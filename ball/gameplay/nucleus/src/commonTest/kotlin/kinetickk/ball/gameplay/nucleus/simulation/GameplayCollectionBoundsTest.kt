@@ -5,15 +5,18 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.api.GameplayPointerAxis
 import kinetickk.ball.gameplay.api.GameplayRejection
-import kinetickk.ball.gameplay.nucleus.model.DelayedRelicHit
+import kinetickk.ball.gameplay.nucleus.model.EchoHit
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.Projectile
+import kinetickk.ball.gameplay.nucleus.model.WeaponEntity
 import kinetickk.ball.gameplay.nucleus.model.WeaponNode
+import kinetickk.ball.gameplay.nucleus.model.WeaponRuntime
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.protocol.SimulationOutput
 import kinetickk.ball.gameplay.nucleus.protocol.SimulationOutputs
@@ -23,8 +26,11 @@ import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
 import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
+import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.PickupType
+import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
+import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.ball.profile.api.GameplayProgressUpdate
@@ -45,8 +51,9 @@ class GameplayCollectionBoundsTest {
     fun fixedStepStableCompactionRetainsOrderAcrossConsecutiveRemovals() {
         val state = newState(seed = 900)
         val retainedEnemy = state.addEnemyForTesting(x = 0f, y = 0f)
-        val firstRemovedEnemy = state.addEnemyForTesting(x = 10_000f, y = 0f)
-        val secondRemovedEnemy = state.addEnemyForTesting(x = 11_000f, y = 0f)
+        // Enemies that left without a kill (a detonated Bomber) are compacted out in order.
+        val firstRemovedEnemy = state.addEnemyForTesting(x = 100f, y = 0f).apply { dead = true }
+        val secondRemovedEnemy = state.addEnemyForTesting(x = 110f, y = 0f).apply { dead = true }
         val lastRetainedEnemy = state.addEnemyForTesting(x = 20f, y = 0f)
         state.updateEnemies(0f)
         assertEquals(
@@ -86,18 +93,18 @@ class GameplayCollectionBoundsTest {
         state.updatePickups(0f)
         assertEquals(listOf(firstRetainedPickup, lastRetainedPickup), state.pickups)
 
-        val firstRetainedHit = DelayedRelicHit(RelicId.ECHO_CHAMBER, -1, 1f, 1f)
-        val firstRemovedHit = DelayedRelicHit(RelicId.ECHO_CHAMBER, -1, 0f, 1f)
-        val secondRemovedHit = DelayedRelicHit(RelicId.ECHO_CHAMBER, -1, -1f, 1f)
-        val lastRetainedHit = DelayedRelicHit(RelicId.ECHO_CHAMBER, -1, 2f, 1f)
-        state.delayedRelicHits += listOf(
+        val firstRetainedHit = EchoHit(enemyId = -1, delay = 1f, damage = 1f, appliesDominant = false)
+        val firstRemovedHit = EchoHit(enemyId = -1, delay = 0f, damage = 1f, appliesDominant = false)
+        val secondRemovedHit = EchoHit(enemyId = -1, delay = -1f, damage = 1f, appliesDominant = false)
+        val lastRetainedHit = EchoHit(enemyId = -1, delay = 2f, damage = 1f, appliesDominant = false)
+        state.echoHits += listOf(
             firstRetainedHit,
             firstRemovedHit,
             secondRemovedHit,
             lastRetainedHit,
         )
         state.updateRelicRuntime(0f)
-        assertEquals(listOf(firstRetainedHit, lastRetainedHit), state.delayedRelicHits)
+        assertEquals(listOf(firstRetainedHit, lastRetainedHit), state.echoHits)
     }
 
     @Test
@@ -190,15 +197,24 @@ class GameplayCollectionBoundsTest {
     @Test
     fun weaponNodesAcceptEightAndRejectNinth() {
         val state = newState(seed = 902)
-        repeat(MutableGameState.MAX_WEAPON_NODES) { index ->
+        assertTrue(state.weaponLevel < 6)
+        repeat(BASE_MINE_LIMIT) { index ->
             assertTrue(state.tryAddWeaponNode(weaponNode(index)))
         }
 
-        assertFalse(state.tryAddWeaponNode(weaponNode(MutableGameState.MAX_WEAPON_NODES)))
+        assertFalse(state.tryAddWeaponNode(weaponNode(BASE_MINE_LIMIT)))
 
-        assertEquals(MutableGameState.MAX_WEAPON_NODES, state.weaponNodes.size)
+        assertEquals(BASE_MINE_LIMIT, state.weaponNodes.size)
         assertEquals(0f, state.weaponNodes.first().x)
-        assertEquals((MutableGameState.MAX_WEAPON_NODES - 1).toFloat(), state.weaponNodes.last().x)
+        assertEquals((BASE_MINE_LIMIT - 1).toFloat(), state.weaponNodes.last().x)
+
+        // Gravity Mines' second form (level 6) holds twelve, never a thirteenth.
+        state.weaponLevel = 6
+        repeat(MutableGameState.MAX_WEAPON_NODES - BASE_MINE_LIMIT) { index ->
+            assertTrue(state.tryAddWeaponNode(weaponNode(BASE_MINE_LIMIT + index)))
+        }
+        assertFalse(state.tryAddWeaponNode(weaponNode(MutableGameState.MAX_WEAPON_NODES)))
+        assertEquals(MutableGameState.MAX_WEAPON_NODES, state.weaponNodes.size)
     }
 
     @Test
@@ -225,6 +241,64 @@ class GameplayCollectionBoundsTest {
             )
         }
         assertEquals(MutableGameState.MAX_WEAPON_ORBITALS, state.weaponOrbitals.size)
+    }
+
+    @Test
+    fun weaponEntitiesAcceptThirtyTwoAndMakeRoomForTheThirtyThirdWithoutATetherOrBeam() {
+        val state = newState(seed = 910)
+        val entities = state.weaponRuntime.entities
+        state.addWeaponEntity(weaponEntity(WeaponEntityKind.TETHER, 0))
+        state.addWeaponEntity(weaponEntity(WeaponEntityKind.BEAM, 1))
+        repeat(WeaponRuntime.MAX_WEAPON_ENTITIES - 2) { index -> state.addWeaponEntity(weaponEntity(WeaponEntityKind.RING, index + 2)) }
+        assertEquals(WeaponRuntime.MAX_WEAPON_ENTITIES, entities.size)
+
+        // The thirty-third takes the place of the oldest entity other than the tether and the beam.
+        state.addWeaponEntity(weaponEntity(WeaponEntityKind.RING, 100))
+        assertEquals(WeaponRuntime.MAX_WEAPON_ENTITIES, entities.size)
+        assertEquals(listOf(0f, 1f, 3f), entities.take(3).map { it.x })
+        assertEquals(100f, entities.last().x)
+
+        // A finished entity gives way before any live one.
+        entities.single { it.x == 20f }.life = 0f
+        state.addWeaponEntity(weaponEntity(WeaponEntityKind.RING, 101))
+        assertEquals(WeaponRuntime.MAX_WEAPON_ENTITIES, entities.size)
+        assertTrue(entities.none { it.x == 20f })
+        assertTrue(entities.any { it.x == 3f })
+
+        // A list of tethers and beams only drops the newcomer.
+        entities.clear()
+        repeat(WeaponRuntime.MAX_WEAPON_ENTITIES) { index ->
+            state.addWeaponEntity(weaponEntity(if (index % 2 == 0) WeaponEntityKind.TETHER else WeaponEntityKind.BEAM, index))
+        }
+        state.addWeaponEntity(weaponEntity(WeaponEntityKind.RING, 200))
+        assertEquals(WeaponRuntime.MAX_WEAPON_ENTITIES, entities.size)
+        assertTrue(entities.none { it.kind == WeaponEntityKind.RING })
+    }
+
+    @Test
+    fun anEntityCreatedInsideAnEntityPassShiftsNoIndexAndKeepsTheBound() {
+        val state = buildTestState(seed = 911, weapon = WeaponId.HUNTER_SALVO)
+        // The third form splits a missile that kills into two.
+        state.weaponLevel = 10
+        val entities = state.weaponRuntime.entities
+        entities.clear()
+        val doomed = state.addEnemyForTesting(x = state.coreX + 300f, y = state.coreY, hp = 1f)
+        val sturdy = state.addEnemyForTesting(x = state.coreX - 300f, y = state.coreY, hp = 1_000_000f)
+        repeat(2) { index -> entities += weaponEntity(WeaponEntityKind.RING, index) }
+        entities += missileAt(doomed.x, doomed.y)
+        entities += missileAt(sturdy.x, sturdy.y)
+        repeat(WeaponRuntime.MAX_WEAPON_ENTITIES - entities.size) { index -> entities += weaponEntity(WeaponEntityKind.RING, index + 10) }
+        assertEquals(WeaponRuntime.MAX_WEAPON_ENTITIES, entities.size)
+
+        state.resolveWeaponEntityHits(MutableGameState.FIXED_STEP)
+
+        assertFalse(doomed.alive)
+        // The split made room by finishing the two oldest rings, so the second missile kept its turn in the pass.
+        assertTrue(sturdy.hp < sturdy.maxHp, "the missile after the split still struck")
+        assertTrue(entities.none { it.kind == WeaponEntityKind.RING && it.x < 2f })
+        assertEquals(2, entities.count { it.kind == WeaponEntityKind.MISSILE })
+        assertTrue(entities.all { it.life > 0f })
+        assertTrue(entities.size <= WeaponRuntime.MAX_WEAPON_ENTITIES)
     }
 
     @Test
@@ -342,7 +416,7 @@ class GameplayCollectionBoundsTest {
         val engine = EngineState(state)
         val reducer = GameReducer()
         val unchangedInputs = listOf(
-            GameplayInteractionPulse.ViewportChanged.fromValidated(1_280f, 720f, 0.5f),
+            GameplayInteractionPulse.ViewportChanged.fromValidated(1_280f, 720f, 1f),
             GameplayInteractionPulse.PointerMoved.fromValidated(900f, 360f, active = true),
             GameplayInteractionPulse.BrakeChanged(
                 BrakeSource.KEYBOARD,
@@ -452,113 +526,123 @@ class GameplayCollectionBoundsTest {
     }
 
     @Test
-    fun arcCoilTargetsSixNearestAndLeavesSeventhUntouched() {
+    fun arcCoilChainsAtMostFourTargetsAndLeavesFifthUntouched() {
+        // Level 18 opens all three forms: four targets and the wider hop.
         val state = newState(seed = 909).apply {
             weaponLevel = 18
         }
+        state.equipWeaponForTesting(WeaponId.ARC_COIL)
+        // Ion-immune Elites take the coil's (elementless) damage but no Charge, so no Overload chains on.
         val candidates = List(7) { index ->
-            state.addEnemyForTesting(x = (index + 1) * 50f, y = 0f)
+            state.addEnemyForTesting(x = (index + 1) * 50f, y = 0f, type = EnemyType.ELITE)
+                .also { assignAspect(it, StatusElement.ION.ordinal, immune = true) }
         }
+        state.takeVisualFxCues()
 
         state.fireArcCoil(baseDamage = 25f)
 
-        candidates.take(6).forEach { enemy ->
+        assertEquals(4, state.arcCoilTargetCount())
+        candidates.take(4).forEach { enemy ->
             assertTrue(enemy.hp < enemy.maxHp)
         }
-        assertEquals(candidates.last().maxHp, candidates.last().hp)
+        candidates.drop(4).forEach { enemy -> assertEquals(enemy.maxHp, enemy.hp) }
         assertEquals(
-            6,
+            4,
             state.takeVisualFxCues().count { cue -> cue is VisualFxCue.WeaponArcAdded },
         )
     }
 
     @Test
     fun rewardChoiceGeneratorsAcceptThreeCandidatesAndDeferFirstNPlusOne() {
-        listOf(MAX_GENERATED_REWARD_CHOICES, MAX_GENERATED_REWARD_CHOICES + 1)
-            .forEachIndexed { index, candidateCount ->
-                val itemContent = canonicalGameplayContent.copy(
-                    items = canonicalGameplayContent.items.take(candidateCount).toImmutableList(),
-                )
-                val itemState = newState(seed = 910 + index, content = itemContent).apply {
-                    lifetimeMatter = 4_000L
-                }
-                itemState.buildItemChoices()
-                val selectedItemIds = itemState.choices.mapNotNull { choice -> choice.itemId }.toSet()
-                assertEquals(MAX_GENERATED_REWARD_CHOICES, selectedItemIds.size)
-                assertEquals(
-                    candidateCount - MAX_GENERATED_REWARD_CHOICES,
-                    itemContent.items.count { item -> item.id !in selectedItemIds },
-                )
-
-                val currentWeapon = canonicalGameplayContent.weapon(WeaponId.FLUX_WAKE)
-                val weaponCandidates = canonicalGameplayContent.weapons
-                    .filter { definition -> definition.id != currentWeapon.id }
-                    .take(candidateCount)
-                val weaponContent = canonicalGameplayContent.copy(
-                    weapons = (listOf(currentWeapon) + weaponCandidates).toImmutableList(),
-                )
-                val weaponState = newState(seed = 912 + index, content = weaponContent)
-                weaponState.buildWeaponChoices()
-                val selectedWeaponIds = weaponState.choices.mapNotNull { choice -> choice.weaponId }.toSet()
-                assertEquals(MAX_GENERATED_REWARD_CHOICES, selectedWeaponIds.size)
-                assertEquals(
-                    candidateCount - MAX_GENERATED_REWARD_CHOICES,
-                    weaponCandidates.count { weapon -> weapon.id !in selectedWeaponIds },
-                )
-
-                val relicContent = canonicalGameplayContent.copy(
-                    relics = canonicalGameplayContent.relics.take(candidateCount).toImmutableList(),
-                )
-                val relicState = newState(seed = 914 + index, content = relicContent)
-                relicState.buildRelicChoices()
-                val selectedRelicIds = relicState.choices.mapNotNull { choice -> choice.relicId }.toSet()
-                assertEquals(MAX_GENERATED_REWARD_CHOICES, selectedRelicIds.size)
-                assertEquals(
-                    candidateCount - MAX_GENERATED_REWARD_CHOICES,
-                    relicContent.relics.count { relic -> relic.id !in selectedRelicIds },
-                )
+        val itemCards = 3
+        listOf(itemCards, itemCards + 1).forEachIndexed { index, candidateCount ->
+            val itemContent = canonicalGameplayContent.copy(
+                items = canonicalGameplayContent.items.take(candidateCount).toImmutableList(),
+            )
+            val itemState = newState(seed = 910 + index, content = itemContent).apply {
+                lifetimeMatter = 4_000L
             }
-    }
+            assertEquals(itemCards, itemState.itemOfferSize())
+            itemState.buildItemChoices()
+            val selectedItemIds = itemState.choices.mapNotNull { choice -> choice.itemId }.toSet()
+            assertEquals(itemCards, itemState.choices.size)
+            assertEquals(itemCards, selectedItemIds.size)
+            assertEquals(
+                candidateCount - itemCards,
+                itemContent.items.count { item -> item.id !in selectedItemIds },
+            )
 
-    @Test
-    fun relicChainWorkAcceptsFiveAndRejectsSixthIteration() {
-        val exact = newState(seed = 916)
-        val exactOrigin = exact.addEnemyForTesting(x = 0f, y = 0f)
-        val exactTargets = List(exact.content.relicPolicy.maxRank + 1) { index ->
-            exact.addEnemyForTesting(x = (index + 1) * 10f, y = 0f, hp = 100f)
+            val relicContent = canonicalGameplayContent.copy(
+                relics = canonicalGameplayContent.relics.take(candidateCount).toImmutableList(),
+            )
+            val relicState = newState(seed = 914 + index, content = relicContent)
+            relicState.buildRelicChoices()
+            val selectedRelicIds = relicState.choices.mapNotNull { choice -> choice.relicId }.toSet()
+            assertEquals(itemCards, selectedRelicIds.size)
+            assertEquals(
+                candidateCount - itemCards,
+                relicContent.relics.count { relic -> relic.id !in selectedRelicIds },
+            )
+            // The fourth card declines into an empty slot; it never consumes a relic candidate.
+            assertEquals(RelicChoiceAction.DECLINE, relicState.choices.last().relicAction)
+            assertEquals(itemCards + 1, relicState.choices.size)
         }
 
-        exact.chainRelicDamage(
-            origin = exactOrigin,
-            count = exact.content.relicPolicy.maxRank,
-            range = 100f,
-            damage = 10f,
-        )
-
-        assertTrue(exactTargets.take(exact.content.relicPolicy.maxRank).all { target -> target.hp < target.maxHp })
-        assertEquals(exactTargets.last().maxHp, exactTargets.last().hp)
-        assertEquals(
-            exact.content.relicPolicy.maxRank,
-            exact.takeVisualFxCues().count { cue -> cue is VisualFxCue.WeaponArcAdded },
-        )
-
-        val overflow = newState(seed = 917)
-        val overflowOrigin = overflow.addEnemyForTesting(x = 0f, y = 0f)
-        val overflowTargets = List(overflow.content.relicPolicy.maxRank + 1) { index ->
-            overflow.addEnemyForTesting(x = (index + 1) * 10f, y = 0f, hp = 100f)
-        }
-        val before = overflowTargets.map { target -> target.hp }
-
-        assertFailsWith<IllegalArgumentException> {
-            overflow.chainRelicDamage(
-                origin = overflowOrigin,
-                count = overflow.content.relicPolicy.maxRank + 1,
-                range = 100f,
-                damage = 10f,
+        // A Totem recalibration offers three weapons, never the Ledger-widened item bound.
+        listOf(WEAPON_OFFER_CHOICES, WEAPON_OFFER_CHOICES + 1).forEachIndexed { index, candidateCount ->
+            val currentWeapon = canonicalGameplayContent.weapon(WeaponId.FLUX_WAKE)
+            val weaponCandidates = canonicalGameplayContent.weapons
+                .filter { definition -> definition.id != currentWeapon.id }
+                .take(candidateCount)
+            val weaponContent = canonicalGameplayContent.copy(
+                weapons = (listOf(currentWeapon) + weaponCandidates).toImmutableList(),
+            )
+            val weaponState = newState(seed = 912 + index, content = weaponContent)
+            weaponState.unlockWeaponsForTesting(weaponCandidates.map { it.id })
+            weaponState.buildWeaponChoices()
+            val selectedWeaponIds = weaponState.choices.mapNotNull { choice -> choice.weaponId }.toSet()
+            assertEquals(WEAPON_OFFER_CHOICES, selectedWeaponIds.size)
+            assertEquals(
+                candidateCount - WEAPON_OFFER_CHOICES,
+                weaponCandidates.count { weapon -> weapon.id !in selectedWeaponIds },
             )
         }
-        assertEquals(before, overflowTargets.map { target -> target.hp })
-        assertTrue(overflow.takeVisualFxCues().isEmpty())
+
+        // Gambler's Ledger adds exactly one card, filling but never exceeding the choice bound.
+        val ledger = newState(seed = 919).apply {
+            lifetimeMatter = 4_000L
+            acquireItemForTesting(content.items.single { it.name == "Gambler's Ledger" }.id)
+        }
+        assertEquals(MAX_GENERATED_REWARD_CHOICES, ledger.itemOfferSize())
+        ledger.buildItemChoices()
+        assertEquals(MAX_GENERATED_REWARD_CHOICES, ledger.choices.mapNotNull { it.itemId }.toSet().size)
+    }
+
+    /** The generic chain bound shared by items, relics, reactions and Breaks: [MAX_CHAIN_TARGETS] links. */
+    @Test
+    fun chainWorkAcceptsSixTargetsAndRejectsTheSeventh() {
+        fun chainOver(seed: Int, requested: Int): Pair<List<kinetickk.ball.gameplay.nucleus.model.Enemy>, Int> {
+            val state = newState(seed = seed)
+            val origin = state.addEnemyForTesting(x = 0f, y = 0f)
+            val targets = List(MAX_CHAIN_TARGETS + 2) { index ->
+                state.addEnemyForTesting(x = (index + 1) * 10f, y = 0f, hp = 100f)
+            }
+            state.chain(origin.x, origin.y, origin.id, requested, range = 100f) { target ->
+                state.dealProcDamage(target, 10f, rescale = false)
+            }
+            return targets to state.takeVisualFxCues().count { cue -> cue is VisualFxCue.WeaponArcAdded }
+        }
+
+        val (exactTargets, exactArcs) = chainOver(seed = 916, requested = MAX_CHAIN_TARGETS)
+        assertTrue(exactTargets.take(MAX_CHAIN_TARGETS).all { target -> target.hp < target.maxHp })
+        assertTrue(exactTargets.drop(MAX_CHAIN_TARGETS).all { target -> target.hp == target.maxHp })
+        assertEquals(MAX_CHAIN_TARGETS, exactArcs)
+
+        // A larger request never performs the first link past the bound.
+        val (overflowTargets, overflowArcs) = chainOver(seed = 917, requested = MAX_CHAIN_TARGETS + 1)
+        assertTrue(overflowTargets.take(MAX_CHAIN_TARGETS).all { target -> target.hp < target.maxHp })
+        assertEquals(overflowTargets[MAX_CHAIN_TARGETS].maxHp, overflowTargets[MAX_CHAIN_TARGETS].hp)
+        assertEquals(MAX_CHAIN_TARGETS, overflowArcs)
     }
 
     @Test
@@ -578,10 +662,10 @@ class GameplayCollectionBoundsTest {
             ),
         )
         assertNull(state.nearestEnemy(x = 0f, y = 0f, range = 4.99f))
-        assertFalse(state.isRelicTargetIsolated(first, range = 10f))
+        assertSame(second, state.nearestOtherEnemy(first.x, first.y, first.id, range = 10f))
 
         second.dead = true
-        assertTrue(state.isRelicTargetIsolated(first, range = 10f))
+        assertNull(state.nearestOtherEnemy(first.x, first.y, first.id, range = 10f))
     }
 
     @Test
@@ -717,6 +801,13 @@ class GameplayCollectionBoundsTest {
         maxLife = 1f,
         radius = 1f,
     )
+
+    /** A live weapon entity told apart by its x. */
+    private fun weaponEntity(kind: WeaponEntityKind, index: Int) = WeaponEntity(kind, x = index.toFloat(), y = 0f, radius = 1f, life = 1f, maxLife = 1f)
+
+    /** A Hunter missile standing on (x, y): it strikes whatever stands there in the hit pass. */
+    private fun missileAt(x: Float, y: Float) =
+        WeaponEntity(WeaponEntityKind.MISSILE, x, y, HUNTER_MISSILE_RADIUS, HUNTER_MISSILE_LIFE, HUNTER_MISSILE_LIFE, vx = 1f, damage = 1_000f)
 
     private fun choice(index: Int) = ChoiceOption(
         type = ChoiceType.ITEM,

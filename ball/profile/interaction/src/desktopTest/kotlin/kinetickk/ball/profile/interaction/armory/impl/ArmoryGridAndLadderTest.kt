@@ -35,7 +35,7 @@ class ArmoryGridAndLadderTest {
         override fun toString() = "$language @$setting $inspected"
     }
 
-    private val model = ArmoryRenderModel(1_284L, WeaponId.FLUX_WAKE, CatalogWeapons.take(7).map { it.id }.toImmutableSet(), WeaponId.ION_SWARM)
+    private val model = ArmoryRenderModel(1_284L, WeaponId.FLUX_WAKE, CatalogWeapons.take(7).map { it.id }.toImmutableSet(), WeaponId.ION_SWARM, rebirthRank = 0)
     private val languages = listOf(AppLanguage.English, AppLanguage.Russian)
     private val settings = listOf(1f, 1.25f, 1.5f, 1.75f)
 

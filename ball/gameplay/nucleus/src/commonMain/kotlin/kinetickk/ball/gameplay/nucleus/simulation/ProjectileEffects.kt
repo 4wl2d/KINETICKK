@@ -3,10 +3,6 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.ItemDefinition
-import kinetickk.ball.content.api.ItemModifier
-import kinetickk.ball.content.api.ModifierUnit
-import kinetickk.ball.content.api.RelicId
 
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
@@ -42,6 +38,8 @@ internal fun MutableGameState.firePlayerProjectile(
     pierce: Int,
     radius: Float,
     colorIndex: Int,
+    procKey: Int = WeaponRuntime.PROC_ALWAYS,
+    life: Float = 4f,
 ) {
     addProjectile(Projectile(
         x = x,
@@ -49,21 +47,31 @@ internal fun MutableGameState.firePlayerProjectile(
         vx = cos(angle) * projectileSpeed,
         vy = sin(angle) * projectileSpeed,
         radius = radius,
-        life = 4f,
+        life = life,
         hostile = false,
         damage = damage,
         pierce = pierce,
         colorIndex = colorIndex,
         sourceWeapon = weapon,
+        procKey = procKey,
     ))
 }
 
-internal fun MutableGameState.fireSpread(x: Float, y: Float, angle: Float, count: Int, spacing: Float, projectileSpeed: Float) {
+/** Aimed hostile fan; [damage] comes from [hostileDamage] when the volley is fired. */
+internal fun MutableGameState.fireSpread(
+    x: Float,
+    y: Float,
+    angle: Float,
+    count: Int,
+    spacing: Float,
+    projectileSpeed: Float,
+    damage: Float,
+) {
     val scaledSpeed = projectileSpeed * rebirthProfile.enemySpeedMultiplier
     val offset = (count - 1) * spacing * 0.5f
     repeat(count) { index ->
         val shotAngle = angle - offset + index * spacing
-        addProjectile(Projectile(x, y, cos(shotAngle) * scaledSpeed, sin(shotAngle) * scaledSpeed, 5f, 6f))
+        addProjectile(Projectile(x, y, cos(shotAngle) * scaledSpeed, sin(shotAngle) * scaledSpeed, 5f, 6f, damage = damage))
     }
 }
 
@@ -74,6 +82,7 @@ internal fun MutableGameState.fireProjectileWall(
     count: Int,
     spacing: Float,
     projectileSpeed: Float,
+    damage: Float,
 ) {
     val scaledSpeed = projectileSpeed * rebirthProfile.enemySpeedMultiplier
     val directionX = cos(angle)
@@ -90,15 +99,24 @@ internal fun MutableGameState.fireProjectileWall(
             vy = directionY * scaledSpeed,
             radius = 5f,
             life = 6f,
+            damage = damage,
         ))
     }
 }
 
-internal fun MutableGameState.fireRadial(x: Float, y: Float, count: Int, projectileSpeed: Float, rotation: Float) {
+internal fun MutableGameState.fireRadial(
+    x: Float,
+    y: Float,
+    count: Int,
+    projectileSpeed: Float,
+    rotation: Float,
+    damage: Float,
+    life: Float = 8f,
+) {
     val scaledSpeed = projectileSpeed * rebirthProfile.enemySpeedMultiplier
     repeat(count) { index ->
         val angle = rotation + index * TAU / count
-        addProjectile(Projectile(x, y, cos(angle) * scaledSpeed, sin(angle) * scaledSpeed, 5f, 8f))
+        addProjectile(Projectile(x, y, cos(angle) * scaledSpeed, sin(angle) * scaledSpeed, 5f, life, damage = damage))
     }
 }
 
@@ -106,8 +124,16 @@ internal fun MutableGameState.addProjectile(projectile: Projectile) {
     if (projectiles.size < MutableGameState.MAX_PROJECTILES) projectiles += projectile
 }
 
+/** At the cap a new Data or repair is dropped; a Key or Relic resonance evicts the oldest Data instead. */
 internal fun MutableGameState.addPickup(pickup: Pickup) {
-    if (pickups.size < MutableGameState.MAX_PICKUPS) pickups += pickup
+    if (pickup.type == PickupType.DATA) pickup.life = blackoutDataLife(pickup.life)
+    if (pickups.size >= MutableGameState.MAX_PICKUPS) {
+        if (pickup.expires) return
+        val oldest = oldestEvictablePickup()
+        if (oldest < 0) return
+        pickups.removeAt(oldest)
+    }
+    pickups += pickup
 }
 
 internal fun MutableGameState.burst(x: Float, y: Float, requestedCount: Int, colorIndex: Int) {
@@ -173,12 +199,13 @@ internal fun MutableGameState.addWeaponArc(
     )
 }
 
+/** Nearest live enemy within [range]; a shifting Architect is never a target. */
 internal fun MutableGameState.nearestEnemy(x: Float, y: Float, range: Float): Enemy? {
     var nearest: Enemy? = null
     var nearestDistanceSquared = range * range
     for (index in enemies.indices) {
         val candidate = enemies[index]
-        if (candidate.dead || !(candidate.hp > 0f)) continue
+        if (candidate.dead || !(candidate.hp > 0f) || isShifting(candidate)) continue
         val candidateDistanceSquared = distanceSquared(x, y, candidate.x, candidate.y)
         if (
             candidateDistanceSquared <= nearestDistanceSquared &&
@@ -198,43 +225,39 @@ internal fun MutableGameState.movementAngle(): Float {
     return atan2(targetY - coreY, targetX - coreX)
 }
 
+/**
+ * Power of the equipped weapon's own hits: item weapon power, Rebirth, level, generic mastery, run growth
+ * (1 + 1.6p plus the Matrix bonus), Overdrive and the synergies ([weaponSynergyPower]: tag resonance,
+ * signature, Relic key harmony, scaling stat). An OVERDRIVE-scaling weapon takes Overdrive through its
+ * scaling only, so no input counts twice.
+ */
 internal fun MutableGameState.effectiveWeaponPower(): Float =
     weaponPower *
         rebirthProfile.playerPowerMultiplier *
         (1f + (weaponLevel - 1) * 0.08f) *
         (1f + currentWeaponMastery.damageBonus) *
+        weaponRunGrowth() *
+        weaponSynergyPower() *
+        weaponOverdriveFactor()
+
+/**
+ * Power of character abilities and weapon-based item effects. It shares the weapon's level, mastery and
+ * Overdrive factors but grows with [kinetickk.ball.content.api.RunTempoProfile.abilityRunGrowth], so
+ * equipped-weapon bonuses applied only to [effectiveWeaponPower] never leak into abilities.
+ */
+internal fun MutableGameState.abilityPower(): Float =
+    weaponPower *
+        rebirthProfile.playerPowerMultiplier *
+        (1f + (weaponLevel - 1) * 0.08f) *
+        (1f + currentWeaponMastery.damageBonus) *
+        content.tempo.abilityRunGrowth(elapsed) *
         if (overdriveTime > 0f) 1.45f else 1f
 
 internal fun MutableGameState.cooldown(base: Float): Float =
     base / (
         attackSpeed *
             (1f + currentWeaponMastery.activationSpeedBonus) *
-            (1f + relicActivationSpeedBonus()) *
-            if (overdriveTime > 0f) 1.35f else 1f
+            buildActivationBonus() *
+            characterActivationMultiplier() *
+            (if (overdriveTime > 0f) 1.35f else 1f)
         ).coerceAtLeast(0.2f)
-
-internal fun MutableGameState.relicActivationSpeedBonus(): Float {
-    var bonus = 0f
-    if (slipstreamRelayTime > 0f) bonus += 0.06f * relicRank(RelicId.SLIPSTREAM_RELAY)
-    if (borrowedMomentTime > 0f) bonus += 0.09f * relicRank(RelicId.BORROWED_MOMENT)
-    if (hp <= maxHp * 0.35f) bonus += 0.08f * relicRank(RelicId.LAST_LIGHT)
-    val crownRank = relicRank(RelicId.CROWN_OF_FOUR_WINDS)
-    if (crownRank > 0) bonus += 0.03f * crownRank * distinctRelicAspectCount()
-    if (overdriveTime > 0f) bonus += 0.10f * relicRank(RelicId.ENGINE_OF_PARADOX)
-    return bonus
-}
-
-internal fun MutableGameState.compactItemDescription(item: ItemDefinition): String =
-    formatModifier(item.primary) + "  //  " + formatModifier(item.secondary)
-
-internal fun MutableGameState.formatModifier(modifier: ItemModifier): String {
-    val amount = if (modifier.effect.unit == ModifierUnit.PERCENT) modifier.amount * 100f else modifier.amount
-    val rounded = (amount * 10f).toInt() / 10f
-    val suffix = when (modifier.effect.unit) {
-        ModifierUnit.PERCENT -> "%"
-        ModifierUnit.PER_SECOND -> "/s"
-        ModifierUnit.SECONDS -> "s"
-        ModifierUnit.FLAT -> ""
-    }
-    return "+" + rounded + suffix + " " + modifier.effect.displayLabel
-}

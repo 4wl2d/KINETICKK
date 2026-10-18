@@ -3,6 +3,9 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.CoreShape
+import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.immutableListOfSize
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.collections.mapToImmutableList
@@ -47,27 +50,18 @@ internal fun MutableGameState.toRenderModel(
         braking = braking,
         elapsed = elapsed,
         heat = heat,
-        overheated = overheated,
+        overheated = overheated && !build.upside(kinetickk.ball.content.api.RelicId.FURNACE_COVENANT),
         dashPhaseTime = dashPhaseTime,
         hp = hp,
         maxHp = maxHp,
         shield = shield,
-        maxShield = maxShield,
+        maxShield = shieldCapacity(),
         level = level,
         data = data,
         nextLevelData = nextLevelData,
         keys = keys,
         kills = kills,
-        runStatistics = RunStatistics(
-            damageDealt = damageDealt,
-            damageTaken = damageTaken,
-            damageAbsorbed = damageAbsorbed,
-            dataCollected = dataCollected,
-            pickupsCollected = pickupsCollected,
-            keysCollected = keysCollected,
-            eliteKills = eliteKills,
-            bestCombo = bestCombo,
-        ),
+        runStatistics = runStatisticsProjection(reusableCollections?.runStatistics),
         combo = combo,
         comboTime = comboTime,
         runMatter = runMatter,
@@ -87,22 +81,24 @@ internal fun MutableGameState.toRenderModel(
             choices === identitySource.choices && reusableCollections != null &&
             buildStats() == identitySource.buildStats() &&
             equippedRelics === identitySource.equippedRelics && weapon == identitySource.weapon && elapsed == identitySource.elapsed &&
-            itemStacks.sharesStorageWith(identitySource.itemStacks)
+            itemStacks.sharesStorageWith(identitySource.itemStacks) && build === identitySource.build &&
+            discoveredPairingMask == identitySource.discoveredPairingMask &&
+            discoveredReactionMask == identitySource.discoveredReactionMask
         ) reusableCollections.rewardPreviews else rewardPreviews(),
         coolingRate = coolingRate,
         magnetStrength = magnetStrength,
         dashImpulse = dashImpulse,
-        dashHeatCost = dashHeatCost,
+        dashHeatCost = effectiveDashHeatCost(),
         regenPerSecond = regenPerSecond,
         critChance = critChance,
         critMultiplier = critMultiplier,
-        pickupRadius = pickupRadius,
-        luck = luck,
+        pickupRadius = effectivePickupRadius(),
+        luck = effectiveLuck(),
         dataGain = dataGain,
         matterGain = matterGain,
         attackSpeed = attackSpeed,
         damageReduction = damageReduction,
-        comboWindow = comboWindow,
+        comboWindow = effectiveComboWindow(),
         overdriveGain = overdriveGain,
         dragCoefficient = dragCoefficient,
         polarityStability = polarityStability,
@@ -153,7 +149,15 @@ internal fun MutableGameState.toRenderModel(
                     value.weaponCooldown.sameBitsAs(previous.weaponCooldown) &&
                     value.previousX.sameBitsAs(previous.previousX) &&
                     value.previousY.sameBitsAs(previous.previousY) &&
-                    value.dead == previous.dead
+                    value.dead == previous.dead &&
+                    statusBits(value) == previous.statusBits &&
+                    affinityBits(value) == previous.affinityBits &&
+                    value.mode == previous.behavior &&
+                    behaviorRemaining(value).sameBitsAs(previous.behaviorRemaining) &&
+                    value.facing.sameBitsAs(previous.facing) &&
+                    linkedTo(value) == previous.linkedTo &&
+                    shielded(value) == previous.shielded &&
+                    value.armorIntact == previous.armored
             }
             ?: enemies.mapToImmutableList { value ->
                 EnemyProjection(
@@ -173,6 +177,14 @@ internal fun MutableGameState.toRenderModel(
                     previousX = value.previousX,
                     previousY = value.previousY,
                     dead = value.dead,
+                    statusBits = statusBits(value),
+                    affinityBits = affinityBits(value),
+                    behavior = value.mode,
+                    behaviorRemaining = behaviorRemaining(value),
+                    facing = value.facing,
+                    linkedTo = linkedTo(value),
+                    shielded = shielded(value),
+                    armored = value.armorIntact,
                 )
             },
         projectiles = projectiles.reuseEmptyProjection(reusableCollections?.projectiles)
@@ -195,7 +207,8 @@ internal fun MutableGameState.toRenderModel(
                     value.colorIndex == previous.colorIndex &&
                     value.sourceWeapon == previous.sourceWeapon &&
                     value.previousX.sameBitsAs(previous.previousX) &&
-                    value.previousY.sameBitsAs(previous.previousY)
+                    value.previousY.sameBitsAs(previous.previousY) &&
+                    value.kind == previous.kind
             }
             ?: projectiles.mapToImmutableList { value ->
                 ProjectileProjection(
@@ -212,6 +225,7 @@ internal fun MutableGameState.toRenderModel(
                     sourceWeapon = value.sourceWeapon,
                     previousX = value.previousX,
                     previousY = value.previousY,
+                    kind = value.kind,
                 )
             },
         pickups = pickups.reuseEmptyProjection(reusableCollections?.pickups)
@@ -243,9 +257,11 @@ internal fun MutableGameState.toRenderModel(
             ?: trail.reuseProjectionIfContentEqual(reusableCollections?.trail) { value, previous ->
                 value.x.sameBitsAs(previous.x) &&
                     value.y.sameBitsAs(previous.y) &&
-                    value.age.sameBitsAs(previous.age)
+                    value.age.sameBitsAs(previous.age) &&
+                    value.life.sameBitsAs(previous.life) &&
+                    value.scale.sameBitsAs(previous.scale)
             }
-            ?: trail.mapToImmutableList { value -> TrailPointProjection(value.x, value.y, value.age) },
+            ?: trail.mapToImmutableList { value -> TrailPointProjection(value.x, value.y, value.age, value.life, value.scale) },
         weaponNodes = weaponNodes.reuseEmptyProjection(reusableCollections?.weaponNodes)
             ?: weaponNodes.reuseIfIdentical(
                 identitySource?.weaponNodes,
@@ -275,10 +291,12 @@ internal fun MutableGameState.toRenderModel(
                 value.index == previous.index &&
                     value.x.sameBitsAs(previous.x) &&
                     value.y.sameBitsAs(previous.y) &&
-                    value.radius.sameBitsAs(previous.radius)
+                    value.radius.sameBitsAs(previous.radius) &&
+                    value.previousX.sameBitsAs(previous.previousX) &&
+                    value.previousY.sameBitsAs(previous.previousY)
             }
             ?: weaponOrbitals.mapToImmutableList { value ->
-                WeaponOrbitalProjection(value.index, value.x, value.y, value.radius)
+                WeaponOrbitalProjection(value.index, value.x, value.y, value.radius, value.previousX, value.previousY)
             },
         choices = choices.reuseIfIdentical(identitySource?.choices, reusableCollections?.choices)
             ?: choices.reuseIfContentEqual(reusableCollections?.choices)
@@ -286,19 +304,14 @@ internal fun MutableGameState.toRenderModel(
         choiceType = activeChoiceType,
         pendingRelicChoiceCount = pendingRelicChoices,
         directedChoice = directedReward != null,
-        characterAbility = CharacterAbilityProjection(characterRuntime.charge, characterRuntime.barrier,
-            characterRuntime.ringRadius, characterRuntime.parryWindow,
-            characterRuntime.lattice.map { CharacterLatticePoint(it.x, it.y) }.toImmutableList()),
-        pointsOfInterest = pointsOfInterest.map { point ->
-            PointOfInterestProjection(point.kind, content.pointsOfInterest.definition(point.kind).name,
-                point.x, point.y, point.active,
-                if (point.active) point.remaining else (point.expiresAt - elapsed).coerceAtLeast(0f),
-                point.nextBeacon, when (point.kind) {
-                    kinetickk.ball.content.api.PointOfInterestKind.RESONANT_CIRCUIT -> (point.nextBeacon - 1) / 3f
-                    kinetickk.ball.content.api.PointOfInterestKind.SEALED_ANOMALY -> point.defeatedDefenders / 3f
-                    kinetickk.ball.content.api.PointOfInterestKind.COLLAPSING_ORBIT -> point.orbitSeconds / content.pointsOfInterest.orbitRequiredSeconds
-                }, point.defenderIds, point.warningRemaining, point.volleyAngle)
-        }.toImmutableList(),
+        characterAbility = characterAbilityProjection(
+            reusable = reusableCollections?.characterAbility,
+            identityRuntime = identitySource?.characterRuntime,
+        ),
+        pointsOfInterest = pointsOfInterestProjection(
+            reusable = reusableCollections?.pointsOfInterest,
+            identitySource = identitySource,
+        ),
         itemStacks = itemStacks.reuseIfStorageShared(
             identitySource?.itemStacks,
             reusableCollections?.itemStacks,
@@ -315,8 +328,378 @@ internal fun MutableGameState.toRenderModel(
             reusableCollections?.relicRanks,
         ) ?: relicRanks.reuseIfContentEqual(reusableCollections?.relicRanks)
             ?: relicRanks.toImmutableList(),
+        build = buildProjection(reusableCollections?.build, identitySource),
+        discoveredReactionMask = discoveredReactionMask,
+        discoveredPairingMask = discoveredPairingMask,
+        coreRadius = coreRadius,
+        abilityPower = abilityPower(),
+        interpolationAlpha = renderInterpolationAlpha(),
+        previousCoreX = previousCoreX,
+        previousCoreY = previousCoreY,
+        previousCameraX = previousCameraX,
+        previousCameraY = previousCameraY,
+        previousMorningstarX = previousMorningstarX,
+        previousMorningstarY = previousMorningstarY,
+        viewportDensity = viewportDensity,
+        obstacles = obstacleProjection(reusableCollections?.obstacles, identitySource?.obstacleField),
+        minimapRange = minimapRange(),
+        weaponEntities = weaponEntityProjection(reusableCollections?.weaponEntities, identitySource?.weaponRuntime),
+        // A scalar-input sibling shares the weapon runtime and changes no synergy input.
+        weaponSynergy = reusableCollections?.weaponSynergy?.takeIf { identitySource != null && weaponRuntime === identitySource.weaponRuntime }
+            ?: weaponSynergyProjection(reusableCollections?.weaponSynergy),
+        rebirthRank = rebirthRank,
+        volatileBursts = volatileBursts,
     )
 }
+
+/** Relic gauges change during combat; the compiled build's immutable collections do not. */
+private fun MutableGameState.buildProjection(
+    previous: BuildProjection?,
+    identitySource: MutableGameState?,
+): BuildProjection {
+    if (previous == null || identitySource == null || build !== identitySource.build ||
+        discoveredPairingMask != identitySource.discoveredPairingMask ||
+        !itemStacks.sharesStorageWith(identitySource.itemStacks) ||
+        !rebornItems.sharesStorageWith(identitySource.rebornItems)
+    ) return buildProjection()
+
+    val severed = severedRelics.reuseProjectionIfContentEqual(previous.severed) { value, projection ->
+        value.id == projection.id && kotlin.math.max(0f, value.until - elapsed).sameBitsAs(projection.remaining)
+    } ?: severedRelics.mapToImmutableList { value ->
+        SeveredRelicProjection(value.id, kotlin.math.max(0f, value.until - elapsed))
+    }
+    val meter = stasisMeter / MutableGameState.STASIS_SECONDS
+    val invulnerable = invulnerableUntil > elapsed
+    val burnout = overdriveBurnoutUntil > elapsed
+    if (previous.severed === severed && previous.stormCharge.sameBitsAs(stormCharge) &&
+        previous.stasisMeter.sameBitsAs(meter) && previous.stasisBank == stasisBank &&
+        previous.ouroborosSpent == ouroborosSpent && previous.invulnerable == invulnerable &&
+        previous.overdriveBurnout == burnout
+    ) return previous
+
+    return previous.copy(
+        severed = severed,
+        stormCharge = stormCharge,
+        stasisMeter = meter,
+        stasisBank = stasisBank,
+        ouroborosSpent = ouroborosSpent,
+        invulnerable = invulnerable,
+        overdriveBurnout = burnout,
+    )
+}
+
+/** The same runtime (a scalar-input sibling) or equal entities keep the previous projection. */
+private fun MutableGameState.weaponEntityProjection(
+    reusable: ImmutableList<WeaponEntityProjection>?,
+    identityRuntime: WeaponRuntime?,
+): ImmutableList<WeaponEntityProjection> {
+    val entities = weaponRuntime.entities
+    if (reusable != null) {
+        if (weaponRuntime === identityRuntime) return reusable
+        if (entities.isEmpty() && reusable.isEmpty()) return reusable
+        if (entities.reuseProjectionIfContentEqual(reusable) { value, previous -> previous.matches(value) } != null) return reusable
+    }
+    if (entities.isEmpty()) return immutableListOf()
+    return entities.mapToImmutableList { value ->
+        WeaponEntityProjection(
+            kind = value.kind,
+            x = value.x,
+            y = value.y,
+            previousX = value.previousX,
+            previousY = value.previousY,
+            endX = value.endX,
+            endY = value.endY,
+            previousEndX = value.previousEndX,
+            previousEndY = value.previousEndY,
+            angle = value.angle,
+            previousAngle = value.previousAngle,
+            radius = value.radius,
+            extent = value.extent,
+            life = value.life,
+            maxLife = value.maxLife,
+            phase = value.phase,
+        )
+    }
+}
+
+private fun WeaponEntityProjection.matches(entity: WeaponEntity): Boolean =
+    kind == entity.kind &&
+        x.sameBitsAs(entity.x) &&
+        y.sameBitsAs(entity.y) &&
+        previousX.sameBitsAs(entity.previousX) &&
+        previousY.sameBitsAs(entity.previousY) &&
+        endX.sameBitsAs(entity.endX) &&
+        endY.sameBitsAs(entity.endY) &&
+        previousEndX.sameBitsAs(entity.previousEndX) &&
+        previousEndY.sameBitsAs(entity.previousEndY) &&
+        angle.sameBitsAs(entity.angle) &&
+        previousAngle.sameBitsAs(entity.previousAngle) &&
+        radius.sameBitsAs(entity.radius) &&
+        extent.sameBitsAs(entity.extent) &&
+        life.sameBitsAs(entity.life) &&
+        maxLife.sameBitsAs(entity.maxLife) &&
+        phase == entity.phase
+
+/** The window changes only when the Core changes chunk (or a rock shatters); otherwise it is reused. */
+private fun MutableGameState.obstacleProjection(
+    reusable: ImmutableList<ObstacleProjection>?,
+    identityField: ObstacleField?,
+): ImmutableList<ObstacleProjection> {
+    val field = obstacleField
+    if (reusable != null) {
+        if (field === identityField) return reusable
+        if (field.obstacles.reuseProjectionIfContentEqual(reusable) { value, previous -> previous.matches(value) } != null) {
+            return reusable
+        }
+    }
+    return field.obstacles.mapToImmutableList { value ->
+        ObstacleProjection(value.id, value.kind, value.x, value.y, value.radius, value.shapeSeed)
+    }
+}
+
+private fun ObstacleProjection.matches(obstacle: Obstacle): Boolean =
+    id == obstacle.id &&
+        kind == obstacle.kind &&
+        x.sameBitsAs(obstacle.x) &&
+        y.sameBitsAs(obstacle.y) &&
+        radius.sameBitsAs(obstacle.radius) &&
+        shapeSeed == obstacle.shapeSeed
+
+/**
+ * How far the accumulated real time has advanced past the last simulated state, in fixed steps.
+ * Only a running simulation accumulates time; every other phase presents its exact state, and so
+ * does a run (re)entering RUNNING until its first step makes the previous positions current.
+ */
+internal fun MutableGameState.renderInterpolationAlpha(): Float =
+    if (phase == GamePhase.RUNNING && interpolationPrimed) {
+        (accumulator / MutableGameState.FIXED_STEP).coerceIn(0f, 1f)
+    } else {
+        1f
+    }
+
+/** Run totals change rarely; an unchanged set keeps the previous immutable projection. */
+private fun MutableGameState.runStatisticsProjection(reusable: RunStatistics?): RunStatistics {
+    if (reusable != null &&
+        reusable.damageDealt.toRawBits() == damageDealt.toRawBits() &&
+        reusable.damageTaken.toRawBits() == damageTaken.toRawBits() &&
+        reusable.damageAbsorbed.toRawBits() == damageAbsorbed.toRawBits() &&
+        reusable.dataCollected == dataCollected &&
+        reusable.pickupsCollected == pickupsCollected &&
+        reusable.keysCollected == keysCollected &&
+        reusable.eliteKills == eliteKills &&
+        reusable.bestCombo == bestCombo
+    ) {
+        return reusable
+    }
+    return RunStatistics(
+        damageDealt = damageDealt,
+        damageTaken = damageTaken,
+        damageAbsorbed = damageAbsorbed,
+        dataCollected = dataCollected,
+        pickupsCollected = pickupsCollected,
+        keysCollected = keysCollected,
+        eliteKills = eliteKills,
+        bestCombo = bestCombo,
+    )
+}
+
+/** The same runtime (a scalar-input sibling) or equal content keeps the previous projection. */
+private fun MutableGameState.characterAbilityProjection(
+    reusable: CharacterAbilityProjection?,
+    identityRuntime: CharacterRuntime?,
+): CharacterAbilityProjection {
+    val runtime = characterRuntime
+    if (reusable != null && (runtime === identityRuntime || reusable.matches(this, runtime))) return reusable
+    val shape = coreShape
+    return CharacterAbilityProjection(
+        charge = runtime.charge,
+        ringRadius = runtime.haloRadius,
+        parryWindow = runtime.parryWindow,
+        lattice = if (shape == CoreShape.TESSERACT) {
+            immutableListOfSize(runtime.latticeCount) { CharacterLatticePoint(runtime.latticeX(it), runtime.latticeY(it)) }
+        } else {
+            immutableListOf()
+        },
+        facets = if (shape == CoreShape.PRISM) runtime.facets else 0,
+        facetProgress = facetProgress(runtime),
+        edge = if (shape == CoreShape.DIAMOND) runtime.edge else 0,
+        stellarMass = if (shape == CoreShape.STAR) runtime.stellarMass else 0,
+        novaFlash = runtime.novaFlash,
+        haloBurstFlash = runtime.haloBurstFlash,
+        polarity = if (shape == CoreShape.DIPOLE) runtime.polarity.ordinal else 0,
+        polarityFlash = runtime.polarityFlash,
+        beatPeriod = if (shape == CoreShape.PENTAGON) BEAT_PERIOD else 0f,
+        beatWindow = if (shape == CoreShape.PENTAGON) BEAT_WINDOW else 0f,
+        beatStreak = if (shape == CoreShape.PENTAGON) runtime.beatStreak else 0,
+        blinkCharges = if (shape == CoreShape.CRESCENT) runtime.blinkCharges else 0,
+        blinkRecharge = if (shape == CoreShape.CRESCENT) runtime.blinkRecharge / BLINK_RECHARGE_SECONDS else 0f,
+        scars = if (shape == CoreShape.CRESCENT) {
+            immutableListOfSize(runtime.scarCount) { index -> scarProjection(runtime, index) }
+        } else {
+            immutableListOf()
+        },
+        drones = if (shape == CoreShape.HEXAGON) {
+            immutableListOfSize(runtime.droneCount) { index ->
+                CharacterDroneProjection(
+                    x = runtime.droneValue(index, CharacterRuntime.DRONE_X),
+                    y = runtime.droneValue(index, CharacterRuntime.DRONE_Y),
+                    previousX = runtime.droneValue(index, CharacterRuntime.DRONE_PREVIOUS_X),
+                    previousY = runtime.droneValue(index, CharacterRuntime.DRONE_PREVIOUS_Y),
+                    darting = runtime.droneValue(index, CharacterRuntime.DRONE_DART) > 0f,
+                )
+            }
+        } else {
+            immutableListOf()
+        },
+        ghostActive = ghostActive,
+        ghostX = if (ghostActive) ghostX else 0f,
+        ghostY = if (ghostActive) ghostY else 0f,
+        previousGhostX = if (ghostActive) previousGhostX else 0f,
+        previousGhostY = if (ghostActive) previousGhostY else 0f,
+    )
+}
+
+private fun MutableGameState.facetProgress(runtime: CharacterRuntime): Float =
+    if (coreShape == CoreShape.PRISM && runtime.facets < CharacterRuntime.MAX_FACETS) {
+        (runtime.facetTimer / FACET_REGEN_SECONDS).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+
+private fun MutableGameState.scarProjection(runtime: CharacterRuntime, index: Int): CharacterScarProjection =
+    CharacterScarProjection(
+        x0 = runtime.scarValue(index, CharacterRuntime.SCAR_X0),
+        y0 = runtime.scarValue(index, CharacterRuntime.SCAR_Y0),
+        x1 = runtime.scarValue(index, CharacterRuntime.SCAR_X1),
+        y1 = runtime.scarValue(index, CharacterRuntime.SCAR_Y1),
+        fuse = scarFuse(runtime, index),
+        fade = scarFade(runtime, index),
+    )
+
+/** Fuse progress of scar [index]: 0 when laid, 1 from its detonation on. */
+private fun MutableGameState.scarFuse(runtime: CharacterRuntime, index: Int): Float {
+    if (runtime.scarValue(index, CharacterRuntime.SCAR_AGE) >= 0f) return 1f
+    return (1f - (runtime.scarValue(index, CharacterRuntime.SCAR_DETONATE_AT) - elapsed) / SCAR_FUSE_SECONDS).coerceIn(0f, 1f)
+}
+
+/** Seconds since scar [index] detonated (0 before). */
+private fun scarFade(runtime: CharacterRuntime, index: Int): Float =
+    runtime.scarValue(index, CharacterRuntime.SCAR_AGE).coerceAtLeast(0f)
+
+/** Compares every projected field bit for bit against what [characterAbilityProjection] would build now. */
+private fun CharacterAbilityProjection.matches(state: MutableGameState, runtime: CharacterRuntime): Boolean {
+    val shape = state.coreShape
+    if (!charge.sameBitsAs(runtime.charge) || !ringRadius.sameBitsAs(runtime.haloRadius) ||
+        !parryWindow.sameBitsAs(runtime.parryWindow) ||
+        facets != (if (shape == CoreShape.PRISM) runtime.facets else 0) ||
+        !facetProgress.sameBitsAs(state.facetProgress(runtime)) ||
+        edge != (if (shape == CoreShape.DIAMOND) runtime.edge else 0) ||
+        stellarMass != (if (shape == CoreShape.STAR) runtime.stellarMass else 0) ||
+        !novaFlash.sameBitsAs(runtime.novaFlash) || !haloBurstFlash.sameBitsAs(runtime.haloBurstFlash) ||
+        polarity != (if (shape == CoreShape.DIPOLE) runtime.polarity.ordinal else 0) ||
+        !polarityFlash.sameBitsAs(runtime.polarityFlash) ||
+        !beatPeriod.sameBitsAs(if (shape == CoreShape.PENTAGON) BEAT_PERIOD else 0f) ||
+        !beatWindow.sameBitsAs(if (shape == CoreShape.PENTAGON) BEAT_WINDOW else 0f) ||
+        beatStreak != (if (shape == CoreShape.PENTAGON) runtime.beatStreak else 0) ||
+        blinkCharges != (if (shape == CoreShape.CRESCENT) runtime.blinkCharges else 0) ||
+        !blinkRecharge.sameBitsAs(if (shape == CoreShape.CRESCENT) runtime.blinkRecharge / BLINK_RECHARGE_SECONDS else 0f) ||
+        ghostActive != state.ghostActive
+    ) {
+        return false
+    }
+    if (ghostActive && (!ghostX.sameBitsAs(state.ghostX) || !ghostY.sameBitsAs(state.ghostY) ||
+            !previousGhostX.sameBitsAs(state.previousGhostX) || !previousGhostY.sameBitsAs(state.previousGhostY))
+    ) {
+        return false
+    }
+    val latticeCount = if (shape == CoreShape.TESSERACT) runtime.latticeCount else 0
+    if (lattice.size != latticeCount) return false
+    for (index in lattice.indices) {
+        val point = lattice[index]
+        if (!point.x.sameBitsAs(runtime.latticeX(index)) || !point.y.sameBitsAs(runtime.latticeY(index))) return false
+    }
+    val scarCount = if (shape == CoreShape.CRESCENT) runtime.scarCount else 0
+    if (scars.size != scarCount) return false
+    for (index in scars.indices) {
+        val scar = scars[index]
+        // Field by field from the runtime: the check builds no projection.
+        if (!scar.x0.sameBitsAs(runtime.scarValue(index, CharacterRuntime.SCAR_X0)) ||
+            !scar.y0.sameBitsAs(runtime.scarValue(index, CharacterRuntime.SCAR_Y0)) ||
+            !scar.x1.sameBitsAs(runtime.scarValue(index, CharacterRuntime.SCAR_X1)) ||
+            !scar.y1.sameBitsAs(runtime.scarValue(index, CharacterRuntime.SCAR_Y1)) ||
+            !scar.fuse.sameBitsAs(state.scarFuse(runtime, index)) || !scar.fade.sameBitsAs(scarFade(runtime, index))
+        ) {
+            return false
+        }
+    }
+    val droneCount = if (shape == CoreShape.HEXAGON) runtime.droneCount else 0
+    if (drones.size != droneCount) return false
+    for (index in drones.indices) {
+        val drone = drones[index]
+        if (!drone.x.sameBitsAs(runtime.droneValue(index, CharacterRuntime.DRONE_X)) ||
+            !drone.y.sameBitsAs(runtime.droneValue(index, CharacterRuntime.DRONE_Y)) ||
+            !drone.previousX.sameBitsAs(runtime.droneValue(index, CharacterRuntime.DRONE_PREVIOUS_X)) ||
+            !drone.previousY.sameBitsAs(runtime.droneValue(index, CharacterRuntime.DRONE_PREVIOUS_Y)) ||
+            drone.darting != (runtime.droneValue(index, CharacterRuntime.DRONE_DART) > 0f)
+        ) {
+            return false
+        }
+    }
+    return true
+}
+
+/**
+ * Points of interest change a few times per second at most: the same list at the same time, or
+ * projections that already carry every derived value, keep the previous immutable list.
+ */
+private fun MutableGameState.pointsOfInterestProjection(
+    reusable: ImmutableList<PointOfInterestProjection>?,
+    identitySource: MutableGameState?,
+): ImmutableList<PointOfInterestProjection> {
+    if (reusable != null) {
+        if (pointsOfInterest === identitySource?.pointsOfInterest && elapsed.sameBitsAs(identitySource.elapsed)) return reusable
+        if (reusable.size == pointsOfInterest.size) {
+            var same = true
+            for (index in pointsOfInterest.indices) {
+                if (!pointProjectionMatches(reusable[index], pointsOfInterest[index])) {
+                    same = false
+                    break
+                }
+            }
+            if (same) return reusable
+        }
+    }
+    return pointsOfInterest.mapToImmutableList { point ->
+        PointOfInterestProjection(point.kind, content.pointsOfInterest.definition(point.kind).name,
+            point.x, point.y, point.active, pointRemaining(point), point.nextBeacon, pointProgress(point),
+            point.defenderIds, point.warningRemaining, point.volleyAngle)
+    }
+}
+
+private fun MutableGameState.pointRemaining(point: PointOfInterestState): Float =
+    if (point.active) point.remaining else (point.expiresAt - elapsed).coerceAtLeast(0f)
+
+private fun MutableGameState.pointProgress(point: PointOfInterestState): Float = when (point.kind) {
+    kinetickk.ball.content.api.PointOfInterestKind.RESONANT_CIRCUIT -> (point.nextBeacon - 1) / 3f
+    kinetickk.ball.content.api.PointOfInterestKind.SEALED_ANOMALY -> point.defeatedDefenders / 3f
+    kinetickk.ball.content.api.PointOfInterestKind.COLLAPSING_ORBIT ->
+        point.orbitSeconds / content.pointsOfInterest.orbitRequiredSeconds
+}
+
+private fun MutableGameState.pointProjectionMatches(
+    projection: PointOfInterestProjection,
+    point: PointOfInterestState,
+): Boolean =
+    projection.kind == point.kind &&
+        projection.x.sameBitsAs(point.x) &&
+        projection.y.sameBitsAs(point.y) &&
+        projection.active == point.active &&
+        projection.remaining.sameBitsAs(pointRemaining(point)) &&
+        projection.nextBeacon == point.nextBeacon &&
+        projection.progress.sameBitsAs(pointProgress(point)) &&
+        (projection.defenderIds === point.defenderIds || projection.defenderIds == point.defenderIds) &&
+        projection.warningRemaining.sameBitsAs(point.warningRemaining) &&
+        projection.volleyAngle.sameBitsAs(point.volleyAngle)
 
 private fun <Source : Any, Projection> Source.reuseIfIdentical(
     previousSource: Source?,

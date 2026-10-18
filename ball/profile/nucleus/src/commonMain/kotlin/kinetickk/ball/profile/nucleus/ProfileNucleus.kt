@@ -3,19 +3,22 @@
 
 package kinetickk.ball.profile.nucleus
 
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.ContentBounds
+import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.profile.api.CollectionProjection
 import kinetickk.ball.profile.api.CollectionEntry
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
+import kinetickk.ball.profile.api.HangarProjection
 import kinetickk.ball.profile.api.HomeProgressProjection
-import kinetickk.ball.profile.api.LabProgress
-import kinetickk.ball.profile.api.LabProfileSnapshot
-import kinetickk.ball.profile.api.LabProgressProjection
+import kinetickk.ball.profile.api.MatrixProfileSnapshot
+import kinetickk.ball.profile.api.MatrixProgress
+import kinetickk.ball.profile.api.MatrixProgressProjection
 import kinetickk.ball.profile.api.LoadoutProfileSnapshot
 import kinetickk.ball.profile.api.LoadoutProjection
+import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerEconomy
@@ -42,10 +45,13 @@ import kinetickk.ball.profile.api.ProfileWriteResult
 import kinetickk.ball.profile.api.RebirthProfileSnapshot
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.RebirthProgressProjection
-import kinetickk.ball.profile.api.ProfileRebirthAdvanced
+import kinetickk.ball.profile.api.ProfileRebirthTierSelected
 import kinetickk.ball.profile.api.ProfileProgressApplied
 import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
+import kinetickk.ball.profile.api.isAscendant
+import kinetickk.ball.profile.api.rank
+import kinetickk.ball.profile.api.rankWithin
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
@@ -72,9 +78,9 @@ object ProfileNucleus {
                 mutationGate(state)?.let { return rejected(it) }
                 selectCoreShape(state, pulse.shape)
             }
-            ProfileNucleusPulse.AdvanceRebirth -> {
+            is ProfileNucleusPulse.SelectRebirthTier -> {
                 mutationGate(state)?.let { return rejected(it) }
-                advanceRebirth(state)
+                selectRebirthTier(state, pulse.tier)
             }
             is ProfileNucleusPulse.ApplyGameplayProgress -> {
                 mutationGate(state)?.let { return rejected(it) }
@@ -110,20 +116,29 @@ object ProfileNucleus {
             canAdvanceRebirth = canAdvanceRebirth(state),
             characterAchievements = state.profile.characterAchievements,
             unlockedCoreShapes = unlockedCoreShapes(state.profile, state.policy),
+            characterProgress = hangarShapeProgress(state.profile, state.policy),
         )
 
-    fun query(state: ProfileState, query: ProfileQuery.GetLabProgress): LabProgressProjection =
-        LabProgressProjection(
+    fun query(state: ProfileState, query: ProfileQuery.GetMatrixProgress): MatrixProgressProjection =
+        MatrixProgressProjection(
             instanceId = state.instanceId,
             revision = state.revision,
-            snapshot = LabProfileSnapshot(state.profile.economy, state.profile.labProgress),
+            snapshot = MatrixProfileSnapshot(
+                economy = state.profile.economy,
+                progress = state.profile.matrix,
+                rebirthRank = state.profile.rebirthProgress.rank,
+            ),
         )
 
     fun query(state: ProfileState, query: ProfileQuery.GetLoadout): LoadoutProjection =
         LoadoutProjection(
             instanceId = state.instanceId,
             revision = state.revision,
-            snapshot = LoadoutProfileSnapshot(state.profile.economy, state.profile.loadout),
+            snapshot = LoadoutProfileSnapshot(
+                economy = state.profile.economy,
+                loadout = state.profile.loadout,
+                rebirthRank = state.profile.rebirthProgress.rank,
+            ),
         )
 
     fun query(state: ProfileState, query: ProfileQuery.GetCollection): CollectionProjection =
@@ -135,6 +150,17 @@ object ProfileNucleus {
             revision = state.revision,
             snapshot = RebirthProfileSnapshot(state.profile.rebirthProgress),
             canAdvance = canAdvanceRebirth(state),
+        )
+
+    fun query(state: ProfileState, query: ProfileQuery.GetHangar): HangarProjection =
+        HangarProjection(
+            instanceId = state.instanceId,
+            revision = state.revision,
+            shapes = hangarShapeProgress(state.profile, state.policy),
+            selected = state.profile.loadout.coreShape,
+            rebirthRank = state.profile.rebirthProgress.rank,
+            ascendedCharacters = state.profile.rebirthProgress.ascendedCharacters,
+            ascendant = state.profile.rebirthProgress.isAscendant,
         )
 
     fun query(state: ProfileState, query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection =
@@ -150,9 +176,11 @@ object ProfileNucleus {
         pulse: ProfilePulse.Business,
     ): ProfileDecision = when (pulse) {
         is ProfilePulse.AdjustPreference -> adjustPreference(state, pulse.adjustment)
-        is ProfilePulse.PurchaseMetaUpgrade -> purchaseMetaUpgrade(state, pulse.id)
+        is ProfilePulse.PurchaseMatrixNode -> purchaseMatrixNode(state, pulse.id)
+        ProfilePulse.ResetMatrix -> resetMatrix(state)
         is ProfilePulse.PurchaseOrEquipWeapon -> purchaseOrEquipWeapon(state, pulse.id)
         is ProfilePulse.MarkCollectionEntryViewed -> markCollectionEntryViewed(state, pulse.entry)
+        is ProfilePulse.SelectCoreShape -> selectCoreShape(state, pulse.shape, commandReply = false)
     }
 
     private fun markCollectionEntryViewed(state: ProfileState, entry: CollectionEntry): ProfileDecision {
@@ -198,6 +226,8 @@ object ProfileNucleus {
                 current.copy(screenShake = !current.screenShake)
             ProfilePreferenceAdjustment.ToggleRunStatisticsSide ->
                 current.copy(runStatisticsOnLeft = !current.runStatisticsOnLeft)
+            ProfilePreferenceAdjustment.ToggleMinimap ->
+                current.copy(minimapEnabled = !current.minimapEnabled)
             is ProfilePreferenceAdjustment.StepParticleDensity -> current.copy(
                 particleDensity = ParticleDensity.entries[
                     (current.particleDensity.ordinal + adjustment.direction.delta)
@@ -254,30 +284,60 @@ object ProfileNucleus {
         )
     }
 
-    private fun purchaseMetaUpgrade(
+    /**
+     * Buys the next rank of [id]. Checked in order: a rank below the maximum, the Rebirth rank at the
+     * node's gate, any one prerequisite owned, then the next price in Matter. Gates apply only here,
+     * never on load.
+     */
+    private fun purchaseMatrixNode(
         state: ProfileState,
-        id: MetaUpgradeId,
+        id: MatrixNodeId,
     ): ProfileDecision {
-        val definition = state.policy.metaUpgrade(id)
-        val currentRank = state.profile.labProgress.rank(id)
-        if (currentRank >= definition.maxRanks) return rejected(ProfileRejection.MetaUpgradeMaxRank)
+        val definition = state.policy.matrixNode(id)
+        val matrix = state.profile.matrix
+        val currentRank = matrix.rank(id)
+        if (currentRank >= definition.maxRanks) return rejected(ProfileRejection.MatrixNodeMaxRank)
+        if (state.profile.rebirthProgress.rank < definition.minimumRebirth) {
+            return rejected(ProfileRejection.MatrixRebirthLocked)
+        }
+        if (definition.prerequisites.isNotEmpty() && definition.prerequisites.none(matrix::owns)) {
+            return rejected(ProfileRejection.MatrixPrerequisiteMissing)
+        }
         val cost = definition.cost(currentRank).toLong()
         if (state.profile.economy.matter < cost) return rejected(ProfileRejection.InsufficientMatter)
 
-        val ranks = state.profile.labProgress.ranks.toMutableList()
+        val ranks = matrix.ranks.toMutableList()
         ranks[id.ordinal] = currentRank + 1
         return acceptedMutation(
             state = state,
             nextProfile = state.profile.copy(
                 economy = state.profile.economy.copy(matter = state.profile.economy.matter - cost),
-                labProgress = LabProgress(ranks),
+                matrix = MatrixProgress(ranks),
             ),
         )
     }
 
+    /** Refunds the full price of every owned rank and clears the Matrix (free respec). */
+    private fun resetMatrix(state: ProfileState): ProfileDecision {
+        val matrix = state.profile.matrix
+        if (matrix.ownedNodeCount == 0) return rejected(ProfileRejection.NoChange)
+        val refund = matrixSpent(matrix, state.policy)
+        val economy = state.profile.economy
+        val matter = saturatedAdd(economy.matter, refund)
+        return acceptedMutation(
+            state = state,
+            nextProfile = state.profile.copy(
+                economy = PlayerEconomy(matter = matter, lifetimeMatter = max(economy.lifetimeMatter, matter)),
+                matrix = MatrixProgress(),
+            ),
+        )
+    }
+
+    /** The Hangar's local pulse and the Session's command share one rule; only the command replies. */
     private fun selectCoreShape(
         state: ProfileState,
         shape: kinetickk.ball.content.api.CoreShape,
+        commandReply: Boolean = true,
     ): ProfileDecision {
         if (!isCoreShapeUnlocked(state.profile, state.policy.coreShape(shape))) {
             return rejected(ProfileRejection.CoreShapeLocked)
@@ -288,10 +348,18 @@ object ProfileNucleus {
             nextProfile = state.profile.copy(
                 loadout = state.profile.loadout.copy(coreShape = shape),
             ),
-            commandOutput = ProfileOutput.CoreShapeSelected(ProfileCoreShapeSelected(state.revision.next(), shape)),
+            commandOutput = if (commandReply) {
+                ProfileOutput.CoreShapeSelected(ProfileCoreShapeSelected(state.revision.next(), shape))
+            } else {
+                null
+            },
         )
     }
 
+    /**
+     * Equips an owned weapon, or buys a locked one: the Rebirth rank must reach the weapon's gate, then the
+     * Matter price is paid. Gates apply only to the purchase, never to weapons already owned.
+     */
     private fun purchaseOrEquipWeapon(
         state: ProfileState,
         id: kinetickk.ball.content.api.WeaponId,
@@ -299,7 +367,11 @@ object ProfileNucleus {
         val unlocked = state.profile.loadout.unlockedWeapons.toMutableSet()
         var economy = state.profile.economy
         if (id !in unlocked) {
-            val cost = state.policy.weapon(id).permanentUnlockCost.toLong()
+            val definition = state.policy.weapon(id)
+            if (state.profile.rebirthProgress.rank < definition.minimumRebirth) {
+                return rejected(ProfileRejection.WeaponRebirthLocked)
+            }
+            val cost = definition.permanentUnlockCost.toLong()
             if (economy.matter < cost) return rejected(ProfileRejection.InsufficientMatter)
             economy = economy.copy(matter = economy.matter - cost)
             unlocked += id
@@ -319,21 +391,26 @@ object ProfileNucleus {
         )
     }
 
-    private fun advanceRebirth(
+    /**
+     * Selects [tier] for the next run. Any tier from the policy minimum up to the rank (one above the
+     * highest clear) is allowed, lower tiers included, so a player is never stuck at a tier they
+     * cannot clear; nothing else changes. The current tier is accepted again (it confirms the tier the
+     * next run starts at), so this command always publishes its result.
+     */
+    private fun selectRebirthTier(
         state: ProfileState,
+        tier: Int,
     ): ProfileDecision {
         val progress = state.profile.rebirthProgress
-        if (progress.level >= state.policy.rebirth.maximumLevel) {
-            return rejected(ProfileRejection.RebirthMaximumReached)
+        val rebirth = state.policy.rebirth
+        if (tier !in rebirth.minimumLevel..progress.rankWithin(rebirth.minimumLevel, rebirth.maximumLevel)) {
+            return rejected(ProfileRejection.RebirthTierLocked)
         }
-        if (progress.highestCleared < progress.level) {
-            return rejected(ProfileRejection.RebirthLevelNotCleared)
-        }
-        val next = progress.copy(level = progress.level + 1)
+        val next = progress.copy(level = tier)
         return acceptedMutation(
             state = state,
             nextProfile = state.profile.copy(rebirthProgress = next),
-            commandOutput = ProfileOutput.RebirthAdvanced(ProfileRebirthAdvanced(state.revision.next(), next)),
+            commandOutput = ProfileOutput.RebirthTierSelected(ProfileRebirthTierSelected(state.revision.next(), next)),
         )
     }
 
@@ -357,8 +434,13 @@ object ProfileNucleus {
             addAll(update.discoveredItemIds)
         }
         val rebirth = update.clearedRebirthLevel?.let { cleared ->
-            state.profile.rebirthProgress.copy(
-                highestCleared = max(state.profile.rebirthProgress.highestCleared, cleared),
+            // Clearing the final tier makes the victorious character Ascendant.
+            val ascended = update.architectDefeatedWith?.takeIf { cleared >= ContentBounds.MAX_REBIRTH_LEVEL }
+            val progress = state.profile.rebirthProgress
+            progress.copy(
+                highestCleared = max(progress.highestCleared, cleared),
+                ascendedCharacters = if (ascended == null) progress.ascendedCharacters
+                else (progress.ascendedCharacters + ascended).toImmutableSet(),
             )
         } ?: state.profile.rebirthProgress
         val previousAchievements = state.profile.characterAchievements
@@ -368,17 +450,28 @@ object ProfileNucleus {
             completedOrbits = saturatedAdd(previousAchievements.completedOrbits, update.completedOrbits.toLong()),
             architectVictories = saturatedAdd(previousAchievements.architectVictories, if (update.architectDefeatedWith != null) 1L else 0L),
             victoriousCharacters = (previousAchievements.victoriousCharacters + listOfNotNull(update.architectDefeatedWith)).toImmutableSet(),
+            totalKills = saturatedAdd(previousAchievements.totalKills, update.totalKills.toLong()),
+            ricochets = saturatedAdd(previousAchievements.ricochets, update.ricochets.toLong()),
+            dataPickups = saturatedAdd(previousAchievements.dataPickups, update.dataPickups.toLong()),
         )
+        val collection = state.profile.collection
+        // A resolved Heirloom offer spends the remembered Relics before a victory in the same
+        // update records the Relics bound at that victory.
+        val heirlooms = update.victoryRelicIds
+            ?: if (update.heirloomResolved) immutableListOf() else collection.heirloomRelicIds
         val next = state.profile.copy(
             characterAchievements = achievements,
             economy = economy,
-            collection = state.profile.collection.copy(
+            collection = collection.copy(
                 discoveredItemIds = discoveries.toImmutableSet(),
-                newItemIds = (state.profile.collection.newItemIds +
-                    (update.discoveredItemIds - state.profile.collection.discoveredItemIds)).toImmutableSet(),
-                discoveredRelicIds = (state.profile.collection.discoveredRelicIds + update.discoveredRelicIds).toImmutableSet(),
-                newRelicIds = (state.profile.collection.newRelicIds +
-                    (update.discoveredRelicIds - state.profile.collection.discoveredRelicIds)).toImmutableSet(),
+                newItemIds = (collection.newItemIds +
+                    (update.discoveredItemIds - collection.discoveredItemIds)).toImmutableSet(),
+                discoveredRelicIds = (collection.discoveredRelicIds + update.discoveredRelicIds).toImmutableSet(),
+                newRelicIds = (collection.newRelicIds +
+                    (update.discoveredRelicIds - collection.discoveredRelicIds)).toImmutableSet(),
+                discoveredReactionIds = (collection.discoveredReactionIds + update.discoveredReactionIds).toImmutableSet(),
+                discoveredPairingIds = (collection.discoveredPairingIds + update.discoveredPairingIds).toImmutableSet(),
+                heirloomRelicIds = heirlooms,
             ),
             rebirthProgress = rebirth,
         )
@@ -443,7 +536,9 @@ object ProfileNucleus {
         state: ProfileState,
         update: kinetickk.ball.profile.api.GameplayProgressUpdate,
     ): ProfileGameplayProgressRejection? {
-        if (update.eliteKills < 0 || update.dashHits < 0 || update.completedOrbits < 0) {
+        if (update.eliteKills < 0 || update.dashHits < 0 || update.completedOrbits < 0 ||
+            update.totalKills < 0 || update.ricochets < 0 || update.dataPickups < 0
+        ) {
             return ProfileGameplayProgressRejection.NegativeAchievementProgress
         }
         update.architectDefeatedWith?.let { character ->
@@ -462,17 +557,31 @@ object ProfileNucleus {
             if (level < state.policy.rebirth.minimumLevel) {
                 return ProfileGameplayProgressRejection.ClearedLevelBelowMinimum(level)
             }
-            if (level > state.profile.rebirthProgress.level) {
-                return ProfileGameplayProgressRejection.ClearedLevelAboveCurrent(level)
+            // The run's tier was selected under the rank at its start; the live selection may have
+            // moved since, so the clear is checked against the rank, never against `level`.
+            if (level > state.profile.rebirthProgress.rankWithin(state.policy.rebirth.minimumLevel, state.policy.rebirth.maximumLevel)) {
+                return ProfileGameplayProgressRejection.ClearedLevelAboveRank(level)
             }
+        }
+        update.victoryRelicIds?.let { relics ->
+            if (update.clearedRebirthLevel == null) {
+                return ProfileGameplayProgressRejection.VictoryRelicsWithoutClear
+            }
+            if (relics.size > MAX_HEIRLOOM_RELICS) return ProfileGameplayProgressRejection.TooManyVictoryRelics
+            relics.firstDuplicateOrNull()?.let { return ProfileGameplayProgressRejection.DuplicateVictoryRelic(it) }
         }
         return null
     }
 
-    private fun canAdvanceRebirth(state: ProfileState): Boolean =
-        state.bootstrap == ProfileBootstrapStatus.Ready &&
-            state.profile.rebirthProgress.level < state.policy.rebirth.maximumLevel &&
-            state.profile.rebirthProgress.highestCleared >= state.profile.rebirthProgress.level
+    /**
+     * True when a new tier waits: the rank is not cleared yet and lies above the selected `level`. An
+     * Ascendant profile (every tier cleared) has none, whichever tier it replays.
+     */
+    private fun canAdvanceRebirth(state: ProfileState): Boolean {
+        val progress = state.profile.rebirthProgress
+        val rank = progress.rankWithin(state.policy.rebirth.minimumLevel, state.policy.rebirth.maximumLevel)
+        return state.bootstrap == ProfileBootstrapStatus.Ready && rank > progress.level && rank > progress.highestCleared
+    }
 
     private fun ProfileWriteResult.toPersistenceStatus(
         pending: ProfilePersistenceStatus.Pending,
@@ -502,7 +611,7 @@ object ProfileNucleus {
         preferences = preferences,
         economy = economy,
         loadout = loadout,
-        labProgress = labProgress,
+        matrix = matrix,
         collection = collection,
         rebirthProgress = rebirthProgress,
     )
@@ -540,8 +649,17 @@ private fun stepPercentage(
     return (nextPercent / 100f).coerceIn(minimum, maximum)
 }
 
-private fun saturatedAdd(left: Long, right: Long): Long =
+private fun <T> List<T>.firstDuplicateOrNull(): T? {
+    val seen = HashSet<T>(size)
+    return firstOrNull { !seen.add(it) }
+}
+
+internal fun saturatedAdd(left: Long, right: Long): Long =
     if (Long.MAX_VALUE - left < right) Long.MAX_VALUE else left + right
 
 private const val DEFAULT_SIMULATION_SPEED_INDEX: Int = 2
 private const val DEFAULT_DAMAGE_THRESHOLD_INDEX: Int = 2
+
+/** Matter paid for every owned Matrix rank under [policy] (saturating). */
+internal fun matrixSpent(matrix: MatrixProgress, policy: kinetickk.ball.content.api.ProfilePolicySnapshot): Long =
+    policy.matrixNodes.fold(0L) { total, definition -> saturatedAdd(total, definition.spent(matrix.rank(definition.id))) }

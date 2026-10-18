@@ -6,7 +6,8 @@ package kinetickk.flow.session.interaction
 import androidx.compose.ui.input.key.Key
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.profile.interaction.armory.api.ArmoryOutput
-import kinetickk.ball.profile.interaction.lab.api.LabOutput
+import kinetickk.ball.profile.interaction.hangar.api.HangarOutput
+import kinetickk.ball.profile.interaction.matrix.api.MatrixOutput
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthOutput
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
 import kinetickk.flow.session.api.AppDestination
@@ -21,6 +22,7 @@ internal fun Key.toSessionShortcut(): SessionShortcut? = when (this) {
     Key.A -> SessionShortcut.ARMORY
     Key.B -> SessionShortcut.REBIRTH
     Key.C, Key.I -> SessionShortcut.CODEX
+    Key.H -> SessionShortcut.HANGAR
     Key.M -> SessionShortcut.MUTE
     Key.Escape -> SessionShortcut.BACK
     Key.Enter -> SessionShortcut.ENTER
@@ -28,7 +30,7 @@ internal fun Key.toSessionShortcut(): SessionShortcut? = when (this) {
 }
 
 internal fun HomeOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
-    is HomeOutput.SelectCoreShape -> SessionInteractionPulse.SelectCoreShapeRequested(shape)
+    HomeOutput.OpenHangar -> SessionInteractionPulse.OpenOverlay(AppDestination.Hangar)
     HomeOutput.StartRun -> SessionInteractionPulse.StartRunRequested
     HomeOutput.OpenSettings -> SessionInteractionPulse.OpenOverlay(AppDestination.Settings)
     HomeOutput.OpenLab -> SessionInteractionPulse.OpenOverlay(AppDestination.Lab)
@@ -52,8 +54,8 @@ internal fun SettingsOutput.toSessionPulse(): SessionInteractionPulse? = when (t
     SettingsOutput.Back -> SessionInteractionPulse.CloseOverlay
 }
 
-internal fun LabOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
-    LabOutput.Back -> SessionInteractionPulse.CloseOverlay
+internal fun MatrixOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
+    MatrixOutput.Back -> SessionInteractionPulse.CloseOverlay
 }
 
 internal fun ArmoryOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
@@ -62,9 +64,12 @@ internal fun ArmoryOutput.toSessionPulse(): SessionInteractionPulse = when (this
 
 internal fun RebirthOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
     RebirthOutput.Back -> SessionInteractionPulse.CloseOverlay
-    RebirthOutput.ArmRequested,
-    RebirthOutput.ConfirmRequested,
-    -> SessionInteractionPulse.RebirthRequested
+    is RebirthOutput.ArmRequested -> SessionInteractionPulse.RebirthRequested(tier)
+    is RebirthOutput.ConfirmRequested -> SessionInteractionPulse.RebirthRequested(tier)
+}
+
+internal fun HangarOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
+    HangarOutput.Back -> SessionInteractionPulse.CloseOverlay
 }
 
 internal fun CodexOutput.toSessionPulse(): SessionInteractionPulse = when (this) {

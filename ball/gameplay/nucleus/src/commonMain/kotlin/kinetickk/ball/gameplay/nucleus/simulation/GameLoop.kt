@@ -3,7 +3,10 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicPairingId
 
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
@@ -27,11 +30,20 @@ internal fun MutableGameState.update(rawDelta: Float) {
         accumulator = 0f
         return
     }
-    accumulator = nextSimulationAccumulator(
-        currentAccumulator = accumulator,
-        rawDeltaSeconds = rawDelta,
-        simulationSpeed = settings.simulationSpeed,
+    runAdmittedFrame(
+        nextSimulationAccumulator(
+            currentAccumulator = accumulator,
+            rawDeltaSeconds = rawDelta,
+            simulationSpeed = settings.simulationSpeed,
+        ),
     )
+}
+
+/** Runs a running frame whose real time [nextAccumulator] was already admitted ([nextSimulationAccumulator]). */
+internal fun MutableGameState.runAdmittedFrame(nextAccumulator: Float) {
+    check(phase == GamePhase.RUNNING) { "Only a running simulation admits frame time" }
+    lastTransitionSteps = 0
+    accumulator = nextAccumulator
     consumeFixedStepBudget()
 }
 
@@ -49,7 +61,7 @@ internal fun nextSimulationAccumulator(
 internal fun MutableGameState.consumeFixedStepBudget() {
     var steps = 0
     while (
-        accumulator >= MutableGameState.FIXED_STEP &&
+        fixedStepIsDue(accumulator) &&
         phase == GamePhase.RUNNING &&
         steps < MAX_FIXED_STEPS_PER_FRAME
     ) {
@@ -60,27 +72,62 @@ internal fun MutableGameState.consumeFixedStepBudget() {
     lastTransitionSteps = steps
 }
 
+/**
+ * Whether [accumulator] holds a whole fixed step. Adding frame deltas such as 1/144 s and
+ * subtracting steps rounds in Float, so a sum that is nominally on a step boundary can sit an ulp
+ * below it; within [FIXED_STEP_ROUNDING_TOLERANCE] the step is due. That keeps the step at which an
+ * input lands independent of the frame rate, while a delta that is genuinely shorter (0.02f is
+ * below 20 ms) still waits for the next frame.
+ */
+internal fun fixedStepIsDue(accumulator: Float): Boolean =
+    accumulator >= MutableGameState.FIXED_STEP - FIXED_STEP_ROUNDING_TOLERANCE
+
+/**
+ * Two ulps of the fixed step: Float rounding of the accumulator, never real time. `Float.ulp` is
+ * not common Kotlin (no Wasm), so the ulp is the exact gap to the next representable Float.
+ */
+internal val FIXED_STEP_ROUNDING_TOLERANCE: Float =
+    (Float.fromBits(MutableGameState.FIXED_STEP.toRawBits() + 1) - MutableGameState.FIXED_STEP) * 2f
+
 internal const val MAX_FIXED_STEPS_PER_FRAME: Int = 48
 internal const val MAX_SIMULATION_RAW_DELTA_SECONDS: Float = 0.1f
 internal const val MAX_SIMULATION_ACCUMULATOR_SECONDS: Float = 0.3f
 
 internal fun MutableGameState.simulateStep(delta: Float) {
+    interpolationPrimed = true
+    ageCharacterStepFlags()
+    previousCameraX = cameraX
+    previousCameraY = cameraY
     elapsed += delta
+    // One cue budget covers every Break and reaction source in the step.
+    statusCuesThisStep = 0
     if (runGrace.toRawBits() != 0) runGrace = max(0f, runGrace - delta)
     if (hurtCooldown.toRawBits() != 0) hurtCooldown = max(0f, hurtCooldown - delta)
-    if (dashPhaseTime.toRawBits() != 0) dashPhaseTime = max(0f, dashPhaseTime - delta)
+    if (dashPhaseTime.toRawBits() != 0) {
+        dashPhaseTime = max(0f, dashPhaseTime - delta)
+        if (dashPhaseTime.toRawBits() == 0) endCharacterDash()
+    }
     if (screenShake.toRawBits() != 0) screenShake = max(0f, screenShake - delta * 18f)
     if (lastImpactTime.toRawBits() != 0) lastImpactTime = max(0f, lastImpactTime - delta)
     if (damageFlash.toRawBits() != 0) damageFlash = max(0f, damageFlash - delta * 3.4f)
     if (messageTime.toRawBits() != 0) messageTime = max(0f, messageTime - delta)
     if (comboTime.toRawBits() != 0) comboTime = max(0f, comboTime - delta)
     if (weaponBeamTime.toRawBits() != 0) weaponBeamTime = max(0f, weaponBeamTime - delta)
-    if (comboTime <= 0f) combo = 0
+    if (comboTime <= 0f && combo > 0) {
+        // CHAIN III: a lapsing combo halves instead of resetting.
+        combo = if (tagTier(BuildTag.CHAIN) >= 3 && combo >= 2) {
+            comboTime = effectiveComboWindow() * 0.5f
+            combo / 2
+        } else 0
+    }
 
     updateSurvival(delta)
     updateOverdrive(delta)
     updateHeat(delta)
     updateCore(delta)
+    if (phase != GamePhase.RUNNING) return
+    // Obstacles bend the Core's path before anything meets it at its new position.
+    updateObstacles()
     if (phase != GamePhase.RUNNING) return
     emitVisualFx(
         VisualFxCue.MotionSample(
@@ -91,19 +138,28 @@ internal fun MutableGameState.simulateStep(delta: Float) {
             dashPhaseTime = dashPhaseTime,
         ),
     )
+    updateBuildEdges(delta)
+    if (phase != GamePhase.RUNNING) return
     updateCharacterRuntime(delta)
+    // A slam can level up through a Data clause and open a choice: nothing else acts once it is open.
+    if (phase != GamePhase.RUNNING) return
     updateCamera(delta)
-    updateSynergyRuntime(delta)
     updatePointsOfInterest(delta)
     updateWeapons(delta)
     updateEnemies(delta)
+    if (phase != GamePhase.RUNNING) return
+    updateBossEncounter()
+    updateStatuses(delta)
+    updateCombatFields(delta)
     updateRelicRuntime(delta)
+    if (phase != GamePhase.RUNNING) return
     updateProjectiles(delta)
     updatePickups(delta)
     updateTotem(delta)
     emitVisualFx(VisualFxCue.EffectsAdvanced(delta))
     spawnWave(delta)
     resolveCollisions(delta)
+    updateVolatileRemains()
     if (phase != GamePhase.RUNNING) return
     rebaseWorldIfNeeded()
 
@@ -117,6 +173,7 @@ internal fun MutableGameState.simulateStep(delta: Float) {
         // The terminal boss has priority over the oldest ordinary enemy at the hard cap.
         if (enemies.size >= content.rebirth.maxActiveEnemies) enemies.removeAt(0)
         spawnEnemy(EnemyType.ARCHITECT)
+        spawnSingularityEscort()
     }
 }
 
@@ -125,108 +182,59 @@ internal fun MutableGameState.updateSurvival(delta: Float) {
     if (shieldRechargeDelay.toRawBits() != 0) {
         shieldRechargeDelay = max(0f, shieldRechargeDelay - delta)
     }
-    if (regenPerSecond > 0f && timeSinceDamage >= 3f) hp = min(maxHp, hp + regenPerSecond * delta)
-    if (maxShield > 0f && shieldRechargeDelay <= 0f) {
-        shield = min(maxShield, shield + max(2f, maxShield * 0.09f) * delta)
+    if (regenPerSecond > 0f && timeSinceDamage >= 3f && build.regenerationToDecay <= 0f) {
+        heal(regenPerSecond * delta, HealSource.REGENERATION)
     }
-}
-
-internal fun MutableGameState.updateRelicRuntime(delta: Float) {
-    for (index in relicCooldowns.indices) {
-        val cooldown = relicCooldowns[index]
-        if (cooldown.toRawBits() != 0) relicCooldowns[index] = max(0f, cooldown - delta)
+    val capacity = shieldCapacity()
+    if (shield > capacity) {
+        // Overfilled shield (Hardlight Weave) decays back toward capacity.
+        shield = max(capacity, shield - 3f * delta)
+    } else if (capacity > 0f && shieldRechargeDelay <= 0f && !build.liability(RelicId.AEGIS_INVERSION)) {
+        shield = min(capacity, shield + max(2f, capacity * 0.09f) * entropyTideShieldRegen() * delta)
+        if (shield >= capacity * 0.5f) shieldBreakArmed = true
     }
-    if (slipstreamRelayTime.toRawBits() != 0) {
-        slipstreamRelayTime = max(0f, slipstreamRelayTime - delta)
-    }
-    if (borrowedMomentTime.toRawBits() != 0) {
-        borrowedMomentTime = max(0f, borrowedMomentTime - delta)
-    }
-
-    val glassIndex = RelicId.GLASS_WITNESS.ordinal
-    val scarIndex = RelicId.SCAR_TISSUE.ordinal
-    val scarRank = relicRank(RelicId.SCAR_TISSUE)
-    for (enemyIndex in enemies.indices) {
-        val enemy = enemies[enemyIndex]
-        if (enemy.relicQualificationCooldown.toRawBits() != 0) {
-            enemy.relicQualificationCooldown = max(0f, enemy.relicQualificationCooldown - delta)
-        }
-        val glassTimer = enemy.relicTimers[glassIndex]
-        if (glassTimer.toRawBits() != 0) enemy.relicTimers[glassIndex] = max(0f, glassTimer - delta)
-        if (enemy.relicTimers[scarIndex] > 0f) {
-            enemy.relicTimers[scarIndex] = max(0f, enemy.relicTimers[scarIndex] - delta)
-            if (scarRank > 0 && enemy.hp > 0f) {
-                val intensity = max(1, enemy.relicCounters[scarIndex])
-                damageEnemy(enemy, 3f * scarRank * intensity * delta)
-            }
-        }
-    }
-
-    var retainedDelayedHitCount = 0
-    for (delayedHitIndex in delayedRelicHits.indices) {
-        val delayed = delayedRelicHits[delayedHitIndex]
-        delayed.delay -= delta
-        if (delayed.delay > 0f) {
-            if (retainedDelayedHitCount != delayedHitIndex) {
-                delayedRelicHits[retainedDelayedHitCount] = delayed
-            }
-            retainedDelayedHitCount++
-            continue
-        }
-        var target: Enemy? = null
-        for (enemyIndex in enemies.indices) {
-            val candidate = enemies[enemyIndex]
-            if (candidate.id == delayed.enemyId && !candidate.dead && candidate.hp > 0f) {
-                target = candidate
-                break
-            }
-        }
-        if (target != null && relicRank(delayed.relicId) > 0) {
-            damageEnemy(target, delayed.damage)
-            relicProcCounts[delayed.relicId.ordinal]++
-            burst(target.x, target.y, 4, 2)
-        }
-        if (delayed.linkedEnemyId >= 0 && hasSynergy(kinetickk.ball.content.api.SynergyId.LINKED_ECHO)) {
-            enemies.firstOrNull { it.id == delayed.linkedEnemyId && !it.dead && it.hp > 0f }?.let { linked ->
-                damageEnemy(linked, delayed.damage * 0.75f)
-                if (target != null) addRelicArc(target.x, target.y, linked.x, linked.y)
-            }
-        }
-    }
-    var delayedHitIndex = delayedRelicHits.lastIndex
-    while (delayedHitIndex >= retainedDelayedHitCount) {
-        delayedRelicHits.removeAt(delayedHitIndex)
-        delayedHitIndex--
+    if (shield > capacity * (if (build.overhealOverfill > 0f) build.overhealOverfill else 1f)) {
+        shield = capacity * if (build.overhealOverfill > 0f) build.overhealOverfill else 1f
     }
 }
 
 internal fun MutableGameState.updateOverdrive(delta: Float) {
     if (overdriveTime > 0f) {
         overdriveTime = max(0f, overdriveTime - delta)
+        if (overdriveTime <= 0f) {
+            overdriveBurnoutUntil = elapsed + OVERDRIVE_BURNOUT_SECONDS
+            overdriveExtension = 0f
+            overdriveKills = 0
+        }
     } else if (overdriveCharge >= 100f) {
         overdriveCharge -= 100f
         overdriveTime = 7f
-        val paradoxRank = relicRank(RelicId.ENGINE_OF_PARADOX)
-        if (paradoxRank > 0) {
-            weaponClock = 0f
-            weaponSecondaryClock = 0f
-            heat = max(0f, heat - 10f)
-            relicProcCounts[RelicId.ENGINE_OF_PARADOX.ordinal]++
+        overdriveExtension = 0f
+        overdriveKills = 0
+        if (tagTier(BuildTag.OVERCLOCK) >= 3) {
+            heat = 0f
+            overdriveTime += 2f
+        }
+        if (build.pairing(RelicPairingId.MELTDOWN)) {
+            val before = heat
+            heat = MutableGameState.MAX_HEAT
+            applyOverheatEdge(before)
         }
         message = "KINETIC OVERDRIVE"
         messageTime = 2f
         emitSound(GameplayAudioCue.OVERDRIVE)
+        fireClauses(EffectTrigger.OVERDRIVE)
     }
-    if (speed > 450f) {
-        val gain = min(5f, (speed - 450f) / 900f) * delta * 8f * overdriveGain
-        overdriveCharge = min(125f, overdriveCharge + gain)
-    }
+    if (speed > 450f) gainOverdrive(min(5f, (speed - 450f) / 900f) * delta * 8f)
 }
 
 internal fun MutableGameState.updateHeat(delta: Float) {
-    val cooling = coolingRate * if (braking) 1.6f else 1f
+    val brakeCooling = if (tagTier(BuildTag.ANCHOR) >= 1) 2.4f else 1.6f
+    val cooling = effectiveCooling() * if (braking) brakeCooling else 1f
     if (overheatHoldTime.toRawBits() != 0) overheatHoldTime = max(0f, overheatHoldTime - delta)
     if (overheatHoldTime <= 0f) heat = max(0f, heat - cooling * delta)
+    if (!overheatArmed && heat <= 70f) overheatArmed = true
+    if (build.freeDashHeat > 0f && heat < build.freeDashHeat && freeDashReadyAt <= elapsed) freeDashPrimed = true
     if (overheated && heat <= 28f) {
         overheated = false
         message = "DASH ONLINE"
@@ -234,17 +242,20 @@ internal fun MutableGameState.updateHeat(delta: Float) {
         emitSound(GameplayAudioCue.RECOVERED)
     }
     if (dashBufferTime.toRawBits() != 0) dashBufferTime = max(0f, dashBufferTime - delta)
-    if (dashBufferTime > 0f && dashReady) {
+    if (dashBufferTime > 0f && buildDashReady()) {
         dashBufferTime = 0f
         performDash()
     }
 }
 
+/** Furnace Covenant keeps Dash available through overheat; otherwise the usual heat rule applies. */
+internal fun MutableGameState.buildDashReady(): Boolean =
+    characterDashReady() ?: if (build.upside(RelicId.FURNACE_COVENANT)) true
+    else !overheated && (heat <= MutableGameState.MAX_HEAT - effectiveDashHeatCost() * 0.5f || matrixFreeDashReady())
+
 internal fun MutableGameState.performDash() {
-    onSynergyDash()
     beginCharacterDash()
-    val departureX = coreX
-    val departureY = coreY
+    dashHitThisDash = false
     val targetX = cameraX + pointerX - screenWidth * 0.5f
     val targetY = cameraY + pointerY - screenHeight * 0.5f
     val dx = targetX - coreX
@@ -252,34 +263,56 @@ internal fun MutableGameState.performDash() {
     val distance = length(dx, dy)
     val directionX = if (distance > 24f) dx / distance else lastAimDirectionX
     val directionY = if (distance > 24f) dy / distance else lastAimDirectionY
-    val forwardVelocity = velocityX * directionX + velocityY * directionY
-    if (forwardVelocity < 0f) {
-        val reverseAssist = forwardVelocity * 0.72f
-        velocityX -= directionX * reverseAssist
-        velocityY -= directionY * reverseAssist
+    val onBeat = onCharacterDashDeparture()
+    var cost = effectiveDashHeatCost() * if (onBeat) BEAT_DASH_HEAT else 1f
+    val crescent = coreShape == kinetickk.ball.content.api.CoreShape.CRESCENT
+    // The Crescent's Blink spends a charge instead of heat.
+    if (crescent) cost = 0f
+    if (cost > 0f && freeDashPrimed) {
+        freeDashPrimed = false
+        freeDashReadyAt = elapsed + build.freeDashCooldown
+        cost = 0f
     }
-    velocityX += directionX * dashImpulse
-    velocityY += directionY * dashImpulse
-    heat += dashHeatCost
-    dashPhaseTime = 0.24f
+    if (cost > 0f && spendMatrixFreeDash()) cost = 0f
+    if (crescent) {
+        relicOnDashDeparture()
+        crescentBlink(directionX, directionY)
+    } else if (!relicOnDash(directionX, directionY)) {
+        val forwardVelocity = velocityX * directionX + velocityY * directionY
+        if (forwardVelocity < 0f) {
+            val reverseAssist = forwardVelocity * 0.72f
+            velocityX -= directionX * reverseAssist
+            velocityY -= directionY * reverseAssist
+        }
+        val impulse = effectiveDashImpulse() * characterDashImpulseMultiplier(onBeat)
+        velocityX += directionX * impulse
+        velocityY += directionY * impulse
+    }
+    val before = heat
+    heat += cost
+    if (heat > MutableGameState.MAX_HEAT && build.upside(RelicId.FURNACE_COVENANT)) {
+        // Heat past full burns integrity instead of locking the Dash.
+        loseIntegrity((heat - MutableGameState.MAX_HEAT) * 0.5f)
+        heat = MutableGameState.MAX_HEAT
+    }
+    dashPhaseTime = DASH_PHASE_SECONDS
     screenShake = max(screenShake, 5f)
-    overdriveCharge = min(125f, overdriveCharge + 5f * overdriveGain)
+    gainOverdrive(5f)
     shockwave(coreX, coreY, 0.3f, 112f, 0)
     directionalBurst(coreX, coreY, 18, 0, -directionX, -directionY)
-    val ghostRank = relicRank(RelicId.GHOST_VECTOR)
-    if (ghostRank > 0) {
-        val radius = 72f + 14f * ghostRank
-        for (enemyIndex in enemies.indices) {
-            val enemy = enemies[enemyIndex]
-            if (!enemy.dead && enemy.hp > 0f && distanceSquared(departureX, departureY, enemy.x, enemy.y) <= square(radius + enemy.radius)) {
-                damageEnemy(enemy, 24f * ghostRank)
-            }
-        }
-        shockwave(departureX, departureY, 0.22f, radius, 2)
-        relicProcCounts[RelicId.GHOST_VECTOR.ordinal]++
-    }
     emitSound(GameplayAudioCue.DASH)
-    if (heat >= MutableGameState.MAX_HEAT) {
+    fireClauses(EffectTrigger.DASH)
+    applyOverheatEdge(before)
+}
+
+/**
+ * Heat reaching full from any source: the Dash locks at full heat unless Furnace Covenant holds, then OVERHEAT
+ * clauses fire once per climb (re-armed at 70). Locking first lets a clause that vents heat count down from full
+ * and shorten the lockout. Call after every heat increase with the heat it started from.
+ */
+internal fun MutableGameState.applyOverheatEdge(before: Float) {
+    if (before >= MutableGameState.MAX_HEAT || heat < MutableGameState.MAX_HEAT) return
+    if (!build.upside(RelicId.FURNACE_COVENANT) && !overheated) {
         heat = MutableGameState.MAX_HEAT
         overheated = true
         overheatHoldTime = 0.08f
@@ -287,6 +320,37 @@ internal fun MutableGameState.performDash() {
         messageTime = 1.4f
         emitSound(GameplayAudioCue.OVERHEAT)
     }
+    if (overheatArmed) {
+        overheatArmed = false
+        fireClauses(EffectTrigger.OVERHEAT)
+    }
+}
+
+/** Brake release and other movement edges, derived inside the fixed step (inputs only set flags). */
+internal fun MutableGameState.updateBuildEdges(delta: Float) {
+    if (braking) {
+        brakeHoldTime += delta
+    } else if (wasBraking) {
+        if (brakeHoldTime >= 0.35f) onBrakeRelease()
+        brakeHoldTime = 0f
+        brakeShedSpeed = 0f
+    }
+    wasBraking = braking
+}
+
+private fun MutableGameState.onBrakeRelease() {
+    fireClauses(EffectTrigger.BRAKE_RELEASE)
+    if (tagTier(BuildTag.ANCHOR) >= 2) {
+        pushEnemies(coreX, coreY, 200f, 320f, inward = false)
+        areaDamage(coreX, coreY, 200f, impactPower(max(brakeShedSpeed, 300f)) * 0.4f, rescale = false)
+    }
+    if (anchorBreaksOnRelease) {
+        for (index in enemies.indices) {
+            val enemy = enemies[index]
+            if (enemy.alive && distanceSquared(enemy.x, enemy.y, coreX, coreY) <= square(220f + enemy.radius)) forceBreaks(enemy, 0.6f)
+        }
+    }
+    relicOnBrakeRelease()
 }
 
 internal fun MutableGameState.updateCore(delta: Float) {
@@ -304,7 +368,7 @@ internal fun MutableGameState.updateCore(delta: Float) {
     val directionX = dx / distance
     val directionY = dy / distance
     val overdriveMultiplier = if (overdriveTime > 0f) 1.3f else 1f
-    val pull = (92f + distance * magnetStrength) * overdriveMultiplier
+    val pull = (CORE_BASE_PULL + distance * effectiveMagnetism()) * overdriveMultiplier
     val brakeFactor = if (braking) 1.12f else 1f
     val currentSpeed = speed
     val forwardX = if (currentSpeed > 1f) velocityX / currentSpeed else directionX
@@ -315,7 +379,10 @@ internal fun MutableGameState.updateCore(delta: Float) {
     val suppressedPull = if (currentSpeed > 1f) forwardPull * (1f - tetherAuthority) else 0f
     velocityX += (directionX * pull - forwardX * suppressedPull) * brakeFactor * delta
     velocityY += (directionY * pull - forwardY * suppressedPull) * brakeFactor * delta
-    val damping = exp((if (braking) -5.2f else -dragCoefficient) * delta)
+    val perpetual = build.upside(RelicId.PERPETUAL_VECTOR)
+    val brakeDamping = if (build.liability(RelicId.PERPETUAL_VECTOR)) -2.6f else -5.2f
+    val drag = if (perpetual) dragCoefficient * 0.15f else dragCoefficient
+    val damping = exp((if (braking) brakeDamping else -drag) * delta)
     velocityX *= damping
     velocityY *= damping
 
@@ -333,11 +400,7 @@ internal fun MutableGameState.updateCore(delta: Float) {
         velocityY = 0f
     }
     updatePolarityStability(delta)
-    val brakeRank = relicRank(RelicId.BRAKEPOINT_MEMORY)
-    if (brakeRank > 0 && braking && currentSpeed > 250f && speed < currentSpeed) {
-        val cap = 0.18f * brakeRank
-        brakepointCharge = min(cap, brakepointCharge + cap * (currentSpeed - speed) / 500f)
-    }
+    if (braking && speed < currentSpeed) brakeShedSpeed = min(3_000f, brakeShedSpeed + (currentSpeed - speed))
 
     if (runGrace <= 0f && segmentCircleIntersects(
             previousCoreX - previousSingularityX,
@@ -373,7 +436,7 @@ internal fun MutableGameState.updatePolarityStability(delta: Float) {
         val recovery = if (braking && speed <= tuning.maximumBrakeRecoverySpeed) {
             max(tuning.normalRecoveryPerSecond, tuning.brakeRecoveryPerSecond)
         } else tuning.normalRecoveryPerSecond
-        polarityStability = min(1f, polarityStability + recovery * delta)
+        if (!build.liability(RelicId.GYRE_ENGINE)) polarityStability = min(1f, polarityStability + recovery * delta)
     }
     if (speed < tuning.minimumTurnSpeed || smoothedSpeed < tuning.minimumTurnSpeed) {
         turnHeadingEstablished = false
@@ -399,9 +462,12 @@ internal fun MutableGameState.updatePolarityStability(delta: Float) {
                 turnHoldTime += delta
                 if (turnHoldTime >= tuning.turnHoldSeconds) {
                     if (edgeStrain <= 0f) {
-                        polarityStability = min(1f, polarityStability + tuning.turnRecovery)
+                        val restore = if (build.liability(RelicId.GYRE_ENGINE)) 0.3f else tuning.turnRecovery
+                        polarityStability = min(1f, polarityStability + restore)
                     }
-                    onSynergyTurn()
+                    fireClauses(EffectTrigger.TURN)
+                    relicOnTurn()
+                    onCharacterTurn()
                     turnRecoveryCooldown = tuning.turnCooldownSeconds
                     saturationHeadingX = headingX
                     saturationHeadingY = headingY
@@ -420,8 +486,14 @@ internal fun MutableGameState.updatePolarityStability(delta: Float) {
     }
 }
 
+/** Thrust toward the singularity that does not depend on its distance. */
+internal const val CORE_BASE_PULL: Float = 92f
+
+/** The camera closes this share of its gap to the Core per second (exponentially). */
+internal const val CAMERA_FOLLOW_RATE: Float = 7.5f
+
 internal fun MutableGameState.updateCamera(delta: Float) {
-    val factor = 1f - exp(-7.5f * delta)
+    val factor = 1f - exp(-CAMERA_FOLLOW_RATE * delta)
     cameraX = lerp(cameraX, coreX, factor)
     cameraY = lerp(cameraY, coreY, factor)
 }

@@ -6,7 +6,6 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.content.api.RunTempoProfile
 import kinetickk.ball.content.api.FatigueTuning
 import kinetickk.ball.gameplay.nucleus.model.Pickup
-import kinetickk.ball.gameplay.nucleus.model.enemyTypeForElapsed
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.PickupType
@@ -67,9 +66,25 @@ class RunTempoTest {
         val faster = base.copy(bossAtSeconds = 360f)
         for (seconds in listOf(0f, 38f, 90f, 150f, 240f, 360f, 600f)) {
             assertEquals(base.encounterStage(seconds), faster.encounterStage(seconds * 0.5f))
-            assertEquals(enemyTypeForElapsed(seconds, 0.99f, base), enemyTypeForElapsed(seconds * 0.5f, 0.99f, faster))
             assertEquals(base.attackRateMultiplier(seconds), faster.attackRateMultiplier(seconds * 0.5f))
             assertEquals(base.enemyHealthMultiplier(seconds), faster.enemyHealthMultiplier(seconds * 0.5f))
+        }
+    }
+
+    @Test
+    fun runGrowthCurvesComeFromTheTempoProfile() {
+        val state = buildTestState(rebirth = 2)
+        val tempo = state.content.tempo
+        val power = state.rebirthProfile.playerPowerMultiplier
+        // Progress, then run scale, impact, weapon, self-damage and ability growth.
+        for ((progress, expected) in listOf(0.5f to listOf(1.8f, 1.6f, 1.8f, 1.8f, 1.5f), 1f to listOf(2.6f, 2.2f, 2.6f, 2.6f, 2f))) {
+            state.elapsed = tempo.bossAtSeconds * progress
+            assertEquals(tempo.runScaleGrowth(state.elapsed) * power, state.runScale(), "at $progress")
+            assertEquals(expected[0] * power, state.runScale(), 0.0001f, "run scale at $progress")
+            assertEquals(expected[1], state.impactRunGrowth(), 0.0001f, "impact at $progress")
+            assertEquals(expected[2], state.weaponRunGrowth(), 0.0001f, "weapon at $progress")
+            assertEquals(expected[3] * power, state.selfDamageScale(), 0.0001f, "self damage at $progress")
+            assertEquals(expected[4], tempo.abilityRunGrowth(state.elapsed), 0.0001f, "ability at $progress")
         }
     }
 
@@ -82,14 +97,16 @@ class RunTempoTest {
             engine.gainData(engine.nextLevelData.toFloat())
         }
         assertEquals(18, engine.level)
-        assertEquals(10, engine.weaponLevel)
+        // The Orb's signature Flux Wake starts a level up and its automatic ceiling is one higher.
+        val ceiling = engine.content.tempo.maximumAutomaticWeaponLevel + engine.signatureLevelBonus()
+        assertEquals(ceiling, engine.weaponLevel)
         assertTrue(engine.equippedRelics.isEmpty())
         assertEquals(0, engine.keys)
         repeat(8) {
             engine.phase = GamePhase.RUNNING
             engine.gainData(engine.nextLevelData.toFloat())
         }
-        assertEquals(10, engine.weaponLevel, "Automatic amplification stops at the profile bound")
+        assertEquals(ceiling, engine.weaponLevel, "Automatic amplification stops at the profile bound")
     }
 
     @Test

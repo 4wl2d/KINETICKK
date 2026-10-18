@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.performance
 
+import kinetickk.ball.gameplay.interaction.canvas.toPerformanceHudProjection
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -64,6 +65,23 @@ class GameplayPerformanceTelemetryTest {
         assertEquals(1, restarted.dispatchPipeline.sampleCount)
         assertEquals(1, restarted.canvasDraw.sampleCount)
         assertEquals(8.0, restarted.frameInterval.meanMillis, absoluteTolerance = 0.000_001)
+    }
+
+    @Test
+    fun framesAboveTheFixedStepRateAreReportedAtTheirRealRate() {
+        // V-Sync on a 240 Hz monitor or the uncapped desktop mode: nothing clamps the readout to 120.
+        val telemetry = GameplayPerformanceTelemetry()
+        repeat(600) { telemetry.recordFrameIntervalMillis(1_000.0 / 240.0) }
+        val fast = telemetry.snapshot()
+        assertEquals(240.0, fast.framesPerSecond, absoluteTolerance = 0.000_001)
+        assertEquals(240.0, fast.onePercentLowFramesPerSecond, absoluteTolerance = 0.000_001)
+        assertEquals(0.0, fast.framesOver16MillisFraction)
+        assertTrue(fast.toPerformanceHudProjection().rateLine.contains("240"), fast.toPerformanceHudProjection().rateLine)
+
+        repeat(600) { telemetry.recordFrameIntervalMillis(0.8) }
+        val uncapped = telemetry.snapshot()
+        assertEquals(1_250.0, uncapped.framesPerSecond, absoluteTolerance = 0.000_001)
+        assertTrue(uncapped.toPerformanceHudProjection().rateLine.contains("1250"), uncapped.toPerformanceHudProjection().rateLine)
     }
 
     @Test

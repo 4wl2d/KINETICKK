@@ -9,7 +9,7 @@ import kinetickk.ball.profile.api.ProfileRejection
 import kinetickk.ball.profile.api.ProfileSnapshot
 import kinetickk.ball.profile.api.ProfileSettingsChanged
 import kinetickk.ball.profile.api.ProfileCoreShapeSelected
-import kinetickk.ball.profile.api.ProfileRebirthAdvanced
+import kinetickk.ball.profile.api.ProfileRebirthTierSelected
 import kinetickk.ball.profile.api.ProfileProgressApplied
 import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.content.api.CoreShape
@@ -22,7 +22,7 @@ sealed interface ProfileNucleusPulse {
     data class Intent(val intent: ProfilePulse.Business) : ProfileNucleusPulse
     data object ToggleMute : ProfileNucleusPulse
     data class SelectCoreShape(val shape: CoreShape) : ProfileNucleusPulse
-    data object AdvanceRebirth : ProfileNucleusPulse
+    data class SelectRebirthTier(val tier: Int) : ProfileNucleusPulse
     data class ApplyGameplayProgress(val update: GameplayProgressUpdate) : ProfileNucleusPulse
 
     sealed interface Fact : ProfileNucleusPulse
@@ -63,6 +63,6 @@ sealed interface ProfileOutput {
 
     data class SettingsChanged(val result: ProfileSettingsChanged) : ProfileOutput
     data class CoreShapeSelected(val result: ProfileCoreShapeSelected) : ProfileOutput
-    data class RebirthAdvanced(val result: ProfileRebirthAdvanced) : ProfileOutput
+    data class RebirthTierSelected(val result: ProfileRebirthTierSelected) : ProfileOutput
     data class ProgressApplied(val result: ProfileProgressApplied) : ProfileOutput
 }

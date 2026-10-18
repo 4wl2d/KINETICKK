@@ -4,9 +4,14 @@
 package kinetickk.ball.profile.interaction.armory.impl
 
 import androidx.compose.ui.geometry.Rect
+import kinetickk.ball.content.api.CoreShapeDefinition
+import kinetickk.ball.content.api.RelicDefinition
+import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WeaponMastery
 import kinetickk.ball.profile.api.LoadoutProfileSnapshot
+import kinetickk.ball.profile.api.ProfileRejection
 import kinetickk.ball.profile.interaction.ProfileFrame
 import kinetickk.ball.profile.interaction.ProfileLayoutMode
 import kinetickk.ball.profile.interaction.armory.api.ArmoryOutput
@@ -15,6 +20,7 @@ import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.profileHeaderBackRect
 import kinetickk.ball.profile.interaction.profileLayoutGrow
 import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.immutableListOf
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
@@ -26,14 +32,21 @@ internal enum class ArmoryWeaponStatus {
     OWNED,
     AFFORDABLE,
     SHORT,
+    /** Not owned and gated above the profile's Rebirth rank, whatever the Matter balance. */
+    REBIRTH_LOCKED,
     ;
 
-    val locked: Boolean get() = this == AFFORDABLE || this == SHORT
+    val locked: Boolean get() = this == AFFORDABLE || this == SHORT || this == REBIRTH_LOCKED
+
+    /** A locked weapon the player cannot unlock yet: the panel says why beside the disabled action. */
+    val blocked: Boolean get() = this == SHORT || this == REBIRTH_LOCKED
 }
 
+// Same order as the Profile's purchase decision: the Rebirth gate before the Matter price.
 internal fun ArmoryRenderModel.status(definition: WeaponDefinition): ArmoryWeaponStatus = when {
     definition.id == selectedWeapon -> ArmoryWeaponStatus.STARTER
     definition.id in unlockedWeapons -> ArmoryWeaponStatus.OWNED
+    rebirthRank < definition.minimumRebirth -> ArmoryWeaponStatus.REBIRTH_LOCKED
     totalMatter >= definition.permanentUnlockCost -> ArmoryWeaponStatus.AFFORDABLE
     else -> ArmoryWeaponStatus.SHORT
 }
@@ -42,10 +55,69 @@ internal fun ArmoryRenderModel.status(definition: WeaponDefinition): ArmoryWeapo
 internal val ArmoryWeaponStatus.actionEnabled: Boolean
     get() = this == ArmoryWeaponStatus.OWNED || this == ArmoryWeaponStatus.AFFORDABLE
 
-/** Screen-local selection: the weapon whose details and action the panel shows. */
+/** Why a weapon could not be unlocked: the panel names it beside the action instead of ignoring the press. */
+internal enum class ArmoryRefusal {
+    INSUFFICIENT_MATTER,
+    REBIRTH_LOCKED,
+    /** The Profile refused for another reason (its state moved on since the screen last read it). */
+    REFUSED,
+}
+
+/** The last refused unlock of [weapon], shown until another weapon is inspected or an unlock succeeds. */
+internal data class ArmoryNotice(val weapon: WeaponId, val refusal: ArmoryRefusal)
+
+/** The refusal a press on a [ArmoryWeaponStatus.blocked] weapon reports; null for every other status. */
+internal fun ArmoryWeaponStatus.refusal(): ArmoryRefusal? = when (this) {
+    ArmoryWeaponStatus.SHORT -> ArmoryRefusal.INSUFFICIENT_MATTER
+    ArmoryWeaponStatus.REBIRTH_LOCKED -> ArmoryRefusal.REBIRTH_LOCKED
+    else -> null
+}
+
+/** The refusal shown for the Profile's [ProfileRejection] of a purchase or equip; null when nothing changed. */
+internal fun ProfileRejection.armoryRefusal(): ArmoryRefusal? = when (this) {
+    ProfileRejection.NoChange -> null
+    ProfileRejection.InsufficientMatter -> ArmoryRefusal.INSUFFICIENT_MATTER
+    ProfileRejection.WeaponRebirthLocked -> ArmoryRefusal.REBIRTH_LOCKED
+    else -> ArmoryRefusal.REFUSED
+}
+
+/** Screen-local selection: the weapon whose details and action the panel shows, and its last refusal. */
 internal data class ArmoryViewState(
     val inspected: WeaponId,
+    val notice: ArmoryNotice? = null,
+) {
+    /** The refusal to show for the inspected weapon, if its last unlock was refused. */
+    val inspectedNotice: ArmoryNotice? get() = notice?.takeIf { it.weapon == inspected }
+}
+
+/**
+ * A weapon's live synergy read from content and the Profile alone: its [signature] character
+ * (active when the next run's character is that one) and the heirloom candidates that carry its
+ * Relic key ([harmonizing], in heirloom slot order).
+ */
+internal class ArmorySynergy(
+    val signature: CoreShapeDefinition?,
+    val signatureActive: Boolean,
+    val harmonizing: List<RelicDefinition>,
 )
+
+internal fun ArmoryRenderModel.synergy(
+    weapon: WeaponDefinition,
+    coreShapes: List<CoreShapeDefinition>,
+    relics: List<RelicDefinition>,
+): ArmorySynergy = ArmorySynergy(
+    signature = coreShapes.firstOrNull { it.id == weapon.signature },
+    signatureActive = character == weapon.signature,
+    harmonizing = heirloomRelics.distinct().mapNotNull { id -> relics.firstOrNull { it.id == id } }.filter { weapon.key in it.keys },
+)
+
+/** Weapon levels of the three mastery forms: the mastery milestones after the base one (3, 6 and 10). */
+internal fun armoryFormLevels(masteries: List<WeaponMastery>): List<Int> =
+    masteries.map { it.minimumLevel }.filter { it > 1 }.sorted().take(WEAPON_FORM_COUNT)
+        .takeIf { it.size == WEAPON_FORM_COUNT } ?: DefaultFormLevels
+
+private const val WEAPON_FORM_COUNT = 3
+private val DefaultFormLevels = listOf(3, 6, 10)
 
 internal sealed interface ArmoryAction {
     data object Back : ArmoryAction
@@ -74,17 +146,24 @@ internal sealed interface ArmoryEffect {
     data class ScrollGrid(val forward: Boolean) : ArmoryEffect
 }
 
+/** Heirloom candidate ids the render model reads when the Profile holds none. */
+internal val NoHeirlooms: ImmutableList<RelicId> = immutableListOf()
+
 internal class ArmoryReducer(
     private val weapons: ImmutableList<WeaponDefinition>,
 ) {
     fun renderModel(
         snapshot: LoadoutProfileSnapshot,
         activeRunWeapon: WeaponId?,
+        heirloomRelics: ImmutableList<RelicId> = NoHeirlooms,
     ): ArmoryRenderModel = ArmoryRenderModel(
         totalMatter = snapshot.economy.matter,
         selectedWeapon = snapshot.loadout.selectedWeapon,
         unlockedWeapons = snapshot.loadout.unlockedWeapons,
         activeRunWeapon = activeRunWeapon,
+        rebirthRank = snapshot.rebirthRank,
+        character = snapshot.loadout.coreShape,
+        heirloomRelics = heirloomRelics,
     )
 
     fun reduce(state: ArmoryViewState, model: ArmoryRenderModel, action: ArmoryAction): ArmoryReduction = when (action) {
@@ -115,13 +194,45 @@ internal class ArmoryReducer(
             ArmoryReduction(ArmoryViewState(id), listOf(ArmoryEffect.PlayAudio(ProfileAudioCue.UI_CLICK)))
         }
 
-    // Affordability is only presentation gating (the old disabled button); the Profile Nucleus
-    // remains the authority that accepts or rejects the purchase or equip.
+    // Affordability and the Rebirth gate are only presentation gating (a locked button that names its
+    // reason); the Profile Nucleus remains the authority that accepts or rejects the purchase or equip.
     private fun apply(state: ArmoryViewState, model: ArmoryRenderModel, id: WeaponId): ArmoryReduction {
         val definition = weapons.firstOrNull { it.id == id } ?: return ArmoryReduction(state)
-        if (!model.status(definition).actionEnabled) return ArmoryReduction(ArmoryViewState(id))
+        val status = model.status(definition)
+        status.refusal()?.let { refusal ->
+            return ArmoryReduction(ArmoryViewState(id, ArmoryNotice(id, refusal)), listOf(ArmoryEffect.PlayAudio(ProfileAudioCue.REFUSED)))
+        }
+        if (!status.actionEnabled) return ArmoryReduction(ArmoryViewState(id))
         return ArmoryReduction(ArmoryViewState(id), listOf(ArmoryEffect.PurchaseOrEquipWeapon(id)))
     }
+
+    /**
+     * The Profile's answer to the purchase or equip of [id]: a [rejection] is named beside the
+     * action (a stale screen can still be refused), an acceptance clears the last refusal.
+     */
+    fun answered(state: ArmoryViewState, id: WeaponId, rejection: ProfileRejection?): ArmoryViewState = when (rejection) {
+        null -> state.copy(notice = null)
+        else -> state.copy(notice = rejection.armoryRefusal()?.let { ArmoryNotice(id, it) })
+    }
+}
+
+/**
+ * The grid scroll (px) that shows tile [index] whole, moving as little as possible from [scroll]:
+ * a tile above the viewport aligns its top (with the grid's padding for the selection lift), one
+ * below aligns its bottom, and a tile taller than the viewport shows its top. Clamped to the
+ * scroll range.
+ */
+internal fun armoryRevealScroll(layout: ArmoryLayout, index: Int, scroll: Float): Float {
+    val max = layout.gridScrollMax
+    val tile = layout.tiles.getOrNull(index) ?: return scroll.coerceIn(0f, max)
+    val margin = layout.tiles.first().top
+    val viewport = layout.gridViewport.height
+    val target = when {
+        tile.top - margin < scroll || tile.height + margin * 2f > viewport -> tile.top - margin
+        tile.bottom + margin > scroll + viewport -> tile.bottom + margin - viewport
+        else -> scroll
+    }
+    return target.coerceIn(0f, max)
 }
 
 /**
@@ -154,6 +265,12 @@ internal class ArmoryLayout(
     val tileIconY: Float = 0f,
     /** True when the mastery milestones stack one per line under the level cells. */
     val ladderStacked: Boolean = false,
+    /** The three mastery forms by level, under the ladder. */
+    val forms: Rect = Rect.Zero,
+    /** The live synergy: signature character and twist, heirloom harmony, tag resonance. */
+    val synergy: Rect = Rect.Zero,
+    /** The weapon's typed facts: family, element, Relic key, scaling input and cadence. */
+    val facts: Rect = Rect.Zero,
 ) {
     val gridScrollMax: Float get() = max(0f, gridContentHeight - gridViewport.height)
     val detailScrollMax: Float get() = max(0f, detailContentHeight - detailViewport.height)
@@ -188,6 +305,10 @@ internal class ArmoryDetailMetrics(
     val descriptionHeight: Float,
     val tagsHeight: Float,
     val masterySideBySide: Boolean = true,
+    /** Heights (px) of the mastery forms, the synergy block and the facts as drawn; null keeps an estimate. */
+    val formsHeight: Float? = null,
+    val synergyHeight: Float? = null,
+    val factsHeight: Float? = null,
 )
 
 /** A weapon tile's content padding in px (the board's `padding: 14px 22px 14px 24px`; tighter on phones). */
@@ -271,7 +392,8 @@ internal fun armoryLayout(
             detailBottom = frame.height - d(8f)
             columns = if (gridRight - gridLeft >= d(430f)) 4 else 3
             gap = d(8f)
-            tileHeight = { width, available -> available.coerceIn(d(84f) * grow, width * 0.95f * grow) }
+            // Rows stay at least 84 px tall (the press target), even when tiles are narrower than that.
+            tileHeight = { width, available -> available.coerceIn(d(84f) * grow, max(d(84f) * grow, width * 0.95f * grow)) }
         }
         ProfileLayoutMode.COMPACT_PORTRAIT -> {
             // The detail dock grows with the text so the ladder starts above the pinned action.
@@ -286,7 +408,8 @@ internal fun armoryLayout(
             detailBottom = frame.height - d(10f)
             columns = 3
             gap = d(8f)
-            tileHeight = { width, available -> available.coerceIn(d(84f) * grow, width * 0.95f * grow) }
+            // Rows stay at least 84 px tall (the press target), even when tiles are narrower than that.
+            tileHeight = { width, available -> available.coerceIn(d(84f) * grow, max(d(84f) * grow, width * 0.95f * grow)) }
         }
     }
     val tileWidth = ((gridRight - gridLeft) - gap * (columns - 1)) / columns
@@ -354,12 +477,22 @@ internal fun armoryLayout(
         d(if (regular) 94f else 60f) * t
     }
     val ladder = Rect(detailLeft, ladderTop, detailRight, ladderTop + ladderHeight)
+    // The weapon sheet under the ladder: its mastery forms, the live synergy and the typed facts.
+    val sectionGap = d(if (regular) 24f else 14f)
+    val bodyLine = d(type.body) * 1.4f * t
+    val labelLine = d(type.label) * 1.5f * t
+    val formsTop = ladder.bottom + sectionGap
+    val forms = Rect(detailLeft, formsTop, detailRight, formsTop + (metrics?.formsHeight ?: (labelLine + bodyLine * 3f + d(18f))))
+    val synergyTop = forms.bottom + sectionGap
+    val synergy = Rect(detailLeft, synergyTop, detailRight, synergyTop + (metrics?.synergyHeight ?: (labelLine * 4f + bodyLine * 5f)))
+    val factsTop = synergy.bottom + sectionGap
+    val facts = Rect(detailLeft, factsTop, detailRight, factsTop + (metrics?.factsHeight ?: (labelLine * 5f + d(16f))))
     val actionHeight = d(if (regular) 72f else 52f)
     // A locked weapon keeps room beside the button for "Need N more matter".
     val actionRoom = (detailRight - detailLeft) * if (needRoom) 0.64f else 1f
     val clampedAction = min(actionWidth, actionRoom)
     val limit = max(detailTop + actionHeight, detailBottom)
-    val naturalTop = ladder.bottom + d(if (regular) 26f else 10f)
+    val naturalTop = facts.bottom + d(if (regular) 26f else 10f)
     // When the details run past the fold (large text, phones) the primary action is pinned to
     // the bottom of the panel and the details above it scroll.
     val actionPinned = naturalTop + actionHeight > limit
@@ -368,10 +501,10 @@ internal fun armoryLayout(
     val need = Rect(action.right + d(16f), action.top, detailRight, action.bottom)
     val detailViewport = Rect(detailLeft - pad, detailTop - pad, detailRight + pad,
         if (actionPinned) action.top - d(8f) else limit)
-    val detailContentHeight = ladder.bottom + pad - detailViewport.top
+    val detailContentHeight = facts.bottom + pad - detailViewport.top
     return ArmoryLayout(frame, back, gridViewport, tiles, gridContentHeight, tileH + gap, columns, detailViewport,
         detailContentHeight, plate, name, description, tags, mastery, ladder, action, need, actionPinned,
-        tileIcon, tileIconY, ladderStacked)
+        tileIcon, tileIconY, ladderStacked, forms, synergy, facts)
 }
 
 /** Height in px of one detail tag chip at the board-relative text multiplier [textScale]. */

@@ -6,12 +6,16 @@ package kinetickk.flow.session.interaction.codex.impl
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ItemDefinition
-import kinetickk.ball.content.api.ItemEffect
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.foundation.design.CanvasGlyphStyle
 import kinetickk.foundation.design.drawLayeredGlyph
 
-/** Session owns the mapping of item semantics to the shared geometric drawing. */
+/**
+ * Session owns the mapping of item semantics to the shared geometric drawing; the table matches the
+ * in-run renderer so an item reads the same in the Codex as during a run.
+ */
 internal fun DrawScope.drawItemIcon(
     item: ItemDefinition,
     center: Offset,
@@ -22,8 +26,8 @@ internal fun DrawScope.drawItemIcon(
 ) {
     val rank = item.rarity.rank.coerceIn(1, 5)
     drawLayeredGlyph(
-        primaryStyle = item.primary.effect.toCanvasGlyphStyle(),
-        secondaryStyle = item.secondary.effect.toCanvasGlyphStyle(),
+        primaryStyle = item.primaryGlyphStyle(),
+        secondaryStyle = item.secondaryGlyphStyle(),
         center = center,
         radius = radius,
         accent = accent,
@@ -34,25 +38,34 @@ internal fun DrawScope.drawItemIcon(
     )
 }
 
-private fun ItemEffect.toCanvasGlyphStyle(): CanvasGlyphStyle = when (this) {
-    ItemEffect.IMPACT_DAMAGE -> CanvasGlyphStyle.SUNBURST
-    ItemEffect.WEAPON_POWER -> CanvasGlyphStyle.TRIPLE_ARROW
-    ItemEffect.MASS -> CanvasGlyphStyle.CONCENTRIC_ORB
-    ItemEffect.MAGNETISM -> CanvasGlyphStyle.HORSESHOE
-    ItemEffect.COOLING -> CanvasGlyphStyle.SNOWFLAKE
-    ItemEffect.MAX_INTEGRITY -> CanvasGlyphStyle.HEX_CROSS
-    ItemEffect.REGEN -> CanvasGlyphStyle.LEAF
-    ItemEffect.DASH_POWER -> CanvasGlyphStyle.DOUBLE_CHEVRON
-    ItemEffect.DASH_EFFICIENCY -> CanvasGlyphStyle.ORBIT_ARROWS
-    ItemEffect.CRIT_CHANCE -> CanvasGlyphStyle.RETICLE
-    ItemEffect.CRIT_DAMAGE -> CanvasGlyphStyle.BOLT
-    ItemEffect.PICKUP_RADIUS -> CanvasGlyphStyle.RADIAL_NODES
-    ItemEffect.LUCK -> CanvasGlyphStyle.FOUR_LEAF
-    ItemEffect.DATA_GAIN -> CanvasGlyphStyle.CIRCUIT_LINES
-    ItemEffect.MATTER_GAIN -> CanvasGlyphStyle.CRYSTAL
-    ItemEffect.ATTACK_SPEED -> CanvasGlyphStyle.SLASH_BARS
-    ItemEffect.SHIELD_CAPACITY -> CanvasGlyphStyle.SHIELD
-    ItemEffect.DAMAGE_REDUCTION -> CanvasGlyphStyle.BRICK_LINES
-    ItemEffect.COMBO_WINDOW -> CanvasGlyphStyle.INTERLOCKING_RINGS
-    ItemEffect.OVERDRIVE_GAIN -> CanvasGlyphStyle.THREE_BLADE
+/** The item's first element when it has one, otherwise its first tag. */
+internal fun ItemDefinition.primaryGlyphStyle(): CanvasGlyphStyle =
+    elements.firstOrNull()?.toCanvasGlyphStyle() ?: tags.firstOrNull()?.toCanvasGlyphStyle() ?: CanvasGlyphStyle.SUNBURST
+
+/** The first tag behind an element, else the second tag or element; a lone mark repeats itself. */
+internal fun ItemDefinition.secondaryGlyphStyle(): CanvasGlyphStyle = when {
+    elements.isNotEmpty() -> tags.firstOrNull()?.toCanvasGlyphStyle() ?: elements.getOrNull(1)?.toCanvasGlyphStyle()
+    else -> tags.getOrNull(1)?.toCanvasGlyphStyle()
+} ?: primaryGlyphStyle()
+
+internal fun StatusElement.toCanvasGlyphStyle(): CanvasGlyphStyle = when (this) {
+    StatusElement.THERMAL -> CanvasGlyphStyle.SUNBURST
+    StatusElement.CRYO -> CanvasGlyphStyle.SNOWFLAKE
+    StatusElement.ION -> CanvasGlyphStyle.BOLT
+    StatusElement.GRAVITIC -> CanvasGlyphStyle.CONCENTRIC_ORB
+    StatusElement.ENTROPY -> CanvasGlyphStyle.LEAF
+    StatusElement.SONIC -> CanvasGlyphStyle.SOUND_WAVES
+    StatusElement.VOID -> CanvasGlyphStyle.HOLLOW_RING
+}
+
+internal fun BuildTag.toCanvasGlyphStyle(): CanvasGlyphStyle = when (this) {
+    BuildTag.RAM -> CanvasGlyphStyle.TRIPLE_ARROW
+    BuildTag.DRIVE -> CanvasGlyphStyle.DOUBLE_CHEVRON
+    BuildTag.ANCHOR -> CanvasGlyphStyle.HORSESHOE
+    BuildTag.ARSENAL -> CanvasGlyphStyle.SLASH_BARS
+    BuildTag.PRECISION -> CanvasGlyphStyle.RETICLE
+    BuildTag.BULWARK -> CanvasGlyphStyle.SHIELD
+    BuildTag.OVERCLOCK -> CanvasGlyphStyle.THREE_BLADE
+    BuildTag.CHAIN -> CanvasGlyphStyle.INTERLOCKING_RINGS
+    BuildTag.FORTUNE -> CanvasGlyphStyle.FOUR_LEAF
 }

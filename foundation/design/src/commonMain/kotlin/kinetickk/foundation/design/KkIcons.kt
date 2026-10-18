@@ -76,6 +76,38 @@ enum class KkIcon(val key: String, val label: String, vararg layerData: KkIconLa
         KkIconLayer("M9 9h12v12h-12Z", KkIconStyle.STROKE),
         KkIconLayer("M3 3 9 9M15 3l6 6M3 15l6 6M15 15l6 6", KkIconStyle.STROKE),
     ),
+    FORMS_STAR(
+        "forms.star",
+        "Star",
+        KkIconLayer("M12 2.5 14.2 9.8 21.5 12 14.2 14.2 12 21.5 9.8 14.2 2.5 12 9.8 9.8Z", KkIconStyle.STROKE),
+    ),
+    FORMS_SPIRAL(
+        "forms.spiral",
+        "Spiral",
+        KkIconLayer("M12 12a1.5 1.5 0 0 1 3 0a3 3 0 0 1 -6 0a4.5 4.5 0 0 1 9 0a6 6 0 0 1 -12 0a7.5 7.5 0 0 1 15 0", KkIconStyle.STROKE),
+    ),
+    FORMS_DIPOLE(
+        "forms.dipole",
+        "Dipole",
+        KkIconLayer("M2.5 12a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0Z", KkIconStyle.FILL),
+        KkIconLayer("M14.5 12a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0Z", KkIconStyle.STROKE),
+        KkIconLayer("M9.5 12h5", KkIconStyle.STROKE),
+    ),
+    FORMS_PENTAGON(
+        "forms.pentagon",
+        "Pentagon",
+        KkIconLayer("M12 3.5 20.6 9.7 17.3 19.8h-10.6L3.4 9.7Z", KkIconStyle.STROKE),
+    ),
+    FORMS_CRESCENT(
+        "forms.crescent",
+        "Crescent",
+        KkIconLayer("M16 4a9 9 0 1 0 0 16a8.5 8.5 0 0 1 0 -16Z", KkIconStyle.STROKE),
+    ),
+    FORMS_HEXAGON(
+        "forms.hexagon",
+        "Hexagon",
+        KkIconLayer("M12 3 19.8 7.5v9L12 21 4.2 16.5v-9Z", KkIconStyle.STROKE),
+    ),
     WEAPONS_FLUX_WAKE(
         "weapons.flux_wake",
         "Flux Wake",
@@ -150,6 +182,82 @@ enum class KkIcon(val key: String, val label: String, vararg layerData: KkIconLa
         "Prism Relay",
         KkIconLayer("M8 5 14 17H2Z", KkIconStyle.STROKE),
         KkIconLayer("M13 11l9-5M14 13h8M13 15l9 5", KkIconStyle.STROKE),
+    ),
+    WEAPONS_GYRE_DISC(
+        "weapons.gyre_disc",
+        "Gyre Disc",
+        KkIconLayer("M4 9a8 3 0 1 0 16 0a8 3 0 1 0 -16 0Z", KkIconStyle.STROKE),
+        KkIconLayer("M5 15a7 5 0 0 0 14 0", KkIconStyle.STROKE_DASHED),
+    ),
+    WEAPONS_SCATTER_BLOOM(
+        "weapons.scatter_bloom",
+        "Scatter Bloom",
+        KkIconLayer("M2 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0Z", KkIconStyle.FILL),
+        KkIconLayer("M11 9h1M11 15h1M15.5 6h1M15.5 12h1M15.5 18h1M20 4h1M20 9.5h1M20 14.5h1M20 20h1", KkIconStyle.STROKE),
+    ),
+    WEAPONS_TETHER_ARC(
+        "weapons.tether_arc",
+        "Tether Arc",
+        KkIconLayer("M2 17a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", KkIconStyle.STROKE),
+        KkIconLayer("M16 7a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", KkIconStyle.FILL),
+        KkIconLayer("M7.5 14.5c1-3 3-1 4-4s3-1 4-3.5", KkIconStyle.STROKE),
+    ),
+    WEAPONS_SENTRY_GRID(
+        "weapons.sentry_grid",
+        "Sentry Grid",
+        KkIconLayer("M3 15h6v6h-6ZM15 15h6v6h-6ZM9 3h6v6h-6Z", KkIconStyle.STROKE),
+        KkIconLayer("M9.5 18h5M10 9.5l-3 5M14 9.5l3 5", KkIconStyle.STROKE_DOTTED),
+    ),
+    WEAPONS_HUNTER_SALVO(
+        "weapons.hunter_salvo",
+        "Hunter Salvo",
+        KkIconLayer("M14 5a2 2 0 1 0 4 0a2 2 0 1 0 -4 0ZM17 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0ZM14 19a2 2 0 1 0 4 0a2 2 0 1 0 -4 0Z", KkIconStyle.FILL),
+        KkIconLayer("M2 5h10M4 12h11M2 19h10", KkIconStyle.STROKE_DASHED),
+    ),
+    WEAPONS_CONCUSSION_ENGINE(
+        "weapons.concussion_engine",
+        "Concussion Engine",
+        KkIconLayer("M12 2l2 4.5 4.5-2-2 4.5 4.5 3-4.5 3 2 4.5-4.5-2-2 4.5-2-4.5-4.5 2 2-4.5-4.5-3 4.5-3-2-4.5 4.5 2Z", KkIconStyle.STROKE),
+        KkIconLayer("M10.5 12a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0Z", KkIconStyle.FILL),
+    ),
+    WEAPONS_GLACIER_BELL(
+        "weapons.glacier_bell",
+        "Glacier Bell",
+        KkIconLayer("M6 17v-6a6 6 0 0 1 12 0v6l2 2H4Z", KkIconStyle.STROKE),
+        KkIconLayer("M10 22h4", KkIconStyle.STROKE),
+        KkIconLayer("M12 8v6", KkIconStyle.STROKE_DOTTED),
+    ),
+    WEAPONS_EVENT_LENS(
+        "weapons.event_lens",
+        "Event Lens",
+        KkIconLayer("M2 12c5-7 15-7 20 0c-5 7-15 7-20 0Z", KkIconStyle.STROKE),
+        KkIconLayer("M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", KkIconStyle.FILL),
+    ),
+    WEAPONS_SOLAR_SWEEP(
+        "weapons.solar_sweep",
+        "Solar Sweep",
+        KkIconLayer("M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", KkIconStyle.STROKE),
+        KkIconLayer("M2 16l6-2.5M16 10.5l6-2.5", KkIconStyle.STROKE),
+        KkIconLayer("M5 5.5a9 9 0 0 1 9-2.5M19 18.5a9 9 0 0 1 -9 2.5", KkIconStyle.STROKE_DASHED),
+    ),
+    WEAPONS_AEGIS_SHARDS(
+        "weapons.aegis_shards",
+        "Aegis Shards",
+        KkIconLayer("M12 2l3 3-3 3-3-3ZM5 15l3 3-3 3-3-3ZM19 15l3 3-3 3-3-3Z", KkIconStyle.STROKE),
+        KkIconLayer("M12 10.5 14.5 12v3L12 16.5 9.5 15v-3Z", KkIconStyle.FILL),
+    ),
+    WEAPONS_HOLLOW_RIFT(
+        "weapons.hollow_rift",
+        "Hollow Rift",
+        KkIconLayer("M12 2l-3 6 4 3-4 4 3 7", KkIconStyle.STROKE),
+        KkIconLayer("M5 12a7 10 0 1 0 14 0a7 10 0 1 0 -14 0Z", KkIconStyle.STROKE_DASHED),
+    ),
+    WEAPONS_RESONANCE_DRUM(
+        "weapons.resonance_drum",
+        "Resonance Drum",
+        KkIconLayer("M4 7a8 3 0 1 0 16 0a8 3 0 1 0 -16 0Z", KkIconStyle.STROKE),
+        KkIconLayer("M4 7v10a8 3 0 0 0 16 0V7", KkIconStyle.STROKE),
+        KkIconLayer("M4 12a8 3 0 0 0 16 0", KkIconStyle.STROKE_DASHED),
     ),
     SYSTEM_INTEGRITY(
         "system.integrity",
@@ -241,41 +349,101 @@ enum class KkIcon(val key: String, val label: String, vararg layerData: KkIconLa
         KkIconLayer("M5 11h14v10h-14Z", KkIconStyle.STROKE),
         KkIconLayer("M8 11V7a4 4 0 0 1 8 0v4", KkIconStyle.STROKE),
     ),
-    ASPECT_VECTOR(
-        "aspect.vector",
-        "Vector",
-        KkIconLayer("M6 19 11 5M13 19 18 5", KkIconStyle.STROKE),
+    ASPECT_KINETIC(
+        "aspect.kinetic",
+        "Kinetic",
+        KkIconLayer("M12 3v4M12 17v4M3 12h4M17 12h4", KkIconStyle.STROKE),
+        KkIconLayer("M10 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0Z", KkIconStyle.FILL),
     ),
-    ASPECT_GRAVITIC(
-        "aspect.gravitic",
-        "Gravitic",
-        KkIconLayer("M3 5c4 4 14 4 18 0M5 10c3 3 11 3 14 0M8 15c2 2 6 2 8 0", KkIconStyle.STROKE),
+    ASPECT_THERMAL(
+        "aspect.thermal",
+        "Thermal",
+        KkIconLayer("M12 3c3 4 6 7 6 11a6 6 0 0 1 -12 0c0 -4 3 -7 6 -11Z", KkIconStyle.STROKE),
+        KkIconLayer("M12 13c1.2 1.4 2 2.4 2 3.5a2 2 0 0 1 -4 0c0 -1.1 .8 -2.1 2 -3.5Z", KkIconStyle.FILL),
+    ),
+    ASPECT_CRYO(
+        "aspect.cryo",
+        "Cryo",
+        KkIconLayer("M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6 -9", KkIconStyle.STROKE),
     ),
     ASPECT_ION(
         "aspect.ion",
         "Ion",
-        KkIconLayer("M13 2 5 13h6l-1 9 8-12h-6Z", KkIconStyle.STROKE),
+        KkIconLayer("M3 13l4 -7 5 12 5 -12 4 7", KkIconStyle.STROKE),
     ),
-    ASPECT_RIFT(
-        "aspect.rift",
-        "Rift",
-        KkIconLayer("M12 2 9 9l5 4-3 9", KkIconStyle.STROKE),
-    ),
-    ASPECT_PRISM(
-        "aspect.prism",
-        "Prism",
-        KkIconLayer("M12 3 21 20H3Z", KkIconStyle.STROKE),
-        KkIconLayer("M12 3v17", KkIconStyle.STROKE),
+    ASPECT_GRAVITIC(
+        "aspect.gravitic",
+        "Gravitic",
+        KkIconLayer("M4.21 16.5a9 4 -30 1 0 15.58 -9a9 4 -30 1 0 -15.58 9Z", KkIconStyle.STROKE),
+        KkIconLayer("M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", KkIconStyle.FILL),
     ),
     ASPECT_ENTROPY(
         "aspect.entropy",
         "Entropy",
-        KkIconLayer("M12 12a2 2 0 1 1 2 2a4 4 0 1 1-4-4a6 6 0 1 1 6 6", KkIconStyle.STROKE),
+        KkIconLayer("M12 4a8 8 0 0 1 8 8M18 17.5a8 8 0 0 1 -9.5 2.5M4.6 15a8 8 0 0 1 2.4 -9.5", KkIconStyle.STROKE),
+    ),
+    ASPECT_SONIC(
+        "aspect.sonic",
+        "Sonic",
+        KkIconLayer("M7.5 8.5a5 5 0 0 0 0 7M16.5 8.5a5 5 0 0 1 0 7M4.5 5.5a9 9 0 0 0 0 13M19.5 5.5a9 9 0 0 1 0 13", KkIconStyle.STROKE),
+        KkIconLayer("M10.5 12a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0Z", KkIconStyle.FILL),
+    ),
+    ASPECT_VOID(
+        "aspect.void",
+        "Void",
+        KkIconLayer("M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0Z", KkIconStyle.STROKE_DASHED),
+        KkIconLayer("M9 11a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0Z", KkIconStyle.STROKE),
     ),
     ASPECT_SOVEREIGN(
         "aspect.sovereign",
         "Sovereign",
         KkIconLayer("M3 20h18M4 17 3 7l5 4 4-7 4 7 5-4-1 10Z", KkIconStyle.STROKE),
+    ),
+    TAG_RAM(
+        "tag.ram",
+        "Ram",
+        KkIconLayer("M5 6h7a6 6 0 0 1 0 12H5ZM2 12h3", KkIconStyle.STROKE),
+    ),
+    TAG_DRIVE(
+        "tag.drive",
+        "Drive",
+        KkIconLayer("M14 8a5 5 0 1 1 0 10a5 5 0 1 1 0 -10ZM2 10h7M2 14h6M4 18h5", KkIconStyle.STROKE),
+    ),
+    TAG_ANCHOR(
+        "tag.anchor",
+        "Anchor",
+        KkIconLayer("M12 4v16M8 8h8M5 14a7 7 0 0 0 14 0", KkIconStyle.STROKE),
+    ),
+    TAG_ARSENAL(
+        "tag.arsenal",
+        "Arsenal",
+        KkIconLayer("M5 20h14M8 17V11M12 17V7M16 17V11", KkIconStyle.STROKE),
+    ),
+    TAG_PRECISION(
+        "tag.precision",
+        "Precision",
+        KkIconLayer("M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5", KkIconStyle.STROKE),
+        KkIconLayer("M10.5 12a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0Z", KkIconStyle.FILL),
+    ),
+    TAG_BULWARK(
+        "tag.bulwark",
+        "Bulwark",
+        KkIconLayer("M12 3l8 3v6c0 5 -3.5 8 -8 9c-4.5 -1 -8 -4 -8 -9V6Z", KkIconStyle.STROKE),
+    ),
+    TAG_OVERCLOCK(
+        "tag.overclock",
+        "Overclock",
+        KkIconLayer("M4 16a8 8 0 1 1 16 0M12 16l4 -6", KkIconStyle.STROKE),
+    ),
+    TAG_CHAIN(
+        "tag.chain",
+        "Chain",
+        KkIconLayer("M9 9H7a3 3 0 0 0 0 6h3M15 9h2a3 3 0 0 1 0 6h-3M9 12h6", KkIconStyle.STROKE),
+    ),
+    TAG_FORTUNE(
+        "tag.fortune",
+        "Fortune",
+        KkIconLayer("M12 3l2.6 5.6 6.1 .7 -4.5 4.2 1.2 6L12 16.5l-5.4 3 1.2 -6 -4.5 -4.2 6.1 -.7Z", KkIconStyle.STROKE),
     ),
     UI_PLUS(
         "ui.plus",
@@ -292,14 +460,26 @@ enum class KkIcon(val key: String, val label: String, vararg layerData: KkIconLa
         /** Icon for an `icons.json` key such as `"weapons.flux_wake"`, or null. */
         fun byKey(key: String): KkIcon? = entries.firstOrNull { it.key == key }
 
-        /** Form icons in `icons.json` order: circle, square, triangle, ring, diamond, tesseract. */
+        /**
+         * Form icons in `icons.json` order: circle, square, triangle, ring, diamond, tesseract, star, spiral,
+         * dipole, pentagon, crescent, hexagon (the [KkFormGeometry] index order).
+         */
         val Forms: List<KkIcon> = entries.filter { it.key.startsWith("forms.") }
 
         /** Weapon icons in `icons.json` order. */
         val Weapons: List<KkIcon> = entries.filter { it.key.startsWith("weapons.") }
 
-        /** Aspect icons in relic-aspect order: vector, gravitic, ion, rift, prism, entropy, sovereign. */
+        /**
+         * Aspect icons in relic-aspect order: kinetic, thermal, cryo, ion, gravitic, entropy, sonic, void,
+         * sovereign.
+         */
         val Aspects: List<KkIcon> = entries.filter { it.key.startsWith("aspect.") }
+
+        /** The seven status element glyphs (thermal, cryo, ion, gravitic, entropy, sonic, void). */
+        val Elements: List<KkIcon> = Aspects.subList(1, Aspects.size - 1)
+
+        /** Archetype tag glyphs in tag order: ram, drive, anchor, arsenal, precision, bulwark, overclock, chain, fortune. */
+        val Tags: List<KkIcon> = entries.filter { it.key.startsWith("tag.") }
 
         /** System icons in `icons.json` order. */
         val System: List<KkIcon> = entries.filter { it.key.startsWith("system.") }
@@ -354,8 +534,10 @@ private object KkIconStrokes {
     private val dashEffect: PathEffect by lazy { PathEffect.dashPathEffect(floatArrayOf(3f, 3f)) }
     private val dotEffect: PathEffect by lazy { PathEffect.dashPathEffect(floatArrayOf(1f, 4f)) }
     private val defaults: Array<Stroke> by lazy { create(2f) }
-    private var customWidth = Float.NaN
-    private var custom: Array<Stroke>? = null
+    // A few custom widths at once (band pips, card watermarks, thin glyphs) without thrashing.
+    private val customWidths = FloatArray(4) { Float.NaN }
+    private val customs = arrayOfNulls<Array<Stroke>>(4)
+    private var customNext = 0
 
     fun solid(w: Float): Stroke = set(w)[0]
     fun dashed(w: Float): Stroke = set(w)[1]
@@ -363,10 +545,11 @@ private object KkIconStrokes {
 
     private fun set(w: Float): Array<Stroke> {
         if (w == 2f) return defaults
-        custom?.let { if (w == customWidth) return it }
+        for (index in 0 until 4) if (customWidths[index] == w) return customs[index]!!
         return create(w).also {
-            custom = it
-            customWidth = w
+            customs[customNext] = it
+            customWidths[customNext] = w
+            customNext = (customNext + 1) % 4
         }
     }
 

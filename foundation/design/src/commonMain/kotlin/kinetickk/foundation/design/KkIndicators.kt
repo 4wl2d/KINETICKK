@@ -284,16 +284,17 @@ fun DrawScope.drawKkLevelBadge(
 }
 
 /**
- * Animated foil fill (`kk-foil`): r-legend to #FFF3C8 to r-legend gradient at 100°, 260 % wide,
- * scrolling one tile per [loopSeconds]. Fills [path] whose bounds are [bounds].
+ * Animated foil fill (`kk-foil`): the [gold]'s base to its light to its base again (r-legend to
+ * #FFF3C8 for the bright gold) at 100°, 260 % wide, scrolling one tile per [loopSeconds]. Fills
+ * [path] whose bounds are [bounds].
  */
-fun DrawScope.drawKkFoil(path: Path, bounds: Rect, time: Float, loopSeconds: Float = 2.4f, alpha: Float = 1f) {
+fun DrawScope.drawKkFoil(path: Path, bounds: Rect, time: Float, loopSeconds: Float = 2.4f, alpha: Float = 1f, gold: KkGold = KkGold.Bright) {
     val tile = bounds.width * 2.6f
     if (tile <= 0f) return
     val shift = -kkLoop(time, loopSeconds) * tile
     clipPath(path) {
         translate(bounds.left + shift, 0f) {
-            drawRect(KkGradients.foil(tile), Offset(-shift - tile, bounds.top), Size(bounds.width + tile * 2f, bounds.height), alpha)
+            drawRect(KkGradients.foil(tile, gold), Offset(-shift - tile, bounds.top), Size(bounds.width + tile * 2f, bounds.height), alpha)
         }
     }
 }
@@ -357,10 +358,12 @@ fun DrawScope.drawKkRays(
 /** Memoized gradient brushes and ray geometry (draw thread only; created on first draw). */
 internal object KkGradients {
     private val foilTiles = FloatArray(4) { -1f }
+    private val foilGolds = arrayOfNulls<KkGold>(4)
     private val foilBrushes = arrayOfNulls<Brush>(4)
     private var foilNext = 0
-    private val sheenColors = LongArray(4)
-    private val sheenBrushes = arrayOfNulls<Brush>(4)
+    // Card sheens, band sheens and glints next to the level badge's sheens: eight colours at once.
+    private val sheenColors = LongArray(8)
+    private val sheenBrushes = arrayOfNulls<Brush>(8)
     private var sheenNext = 0
     private val rayKeys = FloatArray(4 * 3) { -1f }
     private val rayPaths = arrayOfNulls<Path>(4)
@@ -370,16 +373,17 @@ internal object KkGradients {
     private val fadeBrushes = arrayOfNulls<Brush>(4)
     private var fadeNext = 0
 
-    fun foil(tile: Float): Brush {
-        for (index in 0 until 4) if (foilTiles[index] == tile) return foilBrushes[index]!!
+    fun foil(tile: Float, gold: KkGold = KkGold.Bright): Brush {
+        for (index in 0 until 4) if (foilTiles[index] == tile && foilGolds[index] === gold) return foilBrushes[index]!!
         // 100deg: mostly horizontal, dropping ~10° to the right.
         val brush = Brush.linearGradient(
-            0f to Kk.RLegend, 0.15f to Kk.RLegend, 0.42f to Kk.RLegendFoil, 0.68f to Kk.RLegend, 1f to Kk.RLegend,
+            0f to gold.base, 0.15f to gold.base, 0.42f to gold.light, 0.68f to gold.base, 1f to gold.base,
             start = Offset(0f, 0f),
             end = Offset(tile, tile * 0.176f),
             tileMode = TileMode.Repeated,
         )
         foilTiles[foilNext] = tile
+        foilGolds[foilNext] = gold
         foilBrushes[foilNext] = brush
         foilNext = (foilNext + 1) % 4
         return brush
@@ -387,7 +391,7 @@ internal object KkGradients {
 
     fun sheen(color: Color): Brush {
         val key = color.value.toLong()
-        for (index in 0 until 4) if (sheenBrushes[index] != null && sheenColors[index] == key) return sheenBrushes[index]!!
+        for (index in 0 until 8) if (sheenBrushes[index] != null && sheenColors[index] == key) return sheenBrushes[index]!!
         val brush = Brush.horizontalGradient(
             0f to Color.Transparent, 0.5f to color, 1f to Color.Transparent,
             startX = 0f,
@@ -395,7 +399,7 @@ internal object KkGradients {
         )
         sheenColors[sheenNext] = key
         sheenBrushes[sheenNext] = brush
-        sheenNext = (sheenNext + 1) % 4
+        sheenNext = (sheenNext + 1) % 8
         return brush
     }
 

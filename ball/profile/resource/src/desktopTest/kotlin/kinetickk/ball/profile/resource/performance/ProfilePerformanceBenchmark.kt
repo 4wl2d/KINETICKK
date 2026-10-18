@@ -6,13 +6,17 @@ package kinetickk.ball.profile.resource.performance
 import java.security.MessageDigest
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.MatrixNodeId
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.CharacterAchievementProgress
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
-import kinetickk.ball.profile.api.LabProgress
+import kinetickk.ball.profile.api.MatrixProgress
+import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
@@ -43,7 +47,7 @@ import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.common.localization.AppLanguage
 
 internal const val PROFILE_PERSISTENCE_BENCHMARK_SUITE_VERSION =
-    "profile-persistence-current-schema-v3"
+    "profile-persistence-current-schema-v4"
 
 fun main() {
     runBenchmarkSuite(
@@ -337,8 +341,16 @@ internal fun maximumBusinessSnapshot(): ProfileSnapshot = ProfileSnapshot(
             selectedWeapon = WeaponId.entries.last(),
             unlockedWeapons = WeaponId.entries.reversed().toSet(),
         ),
-        labProgress = LabProgress(List(MetaUpgradeId.entries.size) { Int.MAX_VALUE }),
-        collection = PlayerCollection((0 until ContentBounds.MAX_ITEMS).reversed().toSet()),
+        matrix = MatrixProgress(List(MatrixNodeId.entries.size) { ContentBounds.MAX_MATRIX_NODE_RANKS }),
+        collection = PlayerCollection(
+            discoveredItemIds = (0 until ContentBounds.MAX_ITEMS).reversed().toSet(),
+            newItemIds = (0 until ContentBounds.MAX_ITEMS).reversed().toSet(),
+            discoveredRelicIds = RelicId.entries.reversed().toSet(),
+            newRelicIds = RelicId.entries.reversed().toSet(),
+            discoveredReactionIds = ReactionId.entries.reversed().toSet(),
+            discoveredPairingIds = RelicPairingId.entries.reversed().toSet(),
+            heirloomRelicIds = RelicId.entries.reversed().take(MAX_HEIRLOOM_RELICS),
+        ),
         rebirthProgress = RebirthProgress(
             level = ContentBounds.MAX_REBIRTH_LEVEL,
             highestCleared = ContentBounds.MAX_REBIRTH_LEVEL,
@@ -349,6 +361,9 @@ internal fun maximumBusinessSnapshot(): ProfileSnapshot = ProfileSnapshot(
             completedOrbits = Long.MAX_VALUE,
             architectVictories = Long.MAX_VALUE,
             victoriousCharacters = CoreShape.entries.reversed().toImmutableSet(),
+            totalKills = Long.MAX_VALUE,
+            ricochets = Long.MAX_VALUE,
+            dataPickups = Long.MAX_VALUE,
         ),
     ),
 )
@@ -378,12 +393,19 @@ private fun payloadMetadata(
     "payloadBytes" to payload.encodeToByteArray().size.toString(),
     "payloadSha256" to payload.sha256(),
     "unlockedWeapons" to snapshot.profile.loadout.unlockedWeapons.size.toString(),
-    "labRanks" to snapshot.profile.labProgress.ranks.size.toString(),
+    "matrixRanks" to snapshot.profile.matrix.ranks.size.toString(),
     "discoveries" to snapshot.profile.collection.discoveredItemIds.size.toString(),
+    "newItems" to snapshot.profile.collection.newItemIds.size.toString(),
+    "relicDiscoveries" to snapshot.profile.collection.discoveredRelicIds.size.toString(),
+    "newRelics" to snapshot.profile.collection.newRelicIds.size.toString(),
+    "reactionDiscoveries" to snapshot.profile.collection.discoveredReactionIds.size.toString(),
+    "pairingDiscoveries" to snapshot.profile.collection.discoveredPairingIds.size.toString(),
+    "heirlooms" to snapshot.profile.collection.heirloomRelicIds.joinToString(",") { it.name },
     "language" to snapshot.profile.preferences.language.code,
     "victoriousCharacters" to snapshot.profile.characterAchievements.victoriousCharacters.size.toString(),
     "achievementCounters" to snapshot.profile.characterAchievements.let {
-        "${it.eliteKills},${it.dashHits},${it.completedOrbits},${it.architectVictories}"
+        "${it.eliteKills},${it.dashHits},${it.completedOrbits},${it.architectVictories}," +
+            "${it.totalKills},${it.ricochets},${it.dataPickups}"
     },
 )
 
@@ -450,8 +472,15 @@ internal fun snapshotSignature(snapshot: ProfileSnapshot): Long {
     val profile = snapshot.profile
     var result = snapshot.revision.value
     result = result * 31L + profile.loadout.unlockedWeapons.size
-    result = result * 31L + profile.labProgress.ranks.sumOf(Int::toLong)
-    result = result * 31L + profile.collection.discoveredItemIds.sumOf(Int::toLong)
+    result = result * 31L + profile.matrix.ranks.sumOf(Int::toLong)
+    val collection = profile.collection
+    result = result * 31L + collection.discoveredItemIds.sumOf(Int::toLong)
+    result = result * 31L + collection.newItemIds.sumOf(Int::toLong)
+    result = result * 31L + collection.discoveredRelicIds.sumOf { 1L shl it.ordinal }
+    result = result * 31L + collection.newRelicIds.sumOf { 1L shl it.ordinal }
+    result = result * 31L + collection.discoveredReactionIds.sumOf { 1L shl it.ordinal }
+    result = result * 31L + collection.discoveredPairingIds.sumOf { 1L shl it.ordinal }
+    collection.heirloomRelicIds.forEach { relic -> result = result * 31L + relic.ordinal + 1L }
     result = result * 31L + profile.economy.matter
     result = result * 31L + profile.economy.lifetimeMatter
     result = result * 31L + profile.preferences.language.code.hashCode()
@@ -461,6 +490,9 @@ internal fun snapshotSignature(snapshot: ProfileSnapshot): Long {
     result = result * 31L + achievements.completedOrbits
     result = result * 31L + achievements.architectVictories
     result = result * 31L + achievements.victoriousCharacters.sumOf { 1L shl it.ordinal }
+    result = result * 31L + achievements.totalKills
+    result = result * 31L + achievements.ricochets
+    result = result * 31L + achievements.dataPickups
     return result
 }
 

@@ -3,19 +3,25 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ItemDefinition
-import kinetickk.ball.content.api.ItemModifier
 import kinetickk.ball.content.api.ItemEffect
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.lifetimeMatterOfferLevel
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
+import kinetickk.ball.gameplay.nucleus.render.BuildProjection
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.ball.gameplay.nucleus.render.RelicLinkKind
+import kinetickk.ball.gameplay.nucleus.render.RelicLinkProjection
+import kinetickk.ball.gameplay.nucleus.render.SeveredRelicProjection
 import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.immutableListOfSize
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.abs
+import kotlin.math.max
 
 /** One pure, detached read of the accepted simulation revision. */
 internal fun MutableGameState.buildSummary(
@@ -34,101 +40,185 @@ internal fun MutableGameState.buildSummary(
     mastery = currentWeaponMastery.displayLabel,
     relics = equippedRelics.toImmutableList(),
     stats = buildStats(),
-    synergies = buildSynergySummaries(),
     eligibleItemIds = content.items.filter { item ->
-        val ordinaryOfferEligible = item.unlockLevel <=
-            maxOf(level, lifetimeMatterOfferLevel(lifetimeMatter))
+        val ordinaryOfferEligible = item.unlockLevel <= maxOf(level, lifetimeMatterOfferLevel(lifetimeMatter)) &&
+            item.minimumRebirth <= rebirthRank
         val currentlyOffered = phase == GamePhase.CHOICE && choices.any { it.itemId == item.id }
         (ordinaryOfferEligible || currentlyOffered) && hasUsefulItemEffect(item)
     }.map { it.id }.toImmutableList(),
+    tags = BuildTag.entries.map { BuildTagSummary(it, build.tagPoints(it), tagTier(it)) }.toImmutableList(),
+    elements = StatusElement.entries.map {
+        BuildElementSummary(it, build.affinity(it), affinityTier(it), build.dominant == it)
+    }.toImmutableList(),
+    relicLinks = build.links.map { link ->
+        BuildRelicLinkSummary(
+            first = link.first,
+            second = link.second,
+            kind = when (link.kind) {
+                RelicLinkKind.CONCORD -> BuildRelicLinkKind.CONCORD
+                RelicLinkKind.DISCORD -> BuildRelicLinkKind.DISCORD
+                RelicLinkKind.HARMONY -> BuildRelicLinkKind.HARMONY
+                RelicLinkKind.DISSONANCE -> BuildRelicLinkKind.DISSONANCE
+            },
+            pairing = link.pairing,
+            discovered = link.pairing == null || discoveredPairingMask and (1 shl link.pairing.ordinal) != 0,
+        )
+    }.toImmutableList(),
+    reachableReactions = ReactionId.entries.filter(build::reactionReachable).toImmutableList(),
+    suppressedItemIds = ownedSuppressedItems(),
+    rebornItemIds = content.items.filter { rebornItems[it.id] != 0 }.map { it.id }.toImmutableList(),
+    severedRelicIds = severedRelics.map { it.id }.toImmutableList(),
 )
 
-internal fun MutableGameState.hasUsefulItemEffect(item: ItemDefinition): Boolean =
-    itemStacks[item.id] < item.maxStacks &&
-        (hasUsefulModifier(item.primary) || hasUsefulModifier(item.secondary) || familyStacks[item.id / 20] % 3 == 2)
+private fun MutableGameState.ownedSuppressedItems(): ImmutableList<Int> =
+    content.items.filter { itemStacks[it.id] > 0 && itemSuppressedShare(it) >= 1f }.map { it.id }.toImmutableList()
 
-private fun MutableGameState.hasUsefulModifier(modifier: ItemModifier): Boolean =
-    modifier.amount != 0f && when (modifier.effect) {
-        ItemEffect.CRIT_CHANCE -> critChance < 0.75f
-        ItemEffect.DAMAGE_REDUCTION -> damageReduction < 0.65f
-        ItemEffect.DASH_EFFICIENCY -> dashHeatCost > 12f
-        else -> true
-    }
+internal fun MutableGameState.hasUsefulItemEffect(item: ItemDefinition): Boolean =
+    itemStacks[item.id] < item.maxStacks && itemSuppressedShare(item) < 1f && !offerCardsAlreadyAdded(item)
+
+/** The presentation projection of the compiled build and the relic gauges. */
+internal fun MutableGameState.buildProjection(): BuildProjection = BuildProjection(
+    tagPoints = immutableListOfSize(BuildTag.entries.size) { build.tagPoints(BuildTag.entries[it]) },
+    tagTiers = immutableListOfSize(BuildTag.entries.size) { tagTier(BuildTag.entries[it]) },
+    affinity = immutableListOfSize(StatusElement.entries.size) { build.affinity(StatusElement.entries[it]) },
+    affinityTiers = immutableListOfSize(StatusElement.entries.size) { affinityTier(StatusElement.entries[it]) },
+    dominant = build.dominant,
+    secondary = build.secondary,
+    links = build.links.map { link ->
+        RelicLinkProjection(link.first, link.second, link.kind, link.pairing,
+            link.pairing == null || discoveredPairingMask and (1 shl link.pairing.ordinal) != 0)
+    }.toImmutableList(),
+    relicUpsides = immutableListOfSize(RelicId.entries.size) { index ->
+        val id = RelicId.entries[index]
+        if (build.upside(id)) build.relicUpside(id) else 1f
+    },
+    severed = severedRelics.map { SeveredRelicProjection(it.id, max(0f, it.until - elapsed)) }.toImmutableList(),
+    suppressedItemIds = ownedSuppressedItems(),
+    rebornItemIds = content.items.filter { rebornItems[it.id] != 0 }.map { it.id }.toImmutableList(),
+    reachableReactions = ReactionId.entries.filter(build::reactionReachable).toImmutableList(),
+    stormCharge = stormCharge,
+    stasisMeter = stasisMeter / MutableGameState.STASIS_SECONDS,
+    stasisBank = stasisBank,
+    ouroborosSpent = ouroborosSpent,
+    invulnerable = invulnerableUntil > elapsed,
+    overdriveBurnout = overdriveBurnoutUntil > elapsed,
+    breakThresholds = immutableListOfSize(StatusElement.entries.size) { breakThreshold(StatusElement.entries[it]) },
+)
 
 /** Contributions are additive deltas in display units and sum to the effective value. */
 internal fun MutableGameState.buildStats(includeTemporary: Boolean = true): ImmutableList<BuildStatSummary> {
     val rows = mutableListOf<BuildStatSummary>()
-    fun stat(name: String, current: Float, base: Float, lab: Float = 0f, synergy: Float = 0f, unit: String = "") {
+    fun stat(name: String, current: Float, base: Float, lab: Float = 0f, relics: Float = 0f, unit: String = "") {
         rows += BuildStatSummary(name, current, unit, listOf(
             BuildStatContribution(BuildStatSource.CHARACTER, base),
             BuildStatContribution(BuildStatSource.LAB, lab),
-            BuildStatContribution(BuildStatSource.ITEMS, current - base - lab - synergy),
-            BuildStatContribution(BuildStatSource.SYNERGIES, synergy),
+            BuildStatContribution(BuildStatSource.ITEMS, current - base - lab - relics),
+            BuildStatContribution(BuildStatSource.RELICS, relics),
         ).filter { it.amount != 0f }.toImmutableList())
     }
-    val families = content.items.map { it.id / 20 }.distinct().sumOf { familyStacks[it] / 3 }
-    stat("Impact power", damageMultiplier, 1f, metaLevel(MetaUpgradeId.KINETIC_AMPLIFIER) * 0.05f, families * 0.04f, "×")
+    // Matrix contributions come from the folded content effects, never from duplicated numbers.
+    fun matrixShare(effect: ItemEffect, base: Float): Float =
+        matrix.statValue(effect, base, content.pickups.minimumMagnetRadius) - base
+    // The character's traits are part of its base column.
+    val traits = content.coreShape(coreShape).traits
+    val baseIntegrity = 100f + traits.integrityBonus
+    val baseMass = traits.massMultiplier
+    val baseDashHeat = 36f * traits.dashHeatMultiplier
+    val baseCritChance = 0.05f + traits.critChanceBonus
+    val baseCritPower = 1.5f + traits.critDamageBonus
+    val basePickupRadius = content.pickups.magnetRadius + traits.pickupRadiusBonus
+    stat("Impact power", damageMultiplier, 1f, matrixShare(ItemEffect.IMPACT_DAMAGE, 1f), unit = "×")
     val globalPower = rebirthProfile.playerPowerMultiplier
-    val masteryPower = (1f + (weaponLevel - 1) * 0.08f) * (1f + currentWeaponMastery.damageBonus)
-    val permanentPower = weaponPower * globalPower * masteryPower
-    val effectivePower = permanentPower * if (includeTemporary && overdriveTime > 0f) 1.45f else 1f
+    // Run growth reports with mastery: both are progression the run grants, not items.
+    val masteryPower = (1f + (weaponLevel - 1) * 0.08f) * (1f + currentWeaponMastery.damageBonus) * weaponRunGrowth()
+    // Weapon synergies: tag resonance, signature and Relic key harmony last; the scaling stat and Overdrive are live.
+    val synergyPower = permanentWeaponSynergy()
+    val progressionPower = weaponPower * globalPower * masteryPower
+    val permanentPower = progressionPower * synergyPower
+    val effectivePower = if (includeTemporary) effectiveWeaponPower() else permanentPower
+    val matrixWeaponPower = matrixShare(ItemEffect.WEAPON_POWER, 1f)
     rows += BuildStatSummary("Weapon power", effectivePower, "×", listOf(
         BuildStatContribution(BuildStatSource.CHARACTER, 1f),
-        BuildStatContribution(BuildStatSource.LAB, metaLevel(MetaUpgradeId.ARMORY_LICENSE) * 0.04f + weaponPower * (globalPower - 1f)),
-        BuildStatContribution(BuildStatSource.ITEMS, weaponPower - 1f - metaLevel(MetaUpgradeId.ARMORY_LICENSE) * 0.04f - families * 0.06f),
-        BuildStatContribution(BuildStatSource.SYNERGIES, families * 0.06f),
+        BuildStatContribution(BuildStatSource.LAB, matrixWeaponPower + weaponPower * (globalPower - 1f)),
+        BuildStatContribution(BuildStatSource.ITEMS, weaponPower - 1f - matrixWeaponPower),
         BuildStatContribution(BuildStatSource.MASTERY, weaponPower * globalPower * (masteryPower - 1f)),
+        BuildStatContribution(BuildStatSource.SYNERGIES, progressionPower * (synergyPower - 1f)),
         BuildStatContribution(BuildStatSource.TEMPORARY, effectivePower - permanentPower),
     ).filter { it.amount != 0f }.toImmutableList())
     val masterySpeed = attackSpeed * (1f + currentWeaponMastery.activationSpeedBonus)
-    val staticRelicBonus = 0.03f * relicRank(RelicId.CROWN_OF_FOUR_WINDS) * distinctRelicAspectCount()
-    val permanentSpeed = masterySpeed * (1f + staticRelicBonus)
-    val effectiveSpeed = if (includeTemporary) masterySpeed * (1f + relicActivationSpeedBonus()) *
-        (if (overdriveTime > 0f) 1.35f else 1f) else permanentSpeed
+    val buildSpeed = masterySpeed * buildActivationBonus()
+    val effectiveSpeed = buildSpeed * if (includeTemporary && overdriveTime > 0f) 1.35f else 1f
+    val matrixSpeed = matrixShare(ItemEffect.ATTACK_SPEED, 1f)
     rows += BuildStatSummary("Activation speed", effectiveSpeed, "×", listOf(
         BuildStatContribution(BuildStatSource.CHARACTER, 1f),
-        BuildStatContribution(BuildStatSource.ITEMS, attackSpeed - 1f),
+        BuildStatContribution(BuildStatSource.LAB, matrixSpeed),
+        BuildStatContribution(BuildStatSource.ITEMS, attackSpeed - 1f - matrixSpeed),
         BuildStatContribution(BuildStatSource.MASTERY, masterySpeed - attackSpeed),
-        BuildStatContribution(BuildStatSource.RELICS, permanentSpeed - masterySpeed),
-        BuildStatContribution(BuildStatSource.TEMPORARY, effectiveSpeed - permanentSpeed),
+        BuildStatContribution(BuildStatSource.SYNERGIES, buildSpeed - masterySpeed),
+        BuildStatContribution(BuildStatSource.TEMPORARY, effectiveSpeed - buildSpeed),
     ).filter { it.amount != 0f }.toImmutableList())
-    stat("Integrity", maxHp, 100f, metaLevel(MetaUpgradeId.CORE_INTEGRITY) * 10f + rebirthProfile.playerIntegrityBonus)
-    stat("Shield", maxShield, 0f)
-    stat("Damage reduction", damageReduction * 100f, 0f, unit = "%")
-    stat("Regeneration", regenPerSecond, 0f, unit = "/s")
-    stat("Mass", mass, 1f)
-    stat("Magnetism", magnetStrength, 4.65f, 4.65f * metaLevel(MetaUpgradeId.MAGNETIC_RESONANCE) * 0.04f)
-    stat("Cooling", coolingRate, 19f, 19f * metaLevel(MetaUpgradeId.CRYO_VENTS) * 0.05f, unit = "/s")
-    stat("Dash impulse", dashImpulse, 590f, 590f * metaLevel(MetaUpgradeId.DASH_CAPACITOR) * 0.05f)
-    stat("Dash heat", dashHeatCost, 36f)
-    stat("Critical chance", critChance * 100f, 5f, unit = "%")
-    stat("Critical power", critMultiplier, 1.5f, unit = "×")
-    stat("Pickup radius", pickupRadius, 150f)
-    stat("Luck", luck, 0f)
-    stat("Data gain", dataGain, 1f, metaLevel(MetaUpgradeId.DATA_ARCHIVE) * 0.05f, unit = "×")
-    stat("Matter gain", matterGain, 1f, (1f + metaLevel(MetaUpgradeId.SALVAGE_PROTOCOL) * 0.05f) * rebirthProfile.matterGainMultiplier - 1f, unit = "×")
-    stat("Combo window", comboWindow, 2.8f, unit = "s")
-    stat("Overdrive gain", overdriveGain, 1f, unit = "×")
+    stat("Integrity", maxHp, baseIntegrity, matrixShare(ItemEffect.MAX_INTEGRITY, baseIntegrity) + rebirthProfile.playerIntegrityBonus)
+    stat("Shield", shieldCapacity(), 0f, matrixShare(ItemEffect.SHIELD_CAPACITY, 0f), relics = shieldCapacity() - maxShield)
+    stat("Damage reduction", effectiveDamageReduction() * 100f, 0f, matrixShare(ItemEffect.DAMAGE_REDUCTION, 0f) * 100f,
+        relics = (effectiveDamageReduction() - damageReduction) * 100f, unit = "%")
+    stat("Regeneration", regenPerSecond, 0f, matrixShare(ItemEffect.REGEN, 0f), unit = "/s")
+    stat("Mass", effectiveMass(), baseMass, matrixShare(ItemEffect.MASS, baseMass), relics = effectiveMass() - mass)
+    stat("Magnetism", effectiveMagnetism(), 4.65f, matrixShare(ItemEffect.MAGNETISM, 4.65f),
+        relics = effectiveMagnetism() - magnetStrength)
+    stat("Cooling", effectiveCooling(), 19f, matrixShare(ItemEffect.COOLING, 19f),
+        relics = effectiveCooling() - coolingRate, unit = "/s")
+    stat("Dash impulse", effectiveDashImpulse(), 590f, matrixShare(ItemEffect.DASH_POWER, 590f),
+        relics = effectiveDashImpulse() - dashImpulse)
+    stat("Dash heat", effectiveDashHeatCost(), baseDashHeat, baseDashHeat * (matrix.dashHeatMultiplier - 1f),
+        relics = effectiveDashHeatCost() - dashHeatCost)
+    stat("Critical chance", effectiveCritChance() * 100f, baseCritChance * 100f,
+        matrixShare(ItemEffect.CRIT_CHANCE, baseCritChance) * 100f,
+        relics = (effectiveCritChance() - critChance) * 100f, unit = "%")
+    stat("Critical power", critMultiplier, baseCritPower, matrixShare(ItemEffect.CRIT_DAMAGE, baseCritPower), unit = "×")
+    stat("Pickup radius", effectivePickupRadius(), basePickupRadius, matrixShare(ItemEffect.PICKUP_RADIUS, basePickupRadius),
+        relics = effectivePickupRadius() - pickupRadius)
+    stat("Luck", effectiveLuck(), 0f, matrixShare(ItemEffect.LUCK, 0f), relics = effectiveLuck() - luck)
+    stat("Data gain", dataGain, 1f, matrixShare(ItemEffect.DATA_GAIN, 1f), unit = "×")
+    stat("Matter gain", matterGain, 1f,
+        (1f + matrixShare(ItemEffect.MATTER_GAIN, 1f)) * rebirthProfile.matterGainMultiplier - 1f, unit = "×")
+    stat("Combo window", effectiveComboWindow(), 2.8f, relics = effectiveComboWindow() - comboWindow, unit = "s")
+    stat("Overdrive gain", overdriveGainFactor(), 1f, matrixShare(ItemEffect.OVERDRIVE_GAIN, 1f),
+        relics = overdriveGainFactor() - overdriveGain, unit = "×")
     return rows.toImmutableList()
 }
 
 internal data class BuildChangeSnapshot(
     val stats: ImmutableList<BuildStatSummary>,
-    val activeSynergies: ImmutableList<BuildSynergySummary>,
+    val tagTiers: List<Int>,
+    val affinityTiers: List<Int>,
 )
+
 internal fun MutableGameState.captureBuildChange(): BuildChangeSnapshot = BuildChangeSnapshot(
     buildStats(),
-    buildSynergySummaries().filter { it.active }.toImmutableList(),
+    BuildTag.entries.map { tagTier(it) },
+    StatusElement.entries.map { affinityTier(it) },
 )
+
+/** Emits the grouped acquisition toast: stat deltas, then reached tiers as "+ " lines. */
 internal fun MutableGameState.emitBuildChange(before: BuildChangeSnapshot, title: String) {
     val after = buildStats()
     val deltas = after.mapIndexedNotNull { index, stat ->
-        val delta = stat.value - before.stats[index].value
+        val previous = before.stats.getOrNull(index)?.takeIf { it.name == stat.name } ?: return@mapIndexedNotNull null
+        val delta = stat.value - previous.value
         if (abs(delta) < 0.0001f) null else stat.name + " " +
             (if (delta > 0f) "+" else "") + ((delta * 100f).toInt() / 100f) + stat.unit
     }
-    val synergies = buildSynergySummaries().filter { it.active }
-    val added = synergies.filter { next -> before.activeSynergies.none { it.id == next.id } }.map { "+ ${it.name}" }
-    val removed = before.activeSynergies.filter { old -> synergies.none { it.id == old.id } }.map { "− ${it.name}" }
-    emitVisualFx(VisualFxCue.BuildChanged(title, (deltas + added + removed).toImmutableList()))
+    val tiers = BuildTag.entries.filter { tagTier(it) > before.tagTiers[it.ordinal] }.map {
+        "+ " + it.displayLabel + " " + tierNumeral(tagTier(it))
+    } + StatusElement.entries.filter { affinityTier(it) > before.affinityTiers[it.ordinal] }.map {
+        "+ " + it.displayLabel + " " + tierNumeral(affinityTier(it))
+    }
+    emitVisualFx(VisualFxCue.BuildChanged(title, (deltas + tiers).toImmutableList()))
+}
+
+internal fun tierNumeral(tier: Int): String = when (tier) {
+    1 -> "I"
+    2 -> "II"
+    3 -> "III"
+    else -> ""
 }

@@ -228,9 +228,11 @@ class SettingsNavigationComposeTest {
                     }
                     error("$tag is on no Settings page")
                 }
+                // Review captures of each Settings tab, written (like the frames above) only when a capture folder is named.
                 fun captureSettings(group: String) {
+                    val directory = System.getenv("KINETICKK_RENDER_CAPTURE_DIR") ?: return
                     val preferences = preferences()
-                    val output = File("build/reports/settings-screenshots/${width}x${height}-$group-${preferences.textScale}-${preferences.language.code}.png")
+                    val output = File(directory, "settings-${width}x${height}-$group-${preferences.textScale}-${preferences.language.code}.png")
                     output.parentFile.mkdirs()
                     Image.makeFromBitmap(onNodeWithTag(APP_TAG).captureToImage().asSkiaBitmap()).use { image ->
                         image.encodeToData()!!.use { output.writeBytes(it.bytes) }
@@ -416,8 +418,8 @@ class SettingsNavigationComposeTest {
                     key(shortcut, destination)
                     when (destination) {
                         AppDestination.Lab -> {
-                            scrollProfileToEnd("profile-lab-scroll")
-                            onNodeWithTag("profile-lab-buy-${kinetickk.ball.content.api.MetaUpgradeId.entries.last()}").assertIsDisplayed()
+                            scrollProfileToEnd("profile-matrix-scroll")
+                            onNodeWithTag("profile-matrix-node-${kinetickk.ball.content.api.MatrixNodeId.entries.last()}").assertIsDisplayed()
                         }
                         AppDestination.Rebirth -> {
                             scrollProfileToEnd("profile-rebirth-scroll")

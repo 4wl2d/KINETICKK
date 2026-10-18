@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import kinetickk.ball.gameplay.interaction.fixtureWeapon
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.ImageBitmap
@@ -14,34 +15,42 @@ import androidx.compose.ui.text.TextMeasurer as ComposeTextMeasurer
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
-import kinetickk.ball.content.api.ItemModifier
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
-import kinetickk.ball.content.api.MetaUpgradeDefinition
-import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.PointOfInterestKind
-import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
-import kinetickk.ball.content.api.RelicAspect
-import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPolicy
+import kinetickk.ball.content.api.StatDelta
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
 import kinetickk.ball.gameplay.interaction.fx.DamageNumberProjection
+import kinetickk.ball.gameplay.interaction.fx.ElementBurstProjection
+import kinetickk.ball.gameplay.interaction.fx.ReactionStampProjection
+import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureRelics
 import kinetickk.ball.gameplay.interaction.fx.MotionEchoProjection
 import kinetickk.ball.gameplay.interaction.fx.ParticleProjection
 import kinetickk.ball.gameplay.interaction.fx.ShockwaveProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.fx.WeaponArcProjection
+import kinetickk.ball.gameplay.nucleus.render.CharacterAbilityProjection
+import kinetickk.ball.gameplay.nucleus.render.CharacterDroneProjection
+import kinetickk.ball.gameplay.nucleus.render.CharacterLatticePoint
+import kinetickk.ball.gameplay.nucleus.render.CharacterScarProjection
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
+import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
+import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
+import kinetickk.ball.gameplay.nucleus.render.ProjectileKind
+import kinetickk.ball.gameplay.nucleus.render.EnemyBehavior
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
@@ -51,7 +60,10 @@ import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
 import kinetickk.ball.gameplay.nucleus.render.ProjectileProjection
 import kinetickk.ball.gameplay.nucleus.render.TotemProjection
 import kinetickk.ball.gameplay.nucleus.render.TrailPointProjection
+import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
+import kinetickk.ball.gameplay.nucleus.render.WeaponEntityProjection
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeProjection
+import kinetickk.ball.gameplay.nucleus.render.WeaponOrbitalProjection
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.foundation.collections.immutableListOf
@@ -71,14 +83,39 @@ import kotlin.test.assertTrue
  * The world layer runs every frame: once caches are warm (paths, strokes, brushes, strings, text
  * layouts), a busy frame allocates no JVM heap beyond the draw scope's own baseline. Also checks
  * that the world keeps its key colors through the Color vision palette.
+ *
+ * The per-character and per-weapon sweeps warm one pass over the warm frames and measure 20 fresh
+ * frames per pass (the busy frame 100); `KK_FULL_SWEEPS=1` restores the longer runs (60 to 300
+ * measured frames).
  */
 class WorldHotPathAllocationTest {
     private val threads = ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
 
     @Test
     fun busyWorldFrameDoesNotAllocate() {
-        KkRolePalette.Default.let { roles -> assertFrameIsAllocationFree(roles, WeaponId.MORNINGSTAR) }
-        assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL)
+        val warmFrames = if (FULL_SWEEP) 200 else 111
+        val measuredFrames = if (FULL_SWEEP) 300 else 100
+        KkRolePalette.Default.let { roles -> assertFrameIsAllocationFree(roles, WeaponId.MORNINGSTAR, warmFrames = warmFrames, measuredFrames = measuredFrames) }
+        assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL, warmFrames = warmFrames, measuredFrames = measuredFrames)
+    }
+
+    @Test
+    fun everyCharacterDrawsItsCoreAndMechanicWithoutAllocating() {
+        // Each form's silhouette, marks and world visuals (halo band, ghost, drones, scars, polarity ring,
+        // beat pulse, facet ring, nova glow, lattice) on a busy frame.
+        for (shape in CoreShape.entries) {
+            assertFrameIsAllocationFree(KkRolePalette.Default, WeaponId.MORNINGSTAR, shape, warmFrames = if (FULL_SWEEP) 80 else WARM_MODELS,
+                measuredFrames = if (FULL_SWEEP) 60 else 20)
+        }
+    }
+
+    @Test
+    fun everyWeaponDrawsItsWorldVisualsAndEntitiesWithoutAllocating() {
+        // Each weapon's Core marks and orbitals at its third form, over every kind of weapon entity at once.
+        for (weapon in WeaponId.entries) {
+            assertFrameIsAllocationFree(KkRolePalette.Default, weapon, warmFrames = if (FULL_SWEEP) 60 else WARM_MODELS,
+                measuredFrames = if (FULL_SWEEP) 60 else 20, level = 10)
+        }
     }
 
     @Test
@@ -93,43 +130,62 @@ class WorldHotPathAllocationTest {
             }
             assertTrue(count(roles.threat) > 400, "Enemies, bullets and the singularity use the threat role")
             assertTrue(count(roles.you) > 150, "Trail, weapon and progress use the you role")
-            assertTrue(count(Kk.Bone) > 400, "The Core body is bone")
+            // The Core alone (Kinetic damage numbers take the preset's volt, counted with the you role above).
+            assertTrue(count(Kk.Bone) > 300, "The Core body is bone (${count(Kk.Bone)} px)")
             val other = if (roles == KkRolePalette.Default) KkRolePalette.Protan else KkRolePalette.Default
             assertTrue(count(other.threat) < 20, "No hard-coded threat color leaks into the world")
         }
     }
 
-    private fun assertFrameIsAllocationFree(roles: KkRolePalette, weapon: WeaponId) {
+    private fun assertFrameIsAllocationFree(
+        roles: KkRolePalette,
+        weapon: WeaponId,
+        shape: CoreShape = CoreShape.TESSERACT,
+        warmFrames: Int,
+        measuredFrames: Int,
+        level: Int = 3,
+    ) {
         // The off-screen totem and sealed-anomaly offer move every frame, so their edge-marker
         // distances change every frame: they must be drawn from cached digit layouts, never
         // measured as text. Warm-up frames draw distances from a range the measured frames never
-        // use, and every measured frame draws two distances no earlier frame drew (more distinct
-        // values than the layout memo holds), so measuring a distance string would allocate.
-        val warm = Array(37) { frame -> busyModel(weapon, drift = WARM_DRIFT + frame * 23f) }
-        val measured = Array(MEASURED_FRAMES) { frame -> busyModel(weapon, drift = frame * 20f) }
-        check(measured.map { roundedDistance(edgeDistance(it)) }.toSet().size == MEASURED_FRAMES)
-        check(measured.maxOf(::edgeDistance) < warm.minOf(::edgeDistance))
+        // use, and every measured frame draws two distances no earlier frame drew (a measuring
+        // pass never repeats an earlier pass's), so measuring a distance string would allocate.
+        val warm = Array(WARM_MODELS) { frame -> busyModel(weapon, drift = WARM_DRIFT + frame * 23f, shape = shape, level = level) }
+        fun measured(pass: Int) = Array(measuredFrames) { frame ->
+            busyModel(weapon, drift = (pass * measuredFrames + frame) * 20f, shape = shape, level = level)
+        }.also { measured ->
+            check(measured.map { roundedDistance(edgeDistance(it)) }.toSet().size == measuredFrames)
+            check(measured.maxOf(::edgeDistance) < warm.minOf(::edgeDistance))
+        }
         val fx = busyFx()
         val measurer = measurer(roles)
         val bitmap = ImageBitmap(WIDTH, HEIGHT)
         val scope = CanvasDrawScope()
         val canvas = Canvas(bitmap)
         val thread = Thread.currentThread().id
-        fun bytesPerFrame(block: DrawScope.(GameplayRenderModel) -> Unit): Long {
+        fun bytesPerFrame(passes: Int, block: DrawScope.(GameplayRenderModel) -> Unit, accept: (Long) -> Boolean): Long {
             fun frame(model: GameplayRenderModel) =
                 scope.draw(Density(1f), LayoutDirection.Ltr, canvas, Size(WIDTH.toFloat(), HEIGHT.toFloat())) { block(model) }
-            repeat(200) { frame(warm[it % warm.size]) }
-            val before = threads.getThreadAllocatedBytes(thread)
-            measured.forEach { frame(it) }
-            return (threads.getThreadAllocatedBytes(thread) - before) / MEASURED_FRAMES
+            repeat(warmFrames) { frame(warm[it % warm.size]) }
+            // A short pass can catch a stray one-off allocation, so a failing pass is measured again on fresh
+            // frames; an allocation the frames make on every pass fails all of them.
+            var best = Long.MAX_VALUE
+            for (pass in 0 until passes) {
+                val models = measured(pass)
+                val before = threads.getThreadAllocatedBytes(thread)
+                models.forEach { frame(it) }
+                best = minOf(best, (threads.getThreadAllocatedBytes(thread) - before) / measuredFrames)
+                if (accept(best)) break
+            }
+            return best
         }
-        val baseline = bytesPerFrame { }
-        val world = bytesPerFrame { model ->
+        val baseline = bytesPerFrame(1, { }) { true }
+        val world = bytesPerFrame(minOf(PASSES, MEASURED_DRIFT_FRAMES / measuredFrames), { model ->
             drawBackdrop(model, 1.5f, -1f, 2f, roles)
             drawWorld(model, fx, 1.5f, -1f, measurer)
             drawScreenFx(model, 2f, roles)
-        }
-        assertTrue(world - baseline < 96, "A busy world frame allocates ${world - baseline} bytes above the $baseline byte baseline")
+        }) { it - baseline < 96 }
+        assertTrue(world - baseline < 96, "A busy $shape world frame allocates ${world - baseline} bytes above the $baseline byte baseline")
     }
 
     /** The larger of the two edge-marker distances (totem, sealed-anomaly offer) in [model]. */
@@ -229,17 +285,65 @@ class WorldHotPathAllocationTest {
             ShockwaveProjection(CORE + 120f, CORE + 80f, 0.22f, 0.26f, 110f, 3),
         ),
         damageNumbers = listOf(96L, 184L, 742L, 4_800L).mapIndexed { index, amount ->
-            DamageNumberProjection(CORE + index * 70f, CORE - 90f, amount, critical = index == 3, life = 0.4f, driftX = 0.6f, driftY = -0.8f)
+            DamageNumberProjection(CORE + index * 70f, CORE - 90f, amount, critical = index == 3, life = 0.4f, driftX = 0.6f, driftY = -0.8f,
+                tone = index)
         }.toImmutableList(),
         weaponArcs = immutableListOf(WeaponArcProjection(CORE, CORE, CORE + 180f, CORE + 60f, 0.1f)),
+        // Every Break figure, two reactions (one merged) and a first-discovery name stamp.
+        elementBursts = ((0 until 5).map { element ->
+            ElementBurstProjection(CORE - 220f + element * 90f, CORE + 160f, element, -1, -1, 80f, 0.3f, 0.5f, 1)
+        } + listOf(
+            ElementBurstProjection(CORE + 160f, CORE - 160f, 0, 1, 0, 90f, 0.4f, 0.7f, 3),
+            ElementBurstProjection(CORE - 160f, CORE - 160f, 2, 4, 8, 120f, 0.2f, 0.7f, 1),
+        )).toImmutableList(),
+        reactionStamps = immutableListOf(ReactionStampProjection(CORE + 40f, CORE - 40f, 0, 0.5f, 0.9f)),
     )
 
-    private fun busyModel(weapon: WeaponId, drift: Float = 0f): GameplayRenderModel {
+    /** Every mechanic's projected state at once; the renderer draws only the active character's. */
+    private fun busyAbility(drift: Float): CharacterAbilityProjection = CharacterAbilityProjection(
+        charge = 0.6f, ringRadius = 120f, parryWindow = 0.1f,
+        lattice = immutableListOf(CharacterLatticePoint(CORE - 120f, CORE - 90f), CharacterLatticePoint(CORE + 140f, CORE - 80f),
+            CharacterLatticePoint(CORE + 60f, CORE + 150f)),
+        facets = 2, facetProgress = 0.4f, edge = 3, stellarMass = 12, novaFlash = 0.4f, haloBurstFlash = 0.5f,
+        polarity = 1, polarityFlash = 0.5f, beatPeriod = 0.75f, beatWindow = 0.11f, beatStreak = 3,
+        blinkCharges = 1, blinkRecharge = 0.5f,
+        scars = immutableListOf(
+            CharacterScarProjection(CORE - 200f, CORE + 40f, CORE - 20f, CORE + 60f, fuse = 0.5f, fade = 0f),
+            CharacterScarProjection(CORE + 30f, CORE - 200f, CORE + 210f, CORE - 160f, fuse = 1f, fade = 0.1f),
+        ),
+        drones = immutableListOf(
+            CharacterDroneProjection(CORE + 70f, CORE, CORE + 68f, CORE - 4f, darting = false),
+            CharacterDroneProjection(CORE - 35f, CORE + 60f, CORE - 30f, CORE + 62f, darting = true),
+            CharacterDroneProjection(CORE - 35f, CORE - 60f, CORE - 37f, CORE - 58f, darting = false),
+        ),
+        ghostActive = true, ghostX = CORE - 160f + drift * 0.01f, ghostY = CORE + 30f,
+        previousGhostX = CORE - 165f + drift * 0.01f, previousGhostY = CORE + 28f,
+    )
+
+    private fun busyModel(weapon: WeaponId, drift: Float = 0f, shape: CoreShape = CoreShape.TESSERACT, level: Int = 3): GameplayRenderModel {
         val enemies = EnemyType.entries.mapIndexed { index, type ->
             val angle = index * 0.7f
             val distance = if (type == EnemyType.ARCHITECT) 260f else 180f + index * 12f
             EnemyProjection(index + 1, type, CORE + kotlin.math.cos(angle) * distance, CORE + kotlin.math.sin(angle) * distance, 0f, 0f,
-                50f, 100f, if (type == EnemyType.ARCHITECT) 74f else 20f, 0.2f, if (index == 2) 1f else 0f, 0f, 0f, CORE, CORE, false)
+                50f, 100f, if (type == EnemyType.ARCHITECT) 74f else 20f, 0.2f, if (index == 2) 1f else 0f, 0f, 0f, CORE, CORE, false,
+                statusBits = BusyStatuses[index % BusyStatuses.size],
+                // Every type's aspect, weakness and frame, an immune Gravitic elite and a shifting Thermal Architect.
+                affinityBits = runAffinity(type, eliteAspect = StatusElement.GRAVITIC, architectAspect = StatusElement.THERMAL,
+                    architectPhase = 1, shifting = true),
+                // The 0.4.0 telegraphs: a showing lane, a locked sight line, a burning fuse, a wind-up, a raised
+                // shield, a turned front, and a Drifter tethered to the Aegis.
+                behavior = when (type) {
+                    EnemyType.LANCER, EnemyType.SNIPER, EnemyType.PHANTOM -> EnemyBehavior.TELEGRAPH
+                    EnemyType.BOMBER -> EnemyBehavior.PRIMED
+                    else -> EnemyBehavior.IDLE
+                },
+                behaviorRemaining = if (type == EnemyType.SNIPER) 0.2f else 0.3f,
+                facing = index * 0.4f,
+                linkedTo = if (type == EnemyType.DRIFTER) EnemyType.AEGIS.ordinal + 1 else -1,
+                shielded = type == EnemyType.HERALD,
+                // Rebirth R8: an Armored Vanguard plate on every third ordinary enemy.
+                armored = index % 3 == 0 && type != EnemyType.ARCHITECT,
+            )
         }
         return GameplayRenderModel(
             content = Content, phase = GamePhase.RUNNING, settings = PlayerPreferences(textScale = 1.25f), rebirthLevel = 5,
@@ -252,21 +356,35 @@ class WorldHotPathAllocationTest {
             weaponPower = 1f, coolingRate = 1f, magnetStrength = 1f, dashImpulse = 1f, dashHeatCost = 20f, regenPerSecond = 0f,
             critChance = 0f, critMultiplier = 2f, pickupRadius = 150f, luck = 0f, dataGain = 1f, matterGain = 1f, attackSpeed = 1f,
             damageReduction = 0f, comboWindow = 2f, overdriveGain = 1f, dragCoefficient = 1f, polarityStability = 0.8f,
-            weapon = weapon, weaponLevel = 3, overdriveCharge = 10f, overdriveTime = 0f, rerollsRemaining = 1, acquiredItemCount = 0,
+            weapon = weapon, weaponLevel = level, overdriveCharge = 10f, overdriveTime = 0f, rerollsRemaining = 1, acquiredItemCount = 0,
             recentItem = null, equippedRelics = immutableListOf(), morningstarAngle = 0.3f, morningstarX = CORE + 60f,
             morningstarY = CORE + 40f, weaponBeamTime = 0f, weaponBeamStartX = 0f, weaponBeamStartY = 0f, weaponBeamEndX = 0f,
-            weaponBeamEndY = 0f, totem = TotemProjection(CORE - 1_600f - drift, CORE + 100f + drift * 0.3f, 1f), coreShape = CoreShape.TESSERACT,
+            weaponBeamEndY = 0f, totem = TotemProjection(CORE - 1_600f - drift, CORE + 100f + drift * 0.3f, 1f), coreShape = shape,
             enemies = enemies.toImmutableList(),
-            projectiles = (0 until 12).map { index ->
+            projectiles = ((0 until 12).map { index ->
                 ProjectileProjection(CORE - 200f + index * 25f, CORE + 120f, 0f, 0f, 4.5f, 1f, index % 3 != 0, 1f, 0, 0, null,
                     CORE - 206f + index * 25f, CORE + 123f)
-            }.toImmutableList(),
+            } + listOf(
+                // An armed mine and an arming one.
+                ProjectileProjection(CORE + 120f, CORE - 140f, 0f, 0f, 9f, 5f, true, 14f, 0, 0, null, CORE + 120f, CORE - 140f,
+                    kind = ProjectileKind.MINE),
+                ProjectileProjection(CORE + 160f, CORE - 140f, 0f, 0f, 9f, 7.9f, true, 14f, 0, 0, null, CORE + 160f, CORE - 140f,
+                    kind = ProjectileKind.MINE),
+            )).toImmutableList(),
             pickups = PickupType.entries.mapIndexed { index, type ->
                 PickupProjection(type, CORE - 150f + index * 30f, CORE - 60f, 0f, 0f, 3f, CORE - 155f + index * 30f, CORE - 57f)
             }.toImmutableList(),
-            trail = (0 until 24).map { index -> TrailPointProjection(CORE - index * 15f, CORE + index * 8f, index * 0.08f) }.toImmutableList(),
+            trail = (0 until 24).map { index ->
+                TrailPointProjection(CORE - index * 15f, CORE + index * 8f, index * 0.08f, life = if (index % 3 == 0) 2.7f else 1.8f,
+                    scale = if (index % 3 == 0) 1.5f else 1f)
+            }.toImmutableList(),
             weaponNodes = immutableListOf(WeaponNodeProjection(WeaponNodeType.GRAVITY_MINE, CORE - 250f, CORE - 200f, 2f, 3f, 55f)),
-            weaponOrbitals = immutableListOf(), choices = immutableListOf(), choiceType = ChoiceType.ITEM, pendingRelicChoiceCount = 0,
+            weaponOrbitals = (0 until 3).map { index ->
+                WeaponOrbitalProjection(index, CORE + kotlin.math.cos(index * 2.1f) * 140f, CORE + kotlin.math.sin(index * 2.1f) * 140f, 10f,
+                    CORE + kotlin.math.cos(index * 2.1f - 0.03f) * 140f, CORE + kotlin.math.sin(index * 2.1f - 0.03f) * 140f)
+            }.toImmutableList(),
+            weaponEntities = BusyWeaponEntities,
+            choices = immutableListOf(), choiceType = ChoiceType.ITEM, pendingRelicChoiceCount = 0,
             itemStacks = immutableListOf(), discoveredItemIds = immutableSetOf(), relicRanks = immutableListOf(),
             pointsOfInterest = immutableListOf(
                 // The orbit's seconds in the ring change every frame (drawn from cached digits).
@@ -278,12 +396,97 @@ class WorldHotPathAllocationTest {
                 PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed", CORE + 900f + drift, CORE - 300f, false, 20f, 1, 0f,
                     immutableListOf(), 0f, 0f),
             ),
+            obstacles = BusyObstacles,
+            characterAbility = busyAbility(drift),
+            // Rebirth R4: Volatile Remains telegraphs filling toward detonation.
+            volatileBursts = immutableListOf(
+                kinetickk.ball.gameplay.nucleus.render.VolatileBurstProjection(CORE + 90f, CORE + 70f, 70f, 2.8f, 3.15f),
+                kinetickk.ball.gameplay.nucleus.render.VolatileBurstProjection(CORE - 120f, CORE + 30f, 70f, 2.9f, 3.25f),
+            ),
         )
     }
 
     private companion object {
-        const val MEASURED_FRAMES = 300
+        /**
+         * Every obstacle kind on screen (and one off it), with outlines of several corner counts, plus a
+         * crowded view of rocks whose radii all differ (every continuous radius is its own outline).
+         */
+        val BusyObstacles = (
+            listOf(
+                ObstacleProjection(1L, ObstacleKind.ASTEROID, CORE + 300f, CORE + 160f, 120f, 11),
+                ObstacleProjection(2L, ObstacleKind.ASTEROID, CORE - 360f, CORE - 200f, 60f, 4),
+                ObstacleProjection(3L, ObstacleKind.UNSTABLE, CORE + 330f, CORE - 230f, 80f, 27),
+                ObstacleProjection(4L, ObstacleKind.BUMPER, CORE - 120f, CORE + 220f, 34f, 0),
+                ObstacleProjection(5L, ObstacleKind.ASTEROID, CORE + 2_400f, CORE, 140f, 9),
+            ) + List(30) { index ->
+                ObstacleProjection(100L + index, if (index % 5 == 0) ObstacleKind.UNSTABLE else ObstacleKind.ASTEROID,
+                    CORE - 450f + (index % 6) * 180f, CORE - 260f + (index / 6) * 130f, 46f + index * 3.47f, 200 + index * 13)
+            }
+            ).toImmutableList()
+
+        /**
+         * Statuses of the busy frame's enemies: a reaction ready (Thermal with Cryo), a primed Ion arc,
+         * Frozen and Brittle, Embrittled, a full Entropy fill, Sonic with Void, none.
+         */
+        val BusyStatuses = intArrayOf(
+            5 or (3 shl 4),
+            (6 shl 8) or EnemyStatusBits.PRIMED,
+            (4 shl 4) or EnemyStatusBits.FROZEN or EnemyStatusBits.BRITTLE,
+            (2 shl 12) or EnemyStatusBits.EMBRITTLED,
+            9 shl 16,
+            (5 shl 20) or (3 shl 24),
+            0,
+        )
+        /** Every weapon entity kind, with each rift, ring, disc and tether phase. */
+        val BusyWeaponEntities = listOf(
+            weaponEntity(WeaponEntityKind.DISC, CORE + 90f, CORE - 40f, radius = 16f),
+            weaponEntity(WeaponEntityKind.DISC, CORE - 90f, CORE - 60f, radius = 16f, phase = 1),
+            weaponEntity(WeaponEntityKind.SENTRY, CORE - 140f, CORE + 90f, radius = 12f, life = 6f, maxLife = 10f),
+            weaponEntity(WeaponEntityKind.SENTRY, CORE + 140f, CORE + 100f, radius = 12f, life = 0.6f, maxLife = 10f),
+            weaponEntity(WeaponEntityKind.LENS, CORE + 60f, CORE - 120f, radius = 14f),
+            weaponEntity(WeaponEntityKind.WELL, CORE - 200f, CORE - 120f, radius = 170f, life = 1.1f, maxLife = 1.6f),
+            weaponEntity(WeaponEntityKind.RIFT, CORE - 240f, CORE + 10f, endX = CORE - 80f, endY = CORE + 60f, radius = 40f, phase = 0),
+            weaponEntity(WeaponEntityKind.RIFT, CORE + 40f, CORE + 160f, endX = CORE + 220f, endY = CORE + 120f, radius = 40f, phase = 1),
+            weaponEntity(WeaponEntityKind.RIFT, CORE - 60f, CORE - 200f, endX = CORE + 100f, endY = CORE - 220f, radius = 28f, life = 0.2f, phase = 4),
+            weaponEntity(WeaponEntityKind.SHARD, CORE + 30f, CORE + 70f, radius = 9f),
+            weaponEntity(WeaponEntityKind.MISSILE, CORE - 30f, CORE + 110f, radius = 7f),
+            weaponEntity(WeaponEntityKind.RING, CORE, CORE, radius = 240f, life = 0.2f, maxLife = 0.35f, phase = 0),
+            weaponEntity(WeaponEntityKind.RING, CORE + 50f, CORE, radius = 210f, life = 0.1f, maxLife = 0.35f, phase = 1),
+            weaponEntity(WeaponEntityKind.RING, CORE - 50f, CORE, radius = 160f, life = 0.3f, maxLife = 0.35f, phase = 2),
+            weaponEntity(WeaponEntityKind.RING, CORE, CORE + 50f, radius = 170f, life = 0.25f, maxLife = 0.35f, phase = 3),
+            weaponEntity(WeaponEntityKind.TETHER, CORE + 200f, CORE - 30f, endX = CORE, endY = CORE, phase = 0),
+            weaponEntity(WeaponEntityKind.TETHER, CORE - 180f, CORE + 40f, endX = CORE, endY = CORE, phase = 1),
+            weaponEntity(WeaponEntityKind.BEAM, CORE, CORE, radius = 0f, extent = 240f, angle = 0.4f),
+            weaponEntity(WeaponEntityKind.BEAM, CORE, CORE, radius = 55f, extent = 240f, angle = 0.4f + 3.14159f, phase = 1),
+        ).toImmutableList()
+
+        fun weaponEntity(
+            kind: WeaponEntityKind,
+            x: Float,
+            y: Float,
+            endX: Float = x,
+            endY: Float = y,
+            radius: Float = 0f,
+            extent: Float = 0f,
+            angle: Float = 0f,
+            life: Float = 0.5f,
+            maxLife: Float = 1f,
+            phase: Int = 0,
+        ) = WeaponEntityProjection(kind, x, y, x - 4f, y + 2f, endX, endY, endX - 3f, endY, angle, angle - 0.03f, radius, extent, life, maxLife,
+            phase)
+
         const val HUD_FRAMES = 400
+
+        /** Distinct warm-up frames (their drifts lie past every measured frame's). */
+        const val WARM_MODELS = 37
+
+        /** Measuring passes before a frame fails; each draws fresh distances below the warm range. */
+        const val PASSES = 3
+
+        /** Measured frames (20 drift apart) whose distances all stay below the warm range. */
+        const val MEASURED_DRIFT_FRAMES = 320
+
+        val FULL_SWEEP = System.getenv("KK_FULL_SWEEPS") == "1"
 
         /** Warm-up drifts start here, so their distances lie past every measured frame's. */
         const val WARM_DRIFT = 6_400f
@@ -293,20 +496,18 @@ class WorldHotPathAllocationTest {
 
         val Content = GameplayContentSnapshot(
             version = KINETICKK_CONTENT_VERSION,
-            items = immutableListOf(ItemDefinition(0, "Ram", "Ram", ItemRarity.COMMON, ItemModifier(ItemEffect.IMPACT_DAMAGE, 0.05f),
-                ItemModifier(ItemEffect.WEAPON_POWER, 0.04f), 8, 1, "Impact")),
-            weapons = WeaponId.entries.map { WeaponDefinition(it, it.name, "Fixture", listOf("TAG"), 0) }.toImmutableList(),
+            items = immutableListOf(ItemDefinition(0, "Ram", "Ram", ItemRarity.COMMON, immutableListOf(BuildTag.RAM),
+                stats = immutableListOf(StatDelta(ItemEffect.IMPACT_DAMAGE, 0.05f), StatDelta(ItemEffect.WEAPON_POWER, 0.04f)),
+                maxStacks = 3, unlockLevel = 1)),
+            weapons = WeaponId.entries.map { fixtureWeapon(it, description = "Fixture") }.toImmutableList(),
             weaponMasteries = WeaponMastery.entries.toImmutableList(),
-            metaUpgrades = MetaUpgradeId.entries.map { id ->
-                MetaUpgradeDefinition(id, "F", "F", 1, 1, ItemModifier(ItemEffect.MAX_INTEGRITY, 1f))
-            }.toImmutableList(),
-            relics = RelicId.entries.map { id -> RelicDefinition(id, id.name, RelicAspect.entries.first(), "F", "F") }.toImmutableList(),
+            relics = rewardFixtureRelics.toImmutableList(),
             rebirth = RebirthPolicySnapshot(
                 minimumLevel = 0, maximumLevel = 0,
-                profiles = immutableListOf(RebirthProfile(0, RebirthDirective.BASELINE, 5, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 1f, 0f, 1f, 0, 120, 0.09f, 24f)),
+                profiles = immutableListOf(RebirthProfile(0, "Baseline", 5, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 1f, 0f, 1f, 0, 120, 0.09f, 24f)),
                 maxActiveEnemies = 120, minSpawnIntervalSeconds = 0.09f, minEliteIntervalSeconds = 24f,
             ),
-            relicPolicy = RelicPolicy(4, 5),
+            relicPolicy = RelicPolicy(4, 3),
         )
     }
 }

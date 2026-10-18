@@ -48,6 +48,7 @@ class MobileGameUiTest {
             HOME_REBIRTH_TAG,
             HOME_CODEX_TAG,
             HOME_SETTINGS_TAG,
+            HOME_HANGAR_TAG,
         )
 
         val actionBounds = actionTags.map { tag ->
@@ -233,6 +234,7 @@ class MobileGameUiTest {
         const val HOME_REBIRTH_TAG = "kinetickk.home.rebirth"
         const val HOME_CODEX_TAG = "kinetickk.home.codex"
         const val HOME_SETTINGS_TAG = "kinetickk.home.settings"
+        const val HOME_HANGAR_TAG = "kinetickk.home.hangar"
         const val GAMEPLAY_SCREEN_TAG = "kinetickk.gameplay"
         const val GAMEPLAY_PAUSE_TAG = "kinetickk.gameplay.pause"
         const val GAMEPLAY_PERFORMANCE_TAG = "kinetickk.gameplay.performance"

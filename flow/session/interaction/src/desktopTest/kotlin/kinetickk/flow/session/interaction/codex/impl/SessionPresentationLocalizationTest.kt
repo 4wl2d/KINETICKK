@@ -21,11 +21,14 @@ import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.profile.api.*
 import kinetickk.flow.session.interaction.codex.api.CodexRenderModel
 import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
+import kinetickk.flow.session.interaction.localization.SessionText
 import kinetickk.flow.session.interaction.home.impl.DefaultHomeFeature
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.collections.immutableSetOf
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.LocalAppLanguage
+import kinetickk.foundation.design.Kk
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
 import kinetickk.resource.audio.api.ToneRequest
@@ -39,6 +42,67 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
 class SessionPresentationLocalizationTest {
+    @Test
+    fun homeHighlightFollowsEveryPointerMoveOnTheNextFrame() = runComposeUiTest {
+        mainClock.autoAdvance = false
+        val outputs = mutableListOf<HomeOutput>()
+        val feature = DefaultHomeFeature(LocalizationProfilePort(), codexTestCatalog(), LocalizationSilentAudio)
+        setContent {
+            Box(Modifier.requiredSize(1000.dp, 700.dp)) {
+                feature.Content(inputEnabled = true, onOutput = outputs::add)
+            }
+        }
+        mainClock.advanceTimeBy(300)
+        val targets = listOf("start", "lab", "armory", "rebirth", "codex", "settings")
+        for (target in targets.drop(1) + targets.reversed()) {
+            val node = onNodeWithTag("kinetickk.home.$target")
+            node.performMouseInput { moveTo(center) }
+            mainClock.advanceTimeByFrame()
+            node.assertIsFocused()
+            val root = onNodeWithTag("kinetickk.home")
+            val top = root.fetchSemanticsNode().boundsInRoot.top
+            val image = root.captureToImage()
+            val pixels = image.toPixelMap()
+            for (row in targets) {
+                val y = (onNodeWithTag("kinetickk.home.$row").fetchSemanticsNode().boundsInRoot.center.y - top).toInt()
+                val highlighted = pixels[image.width - 30, y].toArgb() == Kk.Bone.toArgb()
+                assertEquals(row == target, highlighted, "$row after pointer moved to $target")
+            }
+        }
+        assertTrue(outputs.isEmpty(), "Preview must not activate a route")
+        onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        mainClock.advanceTimeByFrame()
+        onNodeWithTag("kinetickk.home.lab").assertIsFocused()
+        onRoot().performKeyInput { pressKey(Key.Enter) }
+        assertIs<HomeOutput.OpenLab>(outputs.single())
+    }
+
+    @Test
+    fun homeWaitsForBothViewportDimensionsBeforeRestoringKeyboardFocus() = runComposeUiTest {
+        mainClock.autoAdvance = false
+        var heightValue by mutableStateOf(0.dp)
+        val feature = DefaultHomeFeature(LocalizationProfilePort(), codexTestCatalog(), LocalizationSilentAudio)
+        setContent {
+            Box(Modifier.requiredSize(1000.dp, heightValue)) {
+                feature.Content(inputEnabled = true, onOutput = {})
+            }
+        }
+        mainClock.advanceTimeBy(100)
+        onNodeWithTag("kinetickk.home.start").assertDoesNotExist()
+        runOnIdle { heightValue = 700.dp }
+        mainClock.advanceTimeBy(100)
+        onNodeWithTag("kinetickk.home.start").assertIsFocused()
+        onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        mainClock.advanceTimeByFrame()
+        onNodeWithTag("kinetickk.home.lab").assertIsFocused()
+        runOnIdle { heightValue = 0.dp }
+        mainClock.advanceTimeBy(100)
+        onNodeWithTag("kinetickk.home.lab").assertDoesNotExist()
+        runOnIdle { heightValue = 700.dp }
+        mainClock.advanceTimeBy(100)
+        onNodeWithTag("kinetickk.home.lab").assertIsFocused()
+    }
+
     @Test
     fun homePreviewDoesNotActivateRoutesAndArrowNavigationActivatesExactlyOnce() = runComposeUiTest {
         mainClock.autoAdvance = false
@@ -54,7 +118,6 @@ class SessionPresentationLocalizationTest {
         mainClock.advanceTimeBy(500)
         assertTrue(outputs.isEmpty(), "Hover changes the scene without navigating or starting a run")
         onNodeWithTag("kinetickk.home.lab").assertIsFocused()
-        onNodeWithTag("kinetickk.home.core.orb").assertIsSelected()
         // Hover selected Lab; Down selects Armory and Enter dispatches one action.
         onRoot().performKeyInput { pressKey(Key.DirectionDown) }
         mainClock.advanceTimeByFrame()
@@ -75,7 +138,7 @@ class SessionPresentationLocalizationTest {
                 }
             }
         }
-        onNodeWithTag("codex-tab-1").assertTextEquals("Коллекция")
+        onNodeWithTag("codex-tab-1").assertTextEquals("Каталог")
         onNodeWithTag("codex-category-3").performClick()
         onNodeWithTag("codex-search").performTextInput("крУг")
         onNodeWithTag("codex-slot-shape/ORB").performClick()
@@ -83,7 +146,7 @@ class SessionPresentationLocalizationTest {
         saveLocalizationCapture("codex-ru")
         onNodeWithTag("codex-search").performTextClearance()
         runOnIdle { languageValue = AppLanguage.English }
-        onNodeWithTag("codex-tab-1").assertTextEquals("Collection")
+        onNodeWithTag("codex-tab-1").assertTextEquals("Catalog")
         onNodeWithTag("codex-slot-shape/ORB").assertIsSelected()
         onNodeWithTag("codex-detail-title").assertTextEquals("Circle")
         onNodeWithTag("codex-search").performTextInput("CiRcLe")
@@ -92,7 +155,7 @@ class SessionPresentationLocalizationTest {
     }
 
     @Test
-    fun catalogAndSynergyTabsKeepLazyEntryTypesAligned() = runComposeUiTest {
+    fun catalogAndReactionTabsKeepLazyEntryTypesAligned() = runComposeUiTest {
         var languageValue by mutableStateOf(AppLanguage.Russian)
         val catalog = codexTestCatalog()
         setContent {
@@ -106,12 +169,23 @@ class SessionPresentationLocalizationTest {
             runOnIdle { languageValue = language }
             repeat(3) {
                 onNodeWithTag("codex-tab-1").performClick()
+                // The Items matrix under another sort: its anonymous cells open in the language too.
+                onNodeWithTag("codex-category-0").performClick()
+                onNodeWithTag("codex-sort-${(it + 1) % 3}").performClick().assertIsSelected()
+                onNodeWithTag("codex-slot-item/0").performClick()
+                onNodeWithTag("codex-detail-title").assertTextEquals(language.text(SessionText.UNKNOWN_DISCOVERY))
                 onNodeWithTag("codex-category-3").performClick()
                 onNodeWithTag("codex-slot-shape/ORB").performClick()
                 onNodeWithTag("codex-detail-title").assertTextEquals("Circle".localizedContent(language))
                 onNodeWithTag("codex-tab-2").performClick()
-                onNodeWithTag("codex-slot-synergy/VECTOR_MANEUVER").performClick()
-                onNodeWithTag("codex-detail-title").assertTextEquals(catalog.synergies.first().name.localizedContent(language))
+                onNodeWithTag("codex-slot-break/THERMAL").performClick()
+                onNodeWithTag("codex-detail-title").assertTextEquals("Ignite".localizedContent(language))
+                onNodeWithTag("codex-tab-3").performClick()
+                val harmony = codexPairingKey(kinetickk.ball.content.api.RelicId.BLINK_DRIVE, kinetickk.ball.content.api.RelicId.GYRE_ENGINE)
+                onNodeWithTag("codex-grid").performScrollToKey(harmony)
+                onNodeWithTag("codex-slot-$harmony").performClick()
+                // A harmony is named by the key the two relics share.
+                onNodeWithTag("codex-detail-title").assertTextEquals(kinetickk.ball.content.api.RelicKey.MOTION.displayLabel.localizedContent(language))
             }
         }
     }
@@ -130,12 +204,12 @@ class SessionPresentationLocalizationTest {
         }
         mainClock.advanceTimeByFrame()
         onNodeWithTag("kinetickk.home.start").assertContentDescriptionEquals("Начать забег")
-        onNodeWithTag("kinetickk.home.core.orb").assertContentDescriptionEquals("Выбрать ядро «Круг»")
+        onNodeWithTag("kinetickk.home.hangar").assertContentDescriptionEquals("Открыть ангар. Текущая форма: Круг")
         saveLocalizationCapture("home-ru")
         runOnIdle { languageValue = AppLanguage.English }
         mainClock.advanceTimeByFrame()
         onNodeWithTag("kinetickk.home.start").assertContentDescriptionEquals("Start run")
-        onNodeWithTag("kinetickk.home.core.orb").assertContentDescriptionEquals("Select Circle core")
+        onNodeWithTag("kinetickk.home.hangar").assertContentDescriptionEquals("Open the Hangar. Current form: Circle")
         saveLocalizationCapture("home-en")
     }
 }
@@ -143,8 +217,9 @@ class SessionPresentationLocalizationTest {
 private class LocalizationProfilePort : ProfileReadPort {
     override val instanceId = LOCAL_PROFILE_INSTANCE_ID
     override fun query(query: ProfileQuery.GetRunBootstrap): kinetickk.ball.profile.api.RunBootstrapProjection = error("unused")
-    override fun query(query: ProfileQuery.GetLabProgress) = LabProgressProjection(instanceId, ProfileRevision.ZERO,
-        LabProfileSnapshot(PlayerEconomy(), LabProgress()))
+    override fun query(query: ProfileQuery.GetMatrixProgress) = MatrixProgressProjection(instanceId, ProfileRevision.ZERO,
+        MatrixProfileSnapshot(PlayerEconomy(), MatrixProgress()))
+    override fun query(query: ProfileQuery.GetHangar): kinetickk.ball.profile.api.HangarProjection = error("unused")
     override fun query(query: ProfileQuery.GetLoadout): kinetickk.ball.profile.api.LoadoutProjection = error("unused")
     override fun query(query: ProfileQuery.GetRebirthProgress): kinetickk.ball.profile.api.RebirthProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetPersistenceStatus): kinetickk.ball.profile.api.PersistenceStatusProjection = error("unused")

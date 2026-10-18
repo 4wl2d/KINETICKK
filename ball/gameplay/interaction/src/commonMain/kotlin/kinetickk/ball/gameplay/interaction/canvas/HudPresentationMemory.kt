@@ -31,6 +31,7 @@ internal class HudPresentationMemory {
     private var bossGhostAt = Float.NEGATIVE_INFINITY
 
     private var lastPolarity = Float.NaN
+    private var lastPolarityElapsed = Float.NaN
     private var polarityDrainingUntil = Float.NEGATIVE_INFINITY
 
     private var overdriveFullTime = 0f
@@ -66,10 +67,17 @@ internal class HudPresentationMemory {
             lastBossIntegrity = boss.integrity
         }
 
-        if (!lastPolarity.isNaN() && engine.polarityStability < lastPolarity - POLARITY_EPSILON) {
+        // Polarity changes only on simulation steps, so the drain is measured per simulated second:
+        // frames between steps (or while paused) compare nothing, and the cue shows at the same
+        // drain rate whatever the frame rate. A clock that went back is a new run: just re-arm.
+        val simulated = engine.elapsed - lastPolarityElapsed
+        if (simulated > 0f && lastPolarity - engine.polarityStability > POLARITY_DRAIN_PER_SECOND * simulated) {
             polarityDrainingUntil = renderTime + POLARITY_DRAIN_HOLD_SECONDS
         }
-        lastPolarity = engine.polarityStability
+        if (simulated != 0f) {
+            lastPolarity = engine.polarityStability
+            lastPolarityElapsed = engine.elapsed
+        }
 
         overdriveFullTime = if (engine.overdriveTime > 0f) max(overdriveFullTime, engine.overdriveTime) else 0f
 
@@ -107,7 +115,8 @@ internal class HudPresentationMemory {
     }
 
     private companion object {
-        const val POLARITY_EPSILON = 0.0005f
+        /** Slower drains (the first few percent of edge strain) do not pulse the polarity cue. */
+        const val POLARITY_DRAIN_PER_SECOND = 0.03f
         const val POLARITY_DRAIN_HOLD_SECONDS = 0.35f
         const val MESSAGE_RESTART_EPSILON = 0.05f
     }
@@ -122,18 +131,39 @@ internal class BossTarget {
     var integrity: Float = 0f
         private set
 
+    /** The boss's packed statuses ([EnemyStatusBits]). */
+    var statusBits: Int = 0
+        private set
+
+    /** The boss's aspect, weakness and shift ([kinetickk.ball.gameplay.nucleus.render.EnemyAffinity]). */
+    var affinityBits: Int = 0
+        private set
+
     fun select(engine: GameplayRenderModel): BossTarget {
         id = -1
         type = null
         integrity = 0f
+        statusBits = 0
+        affinityBits = 0
         val enemies = engine.enemies
+        // The Architect outranks a Herald, a Herald outranks Elites; the first of a rank stays tracked.
+        var rank = 0
         for (index in enemies.indices) {
             val enemy = enemies[index]
             if (enemy.dead || enemy.hp <= 0f) continue
-            if (enemy.type == EnemyType.ARCHITECT || (enemy.type == EnemyType.ELITE && id < 0)) {
+            val candidate = when (enemy.type) {
+                EnemyType.ARCHITECT -> 3
+                EnemyType.HERALD -> 2
+                EnemyType.ELITE -> 1
+                else -> 0
+            }
+            if (candidate > rank) {
+                rank = candidate
                 id = enemy.id
                 type = enemy.type
                 integrity = (enemy.hp / enemy.maxHp.coerceAtLeast(1f)).coerceIn(0f, 1f)
+                statusBits = enemy.statusBits
+                affinityBits = enemy.affinityBits
                 if (enemy.type == EnemyType.ARCHITECT) break
             }
         }

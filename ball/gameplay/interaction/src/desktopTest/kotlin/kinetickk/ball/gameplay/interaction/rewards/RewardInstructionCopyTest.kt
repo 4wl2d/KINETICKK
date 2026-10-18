@@ -43,8 +43,8 @@ import kotlin.test.assertTrue
 class RewardInstructionCopyTest {
     private val frames = listOf(1440 to 810, 844 to 390, 390 to 844)
     private val relics4 = listOf(
-        EquippedRelic(RelicId.KINETIC_FLYWHEEL, 2), EquippedRelic(RelicId.GHOST_VECTOR, 1),
-        EquippedRelic(RelicId.ORBITAL_NAIL, 1), EquippedRelic(RelicId.VOLTAIC_FILAMENT, 5),
+        EquippedRelic(RelicId.PERPETUAL_VECTOR, 2), EquippedRelic(RelicId.GYRE_ENGINE, 1),
+        EquippedRelic(RelicId.FURNACE_COVENANT, 1), EquippedRelic(RelicId.AEGIS_INVERSION, 3),
     )
 
     @Test
@@ -125,7 +125,7 @@ class RewardInstructionCopyTest {
                 choices = listOf(
                     ChoiceOption(ChoiceType.TOTEM, "Amplify Flux Wake", "Advance the current system from level 5 to 6 immediately.", "RESONANT",
                         weaponId = WeaponId.FLUX_WAKE, totemAction = TotemAction.AMPLIFY_CURRENT),
-                    ChoiceOption(ChoiceType.TOTEM, "Change weapon", "Recalibrate the Totem, then choose one of three different weapon systems.",
+                    ChoiceOption(ChoiceType.TOTEM, "Change weapon", "Recalibrate the Totem, then choose another weapon system you own.",
                         "RECALIBRATE", totemAction = TotemAction.CHANGE_WEAPON),
                 ),
             ),
@@ -135,7 +135,7 @@ class RewardInstructionCopyTest {
             ),
             "focus-relics" to rewardFixtureModel(
                 choiceType = ChoiceType.RELIC, directedChoice = true, relics = relics4.take(3), language = language, width = width, height = height,
-                choices = focus(ChoiceType.RELIC, RewardFocus.VECTOR, RewardFocus.RIFT, RewardFocus.ENTROPY),
+                choices = focus(ChoiceType.RELIC, RewardFocus.KINETIC, RewardFocus.THERMAL, RewardFocus.ENTROPY),
             ),
             "focus-weapons" to rewardFixtureModel(
                 choiceType = ChoiceType.TOTEM, directedChoice = true, language = language, width = width, height = height,
@@ -143,9 +143,9 @@ class RewardInstructionCopyTest {
             ),
             "relic-meld-offer" to rewardFixtureModel(
                 choiceType = ChoiceType.RELIC, relics = relics4, language = language, width = width, height = height,
-                choices = listOf(RelicId.PERIAPSIS_HOOK, RelicId.ECHO_CHAMBER).map { id ->
+                choices = listOf(RelicId.EVENT_HORIZON, RelicId.ECHO_CHAMBER).map { id ->
                     val relic = rewardFixtureContent.relic(id)
-                    ChoiceOption(ChoiceType.RELIC, relic.name, relic.description, relic.aspect.displayLabel.uppercase(),
+                    ChoiceOption(ChoiceType.RELIC, relic.name, relic.upside, relic.aspect.displayLabel.uppercase(),
                         relicId = id, relicAction = RelicChoiceAction.ACQUIRE)
                 } + ChoiceOption(ChoiceType.RELIC, "Meld resonance",
                     "Collapse this offering into one of the four bound Relics and raise its rank.", "MELD", relicAction = RelicChoiceAction.MELD),

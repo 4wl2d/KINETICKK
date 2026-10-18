@@ -502,6 +502,19 @@ private val KK_ANY_PAINT = Color.Unspecified.value.toLong()
 private fun measureKkTextPainted(measurer: CanvasTextMeasurer, text: String, style: TextStyle, paint: Color): TextLayoutResult =
     measureMemoized(measurer, text, style, false, Float.POSITIVE_INFINITY, 1, paint.value.toLong())
 
+/**
+ * [measureKkText] for a label always painted in [paint] (card band labels, whose colour depends on
+ * the band): the same string in another colour on a neighbouring card keeps its own paragraph.
+ */
+internal fun measureKkTextPainted(
+    measurer: CanvasTextMeasurer,
+    text: String,
+    style: TextStyle,
+    paint: Color,
+    uppercase: Boolean,
+    maxWidth: Float = Float.POSITIVE_INFINITY,
+): TextLayoutResult = measureMemoized(measurer, text, style, uppercase, maxWidth, 1, paint.value.toLong())
+
 private fun measureMemoized(
     measurer: CanvasTextMeasurer,
     text: String,

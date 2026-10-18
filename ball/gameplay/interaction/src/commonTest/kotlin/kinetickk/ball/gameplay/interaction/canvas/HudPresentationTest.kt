@@ -3,27 +3,25 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import kinetickk.ball.gameplay.interaction.fixtureWeapon
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
-import kinetickk.ball.content.api.ItemModifier
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
-import kinetickk.ball.content.api.MetaUpgradeDefinition
-import kinetickk.ball.content.api.MetaUpgradeId
-import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
-import kinetickk.ball.content.api.RelicAspect
-import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPolicy
-import kinetickk.ball.content.api.SynergyId
+import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
+import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureRelics
+import kinetickk.ball.gameplay.nucleus.render.RelicLinkKind
 import kinetickk.ball.gameplay.interaction.layout.TargetDeviceProfiles
 import kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.runningControlBounds
@@ -90,24 +88,28 @@ class HudPresentationTest {
     }
 
     @Test
-    fun relicLinksFollowTheSynergyRuleInAnySlotsAndMatchTheOverlay() {
+    fun relicLinksFollowTheKeyRuleInAnySlotsAndMatchTheOverlay() {
         val content = fixtureContent()
         fun links(vararg ids: RelicId) = hudRelicLinks(content, ids.map { EquippedRelic(it, 1) })
-            .map { it.definition.id to it.slots }
-        // Two different Vector relics link across a Gravitic relic between them (slots 0 and 2).
-        assertEquals(listOf(SynergyId.VECTOR_MANEUVER to listOf(0, 2)),
-            links(RelicId.KINETIC_FLYWHEEL, RelicId.ORBITAL_NAIL, RelicId.GHOST_VECTOR))
-        // A named pair links across aspects wherever it sits; its Gravitic member also pairs locally.
+            .map { it.kind to it.slots }
+        // Two relics sharing the Motion key harmonize, but the row marks no harmony (pause and the
+        // relic cards show it as multipliers); a named pairing across a relic between them is marked.
+        assertEquals(emptyList(), links(RelicId.GYRE_ENGINE, RelicId.ECHO_CHAMBER, RelicId.STORMHEART_CAPACITOR))
+        assertEquals(listOf(RelicLinkKind.CONCORD to listOf(0, 2)),
+            links(RelicId.PERPETUAL_VECTOR, RelicId.ECHO_CHAMBER, RelicId.GYRE_ENGINE))
+        // Named pairings win over the key rule wherever they sit; opposed keys interfere.
         assertEquals(
-            setOf(SynergyId.GRAVITIC_GROUPING to listOf(1, 2), SynergyId.BRAKE_COMPRESSION to listOf(0, 2)),
-            links(RelicId.BRAKEPOINT_MEMORY, RelicId.ORBITAL_NAIL, RelicId.MASS_ECHO).toSet(),
+            setOf(
+                RelicLinkKind.DISCORD to listOf(0, 1),
+                RelicLinkKind.CONCORD to listOf(0, 2),
+                RelicLinkKind.DISSONANCE to listOf(1, 2),
+            ),
+            links(RelicId.PERPETUAL_VECTOR, RelicId.STASIS_ANCHOR, RelicId.GYRE_ENGINE).toSet(),
         )
-        // The same relic twice, a lone relic and unrelated aspects form nothing.
-        assertEquals(emptyList(), links(RelicId.KINETIC_FLYWHEEL, RelicId.KINETIC_FLYWHEEL))
-        assertEquals(emptyList(), links(RelicId.KINETIC_FLYWHEEL))
-        assertEquals(emptyList(), links(RelicId.KINETIC_FLYWHEEL, RelicId.ORBITAL_NAIL))
-        val sovereign = RelicId.entries.filter { content.relic(it).aspect == RelicAspect.SOVEREIGN }
-        if (sovereign.size >= 2) assertEquals(emptyList(), links(sovereign[0], sovereign[1]))
+        // The same relic twice, a lone relic and unrelated keys form nothing.
+        assertEquals(emptyList(), links(RelicId.GYRE_ENGINE, RelicId.GYRE_ENGINE))
+        assertEquals(emptyList(), links(RelicId.GYRE_ENGINE))
+        assertEquals(emptyList(), links(RelicId.GYRE_ENGINE, RelicId.ECHO_CHAMBER))
         // What the relic row draws for these links (bracket vs link bar, stacked levels) is checked
         // on the drawn HUD in HudRelicRowTest.
     }
@@ -156,6 +158,13 @@ class HudPresentationTest {
         }
         assertEquals("Lvl {0}", HudRedesignText.WeaponLevel.english)
         assertEquals("Ур. {0}", HudRedesignText.WeaponLevel.russian)
+        // Russian copy carries no Latin letters (units and words are Cyrillic).
+        val latin = Regex("[A-Za-z]")
+        HudRedesignText.entries.forEach { text ->
+            assertFalse(latin.containsMatchIn(text.russian), "$text: Russian copy contains Latin letters")
+            assertEquals(Regex("\\{\\d+}").findAll(text.english).map { it.value }.toList(),
+                Regex("\\{\\d+}").findAll(text.russian).map { it.value }.toList(), "$text keeps its arguments")
+        }
     }
 }
 
@@ -163,26 +172,22 @@ private fun fixtureContent() = GameplayContentSnapshot(
     version = KINETICKK_CONTENT_VERSION,
     items = immutableListOf(
         ItemDefinition(
-            0, "Cinder Ram", "Cinder Ram binds the Impact family to a Cinder component: +5% Impact damage and +4% Weapon power per stack (max 8).",
-            ItemRarity.COMMON, ItemModifier(ItemEffect.IMPACT_DAMAGE, 0.05f), ItemModifier(ItemEffect.WEAPON_POWER, 0.04f),
-            maxStacks = 8, unlockLevel = 1, family = "Impact",
+            0, "Ballast Core", "Lead in the heart of the Core turns every collision into a shove.",
+            ItemRarity.COMMON, immutableListOf(BuildTag.RAM),
+            stats = immutableListOf(StatDelta(ItemEffect.MASS, 0.12f), StatDelta(ItemEffect.IMPACT_DAMAGE, 0.06f)),
+            maxStacks = 3, unlockLevel = 1,
         ),
     ),
-    weapons = WeaponId.entries.map { WeaponDefinition(it, it.name, "Fixture.", listOf("TRAIL"), 0) }.toImmutableList(),
+    weapons = WeaponId.entries.map { fixtureWeapon(it, description = "Fixture.") }.toImmutableList(),
     weaponMasteries = WeaponMastery.entries.toImmutableList(),
-    metaUpgrades = MetaUpgradeId.entries.map { id ->
-        MetaUpgradeDefinition(id, "Fixture", "Fixture", 1, 1, ItemModifier(ItemEffect.MAX_INTEGRITY, 1f))
-    }.toImmutableList(),
-    relics = RelicId.entries.map { id ->
-        RelicDefinition(id, id.name, RelicAspect.entries[(id.ordinal / 6).coerceAtMost(RelicAspect.entries.size - 1)], "Fixture", "Fixture")
-    }.toImmutableList(),
+    relics = rewardFixtureRelics.toImmutableList(),
     rebirth = RebirthPolicySnapshot(
         minimumLevel = 0, maximumLevel = 0,
         profiles = immutableListOf(RebirthProfile(
-            0, RebirthDirective.BASELINE, 5, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 1f, 0f, 1f, 0,
+            0, "Baseline", 5, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 1f, 0f, 1f, 0,
             120, 0.09f, 24f,
         )),
         maxActiveEnemies = 120, minSpawnIntervalSeconds = 0.09f, minEliteIntervalSeconds = 24f,
     ),
-    relicPolicy = RelicPolicy(4, 5),
+    relicPolicy = RelicPolicy(4, 3),
 )

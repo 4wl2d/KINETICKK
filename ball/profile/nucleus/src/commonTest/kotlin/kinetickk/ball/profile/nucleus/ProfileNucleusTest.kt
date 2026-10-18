@@ -4,7 +4,10 @@
 package kinetickk.ball.profile.nucleus
 
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.MatrixNodeId
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.CollectionProjection
 import kinetickk.ball.profile.api.ColorVision
@@ -14,11 +17,14 @@ import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.ball.profile.api.HomeProgressProjection
-import kinetickk.ball.profile.api.LabProgressProjection
+import kinetickk.ball.profile.api.MatrixProgress
+import kinetickk.ball.profile.api.MatrixProgressProjection
 import kinetickk.ball.profile.api.LoadoutProjection
+import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
+import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.PreferenceAdjustmentDirection
 import kinetickk.ball.profile.api.PreferencesProjection
@@ -42,6 +48,8 @@ import kinetickk.ball.profile.api.ProfileWriteOutcomeUnknownReason
 import kinetickk.ball.profile.api.ProfileWriteResult
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.RebirthProgressProjection
+import kinetickk.ball.profile.api.isAscendant
+import kinetickk.ball.profile.api.rank
 import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.immutableListOf
@@ -68,6 +76,21 @@ class ProfileNucleusTest {
         )).acceptedFrame()
         val restored = ProfileNucleus.decide(written.nextState, pulse).acceptedFrame()
         assertFalse(restored.nextState.profile.preferences.runStatisticsOnLeft)
+    }
+
+    @Test
+    fun theMinimapToggleIsOwnedByProfileAndPersisted() {
+        val state = readyState()
+        assertTrue(state.profile.preferences.minimapEnabled)
+        val pulse = ProfileNucleusPulse.Intent(ProfilePulse.AdjustPreference(ProfilePreferenceAdjustment.ToggleMinimap))
+        val frame = ProfileNucleus.decide(state, pulse).acceptedFrame()
+        assertFalse(frame.nextState.profile.preferences.minimapEnabled)
+        assertTrue(state.profile.preferences.minimapEnabled, "the committed state is untouched")
+        assertEquals(
+            frame.nextState.profile.copy(),
+            assertIs<ProfileOutput.PersistSnapshot>(frame.outputs.single()).snapshot.profile,
+        )
+        assertEquals(state.profile.preferences.copy(minimapEnabled = false), frame.nextState.profile.preferences)
     }
 
     @Test
@@ -201,7 +224,7 @@ class ProfileNucleusTest {
         assertEquals(policy.coreShapes.first().id, profile.loadout.coreShape)
         assertEquals(policy.weapons.first().id, profile.loadout.selectedWeapon)
         assertEquals(setOf(policy.weapons.first().id), profile.loadout.unlockedWeapons)
-        assertEquals(policy.metaUpgrades.size, profile.labProgress.ranks.size)
+        assertEquals(MatrixProgress(), profile.matrix)
         assertEquals(policy.rebirth.minimumLevel, profile.rebirthProgress.level)
     }
 
@@ -214,7 +237,7 @@ class ProfileNucleusTest {
         )
         val intents: List<ProfilePulse.Business> = listOf(
             ProfilePulse.AdjustPreference(ProfilePreferenceAdjustment.ToggleSoundEffects),
-            ProfilePulse.PurchaseMetaUpgrade(MetaUpgradeId.CORE_INTEGRITY),
+            ProfilePulse.PurchaseMatrixNode(MatrixNodeId.REINFORCED_HULL),
             ProfilePulse.PurchaseOrEquipWeapon(WeaponId.MORNINGSTAR),
         )
 
@@ -260,6 +283,68 @@ class ProfileNucleusTest {
     }
 
     @Test
+    fun droppingToTierZeroAfterRankFiveKeepsRankFiveWeaponsCharactersAndMatrixNodes() {
+        val rich = PlayerEconomy(matter = 100_000L, lifetimeMatter = 100_000L)
+        val ranked = readyState(defaultPlayerProfile(TestProfilePolicy).copy(economy = rich,
+            rebirthProgress = RebirthProgress(level = 5, highestCleared = 4)))
+        val dropped = ProfileNucleus.decide(ranked, ProfileNucleusPulse.SelectRebirthTier(0)).acceptedFrame().nextState
+            .let { readyState(it.profile) }
+        assertEquals(RebirthProgress(level = 0, highestCleared = 4), dropped.profile.rebirthProgress)
+        // Rank 5 content stays open at tier 0: the Solar Sweep (Reborn 5) sells, the Crescent (Reborn 5) and the
+        // Pentagon (Reborn 3) are unlocked, and a Reborn 5 Matrix node can be bought.
+        val solar = TestProfilePolicy.weapon(WeaponId.SOLAR_SWEEP)
+        assertEquals(5, solar.minimumRebirth)
+        val bought = ProfileNucleus.decide(dropped, ProfileNucleusPulse.Intent(ProfilePulse.PurchaseOrEquipWeapon(solar.id)))
+            .acceptedFrame().nextState.profile
+        assertTrue(solar.id in bought.loadout.unlockedWeapons)
+        val unlocked = ProfileNucleus.query(dropped, ProfileQuery.GetHomeProgress).unlockedCoreShapes
+        assertTrue(CoreShape.CRESCENT in unlocked && CoreShape.PENTAGON in unlocked, "$unlocked")
+        assertFalse(CoreShape.HEXAGON in unlocked, "the Hexagon needs rank 7")
+        val crescent = ProfileNucleus.decide(dropped, ProfileNucleusPulse.SelectCoreShape(CoreShape.CRESCENT)).acceptedFrame()
+        assertEquals(CoreShape.CRESCENT, crescent.nextState.profile.loadout.coreShape)
+        assertEquals(5, ProfileNucleus.query(dropped, ProfileQuery.GetMatrixProgress).snapshot.rebirthRank)
+        assertEquals(5, ProfileNucleus.query(dropped, ProfileQuery.GetLoadout).snapshot.rebirthRank)
+    }
+
+    @Test
+    fun aWeaponRebirthGateOpensAtExactlyItsRankBeforeMatterIsChecked() {
+        val gated = TestProfilePolicy.weapon(WeaponId.TETHER_ARC)
+        assertEquals(2, gated.minimumRebirth)
+        fun purchase(state: ProfileState) =
+            ProfileNucleus.decide(state, ProfileNucleusPulse.Intent(ProfilePulse.PurchaseOrEquipWeapon(gated.id)))
+        fun rich(highestCleared: Int) = readyState(
+            profile = defaultPlayerProfile(TestProfilePolicy).copy(
+                economy = PlayerEconomy(matter = 10_000L, lifetimeMatter = 10_000L),
+                rebirthProgress = RebirthProgress(level = 0, highestCleared = highestCleared),
+            ),
+        )
+
+        // Rank = highest cleared tier + 1: one clear is rank 1, one below the gate.
+        val rankOne = rich(highestCleared = 0)
+        assertEquals(ProfileRejection.WeaponRebirthLocked, purchase(rankOne).rejection())
+        // The gate comes before the price: a poor rank-one profile still hears about the gate.
+        val poor = readyState(profile = rankOne.profile.copy(economy = PlayerEconomy()))
+        assertEquals(ProfileRejection.WeaponRebirthLocked, purchase(poor).rejection())
+
+        val rankTwo = rich(highestCleared = 1)
+        val bought = purchase(rankTwo).acceptedFrame().nextState.profile
+        assertEquals(gated.id, bought.loadout.selectedWeapon)
+        assertTrue(gated.id in bought.loadout.unlockedWeapons)
+        assertEquals(10_000L - gated.permanentUnlockCost, bought.economy.matter)
+
+        // Owning it already: equipping never re-checks the gate.
+        val owned = readyState(
+            profile = rankOne.profile.copy(
+                loadout = PlayerLoadout(
+                    coreShape = rankOne.profile.loadout.coreShape,
+                    unlockedWeapons = rankOne.profile.loadout.unlockedWeapons + gated.id,
+                ),
+            ),
+        )
+        assertEquals(gated.id, purchase(owned).acceptedFrame().nextState.profile.loadout.selectedWeapon)
+    }
+
+    @Test
     fun businessRejectionsPublishNoAcceptedFrame() {
         val state = readyState()
         assertEquals(
@@ -267,7 +352,7 @@ class ProfileNucleusTest {
             ProfileNucleus.decide(
                 state,
                 ProfileNucleusPulse.Intent(
-                    ProfilePulse.PurchaseMetaUpgrade(MetaUpgradeId.CORE_INTEGRITY),
+                    ProfilePulse.PurchaseMatrixNode(MatrixNodeId.REINFORCED_HULL),
                 ),
             ).rejection(),
         )
@@ -276,8 +361,8 @@ class ProfileNucleusTest {
             ProfileNucleus.decide(state, ProfileNucleusPulse.SelectCoreShape(CoreShape.PRISM)).rejection(),
         )
         assertEquals(
-            ProfileRejection.RebirthLevelNotCleared,
-            ProfileNucleus.decide(state, ProfileNucleusPulse.AdvanceRebirth).rejection(),
+            ProfileRejection.RebirthTierLocked,
+            ProfileNucleus.decide(state, ProfileNucleusPulse.SelectRebirthTier(1)).rejection(),
         )
     }
 
@@ -294,7 +379,19 @@ class ProfileNucleusTest {
             GameplayProgressUpdate(clearedRebirthLevel = -1) to
                 ProfileGameplayProgressRejection.ClearedLevelBelowMinimum(-1),
             GameplayProgressUpdate(clearedRebirthLevel = 1) to
-                ProfileGameplayProgressRejection.ClearedLevelAboveCurrent(1),
+                ProfileGameplayProgressRejection.ClearedLevelAboveRank(1),
+            GameplayProgressUpdate(discoveredItemIds = emptySet(), victoryRelicIds = listOf(RelicId.GLASS_COMET)) to
+                ProfileGameplayProgressRejection.VictoryRelicsWithoutClear,
+            GameplayProgressUpdate(
+                discoveredItemIds = emptySet(),
+                clearedRebirthLevel = 0,
+                victoryRelicIds = RelicId.entries.take(MAX_HEIRLOOM_RELICS + 1),
+            ) to ProfileGameplayProgressRejection.TooManyVictoryRelics,
+            GameplayProgressUpdate(
+                discoveredItemIds = emptySet(),
+                clearedRebirthLevel = 0,
+                victoryRelicIds = listOf(RelicId.GLASS_COMET, RelicId.BLINK_DRIVE, RelicId.GLASS_COMET),
+            ) to ProfileGameplayProgressRejection.DuplicateVictoryRelic(RelicId.GLASS_COMET),
         )
 
         cases.forEach { (update, expected) ->
@@ -303,6 +400,95 @@ class ProfileNucleusTest {
                 applyGameplayProgress(state, update).rejection(),
             )
         }
+    }
+
+    @Test
+    fun victoryRecordsHeirloomsInSlotOrderAndResolvingTheOfferSpendsThem() {
+        val state = readyState()
+        val slots = RelicId.entries.reversed().take(MAX_HEIRLOOM_RELICS)
+        val victory = GameplayProgressUpdate(
+            discoveredItemIds = emptySet(),
+            clearedRebirthLevel = 0,
+            architectDefeatedWith = CoreShape.ORB,
+            victoryRelicIds = slots,
+        )
+        val won = applyGameplayProgress(state, victory).acceptedFrame()
+        assertEquals(slots, won.nextState.profile.collection.heirloomRelicIds)
+        assertEquals(won.nextState.profile, assertIs<ProfileOutput.PersistSnapshot>(won.outputs[0]).snapshot.profile)
+        val bootstrap = assertIs<ProfileRunBootstrapResult.Ready>(
+            ProfileNucleus.query(won.nextState, ProfileQuery.GetRunBootstrap).result,
+        )
+        assertEquals(slots, bootstrap.snapshot.collection.heirloomRelicIds)
+        assertTrue(state.profile.collection.heirloomRelicIds.isEmpty())
+
+        // The next run resolves its Heirloom offer; spending is idempotent once nothing is left.
+        val resolved = applyGameplayProgress(won.persisted(), GameplayProgressUpdate(heirloomResolved = true)).acceptedFrame()
+        assertTrue(resolved.nextState.profile.collection.heirloomRelicIds.isEmpty())
+        assertEquals(won.nextState.profile.collection.copy(heirloomRelicIds = immutableListOf()), resolved.nextState.profile.collection)
+        assertEquals(
+            ProfileRejection.NoChange,
+            applyGameplayProgress(resolved.persisted(), GameplayProgressUpdate(heirloomResolved = true)).rejection(),
+        )
+
+        // Spending the old Heirlooms and winning again in one update keeps only the new victory.
+        val again = listOf(RelicId.HOLLOW_CROWN)
+        val replaced = applyGameplayProgress(won.persisted(), GameplayProgressUpdate(
+            discoveredItemIds = emptySet(),
+            clearedRebirthLevel = 0,
+            victoryRelicIds = again,
+            heirloomResolved = true,
+        )).acceptedFrame()
+        assertEquals(again, replaced.nextState.profile.collection.heirloomRelicIds)
+        // A victory without bound Relics leaves no Heirloom behind.
+        val bare = applyGameplayProgress(won.persisted(), GameplayProgressUpdate(
+            discoveredItemIds = emptySet(),
+            clearedRebirthLevel = 0,
+            victoryRelicIds = emptyList(),
+        )).acceptedFrame()
+        assertTrue(bare.nextState.profile.collection.heirloomRelicIds.isEmpty())
+        // Progress without a victory keeps the remembered Heirlooms untouched.
+        val banked = applyGameplayProgress(won.persisted(), GameplayProgressUpdate(bankedMatter = 5L)).acceptedFrame()
+        assertEquals(slots, banked.nextState.profile.collection.heirloomRelicIds)
+    }
+
+    @Test
+    fun reactionAndPairingDiscoveriesMergeIdempotentlyWithoutTouchingOtherFacts() {
+        val state = readyState()
+        val first = applyGameplayProgress(state, GameplayProgressUpdate(
+            discoveredItemIds = emptySet(),
+            discoveredReactionIds = setOf(ReactionId.FUSION, ReactionId.EMBRITTLE),
+            discoveredPairingIds = setOf(RelicPairingId.MELTDOWN),
+        )).acceptedFrame()
+        val second = applyGameplayProgress(first.persisted(), GameplayProgressUpdate(
+            discoveredItemIds = emptySet(),
+            discoveredReactionIds = setOf(ReactionId.EMBRITTLE, ReactionId.ROT_WELL),
+            discoveredPairingIds = setOf(RelicPairingId.CONTRADICTION),
+        )).acceptedFrame()
+        val collection = second.nextState.profile.collection
+        assertEquals(setOf(ReactionId.FUSION, ReactionId.EMBRITTLE, ReactionId.ROT_WELL), collection.discoveredReactionIds)
+        assertEquals(setOf(RelicPairingId.MELTDOWN, RelicPairingId.CONTRADICTION), collection.discoveredPairingIds)
+        assertEquals(
+            state.profile.copy(collection = state.profile.collection.copy(
+                discoveredReactionIds = collection.discoveredReactionIds,
+                discoveredPairingIds = collection.discoveredPairingIds,
+            )),
+            second.nextState.profile,
+        )
+        assertEquals(
+            ProfileRejection.NoChange,
+            applyGameplayProgress(second.persisted(), GameplayProgressUpdate(
+                discoveredItemIds = emptySet(),
+                discoveredReactionIds = setOf(ReactionId.FUSION),
+                discoveredPairingIds = setOf(RelicPairingId.MELTDOWN),
+            )).rejection(),
+        )
+        val everything = applyGameplayProgress(state, GameplayProgressUpdate(
+            discoveredItemIds = emptySet(),
+            discoveredReactionIds = ReactionId.entries.toSet(),
+            discoveredPairingIds = RelicPairingId.entries.toSet(),
+        )).acceptedFrame().nextState.profile.collection
+        assertEquals(ReactionId.entries.toSet(), everything.discoveredReactionIds)
+        assertEquals(RelicPairingId.entries.toSet(), everything.discoveredPairingIds)
     }
 
     @Test
@@ -326,20 +512,66 @@ class ProfileNucleusTest {
     fun rebirthDecisionProducesTheAcceptedProgressAfterItsPersistenceRequest() {
         val profile = defaultPlayerProfile(TestProfilePolicy).copy(rebirthProgress = RebirthProgress(2, 2))
         val state = readyState(profile)
-        val pulse = ProfileNucleusPulse.AdvanceRebirth
+        val pulse = ProfileNucleusPulse.SelectRebirthTier(3)
         val decision = ProfileNucleus.decide(state, pulse)
         assertEquals(decision, ProfileNucleus.decide(state, pulse))
 
         val frame = decision.acceptedFrame()
         assertEquals(2, frame.outputs.size)
         val persist = assertIs<ProfileOutput.PersistSnapshot>(frame.outputs[0])
-        val result = assertIs<ProfileOutput.RebirthAdvanced>(frame.outputs[1]).result
+        val result = assertIs<ProfileOutput.RebirthTierSelected>(frame.outputs[1]).result
         assertEquals(RebirthProgress(3, 2), result.progress)
         assertEquals(frame.nextState.revision, result.revision)
         assertEquals(frame.nextState.profile.rebirthProgress, result.progress)
         assertEquals(frame.nextState.profile, persist.snapshot.profile)
         assertEquals(profile.copy(rebirthProgress = result.progress), frame.nextState.profile)
         assertEquals(profile, state.profile)
+    }
+
+    @Test
+    fun anyTierFromTheMinimumToTheRankCanBeSelectedAndNothingAbove() {
+        val profile = defaultPlayerProfile(TestProfilePolicy).copy(
+            economy = PlayerEconomy(matter = 77L, lifetimeMatter = 90L),
+            rebirthProgress = RebirthProgress(level = 5, highestCleared = 4),
+        )
+        val state = readyState(profile)
+        // Dropping back to tier 0 keeps every other slice and the highest clear (the rank stays 5).
+        (0..5).forEach { tier ->
+            val next = ProfileNucleus.decide(state, ProfileNucleusPulse.SelectRebirthTier(tier)).acceptedFrame().nextState
+            assertEquals(RebirthProgress(level = tier, highestCleared = 4), next.profile.rebirthProgress, "tier $tier")
+            assertEquals(profile.copy(rebirthProgress = next.profile.rebirthProgress), next.profile)
+            assertEquals(5, next.profile.rebirthProgress.rank)
+        }
+        listOf(6, 10, -1).forEach { tier ->
+            assertEquals(ProfileRejection.RebirthTierLocked,
+                ProfileNucleus.decide(state, ProfileNucleusPulse.SelectRebirthTier(tier)).rejection(), "tier $tier")
+        }
+        // A fresh profile may select only tier 0; reselecting it confirms the tier and still publishes.
+        val fresh = readyState()
+        val again = ProfileNucleus.decide(fresh, ProfileNucleusPulse.SelectRebirthTier(0)).acceptedFrame()
+        assertEquals(RebirthProgress(0, -1), assertIs<ProfileOutput.RebirthTierSelected>(again.outputs[1]).result.progress)
+        assertEquals(ProfileRejection.RebirthTierLocked,
+            ProfileNucleus.decide(fresh, ProfileNucleusPulse.SelectRebirthTier(1)).rejection())
+        // Ascendant profiles may select every tier up to the last one.
+        val ascendant = readyState(defaultPlayerProfile(TestProfilePolicy).copy(rebirthProgress = RebirthProgress(3, 10)))
+        assertEquals(10, ProfileNucleus.decide(ascendant, ProfileNucleusPulse.SelectRebirthTier(10)).acceptedFrame()
+            .nextState.profile.rebirthProgress.level)
+    }
+
+    @Test
+    fun aNewTierWaitsOnlyWhileTheRankIsUnclearedAndNotSelected() {
+        fun waiting(progress: RebirthProgress): Pair<Boolean, Boolean> {
+            val state = readyState(defaultPlayerProfile(TestProfilePolicy).copy(rebirthProgress = progress))
+            return ProfileNucleus.query(state, ProfileQuery.GetHomeProgress).canAdvanceRebirth to
+                ProfileNucleus.query(state, ProfileQuery.GetRebirthProgress).canAdvance
+        }
+        assertEquals(true to true, waiting(RebirthProgress(level = 0, highestCleared = 4)))
+        assertEquals(true to true, waiting(RebirthProgress(level = 4, highestCleared = 4)))
+        assertEquals(false to false, waiting(RebirthProgress(level = 5, highestCleared = 4)))
+        assertEquals(false to false, waiting(RebirthProgress()))
+        // Every tier is cleared: replaying a lower one leaves no new tier waiting.
+        assertEquals(false to false, waiting(RebirthProgress(level = 3, highestCleared = 10)))
+        assertEquals(false to false, waiting(RebirthProgress(level = 10, highestCleared = 10)))
     }
 
     @Test
@@ -362,7 +594,14 @@ class ProfileNucleusTest {
             Long.MAX_VALUE,
         ).map { revision -> constructedProfile(default, revision) }
 
-        (listOf(missing, rejected, incompatible) + exhausted).forEach { state ->
+        val heirlooms = listOf(
+            RelicId.entries.take(MAX_HEIRLOOM_RELICS + 1),
+            listOf(RelicId.GLASS_COMET, RelicId.GLASS_COMET),
+        ).map { relics ->
+            constructedProfile(default.copy(collection = PlayerCollection(emptySet(), heirloomRelicIds = relics)))
+        }
+
+        (listOf(missing, rejected, incompatible) + exhausted + heirlooms).forEach { state ->
             assertEquals(ProfileBootstrapStatus.Ready, state.bootstrap)
             assertEquals(default, state.profile)
             assertEquals(ProfilePersistenceStatus.NotAttempted, state.persistence)
@@ -382,6 +621,49 @@ class ProfileNucleusTest {
         assertEquals(profile, loaded.profile)
         assertEquals(ProfilePersistenceStatus.Persisted(ProfileRevision(17L)), loaded.persistence)
         assertEquals(ProfileBootstrapStatus.Ready, loaded.bootstrap)
+    }
+
+    @Test
+    fun bootstrapForgetsRetiredItemDiscoveriesWithoutResettingTheEconomy() {
+        val catalogEnd = TestProfilePolicy.itemCount
+        val profile = defaultPlayerProfile(TestProfilePolicy).copy(
+            economy = PlayerEconomy(matter = 640L, lifetimeMatter = 9_000L),
+            matrix = MatrixProgress(MatrixNodeId.entries.map { if (it.ordinal < 3) 1 else 0 }),
+            rebirthProgress = RebirthProgress(3, 2),
+            collection = PlayerCollection(
+                discoveredItemIds = setOf(1, catalogEnd - 1, catalogEnd, 399),
+                newItemIds = setOf(1, catalogEnd, 399),
+                discoveredRelicIds = setOf(RelicId.GYRE_ENGINE),
+                discoveredReactionIds = setOf(ReactionId.SUPERCONDUCT),
+                heirloomRelicIds = listOf(RelicId.GYRE_ENGINE),
+            ),
+        )
+
+        val loaded = constructedProfile(profile, revision = 41L)
+
+        assertEquals(ProfileRevision(42L), loaded.revision)
+        assertEquals(ProfilePersistenceStatus.Persisted(ProfileRevision(41L)), loaded.persistence)
+        assertEquals(
+            profile.copy(collection = profile.collection.copy(
+                discoveredItemIds = kinetickk.foundation.collections.immutableSetOf(1, catalogEnd - 1),
+                newItemIds = kinetickk.foundation.collections.immutableSetOf(1),
+            )),
+            loaded.profile,
+        )
+        // The filtered collection is what the next accepted write persists.
+        val written = ProfileNucleus.decide(
+            loaded,
+            ProfileNucleusPulse.Intent(ProfilePulse.AdjustPreference(ProfilePreferenceAdjustment.ToggleScreenShake)),
+        ).acceptedFrame()
+        assertEquals(
+            setOf(1, catalogEnd - 1),
+            assertIs<ProfileOutput.PersistSnapshot>(written.outputs.single()).snapshot.profile.collection.discoveredItemIds,
+        )
+        // An in-catalog unseen marker without its discovery is still an inconsistent save.
+        val inconsistent = constructedProfile(profile.copy(
+            collection = PlayerCollection(setOf(1), newItemIds = setOf(2)),
+        ))
+        assertEquals(defaultPlayerProfile(TestProfilePolicy), inconsistent.profile)
     }
 
     @Test
@@ -463,11 +745,12 @@ class ProfileNucleusTest {
             ProfileNucleus.query(state, ProfileQuery.GetRunBootstrap),
             ProfileNucleus.query(state, ProfileQuery.GetPreferences),
             ProfileNucleus.query(state, ProfileQuery.GetHomeProgress),
-            ProfileNucleus.query(state, ProfileQuery.GetLabProgress),
+            ProfileNucleus.query(state, ProfileQuery.GetMatrixProgress),
             ProfileNucleus.query(state, ProfileQuery.GetLoadout),
             ProfileNucleus.query(state, ProfileQuery.GetCollection),
             ProfileNucleus.query(state, ProfileQuery.GetRebirthProgress),
             ProfileNucleus.query(state, ProfileQuery.GetPersistenceStatus),
+            ProfileNucleus.query(state, ProfileQuery.GetHangar),
         )
         projections.forEach { projection ->
             assertEquals(state.instanceId, projection.instanceId)
@@ -478,15 +761,18 @@ class ProfileNucleusTest {
         )
         assertEquals(state.profile.preferences, assertIs<PreferencesProjection>(projections[1]).preferences)
         assertTrue(assertIs<HomeProgressProjection>(projections[2]).canAdvanceRebirth)
-        assertEquals(state.profile.labProgress, assertIs<LabProgressProjection>(projections[3]).snapshot.progress)
+        assertEquals(state.profile.matrix, assertIs<MatrixProgressProjection>(projections[3]).snapshot.progress)
+        assertEquals(1, assertIs<MatrixProgressProjection>(projections[3]).snapshot.rebirthRank)
         assertEquals(state.profile.loadout, assertIs<LoadoutProjection>(projections[4]).snapshot.loadout)
+        // The Armory reads the weapon unlock gates' rank from the loadout projection.
+        assertEquals(1, assertIs<LoadoutProjection>(projections[4]).snapshot.rebirthRank)
         assertEquals(state.profile.collection, assertIs<CollectionProjection>(projections[5]).collection)
         assertTrue(assertIs<RebirthProgressProjection>(projections[6]).canAdvance)
         assertEquals(state.persistence, assertIs<PersistenceStatusProjection>(projections[7]).persistence)
     }
 
     @Test
-    fun achievementThresholdsAccumulateAcrossRunsAndUnlockAllSixShapes() {
+    fun achievementThresholdsAccumulateAcrossRunsAndUnlockAllTwelveShapes() {
         var state = readyState()
         fun record(update: GameplayProgressUpdate) {
             val frame = applyGameplayProgress(state, update).acceptedFrame()
@@ -494,6 +780,12 @@ class ProfileNucleusTest {
             state = constructedProfile(frame.nextState.profile, frame.nextState.revision.value)
         }
         fun unlocked() = ProfileNucleus.query(state, ProfileQuery.GetHomeProgress).unlockedCoreShapes
+        fun rank(highestCleared: Int) {
+            state = constructedProfile(
+                state.profile.copy(rebirthProgress = RebirthProgress(highestCleared, highestCleared)),
+                state.revision.value,
+            )
+        }
 
         assertEquals(setOf(CoreShape.ORB), unlocked())
         record(GameplayProgressUpdate(eliteKills = 2, dashHits = 19))
@@ -506,11 +798,64 @@ class ProfileNucleusTest {
         record(GameplayProgressUpdate(architectDefeatedWith = CoreShape.PRISM))
         assertFalse(CoreShape.TESSERACT in unlocked())
         record(GameplayProgressUpdate(architectDefeatedWith = CoreShape.SHARD))
+        assertTrue(CoreShape.TESSERACT in unlocked())
+        // Cumulative counters: one short, then exactly the target.
+        record(GameplayProgressUpdate(totalKills = 1_499, ricochets = 39))
+        assertFalse(CoreShape.STAR in unlocked())
+        assertFalse(CoreShape.DIPOLE in unlocked())
+        record(GameplayProgressUpdate(totalKills = 1, ricochets = 1))
+        assertTrue(CoreShape.STAR in unlocked())
+        assertTrue(CoreShape.DIPOLE in unlocked())
+        // Reborn rank gates: rank = highest cleared tier + 1.
+        rank(0)
+        assertTrue(CoreShape.SPIRAL in unlocked())
+        assertFalse(CoreShape.PENTAGON in unlocked())
+        rank(1)
+        assertFalse(CoreShape.PENTAGON in unlocked())
+        rank(2)
+        assertTrue(CoreShape.PENTAGON in unlocked())
+        rank(4)
+        assertTrue(CoreShape.CRESCENT in unlocked())
+        assertFalse(CoreShape.HEXAGON in unlocked())
+        rank(6)
         assertEquals(CoreShape.entries.toSet(), unlocked())
         assertEquals(4, state.profile.characterAchievements.architectVictories)
         assertEquals(3, state.profile.characterAchievements.victoriousCharacters.size)
         assertEquals(0L, state.profile.economy.lifetimeMatter)
         repeat(3) { assertEquals(CoreShape.entries.toSet(), unlocked()) }
+    }
+
+    @Test
+    fun hangarQueryReportsProgressAndTheLocalPulseSelectsOnlyUnlockedShapes() {
+        val state = readyState(profile = defaultPlayerProfile(TestProfilePolicy).copy(
+            characterAchievements = kinetickk.ball.profile.api.CharacterAchievementProgress(eliteKills = 5, totalKills = 700),
+            rebirthProgress = RebirthProgress(0, 0),
+        ))
+        val hangar = ProfileNucleus.query(state, ProfileQuery.GetHangar)
+        assertEquals(state.revision, hangar.revision)
+        assertEquals(CoreShape.entries.toList(), hangar.shapes.map { it.shape })
+        assertEquals(CoreShape.ORB, hangar.selected)
+        assertEquals(1, hangar.rebirthRank)
+        val prism = hangar.shapes.first { it.shape == CoreShape.PRISM }
+        assertTrue(prism.unlocked)
+        assertEquals(3L, prism.progress, "progress is capped at the target")
+        val star = hangar.shapes.first { it.shape == CoreShape.STAR }
+        assertEquals(false to (700L to 1_500L), star.unlocked to (star.progress to star.target))
+        assertTrue(hangar.shapes.first { it.shape == CoreShape.SPIRAL }.unlocked)
+        assertFalse(hangar.shapes.first { it.shape == CoreShape.HEXAGON }.unlocked)
+
+        val selected = ProfileNucleus.decide(state, ProfileNucleusPulse.Intent(ProfilePulse.SelectCoreShape(CoreShape.SPIRAL)))
+            .acceptedFrame()
+        assertEquals(CoreShape.SPIRAL, selected.nextState.profile.loadout.coreShape)
+        assertEquals(
+            ProfileRejection.CoreShapeLocked,
+            ProfileNucleus.decide(state, ProfileNucleusPulse.Intent(ProfilePulse.SelectCoreShape(CoreShape.STAR))).rejection(),
+        )
+        assertEquals(
+            ProfileRejection.NoChange,
+            ProfileNucleus.decide(state, ProfileNucleusPulse.Intent(ProfilePulse.SelectCoreShape(CoreShape.ORB))).rejection(),
+        )
+        assertEquals(CoreShape.ORB, state.profile.loadout.coreShape)
     }
 
     @Test
@@ -520,6 +865,9 @@ class ProfileNucleusTest {
             GameplayProgressUpdate(eliteKills = -1),
             GameplayProgressUpdate(dashHits = -1),
             GameplayProgressUpdate(completedOrbits = -1),
+            GameplayProgressUpdate(totalKills = -1),
+            GameplayProgressUpdate(ricochets = -1),
+            GameplayProgressUpdate(dataPickups = -1),
         ).forEach { update ->
             assertEquals(
                 ProfileRejection.InvalidGameplayProgress(ProfileGameplayProgressRejection.NegativeAchievementProgress),
@@ -542,12 +890,18 @@ class ProfileNucleusTest {
                 eliteKills = Long.MAX_VALUE - 1,
                 dashHits = Long.MAX_VALUE - 1,
                 completedOrbits = Long.MAX_VALUE - 1,
+                totalKills = Long.MAX_VALUE - 1,
+                ricochets = Long.MAX_VALUE - 1,
+                dataPickups = Long.MAX_VALUE - 1,
             ),
         ))
         val update = GameplayProgressUpdate(
             eliteKills = Int.MAX_VALUE,
             dashHits = Int.MAX_VALUE,
             completedOrbits = Int.MAX_VALUE,
+            totalKills = Int.MAX_VALUE,
+            ricochets = Int.MAX_VALUE,
+            dataPickups = Int.MAX_VALUE,
         )
         val first = applyGameplayProgress(state, update).acceptedFrame()
         val second = applyGameplayProgress(state, update).acceptedFrame()
@@ -559,7 +913,59 @@ class ProfileNucleusTest {
         assertEquals(Long.MAX_VALUE, first.nextState.profile.characterAchievements.eliteKills)
         assertEquals(Long.MAX_VALUE, first.nextState.profile.characterAchievements.dashHits)
         assertEquals(Long.MAX_VALUE, first.nextState.profile.characterAchievements.completedOrbits)
+        assertEquals(Long.MAX_VALUE, first.nextState.profile.characterAchievements.totalKills)
+        assertEquals(Long.MAX_VALUE, first.nextState.profile.characterAchievements.ricochets)
+        assertEquals(Long.MAX_VALUE, first.nextState.profile.characterAchievements.dataPickups)
         assertEquals(Long.MAX_VALUE - 1, state.profile.characterAchievements.eliteKills)
+    }
+
+    @Test
+    fun aLoweredTierSurvivesConstructionAndAClearIsCheckedAgainstTheRank() {
+        val lowered = PlayerProfile(rebirthProgress = RebirthProgress(level = 0, highestCleared = 4))
+        val constructed = constructedProfile(lowered, revision = 7L)
+        assertEquals(lowered.rebirthProgress, constructed.profile.rebirthProgress)
+        // A tier above the rank is not a valid save and resets at construction.
+        val aboveRank = constructedProfile(PlayerProfile(rebirthProgress = RebirthProgress(level = 6, highestCleared = 4)), revision = 7L)
+        assertEquals(RebirthProgress(), aboveRank.profile.rebirthProgress)
+
+        // The run's tier may differ from the live selection: a clear up to the rank is accepted
+        // whatever `level` is now, and the first tier above the rank is rejected.
+        val atRank = assertIs<ProfileDecision.Accepted>(applyGameplayProgress(constructed, GameplayProgressUpdate(clearedRebirthLevel = 5)))
+        assertEquals(RebirthProgress(level = 0, highestCleared = 5), atRank.frame.nextState.profile.rebirthProgress)
+        assertEquals(
+            ProfileRejection.InvalidGameplayProgress(ProfileGameplayProgressRejection.ClearedLevelAboveRank(6)),
+            assertIs<ProfileDecision.Rejected>(applyGameplayProgress(constructed, GameplayProgressUpdate(clearedRebirthLevel = 6))).reason,
+        )
+        // A lower clear never lowers the record.
+        val lower = assertIs<ProfileDecision.Accepted>(
+            applyGameplayProgress(constructed, GameplayProgressUpdate(bankedMatter = 1L, clearedRebirthLevel = 2)),
+        )
+        assertEquals(4, lower.frame.nextState.profile.rebirthProgress.highestCleared)
+    }
+
+    @Test
+    fun aFinalTierClearMakesTheVictoriousCharacterAscendant() {
+        val nine = readyState(PlayerProfile(rebirthProgress = RebirthProgress(level = 9, highestCleared = 8)))
+        val clearedNine = applyGameplayProgress(nine,
+            GameplayProgressUpdate(clearedRebirthLevel = 9, architectDefeatedWith = CoreShape.ORB)).acceptedFrame().nextState
+        assertEquals(9, clearedNine.profile.rebirthProgress.highestCleared)
+        assertTrue(clearedNine.profile.rebirthProgress.ascendedCharacters.isEmpty())
+
+        val ten = readyState(PlayerProfile(rebirthProgress = RebirthProgress(level = 10, highestCleared = 9)))
+        val ascended = applyGameplayProgress(ten,
+            GameplayProgressUpdate(clearedRebirthLevel = 10, architectDefeatedWith = CoreShape.ORB)).acceptedFrame().nextState
+        assertEquals(RebirthProgress(10, 10, kinetickk.foundation.collections.immutableSetOf(CoreShape.ORB)),
+            ascended.profile.rebirthProgress)
+        assertTrue(ascended.profile.rebirthProgress.isAscendant)
+        // A later tier-10 clear with the same character changes nothing in the set; the record never drops.
+        val again = applyGameplayProgress(ascended.copy(persistence = ten.persistence),
+            GameplayProgressUpdate(bankedMatter = 1L, clearedRebirthLevel = 10, architectDefeatedWith = CoreShape.ORB))
+            .acceptedFrame().nextState
+        assertEquals(setOf(CoreShape.ORB), again.profile.rebirthProgress.ascendedCharacters)
+        // An Ascendant set the victories do not back is not a valid save.
+        val forged = constructedProfile(PlayerProfile(rebirthProgress = RebirthProgress(10, 10,
+            kinetickk.foundation.collections.immutableSetOf(CoreShape.ORB))))
+        assertTrue(forged.profile.rebirthProgress.ascendedCharacters.isEmpty())
     }
 
     private fun readyState(
@@ -587,6 +993,15 @@ class ProfileNucleusTest {
         state,
         ProfileNucleusPulse.ApplyGameplayProgress(update),
     )
+}
+
+/** Completes the frame's write so the next decision starts from a settled State. */
+private fun ProfileAcceptedFrame.persisted(): ProfileState {
+    val persist = assertIs<ProfileOutput.PersistSnapshot>(outputs.first())
+    return ProfileNucleus.decide(
+        nextState,
+        ProfileNucleusPulse.WriteCompleted(persist.effectRef, ProfileWriteResult.Written(persist.snapshot.revision)),
+    ).acceptedFrame().nextState
 }
 
 private fun ProfileDecision.acceptedFrame(): ProfileAcceptedFrame =

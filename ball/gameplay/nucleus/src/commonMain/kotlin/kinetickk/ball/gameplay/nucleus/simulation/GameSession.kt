@@ -3,8 +3,6 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.MetaUpgradeId
-
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
@@ -16,6 +14,8 @@ import kotlin.math.max
 
 internal fun MutableGameState.startRun() {
     phase = GamePhase.RUNNING
+    interpolationPrimed = false
+    matrix = foldMatrix()
     characterRuntime = CharacterRuntime()
     enemies.clear()
     projectiles.clear()
@@ -33,19 +33,68 @@ internal fun MutableGameState.startRun() {
     relicRanks.fill(0)
     relicCooldowns.fill(0f)
     relicCounters.fill(0)
-    relicProcCounts.fill(0)
     agonyMutationCounts.fill(0)
-    delayedRelicHits.clear()
-    slipstreamRelayTime = 0f
-    borrowedMomentTime = 0f
-    brakepointCharge = 0f
-    resetSynergyRuntime()
+    echoHits.clear()
     itemStacks.fill(0)
-    familyStacks.fill(0)
+    rebornItems.fill(0)
+    acquisitionOrder = emptyList()
+    clauseReadyAt.fill(0f)
+    clauseCounters.fill(0)
+    statusAccumulators.fill(0f)
+    itemStatusReadyAt.fill(0f)
+    buffs = emptyList()
+    combatFields = emptyList()
+    reactionTokens = MutableGameState.REACTION_BURST
+    breakTokens = MutableGameState.BREAK_BURST
+    severedRelics = emptyList()
+    ouroborosSpent = false
+    ouroborosLockedUntil = 0f
+    invulnerableUntil = 0f
+    glassInvulnerabilityReadyAt = 0f
+    bulwarkInvulnerabilityReadyAt = 0f
+    stormCharge = 0f
+    stasisMeter = MutableGameState.STASIS_SECONDS
+    stasisBank = 0
+    stasisLockedUntil = 0f
+    sinceTurn = 0f
+    gyreReadyAt = 0f
+    gyreEchoAt = -1f
+    gyreEchoDamage = 0f
+    overdriveBurnoutUntil = 0f
+    overdriveExtension = 0f
+    overdriveKills = 0
+    aegisAbsorbed = 0f
+    aegisNovaReadyAt = 0f
+    shieldBreakArmed = false
+    shieldBreakReadyAt = 0f
+    overheatArmed = true
+    wasBraking = false
+    brakeHoldTime = 0f
+    brakeShedSpeed = 0f
+    critMissStreak = 0
+    freeDashPrimed = false
+    freeDashReadyAt = 0f
+    comboKillCounter = 0
+    glassCharge = 0f
+    integrityLiabilityCut = 0f
+    cinderRecoilReadyAt = 0f
+    offerPity = 0
+    itemOffersOpened = 0
+    secondWindSpent = false
+    matrixFreeDashReadyAt = 0f
+    dashHitThisDash = false
+    clauseDepth = 0
+    arsenalCounter = 0
+    necroticClock = 0f
+    heirloomOfferActive = false
+    heirloomPending = heirloomCandidates.isNotEmpty() && rebirthRank >= 1
+    volatileBursts = kinetickk.foundation.collections.immutableListOf()
     totem = null
     nextEntityId = 1
     spawnClock = 0.2f
     nextEliteAt = rebirthProfile.eliteInterval(content.tempo.firstEliteAtSeconds)
+    elitesSpawned = 0
+    resetSpawnDirector()
     bossSpawned = false
     accumulator = 0f
     coreX = 0f
@@ -56,6 +105,8 @@ internal fun MutableGameState.startRun() {
     velocityY = 0f
     cameraX = 0f
     cameraY = 0f
+    previousCameraX = 0f
+    previousCameraY = 0f
     pointerX = screenWidth * 0.76f
     pointerY = screenHeight * 0.5f
     previousSingularityX = pointerX - screenWidth * 0.5f
@@ -100,7 +151,7 @@ internal fun MutableGameState.startRun() {
     comboTime = 0f
     runMatter = 0L
     matterFraction = 0f
-    bankedThisRun = false
+    bankedRunMatter = 0L
     lastImpact = 0f
     lastImpactTime = 0f
     damageFlash = 0f
@@ -111,50 +162,60 @@ internal fun MutableGameState.startRun() {
     messageTime = 2.2f
     recentItem = null
     acquiredItemCount = 0
-    rerollsRemaining = 1 + metaLevel(MetaUpgradeId.DATA_ARCHIVE) / 4 + rebirthProfile.bonusRerolls
-    overdriveCharge = 0f
+    rerollsRemaining = 1 + matrix.rerolls + rebirthProfile.bonusRerolls
+    overdriveCharge = matrix.startingOverdrive
     overdriveTime = 0f
-    weaponLevel = 1
-    resetRunStats()
     weapon = startingWeapon
+    // The signature character starts its weapon one level up.
+    weaponLevel = 1 + matrix.startingWeaponLevels + signatureLevelBonus()
+    resetRunStats()
+    recompileBuild()
+    // A new run starts with a new character runtime (Dash count 0), so the weapon's input tracking starts over too.
+    weaponRuntime = WeaponRuntime()
     resetWeaponRuntime()
     resetPointsOfInterest()
+    resetObstacles()
     emitSound(GameplayAudioCue.UI_CLICK)
-    repeat(rebirthProfile.openingEnemyCount) {
-        val openingType = if (rebirthLevel == 0) {
-            EnemyType.DRIFTER
-        } else {
-            enemyTypeForElapsed(threatElapsed, gameplayRandom.nextFloat(), content.tempo)
-        }
-        spawnEnemy(openingType)
-    }
+    spawnOpeningPacks()
 }
 
+/** Base pull per unit of distance to the singularity, before items and the Matrix. */
+internal const val BASE_MAGNET_STRENGTH: Float = 4.65f
+
+/** Base exponential drag on the Core's velocity per second. */
+internal const val BASE_DRAG_COEFFICIENT: Float = 0.29f
+
+/** Character base stats, then the owned Core Matrix effects from content, then Rebirth. */
 internal fun MutableGameState.resetRunStats() {
     mass = 1f
-    damageMultiplier = 1f + metaLevel(MetaUpgradeId.KINETIC_AMPLIFIER) * 0.05f
-    weaponPower = 1f + metaLevel(MetaUpgradeId.ARMORY_LICENSE) * 0.04f
-    coolingRate = 19f * (1f + metaLevel(MetaUpgradeId.CRYO_VENTS) * 0.05f)
-    magnetStrength = 4.65f * (1f + metaLevel(MetaUpgradeId.MAGNETIC_RESONANCE) * 0.04f)
-    dashImpulse = 590f * (1f + metaLevel(MetaUpgradeId.DASH_CAPACITOR) * 0.05f)
+    damageMultiplier = 1f
+    weaponPower = 1f
+    coolingRate = 19f
+    magnetStrength = BASE_MAGNET_STRENGTH
+    dashImpulse = 590f
     dashHeatCost = 36f
-    maxHp = 100f + metaLevel(MetaUpgradeId.CORE_INTEGRITY) * 10f + rebirthProfile.playerIntegrityBonus
-    hp = maxHp
+    maxHp = 100f + rebirthProfile.playerIntegrityBonus
     regenPerSecond = 0f
     critChance = 0.05f
     critMultiplier = 1.5f
-    pickupRadius = 150f
+    pickupRadius = content.pickups.magnetRadius
+    coreRadius = MutableGameState.CORE_RADIUS
     luck = 0f
-    dataGain = 1f + metaLevel(MetaUpgradeId.DATA_ARCHIVE) * 0.05f
-    matterGain = (1f + metaLevel(MetaUpgradeId.SALVAGE_PROTOCOL) * 0.05f) *
-        rebirthProfile.matterGainMultiplier
+    dataGain = 1f
+    matterGain = 1f
     attackSpeed = 1f
     maxShield = 0f
     shield = 0f
     damageReduction = 0f
     comboWindow = 2.8f
     overdriveGain = 1f
-    dragCoefficient = 0.29f
+    dragCoefficient = BASE_DRAG_COEFFICIENT
+    applyCharacterTraits()
+    applyMatrixStats()
+    matterGain *= rebirthProfile.matterGainMultiplier
+    dashHeatCost *= matrix.dashHeatMultiplier
+    dragCoefficient *= matrix.dragMultiplier
+    hp = maxHp
     polarityStability = 1f
     shieldRechargeDelay = 0f
     timeSinceDamage = 0f
@@ -171,6 +232,7 @@ internal fun MutableGameState.togglePause() {
     updateBraking()
     accumulator = 0f
     lastTransitionSteps = 0
+    interpolationPrimed = false
 }
 
 internal fun MutableGameState.pauseForOverlay() {
@@ -251,7 +313,8 @@ internal fun MutableGameState.choose(index: Int) {
     val sound = when (option.type) {
         ChoiceType.ITEM -> {
             val itemId = option.itemId ?: return
-            acquireItem(itemId)
+            acquireItem(itemId, option.reborn)
+            if (directedReward == null) resolveItemOfferPity(content.item(itemId))
             GameplayAudioCue.LEVEL_UP
         }
         ChoiceType.TOTEM -> when (option.totemAction ?: return) {
@@ -271,10 +334,24 @@ internal fun MutableGameState.choose(index: Int) {
             GameplayAudioCue.WEAPON_ACQUIRED
         }
         ChoiceType.RELIC -> when (option.relicAction ?: return) {
+            RelicChoiceAction.DECLINE -> {
+                declineRelic(option.heirloom)
+                heirloomOfferActive = false
+                GameplayAudioCue.UI_CLICK
+            }
             RelicChoiceAction.ACQUIRE -> {
                 val relicId = option.relicId ?: return
+                // Measured while the offer is still open: Heirloom Vault extras it could not show become ranks.
+                val heirloomRanks = if (option.heirloom) heirloomRankBonus() else 0
+                if (option.heirloom) {
+                    pendingHeirloomResolved = true
+                    heirloomCandidates = emptyList()
+                    heirloomOfferActive = false
+                }
                 if (relicRank(relicId) > 0 || equippedRelics.size < content.relicPolicy.maxSlots) {
                     acquireRelic(relicId)
+                    // Each extra rank arrives as if the Relic were offered again (a maxed one is salvaged).
+                    repeat(heirloomRanks) { acquireRelic(relicId) }
                     GameplayAudioCue.WEAPON_ACQUIRED
                 } else {
                     pendingBindingRelic = relicId
@@ -298,7 +375,7 @@ internal fun MutableGameState.choose(index: Int) {
             when (option.relicAction ?: return) {
                 RelicChoiceAction.REPLACE -> replaceRelic(slot, option.relicId ?: pendingBindingRelic ?: return)
                 RelicChoiceAction.MELD_TARGET -> meldRelic(slot)
-                RelicChoiceAction.ACQUIRE, RelicChoiceAction.MELD -> return
+                RelicChoiceAction.ACQUIRE, RelicChoiceAction.MELD, RelicChoiceAction.DECLINE -> return
             }
             pendingBindingRelic = null
             pendingRelicBindAction = null
@@ -311,13 +388,15 @@ internal fun MutableGameState.choose(index: Int) {
 
 internal fun MutableGameState.finishChoice(sound: GameplayAudioCue) {
     if (directedReward == kinetickk.ball.content.api.DirectedReward.ITEM_AND_REPAIR) {
-        hp = minOf(maxHp, hp + 25f)
+        heal(25f, HealSource.REPAIR)
     }
     directedReward = null
     selectedRewardFocus = null
     choices = emptyList()
     phase = GamePhase.RUNNING
+    interpolationPrimed = false
     runGrace = max(runGrace, 0.5f)
+    vacuumOnScreenData()
     emitSound(sound)
     openNextPendingChoice()
 }

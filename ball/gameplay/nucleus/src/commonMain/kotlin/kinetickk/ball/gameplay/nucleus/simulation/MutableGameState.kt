@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.GameplayContentSnapshot
@@ -16,6 +17,7 @@ import kinetickk.ball.content.api.WeaponMastery
 import kinetickk.foundation.random.CloneableXorWowRandom
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.PlayerPreferences
+import kinetickk.ball.profile.api.rank
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
@@ -57,17 +59,38 @@ internal class MutableGameState(
         const val MAX_PROJECTILES = 650
         const val MAX_PICKUPS = 420
         const val MAX_TRAIL_POINTS = 110
-        const val MAX_DELAYED_RELIC_HITS = 256
+        const val MAX_ECHO_HITS = 256
+        const val MAX_BUFFS = 16
+        const val MAX_CHAIN_SCRATCH = 21
+        const val REACTION_BURST = 12f
+        const val BREAK_BURST = 16f
+        const val STASIS_SECONDS = 3f
+        const val REWARD_SEED_SALT = 0x5EED_A11
+        const val SPAWN_SEED_SALT = 0x5A_A4_D1_E7
+        const val MAX_SEVERED_RELICS = 4
         const val MAX_GAMEPLAY_SOUND_CUES = 32
-        const val MAX_WEAPON_NODES = 8
+        const val MAX_WEAPON_NODES = 12
         const val MAX_WEAPON_ORBITALS = 8
         const val MAX_CHOICES = 4
+        /** Volatile Remains bursts waiting at once (Rebirth R4); more deaths in the window add none. */
+        const val MAX_VOLATILE_BURSTS = 48
         const val MAX_TRAIL_SAMPLES_PER_UPDATE = 32
     }
 
     internal var gameplayRandom: CloneableXorWowRandom = reductionSource?.gameplayRandom?.let { source ->
         if (shareStableReductionStorage) source else source.copy()
     } ?: CloneableXorWowRandom(seed)
+    /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */
+    internal var rewardRandom: CloneableXorWowRandom = reductionSource?.rewardRandom?.let { source ->
+        if (shareStableReductionStorage) source else source.copy()
+    } ?: CloneableXorWowRandom(seed xor REWARD_SEED_SALT)
+    /**
+     * Every spawn, spawn position, enemy type, Elite and Herald aspect and director draw comes from this
+     * stream, so spawning never shifts crits and procs, and a different run seed reshapes the waves.
+     */
+    internal var spawnRandom: CloneableXorWowRandom = reductionSource?.spawnRandom?.let { source ->
+        if (shareStableReductionStorage) source else source.copy()
+    } ?: CloneableXorWowRandom(seed xor SPAWN_SEED_SALT)
     internal var activeRebirthProfile: RebirthProfile = reductionSource?.activeRebirthProfile
         ?: content.rebirth.profile(
             bootstrapProgress?.rebirthProgress?.level ?: initialRebirthLevel,
@@ -81,14 +104,16 @@ internal class MutableGameState(
         })
     internal var unlockedWeaponView: Set<WeaponId> = reductionSource?.unlockedWeaponView
         ?: unlockedWeaponSet.toSet()
-    internal val metaRanks: CopyOnWriteIntArray = reductionSource?.metaRanks?.let {
+    /** Owned Core Matrix ranks by content node index, captured from the profile at bootstrap. */
+    internal val matrixRanks: CopyOnWriteIntArray = reductionSource?.matrixRanks?.let {
         if (shareStableReductionStorage) it else it.fork()
     }
-        ?: CopyOnWriteIntArray(IntArray(content.metaUpgrades.size) { index ->
-            val definition = content.metaUpgrades[index]
-            bootstrapProgress?.labProgress?.ranks?.getOrNull(index)
-                ?.coerceIn(0, definition.maxRanks) ?: 0
+        ?: CopyOnWriteIntArray(IntArray(content.matrixNodes.size) { index ->
+            val definition = content.matrixNodes[index]
+            (bootstrapProgress?.matrix?.rank(definition.id) ?: 0).coerceIn(0, definition.maxRanks)
         })
+    /** Folded Matrix effects of [matrixRanks]; immutable, refolded when a run starts. */
+    internal var matrix: MatrixModifiers = reductionSource?.matrix ?: foldMatrix()
     internal val discoveredItemIds: CopyOnWriteMutableSet<Int> = reductionSource?.discoveredItemIds?.let {
         if (shareStableReductionStorage) it else it.fork()
     }
@@ -108,10 +133,100 @@ internal class MutableGameState(
         if (shareStableReductionStorage) it else it.fork()
     }
         ?: CopyOnWriteIntArray(IntArray(content.items.size))
-    internal val familyStacks: CopyOnWriteIntArray = reductionSource?.familyStacks?.let {
+    internal val rebornItems: CopyOnWriteIntArray = reductionSource?.rebornItems?.let {
         if (shareStableReductionStorage) it else it.fork()
     }
-        ?: CopyOnWriteIntArray(IntArray(content.itemFamilyCount))
+        ?: CopyOnWriteIntArray(IntArray(content.items.size))
+    /**
+     * Build gains in order: item ids at first acquisition and relic binds or rank-three upgrades as
+     * [relicGain] entries. Decides affinity ties. Immutable value, replaced on change.
+     */
+    internal var acquisitionOrder: List<Int> = reductionSource?.acquisitionOrder ?: emptyList()
+    /** Immutable compiled build shared by reduction siblings; replaced by [recompileBuild]. */
+    internal var build: CompiledBuild = reductionSource?.build ?: CompiledBuild.empty(content)
+    internal val clauseReadyAt: CopyOnWriteFloatArray = reductionSource?.clauseReadyAt?.let {
+        if (shareStableReductionStorage) it else it.fork()
+    } ?: CopyOnWriteFloatArray(FloatArray(content.totalClauseCount))
+    internal val clauseCounters: CopyOnWriteIntArray = reductionSource?.clauseCounters?.let {
+        if (shareStableReductionStorage) it else it.fork()
+    } ?: CopyOnWriteIntArray(IntArray(content.totalClauseCount))
+    /** Fractional status stacks per item, so stack magnitudes apply deterministically without RNG. */
+    internal val statusAccumulators: CopyOnWriteFloatArray = reductionSource?.statusAccumulators?.let {
+        if (shareStableReductionStorage) it else it.fork()
+    } ?: CopyOnWriteFloatArray(FloatArray(content.items.size))
+    /** Earliest time each item may apply statuses again (per-item rate bound). */
+    internal val itemStatusReadyAt: CopyOnWriteFloatArray = reductionSource?.itemStatusReadyAt?.let {
+        if (shareStableReductionStorage) it else it.fork()
+    } ?: CopyOnWriteFloatArray(FloatArray(content.items.size))
+    internal var buffs: List<ActiveBuff> = reductionSource?.buffs ?: emptyList()
+    internal var combatFields: List<kinetickk.ball.gameplay.nucleus.model.CombatField> =
+        reductionSource?.combatFields ?: emptyList()
+    internal var reactionTokens: Float = reductionSource?.reactionTokens ?: REACTION_BURST
+    internal var breakTokens: Float = reductionSource?.breakTokens ?: BREAK_BURST
+    internal var discoveredReactionMask: Int = reductionSource?.discoveredReactionMask
+        ?: bootstrapProgress?.collection?.discoveredReactionIds?.fold(0) { mask, id -> mask or (1 shl id.ordinal) } ?: 0
+    internal var pendingDiscoveredReactionMask: Int = reductionSource?.pendingDiscoveredReactionMask ?: 0
+    internal var discoveredPairingMask: Int = reductionSource?.discoveredPairingMask
+        ?: bootstrapProgress?.collection?.discoveredPairingIds?.fold(0) { mask, id -> mask or (1 shl id.ordinal) } ?: 0
+    internal var pendingDiscoveredPairingMask: Int = reductionSource?.pendingDiscoveredPairingMask ?: 0
+    internal var heirloomCandidates: List<RelicId> = reductionSource?.heirloomCandidates
+        ?: bootstrapProgress?.collection?.heirloomRelicIds?.toList().orEmpty()
+    internal var heirloomPending: Boolean = reductionSource?.heirloomPending ?: false
+    internal var heirloomOfferActive: Boolean = reductionSource?.heirloomOfferActive ?: false
+    internal var pendingHeirloomResolved: Boolean = reductionSource?.pendingHeirloomResolved ?: false
+    internal var pendingVictoryRelics: List<RelicId>? = reductionSource?.pendingVictoryRelics
+    internal var severedRelics: List<SeveredRelic> = reductionSource?.severedRelics ?: emptyList()
+    internal var ouroborosSpent: Boolean = reductionSource?.ouroborosSpent ?: false
+    internal var ouroborosLockedUntil: Float = reductionSource?.ouroborosLockedUntil ?: 0f
+    internal var invulnerableUntil: Float = reductionSource?.invulnerableUntil ?: 0f
+    internal var glassInvulnerabilityReadyAt: Float = reductionSource?.glassInvulnerabilityReadyAt ?: 0f
+    internal var bulwarkInvulnerabilityReadyAt: Float = reductionSource?.bulwarkInvulnerabilityReadyAt ?: 0f
+    internal var stormCharge: Float = reductionSource?.stormCharge ?: 0f
+    internal var stasisMeter: Float = reductionSource?.stasisMeter ?: STASIS_SECONDS
+    internal var stasisBank: Int = reductionSource?.stasisBank ?: 0
+    internal var stasisLockedUntil: Float = reductionSource?.stasisLockedUntil ?: 0f
+    internal var sinceTurn: Float = reductionSource?.sinceTurn ?: 0f
+    internal var gyreReadyAt: Float = reductionSource?.gyreReadyAt ?: 0f
+    /** Endless Gyre's delayed second ring: when it fires (negative when none is pending) and its damage. */
+    internal var gyreEchoAt: Float = reductionSource?.gyreEchoAt ?: -1f
+    internal var gyreEchoDamage: Float = reductionSource?.gyreEchoDamage ?: 0f
+    internal var overdriveBurnoutUntil: Float = reductionSource?.overdriveBurnoutUntil ?: 0f
+    internal var overdriveExtension: Float = reductionSource?.overdriveExtension ?: 0f
+    internal var overdriveKills: Int = reductionSource?.overdriveKills ?: 0
+    internal var aegisAbsorbed: Float = reductionSource?.aegisAbsorbed ?: 0f
+    internal var aegisNovaReadyAt: Float = reductionSource?.aegisNovaReadyAt ?: 0f
+    internal var shieldBreakArmed: Boolean = reductionSource?.shieldBreakArmed ?: false
+    internal var shieldBreakReadyAt: Float = reductionSource?.shieldBreakReadyAt ?: 0f
+    internal var overheatArmed: Boolean = reductionSource?.overheatArmed ?: true
+    internal var wasBraking: Boolean = reductionSource?.wasBraking ?: false
+    internal var brakeHoldTime: Float = reductionSource?.brakeHoldTime ?: 0f
+    internal var brakeShedSpeed: Float = reductionSource?.brakeShedSpeed ?: 0f
+    internal var critMissStreak: Int = reductionSource?.critMissStreak ?: 0
+    internal var freeDashPrimed: Boolean = reductionSource?.freeDashPrimed ?: false
+    internal var freeDashReadyAt: Float = reductionSource?.freeDashReadyAt ?: 0f
+    internal var comboKillCounter: Int = reductionSource?.comboKillCounter ?: 0
+    internal var glassCharge: Float = reductionSource?.glassCharge ?: 0f
+    /** Maximum integrity Null Covenant's liability currently withholds (0 when none). */
+    internal var integrityLiabilityCut: Float = reductionSource?.integrityLiabilityCut ?: 0f
+    internal var cinderRecoilReadyAt: Float = reductionSource?.cinderRecoilReadyAt ?: 0f
+    internal var offerPity: Int = reductionSource?.offerPity ?: 0
+    /** Item offers opened this run; the Matrix widens every n-th one. */
+    internal var itemOffersOpened: Int = reductionSource?.itemOffersOpened ?: 0
+    internal var secondWindSpent: Boolean = reductionSource?.secondWindSpent ?: false
+    /** When the next heat-free Matrix Dash is ready. */
+    internal var matrixFreeDashReadyAt: Float = reductionSource?.matrixFreeDashReadyAt ?: 0f
+    internal var dashHitThisDash: Boolean = reductionSource?.dashHitThisDash ?: false
+    internal var clauseDepth: Int = reductionSource?.clauseDepth ?: 0
+    internal var arsenalCounter: Int = reductionSource?.arsenalCounter ?: 0
+    internal var necroticClock: Float = reductionSource?.necroticClock ?: 0f
+    /** Visual cue budget for statuses and reactions within the current fixed step. */
+    internal var statusCuesThisStep: Int = reductionSource?.statusCuesThisStep ?: 0
+    /** Candidate-private scratch for bounded chain targeting; never read across steps. */
+    internal val chainScratch: IntArray = IntArray(MAX_CHAIN_SCRATCH)
+    /** Nesting level of [chainScratch] use within the current step; zero between steps. */
+    internal var chainDepth: Int = 0
+    /** The enemy whose Freeze the current hit is shattering, so that hit's clauses still see it Frozen; -1 between hits. */
+    internal var shatteringEnemyId: Int = -1
     internal var soundCueStorage: MutableList<GameplayAudioCue>? =
         reductionSource?.soundCueStorage?.let { source -> ArrayList(source) }
     internal val soundCues: PendingSoundCueBuffer
@@ -122,11 +237,32 @@ internal class MutableGameState(
         get() = PendingVisualFxCueBuffer(this)
     internal var pendingBankedMatter: Long = reductionSource?.pendingBankedMatter ?: 0L
     internal var pendingClearedRebirthLevel: Int? = reductionSource?.pendingClearedRebirthLevel
-    internal var characterRuntime: CharacterRuntime = reductionSource?.characterRuntime ?: CharacterRuntime()
+    /** Mutable character state; a full reduction forks it (scalars copied, buffers copy-on-write). */
+    internal var characterRuntime: CharacterRuntime = reductionSource?.characterRuntime?.let { source ->
+        if (shareStableReductionStorage) source else source.fork()
+    } ?: CharacterRuntime()
+    /**
+     * Owned state of the equipped weapon (entities, proc gates, element cadences, scaling inputs); a full
+     * reduction forks it, a scalar-input reduction shares it.
+     */
+    internal var weaponRuntime: WeaponRuntime = reductionSource?.weaponRuntime?.let { source ->
+        if (shareStableReductionStorage) source else source.fork()
+    } ?: WeaponRuntime()
     internal var pendingEliteKills: Int = reductionSource?.pendingEliteKills ?: 0
     internal var pendingDashHits: Int = reductionSource?.pendingDashHits ?: 0
     internal var pendingCompletedOrbits: Int = reductionSource?.pendingCompletedOrbits ?: 0
     internal var pendingArchitectDefeatedWith: CoreShape? = reductionSource?.pendingArchitectDefeatedWith
+    /**
+     * Cumulative achievement counters awaiting publication. They ride along with any other progress
+     * update and are otherwise published once the run banks (exit, death, victory), so a kill or a
+     * pickup never forces a Profile write on its own.
+     */
+    internal var pendingTotalKills: Int = reductionSource?.pendingTotalKills ?: 0
+    /** Hard obstacle bounces awaiting publication; the obstacle system counts them. */
+    internal var pendingRicochets: Int = reductionSource?.pendingRicochets ?: 0
+    internal var pendingDataPickups: Int = reductionSource?.pendingDataPickups ?: 0
+    /** The run banked, so the next progress update also publishes the deferred counters. */
+    internal var achievementFlushDue: Boolean = reductionSource?.achievementFlushDue ?: false
     internal var pointsOfInterest: List<PointOfInterestState> = reductionSource?.pointsOfInterest ?: emptyList()
     internal var nextPointOfferIndex: Int = reductionSource?.nextPointOfferIndex ?: 0
     internal var pendingDirectedRewards: List<kinetickk.ball.content.api.DirectedReward> = reductionSource?.pendingDirectedRewards ?: emptyList()
@@ -136,12 +272,60 @@ internal class MutableGameState(
     internal var nextEntityId: Int = reductionSource?.nextEntityId ?: 1
     internal var spawnClock: Float = reductionSource?.spawnClock ?: 0f
     internal var nextEliteAt: Float = reductionSource?.nextEliteAt ?: content.tempo.firstEliteAtSeconds
+    /** Elites spawned this run. */
+    internal var elitesSpawned: Int = reductionSource?.elitesSpawned ?: 0
+    /** Heralds spawned this run; each scheduled Herald arrives once. */
+    internal var heraldsSpawned: Int = reductionSource?.heraldsSpawned ?: 0
+    /** Spawn director pacing phase ([SpawnDirectorPhase] ordinal) and the run time it ends. */
+    internal var directorPhase: Int = reductionSource?.directorPhase ?: 0
+    internal var directorPhaseUntil: Float = reductionSource?.directorPhaseUntil ?: 0f
+    /** Enemies' worth of spawn budget banked by the director; events spend it. */
+    internal var spawnBudget: Float = reductionSource?.spawnBudget ?: 0f
+    /** The planned next event ([SpawnEventKind] ordinal, or -1), its size and its single enemy type (-1 when mixed). */
+    internal var pendingEventKind: Int = reductionSource?.pendingEventKind ?: -1
+    internal var pendingEventSize: Int = reductionSource?.pendingEventSize ?: 0
+    internal var pendingEventType: Int = reductionSource?.pendingEventType ?: -1
+    /** Enemy types (bit per ordinal) used by the last and the previous event; they spawn at half weight. */
+    internal var recentEventTypes: Int = reductionSource?.recentEventTypes ?: 0
+    internal var previousEventTypes: Int = reductionSource?.previousEventTypes ?: 0
+    internal var ambushReadyAt: Float = reductionSource?.ambushReadyAt ?: 0f
+    internal var encircleReadyAt: Float = reductionSource?.encircleReadyAt ?: 0f
+    internal var wallReadyAt: Float = reductionSource?.wallReadyAt ?: 0f
+    /** When an event may next exceed the ordinary cap by its own size. */
+    internal var capOverflowReadyAt: Float = reductionSource?.capOverflowReadyAt ?: 0f
+    /** Seconds the Core has kept ambush speed without a break. */
+    internal var ambushSpeedSeconds: Float = reductionSource?.ambushSpeedSeconds ?: 0f
+    /** Events fired this run and the kind, planned size and spawned count of the last one. */
+    internal var spawnEventCount: Int = reductionSource?.spawnEventCount ?: 0
+    internal var lastSpawnEventKind: Int = reductionSource?.lastSpawnEventKind ?: -1
+    internal var lastSpawnEventPlanned: Int = reductionSource?.lastSpawnEventPlanned ?: 0
+    internal var lastSpawnEventSpawned: Int = reductionSource?.lastSpawnEventSpawned ?: 0
+    /** Seed of this run; obstacle chunks hash it with their absolute chunk. */
+    internal val runSeed: Int = reductionSource?.runSeed ?: seed
+    /** Accumulated rebase shift: an absolute world position is the run-local position plus this origin. */
+    internal var worldOriginX: Double = reductionSource?.worldOriginX ?: 0.0
+    internal var worldOriginY: Double = reductionSource?.worldOriginY ?: 0.0
+    /** Generated obstacle window around the Core; an immutable value replaced on change. */
+    internal var obstacleField: ObstacleField = reductionSource?.obstacleField ?: ObstacleField.EMPTY
+    /** Destroyed unstable asteroids, oldest first, at most [ContentBounds.MAX_DESTROYED_OBSTACLES]. */
+    internal var destroyedObstacleIds: List<Long> = reductionSource?.destroyedObstacleIds ?: emptyList()
+    /** Run time before which an asteroid collision deals no further damage and fires no ricochet. */
+    internal var obstacleHitReadyAt: Float = reductionSource?.obstacleHitReadyAt ?: 0f
+    /** Run time before which Near Miss grants no further Overdrive. */
+    internal var nearMissReadyAt: Float = reductionSource?.nearMissReadyAt ?: 0f
+    /**
+     * End of the invulnerability a revive (Second Wind, Ouroboros) granted: the only window a lethal
+     * collision honours; other invulnerability (Glass Comet, Bulwark) does not stop it.
+     */
+    internal var reviveInvulnerableUntil: Float = reductionSource?.reviveInvulnerableUntil ?: 0f
     internal var dashBufferTime: Float = reductionSource?.dashBufferTime ?: 0f
     internal var bossSpawned: Boolean = reductionSource?.bossSpawned ?: false
     internal var keyboardBrakeActive: Boolean = reductionSource?.keyboardBrakeActive ?: false
     internal var secondaryBrakeActive: Boolean = reductionSource?.secondaryBrakeActive ?: false
     internal var touchBrakeActive: Boolean = reductionSource?.touchBrakeActive ?: false
     internal var uiScale: Float = reductionSource?.uiScale ?: 1f
+    /** Device px per dp of the accepted viewport; the simulation itself runs in dp. */
+    internal var viewportDensity: Float = reductionSource?.viewportDensity ?: 1f
     internal var accumulator: Float = reductionSource?.accumulator ?: 0f
     internal var lastTransitionSteps: Int = reductionSource?.lastTransitionSteps ?: 0
         internal set
@@ -149,6 +333,17 @@ internal class MutableGameState(
     internal var previousCoreY: Float = reductionSource?.previousCoreY ?: 0f
     internal var previousSingularityX: Float = reductionSource?.previousSingularityX ?: 0f
     internal var previousSingularityY: Float = reductionSource?.previousSingularityY ?: 0f
+    /** Camera at the start of the last fixed step; renderers interpolate toward [cameraX]. */
+    internal var previousCameraX: Float = reductionSource?.previousCameraX ?: 0f
+    internal var previousCameraY: Float = reductionSource?.previousCameraY ?: 0f
+    /** Morningstar position at the start of the last fixed step (render interpolation only). */
+    internal var previousMorningstarX: Float = reductionSource?.previousMorningstarX ?: 0f
+    internal var previousMorningstarY: Float = reductionSource?.previousMorningstarY ?: 0f
+    /**
+     * Whether a fixed step has run since the simulation last entered RUNNING, so every previous
+     * position is that step's start. Until then renderers present the exact state (render only).
+     */
+    internal var interpolationPrimed: Boolean = reductionSource?.interpolationPrimed ?: false
     internal var trailLastX: Float = reductionSource?.trailLastX ?: 0f
     internal var trailLastY: Float = reductionSource?.trailLastY ?: 0f
     internal var trailDistanceCarry: Float = reductionSource?.trailDistanceCarry ?: 0f
@@ -170,16 +365,12 @@ internal class MutableGameState(
         if (shareStableReductionStorage) it else it.fork()
     }
         ?: CopyOnWriteIntArray(IntArray(content.relics.size))
-    internal val relicProcCounts: CopyOnWriteIntArray = reductionSource?.relicProcCounts?.let {
-        if (shareStableReductionStorage) it else it.fork()
-    }
-        ?: CopyOnWriteIntArray(IntArray(content.relics.size))
-    internal val delayedRelicHits: MutableList<DelayedRelicHit> = reductionSource?.delayedRelicHits
+    internal val echoHits: MutableList<EchoHit> = reductionSource?.echoHits
         ?.let { source ->
             if (shareStableReductionStorage) {
                 source
             } else {
-                source.mapTo(ArrayList(source.size), DelayedRelicHit::copy)
+                source.mapTo(ArrayList(source.size), EchoHit::copy)
             }
         }
         ?: mutableListOf()
@@ -187,17 +378,6 @@ internal class MutableGameState(
         if (shareStableReductionStorage) it else it.fork()
     }
         ?: CopyOnWriteIntArray(IntArray(content.weapons.size))
-    internal var slipstreamRelayTime: Float = reductionSource?.slipstreamRelayTime ?: 0f
-    internal var borrowedMomentTime: Float = reductionSource?.borrowedMomentTime ?: 0f
-    internal var brakepointCharge: Float = reductionSource?.brakepointCharge ?: 0f
-    internal var synergyEffects: List<SynergyEffect> = reductionSource?.synergyEffects ?: emptyList()
-    internal val synergyCooldowns: CopyOnWriteFloatArray = reductionSource?.synergyCooldowns?.let {
-        if (shareStableReductionStorage) it else it.fork()
-    } ?: CopyOnWriteFloatArray(FloatArray(kinetickk.ball.content.api.SynergyId.entries.size))
-    internal var synergyManeuverCharge: Float = reductionSource?.synergyManeuverCharge ?: 0f
-    internal var ghostDashPending: Boolean = reductionSource?.ghostDashPending ?: false
-    internal var ghostDashStartX: Float = reductionSource?.ghostDashStartX ?: 0f
-    internal var ghostDashStartY: Float = reductionSource?.ghostDashStartY ?: 0f
     internal var dataFraction: Float = reductionSource?.dataFraction ?: 0f
     internal var matterFraction: Float = reductionSource?.matterFraction ?: 0f
     internal var shieldRechargeDelay: Float = reductionSource?.shieldRechargeDelay ?: 0f
@@ -214,7 +394,8 @@ internal class MutableGameState(
     internal var hurtCooldown: Float = reductionSource?.hurtCooldown ?: 0f
     internal var lastAimDirectionX: Float = reductionSource?.lastAimDirectionX ?: 1f
     internal var lastAimDirectionY: Float = reductionSource?.lastAimDirectionY ?: 0f
-    internal var bankedThisRun: Boolean = reductionSource?.bankedThisRun ?: false
+    /** Run Matter already banked; later grants in the same run bank only the difference. */
+    internal var bankedRunMatter: Long = reductionSource?.bankedRunMatter ?: 0L
     internal var activeChoiceType: ChoiceType = reductionSource?.activeChoiceType ?: ChoiceType.ITEM
 
     var phase: GamePhase = reductionSource?.phase ?: GamePhase.RUNNING
@@ -223,6 +404,15 @@ internal class MutableGameState(
         internal set
     var rebirthLevel: Int = reductionSource?.rebirthLevel ?: activeRebirthProfile.tier
         internal set
+    /**
+     * Rebirth rank (one above the highest clear) from the bootstrap profile, never below the run's tier.
+     * Unlock gates (items, Relics, Heirloom cards) read it; tier scaling and the roster read [rebirthLevel].
+     */
+    var rebirthRank: Int = reductionSource?.rebirthRank
+        ?: max(activeRebirthProfile.tier, bootstrapProgress?.rebirthProgress?.rank ?: activeRebirthProfile.tier)
+        internal set
+    /** Volatile Remains bursts waiting to detonate (Rebirth R4), at most [MAX_VOLATILE_BURSTS]. */
+    internal var volatileBursts: ImmutableList<VolatileBurstProjection> = reductionSource?.volatileBursts ?: immutableListOf()
     var screenWidth: Float = reductionSource?.screenWidth ?: 1280f
         internal set
     var screenHeight: Float = reductionSource?.screenHeight ?: 720f
@@ -232,6 +422,8 @@ internal class MutableGameState(
         internal set
     var coreY: Float = reductionSource?.coreY ?: 0f
         internal set
+    /** Collision and draw radius of the Core; every simulation contact reads this, never [CORE_RADIUS]. */
+    internal var coreRadius: Float = reductionSource?.coreRadius ?: CORE_RADIUS
     var velocityX: Float = reductionSource?.velocityX ?: 0f
         internal set
     var velocityY: Float = reductionSource?.velocityY ?: 0f
@@ -331,7 +523,7 @@ internal class MutableGameState(
         internal set
     var critMultiplier: Float = reductionSource?.critMultiplier ?: 1.5f
         internal set
-    var pickupRadius: Float = reductionSource?.pickupRadius ?: 150f
+    var pickupRadius: Float = reductionSource?.pickupRadius ?: content.pickups.magnetRadius
         internal set
     var luck: Float = reductionSource?.luck ?: 0f
         internal set
@@ -475,7 +667,10 @@ internal class MutableGameState(
     val choiceType: ChoiceType get() = activeChoiceType
     val choicesCanReroll: Boolean
         get() = phase == GamePhase.CHOICE && directedReward == null && rerollsRemaining > 0 && when (activeChoiceType) {
-            ChoiceType.ITEM, ChoiceType.WEAPON, ChoiceType.RELIC -> true
+            ChoiceType.ITEM -> true
+            // Offers come from owned weapons only: with no more than one offer's worth a reroll would deal the same set.
+            ChoiceType.WEAPON -> weaponOfferCandidates().size > WEAPON_OFFER_CHOICES
+            ChoiceType.RELIC -> !heirloomOfferActive
             ChoiceType.TOTEM, ChoiceType.RELIC_BIND -> false
         }
     val pendingRelicChoiceCount: Int get() = pendingRelicChoices
@@ -502,6 +697,7 @@ internal class MutableGameState(
             previousSingularityY = cameraY + pointerY - screenHeight * 0.5f
         }
         uiScale = max(1f, density)
+        viewportDensity = density
     }
 
 }

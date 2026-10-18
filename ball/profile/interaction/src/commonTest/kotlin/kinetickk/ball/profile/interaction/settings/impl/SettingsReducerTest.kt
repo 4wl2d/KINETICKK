@@ -74,6 +74,11 @@ class SettingsReducerTest {
         assertEquals("Справа", settingValue(russian, SettingsRow.RUN_STATISTICS_SIDE))
         assertEquals("Слева", settingValue(russian.copy(runStatisticsOnLeft = true), SettingsRow.RUN_STATISTICS_SIDE))
         assertEquals("Left", settingValue(english.copy(runStatisticsOnLeft = true), SettingsRow.RUN_STATISTICS_SIDE))
+        assertEquals("Вкл", settingValue(russian, SettingsRow.MINIMAP))
+        assertEquals("Off", settingValue(english.copy(minimapEnabled = false), SettingsRow.MINIMAP))
+        assertEquals("Миникарта", SettingsRow.MINIMAP.label(AppLanguage.Russian))
+        assertEquals("Minimap", SettingsRow.MINIMAP.label(AppLanguage.English))
+        assertTrue(SettingsRow.MINIMAP in SettingsGroup.INTERFACE.rows)
     }
 
     @Test
@@ -93,6 +98,7 @@ class SettingsReducerTest {
                 PreferenceAdjustmentDirection.INCREASE,
             ),
             SettingsRow.SCREEN_SHAKE to ProfilePreferenceAdjustment.ToggleScreenShake,
+            SettingsRow.MINIMAP to ProfilePreferenceAdjustment.ToggleMinimap,
             SettingsRow.PARTICLES to ProfilePreferenceAdjustment.StepParticleDensity(
                 PreferenceAdjustmentDirection.INCREASE,
             ),

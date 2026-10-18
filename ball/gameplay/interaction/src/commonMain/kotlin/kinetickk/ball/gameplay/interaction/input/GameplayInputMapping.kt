@@ -36,12 +36,19 @@ internal data class GameplayHitTestState(
     val choicesCanReroll: Boolean,
 )
 
-/** Maps gameplay canvas coordinates without encoding any app destination in domain state. */
+/**
+ * The gameplay surface in device pixels. The simulation viewport is dp; the HUD, the touch
+ * controls and the Compose overlays are laid out in device pixels with [GameplayRenderModel.uiScale].
+ */
+internal val GameplayRenderModel.hudWidth: Float get() = screenWidth * viewportDensity
+internal val GameplayRenderModel.hudHeight: Float get() = screenHeight * viewportDensity
+
+/** Maps gameplay canvas coordinates (device pixels) without encoding any app destination in domain state. */
 fun GameplayRenderModel.resolveGameplayPress(x: Float, y: Float): GameplayInput? =
     resolveGameplayPress(
         phase = phase,
-        screenWidth = screenWidth,
-        screenHeight = screenHeight,
+        screenWidth = hudWidth,
+        screenHeight = hudHeight,
         uiScale = uiScale,
         x = x,
         y = y,
@@ -50,8 +57,8 @@ fun GameplayRenderModel.resolveGameplayPress(x: Float, y: Float): GameplayInput?
 fun GameplayRenderModel.isHudControlPosition(x: Float, y: Float): Boolean =
     isHudControlPosition(
         phase = phase,
-        screenWidth = screenWidth,
-        screenHeight = screenHeight,
+        screenWidth = hudWidth,
+        screenHeight = hudHeight,
         uiScale = uiScale,
         x = x,
         y = y,
@@ -63,7 +70,7 @@ fun GameplayRenderModel.isHudControlPosition(x: Float, y: Float): Boolean =
  */
 internal fun GameplayRenderModel.isTrialInfoPosition(x: Float, y: Float): Boolean =
     phase == GamePhase.RUNNING && activeTrial() != null &&
-        TrialInfoHitLayout.update(screenWidth, screenHeight, uiScale, settings.textScale).infoTargetContains(x, y, uiScale)
+        TrialInfoHitLayout.update(hudWidth, hudHeight, uiScale, settings.textScale).infoTargetContains(x, y, uiScale)
 
 /** Pointer-thread scratch layout for [isTrialInfoPosition] (never shared with drawing). */
 private val TrialInfoHitLayout = HudTrialPanelLayout()

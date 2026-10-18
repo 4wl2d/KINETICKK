@@ -153,4 +153,46 @@ class CopyOnWriteStorageTest {
         assertEquals(listOf(2), shared.toList())
         assertEquals(listOf(1, 2), sibling.toList())
     }
+
+    @Test
+    fun pagedFloatArrayForksCopyOnlyTheWrittenPageInEveryDirection() {
+        val source = CopyOnWritePagedFloatArray(size = 10, pageSize = 4)
+        assertEquals(3, source.pageCount)
+        for (index in 0 until 10) source[index] = index.toFloat()
+        val first = source.fork()
+        val second = source.fork()
+        val nested = first.fork()
+        assertEquals(3, first.sharedPagesWith(source))
+
+        first[5] = 50f
+        assertEquals(2, first.sharedPagesWith(source), "only page 1 is copied")
+        assertEquals(5f, source[5])
+        assertEquals(5f, second[5])
+        assertEquals(5f, nested[5])
+        first[6] = 60f
+        assertEquals(2, first.sharedPagesWith(source), "an owned page is written in place")
+
+        source[9] = 90f
+        assertEquals(9f, first[9])
+        assertEquals(9f, second[9])
+        assertEquals(9f, nested[9])
+        nested[0] = -1f
+        assertEquals(0f, first[0])
+        assertEquals(listOf(-1f, 1f, 2f, 3f, 4f, 5f, 6f, 7f, 8f, 9f), nested.toList())
+        assertEquals(listOf(0f, 1f, 2f, 3f, 4f, 50f, 60f, 7f, 8f, 9f), first.toList())
+        assertEquals(listOf(0f, 1f, 2f, 3f, 4f, 5f, 6f, 7f, 8f, 90f), source.toList())
+        assertEquals((0 until 10).map { it.toFloat() }, second.toList())
+    }
+
+    @Test
+    fun pagedFloatArrayKeepsRawBitsAndBounds() {
+        val source = CopyOnWritePagedFloatArray(size = 3, pageSize = 2)
+        val branch = source.fork()
+        branch[0] = 0f
+        assertEquals(source.pageCount, branch.sharedPagesWith(source), "an equal write copies nothing")
+        branch[0] = -0f
+        assertEquals(source.pageCount - 1, branch.sharedPagesWith(source), "-0 differs from 0 by its bits")
+        assertFailsWith<IndexOutOfBoundsException> { source[3] }
+        assertFailsWith<IndexOutOfBoundsException> { source[-1] = 1f }
+    }
 }

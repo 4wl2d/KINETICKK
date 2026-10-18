@@ -16,7 +16,7 @@ import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
 import kinetickk.ball.profile.api.ProfileSettingsChanged
 import kinetickk.ball.profile.api.ProfileRefusal
-import kinetickk.ball.profile.api.ProfileRebirthAdvanced
+import kinetickk.ball.profile.api.ProfileRebirthTierSelected
 import kinetickk.ball.profile.api.ProfileCoreShapeSelected
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.flow.session.api.SessionInteractionPulse
@@ -47,10 +47,11 @@ sealed interface AppSessionNucleusPulse {
     sealed interface Refusal : AppSessionNucleusPulse
 }
 
-internal data class ProfileRebirthAdvancedPulse(val result: ProfileRebirthAdvanced) : AppSessionNucleusPulse.Result
+internal data class ProfileRebirthTierSelectedPulse(val result: ProfileRebirthTierSelected) : AppSessionNucleusPulse.Result
 internal data class ProfileRebirthRefusedPulse(val reason: ProfileRefusal) : AppSessionNucleusPulse.Refusal
 
-fun profileRebirthAdvanced(result: ProfileRebirthAdvanced): AppSessionNucleusPulse.Result = ProfileRebirthAdvancedPulse(result)
+fun profileRebirthTierSelected(result: ProfileRebirthTierSelected): AppSessionNucleusPulse.Result =
+    ProfileRebirthTierSelectedPulse(result)
 fun profileRebirthRefused(reason: ProfileRefusal): AppSessionNucleusPulse.Refusal = ProfileRebirthRefusedPulse(reason)
 
 internal data class ProfileSettingsChangedPulse(
@@ -147,7 +148,7 @@ sealed interface AppSessionOutput {
     data class StartRun(val runId: RunId) : AppSessionOutput
     data class PauseForOverlay(val runId: RunId) : AppSessionOutput
     data class ExitRun(val runId: RunId) : AppSessionOutput
-    data object AdvanceRebirth : AppSessionOutput
+    data class SelectRebirthTier(val tier: Int) : AppSessionOutput
     data object ToggleMute : AppSessionOutput
     data class SelectCoreShape(val shape: CoreShape) : AppSessionOutput
     data class ApplyPreferences(val runId: RunId, val preferences: PlayerPreferences) : AppSessionOutput
@@ -160,7 +161,7 @@ private val AppSessionOutput.orderRank: Int
     get() = when (this) {
         is AppSessionOutput.EnsureGameplayRun -> 0
         is AppSessionOutput.ExitRun,
-        AppSessionOutput.AdvanceRebirth,
+        is AppSessionOutput.SelectRebirthTier,
         AppSessionOutput.ToggleMute,
         is AppSessionOutput.SelectCoreShape,
         is AppSessionOutput.StartRun, is AppSessionOutput.PauseForOverlay,
@@ -174,6 +175,6 @@ private val AppSessionOutput.orderRank: Int
 
 private fun AppSessionOutput.isParticipantCommand(): Boolean =
     this is AppSessionOutput.ExitRun ||
-        this === AppSessionOutput.AdvanceRebirth || this === AppSessionOutput.ToggleMute || this is AppSessionOutput.ApplyPreferences ||
+        this is AppSessionOutput.SelectRebirthTier || this === AppSessionOutput.ToggleMute || this is AppSessionOutput.ApplyPreferences ||
         this is AppSessionOutput.SelectCoreShape || this is AppSessionOutput.StartRun ||
         this is AppSessionOutput.PauseForOverlay

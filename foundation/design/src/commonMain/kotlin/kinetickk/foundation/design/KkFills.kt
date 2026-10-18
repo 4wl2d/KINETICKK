@@ -16,9 +16,11 @@ import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.scale
@@ -63,9 +65,67 @@ enum class KkFillKind(val periodDp: Float, val markDp: Float, val loopSeconds: F
 
     /** Large halftone dots: 14 px grid, ~3.3 px dots (`.halftone-lg`). */
     HALFTONE_LARGE(14f, 3.3f, 0f),
+
+    // Pattern fills that tell hues apart without color (color vision presets share one ramp). None
+    // uses the 45° lines of the hatch and stripes, which mean locked and hazard.
+
+    /** Horizontal sine shimmer: one wavy line every 6 px, a wave 12 px long (1.4 s drift loop). */
+    SHIMMER(6f, 1.3f, 1.4f),
+
+    /** Triangle lattice: horizontal and ±60° lines, triangles with 12 px sides. */
+    LATTICE(12f, 0.9f, 0f),
+
+    /** Vertical zigzag: one column every 7 px, a zig and a zag per 9 px of height. */
+    ZIGZAG(7f, 1.2f, 0f),
+
+    /** Concentric rings: two rings per 12 px cell. */
+    RINGS(12f, 1.1f, 0f),
+
+    /** Random pitting: irregular pits scattered over an 18 px tile (never the halftone grid). */
+    PITTING(18f, 1.5f, 0f),
+
+    /** Equalizer bars: three upright bars of different heights in a 9 px tile. */
+    BARS(9f, 1.4f, 0f),
+
+    /** Crosses: two small upright plus signs, staggered on a 10 px tile. */
+    CROSSES(10f, 1.2f, 0f),
+
+    // Card materials. The steep diagonals lean like the slash cut (about 27° from vertical), never the
+    // 45° of the hatch and stripes.
+
+    /** Brushed metal: horizontal hairlines of varying strength every 2 px, one in three broken. */
+    HAIRLINE(6f, 0.6f, 0f),
+
+    /** Fine steep diagonal lines every 4.5 px (metal grain). */
+    SLASH(4.5f, 0.8f, 0f),
+
+    /** Steep diagonal scanlines every 7 px. */
+    SCANLINE(7f, 1.4f, 0f),
     ;
 
     internal val dots: Boolean get() = this == HALFTONE || this == HALFTONE_LARGE
+
+    /** Diagonal line kinds (hatch and stripes), drawn as `/` lines on a square tile. */
+    internal val diagonal: Boolean get() = ordinal <= CARD_STRIPES.ordinal
+
+    /** Steep diagonal kinds: lines 2x + y = n * side on a square tile ([SLASH], [SCANLINE]). */
+    internal val steep: Boolean get() = this == SLASH || this == SCANLINE
+}
+
+/**
+ * Fills [path] with the repeating [kind] in [color] at [alpha] (`0..1`). Allocation-free once the
+ * tile for this color and density exists; the pattern is anchored to the current transform's
+ * origin, so it moves and turns with whatever the caller translated or rotated.
+ */
+fun DrawScope.drawKkPattern(path: Path, kind: KkFillKind, color: Color, alpha: Float = 1f) {
+    if (alpha <= 0f) return
+    drawPath(path, kkFillBrush(kind, color), alpha = alpha.coerceAtMost(1f))
+}
+
+/** Rect overload of [drawKkPattern]. */
+fun DrawScope.drawKkPattern(rect: Rect, kind: KkFillKind, color: Color, alpha: Float = 1f) {
+    if (alpha <= 0f) return
+    drawRect(kkFillBrush(kind, color), rect.topLeft, rect.size, alpha = alpha.coerceAtMost(1f))
 }
 
 /** Default hatch color (bone @8 %). */
@@ -219,18 +279,20 @@ internal fun DrawScope.kkApplyEllipseMask(rect: Rect, cx: Float, cy: Float, rx: 
 internal object KkLayers {
     val paint: Paint by lazy { Paint() }
     private var defaultMask: Brush? = null
-    private var customStop = Float.NaN
-    private var customMask: Brush? = null
+    private val customStops = FloatArray(4) { Float.NaN }
+    private val customMasks = arrayOfNulls<Brush>(4)
+    private var customNext = 0
 
     fun radialMask(innerStop: Float): Brush {
         if (innerStop == 0.2f) {
             return defaultMask ?: createMask(0.2f).also { defaultMask = it }
         }
-        if (customStop != innerStop || customMask == null) {
-            customMask = createMask(innerStop)
-            customStop = innerStop
-        }
-        return customMask!!
+        for (index in 0 until 4) if (customStops[index] == innerStop) return customMasks[index]!!
+        val created = createMask(innerStop)
+        customStops[customNext] = innerStop
+        customMasks[customNext] = created
+        customNext = (customNext + 1) % 4
+        return created
     }
 
     private fun createMask(innerStop: Float): Brush = Brush.radialGradient(
@@ -244,14 +306,36 @@ internal object KkLayers {
 
 /** Small bounded cache of fill tiles; drawing is confined to the UI/draw thread. */
 private object KkTileCache {
-    private const val CAPACITY = 32
+    // Hatch, stripes and halftones in a few colors, the seven patterns in each status hue and the
+    // card materials and faces (hairlines, halftones and patterns) of a dealt hand.
+    private const val CAPACITY = 64
     private val kindKeys = LongArray(CAPACITY)
     private val colorKeys = LongArray(CAPACITY)
     private val brushes = arrayOfNulls<Brush>(CAPACITY)
     private var next = 0
 
+    /** Tile width in px: one animation cycle of horizontal travel. */
     fun tilePx(kind: KkFillKind, density: Float): Int {
-        val side = if (kind.dots) kind.periodDp else kind.periodDp * sqrt(2f)
+        val side = when {
+            kind.dots -> kind.periodDp
+            kind.diagonal -> kind.periodDp * sqrt(2f)
+            kind.steep -> kind.periodDp * sqrt(5f)
+            kind == KkFillKind.SHIMMER -> kind.periodDp * 2f
+            kind == KkFillKind.HAIRLINE -> 24f
+            else -> kind.periodDp
+        }
+        return max(2, (side * density).roundToInt())
+    }
+
+    /** Tile height in px (square tiles match [tilePx]). */
+    fun tileHeightPx(kind: KkFillKind, density: Float): Int {
+        val side = when (kind) {
+            KkFillKind.SHIMMER -> kind.periodDp
+            KkFillKind.LATTICE -> kind.periodDp * sqrt(3f)
+            KkFillKind.ZIGZAG -> kind.periodDp * 9f / 7f
+            KkFillKind.HAIRLINE -> kind.periodDp
+            else -> return tilePx(kind, density)
+        }
         return max(2, (side * density).roundToInt())
     }
 
@@ -272,21 +356,121 @@ private object KkTileCache {
 
     private fun tile(kind: KkFillKind, color: Color, background: Color, density: Float): ImageBitmap {
         val side = tilePx(kind, density)
-        val bitmap = ImageBitmap(side, side)
+        val height = tileHeightPx(kind, density)
+        val bitmap = ImageBitmap(side, height)
         val s = side.toFloat()
-        CanvasDrawScope().draw(Density(density), LayoutDirection.Ltr, Canvas(bitmap), Size(s, s)) {
+        val h = height.toFloat()
+        CanvasDrawScope().draw(Density(density), LayoutDirection.Ltr, Canvas(bitmap), Size(s, h)) {
             if (background.alpha > 0f) drawRect(background)
-            if (kind.dots) {
-                drawCircle(color, kind.markDp * density, Offset(s * 0.5f, s * 0.5f))
-            } else {
-                // Lines x + y = c are "/" in y-down coordinates; three copies keep the tile seamless.
-                val width = kind.markDp * density
-                for (copy in 0..2) {
-                    val c = copy * s
-                    drawLine(color, Offset(-s, c + s), Offset(c + s, -s), width, StrokeCap.Butt)
+            val width = kind.markDp * density
+            when {
+                kind.dots -> drawCircle(color, kind.markDp * density, Offset(s * 0.5f, s * 0.5f))
+                kind.diagonal -> {
+                    // Lines x + y = c are "/" in y-down coordinates; three copies keep the tile seamless.
+                    for (copy in 0..2) {
+                        val c = copy * s
+                        drawLine(color, Offset(-s, c + s), Offset(c + s, -s), width, StrokeCap.Butt)
+                    }
+                }
+                kind == KkFillKind.SHIMMER -> drawPath(shimmerWave(s, h), color, style = Stroke(width, cap = StrokeCap.Butt))
+                kind == KkFillKind.LATTICE -> {
+                    // Horizontal rows at 0, h/2 and h; ±60° lines through the row vertices (x = k * s at
+                    // y = 0, offset by s/2 on the middle row). Copies past the edges keep it seamless.
+                    for (row in 0..2) drawLine(color, Offset(-1f, h * row * 0.5f), Offset(s + 1f, h * row * 0.5f), width)
+                    for (k in -1..2) {
+                        drawLine(color, Offset(k * s, 0f), Offset(k * s + s, h), width)
+                        drawLine(color, Offset(k * s, 0f), Offset(k * s - s, h), width)
+                    }
+                }
+                kind == KkFillKind.ZIGZAG -> drawPath(zigzagColumn(s, h), color, style = Stroke(width, join = StrokeJoin.Miter))
+                kind.steep -> {
+                    // Lines 2x + y = c, one every side length of c; the tile repeats along both axes.
+                    for (copy in 0..3) {
+                        val c = copy * s
+                        drawLine(color, Offset((c + s) * 0.5f, -s), Offset((c - 2f * s) * 0.5f, 2f * s), width, StrokeCap.Butt)
+                    }
+                }
+                kind == KkFillKind.HAIRLINE -> {
+                    // Each hairline centred on a pixel row, so it stays one crisp line at any density.
+                    val row = h / 3f
+                    fun y(index: Int): Float = kotlin.math.floor(row * (index + 0.5f)) + 0.5f
+                    drawLine(color, Offset(0f, y(0)), Offset(s, y(0)), width)
+                    drawLine(color.copy(alpha = color.alpha * 0.55f), Offset(0f, y(1)), Offset(s * 0.62f, y(1)), width)
+                    drawLine(color.copy(alpha = color.alpha * 0.8f), Offset(s * 0.7f, y(1)), Offset(s, y(1)), width)
+                    drawLine(color.copy(alpha = color.alpha * 0.75f), Offset(0f, y(2)), Offset(s, y(2)), width)
+                }
+                kind == KkFillKind.RINGS -> {
+                    val center = Offset(s * 0.5f, s * 0.5f)
+                    drawCircle(color, s * 0.36f, center, style = Stroke(width))
+                    drawCircle(color, s * 0.17f, center, style = Stroke(width))
+                    drawCircle(color, width * 0.6f, center)
+                }
+                kind == KkFillKind.BARS -> {
+                    // Bars at thirds of the width, centred on the middle row so rows and columns tile.
+                    for (bar in 0..2) {
+                        val x = s * (bar + 0.5f) / 3f
+                        val half = h * BarHeights[bar] * 0.5f
+                        drawLine(color, Offset(x, h * 0.5f - half), Offset(x, h * 0.5f + half), width, StrokeCap.Butt)
+                    }
+                }
+                kind == KkFillKind.CROSSES -> {
+                    val arm = s * 0.2f
+                    for (cross in 0..1) {
+                        val cx = s * (0.25f + cross * 0.5f)
+                        val cy = h * (0.25f + cross * 0.5f)
+                        drawLine(color, Offset(cx - arm, cy), Offset(cx + arm, cy), width, StrokeCap.Butt)
+                        drawLine(color, Offset(cx, cy - arm), Offset(cx, cy + arm), width, StrokeCap.Butt)
+                    }
+                }
+                kind == KkFillKind.PITTING -> {
+                    // A fixed scatter (not random per run), wrapped across the edges.
+                    for (pit in Pits.indices step 3) {
+                        val radius = Pits[pit + 2] * kind.markDp * density
+                        for (dx in -1..1) for (dy in -1..1) {
+                            drawCircle(color, radius, Offset(Pits[pit] * s + dx * s, Pits[pit + 1] * s + dy * s))
+                        }
+                    }
                 }
             }
         }
         return bitmap
     }
+
+    /** One sine wavelength across the tile's width, centered vertically, a little past both edges. */
+    private fun shimmerWave(width: Float, height: Float): Path = Path().apply {
+        val amplitude = height * 0.22f
+        val steps = 24
+        for (step in -1..steps + 1) {
+            val x = width * step / steps
+            val y = height * 0.5f + amplitude * kotlin.math.sin(x / width * 2f * kotlin.math.PI.toFloat())
+            if (step == -1) moveTo(x, y) else lineTo(x, y)
+        }
+    }
+
+    /** A zig and a zag down the tile's height, continuing past the top and bottom edges. */
+    private fun zigzagColumn(width: Float, height: Float): Path = Path().apply {
+        val left = width * 0.5f - width * 0.24f
+        val right = width * 0.5f + width * 0.24f
+        moveTo(right, -height * 0.5f)
+        lineTo(left, 0f)
+        lineTo(right, height * 0.5f)
+        lineTo(left, height)
+        lineTo(right, height * 1.5f)
+    }
+
+    /** Bar heights of [KkFillKind.BARS] as fractions of the tile height. */
+    private val BarHeights = floatArrayOf(0.34f, 0.72f, 0.5f)
+
+    /** Pits as (x, y, size) in tile fractions and multiples of the mark radius. */
+    private val Pits = floatArrayOf(
+        0.12f, 0.18f, 1.0f,
+        0.47f, 0.09f, 0.55f,
+        0.78f, 0.27f, 1.25f,
+        0.33f, 0.45f, 0.7f,
+        0.66f, 0.58f, 0.9f,
+        0.09f, 0.71f, 0.6f,
+        0.9f, 0.83f, 0.75f,
+        0.43f, 0.86f, 1.15f,
+        0.24f, 0.97f, 0.5f,
+    )
 }

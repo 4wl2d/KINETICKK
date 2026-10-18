@@ -3,315 +3,250 @@
 
 package kinetickk.ball.content.impl
 
+import kinetickk.ball.content.api.BuildCatalog
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicKey
+import kinetickk.ball.content.api.RelicPairingKind
+import kinetickk.ball.content.api.RelicValue
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.toImmutableList
 
-internal fun defaultRelics(): ImmutableList<RelicDefinition> =
-    listOf(
-        RelicDefinition(
-            RelicId.KINETIC_FLYWHEEL,
-            "Kinetic Flywheel",
-            RelicAspect.VECTOR,
-            "The weapon stores excess velocity as striking force instead of losing it to drag.",
-            "+5% weapon damage above 500 u/s per rank; the bonus doubles above 1,600 u/s.",
-        ),
-        RelicDefinition(
-            RelicId.GHOST_VECTOR,
-            "Ghost Vector",
-            RelicAspect.VECTOR,
-            "Every dash leaves a cutting vector through enemies near the Core's departure point.",
-            "+24 dash-cut damage and +14 effect radius per rank.",
-        ),
-        RelicDefinition(
-            RelicId.OVERTAKE_PROTOCOL,
-            "Overtake Protocol",
-            RelicAspect.VECTOR,
-            "The weapon predicts hostile motion and punishes enemies that refuse to slow down.",
-            "+7% weapon damage per rank against enemies moving at 170 u/s or faster.",
-        ),
-        RelicDefinition(
-            RelicId.SLIPSTREAM_RELAY,
-            "Slipstream Relay",
-            RelicAspect.VECTOR,
-            "Kills made at high velocity feed a short activation surge into the next weapon cycle.",
-            "+6% activation speed per rank for 3 seconds after a kill above 500 u/s.",
-        ),
-        RelicDefinition(
-            RelicId.BRAKEPOINT_MEMORY,
-            "Brakepoint Memory",
-            RelicAspect.VECTOR,
-            "Gravity Brake stores arrested momentum; the next weapon contact releases it all at once.",
-            "Stores up to +18% next-hit damage per rank while braking.",
-        ),
-        RelicDefinition(
-            RelicId.POLARITY_SLING,
-            "Polarity Sling",
-            RelicAspect.VECTOR,
-            "A strained tether slings weapon force through the weakest point in the magnetic field.",
-            "Up to +8% weapon damage per rank as Polarity falls toward zero.",
-        ),
+private fun relic(
+    id: RelicId,
+    name: String,
+    aspect: RelicAspect,
+    keys: List<RelicKey>,
+    attuned: List<BuildTag>,
+    upside: String,
+    liability: String,
+    vararg values: RelicValue,
+    minimumRebirth: Int = 0,
+    meldable: Boolean = true,
+) = RelicDefinition(
+    id = id,
+    name = name,
+    aspect = aspect,
+    keys = keys.toImmutableList(),
+    attunedTags = attuned.toImmutableList(),
+    upside = upside,
+    liability = liability,
+    values = values.toList().toImmutableList(),
+    minimumRebirth = minimumRebirth,
+    meldable = meldable,
+)
 
-        RelicDefinition(
-            RelicId.ORBITAL_NAIL,
-            "Orbital Nail",
-            RelicAspect.GRAVITIC,
-            "Weapon contact nails a target to the Core's local gravity well.",
-            "Pulls the target 24 u/s toward the Core per rank on each qualified hit.",
-        ),
-        RelicDefinition(
-            RelicId.EVENTIDE_ANCHOR,
-            "Eventide Anchor",
-            RelicAspect.GRAVITIC,
-            "Destroyed enemies collapse into brief anchors that drag their formation inward.",
-            "+18 implosion damage and +18 radius per rank on kill.",
-        ),
-        RelicDefinition(
-            RelicId.PERIAPSIS_HOOK,
-            "Periapsis Hook",
-            RelicAspect.GRAVITIC,
-            "Distant targets fall harder through the weapon's curved approach.",
-            "+8% weapon damage per rank beyond 300 units from the Core.",
-        ),
-        RelicDefinition(
-            RelicId.CRUSH_DEPTH,
-            "Crush Depth",
-            RelicAspect.GRAVITIC,
-            "Targets deep inside the Core's pressure field are compressed before impact.",
-            "+6% weapon damage per rank within 155 units of the Core.",
-        ),
-        RelicDefinition(
-            RelicId.MASS_ECHO,
-            "Mass Echo",
-            RelicAspect.GRAVITIC,
-            "The weapon borrows the Core's mass and returns it as recoil through its victim.",
-            "+4% damage per Core mass and stronger knockback per rank.",
-        ),
-        RelicDefinition(
-            RelicId.TIDAL_LOCK,
-            "Tidal Lock",
-            RelicAspect.GRAVITIC,
-            "Repeated contacts align the weapon and target into an increasingly violent orbit.",
-            "+2% damage per rank and qualified hit, stacking five times per target.",
-        ),
-
-        RelicDefinition(
-            RelicId.VOLTAIC_FILAMENT,
-            "Voltaic Filament",
-            RelicAspect.ION,
-            "Weapon contact extrudes a live filament toward the nearest untouched enemy.",
-            "Arcs 16% of the triggering damage per rank, with a 0.28-second gate.",
-        ),
-        RelicDefinition(
-            RelicId.STATIC_CHORUS,
-            "Static Chorus",
-            RelicAspect.ION,
-            "A rhythm of weapon contacts resolves into a many-voiced discharge.",
-            "Every seventh qualified hit arcs to 1 additional target per rank.",
-        ),
-        RelicDefinition(
-            RelicId.ION_DEBT,
-            "Ion Debt",
-            RelicAspect.ION,
-            "Each contact leaves charge the target must eventually repay to everything nearby.",
-            "Five qualified hits discharge 14 area damage per rank.",
-        ),
-        RelicDefinition(
-            RelicId.CIRCUIT_BREAKER,
-            "Circuit Breaker",
-            RelicAspect.ION,
-            "The first weapon contact interrupts a target's movement circuit and cracks its guard.",
-            "+11 opening damage and 8% movement interruption per rank.",
-        ),
-        RelicDefinition(
-            RelicId.RETURN_CIRCUIT,
-            "Return Circuit",
-            RelicAspect.ION,
-            "When no nearby body can carry the current onward, it folds back through its first host.",
-            "+9% weapon damage per rank against isolated targets.",
-        ),
-        RelicDefinition(
-            RelicId.STORM_INDEX,
-            "Storm Index",
-            RelicAspect.ION,
-            "At Surge velocity, the weapon indexes every fourth contact as a free lightning route.",
-            "+10 arc damage and +45 acquisition range per rank.",
-        ),
-
-        RelicDefinition(
-            RelicId.ECHO_CHAMBER,
-            "Echo Chamber",
-            RelicAspect.RIFT,
-            "A portion of every strike is hidden outside time and returned after the target has moved.",
-            "Repeats 12% of qualified-hit damage per rank after 0.45 seconds.",
-        ),
-        RelicDefinition(
-            RelicId.PALIMPSEST_ROUND,
-            "Palimpsest Round",
-            RelicAspect.RIFT,
-            "The weapon periodically writes its previous impact over the present one.",
-            "Every seventh qualified hit repeats 20% of that damage per rank.",
-        ),
-        RelicDefinition(
-            RelicId.SECOND_HAND,
-            "Second Hand",
-            RelicAspect.RIFT,
-            "A kill steals a fraction of the next second and hands it to the weapon clock.",
-            "Removes 0.08 seconds per rank from both weapon cooldowns on kill.",
-        ),
-        RelicDefinition(
-            RelicId.FRACTURE_GATE,
-            "Fracture Gate",
-            RelicAspect.RIFT,
-            "A repeating contact folds its target through the Core and ruptures its exit point.",
-            "Every sixth qualified hit transposes the target and deals 12 rupture damage per rank.",
-        ),
-        RelicDefinition(
-            RelicId.SPLIT_HORIZON,
-            "Split Horizon",
-            RelicAspect.RIFT,
-            "A destroyed enemy leaves one half of its final strike hunting beyond the horizon.",
-            "Kills launch a seeking shard for 18 damage per rank.",
-        ),
-        RelicDefinition(
-            RelicId.BORROWED_MOMENT,
-            "Borrowed Moment",
-            RelicAspect.RIFT,
-            "Damage to the Core is answered with a brief interval stolen from the attacker.",
-            "+9% activation speed per rank for 2.5 seconds after taking damage.",
-        ),
-
-        RelicDefinition(
-            RelicId.GLASS_WITNESS,
-            "Glass Witness",
-            RelicAspect.PRISM,
-            "The first strike is remembered as a fault line that later hits can see and exploit.",
-            "Exposes fresh targets to +7% weapon damage per rank for 3 seconds.",
-        ),
-        RelicDefinition(
-            RelicId.FRACTURE_LENS,
-            "Fracture Lens",
-            RelicAspect.PRISM,
-            "Existing wounds bend probability until the weapon finds the most brittle outcome.",
-            "+2.5% critical chance per rank against injured targets.",
-        ),
-        RelicDefinition(
-            RelicId.SPECTRAL_FAN,
-            "Spectral Fan",
-            RelicAspect.PRISM,
-            "A regular cadence of impacts fans one strike into two pale refractions.",
-            "Every sixth qualified hit refracts 14% damage per rank into two nearby targets.",
-        ),
-        RelicDefinition(
-            RelicId.HARDLIGHT_EDGE,
-            "Hardlight Edge",
-            RelicAspect.PRISM,
-            "Critical strikes condense into an edge too coherent to disperse on contact.",
-            "+12% critical damage per rank.",
-        ),
-        RelicDefinition(
-            RelicId.CHROMA_FEEDBACK,
-            "Chroma Feedback",
-            RelicAspect.PRISM,
-            "The first color returned by each enemy is recycled into the Core's defenses.",
-            "First contact restores 1.5 Shield—or 2 Overdrive—per rank.",
-        ),
-        RelicDefinition(
-            RelicId.MIRROR_CUT,
-            "Mirror Cut",
-            RelicAspect.PRISM,
-            "A critical wound appears again in the nearest body as if both occupied one reflection.",
-            "Critical hits mirror 15% of their damage per rank to another target.",
-        ),
-
-        RelicDefinition(
-            RelicId.HEAT_DEBT,
-            "Heat Debt",
-            RelicAspect.ENTROPY,
-            "Weapon damage is not spent; it accumulates as an unstable debt inside the target.",
-            "Qualified hits build debt that ruptures for 16 area damage per rank.",
-        ),
-        RelicDefinition(
-            RelicId.SCAR_TISSUE,
-            "Scar Tissue",
-            RelicAspect.ENTROPY,
-            "Each strike teaches the target's structure how to keep damaging itself.",
-            "Applies 3 damage per second per rank for 3 seconds; repeated hits intensify it.",
-        ),
-        RelicDefinition(
-            RelicId.QUIETUS_BLOOM,
-            "Quietus Bloom",
-            RelicAspect.ENTROPY,
-            "A kill blossoms into a field that ages motion and matter around it.",
-            "+10 decay damage, +10% slow, and +16 radius per rank on kill.",
-        ),
-        RelicDefinition(
-            RelicId.DEVOURERS_TOLL,
-            "Devourer's Toll",
-            RelicAspect.ENTROPY,
-            "Every death pays a small portion of its remaining possibility back to the Core.",
-            "Every third kill restores 1.5 Integrity and Shield per rank.",
-        ),
-        RelicDefinition(
-            RelicId.DOOM_CLOCK,
-            "Doom Clock",
-            RelicAspect.ENTROPY,
-            "Elite systems and the Architect are forced to acknowledge how little time they have left.",
-            "+8% damage per rank to Elites and the Architect, rising with run time.",
-        ),
-        RelicDefinition(
-            RelicId.LAST_LIGHT,
-            "Last Light",
-            RelicAspect.ENTROPY,
-            "Near fracture, the Core burns its final safe future to make the current one lethal.",
-            "+12% weapon damage and +8% activation speed per rank below 35% Integrity.",
-        ),
-
-        RelicDefinition(
-            RelicId.AGONY_SCEPTER,
-            "Agony Scepter",
-            RelicAspect.SOVEREIGN,
-            "The Scepter discovers a forbidden extension unique to whichever weapon is synchronized.",
-            "Strengthens the weapon-specific mutation per rank; all twelve weapons mutate differently.",
-        ),
-        RelicDefinition(
-            RelicId.CROWN_OF_FOUR_WINDS,
-            "Crown of Four Winds",
-            RelicAspect.SOVEREIGN,
-            "The Crown rewards a matrix whose four slots disagree without falling out of resonance.",
-            "+4% damage and +3% activation speed per rank for each distinct non-Sovereign aspect.",
-        ),
-        RelicDefinition(
-            RelicId.MIRROR_OF_THE_HUNT,
-            "Mirror of the Hunt",
-            RelicAspect.SOVEREIGN,
-            "The first wound in every enemy is reflected into a second enemy across the Core.",
-            "The reflected opening strike carries 20% of its damage per rank.",
-        ),
-        RelicDefinition(
-            RelicId.ENGINE_OF_PARADOX,
-            "Engine of Paradox",
-            RelicAspect.SOVEREIGN,
-            "Entering Overdrive rewinds the weapon and vents heat from a future that never happened.",
-            "On Overdrive: reset cooldowns, vent 10 Heat, and gain 10% activation speed per rank.",
-        ),
-    ).toImmutableList().also(::validateRelics)
+internal fun defaultRelics(): ImmutableList<RelicDefinition> = listOf(
+    relic(
+        RelicId.PERPETUAL_VECTOR, "Perpetual Vector", RelicAspect.KINETIC,
+        listOf(RelicKey.MOTION), listOf(BuildTag.DRIVE, BuildTag.RAM),
+        "Drag falls by 85 %. Every 400 u/s above 600, up to 2,200, adds {0} % damage.",
+        "Brake grips half as hard, and impacts below 600 u/s deal 30 % less.",
+        RelicValue(12f, 3f),
+    ),
+    relic(
+        RelicId.BLINK_DRIVE, "Blink Drive", RelicAspect.KINETIC,
+        listOf(RelicKey.MOTION, RelicKey.CRITICAL), listOf(BuildTag.DRIVE, BuildTag.PRECISION),
+        "Dash becomes a Blink: you jump up to {1} u along your aim, stopping short of the singularity, " +
+            "and strike every enemy on the line for {0} % impact damage. Blinks cost 35 % less heat.",
+        "After a Blink you keep only 35 % of your speed.",
+        RelicValue(110f, 30f), RelicValue(260f),
+    ),
+    relic(
+        RelicId.GYRE_ENGINE, "Gyre Engine", RelicAspect.KINETIC,
+        listOf(RelicKey.MOTION), listOf(BuildTag.DRIVE, BuildTag.CHAIN),
+        "Every real turn releases a shock ring for {0} % impact damage and 2 stacks of your dominant element.",
+        "Polarity no longer recovers on its own or while braking; only turns restore it, and less than before.",
+        RelicValue(55f, 20f),
+    ),
+    relic(
+        RelicId.GLASS_COMET, "Glass Comet", RelicAspect.KINETIC,
+        listOf(RelicKey.FRAGILE, RelicKey.CRITICAL), listOf(BuildTag.PRECISION, BuildTag.RAM),
+        "All your damage +{0} %. Impact kills above 900 u/s grant a quarter second of invulnerability, " +
+            "at most once every 1.5 seconds.",
+        "You take double damage, and shields and damage reduction no longer protect you.",
+        RelicValue(100f, 25f),
+    ),
+    relic(
+        RelicId.EXECUTIONERS_PRISM, "Executioner's Prism", RelicAspect.KINETIC,
+        listOf(RelicKey.CRITICAL), listOf(BuildTag.PRECISION),
+        "Critical hits are no longer random. Every 1 % critical chance, up to 50 %, becomes {0} % critical " +
+            "damage. Hits that can crit always crit against enemies below 35 % integrity, Frozen or Brittle enemies and " +
+            "enemies whose status is three quarters of the way to its Break.",
+        "Hits that do not crit deal 20 % less.",
+        RelicValue(3f, 0.5f),
+    ),
+    relic(
+        RelicId.ECHO_CHAMBER, "Echo Chamber", RelicAspect.KINETIC,
+        listOf(RelicKey.ECHO), listOf(BuildTag.ARSENAL),
+        "Weapon hits echo 0.35 seconds later for {0} % damage and apply their on-hit effects again.",
+        "Impact damage −50 %.",
+        RelicValue(50f, 10f),
+    ),
+    relic(
+        RelicId.FURNACE_COVENANT, "Furnace Covenant", RelicAspect.THERMAL,
+        listOf(RelicKey.HEAT), listOf(BuildTag.OVERCLOCK),
+        "Overheat never locks your Dash. Every 10 heat above 40 adds {0} % damage, and above 70 heat your " +
+            "hits apply Thermal.",
+        "Cooling −55 %. Above 80 heat you lose 3 integrity per second, and heat past full burns integrity instead.",
+        RelicValue(8f, 2f),
+    ),
+    relic(
+        RelicId.CINDER_CROWN, "Cinder Crown", RelicAspect.THERMAL,
+        listOf(RelicKey.HEAT, RelicKey.SPREAD), listOf(BuildTag.OVERCLOCK, BuildTag.CHAIN),
+        "Thermal stacks no longer burn over time. They bank {0} % of their damage and Ignite at 5 stacks, " +
+            "releasing the bank and spreading 2 Thermal.",
+        "Thermal fades twice as fast, and Ignites near you burn 4 % of your integrity.",
+        RelicValue(160f, 30f),
+    ),
+    relic(
+        RelicId.OVERDRIVE_CASCADE, "Overdrive Cascade", RelicAspect.THERMAL,
+        listOf(RelicKey.HEAT), listOf(BuildTag.OVERCLOCK, BuildTag.ARSENAL),
+        "Overdrive gain +{0} %. Each kill during Overdrive extends it, up to 2.5 extra seconds.",
+        "Outside Overdrive all your damage −30 %.",
+        RelicValue(60f, 20f),
+    ),
+    relic(
+        RelicId.ABSOLUTE_ZERO, "Absolute Zero", RelicAspect.CRYO,
+        listOf(RelicKey.COLD, RelicKey.CRITICAL), listOf(BuildTag.RAM, BuildTag.PRECISION),
+        "Impacts apply {0} Cryo and Dash chills everything around you. Frozen enemies shatter on the next " +
+            "direct hit for {1} % damage, chilling their neighbors.",
+        "Half of the Thermal you apply turns to Cryo and the rest is lost. Overdrive gain −40 %.",
+        RelicValue(3f), RelicValue(250f, 50f),
+    ),
+    relic(
+        RelicId.STASIS_ANCHOR, "Stasis Anchor", RelicAspect.CRYO,
+        listOf(RelicKey.STILLNESS, RelicKey.COLD), listOf(BuildTag.ANCHOR, BuildTag.ARSENAL),
+        "While braking, enemies near you are slowed by {0} % and hostile bullets near you are caught, up to " +
+            "24. Release Brake to fire them as your own. Stasis holds for 3 seconds and refills when you let go.",
+        "Weapon activation −30 % while you are not braking.",
+        RelicValue(45f, 10f),
+    ),
+    relic(
+        RelicId.STORMHEART_CAPACITOR, "Stormheart Capacitor", RelicAspect.ION,
+        listOf(RelicKey.CHARGE, RelicKey.MOTION), listOf(BuildTag.DRIVE, BuildTag.RAM),
+        "Above 700 u/s the Core charges in 4 seconds. The next impact discharges into five enemies for " +
+            "{0} % impact damage and 3 Ion each.",
+        "Taking a hit while half charged or more discharges into you for 10 % of your integrity.",
+        RelicValue(200f, 40f),
+    ),
+    relic(
+        RelicId.AEGIS_INVERSION, "Aegis Inversion", RelicAspect.ION,
+        listOf(RelicKey.CHARGE, RelicKey.LIFE), listOf(BuildTag.BULWARK),
+        "All healing becomes shield, and shield capacity grows by 60 % of your maximum integrity. A breaking " +
+            "shield releases a nova worth {0} % of the damage it absorbed.",
+        "Integrity can never be restored, and shields no longer recharge on their own.",
+        RelicValue(150f, 50f),
+    ),
+    relic(
+        RelicId.NEUTRON_HEART, "Neutron Heart", RelicAspect.GRAVITIC,
+        listOf(RelicKey.GRAVITY, RelicKey.STILLNESS), listOf(BuildTag.RAM, BuildTag.ANCHOR),
+        "Mass +{0} %, and enemies barely move you. Slow collisions hurt you only half as much.",
+        "Dash impulse −35 % and magnetism −20 %.",
+        RelicValue(80f, 30f),
+    ),
+    relic(
+        RelicId.EVENT_HORIZON, "Event Horizon", RelicAspect.GRAVITIC,
+        listOf(RelicKey.GRAVITY), listOf(BuildTag.ANCHOR, BuildTag.RAM),
+        "Enemies within 280 u are dragged toward you. Impacts against enemies carrying Gravitic deal {0} % more, and " +
+            "your Collapses implode toward you.",
+        "Contact damage taken ×1.5. Data no longer latches onto you, and level-ups no longer pull it in.",
+        RelicValue(40f, 20f),
+    ),
+    relic(
+        RelicId.VERDANT_ROT, "Verdant Rot", RelicAspect.ENTROPY,
+        listOf(RelicKey.DECAY, RelicKey.LIFE), listOf(BuildTag.BULWARK),
+        "Impacts apply 2 Entropy. Every Entropy stack within 320 u heals you {0} per second, up to 3.5.",
+        "All other healing is disabled, and every Entropy stack close to you makes you take 1.5 % more damage.",
+        RelicValue(0.25f, 0.05f),
+    ),
+    relic(
+        RelicId.PANDEMIC_CODEX, "Pandemic Codex", RelicAspect.ENTROPY,
+        listOf(RelicKey.DECAY, RelicKey.SPREAD), listOf(BuildTag.CHAIN),
+        "Statuses are contagious: when an enemy dies, {0} % of each of its statuses jumps to its two nearest " +
+            "neighbors.",
+        "Enemies carrying a status move 20 % faster.",
+        RelicValue(60f, 10f),
+    ),
+    relic(
+        RelicId.AGONY_SCEPTER, "Agony Scepter", RelicAspect.SOVEREIGN,
+        listOf(RelicKey.ECHO), listOf(BuildTag.ARSENAL),
+        "Your weapon takes its Forbidden form. Every rank deepens the mutation.",
+        "Weapon activations add heat: 6 per shot, or 5 per second for continuous weapons.",
+        minimumRebirth = 1,
+    ),
+    relic(
+        RelicId.HOLLOW_CROWN, "Hollow Crown", RelicAspect.SOVEREIGN,
+        listOf(RelicKey.VOID), listOf(BuildTag.FORTUNE),
+        "Each empty Relic slot grants {0} % damage and 8 % activation speed.",
+        "It never ranks up, every other bound Relic is 25 % weaker, and each empty slot makes you take 10 % " +
+            "more damage.",
+        RelicValue(35f),
+        minimumRebirth = 3,
+        meldable = false,
+    ),
+    relic(
+        RelicId.OUROBOROS_SEAL, "Ouroboros Seal", RelicAspect.SOVEREIGN,
+        listOf(RelicKey.LIFE, RelicKey.VOID), listOf(BuildTag.BULWARK, BuildTag.FORTUNE),
+        "Once per run, lethal damage instead restores your integrity, releases a nova for {0} damage and " +
+            "grants two seconds of invulnerability. Then the seal is spent but keeps its slot.",
+        "Data gain −25 % while the seal is bound. The singularity still kills, and a spent seal locks its " +
+            "slot for two minutes.",
+        RelicValue(120f, 60f),
+        minimumRebirth = 5,
+    ),
+    relic(
+        RelicId.THUNDER_CHOIR, "Thunder Choir", RelicAspect.SONIC,
+        listOf(RelicKey.ECHO, RelicKey.SHIELD), listOf(BuildTag.RAM, BuildTag.ANCHOR),
+        "Shatter also chains to the {0} nearest Resonant enemies within 260 for {1} % of its damage; your knockback +20 %.",
+        "You take +15 % knockback from hits.",
+        RelicValue(2f, 1f), RelicValue(60f, 20f),
+    ),
+    relic(
+        RelicId.NULL_COVENANT, "Null Covenant", RelicAspect.VOID,
+        listOf(RelicKey.VOID, RelicKey.SHIELD), listOf(BuildTag.PRECISION, BuildTag.CHAIN),
+        "Unmake fires immediately and remembers {0} % more; Hollow stacks never decay on Elites.",
+        "Maximum integrity −10 %.",
+        RelicValue(40f, 20f),
+    ),
+).toImmutableList().also(::validateRelics)
 
 private fun validateRelics(relics: List<RelicDefinition>) {
-    check(RelicId.entries.size == ContentBounds.MAX_RELICS) { "RelicId must contain exactly 40 relics" }
-    check(relics.size == ContentBounds.MAX_RELICS) { "Relic catalog must contain exactly 40 relics" }
+    check(relics.size <= ContentBounds.MAX_RELICS) { "Relic catalog exceeds ${ContentBounds.MAX_RELICS} relics" }
+    check(relics.size == RelicId.entries.size) { "Relic catalog must define every RelicId" }
     check(relics.withIndex().all { (index, relic) -> relic.id.ordinal == index }) {
         "Relic catalog order must match RelicId order"
     }
     check(relics.map { it.name }.toSet().size == relics.size) { "Relic names must be unique" }
-    check(relics.map { it.description }.toSet().size == relics.size) { "Relic descriptions must be unique" }
-    check(relics.map { it.rankEffect }.toSet().size == relics.size) { "Relic rank effects must be unique" }
-    val standardCounts = relics.filterNot(RelicDefinition::isSovereign).groupingBy(RelicDefinition::aspect).eachCount()
-    RelicAspect.entries.filter { it != RelicAspect.SOVEREIGN }.forEach { aspect ->
-        check(standardCounts[aspect] == 6) { "$aspect must contain exactly six relics" }
+    check(relics.map { it.upside }.toSet().size == relics.size) { "Relic upsides must be unique" }
+    check(relics.all { relic ->
+        val placeholders = Placeholder.findAll(relic.upside).map { it.groupValues[1].toInt() }.toSet()
+        placeholders == relic.values.indices.toSet()
+    }) { "Every Relic value is referenced exactly by its upside text" }
+    check(relics.count(RelicDefinition::isSovereign) in 1..4) { "Sovereign relics stay rare" }
+    check(relics.filter(RelicDefinition::isSovereign).all { it.minimumRebirth > 0 }) {
+        "Sovereign relics are unlocked by Rebirth"
     }
-    check(relics.count(RelicDefinition::isSovereign) == 4) { "Relic catalog must contain exactly four Sovereign relics" }
 }
+
+/** Every named pairing must agree with the public keys so players can predict it. */
+internal fun validatePairings(relics: List<RelicDefinition>, build: BuildCatalog) {
+    val byId = relics.associateBy { it.id }
+    build.pairings.forEach { pairing ->
+        val first = requireNotNull(byId[pairing.first]) { "${pairing.id} joins a Relic missing from the catalog" }
+        val second = requireNotNull(byId[pairing.second]) { "${pairing.id} joins a Relic missing from the catalog" }
+        when (pairing.kind) {
+            RelicPairingKind.CONCORD -> require(first.harmonizes(second)) {
+                "${pairing.id} must join Relics that share a key and have no opposed keys"
+            }
+            RelicPairingKind.DISCORD -> require(first.dissonates(second)) {
+                "${pairing.id} must join opposed keys"
+            }
+        }
+    }
+}
+
+private val Placeholder = Regex("\\{([0-9]+)\\}")

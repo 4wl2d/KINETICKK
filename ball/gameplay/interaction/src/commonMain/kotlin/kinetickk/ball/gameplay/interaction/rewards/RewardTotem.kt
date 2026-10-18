@@ -3,8 +3,6 @@
 
 package kinetickk.ball.gameplay.interaction.rewards
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -368,9 +366,7 @@ private fun TotemRow(
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
     val focused by source.collectIsFocusedAsState()
-    val highlighted = enabled && (hovered || focused)
-    LaunchedEffect(highlighted) { if (highlighted) onPreview() }
-    val on by animateFloatAsState(if (selected) 1f else 0f, tween(200, easing = KkEase.Pull), label = "totemRow")
+    val on = if (selected) 1f else 0f
     val fg = if (selected) Kk.Ink else Kk.Bone
     val paths = remember { KkPathCache(2) }
     Box(
@@ -379,7 +375,8 @@ private fun TotemRow(
             .height(frame.dp(heightBoard))
             .graphicsLayer { translationX = -10f * density * on }
             .testTag("kinetickk.gameplay.choice.${index + 1}")
-            .semantics { stateDescription = listOfNotNull(row.kind, row.meta, row.level?.let { language.text(OverlayRedesignText.LevelLabel) + " " + it }, row.mastery).joinToString(", ") }
+            .rewardPreviewInput(enabled, onPreview)
+            .semantics { stateDescription = listOfNotNull(row.kind, row.badge, row.meta, row.level?.let { language.text(OverlayRedesignText.LevelLabel) + " " + it }, row.mastery).joinToString(", ") }
             .clickable(
                 interactionSource = source, indication = null, enabled = enabled, role = Role.Button,
                 onClickLabel = language.text(GameplayText.SelectChoice, index + 1, row.name), onClick = onSelect,
@@ -420,7 +417,17 @@ private fun TotemRow(
                         },
                         textScale = frame.textScale,
                     )
-                    row.meta?.let { OverlayFitText(it, typography.monoStyle(frame.sp(11f, 9f), color = fg.copy(alpha = 0.7f)), uppercase = true, maxLines = 1) }
+                    // The run character's signature weapon carries its mark beside the kind.
+                    row.badge?.let { badge ->
+                        OverlayTag(badge, variant = KkTagVariant.LINE, foreground = if (selected) Kk.Ink else roles.you, textScale = frame.textScale,
+                            modifier = Modifier.testTag("kinetickk.gameplay.choice.${index + 1}.signature"))
+                    }
+                    // The meta (equipped, the weapon's family and tags) takes what the kind and badge leave, never below
+                    // 70 % of its size; where that cannot hold it, it stays in the row's state description only.
+                    row.meta?.let {
+                        OverlayFitTextOrNothing(it, typography.monoStyle(frame.sp(11f, 9f), color = fg.copy(alpha = 0.7f)),
+                            Modifier.weight(1f, fill = false).testTag("kinetickk.gameplay.choice.${index + 1}.meta"), uppercase = true)
+                    }
                 }
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
                     // The offering name is large display type (44 px on the board): the text-size

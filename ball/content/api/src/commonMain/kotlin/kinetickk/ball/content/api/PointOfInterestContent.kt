@@ -10,9 +10,10 @@ enum class PointOfInterestKind { RESONANT_CIRCUIT, SEALED_ANOMALY, COLLAPSING_OR
 enum class DirectedReward { WEAPON, RELIC, ITEM_AND_REPAIR }
 enum class RewardFocus(val label: String) {
     MOTION("Motion"), CONTROL("Control"), STRIKE("Strike"),
-    VECTOR("Vector"), GRAVITIC("Gravitic"), ION("Ion"),
-    RIFT("Rift"), PRISM("Prism"), ENTROPY("Entropy"),
+    KINETIC("Kinetic"), THERMAL("Thermal"), CRYO("Cryo"),
+    ION("Ion"), GRAVITIC("Gravitic"), ENTROPY("Entropy"),
     OFFENSE("Offense"), DEFENSE("Defense"), ECONOMY("Economy"),
+    SONIC("Sonic"), VOID("Void"),
 }
 
 data class PointOfInterestDefinition(

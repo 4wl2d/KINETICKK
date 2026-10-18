@@ -6,7 +6,6 @@ package kinetickk.ball.profile.interaction
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -14,7 +13,6 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
@@ -35,7 +33,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
@@ -56,7 +57,11 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
@@ -404,17 +409,19 @@ internal fun ProfileSlabButton(
     textScale: Float = 1f,
     contentDescription: String = if (cost == null) label else "$label $cost",
     stateDescription: String? = null,
+    /** A press on an enabled but [locked] button (one that explains why it is locked); null keeps it inert. */
+    onLockedClick: (() -> Unit)? = null,
 ) {
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
-    val focused by source.collectIsFocusedAsState()
+    var focusedValue by remember { mutableStateOf(false) }
     val pressed by source.collectIsPressedAsState()
+    // A click keeps keyboard routing without pinning the pointer highlight after it leaves.
+    var pointerFocusValue by remember { mutableStateOf(false) }
+    val keyboardFocused = focusedValue && !pointerFocusValue
     val interactive = enabled && !locked
-    val emphasis by animateFloatAsState(
-        if ((hovered || focused) && interactive) 1f else 0f,
-        tween(200, easing = KkEase.Pull),
-        label = "profileButtonEmphasis",
-    )
+    val clickableEnabled = interactive || (locked && enabled && onLockedClick != null)
+    val emphasis = if ((hovered || keyboardFocused) && interactive) 1f else 0f
     val time = if (armed && interactive) profileLoopTime(0.9f) else 0f
     val measurer = rememberKkCanvasMeasurer(textScale)
     val panelFocus = LocalProfilePanelFocus.current
@@ -426,15 +433,33 @@ internal fun ProfileSlabButton(
                 this.contentDescription = contentDescription
                 if (stateDescription != null) this.stateDescription = stateDescription
             }
-            .clickable(interactionSource = source, indication = null, enabled = interactive, role = Role.Button) {
-                panelFocus?.requestFocus()
-                onClick()
+            .onFocusChanged {
+                focusedValue = it.isFocused
+                if (!it.isFocused) pointerFocusValue = false
             }
-            .then(if (locked && enabled) Modifier.focusable(interactionSource = source) else Modifier)
+            .onPreviewKeyEvent { pointerFocusValue = false; false }
+            .pointerInput(clickableEnabled) {
+                if (!clickableEnabled) return@pointerInput
+                awaitPointerEventScope {
+                    while (true) {
+                        if (awaitPointerEvent(PointerEventPass.Initial).type == PointerEventType.Press) {
+                            pointerFocusValue = true
+                            awaitPointerEvent(PointerEventPass.Final)
+                            if (!focusedValue) pointerFocusValue = false
+                        }
+                    }
+                }
+            }
+            .clickable(interactionSource = source, indication = null, enabled = clickableEnabled,
+                role = Role.Button) {
+                panelFocus?.requestFocus()
+                if (interactive) onClick() else onLockedClick?.invoke()
+            }
+            .then(if (locked && enabled && onLockedClick == null) Modifier.focusable(interactionSource = source) else Modifier)
             .drawBehind {
                 scale(k, k, Offset.Zero) {
                     val bounds = Rect(0f, 0f, this.size.width / k, this.size.height / k)
-                    drawKkButton(measurer, bounds, "", variant, size, emphasis, focused && enabled, pressed && interactive,
+                    drawKkButton(measurer, bounds, "", variant, size, emphasis, keyboardFocused && enabled, pressed && interactive,
                         enabled, locked, armed, icon = null, time = time)
                     val shiftX = d(5f) * (if (interactive && !pressed) emphasis.coerceIn(0f, 1.2f) else 0f) +
                         if (pressed && interactive) d(3f) else 0f
@@ -606,19 +631,25 @@ private fun fitKkTextAt(
     var factor = 1f
     while (true) {
         val layout = measureKkText(measurer, text, style(size * factor), uppercase, maxWidth.coerceAtLeast(1f), maxLines)
+        val cut = layout.isCut()
         val broken = layout.breaksWord()
         when {
-            !layout.hasVisualOverflow && !broken -> return layout
+            !cut && !broken -> return layout
             // A word never splits across lines: keep shrinking past [minFactor] for that.
             broken && factor > PROFILE_WORD_FLOOR -> factor = max(PROFILE_WORD_FLOOR, factor - 0.06f)
-            layout.hasVisualOverflow && factor > minFactor -> factor = max(minFactor, factor - 0.08f)
+            cut && factor > minFactor -> factor = max(minFactor, factor - 0.08f)
             else -> return layout
         }
     }
 }
 
 /** True when the whole text is shown: nothing clipped or ellipsized and no word split across lines. */
-internal fun TextLayoutResult.fitsWhole(): Boolean = !hasVisualOverflow && !breaksWord()
+internal fun TextLayoutResult.fitsWhole(): Boolean = !isCut() && !breaksWord()
+
+// Skia can ellipsize a single line without reporting visual overflow or isLineEllipsized.
+// Match its natural width against the actual integer-pixel box, allowing subpixel rounding.
+private fun TextLayoutResult.isCut(): Boolean =
+    hasVisualOverflow || (lineCount == 1 && multiParagraph.intrinsics.maxIntrinsicWidth > size.width + 0.5f)
 
 /**
  * Line height for text that may wrap: the boards' tight 0.86–0.9 line boxes let Cyrillic

@@ -3,6 +3,7 @@
 
 package kinetickk.flow.session.interaction.codex.impl
 
+import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.*
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.profile.api.*
@@ -15,10 +16,20 @@ import kinetickk.flow.session.interaction.localization.SessionText
 import kotlin.test.*
 
 class CodexReducerTest {
-    @Test fun collectionDoesNotExposeUnfoundItemsThroughSearchOrDetails() {
+    @Test fun collectionShowsUnfoundItemsOnlyAsAnonymousCells() {
         val catalog = codexTestCatalog()
         val empty = CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items)
-        assertTrue(codexCatalogEntries(0, "", CodexItemFilter.ALL, empty, catalog, codexTestProgress()).isEmpty())
+        // Every unfound item keeps its slot, as a cell without its name, glyph or description.
+        val cells = codexCatalogEntries(0, "", CodexItemFilter.ALL, empty, catalog, codexTestProgress())
+        assertEquals(catalog.items.size, cells.size)
+        cells.forEach { cell ->
+            assertIs<CodexIcon.Unknown>(cell.icon)
+            assertEquals(AppLanguage.English.text(SessionText.UNKNOWN_DISCOVERY), cell.title)
+            assertEquals("", cell.description)
+            assertFalse("Item" in cell.summary, cell.summary)
+        }
+        // A search never reveals them.
+        assertTrue(codexCatalogEntries(0, catalog.items.first().name, CodexItemFilter.ALL, empty, catalog, codexTestProgress()).isEmpty())
         assertTrue(codexFilteredItems(empty, catalog.items.first().name, CodexItemFilter.ALL).isEmpty())
         val hidden = codexItemEntry(catalog.items.first(), empty, 0L)
         assertIs<CodexIcon.Unknown>(hidden.icon)
@@ -34,11 +45,20 @@ class CodexReducerTest {
         val catalog = codexTestCatalog()
         val shape = catalog.coreShape(CoreShape.PRISM).copy(mechanicDescription = "Hidden power",
             unlockDescription = "Defeat three elites", unlockTarget = 3, unlockRequirement = CharacterUnlockRequirement.ELITE_KILLS)
-        val progress = codexTestProgress().copy(characterAchievements = CharacterAchievementProgress(eliteKills = 2))
+        val progress = codexTestProgress().copy(
+            characterAchievements = CharacterAchievementProgress(eliteKills = 2),
+            characterProgress = kinetickk.foundation.collections.immutableListOf(
+                kinetickk.ball.profile.api.HangarShapeProgress(CoreShape.PRISM, unlocked = false, progress = 2L, target = 3L),
+            ),
+        )
         val entry = codexShapeEntry(shape, model(), progress)
         assertEquals("Unknown core", entry.title)
         assertEquals("Defeat three elites", entry.description)
         assertEquals(CodexFact("Progress", "2/3"), entry.facts.single { it.label == "Progress" })
+        // Forms entries show the character's mechanic, its trigger and difficulty.
+        assertEquals(CodexFact("Mechanic", "Facets"), entry.facts.single { it.label == "Mechanic" })
+        assertEquals(CodexFact("Trigger", "Kills"), entry.facts.single { it.label == "Trigger" })
+        assertEquals(CodexFact("Difficulty", "1/3"), entry.facts.single { it.label == "Difficulty" })
         assertEquals("Locked", entry.status)
         assertFalse(entry.discovered)
         assertTrue(codexCatalogEntries(3, shape.displayName, CodexItemFilter.ALL, model(), catalog, progress).isEmpty())
@@ -75,19 +95,24 @@ class CodexReducerTest {
         }
     }
 
-    @Test fun relicsAndSynergyRecipesAppearOnlyAfterTheirComponentsAreFound() {
+    @Test fun relicsAndPairingsAppearOnlyAfterTheirRelicsAreFound() {
         val catalog = codexTestCatalog()
         val empty = CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items)
-        assertTrue(codexCatalogEntries(2, "", CodexItemFilter.ALL, empty, catalog, codexTestProgress()).isEmpty())
-        assertFalse(codexSynergyDiscovered(catalog.synergies.first(), empty, catalog))
-        val found = empty.copy(discoveredRelicIds = immutableSetOf(RelicId.KINETIC_FLYWHEEL, RelicId.GHOST_VECTOR))
-        assertEquals(2, codexCatalogEntries(2, "", CodexItemFilter.ALL, found, catalog, codexTestProgress()).size)
-        assertTrue(codexSynergyDiscovered(catalog.synergies.first(), found, catalog))
+        // Only the Rebirth-gated relics show, as locked cells without identity.
+        assertTrue(codexCatalogEntries(2, "", CodexItemFilter.ALL, empty, catalog, codexTestProgress()).all { !it.discovered && it.icon is CodexIcon.Locked })
+        assertTrue(codexPairingEntries(empty, catalog).isEmpty())
+        val found = empty.copy(discoveredRelicIds = immutableSetOf(RelicId.PERPETUAL_VECTOR, RelicId.GYRE_ENGINE))
+        assertEquals(listOf(RelicId.PERPETUAL_VECTOR, RelicId.GYRE_ENGINE).map { "relic/$it" },
+            codexCatalogEntries(2, "", CodexItemFilter.ALL, found, catalog, codexTestProgress()).filter { it.discovered }.map { it.key })
+        assertEquals(listOf(codexPairingKey(RelicId.PERPETUAL_VECTOR, RelicId.GYRE_ENGINE)), codexPairingEntries(found, catalog).map { it.key })
     }
 
-    @Test fun catalogAcceptsFourHundredAndRejectsFourHundredOne() {
-        assertEquals(400, model().items.size)
-        assertFailsWith<IllegalArgumentException> { CodexReducer(testItems(401)) }
+    /** The Codex accepts the content bound ([CODEX_CATALOG_LIMIT]) and rejects one more item. */
+    @Test fun catalogAcceptsTheContentBoundAndRejectsOneMore() {
+        assertEquals(ContentBounds.MAX_ITEMS, CODEX_CATALOG_LIMIT)
+        assertEquals(CODEX_CATALOG_LIMIT, CodexReducer(testItems(CODEX_CATALOG_LIMIT)).renderModel(
+            CollectionProjection(LOCAL_PROFILE_INSTANCE_ID, ProfileRevision.ZERO, PlayerCollection()), CodexRunStacks()).items.size)
+        assertFailsWith<IllegalArgumentException> { CodexReducer(testItems(CODEX_CATALOG_LIMIT + 1)) }
     }
 
     @Test fun searchAccepts128AndClamps129() {
@@ -100,13 +125,13 @@ class CodexReducerTest {
         val model = model()
         assertTrue(model.isDiscovered(2))
         assertEquals(4, model.itemStack(2))
-        assertEquals(0, model.itemStack(399))
+        assertEquals(0, model.itemStack(79))
     }
 
     @Test fun searchAndFiltersPreserveCatalogOrderAndUseProfileDiscovery() {
         val model = model()
         assertEquals(listOf(2), codexFilteredItems(model, "iTeM 2", CodexItemFilter.ALL).map { it.id })
-        assertEquals(listOf(2, 399), codexFilteredItems(model, "", CodexItemFilter.DISCOVERED).map { it.id })
+        assertEquals(listOf(2, 79), codexFilteredItems(model, "", CodexItemFilter.DISCOVERED).map { it.id })
         assertEquals(listOf(2), codexFilteredItems(model, "", CodexItemFilter.IN_BUILD).map { it.id })
         assertTrue(codexFilteredItems(model.copy(runStacks = CodexRunStacks()), "", CodexItemFilter.IN_BUILD).isEmpty())
     }
@@ -147,26 +172,71 @@ class CodexReducerTest {
     }
 
     @Test fun noRunEmptyInventoryAndEmptySearchAreDistinct() {
-        assertEquals(CodexEmptyState.NO_RUN, codexEmptyState(0, false, "", 0))
-        assertEquals(CodexEmptyState.EMPTY_INVENTORY, codexEmptyState(0, true, "", 0))
-        assertEquals(CodexEmptyState.EMPTY_SEARCH, codexEmptyState(1, false, "unknown", 0))
-        assertEquals(CodexEmptyState.NONE, codexEmptyState(1, false, "", 400))
+        assertEquals(CodexEmptyState.NO_RUN, codexEmptyState(CodexTab.BUILD, false, "", 0))
+        assertEquals(CodexEmptyState.EMPTY_INVENTORY, codexEmptyState(CodexTab.BUILD, true, "", 0))
+        assertEquals(CodexEmptyState.EMPTY_SEARCH, codexEmptyState(CodexTab.CATALOG, false, "unknown", 0))
+        assertEquals(CodexEmptyState.NONE, codexEmptyState(CodexTab.CATALOG, false, "", 80))
+        assertEquals(CodexEmptyState.NO_PAIRINGS, codexEmptyState(CodexTab.PAIRINGS, false, "", 0))
     }
 
-    @Test fun aspectSynergiesShowTwoDistinctComponentsAndMissingPlaces() {
+    @Test fun reactionMatrixHoldsTheSevenBreaksOnItsDiagonalAndEveryReactionOnce() {
+        val cells = CodexMatrix.flatten()
+        assertEquals(28, cells.size)
+        assertEquals(StatusElement.entries.size, CodexMatrix.size, "a 7 x 7 lower triangle")
+        assertEquals(StatusElement.entries, cells.filter { it.isBreak }.map { it.row })
+        assertEquals(ReactionId.entries.toSet(), cells.mapNotNull { it.reaction }.toSet())
+        assertEquals(ReactionId.entries.size, cells.mapNotNull { it.reaction }.size)
+        // The lower triangle: no cell sits right of the diagonal.
+        assertTrue(cells.all { it.column.ordinal <= it.row.ordinal })
         val catalog = codexTestCatalog()
-        val aspect = catalog.synergies.first()
-        assertEquals(listOf(null, null), codexSynergyComponents(aspect, catalog, emptySet()))
-        assertEquals(listOf(RelicId.KINETIC_FLYWHEEL, null), codexSynergyComponents(aspect, catalog, setOf(RelicId.KINETIC_FLYWHEEL)))
-        assertEquals(listOf(RelicId.KINETIC_FLYWHEEL, RelicId.GHOST_VECTOR), codexSynergyComponents(aspect, catalog, setOf(RelicId.GHOST_VECTOR, RelicId.KINETIC_FLYWHEEL)))
-        val specific = catalog.synergies.first { it.requiredAspect == null }
-        assertEquals(specific.requiredRelics, codexSynergyComponents(specific, catalog, emptySet()))
+        val entries = codexReactionEntries(CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items), catalog)
+        assertEquals(cells.map { it.key }, entries.map { it.key })
+    }
+
+    @Test fun reactionMatrixFitsOneColumnPerElementAcrossPhoneAndDesktopWidths() {
+        assertEquals(StatusElement.entries.size, CODEX_MATRIX_COLUMNS)
+        val narrowest = codexMatrixWidth(CODEX_MATRIX_MIN_CELL).value
+        for (width in listOf(320, 360, 412, 600, 900, 1280)) {
+            for (height in listOf(480, 720, 1080)) {
+                val cell = codexMatrixCell(width.dp, height.dp)
+                assertTrue(cell.value >= 44f, "every cell stays tappable at $width dp (cell ${cell.value} dp)")
+                if (width >= narrowest) {
+                    assertTrue(codexMatrixWidth(cell).value <= width + 0.01f, "the matrix fits $width dp (cell ${cell.value} dp)")
+                } else {
+                    assertEquals(44f, cell.value, "below $narrowest dp the minimum cells scroll sideways")
+                }
+            }
+        }
+        // A wide, tall window still caps the cells.
+        assertEquals(132f, codexMatrixCell(4_000.dp, 4_000.dp).value)
+    }
+
+    @Test fun aResidueFeedsEveryReactionThatTakesItsElement() {
+        assertEquals(setOf(ReactionId.THERMAL_SHOCK, ReactionId.PLASMA_BURST, ReactionId.FUSION, ReactionId.WILDFIRE,
+            ReactionId.THUNDERCLAP, ReactionId.BLACKFIRE), codexResidueFeeds(StatusElement.THERMAL))
+        assertEquals(setOf(ReactionId.THUNDERCLAP, ReactionId.SHATTERPOINT, ReactionId.RESONANT_ARC, ReactionId.SEISMIC,
+            ReactionId.FRACTURE, ReactionId.SILENCE), codexResidueFeeds(StatusElement.SONIC))
+        StatusElement.entries.forEach { element -> assertEquals(6, codexResidueFeeds(element).size, "$element") }
+    }
+
+    @Test fun opposedKeysFormChainsAndNoKeyRepeats() {
+        val groups = codexKeyGroups()
+        assertEquals(RelicKey.entries.toSet(), groups.flatten().toSet())
+        assertEquals(RelicKey.entries.size, groups.flatten().size)
+        groups.filter { it.size > 1 }.forEach { chain ->
+            chain.zipWithNext().forEach { (a, b) -> assertTrue(RelicKey.opposed(a, b), "$a next to $b in $chain") }
+        }
+        // Fragile opposes both Shield and Life, so it sits between them.
+        val fragile = groups.single { RelicKey.FRAGILE in it }
+        assertEquals(RelicKey.FRAGILE, fragile[1])
+        assertEquals(setOf(RelicKey.SHIELD, RelicKey.LIFE), (fragile - RelicKey.FRAGILE).toSet())
+        assertTrue(groups.filter { it.size == 1 }.none { key -> RelicKey.entries.any { RelicKey.opposed(key.single(), it) } })
     }
 
     private fun model(): CodexRenderModel {
-        val stacks = List(400) { if (it == 2) 4 else 0 }.toImmutableList()
+        val stacks = List(80) { if (it == 2) 4 else 0 }.toImmutableList()
         return CodexReducer(testItems()).renderModel(
-            CollectionProjection(LOCAL_PROFILE_INSTANCE_ID, ProfileRevision.ZERO, PlayerCollection(setOf(2, 399))),
+            CollectionProjection(LOCAL_PROFILE_INSTANCE_ID, ProfileRevision.ZERO, PlayerCollection(setOf(2, 79))),
             CodexRunStacks(stacks, GameplayBuildSummaryProjection(GameplayInstanceId(RunId(1)), GameplayRevision.ZERO, stacks)),
         )
     }

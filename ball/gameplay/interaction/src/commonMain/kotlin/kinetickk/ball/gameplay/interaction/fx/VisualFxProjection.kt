@@ -52,6 +52,8 @@ data class DamageNumberProjection(
     val russianCompactAmount: String = compactAmount.russianDamageNumber(),
     val driftX: Float = 0f,
     val driftY: Float = -1f,
+    /** 0 for Kinetic damage, otherwise 1 + the status element ordinal (the hue of the number). */
+    val tone: Int = 0,
 ) {
     fun formattedAmount(format: DamageNumberFormat, language: AppLanguage = AppLanguage.English): String = when (format) {
         DamageNumberFormat.COMPACT -> when (language) {
@@ -84,7 +86,52 @@ data class WeaponArcProjection(
     val life: Float,
 )
 
-data class BuildNotificationProjection(val title: String, val details: ImmutableList<String>, val life: Float)
+/**
+ * How a build toast ranks in the feed. Discoveries (reactions, pairings) and warnings (a relic
+ * suppressing an item) outrank the first Break notes of a run, which outrank acquisitions and the
+ * tiers they reach; a lower toast never evicts a higher one and is dropped while the feed is full
+ * of higher ones.
+ */
+enum class BuildNoticeKind(val priority: Int, val lifeSeconds: Float, val merges: Boolean) {
+    CHANGE(0, 6f, false),
+    BREAK(1, 3.5f, true),
+    DISCOVERY(2, 6f, true),
+    WARNING(2, 6f, true),
+}
+
+/**
+ * A build toast. [life] counts down from [maxLife] and starts again when a merge adds a line;
+ * [age] counts the seconds since the toast opened and never restarts, so the merge window and the
+ * entrance run from the toast's opening.
+ */
+data class BuildNotificationProjection(
+    val title: String,
+    val details: ImmutableList<String>,
+    val life: Float,
+    val kind: BuildNoticeKind = BuildNoticeKind.CHANGE,
+    val maxLife: Float = kind.lifeSeconds,
+    val age: Float = maxLife - life,
+)
+
+/**
+ * A Break ([secondary] and [reaction] are -1) or an elemental reaction flash at a world point.
+ * [primary] and [secondary] are status element ordinals; [weight] counts the events of the same
+ * kind merged into this flash (1..[InteractionFxLimits.MAX_BURST_WEIGHT]).
+ */
+data class ElementBurstProjection(
+    val x: Float,
+    val y: Float,
+    val primary: Int,
+    val secondary: Int,
+    val reaction: Int,
+    val radius: Float,
+    val life: Float,
+    val maxLife: Float,
+    val weight: Int,
+)
+
+/** The once-per-profile name stamp of a reaction met for the first time, at its world point. */
+data class ReactionStampProjection(val x: Float, val y: Float, val reaction: Int, val life: Float, val maxLife: Float)
 
 /** Immutable Interaction-owned visual snapshot attached after the stamped Game read. */
 data class VisualFxProjection(
@@ -94,6 +141,11 @@ data class VisualFxProjection(
     val damageNumbers: ImmutableList<DamageNumberProjection>,
     val weaponArcs: ImmutableList<WeaponArcProjection>,
     val buildNotifications: ImmutableList<BuildNotificationProjection> = immutableListOf(),
+    val elementBursts: ImmutableList<ElementBurstProjection> = immutableListOf(),
+    val reactionStamps: ImmutableList<ReactionStampProjection> = immutableListOf(),
+    /** Reactions (bits by reaction ordinal) seen in this run, and those first met in this run. */
+    val runReactionMask: Int = 0,
+    val runDiscoveryMask: Int = 0,
 ) {
     companion object {
         val EMPTY = VisualFxProjection(

@@ -30,6 +30,11 @@ class DefaultGameplayFeature(
     private val profileProgress: ProfileProgress,
     audioService: AudioService,
     private val diagnostics: CrashDiagnostics = CrashDiagnostics.None,
+    /**
+     * Seed of each run's simulation, chosen by composition: the default keeps every run identical, the
+     * application supplies a varying source so waves differ run to run. The nucleus only receives it.
+     */
+    private val seedSource: (RunId) -> Int = { DEFAULT_GAMEPLAY_SEED },
 ) : GameplayCompositionComponent {
     private val audioExecutor = ResourceGameplayAudioExecutor(audioService)
     private var componentValue by mutableStateOf<GameComponent?>(null)
@@ -38,15 +43,16 @@ class DefaultGameplayFeature(
         runId: RunId,
     ): GameplayRunPort {
         ensureReplacementAllowed(runId)
-        diagnostics.context("gameplay.start") { "runId=$runId seed=$DEFAULT_GAMEPLAY_SEED" }
-        diagnostics.event("gameplay.start", "runId=$runId seed=$DEFAULT_GAMEPLAY_SEED")
+        val seed = seedSource(runId)
+        diagnostics.context("gameplay.start") { "runId=$runId seed=$seed" }
+        diagnostics.event("gameplay.start", "runId=$runId seed=$seed")
         return GameComponent.create(
             runId = runId,
             content = gameplayContent,
             profilePort = profilePort,
             audioExecutor = audioExecutor,
             profileProgress = profileProgress,
-            seed = DEFAULT_GAMEPLAY_SEED,
+            seed = seed,
         ).also { componentValue = it }
     }
 
@@ -95,5 +101,5 @@ class DefaultGameplayFeature(
     }
 }
 
-/** Frozen target-owned construction policy; Session never supplies the simulation seed. */
+/** Seed of the default source; Session never supplies the simulation seed, composition may vary it. */
 internal const val DEFAULT_GAMEPLAY_SEED: Int = 731_991

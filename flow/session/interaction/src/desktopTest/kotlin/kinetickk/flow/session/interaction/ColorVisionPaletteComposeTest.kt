@@ -21,7 +21,7 @@ import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.gameplay.interaction.GameplayPresentation
 import kinetickk.ball.profile.api.*
 import kinetickk.ball.profile.interaction.armory.api.*
-import kinetickk.ball.profile.interaction.lab.api.*
+import kinetickk.ball.profile.interaction.matrix.api.*
 import kinetickk.ball.profile.interaction.rebirth.api.*
 import kinetickk.ball.profile.interaction.settings.impl.DefaultSettingsFeature
 import kinetickk.flow.session.api.*
@@ -84,8 +84,8 @@ private fun PaletteShell(session: AppSessionPort, profile: PaletteProfilePort) {
                 override fun activePresentation() = null
                 @Composable override fun Content(inputEnabled: Boolean, onOutput: (GameplayInteractionOutput) -> Unit) = Unit
             },
-            labFeature = object : LabFeature {
-                @Composable override fun Content(routeToken: Long, onOutput: (LabOutput) -> Unit) = Unit
+            matrixFeature = object : MatrixFeature {
+                @Composable override fun Content(routeToken: Long, onOutput: (MatrixOutput) -> Unit) = Unit
             },
             armoryFeature = object : ArmoryFeature {
                 @Composable override fun Content(activeRunWeapon: WeaponId?, onOutput: (ArmoryOutput) -> Unit) = Unit
@@ -121,7 +121,8 @@ private class PaletteProfilePort(colorVision: ColorVision) : ProfilePort {
     override fun query(query: ProfileQuery.GetHomeProgress): HomeProgressProjection = error("Unused")
     override fun query(query: ProfileQuery.GetCollection): CollectionProjection = error("Unused")
     override fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection = error("Unused")
-    override fun query(query: ProfileQuery.GetLabProgress): LabProgressProjection = error("Unused")
+    override fun query(query: ProfileQuery.GetMatrixProgress): MatrixProgressProjection = error("Unused")
+    override fun query(query: ProfileQuery.GetHangar): kinetickk.ball.profile.api.HangarProjection = error("unused")
     override fun query(query: ProfileQuery.GetLoadout): LoadoutProjection = error("Unused")
     override fun query(query: ProfileQuery.GetRebirthProgress): RebirthProgressProjection = error("Unused")
     override fun query(query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection = error("Unused")

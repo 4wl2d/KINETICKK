@@ -60,7 +60,9 @@ class DesktopCrashContextComposeTest {
                     override fun ensureUnlocked() = Unit
                     override fun close() = Unit
                 }
-                val gameplay = DefaultGameplayFeature(catalog.gameplayContent(), profile, profile, audio, reporter)
+                // The composition's seed source decides the run seed; diagnostics record the one used.
+                val gameplay = DefaultGameplayFeature(catalog.gameplayContent(), profile, profile, audio, reporter,
+                    seedSource = { 424_242 })
                 val owner = AppCompositionOwner(contentCatalog = catalog, profileComponent = profile,
                     gameplayComponent = gameplay, audioService = audio, diagnostics = reporter)
                 try {
@@ -80,7 +82,7 @@ class DesktopCrashContextComposeTest {
                     val report = reporter.capture(IllegalStateException("deliberate test after real 2x frames"),
                         "integration-test", Thread.currentThread())
                     val context = Files.readString(report.parent.resolve("context.txt"))
-                    assertContains(context, "seed=731991")
+                    assertContains(context, "seed=424242")
                     assertContains(context, "speed=2.0")
                     assertContains(context, "revision=GameplayRevision")
                     assertContains(context, "FrameElapsed(realDeltaSeconds=")

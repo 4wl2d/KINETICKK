@@ -3,6 +3,7 @@
 
 package kinetickk.flow.session.api
 
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
 
 /** Closed Interaction intent inventory of the singleton AppSession Flow. */
@@ -16,8 +17,18 @@ sealed interface SessionInteractionPulse {
     data object ToggleMuteRequested : SessionInteractionPulse
     data class SelectCoreShapeRequested(val shape: CoreShape) : SessionInteractionPulse
 
-    /** The first accepted request arms confirmation; the second starts the participant workflow. */
-    data object RebirthRequested : SessionInteractionPulse
+    /**
+     * Selects Rebirth [tier] and starts a run at it. A tier above the highest clear takes two
+     * requests (the first arms confirmation, the second starts the participant workflow); a cleared
+     * tier starts at once.
+     */
+    data class RebirthRequested(val tier: Int) : SessionInteractionPulse {
+        init {
+            require(tier in ContentBounds.MIN_REBIRTH_LEVEL..ContentBounds.MAX_REBIRTH_LEVEL) {
+                "Rebirth tier must lie within the content bounds"
+            }
+        }
+    }
 }
 
 sealed interface SessionRejection {

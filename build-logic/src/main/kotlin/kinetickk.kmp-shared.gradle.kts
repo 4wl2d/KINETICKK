@@ -14,8 +14,10 @@ kotlin {
         compileSdk = 37
         minSdk = 26
 
-        // Android-KMP disables resources, Java, and both test components by default. Keep those
-        // lean defaults for every leaf; the few modules that need a capability opt in locally.
+        // Include commonTest in Android's host JVM tests. Resources, Java, and device tests
+        // stay opt-in for the modules that need them.
+        withHostTest {}
+
         androidResources {
             enable = false
         }

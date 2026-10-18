@@ -505,8 +505,13 @@ internal fun foundationAndRegistryViolations(sources: List<SourceDocument>): Lis
             "ItemEffect",
             "ItemRarity",
             "WeaponId",
-            "MetaUpgradeId",
+            "MatrixNodeId",
             "RelicId",
+            "StatusElement",
+            "BuildTag",
+            "ReactionId",
+            "RelicPairingId",
+            "RelicKey",
         )
         forbidden.filter(source.text.maskKotlinNonCode()::contains).forEach { token ->
             add("Foundation source ${source.relativePath} contains business/domain token `$token`")

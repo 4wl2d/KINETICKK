@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.geometry.Size
 import kotlin.math.max
+import kotlin.math.sin
 
 /** Linear interpolation. */
 fun kkLerp(a: Float, b: Float, t: Float): Float = a + (b - a) * t
@@ -31,6 +32,21 @@ fun kkProgress(elapsedMs: Float, durationMs: Float, easing: Easing? = null): Flo
 fun kkPulse(time: Float, periodSeconds: Float, easing: Easing = KkEase.Snap): Float {
     val t = kkLoop(time, periodSeconds)
     return easing.transform(if (t < 0.5f) t * 2f else (1f - t) * 2f)
+}
+
+/**
+ * Screen shake offset at [time] seconds for [trauma] 0..1: a smooth sway (two incommensurate
+ * sines per axis, 3–6 Hz) of at most [maxOffset] per axis. The reach grows with the square of
+ * the trauma, so light hits barely move the frame and only the hardest ones kick it.
+ */
+fun kkShake(trauma: Float, time: Float, maxOffset: Float): Offset {
+    val t = trauma.coerceIn(0f, 1f)
+    if (t <= 0f) return Offset.Zero
+    val reach = maxOffset * t * t
+    return Offset(
+        (0.6f * sin(time * 37f) + 0.4f * sin(time * 23f + 1.3f)) * reach,
+        (0.6f * sin(time * 31f + 0.7f) + 0.4f * sin(time * 19f + 2.1f)) * reach,
+    )
 }
 
 /**

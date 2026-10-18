@@ -297,7 +297,7 @@ class HudFeedTest {
         )
         val screens = sizes + listOf(780 to 360, 640 to 360, 360 to 780, 360 to 640)
         for (language in AppLanguage.entries) screens.forEach { (w, h) ->
-            for (textScale in TEXT_SCALES) for (message in listOf("", "GHOST VECTOR // SLOT 2 BOUND")) for (toast in toasts) {
+            for (textScale in TEXT_SCALES) for (message in listOf("", "GYRE ENGINE // SLOT 2 BOUND")) for (toast in toasts) {
                 val model = feedModel(w, h, message)
                 val fx = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(toast))
                 drawFeed(w, h, language, textScale) { measurer -> drawHudFeed(model, fx, measurer, 1f, null) }
@@ -359,13 +359,13 @@ class HudFeedTest {
     @Test
     fun replacedRelicTailsShowNoSlotNumeral() {
         for (language in AppLanguage.entries) for (slot in 1..4) {
-            val (title, detail) = feedMessageParts("GHOST VECTOR // SLOT $slot BOUND", language)
+            val (title, detail) = feedMessageParts("GYRE ENGINE // SLOT $slot BOUND", language)
             assertTrue(detail != null && detail.none(Char::isDigit), "$language slot $slot: $detail")
             assertTrue(title.none(Char::isDigit), "$language slot $slot: $title")
         }
         // A replace reads like a fresh bind.
-        assertEquals(feedMessageParts("GHOST VECTOR // BOUND", AppLanguage.English), feedMessageParts("GHOST VECTOR // SLOT 2 BOUND", AppLanguage.English))
-        assertEquals(feedMessageParts("GHOST VECTOR // BOUND", AppLanguage.Russian), feedMessageParts("GHOST VECTOR // SLOT 2 BOUND", AppLanguage.Russian))
+        assertEquals(feedMessageParts("GYRE ENGINE // BOUND", AppLanguage.English), feedMessageParts("GYRE ENGINE // SLOT 2 BOUND", AppLanguage.English))
+        assertEquals(feedMessageParts("GYRE ENGINE // BOUND", AppLanguage.Russian), feedMessageParts("GYRE ENGINE // SLOT 2 BOUND", AppLanguage.Russian))
     }
 
     @Test
@@ -466,7 +466,11 @@ class HudFeedTest {
     }
 }
 
-/** Draws [block] on a density-1 canvas with the bundled fonts at [textScale] (tests). */
+/**
+ * Draws [block] on a density-1 canvas with the bundled fonts at [textScale] (tests). The measurer of each language and
+ * text scale and the canvas of each size are kept between calls (as the game keeps them between frames), so a sweep
+ * of many cases measures each text once instead of loading the fonts and shaping every line again for every case.
+ */
 internal fun drawFeed(
     width: Int,
     height: Int,
@@ -474,12 +478,19 @@ internal fun drawFeed(
     textScale: Float,
     block: androidx.compose.ui.graphics.drawscope.DrawScope.(CanvasTextMeasurer) -> Unit,
 ) {
-    val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), textScale, language,
-        HudTestFonts.typography.copy(localeList = language.localeList()))
-    CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(ImageBitmap(width, height)), Size(width.toFloat(), height.toFloat())) {
+    val measurer = FeedMeasurers.getOrPut(language to textScale) {
+        CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), textScale, language,
+            HudTestFonts.typography.copy(localeList = language.localeList()))
+    }
+    val canvas = FeedCanvases.getOrPut(width to height) { Canvas(ImageBitmap(width, height)) }
+    CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, canvas, Size(width.toFloat(), height.toFloat())) {
+        drawRect(androidx.compose.ui.graphics.Color.Transparent, blendMode = androidx.compose.ui.graphics.BlendMode.Clear)
         block(measurer)
     }
 }
+
+private val FeedMeasurers = HashMap<Pair<AppLanguage, Float>, CanvasTextMeasurer>()
+private val FeedCanvases = HashMap<Pair<Int, Int>, Canvas>()
 
 /**
  * Every line the feed drew in the last frame shows all of its text (no ellipsis, no overflow, no

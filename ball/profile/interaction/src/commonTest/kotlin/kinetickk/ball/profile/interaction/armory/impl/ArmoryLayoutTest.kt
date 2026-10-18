@@ -18,7 +18,7 @@ import kotlin.test.assertTrue
 
 class ArmoryLayoutTest {
     private fun layout(width: Float, height: Float, density: Float = 1f, textScale: Float = 1f) =
-        armoryLayout(profileFrame(width, height, density), TestWeapons.size, textScale, backWidth = 80f * density, actionWidth = 260f * density)
+        armoryLayout(profileFrame(width, height, density), BoardWeapons.size, textScale, backWidth = 80f * density, actionWidth = 260f * density)
 
     @Test
     fun regularGridMatchesTheBoardFourColumnGrid() {
@@ -35,6 +35,17 @@ class ArmoryLayoutTest {
         assertEquals(0f, layout.gridScrollMax)
         assertEquals(950f, layout.plate.left, 0.01f)
         assertTrue(layout.tiles.all { it.right + layout.gridViewport.left < layout.detailViewport.left })
+
+        // The shipped 24 keep the board's tile geometry and add three rows under the fold: the grid
+        // scrolls by exactly those rows instead of shrinking the tiles.
+        val shipped = armoryLayout(profileFrame(1440f, 810f, 1f), TestWeapons.size, 1f, backWidth = 80f, actionWidth = 260f)
+        assertEquals(24, shipped.tiles.size)
+        assertEquals(layout.tiles.first(), shipped.tiles.first())
+        assertEquals(layout.tiles[4], shipped.tiles[4])
+        assertEquals(layout.gridViewport, shipped.gridViewport)
+        assertEquals(layout.gridContentHeight + 3f * shipped.rowPitch, shipped.gridContentHeight, 0.01f)
+        assertEquals(shipped.gridContentHeight - shipped.gridViewport.height, shipped.gridScrollMax, 0.01f)
+        assertTrue(shipped.gridScrollMax > 0f)
     }
 
     @Test
@@ -66,31 +77,31 @@ class ArmoryLayoutTest {
         // The large text size makes the portrait grid scroll.
         val layout = layout(390f, 844f, textScale = 1.75f)
         val grid = layout.gridViewport
-        val reversed = TestWeapons.reversed().toImmutableList()
+        val reversed = BoardWeapons.reversed().toImmutableList()
         val firstCenter = layout.tiles.first().center
         val x = grid.left + firstCenter.x
         val y = grid.top + firstCenter.y
 
         assertEquals(WeaponId.FLUX_WAKE, assertIs<ArmoryAction.Activate>(
-            resolveArmoryPress(layout, TestWeapons, WeaponId.FLUX_WAKE, 0f, x, y)).id)
+            resolveArmoryPress(layout, BoardWeapons, WeaponId.FLUX_WAKE, 0f, x, y)).id)
         assertEquals(reversed.first().id, assertIs<ArmoryAction.Activate>(
             resolveArmoryPress(layout, reversed, WeaponId.FLUX_WAKE, 0f, x, y)).id)
 
         // Scrolling the grid by (up to) one row maps the same point to the tile one row below.
         assertTrue(layout.gridScrollMax >= layout.rowPitch)
         val scroll = layout.rowPitch
-        assertEquals(TestWeapons[layout.columns].id, assertIs<ArmoryAction.Activate>(
-            resolveArmoryPress(layout, TestWeapons, WeaponId.FLUX_WAKE, scroll, x, y)).id)
+        assertEquals(BoardWeapons[layout.columns].id, assertIs<ArmoryAction.Activate>(
+            resolveArmoryPress(layout, BoardWeapons, WeaponId.FLUX_WAKE, scroll, x, y)).id)
 
         // The primary action does not scroll: it maps at its screen position to the inspected weapon.
         val action = layout.action.center
         assertEquals(WeaponId.ARC_COIL, assertIs<ArmoryAction.Apply>(
-            resolveArmoryPress(layout, TestWeapons, WeaponId.ARC_COIL, 0f, action.x, action.y)).id)
-        assertIs<ArmoryAction.Back>(resolveArmoryPress(layout, TestWeapons, WeaponId.FLUX_WAKE, 0f,
+            resolveArmoryPress(layout, BoardWeapons, WeaponId.ARC_COIL, 0f, action.x, action.y)).id)
+        assertIs<ArmoryAction.Back>(resolveArmoryPress(layout, BoardWeapons, WeaponId.FLUX_WAKE, 0f,
             layout.back.center.x, layout.back.center.y))
         // The gap between two tiles and the empty panel area below the action do not act.
         val gapX = grid.left + (layout.tiles[0].right + layout.tiles[1].left) * 0.5f
-        assertNull(resolveArmoryPress(layout, TestWeapons, WeaponId.FLUX_WAKE, 0f, gapX, y))
+        assertNull(resolveArmoryPress(layout, BoardWeapons, WeaponId.FLUX_WAKE, 0f, gapX, y))
     }
 
     @Test
@@ -111,19 +122,73 @@ class ArmoryLayoutTest {
                 }
             }
         }
-        // The board frame keeps the natural position under the ladder.
+        // The weapon sheet (mastery forms, synergy, facts) follows the ladder in order; on the board
+        // frame it runs past the fold, so the action is pinned at the panel's bottom under it.
         val board = layout(1440f, 810f)
-        assertFalse(board.actionPinned)
-        assertEquals(board.ladder.bottom + 26f, board.action.top, 0.01f)
+        assertTrue(board.forms.top >= board.ladder.bottom && board.synergy.top >= board.forms.bottom &&
+            board.facts.top >= board.synergy.bottom, "${board.ladder} ${board.forms} ${board.synergy} ${board.facts}")
+        assertEquals(board.facts.bottom + 12f, board.detailViewport.top + board.detailContentHeight, 0.01f)
+        assertTrue(board.actionPinned)
+        assertEquals(810f - 16f, board.action.bottom, 0.01f)
         assertTrue(layout(390f, 844f, textScale = 1.75f).actionPinned)
+        // A short sheet (measured heights) leaves the action in its natural place under the facts.
+        val short = armoryLayout(profileFrame(1440f, 810f, 1f), BoardWeapons.size, 1f, 80f, 260f) { _, _ ->
+            ArmoryDetailMetrics(40f, 50f, 22f, formsHeight = 10f, synergyHeight = 10f, factsHeight = 10f)
+        }
+        assertFalse(short.actionPinned)
+        assertEquals(short.facts.bottom + 26f, short.action.top, 0.01f)
+    }
+
+    @Test
+    fun theTwentyFourWeaponGridScrollsAndKeepsTouchTargets() {
+        for ((width, height) in listOf(1440f to 810f, 1000f to 700f, 844f to 390f, 720f to 360f, 390f to 844f, 360f to 640f)) {
+            for (setting in listOf(1f, 1.25f, 1.75f)) {
+                // Density 2: the sizes are dp, the geometry px.
+                val layout = armoryLayout(profileFrame(width * 2f, height * 2f, 2f), TestWeapons.size, profileTextScale(setting),
+                    backWidth = 160f, actionWidth = 520f)
+                val context = "${width}x$height @$setting"
+                assertEquals(TestWeapons.size, layout.tiles.size, context)
+                // Every tile is a press target of at least 48 dp in both directions.
+                layout.tiles.forEach { tile ->
+                    assertTrue(tile.width >= 48f * 2f && tile.height >= 48f * 2f, "$context tile ${tile.width}x${tile.height}")
+                }
+                // Rows follow each other a pitch apart and the last row ends inside the scrolling content.
+                assertEquals(layout.tiles[layout.columns].top - layout.tiles[0].top, layout.rowPitch, 0.01f, context)
+                assertTrue(layout.tiles.last().bottom <= layout.gridContentHeight + 0.01f, context)
+                // Six rows of four (or eight of three) never fit one screen: the grid scrolls, and the
+                // last tile can be scrolled fully into the viewport.
+                assertTrue(layout.gridScrollMax > 0f, "$context does not scroll")
+                val last = layout.tiles.last()
+                val reveal = armoryRevealScroll(layout, TestWeapons.lastIndex, 0f)
+                assertTrue(last.top >= reveal && last.bottom <= reveal + layout.gridViewport.height + 0.01f, "$context last tile at $reveal")
+            }
+        }
+    }
+
+    @Test
+    fun revealingATileScrollsAsLittleAsPossible() {
+        val layout = layout(390f, 844f)
+        val viewport = layout.gridViewport.height
+        val margin = layout.tiles.first().top
+        // A tile already in view leaves the scroll where it is.
+        assertEquals(0f, armoryRevealScroll(layout, 0, 0f))
+        assertEquals(0f, armoryRevealScroll(layout, 1, 0f))
+        // A tile below the fold brings its bottom (and the grid padding) to the viewport's bottom ...
+        val below = layout.tiles.lastIndex
+        val down = armoryRevealScroll(layout, below, 0f)
+        assertEquals((layout.tiles[below].bottom + margin - viewport).coerceIn(0f, layout.gridScrollMax), down, 0.01f)
+        // ... and one above it brings its top back to the viewport's top.
+        assertEquals((layout.tiles[0].top - margin).coerceAtLeast(0f), armoryRevealScroll(layout, 0, down), 0.01f)
+        // Unknown indices only clamp the current scroll.
+        assertEquals(layout.gridScrollMax, armoryRevealScroll(layout, 99, 10_000f))
     }
 
     @Test
     fun lockedWeaponsKeepRoomForTheShortfall() {
         val frame = profileFrame(844f, 390f, 1f)
-        val wide = armoryLayout(frame, TestWeapons.size, 1f, 80f, actionWidth = 10_000f, needRoom = true)
+        val wide = armoryLayout(frame, BoardWeapons.size, 1f, 80f, actionWidth = 10_000f, needRoom = true)
         assertTrue(wide.need.width >= (wide.detailViewport.width - 24f) * 0.3f)
-        val owned = armoryLayout(frame, TestWeapons.size, 1f, 80f, actionWidth = 10_000f, needRoom = false)
+        val owned = armoryLayout(frame, BoardWeapons.size, 1f, 80f, actionWidth = 10_000f, needRoom = false)
         assertEquals(owned.detailViewport.right - 12f, owned.action.right, 0.01f)
     }
 
@@ -145,7 +210,7 @@ class ArmoryLayoutTest {
         val frame = profileFrame(844f, 390f, 1f)
         val insets = armoryTileInsets(frame)
         val icon = frame.d(armoryType(frame.mode).tileIcon)
-        fun layout(status: Float, nameBlock: Float) = armoryLayout(frame, TestWeapons.size, 1f, 80f, 260f,
+        fun layout(status: Float, nameBlock: Float) = armoryLayout(frame, BoardWeapons.size, 1f, 80f, 260f,
             tileText = { ArmoryTileMetrics(status, nameBlock) })
         val plain = layout(status = 0f, nameBlock = 0f)
         // Room to spare: the board's icon, centred between the texts.
@@ -199,3 +264,6 @@ class ArmoryLayoutTest {
         }
     }
 }
+
+/** The reference board lays out the original twelve weapons on one unscrolled four-column grid. */
+private val BoardWeapons = TestWeapons.take(12).toImmutableList()

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.Row
@@ -52,8 +53,15 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.canvas.OverlayRelicSlot
+import kinetickk.ball.gameplay.interaction.canvas.drawRelicRune
+import kinetickk.ball.gameplay.interaction.canvas.elementIcon
+import kinetickk.ball.gameplay.interaction.canvas.relicHue
+import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
 import kinetickk.ball.gameplay.interaction.canvas.overlayColor
 import kinetickk.ball.gameplay.interaction.canvas.overlayCompact
 import kinetickk.ball.gameplay.interaction.canvas.overlayGrouped
@@ -98,7 +106,9 @@ import kinetickk.foundation.design.condStyle
 import kinetickk.foundation.design.drawKkGem
 import kinetickk.foundation.design.drawKkGrid
 import kinetickk.foundation.design.drawKkHalftone
+import kinetickk.foundation.design.drawKkHatch
 import kinetickk.foundation.design.drawKkIcon
+import kinetickk.foundation.design.drawKkPips
 import kinetickk.foundation.design.drawKkRadialFade
 import kinetickk.foundation.design.drawKkRelicSlot
 import kinetickk.foundation.design.drawKkRingBurst
@@ -140,6 +150,8 @@ internal data class TerminalPresentation(
     val combat: List<TerminalStatistic>,
     val collection: List<TerminalStatistic>,
     val rebirth: String? = null,
+    /** The Rebirth tier: from the first Rebirth on, its tag is gold (gold means Rebirth). */
+    val rebirthLevel: Int = 0,
     val form: String? = null,
     val formIcon: KkIcon? = null,
     val bank: String? = null,
@@ -147,9 +159,37 @@ internal data class TerminalPresentation(
     val weaponLevel: String? = null,
     val weaponMaxLevel: Boolean = false,
     val relics: List<OverlayRelicSlot?> = emptyList(),
+    /** The bound relics' definitions in slot order, for their own runes. */
+    val relicDefinitions: List<RelicDefinition?> = emptyList(),
+    /** Build recap: the run's leading archetype tags, its dominant element and its reactions. */
+    val recapTags: List<TerminalTag> = emptyList(),
+    val dominant: TerminalElement? = null,
+    val reactions: List<TerminalReaction> = emptyList(),
+    /** What a Victory earns on the Rebirth ladder (null for a defeat or a replayed cleared tier). */
+    val rebirthEarned: ReportRebirthLines? = null,
 )
 
-internal fun GameplayRenderModel.terminalPresentation(language: AppLanguage): TerminalPresentation {
+/** A leading archetype of the run: the tag, its name and the resonance tier it reached. */
+internal data class TerminalTag(val tag: BuildTag, val label: String, val tier: Int)
+
+/** The run's dominant element (status element ordinal) and its name. */
+internal data class TerminalElement(val element: Int, val label: String)
+
+/** A reaction set off in the run; [discovered] marks one met for the first time in it. */
+internal data class TerminalReaction(val id: ReactionId, val name: String, val discovered: Boolean)
+
+/** Archetypes the recap names. */
+private const val RECAP_TAGS = 3
+
+/**
+ * The report of this frame. [reactionsThisRun] and [discoveredThisRun] are bit sets by reaction
+ * ordinal (the interaction's visual record of the run's reactions).
+ */
+internal fun GameplayRenderModel.terminalPresentation(
+    language: AppLanguage,
+    reactionsThisRun: Int = 0,
+    discoveredThisRun: Int = 0,
+): TerminalPresentation {
     val stats = runStatistics
     val victory = phase == GamePhase.VICTORY
     fun stat(label: GameplayText, value: String, tone: TerminalTone = TerminalTone.BONE) = TerminalStatistic(label, value, tone)
@@ -178,6 +218,7 @@ internal fun GameplayRenderModel.terminalPresentation(language: AppLanguage): Te
             stat(GameplayText.LevelReached, overlayLevel(level, language)),
         ),
         rebirth = language.text(OverlayRedesignText.RebirthTag, rebirthLevel),
+        rebirthLevel = rebirthLevel,
         form = content.coreShape(coreShape).displayName.localizedContent(language),
         formIcon = coreShape.overlayIcon(),
         bank = overlayGrouped(totalMatter, language),
@@ -187,6 +228,16 @@ internal fun GameplayRenderModel.terminalPresentation(language: AppLanguage): Te
         relics = List(content.relicPolicy.maxSlots) { index ->
             equippedRelics.getOrNull(index)?.let { OverlayRelicSlot(it.id, content.relic(it.id).aspect, it.rank) }
         },
+        relicDefinitions = List(content.relicPolicy.maxSlots) { index -> equippedRelics.getOrNull(index)?.let { content.relic(it.id) } },
+        recapTags = BuildTag.entries.filter { build.tagPoints(it) > 0 }
+            .sortedWith(compareByDescending<BuildTag> { build.tagPoints(it) }.thenBy { it.ordinal })
+            .take(RECAP_TAGS)
+            .map { TerminalTag(it, it.displayLabel.localizedContent(language), build.tagTier(it)) },
+        dominant = build.dominant?.let { TerminalElement(it.ordinal, it.displayLabel.localizedContent(language)) },
+        reactions = ReactionId.entries.filter { reactionsThisRun and (1 shl it.ordinal) != 0 }.map {
+            TerminalReaction(it, content.build.reaction(it).name.localizedContent(language), discoveredThisRun and (1 shl it.ordinal) != 0)
+        },
+        rebirthEarned = reportRebirthLines(language),
     )
 }
 
@@ -195,10 +246,14 @@ internal fun TerminalContent(
     engine: GameplayRenderModel,
     elapsed: Float,
     enabled: Boolean,
+    reactionsThisRun: Int = 0,
+    discoveredThisRun: Int = 0,
     onInput: (GameplayInput) -> Unit,
 ) {
     val language = LocalAppLanguage.current
-    val presentation = remember(engine, language) { engine.terminalPresentation(language) }
+    val presentation = remember(engine, language, reactionsThisRun, discoveredThisRun) {
+        engine.terminalPresentation(language, reactionsThisRun, discoveredThisRun)
+    }
     TerminalContent(presentation, engine.settings.textScale, engine.settings.runStatisticsOnLeft, elapsed, enabled, onInput)
 }
 
@@ -311,7 +366,7 @@ private fun CompactReport(scene: ReportScene, mirrored: Boolean) {
             PaddingValues(start = 18.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
         ) {
             ReportSummary(scene, frame, titleSize = 38f, matterSize = 34f, gemSize = 20f, stampSize = 15f, slotSize = 50f, relicSize = 28f,
-                compact = true, gapScale = 0.6f)
+                compact = true, gapScale = 0.6f, rebirthLines = false)
         }
         Column(
             Modifier.offset(x = if (mirrored) 0.dp else split).width(statsWidth).fillMaxHeight()
@@ -323,6 +378,11 @@ private fun CompactReport(scene: ReportScene, mirrored: Boolean) {
                 Modifier.weight(1f).fillMaxWidth(),
                 "kinetickk.gameplay.results.statistics", Kk.Ink1,
             ) {
+                // Landscape phones keep the summary column for the title, matter and build: what the
+                // Victory earns on the Rebirth ladder leads the statistics instead.
+                scene.presentation.rebirthEarned?.let { earned ->
+                    ReportRebirthEarned(earned, 13f * scene.textScale, 11f * scene.textScale, Modifier.padding(bottom = 10.dp))
+                }
                 ReportStatistics(scene, frame, rowHeight = 26f, labelSize = 13f, valueSize = 17f)
             }
             Spacer(Modifier.height(10.dp))
@@ -341,12 +401,19 @@ private fun PortraitReport(scene: ReportScene) {
             Modifier.fillMaxSize(), "kinetickk.gameplay.results.summary", Kk.Ink,
             PaddingValues(horizontal = 18.dp, vertical = 16.dp),
         ) {
+            // The recap follows the actions here, so the next run's buttons stay on the first screen.
             ReportSummary(scene, frame, titleSize = 44f, matterSize = 40f, gemSize = 22f, stampSize = 15f, slotSize = 50f, relicSize = 30f,
-                compact = true, inlineShatter = true)
+                compact = true, inlineShatter = true, recap = false, rebirthLines = false)
             Spacer(Modifier.height(20.dp))
             ReportActions(scene, frame, Modifier.fillMaxWidth(), primaryHeight = 56f, primaryFont = 24f, ghostFont = 20f)
             Spacer(Modifier.height(10.dp))
             ReportMenu(scene, frame, Modifier, touch = true)
+            ReportBuildRecap(scene, frame, compact = true)
+            // What the Victory earns on the Rebirth ladder follows the recap, so the actions stay on the first screen.
+            scene.presentation.rebirthEarned?.let { earned ->
+                Spacer(Modifier.height(18.dp))
+                ReportRebirthEarned(earned, 14f * scene.textScale, 12f * scene.textScale)
+            }
             Spacer(Modifier.height(24.dp))
             Column(Modifier.fillMaxWidth().testTag("kinetickk.gameplay.results.statistics")) {
                 ReportStatistics(scene, frame, rowHeight = 28f, labelSize = 14f, valueSize = 18f)
@@ -509,6 +576,9 @@ private fun ColumnScope.ReportSummary(
     compact: Boolean = false,
     inlineShatter: Boolean = false,
     gapScale: Float = 1f,
+    recap: Boolean = true,
+    /** Draw the Victory's Rebirth lines under the stamp (landscape phones show them beside the statistics). */
+    rebirthLines: Boolean = true,
 ) {
     val presentation = scene.presentation
     val language = LocalAppLanguage.current
@@ -546,6 +616,10 @@ private fun ColumnScope.ReportSummary(
     Box(Modifier.zIndex(1f).enter(scene, 0.3f)) {
         OverlayStamp(stamp, Modifier.testTag("kinetickk.gameplay.results.cause"),
             if (presentation.victory) KkStampVariant.YOU else KkStampVariant.THREAT, fontSize = stampSize * k, textScale = text)
+    }
+    presentation.rebirthEarned?.takeIf { rebirthLines }?.let { earned ->
+        Spacer(Modifier.height(gap(14f)))
+        ReportRebirthEarned(earned, sp(15f), sp(12f), Modifier.zIndex(1f).enter(scene, 0.35f))
     }
     if (inlineShatter) {
         Canvas(Modifier.fillMaxWidth().height(230.dp).clearAndSetSemantics { }) {
@@ -597,11 +671,128 @@ private fun ColumnScope.ReportSummary(
                     val slot = size.height
                     presentation.relics.forEachIndexed { index, relic ->
                         val center = Offset(slot * 0.5f + index * (slot + 8f * k * density), size.height * 0.5f)
-                        if (relic != null) drawKkRelicSlot(center, relic.aspect.overlayColor(), relic.aspect.overlayIcon(), slot / density)
-                        else drawKkRelicSlot(center, Color.Unspecified, sizeDp = slot / density)
+                        val definition = presentation.relicDefinitions.getOrNull(index)
+                        when {
+                            definition != null -> {
+                                val hue = relicHue(definition, roles)
+                                drawKkRelicSlot(center, hue, sizeDp = slot / density)
+                                drawRelicRune(definition, center, slot * 0.31f, hue)
+                            }
+                            relic != null -> drawKkRelicSlot(center, relic.aspect.overlayColor(roles), relic.aspect.overlayIcon(), slot / density)
+                            else -> drawKkRelicSlot(center, Color.Unspecified, sizeDp = slot / density)
+                        }
                     }
                 }
             }
+        }
+    }
+    if (recap) ReportBuildRecap(scene, frame, compact)
+}
+
+/** The build recap at the report's sizes ([ReportRecap]). */
+@Composable
+private fun ReportBuildRecap(scene: ReportScene, frame: OverlayFrame, compact: Boolean) {
+    val k = if (compact) 1f else frame.scale
+    val text = scene.textScale
+    ReportRecap(scene, Modifier.enter(scene, 0.55f), max(15f * k, 11f) * text, max(13f * k, 10f) * text, (24f * k).dp,
+        (if (compact) 10f else 18f * k).dp)
+}
+
+/**
+ * The build recap under the build row: the run's leading archetypes (glyph, name, lit tier pips)
+ * and its dominant element, then the reactions it set off, those first met in this run marked
+ * with a small diamond in the you color. Rows wrap; nothing shows for a run without tags or
+ * reactions.
+ */
+@Composable
+private fun ReportRecap(scene: ReportScene, modifier: Modifier, labelSize: Float, chipSize: Float, chipHeight: Dp, gap: Dp) {
+    val presentation = scene.presentation
+    if (presentation.recapTags.isEmpty() && presentation.dominant == null && presentation.reactions.isEmpty()) return
+    val language = LocalAppLanguage.current
+    val typography = rememberInterfaceTypography()
+    val roles = scene.roles
+    Column(modifier.testTag("kinetickk.gameplay.results.recap")) {
+        if (presentation.recapTags.isNotEmpty() || presentation.dominant != null) {
+            Spacer(Modifier.height(gap))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                OverlayText(language.text(HudRedesignText.TopTags), typography.labelStyle(labelSize, color = Kk.Mute),
+                    Modifier.align(Alignment.CenterVertically).padding(end = 4.dp), uppercase = true)
+                presentation.recapTags.forEach { tag ->
+                    ReportRecapChip(tag.label, chipSize, chipHeight, Kk.Bone, tier = tag.tier) { size ->
+                        drawKkIcon(KkIcon.Tags[tag.tag.ordinal], center, size, if (tag.tier > 0) Kk.Bone else Kk.Mute)
+                    }
+                }
+                presentation.dominant?.let { dominant ->
+                    val hue = roles.element(dominant.element)
+                    ReportRecapChip(language.text(HudRedesignText.DominantElement, dominant.label), chipSize, chipHeight, hue) { size ->
+                        drawKkIcon(elementIcon(dominant.element), center, size, hue)
+                        drawCircle(hue, size * 0.62f, center, style = kkStroke(1.5f * density))
+                    }
+                }
+            }
+        }
+        if (presentation.reactions.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                OverlayText(language.text(HudRedesignText.ReactionsThisRun), typography.labelStyle(labelSize, color = Kk.Mute),
+                    Modifier.align(Alignment.CenterVertically).padding(end = 4.dp), uppercase = true)
+                presentation.reactions.forEach { reaction ->
+                    val first = roles.element(reaction.id.first.ordinal)
+                    val second = roles.element(reaction.id.second.ordinal)
+                    ReportRecapChip(reaction.name, chipSize, chipHeight, Kk.Bone, new = if (reaction.discovered) roles.you else null,
+                        wide = true) { size ->
+                        drawKkIcon(elementIcon(reaction.id.first.ordinal), Offset(center.x - size * 0.55f, center.y), size, first)
+                        drawKkIcon(elementIcon(reaction.id.second.ordinal), Offset(center.x + size * 0.55f, center.y), size, second)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** One recap chip: an ink plate with a glyph, the name, lit tier pips and the mark of a new find in [new]'s color. */
+@Composable
+private fun ReportRecapChip(
+    label: String,
+    textSize: Float,
+    height: Dp,
+    color: Color,
+    tier: Int = 0,
+    new: Color? = null,
+    wide: Boolean = false,
+    glyph: DrawScope.(Float) -> Unit,
+) {
+    val typography = rememberInterfaceTypography()
+    Row(
+        Modifier.height(height).drawWithCache {
+            val plate = Path().kkSlab(0f, 0f, size.width, size.height, 6f * density)
+            onDrawBehind { drawPath(plate, Kk.Ink2) }
+        }.padding(horizontal = 8.dp).semantics(mergeDescendants = true) { },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Canvas(Modifier.size(height * (if (wide) 0.9f else 0.6f), height * 0.6f)) { glyph(size.height) }
+        OverlayText(label, typography.condStyle(textSize, color = color), uppercase = true, maxLines = 1)
+        if (tier > 0) {
+            Canvas(Modifier.size(height * 0.95f, height * 0.25f)) {
+                val pip = (size.width - 4f * density) / 3f / density
+                drawKkPips(Offset.Zero, 3, tier.coerceIn(0, 3), Kk.Bone, sizeDp = size.height / density, widthDp = pip, gapDp = 2f, emptyColor = Kk.Ink4)
+            }
+        }
+        if (new != null) {
+            Spacer(Modifier.size(height * 0.34f).testTag("kinetickk.gameplay.results.recap.new").drawWithCache {
+                val half = size.minDimension * 0.5f
+                val x = size.width * 0.5f
+                val y = size.height * 0.5f
+                val mark = Path().apply {
+                    moveTo(x, y - half)
+                    lineTo(x + half, y)
+                    lineTo(x, y + half)
+                    lineTo(x - half, y)
+                    close()
+                }
+                onDrawBehind { drawPath(mark, new) }
+            })
         }
     }
 }
@@ -638,7 +829,13 @@ private fun ReportHeader(scene: ReportScene, labelSize: Float, modifier: Modifie
         }
         Row(horizontalArrangement = Arrangement.spacedBy(ReportHeaderGapDp.dp), verticalAlignment = Alignment.CenterVertically) {
             OverlayText(label, typography.labelStyle(labelSize * fit, color = Kk.Mute), uppercase = true)
-            rebirth?.let { OverlayTag(it, variant = KkTagVariant.LINE, textScale = scene.textScale * fit) }
+            rebirth?.let {
+                if (presentation.rebirthLevel > 0) {
+                    OverlayTag(it, background = Kk.Gold, foreground = Kk.Ink, textScale = scene.textScale * fit)
+                } else {
+                    OverlayTag(it, variant = KkTagVariant.LINE, textScale = scene.textScale * fit)
+                }
+            }
             form?.let { ReportFormTag(it, formIcon, scene.textScale * fit) }
         }
     }

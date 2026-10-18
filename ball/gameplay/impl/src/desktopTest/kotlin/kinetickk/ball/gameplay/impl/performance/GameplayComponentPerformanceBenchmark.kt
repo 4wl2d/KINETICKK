@@ -270,7 +270,7 @@ private object BenchmarkProfilePort : ProfileReadPort, ProfileProgress {
         preferences = profile.preferences,
         economy = profile.economy,
         loadout = profile.loadout,
-        labProgress = profile.labProgress,
+        matrix = profile.matrix,
         collection = profile.collection,
         rebirthProgress = profile.rebirthProgress,
     )
@@ -284,7 +284,8 @@ private object BenchmarkProfilePort : ProfileReadPort, ProfileProgress {
 
     override fun query(query: ProfileQuery.GetHomeProgress): kinetickk.ball.profile.api.HomeProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetCollection): kinetickk.ball.profile.api.CollectionProjection = error("unused")
-    override fun query(query: ProfileQuery.GetLabProgress): kinetickk.ball.profile.api.LabProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetMatrixProgress): kinetickk.ball.profile.api.MatrixProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetHangar): kinetickk.ball.profile.api.HangarProjection = error("unused")
     override fun query(query: ProfileQuery.GetLoadout): kinetickk.ball.profile.api.LoadoutProjection = error("unused")
     override fun query(query: ProfileQuery.GetRebirthProgress): kinetickk.ball.profile.api.RebirthProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetPersistenceStatus): kinetickk.ball.profile.api.PersistenceStatusProjection = error("unused")
@@ -478,6 +479,35 @@ private fun canonicalRenderFingerprint(render: GameplayRenderModel): Long {
     signature = mix(signature, render.weaponBeamEndX.toRawBits())
     signature = mix(signature, render.weaponBeamEndY.toRawBits())
     signature = mix(signature, render.coreShape.ordinal)
+    signature = mix(signature, render.coreRadius.toRawBits())
+    signature = mix(signature, render.abilityPower.toRawBits())
+    signature = mix(signature, render.interpolationAlpha.toRawBits())
+    signature = mix(signature, render.previousCoreX.toRawBits())
+    signature = mix(signature, render.previousCoreY.toRawBits())
+    signature = mix(signature, render.previousCameraX.toRawBits())
+    signature = mix(signature, render.previousCameraY.toRawBits())
+    signature = mix(signature, render.previousMorningstarX.toRawBits())
+    signature = mix(signature, render.previousMorningstarY.toRawBits())
+    signature = mix(signature, render.viewportDensity.toRawBits())
+    signature = mix(signature, render.minimapRange.toRawBits())
+    signature = mix(signature, render.rebirthRank)
+    signature = mix(signature, render.volatileBursts.size)
+    render.volatileBursts.forEach { burst ->
+        signature = mix(signature, burst.x.toRawBits())
+        signature = mix(signature, burst.y.toRawBits())
+        signature = mix(signature, burst.radius.toRawBits())
+        signature = mix(signature, burst.armedAt.toRawBits())
+        signature = mix(signature, burst.detonatesAt.toRawBits())
+    }
+    signature = mix(signature, render.obstacles.size)
+    render.obstacles.forEach { obstacle ->
+        signature = mixLong(signature, obstacle.id)
+        signature = mix(signature, obstacle.kind.ordinal)
+        signature = mix(signature, obstacle.x.toRawBits())
+        signature = mix(signature, obstacle.y.toRawBits())
+        signature = mix(signature, obstacle.radius.toRawBits())
+        signature = mix(signature, obstacle.shapeSeed)
+    }
     signature = mixLong(signature, canonicalCharacterAbilityFingerprint(render.characterAbility))
     signature = mix(signature, render.pointsOfInterest.size)
     render.pointsOfInterest.forEach { point ->
@@ -510,7 +540,8 @@ internal fun canonicalPreferencesFingerprint(preferences: PlayerPreferences): Lo
     signature = mix(signature, preferences.damageNumbers.asInt())
     signature = mix(signature, preferences.damageNumberSize.ordinal)
     signature = mix(signature, preferences.damageNumberFormat.ordinal)
-    return mix(signature, preferences.damageNumberTierThreshold)
+    signature = mix(signature, preferences.damageNumberTierThreshold)
+    return mix(signature, preferences.minimapEnabled.asInt())
 }
 
 internal fun canonicalRelicFingerprint(relic: EquippedRelic): Long =
@@ -527,12 +558,13 @@ internal fun canonicalChoiceFingerprint(choice: ChoiceOption): Long {
     signature = mix(signature, choice.relicId?.ordinal ?: -1)
     signature = mix(signature, choice.relicAction?.ordinal ?: -1)
     signature = mix(signature, choice.relicSlot ?: -1)
-    return mix(signature, choice.rewardFocus?.ordinal ?: -1)
+    signature = mix(signature, choice.rewardFocus?.ordinal ?: -1)
+    signature = mix(signature, choice.reborn.asInt())
+    return mix(signature, choice.heirloom.asInt())
 }
 
 internal fun canonicalCharacterAbilityFingerprint(ability: CharacterAbilityProjection): Long {
     var signature = mix(0L, ability.charge.toRawBits())
-    signature = mix(signature, ability.barrier.toRawBits())
     signature = mix(signature, ability.ringRadius.toRawBits())
     signature = mix(signature, ability.parryWindow.toRawBits())
     signature = mix(signature, ability.lattice.size)
@@ -540,7 +572,41 @@ internal fun canonicalCharacterAbilityFingerprint(ability: CharacterAbilityProje
         signature = mix(signature, point.x.toRawBits())
         signature = mix(signature, point.y.toRawBits())
     }
-    return signature
+    signature = mix(signature, ability.facets)
+    signature = mix(signature, ability.facetProgress.toRawBits())
+    signature = mix(signature, ability.edge)
+    signature = mix(signature, ability.stellarMass)
+    signature = mix(signature, ability.novaFlash.toRawBits())
+    signature = mix(signature, ability.haloBurstFlash.toRawBits())
+    signature = mix(signature, ability.polarity)
+    signature = mix(signature, ability.polarityFlash.toRawBits())
+    signature = mix(signature, ability.beatPeriod.toRawBits())
+    signature = mix(signature, ability.beatWindow.toRawBits())
+    signature = mix(signature, ability.beatStreak)
+    signature = mix(signature, ability.blinkCharges)
+    signature = mix(signature, ability.blinkRecharge.toRawBits())
+    signature = mix(signature, ability.scars.size)
+    ability.scars.forEach { scar ->
+        signature = mix(signature, scar.x0.toRawBits())
+        signature = mix(signature, scar.y0.toRawBits())
+        signature = mix(signature, scar.x1.toRawBits())
+        signature = mix(signature, scar.y1.toRawBits())
+        signature = mix(signature, scar.fuse.toRawBits())
+        signature = mix(signature, scar.fade.toRawBits())
+    }
+    signature = mix(signature, ability.drones.size)
+    ability.drones.forEach { drone ->
+        signature = mix(signature, drone.x.toRawBits())
+        signature = mix(signature, drone.y.toRawBits())
+        signature = mix(signature, drone.previousX.toRawBits())
+        signature = mix(signature, drone.previousY.toRawBits())
+        signature = mix(signature, if (drone.darting) 1 else 0)
+    }
+    signature = mix(signature, if (ability.ghostActive) 1 else 0)
+    signature = mix(signature, ability.ghostX.toRawBits())
+    signature = mix(signature, ability.ghostY.toRawBits())
+    signature = mix(signature, ability.previousGhostX.toRawBits())
+    return mix(signature, ability.previousGhostY.toRawBits())
 }
 
 internal fun canonicalPointOfInterestFingerprint(point: PointOfInterestProjection): Long {
@@ -584,6 +650,12 @@ private fun appendRenderCollections(initial: Long, render: GameplayRenderModel):
         signature = mix(signature, enemy.previousX.toRawBits())
         signature = mix(signature, enemy.previousY.toRawBits())
         signature = mix(signature, enemy.dead.asInt())
+        signature = mix(signature, enemy.behavior)
+        signature = mix(signature, enemy.behaviorRemaining.toRawBits())
+        signature = mix(signature, enemy.facing.toRawBits())
+        signature = mix(signature, enemy.linkedTo)
+        signature = mix(signature, enemy.shielded.asInt())
+        signature = mix(signature, enemy.armored.asInt())
     }
     signature = mix(signature, render.projectiles.size)
     render.projectiles.forEach { projectile ->
@@ -600,6 +672,7 @@ private fun appendRenderCollections(initial: Long, render: GameplayRenderModel):
         signature = mix(signature, projectile.sourceWeapon?.ordinal ?: -1)
         signature = mix(signature, projectile.previousX.toRawBits())
         signature = mix(signature, projectile.previousY.toRawBits())
+        signature = mix(signature, projectile.kind.ordinal)
     }
     signature = mix(signature, render.pickups.size)
     render.pickups.forEach { pickup ->
@@ -617,6 +690,8 @@ private fun appendRenderCollections(initial: Long, render: GameplayRenderModel):
         signature = mix(signature, point.x.toRawBits())
         signature = mix(signature, point.y.toRawBits())
         signature = mix(signature, point.age.toRawBits())
+        signature = mix(signature, point.life.toRawBits())
+        signature = mix(signature, point.scale.toRawBits())
     }
     signature = mix(signature, render.weaponNodes.size)
     render.weaponNodes.forEach { node ->
@@ -633,7 +708,37 @@ private fun appendRenderCollections(initial: Long, render: GameplayRenderModel):
         signature = mix(signature, orbital.x.toRawBits())
         signature = mix(signature, orbital.y.toRawBits())
         signature = mix(signature, orbital.radius.toRawBits())
+        signature = mix(signature, orbital.previousX.toRawBits())
+        signature = mix(signature, orbital.previousY.toRawBits())
     }
+    signature = mix(signature, render.weaponEntities.size)
+    render.weaponEntities.forEach { entity ->
+        signature = mix(signature, entity.kind.ordinal)
+        signature = mix(signature, entity.x.toRawBits())
+        signature = mix(signature, entity.y.toRawBits())
+        signature = mix(signature, entity.previousX.toRawBits())
+        signature = mix(signature, entity.previousY.toRawBits())
+        signature = mix(signature, entity.endX.toRawBits())
+        signature = mix(signature, entity.endY.toRawBits())
+        signature = mix(signature, entity.previousEndX.toRawBits())
+        signature = mix(signature, entity.previousEndY.toRawBits())
+        signature = mix(signature, entity.angle.toRawBits())
+        signature = mix(signature, entity.previousAngle.toRawBits())
+        signature = mix(signature, entity.radius.toRawBits())
+        signature = mix(signature, entity.extent.toRawBits())
+        signature = mix(signature, entity.life.toRawBits())
+        signature = mix(signature, entity.maxLife.toRawBits())
+        signature = mix(signature, entity.phase)
+    }
+    val synergy = render.weaponSynergy
+    signature = mix(signature, synergy.tagPoints)
+    signature = mix(signature, synergy.tagBonus.toRawBits())
+    signature = mix(signature, if (synergy.signatureActive) 1 else 0)
+    signature = mix(signature, synergy.harmonizingRelic?.ordinal ?: -1)
+    signature = mix(signature, synergy.infusionElement?.ordinal ?: -1)
+    signature = mix(signature, synergy.scalingMultiplier.toRawBits())
+    signature = mix(signature, synergy.masteryForms)
+    signature = mix(signature, synergy.activeMasteryForm?.hashCode() ?: 0)
     val totem = render.totem
     signature = mix(signature, if (totem == null) 0 else 1)
     if (totem != null) {

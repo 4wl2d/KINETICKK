@@ -1,0 +1,300 @@
+// SPDX-FileCopyrightText: 2026 Vladislav Tomilov
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package kinetickk.ball.gameplay.nucleus.simulation
+
+import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.gameplay.nucleus.model.Enemy
+import kinetickk.ball.gameplay.nucleus.model.WeaponEntity
+import kinetickk.ball.gameplay.nucleus.model.WeaponNode
+import kinetickk.ball.gameplay.nucleus.model.length
+import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
+import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
+import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+/** Weapon entities and the impact shockwave meet the enemy rules shots meet: shield facing, phasing and Rebirth power. */
+class WeaponEntityRulesTest {
+    @Test
+    fun aReflectorMeetsWeaponEntitiesByWhereTheyComeFrom() {
+        val state = buildTestState(weapon = WeaponId.GYRE_DISC, shape = CoreShape.HEXAGON)
+        state.critChance = 0f
+        val reflector = state.spawn(EnemyType.REFLECTOR, 300f, 0f)
+        state.updateEnemies(STEP)
+        assertTrue(reflector.guarded, "It turns its shield to the Core")
+        reflector.previousX = reflector.x
+        reflector.previousY = reflector.y
+
+        /** One entity crossing the Reflector from [fromX]; returns the damage it dealt. */
+        fun strike(kind: WeaponEntityKind, fromX: Float, phase: Int = 0): Float {
+            val entity = WeaponEntity(kind, fromX, reflector.y, 8f, 1f, 1f, damage = 40f, phase = phase)
+            entity.x = reflector.x
+            val entities = state.weaponRuntime.entities
+            entities.clear()
+            entities += entity
+            val before = reflector.hp
+            state.resolveWeaponEntityHits(STEP)
+            return before - reflector.hp
+        }
+
+        // The outward disc meets the shield from the Core's side; the returning one strikes its back.
+        val front = strike(WeaponEntityKind.DISC, reflector.x - 120f)
+        val rear = strike(WeaponEntityKind.DISC, reflector.x + 120f, phase = 1)
+        assertTrue(front > 0f)
+        assertEquals(4f, rear / front, 1e-3f, "front $front, rear $rear")
+        assertTrue(reflector.guarded, "The shield follows the Core again after the hit")
+        // A missile coming round from behind lands in full too.
+        assertEquals(rear, strike(WeaponEntityKind.MISSILE, reflector.x + 120f), 1e-2f)
+        assertTrue(reflector.guarded)
+    }
+
+    @Test
+    fun aTetherLetsGoOfAPhasedPhantomForAnEnemyItCanHit() {
+        val state = buildTestState(weapon = WeaponId.TETHER_ARC, shape = CoreShape.HEXAGON)
+        val phantom = state.spawn(EnemyType.PHANTOM, 120f, 0f)
+        val drifter = state.spawn(EnemyType.DRIFTER, -200f, 0f)
+        state.stepTethers(seconds = 1f)
+        assertEquals(phantom.id, state.weaponRuntime.tetherTargetId, "The nearer Phantom is held first")
+        assertEquals(DUMMY_HP, drifter.hp)
+
+        phantom.shiftUntil = state.elapsed + PHANTOM_PHASE_SECONDS
+        state.stepTethers(seconds = 0.5f)
+        assertEquals(drifter.id, state.weaponRuntime.tetherTargetId, "The tether moves to the enemy it can hit")
+        assertTrue(drifter.hp < DUMMY_HP, "The new target takes the tether's damage")
+    }
+
+    @Test
+    fun anAegisShardTurnsFromAPhasedTargetToOneItCanHit() {
+        val state = buildTestState(weapon = WeaponId.AEGIS_SHARDS, shape = CoreShape.HEXAGON)
+        val phantom = state.spawn(EnemyType.PHANTOM, 150f, 0f)
+        val drifter = state.spawn(EnemyType.DRIFTER, 0f, 150f)
+        val shard = WeaponEntity(WeaponEntityKind.SHARD, state.coreX, state.coreY, AEGIS_SHARD_RADIUS, AEGIS_SHARD_LIFE, AEGIS_SHARD_LIFE,
+            vx = AEGIS_SPEED, damage = 10f, targetId = phantom.id)
+        state.weaponRuntime.entities.clear()
+        state.weaponRuntime.entities += shard
+        phantom.shiftUntil = state.elapsed + PHANTOM_PHASE_SECONDS
+        state.advanceWeaponEntities(STEP)
+        assertEquals(drifter.id, shard.targetId)
+    }
+
+    @Test
+    fun aSentryShotSplashesTheEnemiesCrowdedAroundItsTarget() {
+        val state = buildTestState(weapon = WeaponId.SENTRY_GRID, shape = CoreShape.HEXAGON)
+        state.critChance = 0f
+        // Low enough integrity that each hit reads exactly in Float.
+        val struck = state.dummy(x = state.coreX + 300f, y = state.coreY, hp = TARGET_HP)
+        // Beside the shot's path (out of its reach), inside the splash; then just outside the splash.
+        val neighbor = state.dummy(x = struck.x, y = struck.y + 36f, hp = TARGET_HP)
+        val outside = state.dummy(x = struck.x, y = struck.y - (SENTRY_SPLASH_RADIUS + 17f + 2f), hp = TARGET_HP)
+        state.firePlayerProjectile(struck.x - 60f, struck.y, 0f, SENTRY_SHOT_SPEED, 20f, 0, 4f, 1)
+        val shot = state.projectiles.single()
+        shot.x = struck.x + 10f
+        state.resolveProjectileHits()
+
+        val direct = TARGET_HP - struck.hp
+        assertTrue(direct > 0f, "the shot strikes its target")
+        assertEquals(SENTRY_SPLASH_SHARE, (TARGET_HP - neighbor.hp) / direct, 1e-4f, "the neighbor takes the splash share")
+        assertEquals(TARGET_HP, outside.hp, "the splash stops at its radius")
+        assertTrue(state.projectiles.isEmpty(), "the shot is spent on its target")
+    }
+
+    @Test
+    fun anAegisShardPiercesOnToThreeMoreEnemiesKeepingMostOfItsDamage() {
+        val state = buildTestState(weapon = WeaponId.AEGIS_SHARDS, shape = CoreShape.HEXAGON)
+        state.critChance = 0f
+        val column = List(AEGIS_PIERCE + 2) { index -> state.spawn(EnemyType.DRIFTER, 80f + index * 70f, 0f).apply { hp = TARGET_HP } }
+        val shard = WeaponEntity(WeaponEntityKind.SHARD, state.coreX, state.coreY, AEGIS_SHARD_RADIUS, AEGIS_SHARD_LIFE, AEGIS_SHARD_LIFE,
+            vx = AEGIS_SPEED, damage = 10f, phase = AEGIS_PIERCE, targetId = column.first().id)
+        state.weaponRuntime.entities.clear()
+        state.weaponRuntime.entities += shard
+        while (shard.life > 0f) {
+            state.advanceWeaponEntities(STEP)
+            state.resolveWeaponEntityHits(STEP)
+        }
+
+        val taken = column.map { TARGET_HP - it.hp }
+        assertEquals(3, AEGIS_PIERCE, "a shard pierces on to three more enemies")
+        assertTrue(taken[0] > 0f, "the shard strikes the first enemy")
+        var share = 1f
+        for (pierced in 1..AEGIS_PIERCE) {
+            share *= AEGIS_PIERCE_SHARE
+            assertEquals(share, taken[pierced] / taken[0], 1e-4f, "enemy $pierced: taken $taken")
+        }
+        assertEquals(0f, taken.last(), "the shard ends on its fourth enemy: taken $taken")
+    }
+
+    @Test
+    fun aPiercingShardWhoseNextTargetPhasesNeverTurnsBackToAnEnemyItStruck() {
+        val state = buildTestState(weapon = WeaponId.AEGIS_SHARDS, shape = CoreShape.HEXAGON)
+        state.critChance = 0f
+        val struck = state.spawn(EnemyType.DRIFTER, 80f, 0f)
+        val phantom = state.spawn(EnemyType.PHANTOM, 150f, 0f)
+        // Farther from the struck enemy than the Phantom, so the shard first pierces on to the Phantom.
+        val unstruck = state.spawn(EnemyType.DRIFTER, 80f, 170f)
+        val shard = WeaponEntity(WeaponEntityKind.SHARD, state.coreX, state.coreY, AEGIS_SHARD_RADIUS, AEGIS_SHARD_LIFE, AEGIS_SHARD_LIFE,
+            vx = AEGIS_SPEED, damage = 10f, phase = AEGIS_PIERCE, targetId = struck.id)
+        state.weaponRuntime.entities.clear()
+        state.weaponRuntime.entities += shard
+        var steps = 0
+        while (struck.hp == DUMMY_HP) {
+            assertTrue(steps++ < 60, "the shard never reached its first target")
+            state.advanceWeaponEntities(STEP)
+            state.resolveWeaponEntityHits(STEP)
+        }
+        assertEquals(phantom.id, shard.targetId, "the shard pierces on to the nearest enemy it has not struck")
+
+        // The Phantom phases out while the shard still sits beside the enemy it struck.
+        phantom.shiftUntil = state.elapsed + PHANTOM_PHASE_SECONDS
+        state.advanceWeaponEntities(STEP)
+        assertEquals(unstruck.id, shard.targetId, "the shard turns to the enemy it has not struck, never back")
+        while (shard.life > 0f) {
+            state.advanceWeaponEntities(STEP)
+            state.resolveWeaponEntityHits(STEP)
+            assertTrue(shard.targetId != struck.id, "the shard turned back to the enemy it struck")
+        }
+    }
+
+    @Test
+    fun theConcussionShockwaveTakesTheRebirthPowerOnce() {
+        fun wave(tier: Int): Float {
+            val state = buildTestState(rebirth = tier, weapon = WeaponId.CONCUSSION_ENGINE, shape = CoreShape.HEXAGON)
+            state.critChance = 0f
+            val target = state.dummy(x = state.coreX + 40f, y = state.coreY)
+            state.onWeaponImpact(IMPACT_SPEED, state.impactPower(IMPACT_SPEED))
+            return target.maxHp - target.hp
+        }
+        val power = canonicalGameplayContent.rebirth.profile(10).playerPowerMultiplier
+        assertTrue(power > 1f)
+        val base = wave(0)
+        assertTrue(base > 0f)
+        assertEquals(power, wave(10) / base, 1e-3f)
+    }
+
+    @Test
+    fun aGravityMineWellGrowsWithWeaponPower() {
+        /** One tick of the third-form well a mine leaves 200 from the Core, at item weapon power [power]. */
+        fun wellTick(power: Float): Float {
+            val state = buildTestState(weapon = WeaponId.GRAVITY_MINES, shape = CoreShape.HEXAGON)
+            state.weaponLevel = 10
+            state.weaponPower = power
+            state.weaponRuntime.entities.clear()
+            state.explodeMine(WeaponNode(WeaponNodeType.GRAVITY_MINE, state.coreX + 200f, state.coreY, 1f, 1f, 40f))
+            val well = state.weaponRuntime.entities.single { it.kind == WeaponEntityKind.WELL }
+            val target = state.spawn(EnemyType.DRIFTER, 200f, 0f)
+            // Low enough integrity that one tick reads exactly in Float.
+            target.hp = 1_000f
+            state.resolveWeaponEntityHits(STEP)
+            assertEquals(MINE_WELL_DPS * state.effectiveWeaponPower(), well.damage, 1e-3f)
+            return 1_000f - target.hp
+        }
+        val base = wellTick(1f)
+        assertTrue(base > 0f)
+        assertEquals(3f, wellTick(3f) / base, 1e-3f)
+    }
+
+    @Test
+    fun aTetherArcEquippedNextToAnEnemyStartsAtItsBaseDamage() {
+        val state = buildTestState(weapon = WeaponId.FLUX_WAKE, shape = CoreShape.HEXAGON)
+        state.critChance = 0f
+        state.equipRunWeapon(WeaponId.TETHER_ARC)
+        val target = state.spawn(EnemyType.DRIFTER, 150f, 0f)
+        // Low enough integrity that one tick reads exactly in Float.
+        target.hp = 1_000f
+        state.stepTethers(seconds = STEP)
+        assertEquals(target.id, state.weaponRuntime.tetherTargetId)
+        assertTrue(state.weaponRuntime.tetherRamp >= 1f, "ramp ${state.weaponRuntime.tetherRamp}")
+        val dealt = 1_000f - target.hp
+        assertTrue(dealt >= TETHER_DPS * STEP * state.effectiveWeaponPower() * 0.999f, "first tick $dealt")
+    }
+
+    @Test
+    fun weaponVisualsAnchoredAtTheCoreJumpWithItsBlink() {
+        for (weapon in listOf(WeaponId.MORNINGSTAR, WeaponId.RIFT_BLADES, WeaponId.AEGIS_SHARDS, WeaponId.SOLAR_SWEEP, WeaponId.TETHER_ARC)) {
+            val state = buildTestState(weapon = weapon, shape = CoreShape.CRESCENT)
+            // A target beside the Blink path stays in tether range on both sides of the jump.
+            if (weapon == WeaponId.TETHER_ARC) state.spawn(EnemyType.DRIFTER, BLINK_RANGE * 0.5f, 120f)
+            state.stepTethers(seconds = STEP * 10f)
+            state.pointerX = state.screenWidth
+            state.pointerY = state.screenHeight * 0.5f
+            val startX = state.coreX
+            state.elapsed += STEP
+            state.ageCharacterStepFlags()
+            state.performDash()
+            assertTrue(state.blinkThisStep)
+            assertEquals(startX + BLINK_RANGE, state.coreX, 0.01f)
+            state.updateWeapons(STEP)
+            state.resolveWeaponEntityHits(STEP)
+
+            // Each visual's travel over the Blink step: one step of orbit or sweep, far below the Blink's range.
+            val travels = buildList<Float> {
+                if (weapon == WeaponId.MORNINGSTAR) {
+                    add(length(state.morningstarX - state.previousMorningstarX, state.morningstarY - state.previousMorningstarY))
+                }
+                state.weaponOrbitals.forEach { add(length(it.x - it.previousX, it.y - it.previousY)) }
+                state.weaponRuntime.entities.forEach { entity ->
+                    when (entity.kind) {
+                        WeaponEntityKind.BEAM -> add(length(entity.x - entity.previousX, entity.y - entity.previousY))
+                        WeaponEntityKind.TETHER -> add(length(entity.endX - entity.previousEndX, entity.endY - entity.previousEndY))
+                        else -> Unit
+                    }
+                }
+            }
+            assertTrue(travels.isNotEmpty(), "$weapon draws a Core-anchored visual")
+            assertTrue(travels.all { it < BLINK_RANGE * 0.1f }, "$weapon travels $travels over a Blink of $BLINK_RANGE")
+        }
+    }
+
+    @Test
+    fun theTetherEndFollowsItsTargetToWhereItIsDrawn() {
+        val state = buildTestState(weapon = WeaponId.TETHER_ARC, shape = CoreShape.HEXAGON)
+        val target = state.spawn(EnemyType.DRIFTER, 150f, 0f)
+        state.stepTethers(seconds = STEP)
+        // The enemy moves after the weapon step anchored the tether, as it does in a game step.
+        repeat(3) {
+            state.elapsed += STEP
+            state.updateWeapons(STEP)
+            target.previousX = target.x
+            target.previousY = target.y
+            target.x += 6f
+            target.y -= 4f
+            state.resolveWeaponEntityHits(STEP)
+            val tether = state.weaponRuntime.entities.single { it.kind == WeaponEntityKind.TETHER }
+            assertEquals(target.previousX, tether.previousX, 1e-3f)
+            assertEquals(target.previousY, tether.previousY, 1e-3f)
+            assertEquals(target.x, tether.x, 1e-3f)
+            assertEquals(target.y, tether.y, 1e-3f)
+        }
+    }
+
+    /** A sturdy [type] at ([x], [y]) from the Core. */
+    private fun MutableGameState.spawn(type: EnemyType, x: Float, y: Float): Enemy {
+        val enemy = spawnedEnemy(type, coreX + x, coreY + y)
+        enemy.hp = DUMMY_HP
+        enemies += enemy
+        return enemy
+    }
+
+    /** Runs the weapon step and the entity hits for [seconds], the enemies held still. */
+    private fun MutableGameState.stepTethers(seconds: Float) {
+        var left = seconds
+        while (left > 0f) {
+            elapsed += STEP
+            updateWeapons(STEP)
+            resolveWeaponEntityHits(STEP)
+            takeVisualFxCues()
+            takeSoundCues()
+            left -= STEP
+        }
+    }
+
+    private companion object {
+        const val STEP = MutableGameState.FIXED_STEP
+        const val IMPACT_SPEED = 600f
+        const val DUMMY_HP = 100_000f
+        const val TARGET_HP = 1_000f
+    }
+}

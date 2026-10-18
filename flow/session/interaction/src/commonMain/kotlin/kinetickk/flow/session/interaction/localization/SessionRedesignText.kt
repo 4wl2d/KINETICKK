@@ -12,8 +12,15 @@ internal enum class SessionRedesignText(
 ) : TextResource {
     MATTER("Matter", "Материя"),
     FORM("Form", "Форма"),
+    MECHANIC("Mechanic", "Механика"),
     MAXED("Maxed", "На максимуме"),
+    RANKS("Ranks", "Ранги"),
     DIRECTIVE("Directive", "Директива"),
+    TIER("Tier", "Ступень"),
+    RANK("Rank", "Ранг"),
+    ASCENDANT("Ascendant", "Вознесённый"),
+    NEW_TIER("New tier", "Новая ступень"),
+    SELECTED("Selected", "Выбрана"),
     STATUS("Status", "Статус"),
     READY("Ready", "Готово"),
     UNLOCKABLE("Unlockable", "Можно открыть"),
@@ -21,27 +28,31 @@ internal enum class SessionRedesignText(
     TEXT_SIZE("Text size", "Размер текста"),
 
     LAB_INFO(
-        "Permanent upgrades bought with Matter. Every form shares them, and they stay after every rebirth.",
-        "Постоянные улучшения за материю. Они действуют на все формы и сохраняются после перерождения.",
+        "The Core Matrix: permanent upgrades bought with Matter in four branches. Every form shares them, they stay after every rebirth, and a reset refunds them for free.",
+        "Матрица Ядра: постоянные улучшения за материю в четырёх ветвях. Они действуют на все формы, сохраняются после перерождения, а сброс бесплатно возвращает материю.",
     ),
     ARMORY_INFO(
         "Unlock starting weapons with Matter. Every form can use every weapon.",
         "Открывайте стартовое оружие за материю. Любая форма может использовать любое оружие.",
     ),
     REBIRTH_INFO(
-        "Defeat the Architect to open a harder tier. Your run build resets. Matter, upgrades, unlocked weapons, discoveries and settings are kept.",
-        "Победите Архитектора, чтобы открыть более сложный уровень. Сборка забега сбрасывается. Материя, улучшения, открытое оружие, находки и настройки сохраняются.",
+        "Defeat the Architect to earn the next, harder tier and a Reborn rank; any earned tier can be chosen for the next run. Matter, Matrix nodes, unlocked weapons, discoveries and settings are kept.",
+        "Победите Архитектора, чтобы открыть следующую, более сложную ступень и ранг перерождения; для забега можно выбрать любую открытую ступень. Материя, узлы матрицы, открытое оружие, находки и настройки сохраняются.",
     ),
     CODEX_INFO(
-        "Everything you have found in runs: items, weapons, relics, forms and synergies.",
-        "Всё, что вы нашли в забегах: предметы, оружие, реликвии, формы и синергии.",
+        "Everything you have found in runs: items, weapons, relics, forms, reactions and relic pairings.",
+        "Всё, что вы нашли в забегах: предметы, оружие, реликвии, формы, реакции и сочетания реликвий.",
+    ),
+    HANGAR_INFO(
+        "Choose the character for your next run. Each form has its own mechanic and traits; new forms unlock with achievements and Reborn ranks.",
+        "Выберите персонажа для следующего забега. У каждой формы своя механика и особенности; новые формы открываются достижениями и рангами перерождения.",
     ),
     SETTINGS_INFO(
         "Game, sound, graphics and interface options. Changes apply immediately.",
         "Параметры игры, звука, графики и интерфейса. Изменения применяются сразу.",
     ),
 
-    VERSION("v0.3.0", "v0.3.0"),
+    VERSION("v0.4.0", "v0.4.0"),
     COPYRIGHT("© 2026 Vladislav Tomilov", "© 2026 Владислав Томилов"),
     LICENSE("GPL v3+", "GPL v3+"),
     NO_WARRANTY("No warranty", "Без гарантий"),

@@ -66,8 +66,8 @@ private fun buttonStyle(measurer: CanvasTextMeasurer, size: KkButtonSize) =
 /**
  * Draws a slab button inside [bounds] (the resting face rect).
  *
- * - [hover] 0..1 is the caller-animated hover/focus emphasis ([KkEase.Pull], ~200 ms): the echo
- *   slab slides out to [KkButtonSize.echoDp] and the button shifts 5 dp right. Idle shows no echo.
+ * - [hover] 0..1 is the current hover/focus emphasis: the echo slab extends to
+ *   [KkButtonSize.echoDp] and the button shifts 5 dp right. Idle shows no echo.
  * - [focused] draws the 2 dp bone focus outline 4 dp outside the face.
  * - [pressed] is the 1-frame bone flash: bone face, echo collapsed, 3 dp press offset.
  * - [enabled] false: ink-3 face, mute-2 text, no echo. [locked]: ink-3 face + hatch, mute text,
@@ -224,8 +224,8 @@ private fun DrawScope.drawFocusOutline(bounds: Rect) {
  * Big stacked menu item (`.mi`, cond 900 italic, 64 px on desktop Home; pass [fontSize] 46 for
  * pause). [left] is the item's left edge and [centerY] its vertical center.
  *
- * [selection] 0..1 (animate with [KkEase.Pull] over [KkTime.MenuSelect] ms; overshoot allowed)
- * grows a bone slab from the screen edge ([edgeRight]) to the item, slides the `you` echo in to
+ * [selection] 0..1 controls the bone slab from the screen edge ([edgeRight]) to the item.
+ * Interactive menus pass their current selection directly. It slides the `you` echo in to
  * (−14, 10), shows three trailing speed lines, turns the text ink and moves the item −26 dp with a
  * −2° tilt. [dim] (secondary item) uses mute-2; [locked] adds a lock icon. Optional [stamp]
  * (e.g. an unlockable event) rides right after the label; optional mono [sub] value follows it and

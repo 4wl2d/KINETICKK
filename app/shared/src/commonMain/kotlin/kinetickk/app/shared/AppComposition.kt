@@ -21,8 +21,10 @@ import kinetickk.ball.profile.impl.ProfilePersistenceCapability
 import kinetickk.ball.profile.impl.createProfileComponent
 import kinetickk.ball.profile.interaction.armory.api.ArmoryFeature
 import kinetickk.ball.profile.interaction.armory.impl.DefaultArmoryFeature
-import kinetickk.ball.profile.interaction.lab.api.LabFeature
-import kinetickk.ball.profile.interaction.lab.impl.DefaultLabFeature
+import kinetickk.ball.profile.interaction.hangar.api.HangarFeature
+import kinetickk.ball.profile.interaction.hangar.impl.DefaultHangarFeature
+import kinetickk.ball.profile.interaction.matrix.api.MatrixFeature
+import kinetickk.ball.profile.interaction.matrix.impl.DefaultMatrixFeature
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
 import kinetickk.ball.profile.interaction.rebirth.impl.DefaultRebirthFeature
 import kinetickk.ball.profile.interaction.settings.api.SettingsFeature
@@ -61,8 +63,9 @@ internal class AppCompositionOwner(
     appSessionComponent: AppSessionPort? = null,
     homeFeature: HomeFeature? = null,
     settingsFeature: SettingsFeature? = null,
-    labFeature: LabFeature? = null,
+    matrixFeature: MatrixFeature? = null,
     armoryFeature: ArmoryFeature? = null,
+    hangarFeature: HangarFeature? = null,
     rebirthFeature: RebirthFeature? = null,
     codexFeature: CodexFeature? = null,
     profileUnavailableFeature: ProfileUnavailableFeature? = null,
@@ -88,6 +91,7 @@ internal class AppCompositionOwner(
             profileProgress = this.profileComponent,
             audioService = this.audioService,
             diagnostics = diagnostics,
+            seedSource = ::varyingGameplaySeed,
         )
     private val homeFeature: HomeFeature = homeFeature ?: DefaultHomeFeature(
         profilePort = this.profilePort,
@@ -98,9 +102,9 @@ internal class AppCompositionOwner(
         this.profilePort,
         this.audioService,
     )
-    private val labFeature: LabFeature = labFeature ?: DefaultLabFeature(
+    private val matrixFeature: MatrixFeature = matrixFeature ?: DefaultMatrixFeature(
         profilePort = this.profilePort,
-        metaUpgrades = uiCatalog.metaUpgrades,
+        matrixNodes = uiCatalog.matrixNodes,
         audioService = this.audioService,
     )
     private val armoryFeature: ArmoryFeature = armoryFeature ?: DefaultArmoryFeature(
@@ -108,11 +112,27 @@ internal class AppCompositionOwner(
         weapons = uiCatalog.weapons,
         weaponMasteries = uiCatalog.weaponMasteries,
         audioService = this.audioService,
+        coreShapes = uiCatalog.coreShapes,
+        relics = uiCatalog.relics,
+    )
+    private val hangarFeature: HangarFeature = hangarFeature ?: DefaultHangarFeature(
+        profilePort = this.profilePort,
+        coreShapes = uiCatalog.coreShapes,
+        audioService = this.audioService,
+        weapons = uiCatalog.weapons,
+        relics = uiCatalog.relics,
     )
     private val rebirthFeature: RebirthFeature = rebirthFeature ?: DefaultRebirthFeature(
         profilePort = this.profilePort,
         rebirthPolicy = uiCatalog.rebirth,
         audioService = this.audioService,
+        relics = uiCatalog.relics,
+        items = uiCatalog.items,
+        buildPolicy = uiCatalog.build.policy,
+        weapons = uiCatalog.weapons,
+        coreShapes = uiCatalog.coreShapes,
+        matrixNodes = uiCatalog.matrixNodes,
+        enemies = uiCatalog.enemies,
     )
     private val codexFeature: CodexFeature = codexFeature ?: DefaultCodexFeature(
         profilePort = this.profilePort,
@@ -148,8 +168,9 @@ internal class AppCompositionOwner(
             gameplayPresentation = gameplayComponent,
             homeFeature = homeFeature,
             settingsFeature = settingsFeature,
-            labFeature = labFeature,
+            matrixFeature = matrixFeature,
             armoryFeature = armoryFeature,
+            hangarFeature = hangarFeature,
             rebirthFeature = rebirthFeature,
             codexFeature = codexFeature,
             profileUnavailableFeature = profileUnavailableFeature,
@@ -166,3 +187,10 @@ internal expect fun createPlatformProfilePersistenceCapability(diagnostics: Cras
 
 /** Platform authority is acquired only by app composition actuals. */
 internal expect fun createPlatformTonePlaybackCapability(): TonePlaybackCapability
+
+/**
+ * Composition's source of run seeds: each run gets a fresh platform-random seed mixed with its id, so
+ * spawns, wave shapes and Elite aspects differ between runs. Gameplay logs the seed it received.
+ */
+internal fun varyingGameplaySeed(runId: kinetickk.ball.gameplay.api.RunId): Int =
+    kotlin.random.Random.nextInt() xor (runId.value * 0x9E37_79B9L).toInt()

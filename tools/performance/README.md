@@ -16,6 +16,33 @@ longer sampling. Select cases with `-PbenchmarkScenarios=name_a,name_b` and
 write results with `-PbenchmarkOutput=/absolute/path/result.json`.
 Press `F3` in-game for the rolling frame, dispatch, and Canvas performance HUD.
 
+The `published_reaction_frame_60hz_1x`, `published_reaction_frame_60hz_2x`, and
+`published_reaction_burst_100ms_2x` scenarios cover a canonical high-activation
+elemental build with 120 enemies, reaction fields and in-flight weapon volleys.
+They measure simulation and immutable render publication, including reuse of the
+previous frame, and validate deterministic state, outputs and projection values.
+
+For native desktop rendering, run the same dense feedback scene in an isolated
+window that closes automatically and never loads or writes a player profile:
+
+```bash
+KK_REACTION_DESKTOP_BENCH=1 ./gradlew :ball:gameplay:interaction:reactionDesktopBenchmark
+```
+
+`KK_REACTION_DESKTOP_OUT` selects the JSON-lines file; `LABEL`, `WARMUP_MS` and
+`SAMPLE_MS` use the same prefix. Set `KK_REACTION_DESKTOP_EFFECTS=0` for the matched
+scene without feedback. Compare the same backend, viewport, density and display.
+The report separates frame-callback intervals from Canvas CPU submission time;
+neither is a GPU presentation timestamp. Defaults are 2 s warmup and 6 s sampling.
+
+The opt-in `ReactionHeavyRenderBenchmarkTest` and `ReactionFxPerformanceBenchmarkTest`
+separate raster Canvas CPU work from FX application/publication. Enable them with
+`KK_REACTION_RENDER_BENCH=1` or `KK_REACTION_FX_BENCH=1`, respectively, and run the
+selected `:ball:gameplay:interaction:desktopTest --tests '*ReactionHeavyRenderBenchmarkTest' --rerun`
+(or the FX class). `OUT` and `LABEL` share the corresponding environment prefix.
+Their ordinary tests also verify visible feedback, bounded state and retained snapshots.
+Keep raster, native desktop, browser and device results separate.
+
 Compare the current clean commit with an exact compatible base SHA:
 
 ```bash
@@ -25,7 +52,7 @@ bash tools/performance/scripts/compare-pr-base.sh --base FULL_BASE_SHA --profile
 The runner uses separate base worktrees and fresh JVMs in A-B-B-A order.
 It requires matching harness, semantic workloads, fingerprints, and environment.
 Release 0.2.0 uses `gameplay-core-v3` and
-`profile-persistence-current-schema-v3`; older workloads are not comparable.
+`profile-persistence-current-schema-v4`; older workloads are not comparable.
 CI produces candidate-only results when the base lacks the current contract,
 then resumes comparisons once both sides support it. Candidate-only results
 carry no claim about improvement or regression against the base.

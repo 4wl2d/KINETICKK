@@ -49,11 +49,17 @@ internal val runtimeBehaviorEvidence = listOf(
         ),
     ),
     BehaviorEvidence(
+        ":ball:content:api", "kinetickk.ball.content.api.WorldContentTest",
+        setOf(
+            "obstacleTuningRejectsAWindowPastTheBoundAndInvertedReaches",
+        ),
+    ),
+    BehaviorEvidence(
         ":ball:content:impl", "kinetickk.ball.content.impl.ContentBootstrapValidationTest",
         setOf(
             "exactCatalogBoundsAreAccepted",
             "itemBoundRejectsNPlusOne",
-            "metaUpgradeBoundRejectsNPlusOne",
+            "matrixNodeBoundRejectsNPlusOne",
             "rebirthBoundRejectsLevelEleven",
             "relicBoundRejectsNPlusOne",
             "synergyBoundRejectsNPlusOne",
@@ -145,7 +151,7 @@ internal val runtimeBehaviorEvidence = listOf(
     BehaviorEvidence(
         ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.characterization.GameplayArchitectureBoundsTest",
         setOf(
-            "delayedRelicHitBoundAcceptsNAndRejectsNPlusOneCandidate",
+            "echoHitBoundAcceptsNAndRejectsNPlusOneCandidate",
             "fixedStepWorkAcceptsFortyEightAndDefersFortyNinth",
             "simulationDeltaAndAccumulatorClampFirstNPlusOneToExactCaps",
         ),
@@ -159,8 +165,8 @@ internal val runtimeBehaviorEvidence = listOf(
     BehaviorEvidence(
         ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.characterization.RelicSystemTest",
         setOf(
-            "meldRelicAcceptsRankFiveAndSalvagesTheFirstRankSixCandidate",
-            "relicMatrixStopsAtFourSlotsAndDuplicateRanksStopAtFive",
+            "meldRaisesToRankTwoSalvagesBeyondItAndDuplicatesReachRankThree",
+            "relicMatrixStopsAtFourSlotsAndDuplicateRanksStopAtThree",
         ),
     ),
     BehaviorEvidence(
@@ -189,7 +195,7 @@ internal val runtimeBehaviorEvidence = listOf(
     BehaviorEvidence(
         ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.GameplayCollectionBoundsTest",
         setOf(
-            "arcCoilTargetsSixNearestAndLeavesSeventhUntouched",
+            "arcCoilChainsAtMostFourTargetsAndLeavesFifthUntouched",
             "choiceIndexThreeIsAcceptedAndFourIsRejected",
             "choiceInventoryAcceptsFourAndRejectsFifthAtomically",
             "collisionCompactionRetainsOrderAcrossConsecutiveProjectileAndPickupHits",
@@ -199,7 +205,7 @@ internal val runtimeBehaviorEvidence = listOf(
             "projectileHitHistoryAcceptsOneHundredTwentyRejectsNextThenReclaimsDeadEntry",
             "projectileHitHistoryMembershipIsCorrectAtLinearAndBinarySearchBoundaries",
             "projectileHitHistoryRetentionMergesSortedLiveIdsAndHonorsTheirLogicalCount",
-            "relicChainWorkAcceptsFiveAndRejectsSixthIteration",
+            "chainWorkAcceptsSixTargetsAndRejectsTheSeventh",
             "rewardChoiceGeneratorsAcceptThreeCandidatesAndDeferFirstNPlusOne",
             "soundCuesAcceptThirtyTwoAndRejectThirtyThird",
             "trailSamplerProcessesThirtyTwoAndDropsThirtyThirdSample",
@@ -234,6 +240,20 @@ internal val runtimeBehaviorEvidence = listOf(
         ),
     ),
     BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.ObstacleSystemTest",
+        setOf(
+            "destroyedObstaclesNeverRegenerateAndTheMemoryIsBounded",
+            "theWindowIsDeterministicPerSeedBoundedGappedAndClearOfTheOrigin",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.PickupVacuumTest",
+        setOf(
+            "keysAndRelicsNeverExpireWhileDataFades",
+            "theCapDropsNewDataButEvictsTheOldestDataForKeysAndRelics",
+        ),
+    ),
+    BehaviorEvidence(
         ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.PendingOutputBufferIsolationTest",
         setOf(
             "drainingOneForkAndRecordingLaterCannotMutateSourceOrSiblingOutputs",
@@ -258,7 +278,7 @@ internal val runtimeBehaviorEvidence = listOf(
     BehaviorEvidence(
         ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.SynergySystemTest",
         setOf(
-            "effectBoundAndDependencyRemovalPreserveIsolatedSnapshots",
+            "combatFieldBoundAndRelicRemovalPreserveIsolatedSnapshots",
         ),
     ),
     BehaviorEvidence(
@@ -302,16 +322,16 @@ internal val runtimeBehaviorEvidence = listOf(
         ),
     ),
     BehaviorEvidence(
-        ":ball:profile:interaction", "kinetickk.ball.profile.interaction.lab.impl.LabReducerTest",
+        ":ball:profile:interaction", "kinetickk.ball.profile.interaction.matrix.impl.MatrixReducerTest",
         setOf(
-            "snapshotMapsEightOrderedUpgradesAndExactNextCost",
+            "snapshotMapsEveryOrderedNodeWithItsStatusAndExactNextCost",
         ),
     ),
     BehaviorEvidence(
         ":ball:profile:nucleus", "kinetickk.ball.profile.nucleus.ProfileNucleusTest",
         setOf(
             "achievementCountersSaturateWithoutOverflowAndTheDecisionIsDeterministic",
-            "achievementThresholdsAccumulateAcrossRunsAndUnlockAllSixShapes",
+            "achievementThresholdsAccumulateAcrossRunsAndUnlockAllTwelveShapes",
             "gameplayProgressValidationUsesClosedRejectionReasons",
             "targetOwnedCommandOrdersPersistenceBeforeCorrelatedCompletion",
         ),
@@ -320,9 +340,9 @@ internal val runtimeBehaviorEvidence = listOf(
         ":ball:profile:resource", "kinetickk.ball.profile.resource.ProfileCodecTest",
         setOf(
             "byteLimitAndUtf8AreCheckedBeforeJsonDecode",
-            "currentSchemaMaximumUnlockedWeaponsLabRanksAndDiscoveriesRoundTripWithoutLoss",
+            "currentSchemaMaximumUnlockedWeaponsMatrixRanksAndDiscoveriesRoundTripWithoutLoss",
             "everyCharacterAndCumulativeAchievementRoundTripsAndRejectsInvalidProgress",
-            "outboundLabRanksAndDiscoveriesRejectFirstNPlusOne",
+            "outboundMatrixRanksAndDiscoveriesRejectFirstNPlusOne",
             "preferenceConfigurationAcceptsExactMaximaAndRejectsAdjacentOverflowOrNonMembers",
             "preferenceIngressAcceptsMembersAndRejectsAdjacentInRangeNonMembers",
         ),
@@ -344,7 +364,7 @@ internal val runtimeBehaviorEvidence = listOf(
     BehaviorEvidence(
         ":flow:session:api", "kinetickk.flow.session.api.AppSessionApiContractTest",
         setOf(
-            "shellProjectionRetainsExactlySevenRoutesAndOnlySessionOwnedWorkflowState",
+            "shellProjectionRetainsExactlyEightRoutesAndOnlySessionOwnedWorkflowState",
         ),
     ),
     BehaviorEvidence(
@@ -371,7 +391,7 @@ internal val runtimeBehaviorEvidence = listOf(
     BehaviorEvidence(
         ":flow:session:interaction", "kinetickk.flow.session.interaction.codex.impl.CodexReducerTest",
         setOf(
-            "catalogAcceptsFourHundredAndRejectsFourHundredOne",
+            "catalogAcceptsTheContentBoundAndRejectsOneMore",
             "searchAccepts128AndClamps129",
         ),
     ),

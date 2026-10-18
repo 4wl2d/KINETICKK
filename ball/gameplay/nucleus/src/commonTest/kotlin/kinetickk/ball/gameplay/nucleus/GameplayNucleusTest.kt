@@ -30,7 +30,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.emitVisualFx
 import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
-import kinetickk.ball.profile.api.LabProgress
+import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
@@ -98,6 +98,24 @@ class GameplayNucleusTest {
         assertEquals(frame.nextState.revision, completion.result.revision)
         assertNull(initial.engine)
         assertEquals(GameplayRevision.ZERO, initial.revision)
+    }
+
+    @Test
+    fun aPlayerWhoSelectsALowerTierThanTheirHighestClearStartsARunAtThatTier() {
+        val valid = validStartInputs()
+        val lowered = valid.copy(profile = valid.profile.copy(rebirthProgress = RebirthProgress(level = 0, highestCleared = 4)))
+        assertNull(GameplayNucleus.validateStartInputs(lowered))
+        val frame = accepted(
+            GameplayNucleus.decide(initial(4), GameplayNucleusPulse.StartRun,
+                GameplayContext(start = GameplayStartContext.Ready(lowered))),
+        )
+        assertEquals(GameplayRunPhase.RUNNING, frame.nextState.phase)
+        assertEquals(0, frame.nextState.engine!!.model.rebirthLevel)
+        // The rank (one above the highest clear) is the highest selectable tier; above it is rejected.
+        val atRank = valid.copy(profile = valid.profile.copy(rebirthProgress = RebirthProgress(level = 5, highestCleared = 4)))
+        assertNull(GameplayNucleus.validateStartInputs(atRank))
+        val aboveRank = valid.copy(profile = valid.profile.copy(rebirthProgress = RebirthProgress(level = 6, highestCleared = 4)))
+        assertEquals(GameplayConfigurationRejection.REBIRTH_LEVEL_OUT_OF_RANGE, GameplayNucleus.validateStartInputs(aboveRank))
     }
 
     @Test
@@ -173,17 +191,17 @@ class GameplayNucleusTest {
                 ),
             ) to GameplayConfigurationRejection.STARTING_WEAPON_LOCKED,
             valid.copy(
-                profile = valid.profile.copy(labProgress = LabProgress(emptyList())),
-            ) to GameplayConfigurationRejection.META_RANK_COUNT_MISMATCH,
+                profile = valid.profile.copy(matrix = MatrixProgress(emptyList())),
+            ) to GameplayConfigurationRejection.MATRIX_RANK_COUNT_MISMATCH,
             valid.copy(
                 profile = valid.profile.copy(
-                    labProgress = LabProgress(
-                        valid.profile.labProgress.ranks.mapIndexed { index, rank ->
-                            if (index == 0) valid.content.metaUpgrades[0].maxRanks + 1 else rank
+                    matrix = MatrixProgress(
+                        valid.profile.matrix.ranks.mapIndexed { index, rank ->
+                            if (index == 0) valid.content.matrixNodes[0].maxRanks + 1 else rank
                         },
                     ),
                 ),
-            ) to GameplayConfigurationRejection.META_RANK_OUT_OF_RANGE,
+            ) to GameplayConfigurationRejection.MATRIX_RANK_OUT_OF_RANGE,
             valid.copy(
                 profile = valid.profile.copy(collection = PlayerCollection(setOf(999))),
             ) to GameplayConfigurationRejection.UNKNOWN_DISCOVERED_ITEM,
@@ -555,7 +573,7 @@ private fun PlayerProfile.toGameplaySnapshot(): GameplayProfileSnapshot = Gamepl
     preferences,
     economy,
     loadout,
-    labProgress,
+    matrix,
     collection,
     rebirthProgress,
 )

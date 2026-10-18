@@ -14,11 +14,20 @@ import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.PointOfInterestKind
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.gameplay.interaction.fx.BuildNoticeKind
 import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
+import kinetickk.ball.gameplay.nucleus.render.BuildProjection
+import kinetickk.ball.gameplay.nucleus.render.SeveredRelicProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
+import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
+import kinetickk.ball.gameplay.nucleus.render.PickupProjection
+import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.TotemProjection
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
@@ -38,14 +47,44 @@ class HudHotPathAllocationTest {
                 "combo" to 14, "comboTime" to 1.4f, "comboWindow" to 2.8f, "keys" to 2, "runMatter" to 12_345L,
                 "overdriveTime" to 3f, "overdriveCharge" to 40f, "dashPhaseTime" to 0.1f, "velocityX" to 2_600f,
                 "level" to 45, "polarityStability" to 0.2f, "message" to "ELITE SIGNAL", "messageTime" to 1f,
-                "equippedRelics" to listOf(EquippedRelic(RelicId.entries[0], 1), EquippedRelic(RelicId.entries[1], 2)).toImmutableList(),
-                "enemies" to listOf(EnemyProjection(3, EnemyType.ARCHITECT, 200f, 0f, 0f, 0f, 400f, 1000f, 74f, 0f, 0f, 0f, 0f, 200f, 0f, false))
+                // Relics that keep gauges (Stormheart charge, Stasis meter, Glass Comet's invulnerability), a
+                // replaced relic whose cost lingers, Burnout, and an Architect carrying three statuses.
+                "equippedRelics" to listOf(EquippedRelic(RelicId.entries[0], 1), EquippedRelic(RelicId.STORMHEART_CAPACITOR, 2),
+                    EquippedRelic(RelicId.STASIS_ANCHOR, 1), EquippedRelic(RelicId.GLASS_COMET, 1)).toImmutableList(),
+                "build" to BuildProjection(stormCharge = 0.6f, stasisMeter = 0.4f, stasisBank = 3, invulnerable = true, overdriveBurnout = true,
+                    severed = immutableListOf(SeveredRelicProjection(RelicId.EVENT_HORIZON, 21f))),
+                // Shifting into its second phase, hardened against Thermal (weak to Cryo).
+                "enemies" to listOf(EnemyProjection(3, EnemyType.ARCHITECT, 200f, 0f, 0f, 0f, 400f, 1000f, 74f, 0f, 0f, 0f, 0f, 200f, 0f, false,
+                    statusBits = 4 or (2 shl 12) or (6 shl 16) or (3 shl 20) or (2 shl 24) or EnemyStatusBits.FROZEN or
+                        EnemyStatusBits.BRITTLE,
+                    affinityBits = bossAffinity(EnemyType.ARCHITECT)),
+                    EnemyProjection(5, EnemyType.ELITE, -500f, -300f, 0f, 0f, 400f, 1000f, 30f, 0f, 0f, 0f, 0f, -500f, -300f, false,
+                        affinityBits = bossAffinity(EnemyType.ELITE)),
+                    EnemyProjection(6, EnemyType.DRIFTER, 700f, 900f, 0f, 0f, 40f, 40f, 17f, 0f, 0f, 0f, 0f, 700f, 900f, false),
+                    EnemyProjection(7, EnemyType.SWARMLING, -50f, 1_900f, 0f, 0f, 9f, 9f, 10f, 0f, 0f, 0f, 0f, -50f, 1_900f, false))
                     .toImmutableList(),
                 "pointsOfInterest" to listOf(PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,
                     true, 12f, 0, 0.4f, immutableListOf(), 0f, 0f)).toImmutableList(),
+                // The minimap: every obstacle kind, a Key and a Relic past its rim, the totem, an Elite and ordinary enemies.
+                "obstacles" to immutableListOf(
+                    ObstacleProjection(1L, ObstacleKind.ASTEROID, 600f, 300f, 120f, 3),
+                    ObstacleProjection(2L, ObstacleKind.UNSTABLE, -900f, 400f, 90f, 8),
+                    ObstacleProjection(3L, ObstacleKind.BUMPER, 200f, -700f, 34f, 1),
+                    ObstacleProjection(4L, ObstacleKind.ASTEROID, 9_000f, 0f, 120f, 5),
+                ),
+                "pickups" to immutableListOf(
+                    PickupProjection(PickupType.KEY, 300f, 300f, 0f, 0f, 20f, 300f, 300f),
+                    PickupProjection(PickupType.RELIC, 5_000f, -4_000f, 0f, 0f, 20f, 5_000f, -4_000f),
+                    PickupProjection(PickupType.DATA, 100f, 100f, 0f, 0f, 20f, 100f, 100f),
+                ),
+                "totem" to TotemProjection(-1_400f, 800f, 1f),
+                "minimapRange" to 2_200f,
+                // Tier 10: the Rebirth strip with all ten mutator sigils and the four-part Architect bar.
+                "rebirthLevel" to 10,
             )
             val fx = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(
-                BuildNotificationProjection("Neon Ram", immutableListOf("Impact damage +0.05", "Weapon power +0.04"), 4f),
+                BuildNotificationProjection("Neon Ram", immutableListOf("Impact damage +0.05", "Weapon power +0.04", "+ Ram II"), 4f),
+                BuildNotificationProjection("REACTION DISCOVERED", immutableListOf("+ Thermal Shock"), 5f, BuildNoticeKind.DISCOVERY),
             ))
             val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
                 AppLanguage.Russian)
@@ -57,6 +96,7 @@ class HudHotPathAllocationTest {
                 model.with(
                     "velocityX" to 300f + frame * 7.3f,
                     "polarityStability" to 0.24f - frame * 0.0005f,
+                    "elapsed" to frame * GameplayRenderModel.FIXED_STEP,
                     "hp" to 36f - frame * 0.05f,
                     "combo" to 14 + frame,
                     "pointsOfInterest" to listOf(PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,
@@ -69,10 +109,14 @@ class HudHotPathAllocationTest {
             val size = Size(width.toFloat(), height.toFloat())
             fun empty() = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) { drawRect(Kk.Ink) }
             // Time stays inside one animation cycle so the frames only move shaders, pulses and alphas.
+            // Toasts run down their life every frame (the reducer copies them, keeping their lines).
+            val fxFrames = List(FRAMES) { frame ->
+                fx.copy(buildNotifications = fx.buildNotifications.map { it.copy(life = it.life - frame * 0.001f) }.toImmutableList())
+            }
             fun hud(frame: Int) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) {
                 val current = frames[frame % FRAMES]
                 drawHud(current, measurer, 10f + frame * 0.0001f, 0f, 0f, memory, trialInfoOpen = true)
-                drawHudFeed(current, fx, measurer, 10f + frame * 0.0001f, memory)
+                drawHudFeed(current, fxFrames[frame % FRAMES], measurer, 10f + frame * 0.0001f, memory)
                 drawTrialTooltip(current, measurer, open = true)
             }
             // Warm every digit, label and path once, then measure frames whose values all differ.
@@ -100,7 +144,9 @@ class HudHotPathAllocationTest {
                 AppLanguage.English)
             val memory = HudPresentationMemory()
             // 21 % down to 10 % every hundred frames (each step a visible drain).
-            val frames = List(FRAMES) { frame -> model.with("polarityStability" to 0.215f - (frame % 100) * 0.0011f) }
+            val frames = List(FRAMES) { frame ->
+                model.with("polarityStability" to 0.215f - (frame % 100) * 0.0011f, "elapsed" to frame * GameplayRenderModel.FIXED_STEP)
+            }
             val bitmap = ImageBitmap(844, 390)
             val canvas = Canvas(bitmap)
             val scope = CanvasDrawScope()

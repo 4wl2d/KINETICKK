@@ -3,11 +3,8 @@
 
 package kinetickk.ball.gameplay.interaction.rewards
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
@@ -18,14 +15,21 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -48,7 +52,6 @@ import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkButtonSize
 import kinetickk.foundation.design.KkButtonVariant
-import kinetickk.foundation.design.KkEase
 import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.KkStampVariant
@@ -146,6 +149,30 @@ internal fun OverlayProbeText(
     Layout(modifier) { _, constraints ->
         val result = measurer.measure(text, style, overflow, softWrap = true, maxLines = maxLines, constraints = constraints)
         layout(result.size.width, result.size.height) {}
+    }
+}
+
+/** [OverlayProbeText] for styled text (spans of number tints and weights). */
+@Composable
+internal fun OverlayProbeText(measurer: TextMeasurer, text: AnnotatedString, style: TextStyle, modifier: Modifier) {
+    Layout(modifier) { _, constraints ->
+        val result = measurer.measure(text, style, TextOverflow.Clip, softWrap = true, constraints = constraints)
+        layout(result.size.width, result.size.height) {}
+    }
+}
+
+/**
+ * Styled body text (tinted numbers, emphasized values) that never breaks inside a word: when its
+ * longest word is wider than the line, the font shrinks until it fits.
+ */
+@Composable
+internal fun OverlayRichText(text: AnnotatedString, style: TextStyle, modifier: Modifier = Modifier) {
+    val measurer = rememberTextMeasurer(cacheSize = 16)
+    val probe = LocalOverlayTextProbe.current
+    BoxWithConstraints(modifier) {
+        val width = if (constraints.hasBoundedWidth) constraints.maxWidth.toFloat() else Float.POSITIVE_INFINITY
+        val fitted = remember(text.text, style, width) { fitTextStyle(measurer, text.text, style, width, Int.MAX_VALUE, 0.7f) }
+        if (probe != null) OverlayProbeText(probe, text, fitted, Modifier) else BasicText(text, style = fitted)
     }
 }
 
@@ -286,6 +313,38 @@ internal fun OverlayFitText(
     }
 }
 
+/**
+ * [text] at the largest size, down to [minScale] of [style], at which it fits its width in [maxLines] lines without
+ * breaking inside a word; nothing at all where even [minScale] cannot hold it (the caller keeps the text in a state
+ * description). It never shrinks below [minScale].
+ */
+@Composable
+internal fun OverlayFitTextOrNothing(
+    text: String,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+    uppercase: Boolean = false,
+    maxLines: Int = 1,
+    minScale: Float = 0.7f,
+) {
+    val measurer = rememberTextMeasurer(cacheSize = 16)
+    val shown = if (uppercase) text.uppercase() else text
+    val probe = LocalOverlayTextProbe.current
+    BoxWithConstraints(modifier) {
+        val width = if (constraints.hasBoundedWidth) constraints.maxWidth.toFloat() else Float.POSITIVE_INFINITY
+        val fitted = remember(shown, style, width, maxLines, minScale) {
+            val candidate = fitTextStyle(measurer, shown, style, width, maxLines, minScale)
+            val layout = measurer.measure(shown, candidate, softWrap = maxLines > 1, maxLines = maxLines + 1,
+                constraints = Constraints(maxWidth = width.coerceAtMost(Constraints.Infinity.toFloat()).toInt().coerceAtLeast(1)))
+            val whole = layout.lineCount <= maxLines && !layout.didOverflowWidth && layout.size.width <= width
+            candidate.takeIf { whole && it.fontSize.value >= style.fontSize.value * minScale - 0.01f }
+        }
+        if (fitted != null) {
+            if (probe != null) OverlayProbeText(probe, shown, fitted, Modifier) else BasicText(shown, style = fitted, maxLines = maxLines)
+        }
+    }
+}
+
 /** Resolves a reward tone to its color; [fixed] is used for [RewardTone.FIXED]. */
 internal fun RewardTone.color(roles: KkRolePalette, fixed: Color): Color = when (this) {
     RewardTone.FIXED -> fixed
@@ -343,7 +402,7 @@ internal fun OverlayStamp(
 
 /**
  * Slab button (`.btn`) filling its modifier bounds, with an optional leading [icon] and a
- * trailing bone count tag ([count], e.g. rerolls left). Hover/focus slide the echo (Pull),
+ * trailing bone count tag ([count], e.g. rerolls left). Hover/focus immediately extend the echo,
  * pressing flashes bone; role Button, focusable, Enter/Space activate.
  */
 @Composable
@@ -363,9 +422,12 @@ internal fun OverlayButton(
 ) {
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
-    val focused by source.collectIsFocusedAsState()
+    var focusedValue by remember { mutableStateOf(false) }
     val pressed by source.collectIsPressedAsState()
-    val emphasis by animateFloatAsState(if ((hovered || focused) && enabled) 1f else 0f, tween(200, easing = KkEase.Pull), label = "overlayButton")
+    // A click keeps keyboard routing without pinning the pointer highlight after it leaves.
+    var pointerFocusValue by remember { mutableStateOf(false) }
+    val keyboardFocused = focusedValue && !pointerFocusValue
+    val emphasis = if ((hovered || keyboardFocused) && enabled) 1f else 0f
     val measurer = rememberKkCanvasMeasurer(textScale)
     Box(
         modifier
@@ -373,10 +435,27 @@ internal fun OverlayButton(
                 this.contentDescription = contentDescription ?: label
                 if (stateDescription != null) this.stateDescription = stateDescription
             }
+            .onFocusChanged {
+                focusedValue = it.isFocused
+                if (!it.isFocused) pointerFocusValue = false
+            }
+            .onPreviewKeyEvent { pointerFocusValue = false; false }
+            .pointerInput(enabled) {
+                if (!enabled) return@pointerInput
+                awaitPointerEventScope {
+                    while (true) {
+                        if (awaitPointerEvent(PointerEventPass.Initial).type == PointerEventType.Press) {
+                            pointerFocusValue = true
+                            awaitPointerEvent(PointerEventPass.Final)
+                            if (!focusedValue) pointerFocusValue = false
+                        }
+                    }
+                }
+            }
             .clickable(interactionSource = source, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
             .drawBehind {
                 val bounds = Rect(Offset.Zero, this.size)
-                drawKkButton(measurer, bounds, "", variant, size, emphasis, focused && enabled, pressed && enabled, enabled, icon = null)
+                drawKkButton(measurer, bounds, "", variant, size, emphasis, keyboardFocused && enabled, pressed && enabled, enabled, icon = null)
                 drawOverlayButtonContent(measurer, bounds, label, variant, size, fontSize, emphasis, pressed && enabled, enabled, icon, count)
             },
     )

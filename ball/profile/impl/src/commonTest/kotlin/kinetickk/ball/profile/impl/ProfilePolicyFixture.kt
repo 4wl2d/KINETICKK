@@ -3,20 +3,21 @@
 
 package kinetickk.ball.profile.impl
 
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ContentVersion
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.CoreShapeDefinition
 import kinetickk.ball.content.api.ItemEffect
-import kinetickk.ball.content.api.ItemModifier
-import kinetickk.ball.content.api.MetaUpgradeDefinition
-import kinetickk.ball.content.api.MetaUpgradeId
 import kinetickk.ball.content.api.ProfilePolicySnapshot
-import kinetickk.ball.content.api.RebirthDirective
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
+import kinetickk.ball.content.api.RelicKey
+import kinetickk.ball.content.api.WeaponCadence
 import kinetickk.ball.content.api.WeaponDefinition
+import kinetickk.ball.content.api.WeaponFamily
 import kinetickk.ball.content.api.WeaponId
-import kinetickk.ball.profile.api.LabProgress
+import kinetickk.ball.content.api.WeaponScaling
+import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
@@ -47,7 +48,7 @@ internal fun testDefaultProfile(policy: ProfilePolicySnapshot = TestProfilePolic
             selectedWeapon = defaultWeapon,
             unlockedWeapons = setOf(defaultWeapon),
         ),
-        labProgress = LabProgress(List(policy.metaUpgrades.size) { 0 }),
+        matrix = MatrixProgress(),
         rebirthProgress = RebirthProgress(
             level = policy.rebirth.minimumLevel,
             highestCleared = -1,
@@ -72,7 +73,7 @@ internal fun representativeProfile(policy: ProfilePolicySnapshot = TestProfilePo
             selectedWeapon = WeaponId.MORNINGSTAR,
             unlockedWeapons = setOf(WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR),
         ),
-        labProgress = LabProgress(List(policy.metaUpgrades.size) { 1 }),
+        matrix = MatrixProgress(kinetickk.ball.content.api.MatrixNodeId.entries.map { if (it.ordinal % 8 < 2) 1 else 0 }),
         collection = PlayerCollection(setOf(0, policy.itemCount / 2, policy.itemCount - 1)),
         rebirthProgress = RebirthProgress(level = 2, highestCleared = 2),
     )
@@ -87,15 +88,15 @@ internal fun profileSnapshot(
 
 internal fun queriedProfile(component: DefaultProfileComponent): PlayerProfile {
     val preferences = component.query(ProfileQuery.GetPreferences)
-    val lab = component.query(ProfileQuery.GetLabProgress)
+    val matrix = component.query(ProfileQuery.GetMatrixProgress)
     val loadout = component.query(ProfileQuery.GetLoadout)
     val collection = component.query(ProfileQuery.GetCollection)
     val rebirth = component.query(ProfileQuery.GetRebirthProgress)
     return PlayerProfile(
         preferences = preferences.preferences,
-        economy = lab.snapshot.economy,
+        economy = matrix.snapshot.economy,
         loadout = loadout.snapshot.loadout,
-        labProgress = lab.snapshot.progress,
+        matrix = matrix.snapshot.progress,
         collection = collection.collection,
         rebirthProgress = rebirth.snapshot.progress,
         characterAchievements = component.query(ProfileQuery.GetHomeProgress).characterAchievements,
@@ -109,7 +110,7 @@ internal fun assertProfileQueries(
 ) {
     val preferences = component.query(ProfileQuery.GetPreferences)
     val home = component.query(ProfileQuery.GetHomeProgress)
-    val lab = component.query(ProfileQuery.GetLabProgress)
+    val lab = component.query(ProfileQuery.GetMatrixProgress)
     val loadout = component.query(ProfileQuery.GetLoadout)
     val collection = component.query(ProfileQuery.GetCollection)
     val rebirth = component.query(ProfileQuery.GetRebirthProgress)
@@ -120,7 +121,7 @@ internal fun assertProfileQueries(
     assertEquals(expected.collection, home.collection)
     assertEquals(expected.rebirthProgress, home.rebirthProgress)
     assertEquals(expected.economy, lab.snapshot.economy)
-    assertEquals(expected.labProgress, lab.snapshot.progress)
+    assertEquals(expected.matrix, lab.snapshot.progress)
     assertEquals(expected.economy, loadout.snapshot.economy)
     assertEquals(expected.loadout, loadout.snapshot.loadout)
     assertEquals(expected.collection, collection.collection)
@@ -165,30 +166,37 @@ internal class RecordingProfileResource(
 
 private fun profilePolicyFixture(): ProfilePolicySnapshot = ProfilePolicySnapshot(
     version = ContentVersion("test-content"),
-    itemCount = 400,
+    itemCount = 80,
     coreShapes = CoreShape.entries.map { CoreShapeDefinition(it) }.toImmutableList(),
-    weapons = intArrayOf(0, 25, 55, 95, 145, 215, 305, 430, 610, 860, 1_200, 1_650)
-        .mapIndexed { index, cost ->
-            WeaponDefinition(
-                WeaponId.entries[index],
-                "Weapon $index",
-                "Test weapon $index",
-                listOf("TEST"),
-                cost,
-            )
-        }.toImmutableList(),
-    metaUpgrades = listOf(10 to 18, 10 to 22, 8 to 24, 8 to 26, 8 to 30, 10 to 34, 10 to 38, 12 to 45)
-        .mapIndexed { index, (maxRanks, baseCost) ->
-            MetaUpgradeDefinition(
-                MetaUpgradeId.entries[index],
-                "Upgrade $index",
-                "Test upgrade $index",
-                maxRanks,
-                baseCost,
-                ItemModifier(ItemEffect.MAX_INTEGRITY, 1f),
-            )
-        }.toImmutableList(),
+    weapons = WeaponId.entries.map { id ->
+        val (cost, rebirth) = TestWeaponPrices[id.ordinal]
+        testWeapon(id, cost, rebirth)
+    }.toImmutableList(),
     rebirth = testRebirthPolicy(),
+)
+
+/** Matter cost and Rebirth gate per weapon in [WeaponId] order, priced like the shipped catalog. */
+private val TestWeaponPrices: List<Pair<Int, Int>> = listOf(
+    0 to 0, 25 to 0, 55 to 0, 95 to 0, 145 to 0, 215 to 0, 305 to 0, 430 to 0, 610 to 0, 860 to 0, 1_200 to 0, 1_650 to 0,
+    120 to 0, 260 to 0, 900 to 2, 380 to 0, 1_300 to 4, 520 to 0, 700 to 1, 1_100 to 3, 1_500 to 5, 1_800 to 6,
+    2_100 to 7, 2_600 to 9,
+)
+
+internal fun testWeapon(id: WeaponId, cost: Int, minimumRebirth: Int = 0): WeaponDefinition = WeaponDefinition(
+    id = id,
+    name = "Weapon ${id.ordinal}",
+    description = "Test weapon ${id.ordinal}",
+    family = WeaponFamily.PROJECTILE,
+    element = null,
+    tags = listOf(BuildTag.DRIVE, BuildTag.ARSENAL),
+    key = RelicKey.MOTION,
+    signature = CoreShape.entries[id.ordinal % CoreShape.entries.size],
+    scaling = WeaponScaling.SPEED,
+    cadence = WeaponCadence.DISCRETE,
+    permanentUnlockCost = cost,
+    minimumRebirth = minimumRebirth,
+    masteryForms = listOf("Form one", "Form two", "Form three"),
+    signatureText = "Signature twist",
 )
 
 internal fun testRebirthPolicy(
@@ -199,7 +207,7 @@ internal fun testRebirthPolicy(
     maximumLevel = maximumLevel,
     profiles = (minimumLevel..maximumLevel).map { tier ->
         RebirthProfile(
-            tier, RebirthDirective.BASELINE, 5, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 1f, 0f, 1f, 0,
+            tier, "Baseline", 5, 1f, 1f, 1f, 1f, 1f, 1f, 0f, 1f, 0f, 1f, 0,
             120, 0.09f, 24f,
         )
     }.toImmutableList(),

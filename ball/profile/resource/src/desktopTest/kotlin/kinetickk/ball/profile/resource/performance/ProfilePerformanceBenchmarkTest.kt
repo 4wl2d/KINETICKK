@@ -4,8 +4,14 @@
 package kinetickk.ball.profile.resource.performance
 
 import kinetickk.ball.profile.resource.MAX_PROFILE_PAYLOAD_BYTES
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.profile.api.CharacterAchievementProgress
+import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
+import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileSnapshot
@@ -25,7 +31,7 @@ class ProfilePerformanceBenchmarkTest {
     @Test
     fun suiteIdentityVersionsTheWorkloadWithoutVersioningTheSaveSchema() {
         assertEquals(
-            "profile-persistence-current-schema-v3",
+            "profile-persistence-current-schema-v4",
             PROFILE_PERSISTENCE_BENCHMARK_SUITE_VERSION,
         )
     }
@@ -37,10 +43,18 @@ class ProfilePerformanceBenchmarkTest {
         assertEquals(
             CharacterAchievementProgress(
                 Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE,
-                CoreShape.entries.toImmutableSet(),
+                CoreShape.entries.toImmutableSet(), Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE,
             ),
             snapshot.profile.characterAchievements,
         )
+        val collection = snapshot.profile.collection
+        assertEquals(ContentBounds.MAX_ITEMS, collection.discoveredItemIds.size)
+        assertEquals(collection.discoveredItemIds, collection.newItemIds)
+        assertEquals(RelicId.entries.toSet(), collection.discoveredRelicIds)
+        assertEquals(RelicId.entries.toSet(), collection.newRelicIds)
+        assertEquals(ReactionId.entries.toSet(), collection.discoveredReactionIds)
+        assertEquals(RelicPairingId.entries.toSet(), collection.discoveredPairingIds)
+        assertEquals(MAX_HEIRLOOM_RELICS, collection.heirloomRelicIds.size)
         val payload = assertIs<ProfileEncodeResult.Encoded>(ProfileCodec.encode(snapshot)).payload
         val decoded = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(payload)).snapshot
         assertEquals(snapshot, decoded)
@@ -57,8 +71,34 @@ class ProfilePerformanceBenchmarkTest {
             profile.copy(characterAchievements = CharacterAchievementProgress(dashHits = 1)),
             profile.copy(characterAchievements = CharacterAchievementProgress(completedOrbits = 1)),
             profile.copy(characterAchievements = CharacterAchievementProgress(architectVictories = 1)),
+            profile.copy(characterAchievements = CharacterAchievementProgress(totalKills = 1)),
+            profile.copy(characterAchievements = CharacterAchievementProgress(ricochets = 1)),
+            profile.copy(characterAchievements = CharacterAchievementProgress(dataPickups = 1)),
+            profile.copy(matrix = kinetickk.ball.profile.api.MatrixProgress(
+                kinetickk.ball.content.api.MatrixNodeId.entries.map { if (it.ordinal == 0) 1 else 0 },
+            )),
             profile.copy(characterAchievements = CharacterAchievementProgress(
                 victoriousCharacters = setOf(CoreShape.SHARD).toImmutableSet(),
+            )),
+            profile.copy(collection = PlayerCollection(
+                discoveredItemIds = setOf(1),
+                newItemIds = setOf(1),
+            )),
+            profile.copy(collection = PlayerCollection(
+                discoveredItemIds = emptySet(),
+                discoveredRelicIds = setOf(RelicId.GLASS_COMET),
+            )),
+            profile.copy(collection = PlayerCollection(
+                discoveredItemIds = emptySet(),
+                discoveredReactionIds = setOf(ReactionId.entries.first()),
+            )),
+            profile.copy(collection = PlayerCollection(
+                discoveredItemIds = emptySet(),
+                discoveredPairingIds = setOf(RelicPairingId.entries.first()),
+            )),
+            profile.copy(collection = PlayerCollection(
+                discoveredItemIds = emptySet(),
+                heirloomRelicIds = listOf(RelicId.entries.first()),
             )),
         )
         changed.forEach { changedProfile ->

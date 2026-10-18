@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.characterization
 
 import kinetickk.ball.content.api.*
+import kinetickk.ball.content.api.EnemyType
 import kinetickk.ball.profile.api.DamageNumberFormat
 
 import kinetickk.ball.gameplay.api.*
@@ -104,7 +105,7 @@ class GameScenarioTest {
         val enabledEngine = gameScenario(seed = 22, initialMatter = 0)
         val enabledTarget = enabledEngine.addEnemyForTesting(x = 20f, y = 30f, hp = 100_000f)
 
-        val appliedDamage = enabledEngine.damageEnemyForTesting(enabledTarget, 14_000.6f)
+        val appliedDamage = enabledEngine.damageEnemyForTesting(enabledTarget, 14_400.6f)
 
         val number = enabledEngine.takeVisualFxCues()
             .filterIsInstance<VisualFxCue.DamageNumberAdded>()

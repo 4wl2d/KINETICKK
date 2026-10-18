@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.characterization
 
 import kinetickk.ball.content.api.*
+import kinetickk.ball.content.api.EnemyType
 
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
@@ -21,9 +22,62 @@ import kotlin.test.Test
 
 class TotemEnemySystemsTest {
     @Test
+    fun recalibrationDealsOnlyOwnedWeaponsAndALoneStarterOnlyAmplifies() {
+        val owned = listOf(WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR, WeaponId.GYRE_DISC)
+        val engine = runningEngine(seed = 202, owned = owned)
+        openTotemChoice(engine)
+        engine.choose(engine.choices.indexOfFirst { it.totemAction == TotemAction.CHANGE_WEAPON })
+        assertEquals(ChoiceType.WEAPON, engine.choiceType)
+        assertEquals(setOf(WeaponId.MORNINGSTAR, WeaponId.GYRE_DISC), engine.choices.mapNotNull(ChoiceOption::weaponId).toSet())
+        // Both candidates are already on the table: a reroll could only deal them again, so it is neither offered nor spent.
+        val rerolls = engine.rerollsRemaining
+        assertFalse(engine.choicesCanReroll)
+        engine.rerollChoices()
+        assertEquals(rerolls, engine.rerollsRemaining)
+
+        // A fresh profile owns only the starter: the Totem can amplify it, never recalibrate into nothing.
+        val starter = runningEngine(seed = 203, owned = emptyList())
+        assertEquals(setOf(WeaponId.FLUX_WAKE), starter.unlockedWeapons)
+        starter.activateTotemForTesting()
+        starter.update(GameScenario.FIXED_STEP)
+        assertEquals(ChoiceType.TOTEM, starter.choiceType)
+        assertEquals(listOf(TotemAction.AMPLIFY_CURRENT), starter.choices.map { it.totemAction })
+    }
+
+    @Test
+    fun aWeaponRerollNeedsMoreOwnedCandidatesThanOneOffer() {
+        fun recalibrated(owned: List<WeaponId>): GameScenario = runningEngine(seed = 204, owned = owned).also { engine ->
+            openTotemChoice(engine)
+            engine.choose(engine.choices.indexOfFirst { it.totemAction == TotemAction.CHANGE_WEAPON })
+            assertEquals(ChoiceType.WEAPON, engine.choiceType)
+        }
+        val threeOthers = listOf(WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR, WeaponId.GYRE_DISC, WeaponId.ARC_COIL)
+
+        // Exactly one offer's worth of owned weapons: the reroll is not offered and costs nothing.
+        val exact = recalibrated(threeOthers)
+        assertEquals(3, exact.choices.size)
+        val choices = exact.choices
+        val rerolls = exact.rerollsRemaining
+        assertTrue(rerolls > 0)
+        assertFalse(exact.choicesCanReroll)
+        exact.rerollChoices()
+        assertEquals(rerolls, exact.rerollsRemaining)
+        assertEquals(choices, exact.choices)
+
+        // One more owned weapon makes a different hand possible, so the reroll is offered and spent.
+        val wider = recalibrated(threeOthers + WeaponId.NULL_LANCE)
+        assertTrue(wider.choicesCanReroll)
+        val before = wider.rerollsRemaining
+        wider.rerollChoices()
+        assertEquals(before - 1, wider.rerollsRemaining)
+    }
+
+    @Test
     fun totemAmplifyAndChangeFormATwoStageChoiceThatPreservesWeaponLevel() {
         val engine = runningEngine(seed = 201)
         val startingWeapon = engine.weapon
+        // The Orb starts its signature Flux Wake one level up.
+        val amplified = engine.weaponLevel + 1
 
         openTotemChoice(engine)
 
@@ -51,7 +105,7 @@ class TotemEnemySystemsTest {
 
         assertEquals(GamePhase.RUNNING, engine.phase)
         assertEquals(startingWeapon, engine.weapon)
-        assertEquals(2, engine.weaponLevel)
+        assertEquals(amplified, engine.weaponLevel)
         assertTrue(engine.choices.isEmpty())
 
         openTotemChoice(engine)
@@ -63,7 +117,7 @@ class TotemEnemySystemsTest {
         assertEquals(GamePhase.CHOICE, engine.phase)
         assertEquals(ChoiceType.WEAPON, engine.choiceType)
         assertEquals(startingWeapon, engine.weapon)
-        assertEquals(2, engine.weaponLevel)
+        assertEquals(amplified, engine.weaponLevel)
         assertEquals(3, engine.choices.size)
         assertEquals(3, engine.choices.mapNotNull(ChoiceOption::weaponId).toSet().size)
         assertTrue(engine.choices.all { it.weaponId != startingWeapon })
@@ -79,7 +133,7 @@ class TotemEnemySystemsTest {
         assertEquals(GamePhase.RUNNING, engine.phase)
         assertEquals(selectedWeapon, engine.weapon)
         assertNotEquals(startingWeapon, engine.weapon)
-        assertEquals(2, engine.weaponLevel)
+        assertEquals(amplified, engine.weaponLevel)
         assertTrue(engine.choices.isEmpty())
     }
 
@@ -214,75 +268,54 @@ class TotemEnemySystemsTest {
     }
 
     @Test
-    fun enemyTypeTiersChangeAtExactElapsedBoundaries() {
-        assertEquals(EnemyType.DRIFTER, tempoEnemyTypeForElapsed(37.999f, 0.999f))
-        assertEquals(EnemyType.SHOOTER, tempoEnemyTypeForElapsed(38f, 0.999f))
-        assertEquals(EnemyType.SHOOTER, tempoEnemyTypeForElapsed(89.999f, 0.999f))
-        assertEquals(EnemyType.INTERCEPTOR, tempoEnemyTypeForElapsed(90f, 0.999f))
-        assertEquals(EnemyType.INTERCEPTOR, tempoEnemyTypeForElapsed(149.999f, 0.999f))
-        assertEquals(EnemyType.WEAVER, tempoEnemyTypeForElapsed(150f, 0.999f))
-        assertEquals(EnemyType.WEAVER, tempoEnemyTypeForElapsed(239.999f, 0.999f))
-        assertEquals(EnemyType.WARDEN, tempoEnemyTypeForElapsed(240f, 0.999f))
-        assertEquals(EnemyType.WARDEN, tempoEnemyTypeForElapsed(359.999f, 0.999f))
-        assertEquals(EnemyType.WARDEN, tempoEnemyTypeForElapsed(360f, 0.999f))
+    fun enemyTypeGatesOpenAtExactThreatTimes() {
+        val engine = gameScenario(seed = 3, initialMatter = 0)
+        val gates = listOf(
+            EnemyType.SHOOTER to 38f,
+            EnemyType.SWARMLING to 75f,
+            EnemyType.INTERCEPTOR to 90f,
+            EnemyType.CHARGER to 150f,
+            EnemyType.WEAVER to 150f,
+            EnemyType.BOMBER to 200f,
+            EnemyType.SPLITTER to 240f,
+            EnemyType.WARDEN to 240f,
+            EnemyType.LANCER to 240f,
+            EnemyType.SNIPER to 330f,
+            EnemyType.AEGIS to 390f,
+            EnemyType.MINELAYER to 450f,
+        )
+        gates.forEach { (type, gate) ->
+            assertEquals(0f, engine.weightAt(gate - 0.001f, type), "$type before its gate")
+            assertTrue(engine.weightAt(gate, type) > 0f, "$type at its gate")
+            // The weight ramps in over a minute after the gate.
+            assertTrue(engine.weightAt(gate, type) < engine.weightAt(gate + 60f, type), "$type ramps in")
+            assertEquals(engine.content.enemy(type).weight, engine.weightAt(gate + 60f, type), "$type full weight")
+        }
+        assertTrue(engine.weightAt(0f, EnemyType.DRIFTER) > 0f)
+        // Rebirth-gated kinds never appear at tier 0, however late; scheduled kinds never take ordinary weight.
+        listOf(EnemyType.PHANTOM, EnemyType.BROODMOTHER, EnemyType.REFLECTOR, EnemyType.ELITE, EnemyType.HERALD, EnemyType.ARCHITECT)
+            .forEach { type -> assertEquals(0f, engine.weightAt(700f, type), "$type at tier 0") }
     }
 
     @Test
-    fun enemyTypeTierRollThresholdsAreDeterministic() {
-        assertTier(
-            elapsed = 38f,
-            0f to EnemyType.DRIFTER,
-            0.699f to EnemyType.DRIFTER,
-            0.70f to EnemyType.SHOOTER,
-        )
-        assertTier(
-            elapsed = 90f,
-            0.499f to EnemyType.DRIFTER,
-            0.50f to EnemyType.SHOOTER,
-            0.779f to EnemyType.SHOOTER,
-            0.78f to EnemyType.INTERCEPTOR,
-        )
-        assertTier(
-            elapsed = 150f,
-            0.339f to EnemyType.DRIFTER,
-            0.34f to EnemyType.SHOOTER,
-            0.579f to EnemyType.SHOOTER,
-            0.58f to EnemyType.CHARGER,
-            0.759f to EnemyType.CHARGER,
-            0.76f to EnemyType.INTERCEPTOR,
-            0.919f to EnemyType.INTERCEPTOR,
-            0.92f to EnemyType.WEAVER,
-        )
-        assertTier(
-            elapsed = 240f,
-            0.259f to EnemyType.DRIFTER,
-            0.26f to EnemyType.SHOOTER,
-            0.459f to EnemyType.SHOOTER,
-            0.46f to EnemyType.CHARGER,
-            0.619f to EnemyType.CHARGER,
-            0.62f to EnemyType.INTERCEPTOR,
-            0.769f to EnemyType.INTERCEPTOR,
-            0.77f to EnemyType.WEAVER,
-            0.869f to EnemyType.WEAVER,
-            0.87f to EnemyType.SPLITTER,
-            0.949f to EnemyType.SPLITTER,
-            0.95f to EnemyType.WARDEN,
-        )
-        assertTier(
-            elapsed = 360f,
-            0.219f to EnemyType.DRIFTER,
-            0.22f to EnemyType.SHOOTER,
-            0.389f to EnemyType.SHOOTER,
-            0.39f to EnemyType.CHARGER,
-            0.529f to EnemyType.CHARGER,
-            0.53f to EnemyType.INTERCEPTOR,
-            0.669f to EnemyType.INTERCEPTOR,
-            0.67f to EnemyType.WEAVER,
-            0.789f to EnemyType.WEAVER,
-            0.79f to EnemyType.SPLITTER,
-            0.909f to EnemyType.SPLITTER,
-            0.91f to EnemyType.WARDEN,
-        )
+    fun enemyTypePicksAreDeterministicPerSeedAndRespectRebirthGates() {
+        fun picks(seed: Int, tier: Int): List<EnemyType> {
+            val engine = gameScenario(seed = seed, initialMatter = 0, initialRebirthLevel = tier)
+            engine.elapsed = 700f
+            return List(600) { engine.pickEnemyType() }
+        }
+        assertEquals(picks(seed = 11, tier = 0), picks(seed = 11, tier = 0))
+        val tierZero = picks(seed = 11, tier = 0).toSet()
+        assertTrue(EnemyType.PHANTOM !in tierZero && EnemyType.BROODMOTHER !in tierZero && EnemyType.REFLECTOR !in tierZero)
+        assertTrue(tierZero.containsAll(listOf(EnemyType.DRIFTER, EnemyType.SWARMLING, EnemyType.SNIPER, EnemyType.MINELAYER)))
+        val tierFour = picks(seed = 11, tier = 4).toSet()
+        assertTrue(tierFour.containsAll(listOf(EnemyType.PHANTOM, EnemyType.BROODMOTHER, EnemyType.REFLECTOR)))
+        assertTrue(EnemyType.HERALD !in tierFour && EnemyType.ELITE !in tierFour)
+    }
+
+    private fun GameScenario.weightAt(seconds: Float, type: EnemyType): Float {
+        elapsed = seconds
+        return typeWeight(content.enemy(type), weakOnly = false, recency = false)
     }
 
     private fun openTotemChoice(engine: GameScenario) {
@@ -293,20 +326,13 @@ class TotemEnemySystemsTest {
         assertEquals(2, engine.choices.size)
     }
 
-    private fun assertTier(elapsed: Float, vararg expected: Pair<Float, EnemyType>) {
-        expected.forEach { (roll, type) ->
-            assertEquals(type, tempoEnemyTypeForElapsed(elapsed, roll), "elapsed=$elapsed roll=$roll")
+    private fun runningEngine(seed: Int, owned: List<WeaponId> = WeaponId.entries): GameScenario =
+        gameScenario(seed = seed, initialMatter = 0).also { engine ->
+            engine.unlockWeaponsForTesting(owned)
+            engine.resize(1_280f, 720f)
+            engine.startRun()
+            engine.enemies.clear()
+            engine.projectiles.clear()
+            engine.updatePointer(640f, 360f)
         }
-    }
-
-    private fun runningEngine(seed: Int): GameScenario = gameScenario(seed = seed, initialMatter = 0).also { engine ->
-        engine.resize(1_280f, 720f)
-        engine.startRun()
-        engine.enemies.clear()
-        engine.projectiles.clear()
-        engine.updatePointer(640f, 360f)
-    }
 }
-
-private fun tempoEnemyTypeForElapsed(elapsed: Float, roll: Float): EnemyType =
-    enemyTypeForElapsed(elapsed, roll, kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent.tempo)

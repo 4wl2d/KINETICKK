@@ -4,11 +4,15 @@
 package kinetickk.ball.profile.api
 
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.content.api.MetaUpgradeId
-import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.MatrixNodeId
+import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicPairingId
+import kinetickk.ball.content.api.WeaponId
+import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.ImmutableSet
 import kinetickk.foundation.collections.immutableSetOf
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.common.localization.AppLanguage
 
@@ -47,6 +51,7 @@ sealed interface ProfilePreferenceAdjustment {
     data class SetDamageNumberFormat(val format: DamageNumberFormat) : ProfilePreferenceAdjustment
     data class StepDamageNumberTierThreshold(val direction: PreferenceAdjustmentDirection) : ProfilePreferenceAdjustment
     data class SetColorVision(val colorVision: ColorVision) : ProfilePreferenceAdjustment
+    data object ToggleMinimap : ProfilePreferenceAdjustment
 }
 
 data class GameplayProgressUpdate(
@@ -58,6 +63,21 @@ data class GameplayProgressUpdate(
     val completedOrbits: Int = 0,
     val architectDefeatedWith: CoreShape? = null,
     val discoveredRelicIds: ImmutableSet<RelicId> = immutableSetOf(),
+    val discoveredReactionIds: ImmutableSet<ReactionId> = immutableSetOf(),
+    val discoveredPairingIds: ImmutableSet<RelicPairingId> = immutableSetOf(),
+    /**
+     * Relics bound at the Architect victory in slot order. Profile accepts it only together with
+     * [clearedRebirthLevel] and replaces the remembered Heirlooms with it.
+     */
+    val victoryRelicIds: ImmutableList<RelicId>? = null,
+    /** The run resolved its Heirloom offer (taken or declined), so the remembered Heirlooms are spent. */
+    val heirloomResolved: Boolean = false,
+    /** Enemies destroyed since the last update. */
+    val totalKills: Int = 0,
+    /** Hard obstacle bounces since the last update. */
+    val ricochets: Int = 0,
+    /** Data pickups collected since the last update. */
+    val dataPickups: Int = 0,
 ) {
     constructor(
         bankedMatter: Long = 0L,
@@ -68,10 +88,26 @@ data class GameplayProgressUpdate(
         completedOrbits: Int = 0,
         architectDefeatedWith: CoreShape? = null,
         discoveredRelicIds: Set<RelicId> = emptySet(),
+        discoveredReactionIds: Set<ReactionId> = emptySet(),
+        discoveredPairingIds: Set<RelicPairingId> = emptySet(),
+        victoryRelicIds: List<RelicId>? = null,
+        heirloomResolved: Boolean = false,
+        totalKills: Int = 0,
+        ricochets: Int = 0,
+        dataPickups: Int = 0,
     ) : this(
         bankedMatter, discoveredItemIds.toImmutableSet(), clearedRebirthLevel,
         eliteKills, dashHits, completedOrbits, architectDefeatedWith, discoveredRelicIds.toImmutableSet(),
+        discoveredReactionIds.toImmutableSet(), discoveredPairingIds.toImmutableSet(),
+        victoryRelicIds?.toImmutableList(), heirloomResolved, totalKills, ricochets, dataPickups,
     )
+
+    /** True when the update carries no fact for Profile to apply, so no command needs to be sent. */
+    val isEmpty: Boolean
+        get() = bankedMatter == 0L && discoveredItemIds.isEmpty() && clearedRebirthLevel == null &&
+            eliteKills == 0 && dashHits == 0 && completedOrbits == 0 && architectDefeatedWith == null &&
+            discoveredRelicIds.isEmpty() && discoveredReactionIds.isEmpty() && discoveredPairingIds.isEmpty() &&
+            victoryRelicIds == null && !heirloomResolved && totalKills == 0 && ricochets == 0 && dataPickups == 0
 }
 
 sealed interface CollectionEntry {
@@ -92,15 +128,22 @@ sealed interface ProfilePulse {
         val adjustment: ProfilePreferenceAdjustment,
     ) : Business
 
-    data class PurchaseMetaUpgrade(
-        val id: MetaUpgradeId,
+    /** Buys the next rank of a Core Matrix node. */
+    data class PurchaseMatrixNode(
+        val id: MatrixNodeId,
     ) : Business
+
+    /** Refunds every owned Core Matrix rank (a free respec). */
+    data object ResetMatrix : Business
 
     data class PurchaseOrEquipWeapon(
         val id: WeaponId,
     ) : Business
 
     data class MarkCollectionEntryViewed(val entry: CollectionEntry) : Business
+
+    /** Chooses the character for the next run from the Hangar; it must be unlocked. */
+    data class SelectCoreShape(val shape: CoreShape) : Business
 }
 
 sealed interface ProfileGameplayProgressRejection {
@@ -110,17 +153,28 @@ sealed interface ProfileGameplayProgressRejection {
     data class UnknownItem(val itemId: Int) : ProfileGameplayProgressRejection
     data object TooManyDiscoveries : ProfileGameplayProgressRejection
     data class ClearedLevelBelowMinimum(val level: Int) : ProfileGameplayProgressRejection
-    data class ClearedLevelAboveCurrent(val level: Int) : ProfileGameplayProgressRejection
+    /** The cleared tier lies above the profile's Rebirth rank, so no run could have selected it. */
+    data class ClearedLevelAboveRank(val level: Int) : ProfileGameplayProgressRejection
+    /** Victory Relics describe an Architect victory, so they require a cleared Rebirth level. */
+    data object VictoryRelicsWithoutClear : ProfileGameplayProgressRejection
+    data object TooManyVictoryRelics : ProfileGameplayProgressRejection
+    data class DuplicateVictoryRelic(val relicId: RelicId) : ProfileGameplayProgressRejection
 }
 
 sealed interface ProfileRejection {
     data object BootstrapNotReady : ProfileRejection
     data object NoChange : ProfileRejection
     data object InsufficientMatter : ProfileRejection
-    data object MetaUpgradeMaxRank : ProfileRejection
+    data object MatrixNodeMaxRank : ProfileRejection
+    /** None of the node's prerequisites is owned. */
+    data object MatrixPrerequisiteMissing : ProfileRejection
+    /** The node needs a higher Rebirth rank. */
+    data object MatrixRebirthLocked : ProfileRejection
     data object CoreShapeLocked : ProfileRejection
-    data object RebirthMaximumReached : ProfileRejection
-    data object RebirthLevelNotCleared : ProfileRejection
+    /** The weapon needs a higher Rebirth rank before it can be bought. */
+    data object WeaponRebirthLocked : ProfileRejection
+    /** The requested Rebirth tier lies outside the policy range or above the profile's rank. */
+    data object RebirthTierLocked : ProfileRejection
 
     data class InvalidGameplayProgress(
         val reason: ProfileGameplayProgressRejection,

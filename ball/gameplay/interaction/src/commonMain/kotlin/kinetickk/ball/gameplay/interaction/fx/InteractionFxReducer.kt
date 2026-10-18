@@ -3,7 +3,10 @@
 
 package kinetickk.ball.gameplay.interaction.fx
 
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.foundation.collections.mapToImmutableList
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.random.CloneableXorWowRandom
 import kinetickk.ball.gameplay.nucleus.model.clamp
 import kinetickk.ball.profile.api.DamageNumberFormat
@@ -30,7 +33,60 @@ internal object InteractionFxLimits {
 
     /** Particles at least this large are drawn as shards. */
     const val SHARD_MIN_SIZE = 4.5f
+
+    /** Build toasts kept at once; a lower-priority toast never evicts a higher one. */
+    const val MAX_BUILD_NOTIFICATIONS = 3
+
+    /**
+     * Toasts of one mergeable kind and title opened this recently (seconds) take the next lines
+     * instead; the window runs from the toast's opening, so a chain of finds never keeps one open.
+     */
+    const val NOTICE_MERGE_SECONDS = 1.5f
+
+    /** Name lines a merged toast holds; the next find opens a toast of its own. */
+    const val NOTICE_MERGED_LINES = 3
+
+    /** Concurrent Break and reaction flashes (the budget admits far more events than read as one). */
+    const val MAX_ELEMENT_BURSTS = 24
+
+    /** Flashes of the same kind closer than this (world units) merge into one heavier flash. */
+    const val BURST_MERGE_DISTANCE = 80f
+
+    /** Events a merged flash can carry; each adds to its reach and brightness. */
+    const val MAX_BURST_WEIGHT = 4
+
+    const val BREAK_BURST_SECONDS = 0.5f
+    const val REACTION_BURST_SECONDS = 0.7f
+
+    /** The once-per-profile reaction name stamp (`cond`, −6°, 900 ms). */
+    const val REACTION_STAMP_SECONDS = 0.9f
+    const val MAX_REACTION_STAMPS = 3
 }
+
+/** Toast titles the nucleus emits for discoveries (see [BuildNoticeKind]); the feed localizes them. */
+internal object BuildNoticeTitles {
+    const val REACTION_DISCOVERED = "REACTION DISCOVERED"
+    const val PAIRING_DISCOVERED = "PAIRING DISCOVERED"
+
+    /** A bound relic newly disables an owned item (warning tone). */
+    const val INCOMPATIBILITY_DISCOVERED = "INCOMPATIBILITY DISCOVERED"
+
+    /** Interaction's own note for the first Break of an element in a run. */
+    const val BREAK = "BREAK"
+
+    fun kind(title: String): BuildNoticeKind = when (title) {
+        REACTION_DISCOVERED, PAIRING_DISCOVERED -> BuildNoticeKind.DISCOVERY
+        INCOMPATIBILITY_DISCOVERED -> BuildNoticeKind.WARNING
+        BREAK -> BuildNoticeKind.BREAK
+        else -> BuildNoticeKind.CHANGE
+    }
+}
+
+/**
+ * Visual reach of each element's Break flash (world units), by status element ordinal: Shatter's
+ * flash spans its 160-unit shockwave, Unmake stays on its target.
+ */
+internal val BreakBurstRadii = floatArrayOf(90f, 64f, 120f, 150f, 72f, 160f, 80f)
 
 /**
  * Interaction-owned reducer for drop-eligible visual state.
@@ -50,6 +106,11 @@ class InteractionFxReducer(seed: Int) {
     private val damageNumbers = mutableListOf<DamageNumber>()
     private val weaponArcs = mutableListOf<WeaponArc>()
     private val buildNotifications = mutableListOf<BuildNotificationProjection>()
+    private val elementBursts = mutableListOf<ElementBurst>()
+    private val reactionStamps = mutableListOf<ReactionStamp>()
+    private var runReactionMask = 0
+    private var runDiscoveryMask = 0
+    private var runBreakMask = 0
     private var projectionDirty = false
     private var cachedProjection = VisualFxProjection.EMPTY
     private var particlesDirty = false
@@ -57,6 +118,8 @@ class InteractionFxReducer(seed: Int) {
     private var shockwavesDirty = false
     private var damageNumbersDirty = false
     private var weaponArcsDirty = false
+    private var elementBurstsDirty = false
+    private var reactionStampsDirty = false
 
     fun apply(cues: Iterable<VisualFxCue>) {
         if (cues is List<*>) {
@@ -113,11 +176,21 @@ class InteractionFxReducer(seed: Int) {
                     russianCompactAmount = value.russianCompactAmount,
                     driftX = value.driftX,
                     driftY = value.driftY,
+                    tone = value.tone,
                 )
             } else cachedProjection.damageNumbers,
             weaponArcs = if (weaponArcsDirty) weaponArcs.mapToImmutableList { value ->
                 WeaponArcProjection(value.fromX, value.fromY, value.toX, value.toY, value.life)
             } else cachedProjection.weaponArcs,
+            elementBursts = if (elementBurstsDirty) elementBursts.mapToImmutableList { value ->
+                ElementBurstProjection(value.x, value.y, value.primary, value.secondary, value.reaction, value.radius, value.life,
+                    value.maxLife, value.weight)
+            } else cachedProjection.elementBursts,
+            reactionStamps = if (reactionStampsDirty) reactionStamps.mapToImmutableList { value ->
+                ReactionStampProjection(value.x, value.y, value.reaction, value.life, value.maxLife)
+            } else cachedProjection.reactionStamps,
+            runReactionMask = runReactionMask,
+            runDiscoveryMask = runDiscoveryMask,
         )
         projectionDirty = false
         particlesDirty = false
@@ -125,17 +198,15 @@ class InteractionFxReducer(seed: Int) {
         shockwavesDirty = false
         damageNumbersDirty = false
         weaponArcsDirty = false
+        elementBurstsDirty = false
+        reactionStampsDirty = false
         return cachedProjection
     }
 
     /** Returns whether the externally visible projection changed. */
     private fun applyCue(cue: VisualFxCue): Boolean =
         when (cue) {
-            is VisualFxCue.BuildChanged -> {
-                buildNotifications += BuildNotificationProjection(cue.title, cue.details, 6f)
-                trimFront(buildNotifications, 3)
-                true
-            }
+            is VisualFxCue.BuildChanged -> addNotice(cue.title, cue.details, BuildNoticeTitles.kind(cue.title)) != NOTICE_DROPPED
             VisualFxCue.ClearAll -> clearAll()
             VisualFxCue.ClearWeaponArcs -> if (weaponArcs.isEmpty()) {
                 false
@@ -161,9 +232,9 @@ class InteractionFxReducer(seed: Int) {
                     val dy = if (coreY.isNaN()) -1f else cue.y - coreY
                     val length = kotlin.math.sqrt(dx * dx + dy * dy)
                     damageNumbers += if (length > 0.001f) {
-                        DamageNumber(cue.x, cue.y, cue.amount, cue.critical, driftX = dx / length, driftY = dy / length)
+                        DamageNumber(cue.x, cue.y, cue.amount, cue.critical, driftX = dx / length, driftY = dy / length, tone = cue.tone)
                     } else {
-                        DamageNumber(cue.x, cue.y, cue.amount, cue.critical)
+                        DamageNumber(cue.x, cue.y, cue.amount, cue.critical, tone = cue.tone)
                     }
                     damageNumbersDirty = true
                     true
@@ -171,6 +242,8 @@ class InteractionFxReducer(seed: Int) {
                     false
                 }
             }
+            is VisualFxCue.StatusBroken -> statusBroken(cue)
+            is VisualFxCue.ReactionTriggered -> reactionTriggered(cue)
             is VisualFxCue.WeaponArcAdded -> {
                 weaponArcs += WeaponArc(cue.fromX, cue.fromY, cue.toX, cue.toY, cue.life)
                 trimFront(weaponArcs, InteractionFxLimits.MAX_WEAPON_ARCS)
@@ -191,9 +264,24 @@ class InteractionFxReducer(seed: Int) {
                     value.x -= cue.shiftX
                     value.y -= cue.shiftY
                 }
+                // Break and reaction flashes and the reaction name stamps mark the enemy that set them
+                // off, so they move with the world like damage numbers (shockwaves keep the baseline
+                // policy and end in place).
+                for (index in elementBursts.indices) {
+                    val value = elementBursts[index]
+                    value.x -= cue.shiftX
+                    value.y -= cue.shiftY
+                }
+                for (index in reactionStamps.indices) {
+                    val value = reactionStamps[index]
+                    value.x -= cue.shiftX
+                    value.y -= cue.shiftY
+                }
                 if (particles.isNotEmpty()) particlesDirty = true
                 if (damageNumbers.isNotEmpty()) damageNumbersDirty = true
-                changed
+                if (elementBursts.isNotEmpty()) elementBurstsDirty = true
+                if (reactionStamps.isNotEmpty()) reactionStampsDirty = true
+                changed || elementBursts.isNotEmpty() || reactionStamps.isNotEmpty()
             }
             is VisualFxCue.VisualCuesDropped -> false
         }
@@ -203,7 +291,15 @@ class InteractionFxReducer(seed: Int) {
             motionEchoes.isNotEmpty() ||
             shockwaves.isNotEmpty() ||
             damageNumbers.isNotEmpty() ||
-            weaponArcs.isNotEmpty()
+            weaponArcs.isNotEmpty() ||
+            elementBursts.isNotEmpty() ||
+            reactionStamps.isNotEmpty() ||
+            runReactionMask != 0 || runDiscoveryMask != 0
+        elementBursts.clear()
+        reactionStamps.clear()
+        runReactionMask = 0
+        runDiscoveryMask = 0
+        runBreakMask = 0
         buildNotifications.clear()
         particles.clear()
         motionEchoes.clear()
@@ -219,8 +315,97 @@ class InteractionFxReducer(seed: Int) {
             shockwavesDirty = true
             damageNumbersDirty = true
             weaponArcsDirty = true
+            elementBurstsDirty = true
+            reactionStampsDirty = true
         }
         return changed
+    }
+
+    /**
+     * Adds a build toast by priority and returns whether its lines show ([NOTICE_MERGED],
+     * [NOTICE_OPENED]) or the feed dropped it ([NOTICE_DROPPED]). Mergeable kinds join a toast of
+     * the same title opened less than [InteractionFxLimits.NOTICE_MERGE_SECONDS] ago while it has
+     * a free line; otherwise the toast goes after every toast of its priority or lower, and the
+     * oldest lowest one leaves when the feed is over its bound (a new toast below a full feed of
+     * higher ones is dropped at once).
+     */
+    private fun addNotice(title: String, details: List<String>, kind: BuildNoticeKind): Int {
+        if (kind.merges) {
+            for (index in buildNotifications.indices.reversed()) {
+                val notice = buildNotifications[index]
+                if (notice.kind != kind || notice.title != title) continue
+                if (notice.age >= InteractionFxLimits.NOTICE_MERGE_SECONDS) break
+                var fresh = 0
+                for (line in details) if (line !in notice.details) fresh++
+                if (fresh == 0) return NOTICE_MERGED
+                if (notice.details.size + fresh > InteractionFxLimits.NOTICE_MERGED_LINES) break
+                val merged = ArrayList<String>(notice.details.size + fresh)
+                merged += notice.details
+                for (line in details) if (line !in merged) merged += line
+                buildNotifications[index] = notice.copy(details = merged.toImmutableList(), life = notice.maxLife)
+                return NOTICE_MERGED
+            }
+        }
+        val notice = BuildNotificationProjection(title, details.toImmutableList(), kind.lifeSeconds, kind)
+        var at = buildNotifications.size
+        while (at > 0 && buildNotifications[at - 1].kind.priority > kind.priority) at--
+        buildNotifications.add(at, notice)
+        trimFront(buildNotifications, InteractionFxLimits.MAX_BUILD_NOTIFICATIONS)
+        for (index in buildNotifications.indices) if (buildNotifications[index] === notice) return NOTICE_OPENED
+        return NOTICE_DROPPED
+    }
+
+    private fun statusBroken(cue: VisualFxCue.StatusBroken): Boolean {
+        val element = cue.element
+        if (element !in BreakBurstRadii.indices) return false
+        addBurst(cue.x, cue.y, element, -1, -1, BreakBurstRadii[element], InteractionFxLimits.BREAK_BURST_SECONDS)
+        val bit = 1 shl element
+        // The run remembers an element's first Break only once its note shows: a note the full feed
+        // drops waits for the element's next Break.
+        if (runBreakMask and bit == 0 &&
+            addNotice(BuildNoticeTitles.BREAK, listOf("+ " + StatusElement.entries[element].breakLabel), BuildNoticeKind.BREAK) != NOTICE_DROPPED
+        ) {
+            runBreakMask = runBreakMask or bit
+        }
+        return true
+    }
+
+    private fun reactionTriggered(cue: VisualFxCue.ReactionTriggered): Boolean {
+        val reaction = ReactionId.entries.getOrNull(cue.reaction) ?: return false
+        addBurst(cue.x, cue.y, reaction.first.ordinal, reaction.second.ordinal, cue.reaction, cue.radius.coerceIn(36f, 320f),
+            InteractionFxLimits.REACTION_BURST_SECONDS)
+        val bit = 1 shl cue.reaction
+        runReactionMask = runReactionMask or bit
+        if (cue.firstDiscovery) {
+            runDiscoveryMask = runDiscoveryMask or bit
+            reactionStamps += ReactionStamp(cue.x, cue.y, cue.reaction, InteractionFxLimits.REACTION_STAMP_SECONDS,
+                InteractionFxLimits.REACTION_STAMP_SECONDS)
+            trimFront(reactionStamps, InteractionFxLimits.MAX_REACTION_STAMPS)
+            reactionStampsDirty = true
+        }
+        return true
+    }
+
+    /** A flash of one kind joins a live flash of the same kind within the merge distance. */
+    private fun addBurst(x: Float, y: Float, primary: Int, secondary: Int, reaction: Int, radius: Float, life: Float) {
+        val reach = InteractionFxLimits.BURST_MERGE_DISTANCE
+        for (index in elementBursts.indices) {
+            val burst = elementBursts[index]
+            if (burst.primary != primary || burst.secondary != secondary || burst.reaction != reaction) continue
+            val dx = burst.x - x
+            val dy = burst.y - y
+            if (dx * dx + dy * dy > reach * reach) continue
+            burst.weight = (burst.weight + 1).coerceAtMost(InteractionFxLimits.MAX_BURST_WEIGHT)
+            burst.life = burst.maxLife
+            burst.radius = kotlin.math.max(burst.radius, radius)
+            burst.x = (burst.x + x) * 0.5f
+            burst.y = (burst.y + y) * 0.5f
+            elementBurstsDirty = true
+            return
+        }
+        elementBursts += ElementBurst(x, y, primary, secondary, reaction, radius, life, life, 1)
+        trimFront(elementBursts, InteractionFxLimits.MAX_ELEMENT_BURSTS)
+        elementBurstsDirty = true
     }
 
     private fun sampleMotionEcho(cue: VisualFxCue.MotionSample): Boolean {
@@ -254,19 +439,22 @@ class InteractionFxReducer(seed: Int) {
             particles.isEmpty() &&
             motionEchoes.isEmpty() &&
             shockwaves.isEmpty() &&
-            damageNumbers.isEmpty()
+            damageNumbers.isEmpty() &&
+            elementBursts.isEmpty() &&
+            reactionStamps.isEmpty()
         ) return false
         for (index in buildNotifications.indices) {
             val value = buildNotifications[index]
-            buildNotifications[index] = value.copy(life = value.life - delta)
+            buildNotifications[index] = value.copy(life = value.life - delta, age = value.age + delta)
         }
         removeExpired(buildNotifications) { it.life > 0f }
+        val particleDamping = exp(-2.2f * delta)
         for (index in particles.indices) {
             val value = particles[index]
             value.x += value.vx * delta
             value.y += value.vy * delta
-            value.vx *= exp(-2.2f * delta)
-            value.vy *= exp(-2.2f * delta)
+            value.vx *= particleDamping
+            value.vy *= particleDamping
             value.life -= delta
         }
         removeExpired(particles) { value -> !(value.life <= 0f) }
@@ -281,6 +469,12 @@ class InteractionFxReducer(seed: Int) {
         if (motionEchoes.isNotEmpty() || cachedProjection.motionEchoes.isNotEmpty()) motionEchoesDirty = true
         if (shockwaves.isNotEmpty() || cachedProjection.shockwaves.isNotEmpty()) shockwavesDirty = true
         if (damageNumbers.isNotEmpty() || cachedProjection.damageNumbers.isNotEmpty()) damageNumbersDirty = true
+        for (index in elementBursts.indices) elementBursts[index].life -= delta
+        removeExpired(elementBursts) { value -> !(value.life <= 0f) }
+        for (index in reactionStamps.indices) reactionStamps[index].life -= delta
+        removeExpired(reactionStamps) { value -> !(value.life <= 0f) }
+        if (elementBursts.isNotEmpty() || cachedProjection.elementBursts.isNotEmpty()) elementBurstsDirty = true
+        if (reactionStamps.isNotEmpty() || cachedProjection.reactionStamps.isNotEmpty()) reactionStampsDirty = true
         return true
     }
 
@@ -415,6 +609,27 @@ class InteractionFxReducer(seed: Int) {
         val russianCompactAmount: String = compactAmount.russianDamageNumber(),
         val driftX: Float = 0f,
         val driftY: Float = -1f,
+        val tone: Int = 0,
+    )
+
+    private data class ElementBurst(
+        var x: Float,
+        var y: Float,
+        val primary: Int,
+        val secondary: Int,
+        val reaction: Int,
+        var radius: Float,
+        var life: Float,
+        val maxLife: Float,
+        var weight: Int,
+    )
+
+    private data class ReactionStamp(
+        var x: Float,
+        var y: Float,
+        val reaction: Int,
+        var life: Float,
+        val maxLife: Float,
     )
 
     private data class WeaponArc(
@@ -426,6 +641,9 @@ class InteractionFxReducer(seed: Int) {
     )
 
     private companion object {
+        const val NOTICE_DROPPED = 0
+        const val NOTICE_MERGED = 1
+        const val NOTICE_OPENED = 2
         const val FX_SEED_MASK = 0x5EED_C0DE
         const val TAU = 6.283185307179586f
     }

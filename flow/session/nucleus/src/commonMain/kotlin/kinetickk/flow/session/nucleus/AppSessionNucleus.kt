@@ -9,7 +9,8 @@ import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
 import kinetickk.ball.gameplay.api.RunId
 import kinetickk.ball.profile.api.ProfileRunBootstrapResult
 import kinetickk.ball.profile.api.ProfileSettingsChanged
-import kinetickk.ball.profile.api.ProfileRebirthAdvanced
+import kinetickk.ball.profile.api.ProfileRebirthTierSelected
+import kinetickk.ball.profile.api.rank
 import kinetickk.ball.profile.api.ProfileCoreShapeSelected
 import kinetickk.flow.session.api.AppDestination
 import kinetickk.flow.session.api.AppSessionQuery
@@ -33,7 +34,7 @@ object AppSessionNucleus {
         context: AppSessionContext = AppSessionContext.Empty,
     ): AppSessionDecision = when (pulse) {
         is AppSessionNucleusPulse.Intent -> decideInteraction(state, pulse.intent, context)
-        is ProfileRebirthAdvancedPulse -> completeRebirthProfileResult(state, pulse.result, context)
+        is ProfileRebirthTierSelectedPulse -> completeRebirthProfileResult(state, pulse.result, context)
         is ProfileRebirthRefusedPulse -> rejectRebirth(state)
         is GameplayRunExitedPulse -> completeExitResult(state, pulse.result)
         is GameplayExitRefusedPulse -> rejectExit(state, pulse)
@@ -76,7 +77,7 @@ object AppSessionNucleus {
             is SessionInteractionPulse.ShortcutObserved -> shortcut(state, intent.shortcut, context)
             SessionInteractionPulse.ToggleMuteRequested -> toggleMute(state)
             is SessionInteractionPulse.SelectCoreShapeRequested -> selectCoreShape(state, intent.shape)
-            SessionInteractionPulse.RebirthRequested -> rebirth(state, context)
+            is SessionInteractionPulse.RebirthRequested -> rebirth(state, intent.tier, context)
         }
     }
 
@@ -149,6 +150,10 @@ object AppSessionNucleus {
         context: AppSessionContext,
     ): AppSessionDecision {
         if (!destination.isOverlayDestination()) {
+            return rejected(SessionRejection.OverlayUnavailable(destination))
+        }
+        // Characters change between runs: the Hangar opens only over the Home base.
+        if (destination == AppDestination.Hangar && state.base != AppDestination.Home) {
             return rejected(SessionRejection.OverlayUnavailable(destination))
         }
         val status = state.gameplayStatusIfActive(context)
@@ -283,6 +288,11 @@ object AppSessionNucleus {
         SessionShortcut.REBIRTH -> openOverlay(state, AppDestination.Rebirth, context)
         SessionShortcut.CODEX -> if (state.overlay == AppDestination.Codex) closeOverlay(state, context)
             else openOverlay(state, AppDestination.Codex, context)
+        SessionShortcut.HANGAR -> when {
+            state.base != AppDestination.Home -> rejected(SessionRejection.ShortcutUnavailable)
+            state.overlay == AppDestination.Hangar -> closeOverlay(state, context)
+            else -> openOverlay(state, AppDestination.Hangar, context)
+        }
         SessionShortcut.MUTE -> toggleMute(state)
         SessionShortcut.BACK -> if (state.overlay != null) {
             closeOverlay(state, context)
@@ -326,8 +336,14 @@ object AppSessionNucleus {
         )
     }
 
+    /**
+     * Selects [tier] and starts a run at it once Profile accepts. Only a tier above the highest clear
+     * (the newly earned one) needs the two-press confirmation; a cleared tier is sent at once. Profile
+     * stays the authority for the tier range; this only refuses tiers the read shows are not earned.
+     */
     private fun rebirth(
         state: AppSessionState,
+        tier: Int,
         context: AppSessionContext,
     ): AppSessionDecision {
         if (
@@ -339,40 +355,39 @@ object AppSessionNucleus {
         val projection = checkNotNull(context.rebirthProgress) {
             "Impl must supply the validated Profile rebirth read"
         }
-        if (!projection.canAdvance) return rejected(SessionRejection.RebirthUnavailable)
-        return when (val confirmation = state.rebirthConfirmation) {
-            RebirthConfirmation.Disarmed -> accepted(
-                state.copy(
-                    revision = state.nextRevision(),
-                    rebirthConfirmation = RebirthConfirmation.Armed(
-                        projection.revision,
-                        projection.snapshot.progress,
-                    ),
-                    lastFailure = null,
-                ),
-            )
-            is RebirthConfirmation.Armed -> {
-                if (
-                    projection.revision.value < confirmation.profileRevision.value ||
-                    projection.snapshot.progress != confirmation.progress
-                ) {
-                    return rejected(SessionRejection.RebirthUnavailable)
-                }
-                if (state.reusableCreatedRunId() == null && state.nextRunId == null) {
-                    return rejected(SessionRejection.RunIdExhausted)
-                }
-                val revision = state.nextRevision()
-                accepted(
+        val progress = projection.snapshot.progress
+        if (tier > progress.rank) return rejected(SessionRejection.RebirthUnavailable)
+        val confirmation = state.rebirthConfirmation
+        if (tier > progress.highestCleared) {
+            val confirmed = confirmation is RebirthConfirmation.Armed && confirmation.tier == tier
+            if (!confirmed) {
+                return accepted(
                     state.copy(
-                        revision = revision,
-                        pendingWorkflow = PendingWorkflow.AdvancingRebirth,
-                        rebirthConfirmation = RebirthConfirmation.Disarmed,
+                        revision = state.nextRevision(),
+                        rebirthConfirmation = RebirthConfirmation.Armed(projection.revision, progress, tier),
                         lastFailure = null,
                     ),
-                    immutableListOf(AppSessionOutput.AdvanceRebirth),
                 )
             }
+            if (
+                projection.revision.value < confirmation.profileRevision.value ||
+                progress != confirmation.progress
+            ) {
+                return rejected(SessionRejection.RebirthUnavailable)
+            }
         }
+        if (state.reusableCreatedRunId() == null && state.nextRunId == null) {
+            return rejected(SessionRejection.RunIdExhausted)
+        }
+        return accepted(
+            state.copy(
+                revision = state.nextRevision(),
+                pendingWorkflow = PendingWorkflow.SelectingRebirthTier(tier),
+                rebirthConfirmation = RebirthConfirmation.Disarmed,
+                lastFailure = null,
+            ),
+            immutableListOf(AppSessionOutput.SelectRebirthTier(tier)),
+        )
     }
 
     private fun exitRun(
@@ -452,10 +467,11 @@ object AppSessionNucleus {
 
     private fun completeRebirthProfileResult(
         state: AppSessionState,
-        result: ProfileRebirthAdvanced,
+        result: ProfileRebirthTierSelected,
         context: AppSessionContext,
     ): AppSessionDecision {
-        check(state.pendingWorkflow === PendingWorkflow.AdvancingRebirth)
+        val pending = checkNotNull(state.pendingWorkflow as? PendingWorkflow.SelectingRebirthTier)
+        check(result.progress.level == pending.tier) { "Profile selected a different Rebirth tier" }
         val ready = checkNotNull(
             checkNotNull(context.runBootstrap).result as? ProfileRunBootstrapResult.Ready,
         ) { "Validated rebirth result requires a ready Profile bootstrap" }
@@ -639,7 +655,7 @@ object AppSessionNucleus {
     }
 
     private fun rejectRebirth(state: AppSessionState): AppSessionDecision {
-        check(state.pendingWorkflow === PendingWorkflow.AdvancingRebirth)
+        check(state.pendingWorkflow is PendingWorkflow.SelectingRebirthTier)
         return accepted(state.copy(
             revision = state.nextRevision(),
             pendingWorkflow = null,
@@ -754,7 +770,7 @@ private fun PendingWorkflow.toProjection(): SessionWorkflowPhase = when (this) {
     is PendingWorkflow.SelectingCoreShape -> SessionWorkflowPhase.SELECTING_CORE_SHAPE
     is PendingWorkflow.TogglingMute -> SessionWorkflowPhase.TOGGLING_MUTE
     is PendingWorkflow.PropagatingMute -> SessionWorkflowPhase.PROPAGATING_MUTE
-    is PendingWorkflow.AdvancingRebirth -> SessionWorkflowPhase.ADVANCING_REBIRTH
+    is PendingWorkflow.SelectingRebirthTier -> SessionWorkflowPhase.SELECTING_REBIRTH_TIER
     is PendingWorkflow.StartingRebirthRun -> SessionWorkflowPhase.STARTING_REBIRTH_RUN
     is PendingWorkflow.ExitingRun -> SessionWorkflowPhase.EXITING_RUN
 }

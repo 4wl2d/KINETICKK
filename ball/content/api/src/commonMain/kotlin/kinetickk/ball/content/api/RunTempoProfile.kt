@@ -37,7 +37,7 @@ data class FatigueTuning(
 data class RunTempoProfile(
     val bossAtSeconds: Float = 12f * 60f,
     val firstEliteAtSeconds: Float = 38f,
-    val dataPickupMultiplier: Float = 1.60f,
+    val dataPickupMultiplier: Float = 2.60f,
     val matterRewardMultiplier: Float = 1.40f,
     val weaponAmplificationEveryLevels: Int = 2,
     val maximumAutomaticWeaponLevel: Int = 10,
@@ -64,10 +64,21 @@ data class RunTempoProfile(
         else -> 5
     }
 
-    fun ordinaryEnemyCap(elapsedSeconds: Float): Int = (14 + (progress(elapsedSeconds) * 60f).toInt()).coerceAtMost(90)
-    fun spawnIntervalSeconds(elapsedSeconds: Float): Float = (0.84f - progress(elapsedSeconds) * 0.64f).coerceAtLeast(0.20f)
+    /** Fewer, tougher ordinary enemies: a low cap and a slow arrival rate pay for their integrity. */
+    fun ordinaryEnemyCap(elapsedSeconds: Float): Int = 8 + (progress(elapsedSeconds) * 34f).toInt()
+    fun spawnIntervalSeconds(elapsedSeconds: Float): Float = (1.58f - progress(elapsedSeconds) * 1.2f).coerceAtLeast(0.38f)
     fun eliteIntervalSeconds(elapsedSeconds: Float): Float = (68f - progress(elapsedSeconds) * 20f).coerceAtLeast(48f)
-    fun enemyHealthMultiplier(elapsedSeconds: Float): Float = 1f + progress(elapsedSeconds) * 2.55f
+    /** Enemy integrity outgrows every player run growth below: 1 + 5.9p. */
+    fun enemyHealthMultiplier(elapsedSeconds: Float): Float = 1f + 5.9f * progress(elapsedSeconds)
+    /** Run scale of flat, status, reaction and proc damage; gameplay and reward cards both read it. */
+    fun runScaleGrowth(elapsedSeconds: Float): Float = 1f + 1.6f * progress(elapsedSeconds)
+    fun impactRunGrowth(elapsedSeconds: Float): Float = 1f + 1.2f * progress(elapsedSeconds)
+    /** Growth of the equipped weapon's own hits: 1 + 1.6p, the same pace as flat and proc damage. */
+    fun weaponRunGrowth(elapsedSeconds: Float): Float = 1f + 1.6f * progress(elapsedSeconds)
+    /** Growth of character abilities and weapon-based item effects: 1 + 1.0p. */
+    fun abilityRunGrowth(elapsedSeconds: Float): Float = 1f + 1.0f * progress(elapsedSeconds)
+    /** Damage the build deals to its own Core (reaction recoil) keeps linear growth. */
+    fun selfDamageRunGrowth(elapsedSeconds: Float): Float = 1f + 1.6f * progress(elapsedSeconds)
     fun attackRateMultiplier(elapsedSeconds: Float): Float = 1f + progress(elapsedSeconds) * 0.40f
     fun denseAttacks(elapsedSeconds: Float): Boolean = progress(elapsedSeconds) >= 0.58f
     fun dataRequiredForLevel(level: Int): Int = if (level <= 1) 18 else 18 + level * 8 + level * level / 8

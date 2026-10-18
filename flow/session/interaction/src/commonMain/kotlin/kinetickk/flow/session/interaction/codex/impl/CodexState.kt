@@ -3,20 +3,31 @@
 
 package kinetickk.flow.session.interaction.codex.impl
 
-import kinetickk.ball.content.api.localizedContent
-import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.ItemDefinition
-import kinetickk.ball.content.api.RelicId
-import kinetickk.ball.content.api.SynergyDefinition
-import kinetickk.ball.content.api.UiCatalogSnapshot
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.RelicKey
+import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.profile.api.CollectionProjection
 import kinetickk.flow.session.interaction.codex.api.CodexRenderModel
 import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
 import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.common.localization.AppLanguage
 
-internal const val CODEX_CATALOG_LIMIT = 400
+/** The Codex never lists more items than the content bound allows. */
+internal const val CODEX_CATALOG_LIMIT = ContentBounds.MAX_ITEMS
 internal const val CODEX_SEARCH_LIMIT = 128
 internal enum class CodexItemFilter { ALL, DISCOVERED, IN_BUILD }
+
+/**
+ * How the Items matrix groups its rows: by first tag (the default board rows), by first element or by
+ * rarity. Saved state and test tags (`codex-sort-N`) use the ordinal.
+ */
+internal enum class CodexItemSort { TAG, ELEMENT, RARITY }
+
+/** Codex tabs in display order; saved state and test tags (`codex-tab-N`) use the ordinal. */
+internal enum class CodexTab { BUILD, CATALOG, REACTIONS, PAIRINGS, TAGS }
 
 /** Representation bounds, kept local to this presentation feature. */
 internal class CodexReducer(private val items: ImmutableList<ItemDefinition>) {
@@ -24,9 +35,10 @@ internal class CodexReducer(private val items: ImmutableList<ItemDefinition>) {
         require(items.size <= CODEX_CATALOG_LIMIT) { "Codex catalog exceeds $CODEX_CATALOG_LIMIT items" }
     }
 
-    fun renderModel(projection: CollectionProjection, runStacks: CodexRunStacks): CodexRenderModel =
-        CodexRenderModel(projection.collection.discoveredItemIds, runStacks, items,
-            projection.collection.newItemIds, projection.collection.discoveredRelicIds, projection.collection.newRelicIds)
+    fun renderModel(projection: CollectionProjection, runStacks: CodexRunStacks): CodexRenderModel = with(projection.collection) {
+        CodexRenderModel(discoveredItemIds, runStacks, items, newItemIds, discoveredRelicIds, newRelicIds,
+            discoveredReactionIds, discoveredPairingIds)
+    }
 }
 
 internal fun codexSearchInput(input: String): String = input.take(CODEX_SEARCH_LIMIT)
@@ -41,6 +53,9 @@ internal fun codexFilteredItems(model: CodexRenderModel, search: String, filter:
     }
 
 internal fun codexUsesSidePanel(widthDp: Float, heightDp: Float): Boolean = widthDp >= 900f && heightDp >= 480f
+
+/** Below this width tabs stack a glyph over a short label. */
+internal const val CODEX_COMPACT_TABS_DP = 600f
 
 /** Hover/focus are ephemeral; only pinnedKey and sheetOpen are saved by Compose. */
 internal data class CodexSelection(
@@ -60,23 +75,61 @@ internal data class CodexSelection(
     )
 }
 
-internal enum class CodexEmptyState { NONE, NO_RUN, EMPTY_INVENTORY, EMPTY_SEARCH }
-internal fun codexEmptyState(tab: Int, hasRun: Boolean, search: String, count: Int): CodexEmptyState = when {
-    tab == 0 && !hasRun -> CodexEmptyState.NO_RUN
+internal enum class CodexEmptyState { NONE, NO_RUN, EMPTY_INVENTORY, EMPTY_SEARCH, NO_PAIRINGS }
+internal fun codexEmptyState(tab: CodexTab, hasRun: Boolean, search: String, count: Int): CodexEmptyState = when {
+    tab == CodexTab.BUILD && !hasRun -> CodexEmptyState.NO_RUN
     count != 0 -> CodexEmptyState.NONE
+    tab == CodexTab.PAIRINGS -> CodexEmptyState.NO_PAIRINGS
     search.isNotEmpty() -> CodexEmptyState.EMPTY_SEARCH
     else -> CodexEmptyState.EMPTY_INVENTORY
 }
 
-/** Aspect pairs are distinct identities; missing places stay visible, even when one relic has rank 3. */
-internal fun codexSynergyComponents(
-    definition: SynergyDefinition,
-    catalog: UiCatalogSnapshot,
-    owned: Set<RelicId>,
-): List<RelicId?> = if (definition.requiredAspect == null) {
-    definition.requiredRelics
-} else {
-    val present = catalog.relics.filter { it.aspect == definition.requiredAspect && it.id in owned }
-        .map { it.id }.distinct().take(2)
-    List(2) { present.getOrNull(it) }
+/**
+ * One cell of the triangular reaction matrix: row [row], column [column] (never right of the
+ * diagonal). The diagonal holds the row element's Break, every other cell the pair's reaction.
+ */
+internal data class CodexMatrixCell(val row: StatusElement, val column: StatusElement) {
+    val isBreak: Boolean get() = row == column
+    val reaction: ReactionId? get() = if (isBreak) null else ReactionId.between(row, column)
+    val key: String get() = reaction?.let(::codexReactionKey) ?: codexBreakKey(row)
+}
+
+/** Row r holds the reactions of element r with every earlier element, then its own Break. */
+internal val CodexMatrix: List<List<CodexMatrixCell>> = StatusElement.entries.map { row ->
+    StatusElement.entries.take(row.ordinal + 1).map { column -> CodexMatrixCell(row, column) }
+}
+
+/** Reactions a residue of [element] can feed next: every reaction that takes [element] in. */
+internal fun codexResidueFeeds(element: StatusElement): Set<ReactionId> = ReactionId.entries.filter { it.involves(element) }.toSet()
+
+internal fun codexReactionKey(id: ReactionId): String = "reaction/$id"
+internal fun codexBreakKey(element: StatusElement): String = "break/$element"
+
+/**
+ * Opposed relic keys as chains (each key next to the keys it opposes), then the keys that oppose
+ * nothing, each on its own. A key opposing two others sits between them, so no key repeats.
+ */
+internal fun codexKeyGroups(): List<List<RelicKey>> {
+    val neighbours = RelicKey.entries.associateWith { key -> RelicKey.entries.filter { it != key && RelicKey.opposed(key, it) } }
+    val seen = mutableSetOf<RelicKey>()
+    val groups = mutableListOf<List<RelicKey>>()
+    RelicKey.entries.filter { neighbours.getValue(it).isNotEmpty() }.forEach { start ->
+        if (start in seen) return@forEach
+        // Walk the component from one of its ends so a chain reads in order.
+        val component = mutableSetOf(start)
+        val frontier = ArrayDeque(listOf(start))
+        while (frontier.isNotEmpty()) neighbours.getValue(frontier.removeFirst()).forEach { if (component.add(it)) frontier.add(it) }
+        val end = component.firstOrNull { neighbours.getValue(it).size == 1 } ?: start
+        val chain = mutableListOf(end)
+        while (true) {
+            val next = neighbours.getValue(chain.last()).firstOrNull { it !in chain } ?: break
+            chain += next
+        }
+        // A component that is not a simple path keeps its remaining keys at the end.
+        chain += component.filter { it !in chain }.sortedBy { it.ordinal }
+        seen += chain
+        groups += chain
+    }
+    RelicKey.entries.filter { it !in seen }.forEach { groups += listOf(it) }
+    return groups
 }

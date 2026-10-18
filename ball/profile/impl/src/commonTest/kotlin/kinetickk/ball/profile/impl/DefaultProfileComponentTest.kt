@@ -4,6 +4,9 @@
 package kinetickk.ball.profile.impl
 
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PlayerEconomy
@@ -26,7 +29,7 @@ import kinetickk.ball.profile.api.ProfileWriteResult
 import kinetickk.ball.profile.api.ProfileSettings
 import kinetickk.ball.profile.api.ProfileSettingsChanged
 import kinetickk.ball.profile.api.ProfileRefusal
-import kinetickk.ball.profile.api.ProfileRebirthAdvanced
+import kinetickk.ball.profile.api.ProfileRebirthTierSelected
 import kinetickk.ball.profile.api.ProfileProgressApplied
 import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.profile.api.RebirthProgress
@@ -46,7 +49,7 @@ class DefaultProfileComponentTest {
         val initial = representativeProfile().copy(collection = kinetickk.ball.profile.api.PlayerCollection(setOf(0)))
         val resource = RecordingProfileResource(ProfileSnapshotReadResult.Observed(profileSnapshot(initial)))
         val component = testProfileComponent(resource)
-        val relic = kinetickk.ball.content.api.RelicId.KINETIC_FLYWHEEL
+        val relic = kinetickk.ball.content.api.RelicId.PERPETUAL_VECTOR
         val update = GameplayProgressUpdate(discoveredItemIds = setOf(0, 1), discoveredRelicIds = setOf(relic))
         ProfileCommandTestCaller<ProfileProgressApplied>().call { component.applyGameplayProgress(update, it) }
         val discovered = component.query(ProfileQuery.GetCollection).collection
@@ -62,18 +65,41 @@ class DefaultProfileComponentTest {
         assertEquals(discovered.discoveredRelicIds, viewed.discoveredRelicIds)
         val writes = resource.writes.size
         ProfileCommandTestCaller<ProfileProgressApplied>().call { component.applyGameplayProgress(update, it) }
-        assertIs<ProfileAcceptance.Rejected>(component.markViewed(kinetickk.ball.profile.api.CollectionEntry.Item(399)))
+        assertIs<ProfileAcceptance.Rejected>(component.markViewed(kinetickk.ball.profile.api.CollectionEntry.Item(TestProfilePolicy.itemCount - 1)))
         assertEquals(writes, resource.writes.size)
         val restored = testProfileComponent(RecordingProfileResource(ProfileSnapshotReadResult.Observed(resource.writes.last())))
         assertEquals(viewed, restored.query(ProfileQuery.GetCollection).collection)
     }
 
     @Test
+    fun ricochetsFromGameplayUnlockTheDipoleInTheHangar() {
+        val component = testProfileComponent(RecordingProfileResource(ProfileSnapshotReadResult.Observed(profileSnapshot(representativeProfile()))))
+        val dipole = TestProfilePolicy.coreShapes.first { it.id == CoreShape.DIPOLE }
+        assertEquals(kinetickk.ball.content.api.CharacterUnlockRequirement.RICOCHETS, dipole.unlockRequirement)
+        fun dipoleProgress() = component.query(ProfileQuery.GetHangar).shapes.first { it.shape == CoreShape.DIPOLE }
+        ProfileCommandTestCaller<ProfileProgressApplied>().call {
+            component.applyGameplayProgress(GameplayProgressUpdate(ricochets = dipole.unlockTarget - 1), it)
+        }
+        assertEquals(false to dipole.unlockTarget - 1L, dipoleProgress().let { it.unlocked to it.progress })
+        ProfileCommandTestCaller<ProfileProgressApplied>().call { component.applyGameplayProgress(GameplayProgressUpdate(ricochets = 1), it) }
+        assertEquals(true to dipole.unlockTarget.toLong(), dipoleProgress().let { it.unlocked to it.progress })
+        assertEquals(dipole.unlockTarget.toLong(), component.stateSnapshot().profile.characterAchievements.ricochets)
+    }
+
+    @Test
     fun gameplayProgressCapabilityPublishesEveryCapturedFieldBeforeSaveAndReply() {
-        val initial = representativeProfile().copy(rebirthProgress = RebirthProgress(2, 1))
+        val representative = representativeProfile()
+        val initial = representative.copy(
+            rebirthProgress = RebirthProgress(2, 1),
+            collection = representative.collection.copy(
+                discoveredReactionIds = kinetickk.foundation.collections.immutableSetOf(ReactionId.FUSION),
+                heirloomRelicIds = kinetickk.foundation.collections.immutableListOf(RelicId.GYRE_ENGINE),
+            ),
+        )
         val resource = RecordingProfileResource(ProfileSnapshotReadResult.Observed(profileSnapshot(initial)))
         val component = testProfileComponent(resource)
         val caller = ProfileCommandTestCaller<ProfileProgressApplied>()
+        val victoryRelics = listOf(RelicId.GLASS_COMET, RelicId.CINDER_CROWN, RelicId.ECHO_CHAMBER)
         val update = GameplayProgressUpdate(
             bankedMatter = 7L,
             discoveredItemIds = setOf(1, 3),
@@ -82,6 +108,11 @@ class DefaultProfileComponentTest {
             dashHits = 8,
             completedOrbits = 13,
             architectDefeatedWith = CoreShape.ORB,
+            discoveredRelicIds = setOf(RelicId.GLASS_COMET),
+            discoveredReactionIds = setOf(ReactionId.FUSION, ReactionId.WILDFIRE),
+            discoveredPairingIds = setOf(RelicPairingId.FIRESTORM),
+            victoryRelicIds = victoryRelics,
+            heirloomResolved = true,
         )
 
         caller.call { reply ->
@@ -99,6 +130,13 @@ class DefaultProfileComponentTest {
         assertEquals(initial.economy.matter + 7L, next.economy.matter)
         assertEquals(initial.economy.lifetimeMatter + 7L, next.economy.lifetimeMatter)
         assertEquals(initial.collection.discoveredItemIds + setOf(1, 3), next.collection.discoveredItemIds)
+        assertEquals(setOf(RelicId.GLASS_COMET), next.collection.discoveredRelicIds)
+        assertEquals(setOf(RelicId.GLASS_COMET), next.collection.newRelicIds)
+        assertEquals(setOf(ReactionId.FUSION, ReactionId.WILDFIRE), next.collection.discoveredReactionIds)
+        assertEquals(setOf(RelicPairingId.FIRESTORM), next.collection.discoveredPairingIds)
+        // The resolved Heirloom offer spent the old Heirloom; the victory recorded the bound slots.
+        assertEquals(victoryRelics, next.collection.heirloomRelicIds)
+        assertEquals(next.collection, resource.writes.single().profile.collection)
         assertEquals(RebirthProgress(2, 2), next.rebirthProgress)
         assertEquals(initial.characterAchievements.eliteKills + 5L, next.characterAchievements.eliteKills)
         assertEquals(initial.characterAchievements.dashHits + 8L, next.characterAchievements.dashHits)
@@ -174,7 +212,7 @@ class DefaultProfileComponentTest {
         val resource = RecordingProfileResource(ProfileSnapshotReadResult.Observed(profileSnapshot(initial)))
         val component = testProfileComponent(resource)
         val before = component.stateSnapshot()
-        val caller = ProfileCommandTestCaller<ProfileRebirthAdvanced>()
+        val caller = ProfileCommandTestCaller<ProfileRebirthTierSelected>()
 
         caller.call { reply ->
             resource.beforeWrite = { snapshot ->
@@ -183,7 +221,7 @@ class DefaultProfileComponentTest {
                 assertEquals(snapshot.revision, component.stateSnapshot().revision)
                 assertIs<ProfilePersistenceStatus.Pending>(component.stateSnapshot().persistence)
             }
-            component.advanceRebirth(reply)
+            component.selectRebirthTier(3, reply)
         }
 
         val result = caller.changed.single()
@@ -203,9 +241,9 @@ class DefaultProfileComponentTest {
         val resource = RecordingProfileResource(ProfileSnapshotReadResult.Observed(profileSnapshot(initial)))
             .apply { writeBehavior = { throw fault } }
         val component = testProfileComponent(resource)
-        val caller = ProfileCommandTestCaller<ProfileRebirthAdvanced>()
+        val caller = ProfileCommandTestCaller<ProfileRebirthTierSelected>()
 
-        assertEquals(fault, assertFailsWith<IllegalStateException> { caller.call(component::advanceRebirth) })
+        assertEquals(fault, assertFailsWith<IllegalStateException> { caller.call { reply -> component.selectRebirthTier(3, reply) } })
 
         val result = caller.changed.single()
         assertEquals(initial.copy(rebirthProgress = RebirthProgress(3, 2)), component.stateSnapshot().profile)
@@ -226,9 +264,9 @@ class DefaultProfileComponentTest {
             val resource = RecordingProfileResource(ProfileSnapshotReadResult.Observed(profileSnapshot(initial)))
                 .apply { writeBehavior = { writeResult } }
             val component = testProfileComponent(resource)
-            val caller = ProfileCommandTestCaller<ProfileRebirthAdvanced>()
+            val caller = ProfileCommandTestCaller<ProfileRebirthTierSelected>()
 
-            caller.call(component::advanceRebirth)
+            caller.call { reply -> component.selectRebirthTier(3, reply) }
 
             val result = caller.changed.single()
             assertEquals(initial.copy(rebirthProgress = RebirthProgress(3, 2)), queriedProfile(component))

@@ -41,53 +41,71 @@ object Kk {
     val Shield = Color(0xFF45E0FF)
     val Pol = Color(0xFFA98BFF)
 
-    // rarity
-    val RCommon = Color(0xFFC9C8BE)
-    val RUncommon = Color(0xFF5CF2A6)
-    val RRare = Color(0xFF4DA6FF)
-    val REpic = Color(0xFFB777FF)
-    val RLegend = Color(0xFFFFB627)
+    // rarity: material, not hue. Hue belongs to elements; effects and frame sides carry rarity.
+    val RCommon = Color(0xFF86857B)
+    val RUncommon = Color(0xFFC9C8BE)
+    val RRare = Color(0xFFF1F0E8)
+    val REpic = Color(0xFFF1F0E8)
+    val RLegend = Color(0xFFFFC93C)
 
     /** Light end of the legendary foil gradient (`#FFF3C8`). */
     val RLegendFoil = Color(0xFFFFF3C8)
 
-    // relic aspects
-    val AVector = Color(0xFFD8FF3E)
-    val AGravitic = Color(0xFF9B7BFF)
-    val AIon = Color(0xFF45E0FF)
-    val ARift = Color(0xFFFF4FA3)
-    val APrism = Color(0xFFE4F1FF)
-    val AEntropy = Color(0xFFFF6A2B)
-    val ASovereign = Color(0xFFFFC93C)
+    // elements: one hue, one meaning, everywhere (cards, statuses, damage numbers, codex, relic aspects).
+    /**
+     * Kinetic (no element) is volt, the player color: movement is your weapon, so impact items share
+     * the brand color. Default palette only; screens read `KkRolePalette.kinetic`, which follows the
+     * preset's own volt.
+     */
+    val EKinetic = Volt
+    /** Thermal deliberately shares the heat hue: your heat and their burning are one idea. */
+    val EThermal = Color(0xFFFF8A1F)
+    val ECryo = Color(0xFFBDEBFF)
+    val EIon = Color(0xFF4F7DFF)
+    val EGravitic = Color(0xFFD24CFF)
+    val EEntropy = Color(0xFF46D96A)
+    /** Sonic: a deep teal, clear of Entropy's green and Cryo's ice. */
+    val ESonic = Color(0xFF009C84)
+    /** Void: a pale lilac, clear of Gravitic's magenta and Cryo's ice. */
+    val EVoid = Color(0xFFCCC0FC)
+
+    /** Gold means Rebirth: Sovereign relics, legendary items, Reborn cards, the Rebirth menu. */
+    val Gold = Color(0xFFFFC93C)
+
+    // relic aspects mirror the elements (kinetic, thermal, cryo, ion, gravitic, entropy, sonic, void, sovereign)
+    val AKinetic = EKinetic
+    val AThermal = EThermal
+    val ACryo = ECryo
+    val AIon = EIon
+    val AGravitic = EGravitic
+    val AEntropy = EEntropy
+    val ASonic = ESonic
+    val AVoid = EVoid
+    val ASovereign = Gold
 
     /** Rarity colors in rank order 1..5: common, uncommon, rare, epic, legendary. */
     val Rarities: List<Color> = listOf(RCommon, RUncommon, RRare, REpic, RLegend)
 
+    /** Status element colors in element order: thermal, cryo, ion, gravitic, entropy, sonic, void. */
+    val Elements: List<Color> = listOf(EThermal, ECryo, EIon, EGravitic, EEntropy, ESonic, EVoid)
+
     /**
-     * Aspect colors in order vector, gravitic, ion, rift, prism, entropy, sovereign (the same order
-     * as the game's relic aspects; screens map by ordinal).
+     * Aspect colors in order kinetic, thermal, cryo, ion, gravitic, entropy, sonic, void, sovereign (the
+     * same order as the game's relic aspects; screens map by ordinal).
      */
-    val Aspects: List<Color> = listOf(AVector, AGravitic, AIon, ARift, APrism, AEntropy, ASovereign)
+    val Aspects: List<Color> = listOf(AKinetic, AThermal, ACryo, AIon, AGravitic, AEntropy, ASonic, AVoid, ASovereign)
 
     /** Rarity color by rank 1 (common) .. 5 (legendary); out-of-range ranks are clamped. */
-    fun rarity(rank: Int): Color = when (rank.coerceIn(1, 5)) {
-        1 -> RCommon
-        2 -> RUncommon
-        3 -> RRare
-        4 -> REpic
-        else -> RLegend
-    }
+    fun rarity(rank: Int): Color = Rarities[rank.coerceIn(1, 5) - 1]
 
-    /** Aspect color by index 0 (vector) .. 6 (sovereign); out-of-range indices are clamped. */
-    fun aspect(index: Int): Color = when (index.coerceIn(0, 6)) {
-        0 -> AVector
-        1 -> AGravitic
-        2 -> AIon
-        3 -> ARift
-        4 -> APrism
-        5 -> AEntropy
-        else -> ASovereign
-    }
+    /** Aspect color by index 0 (kinetic) .. 8 (sovereign); out-of-range indices are clamped. */
+    fun aspect(index: Int): Color = Aspects[index.coerceIn(0, Aspects.lastIndex)]
+
+    /** Status element color by index 0 (thermal) .. 6 (void); out-of-range indices are clamped. */
+    fun element(index: Int): Color = Elements[index.coerceIn(0, Elements.lastIndex)]
+
+    /** Damage tone (Default palette): 0 is kinetic (volt), 1..7 the status elements. */
+    fun tone(index: Int): Color = if (index <= 0) EKinetic else element(index - 1)
 }
 
 /**
@@ -165,15 +183,26 @@ internal const val TAU_F = 6.2831855f
  * targets to these entries.
  */
 enum class KkHomePalette(val accent: Color) {
+    /** You: volt, the player color. */
     START(Color(0xFFD8FF3E)),
-    ARMORY(Color(0xFFFF8A1F)),
-    LAB(Color(0xFF45E0FF)),
-    REBIRTH(Color(0xFFFF4FA3)),
-    CODEX(Color(0xFFA98BFF)),
-    SETTINGS(Color(0xFF5CF2A6)),
+
+    /** The armory: bone, the structure color, so it never passes for START's volt. */
+    ARMORY(Color(0xFFF1F0E8)),
+
+    /** Permanent upgrades to you, paid in volt Matter: the deeper volt. */
+    LAB(Color(0xFFBDE82A)),
+
+    /** Gold means Rebirth. */
+    REBIRTH(Color(0xFFFFC93C)),
+
+    /** Knowledge of the element system; renderers sweep [Kk.Elements] over time. */
+    CODEX(Color(0xFFBDEBFF)),
+
+    /** System: neutral. */
+    SETTINGS(Color(0xFFA3A298)),
 
     /** Exit/quit item, only if the game has one. */
-    EXIT(Color(0xFFA3A298)),
+    EXIT(Color(0xFF86857B)),
     ;
 
     /** mix(accent 7 %, ink 93 %). */

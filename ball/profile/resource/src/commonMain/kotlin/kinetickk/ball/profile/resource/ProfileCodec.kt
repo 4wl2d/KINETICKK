@@ -4,17 +4,21 @@
 package kinetickk.ball.profile.resource
 
 import kinetickk.ball.content.api.ContentBounds
-import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.MatrixNodeId
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.ball.profile.api.CharacterAchievementProgress
 import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
-import kinetickk.ball.profile.api.LabProgress
+import kinetickk.ball.profile.api.MatrixProgress
+import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
@@ -25,6 +29,7 @@ import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileSnapshot
 import kinetickk.ball.profile.api.ProfileSnapshotRejection
 import kinetickk.ball.profile.api.RebirthProgress
+import kinetickk.ball.profile.api.isWithinRebirthBounds
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.foundation.common.localization.AppLanguage
 import kotlinx.serialization.EncodeDefault
@@ -124,12 +129,20 @@ private data class ProfileSnapshotDto(
     val profile: PlayerProfileDto,
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 private data class PlayerProfileDto(
     val preferences: PlayerPreferencesDto,
     val economy: PlayerEconomyDto,
     val loadout: PlayerLoadoutDto,
-    val labProgress: LabProgressDto,
+    // The retired Lab: only saves written before the Core Matrix carry it. Decoding refunds its ranks
+    // (see RetiredLabRefund); encoding never writes it.
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val labProgress: LabProgressDto? = null,
+    // Owned Core Matrix ranks; absent when no node is owned, so a fresh profile keeps its bytes (and an
+    // explicit empty list is not canonical).
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val matrix: MatrixProgressDto = MatrixProgressDto(emptyList()),
     val collection: PlayerCollectionDto,
     val rebirthProgress: RebirthProgressDto,
     val characterAchievements: CharacterAchievementProgressDto,
@@ -159,6 +172,9 @@ private data class PlayerPreferencesDto(
     // predates the setting (and every default profile) keeps its exact canonical bytes.
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val colorVisionId: String? = null,
+    // Written only when the minimap is off: absence means on, so older saves keep their canonical bytes.
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val minimapEnabled: Boolean? = null,
 )
 
 @Serializable
@@ -185,21 +201,45 @@ private data class MetaUpgradeRankDto(
     val rank: Int,
 )
 
+@Serializable
+private data class MatrixProgressDto(
+    val ranks: List<MatrixNodeRankDto>,
+)
+
+@Serializable
+private data class MatrixNodeRankDto(
+    val id: String,
+    val rank: Int,
+)
+
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
 private data class PlayerCollectionDto(
+    // Generation of the item and Relic catalog the ids below refer to. Every encode writes
+    // ContentBounds.COLLECTION_GENERATION; absence marks a save of the retired catalog, which keeps
+    // its exact canonical bytes and whose discoveries are discarded when mapped to the domain.
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val itemCatalogEpoch: Int? = null,
     val discoveredItemIds: List<Int>,
     @EncodeDefault(EncodeDefault.Mode.NEVER) val newItemIds: List<Int> = emptyList(),
     @EncodeDefault(EncodeDefault.Mode.NEVER) val discoveredRelicIds: List<String> = emptyList(),
     @EncodeDefault(EncodeDefault.Mode.NEVER) val newRelicIds: List<String> = emptyList(),
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val discoveredReactionIds: List<String> = emptyList(),
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val discoveredPairingIds: List<String> = emptyList(),
+    // Slot order at the Architect victory, so unique but deliberately not sorted.
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val heirloomRelicIds: List<String> = emptyList(),
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 private data class RebirthProgressDto(
     val level: Int,
     val highestCleared: Int,
+    // Characters that cleared the final tier, sorted by wire id; written only once one has, so older
+    // saves keep their exact bytes.
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val ascendedCharacterIds: List<String> = emptyList(),
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 private data class CharacterAchievementProgressDto(
     val eliteKills: String,
@@ -207,6 +247,11 @@ private data class CharacterAchievementProgressDto(
     val completedOrbits: String,
     val architectVictories: String,
     val victoriousCharacterIds: List<String>,
+    // Written only when non-zero: absence means 0, so saves from before these counters keep their bytes
+    // (and an explicit "0" is not canonical).
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val totalKills: String = "0",
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val ricochets: String = "0",
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val dataPickups: String = "0",
 )
 
 private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
@@ -214,14 +259,10 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
     rejectUnless(revision.value >= 0L, ProfileSnapshotRejection.INVALID_DECIMAL)
 
     val preferences = profile.preferences
-    val ranks = MetaUpgradeId.entries
-        .map { id ->
-            MetaUpgradeRankDto(
-                id = id.wireId(),
-                rank = profile.labProgress.rank(id),
-            )
-        }
-        .sortedBy(MetaUpgradeRankDto::id)
+    val matrixRanks = MatrixNodeId.entries
+        .filter { id -> profile.matrix.rank(id) > 0 }
+        .map { id -> MatrixNodeRankDto(id = id.wireId(), rank = profile.matrix.rank(id)) }
+        .sortedBy(MatrixNodeRankDto::id)
 
     return ProfileSnapshotDto(
         revision = revision.value.toString(),
@@ -241,6 +282,7 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
                 languageCode = preferences.language.code,
                 runStatisticsOnLeft = preferences.runStatisticsOnLeft,
                 colorVisionId = preferences.colorVision.wireIdOrNull(),
+                minimapEnabled = if (preferences.minimapEnabled) null else false,
             ),
             economy = PlayerEconomyDto(
                 matter = profile.economy.matter.toString(),
@@ -253,12 +295,16 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
                     .map(WeaponId::wireId)
                     .sorted(),
             ),
-            labProgress = LabProgressDto(ranks),
+            matrix = MatrixProgressDto(matrixRanks),
             collection = PlayerCollectionDto(
-                profile.collection.discoveredItemIds.sorted(),
-                profile.collection.newItemIds.sorted(),
-                profile.collection.discoveredRelicIds.map(RelicId::wireId).sorted(),
-                profile.collection.newRelicIds.map(RelicId::wireId).sorted(),
+                itemCatalogEpoch = ContentBounds.COLLECTION_GENERATION,
+                discoveredItemIds = profile.collection.discoveredItemIds.sorted(),
+                newItemIds = profile.collection.newItemIds.sorted(),
+                discoveredRelicIds = profile.collection.discoveredRelicIds.map(RelicId::wireId).sorted(),
+                newRelicIds = profile.collection.newRelicIds.map(RelicId::wireId).sorted(),
+                discoveredReactionIds = profile.collection.discoveredReactionIds.map(ReactionId::wireId).sorted(),
+                discoveredPairingIds = profile.collection.discoveredPairingIds.map(RelicPairingId::wireId).sorted(),
+                heirloomRelicIds = profile.collection.heirloomRelicIds.map(RelicId::wireId),
             ),
             characterAchievements = CharacterAchievementProgressDto(
                 eliteKills = profile.characterAchievements.eliteKills.toString(),
@@ -266,10 +312,14 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
                 completedOrbits = profile.characterAchievements.completedOrbits.toString(),
                 architectVictories = profile.characterAchievements.architectVictories.toString(),
                 victoriousCharacterIds = profile.characterAchievements.victoriousCharacters.map(CoreShape::wireId).sorted(),
+                totalKills = profile.characterAchievements.totalKills.toString(),
+                ricochets = profile.characterAchievements.ricochets.toString(),
+                dataPickups = profile.characterAchievements.dataPickups.toString(),
             ),
             rebirthProgress = RebirthProgressDto(
                 level = profile.rebirthProgress.level,
                 highestCleared = profile.rebirthProgress.highestCleared,
+                ascendedCharacterIds = profile.rebirthProgress.ascendedCharacters.map(CoreShape::wireId).sorted(),
             ),
         ),
     )
@@ -277,13 +327,12 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
 
 private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
     val revisionValue = revision.parseCanonicalNonNegativeLong()
+    val retiredCatalog = profile.collection.isFromRetiredCatalog()
 
-    val expectedRankIds = MetaUpgradeId.entries.map { it.wireId() }.sorted()
-    val actualRankIds = profile.labProgress.ranks.map(MetaUpgradeRankDto::id)
-    rejectUnless(
-        actualRankIds.isStrictlySorted() && actualRankIds == expectedRankIds,
-        ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
-    )
+    val legacyLab = profile.labProgress
+    rejectUnless(legacyLab == null || profile.matrix.ranks.isEmpty(), ProfileSnapshotRejection.INCONSISTENT_PROFILE)
+    val labRefund = legacyLab?.let(RetiredLabRefund::refund) ?: 0L
+    val matrixRanks = profile.matrix.toRanks()
     rejectUnless(
         profile.loadout.unlockedWeaponIds.isStrictlySorted(),
         ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
@@ -294,22 +343,27 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
     )
 
     rejectUnless(
-        profile.characterAchievements.victoriousCharacterIds.isStrictlySorted(),
+        profile.characterAchievements.victoriousCharacterIds.isStrictlySorted() &&
+            profile.rebirthProgress.ascendedCharacterIds.isStrictlySorted(),
         ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
     )
 
     rejectUnless(
         profile.collection.newItemIds.isStrictlySorted() &&
             profile.collection.discoveredRelicIds.isStrictlySorted() &&
-            profile.collection.newRelicIds.isStrictlySorted(),
+            profile.collection.newRelicIds.isStrictlySorted() &&
+            profile.collection.discoveredReactionIds.isStrictlySorted() &&
+            profile.collection.discoveredPairingIds.isStrictlySorted() &&
+            profile.collection.heirloomRelicIds.toSet().size == profile.collection.heirloomRelicIds.size,
         ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
     )
 
-    val metaRanks = MutableList(MetaUpgradeId.entries.size) { 0 }
-    profile.labProgress.ranks.forEach { record ->
-        val id = record.id.metaUpgradeId()
-        metaRanks[id.ordinal] = record.rank
-    }
+    val storedMatter = profile.economy.matter.parseCanonicalNonNegativeLong()
+    val storedLifetimeMatter = profile.economy.lifetimeMatter.parseCanonicalNonNegativeLong()
+    rejectUnless(storedLifetimeMatter >= storedMatter, ProfileSnapshotRejection.INCONSISTENT_PROFILE)
+    // A Lab refund returns the whole spend; lifetime Matter never falls below the balance it produced.
+    val matter = saturatedAdd(storedMatter, labRefund)
+    val lifetimeMatter = maxOf(storedLifetimeMatter, matter)
 
     val decoded = PlayerProfile(
         preferences = PlayerPreferences(
@@ -327,39 +381,38 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
             language = profile.preferences.languageCode?.appLanguage() ?: AppLanguage.Russian,
             runStatisticsOnLeft = profile.preferences.runStatisticsOnLeft ?: false,
             colorVision = profile.preferences.colorVisionId?.colorVision() ?: ColorVision.DEFAULT,
+            // Only "off" is ever written; an explicit default is not a value this codec produces.
+            minimapEnabled = when (profile.preferences.minimapEnabled) {
+                null -> true
+                false -> false
+                true -> reject(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+            },
         ),
-        economy = PlayerEconomy(
-            matter = profile.economy.matter.parseCanonicalNonNegativeLong(),
-            lifetimeMatter = profile.economy.lifetimeMatter.parseCanonicalNonNegativeLong(),
-        ),
+        economy = PlayerEconomy(matter = matter, lifetimeMatter = lifetimeMatter),
         loadout = PlayerLoadout(
             coreShape = profile.loadout.coreShapeId.coreShape(),
             selectedWeapon = profile.loadout.selectedWeaponId.weaponId(),
             unlockedWeapons = profile.loadout.unlockedWeaponIds.mapTo(mutableSetOf()) { it.weaponId() },
         ),
-        labProgress = LabProgress(metaRanks),
-        collection = PlayerCollection(
-            discoveredItemIds = profile.collection.discoveredItemIds.toSet(),
-            newItemIds = profile.collection.newItemIds.toSet(),
-            discoveredRelicIds = profile.collection.discoveredRelicIds.relicIds(),
-            newRelicIds = profile.collection.newRelicIds.relicIds(),
-        ),
+        matrix = MatrixProgress(matrixRanks),
+        collection = if (retiredCatalog) PlayerCollection() else profile.collection.toCollection(),
         characterAchievements = CharacterAchievementProgress(
             eliteKills = profile.characterAchievements.eliteKills.parseCanonicalNonNegativeLong(),
             dashHits = profile.characterAchievements.dashHits.parseCanonicalNonNegativeLong(),
             completedOrbits = profile.characterAchievements.completedOrbits.parseCanonicalNonNegativeLong(),
             architectVictories = profile.characterAchievements.architectVictories.parseCanonicalNonNegativeLong(),
             victoriousCharacters = profile.characterAchievements.victoriousCharacterIds.map { it.coreShape() }.toImmutableSet(),
+            totalKills = profile.characterAchievements.totalKills.parseCanonicalNonNegativeLong(),
+            ricochets = profile.characterAchievements.ricochets.parseCanonicalNonNegativeLong(),
+            dataPickups = profile.characterAchievements.dataPickups.parseCanonicalNonNegativeLong(),
         ),
         rebirthProgress = RebirthProgress(
             level = profile.rebirthProgress.level,
             highestCleared = profile.rebirthProgress.highestCleared,
+            ascendedCharacters = profile.rebirthProgress.ascendedCharacterIds.map { it.coreShape() }.toImmutableSet(),
         ),
     )
     validateProfile(decoded)
-    profile.labProgress.ranks.forEach { record ->
-        rejectUnless(record.rank >= 0, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
-    }
 
     return ProfileSnapshot(
         revision = ProfileRevision(revisionValue),
@@ -367,11 +420,53 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
     )
 }
 
+/**
+ * Validates the epoch and the raw list bounds of either catalog generation before any id is mapped.
+ * Returns true for a save of the retired catalog, whose discoveries are dropped unparsed: its Relic
+ * names no longer exist and its item indices point into a different catalog.
+ */
+private fun PlayerCollectionDto.isFromRetiredCatalog(): Boolean {
+    val epoch = itemCatalogEpoch
+    rejectUnless(
+        epoch == null || epoch in 0..ContentBounds.COLLECTION_GENERATION,
+        ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+    )
+    val retired = epoch == null || epoch < ContentBounds.COLLECTION_GENERATION
+    val maxItems = if (retired) ContentBounds.LEGACY_MAX_ITEMS else ContentBounds.MAX_ITEMS
+    val maxRelics = if (retired) ContentBounds.LEGACY_MAX_RELICS else ContentBounds.MAX_RELICS
+    rejectUnless(
+        discoveredItemIds.size <= maxItems && newItemIds.size <= maxItems &&
+            discoveredRelicIds.size <= maxRelics && newRelicIds.size <= maxRelics &&
+            discoveredReactionIds.size <= ReactionId.entries.size &&
+            discoveredPairingIds.size <= RelicPairingId.entries.size &&
+            heirloomRelicIds.size <= MAX_HEIRLOOM_RELICS,
+        ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+    )
+    // The retired codec never wrote these fields, so a save carrying them without an epoch was not
+    // produced by any version.
+    rejectUnless(
+        !retired || discoveredReactionIds.isEmpty() && discoveredPairingIds.isEmpty() && heirloomRelicIds.isEmpty(),
+        ProfileSnapshotRejection.INCONSISTENT_PROFILE,
+    )
+    return retired
+}
+
+private fun PlayerCollectionDto.toCollection(): PlayerCollection = PlayerCollection(
+    discoveredItemIds = discoveredItemIds.toImmutableSet(),
+    newItemIds = newItemIds.toImmutableSet(),
+    discoveredRelicIds = discoveredRelicIds.map { it.relicId() }.toImmutableSet(),
+    newRelicIds = newRelicIds.map { it.relicId() }.toImmutableSet(),
+    discoveredReactionIds = discoveredReactionIds.map { it.reactionId() }.toImmutableSet(),
+    discoveredPairingIds = discoveredPairingIds.map { it.relicPairingId() }.toImmutableSet(),
+    heirloomRelicIds = heirloomRelicIds.map { it.relicId() }.toImmutableList(),
+)
+
 private fun validateProfile(profile: PlayerProfile) {
     val achievements = profile.characterAchievements
     rejectUnless(
         achievements.eliteKills >= 0L && achievements.dashHits >= 0L &&
             achievements.completedOrbits >= 0L && achievements.architectVictories >= 0L &&
+            achievements.totalKills >= 0L && achievements.ricochets >= 0L && achievements.dataPickups >= 0L &&
             achievements.victoriousCharacters.size <= CoreShape.entries.size &&
             achievements.victoriousCharacters.size.toLong() <= achievements.architectVictories,
         ProfileSnapshotRejection.INCONSISTENT_PROFILE,
@@ -402,11 +497,14 @@ private fun validateProfile(profile: PlayerProfile) {
     )
 
     rejectUnless(
-        profile.labProgress.ranks.size == MetaUpgradeId.entries.size &&
-            profile.labProgress.ranks.size == ContentBounds.MAX_META_UPGRADES,
+        profile.matrix.ranks.size == MatrixNodeId.entries.size &&
+            profile.matrix.ranks.size <= ContentBounds.MAX_MATRIX_NODES,
         ProfileSnapshotRejection.INCONSISTENT_PROFILE,
     )
-    rejectUnless(profile.labProgress.ranks.all { it >= 0 }, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+    rejectUnless(
+        profile.matrix.ranks.all { it in 0..ContentBounds.MAX_MATRIX_NODE_RANKS },
+        ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+    )
 
     rejectUnless(
         profile.collection.discoveredItemIds.size <= ContentBounds.MAX_ITEMS &&
@@ -419,10 +517,17 @@ private fun validateProfile(profile: PlayerProfile) {
             profile.collection.discoveredRelicIds.size <= ContentBounds.MAX_RELICS,
         ProfileSnapshotRejection.INCONSISTENT_PROFILE,
     )
+    val heirlooms = profile.collection.heirloomRelicIds
+    rejectUnless(heirlooms.size <= MAX_HEIRLOOM_RELICS, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+    rejectUnless(heirlooms.toSet().size == heirlooms.size, ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE)
     rejectUnless(
-        profile.rebirthProgress.level in ContentBounds.MIN_REBIRTH_LEVEL..ContentBounds.MAX_REBIRTH_LEVEL &&
-            profile.rebirthProgress.highestCleared in -1..profile.rebirthProgress.level,
+        profile.rebirthProgress.isWithinRebirthBounds(ContentBounds.MIN_REBIRTH_LEVEL, ContentBounds.MAX_REBIRTH_LEVEL),
         ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+    )
+    // An Ascendant clear is an Architect victory with that character.
+    rejectUnless(
+        achievements.victoriousCharacters.containsAll(profile.rebirthProgress.ascendedCharacters),
+        ProfileSnapshotRejection.INCONSISTENT_PROFILE,
     )
 }
 
@@ -432,9 +537,6 @@ private fun <T : Comparable<T>> List<T>.isStrictlySorted(): Boolean {
     }
     return true
 }
-
-private fun List<String>.relicIds(): Set<RelicId> =
-    if (isEmpty()) emptySet() else mapTo(mutableSetOf()) { it.relicId() }
 
 private fun Float.toPercent(): Int {
     rejectUnless(isFinite(), ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
@@ -459,6 +561,12 @@ private fun CoreShape.wireId(): String = when (this) {
     CoreShape.RING -> "RING"
     CoreShape.DIAMOND -> "DIAMOND"
     CoreShape.TESSERACT -> "TESSERACT"
+    CoreShape.STAR -> "STAR"
+    CoreShape.SPIRAL -> "SPIRAL"
+    CoreShape.DIPOLE -> "DIPOLE"
+    CoreShape.PENTAGON -> "PENTAGON"
+    CoreShape.CRESCENT -> "CRESCENT"
+    CoreShape.HEXAGON -> "HEXAGON"
 }
 
 private fun String.coreShape(): CoreShape = when (this) {
@@ -468,6 +576,12 @@ private fun String.coreShape(): CoreShape = when (this) {
     "RING" -> CoreShape.RING
     "DIAMOND" -> CoreShape.DIAMOND
     "TESSERACT" -> CoreShape.TESSERACT
+    "STAR" -> CoreShape.STAR
+    "SPIRAL" -> CoreShape.SPIRAL
+    "DIPOLE" -> CoreShape.DIPOLE
+    "PENTAGON" -> CoreShape.PENTAGON
+    "CRESCENT" -> CoreShape.CRESCENT
+    "HEXAGON" -> CoreShape.HEXAGON
     else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
 
@@ -484,6 +598,18 @@ private fun WeaponId.wireId(): String = when (this) {
     WeaponId.ENTROPY_FIELD -> "ENTROPY_FIELD"
     WeaponId.SINGULARITY_SPEAR -> "SINGULARITY_SPEAR"
     WeaponId.PRISM_RELAY -> "PRISM_RELAY"
+    WeaponId.GYRE_DISC -> "GYRE_DISC"
+    WeaponId.SCATTER_BLOOM -> "SCATTER_BLOOM"
+    WeaponId.TETHER_ARC -> "TETHER_ARC"
+    WeaponId.SENTRY_GRID -> "SENTRY_GRID"
+    WeaponId.HUNTER_SALVO -> "HUNTER_SALVO"
+    WeaponId.CONCUSSION_ENGINE -> "CONCUSSION_ENGINE"
+    WeaponId.GLACIER_BELL -> "GLACIER_BELL"
+    WeaponId.EVENT_LENS -> "EVENT_LENS"
+    WeaponId.SOLAR_SWEEP -> "SOLAR_SWEEP"
+    WeaponId.AEGIS_SHARDS -> "AEGIS_SHARDS"
+    WeaponId.HOLLOW_RIFT -> "HOLLOW_RIFT"
+    WeaponId.RESONANCE_DRUM -> "RESONANCE_DRUM"
 }
 
 private fun String.weaponId(): WeaponId = when (this) {
@@ -499,117 +625,238 @@ private fun String.weaponId(): WeaponId = when (this) {
     "ENTROPY_FIELD" -> WeaponId.ENTROPY_FIELD
     "SINGULARITY_SPEAR" -> WeaponId.SINGULARITY_SPEAR
     "PRISM_RELAY" -> WeaponId.PRISM_RELAY
+    "GYRE_DISC" -> WeaponId.GYRE_DISC
+    "SCATTER_BLOOM" -> WeaponId.SCATTER_BLOOM
+    "TETHER_ARC" -> WeaponId.TETHER_ARC
+    "SENTRY_GRID" -> WeaponId.SENTRY_GRID
+    "HUNTER_SALVO" -> WeaponId.HUNTER_SALVO
+    "CONCUSSION_ENGINE" -> WeaponId.CONCUSSION_ENGINE
+    "GLACIER_BELL" -> WeaponId.GLACIER_BELL
+    "EVENT_LENS" -> WeaponId.EVENT_LENS
+    "SOLAR_SWEEP" -> WeaponId.SOLAR_SWEEP
+    "AEGIS_SHARDS" -> WeaponId.AEGIS_SHARDS
+    "HOLLOW_RIFT" -> WeaponId.HOLLOW_RIFT
+    "RESONANCE_DRUM" -> WeaponId.RESONANCE_DRUM
     else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
 
-private fun MetaUpgradeId.wireId(): String = when (this) {
-    MetaUpgradeId.CORE_INTEGRITY -> "CORE_INTEGRITY"
-    MetaUpgradeId.KINETIC_AMPLIFIER -> "KINETIC_AMPLIFIER"
-    MetaUpgradeId.MAGNETIC_RESONANCE -> "MAGNETIC_RESONANCE"
-    MetaUpgradeId.CRYO_VENTS -> "CRYO_VENTS"
-    MetaUpgradeId.DASH_CAPACITOR -> "DASH_CAPACITOR"
-    MetaUpgradeId.SALVAGE_PROTOCOL -> "SALVAGE_PROTOCOL"
-    MetaUpgradeId.DATA_ARCHIVE -> "DATA_ARCHIVE"
-    MetaUpgradeId.ARMORY_LICENSE -> "ARMORY_LICENSE"
+/** Core Matrix wire ids: stable names, never renamed or reused. */
+private fun MatrixNodeId.wireId(): String = when (this) {
+    MatrixNodeId.IMPACT_DRIVER -> "IMPACT_DRIVER"
+    MatrixNodeId.WEAPON_CALIBRATION -> "WEAPON_CALIBRATION"
+    MatrixNodeId.CRITICAL_LATTICE -> "CRITICAL_LATTICE"
+    MatrixNodeId.ARMED_START -> "ARMED_START"
+    MatrixNodeId.CATALYST_CORE -> "CATALYST_CORE"
+    MatrixNodeId.OVERDRIVE_COIL -> "OVERDRIVE_COIL"
+    MatrixNodeId.REBORN_ARSENAL -> "REBORN_ARSENAL"
+    MatrixNodeId.GLASS_ENGINE -> "GLASS_ENGINE"
+    MatrixNodeId.REINFORCED_HULL -> "REINFORCED_HULL"
+    MatrixNodeId.HARDLIGHT_RESERVE -> "HARDLIGHT_RESERVE"
+    MatrixNodeId.IMPACT_DAMPERS -> "IMPACT_DAMPERS"
+    MatrixNodeId.SECOND_WIND -> "SECOND_WIND"
+    MatrixNodeId.NANOFORGE -> "NANOFORGE"
+    MatrixNodeId.BASTION_PROTOCOL -> "BASTION_PROTOCOL"
+    MatrixNodeId.AEGIS_LATTICE -> "AEGIS_LATTICE"
+    MatrixNodeId.JUGGERNAUT -> "JUGGERNAUT"
+    MatrixNodeId.MAGNET_ARRAY -> "MAGNET_ARRAY"
+    MatrixNodeId.CRYO_LOOP -> "CRYO_LOOP"
+    MatrixNodeId.VECTOR_THRUSTERS -> "VECTOR_THRUSTERS"
+    MatrixNodeId.NEAR_MISS -> "NEAR_MISS"
+    MatrixNodeId.RICOCHET_RIG -> "RICOCHET_RIG"
+    MatrixNodeId.OVERCLOCKED_REFLEXES -> "OVERCLOCKED_REFLEXES"
+    MatrixNodeId.GRAVITY_SURFER -> "GRAVITY_SURFER"
+    MatrixNodeId.PERPETUAL_DRIFT -> "PERPETUAL_DRIFT"
+    MatrixNodeId.SALVAGE_PROTOCOL -> "SALVAGE_PROTOCOL"
+    MatrixNodeId.DATA_ARCHIVE -> "DATA_ARCHIVE"
+    MatrixNodeId.REROLL_CACHE -> "REROLL_CACHE"
+    MatrixNodeId.WIDE_OFFER -> "WIDE_OFFER"
+    MatrixNodeId.LUCKY_CHARM -> "LUCKY_CHARM"
+    MatrixNodeId.ELITE_BOUNTY -> "ELITE_BOUNTY"
+    MatrixNodeId.HEIRLOOM_VAULT -> "HEIRLOOM_VAULT"
+    MatrixNodeId.PROSPECTOR -> "PROSPECTOR"
 }
 
-private fun String.metaUpgradeId(): MetaUpgradeId = when (this) {
-    "CORE_INTEGRITY" -> MetaUpgradeId.CORE_INTEGRITY
-    "KINETIC_AMPLIFIER" -> MetaUpgradeId.KINETIC_AMPLIFIER
-    "MAGNETIC_RESONANCE" -> MetaUpgradeId.MAGNETIC_RESONANCE
-    "CRYO_VENTS" -> MetaUpgradeId.CRYO_VENTS
-    "DASH_CAPACITOR" -> MetaUpgradeId.DASH_CAPACITOR
-    "SALVAGE_PROTOCOL" -> MetaUpgradeId.SALVAGE_PROTOCOL
-    "DATA_ARCHIVE" -> MetaUpgradeId.DATA_ARCHIVE
-    "ARMORY_LICENSE" -> MetaUpgradeId.ARMORY_LICENSE
+private fun String.matrixNodeId(): MatrixNodeId = when (this) {
+    "IMPACT_DRIVER" -> MatrixNodeId.IMPACT_DRIVER
+    "WEAPON_CALIBRATION" -> MatrixNodeId.WEAPON_CALIBRATION
+    "CRITICAL_LATTICE" -> MatrixNodeId.CRITICAL_LATTICE
+    "ARMED_START" -> MatrixNodeId.ARMED_START
+    "CATALYST_CORE" -> MatrixNodeId.CATALYST_CORE
+    "OVERDRIVE_COIL" -> MatrixNodeId.OVERDRIVE_COIL
+    "REBORN_ARSENAL" -> MatrixNodeId.REBORN_ARSENAL
+    "GLASS_ENGINE" -> MatrixNodeId.GLASS_ENGINE
+    "REINFORCED_HULL" -> MatrixNodeId.REINFORCED_HULL
+    "HARDLIGHT_RESERVE" -> MatrixNodeId.HARDLIGHT_RESERVE
+    "IMPACT_DAMPERS" -> MatrixNodeId.IMPACT_DAMPERS
+    "SECOND_WIND" -> MatrixNodeId.SECOND_WIND
+    "NANOFORGE" -> MatrixNodeId.NANOFORGE
+    "BASTION_PROTOCOL" -> MatrixNodeId.BASTION_PROTOCOL
+    "AEGIS_LATTICE" -> MatrixNodeId.AEGIS_LATTICE
+    "JUGGERNAUT" -> MatrixNodeId.JUGGERNAUT
+    "MAGNET_ARRAY" -> MatrixNodeId.MAGNET_ARRAY
+    "CRYO_LOOP" -> MatrixNodeId.CRYO_LOOP
+    "VECTOR_THRUSTERS" -> MatrixNodeId.VECTOR_THRUSTERS
+    "NEAR_MISS" -> MatrixNodeId.NEAR_MISS
+    "RICOCHET_RIG" -> MatrixNodeId.RICOCHET_RIG
+    "OVERCLOCKED_REFLEXES" -> MatrixNodeId.OVERCLOCKED_REFLEXES
+    "GRAVITY_SURFER" -> MatrixNodeId.GRAVITY_SURFER
+    "PERPETUAL_DRIFT" -> MatrixNodeId.PERPETUAL_DRIFT
+    "SALVAGE_PROTOCOL" -> MatrixNodeId.SALVAGE_PROTOCOL
+    "DATA_ARCHIVE" -> MatrixNodeId.DATA_ARCHIVE
+    "REROLL_CACHE" -> MatrixNodeId.REROLL_CACHE
+    "WIDE_OFFER" -> MatrixNodeId.WIDE_OFFER
+    "LUCKY_CHARM" -> MatrixNodeId.LUCKY_CHARM
+    "ELITE_BOUNTY" -> MatrixNodeId.ELITE_BOUNTY
+    "HEIRLOOM_VAULT" -> MatrixNodeId.HEIRLOOM_VAULT
+    "PROSPECTOR" -> MatrixNodeId.PROSPECTOR
     else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
 
-
+/** Wire ids of the current Relic catalog; retired names are never mapped (see isFromRetiredCatalog). */
 private fun RelicId.wireId(): String = when (this) {
-    RelicId.KINETIC_FLYWHEEL -> "KINETIC_FLYWHEEL"
-    RelicId.GHOST_VECTOR -> "GHOST_VECTOR"
-    RelicId.OVERTAKE_PROTOCOL -> "OVERTAKE_PROTOCOL"
-    RelicId.SLIPSTREAM_RELAY -> "SLIPSTREAM_RELAY"
-    RelicId.BRAKEPOINT_MEMORY -> "BRAKEPOINT_MEMORY"
-    RelicId.POLARITY_SLING -> "POLARITY_SLING"
-    RelicId.ORBITAL_NAIL -> "ORBITAL_NAIL"
-    RelicId.EVENTIDE_ANCHOR -> "EVENTIDE_ANCHOR"
-    RelicId.PERIAPSIS_HOOK -> "PERIAPSIS_HOOK"
-    RelicId.CRUSH_DEPTH -> "CRUSH_DEPTH"
-    RelicId.MASS_ECHO -> "MASS_ECHO"
-    RelicId.TIDAL_LOCK -> "TIDAL_LOCK"
-    RelicId.VOLTAIC_FILAMENT -> "VOLTAIC_FILAMENT"
-    RelicId.STATIC_CHORUS -> "STATIC_CHORUS"
-    RelicId.ION_DEBT -> "ION_DEBT"
-    RelicId.CIRCUIT_BREAKER -> "CIRCUIT_BREAKER"
-    RelicId.RETURN_CIRCUIT -> "RETURN_CIRCUIT"
-    RelicId.STORM_INDEX -> "STORM_INDEX"
+    RelicId.PERPETUAL_VECTOR -> "PERPETUAL_VECTOR"
+    RelicId.BLINK_DRIVE -> "BLINK_DRIVE"
+    RelicId.GYRE_ENGINE -> "GYRE_ENGINE"
+    RelicId.GLASS_COMET -> "GLASS_COMET"
+    RelicId.EXECUTIONERS_PRISM -> "EXECUTIONERS_PRISM"
     RelicId.ECHO_CHAMBER -> "ECHO_CHAMBER"
-    RelicId.PALIMPSEST_ROUND -> "PALIMPSEST_ROUND"
-    RelicId.SECOND_HAND -> "SECOND_HAND"
-    RelicId.FRACTURE_GATE -> "FRACTURE_GATE"
-    RelicId.SPLIT_HORIZON -> "SPLIT_HORIZON"
-    RelicId.BORROWED_MOMENT -> "BORROWED_MOMENT"
-    RelicId.GLASS_WITNESS -> "GLASS_WITNESS"
-    RelicId.FRACTURE_LENS -> "FRACTURE_LENS"
-    RelicId.SPECTRAL_FAN -> "SPECTRAL_FAN"
-    RelicId.HARDLIGHT_EDGE -> "HARDLIGHT_EDGE"
-    RelicId.CHROMA_FEEDBACK -> "CHROMA_FEEDBACK"
-    RelicId.MIRROR_CUT -> "MIRROR_CUT"
-    RelicId.HEAT_DEBT -> "HEAT_DEBT"
-    RelicId.SCAR_TISSUE -> "SCAR_TISSUE"
-    RelicId.QUIETUS_BLOOM -> "QUIETUS_BLOOM"
-    RelicId.DEVOURERS_TOLL -> "DEVOURERS_TOLL"
-    RelicId.DOOM_CLOCK -> "DOOM_CLOCK"
-    RelicId.LAST_LIGHT -> "LAST_LIGHT"
+    RelicId.FURNACE_COVENANT -> "FURNACE_COVENANT"
+    RelicId.CINDER_CROWN -> "CINDER_CROWN"
+    RelicId.OVERDRIVE_CASCADE -> "OVERDRIVE_CASCADE"
+    RelicId.ABSOLUTE_ZERO -> "ABSOLUTE_ZERO"
+    RelicId.STASIS_ANCHOR -> "STASIS_ANCHOR"
+    RelicId.STORMHEART_CAPACITOR -> "STORMHEART_CAPACITOR"
+    RelicId.AEGIS_INVERSION -> "AEGIS_INVERSION"
+    RelicId.NEUTRON_HEART -> "NEUTRON_HEART"
+    RelicId.EVENT_HORIZON -> "EVENT_HORIZON"
+    RelicId.VERDANT_ROT -> "VERDANT_ROT"
+    RelicId.PANDEMIC_CODEX -> "PANDEMIC_CODEX"
     RelicId.AGONY_SCEPTER -> "AGONY_SCEPTER"
-    RelicId.CROWN_OF_FOUR_WINDS -> "CROWN_OF_FOUR_WINDS"
-    RelicId.MIRROR_OF_THE_HUNT -> "MIRROR_OF_THE_HUNT"
-    RelicId.ENGINE_OF_PARADOX -> "ENGINE_OF_PARADOX"
+    RelicId.HOLLOW_CROWN -> "HOLLOW_CROWN"
+    RelicId.OUROBOROS_SEAL -> "OUROBOROS_SEAL"
+    RelicId.THUNDER_CHOIR -> "THUNDER_CHOIR"
+    RelicId.NULL_COVENANT -> "NULL_COVENANT"
 }
 
 private fun String.relicId(): RelicId = when (this) {
-    "KINETIC_FLYWHEEL" -> RelicId.KINETIC_FLYWHEEL
-    "GHOST_VECTOR" -> RelicId.GHOST_VECTOR
-    "OVERTAKE_PROTOCOL" -> RelicId.OVERTAKE_PROTOCOL
-    "SLIPSTREAM_RELAY" -> RelicId.SLIPSTREAM_RELAY
-    "BRAKEPOINT_MEMORY" -> RelicId.BRAKEPOINT_MEMORY
-    "POLARITY_SLING" -> RelicId.POLARITY_SLING
-    "ORBITAL_NAIL" -> RelicId.ORBITAL_NAIL
-    "EVENTIDE_ANCHOR" -> RelicId.EVENTIDE_ANCHOR
-    "PERIAPSIS_HOOK" -> RelicId.PERIAPSIS_HOOK
-    "CRUSH_DEPTH" -> RelicId.CRUSH_DEPTH
-    "MASS_ECHO" -> RelicId.MASS_ECHO
-    "TIDAL_LOCK" -> RelicId.TIDAL_LOCK
-    "VOLTAIC_FILAMENT" -> RelicId.VOLTAIC_FILAMENT
-    "STATIC_CHORUS" -> RelicId.STATIC_CHORUS
-    "ION_DEBT" -> RelicId.ION_DEBT
-    "CIRCUIT_BREAKER" -> RelicId.CIRCUIT_BREAKER
-    "RETURN_CIRCUIT" -> RelicId.RETURN_CIRCUIT
-    "STORM_INDEX" -> RelicId.STORM_INDEX
+    "PERPETUAL_VECTOR" -> RelicId.PERPETUAL_VECTOR
+    "BLINK_DRIVE" -> RelicId.BLINK_DRIVE
+    "GYRE_ENGINE" -> RelicId.GYRE_ENGINE
+    "GLASS_COMET" -> RelicId.GLASS_COMET
+    "EXECUTIONERS_PRISM" -> RelicId.EXECUTIONERS_PRISM
     "ECHO_CHAMBER" -> RelicId.ECHO_CHAMBER
-    "PALIMPSEST_ROUND" -> RelicId.PALIMPSEST_ROUND
-    "SECOND_HAND" -> RelicId.SECOND_HAND
-    "FRACTURE_GATE" -> RelicId.FRACTURE_GATE
-    "SPLIT_HORIZON" -> RelicId.SPLIT_HORIZON
-    "BORROWED_MOMENT" -> RelicId.BORROWED_MOMENT
-    "GLASS_WITNESS" -> RelicId.GLASS_WITNESS
-    "FRACTURE_LENS" -> RelicId.FRACTURE_LENS
-    "SPECTRAL_FAN" -> RelicId.SPECTRAL_FAN
-    "HARDLIGHT_EDGE" -> RelicId.HARDLIGHT_EDGE
-    "CHROMA_FEEDBACK" -> RelicId.CHROMA_FEEDBACK
-    "MIRROR_CUT" -> RelicId.MIRROR_CUT
-    "HEAT_DEBT" -> RelicId.HEAT_DEBT
-    "SCAR_TISSUE" -> RelicId.SCAR_TISSUE
-    "QUIETUS_BLOOM" -> RelicId.QUIETUS_BLOOM
-    "DEVOURERS_TOLL" -> RelicId.DEVOURERS_TOLL
-    "DOOM_CLOCK" -> RelicId.DOOM_CLOCK
-    "LAST_LIGHT" -> RelicId.LAST_LIGHT
+    "FURNACE_COVENANT" -> RelicId.FURNACE_COVENANT
+    "CINDER_CROWN" -> RelicId.CINDER_CROWN
+    "OVERDRIVE_CASCADE" -> RelicId.OVERDRIVE_CASCADE
+    "ABSOLUTE_ZERO" -> RelicId.ABSOLUTE_ZERO
+    "STASIS_ANCHOR" -> RelicId.STASIS_ANCHOR
+    "STORMHEART_CAPACITOR" -> RelicId.STORMHEART_CAPACITOR
+    "AEGIS_INVERSION" -> RelicId.AEGIS_INVERSION
+    "NEUTRON_HEART" -> RelicId.NEUTRON_HEART
+    "EVENT_HORIZON" -> RelicId.EVENT_HORIZON
+    "VERDANT_ROT" -> RelicId.VERDANT_ROT
+    "PANDEMIC_CODEX" -> RelicId.PANDEMIC_CODEX
     "AGONY_SCEPTER" -> RelicId.AGONY_SCEPTER
-    "CROWN_OF_FOUR_WINDS" -> RelicId.CROWN_OF_FOUR_WINDS
-    "MIRROR_OF_THE_HUNT" -> RelicId.MIRROR_OF_THE_HUNT
-    "ENGINE_OF_PARADOX" -> RelicId.ENGINE_OF_PARADOX
+    "HOLLOW_CROWN" -> RelicId.HOLLOW_CROWN
+    "OUROBOROS_SEAL" -> RelicId.OUROBOROS_SEAL
+    "THUNDER_CHOIR" -> RelicId.THUNDER_CHOIR
+    "NULL_COVENANT" -> RelicId.NULL_COVENANT
+    else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
+}
+
+private fun ReactionId.wireId(): String = when (this) {
+    ReactionId.THERMAL_SHOCK -> "THERMAL_SHOCK"
+    ReactionId.PLASMA_BURST -> "PLASMA_BURST"
+    ReactionId.FUSION -> "FUSION"
+    ReactionId.WILDFIRE -> "WILDFIRE"
+    ReactionId.SUPERCONDUCT -> "SUPERCONDUCT"
+    ReactionId.GLACIER_CRUSH -> "GLACIER_CRUSH"
+    ReactionId.EMBRITTLE -> "EMBRITTLE"
+    ReactionId.MAGNETIZE -> "MAGNETIZE"
+    ReactionId.FEEDBACK -> "FEEDBACK"
+    ReactionId.ROT_WELL -> "ROT_WELL"
+    ReactionId.THUNDERCLAP -> "THUNDERCLAP"
+    ReactionId.SHATTERPOINT -> "SHATTERPOINT"
+    ReactionId.RESONANT_ARC -> "RESONANT_ARC"
+    ReactionId.SEISMIC -> "SEISMIC"
+    ReactionId.FRACTURE -> "FRACTURE"
+    ReactionId.SILENCE -> "SILENCE"
+    ReactionId.BLACKFIRE -> "BLACKFIRE"
+    ReactionId.STASIS -> "STASIS"
+    ReactionId.ANNIHILATE -> "ANNIHILATE"
+    ReactionId.NULL_WELL -> "NULL_WELL"
+    ReactionId.OBLIVION -> "OBLIVION"
+}
+
+private fun String.reactionId(): ReactionId = when (this) {
+    "THERMAL_SHOCK" -> ReactionId.THERMAL_SHOCK
+    "PLASMA_BURST" -> ReactionId.PLASMA_BURST
+    "FUSION" -> ReactionId.FUSION
+    "WILDFIRE" -> ReactionId.WILDFIRE
+    "SUPERCONDUCT" -> ReactionId.SUPERCONDUCT
+    "GLACIER_CRUSH" -> ReactionId.GLACIER_CRUSH
+    "EMBRITTLE" -> ReactionId.EMBRITTLE
+    "MAGNETIZE" -> ReactionId.MAGNETIZE
+    "FEEDBACK" -> ReactionId.FEEDBACK
+    "ROT_WELL" -> ReactionId.ROT_WELL
+    "THUNDERCLAP" -> ReactionId.THUNDERCLAP
+    "SHATTERPOINT" -> ReactionId.SHATTERPOINT
+    "RESONANT_ARC" -> ReactionId.RESONANT_ARC
+    "SEISMIC" -> ReactionId.SEISMIC
+    "FRACTURE" -> ReactionId.FRACTURE
+    "SILENCE" -> ReactionId.SILENCE
+    "BLACKFIRE" -> ReactionId.BLACKFIRE
+    "STASIS" -> ReactionId.STASIS
+    "ANNIHILATE" -> ReactionId.ANNIHILATE
+    "NULL_WELL" -> ReactionId.NULL_WELL
+    "OBLIVION" -> ReactionId.OBLIVION
+    else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
+}
+
+private fun RelicPairingId.wireId(): String = when (this) {
+    RelicPairingId.ENDLESS_GYRE -> "ENDLESS_GYRE"
+    RelicPairingId.ASSASSINS_LINE -> "ASSASSINS_LINE"
+    RelicPairingId.MELTDOWN -> "MELTDOWN"
+    RelicPairingId.COLD_VERDICT -> "COLD_VERDICT"
+    RelicPairingId.LIGHTNING_ROD -> "LIGHTNING_ROD"
+    RelicPairingId.BLACK_STAR -> "BLACK_STAR"
+    RelicPairingId.BLIGHT_GARDEN -> "BLIGHT_GARDEN"
+    RelicPairingId.FIRESTORM -> "FIRESTORM"
+    RelicPairingId.FORBIDDEN_ECHO -> "FORBIDDEN_ECHO"
+    RelicPairingId.ROT_WARD -> "ROT_WARD"
+    RelicPairingId.STILL_WATERS -> "STILL_WATERS"
+    RelicPairingId.FOLD_VECTOR -> "FOLD_VECTOR"
+    RelicPairingId.HOLLOW_VOW -> "HOLLOW_VOW"
+    RelicPairingId.FARADAY_CAGE -> "FARADAY_CAGE"
+    RelicPairingId.THERMAL_PARADOX -> "THERMAL_PARADOX"
+    RelicPairingId.EXTINGUISHED -> "EXTINGUISHED"
+    RelicPairingId.SHATTERED_AEGIS -> "SHATTERED_AEGIS"
+    RelicPairingId.CONTRADICTION -> "CONTRADICTION"
+    RelicPairingId.HEAVY_BLINK -> "HEAVY_BLINK"
+    RelicPairingId.FRAGILE_REBIRTH -> "FRAGILE_REBIRTH"
+}
+
+private fun String.relicPairingId(): RelicPairingId = when (this) {
+    "ENDLESS_GYRE" -> RelicPairingId.ENDLESS_GYRE
+    "ASSASSINS_LINE" -> RelicPairingId.ASSASSINS_LINE
+    "MELTDOWN" -> RelicPairingId.MELTDOWN
+    "COLD_VERDICT" -> RelicPairingId.COLD_VERDICT
+    "LIGHTNING_ROD" -> RelicPairingId.LIGHTNING_ROD
+    "BLACK_STAR" -> RelicPairingId.BLACK_STAR
+    "BLIGHT_GARDEN" -> RelicPairingId.BLIGHT_GARDEN
+    "FIRESTORM" -> RelicPairingId.FIRESTORM
+    "FORBIDDEN_ECHO" -> RelicPairingId.FORBIDDEN_ECHO
+    "ROT_WARD" -> RelicPairingId.ROT_WARD
+    "STILL_WATERS" -> RelicPairingId.STILL_WATERS
+    "FOLD_VECTOR" -> RelicPairingId.FOLD_VECTOR
+    "HOLLOW_VOW" -> RelicPairingId.HOLLOW_VOW
+    "FARADAY_CAGE" -> RelicPairingId.FARADAY_CAGE
+    "THERMAL_PARADOX" -> RelicPairingId.THERMAL_PARADOX
+    "EXTINGUISHED" -> RelicPairingId.EXTINGUISHED
+    "SHATTERED_AEGIS" -> RelicPairingId.SHATTERED_AEGIS
+    "CONTRADICTION" -> RelicPairingId.CONTRADICTION
+    "HEAVY_BLINK" -> RelicPairingId.HEAVY_BLINK
+    "FRAGILE_REBIRTH" -> RelicPairingId.FRAGILE_REBIRTH
     else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
 
@@ -674,6 +921,59 @@ private fun String.appLanguage(): AppLanguage = when (this) {
     "en" -> AppLanguage.English
     else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
+
+/**
+ * Strict mapping of a Core Matrix record list: strictly sorted by wire id (no duplicates), every id
+ * known and every rank within 1..MAX_MATRIX_NODE_RANKS (a zero rank is never written).
+ */
+private fun MatrixProgressDto.toRanks(): List<Int> {
+    rejectUnless(ranks.map(MatrixNodeRankDto::id).isStrictlySorted(), ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE)
+    rejectUnless(ranks.size <= MatrixNodeId.entries.size, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+    val result = MutableList(MatrixNodeId.entries.size) { 0 }
+    ranks.forEach { record ->
+        val id = record.id.matrixNodeId()
+        rejectUnless(record.rank in 1..ContentBounds.MAX_MATRIX_NODE_RANKS, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+        result[id.ordinal] = record.rank
+    }
+    return result
+}
+
+/**
+ * The retired Lab, frozen as it shipped: eight upgrades priced `baseCost × rank²` for each rank.
+ * A legacy save must list exactly these wire ids in sorted order with ranks in 0..maxRanks; its
+ * refund is the full price of every owned rank, so veterans keep their whole spend.
+ */
+private object RetiredLabRefund {
+    private class LegacyUpgrade(val wireId: String, val maxRanks: Int, val baseCost: Long)
+
+    private val upgrades: List<LegacyUpgrade> = listOf(
+        LegacyUpgrade("ARMORY_LICENSE", maxRanks = 12, baseCost = 45),
+        LegacyUpgrade("CORE_INTEGRITY", maxRanks = 10, baseCost = 18),
+        LegacyUpgrade("CRYO_VENTS", maxRanks = 8, baseCost = 26),
+        LegacyUpgrade("DASH_CAPACITOR", maxRanks = 8, baseCost = 30),
+        LegacyUpgrade("DATA_ARCHIVE", maxRanks = 10, baseCost = 38),
+        LegacyUpgrade("KINETIC_AMPLIFIER", maxRanks = 10, baseCost = 22),
+        LegacyUpgrade("MAGNETIC_RESONANCE", maxRanks = 8, baseCost = 24),
+        LegacyUpgrade("SALVAGE_PROTOCOL", maxRanks = 10, baseCost = 34),
+    )
+
+    fun refund(lab: LabProgressDto): Long {
+        rejectUnless(
+            lab.ranks.map(MetaUpgradeRankDto::id) == upgrades.map(LegacyUpgrade::wireId),
+            ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
+        )
+        var total = 0L
+        lab.ranks.forEachIndexed { index, record ->
+            val upgrade = upgrades[index]
+            rejectUnless(record.rank in 0..upgrade.maxRanks, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+            for (rank in 1..record.rank) total += upgrade.baseCost * rank * rank
+        }
+        return total
+    }
+}
+
+private fun saturatedAdd(left: Long, right: Long): Long =
+    if (Long.MAX_VALUE - left < right) Long.MAX_VALUE else left + right
 
 private class ProfileCodecRejection(
     val reason: ProfileSnapshotRejection,

@@ -6,6 +6,7 @@ package kinetickk.foundation.design
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.isUnspecified
@@ -21,7 +22,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import kotlin.math.max
 
-// Rarity card frame + effects, icon plate, relic slot + synergy, weapon slot.
+// Card frame (rarity) and face (type), icon plate, relic slot + synergy, weapon slot.
 
 private const val CARD_CUT_DP = 22f
 
@@ -37,14 +38,18 @@ inline fun DrawScope.withKkCardLift(bounds: Rect, selected: Float, block: DrawSc
 }
 
 /**
- * Rarity card frame and effects (`.card`, `.cfx`, `.crays`, `.band`) for [rank] 1 (common) ..
- * 5 (legendary). Rarity reads through effects: common flat; uncommon inner glow; rare + sheen
- * sweep (3.4 s, Snap) + echo 4; epic + halftone rising from the bottom, 5 rising diamond sparks
- * (2.8 s), echo 6 pulsing (1.6 s); legendary + rotating conic rays behind, striped gold echo
- * (animated) and a foil band. [time] in seconds drives every loop; [selected] 0..1 grows the echo
- * (the caller wraps everything in [withKkCardLift]); [burst] 0..1 plays the legendary ring burst
- * when dealt (negative = none). The band shows [bandStart] (rarity name) and [bandEnd] (e.g.
- * stack or "New"). Glows are stacked translucent strokes, no blur.
+ * Card frame and effects (`.card`, `.cfx`, `.crays`, `.band`) in [style], in two channels: the
+ * rarity material owns the frame (border, band and label, echo, glow, halo, sheen, halftone, sparks,
+ * rays and burst; see [KkCardMaterial]) and the hue owns the face (its pattern, ornament, watermark
+ * and seeded variation; see [KkCardStyle]). The default style is the plain one of [rank] 1 (common)
+ * .. 5 (legendary) in [color]. [time] in seconds drives every loop; [selected] 0..1 grows the echo
+ * (the caller wraps everything in [withKkCardLift]); [burst] 0..1 plays the legendary ring burst when
+ * dealt (negative = none). The band shows [bandStart] (rarity name) and [bandEnd] (e.g. stack or
+ * "New"). Glows are stacked translucent strokes, no blur.
+ *
+ * Callers that paint their own art into the face draw [drawKkCardBack], then the art inside
+ * [clipKkCardFace], then [drawKkCardFront] and last [drawKkCardFrame] (after anything they lay over
+ * the face, so the frame stays whole); this function is exactly those three.
  */
 fun DrawScope.drawKkCard(
     measurer: CanvasTextMeasurer,
@@ -57,103 +62,115 @@ fun DrawScope.drawKkCard(
     bandHeightDp: Float = 42f,
     burst: Float = -1f,
     color: Color = Kk.rarity(rank),
+    style: KkCardStyle = KkCardStyle.forRank(rank, color, measurer.roles.gold, measurer.roles.spectrum),
 ) {
-    val r = rank.coerceIn(1, 5)
+    drawKkCardBack(bounds, time, selected, style)
+    drawKkCardFront(measurer, bounds, time, selected, bandStart, bandEnd, bandHeightDp, burst, style)
+    drawKkCardFrame(bounds, time, style, burst)
+}
+
+/**
+ * Runs [block] clipped to the card face slab of [bounds] (22 dp cut), for art painted into the face.
+ * The slab is a shared cached path, so it is only ever used as this clip, never handed out.
+ */
+inline fun DrawScope.clipKkCardFace(bounds: Rect, block: DrawScope.() -> Unit) {
+    clipPath(kkCardFaceSlab(bounds), block = block)
+}
+
+/** The cached face slab behind [clipKkCardFace]; callers must not change it. */
+@PublishedApi
+internal fun DrawScope.kkCardFaceSlab(bounds: Rect): Path = KkPathMemo.slab(bounds, d(CARD_CUT_DP))
+
+/**
+ * The back half of [drawKkCard]: the legendary rays, the material's halo and echo, the face and,
+ * inside it, the hue's pattern, the watermark and the material's rising halftone. [textBottom] (px,
+ * NaN when unknown) is where the card's text ends: the watermark keeps below it.
+ */
+fun DrawScope.drawKkCardBack(bounds: Rect, time: Float, selected: Float, style: KkCardStyle, textBottom: Float = Float.NaN) {
+    val material = style.material
+    val frame = style.frame
     val s = selected.coerceIn(0f, 1.2f)
     val cut = d(CARD_CUT_DP)
-    if (r == 5) {
+    if (material == KkCardMaterial.GOLD && style.raysAlpha > 0f) {
         drawKkRays(
             Offset(bounds.center.x, bounds.top + bounds.height * 0.46f), bounds.height * 0.82f,
-            Color(0x3DFFB627), 5f, 17f, 0.22f, 0.72f, time * 360f / (KkTime.AmbientMin / 1000f),
+            (frame.gold ?: KkGold.Bright).ray.copy(alpha = 0.24f * style.raysAlpha.coerceAtMost(1f)), 5f, 17f, 0.22f, 0.72f,
+            time * 360f / (KkTime.AmbientMin / 1000f),
         )
     }
+    drawCardHalo(KkPathMemo.slab(bounds, cut), bounds, frame)
     // Echo slab behind the face.
-    val restingEcho = when (r) {
-        3 -> 4f
-        4 -> 6f
-        5 -> 8f
-        else -> 0f
-    }
-    val selectedEcho = if (r >= 4) 12f else 10f
-    val echo = d(kkLerp(restingEcho, selectedEcho, s.coerceAtMost(1f)))
-    if (echo > 0.25f) {
-        val echoPath = KkPathMemo.slab(bounds.left + echo, bounds.top + echo, bounds.right + echo, bounds.bottom + echo, cut)
-        when (r) {
-            5 -> {
-                clipPath(echoPath) {
-                    kkDrawStripes(bounds.left + echo, bounds.top + echo, bounds.right + echo, bounds.bottom + echo,
-                        Kk.RLegend, Color(0xFFFFE59A), time, KkFillKind.CARD_STRIPES)
-                }
-            }
-            4 -> {
-                drawPath(echoPath, color)
-                drawPath(echoPath, Color.White, alpha = 0.3f * kkPulse(time, 1.6f, KkEase.Out))
-            }
-            else -> drawPath(echoPath, color)
-        }
-    }
+    val echo = d(kkLerp(material.restingEchoDp(), material.selectedEchoDp(), s.coerceAtMost(1f)))
+    drawCardEcho(bounds, cut, echo, frame, time)
     val face = KkPathMemo.slab(bounds, cut)
     drawPath(face, if (s > 0.5f) Kk.Ink3 else Kk.Ink2)
+    clipPath(face) { drawCardBody(bounds, style, time, textBottom) }
+}
+
+/**
+ * The front half of [drawKkCard]: the material's inner glow, sparks and facets, the hue's frame
+ * ornament, the sheen and the band with its labels. [textLeft] and [textBottom] (px, NaN when
+ * unknown) bound the card's text column: the ornaments beside it and the prism facets keep clear of
+ * it. [frame] true also draws [drawKkCardFrame] (callers that lay plates over the face pass false
+ * and draw it after them).
+ */
+fun DrawScope.drawKkCardFront(
+    measurer: CanvasTextMeasurer,
+    bounds: Rect,
+    time: Float,
+    selected: Float,
+    bandStart: String?,
+    bandEnd: String?,
+    bandHeightDp: Float,
+    burst: Float,
+    style: KkCardStyle,
+    textLeft: Float = Float.NaN,
+    textBottom: Float = Float.NaN,
+    frame: Boolean = false,
+) {
+    val material = style.material
+    val rarity = style.frame
+    val cut = d(CARD_CUT_DP)
+    val face = KkPathMemo.slab(bounds, cut)
+    val bandBottom = bounds.top + d(bandHeightDp)
     clipPath(face) {
-        if (r >= 4) drawCardHalftone(bounds, color, time)
-        if (r >= 2) drawInnerGlow(face, color)
-        if (r >= 4) drawCardSparks(bounds, color, time)
-    }
-    if (r >= 3) drawKkSheen(face, bounds, time, 3.4f, Color.White.copy(alpha = 0.17f), bandFraction = 0.45f, startFraction = -0.55f)
-    drawCardBand(measurer, bounds, r, color, time, bandStart, bandEnd, bandHeightDp)
-    if (r == 5 && burst >= 0f && burst <= 1f) {
-        drawKkRingBurst(bounds.center, bounds.width * 0.8f, burst, Kk.RLegend, 4f)
-    }
-}
-
-private fun DrawScope.drawInnerGlow(face: Path, color: Color) {
-    // Inset glow (46 px blur, rarity color) as stacked strokes; the face clip keeps the inner half.
-    for (index in 0 until GlowWidths.size) {
-        drawPath(face, color, alpha = GlowAlphas[index], style = kkStroke(d(GlowWidths[index])))
-    }
-}
-
-// Twelve nested strokes approximate `inset 0 0 46px -14px` (strongest at the rim, gone by ~30 dp).
-private val GlowWidths = floatArrayOf(4f, 8f, 12f, 16f, 20f, 24f, 28f, 32f, 38f, 44f, 52f, 60f)
-private val GlowAlphas = floatArrayOf(0.05f, 0.045f, 0.04f, 0.035f, 0.03f, 0.026f, 0.022f, 0.018f, 0.014f, 0.011f, 0.008f, 0.006f)
-
-private fun DrawScope.drawCardHalftone(bounds: Rect, color: Color, time: Float) {
-    // 9 px dots @30 %, masked by radial(120% 70% at 50% 108%) 15% to 70%, drifting up 36 px / 6 s.
-    val shift = -kkLoop(time, 6f) * d(36f)
-    val canvas = drawContext.canvas
-    canvas.saveLayer(bounds, KkLayers.paint)
-    translate(0f, shift) {
-        drawRect(kkFillBrush(KkFillKind.HALFTONE, color.copy(alpha = 0.3f)), Offset(bounds.left, bounds.top - shift), bounds.size)
-    }
-    kkApplyEllipseMask(bounds, bounds.center.x, bounds.top + bounds.height * 1.08f,
-        bounds.width * 1.2f * 0.7f, bounds.height * 0.7f * 0.7f, 0.2f)
-    canvas.restore()
-}
-
-private val SparkLeft = floatArrayOf(0.18f, 0.42f, 0.66f, 0.84f, 0.30f)
-private val SparkDelay = floatArrayOf(0.2f, 1.1f, 0.6f, 1.7f, 2.2f)
-private val SparkSize = floatArrayOf(7f, 5f, 7f, 5f, 7f)
-
-private fun DrawScope.drawCardSparks(bounds: Rect, color: Color, time: Float) {
-    for (index in 0 until 5) {
-        val p = kkLoop(time, 2.8f, SparkDelay[index])
-        val opacity = if (p < 0.2f) p / 0.2f else 1f - (p - 0.2f) / 0.8f
-        val size = d(SparkSize[index])
-        val cx = bounds.left + bounds.width * SparkLeft[index] + size * 0.5f
-        val cy = bounds.bottom + d(12f) - size * 0.5f - d(120f) * p
-        // Moving diamonds as rotated squares: no path rebuild per frame.
-        val half = size * 0.5f * 0.7071f
-        rotate(45f, Offset(cx, cy)) {
-            drawRect(color, Offset(cx - half, cy - half), Size(half * 2f, half * 2f), alpha = opacity.coerceIn(0f, 1f))
+        drawCardGlow(face, bounds, rarity)
+        when (material) {
+            KkCardMaterial.PRISMATIC -> {
+                drawPrismFacets(bounds, bandBottom, style.seed, time, textBottom)
+                drawCardSparks(bounds, rarity, time, style.seed)
+            }
+            KkCardMaterial.GOLD -> if (style.bodyEffects) drawCardSparks(bounds, rarity, time, style.seed)
+            else -> Unit
         }
+        drawCardOrnament(bounds, cut, bandBottom, style, textLeft)
+    }
+    // The face sheen of chrome and gold: the frame's own white (its model lists it).
+    if (rarity.sheen.isSpecified) {
+        drawKkSheen(face, bounds, time, 3.4f, rarity.sheen.copy(alpha = 0.17f), bandFraction = 0.45f, startFraction = -0.55f)
+    }
+    drawCardBand(measurer, bounds, style, time, bandStart, bandEnd, bandHeightDp)
+    if (frame) drawKkCardFrame(bounds, time, style, burst)
+}
+
+/**
+ * The card's frame, last over everything: the material's border round the whole card and the
+ * legendary ring burst ([burst] 0..1 when dealt, negative = none). It never takes the card's hue.
+ */
+fun DrawScope.drawKkCardFrame(bounds: Rect, time: Float, style: KkCardStyle, burst: Float = -1f) {
+    val frame = style.frame
+    val cut = d(CARD_CUT_DP)
+    drawCardBorder(bounds, cut, frame, time)
+    val gold = frame.gold
+    if (gold != null && burst >= 0f && burst <= 1f) {
+        drawKkRingBurst(bounds.center, bounds.width * 0.8f, burst, gold.base, 4f)
     }
 }
 
 private fun DrawScope.drawCardBand(
     measurer: CanvasTextMeasurer,
     bounds: Rect,
-    rank: Int,
-    color: Color,
+    style: KkCardStyle,
     time: Float,
     start: String?,
     end: String?,
@@ -161,20 +178,41 @@ private fun DrawScope.drawCardBand(
 ) {
     val band = KkRects.of(bounds.left + d(18f), bounds.top, bounds.right, bounds.top + d(heightDp))
     val path = KkPathMemo.band(band.left, band.top, band.right, band.bottom, d(4f), d(9f))
-    if (rank == 5) drawKkFoil(path, band, time, 2.2f) else drawPath(path, color)
+    drawCardBandMaterial(path, band, style.frame, time)
+    val prismatic = style.material == KkCardMaterial.PRISMATIC
     if (start != null) {
-        drawKkText(measurer, start, measurer.typography.labelStyle(12f), band.left + d(14f), band.center.y, Kk.Ink,
-            valign = KkVAlign.CENTER, uppercase = true, maxWidth = band.width * 0.6f)
+        val color = if (prismatic) Kk.Bone else style.startLabelColor()
+        // Painted layouts: a band label in another colour on the next card keeps its own paragraph.
+        val layout = measureKkTextPainted(measurer, start, measurer.typography.labelStyle(12f), color, uppercase = true, maxWidth = band.width * 0.6f)
+        val x = band.left + d(14f)
+        if (prismatic) {
+            // The word carries the spectrum, sliding with the edge: plain glyphs tinted in a layer, so
+            // the shared text layout never changes paint. Its own short tile puts several stops across the word.
+            val tile = prismLabelTile(layout.size.width.toFloat())
+            val shift = -kkLoop(time, 6f) * tile
+            val brush = prismLabelBrush(tile, style.frame.prism ?: KkSpectrum.Full)
+            val canvas = drawContext.canvas
+            canvas.saveLayer(band, KkLayers.paint)
+            drawKkText(layout, x, band.center.y, color, valign = KkVAlign.CENTER)
+            translate(x + shift, 0f) {
+                drawRect(brush, Offset(band.left - x - shift, band.top), band.size, blendMode = BlendMode.SrcIn)
+            }
+            canvas.restore()
+        } else {
+            drawKkText(layout, x, band.center.y, color, valign = KkVAlign.CENTER)
+        }
     }
     if (end != null) {
-        drawKkText(measurer, end, measurer.typography.monoStyle(9f, weight = FontWeight.Bold), band.right - d(22f), band.center.y, Kk.Ink,
-            align = KkAlign.END, valign = KkVAlign.CENTER, uppercase = true)
+        val color = style.endLabelColor()
+        val layout = measureKkTextPainted(measurer, end, measurer.typography.monoStyle(9f, weight = FontWeight.Bold), color, uppercase = true)
+        drawKkText(layout, band.right - d(22f), band.center.y, color, align = KkAlign.END, valign = KkVAlign.CENTER)
     }
 }
 
 /**
- * Card name (`.cname`): cond 900 italic in bone; epic adds a stacked violet glow, legendary uses the
- * animated foil brush. Returns the text layout.
+ * Card name (`.cname`): cond 900 italic in bone; epic adds a prismatic glow (rings of faint copies
+ * in the preset's [spectrum], or in [glow] when specified), legendary uses the animated foil brush
+ * in the preset's [gold]. Returns the text layout.
  */
 fun DrawScope.drawKkCardName(
     measurer: CanvasTextMeasurer,
@@ -185,6 +223,9 @@ fun DrawScope.drawKkCardName(
     fontSize: Float = 24f,
     maxWidth: Float = Float.POSITIVE_INFINITY,
     color: Color = Kk.Bone,
+    glow: Color = Color.Unspecified,
+    gold: KkGold = measurer.roles.gold,
+    spectrum: KkSpectrum = measurer.roles.spectrum,
 ): TextLayoutResult {
     val layout = measureKkText(measurer, text, measurer.typography.condStyle(fontSize), uppercase = true, maxWidth = maxWidth)
     when (rank.coerceIn(1, 5)) {
@@ -192,17 +233,18 @@ fun DrawScope.drawKkCardName(
             val tile = layout.size.width * 2.6f
             val shift = -kkLoop(time, 2.4f) * tile
             translate(topLeft.x + shift, 0f) {
-                drawKkText(layout, -shift, topLeft.y, color, brush = KkGradients.foil(max(tile, 1f)))
+                drawKkText(layout, -shift, topLeft.y, color, brush = KkGradients.foil(max(tile, 1f), gold))
             }
         }
         4 -> {
-            // Name glow (text-shadow 0 0 18px epic @55 %) as two rings of faint offset copies.
+            // Name glow (text-shadow 0 0 18px @55 %) as two rings of faint offset copies, each in its own spectrum colour.
             for (ring in 1..2) {
-                val glow = Kk.REpic.copy(alpha = if (ring == 1) 0.09f else 0.05f)
                 val o = d(4f * ring)
                 for (index in 0 until 8) {
+                    val tint = if (glow.isSpecified) glow else spectrum.stop(index)
                     val a = index * TAU_F / 8f
-                    drawKkText(layout, topLeft.x + kotlin.math.cos(a) * o, topLeft.y + kotlin.math.sin(a) * o, glow)
+                    drawKkText(layout, topLeft.x + kotlin.math.cos(a) * o, topLeft.y + kotlin.math.sin(a) * o,
+                        tint.copy(alpha = if (ring == 1) 0.11f else 0.06f))
                 }
             }
             drawKkText(layout, topLeft.x, topLeft.y, color)
@@ -212,11 +254,40 @@ fun DrawScope.drawKkCardName(
     return layout
 }
 
-/** Icon plate (card/offer icon): ink-3 slab with [cutDp] cut and a centered [icon] in [color]. */
-fun DrawScope.drawKkIconPlate(bounds: Rect, icon: KkIcon?, color: Color, cutDp: Float = 8f, iconSizeDp: Float = 30f) {
-    drawPath(KkPathMemo.slab(bounds, d(cutDp)), Kk.Ink3)
+/**
+ * Icon plate (card/offer icon): a slab in [fill] (ink-3 unless the caller tints it) with [cutDp] cut
+ * and a centered [icon] in [color]. A specified [rim] edges the plate (its right and bottom edges in
+ * [rimSecond] when that is specified too). Allocation-free.
+ */
+fun DrawScope.drawKkIconPlate(
+    bounds: Rect,
+    icon: KkIcon?,
+    color: Color,
+    cutDp: Float = 8f,
+    iconSizeDp: Float = 30f,
+    rim: Color = Color.Unspecified,
+    rimSecond: Color = Color.Unspecified,
+    fill: Color = Kk.Ink3,
+) {
+    val cut = d(cutDp)
+    drawPath(KkPathMemo.slab(bounds, cut), fill)
+    if (rim.isSpecified) {
+        val w = d(1.5f)
+        val i = w * 0.5f
+        val c = (cut - i * 0.4f).coerceAtLeast(0f)
+        drawPath(KkPathMemo.slab(bounds.left + i, bounds.top + i, bounds.right - i, bounds.bottom - i, c), rim, alpha = PLATE_RIM_ALPHA,
+            style = kkStroke(w))
+        if (rimSecond.isSpecified) {
+            // The second hue takes the right and bottom edges.
+            drawLine(rimSecond, Offset(bounds.right - i, bounds.top + i), Offset(bounds.right - i - c, bounds.bottom - i), w, alpha = PLATE_RIM_ALPHA)
+            drawLine(rimSecond, Offset(bounds.right - i - c, bounds.bottom - i), Offset(bounds.left + i + w, bounds.bottom - i), w, alpha = PLATE_RIM_ALPHA)
+        }
+    }
     if (icon != null) drawKkIcon(icon, bounds.center, d(iconSizeDp), color)
 }
+
+/** The icon plate rim's strength. */
+private const val PLATE_RIM_ALPHA = 0.85f
 
 /**
  * Relic slot (`.rslot`, 44 dp): diamond with an aspect-colored rim, ink-2 inside and the aspect

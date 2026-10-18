@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.focusable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.key.Key
@@ -22,6 +24,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.isPopup
@@ -47,6 +50,78 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
 class KkComposablesTest {
+    @Test
+    fun pointerPressWithoutFocusDoesNotHideLaterKeyboardFocus() = runSkikoComposeUiTest(Size(360f, 220f), Density(1f)) {
+        val allowFocus = mutableStateOf(false)
+        var clicks = 0
+        setContent {
+            Box(Modifier.padding(20.dp)) {
+                KkButton("Focus later", { clicks++ }, Modifier.testTag("button").size(240.dp, 60.dp)
+                    .focusProperties { canFocus = allowFocus.value }, variant = KkButtonVariant.GHOST)
+            }
+        }
+        val button = onNodeWithTag("button")
+        button.performMouseInput { moveTo(center); click(); exit(Offset(-10f, -10f)) }
+        button.assertIsNotFocused()
+        assertEquals(1, clicks, "the enabled button accepts the click even though focus is denied")
+        runOnIdle { allowFocus.value = true }
+        button.performSemanticsAction(SemanticsActions.RequestFocus)
+        button.assertIsFocused()
+        assertEquals(Kk.Bone.toArgb(), button.captureToImage().at(30, 10), "a press that acquired no focus must not hide later keyboard focus")
+    }
+
+    @Test
+    fun disabledPointerPressDoesNotHideFocusWhenTheButtonIsEnabled() = runSkikoComposeUiTest(Size(360f, 220f), Density(1f)) {
+        val enabled = mutableStateOf(false)
+        setContent {
+            Box(Modifier.padding(20.dp)) {
+                KkButton("Enable later", {}, Modifier.testTag("button").size(240.dp, 60.dp),
+                    variant = KkButtonVariant.GHOST, enabled = enabled.value)
+            }
+        }
+        val button = onNodeWithTag("button")
+        button.performMouseInput { moveTo(center); click(); exit(Offset(-10f, -10f)) }
+        runOnIdle { enabled.value = true }
+        button.performSemanticsAction(SemanticsActions.RequestFocus)
+        button.assertIsFocused()
+        assertEquals(Kk.Bone.toArgb(), button.captureToImage().at(30, 10), "an ignored pointer press must not hide later keyboard focus")
+    }
+
+    @Test
+    fun ghostButtonHighlightFollowsThePointerOnTheNextFrame() = runSkikoComposeUiTest(Size(360f, 220f), Density(1f)) {
+        val clicks = mutableListOf<String>()
+        setContent {
+            Column(Modifier.padding(20.dp)) {
+                KkButton("First", { clicks += "first" }, Modifier.testTag("first").size(240.dp, 60.dp), variant = KkButtonVariant.GHOST)
+                KkButton("Second", { clicks += "second" }, Modifier.testTag("second").size(240.dp, 60.dp), variant = KkButtonVariant.GHOST)
+            }
+        }
+        waitForIdle()
+        mainClock.autoAdvance = false
+        val first = onNodeWithTag("first")
+        val second = onNodeWithTag("second")
+        first.performMouseInput { moveTo(center) }
+        mainClock.advanceTimeByFrame()
+        assertEquals(Kk.Bone.toArgb(), first.captureToImage().at(30, 10), "hover enters without waiting for a tween")
+        mainClock.advanceTimeBy(240)
+        second.performMouseInput { moveTo(center) }
+        mainClock.advanceTimeByFrame()
+        assertEquals(Kk.Ink3.toArgb(), first.captureToImage().at(30, 10), "the previous button loses its highlight immediately")
+        assertEquals(Kk.Bone.toArgb(), second.captureToImage().at(30, 10), "the current button is highlighted immediately")
+        second.performMouseInput { click() }
+        mainClock.advanceTimeBy(240)
+        assertEquals(listOf("second"), clicks)
+        first.performMouseInput { moveTo(center) }
+        mainClock.advanceTimeByFrame()
+        assertEquals(Kk.Ink3.toArgb(), second.captureToImage().at(30, 10), "clicking must not pin the old hover highlight")
+        assertEquals(Kk.Bone.toArgb(), first.captureToImage().at(30, 10), "hover follows the pointer after a click")
+        second.assertIsFocused()
+        second.performKeyInput { pressKey(Key.Enter) }
+        mainClock.advanceTimeBy(240)
+        assertEquals(listOf("second", "second"), clicks, "mouse-origin focus still supports keyboard activation")
+        assertEquals(Kk.Bone.toArgb(), second.captureToImage().at(30, 10), "keyboard input restores the focused highlight")
+    }
+
     @Test
     fun buttonIsAnAccessibleKeyboardActivatableButton() = runSkikoComposeUiTest(Size(480f, 240f), Density(1f)) {
         var clicks = 0

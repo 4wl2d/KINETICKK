@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -18,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
@@ -26,32 +28,54 @@ import androidx.compose.ui.test.v2.runSkikoComposeUiTest
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
+import kinetickk.ball.content.api.defaultCoreShapeDefinitions
 import kinetickk.ball.content.api.localizedContent
-import kinetickk.ball.profile.api.LabProfileSnapshot
-import kinetickk.ball.profile.api.LabProgress
+import kinetickk.ball.profile.api.MatrixProfileSnapshot
+import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.interaction.armory.api.ArmoryRenderModel
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryContent
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryLayout
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryLayoutHolder
+import kinetickk.ball.profile.interaction.armory.impl.ArmoryNotice
+import kinetickk.ball.profile.interaction.armory.impl.ArmoryRefusal
+import kinetickk.ball.profile.interaction.armory.impl.ArmoryWeaponStatus
 import kinetickk.ball.profile.interaction.armory.impl.ArmoryViewState
 import kinetickk.ball.profile.interaction.armory.impl.armoryLadderCellsTop
-import kinetickk.ball.profile.interaction.lab.impl.LabContent
-import kinetickk.ball.profile.interaction.lab.impl.LabLayoutHolder
-import kinetickk.ball.profile.interaction.lab.impl.LabState
-import kinetickk.ball.profile.interaction.lab.impl.toRenderModel
+import kinetickk.ball.profile.interaction.armory.impl.refusal
+import kinetickk.ball.profile.interaction.armory.impl.status
+import kinetickk.ball.profile.interaction.matrix.api.MatrixNodeStatus
+import kinetickk.ball.profile.interaction.matrix.impl.MatrixContent
+import kinetickk.ball.profile.interaction.matrix.impl.MatrixLayoutHolder
+import kinetickk.ball.profile.interaction.matrix.impl.MatrixState
+import kinetickk.ball.profile.interaction.matrix.impl.toRenderModel
 import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignText
 import kinetickk.ball.profile.interaction.localization.ProfileText
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthRenderModel
+import kinetickk.ball.profile.interaction.rebirth.impl.REBIRTH_BUILD_SECTION_ROLE
+import kinetickk.ball.profile.interaction.rebirth.impl.REBIRTH_UNLOCK_BLURB_ROLE
 import kinetickk.ball.profile.interaction.rebirth.impl.RebirthContent
+import kinetickk.ball.profile.interaction.rebirth.impl.RebirthLayout
 import kinetickk.ball.profile.interaction.rebirth.impl.RebirthLayoutHolder
+import kinetickk.ball.profile.interaction.rebirth.impl.actionState
+import kinetickk.ball.profile.interaction.rebirth.impl.rebirthBuildInfoText
+import kinetickk.ball.profile.interaction.rebirth.impl.rebirthInfoText
+import kinetickk.ball.profile.interaction.rebirth.impl.rebirthUnlockBlurb
+import kinetickk.foundation.collections.toImmutableList
+import kinetickk.ball.profile.interaction.rebirth.impl.rebirthFeaturedBlurb
+import kinetickk.ball.profile.interaction.rebirth.impl.featuredRows
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
+import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.LocalAppLanguage
+import kinetickk.foundation.design.measureKkTooltip
+import kinetickk.foundation.design.rememberKkCanvasMeasurer
+import kinetickk.foundation.design.kkBoxBottom
 import kinetickk.foundation.design.kkBoxHeight
 import kinetickk.foundation.design.kkBoxTop
 import kotlin.math.abs
@@ -65,7 +89,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * Renders the Armory, Lab and Rebirth screens with the bundled fonts and the game's copy at the
+ * Renders the Armory, Matrix and Rebirth screens with the bundled fonts and the game's copy at the
  * three reference frames, in English and Russian, at text sizes 100 %, 125 % (default) and
  * 175 %, and checks every text they draw: nothing is clipped, ellipsized or split inside a word,
  * and the reviewed layouts keep their text whole and in place.
@@ -138,13 +162,28 @@ class ProfileTextFitTest {
 
     @Test
     fun armoryTextsStayWholeAndInsideTheDetailPanel() {
-        val model = ArmoryRenderModel(1_284L, WeaponId.FLUX_WAKE, CatalogWeapons.take(7).map { it.id }.toImmutableSet(), WeaponId.ION_SWARM)
+        // The Hexagon is selected (Ion Swarm and Hunter Salvo are its signature weapons) and the four
+        // long-named heirloom candidates harmonize with the Charge, Critical, Heat and Cold keys.
+        val model = ArmoryRenderModel(1_284L, WeaponId.FLUX_WAKE, CatalogWeapons.take(7).map { it.id }.toImmutableSet(), WeaponId.ION_SWARM,
+            rebirthRank = 0, character = CoreShape.HEXAGON, heirloomRelics = CatalogHeirlooms.toImmutableList())
+        // Every other weapon of each refusal shows that refusal beside the action instead of the need
+        // line: the one a locked press names (Matter short, Rebirth rank), or the Profile's generic one
+        // for an owned weapon.
+        val seen = HashMap<ArmoryRefusal, Int>()
+        val notices = CatalogWeapons.mapNotNull { weapon ->
+            val status = model.status(weapon)
+            val refusal = status.refusal() ?: ArmoryRefusal.REFUSED.takeIf { status == ArmoryWeaponStatus.OWNED } ?: return@mapNotNull null
+            val count = seen.getOrElse(refusal) { 0 }.also { seen[refusal] = it + 1 }
+            if (count % 2 == 0) ArmoryNotice(weapon.id, refusal) else null
+        }.associateBy { it.weapon }
+        assertEquals(ArmoryRefusal.entries.toSet(), notices.values.map { it.refusal }.toSet(), "every refusal is drawn")
         for ((width, height) in sizes) {
             val holders = HashMap<Scene<WeaponId>, ArmoryLayoutHolder>()
             val tileNames = HashMap<Triple<AppLanguage, Float, Any?>, Float>()
             render(width, height, scenes(CatalogWeapons.map { it.id }), content = { scene ->
-                ArmoryContent(model, CatalogWeapons, WeaponMastery.entries, ArmoryViewState(scene.item), scene.setting,
-                    remember { ScrollState(0) }, holders.getOrPut(scene) { ArmoryLayoutHolder() }) {}
+                ArmoryContent(model, CatalogWeapons, WeaponMastery.entries, ArmoryViewState(scene.item, notices[scene.item]), scene.setting,
+                    remember { ScrollState(0) }, holders.getOrPut(scene) { ArmoryLayoutHolder() },
+                    coreShapes = defaultCoreShapeDefinitions(), relics = CatalogRebirthRelics) {}
             }) { scene, frame ->
                 val context = "${width}x$height $scene"
                 assertWhole(frame, context)
@@ -161,7 +200,7 @@ class ProfileTextFitTest {
                 assertNoInkRows(frame.image, name.box.left, name.box.right, viewport.top + 1f, 2, context)
 
                 // Every tag, and the in-run tag, is drawn inside the tag rows.
-                val expected = weapon.tags.map { it.localizedContent(scene.language) } +
+                val expected = weapon.tags.map { it.displayLabel.localizedContent(scene.language) } +
                     listOfNotNull(if (weapon.id == model.activeRunWeapon) scene.language.text(ProfileScreensRedesignText.ActiveRun) else null)
                 val tags = frame.of("armory.detail.tag")
                 assertEquals(expected.toSet(), tags.map { it.owner }.toSet(), context)
@@ -189,6 +228,31 @@ class ProfileTextFitTest {
                         assertTrue(cells + layout.frame.d(10f) <= viewport.bottom, "$context ladder cells $cells below ${viewport.bottom}")
                     }
                 }
+                // The weapon sheet follows the ladder: forms, synergy and facts, every text inside the panel.
+                assertTrue(layout.ladder.bottom <= layout.forms.top && layout.forms.bottom <= layout.synergy.top &&
+                    layout.synergy.bottom <= layout.facts.top, "$context sheet order")
+                val sheet = frame.texts.filter { it.role.startsWith("armory.forms") || it.role.startsWith("armory.synergy") ||
+                    it.role.startsWith("armory.facts") }
+                assertEquals(3, frame.of("armory.forms.text").size, "$context mastery forms")
+                assertEquals(5, frame.of("armory.facts.value").size, "$context facts")
+                assertEquals(1, frame.of("armory.synergy.twist").size, "$context twist")
+                sheet.forEach {
+                    assertTrue(it.box.left >= layout.forms.left - 0.5f && it.box.right <= layout.forms.right + 0.5f,
+                        "$context ${it.role} '${it.layout?.layoutInput?.text}' ${it.box} outside ${layout.forms.left}..${layout.forms.right}")
+                    // The CSS line box of every sheet text ends inside the sheet.
+                    assertTrue(it.box.top + assertNotNull(it.layout).kkBoxBottom <= layout.facts.bottom + 0.5f, "$context ${it.role} below the sheet")
+                }
+                // A refusal replaces the need line beside the action, inside the panel: centred on the
+                // action, its line boxes stay within the 8 px gap above it and on screen below it.
+                val notice = frame.of("armory.notice")
+                assertEquals(if (scene.item in notices) 1 else 0, notice.size, "$context notice")
+                notice.forEach {
+                    assertTrue(it.box.left >= layout.need.left - 0.5f && it.box.right <= layout.detailViewport.right + 0.5f &&
+                        it.box.top >= layout.need.top - layout.frame.d(8f) && it.box.bottom <= height + 0.5f &&
+                        abs(it.box.center.y - layout.need.center.y) <= 1.5f,
+                        "$context notice ${it.box} outside ${layout.need}")
+                    assertTrue(frame.of("armory.need").isEmpty(), "$context notice and need line together")
+                }
                 if (width == 1440) assertTileTagsInside(frame, layout, scene.language, context)
                 frame.of("armory.tile.name").forEach { tileNames[Triple(scene.language, scene.setting, it.owner)] = fontSize(it) }
                 // The default text size (125 %) draws UI text at the board's size (tile status: 11 px on the 1440 board).
@@ -206,42 +270,103 @@ class ProfileTextFitTest {
     }
 
     @Test
-    fun labTextsStayWholeAndTheMaxStampClearsTheValues() {
-        val model = LabProfileSnapshot(PlayerEconomy(matter = 1_284L), LabProgress(listOf(4, 5, 8, 2, 1, 2, 0, 1)))
-            .toRenderModel(CatalogMetaUpgrades)
+    fun hangarSignatureRowsStayWholeInsideTheDetailPanel() {
+        val model = with(kinetickk.ball.profile.interaction.hangar.impl.HangarShotAccess) {
+            kinetickk.ball.profile.interaction.hangar.impl.hangarProjection(unlocked = setOf(CoreShape.ORB, CoreShape.HEXAGON)).model(1_284L)
+        }
         for ((width, height) in sizes) {
-            val holders = HashMap<Scene<MetaUpgradeId>, LabLayoutHolder>()
-            val rowNames = HashMap<Triple<AppLanguage, Float, Any?>, Float>()
-            render(width, height, scenes(CatalogMetaUpgrades.map { it.id }), content = { scene ->
-                LabContent(LabState(model, scene.item), scene.setting, remember { ScrollState(0) }, holders.getOrPut(scene) { LabLayoutHolder() }) {}
+            val probes = HashMap<Scene<CoreShape>, kinetickk.ball.profile.interaction.hangar.impl.HangarShotAccess.HangarDetailProbe>()
+            render(width, height, scenes(CoreShape.entries.toList()), content = { scene ->
+                kinetickk.ball.profile.interaction.hangar.impl.HangarShotAccess.Content(model, scene.item, scene.setting,
+                    probes.getOrPut(scene) { kinetickk.ball.profile.interaction.hangar.impl.HangarShotAccess.HangarDetailProbe() })
+            }) { scene, frame ->
+                val context = "${width}x$height $scene"
+                assertWhole(frame, context)
+                // An inspected locked tile keeps its dark face: its unlock progress reads in light ink on it.
+                if (scene.item != CoreShape.ORB && scene.item != CoreShape.HEXAGON) {
+                    val status = frame.of("hangar.tile.status").last { it.owner == scene.item }
+                    assertTrue(contrast(status.color, Kk.Ink4) >= 3f, "$context locked status contrast ${contrast(status.color, Kk.Ink4)}")
+                }
+                val probe = assertNotNull(probes[scene], context)
+                val viewport = assertNotNull(probe.viewport, context)
+                val signature = assertNotNull(probe.signature, context)
+                // Two signature weapons per character, each with its name and state, inside the panel's width
+                // (the spinning forms redraw the panel: the last draw of each weapon counts).
+                val names = frame.of("hangar.detail.signature.value").associateBy { it.owner }.values.toList()
+                val states = frame.of("hangar.detail.signature.state").associateBy { it.owner }.values.toList()
+                assertEquals(2, names.size, "$context names")
+                assertEquals(2, states.size, "$context states")
+                // The detail panel draws in its own content coordinates (0 at its left edge).
+                (names + states + frame.of("hangar.detail.signature.harmony")).forEach {
+                    assertTrue(it.box.left >= -0.5f && it.box.right <= viewport.width + 0.5f,
+                        "$context ${it.role} ${it.box} outside 0..${viewport.width}")
+                    val text = assertNotNull(it.layout)
+                    assertTrue(it.box.top + text.kkBoxTop >= signature.top - 0.5f && it.box.top + text.kkBoxBottom <= signature.bottom + 0.5f,
+                        "$context ${it.role} ${it.box} outside the signature block $signature")
+                }
+                names.zip(states).forEach { (name, state) ->
+                    assertTrue(name.box.right <= state.box.left + 0.5f, "$context name ${name.box} runs into its state ${state.box}")
+                }
+                assertTrue(signature.height > 0f, context)
+            }
+        }
+    }
+
+    @Test
+    fun matrixTextsStayWholeInsideTheirTilesAndTheDetailPanel() {
+        val ranks = MatrixNodeId.entries.map { id -> if (id.ordinal % 3 == 0) 1 else 0 }
+        val model = MatrixProfileSnapshot(PlayerEconomy(matter = 1_284L), MatrixProgress(ranks), rebirthRank = 2)
+            .toRenderModel(CatalogMatrixNodes)
+        // One node per status and branch: maxed, available, short of Matter, prerequisite, Reborn-locked, keystone.
+        val selections = listOf(MatrixNodeId.CRITICAL_LATTICE, MatrixNodeId.WEAPON_CALIBRATION, MatrixNodeId.REINFORCED_HULL,
+            MatrixNodeId.HARDLIGHT_RESERVE, MatrixNodeId.OVERCLOCKED_REFLEXES, MatrixNodeId.HEIRLOOM_VAULT, MatrixNodeId.PROSPECTOR)
+        for ((width, height) in sizes) {
+            val holders = HashMap<Scene<MatrixNodeId>, MatrixLayoutHolder>()
+            val tileNames = HashMap<Triple<AppLanguage, Float, Any?>, Float>()
+            render(width, height, scenes(selections), content = { scene ->
+                MatrixContent(MatrixState(model, scene.item), scene.setting, remember { ScrollState(0) }, holders.getOrPut(scene) { MatrixLayoutHolder() }) {}
             }) { scene, frame ->
                 val context = "${width}x$height $scene"
                 assertWhole(frame, context)
                 assertTrue(frame.of("header.title").isNotEmpty(), "$context header title")
                 val layout = assertNotNull(holders[scene]?.layout, context)
-                val columns = layout.columns
-                val stamps = frame.of("lab.row.stamp")
-                assertEquals(1, stamps.map { it.owner }.toSet().size, "$context one maxed upgrade")
-                for (stamp in stamps) {
-                    // The stamp fits the cost column and, rotated −6°, stays clear of the value.
-                    assertTrue(stamp.box.width <= columns.costRight - columns.costLeft + 0.5f, "$context stamp ${stamp.box.width}")
-                    val stampBounds = rotatedBounds(stamp.box, -6f)
-                    frame.of("lab.row.value").filter { it.owner == stamp.owner }.forEach {
-                        assertFalse(stampBounds.overlaps(it.box), "$context stamp $stampBounds covers the value ${it.box}")
+                // A tile is a slab whose right edge leans in by its cut toward the bottom; its status stays within the
+                // padding inside that edge (the selection echo shows past it).
+                val cut = (if (layout.frame.regular) 12f else 9f) * layout.frame.unit
+                val pad = layout.frame.d(if (layout.frame.regular) 10f else 7f)
+                // Every tile name and status line stays inside its own tile.
+                frame.of("matrix.tile").forEach { tile ->
+                    val names = frame.of("matrix.tile.name").filter { it.owner == tile.owner }
+                    val statuses = frame.of("matrix.tile.status").filter { it.owner == tile.owner }
+                    assertEquals(1, names.size, "$context ${tile.owner} name")
+                    assertEquals(1, statuses.size, "$context ${tile.owner} status")
+                    (names + statuses).forEach {
+                        assertTrue(it.box.left >= -0.5f && it.box.right <= tile.box.right + 0.5f && it.box.bottom <= tile.box.bottom + 0.5f,
+                            "$context ${it.role} ${it.box} outside tile ${tile.box}")
                     }
+                    val pips = frame.of("matrix.tile.pips").single { it.owner == tile.owner }
+                    assertTrue(names.single().box.bottom <= pips.box.top + 0.5f,
+                        "$context ${tile.owner} name ${names.single().box} runs into its pips ${pips.box}")
+                    assertTrue(pips.box.bottom <= statuses.single().box.top + 0.5f, "$context ${tile.owner} pips run into the status")
+                    val status = statuses.single().box
+                    val edge = tile.box.right - pad - cut * (status.bottom - tile.box.top) / tile.box.height
+                    assertTrue(status.right <= edge + 0.5f, "$context ${tile.owner} status $status runs past $edge into the cut corner")
                 }
-                // The description slot is the wrapped text: no blank lines push the panels down.
-                val description = frame.of("lab.detail.description").single()
+                // A Rebirth gate stays above the half-size fit floor (a prerequisite lock reads at full size on the same grid).
+                fun statusSizes(status: MatrixNodeStatus) =
+                    frame.of("matrix.tile.status").filter { model.node(it.owner as MatrixNodeId)?.status == status }.map(::fontSize)
+                val rebornSizes = statusSizes(MatrixNodeStatus.REBIRTH_LOCKED)
+                val lockSizes = statusSizes(MatrixNodeStatus.PREREQUISITE_MISSING)
+                assertTrue(rebornSizes.isNotEmpty() && lockSizes.isNotEmpty(), context)
+                assertTrue(rebornSizes.min() >= 0.55f * lockSizes.max(), "$context Rebirth gates $rebornSizes crushed to the fit floor against locks $lockSizes")
+                // The description slot is the wrapped text and the status sits under the rank line.
+                val description = frame.of("matrix.detail.description").single()
                 assertEquals(assertNotNull(description.layout).kkBoxHeight, layout.description.height, 0.5f, context)
-                // At rest at 175 % on the landscape phone the Now and Next values are visible.
-                if (width == 844 && scene.setting == 1.75f) {
-                    val values = frame.of("lab.panel.value")
-                    assertEquals(2, values.size, context)
-                    values.forEach { assertTrue(it.box.bottom <= layout.detailViewport.bottom, "$context value ${it.box} under the pinned action") }
-                }
-                frame.of("lab.row.name").forEach { rowNames[Triple(scene.language, scene.setting, it.owner)] = fontSize(it) }
+                val status = frame.of("matrix.detail.status").single()
+                assertTrue(status.box.top >= layout.rank.bottom - 0.5f, "$context status ${status.box} over the rank ${layout.rank}")
+                frame.of("matrix.tile.name").forEach { tileNames[Triple(scene.language, scene.setting, it.owner)] = fontSize(it) }
             }
-            assertLargeTextNotSmaller(rowNames, "lab rows ${width}x$height")
+            assertLargeTextNotSmaller(tileNames, "matrix tiles ${width}x$height")
         }
     }
 
@@ -250,10 +375,12 @@ class ProfileTextFitTest {
         val targets = (1..10).toList() + 11
         for ((width, height) in sizes) {
             val holders = HashMap<Scene<Int>, RebirthLayoutHolder>()
+            // Odd targets carry four Heirlooms, even ones none (the board then keeps its right column free).
+            fun heirlooms(target: Int) = if (target % 2 == 1) CatalogHeirlooms else emptyList()
             fun model(target: Int) = if (target > 10) {
-                RebirthRenderModel(catalogRebirthProfile(10), catalogRebirthProfile(10), false, 1_924L, 0, 10)
+                catalogRebirthModel(10, 10, heirlooms = heirlooms(target))
             } else {
-                RebirthRenderModel(catalogRebirthProfile(target - 1), catalogRebirthProfile(target), true, 1_924L, 0, 10)
+                catalogRebirthModel(target - 1, target, heirlooms = heirlooms(target))
             }
             render(width, height, scenes(targets), content = { scene ->
                 RebirthContent(model(scene.item), false, scene.setting, {}, timeSeconds = 7.3f,
@@ -266,10 +393,18 @@ class ProfileTextFitTest {
                 val language = scene.language
                 assertEquals(listOf(ProfileText.HostileEscalation, ProfileText.CycleCompensation).map { language.text(it).uppercase() },
                     frame.of("rebirth.section").map { assertNotNull(it.layout).layoutInput.text.text }.distinct(), context)
-                val target = model(scene.item).let { if (it.isMaximumTier) it.current else it.next }
-                assertEquals(listOf(target.directive.displayName.localizedContent(language).uppercase()),
+                val target = model(scene.item).focus
+                assertEquals(listOf(target.displayName.localizedContent(language).uppercase()),
                     frame.of("rebirth.directive").map { assertNotNull(it.layout).layoutInput.text.text }.distinct(), context)
                 val layout = assertNotNull(holders[scene]?.layout, context)
+                assertRebirthBuildTexts(frame, layout, model(scene.item), language, context)
+                // The tier and status tags stay in the name column, on screen and above the ladder.
+                (frame.of("rebirth.tier.tag") + frame.of("rebirth.status.tag")).forEach {
+                    assertTrue(it.box.left >= -0.5f && it.box.right <= minOf(layout.name.right, width.toFloat()) + 0.5f &&
+                        it.box.bottom <= layout.ladder.top + 0.5f, "$context ${it.role} ${it.box} outside the name column ${layout.name}")
+                }
+                val tags = frame.of("rebirth.status.tag")
+                assertEquals(1, tags.size, context)
                 // Every ladder numeral lies inside its cell.
                 val numbers = frame.of("rebirth.ladder.number")
                 assertEquals(layout.cells.size, numbers.size, context)
@@ -290,6 +425,81 @@ class ProfileTextFitTest {
                 }
             }
         }
+    }
+
+    /**
+     * Both Rebirth (!) tooltips (Advance in every state, and the build table's) keep their whole
+     * text inside the tooltip's 12 lines in English and Russian at every text size, with the
+     * longest tier numeral.
+     */
+    @Test
+    fun rebirthTooltipsStayWholeAtEveryTextSize() {
+        val ready = catalogRebirthModel(9, 10)
+        val locked = catalogRebirthModel(5, 10)
+        val closed = ready.copy(eligible = false)
+        val maximum = catalogRebirthModel(10, 10)
+        val replay = catalogRebirthModel(10, 10).copy(focus = catalogRebirthProfile(3))
+        val cases = listOf(ready to false, ready to true, locked to false, closed to false, maximum to false, replay to false)
+        val scenes = languages.flatMap { language -> listOf(1f, 1.25f, 1.5f, 1.75f).map { Scene(language, it, Unit) } }
+        val measured = HashMap<Scene<Unit>, List<Pair<String, TextLayoutResult>>>()
+        render(390, 844, scenes, content = { scene ->
+            val measurer = rememberKkCanvasMeasurer(profileTextScale(scene.setting))
+            val density = LocalDensity.current.density
+            val texts = cases.map { (model, armed) -> rebirthInfoText(model, model.actionState(armed), scene.language) } +
+                rebirthBuildInfoText(scene.language)
+            SideEffect { measured[scene] = texts.map { it to measureKkTooltip(measurer, it, density) } }
+        }) { scene, _ ->
+            val tooltips = assertNotNull(measured[scene], "$scene")
+            assertEquals(cases.size + 1, tooltips.size)
+            for ((text, layout) in tooltips) {
+                assertFalse(layout.multiParagraph.didExceedMaxLines || layout.hasVisualOverflow,
+                    "$scene tooltip cut at ${layout.lineCount} lines: $text")
+                assertTrue(layout.lineCount <= 11, "$scene tooltip fills ${layout.lineCount} of 12 lines: $text")
+            }
+        }
+    }
+
+    /**
+     * The build sections draw their titles, one row per unlock of the target tier (name left of its
+     * gold kind tag, inside its row) and one per Heirloom, and gold pips over the gated tiers.
+     */
+    private fun assertRebirthBuildTexts(frame: Frame, layout: RebirthLayout, model: RebirthRenderModel, language: AppLanguage,
+        context: String) {
+        val build = assertNotNull(model.build, context)
+        val titles = listOf(ProfileScreensRedesignText.BuildUnlocks) +
+            if (build.heirlooms.isEmpty()) emptyList() else listOf(ProfileScreensRedesignText.Heirlooms)
+        assertEquals(titles.map { language.text(it).uppercase() },
+            frame.of(REBIRTH_BUILD_SECTION_ROLE).map { assertNotNull(it.layout).layoutInput.text.text }, context)
+        val unlocks = frame.of("rebirth.build.unlock")
+        val rows = model.featuredRows()
+        assertEquals(rows.map { it.name }, unlocks.map { it.owner }, context)
+        val tags = frame.of("rebirth.build.tag")
+        val blurbs = frame.of(REBIRTH_UNLOCK_BLURB_ROLE)
+        unlocks.forEachIndexed { index, unlock ->
+            val row = layout.buildRows[index + 1]
+            val tag = tags.single { it.owner == unlock.owner }
+            // The featured row: the display name left of its gold kind tag, and what the content
+            // does under it, all inside the row.
+            assertEquals(rows[index].name.localizedContent(language).uppercase(),
+                assertNotNull(unlock.layout).layoutInput.text.text)
+            assertTrue(unlock.box.left >= row.left && unlock.box.right <= tag.box.left, "$context ${unlock.owner} ${unlock.box} vs tag ${tag.box}")
+            assertTrue(tag.box.right <= row.right + 0.5f && tag.box.top >= row.top && tag.box.bottom <= row.bottom,
+                "$context tag ${tag.box} outside $row")
+            val blurb = blurbs.single { it.owner == unlock.owner }
+            assertEquals(rebirthFeaturedBlurb(rows[index], language), assertNotNull(blurb.layout).layoutInput.text.text, context)
+            assertTrue(blurb.box.left >= unlock.box.left - 0.5f && blurb.box.right <= row.right + 0.5f &&
+                blurb.box.top >= unlock.box.bottom - 0.5f && blurb.box.bottom <= row.bottom + 0.5f,
+                "$context ${unlock.owner} description ${blurb.box} outside $row under ${unlock.box}")
+            assertTrue(unlock.box.top >= row.top - 0.5f, "$context ${unlock.owner} name ${unlock.box} above $row")
+        }
+        assertEquals(build.heirlooms.map { it.id }, frame.of("rebirth.heirloom.name").map { it.owner }, context)
+        frame.of("rebirth.heirloom.name").forEachIndexed { index, name ->
+            val row = layout.heirloomRows[index]
+            assertTrue(name.box.left >= row.left && name.box.right <= row.right + 0.5f, "$context heirloom ${name.box} outside $row")
+        }
+        val reborn = frame.of("rebirth.build.row.value")
+        assertEquals(2, reborn.size, context)
+        assertEquals(CatalogRebirthContent.unlocks.map { it.tier }.toSet(), frame.of("rebirth.ladder.unlock").map { it.owner }.toSet(), context)
     }
 
     /**

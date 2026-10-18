@@ -9,10 +9,10 @@ import kinetickk.ball.gameplay.nucleus.simulation.MAX_SIMULATION_ACCUMULATOR_SEC
 import kinetickk.ball.gameplay.nucleus.simulation.MAX_SIMULATION_RAW_DELTA_SECONDS
 import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
 import kinetickk.ball.gameplay.nucleus.simulation.acquireRelicForTesting
-import kinetickk.ball.gameplay.nucleus.simulation.addDelayedRelicHitForTesting
+import kinetickk.ball.gameplay.nucleus.simulation.addEchoHitForTesting
 import kinetickk.ball.gameplay.nucleus.simulation.addEnemyForTesting
 import kinetickk.ball.gameplay.nucleus.simulation.consumeFixedStepBudget
-import kinetickk.ball.gameplay.nucleus.simulation.delayedRelicHitCountForTesting
+import kinetickk.ball.gameplay.nucleus.simulation.echoHitCountForTesting
 import kinetickk.ball.gameplay.nucleus.simulation.nextSimulationAccumulator
 import kinetickk.ball.gameplay.nucleus.simulation.startRun
 import kinetickk.ball.gameplay.nucleus.simulation.triggerWeaponContactForTesting
@@ -77,20 +77,20 @@ class GameplayArchitectureBoundsTest {
     }
 
     @Test
-    fun delayedRelicHitBoundAcceptsNAndRejectsNPlusOneCandidate() {
+    fun echoHitBoundAcceptsNAndRejectsNPlusOneCandidate() {
         val state = runningState(seed = 803)
         state.acquireRelicForTesting(RelicId.ECHO_CHAMBER)
-        repeat(MutableGameState.MAX_DELAYED_RELIC_HITS - 1) {
-            state.addDelayedRelicHitForTesting()
+        repeat(MutableGameState.MAX_ECHO_HITS - 1) {
+            state.addEchoHitForTesting()
         }
 
         state.triggerWeaponContactForTesting(state.addEnemyForTesting(80f, 0f))
 
-        assertEquals(MutableGameState.MAX_DELAYED_RELIC_HITS, state.delayedRelicHitCountForTesting())
+        assertEquals(MutableGameState.MAX_ECHO_HITS, state.echoHitCountForTesting())
 
         state.triggerWeaponContactForTesting(state.addEnemyForTesting(120f, 0f))
 
-        assertEquals(MutableGameState.MAX_DELAYED_RELIC_HITS, state.delayedRelicHitCountForTesting())
+        assertEquals(MutableGameState.MAX_ECHO_HITS, state.echoHitCountForTesting())
     }
 
     private fun runningState(seed: Int): MutableGameState =

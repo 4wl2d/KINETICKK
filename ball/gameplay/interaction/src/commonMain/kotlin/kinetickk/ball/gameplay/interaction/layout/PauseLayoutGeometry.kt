@@ -68,7 +68,7 @@ internal fun pauseLayoutGeometry(width: Float, height: Float, scale: Float): Pau
                 panelRight = ox + 560f * unit,
                 panelBottom = oy + 810f * unit,
                 navClip = Rect(0f, 0f, ox + 590f * unit, height),
-                build = Rect(ox + 650f * unit, oy + 44f * unit, ox + 1392f * unit, oy + 640f * unit),
+                build = Rect(ox + 650f * unit, oy + 44f * unit, ox + 1392f * unit, oy + 776f * unit),
             )
         }
         GameplayLayoutMode.COMPACT_LANDSCAPE -> {

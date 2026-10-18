@@ -21,7 +21,7 @@ import kinetickk.foundation.common.localization.text
  * and changing numbers resolve to cached strings. All of it is draw-thread confined.
  */
 internal object WorldPaths {
-    private const val CAPACITY = 64
+    private const val CAPACITY = 128
     private val kinds = IntArray(CAPACITY) { -1 }
     private val sizes = FloatArray(CAPACITY)
     private val paths = arrayOfNulls<Path>(CAPACITY)
@@ -123,11 +123,25 @@ internal object WorldUnitShapes {
     }
 }
 
+/**
+ * The three cracks of a Brittle enemy as polyline segments (x0, y0, x1, y1) on a unit radius:
+ * drawn as plain lines scaled by the enemy's radius, so no path or stroke varies per size.
+ */
+internal val BrittleCracks = floatArrayOf(
+    -0.62f, -0.34f, -0.18f, -0.06f,
+    -0.18f, -0.06f, 0.04f, -0.46f,
+    -0.18f, -0.06f, 0.2f, 0.26f,
+    0.2f, 0.26f, 0.62f, 0.12f,
+    0.2f, 0.26f, 0.06f, 0.6f,
+)
+
 /** Cached strokes, including dashed ones (path effects are native-backed: created on first use). */
 internal object WorldStrokes {
     val dashedHair: Stroke by lazy { Stroke(1f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))) }
     val dashedThin: Stroke by lazy { Stroke(1.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(7f, 5f))) }
     val dashedMedium: Stroke by lazy { Stroke(2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 7f))) }
+    /** Dotted ring of an Embrittled enemy. */
+    val dotted: Stroke by lazy { Stroke(1.6f, cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(0.5f, 4.5f))) }
     /** 6 px progress arcs (the collapsing orbit's ring). */
     val arc6: Stroke by lazy { Stroke(6f, cap = StrokeCap.Butt) }
     val dashEffect: PathEffect by lazy { PathEffect.dashPathEffect(floatArrayOf(8f, 7f)) }
@@ -189,6 +203,9 @@ internal object WorldStrings {
     private val secondsSuffixes = arrayOfNulls<String>(AppLanguage.entries.size)
     private val pointNameSources = arrayOfNulls<String>(PointOfInterestKind.entries.size * AppLanguage.entries.size)
     private val pointNames = arrayOfNulls<String>(PointOfInterestKind.entries.size * AppLanguage.entries.size)
+    private val reactionSources = arrayOfNulls<String>(REACTION_SLOTS * AppLanguage.entries.size)
+    private val reactionNames = arrayOfNulls<String>(REACTION_SLOTS * AppLanguage.entries.size)
+    private const val REACTION_SLOTS = 16
 
     /** Remaining time as `m:ss` (mono readout, no unit). */
     fun timer(seconds: Float): String {
@@ -221,6 +238,18 @@ internal object WorldStrings {
         return name.localizedContent(language).also {
             pointNameSources[slot] = name
             pointNames[slot] = it
+        }
+    }
+
+    /** A reaction's content [name] in [language], resolved once per reaction, language and name. */
+    fun reactionName(name: String, reaction: Int, language: AppLanguage): String {
+        if (reaction !in 0 until REACTION_SLOTS) return name.localizedContent(language)
+        val slot = reaction * AppLanguage.entries.size + language.ordinal
+        val cached = reactionNames[slot]
+        if (cached != null && reactionSources[slot] == name) return cached
+        return name.localizedContent(language).also {
+            reactionSources[slot] = name
+            reactionNames[slot] = it
         }
     }
 

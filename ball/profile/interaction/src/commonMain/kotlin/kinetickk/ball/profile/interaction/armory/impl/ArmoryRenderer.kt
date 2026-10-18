@@ -3,8 +3,6 @@
 
 package kinetickk.ball.profile.interaction.armory.impl
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -22,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,13 +43,18 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.toSize
+import kinetickk.ball.content.api.CoreShapeDefinition
+import kinetickk.ball.content.api.RelicDefinition
+import kinetickk.ball.content.api.WeaponCadence
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
@@ -72,6 +76,8 @@ import kinetickk.ball.profile.interaction.drawProfileGrid
 import kinetickk.ball.profile.interaction.drawProfileSidePanel
 import kinetickk.ball.profile.interaction.fitKkText
 import kinetickk.ball.profile.interaction.formatMatter
+import kinetickk.ball.profile.interaction.hangar.impl.drawHangarForm
+import kinetickk.ball.profile.interaction.hangar.impl.hangarFormIndex
 import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignText
 import kinetickk.ball.profile.interaction.localization.ProfileText
 import kinetickk.ball.profile.interaction.profileButtonNaturalWidth
@@ -104,6 +110,10 @@ internal fun ArmoryContent(
     textScale: Float,
     gridScroll: ScrollState,
     holder: ArmoryLayoutHolder,
+    coreShapes: List<CoreShapeDefinition> = emptyList(),
+    relics: List<RelicDefinition> = emptyList(),
+    /** Where each weapon's details start scrolled (px); 0, the top, except in screenshots of the sheet. */
+    detailScrollStart: Int = 0,
     onAction: (ArmoryAction) -> Unit,
 ) {
     val scale = profileTextScale(textScale)
@@ -130,6 +140,9 @@ internal fun ArmoryContent(
         val backWidth = profileHeaderBackWidth(measurer, frame, language.text(ProfileScreensRedesignText.Back))
         val inspected = weapons.firstOrNull { it.id == state.inspected } ?: weapons.first()
         val status = model.status(inspected)
+        val notice = state.inspectedNotice
+        val synergy = remember(inspected, model, coreShapes, relics) { model.synergy(inspected, coreShapes, relics) }
+        val formLevels = remember(masteries) { armoryFormLevels(masteries) }
         val action = armoryActionPresentation(status, inspected, language)
         val buttonSize = if (frame.regular) KkButtonSize.LG else KkButtonSize.MD
         val actionWidth = max(
@@ -137,20 +150,37 @@ internal fun ArmoryContent(
             frame.d(if (frame.regular) 240f else 180f),
         )
         val activeTag = if (model.activeRunWeapon == inspected.id) language.text(ProfileScreensRedesignText.ActiveRun) else null
-        val tagTexts = remember(inspected, language) { inspected.tags.map { it.localizedContent(language) } }
+        val tagTexts = remember(inspected, language) { inspected.tags.map { it.displayLabel.localizedContent(language) } }
         val tileTexts = remember(weapons, model, language) { armoryTileTexts(weapons, model, language) }
-        val layout = armoryLayout(frame, weapons.size, scale, backWidth, actionWidth, needRoom = status == ArmoryWeaponStatus.SHORT,
+        var sheet: ArmorySheet? = null
+        val layout = armoryLayout(frame, weapons.size, scale, backWidth, actionWidth, needRoom = status.blocked || notice != null,
             masteryCount = masteries.size, tileText = { innerWidth -> armoryTileMetrics(measurer, frame, type, tileTexts, innerWidth) },
         ) { nameWidth, width ->
+            val measured = armorySheet(measurer, frame, type, inspected, synergy, formLevels, language, width).also { sheet = it }
             ArmoryDetailMetrics(
                 nameHeight = armoryDetailNameLayout(measurer, frame, type, inspected.name.localizedContent(language), nameWidth).kkBoxHeight,
                 descriptionHeight = armoryDescriptionLayout(measurer, frame, type, inspected.description.localizedContent(language), width)
                     .kkBoxHeight,
                 tagsHeight = armoryTagsHeight(measurer, frame, tagTexts, activeTag, width),
                 masterySideBySide = armoryMasterySideBySide(measurer, frame, type, masteries, language, width),
+                formsHeight = measured.forms.height,
+                synergyHeight = measured.synergy.height,
+                factsHeight = measured.facts.height,
             )
         }
+        val weaponSheet = sheet
         SideEffect { holder.layout = layout }
+        // The inspected weapon's tile is scrolled into view: on opening (the starter may sit on a later
+        // page) and whenever the selection moves (arrow keys, Tab, a tile half under the fold).
+        val inspectedIndex = weapons.indexOfFirst { it.id == inspected.id }
+        val revealHolder = remember { ArmoryRevealMemory() }
+        LaunchedEffect(inspected.id) {
+            val target = armoryRevealScroll(layout, inspectedIndex, gridScroll.value.toFloat()).roundToInt()
+            if (target != gridScroll.value) {
+                if (revealHolder.revealed) gridScroll.animateScrollTo(target) else gridScroll.scrollTo(target)
+            }
+            revealHolder.revealed = true
+        }
         val grid = layout.gridViewport
         Box(
             Modifier.offset { IntOffset(grid.left.roundToInt(), grid.top.roundToInt()) }
@@ -164,12 +194,12 @@ internal fun ArmoryContent(
                 weapons.forEachIndexed { index, definition ->
                     val tile = layout.tiles[index]
                     ArmoryTile(frame, type, tile, layout.tileIcon, layout.tileIconY, definition, model, definition.id == state.inspected,
-                        scale, language, onAction)
+                        scale, language, onAction, signatureForm = definition.signature.hangarFormIndex())
                 }
             }
         }
         // Each weapon's details start at the top.
-        val detailScroll = remember(inspected.id) { ScrollState(0) }
+        val detailScroll = remember(inspected.id) { ScrollState(detailScrollStart) }
         val detail = layout.detailViewport
         Box(
             Modifier.offset { IntOffset(detail.left.roundToInt(), detail.top.roundToInt()) }
@@ -181,12 +211,16 @@ internal fun ArmoryContent(
             Box(
                 Modifier.fillMaxWidth().height(frame.dp(layout.detailContentHeight))
                     .semantics(mergeDescendants = false) {
-                        contentDescription = inspected.name.localizedContent(language) + ". " +
-                            inspected.description.localizedContent(language)
+                        contentDescription = armorySentences(listOfNotNull(
+                            inspected.name.localizedContent(language),
+                            inspected.description.localizedContent(language),
+                            weaponSheet?.spoken,
+                        ))
                     }
                     .drawBehind {
                         translate(-detail.left, -detail.top) {
                             drawArmoryDetail(measurer, frame, type, layout, inspected, tagTexts, activeTag, masteries, language)
+                            if (weaponSheet != null) drawArmorySheet(weaponSheet, layout)
                         }
                     },
             ) {
@@ -211,9 +245,26 @@ internal fun ArmoryContent(
                     drawRect(Kk.Ink1, Offset(layout.detailViewport.left, top),
                         androidx.compose.ui.geometry.Size(layout.detailViewport.width, button.bottom + frame.d(8f) - top))
                 }
-                if (status == ArmoryWeaponStatus.SHORT) drawArmoryNeed(measurer, frame, type, layout.need, inspected, model.totalMatter, language)
+                when {
+                    notice != null -> drawArmoryNeed(measurer, frame, type, layout.need,
+                        armoryNoticeText(notice, inspected, model.totalMatter, language), role = "armory.notice")
+                    status.blocked -> drawArmoryNeed(measurer, frame, type, layout.need, armoryNeedText(status, inspected, model.totalMatter, language))
+                }
             },
         )
+        if (notice != null) {
+            // The refusal is announced as it appears; the drawn line beside the action shows it.
+            val need = layout.need
+            Box(
+                Modifier.offset { IntOffset(need.left.roundToInt(), need.top.roundToInt()) }
+                    .size(frame.dp(need.width.coerceAtLeast(1f)), frame.dp(need.height))
+                    .testTag("profile-armory-notice")
+                    .semantics {
+                        liveRegion = LiveRegionMode.Polite
+                        contentDescription = armoryNoticeText(notice, inspected, model.totalMatter, language)
+                    },
+            )
+        }
         ProfileSlabButton(
                     label = action.label,
                     onClick = { onAction(ArmoryAction.Apply(inspected.id)) },
@@ -222,11 +273,14 @@ internal fun ArmoryContent(
                     variant = action.variant,
                     size = buttonSize,
                     fontSize = type.action,
-                    enabled = status.actionEnabled,
-                    locked = status == ArmoryWeaponStatus.SHORT,
+                    // A blocked unlock stays pressable: the press names why it is locked instead of doing nothing.
+                    enabled = status.actionEnabled || status.blocked,
+                    locked = status.blocked,
                     lockIcon = false,
                     cost = action.cost,
                     textScale = scale,
+                    onLockedClick = { onAction(ArmoryAction.Apply(inspected.id)) },
+                    stateDescription = if (status.blocked) armoryNeedText(status, inspected, model.totalMatter, language) else null,
                     contentDescription = listOfNotNull(action.label, action.costDescription).joinToString(" "),
                     modifier = Modifier.offset { IntOffset(button.left.roundToInt(), button.top.roundToInt()) }
                         .size(frame.dp(button.width), frame.dp(button.height)),
@@ -247,7 +301,7 @@ internal fun armoryActionPresentation(status: ArmoryWeaponStatus, definition: We
     return when (status) {
         ArmoryWeaponStatus.STARTER -> ArmoryActionPresentation(language.text(ProfileScreensRedesignText.Starter), null, null, KkButtonVariant.GHOST)
         ArmoryWeaponStatus.OWNED -> ArmoryActionPresentation(language.text(ProfileScreensRedesignText.SetAsStarter), null, null, KkButtonVariant.GHOST)
-        ArmoryWeaponStatus.AFFORDABLE, ArmoryWeaponStatus.SHORT ->
+        ArmoryWeaponStatus.AFFORDABLE, ArmoryWeaponStatus.SHORT, ArmoryWeaponStatus.REBIRTH_LOCKED ->
             ArmoryActionPresentation(language.text(ProfileScreensRedesignText.Unlock), cost, costDescription, KkButtonVariant.PRIMARY)
     }
 }
@@ -261,8 +315,11 @@ internal fun armoryTileTexts(weapons: List<WeaponDefinition>, model: ArmoryRende
         val active = model.activeRunWeapon == definition.id && status != ArmoryWeaponStatus.STARTER
         ArmoryTileText(
             name = definition.name.localizedContent(language),
-            status = if (status.locked) formatMatter(definition.permanentUnlockCost.toLong(), language) else
-                armoryStatusText(status, active, definition, language),
+            status = when {
+                status == ArmoryWeaponStatus.REBIRTH_LOCKED -> armoryStatusText(status, active, definition, language)
+                status.locked -> formatMatter(definition.permanentUnlockCost.toLong(), language)
+                else -> armoryStatusText(status, active, definition, language)
+            },
             hasTags = definition.tags.isNotEmpty(),
         )
     }
@@ -305,19 +362,22 @@ private fun ArmoryTile(
     textScale: Float,
     language: AppLanguage,
     onAction: (ArmoryAction) -> Unit,
+    signatureForm: Int,
 ) {
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
     val focused by source.collectIsFocusedAsState()
     var pointerPress by remember { mutableStateOf(false) }
-    val selection by animateFloatAsState(if (inspected) 1f else 0f, tween(KkTime.Pull, easing = KkEase.Pull), label = "armoryTile")
+    val selection = if (inspected) 1f else 0f
+    // The selected character's signature weapons carry its form in the tile's corner.
+    val signature = model.character == definition.signature
     val measurer = rememberKkCanvasMeasurer(textScale)
     val status = model.status(definition)
     val active = model.activeRunWeapon == definition.id && status != ArmoryWeaponStatus.STARTER
     val name = definition.name.localizedContent(language)
     val statusText = armoryStatusText(status, active, definition, language)
     val costText = formatMatter(definition.permanentUnlockCost.toLong(), language)
-    val tags = remember(definition, language) { definition.tags.map { it.localizedContent(language) } }
+    val tags = remember(definition, language) { definition.tags.map { it.displayLabel.localizedContent(language) } }
     Box(
         Modifier.offset { IntOffset(tile.left.roundToInt(), tile.top.roundToInt()) }
             .size(frame.dp(tile.width), frame.dp(tile.height))
@@ -325,7 +385,7 @@ private fun ArmoryTile(
             .semantics {
                 selected = inspected
                 contentDescription = name
-                stateDescription = statusText
+                stateDescription = if (signature) statusText + ", " + language.text(ProfileScreensRedesignText.ArmorySignatureMark) else statusText
             }
             .pointerInput(Unit) {
                 awaitPointerEventScope {
@@ -345,7 +405,8 @@ private fun ArmoryTile(
             }
             .drawBehind {
                 drawArmoryTile(measurer, frame, type, name, tags, statusText, costText, status, active,
-                    armoryWeaponIcon(definition.id), iconSize, iconY, selection, hovered, focused)
+                    armoryWeaponIcon(definition.id), iconSize, iconY, selection, hovered, focused,
+                    tint = armoryElementColor(measurer, definition), signatureForm = if (signature) signatureForm else -1)
             },
     )
 }
@@ -354,6 +415,7 @@ internal fun armoryStatusText(status: ArmoryWeaponStatus, active: Boolean, defin
     active -> language.text(ProfileScreensRedesignText.ActiveRun)
     status == ArmoryWeaponStatus.STARTER -> language.text(ProfileScreensRedesignText.Starter)
     status == ArmoryWeaponStatus.OWNED -> language.text(ProfileScreensRedesignText.Owned)
+    status == ArmoryWeaponStatus.REBIRTH_LOCKED -> language.text(ProfileScreensRedesignText.RebornLock, definition.minimumRebirth)
     else -> language.text(ProfileScreensRedesignText.CostMatter, formatMatter(definition.permanentUnlockCost.toLong(), language))
 }
 
@@ -373,6 +435,8 @@ private fun DrawScope.drawArmoryTile(
     selection: Float,
     hovered: Boolean,
     focused: Boolean,
+    tint: Color,
+    signatureForm: Int,
 ) {
     val k = frame.k
     val bounds = Rect(Offset.Zero, size)
@@ -398,19 +462,36 @@ private fun DrawScope.drawArmoryTile(
     val padTop = insets.top
     val padBottom = insets.bottom
     val innerWidth = size.width - padLeft - padRight
-    if (locked) {
+    // The signature mark: the selected character's form in the top-right corner, beside the status line.
+    val markRadius = frame.d(if (compact) 6f else 8f)
+    val markRoom = if (signatureForm >= 0) markRadius * 2f + frame.d(6f) else 0f
+    if (signatureForm >= 0) {
+        drawHangarForm(signatureForm, Offset(size.width - padRight - markRadius, padTop + markRadius), markRadius,
+            if (on) Kk.Ink else roles.you, if (on) Kk.Bone else Kk.Ink, 0f)
+    }
+    val statusWidth = innerWidth - markRoom
+    if (status == ArmoryWeaponStatus.REBIRTH_LOCKED) {
+        // A Rebirth-gated weapon names its rank on the tile: the lock and "Reborn N" in gold.
+        val gold = roles.gold.base
+        val lock = frame.d(if (compact) 9f else 11f)
+        val rank = fitKkText(measurer, statusText, type.status * k, statusWidth - lock - frame.d(5f), minFactor = 0.5f) {
+            measurer.typography.monoStyle(it)
+        }
+        drawKkIcon(KkIcon.SYSTEM_LOCKED, Offset(padLeft + lock * 0.5f, padTop + rank.kkBoxHeight * 0.5f), lock, if (on) Kk.Bone else gold)
+        drawProfileText(rank, padLeft + lock + frame.d(5f), padTop, if (on) Kk.Bone else gold, "armory.tile.status", name)
+    } else if (locked) {
         val gem = frame.d(if (compact) 7f else 9f)
         val costColor = when {
             status == ArmoryWeaponStatus.AFFORDABLE -> roles.you
             else -> Kk.Mute
         }
-        val cost = fitKkText(measurer, costText, type.status * k, innerWidth - gem - frame.d(5f), minFactor = 0.5f) {
+        val cost = fitKkText(measurer, costText, type.status * k, statusWidth - gem - frame.d(5f), minFactor = 0.5f) {
             measurer.typography.monoStyle(it)
         }
         drawKkGem(Offset(padLeft + gem * 0.5f, padTop + cost.kkBoxHeight * 0.5f), costColor, gem / density)
         drawProfileText(cost, padLeft + gem + frame.d(5f), padTop, costColor, "armory.tile.status", name)
     } else {
-        val layout = fitKkText(measurer, statusText, type.status * k, innerWidth, minFactor = 0.5f) { measurer.typography.monoStyle(it) }
+        val layout = fitKkText(measurer, statusText, type.status * k, statusWidth, minFactor = 0.5f) { measurer.typography.monoStyle(it) }
         drawProfileText(layout, padLeft, padTop, if (active && !on) roles.you else fg, "armory.tile.status", name,
             alpha = if (active) 1f else 0.7f)
     }
@@ -445,10 +526,11 @@ private fun DrawScope.drawArmoryTile(
 
     // The icon has the grid's one size and height (the layout keeps it between the tallest status
     // line and the tallest name block), so a wrapped name never shrinks or hides it.
+    // The weapon icon takes its element's hue (Kinetic weapons the preset's volt).
     val iconColor = when {
         locked -> Kk.Mute
         on -> Kk.Ink
-        else -> roles.you
+        else -> tint
     }
     if (icon != null && iconSize > 0f) {
         val center = Offset(size.width * 0.5f, iconY)
@@ -549,7 +631,7 @@ private fun DrawScope.drawArmoryDetail(
 ) {
     val k = frame.k
     val roles = measurer.roles
-    drawKkIconPlate(layout.plate, armoryWeaponIcon(definition.id), roles.you, cutDp = 12f * k,
+    drawKkIconPlate(layout.plate, armoryWeaponIcon(definition.id), armoryElementColor(measurer, definition), cutDp = 12f * k,
         iconSizeDp = (if (frame.regular) 54f else 32f) * k)
     val name = armoryDetailNameLayout(measurer, frame, type, definition.name.localizedContent(language), layout.name.width)
     drawProfileText(name, layout.name.left, layout.name.center.y, Kk.Bone, "armory.detail.name", valign = KkVAlign.CENTER)
@@ -566,22 +648,36 @@ private fun DrawScope.drawArmoryDetail(
     drawMasteryLadder(measurer, frame, type, layout.ladder, layout.ladderStacked, masteries, language)
 }
 
-/** "Need N more matter" beside a locked Unlock button, in the threat role. */
+/** Why a [ArmoryWeaponStatus.blocked] weapon cannot be unlocked yet: its Rebirth gate, or the Matter still missing. */
+internal fun armoryNeedText(status: ArmoryWeaponStatus, definition: WeaponDefinition, matter: Long, language: AppLanguage): String =
+    if (status == ArmoryWeaponStatus.REBIRTH_LOCKED) {
+        language.text(ProfileScreensRedesignText.RebornLock, definition.minimumRebirth)
+    } else {
+        language.text(ProfileScreensRedesignText.NeedMore, formatMatter((definition.permanentUnlockCost - matter).coerceAtLeast(0L), language))
+    }
+
+/** The [armoryNeedText] ("Reborn N" or "Need N more matter") beside a locked Unlock button, in the threat role. */
 private fun DrawScope.drawArmoryNeed(
     measurer: CanvasTextMeasurer,
     frame: ProfileFrame,
     type: ArmoryType,
     rect: Rect,
-    definition: WeaponDefinition,
-    matter: Long,
-    language: AppLanguage,
+    text: String,
+    role: String = "armory.need",
 ) {
-    val need = (definition.permanentUnlockCost - matter).coerceAtLeast(0L)
-    val text = language.text(ProfileScreensRedesignText.NeedMore, formatMatter(need, language))
     val needLayout = fitKkText(measurer, text, type.ladderMono * frame.k, rect.width.coerceAtLeast(frame.d(60f)), maxLines = 3,
         minFactor = 0.6f) { measurer.typography.monoStyle(it, lineHeightEm = 1.6f) }
-    drawProfileText(needLayout, rect.left, rect.center.y, measurer.roles.threat, "armory.need", valign = KkVAlign.CENTER)
+    drawProfileText(needLayout, rect.left, rect.center.y, measurer.roles.threat, role, valign = KkVAlign.CENTER)
 }
+
+/** What a refused unlock of [definition] tells the player beside the action ([ArmoryNotice]). */
+internal fun armoryNoticeText(notice: ArmoryNotice, definition: WeaponDefinition, matter: Long, language: AppLanguage): String =
+    when (notice.refusal) {
+        ArmoryRefusal.INSUFFICIENT_MATTER -> language.text(ProfileScreensRedesignText.ArmoryRefusedMatter,
+            formatMatter((definition.permanentUnlockCost - matter).coerceAtLeast(0L), language))
+        ArmoryRefusal.REBIRTH_LOCKED -> language.text(ProfileScreensRedesignText.ArmoryRefusedRebirth, definition.minimumRebirth)
+        ArmoryRefusal.REFUSED -> language.text(ProfileScreensRedesignText.ArmoryRefused)
+    }
 
 /** A milestone's bonus group: "Base" for the first milestone, else its damage and activation-speed values. */
 private fun masteryBonusParts(mastery: WeaponMastery, language: AppLanguage): List<String> =
@@ -846,4 +942,216 @@ private fun ArmoryStepButton(
             }
             .drawBehind { drawKkStepButton(Rect(Offset.Zero, this.size), plus, hovered, enabled) },
     )
+}
+
+/** Whether the opening reveal has run: later reveals of the inspected tile animate. */
+internal class ArmoryRevealMemory {
+    var revealed = false
+}
+
+/** A weapon's element hue under the player's colour-vision preset; Kinetic weapons take the preset's volt. */
+internal fun armoryElementColor(measurer: CanvasTextMeasurer, definition: WeaponDefinition): Color =
+    definition.element?.let { measurer.roles.element(it.ordinal) } ?: measurer.roles.kinetic
+
+/** A text of the weapon sheet at its offset (px) inside its section, with its color and probe role. */
+internal class ArmorySheetText(
+    val layout: TextLayoutResult,
+    val x: Float,
+    val y: Float,
+    val color: Color,
+    val role: String,
+    val owner: Any? = null,
+    val align: KkAlign = KkAlign.START,
+    /** The text as written (before the style's casing), for the accessible description. */
+    val spoken: String = layout.layoutInput.text.text,
+)
+
+/** The signature character's form glyph inside the synergy section: [fill] lit in `you` when it is the next run's character. */
+internal class ArmorySheetGlyph(val formIndex: Int, val center: Offset, val radius: Float, val fill: Color, val ring: Color?)
+
+/** One section of the weapon sheet: its texts in reading order, its height (px) and an optional form glyph. */
+internal class ArmorySheetSection(
+    val texts: List<ArmorySheetText>,
+    val height: Float,
+    val glyph: ArmorySheetGlyph? = null,
+)
+
+/**
+ * The weapon sheet under the mastery ladder, measured for one panel width: the three mastery forms
+ * by level, the live synergy (signature character and twist, heirloom harmony, tag resonance) and
+ * the typed facts (family, element, Relic key, scaling input, cadence).
+ */
+internal class ArmorySheet(
+    val forms: ArmorySheetSection,
+    val synergy: ArmorySheetSection,
+    val facts: ArmorySheetSection,
+) {
+    /** Every sheet text in reading order, for the detail panel's accessible description. */
+    val spoken: String
+        get() = armorySentences(listOf(forms, synergy, facts).flatMap { section -> section.texts.map { it.spoken } })
+}
+
+/** [parts] read as one description: each ends with a full stop unless it already ends a sentence. */
+internal fun armorySentences(parts: List<String>): String = parts.filter { it.isNotBlank() }.joinToString(" ") { part ->
+    val trimmed = part.trim()
+    if (trimmed.last() in ".!?") trimmed else "$trimmed."
+}
+
+/** Display label of a weapon cadence. */
+internal fun WeaponCadence.armoryLabel(language: AppLanguage): String = language.text(when (this) {
+    WeaponCadence.CONTINUOUS -> ProfileScreensRedesignText.CadenceContinuous
+    WeaponCadence.CONTACT -> ProfileScreensRedesignText.CadenceContact
+    WeaponCadence.DISCRETE -> ProfileScreensRedesignText.CadenceDiscrete
+})
+
+/** The element of [definition] as the sheet names it: its element, or Kinetic. */
+internal fun armoryElementLabel(definition: WeaponDefinition, language: AppLanguage): String =
+    (definition.element?.displayLabel ?: KINETIC_LABEL).localizedContent(language)
+
+private const val KINETIC_LABEL = "Kinetic"
+
+/** Measures the weapon sheet of [weapon] for a panel [width] px wide (see [ArmorySheet]). */
+internal fun armorySheet(
+    measurer: CanvasTextMeasurer,
+    frame: ProfileFrame,
+    type: ArmoryType,
+    weapon: WeaponDefinition,
+    synergy: ArmorySynergy,
+    formLevels: List<Int>,
+    language: AppLanguage,
+    width: Float,
+): ArmorySheet {
+    val k = frame.k
+    val roles = measurer.roles
+    val room = width.coerceAtLeast(frame.d(60f))
+    val bodySize = type.body * ARMORY_SHEET_BODY * k
+    fun title(text: String) = fitKkText(measurer, text, type.label * k, room, minFactor = 0.5f) { measurer.typography.labelStyle(it) }
+    fun body(text: String, maxWidth: Float) = fitKkText(measurer, text, bodySize, maxWidth.coerceAtLeast(frame.d(40f)),
+        maxLines = PROFILE_DESCRIPTION_MAX_LINES, uppercase = false, minFactor = 0.5f) {
+        measurer.typography.bodyStyle(it, lineHeightEm = 1.32f)
+    }
+    fun mono(text: String, maxWidth: Float, lines: Int = 1, uppercase: Boolean = true) = fitKkText(measurer, text, type.ladderMono * k,
+        maxWidth.coerceAtLeast(frame.d(40f)), maxLines = lines, uppercase = uppercase, minFactor = 0.5f) {
+        measurer.typography.monoStyle(it, lineHeightEm = 1.4f)
+    }
+
+    // Mastery forms: "Lvl 3" and the form, one per row, coloured like the ladder's milestones.
+    val forms = ArrayList<ArmorySheetText>()
+    var y = 0f
+    val formsTitle = title(language.text(ProfileScreensRedesignText.ArmoryForms))
+    forms += ArmorySheetText(formsTitle, 0f, y, Kk.Mute, "armory.forms.title", spoken = language.text(ProfileScreensRedesignText.ArmoryForms))
+    y += formsTitle.kkBoxHeight + frame.d(8f)
+    val levelTexts = formLevels.map { language.text(ProfileScreensRedesignText.MasteryLevel, kkIntString(it)) }
+    val levels = levelTexts.map { mono(it, room * 0.4f) }
+    val levelColumn = (levels.maxOfOrNull { it.size.width.toFloat() } ?: 0f) + frame.d(12f)
+    weapon.masteryForms.forEachIndexed { index, form ->
+        val color = when (index) {
+            weapon.masteryForms.lastIndex -> Kk.RLegend
+            0 -> roles.you
+            else -> Kk.Bone
+        }
+        val level = levels.getOrNull(index)
+        val text = body(form.localizedContent(language), room - levelColumn)
+        if (level != null) forms += ArmorySheetText(level, 0f, y, color, "armory.forms.level", index, spoken = levelTexts[index])
+        forms += ArmorySheetText(text, levelColumn, y, Kk.Bone, "armory.forms.text", index)
+        y += max(level?.kkBoxHeight ?: 0f, text.kkBoxHeight) + frame.d(6f)
+    }
+    val formsSection = ArmorySheetSection(forms, y - frame.d(6f))
+
+    // Synergy: the signature character (lit when it is the next run's), its twist, harmony and resonance.
+    val synergyTexts = ArrayList<ArmorySheetText>()
+    y = 0f
+    val synergyTitle = title(language.text(ProfileScreensRedesignText.ArmorySynergy))
+    synergyTexts += ArmorySheetText(synergyTitle, 0f, y, Kk.Mute, "armory.synergy.title", spoken = language.text(ProfileScreensRedesignText.ArmorySynergy))
+    y += synergyTitle.kkBoxHeight + frame.d(10f)
+    val character = synergy.signature?.displayName?.localizedContent(language) ?: weapon.signature.name
+    val glyphRadius = frame.d(type.label) * 0.62f * measurer.scale.coerceIn(1f, 2f)
+    val indent = glyphRadius * 2f + frame.d(10f)
+    val signatureText = language.text(ProfileScreensRedesignText.ArmorySignatureOf, character)
+    val signatureName = fitKkText(measurer, signatureText, type.label * k,
+        room - indent, maxLines = 2, minFactor = 0.5f) { measurer.typography.labelStyle(it) }
+    val rowHeight = max(glyphRadius * 2f, signatureName.kkBoxHeight)
+    val glyph = ArmorySheetGlyph(weapon.signature.hangarFormIndex(), Offset(glyphRadius, y + rowHeight * 0.5f), glyphRadius * 0.78f,
+        fill = if (synergy.signatureActive) roles.you else Kk.Bone2, ring = if (synergy.signatureActive) roles.you else null)
+    synergyTexts += ArmorySheetText(signatureName, indent, y + (rowHeight - signatureName.kkBoxHeight) * 0.5f,
+        if (synergy.signatureActive) roles.you else Kk.Bone, "armory.synergy.signature", spoken = signatureText)
+    y += rowHeight + frame.d(4f)
+    val signatureState = mono(
+        if (synergy.signatureActive) language.text(ProfileScreensRedesignText.ArmorySignatureActive)
+        else language.text(ProfileScreensRedesignText.ArmorySignatureInactive, character),
+        room - indent, lines = PROFILE_DESCRIPTION_MAX_LINES, uppercase = false,
+    )
+    synergyTexts += ArmorySheetText(signatureState, indent, y, if (synergy.signatureActive) roles.you else Kk.Mute, "armory.synergy.state")
+    y += signatureState.kkBoxHeight + frame.d(8f)
+    val twistLabel = mono(language.text(ProfileScreensRedesignText.ArmoryTwist), room - indent)
+    synergyTexts += ArmorySheetText(twistLabel, indent, y, Kk.Mute, "armory.synergy.twist.label", spoken = language.text(ProfileScreensRedesignText.ArmoryTwist))
+    y += twistLabel.kkBoxHeight + frame.d(2f)
+    val twist = body(weapon.signatureText.localizedContent(language), room - indent)
+    synergyTexts += ArmorySheetText(twist, indent, y, Kk.Bone, "armory.synergy.twist")
+    y += twist.kkBoxHeight + frame.d(14f)
+    val key = weapon.key.displayLabel.localizedContent(language)
+    val harmonyTitleText = language.text(ProfileScreensRedesignText.ArmoryHarmony, key)
+    val harmonyTitle = fitKkText(measurer, harmonyTitleText, type.label * k, room,
+        maxLines = 2, minFactor = 0.5f) { measurer.typography.labelStyle(it) }
+    val harmonized = synergy.harmonizing.isNotEmpty()
+    synergyTexts += ArmorySheetText(harmonyTitle, 0f, y, if (harmonized) roles.you else Kk.Bone, "armory.synergy.harmony", spoken = harmonyTitleText)
+    y += harmonyTitle.kkBoxHeight + frame.d(4f)
+    val harmonyText = body(
+        if (harmonized) language.text(ProfileScreensRedesignText.ArmoryHarmonyCandidates,
+            synergy.harmonizing.joinToString(", ") { it.name.localizedContent(language) })
+        else language.text(ProfileScreensRedesignText.ArmoryHarmonyNone),
+        room,
+    )
+    synergyTexts += ArmorySheetText(harmonyText, 0f, y, Kk.Bone2, "armory.synergy.harmony.text")
+    y += harmonyText.kkBoxHeight + frame.d(14f)
+    val resonanceTitle = title(language.text(ProfileScreensRedesignText.ArmoryResonance))
+    synergyTexts += ArmorySheetText(resonanceTitle, 0f, y, Kk.Bone, "armory.synergy.resonance", spoken = language.text(ProfileScreensRedesignText.ArmoryResonance))
+    y += resonanceTitle.kkBoxHeight + frame.d(4f)
+    val tags = weapon.tags.map { it.displayLabel.localizedContent(language) }
+    val resonance = body(language.text(ProfileScreensRedesignText.ArmoryResonanceText, tags.getOrElse(0) { "" }, tags.getOrElse(1) { "" }), room)
+    synergyTexts += ArmorySheetText(resonance, 0f, y, Kk.Bone2, "armory.synergy.resonance.text")
+    y += resonance.kkBoxHeight
+    val synergySection = ArmorySheetSection(synergyTexts, y, glyph)
+
+    // Facts: label at the left, value at the right edge (the element value in its hue).
+    val facts = ArrayList<ArmorySheetText>()
+    y = 0f
+    val rows = listOf(
+        ProfileScreensRedesignText.ArmoryFamily to (weapon.family.displayLabel.localizedContent(language) to Kk.Bone),
+        ProfileScreensRedesignText.ArmoryElement to (armoryElementLabel(weapon, language) to armoryElementColor(measurer, weapon)),
+        ProfileScreensRedesignText.ArmoryKey to (key to Kk.Bone),
+        ProfileScreensRedesignText.ArmoryScaling to (weapon.scaling.displayLabel.localizedContent(language) to Kk.Bone),
+        ProfileScreensRedesignText.ArmoryCadence to (weapon.cadence.armoryLabel(language) to Kk.Bone),
+    )
+    rows.forEachIndexed { index, (label, value) ->
+        val labelText = language.text(label)
+        val labelLayout = mono(labelText, room * 0.5f)
+        val valueLayout = fitKkText(measurer, value.first, type.label * k, room - labelLayout.size.width - frame.d(12f), minFactor = 0.5f) {
+            measurer.typography.labelStyle(it)
+        }
+        val height = max(labelLayout.kkBoxHeight, valueLayout.kkBoxHeight)
+        facts += ArmorySheetText(labelLayout, 0f, y + (height - labelLayout.kkBoxHeight) * 0.5f, Kk.Mute, "armory.facts.label", index,
+            spoken = labelText + " " + value.first)
+        facts += ArmorySheetText(valueLayout, room, y + (height - valueLayout.kkBoxHeight) * 0.5f, value.second, "armory.facts.value", index,
+            align = KkAlign.END, spoken = "")
+        y += height + frame.d(8f)
+    }
+    val factsSection = ArmorySheetSection(facts, y - frame.d(8f))
+    return ArmorySheet(formsSection, synergySection, factsSection)
+}
+
+/** The sheet's body size as a share of the description's. */
+private const val ARMORY_SHEET_BODY = 0.86f
+
+private fun DrawScope.drawArmorySheet(sheet: ArmorySheet, layout: ArmoryLayout) {
+    for ((section, rect) in listOf(sheet.forms to layout.forms, sheet.synergy to layout.synergy, sheet.facts to layout.facts)) {
+        section.glyph?.let { glyph ->
+            val center = Offset(rect.left + glyph.center.x, rect.top + glyph.center.y)
+            glyph.ring?.let { drawCircle(it.copy(alpha = 0.35f), glyph.radius / 0.78f, center, style = kkStroke(density * 1.5f)) }
+            drawHangarForm(glyph.formIndex, center, glyph.radius, glyph.fill, Kk.Ink, 0f)
+        }
+        for (text in section.texts) {
+            drawProfileText(text.layout, rect.left + text.x, rect.top + text.y, text.color, text.role, text.owner, align = text.align)
+        }
+    }
 }

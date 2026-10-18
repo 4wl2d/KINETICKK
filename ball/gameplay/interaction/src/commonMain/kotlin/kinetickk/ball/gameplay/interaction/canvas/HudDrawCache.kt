@@ -10,10 +10,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.KkPathCache
+import kinetickk.foundation.design.drawRuneMedallion
 import kinetickk.foundation.design.measureKkText
 
 /**
@@ -286,7 +288,7 @@ internal enum class HudText {
     TIMER, LEVEL_LABEL, MATTER, KEYS, WEAPON_LEVEL, OVERHEAT,
     BOSS_NAME, TRIAL_LABEL, TRIAL_NAME, TRIAL_CLOCK, TRIAL_PROGRESS, TRIAL_REWARD,
     DASH_LABEL, BRAKE_LABEL, TOOLTIP,
-    PERF_TITLE, PERF_0, PERF_1, PERF_2, PERF_3, PERF_4,
+    PERF_TITLE, PERF_0, PERF_1, PERF_2, PERF_3, PERF_4, REBIRTH_TIER,
 }
 
 /**
@@ -314,6 +316,17 @@ internal object HudLayoutProbe {
         values[base + 2] = right
         values[base + 3] = bottom
         drawn[block.ordinal] = true
+    }
+
+    /** Grows [block]'s rect to hold [other]'s when both were drawn this frame. */
+    fun extend(block: HudBlock, other: HudBlock) {
+        if (!drawn[block.ordinal] || !drawn[other.ordinal]) return
+        val base = block.ordinal * 4
+        val from = other.ordinal * 4
+        values[base] = kotlin.math.min(values[base], values[from])
+        values[base + 1] = kotlin.math.min(values[base + 1], values[from + 1])
+        values[base + 2] = kotlin.math.max(values[base + 2], values[from + 2])
+        values[base + 3] = kotlin.math.max(values[base + 3], values[from + 3])
     }
 
     /** A synergy mark of the relic row: a link bar or a [bracket] joining slots [from] and [to]. */
@@ -350,18 +363,18 @@ internal class HudLinkMark(val bracket: Boolean, val from: Int, val to: Int, val
 
 internal enum class HudBlock {
     CLOCK, MATTER_CHIP, KEY_CHIP, CHAIN, BOSS, POLARITY_LABEL, TRIAL_PANEL, TRIAL_TOOLTIP, FEED,
-    BADGE, INTEGRITY, SPEED, LOADOUT, DASH_LABEL, BRAKE_LABEL,
-    TRIAL_LABEL, TRIAL_CLOCK, TRIAL_NAME, TRIAL_PROGRESS, TRIAL_REWARD,
+    BADGE, INTEGRITY, SPEED, LOADOUT, DASH_LABEL, BRAKE_LABEL, RELIC_ROW, SEVERED,
+    TRIAL_LABEL, TRIAL_CLOCK, TRIAL_NAME, TRIAL_PROGRESS, TRIAL_REWARD, MINIMAP, REBIRTH,
 }
 
 internal enum class HudRect {
-    DATA_BAR, INTEGRITY, HEAT, ABILITY, LADDER, OVERDRIVE, CHAIN, BOSS_0, BOSS_1, BOSS_2,
+    DATA_BAR, INTEGRITY, HEAT, ABILITY, LADDER, OVERDRIVE, CHAIN, BOSS_0, BOSS_1, BOSS_2, BOSS_3,
     WEAPON, TRIAL_METER, TRIAL_INFO, TRIAL_ANCHOR, TRIAL_TOOLTIP, PERF_PANEL,
 }
 
 internal enum class HudPath {
     MATTER_CHIP, KEY_CHIP, PAUSE, PERFORMANCE, DASH, BRAKE, DASH_OUTLINE, BRAKE_OUTLINE, DASH_SPEND,
-    TRIAL_PANEL, MESSAGE, NOTICE_0, NOTICE_1, NOTICE_2, PERF_PANEL, STAMP,
+    TRIAL_PANEL, MESSAGE, NOTICE_0, NOTICE_1, NOTICE_2, PERF_PANEL, STAMP, INVULNERABLE, INVULNERABLE_BAR, RAIL_FROZEN, RAIL_SLAB,
 }
 
 internal enum class HudDash { SHIELD_RING, HALO_TRACK }
@@ -369,3 +382,148 @@ internal enum class HudDash { SHIELD_RING, HALO_TRACK }
 internal enum class HudBrush { VIGNETTE, EDGE_LEFT, EDGE_RIGHT, EDGE_TOP, EDGE_BOTTOM, OVERDRIVE_GLOW, CORE_GLOW }
 
 internal fun Offset.isFiniteOffset(): Boolean = x.isFinite() && y.isFinite()
+
+/**
+ * Relic runes ([drawRelicIcon] geometry) rendered once per relic, pixel size and color into small
+ * bitmaps, so the HUD, the pause view and the report draw each relic's own rune every frame without
+ * building its paths and strokes again. Bounded round robin; draw-thread confined.
+ */
+internal object RelicRuneImages {
+    private const val CAPACITY = 40
+    private val keys = LongArray(CAPACITY) { -1L }
+    private val colors = LongArray(CAPACITY)
+    private val images = arrayOfNulls<Brush>(CAPACITY)
+    private var next = 0
+
+    /**
+     * The rune of [definition] in a [side] px square as a brush anchored at the origin (draw it
+     * under a translate); a shader brush draws without per-frame image wrapping.
+     */
+    fun image(definition: kinetickk.ball.content.api.RelicDefinition, side: Int, color: Color): Brush {
+        val key = (definition.id.ordinal.toLong() shl 32) or side.toLong()
+        val colorKey = color.value.toLong()
+        for (index in 0 until CAPACITY) {
+            if (keys[index] == key && colors[index] == colorKey) return images[index]!!
+        }
+        val bitmap = androidx.compose.ui.graphics.ImageBitmap(side, side)
+        val s = side.toFloat()
+        androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(
+            androidx.compose.ui.unit.Density(1f), androidx.compose.ui.unit.LayoutDirection.Ltr,
+            androidx.compose.ui.graphics.Canvas(bitmap), androidx.compose.ui.geometry.Size(s, s),
+        ) {
+            drawRuneMedallion(
+                style = definition.id.toCanvasRuneStyle(),
+                center = Offset(s * 0.5f, s * 0.5f),
+                radius = s / RUNE_IMAGE_SPAN,
+                accent = color,
+                frameSides = relicFrameSides(definition.aspect),
+                frameRotation = -kotlin.math.PI.toFloat() * 0.5f,
+            )
+        }
+        val brush = imageBrush(bitmap)
+        keys[next] = key
+        colors[next] = colorKey
+        images[next] = brush
+        next = (next + 1) % CAPACITY
+        return brush
+    }
+
+    /** Image side over the medallion radius: its outer glow reaches 1.22 radii. */
+    const val RUNE_IMAGE_SPAN = 2.6f
+}
+
+/**
+ * Sides of a relic medallion's frame by aspect, as [drawRelicIcon] draws them (exhaustive, so a
+ * new aspect cannot fall back to another's frame).
+ */
+internal fun relicFrameSides(aspect: kinetickk.ball.content.api.RelicAspect): Int = when (aspect) {
+    kinetickk.ball.content.api.RelicAspect.KINETIC -> 3
+    kinetickk.ball.content.api.RelicAspect.THERMAL -> 6
+    kinetickk.ball.content.api.RelicAspect.CRYO -> 8
+    kinetickk.ball.content.api.RelicAspect.ION -> 4
+    kinetickk.ball.content.api.RelicAspect.GRAVITIC -> 5
+    kinetickk.ball.content.api.RelicAspect.ENTROPY -> 7
+    kinetickk.ball.content.api.RelicAspect.SONIC -> 9
+    kinetickk.ball.content.api.RelicAspect.VOID -> 12
+    kinetickk.ball.content.api.RelicAspect.SOVEREIGN -> 10
+}
+
+/**
+ * A relic's own rune (medallion radius [radius] px) centered at [center], in [color] at [alpha],
+ * from [RelicRuneImages]. Allocation-free once the image exists.
+ */
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRelicRune(
+    definition: kinetickk.ball.content.api.RelicDefinition,
+    center: Offset,
+    radius: Float,
+    color: Color,
+    alpha: Float = 1f,
+) {
+    val side = kotlin.math.ceil(radius * RelicRuneImages.RUNE_IMAGE_SPAN).toInt().coerceIn(4, 256)
+    drawImageBrush(RelicRuneImages.image(definition, side, color), center, side, alpha)
+}
+
+/** A cached image as a clamped shader brush (allocation-free to draw, unlike wrapping the bitmap per draw). */
+internal fun imageBrush(bitmap: androidx.compose.ui.graphics.ImageBitmap): Brush = androidx.compose.ui.graphics.ShaderBrush(
+    androidx.compose.ui.graphics.ImageShader(bitmap, androidx.compose.ui.graphics.TileMode.Decal, androidx.compose.ui.graphics.TileMode.Decal),
+)
+
+/** Draws an [imageBrush] of [side] px centered at [center]. */
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawImageBrush(brush: Brush, center: Offset, side: Int, alpha: Float) {
+    if (alpha <= 0f) return
+    val left = center.x - side * 0.5f
+    val top = center.y - side * 0.5f
+    translate(left, top) {
+        drawRect(brush, Offset.Zero, androidx.compose.ui.geometry.Size(side.toFloat(), side.toFloat()), alpha = alpha.coerceIn(0f, 1f))
+    }
+}
+
+/**
+ * Item icons ([drawItemIcon] geometry with its stack arc) rendered once per item, stack count,
+ * pixel size and color, so the pause grid redraws its icons without building their paths.
+ */
+internal object ItemIconImages {
+    private const val CAPACITY = 96
+    private val keys = LongArray(CAPACITY) { -1L }
+    private val colors = LongArray(CAPACITY)
+    private val images = arrayOfNulls<Brush>(CAPACITY)
+    private var next = 0
+
+    fun image(item: kinetickk.ball.content.api.ItemDefinition, stack: Int, side: Int, color: Color): Brush {
+        val key = (item.id.toLong() shl 40) or (stack.toLong() shl 20) or side.toLong()
+        val colorKey = color.value.toLong()
+        for (index in 0 until CAPACITY) {
+            if (keys[index] == key && colors[index] == colorKey) return images[index]!!
+        }
+        val bitmap = androidx.compose.ui.graphics.ImageBitmap(side, side)
+        val s = side.toFloat()
+        androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(
+            androidx.compose.ui.unit.Density(1f), androidx.compose.ui.unit.LayoutDirection.Ltr,
+            androidx.compose.ui.graphics.Canvas(bitmap), androidx.compose.ui.geometry.Size(s, s),
+        ) {
+            drawItemIcon(item, Offset(s * 0.5f, s * 0.5f), s / ITEM_IMAGE_SPAN, color, stack)
+        }
+        val brush = imageBrush(bitmap)
+        keys[next] = key
+        colors[next] = colorKey
+        images[next] = brush
+        next = (next + 1) % CAPACITY
+        return brush
+    }
+
+    /** Image side over the glyph radius (its frame and stack arc reach past the radius). */
+    const val ITEM_IMAGE_SPAN = 2.8f
+}
+
+/** An item icon of glyph radius [radius] px centered at [center], from [ItemIconImages]. */
+internal fun androidx.compose.ui.graphics.drawscope.DrawScope.drawItemImage(
+    item: kinetickk.ball.content.api.ItemDefinition,
+    center: Offset,
+    radius: Float,
+    color: Color,
+    stack: Int,
+    alpha: Float = 1f,
+) {
+    val side = kotlin.math.ceil(radius * ItemIconImages.ITEM_IMAGE_SPAN).toInt().coerceIn(4, 256)
+    drawImageBrush(ItemIconImages.image(item, stack, side, color), center, side, alpha)
+}

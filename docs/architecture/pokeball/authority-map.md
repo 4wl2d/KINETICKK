@@ -30,9 +30,9 @@ fact or writing authority.
 
 | Fact or decision | Owner | Consumers and legal access |
 |---|---|---|
-| item, weapon, meta-upgrade, relic, and Rebirth definitions/policy | ContentCatalog | typed Content queries and captured immutable snapshots |
+| item, weapon, Core Matrix node, relic, enemy roster, and Rebirth definitions/policy | ContentCatalog | typed Content queries and captured immutable snapshots |
 | preferences and mute state | Profile | Profile queries; captured into Gameplay after accepted Session workflow |
-| economy, permanent Lab ranks, loadout, collection, Rebirth progress | Profile | target-owned Profile queries; Gameplay captures the run-bootstrap result through a read capability, while later preferences arrive as explicit values in typed settings calls |
+| economy, permanent Core Matrix ranks, cumulative achievements, loadout, collection, Rebirth progress | Profile | target-owned Profile queries; Gameplay captures the run-bootstrap result through a read capability, while later preferences arrive as explicit values in typed settings calls |
 | current `ProfileSnapshot` bootstrap and persistence outcome | Profile | Resource exposes only `readSnapshot`/`writeSnapshot` and typed outcomes; Session reads bootstrap/persistence status |
 | live simulation, deterministic RNG, run matter, discoveries, active weapon, Codex stacks, run terminal result | GameplayRun | Gameplay queries and target-owned result to Session/Profile routes |
 | navigation, overlay policy, start/restart/exit ordering, settings propagation, Rebirth orchestration, bootstrap-unavailable lifecycle | AppSession | Session projection consumed by Session Interaction |

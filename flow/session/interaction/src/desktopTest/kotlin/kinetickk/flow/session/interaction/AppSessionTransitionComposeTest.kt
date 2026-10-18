@@ -21,8 +21,8 @@ import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.gameplay.interaction.GameplayPresentation
 import kinetickk.ball.profile.interaction.armory.api.ArmoryFeature
 import kinetickk.ball.profile.interaction.armory.api.ArmoryOutput
-import kinetickk.ball.profile.interaction.lab.api.LabFeature
-import kinetickk.ball.profile.interaction.lab.api.LabOutput
+import kinetickk.ball.profile.interaction.matrix.api.MatrixFeature
+import kinetickk.ball.profile.interaction.matrix.api.MatrixOutput
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthOutput
 import kinetickk.ball.profile.interaction.settings.api.SettingsFeature
@@ -106,8 +106,8 @@ private fun TransitionShell(port: AppSessionPort) {
         settingsFeature = object : SettingsFeature {
             @Composable override fun Content(routeToken: Long, onOutput: (SettingsOutput) -> Unit) = Unit
         },
-        labFeature = object : LabFeature {
-            @Composable override fun Content(routeToken: Long, onOutput: (LabOutput) -> Unit) = Unit
+        matrixFeature = object : MatrixFeature {
+            @Composable override fun Content(routeToken: Long, onOutput: (MatrixOutput) -> Unit) = Unit
         },
         armoryFeature = object : ArmoryFeature {
             @Composable override fun Content(activeRunWeapon: WeaponId?, onOutput: (ArmoryOutput) -> Unit) = Unit

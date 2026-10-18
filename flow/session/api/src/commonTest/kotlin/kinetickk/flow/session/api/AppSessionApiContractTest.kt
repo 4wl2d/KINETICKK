@@ -27,7 +27,7 @@ class AppSessionApiContractTest {
     }
 
     @Test
-    fun shellProjectionRetainsExactlySevenRoutesAndOnlySessionOwnedWorkflowState() {
+    fun shellProjectionRetainsExactlyEightRoutesAndOnlySessionOwnedWorkflowState() {
         val destinations = listOf(
             AppDestination.Home,
             AppDestination.Gameplay,
@@ -36,10 +36,11 @@ class AppSessionApiContractTest {
             AppDestination.Armory,
             AppDestination.Rebirth,
             AppDestination.Codex,
+            AppDestination.Hangar,
         )
-        assertEquals(7, destinations.size)
+        assertEquals(8, destinations.size)
         assertEquals(2, destinations.count(AppDestination::isBaseDestination))
-        assertEquals(5, destinations.count(AppDestination::isOverlayDestination))
+        assertEquals(6, destinations.count(AppDestination::isOverlayDestination))
 
         val projection = AppShellProjection(
             instanceId = LOCAL_APP_SESSION_INSTANCE_ID,
@@ -97,7 +98,7 @@ class AppSessionApiContractTest {
             SessionInteractionPulse.ShortcutObserved(SessionShortcut.MUTE),
             SessionInteractionPulse.ToggleMuteRequested,
             SessionInteractionPulse.SelectCoreShapeRequested(CoreShape.PRISM),
-            SessionInteractionPulse.RebirthRequested,
+            SessionInteractionPulse.RebirthRequested(1),
         )
 
         assertEquals(9, interactions.size)

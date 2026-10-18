@@ -24,7 +24,13 @@ import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.EquippedRelic
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.RelicPairingId
+import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.gameplay.nucleus.render.BuildForecast
+import kinetickk.ball.gameplay.nucleus.render.ForecastKind
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.interaction.canvas.isCut
@@ -54,8 +60,8 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalTestApi::class)
 class OverlayTextFitTest {
     private val frames = listOf(1440 to 810, 844 to 390, 390 to 844)
-    private val relics3 = listOf(EquippedRelic(RelicId.KINETIC_FLYWHEEL, 2), EquippedRelic(RelicId.GHOST_VECTOR, 1), EquippedRelic(RelicId.ORBITAL_NAIL, 1))
-    private val relics4 = relics3 + EquippedRelic(RelicId.VOLTAIC_FILAMENT, 1)
+    private val relics3 = listOf(EquippedRelic(RelicId.PERPETUAL_VECTOR, 2), EquippedRelic(RelicId.GYRE_ENGINE, 1), EquippedRelic(RelicId.FURNACE_COVENANT, 1))
+    private val relics4 = relics3 + EquippedRelic(RelicId.AEGIS_INVERSION, 1)
 
     @Test
     fun levelUpAndRelicCardsFitTheirTextWholeInBothLanguages() {
@@ -66,13 +72,18 @@ class OverlayTextFitTest {
                 val range = body.config[SemanticsProperties.VerticalScrollAxisRange]
                 assertEquals(0f, range.maxValue(), "${model.choiceType} card ${index + 1} at ${width}x$height fits without scrolling")
             }
-            if (model.choiceType == ChoiceType.RELIC) {
-                model.choices.indices.forEach { index ->
-                    val card = onNodeWithTag("kinetickk.gameplay.choice.${index + 1}").fetchSemanticsNode().boundsInRoot
-                    val footer = onNode(hasTestTag("kinetickk.gameplay.choice.${index + 1}.footer"), useUnmergedTree = true)
-                        .fetchSemanticsNode().boundsInRoot
+            model.choices.indices.forEach { index ->
+                val card = onNodeWithTag("kinetickk.gameplay.choice.${index + 1}").fetchSemanticsNode().boundsInRoot
+                // The footer (action tag and forecast chips) and the chips beside the icon stay on their card.
+                onAllNodes(hasTestTag("kinetickk.gameplay.choice.${index + 1}.footer"), useUnmergedTree = true).fetchSemanticsNodes().forEach { node ->
+                    val footer = node.boundsInRoot
                     assertTrue(card.inflate(2f).contains(footer.topLeft) && card.inflate(2f).contains(footer.bottomRight),
-                        "Relic action tag ${index + 1} stays on its card at ${width}x$height: $footer in $card")
+                        "${model.choiceType} footer ${index + 1} stays on its card at ${width}x$height: $footer in $card")
+                }
+                onAllNodes(hasTestTag("kinetickk.gameplay.choice.${index + 1}.chips"), useUnmergedTree = true).fetchSemanticsNodes().forEach { node ->
+                    val chips = node.boundsInRoot
+                    assertTrue(card.inflate(2f).contains(chips.topLeft) && card.inflate(2f).contains(chips.bottomRight),
+                        "${model.choiceType} chips ${index + 1} stay on their card at ${width}x$height: $chips in $card")
                 }
             }
         }
@@ -198,28 +209,38 @@ class OverlayTextFitTest {
     }
 
     private fun levelUp(language: AppLanguage, width: Float, height: Float) = rewardFixtureModel(
-        choices = listOf(itemChoice(0), itemChoice(1), itemChoice(2)), itemStacks = listOf(2, 0, 0, 0, 0),
+        // A Reborn card and forecast rows: the footer chips take their room from the text.
+        choices = listOf(itemChoice(0), itemChoice(1), itemChoice(2, reborn = true)), itemStacks = listOf(1, 0, 0, 0, 0, 0),
         language = language, width = width, height = height,
         previews = listOf(
-            RewardPreview(immutableListOf(RewardStatChange("Dash impulse", 873f, 1083f, ""), RewardStatChange("Cooling", 23.2f, 24.8f, "/s"))),
-            RewardPreview(immutableListOf(RewardStatChange("Critical chance", 8f, 27f, "%"), RewardStatChange("Critical power", 1.5f, 1.64f, "×"))),
-            RewardPreview(immutableListOf(RewardStatChange("Overdrive gain", 1.2f, 1.51f, "×"), RewardStatChange("Combo window", 2.8f, 2.98f, "s"))),
+            RewardPreview(immutableListOf(RewardStatChange("Dash impulse", 873f, 1083f, ""), RewardStatChange("Cooling", 23.2f, 24.8f, "/s")),
+                immutableListOf(
+                    BuildForecast(ForecastKind.REACTION, reaction = ReactionId.GLACIER_CRUSH, discovered = false),
+                    BuildForecast(ForecastKind.TAG_TIER, tag = BuildTag.ANCHOR, before = 0, after = 1),
+                    BuildForecast(ForecastKind.AFFINITY, element = StatusElement.CRYO, before = 1, after = 2),
+                )),
+            RewardPreview(immutableListOf(RewardStatChange("Critical chance", 8f, 27f, "%"), RewardStatChange("Critical power", 1.5f, 1.64f, "×")),
+                immutableListOf(BuildForecast(ForecastKind.REACTION, reaction = ReactionId.PLASMA_BURST, discovered = true),
+                    BuildForecast(ForecastKind.AFFINITY, element = StatusElement.THERMAL, before = 3, after = 4))),
+            RewardPreview(immutableListOf(RewardStatChange("Overdrive gain", 1.2f, 1.51f, "×"), RewardStatChange("Combo window", 2.8f, 2.98f, "s")),
+                immutableListOf(BuildForecast(ForecastKind.TAG_TIER, tag = BuildTag.OVERCLOCK, before = 1, after = 2))),
         ),
     )
 
     private fun relicOffers(language: AppLanguage, width: Float, height: Float) = rewardFixtureModel(
         choiceType = ChoiceType.RELIC, relics = relics3, language = language, width = width, height = height,
-        choices = listOf(RelicId.VOLTAIC_FILAMENT, RelicId.PERIAPSIS_HOOK, RelicId.GHOST_VECTOR).map { id ->
+        choices = listOf(RelicId.AEGIS_INVERSION, RelicId.EVENT_HORIZON, RelicId.GYRE_ENGINE).map { id ->
             val relic = rewardFixtureContent.relic(id)
-            ChoiceOption(ChoiceType.RELIC, relic.name, relic.description, relic.aspect.displayLabel.uppercase(), relicId = id, relicAction = RelicChoiceAction.ACQUIRE)
+            ChoiceOption(ChoiceType.RELIC, relic.name, relic.upside, relic.aspect.displayLabel.uppercase(), relicId = id, relicAction = RelicChoiceAction.ACQUIRE)
         },
         previews = listOf(
             // Real nucleus preview labels (RelicEffectPreview): stat and condition joined by ": ".
-            RewardPreview(immutableListOf(RewardStatChange("Arc: hit, every 0.28s", 0f, 16f, "%", sourceRelic = RelicId.VOLTAIC_FILAMENT))),
-            RewardPreview(immutableListOf(RewardStatChange("Damage: distance >300", 0f, 8f, "%", sourceRelic = RelicId.PERIAPSIS_HOOK)),
-                addedSynergies = immutableListOf("Gravitic grouping")),
-            RewardPreview(immutableListOf(RewardStatChange("Damage: dash", 24f, 48f, "", sourceRelic = RelicId.GHOST_VECTOR),
-                RewardStatChange("Radius: dash", 86f, 100f, "", sourceRelic = RelicId.GHOST_VECTOR))),
+            RewardPreview(immutableListOf(RewardStatChange("Arc: hit, every 0.28s", 0f, 16f, "%", sourceRelic = RelicId.AEGIS_INVERSION)),
+                immutableListOf(BuildForecast(ForecastKind.CONCORD, pairing = RelicPairingId.FARADAY_CAGE, discovered = false),
+                    BuildForecast(ForecastKind.HARMONY), BuildForecast(ForecastKind.AFFINITY, element = StatusElement.ION, before = 1, after = 2))),
+            RewardPreview(immutableListOf(RewardStatChange("Damage: distance >300", 0f, 8f, "%", sourceRelic = RelicId.EVENT_HORIZON))),
+            RewardPreview(immutableListOf(RewardStatChange("Damage: dash", 24f, 48f, "", sourceRelic = RelicId.GYRE_ENGINE),
+                RewardStatChange("Radius: dash", 86f, 100f, "", sourceRelic = RelicId.GYRE_ENGINE))),
         ),
     )
 
@@ -227,12 +248,11 @@ class OverlayTextFitTest {
         choiceType = ChoiceType.RELIC_BIND, relics = relics4, language = language, width = width, height = height,
         choices = relics4.mapIndexed { index, equipped ->
             val current = rewardFixtureContent.relic(equipped.id)
-            ChoiceOption(ChoiceType.RELIC_BIND, "Replace ${current.name}", "", "", relicId = RelicId.PERIAPSIS_HOOK,
+            ChoiceOption(ChoiceType.RELIC_BIND, "Replace ${current.name}", "", "", relicId = RelicId.EVENT_HORIZON,
                 relicAction = RelicChoiceAction.REPLACE, relicSlot = index)
         },
         previews = relics4.map {
-            RewardPreview(immutableListOf(RewardStatChange("Damage: distance >300", 0f, 8f, "%", sourceRelic = RelicId.PERIAPSIS_HOOK)),
-                addedSynergies = immutableListOf("Gravitic grouping"), removedSynergies = immutableListOf("Vector maneuver"))
+            RewardPreview(immutableListOf(RewardStatChange("Damage: distance >300", 0f, 8f, "%", sourceRelic = RelicId.EVENT_HORIZON)))
         },
     )
 
@@ -242,8 +262,8 @@ class OverlayTextFitTest {
             ChoiceOption(ChoiceType.RELIC_BIND, "Meld ${rewardFixtureContent.relic(equipped.id).name}", "", "", relicId = equipped.id,
                 relicAction = RelicChoiceAction.MELD_TARGET, relicSlot = index)
         },
-        previews = listOf(RewardPreview(immutableListOf(RewardStatChange("Damage: speed ≥500", 10f, 15f, "%", sourceRelic = RelicId.KINETIC_FLYWHEEL),
-            RewardStatChange("Damage: speed ≥1600", 20f, 30f, "%", sourceRelic = RelicId.KINETIC_FLYWHEEL)))),
+        previews = listOf(RewardPreview(immutableListOf(RewardStatChange("Damage: speed ≥500", 10f, 15f, "%", sourceRelic = RelicId.PERPETUAL_VECTOR),
+            RewardStatChange("Damage: speed ≥1600", 20f, 30f, "%", sourceRelic = RelicId.PERPETUAL_VECTOR)))),
     )
 
     private fun totem(language: AppLanguage, width: Float, height: Float, textScale: Float = 1f) = rewardFixtureModel(
@@ -272,6 +292,15 @@ internal fun SemanticsNodeInteractionsProvider.assertTextFitsWithoutBreakingWord
             if (end <= 0 || end >= text.length) continue
             val boundary = text[end - 1].isWhitespace() || text[end].isWhitespace() || text[end - 1] in "-–—/"
             assertTrue(boundary, "$scene: \"$text\" breaks inside a word at $end")
+            // A number keeps its unit on its line, and a unit's slash never splits it.
+            val head = text.substring(0, end).trimEnd()
+            val next = text.substring(end).trimStart().takeWhile { !it.isWhitespace() }
+            val unitSlash = head.length >= 2 && head.endsWith("/") && !head[head.length - 2].isWhitespace()
+            val unit = head.lastOrNull()?.isDigit() == true && next.trimEnd('.', ',', ';').lowercase() in UnitTokens
+            assertTrue(!unitSlash && !unit && !next.startsWith("%"), "$scene: \"$text\" splits a number from its unit at $end")
         }
     }
 }
+
+/** Unit marks that must stay on their number's line. */
+private val UnitTokens = setOf("%", "s", "с", "u/s", "ед/с", "ед", "u")

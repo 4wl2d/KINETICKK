@@ -39,7 +39,7 @@ class CharacterPoiRegressionTest {
         val game = game().apply {
             coreShape = CoreShape.DIAMOND
             runGrace = 0f
-            characterRuntime = CharacterRuntime(parryWindow = 0.15f)
+            characterRuntime = CharacterRuntime().apply { parryWindow = 0.15f }
         }
         val target = game.addEnemyForTesting(300f, 0f)
         game.projectiles += Projectile(x = -40f, y = 0f, vx = -10_000f, vy = 0f,
@@ -75,11 +75,12 @@ class CharacterPoiRegressionTest {
         game.pendingRelicChoices = 1
         game.pendingDirectedRewards = listOf(DirectedReward.ITEM_AND_REPAIR)
         game.hp = 50f
+        val startLevel = game.weaponLevel
         game.activateTotemForTesting()
         game.updateTotem(0.01f)
         assertEquals(ChoiceType.TOTEM, game.choiceType)
         game.choose(0)
-        assertEquals(2, game.weaponLevel)
+        assertEquals(startLevel + 1, game.weaponLevel)
         assertEquals(ChoiceType.ITEM, game.choiceType)
         game.choose(0)
         assertEquals(DirectedReward.ITEM_AND_REPAIR, game.directedReward)

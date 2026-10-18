@@ -3,125 +3,221 @@
 
 package kinetickk.ball.content.api
 
-internal val RelicPhrasesInRussian: Map<String, String> = mapOf(
-    "Kinetic Flywheel" to "Кинетический маховик",
-    "The weapon stores excess velocity as striking force instead of losing it to drag." to "Оружие сохраняет избыточную скорость как силу удара, вместо того чтобы терять её из-за сопротивления.",
-    "+5% weapon damage above 500 u/s per rank; the bonus doubles above 1,600 u/s." to "+5% к урону оружия за ранг при скорости выше 500 ед/с; выше 1\u00A0600 ед/с бонус удваивается.",
-    "Ghost Vector" to "Призрачный вектор",
-    "Every dash leaves a cutting vector through enemies near the Core's departure point." to "Каждый рывок оставляет режущий вектор среди врагов возле точки отправления Ядра.",
-    "+24 dash-cut damage and +14 effect radius per rank." to "+24 к урону разреза при рывке и +14 к радиусу эффекта за ранг.",
-    "Overtake Protocol" to "Протокол обгона",
-    "The weapon predicts hostile motion and punishes enemies that refuse to slow down." to "Оружие предсказывает движение врагов и наказывает тех, кто не сбавляет скорость.",
-    "+7% weapon damage per rank against enemies moving at 170 u/s or faster." to "+7% к урону оружия за ранг по врагам, движущимся со скоростью от 170 ед/с.",
-    "Slipstream Relay" to "Ретранслятор потока",
-    "Kills made at high velocity feed a short activation surge into the next weapon cycle." to "Убийства на высокой скорости ненадолго ускоряют активацию следующего оружейного цикла.",
-    "+6% activation speed per rank for 3 seconds after a kill above 500 u/s." to "+6% к скорости активации за ранг на 3 секунды после убийства при скорости выше 500 ед/с.",
-    "Brakepoint Memory" to "Память торможения",
-    "Gravity Brake stores arrested momentum; the next weapon contact releases it all at once." to "Гравитационный тормоз сохраняет погашенный импульс; следующее попадание оружия высвобождает его целиком.",
-    "Stores up to +18% next-hit damage per rank while braking." to "Во время торможения накапливает до +18% урона следующего попадания за ранг.",
-    "Polarity Sling" to "Праща полярности",
-    "A strained tether slings weapon force through the weakest point in the magnetic field." to "Напряжённая связь направляет силу оружия через слабейшую точку магнитного поля.",
-    "Up to +8% weapon damage per rank as Polarity falls toward zero." to "До +8% к урону оружия за ранг по мере снижения полярности до нуля.",
-    "Orbital Nail" to "Орбитальный гвоздь",
-    "Weapon contact nails a target to the Core's local gravity well." to "Попадание оружия прибивает цель к локальной гравитационной яме Ядра.",
-    "Pulls the target 24 u/s toward the Core per rank on each qualified hit." to "Каждое учитываемое попадание притягивает цель к Ядру со скоростью 24 ед/с за ранг.",
-    "Eventide Anchor" to "Сумеречный якорь",
-    "Destroyed enemies collapse into brief anchors that drag their formation inward." to "Уничтоженные враги ненадолго превращаются в якоря, стягивающие строй противника к центру.",
-    "+18 implosion damage and +18 radius per rank on kill." to "При убийстве: +18 к урону схлопывания и +18 к радиусу за ранг.",
-    "Periapsis Hook" to "Крюк перицентра",
-    "Distant targets fall harder through the weapon's curved approach." to "Далёкие цели сильнее страдают от изогнутой траектории оружия.",
-    "+8% weapon damage per rank beyond 300 units from the Core." to "+8% к урону оружия за ранг по целям дальше 300 единиц от Ядра.",
-    "Crush Depth" to "Глубинное сжатие",
-    "Targets deep inside the Core's pressure field are compressed before impact." to "Цели в глубине поля давления Ядра сжимаются ещё до удара.",
-    "+6% weapon damage per rank within 155 units of the Core." to "+6% к урону оружия за ранг в пределах 155 единиц от Ядра.",
-    "Mass Echo" to "Эхо массы",
-    "The weapon borrows the Core's mass and returns it as recoil through its victim." to "Оружие заимствует массу Ядра и возвращает её отдачей через жертву.",
-    "+4% damage per Core mass and stronger knockback per rank." to "+4% к урону на единицу массы Ядра и усиленное отбрасывание за ранг.",
-    "Tidal Lock" to "Приливный захват",
-    "Repeated contacts align the weapon and target into an increasingly violent orbit." to "Повторные попадания связывают оружие и цель во всё более разрушительную орбиту.",
-    "+2% damage per rank and qualified hit, stacking five times per target." to "+2% к урону за ранг и учитываемое попадание; складывается до пяти раз на каждой цели.",
-    "Voltaic Filament" to "Вольтовая нить",
-    "Weapon contact extrudes a live filament toward the nearest untouched enemy." to "Попадание оружия вытягивает токопроводящую нить к ближайшему незатронутому врагу.",
-    "Arcs 16% of the triggering damage per rank, with a 0.28-second gate." to "Передаёт разрядом 16% исходного урона за ранг с интервалом не менее 0,28 секунды.",
-    "Static Chorus" to "Статический хор",
-    "A rhythm of weapon contacts resolves into a many-voiced discharge." to "Ритм попаданий оружия складывается в многоголосый разряд.",
-    "Every seventh qualified hit arcs to 1 additional target per rank." to "Каждое седьмое учитываемое попадание поражает разрядом ещё 1 цель за ранг.",
-    "Ion Debt" to "Ионный долг",
-    "Each contact leaves charge the target must eventually repay to everything nearby." to "Каждое попадание оставляет заряд, который цель рано или поздно вернёт всему вокруг.",
-    "Five qualified hits discharge 14 area damage per rank." to "Пять учитываемых попаданий вызывают разряд с уроном по области 14 за ранг.",
-    "Circuit Breaker" to "Размыкатель цепи",
-    "The first weapon contact interrupts a target's movement circuit and cracks its guard." to "Первое попадание оружия размыкает двигательную цепь цели и пробивает её защиту.",
-    "+11 opening damage and 8% movement interruption per rank." to "+11 к урону первого попадания и 8% прерывания движения за ранг.",
-    "Return Circuit" to "Возвратный контур",
-    "When no nearby body can carry the current onward, it folds back through its first host." to "Если рядом нет тела для передачи тока, он возвращается через первую цель.",
-    "+9% weapon damage per rank against isolated targets." to "+9% к урону оружия за ранг по изолированным целям.",
-    "Storm Index" to "Индекс бури",
-    "At Surge velocity, the weapon indexes every fourth contact as a free lightning route." to "На скорости разгона оружие превращает каждое четвёртое попадание в бесплатный путь молнии.",
-    "+10 arc damage and +45 acquisition range per rank." to "+10 к урону разряда и +45 к дальности захвата за ранг.",
+/**
+ * Relic names, upside templates (the `{n}` placeholders stay identical to the English source),
+ * liabilities and named pairings.
+ */
+internal val RelicPhrasesInRussian: List<Pair<String, String>> = listOf(
+    "Perpetual Vector" to "Вечный вектор",
+    "Drag falls by 85 %. Every 400 u/s above 600, up to 2,200, adds {0} % damage." to
+        "Сопротивление снижается на 85 %. Каждые 400 ед/с сверх 600, вплоть до 2\u00A0200, добавляют {0} % урона.",
+    "Brake grips half as hard, and impacts below 600 u/s deal 30 % less." to
+        "Тормоз держит вдвое слабее, а столкновения на скорости ниже 600 ед/с наносят на 30 % меньше урона.",
+
+    "Blink Drive" to "Привод скачка",
+    "Dash becomes a Blink: you jump up to {1} u along your aim, stopping short of the singularity, " +
+        "and strike every enemy on the line for {0} % impact damage. Blinks cost 35 % less heat." to
+        "Рывок становится Скачком: вы переноситесь до {1} ед по направлению прицела, не долетая до " +
+        "сингулярности, и бьёте каждого врага на линии на {0} % урона от столкновения. Скачки дают на 35 % меньше нагрева.",
+    "After a Blink you keep only 35 % of your speed." to "После Скачка у вас остаётся лишь 35 % скорости.",
+
+    "Gyre Engine" to "Вихревой двигатель",
+    "Every real turn releases a shock ring for {0} % impact damage and 2 stacks of your dominant element." to
+        "Каждый настоящий поворот выпускает ударное кольцо: {0} % урона от столкновения и 2 слоя вашей основной стихии.",
+    "Polarity no longer recovers on its own or while braking; only turns restore it, and less than before." to
+        "Полярность больше не восстанавливается сама и при торможении: её возвращают только повороты, и слабее, чем прежде.",
+
+    "Glass Comet" to "Стеклянная комета",
+    "All your damage +{0} %. Impact kills above 900 u/s grant a quarter second of invulnerability, " +
+        "at most once every 1.5 seconds." to
+        "Весь ваш урон +{0} %. Убийства столкновением на скорости выше 900 ед/с дают четверть секунды " +
+        "неуязвимости, не чаще раза в 1,5 секунды.",
+    "You take double damage, and shields and damage reduction no longer protect you." to
+        "Вы получаете двойной урон, а щиты и снижение урона больше вас не защищают.",
+
+    "Executioner's Prism" to "Призма палача",
+    "Critical hits are no longer random. Every 1 % critical chance, up to 50 %, becomes {0} % critical " +
+        "damage. Hits that can crit always crit against enemies below 35 % integrity, Frozen or Brittle enemies and " +
+        "enemies whose status is three quarters of the way to its Break." to
+        "Критические удары больше не случайны. Каждый 1 % шанса критического удара, вплоть до 50 %, " +
+        "превращается в {0} % критического урона. Удары, которые могут быть критическими, всегда критические по врагам с прочностью ниже 35 %, " +
+        "по замороженным и хрупким врагам и по врагам, чья стихия на три четверти заполнена до пробоя.",
+    "Hits that do not crit deal 20 % less." to "Некритические удары наносят на 20 % меньше урона.",
+
     "Echo Chamber" to "Камера эха",
-    "A portion of every strike is hidden outside time and returned after the target has moved." to "Часть каждого удара скрывается вне времени и возвращается после перемещения цели.",
-    "Repeats 12% of qualified-hit damage per rank after 0.45 seconds." to "Повторяет 12% урона учитываемого попадания за ранг через 0,45 секунды.",
-    "Palimpsest Round" to "Снаряд-палимпсест",
-    "The weapon periodically writes its previous impact over the present one." to "Оружие периодически записывает предыдущее попадание поверх текущего.",
-    "Every seventh qualified hit repeats 20% of that damage per rank." to "Каждое седьмое учитываемое попадание повторяет 20% этого урона за ранг.",
-    "Second Hand" to "Секундная стрелка",
-    "A kill steals a fraction of the next second and hands it to the weapon clock." to "Убийство крадёт долю следующей секунды и передаёт её часам оружия.",
-    "Removes 0.08 seconds per rank from both weapon cooldowns on kill." to "При убийстве сокращает обе перезарядки оружия на 0,08 секунды за ранг.",
-    "Fracture Gate" to "Врата разлома",
-    "A repeating contact folds its target through the Core and ruptures its exit point." to "Повторное попадание переносит цель сквозь Ядро и разрывает точку её выхода.",
-    "Every sixth qualified hit transposes the target and deals 12 rupture damage per rank." to "Каждое шестое учитываемое попадание переносит цель и наносит 12 урона разрывом за ранг.",
-    "Split Horizon" to "Расколотый горизонт",
-    "A destroyed enemy leaves one half of its final strike hunting beyond the horizon." to "Уничтоженный враг оставляет половину последнего удара охотиться за горизонтом.",
-    "Kills launch a seeking shard for 18 damage per rank." to "Убийства выпускают самонаводящийся осколок с уроном 18 за ранг.",
-    "Borrowed Moment" to "Заёмный миг",
-    "Damage to the Core is answered with a brief interval stolen from the attacker." to "В ответ на урон Ядро крадёт у нападающего короткий промежуток времени.",
-    "+9% activation speed per rank for 2.5 seconds after taking damage." to "+9% к скорости активации за ранг на 2,5 секунды после получения урона.",
-    "Glass Witness" to "Стеклянный свидетель",
-    "The first strike is remembered as a fault line that later hits can see and exploit." to "Первый удар оставляет линию разлома, которую последующие попадания находят и используют.",
-    "Exposes fresh targets to +7% weapon damage per rank for 3 seconds." to "Свежие цели получают на 7% больше урона оружия за ранг в течение 3 секунд.",
-    "Fracture Lens" to "Линза разлома",
-    "Existing wounds bend probability until the weapon finds the most brittle outcome." to "Существующие раны искривляют вероятность, пока оружие не найдёт самый хрупкий исход.",
-    "+2.5% critical chance per rank against injured targets." to "+2,5% к шансу критического удара за ранг по раненым целям.",
-    "Spectral Fan" to "Спектральный веер",
-    "A regular cadence of impacts fans one strike into two pale refractions." to "Ритмичные попадания расщепляют один удар на два бледных преломления.",
-    "Every sixth qualified hit refracts 14% damage per rank into two nearby targets." to "Каждое шестое учитываемое попадание преломляет 14% урона за ранг в две соседние цели.",
-    "Hardlight Edge" to "Грань твёрдого света",
-    "Critical strikes condense into an edge too coherent to disperse on contact." to "Критические удары сгущаются в грань, слишком цельную, чтобы рассеяться при контакте.",
-    "+12% critical damage per rank." to "+12% к критическому урону за ранг.",
-    "Chroma Feedback" to "Хроматическая обратная связь",
-    "The first color returned by each enemy is recycled into the Core's defenses." to "Первый цвет, отражённый каждым врагом, перерабатывается в защиту Ядра.",
-    "First contact restores 1.5 Shield—or 2 Overdrive—per rank." to "Первое попадание восстанавливает 1,5 щита или 2 перегрузки за ранг.",
-    "Mirror Cut" to "Зеркальный разрез",
-    "A critical wound appears again in the nearest body as if both occupied one reflection." to "Критическая рана появляется и на ближайшем теле, словно обе цели занимают одно отражение.",
-    "Critical hits mirror 15% of their damage per rank to another target." to "Критические попадания отражают 15% своего урона за ранг в другую цель.",
-    "Heat Debt" to "Тепловой долг",
-    "Weapon damage is not spent; it accumulates as an unstable debt inside the target." to "Урон оружия не исчезает, а накапливается внутри цели в виде нестабильного долга.",
-    "Qualified hits build debt that ruptures for 16 area damage per rank." to "Учитываемые попадания накапливают долг, который взрывается с уроном по области 16 за ранг.",
-    "Scar Tissue" to "Рубцовая ткань",
-    "Each strike teaches the target's structure how to keep damaging itself." to "Каждый удар учит структуру цели продолжать разрушать саму себя.",
-    "Applies 3 damage per second per rank for 3 seconds; repeated hits intensify it." to "Наносит 3 урона в секунду за ранг в течение 3 секунд; повторные попадания усиливают эффект.",
-    "Quietus Bloom" to "Цветение покоя",
-    "A kill blossoms into a field that ages motion and matter around it." to "Убийство рождает поле, состаривающее движение и материю вокруг.",
-    "+10 decay damage, +10% slow, and +16 radius per rank on kill." to "При убийстве: +10 к урону распада, +10% к замедлению и +16 к радиусу за ранг.",
-    "Devourer's Toll" to "Пошлина пожирателя",
-    "Every death pays a small portion of its remaining possibility back to the Core." to "Каждая смерть возвращает Ядру малую часть оставшихся возможностей.",
-    "Every third kill restores 1.5 Integrity and Shield per rank." to "Каждое третье убийство восстанавливает 1,5 прочности и щита за ранг.",
-    "Doom Clock" to "Часы рока",
-    "Elite systems and the Architect are forced to acknowledge how little time they have left." to "Элитные системы и Архитектор вынуждены признать, как мало времени им осталось.",
-    "+8% damage per rank to Elites and the Architect, rising with run time." to "+8% к урону по элитным врагам и Архитектору за ранг; бонус растёт со временем забега.",
-    "Last Light" to "Последний свет",
-    "Near fracture, the Core burns its final safe future to make the current one lethal." to "На грани разрушения Ядро сжигает своё последнее безопасное будущее, делая настоящее смертоносным.",
-    "+12% weapon damage and +8% activation speed per rank below 35% Integrity." to "+12% к урону оружия и +8% к скорости активации за ранг при прочности ниже 35%.",
+    "Weapon hits echo 0.35 seconds later for {0} % damage and apply their on-hit effects again." to
+        "Попадания оружия повторяются эхом через 0,35 секунды с {0} % урона и снова применяют свои эффекты при попадании.",
+    "Impact damage −50 %." to "Урон от столкновений −50 %.",
+
+    "Furnace Covenant" to "Завет горнила",
+    "Overheat never locks your Dash. Every 10 heat above 40 adds {0} % damage, and above 70 heat your " +
+        "hits apply Thermal." to
+        "Перегрев больше не блокирует рывок. Каждые 10 единиц нагрева сверх 40 добавляют {0} % урона, " +
+        "а при нагреве выше 70 ваши удары накладывают Термо.",
+    "Cooling −55 %. Above 80 heat you lose 3 integrity per second, and heat past full burns integrity instead." to
+        "Охлаждение −55 %. При нагреве выше 80 вы теряете 3 прочности в секунду, а нагрев сверх предела сжигает прочность.",
+
+    "Cinder Crown" to "Пепельная корона",
+    "Thermal stacks no longer burn over time. They bank {0} % of their damage and Ignite at 5 stacks, " +
+        "releasing the bank and spreading 2 Thermal." to
+        "Слои Термо больше не жгут постепенно. Они копят {0} % своего урона и вызывают Воспламенение " +
+        "на 5 слоях, высвобождая накопленное и распространяя 2 слоя Термо.",
+    "Thermal fades twice as fast, and Ignites near you burn 4 % of your integrity." to
+        "Термо рассеивается вдвое быстрее, а Воспламенения рядом с вами сжигают 4 % вашей прочности.",
+
+    "Overdrive Cascade" to "Каскад перегрузки",
+    "Overdrive gain +{0} %. Each kill during Overdrive extends it, up to 2.5 extra seconds." to
+        "Накопление перегрузки +{0} %. Каждое убийство во время перегрузки продлевает её, вплоть до 2,5 дополнительной секунды.",
+    "Outside Overdrive all your damage −30 %." to "Вне перегрузки весь ваш урон −30 %.",
+
+    "Absolute Zero" to "Абсолютный ноль",
+    "Impacts apply {0} Cryo and Dash chills everything around you. Frozen enemies shatter on the next " +
+        "direct hit for {1} % damage, chilling their neighbors." to
+        "Столкновения накладывают {0} слоя Крио, а рывок остужает всё вокруг вас. Замороженные враги " +
+        "раскалываются от следующего прямого удара, нанося {1} % урона и остужая соседей.",
+    "Half of the Thermal you apply turns to Cryo and the rest is lost. Overdrive gain −40 %." to
+        "Половина накладываемого вами Термо превращается в Крио, остальное теряется. Накопление перегрузки −40 %.",
+
+    "Stasis Anchor" to "Якорь стазиса",
+    "While braking, enemies near you are slowed by {0} % and hostile bullets near you are caught, up to " +
+        "24. Release Brake to fire them as your own. Stasis holds for 3 seconds and refills when you let go." to
+        "Во время торможения враги рядом с вами замедляются на {0} %, а вражеские снаряды рядом застывают, " +
+        "до 24 штук. Отпущенный тормоз выпускает их как ваши. Стазис держится 3 секунды и восполняется, " +
+        "когда вы отпускаете тормоз.",
+    "Weapon activation −30 % while you are not braking." to "Скорость активации оружия −30 %, пока вы не тормозите.",
+
+    "Stormheart Capacitor" to "Грозовой конденсатор",
+    "Above 700 u/s the Core charges in 4 seconds. The next impact discharges into five enemies for " +
+        "{0} % impact damage and 3 Ion each." to
+        "На скорости выше 700 ед/с Ядро заряжается за 4 секунды. Следующее столкновение выпускает заряд " +
+        "в пять врагов: каждому {0} % урона от столкновения и 3 слоя Иона.",
+    "Taking a hit while half charged or more discharges into you for 10 % of your integrity." to
+        "Если вас ранят при заряде от половины, заряд бьёт по вам на 10 % вашей прочности.",
+
+    "Aegis Inversion" to "Инверсия эгиды",
+    "All healing becomes shield, and shield capacity grows by 60 % of your maximum integrity. A breaking " +
+        "shield releases a nova worth {0} % of the damage it absorbed." to
+        "Всё лечение становится щитом, а ёмкость щита растёт на 60 % вашей максимальной прочности. " +
+        "Разрушаясь, щит выпускает вспышку силой {0} % поглощённого урона.",
+    "Integrity can never be restored, and shields no longer recharge on their own." to
+        "Прочность больше нельзя восстановить, а щиты перестают перезаряжаться сами.",
+
+    "Neutron Heart" to "Нейтронное сердце",
+    "Mass +{0} %, and enemies barely move you. Slow collisions hurt you only half as much." to
+        "Масса +{0} %, враги почти не сдвигают вас. Медленные столкновения ранят вас вдвое слабее.",
+    "Dash impulse −35 % and magnetism −20 %." to "Импульс рывка −35 %, магнетизм −20 %.",
+
+    "Event Horizon" to "Горизонт событий",
+    "Enemies within 280 u are dragged toward you. Impacts against enemies carrying Gravitic deal {0} % more, and " +
+        "your Collapses implode toward you." to
+        "Врагов в пределах 280 ед затягивает к вам. Столкновения с врагами под действием Гравитации наносят " +
+        "на {0} % больше урона, а ваши Коллапсы схлопываются в вашу сторону.",
+    "Contact damage taken ×1.5. Data no longer latches onto you, and level-ups no longer pull it in." to
+        "Урон от контакта с врагами ×1,5. Данные больше не прилипают к вам, а повышение уровня их не притягивает.",
+
+    "Verdant Rot" to "Цветущая гниль",
+    "Impacts apply 2 Entropy. Every Entropy stack within 320 u heals you {0} per second, up to 3.5." to
+        "Столкновения накладывают 2 слоя Энтропии. Каждый слой Энтропии в пределах 320 ед лечит вас " +
+        "на {0} в секунду, вплоть до 3,5.",
+    "All other healing is disabled, and every Entropy stack close to you makes you take 1.5 % more damage." to
+        "Любое другое лечение отключено, а каждый слой Энтропии вблизи вас увеличивает получаемый урон на 1,5 %.",
+
+    "Pandemic Codex" to "Кодекс пандемии",
+    "Statuses are contagious: when an enemy dies, {0} % of each of its statuses jumps to its two nearest " +
+        "neighbors." to
+        "Стихии заразны: когда враг погибает, {0} % каждой его стихии перескакивает на двух ближайших соседей.",
+    "Enemies carrying a status move 20 % faster." to "Враги под действием стихии двигаются на 20 % быстрее.",
+
     "Agony Scepter" to "Скипетр агонии",
-    "The Scepter discovers a forbidden extension unique to whichever weapon is synchronized." to "Скипетр открывает запретное расширение, уникальное для синхронизированного оружия.",
-    "Strengthens the weapon-specific mutation per rank; all twelve weapons mutate differently." to "Каждый ранг усиливает уникальную мутацию оружия; все двенадцать видов мутируют по-разному.",
-    "Crown of Four Winds" to "Корона четырёх ветров",
-    "The Crown rewards a matrix whose four slots disagree without falling out of resonance." to "Корона награждает матрицу, в которой четыре ячейки различаются, сохраняя общий резонанс.",
-    "+4% damage and +3% activation speed per rank for each distinct non-Sovereign aspect." to "+4% к урону и +3% к скорости активации за ранг за каждый уникальный аспект, кроме Владычества.",
-    "Mirror of the Hunt" to "Зеркало охоты",
-    "The first wound in every enemy is reflected into a second enemy across the Core." to "Первая рана каждого врага отражается на второго врага по другую сторону Ядра.",
-    "The reflected opening strike carries 20% of its damage per rank." to "Отражённый первый удар переносит 20% своего урона за ранг.",
-    "Engine of Paradox" to "Двигатель парадокса",
-    "Entering Overdrive rewinds the weapon and vents heat from a future that never happened." to "Начало перегрузки отматывает оружие назад и отводит тепло из несбывшегося будущего.",
-    "On Overdrive: reset cooldowns, vent 10 Heat, and gain 10% activation speed per rank." to "При перегрузке: сброс перезарядок, отвод 10 тепла и +10% к скорости активации за ранг.",
+    "Your weapon takes its Forbidden form. Every rank deepens the mutation." to
+        "Ваше оружие принимает Запретную форму. Каждый ранг углубляет мутацию.",
+    "Weapon activations add heat: 6 per shot, or 5 per second for continuous weapons." to
+        "Активации оружия добавляют нагрев: 6 за выстрел или 5 в секунду у непрерывного оружия.",
+
+    "Hollow Crown" to "Полая корона",
+    "Each empty Relic slot grants {0} % damage and 8 % activation speed." to
+        "Каждая пустая ячейка реликвий даёт {0} % урона и 8 % скорости активации.",
+    "It never ranks up, every other bound Relic is 25 % weaker, and each empty slot makes you take 10 % " +
+        "more damage." to
+        "Она никогда не повышает ранг, все остальные привязанные реликвии слабее на 25 %, а каждая пустая " +
+        "ячейка увеличивает получаемый урон на 10 %.",
+
+    "Ouroboros Seal" to "Печать Уробороса",
+    "Once per run, lethal damage instead restores your integrity, releases a nova for {0} damage and " +
+        "grants two seconds of invulnerability. Then the seal is spent but keeps its slot." to
+        "Раз за забег смертельный урон вместо гибели восстанавливает вашу прочность, выпускает вспышку " +
+        "на {0} урона и даёт две секунды неуязвимости. После этого печать истощается, но сохраняет ячейку.",
+    "Data gain −25 % while the seal is bound. The singularity still kills, and a spent seal locks its " +
+        "slot for two minutes." to
+        "Получение данных −25 %, пока печать привязана. Сингулярность по-прежнему убивает, а истощённая " +
+        "печать блокирует свою ячейку на две минуты.",
+
+    "Thunder Choir" to "Громовой хор",
+    "Shatter also chains to the {0} nearest Resonant enemies within 260 for {1} % of its damage; your knockback +20 %." to
+        "Раскол также перескакивает на {0} ближайших врагов с Резонансом в радиусе 260 и наносит им {1} % своего урона; " +
+        "ваше отбрасывание +20 %.",
+    "You take +15 % knockback from hits." to "Столкновения отбрасывают вас на 15 % сильнее.",
+
+    "Null Covenant" to "Нулевой завет",
+    "Unmake fires immediately and remembers {0} % more; Hollow stacks never decay on Elites." to
+        "Развоплощение срабатывает сразу и запоминает на {0} % больше; слои Опустошения на элитных врагах не спадают.",
+    "Maximum integrity −10 %." to "Максимальная прочность −10 %.",
+
+    // Named relic-to-relic pairings.
+    "Endless Gyre" to "Бесконечный вихрь",
+    "Above 1,200 u/s every turn fires a second, wider ring at 60 % damage a moment later." to
+        "На скорости выше 1\u00A0200 ед/с каждый поворот мгновение спустя выпускает второе, более широкое кольцо с 60 % урона.",
+    "Assassin's Line" to "Линия убийцы",
+    "Blink strikes always crit and leave their targets Brittle." to "Удары Скачка всегда критические и делают цели хрупкими.",
+    "Meltdown" to "Расплав",
+    "Overdrive starts at full heat, and the heat bonus counts half again during Overdrive." to
+        "Перегрузка начинается при полном нагреве, а во время неё бонус от нагрева увеличивается в полтора раза.",
+    "Cold Verdict" to "Холодный приговор",
+    "Shatters always crit, and hits on enemies with 4 or more Cryo always crit." to
+        "Раскалывания всегда критические, как и удары по врагам, на которых от 4 слоёв Крио.",
+    "Lightning Rod" to "Громоотвод",
+    "Above 1,400 u/s the capacitor charges 50 % faster, and a discharge throws you forward." to
+        "На скорости выше 1\u00A0400 ед/с конденсатор заряжается на 50 % быстрее, а выпущенный заряд бросает вас вперёд.",
+    "Black Star" to "Чёрная звезда",
+    "Collapses at the Core strike 50 % harder, but hostile bullets hit you 50 % harder." to
+        "Коллапсы у Ядра бьют на 50 % сильнее, но и вражеские снаряды ранят вас на 50 % сильнее.",
+    "Blight Garden" to "Сад порчи",
+    "Contagion passes 1 extra Entropy, and every Rupture near you heals 4." to
+        "Заражение передаёт на 1 слой Энтропии больше, а каждый Разрыв рядом с вами лечит на 4.",
+    "Firestorm" to "Огненный шторм",
+    "A dying carrier detonates half of its bank around it." to "Погибающий носитель взрывает вокруг себя половину накопленного.",
+    "Forbidden Echo" to "Запретное эхо",
+    "Echoes strike 20 % harder and apply 1 stack of your dominant element." to
+        "Эхо бьёт на 20 % сильнее и накладывает 1 слой вашей основной стихии.",
+    "Rot Ward" to "Гнилостный оберег",
+    "The rot feeds the inverted shield, and every nova applies 3 Entropy." to
+        "Гниль питает инвертированный щит, а каждая вспышка накладывает 3 слоя Энтропии.",
+    "Still Waters" to "Тихий омут",
+    "Released bullets apply 2 Cryo, and stasis slows 10 % more." to
+        "Выпущенные снаряды накладывают 2 слоя Крио, а стазис замедляет на 10 % сильнее.",
+    "Fold Vector" to "Свёрнутый вектор",
+    "Blinks keep 55 % of your speed, but lose their heat discount." to "Скачки сохраняют 55 % вашей скорости, но теряют скидку на нагрев.",
+    "Hollow Vow" to "Пустая клятва",
+    "The seal fills your shield and restores 30 % of your integrity." to "Печать заполняет ваш щит и восстанавливает 30 % прочности.",
+    "Faraday Cage" to "Клетка Фарадея",
+    "A self-discharge strikes your shield first, and every nova applies 3 Ion." to
+        "Заряд, бьющий по вам, сначала попадает в щит, а каждая вспышка накладывает 3 слоя Иона.",
+    "Thermal Paradox" to "Тепловой парадокс",
+    "The furnace's heat bonus is halved, but every converted Thermal stack vents 3 heat." to
+        "Бонус горнила от нагрева уменьшен вдвое, но каждый преобразованный слой Термо снижает нагрев на 3.",
+    "Extinguished" to "Угасание",
+    "The crown banks Cryo instead, and every Freeze releases the bank at 60 %." to
+        "Корона копит Крио вместо Термо, а каждая Заморозка высвобождает 60 % накопленного.",
+    "Shattered Aegis" to "Разбитая эгида",
+    "Glass ignores shields: inverted healing becomes 1 % damage per 3 points instead, lost when hit." to
+        "Стекло не признаёт щитов: инвертированное лечение вместо этого даёт 1 % урона за каждые 3 единицы " +
+        "и пропадает при получении удара.",
+    "Contradiction" to "Противоречие",
+    "Stasis only holds while you move slower than 400 u/s." to "Стазис держится, только пока вы движетесь медленнее 400 ед/с.",
+    "Heavy Blink" to "Тяжёлый скачок",
+    "Blinks travel 35 % less far, but their strikes use twice your mass." to
+        "Скачки переносят на 35 % ближе, но их удары используют вдвое большую массу.",
+    "Fragile Rebirth" to "Хрупкое возрождение",
+    "The seal restores only half your integrity, but its nova deals double damage." to
+        "Печать восстанавливает лишь половину прочности, но её вспышка наносит двойной урон.",
 )

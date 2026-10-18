@@ -11,6 +11,8 @@ import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.CharacterAbilityProjection
+import kinetickk.ball.gameplay.nucleus.render.CharacterDroneProjection
+import kinetickk.ball.gameplay.nucleus.render.CharacterScarProjection
 import kinetickk.ball.gameplay.nucleus.render.CharacterLatticePoint
 import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
@@ -31,7 +33,7 @@ class GameplayComponentFingerprintTest {
     fun preferencesUsePortableValueWitnessAndRetainEveryEnumSelection() {
         // This fixture witnesses portable hashing; the fresh-profile 1x default has its own test.
         val preferences = PlayerPreferences(simulationSpeed = 1.15f)
-        val expected = -3_124_477_553_521_026_709L
+        val expected = 167_376_744_718_396_850L
         // Fixed witnesses also fail if a future refactor reintroduces JVM identity hash codes.
         assertEquals(expected, canonicalPreferencesFingerprint(preferences))
         assertEquals(expected, canonicalPreferencesFingerprint(preferences.copy()))
@@ -41,6 +43,7 @@ class GameplayComponentFingerprintTest {
             preferences.copy(damageNumberFormat = DamageNumberFormat.FULL),
             preferences.copy(masterVolume = -0f),
             preferences.copy(simulationSpeed = 1f),
+            preferences.copy(minimapEnabled = false),
         ).forEach { changed ->
             assertNotEquals(expected, canonicalPreferencesFingerprint(changed))
         }
@@ -49,10 +52,10 @@ class GameplayComponentFingerprintTest {
     @Test
     fun relicWitnessPreservesBothIdentityAndRankWithoutObjectHashes() {
         val relic = EquippedRelic(RelicId.ECHO_CHAMBER, rank = 2)
-        val expected = 8_528_754_464_390_207_192L
+        val expected = -7_438_867_821_674_710_841L
         assertEquals(expected, canonicalRelicFingerprint(relic))
         assertEquals(expected, canonicalRelicFingerprint(relic.copy()))
-        assertNotEquals(expected, canonicalRelicFingerprint(relic.copy(id = RelicId.GHOST_VECTOR)))
+        assertNotEquals(expected, canonicalRelicFingerprint(relic.copy(id = RelicId.BLINK_DRIVE)))
         assertNotEquals(expected, canonicalRelicFingerprint(relic.copy(rank = 3)))
     }
 
@@ -62,24 +65,26 @@ class GameplayComponentFingerprintTest {
             type = ChoiceType.RELIC,
             title = "Echo",
             description = "Repeat",
-            tag = "RIFT",
+            tag = "KINETIC",
             relicId = RelicId.ECHO_CHAMBER,
             relicAction = RelicChoiceAction.MELD,
             relicSlot = 0,
         )
-        // Previous witness plus the newly owned nullable rewardFocus field (-1 when absent).
-        val expected = 3_144_022_955_760_528_523L
+        // Previous witness plus the nullable rewardFocus field (-1 when absent) and the Reborn and Heirloom flags.
+        val expected = -8_789_539_912_842_911_048L
         assertEquals(expected, canonicalChoiceFingerprint(choice))
         assertEquals(expected, canonicalChoiceFingerprint(choice.copy()))
         listOf(
             choice.copy(type = ChoiceType.RELIC_BIND),
             choice.copy(weaponId = WeaponId.MORNINGSTAR),
             choice.copy(totemAction = TotemAction.CHANGE_WEAPON),
-            choice.copy(relicId = RelicId.GHOST_VECTOR),
+            choice.copy(relicId = RelicId.BLINK_DRIVE),
             choice.copy(relicAction = RelicChoiceAction.REPLACE),
             choice.copy(relicSlot = 1),
             choice.copy(title = "Changed"),
-            choice.copy(rewardFocus = RewardFocus.RIFT),
+            choice.copy(rewardFocus = RewardFocus.THERMAL),
+            choice.copy(reborn = true),
+            choice.copy(heirloom = true),
             choice.copy(rewardFocus = RewardFocus.ENTROPY),
         ).forEach { changed ->
             assertNotEquals(expected, canonicalChoiceFingerprint(changed))
@@ -87,21 +92,49 @@ class GameplayComponentFingerprintTest {
     }
 
     @Test
-    fun characterAbilityWitnessRetainsChargeDefenseGeometryAndLatticeOrder() {
+    fun characterAbilityWitnessRetainsEveryMechanicFieldAndListOrder() {
         val first = CharacterLatticePoint(12f, 34f)
         val second = CharacterLatticePoint(56f, 78f)
-        val ability = CharacterAbilityProjection(0.5f, 20f, 155f, 0.18f, immutableListOf(first, second))
+        val scar = CharacterScarProjection(1f, 2f, 3f, 4f, 0.5f, 0f)
+        val drone = CharacterDroneProjection(5f, 6f, 7f, 8f, false)
+        val ability = CharacterAbilityProjection(
+            charge = 0.5f, ringRadius = 155f, parryWindow = 0.18f, lattice = immutableListOf(first, second),
+            facets = 3, facetProgress = 0.2f, edge = 2, stellarMass = 7, novaFlash = 0.1f, haloBurstFlash = 0.3f,
+            polarity = 1, polarityFlash = 0.4f, beatPeriod = 0.75f, beatWindow = 0.11f, beatStreak = 2,
+            blinkCharges = 1, blinkRecharge = 0.6f, scars = immutableListOf(scar), drones = immutableListOf(drone),
+            ghostActive = true, ghostX = 9f, ghostY = 10f, previousGhostX = 11f, previousGhostY = 12f,
+        )
         val expected = canonicalCharacterAbilityFingerprint(ability)
         assertEquals(expected, canonicalCharacterAbilityFingerprint(ability.copy(lattice = immutableListOf(first.copy(), second.copy()))))
         listOf(
             ability.copy(charge = 0.6f),
-            ability.copy(barrier = 21f),
             ability.copy(ringRadius = 156f),
             ability.copy(parryWindow = 0.17f),
             ability.copy(lattice = immutableListOf(first)),
             ability.copy(lattice = immutableListOf(second, first)),
             ability.copy(lattice = immutableListOf(first.copy(x = 13f), second)),
             ability.copy(lattice = immutableListOf(first.copy(y = 35f), second)),
+            ability.copy(facets = 4),
+            ability.copy(facetProgress = 0.3f),
+            ability.copy(edge = 3),
+            ability.copy(stellarMass = 8),
+            ability.copy(novaFlash = 0.2f),
+            ability.copy(haloBurstFlash = 0.4f),
+            ability.copy(polarity = 0),
+            ability.copy(polarityFlash = 0.5f),
+            ability.copy(beatPeriod = 0f),
+            ability.copy(beatWindow = 0f),
+            ability.copy(beatStreak = 3),
+            ability.copy(blinkCharges = 2),
+            ability.copy(blinkRecharge = 0.7f),
+            ability.copy(scars = immutableListOf()),
+            ability.copy(scars = immutableListOf(scar.copy(fuse = 0.6f))),
+            ability.copy(scars = immutableListOf(scar.copy(fade = 0.1f))),
+            ability.copy(drones = immutableListOf(drone.copy(darting = true))),
+            ability.copy(drones = immutableListOf(drone.copy(previousX = 1f))),
+            ability.copy(ghostActive = false),
+            ability.copy(ghostX = 1f),
+            ability.copy(previousGhostY = 1f),
         ).forEach { changed -> assertNotEquals(expected, canonicalCharacterAbilityFingerprint(changed)) }
     }
 

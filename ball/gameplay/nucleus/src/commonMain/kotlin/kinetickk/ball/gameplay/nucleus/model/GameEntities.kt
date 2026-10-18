@@ -5,8 +5,8 @@ package kinetickk.ball.gameplay.nucleus.model
 
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.PickupType
+import kinetickk.ball.gameplay.nucleus.render.ProjectileKind
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
-import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
 
 @ConsistentCopyVisibility
@@ -27,13 +27,51 @@ internal data class Enemy private constructor(
     var previousX: Float = x,
     var previousY: Float = y,
     var dead: Boolean = false,
-    var relicKillProcsEligible: Boolean = false,
-    var relicQualificationCooldown: Float = 0f,
+    /** True when the killing blow was a direct hit, status, Break or reaction (not item or relic proc damage). */
+    var killClausesEligible: Boolean = false,
+    var hitQualificationCooldown: Float = 0f,
     var characterMarkTime: Float = 0f,
     var lastCharacterDash: Int = -1,
-    val relicCounters: CopyOnWriteIntArray,
-    val relicTimers: CopyOnWriteFloatArray,
-    val relicValues: CopyOnWriteFloatArray,
+    /** Element ordinal of an Elite's or the Architect's aspect, or -1; other types read [EnemyProfile]. */
+    var aspect: Int = -1,
+    var aspectImmune: Boolean = false,
+    /** Architect phase (0..2); each starts when a third of its integrity is gone. */
+    var phase: Int = 0,
+    /** Absolute run time until which the Architect is shifting and takes no damage. */
+    var shiftUntil: Float = 0f,
+    /** Escorts the Architect's last shift still has to call in; consumed outside the damage pipeline. */
+    var escortsPending: Int = 0,
+    /** Absolute run time of the last damage the Architect took; it keeps its adds coming while engaged. */
+    var lastDamagedAt: Float = Float.NEGATIVE_INFINITY,
+    /** Absolute run time until which the enemy cannot act at all (stun, stop); read through canAct. */
+    var disabledUntil: Float = 0f,
+    /** Absolute run time until which the enemy may move but not attack; read through canAttack. */
+    var silencedUntil: Float = 0f,
+    /** Type-specific behavior step (approach, telegraph, strike, recovery, phased, primed); 0 is the default. */
+    var mode: Int = 0,
+    /** Absolute run time at which the current [mode] ends. */
+    var modeUntil: Float = 0f,
+    /** Aim or shield direction in radians: the Lancer's lane, the Sniper's sight line, the Reflector's shield. */
+    var facing: Float = 0f,
+    /** True while the Reflector's shield faces the Core; front hits meet its reduced frame. */
+    var guarded: Boolean = false,
+    /** Id of the Aegis tethering this enemy, or -1; the link holds while [linkedUntil] is ahead. */
+    var linkedBy: Int = -1,
+    var linkedUntil: Float = 0f,
+    /** Absolute run time until which the Herald's shield holds; only impacts reach it meanwhile. */
+    var shieldUntil: Float = 0f,
+    /** Absolute run time at which the type's next ability (lance, shot, phase, brood, shield, reflection) is ready. */
+    var abilityAt: Float = 0f,
+    /** Absolute run time until which a player knockback counts as a throw (enemy-enemy slams). */
+    var thrownUntil: Float = 0f,
+    /** Absolute run time before which the enemy cannot slam again. */
+    var slamReadyAt: Float = 0f,
+    /** Spawned with an Armored Vanguard plate (Rebirth R8): weapon hits deal less until an impact cracks it. */
+    var armored: Boolean = false,
+    /** The plate cracked under an impact; weapons deal full damage from then on. */
+    var armorCracked: Boolean = false,
+    /** Elemental status cells; see [StatusCell]. Copy-on-write so reduction siblings stay isolated. */
+    val status: CopyOnWriteFloatArray,
 ) {
     constructor(
         id: Int,
@@ -52,11 +90,15 @@ internal data class Enemy private constructor(
         previousX: Float = x,
         previousY: Float = y,
         dead: Boolean = false,
-        relicKillProcsEligible: Boolean = false,
-        relicQualificationCooldown: Float = 0f,
-        relicCounters: IntArray,
-        relicTimers: FloatArray,
-        relicValues: FloatArray,
+        killClausesEligible: Boolean = false,
+        hitQualificationCooldown: Float = 0f,
+        aspect: Int = -1,
+        aspectImmune: Boolean = false,
+        phase: Int = 0,
+        shiftUntil: Float = 0f,
+        escortsPending: Int = 0,
+        lastDamagedAt: Float = Float.NEGATIVE_INFINITY,
+        status: FloatArray = FloatArray(StatusCell.COUNT),
     ) : this(
         id = id,
         type = type,
@@ -74,19 +116,80 @@ internal data class Enemy private constructor(
         previousX = previousX,
         previousY = previousY,
         dead = dead,
-        relicKillProcsEligible = relicKillProcsEligible,
-        relicQualificationCooldown = relicQualificationCooldown,
-        relicCounters = CopyOnWriteIntArray(relicCounters),
-        relicTimers = CopyOnWriteFloatArray(relicTimers),
-        relicValues = CopyOnWriteFloatArray(relicValues),
+        killClausesEligible = killClausesEligible,
+        hitQualificationCooldown = hitQualificationCooldown,
+        aspect = aspect,
+        aspectImmune = aspectImmune,
+        phase = phase,
+        shiftUntil = shiftUntil,
+        escortsPending = escortsPending,
+        lastDamagedAt = lastDamagedAt,
+        status = CopyOnWriteFloatArray(status),
     )
 
-    /** Copies mutable scalar state while sharing large relic buffers until first changed write. */
-    fun isolatedCopy(): Enemy = copy(
-        relicCounters = relicCounters.fork(),
-        relicTimers = relicTimers.fork(),
-        relicValues = relicValues.fork(),
-    )
+    /** The run's final boss only: hit cap, encounter lookup and victory. */
+    val isBoss: Boolean get() = type == EnemyType.ARCHITECT
+    val isElite: Boolean get() = type == EnemyType.ELITE
+    /** The scheduled Herald: Elite victim factor, freeze and stop immunity, leash exemption, outside the ordinary cap. */
+    val isMiniBoss: Boolean get() = type == EnemyType.HERALD
+    val alive: Boolean get() = !dead && hp > 0f
+
+    /** Copies mutable scalar state while sharing the status cells until their first changed write. */
+    fun isolatedCopy(): Enemy = copy(status = status.fork())
+}
+
+/**
+ * Layout of [Enemy.status]. Per-element blocks hold [ELEMENTS] entries in
+ * [kinetickk.ball.content.api.StatusElement] order and the pair block holds [PAIRS] entries in
+ * [kinetickk.ball.content.api.ReactionId] order, so the layout follows the element count. Timestamps
+ * are absolute run seconds, so cells are written on events rather than every step.
+ */
+internal object StatusCell {
+    /** Status elements; equals `StatusElement.entries.size` (asserted by the status packing tests). */
+    const val ELEMENTS = 7
+
+    /** Unordered element pairs, one reaction each; equals `ReactionId.entries.size`. */
+    const val PAIRS = ELEMENTS * (ELEMENTS - 1) / 2
+
+    const val STACKS = 0
+    const val DECAY_AT = STACKS + ELEMENTS
+    const val GENERATION = DECAY_AT + ELEMENTS
+    const val REARM_AT = GENERATION + ELEMENTS
+    const val FROZEN_UNTIL = REARM_AT + ELEMENTS
+    const val FREEZE_IMMUNE_UNTIL = FROZEN_UNTIL + 1
+    const val EMBRITTLED_UNTIL = FREEZE_IMMUNE_UNTIL + 1
+    const val BRITTLE = EMBRITTLED_UNTIL + 1
+    const val REACTION_READY_AT = BRITTLE + 1
+    const val LAST_REACTION = REACTION_READY_AT + 1
+    const val LAST_REACTION_AT = LAST_REACTION + 1
+    const val ARC_READY_AT = LAST_REACTION_AT + 1
+    const val CINDER_BANK = ARC_READY_AT + 1
+    const val MAX_HP_PROC_READY_AT = CINDER_BANK + 1
+    const val DETONATE_READY_AT = MAX_HP_PROC_READY_AT + 1
+    const val MARKED_UNTIL = DETONATE_READY_AT + 1
+    /** 1 + [kinetickk.ball.gameplay.nucleus.simulation.HitSource] ordinal of the last direct hit. */
+    const val LAST_SOURCE = MARKED_UNTIL + 1
+    /** [PAIRS] entries in [kinetickk.ball.content.api.ReactionId] order: when each pair may react again. */
+    const val REACTION_PAIR_READY_AT = LAST_SOURCE + 1
+    /** Half-stack remainder of Cryo landing at half strength during Freeze immunity. */
+    const val CRYO_IMMUNE_CARRY = REACTION_PAIR_READY_AT + PAIRS
+    /** Fractional remainder of stacks landing on a resisted aspect element. */
+    const val RESIST_CARRY = CRYO_IMMUNE_CARRY + 1
+    /** Fractional remainder of stacks landing on the weakness element. */
+    const val WEAK_CARRY = RESIST_CARRY + 1
+    /** When the next immunity refusal may show its cue. */
+    const val IMMUNE_FX_READY_AT = WEAK_CARRY + 1
+    /** Damage the enemy remembered while Hollow (Void); an Unmake releases it. */
+    const val HOLLOW_MEMORY = IMMUNE_FX_READY_AT + 1
+    /** When a pending Unmake strikes (0 when none is pending). */
+    const val UNMAKE_AT = HOLLOW_MEMORY + 1
+    /** Damage of the pending Unmake. */
+    const val UNMAKE_DAMAGE = UNMAKE_AT + 1
+    /** When the Blackfire burn ends. */
+    const val BLACKFIRE_UNTIL = UNMAKE_DAMAGE + 1
+    /** Blackfire damage per second while it burns. */
+    const val BLACKFIRE_DPS = BLACKFIRE_UNTIL + 1
+    const val COUNT = BLACKFIRE_DPS + 1
 }
 
 internal class Projectile(
@@ -105,6 +208,12 @@ internal class Projectile(
     var previousY: Float = y,
     private var recordedHitEnemyIds: IntArray? = null,
     private var recordedHitEnemyCount: Int = 0,
+    /** Status element ordinal applied by a relic or item projectile on hit, or -1. */
+    val statusElement: Int = -1,
+    /** Hostile shots are bolts; a Minelayer's mine sits still, arms and detonates near the Core. */
+    val kind: ProjectileKind = ProjectileKind.BOLT,
+    /** Which weapon activation or persistent source a player shot belongs to (see [WeaponRuntime]). */
+    val procKey: Int = WeaponRuntime.PROC_ALWAYS,
 ) {
     init {
         require((recordedHitEnemyIds?.size ?: 0) <= MAX_HIT_ENEMY_IDS) {
@@ -117,6 +226,9 @@ internal class Projectile(
             "projectile hit history count exceeds its storage"
         }
     }
+
+    /** A spent shot (its life is over, or a reaction spent it) neither hits nor is caught; it awaits removal. */
+    val spent: Boolean get() = life <= 0f
 
     fun tryRecordEnemyHit(enemyId: Int): Boolean {
         val match = findRecordedEnemyHit(enemyId)
@@ -189,6 +301,9 @@ internal class Projectile(
         previousY = previousY,
         recordedHitEnemyIds = recordedHitEnemyIds?.copyOf(recordedHitEnemyCount),
         recordedHitEnemyCount = recordedHitEnemyCount,
+        statusElement = statusElement,
+        kind = kind,
+        procKey = procKey,
     )
 
     private fun findRecordedEnemyHit(enemyId: Int): Int {
@@ -232,9 +347,25 @@ internal data class Pickup(
     var life: Float = 20f,
     var previousX: Float = x,
     var previousY: Float = y,
+    /** Latched by the magnet: homes on the Core until collected and is never lost. */
+    var attracted: Boolean = false,
 )
 
-internal data class TrailPoint(var x: Float, var y: Float, var age: Float = 0f)
+/**
+ * A Flux Wake trail sample: it burns for [life] seconds of [age] and deals [scale] times the trail's
+ * damage (a signature trail laid while turning lasts longer and burns harder).
+ */
+internal data class TrailPoint(
+    var x: Float,
+    var y: Float,
+    var age: Float = 0f,
+    val life: Float = TRAIL_LIFE_SECONDS,
+    val scale: Float = 1f,
+)
+
+/** A Flux Wake trail point burns this long; render fades it over [TRAIL_FADE_SECONDS] more. */
+internal const val TRAIL_LIFE_SECONDS: Float = 1.8f
+internal const val TRAIL_FADE_SECONDS: Float = 0.45f
 
 internal data class Totem(var x: Float, var y: Float, var pulse: Float = 0f)
 
@@ -245,6 +376,10 @@ internal data class WeaponNode(
     var life: Float,
     val maxLife: Float,
     var radius: Float,
+    /** The activation that dropped it; only its first explosion hit fires on-hit effects. */
+    val procKey: Int = WeaponRuntime.PROC_ALWAYS,
+    /** Damage multiplier of a special mine (a parry mine detonates at double strength). */
+    val scale: Float = 1f,
 )
 
 internal data class WeaponOrbital(
@@ -252,19 +387,28 @@ internal data class WeaponOrbital(
     var x: Float,
     var y: Float,
     val radius: Float,
+    /** Position at the start of the last fixed step (render interpolation only). */
+    var previousX: Float = x,
+    var previousY: Float = y,
 )
 
-internal enum class WeaponHitCadence { DISCRETE, CONTINUOUS }
+/**
+ * How a weapon delivers hits: [DISCRETE] activations, [CONTINUOUS] per-frame damage (qualifies on a cooldown)
+ * or [CONTACT] strikes gated by per-enemy re-hit timers instead of an activation cadence.
+ */
+internal enum class WeaponHitCadence { DISCRETE, CONTINUOUS, CONTACT }
 
 internal data class DamageResult(
     val amount: Float,
     val critical: Boolean,
+    /** The amount before the receiver's affinity and kinetic multipliers and boss gating. */
+    val unmitigated: Float = amount,
 )
 
-internal data class DelayedRelicHit(
-    val relicId: RelicId,
+/** A weapon hit repeated by Echo Chamber; echoes never echo. */
+internal data class EchoHit(
     val enemyId: Int,
     var delay: Float,
     val damage: Float,
-    val linkedEnemyId: Int = -1,
+    val appliesDominant: Boolean,
 )

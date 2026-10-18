@@ -66,8 +66,8 @@ class RunFeatureBoundsTest {
             state.velocityX = 600f
             state.dashPhaseTime = 0.24f
             state.updateCharacterRuntime(0.01f)
-            assertEquals(if (index == 3) 0 else index + 1, state.characterRuntime.lattice.size)
+            assertEquals(if (index == 3) 0 else index + 1, state.characterRuntime.latticeCount)
         }
-        assertTrue(state.characterRuntime.lattice.isEmpty())
+        assertEquals(0, state.latticeNodeCount)
     }
 }

@@ -9,6 +9,7 @@ import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class KkTokensTest {
@@ -25,25 +26,62 @@ class KkTokensTest {
     }
 
     @Test
-    fun rarityColorsFollowRankOrderAndClamp() {
-        val expected = listOf(0xFFC9C8BE, 0xFF5CF2A6, 0xFF4DA6FF, 0xFFB777FF, 0xFFFFB627)
+    fun rarityColorsAreMaterialInRankOrderAndClamp() {
+        // Material ramp: graphite, bone-grey, bone (sheen), bone (chrome), gold foil.
+        val expected = listOf(0xFF86857B, 0xFFC9C8BE, 0xFFF1F0E8, 0xFFF1F0E8, 0xFFFFC93C)
+        assertEquals(5, Kk.Rarities.size)
         expected.forEachIndexed { index, argb ->
             assertEquals(Color(argb), Kk.rarity(index + 1), "rank ${index + 1}")
             assertEquals(Color(argb), Kk.Rarities[index])
         }
         assertEquals(Kk.RCommon, Kk.rarity(0))
+        assertEquals(Kk.RCommon, Kk.rarity(-4))
         assertEquals(Kk.RLegend, Kk.rarity(9))
+        // Gold means Rebirth and legendary; hue belongs to the elements, never to rarity.
+        assertEquals(Kk.Gold, Kk.RLegend)
+        assertTrue(Kk.Elements.none { it in Kk.Rarities }, "no element hue doubles as a rarity color")
     }
 
     @Test
-    fun aspectColorsFollowRelicAspectOrder() {
-        // vector, gravitic, ion, rift, prism, entropy, sovereign
-        val expected = listOf(0xFFD8FF3E, 0xFF9B7BFF, 0xFF45E0FF, 0xFFFF4FA3, 0xFFE4F1FF, 0xFFFF6A2B, 0xFFFFC93C)
-        assertEquals(7, Kk.Aspects.size)
+    fun elementColorsAndDamageTonesShareOneHuePerElement() {
+        // thermal, cryo, ion, gravitic, entropy, sonic, void
+        val expected = listOf(0xFFFF8A1F, 0xFFBDEBFF, 0xFF4F7DFF, 0xFFD24CFF, 0xFF46D96A, 0xFF009C84, 0xFFCCC0FC).map(::Color)
+        assertEquals(expected, Kk.Elements)
+        assertEquals(listOf(Kk.EThermal, Kk.ECryo, Kk.EIon, Kk.EGravitic, Kk.EEntropy, Kk.ESonic, Kk.EVoid), Kk.Elements)
+        assertEquals(7, Kk.Elements.toSet().size, "seven distinct element hues")
+        expected.forEachIndexed { index, color -> assertEquals(color, Kk.element(index), "element $index") }
+        assertEquals(Kk.EThermal, Kk.element(-1), "clamps low")
+        assertEquals(Kk.EVoid, Kk.element(9), "clamps high")
+        // Thermal is the heat hue: your heat and their burning are one idea.
+        assertEquals(Kk.Heat, Kk.EThermal)
+        // Damage tones: 0 kinetic (volt, the player color: movement is your weapon), 1..7 the elements,
+        // clamped on both ends. Bone stays the neutral text color, never a damage tone.
+        assertEquals(Color(0xFFD8FF3E), Kk.EKinetic)
+        assertEquals(Kk.Volt, Kk.tone(0))
+        assertNotEquals(Kk.Bone, Kk.tone(0), "bone is text, not Kinetic")
+        assertEquals(Kk.EKinetic, Kk.tone(-3))
+        (1..7).forEach { assertEquals(Kk.element(it - 1), Kk.tone(it), "tone $it") }
+        assertEquals(Kk.EVoid, Kk.tone(8))
+        assertFalse(Kk.EKinetic in Kk.Elements, "kinetic is not a status element")
+    }
+
+    @Test
+    fun aspectColorsMirrorTheElementsInRelicAspectOrder() {
+        // kinetic, thermal, cryo, ion, gravitic, entropy, sonic, void, sovereign
+        val expected = listOf(0xFFD8FF3E, 0xFFFF8A1F, 0xFFBDEBFF, 0xFF4F7DFF, 0xFFD24CFF, 0xFF46D96A, 0xFF009C84, 0xFFCCC0FC, 0xFFFFC93C)
+        assertEquals(9, Kk.Aspects.size)
         expected.forEachIndexed { index, argb ->
             assertEquals(Color(argb), Kk.aspect(index), "aspect $index")
             assertEquals(Color(argb), Kk.Aspects[index])
         }
+        assertEquals(
+            listOf(Kk.AKinetic, Kk.AThermal, Kk.ACryo, Kk.AIon, Kk.AGravitic, Kk.AEntropy, Kk.ASonic, Kk.AVoid, Kk.ASovereign),
+            Kk.Aspects,
+        )
+        assertEquals(Kk.Elements, Kk.Aspects.subList(1, 8), "elemental aspects are the element hues")
+        (0..7).forEach { assertEquals(Kk.tone(it), Kk.aspect(it), "aspect $it is damage tone $it") }
+        assertEquals(Kk.Gold, Kk.ASovereign)
+        assertEquals(Kk.AKinetic, Kk.aspect(-1))
         assertEquals(Kk.ASovereign, Kk.aspect(12))
     }
 
@@ -69,6 +107,33 @@ class KkTokensTest {
     }
 
     @Test
+    fun everyColorVisionPaletteDefinesSevenDistinctElementColors() {
+        assertEquals(Kk.Elements, KkRolePalette.Default.elements)
+        KkVisionMode.entries.forEach { mode ->
+            val palette = mode.palette
+            assertEquals(7, palette.elements.size, "$mode element count")
+            assertEquals(7, palette.elements.toSet().size, "$mode element colors are distinct")
+            // Thermal stays on the preset's heat hue in every mode.
+            assertEquals(palette.heat, palette.element(0), "$mode thermal is heat")
+            palette.elements.forEachIndexed { index, color -> assertEquals(color, palette.element(index), "$mode element $index") }
+            assertEquals(palette.elements.first(), palette.element(-2), "$mode clamps low")
+            assertEquals(palette.elements.last(), palette.element(9), "$mode clamps high")
+            // Kinetic is the preset's own volt, and a screen that re-tints `you` keeps the player's Kinetic.
+            assertEquals(palette.you, palette.kinetic, "$mode kinetic is its volt")
+            assertEquals(palette.you, palette.tone(0), "$mode kinetic tone")
+            assertEquals(palette.you, palette.tone(-1), "$mode clamps to kinetic")
+            assertEquals(palette.you, palette.copy(you = Kk.Gold).tone(0), "$mode re-tinted you keeps Kinetic")
+            (1..7).forEach { assertEquals(palette.element(it - 1), palette.tone(it), "$mode tone $it") }
+            // Damage numbers carry hue alone, so kinetic joins the set; KkHueGrammarTest checks the distances.
+            assertEquals(8, (0..7).map(palette::tone).toSet().size, "$mode damage tones are distinct")
+        }
+        // Presets replace the hue wheel; only Default uses the full-saturation element hues.
+        KkVisionMode.entries.filter { it != KkVisionMode.DEFAULT }.forEach { mode ->
+            assertNotEquals(Kk.Elements, mode.palette.elements, "$mode has its own ramp")
+        }
+    }
+
+    @Test
     fun mixInterpolatesEachSrgbChannel() {
         assertEquals(Kk.Ink, kkMix(Kk.Ink, Kk.Volt, 0f))
         assertEquals(Kk.Volt, kkMix(Kk.Ink, Kk.Volt, 1f))
@@ -84,9 +149,18 @@ class KkTokensTest {
     @Test
     fun homePalettesAndRebirthTiersAreCompleteAndOrdered() {
         assertEquals(
-            listOf(0xFFD8FF3E, 0xFFFF8A1F, 0xFF45E0FF, 0xFFFF4FA3, 0xFFA98BFF, 0xFF5CF2A6, 0xFFA3A298).map(::Color),
+            listOf(0xFFD8FF3E, 0xFFF1F0E8, 0xFFBDE82A, 0xFFFFC93C, 0xFFBDEBFF, 0xFFA3A298, 0xFF86857B).map(::Color),
             KkHomePalette.entries.map { it.accent },
         )
+        // Each accent names what the destination means: you, the armory in bone (never START's volt,
+        // even though Kinetic is volt), deeper volt, Rebirth gold.
+        assertEquals(Kk.Volt, KkHomePalette.START.accent)
+        assertEquals(Kk.Bone, KkHomePalette.ARMORY.accent)
+        assertNotEquals(KkHomePalette.START.accent, KkHomePalette.ARMORY.accent)
+        assertEquals(Kk.Volt2, KkHomePalette.LAB.accent)
+        assertEquals(Kk.Gold, KkHomePalette.REBIRTH.accent)
+        assertTrue(KkHomePalette.CODEX.accent in Kk.Elements, "the codex accent rests on an element hue")
+        assertEquals(KkHomePalette.entries.size, KkHomePalette.entries.map { it.accent }.toSet().size, "accents are distinct")
         assertEquals(11, KkRebirthTiers.colors.size)
         assertEquals(Color(0xFFD8FF3E), KkRebirthTiers.color(0))
         assertEquals(Color(0xFFFFB627), KkRebirthTiers.color(1))

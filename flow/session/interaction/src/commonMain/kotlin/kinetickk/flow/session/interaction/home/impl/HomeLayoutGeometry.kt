@@ -5,7 +5,6 @@ package kinetickk.flow.session.interaction.home.impl
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import kinetickk.ball.content.api.CoreShape
 import kotlin.math.max
 import kotlin.math.min
 
@@ -16,12 +15,8 @@ internal enum class HomeLayoutMode {
 }
 
 internal enum class HomeLayoutTarget {
-    CORE_ORB,
-    CORE_PRISM,
-    CORE_SHARD,
-    CORE_RING,
-    CORE_DIAMOND,
-    CORE_TESSERACT,
+    /** The current-character card under the form panel; it opens the Hangar. */
+    HANGAR,
     START,
     LAB,
     ARMORY,
@@ -30,7 +25,7 @@ internal enum class HomeLayoutTarget {
     SETTINGS,
 }
 
-/** Drawn (!) buttons: the facts card (selected menu item) and the form showcase. */
+/** Drawn (!) buttons: the facts card (selected menu item) and the current character's form panel. */
 internal enum class HomeInfoTarget { FACTS, FORM }
 
 internal class HomeActionBounds(
@@ -90,15 +85,6 @@ internal class HomeLayoutGeometry(
     fun info(target: HomeInfoTarget): HomeInfoBounds? = infos.firstOrNull { it.target == target }
 }
 
-internal val HomeCoreTargets = listOf(
-    HomeLayoutTarget.CORE_ORB,
-    HomeLayoutTarget.CORE_PRISM,
-    HomeLayoutTarget.CORE_SHARD,
-    HomeLayoutTarget.CORE_RING,
-    HomeLayoutTarget.CORE_DIAMOND,
-    HomeLayoutTarget.CORE_TESSERACT,
-)
-
 /** The game's menu order (labels and targets are the game's, never the board's). */
 internal val HomeMenuTargets = listOf(
     HomeLayoutTarget.START,
@@ -108,6 +94,9 @@ internal val HomeMenuTargets = listOf(
     HomeLayoutTarget.CODEX,
     HomeLayoutTarget.SETTINGS,
 )
+
+/** Arrow-key order: the menu rows, then the Hangar card, as one Home menu. */
+internal val HomeNavigationTargets = HomeMenuTargets + HomeLayoutTarget.HANGAR
 
 internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): HomeLayoutGeometry {
     val scale = density.coerceAtLeast(1f)
@@ -125,7 +114,7 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
         val bounds = rect(left, centerY - 12f, left + 24f, centerY + 12f)
         return HomeInfoBounds(target, bounds, rect(left - 10f, centerY - 22f, left + 34f, centerY + 22f))
     }
-    val actions = ArrayList<HomeActionBounds>(12)
+    val actions = ArrayList<HomeActionBounds>(HomeLayoutTarget.entries.size)
     val infos = ArrayList<HomeInfoBounds>(2)
     val scene = when (mode) {
         HomeLayoutMode.REGULAR -> {
@@ -150,10 +139,8 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
             // description wrapped to two lines still clears the name's descenders (homeFormDescriptionSpan).
             val formNameSize = 30f * s
             val formNameY = (menuBottom + formNameSize * 0.65f + 0.5f).coerceIn(by(608f), by(620f))
-            HomeCoreTargets.forEachIndexed { index, target ->
-                val left = rx(826f + index * 96f)
-                actions += HomeActionBounds(target, rect(left, by(680f), left + 86f * s, by(756f)))
-            }
+            // The Hangar card spans the form panel where the old form tiles stood.
+            actions += HomeActionBounds(HomeLayoutTarget.HANGAR, rect(rx(826f), by(680f), rx(1392f), by(756f)))
             infos += info(HomeInfoTarget.FORM, rx(1368f), formNameY)
             // The facts card keeps at least 480 px (board 560) on smaller desktops, short of the form panel.
             val factsRight = max(lx(616f), min(lx(56f) + 480f, rx(826f) - 24f))
@@ -213,25 +200,14 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
                 val row = rows[index]
                 actions += HomeActionBounds(target, rect(row.left, row.top, row.right, row.bottom))
             }
-            // Form tiles end 8 px short of every selected menu slab and speed-line trail that reaches
-            // their band: one row while the tiles stay 56 wide, else two rows of three.
-            fun tilesRight(top: Float): Float = rows.map { homeSelectedMenuExtent(it, menuFont) }
+            // The Hangar card ends 8 px short of every selected menu slab and speed-line trail that
+            // reaches its band, and never grows past the old six-tile row.
+            fun cardRight(top: Float): Float = rows.map { homeSelectedMenuExtent(it, menuFont) }
                 .filter { it.bottom > top }.minOfOrNull { it.left - 8f } ?: (rows.minOf { it.left } - 12f)
-            val singleHeight = if (h >= 380f) 50f else 48f
-            val singleTop = h - 10f - singleHeight
-            val singleWidth = (tilesRight(singleTop) - side - 30f) / 6f
-            val singleRow = singleWidth >= 56f
-            val tileHeight = if (singleRow) singleHeight else 48f
-            val tilesTop = if (singleRow) singleTop else h - 10f - tileHeight * 2f - 6f
-            val tileWidth = min(84f, if (singleRow) singleWidth else (tilesRight(tilesTop) - side - 12f) / 3f)
-            HomeCoreTargets.forEachIndexed { index, target ->
-                val column = if (singleRow) index else index % 3
-                val row = if (singleRow) 0 else index / 3
-                val left = side + column * (tileWidth + 6f)
-                val top = tilesTop + row * (tileHeight + 6f)
-                actions += HomeActionBounds(target, rect(left, top, left + tileWidth, top + tileHeight))
-            }
-            val tilesRight = side + (if (singleRow) 6 else 3) * (tileWidth + 6f) - 6f
+            val cardHeight = if (h >= 380f) 50f else 48f
+            val tilesTop = h - 10f - cardHeight
+            val tilesRight = side + min(HOME_CARD_MAX_WIDTH, cardRight(tilesTop) - side)
+            actions += HomeActionBounds(HomeLayoutTarget.HANGAR, rect(side, tilesTop, tilesRight, tilesTop + cardHeight))
             val nameCenter = tilesTop - 24f
             // The (!) leads the form name at the left edge, clear of the selected menu slab and trail.
             infos += info(HomeInfoTarget.FORM, side, nameCenter)
@@ -305,13 +281,9 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
                     actions += HomeActionBounds(target, rect(left, top, left + columnWidth, top + rowHeight))
                 }
             }
-            val tileWidth = (w - side * 2f - 30f) / 6f
             val tileHeight = 56f
             val tilesTop = menuTop - (if (columns == 1) 20f else 16f) - tileHeight
-            HomeCoreTargets.forEachIndexed { index, target ->
-                val left = side + index * (tileWidth + 6f)
-                actions += HomeActionBounds(target, rect(left, tilesTop, left + tileWidth, tilesTop + tileHeight))
-            }
+            actions += HomeActionBounds(HomeLayoutTarget.HANGAR, rect(side, tilesTop, w - side, tilesTop + tileHeight))
             val nameCenter = tilesTop - 24f
             infos += info(HomeInfoTarget.FORM, w - side - 24f, nameCenter)
             val regionTop = 52f
@@ -419,6 +391,9 @@ internal fun homeSelectedMenuFootprint(bounds: Rect, fontSizePx: Float): List<Re
  */
 internal const val HOME_FORM_NAME_INK_EM = 0.6f
 
+/** Widest the phone Hangar card grows (px before density): the old row of six form tiles. */
+private const val HOME_CARD_MAX_WIDTH = 360f
+
 /** sin 2°, rounded up: how far a point of the turned menu item moves per px from its middle. */
 private const val HOME_MENU_TURN = 0.035f
 
@@ -432,26 +407,11 @@ private const val COMPACT_LEGAL_SIZE = 8f
 internal const val HOME_LEGAL_ASCENT_EM = 1f
 
 internal fun HomeLayoutTarget.toHomeAction(): HomeAction = when (this) {
-    HomeLayoutTarget.CORE_ORB -> HomeAction.SelectCoreShape(CoreShape.ORB)
-    HomeLayoutTarget.CORE_PRISM -> HomeAction.SelectCoreShape(CoreShape.PRISM)
-    HomeLayoutTarget.CORE_SHARD -> HomeAction.SelectCoreShape(CoreShape.SHARD)
-    HomeLayoutTarget.CORE_RING -> HomeAction.SelectCoreShape(CoreShape.RING)
-    HomeLayoutTarget.CORE_DIAMOND -> HomeAction.SelectCoreShape(CoreShape.DIAMOND)
-    HomeLayoutTarget.CORE_TESSERACT -> HomeAction.SelectCoreShape(CoreShape.TESSERACT)
+    HomeLayoutTarget.HANGAR -> HomeAction.OpenHangar
     HomeLayoutTarget.START -> HomeAction.StartRun
     HomeLayoutTarget.LAB -> HomeAction.OpenLab
     HomeLayoutTarget.ARMORY -> HomeAction.OpenArmory
     HomeLayoutTarget.REBIRTH -> HomeAction.OpenRebirth
     HomeLayoutTarget.CODEX -> HomeAction.OpenCodex
     HomeLayoutTarget.SETTINGS -> HomeAction.OpenSettings
-}
-
-internal fun HomeLayoutTarget.coreShapeOrNull(): CoreShape? = when (this) {
-    HomeLayoutTarget.CORE_ORB -> CoreShape.ORB
-    HomeLayoutTarget.CORE_PRISM -> CoreShape.PRISM
-    HomeLayoutTarget.CORE_SHARD -> CoreShape.SHARD
-    HomeLayoutTarget.CORE_RING -> CoreShape.RING
-    HomeLayoutTarget.CORE_DIAMOND -> CoreShape.DIAMOND
-    HomeLayoutTarget.CORE_TESSERACT -> CoreShape.TESSERACT
-    else -> null
 }

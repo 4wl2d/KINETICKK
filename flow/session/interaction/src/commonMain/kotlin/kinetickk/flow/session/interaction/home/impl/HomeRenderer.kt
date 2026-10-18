@@ -30,14 +30,21 @@ import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkAlign
+import kinetickk.foundation.design.KkButtonSize
+import kinetickk.foundation.design.KkButtonVariant
 import kinetickk.foundation.design.KkEase
+import kinetickk.foundation.design.KkFormGeometry
+import kinetickk.foundation.design.KkFormPaths
 import kinetickk.foundation.design.KkHomePalette
 import kinetickk.foundation.design.KkIcon
+import kinetickk.foundation.design.KkMutatorSigil
+import kinetickk.foundation.design.KkMutatorSigilPaths
 import kinetickk.foundation.design.KkTime
 import kinetickk.foundation.design.KkTooltipPlacement
 import kinetickk.foundation.design.KkVAlign
 import kinetickk.foundation.design.bodyStyle
 import kinetickk.foundation.design.condStyle
+import kinetickk.foundation.design.drawKkButton
 import kinetickk.foundation.design.drawKkGem
 import kinetickk.foundation.design.drawKkGrid
 import kinetickk.foundation.design.drawKkHalftone
@@ -78,51 +85,61 @@ private val EnemyAngles = floatArrayOf(60f, 150f, 250f, 320f)
 
 /**
  * Draw-only Home motion and caches; semantic selection stays with HomeReducer and the feature.
- * Palette recolor (350 ms Out), menu selection slabs (240 ms Pull) and form tiles are
- * interpolated here from the frame clock.
+ * Palette recolor (350 ms Out) and decorative motion follow the frame clock. Selection is drawn
+ * directly from the current target so a departing pointer leaves no stale highlight behind.
  */
 internal class HomeMenuMotion {
-    private val menu = FloatArray(HomeMenuTargets.size).also { it[0] = 1f }
-    private val tiles = FloatArray(CoreShape.entries.size)
     private var activeIndex = 0
     private var accentFrom = KkHomePalette.START.accent
-    private var accentTo = accentFrom
+    private var accentTarget = HomeLayoutTarget.START
     private var accentElapsedMs = KkTime.PaletteShift.toFloat()
     var accent: Color = accentFrom
         private set
 
-    fun advance(target: HomeLayoutTarget, coreShape: CoreShape, deltaSeconds: Float) {
+    /** Clock of the Codex accent sweep, and the sweep step the settled accent shows (−1 when none). */
+    private var sweepSeconds = 0f
+    private var sweepStep = -1
+    private var sweepHues: List<Color>? = null
+    private var sweepColors: List<Color> = HomeCodexSweep
+    /** Cache slot of each sweep step: the first step showing the same accent (the holds share one). */
+    private var sweepSlots: IntArray = homeCodexSweepSlots(HomeCodexSweep)
+
+    /**
+     * Advances the frame clock. The accent eases into the selected item's palette; on the Codex it
+     * then follows the element sweep through [hues] in cached steps, so a steady frame allocates nothing.
+     */
+    fun advance(target: HomeLayoutTarget, deltaSeconds: Float, hues: List<Color> = Kk.Elements) {
         val delta = deltaSeconds.coerceIn(0f, MAX_HOME_PRESENTATION_FRAME_DELTA_SECONDS)
-        val index = HomeMenuTargets.indexOf(target).coerceAtLeast(0)
+        // The Hangar card is not a menu row: while it is active no row is selected.
+        val index = HomeMenuTargets.indexOf(target)
         selectedSeconds = if (index == activeIndex) selectedSeconds + delta else 0f
         activeIndex = index
-        val step = delta * 1000f / KkTime.MenuSelect
-        for (index in menu.indices) {
-            menu[index] = if (index == activeIndex) min(1f, menu[index] + step) else max(0f, menu[index] - step)
+        sweepSeconds = (sweepSeconds + delta) % HOME_CODEX_SWEEP_SECONDS
+        val sweep = homeCodexSweepStep(sweepSeconds)
+        if (hues !== sweepHues) {
+            // A new color-vision palette: its own sweep, and fresh tints for it.
+            sweepHues = hues
+            sweepColors = homeCodexSweep(hues)
+            sweepSlots = homeCodexSweepSlots(sweepColors)
+            sweepBase = null
+            sweepBrushCenter = Offset.Unspecified
         }
-        for (index in tiles.indices) {
-            tiles[index] = if (index == coreShape.ordinal) min(1f, tiles[index] + step) else max(0f, tiles[index] - step)
-        }
-        val next = menuAccent(target)
-        if (next != accentTo) {
+        val next = if (target == HomeLayoutTarget.CODEX) sweepColors[sweep] else menuAccent(target)
+        if (target != accentTarget) {
             accentFrom = accent
-            accentTo = next
+            accentTarget = target
             accentElapsedMs = 0f
         }
         accentElapsedMs = min(KkTime.PaletteShift.toFloat(), accentElapsedMs + delta * 1000f)
-        accent = lerp(accentFrom, accentTo, KkEase.Out.transform(accentElapsedMs / KkTime.PaletteShift))
+        val settled = accentElapsedMs >= KkTime.PaletteShift
+        accent = if (settled) next else lerp(accentFrom, next, KkEase.Out.transform(accentElapsedMs / KkTime.PaletteShift))
+        sweepStep = if (settled && target == HomeLayoutTarget.CODEX) sweepSlots[sweep] else -1
     }
 
     private var selectedSeconds = HOME_TRAIL_REST_SECONDS
 
     /** Speed-line clock of the selected item: the lines draw in once, then hold (never loop). */
     val trailTime: Float get() = homeTrailTime(selectedSeconds)
-
-    /** Selection slab progress of menu item [index] (Pull overshoot while growing). */
-    fun menuSelection(index: Int): Float =
-        if (index == activeIndex) KkEase.Pull.transform(menu[index]) else KkEase.Out.transform(menu[index])
-
-    fun tileSelection(shape: CoreShape): Float = KkEase.Pull.transform(tiles[shape.ordinal])
 
     // Caches (draw thread only): the accent-tinted measurer, strokes, paths and the trail brush.
     private var tintedBase: CanvasTextMeasurer? = null
@@ -131,6 +148,16 @@ internal class HomeMenuMotion {
 
     /** Home palettes recolor the `you` accents of the menu components (the board overrides --volt). */
     fun tinted(measurer: CanvasTextMeasurer): CanvasTextMeasurer {
+        val step = sweepStep
+        if (step >= 0) {
+            if (sweepBase !== measurer) {
+                sweepTinted.fill(null)
+                sweepMenu.fill(null)
+                sweepBase = measurer
+            }
+            return sweepTinted[step] ?: CanvasTextMeasurer(measurer.delegate, measurer.scale, measurer.language, measurer.typography,
+                measurer.roles.copy(you = accent)).also { sweepTinted[step] = it }
+        }
         val cached = tinted
         if (cached != null && tintedBase === measurer && tintedAccent == accent) return cached
         return CanvasTextMeasurer(measurer.delegate, measurer.scale, measurer.language, measurer.typography,
@@ -141,19 +168,33 @@ internal class HomeMenuMotion {
         }
     }
 
+    // One tinted measurer, menu measurer and trail brush per sweep step, built once and reused.
+    private var sweepBase: CanvasTextMeasurer? = null
+    private val sweepTinted = arrayOfNulls<CanvasTextMeasurer>(HOME_CODEX_SWEEP_STEPS)
+    private val sweepMenu = arrayOfNulls<CanvasTextMeasurer>(HOME_CODEX_SWEEP_STEPS)
+    private var sweepBrushCenter = Offset.Unspecified
+    private val sweepBrushes = arrayOfNulls<Brush>(HOME_CODEX_SWEEP_STEPS)
+
     private var menuBase: CanvasTextMeasurer? = null
     private var menuMeasurerValue: CanvasTextMeasurer? = null
 
     /** Measurer of the menu items (see [homeMenuMeasurerScale]), derived from the tinted one. */
     fun menuMeasurer(tinted: CanvasTextMeasurer): CanvasTextMeasurer {
+        val step = sweepStep
+        if (step >= 0 && sweepTinted[step] === tinted) {
+            return sweepMenu[step] ?: menuMeasurerOf(tinted).also { sweepMenu[step] = it }
+        }
         val cached = menuMeasurerValue
         if (cached != null && menuBase === tinted) return cached
+        return menuMeasurerOf(tinted).also {
+            menuMeasurerValue = it
+            menuBase = tinted
+        }
+    }
+
+    private fun menuMeasurerOf(tinted: CanvasTextMeasurer): CanvasTextMeasurer {
         val scale = homeMenuMeasurerScale(tinted.scale)
-        return (if (scale == tinted.scale) tinted else CanvasTextMeasurer(tinted.delegate, scale, tinted.language, tinted.typography, tinted.roles))
-            .also {
-                menuMeasurerValue = it
-                menuBase = tinted
-            }
+        return if (scale == tinted.scale) tinted else CanvasTextMeasurer(tinted.delegate, scale, tinted.language, tinted.typography, tinted.roles)
     }
 
     private var placementLayout: HomeLayoutGeometry? = null
@@ -227,21 +268,32 @@ internal class HomeMenuMotion {
 
     /** Conic trail (`conic-gradient` from 190° to 357°, transparent to accent) around [center]. */
     fun trailBrush(center: Offset): Brush {
+        val step = sweepStep
+        if (step >= 0) {
+            if (sweepBrushCenter != center) {
+                sweepBrushes.fill(null)
+                sweepBrushCenter = center
+            }
+            return sweepBrushes[step] ?: trailBrushOf(center).also { sweepBrushes[step] = it }
+        }
         val cached = brush
         if (cached != null && brushAccent == accent && brushCenter == center) return cached
-        return Brush.sweepGradient(
+        return trailBrushOf(center).also {
+            brush = it
+            brushAccent = accent
+            brushCenter = center
+        }
+    }
+
+    private fun trailBrushOf(center: Offset): Brush =
+        Brush.sweepGradient(
             0f to accent.copy(alpha = 0f),
             TRAIL_START / 360f to accent.copy(alpha = 0f),
             (TRAIL_START + TRAIL_SWEEP) / 360f to accent,
             (TRAIL_START + TRAIL_SWEEP + 1f) / 360f to accent.copy(alpha = 0f),
             1f to accent.copy(alpha = 0f),
             center = center,
-        ).also {
-            brush = it
-            brushAccent = accent
-            brushCenter = center
-        }
-    }
+        )
 
     val shapePath = Path()
     val shardPath = Path()
@@ -257,12 +309,14 @@ internal class HomeMenuMotion {
     }
 
     /** Enemy silhouettes on the 24-unit grid (triangle, diamond, hexagon, pentagon). */
-    val enemies: List<Path> = listOf(
-        gridPath(12f, 3f, 21f, 20f, 3f, 20f),
-        gridPath(12f, 2f, 22f, 12f, 12f, 22f, 2f, 12f),
-        gridPath(7f, 3f, 17f, 3f, 22f, 12f, 17f, 21f, 7f, 21f, 2f, 12f),
-        gridPath(12f, 3f, 21f, 10f, 17.5f, 21f, 6.5f, 21f, 3f, 10f),
-    )
+    val enemies: List<Path> by lazy {
+        listOf(
+            gridPath(12f, 3f, 21f, 20f, 3f, 20f),
+            gridPath(12f, 2f, 22f, 12f, 12f, 22f, 2f, 12f),
+            gridPath(7f, 3f, 17f, 3f, 22f, 12f, 17f, 21f, 7f, 21f, 2f, 12f),
+            gridPath(12f, 3f, 21f, 10f, 17.5f, 21f, 6.5f, 21f, 3f, 10f),
+        )
+    }
     val enemyStroke = Stroke(2f, join = StrokeJoin.Miter)
 
     private var factsKey: Any? = null
@@ -303,27 +357,6 @@ internal class HomeMenuMotion {
             .also { menuFactsValue[index] = it }
     }
 
-    private var labelKeyModel: Any? = null
-    private var labelKeyMeasurer: CanvasTextMeasurer? = null
-    private var labelKeyWidth = 0f
-
-    private val labelSizes = FloatArray(CoreShape.entries.size)
-
-    /** Label size of each form tile (see [homeTileLabelSize]), cached per model, measurer and tile. */
-    fun tileLabelSize(model: HomeUiModel, text: CanvasTextMeasurer, tile: Rect, density: Float, shape: CoreShape): Float {
-        if (labelKeyModel !== model || labelKeyMeasurer !== text || labelKeyWidth != tile.width) {
-            labelKeyModel = model
-            labelKeyMeasurer = text
-            labelKeyWidth = tile.width
-            CoreShape.entries.forEach { entry ->
-                labelSizes[entry.ordinal] = homeTileLabelSize(model.coreShape(entry).displayName.localizedContent(text.language), tile, density, text.scale) { name, size ->
-                    measureKkText(text, name, text.typography.labelStyle(size), uppercase = true).size.width
-                }
-            }
-        }
-        return labelSizes[shape.ordinal]
-    }
-
     private companion object {
         const val TRAIL_START = 100f
         const val TRAIL_SWEEP = 167f
@@ -340,32 +373,6 @@ internal class HomeMenuMotion {
     }
 }
 
-/** Cut of a form tile's slab (px): smaller tiles use the smaller cut. */
-internal fun homeTileCut(tile: Rect, density: Float): Float = (if (tile.width < 70f * density) 8f else 12f) * density
-
-/** Horizontal padding kept on both sides of a tile label, inside the slanted face (px per dp). */
-internal const val HOME_TILE_LABEL_PADDING_DP = 6f
-
-/**
- * Label size (13 down to the size that draws 7 px at the measurer's [scale]) at which [name] fits
- * its tile's face with padding: the slanted face near the label is the tile width minus one cut.
- * 0 hides the label (icon only) when even 7 px does not fit or the tile is too short.
- */
-internal fun homeTileLabelSize(name: String, tile: Rect, density: Float, scale: Float, width: (String, Float) -> Int): Float {
-    if (tile.height < 60f * density) return 0f
-    val available = tile.width - homeTileCut(tile, density) - 2f * HOME_TILE_LABEL_PADDING_DP * density
-    val smallest = HOME_TILE_LABEL_MIN_PX / scale.coerceAtLeast(0.1f)
-    var size = 13f
-    while (size > smallest) {
-        if (width(name, size) <= available) return size
-        size -= 1f
-    }
-    return if (width(name, smallest) <= available) smallest else 0f
-}
-
-/** Smallest drawn size (px) of a form tile label. */
-internal const val HOME_TILE_LABEL_MIN_PX = 7f
-
 /**
  * Seconds into the menu trail cycle (`kk-trail`: 0.9 s, lines delayed 0 / 0.15 / 0.3 s, opaque
  * between 18 % and 72 % of a cycle) at which all three speed lines are fully drawn.
@@ -375,7 +382,13 @@ internal const val HOME_TRAIL_REST_SECONDS: Float = 0.55f
 /** The trail runs from selection until [HOME_TRAIL_REST_SECONDS] and then rests there. */
 internal fun homeTrailTime(secondsSinceSelected: Float): Float = secondsSinceSelected.coerceIn(0f, HOME_TRAIL_REST_SECONDS)
 
-/** Home palette accent of the selected/hovered menu item (applies to the items the game has). */
+/**
+ * Home palette accent of the selected/hovered menu item (applies to the items the game has). Each
+ * color names what the item opens: volt is you (and Kinetic), bone the armory, kept apart from
+ * START's volt, the deeper volt your permanent upgrades, gold Rebirth (the Rebirth screen keeps its
+ * per-tier themes), mute the system.
+ * The Codex sweeps through the element hues instead (see [HomeCodexSweep]); its static entry is Cryo.
+ */
 internal fun menuAccent(target: HomeLayoutTarget): Color = when (target) {
     HomeLayoutTarget.LAB -> KkHomePalette.LAB.accent
     HomeLayoutTarget.ARMORY -> KkHomePalette.ARMORY.accent
@@ -384,6 +397,43 @@ internal fun menuAccent(target: HomeLayoutTarget): Color = when (target) {
     HomeLayoutTarget.SETTINGS -> KkHomePalette.SETTINGS.accent
     else -> KkHomePalette.START.accent
 }
+
+/** One full sweep of the Codex accent through the seven element hues (about 1.7 s each). */
+internal const val HOME_CODEX_SWEEP_SECONDS: Float = 12f
+
+/**
+ * Distinct accents of one sweep (30 per second); each is tinted once and then reused. With the
+ * smooth blend below, one step moves a hue change by at most about 5 %, so the sweep reads as a glide.
+ */
+internal const val HOME_CODEX_SWEEP_STEPS: Int = 360
+
+/** Sweep step shown at [seconds] into the sweep. */
+internal fun homeCodexSweepStep(seconds: Float): Int =
+    ((seconds.mod(HOME_CODEX_SWEEP_SECONDS) / HOME_CODEX_SWEEP_SECONDS) * HOME_CODEX_SWEEP_STEPS).toInt().coerceIn(0, HOME_CODEX_SWEEP_STEPS - 1)
+
+/**
+ * Accent at [phase] 0..1 of the Codex sweep: it holds each element hue for 40 % of its share,
+ * then glides (a smooth in-and-out, steepest at 1.5 × the linear rate) into the next, wrapping
+ * from Void back to Thermal.
+ */
+internal fun homeCodexSweepColor(phase: Float, hues: List<Color> = Kk.Elements): Color {
+    val position = phase.mod(1f) * hues.size
+    val index = position.toInt().coerceIn(0, hues.lastIndex)
+    val blend = ((position - index - HOME_CODEX_SWEEP_HOLD) / (1f - HOME_CODEX_SWEEP_HOLD)).coerceIn(0f, 1f)
+    return lerp(hues[index], hues[(index + 1) % hues.size], blend * blend * (3f - 2f * blend))
+}
+
+private const val HOME_CODEX_SWEEP_HOLD = 0.4f
+
+/** The accents of one Codex sweep through [hues], indexed by [homeCodexSweepStep]. */
+internal fun homeCodexSweep(hues: List<Color>): List<Color> =
+    List(HOME_CODEX_SWEEP_STEPS) { step -> homeCodexSweepColor(step.toFloat() / HOME_CODEX_SWEEP_STEPS, hues) }
+
+/** For each step of [sweep], the first step with the same accent, so equal accents share one cache slot. */
+internal fun homeCodexSweepSlots(sweep: List<Color>): IntArray = IntArray(sweep.size) { step -> sweep.indexOf(sweep[step]) }
+
+/** The default palette's Codex sweep. */
+internal val HomeCodexSweep: List<Color> = homeCodexSweep(Kk.Elements)
 
 internal val HomeMenuLabels = listOf(
     SessionText.START_RUN,
@@ -412,22 +462,23 @@ internal fun homeMenuStampText(target: HomeLayoutTarget, language: AppLanguage):
 }
 
 internal fun homeFacts(model: HomeUiModel, target: HomeLayoutTarget, language: AppLanguage, textScale: Float): HomeFacts {
-    val label = language.text(HomeMenuLabels[HomeMenuTargets.indexOf(target).coerceAtLeast(0)])
+    val label = if (target == HomeLayoutTarget.HANGAR) language.text(SessionText.HANGAR)
+        else language.text(HomeMenuLabels[HomeMenuTargets.indexOf(target).coerceAtLeast(0)])
     val matter = homeNumber(model.totalMatter, language)
     val weapon = model.startingWeaponName?.localizedContent(language)
-    val directive = model.rebirthProfile.directive
+    val tierProfile = model.rebirthProfile
     return when (target) {
         HomeLayoutTarget.LAB -> HomeFacts(
             label,
-            if (model.labMaxRanks > 0) "${model.labRanks}/${model.labMaxRanks}" else matter,
+            if (model.matrixNodeCount > 0) "${model.matrixOwnedNodes}/${model.matrixNodeCount}" else matter,
             buildList {
                 add(language.text(SessionRedesignText.MATTER) to matter)
-                if (model.labUpgradeCount > 0) {
-                    add(language.text(SessionRedesignText.MAXED) to "${model.labMaxedUpgrades}/${model.labUpgradeCount}")
+                if (model.matrixMaxRanks > 0) {
+                    add(language.text(SessionRedesignText.RANKS) to "${model.matrixRanks}/${model.matrixMaxRanks}")
                 }
             },
             language.text(SessionRedesignText.LAB_INFO),
-            if (model.labMaxRanks > 0) "${model.labRanks}/${model.labMaxRanks}" else null,
+            if (model.matrixNodeCount > 0) "${model.matrixOwnedNodes}/${model.matrixNodeCount}" else null,
             null,
         )
         HomeLayoutTarget.ARMORY -> HomeFacts(
@@ -445,9 +496,11 @@ internal fun homeFacts(model: HomeUiModel, target: HomeLayoutTarget, language: A
             label,
             model.rebirthLevel.toString(),
             listOf(
-                language.text(SessionRedesignText.DIRECTIVE) to directive.displayName.localizedContent(language),
+                language.text(SessionRedesignText.TIER) to tierProfile.displayName.localizedContent(language),
+                language.text(SessionRedesignText.RANK) to
+                    if (model.ascendant) language.text(SessionRedesignText.ASCENDANT) else model.rebirthRank.toString(),
                 language.text(SessionRedesignText.STATUS) to
-                    language.text(if (model.canRebirth) SessionRedesignText.READY else SessionText.LOCKED_STATE),
+                    language.text(if (model.canRebirth) SessionRedesignText.NEW_TIER else SessionRedesignText.SELECTED),
             ),
             language.text(SessionRedesignText.REBIRTH_INFO),
             null,
@@ -465,6 +518,20 @@ internal fun homeFacts(model: HomeUiModel, target: HomeLayoutTarget, language: A
             "${model.discoveredItemCount}/${model.itemCount}",
             null,
         )
+        HomeLayoutTarget.HANGAR -> {
+            val definition = model.coreShape(model.coreShape)
+            HomeFacts(
+                label,
+                "${model.unlockedCoreShapes.size}/${model.coreShapes.size}",
+                listOf(
+                    language.text(SessionRedesignText.FORM) to definition.displayName.localizedContent(language),
+                    language.text(SessionRedesignText.MECHANIC) to definition.mechanicName.localizedContent(language),
+                ),
+                language.text(SessionRedesignText.HANGAR_INFO),
+                null,
+                null,
+            )
+        }
         HomeLayoutTarget.SETTINGS -> HomeFacts(
             label,
             language.code.uppercase(),
@@ -478,17 +545,23 @@ internal fun homeFacts(model: HomeUiModel, target: HomeLayoutTarget, language: A
         )
         else -> HomeFacts(
             label,
-            directive.displayName.localizedContent(language),
+            model.rebirthLevel.toString(),
             buildList {
-                add(language.text(SessionText.REBIRTH) to model.rebirthLevel.toString())
+                add(language.text(SessionRedesignText.TIER) to tierProfile.displayName.localizedContent(language))
                 add(language.text(SessionRedesignText.FORM) to model.coreShape(model.coreShape).displayName.localizedContent(language))
             },
-            directive.description.localizedContent(language),
+            rebirthTierDescription(tierProfile).localizedContent(language),
             language.text(SessionText.REBIRTH_LEVEL, model.rebirthLevel),
             null,
         )
     }
 }
+
+/** What the selected tier adds: its newest mutator's rule, or the baseline cycle's line at tier 0. */
+internal fun rebirthTierDescription(profile: kinetickk.ball.content.api.RebirthProfile): String =
+    profile.newestMutator?.description ?: BASELINE_TIER_DESCRIPTION
+
+private const val BASELINE_TIER_DESCRIPTION = "The original Architect cycle."
 
 /** Grouped integer (1,284 / 1 284) for chips and facts. */
 internal fun homeNumber(value: Long, language: AppLanguage): String {
@@ -502,35 +575,19 @@ internal fun homeNumber(value: Long, language: AppLanguage): String {
     }
 }
 
-/** The (!) text of the form showcase: the mechanic, or the unlock goal and progress when locked. */
-internal fun homeFormInfo(model: HomeUiModel, shape: CoreShape, language: AppLanguage): String {
-    val definition = model.coreShape(shape)
-    return if (model.isCoreShapeUnlocked(shape)) {
-        definition.mechanicDescription.localizedContent(language)
-    } else {
-        definition.unlockDescription.localizedContent(language) + "\n" + language.text(
-            SessionText.UNLOCK_PROGRESS,
-            coreShapeUnlockProgress(definition, model.characterAchievements),
-            definition.unlockTarget,
-        )
-    }
+/** The (!) text of the form panel: the current character's mechanic name and what it does. */
+internal fun homeFormInfo(model: HomeUiModel, language: AppLanguage): String {
+    val definition = model.coreShape(model.coreShape)
+    return definition.mechanicName.localizedContent(language) + "\n" + definition.mechanicDescription.localizedContent(language)
 }
 
-internal fun CoreShape.formIcon(): KkIcon = when (this) {
-    CoreShape.ORB -> KkIcon.FORMS_CIRCLE
-    CoreShape.PRISM -> KkIcon.FORMS_SQUARE
-    CoreShape.SHARD -> KkIcon.FORMS_TRIANGLE
-    CoreShape.RING -> KkIcon.FORMS_RING
-    CoreShape.DIAMOND -> KkIcon.FORMS_DIAMOND
-    CoreShape.TESSERACT -> KkIcon.FORMS_TESSERACT
-}
+/** The form icon of a character: [KkIcon.Forms] follows the character order. */
+internal fun CoreShape.formIcon(): KkIcon = KkIcon.Forms[ordinal]
 
 /** Interaction state the Canvas reflects (hover/focus come from the semantic overlay). */
 internal class HomeDrawState(
-    val previewShape: CoreShape?,
     val activeTarget: HomeLayoutTarget,
     val focusedTarget: HomeLayoutTarget?,
-    val hoveredTarget: HomeLayoutTarget?,
     val openInfo: HomeInfoTarget?,
     val activeInfo: HomeInfoTarget?,
     /** The player's text size setting (the measurer carries the UI factor, [homeUiScale]). */
@@ -641,7 +698,7 @@ internal fun DrawScope.drawHome(
     drawBackgroundWord(text, facts.label, scene, accent)
     drawHero(model, text, time, scene, state, motion)
     drawHeader(model, text, scene, accent)
-    drawMenu(model, tinted, layout, motion, state.textScale)
+    drawMenu(model, tinted, layout, motion, state.activeTarget, state.textScale)
     scene.facts?.let { drawFactsCard(tinted, it, facts, layout, state, motion, accent) }
     drawFormPanel(model, tinted, layout, state, motion)
     drawLegal(text, layout)
@@ -651,7 +708,7 @@ internal fun DrawScope.drawHome(
         if (info != null) {
             val content = when (open) {
                 HomeInfoTarget.FACTS -> facts.info
-                HomeInfoTarget.FORM -> homeFormInfo(model, state.previewShape ?: model.coreShape, language)
+                HomeInfoTarget.FORM -> homeFormInfo(model, language)
             }
             val placement = if (layout.mode == HomeLayoutMode.COMPACT_PORTRAIT) KkTooltipPlacement.ABOVE else KkTooltipPlacement.ABOVE_END
             drawKkTooltip(text, info.bounds, content, placement)
@@ -740,13 +797,13 @@ private fun DrawScope.drawHero(
     drawEnemies(text, time, center, k, spin, accent, far = true, motion)
     if (coreFar) {
         drawTether(core, center, k, accent, roles.threat)
-        drawCore(model, text, core, k, perspective, time, state.previewShape, motion)
+        drawCore(model, core, k, perspective, time, motion)
     }
     drawSingularity(center, k, time, roles.threat, motion)
     drawEnemies(text, time, center, k, spin, accent, far = false, motion)
     if (!coreFar) {
         drawTether(core, center, k, accent, roles.threat)
-        drawCore(model, text, core, k, perspective, time, state.previewShape, motion)
+        drawCore(model, core, k, perspective, time, motion)
     }
 }
 
@@ -780,18 +837,16 @@ private fun DrawScope.drawSingularity(center: Offset, k: Float, time: Float, thr
     drawCircle(Kk.Bone, max(6f * k, density * 3f), center)
 }
 
+/** The current character's form ([KkFormPaths]) on the hero orbit, with its accent glow. */
 private fun DrawScope.drawCore(
     model: HomeUiModel,
-    text: CanvasTextMeasurer,
     center: Offset,
     k: Float,
     perspective: Float,
     time: Float,
-    previewShape: CoreShape?,
     motion: HomeMenuMotion,
 ) {
-    val shape = previewShape ?: model.coreShape
-    val unlocked = model.isCoreShapeUnlocked(shape)
+    val shape = model.coreShape
     val radius = max(32f * k, density * 18f) * perspective
     val accent = motion.accent
     // Glow (box-shadow 46 px accent @85 %) as stacked translucent rings, never a real-time blur.
@@ -799,76 +854,34 @@ private fun DrawScope.drawCore(
         drawCircle(accent.copy(alpha = 0.85f * (0.13f - index * 0.025f)), radius + (6f + index * 8f) * k, center)
     }
     val spin = when (shape) {
-        CoreShape.PRISM -> time / 60f * 360f
-        CoreShape.TESSERACT -> time / 40f * 360f
+        CoreShape.PRISM, CoreShape.HEXAGON -> time / 60f * 360f
+        CoreShape.TESSERACT, CoreShape.STAR -> time / 40f * 360f
+        CoreShape.SPIRAL -> -time / 30f * 360f
         else -> 0f
     }
-    val path = motion.shapePath
+    val index = shape.formIndex()
+    val path = KkFormPaths.of(index, radius)
     rotate(spin % 360f, center) {
-        buildCoreShape(path, shape, center, radius)
-        val outline = kkStroke(max(10f * k, density * 5f))
-        drawPath(path, Kk.Ink, style = outline)
-        if (shape == CoreShape.RING || shape == CoreShape.TESSERACT) {
-            val stroke = kkStroke(if (shape == CoreShape.RING) radius * 0.33f else radius * 0.12f)
-            drawPath(path, if (unlocked) Kk.Bone else Kk.Mute2, style = stroke)
-            if (shape == CoreShape.RING) {
-                drawCircle(Kk.Ink, radius * 0.24f + max(5f * k, density * 2.5f), center)
-                drawCircle(if (unlocked) Kk.Bone else Kk.Mute2, radius * 0.24f, center)
-            }
-        } else {
-            drawPath(path, if (unlocked) Kk.Bone else Kk.Ink3)
-            if (!unlocked) drawKkHatch(path)
-        }
-    }
-    if (!unlocked) drawKkIcon(KkIcon.SYSTEM_LOCKED, center, radius * 0.9f, Kk.Mute)
-}
-
-/** Form silhouettes (Deploy board shapes) scaled so the disc form has [radius]. */
-private fun buildCoreShape(path: Path, shape: CoreShape, center: Offset, radius: Float) {
-    path.rewind()
-    val u = radius / 42f
-    fun p(x: Float, y: Float) = Offset(center.x + (x - 50f) * u, center.y + (y - 50f) * u)
-    when (shape) {
-        CoreShape.ORB -> path.addOval(Rect(center.x - radius, center.y - radius, center.x + radius, center.y + radius))
-        CoreShape.RING -> {
-            val r = 36f * u
-            path.addOval(Rect(center.x - r, center.y - r, center.x + r, center.y + r))
-        }
-        CoreShape.PRISM -> path.addRect(Rect(p(22f, 22f), p(78f, 78f)))
-        CoreShape.SHARD -> {
-            val a = p(50f, 10f)
-            val b = p(92f, 84f)
-            val c = p(8f, 84f)
-            path.moveTo(a.x, a.y)
-            path.lineTo(b.x, b.y)
-            path.lineTo(c.x, c.y)
-            path.close()
-        }
-        CoreShape.DIAMOND -> {
-            val a = p(50f, 6f)
-            val b = p(94f, 50f)
-            val c = p(50f, 94f)
-            val d = p(6f, 50f)
-            path.moveTo(a.x, a.y)
-            path.lineTo(b.x, b.y)
-            path.lineTo(c.x, c.y)
-            path.lineTo(d.x, d.y)
-            path.close()
-        }
-        CoreShape.TESSERACT -> {
-            path.addRect(Rect(p(14f, 14f), p(64f, 64f)))
-            path.addRect(Rect(p(36f, 36f), p(86f, 86f)))
-            for ((x, y) in TesseractEdges) {
-                val a = p(x, y)
-                val b = p(x + 22f, y + 22f)
-                path.moveTo(a.x, a.y)
-                path.lineTo(b.x, b.y)
+        translate(center.x, center.y) {
+            val outline = max(10f * k, density * 5f)
+            if (KkFormGeometry.isStroked(index)) {
+                val width = KkFormGeometry.strokeWidth(index, radius)
+                drawPath(path, Kk.Ink, style = kkStroke(width + outline))
+                drawPath(path, Kk.Bone, style = kkStroke(width))
+            } else {
+                drawPath(path, Kk.Ink, style = kkStroke(outline))
+                drawPath(path, Kk.Bone)
             }
         }
     }
+    if (shape == CoreShape.RING) {
+        drawCircle(Kk.Ink, radius * 0.24f + max(5f * k, density * 2.5f), center)
+        drawCircle(Kk.Bone, radius * 0.24f, center)
+    }
 }
 
-private val TesseractEdges = listOf(14f to 14f, 64f to 14f, 14f to 64f, 64f to 64f)
+/** The form index of a character: [KkFormGeometry] and [KkIcon.Forms] follow the character order. */
+internal fun CoreShape.formIndex(): Int = ordinal
 
 private fun DrawScope.drawEnemies(
     text: CanvasTextMeasurer,
@@ -967,15 +980,23 @@ private fun DrawScope.drawHeader(model: HomeUiModel, text: CanvasTextMeasurer, s
     while (count > 0 && chipsWidth(model, text, scene, count, language) > scene.chipsRight - headerLeft) count--
     var right = scene.chipsRight
     for (index in count - 1 downTo 0) {
-        right -= drawChip(text, right, scene, homeChip(model, language, compact, index), accent) + 8f * density
+        // The chips keep their own meaning whatever item is selected: Matter is yours (volt), Rebirth gold.
+        val chipAccent = if (index == 1) Kk.Gold else text.roles.you
+        right -= drawChip(text, right, scene, homeChip(model, language, compact, index), chipAccent) + 8f * density
     }
 }
 
-private class HomeChip(val gem: Boolean, val value: String, val label: String?, val labelFirst: Boolean)
+/** A header chip; [crown] draws the gold Ascendant crown before the label. */
+private class HomeChip(val gem: Boolean, val value: String, val label: String?, val labelFirst: Boolean, val crown: Boolean = false)
 
+/**
+ * The header chips. The gold Rebirth chip is the rank badge: "Rank 5" (the selected tier is in the
+ * Rebirth facts), or "Ascendant 10" under the gold crown once every tier is cleared.
+ */
 private fun homeChip(model: HomeUiModel, language: AppLanguage, compact: Boolean, index: Int): HomeChip = when (index) {
     0 -> HomeChip(true, homeNumber(model.totalMatter, language), if (compact) null else language.text(SessionRedesignText.MATTER), false)
-    1 -> HomeChip(false, model.rebirthLevel.toString(), language.text(SessionText.REBIRTH), true)
+    1 -> HomeChip(false, model.rebirthRank.toString(),
+        language.text(if (model.ascendant) SessionRedesignText.ASCENDANT else SessionRedesignText.RANK), true, crown = model.ascendant)
     2 -> HomeChip(false, "${model.discoveredItemCount}/${model.itemCount}", language.text(SessionText.CODEX), false)
     else -> HomeChip(false, "${model.unlockedWeaponCount}/${model.weaponCount}", language.text(SessionText.WEAPONS_TITLE), false)
 }
@@ -996,8 +1017,8 @@ private fun DrawScope.chipWidth(text: CanvasTextMeasurer, scene: HomeScene, chip
     val label = chip.label?.let { measureKkText(text, it, chipLabelStyle(text), uppercase = true) }
     val gap = 8f * density
     val gemSize = if (scene.chipCount < 4) 10f else 14f
-    return 10f * density + (if (chip.gem) gemSize * density + gap else 0f) + value.size.width +
-        (if (label != null) gap + label.size.width else 0f) + 14f * density
+    return 10f * density + (if (chip.gem) gemSize * density + gap else 0f) + (if (chip.crown) gemSize * density + gap else 0f) +
+        value.size.width + (if (label != null) gap + label.size.width else 0f) + 14f * density
 }
 
 /** Header chip (`.chip`) right-aligned at [right]; returns its width. */
@@ -1025,6 +1046,11 @@ private fun DrawScope.drawChip(text: CanvasTextMeasurer, right: Float, scene: Ho
         drawKkGem(Offset(x + gemSize * density * 0.5f, cy), accent, gemSize)
         x += gemSize * density + gap
     }
+    if (chip.crown) {
+        val radius = gemSize * density * 0.5f
+        translate(x + radius, cy) { drawPath(KkMutatorSigilPaths.of(KkMutatorSigil.ASCENDANT, radius), accent) }
+        x += gemSize * density + gap
+    }
     if (chip.labelFirst && labelLayout != null) {
         drawKkText(labelLayout, x, cy, Kk.Mute, valign = KkVAlign.CENTER)
         x += labelLayout.size.width + gap
@@ -1044,6 +1070,7 @@ private fun DrawScope.drawMenu(
     tinted: CanvasTextMeasurer,
     layout: HomeLayoutGeometry,
     motion: HomeMenuMotion,
+    activeTarget: HomeLayoutTarget,
     textScale: Float,
 ) {
     val scene = layout.scene
@@ -1055,7 +1082,8 @@ private fun DrawScope.drawMenu(
         // One column: the item stays inside its row (see homeMenuPlacement).
         val left = if (scene.menuColumns == 1) motion.menuPlacement(menu, layout, index, label, facts, density) else layout.bounds(target).left
         val showSub = scene.menuColumns == 1 && motion.menuShowsSub(index)
-        drawHomeMenuItem(menu, layout, index, label, facts, left, showSub, motion.menuStampSize, motion.menuSelection(index), motion.trailTime)
+        val selection = if (target == activeTarget) 1f else 0f
+        drawHomeMenuItem(menu, layout, index, label, facts, left, showSub, motion.menuStampSize, selection, motion.trailTime)
     }
 }
 
@@ -1137,12 +1165,12 @@ internal fun DrawScope.drawHomeFormDescription(text: CanvasTextMeasurer, scene: 
 
 /**
  * Vertical span (px) the form description may take: from 4 dp below the form name's lowest ink (its
- * descenders, [HOME_FORM_NAME_INK_EM]) to the tiles (a selected tile lifts 8 dp).
+ * descenders, [HOME_FORM_NAME_INK_EM]) to 8 dp above the Hangar card.
  */
 internal fun homeFormDescriptionSpan(layout: HomeLayoutGeometry, density: Float): Pair<Float, Float> {
     val scene = layout.scene
     val top = scene.formNameCenterY + scene.formNameSize * HOME_FORM_NAME_INK_EM + 4f * density
-    val bottom = HomeCoreTargets.minOf { layout.bounds(it).top } - 8f * density
+    val bottom = layout.bounds(HomeLayoutTarget.HANGAR).top - 8f * density
     return top to bottom
 }
 
@@ -1255,6 +1283,7 @@ private fun DrawScope.drawFactsCard(
     }
 }
 
+/** The current character: its name, its (!), its mechanic and the Hangar card that changes it. */
 private fun DrawScope.drawFormPanel(
     model: HomeUiModel,
     text: CanvasTextMeasurer,
@@ -1264,45 +1293,23 @@ private fun DrawScope.drawFormPanel(
 ) {
     val scene = layout.scene
     val language = text.language
-    val shape = state.previewShape ?: model.coreShape
-    val unlocked = model.isCoreShapeUnlocked(shape)
-    val definition = model.coreShape(shape)
+    val definition = model.coreShape(model.coreShape)
     val info = layout.info(HomeInfoTarget.FORM)
     motion.formPanel(layout, density)
-    val nameRight = motion.formNameRight
-    val name = if (unlocked) definition.displayName.localizedContent(language) else language.text(SessionText.UNKNOWN_CORE)
-    drawHomeFormName(text, scene, name, nameRight, if (unlocked) Kk.Bone else Kk.Mute)
+    drawHomeFormName(text, scene, definition.displayName.localizedContent(language), motion.formNameRight, Kk.Bone)
     if (info != null) {
         drawKkInfoButton(text, info.bounds, active = state.activeInfo == HomeInfoTarget.FORM || state.openInfo == HomeInfoTarget.FORM)
     }
-    if (unlocked) {
-        drawHomeFormDescription(text, scene, definition.mechanicDescription.localizedContent(language),
-            motion.formDescriptionTop, motion.formDescriptionBottom)
-    }
-    HomeCoreTargets.forEach { target ->
-        val tileShape = requireNotNull(target.coreShapeOrNull())
-        val bounds = layout.bounds(target)
-        val labelSize = motion.tileLabelSize(model, text, bounds, density, tileShape)
-        val tileUnlocked = model.isCoreShapeUnlocked(tileShape)
-        val label = if (tileUnlocked && labelSize > 0f) model.coreShape(tileShape).displayName.localizedContent(language) else null
-        val iconSize = min(24f, bounds.height / density * 0.42f)
-        drawKkTile(
-            text, bounds,
-            label = label,
-            labelSize = if (labelSize > 0f) labelSize else 13f,
-            icon = tileShape.formIcon(),
-            selected = motion.tileSelection(tileShape),
-            hovered = state.hoveredTarget == target || state.previewShape == tileShape,
-            locked = !tileUnlocked,
-            cutDp = homeTileCut(bounds, density) / density,
-            iconSizeDp = iconSize,
-            focused = state.focusedTarget == target,
-        )
-        if (!tileUnlocked) {
-            val lift = -8f * density * motion.tileSelection(tileShape)
-            drawKkIcon(KkIcon.SYSTEM_LOCKED, Offset(bounds.right - 14f * density, bounds.top + 11f * density + lift), 12f * density, Kk.Mute)
-        }
-    }
+    drawHomeFormDescription(text, scene, definition.mechanicDescription.localizedContent(language),
+        motion.formDescriptionTop, motion.formDescriptionBottom)
+    val card = layout.bounds(HomeLayoutTarget.HANGAR)
+    drawKkButton(
+        text, card, language.text(SessionText.HANGAR),
+        variant = KkButtonVariant.GHOST,
+        size = if (card.height < 52f * density) KkButtonSize.SM else KkButtonSize.MD,
+        hover = if (state.activeTarget == HomeLayoutTarget.HANGAR) 1f else 0f,
+        icon = model.coreShape.formIcon(),
+    )
 }
 
 internal fun DrawScope.drawLegal(text: CanvasTextMeasurer, layout: HomeLayoutGeometry) {

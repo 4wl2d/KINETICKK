@@ -8,7 +8,9 @@ import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.flow.session.interaction.codex.api.CodexRenderModel
 import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
+import kinetickk.flow.session.interaction.localization.CodexText
 import kinetickk.flow.session.interaction.localization.SessionText
+import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableSetOf
 import kinetickk.foundation.collections.toImmutableList
@@ -61,7 +63,7 @@ class CodexEntryFactsTest {
         val build = GameplayBuildSummaryProjection(
             GameplayInstanceId(RunId(1)), GameplayRevision.ZERO, immutableListOf(),
             character = CoreShape.ORB, weapon = WeaponId.FLUX_WAKE, weaponLevel = 3,
-            relics = immutableListOf(EquippedRelic(RelicId.KINETIC_FLYWHEEL, 1)),
+            relics = immutableListOf(EquippedRelic(RelicId.PERPETUAL_VECTOR, 1)),
         )
         val model = CodexRenderModel(immutableSetOf(), CodexRunStacks(build = build), catalog.items)
         for (language in AppLanguage.entries) {
@@ -76,45 +78,151 @@ class CodexEntryFactsTest {
     }
 
     @Test
-    fun aspectSynergiesShowTheirRequirementAsAValueWithTheRuleBehindInfo() {
+    fun harmonyAndDissonanceFollowTheKeysWhileNamedPairingsStayHiddenUntilDiscovered() {
         val model = CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items, discoveredRelicIds = RelicId.entries.toImmutableSet())
-        val clause = mapOf(AppLanguage.English to "Extra ranks", AppLanguage.Russian to "Дополнительные ранги")
         for (language in AppLanguage.entries) {
-            val aspects = catalog.synergies.filter { it.requiredAspect != null }
-            assertTrue(aspects.isNotEmpty())
-            aspects.forEach { synergy ->
-                val entry = codexSynergyEntry(synergy, model, catalog, language)
-                val name = requireNotNull(synergy.requiredAspect).displayLabel.localizedContent(language)
-                // Body text is the synergy's own description, never the rule.
-                assertEquals(synergy.description.localizedContent(language), entry.description)
-                entry.description.split("\n\n").forEach { paragraph ->
-                    assertFalse(clause.getValue(language) in paragraph, "${entry.key} body: $paragraph")
-                }
-                val requires = entry.facts.single { it.label == language.text(SessionText.REQUIRES) }
-                assertEquals(language.text(SessionText.SYNERGY_ASPECT_PAIR, name), requires.value)
-                assertEquals(language.text(SessionText.SYNERGY_REQUIREMENT, name), requires.info)
-                assertTrue(clause.getValue(language) in requires.info.orEmpty())
-            }
+            val entries = codexPairingEntries(model, catalog, language).associateBy { it.key }
+            // Gyre Engine and Blink Drive share Motion: a harmony, shown with its effect.
+            val harmony = entries.getValue(codexPairingKey(RelicId.BLINK_DRIVE, RelicId.GYRE_ENGINE))
+            assertEquals(CodexLinkKind.HARMONY, (harmony.icon as CodexIcon.Pairing).kind)
+            assertEquals(language.text(CodexText.HARMONY_EFFECT, 10), harmony.description)
+            // Heat opposes Cold: Furnace Covenant and Stasis Anchor interfere.
+            val dissonance = entries.getValue(codexPairingKey(RelicId.FURNACE_COVENANT, RelicId.STASIS_ANCHOR))
+            assertEquals(language.text(CodexText.DISSONANCE_EFFECT, 15), dissonance.description)
+            assertEquals(CodexPairingSection.DISSONANCE, dissonance.pairingSection())
+            // A named pairing keeps its kind visible but its name and effect hidden.
+            val gyre = entries.getValue(codexPairingKey(RelicId.PERPETUAL_VECTOR, RelicId.GYRE_ENGINE))
+            assertEquals(language.text(CodexText.UNKNOWN_PAIRING), gyre.title)
+            assertEquals("", gyre.description)
+            assertEquals(language.text(CodexText.CONCORD), gyre.kind)
+            assertFalse(gyre.discovered)
+            assertTrue(gyre.help != null && gyre.help.endsWith('.'))
+            // Relics that neither share nor oppose a key form no row.
+            assertNull(entries[codexPairingKey(RelicId.ECHO_CHAMBER, RelicId.EVENT_HORIZON)])
+        }
+        val known = model.copy(discoveredPairingIds = immutableSetOf(RelicPairingId.ENDLESS_GYRE))
+        val gyre = codexPairingEntries(known, catalog).single { it.key == codexPairingKey(RelicId.GYRE_ENGINE, RelicId.PERPETUAL_VECTOR) }
+        assertEquals("Endless Gyre", gyre.title)
+        assertEquals(catalog.build.pairing(RelicPairingId.ENDLESS_GYRE).description, gyre.description)
+        // Undiscovered relics never appear in a pairing.
+        val partial = CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items, discoveredRelicIds = immutableSetOf(RelicId.PERPETUAL_VECTOR))
+        assertTrue(codexPairingEntries(partial, catalog).isEmpty())
+    }
+
+    @Test
+    fun knownIncompatibilitiesListDiscoveredDiscordsSuppressionsAndDocumentedConflicts() {
+        // The conflict follows the item's crit-chance conversion, whatever the item is called.
+        val items = catalog.items.mapIndexed { index, item ->
+            if (index == 7) item.copy(name = "Any Lens", rules = immutableListOf(ItemRule.Convert(ConversionKind.CRIT_CHANCE_TO_DAMAGE, 2.5f))) else item
+        }.toImmutableList()
+        val withReticle = catalog.copy(items = items)
+        val build = GameplayBuildSummaryProjection(
+            GameplayInstanceId(RunId(1)), GameplayRevision.ZERO, immutableListOf(),
+            relics = immutableListOf(EquippedRelic(RelicId.FURNACE_COVENANT, 1), EquippedRelic(RelicId.ABSOLUTE_ZERO, 1)),
+            relicLinks = immutableListOf(BuildRelicLinkSummary(RelicId.FURNACE_COVENANT, RelicId.ABSOLUTE_ZERO, BuildRelicLinkKind.DISCORD,
+                RelicPairingId.THERMAL_PARADOX, discovered = true)),
+            suppressedItemIds = immutableListOf(3),
+        )
+        val model = CodexRenderModel(immutableSetOf(7), CodexRunStacks(build = build), items,
+            discoveredRelicIds = immutableSetOf(RelicId.FURNACE_COVENANT, RelicId.ABSOLUTE_ZERO, RelicId.EXECUTIONERS_PRISM))
+        val incompatible = codexPairingEntries(model, withReticle).filter { it.pairingSection() == CodexPairingSection.INCOMPATIBLE }.map { it.key }
+        assertEquals(listOf(codexPairingKey(RelicId.FURNACE_COVENANT, RelicId.ABSOLUTE_ZERO), "conflict/item/3",
+            "conflict/${RelicId.EXECUTIONERS_PRISM}/7"), incompatible)
+        // The current run's link is enough to reveal the discord's name.
+        assertEquals("Thermal Paradox", codexPairingEntries(model, withReticle).first { it.key == incompatible.first() }.title)
+        // A documented conflict waits until both sides are discovered.
+        val unknownReticle = model.copy(discoveredItemIds = immutableSetOf())
+        assertFalse(codexPairingEntries(unknownReticle, withReticle).any { it.key.startsWith("conflict/${RelicId.EXECUTIONERS_PRISM}") })
+        // A suppression says so once: its kind, without a status fact repeating it.
+        val suppression = codexPairingEntries(model, withReticle).single { it.key == "conflict/item/3" }
+        assertEquals(AppLanguage.English.text(CodexText.SUPPRESSED), suppression.kind)
+        assertTrue(suppression.facts.none { it.value == suppression.kind })
+    }
+
+    @Test
+    fun spokenSummariesTellEveryPairingAndReactionApart() {
+        val model = CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items, discoveredRelicIds = RelicId.entries.toImmutableSet())
+        for (language in AppLanguage.entries) {
+            val pairings = codexPairingEntries(model, catalog, language)
+            assertEquals(pairings.size, pairings.map { it.summary }.toSet().size, "two pairings read the same")
+            // A generic link reads its keys and both relics, and never its kind twice.
+            val harmony = pairings.single { it.key == codexPairingKey(RelicId.BLINK_DRIVE, RelicId.GYRE_ENGINE) }
+            assertEquals(RelicKey.MOTION.displayLabel.localizedContent(language), harmony.title)
+            assertTrue("Blink Drive".localizedContent(language) in harmony.summary && "Gyre Engine".localizedContent(language) in harmony.summary, harmony.summary)
+            assertEquals(1, Regex(Regex.escape(language.text(CodexText.HARMONY))).findAll(harmony.summary).count(), harmony.summary)
+            val reactions = codexReactionEntries(model, catalog, language)
+            assertEquals(reactions.size, reactions.map { it.summary }.toSet().size, "two undiscovered reactions read the same")
         }
     }
 
     @Test
-    fun relicPairSynergiesListTheirRelicsAndMissingPartsAsValues() {
-        val synergy = catalog.synergies.first { it.requiredAspect == null }
-        val (first, second) = synergy.requiredRelics
+    fun buildTabRuleLinesUseTheRewardCardsAttunementAndDominantElement() {
+        val item = catalog.items[0].copy(tags = immutableListOf(BuildTag.DRIVE))
         val build = GameplayBuildSummaryProjection(
             GameplayInstanceId(RunId(1)), GameplayRevision.ZERO, immutableListOf(),
-            relics = immutableListOf(EquippedRelic(first, 1)),
-            synergies = immutableListOf(BuildSynergySummary(synergy.id.name, synergy.name, synergy.description, false,
-                immutableListOf(catalog.relic(second).name))),
+            relics = immutableListOf(EquippedRelic(RelicId.PERPETUAL_VECTOR, 1)),
+            elements = immutableListOf(BuildElementSummary(StatusElement.ION, 2, 1, false), BuildElementSummary(StatusElement.THERMAL, 4, 2, true)),
+        )
+        val policy = catalog.build.policy
+        // Perpetual Vector is attuned to Drive: the bound relic raises the item as on its reward card.
+        val attuned = codexRuleContext(item, 1, reborn = true, catalog, build)
+        assertEquals(policy.rebornMagnitude * (1f + policy.attunementBonus), attuned.bonus, 1e-5f)
+        assertEquals(StatusElement.THERMAL, attuned.dominant)
+        assertEquals(StatusElement.ION, attuned.secondary)
+        val plain = codexRuleContext(item.copy(tags = immutableListOf(BuildTag.FORTUNE)), 1, reborn = false, catalog, build)
+        assertEquals(1f, plain.bonus)
+        // Out of a run the picks stay as their phrases.
+        assertNull(codexRuleContext(item, 1, reborn = false, catalog).dominant)
+    }
+
+    @Test
+    fun relicEntriesCarryEveryRankUpsideTheirCostKeysAndKnownPairings() {
+        val build = GameplayBuildSummaryProjection(
+            GameplayInstanceId(RunId(1)), GameplayRevision.ZERO, immutableListOf(),
+            relics = immutableListOf(EquippedRelic(RelicId.FURNACE_COVENANT, 2), EquippedRelic(RelicId.STASIS_ANCHOR, 1)),
         )
         val model = CodexRenderModel(immutableSetOf(), CodexRunStacks(build = build), catalog.items,
-            discoveredRelicIds = synergy.requiredRelics.toImmutableSet())
-        val entry = codexSynergyEntry(synergy, model, catalog)
-        assertEquals(synergy.description, entry.description)
-        assertEquals("${catalog.relic(first).name} + ${catalog.relic(second).name}", entry.facts.single { it.label == "Requires" }.value)
-        assertEquals(catalog.relic(second).name, entry.facts.single { it.label == "Missing" }.value)
-        assertEquals("Inactive", entry.status)
-        assertFalse(entry.facts.any { it.label.any(Char::isDigit) || ':' in it.label })
+            discoveredRelicIds = immutableSetOf(RelicId.FURNACE_COVENANT, RelicId.OVERDRIVE_CASCADE, RelicId.STASIS_ANCHOR))
+        val furnace = codexRelicEntry(catalog.relic(RelicId.FURNACE_COVENANT), model, catalog)
+        val detail = furnace.detail as CodexDetail.Relic
+        assertEquals(listOf(20, 30, 40).map { "Full relic upside for Furnace Covenant grants $it % more." }, detail.upsides)
+        assertEquals(2, detail.rank)
+        assertEquals("Full relic cost for Furnace Covenant.", detail.liability)
+        // Stasis Anchor's Cold opposes the furnace's Heat.
+        assertEquals(setOf(RelicKey.HEAT), detail.opposedBound)
+        // Meltdown with the discovered Overdrive Cascade is listed, nameless until discovered.
+        val note = detail.pairings.single()
+        assertEquals(RelicId.OVERDRIVE_CASCADE, note.partner.id)
+        assertNull(note.name)
+        assertEquals("2/3", furnace.facts.single { it.label == "Rank" }.value)
+    }
+
+    @Test
+    fun rebirthGatedContentShowsItsTierButNeverItsIdentity() {
+        val items = catalog.items.mapIndexed { index, item -> if (index == 5) item.copy(minimumRebirth = 2) else item }.toImmutableList()
+        val model = CodexRenderModel(immutableSetOf(), CodexRunStacks(), items)
+        for (language in AppLanguage.entries) {
+            val locked = codexCatalogEntries(0, "", CodexItemFilter.ALL, model, catalog.copy(items = items), codexTestProgress(emptySet()), language)
+                .single { it.icon is CodexIcon.Locked }
+            assertEquals("item/5", locked.key)
+            assertEquals(language.text(SessionText.REBIRTH_LEVEL, 2), locked.title)
+            assertEquals(CodexIcon.Locked(2), locked.icon)
+            assertFalse(locked.discovered)
+            assertFalse(locked.summary.contains("Item 5"))
+            // Searching never reveals locked cells; reaching the tier turns it into an anonymous cell like any other unfound item.
+            assertTrue(codexCatalogEntries(0, "item", CodexItemFilter.ALL, model, catalog.copy(items = items), codexTestProgress(emptySet()), language).isEmpty())
+            val reached = codexTestProgress(emptySet()).copy(rebirthProgress = RebirthProgress(level = 2, highestCleared = 1))
+            val open = codexCatalogEntries(0, "", CodexItemFilter.ALL, model, catalog.copy(items = items), reached, language)
+            assertTrue(open.none { it.icon is CodexIcon.Locked })
+            assertEquals(CodexIcon.Unknown, open.single { it.key == "item/5" }.icon)
+            // The rank opens it, whatever tier is selected: dropping back to tier 0 keeps it open.
+            val lowered = codexTestProgress(emptySet()).copy(rebirthProgress = RebirthProgress(level = 0, highestCleared = 1))
+            assertTrue(codexCatalogEntries(0, "", CodexItemFilter.ALL, model, catalog.copy(items = items), lowered, language)
+                .none { it.icon is CodexIcon.Locked })
+        }
+        // Sovereign relics gated by Rebirth do the same in the relic category.
+        val relics = codexCatalogEntries(2, "", CodexItemFilter.ALL, model, catalog, codexTestProgress(emptySet()))
+        assertEquals(listOf(RelicId.AGONY_SCEPTER, RelicId.HOLLOW_CROWN, RelicId.OUROBOROS_SEAL).map { "relic/$it" }, relics.map { it.key })
+        assertTrue(relics.all { it.icon is CodexIcon.Locked && !it.discovered })
     }
 }

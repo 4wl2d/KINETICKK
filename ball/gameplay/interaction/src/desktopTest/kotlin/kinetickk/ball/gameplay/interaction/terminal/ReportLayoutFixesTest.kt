@@ -27,7 +27,9 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.EquippedRelic
+import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.canvas.overlayIcon
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
@@ -35,7 +37,9 @@ import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
 import kinetickk.ball.gameplay.interaction.rewards.OverlayButtonProbe
 import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureContent
 import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureModel
+import kinetickk.ball.gameplay.nucleus.render.BuildProjection
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.Kk
@@ -58,8 +62,8 @@ import kotlin.test.assertTrue
 class ReportLayoutFixesTest {
     private val frames = listOf(1440 to 810, 844 to 390, 390 to 844)
     private val relics = listOf(
-        EquippedRelic(RelicId.KINETIC_FLYWHEEL, 2), EquippedRelic(RelicId.GHOST_VECTOR, 1),
-        EquippedRelic(RelicId.ORBITAL_NAIL, 1), EquippedRelic(RelicId.VOLTAIC_FILAMENT, 1),
+        EquippedRelic(RelicId.PERPETUAL_VECTOR, 2), EquippedRelic(RelicId.GYRE_ENGINE, 1),
+        EquippedRelic(RelicId.FURNACE_COVENANT, 1), EquippedRelic(RelicId.AEGIS_INVERSION, 1),
     )
 
     @Test
@@ -220,6 +224,45 @@ class ReportLayoutFixesTest {
             }
             assertTrue(rebirthWidths[0] <= rebirthWidths[1] && rebirthWidths[1] <= rebirthWidths[2],
                 "report ${width}x$height $language \"$rebirthText\": the header tags grow with the text size ($rebirthWidths)")
+        }
+    }
+
+    /**
+     * A run with archetypes, a dominant element and reactions (one met for the first time): the
+     * recap shows under the build row with its new-find mark, and on a portrait phone it follows the
+     * actions, which stay on the first screen as they do without a recap.
+     */
+    @Test
+    fun buildRecapShowsAndKeepsThePortraitActionsOnTheFirstScreen() {
+        val build = BuildProjection(
+            tagPoints = immutableListOf(5, 3, 0, 2, 0, 1, 4, 0, 0),
+            tagTiers = immutableListOf(2, 1, 0, 0, 0, 0, 1, 0, 0),
+            dominant = StatusElement.THERMAL,
+        )
+        val ran = (1 shl ReactionId.THERMAL_SHOCK.ordinal) or (1 shl ReactionId.WILDFIRE.ordinal) or (1 shl ReactionId.FEEDBACK.ordinal)
+        for ((width, height) in frames) for (language in AppLanguage.entries) for (textScale in listOf(1f, 1.25f, 1.75f)) {
+            val scene = "report ${width}x$height $language ${textScale}x"
+            val presentation = rewardFixtureModel(phase = GamePhase.VICTORY, relics = relics, language = language, build = build)
+                .terminalPresentation(language, reactionsThisRun = ran, discoveredThisRun = 1 shl ReactionId.WILDFIRE.ordinal)
+            assertEquals(3, presentation.reactions.size, scene)
+            runDesktopComposeUiTest(width, height) {
+                setContent {
+                    CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides language) {
+                        Box(Modifier.requiredSize(width.dp, height.dp)) { TerminalContent(presentation, textScale, false, 3f, true) {} }
+                    }
+                }
+                waitForIdle()
+                val recap = onNodeWithTag("kinetickk.gameplay.results.recap", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                onNodeWithTag("kinetickk.gameplay.results.recap.new", useUnmergedTree = true).assertExists()
+                val primary = onNodeWithTag("kinetickk.gameplay.rebirth", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                if (width < height) {
+                    assertTrue(primary.bottom <= height, "$scene: the primary action ($primary) shows on the first screen")
+                    assertTrue(recap.top >= primary.bottom, "$scene: the recap ($recap) follows the actions ($primary)")
+                } else {
+                    val build = onNodeWithTag("kinetickk.gameplay.results.build", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                    assertTrue(recap.top >= build.bottom - 1f, "$scene: the recap ($recap) sits under the build row ($build)")
+                }
+            }
         }
     }
 

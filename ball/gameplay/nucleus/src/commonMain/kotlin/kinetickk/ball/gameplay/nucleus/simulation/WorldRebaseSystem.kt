@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
+import kinetickk.foundation.collections.toImmutableList
 
 internal fun MutableGameState.rebaseWorldIfNeeded() {
     if (kotlin.math.abs(coreX) < 250_000f && kotlin.math.abs(coreY) < 250_000f) return
@@ -17,6 +18,8 @@ internal fun MutableGameState.rebaseWorldIfNeeded() {
     previousSingularityY -= shiftY
     cameraX -= shiftX
     cameraY -= shiftY
+    previousCameraX -= shiftX
+    previousCameraY -= shiftY
     trailLastX -= shiftX
     trailLastY -= shiftY
     for (index in enemies.indices) {
@@ -37,6 +40,8 @@ internal fun MutableGameState.rebaseWorldIfNeeded() {
         val pickup = pickups[index]
         pickup.x -= shiftX
         pickup.y -= shiftY
+        pickup.previousX -= shiftX
+        pickup.previousY -= shiftY
     }
     for (index in trail.indices) {
         val point = trail[index]
@@ -53,18 +58,27 @@ internal fun MutableGameState.rebaseWorldIfNeeded() {
         val orbital = weaponOrbitals[index]
         orbital.x -= shiftX
         orbital.y -= shiftY
+        orbital.previousX -= shiftX
+        orbital.previousY -= shiftY
     }
-    characterRuntime = characterRuntime.copy(
-        dashOrigin = characterRuntime.dashOrigin?.let { it.copy(x = it.x - shiftX, y = it.y - shiftY) },
-        lattice = characterRuntime.lattice.map { it.copy(x = it.x - shiftX, y = it.y - shiftY) },
-    )
+    rebaseCharacterRuntime(shiftX, shiftY)
+    weaponRuntime.rebase(shiftX, shiftY)
     pointsOfInterest = pointsOfInterest.map { it.copy(x = it.x - shiftX, y = it.y - shiftY) }
-    rebaseSynergyEffects(shiftX, shiftY)
+    rebaseCombatFields(shiftX, shiftY)
     totem?.let { it.x -= shiftX; it.y -= shiftY }
+    if (volatileBursts.isNotEmpty()) {
+        volatileBursts = volatileBursts.map { it.copy(x = it.x - shiftX, y = it.y - shiftY) }.toImmutableList()
+    }
     morningstarX -= shiftX
     morningstarY -= shiftY
+    previousMorningstarX -= shiftX
+    previousMorningstarY -= shiftY
     weaponBeamStartX -= shiftX
     weaponBeamStartY -= shiftY
     weaponBeamEndX -= shiftX
     weaponBeamEndY -= shiftY
+    // Absolute positions (obstacle chunks) stay put: the origin takes the shift the world gave up.
+    worldOriginX += shiftX.toDouble()
+    worldOriginY += shiftY.toDouble()
+    obstacleField = obstacleField.shifted(shiftX, shiftY)
 }

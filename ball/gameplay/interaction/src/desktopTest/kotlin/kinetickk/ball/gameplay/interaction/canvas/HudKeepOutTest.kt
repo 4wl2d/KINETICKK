@@ -51,7 +51,9 @@ class HudKeepOutTest {
                 val model = hudTestModel(dpWidth, dpHeight).with(
                     "screenWidth" to width, "screenHeight" to height, "uiScale" to density,
                     "keys" to 12, "runMatter" to 9_876_543L, "combo" to 128, "comboTime" to 1f, "comboWindow" to 2.8f, "level" to 45,
-                    "enemies" to listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f, 0f, 0f, 0f, 0f, 0f, 0f, false))
+                    "rebirthLevel" to 10,
+                    "enemies" to listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f, 0f, 0f, 0f, 0f, 0f, 0f, false,
+                        affinityBits = bossAffinity(boss)))
                         .toImmutableList(),
                     "pointsOfInterest" to (if (trial) listOf(orbit) else emptyList()).toImmutableList(),
                 )
@@ -59,8 +61,8 @@ class HudKeepOutTest {
                 val keepOut = WorldHudKeepOut().update(width, height, density, textScale, trial, bossPresent = true)
                 val rects = keepOut.rects()
                 val where = "$language ${dpWidth}x$dpHeight @$density x$textScale $boss trial=$trial"
-                val blocks = listOf(HudBlock.CLOCK, HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.CHAIN, HudBlock.BOSS, HudBlock.BADGE) +
-                    if (trial) listOf(HudBlock.TRIAL_PANEL) else emptyList()
+                val blocks = listOf(HudBlock.CLOCK, HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.CHAIN, HudBlock.BOSS, HudBlock.BADGE,
+                    HudBlock.MINIMAP, HudBlock.REBIRTH) + if (trial) listOf(HudBlock.TRIAL_PANEL) else emptyList()
                 blocks.forEach { block ->
                     val drawn = assertNotNull(HudLayoutProbe.rect(block), "$where: $block not drawn")
                     assertTrue(covered(drawn, rects), "$where: $block $drawn is outside the keep-out $rects")
@@ -74,7 +76,8 @@ class HudKeepOutTest {
         for (textScale in listOf(1f, 1.25f, 1.75f)) for (boss in listOf(EnemyType.ELITE, EnemyType.ARCHITECT)) for (trial in listOf(false, true)) {
             for (language in AppLanguage.entries) {
                 val model = hudTestModel(390f, 844f).with(
-                    "enemies" to listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f, 0f, 0f, 0f, 0f, 0f, 0f, false))
+                    "enemies" to listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f, 0f, 0f, 0f, 0f, 0f, 0f, false,
+                        affinityBits = bossAffinity(boss)))
                         .toImmutableList(),
                 )
                 var timerHeight = 0f

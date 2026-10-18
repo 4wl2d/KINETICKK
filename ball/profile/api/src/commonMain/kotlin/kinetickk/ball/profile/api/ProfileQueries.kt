@@ -4,18 +4,22 @@
 package kinetickk.ball.profile.api
 
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.ImmutableSet
+import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableSetOf
 
 sealed interface ProfileQuery {
     data object GetRunBootstrap : ProfileQuery
     data object GetPreferences : ProfileQuery
     data object GetHomeProgress : ProfileQuery
-    data object GetLabProgress : ProfileQuery
+    data object GetMatrixProgress : ProfileQuery
     data object GetLoadout : ProfileQuery
     data object GetCollection : ProfileQuery
     data object GetRebirthProgress : ProfileQuery
     data object GetPersistenceStatus : ProfileQuery
+    /** Every character's unlock state for the Hangar. */
+    data object GetHangar : ProfileQuery
 }
 
 sealed interface ProfileProjection {
@@ -23,14 +27,18 @@ sealed interface ProfileProjection {
     val revision: ProfileRevision
 }
 
-data class LabProfileSnapshot(
+data class MatrixProfileSnapshot(
     val economy: PlayerEconomy,
-    val progress: LabProgress,
+    val progress: MatrixProgress,
+    /** Rebirth rank the Matrix gates compare against. */
+    val rebirthRank: Int = 0,
 )
 
 data class LoadoutProfileSnapshot(
     val economy: PlayerEconomy,
     val loadout: PlayerLoadout,
+    /** Rebirth rank the weapon unlock gates compare against. */
+    val rebirthRank: Int = 0,
 )
 
 data class RebirthProfileSnapshot(
@@ -41,7 +49,7 @@ data class GameplayProfileSnapshot(
     val preferences: PlayerPreferences,
     val economy: PlayerEconomy,
     val loadout: PlayerLoadout,
-    val labProgress: LabProgress,
+    val matrix: MatrixProgress,
     val collection: PlayerCollection,
     val rebirthProgress: RebirthProgress,
 )
@@ -70,15 +78,18 @@ data class HomeProgressProjection(
     val loadout: PlayerLoadout,
     val collection: PlayerCollection,
     val rebirthProgress: RebirthProgress,
+    /** True when a new Rebirth tier waits: the rank is uncleared and above the selected `level`. */
     val canAdvanceRebirth: Boolean,
     val characterAchievements: CharacterAchievementProgress = CharacterAchievementProgress(),
     val unlockedCoreShapes: ImmutableSet<CoreShape> = immutableSetOf(CoreShape.ORB),
+    /** Every character's unlock progress in stable order (the Hangar query's [HangarProjection.shapes]). */
+    val characterProgress: ImmutableList<HangarShapeProgress> = immutableListOf(),
 ) : ProfileProjection
 
-data class LabProgressProjection(
+data class MatrixProgressProjection(
     override val instanceId: ProfileInstanceId,
     override val revision: ProfileRevision,
-    val snapshot: LabProfileSnapshot,
+    val snapshot: MatrixProfileSnapshot,
 ) : ProfileProjection
 
 data class LoadoutProjection(
@@ -97,7 +108,30 @@ data class RebirthProgressProjection(
     override val instanceId: ProfileInstanceId,
     override val revision: ProfileRevision,
     val snapshot: RebirthProfileSnapshot,
+    /** True when a new Rebirth tier waits: the rank is uncleared and above the selected `level`. */
     val canAdvance: Boolean,
+) : ProfileProjection
+
+/** Unlock progress of one character: [progress] of [target], capped at the target for display. */
+data class HangarShapeProgress(
+    val shape: CoreShape,
+    val unlocked: Boolean,
+    val progress: Long,
+    val target: Long,
+)
+
+data class HangarProjection(
+    override val instanceId: ProfileInstanceId,
+    override val revision: ProfileRevision,
+    /** One entry per character in stable [CoreShape] order. */
+    val shapes: ImmutableList<HangarShapeProgress>,
+    val selected: CoreShape,
+    /** Rebirth rank the Reborn-rank unlocks compare against. */
+    val rebirthRank: Int = 0,
+    /** Characters that cleared the final Rebirth tier: the Hangar crowns them Ascendant. */
+    val ascendedCharacters: ImmutableSet<CoreShape> = immutableSetOf(),
+    /** Every Rebirth tier is cleared: the Hangar header reads Ascendant. */
+    val ascendant: Boolean = false,
 ) : ProfileProjection
 
 data class PersistenceStatusProjection(
@@ -115,10 +149,11 @@ interface ProfileReadPort {
     fun query(query: ProfileQuery.GetHomeProgress): HomeProgressProjection
     fun query(query: ProfileQuery.GetCollection): CollectionProjection
     fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection
-    fun query(query: ProfileQuery.GetLabProgress): LabProgressProjection
+    fun query(query: ProfileQuery.GetMatrixProgress): MatrixProgressProjection
     fun query(query: ProfileQuery.GetLoadout): LoadoutProjection
     fun query(query: ProfileQuery.GetRebirthProgress): RebirthProgressProjection
     fun query(query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection
+    fun query(query: ProfileQuery.GetHangar): HangarProjection
 }
 
 /** Local Profile interactions with their read capability. */

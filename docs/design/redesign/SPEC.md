@@ -20,7 +20,7 @@ bottom once, then use it as a reference per screen.
 
 **In scope:** every pixel the player sees — HUD, world rendering style (enemies, Core,
 singularity, projectiles, pickups, damage numbers, kill/hit effects), in-run overlays (rewards,
-pause, points of interest, terminal/report), all menus (Home, Armory, Lab, Rebirth, Codex,
+pause, points of interest, terminal/report), all menus (Home, Armory, Core Matrix, Rebirth, Codex,
 Settings, profile-unavailable), phone layouts, typography, color, iconography, motion.
 
 **Also in scope (the only non-visual additions):**
@@ -235,7 +235,7 @@ References: `HUD.png`, `HUD-Anatomy.png`, state boards `HUD-Dash/Overheat/Polari
 - **Bottom-left:** integrity number only (wide 44 px, turns hazard when low) + segmented integrity bar (20-point segments, hit ghost) + shield cells (cyan) + dash charges as pips + heat bar (striped hazard when `overheated`). Character ability (`characterAbility`) shown as a small sheared meter in this cluster, no text label.
 - **Bottom-center:** speed number (wide, horizontally stretched with `velocityTier`) + 30-tick velocity ladder (volt, last ticks hazard when over the top tier) + overdrive bar (`overdriveCharge`; volt stripes while `overdriveTime > 0`).
 - **Bottom-right:** relic diamonds (`equippedRelics`, max from `content.relicPolicy.maxSlots`, synergy link bar) + **the game's active weapon slot(s)** (`weapon`, `weaponLevel`; the board shows six slots — show as many as the game actually has).
-- **States (no text):** dash = afterimage rings + dash pip spend; overheat = striped heat bar + "Overheat" stamp at the Core only while offline; polarity = hazard edge glow on the offending side + cursor halo pulse; overdrive = pulsing volt screen border + speed streaks; critical = hazard vignette at heart-rate pulse + integrity bar pulsing; elite = elite name + segmented hazard bar top-center under the timer; architect = "The Architect" + 3-part hazard bar top-center, timer hazard.
+- **States (no text):** dash = afterimage rings + dash pip spend; overheat = striped heat bar + "Overheat" stamp at the Core only while offline; polarity = narrow hazard edge glow (60 dp) on the offending side + cursor halo pulse; overdrive = pulsing volt screen border; critical = hazard vignette at heart-rate pulse + integrity bar pulsing; elite = elite name + segmented hazard bar top-center under the timer; architect = "The Architect" (its weakness glyph before the name while it has an aspect) + 3-part hazard bar top-center, the active third's track in its aspect hue and striped while it shifts (no part labels), timer hazard.
 - **Remove:** warning strings (`PolarityWarning`, `OverdriveActive`, etc. in HUD), "LV"/"Lv." labels, "/max" integrity, speed-state words, any key hints.
 - **Messages** (`message`, `messageTime`, build notifications): toasts per `Components` toast + `Feedback.png` multi-kill banners (ink → bone → volt, docking under the chain counter, never covering the Core).
 - **Performance HUD (F3):** mono 11 px, volt, top-left panel; keep content.
@@ -245,11 +245,11 @@ References: `HUD.png`, `HUD-Anatomy.png`, state boards `HUD-Dash/Overheat/Polari
 ### 7.2 World & combat feedback — `WorldEntityRenderer.kt`, `WorldCombatRenderer.kt`, `WorldBackgroundRenderer.kt`, `PointOfInterestRenderer.kt`, `fx/*`
 References: `Feedback.png`, `HUD*.png`, `boards/Feedback.dc.html` (9 loops with timings).
 - Background: ink with 40 px ink-1 grid, subtle radial halftone around the Core.
-- Enemies: ink-1 fill, hazard 2 px outline, hazard core dot for shooters; elite = octagon double outline, slow spin; Architect = triangle-in-square frame (see `Architect.png`). Hit flash: fill turns bone for 1 frame.
+- Enemies: ink-1 fill (aspect-tinted), hazard outline (1.5/2/3 px by frame), hazard core dot for shooters; affinity as an element inner contour and a lower-left weakness tab; elite = octagon double outline, slow spin, its aspect as two element inner contours; Architect = triangle-in-square frame (see `Architect.png`), frames in its aspect hue, a pulsing bone shield while it shifts. Hit flash: fill turns bone for 1 frame.
 - Core: bone disc; Form silhouette per `CoreShape` (ORB/PRISM/SHARD/RING/DIAMOND/TESSERACT). Singularity: hazard rings + dot with crosshair ticks.
 - Damage numbers (respect existing settings: on/off, size, format, color thresholds): cond 900i; color tiers bone < 200, volt < 1K, heat < 3K, hazard ≥ 3K with crit stamp; pop with overshoot, drift away from the Core over 600 ms.
 - Kill: flash, 4 shards follow travel direction, data/matter drops; "dismantled" slash glyph only for elites.
-- Ram / impact: 1 inverted frame (respect screen-shake setting and cap shake at 6 px), bone slash across the target, volt ring.
+- Ram / impact: screen shake (respect the setting; a smooth sway whose reach grows with the square of the hit, capped at 6 dp; no full-screen flash), bone slash across the target, volt ring.
 - Damage taken: hazard edge glow on the side of the source, split-channel integrity number, hazard ghost drains in 500 ms.
 - Pickups: Data (bone diamonds) and Matter (volt gems) arc into the Core; one summed line, not a popup each.
 - Points of interest (`PointOfInterestKind`): SEALED_ANOMALY = gravitic diamond marker with hazard corner brackets and a timer; COLLAPSING_ORBIT = bone ring with volt progress arc; RESONANT_CIRCUIT/totem = stacked sheared plates with a volt key block (see `Totem.png`, `Anomaly.png`). Off-screen markers: small icon + distance at the screen edge (no arrow shape).
@@ -280,13 +280,13 @@ The game's Home hosts **both** the menu (START/LAB/ARMORY/REBIRTH/CODEX/SETTINGS
 ### 7.7 Armory — `ball/profile/interaction/armory/impl/*`
 `Armory.png`: header (Home button, title, "7/12"-style count from data, (!) info), 4-column weapon tiles (status STARTER/OWNED or cost with gem; icon; name; tags as separate words), right detail panel (icon plate, wide name, description, tag list, Mastery ladder with Lvl 1/3/6/10 milestones and their bonuses, (!) info), primary Unlock with cost / Set as starter / disabled with "Need N more" in hazard. No footer.
 
-### 7.8 Lab — `lab/impl/*` (`LabRenderer.kt`, `LabState.kt`, `LabPointerResolver.kt`)
-`Lab.png`: rows (icon, name, rank pips = sheared cells: owned volt, next outlined, empty line), current value (cond), cost with gem or Max stamp; right detail (icon, wide name, description, Now / Next rank panels, "Rank N/M", Buy rank primary button with cost). Purchase feedback: row flashes (invert 1 frame) and nudges 8 px (Pull). Header total "N/76" from data + (!) info. No footer, no key hints.
+### 7.8 Core Matrix — `matrix/impl/*` (`MatrixRenderer.kt`, `MatrixState.kt`, `MatrixLayout.kt`)
+Replaces the Lab (route and L key unchanged). Four branch columns (Kinetic, Bulwark, Systems, Fortune; role-coloured headers with icon and owned/total count) of `.tile` node tiles, two lanes per branch and one row per prerequisite depth; elbow prerequisite lines (bone when the prerequisite is owned, line-2 otherwise) bend in the gap above the node. A tile shows the name, rank pips (owned in the branch colour, next outlined when affordable), and the next price with a gem, `Max`, or the lock reason with the lock glyph (`Reborn N`, `Locked`); owned nodes carry a branch-coloured bar, keystones a gem. Right detail (phones: docked below the scrolling grid): branch / keystone / Rebirth tag, wide name, description, `Rank N/M` with pips, the status sentence (what is missing), Buy rank primary button with cost. Header: owned/total nodes + (!) info and a two-press `Reset` (ghost, then hazard `Confirm`) that refunds every rank. Hover highlights a tile; a press, a tap or keyboard focus selects it (Buy rank acts on that selection, never on a tile the pointer only crossed), a press or Enter on the selected tile buys, arrows move between tiles. Purchase feedback: the tile flashes (invert 1 frame) and nudges (Pull). No footer, no key hints.
 
 ### 7.9 Rebirth — `rebirth/impl/*` (`RebirthRenderer.kt`, `RebirthState.kt`, `RebirthPointerResolver.kt`)
 `Rebirth.png`, `states/Rebirth--tierNN*.png`, `Rebirth-Tiers.png`, `Rebirth-X.png`, `Rebirth-Advance.png`, `boards/Rebirth.dc.html`:
 - Theme per tier from `tokens.json rebirthTiers` (index = target tier), background tint, halftone density, orbit ring count, hazard band from tier 5, streaks; tier 10 = pure black, grayscale, animated black hole (lensing disk, photon ring, event horizon, infalling sparks — see `.bh` in kk.css).
-- Big tier numeral (wide 300; 230 at tier 10), direction name (use the game's tier modifier names/data), tier ladder 0–10 (cleared = tier color, current = bone, next = outlined in its color, 10 = striped b/w), comparison table (hostile vs for-you modifiers, current vs next; increases in hazard), Advance button in the tier color with armed (two-press or the game's existing confirm) and locked states; (!) info: "Your run build resets. Matter, Lab upgrades, unlocked weapons, discoveries and settings stay." (adapt to what the game actually keeps).
+- Big tier numeral (wide 300; 230 at tier 10), direction name (use the game's tier modifier names/data), tier ladder 0–10 (cleared = tier color, current = bone, next = outlined in its color, 10 = striped b/w), comparison table (hostile vs for-you modifiers, current vs next; increases in hazard), Advance button in the tier color with armed (two-press or the game's existing confirm) and locked states; (!) info: "Your run build resets. Matter, Matrix nodes, unlocked weapons, discoveries and settings stay." (adapt to what the game actually keeps).
 - Advance animation (`Rebirth-Advance.png`, keyframes `kk-adv-*` in kk.css): whole sequence 1.6 s — shutter slabs at −27° sweep across in 620 ms (Snap, staggered), stepped hazard flash, old screen dims from 30%, new numeral slams from scale 2.6 / −10° after 28% (Pull), short shake at 30–62%, then the Start button. Nothing lingers after 1.6 s.
 - Also theme the in-run arena lightly by rebirth tier (`rebirthLevel` is in the render model): grid tint and halftone color only.
 
@@ -399,7 +399,7 @@ CHROME_BIN=/path/to/chrome ./gradlew wasmJsBrowserTest wasmJsBrowserDistribution
 | Home, Mobile-Home, states/Home--*, states/Mobile-Home--* | 7.6 |
 | Deploy, states/Deploy--* | 7.6 (form choice on Home) |
 | Armory | 7.7 |
-| Lab | 7.8 |
+| Core Matrix (Lab route) | 7.8 |
 | Rebirth, Rebirth-X, Rebirth-Advance, Rebirth-Tiers, states/Rebirth--* | 7.9 |
 | Codex | 7.10 |
 | Settings, states/Settings--* | 7.11 (+ §9) |

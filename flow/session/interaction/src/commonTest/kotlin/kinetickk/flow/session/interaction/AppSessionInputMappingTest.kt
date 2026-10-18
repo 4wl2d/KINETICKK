@@ -4,7 +4,6 @@
 package kinetickk.flow.session.interaction
 
 import androidx.compose.ui.input.key.Key
-import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthOutput
 import kinetickk.flow.session.api.AppDestination
@@ -26,6 +25,7 @@ class AppSessionInputMappingTest {
             Key.A to SessionShortcut.ARMORY,
             Key.B to SessionShortcut.REBIRTH,
             Key.C to SessionShortcut.CODEX,
+            Key.H to SessionShortcut.HANGAR,
             Key.I to SessionShortcut.CODEX,
             Key.M to SessionShortcut.MUTE,
             Key.Escape to SessionShortcut.BACK,
@@ -49,10 +49,12 @@ class AppSessionInputMappingTest {
             HomeOutput.OpenCodex.toSessionPulse(),
         )
         assertEquals(
-            CoreShape.PRISM,
-            assertIs<SessionInteractionPulse.SelectCoreShapeRequested>(
-                HomeOutput.SelectCoreShape(CoreShape.PRISM).toSessionPulse(),
-            ).shape,
+            SessionInteractionPulse.OpenOverlay(AppDestination.Hangar),
+            HomeOutput.OpenHangar.toSessionPulse(),
+        )
+        assertEquals(
+            SessionInteractionPulse.CloseOverlay,
+            kinetickk.ball.profile.interaction.hangar.api.HangarOutput.Back.toSessionPulse(),
         )
         assertEquals(
             SessionInteractionPulse.ExitRunRequested,
@@ -63,12 +65,12 @@ class AppSessionInputMappingTest {
             GameplayInteractionOutput.RestartRun.toSessionPulse(),
         )
         assertEquals(
-            SessionInteractionPulse.RebirthRequested,
-            RebirthOutput.ArmRequested.toSessionPulse(),
+            SessionInteractionPulse.RebirthRequested(3),
+            RebirthOutput.ArmRequested(3).toSessionPulse(),
         )
         assertEquals(
-            SessionInteractionPulse.RebirthRequested,
-            RebirthOutput.ConfirmRequested.toSessionPulse(),
+            SessionInteractionPulse.RebirthRequested(0),
+            RebirthOutput.ConfirmRequested(0).toSessionPulse(),
         )
     }
 

@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus
 
 import kinetickk.ball.gameplay.nucleus.simulation.buildSummary
 
+import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.gameplay.api.GameplayActiveWeaponProjection
 import kinetickk.ball.gameplay.api.GameplayBuildSummaryProjection
 import kinetickk.ball.gameplay.api.GameplayConfigurationRejection
@@ -40,6 +41,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.toRenderModel
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
+import kinetickk.ball.profile.api.isWithinRebirthBounds
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableListOfSize
@@ -368,12 +370,12 @@ object GameplayNucleus {
         if (profile.loadout.selectedWeapon !in profile.loadout.unlockedWeapons) {
             return GameplayConfigurationRejection.STARTING_WEAPON_LOCKED
         }
-        if (profile.labProgress.ranks.size != content.metaUpgrades.size) {
-            return GameplayConfigurationRejection.META_RANK_COUNT_MISMATCH
+        if (profile.matrix.ranks.size != MatrixNodeId.entries.size) {
+            return GameplayConfigurationRejection.MATRIX_RANK_COUNT_MISMATCH
         }
-        content.metaUpgrades.forEachIndexed { index, definition ->
-            if (profile.labProgress.ranks[index] !in 0..definition.maxRanks) {
-                return GameplayConfigurationRejection.META_RANK_OUT_OF_RANGE
+        content.matrixNodes.forEach { definition ->
+            if (profile.matrix.rank(definition.id) !in 0..definition.maxRanks) {
+                return GameplayConfigurationRejection.MATRIX_RANK_OUT_OF_RANGE
             }
         }
         if (profile.collection.discoveredItemIds.any { content.item(it) == null }) {
@@ -382,10 +384,9 @@ object GameplayNucleus {
         if (profile.collection.discoveredRelicIds.any { id -> content.relics.none { it.id == id } }) {
             return GameplayConfigurationRejection.UNKNOWN_DISCOVERED_RELIC
         }
-        if (
-            profile.rebirthProgress.level !in content.rebirth.minimumLevel..content.rebirth.maximumLevel ||
-            profile.rebirthProgress.highestCleared !in -1..profile.rebirthProgress.level
-        ) return GameplayConfigurationRejection.REBIRTH_LEVEL_OUT_OF_RANGE
+        if (!profile.rebirthProgress.isWithinRebirthBounds(content.rebirth.minimumLevel, content.rebirth.maximumLevel)) {
+            return GameplayConfigurationRejection.REBIRTH_LEVEL_OUT_OF_RANGE
+        }
         if (profile.economy.matter < 0L) return GameplayConfigurationRejection.NEGATIVE_MATTER
         if (profile.economy.lifetimeMatter < profile.economy.matter) {
             return GameplayConfigurationRejection.LIFETIME_MATTER_BELOW_CURRENT

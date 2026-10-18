@@ -24,7 +24,7 @@ data class HomeUiModel(
     val itemCount: Int,
     val weaponCount: Int,
     val unlockedCoreShapes: ImmutableSet<CoreShape>,
-    /** Cumulative achievements that unlock forms (progress behind a locked form's (!)). */
+    /** Cumulative achievements that unlock forms. */
     val characterAchievements: CharacterAchievementProgress = CharacterAchievementProgress(),
     val discoveredRelicCount: Int = 0,
     val relicCount: Int = 0,
@@ -32,10 +32,15 @@ data class HomeUiModel(
     val startingWeaponName: String? = null,
     /** True when Matter covers the unlock cost of at least one locked weapon. */
     val weaponUnlockAffordable: Boolean = false,
-    val labRanks: Int = 0,
-    val labMaxRanks: Int = 0,
-    val labMaxedUpgrades: Int = 0,
-    val labUpgradeCount: Int = 0,
+    /** Owned Core Matrix ranks over all ranks, and owned nodes over all nodes (0 while unread). */
+    val matrixRanks: Int = 0,
+    val matrixMaxRanks: Int = 0,
+    val matrixOwnedNodes: Int = 0,
+    val matrixNodeCount: Int = 0,
+    /** Rebirth rank (one above the highest clear): the badge on the Rebirth chip. */
+    val rebirthRank: Int = rebirthLevel,
+    /** Every Rebirth tier cleared: the badge reads Ascendant under the gold crown. */
+    val ascendant: Boolean = false,
 ) {
     fun coreShape(shape: CoreShape): CoreShapeDefinition =
         coreShapes.first { definition -> definition.id == shape }
@@ -45,7 +50,8 @@ data class HomeUiModel(
 }
 
 sealed interface HomeOutput {
-    data class SelectCoreShape(val shape: CoreShape) : HomeOutput
+    /** The current-character card or the H key: choose a character in the Hangar. */
+    data object OpenHangar : HomeOutput
     data object StartRun : HomeOutput
     data object OpenSettings : HomeOutput
     data object OpenLab : HomeOutput

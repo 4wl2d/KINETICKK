@@ -4,6 +4,11 @@
 package kinetickk.ball.gameplay.nucleus.performance
 
 import kinetickk.ball.gameplay.api.GameplayInstanceId
+import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.api.GameplayRevision
 import kinetickk.ball.gameplay.api.GameplayRunPhase
@@ -14,6 +19,10 @@ import kinetickk.ball.gameplay.nucleus.GameplayNucleusPulse
 import kinetickk.ball.gameplay.nucleus.GameplayOutput
 import kinetickk.ball.gameplay.nucleus.GameplayState
 import kinetickk.ball.gameplay.nucleus.characterization.gameScenario
+import kinetickk.ball.gameplay.nucleus.model.Obstacle
+import kinetickk.ball.gameplay.nucleus.model.CombatField
+import kinetickk.ball.gameplay.nucleus.model.CombatFieldKind
+import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.TrailPoint
@@ -23,8 +32,23 @@ import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
 import kinetickk.ball.gameplay.nucleus.protocol.SimulationOutput
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
+import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
+import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
+import kinetickk.ball.gameplay.nucleus.simulation.ION_SWARM_DAMAGE
+import kinetickk.ball.gameplay.nucleus.simulation.ION_SWARM_PIERCE
+import kinetickk.ball.gameplay.nucleus.simulation.addField
+import kinetickk.ball.gameplay.nucleus.simulation.beginWeaponActivation
+import kinetickk.ball.gameplay.nucleus.simulation.buildTestState
+import kinetickk.ball.gameplay.nucleus.simulation.effectiveWeaponPower
+import kinetickk.ball.gameplay.nucleus.simulation.firePlayerProjectile
+import kinetickk.ball.gameplay.nucleus.simulation.ionOrbitalCount
+import kinetickk.ball.gameplay.nucleus.simulation.own
+import kinetickk.ball.gameplay.nucleus.simulation.runScale
+import kinetickk.ball.gameplay.nucleus.simulation.takeProgressUpdate
 import kinetickk.ball.gameplay.nucleus.simulation.addEnemyForTesting
 import kinetickk.ball.gameplay.nucleus.simulation.consumeFixedStepBudget
 import kinetickk.ball.gameplay.nucleus.simulation.copyForReduction
@@ -38,7 +62,9 @@ import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.performance.BenchmarkScenario
 import kinetickk.performance.BenchmarkSuiteIdentity
 import kinetickk.performance.BenchmarkValidation
+import kinetickk.performance.BenchmarkValidationContext
 import kinetickk.performance.runBenchmarkSuite
+import java.lang.reflect.Modifier
 
 internal const val GAMEPLAY_BENCHMARK_SUITE_VERSION = "gameplay-core-v3"
 private const val DEFAULT_SEED = 731_991
@@ -87,6 +113,12 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
     private val idleAuthority = authorityState(idle)
     private val capacityAuthority = authorityState(capacity)
     private val pausedAuthority = authorityState(paused)
+    private val reactions = reactionPerformanceState(seed + 10)
+    private val fastReactions = reactionPerformanceState(seed + 10, simulationSpeed = 2f)
+    private val reactionsAuthority = authorityState(reactions)
+    private val fastReactionsAuthority = authorityState(fastReactions)
+    private val reactionsSnapshot = GameplayNucleus.renderSnapshot(reactionsAuthority)
+    private val fastReactionsSnapshot = GameplayNucleus.renderSnapshot(fastReactionsAuthority)
     private var controlCounter = 1L
     private val traceFingerprint = deterministicTraceFingerprint(seed + 9)
 
@@ -316,6 +348,34 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
             result
         },
         BenchmarkScenario(
+            name = "published_reaction_frame_60hz_1x",
+            category = "publication_pipeline",
+            description = "Copy, simulate and publish a crowded elemental build at 1x speed with the preceding render snapshot.",
+            metadata = reactionMetadata(reactions, fixedSteps = 2),
+            maximumOperations = 5_000,
+        ) { validation ->
+            publishedReactionSignature(reactionsAuthority, reactionsSnapshot, frame60, validation)
+        },
+        BenchmarkScenario(
+            name = "published_reaction_frame_60hz_2x",
+            category = "publication_pipeline",
+            description = "Copy, simulate and publish the same elemental build at the supported 2x speed.",
+            metadata = reactionMetadata(fastReactions, fixedSteps = 4),
+            maximumOperations = 5_000,
+        ) { validation ->
+            publishedReactionSignature(fastReactionsAuthority, fastReactionsSnapshot, frame60, validation)
+        },
+        BenchmarkScenario(
+            name = "published_reaction_burst_100ms_2x",
+            category = "publication_pipeline",
+            description = "Catch up a 100 ms frame at 2x speed with active reactions, fields and high weapon activation.",
+            // The Float accumulator executes 23 steps here; its remainder carries into the next frame.
+            metadata = reactionMetadata(fastReactions, fixedSteps = 23),
+            maximumOperations = 2_000,
+        ) { validation ->
+            publishedReactionSignature(fastReactionsAuthority, fastReactionsSnapshot, frame100Millis, validation)
+        },
+        BenchmarkScenario(
             name = "trace_2s_60hz",
             category = "trace",
             description = "Deterministic 120-frame replay including pointer movement and render snapshots.",
@@ -368,6 +428,12 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
             authorityOutcomeFingerprint(idleAuthority, frame60)
         "nucleus_frame_60hz_capacity" ->
             authorityOutcomeFingerprint(capacityAuthority, frame60)
+        "published_reaction_frame_60hz_1x" ->
+            authorityOutcomeFingerprint(reactionsAuthority, frame60)
+        "published_reaction_frame_60hz_2x" ->
+            authorityOutcomeFingerprint(fastReactionsAuthority, frame60)
+        "published_reaction_burst_100ms_2x" ->
+            authorityOutcomeFingerprint(fastReactionsAuthority, frame100Millis)
         "nucleus_pointer_move_idle", "published_pointer_move_idle" ->
             authorityOutcomeFingerprint(idleAuthority, pointerMove)
         "nucleus_viewport_change_idle" ->
@@ -414,6 +480,12 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
         "published_frame_60hz_idle" -> publishedPipelineSignature(idleAuthority, frame60)
         "published_pointer_move_idle" -> publishedPipelineSignature(idleAuthority, pointerMove)
         "published_frame_paused" -> publishedPipelineSignature(pausedAuthority, frame60)
+        "published_reaction_frame_60hz_1x" ->
+            publishedReactionSignature(reactionsAuthority, reactionsSnapshot, frame60)
+        "published_reaction_frame_60hz_2x" ->
+            publishedReactionSignature(fastReactionsAuthority, fastReactionsSnapshot, frame60)
+        "published_reaction_burst_100ms_2x" ->
+            publishedReactionSignature(fastReactionsAuthority, fastReactionsSnapshot, frame100Millis)
         "trace_2s_60hz" -> deterministicTraceFingerprint(seed + 9)
         else -> error("Missing expected timed result for benchmark scenario: $name")
     }
@@ -495,6 +567,43 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
         return mixLong(signature, stateSignature(checkNotNull(frame.nextState.engine).model))
     }
 
+    private fun reactionMetadata(model: MutableGameState, fixedSteps: Int): Map<String, String> =
+        stateCardinality(model, seed + 10) + mapOf(
+            "workloadVersion" to "reaction-high-activation-v1",
+            "fixedSteps" to fixedSteps.toString(),
+            "simulationSpeed" to model.settings.simulationSpeed.toString(),
+            "weapon" to model.weapon.name,
+            "weaponLevel" to model.weaponLevel.toString(),
+            "attackSpeed" to model.attackSpeed.toString(),
+            "ownedItems" to model.build.ownedItemCount.toString(),
+            "combatFields" to model.combatFields.size.toString(),
+            "stateFingerprint" to canonicalStateFingerprint(model).toString(),
+            "renderReuse" to "committed-predecessor",
+        )
+
+    private fun publishedReactionSignature(
+        source: GameplayState,
+        reusableSnapshot: GameplayRenderSnapshot,
+        pulse: GameplayInteractionPulse,
+        validation: BenchmarkValidationContext? = null,
+    ): Long {
+        val decision = GameplayNucleus.decide(source, GameplayNucleusPulse.Intent(pulse))
+        val frame = (decision as? GameplayDecision.Accepted)?.frame
+            ?: error("Reaction benchmark pulse was rejected: $decision")
+        val model = checkNotNull(frame.nextState.engine).model
+        val snapshot = GameplayNucleus.renderSnapshot(frame.nextState, source, reusableSnapshot)
+        validation?.observeOutcome {
+            check(
+                exactRenderValueFacts(checkNotNull(snapshot.renderModel)) ==
+                    exactRenderValueFacts(checkNotNull(GameplayNucleus.renderSnapshot(frame.nextState).renderModel)),
+            ) {
+                "Reaction benchmark reused projection differs from a fresh projection"
+            }
+            canonicalDecisionOutcomeFingerprint(model, gameplayOutputFingerprint(frame.outputs), includeRender = true)
+        }
+        return mixLong(renderSnapshotSignature(snapshot), stateSignature(model))
+    }
+
     private fun deterministicTraceFingerprint(traceSeed: Int): Long {
         var state = authorityState(newRunningState(traceSeed))
         repeat(TRACE_FRAMES) { frameIndex ->
@@ -561,6 +670,97 @@ private fun capacityState(seed: Int): MutableGameState = newRunningState(seed).a
     repeat(MAX_TRAIL) { index -> trail += TrailPoint(-1_300f + index * 2f, -700f, 0.5f) }
 }
 
+/**
+ * A repeatable late-run combat snapshot using canonical item, weapon and field rules. Its enemy
+ * integrity is raised so copies of the same crowded instant measure combat rather than an emptied
+ * arena. Pre-existing statuses, fields and sixteen in-flight volleys model an active elemental build;
+ * no cooldown, reaction budget, generation limit or activation rule is changed by the workload.
+ */
+internal fun reactionPerformanceState(seed: Int, simulationSpeed: Float = 1f): MutableGameState = buildTestState(
+    RelicId.STORMHEART_CAPACITOR,
+    RelicId.ECHO_CHAMBER,
+    RelicId.EVENT_HORIZON,
+    RelicId.THUNDER_CHOIR,
+    seed = seed,
+    rebirth = 4,
+    shape = CoreShape.HEXAGON,
+    weapon = WeaponId.ION_SWARM,
+).apply {
+    settings = settings.copy(simulationSpeed = simulationSpeed).normalized()
+    elapsed = 300f
+    level = 40
+    weaponLevel = 10
+    for (name in listOf(
+        "Servo Trigger", "Gyro Stabilizer", "Hyperfeed Rails", "Thermal Regulator",
+        "Incendiary Rounds", "Rime Rounds", "Arc Relay", "Graviton Seed", "Rust Spores",
+        "Subwoofer Rounds", "Napalm Feed", "Cryo Feed", "Blight Cartridge",
+        "Catalyst Matrix", "Resonance Fork", "Storm Lattice", "Dark Star",
+    )) {
+        val item = content.items.single { it.name == name }
+        own(name, stacks = item.maxStacks)
+    }
+    heat = 60f
+    overdriveTime = 5f
+    stormCharge = 0.25f
+    velocityX = 900f
+    velocityY = 0f
+    pointerX = 1_000f
+    pointerY = 360f
+    weaponClock = 0f
+
+    repeat(content.rebirth.maxActiveEnemies) { index ->
+        val enemy = addEnemyForTesting(
+            x = 210f + (index % 12) * 20f,
+            y = -90f + (index / 12) * 20f,
+            hp = 1_000_000f,
+            radius = 14f,
+        )
+        // Stagger the older element, so incoming Ion and Thermal exercise different reaction paths.
+        val older = StatusElement.entries[index % StatusElement.entries.size]
+        enemy.status[StatusCell.STACKS + older.ordinal] = 3f
+        enemy.status[StatusCell.DECAY_AT + older.ordinal] = elapsed + 2f
+        enemy.status[StatusCell.GENERATION + older.ordinal] = 0f
+    }
+    val fusion = content.build.reaction(ReactionId.FUSION)
+    val potency = (build.potency(StatusElement.THERMAL) + build.potency(StatusElement.GRAVITIC)) * 0.5f
+    repeat(content.build.policy.maximumFields) { index ->
+        addField(CombatField(
+            kind = CombatFieldKind.FUSION,
+            remaining = 1.2f,
+            x = 190f + (index % 4) * 90f,
+            y = -100f + (index / 4) * 100f,
+            radius = fusion.radius,
+            damagePerSecond = fusion.power * 4f * potency * build.reactionPower * runScale(),
+            element = StatusElement.THERMAL,
+            stacksPerTick = 1,
+            generation = 1,
+            pull = 220f,
+            tickClock = CombatField.TICK_SECONDS - MutableGameState.FIXED_STEP * 0.5f,
+        ))
+    }
+    val volleySize = ionOrbitalCount()
+    repeat(16) { volley ->
+        val serial = beginWeaponActivation()
+        repeat(volleySize) { shot ->
+            val enemy = enemies[(volley * volleySize + shot) % enemies.size]
+            firePlayerProjectile(
+                x = enemy.x - 8f,
+                y = enemy.y,
+                angle = 0f,
+                projectileSpeed = 620f,
+                damage = ION_SWARM_DAMAGE * effectiveWeaponPower(),
+                pierce = ION_SWARM_PIERCE + 1,
+                radius = 4f,
+                colorIndex = 1,
+                procKey = serial,
+            )
+        }
+    }
+    takeSoundCues()
+    takeVisualFxCues()
+    takeProgressUpdate()
+}
+
 private fun collisionState(seed: Int, hit: Boolean): MutableGameState = newRunningState(seed).apply {
     enemies.clear()
     projectiles.clear()
@@ -590,7 +790,7 @@ private fun collisionState(seed: Int, hit: Boolean): MutableGameState = newRunni
     repeat(MAX_TRAIL) { index -> trail += TrailPoint(-1_300f + index, -700f, 0.5f) }
 }
 
-private fun authorityState(model: MutableGameState): GameplayState = GameplayState(
+internal fun authorityState(model: MutableGameState): GameplayState = GameplayState(
     instanceId = GameplayInstanceId(RunId(1L)),
     revision = GameplayRevision.ZERO,
     phase = when (model.phase) {
@@ -632,6 +832,25 @@ private fun renderSnapshotSignature(
     return signature
 }
 
+/**
+ * Untimed desktop verification of every stored render fact, including discovery masks behind public
+ * reads. The outer model deliberately has reference equality; its immutable collections and value
+ * objects have value equality. Reflection also covers newly added fields without a second field list.
+ */
+internal fun exactRenderValueFacts(model: GameplayRenderModel): List<Pair<String, Any?>> =
+    GameplayRenderModel::class.java.declaredFields
+        .filterNot { Modifier.isStatic(it.modifiers) || it.isSynthetic }
+        .sortedBy { it.name }
+        .map { field ->
+            field.isAccessible = true
+            val value = field.get(model)
+            field.name to when (value) {
+                is Float -> value.toRawBits()
+                is Double -> value.toRawBits()
+                else -> value
+            }
+        }
+
 private fun stateSignature(state: MutableGameState): Long {
     var signature = state.elapsed.toRawBits().toLong()
     signature = mix(signature, state.phase.name.hashCode())
@@ -660,8 +879,32 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
     // Release 0.2.0 changed accepted mechanics. Include their retained facts in the witness;
     // a matching adapter file alone does not make the old gameplay outcome comparable.
     signature = mix(signature, state.coreShape.ordinal)
+    signature = mix(signature, state.coreRadius.toRawBits())
     signature = mix(signature, state.characterRuntime.toString().hashCode())
+    // 0.4.0 weapons: the weapon runtime (entities, proc gates, counters, orbit phase) in its deterministic text.
+    signature = mix(signature, state.weaponRuntime.toString().hashCode())
     signature = mix(signature, state.nextEliteAt.toRawBits())
+    signature = mix(signature, state.elitesSpawned)
+    // 0.4.0 spawn director: its own stream, pacing phase, budget, planned event and cooldowns.
+    signature = mix(signature, state.spawnRandom.snapshot().hashCode())
+    signature = mix(signature, state.heraldsSpawned)
+    signature = mix(signature, state.directorPhase)
+    signature = mix(signature, state.directorPhaseUntil.toRawBits())
+    signature = mix(signature, state.spawnBudget.toRawBits())
+    signature = mix(signature, state.pendingEventKind)
+    signature = mix(signature, state.pendingEventSize)
+    signature = mix(signature, state.pendingEventType)
+    signature = mix(signature, state.recentEventTypes)
+    signature = mix(signature, state.previousEventTypes)
+    signature = mix(signature, state.ambushReadyAt.toRawBits())
+    signature = mix(signature, state.encircleReadyAt.toRawBits())
+    signature = mix(signature, state.wallReadyAt.toRawBits())
+    signature = mix(signature, state.capOverflowReadyAt.toRawBits())
+    signature = mix(signature, state.ambushSpeedSeconds.toRawBits())
+    signature = mix(signature, state.spawnEventCount)
+    signature = mix(signature, state.lastSpawnEventKind)
+    signature = mix(signature, state.lastSpawnEventPlanned)
+    signature = mix(signature, state.lastSpawnEventSpawned)
     signature = mix(signature, state.nextLevelData)
     signature = mix(signature, state.smoothedVelocityX.toRawBits())
     signature = mix(signature, state.smoothedVelocityY.toRawBits())
@@ -673,20 +916,94 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
     signature = mix(signature, state.pendingDashHits)
     signature = mix(signature, state.pendingCompletedOrbits)
     signature = mix(signature, state.pendingArchitectDefeatedWith?.ordinal ?: -1)
+    // Core Matrix: folded run modifiers, per-run Matrix runtime and the achievement counters.
+    signature = mix(signature, state.matrix.hashCode())
+    state.matrixRanks.forEach { signature = mix(signature, it) }
+    signature = mix(signature, state.itemOffersOpened)
+    signature = mix(signature, if (state.secondWindSpent) 1 else 0)
+    signature = mix(signature, state.matrixFreeDashReadyAt.toRawBits())
+    signature = mix(signature, state.pendingTotalKills)
+    signature = mix(signature, state.pendingRicochets)
+    signature = mix(signature, state.pendingDataPickups)
+    signature = mix(signature, if (state.achievementFlushDue) 1 else 0)
     signature = mix(signature, state.pointsOfInterest.toString().hashCode())
     signature = mix(signature, state.nextPointOfferIndex)
     signature = mix(signature, state.pendingDirectedRewards.toString().hashCode())
     signature = mix(signature, state.directedReward?.ordinal ?: -1)
     signature = mix(signature, state.selectedRewardFocus?.ordinal ?: -1)
-    signature = mix(signature, state.synergyEffects.toString().hashCode())
-    state.synergyCooldowns.forEach { signature = mix(signature, it.toRawBits()) }
-    signature = mix(signature, state.synergyManeuverCharge.toRawBits())
-    signature = mix(signature, if (state.ghostDashPending) 1 else 0)
-    signature = mix(signature, state.ghostDashStartX.toRawBits())
-    signature = mix(signature, state.ghostDashStartY.toRawBits())
+    // Build runtime: the composable effect system's retained facts.
+    state.rebornItems.forEach { signature = mix(signature, it) }
+    signature = mix(signature, state.acquisitionOrder.hashCode())
+    signature = mix(signature, state.build.upsideMask)
+    signature = mix(signature, state.build.liabilityMask)
+    state.clauseReadyAt.forEach { signature = mix(signature, it.toRawBits()) }
+    state.clauseCounters.forEach { signature = mix(signature, it) }
+    state.statusAccumulators.forEach { signature = mix(signature, it.toRawBits()) }
+    signature = mix(signature, state.buffs.toString().hashCode())
+    signature = mix(signature, state.combatFields.toString().hashCode())
+    signature = mix(signature, state.echoHits.toString().hashCode())
+    signature = mix(signature, state.severedRelics.toString().hashCode())
+    signature = mix(signature, state.reactionTokens.toRawBits())
+    signature = mix(signature, state.breakTokens.toRawBits())
+    signature = mix(signature, state.discoveredReactionMask)
+    signature = mix(signature, state.discoveredPairingMask)
+    signature = mix(signature, state.stormCharge.toRawBits())
+    signature = mix(signature, state.stasisMeter.toRawBits())
+    // 0.4.0 frame pacing: render interpolation sources and the accepted viewport density.
+    signature = mix(signature, state.accumulator.toRawBits())
+    signature = mix(signature, state.previousCameraX.toRawBits())
+    signature = mix(signature, state.previousCameraY.toRawBits())
+    signature = mix(signature, state.previousMorningstarX.toRawBits())
+    signature = mix(signature, state.previousMorningstarY.toRawBits())
+    signature = mix(signature, state.viewportDensity.toRawBits())
+    signature = mix(signature, if (state.interpolationPrimed) 1 else 0)
+    signature = mix(signature, state.stasisBank)
+    signature = mix(signature, state.overdriveBurnoutUntil.toRawBits())
+    signature = mix(signature, state.invulnerableUntil.toRawBits())
+    signature = mix(signature, if (state.ouroborosSpent) 1 else 0)
+    signature = mix(signature, state.offerPity)
+    // 0.4.0 Null Covenant: the maximum integrity its liability withholds.
+    signature = mix(signature, state.integrityLiabilityCut.toRawBits())
+    signature = mix(signature, state.rewardRandom.snapshot().hashCode())
+    // 0.4.0 world obstacles: the run seed, the rebase origin, the generated window and collision cooldowns.
+    signature = mix(signature, state.runSeed)
+    signature = mixLong(signature, state.worldOriginX.toRawBits())
+    signature = mixLong(signature, state.worldOriginY.toRawBits())
+    signature = mix(signature, state.obstacleField.centerChunkX)
+    signature = mix(signature, state.obstacleField.centerChunkY)
+    signature = obstacleFieldFingerprint(signature, state.obstacleField.obstacles)
+    signature = mix(signature, state.destroyedObstacleIds.hashCode())
+    signature = mix(signature, state.obstacleHitReadyAt.toRawBits())
+    signature = mix(signature, state.nearMissReadyAt.toRawBits())
+    signature = mix(signature, state.reviveInvulnerableUntil.toRawBits())
+    // 0.4.0 Rebirth rework: the unlock rank and the pending Volatile Remains bursts.
+    signature = mix(signature, state.rebirthRank)
+    signature = mix(signature, state.volatileBursts.toString().hashCode())
+    state.pickups.forEach { signature = mix(signature, if (it.attracted) 1 else 0) }
     state.enemies.forEach {
         signature = mix(signature, it.characterMarkTime.toRawBits())
         signature = mix(signature, it.lastCharacterDash)
+        signature = mix(signature, it.aspect)
+        signature = mix(signature, if (it.aspectImmune) 1 else 0)
+        signature = mix(signature, it.phase)
+        signature = mix(signature, it.shiftUntil.toRawBits())
+        signature = mix(signature, it.escortsPending)
+        signature = mix(signature, it.lastDamagedAt.toRawBits())
+        signature = mix(signature, it.disabledUntil.toRawBits())
+        signature = mix(signature, it.silencedUntil.toRawBits())
+        signature = mix(signature, it.mode)
+        signature = mix(signature, it.modeUntil.toRawBits())
+        signature = mix(signature, it.facing.toRawBits())
+        signature = mix(signature, if (it.guarded) 1 else 0)
+        signature = mix(signature, it.linkedBy)
+        signature = mix(signature, it.linkedUntil.toRawBits())
+        signature = mix(signature, it.shieldUntil.toRawBits())
+        signature = mix(signature, it.abilityAt.toRawBits())
+        signature = mix(signature, it.thrownUntil.toRawBits())
+        signature = mix(signature, it.slamReadyAt.toRawBits())
+        signature = mix(signature, if (it.armored) 1 else 0)
+        signature = mix(signature, if (it.armorCracked) 1 else 0)
+        it.status.forEach { cell -> signature = mix(signature, cell.toRawBits()) }
     }
     return mixLong(signature, fixtureFingerprint(state))
 }
@@ -734,11 +1051,26 @@ private fun canonicalRenderFingerprint(state: MutableGameState): Long {
     signature = mix(signature, render.rerollsRemaining)
     signature = mix(signature, render.acquiredItemCount)
     signature = mix(signature, render.coreShape.ordinal)
+    signature = mix(signature, render.coreRadius.toRawBits())
     signature = mix(signature, render.characterAbility.toString().hashCode())
     signature = mix(signature, render.pointsOfInterest.toString().hashCode())
     signature = mix(signature, if (render.directedChoice) 1 else 0)
     signature = mix(signature, render.effectiveWeaponPower.toRawBits())
+    signature = mix(signature, render.abilityPower.toRawBits())
     signature = mix(signature, render.runProgress.toRawBits())
+    signature = mix(signature, render.interpolationAlpha.toRawBits())
+    signature = mix(signature, render.previousCoreX.toRawBits())
+    signature = mix(signature, render.previousCoreY.toRawBits())
+    signature = mix(signature, render.previousCameraX.toRawBits())
+    signature = mix(signature, render.previousCameraY.toRawBits())
+    signature = mix(signature, render.previousMorningstarX.toRawBits())
+    signature = mix(signature, render.previousMorningstarY.toRawBits())
+    signature = mix(signature, render.viewportDensity.toRawBits())
+    signature = obstacleProjectionFingerprint(signature, render.obstacles)
+    signature = mix(signature, render.minimapRange.toRawBits())
+    signature = mix(signature, render.rebirthRank)
+    signature = mix(signature, render.volatileBursts.toString().hashCode())
+    render.enemies.forEach { signature = mix(signature, if (it.armored) 1 else 0) }
     render.itemStacksSnapshot.forEach { stack -> signature = mix(signature, stack) }
     return mixLong(signature, fixtureFingerprint(state))
 }
@@ -823,6 +1155,11 @@ private fun fixtureFingerprint(state: MutableGameState): Long {
         signature = mix(signature, enemy.previousX.toRawBits())
         signature = mix(signature, enemy.previousY.toRawBits())
         signature = mix(signature, if (enemy.dead) 1 else 0)
+        signature = mix(signature, enemy.behavior)
+        signature = mix(signature, enemy.behaviorRemaining.toRawBits())
+        signature = mix(signature, enemy.facing.toRawBits())
+        signature = mix(signature, enemy.linkedTo)
+        signature = mix(signature, if (enemy.shielded) 1 else 0)
     }
     render.projectiles.forEach { projectile ->
         signature = mix(signature, projectile.x.toRawBits())
@@ -838,6 +1175,7 @@ private fun fixtureFingerprint(state: MutableGameState): Long {
         signature = mix(signature, projectile.sourceWeapon?.ordinal ?: -1)
         signature = mix(signature, projectile.previousX.toRawBits())
         signature = mix(signature, projectile.previousY.toRawBits())
+        signature = mix(signature, projectile.kind.ordinal)
     }
     render.pickups.forEach { pickup ->
         signature = mix(signature, pickup.type.ordinal)
@@ -853,6 +1191,8 @@ private fun fixtureFingerprint(state: MutableGameState): Long {
         signature = mix(signature, point.x.toRawBits())
         signature = mix(signature, point.y.toRawBits())
         signature = mix(signature, point.age.toRawBits())
+        signature = mix(signature, point.life.toRawBits())
+        signature = mix(signature, point.scale.toRawBits())
     }
     render.weaponNodes.forEach { node ->
         signature = mix(signature, node.type.ordinal)
@@ -867,7 +1207,37 @@ private fun fixtureFingerprint(state: MutableGameState): Long {
         signature = mix(signature, orbital.x.toRawBits())
         signature = mix(signature, orbital.y.toRawBits())
         signature = mix(signature, orbital.radius.toRawBits())
+        signature = mix(signature, orbital.previousX.toRawBits())
+        signature = mix(signature, orbital.previousY.toRawBits())
     }
+    signature = mix(signature, render.weaponEntities.size)
+    render.weaponEntities.forEach { entity ->
+        signature = mix(signature, entity.kind.ordinal)
+        signature = mix(signature, entity.x.toRawBits())
+        signature = mix(signature, entity.y.toRawBits())
+        signature = mix(signature, entity.previousX.toRawBits())
+        signature = mix(signature, entity.previousY.toRawBits())
+        signature = mix(signature, entity.endX.toRawBits())
+        signature = mix(signature, entity.endY.toRawBits())
+        signature = mix(signature, entity.previousEndX.toRawBits())
+        signature = mix(signature, entity.previousEndY.toRawBits())
+        signature = mix(signature, entity.angle.toRawBits())
+        signature = mix(signature, entity.previousAngle.toRawBits())
+        signature = mix(signature, entity.radius.toRawBits())
+        signature = mix(signature, entity.extent.toRawBits())
+        signature = mix(signature, entity.life.toRawBits())
+        signature = mix(signature, entity.maxLife.toRawBits())
+        signature = mix(signature, entity.phase)
+    }
+    val synergy = render.weaponSynergy
+    signature = mix(signature, synergy.tagPoints)
+    signature = mix(signature, synergy.tagBonus.toRawBits())
+    signature = mix(signature, if (synergy.signatureActive) 1 else 0)
+    signature = mix(signature, synergy.harmonizingRelic?.ordinal ?: -1)
+    signature = mix(signature, synergy.infusionElement?.ordinal ?: -1)
+    signature = mix(signature, synergy.scalingMultiplier.toRawBits())
+    signature = mix(signature, synergy.masteryForms)
+    signature = mix(signature, synergy.activeMasteryForm?.hashCode() ?: 0)
     render.totem?.let { totem ->
         signature = mix(signature, totem.x.toRawBits())
         signature = mix(signature, totem.y.toRawBits())
@@ -882,6 +1252,39 @@ private fun baseMetadata(seed: Int, vararg values: Pair<String, String>): Map<St
     put("simulationHz", "120")
     put("gameplayContract", "release-0.2.0")
     putAll(values)
+}
+
+/**
+ * The obstacle window field by field. `hashCode()` of an [Obstacle] mixes its [ObstacleKind] identity hash,
+ * which differs between JVM processes, so the published outcome would not compare across forks; the kind
+ * contributes its ordinal instead.
+ */
+internal fun obstacleFieldFingerprint(current: Long, obstacles: List<Obstacle>): Long {
+    var signature = mix(current, obstacles.size)
+    obstacles.forEach { obstacle ->
+        signature = mixLong(signature, obstacle.id)
+        signature = mix(signature, obstacle.kind.ordinal)
+        signature = mix(signature, obstacle.x.toRawBits())
+        signature = mix(signature, obstacle.y.toRawBits())
+        signature = mix(signature, obstacle.radius.toRawBits())
+        signature = mix(signature, obstacle.shapeSeed)
+        signature = mix(signature, obstacle.ricochetReadyAt.toRawBits())
+    }
+    return signature
+}
+
+/** Projected obstacles field by field, for the same reason as [obstacleFieldFingerprint]. */
+internal fun obstacleProjectionFingerprint(current: Long, obstacles: List<ObstacleProjection>): Long {
+    var signature = mix(current, obstacles.size)
+    obstacles.forEach { obstacle ->
+        signature = mixLong(signature, obstacle.id)
+        signature = mix(signature, obstacle.kind.ordinal)
+        signature = mix(signature, obstacle.x.toRawBits())
+        signature = mix(signature, obstacle.y.toRawBits())
+        signature = mix(signature, obstacle.radius.toRawBits())
+        signature = mix(signature, obstacle.shapeSeed)
+    }
+    return signature
 }
 
 private fun mix(current: Long, value: Int): Long =

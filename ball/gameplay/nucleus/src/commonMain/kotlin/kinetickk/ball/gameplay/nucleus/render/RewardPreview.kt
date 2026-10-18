@@ -19,7 +19,7 @@ data class RewardStatChange(
 
 data class RewardPreview(
     val changes: ImmutableList<RewardStatChange> = immutableListOf(),
-    val addedSynergies: ImmutableList<String> = immutableListOf(),
-    val removedSynergies: ImmutableList<String> = immutableListOf(),
+    /** Build consequences, most important first: suppression, reactions, tiers, affinity, relic links. */
+    val forecasts: ImmutableList<BuildForecast> = immutableListOf(),
     val requiresSlot: Boolean = false,
 )

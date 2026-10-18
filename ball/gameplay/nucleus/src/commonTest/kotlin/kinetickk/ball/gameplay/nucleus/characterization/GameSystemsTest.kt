@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.characterization
 
 import kinetickk.ball.content.api.*
+import kinetickk.ball.content.api.EnemyType
 
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
@@ -73,31 +74,36 @@ class GameSystemsTest {
     }
 
     @Test
-    fun itemStacksStopAtMaximumAndThreeFamilyItemsTriggerResonance() {
+    fun itemStacksStopAtMaximumWithDiminishingMagnitudeAndThreeTagItemsTriggerResonance() {
         val engine = gameScenario(seed = 14, initialMatter = 0)
-        val first = requireNotNull(engine.content.item(0))
-        val second = requireNotNull(engine.content.item(1))
-        val third = requireNotNull(engine.content.item(2))
+        val ram = engine.content.items.filter { BuildTag.RAM in it.tags }.take(3)
+        val ballast = ram.first()
+        val massPerStack = ballast.stats.single { it.effect == ItemEffect.MASS }.amount
+        val magnitudes = engine.content.build.policy.stackMagnitudes
 
-        engine.acquireItemForTesting(first.id)
-        engine.acquireItemForTesting(second.id)
-        val damageBeforeResonance = engine.damageMultiplier
-        val weaponPowerBeforeResonance = engine.weaponPower
+        engine.acquireItemForTesting(ram[0].id)
+        engine.acquireItemForTesting(ram[1].id)
+        assertEquals(0, engine.tagTier(BuildTag.RAM))
         val massBeforeThirdItem = engine.mass
 
-        engine.acquireItemForTesting(third.id)
+        engine.acquireItemForTesting(ram[2].id)
 
-        assertEquals(damageBeforeResonance + third.primary.amount + 0.04f, engine.damageMultiplier, 0.0001f)
-        assertEquals(weaponPowerBeforeResonance + 0.06f, engine.weaponPower, 0.0001f)
-        assertEquals(massBeforeThirdItem + third.secondary.amount, engine.mass, 0.0001f)
-        assertEquals("IMPACT RESONANCE", engine.message)
+        assertEquals(1, engine.tagTier(BuildTag.RAM))
+        assertEquals("RAM RESONANCE", engine.message)
+        assertEquals(massBeforeThirdItem, engine.mass, 0.0001f, "Resonance must not rewrite base stats")
+
+        // Each further stack adds only its marginal share of the diminishing stack magnitude.
+        val massAfterOne = engine.mass
+        engine.acquireItemForTesting(ballast.id)
+        assertEquals(massAfterOne + massPerStack * (magnitudes[1] - magnitudes[0]), engine.mass, 0.0001f)
 
         val acquisitionsBeforeRepeatedStacks = engine.acquiredItemCount
-        repeat(third.maxStacks + 5) { engine.acquireItemForTesting(third.id) }
+        repeat(ballast.maxStacks + 5) { engine.acquireItemForTesting(ballast.id) }
 
-        assertEquals(third.maxStacks, engine.itemStack(third.id))
+        assertEquals(ballast.maxStacks, engine.itemStack(ballast.id))
+        assertEquals(1f + massPerStack * magnitudes[ballast.maxStacks - 1], engine.mass, 0.0001f)
         assertEquals(
-            acquisitionsBeforeRepeatedStacks + third.maxStacks - 1,
+            acquisitionsBeforeRepeatedStacks + ballast.maxStacks - 2,
             engine.acquiredItemCount,
             "Attempts above maxStacks must not count as acquisitions",
         )
@@ -137,19 +143,30 @@ class GameSystemsTest {
     @Test
     fun everyWeaponCanBeEquippedAndProducesADistinctRuntimeSignature() {
         val signatures = WeaponId.entries.associateWith(::exerciseWeapon)
+        val (pending, implemented) = signatures.entries.partition { it.key in PendingWeaponBehaviors }
 
         assertEquals(WeaponId.entries.size, signatures.size)
         assertEquals(
-            WeaponId.entries.size,
-            signatures.values.toSet().size,
+            implemented.size,
+            implemented.map { it.value }.toSet().size,
             "Weapon runtime signatures were not distinct: $signatures",
         )
+        // The typed additions equip safely but stay idle until their behavior lands; each one must leave
+        // this list (and gain its own branch above) the moment it acts.
+        val idle = WeaponRuntimeSignature(
+            trailCount = 0, orbitalCount = 0, orbitalRadiusBits = 0, nodeCount = 0, projectileCount = 0,
+            projectilePierce = -1, projectileRadiusBits = 0, projectileSourceOrdinal = -1, arcCount = 0,
+            beamActive = false, morningstarMoved = false, enemyDamageMilli = 0,
+        )
+        pending.forEach { (id, signature) -> assertEquals(idle, signature, "$id now acts: drop it from PendingWeaponBehaviors") }
     }
 
     @Test
     fun totemAmplificationAdvancesThroughVisibleMasteryMilestones() {
         val engine = runningEngine(seed = 33)
         engine.equipWeaponForTesting(WeaponId.PRISM_RELAY)
+        // From the first milestone (the Orb's signature Flux Wake started the run a level up).
+        engine.weaponLevel = 1
 
         assertEquals(WeaponMastery.CALIBRATED, engine.currentWeaponMastery)
         assertEquals(WeaponMastery.AMPLIFIED, engine.nextWeaponMastery)
@@ -174,7 +191,8 @@ class GameSystemsTest {
 
         val relays = engine.projectiles.filter { !it.hostile && it.sourceWeapon == WeaponId.PRISM_RELAY }
         assertEquals(2, relays.size, "Resonant Prism Relay must fire a twin volley")
-        assertTrue(relays.all { it.pierce == 4 }, "Resonant Prism Relay must gain additional ricochets")
+        // The first form's extra bounce carries into the twin volley (the next one arrives with the third form).
+        assertTrue(relays.all { it.pierce == 3 }, "Resonant Prism Relay must keep the first form's extra bounce")
     }
 
     @Test
@@ -302,7 +320,7 @@ class GameSystemsTest {
         val engine = runningEngine(seed = 47)
         engine.enemies.clear()
         engine.updatePointer(640f, 360f)
-        repeat(2) { engine.projectiles += Projectile(0f, 0f, 0f, 0f, 6f, 1f) }
+        repeat(2) { engine.projectiles += Projectile(0f, 0f, 0f, 0f, 6f, 1f, damage = 12f) }
 
         engine.update(GameScenario.FIXED_STEP)
 
@@ -323,7 +341,8 @@ class GameSystemsTest {
             val directionY = kotlin.math.abs(enemy.y / distance)
             val edgeDistance = minOf(640f / maxOf(0.001f, directionX), 360f / maxOf(0.001f, directionY))
             val overscan = distance - edgeDistance
-            assertTrue(overscan in 89f..241f, "Unexpected spawn overscan: $overscan")
+            // Packs land 80-260 beyond the edge around their anchor; no member is ever closer than 40.
+            assertTrue(overscan in 39.9f..400f, "Unexpected spawn overscan: $overscan")
         }
     }
 
@@ -332,13 +351,24 @@ class GameSystemsTest {
         val engine = runningEngine(seed = 49)
         engine.enemies.clear()
         val nearby = engine.addEnemyForTesting(220f, 0f)
-        val farAway = engine.addEnemyForTesting(10_000f, 0f)
+        val farAway = engine.addEnemyForTesting(10_000f, 0f, hp = 700f)
+        farAway.hp = 450f
         val killsBefore = engine.kills
 
         engine.update(GameScenario.FIXED_STEP)
 
         assertTrue(nearby in engine.enemies)
-        assertTrue(farAway !in engine.enemies)
+        // A straggler is brought back to spawn distance with its integrity, not deleted or rewarded.
+        assertTrue(farAway in engine.enemies)
+        val leash = maxOf(engine.screenWidth, engine.screenHeight) * 1.15f + 360f
+        val distance = kotlin.math.sqrt(
+            (farAway.x - engine.coreX) * (farAway.x - engine.coreX) + (farAway.y - engine.coreY) * (farAway.y - engine.coreY),
+        )
+        assertTrue(distance < leash, "Relocated straggler still beyond the leash: $distance")
+        assertTrue(kotlin.math.abs(farAway.x) > 640f || kotlin.math.abs(farAway.y) > 360f, "Relocated into view")
+        assertEquals(450f, farAway.hp)
+        assertEquals(farAway.x, farAway.previousX)
+        assertEquals(farAway.y, farAway.previousY)
         assertEquals(killsBefore, engine.kills)
     }
 
@@ -366,6 +396,9 @@ class GameSystemsTest {
         assertTrue(engine.lastImpactTime > 0f)
 
         engine.enemies.clear()
+        // Coast to a stop at the centre: a 24 000 u/s Core would otherwise meet the world's obstacles.
+        engine.setVelocityForTesting(0f, 0f)
+        engine.updatePointer(engine.screenWidth * 0.5f, engine.screenHeight * 0.5f)
         repeat(100) { engine.update(GameScenario.FIXED_STEP) }
 
         assertEquals(0f, engine.lastImpactTime)
@@ -444,6 +477,72 @@ class GameSystemsTest {
                 engine.update(GameScenario.FIXED_STEP)
                 assertTrue(engine.projectiles.any { !it.hostile && it.sourceWeapon == id && it.pierce == 2 })
             }
+            WeaponId.GYRE_DISC -> {
+                observedEnemy = engine.addEnemyForTesting(40f, 0f)
+                repeat(6) { engine.update(GameScenario.FIXED_STEP) }
+                assertTrue(engine.weaponRuntime.entities.any { it.kind == WeaponEntityKind.DISC })
+                assertTrue(observedEnemy.hp < observedEnemy.maxHp)
+            }
+            WeaponId.SCATTER_BLOOM -> {
+                observedEnemy = engine.addEnemyForTesting(150f, 0f)
+                engine.update(GameScenario.FIXED_STEP)
+                assertEquals(SCATTER_PASSIVE_PELLETS, engine.projectiles.count { !it.hostile && it.sourceWeapon == id })
+            }
+            WeaponId.TETHER_ARC -> {
+                observedEnemy = engine.addEnemyForTesting(200f, 0f)
+                repeat(3) { engine.update(GameScenario.FIXED_STEP) }
+                assertTrue(engine.weaponRuntime.entities.any { it.kind == WeaponEntityKind.TETHER })
+                assertTrue(observedEnemy.hp < observedEnemy.maxHp)
+            }
+            WeaponId.SENTRY_GRID -> {
+                engine.update(GameScenario.FIXED_STEP)
+                observedEnemy = engine.addEnemyForTesting(200f, 120f)
+                engine.update(GameScenario.FIXED_STEP)
+                assertEquals(1, engine.weaponRuntime.entities.count { it.kind == WeaponEntityKind.SENTRY })
+                assertTrue(engine.projectiles.any { !it.hostile && it.sourceWeapon == id })
+            }
+            WeaponId.HUNTER_SALVO -> {
+                observedEnemy = engine.addEnemyForTesting(300f, 0f)
+                engine.update(GameScenario.FIXED_STEP)
+                assertEquals(3, engine.weaponRuntime.entities.count { it.kind == WeaponEntityKind.MISSILE })
+            }
+            WeaponId.CONCUSSION_ENGINE -> {
+                observedEnemy = engine.addEnemyForTesting(25f, 0f)
+                engine.update(GameScenario.FIXED_STEP)
+                assertTrue(engine.weaponRuntime.entities.any { it.kind == WeaponEntityKind.RING && it.phase == 2 })
+            }
+            WeaponId.GLACIER_BELL -> {
+                observedEnemy = engine.addEnemyForTesting(100f, 0f)
+                engine.update(GameScenario.FIXED_STEP)
+                assertTrue(observedEnemy.hp < observedEnemy.maxHp)
+                assertTrue(engine.weaponRuntime.entities.any { it.kind == WeaponEntityKind.RING && it.phase == 3 })
+            }
+            WeaponId.EVENT_LENS -> {
+                engine.update(GameScenario.FIXED_STEP)
+                assertEquals(1, engine.weaponRuntime.entities.count { it.kind == WeaponEntityKind.LENS })
+            }
+            WeaponId.SOLAR_SWEEP -> {
+                observedEnemy = engine.addEnemyForTesting(150f, 0f)
+                engine.update(GameScenario.FIXED_STEP)
+                assertEquals(2, engine.weaponRuntime.entities.count { it.kind == WeaponEntityKind.BEAM })
+                assertTrue(observedEnemy.hp < observedEnemy.maxHp)
+            }
+            WeaponId.AEGIS_SHARDS -> {
+                observedEnemy = engine.addEnemyForTesting(150f, 0f)
+                engine.update(GameScenario.FIXED_STEP)
+                assertEquals(2, engine.weaponOrbitals.size)
+                assertEquals(2, engine.weaponRuntime.entities.count { it.kind == WeaponEntityKind.SHARD })
+            }
+            WeaponId.HOLLOW_RIFT -> {
+                engine.update(GameScenario.FIXED_STEP)
+                assertEquals(1, engine.weaponRuntime.entities.count { it.kind == WeaponEntityKind.RIFT })
+            }
+            WeaponId.RESONANCE_DRUM -> {
+                observedEnemy = engine.addEnemyForTesting(150f, 0f)
+                engine.update(GameScenario.FIXED_STEP)
+                assertTrue(observedEnemy.hp < observedEnemy.maxHp)
+                assertTrue(engine.weaponRuntime.entities.any { it.kind == WeaponEntityKind.RING && it.phase == 1 })
+            }
         }
 
         val visualFxCues = engine.takeVisualFxCues()
@@ -465,6 +564,8 @@ class GameSystemsTest {
             beamActive = engine.weaponBeamTime > 0f,
             morningstarMoved = engine.morningstarAngle > 0f,
             enemyDamageMilli = observedEnemy?.let { ((it.maxHp - it.hp) * 1_000f).toInt() } ?: 0,
+            entityCount = engine.weaponRuntime.entities.size,
+            entityKindOrdinal = engine.weaponRuntime.entities.firstOrNull()?.kind?.ordinal ?: -1,
         )
     }
 
@@ -486,5 +587,8 @@ class GameSystemsTest {
         val beamActive: Boolean,
         val morningstarMoved: Boolean,
         val enemyDamageMilli: Int,
+        val entityCount: Int = 0,
+        val entityKindOrdinal: Int = -1,
     )
 }
+

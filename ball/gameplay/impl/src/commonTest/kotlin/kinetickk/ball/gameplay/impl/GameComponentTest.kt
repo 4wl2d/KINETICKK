@@ -11,7 +11,7 @@ import kinetickk.ball.profile.api.ProfileRefusal
 import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.gameplay.api.GameplayRunExited
 
-import kinetickk.ball.content.api.MetaUpgradeId
+import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.GameplayAcceptance
 import kinetickk.ball.gameplay.api.GameplayExitProgressResult
@@ -30,8 +30,7 @@ import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.profile.api.CollectionProjection
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.HomeProgressProjection
-import kinetickk.ball.profile.api.LabProgressProjection
-import kinetickk.ball.profile.api.LabProgress
+import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.LoadoutProjection
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PersistenceStatusProjection
@@ -55,6 +54,7 @@ import kinetickk.resource.audio.api.AudioService
 import kinetickk.resource.audio.api.ToneRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
@@ -541,7 +541,41 @@ class GameComponentTest {
     }
 
     @Test
-    fun featureReusesTheExactCapturedContentAndFrozenSeedAcrossTerminalReplacement() {
+    fun aSourcedSeedStartsEachRunAndDiagnosticsRecordTheActualSeed() {
+        val profile = TestProfilePort()
+        val recorded = mutableListOf<String>()
+        val diagnostics = object : kinetickk.foundation.diagnostics.CrashDiagnostics {
+            override fun context(key: String, describe: () -> String) {
+                recorded += "$key:${describe()}"
+            }
+            override fun event(category: String, message: String, highFrequency: Boolean) {
+                recorded += "$category:$message"
+            }
+        }
+        val asked = mutableListOf<RunId>()
+        val feature = DefaultGameplayFeature(
+            gameplayContent = SyntheticGameplayContent,
+            profilePort = profile,
+            profileProgress = profile,
+            audioService = NoOpAudioService,
+            diagnostics = diagnostics,
+            seedSource = { runId -> asked += runId; 40_000 + runId.value.toInt() * 7_919 },
+        )
+        val run0 = assertIs<GameComponent>(feature.createRun(RunId(0)))
+        run0.start()
+        val run0Enemies = run0.renderSnapshot().renderModel!!.enemies
+        run0.exit()
+        val run1 = assertIs<GameComponent>(feature.createRun(RunId(1)))
+        run1.start()
+        val run1Enemies = run1.renderSnapshot().renderModel!!.enemies
+        assertEquals(listOf(RunId(0), RunId(1)), asked)
+        assertTrue(recorded.any { it.contains("seed=40000") } && recorded.any { it.contains("seed=47919") }, "$recorded")
+        // A different seed reshapes the opening.
+        assertNotEquals(run0Enemies.map { it.x to it.y }, run1Enemies.map { it.x to it.y })
+    }
+
+    @Test
+    fun featureReusesTheExactCapturedContentAndDefaultSeedAcrossTerminalReplacement() {
         assertEquals(731_991, DEFAULT_GAMEPLAY_SEED)
         val profile = TestProfilePort()
         val feature = gameplayFeature(profile)
@@ -718,6 +752,9 @@ private fun GameComponent.advanceUntilMatter() {
 }
 
 private fun GameComponent.advanceUntilItemChoice() {
+    // The cursor circles the Core at a fixed reach and turns at a bounded rate, like a hand on a mouse;
+    // it never jumps across the Core (a jump through it is a singularity contact).
+    var cursorAngle = 0f
     repeat(7_200) { frameIndex ->
         val render = checkNotNull(renderSnapshot().renderModel)
         if (
@@ -728,9 +765,15 @@ private fun GameComponent.advanceUntilItemChoice() {
             return
         }
         check(query(GameplayQuery.GetRunStatus).phase == GameplayRunPhase.RUNNING) {
-            "Run stopped before its first item choice at frame $frameIndex: ${render.phase} / ${render.choiceType}"
+            "Run stopped before its first item choice at frame $frameIndex: ${render.phase} / ${render.choiceType} / ${render.message} hp=${render.hp} kills=${render.kills} level=${render.level}"
         }
-        val pickupTarget = render.pickups.firstOrNull()?.let { pickup -> pickup.x to pickup.y }
+        // Aim through a pickup rather than at it, so the Core never runs into its own cursor.
+        val pickupTarget = render.pickups.firstOrNull()?.let { pickup ->
+            val towardX = pickup.x - render.coreX
+            val towardY = pickup.y - render.coreY
+            val length = kotlin.math.sqrt(towardX * towardX + towardY * towardY).coerceAtLeast(1f)
+            pickup.x + towardX / length * 300f to pickup.y + towardY / length * 300f
+        }
         val nearestEnemy = render.enemies.minByOrNull { enemy ->
                 val dx = enemy.x - render.coreX
                 val dy = enemy.y - render.coreY
@@ -744,9 +787,13 @@ private fun GameComponent.advanceUntilItemChoice() {
                 render.coreY + awayY / length * 600f
         }
         if (target != null) {
-            val pointerX = (target.first - render.cameraX + render.screenWidth * 0.5f)
+            val desired = kotlin.math.atan2(target.second - render.coreY, target.first - render.coreX)
+            val turn = kotlin.math.atan2(kotlin.math.sin(desired - cursorAngle), kotlin.math.cos(desired - cursorAngle))
+            cursorAngle += turn.coerceIn(-0.25f, 0.25f)
+            val reach = minOf(render.screenWidth, render.screenHeight) * 0.4f
+            val pointerX = (render.coreX - render.cameraX + render.screenWidth * 0.5f + kotlin.math.cos(cursorAngle) * reach)
                 .coerceIn(0f, render.screenWidth)
-            val pointerY = (target.second - render.cameraY + render.screenHeight * 0.5f)
+            val pointerY = (render.coreY - render.cameraY + render.screenHeight * 0.5f + kotlin.math.sin(cursorAngle) * reach)
                 .coerceIn(0f, render.screenHeight)
             assertIs<GameplayAcceptance.Accepted>(
                 accept(GameplayInteractionPulse.PointerMoved.fromValidated(pointerX, pointerY)),
@@ -769,7 +816,7 @@ private fun resilientLocalDispatchProfile(): GameplayProfileSnapshot = PlayerPro
         selectedWeapon = WeaponId.PRISM_RELAY,
         unlockedWeapons = setOf(WeaponId.FLUX_WAKE, WeaponId.PRISM_RELAY),
     ),
-    labProgress = LabProgress(List(MetaUpgradeId.entries.size) { 10 }),
+    matrix = MatrixProgress(MatrixNodeId.entries.map { 1 }),
 ).toGameplaySnapshot()
 
 private val LocalDispatchGameplayContent by lazy {
@@ -835,7 +882,8 @@ private class TestProfilePort(private val eventSink: (String) -> Unit = {}) : Pr
 
     override fun query(query: ProfileQuery.GetHomeProgress): kinetickk.ball.profile.api.HomeProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetCollection): kinetickk.ball.profile.api.CollectionProjection = error("unused")
-    override fun query(query: ProfileQuery.GetLabProgress): kinetickk.ball.profile.api.LabProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetMatrixProgress): kinetickk.ball.profile.api.MatrixProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetHangar): kinetickk.ball.profile.api.HangarProjection = error("unused")
     override fun query(query: ProfileQuery.GetLoadout): kinetickk.ball.profile.api.LoadoutProjection = error("unused")
     override fun query(query: ProfileQuery.GetRebirthProgress): kinetickk.ball.profile.api.RebirthProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetPersistenceStatus): kinetickk.ball.profile.api.PersistenceStatusProjection = error("unused")
@@ -954,7 +1002,7 @@ private fun PlayerProfile.toGameplaySnapshot(): GameplayProfileSnapshot = Gamepl
     preferences,
     economy,
     loadout,
-    labProgress,
+    matrix,
     collection,
     rebirthProgress,
 )

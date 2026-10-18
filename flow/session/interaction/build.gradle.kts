@@ -9,6 +9,8 @@ kotlin {
     sourceSets {
         desktopTest.dependencies {
             implementation(libs.compose.ui.test.junit4)
+            // The shipped catalog for the session screen shots (tests only).
+            implementation(projects.ball.content.impl)
             val os = when {
                 System.getProperty("os.name").startsWith("Mac") -> "macos"
                 System.getProperty("os.name").startsWith("Windows") -> "windows"

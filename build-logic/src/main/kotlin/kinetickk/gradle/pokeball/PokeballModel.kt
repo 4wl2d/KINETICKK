@@ -84,6 +84,10 @@ internal val allowedForeignInternalProjectEdges = setOf(
     ProjectEdge(":flow:session:interaction", "commonMainApi", ":ball:gameplay:interaction"),
     ProjectEdge(":flow:session:interaction", "commonMainApi", ":ball:profile:interaction"),
     ProjectEdge(":ball:gameplay:nucleus", "commonTestImplementation", ":ball:content:impl"),
+    // The reward card gallery and style checks render every shipped item and relic (tests only).
+    ProjectEdge(":ball:gameplay:interaction", "desktopTestImplementation", ":ball:content:impl"),
+    // The session screen shots render the Codex over the shipped catalog (tests only).
+    ProjectEdge(":flow:session:interaction", "desktopTestImplementation", ":ball:content:impl"),
 )
 
 internal val expectedAndroidHostProductionEdges = setOf(

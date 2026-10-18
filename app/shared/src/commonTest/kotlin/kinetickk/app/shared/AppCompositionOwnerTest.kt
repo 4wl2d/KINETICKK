@@ -24,7 +24,7 @@ import kinetickk.ball.gameplay.impl.GameplayCompositionComponent
 import kinetickk.ball.profile.api.CollectionProjection
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.HomeProgressProjection
-import kinetickk.ball.profile.api.LabProgressProjection
+import kinetickk.ball.profile.api.MatrixProgressProjection
 import kinetickk.ball.profile.api.LoadoutProjection
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PersistenceStatusProjection
@@ -184,8 +184,9 @@ private class ReadyProfileComponent(
         reply: InlineReply<kinetickk.ball.profile.api.ProfileProgressApplied, ProfileRefusal>,
     ): Unit = error("unused")
 
-    override fun advanceRebirth(
-        reply: InlineReply<kinetickk.ball.profile.api.ProfileRebirthAdvanced, ProfileRefusal>,
+    override fun selectRebirthTier(
+        tier: Int,
+        reply: InlineReply<kinetickk.ball.profile.api.ProfileRebirthTierSelected, ProfileRefusal>,
     ): Unit = error("unused")
 
     override fun toggleMute(reply: InlineReply<ProfileSettingsChanged, ProfileRefusal>): Unit = error("unused")
@@ -214,7 +215,8 @@ private class ReadyProfileComponent(
         )
 
     override fun query(query: ProfileQuery.GetHomeProgress): HomeProgressProjection = error("unused")
-    override fun query(query: ProfileQuery.GetLabProgress): LabProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetMatrixProgress): MatrixProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetHangar): kinetickk.ball.profile.api.HangarProjection = error("unused")
     override fun query(query: ProfileQuery.GetLoadout): LoadoutProjection = error("unused")
     override fun query(query: ProfileQuery.GetCollection): CollectionProjection = error("unused")
     override fun query(query: ProfileQuery.GetRebirthProgress): RebirthProgressProjection = error("unused")
@@ -224,7 +226,7 @@ private fun PlayerProfile.toGameplaySnapshot(): GameplayProfileSnapshot = Gamepl
     preferences = preferences,
     economy = economy,
     loadout = loadout,
-    labProgress = labProgress,
+    matrix = matrix,
     collection = collection,
     rebirthProgress = rebirthProgress,
 )

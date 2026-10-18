@@ -413,7 +413,9 @@ fun DrawScope.kkTouchRect(rect: Rect, minDp: Float = 44f): Rect {
 
 /** Cached plain [Stroke]s by pixel width (butt caps, miter joins); allocation-free on reuse. */
 internal object KkStrokes {
-    private const val CAPACITY = 24
+    // Card frames layer many stroke widths (glows, halos, borders, seams) at board and phone sizes, and
+    // rarity tiles their own at each tile size (a Codex grid tile beside its legend swatches).
+    private const val CAPACITY = 96
     private val widths = FloatArray(CAPACITY) { -1f }
     private val strokes = arrayOfNulls<Stroke>(CAPACITY)
     private var next = 0

@@ -8,20 +8,30 @@ import kinetickk.ball.content.api.DirectedReward
 import kinetickk.ball.content.api.PointOfInterestKind
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RewardFocus
-import kinetickk.ball.content.api.SynergyId
+import kinetickk.ball.content.api.BuffStat
+import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
-import kinetickk.ball.gameplay.nucleus.model.DelayedRelicHit
+import kinetickk.ball.gameplay.nucleus.model.ActiveBuff
+import kinetickk.ball.gameplay.nucleus.model.CombatField
+import kinetickk.ball.gameplay.nucleus.model.CombatFieldKind
+import kinetickk.ball.gameplay.nucleus.model.EchoHit
+import kinetickk.ball.gameplay.nucleus.model.Obstacle
+import kinetickk.ball.gameplay.nucleus.model.ObstacleField
+import kinetickk.ball.gameplay.nucleus.model.SeveredRelic
+import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.model.CharacterRuntime
+import kinetickk.ball.gameplay.nucleus.model.Polarity
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.PointOfInterestState
 import kinetickk.ball.gameplay.nucleus.model.Projectile
-import kinetickk.ball.gameplay.nucleus.model.SynergyEffect
-import kinetickk.ball.gameplay.nucleus.model.SynergyEffectKind
 import kinetickk.ball.gameplay.nucleus.model.Totem
 import kinetickk.ball.gameplay.nucleus.model.TrailPoint
 import kinetickk.ball.gameplay.nucleus.model.WeaponNode
+import kinetickk.ball.gameplay.nucleus.model.WeaponEntity
 import kinetickk.ball.gameplay.nucleus.model.WeaponOrbital
 import kinetickk.ball.gameplay.nucleus.model.WorldPoint
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
@@ -29,8 +39,10 @@ import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
 import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
+import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
+import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
@@ -82,7 +94,7 @@ class GameplayReductionIsolationTest {
             pendingClearedRebirthLevel = null
             recentItem = null
             totem = null
-            characterRuntime = characterRuntime.copy(dashOrigin = null)
+            characterRuntime.hasDashOrigin = false
             pendingArchitectDefeatedWith = null
             directedReward = null
             selectedRewardFocus = null
@@ -101,12 +113,12 @@ class GameplayReductionIsolationTest {
         ).apply {
             unlockedWeaponSet += WeaponId.MORNINGSTAR
             unlockedWeaponView = unlockedWeaponSet.toSet()
-            metaRanks[0] = 1
+            matrixRanks[0] = 1
             discoveredItemIds += 17
             itemStacks[0] = 2
-            familyStacks[0] = 3
+            rebornItems[0] = 1
             relicRanks[RelicId.ECHO_CHAMBER.ordinal] = 1
-            addEnemyForTesting(x = 20f, y = 30f)
+            addEnemyForTesting(x = 20f, y = 30f).status[StatusCell.STACKS + StatusElement.ION.ordinal] = 3f
             projectiles += Projectile(
                 x = 40f,
                 y = 50f,
@@ -172,25 +184,28 @@ class GameplayReductionIsolationTest {
         ).apply {
             unlockedWeaponSet += WeaponId.MORNINGSTAR
             unlockedWeaponView = unlockedWeaponSet.toSet()
-            metaRanks[0] = 1
+            matrixRanks[0] = 1
             discoveredItemIds += 17
             itemStacks[0] = 2
-            familyStacks[0] = 3
+            rebornItems[0] = 1
+            clauseCounters[0] = 3
+            statusAccumulators[0] = 0.25f
             relicRanks[relicIndex] = 1
             relicCooldowns[relicIndex] = 0.75f
             relicCounters[relicIndex] = 2
-            relicProcCounts[relicIndex] = 3
+            clauseReadyAt[0] = 0.4f
+            itemStatusReadyAt[0] = 0.6f
             agonyMutationCounts[weaponIndex] = 4
 
             val enemy = addEnemyForTesting(x = 10f, y = 20f)
-            enemy.relicCounters[relicIndex] = 5
-            enemy.relicTimers[relicIndex] = 0.5f
-            enemy.relicValues[relicIndex] = 6f
-            delayedRelicHits += DelayedRelicHit(
-                relicId = RelicId.ECHO_CHAMBER,
+            enemy.status[StatusCell.STACKS + StatusElement.CRYO.ordinal] = 5f
+            enemy.status[StatusCell.DECAY_AT + StatusElement.CRYO.ordinal] = 0.5f
+            enemy.status[StatusCell.CINDER_BANK] = 6f
+            echoHits += EchoHit(
                 enemyId = enemy.id,
                 delay = 1f,
                 damage = 7f,
+                appliesDominant = false,
             )
 
             projectiles += Projectile(
@@ -215,6 +230,9 @@ class GameplayReductionIsolationTest {
                 radius = 3f,
             )
             weaponOrbitals += WeaponOrbital(index = 0, x = 15f, y = 25f, radius = 4f)
+            weaponRuntime.entities += WeaponEntity(WeaponEntityKind.DISC, x = 17f, y = 27f, radius = 5f, life = 1f, maxLife = 1f)
+                .also { it.recordHit(enemy.id) }
+            weaponRuntime.tetherRamp = 1.5f
             totem = Totem(16f, 26f, 0.25f)
         }
         val expectedNextRandom = source.gameplayRandom.copy().nextInt()
@@ -239,43 +257,49 @@ class GameplayReductionIsolationTest {
 
         // These assertions prove the test actually traverses the optimized scalar-COW path.
         assertSame(source.gameplayRandom, pointerBranch.model.gameplayRandom)
-        assertSame(source.metaRanks, pointerBranch.model.metaRanks)
+        assertSame(source.matrixRanks, pointerBranch.model.matrixRanks)
         assertSame(source.enemies, pointerBranch.model.enemies)
         assertSame(source.projectiles, pointerBranch.model.projectiles)
         assertSame(source.enemies, siblingBranch.model.enemies)
 
-        // FrameElapsed is a production full-reduction path. A zero delta isolates copy ownership.
+        // A reroll outside a choice is a production full reduction that simulates nothing, so it
+        // isolates copy ownership alone. (A sub-step frame deliberately shares storage instead.)
         val isolated = assertIs<GameReductionResult.Accepted>(
             reducer.reduce(
                 pointerBranch,
-                GameplayInteractionPulse.FrameElapsed.fromValidated(0f),
+                GameplayInteractionPulse.ChoicesRerolled,
             ),
         ).state.model
 
         assertNotSame(pointerBranch.model.gameplayRandom, isolated.gameplayRandom)
-        assertNotSame(pointerBranch.model.metaRanks, isolated.metaRanks)
+        assertNotSame(pointerBranch.model.matrixRanks, isolated.matrixRanks)
         assertNotSame(pointerBranch.model.enemies, isolated.enemies)
         assertNotSame(pointerBranch.model.projectiles, isolated.projectiles)
         assertNotSame(pointerBranch.model.totem, isolated.totem)
+        assertSame(source.weaponRuntime, pointerBranch.model.weaponRuntime)
+        assertNotSame(pointerBranch.model.weaponRuntime, isolated.weaponRuntime)
 
         // Mutate every mutable storage family that the scalar COW path is allowed to share.
         isolated.gameplayRandom.nextInt()
         isolated.unlockedWeaponSet.clear()
-        isolated.metaRanks[0] = 91
+        isolated.matrixRanks[0] = 91
         isolated.discoveredItemIds.clear()
         isolated.itemStacks[0] = 92
-        isolated.familyStacks[0] = 93
+        isolated.rebornItems[0] = 0
+        isolated.clauseCounters[0] = 93
+        isolated.statusAccumulators[0] = 0.75f
         isolated.relicRanks[relicIndex] = 94
         isolated.relicCooldowns[relicIndex] = 95f
         isolated.relicCounters[relicIndex] = 96
-        isolated.relicProcCounts[relicIndex] = 97
+        isolated.clauseReadyAt[0] = 97f
+        isolated.itemStatusReadyAt[0] = 97.5f
         isolated.agonyMutationCounts[weaponIndex] = 98
-        isolated.delayedRelicHits.single().delay = 99f
+        isolated.echoHits.single().delay = 99f
         isolated.enemies.single().apply {
             x = 100f
-            relicCounters[relicIndex] = 101
-            relicTimers[relicIndex] = 102f
-            relicValues[relicIndex] = 103f
+            status[StatusCell.STACKS + StatusElement.CRYO.ordinal] = 101f
+            status[StatusCell.DECAY_AT + StatusElement.CRYO.ordinal] = 102f
+            status[StatusCell.CINDER_BANK] = 103f
         }
         isolated.projectiles.single().apply {
             x = 104f
@@ -286,27 +310,35 @@ class GameplayReductionIsolationTest {
         isolated.weaponNodes.single().x = 107f
         isolated.weaponOrbitals.single().x = 108f
         isolated.totem!!.x = 109f
+        isolated.weaponRuntime.entities.single().apply {
+            x = 110f
+            recordHit(10_001)
+        }
+        isolated.weaponRuntime.tetherRamp = 2.5f
 
         listOf(source, siblingBranch.model).forEach { retained ->
             assertEquals(expectedNextRandom, retained.gameplayRandom.copy().nextInt())
             assertTrue(WeaponId.FLUX_WAKE in retained.unlockedWeaponSet)
             assertTrue(WeaponId.MORNINGSTAR in retained.unlockedWeaponSet)
-            assertEquals(1, retained.metaRanks[0])
+            assertEquals(1, retained.matrixRanks[0])
             assertTrue(17 in retained.discoveredItemIds)
             assertEquals(2, retained.itemStacks[0])
-            assertEquals(3, retained.familyStacks[0])
+            assertEquals(1, retained.rebornItems[0])
+            assertEquals(3, retained.clauseCounters[0])
+            assertEquals(0.25f, retained.statusAccumulators[0])
             assertEquals(1, retained.relicRanks[relicIndex])
             assertEquals(0.75f, retained.relicCooldowns[relicIndex])
             assertEquals(2, retained.relicCounters[relicIndex])
-            assertEquals(3, retained.relicProcCounts[relicIndex])
+            assertEquals(0.4f, retained.clauseReadyAt[0])
+            assertEquals(0.6f, retained.itemStatusReadyAt[0])
             assertEquals(4, retained.agonyMutationCounts[weaponIndex])
-            assertEquals(1f, retained.delayedRelicHits.single().delay)
+            assertEquals(1f, retained.echoHits.single().delay)
 
             retained.enemies.single().let { enemy ->
                 assertEquals(10f, enemy.x)
-                assertEquals(5, enemy.relicCounters[relicIndex])
-                assertEquals(0.5f, enemy.relicTimers[relicIndex])
-                assertEquals(6f, enemy.relicValues[relicIndex])
+                assertEquals(5f, enemy.status[StatusCell.STACKS + StatusElement.CRYO.ordinal])
+                assertEquals(0.5f, enemy.status[StatusCell.DECAY_AT + StatusElement.CRYO.ordinal])
+                assertEquals(6f, enemy.status[StatusCell.CINDER_BANK])
             }
             retained.projectiles.single().let { projectile ->
                 assertEquals(11f, projectile.x)
@@ -317,6 +349,11 @@ class GameplayReductionIsolationTest {
             assertEquals(14f, retained.weaponNodes.single().x)
             assertEquals(15f, retained.weaponOrbitals.single().x)
             assertEquals(16f, retained.totem!!.x)
+            retained.weaponRuntime.entities.single().let { entity ->
+                assertEquals(17f, entity.x)
+                assertFalse(entity.hasHit(10_001))
+            }
+            assertEquals(1.5f, retained.weaponRuntime.tetherRamp)
         }
     }
 
@@ -348,7 +385,7 @@ class GameplayReductionIsolationTest {
 
         reductions.forEach { reduction ->
             assertFalse(reduction.state.model.hasPendingReductionOutputs())
-            assertSame(source.metaRanks, reduction.state.model.metaRanks)
+            assertSame(source.matrixRanks, reduction.state.model.matrixRanks)
             assertSame(source.enemies, reduction.state.model.enemies)
             assertEquals(
                 listOf(
@@ -447,22 +484,104 @@ class GameplayReductionIsolationTest {
     }
 
     @Test
+    fun subStepFrameRunsNoStepSharesStableStorageAndLeavesTheCommittedStateUntouched() {
+        val source = MutableGameState(canonicalGameplayContent, seed = 7_331).apply {
+            startRun()
+            spawnClock = 1_000f
+            setVelocityForTesting(640f, -120f)
+            addEnemyForTesting(x = 320f, y = 40f).apply { vx = -90f; vy = 12f }
+            projectiles += Projectile(x = 30f, y = 0f, vx = 500f, vy = 0f, radius = 3f, life = 1f, hostile = false)
+            pickups += Pickup(PickupType.DATA, 60f, 10f, vx = 40f)
+            weaponOrbitals += WeaponOrbital(index = 0, x = 15f, y = 25f, radius = 4f)
+            takeSoundCues()
+            takeVisualFxCues()
+        }
+        val reducer = GameReducer()
+        // One full frame first, so the committed source reports executed steps.
+        val committed = assertIs<GameReductionResult.Accepted>(
+            reducer.reduce(EngineState(source), GameplayInteractionPulse.FrameElapsed.fromValidated(MutableGameState.FIXED_STEP * 1.5f)),
+        ).state.model
+        committed.takeSoundCues()
+        committed.takeVisualFxCues()
+        assertTrue(committed.lastTransitionSteps > 0)
+        val retained = committed.exactSimulationFingerprint()
+        val randomBefore = committed.gameplayRandom.copy().nextInt()
+
+        val subStep = assertIs<GameReductionResult.Accepted>(
+            reducer.reduce(EngineState(committed), GameplayInteractionPulse.FrameElapsed.fromValidated(MutableGameState.FIXED_STEP * 0.25f)),
+        )
+        val candidate = subStep.state.model
+
+        assertEquals(0, candidate.lastTransitionSteps)
+        assertEquals(committed.elapsed, candidate.elapsed)
+        assertTrue(candidate.accumulator > committed.accumulator && candidate.accumulator < MutableGameState.FIXED_STEP)
+        assertNull(subStep.outputs.visualFxCuesOrNull)
+        assertNull(subStep.outputs.progressUpdate)
+        assertEquals(MutableGameState.FIXED_STEP * 0.25f, subStep.outputs.audioRealDeltaSeconds)
+        assertSame(committed.enemies, candidate.enemies)
+        assertSame(committed.projectiles, candidate.projectiles)
+        assertSame(committed.pickups, candidate.pickups)
+        assertSame(committed.weaponOrbitals, candidate.weaponOrbitals)
+        assertSame(committed.gameplayRandom, candidate.gameplayRandom)
+        assertEquals(retained, committed.exactSimulationFingerprint())
+        assertEquals(randomBefore, committed.gameplayRandom.copy().nextInt())
+
+        // The next frame that completes the step runs it on an isolated copy; both retained states stay intact.
+        val retainedCandidate = candidate.exactSimulationFingerprint()
+        val stepped = assertIs<GameReductionResult.Accepted>(
+            reducer.reduce(subStep.state, GameplayInteractionPulse.FrameElapsed.fromValidated(MutableGameState.FIXED_STEP)),
+        ).state.model
+        assertEquals(1, stepped.lastTransitionSteps)
+        assertNotSame(candidate.enemies, stepped.enemies)
+        assertEquals(retained, committed.exactSimulationFingerprint())
+        assertEquals(retainedCandidate, candidate.exactSimulationFingerprint())
+    }
+
+    @Test
+    fun achievementCountersWaitForTheBankAndNeverForceAnIdleFrameToPublish() {
+        val source = MutableGameState(canonicalGameplayContent, seed = 6_104).apply {
+            pendingTotalKills = 5
+            pendingRicochets = 6
+            pendingDataPickups = 7
+        }
+        val reducer = GameReducer()
+        val pointer = GameplayInteractionPulse.PointerMoved.fromValidated(source.pointerX, source.pointerY, source.pointerActive)
+        val idle = assertIs<GameReductionResult.Accepted>(reducer.reduce(EngineState(source), pointer))
+        assertNull(idle.outputs.progressUpdate)
+        assertSame(source, idle.state.model, "counters alone leave an unchanged input unreduced")
+
+        val banked = source.copyForReduction().apply { bankRunMatter() }
+        val update = assertNotNull(banked.takeProgressUpdate())
+        assertEquals(5, update.totalKills)
+        assertEquals(6, update.ricochets)
+        assertEquals(7, update.dataPickups)
+        assertFalse(banked.hasPendingReductionOutputs())
+        assertEquals(5, source.pendingTotalKills, "the committed source keeps its counters")
+
+        // Any other progress carries the counters along without waiting for the bank.
+        val elite = source.copyForReduction().apply { pendingEliteKills = 1 }
+        assertEquals(5, assertNotNull(elite.takeProgressUpdate()).totalKills)
+    }
+
+    @Test
     fun threeProductionFrameSiblingsDetachOnlyActiveRelicTimersAndRemainDeterministic() {
-        val glassIndex = RelicId.GLASS_WITNESS.ordinal
-        val scarIndex = RelicId.SCAR_TISSUE.ordinal
+        val furnaceIndex = RelicId.FURNACE_COVENANT.ordinal
+        val codexIndex = RelicId.PANDEMIC_CODEX.ordinal
+        val thermal = StatusElement.THERMAL.ordinal
         val source = MutableGameState(canonicalGameplayContent, seed = 7_201).apply {
             startRun()
             enemies.clear()
             spawnClock = 1_000f
             // Admit exactly one fixed step independently of presentation-speed preferences.
             accumulator = MutableGameState.FIXED_STEP
-            acquireRelicForTesting(RelicId.GLASS_WITNESS)
-            acquireRelicForTesting(RelicId.SCAR_TISSUE)
-            relicCooldowns[glassIndex] = 0.8f
+            acquireRelicForTesting(RelicId.FURNACE_COVENANT)
+            acquireRelicForTesting(RelicId.PANDEMIC_CODEX)
+            relicCooldowns[furnaceIndex] = 0.8f
+            relicCounters[codexIndex] = 2
             val enemy = addEnemyForTesting(x = 240f, y = 40f)
-            enemy.relicCounters[scarIndex] = 2
-            enemy.relicTimers[glassIndex] = 0.6f
-            enemy.relicTimers[scarIndex] = 0.7f
+            // A due decay is an event: it is the only status write this frame performs.
+            enemy.status[StatusCell.STACKS + thermal] = 3f
+            enemy.status[StatusCell.DECAY_AT + thermal] = 0f
         }
         // Make the source a committed, drained state just like a production component frame.
         source.takeSoundCues()
@@ -481,12 +600,15 @@ class GameplayReductionIsolationTest {
 
         siblings.forEach { branch ->
             assertFalse(branch.relicCooldowns.sharesStorageWith(source.relicCooldowns))
-            assertFalse(branch.enemies.single().relicTimers.sharesStorageWith(source.enemies.single().relicTimers))
+            assertFalse(branch.enemies.single().status.sharesStorageWith(source.enemies.single().status))
             assertTrue(branch.relicRanks.sharesStorageWith(source.relicRanks))
             assertTrue(branch.relicCounters.sharesStorageWith(source.relicCounters))
-            assertEquals(0.8f, source.relicCooldowns[glassIndex])
-            assertEquals(0.6f, source.enemies.single().relicTimers[glassIndex])
-            assertEquals(0.7f, source.enemies.single().relicTimers[scarIndex])
+            assertTrue(branch.clauseReadyAt.sharesStorageWith(source.clauseReadyAt))
+            assertTrue(branch.itemStatusReadyAt.sharesStorageWith(source.itemStatusReadyAt))
+            assertEquals(2f, branch.enemies.single().status[StatusCell.STACKS + thermal])
+            assertEquals(0.8f, source.relicCooldowns[furnaceIndex])
+            assertEquals(3f, source.enemies.single().status[StatusCell.STACKS + thermal])
+            assertEquals(0f, source.enemies.single().status[StatusCell.DECAY_AT + thermal])
         }
         assertEquivalentSimulation(siblings[0], siblings[1])
         assertEquivalentSimulation(siblings[1], siblings[2])
@@ -507,16 +629,16 @@ class GameplayReductionIsolationTest {
 
     @Test
     fun threeProductionCollisionSiblingsDetachEnemyRelicBuffersWithoutTouchingSource() {
-        val tidalIndex = RelicId.TIDAL_LOCK.ordinal
-        val glassIndex = RelicId.GLASS_WITNESS.ordinal
+        val thermal = StatusElement.THERMAL.ordinal
         val source = MutableGameState(canonicalGameplayContent, seed = 8_301).apply {
             startRun()
             enemies.clear()
             spawnClock = 1_000f
             // Admit exactly one fixed step independently of presentation-speed preferences.
             accumulator = MutableGameState.FIXED_STEP
-            acquireRelicForTesting(RelicId.TIDAL_LOCK)
-            acquireRelicForTesting(RelicId.GLASS_WITNESS)
+            // Furnace Covenant makes every hit above 70 heat apply Thermal to its target.
+            acquireRelicForTesting(RelicId.FURNACE_COVENANT)
+            heat = 75f
             val enemy = addEnemyForTesting(x = 90f, y = 0f)
             trail += TrailPoint(enemy.x, enemy.y)
             takeSoundCues()
@@ -536,15 +658,19 @@ class GameplayReductionIsolationTest {
 
         siblings.forEach { branch ->
             val enemy = branch.enemies.single()
-            assertEquals(1, enemy.relicCounters[tidalIndex])
-            assertEquals(1, enemy.relicCounters[glassIndex])
-            assertEquals(3f, enemy.relicTimers[glassIndex])
-            assertFalse(enemy.relicCounters.sharesStorageWith(source.enemies.single().relicCounters))
-            assertFalse(enemy.relicTimers.sharesStorageWith(source.enemies.single().relicTimers))
+            // Flux Wake's own Scorch and Furnace Covenant's Thermal.
+            assertEquals(2f, enemy.status[StatusCell.STACKS + thermal])
+            assertEquals((HitSource.WEAPON.ordinal + 1).toFloat(), enemy.status[StatusCell.LAST_SOURCE])
+            assertTrue(enemy.hp < enemy.maxHp)
+            assertFalse(enemy.status.sharesStorageWith(source.enemies.single().status))
+            assertFalse(branch.relicCooldowns.sharesStorageWith(source.relicCooldowns))
         }
-        assertEquals(0, source.enemies.single().relicCounters[tidalIndex])
-        assertEquals(0, source.enemies.single().relicCounters[glassIndex])
-        assertEquals(0f, source.enemies.single().relicTimers[glassIndex])
+        source.enemies.single().let { enemy ->
+            assertEquals(0f, enemy.status[StatusCell.STACKS + thermal])
+            assertEquals(0f, enemy.status[StatusCell.LAST_SOURCE])
+            assertEquals(enemy.maxHp, enemy.hp)
+        }
+        assertEquals(0f, source.relicCooldowns[RelicId.FURNACE_COVENANT.ordinal])
         assertEquivalentSimulation(siblings[0], siblings[1])
         assertEquivalentSimulation(siblings[1], siblings[2])
     }
@@ -559,6 +685,7 @@ class GameplayReductionIsolationTest {
         assertEquals(3, source.choices.size)
         val selectedItemIds = source.choices.map { choice -> requireNotNull(choice.itemId) }
         val sourceRandomCursor = source.gameplayRandom.snapshot()
+        val sourceRewardCursor = source.rewardRandom.snapshot()
         val reducer = GameReducer()
         val sourceEngine = EngineState(source)
 
@@ -576,11 +703,16 @@ class GameplayReductionIsolationTest {
             assertEquals(1, branch.itemStacks[selectedItemId])
             assertEquals(0, source.itemStacks[selectedItemId])
             assertFalse(branch.itemStacks.sharesStorageWith(source.itemStacks))
-            assertFalse(branch.familyStacks.sharesStorageWith(source.familyStacks))
             assertFalse(branch.discoveredItemIds.sharesStorageWith(source.discoveredItemIds))
+            assertNotSame(source.build, branch.build)
+            assertEquals(listOf(selectedItemId), branch.acquisitionOrder)
+            assertTrue(source.acquisitionOrder.isEmpty())
+            assertEquals(0, source.build.ownedItemCount)
             assertTrue(branch.relicRanks.sharesStorageWith(source.relicRanks))
+            assertTrue(branch.clauseReadyAt.sharesStorageWith(source.clauseReadyAt))
         }
         assertEquals(sourceRandomCursor, source.gameplayRandom.snapshot())
+        assertEquals(sourceRewardCursor, source.rewardRandom.snapshot())
         assertEquals(selectedItemIds.toSet().size, siblings.size)
         siblings.forEachIndexed { branchIndex, branch ->
             selectedItemIds.forEachIndexed { itemIndex, itemId ->
@@ -597,10 +729,12 @@ class GameplayReductionIsolationTest {
             initialMatter = 0,
         ).apply {
             startRun()
-            acquireRelicForTesting(RelicId.TIDAL_LOCK)
-            acquireRelicForTesting(RelicId.GLASS_WITNESS)
-            acquireRelicForTesting(RelicId.STATIC_CHORUS)
+            acquireRelicForTesting(RelicId.ECHO_CHAMBER)
+            acquireRelicForTesting(RelicId.FURNACE_COVENANT)
+            acquireRelicForTesting(RelicId.PANDEMIC_CODEX)
             acquireItemForTesting(0)
+            acquireItemForTesting(content.items.single { it.name == "Igniter" }.id)
+            acquireItemForTesting(content.items.single { it.name == "Rime Rounds" }.id)
             // Ensure the trace covers both entity and per-run relic/progression storage.
             addEnemyForTesting(x = 120f, y = 15f)
             trail += TrailPoint(120f, 15f)
@@ -633,6 +767,12 @@ class GameplayReductionIsolationTest {
             ).state
             eagerReference.applyReferencePulse(pulse)
             eagerReference.drainReferenceOutputs()
+            // Step scratch is idle between accepted reductions, so no candidate inherits it.
+            listOf(production.model, eagerReference).forEach { state ->
+                assertEquals(0, state.chainDepth, "transition $index chain scratch depth")
+                assertEquals(-1, state.shatteringEnemyId, "transition $index shatter target")
+                assertEquals(0, state.clauseDepth, "transition $index clause depth")
+            }
             assertEquals(
                 precedingFingerprint,
                 precedingState.exactSimulationFingerprint(),
@@ -646,29 +786,57 @@ class GameplayReductionIsolationTest {
     }
 
     private fun MutableGameState.populateAdditionalRetainedState() {
-        characterRuntime = CharacterRuntime(
-            charge = 0.3f,
-            barrier = 4f,
-            barrierTime = 0.8f,
-            previousSpeed = 123f,
-            previousHeading = 0.4f,
-            turnArc = 0.7f,
-            turnDistance = 50f,
-            wasBraking = true,
-            parryWindow = 0.2f,
-            parryCooldown = 0.6f,
-            ringRadius = 58f,
-            dashSequence = 2,
-            dashOrigin = WorldPoint(4f, -0f),
-            dashRecorded = true,
-            ramPower = 0.9f,
-            lattice = listOf(WorldPoint(-1f, 2f), WorldPoint(3f, -4f)),
-            latticeTime = 0.5f,
-        )
+        characterRuntime = CharacterRuntime().apply {
+            charge = 0.3f
+            previousSpeed = 123f
+            previousHeading = 0.4f
+            turnArc = 0.7f
+            turnDistance = 50f
+            wasBraking = true
+            parryWindow = 0.2f
+            parryCooldown = 0.6f
+            haloRadius = 58f
+            dashSequence = 2
+            hasDashOrigin = true
+            dashOriginX = 4f
+            dashOriginY = -0f
+            dashRecorded = true
+            punctureReadyAt = 0.9f
+            facets = 3
+            facetTimer = 1.5f
+            edge = 2
+            edgeUntil = 4f
+            latticeCount = 2
+            latticeNodes[0] = -1f
+            latticeNodes[1] = 2f
+            latticeNodes[2] = 3f
+            latticeNodes[3] = -4f
+            latticeTime = 0.5f
+            stellarMass = 7
+            ghostHead = 3
+            ghostSamples = 4
+            ghostPath[6] = 11f
+            polarity = Polarity.REPEL
+            beatStreak = 2
+            blinkCharges = 1
+            blinkRecharge = 0.7f
+            scarCount = 1
+            scars[0] = 1f
+            scars[4] = 2f
+            droneCount = 1
+            drones[0] = 5f
+            drones[4] = 12f
+            abilityDamage = 33.0
+            damagePrevented = 4.0
+        }
         pendingEliteKills = 2
         pendingDashHits = 3
         pendingCompletedOrbits = 4
         pendingArchitectDefeatedWith = CoreShape.PRISM
+        pendingTotalKills = 5
+        pendingRicochets = 6
+        pendingDataPickups = 7
+        achievementFlushDue = true
         pointsOfInterest = listOf(
             PointOfInterestState(
                 offerId = 1,
@@ -690,34 +858,148 @@ class GameplayReductionIsolationTest {
         pendingDirectedRewards = listOf(DirectedReward.ITEM_AND_REPAIR, DirectedReward.WEAPON)
         directedReward = DirectedReward.RELIC
         selectedRewardFocus = RewardFocus.CONTROL
-        synergyEffects = listOf(
-            SynergyEffect(
-                synergy = SynergyId.FRACTURE_DECAY,
-                kind = SynergyEffectKind.TRAIL,
-                remaining = 1f,
-                damage = 2f,
-                enemyId = 11,
+        buffs = listOf(ActiveBuff(sourceItem = 0, stat = BuffStat.DAMAGE, amountPerStack = 0.2f, stacks = 2, expiresAt = 9f))
+        combatFields = listOf(
+            CombatField(
+                kind = CombatFieldKind.ROT_WELL,
+                remaining = 1.5f,
                 x = 200f,
                 y = 300f,
-                endX = 400f,
-                endY = 500f,
                 radius = 70f,
+                damagePerSecond = 4f,
+                element = StatusElement.ENTROPY,
+                stacksPerTick = 1,
+                tickClock = 0.1f,
             ),
         )
-        synergyCooldowns[SynergyId.FRACTURE_DECAY.ordinal] = 0.7f
-        synergyManeuverCharge = 0.4f
-        ghostDashPending = true
-        ghostDashStartX = 12f
-        ghostDashStartY = 13f
+        severedRelics = listOf(SeveredRelic(RelicId.GLASS_COMET, until = 40f))
+        echoHits += EchoHit(enemyId = 11, delay = 0.3f, damage = 5f, appliesDominant = true)
+        clauseReadyAt[0] = 0.7f
+        clauseCounters[0] = 2
+        statusAccumulators[1] = 0.4f
+        itemStatusReadyAt[1] = 0.6f
+        reactionTokens = 5.5f
+        breakTokens = 7.25f
+        discoveredReactionMask = 1 shl ReactionId.FUSION.ordinal
+        pendingDiscoveredReactionMask = 1 shl ReactionId.FUSION.ordinal
+        discoveredPairingMask = 2
+        pendingDiscoveredPairingMask = 2
+        heirloomCandidates = listOf(RelicId.GYRE_ENGINE)
+        heirloomPending = true
+        pendingVictoryRelics = listOf(RelicId.GYRE_ENGINE)
+        stormCharge = 0.4f
+        stasisMeter = 2.5f
+        stasisBank = 3
+        overdriveBurnoutUntil = 12f
+        glassCharge = 6f
+        integrityLiabilityCut = 9f
+        critMissStreak = 2
+        offerPity = 4
+        itemOffersOpened = 3
+        secondWindSpent = true
+        matrixFreeDashReadyAt = 0.65f
+        // Every forked build scalar holds a distinct non-default value, so a fork that drops one copy
+        // (resetting it to its initial value) diverges from its source. Several expire inside the trace.
+        rebornItems[0] = 1
+        heirloomOfferActive = true
+        pendingHeirloomResolved = true
+        ouroborosSpent = true
+        ouroborosLockedUntil = 1.5f
+        invulnerableUntil = 0.9f
+        glassInvulnerabilityReadyAt = 1.1f
+        bulwarkInvulnerabilityReadyAt = 1.3f
+        stasisLockedUntil = 0.7f
+        sinceTurn = 0.45f
+        gyreReadyAt = 0.6f
+        gyreEchoAt = 1f
+        gyreEchoDamage = 7f
+        overdriveExtension = 0.4f
+        overdriveKills = 3
+        aegisAbsorbed = 2.5f
+        aegisNovaReadyAt = 1.2f
+        shieldBreakArmed = true
+        shieldBreakReadyAt = 0.8f
+        overheatArmed = false
+        wasBraking = true
+        brakeHoldTime = 0.2f
+        brakeShedSpeed = 210f
+        freeDashPrimed = true
+        freeDashReadyAt = 0.5f
+        comboKillCounter = 2
+        cinderRecoilReadyAt = 0.3f
+        dashHitThisDash = true
+        arsenalCounter = 1
+        necroticClock = 0.25f
+        statusCuesThisStep = 2
         smoothedVelocityX = 14f
         smoothedVelocityY = 15f
         turnHeadingEstablished = true
         turnHoldTime = 0.2f
         turnRecoveryCooldown = 0.3f
         turnDirection = -1
+        elitesSpawned = 3
+        heraldsSpawned = 1
+        directorPhase = 2
+        directorPhaseUntil = 9.5f
+        spawnBudget = 2.25f
+        pendingEventKind = 3
+        pendingEventSize = 7
+        pendingEventType = 9
+        recentEventTypes = 0b101
+        previousEventTypes = 0b110
+        ambushReadyAt = 21f
+        encircleReadyAt = 41f
+        wallReadyAt = 31f
+        capOverflowReadyAt = 22f
+        ambushSpeedSeconds = 0.75f
+        spawnEventCount = 4
+        lastSpawnEventKind = 1
+        lastSpawnEventPlanned = 5
+        lastSpawnEventSpawned = 4
+        spawnRandom.nextInt()
+        coreRadius = 17.5f
+        worldOriginX = 2_400.5
+        worldOriginY = -1_200.25
+        obstacleField = ObstacleField.of(1, -1, 1, listOf(listOf(
+            Obstacle(id = 7L, kind = ObstacleKind.BUMPER, x = 30f, y = -40f, radius = 34f, shapeSeed = 9, ricochetReadyAt = 1.5f),
+        )))
+        destroyedObstacleIds = listOf(3L, 4L)
+        obstacleHitReadyAt = 0.6f
+        nearMissReadyAt = 0.7f
+        reviveInvulnerableUntil = 0.8f
+        rebirthRank = 7
+        volatileBursts = kinetickk.foundation.collections.immutableListOf(
+            kinetickk.ball.gameplay.nucleus.render.VolatileBurstProjection(12f, -8f, 70f, 0.2f, 0.55f),
+        )
+        pickups.firstOrNull()?.attracted = true
         enemies.firstOrNull()?.apply {
             characterMarkTime = 0.75f
             lastCharacterDash = 2
+            aspect = StatusElement.ION.ordinal
+            aspectImmune = true
+            phase = 1
+            shiftUntil = 0.4f
+            escortsPending = 2
+            lastDamagedAt = 0.3f
+            disabledUntil = 0.35f
+            silencedUntil = 0.45f
+            mode = 2
+            modeUntil = 0.55f
+            facing = 1.25f
+            guarded = true
+            linkedBy = 7
+            linkedUntil = 0.65f
+            shieldUntil = 0.7f
+            abilityAt = 0.85f
+            thrownUntil = 0.9f
+            slamReadyAt = 0.95f
+            armored = true
+            armorCracked = true
+            status[StatusCell.STACKS + StatusElement.THERMAL.ordinal] = 2f
+            status[StatusCell.DECAY_AT + StatusElement.THERMAL.ordinal] = 0.5f
+            status[StatusCell.FREEZE_IMMUNE_UNTIL] = 0.6f
+            status[StatusCell.CRYO_IMMUNE_CARRY] = 0.5f
+            status[StatusCell.REACTION_PAIR_READY_AT + ReactionId.FUSION.ordinal] = 0.4f
         }
     }
 
@@ -754,7 +1036,13 @@ class GameplayReductionIsolationTest {
             pendingEliteKills != 0 ||
             pendingDashHits != 0 ||
             pendingCompletedOrbits != 0 ||
-            pendingArchitectDefeatedWith != null
+            pendingArchitectDefeatedWith != null ||
+            achievementFlushDue && (pendingTotalKills != 0 || pendingRicochets != 0 || pendingDataPickups != 0) ||
+            pendingDiscoveredRelicMask != 0L ||
+            pendingDiscoveredReactionMask != 0 ||
+            pendingDiscoveredPairingMask != 0 ||
+            pendingVictoryRelics != null ||
+            pendingHeirloomResolved
 
     private fun assertEquivalentSimulation(
         actual: MutableGameState,
@@ -784,14 +1072,105 @@ class GameplayReductionIsolationTest {
         ExactFingerprint().apply {
             value("content", content)
             value("random", gameplayRandom.snapshot())
+            value("rewardRandom", rewardRandom.snapshot())
+            value("spawnRandom", spawnRandom.snapshot())
             value("activeRebirthProfile", activeRebirthProfile)
             value("unlockedWeaponSet", unlockedWeaponSet.toList())
             value("unlockedWeaponView", unlockedWeaponView.toList())
-            ints("metaRanks", metaRanks)
+            ints("matrixRanks", matrixRanks)
+            value("matrix", matrix)
             value("discoveredItemIds", discoveredItemIds.toList())
             value("pendingDiscoveredItemIds", pendingDiscoveredItemIds.toList())
             ints("itemStacks", itemStacks)
-            ints("familyStacks", familyStacks)
+            ints("rebornItems", rebornItems)
+            value("acquisitionOrder", acquisitionOrder.toList())
+            buildFingerprint(this@exactSimulationFingerprint)
+            floats("clauseReadyAt", clauseReadyAt)
+            ints("clauseCounters", clauseCounters)
+            floats("statusAccumulators", statusAccumulators)
+            floats("itemStatusReadyAt", itemStatusReadyAt)
+            value("buffs.size", buffs.size)
+            buffs.forEachIndexed { index, buff ->
+                val prefix = "buffs[$index]"
+                value("$prefix.sourceItem", buff.sourceItem)
+                value("$prefix.stat", buff.stat)
+                float("$prefix.amountPerStack", buff.amountPerStack)
+                value("$prefix.stacks", buff.stacks)
+                float("$prefix.expiresAt", buff.expiresAt)
+            }
+            value("combatFields.size", combatFields.size)
+            combatFields.forEachIndexed { index, field ->
+                val prefix = "combatFields[$index]"
+                value("$prefix.kind", field.kind)
+                float("$prefix.remaining", field.remaining)
+                float("$prefix.x", field.x)
+                float("$prefix.y", field.y)
+                float("$prefix.radius", field.radius)
+                float("$prefix.damagePerSecond", field.damagePerSecond)
+                value("$prefix.element", field.element)
+                value("$prefix.stacksPerTick", field.stacksPerTick)
+                value("$prefix.generation", field.generation)
+                float("$prefix.pull", field.pull)
+                float("$prefix.tickClock", field.tickClock)
+            }
+            float("reactionTokens", reactionTokens)
+            float("breakTokens", breakTokens)
+            value("discoveredRelicMask", discoveredRelicMask)
+            value("pendingDiscoveredRelicMask", pendingDiscoveredRelicMask)
+            value("discoveredReactionMask", discoveredReactionMask)
+            value("pendingDiscoveredReactionMask", pendingDiscoveredReactionMask)
+            value("discoveredPairingMask", discoveredPairingMask)
+            value("pendingDiscoveredPairingMask", pendingDiscoveredPairingMask)
+            value("heirloomCandidates", heirloomCandidates.toList())
+            value("heirloomPending", heirloomPending)
+            value("heirloomOfferActive", heirloomOfferActive)
+            value("pendingHeirloomResolved", pendingHeirloomResolved)
+            value("pendingVictoryRelics", pendingVictoryRelics?.toList())
+            value("severedRelics.size", severedRelics.size)
+            severedRelics.forEachIndexed { index, severed ->
+                value("severedRelics[$index].id", severed.id)
+                float("severedRelics[$index].until", severed.until)
+            }
+            value("ouroborosSpent", ouroborosSpent)
+            float("ouroborosLockedUntil", ouroborosLockedUntil)
+            float("invulnerableUntil", invulnerableUntil)
+            float("glassInvulnerabilityReadyAt", glassInvulnerabilityReadyAt)
+            float("bulwarkInvulnerabilityReadyAt", bulwarkInvulnerabilityReadyAt)
+            float("stormCharge", stormCharge)
+            float("stasisMeter", stasisMeter)
+            value("stasisBank", stasisBank)
+            float("stasisLockedUntil", stasisLockedUntil)
+            float("sinceTurn", sinceTurn)
+            float("gyreReadyAt", gyreReadyAt)
+            float("gyreEchoAt", gyreEchoAt)
+            float("gyreEchoDamage", gyreEchoDamage)
+            float("overdriveBurnoutUntil", overdriveBurnoutUntil)
+            float("overdriveExtension", overdriveExtension)
+            value("overdriveKills", overdriveKills)
+            float("aegisAbsorbed", aegisAbsorbed)
+            float("aegisNovaReadyAt", aegisNovaReadyAt)
+            value("shieldBreakArmed", shieldBreakArmed)
+            float("shieldBreakReadyAt", shieldBreakReadyAt)
+            value("overheatArmed", overheatArmed)
+            value("wasBraking", wasBraking)
+            float("brakeHoldTime", brakeHoldTime)
+            float("brakeShedSpeed", brakeShedSpeed)
+            value("critMissStreak", critMissStreak)
+            value("freeDashPrimed", freeDashPrimed)
+            float("freeDashReadyAt", freeDashReadyAt)
+            value("comboKillCounter", comboKillCounter)
+            float("glassCharge", glassCharge)
+            float("integrityLiabilityCut", integrityLiabilityCut)
+            float("cinderRecoilReadyAt", cinderRecoilReadyAt)
+            value("offerPity", offerPity)
+            value("itemOffersOpened", itemOffersOpened)
+            value("secondWindSpent", secondWindSpent)
+            float("matrixFreeDashReadyAt", matrixFreeDashReadyAt)
+            value("dashHitThisDash", dashHitThisDash)
+            value("clauseDepth", clauseDepth)
+            value("arsenalCounter", arsenalCounter)
+            float("necroticClock", necroticClock)
+            value("statusCuesThisStep", statusCuesThisStep)
             value("soundCues", soundCues.toList())
             value("pendingDiscoveredItemIdStorage.present", pendingDiscoveredItemIdStorage != null)
             value("soundCueStorage.present", soundCueStorage != null)
@@ -804,31 +1183,12 @@ class GameplayReductionIsolationTest {
             value("pendingDashHits", pendingDashHits)
             value("pendingCompletedOrbits", pendingCompletedOrbits)
             value("pendingArchitectDefeatedWith", pendingArchitectDefeatedWith)
-            float("characterRuntime.charge", characterRuntime.charge)
-            float("characterRuntime.barrier", characterRuntime.barrier)
-            float("characterRuntime.barrierTime", characterRuntime.barrierTime)
-            float("characterRuntime.previousSpeed", characterRuntime.previousSpeed)
-            float("characterRuntime.previousHeading", characterRuntime.previousHeading)
-            float("characterRuntime.turnArc", characterRuntime.turnArc)
-            float("characterRuntime.turnDistance", characterRuntime.turnDistance)
-            value("characterRuntime.wasBraking", characterRuntime.wasBraking)
-            float("characterRuntime.parryWindow", characterRuntime.parryWindow)
-            float("characterRuntime.parryCooldown", characterRuntime.parryCooldown)
-            float("characterRuntime.ringRadius", characterRuntime.ringRadius)
-            value("characterRuntime.dashSequence", characterRuntime.dashSequence)
-            value("characterRuntime.dashOrigin.present", characterRuntime.dashOrigin != null)
-            characterRuntime.dashOrigin?.let { origin ->
-                float("characterRuntime.dashOrigin.x", origin.x)
-                float("characterRuntime.dashOrigin.y", origin.y)
-            }
-            value("characterRuntime.dashRecorded", characterRuntime.dashRecorded)
-            float("characterRuntime.ramPower", characterRuntime.ramPower)
-            value("characterRuntime.lattice.size", characterRuntime.lattice.size)
-            characterRuntime.lattice.forEachIndexed { index, point ->
-                float("characterRuntime.lattice[$index].x", point.x)
-                float("characterRuntime.lattice[$index].y", point.y)
-            }
-            float("characterRuntime.latticeTime", characterRuntime.latticeTime)
+            value("pendingTotalKills", pendingTotalKills)
+            value("pendingRicochets", pendingRicochets)
+            value("pendingDataPickups", pendingDataPickups)
+            value("achievementFlushDue", achievementFlushDue)
+            value("characterRuntime", characterRuntime.toString())
+            value("weaponRuntime", weaponRuntime.toString())
             value("pointsOfInterest.size", pointsOfInterest.size)
             pointsOfInterest.forEachIndexed { index, point ->
                 val prefix = "pointsOfInterest[$index]"
@@ -855,18 +1215,63 @@ class GameplayReductionIsolationTest {
             value("nextEntityId", nextEntityId)
             float("spawnClock", spawnClock)
             float("nextEliteAt", nextEliteAt)
+            value("elitesSpawned", elitesSpawned)
+            value("heraldsSpawned", heraldsSpawned)
+            value("directorPhase", directorPhase)
+            float("directorPhaseUntil", directorPhaseUntil)
+            float("spawnBudget", spawnBudget)
+            value("pendingEventKind", pendingEventKind)
+            value("pendingEventSize", pendingEventSize)
+            value("pendingEventType", pendingEventType)
+            value("recentEventTypes", recentEventTypes)
+            value("previousEventTypes", previousEventTypes)
+            float("ambushReadyAt", ambushReadyAt)
+            float("encircleReadyAt", encircleReadyAt)
+            float("wallReadyAt", wallReadyAt)
+            float("capOverflowReadyAt", capOverflowReadyAt)
+            float("ambushSpeedSeconds", ambushSpeedSeconds)
+            value("spawnEventCount", spawnEventCount)
+            value("lastSpawnEventKind", lastSpawnEventKind)
+            value("lastSpawnEventPlanned", lastSpawnEventPlanned)
+            value("lastSpawnEventSpawned", lastSpawnEventSpawned)
+            value("runSeed", runSeed)
+            value("worldOriginX", worldOriginX.toRawBits())
+            value("worldOriginY", worldOriginY.toRawBits())
+            value("obstacleField.center", obstacleField.centerChunkX to obstacleField.centerChunkY)
+            value("obstacleField.span", obstacleField.span)
+            value("obstacleField.size", obstacleField.size)
+            obstacleField.obstacles.forEachIndexed { index, obstacle ->
+                val prefix = "obstacles[$index]"
+                value("$prefix.id", obstacle.id)
+                value("$prefix.kind", obstacle.kind)
+                float("$prefix.x", obstacle.x)
+                float("$prefix.y", obstacle.y)
+                float("$prefix.radius", obstacle.radius)
+                value("$prefix.shapeSeed", obstacle.shapeSeed)
+                float("$prefix.ricochetReadyAt", obstacle.ricochetReadyAt)
+            }
+            for (cell in 0 until obstacleField.span * obstacleField.span) {
+                value("obstacleField.cell[$cell]", obstacleField.cellBegin(cell) to obstacleField.cellEnd(cell))
+            }
+            value("destroyedObstacleIds", destroyedObstacleIds.toList())
+            float("obstacleHitReadyAt", obstacleHitReadyAt)
+            float("nearMissReadyAt", nearMissReadyAt)
+            float("reviveInvulnerableUntil", reviveInvulnerableUntil)
             float("dashBufferTime", dashBufferTime)
             value("bossSpawned", bossSpawned)
             value("keyboardBrakeActive", keyboardBrakeActive)
             value("secondaryBrakeActive", secondaryBrakeActive)
             value("touchBrakeActive", touchBrakeActive)
             float("uiScale", uiScale)
+            float("viewportDensity", viewportDensity)
             float("accumulator", accumulator)
             value("lastTransitionSteps", lastTransitionSteps)
             float("previousCoreX", previousCoreX)
             float("previousCoreY", previousCoreY)
             float("previousSingularityX", previousSingularityX)
             float("previousSingularityY", previousSingularityY)
+            float("previousCameraX", previousCameraX)
+            float("previousCameraY", previousCameraY)
             float("trailLastX", trailLastX)
             float("trailLastY", trailLastY)
             float("trailDistanceCarry", trailDistanceCarry)
@@ -879,30 +1284,7 @@ class GameplayReductionIsolationTest {
             ints("relicRanks", relicRanks)
             floats("relicCooldowns", relicCooldowns)
             ints("relicCounters", relicCounters)
-            ints("relicProcCounts", relicProcCounts)
             ints("agonyMutationCounts", agonyMutationCounts)
-            float("slipstreamRelayTime", slipstreamRelayTime)
-            float("borrowedMomentTime", borrowedMomentTime)
-            float("brakepointCharge", brakepointCharge)
-            value("synergyEffects.size", synergyEffects.size)
-            synergyEffects.forEachIndexed { index, effect ->
-                val prefix = "synergyEffects[$index]"
-                value("$prefix.synergy", effect.synergy)
-                value("$prefix.kind", effect.kind)
-                float("$prefix.remaining", effect.remaining)
-                float("$prefix.damage", effect.damage)
-                value("$prefix.enemyId", effect.enemyId)
-                float("$prefix.x", effect.x)
-                float("$prefix.y", effect.y)
-                float("$prefix.endX", effect.endX)
-                float("$prefix.endY", effect.endY)
-                float("$prefix.radius", effect.radius)
-            }
-            floats("synergyCooldowns", synergyCooldowns)
-            float("synergyManeuverCharge", synergyManeuverCharge)
-            value("ghostDashPending", ghostDashPending)
-            float("ghostDashStartX", ghostDashStartX)
-            float("ghostDashStartY", ghostDashStartY)
             float("dataFraction", dataFraction)
             float("matterFraction", matterFraction)
             float("shieldRechargeDelay", shieldRechargeDelay)
@@ -919,7 +1301,7 @@ class GameplayReductionIsolationTest {
             float("hurtCooldown", hurtCooldown)
             float("lastAimDirectionX", lastAimDirectionX)
             float("lastAimDirectionY", lastAimDirectionY)
-            value("bankedThisRun", bankedThisRun)
+            value("bankedRunMatter", bankedRunMatter)
             value("activeChoiceType", activeChoiceType)
 
             value("phase", phase)
@@ -936,11 +1318,15 @@ class GameplayReductionIsolationTest {
             value("settings.damageNumberTierThreshold", settings.damageNumberTierThreshold)
             value("settings.language", settings.language)
             value("settings.runStatisticsOnLeft", settings.runStatisticsOnLeft)
+            value("settings.minimapEnabled", settings.minimapEnabled)
             value("rebirthLevel", rebirthLevel)
+            value("rebirthRank", rebirthRank)
+            value("volatileBursts", volatileBursts.toList())
             float("screenWidth", screenWidth)
             float("screenHeight", screenHeight)
             float("coreX", coreX)
             float("coreY", coreY)
+            float("coreRadius", coreRadius)
             float("velocityX", velocityX)
             float("velocityY", velocityY)
             float("cameraX", cameraX)
@@ -1016,6 +1402,9 @@ class GameplayReductionIsolationTest {
             float("morningstarAngle", morningstarAngle)
             float("morningstarX", morningstarX)
             float("morningstarY", morningstarY)
+            float("previousMorningstarX", previousMorningstarX)
+            float("previousMorningstarY", previousMorningstarY)
+            value("interpolationPrimed", interpolationPrimed)
             float("weaponBeamTime", weaponBeamTime)
             float("weaponBeamStartX", weaponBeamStartX)
             float("weaponBeamStartY", weaponBeamStartY)
@@ -1024,13 +1413,12 @@ class GameplayReductionIsolationTest {
             value("coreShape", coreShape)
             value("choices", choices.toList())
 
-            value("delayedRelicHits.size", delayedRelicHits.size)
-            delayedRelicHits.forEachIndexed { index, hit ->
-                value("delayedRelicHits[$index].relicId", hit.relicId)
-                value("delayedRelicHits[$index].enemyId", hit.enemyId)
-                float("delayedRelicHits[$index].delay", hit.delay)
-                float("delayedRelicHits[$index].damage", hit.damage)
-                value("delayedRelicHits[$index].linkedEnemyId", hit.linkedEnemyId)
+            value("echoHits.size", echoHits.size)
+            echoHits.forEachIndexed { index, hit ->
+                value("echoHits[$index].enemyId", hit.enemyId)
+                float("echoHits[$index].delay", hit.delay)
+                float("echoHits[$index].damage", hit.damage)
+                value("echoHits[$index].appliesDominant", hit.appliesDominant)
             }
 
             value("enemies.size", enemies.size)
@@ -1052,13 +1440,31 @@ class GameplayReductionIsolationTest {
                 float("$prefix.previousX", enemy.previousX)
                 float("$prefix.previousY", enemy.previousY)
                 value("$prefix.dead", enemy.dead)
-                value("$prefix.relicKillProcsEligible", enemy.relicKillProcsEligible)
-                float("$prefix.relicQualificationCooldown", enemy.relicQualificationCooldown)
+                value("$prefix.killClausesEligible", enemy.killClausesEligible)
+                float("$prefix.hitQualificationCooldown", enemy.hitQualificationCooldown)
                 float("$prefix.characterMarkTime", enemy.characterMarkTime)
                 value("$prefix.lastCharacterDash", enemy.lastCharacterDash)
-                ints("$prefix.relicCounters", enemy.relicCounters)
-                floats("$prefix.relicTimers", enemy.relicTimers)
-                floats("$prefix.relicValues", enemy.relicValues)
+                value("$prefix.aspect", enemy.aspect)
+                value("$prefix.aspectImmune", enemy.aspectImmune)
+                value("$prefix.phase", enemy.phase)
+                float("$prefix.shiftUntil", enemy.shiftUntil)
+                value("$prefix.escortsPending", enemy.escortsPending)
+                float("$prefix.lastDamagedAt", enemy.lastDamagedAt)
+                float("$prefix.disabledUntil", enemy.disabledUntil)
+                float("$prefix.silencedUntil", enemy.silencedUntil)
+                value("$prefix.mode", enemy.mode)
+                float("$prefix.modeUntil", enemy.modeUntil)
+                float("$prefix.facing", enemy.facing)
+                value("$prefix.guarded", enemy.guarded)
+                value("$prefix.linkedBy", enemy.linkedBy)
+                float("$prefix.linkedUntil", enemy.linkedUntil)
+                float("$prefix.shieldUntil", enemy.shieldUntil)
+                float("$prefix.abilityAt", enemy.abilityAt)
+                float("$prefix.thrownUntil", enemy.thrownUntil)
+                float("$prefix.slamReadyAt", enemy.slamReadyAt)
+                value("$prefix.armored", enemy.armored)
+                value("$prefix.armorCracked", enemy.armorCracked)
+                floats("$prefix.status", enemy.status)
             }
 
             value("projectiles.size", projectiles.size)
@@ -1077,6 +1483,9 @@ class GameplayReductionIsolationTest {
                 value("$prefix.sourceWeapon", projectile.sourceWeapon)
                 float("$prefix.previousX", projectile.previousX)
                 float("$prefix.previousY", projectile.previousY)
+                value("$prefix.statusElement", projectile.statusElement)
+                value("$prefix.kind", projectile.kind)
+                value("$prefix.procKey", projectile.procKey)
                 value("$prefix.hasRecordedEnemyHits", projectile.hasRecordedEnemyHits)
                 for (enemyId in 1 until nextEntityId) {
                     value("$prefix.recordedEnemy[$enemyId]", projectile.hasRecordedEnemyHit(enemyId))
@@ -1094,6 +1503,7 @@ class GameplayReductionIsolationTest {
                 float("$prefix.life", pickup.life)
                 float("$prefix.previousX", pickup.previousX)
                 float("$prefix.previousY", pickup.previousY)
+                value("$prefix.attracted", pickup.attracted)
             }
 
             value("trail.size", trail.size)
@@ -1101,6 +1511,8 @@ class GameplayReductionIsolationTest {
                 float("trail[$index].x", point.x)
                 float("trail[$index].y", point.y)
                 float("trail[$index].age", point.age)
+                float("trail[$index].life", point.life)
+                float("trail[$index].scale", point.scale)
             }
 
             value("weaponNodes.size", weaponNodes.size)
@@ -1112,6 +1524,8 @@ class GameplayReductionIsolationTest {
                 float("$prefix.life", node.life)
                 float("$prefix.maxLife", node.maxLife)
                 float("$prefix.radius", node.radius)
+                value("$prefix.procKey", node.procKey)
+                float("$prefix.scale", node.scale)
             }
 
             value("weaponOrbitals.size", weaponOrbitals.size)
@@ -1121,6 +1535,8 @@ class GameplayReductionIsolationTest {
                 float("$prefix.x", orbital.x)
                 float("$prefix.y", orbital.y)
                 float("$prefix.radius", orbital.radius)
+                float("$prefix.previousX", orbital.previousX)
+                float("$prefix.previousY", orbital.previousY)
             }
 
             value("totem.present", totem != null)
@@ -1130,6 +1546,58 @@ class GameplayReductionIsolationTest {
                 float("totem.pulse", activeTotem.pulse)
             }
         }.fields
+
+    /**
+     * The compiled build is an immutable value derived from items, Reborn flags, character and relics;
+     * its complete observable result is part of the State, independent of the instance identity.
+     */
+    private fun ExactFingerprint.buildFingerprint(state: MutableGameState) {
+        val build = state.build
+        BuildTag.entries.forEach { value("build.tagPoints[$it]", build.tagPoints(it)) }
+        StatusElement.entries.forEach { element ->
+            value("build.affinity[$element]", build.affinity(element))
+            float("build.potency[$element]", build.potency(element))
+            float("build.duration[$element]", build.durationMultiplier(element))
+            value("build.thresholdCut[$element]", build.thresholdCut(element))
+            float("build.breakPower[$element]", build.breakPower(element))
+            value("build.breakSpread[$element]", build.breakSpread(element))
+            float("build.breakSpreadRadius[$element]", build.breakSpreadRadius(element))
+        }
+        value("build.dominant", build.dominant)
+        value("build.secondary", build.secondary)
+        kinetickk.ball.content.api.EffectTrigger.entries.forEach { trigger ->
+            value("build.clauses[$trigger]", build.clauses(trigger).toList())
+        }
+        state.content.items.indices.forEach { id ->
+            float("build.magnitude[$id]", build.magnitude(id))
+            float("build.bonus[$id]", build.bonus(id))
+        }
+        RelicId.entries.forEach { float("build.relicUpside[$it]", build.relicUpside(it)) }
+        value("build.upsideMask", build.upsideMask)
+        value("build.liabilityMask", build.liabilityMask)
+        value("build.pairingMask", build.pairingMask)
+        value("build.links", build.links.toList())
+        value("build.reachableReactionMask", build.reachableReactionMask)
+        value("build.ownedItemCount", build.ownedItemCount)
+        float("build.reactionPower", build.reactionPower)
+        value("build.reactionResidue", build.reactionResidue)
+        float("build.reactionRecoil", build.reactionRecoil)
+        float("build.reactionRecoilRadius", build.reactionRecoilRadius)
+        value("build.alwaysCrit", build.alwaysCrit.toList())
+        value("build.critDamageVersus", build.critDamageVersus.toList())
+        value("build.damageVersus", build.damageVersus.toList())
+        value("build.whileModifiers", build.whileModifiers.toList())
+        float("build.nonCriticalDamage", build.nonCriticalDamage)
+        float("build.comboDamagePer", build.comboDamagePer)
+        float("build.comboDamageCap", build.comboDamageCap)
+        value("build.offerCards", build.offerCards)
+        float("build.overhealOverfill", build.overhealOverfill)
+        float("build.regenerationToDecay", build.regenerationToDecay)
+        float("build.critConversionRate", build.critConversionRate)
+        value("build.guaranteedCritAfter", build.guaranteedCritAfter)
+        float("build.freeDashHeat", build.freeDashHeat)
+        float("build.freeDashCooldown", build.freeDashCooldown)
+    }
 
     private class ExactFingerprint {
         val fields = mutableListOf<Pair<String, Any?>>()
