@@ -124,6 +124,45 @@ class ReactionSystemTest {
     }
 
     @Test
+    fun incomingCascadeNeedsOneWholeTokenWithoutSpendingStacksOrCooldownsWhenRefused() {
+        val justBelowOne = Float.fromBits(1f.toRawBits() - 1)
+        for (incomingGeneration in 0..1) {
+            for (tokens in listOf(0f, justBelowOne, 1f)) {
+                val state = buildTestState()
+                val target = state.dummy()
+                state.elapsed = 10f
+                state.reactionTokens = tokens
+                target.status[StatusCell.STACKS + StatusElement.THERMAL.ordinal] = 3f
+                target.status[StatusCell.STACKS + StatusElement.CRYO.ordinal] = 1f
+                target.status[StatusCell.GENERATION + StatusElement.CRYO.ordinal] = incomingGeneration.toFloat()
+                val before = target.status.toList()
+
+                state.tryReact(target, StatusElement.CRYO, incomingGeneration)
+
+                val admitted = incomingGeneration == 0 || tokens >= 1f
+                if (admitted) {
+                    assertEquals(0, target.stacksOf(StatusElement.THERMAL))
+                    assertEquals(0, target.stacksOf(StatusElement.CRYO))
+                    assertEquals(state.elapsed + state.content.build.policy.reactionCooldownSeconds,
+                        target.status[StatusCell.REACTION_READY_AT])
+                    assertEquals(1 shl ReactionId.THERMAL_SHOCK.ordinal, state.discoveredReactionMask)
+                    assertEquals(0f, state.reactionTokens)
+                    assertTrue(target.hp < target.maxHp)
+                    assertTrue(state.takeVisualFxCues().any { it is VisualFxCue.ReactionTriggered })
+                } else {
+                    assertEquals(before, target.status.toList(), "Refusal keeps every stack and cooldown")
+                    assertEquals(tokens, state.reactionTokens)
+                    assertEquals(target.maxHp, target.hp)
+                    assertEquals(0.0, state.damageDealt)
+                    assertEquals(0, state.discoveredReactionMask)
+                    assertEquals(0, state.pendingDiscoveredReactionMask)
+                    assertTrue(state.takeVisualFxCues().isEmpty())
+                }
+            }
+        }
+    }
+
+    @Test
     fun reactionItemsAmplifyLeaveResidueAndRecoilNearTheCore() {
         fun shockDamage(state: MutableGameState, target: Enemy): Float {
             val before = target.hp

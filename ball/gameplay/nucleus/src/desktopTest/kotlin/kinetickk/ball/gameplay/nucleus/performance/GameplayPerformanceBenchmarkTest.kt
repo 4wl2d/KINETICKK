@@ -9,6 +9,11 @@ import kinetickk.ball.content.api.PointOfInterestKind
 import kinetickk.ball.content.api.BuffStat
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.gameplay.api.GameplayInteractionPulse
+import kinetickk.ball.gameplay.nucleus.GameplayDecision
+import kinetickk.ball.gameplay.nucleus.GameplayNucleus
+import kinetickk.ball.gameplay.nucleus.GameplayNucleusPulse
+import kinetickk.ball.gameplay.nucleus.GameplayOutput
 import kinetickk.ball.gameplay.nucleus.model.PointOfInterestState
 import kinetickk.ball.gameplay.nucleus.model.ActiveBuff
 import kinetickk.ball.gameplay.nucleus.model.CombatField
@@ -22,7 +27,11 @@ import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.model.SeveredRelic
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
+import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
+import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.ball.gameplay.nucleus.simulation.ION_SWARM_COOLDOWN
 import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
+import kinetickk.ball.gameplay.nucleus.simulation.cooldown
 import kinetickk.ball.gameplay.nucleus.simulation.copyForReduction
 import kinetickk.ball.gameplay.nucleus.simulation.startRun
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
@@ -30,6 +39,7 @@ import kinetickk.performance.validateBenchmarkScenario
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 class GameplayPerformanceBenchmarkTest {
     @Test
@@ -37,10 +47,46 @@ class GameplayPerformanceBenchmarkTest {
         assertEquals("gameplay-core-v3", GAMEPLAY_BENCHMARK_SUITE_VERSION)
         val first = gameplayBenchmarkScenarios()
         val second = gameplayBenchmarkScenarios()
-        assertEquals(21, first.size)
+        assertEquals(24, first.size)
         assertEquals(first.map { it.name }.toSet().size, first.size)
         assertEquals(first.map { it.metadata }, second.map { it.metadata })
         first.forEach { validateBenchmarkScenario(it) }
+    }
+
+    @Test
+    fun reactionWorkloadsExerciseCombatAndGaugeChangesWithoutMutatingTheSource() {
+        // A 100 ms delta at 2x leaves the final near-step Float remainder for the following frame.
+        for ((speed, delta, steps) in listOf(Triple(1f, 1f / 60f, 2), Triple(2f, 1f / 60f, 4), Triple(2f, 0.1f, 23))) {
+            val model = reactionPerformanceState(seed = 732_001, simulationSpeed = speed)
+            val source = authorityState(model)
+            val original = canonicalStateFingerprint(model)
+            val snapshot = GameplayNucleus.renderSnapshot(source)
+            val pulse = GameplayNucleusPulse.Intent(GameplayInteractionPulse.FrameElapsed.fromValidated(delta))
+            val frame = (GameplayNucleus.decide(source, pulse) as GameplayDecision.Accepted).frame
+            val result = checkNotNull(frame.nextState.engine).model
+
+            assertEquals(model.content.rebirth.maxActiveEnemies, model.enemies.size)
+            assertEquals(model.content.build.policy.maximumFields, model.combatFields.size)
+            assertTrue(model.cooldown(ION_SWARM_COOLDOWN) < ION_SWARM_COOLDOWN * 0.5f)
+            assertEquals(GamePhase.RUNNING, result.phase)
+            assertEquals(steps, result.lastTransitionSteps)
+            assertTrue(result.stormCharge > model.stormCharge, "The Stormheart gauge must change during the measured frame")
+            assertTrue(result.damageDealt > model.damageDealt, "The crowd must receive actual damage")
+            assertTrue(result.combatFields.isNotEmpty())
+            assertTrue(result.combatFields.first().remaining < model.combatFields.first().remaining)
+            assertTrue(result.enemies.any { it.status[StatusCell.LAST_REACTION_AT] > model.elapsed })
+            assertTrue(frame.outputs.filterIsInstance<GameplayOutput.EmitVisualFx>().any { output ->
+                output.cues.any { it is VisualFxCue.ReactionTriggered }
+            }, "A measured frame must execute reactions, not merely carry status labels")
+            assertEquals(
+                exactRenderValueFacts(checkNotNull(GameplayNucleus.renderSnapshot(frame.nextState).renderModel)),
+                exactRenderValueFacts(checkNotNull(GameplayNucleus.renderSnapshot(frame.nextState, source, snapshot).renderModel)),
+            )
+            assertEquals(original, canonicalStateFingerprint(model), "Benchmark repetitions must retain the source")
+            val repeated = (GameplayNucleus.decide(source, pulse) as GameplayDecision.Accepted).frame
+            assertEquals(canonicalStateFingerprint(result), canonicalStateFingerprint(checkNotNull(repeated.nextState.engine).model))
+            assertEquals(original, canonicalStateFingerprint(model))
+        }
     }
 
     @Test

@@ -448,12 +448,13 @@ class InteractionFxReducer(seed: Int) {
             buildNotifications[index] = value.copy(life = value.life - delta, age = value.age + delta)
         }
         removeExpired(buildNotifications) { it.life > 0f }
+        val particleDamping = exp(-2.2f * delta)
         for (index in particles.indices) {
             val value = particles[index]
             value.x += value.vx * delta
             value.y += value.vy * delta
-            value.vx *= exp(-2.2f * delta)
-            value.vy *= exp(-2.2f * delta)
+            value.vx *= particleDamping
+            value.vy *= particleDamping
             value.life -= delta
         }
         removeExpired(particles) { value -> !(value.life <= 0f) }

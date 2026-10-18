@@ -20,6 +20,8 @@ import kotlin.math.sin
 internal fun MutableGameState.tryReact(enemy: Enemy, incoming: StatusElement, incomingGeneration: Int) {
     if (!enemy.alive) return
     if (enemy.status[StatusCell.REACTION_READY_AT] > elapsed) return
+    // A cascade needs a token regardless of its partner; avoid searching when none can be admitted.
+    if (incomingGeneration >= 1 && reactionTokens < 1f) return
     var partner: StatusElement? = null
     var partnerStacks = 1
     for (element in StatusElement.entries) {

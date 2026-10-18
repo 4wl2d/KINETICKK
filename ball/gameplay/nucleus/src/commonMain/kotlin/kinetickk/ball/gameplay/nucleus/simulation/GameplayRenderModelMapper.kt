@@ -328,16 +328,7 @@ internal fun MutableGameState.toRenderModel(
             reusableCollections?.relicRanks,
         ) ?: relicRanks.reuseIfContentEqual(reusableCollections?.relicRanks)
             ?: relicRanks.toImmutableList(),
-        build = reusableCollections?.build?.takeIf { previous ->
-            identitySource != null && build === identitySource.build && severedRelics.isEmpty() &&
-                discoveredPairingMask == identitySource.discoveredPairingMask &&
-                previous.stormCharge.sameBitsAs(stormCharge) &&
-                previous.stasisMeter.sameBitsAs(stasisMeter / MutableGameState.STASIS_SECONDS) &&
-                previous.stasisBank == stasisBank &&
-                previous.ouroborosSpent == ouroborosSpent &&
-                previous.invulnerable == (invulnerableUntil > elapsed) &&
-                previous.overdriveBurnout == (overdriveBurnoutUntil > elapsed)
-        } ?: buildProjection(),
+        build = buildProjection(reusableCollections?.build, identitySource),
         discoveredReactionMask = discoveredReactionMask,
         discoveredPairingMask = discoveredPairingMask,
         coreRadius = coreRadius,
@@ -358,6 +349,42 @@ internal fun MutableGameState.toRenderModel(
             ?: weaponSynergyProjection(reusableCollections?.weaponSynergy),
         rebirthRank = rebirthRank,
         volatileBursts = volatileBursts,
+    )
+}
+
+/** Relic gauges change during combat; the compiled build's immutable collections do not. */
+private fun MutableGameState.buildProjection(
+    previous: BuildProjection?,
+    identitySource: MutableGameState?,
+): BuildProjection {
+    if (previous == null || identitySource == null || build !== identitySource.build ||
+        discoveredPairingMask != identitySource.discoveredPairingMask ||
+        !itemStacks.sharesStorageWith(identitySource.itemStacks) ||
+        !rebornItems.sharesStorageWith(identitySource.rebornItems)
+    ) return buildProjection()
+
+    val severed = severedRelics.reuseProjectionIfContentEqual(previous.severed) { value, projection ->
+        value.id == projection.id && kotlin.math.max(0f, value.until - elapsed).sameBitsAs(projection.remaining)
+    } ?: severedRelics.mapToImmutableList { value ->
+        SeveredRelicProjection(value.id, kotlin.math.max(0f, value.until - elapsed))
+    }
+    val meter = stasisMeter / MutableGameState.STASIS_SECONDS
+    val invulnerable = invulnerableUntil > elapsed
+    val burnout = overdriveBurnoutUntil > elapsed
+    if (previous.severed === severed && previous.stormCharge.sameBitsAs(stormCharge) &&
+        previous.stasisMeter.sameBitsAs(meter) && previous.stasisBank == stasisBank &&
+        previous.ouroborosSpent == ouroborosSpent && previous.invulnerable == invulnerable &&
+        previous.overdriveBurnout == burnout
+    ) return previous
+
+    return previous.copy(
+        severed = severed,
+        stormCharge = stormCharge,
+        stasisMeter = meter,
+        stasisBank = stasisBank,
+        ouroborosSpent = ouroborosSpent,
+        invulnerable = invulnerable,
+        overdriveBurnout = burnout,
     )
 }
 

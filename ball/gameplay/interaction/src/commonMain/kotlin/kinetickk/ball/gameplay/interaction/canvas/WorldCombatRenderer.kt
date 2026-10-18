@@ -143,6 +143,7 @@ private fun DrawScope.drawDamageNumbers(
     val roles = textMeasurer.roles
     val typography = textMeasurer.typography
     val numbers = visualFx.damageNumbers
+    DamageNumberImages.beginFrame()
     for (index in numbers.indices) {
         val number = numbers[index]
         val elapsedMs = (InteractionFxLimits.DAMAGE_NUMBER_LIFE_SECONDS - number.life) * 1_000f
@@ -158,6 +159,7 @@ private fun DrawScope.drawDamageNumbers(
         val text = number.formattedAmount(settings.damageNumberFormat, textMeasurer.language)
         val face = measureKkText(textMeasurer, text, typography.condStyle(fontSize, tabular = true, lineHeightEm = 1f, color = color))
         val shadow = measureKkText(textMeasurer, text, typography.condStyle(fontSize, tabular = true, lineHeightEm = SHADOW_LINE_HEIGHT, color = Kk.Ink))
+        val image = DamageNumberImages.image(face, shadow, color)
         val tilt = ((number.amount % 9L).toInt() - 4) * 1.1f
         // Keep the whole number (and its crit stamp) inside the screen, e.g. long Russian amounts
         // at phone edges.
@@ -178,11 +180,7 @@ private fun DrawScope.drawDamageNumbers(
             rotate(tilt, Offset.Zero)
             scale(pop, pop, Offset.Zero)
         }) {
-            drawKkText(shadow, 2f, 2f, Kk.Ink, KkAlign.CENTER, KkVAlign.CENTER)
-            drawKkText(shadow, -1f, -1f, Kk.Ink, KkAlign.CENTER, KkVAlign.CENTER)
-            drawKkText(shadow, 1f, -1f, Kk.Ink, KkAlign.CENTER, KkVAlign.CENTER)
-            drawKkText(shadow, -1f, 1f, Kk.Ink, KkAlign.CENTER, KkVAlign.CENTER)
-            drawKkText(face, 0f, 0f, color, KkAlign.CENTER, KkVAlign.CENTER)
+            if (image != null) image.draw(this) else drawDamageNumberInk(face, shadow, color)
             if (number.critical) {
                 drawKkStamp(
                     textMeasurer,

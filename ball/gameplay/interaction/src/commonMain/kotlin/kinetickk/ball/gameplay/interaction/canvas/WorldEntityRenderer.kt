@@ -657,8 +657,8 @@ internal fun DrawScope.drawParticles(
         val alpha = clamp(particle.life / particle.maxLife, 0f, 1f)
         val color = fxColor(particle.colorIndex, roles)
         val speed = sqrt(particle.vx * particle.vx + particle.vy * particle.vy)
-        val heading = if (speed > 0.001f) kotlin.math.atan2(particle.vy, particle.vx) else 0f
         if (particle.size >= InteractionFxLimits.SHARD_MIN_SIZE) {
+            val heading = if (speed > 0.001f) kotlin.math.atan2(particle.vy, particle.vx) else 0f
             val length = particle.size * 2.6f
             withTransform({
                 translate(center.x, center.y)

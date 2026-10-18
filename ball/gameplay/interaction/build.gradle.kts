@@ -44,6 +44,22 @@ val telemetryDesktopBenchmarkCompilation = kotlin.targets
     .compilations
     .getByName("test")
 
+tasks.register<JavaExec>("reactionDesktopBenchmark") {
+    group = "verification"
+    description = "Measures a dense reaction scene in an isolated desktop window without loading profile data."
+    dependsOn(telemetryDesktopBenchmarkCompilation.compileTaskProvider)
+    mainClass.set("kinetickk.ball.gameplay.interaction.canvas.ReactionDesktopBenchmarkKt")
+    classpath(
+        telemetryDesktopBenchmarkCompilation.output.allOutputs,
+        telemetryDesktopBenchmarkCompilation.runtimeDependencyFiles,
+    )
+    workingDir(rootDir)
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "-Xms1g", "-Xmx1g", "-Dfile.encoding=UTF-8")
+    listOf("skiko.renderApi", "skiko.vsync.enabled").forEach { name ->
+        providers.systemProperty(name).orNull?.let { systemProperty(name, it) }
+    }
+}
+
 tasks.register<JavaExec>("performanceTelemetryBenchmark") {
     group = "verification"
     description = "Measures the disabled and enabled runtime performance telemetry overhead."

@@ -170,6 +170,13 @@ class GameplayRenderModelMapperTest {
         assertNotSame(retained.build, recharged.build)
         assertEquals(0.5f, recharged.build.stormCharge)
         assertEquals(0f, retained.build.stormCharge)
+        assertSame(retained.build.tagPoints, recharged.build.tagPoints)
+        assertSame(retained.build.tagTiers, recharged.build.tagTiers)
+        assertSame(retained.build.affinity, recharged.build.affinity)
+        assertSame(retained.build.affinityTiers, recharged.build.affinityTiers)
+        assertSame(retained.build.links, recharged.build.links)
+        assertSame(retained.build.relicUpsides, recharged.build.relicUpsides)
+        assertSame(retained.build.breakThresholds, recharged.build.breakThresholds)
     }
 
     @Test
@@ -188,6 +195,8 @@ class GameplayRenderModelMapperTest {
                 discoveredPairingMask = discoveredPairingMask or (1 shl RelicPairingId.MELTDOWN.ordinal)
             }),
             Triple("a recompiled build", {}, { acquireItem(content.items.first().id) }),
+            Triple("owned item storage", {}, { itemStacks[0] = itemStacks[0] + 1 }),
+            Triple("reborn item storage", {}, { rebornItems[0] = 1 }),
         )
         cases.forEach { (name, setup, change) ->
             val committed = source(setup)
@@ -199,6 +208,24 @@ class GameplayRenderModelMapperTest {
             assertEquals(candidate.buildProjection(), projected.build, name)
             assertEquals(committed.buildProjection(), retained.build, "$name: the retained view stays immutable")
         }
+    }
+
+    @Test
+    fun severedRelicCountdownUpdatesWithoutRebuildingStaticBuildCollections() {
+        val source = buildTestState().apply {
+            elapsed = 10f
+            severedRelics = listOf(SeveredRelic(RelicId.GLASS_COMET, until = 50f))
+            recompileBuild()
+        }
+        val retained = source.toRenderModel()
+        val candidate = source.copyForReduction().apply { elapsed = 11f }
+        val projected = candidate.toRenderModel(retained, identitySource = source)
+        assertEquals(candidate.buildProjection(), projected.build)
+        assertEquals(39f, projected.build.severed.single().remaining)
+        assertEquals(40f, retained.build.severed.single().remaining)
+        assertSame(retained.build.tagPoints, projected.build.tagPoints)
+        assertSame(retained.build.relicUpsides, projected.build.relicUpsides)
+        assertSame(retained.build.suppressedItemIds, projected.build.suppressedItemIds)
     }
 
     @Test
