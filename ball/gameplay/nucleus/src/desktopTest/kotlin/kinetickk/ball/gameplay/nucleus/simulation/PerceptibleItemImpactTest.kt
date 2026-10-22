@@ -974,14 +974,17 @@ class PerceptibleItemImpactTest {
         val support = supportFor(item, conditions)
         // A launch of the Core needs the pilot's leash wherever it is flown.
         val launches = item.clauses.any { clause -> clause.actions.any { it is EffectAction.CoreImpulse } }
-        // A family-gated item is flown with its family's representative weapon instead of the two arena weapons.
-        val familyWeapon = conditions.firstNotNullOfOrNull { (it as? EffectCondition.WeaponFamilyIs)?.family }?.let(FamilyWeapons::getValue)
+        // A family-gated item is flown with every weapon of its family instead of the two arena weapons: it names the
+        // family, and the family's weapons act on it differently (a contact weapon's refresh is a damage surge).
+        val familyWeapons = conditions.firstNotNullOfOrNull { (it as? EffectCondition.WeaponFamilyIs)?.family }?.let { family ->
+            canonicalGameplayContent.weapons.filter { it.family == family }.map { it.id }
+        }
         // Against the siege an applier starts from nothing: other sources of its own element would already hold
         // the attackers at the status it adds.
         val applied = item.clauses.flatMap { it.actions }.mapNotNull { (it as? EffectAction.ApplyStatus)?.pick?.element }.toSet()
         val siegeSupport = support.filter { name -> applied.none { element -> name in ElementSources.getValue(element) } }
         val setups = arenas.flatMap { arena ->
-            (if (familyWeapon != null && arena.armed) listOf(familyWeapon) else arena.weapons()).map { weapon ->
+            (if (familyWeapons != null && arena.armed) familyWeapons else arena.weapons()).map { weapon ->
                 Setup(arena, when (arena) {
                     Arena.OFFERS -> emptyList()
                     Arena.SIEGE -> siegeSupport
@@ -994,14 +997,17 @@ class PerceptibleItemImpactTest {
         val carried = item.clauses.filter { it.trigger in ScriptedTriggers }.flatMap { clause ->
             clause.actions.filter(::isVocabularyAction).flatMap(::actionArenas).map { it to clause.trigger }
         }.distinct().flatMap { (arena, trigger) ->
-            (if (familyWeapon != null && arena.armed) listOf(familyWeapon) else arena.weapons()).map { weapon ->
+            (if (familyWeapons != null && arena.armed) familyWeapons else arena.weapons()).map { weapon ->
                 Setup(arena, support, elite, weapon, leashed = arena.vocabulary || launches, trigger = trigger)
             }
         }
         // An IntegrityBelow item is flown wounded below its threshold where the deep pool would otherwise never let it hold.
         val wound = conditions.filterIsInstance<EffectCondition.IntegrityBelow>().minOfOrNull { it.fraction }
-        // A thrown target only shows once it may fly: an item that throws is flown with its throws left to play out.
-        val throws = item.clauses.any { clause -> clause.actions.any { it is EffectAction.Throw } }
+        // A thrown target only shows once it may fly: an item that throws (or Spalls, whose next ram throws) is flown with its
+        // throws left to play out.
+        val throws = item.clauses.any { clause ->
+            clause.actions.any { it is EffectAction.Throw || it is EffectAction.ApplyMark && it.mark == MarkPick.SPALL }
+        }
         val flown = (setups + carried).map { setup ->
             val wounded = if (wound != null && setup.arena.vocabulary && (setup.arena.pressure || setup.arena.shots)) wound * 0.8f else 0f
             setup.copy(wounded = wounded, loose = throws)
@@ -1047,7 +1053,8 @@ class PerceptibleItemImpactTest {
         is EffectAction.ChargeApex -> listOf(Arena.APEX, Arena.SKILLS)
         is EffectAction.ForceReaction -> listOf(Arena.ALCHEMY, Arena.STATUS)
         is EffectAction.Zone -> listOf(Arena.FIELDS, Arena.SHOTS, Arena.SIEGE)
-        is EffectAction.EraseShots -> listOf(Arena.SHOTS)
+        // Bolts fly in both: SHOTS circles its cluster, FIELDS rams through its ring (an impact-cadence weapon hits only there).
+        is EffectAction.EraseShots -> listOf(Arena.SHOTS, Arena.FIELDS)
         is EffectAction.CoreImpulse -> listOf(Arena.MARKS, Arena.FIELDS)
         // A Spored mark pays on death (Decay spread and a Data drop): it is measured where marked targets die.
         is EffectAction.ApplyMark -> if (action.mark == MarkPick.SPORED) listOf(Arena.MARKS, Arena.CROWD) else listOf(Arena.MARKS)
@@ -1185,18 +1192,6 @@ class PerceptibleItemImpactTest {
 
         /** The reactions the FIELDS arena forces beside the Core, in turn: a pool, a hush, a bubble, a maw. */
         val FieldReactions: List<ReactionId> = listOf(ReactionId.PLASMA_BURST, ReactionId.SILENCE, ReactionId.STASIS, ReactionId.NULL_WELL)
-
-        /** Each weapon family's representative weapon (a family-gated item is flown with it). */
-        val FamilyWeapons: Map<WeaponFamily, WeaponId> = mapOf(
-            WeaponFamily.MOMENTUM to WeaponId.FLUX_WAKE,
-            WeaponFamily.ORBITAL to WeaponId.ION_SWARM,
-            WeaponFamily.AURA to WeaponId.PHASE_LATTICE,
-            WeaponFamily.PROJECTILE to WeaponId.NULL_LANCE,
-            WeaponFamily.TRAP to WeaponId.SENTRY_GRID,
-            WeaponFamily.CHAIN to WeaponId.ARC_COIL,
-            WeaponFamily.BEAM to WeaponId.TETHER_ARC,
-            WeaponFamily.PULSE to WeaponId.CONCUSSION_ENGINE,
-        )
 
         /** Two sources of each element: the first on weapon hits, the second on impacts (or a Dash or crit where none exists). */
         val ElementSources: Map<StatusElement, List<String>> = mapOf(
