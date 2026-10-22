@@ -329,6 +329,15 @@ internal fun MutableGameState.requestSkill(slot: Int) {
     skillBufferTime = MutableGameState.SKILL_INPUT_BUFFER_SECONDS
 }
 
+/**
+ * Buffers an Apex cast for [MutableGameState.SKILL_INPUT_BUFFER_SECONDS]; the next fixed steps cast it once the
+ * Apex is ready. A scalar only; a locked Apex or a run that is not RUNNING buffers nothing.
+ */
+internal fun MutableGameState.requestApex() {
+    if (phase != GamePhase.RUNNING || !apexUnlocked) return
+    apexBufferTime = MutableGameState.SKILL_INPUT_BUFFER_SECONDS
+}
+
 internal fun MutableGameState.choose(index: Int) {
     if (phase != GamePhase.CHOICE || index !in choices.indices) return
     val option = choices[index]

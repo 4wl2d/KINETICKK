@@ -100,6 +100,8 @@ internal class CompiledBuild private constructor(
     val skillCooldownScale: Float = 1f,
     /** Scale of Catalysis refunds (reactions recharging element-matched skills). */
     val catalysisRate: Float = 1f,
+    /** Share cut from the Apex's base cooldown (the ApexCooldown rule; at most [MAX_APEX_COOLDOWN_CUT] applies). */
+    val apexCooldownCut: Float = 0f,
 ) {
     /** The first bound Relic carrying [key], or null: a weapon with that key harmonizes with it. */
     fun harmonizing(key: kinetickk.ball.content.api.RelicKey): RelicId? = keyHarmonies[key.ordinal]

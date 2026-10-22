@@ -117,12 +117,12 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             )
             val newDashContact = dashPhaseTime > 0f && enemy.lastCharacterDash != characterRuntime.dashSequence
             onCharacterDashContact(enemy)
-            val characterMultiplier = characterImpactMultiplier()
+            val characterMultiplier = characterImpactMultiplier(enemy)
             val damage = impactPower(coreImpactSpeed) * characterMultiplier
             val defusable = enemy.type == EnemyType.BOMBER && enemy.mode != EnemyBehavior.PRIMED
-            val edgeCritical = edgeCriticalReady()
+            val edgeCritical = edgeCriticalReady(enemy)
             val impact = dealHit(enemy, damage, HitSource.IMPACT, canCrit = true, forceCrit = edgeCritical)
-            if (edgeCritical) spendEdgeCritical()
+            if (edgeCritical) spendEdgeCritical(enemy)
             // Ablaze: while the Core burns, every contact sets the enemy burning.
             onAblazeContact(enemy)
             onSkillCoreImpact(enemy, coreImpactSpeed, damage, dashContact = newDashContact)
@@ -500,6 +500,8 @@ internal fun MutableGameState.resolveProjectileHits() {
                 hitRadius,
             )
             if (hit) {
+                // An Apex shot with no strike left passes through boss-class enemies without spending itself.
+                if (projectile.procKey == WeaponRuntime.PROC_APEX && apexShotPassesThrough(enemy)) continue
                 if (!projectile.tryRecordEnemyHit(enemy.id)) continue
                 // A Reflector's front shield meets shots by where they come from, not where the Core is.
                 val shieldBefore = enemy.guarded
@@ -510,6 +512,8 @@ internal fun MutableGameState.resolveProjectileHits() {
                     weaponShotHit(projectile, sourceWeapon, enemy)
                 } else if (projectile.procKey == WeaponRuntime.PROC_SKILL) {
                     skillShotHit(enemy, projectile.damage, projectile.statusElement)
+                } else if (projectile.procKey == WeaponRuntime.PROC_APEX) {
+                    apexShotHit(enemy, projectile.damage, projectile.statusElement)
                 } else {
                     // Relic shots deal element-less damage; a status element is a rider applied after it.
                     dealProcDamage(enemy, projectile.damage)
@@ -623,7 +627,8 @@ internal fun MutableGameState.resolvePickupCollection() {
 internal fun MutableGameState.gainData(rawAmount: Float) {
     if (creditData(rawAmount) <= 0) return
     val levelBefore = level
-    while (data >= nextLevelData) {
+    val maximumLevel = content.tempo.maximumLevel
+    while (level < maximumLevel && data >= nextLevelData) {
         data -= nextLevelData
         level++
         pendingLevelChoices++
@@ -639,6 +644,11 @@ internal fun MutableGameState.gainData(rawAmount: Float) {
             amplifyCurrentWeapon()
             emitBuildChange(before, currentWeaponDefinition.name + " mastery advanced")
         }
+        if (level == maximumLevel) {
+            // The capped level holds no Data: the leftover would only charge an Apex that unlocks ready.
+            data = 0
+            unlockApex()
+        }
     }
     if (level > levelBefore) vacuumOnScreenData()
     openNextPendingChoice()
@@ -647,14 +657,19 @@ internal fun MutableGameState.gainData(rawAmount: Float) {
 /**
  * Adds Data without levelling and returns the whole points added; the fraction carries over. A LEVEL_UP
  * clause's Data arrives this way, so the level loop in [gainData] that fired it takes the Data up against the
- * settled requirement and never re-enters itself.
+ * settled requirement and never re-enters itself. At the run's maximum level every whole Data still counts as
+ * collected but charges the Apex instead and adds nothing (0 is returned, so [gainData] never loops).
  */
 internal fun MutableGameState.creditData(rawAmount: Float): Int {
     dataFraction += rawAmount * dataGainLiability()
     val whole = floor(dataFraction).toInt()
     if (whole <= 0) return 0
     dataFraction -= whole
-    data += whole
     dataCollected += whole.toLong()
+    if (level >= content.tempo.maximumLevel) {
+        chargeApexWithData(whole)
+        return 0
+    }
+    data += whole
     return whole
 }

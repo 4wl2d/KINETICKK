@@ -116,6 +116,10 @@ data class CharacterAbilityProjection(
     val ghostY: Float = 0f,
     val previousGhostX: Float = 0f,
     val previousGhostY: Float = 0f,
+    /** Twin Echo's second ghost (Spiral Apex): shown while [secondGhostActive], at its current position. */
+    val secondGhostActive: Boolean = false,
+    val secondGhostX: Float = 0f,
+    val secondGhostY: Float = 0f,
 )
 
 data class PointOfInterestProjection(

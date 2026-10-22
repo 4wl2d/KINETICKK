@@ -258,7 +258,8 @@ internal fun MutableGameState.updateHeat(delta: Float) {
 /** Furnace Covenant keeps Dash available through overheat; otherwise the usual heat rule applies. */
 internal fun MutableGameState.buildDashReady(): Boolean =
     characterDashReady() ?: if (build.upside(RelicId.FURNACE_COVENANT)) true
-    else !overheated && (heat <= MutableGameState.MAX_HEAT - effectiveDashHeatCost() * 0.5f || matrixFreeDashReady())
+    else !overheated && (heat <= MutableGameState.MAX_HEAT - effectiveDashHeatCost() * 0.5f || matrixFreeDashReady() ||
+        apexFreeDashReady())
 
 internal fun MutableGameState.performDash() {
     beginCharacterDash()
@@ -305,6 +306,8 @@ internal fun MutableGameState.performDash() {
         cost = 0f
     }
     if (cost > 0f && spendMatrixFreeDash()) cost = 0f
+    // Vivisect: a Dash far enough after the last free one costs no heat.
+    if (cost > 0f && spendApexFreeDash()) cost = 0f
     if (crescent) {
         relicOnDashDeparture()
         when {

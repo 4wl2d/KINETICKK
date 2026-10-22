@@ -360,7 +360,7 @@ internal fun MutableGameState.dealHit(
     val crit = resolveCrit(enemy, source, canCrit, forceCrit, critChanceBonus)
     var amount = base * (1f + itemAmplification(enemy, source)) * relicSurge() * crit.multiplier *
         (1f + vulnerability(enemy, source)) * damageLiability(source, crit.critical) * matrix.damageMultiplier *
-        characterDamageMultiplier()
+        characterDamageMultiplier(enemy)
     if (enemy.status[StatusCell.BRITTLE] > 0f) enemy.status[StatusCell.BRITTLE] = 0f
     val shatter = build.upside(RelicId.ABSOLUTE_ZERO) && isFrozen(enemy)
     if (shatter) {
@@ -517,11 +517,12 @@ internal fun MutableGameState.dealSkillDamage(
 
 /**
  * Character abilities bypass the build pipeline but still meet the receiver's kinetic frame. The Edge
- * applies; the dealt amount counts as the run's ability output.
+ * applies unless the amount already carries it ([edge] false: Apex strikes and shots); the dealt amount
+ * counts as the run's ability output.
  */
-internal fun MutableGameState.dealCharacterDamage(enemy: Enemy, amount: Float): DamageResult {
+internal fun MutableGameState.dealCharacterDamage(enemy: Enemy, amount: Float, edge: Boolean = true): DamageResult {
     if (amount <= 0f || !enemy.alive) return DamageResult(0f, false)
-    val scaled = amount * matrix.damageMultiplier * characterDamageMultiplier()
+    val scaled = amount * matrix.damageMultiplier * if (edge) characterDamageMultiplier(enemy) else 1f
     val integrity = enemy.hp
     val result = damageEnemy(enemy, scaled * enemy.weaponTaken, unmitigated = scaled)
     recordAbilityDamage(integrity, result)

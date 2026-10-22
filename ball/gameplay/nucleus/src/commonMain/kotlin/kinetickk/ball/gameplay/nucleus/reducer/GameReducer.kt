@@ -163,8 +163,7 @@ internal class GameReducer {
             GameplayInteractionPulse.ChoicesRerolled -> state.rerollChoices()
             GameplayInteractionPulse.UserGestureObserved -> error("handled before state cloning")
             is GameplayInteractionPulse.SkillRequested -> state.requestSkill(intent.slot)
-            // No Apex runtime yet: an Apex request changes nothing.
-            GameplayInteractionPulse.ApexRequested -> Unit
+            GameplayInteractionPulse.ApexRequested -> state.requestApex()
         }
     }
 
@@ -233,8 +232,11 @@ internal class GameReducer {
                     state.skillLoadout.isEmpty(slot) ||
                     (state.skillBufferMask and (1 shl slot) != 0 &&
                         state.skillBufferTime.sameBitsAs(MutableGameState.SKILL_INPUT_BUFFER_SECONDS))
-            // No Apex runtime yet, so no buffer can change.
-            GameplayInteractionPulse.ApexRequested -> true
+            // A locked Apex or a stopped run buffers nothing; a request already fresh in the buffer is a repeat.
+            GameplayInteractionPulse.ApexRequested ->
+                state.phase != GamePhase.RUNNING ||
+                    !state.apexUnlocked ||
+                    state.apexBufferTime.sameBitsAs(MutableGameState.SKILL_INPUT_BUFFER_SECONDS)
             is GameplayInteractionPulse.FrameElapsed,
             GameplayInteractionPulse.PauseToggled,
             is GameplayInteractionPulse.ChoiceSelected,

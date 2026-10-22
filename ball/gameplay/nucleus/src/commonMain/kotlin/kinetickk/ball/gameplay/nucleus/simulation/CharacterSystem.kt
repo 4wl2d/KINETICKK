@@ -25,11 +25,14 @@ import kinetickk.ball.gameplay.nucleus.model.CharacterRuntime.Companion.SCAR_X0
 import kinetickk.ball.gameplay.nucleus.model.CharacterRuntime.Companion.SCAR_X1
 import kinetickk.ball.gameplay.nucleus.model.CharacterRuntime.Companion.SCAR_Y0
 import kinetickk.ball.gameplay.nucleus.model.CharacterRuntime.Companion.SCAR_Y1
+import kinetickk.ball.gameplay.nucleus.protocol.FxColorCode
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
+import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -80,7 +83,8 @@ internal fun MutableGameState.updateCharacterRuntime(delta: Float) {
     val brakingStarted = braking && !ability.wasBraking
     if (ability.parryWindow.toRawBits() != 0) ability.parryWindow = max(0f, ability.parryWindow - delta)
     if (ability.parryCooldown.toRawBits() != 0) ability.parryCooldown = max(0f, ability.parryCooldown - delta)
-    if (ability.latticeTime.toRawBits() != 0) {
+    // Hypercube holds the lattice as its cage: its nodes do not expire while it runs.
+    if (ability.latticeTime.toRawBits() != 0 && !hypercubeRunning()) {
         ability.latticeTime = max(0f, ability.latticeTime - delta)
         if (ability.latticeTime <= 0f) ability.latticeCount = 0
     }
@@ -118,6 +122,7 @@ internal fun MutableGameState.updateCharacterRuntime(delta: Float) {
         CoreShape.CRESCENT -> updateEclipse(ability, delta)
         CoreShape.HEXAGON -> updateHive(ability, delta)
     }
+    if (apexUnlocked) updateApexForm(delta)
     ability.previousSpeed = currentSpeed
     ability.previousHeading = heading
     ability.wasBraking = braking
@@ -160,12 +165,7 @@ internal fun MutableGameState.onCharacterPrimaryHit(enemy: Enemy, dash: Boolean 
     val ability = characterRuntime
     when (coreShape) {
         CoreShape.ORB -> if (ability.charge >= 1f) releaseOrbit(coreX, coreY, enemy)
-        CoreShape.SHARD -> if (!dash && elapsed >= ability.punctureReadyAt && consumeMark(enemy)) {
-            ability.punctureReadyAt = elapsed + PUNCTURE_INTERVAL
-            dealCharacterDamage(enemy, PUNCTURE_DAMAGE * abilityPower())
-            heat = max(0f, heat - PUNCTURE_HEAT_REFUND)
-            shockwave(enemy.x, enemy.y, 0.3f, 65f, 2)
-        }
+        CoreShape.SHARD -> if (!dash && punctureReady(enemy) && consumeMark(enemy)) puncture(enemy, 1f)
         else -> Unit
     }
 }
@@ -185,6 +185,20 @@ private fun MutableGameState.releaseOrbit(x: Float, y: Float, struck: Enemy?) {
     }
     if (dominant != null && struck != null && struck.alive) applyStatus(struck, dominant, ORBIT_STACKS, 0)
     shockwave(x, y, 0.35f, ORBIT_RADIUS, 2)
+    if (apexActive()) captureHostileShots()
+}
+
+/** Perihelion: a release captures the hostile bolts around the Core into the held store (at most the bolt budget). */
+private fun MutableGameState.captureHostileShots() {
+    val runtime = skillRuntime
+    val capacity = apexDefinition.boltBudget.toFloat()
+    val reach = apexValue(PERIHELION_CAPTURE_RADIUS)
+    for (index in projectiles.indices) {
+        if (runtime.apex(ApexCell.HELD) >= capacity || runtime.apex(ApexCell.BOLTS_LEFT) < 1f) return
+        val shot = projectiles[index]
+        if (!shot.hostile || distanceSquared(coreX, coreY, shot.x, shot.y) > square(reach + shot.radius)) continue
+        if (eraseApexShot(shot, shot.x, shot.y)) runtime.setApex(ApexCell.HELD, runtime.apex(ApexCell.HELD) + 1f)
+    }
 }
 
 /**
@@ -212,30 +226,46 @@ internal fun MutableGameState.onCharacterSkillCast(slot: Int, anchorX: Float, an
 }
 
 /**
- * Damage multiplier the character adds to an impact on its way in: all facets intact, Stellar Mass,
- * an on-beat impact and the beat streak.
+ * Damage multiplier the character adds to an impact on [enemy] (null for none in particular) on its way in: all
+ * facets intact (Monolith raises it), Stellar Mass, an on-beat impact and the beat streak (Crescendo holds it
+ * full). An Apex never raises it on a boss-class enemy.
  */
-internal fun MutableGameState.characterImpactMultiplier(): Float = when (coreShape) {
-    CoreShape.PRISM -> if (characterRuntime.facets >= CharacterRuntime.MAX_FACETS) FACET_IMPACT_BONUS else 1f
+internal fun MutableGameState.characterImpactMultiplier(enemy: Enemy? = null): Float = when (coreShape) {
+    CoreShape.PRISM -> if (characterRuntime.facets < CharacterRuntime.MAX_FACETS) 1f
+        else if (amplifies(enemy)) apexValue(MONOLITH_IMPACT_BONUS) else FACET_IMPACT_BONUS
     CoreShape.STAR -> 1f + STAR_IMPACT_PER_STACK * characterRuntime.stellarMass
-    CoreShape.PENTAGON -> (if (isOnBeat()) BEAT_IMPACT_MULTIPLIER else 1f) * (1f + STREAK_IMPACT_PER_STACK * characterRuntime.beatStreak)
+    CoreShape.PENTAGON -> {
+        val streak = if (amplifies(enemy)) CharacterRuntime.MAX_BEAT_STREAK else characterRuntime.beatStreak
+        (if (isOnBeat()) BEAT_IMPACT_MULTIPLIER else 1f) * (1f + STREAK_IMPACT_PER_STACK * streak)
+    }
     else -> 1f
 }
 
-/** Damage multiplier on direct hits and ability damage: the Diamond's Edge. */
-internal fun MutableGameState.characterDamageMultiplier(): Float =
-    if (coreShape == CoreShape.DIAMOND) 1f + EDGE_DAMAGE_PER_STACK * characterRuntime.edge else 1f
+/**
+ * Damage multiplier on direct hits and ability damage: the Diamond's Edge, held full against ordinary enemies
+ * ([enemy]; null for none in particular) while Mirror Stance runs.
+ */
+internal fun MutableGameState.characterDamageMultiplier(enemy: Enemy? = null): Float =
+    if (coreShape == CoreShape.DIAMOND) 1f + EDGE_DAMAGE_PER_STACK * effectiveEdge(enemy) else 1f
+
+/** The Diamond's Edge against [enemy]: Mirror Stance locks it at full on ordinary enemies. */
+private fun MutableGameState.effectiveEdge(enemy: Enemy?): Int =
+    if (amplifies(enemy)) CharacterRuntime.MAX_EDGE else characterRuntime.edge
+
+/** The running Apex amplifies the mechanic on [enemy]; never on a boss-class enemy or none in particular. */
+private fun MutableGameState.amplifies(enemy: Enemy?): Boolean = enemy != null && apexAmplifies(enemy)
 
 /** Mass multiplier from Stellar Mass. */
 internal fun MutableGameState.characterMassMultiplier(): Float =
     if (coreShape == CoreShape.STAR) 1f + STAR_MASS_PER_STACK * characterRuntime.stellarMass else 1f
 
-/** Full Edge turns the next impact into a critical hit; the caller spends it with [spendEdgeCritical]. */
-internal fun MutableGameState.edgeCriticalReady(): Boolean =
-    coreShape == CoreShape.DIAMOND && characterRuntime.edge >= CharacterRuntime.MAX_EDGE
+/** Full Edge turns the next impact on [enemy] into a critical hit; the caller spends it with [spendEdgeCritical]. */
+internal fun MutableGameState.edgeCriticalReady(enemy: Enemy? = null): Boolean =
+    coreShape == CoreShape.DIAMOND && effectiveEdge(enemy) >= CharacterRuntime.MAX_EDGE
 
-internal fun MutableGameState.spendEdgeCritical() {
-    characterRuntime.edge = 0
+/** Spends full Edge after a critical impact on [enemy]; the Edge Mirror Stance locks is not spent. */
+internal fun MutableGameState.spendEdgeCritical(enemy: Enemy? = null) {
+    if (!amplifies(enemy)) characterRuntime.edge = 0
 }
 
 /**
@@ -259,7 +289,9 @@ internal fun MutableGameState.onCharacterImpact(enemy: Enemy, result: DamageResu
             val dy = enemy.y - coreY
             val distance = length(dx, dy)
             if (knockback > 0f && distance >= 1f) {
-                val throwSpeed = impactSpeed * REPEL_THROW_SHARE * knockback
+                // Magnetar throws ordinary enemies harder.
+                val magnetar = if (apexAmplifies(enemy)) apexValue(MAGNETAR_THROW_SCALE) else 1f
+                val throwSpeed = impactSpeed * REPEL_THROW_SHARE * knockback * magnetar
                 enemy.vx += dx / distance * throwSpeed
                 enemy.vy += dy / distance * throwSpeed
                 if (!enemy.isBossClass) enemy.characterMarkTime = THROW_SECONDS
@@ -267,14 +299,17 @@ internal fun MutableGameState.onCharacterImpact(enemy: Enemy, result: DamageResu
         }
         CoreShape.PENTAGON -> {
             if (multiplier > 1f) ability.abilityDamage += impactShare(enemy, result, multiplier)
-            if (isOnBeat()) {
-                onBeatAction()
+            // Crescendo puts every impact on the beat; only a real beat raises the streak or pulses boss-class enemies.
+            val realBeat = isOnBeat()
+            if (realBeat || apexActive()) {
+                if (realBeat) onBeatAction()
                 val beat = currentBeatIndex()
                 if (ability.pulseBeat != beat) {
                     ability.pulseBeat = beat
                     val burst = BEAT_BURST_DAMAGE * abilityPower()
                     for (index in enemies.indices) {
                         val target = enemies[index]
+                        if (!realBeat && target.isBossClass) continue
                         if (target.alive && distanceSquared(coreX, coreY, target.x, target.y) <= square(BEAT_BURST_RADIUS + target.radius)) {
                             dealCharacterDamage(target, burst)
                         }
@@ -304,18 +339,20 @@ internal fun MutableGameState.onCharacterKill(enemy: Enemy, eliteReward: Boolean
             if (impactKill) cutFacetTimer()
         }
         CoreShape.STAR -> {
-            // A skill kill gathers one more.
+            // A skill kill gathers one more; Hypernova gathers more from every kill.
             val skillKill = lastSource == HitSource.SKILL.ordinal
-            gainStellarMass((if (impactKill) 2 else 1) + (if (skillKill) STAR_SKILL_KILL_MASS else 0))
+            val gathered = if (apexActive()) apexValue(HYPERNOVA_KILL_MASS).toInt() + (if (impactKill) 1 else 0)
+                else if (impactKill) 2 else 1
+            gainStellarMass(gathered + (if (skillKill) STAR_SKILL_KILL_MASS else 0))
             if (impactKill && ability.stellarMass >= SUPERNOVA_EARLY_STACKS) supernova()
         }
         else -> Unit
     }
 }
 
-/** Real damage reached the shield or integrity: the Star sheds a quarter of its mass. */
+/** Real damage reached the shield or integrity: the Star sheds a quarter of its mass (nothing during Hypernova). */
 internal fun MutableGameState.onCharacterDamaged() {
-    if (coreShape != CoreShape.STAR) return
+    if (coreShape != CoreShape.STAR || apexActive()) return
     val ability = characterRuntime
     if (ability.stellarMass <= 0) return
     ability.stellarMass -= (ability.stellarMass + 3) / 4
@@ -332,13 +369,19 @@ internal fun MutableGameState.onCharacterDataPickup() {
     val roll = ((characterHash(pickupsCollected + DRONE_HASH_SALT) ushr 40) and 0xFFFFL).toInt()
     if (roll >= (DRONE_CHANCE * 65_536f).toInt() && ability.droneRolls < DRONE_GUARANTEE) return
     ability.droneRolls = 0
+    addDrone(DRONE_LIFE_SECONDS)
+}
+
+/** Builds a drone at the Core that lives [life] seconds (the caller keeps the hive below its bound). */
+private fun MutableGameState.addDrone(life: Float) {
+    val ability = characterRuntime
     val base = ability.droneCount * DRONE_STRIDE
     val drones = ability.drones
     drones[base + DRONE_X] = coreX
     drones[base + DRONE_Y] = coreY
     drones[base + DRONE_PREVIOUS_X] = coreX
     drones[base + DRONE_PREVIOUS_Y] = coreY
-    drones[base + DRONE_LIFE] = DRONE_LIFE_SECONDS
+    drones[base + DRONE_LIFE] = life
     drones[base + DRONE_READY_AT] = elapsed + DRONE_FIRST_DART_SECONDS
     drones[base + DRONE_DART] = 0f
     drones[base + DRONE_TARGET_X] = coreX
@@ -353,14 +396,18 @@ internal fun MutableGameState.onCharacterTurn() {
     flipPolarity()
 }
 
-/** Flips the Dipole's polarity now and restarts its flip gate. */
-private fun MutableGameState.flipPolarity() {
+/** Flips the Dipole's polarity now and, unless Magnetar's own clock flips it ([restartGate] false), restarts its flip gate. */
+private fun MutableGameState.flipPolarity(restartGate: Boolean = true) {
     val ability = characterRuntime
     ability.polarity = if (ability.polarity == Polarity.ATTRACT) Polarity.REPEL else Polarity.ATTRACT
-    ability.polarityFlipReadyAt = elapsed + POLARITY_FLIP_INTERVAL
+    if (restartGate) ability.polarityFlipReadyAt = elapsed + POLARITY_FLIP_INTERVAL
     ability.polarityFlash = 1f
-    shockwave(coreX, coreY, 0.3f, if (ability.polarity == Polarity.ATTRACT) ATTRACT_RADIUS else REPEL_RADIUS, 2)
+    val reach = (if (ability.polarity == Polarity.ATTRACT) ATTRACT_RADIUS else REPEL_RADIUS) * magnetarReachScale()
+    shockwave(coreX, coreY, 0.3f, reach, if (apexActive()) FxColorCode.APEX_GOLD else 2)
 }
+
+/** Magnetar widens both polarity fields on ordinary enemies. */
+private fun MutableGameState.magnetarReachScale(): Float = if (apexActive()) apexValue(MAGNETAR_REACH_SCALE) else 1f
 
 /**
  * Prism facets: an incoming hit that facets may cancel spends one and is negated completely. Every hit
@@ -374,12 +421,30 @@ internal fun MutableGameState.spendFacet(amount: Float): Boolean {
     ability.damagePrevented += amount.toDouble()
     hurtCooldown = 0.14f
     shockwave(coreX, coreY, 0.22f, coreRadius * 3f, 2)
+    if (apexActive()) fireRefraction()
     if (ability.facets == 0) {
         pushEnemies(coreX, coreY, FACET_BREAK_RADIUS, FACET_BREAK_PUSH, inward = false)
         shockwave(coreX, coreY, 0.35f, FACET_BREAK_RADIUS, 2)
     }
     return true
 }
+
+/**
+ * Monolith: a negated hit fires a refraction back, at the boss while strikes remain (within reach, not shifting),
+ * else at the nearest ordinary enemy; the activation's bolt budget counts the refractions.
+ */
+private fun MutableGameState.fireRefraction() {
+    val runtime = skillRuntime
+    val left = runtime.apex(ApexCell.BOLTS_LEFT)
+    if (left < 1f) return
+    val target = apexShotTarget(coreX, coreY, APEX_SHOT_RANGE) ?: return
+    runtime.setApex(ApexCell.BOLTS_LEFT, left - 1f)
+    fireApexShot(coreX, coreY, target, apexValue(MONOLITH_REFRACTION_DAMAGE) * abilityPower())
+}
+
+/** Seconds per regrown facet: Monolith regrows them fast. */
+internal fun MutableGameState.facetRegrowthSeconds(): Float =
+    if (apexActive()) apexValue(MONOLITH_REGROWTH_SECONDS) else FACET_REGEN_SECONDS
 
 /** Any incoming hit pauses facet regeneration. */
 internal fun MutableGameState.pauseFacetRegeneration() {
@@ -408,16 +473,25 @@ internal fun MutableGameState.tryCharacterParry(
     projectile: Boolean = false,
 ): Boolean {
     val ability = characterRuntime
-    if (coreShape != CoreShape.DIAMOND || ability.parryWindow <= 0f) return false
+    if (coreShape != CoreShape.DIAMOND) return false
+    // Mirror Stance: while braking, every hit is parried (no window, speed or cooldown) until its parries run out.
+    val mirror = apexActive() && braking && skillRuntime.apex(ApexCell.BOLTS_LEFT) >= 1f
+    if (ability.parryWindow <= 0f && !mirror) return false
     // Collision callers pass the beginning of the swept segment: an incoming projectile
     // may already be beyond the core at the end of the same fixed step.
     if (vx * (threatenedCoreX - x) + vy * (threatenedCoreY - y) <= 0f) return false
-    ability.parryWindow = 0f
+    if (!mirror) ability.parryWindow = 0f
     ability.parryFlagSteps = 2
     ability.damagePrevented += damage.toDouble()
     ability.edge = min(CharacterRuntime.MAX_EDGE, ability.edge + 1)
     ability.edgeUntil = elapsed + EDGE_SECONDS
-    if (projectile) {
+    if (mirror) {
+        skillRuntime.setApex(ApexCell.BOLTS_LEFT, skillRuntime.apex(ApexCell.BOLTS_LEFT) - 1f)
+        apexShotTarget(coreX, coreY, APEX_SHOT_RANGE)?.let { enemy ->
+            val edge = 1f + EDGE_DAMAGE_PER_STACK * apexValue(MIRROR_LOCKED_EDGE)
+            fireApexShot(coreX, coreY, enemy, apexValue(MIRROR_SHOT_DAMAGE) * abilityPower() * edge)
+        }
+    } else if (projectile) {
         nearestOtherEnemy(coreX, coreY, -1, PARRY_RETURN_RANGE)?.let { enemy ->
             fireRelicProjectile(coreX, coreY, enemy, PARRY_SHOT_DAMAGE * abilityPower() * characterDamageMultiplier())
         }
@@ -434,9 +508,11 @@ internal fun MutableGameState.onCharacterDashDeparture(): Boolean {
         characterRuntime.dashOnBeat = false
         return false
     }
-    val onBeat = isOnBeat()
+    // Crescendo: every Dash leaves on the beat; only a real beat raises the streak.
+    val realBeat = isOnBeat()
+    val onBeat = realBeat || apexActive()
     characterRuntime.dashOnBeat = onBeat
-    if (onBeat) onBeatAction()
+    if (realBeat) onBeatAction()
     return onBeat
 }
 
@@ -483,13 +559,56 @@ internal fun MutableGameState.markForPuncture(enemy: Enemy) {
  * ready (the Null Lance signature's double Puncture); true when it struck.
  */
 internal fun MutableGameState.tryPuncture(enemy: Enemy, multiplier: Float): Boolean {
+    if (!punctureReady(enemy) || !consumeMark(enemy)) return false
+    puncture(enemy, multiplier)
+    return true
+}
+
+/**
+ * Puncture is ready for [enemy]. While Vivisect runs a boss-class enemy still waits the base interval after the
+ * last puncture of any enemy, so the faster cadence never reaches it.
+ */
+private fun MutableGameState.punctureReady(enemy: Enemy): Boolean {
+    if (elapsed < characterRuntime.punctureReadyAt) return false
+    return !enemy.isBossClass || !apexActive() || elapsed >= skillRuntime.apex(ApexCell.BOSS_BASE_READY_AT)
+}
+
+/**
+ * A Puncture of [multiplier] times its damage on [enemy] (its mark already spent). While Vivisect runs, punctures
+ * come at the Apex interval on ordinary enemies and spread the mark to the next one; on a boss-class enemy the
+ * first strikes of the activation are Apex strikes at the Apex's scale, at the base interval.
+ */
+private fun MutableGameState.puncture(enemy: Enemy, multiplier: Float) {
     val ability = characterRuntime
-    if (elapsed < ability.punctureReadyAt || !consumeMark(enemy)) return false
-    ability.punctureReadyAt = elapsed + PUNCTURE_INTERVAL
-    dealCharacterDamage(enemy, PUNCTURE_DAMAGE * multiplier * abilityPower())
+    val vivisect = apexActive()
+    val damage = PUNCTURE_DAMAGE * multiplier * abilityPower()
+    ability.punctureReadyAt = elapsed + if (vivisect && !enemy.isBossClass) apexValue(VIVISECT_INTERVAL) else PUNCTURE_INTERVAL
+    if (vivisect) skillRuntime.setApex(ApexCell.BOSS_BASE_READY_AT, elapsed + PUNCTURE_INTERVAL)
+    if (!(vivisect && enemy.isBossClass && apexStrike(enemy, damage * apexValue(VIVISECT_BOSS_SCALE)) > 0f)) {
+        dealCharacterDamage(enemy, damage)
+    }
     heat = max(0f, heat - PUNCTURE_HEAT_REFUND)
     shockwave(enemy.x, enemy.y, 0.3f, 65f, 2)
-    return true
+    if (vivisect) spreadPunctureMark(enemy)
+}
+
+/** Vivisect: a puncture opens a mark on the nearest unmarked ordinary enemy within reach of [from]. */
+private fun MutableGameState.spreadPunctureMark(from: Enemy) {
+    val reach = apexValue(VIVISECT_SPREAD_RADIUS)
+    var nearest: Enemy? = null
+    var nearestDistance = reach * reach
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
+        if (enemy === from || !enemy.alive || enemy.isBossClass || enemy.characterMarkTime > 0f || isShifting(enemy)) continue
+        val distance = distanceSquared(from.x, from.y, enemy.x, enemy.y)
+        if (distance <= nearestDistance) {
+            nearest = enemy
+            nearestDistance = distance
+        }
+    }
+    val target = nearest ?: return
+    target.characterMarkTime = MARK_SECONDS
+    addRelicArc(from.x, from.y, target.x, target.y, LinkStyleCode.apex(CoreShape.SHARD))
 }
 
 /** True from a parry until the end of the next fixed step, so weapon updates of that step can react. */
@@ -566,11 +685,16 @@ internal fun MutableGameState.characterActivationMultiplier(): Float = if (isOnB
 // Mechanics.
 
 private fun MutableGameState.updateOrbit(ability: CharacterRuntime, turn: Float, moved: Float, currentSpeed: Float) {
-    if (!braking && currentSpeed >= ORBIT_MIN_SPEED && ability.previousSpeed >= ORBIT_MIN_SPEED && moved > 0f) {
+    // Perihelion: Orbit charges on half the arc, over a shorter distance and at a lower speed.
+    val perihelion = apexActive()
+    val minimumSpeed = if (perihelion) PERIHELION_MIN_SPEED else ORBIT_MIN_SPEED
+    if (!braking && currentSpeed >= minimumSpeed && ability.previousSpeed >= minimumSpeed && moved > 0f) {
         val sameDirection = ability.turnArc == 0f || turn * ability.turnArc >= 0f
         val arc = if (sameDirection) ability.turnArc + turn else turn
         val distance = if (sameDirection) ability.turnDistance + moved else moved
-        val earned = if (abs(arc) >= ORBIT_ARC && distance >= ORBIT_MIN_DISTANCE) abs(turn) / PI.toFloat() else 0f
+        val requiredArc = if (perihelion) apexValue(PERIHELION_ARC) else ORBIT_ARC
+        val requiredDistance = if (perihelion) PERIHELION_MIN_DISTANCE else ORBIT_MIN_DISTANCE
+        val earned = if (abs(arc) >= requiredArc && distance >= requiredDistance) abs(turn) / PI.toFloat() else 0f
         ability.turnArc = arc.coerceIn(-TAU, TAU)
         ability.turnDistance = min(2_000f, distance)
         ability.charge = min(1f, ability.charge + earned)
@@ -581,10 +705,13 @@ private fun MutableGameState.updateOrbit(ability: CharacterRuntime, turn: Float,
 }
 
 private fun MutableGameState.updateFacets(ability: CharacterRuntime, delta: Float) {
+    // Monolith: facets regrow fast and a hit no longer pauses them.
+    val monolith = apexActive()
+    val regrowth = facetRegrowthSeconds()
     if (ability.facets < CharacterRuntime.MAX_FACETS) {
-        if (elapsed >= ability.facetPauseUntil) ability.facetTimer += delta
-        if (ability.facetTimer >= FACET_REGEN_SECONDS) {
-            ability.facetTimer -= FACET_REGEN_SECONDS
+        if (monolith || elapsed >= ability.facetPauseUntil) ability.facetTimer += delta
+        if (ability.facetTimer >= regrowth) {
+            ability.facetTimer -= regrowth
             ability.facets++
         }
     }
@@ -593,6 +720,7 @@ private fun MutableGameState.updateFacets(ability: CharacterRuntime, delta: Floa
 }
 
 private fun MutableGameState.updateHalo(ability: CharacterRuntime, delta: Float, currentSpeed: Float, moved: Float) {
+    val corona = apexActive()
     val target = CharacterRuntime.HALO_MIN_RADIUS + clamp(currentSpeed / HALO_SPEED_SPAN, 0f, 1f) * HALO_EXTRA_RADIUS
     if (ability.previousSpeed < HALO_BURST_SPEED && currentSpeed >= HALO_BURST_SPEED && elapsed >= ability.haloBurstReadyAt) {
         // The ring snaps out to the burst radius and strikes every enemy it crosses on the way.
@@ -608,18 +736,24 @@ private fun MutableGameState.updateHalo(ability: CharacterRuntime, delta: Float,
         ability.haloBurstReadyAt = elapsed + HALO_BURST_COOLDOWN
         ability.haloBurstFlash = 1f
         shockwave(coreX, coreY, 0.35f, HALO_BURST_RADIUS, 2)
+    } else if (corona) {
+        // Corona holds the widest ring.
+        ability.haloRadius = apexValue(CORONA_HALO_RADIUS)
     } else {
         ability.haloRadius += (target - ability.haloRadius) * min(1f, delta * HALO_EASE)
     }
     val radius = ability.haloRadius
     ability.charge = ((radius - CharacterRuntime.HALO_MIN_RADIUS) / HALO_EXTRA_RADIUS).coerceIn(0f, 1f)
     if (moved <= 0.01f || currentSpeed < HALO_MIN_SPEED) return
-    val damage = HALO_BAND_DPS * delta * abilityPower()
+    val power = delta * abilityPower()
     for (index in enemies.indices) {
         val enemy = enemies[index]
         if (!enemy.alive) continue
         val distance = length(enemy.x - coreX, enemy.y - coreY)
-        if (distance >= max(36f, radius - HALO_BAND) && distance <= radius + HALO_BAND + enemy.radius) dealCharacterDamage(enemy, damage)
+        if (distance >= max(36f, radius - HALO_BAND) && distance <= radius + HALO_BAND + enemy.radius) {
+            // Corona's band burns ordinary enemies hotter; boss-class enemies keep the base burn.
+            dealCharacterDamage(enemy, (if (corona && !enemy.isBossClass) apexValue(CORONA_BAND_DPS) else HALO_BAND_DPS) * power)
+        }
     }
 }
 
@@ -638,6 +772,8 @@ private fun MutableGameState.updateLattice(ability: CharacterRuntime) {
  * the lattice; a node too close to another is not recorded; the last free node collapses it.
  */
 private fun MutableGameState.recordLatticeNode(x: Float, y: Float) {
+    // Hypercube holds the lattice as its cage: nothing is recorded or collapses while it runs.
+    if (hypercubeRunning()) return
     val ability = characterRuntime
     val count = ability.latticeCount
     if (count >= 3 && distanceSquared(x, y, ability.latticeX(0), ability.latticeY(0)) < square(LATTICE_CLOSE_DISTANCE)) {
@@ -706,7 +842,11 @@ internal fun MutableGameState.gainStellarMass(stacks: Int) {
     refreshCoreRadius()
 }
 
-/** Consumes all Stellar Mass into a nova whose radius, damage and element stacks grow with it. */
+/**
+ * Consumes all Stellar Mass into a nova whose radius, damage and element stacks grow with it. During Hypernova
+ * novas come at the Apex interval and erase the hostile bolts they cover; a nova the base gate would not have
+ * allowed reaches boss-class enemies only as an Apex strike.
+ */
 private fun MutableGameState.supernova() {
     val ability = characterRuntime
     val stacks = ability.stellarMass
@@ -715,15 +855,31 @@ private fun MutableGameState.supernova() {
     val damage = (SUPERNOVA_DAMAGE + SUPERNOVA_DAMAGE_PER_STACK * stacks) * abilityPower()
     val dominant = build.dominant
     val elementStacks = stacks / SUPERNOVA_STACKS_PER_ELEMENT
+    val hypernova = apexActive()
+    val runtime = skillRuntime
+    // The base gate: a nova at least the base cooldown after the last one it allowed reaches bosses as usual.
+    val baseNova = !hypernova || elapsed >= runtime.apex(ApexCell.BOSS_BASE_READY_AT)
+    if (baseNova) runtime.setApex(ApexCell.BOSS_BASE_READY_AT, elapsed + SUPERNOVA_COOLDOWN)
     ability.stellarMass = 0
-    ability.supernovaReadyAt = elapsed + SUPERNOVA_COOLDOWN
+    ability.supernovaReadyAt = elapsed + if (hypernova) apexValue(HYPERNOVA_COOLDOWN) else SUPERNOVA_COOLDOWN
     ability.novaFlash = 1f
     refreshCoreRadius()
     for (index in enemies.indices) {
         val enemy = enemies[index]
         if (!enemy.alive || distanceSquared(coreX, coreY, enemy.x, enemy.y) > square(radius + enemy.radius)) continue
+        if (enemy.isBossClass && !baseNova) {
+            apexStrike(enemy, damage)
+            continue
+        }
         dealCharacterDamage(enemy, damage)
         if (dominant != null && elementStacks > 0 && enemy.alive) applyStatus(enemy, dominant, elementStacks, 0)
+    }
+    if (hypernova) {
+        for (index in projectiles.indices) {
+            if (runtime.apex(ApexCell.BOLTS_LEFT) < 1f) break
+            val shot = projectiles[index]
+            if (shot.hostile && distanceSquared(coreX, coreY, shot.x, shot.y) <= square(radius + shot.radius)) eraseApexShot(shot, shot.x, shot.y)
+        }
     }
     shockwave(coreX, coreY, 0.5f, radius, 3)
     screenShake = max(screenShake, 8f)
@@ -745,18 +901,10 @@ private fun MutableGameState.updateEcho(ability: CharacterRuntime, delta: Float)
     val fromY = previousGhostY
     val speedNow = if (delta > 0f) length(x - fromX, y - fromY) / delta else 0f
     val reach = coreRadius
-    if (elapsed >= ability.ghostAbsorbReadyAt) {
-        for (index in projectiles.indices) {
-            val shot = projectiles[index]
-            if (!shot.hostile || shot.spent || shot.kind != kinetickk.ball.gameplay.nucleus.render.ProjectileKind.BOLT) continue
-            if (segmentCircleIntersects(shot.previousX - fromX, shot.previousY - fromY, shot.x - x, shot.y - y, 0f, 0f, reach + shot.radius)) {
-                // Spent, not removed: the collision pass removes spent shots once no pass walks the list.
-                if (!eraseHostileShot(shot, EraseCause.CHARACTER, x, y)) continue
-                ability.ghostAbsorbReadyAt = elapsed + GHOST_ABSORB_INTERVAL
-                ability.damagePrevented += shot.damage.toDouble()
-                break
-            }
-        }
+    // Twin Echo: the ghost swallows bolts three times as often while its bolt budget lasts.
+    val twin = apexActive() && skillRuntime.apex(ApexCell.BOLTS_LEFT) >= 1f
+    if (elapsed >= ability.ghostAbsorbReadyAt && ghostAbsorbs(x, y, fromX, fromY, if (twin) EraseCause.APEX else EraseCause.CHARACTER)) {
+        ability.ghostAbsorbReadyAt = elapsed + if (twin) apexValue(TWIN_ECHO_ABSORB_INTERVAL) else GHOST_ABSORB_INTERVAL
     }
     ability.charge = if (elapsed >= ability.ghostAbsorbReadyAt) 1f else 0.5f
     if (speedNow < GHOST_MIN_SPEED) return
@@ -775,21 +923,93 @@ private fun MutableGameState.updateEcho(ability: CharacterRuntime, delta: Float)
     }
 }
 
+/** The ghost moving from ([fromX], [fromY]) to ([x], [y]) swallows the first hostile bolt it crosses; true when it did. */
+private fun MutableGameState.ghostAbsorbs(x: Float, y: Float, fromX: Float, fromY: Float, cause: EraseCause): Boolean {
+    val reach = coreRadius
+    for (index in projectiles.indices) {
+        val shot = projectiles[index]
+        if (!shot.hostile || shot.spent || shot.kind != kinetickk.ball.gameplay.nucleus.render.ProjectileKind.BOLT) continue
+        if (segmentCircleIntersects(shot.previousX - fromX, shot.previousY - fromY, shot.x - x, shot.y - y, 0f, 0f, reach + shot.radius)) {
+            // Spent, not removed: the collision pass removes spent shots once no pass walks the list.
+            if (!eraseHostileShot(shot, cause, x, y)) continue
+            characterRuntime.damagePrevented += shot.damage.toDouble()
+            return true
+        }
+    }
+    return false
+}
+
+/** Twin Echo's second ghost: the path [TWIN_ECHO_DELAY_STEPS] behind the Core, once the path is that long. */
+internal val MutableGameState.secondGhostActive: Boolean
+    get() = coreShape == CoreShape.SPIRAL && apexActive() && characterRuntime.ghostSamples > secondGhostDelaySteps() + 1
+internal val MutableGameState.secondGhostX: Float get() = characterRuntime.ghostSampleX(secondGhostDelaySteps())
+internal val MutableGameState.secondGhostY: Float get() = characterRuntime.ghostSampleY(secondGhostDelaySteps())
+
+private fun MutableGameState.secondGhostDelaySteps(): Int =
+    (apexValue(TWIN_ECHO_DELAY) / MutableGameState.FIXED_STEP).roundToInt().coerceIn(1, CharacterRuntime.GHOST_DELAY_STEPS - 1)
+
+/**
+ * Twin Echo: the second ghost strikes what it crosses at speed (ordinary enemies share the first ghost's
+ * per-enemy interval; boss-class enemies only take Apex strikes, on their own interval) and swallows a bolt on the
+ * Apex interval within the bolt budget.
+ */
+private fun MutableGameState.updateSecondGhost() {
+    if (!secondGhostActive) return
+    val ability = characterRuntime
+    val runtime = skillRuntime
+    val delay = secondGhostDelaySteps()
+    val x = ability.ghostSampleX(delay)
+    val y = ability.ghostSampleY(delay)
+    val previous = if (ability.ghostSampleTeleported(delay)) delay else delay + 1
+    val fromX = ability.ghostSampleX(previous)
+    val fromY = ability.ghostSampleY(previous)
+    if (elapsed >= runtime.apex(ApexCell.HELD_RELEASE_AT) && runtime.apex(ApexCell.BOLTS_LEFT) >= 1f &&
+        ghostAbsorbs(x, y, fromX, fromY, EraseCause.APEX)
+    ) runtime.setApex(ApexCell.HELD_RELEASE_AT, elapsed + apexValue(TWIN_ECHO_ABSORB_INTERVAL))
+    val speedNow = length(x - fromX, y - fromY) / MutableGameState.FIXED_STEP
+    if (speedNow < apexValue(TWIN_ECHO_STRIKE_SPEED)) return
+    val damage = impactPower(speedNow) * apexValue(TWIN_ECHO_STRIKE_SCALE)
+    val reach = coreRadius
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
+        if (!enemy.alive || isShifting(enemy)) continue
+        if (!segmentCircleIntersects(fromX - enemy.previousX, fromY - enemy.previousY, x - enemy.x, y - enemy.y, 0f, 0f,
+                reach + enemy.radius)
+        ) continue
+        if (enemy.isBossClass) {
+            if (elapsed < runtime.apex(ApexCell.AUX)) continue
+            if (apexStrike(enemy, damage) > 0f) runtime.setApex(ApexCell.AUX, elapsed + GHOST_HIT_INTERVAL)
+            continue
+        }
+        if (enemy.characterMarkTime > 0f) continue
+        enemy.characterMarkTime = GHOST_HIT_INTERVAL
+        val integrity = enemy.hp
+        recordAbilityDamage(integrity, dealProcDamage(enemy, damage))
+        directionalBurst(enemy.x, enemy.y, 5, FxColorCode.APEX_GOLD, x - fromX, y - fromY)
+    }
+}
+
 private fun MutableGameState.updatePolarity(ability: CharacterRuntime, delta: Float) {
     val attract = ability.polarity == Polarity.ATTRACT
     val radius = if (attract) ATTRACT_RADIUS else REPEL_RADIUS
     val acceleration = (if (attract) -ATTRACT_ACCELERATION else REPEL_ACCELERATION) * delta
+    // Magnetar widens the field and throws harder, on ordinary enemies only.
+    val magnetar = apexActive()
+    val wideRadius = radius * magnetarReachScale()
+    val wideAcceleration = if (attract || !magnetar) acceleration else acceleration * apexValue(MAGNETAR_THROW_SCALE)
     for (index in enemies.indices) {
         val enemy = enemies[index]
         if (!enemy.alive) continue
+        val amplified = magnetar && !enemy.isBossClass
         val dx = enemy.x - coreX
         val dy = enemy.y - coreY
         val distance = length(dx, dy)
-        if (distance < 1f || distance > radius + enemy.radius) continue
+        if (distance < 1f || distance > (if (amplified) wideRadius else radius) + enemy.radius) continue
         val knockback = knockbackTaken(enemy)
         if (knockback <= 0f) continue
-        enemy.vx += dx / distance * acceleration * knockback
-        enemy.vy += dy / distance * acceleration * knockback
+        val push = if (amplified) wideAcceleration else acceleration
+        enemy.vx += dx / distance * push * knockback
+        enemy.vy += dy / distance * push * knockback
         // ATTRACT only adds its pull to the enemy's own steering. REPEL throws what it pushes: the
         // enemy flies on its momentum (no steering) until THROW_SECONDS after the push carries it out
         // of the field, and what it strikes meanwhile is a slam. Bosses and mini-bosses are never thrown.
@@ -868,8 +1088,9 @@ private fun MutableGameState.advanceBlinkRecharge(seconds: Float) {
     val ability = characterRuntime
     if (ability.blinkCharges >= CharacterRuntime.MAX_BLINK_CHARGES) return
     ability.blinkRecharge += seconds
-    if (ability.blinkRecharge >= BLINK_RECHARGE_SECONDS) {
-        ability.blinkRecharge -= BLINK_RECHARGE_SECONDS
+    val period = blinkRechargeSeconds()
+    if (ability.blinkRecharge >= period) {
+        ability.blinkRecharge -= period
         ability.blinkCharges++
     }
     if (ability.blinkCharges >= CharacterRuntime.MAX_BLINK_CHARGES) ability.blinkRecharge = 0f
@@ -892,21 +1113,28 @@ private fun MutableGameState.dronesDartAt(target: Enemy) {
     }
 }
 
+/** Seconds per Blink charge: Total Eclipse recharges almost at once. */
+internal fun MutableGameState.blinkRechargeSeconds(): Float =
+    if (apexActive()) apexValue(ECLIPSE_BLINK_RECHARGE) else BLINK_RECHARGE_SECONDS
+
 private fun MutableGameState.updateEclipse(ability: CharacterRuntime, delta: Float) {
+    val period = blinkRechargeSeconds()
     if (ability.blinkCharges < CharacterRuntime.MAX_BLINK_CHARGES) {
         ability.blinkRecharge += delta
-        if (ability.blinkRecharge >= BLINK_RECHARGE_SECONDS) {
-            ability.blinkRecharge -= BLINK_RECHARGE_SECONDS
+        if (ability.blinkRecharge >= period) {
+            ability.blinkRecharge -= period
             ability.blinkCharges++
         }
     }
     if (ability.blinkCharges >= CharacterRuntime.MAX_BLINK_CHARGES) ability.blinkRecharge = 0f
-    ability.charge = (ability.blinkCharges + ability.blinkRecharge / BLINK_RECHARGE_SECONDS) / CharacterRuntime.MAX_BLINK_CHARGES
+    ability.charge = (ability.blinkCharges + (ability.blinkRecharge / period).coerceAtMost(1f)) / CharacterRuntime.MAX_BLINK_CHARGES
+    val eclipse = apexActive()
     var index = 0
     while (index < ability.scarCount) {
         val age = ability.scarValue(index, SCAR_AGE)
         if (age < 0f) {
             if (elapsed >= ability.scarValue(index, SCAR_DETONATE_AT)) detonateScar(index)
+            else if (eclipse) pullTowardScar(index, delta)
             index++
         } else if (age + delta >= SCAR_FADE_SECONDS) {
             removeScar(index)
@@ -974,6 +1202,7 @@ internal fun MutableGameState.crescentBlink(
         }
     }
     if (drive) addRelicArc(startX, startY, endX, endY)
+    if (apexActive()) cutShotsAlong(startX, startY, endX, endY)
     coreX = endX
     coreY = endY
     previousCoreX = endX
@@ -1021,6 +1250,47 @@ internal fun MutableGameState.markBlink(startX: Float, startY: Float, endX: Floa
     ability.blinkToY = endY
 }
 
+/** Total Eclipse: a Blink from (x0, y0) to (x1, y1) erases the hostile bolts along its path (bolt budget). */
+private fun MutableGameState.cutShotsAlong(x0: Float, y0: Float, x1: Float, y1: Float) {
+    val reach = apexValue(ECLIPSE_CUT_RADIUS)
+    for (index in projectiles.indices) {
+        if (skillRuntime.apex(ApexCell.BOLTS_LEFT) < 1f) return
+        val shot = projectiles[index]
+        if (shot.hostile && segmentCircleIntersects(x0, y0, x1, y1, shot.x, shot.y, reach + shot.radius)) eraseApexShot(shot, shot.x, shot.y)
+    }
+    addWeaponArc(x0, y0, x1, y1, 0.3f, LinkStyleCode.apex(CoreShape.CRESCENT))
+}
+
+/** Total Eclipse: an armed scar draws the ordinary enemies near it toward its line before it detonates. */
+private fun MutableGameState.pullTowardScar(index: Int, delta: Float) {
+    val ability = characterRuntime
+    val x0 = ability.scarValue(index, SCAR_X0)
+    val y0 = ability.scarValue(index, SCAR_Y0)
+    val x1 = ability.scarValue(index, SCAR_X1)
+    val y1 = ability.scarValue(index, SCAR_Y1)
+    val segmentX = x1 - x0
+    val segmentY = y1 - y0
+    val lengthSquared = segmentX * segmentX + segmentY * segmentY
+    val step = apexValue(ECLIPSE_PULL_SPEED) * delta
+    for (enemyIndex in enemies.indices) {
+        val enemy = enemies[enemyIndex]
+        if (!enemy.alive || enemy.isBossClass || isShifting(enemy)) continue
+        val along = if (lengthSquared > 0f) (((enemy.x - x0) * segmentX + (enemy.y - y0) * segmentY) / lengthSquared).coerceIn(0f, 1f) else 0f
+        val dx = x0 + segmentX * along - enemy.x
+        val dy = y0 + segmentY * along - enemy.y
+        val distance = length(dx, dy)
+        if (distance <= 1f || distance > ECLIPSE_PULL_REACH + enemy.radius) continue
+        val move = min(distance, step * knockbackTaken(enemy))
+        enemy.x += dx / distance * move
+        enemy.y += dy / distance * move
+    }
+}
+
+/**
+ * A scar detonates on what touches its line, with one Void stack. During Total Eclipse it hits ordinary enemies
+ * harder; boss-class enemies take the first strikes of the activation at that scale, and later detonations only
+ * at the base Blink cadence.
+ */
 private fun MutableGameState.detonateScar(index: Int) {
     val ability = characterRuntime
     val x0 = ability.scarValue(index, SCAR_X0)
@@ -1029,10 +1299,20 @@ private fun MutableGameState.detonateScar(index: Int) {
     val y1 = ability.scarValue(index, SCAR_Y1)
     ability.scars[index * SCAR_STRIDE + SCAR_AGE] = 0f
     val damage = SCAR_DAMAGE * abilityPower()
+    val eclipse = apexActive()
+    val scale = if (eclipse) apexValue(ECLIPSE_SCAR_SCALE) else 1f
+    val runtime = skillRuntime
     for (enemyIndex in enemies.indices) {
         val enemy = enemies[enemyIndex]
         if (!enemy.alive || !segmentCircleIntersects(x0, y0, x1, y1, enemy.x, enemy.y, enemy.radius + SCAR_REACH)) continue
-        dealCharacterDamage(enemy, damage)
+        if (eclipse && enemy.isBossClass) {
+            if (apexStrike(enemy, damage * scale) > 0f) continue
+            if (elapsed < runtime.apex(ApexCell.BOSS_BASE_READY_AT)) continue
+            runtime.setApex(ApexCell.BOSS_BASE_READY_AT, elapsed + BLINK_RECHARGE_SECONDS)
+            dealCharacterDamage(enemy, damage)
+        } else {
+            dealCharacterDamage(enemy, damage * scale)
+        }
         if (enemy.alive) applyStatus(enemy, StatusElement.VOID, 1, 0)
     }
     addWeaponArc(x0, y0, x1, y1, 0.3f)
@@ -1077,12 +1357,19 @@ private fun MutableGameState.updateHive(ability: CharacterRuntime, delta: Float)
         if (dart <= 0f && elapsed >= drones[base + DRONE_READY_AT]) {
             val target = nearestEnemy(orbitX, orbitY, DRONE_RANGE)
             if (target != null) {
-                drones[base + DRONE_READY_AT] = elapsed + DRONE_INTERVAL
+                // Swarm Queen: ordinary enemies take faster, harder darts; a boss-class target keeps the base
+                // interval, and the first darts of the activation at it are Apex strikes.
+                val queen = apexAmplifies(target)
+                drones[base + DRONE_READY_AT] = elapsed + if (queen) apexValue(SWARM_DART_INTERVAL) else DRONE_INTERVAL
                 drones[base + DRONE_TARGET_X] = target.x
                 drones[base + DRONE_TARGET_Y] = target.y
                 dart = DRONE_DART_SECONDS
                 val integrity = target.hp
-                recordAbilityDamage(integrity, dealProcDamage(target, DRONE_DAMAGE * abilityPower()))
+                val strike = target.isBossClass && apexActive() && apexStrike(target, apexValue(SWARM_DART_DAMAGE) * abilityPower()) > 0f
+                if (!strike) {
+                    val damage = (if (queen) apexValue(SWARM_DART_DAMAGE) else DRONE_DAMAGE) * abilityPower()
+                    recordAbilityDamage(integrity, dealProcDamage(target, damage))
+                }
                 if (!target.alive && elapsed >= ability.droneHealReadyAt) {
                     ability.droneHealReadyAt = elapsed + DRONE_HEAL_INTERVAL
                     heal(DRONE_KILL_HEAL, HealSource.ITEM)
@@ -1101,6 +1388,339 @@ private fun MutableGameState.updateHive(ability: CharacterRuntime, delta: Float)
         }
         drones[base + DRONE_DART] = dart
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Apex forms (combat-final §5.3). [castApex] starts one, [updateApex] ends it; the step below runs what each form
+// adds while it is active (and Perihelion's release after it). Against boss-class enemies every form keeps the base
+// numbers and cadence and adds only Apex strikes; bolts are erased only within the activation's budget.
+
+/** The character's Apex form begins (its activation cells are already set). */
+internal fun MutableGameState.beginApexForm() {
+    val ability = characterRuntime
+    val runtime = skillRuntime
+    when (coreShape) {
+        CoreShape.ORB -> Unit
+        CoreShape.PRISM -> {
+            ability.facets = CharacterRuntime.MAX_FACETS
+            ability.facetTimer = 0f
+        }
+        CoreShape.SHARD -> {
+            // The last free Dash: none yet, and boss punctures follow the last puncture's base interval.
+            runtime.setApex(ApexCell.AUX, Float.NEGATIVE_INFINITY)
+            runtime.setApex(ApexCell.BOSS_BASE_READY_AT, ability.punctureReadyAt)
+        }
+        CoreShape.RING -> runtime.setApex(ApexCell.AUX, elapsed)
+        CoreShape.DIAMOND -> Unit
+        CoreShape.TESSERACT -> foldHypercube()
+        CoreShape.STAR -> {
+            // A full Supernova at once, past the base gate; a boss meets it only if the base gate allowed it.
+            runtime.setApex(ApexCell.BOSS_BASE_READY_AT, ability.supernovaReadyAt)
+            ability.stellarMass = min(CharacterRuntime.MAX_STELLAR_MASS, apexValue(HYPERNOVA_CAST_MASS).toInt())
+            ability.supernovaReadyAt = elapsed
+            supernova()
+        }
+        CoreShape.SPIRAL -> {
+            runtime.setApex(ApexCell.AUX, 0f)
+            runtime.setApex(ApexCell.HELD_RELEASE_AT, 0f)
+        }
+        CoreShape.DIPOLE -> runtime.setApex(ApexCell.AUX, elapsed + apexValue(MAGNETAR_FLIP_INTERVAL))
+        CoreShape.PENTAGON -> runtime.setApex(ApexCell.AUX, beatOrdinal().toFloat())
+        CoreShape.CRESCENT -> runtime.setApex(ApexCell.BOSS_BASE_READY_AT, 0f)
+        CoreShape.HEXAGON -> {
+            val life = apexValue(SWARM_DRONE_LIFE)
+            for (drone in 0 until ability.droneCount) ability.drones[drone * DRONE_STRIDE + DRONE_LIFE] = life
+            while (ability.droneCount < CharacterRuntime.MAX_DRONES) addDrone(life)
+            runtime.setApex(ApexCell.AUX, elapsed)
+        }
+    }
+}
+
+/** The character's Apex form ended. */
+internal fun MutableGameState.endApexForm() {
+    val ability = characterRuntime
+    when (coreShape) {
+        CoreShape.ORB -> if (skillRuntime.apex(ApexCell.HELD) >= 1f) {
+            // Held shots fly back now, or half a second after a shifting boss returns (never more than 9 s away).
+            var releaseAt = elapsed
+            for (index in enemies.indices) {
+                val enemy = enemies[index]
+                if (enemy.isBossClass && enemy.alive && isShifting(enemy)) releaseAt = max(releaseAt, enemy.shiftUntil + PERIHELION_SHIFT_GRACE)
+            }
+            skillRuntime.setApex(ApexCell.HELD_RELEASE_AT, min(releaseAt, elapsed + PERIHELION_MAX_WAIT))
+        }
+        CoreShape.TESSERACT -> {
+            // The cage unfolds: a folded square is cleared, a lattice the player built resumes its life.
+            if (ability.latticeCount >= CharacterRuntime.MAX_LATTICE_NODES) {
+                ability.latticeCount = 0
+                ability.latticeTime = 0f
+            } else if (ability.latticeCount > 0) {
+                ability.latticeTime = LATTICE_LIFE_SECONDS
+            }
+        }
+        CoreShape.STAR -> {
+            ability.stellarMass = min(CharacterRuntime.MAX_STELLAR_MASS, apexValue(HYPERNOVA_END_MASS).toInt())
+            refreshCoreRadius()
+        }
+        CoreShape.PRISM, CoreShape.SHARD, CoreShape.RING, CoreShape.DIAMOND, CoreShape.SPIRAL, CoreShape.DIPOLE,
+        CoreShape.PENTAGON, CoreShape.CRESCENT, CoreShape.HEXAGON -> Unit
+    }
+}
+
+/** Each step of an unlocked Apex: the running form's own effects and Perihelion's held release. */
+private fun MutableGameState.updateApexForm(delta: Float) {
+    if (coreShape == CoreShape.ORB) releaseHeldShots()
+    if (!apexActive()) return
+    when (coreShape) {
+        CoreShape.RING -> updateCorona()
+        CoreShape.TESSERACT -> updateHypercube()
+        CoreShape.SPIRAL -> updateSecondGhost()
+        CoreShape.DIPOLE -> updateMagnetar()
+        CoreShape.PENTAGON -> updateCrescendo()
+        CoreShape.HEXAGON -> updateSwarmQueen()
+        CoreShape.ORB, CoreShape.PRISM, CoreShape.SHARD, CoreShape.DIAMOND, CoreShape.STAR, CoreShape.CRESCENT -> Unit
+    }
+}
+
+/**
+ * Perihelion's release: after the activation, one held shot per interval flies at the boss while strikes remain
+ * (strikes at the held damage, raised to the strike floor), else at the nearest ordinary enemy within reach with
+ * one dominant stack. With nothing in reach the shots wait.
+ */
+private fun MutableGameState.releaseHeldShots() {
+    val runtime = skillRuntime
+    val held = runtime.apex(ApexCell.HELD)
+    if (held < 1f || apexActive() || elapsed < runtime.apex(ApexCell.HELD_RELEASE_AT)) return
+    val target = apexShotTarget(coreX, coreY, PERIHELION_RELEASE_RANGE) ?: return
+    runtime.setApex(ApexCell.HELD, held - 1f)
+    runtime.setApex(ApexCell.HELD_RELEASE_AT, elapsed + apexValue(PERIHELION_RELEASE_INTERVAL))
+    fireApexShot(coreX, coreY, target, apexValue(PERIHELION_HELD_DAMAGE) * abilityPower(),
+        if (target.isBossClass) null else build.dominant)
+}
+
+/**
+ * Corona: hostile bolts crossing the locked band are erased, and an Apex Halo Burst fires on its own interval
+ * whatever the speed: ordinary enemies in its reach take its damage, boss-class enemies only a strike.
+ */
+private fun MutableGameState.updateCorona() {
+    val runtime = skillRuntime
+    val radius = characterRuntime.haloRadius
+    for (index in projectiles.indices) {
+        if (runtime.apex(ApexCell.BOLTS_LEFT) < 1f) break
+        val shot = projectiles[index]
+        if (!shot.hostile || shot.spent) continue
+        val now = length(shot.x - coreX, shot.y - coreY)
+        val before = length(shot.previousX - previousCoreX, shot.previousY - previousCoreY)
+        val inBand = now >= radius - HALO_BAND - shot.radius && now <= radius + HALO_BAND + shot.radius
+        val crossed = (now - radius) * (before - radius) < 0f
+        if (inBand || crossed) eraseApexShot(shot, shot.x, shot.y)
+    }
+    if (elapsed < runtime.apex(ApexCell.AUX)) return
+    runtime.setApex(ApexCell.AUX, elapsed + apexValue(CORONA_BURST_INTERVAL))
+    val damage = apexValue(CORONA_BURST_DAMAGE) * abilityPower()
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
+        if (!enemy.alive || distanceSquared(coreX, coreY, enemy.x, enemy.y) > square(HALO_BURST_RADIUS + enemy.radius)) continue
+        if (enemy.isBossClass) apexStrike(enemy, damage) else dealCharacterDamage(enemy, damage)
+    }
+    characterRuntime.haloBurstFlash = 1f
+    shockwave(coreX, coreY, 0.35f, HALO_BURST_RADIUS, FxColorCode.APEX_GOLD)
+}
+
+/** True while Hypercube holds the lattice as its cage. */
+private fun MutableGameState.hypercubeRunning(): Boolean = coreShape == CoreShape.TESSERACT && apexActive()
+
+/** Hypercube's cage: the lattice when it has three nodes or more, else a square around the Core in the node slots. */
+private fun MutableGameState.foldHypercube() {
+    val ability = characterRuntime
+    if (ability.latticeCount < 3) {
+        val half = apexValue(HYPERCUBE_HALF_SIDE)
+        val nodes = ability.latticeNodes
+        nodes[0] = coreX - half
+        nodes[1] = coreY - half
+        nodes[2] = coreX + half
+        nodes[3] = coreY - half
+        nodes[4] = coreX + half
+        nodes[5] = coreY + half
+        nodes[6] = coreX - half
+        nodes[7] = coreY + half
+        ability.latticeCount = CharacterRuntime.MAX_LATTICE_NODES
+    }
+    skillRuntime.setApex(ApexCell.AUX, elapsed + HYPERCUBE_PULSE_SECONDS)
+}
+
+/**
+ * Hypercube: bolts crossing a cage edge are erased (bolt budget); every pulse interval the edges strike what
+ * touches them, harder inside, and a boss-class enemy they touch takes only a strike.
+ */
+private fun MutableGameState.updateHypercube() {
+    val ability = characterRuntime
+    val count = ability.latticeCount
+    if (count < 2) return
+    val runtime = skillRuntime
+    for (index in projectiles.indices) {
+        if (runtime.apex(ApexCell.BOLTS_LEFT) < 1f) break
+        val shot = projectiles[index]
+        if (!shot.hostile || shot.spent) continue
+        for (edge in 0 until count) {
+            val next = (edge + 1) % count
+            if (segmentsCross(shot.previousX, shot.previousY, shot.x, shot.y,
+                    ability.latticeX(edge), ability.latticeY(edge), ability.latticeX(next), ability.latticeY(next))
+            ) {
+                eraseApexShot(shot, shot.x, shot.y)
+                break
+            }
+        }
+    }
+    if (elapsed < runtime.apex(ApexCell.AUX)) return
+    runtime.setApex(ApexCell.AUX, elapsed + HYPERCUBE_PULSE_SECONDS)
+    val damage = (apexValue(HYPERCUBE_PULSE_DAMAGE) + apexValue(HYPERCUBE_PULSE_PER_NODE) * count) * abilityPower()
+    for (enemyIndex in enemies.indices) {
+        val enemy = enemies[enemyIndex]
+        if (!enemy.alive) continue
+        var touches = false
+        for (edge in 0 until count) {
+            val next = (edge + 1) % count
+            if (segmentCircleIntersects(ability.latticeX(edge), ability.latticeY(edge), ability.latticeX(next), ability.latticeY(next),
+                    enemy.x, enemy.y, enemy.radius + HYPERCUBE_EDGE_REACH)
+            ) {
+                touches = true
+                break
+            }
+        }
+        val inside = count >= 3 && insideLattice(ability, count, enemy.x, enemy.y)
+        if (!touches && !inside) continue
+        val amount = damage * if (inside) LATTICE_INSIDE_MULTIPLIER else 1f
+        if (enemy.isBossClass) {
+            if (touches) apexStrike(enemy, amount)
+        } else {
+            dealCharacterDamage(enemy, amount)
+        }
+    }
+    for (edge in 0 until count) {
+        val next = (edge + 1) % count
+        addWeaponArc(ability.latticeX(edge), ability.latticeY(edge), ability.latticeX(next), ability.latticeY(next), 0.2f,
+            LinkStyleCode.apex(CoreShape.TESSERACT))
+    }
+}
+
+/** Hypercube slows the ordinary enemies inside its cage (their motion scale). */
+internal fun MutableGameState.hypercubeMotionScale(enemy: Enemy): Float {
+    if (!hypercubeRunning() || enemy.isEliteClass) return 1f
+    val ability = characterRuntime
+    val count = ability.latticeCount
+    return if (count >= 3 && insideLattice(ability, count, enemy.x, enemy.y)) apexValue(HYPERCUBE_INSIDE_SPEED) else 1f
+}
+
+/**
+ * Magnetar: polarity flips on its own clock (turns still flip on theirs); in Repel the hostile bolts closing on
+ * the Core within the wide field are erased and fired back along their reflected path as Apex shots.
+ */
+private fun MutableGameState.updateMagnetar() {
+    val runtime = skillRuntime
+    if (elapsed >= runtime.apex(ApexCell.AUX)) {
+        runtime.setApex(ApexCell.AUX, elapsed + apexValue(MAGNETAR_FLIP_INTERVAL))
+        flipPolarity(restartGate = false)
+    }
+    if (characterRuntime.polarity != Polarity.REPEL) return
+    val reach = REPEL_RADIUS * magnetarReachScale()
+    val damage = apexValue(MAGNETAR_SHOT_DAMAGE) * abilityPower()
+    // Re-fired shots are appended; only the bolts present at the start of the pass are looked at.
+    val count = projectiles.size
+    for (index in 0 until count) {
+        if (runtime.apex(ApexCell.BOLTS_LEFT) < 1f) return
+        val shot = projectiles[index]
+        if (!shot.hostile || shot.spent) continue
+        val dx = shot.x - coreX
+        val dy = shot.y - coreY
+        val distance = length(dx, dy)
+        if (distance < 1f || distance > reach + shot.radius) continue
+        val nx = dx / distance
+        val ny = dy / distance
+        val closing = shot.vx * nx + shot.vy * ny
+        if (closing >= 0f) continue
+        val vx = shot.vx
+        val vy = shot.vy
+        if (!eraseApexShot(shot, shot.x, shot.y)) continue
+        // Reflect the velocity off the field's normal at the bolt.
+        val rx = vx - 2f * closing * nx
+        val ry = vy - 2f * closing * ny
+        val speed = length(rx, ry)
+        if (speed > 0f) fireApexShotAlong(shot.x, shot.y, rx / speed, ry / speed, damage)
+    }
+}
+
+/** The index of the Pentagon beat the current moment belongs to (the beat at or before it). */
+private fun MutableGameState.beatOrdinal(): Int = floor(elapsed / BEAT_PERIOD).toInt()
+
+/**
+ * Crescendo: on each new beat an on-beat burst strikes ordinary enemies nearby (a boss-class enemy only takes a
+ * strike) and erases the hostile bolts around the Core, a few per beat within the bolt budget.
+ */
+private fun MutableGameState.updateCrescendo() {
+    val runtime = skillRuntime
+    val beat = beatOrdinal()
+    if (beat <= runtime.apex(ApexCell.AUX).toInt()) return
+    runtime.setApex(ApexCell.AUX, beat.toFloat())
+    val radius = apexValue(CRESCENDO_BURST_RADIUS)
+    val damage = apexValue(CRESCENDO_BURST_DAMAGE) * abilityPower()
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
+        if (!enemy.alive || distanceSquared(coreX, coreY, enemy.x, enemy.y) > square(radius + enemy.radius)) continue
+        if (enemy.isBossClass) apexStrike(enemy, damage) else dealCharacterDamage(enemy, damage)
+    }
+    var erased = 0
+    val perBeat = apexValue(CRESCENDO_BOLTS_PER_BEAT).toInt()
+    for (index in projectiles.indices) {
+        if (erased >= perBeat || runtime.apex(ApexCell.BOLTS_LEFT) < 1f) break
+        val shot = projectiles[index]
+        if (shot.hostile && distanceSquared(coreX, coreY, shot.x, shot.y) <= square(radius + shot.radius) &&
+            eraseApexShot(shot, shot.x, shot.y)
+        ) erased++
+    }
+    shockwave(coreX, coreY, 0.25f, radius, FxColorCode.APEX_GOLD)
+}
+
+/**
+ * Swarm Queen: every intercept interval each drone erases one hostile bolt near it (bolt budget), and loose Data
+ * in reach latches onto the Core (Event Horizon's liability keeps the latch off).
+ */
+private fun MutableGameState.updateSwarmQueen() {
+    val ability = characterRuntime
+    val runtime = skillRuntime
+    if (elapsed >= runtime.apex(ApexCell.AUX)) {
+        runtime.setApex(ApexCell.AUX, elapsed + SWARM_INTERCEPT_SECONDS)
+        for (drone in 0 until ability.droneCount) {
+            if (runtime.apex(ApexCell.BOLTS_LEFT) < 1f) break
+            val x = ability.droneValue(drone, DRONE_X)
+            val y = ability.droneValue(drone, DRONE_Y)
+            for (index in projectiles.indices) {
+                val shot = projectiles[index]
+                if (shot.hostile && distanceSquared(x, y, shot.x, shot.y) <= square(SWARM_INTERCEPT_REACH + shot.radius) &&
+                    eraseApexShot(shot, x, y)
+                ) break
+            }
+        }
+    }
+    if (!latchedVacuumActive()) return
+    val reach = square(apexValue(SWARM_DATA_RANGE))
+    for (index in pickups.indices) {
+        val pickup = pickups[index]
+        if (pickup.type == kinetickk.ball.gameplay.nucleus.render.PickupType.DATA && !pickup.attracted &&
+            distanceSquared(coreX, coreY, pickup.x, pickup.y) <= reach
+        ) pickup.attracted = true
+    }
+}
+
+/** Vivisect: a Dash at least the free gap after the last free one costs no heat. */
+internal fun MutableGameState.apexFreeDashReady(): Boolean =
+    coreShape == CoreShape.SHARD && apexActive() && elapsed >= skillRuntime.apex(ApexCell.AUX) + apexValue(VIVISECT_FREE_DASH_GAP)
+
+/** Spends Vivisect's free Dash; true when this Dash costs no heat. */
+internal fun MutableGameState.spendApexFreeDash(): Boolean {
+    if (!apexFreeDashReady()) return false
+    skillRuntime.setApex(ApexCell.AUX, elapsed)
+    return true
 }
 
 /** Shifts every stored character position after a world rebase. */
@@ -1152,6 +1772,62 @@ private fun characterHash(value: Long): Long {
 }
 
 internal const val DASH_PHASE_SECONDS: Float = 0.24f
+
+/** Apex value indices (the per-shape order of `defaultApexDefinition`) and the forms' own numbers. */
+private const val PERIHELION_ARC = 0
+private const val PERIHELION_CAPTURE_RADIUS = 1
+private const val PERIHELION_HELD_DAMAGE = 2
+private const val PERIHELION_RELEASE_INTERVAL = 3
+private const val PERIHELION_MIN_DISTANCE: Float = 50f
+private const val PERIHELION_MIN_SPEED: Float = 150f
+private const val PERIHELION_SHIFT_GRACE: Float = 0.5f
+private const val PERIHELION_MAX_WAIT: Float = 9f
+private const val PERIHELION_RELEASE_RANGE: Float = 600f
+private const val MONOLITH_REGROWTH_SECONDS = 0
+private const val MONOLITH_IMPACT_BONUS = 1
+private const val MONOLITH_REFRACTION_DAMAGE = 2
+private const val VIVISECT_INTERVAL = 0
+private const val VIVISECT_SPREAD_RADIUS = 1
+private const val VIVISECT_BOSS_SCALE = 2
+private const val VIVISECT_FREE_DASH_GAP = 3
+private const val CORONA_HALO_RADIUS = 0
+private const val CORONA_BAND_DPS = 1
+private const val CORONA_BURST_INTERVAL = 2
+private const val CORONA_BURST_DAMAGE = 3
+private const val MIRROR_SHOT_DAMAGE = 0
+private const val MIRROR_LOCKED_EDGE = 1
+private const val HYPERCUBE_HALF_SIDE = 0
+private const val HYPERCUBE_INSIDE_SPEED = 1
+private const val HYPERCUBE_PULSE_DAMAGE = 2
+private const val HYPERCUBE_PULSE_PER_NODE = 3
+private const val HYPERCUBE_PULSE_SECONDS: Float = 1f
+private const val HYPERCUBE_EDGE_REACH: Float = 24f
+private const val HYPERNOVA_CAST_MASS = 0
+private const val HYPERNOVA_COOLDOWN = 1
+private const val HYPERNOVA_KILL_MASS = 2
+private const val HYPERNOVA_END_MASS = 3
+private const val TWIN_ECHO_DELAY = 0
+private const val TWIN_ECHO_STRIKE_SCALE = 1
+private const val TWIN_ECHO_ABSORB_INTERVAL = 2
+private const val TWIN_ECHO_STRIKE_SPEED = 3
+private const val MAGNETAR_FLIP_INTERVAL = 0
+private const val MAGNETAR_REACH_SCALE = 1
+private const val MAGNETAR_THROW_SCALE = 2
+private const val MAGNETAR_SHOT_DAMAGE = 3
+private const val CRESCENDO_BURST_DAMAGE = 1
+private const val CRESCENDO_BURST_RADIUS = 2
+private const val CRESCENDO_BOLTS_PER_BEAT = 3
+private const val ECLIPSE_BLINK_RECHARGE = 0
+private const val ECLIPSE_CUT_RADIUS = 1
+private const val ECLIPSE_PULL_SPEED = 2
+private const val ECLIPSE_SCAR_SCALE = 3
+private const val ECLIPSE_PULL_REACH: Float = 100f
+private const val SWARM_DART_INTERVAL = 0
+private const val SWARM_DART_DAMAGE = 1
+private const val SWARM_DATA_RANGE = 2
+private const val SWARM_DRONE_LIFE = 3
+private const val SWARM_INTERCEPT_SECONDS: Float = 0.6f
+private const val SWARM_INTERCEPT_REACH: Float = 70f
 /** Character × skill interactions. */
 internal const val PENTAGON_SKILL_REFUND: Float = 0.2f
 internal const val CRESCENT_SKILL_BLINK_SECONDS: Float = 0.6f

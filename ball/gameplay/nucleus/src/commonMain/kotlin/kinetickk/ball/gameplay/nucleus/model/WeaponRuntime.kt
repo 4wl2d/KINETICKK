@@ -189,7 +189,7 @@ internal class WeaponRuntime private constructor(
     /** True when [procKey]'s source may fire on-hit effects now; nothing is spent. */
     fun canQualify(procKey: Int, elapsed: Float): Boolean = when {
         procKey == PROC_ALWAYS -> true
-        procKey == PROC_NEVER || procKey == PROC_SKILL -> false
+        procKey == PROC_NEVER || procKey == PROC_APEX || procKey == PROC_SKILL -> false
         procKey >= 0 -> {
             val age = (activationSerial - procKey) and ACTIVATION_MASK
             age < ACTIVATION_WINDOW && procMask and (1L shl age) == 0L
@@ -200,7 +200,7 @@ internal class WeaponRuntime private constructor(
     /** Spends [procKey]'s qualification after a hit that landed. */
     fun spendQualification(procKey: Int, elapsed: Float) {
         when {
-            procKey == PROC_ALWAYS || procKey == PROC_NEVER || procKey == PROC_SKILL -> Unit
+            procKey == PROC_ALWAYS || procKey == PROC_NEVER || procKey == PROC_APEX || procKey == PROC_SKILL -> Unit
             procKey >= 0 -> {
                 val age = (activationSerial - procKey) and ACTIVATION_MASK
                 if (age < ACTIVATION_WINDOW) procMask = procMask or (1L shl age)
@@ -316,6 +316,8 @@ internal class WeaponRuntime private constructor(
         const val PROC_ALWAYS: Int = Int.MIN_VALUE
         /** Hits that never do (derived bursts of an already counted hit). */
         const val PROC_NEVER: Int = Int.MIN_VALUE + 1
+        /** Shots an Apex fired: strikes on boss-class enemies, character damage elsewhere, never an on-hit effect. */
+        const val PROC_APEX: Int = Int.MIN_VALUE + 2
         /** Shots a skill fired (Null Shroud's returned bolts): skill damage, never an on-hit effect. */
         const val PROC_SKILL: Int = Int.MIN_VALUE + 3
         const val SOURCE_SLOTS: Int = 4

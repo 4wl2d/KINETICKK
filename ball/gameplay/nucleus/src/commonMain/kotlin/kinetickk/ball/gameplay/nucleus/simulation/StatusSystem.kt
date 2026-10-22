@@ -119,6 +119,8 @@ internal fun MutableGameState.enemyMotionScale(enemy: Enemy): Float {
         scale *= 1f - stasisSlow()
     }
     if (build.liability(RelicId.PANDEMIC_CODEX) && totalStacks(enemy) > 0) scale *= 1.2f
+    // Hypercube's cage slows the ordinary enemies inside.
+    scale *= hypercubeMotionScale(enemy)
     return scale
 }
 

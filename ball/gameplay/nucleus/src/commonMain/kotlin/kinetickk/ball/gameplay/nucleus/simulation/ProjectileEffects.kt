@@ -7,6 +7,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
+import kinetickk.ball.gameplay.nucleus.protocol.FxColorCode
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
@@ -207,17 +208,22 @@ internal enum class EraseCause { REACTION, SKILL, ITEM, CHARACTER, APEX }
 
 /**
  * Spends hostile bolt [shot] (its life drops to 0 and the list keeps its shape, so any pass may call this
- * while it walks the projectiles). Friendly, already spent and MINE shots are refused; an Apex erasure is
- * refused until an Apex bolt budget exists. The first [MAX_SHOT_ERASURES_SHOWN_PER_STEP] erasures of a fixed
- * step show a burst at ([x], [y]). True when the shot was spent.
+ * while it walks the projectiles). Friendly, already spent and MINE shots are refused; an Apex erasure spends
+ * one bolt of the running activation's budget and is refused once the budget is empty. The first
+ * [MAX_SHOT_ERASURES_SHOWN_PER_STEP] erasures of a fixed step show a burst at ([x], [y]) (Apex gold for the
+ * Apex's). True when the shot was spent.
  */
 internal fun MutableGameState.eraseHostileShot(shot: Projectile, cause: EraseCause, x: Float, y: Float): Boolean {
     if (!shot.hostile || shot.spent || shot.kind != ProjectileKind.BOLT) return false
-    if (cause == EraseCause.APEX) return false
+    if (cause == EraseCause.APEX) {
+        val left = skillRuntime.apex(ApexCell.BOLTS_LEFT)
+        if (left < 1f) return false
+        skillRuntime.setApex(ApexCell.BOLTS_LEFT, left - 1f)
+    }
     shot.life = 0f
     if (shotErasedDispatches < MAX_SHOT_ERASURES_SHOWN_PER_STEP) {
         shotErasedDispatches++
-        burst(x, y, 5, 2)
+        burst(x, y, 5, if (cause == EraseCause.APEX) FxColorCode.APEX_GOLD else 2)
     }
     return true
 }

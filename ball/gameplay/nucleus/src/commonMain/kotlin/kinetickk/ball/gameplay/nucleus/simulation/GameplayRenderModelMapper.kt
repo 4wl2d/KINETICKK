@@ -355,8 +355,7 @@ internal fun MutableGameState.toRenderModel(
         volatileBursts = volatileBursts,
         maxLevel = content.tempo.maximumLevel,
         skillBar = skillBarProjection(reusableCollections?.skillBar),
-        // No Apex runtime yet: the shared locked projection.
-        apex = ApexProjection.LOCKED,
+        apex = apexProjection(reusableCollections?.apex),
         combatFields = combatFieldProjection(reusableCollections?.combatFields, identitySource?.combatFieldTable),
         coreState = coreStateProjection(reusableCollections?.coreState),
     )
@@ -377,7 +376,37 @@ private fun MutableGameState.controlBits(enemy: Enemy): Int {
     if (mark != null) bits = bits or ((mark.ordinal + 1) shl EnemyControlBits.MARK_SHIFT)
     if (voidAnchorId == enemy.id && voidAnchorUntil > elapsed) bits = bits or EnemyControlBits.VOID_ANCHOR
     if (anchorsAttractor(enemy.id)) bits = bits or EnemyControlBits.ATTRACTOR_ANCHOR
+    if (enemy.isBossClass && apexActive() && apexStrikesLeft > 0) bits = bits or EnemyControlBits.APEX_STRIKE_TARGET
     return bits
+}
+
+/**
+ * The Apex from its runtime cells: the shared [ApexProjection.LOCKED] below the level cap; an unchanged projection
+ * keeps the previous instance. Strikes and bolts are those of the running activation (0 outside one).
+ */
+private fun MutableGameState.apexProjection(previous: ApexProjection?): ApexProjection {
+    if (!apexUnlocked) return ApexProjection.LOCKED
+    val runtime = skillRuntime
+    val definition = apexDefinition
+    val readyAt = runtime.apex(ApexCell.READY_AT)
+    val refunded = runtime.apex(ApexCell.REFUNDED)
+    val ready = elapsed >= readyAt
+    // The cast's cooldown: what it set, before refunds took seconds off.
+    val cooldown = readyAt + refunded - runtime.apex(ApexCell.LAST_CAST)
+    val active = apexActive()
+    val refundable = definition.cooldownSeconds - definition.minimumCooldownSeconds
+    val projection = ApexProjection(
+        unlocked = true,
+        ready = ready,
+        cooldown01 = if (ready || cooldown <= 0f) 0f else ((readyAt - elapsed) / cooldown).coerceIn(0f, 1f),
+        active01 = if (active) remainingShare(runtime.apex(ApexCell.ACTIVE_UNTIL), definition.durationSeconds) else 0f,
+        strikesLeft = if (active) apexStrikesLeft else 0,
+        boltsLeft = if (active) runtime.apex(ApexCell.BOLTS_LEFT).toInt() else 0,
+        held = runtime.apex(ApexCell.HELD).toInt(),
+        refunded = refunded,
+        dataCharge01 = if (refundable > 0f) (refunded / refundable).coerceIn(0f, 1f) else 0f,
+    )
+    return if (projection == previous) checkNotNull(previous) else projection
 }
 
 private fun MutableGameState.anchorsAttractor(enemyId: Int): Boolean {
@@ -751,7 +780,7 @@ private fun MutableGameState.characterAbilityProjection(
         beatWindow = if (shape == CoreShape.PENTAGON) BEAT_WINDOW else 0f,
         beatStreak = if (shape == CoreShape.PENTAGON) runtime.beatStreak else 0,
         blinkCharges = if (shape == CoreShape.CRESCENT) runtime.blinkCharges else 0,
-        blinkRecharge = if (shape == CoreShape.CRESCENT) runtime.blinkRecharge / BLINK_RECHARGE_SECONDS else 0f,
+        blinkRecharge = if (shape == CoreShape.CRESCENT) runtime.blinkRecharge / blinkRechargeSeconds() else 0f,
         scars = if (shape == CoreShape.CRESCENT) {
             immutableListOfSize(runtime.scarCount) { index -> scarProjection(runtime, index) }
         } else {
@@ -775,12 +804,15 @@ private fun MutableGameState.characterAbilityProjection(
         ghostY = if (ghostActive) ghostY else 0f,
         previousGhostX = if (ghostActive) previousGhostX else 0f,
         previousGhostY = if (ghostActive) previousGhostY else 0f,
+        secondGhostActive = secondGhostActive,
+        secondGhostX = if (secondGhostActive) secondGhostX else 0f,
+        secondGhostY = if (secondGhostActive) secondGhostY else 0f,
     )
 }
 
 private fun MutableGameState.facetProgress(runtime: CharacterRuntime): Float =
     if (coreShape == CoreShape.PRISM && runtime.facets < CharacterRuntime.MAX_FACETS) {
-        (runtime.facetTimer / FACET_REGEN_SECONDS).coerceIn(0f, 1f)
+        (runtime.facetTimer / facetRegrowthSeconds()).coerceIn(0f, 1f)
     } else {
         0f
     }
@@ -821,14 +853,17 @@ private fun CharacterAbilityProjection.matches(state: MutableGameState, runtime:
         !beatWindow.sameBitsAs(if (shape == CoreShape.PENTAGON) BEAT_WINDOW else 0f) ||
         beatStreak != (if (shape == CoreShape.PENTAGON) runtime.beatStreak else 0) ||
         blinkCharges != (if (shape == CoreShape.CRESCENT) runtime.blinkCharges else 0) ||
-        !blinkRecharge.sameBitsAs(if (shape == CoreShape.CRESCENT) runtime.blinkRecharge / BLINK_RECHARGE_SECONDS else 0f) ||
-        ghostActive != state.ghostActive
+        !blinkRecharge.sameBitsAs(if (shape == CoreShape.CRESCENT) runtime.blinkRecharge / state.blinkRechargeSeconds() else 0f) ||
+        ghostActive != state.ghostActive || secondGhostActive != state.secondGhostActive
     ) {
         return false
     }
     if (ghostActive && (!ghostX.sameBitsAs(state.ghostX) || !ghostY.sameBitsAs(state.ghostY) ||
             !previousGhostX.sameBitsAs(state.previousGhostX) || !previousGhostY.sameBitsAs(state.previousGhostY))
     ) {
+        return false
+    }
+    if (secondGhostActive && (!secondGhostX.sameBitsAs(state.secondGhostX) || !secondGhostY.sameBitsAs(state.secondGhostY))) {
         return false
     }
     val latticeCount = if (shape == CoreShape.TESSERACT) runtime.latticeCount else 0

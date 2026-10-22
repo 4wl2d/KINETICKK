@@ -38,10 +38,16 @@ import kotlin.math.sin
 
 /**
  * Casts the buffered slots that can cast now (Z, X, C order), then resolves pending effects: Meteor landings,
- * Void Step rifts, Null Shroud's swallow and release, Arc Hook's kill window and the Spiral ghost's repeats.
- * Runs after the heat update and before the Core moves, so movement skills act in the same step. Allocation-free.
+ * Void Step rifts, Null Shroud's swallow and release, Arc Hook's kill window and the Spiral ghost's repeats; the
+ * Apex follows the slots ([updateApex]). Runs after the heat update and before the Core moves, so movement skills
+ * act in the same step. Allocation-free.
  */
 internal fun MutableGameState.updateSkills(delta: Float) {
+    updateSkillSlots(delta)
+    if (phase == kinetickk.ball.gameplay.nucleus.render.GamePhase.RUNNING) updateApex(delta)
+}
+
+private fun MutableGameState.updateSkillSlots(delta: Float) {
     val loadout = skillLoadout
     if (loadout.ownedCount == 0) {
         skillBufferMask = 0
