@@ -82,10 +82,13 @@ class MobileGameUiTest {
         val gameplayBounds = composeRule.onNodeWithTag(GAMEPLAY_SCREEN_TAG)
             .assertIsDisplayed()
             .visibleBounds()
-        val runningTags = listOf(
+        // Portrait phones keep the performance toggle in the pause menu: their touch row holds the skills.
+        val landscape = gameplayBounds.width > gameplayBounds.height
+        if (!landscape) composeRule.onNodeWithTag(GAMEPLAY_PERFORMANCE_TAG).assertDoesNotExist()
+        val runningTags = listOfNotNull(
             GAMEPLAY_BRAKE_TAG,
             GAMEPLAY_DASH_TAG,
-            GAMEPLAY_PERFORMANCE_TAG,
+            GAMEPLAY_PERFORMANCE_TAG.takeIf { landscape },
             GAMEPLAY_PAUSE_TAG,
         )
         val runningBounds = runningTags.map { tag ->
@@ -137,7 +140,7 @@ class MobileGameUiTest {
                 down(center)
                 up()
             }
-        composeRule.onNodeWithTag(GAMEPLAY_PERFORMANCE_TAG).performClick()
+        if (landscape) composeRule.onNodeWithTag(GAMEPLAY_PERFORMANCE_TAG).performClick()
         composeRule.onNodeWithTag(GAMEPLAY_PAUSE_TAG).performClick()
         composeRule.mainClock.advanceTimeByFrame()
 
