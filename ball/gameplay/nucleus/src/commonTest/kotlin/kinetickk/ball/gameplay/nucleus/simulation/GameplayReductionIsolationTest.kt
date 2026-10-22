@@ -755,6 +755,7 @@ class GameplayReductionIsolationTest {
         repeat(240) { index ->
             val pulse = when {
                 index % 61 == 0 -> GameplayInteractionPulse.DashRequested
+                index % 53 == 0 -> GameplayInteractionPulse.ApexRequested
                 index % 47 == 0 -> GameplayInteractionPulse.BrakeChanged(
                     source = BrakeSource.KEYBOARD,
                     active = (index / 47) % 2 == 0,
@@ -790,6 +791,7 @@ class GameplayReductionIsolationTest {
         retained.forEachIndexed { index, (state, fingerprint) ->
             assertEquals(fingerprint, state.exactSimulationFingerprint(), "retained State $index")
         }
+        assertEquals(2f, production.model.skillRuntime.apex(ApexCell.CAST_COUNT), "the trace casts the Apex")
     }
 
     private fun MutableGameState.populateAdditionalRetainedState() {
@@ -920,6 +922,15 @@ class GameplayReductionIsolationTest {
             this[2, SkillCell.PENDING_AT] = 0.9f
             this[2, SkillCell.RANKED_AT_LEVEL] = 2f
             this[2, SkillCell.CAST_COUNT] = 1f
+            // The Apex is unlocked and ready, so its buffered request casts inside the trace; a refund and held
+            // shots are on record.
+            setApex(ApexCell.UNLOCKED, 1f)
+            setApex(ApexCell.READY_AT, 0f)
+            setApex(ApexCell.LAST_CAST, -60f)
+            setApex(ApexCell.REFUNDED, 1.5f)
+            setApex(ApexCell.HELD, 2f)
+            setApex(ApexCell.HELD_RELEASE_AT, 30f)
+            setApex(ApexCell.CAST_COUNT, 1f)
             setApex(ApexCell.AUX, 0.5f)
             skillDamage = 12.5
             apexBossDamage = 3.0
@@ -1071,7 +1082,7 @@ class GameplayReductionIsolationTest {
             GameplayInteractionPulse.ChoicesRerolled -> rerollChoices()
             GameplayInteractionPulse.UserGestureObserved -> Unit
             is GameplayInteractionPulse.SkillRequested -> requestSkill(pulse.slot)
-            GameplayInteractionPulse.ApexRequested -> Unit
+            GameplayInteractionPulse.ApexRequested -> requestApex()
         }
     }
 

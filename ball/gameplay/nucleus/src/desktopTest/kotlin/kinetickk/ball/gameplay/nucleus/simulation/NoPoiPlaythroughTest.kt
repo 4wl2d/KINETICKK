@@ -147,6 +147,11 @@ private const val POI_CLEARANCE = 360f
 /** The bot looks at its skills this often (simulated seconds). */
 private const val SKILL_CHECK_SECONDS = 0.1f
 
+/** The bot's Apex rule: a crowd of this many enemies within this radius, or integrity below this share. */
+private const val APEX_CROWD = 8
+private const val APEX_CROWD_RADIUS = 400f
+private const val APEX_LOW_INTEGRITY = 0.4f
+
 internal class NoPoiBot(
     private val archetypeTag: BuildTag = BuildTag.RAM,
     private val element: StatusElement? = StatusElement.ENTROPY,
@@ -170,6 +175,14 @@ internal class NoPoiBot(
     private var braking = false
     private var decisions = 0
     private var nextSkillCheckAt = 0f
+
+    /** An independent bot in this bot's current state (a forked run continues with it). */
+    fun copy(): NoPoiBot = NoPoiBot(archetypeTag, element, weaponOrder, relicTaste).also { copy ->
+        copy.cursorAngle = cursorAngle
+        copy.braking = braking
+        copy.decisions = decisions
+        copy.nextSkillCheckAt = nextSkillCheckAt
+    }
 
     fun control(s: MutableGameState) {
         val boss = s.enemies.firstOrNull { it.type == EnemyType.ARCHITECT }
@@ -294,7 +307,8 @@ internal class NoPoiBot(
 
     /**
      * The opportunistic caster of combat-final §4.10: every 0.1 s of simulated time each ready skill is cast when
-     * its situation holds. The bot never moves its pointer to aim; area skills land where it already points.
+     * its situation holds, and a ready Apex when the Architect is in the open, a crowd presses or integrity runs
+     * low. The bot never moves its pointer to aim; area skills land where it already points.
      */
     private fun castSkills(s: MutableGameState) {
         if (s.elapsed < nextSkillCheckAt) return
@@ -304,6 +318,15 @@ internal class NoPoiBot(
             if (s.elapsed < s.skillRuntime[slot, SkillCell.READY_AT]) continue
             if (wantsCast(s, id, s.content.skill(id).rank(s.skillLoadout.rank(slot)).values)) s.requestSkill(slot)
         }
+        if (wantsApex(s)) s.requestApex()
+    }
+
+    private fun wantsApex(s: MutableGameState): Boolean {
+        if (!s.apexReady()) return false
+        val architect = s.enemies.firstOrNull { it.type == EnemyType.ARCHITECT && it.alive }
+        if (architect != null && !s.isShifting(architect)) return true
+        val crowd = s.enemies.count { it.alive && distanceSquared(s.coreX, s.coreY, it.x, it.y) <= APEX_CROWD_RADIUS * APEX_CROWD_RADIUS }
+        return crowd >= APEX_CROWD || s.hp < s.maxHp * APEX_LOW_INTEGRITY
     }
 
     private fun wantsCast(s: MutableGameState, id: SkillId, values: List<Float>): Boolean {
