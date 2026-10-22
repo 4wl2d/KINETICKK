@@ -421,10 +421,13 @@ class SkillSystemTest {
         assertEquals(state.elapsed + values[0], state.skillRuntime[slot, SkillCell.ACTIVE_UNTIL])
         // A held reaction cooldown keeps the infused stacks from reacting away.
         val target = state.dummy().apply { status[StatusCell.REACTION_READY_AT] = 1_000f }
+        val every = values[1].toInt()
+        repeat(every - 1) { state.onSkillWeaponHit(target) }
+        assertEquals(every - 1, target.stacksOf(StatusElement.THERMAL), "the dominant element (Thermal fallback) on every hit")
+        assertEquals(0, target.stacksOf(StatusElement.CRYO), "rank $rank: no secondary before weapon hit $every")
         state.onSkillWeaponHit(target)
-        state.onSkillWeaponHit(target)
-        assertEquals(2, target.stacksOf(StatusElement.THERMAL), "the dominant element (Thermal fallback) on every hit")
-        assertEquals(if (rank == 3) 2 else 1, target.stacksOf(StatusElement.CRYO), "rank $rank secondary cadence")
+        assertEquals(every, target.stacksOf(StatusElement.THERMAL), "the dominant element (Thermal fallback) on every hit")
+        assertEquals(1, target.stacksOf(StatusElement.CRYO), "rank $rank: the secondary on weapon hit $every")
     }
 
     @Test

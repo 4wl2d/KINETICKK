@@ -157,9 +157,9 @@ private fun defaultSkill(id: SkillId): SkillDefinition = when (id) {
         "Raises a line of frost that slows enemies, stops hostile bolts and slams thrown enemies.",
         "Enemies on the line are embrittled while they stay on it.",
         StatusElement.CRYO, BuildTag.BULWARK, BuildTag.ANCHOR, SkillTargeting.AIM, 160f, SkillFamily.ZONE,
-        rank(12f, 320f, 4f, 30f, 1f, 24f),
-        rank(11f, 380f, 5f, 40f, 1f, 24f),
-        rank(10f, 440f, 6f, 50f, 1f, 24f),
+        rank(12f, 320f, 5f, 30f, 1f, 48f),
+        rank(11f, 380f, 5.5f, 40f, 1f, 60f),
+        rank(10f, 440f, 6f, 50f, 1f, 72f),
     )
     SkillId.FROST_SNAP -> skill(
         id, "Frost Snap",
@@ -175,17 +175,17 @@ private fun defaultSkill(id: SkillId): SkillDefinition = when (id) {
         "Grapple the enemy nearest your pointer and fly to it; the impact counts as a Dash hit.",
         "If the target dies within 1.5 s, the hook is ready again 2.5 s after the cast.",
         StatusElement.ION, BuildTag.DRIVE, BuildTag.CHAIN, SkillTargeting.NEAREST, 460f, SkillFamily.MOTION,
-        rank(8f, 460f, 3f, 950f, 2f, 30f, 0.7f),
-        rank(7f, 520f, 4f, 1_050f, 3f, 40f, 0.7f),
-        rank(6f, 580f, 5f, 1_150f, 3f, 50f, 0.7f),
+        rank(7f, 460f, 3f, 1_050f, 2f, 60f, 0.7f),
+        rank(6.5f, 520f, 4f, 1_100f, 3f, 65f, 0.7f),
+        rank(6f, 580f, 5f, 1_150f, 3f, 70f, 0.7f),
     )
     SkillId.STORM_COIL -> skill(
         id, "Storm Coil",
         "Plant a lightning turret at the pointer.",
         "Zaps force Overload on enemies within two Charge of it.",
         StatusElement.ION, BuildTag.ARSENAL, BuildTag.CHAIN, SkillTargeting.AREA, 420f, SkillFamily.ZONE,
-        rank(12f, 170f, 5f, 2f, 22f, 0.5f),
-        rank(11f, 170f, 6f, 3f, 28f, 0.5f),
+        rank(12f, 170f, 4.5f, 2f, 22f, 0.5f),
+        rank(11f, 170f, 5.75f, 3f, 28f, 0.5f),
         rank(10f, 170f, 7f, 3f, 34f, 0.5f),
     )
     SkillId.GRAVITY_WELL -> skill(
@@ -202,9 +202,9 @@ private fun defaultSkill(id: SkillId): SkillDefinition = when (id) {
         "Your Core turns heavy: fast impacts throw enemies and add Mass.",
         "Slams while it runs add 1 Mass to both enemies.",
         StatusElement.GRAVITIC, BuildTag.RAM, BuildTag.BULWARK, SkillTargeting.SELF, 0f, SkillFamily.MOTION,
-        rank(11f, 3f, 1.5f, 0.1f, 700f, 500f),
-        rank(10f, 3.5f, 1.6f, 0.15f, 760f, 500f),
-        rank(9f, 4f, 1.7f, 0.2f, 820f, 500f),
+        rank(11f, 2f, 1.25f, 0.1f, 700f, 500f),
+        rank(10f, 2.25f, 1.35f, 0.15f, 760f, 500f),
+        rank(9f, 2.5f, 1.45f, 0.2f, 820f, 500f),
     )
     SkillId.DECAY_SPORES -> skill(
         id, "Decay Spores",
@@ -212,26 +212,26 @@ private fun defaultSkill(id: SkillId): SkillDefinition = when (id) {
         "Each seeded death refunds 0.5 s to every skill, up to 3 s per cast.",
         StatusElement.ENTROPY, BuildTag.FORTUNE, BuildTag.CHAIN, SkillTargeting.AREA, 520f, SkillFamily.CATALYST,
         rank(11f, 170f, 4f, 6f, 6f),
-        rank(10f, 190f, 5f, 6f, 6f),
-        rank(9f, 210f, 6f, 6f, 6f),
+        rank(9f, 205f, 6f, 6f, 6f),
+        rank(7f, 240f, 7f, 6f, 6f),
     )
     SkillId.ENTROPIC_TIDE -> skill(
         id, "Entropic Tide",
         "Draws in all Decay around you: it bursts as damage and mends the Core.",
         "Healing past full integrity becomes shield.",
         StatusElement.ENTROPY, BuildTag.BULWARK, BuildTag.FORTUNE, SkillTargeting.SELF, 0f, SkillFamily.GUARD,
-        rank(14f, 260f, 1f, 0.4f, 12f),
-        rank(13f, 280f, 1.2f, 0.5f, 16f),
-        rank(12f, 300f, 1.4f, 0.6f, 20f),
+        rank(12f, 300f, 1f, 3f, 8f),
+        rank(11f, 320f, 1.2f, 3.5f, 10f),
+        rank(10f, 340f, 1.4f, 4f, 12f),
     )
     SkillId.SONIC_BOOM -> skill(
         id, "Sonic Boom",
         "A cone of sound blasts enemies away and erases shots; the recoil hops you back.",
         "Thrown enemies ring for 0.8 s; a slam into one forces Shatter.",
         StatusElement.SONIC, BuildTag.RAM, BuildTag.PRECISION, SkillTargeting.AIM, 300f, SkillFamily.STRIKE,
-        rank(8f, 300f, 40f, 3f, 8f, 620f, 420f),
-        rank(7f, 330f, 55f, 3f, 10f, 620f, 420f),
-        rank(6f, 360f, 70f, 4f, 12f, 620f, 420f),
+        rank(8f, 300f, 65f, 3f, 8f, 620f, 420f),
+        rank(7f, 330f, 85f, 3f, 10f, 620f, 420f),
+        rank(6f, 360f, 100f, 4f, 12f, 620f, 420f),
     )
     SkillId.RESONATOR -> skill(
         id, "Resonator",
@@ -247,27 +247,27 @@ private fun defaultSkill(id: SkillId): SkillDefinition = when (id) {
         "Step through the void toward the pointer, untouchable for a moment; a rift detonates where you were.",
         "Enemies along the path turn Brittle and take 1 Hollow.",
         StatusElement.VOID, BuildTag.PRECISION, BuildTag.DRIVE, SkillTargeting.AIM, 240f, SkillFamily.MOTION,
-        rank(10f, 240f, 40f, 3f, 90f, 0.3f, 0.5f),
-        rank(9f, 270f, 50f, 4f, 90f, 0.3f, 0.5f),
-        rank(8f, 300f, 60f, 5f, 90f, 0.3f, 0.5f),
+        rank(7f, 240f, 40f, 3f, 90f, 0.3f, 0.5f),
+        rank(5.75f, 270f, 50f, 4f, 90f, 0.3f, 0.5f),
+        rank(4.5f, 300f, 60f, 5f, 90f, 0.3f, 0.5f),
     )
     SkillId.NULL_SHROUD -> skill(
         id, "Null Shroud",
         "Swallow incoming fire, then spit it back.",
         "Returned shots pierce one enemy.",
         StatusElement.VOID, BuildTag.PRECISION, BuildTag.ARSENAL, SkillTargeting.SELF, 0f, SkillFamily.GUARD,
-        rank(18f, 2.5f, 10f, 14f, 600f),
-        rank(17f, 3f, 14f, 18f, 600f),
-        rank(16f, 3.5f, 18f, 22f, 600f),
+        rank(16f, 2.5f, 10f, 14f, 600f),
+        rank(14.5f, 3.5f, 14f, 18f, 600f),
+        rank(13f, 4.5f, 18f, 22f, 600f),
     )
     SkillId.SLINGSHOT -> skill(
         id, "Slingshot",
         "Swing your momentum onto your aim; counts as a sharp turn.",
         "Impacts during the swing keep your momentum.",
         null, BuildTag.DRIVE, BuildTag.RAM, SkillTargeting.SELF, 0f, SkillFamily.MOTION,
-        rank(8f, 1.35f, 700f, 1_800f, 1.2f, 420f),
-        rank(7f, 1.5f, 700f, 1_800f, 1.2f, 420f),
-        rank(6f, 1.65f, 700f, 1_800f, 1.2f, 420f),
+        rank(8f, 1.2f, 700f, 1_800f, 0.6f, 420f),
+        rank(7f, 1.4f, 700f, 1_800f, 0.75f, 420f),
+        rank(6f, 1.55f, 700f, 1_800f, 0.85f, 420f),
     )
     SkillId.FULL_STOP -> skill(
         id, "Full Stop",
@@ -283,18 +283,18 @@ private fun defaultSkill(id: SkillId): SkillDefinition = when (id) {
         "Every enemy near the pointer carrying two elements reacts at once.",
         "Forces up to ten reactions at 130% strength.",
         null, BuildTag.CHAIN, BuildTag.OVERCLOCK, SkillTargeting.AREA, 420f, SkillFamily.CATALYST,
-        rank(14f, 220f, 6f, 1f, 2f),
-        rank(13f, 250f, 8f, 1.15f, 2f),
-        rank(12f, 280f, 10f, 1.3f, 2f),
+        rank(9f, 220f, 6f, 1f, 2f),
+        rank(8f, 250f, 8f, 1.15f, 2f),
+        rank(7f, 280f, 10f, 1.3f, 2f),
     )
     SkillId.DUAL_INFUSION -> skill(
         id, "Dual Infusion",
         "Your weapon sets up reactions: hits apply your two elements.",
         "Core impacts apply both elements too.",
         null, BuildTag.ARSENAL, BuildTag.FORTUNE, SkillTargeting.SELF, 0f, SkillFamily.CATALYST,
-        rank(15f, 5f, 2f, 8f),
-        rank(14f, 6f, 2f, 8f),
-        rank(13f, 7f, 1f, 8f),
+        rank(15f, 2.5f, 3f, 8f),
+        rank(14f, 2.75f, 2f, 8f),
+        rank(13f, 3f, 2f, 8f),
     )
 }
 
