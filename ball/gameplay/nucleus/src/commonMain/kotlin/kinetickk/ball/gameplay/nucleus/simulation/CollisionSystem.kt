@@ -614,7 +614,7 @@ internal fun MutableGameState.resolvePickupCollection() {
 
 /** Data needed to go from run level [level] to the next: the content table scaled by the run's Rebirth tier. */
 internal fun MutableGameState.dataRequiredForLevel(level: Int): Int =
-    rebirthProfile.dataRequirement(content.tempo.dataRequiredForLevel(level))
+    content.tempo.dataRequiredForLevel(level, rebirthProfile)
 
 internal fun MutableGameState.gainData(rawAmount: Float) {
     if (creditData(rawAmount) <= 0) return

@@ -41,21 +41,43 @@ class RebirthDataRequirementScaleTest {
     }
 
     @Test
-    fun everyShippedTierKeepsAPositiveNonDecreasingTableWithItsScaledTotal() {
-        val table = RunTempoProfile().levelRequirements
+    fun everyTierKeepsTheOpeningLevelsAndScalesTheRestIntoAPositiveNonDecreasingTable() {
+        val tempo = RunTempoProfile()
+        assertEquals(16, tempo.rebirthScaleFromLevel)
         val totals = (ContentBounds.MIN_REBIRTH_LEVEL..ContentBounds.MAX_REBIRTH_LEVEL).map { tier ->
             val profile = defaultRebirthProfile(tier)
-            val scaled = table.map(profile::dataRequirement)
+            val scaled = (1 until tempo.maximumLevel).map { level -> tempo.dataRequiredForLevel(level, profile) }
+            assertEquals(tempo.levelRequirements.take(15), scaled.take(15), "tier $tier keeps levels 1-15")
+            assertEquals(tempo.levelRequirements.drop(15).map(profile::dataRequirement), scaled.drop(15), "tier $tier")
             assertTrue(scaled.all { it > 0 }, "tier $tier positive")
             assertTrue(scaled.zipWithNext().all { (first, second) -> first <= second }, "tier $tier non-decreasing")
-            assertTrue(scaled.zip(table).all { (tiered, base) -> tiered >= base }, "tier $tier never cheaper")
+            assertEquals(scaled.last(), tempo.dataRequiredForLevel(tempo.maximumLevel, profile), "tier $tier at the cap")
             scaled.sum()
         }
         assertEquals(14_428, totals[0])
-        assertEquals(20_490, totals[3])
-        assertEquals(26_547, totals[6])
-        assertEquals(34_625, totals[10])
+        assertEquals(19_912, totals[3])
+        assertEquals(25_393, totals[6])
+        assertEquals(32_702, totals[10])
         assertTrue(totals.zipWithNext().all { (lower, higher) -> lower < higher }, "each tier needs more Data to 42")
+        assertEquals(298, tempo.dataRequiredForLevel(16, defaultRebirthProfile(3)), "210 × 1.42 = 298.2")
+        assertEquals(166, tempo.dataRequiredForLevel(15, defaultRebirthProfile(10)))
+    }
+
+    @Test
+    fun theFirstScaledLevelIsAContentKnobFromTheWholeTableToNone() {
+        val whole = RunTempoProfile(rebirthScaleFromLevel = 1)
+        val none = RunTempoProfile(rebirthScaleFromLevel = 42)
+        fun RunTempoProfile.total(tier: Int): Int =
+            (1 until maximumLevel).sumOf { level -> dataRequiredForLevel(level, defaultRebirthProfile(tier)) }
+
+        assertEquals(listOf(14_428, 20_490, 26_547, 34_625), listOf(0, 3, 6, 10).map(whole::total))
+        assertEquals(listOf(14_428, 14_428), listOf(0, 10).map(none::total))
+        assertEquals(43, whole.dataRequiredForLevel(1, defaultRebirthProfile(10)), "18 × 2.4 = 43.2")
+        assertEquals(43, whole.dataRequiredForLevel(Int.MIN_VALUE, defaultRebirthProfile(10)), "clamped like the table")
+
+        RunTempoProfile(rebirthScaleFromLevel = ContentBounds.MAX_RUN_LEVEL)
+        assertFailsWith<IllegalArgumentException> { RunTempoProfile(rebirthScaleFromLevel = 0) }
+        assertFailsWith<IllegalArgumentException> { RunTempoProfile(rebirthScaleFromLevel = ContentBounds.MAX_RUN_LEVEL + 1) }
     }
 
     @Test

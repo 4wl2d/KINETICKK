@@ -56,7 +56,10 @@ data class RebirthProfile(
     val packSizeBonus: Int = 0,
     /** Scales the mean number of world obstacles per chunk. */
     val obstacleDensityMultiplier: Float = 1f,
-    /** Scales every run level's Data requirement at this tier (rounded per level, [dataRequirement]); 1 keeps the base curve. */
+    /**
+     * Scales run-level Data requirements at this tier from [RunTempoProfile.rebirthScaleFromLevel] on (rounded per
+     * level, [dataRequirement]); 1 keeps the base curve.
+     */
     val dataRequirementScale: Float = 1f,
 ) {
     init {
@@ -128,7 +131,7 @@ val RebirthTierNames: List<String> = listOf(
  * incoming damage `1 + 0.14t + 0.008t²`, enemy speed `1 + 0.035t`, spawn rate `1 + 0.09t`, enemy cap
  * `1 + 0.10t`, Elite rate `1 + 0.07t`, threat `12t` s ahead, Matter `1 + 0.2t`, player power
  * `1 + 0.03t`, `t / 4` bonus rerolls, `5 + t` opening enemies, obstacle density `1 + 0.05t` and run-level Data
- * requirements `1 + 0.14t` ([REBIRTH_DATA_REQUIREMENT_SCALE_PER_TIER]). Tier
+ * requirements `1 + 0.14t` from [RunTempoProfile.rebirthScaleFromLevel] ([REBIRTH_DATA_REQUIREMENT_SCALE_PER_TIER]). Tier
  * n also activates the first n [RebirthMutator]s and carries its short name ([RebirthTierNames]). Lives in the
  * API (like the Matrix and enemy rosters) so fixtures can mirror the catalog exactly.
  */

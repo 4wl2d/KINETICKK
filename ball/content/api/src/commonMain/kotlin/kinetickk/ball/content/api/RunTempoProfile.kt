@@ -63,6 +63,12 @@ data class RunTempoProfile(
     val skillRankEveryLevels: Int = 4,
     /** Levels a skill must be owned or ranked for before it is eligible for the next rank-up card. */
     val skillRankGapLevels: Int = 2,
+    /**
+     * First run level whose requirement the Rebirth tier's [RebirthProfile.dataRequirementScale] scales. Earlier
+     * levels keep the table at every tier, so a high tier's opening level-ups arrive as on tier 0; 1 scales the whole
+     * table and a value at or above [maximumLevel] scales nothing.
+     */
+    val rebirthScaleFromLevel: Int = LEGACY_LEVELS + 1,
 ) {
     init {
         require(bossAtSeconds.isFinite() && bossAtSeconds > 0f)
@@ -92,6 +98,9 @@ data class RunTempoProfile(
         }
         require(skillRankEveryLevels in 1 until maximumLevel)
         require(skillRankGapLevels in 0 until maximumLevel)
+        require(rebirthScaleFromLevel in 1..ContentBounds.MAX_RUN_LEVEL) {
+            "The Rebirth Data scale must start on a run level within 1..${ContentBounds.MAX_RUN_LEVEL}"
+        }
     }
 
     fun progress(elapsedSeconds: Float): Float = (elapsedSeconds / bossAtSeconds).coerceIn(0f, 1f)
@@ -125,6 +134,17 @@ data class RunTempoProfile(
     fun denseAttacks(elapsedSeconds: Float): Boolean = progress(elapsedSeconds) >= 0.58f
     /** Total: at and past the cap it returns the last entry, which the capped state only displays. */
     fun dataRequiredForLevel(level: Int): Int = levelRequirements[level.coerceIn(1, maximumLevel - 1) - 1]
+
+    /**
+     * [dataRequiredForLevel] at the Rebirth tier [rebirth]: scaled by its [RebirthProfile.dataRequirement] from
+     * [rebirthScaleFromLevel] on. Total like [dataRequiredForLevel]; the level is clamped before the comparison, so
+     * the capped level displays the last scaled entry.
+     */
+    fun dataRequiredForLevel(level: Int, rebirth: RebirthProfile): Int {
+        val tableLevel = level.coerceIn(1, maximumLevel - 1)
+        val base = levelRequirements[tableLevel - 1]
+        return if (tableLevel < rebirthScaleFromLevel) base else rebirth.dataRequirement(base)
+    }
     fun grantsWeaponAmplification(level: Int): Boolean = level > 1 && level % weaponAmplificationEveryLevels == 0
 
     companion object {

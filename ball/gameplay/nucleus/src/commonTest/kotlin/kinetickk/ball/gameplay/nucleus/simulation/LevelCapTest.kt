@@ -113,22 +113,25 @@ class LevelCapTest {
     }
 
     @Test
-    fun theRebirthTierScalesEveryRequirementOfTheRun() {
+    fun theRebirthTierScalesTheRunsRequirementsFromLevelSixteen() {
         val tierZero = buildTestState()
         val tierThree = buildTestState(rebirth = 3)
         val tierTen = buildTestState(rebirth = 10)
-        assertEquals(18, tierZero.nextLevelData)
-        assertEquals(26, tierThree.nextLevelData, "18 × 1.42 = 25.56")
-        assertEquals(43, tierTen.nextLevelData, "18 × 2.4 = 43.2")
+        // The opening levels arrive as on tier 0 at every tier.
+        assertEquals(listOf(18, 18, 18), listOf(tierZero, tierThree, tierTen).map { it.nextLevelData })
+        assertEquals(18, MutableGameState(canonicalGameplayContent, initialRebirthLevel = 10).nextLevelData)
+        assertEquals(166, tierTen.dataRequiredForLevel(15))
+        assertEquals(298, tierThree.dataRequiredForLevel(16), "210 × 1.42 = 298.2")
+        assertEquals(504, tierTen.dataRequiredForLevel(16), "210 × 2.4 = 504")
         assertEquals(1_017, tierThree.dataRequiredForLevel(41))
-        assertEquals(26, MutableGameState(canonicalGameplayContent, initialRebirthLevel = 3).nextLevelData)
 
-        // One Data short of the scaled total stops a level below the cap with the last requirement less one.
-        for ((tier, total) in listOf(0 to 14_428, 3 to 20_490, 10 to 34_625)) {
+        // One Data short of the tier's total stops a level below the cap with the last requirement less one.
+        for ((tier, total) in listOf(0 to 14_428, 3 to 19_912, 10 to 32_702)) {
             val short = buildTestState(rebirth = tier)
             short.gainData(total - 1f)
             assertEquals(41, short.level, "tier $tier")
             assertEquals(short.dataRequiredForLevel(41) - 1, short.data, "tier $tier")
+            assertEquals(short.dataRequiredForLevel(41), short.nextLevelData, "tier $tier")
 
             val exact = buildTestState(rebirth = tier)
             exact.gainData(total.toFloat())

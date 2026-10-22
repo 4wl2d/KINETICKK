@@ -462,7 +462,7 @@ internal class MutableGameState(
     var data: Int = reductionSource?.data ?: 0
         internal set
     var nextLevelData: Int = reductionSource?.nextLevelData
-        ?: activeRebirthProfile.dataRequirement(content.tempo.dataRequiredForLevel(1))
+        ?: content.tempo.dataRequiredForLevel(1, activeRebirthProfile)
         internal set
     var keys: Int = reductionSource?.keys ?: 0
         internal set
