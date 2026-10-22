@@ -195,6 +195,35 @@ class ProfileUpgradeTest {
         }
     }
 
+    @Test
+    fun homeReportsBoughtLevelsAndWhetherTheWorkshopSellsAnythingAtItsCheapestPrice() {
+        fun home(state: ProfileState) = ProfileNucleus.query(state, ProfileQuery.GetHomeProgress)
+
+        // A fresh profile: the cheapest offer is the Morningstar unlock at 25.
+        assertEquals(false, home(state(matter = 24L)).workshopAffordable)
+        assertEquals(true, home(state(matter = 25L)).workshopAffordable)
+        assertEquals(0, home(state(matter = 25L)).upgradeLevels)
+
+        // With the Morningstar owned, Honing at 35 is the cheapest offer.
+        val armed = setOf(WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR)
+        assertEquals(false, home(state(matter = 34L, unlocked = armed)).workshopAffordable)
+        assertEquals(true, home(state(matter = 35L, unlocked = armed)).workshopAffordable)
+
+        // Both owned weapons honed to the maximum: Orb's Refit at 50.
+        val honed = mapOf(WeaponId.FLUX_WAKE to 10, WeaponId.MORNINGSTAR to 10)
+        assertEquals(false, home(state(matter = 49L, unlocked = armed, weapons = honed)).workshopAffordable)
+        assertEquals(true, home(state(matter = 50L, unlocked = armed, weapons = honed)).workshopAffordable)
+
+        // Every weapon up to 100 owned and honed, Orb at Refit 10: only the Magnet Array rank at 100 is left.
+        val cheapWeapons = setOf(WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR, WeaponId.PHASE_LATTICE, WeaponId.NULL_LANCE)
+        val maxed = cheapWeapons.associateWith { 10 }
+        val orb = mapOf(CoreShape.ORB to 10)
+        assertEquals(false, home(state(matter = 99L, unlocked = cheapWeapons, weapons = maxed, characters = orb)).workshopAffordable)
+        val matrixOnly = state(matter = 100L, unlocked = cheapWeapons, weapons = maxed, characters = orb)
+        assertEquals(true, home(matrixOnly).workshopAffordable)
+        assertEquals(10 + 4 * 10, home(matrixOnly).upgradeLevels)
+    }
+
     private fun upgrades(
         characters: Map<CoreShape, Int> = emptyMap(),
         weapons: Map<WeaponId, Int> = emptyMap(),

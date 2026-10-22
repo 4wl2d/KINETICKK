@@ -4,13 +4,16 @@
 package kinetickk.ball.profile.nucleus
 
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.MatrixNodeDefinition
 import kinetickk.ball.content.api.ProfilePolicySnapshot
 import kinetickk.ball.content.api.UpgradePolicy
+import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.PermanentUpgrades
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.ProfileRejection
+import kinetickk.ball.profile.api.rank
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.mapIndexedToImmutableList
 
@@ -18,6 +21,35 @@ import kinetickk.foundation.collections.mapIndexedToImmutableList
 internal sealed interface PurchaseQuote {
     data class Priced(val cost: Long) : PurchaseQuote
     data class Refused(val reason: ProfileRejection) : PurchaseQuote
+}
+
+/**
+ * The next rank of a Core Matrix node, checked in order: a rank below the maximum, the Rebirth rank at
+ * the node's gate, any one prerequisite owned, then the next price in Matter.
+ */
+internal fun matrixNodeQuote(profile: PlayerProfile, definition: MatrixNodeDefinition): PurchaseQuote {
+    val matrix = profile.matrix
+    val currentRank = matrix.rank(definition.id)
+    if (currentRank >= definition.maxRanks) return PurchaseQuote.Refused(ProfileRejection.MatrixNodeMaxRank)
+    if (profile.rebirthProgress.rank < definition.minimumRebirth) {
+        return PurchaseQuote.Refused(ProfileRejection.MatrixRebirthLocked)
+    }
+    if (definition.prerequisites.isNotEmpty() && definition.prerequisites.none(matrix::owns)) {
+        return PurchaseQuote.Refused(ProfileRejection.MatrixPrerequisiteMissing)
+    }
+    val cost = definition.cost(currentRank).toLong()
+    if (profile.economy.matter < cost) return PurchaseQuote.Refused(ProfileRejection.InsufficientMatter)
+    return PurchaseQuote.Priced(cost)
+}
+
+/** Unlocking a weapon the profile does not own: the Rebirth rank at its gate, then its price in Matter. */
+internal fun weaponUnlockQuote(profile: PlayerProfile, definition: WeaponDefinition): PurchaseQuote {
+    if (profile.rebirthProgress.rank < definition.minimumRebirth) {
+        return PurchaseQuote.Refused(ProfileRejection.WeaponRebirthLocked)
+    }
+    val cost = definition.permanentUnlockCost.toLong()
+    if (profile.economy.matter < cost) return PurchaseQuote.Refused(ProfileRejection.InsufficientMatter)
+    return PurchaseQuote.Priced(cost)
 }
 
 /**
@@ -58,6 +90,19 @@ private fun upgradeQuote(economy: PlayerEconomy, policy: UpgradePolicy, base: In
     if (economy.matter < cost) return PurchaseQuote.Refused(ProfileRejection.InsufficientMatter)
     return PurchaseQuote.Priced(cost)
 }
+
+/**
+ * True when the Workshop would sell something now: a weapon unlock, a Core Matrix rank, a Refit or a
+ * Honing level. Evaluates the same quotes the purchase decisions use.
+ */
+internal fun isWorkshopAffordable(profile: PlayerProfile, policy: ProfilePolicySnapshot): Boolean =
+    policy.weapons.any { it.id !in profile.loadout.unlockedWeapons && weaponUnlockQuote(profile, it) is PurchaseQuote.Priced } ||
+        policy.matrixNodes.any { matrixNodeQuote(profile, it) is PurchaseQuote.Priced } ||
+        policy.coreShapes.any { characterUpgradeQuote(profile, policy, it.id) is PurchaseQuote.Priced } ||
+        policy.weapons.any { weaponUpgradeQuote(profile, policy, it.id) is PurchaseQuote.Priced }
+
+/** Every bought Refit and Honing level. */
+internal val PermanentUpgrades.totalLevels: Int get() = characterLevels.sum() + weaponLevels.sum()
 
 /** [levels] with the entry at [index] one level higher. */
 internal fun ImmutableList<Int>.raisedAt(index: Int): ImmutableList<Int> =

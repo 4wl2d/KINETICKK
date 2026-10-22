@@ -117,6 +117,8 @@ object ProfileNucleus {
             characterAchievements = state.profile.characterAchievements,
             unlockedCoreShapes = unlockedCoreShapes(state.profile, state.policy),
             characterProgress = hangarShapeProgress(state.profile, state.policy),
+            workshopAffordable = isWorkshopAffordable(state.profile, state.policy),
+            upgradeLevels = state.profile.upgrades.totalLevels,
         )
 
     fun query(state: ProfileState, query: ProfileQuery.GetMatrixProgress): MatrixProgressProjection =
@@ -288,34 +290,22 @@ object ProfileNucleus {
     }
 
     /**
-     * Buys the next rank of [id]. Checked in order: a rank below the maximum, the Rebirth rank at the
-     * node's gate, any one prerequisite owned, then the next price in Matter. Gates apply only here,
-     * never on load.
+     * Buys the next rank of [id] (see [matrixNodeQuote] for the order of checks). Gates apply only
+     * here, never on load.
      */
     private fun purchaseMatrixNode(
         state: ProfileState,
         id: MatrixNodeId,
     ): ProfileDecision {
-        val definition = state.policy.matrixNode(id)
-        val matrix = state.profile.matrix
-        val currentRank = matrix.rank(id)
-        if (currentRank >= definition.maxRanks) return rejected(ProfileRejection.MatrixNodeMaxRank)
-        if (state.profile.rebirthProgress.rank < definition.minimumRebirth) {
-            return rejected(ProfileRejection.MatrixRebirthLocked)
+        val cost = when (val quote = matrixNodeQuote(state.profile, state.policy.matrixNode(id))) {
+            is PurchaseQuote.Refused -> return rejected(quote.reason)
+            is PurchaseQuote.Priced -> quote.cost
         }
-        if (definition.prerequisites.isNotEmpty() && definition.prerequisites.none(matrix::owns)) {
-            return rejected(ProfileRejection.MatrixPrerequisiteMissing)
-        }
-        val cost = definition.cost(currentRank).toLong()
-        if (state.profile.economy.matter < cost) return rejected(ProfileRejection.InsufficientMatter)
-
-        val ranks = matrix.ranks.toMutableList()
-        ranks[id.ordinal] = currentRank + 1
         return acceptedMutation(
             state = state,
             nextProfile = state.profile.copy(
                 economy = state.profile.economy.copy(matter = state.profile.economy.matter - cost),
-                matrix = MatrixProgress(ranks),
+                matrix = MatrixProgress(state.profile.matrix.ranks.raisedAt(id.ordinal)),
             ),
         )
     }
@@ -370,12 +360,10 @@ object ProfileNucleus {
         val unlocked = state.profile.loadout.unlockedWeapons.toMutableSet()
         var economy = state.profile.economy
         if (id !in unlocked) {
-            val definition = state.policy.weapon(id)
-            if (state.profile.rebirthProgress.rank < definition.minimumRebirth) {
-                return rejected(ProfileRejection.WeaponRebirthLocked)
+            val cost = when (val quote = weaponUnlockQuote(state.profile, state.policy.weapon(id))) {
+                is PurchaseQuote.Refused -> return rejected(quote.reason)
+                is PurchaseQuote.Priced -> quote.cost
             }
-            val cost = definition.permanentUnlockCost.toLong()
-            if (economy.matter < cost) return rejected(ProfileRejection.InsufficientMatter)
             economy = economy.copy(matter = economy.matter - cost)
             unlocked += id
         } else if (id == state.profile.loadout.selectedWeapon) {

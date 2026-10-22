@@ -91,6 +91,13 @@ data class HomeProgressProjection(
     val unlockedCoreShapes: ImmutableSet<CoreShape> = immutableSetOf(CoreShape.ORB),
     /** Every character's unlock progress in stable order (the Hangar query's [HangarProjection.shapes]). */
     val characterProgress: ImmutableList<HangarShapeProgress> = immutableListOf(),
+    /**
+     * True when the Profile would accept a Workshop purchase now: a weapon unlock, a Core Matrix rank, a
+     * Refit or a Honing level (the same checks its purchase decisions run).
+     */
+    val workshopAffordable: Boolean = false,
+    /** Refit and Honing levels bought across every character and weapon. */
+    val upgradeLevels: Int = 0,
 ) : ProfileProjection
 
 data class MatrixProgressProjection(
