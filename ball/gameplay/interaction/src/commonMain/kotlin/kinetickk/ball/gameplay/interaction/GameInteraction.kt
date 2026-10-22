@@ -59,6 +59,7 @@ import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -294,6 +295,23 @@ fun GameplayContent(
                 performanceSnapshotValue = performanceTelemetry.snapshot()
             }
         }
+    }
+
+    // Show FPS (stored) opens the performance panel with each run and follows the setting when it
+    // reaches the run; F3 and the PERFORMANCE control still toggle the panel for the session.
+    val showFps by remember(component) { derivedStateOf { renderModelValue.settings.showFps } }
+    LaunchedEffect(component, showFps) {
+        if (performanceEnabledValue != showFps) togglePerformanceTelemetry()
+    }
+
+    // Pause when unfocused: the window losing focus pauses a running run (an edge, never a level).
+    val windowFocused = LocalWindowInfo.current.isWindowFocused
+    val windowFocus = remember(component) { GameplayWindowFocus() }
+    LaunchedEffect(component, windowFocused) {
+        val model = renderModelValue
+        val pause = pausesOnFocusLoss(windowFocus.focused, windowFocused, model.phase, model.settings.pauseOnFocusLoss, inputEnabled)
+        windowFocus.focused = windowFocused
+        if (pause) dispatch(GameplayInteractionPulse.PauseToggled)
     }
 
     // The Nucleus receives the viewport in dp, so a density change at an unchanged pixel size (a
