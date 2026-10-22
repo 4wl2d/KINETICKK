@@ -1119,14 +1119,12 @@ class ProfileCodecTest {
             assertEquals(PermanentUpgrades(), previous.profile.upgrades)
             assertEquals(existing, requireEncoded(previous))
         }
-        // One track alone writes only its own list.
+        // One track alone writes only its own digits.
         val weaponsOnly = snapshot.copy(profile = snapshot.profile.copy(upgrades = upgrades.copy(
             characterLevels = PermanentUpgrades().characterLevels,
         )))
         val encoded = requireEncoded(weaponsOnly)
-        assertTrue(encoded.endsWith(
-            "\"upgrades\":{\"weapons\":[{\"id\":\"ARC_COIL\",\"level\":2},{\"id\":\"FLUX_WAKE\",\"level\":10}]}}}",
-        ), encoded)
+        assertTrue(encoded.endsWith("\"upgrades\":{\"w\":\"a0000002\"}}}"), encoded)
         assertEquals(weaponsOnly, decoded(encoded))
         // Nothing bought: the object is absent again.
         assertEquals(
@@ -1136,36 +1134,76 @@ class ProfileCodecTest {
     }
 
     @Test
-    fun upgradeRecordsRejectUnsortedDuplicateUnknownAndExplicitEmptyForms() {
-        val characters = "\"characters\":[{\"id\":\"ORB\",\"level\":3},{\"id\":\"PENTAGON\",\"level\":1}]"
-        val weapons = "\"weapons\":[{\"id\":\"ARC_COIL\",\"level\":2},{\"id\":\"FLUX_WAKE\",\"level\":10}]"
+    fun upgradeDigitsKeepTheirFrozenSlotPositions() {
+        // Positions are persisted: each character and weapon owns one digit, in this order, forever.
+        val characterSlots = listOf(
+            "ORB", "PRISM", "SHARD", "RING", "DIAMOND", "TESSERACT", "STAR", "SPIRAL", "DIPOLE", "PENTAGON",
+            "CRESCENT", "HEXAGON",
+        )
+        val weaponSlots = listOf(
+            "FLUX_WAKE", "MORNINGSTAR", "PHASE_LATTICE", "NULL_LANCE", "GRAVITY_MINES", "ION_SWARM", "RIFT_BLADES",
+            "ARC_COIL", "QUASAR_CANNON", "ENTROPY_FIELD", "SINGULARITY_SPEAR", "PRISM_RELAY", "GYRE_DISC",
+            "SCATTER_BLOOM", "TETHER_ARC", "SENTRY_GRID", "HUNTER_SALVO", "CONCUSSION_ENGINE", "GLACIER_BELL",
+            "EVENT_LENS", "SOLAR_SWEEP", "AEGIS_SHARDS", "HOLLOW_RIFT", "RESONANCE_DRUM",
+        )
+        assertEquals(CoreShape.entries.map(CoreShape::name).toSet(), characterSlots.toSet())
+        assertEquals(WeaponId.entries.map(WeaponId::name).toSet(), weaponSlots.toSet())
+        characterSlots.forEachIndexed { slot, name ->
+            val shape = CoreShape.valueOf(name)
+            val snapshot = testSnapshot(PlayerProfile(upgrades = PermanentUpgrades(
+                characterLevels = CoreShape.entries.map { if (it == shape) 7 else 0 },
+                weaponLevels = List(WeaponId.entries.size) { 0 },
+            )))
+            val encoded = requireEncoded(snapshot)
+            assertTrue(encoded.endsWith("\"upgrades\":{\"c\":\"${"0".repeat(slot)}7\"}}}"), encoded)
+            assertEquals(snapshot, decoded(encoded))
+        }
+        weaponSlots.forEachIndexed { slot, name ->
+            val id = WeaponId.valueOf(name)
+            val snapshot = testSnapshot(PlayerProfile(upgrades = PermanentUpgrades(
+                characterLevels = List(CoreShape.entries.size) { 0 },
+                weaponLevels = WeaponId.entries.map { if (it == id) 4 else 0 },
+            )))
+            val encoded = requireEncoded(snapshot)
+            assertTrue(encoded.endsWith("\"upgrades\":{\"w\":\"${"0".repeat(slot)}4\"}}}"), encoded)
+            assertEquals(snapshot, decoded(encoded))
+        }
+    }
+
+    @Test
+    fun upgradeDigitsRejectForeignDigitsTrailingZerosExtraSlotsAndExplicitEmptyForms() {
+        val characters = "\"c\":\"3000000001\""
+        val weapons = "\"w\":\"a0000002\""
         assertTrue(UPGRADES_GOLDEN.contains("\"upgrades\":{$characters,$weapons}"))
         listOf(
-            Triple(characters, "\"characters\":[{\"id\":\"PENTAGON\",\"level\":1},{\"id\":\"ORB\",\"level\":3}]",
-                ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE),
-            Triple(characters, "\"characters\":[{\"id\":\"ORB\",\"level\":3},{\"id\":\"ORB\",\"level\":1}]",
-                ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE),
-            Triple(weapons, "\"weapons\":[{\"id\":\"FLUX_WAKE\",\"level\":10},{\"id\":\"ARC_COIL\",\"level\":2}]",
-                ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE),
-            Triple(characters, "\"characters\":[{\"id\":\"NONAGON\",\"level\":3},{\"id\":\"PENTAGON\",\"level\":1}]",
-                ProfileSnapshotRejection.INVALID_STABLE_ID),
-            Triple(weapons, "\"weapons\":[{\"id\":\"ARC_COIL\",\"level\":2},{\"id\":\"FLUX_WAKES\",\"level\":10}]",
-                ProfileSnapshotRejection.INVALID_STABLE_ID),
-            // A character id is not a weapon id.
-            Triple(weapons, "\"weapons\":[{\"id\":\"ARC_COIL\",\"level\":2},{\"id\":\"ORB\",\"level\":10}]",
-                ProfileSnapshotRejection.INVALID_STABLE_ID),
-            Triple(characters, "\"characters\":[]", ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD),
-            Triple(weapons, "\"weapons\":[]", ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD),
+            // A trailing zero level is never written.
+            Triple(characters, "\"c\":\"30000000010\"", ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD),
+            Triple(weapons, "\"w\":\"a00000020\"", ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD),
+            // Only lowercase base-36 digits are levels.
+            Triple(characters, "\"c\":\"300000000A\"", ProfileSnapshotRejection.INVALID_DECIMAL),
+            Triple(characters, "\"c\":\"3-00000001\"", ProfileSnapshotRejection.INVALID_DECIMAL),
+            Triple(weapons, "\"w\":\" a0000002\"", ProfileSnapshotRejection.INVALID_DECIMAL),
+            // One digit per slot: 12 characters and 24 weapons.
+            Triple(characters, "\"c\":\"${"1".repeat(CoreShape.entries.size + 1)}\"", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple(weapons, "\"w\":\"${"1".repeat(WeaponId.entries.size + 1)}\"", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple(characters, "\"c\":\"\"", ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD),
+            Triple(weapons, "\"w\":\"\"", ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD),
             Triple("{$characters,$weapons}", "{$weapons,$characters}", ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD),
             Triple("{$characters,$weapons}", "{}", ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD),
             Triple("{$characters,$weapons}", "null", ProfileSnapshotRejection.MALFORMED_JSON),
-            // A quoted level decodes but is not the canonical number.
-            Triple("\"level\":3}", "\"level\":\"3\"}", ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD),
-            Triple("\"level\":3}", "\"level\":true}", ProfileSnapshotRejection.MALFORMED_JSON),
+            Triple(characters, "\"c\":3000000001", ProfileSnapshotRejection.MALFORMED_JSON),
+            Triple(characters, "\"c\":null", ProfileSnapshotRejection.MALFORMED_JSON),
+            Triple(characters, "\"characters\":\"3000000001\"", ProfileSnapshotRejection.MALFORMED_JSON),
         ).forEach { (canonical, invalid, expected) ->
             assertTrue(UPGRADES_GOLDEN.contains(canonical), canonical)
             assertEquals(expected, decodeRejection(UPGRADES_GOLDEN.replace(canonical, invalid)), invalid)
         }
+        // Every slot filled is the longest form.
+        assertEquals(
+            CoreShape.entries.size,
+            decoded(UPGRADES_GOLDEN.replace(characters, "\"c\":\"${"1".repeat(CoreShape.entries.size)}\""))
+                .profile.upgrades.characterLevels.count { it == 1 },
+        )
         // Upgrades postdate the retired Lab: a Lab-era save never carries them.
         val labWithUpgrades = LAB_DEFAULT_GOLDEN.removeSuffix("}}") + ",\"upgrades\":{$characters}}}"
         assertEquals(ProfileSnapshotRejection.INCONSISTENT_PROFILE, decodeRejection(labWithUpgrades))
@@ -1185,26 +1223,28 @@ class ProfileCodecTest {
         assertEncodeRejection(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE, leveled(character = -1))
         assertEncodeRejection(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE, leveled(weapon = -1))
 
-        val hexagon = "{\"id\":\"HEXAGON\",\"level\":${ContentBounds.MAX_UPGRADE_LEVEL}}"
-        val drum = "{\"id\":\"RESONANCE_DRUM\",\"level\":${ContentBounds.MAX_UPGRADE_LEVEL}}"
+        // Level 10 is the base-36 digit "a"; "b" (11) and every later digit are above the maximum.
+        val hexagon = "\"c\":\"${"0".repeat(CoreShape.entries.size - 1)}a\""
+        val drum = "\"w\":\"${"0".repeat(WeaponId.entries.size - 1)}a\""
         assertTrue(encoded.contains(hexagon) && encoded.contains(drum), encoded)
-        for (invalid in listOf(ContentBounds.MAX_UPGRADE_LEVEL + 1, 0, -1)) {
+        for (invalid in listOf('b', 'z')) {
             assertEquals(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
-                decodeRejection(encoded.replace(hexagon, "{\"id\":\"HEXAGON\",\"level\":$invalid}")), "$invalid")
+                decodeRejection(encoded.replace(hexagon, hexagon.replace('a', invalid))), "$invalid")
             assertEquals(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
-                decodeRejection(encoded.replace(drum, "{\"id\":\"RESONANCE_DRUM\",\"level\":$invalid}")), "$invalid")
+                decodeRejection(encoded.replace(drum, drum.replace('a', invalid))), "$invalid")
         }
 
-        // Every track at the maximum round-trips in wire-id order; lists sized off the closed catalogs are refused.
+        // Every track at the maximum round-trips as one digit per slot; lists sized off the closed catalogs are refused.
         val maximum = testSnapshot(PlayerProfile(upgrades = PermanentUpgrades(
             characterLevels = List(CoreShape.entries.size) { ContentBounds.MAX_UPGRADE_LEVEL },
             weaponLevels = List(WeaponId.entries.size) { ContentBounds.MAX_UPGRADE_LEVEL },
         )))
         val maximumPayload = requireEncoded(maximum)
         assertEquals(maximum, decoded(maximumPayload))
-        assertEquals(
-            CoreShape.entries.map(CoreShape::name).sorted() + WeaponId.entries.map(WeaponId::name).sorted(),
-            LEVEL_ID.findAll(maximumPayload).map { it.groupValues[1] }.toList(),
+        assertTrue(
+            maximumPayload.endsWith("\"upgrades\":{\"c\":\"${"a".repeat(CoreShape.entries.size)}\"," +
+                "\"w\":\"${"a".repeat(WeaponId.entries.size)}\"}}}"),
+            maximumPayload,
         )
         assertEncodeRejection(ProfileSnapshotRejection.INCONSISTENT_PROFILE, testSnapshot(PlayerProfile(upgrades = PermanentUpgrades(
             characterLevels = List(CoreShape.entries.size + 1) { 0 },
@@ -1277,8 +1317,6 @@ private fun PlayerPreferences.displayAndControls(): List<Any> = listOf(
 
 private val ACTION_ID = Regex("\\{\\\"action\\\":\\\"([^\\\"]+)\\\",\\\"key\\\":")
 
-private val LEVEL_ID = Regex("\\{\\\"id\\\":\\\"([^\\\"]+)\\\",\\\"level\\\":")
-
 private val RANK_ID = Regex("\\{\\\"id\\\":\\\"([^\\\"]+)\\\",\\\"rank\\\":")
 
 /** A fresh profile: the retired Lab is never written and an empty Matrix and zero counters are omitted. */
@@ -1297,8 +1335,8 @@ private const val DEFAULT_GOLDEN: String =
         "\"architectVictories\":\"0\",\"victoriousCharacterIds\":[]}}}"
 
 /**
- * A current save with Refit (Orb 3, Pentagon 1) and Honing (Arc Coil 2, Flux Wake at the maximum):
- * non-zero levels only, each list sorted by wire id, the object last.
+ * A current save with Refit (Orb 3, Pentagon 1) and Honing (Arc Coil 2, Flux Wake at the maximum 10 = "a"):
+ * one base-36 digit per slot without trailing zeros, the object last.
  */
 private const val UPGRADES_GOLDEN: String =
     "{\"revision\":\"77\",\"profile\":{" +
@@ -1313,8 +1351,7 @@ private const val UPGRADES_GOLDEN: String =
         "\"rebirthProgress\":{\"level\":3,\"highestCleared\":2}," +
         "\"characterAchievements\":{\"eliteKills\":\"0\",\"dashHits\":\"0\",\"completedOrbits\":\"0\"," +
         "\"architectVictories\":\"0\",\"victoriousCharacterIds\":[]}," +
-        "\"upgrades\":{\"characters\":[{\"id\":\"ORB\",\"level\":3},{\"id\":\"PENTAGON\",\"level\":1}]," +
-        "\"weapons\":[{\"id\":\"ARC_COIL\",\"level\":2},{\"id\":\"FLUX_WAKE\",\"level\":10}]}}}"
+        "\"upgrades\":{\"c\":\"3000000001\",\"w\":\"a0000002\"}}}"
 
 /** Byte-exact default save of the current catalog written before the Core Matrix (it carries the Lab). */
 private const val LAB_DEFAULT_GOLDEN: String =

@@ -261,18 +261,18 @@ private data class MatrixNodeRankDto(
     val rank: Int,
 )
 
-/** Non-zero levels only, each list strictly sorted by wire id and absent while empty. */
+/**
+ * Bought levels as positional base-36 digits, one per track: [c] holds the Refit levels in
+ * [CHARACTER_UPGRADE_SLOTS] order and [w] the Honing levels in [WEAPON_UPGRADE_SLOTS] order. Trailing
+ * zero levels are dropped, so a track with nothing bought is absent and appending a character or a
+ * weapon keeps every older save canonical. Positional digits keep the worst case (36 tracks at the
+ * maximum) within the desktop Preferences value budget, which `{id, level}` records would exceed.
+ */
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
 private data class PermanentUpgradesDto(
-    @EncodeDefault(EncodeDefault.Mode.NEVER) val characters: List<UpgradeLevelDto> = emptyList(),
-    @EncodeDefault(EncodeDefault.Mode.NEVER) val weapons: List<UpgradeLevelDto> = emptyList(),
-)
-
-@Serializable
-private data class UpgradeLevelDto(
-    val id: String,
-    val level: Int,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val c: String = "",
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val w: String = "",
 )
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -403,14 +403,8 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
                 ascendedCharacterIds = profile.rebirthProgress.ascendedCharacters.map(CoreShape::wireId).sorted(),
             ),
             upgrades = PermanentUpgradesDto(
-                characters = CoreShape.entries
-                    .filter { shape -> profile.upgrades.characterLevel(shape) > 0 }
-                    .map { shape -> UpgradeLevelDto(id = shape.wireId(), level = profile.upgrades.characterLevel(shape)) }
-                    .sortedBy(UpgradeLevelDto::id),
-                weapons = WeaponId.entries
-                    .filter { id -> profile.upgrades.weaponLevel(id) > 0 }
-                    .map { id -> UpgradeLevelDto(id = id.wireId(), level = profile.upgrades.weaponLevel(id)) }
-                    .sortedBy(UpgradeLevelDto::id),
+                c = CHARACTER_UPGRADE_SLOTS.map(profile.upgrades::characterLevel).toUpgradeDigits(),
+                w = WEAPON_UPGRADE_SLOTS.map(profile.upgrades::weaponLevel).toUpgradeDigits(),
             ),
         ),
     )
@@ -1177,25 +1171,50 @@ private fun MatrixProgressDto.toRanks(): List<Int> {
     return result
 }
 
+/** Refit slots of `upgrades.c`: positions are persisted, so this list is append-only and never reordered. */
+private val CHARACTER_UPGRADE_SLOTS: List<CoreShape> = listOf(
+    CoreShape.ORB, CoreShape.PRISM, CoreShape.SHARD, CoreShape.RING, CoreShape.DIAMOND, CoreShape.TESSERACT,
+    CoreShape.STAR, CoreShape.SPIRAL, CoreShape.DIPOLE, CoreShape.PENTAGON, CoreShape.CRESCENT, CoreShape.HEXAGON,
+)
+
+/** Honing slots of `upgrades.w`: positions are persisted, so this list is append-only and never reordered. */
+private val WEAPON_UPGRADE_SLOTS: List<WeaponId> = listOf(
+    WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR, WeaponId.PHASE_LATTICE, WeaponId.NULL_LANCE, WeaponId.GRAVITY_MINES,
+    WeaponId.ION_SWARM, WeaponId.RIFT_BLADES, WeaponId.ARC_COIL, WeaponId.QUASAR_CANNON, WeaponId.ENTROPY_FIELD,
+    WeaponId.SINGULARITY_SPEAR, WeaponId.PRISM_RELAY, WeaponId.GYRE_DISC, WeaponId.SCATTER_BLOOM, WeaponId.TETHER_ARC,
+    WeaponId.SENTRY_GRID, WeaponId.HUNTER_SALVO, WeaponId.CONCUSSION_ENGINE, WeaponId.GLACIER_BELL, WeaponId.EVENT_LENS,
+    WeaponId.SOLAR_SWEEP, WeaponId.AEGIS_SHARDS, WeaponId.HOLLOW_RIFT, WeaponId.RESONANCE_DRUM,
+)
+
+private const val UPGRADE_DIGIT_RADIX: Int = 36
+
+/** Levels (already validated to 0..MAX_UPGRADE_LEVEL) as lowercase base-36 digits without trailing zeros. */
+private fun List<Int>.toUpgradeDigits(): String =
+    joinToString(separator = "") { level -> level.toString(UPGRADE_DIGIT_RADIX) }.trimEnd('0')
+
 /**
- * Strict mapping of the upgrade record lists: each strictly sorted by wire id (no duplicates), every
- * id known and every level within 1..MAX_UPGRADE_LEVEL (a zero level is never written).
+ * Strict mapping of the positional upgrade digits: at most one lowercase base-36 digit per slot, every
+ * level within 0..MAX_UPGRADE_LEVEL, and no trailing zero (it is never written).
  */
 private fun PermanentUpgradesDto.toUpgrades(): PermanentUpgrades {
-    fun <Id> List<UpgradeLevelDto>.toLevels(size: Int, id: (String) -> Id, ordinal: (Id) -> Int): List<Int> {
-        rejectUnless(map(UpgradeLevelDto::id).isStrictlySorted(), ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE)
-        rejectUnless(this.size <= size, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+    fun <Id> String.toLevels(slots: List<Id>, size: Int, ordinal: (Id) -> Int): List<Int> {
+        rejectUnless(length <= slots.size, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+        rejectUnless(!endsWith('0'), ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD)
         val levels = MutableList(size) { 0 }
-        forEach { record ->
-            val index = ordinal(id(record.id))
-            rejectUnless(record.level in 1..ContentBounds.MAX_UPGRADE_LEVEL, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
-            levels[index] = record.level
+        forEachIndexed { slot, digit ->
+            val level = when (digit) {
+                in '0'..'9' -> digit - '0'
+                in 'a'..'z' -> digit - 'a' + 10
+                else -> reject(ProfileSnapshotRejection.INVALID_DECIMAL)
+            }
+            rejectUnless(level <= ContentBounds.MAX_UPGRADE_LEVEL, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+            levels[ordinal(slots[slot])] = level
         }
         return levels
     }
     return PermanentUpgrades(
-        characterLevels = characters.toLevels(CoreShape.entries.size, { it.coreShape() }, CoreShape::ordinal),
-        weaponLevels = weapons.toLevels(WeaponId.entries.size, { it.weaponId() }, WeaponId::ordinal),
+        characterLevels = c.toLevels(CHARACTER_UPGRADE_SLOTS, CoreShape.entries.size, CoreShape::ordinal),
+        weaponLevels = w.toLevels(WEAPON_UPGRADE_SLOTS, WeaponId.entries.size, WeaponId::ordinal),
     )
 }
 
