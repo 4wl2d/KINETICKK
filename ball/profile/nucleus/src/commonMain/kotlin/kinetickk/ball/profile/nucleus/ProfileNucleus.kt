@@ -19,6 +19,7 @@ import kinetickk.ball.profile.api.MatrixProgressProjection
 import kinetickk.ball.profile.api.LoadoutProfileSnapshot
 import kinetickk.ball.profile.api.LoadoutProjection
 import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
+import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerEconomy
@@ -53,6 +54,7 @@ import kinetickk.ball.profile.api.isAscendant
 import kinetickk.ball.profile.api.rank
 import kinetickk.ball.profile.api.rankWithin
 import kinetickk.foundation.collections.toImmutableSet
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kotlin.math.abs
@@ -500,6 +502,12 @@ object ProfileNucleus {
                 discoveredReactionIds = (collection.discoveredReactionIds + update.discoveredReactionIds).toImmutableSet(),
                 discoveredPairingIds = (collection.discoveredPairingIds + update.discoveredPairingIds).toImmutableSet(),
                 heirloomRelicIds = heirlooms,
+                // Oldest first; only the newest MAX_RECENT_ITEM_IDS acquisitions are remembered.
+                recentItemIds = if (update.acquiredItemIds.isEmpty()) {
+                    collection.recentItemIds
+                } else {
+                    (collection.recentItemIds + update.acquiredItemIds).takeLast(MAX_RECENT_ITEM_IDS).toImmutableList()
+                },
             ),
             rebirthProgress = rebirth,
         )
@@ -579,6 +587,12 @@ object ProfileNucleus {
             return ProfileGameplayProgressRejection.TooManyDiscoveries
         }
         update.discoveredItemIds.firstOrNull { !state.policy.containsItem(it) }?.let {
+            return ProfileGameplayProgressRejection.UnknownItem(it)
+        }
+        if (update.acquiredItemIds.size > MAX_RECENT_ITEM_IDS) {
+            return ProfileGameplayProgressRejection.TooManyAcquiredItems
+        }
+        update.acquiredItemIds.firstOrNull { !state.policy.containsItem(it) }?.let {
             return ProfileGameplayProgressRejection.UnknownItem(it)
         }
         update.clearedRebirthLevel?.let { level ->

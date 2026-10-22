@@ -21,6 +21,7 @@ import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.MatrixProgressProjection
 import kinetickk.ball.profile.api.LoadoutProjection
 import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
+import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
@@ -402,6 +403,10 @@ class ProfileNucleusTest {
                 ProfileGameplayProgressRejection.TooManyDiscoveries,
             GameplayProgressUpdate(discoveredItemIds = setOf(-1)) to
                 ProfileGameplayProgressRejection.UnknownItem(-1),
+            GameplayProgressUpdate(discoveredItemIds = emptySet(), acquiredItemIds = List(MAX_RECENT_ITEM_IDS + 1) { 0 }) to
+                ProfileGameplayProgressRejection.TooManyAcquiredItems,
+            GameplayProgressUpdate(discoveredItemIds = emptySet(), acquiredItemIds = listOf(0, TestProfilePolicy.itemCount)) to
+                ProfileGameplayProgressRejection.UnknownItem(TestProfilePolicy.itemCount),
             GameplayProgressUpdate(clearedRebirthLevel = -1) to
                 ProfileGameplayProgressRejection.ClearedLevelBelowMinimum(-1),
             GameplayProgressUpdate(clearedRebirthLevel = 1) to

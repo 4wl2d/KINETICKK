@@ -19,6 +19,7 @@ import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
 import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
+import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PermanentUpgrades
 import kinetickk.ball.profile.api.PlayerCollection
@@ -246,6 +247,9 @@ private data class PlayerCollectionDto(
     @EncodeDefault(EncodeDefault.Mode.NEVER) val discoveredPairingIds: List<String> = emptyList(),
     // Slot order at the Architect victory, so unique but deliberately not sorted.
     @EncodeDefault(EncodeDefault.Mode.NEVER) val heirloomRelicIds: List<String> = emptyList(),
+    // Recent first acquisitions, oldest first with repeats, so deliberately neither sorted nor unique;
+    // written only when non-empty, so older saves keep their bytes.
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val recentItemIds: List<Int> = emptyList(),
 )
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -324,6 +328,7 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
                 discoveredReactionIds = profile.collection.discoveredReactionIds.map(ReactionId::wireId).sorted(),
                 discoveredPairingIds = profile.collection.discoveredPairingIds.map(RelicPairingId::wireId).sorted(),
                 heirloomRelicIds = profile.collection.heirloomRelicIds.map(RelicId::wireId),
+                recentItemIds = profile.collection.recentItemIds,
             ),
             characterAchievements = CharacterAchievementProgressDto(
                 eliteKills = profile.characterAchievements.eliteKills.toString(),
@@ -472,13 +477,15 @@ private fun PlayerCollectionDto.isFromRetiredCatalog(): Boolean {
             discoveredRelicIds.size <= maxRelics && newRelicIds.size <= maxRelics &&
             discoveredReactionIds.size <= ReactionId.entries.size &&
             discoveredPairingIds.size <= RelicPairingId.entries.size &&
-            heirloomRelicIds.size <= MAX_HEIRLOOM_RELICS,
+            heirloomRelicIds.size <= MAX_HEIRLOOM_RELICS &&
+            recentItemIds.size <= MAX_RECENT_ITEM_IDS,
         ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
     )
     // The retired codec never wrote these fields, so a save carrying them without an epoch was not
     // produced by any version.
     rejectUnless(
-        !retired || discoveredReactionIds.isEmpty() && discoveredPairingIds.isEmpty() && heirloomRelicIds.isEmpty(),
+        !retired || discoveredReactionIds.isEmpty() && discoveredPairingIds.isEmpty() && heirloomRelicIds.isEmpty() &&
+            recentItemIds.isEmpty(),
         ProfileSnapshotRejection.INCONSISTENT_PROFILE,
     )
     return retired
@@ -492,6 +499,7 @@ private fun PlayerCollectionDto.toCollection(): PlayerCollection = PlayerCollect
     discoveredReactionIds = discoveredReactionIds.map { it.reactionId() }.toImmutableSet(),
     discoveredPairingIds = discoveredPairingIds.map { it.relicPairingId() }.toImmutableSet(),
     heirloomRelicIds = heirloomRelicIds.map { it.relicId() }.toImmutableList(),
+    recentItemIds = recentItemIds.toImmutableList(),
 )
 
 private fun validateProfile(profile: PlayerProfile) {
@@ -553,6 +561,11 @@ private fun validateProfile(profile: PlayerProfile) {
     val heirlooms = profile.collection.heirloomRelicIds
     rejectUnless(heirlooms.size <= MAX_HEIRLOOM_RELICS, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
     rejectUnless(heirlooms.toSet().size == heirlooms.size, ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE)
+    val recent = profile.collection.recentItemIds
+    rejectUnless(
+        recent.size <= MAX_RECENT_ITEM_IDS && recent.all { it in 0 until ContentBounds.MAX_ITEMS },
+        ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+    )
     rejectUnless(
         profile.rebirthProgress.isWithinRebirthBounds(ContentBounds.MIN_REBIRTH_LEVEL, ContentBounds.MAX_REBIRTH_LEVEL),
         ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,

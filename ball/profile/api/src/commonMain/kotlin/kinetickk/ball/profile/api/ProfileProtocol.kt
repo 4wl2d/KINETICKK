@@ -167,6 +167,8 @@ sealed interface ProfileGameplayProgressRejection {
     data object NegativeBankedMatter : ProfileGameplayProgressRejection
     data class UnknownItem(val itemId: Int) : ProfileGameplayProgressRejection
     data object TooManyDiscoveries : ProfileGameplayProgressRejection
+    /** More first acquisitions than the Profile remembers ([MAX_RECENT_ITEM_IDS]) in one update. */
+    data object TooManyAcquiredItems : ProfileGameplayProgressRejection
     data class ClearedLevelBelowMinimum(val level: Int) : ProfileGameplayProgressRejection
     /** The cleared tier lies above the profile's Rebirth rank, so no run could have selected it. */
     data class ClearedLevelAboveRank(val level: Int) : ProfileGameplayProgressRejection

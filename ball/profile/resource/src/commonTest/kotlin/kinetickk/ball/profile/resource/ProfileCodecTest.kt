@@ -16,6 +16,7 @@ import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
 import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
+import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PermanentUpgrades
 import kinetickk.ball.profile.api.PlayerCollection
@@ -872,6 +873,69 @@ class ProfileCodecTest {
             decodeRejection(MATRIX_GOLDEN.replace("\"ricochets\":\"40\"", "\"ricochets\":\"-40\"")))
         // Saves from before the counters keep their bytes and read as zero.
         assertEquals(0L, decoded(DEFAULT_GOLDEN).profile.characterAchievements.totalKills)
+    }
+
+    @Test
+    fun recentItemIdsRoundTripInAcquisitionOrderWithRepeatsAndOlderSavesReadEmpty() {
+        val history = List(MAX_RECENT_ITEM_IDS) { index -> listOf(57, 12, 57, ContentBounds.MAX_ITEMS - 1)[index % 4] }
+        val snapshot = testSnapshot(PlayerProfile(collection = PlayerCollection(emptySet(), recentItemIds = history)))
+        val encoded = requireEncoded(snapshot)
+        assertEquals(snapshot, decoded(encoded))
+        assertEquals(history, encoded.extractIntArray("recentItemIds"))
+        assertTrue(encoded.contains("\"discoveredItemIds\":[],\"recentItemIds\":[57,12,57,"), encoded)
+
+        for (existing in listOf(DEFAULT_GOLDEN, REPRESENTATIVE_GOLDEN, MATRIX_GOLDEN, UPGRADES_GOLDEN)) {
+            assertEquals(emptyList<Int>(), decoded(existing).profile.collection.recentItemIds)
+            assertFalse(existing.contains("recentItemIds"))
+        }
+        // An empty history is never written.
+        assertEquals(
+            ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD,
+            decodeRejection(DEFAULT_GOLDEN.replace("\"discoveredItemIds\":[]}", "\"discoveredItemIds\":[],\"recentItemIds\":[]}")),
+        )
+        // The field follows the Heirlooms in the collection object.
+        val withHeirlooms = REPRESENTATIVE_GOLDEN.replace(
+            "\"heirloomRelicIds\":[\"GLASS_COMET\",\"BLINK_DRIVE\"]}",
+            "\"heirloomRelicIds\":[\"GLASS_COMET\",\"BLINK_DRIVE\"],\"recentItemIds\":[42,3,42]}",
+        )
+        assertEquals(listOf(42, 3, 42), decoded(withHeirlooms).profile.collection.recentItemIds)
+        assertEquals(withHeirlooms, requireEncoded(decoded(withHeirlooms)))
+    }
+
+    @Test
+    fun recentItemIdsAcceptSixtyFourInRangeIdsAndRejectOneMoreOrAnIdOutsideTheBounds() {
+        val atBound = List(MAX_RECENT_ITEM_IDS) { it }
+        val payload = requireEncoded(testSnapshot(PlayerProfile(collection = PlayerCollection(emptySet(), recentItemIds = atBound))))
+        val canonical = "\"recentItemIds\":[${atBound.joinToString(",")}]"
+        assertTrue(payload.contains(canonical), payload)
+
+        listOf(
+            atBound + 0 to ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            listOf(ContentBounds.MAX_ITEMS) to ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            listOf(-1) to ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+        ).forEach { (ids, expected) ->
+            assertEquals(expected, decodeRejection(payload.replace(canonical, "\"recentItemIds\":[${ids.joinToString(",")}]")), "$ids")
+        }
+        assertEquals(ProfileSnapshotRejection.MALFORMED_JSON,
+            decodeRejection(payload.replace(canonical, "\"recentItemIds\":[\"ORB\"]")))
+
+        listOf(
+            List(MAX_RECENT_ITEM_IDS + 1) { 0 },
+            listOf(ContentBounds.MAX_ITEMS),
+            listOf(-1),
+        ).forEach { ids ->
+            assertEncodeRejection(
+                ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+                testSnapshot(PlayerProfile(collection = PlayerCollection(emptySet(), recentItemIds = ids))),
+            )
+        }
+
+        // The retired catalog generation never wrote a history.
+        val retired = LEGACY_DEFAULT_GOLDEN.replace(
+            "\"collection\":{\"discoveredItemIds\":[]}",
+            "\"collection\":{\"discoveredItemIds\":[],\"recentItemIds\":[1]}",
+        )
+        assertEquals(ProfileSnapshotRejection.INCONSISTENT_PROFILE, decodeRejection(retired))
     }
 
     @Test
