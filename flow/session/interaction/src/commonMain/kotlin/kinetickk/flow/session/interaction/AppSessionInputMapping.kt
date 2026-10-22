@@ -41,23 +41,14 @@ internal fun Key.toWorkshopAlias(base: AppDestination): WorkshopTab? = when (thi
 /** True for a key the shell maps: a session shortcut or a Workshop alias over [base]. */
 internal fun Key.isShellKey(base: AppDestination): Boolean = toSessionShortcut() != null || toWorkshopAlias(base) != null
 
-/** The Workshop tab a Home output opens; null for an output that is not a Workshop entry. */
-internal fun HomeOutput.workshopTab(): WorkshopTab? = when (this) {
-    HomeOutput.OpenHangar -> WorkshopTab.CHARACTERS
-    HomeOutput.OpenLab -> WorkshopTab.MATRIX
-    HomeOutput.OpenArmory -> WorkshopTab.WEAPONS
-    HomeOutput.StartRun,
-    HomeOutput.OpenSettings,
-    HomeOutput.OpenRebirth,
-    HomeOutput.OpenCodex,
-    -> null
-}
+/**
+ * The Workshop tab a Home output names (the character card's Characters); null for the Workshop row,
+ * which keeps the tab shown last, and for an output that is not a Workshop entry.
+ */
+internal fun HomeOutput.workshopTab(): WorkshopTab? = (this as? HomeOutput.OpenWorkshop)?.tab
 
 internal fun HomeOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
-    HomeOutput.OpenHangar,
-    HomeOutput.OpenLab,
-    HomeOutput.OpenArmory,
-    -> SessionInteractionPulse.OpenOverlay(AppDestination.Workshop)
+    is HomeOutput.OpenWorkshop -> SessionInteractionPulse.OpenOverlay(AppDestination.Workshop)
     HomeOutput.StartRun -> SessionInteractionPulse.StartRunRequested
     HomeOutput.OpenSettings -> SessionInteractionPulse.OpenOverlay(AppDestination.Settings)
     HomeOutput.OpenRebirth -> SessionInteractionPulse.OpenOverlay(AppDestination.Rebirth)

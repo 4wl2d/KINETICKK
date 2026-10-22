@@ -68,11 +68,10 @@ class AppSessionInputMappingTest {
             SessionInteractionPulse.OpenOverlay(AppDestination.Codex),
             HomeOutput.OpenCodex.toSessionPulse(),
         )
-        // The Home entries into the Workshop name their tab; the shell sends the tab with the overlay.
+        // The character card names the Characters tab; the Workshop row keeps the tab shown last (no tab).
         for ((output, tab) in listOf(
-            HomeOutput.OpenHangar to WorkshopTab.CHARACTERS,
-            HomeOutput.OpenArmory to WorkshopTab.WEAPONS,
-            HomeOutput.OpenLab to WorkshopTab.MATRIX,
+            HomeOutput.OpenWorkshop(WorkshopTab.CHARACTERS) to WorkshopTab.CHARACTERS,
+            HomeOutput.OpenWorkshop(null) to null,
         )) {
             assertEquals(SessionInteractionPulse.OpenOverlay(AppDestination.Workshop), output.toSessionPulse())
             assertEquals(tab, output.workshopTab())

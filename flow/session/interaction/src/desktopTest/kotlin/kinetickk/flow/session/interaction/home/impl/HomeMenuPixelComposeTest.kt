@@ -90,13 +90,13 @@ class HomeMenuPixelComposeTest {
                 val layout = homeLayoutGeometry(width.toFloat(), height.toFloat(), 1f)
                 val stampSize = homeMenuStampSize(menu, layout, 1f)
                 val k = layout.scene.menuFontSize / 64f
-                val index = HomeMenuTargets.indexOf(HomeLayoutTarget.ARMORY)
+                val index = HomeMenuTargets.indexOf(HomeLayoutTarget.WORKSHOP)
                 val label = language.text(HomeMenuLabels[index])
-                val facts = homeFacts(StampModel, HomeLayoutTarget.ARMORY, language, 1.25f)
-                val bounds = layout.bounds(HomeLayoutTarget.ARMORY)
+                val facts = homeFacts(StampModel, HomeLayoutTarget.WORKSHOP, language, 1.25f)
+                val bounds = layout.bounds(HomeLayoutTarget.WORKSHOP)
                 val placement = homeMenuPlacement(menu, bounds, label, facts.sub, facts.stamp, layout.scene.menuFontSize, stampSize, 1f)
                 val where = "${language.code} ${width}x$height"
-                assertTrue(facts.stamp != null && facts.sub != null && placement.showSub, "armory needs its stamp and count: $where")
+                assertTrue(facts.stamp != null && facts.sub != null && placement.showSub, "the Workshop needs its stamp and count: $where")
                 fun image(selection: Float, sub: Boolean) = rendered(width, height) {
                     drawHomeMenuItem(menu, layout, index, label, facts, placement.left, sub, stampSize, selection, HOME_TRAIL_REST_SECONDS)
                 }
@@ -144,12 +144,16 @@ class HomeMenuPixelComposeTest {
                     // At rest the label alone is drawn, whole inside its column (the clip would cut a longer one).
                     val label = paintedColumns(item(index, 0f), band) ?: fail("no label: $where")
                     assertTrue(label.last < bounds.right, "label runs to ${label.last} past its column's ${bounds.right}: $where")
-                    // Selected, the item keeps 4 px clear of the other column's label in its row, on either side.
+                    // Selected, the item keeps 4 px clear of the other column's label in its row, on either side
+                    // (Play spans the first row alone; the other four sit in two rows of two).
                     val image = item(index, 1f)
                     val selected = paintedColumns(image, band) ?: fail("nothing selected: $where")
-                    val neighbour = paintedColumns(item(index xor 1, 0f), band) ?: fail("no neighbour label: $where")
-                    val clear = if (index % 2 == 1) selected.first - neighbour.last - 1 else neighbour.first - selected.last - 1
-                    assertTrue(clear >= 4, "selected ${selected.first}..${selected.last}, neighbour label ${neighbour.first}..${neighbour.last}: $where")
+                    if (index > 0) {
+                        val right = (index - 1) % 2 == 1
+                        val neighbour = paintedColumns(item(if (right) index - 1 else index + 1, 0f), band) ?: fail("no neighbour label: $where")
+                        val clear = if (right) selected.first - neighbour.last - 1 else neighbour.first - selected.last - 1
+                        assertTrue(clear >= 4, "selected ${selected.first}..${selected.last}, neighbour label ${neighbour.first}..${neighbour.last}: $where")
+                    }
                     val rows = (bounds.top.toInt()..bounds.bottom.toInt()).filter { y -> (0 until width).any { isBone(image.pixel(it, y)) } }
                     if (rows.isEmpty()) fail("no slab: $where")
                     fun slabLeft(y: Int) = (0 until width).first { isBone(image.pixel(it, y)) }
@@ -166,25 +170,19 @@ class HomeMenuPixelComposeTest {
     }
 
     @Test
-    fun theFormNameClearsItsDescriptionByFourPixels() {
+    fun theFormNameKeepsFourPixelsAboveTheCharactersCard() {
+        // The mechanic's text left the panel for the form's (!): the name's ink sits clear above the card.
         for (language in AppLanguage.entries) for (textScale in listOf(1f, 1.25f, 1.75f)) withMeasurer(language, homeUiScale(textScale)) { text ->
-            for ((width, height) in listOf(1_000 to 700, 1_440 to 810, 1_920 to 1_080)) {
+            for ((width, height) in listOf(1_000 to 700, 1_440 to 810, 1_920 to 1_080, 844 to 390, 390 to 844)) {
                 val layout = homeLayoutGeometry(width.toFloat(), height.toFloat(), 1f)
-                val scene = layout.scene
                 val nameRight = homeFormNameRight(layout, 1f)
-                val (top, bottom) = homeFormDescriptionSpan(layout, 1f)
+                val card = layout.bounds(HomeLayoutTarget.HANGAR)
                 defaultCoreShapeDefinitions().forEach { form ->
                     val name = form.displayName.localizedContent(language)
                     val where = "$name ${language.code} ${width}x$height @$textScale"
-                    val nameInk = inkRows(rendered(width, height) { drawHomeFormName(text, scene, name, nameRight, Kk.Bone) }) ?: fail("no name: $where")
-                    val description = rendered(width, height) {
-                        drawHomeFormDescription(text, scene, form.mechanicDescription.localizedContent(language), top, bottom)
-                    }
-                    // Two lines still fit beside the name's descenders; only the smaller desktop may leave the text to the (!) at 175 %.
-                    val descriptionInk = inkRows(description)
-                        ?: if (width < 1_440 && textScale > 1.25f) return@forEach else fail("description dropped: $where")
-                    assertTrue(descriptionInk.first - nameInk.last - 1 >= 4,
-                        "name ink ends on row ${nameInk.last}, description starts on ${descriptionInk.first}: $where")
+                    val nameInk = inkRows(rendered(width, height) { drawHomeFormName(text, layout.scene, name, nameRight, Kk.Bone) })
+                        ?: fail("no name: $where")
+                    assertTrue(card.top.toInt() - nameInk.last - 1 >= 4, "name ink ends on row ${nameInk.last}, the card starts at ${card.top}: $where")
                 }
             }
         }
@@ -270,9 +268,10 @@ class HomeMenuPixelComposeTest {
         val OneColumnViewports = listOf(1_440 to 810, 844 to 390, 390 to 844, 800 to 360, 600 to 390, 360 to 800)
 
         /** Two-column Home menus (portrait under 660 px tall), down to the narrowest 320 px phones. */
-        val TwoColumnViewports = listOf(320 to 568, 328 to 568, 332 to 568, 340 to 600, 360 to 640, 390 to 600, 412 to 650)
+        // Portrait switches to two columns below 600 px tall (five rows fit one column from there).
+        val TwoColumnViewports = listOf(320 to 568, 328 to 568, 332 to 568, 340 to 580, 360 to 590, 390 to 590, 412 to 598)
 
-        /** Stamps on Armory and Rebirth, counts on the others. */
+        /** Stamps on the Workshop and Rebirth, counts on the others. */
         val StampModel: HomeUiModel by lazy {
             val weapons = listOf(WeaponId.FLUX_WAKE to "Flux Wake", WeaponId.SINGULARITY_SPEAR to "Singularity Spear")
                 .map { (id, name) -> testWeapon(id, name) }.toImmutableList()
@@ -285,7 +284,7 @@ class HomeMenuPixelComposeTest {
                     RebirthProgress(level = 10, highestCleared = 9), canAdvanceRebirth = true,
                     unlockedCoreShapes = immutableSetOf(*CoreShape.entries.toTypedArray()),
                 ),
-            ).copy(weaponUnlockAffordable = true, canRebirth = true)
+            ).copy(workshopAffordable = true, canRebirth = true)
         }
     }
 }

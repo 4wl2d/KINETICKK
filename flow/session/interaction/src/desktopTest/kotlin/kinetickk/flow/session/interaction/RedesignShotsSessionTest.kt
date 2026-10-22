@@ -71,12 +71,16 @@ class RedesignShotsSessionTest {
     }
 
     @Test fun home() {
-        val targets = listOf("start", "lab", "armory", "rebirth", "codex", "settings", "hangar")
+        val targets = listOf("start", "workshop", "rebirth", "codex", "settings", "hangar")
         for ((w, h) in sizes) for (language in AppLanguage.entries) {
             for (target in targets) {
                 shot("home", target, w, h, language, { ShotProfile() }) {
                     onNodeWithTag("kinetickk.home.$target").performSemanticsAction(SemanticsActions.RequestFocus)
                 }
+            }
+            // The Workshop row's Affordable stamp (the Profile would accept a purchase now).
+            shot("home", "workshop-affordable", w, h, language, { ShotProfile(workshopAffordable = true) }) {
+                onNodeWithTag("kinetickk.home.workshop").performSemanticsAction(SemanticsActions.RequestFocus)
             }
             for (shape in CoreShape.entries) {
                 shot("home", "form-${shape.name.lowercase()}", w, h, language, { ShotProfile(coreShape = shape) }) {
@@ -89,21 +93,21 @@ class RedesignShotsSessionTest {
                 onNodeWithTag("kinetickk.home.info.form").performSemanticsAction(SemanticsActions.OnClick)
             }
             if (w > 900) shot("home", "facts-info", w, h, language, { ShotProfile() }) {
-                onNodeWithTag("kinetickk.home.lab").performSemanticsAction(SemanticsActions.RequestFocus)
+                onNodeWithTag("kinetickk.home.workshop").performSemanticsAction(SemanticsActions.RequestFocus)
                 mainClock.advanceTimeBy(300)
                 onNodeWithTag("kinetickk.home.info.facts").performSemanticsAction(SemanticsActions.OnClick)
             }
         }
     }
 
-    /** Text size 175 % (the setting's maximum) and the Rebirth "Ready" stamp, the widest menu rows. */
+    /** Text size 175 % (the setting's maximum) and the Rebirth "Ready" and Workshop "Affordable" stamps, the widest menu rows. */
     @Test fun homeTextSizes() {
         for ((w, h) in sizes + listOf(600 to 390, 360 to 800)) for (language in AppLanguage.entries) {
-            for (target in listOf("start", "armory", "rebirth", "codex", "settings")) {
-                shot("home", "$target-ready-text175", w, h, language, { ShotProfile(textScale = 1.75f, canRebirth = true) }) {
+            for (target in listOf("start", "workshop", "rebirth", "codex", "settings")) {
+                shot("home", "$target-ready-text175", w, h, language, { ShotProfile(textScale = 1.75f, canRebirth = true, workshopAffordable = true) }) {
                     onNodeWithTag("kinetickk.home.$target").performSemanticsAction(SemanticsActions.RequestFocus)
                 }
-                shot("home", "$target-ready", w, h, language, { ShotProfile(canRebirth = true) }) {
+                shot("home", "$target-ready", w, h, language, { ShotProfile(canRebirth = true, workshopAffordable = true) }) {
                     onNodeWithTag("kinetickk.home.$target").performSemanticsAction(SemanticsActions.RequestFocus)
                 }
             }
@@ -133,7 +137,7 @@ class RedesignShotsSessionTest {
 
     @Test fun homeExtraViewports() {
         for ((w, h) in listOf(390 to 600, 600 to 390, 1000 to 700, 1920 to 1080, 800 to 360)) for (language in AppLanguage.entries) {
-            for (target in listOf("armory", "codex", "settings")) shot("home", target, w, h, language, { ShotProfile() }) {
+            for (target in listOf("workshop", "codex", "settings")) shot("home", target, w, h, language, { ShotProfile() }) {
                 onNodeWithTag("kinetickk.home.$target").performSemanticsAction(SemanticsActions.RequestFocus)
             }
             shot("home", "form-info", w, h, language, { ShotProfile() }) {
@@ -144,7 +148,7 @@ class RedesignShotsSessionTest {
         }
     }
 
-    /** Fix round 3: form name over its description at every text size, and the two-column phone menu. */
+    /** Fix round 3: the form name at every text size, and the two-column phone menu (Play across both columns). */
     @Test fun homeFix3() {
         for ((w, h) in listOf(1000 to 700, 1440 to 810, 1920 to 1080)) for (language in AppLanguage.entries) {
             for ((suffix, scale) in listOf("text100" to 1f, "text125" to 1.25f, "text175" to 1.75f)) {
@@ -153,8 +157,8 @@ class RedesignShotsSessionTest {
                 }
             }
         }
-        for ((w, h) in listOf(390 to 600, 360 to 640)) for (language in AppLanguage.entries) {
-            for (target in listOf("start", "lab", "armory", "rebirth", "codex", "settings")) {
+        for ((w, h) in listOf(390 to 560, 360 to 580)) for (language in AppLanguage.entries) {
+            for (target in listOf("start", "workshop", "rebirth", "codex", "settings")) {
                 for ((suffix, scale) in listOf("" to 1.25f, "-text175" to 1.75f)) {
                     shot("home", "two-column-$target$suffix", w, h, language, { ShotProfile(textScale = scale, canRebirth = true) }) {
                         onNodeWithTag("kinetickk.home.$target").performSemanticsAction(SemanticsActions.RequestFocus)
@@ -166,8 +170,8 @@ class RedesignShotsSessionTest {
 
     /** Fix round 3, second pass: the two-column phone menu down to 320 px wide. */
     @Test fun homeTwoColumnNarrow() {
-        for ((w, h) in listOf(320 to 568, 328 to 568, 332 to 568, 360 to 640, 390 to 600)) for (language in AppLanguage.entries) {
-            for (target in listOf("start", "lab", "armory", "rebirth", "codex", "settings")) {
+        for ((w, h) in listOf(320 to 568, 328 to 568, 332 to 568, 360 to 580, 390 to 590)) for (language in AppLanguage.entries) {
+            for (target in listOf("start", "workshop", "rebirth", "codex", "settings")) {
                 for ((suffix, scale) in listOf("" to 1.25f, "-text175" to 1.75f)) {
                     shot("home", "two-column-$target$suffix", w, h, language, { ShotProfile(textScale = scale, canRebirth = true) }) {
                         onNodeWithTag("kinetickk.home.$target").performSemanticsAction(SemanticsActions.RequestFocus)
@@ -472,7 +476,12 @@ private val ItemsMatrixStates = listOf("sort-tag", "sort-element", "sort-rarity"
 
 private val DiscoveredItems: Set<Int> = (0 until 80).filter { (it * 2654435761L % 100) < 54 }.toSet() + 10
 
-internal fun ShotProgress(coreShape: CoreShape = CoreShape.PRISM, lifetimeMatter: Long = 9_640L, canRebirth: Boolean = false): HomeProgressProjection = HomeProgressProjection(
+internal fun ShotProgress(
+    coreShape: CoreShape = CoreShape.PRISM,
+    lifetimeMatter: Long = 9_640L,
+    canRebirth: Boolean = false,
+    workshopAffordable: Boolean = false,
+): HomeProgressProjection = HomeProgressProjection(
     LOCAL_PROFILE_INSTANCE_ID, ProfileRevision.ZERO,
     PlayerEconomy(matter = 1_284, lifetimeMatter = lifetimeMatter),
     PlayerLoadout(coreShape, WeaponId.FLUX_WAKE, WeaponId.entries.take(7).toSet()),
@@ -482,6 +491,8 @@ internal fun ShotProgress(coreShape: CoreShape = CoreShape.PRISM, lifetimeMatter
     characterAchievements = CharacterAchievementProgress(eliteKills = 5, dashHits = 40, completedOrbits = 2, architectVictories = 3,
         victoriousCharacters = immutableSetOf(CoreShape.ORB, CoreShape.PRISM)),
     unlockedCoreShapes = immutableSetOf(CoreShape.ORB, CoreShape.PRISM, CoreShape.SHARD, CoreShape.RING, CoreShape.DIAMOND),
+    workshopAffordable = workshopAffordable,
+    upgradeLevels = 23,
 )
 
 internal fun ShotCodexModel(run: Boolean = false): CodexRenderModel = CodexRenderModel(
@@ -514,7 +525,12 @@ private val ShotRun: CodexRunStacks by lazy {
     ))
 }
 
-internal class ShotProfile(private val coreShape: CoreShape = CoreShape.PRISM, private val textScale: Float = 1.25f, private val canRebirth: Boolean = false) : ProfileReadPort {
+internal class ShotProfile(
+    private val coreShape: CoreShape = CoreShape.PRISM,
+    private val textScale: Float = 1.25f,
+    private val canRebirth: Boolean = false,
+    private val workshopAffordable: Boolean = false,
+) : ProfileReadPort {
     override val instanceId = LOCAL_PROFILE_INSTANCE_ID
     override fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection = error("unused")
     override fun query(query: ProfileQuery.GetMatrixProgress) = MatrixProgressProjection(instanceId, ProfileRevision.ZERO,
@@ -524,7 +540,7 @@ internal class ShotProfile(private val coreShape: CoreShape = CoreShape.PRISM, p
     override fun query(query: ProfileQuery.GetRebirthProgress): RebirthProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection = error("unused")
     override fun query(query: ProfileQuery.GetPreferences) = PreferencesProjection(instanceId, ProfileRevision.ZERO, PlayerPreferences(textScale = textScale))
-    override fun query(query: ProfileQuery.GetHomeProgress) = ShotProgress(coreShape, canRebirth = canRebirth)
+    override fun query(query: ProfileQuery.GetHomeProgress) = ShotProgress(coreShape, canRebirth = canRebirth, workshopAffordable = workshopAffordable)
     override fun query(query: ProfileQuery.GetCollection) = CollectionProjection(instanceId, ProfileRevision.ZERO, PlayerCollection(DiscoveredItems))
 }
 

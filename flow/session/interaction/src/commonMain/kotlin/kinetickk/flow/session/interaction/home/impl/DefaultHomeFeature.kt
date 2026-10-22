@@ -82,6 +82,7 @@ class DefaultHomeFeature(
         weapons = uiCatalog.weapons,
         relicCount = uiCatalog.relics.size,
         matrixNodes = uiCatalog.matrixNodes,
+        upgrades = uiCatalog.upgrades,
     )
     private val audioExecutor = SessionAudioExecutor(audioService)
 
@@ -336,8 +337,7 @@ private fun Modifier.placeInHomeBounds(bounds: Rect, density: Density): Modifier
 private fun HomeLayoutTarget.homeTestTag(): String = when (this) {
     HomeLayoutTarget.HANGAR -> "kinetickk.home.hangar"
     HomeLayoutTarget.START -> "kinetickk.home.start"
-    HomeLayoutTarget.LAB -> "kinetickk.home.lab"
-    HomeLayoutTarget.ARMORY -> "kinetickk.home.armory"
+    HomeLayoutTarget.WORKSHOP -> "kinetickk.home.workshop"
     HomeLayoutTarget.REBIRTH -> "kinetickk.home.rebirth"
     HomeLayoutTarget.CODEX -> "kinetickk.home.codex"
     HomeLayoutTarget.SETTINGS -> "kinetickk.home.settings"
@@ -351,8 +351,7 @@ private fun HomeInfoTarget.homeInfoTestTag(): String = when (this) {
 private fun HomeLayoutTarget.homeContentDescription(language: AppLanguage, characterName: String): String = when (this) {
     HomeLayoutTarget.HANGAR -> language.text(SessionText.HANGAR_DESCRIPTION, characterName)
     HomeLayoutTarget.START -> language.text(SessionText.START_DESCRIPTION)
-    HomeLayoutTarget.LAB -> language.text(SessionText.LAB_DESCRIPTION)
-    HomeLayoutTarget.ARMORY -> language.text(SessionText.ARMORY_DESCRIPTION)
+    HomeLayoutTarget.WORKSHOP -> language.text(SessionText.WORKSHOP_DESCRIPTION)
     HomeLayoutTarget.REBIRTH -> language.text(SessionText.REBIRTH_DESCRIPTION)
     HomeLayoutTarget.CODEX -> language.text(SessionText.CODEX_DESCRIPTION)
     HomeLayoutTarget.SETTINGS -> language.text(SessionText.SETTINGS_DESCRIPTION)

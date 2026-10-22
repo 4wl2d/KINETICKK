@@ -71,7 +71,7 @@ class HomeTextFitComposeTest {
 
     @Test
     fun theHangarCardKeepsItsIconAndLabelInsideItsFace() = forMeasurers { text, language, scale ->
-        val label = language.text(kinetickk.flow.session.interaction.localization.SessionText.HANGAR)
+        val label = language.text(kinetickk.flow.session.interaction.localization.SessionText.CHARACTERS)
         for ((width, height) in listOf(1_440f to 810f, 1_280f to 720f, 1_000f to 700f, 900f to 560f, 844f to 390f, 800f to 360f,
             600f to 390f, 390f to 844f, 390f to 600f)) {
             val card = homeLayoutGeometry(width, height, 1f).bounds(HomeLayoutTarget.HANGAR)
@@ -111,8 +111,8 @@ class HomeTextFitComposeTest {
             waitForIdle()
             runOnIdle {
                 val menu = requireNotNull(measurer)
-                // Stamps on Armory ("Unlockable") and Rebirth ("Ready"), sub values on the others.
-                val model = model(WeaponId.SINGULARITY_SPEAR, TierNames.first()).copy(weaponUnlockAffordable = true, canRebirth = true)
+                // Stamps on the Workshop ("Affordable") and Rebirth ("Ready"), sub values on the others.
+                val model = model(WeaponId.SINGULARITY_SPEAR, TierNames.first()).copy(workshopAffordable = true, canRebirth = true)
                 for ((width, height) in listOf(1_440f to 810f, 1_000f to 700f, 844f to 390f, 800f to 360f, 600f to 390f, 390f to 844f, 360f to 800f, 412f to 915f)) {
                     val layout = homeLayoutGeometry(width, height, 1f)
                     if (layout.scene.menuColumns != 1) continue
@@ -165,27 +165,15 @@ class HomeTextFitComposeTest {
     }
 
     @Test
-    fun theFormDescriptionIsShownWholeBetweenTheNameAndTheHangarCard() = forMeasurers { text, language, scale ->
-        val descriptions = defaultCoreShapeDefinitions().map { it.mechanicDescription.localizedContent(language) }
-        for ((width, height) in listOf(1_440f to 810f, 1_280f to 720f, 1_000f to 700f, 900f to 560f)) {
-            val layout = homeLayoutGeometry(width, height, 1f)
-            val rect = requireNotNull(layout.scene.formDescription)
-            val (top, bottom) = homeFormDescriptionSpan(layout, 1f)
-            // The name's wide type has a 0.9 em line box; the description keeps 8 px above the Hangar card.
-            assertTrue(top >= layout.scene.formNameCenterY + layout.scene.formNameSize * 0.45f - 0.01f)
-            assertTrue(bottom <= layout.bounds(HomeLayoutTarget.HANGAR).top - 8f + 0.01f)
-            descriptions.forEach { description ->
-                val where = "${description.take(24)} ${language.code} ${width}x$height @$scale"
-                val laid = homeFormDescriptionLayout(text, description, rect.width, bottom - top)
-                if (laid == null) {
-                    // Only when even two small lines cannot hold it; the form's (!) carries the text.
-                    assertTrue(width < 1_440f || scale > 1.25f, "description dropped at the reference size: $where")
-                    assertTrue(layout.info(HomeInfoTarget.FORM) != null)
-                } else {
-                    assertFalse(laid.isCut() || laid.didOverflowHeight, "cut: $where")
-                    assertTrue(laid.size.width <= rect.width + 0.5f && laid.kkBoxHeight <= bottom - top + 0.01f, "too large: $where")
-                }
-            }
+    fun theFormInfoCarriesTheMechanicThePanelNoLongerRepeats() = forMeasurers { _, language, _ ->
+        // Every mode shows the form's (!), and it holds the mechanic's name and text (the panel shows only the name).
+        for ((width, height) in listOf(1_440f to 810f, 1_280f to 720f, 1_000f to 700f, 900f to 560f, 844f to 390f, 390f to 844f)) {
+            assertTrue(homeLayoutGeometry(width, height, 1f).info(HomeInfoTarget.FORM) != null, "form (!) at ${width}x$height")
+        }
+        defaultCoreShapeDefinitions().forEach { form ->
+            val model = model(WeaponId.FLUX_WAKE, TierNames.first()).copy(coreShape = form.id)
+            assertEquals(form.mechanicName.localizedContent(language) + "\n" + form.mechanicDescription.localizedContent(language),
+                homeFormInfo(model, language))
         }
     }
 
@@ -210,8 +198,8 @@ class HomeTextFitComposeTest {
             runOnIdle {
                 val text = requireNotNull(home)
                 val menu = requireNotNull(menuMeasurer)
-                // Stamps on Armory and Rebirth, sub values on the others: the widest rows.
-                val model = model(WeaponId.SINGULARITY_SPEAR, TierNames.first()).copy(weaponUnlockAffordable = true, canRebirth = true)
+                // Stamps on the Workshop and Rebirth, sub values on the others: the widest rows.
+                val model = model(WeaponId.SINGULARITY_SPEAR, TierNames.first()).copy(workshopAffordable = true, canRebirth = true)
                 viewports.filter { it.third == density }.forEach { (width, height, _) ->
                     val layout = homeLayoutGeometry(width.toFloat(), height.toFloat(), density)
                     val scene = layout.scene
