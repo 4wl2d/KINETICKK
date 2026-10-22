@@ -20,14 +20,27 @@ import kotlin.math.sin
 
 /**
  * Presentation meaning of a nucleus visual color index: 0 dash/Core, 1 kill or pickup, 2 weapon
- * and relic procs, 3 ram impact, elite kill and key pickups, 4 damage taken.
+ * and relic procs, 3 ram impact, elite kill and key pickups, 4 damage taken (the only threat one),
+ * 8..14 an element's ring (Breaks and reactions), 15 the Apex gold, 16..22 an element's jagged
+ * quake ring ([isQuakeColor]).
  */
 internal fun fxColor(colorIndex: Int, roles: KkRolePalette): Color = when (colorIndex) {
     0, 3 -> roles.you
     4 -> roles.threat
     2 -> Kk.Bone2
+    in ELEMENT_RING_COLORS -> roles.element(colorIndex - ELEMENT_RING_COLORS.first)
+    APEX_GOLD_COLOR -> roles.gold.base
+    in QUAKE_RING_COLORS -> roles.element(colorIndex - QUAKE_RING_COLORS.first)
     else -> Kk.Bone
 }
+
+/** Element ring colour indices (8 + element), the Apex gold (15) and element quake rings (16 + element). */
+internal val ELEMENT_RING_COLORS = 8..14
+internal const val APEX_GOLD_COLOR = 15
+internal val QUAKE_RING_COLORS = 16..22
+
+/** Shockwaves of these colour indices draw as a jagged quake ring. */
+internal fun isQuakeColor(colorIndex: Int): Boolean = colorIndex in QUAKE_RING_COLORS
 
 /** Damage numbers take the hue of their element (the preset's volt for Kinetic); the tier shows only as size. */
 internal fun damageNumberColor(tone: Int, roles: KkRolePalette): Color = roles.tone(tone)
