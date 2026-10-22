@@ -102,6 +102,22 @@ internal object HudMinimapGeometry {
 private object MinimapScratch {
     val rect = FloatArray(4)
     val trial = HudTrialPanelLayout()
+
+    // The rounded square as a path, rebuilt only when it moves or resizes: Skia's drawRoundRect
+    // allocates a radii array on every call.
+    private val square = androidx.compose.ui.graphics.Path()
+    private val squareKeys = FloatArray(4) { Float.NaN }
+
+    fun square(left: Float, top: Float, side: Float, corner: Float): androidx.compose.ui.graphics.Path {
+        if (squareKeys[0] == left && squareKeys[1] == top && squareKeys[2] == side && squareKeys[3] == corner) return square
+        squareKeys[0] = left
+        squareKeys[1] = top
+        squareKeys[2] = side
+        squareKeys[3] = corner
+        square.reset()
+        square.addRoundRect(androidx.compose.ui.geometry.RoundRect(left, top, left + side, top + side, CornerRadius(corner, corner)))
+        return square
+    }
 }
 
 /**
@@ -125,7 +141,8 @@ internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMe
     HudLayoutProbe.record(HudBlock.MINIMAP, left, top, rect[2], rect[3])
     val roles = measurer.roles
     val corner = frame.u(6f)
-    drawRoundRect(Kk.Ink.copy(alpha = 0.74f), Offset(left, top), Size(side, side), CornerRadius(corner, corner))
+    val square = MinimapScratch.square(left, top, side, corner)
+    drawPath(square, Kk.Ink.copy(alpha = 0.74f))
     val half = side * 0.5f
     val centerX = left + half
     val centerY = top + half
@@ -207,7 +224,7 @@ internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMe
         }
         drawCircle(roles.you, dot * 1.7f, Offset(centerX, centerY))
     }
-    drawRoundRect(Kk.Bone.copy(alpha = 0.22f), Offset(left, top), Size(side, side), CornerRadius(corner, corner), style = kkStroke(1f))
+    drawPath(square, Kk.Bone.copy(alpha = 0.22f), style = kkStroke(1f))
 }
 
 /**
