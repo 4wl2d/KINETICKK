@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -82,6 +83,10 @@ class DefaultSettingsFeature(
 ) : SettingsFeature {
     private val audioExecutor = ProfileAudioExecutor(audioService)
 
+    // The view a window opened again for a display change (V-Sync, Borderless) comes back to: the
+    // new window's composition starts without the previous rememberSaveable registry.
+    private var retained: SettingsRetainedView? = null
+
     @Composable
     override fun Content(
         routeToken: Long,
@@ -95,12 +100,13 @@ class DefaultSettingsFeature(
         val focusRequester = remember { FocusRequester() }
         val density = LocalDensity.current.density
         var viewportValue by remember { mutableStateOf(IntSize.Zero) }
-        var pageValue by rememberSaveable(routeToken) { mutableIntStateOf(0) }
-        var groupIndexValue by rememberSaveable(routeToken) { mutableIntStateOf(SettingsGroup.GAME.ordinal) }
+        val restored = retained?.takeIf { it.routeToken == routeToken }
+        var pageValue by rememberSaveable(routeToken) { mutableIntStateOf(restored?.page ?: 0) }
+        var groupIndexValue by rememberSaveable(routeToken) { mutableIntStateOf(restored?.group ?: SettingsGroup.GAME.ordinal) }
         var infoValue by remember(routeToken) { mutableStateOf<SettingsRow?>(null) }
         var hoverValue by remember { mutableStateOf<SettingsTarget?>(null) }
         var focusValue by remember { mutableStateOf<SettingsTarget?>(null) }
-        var activeRowValue by remember(routeToken) { mutableStateOf<SettingsRow?>(null) }
+        var activeRowValue by remember(routeToken) { mutableStateOf(restored?.activeRow) }
         var previewTimeValue by remember { mutableFloatStateOf(0f) }
         var previewWakeValue by remember { mutableIntStateOf(0) }
         // Key capture and the two-press reset (Interaction-ephemeral).
@@ -124,6 +130,9 @@ class DefaultSettingsFeature(
             live = display.liveWindow(),
             browserFullscreen = display.browserFullscreen,
         )
+        SideEffect(routeToken, groupIndexValue, pageValue, activeRowValue) {
+            retained = SettingsRetainedView(routeToken, groupIndexValue, pageValue, activeRowValue)
+        }
         val requestedGroup = SettingsGroup.entries[groupIndexValue]
         val group = if (requestedGroup in platform.groups) requestedGroup else platform.groups.first()
         LaunchedEffect(pageValue) { focusRequester.requestFocus() }
@@ -521,3 +530,6 @@ private fun SettingsSemanticTarget(
         }
         .focusable())
 }
+
+/** What Settings shows for one route, kept by the feature instance for a window opened again. */
+internal class SettingsRetainedView(val routeToken: Long, val group: Int, val page: Int, val activeRow: SettingsRow?)
