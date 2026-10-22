@@ -101,7 +101,8 @@ class PerceptibleItemImpactTest {
         val report = ArrayList<String>()
         val misses = ArrayList<String>()
         val confirmedBaselines = HashMap<Setup, Outcome>()
-        for (item in canonicalGameplayContent.items) {
+        println("IMPACT range ${ImpactRange.first}..${minOf(ImpactRange.last, canonicalGameplayContent.items.lastIndex)}")
+        for (item in canonicalGameplayContent.items.filter { it.id in ImpactRange }) {
             val measured = setupsFor(item).map { setup ->
                 val baseline = baselines.getOrPut(setup) { run(setup, null) }
                 val (output, share) = bestGain(setup.arena, baseline, run(setup, item))
@@ -568,8 +569,11 @@ class PerceptibleItemImpactTest {
             // Heat-limited Dashes count only when one is ready; the heat arena presses Dash regardless, to overheat.
             if (arena.dashEvery > 0f && frame % (arena.dashEvery * FPS).toInt() == 0 && game.buildDashReady()) {
                 // Dash along the travel direction, into whatever lies ahead. For that one frame the singularity
-                // sits beyond the Dash's reach (touching it ends the run); then steering takes the pointer back.
-                if (game.speed > 1f) point(game, atan2(game.velocityY, game.velocityX), 480f)
+                // sits beyond the Dash's reach (touching it ends the run); then steering takes the pointer back. A
+                // leashed pilot Dashes along its heading instead: a hook or a launch can turn the Core's travel away
+                // from the pointer, and a jump to the far side would sweep the singularity across the Core.
+                if (setup.leashed) point(game, heading, 480f)
+                else if (game.speed > 1f) point(game, atan2(game.velocityY, game.velocityX), 480f)
                 game.requestDash()
             }
             if (arena == Arena.CROWD || arena == Arena.SPARSE || arena == Arena.LEVELS || arena == Arena.CULL || arena == Arena.COMBO) {
@@ -1084,6 +1088,19 @@ class PerceptibleItemImpactTest {
             // Hollow Point needs crits to add its Void; Focus Lens supplies them.
             StatusElement.VOID to listOf("Null Rounds", "Hollow Point", "Focus Lens"),
         )
+
+        /**
+         * The item ids [everyItemAtOneStackMovesAMeasuredOutputByAtLeastFivePercent] judges: the whole catalog, or the
+         * `KK_IMPACT_RANGE` environment variable's `first..last` so CI can shard the catalog (for example `0..172`
+         * and `173..268`). A malformed value fails the test rather than silently judging nothing.
+         */
+        val ImpactRange: IntRange = System.getenv("KK_IMPACT_RANGE")?.let { value ->
+            val bounds = value.split("..").map { it.trim().toIntOrNull() }
+            val first = bounds.getOrNull(0)
+            val last = bounds.getOrNull(1)
+            require(bounds.size == 2 && first != null && last != null && first in 0..last) { "KK_IMPACT_RANGE '$value' is not first..last" }
+            first..last
+        } ?: 0..Int.MAX_VALUE
 
         /** Items whose effect no scripted encounter can show, by name, with the reason. None today. */
         val JUSTIFIED_EXCEPTIONS: Map<String, String> = emptyMap()
