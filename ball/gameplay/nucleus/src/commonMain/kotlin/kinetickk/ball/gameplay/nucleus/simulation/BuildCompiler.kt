@@ -26,6 +26,7 @@ import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingKind
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.actsOnSkills
 import kinetickk.ball.content.api.breakThresholdCut
 import kinetickk.ball.content.api.overhealOverfill
 import kinetickk.ball.gameplay.nucleus.model.SkillLoadout
@@ -703,7 +704,7 @@ internal fun MutableGameState.itemDormantShare(item: ItemDefinition): Float {
                 is ItemRule.SkillCooldown, is ItemRule.SkillPower, ItemRule.SkillCharges, is ItemRule.SkillAttunement,
                 is ItemRule.CatalysisRate,
                 -> noSkills
-                is ItemRule.Convert -> noSkills && rule.kind in SkillConversions
+                is ItemRule.Convert -> noSkills && rule.kind.actsOnSkills
                 else -> false
             },
         )
@@ -711,12 +712,7 @@ internal fun MutableGameState.itemDormantShare(item: ItemDefinition): Float {
     return if (total == 0 || dormant == 0) 0f else dormant.toFloat() / total
 }
 
-private val BuffStat.isSkillStat: Boolean get() = this == BuffStat.SKILL_RECHARGE || this == BuffStat.SKILL_POWER
-
-private val SkillConversions: Set<ConversionKind> = setOf(
-    ConversionKind.DASH_HEAT_TO_SKILLS, ConversionKind.DATA_TO_SKILLS, ConversionKind.SKILLS_COST_HEAT,
-    ConversionKind.SKILL_FIELDS_FOLLOW,
-)
+private val BuffStat.isSkillStat: Boolean get() = actsOnSkills
 
 internal val RelicAspect.isElemental: Boolean get() = element != null
 
