@@ -36,6 +36,9 @@ private const val GOLDEN = -0x61c88647
 /** The fixed angle the hash takes for element 0, used as a look's default heading. */
 private const val HEADING = 0
 
+/** A square's half side per unit of corner distance. */
+private const val HALF_DIAGONAL = 0.70710678f
+
 /** Plate and bar shear (−12°) as a horizontal lean per unit of height. */
 private val SHEAR = tan(12f * DEG)
 
@@ -73,22 +76,24 @@ internal object FxDrawBudget {
     /** Signature operations drawn past a pool's end, per pool (tests read them). */
     private val overflow = IntArray(FxPool.entries.size)
 
-    /** Signature layers asked for and drawn this frame. */
-    var signatureLayers: Int = 0
-        private set
-    var skippedLayers: Int = 0
-        private set
+    /** Signature layers drawn and non-signature layers skipped, per pool. */
+    private val signatures = IntArray(FxPool.entries.size)
+    private val skipped = IntArray(FxPool.entries.size)
 
     fun reset() {
         used.fill(0)
         overflow.fill(0)
-        signatureLayers = 0
-        skippedLayers = 0
+        signatures.fill(0)
+        skipped.fill(0)
     }
 
     fun used(pool: FxPool): Int = used[pool.ordinal]
 
     fun overflow(pool: FxPool): Int = overflow[pool.ordinal]
+
+    fun signatures(pool: FxPool): Int = signatures[pool.ordinal]
+
+    fun skipped(pool: FxPool): Int = skipped[pool.ordinal]
 
     fun remaining(pool: FxPool): Int = pool.ops - used[pool.ordinal]
 
@@ -96,18 +101,17 @@ internal object FxDrawBudget {
     fun take(pool: FxPool, ops: Int, signature: Boolean): Boolean {
         val index = pool.ordinal
         val left = pool.ops - used[index]
-        if (ops <= left) {
+        if (signature) {
+            signatures[index]++
+            overflow[index] += max(0, ops - max(0, left))
             used[index] += ops
-            if (signature) signatureLayers++
             return true
         }
-        if (!signature) {
-            skippedLayers++
+        if (ops > left) {
+            skipped[index]++
             return false
         }
         used[index] += ops
-        overflow[index] += ops - max(0, left)
-        signatureLayers++
         return true
     }
 }
@@ -386,13 +390,15 @@ internal fun DrawScope.drawFxLayer(layer: FxLayer, elements: Int) {
             }
         }
         FxPrimitive.PLATE -> {
+            // r(p) is the square's corner distance; the shear leans its top and bottom edges.
             val color = ctx.color(layer.color, 0)
-            val lean = r * SHEAR
+            val half = r * HALF_DIAGONAL
+            val lean = half * SHEAR
             rotate((theta + spin) / DEG, center) {
-                val a = Offset(cx - r + lean, cy - r)
-                val b = Offset(cx + r + lean, cy - r)
-                val c = Offset(cx + r - lean, cy + r)
-                val d = Offset(cx - r - lean, cy + r)
+                val a = Offset(cx - half + lean, cy - half)
+                val b = Offset(cx + half + lean, cy - half)
+                val c = Offset(cx + half - lean, cy + half)
+                val d = Offset(cx - half - lean, cy + half)
                 drawLine(color, a, b, width, alpha = alpha)
                 drawLine(color, b, c, width, alpha = alpha)
                 drawLine(color, c, d, width, alpha = alpha)

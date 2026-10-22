@@ -449,15 +449,11 @@ private fun DrawScope.drawHypercube(engine: GameplayRenderModel, shakeX: Float, 
     val lattice = engine.characterAbility.lattice
     if (lattice.size < 2) return
     val bright = if (time % 1f < 0.2f) 1f else 0.75f
-    val path = HypercubeScratch.path
-    path.rewind()
-    for (index in lattice.indices) {
-        val point = lattice[index]
-        val position = world(engine, point.x, point.y, shakeX, shakeY)
-        if (index == 0) path.moveTo(position.x, position.y) else path.lineTo(position.x, position.y)
+    if (lattice.size >= 3) {
+        // The hatched interior: a world-space path rebuilt only when the nodes move, drawn at the camera.
+        val origin = world(engine, 0f, 0f, shakeX, shakeY)
+        translate(origin.x, origin.y) { drawKkPattern(HypercubeScratch.path(lattice), KkFillKind.HATCH, gold, 0.06f) }
     }
-    path.close()
-    if (lattice.size >= 3) drawKkPattern(path, KkFillKind.HATCH, gold, 0.06f)
     for (index in lattice.indices) {
         val from = lattice[index]
         val to = lattice[(index + 1) % lattice.size]
@@ -468,7 +464,36 @@ private fun DrawScope.drawHypercube(engine: GameplayRenderModel, shakeX: Float, 
     }
 }
 
-/** One reused path for the Hypercube's hatched interior (draw-thread confined). */
+/**
+ * The Hypercube's interior as one world-space path, rebuilt only when the lattice nodes change
+ * (rebuilding a path every frame allocates); draw-thread confined.
+ */
 private object HypercubeScratch {
-    val path: Path by lazy { Path() }
+    private const val MAX_NODES = 16
+    private val path = Path()
+    private val coordinates = FloatArray(MAX_NODES * 2)
+    private var count = -1
+
+    fun path(lattice: kinetickk.foundation.collections.ImmutableList<kinetickk.ball.gameplay.nucleus.render.CharacterLatticePoint>): Path {
+        val nodes = minOf(lattice.size, MAX_NODES)
+        var same = nodes == count
+        if (same) for (index in 0 until nodes) {
+            val point = lattice[index]
+            if (coordinates[index * 2] != point.x || coordinates[index * 2 + 1] != point.y) {
+                same = false
+                break
+            }
+        }
+        if (same) return path
+        path.rewind()
+        for (index in 0 until nodes) {
+            val point = lattice[index]
+            coordinates[index * 2] = point.x
+            coordinates[index * 2 + 1] = point.y
+            if (index == 0) path.moveTo(point.x, point.y) else path.lineTo(point.x, point.y)
+        }
+        path.close()
+        count = nodes
+        return path
+    }
 }

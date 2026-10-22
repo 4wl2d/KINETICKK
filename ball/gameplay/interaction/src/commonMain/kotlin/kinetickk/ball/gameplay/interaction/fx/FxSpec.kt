@@ -51,7 +51,7 @@ enum class FxPrimitive {
     /** A hexagon outline of radius r(p). */
     HEX,
 
-    /** A sheared (−12°) square outline of half size r(p). */
+    /** A sheared (−12°) square outline whose corners lie at r(p). */
     PLATE,
 
     /** n jagged three-segment cracks growing from R·r0 to r(p), ink under colour; `param` jitters the joints. */
@@ -324,7 +324,7 @@ object ReactionFxSpecs {
         // Ice Fan: five shards fanning away from the Core over a gravity crush at the origin.
         ReactionId.GLACIER_CRUSH -> spec(0.55f, FxReach.FIXED, 220f,
             layer(FxPrimitive.SHARDS, 0f, 0.45f, FxEase.O, FxColor.A, n = 5, r0 = 0.05f, r1 = 1f, param = 18f, param2 = 25f, flags = SIG or DIR),
-            layer(FxPrimitive.RING, 0f, 0.22f, FxEase.I, FxColor.B, r0 = 0.30f, r1 = 0.08f, w = 3f, flags = SIG),
+            layer(FxPrimitive.RING, 0f, 0.30f, FxEase.I, FxColor.B, r0 = 0.30f, r1 = 0.08f, w = 3f, flags = SIG),
             layer(FxPrimitive.SPOKES, 0f, 0.25f, FxEase.S, FxColor.B, n = 5, r0 = 0.05f, r1 = 0.35f, w = 1.5f, param2 = 25f, flags = DIR or SEC),
             layer(FxPrimitive.DOTS, 0.20f, 0.70f, FxEase.L, FxColor.A, n = 10, r0 = 0.30f, r1 = 1f, param = 2f, param2 = 55f, flags = DIR or SEC),
         )
