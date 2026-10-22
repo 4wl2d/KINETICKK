@@ -71,6 +71,8 @@ import kotlin.test.assertTrue
  * ready (APEX); they also measure bolts erased, refunded seconds, control seconds, distance flown at 900 u/s and Apex
  * recharge progress. Protection that holds only at speed is flown through fast passes while hits land (RUSH), a keystone
  * that strips defenses also against Elites immune to the weapon's element, and a Spored mark where marked targets die.
+ * A 0.5.0 action whose trigger its encounter never fires is flown there again with the trigger scripted in (a Brake,
+ * ricochets, fragile targets that fall), and an IntegrityBelow item is flown wounded below its threshold.
  * [everyNewVocabularyKindMovesItsEncounter] holds one probe per new kind to those encounters.
  */
 class PerceptibleItemImpactTest {
@@ -111,6 +113,7 @@ class PerceptibleItemImpactTest {
                 val (output, share) = bestGain(setup.arena, baseline, run(setup, item))
                 Triple(setup, output, share)
             }
+            if (ImpactEverySetup) measured.forEach { (s, o, g) -> println("SETUP ${item.id} ${s.label()} $o ${"%+.1f".format(g * 100f)} %") }
             var best = measured.maxBy { it.third }
             var fights = VARIANTS
             if (best.third in MIN_GAIN - CONFIRM_BAND..MIN_GAIN + CONFIRM_BAND) {
@@ -124,14 +127,14 @@ class PerceptibleItemImpactTest {
                 }.maxBy { it.third }
             }
             val (setup, output, share) = best
-            val line = "${item.id} ${item.name}: ${setup.arena}/${setup.weapon}${setup.immuneTo?.let { " vs $it-immune" }.orEmpty()} " +
+            val line = "${item.id} ${item.name}: ${setup.label()} " +
                 "${setup.support} $output ${"%+.1f".format(share * 100f)} % ($fights fights)"
             report += line
             if (share < MIN_GAIN && item.name !in JUSTIFIED_EXCEPTIONS) misses += line
         }
         report.forEach { println("IMPACT $it") }
         baselines.forEach { (setup, outcome) ->
-            println("BASELINE ${setup.arena}/${setup.weapon}${setup.immuneTo?.let { " vs $it-immune" }.orEmpty()} ${setup.support} $outcome")
+            println("BASELINE ${setup.label()} ${setup.support} $outcome")
         }
         assertTrue(JUSTIFIED_EXCEPTIONS.keys.all { name -> canonicalGameplayContent.items.any { it.name == name } }, "Every exception names an item")
         assertTrue(misses.isEmpty(), "Items that move no measured output by 5 %:\n" + misses.joinToString("\n"))
@@ -245,9 +248,23 @@ class PerceptibleItemImpactTest {
         val leashed: Boolean = arena.vocabulary,
         /** Every target is an Elite whose aspect is immune to this element (null: plain targets). */
         val immuneTo: StatusElement? = null,
+        /**
+         * A trigger the arena's own script never fires, scripted in for an item whose 0.5.0 action is measured there: a
+         * held Brake for BRAKE_RELEASE, ricochets and slams for RICOCHET and SLAM, targets as fragile as the crowd's for KILL.
+         */
+        val trigger: EffectTrigger? = null,
+        /**
+         * Above 0, a deep-pool arena starts the Core at this share of its integrity, so an IntegrityBelow condition holds
+         * where the attackers' damage is measured (the pool keeps it from ever falling there on its own).
+         */
+        val wounded: Float = 0f,
     )
 
     private fun Arena.weapons(): List<WeaponId?> = if (armed) ARENA_WEAPONS else listOf(null)
+
+    /** The arena and weapon, and what the setup scripts beyond the arena's own encounter. */
+    private fun Setup.label(): String = "$arena/$weapon" + immuneTo?.let { " vs $it-immune" }.orEmpty() +
+        trigger?.let { " with $it scripted" }.orEmpty() + (if (wounded > 0f) " wounded to $wounded" else "")
 
     private enum class Arena(
         /** False silences the weapon so only impacts and procs deal damage. */
@@ -500,7 +517,7 @@ class PerceptibleItemImpactTest {
         if (arena.pressure || arena.shots) {
             // A deep integrity pool: the attackers' damage is measured, never fatal.
             game.maxHp = 10_000f
-            game.hp = 10_000f
+            game.hp = if (setup.wounded > 0f) 10_000f * setup.wounded else 10_000f
         }
         game.shield = game.shieldCapacity()
         val slots = slotsFor(arena.motion, arena.targets)
@@ -541,7 +558,11 @@ class PerceptibleItemImpactTest {
                 val target = if (current == null || current.dead || current.hp <= 0f || current !in game.enemies) {
                     // Only an instance aspect (an Elite's) can be immune.
                     val type = if (setup.immuneTo != null || setup.elite && index == 0) EnemyType.ELITE else EnemyType.DRIFTER
-                    val integrity = if (arena == Arena.CULL && index % 2 == 1) STURDY else arena.integrity
+                    val integrity = when {
+                        arena == Arena.CULL && index % 2 == 1 -> STURDY
+                        setup.trigger == EffectTrigger.KILL -> minOf(arena.integrity, Arena.CROWD.integrity)
+                        else -> arena.integrity
+                    }
                     game.addEnemyForTesting(x, y, hp = integrity, type = type).also { spawned ->
                         val immuneTo = setup.immuneTo
                         if (immuneTo != null) assignAspect(spawned, immuneTo.ordinal, immune = true)
@@ -585,7 +606,8 @@ class PerceptibleItemImpactTest {
             } else {
                 steer(game, t, path.radius, path.angular, heading)
             }
-            game.setBrake(arena.brake && if (arena.hits > 0f) t % 2f < 1.6f else t % 1.8f in 1.2f..1.7f)
+            val braking = arena.brake && (if (arena.hits > 0f) t % 2f < 1.6f else t % 1.8f in 1.2f..1.7f)
+            game.setBrake(braking || setup.trigger == EffectTrigger.BRAKE_RELEASE && t % 1.8f in 1.2f..1.7f)
             // Heat-limited Dashes count only when one is ready; the heat arena presses Dash regardless, to overheat.
             if (arena.dashEvery > 0f && frame % (arena.dashEvery * FPS).toInt() == 0 && game.buildDashReady()) {
                 // Dash along the travel direction, into whatever lies ahead. For that one frame the singularity
@@ -636,7 +658,7 @@ class PerceptibleItemImpactTest {
             }
             if (arena.apex && game.apexReady()) game.apexBufferTime = MutableGameState.SKILL_INPUT_BUFFER_SECONDS
             if (arena.forcedOverdrive && frame % (10 * FPS).toInt() == 60 && game.overdriveTime <= 0f) game.overdriveCharge = 100f
-            if (arena.obstacles && frame % 36 == 0) {
+            if ((arena.obstacles || setup.trigger == EffectTrigger.RICOCHET || setup.trigger == EffectTrigger.SLAM) && frame % 36 == 0) {
                 game.fireClauses(EffectTrigger.RICOCHET)
                 val slammed = game.enemies.filter { it.alive }.minByOrNull { distanceSquared(it.x, it.y, game.coreX, game.coreY) }
                 if (slammed != null) game.fireClauses(EffectTrigger.SLAM, slammed, hit = 20f)
@@ -936,11 +958,33 @@ class PerceptibleItemImpactTest {
                 }, elite, weapon, leashed = arena.vocabulary || launches)
             }
         }
+        // A 0.5.0 action is measured in an encounter its trigger may never fire in (a hush planted on a Brake release among
+        // shooters, bolts erased off a rock, a maw left by kills): it is flown there again with that trigger scripted in.
+        val carried = item.clauses.filter { it.trigger in ScriptedTriggers }.flatMap { clause ->
+            clause.actions.filter(::isVocabularyAction).flatMap(::actionArenas).filter { it.vocabulary }.map { it to clause.trigger }
+        }.distinct().flatMap { (arena, trigger) ->
+            (if (familyWeapon != null && arena.armed) listOf(familyWeapon) else arena.weapons()).map { weapon ->
+                Setup(arena, support, elite, weapon, leashed = true, trigger = trigger)
+            }
+        }
+        // An IntegrityBelow item is flown wounded below its threshold where the deep pool would otherwise never let it hold.
+        val wound = conditions.filterIsInstance<EffectCondition.IntegrityBelow>().minOfOrNull { it.fraction }
+        val flown = (setups + carried).map { setup ->
+            if (wound != null && setup.arena.vocabulary && (setup.arena.pressure || setup.arena.shots)) setup.copy(wounded = wound * 0.8f) else setup
+        }
         // A keystone that strips defenses (Crevasse) is also flown against Elites immune to the weapon's own element.
         val armored = if (item.keystone in DefenseBreakingKeystones) {
             listOf(Setup(Arena.STATUS, support, elite, WeaponId.ION_SWARM, leashed = launches, immuneTo = StatusElement.ION))
         } else emptyList()
-        return setups + armored
+        return flown + armored
+    }
+
+    /** The 0.5.0 actions, whose encounters may need their trigger scripted in. */
+    private fun isVocabularyAction(action: EffectAction): Boolean = when (action) {
+        is EffectAction.RefundSkills, is EffectAction.ChargeApex, is EffectAction.ForceReaction, is EffectAction.Zone,
+        is EffectAction.EraseShots, is EffectAction.CoreImpulse, is EffectAction.ApplyMark, is EffectAction.Throw,
+        EffectAction.PrimeDash -> true
+        else -> false
     }
 
     private fun conditionArenas(condition: EffectCondition): List<Arena> = when (condition) {
@@ -1145,11 +1189,18 @@ class PerceptibleItemImpactTest {
             first..last
         } ?: 0..Int.MAX_VALUE
 
+        /** `KK_IMPACT_SETUPS` set: every setup's best gain is printed, not only the item's best (for retuning a miss). */
+        val ImpactEverySetup: Boolean = System.getenv("KK_IMPACT_SETUPS") != null
+
         /**
          * Keystones whose form strips enemy defenses (Crevasse: no aspect immunity, resistance or plates), which only
          * defended targets can show.
          */
         val DefenseBreakingKeystones: Set<ReactionId> = setOf(ReactionId.FRACTURE)
+
+        /** Triggers a setup can script into an encounter whose own script never fires them ([Setup.trigger]). */
+        val ScriptedTriggers: Set<EffectTrigger> =
+            setOf(EffectTrigger.BRAKE_RELEASE, EffectTrigger.RICOCHET, EffectTrigger.SLAM, EffectTrigger.KILL)
 
         /** Items whose effect no scripted encounter can show, by name, with the reason. None today. */
         val JUSTIFIED_EXCEPTIONS: Map<String, String> = emptyMap()
