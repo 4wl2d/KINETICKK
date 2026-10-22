@@ -35,7 +35,7 @@ class SessionTransitionTest {
         assertEquals(SessionTransitionKind.NONE, state.kind)
         assertTrue(state.recording)
         // Without a recorded frame there is nothing to cover: fade.
-        state.show(AppDestination.Home, AppDestination.Lab)
+        state.show(AppDestination.Home, AppDestination.Workshop)
         assertEquals(SessionTransitionKind.CROSSFADE, state.kind)
         state.finish()
         state.recorded()

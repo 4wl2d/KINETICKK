@@ -19,16 +19,12 @@ import kinetickk.ball.profile.api.ProfilePort
 import kinetickk.ball.profile.impl.ProfileComponent
 import kinetickk.ball.profile.impl.ProfilePersistenceCapability
 import kinetickk.ball.profile.impl.createProfileComponent
-import kinetickk.ball.profile.interaction.armory.api.ArmoryFeature
-import kinetickk.ball.profile.interaction.armory.impl.DefaultArmoryFeature
-import kinetickk.ball.profile.interaction.hangar.api.HangarFeature
-import kinetickk.ball.profile.interaction.hangar.impl.DefaultHangarFeature
-import kinetickk.ball.profile.interaction.matrix.api.MatrixFeature
-import kinetickk.ball.profile.interaction.matrix.impl.DefaultMatrixFeature
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
 import kinetickk.ball.profile.interaction.rebirth.impl.DefaultRebirthFeature
 import kinetickk.ball.profile.interaction.settings.api.SettingsFeature
 import kinetickk.ball.profile.interaction.settings.impl.DefaultSettingsFeature
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopFeature
+import kinetickk.ball.profile.interaction.workshop.impl.DefaultWorkshopFeature
 import kinetickk.flow.session.api.AppSessionPort
 import kinetickk.flow.session.impl.createAppSessionComponent
 import kinetickk.flow.session.interaction.AppSessionContent
@@ -63,9 +59,7 @@ internal class AppCompositionOwner(
     appSessionComponent: AppSessionPort? = null,
     homeFeature: HomeFeature? = null,
     settingsFeature: SettingsFeature? = null,
-    matrixFeature: MatrixFeature? = null,
-    armoryFeature: ArmoryFeature? = null,
-    hangarFeature: HangarFeature? = null,
+    workshopFeature: WorkshopFeature? = null,
     rebirthFeature: RebirthFeature? = null,
     codexFeature: CodexFeature? = null,
     profileUnavailableFeature: ProfileUnavailableFeature? = null,
@@ -102,25 +96,15 @@ internal class AppCompositionOwner(
         this.profilePort,
         this.audioService,
     )
-    private val matrixFeature: MatrixFeature = matrixFeature ?: DefaultMatrixFeature(
+    private val workshopFeature: WorkshopFeature = workshopFeature ?: DefaultWorkshopFeature(
         profilePort = this.profilePort,
         matrixNodes = uiCatalog.matrixNodes,
-        audioService = this.audioService,
-    )
-    private val armoryFeature: ArmoryFeature = armoryFeature ?: DefaultArmoryFeature(
-        profilePort = this.profilePort,
         weapons = uiCatalog.weapons,
         weaponMasteries = uiCatalog.weaponMasteries,
-        audioService = this.audioService,
-        coreShapes = uiCatalog.coreShapes,
-        relics = uiCatalog.relics,
-    )
-    private val hangarFeature: HangarFeature = hangarFeature ?: DefaultHangarFeature(
-        profilePort = this.profilePort,
         coreShapes = uiCatalog.coreShapes,
         audioService = this.audioService,
-        weapons = uiCatalog.weapons,
         relics = uiCatalog.relics,
+        upgrades = uiCatalog.upgrades,
     )
     private val rebirthFeature: RebirthFeature = rebirthFeature ?: DefaultRebirthFeature(
         profilePort = this.profilePort,
@@ -168,9 +152,7 @@ internal class AppCompositionOwner(
             gameplayPresentation = gameplayComponent,
             homeFeature = homeFeature,
             settingsFeature = settingsFeature,
-            matrixFeature = matrixFeature,
-            armoryFeature = armoryFeature,
-            hangarFeature = hangarFeature,
+            workshopFeature = workshopFeature,
             rebirthFeature = rebirthFeature,
             codexFeature = codexFeature,
             profileUnavailableFeature = profileUnavailableFeature,

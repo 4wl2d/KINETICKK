@@ -45,6 +45,13 @@ data class AppShellProjection(
 
     val normalInputEnabled: Boolean
         get() = lifecycle == SessionLifecycle.READY && pendingWorkflow == null
+
+    /**
+     * Characters change between runs: the Workshop offers selection only over the Home base. Session
+     * still decides every [SessionInteractionPulse.SelectCoreShapeRequested]; this only tells the UI.
+     */
+    val characterSelectionAvailable: Boolean
+        get() = base == AppDestination.Home
 }
 
 /** Local Interaction/query facade. Participant command authority is bound separately by Impl. */

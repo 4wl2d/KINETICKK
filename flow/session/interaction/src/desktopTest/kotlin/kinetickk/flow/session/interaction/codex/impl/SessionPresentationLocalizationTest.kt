@@ -53,7 +53,7 @@ class SessionPresentationLocalizationTest {
             }
         }
         mainClock.advanceTimeBy(300)
-        val targets = listOf("start", "lab", "armory", "rebirth", "codex", "settings")
+        val targets = listOf("start", "workshop", "rebirth", "codex", "settings")
         for (target in targets.drop(1) + targets.reversed()) {
             val node = onNodeWithTag("kinetickk.home.$target")
             node.performMouseInput { moveTo(center) }
@@ -72,9 +72,9 @@ class SessionPresentationLocalizationTest {
         assertTrue(outputs.isEmpty(), "Preview must not activate a route")
         onRoot().performKeyInput { pressKey(Key.DirectionDown) }
         mainClock.advanceTimeByFrame()
-        onNodeWithTag("kinetickk.home.lab").assertIsFocused()
+        onNodeWithTag("kinetickk.home.workshop").assertIsFocused()
         onRoot().performKeyInput { pressKey(Key.Enter) }
-        assertIs<HomeOutput.OpenLab>(outputs.single())
+        assertEquals(HomeOutput.OpenWorkshop(null), outputs.single())
     }
 
     @Test
@@ -94,13 +94,13 @@ class SessionPresentationLocalizationTest {
         onNodeWithTag("kinetickk.home.start").assertIsFocused()
         onRoot().performKeyInput { pressKey(Key.DirectionDown) }
         mainClock.advanceTimeByFrame()
-        onNodeWithTag("kinetickk.home.lab").assertIsFocused()
+        onNodeWithTag("kinetickk.home.workshop").assertIsFocused()
         runOnIdle { heightValue = 0.dp }
         mainClock.advanceTimeBy(100)
-        onNodeWithTag("kinetickk.home.lab").assertDoesNotExist()
+        onNodeWithTag("kinetickk.home.workshop").assertDoesNotExist()
         runOnIdle { heightValue = 700.dp }
         mainClock.advanceTimeBy(100)
-        onNodeWithTag("kinetickk.home.lab").assertIsFocused()
+        onNodeWithTag("kinetickk.home.workshop").assertIsFocused()
     }
 
     @Test
@@ -114,17 +114,17 @@ class SessionPresentationLocalizationTest {
             }
         }
         mainClock.advanceTimeBy(300)
-        onNodeWithTag("kinetickk.home.lab").performMouseInput { moveTo(center) }
+        onNodeWithTag("kinetickk.home.workshop").performMouseInput { moveTo(center) }
         mainClock.advanceTimeBy(500)
         assertTrue(outputs.isEmpty(), "Hover changes the scene without navigating or starting a run")
-        onNodeWithTag("kinetickk.home.lab").assertIsFocused()
-        // Hover selected Lab; Down selects Armory and Enter dispatches one action.
+        onNodeWithTag("kinetickk.home.workshop").assertIsFocused()
+        // Hover selected the Workshop; Down selects Rebirth and Enter dispatches one action.
         onRoot().performKeyInput { pressKey(Key.DirectionDown) }
         mainClock.advanceTimeByFrame()
-        onNodeWithTag("kinetickk.home.armory").assertIsFocused()
+        onNodeWithTag("kinetickk.home.rebirth").assertIsFocused()
         onRoot().performKeyInput { pressKey(Key.Enter) }
         assertEquals(1, outputs.size)
-        assertIs<HomeOutput.OpenArmory>(outputs.single())
+        assertIs<HomeOutput.OpenRebirth>(outputs.single())
     }
 
     @Test
@@ -204,12 +204,12 @@ class SessionPresentationLocalizationTest {
         }
         mainClock.advanceTimeByFrame()
         onNodeWithTag("kinetickk.home.start").assertContentDescriptionEquals("Начать забег")
-        onNodeWithTag("kinetickk.home.hangar").assertContentDescriptionEquals("Открыть ангар. Текущая форма: Круг")
+        onNodeWithTag("kinetickk.home.hangar").assertContentDescriptionEquals("Выбрать персонажа. Текущая форма: Круг")
         saveLocalizationCapture("home-ru")
         runOnIdle { languageValue = AppLanguage.English }
         mainClock.advanceTimeByFrame()
         onNodeWithTag("kinetickk.home.start").assertContentDescriptionEquals("Start run")
-        onNodeWithTag("kinetickk.home.hangar").assertContentDescriptionEquals("Open the Hangar. Current form: Circle")
+        onNodeWithTag("kinetickk.home.hangar").assertContentDescriptionEquals("Choose a character. Current form: Circle")
         saveLocalizationCapture("home-en")
     }
 }

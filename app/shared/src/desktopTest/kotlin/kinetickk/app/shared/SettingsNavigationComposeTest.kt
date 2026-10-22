@@ -262,7 +262,7 @@ class SettingsNavigationComposeTest {
                     input.performTextClearance()
                     input.performTextInput("100")
                     assertVolume(100)
-                    // This key must reach the editor before the session's Armory shortcut.
+                    // This key must reach the editor before the session's Workshop alias.
                     val selectAllModifier = if (System.getProperty("os.name").startsWith("Mac")) Key.MetaLeft else Key.CtrlLeft
                     input.performKeyInput { keyDown(selectAllModifier); pressKey(Key.A); keyUp(selectAllModifier) }
                     render(AppDestination.Settings)
@@ -414,28 +414,27 @@ class SettingsNavigationComposeTest {
                     mainClock.advanceTimeBy(1_000)
                     waitForIdle()
                 }
-                for ((shortcut, destination) in listOf(Key.L to AppDestination.Lab, Key.A to AppDestination.Armory, Key.B to AppDestination.Rebirth)) {
-                    key(shortcut, destination)
-                    when (destination) {
-                        AppDestination.Lab -> {
-                            scrollProfileToEnd("profile-matrix-scroll")
-                            onNodeWithTag("profile-matrix-node-${kinetickk.ball.content.api.MatrixNodeId.entries.last()}").assertIsDisplayed()
-                        }
-                        AppDestination.Rebirth -> {
-                            scrollProfileToEnd("profile-rebirth-scroll")
-                            onNodeWithTag("profile-rebirth-advance").assertIsDisplayed()
-                        }
-                        AppDestination.Armory -> {
-                            repeat(3) { onNodeWithTag("profile-armory-next").performClick() }
-                            scrollProfileToEnd("profile-armory-scroll")
-                            render(AppDestination.Armory)
-                            onNodeWithTag("profile-armory-equip-${catalog.uiCatalog().weapons.last().id}").assertIsDisplayed()
-                            onNodeWithTag("profile-armory-next").assertIsNotEnabled()
-                        }
-                        else -> Unit
-                    }
-                    key(Key.Escape, AppDestination.Home)
-                }
+                // L opens the Workshop on the Core Matrix; A switches it to the weapons in place; W closes it.
+                key(Key.L, AppDestination.Workshop)
+                onNodeWithTag("kinetickk.workshop.tab.matrix").assertIsSelected()
+                scrollProfileToEnd("profile-matrix-scroll")
+                onNodeWithTag("profile-matrix-node-${kinetickk.ball.content.api.MatrixNodeId.entries.last()}").assertIsDisplayed()
+                key(Key.A, AppDestination.Workshop)
+                onNodeWithTag("kinetickk.workshop.tab.weapons").assertIsSelected()
+                repeat(3) { onNodeWithTag("profile-armory-next").performClick() }
+                scrollProfileToEnd("profile-armory-scroll")
+                render(AppDestination.Workshop)
+                onNodeWithTag("profile-armory-equip-${catalog.uiCatalog().weapons.last().id}").assertIsDisplayed()
+                onNodeWithTag("profile-armory-next").assertIsNotEnabled()
+                key(Key.W, AppDestination.Home)
+                // W again opens the Workshop on the tab shown last.
+                key(Key.W, AppDestination.Workshop)
+                onNodeWithTag("kinetickk.workshop.tab.weapons").assertIsSelected()
+                key(Key.Escape, AppDestination.Home)
+                key(Key.B, AppDestination.Rebirth)
+                scrollProfileToEnd("profile-rebirth-scroll")
+                onNodeWithTag("profile-rebirth-advance").assertIsDisplayed()
+                key(Key.Escape, AppDestination.Home)
                 key(Key.C, AppDestination.Codex)
                 onNodeWithTag("codex-tab-0").performClick()
                 render(AppDestination.Codex)

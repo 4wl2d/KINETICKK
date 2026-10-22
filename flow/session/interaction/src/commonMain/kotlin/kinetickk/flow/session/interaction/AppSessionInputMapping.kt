@@ -5,11 +5,10 @@ package kinetickk.flow.session.interaction
 
 import androidx.compose.ui.input.key.Key
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
-import kinetickk.ball.profile.interaction.armory.api.ArmoryOutput
-import kinetickk.ball.profile.interaction.hangar.api.HangarOutput
-import kinetickk.ball.profile.interaction.matrix.api.MatrixOutput
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthOutput
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopOutput
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopTab
 import kinetickk.flow.session.api.AppDestination
 import kinetickk.flow.session.api.SessionInteractionPulse
 import kinetickk.flow.session.api.SessionShortcut
@@ -18,23 +17,40 @@ import kinetickk.flow.session.interaction.home.api.HomeOutput
 
 internal fun Key.toSessionShortcut(): SessionShortcut? = when (this) {
     Key.S -> SessionShortcut.SETTINGS
-    Key.L -> SessionShortcut.LAB
-    Key.A -> SessionShortcut.ARMORY
+    Key.W -> SessionShortcut.WORKSHOP
     Key.B -> SessionShortcut.REBIRTH
     Key.C, Key.I -> SessionShortcut.CODEX
-    Key.H -> SessionShortcut.HANGAR
     Key.M -> SessionShortcut.MUTE
     Key.Escape -> SessionShortcut.BACK
     Key.Enter -> SessionShortcut.ENTER
     else -> null
 }
 
+/**
+ * Presentation aliases that open the Workshop on a tab: L the Core Matrix, A the weapons and, over
+ * the Home base only, H the characters. Session still decides whether the Workshop opens (and
+ * whether a character may be selected); the tab is the shell's request to the Workshop.
+ */
+internal fun Key.toWorkshopAlias(base: AppDestination): WorkshopTab? = when (this) {
+    Key.L -> WorkshopTab.MATRIX
+    Key.A -> WorkshopTab.WEAPONS
+    Key.H -> if (base == AppDestination.Home) WorkshopTab.CHARACTERS else null
+    else -> null
+}
+
+/** True for a key the shell maps: a session shortcut or a Workshop alias over [base]. */
+internal fun Key.isShellKey(base: AppDestination): Boolean = toSessionShortcut() != null || toWorkshopAlias(base) != null
+
+/**
+ * The Workshop tab a Home output names (the character card's Characters); null for the Workshop row,
+ * which keeps the tab shown last, and for an output that is not a Workshop entry.
+ */
+internal fun HomeOutput.workshopTab(): WorkshopTab? = (this as? HomeOutput.OpenWorkshop)?.tab
+
 internal fun HomeOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
-    HomeOutput.OpenHangar -> SessionInteractionPulse.OpenOverlay(AppDestination.Hangar)
+    is HomeOutput.OpenWorkshop -> SessionInteractionPulse.OpenOverlay(AppDestination.Workshop)
     HomeOutput.StartRun -> SessionInteractionPulse.StartRunRequested
     HomeOutput.OpenSettings -> SessionInteractionPulse.OpenOverlay(AppDestination.Settings)
-    HomeOutput.OpenLab -> SessionInteractionPulse.OpenOverlay(AppDestination.Lab)
-    HomeOutput.OpenArmory -> SessionInteractionPulse.OpenOverlay(AppDestination.Armory)
     HomeOutput.OpenRebirth -> SessionInteractionPulse.OpenOverlay(AppDestination.Rebirth)
     HomeOutput.OpenCodex -> SessionInteractionPulse.OpenOverlay(AppDestination.Codex)
 }
@@ -54,22 +70,15 @@ internal fun SettingsOutput.toSessionPulse(): SessionInteractionPulse? = when (t
     SettingsOutput.Back -> SessionInteractionPulse.CloseOverlay
 }
 
-internal fun MatrixOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
-    MatrixOutput.Back -> SessionInteractionPulse.CloseOverlay
-}
-
-internal fun ArmoryOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
-    ArmoryOutput.Back -> SessionInteractionPulse.CloseOverlay
+internal fun WorkshopOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
+    WorkshopOutput.Back -> SessionInteractionPulse.CloseOverlay
+    is WorkshopOutput.SelectCharacter -> SessionInteractionPulse.SelectCoreShapeRequested(shape)
 }
 
 internal fun RebirthOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
     RebirthOutput.Back -> SessionInteractionPulse.CloseOverlay
     is RebirthOutput.ArmRequested -> SessionInteractionPulse.RebirthRequested(tier)
     is RebirthOutput.ConfirmRequested -> SessionInteractionPulse.RebirthRequested(tier)
-}
-
-internal fun HangarOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
-    HangarOutput.Back -> SessionInteractionPulse.CloseOverlay
 }
 
 internal fun CodexOutput.toSessionPulse(): SessionInteractionPulse = when (this) {

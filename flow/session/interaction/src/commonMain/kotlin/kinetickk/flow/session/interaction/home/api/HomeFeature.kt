@@ -8,6 +8,7 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.CoreShapeDefinition
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.profile.api.CharacterAchievementProgress
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopTab
 import kinetickk.foundation.collections.ImmutableSet
 import kinetickk.foundation.collections.ImmutableList
 
@@ -30,8 +31,14 @@ data class HomeUiModel(
     val relicCount: Int = 0,
     /** Catalog name (English content key) of the selected starting weapon, if cataloged. */
     val startingWeaponName: String? = null,
-    /** True when Matter covers the unlock cost of at least one locked weapon. */
-    val weaponUnlockAffordable: Boolean = false,
+    /**
+     * True when the Profile would accept a Workshop purchase now (a weapon unlock, a Matrix rank, a
+     * Refit or a Honing level): the Workshop row's Affordable stamp.
+     */
+    val workshopAffordable: Boolean = false,
+    /** Refit and Honing levels bought, over every level the Workshop sells (0 while unread). */
+    val upgradeLevels: Int = 0,
+    val upgradeLevelCap: Int = 0,
     /** Owned Core Matrix ranks over all ranks, and owned nodes over all nodes (0 while unread). */
     val matrixRanks: Int = 0,
     val matrixMaxRanks: Int = 0,
@@ -50,14 +57,16 @@ data class HomeUiModel(
 }
 
 sealed interface HomeOutput {
-    /** The current-character card or the H key: choose a character in the Hangar. */
-    data object OpenHangar : HomeOutput
     data object StartRun : HomeOutput
-    data object OpenSettings : HomeOutput
-    data object OpenLab : HomeOutput
-    data object OpenArmory : HomeOutput
+
+    /**
+     * Open the Workshop on [tab]: the character card asks for the Characters tab; the Workshop row
+     * passes null and the Workshop shows the tab it showed last.
+     */
+    data class OpenWorkshop(val tab: WorkshopTab?) : HomeOutput
     data object OpenRebirth : HomeOutput
     data object OpenCodex : HomeOutput
+    data object OpenSettings : HomeOutput
 }
 
 interface HomeFeature {

@@ -6,11 +6,13 @@ package kinetickk.flow.session.interaction.home.impl
 import kinetickk.ball.content.api.CoreShapeDefinition
 import kinetickk.ball.content.api.MatrixNodeDefinition
 import kinetickk.ball.content.api.RebirthPolicySnapshot
+import kinetickk.ball.content.api.UpgradePolicy
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.isAscendant
 import kinetickk.ball.profile.api.rank
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopTab
 import kinetickk.flow.session.interaction.audio.SessionAudioCue
 import kinetickk.flow.session.interaction.home.api.HomeOutput
 import kinetickk.flow.session.interaction.home.api.HomeUiModel
@@ -18,10 +20,11 @@ import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 
 internal sealed interface HomeAction {
-    data object OpenHangar : HomeAction
+    /** The current-character card: the Workshop on its Characters tab. */
+    data object OpenCharacters : HomeAction
     data object StartRun : HomeAction
-    data object OpenLab : HomeAction
-    data object OpenArmory : HomeAction
+    /** The Workshop row: the Workshop on the tab it showed last. */
+    data object OpenWorkshop : HomeAction
     data object OpenRebirth : HomeAction
     data object OpenCodex : HomeAction
     data object OpenSettings : HomeAction
@@ -44,6 +47,7 @@ internal class HomeReducer(
     private val weapons: ImmutableList<WeaponDefinition> = immutableListOf(),
     private val relicCount: Int = 0,
     private val matrixNodes: ImmutableList<MatrixNodeDefinition> = immutableListOf(),
+    private val upgrades: UpgradePolicy = UpgradePolicy(),
 ) {
     /** Maps the authoritative Home projection (and, when read, the Matrix ranks) into render facts. */
     fun uiModel(projection: HomeProgressProjection, matrix: MatrixProgress? = null): HomeUiModel = HomeUiModel(
@@ -63,12 +67,10 @@ internal class HomeReducer(
         discoveredRelicCount = projection.collection.discoveredRelicIds.size,
         relicCount = relicCount,
         startingWeaponName = weapons.firstOrNull { it.id == projection.loadout.selectedWeapon }?.name,
-        // The Profile refuses a weapon gated above the Rebirth rank, so only a weapon it would sell counts.
-        weaponUnlockAffordable = weapons.any { weapon ->
-            weapon.id !in projection.loadout.unlockedWeapons &&
-                projection.rebirthProgress.rank >= weapon.minimumRebirth &&
-                projection.economy.matter >= weapon.permanentUnlockCost.toLong()
-        },
+        // The Profile reads its own purchase rules for the stamp; Home never repeats them.
+        workshopAffordable = projection.workshopAffordable,
+        upgradeLevels = projection.upgradeLevels,
+        upgradeLevelCap = upgrades.maxLevel * (coreShapes.size + weaponCount),
         matrixRanks = matrix?.let { progress ->
             matrixNodes.sumOf { node -> progress.rank(node.id).coerceIn(0, node.maxRanks) }
         } ?: 0,
@@ -80,10 +82,9 @@ internal class HomeReducer(
     )
 
     fun reduce(action: HomeAction): HomeReduction = when (action) {
-        HomeAction.OpenHangar -> navigate(HomeOutput.OpenHangar)
+        HomeAction.OpenCharacters -> navigate(HomeOutput.OpenWorkshop(WorkshopTab.CHARACTERS))
         HomeAction.StartRun -> navigate(HomeOutput.StartRun)
-        HomeAction.OpenLab -> navigate(HomeOutput.OpenLab)
-        HomeAction.OpenArmory -> navigate(HomeOutput.OpenArmory)
+        HomeAction.OpenWorkshop -> navigate(HomeOutput.OpenWorkshop(null))
         HomeAction.OpenRebirth -> navigate(HomeOutput.OpenRebirth)
         HomeAction.OpenCodex -> navigate(HomeOutput.OpenCodex)
         HomeAction.OpenSettings -> navigate(HomeOutput.OpenSettings)

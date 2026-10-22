@@ -393,6 +393,26 @@ class CodexComposeTest {
         assertTrue(shown.left >= box.left - 0.5.dp && shown.right <= box.right + 0.5.dp, "scrolling brings the last tab in: $shown in $box")
     }
 
+    @Test fun theCatalogCountShowsOnceInTheNavOnWideScreensAndInTheHeaderOnPhones() {
+        val catalog = codexTestCatalog()
+        val model = CodexRenderModel(immutableSetOf(0, 1), CodexRunStacks(), catalog.items)
+        for ((width, height) in listOf(1440 to 810, 390 to 844)) androidx.compose.ui.test.v2.runDesktopComposeUiTest(width, height) {
+            setContent {
+                CompositionLocalProvider(LocalDensity provides Density(1f, 1f)) {
+                    Box(Modifier.requiredSize(width.dp, height.dp)) { CodexContent(catalog, model, codexTestProgress(), 1.25f) { } }
+                }
+            }
+            // Without a run the Codex opens on the Catalog.
+            if (width >= 900) {
+                // The left nav lists each section's count; the header does not repeat the shown one.
+                onNodeWithTag("codex-category-0").assertExists()
+                onNodeWithTag("codex-collection-progress").assertDoesNotExist()
+            } else {
+                onNodeWithTag("codex-collection-progress").assertExists()
+            }
+        }
+    }
+
     @Test fun buildTabBadgesAndNewStampsLeaveTheCellGlyphClear() {
         val catalog = codexTestCatalog()
         val stacks = List(80) { if (it == 0 || it == 1) 1 else 0 }.toImmutableList()

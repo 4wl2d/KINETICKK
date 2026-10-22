@@ -23,17 +23,16 @@ internal enum class SessionRedesignText(
     SELECTED("Selected", "Выбрана"),
     STATUS("Status", "Статус"),
     READY("Ready", "Готово"),
-    UNLOCKABLE("Unlockable", "Можно открыть"),
+    AFFORDABLE("Affordable", "Доступно"),
+    UPGRADES("Upgrades", "Улучшения"),
+    WEAPONS_FACT("Weapons", "Оружие"),
+    PERCENT("{0}%", "{0}%"),
     LANGUAGE("Language", "Язык"),
     TEXT_SIZE("Text size", "Размер текста"),
 
-    LAB_INFO(
-        "The Core Matrix: permanent upgrades bought with Matter in four branches. Every form shares them, they stay after every rebirth, and a reset refunds them for free.",
-        "Матрица Ядра: постоянные улучшения за материю в четырёх ветвях. Они действуют на все формы, сохраняются после перерождения, а сброс бесплатно возвращает материю.",
-    ),
-    ARMORY_INFO(
-        "Unlock starting weapons with Matter. Every form can use every weapon.",
-        "Открывайте стартовое оружие за материю. Любая форма может использовать любое оружие.",
+    WORKSHOP_INFO(
+        "Spend Matter on characters, weapons and the Core Matrix. Everything bought here stays after every rebirth.",
+        "Тратьте материю на персонажей, оружие и Матрицу Ядра. Всё купленное здесь сохраняется после перерождения.",
     ),
     REBIRTH_INFO(
         "Defeat the Architect to earn the next, harder tier and a Reborn rank; any earned tier can be chosen for the next run. Matter, Matrix nodes, unlocked weapons, discoveries and settings are kept.",

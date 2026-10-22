@@ -101,17 +101,57 @@ class HomeInfoGeometryTest {
         val layout = homeLayoutGeometry(1_440f, 810f, 1f)
         assertEquals(HomeLayoutMode.REGULAR, layout.mode)
         val menu = HomeMenuTargets.map(layout::bounds)
+        // Five rows: Play, Workshop, Rebirth, Codex, Settings.
+        assertEquals(listOf(HomeLayoutTarget.START, HomeLayoutTarget.WORKSHOP, HomeLayoutTarget.REBIRTH, HomeLayoutTarget.CODEX,
+            HomeLayoutTarget.SETTINGS), HomeMenuTargets)
         menu.forEachIndexed { index, bounds ->
-            // Home board: items at x = 880 - 12 i, 74 px apart, the first centered at y = 161.
+            // Items at x = 880 - 12 i, 80 px apart, the first centered at y = 186: the block stays centred on y 346.
             assertEquals(880f - index * 12f, bounds.left, 0.01f)
-            assertEquals(161f + index * 74f, bounds.center.y, 0.01f)
+            assertEquals(186f + index * 80f, bounds.center.y, 0.01f)
+            assertEquals(80f, bounds.height, 0.01f)
         }
+        assertEquals(346f, (menu.first().top + menu.last().bottom) * 0.5f, 0.01f)
         val card = layout.bounds(HomeLayoutTarget.HANGAR)
-        // The Hangar card spans the form panel where the six form tiles stood.
+        // The Characters card spans the form panel where the six form tiles stood.
         assertEquals(826f, card.left, 0.01f)
         assertEquals(1_392f, card.right, 0.01f)
         assertEquals(680f, card.top, 0.01f)
-        assertTrue(card.top > menu.last().bottom, "The Hangar card sits under the menu")
+        assertTrue(card.top > menu.last().bottom, "The Characters card sits under the menu")
+        // Two chips (Matter keeps its label on desktop); the form's (!) holds the mechanic's text.
+        assertEquals(2, layout.scene.chipCount)
+        assertFalse(layout.scene.compactChips)
+        assertTrue(layout.info(HomeInfoTarget.FORM) != null)
+    }
+
+    @Test
+    fun phoneMenusStackFiveRowsAndTwoColumnsNeverLeaveALoneItem() {
+        // Landscape: five rows of 48 to 58 px, compact chips.
+        listOf(844f to 390f, 800f to 360f, 600f to 390f, 1_000f to 360f).forEach { (width, height) ->
+            val layout = homeLayoutGeometry(width, height, 1f)
+            assertEquals(HomeLayoutMode.COMPACT_LANDSCAPE, layout.mode)
+            assertTrue(layout.scene.compactChips)
+            HomeMenuTargets.map(layout::bounds).forEach { assertTrue(it.height in 48f..58f, "row ${it.height} at ${width}x$height") }
+        }
+        // Portrait from 600 px tall: one column of five rows.
+        val tall = homeLayoutGeometry(390f, 600f, 1f)
+        assertEquals(1, tall.scene.menuColumns)
+        assertTrue(tall.scene.compactChips)
+        HomeMenuTargets.map(tall::bounds).zipWithNext().forEach { (upper, lower) -> assertEquals(upper.bottom, lower.top, 0.01f) }
+        // Below 600 px: Play spans both columns, the other four fill two rows of two.
+        val short = homeLayoutGeometry(390f, 560f, 1f)
+        assertEquals(2, short.scene.menuColumns)
+        val start = short.bounds(HomeLayoutTarget.START)
+        assertEquals(16f, start.left, 0.01f)
+        assertEquals(374f, start.right, 0.01f)
+        val rows = HomeMenuTargets.drop(1).map(short::bounds).chunked(2)
+        assertEquals(2, rows.size)
+        rows.forEachIndexed { row, (left, right) ->
+            assertEquals(left.top, right.top, 0.01f)
+            assertEquals(start.top + (row + 1) * start.height, left.top, 0.01f)
+            assertTrue(left.right < right.left)
+            assertEquals(start.left, left.left, 0.01f)
+            assertEquals(start.right, right.right, 0.01f)
+        }
     }
 
     @Test

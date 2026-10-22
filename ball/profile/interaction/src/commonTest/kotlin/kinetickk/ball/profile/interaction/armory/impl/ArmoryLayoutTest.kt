@@ -8,6 +8,7 @@ import kinetickk.ball.profile.interaction.ProfileLayoutMode
 import kinetickk.ball.profile.interaction.TestWeapons
 import kinetickk.ball.profile.interaction.profileFrame
 import kinetickk.ball.profile.interaction.profileTextScale
+import kinetickk.ball.profile.interaction.workshop.impl.WorkshopSegment
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -107,8 +108,10 @@ class ArmoryLayoutTest {
     @Test
     fun primaryActionStaysOnScreenAtEveryTextSize() {
         for ((width, height) in listOf(1440f to 810f, 1000f to 700f, 844f to 390f, 720f to 360f, 390f to 844f)) {
-            for (textScale in listOf(1f, 1.75f)) {
-                val layout = layout(width, height, textScale = textScale)
+            for ((textScale, segment) in listOf(1f, 1.75f).flatMap { scale -> WorkshopSegment.entries.filter {
+                it != WorkshopSegment.TRAITS }.map { scale to it } }) {
+                val layout = armoryLayout(profileFrame(width, height, 1f), BoardWeapons.size, textScale, backWidth = 80f,
+                    actionWidth = 260f, segment = segment)
                 val action = layout.action
                 assertTrue(action.top >= layout.frame.headerHeight && action.bottom <= height, "$width x $height @$textScale $action")
                 if (layout.actionPinned) {
@@ -118,21 +121,32 @@ class ArmoryLayoutTest {
                 } else {
                     // The details fit, so nothing scrolls and the action follows the ladder.
                     assertEquals(0f, layout.detailScrollMax, "$width x $height @$textScale")
-                    assertTrue(layout.ladder.bottom <= action.top, "$width x $height @$textScale")
+                    assertTrue(maxOf(layout.ladder.bottom, layout.forms.bottom, layout.facts.bottom, layout.upgrade.bottom) <= action.top,
+                        "$width x $height @$textScale $segment")
                 }
             }
         }
-        // The weapon sheet (mastery forms, synergy, facts) follows the ladder in order; on the board
-        // frame it runs past the fold, so the action is pinned at the panel's bottom under it.
-        val board = layout(1440f, 810f)
-        assertTrue(board.forms.top >= board.ladder.bottom && board.synergy.top >= board.forms.bottom &&
-            board.facts.top >= board.synergy.bottom, "${board.ladder} ${board.forms} ${board.synergy} ${board.facts}")
-        assertEquals(board.facts.bottom + 12f, board.detailViewport.top + board.detailContentHeight, 0.01f)
-        assertTrue(board.actionPinned)
-        assertEquals(810f - 16f, board.action.bottom, 0.01f)
-        assertTrue(layout(390f, 844f, textScale = 1.75f).actionPinned)
+        // Each segment's blocks follow the switch in order and the others take no room; the content ends
+        // at the shown body (the Mastery sheet on the board frame still runs past the fold: the action pins).
+        fun board(segment: WorkshopSegment) = armoryLayout(profileFrame(1440f, 810f, 1f), BoardWeapons.size, 1f, 80f, 260f, segment = segment)
+        val mastery = board(WorkshopSegment.MASTERY)
+        assertTrue(mastery.segments.top >= mastery.tags.bottom && mastery.mastery.top >= mastery.segments.bottom &&
+            mastery.ladder.top >= mastery.mastery.bottom && mastery.forms.top >= mastery.ladder.bottom, "${mastery.ladder} ${mastery.forms}")
+        assertEquals(0f, mastery.synergy.height + mastery.facts.height + mastery.upgrade.height)
+        assertEquals(mastery.forms.bottom + 12f, mastery.detailViewport.top + mastery.detailContentHeight, 0.01f)
+        val details = board(WorkshopSegment.DETAILS)
+        assertTrue(details.synergy.top >= details.segments.bottom && details.facts.top >= details.synergy.bottom)
+        assertEquals(0f, details.mastery.height + details.ladder.height + details.forms.height + details.upgrade.height)
+        assertEquals(details.facts.bottom + 12f, details.detailViewport.top + details.detailContentHeight, 0.01f)
+        val upgrade = board(WorkshopSegment.UPGRADE)
+        assertEquals(168f, upgrade.upgrade.height, 0.01f)
+        assertEquals(upgrade.upgrade.bottom + 12f, upgrade.detailViewport.top + upgrade.detailContentHeight, 0.01f)
+        // The board frame's Upgrade segment fits: the action sits in its natural place under the block.
+        assertFalse(upgrade.actionPinned)
+        assertEquals(upgrade.upgrade.bottom + 26f, upgrade.action.top, 0.01f)
+        assertTrue(armoryLayout(profileFrame(390f, 844f, 1f), BoardWeapons.size, 1.75f, 80f, 260f, segment = WorkshopSegment.MASTERY).actionPinned)
         // A short sheet (measured heights) leaves the action in its natural place under the facts.
-        val short = armoryLayout(profileFrame(1440f, 810f, 1f), BoardWeapons.size, 1f, 80f, 260f) { _, _ ->
+        val short = armoryLayout(profileFrame(1440f, 810f, 1f), BoardWeapons.size, 1f, 80f, 260f, segment = WorkshopSegment.DETAILS) { _, _ ->
             ArmoryDetailMetrics(40f, 50f, 22f, formsHeight = 10f, synergyHeight = 10f, factsHeight = 10f)
         }
         assertFalse(short.actionPinned)

@@ -354,7 +354,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                 true
             } else false
         }) {
-            // Header: Back, title, the Codex tabs, then the tab's progress chip and rule (!).
+            // Header: Back, title, the Codex tabs, then the tab's progress chip (Catalog: phones only) and rule (!).
             Row(Modifier.fillMaxWidth().heightIn(min = if (wide) 60.dp else 48.dp), verticalAlignment = Alignment.CenterVertically) {
                 KkButton(language.text(SessionRedesignText.BACK), onClick = onClose, modifier = Modifier.testTag("codex-close"),
                     variant = KkButtonVariant.GHOST, size = KkButtonSize.SM, enabled = !sheetVisible, textScale = ui)
@@ -372,8 +372,11 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                 }
                 if (compactHeader || wide) CodexNavigationTabs(tab, controlScale, compactTabs, Modifier.weight(1f)) { selectTab(it) }
                 when (tab) {
-                    CodexTab.CATALOG -> CodexChip("$collectionDiscovered/$collectionTotal", language.text(SessionText.COLLECTION_PROGRESS, collectionDiscovered, collectionTotal), ui,
-                        Modifier.padding(start = 8.dp).testTag("codex-collection-progress"))
+                    // Wide screens list every section's count in the left nav; the header repeats it only on phones.
+                    CodexTab.CATALOG -> if (!wide) {
+                        CodexChip("$collectionDiscovered/$collectionTotal", language.text(SessionText.COLLECTION_PROGRESS, collectionDiscovered, collectionTotal), ui,
+                            Modifier.padding(start = 8.dp).testTag("codex-collection-progress"))
+                    }
                     CodexTab.REACTIONS -> {
                         KkInfoButton(language.text(CodexText.REACTION_RULE), Modifier.padding(horizontal = 8.dp), placement = KkTooltipPlacement.BELOW, textScale = ui)
                         val found = ReactionId.entries.count(model::isReactionDiscovered)

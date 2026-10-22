@@ -43,8 +43,7 @@ class MobileGameUiTest {
         val screenBounds = composeRule.onNodeWithTag(HOME_SCREEN_TAG).visibleBounds()
         val actionTags = listOf(
             HOME_START_TAG,
-            HOME_LAB_TAG,
-            HOME_ARMORY_TAG,
+            HOME_WORKSHOP_TAG,
             HOME_REBIRTH_TAG,
             HOME_CODEX_TAG,
             HOME_SETTINGS_TAG,
@@ -229,8 +228,7 @@ class MobileGameUiTest {
     private companion object {
         const val HOME_SCREEN_TAG = "kinetickk.home"
         const val HOME_START_TAG = "kinetickk.home.start"
-        const val HOME_LAB_TAG = "kinetickk.home.lab"
-        const val HOME_ARMORY_TAG = "kinetickk.home.armory"
+        const val HOME_WORKSHOP_TAG = "kinetickk.home.workshop"
         const val HOME_REBIRTH_TAG = "kinetickk.home.rebirth"
         const val HOME_CODEX_TAG = "kinetickk.home.codex"
         const val HOME_SETTINGS_TAG = "kinetickk.home.settings"

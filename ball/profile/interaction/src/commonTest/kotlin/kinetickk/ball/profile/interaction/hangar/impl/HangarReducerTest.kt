@@ -26,6 +26,7 @@ import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.hangar.api.HangarOutput
 import kinetickk.ball.profile.interaction.profileFrame
 import kinetickk.foundation.collections.toImmutableList
+import kinetickk.ball.profile.interaction.workshop.impl.WorkshopSegment
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -190,14 +191,37 @@ class HangarReducerTest {
     @Test
     fun signatureRowsGrowForAHarmonyLine() {
         val frame = profileFrame(1440f, 810f, 1f)
-        val plain = hangarLayout(frame, 1f, 90f, signatureHarmony = listOf(false, false))
-        val harmony = hangarLayout(frame, 1f, 90f, signatureHarmony = listOf(true, false))
+        val plain = hangarLayout(frame, 1f, 90f, signatureHarmony = listOf(false, false), segment = WorkshopSegment.TRAITS)
+        val harmony = hangarLayout(frame, 1f, 90f, signatureHarmony = listOf(true, false), segment = WorkshopSegment.TRAITS)
         assertEquals(2, plain.signatureRows.size)
         assertEquals(plain.signatureLine, plain.signatureRows[0].height, 0.01f)
         assertTrue(harmony.signatureRows[0].height > plain.signatureRows[0].height)
         assertTrue(harmony.signatureRows[1].top >= harmony.signatureRows[0].bottom)
-        assertTrue(harmony.unlock.top >= harmony.signature.bottom)
+        assertTrue(harmony.signature.top >= harmony.difficulty.bottom)
         assertTrue(harmony.detailContentHeight > plain.detailContentHeight)
+    }
+
+    @Test
+    fun theShownSegmentAloneTakesRoomUnderTheSwitch() {
+        val frame = profileFrame(1440f, 810f, 1f)
+        val traits = hangarLayout(frame, 1f, 90f, segment = WorkshopSegment.TRAITS)
+        val upgrade = hangarLayout(frame, 1f, 90f, segment = WorkshopSegment.UPGRADE)
+        val locked = hangarLayout(frame, 1f, 90f, segment = WorkshopSegment.UPGRADE, locked = true)
+        for (layout in listOf(traits, upgrade, locked)) {
+            assertTrue(layout.segments.top >= layout.description.bottom, "${layout.segment}")
+            assertEquals(34f, layout.segments.height, 0.01f)
+        }
+        // Traits: bars, difficulty and signature rows below the switch; no upgrade or unlock block.
+        assertTrue(traits.traits.first().top >= traits.segments.bottom)
+        assertEquals(0f, traits.upgrade.height + traits.unlock.height)
+        // Upgrade: the 168 px upgrade slot for an unlocked character, the unlock progress for a locked one.
+        assertEquals(168f, upgrade.upgrade.height, 0.01f)
+        assertTrue(upgrade.upgrade.top >= upgrade.segments.bottom)
+        assertEquals(0f, upgrade.traits.sumOf { it.height.toDouble() }.toFloat() + upgrade.signature.height + upgrade.unlock.height)
+        assertTrue(locked.unlock.height > 0f && locked.upgrade.height == 0f)
+        // The content ends at the shown block; the preview is 132 px on the board frame.
+        assertEquals(upgrade.upgrade.bottom + 4f, upgrade.detailContentHeight, 0.01f)
+        assertEquals(132f, upgrade.preview.height, 0.01f)
     }
 }
 

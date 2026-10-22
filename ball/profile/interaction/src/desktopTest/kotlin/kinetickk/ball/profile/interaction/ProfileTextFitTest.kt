@@ -56,6 +56,7 @@ import kinetickk.ball.profile.interaction.matrix.impl.toRenderModel
 import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignText
 import kinetickk.ball.profile.interaction.localization.ProfileText
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthRenderModel
+import kinetickk.ball.profile.interaction.workshop.impl.WorkshopSegment
 import kinetickk.ball.profile.interaction.rebirth.impl.REBIRTH_BUILD_SECTION_ROLE
 import kinetickk.ball.profile.interaction.rebirth.impl.REBIRTH_UNLOCK_BLURB_ROLE
 import kinetickk.ball.profile.interaction.rebirth.impl.RebirthContent
@@ -177,19 +178,26 @@ class ProfileTextFitTest {
             if (count % 2 == 0) ArmoryNotice(weapon.id, refusal) else null
         }.associateBy { it.weapon }
         assertEquals(ArmoryRefusal.entries.toSet(), notices.values.map { it.refusal }.toSet(), "every refusal is drawn")
+        // Every weapon's synergy and facts differ (the Details segment); the ladder and the forms are the
+        // same for all, so two weapons cover the Mastery segment and one the Upgrade segment.
+        val items = CatalogWeapons.map { it.id to WorkshopSegment.DETAILS } +
+            listOf(WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR).map { it to WorkshopSegment.MASTERY } +
+            listOf(WeaponId.ION_SWARM to WorkshopSegment.UPGRADE)
         for ((width, height) in sizes) {
-            val holders = HashMap<Scene<WeaponId>, ArmoryLayoutHolder>()
+            val holders = HashMap<Scene<Pair<WeaponId, WorkshopSegment>>, ArmoryLayoutHolder>()
             val tileNames = HashMap<Triple<AppLanguage, Float, Any?>, Float>()
-            render(width, height, scenes(CatalogWeapons.map { it.id }), content = { scene ->
-                ArmoryContent(model, CatalogWeapons, WeaponMastery.entries, ArmoryViewState(scene.item, notices[scene.item]), scene.setting,
+            render(width, height, scenes(items), content = { scene ->
+                val (id, segment) = scene.item
+                ArmoryContent(model, CatalogWeapons, WeaponMastery.entries, ArmoryViewState(id, notices[id]), scene.setting,
                     remember { ScrollState(0) }, holders.getOrPut(scene) { ArmoryLayoutHolder() },
-                    coreShapes = defaultCoreShapeDefinitions(), relics = CatalogRebirthRelics) {}
+                    coreShapes = defaultCoreShapeDefinitions(), relics = CatalogRebirthRelics, segment = segment) {}
             }) { scene, frame ->
                 val context = "${width}x$height $scene"
+                val (id, segment) = scene.item
                 assertWhole(frame, context)
-                assertTrue(frame.of("header.title").isNotEmpty(), "$context header title")
+                assertEquals(3, frame.of("workshop.tab").map { it.owner }.toSet().size, "$context tab labels")
                 val layout = assertNotNull(holders[scene]?.layout, context)
-                val weapon = CatalogWeapons.first { it.id == scene.item }
+                val weapon = CatalogWeapons.first { it.id == id }
 
                 // The detail name block (two lines at large text) stays inside the scrolling panel
                 // above the description, and no glyph row touches the panel's clipped top edge.
@@ -217,7 +225,7 @@ class ProfileTextFitTest {
 
                 // At 175 % on the board frame all milestones are visible at rest; on phones the
                 // first ladder line (the level cells) starts above the pinned action.
-                if (scene.setting == 1.75f) {
+                if (scene.setting == 1.75f && segment == WorkshopSegment.MASTERY) {
                     if (width == 1440) {
                         val milestones = frame.of("armory.ladder.name")
                         assertEquals(WeaponMastery.entries.size, milestones.size, context)
@@ -228,24 +236,41 @@ class ProfileTextFitTest {
                         assertTrue(cells + layout.frame.d(10f) <= viewport.bottom, "$context ladder cells $cells below ${viewport.bottom}")
                     }
                 }
-                // The weapon sheet follows the ladder: forms, synergy and facts, every text inside the panel.
-                assertTrue(layout.ladder.bottom <= layout.forms.top && layout.forms.bottom <= layout.synergy.top &&
-                    layout.synergy.bottom <= layout.facts.top, "$context sheet order")
+                // The shown segment's sheet sections follow the switch in order, every text inside the panel; the
+                // hidden ones take no room and draw nothing.
+                assertTrue(layout.segments.top >= layout.tags.bottom, "$context switch under the tags")
                 val sheet = frame.texts.filter { it.role.startsWith("armory.forms") || it.role.startsWith("armory.synergy") ||
                     it.role.startsWith("armory.facts") }
-                assertEquals(3, frame.of("armory.forms.text").size, "$context mastery forms")
-                assertEquals(5, frame.of("armory.facts.value").size, "$context facts")
-                assertEquals(1, frame.of("armory.synergy.twist").size, "$context twist")
+                val sheetBottom = maxOf(layout.forms.bottom, layout.facts.bottom)
+                when (segment) {
+                    WorkshopSegment.MASTERY -> {
+                        assertTrue(layout.mastery.top >= layout.segments.bottom && layout.ladder.bottom <= layout.forms.top, "$context sheet order")
+                        assertEquals(3, frame.of("armory.forms.text").size, "$context mastery forms")
+                        assertEquals(0, frame.of("armory.facts.value").size + frame.of("armory.synergy.twist").size, "$context details hidden")
+                        assertEquals(0f, layout.synergy.height + layout.facts.height, context)
+                    }
+                    WorkshopSegment.DETAILS -> {
+                        assertTrue(layout.synergy.top >= layout.segments.bottom && layout.synergy.bottom <= layout.facts.top, "$context sheet order")
+                        assertEquals(5, frame.of("armory.facts.value").size, "$context facts")
+                        assertEquals(1, frame.of("armory.synergy.twist").size, "$context twist")
+                        assertEquals(0, frame.of("armory.forms.text").size + frame.of("armory.ladder.name").size, "$context mastery hidden")
+                        assertEquals(0f, layout.ladder.height + layout.forms.height, context)
+                    }
+                    else -> {
+                        assertTrue(sheet.isEmpty(), "$context sheet on Upgrade")
+                        assertTrue(layout.upgrade.top >= layout.segments.bottom && layout.upgrade.height > 0f, context)
+                    }
+                }
                 sheet.forEach {
                     assertTrue(it.box.left >= layout.forms.left - 0.5f && it.box.right <= layout.forms.right + 0.5f,
                         "$context ${it.role} '${it.layout?.layoutInput?.text}' ${it.box} outside ${layout.forms.left}..${layout.forms.right}")
                     // The CSS line box of every sheet text ends inside the sheet.
-                    assertTrue(it.box.top + assertNotNull(it.layout).kkBoxBottom <= layout.facts.bottom + 0.5f, "$context ${it.role} below the sheet")
+                    assertTrue(it.box.top + assertNotNull(it.layout).kkBoxBottom <= sheetBottom + 0.5f, "$context ${it.role} below the sheet")
                 }
                 // A refusal replaces the need line beside the action, inside the panel: centred on the
                 // action, its line boxes stay within the 8 px gap above it and on screen below it.
                 val notice = frame.of("armory.notice")
-                assertEquals(if (scene.item in notices) 1 else 0, notice.size, "$context notice")
+                assertEquals(if (id in notices) 1 else 0, notice.size, "$context notice")
                 notice.forEach {
                     assertTrue(it.box.left >= layout.need.left - 0.5f && it.box.right <= layout.detailViewport.right + 0.5f &&
                         it.box.top >= layout.need.top - layout.frame.d(8f) && it.box.bottom <= height + 0.5f &&
@@ -278,7 +303,8 @@ class ProfileTextFitTest {
             val probes = HashMap<Scene<CoreShape>, kinetickk.ball.profile.interaction.hangar.impl.HangarShotAccess.HangarDetailProbe>()
             render(width, height, scenes(CoreShape.entries.toList()), content = { scene ->
                 kinetickk.ball.profile.interaction.hangar.impl.HangarShotAccess.Content(model, scene.item, scene.setting,
-                    probes.getOrPut(scene) { kinetickk.ball.profile.interaction.hangar.impl.HangarShotAccess.HangarDetailProbe() })
+                    probes.getOrPut(scene) { kinetickk.ball.profile.interaction.hangar.impl.HangarShotAccess.HangarDetailProbe() },
+                    segment = WorkshopSegment.TRAITS)
             }) { scene, frame ->
                 val context = "${width}x$height $scene"
                 assertWhole(frame, context)
@@ -328,7 +354,7 @@ class ProfileTextFitTest {
             }) { scene, frame ->
                 val context = "${width}x$height $scene"
                 assertWhole(frame, context)
-                assertTrue(frame.of("header.title").isNotEmpty(), "$context header title")
+                assertEquals(3, frame.of("workshop.tab").map { it.owner }.toSet().size, "$context tab labels")
                 val layout = assertNotNull(holders[scene]?.layout, context)
                 // A tile is a slab whose right edge leans in by its cut toward the bottom; its status stays within the
                 // padding inside that edge (the selection echo shows past it).

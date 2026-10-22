@@ -110,7 +110,7 @@ internal class HomeMenuMotion {
      */
     fun advance(target: HomeLayoutTarget, deltaSeconds: Float, hues: List<Color> = Kk.Elements) {
         val delta = deltaSeconds.coerceIn(0f, MAX_HOME_PRESENTATION_FRAME_DELTA_SECONDS)
-        // The Hangar card is not a menu row: while it is active no row is selected.
+        // The Characters card is not a menu row: while it is active no row is selected.
         val index = HomeMenuTargets.indexOf(target)
         selectedSeconds = if (index == activeIndex) selectedSeconds + delta else 0f
         activeIndex = index
@@ -233,19 +233,12 @@ internal class HomeMenuMotion {
     private var formLayout: HomeLayoutGeometry? = null
     var formNameRight = 0f
         private set
-    var formDescriptionTop = 0f
-        private set
-    var formDescriptionBottom = 0f
-        private set
 
-    /** Caches the form name's right end and the description span (both follow the layout only). */
+    /** Caches the form name's right end (it follows the layout only). */
     fun formPanel(layout: HomeLayoutGeometry, density: Float) {
         if (formLayout === layout) return
         formLayout = layout
         formNameRight = homeFormNameRight(layout, density)
-        val (top, bottom) = homeFormDescriptionSpan(layout, density)
-        formDescriptionTop = top
-        formDescriptionBottom = bottom
     }
 
     private var strokeUnit = -1f
@@ -384,14 +377,13 @@ internal fun homeTrailTime(secondsSinceSelected: Float): Float = secondsSinceSel
 
 /**
  * Home palette accent of the selected/hovered menu item (applies to the items the game has). Each
- * color names what the item opens: volt is you (and Kinetic), bone the armory, kept apart from
- * START's volt, the deeper volt your permanent upgrades, gold Rebirth (the Rebirth screen keeps its
+ * color names what the item opens: volt is you (and Kinetic), the deeper volt the Workshop (permanent
+ * upgrades paid in Matter, the palette's former Lab entry), gold Rebirth (the Rebirth screen keeps its
  * per-tier themes), mute the system.
  * The Codex sweeps through the element hues instead (see [HomeCodexSweep]); its static entry is Cryo.
  */
 internal fun menuAccent(target: HomeLayoutTarget): Color = when (target) {
-    HomeLayoutTarget.LAB -> KkHomePalette.LAB.accent
-    HomeLayoutTarget.ARMORY -> KkHomePalette.ARMORY.accent
+    HomeLayoutTarget.WORKSHOP -> KkHomePalette.LAB.accent
     HomeLayoutTarget.REBIRTH -> KkHomePalette.REBIRTH.accent
     HomeLayoutTarget.CODEX -> KkHomePalette.CODEX.accent
     HomeLayoutTarget.SETTINGS -> KkHomePalette.SETTINGS.accent
@@ -437,8 +429,7 @@ internal val HomeCodexSweep: List<Color> = homeCodexSweep(Kk.Elements)
 
 internal val HomeMenuLabels = listOf(
     SessionText.START_RUN,
-    SessionText.LAB,
-    SessionText.ARMORY,
+    SessionText.WORKSHOP,
     SessionText.REBIRTH,
     SessionText.CODEX,
     SessionText.SETTINGS,
@@ -456,42 +447,37 @@ internal class HomeFacts(
 
 /** The stamp menu row [target] carries when the game's state calls for it (see [homeFacts]). */
 internal fun homeMenuStampText(target: HomeLayoutTarget, language: AppLanguage): String? = when (target) {
-    HomeLayoutTarget.ARMORY -> language.text(SessionRedesignText.UNLOCKABLE)
+    HomeLayoutTarget.WORKSHOP -> language.text(SessionRedesignText.AFFORDABLE)
     HomeLayoutTarget.REBIRTH -> language.text(SessionRedesignText.READY)
     else -> null
 }
 
 internal fun homeFacts(model: HomeUiModel, target: HomeLayoutTarget, language: AppLanguage, textScale: Float): HomeFacts {
-    val label = if (target == HomeLayoutTarget.HANGAR) language.text(SessionText.HANGAR)
+    val label = if (target == HomeLayoutTarget.HANGAR) language.text(SessionText.CHARACTERS)
         else language.text(HomeMenuLabels[HomeMenuTargets.indexOf(target).coerceAtLeast(0)])
     val matter = homeNumber(model.totalMatter, language)
     val weapon = model.startingWeaponName?.localizedContent(language)
     val tierProfile = model.rebirthProfile
     return when (target) {
-        HomeLayoutTarget.LAB -> HomeFacts(
-            label,
-            if (model.matrixNodeCount > 0) "${model.matrixOwnedNodes}/${model.matrixNodeCount}" else matter,
-            buildList {
-                add(language.text(SessionRedesignText.MATTER) to matter)
-                if (model.matrixMaxRanks > 0) {
-                    add(language.text(SessionRedesignText.RANKS) to "${model.matrixRanks}/${model.matrixMaxRanks}")
-                }
-            },
-            language.text(SessionRedesignText.LAB_INFO),
-            if (model.matrixNodeCount > 0) "${model.matrixOwnedNodes}/${model.matrixNodeCount}" else null,
-            null,
-        )
-        HomeLayoutTarget.ARMORY -> HomeFacts(
-            label,
-            "${model.unlockedWeaponCount}/${model.weaponCount}",
-            buildList {
-                if (weapon != null) add(language.text(SessionText.WEAPON) to weapon)
-                add(language.text(SessionRedesignText.MATTER) to matter)
-            },
-            language.text(SessionRedesignText.ARMORY_INFO),
-            "${model.unlockedWeaponCount}/${model.weaponCount}",
-            if (model.weaponUnlockAffordable) homeMenuStampText(target, language) else null,
-        )
+        HomeLayoutTarget.WORKSHOP -> {
+            val completion = homeWorkshopCompletion(model)
+            HomeFacts(
+                label,
+                language.text(SessionRedesignText.PERCENT, completion),
+                buildList {
+                    add(language.text(SessionRedesignText.WEAPONS_FACT) to "${model.unlockedWeaponCount}/${model.weaponCount}")
+                    if (model.matrixMaxRanks > 0) {
+                        add(language.text(SessionRedesignText.RANKS) to "${model.matrixRanks}/${model.matrixMaxRanks}")
+                    }
+                    if (model.upgradeLevelCap > 0) {
+                        add(language.text(SessionRedesignText.UPGRADES) to "${model.upgradeLevels}/${model.upgradeLevelCap}")
+                    }
+                },
+                language.text(SessionRedesignText.WORKSHOP_INFO),
+                language.text(SessionRedesignText.PERCENT, completion),
+                if (model.workshopAffordable) homeMenuStampText(target, language) else null,
+            )
+        }
         HomeLayoutTarget.REBIRTH -> HomeFacts(
             label,
             model.rebirthLevel.toString(),
@@ -555,6 +541,17 @@ internal fun homeFacts(model: HomeUiModel, target: HomeLayoutTarget, language: A
             null,
         )
     }
+}
+
+/**
+ * How much of the Workshop is bought, in whole percent (rounded down): owned weapons, Matrix ranks and
+ * Refit / Honing levels over every weapon, rank and level it sells. Unread parts count as nothing.
+ */
+internal fun homeWorkshopCompletion(model: HomeUiModel): Int {
+    val total = model.weaponCount.toLong() + model.matrixMaxRanks + model.upgradeLevelCap
+    if (total <= 0L) return 0
+    val owned = model.unlockedWeaponCount.toLong() + model.matrixRanks + model.upgradeLevels
+    return (owned.coerceIn(0L, total) * 100L / total).toInt()
 }
 
 /** What the selected tier adds: its newest mutator's rule, or the baseline cycle's line at tier 0. */
@@ -972,10 +969,10 @@ private fun DrawScope.drawHeader(model: HomeUiModel, text: CanvasTextMeasurer, s
         origin.x + mark + 12f * unit * 64f / 30f, scene.logo.y, Kk.Bone, valign = KkVAlign.CENTER,
     )
     val headerLeft = origin.x + mark + 12f * unit * 64f / 30f + wordmark.size.width + 16f * density
-    // Chips from real Home data: matter, rebirth, codex, weapons. The least important chips (the
-    // right end) are dropped when the row would reach the wordmark.
+    // Chips from real Home data: Matter and the Rebirth rank (the Codex and the Workshop facts hold the
+    // counts). The least important chip (the right end) is dropped when the row would reach the wordmark.
     val language = text.language
-    val compact = scene.chipCount < 4
+    val compact = scene.compactChips
     var count = scene.chipCount
     while (count > 0 && chipsWidth(model, text, scene, count, language) > scene.chipsRight - headerLeft) count--
     var right = scene.chipsRight
@@ -995,20 +992,18 @@ private class HomeChip(val gem: Boolean, val value: String, val label: String?, 
  */
 private fun homeChip(model: HomeUiModel, language: AppLanguage, compact: Boolean, index: Int): HomeChip = when (index) {
     0 -> HomeChip(true, homeNumber(model.totalMatter, language), if (compact) null else language.text(SessionRedesignText.MATTER), false)
-    1 -> HomeChip(false, model.rebirthRank.toString(),
+    else -> HomeChip(false, model.rebirthRank.toString(),
         language.text(if (model.ascendant) SessionRedesignText.ASCENDANT else SessionRedesignText.RANK), true, crown = model.ascendant)
-    2 -> HomeChip(false, "${model.discoveredItemCount}/${model.itemCount}", language.text(SessionText.CODEX), false)
-    else -> HomeChip(false, "${model.unlockedWeaponCount}/${model.weaponCount}", language.text(SessionText.WEAPONS_TITLE), false)
 }
 
 private fun DrawScope.chipsWidth(model: HomeUiModel, text: CanvasTextMeasurer, scene: HomeScene, count: Int, language: AppLanguage): Float {
     var total = 0f
-    for (index in 0 until count) total += chipWidth(text, scene, homeChip(model, language, scene.chipCount < 4, index)) + 8f * density
+    for (index in 0 until count) total += chipWidth(text, scene, homeChip(model, language, scene.compactChips, index)) + 8f * density
     return total
 }
 
 private fun chipValueStyle(text: CanvasTextMeasurer, scene: HomeScene) =
-    text.typography.condStyle(if (scene.chipCount < 4) 16f else 21f, trackingEm = 0.02f, tabular = true, lineHeightEm = 1f)
+    text.typography.condStyle(if (scene.compactChips) 16f else 21f, trackingEm = 0.02f, tabular = true, lineHeightEm = 1f)
 
 private fun chipLabelStyle(text: CanvasTextMeasurer) = text.typography.monoStyle(9f, trackingEm = 0.06f)
 
@@ -1016,7 +1011,7 @@ private fun DrawScope.chipWidth(text: CanvasTextMeasurer, scene: HomeScene, chip
     val value = measureKkText(text, chip.value, chipValueStyle(text, scene), uppercase = true)
     val label = chip.label?.let { measureKkText(text, it, chipLabelStyle(text), uppercase = true) }
     val gap = 8f * density
-    val gemSize = if (scene.chipCount < 4) 10f else 14f
+    val gemSize = if (scene.compactChips) 10f else 14f
     return 10f * density + (if (chip.gem) gemSize * density + gap else 0f) + (if (chip.crown) gemSize * density + gap else 0f) +
         value.size.width + (if (label != null) gap + label.size.width else 0f) + 14f * density
 }
@@ -1026,7 +1021,7 @@ private fun DrawScope.drawChip(text: CanvasTextMeasurer, right: Float, scene: Ho
     val valueLayout = measureKkText(text, chip.value, chipValueStyle(text, scene), uppercase = true)
     val labelLayout = chip.label?.let { measureKkText(text, it, chipLabelStyle(text), uppercase = true) }
     val gap = 8f * density
-    val gemSize = if (scene.chipCount < 4) 10f else 14f
+    val gemSize = if (scene.compactChips) 10f else 14f
     val width = chipWidth(text, scene, chip)
     val left = right - width
     val top = scene.chipsTop
@@ -1155,44 +1150,6 @@ internal fun DrawScope.drawHomeFormName(text: CanvasTextMeasurer, scene: HomeSce
     )
 }
 
-/** The form [description] centered in its span [top]..[bottom] (see [homeFormDescriptionSpan]), when the scene has one. */
-internal fun DrawScope.drawHomeFormDescription(text: CanvasTextMeasurer, scene: HomeScene, description: String, top: Float, bottom: Float) {
-    val rect = scene.formDescription ?: return
-    homeFormDescriptionLayout(text, description, rect.width, bottom - top)?.let {
-        drawKkText(it, rect.left, (top + bottom) * 0.5f, Kk.Bone2, valign = KkVAlign.CENTER)
-    }
-}
-
-/**
- * Vertical span (px) the form description may take: from 4 dp below the form name's lowest ink (its
- * descenders, [HOME_FORM_NAME_INK_EM]) to 8 dp above the Hangar card.
- */
-internal fun homeFormDescriptionSpan(layout: HomeLayoutGeometry, density: Float): Pair<Float, Float> {
-    val scene = layout.scene
-    val top = scene.formNameCenterY + scene.formNameSize * HOME_FORM_NAME_INK_EM + 4f * density
-    val bottom = layout.bounds(HomeLayoutTarget.HANGAR).top - 8f * density
-    return top to bottom
-}
-
-/**
- * The form's description (body 16) in [width] × [height] px, always whole: one line shrunk down to
- * 12, else two lines from 12 down to 10; null (the form's (!) shows it) when even that is too long.
- */
-internal fun homeFormDescriptionLayout(text: CanvasTextMeasurer, description: String, width: Float, height: Float): TextLayoutResult? {
-    for (size in HomeDescriptionSizes) {
-        val line = measureKkText(text, description, text.typography.bodyStyle(size), maxWidth = width)
-        if (!line.didOverflowHeight && !line.isLineEllipsized(0) && line.kkBoxHeight <= height) return line
-    }
-    for (size in HomeDescriptionTwoLineSizes) {
-        val lines = measureKkText(text, description, text.typography.bodyStyle(size, lineHeightEm = 1.2f), maxWidth = width, maxLines = 2)
-        if (!lines.didOverflowHeight && !lines.isLineEllipsized(lines.lineCount - 1) && lines.kkBoxHeight <= height) return lines
-    }
-    return null
-}
-
-private val HomeDescriptionSizes = floatArrayOf(16f, 15f, 14f, 13f, 12f)
-private val HomeDescriptionTwoLineSizes = floatArrayOf(12f, 11f, 10f)
-
 /** Measured facts card: the label and big value on the left, then one row per fact. */
 internal class HomeFactsCardLayout(
     val label: TextLayoutResult,
@@ -1283,7 +1240,7 @@ private fun DrawScope.drawFactsCard(
     }
 }
 
-/** The current character: its name, its (!), its mechanic and the Hangar card that changes it. */
+/** The current character: its name, its (!) (the mechanic) and the Characters card that changes it. */
 private fun DrawScope.drawFormPanel(
     model: HomeUiModel,
     text: CanvasTextMeasurer,
@@ -1300,11 +1257,9 @@ private fun DrawScope.drawFormPanel(
     if (info != null) {
         drawKkInfoButton(text, info.bounds, active = state.activeInfo == HomeInfoTarget.FORM || state.openInfo == HomeInfoTarget.FORM)
     }
-    drawHomeFormDescription(text, scene, definition.mechanicDescription.localizedContent(language),
-        motion.formDescriptionTop, motion.formDescriptionBottom)
     val card = layout.bounds(HomeLayoutTarget.HANGAR)
     drawKkButton(
-        text, card, language.text(SessionText.HANGAR),
+        text, card, language.text(SessionText.CHARACTERS),
         variant = KkButtonVariant.GHOST,
         size = if (card.height < 52f * density) KkButtonSize.SM else KkButtonSize.MD,
         hover = if (state.activeTarget == HomeLayoutTarget.HANGAR) 1f else 0f,
