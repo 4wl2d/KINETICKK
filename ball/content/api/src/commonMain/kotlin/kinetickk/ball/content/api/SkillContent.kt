@@ -184,9 +184,9 @@ private fun defaultSkill(id: SkillId): SkillDefinition = when (id) {
         "Plant a lightning turret at the pointer.",
         "Zaps force Overload on enemies within two Charge of it.",
         StatusElement.ION, BuildTag.ARSENAL, BuildTag.CHAIN, SkillTargeting.AREA, 420f, SkillFamily.ZONE,
-        rank(12f, 170f, 4.5f, 2f, 22f, 0.5f),
-        rank(11f, 170f, 5.75f, 3f, 28f, 0.5f),
-        rank(10f, 170f, 7f, 3f, 34f, 0.5f),
+        rank(12f, 175f, 4.5f, 2f, 22f, 0.5f),
+        rank(11f, 175f, 5.75f, 3f, 28f, 0.5f),
+        rank(10f, 175f, 7f, 3f, 34f, 0.5f),
     )
     SkillId.GRAVITY_WELL -> skill(
         id, "Gravity Well",
