@@ -67,7 +67,8 @@ internal fun DrawScope.drawSkillBar(
                 HudScratch.skillRowPaint.apply { alpha = entrance })
         }
     }
-    translate(frame.u(SKILL_ROW_ENTRANCE_DP) * (1f - entrance), 0f) {
+    val shift = frame.u(SKILL_ROW_ENTRANCE_DP) * (1f - entrance)
+    translate(shift, 0f) {
         var unionLeft = Float.POSITIVE_INFINITY
         var unionTop = Float.POSITIVE_INFINITY
         var unionRight = Float.NEGATIVE_INFINITY
@@ -95,8 +96,9 @@ internal fun DrawScope.drawSkillBar(
                 keysBottom = max(keysBottom, capTop + frame.u(SKILL_KEY_CAP_HEIGHT_DP))
             }
         }
-        if (unionLeft.isFinite()) HudLayoutProbe.record(HudBlock.SKILLS, unionLeft, unionTop, unionRight, unionBottom)
-        if (keysDrawn) HudLayoutProbe.record(HudBlock.SKILL_KEYS, keysLeft, keysTop, keysRight, keysBottom)
+        // Where the row shows this frame (its entrance shift included).
+        if (unionLeft.isFinite()) HudLayoutProbe.record(HudBlock.SKILLS, unionLeft + shift, unionTop, unionRight + shift, unionBottom)
+        if (keysDrawn) HudLayoutProbe.record(HudBlock.SKILL_KEYS, keysLeft + shift, keysTop, keysRight + shift, keysBottom)
     }
     if (row < 1f) drawIntoCanvas { it.restore() }
 }
