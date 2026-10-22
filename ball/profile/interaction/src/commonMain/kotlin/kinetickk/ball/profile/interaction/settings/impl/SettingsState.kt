@@ -224,6 +224,8 @@ internal data class SettingsPlatform(
     val interfaceScales: List<Int> = INTERFACE_SCALE_OPTIONS,
     val live: SettingsLiveWindow? = null,
     val browserFullscreen: Boolean = false,
+    /** The interface scale the screen is already drawn at (the shell folds it into the density). */
+    val screenScale: Float = 1f,
 ) {
     /** Whether [row] is shown here. */
     fun offers(row: SettingsRow): Boolean = when (row) {

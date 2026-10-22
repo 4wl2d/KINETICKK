@@ -30,6 +30,20 @@ import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
 import kinetickk.resource.audio.api.ToneRequest
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.v2.runSkikoComposeUiTest
+import androidx.compose.ui.unit.Density
+import kinetickk.ball.gameplay.impl.GameplayCompositionComponent
+import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
+import kinetickk.ball.profile.api.ProfilePreferenceAdjustment
+import kinetickk.ball.profile.api.ProfilePulse
+import kinetickk.flow.session.api.SessionInteractionPulse
+import kinetickk.flow.session.interaction.home.api.HomeFeature
+import kinetickk.flow.session.interaction.home.api.HomeOutput
+import kinetickk.foundation.design.LocalKkFrameRateCap
+import kinetickk.foundation.design.LocalKkInterfaceScale
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -97,6 +111,65 @@ class DisplayApplicationComposeTest {
         } finally {
             owner.close()
         }
+    }
+
+    @Test
+    fun menusLayOutAtTheAppliedInterfaceScaleWhileTheRunKeepsTheRawDensity() {
+        // Landscape window: 130 % fits 1280×800 (984×615 dp scaled); 720×540 at 130 % would be 554 dp
+        // long, so 115 % is applied there. Profile keeps 130 % in both.
+        assertEquals(DisplayProbe(1.3f, 1.3f, 60, gameplayDensity = 1f), probeAt(1280, 800))
+        assertEquals(DisplayProbe(1.15f, 1.15f, 60, gameplayDensity = 1f), probeAt(720, 540))
+    }
+
+    private data class DisplayProbe(val menuDensity: Float, val scale: Float, val frameRateCap: Int, val gameplayDensity: Float)
+
+    private fun probeAt(width: Int, height: Int): DisplayProbe {
+        var probe = DisplayProbe(0f, 0f, -1, 0f)
+        runSkikoComposeUiTest(size = Size(width.toFloat(), height.toFloat()), density = Density(1f)) {
+            mainClock.autoAdvance = false
+            val catalog = createContentCatalog()
+            val profile = createProfileComponent(DisplayTestPersistence(), catalog.profilePolicy())
+            profile.accept(ProfilePulse.AdjustPreference(ProfilePreferenceAdjustment.SetInterfaceScale(130)))
+            profile.accept(ProfilePulse.AdjustPreference(ProfilePreferenceAdjustment.SetFrameRateCap(60)))
+            val audio = DisplayTestAudio()
+            val gameplay = DefaultGameplayFeature(catalog.gameplayContent(), profile, profile, audio)
+            val owner = AppCompositionOwner(
+                contentCatalog = catalog,
+                profileComponent = profile,
+                audioService = audio,
+                gameplayComponent = object : GameplayCompositionComponent by gameplay {
+                    @Composable
+                    override fun Content(inputEnabled: Boolean, onOutput: (GameplayInteractionOutput) -> Unit) {
+                        probe = probe.copy(gameplayDensity = LocalDensity.current.density)
+                    }
+                },
+                homeFeature = object : HomeFeature {
+                    @Composable
+                    override fun Content(inputEnabled: Boolean, onOutput: (HomeOutput) -> Unit) {
+                        probe = probe.copy(
+                            menuDensity = LocalDensity.current.density,
+                            scale = LocalKkInterfaceScale.current,
+                            frameRateCap = LocalKkFrameRateCap.current,
+                        )
+                    }
+                },
+            )
+            try {
+                setContent {
+                    Box(Modifier.requiredSize(width.dp, height.dp)) { owner.Content() }
+                }
+                mainClock.advanceTimeBy(100)
+                waitForIdle()
+                owner.sessionPort.accept(SessionInteractionPulse.StartRunRequested)
+                // The shell reads the session again on its next input; any key does.
+                onRoot().performKeyInput { pressKey(Key.Enter) }
+                mainClock.advanceTimeBy(400)
+                waitForIdle()
+            } finally {
+                owner.close()
+            }
+        }
+        return probe
     }
 }
 

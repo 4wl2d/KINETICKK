@@ -400,8 +400,8 @@ private class PreviewScope(
             val alpha = if (ghost == 0) 1f else 0.45f / ghost
             draw.drawCircle(roles.you, 5f * u, at(48f + 240f * position, stripTop + DISPLAY_STRIP_HEIGHT * 0.5f), alpha = alpha)
         }
-        // (c) Play at the applied interface scale.
-        val scale = platform.appliedInterfaceScale(preferences.interfaceScalePercent) / 100f
+        // (c) Play at the applied interface scale, relative to the scale the screen is drawn at.
+        val scale = platform.appliedInterfaceScale(preferences.interfaceScalePercent) / 100f / platform.screenScale
         val buttonTop = stripTop + DISPLAY_STRIP_HEIGHT + 16f
         val factor = u / draw.density * scale
         val measurer = measurers.at(1f)

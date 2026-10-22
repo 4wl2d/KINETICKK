@@ -20,11 +20,19 @@ import kinetickk.foundation.design.KkShutter
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.LocalCrashDiagnostics
 import kinetickk.foundation.design.LocalKkFrameRateCap
+import kinetickk.foundation.design.LocalKkInterfaceScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.unit.Density
+import kinetickk.ball.profile.api.DEFAULT_INTERFACE_SCALE_PERCENT
 import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.LocalKkRolePalette
 import kinetickk.foundation.design.drawKkShutter
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
+import kinetickk.ball.profile.interaction.settings.api.appliedInterfaceScalePercent
+import kinetickk.ball.profile.interaction.settings.api.offeredInterfaceScales
 import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfileReadPort
@@ -98,6 +106,19 @@ fun AppSessionContent(
     var preferencesValue by remember(sessionPort, profileReadPort) {
         mutableStateOf(profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences)
     }
+    // Interface scale: Home and every overlay lay out at a scaled density; the run keeps the raw one.
+    val rawDensity = LocalDensity.current
+    val windowInfo = LocalWindowInfo.current
+    var rootSizeValue by remember { mutableStateOf(windowInfo.containerSize) }
+    val storedInterfaceScale = preferencesValue?.interfaceScalePercent ?: DEFAULT_INTERFACE_SCALE_PERCENT
+    val interfaceScale = remember(storedInterfaceScale, rootSizeValue, rawDensity.density, touchPrimary) {
+        // Offered for the window's unscaled size, so the choice never depends on the scale itself.
+        val offered = offeredInterfaceScales(
+            rootSizeValue.width / rawDensity.density, rootSizeValue.height / rawDensity.density, touchPrimary,
+        )
+        appliedInterfaceScalePercent(storedInterfaceScale, offered) / 100f
+    }
+    val menuDensity = remember(rawDensity, interfaceScale) { Density(rawDensity.density * interfaceScale, rawDensity.fontScale) }
     val focusRequester = remember(sessionPort) { FocusRequester() }
     var shellValue by remember(sessionPort) {
         mutableStateOf(sessionPort.query(AppSessionQuery.GetShell))
@@ -149,11 +170,15 @@ fun AppSessionContent(
         LocalAppLanguage provides languageValue,
         LocalKkRolePalette provides colorVisionValue.rolePalette(),
         LocalKkFrameRateCap provides (preferencesValue?.frameRateCap ?: 0),
+        LocalKkInterfaceScale provides interfaceScale,
+        // Home and every overlay lay out at the scaled logical size, like a zoom.
+        LocalDensity provides menuDensity,
     ) {
         val roles = LocalKkRolePalette.current
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .onSizeChanged { rootSizeValue = it }
                 .drawWithContent {
                     if (transition.recording) {
                         snapshot.record { this@drawWithContent.drawContent() }
@@ -209,10 +234,13 @@ fun AppSessionContent(
                     inputEnabled = normalInputEnabled && shellValue.overlay == null,
                     onOutput = { output -> dispatch(output.toSessionPulse()) },
                 )
-                AppDestination.Gameplay -> gameplayPresentation.Content(
-                    inputEnabled = normalInputEnabled && shellValue.overlay == null,
-                    onOutput = { output -> dispatch(output.toSessionPulse()) },
-                )
+                // The run keeps the raw density: the interface scale never changes the visible arena.
+                AppDestination.Gameplay -> CompositionLocalProvider(LocalDensity provides rawDensity) {
+                    gameplayPresentation.Content(
+                        inputEnabled = normalInputEnabled && shellValue.overlay == null,
+                        onOutput = { output -> dispatch(output.toSessionPulse()) },
+                    )
+                }
                 AppDestination.Settings,
                 AppDestination.Lab,
                 AppDestination.Armory,

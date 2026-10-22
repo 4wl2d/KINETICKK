@@ -4,6 +4,7 @@
 package kinetickk.ball.profile.interaction.settings.impl
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -18,6 +19,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -51,6 +53,7 @@ import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
 import kinetickk.foundation.common.input.BindableKey
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
+import kinetickk.foundation.design.LocalKkInterfaceScale
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -251,6 +254,32 @@ class SettingsDisplayControlsComposeTest {
             route = 2L
             settle()
             onNodeWithTag("kinetickk.settings.group.game").assertIsSelected()
+        }
+
+    @Test
+    fun underTheShellsScaledDensityTheScalesFollowTheWindowsUnscaledSize() =
+        runSkikoComposeUiTest(size = Size(900f, 700f), density = Density(1f)) {
+            mainClock.autoAdvance = false
+            // 900×700 dp keeps 130 % (692×538 dp); judged on the scaled 692×538 it would not (532 dp long).
+            val port = SettingsTestProfilePort(PlayerPreferences(language = AppLanguage.English, interfaceScalePercent = 130))
+            val feature = DefaultSettingsFeature(port, SettingsTestSilentAudio, SettingsTestDisplayPort(DESKTOP_SUPPORT))
+            setContent {
+                CompositionLocalProvider(
+                    LocalAppLanguage provides AppLanguage.English,
+                    LocalDensity provides Density(1.3f),
+                    LocalKkInterfaceScale provides 1.3f,
+                ) {
+                    Box(Modifier.fillMaxSize()) { feature.Content(routeToken = 1L) {} }
+                }
+            }
+            settle()
+            click("kinetickk.settings.group.display")
+            var page = 0
+            while (onAllNodesWithTag("kinetickk.settings.interfacescale.130").fetchSemanticsNodes().isEmpty()) {
+                click("kinetickk.settings.page.${++page}")
+            }
+            onNodeWithTag("kinetickk.settings.interfacescale.130").assertIsSelected()
+            assertTrue(port.adjustments.isEmpty())
         }
 
     private fun settings(

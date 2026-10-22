@@ -71,6 +71,7 @@ import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.LocalKkRolePalette
 import kinetickk.foundation.design.KkFramePacer
 import kinetickk.foundation.design.LocalKkFrameRateCap
+import kinetickk.foundation.design.LocalKkInterfaceScale
 import kinetickk.foundation.design.label
 import kinetickk.foundation.design.toBindableKey
 import kinetickk.foundation.design.rememberInterfaceTypography
@@ -125,9 +126,15 @@ class DefaultSettingsFeature(
         val releaseKey = remember { arrayOfNulls<Key>(1) }
         val capturing = captureValue != null
         val support = remember(display, routeToken, viewportValue) { display.support() }
+        // Settings is drawn at the scaled density; the offered scales follow the window's unscaled size.
+        val screenScale = LocalKkInterfaceScale.current
+        val unscaledDensity = density / screenScale
         val platform = SettingsPlatform(
             support = support,
-            interfaceScales = settingsInterfaceScales(viewportValue.width / density, viewportValue.height / density, support.touchPrimary),
+            interfaceScales = settingsInterfaceScales(
+                viewportValue.width / unscaledDensity, viewportValue.height / unscaledDensity, support.touchPrimary,
+            ),
+            screenScale = screenScale,
             live = display.liveWindow(),
             browserFullscreen = display.browserFullscreen,
         )
