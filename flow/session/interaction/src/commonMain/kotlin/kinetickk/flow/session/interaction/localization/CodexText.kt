@@ -104,6 +104,11 @@ internal enum class CodexText(
         "Your bound relics disable every effect of this item.",
         "Связанные реликвии отключают все эффекты этого предмета.",
     ),
+    DORMANT("Dormant", "Спит"),
+    DORMANT_HELP(
+        "Its effects need a skill or a weapon of another type.",
+        "Его эффектам нужен навык или оружие другого типа.",
+    ),
     REBORN("Reborn", "Перерождённый"),
     RISK("Risk", "Риск"),
     SEVERED("Severed", "Отсечена"),

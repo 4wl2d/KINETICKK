@@ -164,6 +164,26 @@ class CodexEntryFactsTest {
     }
 
     @Test
+    fun aDormantItemSaysItsEffectsWaitForASkillOrAnotherWeapon() {
+        val item = catalog.items[3]
+        fun build(dormant: List<Int>, suppressed: List<Int> = emptyList()) = GameplayBuildSummaryProjection(
+            GameplayInstanceId(RunId(1)), GameplayRevision.ZERO, immutableListOf(),
+            suppressedItemIds = suppressed.toImmutableList(), dormantItemIds = dormant.toImmutableList(),
+        )
+        for (language in AppLanguage.entries) {
+            fun status(build: GameplayBuildSummaryProjection) =
+                codexItemEntry(item, CodexRenderModel(immutableSetOf(item.id), CodexRunStacks(build = build), catalog.items), 0L, language)
+                    .facts.single { it.isStatus }
+            val dormant = status(build(dormant = listOf(item.id)))
+            assertEquals(language.text(CodexText.DORMANT), dormant.value)
+            assertEquals(language.text(CodexText.DORMANT_HELP), dormant.info)
+            // Relics disabling it say so first; an item that can act shows its offer state instead.
+            assertEquals(language.text(CodexText.SUPPRESSED), status(build(dormant = listOf(item.id), suppressed = listOf(item.id))).value)
+            assertNotEquals(language.text(CodexText.DORMANT), status(build(dormant = listOf(item.id + 1))).value)
+        }
+    }
+
+    @Test
     fun spokenSummariesTellEveryPairingAndReactionApart() {
         val model = CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items, discoveredRelicIds = RelicId.entries.toImmutableSet())
         for (language in AppLanguage.entries) {
