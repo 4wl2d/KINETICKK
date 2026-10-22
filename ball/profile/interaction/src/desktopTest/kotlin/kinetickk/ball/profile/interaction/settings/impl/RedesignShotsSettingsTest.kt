@@ -23,6 +23,7 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.v2.runSkikoComposeUiTest
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.profile.api.ColorVision
@@ -33,9 +34,12 @@ import kinetickk.ball.profile.api.WindowMode
 import kinetickk.ball.profile.api.WindowSizePreset
 import kinetickk.ball.profile.interaction.settings.api.SettingsDisplayPort
 import kinetickk.ball.profile.interaction.settings.api.SettingsLiveWindow
+import kinetickk.ball.profile.interaction.settings.api.appliedInterfaceScalePercent
+import kinetickk.ball.profile.interaction.settings.api.offeredInterfaceScales
 import kinetickk.foundation.common.input.BindableKey
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
+import kinetickk.foundation.design.LocalKkInterfaceScale
 import kinetickk.foundation.design.LocalKkRolePalette
 import org.jetbrains.skia.Image
 import java.io.File
@@ -124,9 +128,12 @@ class RedesignShotsSettingsTest {
                 pressTag = "kinetickk.settings.resetbindings.action")
         }
         for (language in AppLanguage.entries) for ((width, height) in allSizes) {
-            // The largest interface scale (the preview's Play button grows with it).
+            // The largest interface scale as the shell applies it: the whole screen at the scaled
+            // density, clamped to the scales this window offers (115 % on a 390 dp phone).
+            val applied = appliedInterfaceScalePercent(130, offeredInterfaceScales(width.toFloat(), height.toFloat(), touchPrimary = false))
             shot(output, width, height, language, "display", "display-scale130",
-                PlayerPreferences(language = language, interfaceScalePercent = 130), display = SettingsTestDisplayPort(DESKTOP_SUPPORT))
+                PlayerPreferences(language = language, interfaceScalePercent = 130), display = SettingsTestDisplayPort(DESKTOP_SUPPORT),
+                interfaceScale = applied / 100f)
             // Stored fullscreen while the system shows a resized window: outlined live mode, live size in mute.
             shot(output, width, height, language, "display", "display-live",
                 PlayerPreferences(language = language, windowMode = WindowMode.WINDOWED, windowSize = WindowSizePreset.W1440X900, frameRateCap = 60,
@@ -173,6 +180,7 @@ class RedesignShotsSettingsTest {
         display: SettingsDisplayPort = SettingsDisplayPort.None,
         keys: List<Key> = emptyList(),
         settleMillis: Long = 1_100,
+        interfaceScale: Float = 1f,
     ) {
         if (!fullShots && !smokeStates.add(state)) return
         runSkikoComposeUiTest(size = Size(width.toFloat(), height.toFloat()), density = Density(1f)) {
@@ -183,8 +191,10 @@ class RedesignShotsSettingsTest {
                 CompositionLocalProvider(
                     LocalAppLanguage provides language,
                     LocalKkRolePalette provides preferences.colorVision.previewPalette(),
+                    LocalDensity provides Density(interfaceScale),
+                    LocalKkInterfaceScale provides interfaceScale,
                 ) {
-                    Box(Modifier.requiredSize(width.dp, height.dp)) {
+                    Box(Modifier.requiredSize((width / interfaceScale).dp, (height / interfaceScale).dp)) {
                         feature.Content(routeToken = 1L) { }
                     }
                 }
