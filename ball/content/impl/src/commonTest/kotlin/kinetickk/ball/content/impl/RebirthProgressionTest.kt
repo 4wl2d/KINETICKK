@@ -199,7 +199,8 @@ class RebirthRankUnlocksTest {
     fun theLadderListsExactlyTheShippedUnlocksOfEveryTier() {
         val expected = mapOf(
             1 to Ladder(weapons = listOf("Glacier Bell"), characters = listOf("Spiral"), relics = listOf("Agony Scepter"),
-                items = listOf("Hyperfeed Rails", "Dead Stop", "Redline Rush", "Fortress Protocol", "Twin Chamber", "Choir Prism"),
+                items = listOf("Hyperfeed Rails", "Dead Stop", "Redline Rush", "Fortress Protocol", "Twin Chamber", "Choir Prism",
+                    "Anchor Lanyard"),
                 matrix = listOf("Overdrive Coil", "Second Wind", "Ricochet Rig")),
             2 to Ladder(weapons = listOf("Tether Arc"),
                 items = listOf("Solar Choir", "Glacial Heart", "Shatter Coil", "Unmaking Engine", "Kinetic Recapture", "Phantom Wake",
@@ -215,7 +216,8 @@ class RebirthRankUnlocksTest {
                 items = listOf("Black Mirror", "Gravity Breech", "Pyre Magazine", "Blackfire Censer", "Anechoic Shell"),
                 matrix = listOf("Perpetual Drift")),
             6 to Ladder(weapons = listOf("Aegis Shards"),
-                items = listOf("Cathedral Bell", "Pile-Up Protocol", "Storm Breech", "Vortex Ledger", "Horizon Knife"),
+                items = listOf("Cathedral Bell", "Pile-Up Protocol", "Storm Breech", "Vortex Ledger", "Horizon Knife",
+                    "Gravity Assist"),
                 matrix = listOf("Reborn Arsenal")),
             7 to Ladder(weapons = listOf("Hollow Rift"), characters = listOf("Hexagon"),
                 items = listOf("Quiet Ward", "Compound Interest", "Stillness Sight", "Nitro Injector", "Starving Lantern",
@@ -223,7 +225,8 @@ class RebirthRankUnlocksTest {
                 matrix = listOf("Aegis Lattice")),
             8 to Ladder(items = listOf("Nothing Left", "Frozen Moment", "Avalanche Protocol", "Hard Stop", "Hourglass Relay")),
             9 to Ladder(weapons = listOf("Resonance Drum"),
-                items = listOf("Comet Drive", "Siege Ram", "Usurer's Contract", "Feeding Frenzy", "Requiem Engine"),
+                items = listOf("Comet Drive", "Siege Ram", "Usurer's Contract", "Feeding Frenzy", "Requiem Engine",
+                    "Event Saddle"),
                 matrix = listOf("Gravity Surfer")),
             10 to Ladder(items = listOf("Fault Line", "Annihilator Coil", "Singularity Seed", "Last Word", "Glass Brand")),
         )

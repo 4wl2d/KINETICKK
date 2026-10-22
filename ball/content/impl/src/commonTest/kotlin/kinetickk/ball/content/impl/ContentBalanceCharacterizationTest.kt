@@ -28,7 +28,7 @@ class ContentBalanceCharacterizationTest {
     fun itemCatalogCardinalityOrderingAndContentAreGolden() {
         val items = ui.items
 
-        assertEquals(233, items.size)
+        assertEquals(245, items.size)
         assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
         // The items shipped through 0.4.0 keep their own pin: a release only appends to the catalog.
         val shipped = items.subList(0, ITEMS_THROUGH_040)
@@ -55,7 +55,7 @@ class ContentBalanceCharacterizationTest {
         // The 0.5.0 items, appended from id 173 and pinned on their own.
         val appended = items.subList(ITEMS_THROUGH_040, items.size)
         assertEquals(
-            "a53b6333a3e6c43d",
+            "9d8134e831d81523",
             goldenFingerprint {
                 add("items-0.5.0")
                 add(appended.size)

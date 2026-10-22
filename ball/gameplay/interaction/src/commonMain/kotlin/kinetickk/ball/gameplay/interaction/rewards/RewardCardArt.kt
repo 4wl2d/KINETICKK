@@ -101,6 +101,7 @@ private val FamilyArtByName: Map<String, RewardCardArt> = mapOf(
     "Horizon Knife" to RewardCardArt.RESONANCE_FORK,
     "Starving Lantern" to RewardCardArt.DARK_STAR,
     "Requiem Engine" to RewardCardArt.RESONANCE_FORK,
+    "Gravity Assist" to RewardCardArt.ARREST_ENGINE,
 )
 
 /**

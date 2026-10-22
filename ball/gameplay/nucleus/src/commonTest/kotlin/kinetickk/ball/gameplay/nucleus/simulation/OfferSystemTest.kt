@@ -115,7 +115,7 @@ class OfferSystemTest {
         for (rebirth in 1..10) assertEquals(gatedUpTo(rebirth), gatedItems(rebirth), "Reborn $rebirth")
         assertTrue("Glacial Heart" in gatedItems(2) && "Resonance Fork" !in gatedItems(3) && "Resonance Fork" in gatedItems(4))
         assertTrue("Last Word" !in gatedItems(9) && "Last Word" in gatedItems(10))
-        assertEquals(43 + 14, gatedItems(10).size, "Three original legendaries, forty gated 0.4.0 items and the gated 0.5.0 items")
+        assertEquals(43 + 17, gatedItems(10).size, "Three original legendaries, forty gated 0.4.0 items and the gated 0.5.0 items")
 
         fun sovereigns(rebirth: Int): Set<RelicId> = buildTestState(rebirth = rebirth).offerableRelics()
             .filter { it.minimumRebirth > 0 }.map { it.id }.toSet()
@@ -128,7 +128,7 @@ class OfferSystemTest {
     @Test
     fun everyItemIsOfferedFromItsOwnTierAndLevelAndIsDiscoveredWhenTaken() {
         val items = canonicalGameplayContent.items
-        assertEquals(233, items.size)
+        assertEquals(245, items.size)
         // A fresh profile per tier: no lifetime Matter, so the run level alone opens the catalog. Each run has drafted
         // a skill (the first slot opens at level 2), so skill items have something to work on.
         val tiers = (0..10).map { tier -> buildTestState(rebirth = tier).apply { acquireSkill(SkillId.SOLAR_FLARE) } }
