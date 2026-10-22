@@ -29,12 +29,14 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.gameplay.interaction.canvas.BossTarget
 import kinetickk.ball.gameplay.interaction.canvas.FxDrawBudget
+import kinetickk.ball.gameplay.interaction.canvas.FxFrame
 import kinetickk.ball.gameplay.interaction.canvas.FxPool
 import kinetickk.ball.gameplay.interaction.canvas.HudBlock
 import kinetickk.ball.gameplay.interaction.canvas.HudLayoutProbe
 import kinetickk.ball.gameplay.interaction.canvas.HudPresentationMemory
 import kinetickk.ball.gameplay.interaction.canvas.HudTestFonts
 import kinetickk.ball.gameplay.interaction.canvas.drawGameplay
+import kinetickk.ball.gameplay.interaction.canvas.with
 import kinetickk.ball.gameplay.nucleus.protocol.FxColorCode
 import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
 import kinetickk.ball.gameplay.nucleus.protocol.ReactionCueFlags
@@ -54,6 +56,7 @@ import kinetickk.ball.profile.api.PermanentUpgrades
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.ProfileProgressApplied
 import kinetickk.ball.profile.api.ProfileRevision
+import kinetickk.ball.profile.api.ReactionEffectsLevel
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.CanvasTextMeasurer
@@ -151,6 +154,41 @@ class GameplayRenderFactsEndToEndTest {
         val (model, fx) = samples["skill-bar"]?.first() ?: error("no skill bar frame")
         drawFrame(model, fx)
         assertNotNull(HudLayoutProbe.rect(HudBlock.SKILLS), "the skill row was not drawn")
+    }
+
+    /**
+     * Reaction effects (Settings → Profile → run → FX): the level a running run receives through the Nucleus is the
+     * one the world FX layer draws with; the same frame of reaction flashes costs less at each lower level.
+     */
+    @Test
+    fun theReactionEffectsLevelTheRunReceivedShapesTheFxLayer() {
+        val (frame, fx) = runs.flatMap { it.samples.entries }.first { it.key == "reactions" }.value
+        val used = ReactionEffectsLevel.entries.associateWith { level ->
+            val settings = runWithReactionEffects(level).settings
+            assertEquals(level, settings.reactionEffects, "the run applied $level")
+            drawFrame(frame.with("settings" to settings), fx)
+            assertEquals(level, FxFrame.level, "the FX layer drew at $level")
+            FxDrawBudget.used(FxPool.TRANSIENT)
+        }
+        assertTrue(used.getValue(ReactionEffectsLevel.FULL) > used.getValue(ReactionEffectsLevel.REDUCED), "$used")
+        assertTrue(used.getValue(ReactionEffectsLevel.REDUCED) >= used.getValue(ReactionEffectsLevel.MINIMAL), "$used")
+        assertTrue(used.getValue(ReactionEffectsLevel.MINIMAL) > 0, "$used")
+    }
+
+    /** A started run's model after the Nucleus applied preferences with [level] (as Session does when Settings closes). */
+    private fun runWithReactionEffects(level: ReactionEffectsLevel): GameplayRenderModel {
+        val content = shortCurveContent()
+        val profile = PlayerProfile(preferences = PlayerPreferences(language = AppLanguage.English))
+        val started = (GameplayNucleus.decide(
+            GameplayState.initial(RunId(2), content),
+            GameplayNucleusPulse.StartRun,
+            GameplayContext(start = GameplayStartContext.Ready(GameplayStartInputs(content,
+                GameplayProfileSnapshot(profile.preferences, profile.economy, profile.loadout, profile.matrix, profile.collection,
+                    profile.rebirthProgress), seed = 7))),
+        ) as GameplayDecision.Accepted).frame.nextState
+        val applied = (GameplayNucleus.decide(started, GameplayNucleusPulse.ApplyPreferences(profile.preferences.copy(reactionEffects = level)))
+            as GameplayDecision.Accepted).frame.nextState
+        return requireNotNull(GameplayNucleus.renderSnapshot(applied).renderModel)
     }
 
     private fun drawFrame(model: GameplayRenderModel, fx: VisualFxProjection) {
@@ -435,6 +473,7 @@ internal class FactRun(val seed: Int, private val seconds: Float = 240f) {
         for (arc in fx.weaponArcs) projectedLinkStyles += arc.style
         for (wave in fx.shockwaves) projectedShockwaveColors += wave.colorIndex
         if (fx.skillBursts.isNotEmpty()) samples.getOrPut("skill-burst") { model to fx }
+        if (fx.elementBursts.count { it.reaction >= 0 } >= 3) samples.getOrPut("reactions") { model to fx }
         if (fx.weaponArcs.any { it.style != LinkStyleCode.WEAPON }) samples.getOrPut("styled-link") { model to fx }
 
         val slots = model.skillBar.slots
