@@ -29,7 +29,8 @@ import kotlin.test.assertTrue
  * projection to confirm that the Pentagon's signature bonus (and, for the strong build, Stormheart
  * Capacitor's Charge-key harmony with Arc Coil) is active at the start and when the Architect arrives.
  *
- * A-D are SPEC 11.2's bounds. E and F require the difficulty to rise with the tier for a partly
+ * A-D are SPEC 11.2's bounds; H (0.5.0) holds D's bounds for the strong build seeking Data with the Apex, and I keeps
+ * skills from trivialising tier 0. E and F require the difficulty to rise with the tier for a partly
  * upgraded profile and for the strong build, so a curve where the tier stops mattering once the Matrix
  * is bought fails. D's upper bound and G keep tier 10 an achievement: the strong build clears it in at
  * most three seeds of five and a full Matrix with the Pentagon and Arc Coil never in all five.
@@ -74,10 +75,15 @@ class RebirthBalanceGateTest {
     /**
      * Gate I (0.5.0 skills): skills help a fresh tier-0 run but do not trivialise it. The same bot with no skill slot in
      * reach of the run clears the Architect no more than a fifth slower than with its drafted, cast skills.
+     *
+     * Measured on the NoPoi probe sequence i = 1..31 ([GateISeeds]), not the five gate seeds: a run that dies counts as
+     * never clearing, and about a quarter of fresh runs die with or without skills, so a five-seed median lands on
+     * whichever arm lost two seeds (the five seeds read 0.37–0.49 while 400 seeds read 0.78–0.83, and five-seed blocks
+     * of those 400 passed in 53 %).
      */
     @Test fun skillsHelpAFreshTierZeroRunWithoutTrivialisingIt() {
-        val withSkills = GateSeeds.map { seed -> play(seed, tier = 0, setup = Fresh) }
-        val without = GateSeeds.map { seed -> play(seed, tier = 0, setup = Fresh, content = NoSkillSlots) }
+        val withSkills = GateISeeds.map { seed -> play(seed, tier = 0, setup = Fresh) }
+        val without = GateISeeds.map { seed -> play(seed, tier = 0, setup = Fresh, content = NoSkillSlots) }
         report("GATE I tier=0 fresh skills", withSkills)
         report("GATE I tier=0 fresh no-skills", without)
         val skilled = withSkills.medianClear()
@@ -129,6 +135,21 @@ class RebirthBalanceGateTest {
         val median = outcomes.map { it.seconds }.sorted()[outcomes.size / 2]
         assertTrue(median >= 480f, "tier 10 must be survivable for a strong build: median $median s, ${outcomes.summary()}")
         assertTrue(outcomes.count { it.won } <= 3, "tier 10 must stay an achievement for the strong build: ${outcomes.summary()}")
+    }
+
+    /**
+     * Gate H (0.5.0 Apex, combat-final §10): the strong build seeking Data at tier 10 — every Matrix rank and lifetime
+     * Matter equal to its price, so every rank-0 Data item can be offered; the bot takes Data cards first, drafts Decay
+     * Spores and Gravity Well, reaches level 42 soonest and casts the Apex as its post-cap Data recharges it. D's bounds
+     * still hold: it survives a median of eight minutes and clears in at most three seeds of five.
+     */
+    @Test fun aStrongBuildSeekingDataWithTheApexStillFindsTierTenHard() {
+        val outcomes = GateSeeds.map { seed -> play(seed, tier = 10, setup = Strong, seekData = true) }
+        report("GATE H tier=10 strong+data", outcomes)
+        assertSignatureAndHarmony(outcomes, harmony = RelicId.STORMHEART_CAPACITOR)
+        val median = outcomes.map { it.seconds }.sorted()[outcomes.size / 2]
+        assertTrue(median >= 480f, "tier 10 must stay survivable for a Data-max strong build: median $median s, ${outcomes.summary()}")
+        assertTrue(outcomes.count { it.won } <= 3, "the Apex must not make tier 10 a formality: ${outcomes.summary()}")
     }
 
     @Test fun aFullMatrixPentagonWithArcCoilCannotClearTierTenEveryTime() {
@@ -184,7 +205,13 @@ class RebirthBalanceGateTest {
         val relics: List<RelicId> = emptyList(),
     )
 
-    private fun play(seed: Int, tier: Int, setup: Setup, content: GameplayContentSnapshot = canonicalGameplayContent): Outcome {
+    private fun play(
+        seed: Int,
+        tier: Int,
+        setup: Setup,
+        content: GameplayContentSnapshot = canonicalGameplayContent,
+        seekData: Boolean = false,
+    ): Outcome {
         val ranks = when (setup.matrix) {
             MatrixPlan.NONE -> content.matrixNodes.map { 0 }
             MatrixPlan.HALF -> halfMatrixRanks(content.matrixNodes)
@@ -195,7 +222,7 @@ class RebirthBalanceGateTest {
             seed = seed,
             bootstrapProgress = GameplayProfileSnapshot(
                 preferences = PlayerPreferences(simulationSpeed = 1f),
-                economy = PlayerEconomy(),
+                economy = if (seekData) PlayerEconomy(0L, fullMatrixPrice(content)) else PlayerEconomy(),
                 loadout = PlayerLoadout(setup.shape, setup.weapon, ReferenceArmory.toSet() + setup.weapon),
                 matrix = MatrixProgress(ranks),
                 collection = PlayerCollection(),
@@ -206,7 +233,8 @@ class RebirthBalanceGateTest {
         state.startRun()
         setup.relics.forEach(state::acquireRelicForTesting)
         val synergy = linkedMapOf("start" to state.toRenderModel().weaponSynergy)
-        val bot = NoPoiBot(archetypeTag = BuildTag.RAM, weaponOrder = setup.weaponOrder)
+        val bot = NoPoiBot(archetypeTag = BuildTag.RAM, weaponOrder = setup.weaponOrder,
+            dataPolicy = if (seekData) DataPolicy.SEEK else DataPolicy.NEUTRAL)
         var architectAt: Float? = null
         while (state.elapsed < 900f && (state.phase == GamePhase.RUNNING || state.phase == GamePhase.CHOICE)) {
             if (state.phase == GamePhase.CHOICE) bot.choose(state) else {
@@ -229,6 +257,9 @@ class RebirthBalanceGateTest {
 
     private companion object {
         val GateSeeds: List<Int> = (6..10).map { it * 7_919 + 13 }
+
+        /** Gate I's seeds: the NoPoi probe sequence (`i * 7_919 + 13`) for i = 1..31, which holds the gate seeds. */
+        val GateISeeds: List<Int> = (1..31).map { it * 7_919 + 13 }
 
         /** The shipped content with every skill slot opening just below the level cap: no run here drafts a skill. */
         val NoSkillSlots: GameplayContentSnapshot = withoutReachableSkillSlots()
