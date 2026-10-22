@@ -167,6 +167,7 @@ internal class ArmoryReducer(
         rebirthRank = snapshot.rebirthRank,
         character = snapshot.loadout.coreShape,
         heirloomRelics = heirloomRelics,
+        upgrades = snapshot.upgrades,
     )
 
     fun reduce(state: ArmoryViewState, model: ArmoryRenderModel, action: ArmoryAction): ArmoryReduction = when (action) {
@@ -359,6 +360,8 @@ internal fun armoryLayout(
     /** The detail segment shown under the tags; the others take no room. */
     segment: WorkshopSegment = WorkshopSegment.UPGRADE,
     tileText: ((innerWidth: Float) -> ArmoryTileMetrics)? = null,
+    /** Measures the upgrade block at the panel width; without it the slot keeps the board's height. */
+    upgradeHeight: ((width: Float) -> Float)? = null,
     detail: ((nameWidth: Float, width: Float) -> ArmoryDetailMetrics)? = null,
 ): ArmoryLayout {
     fun d(value: Float) = frame.d(value)
@@ -481,7 +484,7 @@ internal fun armoryLayout(
     val bodyTop = segments.bottom + d(if (regular) 16f else 8f)
     fun hidden() = Rect(detailLeft, bodyTop, detailRight, bodyTop)
     val upgrade = if (segment == WorkshopSegment.UPGRADE) {
-        Rect(detailLeft, bodyTop, detailRight, bodyTop + workshopUpgradeBlockHeight(frame))
+        Rect(detailLeft, bodyTop, detailRight, bodyTop + (upgradeHeight?.invoke(detailRight - detailLeft) ?: workshopUpgradeBlockHeight(frame)))
     } else hidden()
     val showMastery = segment == WorkshopSegment.MASTERY
     val mastery = if (showMastery) Rect(detailLeft, bodyTop, detailRight, bodyTop + max(frame.density * 24f, d(type.label) * t)) else hidden()

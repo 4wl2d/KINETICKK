@@ -88,6 +88,8 @@ internal fun hangarLayout(
     /** The inspected character is locked: its Upgrade segment shows the unlock progress instead of the upgrade block. */
     locked: Boolean = false,
     descriptionHeight: ((width: Float) -> Float)? = null,
+    /** Measures the upgrade block at a width; without it the slot keeps the board's height. */
+    upgradeHeight: ((width: Float) -> Float)? = null,
 ): HangarLayout {
     fun d(value: Float) = frame.d(value)
     val t = textScale.coerceIn(0.75f, 2f)
@@ -183,7 +185,9 @@ internal fun hangarLayout(
     }
     val signature = if (showTraits) Rect(0f, signatureTop, width, signatureRows.last().bottom) else hidden()
     val unlock = if (showUpgrade && locked) Rect(0f, bodyTop, width, bodyTop + monoHeight * 2.2f) else hidden()
-    val upgrade = if (showUpgrade && !locked) Rect(0f, bodyTop, width, bodyTop + workshopUpgradeBlockHeight(frame)) else hidden()
+    val upgrade = if (showUpgrade && !locked) {
+        Rect(0f, bodyTop, width, bodyTop + (upgradeHeight?.invoke(width) ?: workshopUpgradeBlockHeight(frame)))
+    } else hidden()
     val contentHeight = maxOf(signature.bottom, unlock.bottom, upgrade.bottom) + d(4f)
     return HangarLayout(frame, back, roster, tiles, viewport, contentHeight, preview, tag, name, description, traits, difficulty,
         signature, unlock, select, signatureRows, weaponRow, segments, segment, upgrade)

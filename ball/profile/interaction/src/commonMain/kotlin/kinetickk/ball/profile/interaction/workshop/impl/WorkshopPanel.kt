@@ -77,6 +77,7 @@ import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 /** A tab's label: its long form and the short one the Matrix tab switches to when the strip is tight. */
 internal fun WorkshopTab.label(language: AppLanguage, short: Boolean = false): String = language.text(when (this) {
@@ -294,13 +295,35 @@ private fun WorkshopHeader(
     val matterText = formatMatter(matter, language)
     val matterLabel = language.text(ProfileScreensRedesignText.Matter)
     val chipScale = frame.k * if (frame.regular) 1f else 0.9f
+    // A purchase lets the drawn balance drift to the new one; the node states the balance at once.
+    val drift = remember { MatterDrift(matter) }
+    val progress = remember { Animatable(1f) }
+    LaunchedEffect(matter) {
+        if (drift.to == matter) return@LaunchedEffect
+        drift.from = drift.at(progress.value)
+        drift.to = matter
+        progress.snapTo(0f)
+        progress.animateTo(1f, tween(KkTime.Drift, easing = KkEase.Out))
+    }
     Box(
         Modifier.offset { IntOffset(chip.left.roundToInt(), chip.top.roundToInt()) }
             .size(frame.dp(chip.width), frame.dp(chip.height))
             .testTag("$WORKSHOP_TAG-matter")
             .semantics { contentDescription = "$matterText $matterLabel" }
-            .drawBehind { scale(chipScale, chipScale, Offset.Zero) { drawProfileChip(measurer, matterText, matterLabel) } },
+            .drawBehind {
+                val shown = drift.at(progress.value)
+                val text = if (shown == matter) matterText else formatMatter(shown, language)
+                scale(chipScale, chipScale, Offset.Zero) { drawProfileChip(measurer, text, matterLabel) }
+            },
     )
+}
+
+/** The Matter chip's drift from the balance before a purchase ([from]) to the new one ([to]). */
+private class MatterDrift(var from: Long) {
+    var to: Long = from
+
+    /** The balance drawn at [progress] 0..1 of the drift (the Out curve may overshoot). */
+    fun at(progress: Float): Long = from + ((to - from) * progress.coerceIn(0f, 1f).toDouble()).roundToLong()
 }
 
 /**

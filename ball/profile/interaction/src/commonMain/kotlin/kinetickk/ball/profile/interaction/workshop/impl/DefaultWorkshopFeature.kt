@@ -22,6 +22,7 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.CoreShapeDefinition
 import kinetickk.ball.content.api.MatrixNodeDefinition
 import kinetickk.ball.content.api.RelicDefinition
+import kinetickk.ball.content.api.UpgradePolicy
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
@@ -87,8 +88,9 @@ import kotlinx.coroutines.delay
 
 /**
  * The Workshop: the Characters (Hangar), Weapons (Armory) and Core Matrix bodies behind one header
- * with tabs. Weapon unlocks, Matrix ranks and resets write their typed [ProfilePulse]s; character
- * selection is a [WorkshopOutput.SelectCharacter] for Session, the authority on "between runs".
+ * with tabs. Weapon unlocks, Matrix ranks, resets and Refit / Honing levels write their typed
+ * [ProfilePulse]s (prices from [upgrades], the content rule the Profile charges); character selection
+ * is a [WorkshopOutput.SelectCharacter] for Session, the authority on "between runs".
  *
  * The shown tab and the serial of the last applied shell request live on this instance, which
  * Assembly keeps for the whole app session; inspected tiles, segments and scrolls are remembered per
@@ -103,6 +105,7 @@ class DefaultWorkshopFeature(
     private val coreShapes: ImmutableList<CoreShapeDefinition>,
     audioService: AudioService,
     private val relics: ImmutableList<RelicDefinition> = immutableListOf(),
+    private val upgrades: UpgradePolicy = UpgradePolicy(),
 ) : WorkshopFeature {
     private val audioExecutor = ProfileAudioExecutor(audioService)
     private val armoryReducer = ArmoryReducer(weapons)
@@ -132,11 +135,33 @@ class DefaultWorkshopFeature(
         LaunchedEffect(politeValue) { if (politeValue != null) { delay(WORKSHOP_ANNOUNCE_MS); politeValue = null } }
         LaunchedEffect(alertValue) { if (alertValue != null) { delay(WORKSHOP_ANNOUNCE_MS); alertValue = null } }
         var noticeSequence by remember(routeToken) { mutableIntStateOf(0) }
+        // Bumped after each refused upgrade purchase: the buy action's face flashes once.
+        var refusalSerialValue by remember(routeToken) { mutableIntStateOf(0) }
 
         fun announce(text: String, assertive: Boolean = false) {
             noticeSequence += 1
             val notice = WorkshopNotice(text, noticeSequence)
             if (assertive) alertValue = notice else politeValue = notice
+        }
+
+        // The Profile decides a Refit or Honing purchase; the answer is announced and the tabs re-read.
+        fun purchaseUpgrade(target: UpgradeTarget) {
+            val acceptance = profilePort.accept(target.pulse())
+            revisionValue += 1
+            val name = upgradeName(target, language)
+            when (acceptance) {
+                is ProfileAcceptance.Accepted -> {
+                    audioExecutor.play(ProfileAudioCue.PURCHASE)
+                    val after = upgradeTrack(target)
+                    val matter = profilePort.query(ProfileQuery.GetLoadout).snapshot.economy.matter
+                    announce(language.text(ProfileScreensRedesignText.AnnounceUpgrade, name, after.level, formatMatter(matter, language)))
+                }
+                is ProfileAcceptance.Rejected -> {
+                    audioExecutor.play(ProfileAudioCue.REFUSED)
+                    refusalSerialValue += 1
+                    announce(upgradeRefusalText(acceptance.reason, upgradeTrack(target), language), assertive = true)
+                }
+            }
         }
 
         fun dispatchWorkshop(action: WorkshopAction) {
@@ -149,6 +174,7 @@ class DefaultWorkshopFeature(
                     is WorkshopEffect.PlayAudio -> audioExecutor.play(effect.cue)
                     is WorkshopEffect.AnnounceTab -> announce(tabAnnouncement(effect.tab, language))
                     WorkshopEffect.FocusBody -> focusSerialValue += 1
+                    is WorkshopEffect.PurchaseUpgrade -> purchaseUpgrade(effect.target)
                 }
             }
         }
@@ -224,7 +250,7 @@ class DefaultWorkshopFeature(
                 }
                 body = { frame, _ ->
                     HangarBody(frame, state, shown.characterSegment, textScale, hangarDetail, hangarHolder, focusSerial,
-                        onSegment = ::dispatchWorkshop, onAction = ::dispatch)
+                        upgrades = upgrades, refusalSerial = refusalSerialValue, onWorkshop = ::dispatchWorkshop, onAction = ::dispatch)
                 }
             }
             WorkshopTab.WEAPONS -> {
@@ -302,7 +328,7 @@ class DefaultWorkshopFeature(
                     ArmoryBody(frame, model, weapons, weaponMasteries, view, shown.weaponSegment, textScale, armoryGrid, armoryHolder,
                         coreShapes, relics, focusSerial = focusSerial,
                         gridExtra = if (header.extraInBody) ({ pager(frame) }) else null,
-                        onSegment = ::dispatchWorkshop, onAction = ::dispatch)
+                        upgrades = upgrades, refusalSerial = refusalSerialValue, onWorkshop = ::dispatchWorkshop, onAction = ::dispatch)
                 }
             }
             WorkshopTab.MATRIX -> {
@@ -382,7 +408,30 @@ class DefaultWorkshopFeature(
         // Without a weapon catalog there is no signature row to fill (and no heirloom to read).
         val signatureWeapons = if (weapons.isEmpty()) emptyList() else hangarWeapons(weapons, loadout,
             profilePort.query(ProfileQuery.GetCollection).collection.heirloomRelicIds, relics)
-        return profilePort.query(ProfileQuery.GetHangar).toRenderModel(coreShapes, loadout.economy.matter, signatureWeapons)
+        return profilePort.query(ProfileQuery.GetHangar).toRenderModel(coreShapes, loadout.economy.matter, signatureWeapons,
+            loadout.upgrades)
+    }
+
+    /** The track of [target] as the Profile holds it now (level, ownership and balance from the loadout). */
+    private fun upgradeTrack(target: UpgradeTarget): UpgradeTrackRenderModel {
+        val loadout = profilePort.query(ProfileQuery.GetLoadout).snapshot
+        val matter = loadout.economy.matter
+        return when (target) {
+            is UpgradeTarget.Character -> {
+                val definition = coreShapes.first { it.id == target.shape }
+                val unlocked = profilePort.query(ProfileQuery.GetHangar).shapes.firstOrNull { it.shape == target.shape }?.unlocked
+                    ?: (definition.unlockTarget == 0)
+                characterUpgradeTrack(upgrades, definition, loadout.upgrades.characterLevel(target.shape), matter, unlocked)
+            }
+            is UpgradeTarget.Weapon -> weaponUpgradeTrack(upgrades, weapons.first { it.id == target.id },
+                loadout.upgrades.weaponLevel(target.id), matter, target.id in loadout.loadout.unlockedWeapons)
+        }
+    }
+
+    private fun upgradeName(target: UpgradeTarget, language: AppLanguage): String = when (target) {
+        is UpgradeTarget.Character -> coreShapes.firstOrNull { it.id == target.shape }?.displayName?.localizedContent(language)
+            ?: target.shape.name
+        is UpgradeTarget.Weapon -> weapons.firstOrNull { it.id == target.id }?.name?.localizedContent(language) ?: target.id.name
     }
 
     private fun matrixModel() = profilePort.query(ProfileQuery.GetMatrixProgress).snapshot.toRenderModel(matrixNodes)

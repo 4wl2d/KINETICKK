@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.toSize
 import kinetickk.ball.content.api.CoreShapeDefinition
 import kinetickk.ball.content.api.RelicDefinition
+import kinetickk.ball.content.api.UpgradePolicy
 import kinetickk.ball.content.api.WeaponCadence
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
@@ -87,6 +88,12 @@ import kinetickk.ball.profile.interaction.workshop.impl.WorkshopAction
 import kinetickk.ball.profile.interaction.workshop.impl.WorkshopSegment
 import kinetickk.ball.profile.interaction.workshop.impl.WorkshopSegmentStrip
 import kinetickk.ball.profile.interaction.workshop.impl.segments
+import kinetickk.ball.profile.interaction.workshop.impl.UpgradeTarget
+import kinetickk.ball.profile.interaction.workshop.impl.WorkshopUpgradeBlock
+import kinetickk.ball.profile.interaction.workshop.impl.weaponUpgradeTrack
+import kinetickk.ball.profile.interaction.workshop.impl.workshopTileLevel
+import kinetickk.ball.profile.interaction.workshop.impl.workshopTileLevelColor
+import kinetickk.ball.profile.interaction.workshop.impl.workshopUpgradeLayoutFor
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
@@ -106,9 +113,11 @@ internal fun armoryWeaponIcon(id: WeaponId): KkIcon? = WeaponIcons[id]
 
 /**
  * The Workshop's Weapons body inside the panel's [frame]: the weapon grid, the detail panel with
- * its [segment] and the pinned primary action. [textScale] is the player's text-size setting (1.25 =
- * the boards' size). [gridExtra] (the pager, when the landscape header has no room for it) sits at
- * the grid's top-right corner; [focusSerial] moves keyboard focus to the inspected tile when it changes.
+ * its [segment] (the Honing block of [upgrades], the mastery or the details) and the pinned primary
+ * action. [textScale] is the player's text-size setting (1.25 = the boards' size). [gridExtra] (the
+ * pager, when the landscape header has no room for it) sits at the grid's top-right corner;
+ * [focusSerial] moves keyboard focus to the inspected tile when it changes; [refusalSerial] flashes
+ * the Honing action after a refusal. Segment and Honing presses go to [onWorkshop].
  */
 @Composable
 internal fun ArmoryBody(
@@ -127,7 +136,9 @@ internal fun ArmoryBody(
     detailScrollStart: Int = 0,
     focusSerial: Int = 0,
     gridExtra: (@Composable RowScope.() -> Unit)? = null,
-    onSegment: (WorkshopAction) -> Unit = {},
+    upgrades: UpgradePolicy = UpgradePolicy(),
+    refusalSerial: Int = 0,
+    onWorkshop: (WorkshopAction) -> Unit = {},
     onAction: (ArmoryAction) -> Unit,
 ) {
     val scale = profileTextScale(textScale)
@@ -149,9 +160,12 @@ internal fun ArmoryBody(
     val activeTag = if (model.activeRunWeapon == inspected.id) language.text(ProfileScreensRedesignText.ActiveRun) else null
     val tagTexts = remember(inspected, language) { inspected.tags.map { it.displayLabel.localizedContent(language) } }
     val tileTexts = remember(weapons, model, language) { armoryTileTexts(weapons, model, language) }
+    val track = weaponUpgradeTrack(upgrades, inspected, model.upgrades.weaponLevel(inspected.id), model.totalMatter,
+        owned = inspected.id in model.unlockedWeapons)
     var sheet: ArmorySheet? = null
     val layout = armoryLayout(frame, weapons.size, scale, backWidth, actionWidth, needRoom = status.blocked || notice != null,
         masteryCount = masteries.size, segment = segment, tileText = { innerWidth -> armoryTileMetrics(measurer, frame, type, tileTexts, innerWidth) },
+        upgradeHeight = { width -> workshopUpgradeLayoutFor(measurer, frame, track, language, 0f, 0f, width).height },
     ) { nameWidth, width ->
         val measured = armorySheet(measurer, frame, type, inspected, synergy, formLevels, language, width).also { sheet = it }
         ArmoryDetailMetrics(
@@ -194,7 +208,7 @@ internal fun ArmoryBody(
                 val tile = layout.tiles[index]
                 ArmoryTile(frame, type, tile, layout.tileIcon, layout.tileIconY, definition, model, definition.id == state.inspected,
                     scale, language, onAction, signatureForm = definition.signature.hangarFormIndex(),
-                    focusRequester = if (definition.id == state.inspected) inspectedFocus else null)
+                    focusRequester = if (definition.id == state.inspected) inspectedFocus else null, maxLevel = upgrades.maxLevel)
             }
         }
     }
@@ -236,7 +250,14 @@ internal fun ArmoryBody(
         ) {
             val segments = layout.segments
             WorkshopSegmentStrip(frame, segments.translate(-detail.left, -detail.top), WorkshopTab.WEAPONS.segments, segment, scale,
-                onSegment)
+                onWorkshop)
+            val slot = layout.upgrade
+            if (slot.height > 0f) {
+                val target = UpgradeTarget.Weapon(inspected.id)
+                WorkshopUpgradeBlock(frame, workshopUpgradeLayoutFor(measurer, frame, track, language, slot.left - detail.left,
+                    slot.top - detail.top, slot.width), track, target, inspected.name.localizedContent(language), null, scale,
+                    refusalSerial) { onWorkshop(WorkshopAction.BuyUpgrade(target, track)) }
+            }
             // The mastery (!) moves with the Mastery segment.
             if (layout.mastery.height > 0f) {
                 val masteryLabelWidth = measureKkText(measurer, language.text(ProfileScreensRedesignText.Mastery),
@@ -377,6 +398,7 @@ private fun ArmoryTile(
     onAction: (ArmoryAction) -> Unit,
     signatureForm: Int,
     focusRequester: FocusRequester? = null,
+    maxLevel: Int = UpgradePolicy().maxLevel,
 ) {
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
@@ -391,6 +413,8 @@ private fun ArmoryTile(
     val name = definition.name.localizedContent(language)
     val statusText = armoryStatusText(status, active, definition, language)
     val costText = formatMatter(definition.permanentUnlockCost.toLong(), language)
+    val upgradeLevel = model.upgrades.weaponLevel(definition.id)
+    val level = workshopTileLevel(upgradeLevel, !status.locked, maxLevel, language)
     val tags = remember(definition, language) { definition.tags.map { it.displayLabel.localizedContent(language) } }
     Box(
         Modifier.offset { IntOffset(tile.left.roundToInt(), tile.top.roundToInt()) }
@@ -400,7 +424,8 @@ private fun ArmoryTile(
             .semantics {
                 selected = inspected
                 contentDescription = name
-                stateDescription = if (signature) statusText + ", " + language.text(ProfileScreensRedesignText.ArmorySignatureMark) else statusText
+                stateDescription = listOfNotNull(statusText, level,
+                    if (signature) language.text(ProfileScreensRedesignText.ArmorySignatureMark) else null).joinToString(", ")
             }
             .pointerInput(Unit) {
                 awaitPointerEventScope {
@@ -421,7 +446,8 @@ private fun ArmoryTile(
             .drawBehind {
                 drawArmoryTile(measurer, frame, type, name, tags, statusText, costText, status, active,
                     armoryWeaponIcon(definition.id), iconSize, iconY, selection, hovered, focused,
-                    tint = armoryElementColor(measurer, definition), signatureForm = if (signature) signatureForm else -1)
+                    tint = armoryElementColor(measurer, definition), signatureForm = if (signature) signatureForm else -1,
+                    level = level, maxed = upgradeLevel >= maxLevel)
             },
     )
 }
@@ -452,6 +478,8 @@ private fun DrawScope.drawArmoryTile(
     focused: Boolean,
     tint: Color,
     signatureForm: Int,
+    level: String? = null,
+    maxed: Boolean = false,
 ) {
     val k = frame.k
     val bounds = Rect(Offset.Zero, size)
@@ -552,6 +580,12 @@ private fun DrawScope.drawArmoryTile(
         drawKkIcon(icon, center, iconSize, iconColor)
         if (ProfileTextProbe.sink != null) ProfileTextProbe.record("armory.tile.icon", name, null,
             Rect(center.x - iconSize * 0.5f, center.y - iconSize * 0.5f, center.x + iconSize * 0.5f, center.y + iconSize * 0.5f))
+    }
+    if (level != null) {
+        // The Honing level sits at the bottom-right of the icon band, above the name (gold at the maximum).
+        val mark = fitKkText(measurer, level, type.status * k, innerWidth * 0.4f, minFactor = 0.6f) { measurer.typography.monoStyle(it) }
+        drawProfileText(mark, size.width - padRight, iconY + iconSize * 0.5f, workshopTileLevelColor(maxed, on), "armory.tile.level", name,
+            align = KkAlign.END, valign = KkVAlign.BASELINE)
     }
 }
 

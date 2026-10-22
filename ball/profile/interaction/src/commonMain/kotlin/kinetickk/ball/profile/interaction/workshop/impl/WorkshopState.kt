@@ -63,6 +63,9 @@ internal sealed interface WorkshopAction {
 
     /** Left/Right inside the focused segment group, wrapping. */
     data class StepSegment(val forward: Boolean) : WorkshopAction
+
+    /** The upgrade block's buy action for [target], whose track the block shows as [track]. */
+    data class BuyUpgrade(val target: UpgradeTarget, val track: UpgradeTrackRenderModel) : WorkshopAction
 }
 
 internal sealed interface WorkshopEffect {
@@ -73,6 +76,9 @@ internal sealed interface WorkshopEffect {
 
     /** Move keyboard focus to the shown tab's inspected tile so arrows act at once. */
     data object FocusBody : WorkshopEffect
+
+    /** Ask the Profile for the next Refit or Honing level of [target] (its typed purchase pulse). */
+    data class PurchaseUpgrade(val target: UpgradeTarget) : WorkshopEffect
 }
 
 internal data class WorkshopReduction(
@@ -80,7 +86,11 @@ internal data class WorkshopReduction(
     val effects: List<WorkshopEffect> = emptyList(),
 )
 
-/** Tabs and segments are local presentation: every decision here is pure and emits no Profile intent. */
+/**
+ * Tabs and segments are local presentation: every decision here is pure. The only Profile intent is
+ * an upgrade purchase, asked only for an owned track below its maximum that the balance covers; the
+ * Profile Nucleus still decides.
+ */
 internal object WorkshopReducer {
     fun reduce(state: WorkshopState, action: WorkshopAction): WorkshopReduction = when (action) {
         is WorkshopAction.Request -> if (action.request.serial == state.appliedSerial) {
@@ -109,6 +119,10 @@ internal object WorkshopReducer {
                 segment(state, segments[(segments.indexOf(current) + step) % segments.size])
             }
         }
+        is WorkshopAction.BuyUpgrade -> WorkshopReduction(
+            state,
+            if (action.track.canBuy) listOf(WorkshopEffect.PurchaseUpgrade(action.target)) else emptyList(),
+        )
     }
 
     private fun show(state: WorkshopState, tab: WorkshopTab, click: Boolean): WorkshopReduction = if (state.tab == tab) {

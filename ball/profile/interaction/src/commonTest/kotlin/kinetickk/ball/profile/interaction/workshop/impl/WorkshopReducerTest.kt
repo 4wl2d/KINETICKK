@@ -4,10 +4,13 @@
 package kinetickk.ball.profile.interaction.workshop.impl
 
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.UpgradePolicy
+import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.defaultCoreShapeDefinitions
 import kinetickk.ball.profile.api.HangarProjection
 import kinetickk.ball.profile.api.HangarShapeProgress
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
+import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.hangar.impl.HangarAction
@@ -118,5 +121,29 @@ class WorkshopReducerTest {
         // A locked character or the selected one is never asked for, selection available or not.
         assertTrue(HangarReducer.reduce(between.copy(inspected = CoreShape.STAR), HangarAction.SelectInspected).effects.isEmpty())
         assertTrue(HangarReducer.reduce(between.copy(inspected = CoreShape.ORB), HangarAction.SelectInspected).effects.isEmpty())
+    }
+
+    @Test
+    fun buyAsksForTheTypedUpgradeOnlyForAnOwnedAffordableTrackBelowItsMaximum() {
+        val policy = UpgradePolicy()
+        val orb = defaultCoreShapeDefinitions().first { it.id == CoreShape.ORB }
+        val state = WorkshopState()
+        val character = UpgradeTarget.Character(CoreShape.ORB)
+        val affordable = characterUpgradeTrack(policy, orb, level = 2, matter = 200L, unlocked = true)
+        val buy = WorkshopReducer.reduce(state, WorkshopAction.BuyUpgrade(character, affordable))
+        assertSame(state, buy.state)
+        assertEquals(listOf<WorkshopEffect>(WorkshopEffect.PurchaseUpgrade(character)), buy.effects)
+        assertEquals(ProfilePulse.PurchaseCharacterUpgrade(CoreShape.ORB), character.pulse())
+        assertEquals(ProfilePulse.PurchaseWeaponUpgrade(WeaponId.MORNINGSTAR), UpgradeTarget.Weapon(WeaponId.MORNINGSTAR).pulse())
+        // One Matter short, the maximum, or a track that is not sold: nothing reaches the Profile.
+        listOf(
+            characterUpgradeTrack(policy, orb, level = 2, matter = 199L, unlocked = true),
+            characterUpgradeTrack(policy, orb, level = policy.maxLevel, matter = Long.MAX_VALUE, unlocked = true),
+            characterUpgradeTrack(policy, orb, level = 0, matter = Long.MAX_VALUE, unlocked = false),
+        ).forEach { track ->
+            val refused = WorkshopReducer.reduce(state, WorkshopAction.BuyUpgrade(character, track))
+            assertSame(state, refused.state)
+            assertTrue(refused.effects.isEmpty(), "$track")
+        }
     }
 }

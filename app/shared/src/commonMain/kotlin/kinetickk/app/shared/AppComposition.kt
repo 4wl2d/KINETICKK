@@ -104,6 +104,7 @@ internal class AppCompositionOwner(
         coreShapes = uiCatalog.coreShapes,
         audioService = this.audioService,
         relics = uiCatalog.relics,
+        upgrades = uiCatalog.upgrades,
     )
     private val rebirthFeature: RebirthFeature = rebirthFeature ?: DefaultRebirthFeature(
         profilePort = this.profilePort,

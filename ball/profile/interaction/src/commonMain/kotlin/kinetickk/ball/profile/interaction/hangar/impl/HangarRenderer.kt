@@ -50,6 +50,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.IntOffset
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.UpgradePolicy
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.profile.interaction.PROFILE_DESCRIPTION_MAX_LINES
 import kinetickk.ball.profile.interaction.ProfileFrame
@@ -74,6 +75,12 @@ import kinetickk.ball.profile.interaction.workshop.api.WorkshopTab
 import kinetickk.ball.profile.interaction.workshop.impl.WorkshopAction
 import kinetickk.ball.profile.interaction.workshop.impl.WorkshopSegment
 import kinetickk.ball.profile.interaction.workshop.impl.WorkshopSegmentStrip
+import kinetickk.ball.profile.interaction.workshop.impl.UpgradeTarget
+import kinetickk.ball.profile.interaction.workshop.impl.WorkshopUpgradeBlock
+import kinetickk.ball.profile.interaction.workshop.impl.characterUpgradeTrack
+import kinetickk.ball.profile.interaction.workshop.impl.workshopTileLevel
+import kinetickk.ball.profile.interaction.workshop.impl.workshopTileLevelColor
+import kinetickk.ball.profile.interaction.workshop.impl.workshopUpgradeLayoutFor
 import kinetickk.ball.profile.interaction.workshop.impl.segments
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
@@ -93,8 +100,10 @@ private const val HANGAR_SPIN_SECONDS = 24f
 
 /**
  * The Workshop's Characters body inside the panel's [frame]: the roster, the detail panel with its
- * [segment] and the pinned Select button. [textScale] is the player's text-size setting (1.25 = the
- * boards' size); [focusSerial] moves keyboard focus to the inspected tile when it changes.
+ * [segment] (the Refit block of [upgrades] or the traits) and the pinned Select button. [textScale]
+ * is the player's text-size setting (1.25 = the boards' size); [focusSerial] moves keyboard focus to
+ * the inspected tile when it changes; [refusalSerial] flashes the Refit action after a refusal.
+ * Segment and Refit presses go to [onWorkshop].
  */
 @Composable
 internal fun HangarBody(
@@ -105,7 +114,9 @@ internal fun HangarBody(
     detailScroll: ScrollState,
     holder: HangarLayoutHolder = remember { HangarLayoutHolder() },
     focusSerial: Int = 0,
-    onSegment: (WorkshopAction) -> Unit = {},
+    upgrades: UpgradePolicy = UpgradePolicy(),
+    refusalSerial: Int = 0,
+    onWorkshop: (WorkshopAction) -> Unit = {},
     onAction: (HangarAction) -> Unit,
 ) {
     val scale = profileTextScale(textScale)
@@ -127,10 +138,14 @@ internal fun HangarBody(
         val backWidth = profileHeaderBackWidth(measurer, frame, language.text(ProfileScreensRedesignText.Back))
         val inspected = state.inspectedShape
         val signature = inspected?.let { model.signatureWeapons(it.shape) }.orEmpty()
+        val track = inspected?.let { characterUpgradeTrack(upgrades, it.definition, it.upgradeLevel, model.matter, it.unlocked) }
         val layout = hangarLayout(frame, scale, backWidth, signatureHarmony = signature.map { it.harmonizing.isNotEmpty() },
-            segment = segment, locked = inspected?.unlocked == false) { width ->
-            if (inspected == null) 0f else hangarDescriptionLayout(measurer, frame, type, inspected, language, width).kkBoxHeight
-        }
+            segment = segment, locked = inspected?.unlocked == false,
+            descriptionHeight = { width ->
+                if (inspected == null) 0f else hangarDescriptionLayout(measurer, frame, type, inspected, language, width).kkBoxHeight
+            },
+            upgradeHeight = track?.let { { width -> workshopUpgradeLayoutFor(measurer, frame, it, language, 0f, 0f, width).height } },
+        )
         SideEffect { holder.layout = layout }
         val inspectedFocus = remember { FocusRequester() }
         LaunchedEffect(focusSerial) { if (focusSerial > 0) inspectedFocus.requestFocus() }
@@ -141,7 +156,8 @@ internal fun HangarBody(
             model.shapes.forEachIndexed { index, shape ->
                 val tile = layout.tiles.getOrNull(index) ?: return@forEachIndexed
                 HangarTile(frame, type, tile, shape, shape.shape == state.inspected, shape.shape == model.selected, time, scale,
-                    language, onAction, focusRequester = if (shape.shape == inspected?.shape) inspectedFocus else null)
+                    language, onAction, focusRequester = if (shape.shape == inspected?.shape) inspectedFocus else null,
+                    maxLevel = upgrades.maxLevel)
             }
         }
         if (inspected != null) {
@@ -161,7 +177,16 @@ internal fun HangarBody(
                         }
                         .drawBehind { drawHangarDetail(measurer, frame, type, layout, inspected, model, signature, time, language) },
                 ) {
-                    WorkshopSegmentStrip(frame, layout.segments, WorkshopTab.CHARACTERS.segments, segment, scale, onSegment)
+                    WorkshopSegmentStrip(frame, layout.segments, WorkshopTab.CHARACTERS.segments, segment, scale, onWorkshop)
+                    val slot = layout.upgrade
+                    if (track != null && slot.height > 0f) {
+                        val target = UpgradeTarget.Character(inspected.shape)
+                        WorkshopUpgradeBlock(frame, workshopUpgradeLayoutFor(measurer, frame, track, language, slot.left, slot.top, slot.width),
+                            track, target, inspected.definition.displayName.localizedContent(language),
+                            inspected.definition.mechanicName.localizedContent(language), scale, refusalSerial) {
+                            onWorkshop(WorkshopAction.BuyUpgrade(target, track))
+                        }
+                    }
                     // Each signature weapon reads as its own node: its name, state and harmony.
                     if (layout.signature.height > 0f) {
                         signature.forEachIndexed { index, weapon ->
@@ -220,6 +245,7 @@ private fun HangarTile(
     language: AppLanguage,
     onAction: (HangarAction) -> Unit,
     focusRequester: FocusRequester? = null,
+    maxLevel: Int = UpgradePolicy().maxLevel,
 ) {
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
@@ -231,6 +257,7 @@ private fun HangarTile(
     val measurer = rememberKkCanvasMeasurer(textScale)
     val name = shape.definition.displayName.localizedContent(language)
     val status = hangarTileStatus(shape, selected, language)
+    val level = workshopTileLevel(shape.upgradeLevel, shape.unlocked, maxLevel, language)
     Box(
         Modifier.offset { IntOffset(tile.left.roundToInt(), tile.top.roundToInt()) }
             .size(frame.dp(tile.width), frame.dp(tile.height))
@@ -239,7 +266,7 @@ private fun HangarTile(
             .semantics {
                 this.selected = selected
                 contentDescription = name
-                stateDescription = status
+                stateDescription = listOfNotNull(status, level).joinToString(", ")
             }
             .pointerInput(Unit) {
                 awaitPointerEventScope {
@@ -255,7 +282,10 @@ private fun HangarTile(
                 if (!it.isFocused) pointerPress = false
             }
             .clickable(interactionSource = source, indication = null, role = Role.Button) { onAction(HangarAction.Activate(shape.shape)) }
-            .drawBehind { drawHangarTile(measurer, frame, type, shape, name, status, selection, hovered, focused, selected, time) },
+            .drawBehind {
+                drawHangarTile(measurer, frame, type, shape, name, status, selection, hovered, focused, selected, time,
+                    level, shape.upgradeLevel >= maxLevel)
+            },
     )
 }
 
@@ -342,6 +372,8 @@ private fun DrawScope.drawHangarTile(
     focused: Boolean,
     selected: Boolean,
     time: Float,
+    level: String? = null,
+    maxed: Boolean = false,
 ) {
     val k = frame.k
     val roles = measurer.roles
@@ -372,6 +404,14 @@ private fun DrawScope.drawHangarTile(
     if (!shape.unlocked) drawKkIcon(KkIcon.SYSTEM_LOCKED, center, radius * 0.9f, fg)
     val nameTop = size.height - pad - textHeight
     drawProfileText(nameLayout, size.width * 0.5f, nameTop, fg, "hangar.tile.name", shape.shape, align = KkAlign.CENTER)
+    if (level != null) {
+        // The Refit level sits at the bottom-right of the form's area, above the name (gold at the maximum).
+        val mark = fitKkText(measurer, level, type.tileStatus * k, size.width * 0.5f - pad, minFactor = 0.6f) {
+            measurer.typography.monoStyle(it)
+        }
+        drawProfileText(mark, size.width - pad, nameTop - frame.d(2f), workshopTileLevelColor(maxed, on), "hangar.tile.level",
+            shape.shape, align = KkAlign.END, valign = KkVAlign.BASELINE)
+    }
     // A locked tile keeps its dark face when inspected, so its unlock progress reads in light ink then.
     val statusColor = when {
         !shape.unlocked -> if (on) Kk.Bone2 else Kk.Mute

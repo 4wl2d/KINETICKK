@@ -10,6 +10,7 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.profile.api.HangarProjection
 import kinetickk.ball.profile.api.LoadoutProfileSnapshot
+import kinetickk.ball.profile.api.PermanentUpgrades
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.hangar.api.HangarOutput
 import kinetickk.ball.profile.interaction.hangar.api.HangarRenderModel
@@ -91,12 +92,14 @@ internal const val HANGAR_BAR_FLOOR = 0.25f
  * Maps the Profile's Hangar projection onto the content roster. Trait bars are normalized over the
  * roster: mass by its multiplier, integrity as 100 plus the bonus, handling as the inverse drag and
  * heat as the inverse Dash heat multiplier, each placed between the roster's smallest value (a
- * quarter bar, so every bar stays visible) and its largest (a full bar).
+ * quarter bar, so every bar stays visible) and its largest (a full bar). [upgrades] carries the
+ * bought Refit levels from the loadout.
  */
 internal fun HangarProjection.toRenderModel(
     definitions: ImmutableList<CoreShapeDefinition>,
     matter: Long,
     weapons: List<HangarWeaponRenderModel> = emptyList(),
+    upgrades: PermanentUpgrades = PermanentUpgrades(),
 ): HangarRenderModel {
     val mass = definitions.map { it.traits.massMultiplier }
     val integrity = definitions.map { 100f + it.traits.integrityBonus }
@@ -120,6 +123,7 @@ internal fun HangarProjection.toRenderModel(
                 handlingBar = bar(handling, index),
                 heatBar = bar(heat, index),
                 ascendant = definition.id in ascendedCharacters,
+                upgradeLevel = upgrades.characterLevel(definition.id),
             )
         }.toImmutableList(),
         selected = selected,

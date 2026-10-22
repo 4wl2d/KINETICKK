@@ -25,6 +25,8 @@ data class HangarShapeRenderModel(
     val heatBar: Float,
     /** This character cleared the final Rebirth tier: its tile and details carry the gold crown. */
     val ascendant: Boolean = false,
+    /** Bought Refit levels (the tile shows "Lvl N" from 1). */
+    val upgradeLevel: Int = 0,
 ) {
     val shape: CoreShape get() = definition.id
 }
