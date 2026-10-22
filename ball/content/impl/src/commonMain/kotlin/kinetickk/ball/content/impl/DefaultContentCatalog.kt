@@ -166,6 +166,9 @@ private fun validateBootstrap(data: ContentBootstrapData) {
     require(data.items.withIndex().all { (index, item) -> item.id == index }) {
         "Item ids must be contiguous and ordered from zero"
     }
+    require(data.items.all { item -> item.unlockLevel <= data.tempo.maximumLevel }) {
+        "Item unlock levels must not exceed the maximum run level ${data.tempo.maximumLevel}"
+    }
 
     requireBound("weapons", data.weapons.size, ContentBounds.MAX_WEAPONS)
     requireUniqueIds("weapon", data.weapons.map(WeaponDefinition::id))

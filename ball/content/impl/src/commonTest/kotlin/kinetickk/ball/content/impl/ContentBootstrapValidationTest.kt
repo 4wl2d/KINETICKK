@@ -24,6 +24,7 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicKey
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.RelicPairingKind
+import kinetickk.ball.content.api.RunTempoProfile
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.StatusElement
@@ -63,6 +64,19 @@ class ContentBootstrapValidationTest {
         val data = defaultContentBootstrapData()
 
         assertRejected(data.copy(items = data.items.paddedTo(ContentBounds.MAX_ITEMS + 1)), "items size 193")
+    }
+
+    @Test
+    fun itemUnlockLevelsMayReachTheRunLevelCapButNotPassIt() {
+        val data = defaultContentBootstrapData().copy(tempo = RunTempoProfile(maximumLevel = 42))
+        val capped = data.items.last().copy(unlockLevel = 42)
+
+        val accepted = createContentCatalogForTesting(data.copy(items = data.items.replaceLast(capped)))
+        assertEquals(42, accepted.gameplayContent().items.last().unlockLevel)
+        assertRejected(
+            data.copy(items = data.items.replaceLast(capped.copy(unlockLevel = 43))),
+            "Item unlock levels must not exceed the maximum run level 42",
+        )
     }
 
     @Test
