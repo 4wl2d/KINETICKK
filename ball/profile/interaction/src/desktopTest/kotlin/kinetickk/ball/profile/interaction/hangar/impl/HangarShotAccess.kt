@@ -11,6 +11,7 @@ import kinetickk.ball.content.api.defaultCoreShapeDefinitions
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.HangarProjection
 import kinetickk.ball.profile.api.LoadoutProfileSnapshot
+import kinetickk.ball.profile.api.PermanentUpgrades
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.interaction.CatalogHeirlooms
@@ -31,10 +32,11 @@ internal object HangarShotAccess {
      * The roster with the shipped weapons in the signature rows: Flux Wake (starter), Morningstar and
      * Ion Swarm owned, the Rebirth gates at rank 0, and the four catalog heirloom candidates.
      */
-    fun HangarProjection.model(matter: Long): HangarRenderModel = toRenderModel(defaultCoreShapeDefinitions(), matter,
-        hangarWeapons(CatalogWeapons, LoadoutProfileSnapshot(PlayerEconomy(matter),
-            PlayerLoadout(selected, WeaponId.FLUX_WAKE, setOf(WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR, WeaponId.ION_SWARM))),
-            CatalogHeirlooms, CatalogRebirthRelics))
+    fun HangarProjection.model(matter: Long, upgrades: PermanentUpgrades = PermanentUpgrades()): HangarRenderModel =
+        toRenderModel(defaultCoreShapeDefinitions(), matter,
+            hangarWeapons(CatalogWeapons, LoadoutProfileSnapshot(PlayerEconomy(matter),
+                PlayerLoadout(selected, WeaponId.FLUX_WAKE, setOf(WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR, WeaponId.ION_SWARM))),
+                CatalogHeirlooms, CatalogRebirthRelics), upgrades)
 
     /** The Characters tab as the Workshop hosts it, inspecting [inspected] with the detail on [segment]. */
     @Composable
