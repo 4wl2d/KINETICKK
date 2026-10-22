@@ -9,6 +9,8 @@ import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.LocalKkRolePalette
+import kinetickk.foundation.design.KkFramePacer
+import kinetickk.foundation.design.LocalKkFrameRateCap
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.drawKkSlab
 import kinetickk.foundation.design.kkStroke
@@ -38,7 +40,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.structuralEqualityPolicy
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -58,6 +59,7 @@ import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -260,16 +262,20 @@ fun GameplayContent(
         if (inputEnabled) focusRequester.requestFocus()
     }
 
+    // The frame limit paces the loop; the fixed-step simulation plays the same at any frame rate.
+    val frameRateCap = LocalKkFrameRateCap.current
     LaunchedEffect(
         component,
         interactionValidator,
         performanceTelemetry,
         performanceEnabledValue,
+        frameRateCap,
     ) {
         val collectPerformance = performanceEnabledValue
-        var previousFrame = withFrameNanos { it }
+        val pacer = KkFramePacer(frameRateCap)
+        var previousFrame = pacer.awaitFrame()
         while (true) {
-            val frame = withFrameNanos { it }
+            val frame = pacer.awaitFrame()
             val frameIntervalNanos = frame - previousFrame
             val delta = frameIntervalNanos / 1_000_000_000f
             previousFrame = frame
@@ -289,6 +295,23 @@ fun GameplayContent(
                 performanceSnapshotValue = performanceTelemetry.snapshot()
             }
         }
+    }
+
+    // Show FPS (stored) opens the performance panel with each run and follows the setting when it
+    // reaches the run; F3 and the PERFORMANCE control still toggle the panel for the session.
+    val showFps by remember(component) { derivedStateOf { renderModelValue.settings.showFps } }
+    LaunchedEffect(component, showFps) {
+        if (performanceEnabledValue != showFps) togglePerformanceTelemetry()
+    }
+
+    // Pause when unfocused: the window losing focus pauses a running run (an edge, never a level).
+    val windowFocused = LocalWindowInfo.current.isWindowFocused
+    val windowFocus = remember(component) { GameplayWindowFocus() }
+    LaunchedEffect(component, windowFocused) {
+        val model = renderModelValue
+        val pause = pausesOnFocusLoss(windowFocus.focused, windowFocused, model.phase, model.settings.pauseOnFocusLoss, inputEnabled)
+        windowFocus.focused = windowFocused
+        if (pause) dispatch(GameplayInteractionPulse.PauseToggled)
     }
 
     // The Nucleus receives the viewport in dp, so a density change at an unchanged pixel size (a

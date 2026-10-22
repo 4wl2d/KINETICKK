@@ -13,6 +13,8 @@ internal enum class ProfileText : TextResource {
     SettingsSound,
     SettingsGraphics,
     SettingsInterface,
+    SettingsDisplay,
+    SettingsControls,
     RunStatisticsSide,
     LeftSide,
     RightSide,
