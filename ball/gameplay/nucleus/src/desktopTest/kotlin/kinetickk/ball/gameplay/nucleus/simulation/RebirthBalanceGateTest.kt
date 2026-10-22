@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.EnemyType
+import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.MatrixNodeDefinition
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
@@ -69,6 +70,22 @@ class RebirthBalanceGateTest {
         val outcomes = GateSeeds.map { seed -> play(seed, tier = 0, setup = Fresh) }
         report("GATE A tier=0 fresh", outcomes)
         assertTrue(outcomes.count { it.won } >= 4, "tier 0 must stay winnable: ${outcomes.summary()}")
+    }
+
+    /**
+     * Gate I (0.5.0 skills): skills help a fresh tier-0 run but do not trivialise it. The same bot with no skill slot in
+     * reach of the run clears the Architect no more than a fifth slower than with its drafted, cast skills.
+     */
+    @Test fun skillsHelpAFreshTierZeroRunWithoutTrivialisingIt() {
+        val withSkills = GateSeeds.map { seed -> play(seed, tier = 0, setup = Fresh) }
+        val without = GateSeeds.map { seed -> play(seed, tier = 0, setup = Fresh, content = NoSkillSlots) }
+        report("GATE I tier=0 fresh skills", withSkills)
+        report("GATE I tier=0 fresh no-skills", without)
+        val skilled = withSkills.medianClear()
+        val unskilled = without.medianClear()
+        println("GATE I median clear skills=$skilled no-skills=$unskilled ratio=${skilled / unskilled}")
+        assertTrue(skilled >= unskilled * 0.8f,
+            "skills must not trivialise tier 0: median clear $skilled s against $unskilled s without skills")
     }
 
     @Test fun aFullMatrixAndASignatureWeaponCanWinTierThree() {
@@ -168,8 +185,7 @@ class RebirthBalanceGateTest {
         val relics: List<RelicId> = emptyList(),
     )
 
-    private fun play(seed: Int, tier: Int, setup: Setup): Outcome {
-        val content = canonicalGameplayContent
+    private fun play(seed: Int, tier: Int, setup: Setup, content: GameplayContentSnapshot = canonicalGameplayContent): Outcome {
         val ranks = when (setup.matrix) {
             MatrixPlan.NONE -> content.matrixNodes.map { 0 }
             MatrixPlan.HALF -> halfMatrixRanks(content.matrixNodes)
@@ -235,6 +251,9 @@ class RebirthBalanceGateTest {
 
     private companion object {
         val GateSeeds: List<Int> = (6..10).map { it * 7_919 + 13 }
+
+        /** The shipped content with every skill slot opening just below the level cap: no run here drafts a skill. */
+        val NoSkillSlots: GameplayContentSnapshot = withoutReachableSkillSlots()
         val BotWeapons: List<WeaponId> = listOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.ENTROPY_FIELD, WeaponId.PRISM_RELAY)
 
         /** No Matrix ranks, the Orb and the starter weapon. */

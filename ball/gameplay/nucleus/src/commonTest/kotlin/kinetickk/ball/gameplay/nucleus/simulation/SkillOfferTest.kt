@@ -10,8 +10,6 @@ import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.model.SkillCell
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
-import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
-import kinetickk.foundation.collections.immutableListOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -79,9 +77,7 @@ class SkillOfferTest {
 
     @Test
     fun withNoSkillSlotInReachTheItemStreamIsUntouchedAndADraftOnlyAddsItsThreeDraws() {
-        val unreachable = canonicalGameplayContent.copy(
-            tempo = canonicalGameplayContent.tempo.copy(skillSlotLevels = immutableListOf(96, 97, 98)),
-        )
+        val unreachable = withoutReachableSkillSlots()
         val withDrafts = buildTestState(seed = 77)
         val without = buildTestState(seed = 77, content = unreachable)
         assertEquals(withDrafts.rewardRandom.snapshot(), without.rewardRandom.snapshot())

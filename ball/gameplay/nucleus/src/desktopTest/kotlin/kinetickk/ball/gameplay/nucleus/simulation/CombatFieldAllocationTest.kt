@@ -43,6 +43,50 @@ class CombatFieldAllocationTest {
         assertEquals(emptyBytes, fieldBytes, "$STEPS steps over shot, bend, pickup and guard passes allocated beyond the empty arena")
     }
 
+    @Test
+    fun sixHundredStepsOverTheSkillFieldKindsAllocateNothingBeyondTheEmptyArena() {
+        val fields = crowdedArena()
+        val empty = crowdedArena()
+        refillSkillFields(fields)
+        assertEquals(fields.content.build.policy.maximumSkillFields, fields.combatFieldTable.count)
+
+        val fieldBytes = skillBytesPerRound(fields, withFields = true)
+        val emptyBytes = skillBytesPerRound(empty, withFields = false)
+        println("COMBAT-FIELD-SKILL-ALLOCATION fields=$fieldBytes empty=$emptyBytes steps=$STEPS")
+        assertEquals(emptyBytes, fieldBytes, "$STEPS steps over the Frost Line, Gravity Well and Storm Coil passes allocated beyond the empty arena")
+    }
+
+    /**
+     * A Frost Line across the bolts (a shot eater with its band, slow and slam passes), a Gravity Well over the
+     * pickups and a Storm Coil whose zap scan walks the crowd, one per skill slot; refilled in place by recasts.
+     */
+    private fun refillSkillFields(state: MutableGameState) {
+        state.addField(CombatFieldKind.FROST_LINE, FieldSource.SKILL, 0, x = -1_520f, y = 1_550f, x2 = -1_250f, y2 = 1_550f,
+            radius = 24f, seconds = 0.4f, damagePerSecond = 0f, element = kinetickk.ball.content.api.StatusElement.CRYO,
+            stacksPerTick = 1, generation = 0, power = 50f)
+        state.addField(CombatFieldKind.GRAVITY_WELL, FieldSource.SKILL, 1, x = -1_400f, y = -1_400f, radius = 200f, seconds = 1f,
+            damagePerSecond = 10f, element = kinetickk.ball.content.api.StatusElement.GRAVITIC, stacksPerTick = 1, generation = 0,
+            pull = 260f, power = 300f)
+        state.addField(CombatFieldKind.STORM_COIL, FieldSource.SKILL, 2, x = 0f, y = 3_000f, radius = 170f, seconds = 1f,
+            damagePerSecond = 0f, element = kinetickk.ball.content.api.StatusElement.ION, stacksPerTick = 3, generation = 0, power = 20f)
+    }
+
+    private fun skillSteps(state: MutableGameState, withFields: Boolean) {
+        for (step in 0 until STEPS) {
+            state.elapsed += MutableGameState.FIXED_STEP
+            state.updateCombatFields(MutableGameState.FIXED_STEP)
+            if (withFields && step % REFILL_EVERY == 0) refillSkillFields(state)
+        }
+    }
+
+    private fun skillBytesPerRound(state: MutableGameState, withFields: Boolean): Long {
+        repeat(WARMUP_ROUNDS) { skillSteps(state, withFields) }
+        val thread = Thread.currentThread().id
+        val before = threads.getThreadAllocatedBytes(thread)
+        repeat(ROUNDS) { skillSteps(state, withFields) }
+        return (threads.getThreadAllocatedBytes(thread) - before) / ROUNDS
+    }
+
     /** The crowd plus 450 hostile bolts, 120 player shots and 200 Data pickups inside the fields' reach. */
     private fun crowdedArena(): MutableGameState = arena().apply {
         repeat(MAX_BOLTS) { index -> hostileBolt(-1_500f + (index % 30) * 8f, 1_500f + (index / 30) * 8f) }

@@ -117,6 +117,19 @@ internal val contentWithoutReactionVerbs: GameplayContentSnapshot by lazy {
     )
 }
 
+/**
+ * [content] with every skill slot opening on the last levels before the run's level cap, so a run never drafts a
+ * skill (the "no skills" arm of the skill gates).
+ */
+internal fun withoutReachableSkillSlots(content: GameplayContentSnapshot = canonicalGameplayContent): GameplayContentSnapshot {
+    val top = content.tempo.maximumLevel
+    return content.copy(
+        tempo = content.tempo.copy(
+            skillSlotLevels = kinetickk.foundation.collections.immutableListOf(top - 3, top - 2, top - 1),
+        ),
+    )
+}
+
 /** Sets off [reaction] on [target]: [olderStacks] of its first element, then one of its second. */
 internal fun MutableGameState.setOff(reaction: kinetickk.ball.content.api.ReactionId, target: Enemy, olderStacks: Int = 3) {
     applyStatus(target, reaction.first, olderStacks, generation = 0)
