@@ -15,6 +15,7 @@ import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRule
+import kinetickk.ball.content.api.MarkPick
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatDelta
@@ -67,7 +68,9 @@ import kotlin.test.assertTrue
  * The 0.5.0 vocabulary has its own encounters: skills cast on cooldown (SKILLS), reactions forced next to the Core
  * that leave pools, hushes, bubbles and maws on its path while bolts fly at it (FIELDS), bolt volleys with one
  * erased every 0.6 s (SHOTS), pre-marked packs rammed and braked on (MARKS) and the Apex unlocked and cast whenever
- * ready (APEX); they also measure bolts erased, refunded seconds, control seconds and distance flown at 900 u/s.
+ * ready (APEX); they also measure bolts erased, refunded seconds, control seconds, distance flown at 900 u/s and Apex
+ * recharge progress. Protection that holds only at speed is flown through fast passes while hits land (RUSH), a keystone
+ * that strips defenses also against Elites immune to the weapon's element, and a Spored mark where marked targets die.
  * [everyNewVocabularyKindMovesItsEncounter] holds one probe per new kind to those encounters.
  */
 class PerceptibleItemImpactTest {
@@ -121,13 +124,15 @@ class PerceptibleItemImpactTest {
                 }.maxBy { it.third }
             }
             val (setup, output, share) = best
-            val line = "${item.id} ${item.name}: ${setup.arena}/${setup.weapon} ${setup.support} $output ${"%+.1f".format(share * 100f)} % " +
-                "($fights fights)"
+            val line = "${item.id} ${item.name}: ${setup.arena}/${setup.weapon}${setup.immuneTo?.let { " vs $it-immune" }.orEmpty()} " +
+                "${setup.support} $output ${"%+.1f".format(share * 100f)} % ($fights fights)"
             report += line
             if (share < MIN_GAIN && item.name !in JUSTIFIED_EXCEPTIONS) misses += line
         }
         report.forEach { println("IMPACT $it") }
-        baselines.forEach { (setup, outcome) -> println("BASELINE ${setup.arena}/${setup.weapon} ${setup.support} $outcome") }
+        baselines.forEach { (setup, outcome) ->
+            println("BASELINE ${setup.arena}/${setup.weapon}${setup.immuneTo?.let { " vs $it-immune" }.orEmpty()} ${setup.support} $outcome")
+        }
         assertTrue(JUSTIFIED_EXCEPTIONS.keys.all { name -> canonicalGameplayContent.items.any { it.name == name } }, "Every exception names an item")
         assertTrue(misses.isEmpty(), "Items that move no measured output by 5 %:\n" + misses.joinToString("\n"))
     }
@@ -238,6 +243,8 @@ class PerceptibleItemImpactTest {
         val weapon: WeaponId?,
         /** The pilot keeps the Core inside the start area ([leash]): the vocabulary encounters, and any item that launches it. */
         val leashed: Boolean = arena.vocabulary,
+        /** Every target is an Elite whose aspect is immune to this element (null: plain targets). */
+        val immuneTo: StatusElement? = null,
     )
 
     private fun Arena.weapons(): List<WeaponId?> = if (armed) ARENA_WEAPONS else listOf(null)
@@ -532,10 +539,13 @@ class PerceptibleItemImpactTest {
                 val current = targets[index]
                 val (x, y) = slots[index]
                 val target = if (current == null || current.dead || current.hp <= 0f || current !in game.enemies) {
-                    val type = if (setup.elite && index == 0) EnemyType.ELITE else EnemyType.DRIFTER
+                    // Only an instance aspect (an Elite's) can be immune.
+                    val type = if (setup.immuneTo != null || setup.elite && index == 0) EnemyType.ELITE else EnemyType.DRIFTER
                     val integrity = if (arena == Arena.CULL && index % 2 == 1) STURDY else arena.integrity
                     game.addEnemyForTesting(x, y, hp = integrity, type = type).also { spawned ->
-                        if (type == EnemyType.ELITE) assignAspect(spawned, -1, immune = false)
+                        val immuneTo = setup.immuneTo
+                        if (immuneTo != null) assignAspect(spawned, immuneTo.ordinal, immune = true)
+                        else if (type == EnemyType.ELITE) assignAspect(spawned, -1, immune = false)
                         targets[index] = spawned
                     }
                 } else current
@@ -917,7 +927,7 @@ class PerceptibleItemImpactTest {
         // the attackers at the status it adds.
         val applied = item.clauses.flatMap { it.actions }.mapNotNull { (it as? EffectAction.ApplyStatus)?.pick?.element }.toSet()
         val siegeSupport = support.filter { name -> applied.none { element -> name in ElementSources.getValue(element) } }
-        return arenas.flatMap { arena ->
+        val setups = arenas.flatMap { arena ->
             (if (familyWeapon != null && arena.armed) listOf(familyWeapon) else arena.weapons()).map { weapon ->
                 Setup(arena, when (arena) {
                     Arena.OFFERS -> emptyList()
@@ -926,6 +936,11 @@ class PerceptibleItemImpactTest {
                 }, elite, weapon, leashed = arena.vocabulary || launches)
             }
         }
+        // A keystone that strips defenses (Crevasse) is also flown against Elites immune to the weapon's own element.
+        val armored = if (item.keystone in DefenseBreakingKeystones) {
+            listOf(Setup(Arena.STATUS, support, elite, WeaponId.ION_SWARM, leashed = launches, immuneTo = StatusElement.ION))
+        } else emptyList()
+        return setups + armored
     }
 
     private fun conditionArenas(condition: EffectCondition): List<Arena> = when (condition) {
@@ -956,7 +971,9 @@ class PerceptibleItemImpactTest {
         is EffectAction.Zone -> listOf(Arena.FIELDS, Arena.SHOTS, Arena.SIEGE)
         is EffectAction.EraseShots -> listOf(Arena.SHOTS)
         is EffectAction.CoreImpulse -> listOf(Arena.MARKS, Arena.FIELDS)
-        is EffectAction.ApplyMark, is EffectAction.Throw -> listOf(Arena.MARKS)
+        // A Spored mark pays on death (Decay spread and a Data drop): it is measured where marked targets die.
+        is EffectAction.ApplyMark -> if (action.mark == MarkPick.SPORED) listOf(Arena.MARKS, Arena.CROWD) else listOf(Arena.MARKS)
+        is EffectAction.Throw -> listOf(Arena.MARKS)
         EffectAction.PrimeDash -> listOf(Arena.HEAT, Arena.IMPACT)
         is EffectAction.Buff -> if (action.stat == BuffStat.SKILL_RECHARGE || action.stat == BuffStat.SKILL_POWER) listOf(Arena.SKILLS) else emptyList()
         else -> emptyList()
@@ -1127,6 +1144,12 @@ class PerceptibleItemImpactTest {
             require(bounds.size == 2 && first != null && last != null && first in 0..last) { "KK_IMPACT_RANGE '$value' is not first..last" }
             first..last
         } ?: 0..Int.MAX_VALUE
+
+        /**
+         * Keystones whose form strips enemy defenses (Crevasse: no aspect immunity, resistance or plates), which only
+         * defended targets can show.
+         */
+        val DefenseBreakingKeystones: Set<ReactionId> = setOf(ReactionId.FRACTURE)
 
         /** Items whose effect no scripted encounter can show, by name, with the reason. None today. */
         val JUSTIFIED_EXCEPTIONS: Map<String, String> = emptyMap()
