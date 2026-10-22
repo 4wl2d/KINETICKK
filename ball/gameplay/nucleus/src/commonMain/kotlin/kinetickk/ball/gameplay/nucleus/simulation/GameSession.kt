@@ -168,6 +168,9 @@ internal fun MutableGameState.startRun() {
     weapon = startingWeapon
     // The signature character starts its weapon one level up.
     weaponLevel = 1 + matrix.startingWeaponLevels + signatureLevelBonus()
+    // Refit of the selected character is a run constant; Honing is read by the current weapon.
+    characterUpgradeLevel = characterUpgradeLevels[coreShape.ordinal]
+    characterUpgradePower = 1f + content.upgrades.characterPowerPerLevel * characterUpgradeLevel
     resetRunStats()
     recompileBuild()
     // A new run starts with a new character runtime (Dash count 0), so the weapon's input tracking starts over too.
@@ -185,7 +188,7 @@ internal const val BASE_MAGNET_STRENGTH: Float = 4.65f
 /** Base exponential drag on the Core's velocity per second. */
 internal const val BASE_DRAG_COEFFICIENT: Float = 0.29f
 
-/** Character base stats, then the owned Core Matrix effects from content, then Rebirth. */
+/** Character base stats, then the owned Core Matrix effects from content, Refit integrity, then Rebirth. */
 internal fun MutableGameState.resetRunStats() {
     mass = 1f
     damageMultiplier = 1f
@@ -212,6 +215,7 @@ internal fun MutableGameState.resetRunStats() {
     dragCoefficient = BASE_DRAG_COEFFICIENT
     applyCharacterTraits()
     applyMatrixStats()
+    maxHp += content.upgrades.characterIntegrityPerLevel * characterUpgradeLevel
     matterGain *= rebirthProfile.matterGainMultiplier
     dashHeatCost *= matrix.dashHeatMultiplier
     dragCoefficient *= matrix.dragMultiplier

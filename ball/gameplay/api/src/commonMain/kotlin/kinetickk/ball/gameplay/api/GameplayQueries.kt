@@ -59,6 +59,8 @@ data class GameplayBuildSummaryProjection(
     val suppressedItemIds: ImmutableList<Int> = immutableListOf(),
     val rebornItemIds: ImmutableList<Int> = immutableListOf(),
     val severedRelicIds: ImmutableList<RelicId> = immutableListOf(),
+    /** The run's permanent upgrades, "Refit {character level} · Honing {current weapon level}" (content-localized). */
+    val upgrades: String = "",
 ) : GameplayProjection
 
 enum class BuildStatSource { CHARACTER, LAB, ITEMS, RELICS, SYNERGIES, MASTERY, TEMPORARY }

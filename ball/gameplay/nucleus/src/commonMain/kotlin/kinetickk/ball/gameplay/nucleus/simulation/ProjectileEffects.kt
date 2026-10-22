@@ -228,8 +228,8 @@ internal fun MutableGameState.movementAngle(): Float {
 /**
  * Power of the equipped weapon's own hits: item weapon power, Rebirth, level, generic mastery, run growth
  * (1 + 1.6p plus the Matrix bonus), Overdrive and the synergies ([weaponSynergyPower]: tag resonance,
- * signature, Relic key harmony, scaling stat). An OVERDRIVE-scaling weapon takes Overdrive through its
- * scaling only, so no input counts twice.
+ * signature, Relic key harmony, scaling stat) and Honing ([weaponUpgradePower]). An OVERDRIVE-scaling weapon
+ * takes Overdrive through its scaling only, so no input counts twice.
  */
 internal fun MutableGameState.effectiveWeaponPower(): Float =
     weaponPower *
@@ -238,7 +238,15 @@ internal fun MutableGameState.effectiveWeaponPower(): Float =
         (1f + currentWeaponMastery.damageBonus) *
         weaponRunGrowth() *
         weaponSynergyPower() *
-        weaponOverdriveFactor()
+        weaponOverdriveFactor() *
+        weaponUpgradePower()
+
+/**
+ * Honing of the equipped weapon: its own hits only (never [abilityPower]), read by the current weapon so the
+ * bonus follows a Totem recalibration or a weapon choice.
+ */
+internal fun MutableGameState.weaponUpgradePower(): Float =
+    1f + content.upgrades.weaponPowerPerLevel * weaponUpgradeLevels[weapon.ordinal]
 
 /**
  * Power of character abilities and weapon-based item effects. It shares the weapon's level, mastery and

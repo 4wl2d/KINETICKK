@@ -40,6 +40,7 @@ private val ContentMessageTemplates: List<Pair<Regex, ContentMessageRenderer>> =
         { g -> "Ячейку ${g[1]} больше нельзя слить; утилизировать избыточный резонанс." },
     Regex("Slot ([0-9]+) is already rank ([0-9]+); salvage the excess resonance\\.") to
         { g -> "Ячейка ${g[1]} уже имеет ранг ${g[2]}; утилизировать избыточный резонанс." },
+    Regex("Refit ([0-9]+) · Honing ([0-9]+)") to { g -> "Доработка ${g[1]} · Заточка ${g[2]}" },
     Regex("LEVEL ([0-9]+)") to { g -> "УРОВЕНЬ ${g[1]}" },
     Regex("RANK ([0-9]+)") to { g -> "РАНГ ${g[1]}" },
     Regex("SLOT ([0-9]+)") to { g -> "ЯЧЕЙКА ${g[1]}" },

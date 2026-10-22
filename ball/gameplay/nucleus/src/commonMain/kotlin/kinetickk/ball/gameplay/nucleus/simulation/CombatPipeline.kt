@@ -472,11 +472,11 @@ internal fun MutableGameState.dealStatusDamage(
 
 /**
  * Character abilities bypass the build pipeline but still meet the receiver's kinetic frame. The Edge
- * applies; the dealt amount counts as the run's ability output.
+ * and Refit ([MutableGameState.characterUpgradePower]) apply; the dealt amount counts as the run's ability output.
  */
 internal fun MutableGameState.dealCharacterDamage(enemy: Enemy, amount: Float): DamageResult {
     if (amount <= 0f || !enemy.alive) return DamageResult(0f, false)
-    val scaled = amount * matrix.damageMultiplier * characterDamageMultiplier()
+    val scaled = amount * matrix.damageMultiplier * characterDamageMultiplier() * characterUpgradePower
     val integrity = enemy.hp
     val result = damageEnemy(enemy, scaled * enemy.weaponTaken, unmitigated = scaled)
     recordAbilityDamage(integrity, result)
