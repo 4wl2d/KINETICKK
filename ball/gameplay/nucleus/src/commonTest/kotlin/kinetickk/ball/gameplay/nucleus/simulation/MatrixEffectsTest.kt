@@ -28,6 +28,7 @@ import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
+import kinetickk.foundation.random.CloneableXorWowRandom
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -353,6 +354,35 @@ class MatrixEffectsTest {
             assertTrue(dataItems(one) >= minOf(ladder, floor + 3), "seed $seed: one rank deals three more")
             assertEquals(ladder, dataItems(three), "seed $seed: a full Data Archive deals the whole rank-0 Data ladder")
         }
+    }
+
+    @Test
+    fun dataOfferWeightShowsDataCardsMoreOftenWithoutAnExtraRewardDraw() {
+        val effect = MatrixEffect.DataOfferWeight(1f)
+        /** One offer per seed from a fresh reward stream: the cards and the stream's state after the offer. */
+        fun offers(state: MutableGameState): List<Pair<List<Int>, CloneableXorWowRandom.Snapshot>> = state.run {
+            dealWholeCatalog()
+            level = 30
+            (1..600).map { seed ->
+                rewardRandom = CloneableXorWowRandom(seed)
+                buildItemChoices()
+                choices.map { requireNotNull(it.itemId) } to rewardRandom.snapshot()
+            }
+        }
+        fun dataCards(offers: List<Pair<List<Int>, CloneableXorWowRandom.Snapshot>>): Int =
+            offers.sumOf { (cards, _) -> cards.count { canonicalGameplayContent.items[it].isDataEconomy } }
+
+        val plain = offers(isolated(null, false, node = MatrixNodeId.DATA_ARCHIVE))
+        val notOwned = offers(isolated(effect, false, node = MatrixNodeId.DATA_ARCHIVE))
+        val full = isolated(effect, true, node = MatrixNodeId.DATA_ARCHIVE, rank = 3)
+        assertEquals(1f, isolated(null, false).matrix.dataOfferWeight)
+        assertEquals(4f, full.matrix.dataOfferWeight, "three ranks of +1 weigh Data items × 4")
+        val weighted = offers(full)
+
+        assertEquals(plain, notOwned, "an unowned node leaves every offer as it was")
+        assertEquals(plain.map { it.second }, weighted.map { it.second }, "the weight never adds or removes a reward draw")
+        assertTrue(dataCards(weighted) > dataCards(plain) * 2, "Data cards ${dataCards(plain)} -> ${dataCards(weighted)}")
+        assertTrue(weighted.all { (cards, _) -> cards.size == 3 && cards.toSet().size == 3 })
     }
 
     @Test

@@ -95,6 +95,16 @@ class RuleVocabularyTest {
     }
 
     @Test
+    fun theDataOfferWeightAcceptsAPositiveFractionUpToTwo() {
+        MatrixEffect.DataOfferWeight(0.001f)
+        MatrixEffect.DataOfferWeight(2f)
+        assertFailsWith<IllegalArgumentException> { MatrixEffect.DataOfferWeight(0f) }
+        assertFailsWith<IllegalArgumentException> { MatrixEffect.DataOfferWeight(-0.5f) }
+        assertFailsWith<IllegalArgumentException> { MatrixEffect.DataOfferWeight(2.001f) }
+        assertFailsWith<IllegalArgumentException> { MatrixEffect.DataOfferWeight(Float.NaN) }
+    }
+
+    @Test
     fun conditionsHoldOnlyOnTriggersThatCarryTheirFacts() {
         val reactionCarriers = setOf(EffectTrigger.REACTION, EffectTrigger.FIELD_ENTER, EffectTrigger.MARK_CONSUMED)
         val skillCarriers = setOf(EffectTrigger.SKILL_CAST, EffectTrigger.SKILL_HIT)

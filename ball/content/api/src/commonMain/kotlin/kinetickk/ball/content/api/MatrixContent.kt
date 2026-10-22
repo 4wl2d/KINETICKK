@@ -196,6 +196,15 @@ sealed interface MatrixEffect {
         init { require(items in 1..MAX_DATA_STRATUM_ITEMS) { "Data stratum items must be 1..$MAX_DATA_STRATUM_ITEMS" } }
     }
 
+    /**
+     * Data-economy items ([ItemDefinition.isDataEconomy]) weigh × (1 + [fraction] × ranks) when an ordinary item offer
+     * picks a card in any lane, so a profile that invested in Data sees its Data cards more often. It changes only the
+     * pick's weights: the offer draws exactly as many reward values as without it.
+     */
+    data class DataOfferWeight(val fraction: Float) : MatrixEffect {
+        init { requireFraction(fraction) }
+    }
+
     /** Weapon run growth gains [bonusPerProgress] × run progress. */
     data class WeaponRunGrowth(val bonusPerProgress: Float) : MatrixEffect {
         init { requireFraction(bonusPerProgress) }

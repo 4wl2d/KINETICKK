@@ -207,7 +207,7 @@ class ContentBalanceCharacterizationTest {
             ui.matrixNodes.map { node -> node.id to node.costs.toList() },
         )
         assertEquals(
-            "a668ef80e74bd333",
+            "cb7b830a7fc7e1aa",
             goldenFingerprint {
                 add("weapons")
                 ui.weapons.forEach { weapon ->
@@ -411,6 +411,7 @@ private fun GoldenFingerprint.addMatrixEffect(effect: MatrixEffect) {
         is MatrixEffect.FreeDashInterval -> { add("free-dash"); add(effect.seconds) }
         is MatrixEffect.Rerolls -> { add("rerolls"); add(effect.count) }
         is MatrixEffect.DataStratum -> { add("data-stratum"); add(effect.items) }
+        is MatrixEffect.DataOfferWeight -> { add("data-offer-weight"); add(effect.fraction) }
         is MatrixEffect.WeaponRunGrowth -> { add("weapon-growth"); add(effect.bonusPerProgress) }
         is MatrixEffect.ShieldRegenDelay -> { add("shield-delay"); add(effect.multiplier) }
         is MatrixEffect.RicochetPhase -> { add("ricochet-phase"); add(effect.seconds) }
