@@ -7,6 +7,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
@@ -159,13 +160,22 @@ class HudHotPathAllocationTest {
             val canvas = Canvas(bitmap)
             val scope = CanvasDrawScope()
             val size = Size(width.toFloat(), height.toFloat())
-            fun empty() = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) { drawRect(Kk.Ink) }
+            // One density and one draw block per scenario: until the JIT compiles the harness, a fresh
+            // Density and a capturing lambda per frame would count against the HUD.
+            val density = Density(1f)
+            val clear: DrawScope.() -> Unit = { drawRect(Kk.Ink) }
+            fun empty() = scope.draw(density, LayoutDirection.Ltr, canvas, size, clear)
             scenarios.forEach { (name, build) ->
                 val frames = List(FRAMES) { build(it) }
                 val memory = HudPresentationMemory()
+                var current = 0
                 // 0.8 s of presentation time: the foil, sheen, glow pulse and rays all move.
-                fun hud(frame: Int) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) {
-                    drawHud(frames[frame % FRAMES], measurer, 10f + (frame % FRAMES) * 0.002f, 0f, 0f, memory)
+                val block: DrawScope.() -> Unit = {
+                    drawHud(frames[current % FRAMES], measurer, 10f + (current % FRAMES) * 0.002f, 0f, 0f, memory)
+                }
+                fun hud(frame: Int) {
+                    current = frame
+                    scope.draw(density, LayoutDirection.Ltr, canvas, size, block)
                 }
                 repeat(FRAMES) { empty(); hud(it) }
                 val emptyBytes = allocated { repeat(FRAMES) { empty() } }
@@ -204,14 +214,22 @@ class HudHotPathAllocationTest {
             val scope = CanvasDrawScope()
             val size = Size(width.toFloat(), height.toFloat())
             val controls = keyboardControls()
-            fun empty() = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) { drawRect(Kk.Ink) }
+            // One density and one draw block: the harness allocates nothing per frame itself.
+            val density = Density(1f)
+            val clear: DrawScope.() -> Unit = { drawRect(Kk.Ink) }
+            fun empty() = scope.draw(density, LayoutDirection.Ltr, canvas, size, clear)
             val memory = HudPresentationMemory()
-            fun hud(frame: Int) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) {
-                val time = 10f + (frame % FRAMES) * 0.002f
+            var current = 0
+            val block: DrawScope.() -> Unit = {
+                val time = 10f + (current % FRAMES) * 0.002f
                 // The X slot is pressed every frame: its Bone press flash stays on.
                 controls.press(kinetickk.ball.gameplay.interaction.layout.RunningControlTarget.SKILL_2, time)
-                drawHud(frames[frame % FRAMES], measurer, time, 0f, 0f, memory, controls = controls)
+                drawHud(frames[current % FRAMES], measurer, time, 0f, 0f, memory, controls = controls)
                 drawControls(locked, measurer, time, null, controls)
+            }
+            fun hud(frame: Int) {
+                current = frame
+                scope.draw(density, LayoutDirection.Ltr, canvas, size, block)
             }
             repeat(FRAMES) { empty(); hud(it) }
             kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.SKILLS), "the skill row is not drawn")
