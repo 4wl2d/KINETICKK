@@ -46,6 +46,7 @@ import kinetickk.ball.gameplay.nucleus.GameplayNucleusPulse
 import kinetickk.ball.gameplay.nucleus.GameplayStartContext
 import kinetickk.ball.gameplay.nucleus.GameplayStartInputs
 import kinetickk.ball.gameplay.nucleus.GameplayState
+import kinetickk.ball.gameplay.nucleus.render.ApexProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
@@ -132,6 +133,25 @@ class RedesignShotsHudTest {
         SYNERGY, ELITE_MARKERS, ARCHITECT_TRIAL,
         // The Rebirth strip: the tier plate with five and with every mutator sigil.
         REBIRTH_5, REBIRTH_10,
+        // The level badge's upper tiers and the APEX at the cap in each Apex state; a tier change 300 ms and the
+        // Apex unlock 400 ms into their one-shots.
+        LEVEL_T4, LEVEL_T5, APEX_COOLING, APEX_READY, APEX_ACTIVE, TIER_UP, APEX_UNLOCK,
+    }
+
+    private fun level(shot: Shot, values: Values): Int = when (shot) {
+        Shot.LEVEL_T4 -> 34
+        Shot.LEVEL_T5 -> 41
+        Shot.APEX_COOLING, Shot.APEX_READY, Shot.APEX_ACTIVE, Shot.APEX_UNLOCK -> LEVEL_CAP
+        Shot.TIER_UP -> 20
+        else -> values.level
+    }
+
+    private fun apex(shot: Shot): ApexProjection = when (shot) {
+        // Charged 40 %.
+        Shot.APEX_COOLING -> ApexProjection(unlocked = true, cooldown01 = 0.6f)
+        Shot.APEX_READY, Shot.APEX_UNLOCK -> ApexProjection(unlocked = true, ready = true)
+        Shot.APEX_ACTIVE -> ApexProjection(unlocked = true, active01 = 0.6f)
+        else -> ApexProjection.LOCKED
     }
 
     private data class Values(
@@ -196,7 +216,7 @@ class RedesignShotsHudTest {
             "heat" to v.heat, "overheated" to (v.heat >= 100f),
             "dashPhaseTime" to if (shot == Shot.DASH) 0.16f else 0f,
             "hp" to v.integrity, "maxHp" to 180f, "shield" to v.shield, "maxShield" to 60f,
-            "level" to v.level, "data" to 77, "nextLevelData" to 100, "keys" to v.keys,
+            "level" to level(shot, v), "maxLevel" to LEVEL_CAP, "apex" to apex(shot), "data" to 77, "nextLevelData" to 100, "keys" to v.keys,
             "combo" to v.chain, "comboTime" to v.chainWindow * 2.8f, "comboWindow" to 2.8f,
             "runMatter" to if (shot == Shot.ARCHITECT) 1_234_567L else 486L, "elapsed" to v.time, "polarityStability" to v.polarity,
             "overdriveCharge" to v.overdrive, "overdriveTime" to if (shot == Shot.OVERDRIVE) 5f else 0f,
@@ -234,12 +254,26 @@ class RedesignShotsHudTest {
             Shot.ARCHITECT, Shot.ARCHITECT_TRIAL -> model.with("enemies" to listOf(enemy(2, EnemyType.ARCHITECT, 0f, 0f, 0.62f, 74f)).toImmutableList())
             else -> model
         }
-        memory.observe(pre, time - 0.2f, boss.select(pre))
+        when (shot) {
+            // The one-shot started 300 / 400 ms before the drawn frame: the frame before it shows the lower tier.
+            Shot.TIER_UP, Shot.APEX_UNLOCK -> {
+                val lower = model.with("level" to level(shot, v) - 1, "apex" to ApexProjection.LOCKED)
+                val lead = if (shot == Shot.TIER_UP) 0.3f else 0.4f
+                memory.observe(lower, time - lead - 0.1f, boss.select(lower))
+                memory.observe(model, time - lead, boss.select(model))
+            }
+            else -> memory.observe(pre, time - 0.2f, boss.select(pre))
+        }
         val fx = if (shot == Shot.FEED || shot == Shot.FEED_ANOMALY) VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(
             BuildNotificationProjection("Neon Ram", immutableListOf("Impact damage +0.05", "Weapon power +0.04", "+ Vector maneuver"), 5f),
             BuildNotificationProjection("Ghost Vector", immutableListOf("Dash power +12"), 3.2f),
         )) else VisualFxProjection.EMPTY
         return Scene(model, fx, memory, time, shot == Shot.TRIAL_INFO)
+    }
+
+    private companion object {
+        /** The content's run level cap. */
+        const val LEVEL_CAP = 42
     }
 
     private fun enemy(id: Int, type: EnemyType, x: Float, y: Float, integrity: Float, radius: Float) =

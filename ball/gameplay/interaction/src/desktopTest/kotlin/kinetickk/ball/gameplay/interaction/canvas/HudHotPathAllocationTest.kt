@@ -16,6 +16,7 @@ import kinetickk.ball.content.api.PointOfInterestKind
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.gameplay.interaction.fx.BuildNoticeKind
 import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
+import kinetickk.ball.gameplay.nucleus.render.ApexProjection
 import kinetickk.ball.gameplay.nucleus.render.BuildProjection
 import kinetickk.ball.gameplay.nucleus.render.SeveredRelicProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
@@ -46,7 +47,7 @@ class HudHotPathAllocationTest {
                 "hp" to 30f, "maxHp" to 180f, "shield" to 20f, "maxShield" to 60f, "heat" to 100f, "overheated" to true,
                 "combo" to 14, "comboTime" to 1.4f, "comboWindow" to 2.8f, "keys" to 2, "runMatter" to 12_345L,
                 "overdriveTime" to 3f, "overdriveCharge" to 40f, "dashPhaseTime" to 0.1f, "velocityX" to 2_600f,
-                "level" to 45, "polarityStability" to 0.2f, "message" to "ELITE SIGNAL", "messageTime" to 1f,
+                *levelOverrides(), "polarityStability" to 0.2f, "message" to "ELITE SIGNAL", "messageTime" to 1f,
                 // Relics that keep gauges (Stormheart charge, Stasis meter, Glass Comet's invulnerability), a
                 // replaced relic whose cost lingers, Burnout, and an Architect carrying three statuses.
                 "equippedRelics" to listOf(EquippedRelic(RelicId.entries[0], 1), EquippedRelic(RelicId.STORMHEART_CAPACITOR, 2),
@@ -125,6 +126,50 @@ class HudHotPathAllocationTest {
             val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
             val perFrame = (hudBytes - emptyBytes) / FRAMES
             assertTrue(perFrame <= 64, "HUD frame at $width x $height allocates $perFrame bytes above an empty frame")
+        }
+    }
+
+    /**
+     * The level cluster at the last T5 level and in every Apex state at the cap: once warm, frames whose
+     * foil, stripes, rays, glow and sheen move and whose Apex recharge or activation changes every frame
+     * allocate nothing (one-shots aside, which only fade).
+     */
+    @Test
+    fun levelClusterAtT5AndEveryApexStateAllocatesNothing() {
+        listOf(1_440 to 810, 844 to 390, 390 to 844).forEach { (width, height) ->
+            val base = hudTestModel(width.toFloat(), height.toFloat()).with("data" to 30, "nextLevelData" to 100)
+            val scenarios = listOf<Pair<String, (Int) -> GameplayRenderModel>>(
+                "T5" to { frame -> base.with(*levelOverrides(41), "elapsed" to frame * GameplayRenderModel.FIXED_STEP) },
+                "cooling" to { frame ->
+                    base.with(*levelOverrides(HUD_TEST_LEVEL_CAP, ApexProjection(unlocked = true, cooldown01 = 0.9f - frame * 0.001f)),
+                        "elapsed" to frame * GameplayRenderModel.FIXED_STEP)
+                },
+                "ready" to { frame -> base.with(*levelOverrides(), "elapsed" to frame * GameplayRenderModel.FIXED_STEP) },
+                "active" to { frame ->
+                    base.with(*levelOverrides(HUD_TEST_LEVEL_CAP, ApexProjection(unlocked = true, active01 = 0.9f - frame * 0.001f)),
+                        "elapsed" to frame * GameplayRenderModel.FIXED_STEP)
+                },
+            )
+            val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
+                AppLanguage.Russian)
+            val bitmap = ImageBitmap(width, height)
+            val canvas = Canvas(bitmap)
+            val scope = CanvasDrawScope()
+            val size = Size(width.toFloat(), height.toFloat())
+            fun empty() = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) { drawRect(Kk.Ink) }
+            scenarios.forEach { (name, build) ->
+                val frames = List(FRAMES) { build(it) }
+                val memory = HudPresentationMemory()
+                // 0.8 s of presentation time: the foil, sheen, glow pulse and rays all move.
+                fun hud(frame: Int) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) {
+                    drawHud(frames[frame % FRAMES], measurer, 10f + (frame % FRAMES) * 0.002f, 0f, 0f, memory)
+                }
+                repeat(FRAMES) { empty(); hud(it) }
+                val emptyBytes = allocated { repeat(FRAMES) { empty() } }
+                val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
+                val perFrame = (hudBytes - emptyBytes) / FRAMES
+                assertTrue(perFrame <= 64, "$name level cluster at $width x $height allocates $perFrame bytes above an empty frame")
+            }
         }
     }
 

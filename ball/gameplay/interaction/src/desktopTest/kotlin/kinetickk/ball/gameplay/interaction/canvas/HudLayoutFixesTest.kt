@@ -120,10 +120,12 @@ class HudLayoutFixesTest {
             val height = h.toFloat()
             val controls = runningControlBounds(width, height, 1f).map { it.target.name to it.bounds } +
                 ("BUILD" to runningBuildButtonBounds(width, height, 1f))
-            for (textScale in textScales) for (boss in listOf(EnemyType.ELITE, EnemyType.ARCHITECT)) for (trial in listOf(false, true)) {
+            // The last T5 level and the cap (APEX ready: its echoes, rays and glow at their widest).
+            for (level in listOf(41, HUD_TEST_LEVEL_CAP)) for (textScale in textScales) for (boss in listOf(EnemyType.ELITE, EnemyType.ARCHITECT))
+            for (trial in listOf(false, true)) {
                 val model = hudTestModel(width, height).with(
                     "keys" to 12, "runMatter" to 9_876_543L, "combo" to 128, "comboTime" to 1f, "comboWindow" to 2.8f,
-                    "level" to 45, "weaponLevel" to 12, "hp" to 1_234f, "maxHp" to 1_500f, "velocityX" to 2_600f,
+                    *levelOverrides(level), "weaponLevel" to 12, "hp" to 1_234f, "maxHp" to 1_500f, "velocityX" to 2_600f,
                     "message" to "ELITE SIGNAL", "messageTime" to 1.5f,
                     "equippedRelics" to listOf(EquippedRelic(RelicId.PERPETUAL_VECTOR, 1), EquippedRelic(RelicId.GYRE_ENGINE, 1))
                         .toImmutableList(),
@@ -137,7 +139,7 @@ class HudLayoutFixesTest {
                     drawHud(model, measurer, 1f)
                     drawHudFeed(model, fx, measurer, 1f, null)
                 }
-                val where = "$language $w x $h x$textScale $boss trial=$trial"
+                val where = "$language $w x $h level $level x$textScale $boss trial=$trial"
                 fun rect(block: HudBlock) = HudLayoutProbe.rect(block)
                 fun apart(a: HudBlock, b: HudBlock) {
                     val first = rect(a) ?: return

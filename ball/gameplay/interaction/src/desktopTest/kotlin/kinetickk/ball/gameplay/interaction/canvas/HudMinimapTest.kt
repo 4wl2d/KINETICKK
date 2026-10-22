@@ -66,7 +66,7 @@ class HudMinimapTest {
                 val height = dpHeight * density
                 val model = hudTestModel(dpWidth, dpHeight).with(
                     "screenWidth" to width, "screenHeight" to height, "uiScale" to density,
-                    "keys" to 12, "runMatter" to 9_876_543L, "combo" to 128, "comboTime" to 1f, "comboWindow" to 2.8f, "level" to 45,
+                    "keys" to 12, "runMatter" to 9_876_543L, "combo" to 128, "comboTime" to 1f, "comboWindow" to 2.8f, *levelOverrides(),
                     // Tier 10: the Rebirth strip with every mutator sigil.
                     "rebirthLevel" to 10,
                     "enemies" to (if (boss == null) emptyList() else listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f,

@@ -134,6 +134,10 @@ internal class PauseBuildOverview(
     /** The element of an [PauseSynergyAccent.ELEMENT] chip and the Relic of a [PauseSynergyAccent.RELIC] one. */
     val synergyElement: StatusElement? = null,
     val synergyRelic: RelicDefinition? = null,
+    /** The run's level cap (the badge turns APEX there) and the Apex the badge shows, as of the pause. */
+    val levelCap: Int = Int.MAX_VALUE,
+    val apex: KkApexState = KkApexState.NONE,
+    val apexActive: Float = 0f,
 ) {
     /** The names the brackets carry, in bracket order. */
     val synergyNames: List<String> = brackets.map { it.name }
@@ -200,6 +204,9 @@ internal fun GameplayRenderModel.pauseBuildOverview(language: AppLanguage): Paus
         rebirthLevel = rebirthLevel,
         levelLabel = language.text(OverlayRedesignText.LevelLabel),
         level = level,
+        levelCap = maxLevel,
+        apex = apex.badgeState(),
+        apexActive = apex.active01,
         relicsLabel = language.text(OverlayRedesignText.Relics) + " " + equippedRelics.size + "/" + policy.maxSlots,
         relics = relics,
         brackets = brackets,
@@ -1506,7 +1513,8 @@ private fun DrawScope.drawBuildTags(
 ): Float {
     val badge = kkLevelBadgeSize(display, overview.level, density, overview.levelLabel, badgeLabel, badgeNumber)
     var x = right - badge.width - 8f * density
-    drawKkLevelBadge(display, Offset(x, top), overview.level, overview.levelLabel, time, 1f, badgeLabel, badgeNumber)
+    drawKkLevelBadge(display, Offset(x, top), overview.level, overview.levelLabel, time, 1f, badgeLabel, badgeNumber,
+        maxLevel = overview.levelCap, apex = overview.apex, apexActive = overview.apexActive)
     val tagHeight = 22f * k * maxOf(1f, ui.scale) * tagScale
     val tagTop = top + (badge.height - tagHeight * density) * 0.5f
     val fontSize = 13f * k * tagScale
