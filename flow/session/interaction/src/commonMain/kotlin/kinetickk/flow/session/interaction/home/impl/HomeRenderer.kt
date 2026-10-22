@@ -378,12 +378,12 @@ internal fun homeTrailTime(secondsSinceSelected: Float): Float = secondsSinceSel
 /**
  * Home palette accent of the selected/hovered menu item (applies to the items the game has). Each
  * color names what the item opens: volt is you (and Kinetic), the deeper volt the Workshop (permanent
- * upgrades paid in Matter, the palette's former Lab entry), gold Rebirth (the Rebirth screen keeps its
+ * upgrades paid in Matter), gold Rebirth (the Rebirth screen keeps its
  * per-tier themes), mute the system.
  * The Codex sweeps through the element hues instead (see [HomeCodexSweep]); its static entry is Cryo.
  */
 internal fun menuAccent(target: HomeLayoutTarget): Color = when (target) {
-    HomeLayoutTarget.WORKSHOP -> KkHomePalette.LAB.accent
+    HomeLayoutTarget.WORKSHOP -> KkHomePalette.WORKSHOP.accent
     HomeLayoutTarget.REBIRTH -> KkHomePalette.REBIRTH.accent
     HomeLayoutTarget.CODEX -> KkHomePalette.CODEX.accent
     HomeLayoutTarget.SETTINGS -> KkHomePalette.SETTINGS.accent

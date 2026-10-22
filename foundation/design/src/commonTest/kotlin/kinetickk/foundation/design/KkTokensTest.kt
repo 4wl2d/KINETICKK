@@ -166,15 +166,14 @@ class KkTokensTest {
     @Test
     fun homePalettesAndRebirthTiersAreCompleteAndOrdered() {
         assertEquals(
-            listOf(0xFFD8FF3E, 0xFFF1F0E8, 0xFFBDE82A, 0xFFFFC93C, 0xFFBDEBFF, 0xFFA3A298, 0xFF86857B).map(::Color),
+            listOf(0xFFD8FF3E, 0xFFBDE82A, 0xFFFFC93C, 0xFFBDEBFF, 0xFFA3A298, 0xFF86857B).map(::Color),
             KkHomePalette.entries.map { it.accent },
         )
-        // Each accent names what the destination means: you, the armory in bone (never START's volt,
-        // even though Kinetic is volt), deeper volt, Rebirth gold.
+        // Each accent names what the destination means: you, the Workshop's deeper volt (never START's
+        // volt), Rebirth gold.
         assertEquals(Kk.Volt, KkHomePalette.START.accent)
-        assertEquals(Kk.Bone, KkHomePalette.ARMORY.accent)
-        assertNotEquals(KkHomePalette.START.accent, KkHomePalette.ARMORY.accent)
-        assertEquals(Kk.Volt2, KkHomePalette.LAB.accent)
+        assertEquals(Kk.Volt2, KkHomePalette.WORKSHOP.accent)
+        assertNotEquals(KkHomePalette.START.accent, KkHomePalette.WORKSHOP.accent)
         assertEquals(Kk.Gold, KkHomePalette.REBIRTH.accent)
         assertTrue(KkHomePalette.CODEX.accent in Kk.Elements, "the codex accent rests on an element hue")
         assertEquals(KkHomePalette.entries.size, KkHomePalette.entries.map { it.accent }.toSet().size, "accents are distinct")

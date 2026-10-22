@@ -186,7 +186,7 @@ internal const val PI_F = 3.1415927f
 internal const val TAU_F = 6.2831855f
 
 /**
- * The seven Home palettes (data only). The selected Home item recolors the whole screen: the
+ * The six Home palettes (data only). The selected Home item recolors the whole screen: the
  * accent replaces volt on Home, background = [background], halftone = accent @12 %, big word =
  * accent @7 %, transition [KkTime.PaletteShift] ms with [KkEase.Out]. Screens map their own menu
  * targets to these entries.
@@ -195,11 +195,8 @@ enum class KkHomePalette(val accent: Color) {
     /** You: volt, the player color. */
     START(Color(0xFFD8FF3E)),
 
-    /** The armory: bone, the structure color, so it never passes for START's volt. */
-    ARMORY(Color(0xFFF1F0E8)),
-
-    /** Permanent upgrades to you, paid in volt Matter: the deeper volt. */
-    LAB(Color(0xFFBDE82A)),
+    /** The Workshop: permanent upgrades to you, paid in volt Matter: the deeper volt. */
+    WORKSHOP(Color(0xFFBDE82A)),
 
     /** Gold means Rebirth. */
     REBIRTH(Color(0xFFFFC93C)),

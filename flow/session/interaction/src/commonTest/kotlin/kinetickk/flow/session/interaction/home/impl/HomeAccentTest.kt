@@ -18,8 +18,8 @@ class HomeAccentTest {
     fun everyMenuItemWearsItsSemanticPalette() {
         assertEquals(KkHomePalette.START.accent, menuAccent(HomeLayoutTarget.START))
         // The Workshop wears the deeper volt of permanent upgrades paid in Matter.
-        assertEquals(KkHomePalette.LAB.accent, menuAccent(HomeLayoutTarget.WORKSHOP))
-        assertTrue(KkHomePalette.LAB.accent != menuAccent(HomeLayoutTarget.START))
+        assertEquals(KkHomePalette.WORKSHOP.accent, menuAccent(HomeLayoutTarget.WORKSHOP))
+        assertTrue(KkHomePalette.WORKSHOP.accent != menuAccent(HomeLayoutTarget.START))
         assertEquals(KkHomePalette.SETTINGS.accent, menuAccent(HomeLayoutTarget.SETTINGS))
         // Gold means Rebirth; the Rebirth screen itself keeps the per-tier themes.
         assertEquals(Kk.Gold, menuAccent(HomeLayoutTarget.REBIRTH))
