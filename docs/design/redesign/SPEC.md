@@ -57,6 +57,8 @@ structure, keep the game's structure and apply the design's look.
 4. **No hint / instruction text in the UI** ("Press…", "Tap to…", "Hold Enter…", key legends,
    "Esc Back", footers explaining rules). Buttons may exist; hints may not. Any explanation that
    still matters goes behind an **(!) info button** with a tooltip.
+   Amendment (0.5.0): action slots (Skill 1–3, Apex) show their bound key as a mono key cap while
+   the keyboard is in use. No verbs, no other key legends; Dash and Brake keep icon + label only.
 5. **Levels read "Lvl X"** everywhere (player level, weapon level, mastery milestones).
    Russian uses the game's existing short form for level followed by the number (no "L7",
    no "LV 14", no "Lv.").
@@ -240,6 +242,7 @@ References: `HUD.png`, `HUD-Anatomy.png`, state boards `HUD-Dash/Overheat/Polari
 - **Messages** (`message`, `messageTime`, build notifications): toasts per `Components` toast + `Feedback.png` multi-kill banners (ink → bone → volt, docking under the chain counter, never covering the Core).
 - **Performance HUD (F3):** mono 11 px, volt, top-left panel; keep content.
 - **Phones:** `Mobile-HUD.png` (COMPACT_LANDSCAPE) and `Mobile-Portrait.png` (COMPACT_PORTRAIT): same modules, smaller; Dash (volt, large) and Brake (ink-3) touch buttons at the thumb side; no "safe area" or "finger offset" labels.
+- **Skill row (Z/X/C) and Apex (0.5.0):** shown once the first skill is drafted. Desktop: three 52 u sheared squares extending the Dash/Brake row to the left (gap 8 u, 12 u before Brake), each with its bound key as a mono key cap 3 u below while the keyboard is in use (windows ≥ 600 dp). Landscape phones: Z and X left of Dash, C below Dash at the margin (48 dp). Portrait phones: Brake, Z, X, C, Dash share the bottom row (Brake and Dash narrow to 80/92 dp at the board width), the Build button moves into the top row left of pause and the performance toggle stays in the pause menu. A slot shows its skill glyph in the skill's element (kinetic skills volt-kinetic, Catalyze and Dual Infusion bone), the cooldown as the weapon slot's ink sweep, rank pips (gold at rank III), two charge squares when it has charges, the active/in-flight bar, and locks (hatch + lock) until drafted. Feedback: press = 90 ms bone face; refusal = 240 ms shake + bone sweep edge (no target also rings the skill's reach around the Core); ready = bone flash + volt ring; refund = the sweep edge flashes in the skill's colour; draft = slam + ring (the first draft slides the row in); rank-up = the new pip fills + ring. The Apex control is the level badge itself (its key cap sits at the Data bar's left end at the cap; a press while cooling shakes the badge); while the Apex runs, its boss strikes left show as gold pips above the boss bar.
 - Hot path: this runs every frame. No allocations per frame (cache Paths, Brushes, text layouts where the existing code does), respect the existing performance benchmark (`GameplayTelemetryPerformanceBenchmark`).
 
 ### 7.2 World & combat feedback — `WorldEntityRenderer.kt`, `WorldCombatRenderer.kt`, `WorldBackgroundRenderer.kt`, `PointOfInterestRenderer.kt`, `fx/*`
