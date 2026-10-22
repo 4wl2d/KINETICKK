@@ -318,6 +318,43 @@ class RuleVocabularyRuntimeTest {
     }
 
     @Test
+    fun anItemMawFillsAndPopsLikeTheNullWellItBorrows() {
+        val state = stateWith(probe("Pocket Maw", on(EffectTrigger.DASH, EffectAction.Zone(ZoneKind.MAW, 150f, 1f))))
+        state.fireClauses(EffectTrigger.DASH)
+        val budget = state.reactionValue(ReactionId.NULL_WELL, MAW_SHOTS_VALUE)
+        repeat(2) { state.hostileBolt(20f + it * 5f, 0f) }
+        state.elapsed += 0.1f
+        state.updateCombatFields(0.1f)
+        assertEquals(2f / budget, state.toRenderModel().combatFields.single().charge01, 1e-6f)
+
+        val bystander = state.dummy(x = 60f, y = 0f)
+        repeat(state.reactionValue(ReactionId.NULL_WELL, MAW_POP_VALUE).toInt()) { state.hostileBolt(30f, 10f) }
+        state.elapsed += 0.1f
+        state.updateCombatFields(0.1f)
+        state.elapsed += 1f
+        state.updateCombatFields(1f)
+        assertTrue(state.fieldRecords.isEmpty())
+        assertTrue(bystander.vx > 0f, "a fed maw throws what stands in it when it closes")
+    }
+
+    @Test
+    fun absoluteZeroSuppressesThermalReactionParts() {
+        val keystone = probe("Quench Seal", rules = listOf(ItemRule.ReactionKeystone(ReactionId.THERMAL_SHOCK)),
+            elements = listOf(StatusElement.THERMAL, StatusElement.CRYO), rarity = ItemRarity.EPIC)
+        val tuned = probe("Frost Lens", rules = listOf(ItemRule.ReactionTuning(ReactionId.SUPERCONDUCT, ReactionAspect.RADIUS, 0.3f)))
+        val counter = probe("Blast Counter", on(EffectTrigger.REACTION, EffectAction.Vent(5f), cooldown = 1f,
+            given = listOf(EffectCondition.ReactionIs(ReactionId.PLASMA_BURST))))
+        val base = canonicalGameplayContent.items
+        val content = canonicalGameplayContent.copy(
+            items = (base + listOf(keystone, tuned, counter).mapIndexed { index, item -> item.copy(id = base.size + index) }).toImmutableList(),
+        )
+        val state = buildTestState(kinetickk.ball.content.api.RelicId.ABSOLUTE_ZERO, content = content)
+        assertEquals(1f, state.itemSuppressedShare(state.itemNamed("Quench Seal")))
+        assertEquals(0f, state.itemSuppressedShare(state.itemNamed("Frost Lens")))
+        assertEquals(0.5f, state.itemSuppressedShare(state.itemNamed("Blast Counter")), "the condition, not the action")
+    }
+
+    @Test
     fun erasingShotsTakesTheNearestWithinRangeUpToTheMaximum() {
         val state = stateWith(probe("Sweeper", on(EffectTrigger.HURT, EffectAction.EraseShots(200f, 2), cooldown = 1f)))
         val bolts = listOf(150f, 50f, 300f, 100f).map { state.hostileBolt(it, 0f) }

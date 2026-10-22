@@ -464,13 +464,14 @@ private fun MutableGameState.fieldCharge01(table: CombatFieldTable, index: Int):
         }
         return if (budget <= 0f) 0f else (table[index, FieldCell.CHARGE] / budget).coerceIn(0f, 1f)
     }
-    if (table.source(index) != FieldSource.REACTION) return 0f
+    // An item zone fills like the reaction field it borrows (a maw's or a bubble's shot budget).
+    val item = table.source(index) == FieldSource.ITEM
     val keystone = table.hasFlag(index, FieldFlags.KEYSTONE)
     val budget = when (table.kind(index)) {
         CombatFieldKind.NULL_WELL -> verbValueOrZero(ReactionId.NULL_WELL, MAW_SHOTS_VALUE)
         CombatFieldKind.TIME_BUBBLE -> verbValueOrZero(ReactionId.STASIS, BUBBLE_SHOTS_VALUE)
         CombatFieldKind.HUSH -> if (keystone) DEAD_AIR_SHOTS.toFloat() else 0f
-        CombatFieldKind.ROT_WELL -> if (keystone) 0f else verbValueOrZero(ReactionId.ROT_WELL, COMPOST_GROWTHS_VALUE)
+        CombatFieldKind.ROT_WELL -> if (keystone || item) 0f else verbValueOrZero(ReactionId.ROT_WELL, COMPOST_GROWTHS_VALUE)
         else -> 0f
     }
     return if (budget <= 0f) 0f else (table[index, FieldCell.CHARGE] / budget).coerceIn(0f, 1f)

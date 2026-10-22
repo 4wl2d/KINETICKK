@@ -644,6 +644,8 @@ internal fun MutableGameState.itemSuppressedShare(item: ItemDefinition): Float {
         }
         clause.conditions.forEach { condition ->
             if (frozenOut && condition is EffectCondition.ElementIs && condition.element == StatusElement.THERMAL) count(true)
+            // No Thermal lands, so no Thermal reaction fires, leaves a field or a mark.
+            if (frozenOut && condition is EffectCondition.ReactionIs && condition.reaction.involves(StatusElement.THERMAL)) count(true)
         }
     }
     item.rules.forEach { rule ->
@@ -654,6 +656,8 @@ internal fun MutableGameState.itemSuppressedShare(item: ItemDefinition): Float {
                 is ItemRule.BreakThreshold -> rule.element == StatusElement.THERMAL
                 is ItemRule.BreakPower -> rule.element == StatusElement.THERMAL
                 is ItemRule.BreakSpread -> rule.element == StatusElement.THERMAL
+                is ItemRule.ReactionKeystone -> rule.reaction.involves(StatusElement.THERMAL)
+                is ItemRule.ReactionTuning -> rule.reaction?.involves(StatusElement.THERMAL) == true
                 else -> false
             } || glass && rule is ItemRule.Convert && rule.kind == ConversionKind.OVERHEAL_TO_SHIELD,
         )
