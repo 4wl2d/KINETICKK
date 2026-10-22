@@ -103,6 +103,30 @@ class PlayerSettingsContractTest {
     }
 
     @Test
+    fun displayAdjustmentsAdmitOnlyListedOptionsAndTheRefreshRange() {
+        FRAME_RATE_CAP_OPTIONS.forEach { fps -> assertEquals(fps, ProfilePreferenceAdjustment.SetFrameRateCap(fps).fps) }
+        for (unlisted in listOf(-1, 1, 29, 59, 75, 239, 241, Int.MAX_VALUE)) {
+            assertFailsWith<IllegalArgumentException> { ProfilePreferenceAdjustment.SetFrameRateCap(unlisted) }
+        }
+        for (hz in listOf(REFRESH_RATE_AUTO, REFRESH_RATE_RANGE.first, 60, REFRESH_RATE_RANGE.last)) {
+            assertEquals(hz, ProfilePreferenceAdjustment.SetRefreshRate(hz).hz)
+        }
+        for (outside in listOf(-1, 1, REFRESH_RATE_RANGE.first - 1, REFRESH_RATE_RANGE.last + 1, Int.MIN_VALUE)) {
+            assertFailsWith<IllegalArgumentException> { ProfilePreferenceAdjustment.SetRefreshRate(outside) }
+        }
+        INTERFACE_SCALE_OPTIONS.forEach { percent ->
+            assertEquals(percent, ProfilePreferenceAdjustment.SetInterfaceScale(percent).percent)
+        }
+        for (unlisted in listOf(0, 84, 86, 99, 101, 129, 131)) {
+            assertFailsWith<IllegalArgumentException> { ProfilePreferenceAdjustment.SetInterfaceScale(unlisted) }
+        }
+        assertEquals(
+            ProfilePreferenceAdjustment.SetKeyBinding(GameAction.APEX, BindableKey.F),
+            ProfilePreferenceAdjustment.SetKeyBinding(GameAction.APEX, BindableKey.F),
+        )
+    }
+
+    @Test
     fun permanentUpgradesStartAtZeroForEveryCharacterAndWeapon() {
         val upgrades = PermanentUpgrades()
 

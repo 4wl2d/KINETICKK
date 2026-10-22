@@ -15,11 +15,18 @@ import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.ball.profile.api.CharacterAchievementProgress
 import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
+import kinetickk.ball.profile.api.DEFAULT_INTERFACE_SCALE_PERCENT
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
+import kinetickk.ball.profile.api.FRAME_RATE_CAP_OPTIONS
+import kinetickk.ball.profile.api.GameAction
+import kinetickk.ball.profile.api.INTERFACE_SCALE_OPTIONS
+import kinetickk.ball.profile.api.KeyBindings
 import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
+import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
 import kinetickk.ball.profile.api.ParticleDensity
+import kinetickk.ball.profile.api.PermanentUpgrades
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
@@ -28,9 +35,15 @@ import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileSnapshot
 import kinetickk.ball.profile.api.ProfileSnapshotRejection
+import kinetickk.ball.profile.api.REFRESH_RATE_AUTO
+import kinetickk.ball.profile.api.REFRESH_RATE_RANGE
+import kinetickk.ball.profile.api.ReactionEffectsLevel
 import kinetickk.ball.profile.api.RebirthProgress
+import kinetickk.ball.profile.api.WindowMode
+import kinetickk.ball.profile.api.WindowSizePreset
 import kinetickk.ball.profile.api.isWithinRebirthBounds
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
+import kinetickk.foundation.common.input.BindableKey
 import kinetickk.foundation.common.localization.AppLanguage
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -146,6 +159,10 @@ private data class PlayerProfileDto(
     val collection: PlayerCollectionDto,
     val rebirthProgress: RebirthProgressDto,
     val characterAchievements: CharacterAchievementProgressDto,
+    // Bought Refit and Honing levels; absent while nothing is bought, so older saves keep their bytes
+    // (and an explicit empty object is not canonical).
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val upgrades: PermanentUpgradesDto = PermanentUpgradesDto(),
 )
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -175,6 +192,38 @@ private data class PlayerPreferencesDto(
     // Written only when the minimap is off: absence means on, so older saves keep their canonical bytes.
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val minimapEnabled: Boolean? = null,
+    // Display and controls follow the same rule: each field is written only for a non-default value
+    // (booleans only as their non-default value), so older saves keep their bytes, and an explicit
+    // default is refused as a value this codec never produces.
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val windowModeId: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val windowSizeId: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val vsyncEnabled: Boolean? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val frameRateCap: Int? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val refreshRateHz: Int? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val immersiveEnabled: Boolean? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val interfaceScalePercent: Int? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val showFps: Boolean? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val pauseOnFocusLoss: Boolean? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val reactionEffectsId: String? = null,
+    // Rebound actions only, strictly sorted by action wire id; absent while every key is the default.
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val keyBindings: List<KeyBindingDto> = emptyList(),
+)
+
+@Serializable
+private data class KeyBindingDto(
+    val action: String,
+    val key: String,
 )
 
 @Serializable
@@ -212,6 +261,20 @@ private data class MatrixNodeRankDto(
     val rank: Int,
 )
 
+/**
+ * Bought levels as positional base-36 digits, one per track: [c] holds the Refit levels in
+ * [CHARACTER_UPGRADE_SLOTS] order and [w] the Honing levels in [WEAPON_UPGRADE_SLOTS] order. Trailing
+ * zero levels are dropped, so a track with nothing bought is absent and appending a character or a
+ * weapon keeps every older save canonical. Positional digits keep the worst case (36 tracks at the
+ * maximum) within the desktop Preferences value budget, which `{id, level}` records would exceed.
+ */
+@OptIn(ExperimentalSerializationApi::class)
+@Serializable
+private data class PermanentUpgradesDto(
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val c: String = "",
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val w: String = "",
+)
+
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
 private data class PlayerCollectionDto(
@@ -227,6 +290,9 @@ private data class PlayerCollectionDto(
     @EncodeDefault(EncodeDefault.Mode.NEVER) val discoveredPairingIds: List<String> = emptyList(),
     // Slot order at the Architect victory, so unique but deliberately not sorted.
     @EncodeDefault(EncodeDefault.Mode.NEVER) val heirloomRelicIds: List<String> = emptyList(),
+    // Recent first acquisitions, oldest first with repeats, so deliberately neither sorted nor unique;
+    // written only when non-empty, so older saves keep their bytes.
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val recentItemIds: List<Int> = emptyList(),
 )
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -283,6 +349,20 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
                 runStatisticsOnLeft = preferences.runStatisticsOnLeft,
                 colorVisionId = preferences.colorVision.wireIdOrNull(),
                 minimapEnabled = if (preferences.minimapEnabled) null else false,
+                windowModeId = preferences.windowMode.takeUnless { it == WindowMode.WINDOWED }?.wireId(),
+                windowSizeId = preferences.windowSize.takeUnless { it == WindowSizePreset.W1280X800 }?.wireId(),
+                vsyncEnabled = if (preferences.vsync) null else false,
+                frameRateCap = preferences.frameRateCap.takeUnless { it == 0 },
+                refreshRateHz = preferences.refreshRateHz.takeUnless { it == REFRESH_RATE_AUTO },
+                immersiveEnabled = if (preferences.immersive) true else null,
+                interfaceScalePercent = preferences.interfaceScalePercent.takeUnless { it == DEFAULT_INTERFACE_SCALE_PERCENT },
+                showFps = if (preferences.showFps) true else null,
+                pauseOnFocusLoss = if (preferences.pauseOnFocusLoss) null else false,
+                reactionEffectsId = preferences.reactionEffects.takeUnless { it == ReactionEffectsLevel.FULL }?.wireId(),
+                keyBindings = GameAction.entries
+                    .filter { action -> preferences.keyBindings.key(action) != KeyBindings.DEFAULT.key(action) }
+                    .map { action -> KeyBindingDto(action = action.wireId(), key = preferences.keyBindings.key(action).wireId) }
+                    .sortedBy(KeyBindingDto::action),
             ),
             economy = PlayerEconomyDto(
                 matter = profile.economy.matter.toString(),
@@ -305,6 +385,7 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
                 discoveredReactionIds = profile.collection.discoveredReactionIds.map(ReactionId::wireId).sorted(),
                 discoveredPairingIds = profile.collection.discoveredPairingIds.map(RelicPairingId::wireId).sorted(),
                 heirloomRelicIds = profile.collection.heirloomRelicIds.map(RelicId::wireId),
+                recentItemIds = profile.collection.recentItemIds,
             ),
             characterAchievements = CharacterAchievementProgressDto(
                 eliteKills = profile.characterAchievements.eliteKills.toString(),
@@ -321,6 +402,10 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
                 highestCleared = profile.rebirthProgress.highestCleared,
                 ascendedCharacterIds = profile.rebirthProgress.ascendedCharacters.map(CoreShape::wireId).sorted(),
             ),
+            upgrades = PermanentUpgradesDto(
+                c = CHARACTER_UPGRADE_SLOTS.map(profile.upgrades::characterLevel).toUpgradeDigits(),
+                w = WEAPON_UPGRADE_SLOTS.map(profile.upgrades::weaponLevel).toUpgradeDigits(),
+            ),
         ),
     )
 }
@@ -331,8 +416,11 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
 
     val legacyLab = profile.labProgress
     rejectUnless(legacyLab == null || profile.matrix.ranks.isEmpty(), ProfileSnapshotRejection.INCONSISTENT_PROFILE)
+    // Upgrades were introduced long after the Lab was retired, so no save carries both.
+    rejectUnless(legacyLab == null || profile.upgrades == PermanentUpgradesDto(), ProfileSnapshotRejection.INCONSISTENT_PROFILE)
     val labRefund = legacyLab?.let(RetiredLabRefund::refund) ?: 0L
     val matrixRanks = profile.matrix.toRanks()
+    val upgrades = profile.upgrades.toUpgrades()
     rejectUnless(
         profile.loadout.unlockedWeaponIds.isStrictlySorted(),
         ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
@@ -387,6 +475,17 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
                 false -> false
                 true -> reject(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
             },
+            windowMode = profile.preferences.windowModeId?.windowMode().storedOr(WindowMode.WINDOWED),
+            windowSize = profile.preferences.windowSizeId?.windowSizePreset().storedOr(WindowSizePreset.W1280X800),
+            vsync = profile.preferences.vsyncEnabled.storedOr(true),
+            frameRateCap = profile.preferences.frameRateCap.storedOr(0),
+            refreshRateHz = profile.preferences.refreshRateHz.storedOr(REFRESH_RATE_AUTO),
+            immersive = profile.preferences.immersiveEnabled.storedOr(false),
+            interfaceScalePercent = profile.preferences.interfaceScalePercent.storedOr(DEFAULT_INTERFACE_SCALE_PERCENT),
+            showFps = profile.preferences.showFps.storedOr(false),
+            pauseOnFocusLoss = profile.preferences.pauseOnFocusLoss.storedOr(true),
+            reactionEffects = profile.preferences.reactionEffectsId?.reactionEffectsLevel().storedOr(ReactionEffectsLevel.FULL),
+            keyBindings = profile.preferences.keyBindings.toKeyBindings(),
         ),
         economy = PlayerEconomy(matter = matter, lifetimeMatter = lifetimeMatter),
         loadout = PlayerLoadout(
@@ -411,6 +510,7 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
             highestCleared = profile.rebirthProgress.highestCleared,
             ascendedCharacters = profile.rebirthProgress.ascendedCharacterIds.map { it.coreShape() }.toImmutableSet(),
         ),
+        upgrades = upgrades,
     )
     validateProfile(decoded)
 
@@ -439,13 +539,15 @@ private fun PlayerCollectionDto.isFromRetiredCatalog(): Boolean {
             discoveredRelicIds.size <= maxRelics && newRelicIds.size <= maxRelics &&
             discoveredReactionIds.size <= ReactionId.entries.size &&
             discoveredPairingIds.size <= RelicPairingId.entries.size &&
-            heirloomRelicIds.size <= MAX_HEIRLOOM_RELICS,
+            heirloomRelicIds.size <= MAX_HEIRLOOM_RELICS &&
+            recentItemIds.size <= MAX_RECENT_ITEM_IDS,
         ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
     )
     // The retired codec never wrote these fields, so a save carrying them without an epoch was not
     // produced by any version.
     rejectUnless(
-        !retired || discoveredReactionIds.isEmpty() && discoveredPairingIds.isEmpty() && heirloomRelicIds.isEmpty(),
+        !retired || discoveredReactionIds.isEmpty() && discoveredPairingIds.isEmpty() && heirloomRelicIds.isEmpty() &&
+            recentItemIds.isEmpty(),
         ProfileSnapshotRejection.INCONSISTENT_PROFILE,
     )
     return retired
@@ -459,6 +561,7 @@ private fun PlayerCollectionDto.toCollection(): PlayerCollection = PlayerCollect
     discoveredReactionIds = discoveredReactionIds.map { it.reactionId() }.toImmutableSet(),
     discoveredPairingIds = discoveredPairingIds.map { it.relicPairingId() }.toImmutableSet(),
     heirloomRelicIds = heirloomRelicIds.map { it.relicId() }.toImmutableList(),
+    recentItemIds = recentItemIds.toImmutableList(),
 )
 
 private fun validateProfile(profile: PlayerProfile) {
@@ -477,7 +580,10 @@ private fun validateProfile(profile: PlayerProfile) {
             preferences.simulationSpeed.isFinite() && preferences.simulationSpeed in 0.75f..2f &&
             preferences.simulationSpeed in SIMULATION_SPEED_OPTIONS &&
             preferences.textScale.isFinite() && preferences.textScale in 1f..1.75f &&
-            preferences.damageNumberTierThreshold in DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS,
+            preferences.damageNumberTierThreshold in DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS &&
+            preferences.frameRateCap in FRAME_RATE_CAP_OPTIONS &&
+            (preferences.refreshRateHz == REFRESH_RATE_AUTO || preferences.refreshRateHz in REFRESH_RATE_RANGE) &&
+            preferences.interfaceScalePercent in INTERFACE_SCALE_OPTIONS,
         ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
     )
     rejectUnless(
@@ -520,6 +626,11 @@ private fun validateProfile(profile: PlayerProfile) {
     val heirlooms = profile.collection.heirloomRelicIds
     rejectUnless(heirlooms.size <= MAX_HEIRLOOM_RELICS, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
     rejectUnless(heirlooms.toSet().size == heirlooms.size, ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE)
+    val recent = profile.collection.recentItemIds
+    rejectUnless(
+        recent.size <= MAX_RECENT_ITEM_IDS && recent.all { it in 0 until ContentBounds.MAX_ITEMS },
+        ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+    )
     rejectUnless(
         profile.rebirthProgress.isWithinRebirthBounds(ContentBounds.MIN_REBIRTH_LEVEL, ContentBounds.MAX_REBIRTH_LEVEL),
         ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
@@ -528,6 +639,16 @@ private fun validateProfile(profile: PlayerProfile) {
     rejectUnless(
         achievements.victoriousCharacters.containsAll(profile.rebirthProgress.ascendedCharacters),
         ProfileSnapshotRejection.INCONSISTENT_PROFILE,
+    )
+    val upgrades = profile.upgrades
+    rejectUnless(
+        upgrades.characterLevels.size == CoreShape.entries.size && upgrades.weaponLevels.size == WeaponId.entries.size,
+        ProfileSnapshotRejection.INCONSISTENT_PROFILE,
+    )
+    rejectUnless(
+        upgrades.characterLevels.all { it in 0..ContentBounds.MAX_UPGRADE_LEVEL } &&
+            upgrades.weaponLevels.all { it in 0..ContentBounds.MAX_UPGRADE_LEVEL },
+        ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
     )
 }
 
@@ -922,6 +1043,118 @@ private fun String.appLanguage(): AppLanguage = when (this) {
     else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
 }
 
+private fun WindowMode.wireId(): String = when (this) {
+    WindowMode.WINDOWED -> "WINDOWED"
+    WindowMode.BORDERLESS -> "BORDERLESS"
+    WindowMode.FULLSCREEN -> "FULLSCREEN"
+}
+
+private fun String.windowMode(): WindowMode = when (this) {
+    "WINDOWED" -> WindowMode.WINDOWED
+    "BORDERLESS" -> WindowMode.BORDERLESS
+    "FULLSCREEN" -> WindowMode.FULLSCREEN
+    else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
+}
+
+private fun WindowSizePreset.wireId(): String = when (this) {
+    WindowSizePreset.W1280X720 -> "W1280X720"
+    WindowSizePreset.W1280X800 -> "W1280X800"
+    WindowSizePreset.W1366X768 -> "W1366X768"
+    WindowSizePreset.W1440X900 -> "W1440X900"
+    WindowSizePreset.W1600X900 -> "W1600X900"
+    WindowSizePreset.W1920X1080 -> "W1920X1080"
+    WindowSizePreset.W2560X1440 -> "W2560X1440"
+}
+
+private fun String.windowSizePreset(): WindowSizePreset = when (this) {
+    "W1280X720" -> WindowSizePreset.W1280X720
+    "W1280X800" -> WindowSizePreset.W1280X800
+    "W1366X768" -> WindowSizePreset.W1366X768
+    "W1440X900" -> WindowSizePreset.W1440X900
+    "W1600X900" -> WindowSizePreset.W1600X900
+    "W1920X1080" -> WindowSizePreset.W1920X1080
+    "W2560X1440" -> WindowSizePreset.W2560X1440
+    else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
+}
+
+private fun ReactionEffectsLevel.wireId(): String = when (this) {
+    ReactionEffectsLevel.FULL -> "FULL"
+    ReactionEffectsLevel.REDUCED -> "REDUCED"
+    ReactionEffectsLevel.MINIMAL -> "MINIMAL"
+}
+
+private fun String.reactionEffectsLevel(): ReactionEffectsLevel = when (this) {
+    "FULL" -> ReactionEffectsLevel.FULL
+    "REDUCED" -> ReactionEffectsLevel.REDUCED
+    "MINIMAL" -> ReactionEffectsLevel.MINIMAL
+    else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
+}
+
+/** Rebindable action wire ids: stable names, never renamed or reused. Keys use [BindableKey.wireId]. */
+private fun GameAction.wireId(): String = when (this) {
+    GameAction.DASH -> "DASH"
+    GameAction.BRAKE -> "BRAKE"
+    GameAction.SKILL_1 -> "SKILL_1"
+    GameAction.SKILL_2 -> "SKILL_2"
+    GameAction.SKILL_3 -> "SKILL_3"
+    GameAction.APEX -> "APEX"
+    GameAction.PAUSE -> "PAUSE"
+    GameAction.REROLL -> "REROLL"
+    GameAction.RESTART -> "RESTART"
+    GameAction.CHOICE_1 -> "CHOICE_1"
+    GameAction.CHOICE_2 -> "CHOICE_2"
+    GameAction.CHOICE_3 -> "CHOICE_3"
+    GameAction.CHOICE_4 -> "CHOICE_4"
+    GameAction.PERFORMANCE_HUD -> "PERFORMANCE_HUD"
+}
+
+private fun String.gameAction(): GameAction = when (this) {
+    "DASH" -> GameAction.DASH
+    "BRAKE" -> GameAction.BRAKE
+    "SKILL_1" -> GameAction.SKILL_1
+    "SKILL_2" -> GameAction.SKILL_2
+    "SKILL_3" -> GameAction.SKILL_3
+    "APEX" -> GameAction.APEX
+    "PAUSE" -> GameAction.PAUSE
+    "REROLL" -> GameAction.REROLL
+    "RESTART" -> GameAction.RESTART
+    "CHOICE_1" -> GameAction.CHOICE_1
+    "CHOICE_2" -> GameAction.CHOICE_2
+    "CHOICE_3" -> GameAction.CHOICE_3
+    "CHOICE_4" -> GameAction.CHOICE_4
+    "PERFORMANCE_HUD" -> GameAction.PERFORMANCE_HUD
+    else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
+}
+
+/**
+ * An optional preference: absence is [default]; a stored value equal to it is never written, so it
+ * is refused rather than silently accepted.
+ */
+private fun <T : Any> T?.storedOr(default: T): T = when (this) {
+    null -> default
+    default -> reject(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+    else -> this
+}
+
+/**
+ * Strict mapping of the rebound actions over [KeyBindings.DEFAULT]: strictly sorted by action wire id
+ * (no duplicates), every id known, no record repeating its default, and the resulting map binds each
+ * key at most once.
+ */
+private fun List<KeyBindingDto>.toKeyBindings(): KeyBindings {
+    rejectUnless(map(KeyBindingDto::action).isStrictlySorted(), ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE)
+    rejectUnless(size <= GameAction.entries.size, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+    val keys = KeyBindings.DEFAULT.keys.toMutableList()
+    forEach { record ->
+        val action = record.action.gameAction()
+        val key = BindableKey.fromWireId(record.key) ?: reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
+        rejectUnless(key != KeyBindings.DEFAULT.key(action), ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+        keys[action.ordinal] = key
+    }
+    rejectUnless(KeyBindings.isValid(keys), ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE)
+    return KeyBindings.of(keys)
+}
+
 /**
  * Strict mapping of a Core Matrix record list: strictly sorted by wire id (no duplicates), every id
  * known and every rank within 1..MAX_MATRIX_NODE_RANKS (a zero rank is never written).
@@ -936,6 +1169,53 @@ private fun MatrixProgressDto.toRanks(): List<Int> {
         result[id.ordinal] = record.rank
     }
     return result
+}
+
+/** Refit slots of `upgrades.c`: positions are persisted, so this list is append-only and never reordered. */
+private val CHARACTER_UPGRADE_SLOTS: List<CoreShape> = listOf(
+    CoreShape.ORB, CoreShape.PRISM, CoreShape.SHARD, CoreShape.RING, CoreShape.DIAMOND, CoreShape.TESSERACT,
+    CoreShape.STAR, CoreShape.SPIRAL, CoreShape.DIPOLE, CoreShape.PENTAGON, CoreShape.CRESCENT, CoreShape.HEXAGON,
+)
+
+/** Honing slots of `upgrades.w`: positions are persisted, so this list is append-only and never reordered. */
+private val WEAPON_UPGRADE_SLOTS: List<WeaponId> = listOf(
+    WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR, WeaponId.PHASE_LATTICE, WeaponId.NULL_LANCE, WeaponId.GRAVITY_MINES,
+    WeaponId.ION_SWARM, WeaponId.RIFT_BLADES, WeaponId.ARC_COIL, WeaponId.QUASAR_CANNON, WeaponId.ENTROPY_FIELD,
+    WeaponId.SINGULARITY_SPEAR, WeaponId.PRISM_RELAY, WeaponId.GYRE_DISC, WeaponId.SCATTER_BLOOM, WeaponId.TETHER_ARC,
+    WeaponId.SENTRY_GRID, WeaponId.HUNTER_SALVO, WeaponId.CONCUSSION_ENGINE, WeaponId.GLACIER_BELL, WeaponId.EVENT_LENS,
+    WeaponId.SOLAR_SWEEP, WeaponId.AEGIS_SHARDS, WeaponId.HOLLOW_RIFT, WeaponId.RESONANCE_DRUM,
+)
+
+private const val UPGRADE_DIGIT_RADIX: Int = 36
+
+/** Levels (already validated to 0..MAX_UPGRADE_LEVEL) as lowercase base-36 digits without trailing zeros. */
+private fun List<Int>.toUpgradeDigits(): String =
+    joinToString(separator = "") { level -> level.toString(UPGRADE_DIGIT_RADIX) }.trimEnd('0')
+
+/**
+ * Strict mapping of the positional upgrade digits: at most one lowercase base-36 digit per slot, every
+ * level within 0..MAX_UPGRADE_LEVEL, and no trailing zero (it is never written).
+ */
+private fun PermanentUpgradesDto.toUpgrades(): PermanentUpgrades {
+    fun <Id> String.toLevels(slots: List<Id>, size: Int, ordinal: (Id) -> Int): List<Int> {
+        rejectUnless(length <= slots.size, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+        rejectUnless(!endsWith('0'), ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD)
+        val levels = MutableList(size) { 0 }
+        forEachIndexed { slot, digit ->
+            val level = when (digit) {
+                in '0'..'9' -> digit - '0'
+                in 'a'..'z' -> digit - 'a' + 10
+                else -> reject(ProfileSnapshotRejection.INVALID_DECIMAL)
+            }
+            rejectUnless(level <= ContentBounds.MAX_UPGRADE_LEVEL, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+            levels[ordinal(slots[slot])] = level
+        }
+        return levels
+    }
+    return PermanentUpgrades(
+        characterLevels = c.toLevels(CHARACTER_UPGRADE_SLOTS, CoreShape.entries.size, CoreShape::ordinal),
+        weaponLevels = w.toLevels(WEAPON_UPGRADE_SLOTS, WeaponId.entries.size, WeaponId::ordinal),
+    )
 }
 
 /**

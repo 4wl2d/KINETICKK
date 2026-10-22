@@ -100,6 +100,7 @@ internal fun queriedProfile(component: DefaultProfileComponent): PlayerProfile {
         collection = collection.collection,
         rebirthProgress = rebirth.snapshot.progress,
         characterAchievements = component.query(ProfileQuery.GetHomeProgress).characterAchievements,
+        upgrades = loadout.snapshot.upgrades,
     )
 }
 
@@ -124,6 +125,7 @@ internal fun assertProfileQueries(
     assertEquals(expected.matrix, lab.snapshot.progress)
     assertEquals(expected.economy, loadout.snapshot.economy)
     assertEquals(expected.loadout, loadout.snapshot.loadout)
+    assertEquals(expected.upgrades, loadout.snapshot.upgrades)
     assertEquals(expected.collection, collection.collection)
     assertEquals(expected.rebirthProgress, rebirth.snapshot.progress)
 
