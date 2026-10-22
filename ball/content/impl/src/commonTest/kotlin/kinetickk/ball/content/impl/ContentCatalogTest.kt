@@ -92,7 +92,7 @@ class ContentCatalogTest {
     fun itemCatalogHoldsDistinctHandAuthoredItemsWithinTheBound() {
         val items = gameplay.items
 
-        assertEquals(257, items.size)
+        assertEquals(269, items.size)
         assertEquals(320, ContentBounds.MAX_ITEMS)
         assertTrue(items.size <= ContentBounds.MAX_ITEMS)
         assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
@@ -147,6 +147,8 @@ class ContentCatalogTest {
                 "Nothing Left" to 8, "Last Word" to 10,
                 // The 0.5.0 legendaries: the Stasis, Annihilate and Oblivion keystones.
                 "Hourglass Relay" to 8, "Horizon Knife" to 6, "Requiem Engine" to 9,
+                // The 0.5.0 capstones: reaction casting, the Apex and fields.
+                "Philosopher's Engine" to 2, "Summit Crown" to 10, "Meridian Engine" to 5,
             ),
             legendaries.associate { it.name to it.minimumRebirth },
         )
