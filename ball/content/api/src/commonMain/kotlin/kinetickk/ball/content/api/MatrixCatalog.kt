@@ -126,10 +126,10 @@ private val DefaultMatrixNodes: ImmutableList<MatrixNodeDefinition> = listOf(
     node(SALVAGE_PROTOCOL, "Salvage Protocol", "+15% Matter per rank.", FORTUNE, 0, listOf(150, 400, 900),
         effects = listOf(stat(ItemEffect.MATTER_GAIN, 0.15f))),
     node(DATA_ARCHIVE, "Data Archive",
-        "+15% Data per rank. Each rank deals three more Data items into the run's draft deck and gives Data items +50% " +
+        "+15% Data per rank. Each rank deals three more Data items into the run's draft deck and gives Data items +150% " +
             "weight in item offers.",
         FORTUNE, 0, listOf(150, 400, 900),
-        effects = listOf(stat(ItemEffect.DATA_GAIN, 0.15f), MatrixEffect.DataStratum(3), MatrixEffect.DataOfferWeight(0.5f))),
+        effects = listOf(stat(ItemEffect.DATA_GAIN, 0.15f), MatrixEffect.DataStratum(3), MatrixEffect.DataOfferWeight(1.5f))),
     node(REROLL_CACHE, "Reroll Cache", "+1 reroll per rank at the start of every run.", FORTUNE, 1, listOf(500, 1_500),
         requires = listOf(DATA_ARCHIVE), effects = listOf(MatrixEffect.Rerolls(1))),
     node(WIDE_OFFER, "Wide Offer", "Every fourth item offer shows four cards.", FORTUNE, 2, listOf(1_200),

@@ -207,7 +207,7 @@ class ContentBalanceCharacterizationTest {
             ui.matrixNodes.map { node -> node.id to node.costs.toList() },
         )
         assertEquals(
-            "cb7b830a7fc7e1aa",
+            "6e61ebea0bcb73f7",
             goldenFingerprint {
                 add("weapons")
                 ui.weapons.forEach { weapon ->
@@ -286,7 +286,7 @@ class ContentBalanceCharacterizationTest {
     fun skillApexAndUpgradeContentIsGolden() {
         assertEquals(18, ui.skills.size)
         assertEquals(
-            "e21686b5e4452b5e",
+            "024e9546dd005a16",
             goldenFingerprint {
                 add("skills")
                 ui.skills.forEach { skill ->

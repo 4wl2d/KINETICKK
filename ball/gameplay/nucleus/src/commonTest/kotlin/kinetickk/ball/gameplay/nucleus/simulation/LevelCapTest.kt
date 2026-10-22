@@ -126,12 +126,12 @@ class LevelCapTest {
         assertEquals(listOf(18, 18, 18), listOf(tierZero, tierThree, tierTen).map { it.nextLevelData })
         assertEquals(18, MutableGameState(canonicalGameplayContent, initialRebirthLevel = 10).nextLevelData)
         assertEquals(166, tierTen.dataRequiredForLevel(15))
-        assertEquals(281, tierThree.dataRequiredForLevel(16), "216 × 1.3 = 280.8")
-        assertEquals(432, tierTen.dataRequiredForLevel(16), "216 × 2 = 432")
-        assertEquals(970, tierThree.dataRequiredForLevel(41))
+        assertEquals(307, tierThree.dataRequiredForLevel(16), "216 × 1.42 = 306.72")
+        assertEquals(518, tierTen.dataRequiredForLevel(16), "216 × 2.4 = 518.4")
+        assertEquals(1_059, tierThree.dataRequiredForLevel(41))
 
         // One Data short of the tier's total stops a level below the cap with the last requirement less one.
-        for ((tier, total) in listOf(0 to 15_148, 3 to 19_278, 10 to 28_922)) {
+        for ((tier, total) in listOf(0 to 15_148, 3 to 20_933, 10 to 34_429)) {
             val short = buildTestState(rebirth = tier)
             short.gainData(total - 1f)
             assertEquals(41, short.level, "tier $tier")
