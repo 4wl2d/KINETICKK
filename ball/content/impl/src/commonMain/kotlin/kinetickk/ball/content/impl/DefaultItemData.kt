@@ -39,6 +39,7 @@ import kinetickk.ball.content.api.ReactionAspect
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.SkillPick
 import kinetickk.ball.content.api.StatDelta
+import kinetickk.ball.content.api.ZoneKind
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.toImmutableList
 
@@ -847,6 +848,45 @@ private val Drafts: List<ItemDraft> = listOf(
     ItemDraft("Glass Brand", "Pass through and leave the target as thin as glass.", RARE, listOf(DRIVE), listOf(StatusElement.CRYO),
         clauses = listOf(on(EffectTrigger.DASH_HIT, EffectAction.ApplyMark(MarkPick.EMBRITTLED, 2f), cooldown = 0.3f)),
         rebirth = 10),
+
+    // FIELDS AND TERRAIN (ids 221-232).
+    ItemDraft("Steam Valve", "Inside a field the valve opens and the heat bleeds out.", UNCOMMON, listOf(OVERCLOCK),
+        rules = listOf(ItemRule.WhileModifier(EffectCondition.CoreInField, BuffStat.COOLING, 0.4f), ItemRule.FieldTuning(FieldAspect.DURATION, 0.2f)),
+        unlock = 5),
+    ItemDraft("Plasma Spigot", "Overheat and the excess spills out as a pool to stand in.", RARE, listOf(OVERCLOCK), listOf(StatusElement.THERMAL, StatusElement.ION),
+        clauses = listOf(on(EffectTrigger.OVERHEAT, EffectAction.Zone(ZoneKind.PLASMA, 120f, 2.5f), cooldown = 3f)),
+        unlock = 8),
+    ItemDraft("Hush Pedal", "Ease off the brake and the room goes quiet.", UNCOMMON, listOf(ANCHOR), listOf(StatusElement.SONIC),
+        clauses = listOf(on(EffectTrigger.BRAKE_RELEASE, EffectAction.Zone(ZoneKind.HUSH, 160f, 2f), cooldown = 4f)),
+        unlock = 6),
+    ItemDraft("Borrowed Second", "When the hull is failing, time lends you a moment.", RARE, listOf(BULWARK), listOf(StatusElement.CRYO),
+        clauses = listOf(on(EffectTrigger.HURT, EffectAction.Zone(ZoneKind.TIME_BUBBLE, 140f, 2f), given = listOf(EffectCondition.IntegrityBelow(0.5f)), cooldown = 12f)),
+        unlock = 8),
+    ItemDraft("Gaping Ground", "The fallen open mouths in the ground.", RARE, listOf(CHAIN), listOf(StatusElement.VOID),
+        clauses = listOf(on(EffectTrigger.KILL, EffectAction.Zone(ZoneKind.MAW, 150f, 3f), every = 8)),
+        unlock = 7),
+    ItemDraft("Field Marshal", "Step into a field and command everything inside to react.", RARE, listOf(CHAIN),
+        clauses = listOf(on(EffectTrigger.FIELD_ENTER, EffectAction.ForceReaction(180f, 2), cooldown = 1.5f)),
+        unlock = 10),
+    ItemDraft("Surveyor's Stakes", "Stake the field a little wider.", COMMON, listOf(FORTUNE),
+        rules = listOf(ItemRule.FieldTuning(FieldAspect.RADIUS, 0.15f)),
+        unlock = 3),
+    ItemDraft("Tidewater Hull", "Inside a field the hull rides the current instead of the blows.", COMMON, listOf(BULWARK),
+        rules = listOf(ItemRule.WhileModifier(EffectCondition.CoreInField, BuffStat.DAMAGE_REDUCTION, 0.2f)),
+        unlock = 2),
+    ItemDraft("Quarry Rebound", "Bounce off the rock and the rock takes the shots for you.", RARE, listOf(DRIVE, BULWARK),
+        clauses = listOf(on(EffectTrigger.RICOCHET, EffectAction.EraseShots(220f, 3), cooldown = 1.5f)),
+        unlock = 6),
+    ItemDraft("Long Exposure", "Every reaction lingers a little longer in the frame.", RARE, listOf(OVERCLOCK),
+        rules = listOf(ItemRule.ReactionTuning(null, ReactionAspect.DURATION, 0.25f)),
+        rebirth = 7),
+    ItemDraft("Gravity Loom", "Weaves every pull and throw a little tighter.", RARE, listOf(ANCHOR), listOf(StatusElement.GRAVITIC),
+        stats = listOf(stat(ItemEffect.MASS, 0.1f)),
+        rules = listOf(ItemRule.ReactionTuning(null, ReactionAspect.FORCE, 0.3f)),
+        rebirth = 2),
+    ItemDraft("Pocket Well", "Carry a little gravity and drop it where you Dash.", UNCOMMON, listOf(ANCHOR), listOf(StatusElement.GRAVITIC),
+        clauses = listOf(on(EffectTrigger.DASH, EffectAction.Well(140f, 1.2f, DamageBasis.IMPACT, 0.2f, ElementPick.GRAVITIC), cooldown = 1.5f)),
+        unlock = 7),
 )
 
 /** A reaction clause condition naming both elements: it holds only for the reaction between them. */
