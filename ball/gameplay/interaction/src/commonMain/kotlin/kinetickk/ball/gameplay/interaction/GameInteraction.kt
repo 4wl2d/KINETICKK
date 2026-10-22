@@ -9,6 +9,8 @@ import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.LocalKkRolePalette
+import kinetickk.foundation.design.KkFramePacer
+import kinetickk.foundation.design.LocalKkFrameRateCap
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.drawKkSlab
 import kinetickk.foundation.design.kkStroke
@@ -38,7 +40,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.structuralEqualityPolicy
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -260,16 +261,20 @@ fun GameplayContent(
         if (inputEnabled) focusRequester.requestFocus()
     }
 
+    // The frame limit paces the loop; the fixed-step simulation plays the same at any frame rate.
+    val frameRateCap = LocalKkFrameRateCap.current
     LaunchedEffect(
         component,
         interactionValidator,
         performanceTelemetry,
         performanceEnabledValue,
+        frameRateCap,
     ) {
         val collectPerformance = performanceEnabledValue
-        var previousFrame = withFrameNanos { it }
+        val pacer = KkFramePacer(frameRateCap)
+        var previousFrame = pacer.awaitFrame()
         while (true) {
-            val frame = withFrameNanos { it }
+            val frame = pacer.awaitFrame()
             val frameIntervalNanos = frame - previousFrame
             val delta = frameIntervalNanos / 1_000_000_000f
             previousFrame = frame

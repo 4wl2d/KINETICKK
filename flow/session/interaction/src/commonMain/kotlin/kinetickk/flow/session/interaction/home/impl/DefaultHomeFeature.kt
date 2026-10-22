@@ -28,7 +28,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -149,10 +148,12 @@ class DefaultHomeFeature(
         }
 
         val elementHuesValue by rememberUpdatedState(roles.elements)
-        LaunchedEffect(Unit) {
-            var previousFrame = withFrameNanos { it }
+        val frameRateCap = LocalKkFrameRateCap.current
+        LaunchedEffect(frameRateCap) {
+            val pacer = KkFramePacer(frameRateCap)
+            var previousFrame = pacer.awaitFrame()
             while (true) {
-                val frame = withFrameNanos { it }
+                val frame = pacer.awaitFrame()
                 val delta = selectHomePresentationFrameDeltaSeconds((frame - previousFrame) / 1_000_000_000f)
                 renderTimeSecondsValue += delta
                 menuMotion.advance(activeTargetValue, delta, elementHuesValue)

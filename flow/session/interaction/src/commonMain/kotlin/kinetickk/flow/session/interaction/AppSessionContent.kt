@@ -19,6 +19,7 @@ import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkShutter
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.LocalCrashDiagnostics
+import kinetickk.foundation.design.LocalKkFrameRateCap
 import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.LocalKkRolePalette
 import kinetickk.foundation.design.drawKkShutter
@@ -147,6 +148,7 @@ fun AppSessionContent(
     CompositionLocalProvider(
         LocalAppLanguage provides languageValue,
         LocalKkRolePalette provides colorVisionValue.rolePalette(),
+        LocalKkFrameRateCap provides (preferencesValue?.frameRateCap ?: 0),
     ) {
         val roles = LocalKkRolePalette.current
         Box(

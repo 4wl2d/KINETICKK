@@ -20,7 +20,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
@@ -70,6 +69,8 @@ import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.LocalKkRolePalette
+import kinetickk.foundation.design.KkFramePacer
+import kinetickk.foundation.design.LocalKkFrameRateCap
 import kinetickk.foundation.design.label
 import kinetickk.foundation.design.toBindableKey
 import kinetickk.foundation.design.rememberInterfaceTypography
@@ -138,11 +139,13 @@ class DefaultSettingsFeature(
         LaunchedEffect(pageValue) { focusRequester.requestFocus() }
         // The preview animates while the player interacts and settles shortly after, so an idle
         // Settings screen stops requesting frames; a key cell waiting for a key keeps it running.
-        LaunchedEffect(previewWakeValue, capturing) {
-            var last = withFrameNanos { it }
+        val frameRateCap = LocalKkFrameRateCap.current
+        LaunchedEffect(previewWakeValue, capturing, frameRateCap) {
+            val pacer = KkFramePacer(frameRateCap)
+            var last = pacer.awaitFrame()
             val end = last + PREVIEW_AWAKE_NANOS
             while (last < end || capturing) {
-                val now = withFrameNanos { it }
+                val now = pacer.awaitFrame()
                 previewTimeValue += ((now - last) / 1_000_000_000f).coerceIn(0f, 0.1f)
                 last = now
             }
