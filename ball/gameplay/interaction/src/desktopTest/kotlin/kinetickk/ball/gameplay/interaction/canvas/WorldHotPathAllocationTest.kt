@@ -41,6 +41,22 @@ import kinetickk.ball.gameplay.interaction.fx.ParticleProjection
 import kinetickk.ball.gameplay.interaction.fx.ShockwaveProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.fx.WeaponArcProjection
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.SkillId
+import kinetickk.ball.gameplay.interaction.fx.ApexBurstProjection
+import kinetickk.ball.gameplay.interaction.fx.InteractionFxLimits
+import kinetickk.ball.gameplay.interaction.fx.ReactionFxSpecs
+import kinetickk.ball.gameplay.interaction.fx.SkillBurstProjection
+import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
+import kinetickk.ball.gameplay.nucleus.protocol.ReactionCueFlags
+import kinetickk.ball.gameplay.nucleus.render.ApexProjection
+import kinetickk.ball.gameplay.nucleus.render.CombatFieldProjection
+import kinetickk.ball.gameplay.nucleus.render.CombatFieldSource
+import kinetickk.ball.gameplay.nucleus.render.CombatFieldVisual
+import kinetickk.ball.gameplay.nucleus.render.CoreStateProjection
+import kinetickk.ball.gameplay.nucleus.render.EnemyControlBits
+import kinetickk.ball.gameplay.nucleus.render.SkillBarProjection
+import kinetickk.ball.gameplay.nucleus.render.SkillSlotProjection
 import kinetickk.ball.gameplay.nucleus.render.CharacterAbilityProjection
 import kinetickk.ball.gameplay.nucleus.render.CharacterDroneProjection
 import kinetickk.ball.gameplay.nucleus.render.CharacterLatticePoint
@@ -100,6 +116,19 @@ class WorldHotPathAllocationTest {
     }
 
     @Test
+    fun everyReactionFieldGlyphCoreStateSkillApexAndLinkLookDrawsWithoutAllocating() {
+        // Every reaction look (mixed progress, forms and weights), every field kind, every control glyph and
+        // mark, every Core state, skill and Apex looks with the aura, and styled links: on a packed screen
+        // (120 enemies, signature layers only) and on an open one (40 enemies, every layer and glyph).
+        for (crowd in listOf(120, 40)) {
+            assertFrameIsAllocationFree(KkRolePalette.Default, WeaponId.ARC_COIL, warmFrames = WARM_MODELS, measuredFrames = 20,
+                fx = reactionFx(), decorate = { reactionWorld(it, crowd) })
+        }
+        assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL, CoreShape.PENTAGON, warmFrames = WARM_MODELS, measuredFrames = 20,
+            fx = reactionFx(), decorate = { reactionWorld(it, 40) })
+    }
+
+    @Test
     fun everyCharacterDrawsItsCoreAndMechanicWithoutAllocating() {
         // Each form's silhouette, marks and world visuals (halo band, ghost, drones, scars, polarity ring,
         // beat pulse, facet ring, nova glow, lattice) on a busy frame.
@@ -144,20 +173,21 @@ class WorldHotPathAllocationTest {
         warmFrames: Int,
         measuredFrames: Int,
         level: Int = 3,
+        fx: VisualFxProjection = busyFx(),
+        decorate: (GameplayRenderModel) -> GameplayRenderModel = { it },
     ) {
         // The off-screen totem and sealed-anomaly offer move every frame, so their edge-marker
         // distances change every frame: they must be drawn from cached digit layouts, never
         // measured as text. Warm-up frames draw distances from a range the measured frames never
         // use, and every measured frame draws two distances no earlier frame drew (a measuring
         // pass never repeats an earlier pass's), so measuring a distance string would allocate.
-        val warm = Array(WARM_MODELS) { frame -> busyModel(weapon, drift = WARM_DRIFT + frame * 23f, shape = shape, level = level) }
+        val warm = Array(WARM_MODELS) { frame -> decorate(busyModel(weapon, drift = WARM_DRIFT + frame * 23f, shape = shape, level = level)) }
         fun measured(pass: Int) = Array(measuredFrames) { frame ->
-            busyModel(weapon, drift = (pass * measuredFrames + frame) * 20f, shape = shape, level = level)
+            decorate(busyModel(weapon, drift = (pass * measuredFrames + frame) * 20f, shape = shape, level = level))
         }.also { measured ->
             check(measured.map { roundedDistance(edgeDistance(it)) }.toSet().size == measuredFrames)
             check(measured.maxOf(::edgeDistance) < warm.minOf(::edgeDistance))
         }
-        val fx = busyFx()
         val measurer = measurer(roles)
         val bitmap = ImageBitmap(WIDTH, HEIGHT)
         val scope = CanvasDrawScope()
@@ -298,6 +328,77 @@ class WorldHotPathAllocationTest {
         )).toImmutableList(),
         reactionStamps = immutableListOf(ReactionStampProjection(CORE + 40f, CORE - 40f, 0, 0.5f, 0.9f)),
     )
+
+    /** [busyFx] plus every reaction's look, three skill looks, an Apex activation and 40 styled links. */
+    private fun reactionFx(): VisualFxProjection {
+        val base = busyFx()
+        val forms = intArrayOf(0, ReactionCueFlags.VERB, ReactionCueFlags.KEYSTONE, ReactionCueFlags.VERB or ReactionCueFlags.KEYSTONE,
+            ReactionCueFlags.ECHO, ReactionCueFlags.CASCADE)
+        val reactions = ReactionId.entries.map { reaction ->
+            val index = reaction.ordinal
+            val life = ReactionFxSpecs[reaction].life
+            ElementBurstProjection(CORE - 420f + (index % 7) * 140f, CORE - 240f + (index / 7) * 200f, reaction.first.ordinal,
+                reaction.second.ordinal, index, 60f + index * 4f, life * (1f - (index % 5 + 0.5f) / 5f), life, 1 + index % 4,
+                if (index % 2 == 0) index * 0.3f else Float.NaN, forms[index % forms.size], index * 31)
+        }
+        val skills = listOf(
+            SkillBurstProjection(SkillId.METEOR.ordinal, 1, CORE + 120f, CORE + 80f, 0.6f, 0.8f, 150f, 3, 1, 5, 0.3f, 0.7f),
+            SkillBurstProjection(SkillId.SONIC_BOOM.ordinal, 0, CORE, CORE, 1f, 0f, 300f, 2, 0, 6, 0.2f, 0.5f),
+            SkillBurstProjection(SkillId.VOID_STEP.ordinal, 0, CORE - 60f, CORE + 40f, 0f, 1f, 240f, 1, 0, 7, 0.3f, 0.45f),
+        )
+        val styles = ReactionId.entries.map { LinkStyleCode.reaction(it) } + listOf(LinkStyleCode.skill(SkillId.ARC_HOOK),
+            LinkStyleCode.skill(SkillId.STORM_COIL), LinkStyleCode.skill(SkillId.RESONATOR), LinkStyleCode.skill(SkillId.CATALYZE),
+            LinkStyleCode.skill(SkillId.SOLAR_FLARE)) + StatusElement.entries.map { LinkStyleCode.elementBreak(it) } +
+            CoreShape.entries.take(7).map { LinkStyleCode.apex(it) }
+        val links = styles.mapIndexed { index, style ->
+            val x = CORE - 450f + (index % 10) * 90f
+            val y = CORE - 280f + (index / 10) * 150f
+            WeaponArcProjection(x, y, x + 70f, y + 50f, 0.15f, style, 0.3f)
+        }
+        return base.copy(
+            elementBursts = (base.elementBursts + reactions).takeLast(InteractionFxLimits.MAX_ELEMENT_BURSTS).toImmutableList(),
+            weaponArcs = (base.weaponArcs + links).toImmutableList(),
+            skillBursts = skills.toImmutableList(),
+            apexBursts = immutableListOf(ApexBurstProjection(CoreShape.TESSERACT.ordinal, CORE, CORE, 3, 0.6f, 1f)),
+        )
+    }
+
+    /**
+     * [model] with [enemies] enemies cycling every control bit and mark, one field of each kind (two on
+     * the Core), every Core state, three skill zones and the Apex running.
+     */
+    private fun reactionWorld(model: GameplayRenderModel, enemies: Int): GameplayRenderModel {
+        val glyphs = intArrayOf(EnemyControlBits.STOPPED, EnemyControlBits.SILENCED, EnemyControlBits.THROWN, EnemyControlBits.BLACKFIRE,
+            EnemyControlBits.UNMAKE_PENDING, EnemyControlBits.VOID_ANCHOR, EnemyControlBits.ATTRACTOR_ANCHOR, EnemyControlBits.APEX_STRIKE_TARGET)
+        val crowd = List(enemies) { index ->
+            val x = CORE - 440f + (index % 12) * 78f
+            val y = CORE - 270f + (index / 12) * 54f
+            val mark = ((index % 5) + 1) shl EnemyControlBits.MARK_SHIFT
+            EnemyProjection(index + 1, EnemyType.DRIFTER, x, y, 40f, -20f, 50f, 100f, 14f, 0f, 0f, 0f, 0f, x - 1f, y, false,
+                statusBits = BusyStatuses[index % BusyStatuses.size],
+                controlBits = glyphs[index % glyphs.size] or glyphs[(index + 3) % glyphs.size] or mark)
+        }
+        val fields = CombatFieldVisual.entries.mapIndexed { index, kind ->
+            val x = CORE - 380f + (index % 6) * 150f
+            val y = CORE - 150f + (index / 6) * 260f
+            CombatFieldProjection(kind, CombatFieldSource.entries[index % 3], x, y, x + 80f, y + 20f, 70f + index * 5f,
+                element = if (index % 4 == 0) index % 7 else -1, reaction = if (index % 4 == 1) index else -1,
+                createdAt = 3f - (index % 4) * 0.7f, expiresAt = 3f + 0.1f + index * 0.4f, charge01 = (index % 5) / 4f,
+                anchorId = if (kind == CombatFieldVisual.ATTRACTOR) 3 else -1, followsCore = index == 2 || index == 6)
+        }
+        return model.with(
+            "enemies" to crowd.toImmutableList(),
+            "combatFields" to fields.toImmutableList(),
+            "coreState" to CoreStateProjection(0.7f, 0.6f, true, 0.5f, 5, 4, true, true, true,
+                (1 shl CombatFieldVisual.PLASMA.ordinal) or (1 shl CombatFieldVisual.TIME_BUBBLE.ordinal)),
+            "skillBar" to SkillBarProjection(immutableListOf(
+                SkillSlotProjection(SkillId.METEOR.ordinal, 2, pending01 = 0.4f, anchorX = CORE + 150f, anchorY = CORE - 60f),
+                SkillSlotProjection(SkillId.MASS_DRIVER.ordinal, 1, active01 = 0.6f),
+                SkillSlotProjection(SkillId.DUAL_INFUSION.ordinal, 3, active01 = 0.5f),
+            )),
+            "apex" to ApexProjection(unlocked = true, active01 = 0.6f, held = 3, strikesLeft = 4),
+        )
+    }
 
     /** Every mechanic's projected state at once; the renderer draws only the active character's. */
     private fun busyAbility(drift: Float): CharacterAbilityProjection = CharacterAbilityProjection(
