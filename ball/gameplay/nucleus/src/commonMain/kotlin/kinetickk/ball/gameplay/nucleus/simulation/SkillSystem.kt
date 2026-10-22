@@ -280,7 +280,8 @@ private inline fun MutableGameState.withSkillEffect(slot: Int, effect: () -> Uni
 
 /**
  * The enemy nearest the pointer at ([pointerX], [pointerY]) among live, non-shifting enemies within [reach] of the
- * Core and at least [HOOK_SINGULARITY_GAP] from the singularity; ties keep scan order.
+ * Core, at least [HOOK_SINGULARITY_GAP] from the singularity and with no obstacle between it and the Core (the hook
+ * would fling the Core into the rock); ties keep scan order.
  */
 internal fun MutableGameState.nearestSkillTarget(pointerX: Float, pointerY: Float, reach: Float): Enemy? {
     var best: Enemy? = null
@@ -293,6 +294,7 @@ internal fun MutableGameState.nearestSkillTarget(pointerX: Float, pointerY: Floa
         val fromPointer = distanceSquared(pointerX, pointerY, enemy.x, enemy.y)
         if (fromPointer < square(HOOK_SINGULARITY_GAP)) continue
         if (fromPointer < bestDistance) {
+            if (hookLineBlocked(enemy)) continue
             best = enemy
             bestDistance = fromPointer
         }
@@ -585,7 +587,9 @@ private fun MutableGameState.resolveSkillCast(
             coreRadius + SHROUD_REACH
         }
         SkillId.SLINGSHOT -> {
-            val swung = (speed * values[SLING_SCALE]).coerceIn(values[SLING_MIN_SPEED], values[SLING_MAX_SPEED])
+            var swung = (speed * values[SLING_SCALE]).coerceIn(values[SLING_MIN_SPEED], values[SLING_MAX_SPEED])
+            // The swing never flings the Core into a rock: it slows to what keeps the next moments' path clear.
+            swung = min(swung, blinkRangeClearOfObstacles(aimX, aimY, swung * SLING_CLEAR_SECONDS) / SLING_CLEAR_SECONDS)
             velocityX = aimX * swung
             velocityY = aimY * swung
             runtime[slot, SkillCell.ACTIVE_UNTIL] = elapsed + values[SLING_WINDOW]
@@ -696,6 +700,10 @@ private fun MutableGameState.voidStep(slot: Int, values: List<Float>, aimX: Floa
     val ahead = (singularityX - coreX) * aimX + (singularityY - coreY) * aimY
     if (ahead > 0f) range = min(range, max(0f, length(singularityX - coreX, singularityY - coreY) - VOID_STEP_SINGULARITY_GAP))
     range = blinkRangeClearOfObstacles(aimX, aimY, range)
+    // The step lands clear of rocks, so the speed it keeps does not carry the Core straight into one.
+    while (range > 0f && !landingClearOfObstacles(coreX + aimX * range, coreY + aimY * range, coreRadius + VOID_STEP_OBSTACLE_GAP)) {
+        range = max(0f, range - VOID_STEP_OBSTACLE_STEP)
+    }
     val startX = coreX
     val startY = coreY
     runtime[slot, SkillCell.ANCHOR_X] = startX
@@ -725,6 +733,27 @@ private fun MutableGameState.voidStep(slot: Int, values: List<Float>, aimX: Floa
     velocityY *= VOID_STEP_SPEED_RETENTION
     markBlink(startX, startY, endX, endY)
     return range
+}
+
+/**
+ * True when an obstacle comes within [HOOK_OBSTACLE_CLEARANCE] of the hook's line to [target] or of the
+ * [HOOK_OVERSHOOT] the Core carries past it, so the hook would fling the Core into the rock.
+ */
+private fun MutableGameState.hookLineBlocked(target: Enemy): Boolean {
+    val dx = target.x - coreX
+    val dy = target.y - coreY
+    val distance = max(1f, length(dx, dy))
+    val endX = target.x + dx / distance * HOOK_OVERSHOOT
+    val endY = target.y + dy / distance * HOOK_OVERSHOOT
+    return obstacleBlocksSegment(coreX, coreY, endX, endY, coreRadius + HOOK_OBSTACLE_CLEARANCE)
+}
+
+/** True when no obstacle surface lies within [clearance] of ([x], [y]). */
+private fun MutableGameState.landingClearOfObstacles(x: Float, y: Float, clearance: Float): Boolean {
+    forEachObstacleNear(x, y, clearance) { _, obstacle ->
+        if (distanceSquared(x, y, obstacle.x, obstacle.y) < square(obstacle.radius + clearance)) return false
+    }
+    return true
 }
 
 /** The Void Step rift detonates where the step began. */
@@ -1504,6 +1533,10 @@ internal const val GHOST_REPEAT_SHARE: Float = 0.35f
 /** Pointer distance below which a cast keeps the last aim and an area cast lands on the Core. */
 internal const val AIM_DEADZONE: Float = 24f
 internal const val HOOK_SINGULARITY_GAP: Float = 90f
+/** The hook's line is checked for obstacles this far past its target (the Core flies on after the impact). */
+internal const val HOOK_OVERSHOOT: Float = 200f
+/** Room the hooked Core keeps from an obstacle surface along that line. */
+private const val HOOK_OBSTACLE_CLEARANCE: Float = 30f
 internal const val SKILL_BREAK_MARGIN: Int = 2
 internal const val DRAFT_CARDS: Int = 3
 internal const val CATALYZE_MIN_ELEMENTS: Int = 2
@@ -1613,6 +1646,9 @@ private const val VOID_STEP_RIFT_RADIUS = 3
 private const val VOID_STEP_PHASE = 4
 private const val VOID_STEP_RIFT_DELAY = 5
 private const val VOID_STEP_SINGULARITY_GAP: Float = 60f
+/** Void Step lands at least this far from an obstacle surface (beyond the Core's radius), stepping back by the step. */
+internal const val VOID_STEP_OBSTACLE_GAP: Float = 80f
+private const val VOID_STEP_OBSTACLE_STEP: Float = 20f
 private const val VOID_STEP_SPEED_RETENTION: Float = 0.8f
 
 private const val SHROUD_SECONDS = 0
@@ -1628,6 +1664,8 @@ private const val SLING_MIN_SPEED = 1
 private const val SLING_MAX_SPEED = 2
 private const val SLING_WINDOW = 3
 private const val SLING_HURL = 4
+/** Slingshot's swing keeps this many seconds of its path clear of obstacles. */
+internal const val SLING_CLEAR_SECONDS: Float = 0.5f
 
 private const val FULL_STOP_RADIUS = 0
 private const val FULL_STOP_SCALE = 1

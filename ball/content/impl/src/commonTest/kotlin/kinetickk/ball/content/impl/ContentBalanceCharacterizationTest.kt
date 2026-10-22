@@ -286,7 +286,7 @@ class ContentBalanceCharacterizationTest {
     fun skillApexAndUpgradeContentIsGolden() {
         assertEquals(18, ui.skills.size)
         assertEquals(
-            "bd23a73850801dcf",
+            "4df0fda37cc7d0c3",
             goldenFingerprint {
                 add("skills")
                 ui.skills.forEach { skill ->

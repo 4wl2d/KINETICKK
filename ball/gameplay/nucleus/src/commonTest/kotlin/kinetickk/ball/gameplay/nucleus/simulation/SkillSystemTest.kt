@@ -421,10 +421,60 @@ class SkillSystemTest {
         assertEquals(state.elapsed + values[0], state.skillRuntime[slot, SkillCell.ACTIVE_UNTIL])
         // A held reaction cooldown keeps the infused stacks from reacting away.
         val target = state.dummy().apply { status[StatusCell.REACTION_READY_AT] = 1_000f }
+        val every = values[1].toInt()
+        repeat(every - 1) { state.onSkillWeaponHit(target) }
+        assertEquals(every - 1, target.stacksOf(StatusElement.THERMAL), "the dominant element (Thermal fallback) on every hit")
+        assertEquals(0, target.stacksOf(StatusElement.CRYO), "rank $rank: no secondary before weapon hit $every")
         state.onSkillWeaponHit(target)
-        state.onSkillWeaponHit(target)
-        assertEquals(2, target.stacksOf(StatusElement.THERMAL), "the dominant element (Thermal fallback) on every hit")
-        assertEquals(if (rank == 3) 2 else 1, target.stacksOf(StatusElement.CRYO), "rank $rank secondary cadence")
+        assertEquals(every, target.stacksOf(StatusElement.THERMAL), "the dominant element (Thermal fallback) on every hit")
+        assertEquals(1, target.stacksOf(StatusElement.CRYO), "rank $rank: the secondary on weapon hit $every")
+    }
+
+    @Test
+    fun movementSkillsKeepTheCoreClearOfObstacles() {
+        // Arc Hook: the enemy nearest the pointer stands behind a rock, so the hook takes the one in the clear.
+        val hook = arena()
+        val hookSlot = hook.learn(SkillId.ARC_HOOK)
+        hook.aimAt(hook.coreX + 420f, hook.coreY)
+        val behind = hook.dummy(x = hook.coreX + 300f, y = hook.coreY)
+        val open = hook.dummy(x = hook.coreX + 150f, y = hook.coreY + 250f)
+        hook.placeObstaclesForTesting(testObstacle(hook.coreX + 150f, hook.coreY, radius = 40f))
+        assertEquals(open.id, hook.nearestSkillTarget(hook.coreX + 420f, hook.coreY, 460f)?.id, "a target behind a rock is out of reach")
+        hook.castSkill(hookSlot)
+        assertEquals(open.id.toFloat(), hook.skillRuntime[hookSlot, SkillCell.TARGET_ID])
+        assertTrue(behind.alive)
+        // A rock just past the only target refuses the hook: the Core would fly on into it.
+        val past = arena()
+        val pastSlot = past.learn(SkillId.ARC_HOOK)
+        past.aimAt(past.coreX + 420f, past.coreY)
+        past.dummy(x = past.coreX + 200f, y = past.coreY)
+        past.placeObstaclesForTesting(testObstacle(past.coreX + 200f + HOOK_OVERSHOOT * 0.5f + 40f, past.coreY, radius = 40f))
+        assertFalse(past.castSkill(pastSlot), "no hook toward a rock behind the target")
+        assertEquals(SkillSlotProjection.REFUSAL_NO_TARGET, past.skillRuntime[pastSlot, SkillCell.REFUSAL].toInt())
+
+        // Slingshot: a rock on the aim slows the swing to what keeps its next moments clear.
+        val sling = arena()
+        val slingSlot = sling.learn(SkillId.SLINGSHOT)
+        val values = sling.valuesOf(SkillId.SLINGSHOT)
+        sling.aimAt(sling.coreX, sling.coreY - 400f)
+        sling.placeObstaclesForTesting(testObstacle(sling.coreX, sling.coreY - 260f, radius = 40f))
+        sling.setVelocityForTesting(800f, 0f)
+        sling.castSkill(slingSlot)
+        assertTrue(sling.speed < (800f * values[0]).coerceIn(values[1], values[2]), "the swing slowed")
+        assertTrue(sling.speed > 0f && sling.velocityY < 0f, "the swing still turns onto the aim")
+        assertFalse(sling.obstacleBlocksSegment(sling.coreX, sling.coreY, sling.coreX + sling.velocityX * SLING_CLEAR_SECONDS,
+            sling.coreY + sling.velocityY * SLING_CLEAR_SECONDS, sling.coreRadius), "its next moments are clear")
+
+        // Void Step: the step lands short of a rock with room to spare.
+        val step = arena()
+        val stepSlot = step.learn(SkillId.VOID_STEP)
+        step.aimAt(step.coreX + 600f, step.coreY)
+        val rockX = step.coreX + 260f
+        step.placeObstaclesForTesting(testObstacle(rockX, step.coreY, radius = 40f))
+        val startX = step.coreX
+        step.castSkill(stepSlot)
+        assertTrue(step.coreX > startX, "the step still moves the Core")
+        assertTrue(rockX - 40f - step.coreX >= step.coreRadius + VOID_STEP_OBSTACLE_GAP, "it lands clear of the rock")
     }
 
     @Test

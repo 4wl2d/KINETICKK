@@ -7,6 +7,7 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.ApexCell
+import kinetickk.ball.gameplay.nucleus.model.WeaponRuntime
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
@@ -30,14 +31,16 @@ import kotlin.test.assertTrue
  * Fights: per character, tier (0 fresh; 10 with the strong build's Matrix, Arc Coil and Relics) and seed, the
  * no-POI bot plays the run to the Architect's arrival (the Core cannot be hurt on the way; the first three seeds of
  * a fixed list whose run reaches the Architect are used, since a singularity contact can still end one); the run
- * then forks into two arms that play the next 180 s with copies of the same bot: one
- * with the level forced to the cap (the bot casts the Apex by its rule), one without. In the fight the Core's
- * integrity is refilled every frame and its losses (shield and integrity) are counted.
+ * then forks into two arms that play the next 180 s with copies of the same bot, both with the level forced to the
+ * cap (so neither keeps drafting): one unlocks the Apex (the bot casts it by its rule), one does not. In the fight
+ * the Core's integrity is refilled every frame and its losses (shield and integrity) are counted.
  *
  * The contract holds in every Apex arm: each strike stays within the boss's hit cap, an activation spends at most
  * its strikes and its bolt budget, the boss's integrity never moves while it shifts, every shift starts at a phase
- * gate and lasts exactly 8 s, its escorts arrive, and the Architect fires at least 90 % of the volleys its own
- * timer schedules. In a scripted arena where the Architect is the only enemy, the character's own damage to it
+ * gate and lasts exactly 8 s, its escorts arrive, and the Apex costs the Architect at most 10 % of the volleys its
+ * own timer schedules: a volley counts against it when the boss could attack and the shared projectile pool was at
+ * the volley budget only because of live Apex shots (a Silence and a pool full of other shots hold volleys back with
+ * or without an Apex). In a scripted arena where the Architect is the only enemy, the character's own damage to it
  * during an activation (strikes included) is never below the same script's without the Apex.
  *
  * The benefit (tier 0, median over the seeds): the offensive characters' median time-to-kill with the Apex lies
@@ -67,7 +70,8 @@ class ApexArchitectFightTest {
                 broken += "$label shifts end ${apex.shiftLengths} s after their frame"
             }
             if (apex.shiftEscorts.any { it < 2 }) broken += "$label escorts ${apex.shiftEscorts}"
-            if (apex.volleyShare < 0.9f) broken += "$label fired ${apex.volleyShare} of its scheduled volleys"
+            if (apex.apexVolleyShare < 0.9f) broken += "$label fired ${apex.apexVolleyShare} of the volleys its Apex could cost " +
+                "(${apex.apexMissedVolleys} held back by Apex shots, ${apex.volleyShare} of all scheduled)"
         }
         assertTrue(broken.isEmpty(), "Apex contract: $broken")
     }
@@ -128,6 +132,10 @@ class ApexArchitectFightTest {
         val shiftEscorts: List<Int>,
         /** Volleys fired as a share of the volleys the Architect's attack timer scheduled while it was open. */
         val volleyShare: Float,
+        /** Scheduled volleys held back only by live Apex shots filling the projectile pool. */
+        val apexMissedVolleys: Int,
+        /** Volleys fired as a share of those fired and those the Apex held back. */
+        val apexVolleyShare: Float,
         /** Apex windows (start, end) of this arm. */
         val windows: List<Pair<Float, Float>>,
         /** Per frame: time and the Core's loss (shield and integrity). */
@@ -138,7 +146,7 @@ class ApexArchitectFightTest {
             losses.filter { (time, _) -> windows.any { (start, end) -> time > start && time <= end } }.sumOf { it.second.toDouble() }.toFloat()
 
         fun line(): String = "kill=${"%.1f".format(killSeconds)}s casts=$casts strikes≤$maxStrikes/$strikeBudget " +
-            "erased≤$maxErasures/$boltBudget volleys=${"%.3f".format(volleyShare)} shifts=${shiftLengths.size} " +
+            "erased≤$maxErasures/$boltBudget volleys=${"%.3f".format(volleyShare)} apexHeldBack=$apexMissedVolleys shifts=${shiftLengths.size} " +
             "escorts=$shiftEscorts apexBoss=${"%.0f".format(apexBossDamage)}"
     }
 
@@ -221,15 +229,13 @@ class ApexArchitectFightTest {
         }
 
         /**
-         * 180 s of the fight from the fork. With [apex] the level is forced to the cap, so the Apex unlocks ready and
-         * the bot casts it by its rule. [windows] are the activations of the Apex arm (kept for the other arm).
+         * 180 s of the fight from the fork, the level forced to the cap. With [apex] the Apex unlocks ready and the bot
+         * casts it by its rule. [windows] are the activations of the Apex arm (kept for the other arm).
          */
         fun fight(state: MutableGameState, bot: NoPoiBot, apex: Boolean, windows: List<Pair<Float, Float>>): Fight {
             val start = state.elapsed
-            if (apex) {
-                state.level = state.content.tempo.maximumLevel
-                state.unlockApex()
-            }
+            state.level = state.content.tempo.maximumLevel
+            if (apex) state.unlockApex()
             val definition = state.apexDefinition
             val ownWindows = mutableListOf<Pair<Float, Float>>()
             val losses = mutableListOf<Pair<Float, Float>>()
@@ -244,6 +250,7 @@ class ApexArchitectFightTest {
             val shiftEscorts = mutableListOf<Int>()
             var volleys = 0
             var scheduled = 0
+            var apexMissed = 0
             // Escorts of the latest shift: enemies newer than the shift's frame, seen within the next few frames.
             var escortMark = Int.MAX_VALUE
             var escortFrames = 0
@@ -297,10 +304,15 @@ class ApexArchitectFightTest {
                     if (--escortFrames == 0) shiftEscorts += escortIds.size
                 }
                 // A volley is due when the attack timer resets (the Apex never writes it); it fires unless the boss
-                // cannot attack or the projectile budget is full (Apex shots count toward it).
+                // cannot attack or the projectile pool is at the volley budget. The Apex held it back only when its
+                // own shots filled the pool.
                 if (!shiftingBefore && !state.isShifting(boss) && boss.actionTimer > timerBefore) {
                     scheduled++
-                    if (state.canAttack(boss) && state.projectiles.size < ARCHITECT_VOLLEY_PROJECTILE_BUDGET) volleys++
+                    val live = state.projectiles.size
+                    if (state.canAttack(boss) && live < ARCHITECT_VOLLEY_PROJECTILE_BUDGET) volleys++
+                    if (state.canAttack(boss) && live >= ARCHITECT_VOLLEY_PROJECTILE_BUDGET &&
+                        live - state.projectiles.count { !it.hostile && it.procKey == WeaponRuntime.PROC_APEX } < ARCHITECT_VOLLEY_PROJECTILE_BUDGET
+                    ) apexMissed++
                 }
                 losses += now to max(0f, coreBefore - state.hp - state.shield)
                 state.hp = state.maxHp
@@ -324,6 +336,8 @@ class ApexArchitectFightTest {
                 shiftLengths = shiftLengths,
                 shiftEscorts = shiftEscorts,
                 volleyShare = if (scheduled > 0) volleys / scheduled.toFloat() else 1f,
+                apexMissedVolleys = apexMissed,
+                apexVolleyShare = if (volleys + apexMissed > 0) volleys / (volleys + apexMissed).toFloat() else 1f,
                 windows = if (apex) ownWindows else windows,
                 losses = losses,
                 apexBossDamage = state.skillRuntime.apexBossDamage,
