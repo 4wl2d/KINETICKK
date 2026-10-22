@@ -255,6 +255,7 @@ fun GameplayContent(
         when (input) {
             is GameplayInput.Action -> dispatch(input.action, collectPerformance)
             GameplayInput.OpenSettings -> onOutput(GameplayInteractionOutput.OpenSettings)
+            GameplayInput.OpenWorkshop -> onOutput(GameplayInteractionOutput.OpenWorkshop)
             GameplayInput.OpenRebirth -> onOutput(GameplayInteractionOutput.OpenRebirth)
             GameplayInput.OpenCodex -> onOutput(GameplayInteractionOutput.OpenCodex)
             GameplayInput.ExitToHome -> onOutput(GameplayInteractionOutput.ExitToHome)
@@ -918,18 +919,19 @@ private fun GameplaySemanticControls(
                     description = language.text(GameplayText.SettingsDescription),
                     onClick = { onInput(GameplayInput.OpenSettings) },
                 )
+                PauseTarget.WORKSHOP -> GameplaySemanticAction(
+                    bounds = action.bounds,
+                    density = density,
+                    tag = "kinetickk.gameplay.workshop",
+                    description = language.text(GameplayText.WorkshopDescription),
+                    onClick = { onInput(GameplayInput.OpenWorkshop) },
+                )
                 PauseTarget.CODEX -> GameplaySemanticAction(
                     bounds = action.bounds,
                     density = density,
                     tag = "kinetickk.gameplay.codex",
                     description = language.text(OverlayRedesignText.Codex),
                     onClick = { onInput(GameplayInput.OpenCodex) },
-                )
-                PauseTarget.PERFORMANCE -> PerformanceSemanticAction(
-                    bounds = action.bounds,
-                    density = density,
-                    enabled = performanceEnabled,
-                    onClick = { onInput(GameplayInput.TogglePerformance) },
                 )
                 PauseTarget.EXIT -> GameplaySemanticAction(
                     bounds = action.bounds,

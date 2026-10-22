@@ -20,6 +20,7 @@ import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 sealed interface GameplayInput {
     data class Action(val action: GameplayInteractionPulse) : GameplayInput
     data object OpenSettings : GameplayInput
+    data object OpenWorkshop : GameplayInput
     data object OpenRebirth : GameplayInput
     data object OpenCodex : GameplayInput
     data object ExitToHome : GameplayInput
@@ -163,8 +164,8 @@ private fun resolvePausePress(
     return when (target) {
         PauseTarget.RESUME -> GameplayInput.Action(GameplayInteractionPulse.PauseToggled)
         PauseTarget.SETTINGS -> GameplayInput.OpenSettings
+        PauseTarget.WORKSHOP -> GameplayInput.OpenWorkshop
         PauseTarget.CODEX -> GameplayInput.OpenCodex
-        PauseTarget.PERFORMANCE -> GameplayInput.TogglePerformance
         PauseTarget.EXIT -> GameplayInput.ExitToHome
     }
 }

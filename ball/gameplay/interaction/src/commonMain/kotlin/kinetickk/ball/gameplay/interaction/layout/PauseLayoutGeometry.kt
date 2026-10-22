@@ -7,13 +7,17 @@ import androidx.compose.ui.geometry.Rect
 import kotlin.math.max
 import kotlin.math.min
 
+/** Pause menu items in menu order (every mode): the Workshop is the run's route to the upgrades. */
 internal enum class PauseTarget {
     RESUME,
     SETTINGS,
+    WORKSHOP,
     CODEX,
-    PERFORMANCE,
     EXIT,
 }
+
+/** The pause menu's items, top to bottom. */
+private val PAUSE_TARGETS: List<PauseTarget> = PauseTarget.entries
 
 internal class PauseActionBounds(
     val target: PauseTarget,
@@ -49,7 +53,7 @@ internal fun pauseLayoutGeometry(width: Float, height: Float, scale: Float): Pau
             val unit = min(width / 1440f, height / 810f).coerceIn(0.55f * safeScale, 1.4f * safeScale)
             val ox = max(0f, (width - 1440f * unit) * 0.5f)
             val oy = max(0f, (height - 810f * unit) * 0.5f)
-            val targets = listOf(PauseTarget.RESUME, PauseTarget.SETTINGS, PauseTarget.CODEX, PauseTarget.EXIT)
+            val targets = PAUSE_TARGETS
             val itemHeight = max(54f * unit, 48f * safeScale)
             val pitch = max(66f * unit, itemHeight + 4f * safeScale)
             PauseLayoutGeometry(
@@ -75,7 +79,7 @@ internal fun pauseLayoutGeometry(width: Float, height: Float, scale: Float): Pau
             val unit = min(width / 844f, height / 390f).coerceIn(0.6f * safeScale, 1.4f * safeScale)
             val ox = max(0f, (width - 844f * unit) * 0.5f)
             val oy = max(0f, (height - 390f * unit) * 0.5f)
-            val targets = listOf(PauseTarget.RESUME, PauseTarget.SETTINGS, PauseTarget.CODEX, PauseTarget.PERFORMANCE, PauseTarget.EXIT)
+            val targets = PAUSE_TARGETS
             val itemHeight = max(44f * unit, 48f * safeScale)
             val pitch = max(50f * unit, itemHeight + 2f * safeScale)
             val first = min(oy + 118f * unit, height - 4f * safeScale - pitch * (targets.size - 1) - itemHeight * 0.5f)
@@ -102,7 +106,7 @@ internal fun pauseLayoutGeometry(width: Float, height: Float, scale: Float): Pau
             val unit = min(width / 390f, height / 844f).coerceIn(0.6f * safeScale, 1.4f * safeScale)
             val ox = max(0f, (width - 390f * unit) * 0.5f)
             val oy = max(0f, (height - 844f * unit) * 0.5f)
-            val targets = listOf(PauseTarget.RESUME, PauseTarget.SETTINGS, PauseTarget.CODEX, PauseTarget.PERFORMANCE, PauseTarget.EXIT)
+            val targets = PAUSE_TARGETS
             val itemHeight = max(46f * unit, 48f * safeScale)
             val pitch = max(54f * unit, itemHeight + 2f * safeScale)
             val first = oy + 142f * unit

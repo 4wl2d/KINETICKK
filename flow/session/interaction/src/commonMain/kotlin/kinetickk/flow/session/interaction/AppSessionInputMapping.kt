@@ -59,6 +59,9 @@ internal fun GameplayInteractionOutput.toSessionPulse(): SessionInteractionPulse
     GameplayInteractionOutput.OpenCodex -> SessionInteractionPulse.OpenOverlay(AppDestination.Codex)
     GameplayInteractionOutput.OpenSettings ->
         SessionInteractionPulse.OpenOverlay(AppDestination.Settings)
+    // The pause menu's Workshop: Session opens it over the paused run on the tab shown last.
+    GameplayInteractionOutput.OpenWorkshop ->
+        SessionInteractionPulse.OpenOverlay(AppDestination.Workshop)
     GameplayInteractionOutput.OpenRebirth ->
         SessionInteractionPulse.OpenOverlay(AppDestination.Rebirth)
     GameplayInteractionOutput.ExitToHome -> SessionInteractionPulse.ExitRunRequested

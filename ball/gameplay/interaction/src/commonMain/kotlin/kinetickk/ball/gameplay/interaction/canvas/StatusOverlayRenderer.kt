@@ -56,8 +56,8 @@ internal fun DrawScope.drawPause(
             val label = when (action.target) {
                 PauseTarget.RESUME -> language.text(GameplayText.Resume)
                 PauseTarget.SETTINGS -> language.text(GameplayText.Settings)
+                PauseTarget.WORKSHOP -> language.text(GameplayText.Workshop)
                 PauseTarget.CODEX -> language.text(OverlayRedesignText.Codex)
-                PauseTarget.PERFORMANCE -> language.text(GameplayText.PerformanceMetrics)
                 PauseTarget.EXIT -> language.text(GameplayText.ReturnHome)
             }
             drawKkMenuItem(

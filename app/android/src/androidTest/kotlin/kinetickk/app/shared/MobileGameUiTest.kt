@@ -150,7 +150,7 @@ class MobileGameUiTest {
         val pausedTags = listOf(
             GAMEPLAY_RESUME_TAG,
             GAMEPLAY_SETTINGS_TAG,
-            GAMEPLAY_PERFORMANCE_TAG,
+            GAMEPLAY_WORKSHOP_TAG,
             GAMEPLAY_EXIT_TAG,
         )
         val pausedBounds = pausedTags.map { tag ->
@@ -243,6 +243,7 @@ class MobileGameUiTest {
         const val GAMEPLAY_BRAKE_TAG = "kinetickk.gameplay.brake"
         const val GAMEPLAY_RESUME_TAG = "kinetickk.gameplay.resume"
         const val GAMEPLAY_SETTINGS_TAG = "kinetickk.gameplay.settings"
+        const val GAMEPLAY_WORKSHOP_TAG = "kinetickk.gameplay.workshop"
         const val GAMEPLAY_EXIT_TAG = "kinetickk.gameplay.exit"
         const val MINIMUM_TOUCH_TARGET_DP = 48
         const val NO_COMPOSE_HIERARCHIES_PREFIX = "No compose hierarchies found in the app"

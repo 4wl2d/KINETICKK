@@ -87,6 +87,11 @@ class AppSessionInputMappingTest {
             SessionInteractionPulse.ExitRunRequested,
             GameplayInteractionOutput.ExitToHome.toSessionPulse(),
         )
+        // The pause menu's Workshop opens the overlay over the paused run.
+        assertEquals(
+            SessionInteractionPulse.OpenOverlay(AppDestination.Workshop),
+            GameplayInteractionOutput.OpenWorkshop.toSessionPulse(),
+        )
         assertEquals(
             SessionInteractionPulse.RestartRunRequested,
             GameplayInteractionOutput.RestartRun.toSessionPulse(),
