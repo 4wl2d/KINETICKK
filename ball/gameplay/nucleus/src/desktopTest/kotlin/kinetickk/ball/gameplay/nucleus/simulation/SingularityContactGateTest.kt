@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
  * bumper, sampled every 0.02 s input frame). Each arm is the no-POI bot on ten fixed seeds (the
  * no-POI probe `i * 7_919 + 13`, i = 1..10) for 300 s, with no skill drafts: a skill arm owns one skill from the
  * start and casts it by the bot's policy, a reaction arm sets the reaction off on the nearest enemy close to the
- * Core every three seconds.
+ * Core every three seconds, and an item arm owns one item that launches the Core (items.md §6.2) from the start.
  */
 class SingularityContactGateTest {
     private class Arm(val label: String, val contacts: Int, val bouncesPerSecond: Double, val outcomes: String)
@@ -26,7 +26,8 @@ class SingularityContactGateTest {
         val baseline = arm("baseline", skill = null, reaction = null)
         report(baseline)
         val arms = MovingSkills.map { skill -> arm(skill.name, skill = skill, reaction = null) } +
-            MovingReactions.map { reaction -> arm(reaction.name, skill = null, reaction = reaction) }
+            MovingReactions.map { reaction -> arm(reaction.name, skill = null, reaction = reaction) } +
+            LaunchingItems.map { item -> arm(item, skill = null, reaction = null, item = item) }
         arms.forEach(::report)
         val worse = arms.filter { it.contacts > baseline.contacts || it.bouncesPerSecond > baseline.bouncesPerSecond * MAX_BOUNCE_RATIO }
         assertTrue(worse.isEmpty(), "against the baseline (contacts ${baseline.contacts}, obstacle-contacts/s " +
@@ -38,7 +39,7 @@ class SingularityContactGateTest {
         println("SINGULARITY-CONTACT ${arm.label} contacts=${arm.contacts} obstacle-contacts/s=${"%.4f".format(arm.bouncesPerSecond)} ${arm.outcomes}")
     }
 
-    private fun arm(label: String, skill: SkillId?, reaction: ReactionId?): Arm {
+    private fun arm(label: String, skill: SkillId?, reaction: ReactionId?, item: String? = null): Arm {
         var contacts = 0
         var bounces = 0L
         var seconds = 0.0
@@ -49,6 +50,7 @@ class SingularityContactGateTest {
             state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
             state.startRun()
             skill?.let(state::acquireSkill)
+            item?.let { name -> state.acquireItem(state.content.items.single { it.name == name }.id) }
             val bot = NoPoiBot()
             var nextReactionAt = REACTION_EVERY
             var touching = false
@@ -85,6 +87,8 @@ class SingularityContactGateTest {
         /** Skills that move the Core: the MOTION family, Meteor's ride and Sonic Boom's recoil. */
         val MovingSkills = listOf(SkillId.METEOR, SkillId.ARC_HOOK, SkillId.MASS_DRIVER, SkillId.VOID_STEP,
             SkillId.SLINGSHOT, SkillId.SONIC_BOOM)
+        /** Items whose clauses launch the Core (CoreImpulse). */
+        val LaunchingItems = listOf("Recoil Spring", "Kickback Plate", "Spin Turbine", "Event Saddle", "Gravity Assist", "Crest Rider")
         /** Reaction verbs that move the Core: Frictionless, Blast Jump and Void Anchor. */
         val MovingReactions = listOf(ReactionId.SUPERCONDUCT, ReactionId.THUNDERCLAP, ReactionId.ANNIHILATE)
         const val ARM_SECONDS = 300f

@@ -41,6 +41,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
 import kinetickk.ball.gameplay.nucleus.simulation.takeVisualFxCues
 import kinetickk.ball.gameplay.nucleus.simulation.toRenderModel
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
+import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.ball.profile.api.isWithinRebirthBounds
@@ -385,6 +386,9 @@ object GameplayNucleus {
         }
         if (profile.collection.discoveredRelicIds.any { id -> content.relics.none { it.id == id } }) {
             return GameplayConfigurationRejection.UNKNOWN_DISCOVERED_RELIC
+        }
+        if (profile.recentItemIds.size > MAX_RECENT_ITEM_IDS || profile.recentItemIds.any { content.item(it) == null }) {
+            return GameplayConfigurationRejection.RECENT_ITEM_HISTORY_INVALID
         }
         if (!profile.rebirthProgress.isWithinRebirthBounds(content.rebirth.minimumLevel, content.rebirth.maximumLevel)) {
             return GameplayConfigurationRejection.REBIRTH_LEVEL_OUT_OF_RANGE

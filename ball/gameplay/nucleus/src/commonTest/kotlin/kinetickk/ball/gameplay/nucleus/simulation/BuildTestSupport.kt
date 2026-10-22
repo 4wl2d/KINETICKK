@@ -55,6 +55,11 @@ internal fun buildTestState(
 
 internal fun MutableGameState.itemNamed(name: String): ItemDefinition = content.items.single { it.name == name }
 
+/** Deals the whole catalog into the run's draft deck, for checks of what the other offer gates allow. */
+internal fun MutableGameState.dealWholeCatalog(): MutableGameState = apply {
+    itemDeck = kinetickk.ball.gameplay.nucleus.model.ItemDeck.EVERYTHING
+}
+
 /** Acquires [stacks] stacks of the item called [name]. */
 internal fun MutableGameState.own(name: String, stacks: Int = 1, reborn: Boolean = false): ItemDefinition {
     val item = itemNamed(name)
@@ -153,3 +158,17 @@ internal fun MutableGameState.aimAt(x: Float, y: Float) {
     pointerX = screenWidth * 0.5f + (x - coreX)
     pointerY = screenHeight * 0.5f + (y - coreY)
 }
+
+/** A started run whose Profile remembers [recent] (oldest first). */
+internal fun startedWithHistory(seed: Int, recent: List<Int>): MutableGameState = MutableGameState(
+    canonicalGameplayContent,
+    seed = seed,
+    bootstrapProgress = kinetickk.ball.profile.api.GameplayProfileSnapshot(
+        preferences = kinetickk.ball.profile.api.PlayerPreferences(),
+        economy = kinetickk.ball.profile.api.PlayerEconomy(),
+        loadout = kinetickk.ball.profile.api.PlayerLoadout(),
+        matrix = kinetickk.ball.profile.api.MatrixProgress(),
+        collection = kinetickk.ball.profile.api.PlayerCollection(discoveredItemIds = emptySet(), recentItemIds = recent),
+        rebirthProgress = kinetickk.ball.profile.api.RebirthProgress(level = 0),
+    ),
+).apply { startRun() }

@@ -25,7 +25,8 @@ import kotlin.test.assertTrue
 class RebirthMutatorTest {
     @Test
     fun droppingToTierZeroAfterRankFiveKeepsRankUnlocksButTheTierZeroRosterAndScaling() {
-        val lowered = rankedState(level = 0, highestCleared = 4)
+        // The deck is dealt from the rank's universe; with the whole catalog dealt, only the rank gates the offer.
+        val lowered = rankedState(level = 0, highestCleared = 4).dealWholeCatalog()
         assertEquals(0, lowered.rebirthLevel)
         assertEquals(5, lowered.rebirthRank)
         assertEquals(0, lowered.rebirthProfile.tier)

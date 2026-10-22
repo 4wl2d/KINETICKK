@@ -14,14 +14,14 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** The real 173-item catalog in the Codex: within its bound, every item in one slot of every sort. */
+/** The real item catalog in the Codex: within its bound, every item in one slot of every sort. */
 class CodexShippedCatalogTest {
     private val catalog = createContentCatalog().uiCatalog()
 
     @Test
     fun theShippedCatalogFitsTheCodexAndEveryItemHasOneSlotInEverySort() {
         val items = catalog.items
-        assertEquals(173, items.size)
+        assertEquals(269, items.size)
         assertEquals(ContentBounds.MAX_ITEMS, CODEX_CATALOG_LIMIT)
         assertTrue(items.size <= CODEX_CATALOG_LIMIT)
         // The stand-in shape the common tests lay out is the real one.

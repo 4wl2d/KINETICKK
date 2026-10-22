@@ -155,6 +155,8 @@ enum class GameplayConfigurationRejection {
     LIFETIME_MATTER_BELOW_CURRENT,
     /** A Refit or Honing list has the wrong size, or a level lies outside `0..UpgradePolicy.maxLevel`. */
     UPGRADE_LEVEL_OUT_OF_RANGE,
+    /** The recent-item history holds more than `MAX_RECENT_ITEM_IDS` entries or an id outside the captured catalog. */
+    RECENT_ITEM_HISTORY_INVALID,
 }
 
 sealed interface GameplayRejection {

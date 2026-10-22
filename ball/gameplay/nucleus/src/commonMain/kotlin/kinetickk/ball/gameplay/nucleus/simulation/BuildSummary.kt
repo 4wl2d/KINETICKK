@@ -45,7 +45,7 @@ internal fun MutableGameState.buildSummary(
     stats = buildStats(),
     eligibleItemIds = content.items.filter { item ->
         val ordinaryOfferEligible = item.unlockLevel <= maxOf(level, lifetimeMatterOfferLevel(lifetimeMatter)) &&
-            item.minimumRebirth <= rebirthRank
+            item.minimumRebirth <= rebirthRank && item.id in itemDeck
         val currentlyOffered = phase == GamePhase.CHOICE && choices.any { it.itemId == item.id }
         (ordinaryOfferEligible || currentlyOffered) && hasUsefulItemEffect(item)
     }.map { it.id }.toImmutableList(),
@@ -72,6 +72,7 @@ internal fun MutableGameState.buildSummary(
     rebornItemIds = content.items.filter { rebornItems[it.id] != 0 }.map { it.id }.toImmutableList(),
     severedRelicIds = severedRelics.map { it.id }.toImmutableList(),
     dormantItemIds = content.items.filter { itemStacks[it.id] > 0 && itemDormantShare(it) >= 1f }.map { it.id }.toImmutableList(),
+    outOfDeckItemIds = itemDeck.reserveIds().toImmutableList(),
 )
 
 private fun MutableGameState.ownedSuppressedItems(): ImmutableList<Int> =

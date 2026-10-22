@@ -59,17 +59,13 @@ class ProfilePayloadBudgetTest {
         assertEquals(snapshot, assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(payload)).snapshot)
         println("worst-case profile payload: ${payload.length} UTF-16 units at MAX_ITEMS ${ContentBounds.MAX_ITEMS}")
         assertTrue(payload.length <= Preferences.MAX_VALUE_LENGTH, "worst case ${payload.length} > ${Preferences.MAX_VALUE_LENGTH}")
-
-        // The catalog bound grows to PLANNED_MAX_ITEMS in 0.5.0; item ids are plain sorted integers, so
-        // the same profile at that bound differs only in its three item id lists.
-        val planned = payload.withItemBound(PLANNED_MAX_ITEMS)
-        println("worst-case profile payload: ${planned.length} UTF-16 units at MAX_ITEMS $PLANNED_MAX_ITEMS (projected)")
-        assertTrue(planned.length <= Preferences.MAX_VALUE_LENGTH, "worst case ${planned.length} > ${Preferences.MAX_VALUE_LENGTH}")
     }
 
     @Test
     fun theWorstCaseUsesTheLongestEncodingOfEveryBoundedFact() {
         val profile = worstCaseSnapshot().profile
+        // The 0.5.0 item bound (173 → 269 items, `ContentBounds.MAX_ITEMS` 192 → 320), every id owned.
+        assertEquals(320, ContentBounds.MAX_ITEMS)
         assertEquals(ContentBounds.MAX_ITEMS, profile.collection.discoveredItemIds.size)
         assertEquals(profile.collection.discoveredItemIds, profile.collection.newItemIds)
         assertEquals(MAX_RECENT_ITEM_IDS, profile.collection.recentItemIds.size)
@@ -87,21 +83,6 @@ class ProfilePayloadBudgetTest {
             "reactionEffectsId", "keyBindings", "recentItemIds", "ascendedCharacterIds", "upgrades",
         ).forEach { field -> assertTrue(payload.contains("\"$field\":"), field) }
     }
-}
-
-/** The item bound 0.5.0 ships (decisions: 173 → 269 items, `ContentBounds.MAX_ITEMS` 192 → 320). */
-private const val PLANNED_MAX_ITEMS: Int = 320
-
-/** [this] payload with every item id list rewritten as if the catalog held [itemBound] items, all of them owned. */
-private fun String.withItemBound(itemBound: Int): String {
-    val all = (0 until itemBound).joinToString(",")
-    val recent = List(MAX_RECENT_ITEM_IDS) { itemBound - 1 }.joinToString(",")
-    return listOf("discoveredItemIds" to all, "newItemIds" to all, "recentItemIds" to recent)
-        .fold(this) { payload, (field, ids) ->
-            val list = Regex("\"$field\":\\[[0-9,]*]")
-            assertTrue(list.containsMatchIn(payload), field)
-            payload.replace(list, "\"$field\":[$ids]")
-        }
 }
 
 private fun <T : Enum<T>> Iterable<T>.longestName(): T = maxBy { it.name.length }

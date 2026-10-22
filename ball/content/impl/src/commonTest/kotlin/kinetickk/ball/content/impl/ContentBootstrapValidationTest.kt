@@ -45,7 +45,7 @@ class ContentBootstrapValidationTest {
         val data = defaultContentBootstrapData()
         val gameplay = createContentCatalogForTesting(data).gameplayContent()
 
-        assertEquals(173, gameplay.items.size)
+        assertEquals(269, gameplay.items.size)
         assertEquals(ContentBounds.MAX_WEAPONS, gameplay.weapons.size)
         assertEquals(MatrixNodeId.entries.size, gameplay.matrixNodes.size)
         assertEquals(RelicId.entries.size, gameplay.relics.size)
@@ -64,7 +64,7 @@ class ContentBootstrapValidationTest {
     fun itemBoundRejectsNPlusOne() {
         val data = defaultContentBootstrapData()
 
-        assertRejected(data.copy(items = data.items.paddedTo(ContentBounds.MAX_ITEMS + 1)), "items size 193")
+        assertRejected(data.copy(items = data.items.paddedTo(ContentBounds.MAX_ITEMS + 1)), "items size 321")
     }
 
     @Test
@@ -434,7 +434,11 @@ class ContentBootstrapValidationTest {
 
     @Test
     fun keystonesAndExclusiveSkillRulesStayOnePerCatalog() {
+        // The shipped catalog without its keystone, skill-charge and attunement items, so each probe below is the only
+        // one of its kind.
         val items = defaultContentBootstrapData().items
+            .filter { item -> item.keystone == null && item.rules.none { it is ItemRule.SkillCharges || it is ItemRule.SkillAttunement } }
+            .mapIndexed { index, item -> item.copy(id = index) }
         fun epic(name: String, rules: List<ItemRule>, vararg elements: StatusElement) = ItemDefinition(
             id = 0, name = name, description = "$name exercises the exclusive rules.", rarity = ItemRarity.EPIC,
             tags = immutableListOf(BuildTag.CHAIN), elements = elements.toList().toImmutableList(), rules = rules.toImmutableList(),
@@ -454,6 +458,11 @@ class ContentBootstrapValidationTest {
         val charges = epic("Twin Chamber", listOf(ItemRule.SkillCharges))
         validateItems(withAppended(charges))
         assertFailsWith<IllegalStateException> { validateItems(withAppended(charges, charges.copy(name = "Third Chamber", description = "Another."))) }
+        // The shipped catalog holds one keystone item per reaction: one more for any reaction is rejected.
+        val shipped = defaultContentBootstrapData().items
+        val extra = assertFailsWith<IllegalStateException> { validateItems(shipped + twin.copy(id = shipped.size)) }
+        assertTrue(extra.message.orEmpty().contains("FUSION has more than one keystone item"), extra.message)
+
         val attune = epic("Alchemical Core", listOf(ItemRule.SkillAttunement(ElementPick.DOMINANT)))
         validateItems(withAppended(attune))
         assertFailsWith<IllegalStateException> { validateItems(withAppended(attune, attune.copy(name = "Second Core", description = "Again."))) }

@@ -170,6 +170,108 @@ data class AffinityTierDefinition(val description: String) {
     }
 }
 
+/**
+ * The per-run draft deck: each run deals a share of every rank-eligible rarity tier into its deck, and only dealt items
+ * reach ordinary offers. The floors keep every run playable: early choice, an early Rare for pity, the Data ladder, the
+ * character's archetype, every archetype and element, the risk wagers and skill support. History weights lower the
+ * chance that recently taken items are dealt again. [FULL] deals the whole catalog (characterisation tests).
+ * Shares and minimums are by [ItemRarity] (Common to Legendary).
+ */
+data class DraftDeckPolicy(
+    val shares: ImmutableList<Float> = immutableListOf(0.55f, 0.55f, 0.6f, 0.65f, 0.75f),
+    val minimums: ImmutableList<Int> = immutableListOf(18, 18, 12, 8, 2),
+    /** Commons and Uncommons unlocking by [earlyOpenUnlock], so the first offers have choice. */
+    val earlyOpenFloor: Int = 10,
+    val earlyOpenUnlock: Int = 2,
+    /** Rare-or-better items unlocking by [earlyRareUnlock], so pity can resolve early. */
+    val earlyRareFloor: Int = 5,
+    val earlyRareUnlock: Int = 6,
+    /**
+     * Rank-0 Data-economy items of Rare or lower ([ItemDefinition.isDataEconomy], the level-42 Data ladder), and how many
+     * of them unlock by [earlyDataUnlock].
+     */
+    val dataEconomyFloor: Int = 4,
+    val earlyDataFloor: Int = 2,
+    val earlyDataUnlock: Int = 5,
+    /** Items of Rare or lower carrying the run character's archetype. */
+    val characterTagFloor: Int = 7,
+    /** Items of Rare or lower per [BuildTag]. */
+    val tagFloor: Int = 5,
+    /** Items of Rare or lower per [StatusElement]. */
+    val elementFloor: Int = 4,
+    /** Risk items (the wagers). */
+    val riskFloor: Int = 4,
+    /** Items using skill vocabulary ([ItemDefinition.usesSkills]). */
+    val skillFloor: Int = 6,
+    /** A tier holding fewer offerable dealt items than this deals its next offerable reserve item. */
+    val refillFloor: Int = 3,
+    /** Deck weight of an item the Profile has never discovered. */
+    val undiscoveredWeight: Float = 1.2f,
+    /** History: deck weight 1 / (1 + [historyPenalty] × recency penalty), never below [historyFloor]. */
+    val historyPenalty: Float = 0.8f,
+    val historyFloor: Float = 0.35f,
+) {
+    init {
+        require(shares.size == ItemRarity.entries.size && shares.all { it.isFinite() && it > 0f && it <= 1f })
+        require(minimums.size == ItemRarity.entries.size && minimums.all { it >= 0 })
+        require(earlyOpenFloor >= 0 && earlyOpenUnlock >= 1 && earlyRareFloor >= 0 && earlyRareUnlock >= 1)
+        require(dataEconomyFloor >= 0 && earlyDataFloor in 0..dataEconomyFloor && earlyDataUnlock >= 1)
+        require(characterTagFloor >= 0 && tagFloor >= 0 && elementFloor >= 0 && riskFloor >= 0 && skillFloor >= 0)
+        require(refillFloor in 1..8)
+        require(undiscoveredWeight.isFinite() && undiscoveredWeight in 1f..2f)
+        require(historyPenalty.isFinite() && historyPenalty > 0f && historyPenalty <= 2f)
+        require(historyFloor.isFinite() && historyFloor > 0f && historyFloor <= 1f)
+    }
+
+    /** True when every share is 1 and every floor 0: the deck is the whole rank-eligible catalog. */
+    val dealsEverything: Boolean
+        get() = shares.all { it >= 1f }
+
+    companion object {
+        /** No deck: every rank-eligible item is dealt (characterisation and pre-deck comparisons). */
+        val FULL: DraftDeckPolicy = DraftDeckPolicy(
+            shares = immutableListOf(1f, 1f, 1f, 1f, 1f),
+            minimums = immutableListOf(0, 0, 0, 0, 0),
+            earlyOpenFloor = 0, earlyRareFloor = 0, dataEconomyFloor = 0, earlyDataFloor = 0, characterTagFloor = 0,
+            tagFloor = 0, elementFloor = 0, riskFloor = 0, skillFloor = 0,
+        )
+    }
+}
+
+/**
+ * The item offer's lanes. The aligned card picks, [alignedChance] of the time, among items that fit the build, weighted
+ * 1 + [alignedFitWeight] × min(fit, [alignedFitCap]); a tag counts toward fit only with points the player chose
+ * ([loadoutFits] false leaves the character's own point out, and lets an item naming the equipped weapon's family fit
+ * only once the build took one), and half when already at the top resonance tier ([saturatedTagFit]). The volatile card lifts its rarity [volatileLiftChance] of the time and prefers risk items only
+ * [volatileRiskChance] of the time. [RELEASE_040] is the 0.4.0 funnel, for comparisons.
+ */
+data class OfferLanePolicy(
+    val alignedChance: Float = 0.65f,
+    val alignedFitWeight: Float = 0.6f,
+    val alignedFitCap: Float = 3f,
+    val loadoutFits: Boolean = false,
+    val saturatedTagFit: Float = 0.5f,
+    val volatileLiftChance: Float = 0.6f,
+    val volatileRiskChance: Float = 0.36f,
+) {
+    init {
+        require(alignedChance.isFinite() && alignedChance in 0f..1f)
+        require(alignedFitWeight.isFinite() && alignedFitWeight >= 0f)
+        require(alignedFitCap.isFinite() && alignedFitCap > 0f || alignedFitCap == Float.POSITIVE_INFINITY)
+        require(saturatedTagFit.isFinite() && saturatedTagFit in 0f..1f)
+        require(volatileLiftChance.isFinite() && volatileLiftChance in 0f..1f)
+        require(volatileRiskChance.isFinite() && volatileRiskChance in 0f..volatileLiftChance)
+    }
+
+    companion object {
+        /** The 0.4.0 lanes: the loadout fits, no saturation, an uncapped 0.8 fit weight, risk on every lift. */
+        val RELEASE_040: OfferLanePolicy = OfferLanePolicy(
+            alignedChance = 0.75f, alignedFitWeight = 0.8f, alignedFitCap = Float.POSITIVE_INFINITY, loadoutFits = true,
+            saturatedTagFit = 1f, volatileLiftChance = 0.6f, volatileRiskChance = 0.6f,
+        )
+    }
+}
+
 /** Catalog-wide build tuning captured with the content snapshot. */
 data class BuildPolicy(
     val resonanceThresholds: ImmutableList<Int> = immutableListOf(3, 5, 7),
@@ -202,6 +304,10 @@ data class BuildPolicy(
      * again to the element, or to the first tag of an element-less skill).
      */
     val skillTagPoints: Int = 1,
+    /** The per-run draft deck of offerable items. */
+    val draftDeck: DraftDeckPolicy = DraftDeckPolicy(),
+    /** How the item offer's three lanes choose inside a rolled rarity. */
+    val offerLanes: OfferLanePolicy = OfferLanePolicy(),
 ) {
     init {
         require(resonanceThresholds.size == ContentBounds.RESONANCE_TIERS)

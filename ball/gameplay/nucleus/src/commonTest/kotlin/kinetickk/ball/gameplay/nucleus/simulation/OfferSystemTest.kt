@@ -4,12 +4,16 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.EffectCondition
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
@@ -95,8 +99,15 @@ class OfferSystemTest {
 
     @Test
     fun rebirthGatedItemsAndRelicsStayOutOfOffersBelowTheirTier() {
-        fun gatedItems(rebirth: Int): Set<String> = buildTestState(rebirth = rebirth).apply { lifetimeMatter = 4_000L }
-            .offerableItems().filter { it.minimumRebirth > 0 }.map { it.name }.toSet()
+        // A veteran's run that can use every gated item: a skill drafted and a plain item of each element held, so skill
+        // items have something to work on and every reaction a keystone item names is reachable.
+        fun gatedItems(rebirth: Int): Set<String> = buildTestState(rebirth = rebirth).dealWholeCatalog().apply {
+            lifetimeMatter = 4_000L
+            acquireSkill(SkillId.SOLAR_FLARE)
+            StatusElement.entries.forEach { element ->
+                acquireItem(content.items.first { it.elements.singleOrNull() == element && it.rarity == ItemRarity.COMMON }.id)
+            }
+        }.offerableItems().filter { it.minimumRebirth > 0 }.map { it.name }.toSet()
         fun gatedUpTo(rebirth: Int): Set<String> =
             canonicalGameplayContent.items.filter { it.minimumRebirth in 1..rebirth }.map { it.name }.toSet()
         assertTrue(gatedItems(0).isEmpty())
@@ -104,7 +115,7 @@ class OfferSystemTest {
         for (rebirth in 1..10) assertEquals(gatedUpTo(rebirth), gatedItems(rebirth), "Reborn $rebirth")
         assertTrue("Glacial Heart" in gatedItems(2) && "Resonance Fork" !in gatedItems(3) && "Resonance Fork" in gatedItems(4))
         assertTrue("Last Word" !in gatedItems(9) && "Last Word" in gatedItems(10))
-        assertEquals(43, gatedItems(10).size, "Three original legendaries and forty gated expansion items")
+        assertEquals(43 + 23, gatedItems(10).size, "Three original legendaries, forty gated 0.4.0 items and the gated 0.5.0 items")
 
         fun sovereigns(rebirth: Int): Set<RelicId> = buildTestState(rebirth = rebirth).offerableRelics()
             .filter { it.minimumRebirth > 0 }.map { it.id }.toSet()
@@ -117,18 +128,20 @@ class OfferSystemTest {
     @Test
     fun everyItemIsOfferedFromItsOwnTierAndLevelAndIsDiscoveredWhenTaken() {
         val items = canonicalGameplayContent.items
-        assertEquals(173, items.size)
-        // A fresh profile per tier: no lifetime Matter, so the run level alone opens the catalog.
-        val tiers = (0..10).map { buildTestState(rebirth = it) }
+        assertEquals(269, items.size)
+        // A fresh profile per tier: no lifetime Matter, so the run level alone opens the catalog. Each run has drafted
+        // a skill (the first slot opens at level 2), so skill items have something to work on, and has dealt the whole
+        // catalog into its deck (DraftDeckTest covers the deal).
+        val tiers = (0..10).map { tier -> buildTestState(rebirth = tier).dealWholeCatalog().apply { acquireSkill(SkillId.SOLAR_FLARE) } }
         for (item in items) {
-            val own = tiers[item.minimumRebirth].apply { level = item.unlockLevel }
+            val own = runThatCanUse(item, item.minimumRebirth, tiers).apply { level = item.unlockLevel }
             assertTrue(item in own.offerableItems(), "${item.name} is offered at Reborn ${item.minimumRebirth}, level ${item.unlockLevel}")
             if (item.unlockLevel > 1) {
                 own.level = item.unlockLevel - 1
                 assertFalse(item in own.offerableItems(), "${item.name} waits for level ${item.unlockLevel}")
             }
             if (item.minimumRebirth > 0) {
-                val below = tiers[item.minimumRebirth - 1].apply { level = 99 }
+                val below = runThatCanUse(item, item.minimumRebirth - 1, tiers).apply { level = 99 }
                 assertFalse(item in below.offerableItems(), "${item.name} waits for Reborn ${item.minimumRebirth}")
             }
         }
@@ -412,6 +425,28 @@ class OfferSystemTest {
     }
 
     private fun MutableGameState.itemOf(itemId: Int?) = content.items[requireNotNull(itemId)]
+
+    /**
+     * A run at Reborn [rebirth] that can use [item]: the tier's run, or, for an item that names a weapon family or
+     * switches a reaction to its keystone, a fresh one with that family's weapon in hand or holding a plain item of
+     * each of the reaction's elements (a keystone is only offered while its reaction is reachable), a skill drafted.
+     */
+    private fun runThatCanUse(item: ItemDefinition, rebirth: Int, tiers: List<MutableGameState>): MutableGameState {
+        val family = (item.clauses.flatMap { it.conditions } + item.rules.mapNotNull { (it as? ItemRule.WhileModifier)?.condition })
+            .firstNotNullOfOrNull { (it as? EffectCondition.WeaponFamilyIs)?.family }
+        val keystone = item.keystone
+        if (family == null && keystone == null) return tiers[rebirth]
+        val weapon = family?.let { wanted -> canonicalGameplayContent.weapons.first { it.family == wanted }.id } ?: WeaponId.FLUX_WAKE
+        return buildTestState(rebirth = rebirth, weapon = weapon).dealWholeCatalog().apply {
+            acquireSkill(SkillId.SOLAR_FLARE)
+            keystone?.let { reaction ->
+                listOf(reaction.first, reaction.second).forEach { element ->
+                    val source = content.items.first { it.elements.singleOrNull() == element && it.rarity == ItemRarity.COMMON }
+                    acquireItem(source.id)
+                }
+            }
+        }
+    }
 
     private val rareOrBetter = { item: ItemDefinition -> item.rarity.rank >= ItemRarity.RARE.rank }
 

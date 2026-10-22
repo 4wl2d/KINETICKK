@@ -128,6 +128,39 @@ val ItemDefinition.isDataEconomy: Boolean
             clause.actions.any { it is EffectAction.GainData || it is EffectAction.ApplyMark && it.mark == MarkPick.SPORED }
         }
 
+/** Conversions that act on skills: they do nothing until the run has drafted one. */
+val ConversionKind.actsOnSkills: Boolean
+    get() = this == ConversionKind.DASH_HEAT_TO_SKILLS || this == ConversionKind.DATA_TO_SKILLS ||
+        this == ConversionKind.SKILLS_COST_HEAT || this == ConversionKind.SKILL_FIELDS_FOLLOW
+
+/** Buff stats that act on skills. */
+val BuffStat.actsOnSkills: Boolean
+    get() = this == BuffStat.SKILL_RECHARGE || this == BuffStat.SKILL_POWER
+
+/**
+ * An item that uses skill vocabulary: a skill trigger, condition, refund or buff, a skill rule, Catalysis or a skill
+ * conversion. Those parts wait until the run drafts a skill (the run's dormant share); the draft deck keeps a floor of
+ * such items so casters find their support.
+ */
+val ItemDefinition.usesSkills: Boolean
+    get() {
+        fun skillCondition(condition: EffectCondition) =
+            condition is EffectCondition.SkillIs || condition is EffectCondition.SkillTagged || condition is EffectCondition.SkillsCharging
+        return clauses.any { clause ->
+            clause.trigger == EffectTrigger.SKILL_CAST || clause.trigger == EffectTrigger.SKILL_HIT ||
+                clause.conditions.any(::skillCondition) ||
+                clause.actions.any { it is EffectAction.RefundSkills || it is EffectAction.Buff && it.stat.actsOnSkills }
+        } || rules.any { rule ->
+            when (rule) {
+                is ItemRule.WhileModifier -> skillCondition(rule.condition) || rule.stat.actsOnSkills
+                is ItemRule.SkillCooldown, is ItemRule.SkillPower, ItemRule.SkillCharges, is ItemRule.SkillAttunement,
+                is ItemRule.CatalysisRate -> true
+                is ItemRule.Convert -> rule.kind.actsOnSkills
+                else -> false
+            }
+        }
+    }
+
 /** Append only: persisted by stable codec ids and indexed by ordinal (Agony forms, icons, card marks). */
 enum class WeaponId {
     FLUX_WAKE,

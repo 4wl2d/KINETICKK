@@ -16,6 +16,7 @@ import kinetickk.ball.content.api.WeaponMastery
 
 import kinetickk.foundation.random.CloneableXorWowRandom
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
+import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.rank
 import kinetickk.ball.gameplay.api.*
@@ -66,6 +67,8 @@ internal class MutableGameState(
         const val BREAK_BURST = 16f
         const val STASIS_SECONDS = 3f
         const val REWARD_SEED_SALT = 0x5EED_A11
+        /** The draft deck's own stream (seed xor salt): dealing never draws from [rewardRandom]. */
+        const val DECK_SEED_SALT = 0x0DEC_C0DE
         const val SPAWN_SEED_SALT = 0x5A_A4_D1_E7
         const val MAX_SEVERED_RELICS = 4
         const val MAX_GAMEPLAY_SOUND_CUES = 32
@@ -166,6 +169,20 @@ internal class MutableGameState(
      * [relicGain] entries. Decides affinity ties. Immutable value, replaced on change.
      */
     internal var acquisitionOrder: List<Int> = reductionSource?.acquisitionOrder ?: emptyList()
+    /**
+     * First acquisitions not yet reported to the Profile's recent-item history, oldest first; immutable and replaced on
+     * change, at most [MAX_RECENT_ITEM_IDS] (the oldest drop first).
+     */
+    internal var pendingAcquiredItemIds: List<Int> = reductionSource?.pendingAcquiredItemIds ?: emptyList()
+    /** The draft deck stream's seed ([DECK_SEED_SALT]); the deck is dealt from it when the run starts. */
+    internal val deckSeed: Int = reductionSource?.deckSeed ?: (seed xor DECK_SEED_SALT)
+    /** The run's draft deck (immutable, replaced when a refill deals); every item until the run deals one. */
+    internal var itemDeck: ItemDeck = reductionSource?.itemDeck ?: ItemDeck.EVERYTHING
+    /** Down-weights from the Profile's recent acquisitions, fixed for the run. */
+    internal val itemHistory: ItemHistoryWeights = reductionSource?.itemHistory ?: ItemHistoryWeights.of(
+        bootstrapProgress?.recentItemIds.orEmpty(), content.items.size, MAX_RECENT_ITEM_IDS,
+        content.build.policy.draftDeck.historyPenalty, content.build.policy.draftDeck.historyFloor,
+    )
     /** Immutable compiled build shared by reduction siblings; replaced by [recompileBuild]. */
     internal var build: CompiledBuild = reductionSource?.build ?: CompiledBuild.empty(content)
     internal val clauseReadyAt: CopyOnWriteFloatArray = reductionSource?.clauseReadyAt?.let {
