@@ -89,7 +89,9 @@ class RedesignShotsHudTest {
     @Test
     fun renderHudStates() {
         if (fullShots) output.mkdirs()
-        val sizes = listOf(1440 to 810, 844 to 390, 390 to 844).matrix()
+        // KK_SHOTS_SIZES ("1000x700,640x360") replaces the three reference sizes.
+        val sizes = (System.getenv("KK_SHOTS_SIZES")?.split(',')?.map { it.substringBefore('x').toInt() to it.substringAfter('x').toInt() }
+            ?: listOf(1440 to 810, 844 to 390, 390 to 844)).matrix()
         val only = System.getenv("KK_SHOTS_ONLY")
         // The game's default text size (1.25) and the setting's maximum (1.75, suffix -175).
         val scales = (System.getenv("KK_SHOTS_SCALES") ?: "1.25,1.75").split(',').map { it.toFloat() }.matrix()
@@ -111,7 +113,7 @@ class RedesignShotsHudTest {
                     val bitmap = ImageBitmap(width, height)
                     CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(width.toFloat(), height.toFloat())) {
                         drawGameplay(scene.model, scene.fx, measurer, scene.time, null, hudMemory = scene.memory,
-                            trialInfoOpen = scene.focused)
+                            trialInfoOpen = scene.focused, controls = scene.controls)
                         // The Compose Build button sits beside pause; outline its bounds for review.
                         val build = kinetickk.ball.gameplay.interaction.layout.runningBuildButtonBounds(size.width, size.height, 1f)
                         drawRect(kinetickk.foundation.design.Kk.Ink3, build.topLeft + androidx.compose.ui.geometry.Offset(4f, 6f),
@@ -125,7 +127,14 @@ class RedesignShotsHudTest {
         }
     }
 
-    private class Scene(val model: GameplayRenderModel, val fx: VisualFxProjection, val memory: HudPresentationMemory, val time: Float, val focused: Boolean)
+    private class Scene(
+        val model: GameplayRenderModel,
+        val fx: VisualFxProjection,
+        val memory: HudPresentationMemory,
+        val time: Float,
+        val focused: Boolean,
+        val controls: kinetickk.ball.gameplay.interaction.input.RunningControlPressLog? = null,
+    )
 
     private enum class Shot {
         CRUISE, DASH, OVERHEAT, POLARITY, OVERDRIVE, CRITICAL, ELITE, ARCHITECT, TRIAL, TRIAL_INFO, FEED, FEED_ANOMALY,
@@ -136,12 +145,15 @@ class RedesignShotsHudTest {
         // The level badge's upper tiers and the APEX at the cap in each Apex state; a tier change 300 ms and the
         // Apex unlock 400 ms into their one-shots.
         LEVEL_T4, LEVEL_T5, APEX_COOLING, APEX_READY, APEX_ACTIVE, TIER_UP, APEX_UNLOCK,
+        // The skill row with key caps (keyboard in use) at the cap: Z ready at rank III, X cooling 60 % at rank II
+        // with a refund flash, C locked; then every slot drafted with two charges, a running and an in-flight skill.
+        SKILLS_MIXED, SKILLS_FULL,
     }
 
     private fun level(shot: Shot, values: Values): Int = when (shot) {
         Shot.LEVEL_T4 -> 34
         Shot.LEVEL_T5 -> 41
-        Shot.APEX_COOLING, Shot.APEX_READY, Shot.APEX_ACTIVE, Shot.APEX_UNLOCK -> LEVEL_CAP
+        Shot.APEX_COOLING, Shot.APEX_READY, Shot.APEX_ACTIVE, Shot.APEX_UNLOCK, Shot.SKILLS_MIXED, Shot.SKILLS_FULL -> LEVEL_CAP
         Shot.TIER_UP -> 20
         else -> values.level
     }
@@ -149,7 +161,8 @@ class RedesignShotsHudTest {
     private fun apex(shot: Shot): ApexProjection = when (shot) {
         // Charged 40 %.
         Shot.APEX_COOLING -> ApexProjection(unlocked = true, cooldown01 = 0.6f)
-        Shot.APEX_READY, Shot.APEX_UNLOCK -> ApexProjection(unlocked = true, ready = true)
+        Shot.APEX_READY, Shot.APEX_UNLOCK, Shot.SKILLS_FULL -> ApexProjection(unlocked = true, ready = true)
+        Shot.SKILLS_MIXED -> ApexProjection(unlocked = true, cooldown01 = 0.3f)
         Shot.APEX_ACTIVE -> ApexProjection(unlocked = true, active01 = 0.6f)
         else -> ApexProjection.LOCKED
     }
@@ -236,6 +249,13 @@ class RedesignShotsHudTest {
             },
             "messageTime" to if (shot == Shot.FEED || shot == Shot.FEED_ANOMALY) 1.5f else 0f,
             "screenShake" to 0f,
+            "skillBar" to when (shot) {
+                Shot.SKILLS_MIXED -> MIXED_SKILL_BAR.let { bar ->
+                    kinetickk.ball.gameplay.nucleus.render.SkillBarProjection(immutableListOf(bar.slot(0), bar.slot(1).copy(refunded = 1f), bar.slot(2)))
+                }
+                Shot.SKILLS_FULL -> FULL_SKILL_BAR
+                else -> kinetickk.ball.gameplay.nucleus.render.SkillBarProjection.EMPTY
+            },
             "rebirthLevel" to when (shot) {
                 Shot.REBIRTH_5 -> 5
                 Shot.REBIRTH_10 -> 10
@@ -252,6 +272,8 @@ class RedesignShotsHudTest {
             Shot.CRUISE -> model.with("hp" to 151f)
             Shot.ELITE, Shot.ELITE_MARKERS -> model.with("enemies" to listOf(enemy(1, EnemyType.ELITE, 0f, 0f, 0.7f, 38f)).toImmutableList())
             Shot.ARCHITECT, Shot.ARCHITECT_TRIAL -> model.with("enemies" to listOf(enemy(2, EnemyType.ARCHITECT, 0f, 0f, 0.62f, 74f)).toImmutableList())
+            // Before the drawn frame X had no refund: the frame plays its refund flash.
+            Shot.SKILLS_MIXED -> model.with("skillBar" to MIXED_SKILL_BAR)
             else -> model
         }
         when (shot) {
@@ -268,7 +290,8 @@ class RedesignShotsHudTest {
             BuildNotificationProjection("Neon Ram", immutableListOf("Impact damage +0.05", "Weapon power +0.04", "+ Vector maneuver"), 5f),
             BuildNotificationProjection("Ghost Vector", immutableListOf("Dash power +12"), 3.2f),
         )) else VisualFxProjection.EMPTY
-        return Scene(model, fx, memory, time, shot == Shot.TRIAL_INFO)
+        val controls = if (shot == Shot.SKILLS_MIXED || shot == Shot.SKILLS_FULL) keyboardControls() else null
+        return Scene(model, fx, memory, time, shot == Shot.TRIAL_INFO, controls)
     }
 
     private companion object {

@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.gameplay.interaction.fixtureWeapon
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.GameplayContentSnapshot
@@ -384,6 +385,24 @@ internal fun levelOverrides(
     level: Int = HUD_TEST_LEVEL_CAP,
     apex: ApexProjection = if (level >= HUD_TEST_LEVEL_CAP) ApexProjection(unlocked = true, ready = true) else ApexProjection.LOCKED,
 ): Array<Pair<String, Any?>> = arrayOf("level" to level, "maxLevel" to HUD_TEST_LEVEL_CAP, "apex" to apex)
+
+/** A drafted skill row for HUD tests: Z ready at rank III, X cooling at rank II, C not drafted yet (locked). */
+internal val MIXED_SKILL_BAR = SkillBarProjection(immutableListOf(
+    SkillSlotProjection(skill = SkillId.STORM_COIL.ordinal, rank = 3, ready = true, charges = 1),
+    SkillSlotProjection(skill = SkillId.METEOR.ordinal, rank = 2, cooldown01 = 0.6f),
+    SkillSlotProjection.EMPTY,
+))
+
+/** Every slot drafted: two charges ready, one skill running, one in flight. */
+internal val FULL_SKILL_BAR = SkillBarProjection(immutableListOf(
+    SkillSlotProjection(skill = SkillId.FROST_SNAP.ordinal, rank = 1, ready = true, charges = 2, maxCharges = 2),
+    SkillSlotProjection(skill = SkillId.SOLAR_FLARE.ordinal, rank = 2, cooldown01 = 0.8f, active01 = 0.5f),
+    SkillSlotProjection(skill = SkillId.METEOR.ordinal, rank = 3, cooldown01 = 0.9f, pending01 = 0.4f),
+))
+
+/** The press log of a keyboard player: key caps show. */
+internal fun keyboardControls(): kinetickk.ball.gameplay.interaction.input.RunningControlPressLog =
+    kinetickk.ball.gameplay.interaction.input.RunningControlPressLog().apply { keyHints = true }
 
 /** A started run's render model at [width] × [height] (density 1) for HUD tests. */
 internal fun hudTestModel(width: Float = 1_440f, height: Float = 810f): GameplayRenderModel =

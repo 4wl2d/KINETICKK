@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.gameplay.interaction.layout.runningControlBounds
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
@@ -68,6 +69,41 @@ class HudKeepOutTest {
                     assertTrue(covered(drawn, rects), "$where: $block $drawn is outside the keep-out $rects")
                 }
             }
+        }
+    }
+
+    /**
+     * The skill row with its key caps, the Apex key cap and the Apex badge target lie inside the keep-out at
+     * every reference size, density and text size, as drawn and as laid out, and the regions stay ≤ 12.
+     */
+    @Test
+    fun theSkillRowItsKeyCapsAndTheApexLieInsideTheKeepOut() {
+        val sizes = viewports + listOf(1_280f to 720f, 1_000f to 700f, 481f to 800f, 640f to 360f, 568f to 320f, 360f to 640f)
+        for ((dpWidth, dpHeight) in sizes) for (density in listOf(1f, 3f)) for (textScale in listOf(1f, 1.75f)) {
+            val width = dpWidth * density
+            val height = dpHeight * density
+            val model = hudTestModel(dpWidth, dpHeight).with(
+                "screenWidth" to width, "screenHeight" to height, "uiScale" to density, *levelOverrides(), "skillBar" to FULL_SKILL_BAR,
+            )
+            drawHudAt(width, height, density, AppLanguage.Russian, textScale) { measurer ->
+                drawHud(model, measurer, 1f, controls = keyboardControls())
+            }
+            val where = "${dpWidth}x$dpHeight @$density x$textScale"
+            for (trial in listOf(false, true)) {
+                val keepOut = WorldHudKeepOut().update(width, height, density, textScale, trial, bossPresent = true)
+                val rects = keepOut.rects()
+                assertTrue(rects.size <= 12, "$where: ${rects.size} regions")
+                listOf(HudBlock.SKILLS, HudBlock.SKILL_KEYS, HudBlock.APEX_KEY).forEach { block ->
+                    val drawn = HudLayoutProbe.rect(block) ?: return@forEach
+                    assertTrue(covered(drawn, rects), "$where trial=$trial: $block $drawn is outside the keep-out $rects")
+                }
+                runningControlBounds(width, height, density).forEach { control ->
+                    if (control.target.name.startsWith("SKILL") || control.target.name == "APEX") {
+                        assertTrue(covered(control.bounds, rects), "$where trial=$trial: ${control.target} ${control.bounds} outside $rects")
+                    }
+                }
+            }
+            assertNotNull(HudLayoutProbe.rect(HudBlock.SKILLS), "$where: no skill row")
         }
     }
 

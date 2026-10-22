@@ -14,11 +14,14 @@ import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.PointOfInterestKind
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.gameplay.interaction.fx.BuildNoticeKind
 import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
 import kinetickk.ball.gameplay.nucleus.render.ApexProjection
 import kinetickk.ball.gameplay.nucleus.render.BuildProjection
 import kinetickk.ball.gameplay.nucleus.render.SeveredRelicProjection
+import kinetickk.ball.gameplay.nucleus.render.SkillBarProjection
+import kinetickk.ball.gameplay.nucleus.render.SkillSlotProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
@@ -170,6 +173,52 @@ class HudHotPathAllocationTest {
                 val perFrame = (hudBytes - emptyBytes) / FRAMES
                 assertTrue(perFrame <= 64, "$name level cluster at $width x $height allocates $perFrame bytes above an empty frame")
             }
+        }
+    }
+
+    /**
+     * The skill row in every slot state — locked, ready with two charges at rank III, cooling with its sweep
+     * moving, running, in flight, a cooling refusal shaking it with the Bone edge, the press flash held and the
+     * key caps (keyboard in use) — and the Apex key cap at the cap: steady frames allocate nothing.
+     */
+    @Test
+    fun skillBarInEveryStateWithFlashesAndKeyCapsAllocatesNothing() {
+        listOf(1_440 to 810, 844 to 390, 390 to 844).forEach { (width, height) ->
+            val base = hudTestModel(width.toFloat(), height.toFloat()).with(*levelOverrides())
+            val frames = List(FRAMES) { frame ->
+                val elapsed = 20f + frame * GameplayRenderModel.FIXED_STEP
+                val bar = SkillBarProjection(immutableListOf(
+                    SkillSlotProjection(skill = SkillId.STORM_COIL.ordinal, rank = 3, ready = true, charges = 2, maxCharges = 2),
+                    // A cooling refusal 0.1 s ago, its sweep running down.
+                    SkillSlotProjection(skill = SkillId.METEOR.ordinal, rank = 2, cooldown01 = 0.9f - frame * 0.001f, pending01 = 0.5f,
+                        refusal = SkillSlotProjection.REFUSAL_COOLING, refusedAt = elapsed - 0.1f),
+                    SkillSlotProjection(skill = SkillId.SOLAR_FLARE.ordinal, rank = 1, cooldown01 = 0.5f, active01 = 0.8f - frame * 0.001f),
+                ))
+                base.with("skillBar" to bar, "elapsed" to elapsed)
+            }
+            val locked = base.with("skillBar" to MIXED_SKILL_BAR)
+            val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
+                AppLanguage.Russian)
+            val bitmap = ImageBitmap(width, height)
+            val canvas = Canvas(bitmap)
+            val scope = CanvasDrawScope()
+            val size = Size(width.toFloat(), height.toFloat())
+            val controls = keyboardControls()
+            fun empty() = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) { drawRect(Kk.Ink) }
+            val memory = HudPresentationMemory()
+            fun hud(frame: Int) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) {
+                val time = 10f + (frame % FRAMES) * 0.002f
+                // The X slot is pressed every frame: its Bone press flash stays on.
+                controls.press(kinetickk.ball.gameplay.interaction.layout.RunningControlTarget.SKILL_2, time)
+                drawHud(frames[frame % FRAMES], measurer, time, 0f, 0f, memory, controls = controls)
+                drawControls(locked, measurer, time, null, controls)
+            }
+            repeat(FRAMES) { empty(); hud(it) }
+            kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.SKILLS), "the skill row is not drawn")
+            val emptyBytes = allocated { repeat(FRAMES) { empty() } }
+            val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
+            val perFrame = (hudBytes - emptyBytes) / FRAMES
+            assertTrue(perFrame <= 64, "skill bar frame at $width x $height allocates $perFrame bytes above an empty frame")
         }
     }
 

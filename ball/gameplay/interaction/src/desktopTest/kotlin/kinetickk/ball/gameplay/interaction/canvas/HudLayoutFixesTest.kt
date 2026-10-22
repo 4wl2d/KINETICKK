@@ -168,6 +168,64 @@ class HudLayoutFixesTest {
         }
     }
 
+    /**
+     * The skill row, its key caps and the Apex key cap at every reference size, text size and language, mixed
+     * and full rows, with and without a trial: they stay on screen, never meet the bottom clusters, the
+     * loadout, the feed, the minimap, the clock, the chips or the trial panel, and no key label is cut.
+     */
+    @Test
+    fun skillRowAndKeyCapsStayClearOfTheHudAtEveryTextSize() {
+        val orbit = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
+            immutableListOf(), 0f, 0f)
+        val fx = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(
+            BuildNotificationProjection("Neon Ram", immutableListOf("Impact damage +0.05", "Weapon power +0.04"), 5f),
+        ))
+        val windows = listOf(1_440 to 810, 1_280 to 720, 1_000 to 700, 481 to 800, 844 to 390, 740 to 360, 640 to 360, 568 to 320,
+            390 to 844, 375 to 667, 360 to 640, 320 to 568)
+        val keySlots = listOf(HudText.SKILL_KEY_0, HudText.SKILL_KEY_1, HudText.SKILL_KEY_2, HudText.APEX_KEY)
+        for (language in AppLanguage.entries) for ((w, h) in windows) for (textScale in textScales)
+        for (bar in listOf(MIXED_SKILL_BAR, FULL_SKILL_BAR)) for (trial in listOf(false, true)) {
+            val width = w.toFloat()
+            val height = h.toFloat()
+            val model = hudTestModel(width, height).with(
+                "keys" to 12, "runMatter" to 9_876_543L, *levelOverrides(), "skillBar" to bar, "weaponLevel" to 12,
+                "message" to "ELITE SIGNAL", "messageTime" to 1.5f,
+                "equippedRelics" to listOf(EquippedRelic(RelicId.PERPETUAL_VECTOR, 1), EquippedRelic(RelicId.GYRE_ENGINE, 1))
+                    .toImmutableList(),
+                "pointsOfInterest" to (if (trial) listOf(orbit) else emptyList()).toImmutableList(),
+            )
+            HudDrawCache.forgetLayouts()
+            draw(w, h, language, textScale) { measurer ->
+                drawHud(model, measurer, 1f, controls = keyboardControls())
+                drawHudFeed(model, fx, measurer, 1f, null)
+            }
+            val where = "$language $w x $h x$textScale ${if (bar === FULL_SKILL_BAR) "full" else "mixed"} trial=$trial"
+            fun rect(block: HudBlock) = HudLayoutProbe.rect(block)
+            val skills = assertNotNull(rect(HudBlock.SKILLS), "$where: no skill row")
+            val keyCaps = w >= 600 && kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode(width, height, 1f) ==
+                kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode.REGULAR
+            if (keyCaps) assertNotNull(rect(HudBlock.SKILL_KEYS), "$where: no key caps") else assertNull(rect(HudBlock.SKILL_KEYS), where)
+            val others = listOf(HudBlock.INTEGRITY, HudBlock.SPEED, HudBlock.LOADOUT, HudBlock.FEED, HudBlock.MINIMAP, HudBlock.CLOCK,
+                HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.CHAIN, HudBlock.TRIAL_PANEL, HudBlock.REBIRTH)
+            assertTrue(skills.left >= 0f && skills.top >= 0f && skills.right <= width && skills.bottom <= height, "$where: row $skills off screen")
+            // Each square (the landscape 2 + 1 cluster's union box spans free space), the key-cap row and the Apex key.
+            val drawn = listOf(HudRect.SKILL_0, HudRect.SKILL_1, HudRect.SKILL_2).map { it.name to assertNotNull(HudDrawCache.peekRect(it)) } +
+                listOfNotNull(rect(HudBlock.SKILL_KEYS)?.let { "SKILL_KEYS" to it }, rect(HudBlock.APEX_KEY)?.let { "APEX_KEY" to it })
+            drawn.forEach { (name, box) ->
+                assertTrue(box.left >= 0f && box.top >= 0f && box.right <= width && box.bottom <= height, "$where: $name $box off screen")
+                others.forEach { other ->
+                    val second = rect(other) ?: return@forEach
+                    assertFalse(box.overlaps(second), "$where: $name $box meets $other $second")
+                }
+                if (name != "APEX_KEY") assertFalse(box.overlaps(assertNotNull(rect(HudBlock.BADGE))), "$where: $name meets the badge")
+            }
+            keySlots.forEach { slot ->
+                val layout = HudDrawCache.peekLayout(slot) ?: return@forEach
+                assertFalse(layout.isCut(), "$where: $slot is cut")
+            }
+        }
+    }
+
     /** Dash and Brake labels are never cut and stay inside their slabs (with padding) at any text size. */
     @Test
     fun touchButtonLabelsFitInsideTheirSlabsAtEveryTextSize() {
