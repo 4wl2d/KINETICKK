@@ -6,10 +6,12 @@ package kinetickk.foundation.design
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.isUnspecified
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -28,8 +30,11 @@ import kotlin.math.sin
 
 // Meters, pips, level badge, info (!) + tooltip, tags, stamps, chips, toasts, separator.
 
-/** Animated meter fills (`.meter.striped` threat/ink, `.meter.striped-v` you/dark). */
-enum class KkMeterStripes { NONE, THREAT, YOU }
+/**
+ * Animated meter fills (`.meter.striped` threat/ink, `.meter.striped-v` you/dark, the running Apex in
+ * the preset's gold over its seam).
+ */
+enum class KkMeterStripes { NONE, THREAT, YOU, GOLD }
 
 /**
  * Meter (`.meter`), leaning −12°. [value] and [ghost] are fractions 0..1 of the full meter.
@@ -39,8 +44,10 @@ enum class KkMeterStripes { NONE, THREAT, YOU }
  * - [ghost] draws the hit ghost from [value] to [value] + [ghost] in [ghostColor]; the caller
  *   drains it over [KkTime.GhostDrain] ms.
  * - [stripes] replaces the fill with moving diagonal stripes (overheat = THREAT, overdrive
- *   active = YOU); [time] in seconds animates them.
- * - [edge] draws the 3 dp bone value edge.
+ *   active = YOU, a running Apex = GOLD); [time] in seconds animates them.
+ * - [fillBrush] (a cached brush: pattern tile or [kkFoilBrush]) replaces a plain fill, anchored at
+ *   the meter's left edge; [fillAlpha] fades a plain or brush fill.
+ * - [edge] draws the 3 dp value edge in [edgeColor].
  * - [threat] marks the fill as a threat so MONO adds the hatch.
  *
  * Allocation-free (cached stripe tiles, no paths).
@@ -58,22 +65,27 @@ fun DrawScope.drawKkMeter(
     time: Float = 0f,
     edge: Boolean = false,
     threat: Boolean = false,
+    fillBrush: Brush? = null,
+    edgeColor: Color = Kk.Bone,
+    fillAlpha: Float = 1f,
 ) {
     val v = value.coerceIn(0f, 1f)
     val valueX = bounds.left + bounds.width * v
     val ghostX = bounds.left + bounds.width * (v + ghost.coerceAtLeast(0f)).coerceAtMost(1f)
     withTransform({ kkShear(bounds.center.y) }) {
         if (segments <= 0) {
-            drawMeterSpan(bounds, bounds.left, bounds.right, valueX, ghostX, color, background, ghostColor, stripes, roles, time, threat)
+            drawMeterSpan(bounds, bounds.left, bounds.right, valueX, ghostX, color, background, ghostColor, stripes, roles, time, threat,
+                fillBrush, fillAlpha)
         } else {
             val pitch = bounds.width / segments
             val gap = d(3f).coerceAtMost(pitch * 0.5f)
             for (index in 0 until segments) {
                 val left = bounds.left + index * pitch
-                drawMeterSpan(bounds, left, left + pitch - gap, valueX, ghostX, color, background, ghostColor, stripes, roles, time, threat)
+                drawMeterSpan(bounds, left, left + pitch - gap, valueX, ghostX, color, background, ghostColor, stripes, roles, time, threat,
+                    fillBrush, fillAlpha)
             }
         }
-        if (edge && v > 0f) drawRect(Kk.Bone, Offset(valueX - d(3f), bounds.top), Size(d(3f), bounds.height))
+        if (edge && v > 0f) drawRect(edgeColor, Offset(valueX - d(3f), bounds.top), Size(d(3f), bounds.height))
     }
 }
 
@@ -90,6 +102,8 @@ private fun DrawScope.drawMeterSpan(
     roles: KkRolePalette,
     time: Float,
     threat: Boolean,
+    fillBrush: Brush?,
+    fillAlpha: Float,
 ) {
     if (right <= left) return
     val height = bounds.height
@@ -97,15 +111,18 @@ private fun DrawScope.drawMeterSpan(
     val fillRight = min(right, valueX)
     if (fillRight > left) {
         when (stripes) {
-            KkMeterStripes.NONE -> drawRect(color, Offset(left, bounds.top), Size(fillRight - left, height))
-            KkMeterStripes.THREAT, KkMeterStripes.YOU -> {
-                val base = if (stripes == KkMeterStripes.THREAT) roles.threat else roles.you
-                kkDrawStripes(
-                    left, bounds.top, fillRight, bounds.bottom, base,
-                    kkMix(base, Kk.Ink, if (stripes == KkMeterStripes.THREAT) 0.45f else 0.35f),
-                    time, KkFillKind.METER_STRIPES,
-                )
+            KkMeterStripes.NONE -> if (fillBrush != null) {
+                // Anchored at the meter's left edge, so the brush does not depend on where the meter sits.
+                translate(bounds.left, 0f) {
+                    drawRect(fillBrush, Offset(left - bounds.left, bounds.top), Size(fillRight - left, height), fillAlpha)
+                }
+            } else {
+                drawRect(color, Offset(left, bounds.top), Size(fillRight - left, height), fillAlpha)
             }
+            KkMeterStripes.THREAT, KkMeterStripes.YOU, KkMeterStripes.GOLD -> kkDrawStripes(
+                left, bounds.top, fillRight, bounds.bottom, meterStripeColor(stripes, roles), meterStripeBackground(stripes, roles),
+                time, KkFillKind.METER_STRIPES,
+            )
         }
         if (threat && roles.hatchThreats) {
             drawRect(kkFillBrush(KkFillKind.THREAT_HATCH, Kk.Ink), Offset(left, bounds.top), Size(fillRight - left, height))
@@ -114,6 +131,37 @@ private fun DrawScope.drawMeterSpan(
     val ghostLeft = max(left, valueX)
     val ghostRight = min(right, ghostX)
     if (ghostRight > ghostLeft) drawRect(ghostColor, Offset(ghostLeft, bounds.top), Size(ghostRight - ghostLeft, height))
+}
+
+/** The bright stripe of a striped meter fill ([KkMeterStripes.NONE] has none: its plain colour applies). */
+internal fun meterStripeColor(stripes: KkMeterStripes, roles: KkRolePalette): Color = when (stripes) {
+    KkMeterStripes.THREAT -> roles.threat
+    KkMeterStripes.YOU, KkMeterStripes.NONE -> roles.you
+    KkMeterStripes.GOLD -> roles.gold.base
+}
+
+/** The dark stripe between the bright ones. */
+internal fun meterStripeBackground(stripes: KkMeterStripes, roles: KkRolePalette): Color = when (stripes) {
+    KkMeterStripes.THREAT -> kkMix(roles.threat, Kk.Ink, 0.45f)
+    KkMeterStripes.YOU, KkMeterStripes.NONE -> kkMix(roles.you, Kk.Ink, 0.35f)
+    KkMeterStripes.GOLD -> roles.gold.seam
+}
+
+/**
+ * Moving meter stripes ([stripes], [KkFillKind.METER_STRIPES]) filling the plain rect from [left] to
+ * [right] (no lean): lines and frames that show a striped meter state. Allocation-free.
+ */
+fun DrawScope.drawKkMeterStripes(
+    left: Float,
+    top: Float,
+    right: Float,
+    bottom: Float,
+    stripes: KkMeterStripes,
+    roles: KkRolePalette,
+    time: Float,
+) {
+    kkDrawStripes(left, top, right, bottom, meterStripeColor(stripes, roles), meterStripeBackground(stripes, roles), time,
+        KkFillKind.METER_STRIPES)
 }
 
 /**
@@ -211,9 +259,19 @@ private fun badgeSize(labelLayout: TextLayoutResult, numberLayout: TextLayoutRes
 
 /**
  * Level badge (`.lvl`): small [label] (the caller's localized "Lvl") + wide [level] number; the
- * tier ([KkLevelTier.of]) sets face, echo, sheen, foil and rays. [time] in seconds animates sheen,
- * foil and rays; [slam] 0..1 is the level-up slam progress (1 = settled). Returns the badge face
- * rect. Text is measured per call: keep `level` changes rare (HUD) or cache the badge.
+ * tier ([KkLevelTier.of] with [maxLevel], no cap by default) sets face, seam, echo, sheen, foil and
+ * rays. [time] in seconds animates sheen, foil and rays; [slam] 0..1 is the level-up slam progress
+ * (1 = settled). Returns the badge face rect. Text is measured per call: keep `level` changes rare
+ * (HUD) or cache the badge.
+ *
+ * At the cap ([KkLevelTier.T6]) [apex] picks the look (NONE draws as COOLING) and [apexActive] 0..1
+ * fades the running activation's echo and rays. One-shots the HUD drives (defaults = settled):
+ * [echoGrow] scales the echo offsets (tier change), [slamFrom] and [slamKick] are the slam's start
+ * scale and rotation, [kick] scales the whole badge (Apex cast), [shutter] 0..1 sweeps a bone band
+ * across the face (1 = none), [flash] lays bone over the face at that alpha, and [raysScale] /
+ * [raysAlpha] grow and fade the rays. The face metrics ([kkLevelBadgeSize]) are the same for every
+ * tier and state; echoes, rays and glow overflow them. Allocation-free while the level and sizes
+ * hold (memoized paths, brushes, strokes and text).
  */
 fun DrawScope.drawKkLevelBadge(
     measurer: CanvasTextMeasurer,
@@ -224,6 +282,17 @@ fun DrawScope.drawKkLevelBadge(
     slam: Float = 1f,
     labelSize: Float = 12f,
     numberSize: Float = 30f,
+    maxLevel: Int = Int.MAX_VALUE,
+    apex: KkApexState = KkApexState.NONE,
+    apexActive: Float = 0f,
+    echoGrow: Float = 1f,
+    slamFrom: Float = 1.3f,
+    slamKick: Float = 5f,
+    kick: Float = 1f,
+    shutter: Float = 1f,
+    flash: Float = 0f,
+    raysScale: Float = 1f,
+    raysAlpha: Float = 1f,
 ): Rect {
     val roles = measurer.roles
     val k = numberSize / 30f
@@ -231,56 +300,202 @@ fun DrawScope.drawKkLevelBadge(
     val numberLayout = measureKkText(measurer, kkIntString(level), badgeNumberStyle(measurer, numberSize))
     val size = badgeSize(labelLayout, numberLayout, density, k)
     val bounds = KkRects.of(topLeft.x, topLeft.y, topLeft.x + size.width, topLeft.y + size.height)
-    val tier = KkLevelTier.of(level)
+    val tier = KkLevelTier.of(level, maxLevel)
     val cut = d(10f) * k
     val alpha = if (slam >= 1f) 1f else KkSlam.alpha(slam)
-    val slamScale = if (slam >= 1f) 1f else KkSlam.scale(slam)
-    val slamRotation = if (slam >= 1f) 0f else KkSlam.rotation(slam, 0f)
+    val slamScale = (if (slam >= 1f) 1f else KkSlam.scale(slam, slamFrom)) * kick
+    val slamRotation = if (slam >= 1f) 0f else KkSlam.rotation(slam, 0f, slamKick)
+    val grow = echoGrow.coerceIn(0f, 1f)
     rotate(slamRotation, bounds.center) {
         scale(slamScale, slamScale, bounds.center) {
-            if (tier == KkLevelTier.T5) {
-                drawKkRays(bounds.center, d(95f) * k, Kk.RLegend.copy(alpha = 0.5f * alpha), 7f, 22f, 0.3f, 0.8f, time * 360f / (KkTime.AmbientMin / 1000f))
-            }
-            val echoOffset = when (tier) {
-                KkLevelTier.T1 -> 0f
-                KkLevelTier.T2 -> d(4f) * k
-                KkLevelTier.T3, KkLevelTier.T4 -> d(5f) * k
-                KkLevelTier.T5 -> d(6f) * k
-            }
-            if (echoOffset > 0f) {
-                val echoPath = KkPathMemo.slab(bounds.left + echoOffset, bounds.top + echoOffset, bounds.right + echoOffset, bounds.bottom + echoOffset, cut)
-                when (tier) {
-                    KkLevelTier.T2 -> drawPath(echoPath, roles.you, alpha)
-                    KkLevelTier.T3, KkLevelTier.T5 -> drawPath(echoPath, Kk.Bone, alpha)
-                    else -> drawPath(echoPath, kkFillBrush(KkFillKind.BADGE_STRIPES, roles.you, Kk.Ink), alpha)
-                }
-            }
             val face = KkPathMemo.slab(bounds, cut)
-            when (tier) {
-                KkLevelTier.T1, KkLevelTier.T2 -> drawPath(face, Kk.Bone, alpha)
-                KkLevelTier.T3 -> drawPath(face, roles.you, alpha)
-                KkLevelTier.T4 -> {
-                    drawPath(face, Kk.Ink2, alpha)
-                    clipPath(face) {
-                        val inset = d(1f)
-                        drawRect(roles.you, Offset(bounds.left + inset, bounds.top + inset),
-                            Size(bounds.width - inset * 2f, bounds.height - inset * 2f), alpha, kkStroke(d(2f)))
-                    }
-                }
-                KkLevelTier.T5 -> drawKkFoil(face, bounds, time, 2.4f, alpha)
-            }
-            if (tier >= KkLevelTier.T3) {
-                val sheen = if (tier == KkLevelTier.T4) roles.you.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.75f)
-                drawKkSheen(face, bounds, time, 2.6f, sheen, alpha)
-            }
-            val fg = if (tier == KkLevelTier.T4) roles.you else Kk.Ink
             val baseline = bounds.top + d(6f) * k + badgeAbove(labelLayout, numberLayout)
             val labelX = bounds.left + d(15f) * k
-            drawKkText(labelLayout, labelX, baseline, fg, valign = KkVAlign.BASELINE, alpha = alpha)
-            drawKkText(numberLayout, labelX + labelLayout.size.width + d(6f) * k, baseline, fg, valign = KkVAlign.BASELINE, alpha = alpha)
+            val numberX = labelX + labelLayout.size.width + d(6f) * k
+            if (tier == KkLevelTier.T6) {
+                val state = if (apex == KkApexState.NONE) KkApexState.COOLING else apex
+                drawApexBadgeBody(roles, face, bounds, cut, k, alpha, grow, time, state, apexActive.coerceIn(0f, 1f), raysScale, raysAlpha)
+                // Foil text: the gold scrolls through the glyphs (static while the Apex recharges).
+                drawKkFoilText(labelLayout, labelX, numberLayout, numberX, baseline, bounds, time, roles.gold, alpha,
+                    scroll = state != KkApexState.COOLING)
+                if (state == KkApexState.READY) drawKkSheen(face, bounds, time, 2.6f, roles.gold.light.copy(alpha = 0.6f), alpha)
+            } else {
+                drawTierBadgeBody(roles, tier, face, bounds, cut, k, alpha, grow, time, raysScale, raysAlpha)
+                val fg = if (tier == KkLevelTier.T4) roles.you else Kk.Ink
+                drawKkText(labelLayout, labelX, baseline, fg, valign = KkVAlign.BASELINE, alpha = alpha)
+                drawKkText(numberLayout, numberX, baseline, fg, valign = KkVAlign.BASELINE, alpha = alpha)
+            }
+            if (shutter >= 0f && shutter < 1f) {
+                // Tier change: a bone band (the sheen's geometry, half the face wide) crosses the face once (Snap).
+                drawKkSheen(face, bounds, 0.5f + 0.5f * shutter, 1f, BadgeShutterColor, alpha, bandFraction = 0.5f)
+            }
+            if (flash > 0f) drawPath(face, Kk.Bone, flash.coerceAtMost(1f) * alpha)
         }
     }
     return bounds
+}
+
+/** Bone@0.9: the tier change's shutter band. */
+private val BadgeShutterColor = Kk.Bone.copy(alpha = 0.9f)
+
+/** T1–T5: rays (T5), echo, face, seam and sheen, under the text. */
+private fun DrawScope.drawTierBadgeBody(
+    roles: KkRolePalette,
+    tier: KkLevelTier,
+    face: Path,
+    bounds: Rect,
+    cut: Float,
+    k: Float,
+    alpha: Float,
+    echoGrow: Float,
+    time: Float,
+    raysScale: Float,
+    raysAlpha: Float,
+) {
+    if (tier == KkLevelTier.T5) {
+        // The preset's gold (the deep gold where a deficiency sees the bright one as its volt).
+        drawKkRays(bounds.center, d(95f) * k, roles.gold.ray, 7f, 22f, 0.3f, 0.8f, time * 360f / (KkTime.AmbientMin / 1000f),
+            alpha = 0.5f * alpha * raysAlpha, scale = raysScale)
+    }
+    val echoOffset = echoGrow * k * when (tier) {
+        KkLevelTier.T1, KkLevelTier.T6 -> 0f
+        KkLevelTier.T2 -> d(4f)
+        KkLevelTier.T3, KkLevelTier.T4 -> d(5f)
+        KkLevelTier.T5 -> d(6f)
+    }
+    if (echoOffset > 0f) {
+        val echoPath = KkPathMemo.slab(bounds.left + echoOffset, bounds.top + echoOffset, bounds.right + echoOffset, bounds.bottom + echoOffset, cut)
+        when (tier) {
+            KkLevelTier.T2 -> drawPath(echoPath, roles.you, alpha)
+            KkLevelTier.T3, KkLevelTier.T5 -> drawPath(echoPath, Kk.Bone, alpha)
+            else -> drawPath(echoPath, kkFillBrush(KkFillKind.BADGE_STRIPES, roles.you, Kk.Ink), alpha)
+        }
+    }
+    when (tier) {
+        KkLevelTier.T1, KkLevelTier.T2 -> drawPath(face, Kk.Bone, alpha)
+        KkLevelTier.T3 -> drawPath(face, roles.you, alpha)
+        KkLevelTier.T4 -> {
+            drawPath(face, Kk.Ink2, alpha)
+            clipPath(face) {
+                val inset = d(1f)
+                drawRect(roles.you, Offset(bounds.left + inset, bounds.top + inset),
+                    Size(bounds.width - inset * 2f, bounds.height - inset * 2f), alpha, kkStroke(d(2f)))
+            }
+        }
+        KkLevelTier.T5, KkLevelTier.T6 -> drawKkFoil(face, bounds, time, 2.4f, alpha, roles.gold)
+    }
+    if (tier == KkLevelTier.T2 || tier == KkLevelTier.T3 || tier == KkLevelTier.T5) {
+        // The ink seam keeps face and echo apart without hue (Mono sees T2/T3 face and echo 3 ΔE apart).
+        drawPath(face, Kk.Ink, alpha, kkStroke(d(1f) * k))
+    }
+    if (tier >= KkLevelTier.T3) {
+        val sheen = if (tier == KkLevelTier.T4) roles.you.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.75f)
+        drawKkSheen(face, bounds, time, 2.6f, sheen, alpha)
+    }
+}
+
+/**
+ * T6 (APEX) under the text: rays A (gold) and B (volt, counter-rotating), the volt and the gold-striped
+ * echoes, the ready glow, the frame (foil, or moving gold stripes while active) and the ink face inside it.
+ */
+private fun DrawScope.drawApexBadgeBody(
+    roles: KkRolePalette,
+    face: Path,
+    bounds: Rect,
+    cut: Float,
+    k: Float,
+    alpha: Float,
+    echoGrow: Float,
+    time: Float,
+    state: KkApexState,
+    active: Float,
+    raysScale: Float,
+    raysAlpha: Float,
+) {
+    val gold = roles.gold
+    val turn = time * 360f / (KkTime.AmbientMin / 1000f)
+    val raysA = if (state == KkApexState.COOLING) 0.25f else 0.5f
+    val raysB = when (state) {
+        KkApexState.READY -> 0.22f
+        KkApexState.ACTIVE -> 0.22f * active
+        else -> 0f
+    }
+    drawKkRays(bounds.center, d(95f) * k, gold.ray, 7f, 22f, 0.3f, 0.8f, turn, alpha = raysA * alpha * raysAlpha, scale = raysScale)
+    drawKkRays(bounds.center, d(120f) * k, roles.you, 3f, 30f, 0.5f, 0.95f, -turn, alpha = raysB * alpha * raysAlpha, scale = raysScale)
+    val youEcho = when (state) {
+        KkApexState.READY -> 1f
+        KkApexState.ACTIVE -> active
+        else -> 0f
+    }
+    if (youEcho > 0f && echoGrow > 0f) {
+        val o = d(9f) * k * echoGrow
+        drawPath(KkPathMemo.slab(bounds.left + o, bounds.top + o, bounds.right + o, bounds.bottom + o, cut), roles.you, youEcho * alpha)
+    }
+    if (echoGrow > 0f) {
+        val o = d(5f) * k * echoGrow
+        drawPath(KkPathMemo.slab(bounds.left + o, bounds.top + o, bounds.right + o, bounds.bottom + o, cut),
+            kkFillBrush(KkFillKind.BADGE_STRIPES, gold.base, Kk.Ink), alpha)
+    }
+    if (state == KkApexState.READY) {
+        // drop-shadow glow as stacked strokes (the weapon slot's), pulsing; the frame covers their inner half.
+        val pulse = 0.45f + 0.55f * kkPulse(time, 1.2f)
+        for (index in 0 until SlotGlowWidths.size) {
+            drawPath(face, gold.base, SlotGlowAlphas[index] * pulse * alpha, kkStroke(d(SlotGlowWidths[index])))
+        }
+    }
+    when (state) {
+        KkApexState.ACTIVE -> {
+            val brush = kkFillBrush(KkFillKind.METER_STRIPES, gold.base, gold.seam)
+            val shift = kkLoop(time, KkFillKind.METER_STRIPES.loopSeconds) * kkFillTilePx(KkFillKind.METER_STRIPES)
+            clipPath(face) {
+                translate(shift, 0f) { drawRect(brush, Offset(bounds.left - shift, bounds.top), bounds.size, alpha) }
+            }
+        }
+        // Cooling: the foil stands still, dimmed.
+        KkApexState.COOLING, KkApexState.NONE -> drawKkFoil(face, bounds, 0f, 2.4f, 0.55f * alpha, gold)
+        KkApexState.READY -> drawKkFoil(face, bounds, time, 2.4f, alpha, gold)
+    }
+    val frame = max(d(2.5f) * k, d(2f))
+    drawPath(KkPathMemo.slab(bounds.left + frame, bounds.top + frame, bounds.right - frame, bounds.bottom - frame, cut - frame), Kk.Ink, alpha)
+}
+
+/**
+ * Draws [label] at [labelX] and [number] at [numberX] on [baseline] in foil ([gold], 2.4 s loop over a
+ * tile 2.6 × [bounds] wide), scrolling when [scroll]. The glyphs are a mask in a layer the size of
+ * [bounds] and the foil is laid over them (SrcIn): a text brush is fixed to its glyphs, so it cannot
+ * scroll through them. The mask is ink at full opacity, the colour the other tiers draw the same
+ * layouts in, and [alpha] fades the foil instead, so no paragraph is repainted in another colour.
+ * Allocation-free (cached layer paint, rect and brush).
+ */
+private fun DrawScope.drawKkFoilText(
+    label: TextLayoutResult,
+    labelX: Float,
+    number: TextLayoutResult,
+    numberX: Float,
+    baseline: Float,
+    bounds: Rect,
+    time: Float,
+    gold: KkGold,
+    alpha: Float,
+    scroll: Boolean,
+) {
+    val tile = bounds.width * 2.6f
+    if (tile <= 0f) return
+    val shift = if (scroll) -kkLoop(time, 2.4f) * tile else 0f
+    val canvas = drawContext.canvas
+    canvas.saveLayer(bounds, KkLayerPaint.plain)
+    drawKkText(label, labelX, baseline, Kk.Ink, valign = KkVAlign.BASELINE)
+    drawKkText(number, numberX, baseline, Kk.Ink, valign = KkVAlign.BASELINE)
+    translate(bounds.left + shift, 0f) {
+        drawRect(KkGradients.foil(tile, gold), Offset(-shift - tile, bounds.top), Size(bounds.width + tile * 2f, bounds.height),
+            alpha = alpha, blendMode = BlendMode.SrcIn)
+    }
+    canvas.restore()
+}
+
+/** The plain paint of an offscreen layer (draw thread only). */
+private object KkLayerPaint {
+    val plain: Paint by lazy { Paint() }
 }
 
 /**
@@ -298,6 +513,24 @@ fun DrawScope.drawKkFoil(path: Path, bounds: Rect, time: Float, loopSeconds: Flo
         }
     }
 }
+
+/** Rect overload of [drawKkFoil]: fills [bounds] itself (a clip rect instead of a clip path). */
+fun DrawScope.drawKkFoil(bounds: Rect, time: Float, loopSeconds: Float = 2.4f, alpha: Float = 1f, gold: KkGold = KkGold.Bright) {
+    val tile = bounds.width * 2.6f
+    if (tile <= 0f) return
+    val shift = -kkLoop(time, loopSeconds) * tile
+    clipRect(bounds.left, bounds.top, bounds.right, bounds.bottom) {
+        translate(bounds.left + shift, 0f) {
+            drawRect(KkGradients.foil(tile, gold), Offset(-shift - tile, bounds.top), Size(bounds.width + tile * 2f, bounds.height), alpha)
+        }
+    }
+}
+
+/**
+ * The foil gradient of [drawKkFoil] for a tile [tile] px wide as a cached brush (static foil fills such
+ * as meters). It repeats from the origin of the transform it is drawn under.
+ */
+fun kkFoilBrush(tile: Float, gold: KkGold = KkGold.Bright): Brush = KkGradients.foil(max(tile, 1f), gold)
 
 /**
  * Sheen sweep (`kk-sheen`): a sheared highlight band ([bandFraction] of [bounds] wide, starting
@@ -333,8 +566,9 @@ fun DrawScope.drawKkSheen(
 /**
  * Rotating conic rays (`.lrays`, `.crays`): wedges [rayDeg] wide every [periodDeg] around
  * [center], faded radially from [innerStop] to [outerStop] of [radius], rotated [rotationDeg].
- * Ambient loops rotate no faster than one turn per [KkTime.AmbientMin]. Allocation-free after the
- * first draw per geometry.
+ * Ambient loops rotate no faster than one turn per [KkTime.AmbientMin]. [alpha] fades and [scale]
+ * grows the rays without touching their memoized fade brush and path (pass a constant [color] and
+ * animate these instead). Allocation-free after the first draw per geometry and colour.
  */
 fun DrawScope.drawKkRays(
     center: Offset,
@@ -345,36 +579,48 @@ fun DrawScope.drawKkRays(
     innerStop: Float,
     outerStop: Float,
     rotationDeg: Float,
+    alpha: Float = 1f,
+    scale: Float = 1f,
 ) {
-    if (radius <= 0f || color.alpha <= 0f) return
+    if (radius <= 0f || color.alpha <= 0f || alpha <= 0f || scale <= 0f) return
     val path = KkGradients.rays(radius, rayDeg, periodDeg)
     translate(center.x, center.y) {
         rotate(rotationDeg, Offset.Zero) {
-            drawPath(path, KkGradients.rayFade(radius, color, innerStop, outerStop))
+            if (scale == 1f) {
+                drawPath(path, KkGradients.rayFade(radius, color, innerStop, outerStop), alpha.coerceAtMost(1f))
+            } else {
+                scale(scale, scale, Offset.Zero) {
+                    drawPath(path, KkGradients.rayFade(radius, color, innerStop, outerStop), alpha.coerceAtMost(1f))
+                }
+            }
         }
     }
 }
 
 /** Memoized gradient brushes and ray geometry (draw thread only; created on first draw). */
 internal object KkGradients {
-    private val foilTiles = FloatArray(4) { -1f }
-    private val foilGolds = arrayOfNulls<KkGold>(4)
-    private val foilBrushes = arrayOfNulls<Brush>(4)
+    // Badge face, foil text, Data bar and Data line next to card and tile foils: eight tiles at once.
+    private const val FOILS = 8
+    private val foilTiles = FloatArray(FOILS) { -1f }
+    private val foilGolds = arrayOfNulls<KkGold>(FOILS)
+    private val foilBrushes = arrayOfNulls<Brush>(FOILS)
     private var foilNext = 0
     // Card sheens, band sheens and glints next to the level badge's sheens: eight colours at once.
     private val sheenColors = LongArray(8)
     private val sheenBrushes = arrayOfNulls<Brush>(8)
     private var sheenNext = 0
-    private val rayKeys = FloatArray(4 * 3) { -1f }
-    private val rayPaths = arrayOfNulls<Path>(4)
+    // Ray sets on screen at once: the T5/T6 badge (two at the cap), card and tile rays.
+    private const val RAYS = 8
+    private val rayKeys = FloatArray(RAYS * 3) { -1f }
+    private val rayPaths = arrayOfNulls<Path>(RAYS)
     private var rayNext = 0
-    private val fadeKeys = FloatArray(4 * 3) { -1f }
-    private val fadeColors = LongArray(4)
-    private val fadeBrushes = arrayOfNulls<Brush>(4)
+    private val fadeKeys = FloatArray(RAYS * 3) { -1f }
+    private val fadeColors = LongArray(RAYS)
+    private val fadeBrushes = arrayOfNulls<Brush>(RAYS)
     private var fadeNext = 0
 
     fun foil(tile: Float, gold: KkGold = KkGold.Bright): Brush {
-        for (index in 0 until 4) if (foilTiles[index] == tile && foilGolds[index] === gold) return foilBrushes[index]!!
+        for (index in 0 until FOILS) if (foilTiles[index] == tile && foilGolds[index] === gold) return foilBrushes[index]!!
         // 100deg: mostly horizontal, dropping ~10° to the right.
         val brush = Brush.linearGradient(
             0f to gold.base, 0.15f to gold.base, 0.42f to gold.light, 0.68f to gold.base, 1f to gold.base,
@@ -385,7 +631,7 @@ internal object KkGradients {
         foilTiles[foilNext] = tile
         foilGolds[foilNext] = gold
         foilBrushes[foilNext] = brush
-        foilNext = (foilNext + 1) % 4
+        foilNext = (foilNext + 1) % FOILS
         return brush
     }
 
@@ -404,7 +650,7 @@ internal object KkGradients {
     }
 
     fun rays(radius: Float, rayDeg: Float, periodDeg: Float): Path {
-        for (index in 0 until 4) {
+        for (index in 0 until RAYS) {
             val base = index * 3
             if (rayKeys[base] == radius && rayKeys[base + 1] == rayDeg && rayKeys[base + 2] == periodDeg) return rayPaths[index]!!
         }
@@ -423,13 +669,13 @@ internal object KkGradients {
         rayKeys[base] = radius
         rayKeys[base + 1] = rayDeg
         rayKeys[base + 2] = periodDeg
-        rayNext = (rayNext + 1) % 4
+        rayNext = (rayNext + 1) % RAYS
         return path
     }
 
     fun rayFade(radius: Float, color: Color, innerStop: Float, outerStop: Float): Brush {
         val key = color.value.toLong()
-        for (index in 0 until 4) {
+        for (index in 0 until RAYS) {
             val base = index * 3
             if (fadeBrushes[index] != null && fadeColors[index] == key && fadeKeys[base] == radius &&
                 fadeKeys[base + 1] == innerStop && fadeKeys[base + 2] == outerStop
@@ -446,7 +692,7 @@ internal object KkGradients {
         fadeKeys[base + 2] = outerStop
         fadeColors[fadeNext] = key
         fadeBrushes[fadeNext] = brush
-        fadeNext = (fadeNext + 1) % 4
+        fadeNext = (fadeNext + 1) % RAYS
         return brush
     }
 }

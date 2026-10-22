@@ -364,8 +364,8 @@ private object KkBracketStrokes {
     }
 }
 
-private val SlotGlowWidths = floatArrayOf(2f, 4f, 7f, 10f, 14f)
-private val SlotGlowAlphas = floatArrayOf(0.16f, 0.12f, 0.08f, 0.05f, 0.03f)
+internal val SlotGlowWidths = floatArrayOf(2f, 4f, 7f, 10f, 14f)
+internal val SlotGlowAlphas = floatArrayOf(0.16f, 0.12f, 0.08f, 0.05f, 0.03f)
 
 /** Measures the weapon-slot level text ("Lvl N", mono 700 10 px) once for [drawKkWeaponSlot]. */
 fun measureKkWeaponLevel(measurer: CanvasTextMeasurer, text: String): TextLayoutResult =

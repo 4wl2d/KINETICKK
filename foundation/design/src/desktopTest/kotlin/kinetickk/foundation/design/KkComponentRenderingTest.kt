@@ -112,10 +112,13 @@ class KkComponentRenderingTest {
 
     @Test
     fun levelBadgeTiersEscalate() {
-        val tiers = listOf(7, 14, 24, 34, 45).map { level ->
-            image(260, 200) { drawKkLevelBadge(measurer, Offset(90f, 80f), level, time = 1.5f) }
+        // Six tiers under the content cap 42: 41 is the last T5, 42 the APEX (ready).
+        val tiers = listOf(7, 14, 24, 34, 41, 42).map { level ->
+            image(260, 200) {
+                drawKkLevelBadge(measurer, Offset(90f, 80f), level, time = 1.5f, maxLevel = CAP, apex = KkApexState.READY)
+            }
         }
-        assertEquals(5, tiers.map { it.argb().toList() }.toSet().size)
+        assertEquals(6, tiers.map { it.argb().toList() }.toSet().size)
         assertTrue(tiers[0].regionCountNear(Kk.Volt, 0, 0, 260, 200) == 0, "t1 has no volt")
         assertTrue(tiers[1].countNear(Kk.Volt) > 50, "t2 volt echo")
         assertTrue(tiers[2].countNear(Kk.Volt) > 800, "t3 volt face")
@@ -123,6 +126,105 @@ class KkComponentRenderingTest {
         assertTrue(tiers[4].countNear(Kk.RLegend, 40) > 400, "t5 gold foil")
         // Rays extend far outside the t5 badge.
         assertTrue(tiers[4].regionCountNear(Kk.RLegend, 0, 0, 80, 200, 90) > 20 || tiers[4].regionCountNear(Kk.RLegend, 180, 0, 260, 200, 90) > 20)
+        // The APEX: an ink face inside a gold frame, the volt echo, gold rays and foil text.
+        val face = badgeFace(42)
+        val apex = tiers[5]
+        assertTrue(apex.regionCountNear(Kk.Ink, face.left.toInt() + 14, face.top.toInt() + 5, face.right.toInt() - 14, face.bottom.toInt() - 5, 6) > 200,
+            "t6 ink face")
+        assertTrue(apex.countNear(Kk.RLegend, 40) > 200, "t6 gold frame and foil text")
+        assertTrue(apex.countNear(Kk.Volt, 20) > 300, "t6 volt echo")
+        // The cap itself, not the decade, makes the APEX: 42 without a cap is a plain T5.
+        val uncapped = image(260, 200) { drawKkLevelBadge(measurer, Offset(90f, 80f), 42, time = 1.5f) }
+        assertTrue(uncapped.countNear(Kk.Volt, 20) < 50, "42 without a cap draws no APEX echo")
+    }
+
+    @Test
+    fun levelBadgeApexStatesDiffer() {
+        val states = listOf(KkApexState.COOLING, KkApexState.READY, KkApexState.ACTIVE).map { state ->
+            state to image(260, 200) {
+                drawKkLevelBadge(measurer, Offset(90f, 80f), CAP, time = 1.5f, maxLevel = CAP, apex = state, apexActive = 0.6f)
+            }.argb()
+        }
+        states.forEachIndexed { index, (a, first) ->
+            states.drop(index + 1).forEach { (b, second) ->
+                val differing = first.indices.count { first[it] != second[it] }
+                assertTrue(differing >= 200, "$a vs $b differ in $differing px")
+            }
+        }
+        // NONE (no Apex runtime yet) shows the recharging look.
+        val none = image(260, 200) { drawKkLevelBadge(measurer, Offset(90f, 80f), CAP, time = 1.5f, maxLevel = CAP) }.argb()
+        assertContentEquals(states[0].second, none)
+    }
+
+    @Test
+    fun levelBadgeT6DiffersFromT4OutsideTheFace() {
+        fun outside(level: Int): Int {
+            val face = badgeFace(level)
+            val image = image(260, 200) {
+                drawKkLevelBadge(measurer, Offset(90f, 80f), level, time = 1.5f, maxLevel = CAP, apex = KkApexState.READY)
+            }.argb()
+            // Outside the face and outside the T4 echo (the face moved 5 dp down and right), with 1 px of anti-aliasing.
+            var count = 0
+            for (y in 0 until 200) for (x in 0 until 260) {
+                val inFace = x >= face.left - 1f && x <= face.right + 1f && y >= face.top - 1f && y <= face.bottom + 1f
+                val inEcho = x >= face.left + 4f && x <= face.right + 6f && y >= face.top + 4f && y <= face.bottom + 6f
+                if (!inFace && !inEcho && colorDistance(image[y * 260 + x], Kk.Ink.toArgb()) > 24) count++
+            }
+            return count
+        }
+        assertEquals(0, outside(34), "t4 paints nothing beyond its echo")
+        val apex = outside(42)
+        assertTrue(apex >= 300, "t6 rays, echoes and glow reach past the face ($apex px)")
+    }
+
+    @Test
+    fun levelBadgeFaceMetricsMatchAcrossTiers() {
+        assertEquals(kkLevelBadgeSize(measurer, 41, 1f), kkLevelBadgeSize(measurer, 42, 1f))
+        val t5 = badgeFace(41)
+        listOf(KkApexState.NONE, KkApexState.COOLING, KkApexState.READY, KkApexState.ACTIVE).forEach { state ->
+            assertEquals(t5.size, badgeFace(42, state).size, "$state")
+        }
+    }
+
+    @Test
+    fun levelBadgeApexFoilTextScrollsUnlessCooling() {
+        // Inside the ink face only the foil text changes over time (the rays and echoes sit under it).
+        fun inner(state: KkApexState, time: Float): List<Int> {
+            val face = badgeFace(CAP, state)
+            val image = image(260, 200) {
+                drawKkLevelBadge(measurer, Offset(90f, 80f), CAP, time = time, maxLevel = CAP, apex = state, apexActive = 0.6f)
+            }
+            val pixels = mutableListOf<Int>()
+            for (y in face.top.toInt() + 4 until face.bottom.toInt() - 4) for (x in face.left.toInt() + 14 until face.right.toInt() - 14) {
+                pixels += image.at(x, y)
+            }
+            return pixels
+        }
+        fun moved(state: KkApexState): Int {
+            val a = inner(state, 0.1f)
+            val b = inner(state, 1.3f)
+            return a.indices.count { a[it] != b[it] }
+        }
+        assertEquals(0, moved(KkApexState.COOLING), "cooling foil text stands still")
+        assertTrue(moved(KkApexState.ACTIVE) > 40, "active foil text scrolls (${moved(KkApexState.ACTIVE)} px)")
+    }
+
+    @Test
+    fun levelBadgeGoldFollowsTheColorVisionPreset() {
+        val protan = kkTestMeasurer(KkRolePalette.Protan)
+        listOf(41, 42).forEach { level ->
+            val image = image(260, 200) {
+                drawKkLevelBadge(protan, Offset(90f, 80f), level, time = 1.5f, maxLevel = CAP, apex = KkApexState.READY)
+            }
+            assertTrue(image.countNear(KkGold.Deep.base, 24) > 100, "level $level: Protan draws the deep gold")
+            assertEquals(0, image.countNear(Kk.RLegend, 12), "level $level: no bright gold under Protan")
+        }
+    }
+
+    private fun badgeFace(level: Int, state: KkApexState = KkApexState.READY): Rect {
+        var face = Rect.Zero
+        image(260, 200) { face = drawKkLevelBadge(measurer, Offset(90f, 80f), level, time = 1.5f, maxLevel = CAP, apex = state) }
+        return face
     }
 
     @Test
@@ -263,5 +365,10 @@ class KkComponentRenderingTest {
         assertTrue(before.argb().all { it == Color.White.toArgb() })
         val after = image(320, 180) { drawRect(Color.White); drawKkShutter(KkShutter.TOTAL_MS.toFloat(), KkRolePalette.Default) }
         assertTrue(after.argb().all { it == Color.White.toArgb() })
+    }
+
+    private companion object {
+        /** The content's run level cap. */
+        const val CAP = 42
     }
 }

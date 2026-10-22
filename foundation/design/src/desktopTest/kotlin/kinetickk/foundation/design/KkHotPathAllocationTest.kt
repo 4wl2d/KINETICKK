@@ -86,6 +86,41 @@ class KkHotPathAllocationTest {
     }
 
     @Test
+    fun levelBadgeTiersApexStatesAndTheirMetersDoNotAllocatePerFrame() {
+        // Protan: the deep gold everywhere the badge and its meters read the preset's gold.
+        val measurer = kkTestMeasurer(roles = KkRolePalette.Protan)
+        val bar = Rect(20f, 120f, 140f, 124f)
+        val line = Rect(0f, 0f, 640f, 4f)
+        val bitmap = ImageBitmap(640, 180)
+        val scope = CanvasDrawScope()
+        val canvas = Canvas(bitmap)
+        val thread = Thread.currentThread().id
+        var frameIndex = 0
+        fun frame(draw: Boolean) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, Size(640f, 180f)) {
+            // Inside one animation cycle: rays turn, foil and stripes scroll, the ready glow pulses.
+            val time = 1f + (frameIndex++ % 500) * 0.002f
+            if (!draw) return@draw
+            drawKkLevelBadge(measurer, Offset(20f, 40f), 41, time = time, maxLevel = 42)
+            drawKkLevelBadge(measurer, Offset(170f, 40f), 42, time = time, maxLevel = 42, apex = KkApexState.COOLING)
+            drawKkLevelBadge(measurer, Offset(320f, 40f), 42, time = time, maxLevel = 42, apex = KkApexState.READY)
+            drawKkLevelBadge(measurer, Offset(470f, 40f), 42, time = time, maxLevel = 42, apex = KkApexState.ACTIVE, apexActive = 0.5f)
+            drawKkMeter(bar, 0.7f, measurer.roles.gold.base, measurer.roles, stripes = KkMeterStripes.GOLD, time = time)
+            drawKkMeter(bar, 1f, measurer.roles.gold.base, measurer.roles, fillBrush = kkFoilBrush(bar.width * 2.6f, measurer.roles.gold),
+                fillAlpha = 0.75f + 0.25f * kkPulse(time, 1.2f), edge = true, edgeColor = measurer.roles.you)
+            drawKkFoil(line, time, gold = measurer.roles.gold)
+            drawKkMeterStripes(0f, 8f, 320f, 12f, KkMeterStripes.GOLD, measurer.roles, time)
+        }
+        repeat(300) { frame(true) } // warm caches and JIT
+        val before = threads.getThreadAllocatedBytes(thread)
+        repeat(500) { frame(false) }
+        val baseline = (threads.getThreadAllocatedBytes(thread) - before) / 500
+        val start = threads.getThreadAllocatedBytes(thread)
+        repeat(500) { frame(true) }
+        val perFrame = (threads.getThreadAllocatedBytes(thread) - start) / 500
+        assertTrue(perFrame - baseline < 64, "T5/T6 badges and their meters allocate ${perFrame - baseline} bytes per frame")
+    }
+
+    @Test
     fun numbersThatChangeEveryFrameDoNotMeasureText() {
         val measurer = kkTestMeasurer()
         val style = measurer.typography.wideStyle(44f, tabular = true)

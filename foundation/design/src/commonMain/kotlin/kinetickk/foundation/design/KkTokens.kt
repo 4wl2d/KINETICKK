@@ -156,6 +156,15 @@ object KkTime {
 
     /** Home palette recolor time (Out easing). */
     const val PaletteShift = 350
+
+    /** Level badge tier change: echo growth, bone shutter and ring burst. */
+    const val TierBurst = Drift
+
+    /** Level badge reaching the cap (APEX unlock): long slam, two ring bursts, rays growing in. */
+    const val ApexUnlock = 1_200
+
+    /** Apex ready again: one ring burst and a meter head flash. */
+    const val ApexPing = Shutter
 }
 
 /** Shape angles in degrees. Negative leans the top edge forward (right), like italic type. */
@@ -253,27 +262,41 @@ object KkRebirthTiers {
     fun isEventHorizon(tier: Int): Boolean = tier >= MaxTier
 }
 
-/** Level badge tiers (`.lvl.t1…t5`). */
+/** Level badge tiers (`.lvl.t1…t6`). */
 enum class KkLevelTier {
     /** Levels 1–9: bone slab. */
     T1,
 
-    /** Levels 10–19: bone slab + volt echo. */
+    /** Levels 10–19: bone slab, ink seam, volt echo. */
     T2,
 
-    /** Levels 20–29: volt face, bone echo, sheen. */
+    /** Levels 20–29: volt face, ink seam, bone echo, sheen. */
     T3,
 
     /** Levels 30–39: ink face, volt text and inset line, striped echo, sheen. */
     T4,
 
-    /** Levels 40+: animated gold foil, bone echo, sheen, rotating rays. */
+    /** Levels 40 up to the cap: animated gold foil, ink seam, bone echo, sheen, rotating rays. */
     T5,
+
+    /**
+     * APEX, the run's level cap: an ink face inside a gold foil frame, foil text, a gold-striped and a
+     * volt echo and two counter-rotating ray sets; its look follows the [KkApexState].
+     */
+    T6,
     ;
 
     companion object {
-        /** Tier for a level: 1–9 T1, 10–19 T2, 20–29 T3, 30–39 T4, 40+ T5 (≤ 0 reads as T1). */
-        fun of(level: Int): KkLevelTier = when {
+        /** Tier for a level without a cap: 1–9 T1, 10–19 T2, 20–29 T3, 30–39 T4, 40+ T5 (≤ 0 reads as T1). */
+        fun of(level: Int): KkLevelTier = of(level, Int.MAX_VALUE)
+
+        /**
+         * Tier for a level under the content's [maxLevel]: the cap itself (and anything above it) is T6,
+         * below it the decades of [of] (with a cap of 42: 40–41 T5, 42 T6). Foundation knows no game
+         * rules; the caller passes the cap.
+         */
+        fun of(level: Int, maxLevel: Int): KkLevelTier = when {
+            level >= maxLevel -> T6
             level >= 40 -> T5
             level >= 30 -> T4
             level >= 20 -> T3
@@ -281,4 +304,19 @@ enum class KkLevelTier {
             else -> T1
         }
     }
+}
+
+/** Apex readiness as the level badge shows it at [KkLevelTier.T6] (the HUD maps the run's Apex onto it). */
+enum class KkApexState {
+    /** No Apex (below the cap, or not unlocked yet): T6 draws as [COOLING]. */
+    NONE,
+
+    /** Recharging: a static, dimmed foil frame. */
+    COOLING,
+
+    /** Ready to cast: animated foil, the volt echo, both ray sets, a pulsing gold glow and a sheen. */
+    READY,
+
+    /** Running: a moving gold-striped frame; the volt echo and the second rays fade with the activation. */
+    ACTIVE,
 }
