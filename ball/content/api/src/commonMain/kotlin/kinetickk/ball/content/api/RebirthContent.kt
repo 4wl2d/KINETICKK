@@ -56,7 +56,7 @@ data class RebirthProfile(
     val packSizeBonus: Int = 0,
     /** Scales the mean number of world obstacles per chunk. */
     val obstacleDensityMultiplier: Float = 1f,
-    /** Scales every run level's Data requirement at this tier (rounded per level); 1 keeps the base curve. */
+    /** Scales every run level's Data requirement at this tier (rounded per level, [dataRequirement]); 1 keeps the base curve. */
     val dataRequirementScale: Float = 1f,
 ) {
     init {
@@ -99,7 +99,20 @@ data class RebirthProfile(
         max(minimumEliteIntervalSeconds, baseSeconds / eliteRateMultiplier)
 
     fun enemyHealth(base: Float): Float = base * enemyHealthMultiplier
+
+    /**
+     * A run level's Data requirement at this tier: `floor(base × dataRequirementScale + 0.5)`, never below [base]
+     * and saturating at [Int.MAX_VALUE]. Monotone in [base], so a non-decreasing table stays non-decreasing.
+     */
+    fun dataRequirement(base: Int): Int {
+        if (dataRequirementScale == 1f) return base
+        val scaled = floor(base.toDouble() * dataRequirementScale.toDouble() + 0.5)
+        return if (scaled >= Int.MAX_VALUE.toDouble()) Int.MAX_VALUE else max(base, scaled.toInt())
+    }
 }
+
+/** Data requirement growth per Rebirth tier: tier t needs `1 + 0.14t` times the base table (Data supply grows alike). */
+const val REBIRTH_DATA_REQUIREMENT_SCALE_PER_TIER: Float = 0.14f
 
 /** Name of the tier without mutators. */
 const val BASELINE_REBIRTH_NAME: String = "Baseline"
@@ -114,7 +127,8 @@ val RebirthTierNames: List<String> = listOf(
  * player's compensation, so each tier is a real step up: enemy integrity `1 + 0.32t + 0.05t²`,
  * incoming damage `1 + 0.14t + 0.008t²`, enemy speed `1 + 0.035t`, spawn rate `1 + 0.09t`, enemy cap
  * `1 + 0.10t`, Elite rate `1 + 0.07t`, threat `12t` s ahead, Matter `1 + 0.2t`, player power
- * `1 + 0.03t`, `t / 4` bonus rerolls, `5 + t` opening enemies and obstacle density `1 + 0.05t`. Tier
+ * `1 + 0.03t`, `t / 4` bonus rerolls, `5 + t` opening enemies, obstacle density `1 + 0.05t` and run-level Data
+ * requirements `1 + 0.14t` ([REBIRTH_DATA_REQUIREMENT_SCALE_PER_TIER]). Tier
  * n also activates the first n [RebirthMutator]s and carries its short name ([RebirthTierNames]). Lives in the
  * API (like the Matrix and enemy rosters) so fixtures can mirror the catalog exactly.
  */
@@ -147,6 +161,7 @@ fun defaultRebirthProfile(
         mutators = mutators,
         packSizeBonus = if (RebirthMutator.PACK_HUNTERS in mutators) 1 else 0,
         obstacleDensityMultiplier = 1f + t * 0.05f,
+        dataRequirementScale = 1f + t * REBIRTH_DATA_REQUIREMENT_SCALE_PER_TIER,
     )
 }
 

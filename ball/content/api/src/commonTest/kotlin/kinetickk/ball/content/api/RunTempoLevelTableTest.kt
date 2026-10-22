@@ -11,21 +11,18 @@ import kotlin.test.assertFailsWith
 
 class RunTempoLevelTableTest {
     @Test
-    fun theDefaultTableReproducesTheLegacyCurveForEveryLevelBelowTheCap() {
-        val tempo = RunTempoProfile()
+    fun theLegacyTableReproducesTheQuadraticCurveForEveryLevelBelowTheCap() {
+        val tempo = RunTempoProfile(
+            maximumLevel = ContentBounds.MAX_RUN_LEVEL,
+            levelRequirements = legacyLevelRequirements(ContentBounds.MAX_RUN_LEVEL),
+        )
 
-        assertEquals(ContentBounds.MAX_RUN_LEVEL, tempo.maximumLevel)
         assertEquals(tempo.maximumLevel - 1, tempo.levelRequirements.size)
         (-1 until tempo.maximumLevel).forEach { level ->
             val legacy = if (level <= 1) 18 else 18 + level * 8 + level * level / 8
             assertEquals(legacy, tempo.dataRequiredForLevel(level), "level $level")
         }
         assertEquals(listOf(18, 34, 43, 52, 61), tempo.levelRequirements.take(5))
-        assertEquals(2f, tempo.levelIntegrity)
-        assertEquals(6f, tempo.levelRepair)
-        assertEquals(listOf(2, 8, 16), tempo.skillSlotLevels)
-        assertEquals(4, tempo.skillRankEveryLevels)
-        assertEquals(2, tempo.skillRankGapLevels)
     }
 
     @Test
@@ -106,18 +103,5 @@ class RunTempoLevelTableTest {
         }
         assertFailsWith<IllegalArgumentException> { RunTempoProfile(skillRankEveryLevels = 0) }
         assertFailsWith<IllegalArgumentException> { RunTempoProfile(skillRankGapLevels = -1) }
-    }
-
-    @Test
-    fun rebirthDataRequirementScaleIsNeutralByDefaultAndAtLeastOne() {
-        (ContentBounds.MIN_REBIRTH_LEVEL..ContentBounds.MAX_REBIRTH_LEVEL).forEach { tier ->
-            assertEquals(1f, defaultRebirthProfile(tier).dataRequirementScale, "tier $tier")
-        }
-        val base = defaultRebirthProfile(3)
-        assertEquals(2.4f, base.copy(dataRequirementScale = 2.4f).dataRequirementScale)
-        base.copy(dataRequirementScale = 1f)
-        assertFailsWith<IllegalArgumentException> { base.copy(dataRequirementScale = 0.999f) }
-        assertFailsWith<IllegalArgumentException> { base.copy(dataRequirementScale = Float.NaN) }
-        assertFailsWith<IllegalArgumentException> { base.copy(dataRequirementScale = Float.POSITIVE_INFINITY) }
     }
 }

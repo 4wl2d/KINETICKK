@@ -47,16 +47,16 @@ data class RunTempoProfile(
     val maximumAutomaticWeaponLevel: Int = 10,
     val fatigue: FatigueTuning = FatigueTuning(),
     /** Highest run level; Data stops levelling here (the Apex unlocks at it). */
-    val maximumLevel: Int = ContentBounds.MAX_RUN_LEVEL,
+    val maximumLevel: Int = DEFAULT_MAXIMUM_LEVEL,
     /**
      * Data needed to go from level `L` to `L + 1`, for `L = 1 until maximumLevel` (entry `L - 1`):
-     * positive and non-decreasing. The default reproduces the legacy quadratic curve.
+     * positive and non-decreasing. The default is the shipped curve ([defaultLevelRequirements]).
      */
-    val levelRequirements: ImmutableList<Int> = legacyLevelRequirements(maximumLevel),
+    val levelRequirements: ImmutableList<Int> = defaultLevelRequirements(maximumLevel = maximumLevel),
     /** Maximum integrity every level-up adds. */
-    val levelIntegrity: Float = 2f,
+    val levelIntegrity: Float = 2.3f,
     /** Integrity every level-up repairs. */
-    val levelRepair: Float = 6f,
+    val levelRepair: Float = 7f,
     /** Run levels that open the skill slots, in slot order (one per [ContentBounds.SKILL_SLOTS]). */
     val skillSlotLevels: ImmutableList<Int> = immutableListOf(2, 8, 16),
     /** Item offers on levels divisible by this carry a skill rank-up card. */
@@ -130,8 +130,53 @@ data class RunTempoProfile(
     companion object {
         /** A run needs at least one level-up below its cap. */
         const val MIN_MAXIMUM_LEVEL: Int = 2
+
+        /** The shipped run level cap. */
+        const val DEFAULT_MAXIMUM_LEVEL: Int = 42
+
+        /** Levels whose requirement equals the legacy curve; the ramp starts on the next one. */
+        const val LEGACY_LEVELS: Int = 15
+
+        /** Levels over which a plateau ramps in, in equal integer steps. */
+        const val PLATEAU_RAMP_LEVELS: Int = 5
+
+        /** Extra Data per level once the first ramp (levels 16..20) is complete. */
+        const val DEFAULT_RAMP_PLATEAU: Int = 160
+
+        /** Extra Data per level once the second ramp (levels 31..35) is complete. */
+        const val DEFAULT_TOP_PLATEAU: Int = 0
+
+        /** Last level before the second ramp. */
+        const val TOP_RAMP_AFTER_LEVEL: Int = 30
     }
 }
+
+/**
+ * The shipped curve for levels `1 until maximumLevel` (integer arithmetic):
+ * `req(L) = legacy(L) + rampPlateau × clamp(L − 15, 0, 5) / 5 + topPlateau × clamp(L − 30, 0, 5) / 5`, where
+ * `legacy` is [legacyLevelRequirements]' quadratic. Levels 1–15 keep the legacy requirement; [rampPlateau] adds up to
+ * its value over levels 16–20 and [topPlateau] over levels 31–35. Both are calibration knobs, so a test can rebuild
+ * the table with other values.
+ */
+fun defaultLevelRequirements(
+    rampPlateau: Int = RunTempoProfile.DEFAULT_RAMP_PLATEAU,
+    topPlateau: Int = RunTempoProfile.DEFAULT_TOP_PLATEAU,
+    maximumLevel: Int = RunTempoProfile.DEFAULT_MAXIMUM_LEVEL,
+): ImmutableList<Int> {
+    require(maximumLevel in RunTempoProfile.MIN_MAXIMUM_LEVEL..ContentBounds.MAX_RUN_LEVEL)
+    require(rampPlateau >= 0 && topPlateau >= 0) { "Level plateaus must not be negative" }
+    return immutableListOfSize(maximumLevel - 1) { index ->
+        val level = index + 1
+        val requirement = legacyLevelRequirement(level).toLong() +
+            plateauStep(rampPlateau, level - RunTempoProfile.LEGACY_LEVELS) +
+            plateauStep(topPlateau, level - RunTempoProfile.TOP_RAMP_AFTER_LEVEL)
+        require(requirement <= Int.MAX_VALUE) { "Level $level requirement exceeds the Int range" }
+        requirement.toInt()
+    }
+}
+
+private fun plateauStep(plateau: Int, levelsIntoRamp: Int): Long =
+    plateau.toLong() * levelsIntoRamp.coerceIn(0, RunTempoProfile.PLATEAU_RAMP_LEVELS) / RunTempoProfile.PLATEAU_RAMP_LEVELS
 
 /** The pre-0.5 quadratic curve `18 + 8L + L²/8` (18 at level 1) for levels `1 until maximumLevel`. */
 fun legacyLevelRequirements(maximumLevel: Int): ImmutableList<Int> {
