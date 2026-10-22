@@ -134,6 +134,9 @@ class UpgradeBalanceGateTest {
      * ComparativeBuildScenarioTest's encounter shape with equal resources: level 18, weapon level 10, the eight
      * shared survival stacks, no Relics, spawning held; twelve Drifters at 540 s for 25 s or the Architect at its
      * arrival for 180 s. The Core orbits the targets close enough for impacts and dodges shots like that harness.
+     * The crowd's Drifters (WeaponBalanceTest's arena targets) hold [CROWD_INTEGRITY] and are topped up below a quarter,
+     * so no kill ends or quantizes the measurement and both flights meet the same crowd for all 25 s; the
+     * Architect fight is measured until the Victory or 180 s.
      */
     private fun encounter(shape: CoreShape, weapon: WeaponId, level: Int, boss: Boolean, seed: Int): EncounterMeasure {
         val game = MutableGameState(canonicalGameplayContent, seed = seed).apply {
@@ -177,10 +180,14 @@ class UpgradeBalanceGateTest {
         val count = if (boss) 1 else 12
         val targets = (0 until count).map { index ->
             val angle = index * TAU / count
-            val radius = if (boss) 0f else 170f
-            game.spawnedEnemy(if (boss) EnemyType.ARCHITECT else EnemyType.DRIFTER, cos(angle) * radius, sin(angle) * radius)
-                .also { game.enemies += it }
+            val radius = 170f
+            if (boss) {
+                game.spawnedEnemy(EnemyType.ARCHITECT, 0f, 0f).also { game.enemies += it }
+            } else {
+                game.addEnemyForTesting(cos(angle) * radius, sin(angle) * radius, hp = CROWD_INTEGRITY)
+            }
         }
+        var crowdDamage = 0.0
         val startedAt = game.elapsed
         val seconds = if (boss) 180 else 25
         var heading = 0f
@@ -192,6 +199,13 @@ class UpgradeBalanceGateTest {
         repeat(seconds * 60) { frame ->
             if (game.phase != GamePhase.RUNNING) {
                 if (game.phase == GamePhase.CHOICE && game.choices.isNotEmpty()) game.choose(0) else return@repeat
+            }
+            if (!boss) for (target in targets) {
+                if (target !in game.enemies) {
+                    target.dead = false
+                    game.enemies += target
+                }
+                if (target.hp < target.maxHp * 0.25f) target.hp = target.maxHp
             }
             val t = frame / 60f
             val live = targets.filter { !it.dead && it.hp > 0f }
@@ -235,20 +249,26 @@ class UpgradeBalanceGateTest {
             val brake = game.speed > 850f
             game.setBrake(brake)
             if (urgent && !brake && game.heat < 45f) game.requestDash()
+            val before = targets.sumOf { it.hp.toDouble() }
             game.update(1f / 60f)
+            crowdDamage += before - targets.sumOf { it.hp.toDouble() }
             game.takeVisualFxCues()
             game.takeSoundCues()
             integrityLost += max(0f, previousIntegrity - game.hp) / game.maxHp
             previousIntegrity = game.hp
             if (clearedAt < 0f && targets.all { it.dead || it.hp <= 0f }) clearedAt = game.elapsed - startedAt
         }
-        val engaged = if (clearedAt > 0f) clearedAt else max(1f / 60f, game.elapsed - startedAt)
+        val engaged = if (boss && clearedAt > 0f) clearedAt else max(1f / 60f, game.elapsed - startedAt)
         val ability = (game.characterRuntime.abilityDamage - abilityBefore).toFloat()
-        val weaponSide = (game.damageDealt - damageBefore).toFloat() - ability
+        val dealt = if (boss) (game.damageDealt - damageBefore).toFloat() else crowdDamage.toFloat()
+        val weaponSide = dealt - ability
         return EncounterMeasure(weaponSide / engaged, ability / engaged, integrityLost)
     }
 
     private companion object {
+        /** The crowd Drifters' integrity pool (WeaponBalanceTest's crowd arena). */
+        const val CROWD_INTEGRITY = 900f
+
         /** RebirthBalanceGateTest's strong build Relics. */
         val StrongRelics: List<RelicId> =
             listOf(RelicId.STORMHEART_CAPACITOR, RelicId.PANDEMIC_CODEX, RelicId.THUNDER_CHOIR, RelicId.CINDER_CROWN)
