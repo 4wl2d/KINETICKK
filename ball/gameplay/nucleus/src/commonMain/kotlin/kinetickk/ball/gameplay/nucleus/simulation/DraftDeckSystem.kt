@@ -112,14 +112,14 @@ internal fun MutableGameState.refillItemDeck() {
     val catalogLevel = offerCatalogLevel()
     val newlyDealt = ArrayList<Int>()
     for (tier in ItemRarity.entries) {
-        var offerable = content.items.count {
+        var takeable = content.items.count {
             it.rarity == tier && it.id in deck && it.minimumRebirth <= rebirthRank && hasUsefulItemEffect(it)
         }
-        if (offerable >= floor) continue
+        if (takeable >= floor) continue
         for (id in deck.reserveOf(tier)) {
             if (!offerableOutsideDeck(content.items[id], catalogLevel)) continue
             newlyDealt += id
-            if (++offerable >= floor) break
+            if (++takeable >= floor) break
         }
     }
     if (newlyDealt.isNotEmpty()) itemDeck = deck.withDealt(newlyDealt)
