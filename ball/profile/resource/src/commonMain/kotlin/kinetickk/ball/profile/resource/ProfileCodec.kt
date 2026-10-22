@@ -15,8 +15,13 @@ import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.ball.profile.api.CharacterAchievementProgress
 import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
+import kinetickk.ball.profile.api.DEFAULT_INTERFACE_SCALE_PERCENT
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
+import kinetickk.ball.profile.api.FRAME_RATE_CAP_OPTIONS
+import kinetickk.ball.profile.api.GameAction
+import kinetickk.ball.profile.api.INTERFACE_SCALE_OPTIONS
+import kinetickk.ball.profile.api.KeyBindings
 import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
 import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
@@ -30,9 +35,15 @@ import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ProfileSnapshot
 import kinetickk.ball.profile.api.ProfileSnapshotRejection
+import kinetickk.ball.profile.api.REFRESH_RATE_AUTO
+import kinetickk.ball.profile.api.REFRESH_RATE_RANGE
+import kinetickk.ball.profile.api.ReactionEffectsLevel
 import kinetickk.ball.profile.api.RebirthProgress
+import kinetickk.ball.profile.api.WindowMode
+import kinetickk.ball.profile.api.WindowSizePreset
 import kinetickk.ball.profile.api.isWithinRebirthBounds
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
+import kinetickk.foundation.common.input.BindableKey
 import kinetickk.foundation.common.localization.AppLanguage
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -181,6 +192,38 @@ private data class PlayerPreferencesDto(
     // Written only when the minimap is off: absence means on, so older saves keep their canonical bytes.
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val minimapEnabled: Boolean? = null,
+    // Display and controls follow the same rule: each field is written only for a non-default value
+    // (booleans only as their non-default value), so older saves keep their bytes, and an explicit
+    // default is refused as a value this codec never produces.
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val windowModeId: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val windowSizeId: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val vsyncEnabled: Boolean? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val frameRateCap: Int? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val refreshRateHz: Int? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val immersiveEnabled: Boolean? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val interfaceScalePercent: Int? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val showFps: Boolean? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val pauseOnFocusLoss: Boolean? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val reactionEffectsId: String? = null,
+    // Rebound actions only, strictly sorted by action wire id; absent while every key is the default.
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val keyBindings: List<KeyBindingDto> = emptyList(),
+)
+
+@Serializable
+private data class KeyBindingDto(
+    val action: String,
+    val key: String,
 )
 
 @Serializable
@@ -306,6 +349,20 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
                 runStatisticsOnLeft = preferences.runStatisticsOnLeft,
                 colorVisionId = preferences.colorVision.wireIdOrNull(),
                 minimapEnabled = if (preferences.minimapEnabled) null else false,
+                windowModeId = preferences.windowMode.takeUnless { it == WindowMode.WINDOWED }?.wireId(),
+                windowSizeId = preferences.windowSize.takeUnless { it == WindowSizePreset.W1280X800 }?.wireId(),
+                vsyncEnabled = if (preferences.vsync) null else false,
+                frameRateCap = preferences.frameRateCap.takeUnless { it == 0 },
+                refreshRateHz = preferences.refreshRateHz.takeUnless { it == REFRESH_RATE_AUTO },
+                immersiveEnabled = if (preferences.immersive) true else null,
+                interfaceScalePercent = preferences.interfaceScalePercent.takeUnless { it == DEFAULT_INTERFACE_SCALE_PERCENT },
+                showFps = if (preferences.showFps) true else null,
+                pauseOnFocusLoss = if (preferences.pauseOnFocusLoss) null else false,
+                reactionEffectsId = preferences.reactionEffects.takeUnless { it == ReactionEffectsLevel.FULL }?.wireId(),
+                keyBindings = GameAction.entries
+                    .filter { action -> preferences.keyBindings.key(action) != KeyBindings.DEFAULT.key(action) }
+                    .map { action -> KeyBindingDto(action = action.wireId(), key = preferences.keyBindings.key(action).wireId) }
+                    .sortedBy(KeyBindingDto::action),
             ),
             economy = PlayerEconomyDto(
                 matter = profile.economy.matter.toString(),
@@ -424,6 +481,17 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
                 false -> false
                 true -> reject(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
             },
+            windowMode = profile.preferences.windowModeId?.windowMode().storedOr(WindowMode.WINDOWED),
+            windowSize = profile.preferences.windowSizeId?.windowSizePreset().storedOr(WindowSizePreset.W1280X800),
+            vsync = profile.preferences.vsyncEnabled.storedOr(true),
+            frameRateCap = profile.preferences.frameRateCap.storedOr(0),
+            refreshRateHz = profile.preferences.refreshRateHz.storedOr(REFRESH_RATE_AUTO),
+            immersive = profile.preferences.immersiveEnabled.storedOr(false),
+            interfaceScalePercent = profile.preferences.interfaceScalePercent.storedOr(DEFAULT_INTERFACE_SCALE_PERCENT),
+            showFps = profile.preferences.showFps.storedOr(false),
+            pauseOnFocusLoss = profile.preferences.pauseOnFocusLoss.storedOr(true),
+            reactionEffects = profile.preferences.reactionEffectsId?.reactionEffectsLevel().storedOr(ReactionEffectsLevel.FULL),
+            keyBindings = profile.preferences.keyBindings.toKeyBindings(),
         ),
         economy = PlayerEconomy(matter = matter, lifetimeMatter = lifetimeMatter),
         loadout = PlayerLoadout(
@@ -518,7 +586,10 @@ private fun validateProfile(profile: PlayerProfile) {
             preferences.simulationSpeed.isFinite() && preferences.simulationSpeed in 0.75f..2f &&
             preferences.simulationSpeed in SIMULATION_SPEED_OPTIONS &&
             preferences.textScale.isFinite() && preferences.textScale in 1f..1.75f &&
-            preferences.damageNumberTierThreshold in DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS,
+            preferences.damageNumberTierThreshold in DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS &&
+            preferences.frameRateCap in FRAME_RATE_CAP_OPTIONS &&
+            (preferences.refreshRateHz == REFRESH_RATE_AUTO || preferences.refreshRateHz in REFRESH_RATE_RANGE) &&
+            preferences.interfaceScalePercent in INTERFACE_SCALE_OPTIONS,
         ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
     )
     rejectUnless(
@@ -976,6 +1047,118 @@ private fun String.appLanguage(): AppLanguage = when (this) {
     "ru" -> AppLanguage.Russian
     "en" -> AppLanguage.English
     else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
+}
+
+private fun WindowMode.wireId(): String = when (this) {
+    WindowMode.WINDOWED -> "WINDOWED"
+    WindowMode.BORDERLESS -> "BORDERLESS"
+    WindowMode.FULLSCREEN -> "FULLSCREEN"
+}
+
+private fun String.windowMode(): WindowMode = when (this) {
+    "WINDOWED" -> WindowMode.WINDOWED
+    "BORDERLESS" -> WindowMode.BORDERLESS
+    "FULLSCREEN" -> WindowMode.FULLSCREEN
+    else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
+}
+
+private fun WindowSizePreset.wireId(): String = when (this) {
+    WindowSizePreset.W1280X720 -> "W1280X720"
+    WindowSizePreset.W1280X800 -> "W1280X800"
+    WindowSizePreset.W1366X768 -> "W1366X768"
+    WindowSizePreset.W1440X900 -> "W1440X900"
+    WindowSizePreset.W1600X900 -> "W1600X900"
+    WindowSizePreset.W1920X1080 -> "W1920X1080"
+    WindowSizePreset.W2560X1440 -> "W2560X1440"
+}
+
+private fun String.windowSizePreset(): WindowSizePreset = when (this) {
+    "W1280X720" -> WindowSizePreset.W1280X720
+    "W1280X800" -> WindowSizePreset.W1280X800
+    "W1366X768" -> WindowSizePreset.W1366X768
+    "W1440X900" -> WindowSizePreset.W1440X900
+    "W1600X900" -> WindowSizePreset.W1600X900
+    "W1920X1080" -> WindowSizePreset.W1920X1080
+    "W2560X1440" -> WindowSizePreset.W2560X1440
+    else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
+}
+
+private fun ReactionEffectsLevel.wireId(): String = when (this) {
+    ReactionEffectsLevel.FULL -> "FULL"
+    ReactionEffectsLevel.REDUCED -> "REDUCED"
+    ReactionEffectsLevel.MINIMAL -> "MINIMAL"
+}
+
+private fun String.reactionEffectsLevel(): ReactionEffectsLevel = when (this) {
+    "FULL" -> ReactionEffectsLevel.FULL
+    "REDUCED" -> ReactionEffectsLevel.REDUCED
+    "MINIMAL" -> ReactionEffectsLevel.MINIMAL
+    else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
+}
+
+/** Rebindable action wire ids: stable names, never renamed or reused. Keys use [BindableKey.wireId]. */
+private fun GameAction.wireId(): String = when (this) {
+    GameAction.DASH -> "DASH"
+    GameAction.BRAKE -> "BRAKE"
+    GameAction.SKILL_1 -> "SKILL_1"
+    GameAction.SKILL_2 -> "SKILL_2"
+    GameAction.SKILL_3 -> "SKILL_3"
+    GameAction.APEX -> "APEX"
+    GameAction.PAUSE -> "PAUSE"
+    GameAction.REROLL -> "REROLL"
+    GameAction.RESTART -> "RESTART"
+    GameAction.CHOICE_1 -> "CHOICE_1"
+    GameAction.CHOICE_2 -> "CHOICE_2"
+    GameAction.CHOICE_3 -> "CHOICE_3"
+    GameAction.CHOICE_4 -> "CHOICE_4"
+    GameAction.PERFORMANCE_HUD -> "PERFORMANCE_HUD"
+}
+
+private fun String.gameAction(): GameAction = when (this) {
+    "DASH" -> GameAction.DASH
+    "BRAKE" -> GameAction.BRAKE
+    "SKILL_1" -> GameAction.SKILL_1
+    "SKILL_2" -> GameAction.SKILL_2
+    "SKILL_3" -> GameAction.SKILL_3
+    "APEX" -> GameAction.APEX
+    "PAUSE" -> GameAction.PAUSE
+    "REROLL" -> GameAction.REROLL
+    "RESTART" -> GameAction.RESTART
+    "CHOICE_1" -> GameAction.CHOICE_1
+    "CHOICE_2" -> GameAction.CHOICE_2
+    "CHOICE_3" -> GameAction.CHOICE_3
+    "CHOICE_4" -> GameAction.CHOICE_4
+    "PERFORMANCE_HUD" -> GameAction.PERFORMANCE_HUD
+    else -> reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
+}
+
+/**
+ * An optional preference: absence is [default]; a stored value equal to it is never written, so it
+ * is refused rather than silently accepted.
+ */
+private fun <T : Any> T?.storedOr(default: T): T = when (this) {
+    null -> default
+    default -> reject(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+    else -> this
+}
+
+/**
+ * Strict mapping of the rebound actions over [KeyBindings.DEFAULT]: strictly sorted by action wire id
+ * (no duplicates), every id known, no record repeating its default, and the resulting map binds each
+ * key at most once.
+ */
+private fun List<KeyBindingDto>.toKeyBindings(): KeyBindings {
+    rejectUnless(map(KeyBindingDto::action).isStrictlySorted(), ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE)
+    rejectUnless(size <= GameAction.entries.size, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+    val keys = KeyBindings.DEFAULT.keys.toMutableList()
+    forEach { record ->
+        val action = record.action.gameAction()
+        val key = BindableKey.fromWireId(record.key) ?: reject(ProfileSnapshotRejection.INVALID_STABLE_ID)
+        rejectUnless(key != KeyBindings.DEFAULT.key(action), ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+        keys[action.ordinal] = key
+    }
+    rejectUnless(KeyBindings.isValid(keys), ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE)
+    return KeyBindings.of(keys)
 }
 
 /**

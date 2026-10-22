@@ -13,6 +13,7 @@ import kinetickk.ball.profile.api.DamageNumberSize
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.HangarProjection
 import kinetickk.ball.profile.api.HomeProgressProjection
+import kinetickk.ball.profile.api.KeyBindings
 import kinetickk.ball.profile.api.MatrixProfileSnapshot
 import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.MatrixProgressProjection
@@ -270,6 +271,21 @@ object ProfileNucleus {
                     ],
                 )
             }
+            is ProfilePreferenceAdjustment.SetWindowMode -> current.copy(windowMode = adjustment.mode)
+            is ProfilePreferenceAdjustment.SetWindowSize -> current.copy(windowSize = adjustment.preset)
+            ProfilePreferenceAdjustment.ToggleVsync -> current.copy(vsync = !current.vsync)
+            is ProfilePreferenceAdjustment.SetFrameRateCap -> current.copy(frameRateCap = adjustment.fps)
+            is ProfilePreferenceAdjustment.SetRefreshRate -> current.copy(refreshRateHz = adjustment.hz)
+            ProfilePreferenceAdjustment.ToggleImmersive -> current.copy(immersive = !current.immersive)
+            is ProfilePreferenceAdjustment.SetInterfaceScale -> current.copy(interfaceScalePercent = adjustment.percent)
+            ProfilePreferenceAdjustment.ToggleShowFps -> current.copy(showFps = !current.showFps)
+            ProfilePreferenceAdjustment.TogglePauseOnFocusLoss ->
+                current.copy(pauseOnFocusLoss = !current.pauseOnFocusLoss)
+            is ProfilePreferenceAdjustment.SetReactionEffects -> current.copy(reactionEffects = adjustment.level)
+            // A key another action holds swaps with it, so the map stays complete and conflict-free.
+            is ProfilePreferenceAdjustment.SetKeyBinding ->
+                current.copy(keyBindings = current.keyBindings.with(adjustment.action, adjustment.key))
+            ProfilePreferenceAdjustment.ResetKeyBindings -> current.copy(keyBindings = KeyBindings.DEFAULT)
         }.normalized()
         if (next == current) return rejected(ProfileRejection.NoChange)
         return acceptedMutation(

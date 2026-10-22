@@ -11,7 +11,9 @@ import kinetickk.ball.content.api.ProfilePolicySnapshot
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
+import kinetickk.ball.profile.api.GameAction
 import kinetickk.ball.profile.api.GameplayProgressUpdate
+import kinetickk.ball.profile.api.KeyBindings
 import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.PermanentUpgrades
 import kinetickk.ball.profile.api.ParticleDensity
@@ -30,8 +32,12 @@ import kinetickk.ball.profile.api.ProfileCoreShapeSelected
 import kinetickk.ball.profile.api.ProfileRebirthTierSelected
 import kinetickk.ball.profile.api.ProfileProgressApplied
 import kinetickk.ball.profile.api.ProfileSnapshotReadResult
+import kinetickk.ball.profile.api.ReactionEffectsLevel
 import kinetickk.ball.profile.api.RebirthProgress
+import kinetickk.ball.profile.api.WindowMode
+import kinetickk.ball.profile.api.WindowSizePreset
 import kinetickk.foundation.collections.toImmutableList
+import kinetickk.foundation.common.input.BindableKey
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -56,6 +62,20 @@ class ProfileComponentCharacterizationTest {
             ProfilePreferenceAdjustment.StepDamageNumberSize(PreferenceAdjustmentDirection.INCREASE),
             ProfilePreferenceAdjustment.StepDamageNumberFormat(PreferenceAdjustmentDirection.INCREASE),
             ProfilePreferenceAdjustment.StepDamageNumberTierThreshold(PreferenceAdjustmentDirection.INCREASE),
+            ProfilePreferenceAdjustment.SetWindowMode(WindowMode.BORDERLESS),
+            ProfilePreferenceAdjustment.SetWindowSize(WindowSizePreset.W1920X1080),
+            ProfilePreferenceAdjustment.ToggleVsync,
+            ProfilePreferenceAdjustment.SetFrameRateCap(144),
+            ProfilePreferenceAdjustment.SetRefreshRate(120),
+            ProfilePreferenceAdjustment.ToggleImmersive,
+            ProfilePreferenceAdjustment.SetInterfaceScale(115),
+            ProfilePreferenceAdjustment.ToggleShowFps,
+            ProfilePreferenceAdjustment.TogglePauseOnFocusLoss,
+            ProfilePreferenceAdjustment.SetReactionEffects(ReactionEffectsLevel.MINIMAL),
+            ProfilePreferenceAdjustment.SetKeyBinding(GameAction.DASH, BindableKey.Z),
+            ProfilePreferenceAdjustment.SetKeyBinding(GameAction.APEX, BindableKey.F),
+            ProfilePreferenceAdjustment.ResetKeyBindings,
+            ProfilePreferenceAdjustment.SetKeyBinding(GameAction.PERFORMANCE_HUD, BindableKey.F12),
         )
 
         adjustments.forEach { adjustment ->
@@ -87,6 +107,17 @@ class ProfileComponentCharacterizationTest {
         assertEquals(DamageNumberSize.LARGE, preferences.damageNumberSize)
         assertEquals(DamageNumberFormat.FULL, preferences.damageNumberFormat)
         assertEquals(100, preferences.damageNumberTierThreshold)
+        assertEquals(WindowMode.BORDERLESS, preferences.windowMode)
+        assertEquals(WindowSizePreset.W1920X1080, preferences.windowSize)
+        assertFalse(preferences.vsync)
+        assertEquals(144, preferences.frameRateCap)
+        assertEquals(120, preferences.refreshRateHz)
+        assertTrue(preferences.immersive)
+        assertEquals(115, preferences.interfaceScalePercent)
+        assertTrue(preferences.showFps)
+        assertFalse(preferences.pauseOnFocusLoss)
+        assertEquals(ReactionEffectsLevel.MINIMAL, preferences.reactionEffects)
+        assertEquals(KeyBindings.DEFAULT.with(GameAction.PERFORMANCE_HUD, BindableKey.F12), preferences.keyBindings)
         assertEquals(adjustments.size + 1, resource.writes.size)
     }
 

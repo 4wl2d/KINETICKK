@@ -14,6 +14,10 @@ import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
+import kinetickk.ball.profile.api.FRAME_RATE_CAP_OPTIONS
+import kinetickk.ball.profile.api.GameAction
+import kinetickk.ball.profile.api.INTERFACE_SCALE_OPTIONS
+import kinetickk.ball.profile.api.KeyBindings
 import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
 import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
@@ -25,8 +29,13 @@ import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.ProfileSnapshotRejection
+import kinetickk.ball.profile.api.REFRESH_RATE_RANGE
+import kinetickk.ball.profile.api.ReactionEffectsLevel
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
+import kinetickk.ball.profile.api.WindowMode
+import kinetickk.ball.profile.api.WindowSizePreset
+import kinetickk.foundation.common.input.BindableKey
 import kinetickk.foundation.common.localization.AppLanguage
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -385,6 +394,161 @@ class ProfileCodecTest {
         assertEquals(ProfileSnapshotRejection.MALFORMED_JSON, decodeRejection(
             mono.replace("\"colorVisionId\":\"MONO\"", "\"colorVisionId\":4"),
         ))
+    }
+
+    @Test
+    fun displayAndControlPreferencesAreWrittenOnlyWhenNonDefaultAfterTheExistingFields() {
+        // Saves from before these settings read as the defaults and keep their bytes.
+        for (existing in listOf(DEFAULT_GOLDEN, REPRESENTATIVE_GOLDEN, MATRIX_GOLDEN, UPGRADES_GOLDEN)) {
+            val snapshot = decoded(existing)
+            assertEquals(PlayerPreferences().displayAndControls(), snapshot.profile.preferences.displayAndControls())
+            assertEquals(existing, requireEncoded(snapshot))
+        }
+
+        val base = decoded(REPRESENTATIVE_GOLDEN)
+        fun choosing(preferences: PlayerPreferences) = base.copy(profile = base.profile.copy(preferences = preferences))
+        val every = choosing(everyDisplayChoice(base.profile.preferences))
+        val encoded = requireEncoded(every)
+        assertEquals(
+            REPRESENTATIVE_GOLDEN.replace("\"runStatisticsOnLeft\":true}", "\"runStatisticsOnLeft\":true$EVERY_DISPLAY_FIELD}"),
+            encoded,
+        )
+        assertEquals(every, decoded(encoded))
+
+        // Each field alone is appended after the existing preferences; nothing else moves.
+        val preferences = base.profile.preferences
+        listOf(
+            preferences.copy(windowMode = WindowMode.FULLSCREEN) to ",\"windowModeId\":\"FULLSCREEN\"",
+            preferences.copy(windowSize = WindowSizePreset.W2560X1440) to ",\"windowSizeId\":\"W2560X1440\"",
+            preferences.copy(vsync = false) to ",\"vsyncEnabled\":false",
+            preferences.copy(frameRateCap = 30) to ",\"frameRateCap\":30",
+            preferences.copy(refreshRateHz = REFRESH_RATE_RANGE.first) to ",\"refreshRateHz\":24",
+            preferences.copy(immersive = true) to ",\"immersiveEnabled\":true",
+            preferences.copy(interfaceScalePercent = 85) to ",\"interfaceScalePercent\":85",
+            preferences.copy(showFps = true) to ",\"showFps\":true",
+            preferences.copy(pauseOnFocusLoss = false) to ",\"pauseOnFocusLoss\":false",
+            preferences.copy(reactionEffects = ReactionEffectsLevel.REDUCED) to ",\"reactionEffectsId\":\"REDUCED\"",
+            preferences.copy(keyBindings = KeyBindings.DEFAULT.with(GameAction.PERFORMANCE_HUD, BindableKey.F12)) to
+                ",\"keyBindings\":[{\"action\":\"PERFORMANCE_HUD\",\"key\":\"F12\"}]",
+        ).forEach { (chosen, field) ->
+            val single = requireEncoded(choosing(chosen))
+            assertTrue(single.contains("\"runStatisticsOnLeft\":true$field},\"economy\""), single)
+            assertEquals(choosing(chosen), decoded(single))
+            assertEquals(REPRESENTATIVE_GOLDEN, single.replace(field, ""))
+        }
+
+        // Every member of every option set round-trips.
+        val choices = WindowMode.entries.map { preferences.copy(windowMode = it) } +
+            WindowSizePreset.entries.map { preferences.copy(windowSize = it) } +
+            ReactionEffectsLevel.entries.map { preferences.copy(reactionEffects = it) } +
+            FRAME_RATE_CAP_OPTIONS.map { preferences.copy(frameRateCap = it) } +
+            INTERFACE_SCALE_OPTIONS.map { preferences.copy(interfaceScalePercent = it) } +
+            listOf(0, REFRESH_RATE_RANGE.first, 60, REFRESH_RATE_RANGE.last).map { preferences.copy(refreshRateHz = it) } +
+            BindableKey.entries.map { key ->
+                preferences.copy(keyBindings = KeyBindings.DEFAULT.with(GameAction.PERFORMANCE_HUD, key))
+            }
+        choices.forEach { chosen -> assertEquals(choosing(chosen), decoded(requireEncoded(choosing(chosen))), chosen.toString()) }
+    }
+
+    @Test
+    fun displayPreferenceIngressRejectsExplicitDefaultsUnknownIdsAndNonMembers() {
+        val payload = requireEncoded(testSnapshot(PlayerProfile(preferences = everyDisplayChoice(PlayerPreferences()))))
+        assertTrue(payload.contains(EVERY_DISPLAY_FIELD), payload)
+        listOf(
+            Triple("\"windowModeId\":\"BORDERLESS\"", "\"windowModeId\":\"WINDOWED\"", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"windowModeId\":\"BORDERLESS\"", "\"windowModeId\":\"borderless\"", ProfileSnapshotRejection.INVALID_STABLE_ID),
+            Triple("\"windowModeId\":\"BORDERLESS\"", "\"windowModeId\":\"\"", ProfileSnapshotRejection.INVALID_STABLE_ID),
+            Triple("\"windowModeId\":\"BORDERLESS\"", "\"windowModeId\":null", ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD),
+            Triple("\"windowModeId\":\"BORDERLESS\"", "\"windowModeId\":1", ProfileSnapshotRejection.MALFORMED_JSON),
+            Triple("\"windowSizeId\":\"W1920X1080\"", "\"windowSizeId\":\"W1280X800\"", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"windowSizeId\":\"W1920X1080\"", "\"windowSizeId\":\"W800X600\"", ProfileSnapshotRejection.INVALID_STABLE_ID),
+            Triple("\"vsyncEnabled\":false", "\"vsyncEnabled\":true", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"frameRateCap\":144", "\"frameRateCap\":0", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"frameRateCap\":144", "\"frameRateCap\":143", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"frameRateCap\":144", "\"frameRateCap\":241", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"frameRateCap\":144", "\"frameRateCap\":-144", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"frameRateCap\":144", "\"frameRateCap\":\"144\"", ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD),
+            Triple("\"refreshRateHz\":120", "\"refreshRateHz\":0", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"refreshRateHz\":120", "\"refreshRateHz\":23", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"refreshRateHz\":120", "\"refreshRateHz\":361", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"immersiveEnabled\":true", "\"immersiveEnabled\":false", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"interfaceScalePercent\":115", "\"interfaceScalePercent\":100", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"interfaceScalePercent\":115", "\"interfaceScalePercent\":116", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"interfaceScalePercent\":115", "\"interfaceScalePercent\":84", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"showFps\":true", "\"showFps\":false", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"pauseOnFocusLoss\":false", "\"pauseOnFocusLoss\":true", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"reactionEffectsId\":\"MINIMAL\"", "\"reactionEffectsId\":\"FULL\"", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"reactionEffectsId\":\"MINIMAL\"", "\"reactionEffectsId\":\"NONE\"", ProfileSnapshotRejection.INVALID_STABLE_ID),
+            // The fields keep their declared order.
+            Triple("\"showFps\":true,\"pauseOnFocusLoss\":false", "\"pauseOnFocusLoss\":false,\"showFps\":true",
+                ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD),
+        ).forEach { (canonical, invalid, expected) ->
+            assertTrue(payload.contains(canonical), canonical)
+            assertEquals(expected, decodeRejection(payload.replace(canonical, invalid)), invalid)
+        }
+        // The refresh range bounds are stored values.
+        for (hz in listOf(REFRESH_RATE_RANGE.first, REFRESH_RATE_RANGE.last)) {
+            assertEquals(hz, decoded(payload.replace("\"refreshRateHz\":120", "\"refreshRateHz\":$hz")).profile.preferences.refreshRateHz)
+        }
+
+        // Outbound values outside the option sets are refused, never clamped.
+        listOf(
+            PlayerPreferences(frameRateCap = 59),
+            PlayerPreferences(frameRateCap = 241),
+            PlayerPreferences(refreshRateHz = REFRESH_RATE_RANGE.first - 1),
+            PlayerPreferences(refreshRateHz = REFRESH_RATE_RANGE.last + 1),
+            PlayerPreferences(interfaceScalePercent = 101),
+            PlayerPreferences(interfaceScalePercent = 84),
+        ).forEach { invalid ->
+            assertEncodeRejection(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE, testSnapshot(PlayerProfile(preferences = invalid)))
+        }
+    }
+
+    @Test
+    fun keyBindingRecordsRejectUnsortedDuplicateUnknownDefaultAndConflictingForms() {
+        val payload = requireEncoded(testSnapshot(PlayerProfile(preferences = everyDisplayChoice(PlayerPreferences()))))
+        val records = "[{\"action\":\"APEX\",\"key\":\"F\"},{\"action\":\"DASH\",\"key\":\"Z\"},{\"action\":\"SKILL_1\",\"key\":\"SPACE\"}]"
+        assertTrue(payload.contains("\"keyBindings\":$records"), payload)
+        fun rebound(list: String) = payload.replace("\"keyBindings\":$records", "\"keyBindings\":$list")
+        listOf(
+            // Unsorted and duplicate actions.
+            "[{\"action\":\"DASH\",\"key\":\"Z\"},{\"action\":\"APEX\",\"key\":\"F\"},{\"action\":\"SKILL_1\",\"key\":\"SPACE\"}]" to
+                ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
+            "[{\"action\":\"APEX\",\"key\":\"F\"},{\"action\":\"APEX\",\"key\":\"G\"}]" to ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
+            // Two actions on one key, explicitly or by leaving the default holder in place.
+            "[{\"action\":\"APEX\",\"key\":\"F\"},{\"action\":\"DASH\",\"key\":\"F\"},{\"action\":\"SKILL_1\",\"key\":\"SPACE\"}]" to
+                ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
+            "[{\"action\":\"APEX\",\"key\":\"F\"},{\"action\":\"DASH\",\"key\":\"Z\"}]" to ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
+            // Unknown ids; Escape is never bindable and ids are case-sensitive.
+            "[{\"action\":\"JUMP\",\"key\":\"F\"}]" to ProfileSnapshotRejection.INVALID_STABLE_ID,
+            "[{\"action\":\"APEX\",\"key\":\"ESCAPE\"}]" to ProfileSnapshotRejection.INVALID_STABLE_ID,
+            "[{\"action\":\"APEX\",\"key\":\"f\"}]" to ProfileSnapshotRejection.INVALID_STABLE_ID,
+            // A record repeating its default is never written.
+            "[{\"action\":\"APEX\",\"key\":\"V\"}]" to ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            "[]" to ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD,
+            "[{\"key\":\"F\",\"action\":\"APEX\"}]" to ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD,
+            "null" to ProfileSnapshotRejection.MALFORMED_JSON,
+            "[{\"action\":\"APEX\"}]" to ProfileSnapshotRejection.MALFORMED_JSON,
+        ).forEach { (list, expected) ->
+            assertEquals(expected, decodeRejection(rebound(list)), list)
+        }
+        assertEquals(
+            KeyBindings.DEFAULT.with(GameAction.APEX, BindableKey.F),
+            decoded(rebound("[{\"action\":\"APEX\",\"key\":\"F\"}]")).profile.preferences.keyBindings,
+        )
+
+        // Every action rebound is the largest record list; one record more is refused.
+        val shifted = GameAction.entries.zip(BindableKey.entries.filter { it !in KeyBindings.DEFAULT.keys })
+        val everyAction = shifted.fold(KeyBindings.DEFAULT) { bindings, (action, key) -> bindings.with(action, key) }
+        val full = requireEncoded(testSnapshot(PlayerProfile(preferences = PlayerPreferences(keyBindings = everyAction))))
+        assertEquals(everyAction, decoded(full).profile.preferences.keyBindings)
+        val fullRecords = GameAction.entries.map { it.name }.sorted()
+        assertEquals(fullRecords, ACTION_ID.findAll(full).map { it.groupValues[1] }.toList())
+        val lastRecord = shifted.maxBy { it.first.name }.let { (action, key) -> "{\"action\":\"${action.name}\",\"key\":\"${key.name}\"}" }
+        assertEquals(
+            ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            decodeRejection(full.replace("$lastRecord]", "$lastRecord,{\"action\":\"ZOOM\",\"key\":\"Y\"}]")),
+        )
     }
 
     @Test
@@ -1083,6 +1247,35 @@ private fun String.extractIntArray(field: String): List<Int> {
     if (body.isEmpty()) return emptyList()
     return body.split(',').map(String::toInt)
 }
+
+/** Every display and controls preference at a non-default choice; Dash takes Z, so Skill 1 takes Space. */
+private fun everyDisplayChoice(preferences: PlayerPreferences): PlayerPreferences = preferences.copy(
+    windowMode = WindowMode.BORDERLESS,
+    windowSize = WindowSizePreset.W1920X1080,
+    vsync = false,
+    frameRateCap = 144,
+    refreshRateHz = 120,
+    immersive = true,
+    interfaceScalePercent = 115,
+    showFps = true,
+    pauseOnFocusLoss = false,
+    reactionEffects = ReactionEffectsLevel.MINIMAL,
+    keyBindings = KeyBindings.DEFAULT.with(GameAction.DASH, BindableKey.Z).with(GameAction.APEX, BindableKey.F),
+)
+
+/** [everyDisplayChoice] on the wire: appended after the existing preferences in declaration order. */
+private const val EVERY_DISPLAY_FIELD: String =
+    ",\"windowModeId\":\"BORDERLESS\",\"windowSizeId\":\"W1920X1080\",\"vsyncEnabled\":false,\"frameRateCap\":144," +
+        "\"refreshRateHz\":120,\"immersiveEnabled\":true,\"interfaceScalePercent\":115,\"showFps\":true," +
+        "\"pauseOnFocusLoss\":false,\"reactionEffectsId\":\"MINIMAL\",\"keyBindings\":[{\"action\":\"APEX\",\"key\":\"F\"}," +
+        "{\"action\":\"DASH\",\"key\":\"Z\"},{\"action\":\"SKILL_1\",\"key\":\"SPACE\"}]"
+
+private fun PlayerPreferences.displayAndControls(): List<Any> = listOf(
+    windowMode, windowSize, vsync, frameRateCap, refreshRateHz, immersive, interfaceScalePercent, showFps,
+    pauseOnFocusLoss, reactionEffects, keyBindings,
+)
+
+private val ACTION_ID = Regex("\\{\\\"action\\\":\\\"([^\\\"]+)\\\",\\\"key\\\":")
 
 private val LEVEL_ID = Regex("\\{\\\"id\\\":\\\"([^\\\"]+)\\\",\\\"level\\\":")
 

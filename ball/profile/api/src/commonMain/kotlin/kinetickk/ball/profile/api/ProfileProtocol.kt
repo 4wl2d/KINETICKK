@@ -15,6 +15,7 @@ import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableSetOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
+import kinetickk.foundation.common.input.BindableKey
 import kinetickk.foundation.common.localization.AppLanguage
 
 enum class PreferenceAdjustmentDirection {
@@ -53,6 +54,34 @@ sealed interface ProfilePreferenceAdjustment {
     data class StepDamageNumberTierThreshold(val direction: PreferenceAdjustmentDirection) : ProfilePreferenceAdjustment
     data class SetColorVision(val colorVision: ColorVision) : ProfilePreferenceAdjustment
     data object ToggleMinimap : ProfilePreferenceAdjustment
+
+    // Display and controls. Steppers send the next option the platform offers as a direct choice, so
+    // no Step variants exist; a choice equal to the current value is NoChange.
+    data class SetWindowMode(val mode: WindowMode) : ProfilePreferenceAdjustment
+    data class SetWindowSize(val preset: WindowSizePreset) : ProfilePreferenceAdjustment
+    data object ToggleVsync : ProfilePreferenceAdjustment
+    data class SetFrameRateCap(val fps: Int) : ProfilePreferenceAdjustment {
+        init {
+            require(fps in FRAME_RATE_CAP_OPTIONS) { "Frame rate cap must be one of the listed options" }
+        }
+    }
+    data class SetRefreshRate(val hz: Int) : ProfilePreferenceAdjustment {
+        init {
+            require(hz == REFRESH_RATE_AUTO || hz in REFRESH_RATE_RANGE) { "Refresh rate must be automatic or 24..360 Hz" }
+        }
+    }
+    data object ToggleImmersive : ProfilePreferenceAdjustment
+    data class SetInterfaceScale(val percent: Int) : ProfilePreferenceAdjustment {
+        init {
+            require(percent in INTERFACE_SCALE_OPTIONS) { "Interface scale must be one of the listed options" }
+        }
+    }
+    data object ToggleShowFps : ProfilePreferenceAdjustment
+    data object TogglePauseOnFocusLoss : ProfilePreferenceAdjustment
+    data class SetReactionEffects(val level: ReactionEffectsLevel) : ProfilePreferenceAdjustment
+    /** Binds [key] to [action]; the action that held [key] takes [action]'s previous key ([KeyBindings.with]). */
+    data class SetKeyBinding(val action: GameAction, val key: BindableKey) : ProfilePreferenceAdjustment
+    data object ResetKeyBindings : ProfilePreferenceAdjustment
 }
 
 data class GameplayProgressUpdate(
