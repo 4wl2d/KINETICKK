@@ -22,8 +22,8 @@ import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_BOSS_ROW_DP
 import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_PANEL_ROW_DP
-import kinetickk.ball.gameplay.interaction.layout.REGULAR_HUD_BOTTOM_DP
-import kinetickk.ball.gameplay.interaction.layout.REGULAR_LOADOUT_HEIGHT_DP
+import kinetickk.ball.gameplay.interaction.layout.RunningControlMask
+import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
@@ -160,8 +160,12 @@ private object FeedArea {
                 maxWidth = min(frame.u(380f), frame.width * 0.4f)
                 maxNotices = MAX_NOTICES
                 maxDetails = DETAILS_PER_NOTICE
-                // Stop above the Dash/Brake row that sits over the loadout.
-                limit = frame.height - frame.u(REGULAR_HUD_BOTTOM_DP + REGULAR_LOADOUT_HEIGHT_DP + 18f + 52f + 12f)
+                // Stop above the control row (Dash, Brake and the skill squares) that sits over the loadout.
+                var rowTop = frame.height
+                forEachRunningControlBounds(frame.width, frame.height, density, RunningControlMask.ALL) { target, _, controlTop, _, _ ->
+                    if (target != RunningControlTarget.PAUSE && target != RunningControlTarget.APEX) rowTop = min(rowTop, controlTop)
+                }
+                limit = rowTop - frame.u(12f)
             }
             GameplayLayoutMode.COMPACT_LANDSCAPE -> {
                 right = frame.width - frame.margin - compactLoadoutWidth(engine.content.relicPolicy.maxSlots.coerceIn(0, 8), frame.unit) - frame.u(12f)
@@ -184,7 +188,7 @@ private object FeedArea {
                 narrowWidth = (right - coreRight).let { if (it >= frame.u(NARROW_COLUMN_MIN_DP)) it else Float.NaN }
                 limit = if (narrowWidth.isNaN()) min(frame.height * 0.55f, coreTop - frame.u(8f)) else frame.height * 0.55f
                 narrowLimit = frame.height - frame.u(96f)
-                forEachRunningControlBounds(frame.width, frame.height, density) { _, controlLeft, controlTop, controlRight, _ ->
+                forEachRunningControlBounds(frame.width, frame.height, density, RunningControlMask.ALL) { _, controlLeft, controlTop, controlRight, _ ->
                     if (controlTop > frame.height * 0.5f && controlRight > coreRight && controlLeft < right) {
                         narrowLimit = min(narrowLimit, controlTop - frame.u(12f))
                     }

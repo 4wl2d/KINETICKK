@@ -151,6 +151,7 @@ import kinetickk.foundation.design.drawKkCardFront
 import kinetickk.foundation.design.kkLiftContrast
 import kinetickk.foundation.design.drawKkHalftone
 import kinetickk.foundation.design.drawKkIconPlate
+import kinetickk.foundation.design.KkApexState
 import kinetickk.foundation.design.drawKkLevelBadge
 import kinetickk.foundation.design.drawKkRadialFade
 import kinetickk.foundation.design.drawKkRingBurst
@@ -392,7 +393,7 @@ private fun RewardHeader(state: RewardOverlayState, modifier: Modifier) {
         if (level != null) {
             // The level numeral is display type: the text-size setting does not apply.
             RewardLevelBadge(level, language.text(OverlayRedesignText.LevelLabel), if (regular) 58f else 32f, if (regular) 20f else 13f,
-                1f, state.time, slam, Modifier.testTag("kinetickk.gameplay.rewards.level"))
+                1f, state.time, slam, Modifier.testTag("kinetickk.gameplay.rewards.level"), presentation.levelCap, presentation.apex)
         } else {
             // An Heirloom offer is gold: the hue the Rebirth system carries.
             OverlayStamp(presentation.heading, Modifier.testTag("kinetickk.gameplay.rewards.heading"), KkStampVariant.YOU,
@@ -412,6 +413,8 @@ internal fun RewardLevelBadge(
     time: State<Float>,
     slam: () -> Float,
     modifier: Modifier = Modifier,
+    maxLevel: Int = Int.MAX_VALUE,
+    apex: KkApexState = KkApexState.NONE,
 ) {
     val measurer = rememberKkCanvasMeasurer(textScale)
     val density = LocalDensity.current.density
@@ -424,7 +427,8 @@ internal fun RewardLevelBadge(
             .semantics { text = AnnotatedString("$label $level") }
             .drawBehind {
                 val p = slam()
-                drawKkLevelBadge(measurer, Offset.Zero, level, label, time.value, if (p >= 1f) 1f else p, labelSize, numberSize)
+                drawKkLevelBadge(measurer, Offset.Zero, level, label, time.value, if (p >= 1f) 1f else p, labelSize, numberSize,
+                    maxLevel = maxLevel, apex = apex)
             },
     )
 }

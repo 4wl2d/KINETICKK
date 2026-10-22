@@ -88,7 +88,12 @@ internal enum class GameplayText : TextResource {
     CompactTrail,
     Milliseconds,
     MaxRegular,
-    Samples;
+    Samples,
+    SkillSlotDescription,
+    SkillSlotLocked,
+    ApexDescription,
+    ActiveState,
+    RechargingState;
 
     override val english: String get() = englishGameplayText(this)
     override val russian: String get() = russianGameplayText(this)

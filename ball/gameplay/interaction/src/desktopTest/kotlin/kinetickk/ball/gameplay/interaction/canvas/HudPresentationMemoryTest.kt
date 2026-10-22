@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.gameplay.interaction.fixtureWeapon
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.GameplayContentSnapshot
@@ -28,16 +29,20 @@ import kinetickk.ball.gameplay.nucleus.GameplayNucleusPulse
 import kinetickk.ball.gameplay.nucleus.GameplayStartContext
 import kinetickk.ball.gameplay.nucleus.GameplayStartInputs
 import kinetickk.ball.gameplay.nucleus.GameplayState
+import kinetickk.ball.gameplay.nucleus.render.ApexProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SkillBarProjection
+import kinetickk.ball.gameplay.nucleus.render.SkillSlotProjection
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.design.KkLevelTier
 import kotlin.math.floor
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -80,6 +85,147 @@ class HudPresentationMemoryTest {
         val lower = base.with("level" to 1)
         memory.observe(lower, 5f, boss.select(lower))
         assertEquals(1f, memory.levelSlam(5f))
+    }
+
+    @Test
+    fun tierOneShotFiresOnlyWhenTheTierRises() {
+        val memory = HudPresentationMemory()
+        val boss = BossTarget()
+        fun observe(level: Int, at: Float) {
+            val model = base.with("level" to level, "maxLevel" to CAP)
+            memory.observe(model, at, boss.select(model))
+        }
+        observe(9, 0f)
+        assertEquals(1f, memory.tierBurst(0f), "the first frame only records")
+        observe(10, 1f)
+        assertEquals(0f, memory.tierBurst(1f), "9 to 10 enters T2")
+        assertEquals(KkLevelTier.T2, memory.tierTo)
+        assertEquals(0.5f, memory.tierBurst(1.3f), 0.001f)
+        assertEquals(1f, memory.tierBurst(1.6f))
+        observe(11, 2f)
+        assertEquals(1f, memory.tierBurst(2f), "10 to 11 stays in T2")
+        observe(40, 3f)
+        assertEquals(KkLevelTier.T5, memory.tierTo)
+        assertEquals(0f, memory.tierBurst(3f))
+        // The cap is the Apex unlock, not another tier burst.
+        observe(41, 5f)
+        observe(CAP, 6f)
+        assertEquals(1f, memory.tierBurst(6f))
+        assertEquals(0f, memory.apexUnlock(6f))
+        // A memory whose first frame is already high fires nothing.
+        val fresh = HudPresentationMemory()
+        val high = base.with("level" to 25, "maxLevel" to CAP)
+        fresh.observe(high, 0f, boss.select(high))
+        assertEquals(1f, fresh.tierBurst(0f))
+    }
+
+    @Test
+    fun apexOneShotsFollowTheirEdges() {
+        val memory = HudPresentationMemory()
+        val boss = BossTarget()
+        fun observe(level: Int, apex: ApexProjection, at: Float) {
+            val model = base.with("level" to level, "maxLevel" to CAP, "apex" to apex)
+            memory.observe(model, at, boss.select(model))
+        }
+        val ready = ApexProjection(unlocked = true, ready = true)
+        val cooling = ApexProjection(unlocked = true, cooldown01 = 0.5f)
+        observe(41, ApexProjection.LOCKED, 0f)
+        // Unlock once, ready on unlock: the unlock plays, the ready edge pings nothing.
+        observe(CAP, ready, 1f)
+        assertEquals(0f, memory.apexUnlock(1f))
+        assertEquals(1f, memory.apexPing(1f))
+        assertEquals(0.5f, memory.apexUnlock(1.6f), 0.001f)
+        observe(CAP, ready, 2f)
+        assertEquals(1f, memory.apexUnlock(2.2f))
+        observe(CAP, ready, 3f)
+        assertEquals(1f, memory.apexUnlock(3f), "the unlock never repeats")
+        // Cast: the activation starting; draining activation fires nothing more.
+        observe(CAP, ApexProjection(unlocked = true, active01 = 1f), 4f)
+        assertEquals(0f, memory.apexCast(4f))
+        observe(CAP, ApexProjection(unlocked = true, active01 = 0.8f), 4.3f)
+        assertEquals(0.5f, memory.apexCast(4.3f), 0.001f)
+        // Cooling, then Data refunds: each rise flashes, a new cycle's reset does not.
+        observe(CAP, cooling, 5f)
+        observe(CAP, cooling.copy(refunded = 2f), 6f)
+        assertEquals(0f, memory.apexRefund(6f))
+        assertEquals(1f, memory.apexRefund(6.3f))
+        observe(CAP, cooling.copy(refunded = 2f), 7f)
+        assertEquals(1f, memory.apexRefund(7f))
+        observe(CAP, cooling, 8f)
+        assertEquals(1f, memory.apexRefund(8f))
+        observe(CAP, cooling.copy(refunded = 1f), 9f)
+        assertEquals(0f, memory.apexRefund(9f))
+        // Ready again: the ping.
+        observe(CAP, ready, 10f)
+        assertEquals(0f, memory.apexPing(10f))
+        assertEquals(0.5f, memory.apexPing(10.21f), 0.001f)
+        observe(CAP, ready, 11f)
+        assertEquals(1f, memory.apexPing(11f))
+        // Ready a moment after the unlock (while it still plays): still no ping.
+        val late = HudPresentationMemory()
+        listOf(Triple(41, ApexProjection.LOCKED, 0f), Triple(CAP, cooling, 1f), Triple(CAP, ready, 1.2f)).forEach { (level, apex, at) ->
+            val model = base.with("level" to level, "maxLevel" to CAP, "apex" to apex)
+            late.observe(model, at, boss.select(model))
+        }
+        assertEquals(1f, late.apexPing(1.2f))
+    }
+
+    @Test
+    fun skillSlotOneShotsFollowTheirEdges() {
+        val memory = HudPresentationMemory()
+        val boss = BossTarget()
+        val empty = SkillSlotProjection.EMPTY
+        fun observe(first: SkillSlotProjection, second: SkillSlotProjection, at: Float) {
+            val model = base.with("skillBar" to SkillBarProjection(immutableListOf(first, second, empty)))
+            memory.observe(model, at, boss.select(model))
+        }
+        observe(empty, empty, 0f)
+        // A draft slams the slot and slides the row in; its rank, ready and refund flashes stay quiet.
+        val drafted = SkillSlotProjection(skill = 3, rank = 1, ready = true)
+        observe(drafted, empty, 1f)
+        assertEquals(0f, memory.skillAcquired(0, 1f))
+        assertEquals(0f, memory.skillRow(1f))
+        assertEquals(1f, memory.skillRanked(0, 1f))
+        assertEquals(1f, memory.skillReady(0, 1f))
+        assertEquals(1f, memory.skillAcquired(1, 1f))
+        observe(drafted.copy(rank = 2), empty, 2f)
+        assertEquals(0f, memory.skillRanked(0, 2f))
+        assertEquals(0.5f, memory.skillRanked(0, 2.3f), 0.001f)
+        observe(drafted.copy(rank = 2, ready = false, cooldown01 = 1f), empty, 3f)
+        assertEquals(1f, memory.skillReady(0, 3f))
+        observe(drafted.copy(rank = 2), empty, 4f)
+        assertEquals(0f, memory.skillReady(0, 4f))
+        observe(drafted.copy(rank = 2, refunded = 1.5f), empty, 5f)
+        assertEquals(0f, memory.skillRefund(0, 5f))
+        // A second draft slams its own slot; the row is already in.
+        observe(drafted.copy(rank = 2, refunded = 1.5f), SkillSlotProjection(skill = 9, rank = 1), 6f)
+        assertEquals(0f, memory.skillAcquired(1, 6f))
+        assertEquals(1f, memory.skillAcquired(0, 6f))
+        assertEquals(1f, memory.skillRow(6f))
+    }
+
+    @Test
+    fun aNewRunReArmsTheOneShotsWithoutFiringThem() {
+        val memory = HudPresentationMemory()
+        val boss = BossTarget()
+        fun observe(level: Int, elapsed: Float, at: Float, skill: Int = -1) {
+            val slot = if (skill < 0) SkillSlotProjection.EMPTY else SkillSlotProjection(skill = skill, rank = 1, ready = true)
+            val model = base.with("level" to level, "maxLevel" to CAP, "elapsed" to elapsed,
+                "skillBar" to SkillBarProjection(immutableListOf(slot, SkillSlotProjection.EMPTY, SkillSlotProjection.EMPTY)))
+            memory.observe(model, at, boss.select(model))
+        }
+        observe(9, 300f, 0f)
+        observe(10, 301f, 1f)
+        assertEquals(0f, memory.tierBurst(1f))
+        // The clock goes back: a new run. What the old run was playing stops; what the new one shows fires nothing.
+        observe(25, 0f, 1.1f, skill = 4)
+        assertEquals(1f, memory.tierBurst(1.1f))
+        assertEquals(1f, memory.skillAcquired(0, 1.1f))
+        assertEquals(1f, memory.skillRow(1.1f))
+        // Armed again from the next frame on.
+        observe(30, 1f, 2f, skill = 4)
+        assertEquals(0f, memory.tierBurst(2f))
+        assertEquals(KkLevelTier.T4, memory.tierTo)
     }
 
     @Test
@@ -207,6 +353,11 @@ class HudPresentationMemoryTest {
 
     private fun enemy(id: Int, type: EnemyType, integrity: Float) =
         EnemyProjection(id, type, 0f, 0f, 0f, 0f, 100f * integrity, 100f, 20f, 0f, 0f, 0f, 0f, 0f, 0f, false)
+
+    private companion object {
+        /** The content's run level cap. */
+        const val CAP = 42
+    }
 }
 
 internal fun GameplayRenderModel.with(vararg overrides: Pair<String, Any?>): GameplayRenderModel {
@@ -222,6 +373,36 @@ internal fun GameplayRenderModel.with(vararg overrides: Pair<String, Any?>): Gam
     constructor.isAccessible = true
     return constructor.newInstance(*args) as GameplayRenderModel
 }
+
+/** The content's run level cap the HUD fixtures play at (the badge's APEX tier). */
+internal const val HUD_TEST_LEVEL_CAP = 42
+
+/**
+ * Overrides for a run at [level] under [HUD_TEST_LEVEL_CAP] with its Apex (ready at the cap, the
+ * badge's widest state: both echoes, both ray sets and the glow).
+ */
+internal fun levelOverrides(
+    level: Int = HUD_TEST_LEVEL_CAP,
+    apex: ApexProjection = if (level >= HUD_TEST_LEVEL_CAP) ApexProjection(unlocked = true, ready = true) else ApexProjection.LOCKED,
+): Array<Pair<String, Any?>> = arrayOf("level" to level, "maxLevel" to HUD_TEST_LEVEL_CAP, "apex" to apex)
+
+/** A drafted skill row for HUD tests: Z ready at rank III, X cooling at rank II, C not drafted yet (locked). */
+internal val MIXED_SKILL_BAR = SkillBarProjection(immutableListOf(
+    SkillSlotProjection(skill = SkillId.STORM_COIL.ordinal, rank = 3, ready = true, charges = 1),
+    SkillSlotProjection(skill = SkillId.METEOR.ordinal, rank = 2, cooldown01 = 0.6f),
+    SkillSlotProjection.EMPTY,
+))
+
+/** Every slot drafted: two charges ready, one skill running, one in flight. */
+internal val FULL_SKILL_BAR = SkillBarProjection(immutableListOf(
+    SkillSlotProjection(skill = SkillId.FROST_SNAP.ordinal, rank = 1, ready = true, charges = 2, maxCharges = 2),
+    SkillSlotProjection(skill = SkillId.SOLAR_FLARE.ordinal, rank = 2, cooldown01 = 0.8f, active01 = 0.5f),
+    SkillSlotProjection(skill = SkillId.METEOR.ordinal, rank = 3, cooldown01 = 0.9f, pending01 = 0.4f),
+))
+
+/** The press log of a keyboard player: key caps show. */
+internal fun keyboardControls(): kinetickk.ball.gameplay.interaction.input.RunningControlPressLog =
+    kinetickk.ball.gameplay.interaction.input.RunningControlPressLog().apply { keyHints = true }
 
 /** A started run's render model at [width] × [height] (density 1) for HUD tests. */
 internal fun hudTestModel(width: Float = 1_440f, height: Float = 810f): GameplayRenderModel =

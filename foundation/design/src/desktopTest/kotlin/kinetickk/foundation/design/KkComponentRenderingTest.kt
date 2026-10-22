@@ -112,10 +112,13 @@ class KkComponentRenderingTest {
 
     @Test
     fun levelBadgeTiersEscalate() {
-        val tiers = listOf(7, 14, 24, 34, 45).map { level ->
-            image(260, 200) { drawKkLevelBadge(measurer, Offset(90f, 80f), level, time = 1.5f) }
+        // Six tiers under the content cap 42: 41 is the last T5, 42 the APEX (ready).
+        val tiers = listOf(7, 14, 24, 34, 41, 42).map { level ->
+            image(260, 200) {
+                drawKkLevelBadge(measurer, Offset(90f, 80f), level, time = 1.5f, maxLevel = CAP, apex = KkApexState.READY)
+            }
         }
-        assertEquals(5, tiers.map { it.argb().toList() }.toSet().size)
+        assertEquals(6, tiers.map { it.argb().toList() }.toSet().size)
         assertTrue(tiers[0].regionCountNear(Kk.Volt, 0, 0, 260, 200) == 0, "t1 has no volt")
         assertTrue(tiers[1].countNear(Kk.Volt) > 50, "t2 volt echo")
         assertTrue(tiers[2].countNear(Kk.Volt) > 800, "t3 volt face")
@@ -123,6 +126,105 @@ class KkComponentRenderingTest {
         assertTrue(tiers[4].countNear(Kk.RLegend, 40) > 400, "t5 gold foil")
         // Rays extend far outside the t5 badge.
         assertTrue(tiers[4].regionCountNear(Kk.RLegend, 0, 0, 80, 200, 90) > 20 || tiers[4].regionCountNear(Kk.RLegend, 180, 0, 260, 200, 90) > 20)
+        // The APEX: an ink face inside a gold frame, the volt echo, gold rays and foil text.
+        val face = badgeFace(42)
+        val apex = tiers[5]
+        assertTrue(apex.regionCountNear(Kk.Ink, face.left.toInt() + 14, face.top.toInt() + 5, face.right.toInt() - 14, face.bottom.toInt() - 5, 6) > 200,
+            "t6 ink face")
+        assertTrue(apex.countNear(Kk.RLegend, 40) > 200, "t6 gold frame and foil text")
+        assertTrue(apex.countNear(Kk.Volt, 20) > 300, "t6 volt echo")
+        // The cap itself, not the decade, makes the APEX: 42 without a cap is a plain T5.
+        val uncapped = image(260, 200) { drawKkLevelBadge(measurer, Offset(90f, 80f), 42, time = 1.5f) }
+        assertTrue(uncapped.countNear(Kk.Volt, 20) < 50, "42 without a cap draws no APEX echo")
+    }
+
+    @Test
+    fun levelBadgeApexStatesDiffer() {
+        val states = listOf(KkApexState.COOLING, KkApexState.READY, KkApexState.ACTIVE).map { state ->
+            state to image(260, 200) {
+                drawKkLevelBadge(measurer, Offset(90f, 80f), CAP, time = 1.5f, maxLevel = CAP, apex = state, apexActive = 0.6f)
+            }.argb()
+        }
+        states.forEachIndexed { index, (a, first) ->
+            states.drop(index + 1).forEach { (b, second) ->
+                val differing = first.indices.count { first[it] != second[it] }
+                assertTrue(differing >= 200, "$a vs $b differ in $differing px")
+            }
+        }
+        // NONE (no Apex runtime yet) shows the recharging look.
+        val none = image(260, 200) { drawKkLevelBadge(measurer, Offset(90f, 80f), CAP, time = 1.5f, maxLevel = CAP) }.argb()
+        assertContentEquals(states[0].second, none)
+    }
+
+    @Test
+    fun levelBadgeT6DiffersFromT4OutsideTheFace() {
+        fun outside(level: Int): Int {
+            val face = badgeFace(level)
+            val image = image(260, 200) {
+                drawKkLevelBadge(measurer, Offset(90f, 80f), level, time = 1.5f, maxLevel = CAP, apex = KkApexState.READY)
+            }.argb()
+            // Outside the face and outside the T4 echo (the face moved 5 dp down and right), with 1 px of anti-aliasing.
+            var count = 0
+            for (y in 0 until 200) for (x in 0 until 260) {
+                val inFace = x >= face.left - 1f && x <= face.right + 1f && y >= face.top - 1f && y <= face.bottom + 1f
+                val inEcho = x >= face.left + 4f && x <= face.right + 6f && y >= face.top + 4f && y <= face.bottom + 6f
+                if (!inFace && !inEcho && colorDistance(image[y * 260 + x], Kk.Ink.toArgb()) > 24) count++
+            }
+            return count
+        }
+        assertEquals(0, outside(34), "t4 paints nothing beyond its echo")
+        val apex = outside(42)
+        assertTrue(apex >= 300, "t6 rays, echoes and glow reach past the face ($apex px)")
+    }
+
+    @Test
+    fun levelBadgeFaceMetricsMatchAcrossTiers() {
+        assertEquals(kkLevelBadgeSize(measurer, 41, 1f), kkLevelBadgeSize(measurer, 42, 1f))
+        val t5 = badgeFace(41)
+        listOf(KkApexState.NONE, KkApexState.COOLING, KkApexState.READY, KkApexState.ACTIVE).forEach { state ->
+            assertEquals(t5.size, badgeFace(42, state).size, "$state")
+        }
+    }
+
+    @Test
+    fun levelBadgeApexFoilTextScrollsUnlessCooling() {
+        // Inside the ink face only the foil text changes over time (the rays and echoes sit under it).
+        fun inner(state: KkApexState, time: Float): List<Int> {
+            val face = badgeFace(CAP, state)
+            val image = image(260, 200) {
+                drawKkLevelBadge(measurer, Offset(90f, 80f), CAP, time = time, maxLevel = CAP, apex = state, apexActive = 0.6f)
+            }
+            val pixels = mutableListOf<Int>()
+            for (y in face.top.toInt() + 4 until face.bottom.toInt() - 4) for (x in face.left.toInt() + 14 until face.right.toInt() - 14) {
+                pixels += image.at(x, y)
+            }
+            return pixels
+        }
+        fun moved(state: KkApexState): Int {
+            val a = inner(state, 0.1f)
+            val b = inner(state, 1.3f)
+            return a.indices.count { a[it] != b[it] }
+        }
+        assertEquals(0, moved(KkApexState.COOLING), "cooling foil text stands still")
+        assertTrue(moved(KkApexState.ACTIVE) > 40, "active foil text scrolls (${moved(KkApexState.ACTIVE)} px)")
+    }
+
+    @Test
+    fun levelBadgeGoldFollowsTheColorVisionPreset() {
+        val protan = kkTestMeasurer(KkRolePalette.Protan)
+        listOf(41, 42).forEach { level ->
+            val image = image(260, 200) {
+                drawKkLevelBadge(protan, Offset(90f, 80f), level, time = 1.5f, maxLevel = CAP, apex = KkApexState.READY)
+            }
+            assertTrue(image.countNear(KkGold.Deep.base, 24) > 100, "level $level: Protan draws the deep gold")
+            assertEquals(0, image.countNear(Kk.RLegend, 12), "level $level: no bright gold under Protan")
+        }
+    }
+
+    private fun badgeFace(level: Int, state: KkApexState = KkApexState.READY): Rect {
+        var face = Rect.Zero
+        image(260, 200) { face = drawKkLevelBadge(measurer, Offset(90f, 80f), level, time = 1.5f, maxLevel = CAP, apex = state) }
+        return face
     }
 
     @Test
@@ -185,6 +287,64 @@ class KkComponentRenderingTest {
         assertEquals(0, none.countNear(Kk.Volt))
         val plus = (0 until 16).sumOf { dy -> (0 until 16).count { dx -> colorDistance(none.at(63 + dx, 53 + dy), Kk.Ink.toArgb()) > 40 } }
         assertTrue(plus > 8, "plus mark ($plus)")
+    }
+
+    @Test
+    fun skillSlotsShowLockCooldownReadinessRanksChargesAndKeyCaps() {
+        val slot = Rect(60f, 30f, 112f, 82f)
+        val ion = measurer.roles.element(2)
+        fun draw(
+            cooldown: Float = 0f, ready: Boolean = false, rank: Int = 1, charges: Int = -1, maxCharges: Int = 1,
+            active: Float = 0f, pending: Float = 0f, locked: Boolean = false, pressed: Float = 0f, refund: Float = 0f,
+            shake: Float = 0f, key: androidx.compose.ui.text.TextLayoutResult? = null, rankFill: Float = 1f,
+        ) = image(200, 120) {
+            drawKkSkillSlot(measurer, slot, KkIcon.WEAPONS_ARC_COIL, ion, cooldown, ready, rank, charges = charges, maxCharges = maxCharges,
+                active = active, activeColor = ion, pending = pending, locked = locked, pressed = pressed, refundFlash = refund,
+                refundColor = Kk.Bone, shakeX = shake, keyLayout = key, rankFill = rankFill)
+        }
+        val ready = draw(ready = true)
+        val cooling = draw(cooldown = 0.6f)
+        // Ready: the `you` glow outside the face; cooling: none, and the sweep darkens the icon.
+        val glow = (20 until 100).count { y -> colorDistance(ready.at(56, y), Kk.Ink.toArgb()) > 8 }
+        assertTrue(glow > 10, "ready glow outside the slot ($glow)")
+        assertEquals(0, (20 until 100).count { y -> colorDistance(cooling.at(56, y), Kk.Ink.toArgb()) > 8 }, "glow while cooling")
+        assertTrue(cooling.countNear(ion, 20) < ready.countNear(ion, 20) - 20, "the sweep does not cover the icon")
+        // Locked: the lock in Mute2, no element icon, no pips.
+        val locked = draw(locked = true)
+        assertEquals(0, locked.countNear(ion, 20))
+        assertTrue(locked.countNear(Kk.Mute2, 20) > 20, "lock glyph")
+        assertEquals(0, locked.countNear(Kk.Volt, 20))
+        // Rank pips: one volt pip at rank I, three at rank II... gold at rank III (no volt pips left).
+        val pips = { image: androidx.compose.ui.graphics.ImageBitmap, color: Color -> image.regionCountNear(color, 60, 30, 100, 40, 20) }
+        val rankOne = pips(draw(rank = 1), Kk.Volt)
+        val rankTwo = pips(draw(rank = 2), Kk.Volt)
+        assertTrue(rankOne > 6 && rankTwo > rankOne + 6, "pips $rankOne → $rankTwo")
+        val top = draw(rank = 3)
+        assertEquals(0, pips(top, Kk.Volt))
+        assertTrue(pips(top, measurer.roles.gold.base) > rankTwo, "rank III pips are gold")
+        // The newest pip fills: half filled shows fewer volt pixels than a full one.
+        assertTrue(pips(draw(rank = 2, rankFill = 0.5f), Kk.Volt) in (rankOne + 1) until rankTwo)
+        // Charges: two squares top-right only when the slot holds two charges.
+        val chargeRegion = { image: androidx.compose.ui.graphics.ImageBitmap -> image.regionCountNear(Kk.Volt, 92, 30, 112, 40, 20) }
+        assertEquals(0, chargeRegion(draw(rank = 0)))
+        val twoCharges = chargeRegion(draw(rank = 0, charges = 2, maxCharges = 2))
+        val oneCharge = chargeRegion(draw(rank = 0, charges = 1, maxCharges = 2))
+        assertTrue(twoCharges > oneCharge && oneCharge > 4, "charges $oneCharge / $twoCharges")
+        // Active share in the element colour, pending in Bone, near the bottom.
+        val bar = { image: androidx.compose.ui.graphics.ImageBitmap, color: Color -> image.regionCountNear(color, 60, 70, 112, 78, 20) }
+        assertTrue(bar(draw(active = 1f, rank = 0), ion) > bar(draw(rank = 0), ion) + 20)
+        assertTrue(bar(draw(pending = 1f, rank = 0), Kk.Bone) > 20)
+        // Press flash: a Bone face; refund edge: Bone pixels inside a cooling face.
+        assertTrue(draw(pressed = 1f).countNear(Kk.Bone, 10) > 1_500)
+        assertTrue(draw(cooldown = 0.5f, refund = 1f).regionCountNear(Kk.Bone, 60, 30, 112, 82, 30) > 20)
+        // Shake moves the whole slot.
+        assertTrue(draw(shake = 3f).argb().zip(draw().argb()).count { (a, b) -> a != b } > 100)
+        // Key cap: an Ink3 plate below the slot with the label.
+        val key = measureKkKeyCap(measurer, "Z", 10f)
+        val capped = draw(key = key)
+        assertTrue(capped.regionCountNear(Kk.Ink3, 70, 85, 102, 97, 4) > 30, "no key plate")
+        assertTrue(capped.regionCountNear(Kk.Bone, 70, 85, 102, 97, 40) > 4, "no key label")
+        assertEquals(0, draw().regionCountNear(Kk.Bone, 70, 85, 102, 97, 40))
     }
 
     @Test
@@ -263,5 +423,10 @@ class KkComponentRenderingTest {
         assertTrue(before.argb().all { it == Color.White.toArgb() })
         val after = image(320, 180) { drawRect(Color.White); drawKkShutter(KkShutter.TOTAL_MS.toFloat(), KkRolePalette.Default) }
         assertTrue(after.argb().all { it == Color.White.toArgb() })
+    }
+
+    private companion object {
+        /** The content's run level cap. */
+        const val CAP = 42
     }
 }

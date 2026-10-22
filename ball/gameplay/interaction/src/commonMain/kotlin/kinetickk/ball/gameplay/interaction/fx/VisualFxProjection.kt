@@ -86,6 +86,8 @@ data class WeaponArcProjection(
     val life: Float,
     /** The link's look (a gameplay `LinkStyleCode`); 0 is the weapon look. */
     val style: Int = 0,
+    /** The life it started with (a styled link lives at least its look's life, [LinkLooks]). */
+    val maxLife: Float = life,
 )
 
 /**
@@ -118,7 +120,9 @@ data class BuildNotificationProjection(
 /**
  * A Break ([secondary] and [reaction] are -1) or an elemental reaction flash at a world point.
  * [primary] and [secondary] are status element ordinals; [weight] counts the events of the same
- * kind merged into this flash (1..[InteractionFxLimits.MAX_BURST_WEIGHT]).
+ * kind merged into this flash (1..[InteractionFxLimits.MAX_BURST_WEIGHT]). [radius] is the look's
+ * reach ([ReactionFxSpec.reachOf]); [direction] a heading in radians (NaN when unused), [flags] the
+ * cue's `ReactionCueFlags` and [seed] the look's own hash seed.
  */
 data class ElementBurstProjection(
     val x: Float,
@@ -130,6 +134,38 @@ data class ElementBurstProjection(
     val life: Float,
     val maxLife: Float,
     val weight: Int,
+    val direction: Float = Float.NaN,
+    val flags: Int = 0,
+    val seed: Int = 0,
+)
+
+/**
+ * A skill cast ([phase] 0) or its delayed impact (1) at a world point toward ([dirX], [dirY]), with
+ * the look's reach [radius] at [rank] 1..3; [flags] holds the cue's `SkillCueCodes` bits.
+ */
+data class SkillBurstProjection(
+    val skill: Int,
+    val phase: Int,
+    val x: Float,
+    val y: Float,
+    val dirX: Float,
+    val dirY: Float,
+    val radius: Float,
+    val rank: Int,
+    val flags: Int,
+    val seed: Int,
+    val life: Float,
+    val maxLife: Float,
+)
+
+/** A character's Apex activation ([shape] a `CoreShape` ordinal) at the Core's position. */
+data class ApexBurstProjection(
+    val shape: Int,
+    val x: Float,
+    val y: Float,
+    val seed: Int,
+    val life: Float,
+    val maxLife: Float,
 )
 
 /** The once-per-profile name stamp of a reaction met for the first time, at its world point. */
@@ -145,6 +181,8 @@ data class VisualFxProjection(
     val buildNotifications: ImmutableList<BuildNotificationProjection> = immutableListOf(),
     val elementBursts: ImmutableList<ElementBurstProjection> = immutableListOf(),
     val reactionStamps: ImmutableList<ReactionStampProjection> = immutableListOf(),
+    val skillBursts: ImmutableList<SkillBurstProjection> = immutableListOf(),
+    val apexBursts: ImmutableList<ApexBurstProjection> = immutableListOf(),
     /** Reactions (bits by reaction ordinal) seen in this run, and those first met in this run. */
     val runReactionMask: Int = 0,
     val runDiscoveryMask: Int = 0,

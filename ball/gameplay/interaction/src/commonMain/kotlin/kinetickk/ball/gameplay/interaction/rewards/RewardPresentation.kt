@@ -35,6 +35,7 @@ import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.content.api.ruleLines
 import kinetickk.ball.content.api.upsideText
 import kinetickk.ball.gameplay.interaction.canvas.OverlayRelicLink
+import kinetickk.ball.gameplay.interaction.canvas.badgeState
 import kinetickk.ball.gameplay.interaction.canvas.OverlayRelicSlot
 import kinetickk.ball.gameplay.interaction.canvas.UNKNOWN_PAIRING_NAME
 import kinetickk.ball.gameplay.interaction.canvas.overlayColor
@@ -60,6 +61,7 @@ import kinetickk.ball.gameplay.nucleus.render.TotemAction
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
+import kinetickk.foundation.design.KkApexState
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.KkRolePalette
@@ -82,6 +84,9 @@ internal data class RewardPresentation(
     val kind: RewardLayoutKind = RewardLayoutKind.CARDS,
     /** Player level shown by the slamming badge when a level-up opened the choice. */
     val level: Int? = null,
+    /** The run's level cap (the badge turns APEX there) and the Apex state it shows. */
+    val levelCap: Int = Int.MAX_VALUE,
+    val apex: KkApexState = KkApexState.NONE,
     /** Screen position (px) the cards are dealt from: the Core. */
     val dealOrigin: Offset? = null,
     /** Current relic matrix for relic choices. */
@@ -113,6 +118,8 @@ internal fun GameplayRenderModel.rewardPresentation(language: AppLanguage = AppL
         rerollsRemaining = rerollsRemaining,
         kind = kind,
         level = level.takeIf { choiceType == ChoiceType.ITEM && !directedChoice && choices.none { it.rewardFocus != null } },
+        levelCap = maxLevel,
+        apex = apex.badgeState(),
         // The Core on screen in device pixels (the simulation viewport is dp).
         dealOrigin = Offset(
             (coreX - cameraX + screenWidth * 0.5f) * viewportDensity,

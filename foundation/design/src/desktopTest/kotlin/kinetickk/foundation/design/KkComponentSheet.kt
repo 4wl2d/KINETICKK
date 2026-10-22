@@ -182,26 +182,32 @@ internal fun DrawScope.drawKkComponentsSheet(m: CanvasTextMeasurer, time: Float)
     drawPath(KkPathCache(1).chamferTopRight(0, slip, 10f), Kk.Bone)
     drawKkText(tipBody, slip.left + 13f, slip.top + 11f, Kk.Ink)
 
-    // Level badges.
-    sectionTitle("Level badge", 1790f, "Always Lvl X, grows louder every ten levels")
+    // Level badges: the five decades under the run cap 42, then the cap (APEX) in its three Apex states.
+    sectionTitle("Level badge", 1790f, "Always Lvl X, grows louder every ten levels, APEX at the cap")
     val fifth = (contentWidth - 4 * 22f) / 5f
+    val panelWidth = (contentWidth - 7 * 22f) / 8f
+    class Badge(val level: Int, val range: String, val note: String, val apex: KkApexState = KkApexState.NONE)
     val badges = listOf(
-        Triple(7, "Lvl 1-9", "Bone slab"),
-        Triple(14, "Lvl 10-19", "Volt echo"),
-        Triple(24, "Lvl 20-29", "Volt face, bone echo, sheen"),
-        Triple(34, "Lvl 30-39", "Ink face, striped echo, sheen"),
-        Triple(45, "Lvl 40+", "Gold foil and rays"),
+        Badge(7, "Lvl 1-9", "Bone slab"),
+        Badge(14, "Lvl 10-19", "Ink seam, volt echo"),
+        Badge(24, "Lvl 20-29", "Volt face, bone echo"),
+        Badge(34, "Lvl 30-39", "Ink face, stripes"),
+        Badge(41, "Lvl 40-41", "Gold foil and rays"),
+        Badge(42, "Lvl 42 cooling", "Static foil frame", KkApexState.COOLING),
+        Badge(42, "Lvl 42 ready", "Foil, volt echo, glow", KkApexState.READY),
+        Badge(42, "Lvl 42 active", "Gold stripes", KkApexState.ACTIVE),
     )
-    badges.forEachIndexed { index, (level, range, note) ->
-        val px = left + index * (fifth + 22f)
-        val panelRect = Rect(px, 1830f, px + fifth, 2000f)
+    badges.forEachIndexed { index, badge ->
+        val px = left + index * (panelWidth + 22f)
+        val panelRect = Rect(px, 1830f, px + panelWidth, 2000f)
         drawRect(Kk.Ink2, panelRect.topLeft, panelRect.size)
         clipRect(panelRect.left, panelRect.top, panelRect.right, panelRect.bottom) {
-            val size = kkLevelBadgeSize(m, level, density)
-            drawKkLevelBadge(m, Offset(panelRect.center.x - size.width / 2f, 1830f + 16f + 40f - size.height / 2f), level, time = time)
+            val size = kkLevelBadgeSize(m, badge.level, density)
+            drawKkLevelBadge(m, Offset(panelRect.center.x - size.width / 2f - 4f, 1830f + 16f + 40f - size.height / 2f), badge.level,
+                time = time, maxLevel = 42, apex = badge.apex, apexActive = 0.6f)
         }
-        drawKkText(m, range, t.labelStyle(14f), px + 18f, 1930f, Kk.Bone, uppercase = true)
-        drawKkText(measureKkText(m, note, t.monoStyle(), uppercase = true, maxWidth = fifth - 36f, maxLines = 2), px + 18f, 1950f, Kk.Mute)
+        drawKkText(m, badge.range, t.labelStyle(14f), px + 14f, 1930f, Kk.Bone, uppercase = true)
+        drawKkText(measureKkText(m, badge.note, t.monoStyle(), uppercase = true, maxWidth = panelWidth - 28f, maxLines = 2), px + 14f, 1950f, Kk.Mute)
     }
 
     // Meters.

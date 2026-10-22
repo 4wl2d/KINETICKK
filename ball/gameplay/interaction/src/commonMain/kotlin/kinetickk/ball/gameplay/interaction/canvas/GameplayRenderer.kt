@@ -9,6 +9,7 @@ import kinetickk.foundation.design.*
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
+import kinetickk.ball.gameplay.interaction.input.RunningControlPressLog
 import kinetickk.ball.gameplay.interaction.layout.PauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.terminal.drawCoreDeath
 
@@ -31,6 +32,7 @@ internal fun DrawScope.drawGameplay(
     terminalElapsed: Float = 0f,
     hudMemory: HudPresentationMemory? = null,
     trialInfoOpen: Boolean = false,
+    controls: RunningControlPressLog? = null,
 ) {
     drawRect(Kk.Ink)
     val shake = if (engine.settings.screenShake && engine.phase == GamePhase.RUNNING) {
@@ -49,7 +51,7 @@ internal fun DrawScope.drawGameplay(
         drawScreenFx(engine, renderTime, textMeasurer.roles)
     }
     if (shouldDrawRunningPresentation(engine.phase)) {
-        drawHud(engine, textMeasurer, renderTime, shakeX, shakeY, hudMemory, trialInfoOpen)
+        drawHud(engine, textMeasurer, renderTime, shakeX, shakeY, hudMemory, trialInfoOpen, controls)
         drawHudFeed(engine, visualFx, textMeasurer, renderTime, hudMemory)
         drawTrialTooltip(engine, textMeasurer, trialInfoOpen)
     }

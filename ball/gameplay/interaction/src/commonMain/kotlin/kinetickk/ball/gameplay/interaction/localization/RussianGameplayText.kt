@@ -87,4 +87,9 @@ internal fun russianGameplayText(key: GameplayText): String = when (key) {
     GameplayText.Milliseconds -> "{0} мс"
     GameplayText.MaxRegular -> "  МАКС {0}"
     GameplayText.Samples -> "  N {0}  ОКНО {1}"
+    GameplayText.SkillSlotDescription -> "Навык {0}: {1}"
+    GameplayText.SkillSlotLocked -> "Навык {0}: закрыт"
+    GameplayText.ApexDescription -> "Апекс: {0}"
+    GameplayText.ActiveState -> "активен"
+    GameplayText.RechargingState -> "перезаряжается"
 }

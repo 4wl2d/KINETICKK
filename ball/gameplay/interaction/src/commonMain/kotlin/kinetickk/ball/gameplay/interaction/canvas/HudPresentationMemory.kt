@@ -3,23 +3,52 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kinetickk.foundation.design.KkLevelTier
 import kinetickk.foundation.design.KkSlam
 import kinetickk.foundation.design.KkTime
 import kotlin.math.max
 
 /**
  * Presentation-only memory of the running HUD: what the previous drawn frame showed, so the HUD can
- * animate changes (level-badge slam, hit ghosts, polarity draining, banner entrances) without new
- * domain state. It never feeds a decision; a fresh instance simply starts without transitions.
- * Draw-thread confined; one instance per gameplay host.
+ * animate changes (level-badge slam, tier and Apex one-shots, skill-slot one-shots, hit ghosts,
+ * polarity draining, banner entrances) without new domain state. It never feeds a decision; a fresh
+ * instance simply starts without transitions. The first observed frame and the first frame of a new
+ * run (its clock went back) only record what they show; later frames fire one-shots on their edges.
+ * Draw-thread confined; one instance per gameplay host; no allocation per frame.
  */
 internal class HudPresentationMemory {
     private var observedAt = Float.NaN
 
     private var lastLevel = -1
     private var levelChangedAt = Float.NEGATIVE_INFINITY
+
+    private var lastElapsed = Float.NaN
+    private var lastTier = KkLevelTier.T1
+    private var tierChangedAt = Float.NEGATIVE_INFINITY
+
+    /** The tier the last tier change reached (its ring burst's accent). */
+    var tierTo: KkLevelTier = KkLevelTier.T1
+        private set
+    private var apexUnlockedAt = Float.NEGATIVE_INFINITY
+    private var lastApexReady = false
+    private var apexReadyAt = Float.NEGATIVE_INFINITY
+    private var lastApexActive = false
+    private var apexCastAt = Float.NEGATIVE_INFINITY
+    private var lastApexRefunded = 0f
+    private var apexRefundAt = Float.NEGATIVE_INFINITY
+
+    private val lastSkill = IntArray(SKILL_SLOTS) { -1 }
+    private val acquiredAt = FloatArray(SKILL_SLOTS) { Float.NEGATIVE_INFINITY }
+    private val lastRank = IntArray(SKILL_SLOTS)
+    private val rankedAt = FloatArray(SKILL_SLOTS) { Float.NEGATIVE_INFINITY }
+    private val lastReady = BooleanArray(SKILL_SLOTS)
+    private val readyAt = FloatArray(SKILL_SLOTS) { Float.NEGATIVE_INFINITY }
+    private val lastRefunded = FloatArray(SKILL_SLOTS)
+    private val refundAt = FloatArray(SKILL_SLOTS) { Float.NEGATIVE_INFINITY }
+    private var skillRowShownAt = Float.NEGATIVE_INFINITY
 
     private var lastIntegrity = Float.NaN
     private var integrityGhost = 0f
@@ -47,6 +76,15 @@ internal class HudPresentationMemory {
 
         if (lastLevel >= 0 && engine.level > lastLevel) levelChangedAt = renderTime
         lastLevel = engine.level
+
+        // One-shots fire on edges between frames of one run: the first frame and a new run's first
+        // frame (its clock went back) only record, and a new run drops what the last one was playing.
+        val restarted = !first && engine.elapsed < lastElapsed
+        val armed = !first && !restarted
+        lastElapsed = engine.elapsed
+        if (restarted) forgetOneShots()
+        observeLevelTier(engine, renderTime, armed)
+        observeSkills(engine, renderTime, armed)
 
         val integrity = engine.hp / engine.maxHp.coerceAtLeast(1f)
         if (!first && !lastIntegrity.isNaN() && integrity < lastIntegrity) {
@@ -89,9 +127,102 @@ internal class HudPresentationMemory {
         lastMessageTime = engine.messageTime
     }
 
+    private fun observeLevelTier(engine: GameplayRenderModel, renderTime: Float, armed: Boolean) {
+        val tier = KkLevelTier.of(engine.level, engine.maxLevel)
+        if (armed && tier > lastTier) {
+            if (tier == KkLevelTier.T6) {
+                apexUnlockedAt = renderTime
+            } else {
+                tierChangedAt = renderTime
+                tierTo = tier
+            }
+        }
+        lastTier = tier
+
+        val apex = engine.apex
+        val active = apex.active01 > 0f
+        // The unlock already plays the Apex coming online: its ready edge pings nothing.
+        if (armed && apex.ready && !lastApexReady && apexUnlock(renderTime) >= 1f) apexReadyAt = renderTime
+        if (armed && active && !lastApexActive) apexCastAt = renderTime
+        if (armed && apex.refunded > lastApexRefunded) apexRefundAt = renderTime
+        lastApexReady = apex.ready
+        lastApexActive = active
+        lastApexRefunded = apex.refunded
+    }
+
+    private fun observeSkills(engine: GameplayRenderModel, renderTime: Float, armed: Boolean) {
+        val slots = engine.skillBar.slots
+        var shownBefore = false
+        var shownNow = false
+        for (index in 0 until SKILL_SLOTS) {
+            val slot = slots[index]
+            if (lastSkill[index] >= 0) shownBefore = true
+            if (slot.skill >= 0) shownNow = true
+            if (armed && slot.skill != lastSkill[index]) {
+                // A drafted skill: its slam, not a rank, ready or refund flash.
+                if (slot.skill >= 0) acquiredAt[index] = renderTime
+            } else if (armed && slot.skill >= 0) {
+                if (slot.rank > lastRank[index]) rankedAt[index] = renderTime
+                if (slot.ready && !lastReady[index]) readyAt[index] = renderTime
+                if (slot.refunded > lastRefunded[index]) refundAt[index] = renderTime
+            }
+            lastSkill[index] = slot.skill
+            lastRank[index] = slot.rank
+            lastReady[index] = slot.ready
+            lastRefunded[index] = slot.refunded
+        }
+        if (armed && shownNow && !shownBefore) skillRowShownAt = renderTime
+    }
+
+    private fun forgetOneShots() {
+        tierChangedAt = Float.NEGATIVE_INFINITY
+        apexUnlockedAt = Float.NEGATIVE_INFINITY
+        apexReadyAt = Float.NEGATIVE_INFINITY
+        apexCastAt = Float.NEGATIVE_INFINITY
+        apexRefundAt = Float.NEGATIVE_INFINITY
+        acquiredAt.fill(Float.NEGATIVE_INFINITY)
+        rankedAt.fill(Float.NEGATIVE_INFINITY)
+        readyAt.fill(Float.NEGATIVE_INFINITY)
+        refundAt.fill(Float.NEGATIVE_INFINITY)
+        skillRowShownAt = Float.NEGATIVE_INFINITY
+    }
+
     /** Level-badge slam progress 0..1 (1 = settled) at [renderTime]. */
     fun levelSlam(renderTime: Float): Float =
         ((renderTime - levelChangedAt) * 1000f / KkSlam.DURATION_MS).coerceIn(0f, 1f)
+
+    /** Tier change (T2..T5) progress over [KkTime.TierBurst]; the tier reached is [tierTo]. */
+    fun tierBurst(renderTime: Float): Float = progress(tierChangedAt, KkTime.TierBurst, renderTime)
+
+    /** Reaching the cap (T6) progress over [KkTime.ApexUnlock]. */
+    fun apexUnlock(renderTime: Float): Float = progress(apexUnlockedAt, KkTime.ApexUnlock, renderTime)
+
+    /** The Apex turning ready again, over [KkTime.ApexPing]. */
+    fun apexPing(renderTime: Float): Float = progress(apexReadyAt, KkTime.ApexPing, renderTime)
+
+    /** The Apex cast (its activation starting), over [APEX_CAST_MS]. */
+    fun apexCast(renderTime: Float): Float = progress(apexCastAt, APEX_CAST_MS, renderTime)
+
+    /** Data refunding Apex cooldown, over [REFUND_MS]. */
+    fun apexRefund(renderTime: Float): Float = progress(apexRefundAt, REFUND_MS, renderTime)
+
+    /** Skill [slot] drafted, over [SKILL_ACQUIRE_MS]. */
+    fun skillAcquired(slot: Int, renderTime: Float): Float = progress(acquiredAt[slot], SKILL_ACQUIRE_MS, renderTime)
+
+    /** Skill [slot] ranked up, over [SKILL_RANK_MS]. */
+    fun skillRanked(slot: Int, renderTime: Float): Float = progress(rankedAt[slot], SKILL_RANK_MS, renderTime)
+
+    /** Skill [slot] turning ready, over [SKILL_READY_MS]. */
+    fun skillReady(slot: Int, renderTime: Float): Float = progress(readyAt[slot], SKILL_READY_MS, renderTime)
+
+    /** Cooldown refunded to skill [slot], over [REFUND_MS]. */
+    fun skillRefund(slot: Int, renderTime: Float): Float = progress(refundAt[slot], REFUND_MS, renderTime)
+
+    /** The skill row sliding in with the run's first drafted skill, over [SKILL_ROW_MS]. */
+    fun skillRow(renderTime: Float): Float = progress(skillRowShownAt, SKILL_ROW_MS, renderTime)
+
+    private fun progress(at: Float, durationMs: Int, renderTime: Float): Float =
+        ((renderTime - at) * 1000f / durationMs).coerceIn(0f, 1f)
 
     /** Remaining integrity hit ghost as a fraction of max integrity. */
     fun integrityGhost(renderTime: Float): Float = drain(integrityGhost, integrityGhostAt, renderTime)
@@ -114,11 +245,31 @@ internal class HudPresentationMemory {
         return if (t >= 1f) 0f else amount * (1f - t.coerceAtLeast(0f))
     }
 
-    private companion object {
+    companion object {
+        const val SKILL_SLOTS = ContentBounds.SKILL_SLOTS
+
+        /** Apex cast: bone flash, ring burst and badge kick. */
+        const val APEX_CAST_MS = KkTime.Drift
+
+        /** Refund flashes (Apex meters, skill sweeps). */
+        const val REFUND_MS = KkTime.Pull
+
+        /** Skill draft: slot slam and ring burst. */
+        const val SKILL_ACQUIRE_MS = KkTime.Shutter
+
+        /** Skill rank-up: pip fill and ring burst. */
+        const val SKILL_RANK_MS = KkTime.Drift
+
+        /** Skill ready: face flash and ring burst. */
+        const val SKILL_READY_MS = KkTime.Shutter
+
+        /** The skill row sliding in. */
+        const val SKILL_ROW_MS = KkTime.Pull
+
         /** Slower drains (the first few percent of edge strain) do not pulse the polarity cue. */
-        const val POLARITY_DRAIN_PER_SECOND = 0.03f
-        const val POLARITY_DRAIN_HOLD_SECONDS = 0.35f
-        const val MESSAGE_RESTART_EPSILON = 0.05f
+        private const val POLARITY_DRAIN_PER_SECOND = 0.03f
+        private const val POLARITY_DRAIN_HOLD_SECONDS = 0.35f
+        private const val MESSAGE_RESTART_EPSILON = 0.05f
     }
 }
 

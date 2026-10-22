@@ -48,6 +48,17 @@ internal val GameplayRenderModel.renderElapsed: Float
     }
 
 /**
+ * Age in seconds of a transient look that started with [maxLife] and has [life] left, at the
+ * interpolated time: one fixed step behind at alpha 0 (as the interpolated enemies are), exactly
+ * `maxLife − life` at alpha 1, never negative. Looks drawn with it stay in step with the world.
+ */
+internal fun GameplayRenderModel.fxAge(life: Float, maxLife: Float): Float {
+    val alpha = interpolationAlpha
+    val age = maxLife - life
+    return if (alpha >= 1f) max(0f, age) else max(0f, age - (1f - alpha) * GameplayRenderModel.FIXED_STEP)
+}
+
+/**
  * Device pixels per world unit. The simulation runs in dp (viewport, pointer and every world
  * length), so the world layer is drawn magnified by the viewport density it accepted.
  */

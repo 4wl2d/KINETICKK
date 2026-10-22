@@ -112,6 +112,33 @@ internal object WorldUnitShapes {
         }
     }
 
+    /**
+     * A flame tongue from x = 0 (its base, 0.5 wide) to x = 1 (a flat tip 0.22 wide, sheared 12°):
+     * blunt at both ends, so it never reads as an arrowhead (SPEC rule 3).
+     */
+    val flame: Path by lazy {
+        val lean = 0.11f * 0.2126f
+        Path().apply {
+            moveTo(0f, -0.25f)
+            lineTo(1f + lean, -0.11f)
+            lineTo(1f - lean, 0.11f)
+            lineTo(0f, 0.25f)
+            close()
+        }
+    }
+
+    /** A sheared (−12°) bar 1 × 0.22 centred on the origin (Silence's mute bars). */
+    val bar: Path by lazy {
+        val lean = 0.11f * 0.2126f
+        Path().apply {
+            moveTo(-0.5f + lean, -0.11f)
+            lineTo(0.5f + lean, -0.11f)
+            lineTo(0.5f - lean, 0.11f)
+            lineTo(-0.5f - lean, 0.11f)
+            close()
+        }
+    }
+
     /** The speed tail (`clip-path: polygon(0 20%, 100% 50%, 0 80%)`) from x = 0 to x = 1. */
     val tail: Path by lazy {
         Path().apply {
@@ -203,9 +230,10 @@ internal object WorldStrings {
     private val secondsSuffixes = arrayOfNulls<String>(AppLanguage.entries.size)
     private val pointNameSources = arrayOfNulls<String>(PointOfInterestKind.entries.size * AppLanguage.entries.size)
     private val pointNames = arrayOfNulls<String>(PointOfInterestKind.entries.size * AppLanguage.entries.size)
+    /** One slot per reaction (declared before the arrays it sizes). */
+    private val REACTION_SLOTS = kinetickk.ball.content.api.ReactionId.entries.size
     private val reactionSources = arrayOfNulls<String>(REACTION_SLOTS * AppLanguage.entries.size)
     private val reactionNames = arrayOfNulls<String>(REACTION_SLOTS * AppLanguage.entries.size)
-    private const val REACTION_SLOTS = 16
 
     /** Remaining time as `m:ss` (mono readout, no unit). */
     fun timer(seconds: Float): String {

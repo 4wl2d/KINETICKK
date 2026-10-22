@@ -49,7 +49,7 @@ class WorldHudTextLoadTest {
         val base = start.with(
             "settings" to start.settings.copy(damageNumberFormat = DamageNumberFormat.FULL),
             "hp" to 30f, "maxHp" to 180f, "shield" to 20f, "maxShield" to 60f, "combo" to 14, "comboTime" to 1.4f,
-            "comboWindow" to 2.8f, "keys" to 2, "runMatter" to 12_345L, "level" to 45, "polarityStability" to 0.2f,
+            "comboWindow" to 2.8f, "keys" to 2, "runMatter" to 12_345L, *levelOverrides(), "polarityStability" to 0.2f,
         )
         // HUD values change every frame (speed, draining polarity and integrity, a growing chain).
         val models = List(CYCLE) { frame ->

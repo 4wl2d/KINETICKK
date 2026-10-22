@@ -29,7 +29,7 @@ class HudRebirthStripTest {
     fun theStripShowsFromTierOneBesideTheBadgeAndClearOfTheClock() {
         for ((width, height) in listOf(1_440f to 810f, 844f to 390f, 390f to 844f)) for (textScale in listOf(1f, 1.75f)) {
             for (language in AppLanguage.entries) for (tier in listOf(0, 1, 6, 10)) {
-                val model = hudTestModel(width, height).with("rebirthLevel" to tier, "keys" to 12, "runMatter" to 9_876_543L, "level" to 45,
+                val model = hudTestModel(width, height).with("rebirthLevel" to tier, "keys" to 12, "runMatter" to 9_876_543L, *levelOverrides(),
                     "combo" to 128, "comboTime" to 1f, "comboWindow" to 2.8f)
                 draw(width, height, language, textScale) { measurer -> drawHud(model, measurer, 1f) }
                 val where = "${width}x$height x$textScale $language tier $tier"

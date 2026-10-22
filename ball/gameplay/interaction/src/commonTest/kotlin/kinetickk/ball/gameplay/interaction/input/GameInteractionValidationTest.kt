@@ -14,6 +14,7 @@ import kinetickk.ball.gameplay.interaction.input.ValidationFailure
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.test.Test
 
@@ -207,6 +208,23 @@ class GameInteractionValidationTest {
             assertEquals(InteractionInputField.CHOICE_INDEX, failure.field)
             assertEquals(0, failure.acceptedMinimum)
             assertEquals(3, failure.acceptedMaximum)
+        }
+    }
+
+    @Test
+    fun skillSlotValidationAcceptsTheThreeSlotsAndRejectsBothAdjacentValues() {
+        val validator = GameInteractionValidator()
+        (0..2).forEach { slot ->
+            val intent = valid<GameplayInteractionPulse.SkillRequested>(validator.skillRequested(slot))
+            assertEquals(slot, intent.slot)
+            // One shared pulse per slot: key and touch casts allocate nothing.
+            assertSame(GameplayInteractionPulse.SkillRequested.fromValidated(slot), intent)
+        }
+        listOf(-1, 3).forEach { rejected ->
+            val failure = assertIs<ValidationFailure.IndexOutOfRange>(invalid(validator.skillRequested(rejected)))
+            assertEquals(InteractionInputField.SKILL_SLOT, failure.field)
+            assertEquals(0, failure.acceptedMinimum)
+            assertEquals(2, failure.acceptedMaximum)
         }
     }
 
