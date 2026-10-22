@@ -6,6 +6,8 @@ package kinetickk.ball.profile.interaction.localization
 internal object EnglishProfileText {
     operator fun get(key: ProfileText): String = when (key) {
         ProfileText.SettingsInterface -> "Interface"
+        ProfileText.SettingsDisplay -> "Display"
+        ProfileText.SettingsControls -> "Controls"
         ProfileText.RunStatisticsSide -> "Run statistics side"
         ProfileText.LeftSide -> "Left"
         ProfileText.RightSide -> "Right"

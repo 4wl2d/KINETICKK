@@ -16,7 +16,12 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextStyle
 import kinetickk.ball.profile.api.ColorVision
+import kinetickk.ball.profile.api.GameAction
+import kinetickk.ball.profile.api.WindowMode
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PlayerPreferences
@@ -26,24 +31,33 @@ import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkAlign
+import kinetickk.foundation.design.KkButtonSize
+import kinetickk.foundation.design.KkButtonVariant
 import kinetickk.foundation.design.KkEase
 import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.KkVAlign
 import kinetickk.foundation.design.KkVisionMode
 import kinetickk.foundation.design.bodyStyle
 import kinetickk.foundation.design.condStyle
+import kinetickk.foundation.design.drawKkButton
 import kinetickk.foundation.design.drawKkGrid
+import kinetickk.foundation.design.drawKkSlab
 import kinetickk.foundation.design.drawKkSheared
 import kinetickk.foundation.design.drawKkText
 import kinetickk.foundation.design.drawKkThreatHatch
+import kinetickk.foundation.design.kkButtonWidth
 import kinetickk.foundation.design.kkLoop
+import kinetickk.foundation.design.kkPulse
+import kinetickk.foundation.design.label
 import kinetickk.foundation.design.kkShake
 import kinetickk.foundation.design.kkStroke
 import kinetickk.foundation.design.labelStyle
 import kinetickk.foundation.design.measureKkText
 import kinetickk.foundation.design.monoStyle
+import kinetickk.foundation.design.wideStyle
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
@@ -64,9 +78,17 @@ internal fun ColorVision.previewPalette(): KkRolePalette = when (this) {
 internal fun settingsPreviewUnits(group: SettingsGroup): Float = when (group) {
     SettingsGroup.GAME -> 240f
     SettingsGroup.SOUND -> 250f
+    SettingsGroup.DISPLAY -> DISPLAY_SCREEN_HEIGHT + 32f + DISPLAY_STRIP_HEIGHT + 16f + DISPLAY_BUTTON_HEIGHT * 1.3f
     SettingsGroup.GRAPHICS -> 300f + 12f + 30f + 6f + 14f
     SettingsGroup.INTERFACE -> 110f + 12f + 110f
+    SettingsGroup.CONTROLS -> (KEYCAP_HEIGHT + 30f) * 2f
 }
+
+private const val DISPLAY_SCREEN_HEIGHT = 190f
+private const val DISPLAY_STRIP_HEIGHT = 30f
+private const val DISPLAY_BUTTON_HEIGHT = 52f
+private const val KEYCAP_WIDTH = 64f
+private const val KEYCAP_HEIGHT = 48f
 
 /** Live preview column: reacts to the current values of the selected tab. */
 internal fun DrawScope.drawSettingsPreview(area: Rect, frame: SettingsFrame, measurers: SettingsMeasurers) {
@@ -79,8 +101,10 @@ internal fun DrawScope.drawSettingsPreview(area: Rect, frame: SettingsFrame, mea
     when (group) {
         SettingsGroup.GAME -> preview.game()
         SettingsGroup.SOUND -> preview.sound()
+        SettingsGroup.DISPLAY -> preview.display(frame.platform)
         SettingsGroup.GRAPHICS -> preview.graphics()
         SettingsGroup.INTERFACE -> preview.interfaceSample()
+        SettingsGroup.CONTROLS -> preview.controls(frame)
     }
 }
 
@@ -352,6 +376,112 @@ private class PreviewScope(
         bar(statsLeft + 12f, rowTop + 54f, (statsWidth - 24f) * 0.6f, 8f, Kk.Ink4)
     }
 
+    /**
+     * Display: (a) the window in the stored mode inside a dashed screen outline (title strip when
+     * windowed, filling the outline when borderless, cut corners in fullscreen) with its size;
+     * (b) a cadence strip whose dot moves at the chosen frame limit; (c) a Play button at the
+     * applied interface scale.
+     */
+    fun display(platform: SettingsPlatform) {
+        val roles = measurers.roles
+        val screen = rect(0f, 0f, PREVIEW_UNITS, DISPLAY_SCREEN_HEIGHT)
+        draw.drawRect(Kk.Ink1, screen.topLeft, screen.size)
+        val inset = 0.75f * u
+        draw.drawRect(
+            Kk.Line2, Offset(screen.left + inset, screen.top + inset), Size(screen.width - inset * 2f, screen.height - inset * 2f),
+            style = Stroke(1.5f * u, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f * u, 5f * u))),
+        )
+        val mode = if (platform.support.windowModes) preferences.windowMode else WindowMode.FULLSCREEN
+        when (mode) {
+            WindowMode.WINDOWED -> {
+                val window = rect(48f, 20f, 288f, 170f)
+                draw.drawRect(Kk.Ink3, window.topLeft, window.size)
+                draw.drawRect(Kk.Bone, window.topLeft, Size(window.width, 14f * u))
+                draw.drawRect(Kk.Line, window.topLeft, window.size, style = kkStroke(u))
+            }
+            WindowMode.BORDERLESS -> {
+                val window = rect(4f, 4f, PREVIEW_UNITS - 4f, DISPLAY_SCREEN_HEIGHT - 4f)
+                draw.drawRect(Kk.Ink3, window.topLeft, window.size)
+            }
+            WindowMode.FULLSCREEN -> {
+                val window = rect(4f, 4f, PREVIEW_UNITS - 4f, DISPLAY_SCREEN_HEIGHT - 4f)
+                draw.drawKkSlab(window, Kk.Ink3, cut = 14f * u)
+            }
+        }
+        if (platform.support.windowModes) {
+            val size = platform.liveSizeOverride(preferences)?.let { settingsWindowSizeText(it.widthDp, it.heightDp, language) }
+                ?: settingsWindowSizeText(preferences.windowSize.widthDp, preferences.windowSize.heightDp, language)
+            val label = if (mode == WindowMode.WINDOWED) size else language.text(windowModeText(mode))
+            draw.drawKkText(
+                text, label, measurers.typography.monoStyle(12f), x(PREVIEW_UNITS * 0.5f), y(DISPLAY_SCREEN_HEIGHT + 16f), Kk.Mute,
+                align = KkAlign.CENTER, valign = KkVAlign.CENTER, uppercase = true,
+            )
+        }
+        // (b) Cadence: the dot crosses 240 units in 1.2 s at positions quantized to the frame limit.
+        val stripTop = DISPLAY_SCREEN_HEIGHT + 32f
+        val strip = rect(48f, stripTop + DISPLAY_STRIP_HEIGHT * 0.5f - 1f, 288f, stripTop + DISPLAY_STRIP_HEIGHT * 0.5f + 1f)
+        draw.drawRect(Kk.Line, strip.topLeft, strip.size)
+        val cap = preferences.frameRateCap
+        val step = if (cap > 0) 1f / cap else 1f / 120f
+        for (ghost in 3 downTo 0) {
+            val sample = if (cap > 0) floor((time - ghost * step) * cap) / cap else time - ghost * step
+            val position = kkLoop(sample, 1.2f)
+            val alpha = if (ghost == 0) 1f else 0.45f / ghost
+            draw.drawCircle(roles.you, 5f * u, at(48f + 240f * position, stripTop + DISPLAY_STRIP_HEIGHT * 0.5f), alpha = alpha)
+        }
+        // (c) Play at the applied interface scale.
+        val scale = platform.appliedInterfaceScale(preferences.interfaceScalePercent) / 100f
+        val buttonTop = stripTop + DISPLAY_STRIP_HEIGHT + 16f
+        val factor = u / draw.density * scale
+        val measurer = measurers.at(1f)
+        val label = language.text(SettingsRedesignText.PreviewPlay)
+        val width = kkButtonWidth(measurer, label, KkButtonSize.MD, draw.density)
+        val height = KkButtonSize.MD.heightDp * draw.density
+        val center = at(PREVIEW_UNITS * 0.5f, buttonTop + DISPLAY_BUTTON_HEIGHT * scale * 0.5f)
+        draw.withTransform({
+            translate(center.x, center.y)
+            scale(factor, factor, Offset.Zero)
+        }) {
+            drawKkButton(measurer, Rect(-width * 0.5f, -height * 0.5f, width * 0.5f, height * 0.5f), label, KkButtonVariant.PRIMARY, KkButtonSize.MD)
+        }
+    }
+
+    /**
+     * Controls: six sheared keycaps (Dash, Brake, Skill 1–3, Apex) with their keys; the capturing
+     * one pulses volt and the one that just took a swapped key shows the swap echo.
+     */
+    fun controls(frame: SettingsFrame) {
+        val roles = measurers.roles
+        val actions = PREVIEW_ACTIONS
+        actions.forEachIndexed { index, action ->
+            val centerX = 56f + 112f * (index % 3)
+            val top = (KEYCAP_HEIGHT + 30f) * (index / 3)
+            val cap = rect(centerX - KEYCAP_WIDTH * 0.5f, top, centerX + KEYCAP_WIDTH * 0.5f, top + KEYCAP_HEIGHT)
+            val capturing = frame.capture == action
+            val swapped = frame.swapped == action && time - frame.swappedAt in 0f..SETTINGS_SWAP_SECONDS
+            if (capturing || swapped) {
+                val echo = if (capturing) 4f * kkPulse(time, 1.2f) else 4f
+                draw.drawKkSheared(Rect(cap.left + echo * u, cap.top + echo * u, cap.right + echo * u, cap.bottom + echo * u), roles.you.copy(alpha = 0.55f))
+            }
+            draw.drawKkSheared(cap, if (capturing) roles.you else Kk.Ink3)
+            if (!capturing) {
+                val key = preferences.keyBindings.key(action).label(language)
+                fitted(key, measurers.typography.wideStyle(18f), (KEYCAP_WIDTH - 10f) * u) { layout ->
+                    draw.drawKkText(layout, cap.center.x, cap.center.y, Kk.Bone, align = KkAlign.CENTER, valign = KkVAlign.CENTER)
+                }
+            }
+            fitted(settingsActionName(action, language), measurers.typography.labelStyle(11f), 104f * u) { layout ->
+                draw.drawKkText(layout, cap.center.x, y(top + KEYCAP_HEIGHT + 14f), Kk.Mute, align = KkAlign.CENTER, valign = KkVAlign.CENTER)
+            }
+        }
+    }
+
+    /** Measures [label] at the preview scale, shrunk to [lane] px when wider, and hands it to [draw]. */
+    private inline fun fitted(label: String, style: TextStyle, lane: Float, block: (TextLayoutResult) -> Unit) {
+        val natural = measureKkText(text, label, style, uppercase = true)
+        block(if (natural.size.width <= lane) natural else measureKkText(measurers.at(text.scale * lane / natural.size.width), label, style, uppercase = true))
+    }
+
     fun bar(l: Float, t: Float, width: Float, height: Float, color: Color) {
         draw.drawRect(color, Offset(x(l), y(t)), Size(width * u, height * u))
     }
@@ -403,6 +533,11 @@ private class PreviewScope(
 internal fun settingsTextSizeSample(language: AppLanguage): List<Pair<String, String>> = listOf(
     language.text(ProfileText.PlayerPower) to "140",
     language.text(ProfileText.CoreIntegrity) to "100",
+)
+
+/** The actions the Controls preview shows, in its 3 × 2 order. */
+private val PREVIEW_ACTIONS: List<GameAction> = listOf(
+    GameAction.DASH, GameAction.BRAKE, GameAction.APEX, GameAction.SKILL_1, GameAction.SKILL_2, GameAction.SKILL_3,
 )
 
 private class DamageSample(val amount: Long, val x: Float, val y: Float, val lane: Float, val tierScale: Float, val delay: Float)
