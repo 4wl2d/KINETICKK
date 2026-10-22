@@ -190,6 +190,15 @@ internal class MutableGameState(
     internal var coreImpulseReadyAt: Float = reductionSource?.coreImpulseReadyAt ?: 0f
     internal var primedDashUntil: Float = reductionSource?.primedDashUntil ?: 0f
     internal var phaseUntil: Float = reductionSource?.phaseUntil ?: 0f
+    /** Seismic's keystone keeps two pending aftershocks: when each strikes (negative when free), where and how hard. */
+    internal var aftershockAt0: Float = reductionSource?.aftershockAt0 ?: -1f
+    internal var aftershockX0: Float = reductionSource?.aftershockX0 ?: 0f
+    internal var aftershockY0: Float = reductionSource?.aftershockY0 ?: 0f
+    internal var aftershockDamage0: Float = reductionSource?.aftershockDamage0 ?: 0f
+    internal var aftershockAt1: Float = reductionSource?.aftershockAt1 ?: -1f
+    internal var aftershockX1: Float = reductionSource?.aftershockX1 ?: 0f
+    internal var aftershockY1: Float = reductionSource?.aftershockY1 ?: 0f
+    internal var aftershockDamage1: Float = reductionSource?.aftershockDamage1 ?: 0f
     /** Erased bolts and cashed marks announced within the current fixed step; zero between steps. */
     internal var shotErasedDispatches: Int = reductionSource?.shotErasedDispatches ?: 0
     internal var markDispatches: Int = reductionSource?.markDispatches ?: 0

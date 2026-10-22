@@ -395,7 +395,7 @@ private fun MutableGameState.combatFieldProjection(
     val table = combatFieldTable
     if (reusable != null) {
         if (table === identityTable) return reusable
-        if (reusable.matches(table)) return reusable
+        if (matches(reusable, table)) return reusable
     }
     if (table.count == 0) return immutableListOf()
     return immutableListOfSize(table.count) { index ->
@@ -421,17 +421,33 @@ private fun MutableGameState.combatFieldProjection(
 private fun fieldReaction(table: CombatFieldTable, index: Int): Int =
     if (table.source(index) == FieldSource.REACTION) table.owner(index) else -1
 
-/** The kind counter as a 0..1 fill; the shipped kinds keep none. */
-@Suppress("UNUSED_PARAMETER")
-private fun fieldCharge01(table: CombatFieldTable, index: Int): Float = 0f
+/**
+ * The kind counter as a 0..1 fill: shots a Maw, a Time Bubble (Rewind) or Dead Air ate of its budget, a Rot
+ * Well's growths; 0 for the other kinds.
+ */
+private fun MutableGameState.fieldCharge01(table: CombatFieldTable, index: Int): Float {
+    if (table.source(index) != FieldSource.REACTION) return 0f
+    val keystone = table.hasFlag(index, FieldFlags.KEYSTONE)
+    val budget = when (table.kind(index)) {
+        CombatFieldKind.NULL_WELL -> verbValueOrZero(ReactionId.NULL_WELL, MAW_SHOTS_VALUE)
+        CombatFieldKind.TIME_BUBBLE -> if (keystone) REWIND_SHOTS.toFloat() else verbValueOrZero(ReactionId.STASIS, BUBBLE_SHOTS_VALUE)
+        CombatFieldKind.HUSH -> if (keystone) DEAD_AIR_SHOTS.toFloat() else 0f
+        CombatFieldKind.ROT_WELL -> if (keystone) 0f else verbValueOrZero(ReactionId.ROT_WELL, COMPOST_GROWTHS_VALUE)
+        else -> 0f
+    }
+    return if (budget <= 0f) 0f else (table[index, FieldCell.CHARGE] / budget).coerceIn(0f, 1f)
+}
 
-private fun ImmutableList<CombatFieldProjection>.matches(table: CombatFieldTable): Boolean {
-    if (size != table.count) return false
-    for (index in 0 until size) if (!this[index].matches(table, index)) return false
+private fun MutableGameState.verbValueOrZero(reaction: ReactionId, index: Int): Float =
+    content.build.reaction(reaction).values.getOrNull(index) ?: 0f
+
+private fun MutableGameState.matches(projection: ImmutableList<CombatFieldProjection>, table: CombatFieldTable): Boolean {
+    if (projection.size != table.count) return false
+    for (index in 0 until projection.size) if (!projection[index].matches(this, table, index)) return false
     return true
 }
 
-private fun CombatFieldProjection.matches(table: CombatFieldTable, index: Int): Boolean =
+private fun CombatFieldProjection.matches(state: MutableGameState, table: CombatFieldTable, index: Int): Boolean =
     kind.ordinal == table.kind(index).ordinal &&
         source.ordinal == table.source(index).ordinal &&
         x.sameBitsAs(table[index, FieldCell.X]) &&
@@ -443,19 +459,19 @@ private fun CombatFieldProjection.matches(table: CombatFieldTable, index: Int): 
         reaction == fieldReaction(table, index) &&
         createdAt.sameBitsAs(table[index, FieldCell.CREATED_AT]) &&
         expiresAt.sameBitsAs(table[index, FieldCell.EXPIRES_AT]) &&
-        charge01.sameBitsAs(fieldCharge01(table, index)) &&
+        charge01.sameBitsAs(state.fieldCharge01(table, index)) &&
         anchorId == table[index, FieldCell.ANCHOR_ID].toInt() &&
         followsCore == table.hasFlag(index, FieldFlags.FOLLOWS_CORE)
 
 /**
  * Lingering Core state from committed scalars. The remaining shares of Ablaze, Frictionless and Arc Weave
- * are measured against their reaction's duration value ([ABLAZE_SECONDS_VALUE] and its siblings); with no
- * such value a live state shows full. The shared [CoreStateProjection.NEUTRAL] stands for no state at all.
+ * are measured against the duration their reaction grants (its keystone form included); with no such value
+ * a live state shows full. The shared [CoreStateProjection.NEUTRAL] stands for no state at all.
  */
 private fun MutableGameState.coreStateProjection(previous: CoreStateProjection?): CoreStateProjection {
-    val ablaze = remainingShare(ablazeUntil, reactionValue(ReactionId.WILDFIRE, ABLAZE_SECONDS_VALUE))
-    val frictionless = remainingShare(frictionlessUntil, reactionValue(ReactionId.SUPERCONDUCT, FRICTIONLESS_SECONDS_VALUE))
-    val weave = remainingShare(weaveUntil, reactionValue(ReactionId.RESONANT_ARC, WEAVE_SECONDS_VALUE))
+    val ablaze = remainingShare(ablazeUntil, if (hasVerb(ReactionId.WILDFIRE)) ablazeSeconds() else 0f)
+    val frictionless = remainingShare(frictionlessUntil, verbValueOrZero(ReactionId.SUPERCONDUCT, FRICTIONLESS_SECONDS_VALUE))
+    val weave = remainingShare(weaveUntil, if (hasVerb(ReactionId.RESONANT_ARC)) weaveSeconds() else 0f)
     val blastJumpReady = blastJumpUntil > elapsed
     val guard = if (guardUntil > elapsed) guardShards else 0
     val phased = phaseUntil > elapsed
@@ -475,9 +491,6 @@ private fun MutableGameState.coreStateProjection(previous: CoreStateProjection?)
     )
     return if (projection == previous) previous else projection
 }
-
-private fun MutableGameState.reactionValue(reaction: ReactionId, index: Int): Float =
-    content.build.reaction(reaction).values.getOrNull(index) ?: 0f
 
 private fun MutableGameState.remainingShare(until: Float, seconds: Float): Float = when {
     until <= elapsed -> 0f

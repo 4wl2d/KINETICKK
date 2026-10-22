@@ -856,7 +856,14 @@ private fun MutableGameState.updateEclipse(ability: CharacterRuntime, delta: Flo
  * most of the speed, costs a charge instead of heat, counts enemies it crosses as Dash hits and leaves
  * a void scar. Blink Drive extends it and adds its strike and pairings.
  */
-internal fun MutableGameState.crescentBlink(directionX: Float, directionY: Float) {
+internal fun MutableGameState.crescentBlink(
+    directionX: Float,
+    directionY: Float,
+    /** A reach that replaces the Blink's own (a Void Anchor's); NaN keeps it. */
+    rangeOverride: Float = Float.NaN,
+    /** Scales the Blink's reach (a Blast Jump). */
+    rangeScale: Float = 1f,
+) {
     val ability = characterRuntime
     ability.blinkCharges = max(0, ability.blinkCharges - 1)
     dashPhaseTime = DASH_PHASE_SECONDS
@@ -870,6 +877,8 @@ internal fun MutableGameState.crescentBlink(directionX: Float, directionY: Float
             strikeMass = 2f
         }
     }
+    if (!rangeOverride.isNaN()) range = rangeOverride
+    range *= rangeScale
     val targetX = cameraX + pointerX - screenWidth * 0.5f
     val targetY = cameraY + pointerY - screenHeight * 0.5f
     val ahead = (targetX - coreX) * directionX + (targetY - coreY) * directionY

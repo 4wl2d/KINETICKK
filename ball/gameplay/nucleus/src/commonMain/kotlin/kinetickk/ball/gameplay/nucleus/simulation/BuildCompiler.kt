@@ -86,6 +86,8 @@ internal class CompiledBuild private constructor(
     /** Bits over ReactionId ordinals whose two elements both have a source in the build. */
     val reachableReactionMask: Int,
     val ownedItemCount: Int,
+    /** Bits over ReactionId ordinals whose keystone form the build switched on. */
+    val keystoneMask: Int = 0,
     /** By RelicKey ordinal: the first bound Relic carrying that key (a weapon with the key harmonizes with it). */
     private val keyHarmonies: Array<RelicId?> = arrayOfNulls(kinetickk.ball.content.api.RelicKey.entries.size),
 ) {
@@ -110,6 +112,7 @@ internal class CompiledBuild private constructor(
     fun liability(id: RelicId): Boolean = liabilityMask and (1 shl id.ordinal) != 0
     fun pairing(id: kinetickk.ball.content.api.RelicPairingId): Boolean = pairingMask and (1 shl id.ordinal) != 0
     fun reactionReachable(id: ReactionId): Boolean = reachableReactionMask and (1 shl id.ordinal) != 0
+    fun keystone(id: ReactionId): Boolean = keystoneMask and (1 shl id.ordinal) != 0
 
     companion object {
         /** Clause references pack the item id and the clause index. */
@@ -141,6 +144,8 @@ internal class CompiledBuild private constructor(
             reactionPowerBonus: Float = 0f,
             /** The equipped weapon's Relic key: a bound Relic carrying it harmonizes with the weapon. */
             weaponKey: kinetickk.ball.content.api.RelicKey? = null,
+            /** Reaction keystone forms switched on beyond the items' own (no item rule declares one yet). */
+            keystoneMask: Int = 0,
         ): CompiledBuild {
             val policy = content.build.policy
             val itemCount = content.items.size
@@ -385,6 +390,7 @@ internal class CompiledBuild private constructor(
                 links = links.toImmutableList(),
                 reachableReactionMask = reachable,
                 ownedItemCount = order.size,
+                keystoneMask = keystoneMask and ((1 shl ReactionId.entries.size) - 1),
                 keyHarmonies = arrayOfNulls<RelicId>(kinetickk.ball.content.api.RelicKey.entries.size).also { harmonies ->
                     for (relic in equipped) for (key in content.relic(relic.id).keys) {
                         if (harmonies[key.ordinal] == null) harmonies[key.ordinal] = relic.id
@@ -426,21 +432,25 @@ internal fun MutableGameState.recordRelicGain(id: RelicId) {
 
 /** Recompiles after an item, relic or severance change. */
 internal fun MutableGameState.recompileBuild() {
-    build = CompiledBuild.compile(
-        content = content,
-        itemStacks = IntArray(itemStacks.size) { itemStacks[it] },
-        rebornItems = IntArray(rebornItems.size) { rebornItems[it] },
-        acquisitionOrder = acquisitionOrder,
-        coreShape = coreShape,
-        equipped = equippedRelics,
-        severed = severedRelics.map { it.id },
-        spentOuroboros = ouroborosSpent,
-        statusPotencyBonus = matrix.statusPotencyBonus,
-        reactionPowerBonus = matrix.reactionPowerBonus,
-        weaponKey = currentWeaponDefinition.key,
-    )
+    build = compileBuild()
     reconcileIntegrityLiability()
 }
+
+/** The build the run's items, Relics, character, Matrix and weapon compile to, with [keystoneMask] forms on top. */
+internal fun MutableGameState.compileBuild(keystoneMask: Int = 0): CompiledBuild = CompiledBuild.compile(
+    content = content,
+    itemStacks = IntArray(itemStacks.size) { itemStacks[it] },
+    rebornItems = IntArray(rebornItems.size) { rebornItems[it] },
+    acquisitionOrder = acquisitionOrder,
+    coreShape = coreShape,
+    equipped = equippedRelics,
+    severed = severedRelics.map { it.id },
+    spentOuroboros = ouroborosSpent,
+    statusPotencyBonus = matrix.statusPotencyBonus,
+    reactionPowerBonus = matrix.reactionPowerBonus,
+    weaponKey = currentWeaponDefinition.key,
+    keystoneMask = keystoneMask,
+)
 
 /** True when bound relic liabilities disable every effect of [item] (offers weight it 0; cards strike it). */
 internal fun MutableGameState.itemSuppressedShare(item: ItemDefinition): Float {

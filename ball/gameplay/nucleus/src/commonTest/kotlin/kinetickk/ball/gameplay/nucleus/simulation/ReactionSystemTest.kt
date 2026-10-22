@@ -21,8 +21,9 @@ class ReactionSystemTest {
     fun everyReactionConsumesItsStacksIsDiscoveredOnceAndLeavesItsResidue() {
         ReactionId.entries.forEach { reaction ->
             val state = buildTestState()
-            val target = state.dummy(x = 400f)
-            val neighbor = state.dummy(x = 400f, y = 0f).also { placeNeighbor(state, reaction, target, it) }
+            // Near the Core Shatterpoint guards the Core instead of throwing its shards out.
+            val target = state.dummy(x = if (reaction == ReactionId.SHATTERPOINT) 900f else 400f)
+            val neighbor = state.dummy(x = target.x, y = 0f).also { placeNeighbor(state, reaction, target, it) }
             val older = reaction.first
             val incoming = reaction.second
 
@@ -218,9 +219,10 @@ class ReactionSystemTest {
             ReactionId.GLACIER_CRUSH, ReactionId.SHATTERPOINT -> 100f
             ReactionId.MAGNETIZE -> 150f
         }
-        // Glacier Crush and Shatterpoint fire their first shard along a direction derived from the target id.
+        // Glacier Crush's middle shard flies straight away from the Core; Shatterpoint fires its first shard along
+        // a direction derived from the target id.
         val angle = when (reaction) {
-            ReactionId.GLACIER_CRUSH -> target.id * 0.37f
+            ReactionId.GLACIER_CRUSH -> kotlin.math.atan2(target.y - state.coreY, target.x - state.coreX)
             ReactionId.SHATTERPOINT -> target.id * 0.53f + 0.3f
             else -> 0f
         }
@@ -293,7 +295,8 @@ class ReactionSystemTest {
             else -> {
                 val definition = state.content.build.reaction(reaction)
                 val residue = definition.residue ?: fail("$reaction has a residue")
-                val expected = if (reaction == ReactionId.WILDFIRE) 3 / 2 + 1 else definition.residueStacks
+                // Wildfire spreads its declared residue (it once spread a / 2 + 1 stacks).
+                val expected = definition.residueStacks
                 assertEquals(expected, neighbor.stacksOf(residue), "$reaction residue on its neighbor")
                 assertEquals(1, neighbor.generationOf(residue), "$reaction residue is generation one")
                 if (reaction != ReactionId.WILDFIRE) assertTrue(neighbor.hp < neighbor.maxHp, "$reaction reaches its neighbor")

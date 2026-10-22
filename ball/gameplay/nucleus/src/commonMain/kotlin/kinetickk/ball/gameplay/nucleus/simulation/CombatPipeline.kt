@@ -87,8 +87,14 @@ internal fun MutableGameState.effectiveDashHeatCost(): Float {
     var cost = dashHeatCost
     if (tagTier(BuildTag.DRIVE) >= 1) cost *= 0.85f
     if (build.upside(RelicId.BLINK_DRIVE) && !build.pairing(RelicPairingId.FOLD_VECTOR)) cost *= 0.65f
+    // Plasma Pool: Dashes from inside a pool cost less heat.
+    if (inPlasmaPool()) cost *= reactionValue(ReactionId.PLASMA_BURST, PLASMA_DASH_HEAT_VALUE)
     return cost
 }
+
+/** True while the Core stands in a Plasma Burst's pool. */
+internal fun MutableGameState.inPlasmaPool(): Boolean =
+    coreInField(CombatFieldKind.PLASMA) && hasVerb(ReactionId.PLASMA_BURST)
 
 /** Magnet radius; Event Horizon's liability removes the latch instead of shrinking it. */
 internal fun MutableGameState.effectivePickupRadius(): Float = pickupRadius
@@ -98,6 +104,7 @@ internal fun MutableGameState.buildActivationBonus(): Float {
     var bonus = buffAmount(BuffStat.ACTIVATION) + whileAmount(BuffStat.ACTIVATION, null)
     if (tagTier(BuildTag.ARSENAL) >= 1) bonus += 0.10f
     if (build.upside(RelicId.HOLLOW_CROWN)) bonus += 0.08f * emptyRelicSlots()
+    if (inPlasmaPool()) bonus += reactionValue(ReactionId.PLASMA_BURST, PLASMA_ACTIVATION_VALUE)
     var multiplier = 1f + bonus
     if (build.liability(RelicId.STASIS_ANCHOR) && !braking) multiplier *= 0.7f
     return multiplier
@@ -367,6 +374,8 @@ internal fun MutableGameState.dealHit(
         shockwave(enemy.x, enemy.y, 0.3f, 120f, 1)
         applyStatusAround(enemy.x, enemy.y, 120f, StatusElement.CRYO, 2f, generation = 1, excludedId = enemy.id)
     }
+    // Spall: the hit cashes Thermal Shock's mark.
+    cashSpall(enemy)
     if (result.amount > 0f && qualified) {
         // The shattering hit's own clauses still count the target as Frozen.
         if (shatter) shatteringEnemyId = enemy.id
@@ -493,7 +502,7 @@ internal fun MutableGameState.dealSkillDamage(
     val scaled = amount * relicSurge() * (1f + vulnerability(enemy, if (kinetic) HitSource.IMPACT else HitSource.SKILL)) *
         damageLiability(HitSource.SKILL, false) * matrix.damageMultiplier
     val received = when {
-        element != null -> if (enemy.aspectIsImmune && enemy.aspectElement == element.ordinal) 0f else 1f
+        element != null -> if (aspectRefuses(enemy, element)) 0f else 1f
         kinetic -> enemy.impactTaken
         else -> enemy.weaponTaken * armorWeaponFactor(enemy, HitSource.SKILL)
     }
@@ -531,11 +540,15 @@ internal const val KILL_PROC_SHARE_CAP: Float = 0.4f
  * The receiving enemy's own multiplier, applied once per damage instance: element-tagged damage is
  * refused only by an IMMUNE aspect; element-less damage meets the kinetic frame of its source.
  */
-internal fun receivedScale(enemy: Enemy, source: HitSource, element: StatusElement?): Float = when {
-    element != null -> if (enemy.aspectIsImmune && enemy.aspectElement == element.ordinal) 0f else 1f
+internal fun MutableGameState.receivedScale(enemy: Enemy, source: HitSource, element: StatusElement?): Float = when {
+    element != null -> if (aspectRefuses(enemy, element)) 0f else 1f
     source == HitSource.IMPACT || source == HitSource.DASH -> enemy.impactTaken
     else -> enemy.weaponTaken * armorWeaponFactor(enemy, source)
 }
+
+/** An immune aspect refuses its own element, unless the enemy is Suppressed (Crevasse). */
+internal fun MutableGameState.aspectRefuses(enemy: Enemy, element: StatusElement): Boolean =
+    enemy.aspectIsImmune && enemy.aspectElement == element.ordinal && !markIs(enemy, MarkKind.SUPPRESSED)
 
 private fun MutableGameState.dealReceived(
     enemy: Enemy,

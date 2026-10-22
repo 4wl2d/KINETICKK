@@ -116,8 +116,8 @@ class CombatFoundationsTest {
         state.coreFieldMask = 1 shl CombatFieldKind.NULL_WELL.ordinal
         val model = state.toRenderModel()
         val core = model.coreState
-        // Without a content duration a live state shows full.
-        assertEquals(1f, core.ablaze01)
+        // Ablaze shows the share left of the three seconds Wildfire grants.
+        assertEquals(1f / 3f, core.ablaze01, 1e-6f)
         assertEquals(0f, core.frictionless01)
         assertTrue(core.blastJumpReady)
         assertEquals(4, core.guardShards)
@@ -241,7 +241,8 @@ class CombatFoundationsTest {
         val cues = state.takeVisualFxCues()
         val reaction = cues.filterIsInstance<VisualFxCue.ReactionTriggered>().single()
         assertEquals(ReactionId.SUPERCONDUCT.ordinal, reaction.reaction)
-        assertEquals(ReactionCueFlags.CASCADE, reaction.flags)
+        // A cascade, and near the Core its Frictionless verb fires too.
+        assertEquals(ReactionCueFlags.CASCADE or ReactionCueFlags.VERB, reaction.flags)
         val links = cues.filterIsInstance<VisualFxCue.WeaponArcAdded>()
         assertTrue(links.isNotEmpty())
         assertTrue(links.all { it.style == LinkStyleCode.reaction(ReactionId.SUPERCONDUCT) })

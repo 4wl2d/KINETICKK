@@ -57,7 +57,7 @@ class ContentBalanceCharacterizationTest {
         val build = ui.build
 
         assertEquals(
-            "6b94bfd3ccc1e1a6",
+            "d6fa6a5d0a26712d",
             goldenFingerprint {
                 build.elements.forEach { element ->
                     add(element.element.name)
@@ -78,6 +78,11 @@ class ContentBalanceCharacterizationTest {
                     add(reaction.radius)
                     add(reaction.residue?.name ?: "-")
                     add(reaction.residueStacks)
+                    reaction.values.forEach(::add)
+                    add(reaction.verb)
+                    add(reaction.cue)
+                    add(reaction.keystone)
+                    add(reaction.keystoneDescription)
                 }
                 build.resonances.forEach { resonance ->
                     add(resonance.tag.name)

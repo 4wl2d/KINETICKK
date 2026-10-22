@@ -10,6 +10,9 @@ import kinetickk.ball.gameplay.nucleus.protocol.FxColorCode
 import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
 import kinetickk.ball.gameplay.nucleus.protocol.ReactionCueFlags
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
+import kinetickk.ball.gameplay.nucleus.render.ProjectileKind
+import kotlin.math.PI
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
@@ -121,7 +124,8 @@ private fun MutableGameState.react(
 
 /**
  * The reaction's effect for [a] older and [b] incoming stacks. [scale] multiplies the magnitude; an [echo]
- * skips the build residue, discovery and REACTION clauses.
+ * skips the build residue, discovery and REACTION clauses. A reaction with content values also plays its
+ * verb (the play-style behaviour); a keystone in the build switches the verb to the keystone form.
  */
 internal fun MutableGameState.resolveReaction(
     enemy: Enemy,
@@ -141,52 +145,93 @@ internal fun MutableGameState.resolveReaction(
     val residueGeneration = generation + 1
     val x = enemy.x
     val y = enemy.y
+    // Verb values in the order BuildCatalog documents; without them the reaction keeps its base effect.
+    val v = definition.values
+    val verbs = v.isNotEmpty()
+    val keystone = verbs && build.keystone(reaction)
+    val near = nearCore(x, y)
+    var flags = if (keystone) ReactionCueFlags.KEYSTONE else 0
+    var direction = Float.NaN
     when (reaction) {
         ReactionId.THERMAL_SHOCK -> {
-            dealStatusDamage(enemy, magnitude, StatusElement.THERMAL, ignoresAffinity = true)
+            dealStatusDamage(enemy, if (keystone) magnitude * FLASH_FREEZE_DAMAGE else magnitude, StatusElement.THERMAL,
+                ignoresAffinity = true)
             enemy.status[StatusCell.BRITTLE] = 1f
+            // Spall: the next direct hit throws the target (Flash Freeze: freezes it instead).
+            if (verbs && enemy.alive) setMark(enemy, MarkKind.SPALL, v[0])
         }
         ReactionId.PLASMA_BURST -> {
-            for (index in enemies.indices) {
-                val target = enemies[index]
-                if (target.alive && distanceSquared(x, y, target.x, target.y) <= square(definition.radius + target.radius)) {
-                    dealStatusDamage(target, magnitude, StatusElement.THERMAL, ignoresAffinity = true)
-                    if (residueGeneration < 2 && target.alive) applyStatus(target, StatusElement.THERMAL, definition.residueStacks, residueGeneration)
-                }
+            plasmaBurst(x, y, definition.radius, magnitude, definition.residueStacks, residueGeneration)
+            if (keystone) {
+                arcPlasma(enemy, x, y, definition.radius, magnitude, residueGeneration)
+            } else if (verbs) {
+                addField(CombatFieldKind.PLASMA, FieldSource.REACTION, reaction.ordinal, x, y, radius = v[0], seconds = v[1],
+                    damagePerSecond = 0f, generation = residueGeneration)
             }
         }
         ReactionId.FUSION -> addField(
-            CombatFieldKind.FUSION, FieldSource.REACTION, reaction.ordinal, x, y, radius = definition.radius, seconds = 1.6f,
-            damagePerSecond = magnitude, element = StatusElement.THERMAL, stacksPerTick = 1,
-            generation = residueGeneration, pull = 220f,
+            CombatFieldKind.FUSION, FieldSource.REACTION, reaction.ordinal, x, y, radius = definition.radius,
+            seconds = if (keystone) DWARF_STAR_SECONDS else FUSION_SECONDS,
+            damagePerSecond = if (keystone) magnitude * DWARF_STAR_DAMAGE else magnitude,
+            element = StatusElement.THERMAL, stacksPerTick = 1, generation = residueGeneration,
+            pull = if (keystone) DWARF_STAR_PULL else FUSION_PULL, flags = if (keystone) FieldFlags.KEYSTONE else 0,
         )
         ReactionId.WILDFIRE -> {
             dealStatusDamage(enemy, magnitude, StatusElement.THERMAL, ignoresAffinity = true)
-            var spread = 0
-            val spreadStacks = a / 2 + 1
-            for (index in enemies.indices) {
-                if (spread >= 4) break
-                val target = enemies[index]
-                if (target.id == enemy.id || !target.alive) continue
-                if (distanceSquared(x, y, target.x, target.y) <= square(definition.radius + target.radius)) {
-                    spread++
-                    addRelicArc(x, y, target.x, target.y, link)
-                    if (residueGeneration < 2) applyStatus(target, StatusElement.THERMAL, spreadStacks, residueGeneration)
+            if (!keystone) {
+                var spread = 0
+                val spreadLimit = if (verbs) v[0].toInt() else WILDFIRE_LEGACY_SPREAD
+                for (index in enemies.indices) {
+                    if (spread >= spreadLimit) break
+                    val target = enemies[index]
+                    if (target.id == enemy.id || !target.alive) continue
+                    if (distanceSquared(x, y, target.x, target.y) <= square(definition.radius + target.radius)) {
+                        spread++
+                        addRelicArc(x, y, target.x, target.y, link)
+                        if (residueGeneration < 2) applyStatus(target, StatusElement.THERMAL, definition.residueStacks, residueGeneration)
+                    }
                 }
+            }
+            // Ablaze: near the Core (Firewalker: anywhere) every ram sets enemies burning.
+            if (verbs && (near || keystone)) {
+                ablazeUntil = max(ablazeUntil, elapsed + ablazeSeconds())
+                flags = flags or ReactionCueFlags.VERB
             }
         }
         ReactionId.SUPERCONDUCT -> {
             dealStatusDamage(enemy, magnitude, StatusElement.CRYO, ignoresAffinity = true)
-            chain(x, y, enemy.id, 3, definition.radius, link) { target ->
-                dealStatusDamage(target, magnitude, StatusElement.ION, ignoresAffinity = true)
+            chain(x, y, enemy.id, if (keystone) ZERO_RESISTANCE_LINKS else SUPERCONDUCT_LINKS, definition.radius, link) { target ->
+                var damage = magnitude
+                if (keystone && isFrozen(target)) {
+                    damage *= ZERO_RESISTANCE_FROZEN
+                    target.status[StatusCell.BRITTLE] = 0f
+                }
+                dealStatusDamage(target, damage, StatusElement.ION, ignoresAffinity = true)
                 if (residueGeneration < 2) applyStatus(target, StatusElement.CRYO, definition.residueStacks, residueGeneration)
+            }
+            // Frictionless: near the Core the drag falls away and the Core vents heat once.
+            if (verbs && !keystone && near) {
+                frictionlessUntil = max(frictionlessUntil, elapsed + v[1])
+                heat = max(0f, heat - v[2])
+                flags = flags or ReactionCueFlags.VERB
             }
         }
         ReactionId.GLACIER_CRUSH -> {
-            repeat(5) { shard ->
-                val angle = shard * TAU / 5f + enemy.id * 0.37f
-                val endX = x + cos(angle) * 220f
-                val endY = y + sin(angle) * 220f
+            // Ice Fan: the fan points away from the Core (Aimed Avalanche: along the aim); without a verb it
+            // keeps its old spread around the target.
+            val base = when {
+                keystone -> atan2(lastAimDirectionY, lastAimDirectionX)
+                verbs -> awayFromCoreAngle(x, y)
+                else -> 0f
+            }
+            if (verbs) direction = base
+            val spacing = if (verbs) v[0] * RADIANS_PER_DEGREE else 0f
+            repeat(GLACIER_SHARDS) { shard ->
+                val angle = if (verbs) base + (shard - GLACIER_SHARDS / 2) * spacing else shard * TAU / GLACIER_SHARDS + enemy.id * 0.37f
+                val dirX = cos(angle)
+                val dirY = sin(angle)
+                val endX = x + dirX * GLACIER_REACH
+                val endY = y + dirY * GLACIER_REACH
                 addRelicArc(x, y, endX, endY, link)
                 for (index in enemies.indices) {
                     val target = enemies[index]
@@ -194,30 +239,45 @@ internal fun MutableGameState.resolveReaction(
                     if (segmentCircleIntersects(x, y, endX, endY, target.x, target.y, target.radius + 6f)) {
                         dealStatusDamage(target, magnitude, StatusElement.CRYO, ignoresAffinity = true)
                         if (residueGeneration < 2 && target.alive) applyStatus(target, StatusElement.CRYO, definition.residueStacks, residueGeneration)
+                        if (verbs && target.alive) push(target, dirX, dirY, v[1])
+                        if (keystone && target.alive && stacks(target, StatusElement.CRYO) >= AVALANCHE_FREEZE_CHILL) {
+                            forceElementBreak(target, StatusElement.CRYO)
+                        }
                     }
                 }
             }
             dealStatusDamage(enemy, magnitude, StatusElement.CRYO, ignoresAffinity = true)
         }
         ReactionId.EMBRITTLE -> {
-            enemy.status[StatusCell.EMBRITTLED_UNTIL] = elapsed + 4f
+            enemy.status[StatusCell.EMBRITTLED_UNTIL] = elapsed + if (keystone) GLASS_BURST_EMBRITTLE_SECONDS else EMBRITTLE_SECONDS
         }
         ReactionId.MAGNETIZE -> {
-            for (index in enemies.indices) {
-                val target = enemies[index]
-                if (target.id == enemy.id || !target.alive) continue
-                val dx = x - target.x
-                val dy = y - target.y
-                val distance = max(1f, length(dx, dy))
-                if (distance > definition.radius + target.radius) continue
-                val knockback = knockbackTaken(target)
-                target.vx += dx / distance * 640f * knockback
-                target.vy += dy / distance * 640f * knockback
-                markThrown(target)
-                dealStatusDamage(target, magnitude, StatusElement.GRAVITIC, ignoresAffinity = true)
-                if (residueGeneration < 2 && target.alive) applyStatus(target, StatusElement.GRAVITIC, definition.residueStacks, residueGeneration)
+            if (keystone) {
+                // Repulsor: no yank; the target flies away from the Core and charges whatever it slams.
+                hurl(coreX, coreY, enemy, REPULSOR_THROW_SPEED)
+            } else {
+                for (index in enemies.indices) {
+                    val target = enemies[index]
+                    if (target.id == enemy.id || !target.alive) continue
+                    val dx = x - target.x
+                    val dy = y - target.y
+                    val distance = max(1f, length(dx, dy))
+                    if (distance > definition.radius + target.radius) continue
+                    val knockback = knockbackTaken(target)
+                    target.vx += dx / distance * MAGNETIZE_YANK * knockback
+                    target.vy += dy / distance * MAGNETIZE_YANK * knockback
+                    markThrown(target)
+                    dealStatusDamage(target, magnitude, StatusElement.GRAVITIC, ignoresAffinity = true)
+                    if (residueGeneration < 2 && target.alive) applyStatus(target, StatusElement.GRAVITIC, definition.residueStacks, residueGeneration)
+                }
             }
             dealStatusDamage(enemy, magnitude, StatusElement.ION, ignoresAffinity = true)
+            // Attractor: the target keeps pulling enemies and bending your shots for a while.
+            if (verbs && !keystone && enemy.alive) {
+                addField(CombatFieldKind.ATTRACTOR, FieldSource.REACTION, reaction.ordinal, x, y, radius = definition.radius,
+                    seconds = v[0], damagePerSecond = 0f, generation = residueGeneration, pull = v[1], anchorId = enemy.id,
+                    flags = FieldFlags.FOLLOWS_ANCHOR)
+            }
         }
         ReactionId.FEEDBACK -> {
             if (enemy.status[StatusCell.MAX_HP_PROC_READY_AT] <= elapsed) {
@@ -229,11 +289,18 @@ internal fun MutableGameState.resolveReaction(
                 dealStatusDamage(target, arc, StatusElement.ION, ignoresAffinity = true)
                 if (residueGeneration < 2 && target.alive) applyStatus(target, StatusElement.ENTROPY, definition.residueStacks, residueGeneration)
             }
+            // Overcurrent: the weapon jumps to its next shot (Short Circuit: the skills recharge instead).
+            if (verbs && overcurrentReadyAt <= elapsed) {
+                overcurrentReadyAt = elapsed + v[1]
+                if (keystone) refundAllSkills(SHORT_CIRCUIT_SECONDS) else refreshWeapon(v[0], BuffSource.reaction(reaction))
+                flags = flags or ReactionCueFlags.VERB
+            }
         }
         ReactionId.ROT_WELL -> addField(
-            CombatFieldKind.ROT_WELL, FieldSource.REACTION, reaction.ordinal, x, y, radius = definition.radius, seconds = 2f,
+            CombatFieldKind.ROT_WELL, FieldSource.REACTION, reaction.ordinal, x, y, radius = definition.radius,
+            seconds = if (keystone) PLAGUE_PIT_SECONDS else ROT_WELL_SECONDS,
             damagePerSecond = magnitude, element = StatusElement.ENTROPY, stacksPerTick = 1,
-            generation = residueGeneration, pull = 180f,
+            generation = residueGeneration, pull = ROT_WELL_PULL, flags = if (keystone) FieldFlags.KEYSTONE else 0,
         )
         ReactionId.THUNDERCLAP -> {
             for (index in enemies.indices) {
@@ -243,19 +310,47 @@ internal fun MutableGameState.resolveReaction(
                 hurl(x, y, target, THUNDERCLAP_THROW_SPEED)
             }
             shockwave(x, y, 0.32f, definition.radius, FxColorCode.elementTone(StatusElement.SONIC))
+            val clapDistanceSquared = distanceSquared(x, y, coreX, coreY)
+            if (keystone) {
+                // Rocket Clap: a clap close by launches the Core away from it.
+                if (clapDistanceSquared <= square(ROCKET_CLAP_REACH)) {
+                    val angle = awayFromCoreAngle(x, y) + PI.toFloat()
+                    if (applyCoreImpulse(cos(angle), sin(angle), ROCKET_CLAP_SPEED, gated = true)) {
+                        flags = flags or ReactionCueFlags.VERB
+                    }
+                }
+            } else if (verbs && clapDistanceSquared <= square(v[0])) {
+                // Blast Jump: a Dash started within the window rides the blast.
+                blastJumpUntil = elapsed + v[1]
+                flags = flags or ReactionCueFlags.VERB
+            }
         }
         ReactionId.SHATTERPOINT -> {
-            repeat(SHATTERPOINT_SHARDS) { shard ->
-                val angle = shard * TAU / SHATTERPOINT_SHARDS + enemy.id * 0.53f + 0.3f
-                val endX = x + cos(angle) * SHATTERPOINT_REACH
-                val endY = y + sin(angle) * SHATTERPOINT_REACH
-                addRelicArc(x, y, endX, endY, link)
-                for (index in enemies.indices) {
-                    val target = enemies[index]
-                    if (target.id == enemy.id || !target.alive) continue
-                    if (segmentCircleIntersects(x, y, endX, endY, target.x, target.y, target.radius + 6f)) {
-                        dealStatusDamage(target, magnitude, StatusElement.CRYO, ignoresAffinity = true)
-                        if (residueGeneration < 2 && target.alive) applyStatus(target, StatusElement.CRYO, definition.residueStacks, residueGeneration)
+            if (verbs && !keystone && near) {
+                // Shard Guard: the shards circle the Core instead of flying out.
+                guardShards = if (guardUntil > elapsed) min(v[2].toInt(), guardShards + SHATTERPOINT_SHARDS) else min(v[2].toInt(), SHATTERPOINT_SHARDS)
+                guardUntil = elapsed + v[0]
+                guardDamage = magnitude
+                flags = flags or ReactionCueFlags.VERB
+            } else {
+                val shards = if (keystone) CRYSTAL_CHOIR_SHARDS else SHATTERPOINT_SHARDS
+                val offset = enemy.id * 0.53f + 0.3f
+                if (verbs) direction = offset
+                repeat(shards) { shard ->
+                    val angle = shard * TAU / shards + offset
+                    val endX = x + cos(angle) * SHATTERPOINT_REACH
+                    val endY = y + sin(angle) * SHATTERPOINT_REACH
+                    addRelicArc(x, y, endX, endY, link)
+                    for (index in enemies.indices) {
+                        val target = enemies[index]
+                        if (target.id == enemy.id || !target.alive) continue
+                        if (segmentCircleIntersects(x, y, endX, endY, target.x, target.y, target.radius + 6f)) {
+                            dealStatusDamage(target, magnitude, StatusElement.CRYO, ignoresAffinity = true)
+                            if (residueGeneration < 2 && target.alive) applyStatus(target, StatusElement.CRYO, definition.residueStacks, residueGeneration)
+                            if (keystone && target.alive && stacks(target, StatusElement.SONIC) >= CRYSTAL_CHOIR_RESONANCE) {
+                                forceElementBreak(target, StatusElement.SONIC)
+                            }
+                        }
                     }
                 }
             }
@@ -268,31 +363,52 @@ internal fun MutableGameState.resolveReaction(
             chain(x, y, enemy.id, RESONANT_ARC_LINKS, range, link) { target ->
                 dealStatusDamage(target, magnitude, StatusElement.ION, ignoresAffinity = true)
             }
+            // Arc Weave: near the Core (Standing Wave: anywhere) sharp turns throw more arcs.
+            if (verbs && (near || keystone)) {
+                weaveUntil = max(weaveUntil, elapsed + weaveSeconds())
+                weaveDamage = magnitude * if (keystone) STANDING_WAVE_SHARE else v[2]
+                weaveRange = range
+                flags = flags or ReactionCueFlags.VERB
+            }
         }
         ReactionId.SEISMIC -> {
-            for (index in enemies.indices) {
-                val target = enemies[index]
-                if (!target.alive || isShifting(target) || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
-                dealStatusDamage(target, magnitude, StatusElement.GRAVITIC, ignoresAffinity = true)
-                if (target.alive && isOrdinary(target)) target.disabledUntil = max(target.disabledUntil, elapsed + SEISMIC_STUN_SECONDS)
-            }
+            quake(x, y, definition.radius, magnitude)
             shockwave(x, y, 0.4f, definition.radius, FxColorCode.quake(StatusElement.GRAVITIC))
+            if (keystone) {
+                queueAftershock(x, y, magnitude * AFTERSHOCK_SHARE)
+            } else if (verbs && rockEcho(x, y, v[0].toInt(), v[1], v[2], magnitude * v[3]) > 0) {
+                flags = flags or ReactionCueFlags.VERB
+            }
         }
         ReactionId.FRACTURE -> for (index in enemies.indices) {
             val target = enemies[index]
             if (!target.alive || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
             dealStatusDamage(target, magnitude, StatusElement.ENTROPY, ignoresAffinity = true)
             if (residueGeneration < 2 && target.alive) applyStatus(target, StatusElement.ENTROPY, definition.residueStacks, residueGeneration)
+            if (!verbs || !target.alive) continue
+            if (keystone) suppress(target) else setMark(target, MarkKind.CRACKED, v[0])
         }
-        ReactionId.SILENCE -> for (index in enemies.indices) {
-            val target = enemies[index]
-            if (!target.alive || isShifting(target) || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
-            dealStatusDamage(target, magnitude, StatusElement.VOID, ignoresAffinity = true)
-            if (target.alive) silence(target)
+        ReactionId.SILENCE -> {
+            for (index in enemies.indices) {
+                val target = enemies[index]
+                if (!target.alive || isShifting(target) || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
+                // Dead Air forms without damage.
+                if (!keystone) dealStatusDamage(target, magnitude, StatusElement.VOID, ignoresAffinity = true)
+                if (target.alive) silence(target)
+            }
+            if (keystone) {
+                addField(CombatFieldKind.HUSH, FieldSource.REACTION, reaction.ordinal, coreX, coreY, radius = DEAD_AIR_RADIUS,
+                    seconds = DEAD_AIR_SECONDS, damagePerSecond = 0f, generation = residueGeneration,
+                    flags = FieldFlags.FOLLOWS_CORE or FieldFlags.KEYSTONE)
+            } else if (verbs) {
+                addField(CombatFieldKind.HUSH, FieldSource.REACTION, reaction.ordinal, x, y, radius = v[0], seconds = v[1],
+                    damagePerSecond = 0f, generation = residueGeneration)
+            }
         }
         ReactionId.BLACKFIRE -> {
             enemy.status[StatusCell.BLACKFIRE_UNTIL] = elapsed + BLACKFIRE_SECONDS
-            enemy.status[StatusCell.BLACKFIRE_DPS] = max(enemy.status[StatusCell.BLACKFIRE_DPS], magnitude)
+            enemy.status[StatusCell.BLACKFIRE_DPS] = max(enemy.status[StatusCell.BLACKFIRE_DPS],
+                if (keystone) magnitude * HELLFIRE_DAMAGE else magnitude)
         }
         ReactionId.STASIS -> {
             for (index in enemies.indices) {
@@ -305,12 +421,18 @@ internal fun MutableGameState.resolveReaction(
                     target.vy = 0f
                 }
             }
+            // Time Bubble: the stop lingers as a field (Rewind: one that returns the shots it catches).
+            val bubble = if (verbs) {
+                addField(CombatFieldKind.TIME_BUBBLE, FieldSource.REACTION, reaction.ordinal, x, y, radius = v[0], seconds = v[1],
+                    damagePerSecond = 0f, generation = residueGeneration, flags = if (keystone) FieldFlags.KEYSTONE else 0)
+            } else -1
             // Stasis can fire while projectile hits are being walked by index, so it only spends the shots;
             // the list keeps its shape until the collision pass or the next projectile update drops them.
             val reach = square(definition.radius)
             for (index in projectiles.indices) {
                 val shot = projectiles[index]
-                if (distanceSquared(x, y, shot.x, shot.y) <= reach) eraseHostileShot(shot, EraseCause.REACTION, shot.x, shot.y)
+                if (distanceSquared(x, y, shot.x, shot.y) > reach) continue
+                if (keystone && bubble >= 0) rewindShot(bubble, shot) else eraseHostileShot(shot, EraseCause.REACTION, shot.x, shot.y)
             }
             shockwave(x, y, 0.45f, definition.radius, FxColorCode.elementTone(StatusElement.CRYO))
         }
@@ -319,20 +441,41 @@ internal fun MutableGameState.resolveReaction(
             toughestOtherEnemy(enemy, definition.radius)?.let { target ->
                 addRelicArc(x, y, target.x, target.y, link)
                 dealStatusDamage(target, magnitude, StatusElement.VOID, ignoresAffinity = true)
+                // Void Anchor: the next Dash toward the toughest one blinks the Core to it.
+                if (verbs && target.alive) {
+                    voidAnchorId = target.id
+                    voidAnchorUntil = elapsed + if (keystone) EVENT_STRIKE_ANCHOR_SECONDS else v[0]
+                    flags = flags or ReactionCueFlags.VERB
+                }
             }
         }
-        ReactionId.NULL_WELL -> addField(
-            CombatFieldKind.NULL_WELL, FieldSource.REACTION, reaction.ordinal, x, y, radius = definition.radius,
-            seconds = NULL_WELL_SECONDS, damagePerSecond = definition.power * potency * build.reactionPower,
-            element = StatusElement.VOID, stacksPerTick = 0, generation = residueGeneration, pull = NULL_WELL_PULL,
-        )
+        ReactionId.NULL_WELL -> {
+            val weight = definition.power * potency * build.reactionPower
+            if (keystone) {
+                addField(CombatFieldKind.NULL_WELL, FieldSource.REACTION, reaction.ordinal, coreX, coreY, radius = HUNGRY_VOID_RADIUS,
+                    seconds = HUNGRY_VOID_SECONDS, damagePerSecond = weight, element = StatusElement.VOID, stacksPerTick = 0,
+                    generation = residueGeneration, flags = FieldFlags.FOLLOWS_CORE or FieldFlags.KEYSTONE)
+            } else {
+                addField(CombatFieldKind.NULL_WELL, FieldSource.REACTION, reaction.ordinal, x, y, radius = definition.radius,
+                    seconds = NULL_WELL_SECONDS, damagePerSecond = weight, element = StatusElement.VOID, stacksPerTick = 0,
+                    generation = residueGeneration, pull = NULL_WELL_PULL)
+            }
+        }
         ReactionId.OBLIVION -> {
             val line = when {
                 enemy.isBossClass -> 0f
-                enemy.isElite -> OBLIVION_ELITE_LINE
-                else -> OBLIVION_LINE
+                enemy.isElite -> if (keystone) LAST_RITES_ELITE_LINE else OBLIVION_ELITE_LINE
+                else -> if (keystone) LAST_RITES_LINE else OBLIVION_LINE
             }
             if (enemy.hp < enemy.maxHp * line) {
+                // Erasure: the victim's Data latches to the Core and the skills recharge (Last Rites: neither).
+                if (verbs) {
+                    if (!keystone) {
+                        erasureLatchId = enemy.id
+                        refundAllSkills(v[0])
+                    }
+                    flags = flags or ReactionCueFlags.VERB
+                }
                 // An execute: an Aegis tether cannot soften it (bosses never reach here, their line is 0).
                 executeEnemy(enemy, HitSource.STATUS, tone = StatusElement.VOID.ordinal + 1)
             } else {
@@ -353,10 +496,312 @@ internal fun MutableGameState.resolveReaction(
         pendingDiscoveredReactionMask = pendingDiscoveredReactionMask or bit
         emitVisualFx(VisualFxCue.BuildChanged("REACTION DISCOVERED", kinetickk.foundation.collections.immutableListOf("+ " + definition.name)))
     }
-    val flags = (if (generation >= 1) ReactionCueFlags.CASCADE else 0) or (if (echo) ReactionCueFlags.ECHO else 0)
+    if (generation >= 1) flags = flags or ReactionCueFlags.CASCADE
+    if (echo) flags = flags or ReactionCueFlags.ECHO
     recordStatusCue(VisualFxCue.ReactionTriggered(x, y, reaction.ordinal, max(definition.radius, enemy.radius * 2f), first,
-        flags = flags))
+        direction = direction, flags = flags))
     if (!echo) onReaction(enemy, reaction)
+}
+
+/** Plasma Burst's blast: [magnitude] Thermal to everything within [radius] of ([x], [y]) plus [stacks] Thermal. */
+private fun MutableGameState.plasmaBurst(x: Float, y: Float, radius: Float, magnitude: Float, stacks: Int, generation: Int) {
+    for (index in enemies.indices) {
+        val target = enemies[index]
+        if (target.alive && distanceSquared(x, y, target.x, target.y) <= square(radius + target.radius)) {
+            dealStatusDamage(target, magnitude, StatusElement.THERMAL, ignoresAffinity = true)
+            if (generation < 2 && target.alive) applyStatus(target, StatusElement.THERMAL, stacks, generation)
+        }
+    }
+}
+
+/** Arc Plasma: the burst repeats once around up to [ARC_PLASMA_REPEATS] Charged enemies near it, at half strength. */
+private fun MutableGameState.arcPlasma(origin: Enemy, x: Float, y: Float, radius: Float, magnitude: Float, generation: Int) {
+    var firstX = Float.NaN
+    var firstY = Float.NaN
+    var secondX = Float.NaN
+    var secondY = Float.NaN
+    for (index in enemies.indices) {
+        val target = enemies[index]
+        if (target.id == origin.id || !target.alive || isShifting(target) || stacks(target, StatusElement.ION) <= 0) continue
+        if (distanceSquared(x, y, target.x, target.y) > square(ARC_PLASMA_REACH)) continue
+        if (firstX.isNaN()) {
+            firstX = target.x
+            firstY = target.y
+        } else {
+            secondX = target.x
+            secondY = target.y
+            break
+        }
+    }
+    val link = LinkStyleCode.reaction(ReactionId.PLASMA_BURST)
+    if (!firstX.isNaN()) {
+        addRelicArc(x, y, firstX, firstY, link)
+        plasmaBurst(firstX, firstY, radius, magnitude * ARC_PLASMA_SHARE, ARC_PLASMA_STACKS, generation)
+    }
+    if (!secondX.isNaN()) {
+        addRelicArc(x, y, secondX, secondY, link)
+        plasmaBurst(secondX, secondY, radius, magnitude * ARC_PLASMA_SHARE, ARC_PLASMA_STACKS, generation)
+    }
+}
+
+/** Seismic's quake: [damage] Gravitic within [radius] of ([x], [y]); ordinary enemies are stunned. */
+private fun MutableGameState.quake(x: Float, y: Float, radius: Float, damage: Float) {
+    for (index in enemies.indices) {
+        val target = enemies[index]
+        if (!target.alive || isShifting(target) || distanceSquared(x, y, target.x, target.y) > square(radius + target.radius)) continue
+        dealStatusDamage(target, damage, StatusElement.GRAVITIC, ignoresAffinity = true)
+        if (target.alive && isOrdinary(target)) target.disabledUntil = max(target.disabledUntil, elapsed + SEISMIC_STUN_SECONDS)
+    }
+}
+
+/**
+ * Rock Echo: up to [rocks] obstacles within [reach] of ([x], [y]) repeat the quake around their centres
+ * ([radius], [damage]). Obstacles are visited in window-cell order and never changed. Returns the echoes.
+ */
+private fun MutableGameState.rockEcho(x: Float, y: Float, rocks: Int, reach: Float, radius: Float, damage: Float): Int {
+    val limit = min(rocks, MAX_ROCK_ECHOES)
+    var found = 0
+    var firstX = 0f
+    var firstY = 0f
+    var secondX = 0f
+    var secondY = 0f
+    var thirdX = 0f
+    var thirdY = 0f
+    forEachObstacleNear(x, y, reach) { _, obstacle ->
+        if (found < limit && distanceSquared(x, y, obstacle.x, obstacle.y) <= square(reach + obstacle.radius)) {
+            when (found) {
+                0 -> { firstX = obstacle.x; firstY = obstacle.y }
+                1 -> { secondX = obstacle.x; secondY = obstacle.y }
+                else -> { thirdX = obstacle.x; thirdY = obstacle.y }
+            }
+            found++
+        }
+    }
+    for (echo in 0 until found) {
+        val echoX = when (echo) { 0 -> firstX; 1 -> secondX; else -> thirdX }
+        val echoY = when (echo) { 0 -> firstY; 1 -> secondY; else -> thirdY }
+        quake(echoX, echoY, radius, damage)
+        shockwave(echoX, echoY, 0.35f, radius, FxColorCode.quake(StatusElement.GRAVITIC))
+    }
+    return found
+}
+
+/** Aftershock: queues a second quake at ([x], [y]) in [AFTERSHOCK_DELAY_SECONDS]; a third pending one is dropped. */
+private fun MutableGameState.queueAftershock(x: Float, y: Float, damage: Float) {
+    val at = elapsed + AFTERSHOCK_DELAY_SECONDS
+    if (aftershockAt0 < 0f) {
+        aftershockAt0 = at
+        aftershockX0 = x
+        aftershockY0 = y
+        aftershockDamage0 = damage
+    } else if (aftershockAt1 < 0f) {
+        aftershockAt1 = at
+        aftershockX1 = x
+        aftershockY1 = y
+        aftershockDamage1 = damage
+    }
+}
+
+/** Strikes the aftershocks that came due. */
+private fun MutableGameState.updateAftershocks() {
+    if (aftershockAt0 < 0f && aftershockAt1 < 0f) return
+    val radius = content.build.reaction(ReactionId.SEISMIC).radius
+    if (aftershockAt0 >= 0f && aftershockAt0 <= elapsed) {
+        aftershockAt0 = -1f
+        quake(aftershockX0, aftershockY0, radius, aftershockDamage0)
+        shockwave(aftershockX0, aftershockY0, 0.4f, radius * AFTERSHOCK_SHARE, FxColorCode.quake(StatusElement.GRAVITIC))
+    }
+    if (aftershockAt1 >= 0f && aftershockAt1 <= elapsed) {
+        aftershockAt1 = -1f
+        quake(aftershockX1, aftershockY1, radius, aftershockDamage1)
+        shockwave(aftershockX1, aftershockY1, 0.4f, radius * AFTERSHOCK_SHARE, FxColorCode.quake(StatusElement.GRAVITIC))
+    }
+}
+
+/** Crevasse: a non-boss target loses its aspect for a while and its armor plates crack. */
+private fun MutableGameState.suppress(target: Enemy) {
+    if (target.isBossClass) return
+    setMark(target, MarkKind.SUPPRESSED, CREVASSE_SECONDS)
+    if (target.armored) target.armorCracked = true
+}
+
+/** Pushes [target] along the unit vector ([dirX], [dirY]) at [speed], scaled by the knockback it takes. */
+private fun MutableGameState.push(target: Enemy, dirX: Float, dirY: Float, speed: Float) {
+    val knockback = knockbackTaken(target)
+    if (knockback <= 0f) return
+    target.vx += dirX * speed * knockback
+    target.vy += dirY * speed * knockback
+    markThrown(target)
+}
+
+/** Heading from the Core to ([x], [y]); the last aim when the two (nearly) coincide. */
+private fun MutableGameState.awayFromCoreAngle(x: Float, y: Float): Float {
+    val dx = x - coreX
+    val dy = y - coreY
+    return if (length(dx, dy) < 1f) atan2(lastAimDirectionY, lastAimDirectionX) else atan2(dy, dx)
+}
+
+/** True when ([x], [y]) lies within [CORE_LINK_RADIUS] of the Core: such reactions feed the Core's verbs. */
+internal fun MutableGameState.nearCore(x: Float, y: Float): Boolean = distanceSquared(x, y, coreX, coreY) <= square(CORE_LINK_RADIUS)
+
+/** The verb value at [index] of [reaction]; read only where the reaction has verb values. */
+internal fun MutableGameState.reactionValue(reaction: ReactionId, index: Int): Float = content.build.reaction(reaction).values[index]
+
+/** True when [reaction] carries verb values (its play-style behaviour is on). */
+internal fun MutableGameState.hasVerb(reaction: ReactionId): Boolean = content.build.reaction(reaction).values.isNotEmpty()
+
+/** The keystone form of [reaction] is on: the build switched it on and the reaction has its verb. */
+internal fun MutableGameState.keystoneOn(reaction: ReactionId): Boolean = build.keystone(reaction) && hasVerb(reaction)
+
+/** How long Ablaze lasts when Wildfire sets it (Firewalker longer). */
+internal fun MutableGameState.ablazeSeconds(): Float =
+    if (keystoneOn(ReactionId.WILDFIRE)) FIREWALKER_SECONDS else reactionValue(ReactionId.WILDFIRE, ABLAZE_SECONDS_VALUE)
+
+/** How long Arc Weave lasts when Resonant Arc sets it (Standing Wave longer). */
+internal fun MutableGameState.weaveSeconds(): Float =
+    if (keystoneOn(ReactionId.RESONANT_ARC)) STANDING_WAVE_SECONDS else reactionValue(ReactionId.RESONANT_ARC, WEAVE_SECONDS_VALUE)
+
+/**
+ * Refunds [seconds] of cooldown to every owned skill and returns the seconds refunded. No skill runtime exists
+ * yet, so nothing is refunded; the skill system's refund bank takes this over.
+ */
+@Suppress("UNUSED_PARAMETER", "FunctionOnlyReturningConstant")
+internal fun MutableGameState.refundAllSkills(seconds: Float): Float = 0f
+
+// ---------------------------------------------------------------------------------------------
+// Core verbs read outside the reaction itself.
+
+/**
+ * Spall on a direct hit: the mark is cashed and the target flies away from the Core (Flash Freeze: it
+ * freezes through the normal Freeze path). Immovable frames lose the mark without moving.
+ */
+internal fun MutableGameState.cashSpall(enemy: Enemy) {
+    if (!enemy.alive || !consumeMark(enemy, MarkKind.SPALL) || !hasVerb(ReactionId.THERMAL_SHOCK)) return
+    if (keystoneOn(ReactionId.THERMAL_SHOCK)) {
+        if (!isFrozen(enemy) && enemy.status[StatusCell.FREEZE_IMMUNE_UNTIL] <= elapsed) freeze(enemy, FLASH_FREEZE_SECONDS)
+    } else {
+        hurl(coreX, coreY, enemy, reactionValue(ReactionId.THERMAL_SHOCK, SPALL_THROW_VALUE))
+    }
+}
+
+/**
+ * Ablaze on a Core contact: [enemy] takes Thermal; with Firewalker a contact on an enemy close to its
+ * Ignite threshold sets it off.
+ */
+internal fun MutableGameState.onAblazeContact(enemy: Enemy) {
+    if (ablazeUntil <= elapsed || !enemy.alive || !hasVerb(ReactionId.WILDFIRE)) return
+    applyStatus(enemy, StatusElement.THERMAL, reactionValue(ReactionId.WILDFIRE, ABLAZE_STACKS_VALUE).toInt(), 1)
+    if (keystoneOn(ReactionId.WILDFIRE) && enemy.alive &&
+        stacks(enemy, StatusElement.THERMAL) >= breakThreshold(StatusElement.THERMAL, enemy) - FIREWALKER_IGNITE_MARGIN
+    ) {
+        forceElementBreak(enemy, StatusElement.THERMAL)
+    }
+}
+
+/** Glass Charge: an Embrittled ordinary or Elite enemy hit fast enough cannot stop the Core. */
+internal fun MutableGameState.piercesEmbrittled(enemy: Enemy, coreImpactSpeed: Float): Boolean =
+    hasVerb(ReactionId.EMBRITTLE) && !enemy.isBossClass && enemy.status[StatusCell.EMBRITTLED_UNTIL] > elapsed &&
+        coreImpactSpeed >= reactionValue(ReactionId.EMBRITTLE, GLASS_CHARGE_SPEED_VALUE)
+
+/**
+ * Glass Burst: a pierced Embrittled enemy shatters into [GLASS_BURST_SHARDS] Cryo shards along the Core's
+ * heading for [GLASS_BURST_SHARE] of the impact, and loses its Embrittle.
+ */
+internal fun MutableGameState.glassBurst(enemy: Enemy, impact: Float) {
+    if (!keystoneOn(ReactionId.EMBRITTLE)) return
+    enemy.status[StatusCell.EMBRITTLED_UNTIL] = 0f
+    val heading = if (speed > 1f) atan2(velocityY, velocityX) else atan2(lastAimDirectionY, lastAimDirectionX)
+    val x = enemy.x
+    val y = enemy.y
+    val link = LinkStyleCode.reaction(ReactionId.EMBRITTLE)
+    val spacing = GLASS_BURST_SPACING_DEGREES * RADIANS_PER_DEGREE
+    repeat(GLASS_BURST_SHARDS) { shard ->
+        val angle = heading + (shard - GLASS_BURST_SHARDS / 2) * spacing
+        val endX = x + cos(angle) * GLASS_BURST_REACH
+        val endY = y + sin(angle) * GLASS_BURST_REACH
+        addRelicArc(x, y, endX, endY, link)
+        for (index in enemies.indices) {
+            val target = enemies[index]
+            if (target.id == enemy.id || !target.alive) continue
+            if (segmentCircleIntersects(x, y, endX, endY, target.x, target.y, target.radius + 6f)) {
+                dealStatusDamage(target, impact * GLASS_BURST_SHARE, StatusElement.CRYO, ignoresAffinity = true)
+            }
+        }
+    }
+}
+
+/** Repulsor: an enemy Magnetize threw charges whatever it slams. */
+internal fun MutableGameState.repulsorCharges(thrown: Enemy): Boolean =
+    keystoneOn(ReactionId.MAGNETIZE) &&
+        thrown.status[StatusCell.LAST_REACTION].toInt() == ReactionId.MAGNETIZE.ordinal + 1 &&
+        elapsed - thrown.status[StatusCell.LAST_REACTION_AT] <= content.obstacles.thrownSeconds
+
+/** Breakpoint: a Brake release detonates the Cracked enemies near the Core (at most [MAX_CRACKED_DETONATIONS]). */
+internal fun MutableGameState.detonateCracked() {
+    if (!hasVerb(ReactionId.FRACTURE) || keystoneOn(ReactionId.FRACTURE)) return
+    val definition = content.build.reaction(ReactionId.FRACTURE)
+    val reach = definition.values[CRACKED_REACH_VALUE]
+    val damage = definition.values[CRACKED_POWER_VALUE] * definition.power * build.potency(StatusElement.ENTROPY) *
+        build.reactionPower * runScale()
+    val decay = definition.values[CRACKED_DECAY_VALUE].toInt()
+    var detonated = 0
+    for (index in enemies.indices) {
+        if (detonated >= MAX_CRACKED_DETONATIONS) break
+        val target = enemies[index]
+        if (!target.alive || !markIs(target, MarkKind.CRACKED)) continue
+        if (distanceSquared(coreX, coreY, target.x, target.y) > square(reach + target.radius)) continue
+        consumeMark(target, MarkKind.CRACKED)
+        detonated++
+        val x = target.x
+        val y = target.y
+        dealStatusDamage(target, damage, StatusElement.ENTROPY, ignoresAffinity = true)
+        if (target.alive) applyStatus(target, StatusElement.ENTROPY, decay, 1)
+        shockwave(x, y, CRACKED_SHOCKWAVE_SECONDS, CRACKED_SHOCKWAVE_RADIUS, FxColorCode.elementTone(StatusElement.ENTROPY))
+    }
+}
+
+/** Arc Weave: while it lasts, every TURN edge throws a chain from the Core. */
+internal fun MutableGameState.onTurnForReactions() {
+    if (weaveUntil <= elapsed || !hasVerb(ReactionId.RESONANT_ARC)) return
+    val links = if (keystoneOn(ReactionId.RESONANT_ARC)) STANDING_WAVE_LINKS else reactionValue(ReactionId.RESONANT_ARC, WEAVE_LINKS_VALUE).toInt()
+    val damage = weaveDamage
+    chain(coreX, coreY, -1, links, weaveRange, LinkStyleCode.reaction(ReactionId.RESONANT_ARC)) { target ->
+        dealStatusDamage(target, damage, StatusElement.ION, ignoresAffinity = true)
+    }
+}
+
+/** The live Void Anchor, or null (none, lapsed, dead or shifting). */
+internal fun MutableGameState.voidAnchor(): Enemy? {
+    if (voidAnchorId < 0 || voidAnchorUntil <= elapsed) return null
+    for (index in enemies.indices) {
+        val candidate = enemies[index]
+        if (candidate.id == voidAnchorId) return if (candidate.alive && !isShifting(candidate)) candidate else null
+    }
+    return null
+}
+
+/**
+ * Flame Leap and the field deaths when [enemy] dies: a burning enemy passes its black flame to the nearest other
+ * enemy (weaker each leap, until it is too weak to leap) and recharges the skills; a death inside a Rot Well
+ * grows it (Plague Pit: passes its Decay to everyone inside).
+ */
+internal fun MutableGameState.onReactionCarrierDied(enemy: Enemy) {
+    if (enemy.status[StatusCell.BLACKFIRE_UNTIL] > elapsed && hasVerb(ReactionId.BLACKFIRE) && !keystoneOn(ReactionId.BLACKFIRE)) {
+        val values = content.build.reaction(ReactionId.BLACKFIRE).values
+        val dps = enemy.status[StatusCell.BLACKFIRE_DPS] * values[FLAME_LEAP_SHARE_VALUE]
+        if (dps >= values[FLAME_LEAP_FLOOR_VALUE] * runScale()) {
+            nearestOtherEnemy(enemy.x, enemy.y, enemy.id, values[FLAME_LEAP_REACH_VALUE])?.let { target ->
+                val seconds = max(FLAME_LEAP_MIN_SECONDS, enemy.status[StatusCell.BLACKFIRE_UNTIL] - elapsed)
+                target.status[StatusCell.BLACKFIRE_UNTIL] = max(target.status[StatusCell.BLACKFIRE_UNTIL], elapsed + seconds)
+                target.status[StatusCell.BLACKFIRE_DPS] = max(target.status[StatusCell.BLACKFIRE_DPS], dps)
+                addRelicArc(enemy.x, enemy.y, target.x, target.y, LinkStyleCode.reaction(ReactionId.BLACKFIRE))
+            }
+        }
+        if (flameRefundReadyAt <= elapsed && refundAllSkills(values[FLAME_REFUND_VALUE]) > 0f) {
+            flameRefundReadyAt = elapsed + FLAME_REFUND_GATE_SECONDS
+        }
+    }
+    if (hasVerb(ReactionId.ROT_WELL)) onRotWellDeath(enemy)
 }
 
 /**
@@ -366,6 +811,129 @@ internal fun MutableGameState.resolveReaction(
 internal const val ABLAZE_SECONDS_VALUE: Int = 1
 internal const val FRICTIONLESS_SECONDS_VALUE: Int = 1
 internal const val WEAVE_SECONDS_VALUE: Int = 0
+
+// Indices of the other verb values read outside resolveReaction (BuildCatalog documents every index).
+internal const val SPALL_THROW_VALUE: Int = 1
+internal const val PLASMA_ACTIVATION_VALUE: Int = 2
+internal const val PLASMA_DASH_HEAT_VALUE: Int = 3
+internal const val ACCRETION_REACH_VALUE: Int = 0
+internal const val ACCRETION_SPEED_VALUE: Int = 1
+internal const val ACCRETION_THROW_VALUE: Int = 2
+internal const val ABLAZE_STACKS_VALUE: Int = 2
+internal const val FRICTIONLESS_DRAG_VALUE: Int = 0
+internal const val GLASS_CHARGE_SPEED_VALUE: Int = 0
+internal const val ATTRACTOR_SHOT_REACH_VALUE: Int = 2
+internal const val ATTRACTOR_SHOT_TURN_VALUE: Int = 3
+internal const val COMPOST_DAMPING_VALUE: Int = 0
+internal const val COMPOST_GROWTH_RADIUS_VALUE: Int = 1
+internal const val COMPOST_GROWTH_SECONDS_VALUE: Int = 2
+internal const val COMPOST_GROWTHS_VALUE: Int = 3
+internal const val BLAST_JUMP_IMPULSE_VALUE: Int = 2
+internal const val GUARD_ORBIT_VALUE: Int = 1
+internal const val WEAVE_LINKS_VALUE: Int = 1
+internal const val CRACKED_REACH_VALUE: Int = 1
+internal const val CRACKED_POWER_VALUE: Int = 2
+internal const val CRACKED_DECAY_VALUE: Int = 3
+internal const val HUSH_SILENCE_VALUE: Int = 2
+internal const val FLAME_LEAP_REACH_VALUE: Int = 0
+internal const val FLAME_LEAP_SHARE_VALUE: Int = 1
+internal const val FLAME_LEAP_FLOOR_VALUE: Int = 2
+internal const val FLAME_REFUND_VALUE: Int = 3
+internal const val BUBBLE_SHOTS_VALUE: Int = 2
+internal const val BUBBLE_HASTE_VALUE: Int = 3
+internal const val VOID_ANCHOR_CONE_VALUE: Int = 1
+internal const val VOID_ANCHOR_REACH_VALUE: Int = 2
+internal const val MAW_SHOTS_VALUE: Int = 0
+internal const val MAW_POP_VALUE: Int = 1
+internal const val MAW_THROW_VALUE: Int = 2
+
+/** Reactions within this distance of the Core feed its verbs (Ablaze, Frictionless, Shard Guard, Arc Weave). */
+internal const val CORE_LINK_RADIUS: Float = 480f
+internal const val RADIANS_PER_DEGREE: Float = (PI / 180.0).toFloat()
+
+// Base shapes the verbs leave unchanged.
+internal const val FUSION_SECONDS: Float = 1.6f
+internal const val FUSION_PULL: Float = 220f
+/** Wildfire's spread when the reaction has no verb values. */
+internal const val WILDFIRE_LEGACY_SPREAD: Int = 4
+internal const val SUPERCONDUCT_LINKS: Int = 3
+internal const val GLACIER_SHARDS: Int = 5
+internal const val GLACIER_REACH: Float = 220f
+internal const val EMBRITTLE_SECONDS: Float = 4f
+internal const val MAGNETIZE_YANK: Float = 640f
+internal const val ROT_WELL_SECONDS: Float = 2f
+internal const val ROT_WELL_PULL: Float = 180f
+/** Compost never grows a well past this radius. */
+internal const val COMPOST_MAX_RADIUS: Float = 200f
+/** Accretion latches the pickups this far beyond the star's radius when it implodes. */
+internal const val ACCRETION_LATCH_MARGIN: Float = 40f
+/** A Time Bubble holds ordinary occupants this long per tick. */
+internal const val TIME_BUBBLE_STOP_SECONDS: Float = 0.5f
+/** Blast Jump: a Crescent's Blink reaches this much farther. */
+internal const val BLAST_JUMP_BLINK_RANGE: Float = 1.4f
+internal const val GUARD_SHARD_RADIUS: Float = 6f
+/** Shard Guard shards turn this many radians per second around the Core. */
+internal const val GUARD_SPIN: Float = 3f
+/** Void Anchor: the Core lands this far short of the anchor's rim and never within the singularity gap. */
+internal const val VOID_BLINK_CLEARANCE: Float = 8f
+internal const val VOID_BLINK_SINGULARITY_GAP: Float = 60f
+internal const val MAX_ROCK_ECHOES: Int = 3
+internal const val MAX_CRACKED_DETONATIONS: Int = 12
+internal const val CRACKED_SHOCKWAVE_SECONDS: Float = 0.25f
+internal const val CRACKED_SHOCKWAVE_RADIUS: Float = 60f
+internal const val FLAME_LEAP_MIN_SECONDS: Float = 1f
+internal const val FLAME_REFUND_GATE_SECONDS: Float = 0.5f
+/** At most this many of the newest shot-eating fields test hostile shots each step. */
+internal const val MAX_SHOT_EATING_FIELDS: Int = 4
+/** At most this many of the newest pickup-pulling fields move pickups each step. */
+internal const val MAX_PICKUP_FIELDS: Int = 2
+
+// Keystone forms (one per reaction).
+internal const val FLASH_FREEZE_SECONDS: Float = 0.8f
+internal const val FLASH_FREEZE_DAMAGE: Float = 0.8f
+internal const val ARC_PLASMA_REACH: Float = 220f
+internal const val ARC_PLASMA_SHARE: Float = 0.5f
+internal const val ARC_PLASMA_STACKS: Int = 1
+internal const val DWARF_STAR_SECONDS: Float = 3.2f
+internal const val DWARF_STAR_PULL: Float = 440f
+internal const val DWARF_STAR_DAMAGE: Float = 0.5f
+internal const val FIREWALKER_SECONDS: Float = 6f
+internal const val FIREWALKER_IGNITE_MARGIN: Int = 2
+internal const val ZERO_RESISTANCE_LINKS: Int = 6
+internal const val ZERO_RESISTANCE_FROZEN: Float = 1.5f
+internal const val AVALANCHE_FREEZE_CHILL: Int = 4
+internal const val GLASS_BURST_EMBRITTLE_SECONDS: Float = 2f
+internal const val GLASS_BURST_SHARDS: Int = 3
+internal const val GLASS_BURST_SHARE: Float = 0.5f
+internal const val GLASS_BURST_REACH: Float = 160f
+internal const val GLASS_BURST_SPACING_DEGREES: Float = 25f
+internal const val REPULSOR_THROW_SPEED: Float = 900f
+internal const val SHORT_CIRCUIT_SECONDS: Float = 1f
+internal const val PLAGUE_PIT_SECONDS: Float = 4f
+internal const val ROCKET_CLAP_REACH: Float = 220f
+internal const val ROCKET_CLAP_SPEED: Float = 560f
+internal const val CRYSTAL_CHOIR_SHARDS: Int = 7
+internal const val CRYSTAL_CHOIR_RESONANCE: Int = 5
+internal const val STANDING_WAVE_SECONDS: Float = 6f
+internal const val STANDING_WAVE_LINKS: Int = 2
+internal const val STANDING_WAVE_SHARE: Float = 0.35f
+internal const val AFTERSHOCK_DELAY_SECONDS: Float = 0.6f
+internal const val AFTERSHOCK_SHARE: Float = 0.6f
+internal const val CREVASSE_SECONDS: Float = 4f
+internal const val DEAD_AIR_RADIUS: Float = 140f
+internal const val DEAD_AIR_SECONDS: Float = 3f
+internal const val DEAD_AIR_SHOTS: Int = 20
+internal const val HELLFIRE_DAMAGE: Float = 1.5f
+internal const val REWIND_SHOTS: Int = 12
+internal const val REWIND_SHARE: Float = 0.3f
+internal const val REWIND_REACH: Float = 600f
+internal const val EVENT_STRIKE_ANCHOR_SECONDS: Float = 1.5f
+/** Event Strike: the anchor counts as marked for crits this long after the blink. */
+internal const val EVENT_STRIKE_CRIT_SECONDS: Float = 0.5f
+internal const val HUNGRY_VOID_RADIUS: Float = 120f
+internal const val HUNGRY_VOID_SECONDS: Float = 2.4f
+internal const val LAST_RITES_LINE: Float = 0.16f
+internal const val LAST_RITES_ELITE_LINE: Float = 0.09f
 
 /** Forced and echoed reactions scale their magnitude at most this much. */
 internal const val MAX_FORCED_REACTION_SCALE: Float = 1.3f
@@ -437,8 +1005,77 @@ internal fun MutableGameState.toughestOtherEnemy(origin: Enemy, range: Float): E
     return best
 }
 
-/** A new run starts with no lingering Core state, anchor, latch, prime or buffered skill input. */
+/**
+ * The Core's lingering reaction states each step: pending aftershocks strike, Shard Guard shards break on
+ * the first enemy or hostile shot they touch, and lapsed states clear. One pass over enemies and shots while
+ * a guard lives; allocation-free.
+ */
+internal fun MutableGameState.updateCoreReactionStates() {
+    updateAftershocks()
+    if (guardShards <= 0) return
+    if (guardUntil <= elapsed || !hasVerb(ReactionId.SHATTERPOINT)) {
+        guardShards = 0
+        return
+    }
+    val count = guardShards
+    val orbit = coreRadius + reactionValue(ReactionId.SHATTERPOINT, GUARD_ORBIT_VALUE)
+    val damage = guardDamage
+    var broken = 0
+    for (index in enemies.indices) {
+        if (guardShards <= 0) return
+        val target = enemies[index]
+        if (!target.alive || isShifting(target)) continue
+        val shard = guardShardTouching(count, broken, orbit, target.x, target.y, target.radius + GUARD_SHARD_RADIUS)
+        if (shard < 0) continue
+        broken = broken or (1 shl shard)
+        guardShards--
+        dealStatusDamage(target, damage, StatusElement.CRYO, ignoresAffinity = true)
+        if (target.alive) applyStatus(target, StatusElement.CRYO, 1, 1)
+    }
+    for (index in projectiles.indices) {
+        if (guardShards <= 0) return
+        val shot = projectiles[index]
+        if (!shot.hostile || shot.spent || shot.kind != ProjectileKind.BOLT) continue
+        val shard = guardShardTouching(count, broken, orbit, shot.x, shot.y, shot.radius + GUARD_SHARD_RADIUS)
+        if (shard < 0 || !eraseHostileShot(shot, EraseCause.REACTION, shot.x, shot.y)) continue
+        broken = broken or (1 shl shard)
+        guardShards--
+    }
+}
+
+/**
+ * The first unbroken shard of a [count]-shard guard on the [orbit] around the Core within [reach] of ([x], [y]),
+ * or -1. Shard i sits at angle `elapsed × GUARD_SPIN + i × TAU / count`.
+ */
+private fun MutableGameState.guardShardTouching(count: Int, broken: Int, orbit: Float, x: Float, y: Float, reach: Float): Int {
+    val fromCore = length(x - coreX, y - coreY)
+    if (kotlin.math.abs(fromCore - orbit) > reach) return -1
+    for (shard in 0 until count) {
+        if (broken and (1 shl shard) != 0) continue
+        val angle = elapsed * GUARD_SPIN + shard * TAU / count
+        if (distanceSquared(coreX + cos(angle) * orbit, coreY + sin(angle) * orbit, x, y) <= reach * reach) return shard
+    }
+    return -1
+}
+
+/** The world moved by ([shiftX], [shiftY]): pending aftershocks move with it. */
+internal fun MutableGameState.rebaseCoreReactionStates(shiftX: Float, shiftY: Float) {
+    aftershockX0 -= shiftX
+    aftershockY0 -= shiftY
+    aftershockX1 -= shiftX
+    aftershockY1 -= shiftY
+}
+
+/** A new run starts with no lingering Core state, anchor, latch, prime, aftershock or buffered skill input. */
 internal fun MutableGameState.resetCoreReactionState() {
+    aftershockAt0 = -1f
+    aftershockX0 = 0f
+    aftershockY0 = 0f
+    aftershockDamage0 = 0f
+    aftershockAt1 = -1f
+    aftershockX1 = 0f
+    aftershockY1 = 0f
+    aftershockDamage1 = 0f
     ablazeUntil = 0f
     frictionlessUntil = 0f
     blastJumpUntil = 0f

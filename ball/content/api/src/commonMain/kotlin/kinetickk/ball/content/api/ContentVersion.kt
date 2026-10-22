@@ -72,6 +72,8 @@ object ContentBounds {
     /** No skill rank may recast sooner than this, before any refund (the refund bank keeps the same floor). */
     const val MIN_SKILL_COOLDOWN_SECONDS: Float = 2.5f
     const val MAX_REACTION_VALUES: Int = 4
+    /** A reaction's verb cue is a short decision line (first-discovery stamp, Codex, tooltip). */
+    const val MAX_REACTION_CUE_CHARS: Int = 28
     const val MAX_APEX_VALUES: Int = 4
     /** Boss strikes one Apex activation may spend. */
     const val MAX_APEX_STRIKES: Int = 12

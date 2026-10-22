@@ -123,6 +123,8 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             val edgeCritical = edgeCriticalReady()
             val impact = dealHit(enemy, damage, HitSource.IMPACT, canCrit = true, forceCrit = edgeCritical)
             if (edgeCritical) spendEdgeCritical()
+            // Ablaze: while the Core burns, every contact sets the enemy burning.
+            onAblazeContact(enemy)
             onCharacterImpact(enemy, impact, coreImpactSpeed, characterMultiplier)
             onWeaponImpact(coreImpactSpeed, damage)
             // A fast impact destroys an unprimed Bomber outright, before it can prime, even through a tether.
@@ -135,7 +137,10 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             lastImpactTime = 0.72f
             enemy.contactCooldown = 0.26f
             screenShake = min(15f, 3f + softVelocity(impactSpeed) * 0.018f)
-            val keepsMomentum = tagTier(BuildTag.RAM) >= 3 && speed >= 1_200f
+            // Glass Charge: an Embrittled enemy cannot stop a fast Core (Glass Burst: it shatters as you pass).
+            val pierced = piercesEmbrittled(enemy, coreImpactSpeed)
+            if (pierced) glassBurst(enemy, damage)
+            val keepsMomentum = tagTier(BuildTag.RAM) >= 3 && speed >= 1_200f || pierced
             if (!keepsMomentum) {
                 val recoil = min(220f, softVelocity(impactSpeed) * 0.28f) / max(1f, effectiveMass() / mass) * impactRecoilScale()
                 velocityX += dx / distance * recoil

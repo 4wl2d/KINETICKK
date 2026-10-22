@@ -53,6 +53,8 @@ internal object FieldFlags {
     const val FOLLOWS_ANCHOR: Int = 1 shl 1
     const val CORE_INSIDE: Int = 1 shl 2
     const val RANK_III: Int = 1 shl 3
+    /** A reaction field in its keystone form (Dwarf Star, Plague Pit, Dead Air, Rewind, Hungry Void). */
+    const val KEYSTONE: Int = 1 shl 4
 }
 
 /** A detached copy of one record, for tests, fingerprints and diagnostics (allocates; never on a hot path). */

@@ -119,10 +119,19 @@ data class ReactionDefinition(
     val residue: StatusElement? = null,
     val residueStacks: Int = 0,
     /**
-     * Content-owned numbers of the reaction's play-style behaviour, read by index (the description
-     * may name them as `{v0}`..`{v3}`); empty while the reaction has none.
+     * Content-owned numbers of the reaction's play-style behaviour (its verb), read by index in the order
+     * the gameplay rules document; empty while the reaction has none, and a reaction without values keeps
+     * only its base effect.
      */
     val values: ImmutableList<Float> = immutableListOf(),
+    /** The play-style behaviour's name (Spall, Plasma Pool, ...); blank while the reaction has none. */
+    val verb: String = "",
+    /** The decision the verb asks of the player, at most [ContentBounds.MAX_REACTION_CUE_CHARS] characters. */
+    val cue: String = "",
+    /** The name of the reaction's keystone form, which a keystone item switches it to; blank when none. */
+    val keystone: String = "",
+    /** What the keystone form changes. */
+    val keystoneDescription: String = "",
 ) {
     init {
         require(name.isNotBlank() && description.isNotBlank())
@@ -134,6 +143,11 @@ data class ReactionDefinition(
             "Reaction values size ${values.size} exceeds ${ContentBounds.MAX_REACTION_VALUES}"
         }
         require(values.all(Float::isFinite)) { "Reaction values must be finite" }
+        require(verb.isBlank() == cue.isBlank()) { "A verb and its cue are declared together" }
+        require(cue.length <= ContentBounds.MAX_REACTION_CUE_CHARS) {
+            "Reaction cue length ${cue.length} exceeds ${ContentBounds.MAX_REACTION_CUE_CHARS}"
+        }
+        require(keystone.isBlank() == keystoneDescription.isBlank()) { "A keystone and its description are declared together" }
     }
 }
 

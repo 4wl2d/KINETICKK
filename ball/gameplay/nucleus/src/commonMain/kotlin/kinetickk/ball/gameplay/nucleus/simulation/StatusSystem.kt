@@ -141,15 +141,18 @@ internal fun MutableGameState.applyStatus(enemy: Enemy, element: StatusElement, 
         landing = StatusElement.CRYO
         if (amount <= 0) return
     }
+    // A Suppressed enemy has no aspect: no immunity, resistance or weakness.
+    val suppressed = markIs(enemy, MarkKind.SUPPRESSED)
     // An immune aspect refuses the landing element before any side effect.
-    if (enemy.aspectIsImmune && enemy.aspectElement == landing.ordinal) {
+    if (!suppressed && enemy.aspectIsImmune && enemy.aspectElement == landing.ordinal) {
         signalImmunity(enemy)
         return
     }
     if (converted && build.pairing(RelicPairingId.THERMAL_PARADOX)) heat = max(0f, heat - 3f * amount)
-    val affinityCarry = when (landing.ordinal) {
-        enemy.aspectElement -> StatusCell.RESIST_CARRY
-        enemy.weaknessElement -> StatusCell.WEAK_CARRY
+    val affinityCarry = when {
+        suppressed -> -1
+        landing.ordinal == enemy.aspectElement -> StatusCell.RESIST_CARRY
+        landing.ordinal == enemy.weaknessElement -> StatusCell.WEAK_CARRY
         else -> -1
     }
     if (affinityCarry >= 0) {
@@ -303,20 +306,7 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
             shockwave(enemy.x, enemy.y, 0.28f, radius, FxColorCode.elementTone(element))
         }
         StatusElement.CRYO -> {
-            val immunity = when {
-                enemy.isBoss -> ARCHITECT_FREEZE_IMMUNITY_SECONDS
-                enemy.isElite -> ELITE_FREEZE_IMMUNITY_SECONDS
-                else -> FREEZE_IMMUNITY_SECONDS
-            }
-            // The Herald never freezes; its Break still rearms and leaves it Brittle.
-            val duration = if (enemy.isMiniBoss) 0f else if (enemy.isBoss) 0.5f else min(2f, power)
-            enemy.status[StatusCell.FROZEN_UNTIL] = elapsed + duration
-            enemy.status[StatusCell.FREEZE_IMMUNE_UNTIL] = elapsed + duration + immunity
-            enemy.status[StatusCell.REARM_AT + element.ordinal] = elapsed + duration + BREAK_REARM_SECONDS
-            enemy.status[StatusCell.BRITTLE] = 1f
-            enemy.status[StatusCell.CRYO_IMMUNE_CARRY] = 0f
-            enemy.vx = 0f
-            enemy.vy = 0f
+            freeze(enemy, min(2f, power))
             if (build.pairing(RelicPairingId.EXTINGUISHED) && enemy.status[StatusCell.CINDER_BANK] > 0f) {
                 dealStatusDamage(enemy, enemy.status[StatusCell.CINDER_BANK] * 0.6f, StatusElement.THERMAL)
                 enemy.status[StatusCell.CINDER_BANK] = 0f
@@ -652,6 +642,27 @@ private fun MutableGameState.burnBlackfire(enemy: Enemy, delta: Float) {
     }
 }
 
+/**
+ * Freezes [enemy] the way a Freeze Break does: ordinary enemies and Elites for [seconds], the Architect for half
+ * a second, the Herald not at all (its Break still rearms and leaves it Brittle). The target stops, turns Brittle
+ * and resists the next Freeze for a while.
+ */
+internal fun MutableGameState.freeze(enemy: Enemy, seconds: Float) {
+    val immunity = when {
+        enemy.isBoss -> ARCHITECT_FREEZE_IMMUNITY_SECONDS
+        enemy.isElite -> ELITE_FREEZE_IMMUNITY_SECONDS
+        else -> FREEZE_IMMUNITY_SECONDS
+    }
+    val duration = if (enemy.isMiniBoss) 0f else if (enemy.isBoss) 0.5f else seconds
+    enemy.status[StatusCell.FROZEN_UNTIL] = elapsed + duration
+    enemy.status[StatusCell.FREEZE_IMMUNE_UNTIL] = elapsed + duration + immunity
+    enemy.status[StatusCell.REARM_AT + StatusElement.CRYO.ordinal] = elapsed + duration + BREAK_REARM_SECONDS
+    enemy.status[StatusCell.BRITTLE] = 1f
+    enemy.status[StatusCell.CRYO_IMMUNE_CARRY] = 0f
+    enemy.vx = 0f
+    enemy.vy = 0f
+}
+
 /** Ends a Freeze early (a shatter) while keeping the post-thaw immunity. */
 internal fun MutableGameState.thaw(enemy: Enemy) {
     if (!isFrozen(enemy)) return
@@ -677,7 +688,7 @@ internal fun MutableGameState.arcCharge(enemy: Enemy) {
     }
 }
 
-/** Contagion and banked fire on death. Runs for every death, eligible or not. */
+/** Contagion, banked fire and the reaction verbs that read deaths. Runs for every death, eligible or not. */
 internal fun MutableGameState.onStatusCarrierDied(enemy: Enemy) {
     if (build.upside(RelicId.PANDEMIC_CODEX) && totalStacks(enemy) > 0) {
         val share = min(0.8f, content.relic(RelicId.PANDEMIC_CODEX).value(0, relicRank(RelicId.PANDEMIC_CODEX)) / 100f *
@@ -709,6 +720,7 @@ internal fun MutableGameState.onStatusCarrierDied(enemy: Enemy) {
         }
         shockwave(enemy.x, enemy.y, 0.3f, 110f, 4)
     }
+    onReactionCarrierDied(enemy)
 }
 
 private fun MutableGameState.nearestOtherEnemyExcluding(origin: Enemy, alsoExcluded: Int, range: Float): Enemy? {
