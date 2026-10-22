@@ -657,7 +657,10 @@ fun GameplayContent(
                                             }
                                         }
                                     }
-                                    change.pressed -> if (running && tracker.move(id)) steerTo(change, currentRenderModel, collectPerformance)
+                                    // Every pointer reports in each event; only the steering one, when it moved, steers.
+                                    change.pressed -> if (running && tracker.move(id) && change.position != change.previousPosition) {
+                                        steerTo(change, currentRenderModel, collectPerformance)
+                                    }
                                     // A hovering mouse steers (not over a control).
                                     change.type == PointerType.Mouse && running -> steerTo(change, currentRenderModel, collectPerformance)
                                 }
