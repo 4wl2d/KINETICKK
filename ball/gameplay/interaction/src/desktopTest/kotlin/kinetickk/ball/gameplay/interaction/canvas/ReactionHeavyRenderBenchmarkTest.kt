@@ -30,6 +30,7 @@ import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
 import kinetickk.ball.gameplay.nucleus.render.WeaponEntityProjection
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.ParticleDensity
+import kinetickk.ball.profile.api.ReactionEffectsLevel
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
@@ -49,14 +50,16 @@ import kotlin.test.assertTrue
  * Setup, simulation, FX reduction and projection are excluded; the draw includes the complete HUD
  * and world on a raster Canvas. It does not measure Compose scheduling, GPU presentation or devices.
  *
- * Run with KK_REACTION_RENDER_BENCH=1; KK_REACTION_RENDER_OUT selects the JSON-lines output file.
+ * Run with KK_REACTION_RENDER_BENCH=1; KK_REACTION_RENDER_OUT selects the JSON-lines output file and
+ * KK_REACTION_RENDER_EFFECTS the reaction effects setting (FULL, REDUCED or MINIMAL; FULL by default).
  * The existing redesign benchmark remains an independent workload with no visual FX.
  */
 class ReactionHeavyRenderBenchmarkTest {
     @Test
     fun measureReactionHeavyGameplayDraw() {
         if (System.getenv("KK_REACTION_RENDER_BENCH") != "1") return
-        val frames = reactionFrames()
+        val effectsLevel = ReactionEffectsLevel.valueOf(System.getenv("KK_REACTION_RENDER_EFFECTS") ?: ReactionEffectsLevel.FULL.name)
+        val frames = reactionFrames().map { it.copy(model = it.model.with("settings" to it.model.settings.copy(reactionEffects = effectsLevel))) }
         val warmups = positiveEnvironmentInt("KK_REACTION_RENDER_WARMUPS", 240)
         val samples = positiveEnvironmentInt("KK_REACTION_RENDER_SAMPLES", 480)
         val canvas = ReactionBenchmarkCanvas()
@@ -96,7 +99,7 @@ class ReactionHeavyRenderBenchmarkTest {
             fun percentile(fraction: Double): Double = elapsed[((samples - 1) * fraction).toInt()] / 1_000_000.0
             val result = "{" +
                 "\"suite\":\"reaction-canvas-v1\",\"scenario\":\"$scenario\"," +
-                "\"label\":\"${jsonString(System.getenv("KK_REACTION_RENDER_LABEL") ?: "run")}\"," +
+                "\"label\":\"${jsonString(System.getenv("KK_REACTION_RENDER_LABEL") ?: "run")}\",\"effects\":\"$effectsLevel\"," +
                 "\"width\":$REACTION_WIDTH,\"height\":$REACTION_HEIGHT,\"frames\":${frames.size}," +
                 "\"warmups\":$warmups,\"samples\":$samples," +
                 "\"enemies\":$REACTION_ENEMIES,\"projectiles\":120,\"fields\":6," +
