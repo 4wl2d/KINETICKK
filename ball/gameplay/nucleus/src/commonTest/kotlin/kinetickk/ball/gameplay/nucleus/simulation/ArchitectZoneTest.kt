@@ -16,7 +16,8 @@ import kotlin.test.assertTrue
 /**
  * The reaction zones sit on the Architect for 30 s without taking its fight away: a Time Bubble, a Maw and
  * an Attractor never stop it firing (volleys ≥ 90 % of the same fight without the zone), and none of them
- * writes its attack timer, shift or stun. A Hush silences it only through Silence's own boss rule.
+ * writes its attack timer, shift or stun. A Hush silences it only through Silence's own boss rule, so it too
+ * keeps ≥ 90 % of the volleys and never holds the Architect quiet past one boss Silence.
  */
 class ArchitectZoneTest {
     @Test
@@ -24,6 +25,7 @@ class ArchitectZoneTest {
         for (reaction in listOf(ReactionId.STASIS, ReactionId.NULL_WELL, ReactionId.MAGNETIZE)) {
             val zoned = fight(reaction, canonicalGameplayContent)
             val plain = fight(reaction, contentWithoutReactionVerbs)
+            println("ARCHITECT-ZONE $reaction volleys=${zoned.volleys}/${plain.volleys} zoneSteps=${zoned.zoneSteps}")
             assertTrue(zoned.zoneSteps > 0, "$reaction kept a zone on the Architect")
             assertTrue(zoned.volleys >= plain.volleys * 0.9f, "$reaction volleys ${zoned.volleys} of ${plain.volleys}")
             assertEquals(plain.actionTimers, zoned.actionTimers, "$reaction never writes the attack timer")
@@ -36,7 +38,10 @@ class ArchitectZoneTest {
     fun aHushOnTheArchitectStillLeavesItsAttackWindows() {
         val hushed = fight(ReactionId.SILENCE, canonicalGameplayContent)
         val plain = fight(ReactionId.SILENCE, contentWithoutReactionVerbs)
+        println("ARCHITECT-ZONE SILENCE volleys=${hushed.volleys}/${plain.volleys} quiet=${hushed.quietShare} " +
+            "longestQuiet=${hushed.longestQuietSeconds}")
         assertTrue(hushed.zoneSteps > 0)
+        assertTrue(hushed.volleys >= plain.volleys * 0.9f, "volleys ${hushed.volleys} of ${plain.volleys}")
         assertTrue(hushed.longestQuietSeconds <= SILENCE_BOSS_SECONDS + 0.02f, "no Silence is extended")
         assertTrue(hushed.quietShare < 0.4f, "the Architect attacks most of the time (${hushed.quietShare})")
         assertEquals(plain.actionTimers, hushed.actionTimers)
