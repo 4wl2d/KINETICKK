@@ -67,7 +67,7 @@ import kinetickk.performance.BenchmarkValidationContext
 import kinetickk.performance.runBenchmarkSuite
 import java.lang.reflect.Modifier
 
-internal const val GAMEPLAY_BENCHMARK_SUITE_VERSION = "gameplay-core-v3"
+internal const val GAMEPLAY_BENCHMARK_SUITE_VERSION = "gameplay-core-v4"
 private const val DEFAULT_SEED = 731_991
 private const val MAX_ENEMIES = 120
 private const val MAX_PROJECTILES = 650
