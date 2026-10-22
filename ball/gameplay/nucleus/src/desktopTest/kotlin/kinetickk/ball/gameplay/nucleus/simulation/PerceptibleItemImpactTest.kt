@@ -354,6 +354,11 @@ class PerceptibleItemImpactTest {
         FAST_DISTANCE,
         /** Seconds the Apex ran. */
         APEX,
+        /**
+         * Apex recharges completed after its first cast, the one under way counting by the share already done: a
+         * cooldown cut shows even when the window holds no extra cast (60 s → 51 s: 1.67 → 1.96 over 100 s).
+         */
+        APEX_RECHARGE,
     }
 
     private fun Arena.outputs(): List<Output> = when (this) {
@@ -372,7 +377,7 @@ class PerceptibleItemImpactTest {
         Arena.FIELDS -> listOf(Output.DAMAGE, Output.TAKEN, Output.CONTROL, Output.ERASED, Output.FAST_DISTANCE)
         Arena.SHOTS -> listOf(Output.DAMAGE, Output.TAKEN, Output.INTEGRITY, Output.ERASED)
         Arena.MARKS -> listOf(Output.DAMAGE, Output.DASHES, Output.FAST_DISTANCE)
-        Arena.APEX -> listOf(Output.DAMAGE, Output.REFUNDED, Output.APEX)
+        Arena.APEX -> listOf(Output.DAMAGE, Output.REFUNDED, Output.APEX, Output.APEX_RECHARGE)
     }
 
     /** What an encounter measured. Higher is better except for damage taken. */
@@ -393,6 +398,7 @@ class PerceptibleItemImpactTest {
         val control: Float = 0f,
         val fastDistance: Float = 0f,
         val apex: Float = 0f,
+        val apexRecharge: Float = 0f,
     ) {
         fun value(output: Output): Double = when (output) {
             Output.DAMAGE -> damage
@@ -412,13 +418,14 @@ class PerceptibleItemImpactTest {
             Output.CONTROL -> control.toDouble()
             Output.FAST_DISTANCE -> fastDistance.toDouble()
             Output.APEX -> apex.toDouble()
+            Output.APEX_RECHARGE -> apexRecharge.toDouble()
         }
 
         operator fun plus(other: Outcome): Outcome = Outcome(
             damage + other.damage, taken + other.taken, integrity + other.integrity, survival + other.survival,
             kills + other.kills, data + other.data, matter + other.matter, overdrive + other.overdrive, dashes + other.dashes,
             offers + other.offers, erased + other.erased, refunded + other.refunded, control + other.control,
-            fastDistance + other.fastDistance, apex + other.apex,
+            fastDistance + other.fastDistance, apex + other.apex, apexRecharge + other.apexRecharge,
         )
     }
 
@@ -648,7 +655,17 @@ class PerceptibleItemImpactTest {
         var taken = if (arena.defended) game.damageTaken else 0.0
         if (arena.hits > 0f) for (frame in fellAt until frames) if (burstHit(frame)) taken += arena.hits
         return Outcome(game.damageDealt, taken, integrity, fellAt / FPS, game.kills, game.dataCollected, game.runMatter, overdrive,
-            dashes, 0f, game.shotsErased, refunds.total, control, fastDistance, apexSeconds)
+            dashes, 0f, game.shotsErased, refunds.total, control, fastDistance, apexSeconds, apexRecharges(game))
+    }
+
+    /** [Output.APEX_RECHARGE] at the end of a fight: recharges finished since the first cast plus the share of the current one. */
+    private fun apexRecharges(game: MutableGameState): Float {
+        val casts = game.skillRuntime.apex(ApexCell.CAST_COUNT).toInt()
+        if (casts == 0) return 0f
+        val lastCast = game.skillRuntime.apex(ApexCell.LAST_CAST)
+        val readyAt = game.skillRuntime.apex(ApexCell.READY_AT)
+        val share = if (readyAt <= game.elapsed || readyAt <= lastCast) 1f else (game.elapsed - lastCast) / (readyAt - lastCast)
+        return casts - 1 + share.coerceIn(0f, 1f)
     }
 
     /** Sums the cooldown seconds refunded to the skills and the Apex from frame to frame (a cast restarts a count). */
@@ -1056,7 +1073,7 @@ class PerceptibleItemImpactTest {
             Output.DATA to 30.0,
             Output.MATTER to 30.0, Output.DATA_PER_KILL to 1.0, Output.MATTER_PER_KILL to 1.0, Output.OVERDRIVE to 3.0,
             Output.DASHES to 10.0, Output.OFFERS to 1.0, Output.ERASED to 10.0, Output.REFUNDED to 2.0, Output.CONTROL to 5.0,
-            Output.FAST_DISTANCE to 500.0, Output.APEX to 5.0,
+            Output.FAST_DISTANCE to 500.0, Output.APEX to 5.0, Output.APEX_RECHARGE to 0.5,
         )
 
         /** The SKILLS arena's loadout (each at rank II). */
