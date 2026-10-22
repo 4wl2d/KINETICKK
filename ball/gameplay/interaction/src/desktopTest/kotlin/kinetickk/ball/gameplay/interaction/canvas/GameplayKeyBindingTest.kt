@@ -28,6 +28,8 @@ import kinetickk.ball.gameplay.api.GameplayRejection
 import kinetickk.ball.gameplay.interaction.GameplayContent
 import kinetickk.ball.gameplay.interaction.GameplayInteractionPort
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
+import kinetickk.ball.gameplay.interaction.rewards.itemChoice
+import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureModel
 import kinetickk.ball.gameplay.nucleus.render.ApexProjection
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
@@ -145,6 +147,21 @@ class GameplayKeyBindingTest {
         assertEquals(listOf(Key.ShiftLeft), bubbled)
         assertEquals(emptyList(), press(Key.F3))
         assertTrue(bubbled.isEmpty(), "F3 bubbled while paused")
+    }
+
+    @Test
+    fun duringAChoiceOnlyTheChoiceAndRerollKeysAreConsumed() {
+        start(rewardFixtureModel(choices = listOf(itemChoice(0), itemChoice(1))))
+        val chosen = press(Key.Two)
+        assertEquals(1, chosen.size, "$chosen")
+        assertEquals(1, (chosen.single() as GameplayInteractionPulse.ChoiceSelected).index)
+        assertTrue(bubbled.isEmpty())
+        assertEquals(listOf(GameplayInteractionPulse.ChoicesRerolled), press(Key.Q))
+        // Run keys and pause belong to other phases: they reach the session (C opens the Codex).
+        listOf(Key.Z, Key.C, Key.V, Key.Spacebar, Key.P, Key.R).forEach { key ->
+            assertEquals(emptyList(), press(key), "$key during a choice")
+            assertEquals(listOf(key), bubbled, "$key did not bubble during a choice")
+        }
     }
 
     @Test
