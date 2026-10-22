@@ -203,6 +203,8 @@ class RebirthBalanceGateTest {
         val weapon: WeaponId,
         val weaponOrder: List<WeaponId>,
         val relics: List<RelicId> = emptyList(),
+        /** The bot never binds a Relic in key harmony with its weapon, so the setup holds without harmony by construction. */
+        val withoutHarmony: Boolean = false,
     )
 
     private fun play(
@@ -234,7 +236,7 @@ class RebirthBalanceGateTest {
         setup.relics.forEach(state::acquireRelicForTesting)
         val synergy = linkedMapOf("start" to state.toRenderModel().weaponSynergy)
         val bot = NoPoiBot(archetypeTag = BuildTag.RAM, weaponOrder = setup.weaponOrder,
-            dataPolicy = if (seekData) DataPolicy.SEEK else DataPolicy.NEUTRAL)
+            dataPolicy = if (seekData) DataPolicy.SEEK else DataPolicy.NEUTRAL, avoidWeaponHarmony = setup.withoutHarmony)
         var architectAt: Float? = null
         while (state.elapsed < 900f && (state.phase == GamePhase.RUNNING || state.phase == GamePhase.CHOICE)) {
             if (state.phase == GamePhase.CHOICE) bot.choose(state) else {
@@ -268,8 +270,15 @@ class RebirthBalanceGateTest {
         /** No Matrix ranks, the Orb and the starter weapon. */
         val Fresh = Setup(MatrixPlan.NONE, shape = CoreShape.ORB, weapon = WeaponId.FLUX_WAKE, weaponOrder = BotWeapons)
 
-        /** Every Matrix rank and the Pentagon with its signature Arc Coil from the start. */
-        val Signature = Setup(MatrixPlan.FULL, shape = CoreShape.PENTAGON, weapon = WeaponId.ARC_COIL, weaponOrder = BotWeapons)
+        /**
+         * Every Matrix rank and the Pentagon with its signature Arc Coil from the start, measured without key harmony
+         * (B and G check it): the bot leaves a slot hollow rather than bind a Relic carrying its weapon's Charge key. It
+         * used to bind Stormheart Capacitor or Aegis Inversion when every other Relic card was one it dislikes, in about
+         * one tier-3 run in fifteen, which made the harmony check a draw of the offers rather than a property of the setup.
+         */
+        val Signature = Setup(
+            MatrixPlan.FULL, shape = CoreShape.PENTAGON, weapon = WeaponId.ARC_COIL, weaponOrder = BotWeapons, withoutHarmony = true,
+        )
 
         /** Half the Matrix (see [halfMatrixRanks]), the Orb and the starter weapon. */
         val Half = Setup(MatrixPlan.HALF, shape = CoreShape.ORB, weapon = WeaponId.FLUX_WAKE, weaponOrder = BotWeapons)
