@@ -39,6 +39,7 @@ import kinetickk.ball.content.api.ReactionAspect
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.SkillPick
 import kinetickk.ball.content.api.StatDelta
+import kinetickk.ball.content.api.WeaponFamily
 import kinetickk.ball.content.api.ZoneKind
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.toImmutableList
@@ -930,6 +931,45 @@ private val Drafts: List<ItemDraft> = listOf(
         clauses = listOf(on(EffectTrigger.TURN, EffectAction.Burst(160f, DamageBasis.IMPACT, 0.5f), EffectAction.CoreImpulse(450f, ImpulseDirection.FORWARD), given = listOf(EffectCondition.SpeedAtLeast(1_100f)), cooldown = 1f)),
         rules = listOf(ItemRule.WhileModifier(EffectCondition.SpeedAtLeast(1_400f), BuffStat.DAMAGE_REDUCTION, 0.2f)),
         rebirth = 6),
+
+    // ARSENAL FAMILIES (ids 245-256).
+    ItemDraft("Wake Governor", "Turn hard and the wake surges.", UNCOMMON, listOf(DRIVE),
+        clauses = listOf(on(EffectTrigger.TURN, EffectAction.RefreshWeapon(0.4f), given = listOf(EffectCondition.WeaponFamilyIs(WeaponFamily.MOMENTUM)), cooldown = 0.75f)),
+        unlock = 5),
+    ItemDraft("Epicycle Gears", "Every collision spins the orbit faster.", UNCOMMON, listOf(RAM),
+        clauses = listOf(on(EffectTrigger.IMPACT, EffectAction.RefreshWeapon(0.2f), given = listOf(EffectCondition.WeaponFamilyIs(WeaponFamily.ORBITAL)), cooldown = 0.5f)),
+        unlock = 5),
+    ItemDraft("Halo Condenser", "A blow to the hull flares the aura around it.", UNCOMMON, listOf(BULWARK),
+        clauses = listOf(on(EffectTrigger.HURT, EffectAction.RefreshWeapon(0.6f), given = listOf(EffectCondition.WeaponFamilyIs(WeaponFamily.AURA)), cooldown = 1f)),
+        unlock = 5),
+    ItemDraft("Homing Rifling", "A clean hit bends the next shots toward it.", RARE, listOf(PRECISION), listOf(StatusElement.GRAVITIC),
+        clauses = listOf(on(EffectTrigger.CRIT, EffectAction.Zone(ZoneKind.ATTRACTOR, 200f, 3f), given = listOf(EffectCondition.WeaponFamilyIs(WeaponFamily.PROJECTILE)), cooldown = 2f)),
+        unlock = 8),
+    ItemDraft("Tripwire Spool", "Stop, and the traps reset themselves.", COMMON, listOf(ANCHOR),
+        clauses = listOf(on(EffectTrigger.BRAKE_RELEASE, EffectAction.RefreshWeapon(0.8f), given = listOf(EffectCondition.WeaponFamilyIs(WeaponFamily.TRAP)), cooldown = 1.5f)),
+        unlock = 4),
+    ItemDraft("Bridge Rectifier", "Every fifth link closes the circuit into a reaction.", RARE, listOf(CHAIN), listOf(StatusElement.ION),
+        clauses = listOf(on(EffectTrigger.WEAPON_HIT, EffectAction.ForceReaction(120f, 2), given = listOf(EffectCondition.WeaponFamilyIs(WeaponFamily.CHAIN)), every = 5)),
+        unlock = 8),
+    ItemDraft("Burn-In Coil", "Run the beam until it glows, then let it all out.", RARE, listOf(OVERCLOCK),
+        clauses = listOf(on(EffectTrigger.OVERHEAT, EffectAction.RefreshWeapon(1f), given = listOf(EffectCondition.WeaponFamilyIs(WeaponFamily.BEAM)), cooldown = 3f)),
+        rules = listOf(ItemRule.WhileModifier(EffectCondition.WeaponFamilyIs(WeaponFamily.BEAM), BuffStat.COOLING, 0.25f)),
+        unlock = 8),
+    ItemDraft("Shock Absorber", "Every pulse knocks a few shots out of the air.", RARE, listOf(BULWARK),
+        clauses = listOf(on(EffectTrigger.WEAPON_HIT, EffectAction.EraseShots(160f, 2), given = listOf(EffectCondition.WeaponFamilyIs(WeaponFamily.PULSE)), cooldown = 1f, every = 3)),
+        unlock = 6),
+    ItemDraft("Trigger Discipline", "Steady fire keeps every other system on time.", COMMON, listOf(ARSENAL),
+        clauses = listOf(on(EffectTrigger.WEAPON_HIT, EffectAction.RefundSkills(0.3f, SkillPick.LONGEST), every = 10)),
+        unlock = 3),
+    ItemDraft("Loader Sigil", "Each cast racks the weapon.", UNCOMMON, listOf(OVERCLOCK, ARSENAL),
+        clauses = listOf(on(EffectTrigger.SKILL_CAST, EffectAction.RefreshWeapon(0.5f))),
+        unlock = 6),
+    ItemDraft("Spall Rounds", "The shot cracks the shell; the Core finishes the throw.", UNCOMMON, listOf(ARSENAL, RAM),
+        clauses = listOf(on(EffectTrigger.WEAPON_HIT, EffectAction.ApplyMark(MarkPick.SPALL, 3f), every = 5)),
+        unlock = 6),
+    ItemDraft("Counterbattery", "Every shot you stop is a round you get back.", RARE, listOf(BULWARK, ARSENAL),
+        clauses = listOf(on(EffectTrigger.SHOT_ERASED, EffectAction.RefreshWeapon(0.15f), every = 2)),
+        rebirth = 5),
 )
 
 /** A reaction clause condition naming both elements: it holds only for the reaction between them. */
