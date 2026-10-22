@@ -226,12 +226,24 @@ class GameplayNucleusTest {
                     ),
                 ),
             ) to GameplayConfigurationRejection.UPGRADE_LEVEL_OUT_OF_RANGE,
+            valid.copy(
+                profile = valid.profile.copy(collection = valid.profile.collection.copy(recentItemIds = List(65) { 0 }.toImmutableList())),
+            ) to GameplayConfigurationRejection.RECENT_ITEM_HISTORY_INVALID,
+            valid.copy(
+                profile = valid.profile.copy(
+                    collection = valid.profile.collection.copy(recentItemIds = listOf(0, valid.content.items.size).toImmutableList()),
+                ),
+            ) to GameplayConfigurationRejection.RECENT_ITEM_HISTORY_INVALID,
         )
 
         configurations.forEach { (inputs, expected) ->
             assertEquals(expected, GameplayNucleus.validateStartInputs(inputs))
         }
         assertNull(GameplayNucleus.validateStartInputs(valid))
+        // The newest 64 acquisitions, repeats included, are a valid history.
+        val fullHistory = List(64) { it % 3 }.toImmutableList()
+        assertNull(GameplayNucleus.validateStartInputs(valid.copy(profile = valid.profile.copy(
+            collection = valid.profile.collection.copy(recentItemIds = fullHistory)))))
     }
 
     @Test

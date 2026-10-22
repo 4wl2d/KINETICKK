@@ -257,10 +257,10 @@ class ExpansionItemsTest {
         val pair = listOf("Gambler's Ledger", "Cornucopia Core")
         for (held in pair) {
             val other = pair.single { it != held }
-            val fresh = buildTestState(rebirth = 10).apply { lifetimeMatter = 4_000L }
+            val fresh = buildTestState(rebirth = 10).dealWholeCatalog().apply { lifetimeMatter = 4_000L }
             assertTrue(fresh.itemNamed(other) in fresh.offerableItems(), "$other is offered to a build without $held")
 
-            val state = buildTestState(rebirth = 10).apply {
+            val state = buildTestState(rebirth = 10).dealWholeCatalog().apply {
                 lifetimeMatter = 4_000L
                 own(held)
             }

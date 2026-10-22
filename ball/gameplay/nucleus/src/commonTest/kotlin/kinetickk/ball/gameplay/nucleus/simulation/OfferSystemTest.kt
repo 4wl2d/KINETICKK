@@ -101,7 +101,7 @@ class OfferSystemTest {
     fun rebirthGatedItemsAndRelicsStayOutOfOffersBelowTheirTier() {
         // A veteran's run that can use every gated item: a skill drafted and a plain item of each element held, so skill
         // items have something to work on and every reaction a keystone item names is reachable.
-        fun gatedItems(rebirth: Int): Set<String> = buildTestState(rebirth = rebirth).apply {
+        fun gatedItems(rebirth: Int): Set<String> = buildTestState(rebirth = rebirth).dealWholeCatalog().apply {
             lifetimeMatter = 4_000L
             acquireSkill(SkillId.SOLAR_FLARE)
             StatusElement.entries.forEach { element ->
@@ -130,8 +130,9 @@ class OfferSystemTest {
         val items = canonicalGameplayContent.items
         assertEquals(269, items.size)
         // A fresh profile per tier: no lifetime Matter, so the run level alone opens the catalog. Each run has drafted
-        // a skill (the first slot opens at level 2), so skill items have something to work on.
-        val tiers = (0..10).map { tier -> buildTestState(rebirth = tier).apply { acquireSkill(SkillId.SOLAR_FLARE) } }
+        // a skill (the first slot opens at level 2), so skill items have something to work on, and has dealt the whole
+        // catalog into its deck (DraftDeckTest covers the deal).
+        val tiers = (0..10).map { tier -> buildTestState(rebirth = tier).dealWholeCatalog().apply { acquireSkill(SkillId.SOLAR_FLARE) } }
         for (item in items) {
             val own = runThatCanUse(item, item.minimumRebirth, tiers).apply { level = item.unlockLevel }
             assertTrue(item in own.offerableItems(), "${item.name} is offered at Reborn ${item.minimumRebirth}, level ${item.unlockLevel}")
@@ -436,7 +437,7 @@ class OfferSystemTest {
         val keystone = item.keystone
         if (family == null && keystone == null) return tiers[rebirth]
         val weapon = family?.let { wanted -> canonicalGameplayContent.weapons.first { it.family == wanted }.id } ?: WeaponId.FLUX_WAKE
-        return buildTestState(rebirth = rebirth, weapon = weapon).apply {
+        return buildTestState(rebirth = rebirth, weapon = weapon).dealWholeCatalog().apply {
             acquireSkill(SkillId.SOLAR_FLARE)
             keystone?.let { reaction ->
                 listOf(reaction.first, reaction.second).forEach { element ->

@@ -855,6 +855,10 @@ class GameplayReductionIsolationTest {
         pendingTotalKills = 5
         pendingRicochets = 6
         pendingDataPickups = 7
+        pendingAcquiredItemIds = listOf(3, 5)
+        itemDeck = kinetickk.ball.gameplay.nucleus.model.ItemDeck.dealt(
+            content.items.size, IntArray(content.items.size) { it }, intArrayOf(content.items.size, 0, 0, 0, 0), listOf(0, 3, 5),
+        )
         achievementFlushDue = true
         pointsOfInterest = listOf(
             PointOfInterestState(
@@ -1114,7 +1118,8 @@ class GameplayReductionIsolationTest {
             pendingDashHits != 0 ||
             pendingCompletedOrbits != 0 ||
             pendingArchitectDefeatedWith != null ||
-            achievementFlushDue && (pendingTotalKills != 0 || pendingRicochets != 0 || pendingDataPickups != 0) ||
+            achievementFlushDue && (pendingTotalKills != 0 || pendingRicochets != 0 || pendingDataPickups != 0 ||
+                pendingAcquiredItemIds.isNotEmpty()) ||
             pendingDiscoveredRelicMask != 0L ||
             pendingDiscoveredReactionMask != 0 ||
             pendingDiscoveredPairingMask != 0 ||
@@ -1165,6 +1170,11 @@ class GameplayReductionIsolationTest {
             ints("itemStacks", itemStacks)
             ints("rebornItems", rebornItems)
             value("acquisitionOrder", acquisitionOrder.toList())
+            value("pendingAcquiredItemIds", pendingAcquiredItemIds.toList())
+            value("deckSeed", deckSeed)
+            value("itemDeck", itemDeck.dealtIds() to itemDeck.reserve())
+            value("itemDeck.dealsEverything", itemDeck.dealsEverything)
+            value("itemHistory", content.items.indices.map(itemHistory::deckWeight))
             buildFingerprint(this@exactSimulationFingerprint)
             floats("clauseReadyAt", clauseReadyAt)
             ints("clauseCounters", clauseCounters)

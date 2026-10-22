@@ -67,6 +67,8 @@ data class GameplayBuildSummaryProjection(
     val characterUpgradeLevel: Int = 0,
     /** The run's Honing level of the current [weapon]. */
     val weaponUpgradeLevel: Int = 0,
+    /** Items the run's Rebirth rank allows that its draft deck left out (ascending): no ordinary offer shows them. */
+    val outOfDeckItemIds: ImmutableList<Int> = immutableListOf(),
 ) : GameplayProjection
 
 enum class BuildStatSource { CHARACTER, LAB, ITEMS, RELICS, SYNERGIES, MASTERY, TEMPORARY }

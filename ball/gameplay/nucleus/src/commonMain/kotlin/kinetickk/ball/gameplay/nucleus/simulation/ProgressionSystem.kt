@@ -28,6 +28,7 @@ import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.ball.profile.api.GameplayProgressUpdate
+import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kotlin.math.floor
 import kotlin.math.max
@@ -377,7 +378,10 @@ internal fun MutableGameState.acquireItem(itemId: Int, reborn: Boolean = false) 
     }
     itemStacks[itemId] = before + 1
     if (reborn) rebornItems[itemId] = 1
-    if (before == 0) acquisitionOrder = acquisitionOrder + itemId
+    if (before == 0) {
+        acquisitionOrder = acquisitionOrder + itemId
+        pendingAcquiredItemIds = (pendingAcquiredItemIds + itemId).takeLast(MAX_RECENT_ITEM_IDS)
+    }
     acquiredItemCount++
     recentItem = item
     val policy = content.build.policy
@@ -499,6 +503,7 @@ internal fun MutableGameState.takeProgressUpdate(): GameplayProgressUpdate? {
         totalKills = pendingTotalKills,
         ricochets = pendingRicochets,
         dataPickups = pendingDataPickups,
+        acquiredItemIds = pendingAcquiredItemIds.toImmutableList(),
     )
     pendingBankedMatter = 0L
     pendingDiscoveredItemIds.clear()
@@ -515,6 +520,7 @@ internal fun MutableGameState.takeProgressUpdate(): GameplayProgressUpdate? {
     pendingTotalKills = 0
     pendingRicochets = 0
     pendingDataPickups = 0
+    pendingAcquiredItemIds = emptyList()
     return update
 }
 
@@ -527,8 +533,9 @@ internal fun MutableGameState.hasUrgentProgress(): Boolean =
         pendingClearedRebirthLevel != null || pendingEliteKills != 0 || pendingDashHits != 0 ||
         pendingCompletedOrbits != 0 || pendingArchitectDefeatedWith != null
 
+/** Non-urgent progress: counters and first acquisitions ride along with the next update or the run-end flush. */
 internal fun MutableGameState.hasPendingAchievementCounters(): Boolean =
-    pendingTotalKills != 0 || pendingRicochets != 0 || pendingDataPickups != 0
+    pendingTotalKills != 0 || pendingRicochets != 0 || pendingDataPickups != 0 || pendingAcquiredItemIds.isNotEmpty()
 
 /** True when [takeProgressUpdate] would publish an update now. */
 internal fun MutableGameState.hasPublishableProgress(): Boolean =

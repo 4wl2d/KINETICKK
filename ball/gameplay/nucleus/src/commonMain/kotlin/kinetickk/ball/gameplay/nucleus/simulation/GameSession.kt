@@ -16,6 +16,7 @@ internal fun MutableGameState.startRun() {
     phase = GamePhase.RUNNING
     interpolationPrimed = false
     matrix = foldMatrix()
+    drawItemDeck()
     characterRuntime = CharacterRuntime()
     skillRuntime = SkillRuntime()
     skillLoadout = SkillLoadout.EMPTY
