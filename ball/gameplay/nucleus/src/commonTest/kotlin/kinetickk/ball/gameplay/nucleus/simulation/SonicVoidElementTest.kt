@@ -295,14 +295,14 @@ class SonicVoidElementTest {
         assertEquals(state.maxHp, state.hp, 0.01f, "integrity rises by the ceiling actually gained")
 
         state.onLevelUp()
-        assertEquals(0.9f * (200f + LEVEL_INTEGRITY), state.maxHp, 0.01f)
+        assertEquals(0.9f * (200f + state.content.tempo.levelIntegrity), state.maxHp, 0.01f)
 
         // Ending the liability returns the whole cut and heals nothing.
         val integrity = state.hp
         state.replaceRelic(0, RelicId.PERPETUAL_VECTOR)
         state.elapsed += state.content.build.policy.severanceSeconds + 1f
         state.updateRelicRuntime(MutableGameState.FIXED_STEP)
-        assertEquals(200f + LEVEL_INTEGRITY, state.maxHp, 0.01f)
+        assertEquals(200f + state.content.tempo.levelIntegrity, state.maxHp, 0.01f)
         assertEquals(0f, state.integrityLiabilityCut)
         assertEquals(integrity, state.hp)
 

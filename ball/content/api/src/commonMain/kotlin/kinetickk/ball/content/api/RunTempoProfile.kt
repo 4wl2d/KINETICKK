@@ -3,6 +3,10 @@
 
 package kinetickk.ball.content.api
 
+import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.immutableListOfSize
+
 /** Content-owned starting values; seconds always mean active simulation time at 1x. */
 data class FatigueTuning(
     val velocitySmoothingSeconds: Float = 0.15f,
@@ -42,6 +46,23 @@ data class RunTempoProfile(
     val weaponAmplificationEveryLevels: Int = 2,
     val maximumAutomaticWeaponLevel: Int = 10,
     val fatigue: FatigueTuning = FatigueTuning(),
+    /** Highest run level; Data stops levelling here (the Apex unlocks at it). */
+    val maximumLevel: Int = ContentBounds.MAX_RUN_LEVEL,
+    /**
+     * Data needed to go from level `L` to `L + 1`, for `L = 1 until maximumLevel` (entry `L - 1`):
+     * positive and non-decreasing. The default reproduces the legacy quadratic curve.
+     */
+    val levelRequirements: ImmutableList<Int> = legacyLevelRequirements(maximumLevel),
+    /** Maximum integrity every level-up adds. */
+    val levelIntegrity: Float = 2f,
+    /** Integrity every level-up repairs. */
+    val levelRepair: Float = 6f,
+    /** Run levels that open the skill slots, in slot order (one per [ContentBounds.SKILL_SLOTS]). */
+    val skillSlotLevels: ImmutableList<Int> = immutableListOf(2, 8, 16),
+    /** Item offers on levels divisible by this carry a skill rank-up card. */
+    val skillRankEveryLevels: Int = 4,
+    /** Levels a skill must be owned or ranked for before it is eligible for the next rank-up card. */
+    val skillRankGapLevels: Int = 2,
 ) {
     init {
         require(bossAtSeconds.isFinite() && bossAtSeconds > 0f)
@@ -50,6 +71,27 @@ data class RunTempoProfile(
         require(matterRewardMultiplier.isFinite() && matterRewardMultiplier > 0f)
         require(weaponAmplificationEveryLevels > 0)
         require(maximumAutomaticWeaponLevel in 1..100)
+        require(maximumLevel in MIN_MAXIMUM_LEVEL..ContentBounds.MAX_RUN_LEVEL) {
+            "Maximum run level must be within $MIN_MAXIMUM_LEVEL..${ContentBounds.MAX_RUN_LEVEL}"
+        }
+        require(levelRequirements.size == maximumLevel - 1) {
+            "Level requirements must list one entry per level below the maximum"
+        }
+        require(levelRequirements.all { it > 0 }) { "Level requirements must be positive" }
+        require(levelRequirements.zipWithNext().all { (first, second) -> first <= second }) {
+            "Level requirements must not decrease"
+        }
+        require(levelIntegrity.isFinite() && levelIntegrity >= 0f)
+        require(levelRepair.isFinite() && levelRepair >= 0f)
+        require(skillSlotLevels.size == ContentBounds.SKILL_SLOTS) { "Every skill slot needs an opening level" }
+        require(skillSlotLevels.all { it in MIN_MAXIMUM_LEVEL until maximumLevel }) {
+            "Skill slots open on a level-up below the maximum level"
+        }
+        require(skillSlotLevels.zipWithNext().all { (first, second) -> first < second }) {
+            "Skill slot levels must increase"
+        }
+        require(skillRankEveryLevels in 1 until maximumLevel)
+        require(skillRankGapLevels in 0 until maximumLevel)
     }
 
     fun progress(elapsedSeconds: Float): Float = (elapsedSeconds / bossAtSeconds).coerceIn(0f, 1f)
@@ -81,6 +123,20 @@ data class RunTempoProfile(
     fun selfDamageRunGrowth(elapsedSeconds: Float): Float = 1f + 1.6f * progress(elapsedSeconds)
     fun attackRateMultiplier(elapsedSeconds: Float): Float = 1f + progress(elapsedSeconds) * 0.40f
     fun denseAttacks(elapsedSeconds: Float): Boolean = progress(elapsedSeconds) >= 0.58f
-    fun dataRequiredForLevel(level: Int): Int = if (level <= 1) 18 else 18 + level * 8 + level * level / 8
+    /** Total: at and past the cap it returns the last entry, which the capped state only displays. */
+    fun dataRequiredForLevel(level: Int): Int = levelRequirements[level.coerceIn(1, maximumLevel - 1) - 1]
     fun grantsWeaponAmplification(level: Int): Boolean = level > 1 && level % weaponAmplificationEveryLevels == 0
+
+    companion object {
+        /** A run needs at least one level-up below its cap. */
+        const val MIN_MAXIMUM_LEVEL: Int = 2
+    }
 }
+
+/** The pre-0.5 quadratic curve `18 + 8L + L²/8` (18 at level 1) for levels `1 until maximumLevel`. */
+fun legacyLevelRequirements(maximumLevel: Int): ImmutableList<Int> {
+    require(maximumLevel in RunTempoProfile.MIN_MAXIMUM_LEVEL..ContentBounds.MAX_RUN_LEVEL)
+    return immutableListOfSize(maximumLevel - 1) { index -> legacyLevelRequirement(index + 1) }
+}
+
+private fun legacyLevelRequirement(level: Int): Int = if (level <= 1) 18 else 18 + level * 8 + level * level / 8

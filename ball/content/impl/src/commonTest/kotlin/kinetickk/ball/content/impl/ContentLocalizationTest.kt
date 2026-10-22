@@ -47,7 +47,9 @@ class ContentLocalizationTest {
             content.relics.forEach { addAll(listOf(it.name, it.upside, it.liability)) }
             content.coreShapes.forEach {
                 addAll(listOf(it.displayName, it.mechanicDescription, it.unlockDescription, it.mechanicName))
+                addAll(listOf(it.apex.name, it.apex.description))
             }
+            content.skills.forEach { addAll(listOf(it.name, it.summary, it.rankThree)) }
             addAll(kinetickk.ball.content.api.CharacterTriggerKind.entries.map { it.displayLabel })
             content.pointsOfInterest.definitions.forEach { addAll(listOf(it.name, it.instruction)) }
             content.rebirth.profiles.forEach { add(it.displayName) }
@@ -78,6 +80,8 @@ class ContentLocalizationTest {
         assertDistinctInRussian(kinetickk.ball.content.api.WeaponScaling.entries.map { it.displayLabel })
         assertDistinctInRussian(build.pairings.map { it.name })
         assertDistinctInRussian(build.reactions.map { it.name })
+        assertDistinctInRussian(content.skills.map { it.name })
+        assertDistinctInRussian(content.coreShapes.map { it.apex.name })
         assertDistinctInRussian(RebirthMutator.entries.map { it.displayName })
         assertDistinctInRussian(BuildTag.entries.map { it.displayLabel })
         assertDistinctInRussian(StatusElement.entries.flatMap { listOf(it.displayLabel, it.statusLabel, it.breakLabel) })

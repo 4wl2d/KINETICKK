@@ -24,6 +24,8 @@ internal val RussianContentSources: List<List<Pair<String, String>>> = listOf(
     BuildPhrasesInRussian,
     RelicPhrasesInRussian,
     ItemPhrasesInRussian,
+    SkillPhrasesInRussian,
+    ApexPhrasesInRussian,
 )
 
 private val RussianContent: Map<String, String> = buildMap {

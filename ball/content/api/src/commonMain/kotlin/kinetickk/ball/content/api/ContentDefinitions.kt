@@ -202,6 +202,8 @@ class WeaponDefinition(
     val minimumRebirth: Int,
     masteryForms: List<String>,
     val signatureText: String,
+    /** Matter for Honing level 1; level `n + 1` costs `upgradeBaseCost × 2^n` ([UpgradePolicy.nextCost]). */
+    val upgradeBaseCost: Int = defaultWeaponUpgradeBaseCost(minimumRebirth),
 ) {
     val tags: ImmutableList<BuildTag> = tags.toImmutableList()
     val masteryForms: ImmutableList<String> = masteryForms.toImmutableList()
@@ -220,6 +222,9 @@ class WeaponDefinition(
             "A weapon names exactly three mastery forms"
         }
         require(signatureText.isNotBlank()) { "Weapon signature text must not be blank" }
+        require(upgradeBaseCost in 1..ContentBounds.MAX_UPGRADE_BASE_COST) {
+            "Honing base cost must be within 1..${ContentBounds.MAX_UPGRADE_BASE_COST}"
+        }
     }
 
     override fun equals(other: Any?): Boolean =
@@ -237,7 +242,8 @@ class WeaponDefinition(
             permanentUnlockCost == other.permanentUnlockCost &&
             minimumRebirth == other.minimumRebirth &&
             masteryForms == other.masteryForms &&
-            signatureText == other.signatureText
+            signatureText == other.signatureText &&
+            upgradeBaseCost == other.upgradeBaseCost
 
     override fun hashCode(): Int {
         var result = id.hashCode()
@@ -253,14 +259,15 @@ class WeaponDefinition(
         result = 31 * result + permanentUnlockCost
         result = 31 * result + minimumRebirth
         result = 31 * result + masteryForms.hashCode()
-        return 31 * result + signatureText.hashCode()
+        result = 31 * result + signatureText.hashCode()
+        return 31 * result + upgradeBaseCost
     }
 
     override fun toString(): String =
         "WeaponDefinition(id=$id, name=$name, description=$description, family=$family, element=$element, " +
             "tags=$tags, key=$key, signature=$signature, scaling=$scaling, cadence=$cadence, " +
             "permanentUnlockCost=$permanentUnlockCost, minimumRebirth=$minimumRebirth, " +
-            "masteryForms=$masteryForms, signatureText=$signatureText)"
+            "masteryForms=$masteryForms, signatureText=$signatureText, upgradeBaseCost=$upgradeBaseCost)"
 
     companion object {
         /** Build tags per weapon; tag resonance reads both. */

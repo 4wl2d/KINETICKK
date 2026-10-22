@@ -56,6 +56,8 @@ data class RebirthProfile(
     val packSizeBonus: Int = 0,
     /** Scales the mean number of world obstacles per chunk. */
     val obstacleDensityMultiplier: Float = 1f,
+    /** Scales every run level's Data requirement at this tier (rounded per level); 1 keeps the base curve. */
+    val dataRequirementScale: Float = 1f,
 ) {
     init {
         require(tier >= 0) { "Rebirth tier must be non-negative" }
@@ -71,6 +73,9 @@ data class RebirthProfile(
         require(packSizeBonus >= 0) { "Rebirth pack size bonus must not be negative" }
         require(obstacleDensityMultiplier.isFinite() && obstacleDensityMultiplier > 0f) {
             "Obstacle density multiplier must be finite and positive"
+        }
+        require(dataRequirementScale.isFinite() && dataRequirementScale >= 1f) {
+            "Data requirement scale must be finite and at least 1"
         }
     }
 

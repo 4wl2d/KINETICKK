@@ -118,6 +118,11 @@ data class ReactionDefinition(
     /** Multi-stage residue applied to every enemy the reaction touches. */
     val residue: StatusElement? = null,
     val residueStacks: Int = 0,
+    /**
+     * Content-owned numbers of the reaction's play-style behaviour, read by index (the description
+     * may name them as `{v0}`..`{v3}`); empty while the reaction has none.
+     */
+    val values: ImmutableList<Float> = immutableListOf(),
 ) {
     init {
         require(name.isNotBlank() && description.isNotBlank())
@@ -125,6 +130,10 @@ data class ReactionDefinition(
         require(radius.isFinite() && radius >= 0f)
         require((residue == null) == (residueStacks == 0)) { "Residue element and stacks are declared together" }
         require(residueStacks in 0..3)
+        require(values.size <= ContentBounds.MAX_REACTION_VALUES) {
+            "Reaction values size ${values.size} exceeds ${ContentBounds.MAX_REACTION_VALUES}"
+        }
+        require(values.all(Float::isFinite)) { "Reaction values must be finite" }
     }
 }
 

@@ -24,6 +24,7 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicKey
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.RelicPairingKind
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
@@ -70,6 +71,35 @@ class ContentBootstrapValidationTest {
         val extra = data.weapons.first().copied(name = "Overflow Weapon")
 
         assertRejected(data.copy(weapons = data.weapons + extra), "weapons size 25")
+    }
+
+    @Test
+    fun skillPoolFollowsTheSkillIdOrderAndRejectsTheFirstSkillPastTheBound() {
+        val data = defaultContentBootstrapData()
+        val gameplay = createContentCatalogForTesting(data).gameplayContent()
+
+        assertEquals(SkillId.entries.toList(), gameplay.skills.map { it.id })
+        assertEquals(gameplay.skills, createContentCatalogForTesting(data).uiCatalog().skills)
+        val padded = data.skills + List(ContentBounds.MAX_SKILLS + 1 - data.skills.size) { data.skills.last() }
+        assertRejected(data.copy(skills = padded), "skills size 25")
+        assertRejected(data.copy(skills = data.skills.swappedHead()), "Skill ids must match")
+        assertRejected(data.copy(skills = data.skills.dropLast(1)), "Skill ids must match")
+    }
+
+    @Test
+    fun upgradeBasesAcceptTheBoundAndRejectOneMore() {
+        val data = defaultContentBootstrapData()
+        val weapon = data.weapons.first()
+
+        assertEquals(weapon, weapon.copied(upgradeBaseCost = weapon.upgradeBaseCost))
+        weapon.copied(upgradeBaseCost = ContentBounds.MAX_UPGRADE_BASE_COST)
+        assertFailsWith<IllegalArgumentException> {
+            weapon.copied(upgradeBaseCost = ContentBounds.MAX_UPGRADE_BASE_COST + 1)
+        }
+        assertFailsWith<IllegalArgumentException> { weapon.copied(upgradeBaseCost = 0) }
+        val policy = createContentCatalogForTesting(data).profilePolicy()
+        assertEquals(ContentBounds.MAX_UPGRADE_LEVEL, policy.upgrades.maxLevel)
+        assertEquals(policy.upgrades, createContentCatalogForTesting(data).gameplayContent().upgrades)
     }
 
     @Test
@@ -431,6 +461,7 @@ private fun WeaponDefinition.copied(
     id: WeaponId = this.id,
     name: String = this.name,
     key: RelicKey = this.key,
+    upgradeBaseCost: Int = this.upgradeBaseCost,
 ): WeaponDefinition = WeaponDefinition(
     id = id,
     name = name,
@@ -446,4 +477,5 @@ private fun WeaponDefinition.copied(
     minimumRebirth = minimumRebirth,
     masteryForms = masteryForms,
     signatureText = signatureText,
+    upgradeBaseCost = upgradeBaseCost,
 )

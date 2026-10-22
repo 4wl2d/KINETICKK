@@ -266,6 +266,68 @@ class ContentBalanceCharacterizationTest {
     }
 
     @Test
+    fun skillApexAndUpgradeContentIsGolden() {
+        assertEquals(18, ui.skills.size)
+        assertEquals(
+            "c731894c89232154",
+            goldenFingerprint {
+                add("skills")
+                ui.skills.forEach { skill ->
+                    add(skill.id.name)
+                    add(skill.name)
+                    add(skill.summary)
+                    add(skill.rankThree)
+                    add(skill.element?.name ?: "-")
+                    skill.tags.forEach { add(it.name) }
+                    add(skill.targeting.name)
+                    add(skill.reach)
+                    add(skill.family.name)
+                    skill.ranks.forEach { rank ->
+                        add(rank.cooldownSeconds)
+                        add(rank.values.size)
+                        rank.values.forEach(::add)
+                    }
+                }
+                add("apex")
+                ui.coreShapes.forEach { shape ->
+                    val apex = shape.apex
+                    add(shape.id.name)
+                    add(apex.name)
+                    add(apex.description)
+                    add(apex.durationSeconds)
+                    add(apex.cooldownSeconds)
+                    add(apex.minimumCooldownSeconds)
+                    add(apex.bossStrikes)
+                    add(apex.boltBudget)
+                    add(apex.values.size)
+                    apex.values.forEach(::add)
+                    add(shape.upgradeBaseCost)
+                    add(shape.upgradeSignature.perLevel)
+                    add(shape.upgradeSignature.secondaryPerLevel)
+                }
+                add("upgrades")
+                add(ui.upgrades.maxLevel)
+                add(ui.upgrades.characterIntegrityPerLevel)
+                add(ui.upgrades.characterPowerPerLevel)
+                add(ui.upgrades.weaponPowerPerLevel)
+                ui.weapons.forEach { weapon ->
+                    add(weapon.id.name)
+                    add(weapon.upgradeBaseCost)
+                }
+                add("tempo")
+                add(ui.tempo.maximumLevel)
+                ui.tempo.levelRequirements.forEach(::add)
+                add(ui.tempo.levelIntegrity)
+                add(ui.tempo.levelRepair)
+                ui.tempo.skillSlotLevels.forEach(::add)
+                add(ui.tempo.skillRankEveryLevels)
+                add(ui.tempo.skillRankGapLevels)
+                ui.rebirth.profiles.forEach { add(it.dataRequirementScale) }
+            },
+        )
+    }
+
+    @Test
     fun relicLimitsOrderingAndContentIdentityAreGolden() {
         val relics = ui.relics
 
