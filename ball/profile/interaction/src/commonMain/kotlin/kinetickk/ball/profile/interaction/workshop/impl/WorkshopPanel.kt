@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
@@ -156,6 +157,8 @@ internal fun WorkshopPanel(
     headerExtraWidth: (ProfileFrame) -> Float = { 0f },
     announcement: String? = null,
     alert: String? = null,
+    /** A key that reaches the panel itself (focus on no control): the tab may own it, as Characters owns Enter. */
+    onPanelKey: (KeyEvent) -> Boolean = { false },
     content: @Composable BoxScope.(frame: ProfileFrame, header: WorkshopHeaderLayout) -> Unit,
 ) {
     val language = LocalAppLanguage.current
@@ -180,6 +183,7 @@ internal fun WorkshopPanel(
             }
             .focusRequester(panelFocus)
             .onKeyEvent { event ->
+                if (onPanelKey(event)) return@onKeyEvent true
                 if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
                 val direction = when (event.key) {
                     Key.DirectionUp -> FocusDirection.Up

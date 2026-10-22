@@ -13,6 +13,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.CoreShapeDefinition
 import kinetickk.ball.content.api.MatrixNodeDefinition
@@ -167,6 +172,7 @@ class DefaultWorkshopFeature(
         val matter: Long
         val background: DrawScope.(ProfileFrame) -> Unit
         val onBack: () -> Unit
+        var onPanelKey: (KeyEvent) -> Boolean = { false }
         var headerExtra: (@Composable RowScope.(ProfileFrame) -> Unit)? = null
         var headerExtraWidth: (ProfileFrame) -> Float = { 0f }
         val body: @Composable (ProfileFrame, WorkshopHeaderLayout) -> Unit
@@ -209,6 +215,13 @@ class DefaultWorkshopFeature(
                 matter = model.matter
                 background = { frame -> drawHangarBackground(frame, hangarHolder.layout) }
                 onBack = { dispatch(HangarAction.Back) }
+                // Enter selects the inspected character even while focus rests on the panel (after opening);
+                // an unconsumed Enter would reach Session and close the Workshop.
+                onPanelKey = { event ->
+                    (event.key == Key.Enter || event.key == Key.NumPadEnter).also { enter ->
+                        if (enter && event.type == KeyEventType.KeyDown) dispatch(HangarAction.SelectInspected)
+                    }
+                }
                 body = { frame, _ ->
                     HangarBody(frame, state, shown.characterSegment, textScale, hangarDetail, hangarHolder, focusSerial,
                         onSegment = ::dispatchWorkshop, onAction = ::dispatch)
@@ -360,6 +373,7 @@ class DefaultWorkshopFeature(
             headerExtraWidth = headerExtraWidth,
             announcement = politeValue?.text,
             alert = alertValue?.text,
+            onPanelKey = onPanelKey,
         ) { frame, header -> body(frame, header) }
     }
 

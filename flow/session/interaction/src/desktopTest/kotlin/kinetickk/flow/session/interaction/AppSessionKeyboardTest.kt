@@ -279,6 +279,14 @@ class AppSessionKeyboardTest {
                 KeyboardShell(port, NoCodex, workshop)
             }
         }
+        waitForIdle()
+        // Right after opening, focus rests on the panel: Enter belongs to the Characters tab, not to Session
+        // (the selected character is inspected, so nothing is asked and the Workshop stays open).
+        onRoot().performKeyInput { pressKey(Key.Enter) }
+        runOnIdle {
+            assertTrue(port.pulses.isEmpty(), "${port.pulses}")
+            assertEquals(AppDestination.Workshop, port.overlay)
+        }
         // A press inspects a tile; hovering another one on the way only highlights it, so Enter selects the inspected one.
         onNodeWithTag("profile-hangar-tile-${CoreShape.PRISM}").performMouseInput { click() }
         waitForIdle()
