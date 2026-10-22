@@ -9,6 +9,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -111,6 +115,29 @@ class SettingsDisplayControlsComposeTest {
     }
 
     @Test
+    fun keysOfACaptureNeverReachTheShellEvenWhileHeld() = settings(SettingsDisplayPort.None) { port, _, unconsumed ->
+        click("kinetickk.settings.group.controls")
+        // Outside a capture Settings leaves Escape and letters to the shell.
+        key(Key.Escape)
+        key(Key.S)
+        assertEquals(listOf(Key.Escape, Key.S), unconsumed.toList())
+        unconsumed.clear()
+        // Escape held to cancel: its repeats do not also close Settings.
+        click("kinetickk.settings.bind.pause.key")
+        onRoot().performKeyInput { keyDown(Key.Escape); advanceEventTime(700); keyUp(Key.Escape) }
+        settle()
+        // S held to bind: its repeats do not reach the Settings shortcut.
+        click("kinetickk.settings.bind.pause.key")
+        onRoot().performKeyInput { keyDown(Key.S); advanceEventTime(700); keyUp(Key.S) }
+        settle()
+        assertEquals(BindableKey.S, port.preferences.keyBindings.key(GameAction.PAUSE))
+        assertTrue(unconsumed.isEmpty(), "$unconsumed")
+        // After the release, keys reach the shell again.
+        key(Key.S)
+        assertEquals(listOf(Key.S), unconsumed.toList())
+    }
+
+    @Test
     fun desktopDisplayRowsWriteTypedChoicesAndReapplyOverAWindowTheSystemChanged() {
         val support = DESKTOP_SUPPORT
         val display = SettingsTestDisplayPort(support)
@@ -195,21 +222,26 @@ class SettingsDisplayControlsComposeTest {
         width: Int = 1440,
         height: Int = 810,
         preferences: PlayerPreferences = PlayerPreferences(language = AppLanguage.English),
-        body: ComposeUiTest.(SettingsTestProfilePort, MutableList<SettingsOutput>, SettingsDisplayPort) -> Unit,
+        body: ComposeUiTest.(SettingsTestProfilePort, MutableList<SettingsOutput>, MutableList<Key>) -> Unit,
     ): Unit = runSkikoComposeUiTest(size = Size(width.toFloat(), height.toFloat()), density = Density(1f)) {
         mainClock.autoAdvance = false
         val port = SettingsTestProfilePort(preferences)
         val outputs = mutableListOf<SettingsOutput>()
+        // Key downs Settings left unconsumed, as the shell's bubble handler would see them.
+        val unconsumed = mutableListOf<Key>()
         val feature = DefaultSettingsFeature(port, SettingsTestSilentAudio, display)
         setContent {
             CompositionLocalProvider(LocalAppLanguage provides preferences.language) {
-                Box(Modifier.requiredSize(width.dp, height.dp)) {
+                Box(Modifier.requiredSize(width.dp, height.dp).onKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown) unconsumed += event.key
+                    false
+                }) {
                     feature.Content(routeToken = 1L) { outputs += it }
                 }
             }
         }
         settle()
-        body(port, outputs, display)
+        body(port, outputs, unconsumed)
     }
 
     private fun ComposeUiTest.settle() {

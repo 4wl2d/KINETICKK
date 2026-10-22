@@ -113,6 +113,9 @@ class DefaultSettingsFeature(
         // The key held when a capture began (Enter or Space on the cell): its repeats are not a choice.
         val heldKey = remember { arrayOfNulls<Key>(1) }
         val captureIgnoredKey = remember { arrayOfNulls<Key>(1) }
+        // The key that ended a capture: its repeats and release still belong to that press, so they
+        // reach no shortcut (holding Escape does not also close Settings, a new S does not toggle it).
+        val releaseKey = remember { arrayOfNulls<Key>(1) }
         val capturing = captureValue != null
         val support = remember(display, routeToken, viewportValue) { display.support() }
         val platform = SettingsPlatform(
@@ -214,6 +217,7 @@ class DefaultSettingsFeature(
                 key != null -> SettingsAction.CaptureKey(key, previewTimeValue)
                 else -> SettingsAction.CaptureRejected(previewTimeValue)
             })
+            if (captureValue == null) releaseKey[0] = event.key
         }
 
         fun focusChanged(target: SettingsTarget, focused: Boolean) {
@@ -232,12 +236,22 @@ class DefaultSettingsFeature(
                 .semantics { paneTitle = language.text(ProfileText.SettingsTitle) }
                 .onPreviewKeyEvent { event ->
                     when (event.type) {
-                        KeyEventType.KeyDown -> heldKey[0] = event.key
+                        KeyEventType.KeyDown -> {
+                            heldKey[0] = event.key
+                            if (releaseKey[0] != event.key) releaseKey[0] = null
+                        }
                         KeyEventType.KeyUp -> if (heldKey[0] == event.key) heldKey[0] = null
                     }
-                    if (captureValue == null) false else {
-                        captureKey(event)
-                        true
+                    when {
+                        captureValue != null -> {
+                            captureKey(event)
+                            true
+                        }
+                        event.key == releaseKey[0] -> {
+                            if (event.type == KeyEventType.KeyUp) releaseKey[0] = null
+                            true
+                        }
+                        else -> false
                     }
                 }
                 .focusRequester(focusRequester)
