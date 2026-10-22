@@ -20,6 +20,7 @@ import kinetickk.ball.profile.api.DamageNumberSize
 import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
 import kinetickk.ball.profile.api.ParticleDensity
+import kinetickk.ball.profile.api.PermanentUpgrades
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
@@ -146,6 +147,10 @@ private data class PlayerProfileDto(
     val collection: PlayerCollectionDto,
     val rebirthProgress: RebirthProgressDto,
     val characterAchievements: CharacterAchievementProgressDto,
+    // Bought Refit and Honing levels; absent while nothing is bought, so older saves keep their bytes
+    // (and an explicit empty object is not canonical).
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val upgrades: PermanentUpgradesDto = PermanentUpgradesDto(),
 )
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -210,6 +215,20 @@ private data class MatrixProgressDto(
 private data class MatrixNodeRankDto(
     val id: String,
     val rank: Int,
+)
+
+/** Non-zero levels only, each list strictly sorted by wire id and absent while empty. */
+@OptIn(ExperimentalSerializationApi::class)
+@Serializable
+private data class PermanentUpgradesDto(
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val characters: List<UpgradeLevelDto> = emptyList(),
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val weapons: List<UpgradeLevelDto> = emptyList(),
+)
+
+@Serializable
+private data class UpgradeLevelDto(
+    val id: String,
+    val level: Int,
 )
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -321,6 +340,16 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
                 highestCleared = profile.rebirthProgress.highestCleared,
                 ascendedCharacterIds = profile.rebirthProgress.ascendedCharacters.map(CoreShape::wireId).sorted(),
             ),
+            upgrades = PermanentUpgradesDto(
+                characters = CoreShape.entries
+                    .filter { shape -> profile.upgrades.characterLevel(shape) > 0 }
+                    .map { shape -> UpgradeLevelDto(id = shape.wireId(), level = profile.upgrades.characterLevel(shape)) }
+                    .sortedBy(UpgradeLevelDto::id),
+                weapons = WeaponId.entries
+                    .filter { id -> profile.upgrades.weaponLevel(id) > 0 }
+                    .map { id -> UpgradeLevelDto(id = id.wireId(), level = profile.upgrades.weaponLevel(id)) }
+                    .sortedBy(UpgradeLevelDto::id),
+            ),
         ),
     )
 }
@@ -331,8 +360,11 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
 
     val legacyLab = profile.labProgress
     rejectUnless(legacyLab == null || profile.matrix.ranks.isEmpty(), ProfileSnapshotRejection.INCONSISTENT_PROFILE)
+    // Upgrades were introduced long after the Lab was retired, so no save carries both.
+    rejectUnless(legacyLab == null || profile.upgrades == PermanentUpgradesDto(), ProfileSnapshotRejection.INCONSISTENT_PROFILE)
     val labRefund = legacyLab?.let(RetiredLabRefund::refund) ?: 0L
     val matrixRanks = profile.matrix.toRanks()
+    val upgrades = profile.upgrades.toUpgrades()
     rejectUnless(
         profile.loadout.unlockedWeaponIds.isStrictlySorted(),
         ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
@@ -411,6 +443,7 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
             highestCleared = profile.rebirthProgress.highestCleared,
             ascendedCharacters = profile.rebirthProgress.ascendedCharacterIds.map { it.coreShape() }.toImmutableSet(),
         ),
+        upgrades = upgrades,
     )
     validateProfile(decoded)
 
@@ -528,6 +561,16 @@ private fun validateProfile(profile: PlayerProfile) {
     rejectUnless(
         achievements.victoriousCharacters.containsAll(profile.rebirthProgress.ascendedCharacters),
         ProfileSnapshotRejection.INCONSISTENT_PROFILE,
+    )
+    val upgrades = profile.upgrades
+    rejectUnless(
+        upgrades.characterLevels.size == CoreShape.entries.size && upgrades.weaponLevels.size == WeaponId.entries.size,
+        ProfileSnapshotRejection.INCONSISTENT_PROFILE,
+    )
+    rejectUnless(
+        upgrades.characterLevels.all { it in 0..ContentBounds.MAX_UPGRADE_LEVEL } &&
+            upgrades.weaponLevels.all { it in 0..ContentBounds.MAX_UPGRADE_LEVEL },
+        ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
     )
 }
 
@@ -936,6 +979,28 @@ private fun MatrixProgressDto.toRanks(): List<Int> {
         result[id.ordinal] = record.rank
     }
     return result
+}
+
+/**
+ * Strict mapping of the upgrade record lists: each strictly sorted by wire id (no duplicates), every
+ * id known and every level within 1..MAX_UPGRADE_LEVEL (a zero level is never written).
+ */
+private fun PermanentUpgradesDto.toUpgrades(): PermanentUpgrades {
+    fun <Id> List<UpgradeLevelDto>.toLevels(size: Int, id: (String) -> Id, ordinal: (Id) -> Int): List<Int> {
+        rejectUnless(map(UpgradeLevelDto::id).isStrictlySorted(), ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE)
+        rejectUnless(this.size <= size, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+        val levels = MutableList(size) { 0 }
+        forEach { record ->
+            val index = ordinal(id(record.id))
+            rejectUnless(record.level in 1..ContentBounds.MAX_UPGRADE_LEVEL, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+            levels[index] = record.level
+        }
+        return levels
+    }
+    return PermanentUpgrades(
+        characterLevels = characters.toLevels(CoreShape.entries.size, { it.coreShape() }, CoreShape::ordinal),
+        weaponLevels = weapons.toLevels(WeaponId.entries.size, { it.weaponId() }, WeaponId::ordinal),
+    )
 }
 
 /**
