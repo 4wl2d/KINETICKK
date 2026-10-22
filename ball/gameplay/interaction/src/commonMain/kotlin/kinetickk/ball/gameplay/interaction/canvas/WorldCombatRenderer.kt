@@ -62,10 +62,12 @@ internal fun DrawScope.drawWorld(
     shakeX: Float,
     shakeY: Float,
     textMeasurer: TextMeasurer,
+    hudDensity: Float = density,
 ) {
     WorldDrawProbe.begin()
-    // The HUD keep-out is screen space: update it before the world layer changes the scope's units.
-    worldHudKeepOut(engine, textMeasurer)
+    // The HUD keep-out is screen space, at the HUD's (interface-scaled) density: update it before the
+    // world layer changes the scope's units.
+    worldHudKeepOut(engine, textMeasurer, hudDensity)
     val markers = WorldOverlayScratch.markers.clear()
     val scale = engine.worldScale
     withWorldUnits(scale) {

@@ -11,6 +11,7 @@ import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.LocalKkRolePalette
 import kinetickk.foundation.design.KkFramePacer
 import kinetickk.foundation.design.LocalKkFrameRateCap
+import kinetickk.foundation.design.LocalKkInterfaceScale
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.drawKkSlab
 import kinetickk.foundation.design.kkStroke
@@ -28,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.NonRestartableComposable
@@ -60,6 +62,8 @@ import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFontFamilyResolver
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -69,6 +73,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.TextMeasurer as ComposeTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import kinetickk.ball.content.api.SkillId
@@ -88,6 +93,7 @@ import kinetickk.ball.gameplay.interaction.canvas.activeTrial
 import kinetickk.ball.gameplay.interaction.canvas.badgeState
 import kinetickk.ball.gameplay.interaction.canvas.drawGameplay
 import kinetickk.ball.gameplay.interaction.canvas.drawPerformanceHud
+import kinetickk.ball.gameplay.interaction.canvas.withHudDensity
 import kinetickk.ball.gameplay.interaction.canvas.shouldDrawRunningPresentation
 import kinetickk.ball.gameplay.interaction.canvas.toPerformanceHudProjection
 import kinetickk.ball.gameplay.interaction.canvas.trialRules
@@ -99,6 +105,7 @@ import kinetickk.ball.gameplay.interaction.input.RunningTouchTracker
 import kinetickk.ball.gameplay.interaction.input.ValidationFailure
 import kinetickk.ball.gameplay.interaction.input.filledSkillSlots
 import kinetickk.ball.gameplay.interaction.input.hudHeight
+import kinetickk.ball.gameplay.interaction.input.hudScale
 import kinetickk.ball.gameplay.interaction.input.hudWidth
 import kinetickk.ball.gameplay.interaction.input.isHudControlPosition
 import kinetickk.ball.gameplay.interaction.input.isTrialInfoPosition
@@ -148,6 +155,18 @@ fun GameplayContent(
     val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
     val localDensity = LocalDensity.current
     val density = localDensity.density
+    // The world keeps the raw density; the HUD, the running controls and the run's overlays lay out at the
+    // applied interface scale (meta-ui §3.6), in drawing and hit tests alike.
+    val interfaceScale = LocalKkInterfaceScale.current
+    val interfaceScaleState = rememberUpdatedState(interfaceScale)
+    val hudDensity = remember(localDensity, interfaceScale) {
+        if (interfaceScale == 1f) localDensity else Density(localDensity.density * interfaceScale, localDensity.fontScale)
+    }
+    val fontFamilyResolver = LocalFontFamilyResolver.current
+    val layoutDirection = LocalLayoutDirection.current
+    val hudComposeTextMeasurer = remember(composeTextMeasurer, hudDensity, fontFamilyResolver, layoutDirection) {
+        if (hudDensity === localDensity) composeTextMeasurer else ComposeTextMeasurer(fontFamilyResolver, hudDensity, layoutDirection, 64)
+    }
     val interactionValidator = remember(component) { GameInteractionValidator() }
     var renderModelValue by remember(component) {
         mutableStateOf(requireNotNull(component.renderSnapshot().renderModel))
@@ -294,7 +313,7 @@ fun GameplayContent(
     fun steerTo(change: PointerInputChange, model: GameplayRenderModel, collectPerformance: Boolean) {
         val x = change.position.x
         val y = change.position.y
-        if (model.isHudControlPosition(x, y)) return
+        if (model.isHudControlPosition(x, y, interfaceScaleState.value)) return
         when (val result = interactionValidator.pointerMoved(x, y, density = model.viewportDensity)) {
             is InteractionValidationResult.Valid -> dispatch(result.intent, collectPerformance)
             is InteractionValidationResult.Invalid -> reportInvalidInteractionInput(result.failure)
@@ -367,7 +386,7 @@ fun GameplayContent(
     val showFpsPanel by remember(component) {
         derivedStateOf {
             val model = renderModelValue
-            showFpsOpensPanel(model.settings.showFps, gameplayLayoutMode(model.hudWidth, model.hudHeight, model.uiScale))
+            showFpsOpensPanel(model.settings.showFps, gameplayLayoutMode(model.hudWidth, model.hudHeight, model.hudScale(interfaceScaleState.value)))
         }
     }
     LaunchedEffect(component, showFpsPanel) {
@@ -412,11 +431,19 @@ fun GameplayContent(
             roles = roles,
         )
     }
-    val layoutDimensions = remember(facts.hudWidth, facts.hudHeight, facts.uiScale) {
+    val hudTextMeasurer = remember(textMeasurer, hudComposeTextMeasurer) {
+        if (hudComposeTextMeasurer === composeTextMeasurer) {
+            textMeasurer
+        } else {
+            CanvasTextMeasurer(hudComposeTextMeasurer, textMeasurer.scale, textMeasurer.language, textMeasurer.typography, textMeasurer.roles)
+        }
+    }
+    val hudScale = hudScale(facts.uiScale, facts.viewportDensity, interfaceScale)
+    val layoutDimensions = remember(facts.hudWidth, facts.hudHeight, hudScale) {
         GameplayLayoutDimensions(
             width = facts.hudWidth,
             height = facts.hudHeight,
-            scale = facts.uiScale,
+            scale = hudScale,
         )
     }
     val pauseLayout = if (phase == GamePhase.PAUSED) {
@@ -646,7 +673,7 @@ fun GameplayContent(
                                 // Only a mouse hovers; a lifted finger must not keep the rules open.
                                 val first = changes[0]
                                 trialInfoHoveredValue = first.type == PointerType.Mouse && event.type != PointerEventType.Exit &&
-                                    currentRenderModel.isTrialInfoPosition(first.position.x, first.position.y)
+                                    currentRenderModel.isTrialInfoPosition(first.position.x, first.position.y, interfaceScaleState.value)
                             }
                             for (index in 0 until changes.size) {
                                 val change = changes[index]
@@ -664,12 +691,13 @@ fun GameplayContent(
                                         dispatch(GameplayInteractionPulse.UserGestureObserved, collectPerformance)
                                         if (change.type == PointerType.Touch) controlLog.keyHints = false
                                         // A press on the (!) toggles the rules; a press anywhere else closes them.
-                                        val onTrialInfo = currentRenderModel.isTrialInfoPosition(x, y)
+                                        val hudInterfaceScale = interfaceScaleState.value
+                                        val onTrialInfo = currentRenderModel.isTrialInfoPosition(x, y, hudInterfaceScale)
                                         trialInfoOpenValue = onTrialInfo && !trialInfoOpenValue
                                         if (!running) {
-                                            currentRenderModel.resolveGameplayPress(x, y)?.let { dispatchInput(it, collectPerformance) }
+                                            currentRenderModel.resolveGameplayPress(x, y, hudInterfaceScale)?.let { dispatchInput(it, collectPerformance) }
                                         } else {
-                                            val target = currentRenderModel.runningControlTargetAt(x, y)
+                                            val target = currentRenderModel.runningControlTargetAt(x, y, hudInterfaceScale)
                                             when (tracker.down(id, target, hudPosition = onTrialInfo)) {
                                                 RunningTouchTracker.DOWN_CONTROL ->
                                                     if (target != null) pressRunningControl(target, collectPerformance)
@@ -720,6 +748,8 @@ fun GameplayContent(
                 hudMemory = hudMemory,
                 trialInfoOpen = trialInfoShown,
                 controls = controlLog,
+                hudDensity = hudDensity,
+                hudTextMeasurer = hudTextMeasurer,
             )
             if (drawStartedAt != null) {
                 // State writes can invalidate the draw scope before recomposition publishes the
@@ -727,90 +757,96 @@ fun GameplayContent(
                 // the next recomposition supplies the exact snapshot without allocating here.
                 val hudProjection = performanceHudProjection
                 if (hudProjection != null && shouldDrawRunningPresentation(renderModelValue.phase)) {
-                    drawPerformanceHud(
-                        projection = hudProjection,
-                        textMeasurer = textMeasurer,
-                    )
+                    withHudDensity(hudDensity) {
+                        drawPerformanceHud(
+                            projection = hudProjection,
+                            textMeasurer = hudTextMeasurer,
+                        )
+                    }
                 }
                 performanceTelemetry.recordCanvasDrawMillis(
                     drawStartedAt.elapsedNow().toDouble(DurationUnit.MILLISECONDS),
                 )
             }
         }
-        if (terminal) {
-            TerminalContent(
-                renderModelValue,
-                terminalElapsed,
-                inputEnabled,
-                reactionsThisRun = visualFxProjectionValue.runReactionMask,
-                discoveredThisRun = visualFxProjectionValue.runDiscoveryMask,
-            ) { input ->
-                dispatch(GameplayInteractionPulse.UserGestureObserved)
-                dispatchInput(input)
-            }
-        }
-        if (phase == GamePhase.CHOICE) {
-            RewardContent(
-                engine = renderModelValue,
-                layout = requireNotNull(choiceLayout),
-                renderTime = renderTimeSecondsValue,
-                enabled = inputEnabled,
-                onSelect = { index ->
-                    dispatch(GameplayInteractionPulse.UserGestureObserved)
-                    dispatchValidated(interactionValidator.choiceSelected(index))
-                },
-                onReroll = {
-                    dispatch(GameplayInteractionPulse.UserGestureObserved)
-                    dispatch(GameplayInteractionPulse.ChoicesRerolled)
-                },
-                onBuild = { onOutput(GameplayInteractionOutput.OpenCodex) },
-            )
-        }
-        // Pause and reward overlays present Codex as their own menu item and button.
-        if (inputEnabled && phase == GamePhase.RUNNING) {
-            val buildBounds = remember(layoutDimensions) {
-                runningBuildButtonBounds(layoutDimensions.width, layoutDimensions.height, layoutDimensions.scale)
-            }
-            BuildButton(
-                modifier = Modifier.placeInGameplayBounds(buildBounds, localDensity),
-                regularUnit = if (gameplayLayoutMode(layoutDimensions.width, layoutDimensions.height, layoutDimensions.scale) ==
-                    GameplayLayoutMode.REGULAR
-                ) {
-                    regularHudUnit(layoutDimensions.width, layoutDimensions.scale)
-                } else {
-                    0f
-                },
-                onClick = { onOutput(GameplayInteractionOutput.OpenCodex) },
-            )
-        }
-        if (inputEnabled) {
-            GameplaySemanticControls(
-                facts = facts,
-                content = content,
-                trialDescription = trialDescription,
-                density = localDensity,
-                performanceEnabled = performanceEnabledValue,
-                pauseLayout = pauseLayout,
-                onTrialInfoFocusChanged = { trialInfoFocusedValue = it },
-                onTrialInfoToggle = { trialInfoOpenValue = !trialInfoOpenValue },
-                onInput = { input ->
+        // The run's overlays and the controls' semantics lay out at the HUD's (interface-scaled) density.
+        CompositionLocalProvider(LocalDensity provides hudDensity) {
+            if (terminal) {
+                TerminalContent(
+                    renderModelValue,
+                    terminalElapsed,
+                    inputEnabled,
+                    reactionsThisRun = visualFxProjectionValue.runReactionMask,
+                    discoveredThisRun = visualFxProjectionValue.runDiscoveryMask,
+                ) { input ->
                     dispatch(GameplayInteractionPulse.UserGestureObserved)
                     dispatchInput(input)
-                },
-                onControl = { target ->
-                    dispatch(GameplayInteractionPulse.UserGestureObserved)
-                    pressRunningControl(target)
-                },
-                onBrakeChanged = { active ->
-                    if (active) dispatch(GameplayInteractionPulse.UserGestureObserved)
-                    dispatch(
-                        GameplayInteractionPulse.BrakeChanged(
-                            source = BrakeSource.TOUCH_CONTROL,
-                            active = active,
-                        ),
-                    )
-                },
-            )
+                }
+            }
+            if (phase == GamePhase.CHOICE) {
+                RewardContent(
+                    engine = renderModelValue,
+                    layout = requireNotNull(choiceLayout),
+                    renderTime = renderTimeSecondsValue,
+                    enabled = inputEnabled,
+                    onSelect = { index ->
+                        dispatch(GameplayInteractionPulse.UserGestureObserved)
+                        dispatchValidated(interactionValidator.choiceSelected(index))
+                    },
+                    onReroll = {
+                        dispatch(GameplayInteractionPulse.UserGestureObserved)
+                        dispatch(GameplayInteractionPulse.ChoicesRerolled)
+                    },
+                    onBuild = { onOutput(GameplayInteractionOutput.OpenCodex) },
+                )
+            }
+            // Pause and reward overlays present Codex as their own menu item and button.
+            if (inputEnabled && phase == GamePhase.RUNNING) {
+                val buildBounds = remember(layoutDimensions) {
+                    runningBuildButtonBounds(layoutDimensions.width, layoutDimensions.height, layoutDimensions.scale)
+                }
+                BuildButton(
+                    modifier = Modifier.placeInGameplayBounds(buildBounds, hudDensity),
+                    regularUnit = if (gameplayLayoutMode(layoutDimensions.width, layoutDimensions.height, layoutDimensions.scale) ==
+                        GameplayLayoutMode.REGULAR
+                    ) {
+                        regularHudUnit(layoutDimensions.width, layoutDimensions.scale)
+                    } else {
+                        0f
+                    },
+                    onClick = { onOutput(GameplayInteractionOutput.OpenCodex) },
+                )
+            }
+            if (inputEnabled) {
+                GameplaySemanticControls(
+                    facts = facts,
+                    content = content,
+                    trialDescription = trialDescription,
+                    density = hudDensity,
+                    hudScale = hudScale,
+                    performanceEnabled = performanceEnabledValue,
+                    pauseLayout = pauseLayout,
+                    onTrialInfoFocusChanged = { trialInfoFocusedValue = it },
+                    onTrialInfoToggle = { trialInfoOpenValue = !trialInfoOpenValue },
+                    onInput = { input ->
+                        dispatch(GameplayInteractionPulse.UserGestureObserved)
+                        dispatchInput(input)
+                    },
+                    onControl = { target ->
+                        dispatch(GameplayInteractionPulse.UserGestureObserved)
+                        pressRunningControl(target)
+                    },
+                    onBrakeChanged = { active ->
+                        if (active) dispatch(GameplayInteractionPulse.UserGestureObserved)
+                        dispatch(
+                            GameplayInteractionPulse.BrakeChanged(
+                                source = BrakeSource.TOUCH_CONTROL,
+                                active = active,
+                            ),
+                        )
+                    },
+                )
+            }
         }
     }
 }
@@ -821,6 +857,7 @@ private fun GameplaySemanticControls(
     content: GameplayContentSnapshot,
     trialDescription: String?,
     density: Density,
+    hudScale: Float,
     performanceEnabled: Boolean,
     pauseLayout: PauseLayoutGeometry?,
     onTrialInfoFocusChanged: (Boolean) -> Unit,
@@ -834,6 +871,7 @@ private fun GameplaySemanticControls(
         TrialInfoSemanticNode(
             facts = facts,
             density = density,
+            hudScale = hudScale,
             description = trialDescription,
             onFocusChanged = onTrialInfoFocusChanged,
             onToggle = onTrialInfoToggle,
@@ -843,7 +881,7 @@ private fun GameplaySemanticControls(
         GamePhase.RUNNING -> forEachRunningControlBounds(
             width = facts.hudWidth,
             height = facts.hudHeight,
-            scale = facts.uiScale,
+            scale = hudScale,
             mask = facts.controlMask,
         ) { target, left, top, right, bottom ->
             val bounds = Rect(left, top, right, bottom)
@@ -971,14 +1009,15 @@ private fun GameplaySemanticControls(
 private fun TrialInfoSemanticNode(
     facts: GameplayCompositionFacts,
     density: Density,
+    hudScale: Float,
     description: String,
     onFocusChanged: (Boolean) -> Unit,
     onToggle: () -> Unit,
 ) {
-    val bounds = remember(facts.hudWidth, facts.hudHeight, facts.uiScale, facts.textScale) {
+    val bounds = remember(facts.hudWidth, facts.hudHeight, hudScale, facts.textScale) {
         HudTrialPanelLayout()
-            .update(facts.hudWidth, facts.hudHeight, facts.uiScale, facts.textScale)
-            .infoTarget(facts.uiScale)
+            .update(facts.hudWidth, facts.hudHeight, hudScale, facts.textScale)
+            .infoTarget(hudScale)
     }
     val currentOnFocusChanged = rememberUpdatedState(onFocusChanged)
     DisposableEffect(Unit) {
@@ -1126,6 +1165,8 @@ private data class GameplayCompositionFacts(
     val hudWidth: Float,
     val hudHeight: Float,
     val uiScale: Float,
+    /** The viewport's raw density (the HUD scale at another interface scale, [hudScale]). */
+    val viewportDensity: Float,
     val textScale: Float,
     val choiceCount: Int,
     val choicesCanReroll: Boolean,
@@ -1174,6 +1215,7 @@ private fun GameplayRenderModel.compositionFacts(): GameplayCompositionFacts {
         hudWidth = hudWidth,
         hudHeight = hudHeight,
         uiScale = uiScale,
+        viewportDensity = viewportDensity,
         textScale = settings.textScale,
         choiceCount = choices.size,
         choicesCanReroll = choicesCanReroll,

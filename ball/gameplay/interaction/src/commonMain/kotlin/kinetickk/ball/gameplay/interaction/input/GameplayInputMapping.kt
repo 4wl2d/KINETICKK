@@ -15,6 +15,7 @@ import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kotlin.math.max
 
 /** A pointer result is either a live-run action or a request for the Session-owned host. */
 sealed interface GameplayInput {
@@ -54,46 +55,62 @@ internal fun GameplayRenderModel.filledSkillSlots(): Int {
 
 /**
  * The gameplay surface in device pixels. The simulation viewport is dp; the HUD, the touch
- * controls and the Compose overlays are laid out in device pixels with [GameplayRenderModel.uiScale].
+ * controls and the Compose overlays are laid out in device pixels with [hudScale].
  */
 internal val GameplayRenderModel.hudWidth: Float get() = screenWidth * viewportDensity
 internal val GameplayRenderModel.hudHeight: Float get() = screenHeight * viewportDensity
 
-/** Maps gameplay canvas coordinates (device pixels) without encoding any app destination in domain state. */
-fun GameplayRenderModel.resolveGameplayPress(x: Float, y: Float): GameplayInput? =
+/**
+ * px per dp of the HUD, the running controls and the run's overlays: [GameplayRenderModel.uiScale] at the
+ * applied interface scale [interfaceScale] (1 = 100 %). The world keeps the raw viewport density; drawing
+ * and hit tests use this one value, so they always agree.
+ */
+internal fun GameplayRenderModel.hudScale(interfaceScale: Float): Float = hudScale(uiScale, viewportDensity, interfaceScale)
+
+/** [GameplayRenderModel.hudScale] from its parts: the model's [uiScale] at 100 %, else the scaled viewport density. */
+internal fun hudScale(uiScale: Float, viewportDensity: Float, interfaceScale: Float): Float =
+    if (interfaceScale == 1f) uiScale else max(1f, viewportDensity * interfaceScale)
+
+/**
+ * Maps gameplay canvas coordinates (device pixels) without encoding any app destination in domain state;
+ * [interfaceScale] is the applied interface scale the HUD is laid out at.
+ */
+fun GameplayRenderModel.resolveGameplayPress(x: Float, y: Float, interfaceScale: Float = 1f): GameplayInput? =
     resolveGameplayPress(
         phase = phase,
         screenWidth = hudWidth,
         screenHeight = hudHeight,
-        uiScale = uiScale,
+        uiScale = hudScale(interfaceScale),
         controlMask = RunningControlMask.of(this),
         skillSlots = filledSkillSlots(),
         x = x,
         y = y,
     )
 
-fun GameplayRenderModel.isHudControlPosition(x: Float, y: Float): Boolean =
+fun GameplayRenderModel.isHudControlPosition(x: Float, y: Float, interfaceScale: Float = 1f): Boolean =
     isHudControlPosition(
         phase = phase,
         screenWidth = hudWidth,
         screenHeight = hudHeight,
-        uiScale = uiScale,
+        uiScale = hudScale(interfaceScale),
         controlMask = RunningControlMask.of(this),
         x = x,
         y = y,
-    ) || isTrialInfoPosition(x, y)
+    ) || isTrialInfoPosition(x, y, interfaceScale)
 
 /** The running control at ([x], [y]) in canvas px, or null (live mask; any phase). */
-internal fun GameplayRenderModel.runningControlTargetAt(x: Float, y: Float): RunningControlTarget? =
-    runningControlTargetAt(hudWidth, hudHeight, uiScale, RunningControlMask.of(this), x, y)
+internal fun GameplayRenderModel.runningControlTargetAt(x: Float, y: Float, interfaceScale: Float = 1f): RunningControlTarget? =
+    runningControlTargetAt(hudWidth, hudHeight, hudScale(interfaceScale), RunningControlMask.of(this), x, y)
 
 /**
  * Whether ([x], [y]) is on the active trial panel's (!) target. The pointer steers everywhere else;
  * a press here toggles the rules and never steers (the host keeps the open state).
  */
-internal fun GameplayRenderModel.isTrialInfoPosition(x: Float, y: Float): Boolean =
-    phase == GamePhase.RUNNING && activeTrial() != null &&
-        TrialInfoHitLayout.update(hudWidth, hudHeight, uiScale, settings.textScale).infoTargetContains(x, y, uiScale)
+internal fun GameplayRenderModel.isTrialInfoPosition(x: Float, y: Float, interfaceScale: Float = 1f): Boolean {
+    if (phase != GamePhase.RUNNING || activeTrial() == null) return false
+    val scale = hudScale(interfaceScale)
+    return TrialInfoHitLayout.update(hudWidth, hudHeight, scale, settings.textScale).infoTargetContains(x, y, scale)
+}
 
 /** Pointer-thread scratch layout for [isTrialInfoPosition] (never shared with drawing). */
 private val TrialInfoHitLayout = HudTrialPanelLayout()
