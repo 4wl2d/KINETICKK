@@ -99,9 +99,11 @@ internal fun MutableGameState.offerableOutsideDeck(item: ItemDefinition, catalog
     item.unlockLevel <= catalogLevel && item.minimumRebirth <= rebirthRank && hasUsefulItemEffect(item)
 
 /**
- * Keeps every tier offerable: a tier holding fewer than the policy's refill floor of offerable dealt items deals its
- * next offerable reserve items in priority (reserve items not offerable yet stay in reserve). No draw; the deck is
- * replaced only when something is dealt.
+ * Keeps a tier from running dry: a tier holding fewer than the policy's refill floor of dealt items the run can still
+ * take (rank-eligible and useful, at any unlock level) deals its next reserve items that are offerable now, in priority
+ * (reserve items not offerable yet stay in reserve). Unlock levels are not a shortage: early in a run a tier holds few
+ * unlocked items with or without a deck, and the rolled rarity falls to the nearest tier as it always has. No draw; the
+ * deck is replaced only when something is dealt.
  */
 internal fun MutableGameState.refillItemDeck() {
     val deck = itemDeck
@@ -110,7 +112,9 @@ internal fun MutableGameState.refillItemDeck() {
     val catalogLevel = offerCatalogLevel()
     val newlyDealt = ArrayList<Int>()
     for (tier in ItemRarity.entries) {
-        var offerable = content.items.count { it.rarity == tier && it.id in deck && offerableOutsideDeck(it, catalogLevel) }
+        var offerable = content.items.count {
+            it.rarity == tier && it.id in deck && it.minimumRebirth <= rebirthRank && hasUsefulItemEffect(it)
+        }
         if (offerable >= floor) continue
         for (id in deck.reserveOf(tier)) {
             if (!offerableOutsideDeck(content.items[id], catalogLevel)) continue
