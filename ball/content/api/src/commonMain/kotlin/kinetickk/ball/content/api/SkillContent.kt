@@ -265,9 +265,9 @@ private fun defaultSkill(id: SkillId): SkillDefinition = when (id) {
         "Swing your momentum onto your aim; counts as a sharp turn.",
         "Impacts during the swing keep your momentum.",
         null, BuildTag.DRIVE, BuildTag.RAM, SkillTargeting.SELF, 0f, SkillFamily.MOTION,
-        rank(8f, 1.2f, 700f, 1_800f, 0.6f, 420f),
-        rank(7f, 1.4f, 700f, 1_800f, 0.75f, 420f),
-        rank(6f, 1.55f, 700f, 1_800f, 0.85f, 420f),
+        rank(8f, 1.2f, 700f, 1_100f, 0.6f, 420f),
+        rank(7f, 1.4f, 700f, 1_100f, 0.75f, 420f),
+        rank(6f, 1.55f, 700f, 1_100f, 0.85f, 420f),
     )
     SkillId.FULL_STOP -> skill(
         id, "Full Stop",
