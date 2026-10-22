@@ -1679,3 +1679,16 @@ private const val CATALYZE_FALLBACK = 3
 private const val INFUSION_SECONDS = 0
 private const val INFUSION_HITS_PER_SECONDARY = 1
 private const val INFUSION_STACK_CAP = 2
+
+/**
+ * True when a hit from [source] is caused by a drafted skill: a skill hit, anything dealt while a cast resolves (its
+ * forced reactions and shockwaves), or the Core's impact or Dash hit while a skill moves it (Slingshot's swing, Mass
+ * Driver's charge, Arc Hook's flight and Dash window). Utility skills deliver their damage this way.
+ */
+internal fun MutableGameState.skillCausedHit(source: HitSource?): Boolean {
+    if (source == HitSource.SKILL || castSlot >= 0) return true
+    if (source != HitSource.IMPACT && source != HitSource.DASH || skillLoadout.ownedCount == 0) return false
+    if (activeSkillSlot(SkillId.SLINGSHOT) >= 0 || activeSkillSlot(SkillId.MASS_DRIVER) >= 0) return true
+    val hook = skillLoadout.slotOf(SkillId.ARC_HOOK)
+    return hook >= 0 && skillRuntime[hook, SkillCell.TARGET_UNTIL] > elapsed
+}

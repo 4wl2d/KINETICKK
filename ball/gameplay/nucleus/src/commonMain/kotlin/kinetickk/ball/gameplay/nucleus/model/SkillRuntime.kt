@@ -90,6 +90,12 @@ internal class SkillRuntime private constructor(
     var skillDamage: Double = 0.0
     /** Damage the Apex dealt to boss-class enemies this run. */
     var apexBossDamage: Double = 0.0
+    /**
+     * Damage the drafted skills caused this run (each instance up to the integrity it removed): their own hits,
+     * whatever a cast resolves (forced reactions, a cast's shockwave) and the Core's impacts while a skill moves it
+     * (Slingshot's swing, Mass Driver's charge, Arc Hook's flight and Dash window). It contains [skillDamage].
+     */
+    var skillCausedDamage: Double = 0.0
 
     operator fun get(slot: Int, cell: Int): Float = cells[slot * SkillCell.STRIDE + cell]
 
@@ -115,13 +121,15 @@ internal class SkillRuntime private constructor(
     fun fork(): SkillRuntime = SkillRuntime(cells.fork()).also { copy ->
         copy.skillDamage = skillDamage
         copy.apexBossDamage = apexBossDamage
+        copy.skillCausedDamage = skillCausedDamage
     }
 
     fun sharesStorageWith(other: SkillRuntime): Boolean = cells.sharesStorageWith(other.cells)
 
     /** Every retained fact in a stable order (state witnesses and diagnostics). */
     override fun toString(): String =
-        "SkillRuntime(skillDamage=$skillDamage, apexBossDamage=$apexBossDamage, cells=${cells.toList()})"
+        "SkillRuntime(skillDamage=$skillDamage, skillCausedDamage=$skillCausedDamage, apexBossDamage=$apexBossDamage, " +
+            "cells=${cells.toList()})"
 
     companion object {
         const val SLOTS: Int = ContentBounds.SKILL_SLOTS

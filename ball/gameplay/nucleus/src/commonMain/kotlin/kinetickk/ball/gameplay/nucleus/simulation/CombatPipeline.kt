@@ -660,7 +660,9 @@ internal fun MutableGameState.damageEnemy(
         else -> guarded
     }
     if (applied <= 0f) return DamageResult(0f, false)
-    damageDealt += minOf(applied, enemy.hp).toDouble()
+    val removed = minOf(applied, enemy.hp).toDouble()
+    damageDealt += removed
+    if (skillCausedHit(source)) skillRuntime.skillCausedDamage += removed
     rememberHollowDamage(enemy, applied)
     enemy.hp -= applied
     crackArmor(enemy, source)
