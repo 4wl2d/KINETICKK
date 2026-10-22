@@ -223,6 +223,8 @@ class GameplayPerformanceBenchmarkTest {
             { phaseUntil = 1f },
             { shotErasedDispatches = 1 },
             { markDispatches = 1 },
+            { shotsErased = 1L },
+            { dashHeatBank = 1f },
             { pendingSkillDrafts = 1 },
             { skillBufferMask = 2 },
             { skillBufferTime = 0.1f },

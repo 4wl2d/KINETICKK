@@ -15,11 +15,20 @@ import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRule
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.WeaponFamily
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.isLiability
+import kinetickk.ball.gameplay.nucleus.model.ApexCell
 import kinetickk.ball.gameplay.nucleus.model.Enemy
+import kinetickk.ball.gameplay.nucleus.model.MarkKind
 import kinetickk.ball.gameplay.nucleus.model.Pickup
+import kinetickk.ball.gameplay.nucleus.model.Projectile
+import kinetickk.ball.gameplay.nucleus.model.SkillCell
+import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.model.TAU
 import kinetickk.ball.gameplay.nucleus.model.distanceSquared
 import kinetickk.ball.gameplay.nucleus.model.length
@@ -54,6 +63,12 @@ import kotlin.test.assertTrue
  *
  * Ricochets and slams are dispatched directly every 0.6 s; the collisions that fire them belong to the
  * obstacle field, which the scripted paths never reach (they stay inside the run origin's safe area).
+ *
+ * The 0.5.0 vocabulary has its own encounters: skills cast on cooldown (SKILLS), reactions forced next to the Core
+ * that leave pools, hushes, bubbles and maws on its path while bolts fly at it (FIELDS), bolt volleys with one
+ * erased every 0.6 s (SHOTS), pre-marked packs rammed and braked on (MARKS) and the Apex unlocked and cast whenever
+ * ready (APEX); they also measure bolts erased, refunded seconds, control seconds and distance flown at 900 u/s.
+ * [everyNewVocabularyKindMovesItsEncounter] holds one probe per new kind to those encounters.
  */
 class PerceptibleItemImpactTest {
     @Test
@@ -117,11 +132,112 @@ class PerceptibleItemImpactTest {
     }
 
     /**
+     * The 0.5.0 vocabulary before any item uses it: one probe item per new trigger, condition, action, rule,
+     * conversion and buff (each at a strength its validation allows) must move a measured output of the encounters
+     * [setupsFor] picks for it by at least [MIN_GAIN], under the same measure as the catalog. Kinds no scripted
+     * encounter can show are listed in [UNPROBED_VOCABULARY] with the reason.
+     */
+    @Test
+    fun everyNewVocabularyKindMovesItsEncounter() {
+        val baselines = HashMap<Setup, Outcome>()
+        val misses = ArrayList<String>()
+        for ((label, draft) in vocabularyProbes()) {
+            val probe = draft.copy(id = canonicalGameplayContent.items.size)
+            val content = canonicalGameplayContent.copy(items = (canonicalGameplayContent.items + probe).toImmutableList())
+            val (setup, output, share) = setupsFor(probe).map { setup ->
+                val baseline = baselines.getOrPut(setup) { run(setup, null) }
+                val (output, share) = bestGain(setup.arena, baseline, run(setup, probe, content))
+                Triple(setup, output, share)
+            }.maxBy { it.third }
+            val line = "$label: ${setup.arena}/${setup.weapon} $output ${"%+.1f".format(share * 100f)} %"
+            println("VOCABULARY $line")
+            if (share < MIN_GAIN) misses += line
+        }
+        assertTrue(misses.isEmpty(), "Vocabulary probes that move no measured output by 5 %:\n" + misses.joinToString("\n"))
+    }
+
+    /** One probe item per new vocabulary kind, labelled by the kind it shows. */
+    private fun vocabularyProbes(): List<Pair<String, ItemDefinition>> {
+        fun on(trigger: EffectTrigger, vararg actions: EffectAction, given: List<EffectCondition> = emptyList(), cooldown: Float = 0f, every: Int = 1) =
+            kinetickk.ball.content.api.EffectClause(trigger, given.toImmutableList(), actions.toList().toImmutableList(), cooldown, every)
+        fun probe(
+            clauses: List<kinetickk.ball.content.api.EffectClause> = emptyList(),
+            rules: List<ItemRule> = emptyList(),
+            elements: List<StatusElement> = emptyList(),
+            rarity: kinetickk.ball.content.api.ItemRarity = kinetickk.ball.content.api.ItemRarity.RARE,
+        ) = ItemDefinition(
+            id = 0, name = "Vocabulary Probe", description = "Shows one piece of the 0.5.0 vocabulary.", rarity = rarity,
+            tags = immutableListOf(kinetickk.ball.content.api.BuildTag.CHAIN), elements = elements.toImmutableList(),
+            clauses = clauses.toImmutableList(), rules = rules.toImmutableList(), maxStacks = 1, unlockLevel = 1,
+            risk = rules.any { it.isLiability },
+        )
+        val weaponBurst = EffectAction.Burst(200f, kinetickk.ball.content.api.DamageBasis.WEAPON, 1f)
+        return listOf(
+            "SKILL_CAST" to probe(listOf(on(EffectTrigger.SKILL_CAST, weaponBurst))),
+            "SKILL_HIT" to probe(listOf(on(EffectTrigger.SKILL_HIT, EffectAction.Strike(kinetickk.ball.content.api.DamageBasis.HIT, 0.5f)))),
+            "APEX" to probe(listOf(on(EffectTrigger.APEX, EffectAction.Buff(BuffStat.DAMAGE, 0.5f, 20f)))),
+            "FIELD_ENTER" to probe(listOf(on(EffectTrigger.FIELD_ENTER, weaponBurst))),
+            "SHOT_ERASED" to probe(listOf(on(EffectTrigger.SHOT_ERASED, EffectAction.Shield(4f), cooldown = 0.5f))),
+            "MARK_CONSUMED" to probe(listOf(on(EffectTrigger.MARK_CONSUMED, EffectAction.Burst(160f, kinetickk.ball.content.api.DamageBasis.IMPACT, 0.6f)))),
+            "ReactionIs" to probe(
+                listOf(on(EffectTrigger.REACTION, weaponBurst, given = listOf(EffectCondition.ReactionIs(ReactionId.PLASMA_BURST)))),
+                elements = listOf(StatusElement.THERMAL, StatusElement.ION),
+            ),
+            "SkillIs" to probe(listOf(on(EffectTrigger.SKILL_CAST, EffectAction.Burst(240f, kinetickk.ball.content.api.DamageBasis.WEAPON, 1.5f),
+                given = listOf(EffectCondition.SkillIs(SkillId.SOLAR_FLARE))))),
+            "SkillTagged" to probe(listOf(on(EffectTrigger.SKILL_HIT, EffectAction.Strike(kinetickk.ball.content.api.DamageBasis.HIT, 1f),
+                given = listOf(EffectCondition.SkillTagged(kinetickk.ball.content.api.BuildTag.OVERCLOCK))))),
+            "CoreInField" to probe(rules = listOf(ItemRule.WhileModifier(EffectCondition.CoreInField, BuffStat.DAMAGE, 0.5f))),
+            "TargetMarked" to probe(rules = listOf(ItemRule.DamageVersus(EffectCondition.TargetMarked, 0.5f))),
+            "TargetControlled" to probe(rules = listOf(ItemRule.DamageVersus(EffectCondition.TargetControlled, 0.3f))),
+            "TargetThrown" to probe(listOf(on(EffectTrigger.IMPACT, EffectAction.Strike(kinetickk.ball.content.api.DamageBasis.IMPACT, 1f),
+                given = listOf(EffectCondition.TargetThrown)))),
+            "ApexActive" to probe(rules = listOf(ItemRule.WhileModifier(EffectCondition.ApexActive, BuffStat.DAMAGE, 0.5f))),
+            "SkillsCharging" to probe(rules = listOf(ItemRule.WhileModifier(EffectCondition.SkillsCharging(2), BuffStat.DAMAGE, 0.3f))),
+            "WeaponFamilyIs" to probe(rules = listOf(ItemRule.WhileModifier(EffectCondition.WeaponFamilyIs(WeaponFamily.PULSE), BuffStat.WEAPON, 0.4f))),
+            "RefundSkills" to probe(listOf(on(EffectTrigger.KILL, EffectAction.RefundSkills(1f), cooldown = 0.5f))),
+            "ChargeApex" to probe(listOf(on(EffectTrigger.KILL, EffectAction.ChargeApex(3f), cooldown = 0.5f))),
+            "ForceReaction" to probe(
+                listOf(on(EffectTrigger.WEAPON_HIT, EffectAction.ForceReaction(200f, 3), cooldown = 1f)),
+                elements = listOf(StatusElement.THERMAL, StatusElement.CRYO),
+            ),
+            "Zone" to probe(listOf(on(EffectTrigger.DASH, EffectAction.Zone(kinetickk.ball.content.api.ZoneKind.TIME_BUBBLE, 200f, 3f), cooldown = 2f))),
+            "EraseShots" to probe(listOf(on(EffectTrigger.HURT, EffectAction.EraseShots(250f, 6), cooldown = 1f))),
+            "CoreImpulse" to probe(listOf(on(EffectTrigger.DASH,
+                EffectAction.CoreImpulse(600f, kinetickk.ball.content.api.ImpulseDirection.FORWARD), cooldown = 0.5f))),
+            "ApplyMark" to probe(listOf(on(EffectTrigger.IMPACT, EffectAction.ApplyMark(kinetickk.ball.content.api.MarkPick.CRACKED, 4f), cooldown = 0.3f))),
+            "PrimeDash" to probe(listOf(on(EffectTrigger.DASH, EffectAction.PrimeDash, every = 2))),
+            "ReactionKeystone" to probe(rules = listOf(ItemRule.ReactionKeystone(ReactionId.PLASMA_BURST)),
+                elements = listOf(StatusElement.THERMAL, StatusElement.ION), rarity = kinetickk.ball.content.api.ItemRarity.EPIC),
+            "ReactionTuning" to probe(rules = listOf(ItemRule.ReactionTuning(null, kinetickk.ball.content.api.ReactionAspect.RADIUS, 0.5f))),
+            "FieldTuning" to probe(rules = listOf(ItemRule.FieldTuning(kinetickk.ball.content.api.FieldAspect.DURATION, 0.5f))),
+            "SkillCooldown" to probe(rules = listOf(ItemRule.SkillCooldown(null, 0.25f))),
+            "SkillPower" to probe(rules = listOf(ItemRule.SkillPower(null, 0.5f))),
+            "SkillCharges" to probe(rules = listOf(ItemRule.SkillCharges)),
+            "CatalysisRate" to probe(rules = listOf(ItemRule.CatalysisRate(1f))),
+            "ApexCooldown" to probe(rules = listOf(ItemRule.ApexCooldown(0.2f))),
+            "DASH_HEAT_TO_SKILLS" to probe(rules = listOf(ItemRule.Convert(ConversionKind.DASH_HEAT_TO_SKILLS, 1f))),
+            "DATA_TO_SKILLS" to probe(rules = listOf(ItemRule.Convert(ConversionKind.DATA_TO_SKILLS, 0.5f))),
+            "SKILLS_COST_HEAT" to probe(rules = listOf(ItemRule.Convert(ConversionKind.SKILLS_COST_HEAT, 10f))),
+            "KNOCKBACK_TO_DAMAGE" to probe(rules = listOf(ItemRule.Convert(ConversionKind.KNOCKBACK_TO_DAMAGE, 1f))),
+            "SKILL_POWER buff" to probe(listOf(on(EffectTrigger.SKILL_CAST, EffectAction.Buff(BuffStat.SKILL_POWER, 0.5f, 6f)))),
+            "SKILL_RECHARGE buff" to probe(listOf(on(EffectTrigger.KILL, EffectAction.Buff(BuffStat.SKILL_RECHARGE, 1f, 5f), cooldown = 1f))),
+        )
+    }
+
+    /**
      * One scripted encounter and the items held in it with and without the item under test. An armed arena is
      * flown with each of [ARENA_WEAPONS]: the proc rule lets one hit per activation fire WEAPON_HIT effects, so how
      * often they fire depends on the weapon's cadence (a discrete volley or a persistent source).
      */
-    private data class Setup(val arena: Arena, val support: List<String>, val elite: Boolean, val weapon: WeaponId?)
+    private data class Setup(
+        val arena: Arena,
+        val support: List<String>,
+        val elite: Boolean,
+        val weapon: WeaponId?,
+        /** The pilot keeps the Core inside the start area ([leash]): the vocabulary encounters, and any item that launches it. */
+        val leashed: Boolean = arena.vocabulary,
+    )
 
     private fun Arena.weapons(): List<WeaponId?> = if (armed) ARENA_WEAPONS else listOf(null)
 
@@ -142,6 +258,17 @@ class PerceptibleItemImpactTest {
         val forcedOverdrive: Boolean = false,
         /** Every target presses a steady attack on the Core, scaled by what its statuses leave of it. */
         val pressure: Boolean = false,
+        /** Every target fires a bolt at the Core each second and one bolt near the Core is erased every 0.6 s. */
+        val shots: Boolean = false,
+        /** The Orb holds Solar Flare II, Arc Hook II and Catalyze II and casts each the moment it is ready. */
+        val skills: Boolean = false,
+        /** Every 1.2 s the target nearest the Core is made to react: a Plasma Burst, Silence, Stasis or Null Well. */
+        val fields: Boolean = false,
+        /** Every 2 s the targets are marked again, half Spalled and half Cracked. */
+        val marks: Boolean = false,
+        /** The Apex is unlocked at the start and cast whenever it is ready. */
+        val apex: Boolean = false,
+        val seconds: Float = SECONDS,
     ) {
         /** Impacts only: the weapon is silenced; the Core orbits through a ring and dashes into it. */
         IMPACT(false, Motion.ORBIT, 10, 600f, dashEvery = 0.8f),
@@ -192,10 +319,23 @@ class PerceptibleItemImpactTest {
         REACH(true, Motion.HOVER, 8, 900f),
         /** No combat: thirty item offers at Reborn 10. */
         OFFERS(false, Motion.HOVER, 0, 0f),
+        /** Skills cast on cooldown around a ring that falls and returns: skill damage, refunds and the Data they bring. */
+        SKILLS(true, Motion.ORBIT, 10, 600f, dashEvery = 2f, skills = true),
+        /** Reaction fields on the Core's path while every target presses and fires at it. */
+        FIELDS(true, Motion.ORBIT, 10, 1_500f, dashEvery = 2f, pressure = true, shots = true, fields = true),
+        /** Bolt volleys at a slow circle close around a cluster, one bolt erased every 0.6 s. */
+        SHOTS(true, Motion.CLOSE_HOVER, 8, 1_500f, shots = true),
+        /** Pre-marked targets rammed, dashed through and braked on: Spall throws and Cracked detonations. */
+        MARKS(true, Motion.ORBIT, 10, 1_500f, dashEvery = 1f, brake = true, marks = true),
+        /** The Apex from the start: cast at once and whenever ready, over a fight long enough for a cooldown cut to tell. */
+        APEX(true, Motion.ORBIT, 10, 1_500f, dashEvery = 2f, apex = true, seconds = 100f),
         ;
 
         /** Only these arenas count integrity: elsewhere glancing contacts are topped up and integrity is ignored. */
-        val defended: Boolean get() = hits > 0f || pressure
+        val defended: Boolean get() = hits > 0f || pressure || shots
+
+        /** The 0.5.0 vocabulary encounters, whose hooks and launches the pilot keeps inside the start area. */
+        val vocabulary: Boolean get() = skills || fields || marks || apex || shots
     }
 
     private enum class Motion { ORBIT, PASS, HOVER, CLOSE_HOVER, INNER_HOVER }
@@ -203,6 +343,16 @@ class PerceptibleItemImpactTest {
     /** The measured outputs; each arena reads the ones it is built to show. */
     private enum class Output {
         DAMAGE, TAKEN, INTEGRITY, SURVIVAL, KILLS, DATA, MATTER, DATA_PER_KILL, MATTER_PER_KILL, OVERDRIVE, DASHES, OFFERS,
+        /** Hostile bolts erased. */
+        ERASED,
+        /** Skill and Apex cooldown seconds refunded. */
+        REFUNDED,
+        /** Target-seconds silenced or Frozen. */
+        CONTROL,
+        /** Distance the Core flew at 900 u/s or more. */
+        FAST_DISTANCE,
+        /** Seconds the Apex ran. */
+        APEX,
     }
 
     private fun Arena.outputs(): List<Output> = when (this) {
@@ -217,6 +367,11 @@ class PerceptibleItemImpactTest {
         Arena.SHELTER -> listOf(Output.DAMAGE, Output.TAKEN, Output.INTEGRITY, Output.SURVIVAL, Output.OVERDRIVE)
         Arena.REACH -> listOf(Output.DATA)
         Arena.OFFERS -> listOf(Output.OFFERS)
+        Arena.SKILLS -> listOf(Output.DAMAGE, Output.REFUNDED, Output.KILLS, Output.DATA)
+        Arena.FIELDS -> listOf(Output.DAMAGE, Output.TAKEN, Output.CONTROL, Output.ERASED, Output.FAST_DISTANCE)
+        Arena.SHOTS -> listOf(Output.DAMAGE, Output.TAKEN, Output.INTEGRITY, Output.ERASED)
+        Arena.MARKS -> listOf(Output.DAMAGE, Output.DASHES, Output.FAST_DISTANCE)
+        Arena.APEX -> listOf(Output.DAMAGE, Output.REFUNDED, Output.APEX)
     }
 
     /** What an encounter measured. Higher is better except for damage taken. */
@@ -232,6 +387,11 @@ class PerceptibleItemImpactTest {
         val overdrive: Float,
         val dashes: Int,
         val offers: Float,
+        val erased: Long = 0L,
+        val refunded: Float = 0f,
+        val control: Float = 0f,
+        val fastDistance: Float = 0f,
+        val apex: Float = 0f,
     ) {
         fun value(output: Output): Double = when (output) {
             Output.DAMAGE -> damage
@@ -246,7 +406,19 @@ class PerceptibleItemImpactTest {
             Output.OVERDRIVE -> overdrive.toDouble()
             Output.DASHES -> dashes.toDouble()
             Output.OFFERS -> offers.toDouble()
+            Output.ERASED -> erased.toDouble()
+            Output.REFUNDED -> refunded.toDouble()
+            Output.CONTROL -> control.toDouble()
+            Output.FAST_DISTANCE -> fastDistance.toDouble()
+            Output.APEX -> apex.toDouble()
         }
+
+        operator fun plus(other: Outcome): Outcome = Outcome(
+            damage + other.damage, taken + other.taken, integrity + other.integrity, survival + other.survival,
+            kills + other.kills, data + other.data, matter + other.matter, overdrive + other.overdrive, dashes + other.dashes,
+            offers + other.offers, erased + other.erased, refunded + other.refunded, control + other.control,
+            fastDistance + other.fastDistance, apex + other.apex,
+        )
     }
 
     /** The output [owned] improves most over [baseline], as a share of the baseline (never of a near-zero one). */
@@ -260,10 +432,7 @@ class PerceptibleItemImpactTest {
     private fun run(setup: Setup, item: ItemDefinition?, content: GameplayContentSnapshot = canonicalGameplayContent,
         variants: Int = VARIANTS): Outcome =
         if (setup.arena == Arena.OFFERS) offers(setup, item, content)
-        else (0 until variants).map { variant -> fight(setup, item, variant, content) }.reduce { a, b ->
-            Outcome(a.damage + b.damage, a.taken + b.taken, a.integrity + b.integrity, a.survival + b.survival, a.kills + b.kills,
-                a.data + b.data, a.matter + b.matter, a.overdrive + b.overdrive, a.dashes + b.dashes, a.offers + b.offers)
-        }
+        else (0 until variants).map { variant -> fight(setup, item, variant, content) }.reduce(Outcome::plus)
 
     /** Thirty consecutive item offers at Reborn 10 with every item unlocked: the summed rarity of the cards. */
     private fun offers(setup: Setup, item: ItemDefinition?, content: GameplayContentSnapshot): Outcome {
@@ -302,8 +471,15 @@ class PerceptibleItemImpactTest {
         }
         setup.support.forEach { name -> game.own(name, stacks = game.itemNamed(name).maxStacks) }
         val reach = game.effectivePickupRadius() + 30f
+        if (arena.skills) {
+            ArenaSkills.forEach { skill ->
+                game.acquireSkill(skill)
+                game.rankUpSkill(skill)
+            }
+        }
+        if (arena.apex) game.unlockApex()
         item?.let { game.acquireItem(it.id) }
-        if (arena.pressure) {
+        if (arena.pressure || arena.shots) {
             // A deep integrity pool: the attackers' damage is measured, never fatal.
             game.maxHp = 10_000f
             game.hp = 10_000f
@@ -325,8 +501,12 @@ class PerceptibleItemImpactTest {
         game.previousSingularityY = game.coreY + sin(heading) * 120f
         var dashes = 0
         var overdrive = 0f
+        var control = 0f
+        var fastDistance = 0f
+        var apexSeconds = 0f
+        val refunds = RefundLedger()
         var nearObstacle = false
-        val frames = (SECONDS * FPS).toInt()
+        val frames = (arena.seconds * FPS).toInt()
         // The frame the Core fell on, or [frames] while it stands.
         var fellAt = frames
         for (frame in 0 until frames) {
@@ -422,12 +602,22 @@ class PerceptibleItemImpactTest {
                 if (pressed > 0f) game.takeDamage(pressed)
             }
             if (arena.hits > 0f && burstHit(frame)) game.takeDamage(arena.hits)
+            if (arena.shots) volley(game, frame)
+            if (arena.fields && frame % FIELD_FRAMES == 0) reactBesideCore(game, frame / FIELD_FRAMES)
+            if (arena.marks && frame % MARK_FRAMES == 0) markTargets(game)
+            if (arena.skills) {
+                // Every slot asks to cast each frame: it casts the moment it is ready, through the real buffer.
+                game.skillBufferMask = (1 shl ArenaSkills.size) - 1
+                game.skillBufferTime = MutableGameState.SKILL_INPUT_BUFFER_SECONDS
+            }
+            if (arena.apex && game.apexReady()) game.apexBufferTime = MutableGameState.SKILL_INPUT_BUFFER_SECONDS
             if (arena.forcedOverdrive && frame % (10 * FPS).toInt() == 60 && game.overdriveTime <= 0f) game.overdriveCharge = 100f
             if (arena.obstacles && frame % 36 == 0) {
                 game.fireClauses(EffectTrigger.RICOCHET)
                 val slammed = game.enemies.filter { it.alive }.minByOrNull { distanceSquared(it.x, it.y, game.coreX, game.coreY) }
                 if (slammed != null) game.fireClauses(EffectTrigger.SLAM, slammed, hit = 20f)
             }
+            if (setup.leashed) leash(game)
             val dashSequence = game.characterRuntime.dashSequence
             game.update(1f / FPS)
             // The scripted paths stay inside the obstacle-free start area: a collision never enters a measurement.
@@ -437,6 +627,12 @@ class PerceptibleItemImpactTest {
                 }
             }
             dashes += game.characterRuntime.dashSequence - dashSequence
+            refunds.record(game)
+            for (enemy in game.enemies) {
+                if (enemy.alive && (game.elapsed < enemy.silencedUntil || game.isFrozen(enemy))) control += 1f / FPS
+            }
+            if (game.speed >= FAST_SPEED) fastDistance += game.speed / FPS
+            if (game.apexActive()) apexSeconds += 1f / FPS
             game.takeVisualFxCues()
             game.takeSoundCues()
             game.takeProgressUpdate()
@@ -448,7 +644,81 @@ class PerceptibleItemImpactTest {
         var taken = if (arena.defended) game.damageTaken else 0.0
         if (arena.hits > 0f) for (frame in fellAt until frames) if (burstHit(frame)) taken += arena.hits
         return Outcome(game.damageDealt, taken, integrity, fellAt / FPS, game.kills, game.dataCollected, game.runMatter, overdrive,
-            dashes, 0f)
+            dashes, 0f, game.shotsErased, refunds.total, control, fastDistance, apexSeconds)
+    }
+
+    /** Sums the cooldown seconds refunded to the skills and the Apex from frame to frame (a cast restarts a count). */
+    private class RefundLedger {
+        private val casts = IntArray(MAX_SLOTS + 1)
+        private val refunded = FloatArray(MAX_SLOTS + 1)
+        var total = 0f
+            private set
+
+        fun record(game: MutableGameState) {
+            for (slot in 0 until MAX_SLOTS) {
+                track(slot, game.skillRuntime[slot, SkillCell.CAST_COUNT].toInt(), game.skillRuntime[slot, SkillCell.REFUNDED])
+            }
+            track(MAX_SLOTS, game.skillRuntime.apex(ApexCell.CAST_COUNT).toInt(), game.skillRuntime.apex(ApexCell.REFUNDED))
+        }
+
+        private fun track(index: Int, castCount: Int, now: Float) {
+            total += if (castCount != casts[index]) now else max(0f, now - refunded[index])
+            casts[index] = castCount
+            refunded[index] = now
+        }
+    }
+
+    /**
+     * A pilot who never leaves the start area: past [LEASH] from the origin the Core loses the outward part of its
+     * velocity (a hook or a launch still carries it along the circle), so no collision enters a measurement.
+     */
+    private fun leash(game: MutableGameState) {
+        val distance = length(game.coreX, game.coreY)
+        if (distance <= LEASH) return
+        val outward = (game.velocityX * game.coreX + game.velocityY * game.coreY) / distance
+        if (outward <= 0f) return
+        game.velocityX -= game.coreX / distance * outward
+        game.velocityY -= game.coreY / distance * outward
+    }
+
+    /**
+     * Each live target fires a bolt once a second, aimed where the Core will be when it arrives; every 0.6 s the bolt
+     * nearest the Core is erased.
+     */
+    private fun volley(game: MutableGameState, frame: Int) {
+        if (frame % BOLT_FRAMES == 0) {
+            for (enemy in game.enemies) {
+                if (!enemy.alive) continue
+                val lead = length(game.coreX - enemy.x, game.coreY - enemy.y) / BOLT_SPEED
+                val angle = atan2(game.coreY + game.velocityY * lead - enemy.y, game.coreX + game.velocityX * lead - enemy.x)
+                game.addProjectile(Projectile(enemy.x, enemy.y, cos(angle) * BOLT_SPEED, sin(angle) * BOLT_SPEED, radius = 6f,
+                    life = 2.5f, hostile = true, damage = BOLT_DAMAGE))
+            }
+        }
+        if (frame % ERASE_FRAMES == ERASE_FRAMES / 2) {
+            val bolt = game.projectiles.filter { it.hostile && !it.spent }.minByOrNull { distanceSquared(it.x, it.y, game.coreX, game.coreY) }
+            if (bolt != null) game.eraseHostileShot(bolt, EraseCause.REACTION, bolt.x, bolt.y)
+        }
+    }
+
+    /**
+     * The target nearest the Core takes three stacks of both elements of the next field reaction (Plasma Burst,
+     * Silence, Stasis, Null Well in turn) and is made to react, so its field opens on the Core's path.
+     */
+    private fun reactBesideCore(game: MutableGameState, round: Int) {
+        val reaction = FieldReactions[round % FieldReactions.size]
+        val target = game.enemies.filter { it.alive }.minByOrNull { distanceSquared(it.x, it.y, game.coreX, game.coreY) } ?: return
+        target.status[StatusCell.STACKS + reaction.first.ordinal] = 3f
+        target.status[StatusCell.STACKS + reaction.second.ordinal] = 3f
+        target.status[StatusCell.REACTION_PAIR_READY_AT + reaction.ordinal] = 0f
+        game.forceReaction(target, 0)
+    }
+
+    /** Marks every live target again, alternating Spall and Cracked. */
+    private fun markTargets(game: MutableGameState) {
+        game.enemies.filter { it.alive }.forEachIndexed { index, enemy ->
+            game.setMark(enemy, if (index % 2 == 0) MarkKind.SPALL else MarkKind.CRACKED, MARK_SECONDS)
+        }
     }
 
     /** Four hits 0.4 s apart every 6 s: shields recharge between the bursts. */
@@ -554,7 +824,13 @@ class PerceptibleItemImpactTest {
                 EffectTrigger.LEVEL_UP -> listOf(Arena.LEVELS)
                 EffectTrigger.PICKUP -> listOf(Arena.CROWD)
                 EffectTrigger.RICOCHET, EffectTrigger.SLAM -> listOf(Arena.OBSTACLE, Arena.SHELTER)
+                EffectTrigger.SKILL_CAST, EffectTrigger.SKILL_HIT -> listOf(Arena.SKILLS)
+                EffectTrigger.APEX -> listOf(Arena.APEX)
+                EffectTrigger.FIELD_ENTER -> listOf(Arena.FIELDS)
+                EffectTrigger.SHOT_ERASED -> listOf(Arena.SHOTS, Arena.FIELDS)
+                EffectTrigger.MARK_CONSUMED -> listOf(Arena.MARKS)
             }
+            clause.actions.forEach { action -> arenas += actionArenas(action) }
         }
         item.stats.forEach { stat ->
             arenas += when (stat.effect) {
@@ -581,27 +857,43 @@ class PerceptibleItemImpactTest {
                 is ItemRule.ComboDamage -> listOf(Arena.CROWD, Arena.COMBO)
                 is ItemRule.BonusRerolls, is ItemRule.OfferCards -> listOf(Arena.OFFERS)
                 is ItemRule.FreeDash -> listOf(Arena.HEAT)
-                is ItemRule.Convert -> listOf(Arena.DEFENSE, Arena.STATUS, Arena.WEAPON)
+                is ItemRule.Convert -> when (rule.kind) {
+                    ConversionKind.OVERHEAL_TO_SHIELD, ConversionKind.REGENERATION_TO_DECAY, ConversionKind.CRIT_CHANCE_TO_DAMAGE ->
+                        listOf(Arena.DEFENSE, Arena.STATUS, Arena.WEAPON)
+                    ConversionKind.DASH_HEAT_TO_SKILLS, ConversionKind.DATA_TO_SKILLS, ConversionKind.SKILLS_COST_HEAT,
+                    ConversionKind.SKILL_FIELDS_FOLLOW -> listOf(Arena.SKILLS)
+                    ConversionKind.KNOCKBACK_TO_DAMAGE -> listOf(Arena.MARKS, Arena.OBSTACLE)
+                }
+                is ItemRule.ReactionKeystone, is ItemRule.CoreLinkRadius -> listOf(Arena.ALCHEMY, Arena.STATUS, Arena.CROWD, Arena.MARKS)
+                is ItemRule.ReactionTuning -> listOf(Arena.ALCHEMY, Arena.STATUS, Arena.CROWD, Arena.FIELDS)
+                is ItemRule.FieldTuning -> listOf(Arena.FIELDS, Arena.SKILLS)
+                is ItemRule.SkillCooldown, is ItemRule.SkillPower, ItemRule.SkillCharges, is ItemRule.SkillAttunement,
+                is ItemRule.CatalysisRate -> listOf(Arena.SKILLS)
+                is ItemRule.ApexCooldown -> listOf(Arena.APEX)
             }
         }
         conditions.forEach { arenas += conditionArenas(it) }
-        // Elemental appliers show in the arena where statuses carry the damage.
-        if (item.clauses.any { clause -> clause.actions.any { it is EffectAction.ApplyStatus } }) arenas += Arena.ALCHEMY
         // Slows, freezes and Hollow show as damage not taken from attacking enemies.
         if (StatusElement.CRYO in item.elements || StatusElement.VOID in item.elements) arenas += Arena.SIEGE
-        val elite = conditions.any { it == EffectCondition.TargetElite }
+        // Immovable frames (an Elite takes 0.35 knockback) are what the knockback conversion needs.
+        val elite = conditions.any { it == EffectCondition.TargetElite } ||
+            item.rules.any { it is ItemRule.Convert && it.kind == ConversionKind.KNOCKBACK_TO_DAMAGE }
         val support = supportFor(item, conditions)
+        // A launch of the Core needs the pilot's leash wherever it is flown.
+        val launches = item.clauses.any { clause -> clause.actions.any { it is EffectAction.CoreImpulse } }
+        // A family-gated item is flown with its family's representative weapon instead of the two arena weapons.
+        val familyWeapon = conditions.firstNotNullOfOrNull { (it as? EffectCondition.WeaponFamilyIs)?.family }?.let(FamilyWeapons::getValue)
         // Against the siege an applier starts from nothing: other sources of its own element would already hold
         // the attackers at the status it adds.
         val applied = item.clauses.flatMap { it.actions }.mapNotNull { (it as? EffectAction.ApplyStatus)?.pick?.element }.toSet()
         val siegeSupport = support.filter { name -> applied.none { element -> name in ElementSources.getValue(element) } }
         return arenas.flatMap { arena ->
-            arena.weapons().map { weapon ->
+            (if (familyWeapon != null && arena.armed) listOf(familyWeapon) else arena.weapons()).map { weapon ->
                 Setup(arena, when (arena) {
                     Arena.OFFERS -> emptyList()
                     Arena.SIEGE -> siegeSupport
                     else -> support
-                }, elite, weapon)
+                }, elite, weapon, leashed = arena.vocabulary || launches)
             }
         }
     }
@@ -616,6 +908,27 @@ class PerceptibleItemImpactTest {
         EffectCondition.Braking -> listOf(Arena.BRAKE, Arena.BRACE)
         is EffectCondition.ComboAtLeast -> listOf(Arena.CROWD, Arena.COMBO)
         is EffectCondition.TargetBelow -> listOf(Arena.CROWD)
+        is EffectCondition.SkillIs, is EffectCondition.SkillTagged, is EffectCondition.SkillsCharging -> listOf(Arena.SKILLS)
+        EffectCondition.CoreInField -> listOf(Arena.FIELDS)
+        EffectCondition.TargetMarked, EffectCondition.TargetThrown -> listOf(Arena.MARKS)
+        EffectCondition.TargetControlled -> listOf(Arena.WEAPON, Arena.SIEGE)
+        EffectCondition.ApexActive -> listOf(Arena.APEX)
+        is EffectCondition.WeaponFamilyIs -> listOf(Arena.WEAPON, Arena.STATUS)
+        else -> emptyList()
+    }
+
+    /** Encounters an action needs beyond its trigger's: where its effect becomes a measured output. */
+    private fun actionArenas(action: EffectAction): List<Arena> = when (action) {
+        is EffectAction.ApplyStatus -> listOf(Arena.ALCHEMY)
+        is EffectAction.RefundSkills -> listOf(Arena.SKILLS)
+        is EffectAction.ChargeApex -> listOf(Arena.APEX, Arena.SKILLS)
+        is EffectAction.ForceReaction -> listOf(Arena.ALCHEMY, Arena.STATUS)
+        is EffectAction.Zone -> listOf(Arena.FIELDS, Arena.SHOTS, Arena.SIEGE)
+        is EffectAction.EraseShots -> listOf(Arena.SHOTS)
+        is EffectAction.CoreImpulse -> listOf(Arena.MARKS, Arena.FIELDS)
+        is EffectAction.ApplyMark, is EffectAction.Throw -> listOf(Arena.MARKS)
+        EffectAction.PrimeDash -> listOf(Arena.HEAT, Arena.IMPACT)
+        is EffectAction.Buff -> if (action.stat == BuffStat.SKILL_RECHARGE || action.stat == BuffStat.SKILL_POWER) listOf(Arena.SKILLS) else emptyList()
         else -> emptyList()
     }
 
@@ -647,8 +960,18 @@ class PerceptibleItemImpactTest {
             elements.clear()
             elements += detonates.first().elements.first()
         }
-        val reactive = item.rules.any { it is ItemRule.ReactionPower || it is ItemRule.ReactionResidue || it is ItemRule.ReactionRecoil } ||
-            item.clauses.any { it.trigger == EffectTrigger.REACTION }
+        val reactive = item.rules.any {
+            it is ItemRule.ReactionPower || it is ItemRule.ReactionResidue || it is ItemRule.ReactionRecoil ||
+                it is ItemRule.ReactionTuning || it is ItemRule.CoreLinkRadius
+        } || item.clauses.any { clause -> clause.trigger == EffectTrigger.REACTION || clause.actions.any { it is EffectAction.ForceReaction } }
+        // A keystone or a reaction condition needs its own reaction's two elements.
+        item.keystone?.let { elements += it.first; elements += it.second }
+        conditions.forEach { condition ->
+            if (condition is EffectCondition.ReactionIs) {
+                elements += condition.reaction.first
+                elements += condition.reaction.second
+            }
+        }
         if (reactive && elements.size < 2) {
             elements += StatusElement.THERMAL
             elements += StatusElement.ENTROPY
@@ -703,6 +1026,18 @@ class PerceptibleItemImpactTest {
             Motion.INNER_HOVER to Path(90f, 0f, 90f, 0.8f),
         )
         const val OFFER_COUNT = 30
+        const val MAX_SLOTS = 3
+        /** The vocabulary encounters' cadences, in 60 fps frames: a volley, an erasure, a forced field, a re-mark. */
+        const val BOLT_FRAMES = 60
+        const val ERASE_FRAMES = 36
+        const val FIELD_FRAMES = 72
+        const val MARK_FRAMES = 120
+        const val BOLT_SPEED = 380f
+        const val BOLT_DAMAGE = 1f
+        const val MARK_SECONDS = 2.5f
+        const val FAST_SPEED = 900f
+        /** How far from the origin the vocabulary encounters let the Core fly (the start area is obstacle-free to 900). */
+        const val LEASH = 560f
         const val VARIANTS = 5
         /** Weapon power and impact power in the alchemy arena: hits that land, with almost no damage of their own. */
         const val TAP = 0.02f
@@ -716,7 +1051,26 @@ class PerceptibleItemImpactTest {
             Output.DAMAGE to 200.0, Output.TAKEN to 10.0, Output.INTEGRITY to 10.0, Output.SURVIVAL to 10.0, Output.KILLS to 10.0,
             Output.DATA to 30.0,
             Output.MATTER to 30.0, Output.DATA_PER_KILL to 1.0, Output.MATTER_PER_KILL to 1.0, Output.OVERDRIVE to 3.0,
-            Output.DASHES to 10.0, Output.OFFERS to 1.0,
+            Output.DASHES to 10.0, Output.OFFERS to 1.0, Output.ERASED to 10.0, Output.REFUNDED to 2.0, Output.CONTROL to 5.0,
+            Output.FAST_DISTANCE to 500.0, Output.APEX to 5.0,
+        )
+
+        /** The SKILLS arena's loadout (each at rank II). */
+        val ArenaSkills: List<SkillId> = listOf(SkillId.SOLAR_FLARE, SkillId.ARC_HOOK, SkillId.CATALYZE)
+
+        /** The reactions the FIELDS arena forces beside the Core, in turn: a pool, a hush, a bubble, a maw. */
+        val FieldReactions: List<ReactionId> = listOf(ReactionId.PLASMA_BURST, ReactionId.SILENCE, ReactionId.STASIS, ReactionId.NULL_WELL)
+
+        /** Each weapon family's representative weapon (a family-gated item is flown with it). */
+        val FamilyWeapons: Map<WeaponFamily, WeaponId> = mapOf(
+            WeaponFamily.MOMENTUM to WeaponId.FLUX_WAKE,
+            WeaponFamily.ORBITAL to WeaponId.ION_SWARM,
+            WeaponFamily.AURA to WeaponId.PHASE_LATTICE,
+            WeaponFamily.PROJECTILE to WeaponId.NULL_LANCE,
+            WeaponFamily.TRAP to WeaponId.SENTRY_GRID,
+            WeaponFamily.CHAIN to WeaponId.ARC_COIL,
+            WeaponFamily.BEAM to WeaponId.TETHER_ARC,
+            WeaponFamily.PULSE to WeaponId.CONCUSSION_ENGINE,
         )
 
         /** Two sources of each element: the first on weapon hits, the second on impacts (or a Dash or crit where none exists). */
@@ -733,6 +1087,14 @@ class PerceptibleItemImpactTest {
 
         /** Items whose effect no scripted encounter can show, by name, with the reason. None today. */
         val JUSTIFIED_EXCEPTIONS: Map<String, String> = emptyMap()
+
+        /** Vocabulary kinds [everyNewVocabularyKindMovesItsEncounter] holds no probe for, with the reason. */
+        val UNPROBED_VOCABULARY: Map<String, String> = mapOf(
+            "Throw" to "encounter targets are pinned in place each frame, so a throw alone moves nothing measured",
+            "SkillAttunement" to "the skill arena's own elements already react; changing them is a trade, not a gain",
+            "CoreLinkRadius" to "every scripted reaction already lands within the Core link",
+            "SKILL_FIELDS_FOLLOW" to "the skill arena's loadout makes no skill field",
+        )
     }
 }
 

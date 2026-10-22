@@ -59,6 +59,8 @@ data class GameplayBuildSummaryProjection(
     val suppressedItemIds: ImmutableList<Int> = immutableListOf(),
     val rebornItemIds: ImmutableList<Int> = immutableListOf(),
     val severedRelicIds: ImmutableList<RelicId> = immutableListOf(),
+    /** Owned items none of whose effects can work in this run (they need a skill or a weapon of another type). */
+    val dormantItemIds: ImmutableList<Int> = immutableListOf(),
 ) : GameplayProjection
 
 enum class BuildStatSource { CHARACTER, LAB, ITEMS, RELICS, SYNERGIES, MASTERY, TEMPORARY }

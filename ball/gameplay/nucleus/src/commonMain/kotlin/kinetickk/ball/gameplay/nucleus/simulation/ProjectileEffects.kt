@@ -211,7 +211,7 @@ internal enum class EraseCause { REACTION, SKILL, ITEM, CHARACTER, APEX }
  * while it walks the projectiles). Friendly, already spent and MINE shots are refused; an Apex erasure spends
  * one bolt of the running activation's budget and is refused once the budget is empty. The first
  * [MAX_SHOT_ERASURES_SHOWN_PER_STEP] erasures of a fixed step show a burst at ([x], [y]) (Apex gold for the
- * Apex's). True when the shot was spent.
+ * Apex's) and fire SHOT_ERASED clauses there. True when the shot was spent.
  */
 internal fun MutableGameState.eraseHostileShot(shot: Projectile, cause: EraseCause, x: Float, y: Float): Boolean {
     if (!shot.hostile || shot.spent || shot.kind != ProjectileKind.BOLT) return false
@@ -221,9 +221,14 @@ internal fun MutableGameState.eraseHostileShot(shot: Projectile, cause: EraseCau
         skillRuntime.setApex(ApexCell.BOLTS_LEFT, left - 1f)
     }
     shot.life = 0f
+    shotsErased++
     if (shotErasedDispatches < MAX_SHOT_ERASURES_SHOWN_PER_STEP) {
         shotErasedDispatches++
         burst(x, y, 5, if (cause == EraseCause.APEX) FxColorCode.APEX_GOLD else 2)
+        // The same bound caps SHOT_ERASED: at most four dispatches per fixed step.
+        if (listens(kinetickk.ball.content.api.EffectTrigger.SHOT_ERASED)) {
+            fireClauses(kinetickk.ball.content.api.EffectTrigger.SHOT_ERASED, originX = x, originY = y)
+        }
     }
     return true
 }

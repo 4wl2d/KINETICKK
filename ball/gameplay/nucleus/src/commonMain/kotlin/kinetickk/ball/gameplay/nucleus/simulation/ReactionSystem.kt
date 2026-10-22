@@ -3,6 +3,8 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.EffectTrigger
+import kinetickk.ball.content.api.ReactionAspect
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.model.*
@@ -150,6 +152,8 @@ internal fun MutableGameState.resolveReaction(
     val verbs = v.isNotEmpty()
     val keystone = verbs && build.keystone(reaction)
     val near = nearCore(x, y)
+    // Reaction Tuning: reach, how long its states last and how hard it moves things (fields tune in addField).
+    val radius = tunedRadius(reaction, definition.radius)
     var flags = if (keystone) ReactionCueFlags.KEYSTONE else 0
     var direction = Float.NaN
     when (reaction) {
@@ -158,12 +162,12 @@ internal fun MutableGameState.resolveReaction(
                 ignoresAffinity = true)
             enemy.status[StatusCell.BRITTLE] = 1f
             // Spall: the next direct hit throws the target (Flash Freeze: freezes it instead).
-            if (verbs && enemy.alive) setMark(enemy, MarkKind.SPALL, v[0])
+            if (verbs && enemy.alive) setMark(enemy, MarkKind.SPALL, tunedSeconds(reaction, v[0]))
         }
         ReactionId.PLASMA_BURST -> {
-            plasmaBurst(x, y, definition.radius, magnitude, definition.residueStacks, residueGeneration)
+            plasmaBurst(x, y, radius, magnitude, definition.residueStacks, residueGeneration)
             if (keystone) {
-                arcPlasma(enemy, x, y, definition.radius, magnitude, residueGeneration)
+                arcPlasma(enemy, x, y, radius, magnitude, residueGeneration)
             } else if (verbs) {
                 addField(CombatFieldKind.PLASMA, FieldSource.REACTION, reaction.ordinal, x, y, radius = v[0], seconds = v[1],
                     damagePerSecond = 0f, generation = residueGeneration)
@@ -185,7 +189,7 @@ internal fun MutableGameState.resolveReaction(
                     if (spread >= spreadLimit) break
                     val target = enemies[index]
                     if (target.id == enemy.id || !target.alive) continue
-                    if (distanceSquared(x, y, target.x, target.y) <= square(definition.radius + target.radius)) {
+                    if (distanceSquared(x, y, target.x, target.y) <= square(radius + target.radius)) {
                         spread++
                         addRelicArc(x, y, target.x, target.y, link)
                         if (residueGeneration < 2) applyStatus(target, StatusElement.THERMAL, definition.residueStacks, residueGeneration)
@@ -194,13 +198,13 @@ internal fun MutableGameState.resolveReaction(
             }
             // Ablaze: near the Core (Firewalker: anywhere) every ram sets enemies burning.
             if (verbs && (near || keystone)) {
-                ablazeUntil = max(ablazeUntil, elapsed + ablazeSeconds())
+                ablazeUntil = max(ablazeUntil, elapsed + tunedSeconds(reaction, ablazeSeconds()))
                 flags = flags or ReactionCueFlags.VERB
             }
         }
         ReactionId.SUPERCONDUCT -> {
             dealStatusDamage(enemy, magnitude, StatusElement.CRYO, ignoresAffinity = true)
-            chain(x, y, enemy.id, if (keystone) ZERO_RESISTANCE_LINKS else SUPERCONDUCT_LINKS, definition.radius, link) { target ->
+            chain(x, y, enemy.id, if (keystone) ZERO_RESISTANCE_LINKS else SUPERCONDUCT_LINKS, radius, link) { target ->
                 var damage = magnitude
                 if (keystone && isFrozen(target)) {
                     damage *= ZERO_RESISTANCE_FROZEN
@@ -211,7 +215,7 @@ internal fun MutableGameState.resolveReaction(
             }
             // Frictionless: near the Core the drag falls away and the Core vents heat once.
             if (verbs && !keystone && near) {
-                frictionlessUntil = max(frictionlessUntil, elapsed + v[1])
+                frictionlessUntil = max(frictionlessUntil, elapsed + tunedSeconds(reaction, v[1]))
                 heat = max(0f, heat - v[2])
                 flags = flags or ReactionCueFlags.VERB
             }
@@ -226,12 +230,14 @@ internal fun MutableGameState.resolveReaction(
             }
             if (verbs) direction = base
             val spacing = if (verbs) v[0] * RADIANS_PER_DEGREE else 0f
+            val reach = tunedRadius(reaction, GLACIER_REACH)
+            val fanPush = if (verbs) tunedForce(reaction, v[1]) else 0f
             repeat(GLACIER_SHARDS) { shard ->
                 val angle = if (verbs) base + (shard - GLACIER_SHARDS / 2) * spacing else shard * TAU / GLACIER_SHARDS + enemy.id * 0.37f
                 val dirX = cos(angle)
                 val dirY = sin(angle)
-                val endX = x + dirX * GLACIER_REACH
-                val endY = y + dirY * GLACIER_REACH
+                val endX = x + dirX * reach
+                val endY = y + dirY * reach
                 addRelicArc(x, y, endX, endY, link)
                 for (index in enemies.indices) {
                     val target = enemies[index]
@@ -239,7 +245,7 @@ internal fun MutableGameState.resolveReaction(
                     if (segmentCircleIntersects(x, y, endX, endY, target.x, target.y, target.radius + 6f)) {
                         dealStatusDamage(target, magnitude, StatusElement.CRYO, ignoresAffinity = true)
                         if (residueGeneration < 2 && target.alive) applyStatus(target, StatusElement.CRYO, definition.residueStacks, residueGeneration)
-                        if (verbs && target.alive) push(target, dirX, dirY, v[1])
+                        if (verbs && target.alive) push(target, dirX, dirY, fanPush)
                         if (keystone && target.alive && stacks(target, StatusElement.CRYO) >= AVALANCHE_FREEZE_CHILL) {
                             forceElementBreak(target, StatusElement.CRYO)
                         }
@@ -249,12 +255,13 @@ internal fun MutableGameState.resolveReaction(
             dealStatusDamage(enemy, magnitude, StatusElement.CRYO, ignoresAffinity = true)
         }
         ReactionId.EMBRITTLE -> {
-            enemy.status[StatusCell.EMBRITTLED_UNTIL] = elapsed + if (keystone) GLASS_BURST_EMBRITTLE_SECONDS else EMBRITTLE_SECONDS
+            enemy.status[StatusCell.EMBRITTLED_UNTIL] = elapsed +
+                tunedSeconds(reaction, if (keystone) GLASS_BURST_EMBRITTLE_SECONDS else EMBRITTLE_SECONDS)
         }
         ReactionId.MAGNETIZE -> {
             if (keystone) {
                 // Repulsor: no yank; the target flies away from the Core and charges whatever it slams.
-                hurl(coreX, coreY, enemy, REPULSOR_THROW_SPEED)
+                hurl(coreX, coreY, enemy, tunedForce(reaction, REPULSOR_THROW_SPEED))
             } else {
                 for (index in enemies.indices) {
                     val target = enemies[index]
@@ -262,11 +269,14 @@ internal fun MutableGameState.resolveReaction(
                     val dx = x - target.x
                     val dy = y - target.y
                     val distance = max(1f, length(dx, dy))
-                    if (distance > definition.radius + target.radius) continue
+                    if (distance > radius + target.radius) continue
                     val knockback = knockbackTaken(target)
-                    target.vx += dx / distance * MAGNETIZE_YANK * knockback
-                    target.vy += dy / distance * MAGNETIZE_YANK * knockback
-                    markThrown(target)
+                    val yank = tunedForce(reaction, MAGNETIZE_YANK)
+                    if (!knockbackAsDamage(target, knockback, yank)) {
+                        target.vx += dx / distance * yank * knockback
+                        target.vy += dy / distance * yank * knockback
+                        markThrown(target)
+                    }
                     dealStatusDamage(target, magnitude, StatusElement.GRAVITIC, ignoresAffinity = true)
                     if (residueGeneration < 2 && target.alive) applyStatus(target, StatusElement.GRAVITIC, definition.residueStacks, residueGeneration)
                 }
@@ -285,7 +295,7 @@ internal fun MutableGameState.resolveReaction(
                 dealStatusDamage(enemy, enemy.maxHp * victimFactor(enemy) * definition.power, StatusElement.ION, ignoresAffinity = true)
             }
             val arc = 5f * (a + b) * potency * build.reactionPower * runScale()
-            chain(x, y, enemy.id, 2, definition.radius, link) { target ->
+            chain(x, y, enemy.id, 2, radius, link) { target ->
                 dealStatusDamage(target, arc, StatusElement.ION, ignoresAffinity = true)
                 if (residueGeneration < 2 && target.alive) applyStatus(target, StatusElement.ENTROPY, definition.residueStacks, residueGeneration)
             }
@@ -305,11 +315,11 @@ internal fun MutableGameState.resolveReaction(
         ReactionId.THUNDERCLAP -> {
             for (index in enemies.indices) {
                 val target = enemies[index]
-                if (!target.alive || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
+                if (!target.alive || distanceSquared(x, y, target.x, target.y) > square(radius + target.radius)) continue
                 dealStatusDamage(target, magnitude, StatusElement.THERMAL, ignoresAffinity = true)
-                hurl(x, y, target, THUNDERCLAP_THROW_SPEED)
+                hurl(x, y, target, tunedForce(reaction, THUNDERCLAP_THROW_SPEED))
             }
-            shockwave(x, y, 0.32f, definition.radius, FxColorCode.elementTone(StatusElement.SONIC))
+            shockwave(x, y, 0.32f, radius, FxColorCode.elementTone(StatusElement.SONIC))
             val clapDistanceSquared = distanceSquared(x, y, coreX, coreY)
             if (keystone) {
                 // Rocket Clap: a clap close by launches the Core away from it.
@@ -321,7 +331,7 @@ internal fun MutableGameState.resolveReaction(
                 }
             } else if (verbs && clapDistanceSquared <= square(v[0])) {
                 // Blast Jump: a Dash started within the window rides the blast.
-                blastJumpUntil = elapsed + v[1]
+                blastJumpUntil = elapsed + tunedSeconds(reaction, v[1])
                 flags = flags or ReactionCueFlags.VERB
             }
         }
@@ -329,7 +339,7 @@ internal fun MutableGameState.resolveReaction(
             if (verbs && !keystone && near) {
                 // Shard Guard: the shards circle the Core instead of flying out.
                 guardShards = if (guardUntil > elapsed) min(v[2].toInt(), guardShards + SHATTERPOINT_SHARDS) else min(v[2].toInt(), SHATTERPOINT_SHARDS)
-                guardUntil = elapsed + v[0]
+                guardUntil = elapsed + tunedSeconds(reaction, v[0])
                 guardDamage = magnitude
                 flags = flags or ReactionCueFlags.VERB
             } else {
@@ -338,8 +348,8 @@ internal fun MutableGameState.resolveReaction(
                 if (verbs) direction = offset
                 repeat(shards) { shard ->
                     val angle = shard * TAU / shards + offset
-                    val endX = x + cos(angle) * SHATTERPOINT_REACH
-                    val endY = y + sin(angle) * SHATTERPOINT_REACH
+                    val endX = x + cos(angle) * tunedRadius(reaction, SHATTERPOINT_REACH)
+                    val endY = y + sin(angle) * tunedRadius(reaction, SHATTERPOINT_REACH)
                     addRelicArc(x, y, endX, endY, link)
                     for (index in enemies.indices) {
                         val target = enemies[index]
@@ -358,40 +368,40 @@ internal fun MutableGameState.resolveReaction(
         }
         ReactionId.RESONANT_ARC -> {
             val resonance = if (older == StatusElement.SONIC) a else b
-            val range = definition.radius + RESONANT_ARC_RANGE_PER_STACK * resonance
+            val range = radius + RESONANT_ARC_RANGE_PER_STACK * resonance
             dealStatusDamage(enemy, magnitude, StatusElement.ION, ignoresAffinity = true)
             chain(x, y, enemy.id, RESONANT_ARC_LINKS, range, link) { target ->
                 dealStatusDamage(target, magnitude, StatusElement.ION, ignoresAffinity = true)
             }
             // Arc Weave: near the Core (Standing Wave: anywhere) sharp turns throw more arcs.
             if (verbs && (near || keystone)) {
-                weaveUntil = max(weaveUntil, elapsed + weaveSeconds())
+                weaveUntil = max(weaveUntil, elapsed + tunedSeconds(reaction, weaveSeconds()))
                 weaveDamage = magnitude * if (keystone) STANDING_WAVE_SHARE else v[2]
                 weaveRange = range
                 flags = flags or ReactionCueFlags.VERB
             }
         }
         ReactionId.SEISMIC -> {
-            quake(x, y, definition.radius, magnitude)
-            shockwave(x, y, 0.4f, definition.radius, FxColorCode.quake(StatusElement.GRAVITIC))
+            quake(x, y, radius, magnitude)
+            shockwave(x, y, 0.4f, radius, FxColorCode.quake(StatusElement.GRAVITIC))
             if (keystone) {
                 queueAftershock(x, y, magnitude * AFTERSHOCK_SHARE)
-            } else if (verbs && rockEcho(x, y, v[0].toInt(), v[1], v[2], magnitude * v[3]) > 0) {
+            } else if (verbs && rockEcho(x, y, v[0].toInt(), tunedRadius(reaction, v[1]), tunedRadius(reaction, v[2]), magnitude * v[3]) > 0) {
                 flags = flags or ReactionCueFlags.VERB
             }
         }
         ReactionId.FRACTURE -> for (index in enemies.indices) {
             val target = enemies[index]
-            if (!target.alive || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
+            if (!target.alive || distanceSquared(x, y, target.x, target.y) > square(radius + target.radius)) continue
             dealStatusDamage(target, magnitude, StatusElement.ENTROPY, ignoresAffinity = true)
             if (residueGeneration < 2 && target.alive) applyStatus(target, StatusElement.ENTROPY, definition.residueStacks, residueGeneration)
             if (!verbs || !target.alive) continue
-            if (keystone) suppress(target) else setMark(target, MarkKind.CRACKED, v[0])
+            if (keystone) suppress(target) else setMark(target, MarkKind.CRACKED, tunedSeconds(reaction, v[0]))
         }
         ReactionId.SILENCE -> {
             for (index in enemies.indices) {
                 val target = enemies[index]
-                if (!target.alive || isShifting(target) || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
+                if (!target.alive || isShifting(target) || distanceSquared(x, y, target.x, target.y) > square(radius + target.radius)) continue
                 // Dead Air forms without damage.
                 if (!keystone) dealStatusDamage(target, magnitude, StatusElement.VOID, ignoresAffinity = true)
                 if (target.alive) silence(target)
@@ -406,14 +416,14 @@ internal fun MutableGameState.resolveReaction(
             }
         }
         ReactionId.BLACKFIRE -> {
-            enemy.status[StatusCell.BLACKFIRE_UNTIL] = elapsed + BLACKFIRE_SECONDS
+            enemy.status[StatusCell.BLACKFIRE_UNTIL] = elapsed + tunedSeconds(reaction, BLACKFIRE_SECONDS)
             enemy.status[StatusCell.BLACKFIRE_DPS] = max(enemy.status[StatusCell.BLACKFIRE_DPS],
                 if (keystone) magnitude * HELLFIRE_DAMAGE else magnitude)
         }
         ReactionId.STASIS -> {
             for (index in enemies.indices) {
                 val target = enemies[index]
-                if (!target.alive || isShifting(target) || distanceSquared(x, y, target.x, target.y) > square(definition.radius + target.radius)) continue
+                if (!target.alive || isShifting(target) || distanceSquared(x, y, target.x, target.y) > square(radius + target.radius)) continue
                 dealStatusDamage(target, magnitude, StatusElement.CRYO, ignoresAffinity = true)
                 if (target.alive && isOrdinary(target)) {
                     target.disabledUntil = max(target.disabledUntil, elapsed + STASIS_STOP_SECONDS)
@@ -428,23 +438,23 @@ internal fun MutableGameState.resolveReaction(
             } else -1
             // Stasis can fire while projectile hits are being walked by index, so it only spends the shots;
             // the list keeps its shape until the collision pass or the next projectile update drops them.
-            val reach = square(definition.radius)
+            val reach = square(radius)
             for (index in projectiles.indices) {
                 val shot = projectiles[index]
                 if (distanceSquared(x, y, shot.x, shot.y) > reach) continue
                 if (keystone && bubble >= 0) rewindShot(bubble, shot) else eraseHostileShot(shot, EraseCause.REACTION, shot.x, shot.y)
             }
-            shockwave(x, y, 0.45f, definition.radius, FxColorCode.elementTone(StatusElement.CRYO))
+            shockwave(x, y, 0.45f, radius, FxColorCode.elementTone(StatusElement.CRYO))
         }
         ReactionId.ANNIHILATE -> {
             dealStatusDamage(enemy, magnitude, StatusElement.VOID, ignoresAffinity = true)
-            toughestOtherEnemy(enemy, definition.radius)?.let { target ->
+            toughestOtherEnemy(enemy, radius)?.let { target ->
                 addRelicArc(x, y, target.x, target.y, link)
                 dealStatusDamage(target, magnitude, StatusElement.VOID, ignoresAffinity = true)
                 // Void Anchor: the next Dash toward the toughest one blinks the Core to it.
                 if (verbs && target.alive) {
                     voidAnchorId = target.id
-                    voidAnchorUntil = elapsed + if (keystone) EVENT_STRIKE_ANCHOR_SECONDS else v[0]
+                    voidAnchorUntil = elapsed + tunedSeconds(reaction, if (keystone) EVENT_STRIKE_ANCHOR_SECONDS else v[0])
                     flags = flags or ReactionCueFlags.VERB
                 }
             }
@@ -498,7 +508,7 @@ internal fun MutableGameState.resolveReaction(
     }
     if (generation >= 1) flags = flags or ReactionCueFlags.CASCADE
     if (echo) flags = flags or ReactionCueFlags.ECHO
-    recordStatusCue(VisualFxCue.ReactionTriggered(x, y, reaction.ordinal, max(definition.radius, enemy.radius * 2f), first,
+    recordStatusCue(VisualFxCue.ReactionTriggered(x, y, reaction.ordinal, max(radius, enemy.radius * 2f), first,
         direction = direction, flags = flags))
     if (!echo) {
         onReaction(enemy, reaction)
@@ -632,6 +642,7 @@ private fun MutableGameState.suppress(target: Enemy) {
 /** Pushes [target] along the unit vector ([dirX], [dirY]) at [speed], scaled by the knockback it takes. */
 private fun MutableGameState.push(target: Enemy, dirX: Float, dirY: Float, speed: Float) {
     val knockback = knockbackTaken(target)
+    if (knockbackAsDamage(target, knockback, speed)) return
     if (knockback <= 0f) return
     target.vx += dirX * speed * knockback
     target.vy += dirY * speed * knockback
@@ -645,8 +656,38 @@ private fun MutableGameState.awayFromCoreAngle(x: Float, y: Float): Float {
     return if (length(dx, dy) < 1f) atan2(lastAimDirectionY, lastAimDirectionX) else atan2(dy, dx)
 }
 
-/** True when ([x], [y]) lies within [CORE_LINK_RADIUS] of the Core: such reactions feed the Core's verbs. */
-internal fun MutableGameState.nearCore(x: Float, y: Float): Boolean = distanceSquared(x, y, coreX, coreY) <= square(CORE_LINK_RADIUS)
+/**
+ * True when ([x], [y]) lies within [CORE_LINK_RADIUS] (plus the build's Core Link bonus) of the Core: such reactions
+ * feed the Core's verbs.
+ */
+internal fun MutableGameState.nearCore(x: Float, y: Float): Boolean =
+    distanceSquared(x, y, coreX, coreY) <= square(CORE_LINK_RADIUS + build.coreLinkBonus)
+
+/** [reaction]'s [radius] with its Reaction Tuning, never past [MAX_TUNED_RADIUS] (untuned: unchanged). */
+internal fun MutableGameState.tunedRadius(reaction: ReactionId, radius: Float): Float {
+    val scale = build.reactionTuning(reaction, ReactionAspect.RADIUS)
+    return if (scale == 1f) radius else min(MAX_TUNED_RADIUS, radius * scale)
+}
+
+/** How long a state [reaction] leaves lasts with its Reaction Tuning. */
+internal fun MutableGameState.tunedSeconds(reaction: ReactionId, seconds: Float): Float =
+    seconds * build.reactionTuning(reaction, ReactionAspect.DURATION)
+
+/** How hard [reaction] moves enemies with its Reaction Tuning. */
+internal fun MutableGameState.tunedForce(reaction: ReactionId, speed: Float): Float =
+    speed * build.reactionTuning(reaction, ReactionAspect.FORCE)
+
+/**
+ * A mark was cashed on [enemy] (a Spall throw, a Cracked detonation, a Void Anchor blink, a ringing Shatter):
+ * MARK_CONSUMED clauses fire, at most [MAX_MARK_DISPATCHES_PER_STEP] times per fixed step.
+ */
+internal fun MutableGameState.onMarkCashed(enemy: Enemy, reaction: ReactionId?, element: StatusElement?) {
+    if (markDispatches >= MAX_MARK_DISPATCHES_PER_STEP || !listens(EffectTrigger.MARK_CONSUMED)) return
+    markDispatches++
+    fireClauses(EffectTrigger.MARK_CONSUMED, enemy, element = element ?: reaction?.first, reaction = reaction)
+}
+
+internal const val MAX_MARK_DISPATCHES_PER_STEP: Int = 4
 
 /** The verb value at [index] of [reaction]; read only where the reaction has verb values. */
 internal fun MutableGameState.reactionValue(reaction: ReactionId, index: Int): Float = content.build.reaction(reaction).values[index]
@@ -677,8 +718,9 @@ internal fun MutableGameState.cashSpall(enemy: Enemy) {
     if (keystoneOn(ReactionId.THERMAL_SHOCK)) {
         if (!isFrozen(enemy) && enemy.status[StatusCell.FREEZE_IMMUNE_UNTIL] <= elapsed) freeze(enemy, FLASH_FREEZE_SECONDS)
     } else {
-        hurl(coreX, coreY, enemy, reactionValue(ReactionId.THERMAL_SHOCK, SPALL_THROW_VALUE))
+        hurl(coreX, coreY, enemy, tunedForce(ReactionId.THERMAL_SHOCK, reactionValue(ReactionId.THERMAL_SHOCK, SPALL_THROW_VALUE)))
     }
+    onMarkCashed(enemy, ReactionId.THERMAL_SHOCK, null)
 }
 
 /**
@@ -754,6 +796,7 @@ internal fun MutableGameState.detonateCracked() {
         dealStatusDamage(target, damage, StatusElement.ENTROPY, ignoresAffinity = true)
         if (target.alive) applyStatus(target, StatusElement.ENTROPY, decay, 1)
         shockwave(x, y, CRACKED_SHOCKWAVE_SECONDS, CRACKED_SHOCKWAVE_RADIUS, FxColorCode.elementTone(StatusElement.ENTROPY))
+        onMarkCashed(target, ReactionId.FRACTURE, null)
     }
 }
 
@@ -819,6 +862,7 @@ internal const val ACCRETION_THROW_VALUE: Int = 2
 internal const val ABLAZE_STACKS_VALUE: Int = 2
 internal const val FRICTIONLESS_DRAG_VALUE: Int = 0
 internal const val GLASS_CHARGE_SPEED_VALUE: Int = 0
+internal const val ATTRACTOR_PULL_VALUE: Int = 1
 internal const val ATTRACTOR_SHOT_REACH_VALUE: Int = 2
 internal const val ATTRACTOR_SHOT_TURN_VALUE: Int = 3
 internal const val COMPOST_DAMPING_VALUE: Int = 0
@@ -970,12 +1014,31 @@ internal fun MutableGameState.silence(target: Enemy, seconds: Float = SILENCE_SE
     target.silencedUntil = elapsed + SILENCE_BOSS_SECONDS
 }
 
+/**
+ * Knockback to Damage: a [speed] throw, push or pull on [target], which takes at most [IMMOVABLE_KNOCKBACK] of
+ * knockback, deals proc damage instead (through the Architect's gate), at most once per enemy per
+ * [KNOCKBACK_DAMAGE_GATE_SECONDS] (the slam gate). True when it did; a gated throw moves the enemy as usual.
+ */
+internal fun MutableGameState.knockbackAsDamage(target: Enemy, knockback: Float, speed: Float): Boolean {
+    val amount = build.knockbackToDamage
+    if (amount <= 0f || knockback > IMMOVABLE_KNOCKBACK || !(speed > 0f) || !target.alive || isShifting(target)) return false
+    if (target.slamReadyAt > elapsed) return false
+    target.slamReadyAt = elapsed + KNOCKBACK_DAMAGE_GATE_SECONDS
+    dealProcDamage(target, amount * speed * KNOCKBACK_DAMAGE_SCALE * runScale(), rescale = false)
+    return true
+}
+
+internal const val IMMOVABLE_KNOCKBACK: Float = 0.35f
+internal const val KNOCKBACK_DAMAGE_SCALE: Float = 0.15f
+internal const val KNOCKBACK_DAMAGE_GATE_SECONDS: Float = 0.5f
+
 /** Ordinary enemies take stuns and stops; Elites and bosses shrug them off. */
 private fun isOrdinary(enemy: Enemy): Boolean = !enemy.isEliteClass
 
 /** Pushes [target] away from ([x], [y]) at [speed], scaled by the knockback it takes. */
 internal fun MutableGameState.hurl(x: Float, y: Float, target: Enemy, speed: Float) {
     val knockback = knockbackTaken(target)
+    if (knockbackAsDamage(target, knockback, speed)) return
     if (knockback <= 0f) return
     var dx = target.x - x
     var dy = target.y - y
@@ -1089,9 +1152,11 @@ internal fun MutableGameState.resetCoreReactionState() {
     erasureLatchId = -1
     coreImpulseReadyAt = 0f
     primedDashUntil = 0f
+    dashHeatBank = 0f
     phaseUntil = 0f
     shotErasedDispatches = 0
     markDispatches = 0
+    shotsErased = 0L
     pendingSkillDrafts = 0
     pendingRankUpOffers = 0
     skillBufferMask = 0

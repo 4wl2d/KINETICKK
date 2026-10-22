@@ -1000,8 +1000,9 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
         state.ablazeUntil, state.frictionlessUntil, state.blastJumpUntil, state.weaveUntil, state.weaveDamage,
         state.weaveRange, state.guardUntil, state.guardDamage, state.voidAnchorUntil, state.overcurrentReadyAt,
         state.flameRefundReadyAt, state.coreImpulseReadyAt, state.primedDashUntil, state.phaseUntil,
-        state.skillBufferTime, state.apexBufferTime,
+        state.skillBufferTime, state.apexBufferTime, state.dashHeatBank,
     )) signature = mix(signature, value.toRawBits())
+    signature = mix(signature, state.shotsErased.hashCode())
     for (value in intArrayOf(
         state.guardShards, state.voidAnchorId, state.erasureLatchId, state.shotErasedDispatches, state.markDispatches,
         state.pendingSkillDrafts, state.skillBufferMask,

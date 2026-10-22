@@ -9,8 +9,13 @@ import kinetickk.ball.content.api.EffectAction
 import kinetickk.ball.content.api.EffectClause
 import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.ElementPick
+import kinetickk.ball.content.api.ImpulseDirection
+import kinetickk.ball.content.api.MarkPick
 import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.SkillId
+import kinetickk.ball.content.api.SkillPick
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.ZoneKind
 import kinetickk.ball.content.api.WeaponCadence
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.*
@@ -36,8 +41,10 @@ internal const val ITEM_STATUS_RATE: Float = 6f
 
 /**
  * Dispatches every owned clause listening to [trigger]. [target] is the enemy involved (hit, killed,
- * broken), [hit] the triggering damage, [element] the element of a Break and [reaction] the reaction
- * that fired (its two elements both count as involved). Clause consequences are proc damage, so they
+ * broken), [hit] the triggering damage, [element] the element of a Break (or of the skill or field involved)
+ * and [reaction] the reaction that fired, made the field or left the mark (a fired reaction's two elements
+ * both count as involved); [skill] is the skill that cast or hit. Effects start at ([originX], [originY]),
+ * or at the target (the Core without one) while those are NaN. Clause consequences are proc damage, so they
  * never re-trigger hit or kill clauses.
  */
 internal fun MutableGameState.fireClauses(
@@ -48,6 +55,9 @@ internal fun MutableGameState.fireClauses(
     element: StatusElement? = null,
     statusOnly: Boolean = false,
     reaction: ReactionId? = null,
+    skill: SkillId? = null,
+    originX: Float = Float.NaN,
+    originY: Float = Float.NaN,
 ) {
     val packed = build.clauses(trigger)
     if (packed.isEmpty() || clauseDepth >= MAX_CLAUSE_DEPTH) return
@@ -62,7 +72,7 @@ internal fun MutableGameState.fireClauses(
             if (clauseReadyAt[global] > elapsed) continue
             var conditionsHold = true
             for (conditionIndex in clause.conditions.indices) {
-                if (!holds(clause.conditions[conditionIndex], target, source, element, reaction)) {
+                if (!holds(clause.conditions[conditionIndex], target, source, element, reaction, skill)) {
                     conditionsHold = false
                     break
                 }
@@ -77,8 +87,10 @@ internal fun MutableGameState.fireClauses(
                 if (count % gate != 0) continue
             }
             if (clause.cooldownSeconds > 0f) clauseReadyAt[global] = elapsed + clause.cooldownSeconds
-            val generation = if (trigger == EffectTrigger.BREAK || trigger == EffectTrigger.REACTION) 1 else 0
-            runClause(itemId, clause, target, hit, generation, statusOnly)
+            val generation = if (trigger == EffectTrigger.BREAK || trigger == EffectTrigger.REACTION ||
+                trigger == EffectTrigger.SHOT_ERASED
+            ) 1 else 0
+            runClause(itemId, clause, target, hit, generation, statusOnly, skill, originX, originY)
         }
     } finally {
         clauseDepth--
@@ -92,13 +104,18 @@ private fun MutableGameState.runClause(
     hit: Float,
     generation: Int,
     statusOnly: Boolean,
+    skill: SkillId?,
+    fromX: Float,
+    fromY: Float,
 ) {
     val magnitude = build.magnitude(itemId)
     val bonus = build.bonus(itemId)
     // Damage scale per basis: %max-HP procs cap their stack growth and ignore Reborn and attunement.
     fun scale(basis: DamageBasis) = if (basis == DamageBasis.VICTIM_MAX_HP) min(MAX_HP_PROC_SCALE, magnitude) else magnitude * bonus
-    val originX = target?.x ?: coreX
-    val originY = target?.y ?: coreY
+    val originX = if (fromX.isNaN()) target?.x ?: coreX else fromX
+    val originY = if (fromY.isNaN()) target?.y ?: coreY else fromY
+    // Marks share the item's status rate: open when the clause began, so a status and a mark in one clause both land.
+    val statusRateOpen = itemStatusReadyAt[itemId] <= elapsed
     for (actionIndex in clause.actions.indices) {
         val action = clause.actions[actionIndex]
         if (statusOnly && action !is EffectAction.ApplyStatus) continue
@@ -177,7 +194,191 @@ private fun MutableGameState.runClause(
                 )
             }
             is EffectAction.Detonate -> if (target != null && target.alive && !isShifting(target)) detonate(target, action, magnitude * bonus)
+            is EffectAction.RefundSkills -> refundSkillsFor(action.pick, action.seconds * magnitude, skill, clause.trigger)
+            is EffectAction.ChargeApex -> chargeApex(action.seconds * magnitude)
+            is EffectAction.ForceReaction -> forceReactionsAround(target, originX, originY, action.radius, action.maxTargets)
+            is EffectAction.Zone -> openZone(itemId, action, originX, originY, target)
+            is EffectAction.EraseShots -> eraseShotsAround(originX, originY, action.radius, action.maximum)
+            is EffectAction.CoreImpulse -> launchCore(action.direction, action.speed * magnitude, target)
+            is EffectAction.ApplyMark -> if (statusRateOpen && target != null && target.alive && !isShifting(target)) {
+                itemStatusReadyAt[itemId] = max(itemStatusReadyAt[itemId], elapsed + 1f / (ITEM_STATUS_RATE * max(1f, magnitude)))
+                applyItemMark(target, action.mark, action.seconds)
+            }
+            is EffectAction.Throw -> if (target != null && target.alive && !isShifting(target)) {
+                hurl(coreX, coreY, target, action.speed * magnitude)
+            }
+            EffectAction.PrimeDash -> primedDashUntil = max(primedDashUntil, elapsed + PRIME_DASH_SECONDS)
         }
+    }
+}
+
+/** PrimeDash: the next Dash within this long costs no heat. */
+internal const val PRIME_DASH_SECONDS: Float = 3f
+
+/** ChargeApex before the maximum level refunds this share of its seconds to every skill. */
+internal const val CHARGE_APEX_SKILL_SHARE: Float = 0.25f
+
+/**
+ * RefundSkills: [seconds] through the refund bank to [pick]'s skills. A SKILL_CAST clause never refunds the slot
+ * that just cast; CAST falls back to the slowest skill when no skill dispatched the clause.
+ */
+private fun MutableGameState.refundSkillsFor(pick: SkillPick, seconds: Float, skill: SkillId?, trigger: EffectTrigger) {
+    if (skillLoadout.ownedCount == 0) return
+    val dispatching = skill?.let(skillLoadout::slotOf) ?: -1
+    val excluded = if (trigger == EffectTrigger.SKILL_CAST) dispatching else -1
+    when (pick) {
+        SkillPick.ALL -> for (slot in 0 until SkillRuntime.SLOTS) if (slot != excluded) refundSkill(slot, seconds)
+        SkillPick.CAST ->
+            if (dispatching >= 0 && dispatching != excluded) refundSkill(dispatching, seconds)
+            else slowestSkillSlot(excluded).let { if (it >= 0) refundSkill(it, seconds) }
+        SkillPick.LONGEST -> slowestSkillSlot(excluded).let { if (it >= 0) refundSkill(it, seconds) }
+    }
+}
+
+/** The recharging slot with the most cooldown left (slot order on ties), other than [excluded]; -1 when none. */
+internal fun MutableGameState.slowestSkillSlot(excluded: Int = -1): Int {
+    var best = -1
+    var bestLeft = 0f
+    for (slot in 0 until SkillRuntime.SLOTS) {
+        if (slot == excluded || skillLoadout.isEmpty(slot)) continue
+        val left = skillRuntime[slot, SkillCell.READY_AT] - elapsed
+        if (left > bestLeft) {
+            best = slot
+            bestLeft = left
+        }
+    }
+    return best
+}
+
+/** ChargeApex: once the Apex is unlocked its cooldown shrinks by [seconds]; before that every skill by a quarter of it. */
+internal fun MutableGameState.chargeApex(seconds: Float) {
+    if (apexUnlocked) refundApex(seconds) else refundAllSkills(seconds * CHARGE_APEX_SKILL_SHARE)
+}
+
+/**
+ * ForceReaction: sets off the reaction on [target], then on the enemies nearest ([x], [y]) within [radius] until
+ * [maxTargets] were tried; each is a cascade (generation 1, so it spends a reaction token). Allocation-free.
+ */
+private fun MutableGameState.forceReactionsAround(target: Enemy?, x: Float, y: Float, radius: Float, maxTargets: Int) {
+    var tried = 0
+    var firstId = -1
+    var secondId = -1
+    var thirdId = -1
+    if (target != null && target.alive) {
+        forceReaction(target, 1)
+        firstId = target.id
+        tried = 1
+    }
+    while (tried < maxTargets) {
+        var best: Enemy? = null
+        var bestDistance = Float.POSITIVE_INFINITY
+        for (index in enemies.indices) {
+            val enemy = enemies[index]
+            if (!enemy.alive || isShifting(enemy) || enemy.id == firstId || enemy.id == secondId || enemy.id == thirdId) continue
+            val distance = distanceSquared(x, y, enemy.x, enemy.y)
+            if (distance > square(radius + enemy.radius) || distance >= bestDistance) continue
+            best = enemy
+            bestDistance = distance
+        }
+        val next = best ?: break
+        forceReaction(next, 1)
+        when (tried) {
+            0 -> firstId = next.id
+            1 -> secondId = next.id
+            else -> thirdId = next.id
+        }
+        tried++
+    }
+}
+
+/**
+ * Zone: an item field of the zone's kind with no damage of its own at ([x], [y]); an attractor rides [target]
+ * when there is one. Its behaviour (pool, hush, bubble, pull, maw) is its reaction's verb, read from content.
+ */
+private fun MutableGameState.openZone(itemId: Int, zone: EffectAction.Zone, x: Float, y: Float, target: Enemy?) {
+    val anchor = if (zone.kind == ZoneKind.ATTRACTOR && target != null && target.alive) target else null
+    val kind = when (zone.kind) {
+        ZoneKind.PLASMA -> CombatFieldKind.PLASMA
+        ZoneKind.HUSH -> CombatFieldKind.HUSH
+        ZoneKind.TIME_BUBBLE -> CombatFieldKind.TIME_BUBBLE
+        ZoneKind.ATTRACTOR -> CombatFieldKind.ATTRACTOR
+        ZoneKind.MAW -> CombatFieldKind.NULL_WELL
+    }
+    val pull = when (zone.kind) {
+        ZoneKind.ATTRACTOR -> if (hasVerb(ReactionId.MAGNETIZE)) reactionValue(ReactionId.MAGNETIZE, ATTRACTOR_PULL_VALUE) else 0f
+        ZoneKind.MAW -> NULL_WELL_PULL
+        else -> 0f
+    }
+    addField(
+        kind, FieldSource.ITEM, itemId, anchor?.x ?: x, anchor?.y ?: y, radius = zone.radius, seconds = zone.seconds,
+        damagePerSecond = 0f, generation = 1, pull = pull, anchorId = anchor?.id ?: -1,
+        flags = if (anchor != null) FieldFlags.FOLLOWS_ANCHOR else 0,
+    )
+}
+
+/**
+ * EraseShots: erases up to [maximum] live hostile bolts nearest ([x], [y]) within [radius], nearest first (an item
+ * erasure). Allocation-free: one scan per bolt.
+ */
+private fun MutableGameState.eraseShotsAround(x: Float, y: Float, radius: Float, maximum: Int) {
+    var erased = 0
+    while (erased < maximum) {
+        var best: Projectile? = null
+        var bestDistance = radius * radius
+        for (index in projectiles.indices) {
+            val shot = projectiles[index]
+            if (!shot.hostile || shot.spent || shot.kind != kinetickk.ball.gameplay.nucleus.render.ProjectileKind.BOLT) continue
+            val distance = distanceSquared(x, y, shot.x, shot.y)
+            if (distance > bestDistance) continue
+            if (best == null || distance < bestDistance) {
+                best = shot
+                bestDistance = distance
+            }
+        }
+        val chosen = best ?: break
+        if (eraseHostileShot(chosen, EraseCause.ITEM, chosen.x, chosen.y)) erased++ else break
+    }
+}
+
+/** CoreImpulse: a gated launch of the Core at [speed] toward the pointer, away from [target] or along its motion. */
+private fun MutableGameState.launchCore(direction: ImpulseDirection, speed: Float, target: Enemy?) {
+    var dirX = lastAimDirectionX
+    var dirY = lastAimDirectionY
+    when (direction) {
+        ImpulseDirection.POINTER -> {
+            val dx = cameraX + pointerX - screenWidth * 0.5f - coreX
+            val dy = cameraY + pointerY - screenHeight * 0.5f - coreY
+            val distance = length(dx, dy)
+            if (distance > AIM_DEADZONE) {
+                dirX = dx / distance
+                dirY = dy / distance
+            }
+        }
+        ImpulseDirection.AWAY_FROM_TARGET -> if (target != null) {
+            val dx = coreX - target.x
+            val dy = coreY - target.y
+            val distance = length(dx, dy)
+            if (distance >= 1f) {
+                dirX = dx / distance
+                dirY = dy / distance
+            }
+        }
+        ImpulseDirection.FORWARD -> if (this.speed > 1f) {
+            dirX = velocityX / this.speed
+            dirY = velocityY / this.speed
+        }
+    }
+    applyCoreImpulse(dirX, dirY, speed, gated = true)
+}
+
+/** ApplyMark: writes [mark] on [target] for [seconds]; Embrittled is the Embrittle reaction's state. */
+private fun MutableGameState.applyItemMark(target: Enemy, mark: MarkPick, seconds: Float) {
+    when (mark) {
+        MarkPick.SPALL -> setMark(target, MarkKind.SPALL, seconds)
+        MarkPick.CRACKED -> setMark(target, MarkKind.CRACKED, seconds)
+        MarkPick.SPORED -> setMark(target, MarkKind.SPORED, seconds)
+        MarkPick.EMBRITTLED ->
+            target.status[StatusCell.EMBRITTLED_UNTIL] = max(target.status[StatusCell.EMBRITTLED_UNTIL], elapsed + seconds)
     }
 }
 
@@ -421,9 +622,12 @@ internal fun MutableGameState.onLevelUp() {
     if (tagTier(BuildTag.FORTUNE) >= 2 && level % 4 == 0) rerollsRemaining++
 }
 
-/** Ouroboros Seal's liability; applied to every Data gain, pickups and item clauses alike. */
+/**
+ * Ouroboros Seal's liability and Data-to-skills' cost; applied to every Data gain, pickups and item clauses alike.
+ */
 internal fun MutableGameState.dataGainLiability(): Float =
-    if (build.liability(kinetickk.ball.content.api.RelicId.OUROBOROS_SEAL)) 0.75f else 1f
+    (if (build.liability(kinetickk.ball.content.api.RelicId.OUROBOROS_SEAL)) 0.75f else 1f) *
+        if (build.dataToSkills > 0f) kinetickk.ball.content.api.DATA_CONVERSION_GAIN else 1f
 
 /** Agony Scepter's mutation strength: ranks 1, 2 and 3 map to the Forbidden forms 1, 3 and 5. */
 internal fun MutableGameState.agonyPower(): Int =

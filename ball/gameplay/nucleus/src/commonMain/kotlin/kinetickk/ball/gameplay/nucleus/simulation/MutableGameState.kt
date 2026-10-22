@@ -192,6 +192,8 @@ internal class MutableGameState(
     /** When a reaction or item may next push the Core. */
     internal var coreImpulseReadyAt: Float = reductionSource?.coreImpulseReadyAt ?: 0f
     internal var primedDashUntil: Float = reductionSource?.primedDashUntil ?: 0f
+    /** Dash heat spent toward the next Dash-heat-to-skills refund (below its step of 10). */
+    internal var dashHeatBank: Float = reductionSource?.dashHeatBank ?: 0f
     internal var phaseUntil: Float = reductionSource?.phaseUntil ?: 0f
     /** Seismic's keystone keeps two pending aftershocks: when each strikes (negative when free), where and how hard. */
     internal var aftershockAt0: Float = reductionSource?.aftershockAt0 ?: -1f
@@ -205,6 +207,8 @@ internal class MutableGameState(
     /** Erased bolts and cashed marks announced within the current fixed step; zero between steps. */
     internal var shotErasedDispatches: Int = reductionSource?.shotErasedDispatches ?: 0
     internal var markDispatches: Int = reductionSource?.markDispatches ?: 0
+    /** Hostile bolts erased this run (a run statistic). */
+    internal var shotsErased: Long = reductionSource?.shotsErased ?: 0L
     // Skill and Apex input: drafts waiting to open, buffered slot requests and their age, the buffered Apex request.
     internal var pendingSkillDrafts: Int = reductionSource?.pendingSkillDrafts ?: 0
     internal var skillBufferMask: Int = reductionSource?.skillBufferMask ?: 0
@@ -223,6 +227,8 @@ internal class MutableGameState(
     /** The slot casting right now, -1 between casts; the cast's damaged-enemy count and the bosses it struck. */
     internal var castSlot: Int = -1
     internal var castHits: Int = 0
+    /** Enemies the running element-less cast attuned (SkillAttunement). */
+    internal var castAttunedStacks: Int = 0
     internal var castPrimaryId: Int = -1
     internal var castBossHitFirst: Int = -1
     internal var castBossHitSecond: Int = -1

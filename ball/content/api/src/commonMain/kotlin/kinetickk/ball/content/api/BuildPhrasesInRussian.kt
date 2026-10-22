@@ -313,6 +313,8 @@ internal val BuildPhrasesInRussian: List<Pair<String, String>> = listOf(
     // Timed stats that are not item effects.
     "Damage" to "Урон",
     "Damage taken" to "Получаемый урон",
+    "Skill recharge" to "Перезарядка навыков",
+    "Skill power" to "Сила навыков",
 
     // Clause trigger labels.
     "On impact" to "При столкновении",
@@ -333,4 +335,10 @@ internal val BuildPhrasesInRussian: List<Pair<String, String>> = listOf(
     "On data pickup" to "При сборе данных",
     "On ricochet" to "При рикошете",
     "On slam" to "При впечатывании врага",
+    "On skill cast" to "При применении навыка",
+    "On skill hit" to "При попадании навыком",
+    "On Apex" to "При Апексе",
+    "On entering a field" to "При входе в поле",
+    "On erasing a shot" to "При стирании снаряда",
+    "On cashing a mark" to "При срабатывании метки",
 )

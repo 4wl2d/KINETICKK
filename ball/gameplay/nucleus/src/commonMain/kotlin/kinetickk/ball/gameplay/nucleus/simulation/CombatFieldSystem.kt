@@ -3,6 +3,8 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.EffectTrigger
+import kinetickk.ball.content.api.ReactionAspect
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.model.*
@@ -22,6 +24,9 @@ import kotlin.math.sin
  * [CombatFieldKind.cap] overwrites its oldest field in place; otherwise reactions and items share
  * `maximumFields − maximumSkillFields` records and a field past that pool is refused. Overwriting in
  * place keeps every other index stable, so a field may be admitted while a pass walks the table.
+ * The build's Field Tuning scales every field's radius and life; a reaction's field also takes its Reaction
+ * Tuning (radius, life, pull), together at most [MAX_TUNED_FIELD_SCALE] and [MAX_TUNED_RADIUS]; with Skill Fields
+ * Follow a skill's field travels with the Core at its share of the radius.
  */
 internal fun MutableGameState.addField(
     kind: CombatFieldKind,
@@ -45,6 +50,22 @@ internal fun MutableGameState.addField(
 ): Int {
     val table = combatFieldTable
     val policy = content.build.policy
+    var fieldRadius = radius
+    var fieldSeconds = seconds
+    var fieldPull = pull
+    var fieldFlags = flags
+    val tunedReaction = if (source == FieldSource.REACTION) ReactionId.entries.getOrNull(owner) else null
+    val radiusScale = min(MAX_TUNED_FIELD_SCALE,
+        build.fieldRadiusScale * (tunedReaction?.let { build.reactionTuning(it, ReactionAspect.RADIUS) } ?: 1f))
+    val secondsScale = min(MAX_TUNED_FIELD_SCALE,
+        build.fieldDurationScale * (tunedReaction?.let { build.reactionTuning(it, ReactionAspect.DURATION) } ?: 1f))
+    if (radiusScale != 1f) fieldRadius = min(MAX_TUNED_RADIUS, radius * radiusScale)
+    if (secondsScale != 1f) fieldSeconds = seconds * secondsScale
+    if (tunedReaction != null) fieldPull = tunedForce(tunedReaction, pull)
+    if (source == FieldSource.SKILL && build.skillFieldsFollow > 0f) {
+        fieldRadius *= build.skillFieldsFollow
+        fieldFlags = fieldFlags or FieldFlags.FOLLOWS_CORE
+    }
     val index = if (source == FieldSource.SKILL) {
         val own = table.skillSlotIndex(owner)
         when {
@@ -65,19 +86,19 @@ internal fun MutableGameState.addField(
     table[index, FieldCell.Y] = y
     table[index, FieldCell.X2] = x2
     table[index, FieldCell.Y2] = y2
-    table[index, FieldCell.RADIUS] = radius
+    table[index, FieldCell.RADIUS] = fieldRadius
     table[index, FieldCell.DPS] = damagePerSecond
     table[index, FieldCell.ELEMENT] = (element?.ordinal ?: -1).toFloat()
     table[index, FieldCell.STACKS] = stacksPerTick.toFloat()
     table[index, FieldCell.GENERATION] = generation.toFloat()
-    table[index, FieldCell.PULL] = pull
+    table[index, FieldCell.PULL] = fieldPull
     table[index, FieldCell.CREATED_AT] = elapsed
-    table[index, FieldCell.EXPIRES_AT] = elapsed + seconds
-    table[index, FieldCell.REMAINING] = seconds
+    table[index, FieldCell.EXPIRES_AT] = elapsed + fieldSeconds
+    table[index, FieldCell.REMAINING] = fieldSeconds
     table[index, FieldCell.TICK_CLOCK] = tickClock
     table[index, FieldCell.CHARGE] = 0f
     table[index, FieldCell.ANCHOR_ID] = anchorId.toFloat()
-    table[index, FieldCell.FLAGS] = flags.toFloat()
+    table[index, FieldCell.FLAGS] = fieldFlags.toFloat()
     table[index, FieldCell.POWER] = power
     table.stamp(index)
     return index
@@ -192,7 +213,7 @@ internal fun MutableGameState.updateCombatFields(delta: Float) {
         table[index, FieldCell.TICK_CLOCK] = clock
         if (remaining <= 0f) expired = true
         if (eatsShots(index, kind)) shotEaters++
-        if (kind == CombatFieldKind.ATTRACTOR && reactionField) attractors++
+        if (kind == CombatFieldKind.ATTRACTOR && !skillField) attractors++
         if (kind == CombatFieldKind.FUSION && reactionField || kind == CombatFieldKind.GRAVITY_WELL && skillField) stars++
     }
     if (shotEaters > 0) eatShots(passSequence)
@@ -207,11 +228,14 @@ internal fun MutableGameState.updateCombatFields(delta: Float) {
     updateCoreFieldMask(delta)
 }
 
-/** A follower field moves with the Core; an attractor with its living anchor (a lost anchor leaves it in place). */
+/**
+ * A follower field moves with the Core (a Frost Line keeps its segment and its offset ahead of the Core along the
+ * aim it was cast with); an attractor with its living anchor (a lost anchor leaves it in place).
+ */
 private fun MutableGameState.followAnchor(index: Int, kind: CombatFieldKind) {
     val table = combatFieldTable
     if (table.hasFlag(index, FieldFlags.FOLLOWS_CORE)) {
-        moveField(index, coreX, coreY)
+        if (kind == CombatFieldKind.FROST_LINE) followWithSegment(index) else moveField(index, coreX, coreY)
         return
     }
     if (kind != CombatFieldKind.ATTRACTOR) return
@@ -228,6 +252,32 @@ private fun MutableGameState.followAnchor(index: Int, kind: CombatFieldKind) {
     }
     table[index, FieldCell.ANCHOR_ID] = -1f
     table.setFlag(index, FieldFlags.FOLLOWS_ANCHOR, false)
+    table.touch()
+}
+
+/**
+ * A Frost Line that follows the Core: its half-segment (perpendicular to the aim it was cast along) gives back
+ * that aim, so its centre stays [FROST_LINE_AHEAD] ahead of the Core along it.
+ */
+private fun MutableGameState.followWithSegment(index: Int) {
+    val table = combatFieldTable
+    val halfX = (table[index, FieldCell.X2] - table[index, FieldCell.X]) * 0.5f
+    val halfY = (table[index, FieldCell.Y2] - table[index, FieldCell.Y]) * 0.5f
+    val half = length(halfX, halfY)
+    if (half < 1f) {
+        moveField(index, coreX, coreY)
+        return
+    }
+    // The cast put the ends at centre ∓ (aimY, −aimX)·half, so the half-segment gives aim = (−halfY, halfX) / half.
+    val centreX = coreX - halfY / half * FROST_LINE_AHEAD
+    val centreY = coreY + halfX / half * FROST_LINE_AHEAD
+    val x = centreX - halfX
+    val y = centreY - halfY
+    if (table[index, FieldCell.X] == x && table[index, FieldCell.Y] == y) return
+    table[index, FieldCell.X] = x
+    table[index, FieldCell.Y] = y
+    table[index, FieldCell.X2] = centreX + halfX
+    table[index, FieldCell.Y2] = centreY + halfY
     table.touch()
 }
 
@@ -260,20 +310,19 @@ private fun MutableGameState.tickOccupant(kind: CombatFieldKind, target: Enemy) 
 }
 
 /**
- * True when the field at [index] spends hostile shots: a Maw, a Time Bubble or Dead Air with budget left, or a
- * skill's Frost Line within its bolt cap.
+ * True when the field at [index] spends hostile shots: a Maw or a Time Bubble (a reaction's or an item zone's) or
+ * Dead Air with budget left, or a skill's Frost Line within its bolt cap.
  */
 private fun MutableGameState.eatsShots(index: Int, kind: CombatFieldKind): Boolean {
     val table = combatFieldTable
     val limit = when (table.source(index)) {
-        FieldSource.REACTION -> when (kind) {
+        FieldSource.REACTION, FieldSource.ITEM -> when (kind) {
             CombatFieldKind.NULL_WELL -> if (hasVerb(ReactionId.NULL_WELL)) reactionValue(ReactionId.NULL_WELL, MAW_SHOTS_VALUE) else 0f
             CombatFieldKind.TIME_BUBBLE -> if (hasVerb(ReactionId.STASIS)) reactionValue(ReactionId.STASIS, BUBBLE_SHOTS_VALUE) else 0f
             CombatFieldKind.HUSH -> if (table.hasFlag(index, FieldFlags.KEYSTONE)) DEAD_AIR_SHOTS.toFloat() else 0f
             else -> 0f
         }
         FieldSource.SKILL -> if (kind == CombatFieldKind.FROST_LINE) table[index, FieldCell.POWER] else 0f
-        FieldSource.ITEM -> 0f
     }
     return table[index, FieldCell.CHARGE] < limit
 }
@@ -324,7 +373,11 @@ private fun MutableGameState.eatShots(passSequence: Int) {
 /** Spends [shot] into the field at [index], counting it against the field's budget. */
 private fun MutableGameState.eatShot(index: Int, shot: Projectile): Boolean {
     val table = combatFieldTable
-    val cause = if (table.source(index) == FieldSource.SKILL) EraseCause.SKILL else EraseCause.REACTION
+    val cause = when (table.source(index)) {
+        FieldSource.SKILL -> EraseCause.SKILL
+        FieldSource.ITEM -> EraseCause.ITEM
+        FieldSource.REACTION -> EraseCause.REACTION
+    }
     if (!eraseHostileShot(shot, cause, shot.x, shot.y)) return false
     table[index, FieldCell.CHARGE] = table[index, FieldCell.CHARGE] + 1f
     table.touch()
@@ -353,7 +406,7 @@ private fun MutableGameState.bendShots(passSequence: Int, delta: Float) {
     val maxTurn = reactionValue(ReactionId.MAGNETIZE, ATTRACTOR_SHOT_TURN_VALUE) * delta
     for (index in 0 until table.count) {
         if (table.sequence(index) >= passSequence || table.kind(index) != CombatFieldKind.ATTRACTOR) continue
-        if (table.source(index) != FieldSource.REACTION) continue
+        if (table.source(index) == FieldSource.SKILL) continue
         val fieldX = table[index, FieldCell.X]
         val fieldY = table[index, FieldCell.Y]
         for (shotIndex in projectiles.indices) {
@@ -412,20 +465,24 @@ private fun MutableGameState.pullsPickups(index: Int, accretion: Boolean): Boole
         kind == CombatFieldKind.GRAVITY_WELL && source == FieldSource.SKILL
 }
 
-/** A field's last moment: a star implodes (Accretion), a fed Maw pops, a Gravity Well latches and collapses. */
+/**
+ * A field's last moment: a star implodes (Accretion), a fed Maw (a reaction's or an item zone's) pops, a Gravity
+ * Well latches and collapses.
+ */
 private fun MutableGameState.onFieldExpired(index: Int) {
     val table = combatFieldTable
     if (table.source(index) == FieldSource.SKILL) {
         if (table.kind(index) == CombatFieldKind.GRAVITY_WELL) gravityWellClosed(index)
         return
     }
-    if (table.source(index) != FieldSource.REACTION || table.hasFlag(index, FieldFlags.KEYSTONE) && table.kind(index) == CombatFieldKind.FUSION) return
+    if (table.source(index) == FieldSource.ITEM && table.kind(index) != CombatFieldKind.NULL_WELL) return
+    if (table.hasFlag(index, FieldFlags.KEYSTONE) && table.kind(index) == CombatFieldKind.FUSION) return
     val x = table[index, FieldCell.X]
     val y = table[index, FieldCell.Y]
     val radius = table[index, FieldCell.RADIUS]
     when (table.kind(index)) {
         CombatFieldKind.FUSION -> if (hasVerb(ReactionId.FUSION)) {
-            hurlOccupants(x, y, radius, reactionValue(ReactionId.FUSION, ACCRETION_THROW_VALUE))
+            hurlOccupants(x, y, radius, tunedForce(ReactionId.FUSION, reactionValue(ReactionId.FUSION, ACCRETION_THROW_VALUE)))
             val latch = latchedVacuumActive()
             for (pickupIndex in pickups.indices) {
                 val pickup = pickups[pickupIndex]
@@ -436,7 +493,7 @@ private fun MutableGameState.onFieldExpired(index: Int) {
         CombatFieldKind.NULL_WELL -> if (hasVerb(ReactionId.NULL_WELL) &&
             table[index, FieldCell.CHARGE] >= reactionValue(ReactionId.NULL_WELL, MAW_POP_VALUE)
         ) {
-            hurlOccupants(x, y, radius, reactionValue(ReactionId.NULL_WELL, MAW_THROW_VALUE))
+            hurlOccupants(x, y, radius, tunedForce(ReactionId.NULL_WELL, reactionValue(ReactionId.NULL_WELL, MAW_THROW_VALUE)))
             shockwave(x, y, 0.3f, radius, FxColorCode.elementTone(StatusElement.VOID))
         }
         else -> Unit
@@ -487,25 +544,39 @@ internal fun MutableGameState.onRotWellDeath(enemy: Enemy) {
 
 /**
  * Which field kinds the Core stands in (one bit per [CombatFieldKind] ordinal), with each field's inside flag.
- * Standing in a reaction's Time Bubble hastens the skills.
+ * Standing in a reaction's or an item's Time Bubble hastens the skills. The first field the Core entered since the
+ * last pass fires FIELD_ENTER clauses, at most once per [FIELD_ENTER_GATE_SECONDS].
  */
 private fun MutableGameState.updateCoreFieldMask(delta: Float) {
     val table = combatFieldTable
     var mask = 0
     var haste = false
+    var entered = -1
     for (index in 0 until table.count) {
         val inside = fieldContains(index, coreX, coreY, 0f)
         if (inside) {
             mask = mask or (1 shl table.kind(index).ordinal)
-            if (table.kind(index) == CombatFieldKind.TIME_BUBBLE && table.source(index) == FieldSource.REACTION &&
+            if (table.kind(index) == CombatFieldKind.TIME_BUBBLE && table.source(index) != FieldSource.SKILL &&
                 !table.hasFlag(index, FieldFlags.KEYSTONE)
             ) haste = true
+            if (entered < 0 && !table.hasFlag(index, FieldFlags.CORE_INSIDE)) entered = index
         }
         table.setFlag(index, FieldFlags.CORE_INSIDE, inside)
     }
     coreFieldMask = mask
     if (haste && hasVerb(ReactionId.STASIS)) refundAllSkills((reactionValue(ReactionId.STASIS, BUBBLE_HASTE_VALUE) - 1f) * delta)
+    if (entered >= 0 && fieldEnterReadyAt <= elapsed && listens(EffectTrigger.FIELD_ENTER)) {
+        fieldEnterReadyAt = elapsed + FIELD_ENTER_GATE_SECONDS
+        val reaction = if (table.source(entered) == FieldSource.REACTION) ReactionId.entries.getOrNull(table.owner(entered)) else null
+        fireClauses(
+            EffectTrigger.FIELD_ENTER, element = table.element(entered), reaction = reaction,
+            originX = table[entered, FieldCell.X], originY = table[entered, FieldCell.Y],
+        )
+    }
 }
+
+/** FIELD_ENTER fires at most this often. */
+internal const val FIELD_ENTER_GATE_SECONDS: Float = 0.5f
 
 /** True while the Core stands in a field of [kind]. */
 internal fun MutableGameState.coreInField(kind: CombatFieldKind): Boolean = coreFieldMask and (1 shl kind.ordinal) != 0

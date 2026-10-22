@@ -905,6 +905,8 @@ class GameplayReductionIsolationTest {
         aftershockDamage1 = 7f
         shotErasedDispatches = 2
         markDispatches = 1
+        shotsErased = 5L
+        dashHeatBank = 4.5f
         pendingSkillDrafts = 1
         pendingRankUpOffers = 1
         skillBufferMask = 0b101
@@ -1220,6 +1222,8 @@ class GameplayReductionIsolationTest {
             float("aftershockDamage1", aftershockDamage1)
             value("shotErasedDispatches", shotErasedDispatches)
             value("markDispatches", markDispatches)
+            value("shotsErased", shotsErased)
+            float("dashHeatBank", dashHeatBank)
             value("pendingSkillDrafts", pendingSkillDrafts)
             value("pendingRankUpOffers", pendingRankUpOffers)
             value("skillLoadout", skillLoadout.toString())

@@ -601,6 +601,7 @@ internal fun MutableGameState.resolvePickupCollection() {
                     onCharacterDataPickup()
                     gainData(dataGain * content.tempo.dataPickupMultiplier * (1f + matrix.pickupValueBonus))
                     fireClauses(EffectTrigger.PICKUP)
+                    dataPickupRechargesSkills()
                 }
                 PickupType.KEY -> {
                     keys++

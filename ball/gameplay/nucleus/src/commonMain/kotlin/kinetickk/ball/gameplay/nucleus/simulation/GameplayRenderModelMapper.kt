@@ -559,7 +559,11 @@ private fun MutableGameState.skillSlotProjection(slot: Int): SkillSlotProjection
     val values = content.skill(id).rank(skillLoadout.rank(slot)).values
     val readyAt = runtime[slot, SkillCell.READY_AT]
     val cooldown = runtime[slot, SkillCell.LAST_COOLDOWN]
-    val ready = elapsed >= readyAt
+    // With Skill Charges the slot shows its held charges; the cooldown then fills the next one.
+    val charged = build.skillCharges
+    val held = if (charged) runtime[slot, SkillCell.CHARGES].toInt().coerceIn(0, MAX_SKILL_CHARGES.toInt()) else 0
+    val recharging = if (charged) held < MAX_SKILL_CHARGES.toInt() && elapsed < readyAt else elapsed < readyAt
+    val ready = if (charged) held >= 1 else elapsed >= readyAt
     val activeSeconds = when (id) {
         SkillId.MASS_DRIVER, SkillId.NULL_SHROUD, SkillId.DUAL_INFUSION -> values[0]
         SkillId.SLINGSHOT -> values[SLINGSHOT_WINDOW_VALUE]
@@ -575,10 +579,10 @@ private fun MutableGameState.skillSlotProjection(slot: Int): SkillSlotProjection
     return SkillSlotProjection(
         skill = id.ordinal,
         rank = skillLoadout.rank(slot),
-        cooldown01 = if (ready || cooldown <= 0f) 0f else ((readyAt - elapsed) / cooldown).coerceIn(0f, 1f),
+        cooldown01 = if (!recharging || cooldown <= 0f) 0f else ((readyAt - elapsed) / cooldown).coerceIn(0f, 1f),
         ready = ready,
-        charges = if (ready) 1 else 0,
-        maxCharges = 1,
+        charges = if (charged) held else if (ready) 1 else 0,
+        maxCharges = if (charged) MAX_SKILL_CHARGES.toInt() else 1,
         active01 = if (activeSeconds > 0f) remainingShare(runtime[slot, SkillCell.ACTIVE_UNTIL], activeSeconds) else 0f,
         pending01 = if (pending && pendingSeconds > 0f) ((pendingAt - elapsed) / pendingSeconds).coerceIn(0f, 1f) else 0f,
         anchorX = if (pending) runtime[slot, SkillCell.ANCHOR_X] else 0f,

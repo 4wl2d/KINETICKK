@@ -299,6 +299,12 @@ internal fun MutableGameState.performDash() {
             cost = 0f
         }
         if (!crescent) voidBlink(anchor, directionX, directionY, anchorDistance, targetX, targetY)
+        onMarkCashed(anchor, ReactionId.ANNIHILATE, null)
+    }
+    // Prime Dash: an item made this Dash free.
+    if (cost > 0f && primedDashUntil > elapsed) {
+        primedDashUntil = 0f
+        cost = 0f
     }
     if (cost > 0f && freeDashPrimed) {
         freeDashPrimed = false
@@ -331,6 +337,7 @@ internal fun MutableGameState.performDash() {
     }
     val before = heat
     heat += cost
+    bankDashHeat(cost)
     if (heat > MutableGameState.MAX_HEAT && build.upside(RelicId.FURNACE_COVENANT)) {
         // Heat past full burns integrity instead of locking the Dash.
         loseIntegrity((heat - MutableGameState.MAX_HEAT) * 0.5f)

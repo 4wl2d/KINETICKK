@@ -47,6 +47,13 @@ internal fun MutableGameState.updateSkills(delta: Float) {
     if (phase == kinetickk.ball.gameplay.nucleus.render.GamePhase.RUNNING) updateApex(delta)
 }
 
+/** Skill Recharge (buffs and while-modifiers): cooldowns tick faster by its amount, through the refund bank. */
+private fun MutableGameState.rechargeSkills(delta: Float) {
+    val recharge = buffAmount(kinetickk.ball.content.api.BuffStat.SKILL_RECHARGE) +
+        whileAmount(kinetickk.ball.content.api.BuffStat.SKILL_RECHARGE, null)
+    if (recharge > 0f) refundAllSkills(recharge * delta)
+}
+
 private fun MutableGameState.updateSkillSlots(delta: Float) {
     val loadout = skillLoadout
     if (loadout.ownedCount == 0) {
@@ -54,6 +61,8 @@ private fun MutableGameState.updateSkillSlots(delta: Float) {
         skillBufferTime = 0f
         return
     }
+    rechargeSkills(delta)
+    if (build.skillCharges) for (slot in 0 until SkillRuntime.SLOTS) if (!loadout.isEmpty(slot)) accrueSkillCharges(slot)
     if (skillBufferMask != 0) {
         skillBufferTime = max(0f, skillBufferTime - delta)
         if (skillBufferTime <= 0f) {
@@ -126,7 +135,9 @@ private fun MutableGameState.updatePendingSkillEffect(slot: Int, id: SkillId) {
 internal fun MutableGameState.castSkill(slot: Int): Boolean {
     val id = skillLoadout.skill(slot) ?: return false
     val runtime = skillRuntime
-    if (elapsed < runtime[slot, SkillCell.READY_AT]) {
+    val charged = build.skillCharges
+    if (charged) accrueSkillCharges(slot)
+    if (if (charged) !chargeReady(slot) else elapsed < runtime[slot, SkillCell.READY_AT]) {
         refuseSkill(slot, SkillSlotProjection.REFUSAL_COOLING)
         return false
     }
@@ -165,11 +176,19 @@ internal fun MutableGameState.castSkill(slot: Int): Boolean {
         radius = resolveSkillCast(slot, id, rank, values, aimX, aimY, anchorX, anchorY, target)
     }
     val primary = enemyById(primaryId) ?: target
-    var cooldown = definition.rank(rank).cooldownSeconds * max(MIN_SKILL_COOLDOWN_SCALE, build.skillCooldownScale)
+    var cooldown = definition.rank(rank).cooldownSeconds * max(MIN_SKILL_COOLDOWN_SCALE, build.skillCooldownScale(definition.element))
     if (prismDiscount) cooldown *= PRISM_SKILL_COOLDOWN
     cooldown = max(MIN_SKILL_RECAST_SECONDS, cooldown)
+    if (charged) {
+        // A charge recharges on the cooldown × 1.2; a full slot starts recharging, a recharging one keeps its clock.
+        cooldown *= SKILL_CHARGE_RECHARGE
+        val held = runtime[slot, SkillCell.CHARGES]
+        runtime[slot, SkillCell.CHARGES] = held - 1f
+        if (held >= MAX_SKILL_CHARGES || runtime[slot, SkillCell.READY_AT] <= elapsed) runtime[slot, SkillCell.READY_AT] = elapsed + cooldown
+    } else {
+        runtime[slot, SkillCell.READY_AT] = elapsed + cooldown
+    }
     runtime[slot, SkillCell.LAST_COOLDOWN] = cooldown
-    runtime[slot, SkillCell.READY_AT] = elapsed + cooldown
     runtime[slot, SkillCell.REFUNDED] = 0f
     runtime[slot, SkillCell.CAST_AT] = elapsed
     runtime[slot, SkillCell.CAST_COUNT] = runtime[slot, SkillCell.CAST_COUNT] + 1f
@@ -177,8 +196,52 @@ internal fun MutableGameState.castSkill(slot: Int): Boolean {
     onCharacterSkillCast(slot, anchorX, anchorY, primary)
     emitVisualFx(VisualFxCue.SkillCast(id, anchorX, anchorY, aimX, aimY, radius, rank))
     emitSound(GameplayAudioCue.SKILL)
+    // Skills Cost Heat: each cast heats the Core.
+    if (build.skillsCostHeat > 0f) {
+        val before = heat
+        heat = min(MutableGameState.MAX_HEAT, heat + build.skillsCostHeat)
+        applyOverheatEdge(before)
+    }
+    if (listens(kinetickk.ball.content.api.EffectTrigger.SKILL_CAST)) {
+        val origin = primary?.takeIf { it.alive }
+        fireClauses(
+            kinetickk.ball.content.api.EffectTrigger.SKILL_CAST, origin, element = skillElement(id), skill = id,
+            originX = if (origin == null) anchorX else Float.NaN, originY = if (origin == null) anchorY else Float.NaN,
+        )
+    }
     return true
 }
+
+/**
+ * SkillCharges: [slot] gains the charges whose recharge completed (at most [MAX_SKILL_CHARGES]); a charge still
+ * missing keeps recharging from where the last one finished.
+ */
+internal fun MutableGameState.accrueSkillCharges(slot: Int) {
+    val runtime = skillRuntime
+    var held = runtime[slot, SkillCell.CHARGES]
+    var readyAt = runtime[slot, SkillCell.READY_AT]
+    while (held < MAX_SKILL_CHARGES && elapsed >= readyAt) {
+        held += 1f
+        if (held < MAX_SKILL_CHARGES) readyAt += max(MIN_SKILL_RECAST_SECONDS, runtime[slot, SkillCell.LAST_COOLDOWN])
+    }
+    if (held != runtime[slot, SkillCell.CHARGES]) runtime[slot, SkillCell.CHARGES] = held
+    if (readyAt != runtime[slot, SkillCell.READY_AT]) runtime[slot, SkillCell.READY_AT] = readyAt
+}
+
+/** With charges, [slot] casts while it holds one and its last cast is at least the recast floor ago. */
+private fun MutableGameState.chargeReady(slot: Int): Boolean {
+    val runtime = skillRuntime
+    if (runtime[slot, SkillCell.CHARGES] < 1f) return false
+    return runtime[slot, SkillCell.CAST_COUNT] < 1f || elapsed >= runtime[slot, SkillCell.CAST_AT] + MIN_SKILL_RECAST_SECONDS
+}
+
+/** The element [id] casts with: the attuned element when the build attunes skills, else its own (null: element-less). */
+internal fun MutableGameState.skillElement(id: SkillId): StatusElement? =
+    build.skillAttunement?.let(::resolvePick) ?: content.skill(id).element
+
+/** [native], or the attuned element when the build attunes skills (and the pick resolves). */
+private fun MutableGameState.attuned(native: StatusElement): StatusElement =
+    build.skillAttunement?.let(::resolvePick) ?: native
 
 /** Shows why a buffered cast waits, once per buffered request. */
 private fun MutableGameState.refuseSkill(slot: Int, refusal: Int) {
@@ -198,6 +261,7 @@ private fun MutableGameState.refuseSkill(slot: Int, refusal: Int) {
 private inline fun MutableGameState.withSkillEffect(slot: Int, effect: () -> Unit): Int {
     castSlot = slot
     castHits = 0
+    castAttunedStacks = 0
     castPrimaryId = -1
     castBossHitFirst = -1
     castBossHitSecond = -1
@@ -207,6 +271,7 @@ private inline fun MutableGameState.withSkillEffect(slot: Int, effect: () -> Uni
     } finally {
         castSlot = -1
         castHits = 0
+        castAttunedStacks = 0
         castPrimaryId = -1
         castBossHitFirst = -1
         castBossHitSecond = -1
@@ -235,11 +300,16 @@ internal fun MutableGameState.nearestSkillTarget(pointerX: Float, pointerY: Floa
     return best
 }
 
-/** Skill power: the run scale times the build's skill bonus. Every non-kinetic skill number scales with it. */
-internal fun MutableGameState.skillPower(): Float = runScale() * (1f + build.skillPower)
+/**
+ * Skill power of [id]: the run scale times one plus the build's skill bonus for its element, Skill Power buffs and
+ * while-modifiers. Every non-kinetic skill number scales with it.
+ */
+internal fun MutableGameState.skillPower(id: SkillId): Float = runScale() * kineticSkillScale(id)
 
-/** Kinetic skills scale off impact power, which already carries the run growth: only the build bonus applies. */
-private fun MutableGameState.kineticSkillScale(): Float = 1f + build.skillPower
+/** Kinetic skills scale off impact power, which already carries the run growth: only the build and buff bonuses apply. */
+private fun MutableGameState.kineticSkillScale(id: SkillId): Float =
+    1f + build.skillPowerBonus(content.skill(id).element) + buffAmount(kinetickk.ball.content.api.BuffStat.SKILL_POWER) +
+        whileAmount(kinetickk.ball.content.api.BuffStat.SKILL_POWER, null)
 
 /** The Ring's Halo widens its own self-centred skills (×1 at the smallest Halo, at most ×1.5). */
 private fun MutableGameState.selfSkillRadiusScale(): Float =
@@ -260,11 +330,26 @@ private fun MutableGameState.skillHit(enemy: Enemy, amount: Float, element: Stat
     if (result.amount <= 0f) return false
     recordSkillDamage(castSlot, min(result.amount, integrity.coerceAtLeast(0f)))
     noteCastTarget(enemy)
+    attuneHit(enemy)
     if (castHits < MAX_SKILL_HITS_PER_CAST) {
         castHits++
-        onSkillHit(enemy)
+        onSkillHit(enemy, result.amount)
     }
     return true
+}
+
+/**
+ * SkillAttunement: an element-less skill's cast applies one stack of the attuned element to each enemy it damages,
+ * at most [MAX_ATTUNED_STACKS_PER_CAST] per cast.
+ */
+private fun MutableGameState.attuneHit(enemy: Enemy) {
+    val pick = build.skillAttunement ?: return
+    if (castSlot < 0 || castAttunedStacks >= MAX_ATTUNED_STACKS_PER_CAST || !enemy.alive) return
+    val id = skillLoadout.skill(castSlot) ?: return
+    if (content.skill(id).element != null) return
+    val element = resolvePick(pick) ?: return
+    castAttunedStacks++
+    applyStatus(enemy, element, 1, 0)
 }
 
 /** Skill field damage of [slot] (a tick, a zap, a returned shot): one capped instance, no skill hit. */
@@ -286,9 +371,12 @@ private fun MutableGameState.noteCastTarget(enemy: Enemy) {
     if (castSlot >= 0 && castPrimaryId < 0) castPrimaryId = enemy.id
 }
 
-/** A skill hit on [enemy]: the Triangle marks it for Puncture. */
-private fun MutableGameState.onSkillHit(enemy: Enemy) {
+/** A skill hit on [enemy] for [dealt]: the Triangle marks it for Puncture and SKILL_HIT clauses fire. */
+private fun MutableGameState.onSkillHit(enemy: Enemy, dealt: Float) {
     if (enemy.alive) markForPuncture(enemy)
+    val id = skillLoadout.skill(castSlot) ?: return
+    if (!listens(kinetickk.ball.content.api.EffectTrigger.SKILL_HIT)) return
+    fireClauses(kinetickk.ball.content.api.EffectTrigger.SKILL_HIT, enemy, dealt, element = skillElement(id), skill = id)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -313,14 +401,15 @@ private fun MutableGameState.resolveSkillCast(
             val vented = min(heat, values[SOLAR_VENT_CAP])
             heat -= vented
             val radius = values[SOLAR_RADIUS] * selfSkillRadiusScale()
-            val damage = (values[SOLAR_DAMAGE] + values[SOLAR_DAMAGE_PER_HEAT] * vented) * skillPower()
+            val damage = (values[SOLAR_DAMAGE] + values[SOLAR_DAMAGE_PER_HEAT] * vented) * skillPower(id)
             val scorch = min(SOLAR_SCORCH_CAP, values[SOLAR_SCORCH].toInt() + floor(vented / SOLAR_HEAT_PER_SCORCH).toInt())
+            val element = attuned(StatusElement.THERMAL)
             forEachEnemyWithin(coreX, coreY, radius) { enemy ->
-                skillHit(enemy, damage, StatusElement.THERMAL)
-                if (enemy.alive) applyStatus(enemy, StatusElement.THERMAL, scorch, 0)
+                skillHit(enemy, damage, element)
+                if (enemy.alive) applyStatus(enemy, element, scorch, 0)
                 if (rankThree && enemy.alive &&
-                    stacks(enemy, StatusElement.THERMAL) >= breakThreshold(StatusElement.THERMAL, enemy) - SKILL_BREAK_MARGIN
-                ) forceElementBreak(enemy, StatusElement.THERMAL)
+                    stacks(enemy, element) >= breakThreshold(element, enemy) - SKILL_BREAK_MARGIN
+                ) forceElementBreak(enemy, element)
             }
             shockwave(coreX, coreY, 0.35f, radius, FxColorCode.elementTone(StatusElement.THERMAL))
             prepareGhost(slot, damage, radius)
@@ -340,7 +429,7 @@ private fun MutableGameState.resolveSkillCast(
             addField(
                 CombatFieldKind.FROST_LINE, FieldSource.SKILL, slot, centreX - aimY * half, centreY + aimX * half,
                 radius = values[FROST_LINE_HALF_WIDTH], seconds = values[FROST_LINE_SECONDS], damagePerSecond = 0f,
-                element = StatusElement.CRYO, stacksPerTick = values[FROST_LINE_CHILL].toInt(), generation = 0,
+                element = attuned(StatusElement.CRYO), stacksPerTick = values[FROST_LINE_CHILL].toInt(), generation = 0,
                 x2 = centreX + aimY * half, y2 = centreY - aimX * half,
                 flags = if (rankThree) FieldFlags.RANK_III else 0, power = values[FROST_LINE_BOLTS],
             )
@@ -348,17 +437,18 @@ private fun MutableGameState.resolveSkillCast(
         }
         SkillId.FROST_SNAP -> {
             val radius = values[FROST_SNAP_RADIUS] * selfSkillRadiusScale()
-            val shatter = impactPower(max(speed, FROST_SNAP_MIN_SPEED)) * values[FROST_SNAP_SHATTER] * kineticSkillScale()
+            val shatter = impactPower(max(speed, FROST_SNAP_MIN_SPEED)) * values[FROST_SNAP_SHATTER] * kineticSkillScale(id)
+            val element = attuned(StatusElement.CRYO)
             forEachEnemyWithin(coreX, coreY, radius) { enemy ->
                 val brittle = enemy.status[StatusCell.BRITTLE] > 0f
                 if (isFrozen(enemy) || brittle) {
                     if (brittle) enemy.status[StatusCell.BRITTLE] = 0f
                     skillHit(enemy, shatter, null, kinetic = true)
                 }
-                if (enemy.alive) applyStatus(enemy, StatusElement.CRYO, values[FROST_SNAP_CHILL].toInt(), 0)
+                if (enemy.alive) applyStatus(enemy, element, values[FROST_SNAP_CHILL].toInt(), 0)
                 if (rankThree && enemy.alive &&
-                    stacks(enemy, StatusElement.CRYO) >= breakThreshold(StatusElement.CRYO, enemy) - SKILL_BREAK_MARGIN
-                ) forceElementBreak(enemy, StatusElement.CRYO)
+                    stacks(enemy, element) >= breakThreshold(element, enemy) - SKILL_BREAK_MARGIN
+                ) forceElementBreak(enemy, element)
             }
             runtime[slot, SkillCell.AUX_UNTIL] = elapsed + values[FROST_SNAP_COILED_SECONDS]
             shockwave(coreX, coreY, 0.3f, radius, FxColorCode.elementTone(StatusElement.CRYO))
@@ -367,7 +457,7 @@ private fun MutableGameState.resolveSkillCast(
         }
         SkillId.ARC_HOOK -> {
             val hooked = target ?: return 0f
-            applyStatus(hooked, StatusElement.ION, values[ARC_HOOK_CHARGE].toInt(), 0)
+            applyStatus(hooked, attuned(StatusElement.ION), values[ARC_HOOK_CHARGE].toInt(), 0)
             noteCastTarget(hooked)
             val dx = hooked.x - coreX
             val dy = hooked.y - coreY
@@ -387,17 +477,17 @@ private fun MutableGameState.resolveSkillCast(
         SkillId.STORM_COIL -> {
             addField(
                 CombatFieldKind.STORM_COIL, FieldSource.SKILL, slot, anchorX, anchorY, radius = values[STORM_COIL_RADIUS],
-                seconds = values[STORM_COIL_SECONDS], damagePerSecond = 0f, element = StatusElement.ION,
+                seconds = values[STORM_COIL_SECONDS], damagePerSecond = 0f, element = attuned(StatusElement.ION),
                 stacksPerTick = values[STORM_COIL_TARGETS].toInt(), generation = 0,
-                flags = if (rankThree) FieldFlags.RANK_III else 0, power = values[STORM_COIL_DAMAGE] * skillPower(),
+                flags = if (rankThree) FieldFlags.RANK_III else 0, power = values[STORM_COIL_DAMAGE] * skillPower(id),
             )
             values[STORM_COIL_RADIUS]
         }
         SkillId.GRAVITY_WELL -> {
             addField(
                 CombatFieldKind.GRAVITY_WELL, FieldSource.SKILL, slot, anchorX, anchorY, radius = values[GRAVITY_WELL_RADIUS],
-                seconds = values[GRAVITY_WELL_SECONDS], damagePerSecond = values[GRAVITY_WELL_DPS] * skillPower(),
-                element = StatusElement.GRAVITIC, stacksPerTick = 1, generation = 0, pull = values[GRAVITY_WELL_PULL],
+                seconds = values[GRAVITY_WELL_SECONDS], damagePerSecond = values[GRAVITY_WELL_DPS] * skillPower(id),
+                element = attuned(StatusElement.GRAVITIC), stacksPerTick = 1, generation = 0, pull = values[GRAVITY_WELL_PULL],
                 flags = if (rankThree) FieldFlags.RANK_III else 0, power = values[GRAVITY_WELL_DATA_RANGE],
             )
             values[GRAVITY_WELL_RADIUS]
@@ -413,8 +503,9 @@ private fun MutableGameState.resolveSkillCast(
             val radius = values[SPORES_RADIUS]
             runtime[slot, SkillCell.STORED] = 0f
             runtime[slot, SkillCell.AUX_COUNT] = 0f
+            val element = attuned(StatusElement.ENTROPY)
             forEachEnemyWithin(anchorX, anchorY, radius) { enemy ->
-                applyStatus(enemy, StatusElement.ENTROPY, values[SPORES_DECAY].toInt(), 0)
+                applyStatus(enemy, element, values[SPORES_DECAY].toInt(), 0)
                 if (enemy.alive) {
                     setMark(enemy, MarkKind.SPORED, values[SPORES_SECONDS])
                     noteCastTarget(enemy)
@@ -425,7 +516,7 @@ private fun MutableGameState.resolveSkillCast(
         }
         SkillId.ENTROPIC_TIDE -> {
             val radius = values[TIDE_RADIUS] * selfSkillRadiusScale()
-            val scale = values[TIDE_SCALE] * kineticSkillScale()
+            val scale = values[TIDE_SCALE] * kineticSkillScale(id)
             var consumed = 0
             forEachEnemyWithin(coreX, coreY, radius) { enemy ->
                 val decay = stacks(enemy, StatusElement.ENTROPY)
@@ -433,7 +524,7 @@ private fun MutableGameState.resolveSkillCast(
                 val amount = detonateDecayAmount(enemy, StatusElement.ENTROPY) * scale
                 enemy.status[StatusCell.STACKS + StatusElement.ENTROPY.ordinal] = 0f
                 consumed += decay
-                skillHit(enemy, amount, StatusElement.ENTROPY)
+                skillHit(enemy, amount, attuned(StatusElement.ENTROPY))
             }
             if (consumed > 0) {
                 val mended = min(consumed, values[TIDE_HEAL_CAP].toInt()) * values[TIDE_HEAL_PER_STACK]
@@ -449,13 +540,14 @@ private fun MutableGameState.resolveSkillCast(
         }
         SkillId.SONIC_BOOM -> {
             val range = values[BOOM_RANGE]
-            val damage = values[BOOM_DAMAGE] * skillPower()
+            val damage = values[BOOM_DAMAGE] * skillPower(id)
             val cone = cos(BOOM_HALF_ANGLE_DEGREES * RADIANS_PER_DEGREE)
+            val element = attuned(StatusElement.SONIC)
             forEachEnemyWithin(coreX, coreY, range) { enemy ->
                 if (!inCone(enemy.x, enemy.y, aimX, aimY, cone)) return@forEachEnemyWithin
-                skillHit(enemy, damage, StatusElement.SONIC)
+                skillHit(enemy, damage, element)
                 if (!enemy.alive) return@forEachEnemyWithin
-                applyStatus(enemy, StatusElement.SONIC, values[BOOM_RESONANCE].toInt(), 0)
+                applyStatus(enemy, element, values[BOOM_RESONANCE].toInt(), 0)
                 if (!enemy.alive) return@forEachEnemyWithin
                 hurl(coreX, coreY, enemy, values[BOOM_PUSH])
                 if (rankThree && !enemy.isBossClass) setMark(enemy, MarkKind.BOOMED, BOOMED_SECONDS)
@@ -477,7 +569,7 @@ private fun MutableGameState.resolveSkillCast(
             val nextBeat = (floor(elapsed / BEAT_PERIOD) + 1f) * BEAT_PERIOD
             addField(
                 CombatFieldKind.ECHO_RING, FieldSource.SKILL, slot, anchorX, anchorY, radius = values[RESONATOR_RADIUS],
-                seconds = values[RESONATOR_SECONDS], damagePerSecond = 0f, element = StatusElement.SONIC,
+                seconds = values[RESONATOR_SECONDS], damagePerSecond = 0f, element = attuned(StatusElement.SONIC),
                 stacksPerTick = values[RESONATOR_ECHOES].toInt(), generation = 0,
                 tickClock = BEAT_PERIOD - (nextBeat - elapsed), power = values[RESONATOR_SCALE],
                 flags = if (rankThree) FieldFlags.RANK_III else 0,
@@ -501,7 +593,7 @@ private fun MutableGameState.resolveSkillCast(
             0f
         }
         SkillId.FULL_STOP -> {
-            val impact = impactPower(speed) * values[FULL_STOP_SCALE] * kineticSkillScale()
+            val impact = impactPower(speed) * values[FULL_STOP_SCALE] * kineticSkillScale(id)
             velocityX = 0f
             velocityY = 0f
             val radius = values[FULL_STOP_RADIUS] * selfSkillRadiusScale()
@@ -556,10 +648,11 @@ private fun MutableGameState.meteorLanding(slot: Int) {
     val x = runtime[slot, SkillCell.ANCHOR_X]
     val y = runtime[slot, SkillCell.ANCHOR_Y]
     val radius = values[METEOR_RADIUS]
-    val damage = values[METEOR_DAMAGE] * skillPower()
+    val damage = values[METEOR_DAMAGE] * skillPower(SkillId.METEOR)
+    val element = attuned(StatusElement.THERMAL)
     forEachEnemyWithin(x, y, radius) { enemy ->
-        skillHit(enemy, damage, StatusElement.THERMAL)
-        if (enemy.alive) applyStatus(enemy, StatusElement.THERMAL, values[METEOR_SCORCH].toInt(), 0)
+        skillHit(enemy, damage, element)
+        if (enemy.alive) applyStatus(enemy, element, values[METEOR_SCORCH].toInt(), 0)
         if (enemy.alive) hurl(x, y, enemy, values[METEOR_HURL])
     }
     var flags = 0
@@ -618,7 +711,7 @@ private fun MutableGameState.voidStep(slot: Int, values: List<Float>, aimX: Floa
             if (!enemy.alive || isShifting(enemy)) continue
             if (!segmentCircleIntersects(startX, startY, endX, endY, enemy.x, enemy.y, enemy.radius + coreRadius)) continue
             enemy.status[StatusCell.BRITTLE] = 1f
-            applyStatus(enemy, StatusElement.VOID, 1, 0)
+            applyStatus(enemy, attuned(StatusElement.VOID), 1, 0)
             noteCastTarget(enemy)
         }
     }
@@ -642,10 +735,11 @@ private fun MutableGameState.voidRift(slot: Int) {
     val x = runtime[slot, SkillCell.ANCHOR_X]
     val y = runtime[slot, SkillCell.ANCHOR_Y]
     val radius = values[VOID_STEP_RIFT_RADIUS]
-    val damage = values[VOID_STEP_RIFT_DAMAGE] * skillPower()
+    val damage = values[VOID_STEP_RIFT_DAMAGE] * skillPower(SkillId.VOID_STEP)
+    val element = attuned(StatusElement.VOID)
     forEachEnemyWithin(x, y, radius) { enemy ->
-        skillHit(enemy, damage, StatusElement.VOID)
-        if (enemy.alive) applyStatus(enemy, StatusElement.VOID, values[VOID_STEP_HOLLOW].toInt(), 0)
+        skillHit(enemy, damage, element)
+        if (enemy.alive) applyStatus(enemy, element, values[VOID_STEP_HOLLOW].toInt(), 0)
     }
     shockwave(x, y, 0.3f, radius, FxColorCode.elementTone(StatusElement.VOID))
     emitVisualFx(VisualFxCue.SkillCast(SkillId.VOID_STEP, x, y, 0f, 0f, radius, rank, SkillCueCodes.PHASE_IMPACT))
@@ -679,7 +773,7 @@ private fun MutableGameState.releaseShroud(slot: Int) {
     if (stored <= 0) return
     val targets = pickNearestEnemies(coreX, coreY, values[SHROUD_RANGE], SHROUD_RELEASE_TARGETS)
     if (targets == 0) return
-    val damage = values[SHROUD_DAMAGE] * skillPower()
+    val damage = values[SHROUD_DAMAGE] * skillPower(SkillId.NULL_SHROUD)
     val pierce = if (rank >= ContentBounds.MAX_SKILL_RANK) 1 else 0
     for (shot in 0 until stored) {
         val target = enemyById(skillScratch[shot % targets]) ?: continue
@@ -687,7 +781,7 @@ private fun MutableGameState.releaseShroud(slot: Int) {
         addProjectile(Projectile(
             x = coreX, y = coreY, vx = cos(angle) * SHROUD_SHOT_SPEED, vy = sin(angle) * SHROUD_SHOT_SPEED,
             radius = 5f, life = 2f, hostile = false, damage = damage, pierce = pierce, colorIndex = 2,
-            statusElement = StatusElement.VOID.ordinal, procKey = WeaponRuntime.PROC_SKILL,
+            statusElement = attuned(StatusElement.VOID).ordinal, procKey = WeaponRuntime.PROC_SKILL,
         ))
     }
     emitVisualFx(VisualFxCue.SkillCast(SkillId.NULL_SHROUD, coreX, coreY, 0f, 0f, coreRadius + SHROUD_REACH, rank,
@@ -786,14 +880,14 @@ private fun MutableGameState.ghostRepeat(slot: Int, id: SkillId) {
     val stored = runtime[slot, SkillCell.GHOST_DAMAGE]
     forEachEnemyWithin(x, y, radius) { enemy ->
         when (id) {
-            SkillId.SOLAR_FLARE -> skillHit(enemy, stored * GHOST_REPEAT_SHARE, StatusElement.THERMAL)
+            SkillId.SOLAR_FLARE -> skillHit(enemy, stored * GHOST_REPEAT_SHARE, attuned(StatusElement.THERMAL))
             SkillId.FROST_SNAP -> if (isFrozen(enemy) || enemy.status[StatusCell.BRITTLE] > 0f) {
                 skillHit(enemy, stored * GHOST_REPEAT_SHARE, null, kinetic = true)
             }
             SkillId.FULL_STOP -> skillHit(enemy, stored * GHOST_REPEAT_SHARE, null, kinetic = true)
             // The Tide's repeat reads the Decay now on the enemy and consumes none of it.
             SkillId.ENTROPIC_TIDE -> skillHit(enemy, detonateDecayAmount(enemy, StatusElement.ENTROPY) * stored * GHOST_REPEAT_SHARE,
-                StatusElement.ENTROPY)
+                attuned(StatusElement.ENTROPY))
             else -> Unit
         }
     }
@@ -853,10 +947,11 @@ internal fun MutableGameState.frostLineTick(index: Int) {
     val table = combatFieldTable
     val chill = table[index, FieldCell.STACKS].toInt()
     val rankThree = table.hasFlag(index, FieldFlags.RANK_III)
+    val element = table.element(index) ?: StatusElement.CRYO
     for (enemyIndex in enemies.indices) {
         val enemy = enemies[enemyIndex]
         if (!enemy.alive || !fieldContains(index, enemy.x, enemy.y, enemy.radius)) continue
-        applyStatus(enemy, StatusElement.CRYO, chill, 0)
+        applyStatus(enemy, element, chill, 0)
         if (rankThree && enemy.alive) {
             enemy.status[StatusCell.EMBRITTLED_UNTIL] = max(enemy.status[StatusCell.EMBRITTLED_UNTIL], elapsed + FROST_LINE_EMBRITTLE_SECONDS)
         }
@@ -902,16 +997,17 @@ internal fun MutableGameState.stormCoilZap(index: Int) {
         }
     }
     val link = LinkStyleCode.skill(SkillId.STORM_COIL)
+    val element = table.element(index) ?: StatusElement.ION
     for (pick in 0 until count) {
         val id = when (pick) { 0 -> firstId; 1 -> secondId; else -> thirdId }
         val enemy = enemyById(id) ?: break
         if (!enemy.alive) continue
         addRelicArc(x, y, enemy.x, enemy.y, link)
-        skillFieldHit(table.owner(index), enemy, damage, StatusElement.ION)
-        if (enemy.alive) applyStatus(enemy, StatusElement.ION, 1, 0)
+        skillFieldHit(table.owner(index), enemy, damage, element)
+        if (enemy.alive) applyStatus(enemy, element, 1, 0)
         if (rankThree && enemy.alive &&
-            stacks(enemy, StatusElement.ION) >= breakThreshold(StatusElement.ION, enemy) - SKILL_BREAK_MARGIN
-        ) forceElementBreak(enemy, StatusElement.ION)
+            stacks(enemy, element) >= breakThreshold(element, enemy) - SKILL_BREAK_MARGIN
+        ) forceElementBreak(enemy, element)
     }
 }
 
@@ -923,10 +1019,11 @@ internal fun MutableGameState.resonatorPulse(index: Int) {
     val table = combatFieldTable
     var latest: Enemy? = null
     var latestAt = elapsed - BEAT_PERIOD
+    val element = table.element(index) ?: StatusElement.SONIC
     for (enemyIndex in enemies.indices) {
         val enemy = enemies[enemyIndex]
         if (!enemy.alive || !fieldContains(index, enemy.x, enemy.y, enemy.radius)) continue
-        applyStatus(enemy, StatusElement.SONIC, 1, 0)
+        applyStatus(enemy, element, 1, 0)
     }
     for (enemyIndex in enemies.indices) {
         val enemy = enemies[enemyIndex]
@@ -969,10 +1066,11 @@ internal fun MutableGameState.gravityWellClosed(index: Int) {
     val rank = skillLoadout.rank(table.owner(index)).coerceIn(1, ContentBounds.MAX_SKILL_RANK)
     emitVisualFx(VisualFxCue.SkillCast(SkillId.GRAVITY_WELL, x, y, 0f, 0f, radius, rank, SkillCueCodes.PHASE_IMPACT))
     if (!table.hasFlag(index, FieldFlags.RANK_III)) return
+    val element = table.element(index) ?: StatusElement.GRAVITIC
     for (enemyIndex in enemies.indices) {
         val enemy = enemies[enemyIndex]
         if (!enemy.alive || distanceSquared(x, y, enemy.x, enemy.y) > square(radius + enemy.radius)) continue
-        if (stacks(enemy, StatusElement.GRAVITIC) >= GRAVITY_WELL_COLLAPSE_MASS) forceElementBreak(enemy, StatusElement.GRAVITIC)
+        if (stacks(enemy, element) >= GRAVITY_WELL_COLLAPSE_MASS) forceElementBreak(enemy, element)
     }
 }
 
@@ -1010,11 +1108,12 @@ internal fun MutableGameState.onSkillCoreImpact(enemy: Enemy, coreImpactSpeed: F
         if (!dashContact) onDashHit(enemy, damage)
         markForPuncture(enemy)
         val values = skillValues(hookSlot)
-        val linkDamage = values[ARC_HOOK_LINK_DAMAGE] * skillPower()
+        val linkDamage = values[ARC_HOOK_LINK_DAMAGE] * skillPower(SkillId.ARC_HOOK)
         withSkillEffect(hookSlot) {
+            val element = attuned(StatusElement.ION)
             chain(enemy.x, enemy.y, enemy.id, values[ARC_HOOK_LINKS].toInt(), ARC_HOOK_LINK_RANGE, LinkStyleCode.skill(SkillId.ARC_HOOK)) { link ->
-                skillHit(link, linkDamage, StatusElement.ION)
-                if (link.alive) applyStatus(link, StatusElement.ION, 1, 0)
+                skillHit(link, linkDamage, element)
+                if (link.alive) applyStatus(link, element, 1, 0)
             }
         }
     }
@@ -1024,7 +1123,7 @@ internal fun MutableGameState.onSkillCoreImpact(enemy: Enemy, coreImpactSpeed: F
         val values = skillValues(driver)
         if (coreImpactSpeed >= values[MASS_DRIVER_THRESHOLD]) {
             hurl(coreX, coreY, enemy, values[MASS_DRIVER_THROW])
-            applyStatus(enemy, StatusElement.GRAVITIC, MASS_DRIVER_IMPACT_MASS, 0)
+            applyStatus(enemy, attuned(StatusElement.GRAVITIC), MASS_DRIVER_IMPACT_MASS, 0)
         }
     }
     if (!enemy.alive) return
@@ -1076,10 +1175,13 @@ private fun MutableGameState.infuse(slot: Int, enemy: Enemy, element: StatusElem
 /** A landed slam on [enemy]: a ringing (BOOMED) enemy Shatters, and rank III Mass Driver adds Mass. */
 internal fun MutableGameState.onSkillSlam(enemy: Enemy) {
     if (!enemy.alive) return
-    if (consumeMark(enemy, MarkKind.BOOMED)) forceElementBreak(enemy, StatusElement.SONIC)
+    if (consumeMark(enemy, MarkKind.BOOMED)) {
+        forceElementBreak(enemy, StatusElement.SONIC)
+        onMarkCashed(enemy, null, StatusElement.SONIC)
+    }
     val driver = activeSkillSlot(SkillId.MASS_DRIVER)
     if (driver >= 0 && skillLoadout.rank(driver) >= ContentBounds.MAX_SKILL_RANK && enemy.alive) {
-        applyStatus(enemy, StatusElement.GRAVITIC, 1, 0)
+        applyStatus(enemy, attuned(StatusElement.GRAVITIC), 1, 0)
     }
 }
 
@@ -1180,7 +1282,7 @@ internal fun MutableGameState.catalyze(older: StatusElement, incoming: StatusEle
     if (loadout.ownedCount == 0) return
     for (slot in 0 until SkillRuntime.SLOTS) {
         val id = loadout.skill(slot) ?: continue
-        val element = content.skill(id).element
+        val element = skillElement(id)
         val seconds = when {
             element == null -> CATALYSIS_ELEMENTLESS_SECONDS
             element == older || element == incoming -> CATALYSIS_SECONDS
@@ -1379,6 +1481,11 @@ internal const val MIN_SKILL_COOLDOWN_SCALE: Float = 0.5f
 internal const val MAX_REFUND_SHARE: Float = 0.5f
 /** The first enemies a cast damages are its skill hits. */
 internal const val MAX_SKILL_HITS_PER_CAST: Int = 4
+/** SkillAttunement: an element-less cast applies the attuned element to at most this many enemies. */
+internal const val MAX_ATTUNED_STACKS_PER_CAST: Int = 8
+/** SkillCharges: a slot holds at most this many charges, each recharging on the cooldown × [SKILL_CHARGE_RECHARGE]. */
+internal const val MAX_SKILL_CHARGES: Float = 2f
+internal const val SKILL_CHARGE_RECHARGE: Float = 1.2f
 internal const val CATALYSIS_SECONDS: Float = 0.4f
 internal const val CATALYSIS_ELEMENTLESS_SECONDS: Float = 0.2f
 internal const val PRISM_SKILL_COOLDOWN: Float = 0.85f

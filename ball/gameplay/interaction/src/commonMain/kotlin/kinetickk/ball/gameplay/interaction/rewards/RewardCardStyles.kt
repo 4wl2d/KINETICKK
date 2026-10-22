@@ -17,6 +17,7 @@ import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.WeaponFamily
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.interaction.canvas.elementFill
 import kinetickk.ball.gameplay.interaction.canvas.overlayColor
@@ -374,6 +375,23 @@ private fun EffectClause.watermarkIcon(): KkIcon = when (val action = actions.fi
         action.stat == BuffStat.DAMAGE && trigger == EffectTrigger.OVERHEAT -> KkIcon.FORMS_TRIANGLE
         else -> trigger.watermarkIcon()
     }
+    // A beat coming round again.
+    is EffectAction.RefundSkills -> KkIcon.WEAPONS_RESONANCE_DRUM
+    // The Apex badge.
+    is EffectAction.ChargeApex -> KkIcon.FORMS_STAR
+    // A burst of reactions.
+    is EffectAction.ForceReaction -> KkIcon.WEAPONS_SCATTER_BLOOM
+    // A lens placed in the world.
+    is EffectAction.Zone -> KkIcon.WEAPONS_EVENT_LENS
+    is EffectAction.EraseShots -> KkIcon.WEAPONS_AEGIS_SHARDS
+    // An arc of motion.
+    is EffectAction.CoreImpulse -> KkIcon.FORMS_CRESCENT
+    // A scar left on the target.
+    is EffectAction.ApplyMark -> KkIcon.WEAPONS_HOLLOW_RIFT
+    // A shove.
+    is EffectAction.Throw -> KkIcon.WEAPONS_CONCUSSION_ENGINE
+    // A coiled spring.
+    EffectAction.PrimeDash -> KkIcon.FORMS_SPIRAL
     else -> trigger.watermarkIcon()
 }
 
@@ -396,6 +414,12 @@ private fun EffectTrigger.watermarkIcon(): KkIcon = when (this) {
     EffectTrigger.PICKUP -> KkIcon.SYSTEM_DATA
     EffectTrigger.RICOCHET -> KkIcon.SYSTEM_ANOMALY
     EffectTrigger.SLAM -> KkIcon.SYSTEM_DISMANTLED
+    EffectTrigger.SKILL_CAST -> KkIcon.WEAPONS_SOLAR_SWEEP
+    EffectTrigger.SKILL_HIT -> KkIcon.WEAPONS_HUNTER_SALVO
+    EffectTrigger.APEX -> KkIcon.SYSTEM_ELITE
+    EffectTrigger.FIELD_ENTER -> KkIcon.WEAPONS_GRAVITY_MINES
+    EffectTrigger.SHOT_ERASED -> KkIcon.WEAPONS_AEGIS_SHARDS
+    EffectTrigger.MARK_CONSUMED -> KkIcon.WEAPONS_NULL_LANCE
 }
 
 private fun ItemEffect.watermarkIcon(): KkIcon = when (this) {
@@ -423,11 +447,15 @@ private fun ItemEffect.watermarkIcon(): KkIcon = when (this) {
 }
 
 private fun ItemRule.watermarkIcon(): KkIcon? = when (this) {
-    is ItemRule.WhileModifier -> when (condition) {
+    is ItemRule.WhileModifier -> when (val condition = condition) {
         is EffectCondition.SpeedAtLeast, is EffectCondition.SpeedBelow -> KkIcon.WEAPONS_FLUX_WAKE
         EffectCondition.Braking -> KkIcon.SYSTEM_BRAKE
         EffectCondition.ShieldUp -> KkIcon.SYSTEM_SHIELD
         is EffectCondition.IntegrityBelow -> KkIcon.SYSTEM_INTEGRITY
+        EffectCondition.CoreInField -> KkIcon.WEAPONS_GRAVITY_MINES
+        EffectCondition.ApexActive -> KkIcon.SYSTEM_ELITE
+        is EffectCondition.SkillsCharging -> KkIcon.SYSTEM_CYCLE_CLOCK
+        is EffectCondition.WeaponFamilyIs -> condition.family.watermarkIcon()
         else -> KkIcon.SYSTEM_ANOMALY
     }
     is ItemRule.ElementPotency -> KkIcon.FORMS_TESSERACT
@@ -442,6 +470,26 @@ private fun ItemRule.watermarkIcon(): KkIcon? = when (this) {
     is ItemRule.BonusRerolls, is ItemRule.OfferCards -> KkIcon.SYSTEM_REROLL
     is ItemRule.FreeDash -> KkIcon.SYSTEM_DASH
     is ItemRule.Convert -> KkIcon.SYSTEM_MATTER
+    is ItemRule.ReactionKeystone -> KkIcon.WEAPONS_TETHER_ARC
+    is ItemRule.ReactionTuning -> KkIcon.WEAPONS_PRISM_RELAY
+    is ItemRule.FieldTuning -> KkIcon.WEAPONS_GRAVITY_MINES
+    is ItemRule.SkillCooldown, ItemRule.SkillCharges -> KkIcon.SYSTEM_CYCLE_CLOCK
+    is ItemRule.SkillPower, is ItemRule.SkillAttunement -> KkIcon.WEAPONS_SOLAR_SWEEP
+    is ItemRule.CatalysisRate -> KkIcon.WEAPONS_ARC_COIL
+    is ItemRule.ApexCooldown -> KkIcon.SYSTEM_ELITE
+    is ItemRule.CoreLinkRadius -> KkIcon.SYSTEM_POLARITY
+}
+
+/** A weapon family's mark (a family-gated "while" rule names the family by its emblem weapon or form). */
+private fun WeaponFamily.watermarkIcon(): KkIcon = when (this) {
+    WeaponFamily.MOMENTUM -> KkIcon.WEAPONS_GYRE_DISC
+    WeaponFamily.ORBITAL -> KkIcon.FORMS_DIPOLE
+    WeaponFamily.AURA -> KkIcon.WEAPONS_GLACIER_BELL
+    WeaponFamily.PROJECTILE -> KkIcon.WEAPONS_SCATTER_BLOOM
+    WeaponFamily.TRAP -> KkIcon.WEAPONS_SENTRY_GRID
+    WeaponFamily.CHAIN -> KkIcon.FORMS_PENTAGON
+    WeaponFamily.BEAM -> KkIcon.WEAPONS_SINGULARITY_SPEAR
+    WeaponFamily.PULSE -> KkIcon.WEAPONS_CONCUSSION_ENGINE
 }
 
 /** Each relic's own watermark glyph (its rule in one mark), so relics of one aspect differ. */

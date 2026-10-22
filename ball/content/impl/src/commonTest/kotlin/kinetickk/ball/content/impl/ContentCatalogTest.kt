@@ -580,20 +580,33 @@ class ContentCatalogTest {
                 is EffectAction.Shards -> action.pick?.name
                 is EffectAction.Well -> action.pick?.name
                 is EffectAction.Detonate -> action.elements.first().name
+                // The 0.5.0 actions are told apart by what they pick.
+                is EffectAction.RefundSkills -> action.pick.name
+                is EffectAction.Zone -> action.kind.name
+                is EffectAction.CoreImpulse -> action.direction.name
+                is EffectAction.ApplyMark -> action.mark.name
                 else -> null
             }
             return Triple(clause.trigger.name, action::class.simpleName.orEmpty(), element ?: "-")
         }
         item.rules.firstOrNull()?.let { rule ->
             val (kind, element) = when (rule) {
-                is ItemRule.WhileModifier -> "WhileModifier ${rule.stat}" to null
+                is ItemRule.WhileModifier -> "WhileModifier ${rule.stat} ${rule.condition::class.simpleName}" to null
                 is ItemRule.ElementPotency -> "ElementPotency" to rule.element
                 is ItemRule.StatusDuration -> "StatusDuration" to rule.element
                 is ItemRule.BreakThreshold -> "BreakThreshold" to rule.element
                 is ItemRule.BreakPower -> "BreakPower" to rule.element
                 is ItemRule.BreakSpread -> "BreakSpread" to rule.element
-                is ItemRule.CritDamageVersus -> "CritDamageVersus" to (rule.condition as? EffectCondition.TargetHas)?.element
-                is ItemRule.DamageVersus -> "DamageVersus" to (rule.condition as? EffectCondition.TargetHas)?.element
+                is ItemRule.CritDamageVersus ->
+                    "CritDamageVersus ${rule.condition::class.simpleName}" to (rule.condition as? EffectCondition.TargetHas)?.element
+                is ItemRule.DamageVersus ->
+                    "DamageVersus ${rule.condition::class.simpleName}" to (rule.condition as? EffectCondition.TargetHas)?.element
+                is ItemRule.ReactionKeystone -> "ReactionKeystone ${rule.reaction}" to null
+                is ItemRule.ReactionTuning -> "ReactionTuning ${rule.reaction ?: "all"} ${rule.aspect}" to null
+                is ItemRule.FieldTuning -> "FieldTuning ${rule.aspect}" to null
+                is ItemRule.SkillCooldown -> "SkillCooldown" to rule.element
+                is ItemRule.SkillPower -> "SkillPower" to rule.element
+                is ItemRule.Convert -> "Convert ${rule.kind}" to null
                 else -> (rule::class.simpleName.orEmpty()) to null
             }
             return Triple("rule $kind", "", element?.name ?: "-")

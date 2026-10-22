@@ -122,7 +122,9 @@ private fun MutableGameState.castApex() {
     runtime.setApex(ApexCell.STRIKES_LEFT, definition.bossStrikes.toFloat())
     runtime.setApex(ApexCell.BOLTS_LEFT, definition.boltBudget.toFloat())
     runtime.setApex(ApexCell.CAST_COUNT, runtime.apex(ApexCell.CAST_COUNT) + 1f)
-    // C5's APEX trigger dispatches here.
+    if (listens(kinetickk.ball.content.api.EffectTrigger.APEX)) {
+        fireClauses(kinetickk.ball.content.api.EffectTrigger.APEX, element = build.dominant)
+    }
     beginApexForm()
     emitVisualFx(VisualFxCue.ApexActivated(coreShape, coreX, coreY))
     emitSound(GameplayAudioCue.APEX)

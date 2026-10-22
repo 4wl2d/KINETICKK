@@ -12,7 +12,11 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.EffectAction
 import kinetickk.ball.content.api.EffectCondition
 import kinetickk.ball.content.api.EffectTrigger
+import kinetickk.ball.content.api.ElementPick
 import kinetickk.ball.content.api.EquippedRelic
+import kinetickk.ball.content.api.FieldAspect
+import kinetickk.ball.content.api.ReactionAspect
+import kinetickk.ball.content.api.SKILL_HEAT_CONVERSION_COOLDOWN
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
@@ -94,15 +98,43 @@ internal class CompiledBuild private constructor(
     val keystoneMask: Int = 0,
     /** By RelicKey ordinal: the first bound Relic carrying that key (a weapon with the key harmonizes with it). */
     private val keyHarmonies: Array<RelicId?> = arrayOfNulls(kinetickk.ball.content.api.RelicKey.entries.size),
-    /** Skill damage bonus over the base (skill power = run scale × (1 + this)). */
-    val skillPower: Float = 0f,
-    /** Static scale of every skill cooldown (rules and conversions), never below [MIN_SKILL_COOLDOWN_SCALE]. */
-    val skillCooldownScale: Float = 1f,
+    /** Skill damage bonus over the base per skill element ([StatusElement] ordinal; the last cell: element-less skills). */
+    private val skillPowerBonuses: FloatArray = FloatArray(SKILL_ELEMENT_CELLS),
+    /** Static cooldown scale per skill element (rules and conversions), never below [MIN_SKILL_COOLDOWN_SCALE]. */
+    private val skillCooldownScales: FloatArray = FloatArray(SKILL_ELEMENT_CELLS) { 1f },
     /** Scale of Catalysis refunds (reactions recharging element-matched skills). */
     val catalysisRate: Float = 1f,
     /** Share cut from the Apex's base cooldown (the ApexCooldown rule; at most [MAX_APEX_COOLDOWN_CUT] applies). */
     val apexCooldownCut: Float = 0f,
+    /** Multipliers per (reaction, [ReactionAspect]): 1 plus the tuning the build adds, within [MAX_REACTION_TUNING]. */
+    private val reactionTunings: FloatArray = FloatArray(ReactionId.entries.size * ReactionAspect.entries.size) { 1f },
+    /** Scales of every player field's radius and life (FieldTuning, within [MAX_FIELD_TUNING]). */
+    val fieldRadiusScale: Float = 1f,
+    val fieldDurationScale: Float = 1f,
+    /** Every skill holds a second charge (the SkillCharges rule). */
+    val skillCharges: Boolean = false,
+    /** The element every skill takes (the SkillAttunement rule), or null. */
+    val skillAttunement: ElementPick? = null,
+    /** Extra reach of the Core link (CoreLinkRadius), at most [MAX_CORE_LINK_BONUS]. */
+    val coreLinkBonus: Float = 0f,
+    /** Conversion amounts; 0 while the build holds none. */
+    val dashHeatToSkills: Float = 0f,
+    val dataToSkills: Float = 0f,
+    val skillsCostHeat: Float = 0f,
+    val skillFieldsFollow: Float = 0f,
+    val knockbackToDamage: Float = 0f,
 ) {
+    /** Skill damage bonus for a skill of [element] (null: an element-less skill): the shared bonus plus its element's. */
+    fun skillPowerBonus(element: StatusElement?): Float =
+        skillPowerBonuses[SKILL_ELEMENT_CELLS - 1] + (element?.let { skillPowerBonuses[it.ordinal] } ?: 0f)
+
+    /** Static cooldown scale of a skill of [element]; never below [MIN_SKILL_COOLDOWN_SCALE]. */
+    fun skillCooldownScale(element: StatusElement?): Float = skillCooldownScales[element?.ordinal ?: (SKILL_ELEMENT_CELLS - 1)]
+
+    /** The multiplier [ReactionTuning] rules give [reaction]'s [aspect] (1 without any). */
+    fun reactionTuning(reaction: ReactionId, aspect: ReactionAspect): Float =
+        reactionTunings[reaction.ordinal * ReactionAspect.entries.size + aspect.ordinal]
+
     /** The first bound Relic carrying [key], or null: a weapon with that key harmonizes with it. */
     fun harmonizing(key: kinetickk.ball.content.api.RelicKey): RelicId? = keyHarmonies[key.ordinal]
 
@@ -285,6 +317,23 @@ internal class CompiledBuild private constructor(
             var critAfter = 0
             var freeDashHeat = 0f
             var freeDashCooldown = 0f
+            var keystones = keystoneMask
+            val namedTuning = FloatArray(ReactionId.entries.size * ReactionAspect.entries.size)
+            val sharedTuning = FloatArray(ReactionAspect.entries.size)
+            var fieldRadius = 0f
+            var fieldDuration = 0f
+            val skillCooldownCuts = FloatArray(SKILL_ELEMENT_CELLS)
+            val skillPowerBonuses = FloatArray(SKILL_ELEMENT_CELLS)
+            var skillCharges = false
+            var attunement: ElementPick? = null
+            var catalysis = 0f
+            var apexCut = 0f
+            var linkBonus = 0f
+            var dashHeatToSkills = 0f
+            var dataToSkills = 0f
+            var skillsCostHeat = 0f
+            var skillFieldsFollow = 0f
+            var knockbackToDamage = 0f
 
             for (id in order) {
                 val item = content.items[id]
@@ -321,12 +370,34 @@ internal class CompiledBuild private constructor(
                             ConversionKind.OVERHEAL_TO_SHIELD -> overfill = maxOf(overfill, overhealOverfill(rule.amount, itemStacks[id]))
                             ConversionKind.REGENERATION_TO_DECAY -> regenDecay = maxOf(regenDecay, rule.amount)
                             ConversionKind.CRIT_CHANCE_TO_DAMAGE -> critConversion = maxOf(critConversion, rule.amount * bonuses[id])
+                            ConversionKind.DASH_HEAT_TO_SKILLS -> dashHeatToSkills = maxOf(dashHeatToSkills, rule.amount)
+                            ConversionKind.DATA_TO_SKILLS -> dataToSkills = maxOf(dataToSkills, rule.amount)
+                            ConversionKind.SKILLS_COST_HEAT -> skillsCostHeat = maxOf(skillsCostHeat, rule.amount)
+                            // Several followers keep the largest radius share.
+                            ConversionKind.SKILL_FIELDS_FOLLOW -> skillFieldsFollow = maxOf(skillFieldsFollow, rule.amount)
+                            ConversionKind.KNOCKBACK_TO_DAMAGE -> knockbackToDamage = maxOf(knockbackToDamage, rule.amount)
                         }
                         is ItemRule.GuaranteedCritAfter -> critAfter = if (critAfter == 0) rule.misses else minOf(critAfter, rule.misses)
                         is ItemRule.FreeDash -> {
                             freeDashHeat = maxOf(freeDashHeat, rule.heat)
                             freeDashCooldown = if (freeDashCooldown == 0f) rule.cooldownSeconds else minOf(freeDashCooldown, rule.cooldownSeconds)
                         }
+                        is ItemRule.ReactionKeystone -> keystones = keystones or (1 shl rule.reaction.ordinal)
+                        is ItemRule.ReactionTuning -> when (val reaction = rule.reaction) {
+                            null -> sharedTuning[rule.aspect.ordinal] += rule.amount * scale
+                            else -> namedTuning[reaction.ordinal * ReactionAspect.entries.size + rule.aspect.ordinal] += rule.amount * scale
+                        }
+                        is ItemRule.FieldTuning -> when (rule.aspect) {
+                            FieldAspect.RADIUS -> fieldRadius += rule.amount * scale
+                            FieldAspect.DURATION -> fieldDuration += rule.amount * scale
+                        }
+                        is ItemRule.SkillCooldown -> skillCooldownCuts[rule.element?.ordinal ?: (SKILL_ELEMENT_CELLS - 1)] += rule.amount * scale
+                        is ItemRule.SkillPower -> skillPowerBonuses[rule.element?.ordinal ?: (SKILL_ELEMENT_CELLS - 1)] += rule.amount * scale
+                        ItemRule.SkillCharges -> skillCharges = true
+                        is ItemRule.SkillAttunement -> if (attunement == null) attunement = rule.pick
+                        is ItemRule.CatalysisRate -> catalysis += rule.amount * scale
+                        is ItemRule.ApexCooldown -> apexCut += rule.amount * scale
+                        is ItemRule.CoreLinkRadius -> linkBonus += rule.bonus * scale
                     }
                 }
             }
@@ -377,6 +448,20 @@ internal class CompiledBuild private constructor(
                 upsides[relic.id.ordinal] = multiplier
             }
 
+            // Tuning: a shared (all-reaction) row adds at most MAX_SHARED_REACTION_TUNING, each cell at most MAX_REACTION_TUNING.
+            val tunings = FloatArray(namedTuning.size) { cell ->
+                val shared = minOf(MAX_SHARED_REACTION_TUNING, sharedTuning[cell % ReactionAspect.entries.size])
+                1f + minOf(MAX_REACTION_TUNING, namedTuning[cell] + shared)
+            }
+            // A skill's cooldown cut is the shared cut plus its element's, within MAX_SKILL_COOLDOWN_CUT; Skills Cost
+            // Heat multiplies on top; nothing goes below MIN_SKILL_COOLDOWN_SCALE.
+            val conversionScale = if (skillsCostHeat > 0f) SKILL_HEAT_CONVERSION_COOLDOWN else 1f
+            val cooldownScales = FloatArray(SKILL_ELEMENT_CELLS) { cell ->
+                val shared = skillCooldownCuts[SKILL_ELEMENT_CELLS - 1]
+                val cut = minOf(MAX_SKILL_COOLDOWN_CUT, if (cell == SKILL_ELEMENT_CELLS - 1) shared else shared + skillCooldownCuts[cell])
+                maxOf(MIN_SKILL_COOLDOWN_SCALE, (1f - cut) * conversionScale)
+            }
+
             var reachable = 0
             for (reaction in ReactionId.entries) {
                 if (affinity[reaction.first.ordinal] > 0 && affinity[reaction.second.ordinal] > 0) {
@@ -423,16 +508,50 @@ internal class CompiledBuild private constructor(
                 links = links.toImmutableList(),
                 reachableReactionMask = reachable,
                 ownedItemCount = order.size,
-                keystoneMask = keystoneMask and ((1 shl ReactionId.entries.size) - 1),
+                keystoneMask = keystones and ((1 shl ReactionId.entries.size) - 1),
                 keyHarmonies = arrayOfNulls<RelicId>(kinetickk.ball.content.api.RelicKey.entries.size).also { harmonies ->
                     for (relic in equipped) for (key in content.relic(relic.id).keys) {
                         if (harmonies[key.ordinal] == null) harmonies[key.ordinal] = relic.id
                     }
                 },
+                skillPowerBonuses = skillPowerBonuses,
+                skillCooldownScales = cooldownScales,
+                catalysisRate = 1f + minOf(MAX_CATALYSIS_BONUS, catalysis),
+                apexCooldownCut = minOf(MAX_APEX_COOLDOWN_CUT, apexCut),
+                reactionTunings = tunings,
+                fieldRadiusScale = 1f + minOf(MAX_FIELD_TUNING, fieldRadius),
+                fieldDurationScale = 1f + minOf(MAX_FIELD_TUNING, fieldDuration),
+                skillCharges = skillCharges,
+                skillAttunement = attunement,
+                coreLinkBonus = minOf(MAX_CORE_LINK_BONUS, linkBonus),
+                dashHeatToSkills = dashHeatToSkills,
+                dataToSkills = dataToSkills,
+                skillsCostHeat = skillsCostHeat,
+                skillFieldsFollow = skillFieldsFollow,
+                knockbackToDamage = knockbackToDamage,
             )
         }
     }
 }
+
+/** Skill-indexed compiled cells: one per [StatusElement] plus a last one for every skill (or element-less skills). */
+internal val SKILL_ELEMENT_CELLS: Int = StatusElement.entries.size + 1
+
+/** ReactionTuning: at most this much per (reaction, aspect) in total, and at most [MAX_SHARED_REACTION_TUNING] from all-reaction rows. */
+internal const val MAX_REACTION_TUNING: Float = 0.75f
+internal const val MAX_SHARED_REACTION_TUNING: Float = 0.5f
+/** FieldTuning: at most this much per aspect. */
+internal const val MAX_FIELD_TUNING: Float = 0.5f
+/** A tuned reaction field grows at most this much in total (reaction tuning times field tuning). */
+internal const val MAX_TUNED_FIELD_SCALE: Float = 1.75f
+/** No tuned radius reaches beyond this. */
+internal const val MAX_TUNED_RADIUS: Float = 600f
+/** SkillCooldown: at most this cut on any skill. */
+internal const val MAX_SKILL_COOLDOWN_CUT: Float = 0.4f
+/** CatalysisRate: at most doubles Catalysis. */
+internal const val MAX_CATALYSIS_BONUS: Float = 1f
+/** CoreLinkRadius: at most this much farther. */
+internal const val MAX_CORE_LINK_BONUS: Float = 240f
 
 /** Characters lean toward an archetype without locking the build. */
 internal fun CoreShape.characterTag(): BuildTag = when (this) {
@@ -541,6 +660,59 @@ internal fun MutableGameState.itemSuppressedShare(item: ItemDefinition): Float {
     }
     return if (total == 0) 0f else suppressed.toFloat() / total
 }
+
+/**
+ * The share of [item]'s parts this run cannot use: skill parts (skill triggers and conditions, skill refunds,
+ * skill buffs, skill rules, Catalysis and the skill conversions) while no skill is owned, and parts gated on a
+ * weapon family other than the equipped one. Kept apart from [itemSuppressedShare], which Relics cause; Apex parts
+ * are never dormant (each refunds skills before the Apex unlocks).
+ */
+internal fun MutableGameState.itemDormantShare(item: ItemDefinition): Float {
+    val noSkills = skillLoadout.ownedCount == 0
+    val family = currentWeaponDefinition.family
+    fun conditionDormant(condition: EffectCondition): Boolean = when (condition) {
+        is EffectCondition.SkillIs, is EffectCondition.SkillTagged, is EffectCondition.SkillsCharging -> noSkills
+        is EffectCondition.WeaponFamilyIs -> condition.family != family
+        else -> false
+    }
+    var total = 0
+    var dormant = 0
+    fun count(isDormant: Boolean) {
+        total++
+        if (isDormant) dormant++
+    }
+    total += item.stats.size
+    item.clauses.forEach { clause ->
+        val clauseDormant = noSkills && (clause.trigger == EffectTrigger.SKILL_CAST || clause.trigger == EffectTrigger.SKILL_HIT) ||
+            clause.conditions.any(::conditionDormant)
+        clause.actions.forEach { action ->
+            count(
+                clauseDormant || noSkills && (action is EffectAction.RefundSkills ||
+                    action is EffectAction.Buff && action.stat.isSkillStat),
+            )
+        }
+    }
+    item.rules.forEach { rule ->
+        count(
+            when (rule) {
+                is ItemRule.WhileModifier -> conditionDormant(rule.condition) || noSkills && rule.stat.isSkillStat
+                is ItemRule.SkillCooldown, is ItemRule.SkillPower, ItemRule.SkillCharges, is ItemRule.SkillAttunement,
+                is ItemRule.CatalysisRate,
+                -> noSkills
+                is ItemRule.Convert -> noSkills && rule.kind in SkillConversions
+                else -> false
+            },
+        )
+    }
+    return if (total == 0 || dormant == 0) 0f else dormant.toFloat() / total
+}
+
+private val BuffStat.isSkillStat: Boolean get() = this == BuffStat.SKILL_RECHARGE || this == BuffStat.SKILL_POWER
+
+private val SkillConversions: Set<ConversionKind> = setOf(
+    ConversionKind.DASH_HEAT_TO_SKILLS, ConversionKind.DATA_TO_SKILLS, ConversionKind.SKILLS_COST_HEAT,
+    ConversionKind.SKILL_FIELDS_FOLLOW,
+)
 
 internal val RelicAspect.isElemental: Boolean get() = element != null
 

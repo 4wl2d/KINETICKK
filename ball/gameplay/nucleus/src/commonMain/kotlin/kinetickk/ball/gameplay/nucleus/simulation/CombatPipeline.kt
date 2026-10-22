@@ -80,8 +80,33 @@ internal fun MutableGameState.effectiveCooling(): Float {
     var cooling = coolingRate * (1f + buffAmount(BuffStat.COOLING) + whileAmount(BuffStat.COOLING, null))
     if (tagTier(BuildTag.OVERCLOCK) >= 1) cooling *= 1.15f
     if (build.liability(RelicId.FURNACE_COVENANT)) cooling *= 0.45f
+    // Dash Heat to Skills: the Core cools slower.
+    if (build.dashHeatToSkills > 0f) cooling *= kinetickk.ball.content.api.DASH_HEAT_CONVERSION_COOLING
     return cooling
 }
+
+/** Data to Skills: a Data pickup recharges every skill (at the level cap also the Apex, twice as much). */
+internal fun MutableGameState.dataPickupRechargesSkills() {
+    val amount = build.dataToSkills
+    if (amount <= 0f) return
+    refundAllSkills(amount)
+    if (apexUnlocked) refundApex(amount * DATA_APEX_REFUND_SHARE)
+}
+
+/** Dash Heat to Skills: every [DASH_HEAT_PER_REFUND] Dash heat spent recharges every skill by the conversion's amount. */
+internal fun MutableGameState.bankDashHeat(spent: Float) {
+    val amount = build.dashHeatToSkills
+    if (amount <= 0f || !(spent > 0f)) return
+    var bank = dashHeatBank + spent
+    while (bank >= DASH_HEAT_PER_REFUND) {
+        bank -= DASH_HEAT_PER_REFUND
+        refundAllSkills(amount)
+    }
+    dashHeatBank = bank
+}
+
+internal const val DATA_APEX_REFUND_SHARE: Float = 2f
+internal const val DASH_HEAT_PER_REFUND: Float = 10f
 
 internal fun MutableGameState.effectiveDashHeatCost(): Float {
     var cost = dashHeatCost
@@ -170,6 +195,7 @@ internal fun MutableGameState.holds(
     source: HitSource?,
     element: StatusElement?,
     reaction: ReactionId? = null,
+    skill: kinetickk.ball.content.api.SkillId? = null,
 ): Boolean = when (condition) {
     is EffectCondition.SpeedAtLeast -> speed >= condition.speed
     is EffectCondition.SpeedBelow -> speed < condition.speed
@@ -188,8 +214,34 @@ internal fun MutableGameState.holds(
     is EffectCondition.TargetBelow -> target != null && target.hp < target.maxHp * condition.fraction
     EffectCondition.SourceImpact -> source == HitSource.IMPACT || source == HitSource.DASH
     EffectCondition.SourceWeapon -> source == HitSource.WEAPON || source == HitSource.ECHO
-    // A reaction involves both of its elements; a Break names its own.
+    // A reaction (fired, or behind a field or mark) involves both of its elements; a Break, skill or other field
+    // names its own.
     is EffectCondition.ElementIs -> reaction?.involves(condition.element) ?: (element == condition.element)
+    is EffectCondition.ReactionIs -> reaction == condition.reaction
+    is EffectCondition.SkillIs -> skill == condition.skill
+    is EffectCondition.SkillTagged -> skill != null && condition.tag in content.skill(skill).tags
+    EffectCondition.CoreInField -> coreFieldMask != 0
+    EffectCondition.TargetMarked -> target != null && targetMarked(target)
+    EffectCondition.TargetControlled -> target != null &&
+        (isFrozen(target) || target.disabledUntil > elapsed || target.silencedUntil > elapsed)
+    EffectCondition.TargetThrown -> target != null && (target.thrownUntil > elapsed || isThrownByPolarity(target))
+    EffectCondition.ApexActive -> apexActive()
+    is EffectCondition.SkillsCharging -> skillsCharging() >= condition.count
+    is EffectCondition.WeaponFamilyIs -> currentWeaponDefinition.family == condition.family
+}
+
+/** A live mark, Blackfire or Embrittle on [target], or [target] is the Void Anchor. */
+internal fun MutableGameState.targetMarked(target: Enemy): Boolean =
+    markOf(target) != null || target.status[StatusCell.BLACKFIRE_UNTIL] > elapsed ||
+        target.status[StatusCell.EMBRITTLED_UNTIL] > elapsed || voidAnchorId == target.id && voidAnchorUntil > elapsed
+
+/** Owned skills still recharging. */
+internal fun MutableGameState.skillsCharging(): Int {
+    var count = 0
+    for (slot in 0 until SkillRuntime.SLOTS) {
+        if (!skillLoadout.isEmpty(slot) && skillRuntime[slot, SkillCell.READY_AT] > elapsed) count++
+    }
+    return count
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -815,11 +867,12 @@ internal fun MutableGameState.pushEnemies(x: Float, y: Float, radius: Float, str
     for (index in enemies.indices) {
         val target = enemies[index]
         val knockback = knockbackTaken(target)
-        if (!target.alive || knockback <= 0f) continue
+        if (!target.alive || knockback <= 0f && build.knockbackToDamage <= 0f) continue
         val dx = target.x - x
         val dy = target.y - y
         val distance = max(1f, length(dx, dy))
         if (distance > radius + target.radius) continue
+        if (knockbackAsDamage(target, knockback, strength) || knockback <= 0f) continue
         val falloff = 1f - (distance / (radius + target.radius)) * 0.5f
         val sign = if (inward) -1f else 1f
         target.vx += dx / distance * strength * falloff * sign * knockback
