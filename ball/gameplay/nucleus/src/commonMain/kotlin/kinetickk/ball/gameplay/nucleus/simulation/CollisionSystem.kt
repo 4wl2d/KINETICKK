@@ -125,6 +125,7 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             if (edgeCritical) spendEdgeCritical()
             // Ablaze: while the Core burns, every contact sets the enemy burning.
             onAblazeContact(enemy)
+            onSkillCoreImpact(enemy, coreImpactSpeed, damage, dashContact = newDashContact)
             onCharacterImpact(enemy, impact, coreImpactSpeed, characterMultiplier)
             onWeaponImpact(coreImpactSpeed, damage)
             // A fast impact destroys an unprimed Bomber outright, before it can prime, even through a tether.
@@ -140,7 +141,7 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             // Glass Charge: an Embrittled enemy cannot stop a fast Core (Glass Burst: it shatters as you pass).
             val pierced = piercesEmbrittled(enemy, coreImpactSpeed)
             if (pierced) glassBurst(enemy, damage)
-            val keepsMomentum = tagTier(BuildTag.RAM) >= 3 && speed >= 1_200f || pierced
+            val keepsMomentum = tagTier(BuildTag.RAM) >= 3 && speed >= 1_200f || pierced || slingshotKeepsMomentum()
             if (!keepsMomentum) {
                 val recoil = min(220f, softVelocity(impactSpeed) * 0.28f) / max(1f, effectiveMass() / mass) * impactRecoilScale()
                 velocityX += dx / distance * recoil
@@ -507,6 +508,8 @@ internal fun MutableGameState.resolveProjectileHits() {
                 val sourceWeapon = projectile.sourceWeapon
                 if (sourceWeapon != null) {
                     weaponShotHit(projectile, sourceWeapon, enemy)
+                } else if (projectile.procKey == WeaponRuntime.PROC_SKILL) {
+                    skillShotHit(enemy, projectile.damage, projectile.statusElement)
                 } else {
                     // Relic shots deal element-less damage; a status element is a rider applied after it.
                     dealProcDamage(enemy, projectile.damage)
@@ -624,6 +627,9 @@ internal fun MutableGameState.gainData(rawAmount: Float) {
         data -= nextLevelData
         level++
         pendingLevelChoices++
+        // Skill slots open at their levels (a draft each); every few levels an item offer carries a rank-up card.
+        if (level in content.tempo.skillSlotLevels) pendingSkillDrafts++
+        if (level % content.tempo.skillRankEveryLevels == 0) pendingRankUpOffers++
         onLevelUp()
         nextLevelData = content.tempo.dataRequiredForLevel(level)
         if (content.tempo.grantsWeaponAmplification(level) &&

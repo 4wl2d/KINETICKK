@@ -122,6 +122,12 @@ class GameSystemsTest {
         assertEquals(52, engine.nextLevelData)
         assertEquals(GamePhase.CHOICE, engine.phase)
         assertTrue(engine.choices.isNotEmpty())
+        // Level 2 opened the Z slot: its skill draft comes before the queued item offers.
+        assertEquals(ChoiceType.SKILL, engine.choiceType)
+        engine.choose(0)
+        assertEquals(GamePhase.CHOICE, engine.phase, "Queued level choice was not presented")
+        assertEquals(ChoiceType.ITEM, engine.choiceType)
+        assertEquals(5, engine.data, "Choosing a skill must not consume overflow Data")
 
         repeat(2) {
             engine.choose(0)

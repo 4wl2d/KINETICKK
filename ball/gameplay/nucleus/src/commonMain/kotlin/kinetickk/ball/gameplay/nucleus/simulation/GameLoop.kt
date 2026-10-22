@@ -128,6 +128,8 @@ internal fun MutableGameState.simulateStep(delta: Float) {
     updateSurvival(delta)
     updateOverdrive(delta)
     updateHeat(delta)
+    updateSkills(delta)
+    if (phase != GamePhase.RUNNING) return
     updateCore(delta)
     if (phase != GamePhase.RUNNING) return
     // Obstacles bend the Core's path before anything meets it at its new position.
@@ -279,6 +281,9 @@ internal fun MutableGameState.performDash() {
         blastJumpUntil = 0f
         cost = 0f
     }
+    // Frost Snap: a coiled Dash costs no heat and pushes harder (the Crescent's Blink reaches farther).
+    val coiled = consumeCoiledDash()
+    if (coiled > 1f) cost = 0f
     // Void Anchor: a Dash aimed at the anchor first blinks the Core to it and then drives into it.
     val anchor = voidAnchorAimedAt(directionX, directionY)
     if (anchor != null) {
@@ -305,8 +310,8 @@ internal fun MutableGameState.performDash() {
         when {
             anchor != null -> crescentBlink(directionX, directionY,
                 rangeOverride = reactionValue(ReactionId.ANNIHILATE, VOID_ANCHOR_REACH_VALUE))
-            blastJump -> crescentBlink(directionX, directionY, rangeScale = BLAST_JUMP_BLINK_RANGE)
-            else -> crescentBlink(directionX, directionY)
+            blastJump -> crescentBlink(directionX, directionY, rangeScale = BLAST_JUMP_BLINK_RANGE * coiled)
+            else -> crescentBlink(directionX, directionY, rangeScale = coiled)
         }
     } else if (!relicOnDash(directionX, directionY)) {
         val forwardVelocity = velocityX * directionX + velocityY * directionY
@@ -317,6 +322,7 @@ internal fun MutableGameState.performDash() {
         }
         var impulse = effectiveDashImpulse() * characterDashImpulseMultiplier(onBeat)
         if (blastJump) impulse *= reactionValue(ReactionId.THUNDERCLAP, BLAST_JUMP_IMPULSE_VALUE)
+        impulse *= coiled
         velocityX += directionX * impulse
         velocityY += directionY * impulse
     }
@@ -426,7 +432,7 @@ internal fun MutableGameState.updateBuildEdges(delta: Float) {
     wasBraking = braking
 }
 
-private fun MutableGameState.onBrakeRelease() {
+internal fun MutableGameState.onBrakeRelease() {
     fireClauses(EffectTrigger.BRAKE_RELEASE)
     if (tagTier(BuildTag.ANCHOR) >= 2) {
         pushEnemies(coreX, coreY, 200f, 320f, inward = false)
@@ -559,10 +565,7 @@ internal fun MutableGameState.updatePolarityStability(delta: Float) {
                         val restore = if (build.liability(RelicId.GYRE_ENGINE)) 0.3f else tuning.turnRecovery
                         polarityStability = min(1f, polarityStability + restore)
                     }
-                    fireClauses(EffectTrigger.TURN)
-                    relicOnTurn()
-                    onCharacterTurn()
-                    onTurnForReactions()
+                    fireTurnEdge()
                     turnRecoveryCooldown = tuning.turnCooldownSeconds
                     saturationHeadingX = headingX
                     saturationHeadingY = headingY
@@ -579,6 +582,14 @@ internal fun MutableGameState.updatePolarityStability(delta: Float) {
         messageTime = 1.4f
         emitSound(GameplayAudioCue.OVERHEAT)
     }
+}
+
+/** A sharp turn's build edge: TURN clauses, Relic and character turn rules and the reactions' turn verbs. */
+internal fun MutableGameState.fireTurnEdge() {
+    fireClauses(EffectTrigger.TURN)
+    relicOnTurn()
+    onCharacterTurn()
+    onTurnForReactions()
 }
 
 /** Thrust toward the singularity that does not depend on its distance. */

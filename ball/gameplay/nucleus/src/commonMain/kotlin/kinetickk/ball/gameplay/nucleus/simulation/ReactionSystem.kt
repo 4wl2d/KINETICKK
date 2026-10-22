@@ -500,7 +500,11 @@ internal fun MutableGameState.resolveReaction(
     if (echo) flags = flags or ReactionCueFlags.ECHO
     recordStatusCue(VisualFxCue.ReactionTriggered(x, y, reaction.ordinal, max(definition.radius, enemy.radius * 2f), first,
         direction = direction, flags = flags))
-    if (!echo) onReaction(enemy, reaction)
+    if (!echo) {
+        onReaction(enemy, reaction)
+        // Catalysis: the reaction recharges the skills of its elements.
+        catalyze(older, incoming)
+    }
 }
 
 /** Plasma Burst's blast: [magnitude] Thermal to everything within [radius] of ([x], [y]) plus [stacks] Thermal. */
@@ -660,13 +664,6 @@ internal fun MutableGameState.ablazeSeconds(): Float =
 /** How long Arc Weave lasts when Resonant Arc sets it (Standing Wave longer). */
 internal fun MutableGameState.weaveSeconds(): Float =
     if (keystoneOn(ReactionId.RESONANT_ARC)) STANDING_WAVE_SECONDS else reactionValue(ReactionId.RESONANT_ARC, WEAVE_SECONDS_VALUE)
-
-/**
- * Refunds [seconds] of cooldown to every owned skill and returns the seconds refunded. No skill runtime exists
- * yet, so nothing is refunded; the skill system's refund bank takes this over.
- */
-@Suppress("UNUSED_PARAMETER", "FunctionOnlyReturningConstant")
-internal fun MutableGameState.refundAllSkills(seconds: Float): Float = 0f
 
 // ---------------------------------------------------------------------------------------------
 // Core verbs read outside the reaction itself.
@@ -1096,6 +1093,7 @@ internal fun MutableGameState.resetCoreReactionState() {
     shotErasedDispatches = 0
     markDispatches = 0
     pendingSkillDrafts = 0
+    pendingRankUpOffers = 0
     skillBufferMask = 0
     skillBufferTime = 0f
     apexBufferTime = 0f

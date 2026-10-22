@@ -323,6 +323,7 @@ internal fun MutableGameState.onDirectHit(enemy: Enemy, result: DamageResult, so
         HitSource.IMPACT -> fireClauses(EffectTrigger.IMPACT, enemy, basis, source)
         HitSource.WEAPON -> {
             fireClauses(EffectTrigger.WEAPON_HIT, enemy, basis, source)
+            onSkillWeaponHit(enemy)
             if (tagTier(BuildTag.ARSENAL) >= 3) {
                 // A deterministic counter, not a roll: no draw from the crit and proc stream.
                 arsenalCounter = (arsenalCounter + 1) % ARSENAL_INFUSION_EVERY

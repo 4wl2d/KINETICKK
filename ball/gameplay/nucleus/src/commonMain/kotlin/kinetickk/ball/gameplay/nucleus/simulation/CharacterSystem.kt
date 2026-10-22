@@ -159,21 +159,7 @@ internal fun MutableGameState.onCharacterDashContact(enemy: Enemy) {
 internal fun MutableGameState.onCharacterPrimaryHit(enemy: Enemy, dash: Boolean = false) {
     val ability = characterRuntime
     when (coreShape) {
-        CoreShape.ORB -> if (ability.charge >= 1f) {
-            ability.charge = 0f
-            ability.turnArc = 0f
-            ability.turnDistance = 0f
-            val damage = ORBIT_DAMAGE * abilityPower()
-            val dominant = build.dominant
-            for (index in enemies.indices) {
-                val target = enemies[index]
-                if (!target.alive || distanceSquared(coreX, coreY, target.x, target.y) > square(ORBIT_RADIUS + target.radius)) continue
-                dealCharacterDamage(target, damage)
-            }
-            // The struck enemy carries the release's element.
-            if (dominant != null && enemy.alive) applyStatus(enemy, dominant, ORBIT_STACKS, 0)
-            shockwave(coreX, coreY, 0.35f, ORBIT_RADIUS, 2)
-        }
+        CoreShape.ORB -> if (ability.charge >= 1f) releaseOrbit(coreX, coreY, enemy)
         CoreShape.SHARD -> if (!dash && elapsed >= ability.punctureReadyAt && consumeMark(enemy)) {
             ability.punctureReadyAt = elapsed + PUNCTURE_INTERVAL
             dealCharacterDamage(enemy, PUNCTURE_DAMAGE * abilityPower())
@@ -181,6 +167,47 @@ internal fun MutableGameState.onCharacterPrimaryHit(enemy: Enemy, dash: Boolean 
             shockwave(enemy.x, enemy.y, 0.3f, 65f, 2)
         }
         else -> Unit
+    }
+}
+
+/** Releases a charged Orbit ring around ([x], [y]); the [struck] enemy carries the release's element. */
+private fun MutableGameState.releaseOrbit(x: Float, y: Float, struck: Enemy?) {
+    val ability = characterRuntime
+    ability.charge = 0f
+    ability.turnArc = 0f
+    ability.turnDistance = 0f
+    val damage = ORBIT_DAMAGE * abilityPower()
+    val dominant = build.dominant
+    for (index in enemies.indices) {
+        val target = enemies[index]
+        if (!target.alive || distanceSquared(x, y, target.x, target.y) > square(ORBIT_RADIUS + target.radius)) continue
+        dealCharacterDamage(target, damage)
+    }
+    if (dominant != null && struck != null && struck.alive) applyStatus(struck, dominant, ORBIT_STACKS, 0)
+    shockwave(x, y, 0.35f, ORBIT_RADIUS, 2)
+}
+
+/**
+ * A skill cast from [slot] centred on ([anchorX], [anchorY]) whose first target was [primary]. The
+ * Circle releases a charged Orbit there, the Tesseract records a lattice node at the Core, the Dipole flips at
+ * once, an on-beat Pentagon cast counts as an on-beat action and takes back a share of its cooldown, the
+ * Crescent's Blink recharges faster and the Hexagon's drones dart at the target. The Square (shorter cooldown),
+ * Triangle (skill hits marked), Ring (wider self skills), Diamond (parries refund), Star (skill kills) and Spiral
+ * (the ghost repeats self skills) act where those facts are read.
+ */
+internal fun MutableGameState.onCharacterSkillCast(slot: Int, anchorX: Float, anchorY: Float, primary: Enemy?) {
+    val ability = characterRuntime
+    when (coreShape) {
+        CoreShape.ORB -> if (ability.charge >= 1f) releaseOrbit(anchorX, anchorY, primary)
+        CoreShape.TESSERACT -> recordLatticeNode(coreX, coreY)
+        CoreShape.DIPOLE -> flipPolarity()
+        CoreShape.PENTAGON -> if (isOnBeat()) {
+            onBeatAction()
+            refundSkill(slot, skillRuntime[slot, SkillCell.LAST_COOLDOWN] * PENTAGON_SKILL_REFUND)
+        }
+        CoreShape.CRESCENT -> advanceBlinkRecharge(CRESCENT_SKILL_BLINK_SECONDS)
+        CoreShape.HEXAGON -> if (primary != null) dronesDartAt(primary)
+        CoreShape.PRISM, CoreShape.SHARD, CoreShape.RING, CoreShape.DIAMOND, CoreShape.STAR, CoreShape.SPIRAL -> Unit
     }
 }
 
@@ -277,7 +304,9 @@ internal fun MutableGameState.onCharacterKill(enemy: Enemy, eliteReward: Boolean
             if (impactKill) cutFacetTimer()
         }
         CoreShape.STAR -> {
-            gainStellarMass(if (impactKill) 2 else 1)
+            // A skill kill gathers one more.
+            val skillKill = lastSource == HitSource.SKILL.ordinal
+            gainStellarMass((if (impactKill) 2 else 1) + (if (skillKill) STAR_SKILL_KILL_MASS else 0))
             if (impactKill && ability.stellarMass >= SUPERNOVA_EARLY_STACKS) supernova()
         }
         else -> Unit
@@ -320,8 +349,13 @@ internal fun MutableGameState.onCharacterDataPickup() {
 /** A real TURN edge: the Dipole flips polarity (at most every two seconds). */
 internal fun MutableGameState.onCharacterTurn() {
     if (coreShape != CoreShape.DIPOLE) return
+    if (elapsed < characterRuntime.polarityFlipReadyAt) return
+    flipPolarity()
+}
+
+/** Flips the Dipole's polarity now and restarts its flip gate. */
+private fun MutableGameState.flipPolarity() {
     val ability = characterRuntime
-    if (elapsed < ability.polarityFlipReadyAt) return
     ability.polarity = if (ability.polarity == Polarity.ATTRACT) Polarity.REPEL else Polarity.ATTRACT
     ability.polarityFlipReadyAt = elapsed + POLARITY_FLIP_INTERVAL
     ability.polarityFlash = 1f
@@ -389,6 +423,8 @@ internal fun MutableGameState.tryCharacterParry(
         }
     }
     shockwave(coreX, coreY, 0.25f, 110f, 2)
+    // A parry recharges every skill.
+    refundAllSkills(DIAMOND_PARRY_SKILL_REFUND)
     return true
 }
 
@@ -591,30 +627,31 @@ private fun MutableGameState.updateLattice(ability: CharacterRuntime) {
     if (dashPhaseTime > 0f && ability.hasDashOrigin && !ability.dashRecorded &&
         distanceSquared(ability.dashOriginX, ability.dashOriginY, coreX, coreY) >= square(LATTICE_RECORD_DISTANCE)
     ) {
-        val originX = ability.dashOriginX
-        val originY = ability.dashOriginY
-        val count = ability.latticeCount
         ability.dashRecorded = true
-        if (count >= 3 && distanceSquared(originX, originY, ability.latticeX(0), ability.latticeY(0)) < square(LATTICE_CLOSE_DISTANCE)) {
-            collapseLattice(count)
-        } else {
-            var separated = true
-            for (index in 0 until count) {
-                if (distanceSquared(originX, originY, ability.latticeX(index), ability.latticeY(index)) < square(LATTICE_SPACING)) {
-                    separated = false
-                    break
-                }
-            }
-            if (separated) {
-                ability.latticeNodes[count * 2] = originX
-                ability.latticeNodes[count * 2 + 1] = originY
-                ability.latticeCount = count + 1
-                if (ability.latticeCount >= CharacterRuntime.MAX_LATTICE_NODES) collapseLattice(ability.latticeCount)
-                else ability.latticeTime = LATTICE_LIFE_SECONDS
-            }
-        }
+        recordLatticeNode(ability.dashOriginX, ability.dashOriginY)
     }
     ability.charge = ability.latticeCount / CharacterRuntime.MAX_LATTICE_NODES.toFloat()
+}
+
+/**
+ * Records a lattice node at ([x], [y]): close to the first node of a three-node lattice it closes and collapses
+ * the lattice; a node too close to another is not recorded; the last free node collapses it.
+ */
+private fun MutableGameState.recordLatticeNode(x: Float, y: Float) {
+    val ability = characterRuntime
+    val count = ability.latticeCount
+    if (count >= 3 && distanceSquared(x, y, ability.latticeX(0), ability.latticeY(0)) < square(LATTICE_CLOSE_DISTANCE)) {
+        collapseLattice(count)
+        return
+    }
+    for (index in 0 until count) {
+        if (distanceSquared(x, y, ability.latticeX(index), ability.latticeY(index)) < square(LATTICE_SPACING)) return
+    }
+    ability.latticeNodes[count * 2] = x
+    ability.latticeNodes[count * 2 + 1] = y
+    ability.latticeCount = count + 1
+    if (ability.latticeCount >= CharacterRuntime.MAX_LATTICE_NODES) collapseLattice(ability.latticeCount)
+    else ability.latticeTime = LATTICE_LIFE_SECONDS
 }
 
 /** Strikes every enemy touching a lattice edge; enemies inside the closed polygon take half again. */
@@ -661,7 +698,7 @@ private fun insideLattice(ability: CharacterRuntime, count: Int, x: Float, y: Fl
     return inside
 }
 
-private fun MutableGameState.gainStellarMass(stacks: Int) {
+internal fun MutableGameState.gainStellarMass(stacks: Int) {
     val ability = characterRuntime
     val next = min(CharacterRuntime.MAX_STELLAR_MASS, ability.stellarMass + stacks)
     if (next == ability.stellarMass) return
@@ -818,12 +855,41 @@ internal fun MutableGameState.endPolarityThrow(enemy: Enemy) {
 }
 
 /** Records an on-beat action: the streak rises once per beat. */
-private fun MutableGameState.onBeatAction() {
+internal fun MutableGameState.onBeatAction() {
     val ability = characterRuntime
     val beat = currentBeatIndex()
     if (ability.streakBeat == beat) return
     ability.streakBeat = beat
     ability.beatStreak = min(CharacterRuntime.MAX_BEAT_STREAK, ability.beatStreak + 1)
+}
+
+/** Advances the Crescent's Blink recharge by [seconds] (a charge completes as in the step). */
+private fun MutableGameState.advanceBlinkRecharge(seconds: Float) {
+    val ability = characterRuntime
+    if (ability.blinkCharges >= CharacterRuntime.MAX_BLINK_CHARGES) return
+    ability.blinkRecharge += seconds
+    if (ability.blinkRecharge >= BLINK_RECHARGE_SECONDS) {
+        ability.blinkRecharge -= BLINK_RECHARGE_SECONDS
+        ability.blinkCharges++
+    }
+    if (ability.blinkCharges >= CharacterRuntime.MAX_BLINK_CHARGES) ability.blinkRecharge = 0f
+}
+
+/** Every idle Hive drone darts at [target] now (each dart as in the Hive's own cadence). */
+private fun MutableGameState.dronesDartAt(target: Enemy) {
+    val ability = characterRuntime
+    val drones = ability.drones
+    for (drone in 0 until ability.droneCount) {
+        if (!target.alive) return
+        val base = drone * DRONE_STRIDE
+        if (drones[base + DRONE_DART] > 0f) continue
+        drones[base + DRONE_READY_AT] = elapsed + DRONE_INTERVAL
+        drones[base + DRONE_TARGET_X] = target.x
+        drones[base + DRONE_TARGET_Y] = target.y
+        drones[base + DRONE_DART] = DRONE_DART_SECONDS
+        val integrity = target.hp
+        recordAbilityDamage(integrity, dealProcDamage(target, DRONE_DAMAGE * abilityPower()))
+    }
 }
 
 private fun MutableGameState.updateEclipse(ability: CharacterRuntime, delta: Float) {
@@ -1086,6 +1152,11 @@ private fun characterHash(value: Long): Long {
 }
 
 internal const val DASH_PHASE_SECONDS: Float = 0.24f
+/** Character × skill interactions. */
+internal const val PENTAGON_SKILL_REFUND: Float = 0.2f
+internal const val CRESCENT_SKILL_BLINK_SECONDS: Float = 0.6f
+internal const val DIAMOND_PARRY_SKILL_REFUND: Float = 1f
+internal const val STAR_SKILL_KILL_MASS: Int = 1
 private const val FLASH_DECAY: Float = 2.5f
 
 // Ability damage is calibrated by CharacterBalanceTest: averaged over its seeded 90 s fights (packs at

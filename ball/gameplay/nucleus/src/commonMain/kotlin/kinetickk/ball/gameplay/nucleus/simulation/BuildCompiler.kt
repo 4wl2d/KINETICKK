@@ -5,6 +5,8 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.BuffStat
 import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.ContentBounds
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.ConversionKind
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.EffectAction
@@ -22,6 +24,8 @@ import kinetickk.ball.content.api.RelicPairingKind
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.breakThresholdCut
 import kinetickk.ball.content.api.overhealOverfill
+import kinetickk.ball.gameplay.nucleus.model.SkillLoadout
+import kinetickk.ball.gameplay.nucleus.model.SkillRuntime
 import kinetickk.ball.gameplay.nucleus.render.RelicLinkKind
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
@@ -90,6 +94,12 @@ internal class CompiledBuild private constructor(
     val keystoneMask: Int = 0,
     /** By RelicKey ordinal: the first bound Relic carrying that key (a weapon with the key harmonizes with it). */
     private val keyHarmonies: Array<RelicId?> = arrayOfNulls(kinetickk.ball.content.api.RelicKey.entries.size),
+    /** Skill damage bonus over the base (skill power = run scale × (1 + this)). */
+    val skillPower: Float = 0f,
+    /** Static scale of every skill cooldown (rules and conversions), never below [MIN_SKILL_COOLDOWN_SCALE]. */
+    val skillCooldownScale: Float = 1f,
+    /** Scale of Catalysis refunds (reactions recharging element-matched skills). */
+    val catalysisRate: Float = 1f,
 ) {
     /** The first bound Relic carrying [key], or null: a weapon with that key harmonizes with it. */
     fun harmonizing(key: kinetickk.ball.content.api.RelicKey): RelicId? = keyHarmonies[key.ordinal]
@@ -146,6 +156,8 @@ internal class CompiledBuild private constructor(
             weaponKey: kinetickk.ball.content.api.RelicKey? = null,
             /** Reaction keystone forms switched on beyond the items' own (no item rule declares one yet). */
             keystoneMask: Int = 0,
+            /** Owned skills: each adds tag points and element affinity like an item. */
+            skills: SkillLoadout = SkillLoadout.EMPTY,
         ): CompiledBuild {
             val policy = content.build.policy
             val itemCount = content.items.size
@@ -162,10 +174,14 @@ internal class CompiledBuild private constructor(
             // appears once, and owned items missing from the order count as the newest gains.
             val itemStamps = IntArray(itemCount)
             val relicStamps = IntArray(RelicId.entries.size)
+            val skillStamps = IntArray(SkillId.entries.size)
             var stamp = 1
             val order = ArrayList<Int>(acquisitionOrder.size)
             acquisitionOrder.forEach { entry ->
-                if (entry < 0) {
+                if (entry <= SKILL_GAIN_BASE) {
+                    val skill = SKILL_GAIN_BASE - entry
+                    if (skill in skillStamps.indices) skillStamps[skill] = stamp
+                } else if (entry < 0) {
                     val relic = relicOfGain(entry)
                     if (relic in relicStamps.indices) relicStamps[relic] = stamp
                 } else if (entry < itemCount && itemStacks[entry] > 0 && itemStamps[entry] == 0) {
@@ -199,6 +215,21 @@ internal class CompiledBuild private constructor(
                     } else {
                         item.tags.firstOrNull()?.let { tagPoints[it.ordinal] += policy.masteredTagPoints }
                     }
+                }
+            }
+            // Owned skills count like items: a point in each tag and in the element, rank III one more.
+            val skillPoints = policy.skillTagPoints
+            for (slot in 0 until SkillRuntime.SLOTS) {
+                val id = skills.skill(slot) ?: continue
+                val definition = content.skill(id)
+                definition.tags.forEach { tag -> tagPoints[tag.ordinal] += skillPoints }
+                val element = definition.element
+                val rankThree = skills.rank(slot) >= ContentBounds.MAX_SKILL_RANK
+                if (element != null) {
+                    affinity[element.ordinal] += if (rankThree) skillPoints * 2 else skillPoints
+                    affinityStamp[element.ordinal] = maxOf(affinityStamp[element.ordinal], skillStamps[id.ordinal])
+                } else if (rankThree) {
+                    tagPoints[definition.tags.first().ordinal] += skillPoints
                 }
             }
             coreShape?.characterTag()?.let { tagPoints[it.ordinal] += 1 }
@@ -422,6 +453,18 @@ internal fun MutableGameState.affinityTier(element: StatusElement): Int =
 /** A relic bind or rank-three upgrade in [MutableGameState.acquisitionOrder]; item ids stay non-negative. */
 internal fun relicGain(id: RelicId): Int = -(1 + id.ordinal)
 
+/** Skill gains sit far below every relic gain in [MutableGameState.acquisitionOrder]. */
+internal const val SKILL_GAIN_BASE: Int = -1_000
+
+/** A skill draft or rank-up in [MutableGameState.acquisitionOrder]. */
+internal fun skillGain(id: SkillId): Int = SKILL_GAIN_BASE - id.ordinal
+
+/** Records [id]'s affinity gain as the newest one; each skill appears at most once. */
+internal fun MutableGameState.recordSkillGain(id: SkillId) {
+    val entry = skillGain(id)
+    acquisitionOrder = acquisitionOrder.filter { it != entry } + entry
+}
+
 private fun relicOfGain(entry: Int): Int = -entry - 1
 
 /** Records [id]'s affinity gain as the newest one; each relic appears at most once. */
@@ -450,6 +493,7 @@ internal fun MutableGameState.compileBuild(keystoneMask: Int = 0): CompiledBuild
     reactionPowerBonus = matrix.reactionPowerBonus,
     weaponKey = currentWeaponDefinition.key,
     keystoneMask = keystoneMask,
+    skills = skillLoadout,
 )
 
 /** True when bound relic liabilities disable every effect of [item] (offers weight it 0; cards strike it). */

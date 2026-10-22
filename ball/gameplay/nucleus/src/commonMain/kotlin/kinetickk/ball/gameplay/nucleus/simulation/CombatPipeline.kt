@@ -62,7 +62,7 @@ internal fun MutableGameState.effectiveMass(): Float {
         content.relic(RelicId.NEUTRON_HEART).value(0, relicRank(RelicId.NEUTRON_HEART)) / 100f *
             build.relicUpside(RelicId.NEUTRON_HEART)
     } else 0f
-    return mass * (1f + neutron) * characterMassMultiplier()
+    return mass * (1f + neutron) * characterMassMultiplier() * skillMassMultiplier()
 }
 
 /** Impact power at [atSpeed], including run growth; the shared basis of impacts and IMPACT procs. */
@@ -644,7 +644,7 @@ internal fun MutableGameState.executeEnemy(enemy: Enemy, source: HitSource, tone
 // ---------------------------------------------------------------------------------------------
 // Healing and shields: one path, so conversions and blocks apply everywhere.
 
-internal enum class HealSource { REGENERATION, REPAIR, ITEM, LEVEL, VERDANT, RELIC }
+internal enum class HealSource { REGENERATION, REPAIR, ITEM, LEVEL, VERDANT, RELIC, SKILL }
 
 internal fun MutableGameState.heal(requested: Float, source: HealSource) {
     if (requested <= 0f) return

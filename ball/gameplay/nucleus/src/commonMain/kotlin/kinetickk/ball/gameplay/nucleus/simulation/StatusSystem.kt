@@ -721,6 +721,7 @@ internal fun MutableGameState.onStatusCarrierDied(enemy: Enemy) {
         shockwave(enemy.x, enemy.y, 0.3f, 110f, 4)
     }
     onReactionCarrierDied(enemy)
+    onSkillCarrierDied(enemy)
 }
 
 private fun MutableGameState.nearestOtherEnemyExcluding(origin: Enemy, alsoExcluded: Int, range: Float): Enemy? {

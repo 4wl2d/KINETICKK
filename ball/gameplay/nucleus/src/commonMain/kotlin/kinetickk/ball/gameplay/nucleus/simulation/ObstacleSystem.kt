@@ -91,6 +91,7 @@ internal fun MutableGameState.applySlamDamage(
     }
     burst(enemy.x, enemy.y, 6, 3)
     fireClauses(EffectTrigger.SLAM, enemy, damage)
+    onSkillSlam(enemy)
     return true
 }
 

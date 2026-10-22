@@ -24,7 +24,8 @@ typealias EnemyType = kinetickk.ball.content.api.EnemyType
 enum class PickupType { DATA, KEY, REPAIR, RELIC }
 /** A hostile [BOLT] flies; a [MINE] stays put, arms and detonates when the Core comes close. */
 enum class ProjectileKind { BOLT, MINE }
-enum class ChoiceType { ITEM, TOTEM, WEAPON, RELIC, RELIC_BIND }
+/** What an offer deals; [SKILL] is a skill draft (a level's item offer may also carry one skill rank-up card). */
+enum class ChoiceType { ITEM, TOTEM, WEAPON, RELIC, RELIC_BIND, SKILL }
 enum class TotemAction { AMPLIFY_CURRENT, CHANGE_WEAPON }
 enum class RelicChoiceAction { ACQUIRE, MELD, REPLACE, MELD_TARGET, DECLINE }
 enum class WeaponNodeType { GRAVITY_MINE }
@@ -52,6 +53,10 @@ data class ChoiceOption(
     val reborn: Boolean = false,
     /** Part of the run-opening Heirloom offer. */
     val heirloom: Boolean = false,
+    /** A skill card: the drafted skill, or the skill a rank-up card raises. */
+    val skillId: kinetickk.ball.content.api.SkillId? = null,
+    /** The rank the skill has once picked (1 for a draft card, 2 or 3 for a rank-up card). */
+    val skillRank: Int? = null,
 )
 
 data class CharacterLatticePoint(val x: Float, val y: Float)
@@ -478,7 +483,7 @@ class GameplayRenderModel(
         }
     val choicesCanReroll: Boolean
         get() = phase == GamePhase.CHOICE && !directedChoice && rerollsRemaining > 0 && when (choiceType) {
-            ChoiceType.ITEM, ChoiceType.WEAPON, ChoiceType.RELIC -> true
+            ChoiceType.ITEM, ChoiceType.WEAPON, ChoiceType.RELIC, ChoiceType.SKILL -> true
             ChoiceType.TOTEM, ChoiceType.RELIC_BIND -> false
         }
     val itemStacksSnapshot: ImmutableList<Int> get() = itemStacks

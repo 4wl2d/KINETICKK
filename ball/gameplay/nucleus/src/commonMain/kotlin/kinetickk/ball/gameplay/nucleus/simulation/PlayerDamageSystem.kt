@@ -62,6 +62,8 @@ internal fun MutableGameState.takeDamage(
         takeObstacleDamage(rawAmount)
         return
     }
+    // Void Step's phase: contacts and shots pass through the Core (the shots are still spent).
+    if ((kind == IncomingDamage.CONTACT || kind == IncomingDamage.PROJECTILE) && phaseUntil > elapsed) return
     // Self-inflicted damage neither uses nor grants the hit i-frames, so real hits are never dropped behind it.
     val incoming = kind != IncomingDamage.SELF
     if ((incoming && hurtCooldown > 0f) || invulnerableUntil > elapsed) return

@@ -11,6 +11,7 @@ import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.api.BuffStat
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.BrakeSource
@@ -25,6 +26,10 @@ import kinetickk.ball.gameplay.nucleus.model.ObstacleField
 import kinetickk.ball.gameplay.nucleus.model.SeveredRelic
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.model.CharacterRuntime
+import kinetickk.ball.gameplay.nucleus.model.ApexCell
+import kinetickk.ball.gameplay.nucleus.model.SkillCell
+import kinetickk.ball.gameplay.nucleus.model.SkillLoadout
+import kinetickk.ball.gameplay.nucleus.model.SkillRuntime
 import kinetickk.ball.gameplay.nucleus.model.Polarity
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.PointOfInterestState
@@ -771,6 +776,7 @@ class GameplayReductionIsolationTest {
             // Step scratch is idle between accepted reductions, so no candidate inherits it.
             listOf(production.model, eagerReference).forEach { state ->
                 assertEquals(0, state.chainDepth, "transition $index chain scratch depth")
+                assertEquals(-1, state.castSlot, "transition $index skill cast scratch")
                 assertEquals(-1, state.shatteringEnemyId, "transition $index shatter target")
                 assertEquals(0, state.clauseDepth, "transition $index clause depth")
             }
@@ -898,9 +904,26 @@ class GameplayReductionIsolationTest {
         shotErasedDispatches = 2
         markDispatches = 1
         pendingSkillDrafts = 1
+        pendingRankUpOffers = 1
         skillBufferMask = 0b101
         skillBufferTime = 0.08f
         apexBufferTime = 0.05f
+        // Slot Z casts inside the trace (its buffered request is ready); slot C cools and holds a pending landing.
+        skillLoadout = SkillLoadout.EMPTY.with(0, SkillId.FROST_SNAP, 2).with(2, SkillId.METEOR, 1)
+        skillRuntime = SkillRuntime().apply {
+            this[2, SkillCell.READY_AT] = 3f
+            this[2, SkillCell.CAST_AT] = 0.1f
+            this[2, SkillCell.LAST_COOLDOWN] = 12f
+            this[2, SkillCell.REFUNDED] = 0.25f
+            this[2, SkillCell.ANCHOR_X] = 140f
+            this[2, SkillCell.ANCHOR_Y] = -20f
+            this[2, SkillCell.PENDING_AT] = 0.9f
+            this[2, SkillCell.RANKED_AT_LEVEL] = 2f
+            this[2, SkillCell.CAST_COUNT] = 1f
+            setApex(ApexCell.AUX, 0.5f)
+            skillDamage = 12.5
+            apexBossDamage = 3.0
+        }
         severedRelics = listOf(SeveredRelic(RelicId.GLASS_COMET, until = 40f))
         echoHits += EchoHit(enemyId = 11, delay = 0.3f, damage = 5f, appliesDominant = true)
         clauseReadyAt[0] = 0.7f
@@ -1047,9 +1070,8 @@ class GameplayReductionIsolationTest {
             is GameplayInteractionPulse.ChoiceSelected -> choose(pulse.index)
             GameplayInteractionPulse.ChoicesRerolled -> rerollChoices()
             GameplayInteractionPulse.UserGestureObserved -> Unit
-            is GameplayInteractionPulse.SkillRequested,
-            GameplayInteractionPulse.ApexRequested,
-            -> Unit
+            is GameplayInteractionPulse.SkillRequested -> requestSkill(pulse.slot)
+            GameplayInteractionPulse.ApexRequested -> Unit
         }
     }
 
@@ -1188,6 +1210,9 @@ class GameplayReductionIsolationTest {
             value("shotErasedDispatches", shotErasedDispatches)
             value("markDispatches", markDispatches)
             value("pendingSkillDrafts", pendingSkillDrafts)
+            value("pendingRankUpOffers", pendingRankUpOffers)
+            value("skillLoadout", skillLoadout.toString())
+            value("skillRuntime", skillRuntime.toString())
             value("skillBufferMask", skillBufferMask)
             float("skillBufferTime", skillBufferTime)
             float("apexBufferTime", apexBufferTime)

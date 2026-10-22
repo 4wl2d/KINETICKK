@@ -76,6 +76,9 @@ internal class MutableGameState(
         const val MAX_VOLATILE_BURSTS = 48
         const val MAX_TRAIL_SAMPLES_PER_UPDATE = 32
         const val MAX_GUARD_SHARDS = 6
+        const val SKILL_INPUT_BUFFER_SECONDS = 0.16f
+        /** Enemies one skill cast may pick at once (Catalyze's largest target cap). */
+        const val MAX_SKILL_SCRATCH = 10
     }
 
     internal var gameplayRandom: CloneableXorWowRandom = reductionSource?.gameplayRandom?.let { source ->
@@ -207,6 +210,22 @@ internal class MutableGameState(
     internal var skillBufferMask: Int = reductionSource?.skillBufferMask ?: 0
     internal var skillBufferTime: Float = reductionSource?.skillBufferTime ?: 0f
     internal var apexBufferTime: Float = reductionSource?.apexBufferTime ?: 0f
+    /** Level item offers still owed a skill rank-up card (one per level reached at the rank cadence). */
+    internal var pendingRankUpOffers: Int = reductionSource?.pendingRankUpOffers ?: 0
+    /** What the skill slots hold; immutable, replaced by a draft or rank-up. */
+    internal var skillLoadout: SkillLoadout = reductionSource?.skillLoadout ?: SkillLoadout.EMPTY
+    /** Skill and Apex timing; a full reduction forks it, a scalar-input reduction shares it. */
+    internal var skillRuntime: SkillRuntime = reductionSource?.skillRuntime?.let { source ->
+        if (shareStableReductionStorage) source else source.fork()
+    } ?: SkillRuntime()
+    /** Candidate-private scratch of one skill cast (picked targets); never read across casts. */
+    internal val skillScratch: IntArray = IntArray(MAX_SKILL_SCRATCH)
+    /** The slot casting right now, -1 between casts; the cast's damaged-enemy count and the bosses it struck. */
+    internal var castSlot: Int = -1
+    internal var castHits: Int = 0
+    internal var castPrimaryId: Int = -1
+    internal var castBossHitFirst: Int = -1
+    internal var castBossHitSecond: Int = -1
     internal var reactionTokens: Float = reductionSource?.reactionTokens ?: REACTION_BURST
     internal var breakTokens: Float = reductionSource?.breakTokens ?: BREAK_BURST
     internal var discoveredReactionMask: Int = reductionSource?.discoveredReactionMask
@@ -717,6 +736,7 @@ internal class MutableGameState(
             // Offers come from owned weapons only: with no more than one offer's worth a reroll would deal the same set.
             ChoiceType.WEAPON -> weaponOfferCandidates().size > WEAPON_OFFER_CHOICES
             ChoiceType.RELIC -> !heirloomOfferActive
+            ChoiceType.SKILL -> true
             ChoiceType.TOTEM, ChoiceType.RELIC_BIND -> false
         }
     val pendingRelicChoiceCount: Int get() = pendingRelicChoices

@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.SkillId
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableListOfSize
 import kinetickk.foundation.collections.toImmutableList
@@ -353,8 +354,8 @@ internal fun MutableGameState.toRenderModel(
         rebirthRank = rebirthRank,
         volatileBursts = volatileBursts,
         maxLevel = content.tempo.maximumLevel,
-        // No skill or Apex runtime yet: shared neutral projections.
-        skillBar = SkillBarProjection.EMPTY,
+        skillBar = skillBarProjection(reusableCollections?.skillBar),
+        // No Apex runtime yet: the shared locked projection.
         apex = ApexProjection.LOCKED,
         combatFields = combatFieldProjection(reusableCollections?.combatFields, identitySource?.combatFieldTable),
         coreState = coreStateProjection(reusableCollections?.coreState),
@@ -422,10 +423,18 @@ private fun fieldReaction(table: CombatFieldTable, index: Int): Int =
     if (table.source(index) == FieldSource.REACTION) table.owner(index) else -1
 
 /**
- * The kind counter as a 0..1 fill: shots a Maw, a Time Bubble or Dead Air ate of its budget, a Rot
- * Well's growths; 0 for the other kinds.
+ * The kind counter as a 0..1 fill: shots a Maw, a Time Bubble, Dead Air or a Frost Line ate of its budget, a Rot
+ * Well's growths, a Resonator's echoes; 0 for the other kinds.
  */
 private fun MutableGameState.fieldCharge01(table: CombatFieldTable, index: Int): Float {
+    if (table.source(index) == FieldSource.SKILL) {
+        val budget = when (table.kind(index)) {
+            CombatFieldKind.FROST_LINE -> table[index, FieldCell.POWER]
+            CombatFieldKind.ECHO_RING -> table[index, FieldCell.STACKS]
+            else -> 0f
+        }
+        return if (budget <= 0f) 0f else (table[index, FieldCell.CHARGE] / budget).coerceIn(0f, 1f)
+    }
     if (table.source(index) != FieldSource.REACTION) return 0f
     val keystone = table.hasFlag(index, FieldFlags.KEYSTONE)
     val budget = when (table.kind(index)) {
@@ -476,8 +485,10 @@ private fun MutableGameState.coreStateProjection(previous: CoreStateProjection?)
     val guard = if (guardUntil > elapsed) guardShards else 0
     val phased = phaseUntil > elapsed
     val primed = primedDashUntil > elapsed
+    val stored = shroudStored()
+    val coiled = dashCoiled()
     if (ablaze == 0f && frictionless == 0f && weave == 0f && !blastJumpReady && guard == 0 && !phased && !primed &&
-        coreFieldMask == 0
+        coreFieldMask == 0 && stored == 0 && !coiled
     ) return CoreStateProjection.NEUTRAL
     val projection = CoreStateProjection(
         ablaze01 = ablaze,
@@ -485,12 +496,74 @@ private fun MutableGameState.coreStateProjection(previous: CoreStateProjection?)
         blastJumpReady = blastJumpReady,
         weave01 = weave,
         guardShards = guard,
+        shroudStored = stored,
         phased = phased,
         primedDash = primed,
+        coiledDash = coiled,
         inFieldMask = coreFieldMask,
     )
     return if (projection == previous) previous else projection
 }
+
+/**
+ * The three skill slots from the loadout and the skill runtime. The shared [SkillBarProjection.EMPTY] stands for
+ * no skill drafted; an unchanged bar keeps the previous instance.
+ */
+private fun MutableGameState.skillBarProjection(previous: SkillBarProjection?): SkillBarProjection {
+    val loadout = skillLoadout
+    if (loadout.ownedCount == 0) return SkillBarProjection.EMPTY
+    var changed = previous == null || previous === SkillBarProjection.EMPTY
+    val first = skillSlotProjection(0)
+    val second = skillSlotProjection(1)
+    val third = skillSlotProjection(2)
+    if (!changed) {
+        val slots = checkNotNull(previous).slots
+        changed = slots[0] != first || slots[1] != second || slots[2] != third
+    }
+    if (!changed) return checkNotNull(previous)
+    return SkillBarProjection(kinetickk.foundation.collections.immutableListOf(first, second, third))
+}
+
+private fun MutableGameState.skillSlotProjection(slot: Int): SkillSlotProjection {
+    val id = skillLoadout.skill(slot) ?: return SkillSlotProjection.EMPTY
+    val runtime = skillRuntime
+    val values = content.skill(id).rank(skillLoadout.rank(slot)).values
+    val readyAt = runtime[slot, SkillCell.READY_AT]
+    val cooldown = runtime[slot, SkillCell.LAST_COOLDOWN]
+    val ready = elapsed >= readyAt
+    val activeSeconds = when (id) {
+        SkillId.MASS_DRIVER, SkillId.NULL_SHROUD, SkillId.DUAL_INFUSION -> values[0]
+        SkillId.SLINGSHOT -> values[SLINGSHOT_WINDOW_VALUE]
+        else -> 0f
+    }
+    val pendingAt = runtime[slot, SkillCell.PENDING_AT]
+    val pendingSeconds = when (id) {
+        SkillId.METEOR -> values[METEOR_DELAY_VALUE]
+        SkillId.VOID_STEP -> values[VOID_STEP_RIFT_DELAY_VALUE]
+        else -> 0f
+    }
+    val pending = id != SkillId.NULL_SHROUD && pendingAt >= 0f && pendingAt > elapsed
+    return SkillSlotProjection(
+        skill = id.ordinal,
+        rank = skillLoadout.rank(slot),
+        cooldown01 = if (ready || cooldown <= 0f) 0f else ((readyAt - elapsed) / cooldown).coerceIn(0f, 1f),
+        ready = ready,
+        charges = if (ready) 1 else 0,
+        maxCharges = 1,
+        active01 = if (activeSeconds > 0f) remainingShare(runtime[slot, SkillCell.ACTIVE_UNTIL], activeSeconds) else 0f,
+        pending01 = if (pending && pendingSeconds > 0f) ((pendingAt - elapsed) / pendingSeconds).coerceIn(0f, 1f) else 0f,
+        anchorX = if (pending) runtime[slot, SkillCell.ANCHOR_X] else 0f,
+        anchorY = if (pending) runtime[slot, SkillCell.ANCHOR_Y] else 0f,
+        refunded = runtime[slot, SkillCell.REFUNDED],
+        refusal = runtime[slot, SkillCell.REFUSAL].toInt(),
+        refusedAt = runtime[slot, SkillCell.REFUSED_AT],
+    )
+}
+
+/** Indices of the skill values the skill bar reads (the content order of `defaultSkillDefinitions`). */
+private const val SLINGSHOT_WINDOW_VALUE: Int = 3
+private const val METEOR_DELAY_VALUE: Int = 4
+private const val VOID_STEP_RIFT_DELAY_VALUE: Int = 5
 
 private fun MutableGameState.remainingShare(until: Float, seconds: Float): Float = when {
     until <= elapsed -> 0f

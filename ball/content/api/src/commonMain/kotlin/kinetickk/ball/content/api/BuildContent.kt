@@ -197,6 +197,11 @@ data class BuildPolicy(
     val reactionCooldownSeconds: Float = 0.5f,
     val reactionPairCooldownSeconds: Float = 2f,
     val masteredTagPoints: Int = 1,
+    /**
+     * Points an owned skill adds to each of its two tags and to its element's affinity (rank III adds as many
+     * again to the element, or to the first tag of an element-less skill).
+     */
+    val skillTagPoints: Int = 1,
 ) {
     init {
         require(resonanceThresholds.size == ContentBounds.RESONANCE_TIERS)
@@ -222,6 +227,7 @@ data class BuildPolicy(
         require(reactionCooldownSeconds.isFinite() && reactionCooldownSeconds > 0f)
         require(reactionPairCooldownSeconds.isFinite() && reactionPairCooldownSeconds >= reactionCooldownSeconds)
         require(masteredTagPoints in 0..2)
+        require(skillTagPoints in 0..2)
     }
 
     fun stackMagnitude(stacks: Int): Float =
