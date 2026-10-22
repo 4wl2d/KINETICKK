@@ -960,6 +960,8 @@ internal fun MutableGameState.gravityWellClosed(index: Int) {
         if (!pickup.expires || pickup.attracted) continue
         if (distanceSquared(x, y, pickup.x, pickup.y) <= radius * radius) pickup.attracted = latch
     }
+    val rank = skillLoadout.rank(table.owner(index)).coerceIn(1, ContentBounds.MAX_SKILL_RANK)
+    emitVisualFx(VisualFxCue.SkillCast(SkillId.GRAVITY_WELL, x, y, 0f, 0f, radius, rank, SkillCueCodes.PHASE_IMPACT))
     if (!table.hasFlag(index, FieldFlags.RANK_III)) return
     for (enemyIndex in enemies.indices) {
         val enemy = enemies[enemyIndex]
@@ -1119,10 +1121,13 @@ internal fun MutableGameState.onSkillCarrierDied(enemy: Enemy) {
         val angle = enemy.id * SPORES_SCATTER_ANGLE
         addPickup(Pickup(PickupType.DATA, enemy.x, enemy.y, cos(angle) * SPORES_DATA_SPEED, sin(angle) * SPORES_DATA_SPEED))
     }
+    // Rank III: every skill recharges for each Spored death, up to the cast's cap per skill.
     if (skillLoadout.rank(slot) >= ContentBounds.MAX_SKILL_RANK) {
-        val refunded = runtime[slot, SkillCell.AUX_COUNT]
-        if (refunded < SPORES_REFUND_CAP) {
-            runtime[slot, SkillCell.AUX_COUNT] = refunded + refundAllSkills(min(SPORES_REFUND_SECONDS, SPORES_REFUND_CAP - refunded))
+        val offered = runtime[slot, SkillCell.AUX_COUNT]
+        val seconds = min(SPORES_REFUND_SECONDS, SPORES_REFUND_CAP - offered)
+        if (seconds > 0f) {
+            runtime[slot, SkillCell.AUX_COUNT] = offered + seconds
+            refundAllSkills(seconds)
         }
     }
 }

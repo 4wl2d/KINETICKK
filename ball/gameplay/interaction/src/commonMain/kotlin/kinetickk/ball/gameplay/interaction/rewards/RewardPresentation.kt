@@ -30,6 +30,7 @@ import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.liabilityText
+import kinetickk.ball.content.api.rankLines
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.content.api.ruleLines
 import kinetickk.ball.content.api.upsideText
@@ -542,8 +543,11 @@ internal fun GameplayRenderModel.rewardCardPresentation(
             weapon != null -> add(weapon.description.localizedContent(language))
             choice.totemAction == TotemAction.CHANGE_WEAPON -> add(language.text(OverlayRedesignText.ChangeWeaponEffect))
             choice.relicAction == RelicChoiceAction.MELD -> add(language.text(OverlayRedesignText.MeldEffect))
-            // A skill card: what the skill does (a rank III card: what rank III adds).
-            choice.skillId != null -> add(choice.description.localizedContent(language))
+            // A skill card: what the skill does (a rank III card: what rank III adds), then the rank's numbers.
+            choice.skillId != null -> {
+                add(choice.description.localizedContent(language))
+                add(content.skill(choice.skillId!!).rankLines(choice.skillRank ?: 1, language).joinToString(" · "))
+            }
         }
     }.filter(String::isNotBlank).distinct()
     val relicAspect = relic?.aspect
