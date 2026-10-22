@@ -178,9 +178,14 @@ private fun MutableGameState.releaseOrbit(x: Float, y: Float, struck: Enemy?) {
     ability.turnDistance = 0f
     val damage = ORBIT_DAMAGE * abilityPower()
     val dominant = build.dominant
+    // During Perihelion a release reaches boss-class enemies only when the base rules would have charged it too.
+    val perihelion = apexActive()
+    val reachesBosses = !perihelion || skillRuntime.apex(ApexCell.AUX) >= 1f
+    if (perihelion && reachesBosses) skillRuntime.setApex(ApexCell.AUX, 0f)
     for (index in enemies.indices) {
         val target = enemies[index]
         if (!target.alive || distanceSquared(x, y, target.x, target.y) > square(ORBIT_RADIUS + target.radius)) continue
+        if (target.isBossClass && !reachesBosses) continue
         dealCharacterDamage(target, damage)
     }
     if (dominant != null && struck != null && struck.alive) applyStatus(struck, dominant, ORBIT_STACKS, 0)
@@ -695,6 +700,13 @@ private fun MutableGameState.updateOrbit(ability: CharacterRuntime, turn: Float,
         val requiredArc = if (perihelion) apexValue(PERIHELION_ARC) else ORBIT_ARC
         val requiredDistance = if (perihelion) PERIHELION_MIN_DISTANCE else ORBIT_MIN_DISTANCE
         val earned = if (abs(arc) >= requiredArc && distance >= requiredDistance) abs(turn) / PI.toFloat() else 0f
+        if (perihelion) {
+            // The charge the base rules would have earned: only a release it completes reaches boss-class enemies.
+            val baseEarned = if (currentSpeed >= ORBIT_MIN_SPEED && ability.previousSpeed >= ORBIT_MIN_SPEED &&
+                abs(arc) >= ORBIT_ARC && distance >= ORBIT_MIN_DISTANCE
+            ) abs(turn) / PI.toFloat() else 0f
+            skillRuntime.setApex(ApexCell.AUX, min(1f, skillRuntime.apex(ApexCell.AUX) + baseEarned))
+        }
         ability.turnArc = arc.coerceIn(-TAU, TAU)
         ability.turnDistance = min(2_000f, distance)
         ability.charge = min(1f, ability.charge + earned)
@@ -1400,7 +1412,8 @@ internal fun MutableGameState.beginApexForm() {
     val ability = characterRuntime
     val runtime = skillRuntime
     when (coreShape) {
-        CoreShape.ORB -> Unit
+        // The base rules' Orbit charge carries into the activation.
+        CoreShape.ORB -> runtime.setApex(ApexCell.AUX, ability.charge)
         CoreShape.PRISM -> {
             ability.facets = CharacterRuntime.MAX_FACETS
             ability.facetTimer = 0f
@@ -1490,10 +1503,13 @@ private fun MutableGameState.updateApexForm(delta: Float) {
 private fun MutableGameState.releaseHeldShots() {
     val runtime = skillRuntime
     val held = runtime.apex(ApexCell.HELD)
-    if (held < 1f || apexActive() || elapsed < runtime.apex(ApexCell.HELD_RELEASE_AT)) return
+    val releaseAt = runtime.apex(ApexCell.HELD_RELEASE_AT)
+    if (held < 1f || apexActive() || elapsed < releaseAt) return
     val target = apexShotTarget(coreX, coreY, PERIHELION_RELEASE_RANGE) ?: return
     runtime.setApex(ApexCell.HELD, held - 1f)
-    runtime.setApex(ApexCell.HELD_RELEASE_AT, elapsed + apexValue(PERIHELION_RELEASE_INTERVAL))
+    // On the release schedule (a shot that waited for a target restarts it), so fixed steps add no drift.
+    val interval = apexValue(PERIHELION_RELEASE_INTERVAL)
+    runtime.setApex(ApexCell.HELD_RELEASE_AT, max(releaseAt + interval, elapsed + interval - MutableGameState.FIXED_STEP))
     fireApexShot(coreX, coreY, target, apexValue(PERIHELION_HELD_DAMAGE) * abilityPower(),
         if (target.isBossClass) null else build.dominant)
 }

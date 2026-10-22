@@ -131,8 +131,9 @@ private fun MutableGameState.castApex() {
 /**
  * The boss channel (combat-final §5.2 rule 2): a strike on boss-class [enemy] deals at least
  * [APEX_STRIKE_CAP_SHARE] of its hit cap through the character damage path (so the Architect's gate still caps it
- * and holds every phase gate) and spends one strike when something landed. A shifting enemy, an ordinary one or
- * an empty strike budget takes nothing and spends nothing. Returns the integrity removed.
+ * and holds every phase gate; a Herald, which has no gate, is held to the same cap) and spends one strike when
+ * something landed. A shifting enemy, an ordinary one or an empty strike budget takes nothing and spends nothing.
+ * Returns the integrity removed.
  */
 internal fun MutableGameState.apexStrike(enemy: Enemy, amount: Float): Float {
     if (!enemy.isBossClass || !enemy.alive || isShifting(enemy)) return 0f
@@ -140,7 +141,14 @@ internal fun MutableGameState.apexStrike(enemy: Enemy, amount: Float): Float {
     val left = runtime.apex(ApexCell.STRIKES_LEFT)
     if (left < 1f) return 0f
     val integrity = enemy.hp
-    val result = dealCharacterDamage(enemy, max(amount, APEX_STRIKE_CAP_SHARE * architectHitCap(enemy)), edge = false)
+    val cap = architectHitCap(enemy)
+    val requested = max(amount, APEX_STRIKE_CAP_SHARE * cap)
+    val result = if (enemy.isBoss) {
+        dealCharacterDamage(enemy, requested, edge = false)
+    } else {
+        val scaled = min(requested * matrix.damageMultiplier * enemy.weaponTaken, cap)
+        damageEnemy(enemy, scaled, unmitigated = scaled).also { recordAbilityDamage(integrity, it) }
+    }
     if (result.amount <= 0f) return 0f
     runtime.setApex(ApexCell.STRIKES_LEFT, left - 1f)
     runtime.apexBossDamage += min(result.amount, integrity.coerceAtLeast(0f)).toDouble()
