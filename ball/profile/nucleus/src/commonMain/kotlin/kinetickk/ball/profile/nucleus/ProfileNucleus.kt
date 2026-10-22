@@ -138,6 +138,7 @@ object ProfileNucleus {
                 economy = state.profile.economy,
                 loadout = state.profile.loadout,
                 rebirthRank = state.profile.rebirthProgress.rank,
+                upgrades = state.profile.upgrades,
             ),
         )
 
@@ -181,6 +182,8 @@ object ProfileNucleus {
         is ProfilePulse.PurchaseOrEquipWeapon -> purchaseOrEquipWeapon(state, pulse.id)
         is ProfilePulse.MarkCollectionEntryViewed -> markCollectionEntryViewed(state, pulse.entry)
         is ProfilePulse.SelectCoreShape -> selectCoreShape(state, pulse.shape, commandReply = false)
+        is ProfilePulse.PurchaseCharacterUpgrade -> purchaseCharacterUpgrade(state, pulse.shape)
+        is ProfilePulse.PurchaseWeaponUpgrade -> purchaseWeaponUpgrade(state, pulse.id)
     }
 
     private fun markCollectionEntryViewed(state: ProfileState, entry: CollectionEntry): ProfileDecision {
@@ -386,6 +389,43 @@ object ProfileNucleus {
                     coreShape = state.profile.loadout.coreShape,
                     selectedWeapon = id,
                     unlockedWeapons = unlocked,
+                ),
+            ),
+        )
+    }
+
+    /**
+     * Buys the next Refit level of [shape] (see [characterUpgradeQuote] for the order of checks).
+     * Upgrades are permanent spending, so lifetime Matter is unchanged and nothing refunds them.
+     */
+    private fun purchaseCharacterUpgrade(
+        state: ProfileState,
+        shape: kinetickk.ball.content.api.CoreShape,
+    ): ProfileDecision = when (val quote = characterUpgradeQuote(state.profile, state.policy, shape)) {
+        is PurchaseQuote.Refused -> rejected(quote.reason)
+        is PurchaseQuote.Priced -> acceptedMutation(
+            state = state,
+            nextProfile = state.profile.copy(
+                economy = state.profile.economy.copy(matter = state.profile.economy.matter - quote.cost),
+                upgrades = state.profile.upgrades.copy(
+                    characterLevels = state.profile.upgrades.characterLevels.raisedAt(shape.ordinal),
+                ),
+            ),
+        )
+    }
+
+    /** Buys the next Honing level of [id] (see [weaponUpgradeQuote]); lifetime Matter is unchanged. */
+    private fun purchaseWeaponUpgrade(
+        state: ProfileState,
+        id: kinetickk.ball.content.api.WeaponId,
+    ): ProfileDecision = when (val quote = weaponUpgradeQuote(state.profile, state.policy, id)) {
+        is PurchaseQuote.Refused -> rejected(quote.reason)
+        is PurchaseQuote.Priced -> acceptedMutation(
+            state = state,
+            nextProfile = state.profile.copy(
+                economy = state.profile.economy.copy(matter = state.profile.economy.matter - quote.cost),
+                upgrades = state.profile.upgrades.copy(
+                    weaponLevels = state.profile.upgrades.weaponLevels.raisedAt(id.ordinal),
                 ),
             ),
         )
@@ -614,6 +654,7 @@ object ProfileNucleus {
         matrix = matrix,
         collection = collection,
         rebirthProgress = rebirthProgress,
+        upgrades = upgrades,
     )
 
     private fun accepted(

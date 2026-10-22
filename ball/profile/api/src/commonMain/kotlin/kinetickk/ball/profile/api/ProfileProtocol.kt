@@ -150,6 +150,15 @@ sealed interface ProfilePulse {
 
     /** Chooses the character for the next run from the Hangar; it must be unlocked. */
     data class SelectCoreShape(val shape: CoreShape) : Business
+
+    /**
+     * Buys the next Refit level of an unlocked character. Permanent (never refunded); a run captures
+     * the levels when it starts, so a level bought mid-run applies from the next run.
+     */
+    data class PurchaseCharacterUpgrade(val shape: CoreShape) : Business
+
+    /** Buys the next Honing level of an owned weapon; permanent, and applied from the next run. */
+    data class PurchaseWeaponUpgrade(val id: WeaponId) : Business
 }
 
 sealed interface ProfileGameplayProgressRejection {
@@ -181,6 +190,10 @@ sealed interface ProfileRejection {
     data object WeaponRebirthLocked : ProfileRejection
     /** The requested Rebirth tier lies outside the policy range or above the profile's rank. */
     data object RebirthTierLocked : ProfileRejection
+    /** The Refit or Honing track is already at the policy's maximum level. */
+    data object UpgradeMaxLevel : ProfileRejection
+    /** Honing is sold only for a weapon the profile owns. */
+    data object WeaponNotOwned : ProfileRejection
 
     data class InvalidGameplayProgress(
         val reason: ProfileGameplayProgressRejection,

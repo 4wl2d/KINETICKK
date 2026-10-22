@@ -13,6 +13,7 @@ import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
 import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.profile.api.MatrixProgress
+import kinetickk.ball.profile.api.PermanentUpgrades
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerProfile
@@ -175,6 +176,29 @@ class ProfileComponentCharacterizationTest {
     }
 
     @Test
+    fun upgradePurchasesChargeDoublingPricesKeepLifetimeMatterAndWriteOncePerLevel() {
+        val initial = testDefaultProfile().copy(economy = PlayerEconomy(1_000L, 4_000L))
+        val resource = loadedResource(initial)
+        val component = testProfileComponent(resource)
+
+        listOf(
+            ProfilePulse.PurchaseCharacterUpgrade(CoreShape.ORB),
+            ProfilePulse.PurchaseCharacterUpgrade(CoreShape.ORB),
+            ProfilePulse.PurchaseWeaponUpgrade(WeaponId.FLUX_WAKE),
+        ).forEach { pulse ->
+            assertAcceptedAndWritten(component, resource, ProfileTestOperation.Local(pulse))
+        }
+
+        val view = component.query(ProfileQuery.GetLoadout).snapshot
+        // Refit 50 + 100 at Orb's base 50, Honing 35 at Flux Wake's base 35.
+        assertEquals(PlayerEconomy(1_000L - 50L - 100L - 35L, 4_000L), view.economy)
+        assertEquals(2, view.upgrades.characterLevel(CoreShape.ORB))
+        assertEquals(1, view.upgrades.weaponLevel(WeaponId.FLUX_WAKE))
+        assertEquals(initial.loadout, view.loadout)
+        assertEquals(3, resource.writes.size)
+    }
+
+    @Test
     fun gameplayBatchAndRebirthPreservePermanentSlicesAcrossTiers() {
         val representative = representativeProfile()
         val initial = representative.copy(
@@ -307,6 +331,32 @@ class ProfileComponentCharacterizationTest {
                 profile = testDefaultProfile(),
                 operation = ProfileTestOperation.ApplyGameplayProgress(GameplayProgressUpdate()),
                 reason = ProfileRejection.NoChange,
+            ),
+            RejectionCase(
+                profile = testDefaultProfile().copy(economy = PlayerEconomy(10_000L, 10_000L)),
+                operation = ProfileTestOperation.Local(ProfilePulse.PurchaseCharacterUpgrade(CoreShape.PRISM)),
+                reason = ProfileRejection.CoreShapeLocked,
+            ),
+            RejectionCase(
+                profile = testDefaultProfile().copy(economy = PlayerEconomy(10_000L, 10_000L)),
+                operation = ProfileTestOperation.Local(ProfilePulse.PurchaseWeaponUpgrade(WeaponId.MORNINGSTAR)),
+                reason = ProfileRejection.WeaponNotOwned,
+            ),
+            RejectionCase(
+                profile = testDefaultProfile().copy(
+                    economy = PlayerEconomy(10_000L, 10_000L),
+                    upgrades = PermanentUpgrades(
+                        characterLevels = CoreShape.entries.map { if (it == CoreShape.ORB) 10 else 0 },
+                        weaponLevels = List(WeaponId.entries.size) { 0 },
+                    ),
+                ),
+                operation = ProfileTestOperation.Local(ProfilePulse.PurchaseCharacterUpgrade(CoreShape.ORB)),
+                reason = ProfileRejection.UpgradeMaxLevel,
+            ),
+            RejectionCase(
+                profile = testDefaultProfile().copy(economy = PlayerEconomy(34L, 34L)),
+                operation = ProfileTestOperation.Local(ProfilePulse.PurchaseWeaponUpgrade(WeaponId.FLUX_WAKE)),
+                reason = ProfileRejection.InsufficientMatter,
             ),
         )
 

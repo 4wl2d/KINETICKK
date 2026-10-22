@@ -79,6 +79,7 @@ private fun constructInitialProfileState(
         is ProfileSnapshotReadResult.Observed -> {
             val snapshot = result.snapshot
             val loaded = snapshot?.profile?.withCatalogDiscoveries(policy)?.withMatrixPolicy(policy)
+                ?.withUpgradePolicy(policy)
             when {
                 snapshot == null || loaded == null -> state(
                     revision = ProfileRevision(1L),
@@ -190,6 +191,7 @@ private fun isPolicyCompatibleAtConstruction(
     policy.matrixNodes.forEach { definition ->
         if (matrix.rank(definition.id) > definition.maxRanks) return false
     }
+    if (!profile.upgrades.isWithin(policy.upgrades)) return false
     val heirlooms = profile.collection.heirloomRelicIds
     if (
         profile.collection.discoveredItemIds.size > policy.itemCount ||

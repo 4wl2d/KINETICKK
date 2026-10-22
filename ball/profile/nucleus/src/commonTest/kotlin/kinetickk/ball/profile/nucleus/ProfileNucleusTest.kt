@@ -239,6 +239,8 @@ class ProfileNucleusTest {
             ProfilePulse.AdjustPreference(ProfilePreferenceAdjustment.ToggleSoundEffects),
             ProfilePulse.PurchaseMatrixNode(MatrixNodeId.REINFORCED_HULL),
             ProfilePulse.PurchaseOrEquipWeapon(WeaponId.MORNINGSTAR),
+            ProfilePulse.PurchaseCharacterUpgrade(CoreShape.ORB),
+            ProfilePulse.PurchaseWeaponUpgrade(WeaponId.FLUX_WAKE),
         )
 
         intents.forEach { intent ->
@@ -342,6 +344,30 @@ class ProfileNucleusTest {
             ),
         )
         assertEquals(gated.id, purchase(owned).acceptedFrame().nextState.profile.loadout.selectedWeapon)
+    }
+
+    @Test
+    fun upgradePriceDoublesAndSaturates() {
+        // Ten Refit levels of a base-50 character cost 50, 100, … 25,600: 51,150 in total.
+        var state = readyState(defaultPlayerProfile(TestProfilePolicy).copy(
+            economy = PlayerEconomy(matter = 51_150L, lifetimeMatter = 60_000L),
+        ))
+        val paid = (0 until TestProfilePolicy.upgrades.maxLevel).map { level ->
+            val before = state.profile.economy.matter
+            state = ProfileNucleus.decide(state, ProfileNucleusPulse.Intent(ProfilePulse.PurchaseCharacterUpgrade(CoreShape.ORB)))
+                .acceptedFrame().persisted()
+            assertEquals(level + 1, state.profile.upgrades.characterLevel(CoreShape.ORB))
+            before - state.profile.economy.matter
+        }
+        assertEquals((0 until 10).map { 50L shl it }, paid)
+        assertEquals(PlayerEconomy(matter = 0L, lifetimeMatter = 60_000L), state.profile.economy)
+
+        // The price function the decision charges saturates instead of overflowing.
+        val policy = TestProfilePolicy.upgrades
+        assertEquals(1L shl 62, policy.nextCost(base = 1, level = 62))
+        assertEquals(Long.MAX_VALUE, policy.nextCost(base = 2, level = 62))
+        assertEquals(Long.MAX_VALUE, policy.nextCost(base = 1, level = 63))
+        assertEquals(Long.MAX_VALUE, policy.nextCost(base = 10_000, level = 200))
     }
 
     @Test
