@@ -180,11 +180,13 @@ internal fun MutableGameState.castSkill(slot: Int): Boolean {
     if (prismDiscount) cooldown *= PRISM_SKILL_COOLDOWN
     cooldown = max(MIN_SKILL_RECAST_SECONDS, cooldown)
     if (charged) {
-        // A charge recharges on the cooldown × 1.2; a full slot starts recharging, a recharging one keeps its clock.
+        // Each spent charge recharges on its own clock at the cooldown × 1.2: the first under way is READY_AT, a second
+        // CHARGE_READY_AT.
         cooldown *= SKILL_CHARGE_RECHARGE
         val held = runtime[slot, SkillCell.CHARGES]
         runtime[slot, SkillCell.CHARGES] = held - 1f
         if (held >= MAX_SKILL_CHARGES || runtime[slot, SkillCell.READY_AT] <= elapsed) runtime[slot, SkillCell.READY_AT] = elapsed + cooldown
+        else runtime[slot, SkillCell.CHARGE_READY_AT] = elapsed + cooldown
     } else {
         runtime[slot, SkillCell.READY_AT] = elapsed + cooldown
     }
@@ -213,19 +215,23 @@ internal fun MutableGameState.castSkill(slot: Int): Boolean {
 }
 
 /**
- * SkillCharges: [slot] gains the charges whose recharge completed (at most [MAX_SKILL_CHARGES]); a charge still
- * missing keeps recharging from where the last one finished.
+ * SkillCharges: [slot] gains the charges whose own recharge clock ran out (at most [MAX_SKILL_CHARGES]); the second
+ * clock under way, if any, then becomes the first. A fresh slot fills both charges.
  */
 internal fun MutableGameState.accrueSkillCharges(slot: Int) {
     val runtime = skillRuntime
     var held = runtime[slot, SkillCell.CHARGES]
     var readyAt = runtime[slot, SkillCell.READY_AT]
+    var second = runtime[slot, SkillCell.CHARGE_READY_AT]
     while (held < MAX_SKILL_CHARGES && elapsed >= readyAt) {
         held += 1f
-        if (held < MAX_SKILL_CHARGES) readyAt += max(MIN_SKILL_RECAST_SECONDS, runtime[slot, SkillCell.LAST_COOLDOWN])
+        if (second < 0f) break
+        readyAt = second
+        second = -1f
     }
     if (held != runtime[slot, SkillCell.CHARGES]) runtime[slot, SkillCell.CHARGES] = held
     if (readyAt != runtime[slot, SkillCell.READY_AT]) runtime[slot, SkillCell.READY_AT] = readyAt
+    if (second != runtime[slot, SkillCell.CHARGE_READY_AT]) runtime[slot, SkillCell.CHARGE_READY_AT] = second
 }
 
 /** With charges, [slot] casts while it holds one and its last cast is at least the recast floor ago. */

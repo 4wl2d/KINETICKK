@@ -55,7 +55,9 @@ internal object SkillCell {
     const val GHOST_RADIUS = 21
     /** Skill damage the slot dealt this run (each instance up to the integrity it removed). */
     const val DAMAGE = 22
-    const val STRIDE = 23
+    /** With Skill Charges, when the second spent charge finishes recharging (each charge has its own clock); -1 = none. */
+    const val CHARGE_READY_AT = 23
+    const val STRIDE = 24
 }
 
 /** Cells of the character's Apex in [SkillRuntime] (the Apex system fills them). */

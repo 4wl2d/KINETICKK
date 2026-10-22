@@ -496,7 +496,7 @@ class RuleVocabularyRuntimeTest {
     }
 
     @Test
-    fun skillChargesHoldTwoCastsRechargingOneAfterAnotherAndKeepTheRecastFloor() {
+    fun skillChargesHoldTwoCastsAndKeepTheRecastFloor() {
         val state = stateWith(probe("Twin Drum", rules = listOf(ItemRule.SkillCharges), rarity = ItemRarity.EPIC))
         state.acquireSkill(SkillId.SOLAR_FLARE)
         val cooldown = state.content.skill(SkillId.SOLAR_FLARE).rank(1).cooldownSeconds * SKILL_CHARGE_RECHARGE
@@ -513,6 +513,27 @@ class RuleVocabularyRuntimeTest {
         state.elapsed += 2 * cooldown + 1f
         state.accrueSkillCharges(0)
         assertEquals(MAX_SKILL_CHARGES, state.skillRuntime[0, SkillCell.CHARGES], "never more than two")
+    }
+
+    @Test
+    fun eachSkillChargeRechargesOnItsOwnClock() {
+        val state = stateWith(probe("Twin Drum", rules = listOf(ItemRule.SkillCharges), rarity = ItemRarity.EPIC))
+        state.acquireSkill(SkillId.SOLAR_FLARE)
+        val cooldown = state.content.skill(SkillId.SOLAR_FLARE).rank(1).cooldownSeconds * SKILL_CHARGE_RECHARGE
+        val start = state.elapsed
+
+        assertTrue(state.castSkill(0))
+        state.elapsed = start + MIN_SKILL_RECAST_SECONDS
+        assertTrue(state.castSkill(0), "both charges spent")
+        assertEquals(start + MIN_SKILL_RECAST_SECONDS + cooldown, state.skillRuntime[0, SkillCell.CHARGE_READY_AT], 1e-4f)
+        // The second charge does not wait for the first: both are back one cooldown × 1.2 after their own casts.
+        state.elapsed = start + MIN_SKILL_RECAST_SECONDS + cooldown
+        state.accrueSkillCharges(0)
+        assertEquals(MAX_SKILL_CHARGES, state.skillRuntime[0, SkillCell.CHARGES], "two charges back after one recharge time")
+        assertEquals(-1f, state.skillRuntime[0, SkillCell.CHARGE_READY_AT], "no clock left under way")
+        assertTrue(state.castSkill(0))
+        state.elapsed += MIN_SKILL_RECAST_SECONDS
+        assertTrue(state.castSkill(0), "a full pair again")
     }
 
     @Test
