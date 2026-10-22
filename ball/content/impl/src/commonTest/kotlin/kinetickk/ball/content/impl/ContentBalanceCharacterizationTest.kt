@@ -28,8 +28,10 @@ class ContentBalanceCharacterizationTest {
     fun itemCatalogCardinalityOrderingAndContentAreGolden() {
         val items = ui.items
 
-        assertEquals(173, items.size)
+        assertEquals(185, items.size)
         assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
+        // The items shipped through 0.4.0 keep their own pin: a release only appends to the catalog.
+        val shipped = items.subList(0, ITEMS_THROUGH_040)
         assertEquals(
             "f0cbb70507a2b2bb",
             goldenFingerprint {
@@ -46,8 +48,18 @@ class ContentBalanceCharacterizationTest {
                     add(rarity.rank)
                 }
                 add("items")
-                add(items.size)
-                items.forEach(::addItem)
+                add(shipped.size)
+                shipped.forEach(::addItem)
+            },
+        )
+        // The 0.5.0 items, appended from id 173 and pinned on their own.
+        val appended = items.subList(ITEMS_THROUGH_040, items.size)
+        assertEquals(
+            "b2c3ba6b389677b9",
+            goldenFingerprint {
+                add("items-0.5.0")
+                add(appended.size)
+                appended.forEach(::addItem)
             },
         )
     }
@@ -367,6 +379,9 @@ class ContentBalanceCharacterizationTest {
         )
     }
 }
+
+/** The item catalog's size through 0.4.0: ids 0..172 (0.5.0 appends from 173). */
+private const val ITEMS_THROUGH_040 = 173
 
 /** Every Matrix effect kind with its numbers; floats enter by bits, so JVM and Wasm agree. */
 private fun GoldenFingerprint.addMatrixEffect(effect: MatrixEffect) {

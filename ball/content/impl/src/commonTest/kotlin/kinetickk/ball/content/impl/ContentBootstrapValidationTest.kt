@@ -45,7 +45,7 @@ class ContentBootstrapValidationTest {
         val data = defaultContentBootstrapData()
         val gameplay = createContentCatalogForTesting(data).gameplayContent()
 
-        assertEquals(173, gameplay.items.size)
+        assertEquals(185, gameplay.items.size)
         assertEquals(ContentBounds.MAX_WEAPONS, gameplay.weapons.size)
         assertEquals(MatrixNodeId.entries.size, gameplay.matrixNodes.size)
         assertEquals(RelicId.entries.size, gameplay.relics.size)
@@ -434,7 +434,11 @@ class ContentBootstrapValidationTest {
 
     @Test
     fun keystonesAndExclusiveSkillRulesStayOnePerCatalog() {
+        // The shipped catalog without its keystone, skill-charge and attunement items, so each probe below is the only
+        // one of its kind.
         val items = defaultContentBootstrapData().items
+            .filter { item -> item.keystone == null && item.rules.none { it is ItemRule.SkillCharges || it is ItemRule.SkillAttunement } }
+            .mapIndexed { index, item -> item.copy(id = index) }
         fun epic(name: String, rules: List<ItemRule>, vararg elements: StatusElement) = ItemDefinition(
             id = 0, name = name, description = "$name exercises the exclusive rules.", rarity = ItemRarity.EPIC,
             tags = immutableListOf(BuildTag.CHAIN), elements = elements.toList().toImmutableList(), rules = rules.toImmutableList(),

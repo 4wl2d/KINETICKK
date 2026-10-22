@@ -92,7 +92,7 @@ class ContentCatalogTest {
     fun itemCatalogHoldsDistinctHandAuthoredItemsWithinTheBound() {
         val items = gameplay.items
 
-        assertEquals(173, items.size)
+        assertEquals(185, items.size)
         assertEquals(320, ContentBounds.MAX_ITEMS)
         assertTrue(items.size <= ContentBounds.MAX_ITEMS)
         assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))

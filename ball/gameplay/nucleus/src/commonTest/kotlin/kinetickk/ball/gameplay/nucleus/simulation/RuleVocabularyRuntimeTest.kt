@@ -339,7 +339,7 @@ class RuleVocabularyRuntimeTest {
 
     @Test
     fun absoluteZeroSuppressesThermalReactionParts() {
-        val keystone = probe("Quench Seal", rules = listOf(ItemRule.ReactionKeystone(ReactionId.THERMAL_SHOCK)),
+        val keystone = probe("Quench Probe", rules = listOf(ItemRule.ReactionKeystone(ReactionId.THERMAL_SHOCK)),
             elements = listOf(StatusElement.THERMAL, StatusElement.CRYO), rarity = ItemRarity.EPIC)
         val tuned = probe("Frost Lens", rules = listOf(ItemRule.ReactionTuning(ReactionId.SUPERCONDUCT, ReactionAspect.RADIUS, 0.3f)))
         val counter = probe("Blast Counter", on(EffectTrigger.REACTION, EffectAction.Vent(5f), cooldown = 1f,
@@ -349,7 +349,7 @@ class RuleVocabularyRuntimeTest {
             items = (base + listOf(keystone, tuned, counter).mapIndexed { index, item -> item.copy(id = base.size + index) }).toImmutableList(),
         )
         val state = buildTestState(kinetickk.ball.content.api.RelicId.ABSOLUTE_ZERO, content = content)
-        assertEquals(1f, state.itemSuppressedShare(state.itemNamed("Quench Seal")))
+        assertEquals(1f, state.itemSuppressedShare(state.itemNamed("Quench Probe")))
         assertEquals(0f, state.itemSuppressedShare(state.itemNamed("Frost Lens")))
         assertEquals(0.5f, state.itemSuppressedShare(state.itemNamed("Blast Counter")), "the condition, not the action")
     }
@@ -501,7 +501,7 @@ class RuleVocabularyRuntimeTest {
         val rate2 = probe("Catalyst Coil II", rules = listOf(ItemRule.CatalysisRate(1f)))
         val apex = probe("Crown Gear", rules = listOf(ItemRule.ApexCooldown(0.2f)))
         val apex2 = probe("Crown Gear II", rules = listOf(ItemRule.ApexCooldown(0.2f)))
-        val link = probe("Long Tether", rules = listOf(ItemRule.CoreLinkRadius(240f)))
+        val link = probe("Tether Probe", rules = listOf(ItemRule.CoreLinkRadius(240f)))
         val link2 = probe("Long Tether II", rules = listOf(ItemRule.CoreLinkRadius(200f)))
         val state = stateWith(rate, rate2, apex, apex2, link, link2)
         assertEquals(2f, state.build.catalysisRate)
@@ -545,7 +545,7 @@ class RuleVocabularyRuntimeTest {
     fun skillsCostHeatAndSkillFieldsTravelWithTheCore() {
         val state = stateWith(
             probe("Hot Cog", rules = listOf(ItemRule.Convert(ConversionKind.SKILLS_COST_HEAT, 25f))),
-            probe("Nomad Field", rules = listOf(ItemRule.Convert(ConversionKind.SKILL_FIELDS_FOLLOW, 0.8f))),
+            probe("Nomad Probe", rules = listOf(ItemRule.Convert(ConversionKind.SKILL_FIELDS_FOLLOW, 0.8f))),
         )
         state.acquireSkill(SkillId.FROST_LINE)
         state.aimAt(300f, 0f)
@@ -570,7 +570,7 @@ class RuleVocabularyRuntimeTest {
 
     @Test
     fun throwsOnImmovableEnemiesBecomeGatedDamage() {
-        val state = stateWith(probe("Anvil Doctrine", rules = listOf(ItemRule.Convert(ConversionKind.KNOCKBACK_TO_DAMAGE, 1f))))
+        val state = stateWith(probe("Anvil Probe", rules = listOf(ItemRule.Convert(ConversionKind.KNOCKBACK_TO_DAMAGE, 1f))))
         val elite = state.dummy(x = 200f, y = 0f, type = EnemyType.ELITE)
         val drifter = state.dummy(x = 0f, y = 200f)
         val twin = state.dummy(x = -200f, y = 0f, type = EnemyType.ELITE)
@@ -610,7 +610,7 @@ class RuleVocabularyRuntimeTest {
 
     @Test
     fun skillAndFamilyPartsSleepUntilTheRunCanUseThem() {
-        val caster = probe("Spark Gap", on(EffectTrigger.SKILL_CAST, EffectAction.ApplyStatus(ElementPick.ION, 2, 160f)),
+        val caster = probe("Spark Probe", on(EffectTrigger.SKILL_CAST, EffectAction.ApplyStatus(ElementPick.ION, 2, 160f)),
             elements = listOf(StatusElement.ION))
         val mixed = probe("Half Caster", on(EffectTrigger.SKILL_CAST, EffectAction.Vent(5f)), stats = true)
         val pulse = probe("Drum Grip", rules = listOf(ItemRule.WhileModifier(EffectCondition.WeaponFamilyIs(WeaponFamily.PULSE), BuffStat.WEAPON, 0.2f)))
@@ -624,7 +624,7 @@ class RuleVocabularyRuntimeTest {
         assertFalse(state.hasUsefulItemEffect(caster.of(state)))
         assertTrue(state.hasUsefulItemEffect(mixed.of(state)))
         assertFalse(state.hasUsefulItemEffect(pulse.of(state)))
-        assertTrue(state.offerableItems().none { it.name == "Spark Gap" || it.name == "Drum Grip" })
+        assertTrue(state.offerableItems().none { it.name == "Spark Probe" || it.name == "Drum Grip" })
         state.acquireItem(caster.of(state).id)
         assertEquals(listOf(caster.idIn(state)), state.buildSummaryDormantIds())
 

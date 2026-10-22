@@ -23,6 +23,7 @@ import kinetickk.ball.content.api.EffectCondition
 import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.ElementPick
+import kinetickk.ball.content.api.FieldAspect
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
@@ -32,6 +33,7 @@ import kinetickk.ball.content.api.ItemRarity.LEGENDARY
 import kinetickk.ball.content.api.ItemRarity.RARE
 import kinetickk.ball.content.api.ItemRarity.UNCOMMON
 import kinetickk.ball.content.api.ItemRule
+import kinetickk.ball.content.api.SkillPick
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.toImmutableList
@@ -623,6 +625,52 @@ private val Drafts: List<ItemDraft> = listOf(
         clauses = listOf(on(EffectTrigger.KILL, EffectAction.Heal(3f), EffectAction.Buff(BuffStat.DAMAGE, 0.15f, 2.5f, maxStacks = 2),
             cooldown = 0.5f)),
         rules = listOf(ItemRule.DamageVersus(EffectCondition.TargetElite, -0.25f)), rebirth = 9, risk = true),
+
+    // 0.5.0 (ids 173 onward): items built on skills, the Apex, reaction keystones, fields, marks and the Core's
+    // movement, appended in themed batches of twelve.
+    // CASTING (SKILL BUILDS) (ids 173-184).
+    ItemDraft("Spark Gap", "After every skill the air keeps crackling with charge.", COMMON, listOf(CHAIN), listOf(StatusElement.ION),
+        clauses = listOf(on(EffectTrigger.SKILL_CAST, apply(StatusElement.ION, 2, 160f))),
+        unlock = 3),
+    ItemDraft("Kiln Primer", "Whatever your skills touch comes out of the kiln a little hotter.", COMMON, listOf(OVERCLOCK),
+        listOf(StatusElement.THERMAL),
+        clauses = listOf(on(EffectTrigger.SKILL_HIT, apply(StatusElement.THERMAL, 1))),
+        unlock = 2),
+    ItemDraft("Launch Rail", "A moving skill leaves the rail greased for the next Dash.", COMMON, listOf(DRIVE),
+        clauses = listOf(on(EffectTrigger.SKILL_CAST, EffectAction.PrimeDash, EffectAction.Buff(BuffStat.DAMAGE, 0.15f, 3f),
+            given = listOf(EffectCondition.SkillTagged(DRIVE)))),
+        unlock = 4),
+    ItemDraft("Echo Capacitor", "Stores the ring of the last cast to start the next one sooner.", COMMON, listOf(OVERCLOCK),
+        rules = listOf(ItemRule.SkillCooldown(null, 0.08f)),
+        unlock = 4),
+    ItemDraft("Overcharge Glyph", "A cast spills its surplus into the weapon.", UNCOMMON, listOf(ARSENAL),
+        clauses = listOf(on(EffectTrigger.SKILL_CAST, EffectAction.Buff(BuffStat.ACTIVATION, 0.2f, 2.5f))),
+        unlock = 5),
+    ItemDraft("Cascade Relay", "A skill that lands keeps looking for the next target.", RARE, listOf(CHAIN),
+        clauses = listOf(on(EffectTrigger.SKILL_HIT, EffectAction.Chain(2, 280f, DamageBasis.HIT, 0.5f), every = 3)),
+        unlock = 7),
+    ItemDraft("Finishing Cadence", "Finish the wounded and the rhythm comes round again.", RARE, listOf(PRECISION),
+        clauses = listOf(on(EffectTrigger.SKILL_HIT, EffectAction.RefundSkills(0.4f, SkillPick.CAST),
+            given = listOf(EffectCondition.TargetBelow(0.3f)), cooldown = 0.5f)),
+        unlock = 6),
+    ItemDraft("Catalytic Converter", "Every reaction pays its toll back into your skills.", RARE, listOf(OVERCLOCK, CHAIN),
+        rules = listOf(ItemRule.CatalysisRate(0.5f)),
+        unlock = 6),
+    ItemDraft("Empty Chamber", "With nothing left to cast, there is only the fight.", RARE, listOf(OVERCLOCK),
+        rules = listOf(
+            ItemRule.WhileModifier(EffectCondition.SkillsCharging(3), BuffStat.DAMAGE, 0.2f),
+            ItemRule.WhileModifier(EffectCondition.SkillsCharging(3), BuffStat.COOLING, 0.4f),
+        ),
+        unlock = 9),
+    ItemDraft("Twin Chamber", "Load every skill twice and fire them back to back.", EPIC, listOf(ARSENAL),
+        rules = listOf(ItemRule.SkillCharges),
+        rebirth = 1),
+    ItemDraft("Alchemical Core", "Your skills forget their own element and learn yours.", EPIC, listOf(CHAIN),
+        rules = listOf(ItemRule.SkillAttunement(ElementPick.DOMINANT), ItemRule.SkillPower(null, 0.2f)),
+        unlock = 10),
+    ItemDraft("Nomad Field", "The fields you raise pack up and follow you.", RARE, listOf(ANCHOR),
+        rules = listOf(ItemRule.FieldTuning(FieldAspect.DURATION, 0.2f), ItemRule.Convert(ConversionKind.SKILL_FIELDS_FOLLOW, 0.8f)),
+        unlock = 8),
 )
 
 /** A reaction clause condition naming both elements: it holds only for the reaction between them. */

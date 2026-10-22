@@ -76,6 +76,8 @@ private val FamilyArtByName: Map<String, RewardCardArt> = mapOf(
     "Pyre Magazine" to RewardCardArt.SOLAR_CHOIR,
     "Last Word" to RewardCardArt.RESONANCE_FORK,
     "Cornucopia Core" to RewardCardArt.SOLAR_CHOIR,
+    "Twin Chamber" to RewardCardArt.STORM_LATTICE,
+    "Alchemical Core" to RewardCardArt.PRISMATIC_CORE,
 )
 
 /**

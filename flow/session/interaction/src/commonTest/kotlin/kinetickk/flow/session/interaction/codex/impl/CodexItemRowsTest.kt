@@ -25,12 +25,12 @@ import kotlin.test.*
 
 /** The Items matrix: fixed slots in labelled rows, its grid geometry, keyboard moves and cell marks. */
 /**
- * The shipped catalog's first-tag × rarity counts (Common to Legendary), the untagged row last: 173 items.
+ * The shipped catalog's first-tag × rarity counts (Common to Legendary), the untagged row last: 185 items.
  * A desktop test checks it against the real catalog.
  */
 internal val ShippedTagRarityCounts: List<List<Int>> = listOf(
-    listOf(6, 5, 4, 2, 1), listOf(7, 7, 4, 3, 1), listOf(5, 5, 4, 2, 1), listOf(11, 5, 4, 3, 1), listOf(3, 5, 2, 4, 0),
-    listOf(3, 4, 3, 3, 0), listOf(3, 4, 3, 1, 0), listOf(3, 7, 3, 5, 2), listOf(3, 4, 2, 3, 1), listOf(1, 7, 7, 4, 2),
+    listOf(6, 5, 4, 2, 1), listOf(8, 7, 4, 3, 1), listOf(5, 5, 5, 2, 1), listOf(11, 6, 4, 4, 1), listOf(3, 5, 3, 4, 0),
+    listOf(3, 4, 3, 3, 0), listOf(5, 4, 5, 1, 0), listOf(4, 7, 4, 6, 2), listOf(3, 4, 2, 3, 1), listOf(1, 7, 7, 4, 2),
 )
 
 class CodexItemRowsTest {
@@ -340,13 +340,13 @@ class CodexItemRowsTest {
     }
 
     @Test
-    fun shippedTagShapeGivesThirtyTwoRarityColumns() {
-        assertEquals(173, shipped.size)
-        assertEquals(32, codexItemRefColumns(shipped))
+    fun theShippedTagShapePacksOnTheBoardAndBandsOnAWideWindow() {
+        assertEquals(185, shipped.size)
+        assertEquals(33, codexItemRefColumns(shipped))
         assertEquals(9, codexItemRefColumns(codexTestCatalog().items))
         val matrix = rows(CodexItemSort.TAG, emptySet(), items = shipped)
-        assertEquals(listOf(18, 22, 17, 24, 14, 13, 11, 20, 13, 21), matrix.rows.map { it.cells.size })
-        // On the 710 dp board the 32 band columns no longer fit beside the labels: every row wraps, packed.
+        assertEquals(listOf(18, 23, 18, 26, 15, 13, 15, 23, 13, 21), matrix.rows.map { it.cells.size })
+        // On the 710 dp board the 33 band columns no longer fit beside the labels: every row wraps, packed.
         val board = codexItemGrid(matrix.rows, codexItemGeometry(710f, 100f, codexItemRefColumns(shipped), wide = true, ui = 1f), CodexItemSort.TAG)
         assertEquals(CodexItemLayout.PACKED, board.layout)
         assertGridShape(board, matrix)
@@ -355,8 +355,8 @@ class CodexItemRowsTest {
         val wide = codexItemGrid(matrix.rows, codexItemGeometry(1_280f, 100f, codexItemRefColumns(shipped), wide = true, ui = 1f), CodexItemSort.TAG)
         assertEquals(CodexItemLayout.BANDED, wide.layout)
         assertEquals(ItemRarity.entries, wide.bands.map { it.rarity })
-        assertEquals(listOf(11, 7, 7, 5, 2), wide.bands.map { it.width })
-        assertEquals(listOf(3, 14, 21, 28, 33), wide.bands.map { it.column })
+        assertEquals(listOf(11, 7, 7, 6, 2), wide.bands.map { it.width })
+        assertEquals(listOf(3, 14, 21, 28, 34), wide.bands.map { it.column })
         assertEquals(11, wide.items.maxOf { it.line } + 1)
         assertGridShape(wide, matrix)
     }
