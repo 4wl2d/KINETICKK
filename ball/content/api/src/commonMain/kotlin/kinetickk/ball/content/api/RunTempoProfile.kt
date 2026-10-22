@@ -145,6 +145,7 @@ data class RunTempoProfile(
         val base = levelRequirements[tableLevel - 1]
         return if (tableLevel < rebirthScaleFromLevel) base else rebirth.dataRequirement(base)
     }
+
     fun grantsWeaponAmplification(level: Int): Boolean = level > 1 && level % weaponAmplificationEveryLevels == 0
 
     companion object {
