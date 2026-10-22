@@ -10,26 +10,26 @@ import kotlin.test.assertTrue
 
 class RebirthDataRequirementScaleTest {
     @Test
-    fun everyTierScalesTheTableByFourteenHundredthsMore() {
-        assertEquals(0.14f, REBIRTH_DATA_REQUIREMENT_SCALE_PER_TIER)
+    fun everyTierScalesTheTableByATenthMore() {
+        assertEquals(0.10f, REBIRTH_DATA_REQUIREMENT_SCALE_PER_TIER)
         assertEquals(1f, defaultRebirthProfile(0).dataRequirementScale, "tier 0 keeps the base curve exactly")
         (ContentBounds.MIN_REBIRTH_LEVEL..ContentBounds.MAX_REBIRTH_LEVEL).forEach { tier ->
-            assertEquals(1f + tier * 0.14f, defaultRebirthProfile(tier).dataRequirementScale, "tier $tier")
+            assertEquals(1f + tier * 0.10f, defaultRebirthProfile(tier).dataRequirementScale, "tier $tier")
         }
-        assertEquals(1.42f, defaultRebirthProfile(3).dataRequirementScale, 1e-6f)
-        assertEquals(2.4f, defaultRebirthProfile(10).dataRequirementScale, 1e-6f)
+        assertEquals(1.3f, defaultRebirthProfile(3).dataRequirementScale, 1e-6f)
+        assertEquals(2f, defaultRebirthProfile(10).dataRequirementScale, 1e-6f)
     }
 
     @Test
     fun scaledRequirementsRoundHalfUpAndNeverFallBelowTheBase() {
         val tierZero = defaultRebirthProfile(0)
-        assertEquals(716, tierZero.dataRequirement(716))
+        assertEquals(746, tierZero.dataRequirement(746))
         assertEquals(Int.MAX_VALUE, tierZero.dataRequirement(Int.MAX_VALUE))
 
         val tierThree = defaultRebirthProfile(3)
-        // 18 × 1.42 = 25.56 and 716 × 1.42 = 1,016.72.
-        assertEquals(26, tierThree.dataRequirement(18))
-        assertEquals(1_017, tierThree.dataRequirement(716))
+        // 18 × 1.3 = 23.4 and 746 × 1.3 = 969.8.
+        assertEquals(23, tierThree.dataRequirement(18))
+        assertEquals(970, tierThree.dataRequirement(746))
 
         val half = tierZero.copy(dataRequirementScale = 1.5f)
         assertEquals(2, half.dataRequirement(1), "1.5 rounds up")
@@ -54,12 +54,12 @@ class RebirthDataRequirementScaleTest {
             assertEquals(scaled.last(), tempo.dataRequiredForLevel(tempo.maximumLevel, profile), "tier $tier at the cap")
             scaled.sum()
         }
-        assertEquals(14_428, totals[0])
-        assertEquals(19_912, totals[3])
-        assertEquals(25_393, totals[6])
-        assertEquals(32_702, totals[10])
+        assertEquals(15_148, totals[0])
+        assertEquals(19_278, totals[3])
+        assertEquals(23_415, totals[6])
+        assertEquals(28_922, totals[10])
         assertTrue(totals.zipWithNext().all { (lower, higher) -> lower < higher }, "each tier needs more Data to 42")
-        assertEquals(298, tempo.dataRequiredForLevel(16, defaultRebirthProfile(3)), "210 × 1.42 = 298.2")
+        assertEquals(281, tempo.dataRequiredForLevel(16, defaultRebirthProfile(3)), "216 × 1.3 = 280.8")
         assertEquals(166, tempo.dataRequiredForLevel(15, defaultRebirthProfile(10)))
     }
 
@@ -70,10 +70,10 @@ class RebirthDataRequirementScaleTest {
         fun RunTempoProfile.total(tier: Int): Int =
             (1 until maximumLevel).sumOf { level -> dataRequiredForLevel(level, defaultRebirthProfile(tier)) }
 
-        assertEquals(listOf(14_428, 20_490, 26_547, 34_625), listOf(0, 3, 6, 10).map(whole::total))
-        assertEquals(listOf(14_428, 14_428), listOf(0, 10).map(none::total))
-        assertEquals(43, whole.dataRequiredForLevel(1, defaultRebirthProfile(10)), "18 × 2.4 = 43.2")
-        assertEquals(43, whole.dataRequiredForLevel(Int.MIN_VALUE, defaultRebirthProfile(10)), "clamped like the table")
+        assertEquals(listOf(15_148, 19_690, 24_240, 30_296), listOf(0, 3, 6, 10).map(whole::total))
+        assertEquals(listOf(15_148, 15_148), listOf(0, 10).map(none::total))
+        assertEquals(36, whole.dataRequiredForLevel(1, defaultRebirthProfile(10)), "18 × 2 = 36")
+        assertEquals(36, whole.dataRequiredForLevel(Int.MIN_VALUE, defaultRebirthProfile(10)), "clamped like the table")
 
         RunTempoProfile(rebirthScaleFromLevel = ContentBounds.MAX_RUN_LEVEL)
         assertFailsWith<IllegalArgumentException> { RunTempoProfile(rebirthScaleFromLevel = 0) }

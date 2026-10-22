@@ -18,12 +18,12 @@ class RunTempoCurveTest {
 
         assertEquals(42, tempo.maximumLevel)
         assertEquals(SHIPPED_REQUIREMENTS, tempo.levelRequirements)
-        assertEquals(SHIPPED_REQUIREMENTS, defaultLevelRequirements(rampPlateau = 160, topPlateau = 0))
-        assertEquals(14_428, tempo.levelRequirements.sum(), "Data from level 1 to the cap")
-        assertEquals(716, tempo.dataRequiredForLevel(41))
-        assertEquals(716, tempo.dataRequiredForLevel(42), "the capped level only displays the last entry")
-        assertEquals(2.3f, tempo.levelIntegrity)
-        assertEquals(7f, tempo.levelRepair)
+        assertEquals(SHIPPED_REQUIREMENTS, defaultLevelRequirements(rampPlateau = 190, topPlateau = 0))
+        assertEquals(15_148, tempo.levelRequirements.sum(), "Data from level 1 to the cap")
+        assertEquals(746, tempo.dataRequiredForLevel(41))
+        assertEquals(746, tempo.dataRequiredForLevel(42), "the capped level only displays the last entry")
+        assertEquals(2.5f, tempo.levelIntegrity)
+        assertEquals(7.5f, tempo.levelRepair)
         assertEquals(listOf(2, 8, 16), tempo.skillSlotLevels)
         assertEquals(4, tempo.skillRankEveryLevels)
         assertEquals(2, tempo.skillRankGapLevels)
@@ -53,12 +53,12 @@ class RunTempoCurveTest {
     @Test
     fun eachPlateauKnobMovesOnlyItsOwnLevels() {
         val shipped = defaultLevelRequirements()
-        val ramp = defaultLevelRequirements(rampPlateau = 170)
+        val ramp = defaultLevelRequirements(rampPlateau = RunTempoProfile.DEFAULT_RAMP_PLATEAU + 10)
         val top = defaultLevelRequirements(topPlateau = 20)
 
         (1..15).forEach { level -> assertEquals(shipped[level - 1], ramp[level - 1], "ramp leaves level $level") }
         (1..30).forEach { level -> assertEquals(shipped[level - 1], top[level - 1], "top leaves level $level") }
-        assertEquals(210 + 2, ramp[15], "the ramp adds a fifth of its plateau at level 16")
+        assertEquals(shipped[15] + 2, ramp[15], "the ramp adds a fifth of its plateau at level 16")
         assertEquals(shipped[19] + 10, ramp[19], "the full plateau from level 20")
         assertEquals(240, ramp.sum() - shipped.sum(), "rampPlateau moves the cap total by 24 per unit")
         assertEquals(180, top.sum() - shipped.sum(), "topPlateau moves the cap total by 9 per unit")
@@ -92,7 +92,7 @@ class RunTempoCurveTest {
             RunTempoProfile(maximumLevel = 42, levelRequirements = SHIPPED_REQUIREMENTS.dropLast(1).toImmutableList())
         }
         assertFailsWith<IllegalArgumentException> {
-            RunTempoProfile(maximumLevel = 42, levelRequirements = (SHIPPED_REQUIREMENTS + 716).toImmutableList())
+            RunTempoProfile(maximumLevel = 42, levelRequirements = (SHIPPED_REQUIREMENTS + 746).toImmutableList())
         }
         val decreasing = SHIPPED_REQUIREMENTS.toMutableList().apply { this[30] = this[29] - 1 }.toImmutableList()
         assertFailsWith<IllegalArgumentException> { RunTempoProfile(levelRequirements = decreasing) }
@@ -104,13 +104,13 @@ class RunTempoCurveTest {
     }
 
     private companion object {
-        /** economy.md §1.3: Data from level L to L + 1 for L = 1..41. */
+        /** economy.md §1.3 with the calibrated rampPlateau 190: Data from level L to L + 1 for L = 1..41. */
         val SHIPPED_REQUIREMENTS: List<Int> = listOf(
             18, 34, 43, 52, 61, 70, 80, 90, 100, 110,
-            121, 132, 143, 154, 166, 210, 254, 298, 343, 388,
-            401, 414, 428, 442, 456, 470, 485, 500, 515, 530,
-            546, 562, 578, 594, 611, 628, 645, 662, 680, 698,
-            716,
+            121, 132, 143, 154, 166, 216, 266, 316, 367, 418,
+            431, 444, 458, 472, 486, 500, 515, 530, 545, 560,
+            576, 592, 608, 624, 641, 658, 675, 692, 710, 728,
+            746,
         )
     }
 }

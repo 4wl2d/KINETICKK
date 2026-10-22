@@ -33,7 +33,7 @@ class ContentBalanceCharacterizationTest {
         // The items shipped through 0.4.0 keep their own pin: a release only appends to the catalog.
         val shipped = items.subList(0, ITEMS_THROUGH_040)
         assertEquals(
-            "f0cbb70507a2b2bb",
+            "68d4572118b9586d",
             goldenFingerprint {
                 add("item-effects")
                 ItemEffect.entries.forEach { effect ->
@@ -55,7 +55,7 @@ class ContentBalanceCharacterizationTest {
         // The 0.5.0 items, appended from id 173 and pinned on their own.
         val appended = items.subList(ITEMS_THROUGH_040, items.size)
         assertEquals(
-            "e98124e2ca9e4ee4",
+            "406fa76d4f1807e5",
             goldenFingerprint {
                 add("items-0.5.0")
                 add(appended.size)
@@ -286,7 +286,7 @@ class ContentBalanceCharacterizationTest {
     fun skillApexAndUpgradeContentIsGolden() {
         assertEquals(18, ui.skills.size)
         assertEquals(
-            "096b6b8a967f8657",
+            "8a7fd4b1e24d8730",
             goldenFingerprint {
                 add("skills")
                 ui.skills.forEach { skill ->

@@ -30,8 +30,8 @@ class LevelCapTest {
         state.gainData(state.nextLevelData + 100f)
         assertEquals(maximumLevel, state.level)
         assertEquals(0, state.data)
-        assertEquals(collectedBefore + 716 + 100, state.dataCollected)
-        assertEquals(716, state.nextLevelData, "the capped level displays the last requirement")
+        assertEquals(collectedBefore + 746 + 100, state.dataCollected)
+        assertEquals(746, state.nextLevelData, "the capped level displays the last requirement")
 
         state.phase = GamePhase.RUNNING
         state.pendingLevelChoices = 0
@@ -114,7 +114,7 @@ class LevelCapTest {
         assertEquals(42, model.maxLevel)
         assertEquals(model.maxLevel, model.level)
         assertEquals(0, model.data)
-        assertEquals(716, model.nextLevelData)
+        assertEquals(746, model.nextLevelData)
     }
 
     @Test
@@ -126,12 +126,12 @@ class LevelCapTest {
         assertEquals(listOf(18, 18, 18), listOf(tierZero, tierThree, tierTen).map { it.nextLevelData })
         assertEquals(18, MutableGameState(canonicalGameplayContent, initialRebirthLevel = 10).nextLevelData)
         assertEquals(166, tierTen.dataRequiredForLevel(15))
-        assertEquals(298, tierThree.dataRequiredForLevel(16), "210 × 1.42 = 298.2")
-        assertEquals(504, tierTen.dataRequiredForLevel(16), "210 × 2.4 = 504")
-        assertEquals(1_017, tierThree.dataRequiredForLevel(41))
+        assertEquals(281, tierThree.dataRequiredForLevel(16), "216 × 1.3 = 280.8")
+        assertEquals(432, tierTen.dataRequiredForLevel(16), "216 × 2 = 432")
+        assertEquals(970, tierThree.dataRequiredForLevel(41))
 
         // One Data short of the tier's total stops a level below the cap with the last requirement less one.
-        for ((tier, total) in listOf(0 to 14_428, 3 to 19_912, 10 to 32_702)) {
+        for ((tier, total) in listOf(0 to 15_148, 3 to 19_278, 10 to 28_922)) {
             val short = buildTestState(rebirth = tier)
             short.gainData(total - 1f)
             assertEquals(41, short.level, "tier $tier")

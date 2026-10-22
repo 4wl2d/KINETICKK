@@ -246,7 +246,7 @@ data class DraftDeckPolicy(
  * [volatileRiskChance] of the time. [RELEASE_040] is the 0.4.0 funnel, for comparisons.
  */
 data class OfferLanePolicy(
-    val alignedChance: Float = 0.65f,
+    val alignedChance: Float = 0.55f,
     val alignedFitWeight: Float = 0.6f,
     val alignedFitCap: Float = 3f,
     val loadoutFits: Boolean = false,

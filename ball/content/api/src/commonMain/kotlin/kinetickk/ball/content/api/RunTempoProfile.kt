@@ -54,9 +54,9 @@ data class RunTempoProfile(
      */
     val levelRequirements: ImmutableList<Int> = defaultLevelRequirements(maximumLevel = maximumLevel),
     /** Maximum integrity every level-up adds. */
-    val levelIntegrity: Float = 2.3f,
+    val levelIntegrity: Float = 2.5f,
     /** Integrity every level-up repairs. */
-    val levelRepair: Float = 7f,
+    val levelRepair: Float = 7.5f,
     /** Run levels that open the skill slots, in slot order (one per [ContentBounds.SKILL_SLOTS]). */
     val skillSlotLevels: ImmutableList<Int> = immutableListOf(2, 8, 16),
     /** Item offers on levels divisible by this carry a skill rank-up card. */
@@ -162,7 +162,7 @@ data class RunTempoProfile(
         const val PLATEAU_RAMP_LEVELS: Int = 5
 
         /** Extra Data per level once the first ramp (levels 16..20) is complete. */
-        const val DEFAULT_RAMP_PLATEAU: Int = 160
+        const val DEFAULT_RAMP_PLATEAU: Int = 190
 
         /** Extra Data per level once the second ramp (levels 31..35) is complete. */
         const val DEFAULT_TOP_PLATEAU: Int = 0

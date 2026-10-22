@@ -211,9 +211,9 @@ private fun defaultSkill(id: SkillId): SkillDefinition = when (id) {
         "Seed a crowd with Decay; the seeded spread rot and drop Data when they die.",
         "Each seeded death refunds 0.5 s to every skill, up to 3 s per cast.",
         StatusElement.ENTROPY, BuildTag.FORTUNE, BuildTag.CHAIN, SkillTargeting.AREA, 520f, SkillFamily.CATALYST,
-        rank(11f, 170f, 4f, 6f, 6f),
-        rank(9f, 205f, 6f, 6f, 6f),
-        rank(7f, 240f, 7f, 6f, 6f),
+        rank(11f, 170f, 4f, 6f, 8f),
+        rank(9f, 205f, 6f, 6f, 8f),
+        rank(7f, 240f, 7f, 6f, 8f),
     )
     SkillId.ENTROPIC_TIDE -> skill(
         id, "Entropic Tide",
@@ -265,7 +265,7 @@ private fun defaultSkill(id: SkillId): SkillDefinition = when (id) {
         "Swing your momentum onto your aim; counts as a sharp turn.",
         "Impacts during the swing keep your momentum.",
         null, BuildTag.DRIVE, BuildTag.RAM, SkillTargeting.SELF, 0f, SkillFamily.MOTION,
-        rank(8f, 1.2f, 700f, 1_100f, 0.6f, 420f),
+        rank(8.5f, 1.2f, 700f, 1_100f, 0.6f, 420f),
         rank(7f, 1.4f, 700f, 1_100f, 0.75f, 420f),
         rank(6f, 1.55f, 700f, 1_100f, 0.85f, 420f),
     )
