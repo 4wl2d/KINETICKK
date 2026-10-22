@@ -36,12 +36,17 @@ class LevelCapTest {
         state.phase = GamePhase.RUNNING
         state.pendingLevelChoices = 0
         val atCap = state.dataCollected
+        // Skill drafts and rank-up cards follow level-ups: Data past the cap owes neither (combat §4, economy §1.6).
+        val draftsAtCap = state.pendingSkillDrafts
+        val rankUpsAtCap = state.pendingRankUpOffers
         state.gainData(5_000f)
         state.gainData(0.5f)
         state.gainData(0.5f)
         assertEquals(maximumLevel, state.level)
         assertEquals(0, state.data)
         assertEquals(0, state.pendingLevelChoices)
+        assertEquals(draftsAtCap, state.pendingSkillDrafts, "no skill draft after the cap")
+        assertEquals(rankUpsAtCap, state.pendingRankUpOffers, "no rank-up card after the cap")
         assertEquals(GamePhase.RUNNING, state.phase, "post-cap Data opens no choice")
         assertEquals(atCap + 5_001, state.dataCollected, "post-cap Data still counts as collected")
         assertEquals(0, state.creditData(30f), "credit at the cap adds nothing to the level's Data")
