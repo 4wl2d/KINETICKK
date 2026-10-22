@@ -252,12 +252,15 @@ internal fun codexItemEntry(
     val suppressed = build?.suppressedItemIds?.contains(item.id) == true
     // Every part waits for a skill or for a weapon of another family (never the relics' doing).
     val dormant = build?.dormantItemIds?.contains(item.id) == true
+    // The run's draft deck left it out: no ordinary offer of this run shows it.
+    val outOfDeck = build?.outOfDeckItemIds?.contains(item.id) == true
     val lines = item.ruleLines(language, codexRuleContext(item, stack, reborn, catalog, build))
     val facts = buildList {
         // Offers depend on the run: the stack limit, then the game's current eligibility.
         when {
             suppressed -> add(codexStatus(language, language.text(CodexText.SUPPRESSED), language.text(CodexText.SUPPRESSED_EFFECT)))
             dormant -> add(codexStatus(language, language.text(CodexText.DORMANT), language.text(CodexText.DORMANT_HELP)))
+            outOfDeck -> add(codexStatus(language, language.text(CodexText.NOT_IN_RUN), language.text(CodexText.NOT_IN_RUN_HELP)))
             stack >= item.maxStacks -> add(codexStatus(language, language.text(SessionText.STACK_LIMIT)))
             build != null && item.id in build.eligibleItemIds -> add(codexStatus(language, language.text(SessionText.NEXT_ACQUISITION)))
             build != null -> add(codexStatus(language, language.text(SessionText.OFFER_LIMIT), language.text(SessionText.OFFER_LIMIT_HELP)))

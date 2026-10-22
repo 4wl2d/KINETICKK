@@ -184,6 +184,27 @@ class CodexEntryFactsTest {
     }
 
     @Test
+    fun anItemTheDeckLeftOutSaysItIsNotInThisRun() {
+        val item = catalog.items[3]
+        fun build(outOfDeck: List<Int>, dormant: List<Int> = emptyList(), eligible: List<Int> = emptyList()) = GameplayBuildSummaryProjection(
+            GameplayInstanceId(RunId(1)), GameplayRevision.ZERO, immutableListOf(),
+            eligibleItemIds = eligible.toImmutableList(), dormantItemIds = dormant.toImmutableList(),
+            outOfDeckItemIds = outOfDeck.toImmutableList(),
+        )
+        for (language in AppLanguage.entries) {
+            fun status(build: GameplayBuildSummaryProjection) =
+                codexItemEntry(item, CodexRenderModel(immutableSetOf(item.id), CodexRunStacks(build = build), catalog.items), 0L, language)
+                    .facts.single { it.isStatus }
+            val left = status(build(outOfDeck = listOf(item.id)))
+            assertEquals(language.text(CodexText.NOT_IN_RUN), left.value)
+            assertEquals(language.text(CodexText.NOT_IN_RUN_HELP), left.info)
+            // A dormant item says so first; a dealt item shows its offer state instead.
+            assertEquals(language.text(CodexText.DORMANT), status(build(outOfDeck = listOf(item.id), dormant = listOf(item.id))).value)
+            assertEquals(language.text(SessionText.NEXT_ACQUISITION), status(build(outOfDeck = listOf(item.id + 1), eligible = listOf(item.id))).value)
+        }
+    }
+
+    @Test
     fun spokenSummariesTellEveryPairingAndReactionApart() {
         val model = CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items, discoveredRelicIds = RelicId.entries.toImmutableSet())
         for (language in AppLanguage.entries) {

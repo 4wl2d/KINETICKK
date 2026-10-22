@@ -109,6 +109,11 @@ internal enum class CodexText(
         "Its effects need a skill or a weapon of another type.",
         "Его эффектам нужен навык или оружие другого типа.",
     ),
+    NOT_IN_RUN("Not in this run", "Не в этом забеге"),
+    NOT_IN_RUN_HELP(
+        "This run's draft deck left it out; the next run deals a new deck.",
+        "Колода этого забега его не включила; следующий забег раздаст новую колоду.",
+    ),
     REBORN("Reborn", "Перерождённый"),
     RISK("Risk", "Риск"),
     SEVERED("Severed", "Отсечена"),
