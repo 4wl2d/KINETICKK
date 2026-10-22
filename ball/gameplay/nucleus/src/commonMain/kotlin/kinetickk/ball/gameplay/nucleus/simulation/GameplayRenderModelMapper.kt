@@ -157,7 +157,8 @@ internal fun MutableGameState.toRenderModel(
                     value.facing.sameBitsAs(previous.facing) &&
                     linkedTo(value) == previous.linkedTo &&
                     shielded(value) == previous.shielded &&
-                    value.armorIntact == previous.armored
+                    value.armorIntact == previous.armored &&
+                    controlBits(value) == previous.controlBits
             }
             ?: enemies.mapToImmutableList { value ->
                 EnemyProjection(
@@ -185,6 +186,7 @@ internal fun MutableGameState.toRenderModel(
                     linkedTo = linkedTo(value),
                     shielded = shielded(value),
                     armored = value.armorIntact,
+                    controlBits = controlBits(value),
                 )
             },
         projectiles = projectiles.reuseEmptyProjection(reusableCollections?.projectiles)
@@ -349,8 +351,18 @@ internal fun MutableGameState.toRenderModel(
             ?: weaponSynergyProjection(reusableCollections?.weaponSynergy),
         rebirthRank = rebirthRank,
         volatileBursts = volatileBursts,
+        maxLevel = content.tempo.maximumLevel,
+        // No skill, Apex, field-table or Core-state runtime yet: shared neutral projections.
+        skillBar = SkillBarProjection.EMPTY,
+        apex = ApexProjection.LOCKED,
+        combatFields = immutableListOf(),
+        coreState = CoreStateProjection.NEUTRAL,
     )
 }
+
+/** Control and mark bits of [enemy] ([EnemyControlBits]); no control state is tracked yet. */
+@Suppress("UNUSED_PARAMETER")
+private fun MutableGameState.controlBits(enemy: Enemy): Int = 0
 
 /** Relic gauges change during combat; the compiled build's immutable collections do not. */
 private fun MutableGameState.buildProjection(

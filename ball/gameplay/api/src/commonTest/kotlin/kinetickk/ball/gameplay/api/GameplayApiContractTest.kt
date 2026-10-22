@@ -9,6 +9,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertSame
 
 class GameplayApiContractTest {
     @Test
@@ -46,6 +47,23 @@ class GameplayApiContractTest {
         assertFailsWith<IllegalArgumentException> {
             GameplayInteractionPulse.ChoiceSelected.fromValidated(4)
         }
+    }
+
+    @Test
+    fun skillRequestsAcceptTheThreeSlotsAndRejectTheFirstOutside() {
+        val slots = (GameplayInteractionLimits.MIN_SKILL_SLOT..GameplayInteractionLimits.MAX_SKILL_SLOT).map { slot ->
+            GameplayInteractionPulse.SkillRequested.fromValidated(slot)
+        }
+
+        assertEquals(listOf(0, 1, 2), slots.map { it.slot })
+        assertSame(slots[2], GameplayInteractionPulse.SkillRequested.fromValidated(2))
+        listOf(-1, 3, Int.MIN_VALUE, Int.MAX_VALUE).forEach { invalid ->
+            assertFailsWith<IllegalArgumentException> {
+                GameplayInteractionPulse.SkillRequested.fromValidated(invalid)
+            }
+        }
+        val apex: GameplayInteractionPulse = GameplayInteractionPulse.ApexRequested
+        assertSame(GameplayInteractionPulse.ApexRequested, apex)
     }
 
     @Test

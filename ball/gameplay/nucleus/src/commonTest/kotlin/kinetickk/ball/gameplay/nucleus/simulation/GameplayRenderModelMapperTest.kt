@@ -74,6 +74,8 @@ class GameplayRenderModelMapperTest {
                 GameplayInteractionPulse.ViewportChanged.fromValidated(1_024f, 768f, 2f),
                 GameplayInteractionPulse.BrakeChanged(BrakeSource.KEYBOARD, true),
                 GameplayInteractionPulse.DashRequested,
+                GameplayInteractionPulse.SkillRequested.fromValidated(0),
+                GameplayInteractionPulse.ApexRequested,
                 frame,
                 GameplayInteractionPulse.PauseToggled,
                 frame,
@@ -562,7 +564,7 @@ class GameplayRenderModelMapperTest {
                 it.hp.toRawBits(), it.maxHp.toRawBits(), it.radius.toRawBits(), it.actionTimer.toRawBits(),
                 it.flash.toRawBits(), it.contactCooldown.toRawBits(), it.weaponCooldown.toRawBits(),
                 it.previousX.toRawBits(), it.previousY.toRawBits(), it.dead, it.statusBits, it.affinityBits,
-                it.armored,
+                it.armored, it.controlBits,
             )
         },
         "projectiles" to projectiles.map {
@@ -612,6 +614,11 @@ class GameplayRenderModelMapperTest {
         "minimapRange" to minimapRange.toRawBits(),
         "rebirthRank" to rebirthRank,
         "volatileBursts" to volatileBursts.toList(),
+        "maxLevel" to maxLevel,
+        "skillBar" to skillBar,
+        "apex" to apex,
+        "combatFields" to combatFields.toList(),
+        "coreState" to coreState,
     )
 
     private class ReadGuardList<Element>(

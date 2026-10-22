@@ -1018,6 +1018,9 @@ class GameplayReductionIsolationTest {
             is GameplayInteractionPulse.ChoiceSelected -> choose(pulse.index)
             GameplayInteractionPulse.ChoicesRerolled -> rerollChoices()
             GameplayInteractionPulse.UserGestureObserved -> Unit
+            is GameplayInteractionPulse.SkillRequested,
+            GameplayInteractionPulse.ApexRequested,
+            -> Unit
         }
     }
 

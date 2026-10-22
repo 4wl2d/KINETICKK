@@ -180,7 +180,7 @@ class InteractionFxReducer(seed: Int) {
                 )
             } else cachedProjection.damageNumbers,
             weaponArcs = if (weaponArcsDirty) weaponArcs.mapToImmutableList { value ->
-                WeaponArcProjection(value.fromX, value.fromY, value.toX, value.toY, value.life)
+                WeaponArcProjection(value.fromX, value.fromY, value.toX, value.toY, value.life, value.style)
             } else cachedProjection.weaponArcs,
             elementBursts = if (elementBurstsDirty) elementBursts.mapToImmutableList { value ->
                 ElementBurstProjection(value.x, value.y, value.primary, value.secondary, value.reaction, value.radius, value.life,
@@ -245,7 +245,7 @@ class InteractionFxReducer(seed: Int) {
             is VisualFxCue.StatusBroken -> statusBroken(cue)
             is VisualFxCue.ReactionTriggered -> reactionTriggered(cue)
             is VisualFxCue.WeaponArcAdded -> {
-                weaponArcs += WeaponArc(cue.fromX, cue.fromY, cue.toX, cue.toY, cue.life)
+                weaponArcs += WeaponArc(cue.fromX, cue.fromY, cue.toX, cue.toY, cue.life, cue.style)
                 trimFront(weaponArcs, InteractionFxLimits.MAX_WEAPON_ARCS)
                 weaponArcsDirty = true
                 true
@@ -284,6 +284,10 @@ class InteractionFxReducer(seed: Int) {
                 changed || elementBursts.isNotEmpty() || reactionStamps.isNotEmpty()
             }
             is VisualFxCue.VisualCuesDropped -> false
+            // Skill and Apex looks are not drawn yet; the cues change no effect state.
+            is VisualFxCue.SkillCast,
+            is VisualFxCue.ApexActivated,
+            -> false
         }
 
     private fun clearAll(): Boolean {
@@ -638,6 +642,7 @@ class InteractionFxReducer(seed: Int) {
         val toX: Float,
         val toY: Float,
         var life: Float,
+        val style: Int,
     )
 
     private companion object {

@@ -160,6 +160,8 @@ data class EnemyProjection(
     val shielded: Boolean = false,
     /** True while an Armored Vanguard plate (Rebirth R8) still blunts weapon hits; an impact cracks it. */
     val armored: Boolean = false,
+    /** Control and mark state; decode with [EnemyControlBits]. */
+    val controlBits: Int = 0,
 )
 
 /** Behavior steps published in [EnemyProjection.behavior]; meaning depends on the enemy type. */
@@ -430,6 +432,16 @@ class GameplayRenderModel(
     val rebirthRank: Int = rebirthLevel,
     /** Volatile Remains bursts waiting to detonate (Rebirth R4). */
     val volatileBursts: ImmutableList<VolatileBurstProjection> = kinetickk.foundation.collections.immutableListOf(),
+    /** The run's level cap; at it [level] equals it and Data charges the Apex instead. */
+    val maxLevel: Int = content.tempo.maximumLevel,
+    /** The Z, X and C skill slots. */
+    val skillBar: SkillBarProjection = SkillBarProjection.EMPTY,
+    /** The character's Apex. */
+    val apex: ApexProjection = ApexProjection.LOCKED,
+    /** Lingering combat fields in creation order. */
+    val combatFields: ImmutableList<CombatFieldProjection> = kinetickk.foundation.collections.immutableListOf(),
+    /** Lingering reaction and skill states on the Core. */
+    val coreState: CoreStateProjection = CoreStateProjection.NEUTRAL,
 ) {
     val speed: Float get() = vectorLength(velocityX, velocityY)
     val runProgress: Float get() = content.tempo.progress(elapsed)

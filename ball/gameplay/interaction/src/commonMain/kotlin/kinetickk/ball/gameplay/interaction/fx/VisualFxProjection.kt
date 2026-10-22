@@ -84,6 +84,8 @@ data class WeaponArcProjection(
     val toX: Float,
     val toY: Float,
     val life: Float,
+    /** The link's look (a gameplay `LinkStyleCode`); 0 is the weapon look. */
+    val style: Int = 0,
 )
 
 /**

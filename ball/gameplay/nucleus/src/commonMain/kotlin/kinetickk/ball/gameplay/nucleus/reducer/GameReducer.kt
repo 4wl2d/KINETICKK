@@ -162,6 +162,10 @@ internal class GameReducer {
             is GameplayInteractionPulse.ChoiceSelected -> state.choose(intent.index)
             GameplayInteractionPulse.ChoicesRerolled -> state.rerollChoices()
             GameplayInteractionPulse.UserGestureObserved -> error("handled before state cloning")
+            // No skill or Apex runtime yet: casting requests change nothing.
+            is GameplayInteractionPulse.SkillRequested,
+            GameplayInteractionPulse.ApexRequested,
+            -> Unit
         }
     }
 
@@ -198,6 +202,8 @@ internal class GameReducer {
         is GameplayInteractionPulse.BrakeChanged,
         GameplayInteractionPulse.DashRequested,
         GameplayInteractionPulse.PauseToggled,
+        is GameplayInteractionPulse.SkillRequested,
+        GameplayInteractionPulse.ApexRequested,
         -> true
         is GameplayInteractionPulse.FrameElapsed,
         is GameplayInteractionPulse.ChoiceSelected,
@@ -222,6 +228,10 @@ internal class GameReducer {
             GameplayInteractionPulse.DashRequested ->
                 state.phase != GamePhase.RUNNING ||
                     state.dashBufferTime.sameBitsAs(MutableGameState.DASH_INPUT_BUFFER_SECONDS)
+            // No skill or Apex runtime yet, so no buffer can change.
+            is GameplayInteractionPulse.SkillRequested,
+            GameplayInteractionPulse.ApexRequested,
+            -> true
             is GameplayInteractionPulse.FrameElapsed,
             GameplayInteractionPulse.PauseToggled,
             is GameplayInteractionPulse.ChoiceSelected,
