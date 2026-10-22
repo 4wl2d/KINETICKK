@@ -110,7 +110,7 @@ internal class HomeMenuMotion {
      */
     fun advance(target: HomeLayoutTarget, deltaSeconds: Float, hues: List<Color> = Kk.Elements) {
         val delta = deltaSeconds.coerceIn(0f, MAX_HOME_PRESENTATION_FRAME_DELTA_SECONDS)
-        // The Hangar card is not a menu row: while it is active no row is selected.
+        // The Characters card is not a menu row: while it is active no row is selected.
         val index = HomeMenuTargets.indexOf(target)
         selectedSeconds = if (index == activeIndex) selectedSeconds + delta else 0f
         activeIndex = index

@@ -94,7 +94,7 @@ internal val HomeMenuTargets = listOf(
     HomeLayoutTarget.SETTINGS,
 )
 
-/** Arrow-key order: the menu rows, then the Hangar card, as one Home menu. */
+/** Arrow-key order: the menu rows, then the Characters card, as one Home menu. */
 internal val HomeNavigationTargets = HomeMenuTargets + HomeLayoutTarget.HANGAR
 
 internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): HomeLayoutGeometry {
@@ -139,7 +139,7 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
             // text is the form's (!) tooltip; the panel shows only the name and the Characters card.
             val formNameSize = 30f * s
             val formNameY = (menuBottom + formNameSize * 0.65f + 0.5f).coerceIn(by(608f), by(620f))
-            // The Hangar card spans the form panel where the old form tiles stood.
+            // The Characters card spans the form panel where the old form tiles stood.
             actions += HomeActionBounds(HomeLayoutTarget.HANGAR, rect(rx(826f), by(680f), rx(1392f), by(756f)))
             infos += info(HomeInfoTarget.FORM, rx(1368f), formNameY)
             // The facts card keeps at least 480 px (board 560) on smaller desktops, short of the form panel.
@@ -213,7 +213,7 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
                 val row = rows[index]
                 actions += HomeActionBounds(target, rect(row.left, row.top, row.right, row.bottom))
             }
-            // The Hangar card ends 8 px short of every selected menu slab and speed-line trail that
+            // The Characters card ends 8 px short of every selected menu slab and speed-line trail that
             // reaches its band, and never grows past the old six-tile row.
             fun cardRight(top: Float): Float = rows.map { homeSelectedMenuExtent(it, menuFont) }
                 .filter { it.bottom > top }.minOfOrNull { it.left - 8f } ?: (rows.minOf { it.left } - 12f)
@@ -422,7 +422,7 @@ internal fun homeSelectedMenuFootprint(bounds: Rect, fontSizePx: Float): List<Re
  */
 internal const val HOME_FORM_NAME_INK_EM = 0.6f
 
-/** Widest the phone Hangar card grows (px before density): the old row of six form tiles. */
+/** Widest the phone Characters card grows (px before density): the old row of six form tiles. */
 private const val HOME_CARD_MAX_WIDTH = 360f
 
 /** sin 2°, rounded up: how far a point of the turned menu item moves per px from its middle. */
