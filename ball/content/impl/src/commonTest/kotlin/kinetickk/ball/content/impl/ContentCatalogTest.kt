@@ -89,11 +89,11 @@ class ContentCatalogTest {
     }
 
     @Test
-    fun itemCatalogContainsOneHundredSeventyThreeDistinctHandAuthoredItemsWithinTheBound() {
+    fun itemCatalogHoldsDistinctHandAuthoredItemsWithinTheBound() {
         val items = gameplay.items
 
         assertEquals(173, items.size)
-        assertEquals(192, ContentBounds.MAX_ITEMS)
+        assertEquals(320, ContentBounds.MAX_ITEMS)
         assertTrue(items.size <= ContentBounds.MAX_ITEMS)
         assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
         assertEquals(items.size, items.map(ItemDefinition::name).toSet().size)
@@ -156,10 +156,10 @@ class ContentCatalogTest {
 
     @Test
     fun theExpansionAppendsEightyThreeItemsWithTheirRarityMix() {
-        val expansion = gameplay.items.drop(EXPANSION_START)
+        val expansion = expansion040()
 
         assertEquals(83, expansion.size)
-        assertEquals((EXPANSION_START until 173).toList(), expansion.map(ItemDefinition::id))
+        assertEquals((EXPANSION_START until EXPANSION_END).toList(), expansion.map(ItemDefinition::id))
         assertEquals(
             mapOf(ItemRarity.COMMON to 20, ItemRarity.UNCOMMON to 24, ItemRarity.RARE to 20, ItemRarity.EPIC to 13, ItemRarity.LEGENDARY to 6),
             ItemRarity.entries.associateWith { rarity -> expansion.count { it.rarity == rarity } },
@@ -172,7 +172,7 @@ class ContentCatalogTest {
 
     @Test
     fun eachRebirthTierUnlocksFourExpansionItemsAndTheRestStayOpen() {
-        val expansion = gameplay.items.drop(EXPANSION_START)
+        val expansion = expansion040()
         val expected = mapOf(
             1 to listOf(ItemRarity.RARE, ItemRarity.RARE, ItemRarity.RARE, ItemRarity.RARE),
             2 to listOf(ItemRarity.RARE, ItemRarity.RARE, ItemRarity.RARE, ItemRarity.RARE),
@@ -200,7 +200,7 @@ class ContentCatalogTest {
 
     @Test
     fun theExpansionBucketsCoverRicochetsSlamsWeaponsAndEveryNewReaction() {
-        val expansion = gameplay.items.drop(EXPANSION_START)
+        val expansion = expansion040()
         fun clausesOn(trigger: EffectTrigger) = expansion.filter { item -> item.clauses.any { it.trigger == trigger } }
 
         val ricochet = clausesOn(EffectTrigger.RICOCHET)
@@ -614,9 +614,15 @@ class ContentCatalogTest {
         return Triple("stat ${item.stats.first().effect}", "", "-")
     }
 
+    /** The 0.4.0 expansion, ids [EXPANSION_START] until [EXPANSION_END]; later releases append after it. */
+    private fun expansion040(): List<ItemDefinition> = gameplay.items.subList(EXPANSION_START, EXPANSION_END)
+
     private companion object {
         /** The first id of the 0.4.0 expansion (ids 90 to 172). */
         const val EXPANSION_START = 90
+
+        /** One past the last id of the 0.4.0 expansion: the 0.5.0 items start here. */
+        const val EXPANSION_END = 173
     }
 
     /** Everything that changes how an item plays, ignoring its name, flavor and id. */

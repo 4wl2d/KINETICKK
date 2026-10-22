@@ -64,7 +64,7 @@ class ContentBootstrapValidationTest {
     fun itemBoundRejectsNPlusOne() {
         val data = defaultContentBootstrapData()
 
-        assertRejected(data.copy(items = data.items.paddedTo(ContentBounds.MAX_ITEMS + 1)), "items size 193")
+        assertRejected(data.copy(items = data.items.paddedTo(ContentBounds.MAX_ITEMS + 1)), "items size 321")
     }
 
     @Test
