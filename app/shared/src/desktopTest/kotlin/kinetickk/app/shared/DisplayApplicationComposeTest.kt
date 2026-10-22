@@ -31,6 +31,12 @@ import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
 import kinetickk.resource.audio.api.ToneRequest
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
+import kinetickk.ball.gameplay.api.GameplayQuery
+import kinetickk.ball.gameplay.api.GameplayRunPhase
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.v2.runSkikoComposeUiTest
@@ -46,6 +52,7 @@ import kinetickk.foundation.design.LocalKkFrameRateCap
 import kinetickk.foundation.design.LocalKkInterfaceScale
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertSame
 
 /** Assembly hands every accepted display preference to the platform host, and nothing else writes it. */
 @OptIn(ExperimentalTestApi::class)
@@ -108,6 +115,55 @@ class DisplayApplicationComposeTest {
             settle()
             assertEquals(before, stored())
             assertEquals(listOf(before.toHostDisplayRequest() to true), host.applied.drop(requests))
+        } finally {
+            owner.close()
+        }
+    }
+
+    @Test
+    fun aWindowOpenedAgainKeepsTheSessionTheRunAndTheOpenSettingsTab() = runComposeUiTest {
+        mainClock.autoAdvance = false
+        val catalog = createContentCatalog()
+        val profile = createProfileComponent(DisplayTestPersistence(), catalog.profilePolicy())
+        val audio = DisplayTestAudio()
+        val gameplay = DefaultGameplayFeature(catalog.gameplayContent(), profile, profile, audio)
+        val owner = AppCompositionOwner(
+            contentCatalog = catalog,
+            profileComponent = profile,
+            audioService = audio,
+            gameplayComponent = gameplay,
+            displayHost = RecordingDisplayHost(HostDisplaySupport(windowModes = true, usableWidthDp = 1920, usableHeightDp = 1050, vsync = true)),
+        )
+        // The desktop application keys its window on the host's generation; the owner lives above it.
+        var generation by mutableIntStateOf(0)
+        try {
+            setContent {
+                key(generation) {
+                    Box(Modifier.requiredSize(1000.dp, 700.dp)) { owner.Content() }
+                }
+            }
+            fun settle() {
+                mainClock.advanceTimeBy(260)
+                waitForIdle()
+            }
+            settle()
+            owner.sessionPort.accept(SessionInteractionPulse.StartRunRequested)
+            onRoot().performKeyInput { pressKey(Key.S) }
+            settle()
+            val shell = owner.sessionPort.query(AppSessionQuery.GetShell)
+            assertEquals(AppDestination.Gameplay, shell.base)
+            assertEquals(AppDestination.Settings, shell.overlay)
+            val run = gameplay.activeRun()
+            assertEquals(GameplayRunPhase.PAUSED, run?.query(GameplayQuery.GetRunStatus)?.phase)
+            onNodeWithTag("kinetickk.settings.group.display").performClick()
+            settle()
+
+            generation++
+            settle()
+            assertEquals(shell, owner.sessionPort.query(AppSessionQuery.GetShell))
+            assertSame(run, gameplay.activeRun())
+            assertEquals(GameplayRunPhase.PAUSED, run?.query(GameplayQuery.GetRunStatus)?.phase)
+            onNodeWithTag("kinetickk.settings.group.display").assertIsSelected()
         } finally {
             owner.close()
         }
