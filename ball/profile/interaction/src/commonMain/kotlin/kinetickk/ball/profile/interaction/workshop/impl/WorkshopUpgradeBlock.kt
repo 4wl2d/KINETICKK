@@ -76,6 +76,48 @@ internal enum class UpgradeStat {
 internal data class UpgradeEffectLine(val stat: UpgradeStat, val now: Float, val next: Float?)
 
 /**
+ * A character's Refit signature (economy §4.1 part 3): the one mechanic parameter each level moves, with the
+ * content's per-level steps ([kinetickk.ball.content.api.CharacterUpgradeSignature]); [text] says it per level.
+ */
+internal data class UpgradeSignatureLine(val shape: CoreShape, val perLevel: Float, val secondaryPerLevel: Float = 0f)
+
+/** The signature's per-level sentence (economy §7), its numbers from the content steps. */
+internal fun UpgradeSignatureLine.text(language: AppLanguage): String {
+    val step = kotlin.math.abs(perLevel)
+    val value = when (shape) {
+        // Orbit's arc and Facets' regrowth move by a share; the parry window by milliseconds.
+        CoreShape.ORB, CoreShape.PRISM -> step * 100f
+        CoreShape.DIAMOND -> step * 1_000f
+        else -> step
+    }
+    val text = when (shape) {
+        CoreShape.ORB -> ProfileScreensRedesignText.SignatureOrb
+        CoreShape.PRISM -> ProfileScreensRedesignText.SignaturePrism
+        CoreShape.SHARD -> ProfileScreensRedesignText.SignatureShard
+        CoreShape.RING -> ProfileScreensRedesignText.SignatureRing
+        CoreShape.DIAMOND -> ProfileScreensRedesignText.SignatureDiamond
+        CoreShape.TESSERACT -> ProfileScreensRedesignText.SignatureTesseract
+        CoreShape.STAR -> ProfileScreensRedesignText.SignatureStar
+        CoreShape.SPIRAL -> ProfileScreensRedesignText.SignatureSpiral
+        CoreShape.DIPOLE -> ProfileScreensRedesignText.SignatureDipole
+        CoreShape.PENTAGON -> ProfileScreensRedesignText.SignaturePentagon
+        CoreShape.CRESCENT -> ProfileScreensRedesignText.SignatureCrescent
+        CoreShape.HEXAGON -> ProfileScreensRedesignText.SignatureHexagon
+    }
+    return language.text(text, signatureNumber(value, language), signatureNumber(kotlin.math.abs(secondaryPerLevel), language))
+}
+
+/** A signature step with up to two decimals and no trailing zeros ("0.8", Russian "0,8", "4"). */
+internal fun signatureNumber(value: Float, language: AppLanguage): String {
+    val hundredths = (value * 100f).roundToInt()
+    val whole = hundredths / 100
+    val fraction = hundredths % 100
+    if (fraction == 0) return whole.toString()
+    val digits = if (fraction % 10 == 0) (fraction / 10).toString() else fraction.toString().padStart(2, '0')
+    return whole.toString() + (if (language == AppLanguage.Russian) "," else ".") + digits
+}
+
+/**
  * One Refit or Honing track as the upgrade block shows it. [nextPrice] is the content price rule
  * ([UpgradePolicy.nextCost], the function the Profile Nucleus charges), null at the maximum;
  * [shortfall] is the Matter still missing for it. The Profile stays the authority: an affordable
@@ -90,6 +132,8 @@ internal data class UpgradeTrackRenderModel(
     val owned: Boolean,
     val shortfall: Long,
     val effects: List<UpgradeEffectLine>,
+    /** A Refit's signature line (null for Honing). */
+    val signature: UpgradeSignatureLine? = null,
 ) {
     val maxed: Boolean get() = level >= maxLevel
 
@@ -134,7 +178,7 @@ internal fun characterUpgradeTrack(
 ): UpgradeTrackRenderModel = upgradeTrack(policy, definition.upgradeBaseCost, level, matter, unlocked, listOf(
     UpgradeStat.INTEGRITY to policy.characterIntegrityPerLevel,
     UpgradeStat.CHARACTER_DAMAGE to policy.characterPowerPerLevel * 100f,
-))
+)).copy(signature = UpgradeSignatureLine(definition.id, definition.upgradeSignature.perLevel, definition.upgradeSignature.secondaryPerLevel))
 
 /** A weapon's Honing: the weapon's own hits per level. */
 internal fun weaponUpgradeTrack(
@@ -240,6 +284,8 @@ internal class WorkshopUpgradeLayout(
     val pips: Rect,
     val captions: Rect,
     val effects: List<Rect>,
+    /** The Refit signature sentence under the effect lines (null without one). */
+    val signature: Rect?,
     /** Left edges of the Now and Next value columns. */
     val nowLeft: Float,
     val nextLeft: Float,
@@ -251,9 +297,9 @@ internal class WorkshopUpgradeLayout(
 }
 
 /**
- * Lays the block out from ([left], [top]) across [width] px for [effectCount] lines, a buy action
- * [buyWidth] px wide at its natural size and an optional need line [needWidth] px wide ([needHeight]
- * tall when it stacks under the action).
+ * Lays the block out from ([left], [top]) across [width] px for [effectCount] lines, a Refit signature
+ * sentence [signatureHeight] px tall (0 without one), a buy action [buyWidth] px wide at its natural size
+ * and an optional need line [needWidth] px wide ([needHeight] tall when it stacks under the action).
  */
 internal fun workshopUpgradeLayout(
     frame: ProfileFrame,
@@ -265,6 +311,7 @@ internal fun workshopUpgradeLayout(
     buyWidth: Float,
     needWidth: Float?,
     needHeight: Float = 0f,
+    signatureHeight: Float = 0f,
 ): WorkshopUpgradeLayout {
     fun d(value: Float) = frame.d(value)
     val metrics = workshopUpgradeMetrics(frame)
@@ -283,6 +330,9 @@ internal fun workshopUpgradeLayout(
     val effects = List(effectCount) {
         Rect(left, y, right, y + d(metrics.line) * grow).also { y = it.bottom }
     }
+    val signature = if (signatureHeight > 0f) {
+        Rect(left, y + d(metrics.buyGap), right, y + d(metrics.buyGap) + signatureHeight).also { y = it.bottom }
+    } else null
     val buyTop = y + d(metrics.buyGap)
     val buy = Rect(left, buyTop, left + min(width, max(buyWidth, d(metrics.buyMin))), buyTop + d(metrics.buy))
     val need = needWidth?.let {
@@ -293,16 +343,17 @@ internal fun workshopUpgradeLayout(
             Rect(left, buy.bottom + d(4f), right, buy.bottom + d(4f) + needHeight)
         }
     }
-    return WorkshopUpgradeLayout(header, pips, captions, effects, nowLeft, nextLeft, buy, need, metrics)
+    return WorkshopUpgradeLayout(header, pips, captions, effects, signature, nowLeft, nextLeft, buy, need, metrics)
 }
 
-/** The buy action's label and its gem price (none at the maximum or for a track not sold). */
-internal class WorkshopUpgradeTexts(val label: String, val cost: String?, val need: String?)
+/** The buy action's label and its gem price (none at the maximum or for a track not sold); a Refit's signature sentence. */
+internal class WorkshopUpgradeTexts(val label: String, val cost: String?, val need: String?, val signature: String? = null)
 
 internal fun workshopUpgradeTexts(track: UpgradeTrackRenderModel, language: AppLanguage): WorkshopUpgradeTexts = WorkshopUpgradeTexts(
     label = upgradeBuyLabel(track, language),
     cost = track.nextPrice?.takeIf { track.owned }?.let { formatMatter(it, language) },
     need = upgradeNeedText(track, language),
+    signature = track.signature?.text(language),
 )
 
 /** The block's layout measured for [track]'s texts with [measurer] (the panel's text size). */
@@ -319,9 +370,16 @@ internal fun workshopUpgradeLayoutFor(
     val texts = workshopUpgradeTexts(track, language)
     val buyWidth = profileButtonNaturalWidth(measurer, frame, texts.label, metrics.buySize, cost = texts.cost, icon = !track.owned)
     val needLayout = texts.need?.let { workshopNeedLayout(measurer, frame, it, width) }
+    val signatureLayout = texts.signature?.let { workshopSignatureLayout(measurer, frame, it, width) }
     return workshopUpgradeLayout(frame, left, top, width, measurer.scale, track.effects.size, buyWidth,
-        needLayout?.size?.width?.toFloat(), needLayout?.kkBoxHeight ?: 0f)
+        needLayout?.size?.width?.toFloat(), needLayout?.kkBoxHeight ?: 0f, signatureLayout?.kkBoxHeight ?: 0f)
 }
+
+/** The signature sentence at the effect names' size, wrapped to two lines (it shrinks before it is cut). */
+private fun workshopSignatureLayout(measurer: CanvasTextMeasurer, frame: ProfileFrame, text: String, width: Float): TextLayoutResult =
+    fitKkText(measurer, text, workshopUpgradeMetrics(frame).needSize * frame.k, width, maxLines = 2, uppercase = false, minFactor = 0.6f) {
+        measurer.typography.bodyStyle(it, lineHeightEm = 1.2f)
+    }
 
 private fun workshopNeedLayout(measurer: CanvasTextMeasurer, frame: ProfileFrame, text: String, width: Float): TextLayoutResult =
     fitKkText(measurer, text, workshopUpgradeMetrics(frame).needSize * frame.k, width, maxLines = 2, uppercase = false, minFactor = 0.6f) {
@@ -331,6 +389,7 @@ private fun workshopNeedLayout(measurer: CanvasTextMeasurer, frame: ProfileFrame
 /** Test tags of the block's nodes. */
 internal const val WORKSHOP_UPGRADE_BUY_TAG = "kinetickk.workshop.upgrade.buy"
 internal const val WORKSHOP_UPGRADE_PIPS_TAG = "kinetickk.workshop.upgrade.pips"
+internal const val WORKSHOP_UPGRADE_SIGNATURE_TAG = "kinetickk.workshop.upgrade.signature"
 
 /**
  * The upgrade block for [track] at [layout] (the parent's coordinates): the drawn header, pips,
@@ -382,7 +441,7 @@ internal fun WorkshopUpgradeBlock(
             .size(frame.dp(bounds.width), frame.dp(bounds.height))
             .drawBehind {
                 translate(-bounds.left, -bounds.top) {
-                    drawWorkshopUpgrade(measurer, frame, layout, track, texts.need, mechanic, language, slam.value)
+                    drawWorkshopUpgrade(measurer, frame, layout, track, texts.need, mechanic, language, slam.value, texts.signature)
                 }
             },
     )
@@ -394,6 +453,17 @@ internal fun WorkshopUpgradeBlock(
             .testTag(WORKSHOP_UPGRADE_PIPS_TAG)
             .semantics { contentDescription = levelText },
     )
+    // The Refit signature reads as its own node (it is drawn with the block).
+    val signatureRect = layout.signature
+    val signatureText = texts.signature
+    if (signatureRect != null && signatureText != null) {
+        Box(
+            Modifier.offset { IntOffset(signatureRect.left.roundToInt(), signatureRect.top.roundToInt()) }
+                .size(frame.dp(signatureRect.width), frame.dp(signatureRect.height))
+                .testTag(WORKSHOP_UPGRADE_SIGNATURE_TAG)
+                .semantics { contentDescription = signatureText },
+        )
+    }
     val buy = layout.buy
     val description = if (track.canBuy || (track.owned && !track.maxed)) {
         language.text(ProfileScreensRedesignText.UpgradeBuyDescription, name, track.level + 1, texts.cost.orEmpty())
@@ -436,6 +506,7 @@ internal fun DrawScope.drawWorkshopUpgrade(
     mechanic: String?,
     language: AppLanguage,
     slam: Float = 1f,
+    signature: String? = null,
 ) {
     val k = frame.k
     val metrics = layout.metrics
@@ -497,6 +568,11 @@ internal fun DrawScope.drawWorkshopUpgrade(
             }
             drawProfileText(value, layout.nextLeft, row.center.y, roles.you, "workshop.upgrade.effect.next", line.stat, valign = KkVAlign.CENTER)
         }
+    }
+    val signatureRect = layout.signature
+    if (signature != null && signatureRect != null) {
+        val text = workshopSignatureLayout(measurer, frame, signature, signatureRect.width)
+        drawProfileText(text, signatureRect.left, signatureRect.top, Kk.Bone2, "workshop.upgrade.signature")
     }
     val needRect = layout.need
     if (need != null && needRect != null) {

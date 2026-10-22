@@ -276,6 +276,10 @@ class WorkshopComposeTest {
         mainClock.autoAdvance = false
         // Circle (selected and inspected) shows its Refit block on the default Upgrade segment.
         onNodeWithTag(WORKSHOP_UPGRADE_PIPS_TAG).assert(description("Lvl 0 of 10"))
+        // Its third line is the character's signature parameter (economy §7), between the lines and the action.
+        onNodeWithTag(WORKSHOP_UPGRADE_SIGNATURE_TAG).assert(description("Orbit charges on a 2% shorter arc per level"))
+        assertTrue(onNodeWithTag(WORKSHOP_UPGRADE_SIGNATURE_TAG).fetchSemanticsNode().boundsInRoot.bottom <=
+            onNodeWithTag(WORKSHOP_UPGRADE_BUY_TAG).fetchSemanticsNode().boundsInRoot.top)
         onNodeWithTag(WORKSHOP_UPGRADE_BUY_TAG).assert(description("Upgrade Circle to Lvl 1 for 50 Matter")).assertIsEnabled()
         onNodeWithTag(WORKSHOP_UPGRADE_BUY_TAG).performClick()
         mainClock.advanceTimeBy(64)
@@ -300,6 +304,8 @@ class WorkshopComposeTest {
         workshop(port, feature(port), { Opening(1L, WorkshopTabRequest(WorkshopTab.WEAPONS, 1)) })
         mainClock.autoAdvance = false
         // Flux Wake (the starter, base 35) is affordable once.
+        // Honing has no signature line.
+        onNodeWithTag(WORKSHOP_UPGRADE_SIGNATURE_TAG).assertDoesNotExist()
         onNodeWithTag(WORKSHOP_UPGRADE_BUY_TAG).assert(description("Upgrade Flux Wake to Lvl 1 for 35 Matter")).performClick()
         mainClock.advanceTimeBy(64)
         assertEquals(listOf<ProfilePulse.Business>(ProfilePulse.PurchaseWeaponUpgrade(WeaponId.FLUX_WAKE)), port.pulses)

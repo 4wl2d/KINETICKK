@@ -106,6 +106,55 @@ class WorkshopUpgradeBlockTest {
         assertEquals("+2.5%", UpgradeStat.WEAPON_DAMAGE.value(half.effects.single().now, english))
     }
 
+    /** Every character's Refit signature sentence (economy §7) in both languages, its numbers from the content steps. */
+    @Test
+    fun everyRefitNamesItsSignatureParameterPerLevel() {
+        val expected = mapOf(
+            CoreShape.ORB to ("Orbit charges on a 2% shorter arc per level" to "Орбита заряжается на дуге короче на 2% за уровень"),
+            CoreShape.PRISM to ("Facets regrow 3% faster per level" to "Грани отрастают на 3% быстрее за уровень"),
+            CoreShape.SHARD to ("Punctures vent 0.8 more heat per level" to "Прокол сбрасывает на 0,8 жара больше за уровень"),
+            CoreShape.RING to ("The halo reaches 3 farther per level" to "Ореол шире на 3 за уровень"),
+            CoreShape.DIAMOND to ("The parry window grows 4 ms per level" to "Окно парирования длиннее на 4 мс за уровень"),
+            CoreShape.TESSERACT to ("Lattice nodes last 0.2 s longer per level" to "Узлы решётки живут на 0,2 с дольше за уровень"),
+            CoreShape.STAR to ("Supernova radius +4 per level" to "Радиус сверхновой +4 за уровень"),
+            CoreShape.SPIRAL to ("The echo swallows shots 0.03 s sooner per level" to "Эхо поглощает снаряды на 0,03 с чаще за уровень"),
+            CoreShape.DIPOLE to ("Attract reach +4 and Repel reach +3 per level" to "Притяжение +4 и отталкивание +3 к радиусу за уровень"),
+            CoreShape.PENTAGON to ("On-beat bursts +3 radius per level" to "Радиус всплеска в такт +3 за уровень"),
+            CoreShape.CRESCENT to ("Blink recharges 0.04 s faster per level" to "Скачок перезаряжается на 0,04 с быстрее за уровень"),
+            CoreShape.HEXAGON to ("Drones last 0.4 s longer per level" to "Дроны живут на 0,4 с дольше за уровень"),
+        )
+        assertEquals(CoreShape.entries.toSet(), expected.keys)
+        for (definition in defaultCoreShapeDefinitions()) {
+            val track = characterUpgradeTrack(policy, definition, level = 3, matter = 0L, unlocked = true)
+            val (en, ru) = expected.getValue(definition.id)
+            assertEquals(en, workshopUpgradeTexts(track, english).signature, "${definition.id}")
+            assertEquals(ru, workshopUpgradeTexts(track, AppLanguage.Russian).signature, "${definition.id}")
+        }
+        // The sentence follows the content step: a retuned step changes the number it shows.
+        val retuned = orb.copy(upgradeSignature = kinetickk.ball.content.api.CharacterUpgradeSignature(-0.025f))
+        assertEquals("Orbit charges on a 2.5% shorter arc per level",
+            workshopUpgradeTexts(characterUpgradeTrack(policy, retuned, 0, 0L, unlocked = true), english).signature)
+        // Honing has no signature.
+        assertNull(weaponUpgradeTrack(policy, TestWeapons.first(), 0, 0L, owned = true).signature)
+        assertEquals("0,03", signatureNumber(0.03f, AppLanguage.Russian))
+        assertEquals("12", signatureNumber(12f, english))
+    }
+
+    @Test
+    fun theSignatureSentenceSitsBetweenTheEffectLinesAndTheAction() {
+        val regular = profileFrame(1440f, 810f, 1f)
+        val plain = workshopUpgradeLayout(regular, 0f, 0f, width = 440f, textScale = 1f, effectCount = 2, buyWidth = 120f, needWidth = null)
+        assertNull(plain.signature)
+        val signed = workshopUpgradeLayout(regular, 0f, 0f, width = 440f, textScale = 1f, effectCount = 2, buyWidth = 120f, needWidth = null,
+            signatureHeight = 34f)
+        val signature = signed.signature!!
+        assertTrue(signature.top >= signed.effects.last().bottom)
+        assertEquals(34f, signature.height)
+        assertTrue(signed.buy.top >= signature.bottom)
+        // The block grows by the sentence and the gap above it.
+        assertEquals(plain.height + 34f + 6f, signed.height, 0.01f)
+    }
+
     @Test
     fun theBlockStacksHeaderPipsLinesAndTheActionWithTheNeedBesideOrUnderIt() {
         val regular = profileFrame(1440f, 810f, 1f)
