@@ -135,7 +135,7 @@ internal fun MutableGameState.startRun() {
     level = 1
     data = 0
     dataFraction = 0f
-    nextLevelData = content.tempo.dataRequiredForLevel(1)
+    nextLevelData = dataRequiredForLevel(1)
     pendingLevelChoices = 0
     keys = 0
     kills = 0

@@ -612,21 +612,31 @@ internal fun MutableGameState.resolvePickupCollection() {
     }
 }
 
+/** Data needed to go from run level [level] to the next: the content table scaled by the run's Rebirth tier. */
+internal fun MutableGameState.dataRequiredForLevel(level: Int): Int =
+    rebirthProfile.dataRequirement(content.tempo.dataRequiredForLevel(level))
+
 internal fun MutableGameState.gainData(rawAmount: Float) {
     if (creditData(rawAmount) <= 0) return
     val levelBefore = level
-    while (data >= nextLevelData) {
+    val maximumLevel = content.tempo.maximumLevel
+    while (level < maximumLevel && data >= nextLevelData) {
         data -= nextLevelData
         level++
         pendingLevelChoices++
         onLevelUp()
-        nextLevelData = content.tempo.dataRequiredForLevel(level)
+        nextLevelData = dataRequiredForLevel(level)
         if (content.tempo.grantsWeaponAmplification(level) &&
             weaponLevel < content.tempo.maximumAutomaticWeaponLevel + matrix.startingWeaponLevels + signatureLevelBonus()
         ) {
             val before = captureBuildChange()
             amplifyCurrentWeapon()
             emitBuildChange(before, currentWeaponDefinition.name + " mastery advanced")
+        }
+        if (level == maximumLevel) {
+            // The capped level holds no Data: the leftover would only charge an Apex that unlocks ready.
+            data = 0
+            unlockApex()
         }
     }
     if (level > levelBefore) vacuumOnScreenData()
@@ -636,14 +646,33 @@ internal fun MutableGameState.gainData(rawAmount: Float) {
 /**
  * Adds Data without levelling and returns the whole points added; the fraction carries over. A LEVEL_UP
  * clause's Data arrives this way, so the level loop in [gainData] that fired it takes the Data up against the
- * settled requirement and never re-enters itself.
+ * settled requirement and never re-enters itself. At the run's maximum level every whole Data still counts as
+ * collected but charges the Apex instead and adds nothing (0 is returned, so [gainData] never loops).
  */
 internal fun MutableGameState.creditData(rawAmount: Float): Int {
     dataFraction += rawAmount * dataGainLiability()
     val whole = floor(dataFraction).toInt()
     if (whole <= 0) return 0
     dataFraction -= whole
-    data += whole
     dataCollected += whole.toLong()
+    if (level >= content.tempo.maximumLevel) {
+        chargeApexWithData(whole)
+        return 0
+    }
+    data += whole
     return whole
 }
+
+/**
+ * Apex hook: the run has just reached its maximum level. The Apex runtime (combat-final §5.1) unlocks the
+ * character's Apex here, ready at once; until that runtime lands this is a deliberate no-op.
+ */
+internal fun MutableGameState.unlockApex() = Unit
+
+/**
+ * Apex hook: [wholeData] Data was credited at the maximum level. The Apex runtime (combat-final §5.1) shortens
+ * the cooldown by 0.03 s per Data within its per-cycle refund bound once the Apex is unlocked; until that runtime
+ * lands this is a deliberate no-op, so post-cap Data only counts toward [MutableGameState.dataCollected].
+ */
+@Suppress("UNUSED_PARAMETER")
+internal fun MutableGameState.chargeApexWithData(wholeData: Int) = Unit
