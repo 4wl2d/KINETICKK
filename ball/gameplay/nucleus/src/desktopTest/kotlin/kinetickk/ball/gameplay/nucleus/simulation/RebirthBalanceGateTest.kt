@@ -5,7 +5,6 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.EnemyType
-import kinetickk.ball.content.api.MatrixNodeDefinition
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
@@ -206,27 +205,6 @@ class RebirthBalanceGateTest {
             state.takeVisualFxCues()
         }
         return Outcome(seed, state.phase == GamePhase.VICTORY, state.elapsed, state.message, architectAt, synergy)
-    }
-
-    /**
-     * Half the Core Matrix by Matter: ranks bought cheapest first (each node's ranks in order) while the
-     * total stays within half the full price. On the shipped Matrix this is every rank of the first two
-     * rows and one rank of most third-row nodes up to Rebirth 1, with no keystone or deeper node: the
-     * profile of a player a few tiers in.
-     */
-    private fun halfMatrixRanks(nodes: List<MatrixNodeDefinition>): List<Int> {
-        val ranks = IntArray(nodes.size)
-        val budget = nodes.sumOf { it.costs.sum() } / 2
-        var spent = 0
-        val purchases = nodes.indices.flatMap { node -> nodes[node].costs.indices.map { rank -> node to rank } }
-            .sortedWith(compareBy({ (node, rank) -> nodes[node].costs[rank] }, { it.second }))
-        for ((node, rank) in purchases) {
-            val cost = nodes[node].costs[rank]
-            if (ranks[node] != rank || spent + cost > budget) continue
-            ranks[node]++
-            spent += cost
-        }
-        return ranks.toList()
     }
 
     private fun report(label: String, outcomes: List<Outcome>) {

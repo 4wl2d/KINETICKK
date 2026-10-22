@@ -162,10 +162,16 @@ internal class NoPoiBot(
         // It never manages heat, so the Covenant's cooling cut keeps it above 80 heat, bleeding integrity.
         RelicId.FURNACE_COVENANT to -20f,
     ),
+    /** How the bot treats Data-gain cards (economy §2.1); [DataPolicy.NEUTRAL] plays exactly as the reference bot. */
+    private val dataPolicy: DataPolicy = DataPolicy.NEUTRAL,
 ) {
     private var cursorAngle = 0f
     private var braking = false
     private var decisions = 0
+
+    /** [DataPolicy.AVOID] only: offers of nothing but Data-gain cards with no reroll left, so one had to be taken. */
+    var avoidBreaches = 0
+        private set
 
     fun control(s: MutableGameState) {
         val boss = s.enemies.firstOrNull { it.type == EnemyType.ARCHITECT }
@@ -314,10 +320,53 @@ internal class NoPoiBot(
     }
 
     fun choose(s: MutableGameState) {
-        val index = s.choices.indices.maxByOrNull { score(s, s.choices[it], it) } ?: return
+        val choices = s.choices
+        when (dataPolicy) {
+            DataPolicy.NEUTRAL -> Unit
+            // An item offer without a Data card is rerolled while a rank-0 Data item can still stack; the
+            // bot decides again on the next tick.
+            DataPolicy.SEEK -> if (
+                s.choiceType == ChoiceType.ITEM && choices.none { isDataGainCard(s, it) } && s.choicesCanReroll &&
+                s.content.items.any { it.minimumRebirth == 0 && it.isDataGain() && s.itemStacks[it.id] < it.maxStacks }
+            ) {
+                s.rerollChoices()
+                return
+            }
+            DataPolicy.AVOID -> if (choices.isNotEmpty() && choices.all { isDataGainCard(s, it) }) {
+                if (s.choicesCanReroll) {
+                    s.rerollChoices()
+                    return
+                }
+                // Every card gains Data: take the one that gains the least.
+                avoidBreaches++
+                val index = choices.indices.minBy { dataWeight(s, choices[it]) }
+                decisions++
+                s.choose(index)
+                return
+            }
+        }
+        val index = choices.indices.maxByOrNull { policyScore(s, choices[it], it) } ?: return
         decisions++
         s.choose(index)
     }
+
+    /** SEEK ranks a Data-gain card by its Data weight above every other card; AVOID scores it −5 000. */
+    private fun policyScore(s: MutableGameState, c: ChoiceOption, index: Int): Float = when {
+        dataPolicy == DataPolicy.NEUTRAL || !isDataGainCard(s, c) -> score(s, c, index)
+        dataPolicy == DataPolicy.SEEK -> dataWeight(s, c)
+        else -> -5_000f
+    }
+
+    /** `5 000 + 1 000 × ΣDATA_GAIN + 500 × [has GainData]` for a Data-gain item card (economy §2.1). */
+    private fun dataWeight(s: MutableGameState, c: ChoiceOption): Float {
+        val item = c.itemId?.let(s.content::item) ?: return 0f
+        val dataGain = item.stats.filter { it.effect == ItemEffect.DATA_GAIN && it.amount > 0f }.sumOf { it.amount.toDouble() }
+        val gainsData = item.clauses.any { clause -> clause.actions.any { it is EffectAction.GainData } }
+        return 5_000f + 1_000f * dataGain.toFloat() + if (gainsData) 500f else 0f
+    }
+
+    private fun isDataGainCard(s: MutableGameState, c: ChoiceOption): Boolean =
+        c.itemId?.let(s.content::item)?.isDataGain() == true
 
     /**
      * A committed Ram and Entropy build: archetype and element items first, survival stats second,
@@ -368,6 +417,14 @@ internal class NoPoiBot(
         return 0f
     }
 }
+
+/** How a bot treats Data-gain cards: as any other card, first ([SEEK], with rerolls) or last ([AVOID]). */
+internal enum class DataPolicy { NEUTRAL, SEEK, AVOID }
+
+/** A Data-gain item: any positive DATA_GAIN stat or a clause that gains Data (economy §2.1). */
+internal fun ItemDefinition.isDataGain(): Boolean =
+    stats.any { it.effect == ItemEffect.DATA_GAIN && it.amount > 0f } ||
+        clauses.any { clause -> clause.actions.any { it is EffectAction.GainData } }
 
 /**
  * The reference run owns the original twelve weapons, so its Totem recalibrations deal exactly the
