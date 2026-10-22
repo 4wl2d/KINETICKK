@@ -434,7 +434,7 @@ internal class NoPoiBot(
                 // bot decides again on the next tick.
                 DataPolicy.SEEK -> if (
                     s.choiceType == ChoiceType.ITEM && choices.none { isDataGainCard(s, it) } && s.choicesCanReroll &&
-                    s.content.items.any { it.minimumRebirth == 0 && it.isDataGain() && s.itemStacks[it.id] < it.maxStacks }
+                    s.content.items.any { it.minimumRebirth == 0 && it.isDataEconomy && s.itemStacks[it.id] < it.maxStacks }
                 ) {
                     s.rerollChoices()
                     return
@@ -474,7 +474,7 @@ internal class NoPoiBot(
     }
 
     private fun isDataGainCard(s: MutableGameState, c: ChoiceOption): Boolean =
-        c.itemId?.let(s.content::item)?.isDataGain() == true
+        c.itemId?.let(s.content::item)?.isDataEconomy == true
 
     /**
      * Skill cards (combat-final §4.10): a rank-up card is always taken; a draft takes the character's card, else
@@ -516,6 +516,10 @@ internal class NoPoiBot(
             // The reference flight steers around obstacles and seldom throws enemies into them: ricochet and slam
             // items would sit nearly idle in this build.
             if (item.clauses.any { it.trigger == EffectTrigger.RICOCHET || it.trigger == EffectTrigger.SLAM }) return -100f
+            // Nor does it cash marks, seek out fields or mark and throw on purpose (items.md §6.2).
+            val first = item.clauses.firstOrNull()
+            if (first != null && (first.trigger == EffectTrigger.MARK_CONSUMED || first.trigger == EffectTrigger.FIELD_ENTER ||
+                    first.actions.first().let { it is EffectAction.ApplyMark || it is EffectAction.Throw })) return -100f
             val archetype = (if (archetypeTag in item.tags) 50f else 0f) + (if (element != null && element in item.elements) 50f else 0f)
             val survival = item.stats.sumOf { stat ->
                 when (stat.effect) {
@@ -542,11 +546,6 @@ internal class NoPoiBot(
 
 /** How a bot treats Data-gain cards: as any other card, first ([SEEK], with rerolls) or last ([AVOID]). */
 internal enum class DataPolicy { NEUTRAL, SEEK, AVOID }
-
-/** A Data-gain item: any positive DATA_GAIN stat or a clause that gains Data (economy §2.1). */
-internal fun ItemDefinition.isDataGain(): Boolean =
-    stats.any { it.effect == ItemEffect.DATA_GAIN && it.amount > 0f } ||
-        clauses.any { clause -> clause.actions.any { it is EffectAction.GainData } }
 
 /**
  * The reference run owns the original twelve weapons, so its Totem recalibrations deal exactly the

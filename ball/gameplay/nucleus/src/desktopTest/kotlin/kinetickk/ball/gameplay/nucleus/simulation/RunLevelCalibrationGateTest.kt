@@ -6,6 +6,7 @@ import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.isDataEconomy
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
@@ -128,7 +129,7 @@ class RunLevelCalibrationGateTest {
             }
             if (levelAtTwelveMinutes == null && state.elapsed >= 720f) levelAtTwelveMinutes = state.level
             if (state.elapsed >= minute * 60f) {
-                val dataItems = content.items.filter { it.isDataGain() && state.itemStacks[it.id] > 0 }
+                val dataItems = content.items.filter { it.isDataEconomy && state.itemStacks[it.id] > 0 }
                     .joinToString(",") { "${it.name}x${state.itemStacks[it.id]}" }
                 minutes += "m$minute L${state.level} D${state.dataCollected} g${(state.dataGain * 100f).toInt() / 100f} " +
                     "k${state.kills} M${state.runMatter} data=[$dataItems]"
