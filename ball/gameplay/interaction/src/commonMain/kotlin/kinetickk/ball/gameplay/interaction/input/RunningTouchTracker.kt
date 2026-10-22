@@ -149,6 +149,9 @@ internal class RunningControlPressLog {
 
     var keyHints: Boolean = false
 
+    /** The Show FPS counter's value the PERFORMANCE slot draws (`GameplayFpsCounter.NO_VALUE` before one). */
+    var fps: Int = -1
+
     fun press(target: RunningControlTarget, renderTime: Float) {
         pressedAt[target.ordinal] = renderTime
     }

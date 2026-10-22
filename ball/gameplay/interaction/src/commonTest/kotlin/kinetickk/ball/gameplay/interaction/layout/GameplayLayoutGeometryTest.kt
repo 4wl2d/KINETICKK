@@ -106,9 +106,15 @@ class GameplayLayoutGeometryTest {
             assertEquals(none + skills, onlySkills, where)
             val onlyApex = runningControlBounds(width, height, scale, RunningControlMask.APEX).map { it.target }.toSet()
             assertEquals(none + RunningControlTarget.APEX, onlyApex, where)
+            // The FPS counter (PERFORMANCE) only with its bit, and only where the layout has its slot.
+            val mode = gameplayLayoutMode(width, height, scale)
+            assertFalse(RunningControlTarget.PERFORMANCE in none, "$where: performance without Show FPS")
+            val fps = if (mode == GameplayLayoutMode.COMPACT_PORTRAIT) emptySet() else setOf(RunningControlTarget.PERFORMANCE)
+            val onlyFps = runningControlBounds(width, height, scale, RunningControlMask.FPS).map { it.target }.toSet()
+            assertEquals(none + fps, onlyFps, where)
 
             val all = runningControlBounds(width, height, scale, RunningControlMask.ALL)
-            assertEquals(none + skills + RunningControlTarget.APEX, all.map { it.target }.toSet(), where)
+            assertEquals(none + skills + RunningControlTarget.APEX + fps, all.map { it.target }.toSet(), where)
             val build = runningBuildButtonBounds(width, height, scale)
             val targets = all.map { it.target.name to it.bounds } + ("BUILD" to build)
             targets.forEach { (name, bounds) ->
@@ -119,7 +125,6 @@ class GameplayLayoutGeometryTest {
             targets.forEachIndexed { index, (first, a) ->
                 targets.drop(index + 1).forEach { (second, b) -> assertFalse(a.overlaps(b), "$where: $first $a meets $second $b") }
             }
-            val mode = gameplayLayoutMode(width, height, scale)
             val byTarget = all.associate { it.target to it.bounds }
             val clearance = CORE_ZONE_DP * scale
             val core = Rect(width * 0.5f - clearance, height * 0.5f - clearance, width * 0.5f + clearance, height * 0.5f + clearance)
@@ -134,6 +139,32 @@ class GameplayLayoutGeometryTest {
                 assertFalse(RunningControlTarget.PERFORMANCE in byTarget, "$where: performance on portrait")
             }
         }
+    }
+
+    /**
+     * Show FPS: the counter takes the landscape phones' Performance slot left of pause (Build stays left
+     * of it) and, on desktop, one header step left of Build; Build never moves when it appears.
+     */
+    @Test
+    fun theFpsCounterSitsInThePerformanceSlotWithoutMovingBuild() {
+        fun at(w: Float, h: Float, mask: Int) = runningControlBounds(w, h, 1f, mask).associate { it.target to it.bounds }
+        for ((w, h) in listOf(1_440f to 810f, 1_280f to 720f, 1_000f to 700f)) {
+            val controls = at(w, h, RunningControlMask.FPS)
+            val pause = controls.getValue(RunningControlTarget.PAUSE)
+            val counter = controls.getValue(RunningControlTarget.PERFORMANCE)
+            val build = runningBuildButtonBounds(w, h, 1f)
+            val step = regularHeaderStep(w, 1f)
+            assertEquals(pause.center.y, counter.center.y, "$w x $h counter on the pause row")
+            assertEquals(build.center.x - step, counter.center.x, 0.01f, "$w x $h counter one step left of Build")
+            assertTrue(counter.right <= build.left && build.right <= pause.left, "$w x $h counter, Build, pause in a row")
+            assertTrue(counter.width >= 48f && counter.height >= 48f)
+        }
+        val landscape = at(844f, 390f, RunningControlMask.FPS)
+        val counter = landscape.getValue(RunningControlTarget.PERFORMANCE)
+        assertEquals(Rect(702f, 6f, 750f, 54f), counter)
+        assertTrue(runningBuildButtonBounds(844f, 390f, 1f).right <= counter.left)
+        assertFalse(RunningControlTarget.PERFORMANCE in at(844f, 390f, RunningControlMask.NONE))
+        assertFalse(RunningControlTarget.PERFORMANCE in at(390f, 844f, RunningControlMask.ALL), "portrait has no Performance slot")
     }
 
     /** The skill squares, the Apex box and the portrait Build button at the design's reference sizes (±0.5 px). */

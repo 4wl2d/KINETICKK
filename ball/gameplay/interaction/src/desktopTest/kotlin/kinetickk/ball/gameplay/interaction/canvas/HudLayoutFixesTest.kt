@@ -169,6 +169,47 @@ class HudLayoutFixesTest {
     }
 
     /**
+     * Show FPS on desktop and landscape phones: the counter (value and label) fits inside its slot's
+     * visual and never meets the clock, the badge, the chips (which step left of it on desktop), the
+     * chain or a boss block, at every text size in both languages; the full panel stays closed.
+     */
+    @Test
+    fun theFpsCounterStaysInItsSlotClearOfTheHeader() {
+        val windows = listOf(1_440 to 810, 1_280 to 720, 1_000 to 700, 844 to 390, 740 to 360, 640 to 360, 568 to 320)
+        for (language in AppLanguage.entries) for ((w, h) in windows) for (textScale in textScales)
+        for (boss in listOf(EnemyType.ELITE, EnemyType.ARCHITECT)) {
+            val width = w.toFloat()
+            val height = h.toFloat()
+            val base = hudTestModel(width, height)
+            val model = base.with(
+                "settings" to base.settings.copy(showFps = true),
+                "keys" to 12, "runMatter" to 9_876_543L, "combo" to 128, "comboTime" to 1f, "comboWindow" to 2.8f,
+                "enemies" to listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f, 0f, 0f, 0f, 0f, 0f, 0f, false,
+                    affinityBits = bossAffinity(boss)))
+                    .toImmutableList(),
+            )
+            val controls = kinetickk.ball.gameplay.interaction.input.RunningControlPressLog().apply { fps = 144 }
+            HudDrawCache.forgetLayouts()
+            draw(w, h, language, textScale) { measurer -> drawHud(model, measurer, 1f, controls = controls) }
+            val where = "$language $w x $h x$textScale $boss"
+            val slot = runningControlBounds(width, height, 1f, kinetickk.ball.gameplay.interaction.layout.RunningControlMask.of(model))
+                .single { it.target == RunningControlTarget.PERFORMANCE }.bounds
+            val counter = assertNotNull(HudLayoutProbe.rect(HudBlock.FPS), "$where: no counter")
+            assertTrue(slot.contains(counter.topLeft) && slot.contains(counter.bottomRight), "$where: counter $counter outside its slot $slot")
+            listOf(HudBlock.CLOCK, HudBlock.BADGE, HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.CHAIN, HudBlock.BOSS).forEach { block ->
+                val other = HudLayoutProbe.rect(block) ?: return@forEach
+                assertFalse(other.overlaps(slot), "$where: $block $other meets the counter's slot $slot")
+            }
+            val build = runningBuildButtonBounds(width, height, 1f)
+            listOf(HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.CHAIN).forEach { block ->
+                val other = HudLayoutProbe.rect(block) ?: return@forEach
+                assertFalse(other.overlaps(build), "$where: $block $other meets Build $build")
+            }
+            HudDrawCache.peekLayout(HudText.FPS)?.let { assertFalse(it.isCut(), "$where: the value is cut") }
+        }
+    }
+
+    /**
      * The skill row, its key caps and the Apex key cap at every reference size, text size and language, mixed
      * and full rows, with and without a trial: they stay on screen, never meet the bottom clusters, the
      * loadout, the feed, the minimap, the clock, the chips or the trial panel, and no key label is cut.

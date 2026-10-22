@@ -120,6 +120,7 @@ import kinetickk.ball.gameplay.interaction.layout.runningBuildButtonBounds
 import kinetickk.ball.gameplay.interaction.rewards.RewardContent
 import kinetickk.ball.gameplay.interaction.terminal.TerminalContent
 import kinetickk.ball.gameplay.interaction.terminal.terminalActionsReady
+import kinetickk.ball.gameplay.interaction.performance.GameplayFpsCounter
 import kinetickk.ball.gameplay.interaction.performance.GameplayPerformanceSnapshot
 import kinetickk.ball.gameplay.interaction.performance.GameplayPerformanceTelemetry
 import kinetickk.ball.content.api.CoreShape
@@ -163,6 +164,7 @@ fun GameplayContent(
     val performanceEnabledState = rememberUpdatedState(performanceEnabledValue)
     val hudMemory = remember(component) { HudPresentationMemory() }
     val controlLog = remember(component) { RunningControlPressLog() }
+    val fpsCounter = remember(component) { GameplayFpsCounter() }
     // Names in the skill and Apex semantics; a component plays one content snapshot.
     val content = remember(component) { requireNotNull(component.renderSnapshot().renderModel).content }
     // The trial panel's (!) opens by keyboard focus, a tap/click (toggle) or a hovering mouse.
@@ -337,6 +339,13 @@ fun GameplayContent(
             if (collectPerformance && frameIntervalNanos >= 0L) {
                 performanceTelemetry.recordFrameIntervalMillis(frameIntervalNanos / 1_000_000.0)
             }
+            // The Show FPS counter measures the loop while the setting is on; the HUD reads its value.
+            if (renderModelValue.settings.showFps) {
+                if (fpsCounter.frame(frame)) controlLog.fps = fpsCounter.fps
+            } else if (controlLog.fps != GameplayFpsCounter.NO_VALUE) {
+                fpsCounter.reset()
+                controlLog.fps = GameplayFpsCounter.NO_VALUE
+            }
             when (val result = interactionValidator.frameElapsed(delta)) {
                 is InteractionValidationResult.Valid -> {
                     renderTimeSecondsValue += selectGameplayPresentationDelta(
@@ -352,11 +361,17 @@ fun GameplayContent(
         }
     }
 
-    // Show FPS (stored) opens the performance panel with each run and follows the setting when it
-    // reaches the run; F3 and the PERFORMANCE control still toggle the panel for the session.
-    val showFps by remember(component) { derivedStateOf { renderModelValue.settings.showFps } }
-    LaunchedEffect(component, showFps) {
-        if (performanceEnabledValue != showFps) togglePerformanceTelemetry()
+    // Show FPS (stored) places the FPS counter in the PERFORMANCE slot; a tap on it, F3 and the bound
+    // key toggle the full panel for the session. Portrait phones have no such slot (Build holds it), so
+    // there Show FPS opens the full panel with each run and follows the setting when it reaches the run.
+    val showFpsPanel by remember(component) {
+        derivedStateOf {
+            val model = renderModelValue
+            showFpsOpensPanel(model.settings.showFps, gameplayLayoutMode(model.hudWidth, model.hudHeight, model.uiScale))
+        }
+    }
+    LaunchedEffect(component, showFpsPanel) {
+        if (performanceEnabledValue != showFpsPanel) togglePerformanceTelemetry()
     }
 
     // Pause when unfocused: the window losing focus pauses a running run (an edge, never a level).
@@ -1083,6 +1098,13 @@ private fun Modifier.placeInGameplayBounds(bounds: Rect, density: Density): Modi
             width = with(density) { bounds.width.toDp() },
             height = with(density) { bounds.height.toDp() },
         )
+
+/**
+ * Whether Show FPS opens the full performance panel: only where the HUD has no PERFORMANCE slot for the
+ * counter (portrait phones); elsewhere the counter shows and the panel stays the player's toggle.
+ */
+internal fun showFpsOpensPanel(showFps: Boolean, mode: GameplayLayoutMode): Boolean =
+    showFps && mode == GameplayLayoutMode.COMPACT_PORTRAIT
 
 private const val GAMEPLAY_ROOT_TAG = "kinetickk.gameplay"
 internal const val GAMEPLAY_TRIAL_INFO_TAG = "kinetickk.gameplay.trial-info"

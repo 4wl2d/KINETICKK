@@ -163,7 +163,9 @@ private object FeedArea {
                 // Stop above the control row (Dash, Brake and the skill squares) that sits over the loadout.
                 var rowTop = frame.height
                 forEachRunningControlBounds(frame.width, frame.height, density, RunningControlMask.ALL) { target, _, controlTop, _, _ ->
-                    if (target != RunningControlTarget.PAUSE && target != RunningControlTarget.APEX) rowTop = min(rowTop, controlTop)
+                    if (target != RunningControlTarget.PAUSE && target != RunningControlTarget.APEX &&
+                        target != RunningControlTarget.PERFORMANCE
+                    ) rowTop = min(rowTop, controlTop)
                 }
                 limit = rowTop - frame.u(12f)
             }

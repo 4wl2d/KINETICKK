@@ -17,6 +17,9 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -25,6 +28,7 @@ import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.interaction.canvas.hudTestSnapshot
 import kinetickk.ball.gameplay.interaction.canvas.with
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
+import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
@@ -34,6 +38,7 @@ import kinetickk.foundation.design.LocalAppLanguage
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** Show FPS and Pause when unfocused through the real gameplay host. */
@@ -70,29 +75,47 @@ class GameplayWindowPreferencesTest {
     private val english = PlayerPreferences(language = AppLanguage.English)
 
     @Test
-    fun showFpsOpensThePerformancePanelAndFollowsTheSettingWhenItReachesTheRun() = runComposeUiTest {
+    fun onALandscapePhoneShowFpsPlacesTheCounterWhoseTapTogglesThePanel() = exerciseCounter(844, 390)
+
+    @Test
+    fun onDesktopShowFpsPlacesTheCounterWhoseTapTogglesThePanel() = exerciseCounter(1_440, 810)
+
+    /** The counter is the PERFORMANCE control: Show FPS places it with the panel closed, a tap opens the panel. */
+    private fun exerciseCounter(width: Int, height: Int) = runComposeUiTest {
         mainClock.autoAdvance = false
-        // Landscape phone: the PERFORMANCE control reports the panel's state.
-        val run = TestRun(844f, 390f, english.copy(showFps = true))
-        setContent { Host(run, TestWindow(focused = true), 844, 390) }
+        val run = TestRun(width.toFloat(), height.toFloat(), english.copy(showFps = true))
+        setContent { Host(run, TestWindow(focused = true), width, height) }
         mainClock.advanceTimeByFrame()
         waitForIdle()
-        assertEquals("on", performanceState())
+        assertEquals("off", performanceState(), "$width x $height: Show FPS shows the counter, not the panel")
+        onNodeWithTag("kinetickk.gameplay.performance").performSemanticsAction(SemanticsActions.OnClick)
+        repeat(2) { mainClock.advanceTimeByFrame() }
+        waitForIdle()
+        assertEquals("on", performanceState(), "$width x $height: a tap on the counter opens the panel")
         run.publish(english.copy(showFps = false))
-        // A frame takes the new model, the next recomposes with it, the one after shows the panel's state.
+        // A frame takes the new model, the next recomposes with it.
         repeat(6) { mainClock.advanceTimeByFrame() }
         waitForIdle()
-        assertTrue(performanceState() != "on", "the panel closes with Show FPS off")
+        assertNull(performanceState(), "$width x $height: the counter leaves with Show FPS off")
     }
 
     @Test
-    fun withoutShowFpsTheRunStartsWithoutThePanel() = runComposeUiTest {
+    fun withoutShowFpsTheRunHasNoCounter() = runComposeUiTest {
         mainClock.autoAdvance = false
         val run = TestRun(844f, 390f, english)
         setContent { Host(run, TestWindow(focused = true), 844, 390) }
         repeat(3) { mainClock.advanceTimeByFrame() }
         waitForIdle()
-        assertTrue(performanceState() != "on")
+        assertNull(performanceState())
+    }
+
+    @Test
+    fun onlyPortraitPhonesOpenThePanelForShowFps() {
+        // Portrait phones have no Performance slot for the counter (Build holds it), so the panel shows instead.
+        assertTrue(showFpsOpensPanel(true, GameplayLayoutMode.COMPACT_PORTRAIT))
+        assertFalse(showFpsOpensPanel(false, GameplayLayoutMode.COMPACT_PORTRAIT))
+        assertFalse(showFpsOpensPanel(true, GameplayLayoutMode.COMPACT_LANDSCAPE))
+        assertFalse(showFpsOpensPanel(true, GameplayLayoutMode.REGULAR))
     }
 
     @Test

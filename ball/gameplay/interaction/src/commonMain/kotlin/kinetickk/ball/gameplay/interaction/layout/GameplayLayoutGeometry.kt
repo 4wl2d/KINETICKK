@@ -42,7 +42,13 @@ internal object RunningControlMask {
 
     /** The level badge as the Apex control: placed once the Apex unlocks. */
     const val APEX = 2
-    const val ALL = SKILLS or APEX
+
+    /**
+     * The FPS counter in the PERFORMANCE slot (a tap toggles the performance panel): placed while Show
+     * FPS is on, on desktop and landscape phones (portrait phones have no Performance slot).
+     */
+    const val FPS = 4
+    const val ALL = SKILLS or APEX or FPS
 
     fun of(engine: GameplayRenderModel): Int {
         var mask = NONE
@@ -54,6 +60,7 @@ internal object RunningControlMask {
             }
         }
         if (engine.apex.unlocked) mask = mask or APEX
+        if (engine.settings.showFps) mask = mask or FPS
         return mask
     }
 }
@@ -146,12 +153,13 @@ private const val PORTRAIT_DASH_DP = 92f
 private const val PORTRAIT_SKILL_ROW_DP = 3f * SKILL_SQUARE_DP + 2f * COMPACT_SKILL_GAP_DP + 2f * COMPACT_SKILL_GAP_DP
 
 /**
- * Running controls in canvas px. REGULAR: pause top-right, the skill squares, Brake and Dash as one
- * row right-aligned above the bottom-right loadout. Landscape phones: Dash and Brake at the right
- * thumb, Z and X left of Dash, C below it; performance and pause in the top-right row. Portrait
- * phones: Brake, Z, X, C and Dash share the bottom row; pause top-right (performance stays in the
- * pause menu). The Apex control is the level badge. [mask] ([RunningControlMask]) places the skill
- * row and the Apex; every target is at least [RUNNING_CONTROL_MIN_DP] and they never overlap.
+ * Running controls in canvas px. REGULAR: pause top-right with the FPS counter one slot left of Build,
+ * the skill squares, Brake and Dash as one row right-aligned above the bottom-right loadout. Landscape
+ * phones: Dash and Brake at the right thumb, Z and X left of Dash, C below it; the FPS counter and pause
+ * in the top-right row. Portrait phones: Brake, Z, X, C and Dash share the bottom row; pause top-right
+ * (Build holds the Performance slot, so no counter is placed). The Apex control is the level badge.
+ * [mask] ([RunningControlMask]) places the skill row, the Apex and the FPS counter (PERFORMANCE); every
+ * target is at least [RUNNING_CONTROL_MIN_DP] and they never overlap.
  */
 internal inline fun forEachRunningControlBounds(
     width: Float,
@@ -172,6 +180,7 @@ internal inline fun forEachRunningControlBounds(
     val margin = runningHudMargin(width, height, safeScale)
     val skills = mask and RunningControlMask.SKILLS != 0
     val apex = mask and RunningControlMask.APEX != 0
+    val fps = mask and RunningControlMask.FPS != 0
     when (gameplayLayoutMode(width, height, safeScale)) {
         GameplayLayoutMode.REGULAR -> {
             val unit = regularHudUnit(width, safeScale)
@@ -196,6 +205,11 @@ internal inline fun forEachRunningControlBounds(
             val pauseX = width - margin - 20f * unit
             val pauseY = 24f * unit + 18f * unit
             action(RunningControlTarget.PAUSE, pauseX - half, pauseY - half, pauseX + half, pauseY + half)
+            if (fps) {
+                // One header step left of Build ([runningBuildButtonBounds]), which sits one step left of pause.
+                val fpsX = pauseX - 2f * regularHeaderStep(width, safeScale)
+                action(RunningControlTarget.PERFORMANCE, fpsX - half, pauseY - half, fpsX + half, pauseY + half)
+            }
             if (apex) {
                 // The level badge with its Data bar: from 6 u left of the badge to 134 u, around its row.
                 val left = margin - 6f * unit
@@ -230,7 +244,7 @@ internal inline fun forEachRunningControlBounds(
             val pauseX = width - margin - 22f * safeScale
             val rowY = 30f * safeScale
             val performanceX = pauseX - 52f * safeScale
-            action(RunningControlTarget.PERFORMANCE, performanceX - half, rowY - half, performanceX + half, rowY + half)
+            if (fps) action(RunningControlTarget.PERFORMANCE, performanceX - half, rowY - half, performanceX + half, rowY + half)
             action(RunningControlTarget.PAUSE, pauseX - half, rowY - half, pauseX + half, rowY + half)
             if (apex) {
                 // The badge row; the box ends where the trial panel and the minimap begin (48 dp).
@@ -301,7 +315,7 @@ internal fun runningBuildButtonBounds(width: Float, height: Float, scale: Float)
     }
     return when (gameplayLayoutMode(width, height, safeScale)) {
         GameplayLayoutMode.REGULAR -> {
-            val x = pause.center.x - max(48f * regularHudUnit(width, safeScale), half * 2f)
+            val x = pause.center.x - regularHeaderStep(width, safeScale)
             Rect(x - half, pause.center.y - half, x + half, pause.center.y + half)
         }
         GameplayLayoutMode.COMPACT_LANDSCAPE -> {
@@ -313,4 +327,10 @@ internal fun runningBuildButtonBounds(width: Float, height: Float, scale: Float)
             Rect(x - half, pause.center.y - half, x + half, pause.center.y + half)
         }
     }
+}
+
+/** REGULAR header step between the centres of pause, Build and the FPS counter, in px. */
+internal fun regularHeaderStep(width: Float, scale: Float): Float {
+    val safeScale = scale.coerceAtLeast(1f)
+    return max(48f * regularHudUnit(width, safeScale), RUNNING_CONTROL_MIN_DP * safeScale)
 }

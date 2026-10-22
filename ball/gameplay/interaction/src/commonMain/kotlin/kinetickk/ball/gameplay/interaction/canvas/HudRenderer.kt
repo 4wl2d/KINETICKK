@@ -33,7 +33,9 @@ import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
 import kinetickk.ball.gameplay.interaction.layout.compactHudFactor
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode
+import kinetickk.ball.gameplay.interaction.layout.regularHeaderStep
 import kinetickk.ball.gameplay.interaction.layout.regularHudUnit
+import kinetickk.ball.gameplay.interaction.performance.GameplayFpsCounter
 import kinetickk.ball.gameplay.interaction.layout.runningHudMargin
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
@@ -129,6 +131,9 @@ internal object HudScratch {
     val timer = HudNumberText { formatRunTime(it.toFloat()) }
     val matter = HudKeyedText()
     val keys = HudNumberText { it.toString() }
+
+    /** The Show FPS counter's value ("–" before the first measured window). */
+    val fps = HudNumberText { if (it < 0L) "–" else it.toString() }
     val weaponLevel = HudKeyedText()
     val bossName = HudKeyedText()
     val label = HudKeyedText()
@@ -906,7 +911,9 @@ private fun DrawScope.drawEconomy(engine: GameplayRenderModel, hostMeasurer: Tex
         GameplayLayoutMode.REGULAR -> {
             val height = frame.u(36f)
             val top = frame.u(24f)
-            var right = frame.buildCenterX - frame.u(20f + 10f)
+            // Right-aligned left of the header's leftmost button: Build, or the FPS counter while it shows.
+            val headerLeft = if (engine.settings.showFps) frame.buildCenterX - regularHeaderStep(frame.width, frame.density) else frame.buildCenterX
+            var right = headerLeft - frame.u(20f + 10f)
             if (keys != null) right = drawHudChip(measurer, HudPath.KEY_CHIP, HudText.KEYS, keys, right, top, height, frame.t(21f), KkIcon.SYSTEM_KEY, roles) - frame.u(8f)
             drawHudChip(measurer, HudPath.MATTER_CHIP, HudText.MATTER, matter, right, top, height, frame.t(21f), null, roles)
         }
@@ -1809,8 +1816,9 @@ internal fun DrawScope.drawControls(
             RunningControlTarget.PAUSE -> drawHudIconButton(frame, HudPath.PAUSE, left, top, right, bottom, regular) { center, glyph ->
                 drawPauseGlyph(center, glyph)
             }
-            RunningControlTarget.PERFORMANCE -> drawHudIconButton(frame, HudPath.PERFORMANCE, left, top, right, bottom, regular) { center, glyph ->
-                drawPerformanceGlyph(center, glyph)
+            // Placed while Show FPS is on: the counter itself is the control (a tap toggles the full panel).
+            RunningControlTarget.PERFORMANCE -> drawHudIconButton(frame, HudPath.PERFORMANCE, left, top, right, bottom, regular) { center, _ ->
+                drawFpsCounter(textMeasurer, frame, center, controls?.fps ?: GameplayFpsCounter.NO_VALUE)
             }
             // The skill row draws as one (its entrance moves all three); the Apex is the level badge.
             RunningControlTarget.SKILL_1, RunningControlTarget.SKILL_2, RunningControlTarget.SKILL_3, RunningControlTarget.APEX -> Unit
@@ -1921,6 +1929,27 @@ internal fun DrawScope.drawPauseGlyph(center: Offset, size: Float, color: Color 
     drawLine(color, Offset(center.x - 4f * unit, center.y - 8f * unit), Offset(center.x - 4f * unit, center.y + 8f * unit), stroke, StrokeCap.Square)
     drawLine(color, Offset(center.x + 4f * unit, center.y - 8f * unit), Offset(center.x + 4f * unit, center.y + 8f * unit), stroke, StrokeCap.Square)
 }
+
+/**
+ * The Show FPS counter inside the PERFORMANCE slot: the measured value (mono 12, "–" until the first
+ * window closes) over an "FPS" label (8). Cached per value; no allocation once a value was shown.
+ */
+private fun DrawScope.drawFpsCounter(measurer: TextMeasurer, frame: HudFrame, center: Offset, fps: Int) {
+    val display = HudMeasurers.display(measurer)
+    val value = HudScratch.fps.of(fps.toLong())
+    val number = HudDrawCache.layout(HudText.FPS, display, value,
+        measurer.typography.monoStyle(frame.t(12f), weight = FontWeight.Bold, trackingEm = 0f, lineHeightEm = 1f))
+    val label = HudDrawCache.layout(HudText.FPS_LABEL, display, FPS_LABEL, measurer.typography.labelStyle(frame.t(8f)), uppercase = true)
+    val gap = frame.u(1f)
+    val top = center.y - (number.kkBoxHeight + gap + label.kkBoxHeight) * 0.5f
+    drawKkText(number, center.x, top, Kk.Bone, KkAlign.CENTER)
+    drawKkText(label, center.x, top + number.kkBoxHeight + gap, Kk.Mute, KkAlign.CENTER)
+    val half = max(number.size.width, label.size.width) * 0.5f
+    HudLayoutProbe.record(HudBlock.FPS, center.x - half, top, center.x + half, top + number.kkBoxHeight + gap + label.kkBoxHeight)
+}
+
+/** The counter's unit, the same in every language (like the panel's own "FPS"). */
+private const val FPS_LABEL = "FPS"
 
 /** Performance mark: three rising bars. */
 internal fun DrawScope.drawPerformanceGlyph(center: Offset, size: Float, color: Color = Kk.Bone) {
