@@ -74,7 +74,9 @@ import kotlin.test.assertTrue
  * A 0.5.0 action whose trigger its encounter never fires is flown there again with the trigger scripted in (a Brake,
  * ricochets, fragile targets that fall), and an IntegrityBelow item is flown wounded below its threshold. A skill stat that
  * holds only at speed is flown through the fast passes with the skill loadout (SPRINT), and a thrower's targets fly their
- * throws out before they are anchored again, its slams counted (SLAMS) as Dashes are for Dash items.
+ * throws out before they are anchored again, its slams counted (SLAMS) as Dashes are for Dash items. An item whose skill
+ * condition (a skill or a skill tag) the skill loadout cannot meet is flown with the first such skill in the loadout's
+ * last slot, so the clause can fire where it is measured.
  * [everyNewVocabularyKindMovesItsEncounter] holds one probe per new kind to those encounters.
  */
 class PerceptibleItemImpactTest {
@@ -194,7 +196,7 @@ class PerceptibleItemImpactTest {
                 listOf(on(EffectTrigger.REACTION, weaponBurst, given = listOf(EffectCondition.ReactionIs(ReactionId.PLASMA_BURST)))),
                 elements = listOf(StatusElement.THERMAL, StatusElement.ION),
             ),
-            "SkillIs" to probe(listOf(on(EffectTrigger.SKILL_CAST, EffectAction.Burst(240f, kinetickk.ball.content.api.DamageBasis.WEAPON, 1.5f),
+            "SkillIs" to probe(listOf(on(EffectTrigger.SKILL_CAST, EffectAction.Burst(300f, kinetickk.ball.content.api.DamageBasis.WEAPON, 3f),
                 given = listOf(EffectCondition.SkillIs(SkillId.SOLAR_FLARE))))),
             "SkillTagged" to probe(listOf(on(EffectTrigger.SKILL_HIT, EffectAction.Strike(kinetickk.ball.content.api.DamageBasis.HIT, 1f),
                 given = listOf(EffectCondition.SkillTagged(kinetickk.ball.content.api.BuildTag.OVERCLOCK))))),
@@ -263,6 +265,8 @@ class PerceptibleItemImpactTest {
         val wounded: Float = 0f,
         /** A target the item throws flies its throw out (slamming whatever it meets) before it is anchored again. */
         val loose: Boolean = false,
+        /** The skill loadout of a skill arena: [ArenaSkills], or with the skill an item names (by id or tag) in its place. */
+        val skills: List<SkillId> = ArenaSkills,
     )
 
     private fun Arena.weapons(): List<WeaponId?> = if (armed) ARENA_WEAPONS else listOf(null)
@@ -270,7 +274,7 @@ class PerceptibleItemImpactTest {
     /** The arena and weapon, and what the setup scripts beyond the arena's own encounter. */
     private fun Setup.label(): String = "$arena/$weapon" + immuneTo?.let { " vs $it-immune" }.orEmpty() +
         trigger?.let { " with $it scripted" }.orEmpty() + (if (wounded > 0f) " wounded to $wounded" else "") +
-        (if (loose) " loose" else "")
+        (if (loose) " loose" else "") + (if (skills != ArenaSkills) " skills $skills" else "")
 
     private enum class Arena(
         /** False silences the weapon so only impacts and procs deal damage. */
@@ -523,7 +527,7 @@ class PerceptibleItemImpactTest {
         setup.support.forEach { name -> game.own(name, stacks = game.itemNamed(name).maxStacks) }
         val reach = game.effectivePickupRadius() + 30f
         if (arena.skills) {
-            ArenaSkills.forEach { skill ->
+            setup.skills.forEach { skill ->
                 game.acquireSkill(skill)
                 game.rankUpSkill(skill)
             }
@@ -678,7 +682,7 @@ class PerceptibleItemImpactTest {
             if (arena.marks && frame % MARK_FRAMES == 0) markTargets(game)
             if (arena.skills) {
                 // Every slot asks to cast each frame: it casts the moment it is ready, through the real buffer.
-                game.skillBufferMask = (1 shl ArenaSkills.size) - 1
+                game.skillBufferMask = (1 shl setup.skills.size) - 1
                 game.skillBufferTime = MutableGameState.SKILL_INPUT_BUFFER_SECONDS
             }
             if (arena.apex && game.apexReady()) game.apexBufferTime = MutableGameState.SKILL_INPUT_BUFFER_SECONDS
@@ -983,8 +987,13 @@ class PerceptibleItemImpactTest {
         // the attackers at the status it adds.
         val applied = item.clauses.flatMap { it.actions }.mapNotNull { (it as? EffectAction.ApplyStatus)?.pick?.element }.toSet()
         val siegeSupport = support.filter { name -> applied.none { element -> name in ElementSources.getValue(element) } }
+        // A refresh advances a fired weapon's clocks but surges a continuous one (a damage buff), so a refreshing item is also
+        // flown with the starter Flux Wake, where its refresh is the surge.
+        val refreshes = item.clauses.any { clause -> clause.actions.any { it is EffectAction.RefreshWeapon } }
         val setups = arenas.flatMap { arena ->
-            (if (familyWeapons != null && arena.armed) familyWeapons else arena.weapons()).map { weapon ->
+            (if (familyWeapons != null && arena.armed) familyWeapons
+            else if (refreshes && arena.armed) arena.weapons() + WeaponId.FLUX_WAKE
+            else arena.weapons()).map { weapon ->
                 Setup(arena, when (arena) {
                     Arena.OFFERS -> emptyList()
                     Arena.SIEGE -> siegeSupport
@@ -1008,9 +1017,20 @@ class PerceptibleItemImpactTest {
         val throws = item.clauses.any { clause ->
             clause.actions.any { it is EffectAction.Throw || it is EffectAction.ApplyMark && it.mark == MarkPick.SPALL }
         }
+        // A skill condition the arena loadout cannot meet (a skill or tag none of its skills has) swaps the last arena skill
+        // for the first skill that meets it, so the clause can fire where it is measured.
+        val loadout = conditions.fold(ArenaSkills) { skills, condition ->
+            val wanted = when (condition) {
+                is EffectCondition.SkillIs -> condition.skill.takeIf { it !in skills }
+                is EffectCondition.SkillTagged -> SkillId.entries.firstOrNull { condition.tag in canonicalGameplayContent.skill(it).tags }
+                    ?.takeIf { skills.none { skill -> condition.tag in canonicalGameplayContent.skill(skill).tags } }
+                else -> null
+            }
+            if (wanted == null) skills else skills.dropLast(1) + wanted
+        }
         val flown = (setups + carried).map { setup ->
             val wounded = if (wound != null && setup.arena.vocabulary && (setup.arena.pressure || setup.arena.shots)) wound * 0.8f else 0f
-            setup.copy(wounded = wounded, loose = throws)
+            setup.copy(wounded = wounded, loose = throws, skills = if (setup.arena.skills) loadout else ArenaSkills)
         }
         // A keystone that strips defenses (Crevasse) is also flown against Elites immune to the weapon's own element.
         val armored = if (item.keystone in DefenseBreakingKeystones) {

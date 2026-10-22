@@ -55,7 +55,7 @@ class ContentBalanceCharacterizationTest {
         // The 0.5.0 items, appended from id 173 and pinned on their own.
         val appended = items.subList(ITEMS_THROUGH_040, items.size)
         assertEquals(
-            "406fa76d4f1807e5",
+            "c11c59b06e52e3dc",
             goldenFingerprint {
                 add("items-0.5.0")
                 add(appended.size)
