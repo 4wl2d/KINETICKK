@@ -174,7 +174,7 @@ internal fun MutableGameState.updateCombatFields(delta: Float) {
                         damagePerSecond
                     }
                     if (skillField) {
-                        skillFieldTickDamage(target, perSecond * CombatField.TICK_SECONDS, element)
+                        skillFieldTickDamage(index, target, perSecond * CombatField.TICK_SECONDS, element)
                     } else {
                         dealStatusDamage(target, perSecond * CombatField.TICK_SECONDS, element, showNumber = false,
                             ignoresAffinity = ignoresAffinity)

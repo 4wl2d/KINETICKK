@@ -144,6 +144,9 @@ private fun report(value: String) {
 /** How far the bot keeps the momentum-projected Core from a skipped POI's center. */
 private const val POI_CLEARANCE = 360f
 
+/** The bot looks at its skills this often (simulated seconds). */
+private const val SKILL_CHECK_SECONDS = 0.1f
+
 internal class NoPoiBot(
     private val archetypeTag: BuildTag = BuildTag.RAM,
     private val element: StatusElement? = StatusElement.ENTROPY,
@@ -166,6 +169,7 @@ internal class NoPoiBot(
     private var cursorAngle = 0f
     private var braking = false
     private var decisions = 0
+    private var nextSkillCheckAt = 0f
 
     fun control(s: MutableGameState) {
         val boss = s.enemies.firstOrNull { it.type == EnemyType.ARCHITECT }
@@ -285,6 +289,78 @@ internal class NoPoiBot(
             segmentCircleIntersects(s.coreX, s.coreY, s.coreX + ux * 320f, s.coreY + uy * 320f, point.x, point.y, 150f)
         }
         if (threat && s.dashReady && s.heat < 60f && !blinkLandsOnPoi) s.requestDash()
+        castSkills(s)
+    }
+
+    /**
+     * The opportunistic caster of combat-final §4.10: every 0.1 s of simulated time each ready skill is cast when
+     * its situation holds. The bot never moves its pointer to aim; area skills land where it already points.
+     */
+    private fun castSkills(s: MutableGameState) {
+        if (s.elapsed < nextSkillCheckAt) return
+        nextSkillCheckAt = s.elapsed + SKILL_CHECK_SECONDS
+        for (slot in 0 until SkillRuntime.SLOTS) {
+            val id = s.skillLoadout.skill(slot) ?: continue
+            if (s.elapsed < s.skillRuntime[slot, SkillCell.READY_AT]) continue
+            if (wantsCast(s, id, s.content.skill(id).rank(s.skillLoadout.rank(slot)).values)) s.requestSkill(slot)
+        }
+    }
+
+    private fun wantsCast(s: MutableGameState, id: SkillId, values: List<Float>): Boolean {
+        val singularityX = s.cameraX + s.pointerX - s.screenWidth * 0.5f
+        val singularityY = s.cameraY + s.pointerY - s.screenHeight * 0.5f
+        val toPointer = length(singularityX - s.coreX, singularityY - s.coreY)
+        val aimX = if (toPointer > 24f) (singularityX - s.coreX) / toPointer else s.lastAimDirectionX
+        val aimY = if (toPointer > 24f) (singularityY - s.coreY) / toPointer else s.lastAimDirectionY
+        val definition = s.content.skill(id)
+        val reach = min(toPointer, definition.reach)
+        val anchorX = if (toPointer > 24f) s.coreX + aimX * reach else s.coreX
+        val anchorY = if (toPointer > 24f) s.coreY + aimY * reach else s.coreY
+        fun enemiesWithin(x: Float, y: Float, radius: Float) =
+            s.enemies.count { it.alive && distanceSquared(x, y, it.x, it.y) <= (radius + it.radius) * (radius + it.radius) }
+        fun boltsWithin(radius: Float) = s.projectiles.count { it.hostile && !it.spent && distanceSquared(s.coreX, s.coreY, it.x, it.y) <= radius * radius }
+        fun inCone(x: Float, y: Float, range: Float): Boolean {
+            val dx = x - s.coreX
+            val dy = y - s.coreY
+            val distance = length(dx, dy)
+            return distance <= range && (distance < 1f || (dx * aimX + dy * aimY) / distance >= cos(35f * PI.toFloat() / 180f))
+        }
+        val boss = s.enemies.firstOrNull { it.type == EnemyType.ARCHITECT && it.alive }
+        return when (id) {
+            SkillId.SOLAR_FLARE -> s.heat >= 40f && enemiesWithin(s.coreX, s.coreY, values[1]) >= 3
+            SkillId.FROST_SNAP, SkillId.FULL_STOP -> enemiesWithin(s.coreX, s.coreY, values[0]) >= 3 ||
+                boss != null && length(boss.x - s.coreX, boss.y - s.coreY) <= values[0] + 100f
+            SkillId.ENTROPIC_TIDE -> s.hp < s.maxHp * 0.5f || s.enemies.filter {
+                it.alive && length(it.x - s.coreX, it.y - s.coreY) <= values[0] + it.radius
+            }.sumOf { it.stacksOf(StatusElement.ENTROPY) } >= 12
+            SkillId.NULL_SHROUD -> boltsWithin(250f) >= 4
+            SkillId.MASS_DRIVER, SkillId.DUAL_INFUSION -> enemiesWithin(s.coreX, s.coreY, 400f) >= 3
+            SkillId.METEOR, SkillId.STORM_COIL, SkillId.GRAVITY_WELL, SkillId.DECAY_SPORES, SkillId.RESONATOR ->
+                enemiesWithin(anchorX, anchorY, values[0]) >= 2
+            SkillId.CATALYZE -> s.enemies.count { enemy ->
+                enemy.alive && length(enemy.x - anchorX, enemy.y - anchorY) <= values[0] + enemy.radius &&
+                    StatusElement.entries.count { enemy.stacksOf(it) > 0 } >= 2
+            } >= 3
+            SkillId.FROST_LINE -> {
+                val half = values[0] * 0.5f
+                val centreX = s.coreX + aimX * 160f
+                val centreY = s.coreY + aimY * 160f
+                val x0 = centreX - aimY * half
+                val y0 = centreY + aimX * half
+                val x1 = centreX + aimY * half
+                val y1 = centreY - aimX * half
+                s.enemies.count { it.alive && segmentCircleIntersects(x0, y0, x1, y1, it.x, it.y, it.radius + values[4]) } >= 2 ||
+                    s.projectiles.count { it.hostile && !it.spent && segmentCircleIntersects(x0, y0, x1, y1, it.x, it.y, values[4]) } >= 4
+            }
+            SkillId.SONIC_BOOM -> s.enemies.count { it.alive && inCone(it.x, it.y, values[0] + it.radius) } >= 2 ||
+                s.projectiles.count { it.hostile && !it.spent && inCone(it.x, it.y, values[0]) } >= 4
+            SkillId.VOID_STEP -> s.projectiles.any { shot ->
+                shot.hostile && !shot.spent && length(shot.x - s.coreX, shot.y - s.coreY) <= 140f &&
+                    (shot.vx - s.velocityX) * (s.coreX - shot.x) + (shot.vy - s.velocityY) * (s.coreY - shot.y) > 0f
+            }
+            SkillId.ARC_HOOK -> s.nearestSkillTarget(singularityX, singularityY, values[0]) != null
+            SkillId.SLINGSHOT -> s.speed >= 500f && (s.velocityX * aimX + s.velocityY * aimY) / s.speed <= 0f
+        }
     }
 
     private fun steeringScore(s: MutableGameState, angle: Float, force: Float, desiredX: Float, desiredY: Float, shots: List<Projectile>): Float {
@@ -314,9 +390,23 @@ internal class NoPoiBot(
     }
 
     fun choose(s: MutableGameState) {
-        val index = s.choices.indices.maxByOrNull { score(s, s.choices[it], it) } ?: return
+        val index = skillChoice(s) ?: s.choices.indices.maxByOrNull { score(s, s.choices[it], it) } ?: return
         decisions++
         s.choose(index)
+    }
+
+    /**
+     * Skill cards (combat-final §4.10): a rank-up card is always taken; a draft takes the character's card, else
+     * the aligned card (the first), else the lowest skill.
+     */
+    private fun skillChoice(s: MutableGameState): Int? {
+        val rankUp = s.choices.indexOfFirst { it.type == ChoiceType.SKILL && (it.skillRank ?: 1) > 1 }
+        if (rankUp >= 0) return rankUp
+        if (s.choiceType != ChoiceType.SKILL || s.choices.isEmpty()) return null
+        val lane = s.coreShape.synergySkills()
+        val character = s.choices.indexOfFirst { it.skillId in lane }
+        if (character >= 0) return character
+        return if (s.choices[0].skillId != null) 0 else s.choices.indices.minByOrNull { s.choices[it].skillId?.ordinal ?: Int.MAX_VALUE }
     }
 
     /**

@@ -53,7 +53,9 @@ internal object SkillCell {
     /** Damage and radius the Spiral's ghost repeats. */
     const val GHOST_DAMAGE = 20
     const val GHOST_RADIUS = 21
-    const val STRIDE = 22
+    /** Skill damage the slot dealt this run (each instance up to the integrity it removed). */
+    const val DAMAGE = 22
+    const val STRIDE = 23
 }
 
 /** Cells of the character's Apex in [SkillRuntime] (the Apex system fills them). */

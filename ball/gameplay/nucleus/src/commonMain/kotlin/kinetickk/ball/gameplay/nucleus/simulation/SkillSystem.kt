@@ -211,7 +211,7 @@ private inline fun MutableGameState.withSkillEffect(slot: Int, effect: () -> Uni
  * The enemy nearest the pointer at ([pointerX], [pointerY]) among live, non-shifting enemies within [reach] of the
  * Core and at least [HOOK_SINGULARITY_GAP] from the singularity; ties keep scan order.
  */
-private fun MutableGameState.nearestSkillTarget(pointerX: Float, pointerY: Float, reach: Float): Enemy? {
+internal fun MutableGameState.nearestSkillTarget(pointerX: Float, pointerY: Float, reach: Float): Enemy? {
     var best: Enemy? = null
     var bestDistance = Float.POSITIVE_INFINITY
     val reachSquared = reach * reach
@@ -252,7 +252,7 @@ private fun MutableGameState.skillHit(enemy: Enemy, amount: Float, element: Stat
     val integrity = enemy.hp
     val result = dealSkillDamage(enemy, amount, element, kinetic)
     if (result.amount <= 0f) return false
-    skillRuntime.skillDamage += min(result.amount, integrity.coerceAtLeast(0f)).toDouble()
+    recordSkillDamage(castSlot, min(result.amount, integrity.coerceAtLeast(0f)))
     noteCastTarget(enemy)
     if (castHits < MAX_SKILL_HITS_PER_CAST) {
         castHits++
@@ -261,12 +261,19 @@ private fun MutableGameState.skillHit(enemy: Enemy, amount: Float, element: Stat
     return true
 }
 
-/** Skill field damage (a tick, a zap): one capped instance per tick, no skill hit. */
-private fun MutableGameState.skillFieldHit(enemy: Enemy, amount: Float, element: StatusElement?) {
+/** Skill field damage of [slot] (a tick, a zap, a returned shot): one capped instance, no skill hit. */
+private fun MutableGameState.skillFieldHit(slot: Int, enemy: Enemy, amount: Float, element: StatusElement?) {
     if (!enemy.alive || amount <= 0f) return
     val integrity = enemy.hp
     val result = dealSkillDamage(enemy, amount, element)
-    if (result.amount > 0f) skillRuntime.skillDamage += min(result.amount, integrity.coerceAtLeast(0f)).toDouble()
+    if (result.amount > 0f) recordSkillDamage(slot, min(result.amount, integrity.coerceAtLeast(0f)))
+}
+
+/** Counts [dealt] skill damage for the run and for [slot] (when known). */
+private fun MutableGameState.recordSkillDamage(slot: Int, dealt: Float) {
+    val runtime = skillRuntime
+    runtime.skillDamage += dealt.toDouble()
+    if (slot >= 0) runtime[slot, SkillCell.DAMAGE] = runtime[slot, SkillCell.DAMAGE] + dealt
 }
 
 private fun MutableGameState.noteCastTarget(enemy: Enemy) {
@@ -683,7 +690,7 @@ private fun MutableGameState.releaseShroud(slot: Int) {
 
 /** A Null Shroud shot struck [enemy]: element-less skill damage, then its Hollow rider. */
 internal fun MutableGameState.skillShotHit(enemy: Enemy, damage: Float, statusElement: Int) {
-    skillFieldHit(enemy, damage, null)
+    skillFieldHit(skillLoadout.slotOf(SkillId.NULL_SHROUD), enemy, damage, null)
     if (statusElement >= 0 && enemy.alive) applyStatus(enemy, StatusElement.entries[statusElement], 2, 1)
 }
 
@@ -894,7 +901,7 @@ internal fun MutableGameState.stormCoilZap(index: Int) {
         val enemy = enemyById(id) ?: break
         if (!enemy.alive) continue
         addRelicArc(x, y, enemy.x, enemy.y, link)
-        skillFieldHit(enemy, damage, StatusElement.ION)
+        skillFieldHit(table.owner(index), enemy, damage, StatusElement.ION)
         if (enemy.alive) applyStatus(enemy, StatusElement.ION, 1, 0)
         if (rankThree && enemy.alive &&
             stacks(enemy, StatusElement.ION) >= breakThreshold(StatusElement.ION, enemy) - SKILL_BREAK_MARGIN
@@ -936,9 +943,9 @@ internal fun MutableGameState.resonatorPulse(index: Int) {
     }
 }
 
-/** A tick of a skill field's own damage (a Gravity Well's): skill damage, never a skill hit. */
-internal fun MutableGameState.skillFieldTickDamage(target: Enemy, amount: Float, element: StatusElement?) {
-    skillFieldHit(target, amount, element)
+/** A tick of the skill field at [index]'s own damage (a Gravity Well's): skill damage, never a skill hit. */
+internal fun MutableGameState.skillFieldTickDamage(index: Int, target: Enemy, amount: Float, element: StatusElement?) {
+    skillFieldHit(combatFieldTable.owner(index), target, amount, element)
 }
 
 /** A Gravity Well closes: loose Data and repairs inside latch to the Core; rank III collapses the heavy enemies. */
