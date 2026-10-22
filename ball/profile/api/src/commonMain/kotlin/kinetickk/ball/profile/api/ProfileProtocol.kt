@@ -11,6 +11,7 @@ import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.ImmutableSet
+import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableSetOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
@@ -78,6 +79,8 @@ data class GameplayProgressUpdate(
     val ricochets: Int = 0,
     /** Data pickups collected since the last update. */
     val dataPickups: Int = 0,
+    /** Items first acquired in the run since the last update, in acquisition order. */
+    val acquiredItemIds: ImmutableList<Int> = immutableListOf(),
 ) {
     constructor(
         bankedMatter: Long = 0L,
@@ -95,11 +98,13 @@ data class GameplayProgressUpdate(
         totalKills: Int = 0,
         ricochets: Int = 0,
         dataPickups: Int = 0,
+        acquiredItemIds: List<Int> = emptyList(),
     ) : this(
         bankedMatter, discoveredItemIds.toImmutableSet(), clearedRebirthLevel,
         eliteKills, dashHits, completedOrbits, architectDefeatedWith, discoveredRelicIds.toImmutableSet(),
         discoveredReactionIds.toImmutableSet(), discoveredPairingIds.toImmutableSet(),
         victoryRelicIds?.toImmutableList(), heirloomResolved, totalKills, ricochets, dataPickups,
+        acquiredItemIds.toImmutableList(),
     )
 
     /** True when the update carries no fact for Profile to apply, so no command needs to be sent. */
@@ -107,7 +112,8 @@ data class GameplayProgressUpdate(
         get() = bankedMatter == 0L && discoveredItemIds.isEmpty() && clearedRebirthLevel == null &&
             eliteKills == 0 && dashHits == 0 && completedOrbits == 0 && architectDefeatedWith == null &&
             discoveredRelicIds.isEmpty() && discoveredReactionIds.isEmpty() && discoveredPairingIds.isEmpty() &&
-            victoryRelicIds == null && !heirloomResolved && totalKills == 0 && ricochets == 0 && dataPickups == 0
+            victoryRelicIds == null && !heirloomResolved && totalKills == 0 && ricochets == 0 && dataPickups == 0 &&
+            acquiredItemIds.isEmpty()
 }
 
 sealed interface CollectionEntry {

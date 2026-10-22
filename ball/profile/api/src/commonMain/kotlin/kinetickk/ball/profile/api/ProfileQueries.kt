@@ -39,6 +39,8 @@ data class LoadoutProfileSnapshot(
     val loadout: PlayerLoadout,
     /** Rebirth rank the weapon unlock gates compare against. */
     val rebirthRank: Int = 0,
+    /** Bought Refit and Honing levels. */
+    val upgrades: PermanentUpgrades = PermanentUpgrades(),
 )
 
 data class RebirthProfileSnapshot(
@@ -52,7 +54,12 @@ data class GameplayProfileSnapshot(
     val matrix: MatrixProgress,
     val collection: PlayerCollection,
     val rebirthProgress: RebirthProgress,
-)
+    /** Refit and Honing levels the run applies; captured when the run starts. */
+    val upgrades: PermanentUpgrades = PermanentUpgrades(),
+) {
+    /** Recent acquisitions the run's offers down-weight (oldest first). */
+    val recentItemIds: ImmutableList<Int> get() = collection.recentItemIds
+}
 
 sealed interface ProfileRunBootstrapResult {
     data class Ready(val snapshot: GameplayProfileSnapshot) : ProfileRunBootstrapResult

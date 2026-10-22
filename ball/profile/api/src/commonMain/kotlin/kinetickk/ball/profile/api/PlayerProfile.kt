@@ -84,6 +84,23 @@ data class PlayerPreferences(
     val colorVision: ColorVision = ColorVision.DEFAULT,
     /** Shows the run minimap; absent from saves while it is on. */
     val minimapEnabled: Boolean = true,
+    /** Desktop window mode; the platform lists and applies it. */
+    val windowMode: WindowMode = WindowMode.WINDOWED,
+    /** Desktop windowed-mode size. */
+    val windowSize: WindowSizePreset = WindowSizePreset.W1280X800,
+    val vsync: Boolean = true,
+    /** One of [FRAME_RATE_CAP_OPTIONS]; 0 is unlimited. */
+    val frameRateCap: Int = 0,
+    /** [REFRESH_RATE_AUTO] or a rate within [REFRESH_RATE_RANGE] (Android). */
+    val refreshRateHz: Int = REFRESH_RATE_AUTO,
+    /** Hides the system bars (Android). */
+    val immersive: Boolean = false,
+    /** One of [INTERFACE_SCALE_OPTIONS]. */
+    val interfaceScalePercent: Int = DEFAULT_INTERFACE_SCALE_PERCENT,
+    val showFps: Boolean = false,
+    val pauseOnFocusLoss: Boolean = true,
+    val reactionEffects: ReactionEffectsLevel = ReactionEffectsLevel.FULL,
+    val keyBindings: KeyBindings = KeyBindings.DEFAULT,
 ) {
     fun normalized(): PlayerPreferences = copy(
         masterVolume = masterVolume.coerceIn(0f, 1f),
@@ -93,6 +110,17 @@ data class PlayerPreferences(
             DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.first(),
             DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.last(),
         ),
+        frameRateCap = if (frameRateCap in FRAME_RATE_CAP_OPTIONS) frameRateCap else 0,
+        refreshRateHz = if (refreshRateHz == REFRESH_RATE_AUTO || refreshRateHz in REFRESH_RATE_RANGE) {
+            refreshRateHz
+        } else {
+            REFRESH_RATE_AUTO
+        },
+        interfaceScalePercent = if (interfaceScalePercent in INTERFACE_SCALE_OPTIONS) {
+            interfaceScalePercent
+        } else {
+            DEFAULT_INTERFACE_SCALE_PERCENT
+        },
     )
 }
 
@@ -130,6 +158,9 @@ data class MatrixProgress(
 /** Relics remembered as Heirlooms: at most one per Relic slot bound at the Architect victory. */
 const val MAX_HEIRLOOM_RELICS: Int = 4
 
+/** Most recent item acquisitions remembered across runs (oldest dropped first). */
+const val MAX_RECENT_ITEM_IDS: Int = 64
+
 data class PlayerCollection(
     val discoveredItemIds: ImmutableSet<Int> = immutableSetOf(),
     val newItemIds: ImmutableSet<Int> = immutableSetOf(),
@@ -144,6 +175,11 @@ data class PlayerCollection(
      * distinct. The next run offers them once; resolving that offer clears the list.
      */
     val heirloomRelicIds: ImmutableList<RelicId> = immutableListOf(),
+    /**
+     * Item ids first acquired in recent runs, oldest first, duplicates kept, at most
+     * [MAX_RECENT_ITEM_IDS]; offers down-weight recently taken items.
+     */
+    val recentItemIds: ImmutableList<Int> = immutableListOf(),
 ) {
     constructor(
         discoveredItemIds: Set<Int>,
@@ -153,11 +189,12 @@ data class PlayerCollection(
         discoveredReactionIds: Set<ReactionId> = emptySet(),
         discoveredPairingIds: Set<RelicPairingId> = emptySet(),
         heirloomRelicIds: List<RelicId> = emptyList(),
+        recentItemIds: List<Int> = emptyList(),
     ) : this(
         discoveredItemIds.toImmutableSet(), newItemIds.toImmutableSet(),
         discoveredRelicIds.toImmutableSet(), newRelicIds.toImmutableSet(),
         discoveredReactionIds.toImmutableSet(), discoveredPairingIds.toImmutableSet(),
-        heirloomRelicIds.toImmutableList(),
+        heirloomRelicIds.toImmutableList(), recentItemIds.toImmutableList(),
     )
 }
 
@@ -213,4 +250,6 @@ data class PlayerProfile(
     val collection: PlayerCollection = PlayerCollection(),
     val rebirthProgress: RebirthProgress = RebirthProgress(),
     val characterAchievements: CharacterAchievementProgress = CharacterAchievementProgress(),
+    /** Bought Refit and Honing levels. */
+    val upgrades: PermanentUpgrades = PermanentUpgrades(),
 )
