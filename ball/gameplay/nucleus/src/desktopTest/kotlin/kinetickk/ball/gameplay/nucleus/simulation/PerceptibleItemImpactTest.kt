@@ -330,6 +330,8 @@ class PerceptibleItemImpactTest {
         MARKS(true, Motion.ORBIT, 10, 1_500f, dashEvery = 1f, brake = true, marks = true),
         /** The Apex from the start: cast at once and whenever ready, over a fight long enough for a cooldown cut to tell. */
         APEX(true, Motion.ORBIT, 10, 1_500f, dashEvery = 2f, apex = true, seconds = 100f),
+        /** The fast passes while bursts of hits land every 6 s: protection that holds only at speed. */
+        RUSH(false, Motion.PASS, 8, 600f, dashEvery = 0.5f, hits = 4.5f),
         ;
 
         /** Only these arenas count integrity: elsewhere glancing contacts are topped up and integrity is ignored. */
@@ -378,6 +380,7 @@ class PerceptibleItemImpactTest {
         Arena.SHOTS -> listOf(Output.DAMAGE, Output.TAKEN, Output.INTEGRITY, Output.ERASED)
         Arena.MARKS -> listOf(Output.DAMAGE, Output.DASHES, Output.FAST_DISTANCE)
         Arena.APEX -> listOf(Output.DAMAGE, Output.REFUNDED, Output.APEX, Output.APEX_RECHARGE)
+        Arena.RUSH -> listOf(Output.DAMAGE, Output.TAKEN, Output.INTEGRITY, Output.SURVIVAL)
     }
 
     /** What an encounter measured. Higher is better except for damage taken. */
@@ -869,7 +872,13 @@ class PerceptibleItemImpactTest {
         }
         item.rules.forEach { rule ->
             arenas += when (rule) {
-                is ItemRule.WhileModifier -> conditionArenas(rule.condition) + if (rule.stat == BuffStat.DAMAGE_TAKEN) listOf(Arena.DEFENSE) else emptyList()
+                is ItemRule.WhileModifier -> conditionArenas(rule.condition) + when {
+                    rule.stat == BuffStat.DAMAGE_TAKEN -> listOf(Arena.DEFENSE)
+                    // Protection under a condition is measured where the condition holds while hits land.
+                    rule.stat == BuffStat.DAMAGE_REDUCTION ->
+                        listOf(if (rule.condition is EffectCondition.SpeedAtLeast) Arena.RUSH else Arena.DEFENSE)
+                    else -> emptyList()
+                }
                 is ItemRule.ElementPotency, is ItemRule.StatusDuration, is ItemRule.BreakThreshold, is ItemRule.BreakPower,
                 is ItemRule.BreakSpread, is ItemRule.ReactionPower, is ItemRule.ReactionResidue, is ItemRule.ReactionRecoil ->
                     listOf(Arena.ALCHEMY, Arena.STATUS, Arena.CROWD)
