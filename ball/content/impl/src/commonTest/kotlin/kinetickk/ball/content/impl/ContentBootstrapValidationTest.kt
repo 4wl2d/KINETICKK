@@ -20,6 +20,7 @@ import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
 import kinetickk.ball.content.api.MatrixNodeDefinition
 import kinetickk.ball.content.api.MatrixNodeId
+import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicKey
 import kinetickk.ball.content.api.RelicPairingId
@@ -429,6 +430,53 @@ class ContentBootstrapValidationTest {
 
         val renamed = items.mapIndexed { index, item -> if (index == 1) item.copy(name = items[0].name) else item }
         assertFailsWith<IllegalStateException> { validateItems(renamed) }
+    }
+
+    @Test
+    fun keystonesAndExclusiveSkillRulesStayOnePerCatalog() {
+        val items = defaultContentBootstrapData().items
+        fun epic(name: String, rules: List<ItemRule>, vararg elements: StatusElement) = ItemDefinition(
+            id = 0, name = name, description = "$name exercises the exclusive rules.", rarity = ItemRarity.EPIC,
+            tags = immutableListOf(BuildTag.CHAIN), elements = elements.toList().toImmutableList(), rules = rules.toImmutableList(),
+            maxStacks = 1, unlockLevel = 1,
+        )
+        fun withAppended(vararg extra: ItemDefinition) = items + extra.mapIndexed { index, item -> item.copy(id = items.size + index) }
+        val star = epic("Star Seal", listOf(ItemRule.ReactionKeystone(ReactionId.FUSION)), StatusElement.THERMAL, StatusElement.GRAVITIC)
+        validateItems(withAppended(star))
+
+        val twin = epic("Second Star Seal", listOf(ItemRule.ReactionKeystone(ReactionId.FUSION)), StatusElement.THERMAL, StatusElement.GRAVITIC)
+        val doubled = assertFailsWith<IllegalStateException> { validateItems(withAppended(star, twin)) }
+        assertTrue(doubled.message.orEmpty().contains("FUSION has more than one keystone item"), doubled.message)
+        val halfDeclared = epic("Half Seal", listOf(ItemRule.ReactionKeystone(ReactionId.WILDFIRE)), StatusElement.THERMAL)
+        val undeclared = assertFailsWith<IllegalStateException> { validateItems(withAppended(halfDeclared)) }
+        assertTrue(undeclared.message.orEmpty().contains("without declaring both of its elements"), undeclared.message)
+
+        val charges = epic("Twin Chamber", listOf(ItemRule.SkillCharges))
+        validateItems(withAppended(charges))
+        assertFailsWith<IllegalStateException> { validateItems(withAppended(charges, charges.copy(name = "Third Chamber", description = "Another."))) }
+        val attune = epic("Alchemical Core", listOf(ItemRule.SkillAttunement(ElementPick.DOMINANT)))
+        validateItems(withAppended(attune))
+        assertFailsWith<IllegalStateException> { validateItems(withAppended(attune, attune.copy(name = "Second Core", description = "Again."))) }
+    }
+
+    @Test
+    fun skillRulesDeclareTheElementsTheyName() {
+        val data = defaultContentBootstrapData()
+        val base = data.items.first { it.elements.isEmpty() && it.clauses.isNotEmpty() }
+        listOf(
+            ItemRule.SkillPower(StatusElement.SONIC, 0.2f),
+            ItemRule.SkillCooldown(StatusElement.SONIC, 0.1f),
+            ItemRule.SkillAttunement(ElementPick.SONIC),
+        ).forEach { rule ->
+            assertRejected(data.copy(items = data.items.withReplaced(base.id, base.copy(rules = immutableListOf(rule)))), "touches undeclared elements")
+            createContentCatalogForTesting(
+                data.copy(items = data.items.withReplaced(base.id, base.copy(rules = immutableListOf(rule), elements = immutableListOf(StatusElement.SONIC)))),
+            )
+        }
+        // Rules for every skill, or for the build's own element, name none.
+        createContentCatalogForTesting(data.copy(items = data.items.withReplaced(base.id, base.copy(rules = immutableListOf(
+            ItemRule.SkillPower(null, 0.2f), ItemRule.SkillAttunement(ElementPick.DOMINANT),
+        )))))
     }
 
     private fun riskItem(
