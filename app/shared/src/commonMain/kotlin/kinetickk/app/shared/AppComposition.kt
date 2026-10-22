@@ -15,7 +15,9 @@ import kinetickk.ball.content.api.ContentCatalog
 import kinetickk.ball.content.impl.createContentCatalog
 import kinetickk.ball.gameplay.impl.DefaultGameplayFeature
 import kinetickk.ball.gameplay.impl.GameplayCompositionComponent
+import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfilePort
+import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.impl.ProfileComponent
 import kinetickk.ball.profile.impl.ProfilePersistenceCapability
 import kinetickk.ball.profile.impl.createProfileComponent
@@ -43,11 +45,17 @@ import kinetickk.resource.audio.api.AudioService
 import kinetickk.resource.audio.impl.DefaultAudioService
 import kinetickk.resource.audio.impl.TonePlaybackCapability
 
-/** The single UI entry point used by Android, Desktop, and Web hosts. */
+/**
+ * The single UI entry point used by Android and Web hosts (Desktop hoists the owner above its
+ * window, see `runKinetickkDesktop`). [displayHost] applies the accepted display preferences.
+ */
 @Composable
-fun KinetickkApp(onLanguageChanged: (String) -> Unit = {}) {
+fun KinetickkApp(
+    onLanguageChanged: (String) -> Unit = {},
+    displayHost: PlatformDisplayHost = LocalPlatformDisplayHost.current,
+) {
     val diagnostics = LocalCrashDiagnostics.current
-    val ownerValue = remember { AppCompositionOwner(diagnostics = diagnostics) }
+    val ownerValue = remember { AppCompositionOwner(diagnostics = diagnostics, displayHost = displayHost) }
     DisposableEffect(ownerValue) {
         onDispose(ownerValue::close)
     }
@@ -70,6 +78,7 @@ internal class AppCompositionOwner(
     codexFeature: CodexFeature? = null,
     profileUnavailableFeature: ProfileUnavailableFeature? = null,
     private val diagnostics: CrashDiagnostics = CrashDiagnostics.None,
+    private val displayHost: PlatformDisplayHost = PlatformDisplayHost.None,
 ) {
     private val profilePolicy = contentCatalog.profilePolicy()
     private val gameplayContent = contentCatalog.gameplayContent()
@@ -101,6 +110,7 @@ internal class AppCompositionOwner(
     private val settingsFeature: SettingsFeature = settingsFeature ?: DefaultSettingsFeature(
         this.profilePort,
         this.audioService,
+        PlatformSettingsDisplay(displayHost, ::preferences),
     )
     private val matrixFeature: MatrixFeature = matrixFeature ?: DefaultMatrixFeature(
         profilePort = this.profilePort,
@@ -157,6 +167,15 @@ internal class AppCompositionOwner(
     internal val sessionPort
         get() = appSessionComponent
 
+    /** The accepted preferences (Profile loads synchronously when the owner is built). */
+    internal fun preferences(): PlayerPreferences = profilePort.query(ProfileQuery.GetPreferences).preferences
+
+    // Accepted display preferences reach the platform host only through this translation.
+    private val applyDisplayPreferences: (PlayerPreferences) -> Unit = { preferences ->
+        displayHost.apply(preferences.toHostDisplayRequest())
+    }
+    private val touchPrimary: Boolean by lazy { displayHost.support().touchPrimary }
+
     @Composable
     @NonRestartableComposable
     fun Content(onLanguageChanged: (String) -> Unit = {}) {
@@ -174,6 +193,8 @@ internal class AppCompositionOwner(
             rebirthFeature = rebirthFeature,
             codexFeature = codexFeature,
             profileUnavailableFeature = profileUnavailableFeature,
+            onPreferencesChanged = applyDisplayPreferences,
+            touchPrimary = touchPrimary,
         )
     }
 

@@ -25,6 +25,7 @@ import kinetickk.foundation.design.drawKkShutter
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
 import kinetickk.ball.profile.api.ColorVision
+import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfileReadPort
 import kinetickk.ball.profile.api.ProfileQuery
 import androidx.compose.runtime.SideEffect
@@ -80,6 +81,10 @@ fun AppSessionContent(
     onLanguageChanged: (AppLanguage) -> Unit = {},
     /** Character selection over Home; without it the Hangar route shows nothing. */
     hangarFeature: HangarFeature? = null,
+    /** Receives the accepted preferences at start and after every accepted change (display application). */
+    onPreferencesChanged: (PlayerPreferences) -> Unit = {},
+    /** Touch is the platform's primary input: the smallest interface scale is never applied. */
+    touchPrimary: Boolean = false,
 ) {
     val diagnostics = LocalCrashDiagnostics.current
     var languageValue by remember(sessionPort, profileReadPort) {
@@ -87,6 +92,10 @@ fun AppSessionContent(
     }
     var colorVisionValue by remember(sessionPort, profileReadPort) {
         mutableStateOf(profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences?.colorVision ?: ColorVision.DEFAULT)
+    }
+    // The accepted preferences as last read; display options, frame pacing and interface scale follow them.
+    var preferencesValue by remember(sessionPort, profileReadPort) {
+        mutableStateOf(profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences)
     }
     val focusRequester = remember(sessionPort) { FocusRequester() }
     var shellValue by remember(sessionPort) {
@@ -117,6 +126,7 @@ fun AppSessionContent(
     }
 
     SideEffect(languageValue, onLanguageChanged) { onLanguageChanged(languageValue) }
+    SideEffect(preferencesValue, onPreferencesChanged) { preferencesValue?.let(onPreferencesChanged) }
 
     val normalInputEnabled = shellValue.normalInputEnabled
     // Screen changes: the new destination composes and takes input at once; the previous frame
@@ -219,8 +229,10 @@ fun AppSessionContent(
                             is SettingsOutput.LanguageChanged -> {
                                 languageValue = output.language
                                 // Settings reports every accepted preference change through this output.
-                                profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences?.colorVision
-                                    ?.let { colorVisionValue = it }
+                                profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences?.let { preferences ->
+                                    colorVisionValue = preferences.colorVision
+                                    preferencesValue = preferences
+                                }
                             }
                             SettingsOutput.Back -> output.toSessionPulse()?.let { dispatch(it) }
                         }

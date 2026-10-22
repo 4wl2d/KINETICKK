@@ -3,8 +3,12 @@
 
 package kinetickk.ball.profile.interaction.settings.api
 
+import kinetickk.ball.profile.api.DEFAULT_INTERFACE_SCALE_PERCENT
+import kinetickk.ball.profile.api.INTERFACE_SCALE_OPTIONS
 import kinetickk.ball.profile.api.WindowMode
 import kinetickk.ball.profile.api.WindowSizePreset
+import kotlin.math.max
+import kotlin.math.min
 
 /**
  * What the platform can list and apply for the DISPLAY and CONTROLS rows. Profile owns the chosen
@@ -68,3 +72,33 @@ interface SettingsDisplayPort {
         override fun support(): SettingsDisplaySupport = SettingsDisplaySupport()
     }
 }
+
+/** The smallest window, in dp at the chosen scale, that every screen is laid out for. */
+const val INTERFACE_SCALED_SHORT_SIDE_DP: Float = 320f
+const val INTERFACE_SCALED_LONG_SIDE_DP: Float = 568f
+
+/**
+ * Interface scales offered for a window of [widthDp] × [heightDp] (unscaled dp): a scale is offered
+ * when the window at that scale keeps an [INTERFACE_SCALED_SHORT_SIDE_DP] short side and an
+ * [INTERFACE_SCALED_LONG_SIDE_DP] long side; scales below 100 % are not offered on touch-primary
+ * devices. 100 % is always offered, so the row never empties.
+ */
+fun offeredInterfaceScales(widthDp: Float, heightDp: Float, touchPrimary: Boolean): List<Int> {
+    val short = min(widthDp, heightDp)
+    val long = max(widthDp, heightDp)
+    return INTERFACE_SCALE_OPTIONS.filter { percent ->
+        val scale = percent / 100f
+        when {
+            percent == DEFAULT_INTERFACE_SCALE_PERCENT -> true
+            touchPrimary && percent < DEFAULT_INTERFACE_SCALE_PERCENT -> false
+            else -> short / scale >= INTERFACE_SCALED_SHORT_SIDE_DP && long / scale >= INTERFACE_SCALED_LONG_SIDE_DP
+        }
+    }
+}
+
+/**
+ * The interface scale shown: the stored percentage clamped to the largest [offered] option at or
+ * below it (presentation only, never written back), or the smallest offered one.
+ */
+fun appliedInterfaceScalePercent(storedPercent: Int, offered: List<Int>): Int =
+    offered.lastOrNull { it <= storedPercent } ?: offered.first()

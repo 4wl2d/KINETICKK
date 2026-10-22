@@ -8,7 +8,6 @@ import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.formatMultiplier
 import kinetickk.ball.profile.api.ColorVision
-import kinetickk.ball.profile.api.DEFAULT_INTERFACE_SCALE_PERCENT
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
 import kinetickk.ball.profile.api.FRAME_RATE_CAP_OPTIONS
@@ -30,9 +29,9 @@ import kinetickk.ball.profile.interaction.settings.api.SettingsDisplaySupport
 import kinetickk.ball.profile.interaction.settings.api.SettingsLiveWindow
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
 import kinetickk.ball.profile.interaction.settings.api.SettingsRenderModel
+import kinetickk.ball.profile.interaction.settings.api.appliedInterfaceScalePercent
+import kinetickk.ball.profile.interaction.settings.api.offeredInterfaceScales
 import kotlin.math.abs
-import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.roundToInt
 
 /** Every Settings row; entries are appended (tests and tags address rows by name, never by ordinal). */
@@ -252,7 +251,7 @@ internal data class SettingsPlatform(
     val refreshChoices: List<Int> get() = listOf(REFRESH_RATE_AUTO) + support.refreshRatesHz
 
     /** The stored interface scale clamped to the offered options (presentation only, never written back). */
-    fun appliedInterfaceScale(stored: Int): Int = interfaceScales.lastOrNull { it <= stored } ?: interfaceScales.first()
+    fun appliedInterfaceScale(stored: Int): Int = appliedInterfaceScalePercent(stored, interfaceScales)
 
     /** The live window size when it differs from the stored preset by more than 1 dp in windowed mode, else null. */
     fun liveSizeOverride(preferences: PlayerPreferences): SettingsLiveWindow? {
@@ -272,28 +271,9 @@ internal data class SettingsPlatform(
     }
 }
 
-/** The smallest window, in dp at the chosen scale, that every screen is laid out for. */
-internal const val SETTINGS_SCALED_SHORT_SIDE_DP = 320f
-internal const val SETTINGS_SCALED_LONG_SIDE_DP = 568f
-
-/**
- * Interface scales offered for a window of [widthDp] × [heightDp]: a scale is offered when the
- * window at that scale keeps a [SETTINGS_SCALED_SHORT_SIDE_DP] short side and a
- * [SETTINGS_SCALED_LONG_SIDE_DP] long side; scales below 100 % are not offered on touch-primary
- * devices. 100 % is always offered, so the row never empties.
- */
-internal fun settingsInterfaceScales(widthDp: Float, heightDp: Float, touchPrimary: Boolean): List<Int> {
-    val short = min(widthDp, heightDp)
-    val long = max(widthDp, heightDp)
-    return INTERFACE_SCALE_OPTIONS.filter { percent ->
-        val scale = percent / 100f
-        when {
-            percent == DEFAULT_INTERFACE_SCALE_PERCENT -> true
-            touchPrimary && percent < DEFAULT_INTERFACE_SCALE_PERCENT -> false
-            else -> short / scale >= SETTINGS_SCALED_SHORT_SIDE_DP && long / scale >= SETTINGS_SCALED_LONG_SIDE_DP
-        }
-    }
-}
+/** Interface scales offered for a window of [widthDp] × [heightDp] (see [offeredInterfaceScales]). */
+internal fun settingsInterfaceScales(widthDp: Float, heightDp: Float, touchPrimary: Boolean): List<Int> =
+    offeredInterfaceScales(widthDp, heightDp, touchPrimary)
 
 /** Frame-rate limits in stepper order: the listed limits ascending, then Unlimited (0). */
 internal val FRAME_RATE_CAP_STEPS: List<Int> = FRAME_RATE_CAP_OPTIONS.filter { it > 0 } + 0
