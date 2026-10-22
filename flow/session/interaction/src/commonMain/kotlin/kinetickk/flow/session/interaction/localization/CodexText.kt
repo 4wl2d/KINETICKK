@@ -158,6 +158,8 @@ internal enum class CodexText(
     BOSS_KIND("Boss", "Босс"),
     THREAT("Threat", "Угроза"),
     MECHANIC("Mechanic", "Механика"),
+    REFIT("Refit", "Доработка"),
+    HONING("Honing", "Заточка"),
     TRIGGER("Trigger", "Источник"),
     DIFFICULTY("Difficulty", "Сложность"),
     APPEARS("Appears", "Появляется"),

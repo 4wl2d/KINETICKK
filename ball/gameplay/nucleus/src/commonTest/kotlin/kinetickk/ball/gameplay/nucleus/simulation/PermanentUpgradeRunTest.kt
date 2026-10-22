@@ -192,6 +192,8 @@ class PermanentUpgradeRunTest {
         val upgraded = run(refit = 3, honing = mapOf(WeaponId.FLUX_WAKE to 5))
         val summary = upgraded.buildSummary(GameplayInstanceId(RunId(1)), GameplayRevision(1))
         assertEquals("Refit 3 · Honing 5", summary.upgrades)
+        assertEquals(3, summary.characterUpgradeLevel)
+        assertEquals(5, summary.weaponUpgradeLevel)
         assertEquals("Доработка 3 · Заточка 5", summary.upgrades.localizedContent(AppLanguage.Russian))
         assertEquals("Refit 0 · Honing 0", plain.buildSummary(GameplayInstanceId(RunId(2)), GameplayRevision(1)).upgrades)
         // Refit integrity is the character's own; nothing leaks into the item column.
@@ -211,6 +213,7 @@ class PermanentUpgradeRunTest {
         // A mid-run weapon switch reads the new weapon's Honing.
         upgraded.equipRunWeapon(WeaponId.MORNINGSTAR)
         assertEquals("Refit 3 · Honing 0", upgraded.upgradeLine())
+        assertEquals(0, upgraded.buildSummary(GameplayInstanceId(RunId(1)), GameplayRevision(2)).weaponUpgradeLevel)
     }
 
     private fun MutableGameState.stepCharacter() {

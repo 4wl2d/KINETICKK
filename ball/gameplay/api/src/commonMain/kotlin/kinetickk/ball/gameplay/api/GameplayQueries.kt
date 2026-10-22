@@ -63,6 +63,10 @@ data class GameplayBuildSummaryProjection(
     val upgrades: String = "",
     /** Owned items none of whose effects can work in this run (they need a skill or a weapon of another type). */
     val dormantItemIds: ImmutableList<Int> = immutableListOf(),
+    /** The run's Refit level of [character] (the levels behind [upgrades], for screens that show them apart). */
+    val characterUpgradeLevel: Int = 0,
+    /** The run's Honing level of the current [weapon]. */
+    val weaponUpgradeLevel: Int = 0,
 ) : GameplayProjection
 
 enum class BuildStatSource { CHARACTER, LAB, ITEMS, RELICS, SYNERGIES, MASTERY, TEMPORARY }

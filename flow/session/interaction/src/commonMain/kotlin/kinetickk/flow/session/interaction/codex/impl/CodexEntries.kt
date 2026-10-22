@@ -316,6 +316,8 @@ internal fun codexWeaponEntry(
         if (equipped && build != null) {
             add(CodexFact(language.text(SessionText.WEAPON_LEVEL), language.text(SessionText.LEVEL_SHORT, build.weaponLevel)))
             add(CodexFact(language.text(SessionText.MASTERY), build.mastery.localizedContent(language)))
+            // The permanent Honing the run applies to the weapon in hand.
+            add(CodexFact(language.text(CodexText.HONING), language.text(SessionText.LEVEL_SHORT, build.weaponUpgradeLevel)))
         }
         add(CodexFact(language.text(CodexText.WEAPON_FAMILY), weapon.family.displayLabel.localizedContent(language)))
         add(CodexFact(language.text(CodexText.WEAPON_ELEMENT), codexWeaponElementLabel(weapon, language)))
@@ -408,6 +410,10 @@ internal fun codexShapeEntry(shape: CoreShapeDefinition, model: CodexRenderModel
             else -> SessionText.LOCKED
         })))
         if (!unlocked) add(CodexFact(language.text(SessionText.PROGRESS), "$current/${shape.unlockTarget}"))
+        // The permanent Refit the run applies to the character it plays.
+        model.runStacks.build?.takeIf { equipped }?.let { build ->
+            add(CodexFact(language.text(CodexText.REFIT), language.text(SessionText.LEVEL_SHORT, build.characterUpgradeLevel)))
+        }
         add(CodexFact(language.text(CodexText.MECHANIC), shape.mechanicName.localizedContent(language)))
         add(CodexFact(language.text(CodexText.TRIGGER), shape.triggerKind.displayLabel.localizedContent(language)))
         add(CodexFact(language.text(CodexText.DIFFICULTY), "${shape.difficulty}/3"))

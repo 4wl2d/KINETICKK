@@ -77,6 +77,30 @@ class CodexEntryFactsTest {
         }
     }
 
+    /** The run's permanent upgrades: the played character's Refit and the weapon in hand's Honing, as levels. */
+    @Test
+    fun buildTabNamesTheRunsRefitAndHoningLevels() {
+        val build = GameplayBuildSummaryProjection(
+            GameplayInstanceId(RunId(1)), GameplayRevision.ZERO, immutableListOf(),
+            character = CoreShape.ORB, weapon = WeaponId.FLUX_WAKE, weaponLevel = 3,
+            upgrades = "Refit 4 · Honing 7", characterUpgradeLevel = 4, weaponUpgradeLevel = 7,
+        )
+        val model = CodexRenderModel(immutableSetOf(), CodexRunStacks(build = build), catalog.items)
+        for (language in AppLanguage.entries) {
+            val entries = codexBuildEntries(model, catalog, codexTestProgress(), language)
+            val character = entries.single { it.key == "shape/${CoreShape.ORB}" }
+            assertEquals(language.text(SessionText.LEVEL_SHORT, 4), character.facts.single { it.label == language.text(CodexText.REFIT) }.value)
+            val weapon = entries.single { it.icon is CodexIcon.Weapon }
+            assertEquals(language.text(SessionText.LEVEL_SHORT, 7), weapon.facts.single { it.label == language.text(CodexText.HONING) }.value)
+            // Facts never carry the summary's separator (no `·` on screen).
+            (character.facts + weapon.facts).forEach { assertFalse('·' in it.value, "${it.label}: ${it.value}") }
+        }
+        // Outside a run the catalog shows no run upgrades.
+        val idle = CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items)
+        val shape = codexShapeEntry(catalog.coreShapes.first { it.id == CoreShape.ORB }, idle, codexTestProgress())
+        assertTrue(shape.facts.none { it.label == CodexText.REFIT.english })
+    }
+
     @Test
     fun harmonyAndDissonanceFollowTheKeysWhileNamedPairingsStayHiddenUntilDiscovered() {
         val model = CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items, discoveredRelicIds = RelicId.entries.toImmutableSet())

@@ -40,6 +40,8 @@ internal fun MutableGameState.buildSummary(
     mastery = currentWeaponMastery.displayLabel,
     relics = equippedRelics.toImmutableList(),
     upgrades = upgradeLine(),
+    characterUpgradeLevel = characterUpgradeLevel,
+    weaponUpgradeLevel = weaponUpgradeLevels[weapon.ordinal],
     stats = buildStats(),
     eligibleItemIds = content.items.filter { item ->
         val ordinaryOfferEligible = item.unlockLevel <= maxOf(level, lifetimeMatterOfferLevel(lifetimeMatter)) &&
