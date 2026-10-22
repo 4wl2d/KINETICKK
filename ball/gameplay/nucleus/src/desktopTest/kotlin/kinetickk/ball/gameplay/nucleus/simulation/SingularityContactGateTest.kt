@@ -12,8 +12,9 @@ import kotlin.test.assertTrue
  * Singularity contact gate (combat-final §9 and §10 Skills): skills and reaction verbs that move the Core are all
  * player-timed or bounded, so a bot using them touches the singularity no more often than the same bot without
  * them, and touches obstacles at most 15 % more often (a contact is the frame the Core first touches a rock or
- * bumper, sampled every 0.02 s input frame). Each arm is the no-POI bot on ten fixed seeds (the
- * no-POI probe `i * 7_919 + 13`, i = 1..10) for 300 s, with no skill drafts: a skill arm owns one skill from the
+ * bumper, sampled every 0.02 s input frame). Each arm is the no-POI bot on thirty fixed seeds (the
+ * no-POI probe sequence `i * 7_919 + 13`, i = 1..30: a few dozen contacts per arm need that many to tell a skill's
+ * effect from a single seed's run) for 300 s, with no skill drafts: a skill arm owns one skill from the
  * start and casts it by the bot's policy, a reaction arm sets the reaction off on the nearest enemy close to the
  * Core every three seconds.
  */
@@ -80,7 +81,7 @@ class SingularityContactGateTest {
     }
 
     private companion object {
-        val Seeds: List<Int> = (1..10).map { it * 7_919 + 13 }
+        val Seeds: List<Int> = (1..30).map { it * 7_919 + 13 }
         val NoDrafts = withoutReachableSkillSlots()
         /** Skills that move the Core: the MOTION family, Meteor's ride and Sonic Boom's recoil. */
         val MovingSkills = listOf(SkillId.METEOR, SkillId.ARC_HOOK, SkillId.MASS_DRIVER, SkillId.VOID_STEP,
