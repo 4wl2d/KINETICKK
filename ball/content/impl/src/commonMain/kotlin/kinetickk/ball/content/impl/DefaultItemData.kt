@@ -24,6 +24,7 @@ import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.ElementPick
 import kinetickk.ball.content.api.FieldAspect
+import kinetickk.ball.content.api.ImpulseDirection
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
@@ -671,6 +672,65 @@ private val Drafts: List<ItemDraft> = listOf(
     ItemDraft("Nomad Field", "The fields you raise pack up and follow you.", RARE, listOf(ANCHOR),
         rules = listOf(ItemRule.FieldTuning(FieldAspect.DURATION, 0.2f), ItemRule.Convert(ConversionKind.SKILL_FIELDS_FOLLOW, 0.8f)),
         unlock = 8),
+
+    // ARCHIVE AND APEX (RANK-0 DATA, LEVEL 42) (ids 185-196).
+    ItemDraft("Tithe Collector", "Every tenth fragment goes to the reactor.", COMMON, listOf(FORTUNE),
+        stats = listOf(stat(ItemEffect.OVERDRIVE_GAIN, 0.1f), stat(ItemEffect.DATA_GAIN, 0.05f)),
+        clauses = listOf(on(EffectTrigger.PICKUP, EffectAction.Overdrive(4f), every = 10))),
+    ItemDraft("Mycelial Ledger", "Rot runs through the dead like roots, and the roots carry Data.", COMMON, listOf(FORTUNE),
+        listOf(StatusElement.ENTROPY),
+        stats = listOf(stat(ItemEffect.DATA_GAIN, 0.04f)),
+        clauses = listOf(on(EffectTrigger.KILL, apply(StatusElement.ENTROPY, 2, 130f), EffectAction.GainData(0.6f),
+            given = listOf(EffectCondition.TargetHas(StatusElement.ENTROPY, 3)), cooldown = 0.25f)),
+        unlock = 3),
+    ItemDraft("Scavenger Protocol", "A held enemy cannot hide what it carries.", RARE, listOf(FORTUNE, ANCHOR), listOf(StatusElement.CRYO),
+        stats = listOf(stat(ItemEffect.DATA_GAIN, 0.07f)),
+        clauses = listOf(on(EffectTrigger.KILL, EffectAction.GainData(1f), given = listOf(EffectCondition.TargetControlled), cooldown = 0.3f)),
+        unlock = 4),
+    ItemDraft("Bit Furnace", "Burn the spare bits to cool the hull.", UNCOMMON, listOf(FORTUNE, OVERCLOCK),
+        stats = listOf(stat(ItemEffect.COOLING, 0.1f), stat(ItemEffect.DATA_GAIN, 0.06f)),
+        clauses = listOf(on(EffectTrigger.PICKUP, EffectAction.Vent(10f), every = 6)),
+        unlock = 5),
+    ItemDraft("Rote Memory", "Repetition is how a skill gets faster.", RARE, listOf(FORTUNE),
+        stats = listOf(stat(ItemEffect.LUCK, 0.2f), stat(ItemEffect.DATA_GAIN, 0.1f)),
+        clauses = listOf(on(EffectTrigger.PICKUP, EffectAction.RefundSkills(0.3f, SkillPick.LONGEST), every = 8)),
+        unlock = 6),
+    ItemDraft("Lodestar Ledger", "Every page of Data is bound in hard light.", RARE, listOf(BULWARK, FORTUNE),
+        stats = listOf(stat(ItemEffect.DATA_GAIN, 0.08f), stat(ItemEffect.SHIELD_CAPACITY, 10f)),
+        clauses = listOf(on(EffectTrigger.PICKUP, EffectAction.Shield(5f), every = 8)),
+        unlock = 7),
+    ItemDraft("Debt Collector", "A cashed mark always pays out.", RARE, listOf(FORTUNE, PRECISION),
+        stats = listOf(stat(ItemEffect.CRIT_DAMAGE, 0.15f), stat(ItemEffect.DATA_GAIN, 0.1f)),
+        clauses = listOf(on(EffectTrigger.MARK_CONSUMED, EffectAction.GainData(2.5f))),
+        unlock = 8),
+    ItemDraft("Summit Battery", "Charged on the climb, spent at the top.", RARE, listOf(OVERCLOCK),
+        clauses = listOf(on(EffectTrigger.LEVEL_UP, EffectAction.RefundSkills(1f, SkillPick.ALL))),
+        rules = listOf(ItemRule.ApexCooldown(0.15f)),
+        unlock = 26),
+    ItemDraft("Zenith Ledger", "Every fragment past the summit feeds the crown.", RARE, listOf(FORTUNE),
+        stats = listOf(stat(ItemEffect.PICKUP_RADIUS, 40f)),
+        clauses = listOf(on(EffectTrigger.PICKUP, EffectAction.ChargeApex(1f), every = 15)),
+        unlock = 24),
+    ItemDraft("Crest Rider", "Ride the crest of the wave you built.", UNCOMMON, listOf(DRIVE),
+        clauses = listOf(
+            on(EffectTrigger.DASH_HIT, EffectAction.ChargeApex(0.8f), every = 4),
+            on(EffectTrigger.APEX, EffectAction.CoreImpulse(500f, ImpulseDirection.POINTER), EffectAction.Buff(BuffStat.DAMAGE, 0.25f, 10f)),
+        ),
+        unlock = 22),
+    ItemDraft("Overture", "The Apex opens, and every instrument comes in at once.", EPIC, listOf(OVERCLOCK),
+        clauses = listOf(
+            on(EffectTrigger.APEX, EffectAction.RefundSkills(3f, SkillPick.ALL), EffectAction.Overdrive(40f)),
+            on(EffectTrigger.SKILL_CAST, EffectAction.ChargeApex(2f), every = 4),
+        ),
+        unlock = 26),
+    ItemDraft("Encore Protocol", "The crowd wants it again, louder.", EPIC, listOf(CHAIN),
+        clauses = listOf(
+            on(EffectTrigger.APEX, EffectAction.ForceReaction(300f, 4)),
+            on(EffectTrigger.REACTION, EffectAction.ChargeApex(1.5f), every = 6),
+        ),
+        rules = listOf(ItemRule.WhileModifier(EffectCondition.ApexActive, BuffStat.DAMAGE, 0.2f)),
+        unlock = 28,
+        rebirth = 3),
 )
 
 /** A reaction clause condition naming both elements: it holds only for the reaction between them. */

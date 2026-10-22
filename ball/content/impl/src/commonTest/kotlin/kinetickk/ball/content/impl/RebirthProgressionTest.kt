@@ -205,7 +205,7 @@ class RebirthRankUnlocksTest {
                 items = listOf("Solar Choir", "Glacial Heart", "Shatter Coil", "Unmaking Engine", "Kinetic Recapture", "Phantom Wake"),
                 matrix = listOf("Bastion Protocol", "Elite Bounty"), enemies = listOf("Phantom", "Herald")),
             3 to Ladder(weapons = listOf("Event Lens"), characters = listOf("Pentagon"), relics = listOf("Hollow Crown"),
-                items = listOf("Tectonic Driver", "Cornucopia Core", "Aegis Feedback", "Executioner's Scope"),
+                items = listOf("Tectonic Driver", "Cornucopia Core", "Aegis Feedback", "Executioner's Scope", "Encore Protocol"),
                 matrix = listOf("Glass Engine", "Heirloom Vault"), enemies = listOf("Broodmother")),
             4 to Ladder(weapons = listOf("Hunter Salvo"),
                 items = listOf("Resonance Fork", "Perfect Carom", "Salvage Collisions", "Siege Capacitor", "Wrecking Ball"),

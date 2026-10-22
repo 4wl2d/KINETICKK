@@ -21,7 +21,7 @@ class CodexShippedCatalogTest {
     @Test
     fun theShippedCatalogFitsTheCodexAndEveryItemHasOneSlotInEverySort() {
         val items = catalog.items
-        assertEquals(185, items.size)
+        assertEquals(197, items.size)
         assertEquals(ContentBounds.MAX_ITEMS, CODEX_CATALOG_LIMIT)
         assertTrue(items.size <= CODEX_CATALOG_LIMIT)
         // The stand-in shape the common tests lay out is the real one.

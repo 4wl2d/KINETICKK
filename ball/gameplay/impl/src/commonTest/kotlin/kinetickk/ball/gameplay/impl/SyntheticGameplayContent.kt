@@ -8,7 +8,7 @@ import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 
 /** Matches the shipped catalog size; the item bound is [ContentBounds.MAX_ITEMS]. */
-private const val SYNTHETIC_ITEM_COUNT = 185
+private const val SYNTHETIC_ITEM_COUNT = 197
 
 internal val SyntheticGameplayContent: GameplayContentSnapshot by lazy(::syntheticGameplayContent)
 

@@ -92,7 +92,7 @@ class ContentCatalogTest {
     fun itemCatalogHoldsDistinctHandAuthoredItemsWithinTheBound() {
         val items = gameplay.items
 
-        assertEquals(185, items.size)
+        assertEquals(197, items.size)
         assertEquals(320, ContentBounds.MAX_ITEMS)
         assertTrue(items.size <= ContentBounds.MAX_ITEMS)
         assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
@@ -284,8 +284,17 @@ class ContentCatalogTest {
                 assertTrue(line.text.length <= 140, "${item.name}: '${line.text}' fits a card")
             }
             russian.forEach { line -> assertFalse(line.text.any { it in 'A'..'Z' || it in 'a'..'z' }, "${item.name}: '${line.text}'") }
-            item.clauses.filter { it.trigger == EffectTrigger.REACTION }.forEach {
-                assertTrue(english.any { line -> line.kind == RuleLineKind.TRIGGER && line.text.startsWith("On a reaction between") }, item.name)
+            val triggers = english.filter { it.kind == RuleLineKind.TRIGGER }.map { it.text }
+            item.clauses.filter { it.trigger == EffectTrigger.REACTION }.forEach { clause ->
+                val named = clause.conditions.filterIsInstance<EffectCondition.ReactionIs>().singleOrNull()?.reaction
+                when {
+                    // A clause for an element pair names the pair (0.4.0), one for a named reaction names it (0.5.0).
+                    clause.conditions.any { it is EffectCondition.ElementIs } ->
+                        assertTrue(triggers.any { it.startsWith("On a reaction between") }, item.name)
+                    named != null -> assertTrue(triggers.any { gameplay.build.reaction(named).name in it }, "${item.name}: $triggers")
+                    // Any reaction: the line says so.
+                    else -> assertTrue(triggers.any { "reaction" in it }, "${item.name}: $triggers")
+                }
             }
         }
     }
