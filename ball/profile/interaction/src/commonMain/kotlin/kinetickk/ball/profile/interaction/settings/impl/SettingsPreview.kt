@@ -384,41 +384,12 @@ private class PreviewScope(
      */
     fun display(platform: SettingsPlatform) {
         val roles = measurers.roles
-        val screen = rect(0f, 0f, PREVIEW_UNITS, DISPLAY_SCREEN_HEIGHT)
-        draw.drawRect(Kk.Ink1, screen.topLeft, screen.size)
-        val inset = 0.75f * u
-        draw.drawRect(
-            Kk.Line2, Offset(screen.left + inset, screen.top + inset), Size(screen.width - inset * 2f, screen.height - inset * 2f),
-            style = Stroke(1.5f * u, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f * u, 5f * u))),
-        )
-        val mode = if (platform.support.windowModes) preferences.windowMode else WindowMode.FULLSCREEN
-        when (mode) {
-            WindowMode.WINDOWED -> {
-                val window = rect(48f, 20f, 288f, 170f)
-                draw.drawRect(Kk.Ink3, window.topLeft, window.size)
-                draw.drawRect(Kk.Bone, window.topLeft, Size(window.width, 14f * u))
-                draw.drawRect(Kk.Line, window.topLeft, window.size, style = kkStroke(u))
-            }
-            WindowMode.BORDERLESS -> {
-                val window = rect(4f, 4f, PREVIEW_UNITS - 4f, DISPLAY_SCREEN_HEIGHT - 4f)
-                draw.drawRect(Kk.Ink3, window.topLeft, window.size)
-            }
-            WindowMode.FULLSCREEN -> {
-                val window = rect(4f, 4f, PREVIEW_UNITS - 4f, DISPLAY_SCREEN_HEIGHT - 4f)
-                draw.drawKkSlab(window, Kk.Ink3, cut = 14f * u)
-            }
-        }
-        if (platform.support.windowModes) {
-            val size = platform.liveSizeOverride(preferences)?.let { settingsWindowSizeText(it.widthDp, it.heightDp, language) }
-                ?: settingsWindowSizeText(preferences.windowSize.widthDp, preferences.windowSize.heightDp, language)
-            val label = if (mode == WindowMode.WINDOWED) size else language.text(windowModeText(mode))
-            draw.drawKkText(
-                text, label, measurers.typography.monoStyle(12f), x(PREVIEW_UNITS * 0.5f), y(DISPLAY_SCREEN_HEIGHT + 16f), Kk.Mute,
-                align = KkAlign.CENTER, valign = KkVAlign.CENTER, uppercase = true,
-            )
-        }
+        // Without window modes (phones, browsers) the window sample means nothing: cadence and scale only.
+        val stripTop = if (platform.support.windowModes) {
+            window(platform)
+            DISPLAY_SCREEN_HEIGHT + 32f
+        } else 0f
         // (b) Cadence: the dot crosses 240 units in 1.2 s at positions quantized to the frame limit.
-        val stripTop = DISPLAY_SCREEN_HEIGHT + 32f
         val strip = rect(48f, stripTop + DISPLAY_STRIP_HEIGHT * 0.5f - 1f, 288f, stripTop + DISPLAY_STRIP_HEIGHT * 0.5f + 1f)
         draw.drawRect(Kk.Line, strip.topLeft, strip.size)
         val cap = preferences.frameRateCap
@@ -444,6 +415,41 @@ private class PreviewScope(
         }) {
             drawKkButton(measurer, Rect(-width * 0.5f, -height * 0.5f, width * 0.5f, height * 0.5f), label, KkButtonVariant.PRIMARY, KkButtonSize.MD)
         }
+    }
+
+    /** (a) The window in the stored mode inside a dashed screen outline, with its size or mode below. */
+    private fun window(platform: SettingsPlatform) {
+        val screen = rect(0f, 0f, PREVIEW_UNITS, DISPLAY_SCREEN_HEIGHT)
+        draw.drawRect(Kk.Ink1, screen.topLeft, screen.size)
+        val inset = 0.75f * u
+        draw.drawRect(
+            Kk.Line2, Offset(screen.left + inset, screen.top + inset), Size(screen.width - inset * 2f, screen.height - inset * 2f),
+            style = Stroke(1.5f * u, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f * u, 5f * u))),
+        )
+        val mode = preferences.windowMode
+        when (mode) {
+            WindowMode.WINDOWED -> {
+                val window = rect(48f, 20f, 288f, 170f)
+                draw.drawRect(Kk.Ink3, window.topLeft, window.size)
+                draw.drawRect(Kk.Bone, window.topLeft, Size(window.width, 14f * u))
+                draw.drawRect(Kk.Line, window.topLeft, window.size, style = kkStroke(u))
+            }
+            WindowMode.BORDERLESS -> {
+                val window = rect(4f, 4f, PREVIEW_UNITS - 4f, DISPLAY_SCREEN_HEIGHT - 4f)
+                draw.drawRect(Kk.Ink3, window.topLeft, window.size)
+            }
+            WindowMode.FULLSCREEN -> {
+                val window = rect(4f, 4f, PREVIEW_UNITS - 4f, DISPLAY_SCREEN_HEIGHT - 4f)
+                draw.drawKkSlab(window, Kk.Ink3, cut = 14f * u)
+            }
+        }
+        val size = platform.liveSizeOverride(preferences)?.let { settingsWindowSizeText(it.widthDp, it.heightDp, language) }
+            ?: settingsWindowSizeText(preferences.windowSize.widthDp, preferences.windowSize.heightDp, language)
+        val label = if (mode == WindowMode.WINDOWED) size else language.text(windowModeText(mode))
+        draw.drawKkText(
+            text, label, measurers.typography.monoStyle(12f), x(PREVIEW_UNITS * 0.5f), y(DISPLAY_SCREEN_HEIGHT + 16f), Kk.Mute,
+            align = KkAlign.CENTER, valign = KkVAlign.CENTER, uppercase = true,
+        )
     }
 
     /**

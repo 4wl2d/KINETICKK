@@ -417,7 +417,8 @@ private class SettingsGeometry(
         val line = when {
             regular -> if (keyRow) d(52f) else d(62f)
             twoLine(row) -> d(if (hasSwatches(row)) 95f else 90f)
-            portrait -> d(52f)
+            // A one-line portrait row whose label needs a second line gets the height for it.
+            portrait -> max(d(52f), labelLines(row, column) * metrics.rowLabelLineHeight() + d(14f))
             else -> landscapeLineHeight(row, column)
         }
         return line + if (hasSwatches(row)) swatchGap + swatchHeight else 0f
@@ -425,12 +426,16 @@ private class SettingsGeometry(
 
     /** Compact landscape: a label that needs its second line gets the height for it. */
     fun landscapeLineHeight(row: SettingsRow, column: Column = Column.FULL): Float {
-        val (left, right) = columnSpan(column)
-        val probe = rowLayout(row, Rect(left, 0f, right, d(SETTINGS_TOUCH_DP)), strip = false)
-        val lines = if (metrics.width(row.label(language), SettingsTextKind.ROW_LABEL) <= probe.label.width) 1 else 2
         // Above a swatch strip the cells keep a 44 dp hit band between the row top and the strip.
         val minimum = if (hasSwatches(row)) d(52f) else d(SETTINGS_TOUCH_DP)
-        return max(minimum, metrics.rowLabelLineHeight() * lines + d(14f))
+        return max(minimum, metrics.rowLabelLineHeight() * labelLines(row, column) + d(14f))
+    }
+
+    /** One or two label lines: two when the label is wider than its box on a one-line row. */
+    fun labelLines(row: SettingsRow, column: Column): Int {
+        val (left, right) = columnSpan(column)
+        val probe = rowLayout(row, Rect(left, 0f, right, d(SETTINGS_TOUCH_DP)), strip = false)
+        return if (metrics.width(row.label(language), SettingsTextKind.ROW_LABEL) <= probe.label.width) 1 else 2
     }
 
     fun paginate(heights: List<Float>, available: Float): List<IntRange> {
@@ -572,7 +577,11 @@ private class SettingsGeometry(
                 )
             }
             SettingsControl.KEYBIND -> {
-                val cellWidth = min(if (regular) d(132f) else d(112f), available)
+                // The cell gives up to a third of its width to a long action name (key caps are short).
+                val natural = if (regular) d(132f) else d(112f)
+                val labelNeed = metrics.width(row.label(language), SettingsTextKind.ROW_LABEL) / settingsType(mode).rowLabelLines + d(8f)
+                val room = right - (label.left + labelNeed + (if (regular) d(20f) else d(12f)))
+                val cellWidth = min(available, room.coerceIn(natural * KEY_CELL_MIN_SHARE, natural))
                 SettingsRowLayout(
                     row, bounds, label, info,
                     key = Rect(right - cellWidth, centerY - cellHeight * 0.5f, right, centerY + cellHeight * 0.5f),
@@ -617,6 +626,9 @@ private class SettingsGeometry(
         language.text(SettingsRedesignText.RefreshUnknown),
     ).maxOf { metrics.width(it, SettingsTextKind.READOUT) }
 }
+
+/** A key cell keeps at least this share of its natural width. */
+private const val KEY_CELL_MIN_SHARE = 0.7f
 
 /** Smallest label factor of a single desktop tab row before it wraps. */
 private const val REGULAR_TAB_MIN_SCALE = 0.8f

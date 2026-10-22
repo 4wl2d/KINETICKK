@@ -394,6 +394,11 @@ class SettingsPointerResolverTest {
         val phone = assertNotNull(layout(390f, 844f, 1f, SettingsGroup.CONTROLS).row(SettingsRow.BIND_SKILL_1))
         assertEquals(112f, assertNotNull(phone.key).width)
         assertEquals(32f, phone.key!!.height)
+        // A long action name takes room from the cell, down to 70 % of it.
+        val large = layout(1000f, 700f, 1f, SettingsGroup.CONTROLS, language = AppLanguage.Russian, scale = 1.4f)
+        val performance = assertNotNull(assertNotNull(large.row(SettingsRow.BIND_PERFORMANCE)).key)
+        assertTrue(performance.width in 132f * 0.7f..131.9f, "${performance.width}")
+        assertEquals(132f, assertNotNull(large.row(SettingsRow.BIND_DASH)!!.key).width)
         val reset = assertNotNull(layout(1440f, 810f, 1f, SettingsGroup.CONTROLS).row(SettingsRow.RESET_BINDINGS))
         assertTrue(reset.hasInfo)
         assertNotNull(reset.action)

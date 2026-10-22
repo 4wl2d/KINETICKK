@@ -276,11 +276,7 @@ private fun DrawScope.drawSettingsRow(
         val cy = row.bounds.center.y
         drawKkSheared(Rect(row.bounds.left - d(14f), cy - d(13f), row.bounds.left - d(9f), cy + d(13f)), roles.you)
     }
-    val labelLayout = measureKkText(
-        measurers.body, row.row.label(language), measurers.typography.condStyle(type.rowLabel),
-        uppercase = true, maxWidth = row.label.width, maxLines = type.rowLabelLines,
-    )
-    drawKkText(labelLayout, row.label.left, row.label.center.y, Kk.Bone, valign = KkVAlign.CENTER)
+    drawKkText(settingsRowLabel(measurers, row, frame.layout.mode, type), row.label.left, row.label.center.y, Kk.Bone, valign = KkVAlign.CENTER)
 
     if (row.hasInfo) {
         val info = SettingsTarget.Info(row.row)
@@ -431,6 +427,30 @@ private fun DrawScope.drawSettingsKeyCell(frame: SettingsFrame, measurers: Setti
 
 private fun translateRect(rect: Rect, dx: Float, dy: Float = 0f): Rect =
     if (dx == 0f && dy == 0f) rect else Rect(rect.left + dx, rect.top + dy, rect.right + dx, rect.bottom + dy)
+
+/** Smallest factor a one-line row label shrinks to before it ends in an ellipsis. */
+private const val SETTINGS_LABEL_MIN_FIT = 0.8f
+
+/**
+ * A row label in its box: compact landscape and the one-line rows of portrait wrap to two lines
+ * (their layout made room); a single-line label wider than its box shrinks to 80 % first.
+ */
+private fun settingsRowLabel(
+    measurers: SettingsMeasurers,
+    row: SettingsRowLayout,
+    mode: SettingsLayoutMode,
+    type: SettingsType,
+): TextLayoutResult {
+    val text = row.row.label(measurers.language)
+    val style = measurers.typography.condStyle(type.rowLabel)
+    val stacked = row.control == SettingsControl.SEGMENTED || row.control == SettingsControl.SLIDER
+    val lines = if (mode == SettingsLayoutMode.COMPACT_PORTRAIT && !stacked) 2 else type.rowLabelLines
+    val wrapped = measureKkText(measurers.body, text, style, uppercase = true, maxWidth = row.label.width, maxLines = lines)
+    if (!wrapped.hasVisualOverflow && (lines > 1 || wrapped.lineCount == 1)) return wrapped
+    val natural = measureKkText(measurers.body, text, style, uppercase = true).size.width.toFloat()
+    val factor = (row.label.width * lines / natural.coerceAtLeast(1f)).coerceIn(SETTINGS_LABEL_MIN_FIT, 1f)
+    return measureKkText(measurers.at(measurers.bodyScale * factor), text, style, uppercase = true, maxWidth = row.label.width, maxLines = lines)
+}
 
 /** Keyboard focus ring (`:focus-visible`: 2 dp bone, 4 dp outside) for controls without one. */
 internal fun DrawScope.drawSettingsFocus(bounds: Rect) {
