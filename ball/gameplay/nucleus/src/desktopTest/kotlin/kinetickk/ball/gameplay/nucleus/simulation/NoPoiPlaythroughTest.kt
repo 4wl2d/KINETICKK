@@ -388,7 +388,12 @@ internal class NoPoiBot(
                 shot.hostile && !shot.spent && length(shot.x - s.coreX, shot.y - s.coreY) <= 140f &&
                     (shot.vx - s.velocityX) * (s.coreX - shot.x) + (shot.vy - s.velocityY) * (s.coreY - shot.y) > 0f
             }
-            SkillId.ARC_HOOK -> s.nearestSkillTarget(singularityX, singularityY, values[0]) != null
+            // The hook throws the Core at its target, so (like a Blink) never along a line that touches a skipped POI.
+            SkillId.ARC_HOOK -> s.nearestSkillTarget(singularityX, singularityY, values[0])?.let { target ->
+                s.pointsOfInterest.none { point ->
+                    segmentCircleIntersects(s.coreX, s.coreY, target.x, target.y, point.x, point.y, 150f)
+                }
+            } == true
             SkillId.SLINGSHOT -> s.speed >= 500f && (s.velocityX * aimX + s.velocityY * aimY) / s.speed <= 0f
         }
     }
