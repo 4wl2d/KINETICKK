@@ -5,7 +5,9 @@ package kinetickk.ball.gameplay.nucleus
 
 import kinetickk.ball.gameplay.nucleus.simulation.buildSummary
 
+import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MatrixNodeId
+import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.GameplayActiveWeaponProjection
 import kinetickk.ball.gameplay.api.GameplayBuildSummaryProjection
 import kinetickk.ball.gameplay.api.GameplayConfigurationRejection
@@ -391,6 +393,14 @@ object GameplayNucleus {
         if (profile.economy.lifetimeMatter < profile.economy.matter) {
             return GameplayConfigurationRejection.LIFETIME_MATTER_BELOW_CURRENT
         }
+        val upgradeLevels = 0..content.upgrades.maxLevel
+        val upgrades = profile.upgrades
+        if (
+            upgrades.characterLevels.size != CoreShape.entries.size ||
+            upgrades.weaponLevels.size != WeaponId.entries.size ||
+            upgrades.characterLevels.any { it !in upgradeLevels } ||
+            upgrades.weaponLevels.any { it !in upgradeLevels }
+        ) return GameplayConfigurationRejection.UPGRADE_LEVEL_OUT_OF_RANGE
         return null
     }
 

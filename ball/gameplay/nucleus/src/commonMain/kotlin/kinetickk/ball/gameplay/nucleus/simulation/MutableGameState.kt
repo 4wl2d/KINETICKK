@@ -114,6 +114,26 @@ internal class MutableGameState(
         })
     /** Folded Matrix effects of [matrixRanks]; immutable, refolded when a run starts. */
     internal var matrix: MatrixModifiers = reductionSource?.matrix ?: foldMatrix()
+    /** Bought Refit levels by [CoreShape.ordinal], captured from the profile at bootstrap; a run never writes them. */
+    internal val characterUpgradeLevels: CopyOnWriteIntArray = reductionSource?.characterUpgradeLevels?.let {
+        if (shareStableReductionStorage) it else it.fork()
+    }
+        ?: CopyOnWriteIntArray(IntArray(CoreShape.entries.size) { index ->
+            (bootstrapProgress?.upgrades?.characterLevels?.getOrElse(index) { 0 } ?: 0)
+                .coerceIn(0, content.upgrades.maxLevel)
+        })
+    /** Bought Honing levels by [WeaponId.ordinal], captured from the profile at bootstrap; a run never writes them. */
+    internal val weaponUpgradeLevels: CopyOnWriteIntArray = reductionSource?.weaponUpgradeLevels?.let {
+        if (shareStableReductionStorage) it else it.fork()
+    }
+        ?: CopyOnWriteIntArray(IntArray(WeaponId.entries.size) { index ->
+            (bootstrapProgress?.upgrades?.weaponLevels?.getOrElse(index) { 0 } ?: 0)
+                .coerceIn(0, content.upgrades.maxLevel)
+        })
+    /** The selected character's Refit level, fixed when a run starts. */
+    internal var characterUpgradeLevel: Int = reductionSource?.characterUpgradeLevel ?: 0
+    /** Refit's character-mechanic damage multiplier, fixed when a run starts. */
+    internal var characterUpgradePower: Float = reductionSource?.characterUpgradePower ?: 1f
     internal val discoveredItemIds: CopyOnWriteMutableSet<Int> = reductionSource?.discoveredItemIds?.let {
         if (shareStableReductionStorage) it else it.fork()
     }
@@ -461,7 +481,8 @@ internal class MutableGameState(
         internal set
     var data: Int = reductionSource?.data ?: 0
         internal set
-    var nextLevelData: Int = reductionSource?.nextLevelData ?: content.tempo.dataRequiredForLevel(1)
+    var nextLevelData: Int = reductionSource?.nextLevelData
+        ?: content.tempo.dataRequiredForLevel(1, activeRebirthProfile)
         internal set
     var keys: Int = reductionSource?.keys ?: 0
         internal set

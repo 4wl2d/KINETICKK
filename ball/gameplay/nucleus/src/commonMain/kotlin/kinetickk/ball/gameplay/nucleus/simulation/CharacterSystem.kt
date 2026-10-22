@@ -99,7 +99,7 @@ internal fun MutableGameState.updateCharacterRuntime(delta: Float) {
         CoreShape.RING -> updateHalo(ability, delta, currentSpeed, moved)
         CoreShape.DIAMOND -> {
             if (brakingStarted && ability.previousSpeed >= PARRY_MIN_SPEED && moved > 0f && ability.parryCooldown <= 0f) {
-                ability.parryWindow = PARRY_WINDOW_SECONDS
+                ability.parryWindow = parryWindowSeconds()
                 ability.parryCooldown = PARRY_COOLDOWN_SECONDS
             }
             ability.charge = if (ability.parryWindow > 0f) 1f else max(0f, 1f - ability.parryCooldown / PARRY_COOLDOWN_SECONDS)
@@ -177,7 +177,7 @@ internal fun MutableGameState.onCharacterPrimaryHit(enemy: Enemy, dash: Boolean 
         CoreShape.SHARD -> if (!dash && elapsed >= ability.punctureReadyAt && consumeMark(enemy)) {
             ability.punctureReadyAt = elapsed + PUNCTURE_INTERVAL
             dealCharacterDamage(enemy, PUNCTURE_DAMAGE * abilityPower())
-            heat = max(0f, heat - PUNCTURE_HEAT_REFUND)
+            heat = max(0f, heat - punctureHeatRefund())
             shockwave(enemy.x, enemy.y, 0.3f, 65f, 2)
         }
         else -> Unit
@@ -198,6 +198,70 @@ internal fun MutableGameState.characterImpactMultiplier(): Float = when (coreSha
 /** Damage multiplier on direct hits and ability damage: the Diamond's Edge. */
 internal fun MutableGameState.characterDamageMultiplier(): Float =
     if (coreShape == CoreShape.DIAMOND) 1f + EDGE_DAMAGE_PER_STACK * characterRuntime.edge else 1f
+
+// ---------------------------------------------------------------------------------------------
+// Refit signatures. Each mechanic reads its one upgradable constant through an accessor that applies the
+// selected character's Refit level with the content step ([kinetickk.ball.content.api.CharacterUpgradeSignature]);
+// the render mapper reads the same accessors.
+
+/** Orbit: the turn arc that charges the next impact (Refit shortens it by a share per level). */
+internal fun MutableGameState.orbitArc(): Float = refitSignature(CoreShape.ORB, ORBIT_ARC, share = true)
+
+/** Facets: seconds to regrow one facet (Refit shortens them by a share per level). */
+internal fun MutableGameState.facetRegenSeconds(): Float =
+    refitSignature(CoreShape.PRISM, FACET_REGEN_SECONDS, share = true)
+
+/** Puncture: heat vented by a puncture. */
+internal fun MutableGameState.punctureHeatRefund(): Float = refitSignature(CoreShape.SHARD, PUNCTURE_HEAT_REFUND)
+
+/** Halo: the radius the ring gains at full speed over its minimum. */
+internal fun MutableGameState.haloExtraRadius(): Float = refitSignature(CoreShape.RING, HALO_EXTRA_RADIUS)
+
+/** Parry: seconds the parry window stays open. */
+internal fun MutableGameState.parryWindowSeconds(): Float = refitSignature(CoreShape.DIAMOND, PARRY_WINDOW_SECONDS)
+
+/** Lattice: seconds an open lattice lasts after its newest node. */
+internal fun MutableGameState.latticeLifeSeconds(): Float = refitSignature(CoreShape.TESSERACT, LATTICE_LIFE_SECONDS)
+
+/** Nova: the Supernova radius before Stellar Mass. */
+internal fun MutableGameState.supernovaBaseRadius(): Float = refitSignature(CoreShape.STAR, SUPERNOVA_RADIUS)
+
+/** Echo: seconds between two hostile shots the ghost swallows. */
+internal fun MutableGameState.ghostAbsorbInterval(): Float = refitSignature(CoreShape.SPIRAL, GHOST_ABSORB_INTERVAL)
+
+/** Polarity: the Attract field's radius. */
+internal fun MutableGameState.attractRadius(): Float = refitSignature(CoreShape.DIPOLE, ATTRACT_RADIUS)
+
+/** Polarity: the Repel field's radius (the signature's secondary step). */
+internal fun MutableGameState.repelRadius(): Float =
+    refitSignature(CoreShape.DIPOLE, REPEL_RADIUS, secondary = true)
+
+/** Pulse: the on-beat burst's radius. */
+internal fun MutableGameState.beatBurstRadius(): Float = refitSignature(CoreShape.PENTAGON, BEAT_BURST_RADIUS)
+
+/** Eclipse: seconds to recharge one Blink. */
+internal fun MutableGameState.blinkRechargeSeconds(): Float = refitSignature(CoreShape.CRESCENT, BLINK_RECHARGE_SECONDS)
+
+/** Hive: seconds a drone lives without a Data refresh. */
+internal fun MutableGameState.droneLifeSeconds(): Float = refitSignature(CoreShape.HEXAGON, DRONE_LIFE_SECONDS)
+
+/**
+ * [base] moved by the Refit step of [shape] times the run's Refit level: added, or as a [share] of [base]. Another
+ * character, or level 0, reads [base] itself. A step never takes a value below [REFIT_SIGNATURE_FLOOR_SHARE] of
+ * [base] (the Blink recharge stays at or above 1.1 s, a facet regrows in at least 3 s).
+ */
+private fun MutableGameState.refitSignature(
+    shape: CoreShape,
+    base: Float,
+    share: Boolean = false,
+    secondary: Boolean = false,
+): Float {
+    val level = characterUpgradeLevel
+    if (level == 0 || coreShape != shape) return base
+    val signature = content.coreShape(shape).upgradeSignature
+    val step = (if (secondary) signature.secondaryPerLevel else signature.perLevel) * level
+    return max(base * REFIT_SIGNATURE_FLOOR_SHARE, if (share) base * (1f + step) else base + step)
+}
 
 /** Mass multiplier from Stellar Mass. */
 internal fun MutableGameState.characterMassMultiplier(): Float =
@@ -246,13 +310,14 @@ internal fun MutableGameState.onCharacterImpact(enemy: Enemy, result: DamageResu
                 if (ability.pulseBeat != beat) {
                     ability.pulseBeat = beat
                     val burst = BEAT_BURST_DAMAGE * abilityPower()
+                    val burstRadius = beatBurstRadius()
                     for (index in enemies.indices) {
                         val target = enemies[index]
-                        if (target.alive && distanceSquared(coreX, coreY, target.x, target.y) <= square(BEAT_BURST_RADIUS + target.radius)) {
+                        if (target.alive && distanceSquared(coreX, coreY, target.x, target.y) <= square(burstRadius + target.radius)) {
                             dealCharacterDamage(target, burst)
                         }
                     }
-                    shockwave(coreX, coreY, 0.25f, BEAT_BURST_RADIUS, 2)
+                    shockwave(coreX, coreY, 0.25f, burstRadius, 2)
                 }
             }
         }
@@ -297,7 +362,8 @@ internal fun MutableGameState.onCharacterDamaged() {
 internal fun MutableGameState.onCharacterDataPickup() {
     if (coreShape != CoreShape.HEXAGON) return
     val ability = characterRuntime
-    for (index in 0 until ability.droneCount) ability.drones[index * DRONE_STRIDE + DRONE_LIFE] = DRONE_LIFE_SECONDS
+    val droneLife = droneLifeSeconds()
+    for (index in 0 until ability.droneCount) ability.drones[index * DRONE_STRIDE + DRONE_LIFE] = droneLife
     if (ability.droneCount >= CharacterRuntime.MAX_DRONES) return
     ability.droneRolls++
     val roll = ((characterHash(pickupsCollected + DRONE_HASH_SALT) ushr 40) and 0xFFFFL).toInt()
@@ -309,7 +375,7 @@ internal fun MutableGameState.onCharacterDataPickup() {
     drones[base + DRONE_Y] = coreY
     drones[base + DRONE_PREVIOUS_X] = coreX
     drones[base + DRONE_PREVIOUS_Y] = coreY
-    drones[base + DRONE_LIFE] = DRONE_LIFE_SECONDS
+    drones[base + DRONE_LIFE] = droneLife
     drones[base + DRONE_READY_AT] = elapsed + DRONE_FIRST_DART_SECONDS
     drones[base + DRONE_DART] = 0f
     drones[base + DRONE_TARGET_X] = coreX
@@ -325,7 +391,7 @@ internal fun MutableGameState.onCharacterTurn() {
     ability.polarity = if (ability.polarity == Polarity.ATTRACT) Polarity.REPEL else Polarity.ATTRACT
     ability.polarityFlipReadyAt = elapsed + POLARITY_FLIP_INTERVAL
     ability.polarityFlash = 1f
-    shockwave(coreX, coreY, 0.3f, if (ability.polarity == Polarity.ATTRACT) ATTRACT_RADIUS else REPEL_RADIUS, 2)
+    shockwave(coreX, coreY, 0.3f, if (ability.polarity == Polarity.ATTRACT) attractRadius() else repelRadius(), 2)
 }
 
 /**
@@ -357,8 +423,9 @@ private fun MutableGameState.cutFacetTimer() {
     if (ability.facets >= CharacterRuntime.MAX_FACETS || elapsed < ability.facetCutReadyAt) return
     ability.facetCutReadyAt = elapsed + FACET_CUT_INTERVAL
     ability.facetTimer += FACET_CUT_SECONDS
-    if (ability.facetTimer >= FACET_REGEN_SECONDS) {
-        ability.facetTimer -= FACET_REGEN_SECONDS
+    val regen = facetRegenSeconds()
+    if (ability.facetTimer >= regen) {
+        ability.facetTimer -= regen
         ability.facets++
     }
 }
@@ -451,7 +518,7 @@ internal fun MutableGameState.tryPuncture(enemy: Enemy, multiplier: Float): Bool
     if (elapsed < ability.punctureReadyAt || !consumeMark(enemy)) return false
     ability.punctureReadyAt = elapsed + PUNCTURE_INTERVAL
     dealCharacterDamage(enemy, PUNCTURE_DAMAGE * multiplier * abilityPower())
-    heat = max(0f, heat - PUNCTURE_HEAT_REFUND)
+    heat = max(0f, heat - punctureHeatRefund())
     shockwave(enemy.x, enemy.y, 0.3f, 65f, 2)
     return true
 }
@@ -534,7 +601,7 @@ private fun MutableGameState.updateOrbit(ability: CharacterRuntime, turn: Float,
         val sameDirection = ability.turnArc == 0f || turn * ability.turnArc >= 0f
         val arc = if (sameDirection) ability.turnArc + turn else turn
         val distance = if (sameDirection) ability.turnDistance + moved else moved
-        val earned = if (abs(arc) >= ORBIT_ARC && distance >= ORBIT_MIN_DISTANCE) abs(turn) / PI.toFloat() else 0f
+        val earned = if (abs(arc) >= orbitArc() && distance >= ORBIT_MIN_DISTANCE) abs(turn) / PI.toFloat() else 0f
         ability.turnArc = arc.coerceIn(-TAU, TAU)
         ability.turnDistance = min(2_000f, distance)
         ability.charge = min(1f, ability.charge + earned)
@@ -547,8 +614,9 @@ private fun MutableGameState.updateOrbit(ability: CharacterRuntime, turn: Float,
 private fun MutableGameState.updateFacets(ability: CharacterRuntime, delta: Float) {
     if (ability.facets < CharacterRuntime.MAX_FACETS) {
         if (elapsed >= ability.facetPauseUntil) ability.facetTimer += delta
-        if (ability.facetTimer >= FACET_REGEN_SECONDS) {
-            ability.facetTimer -= FACET_REGEN_SECONDS
+        val regen = facetRegenSeconds()
+        if (ability.facetTimer >= regen) {
+            ability.facetTimer -= regen
             ability.facets++
         }
     }
@@ -557,7 +625,8 @@ private fun MutableGameState.updateFacets(ability: CharacterRuntime, delta: Floa
 }
 
 private fun MutableGameState.updateHalo(ability: CharacterRuntime, delta: Float, currentSpeed: Float, moved: Float) {
-    val target = CharacterRuntime.HALO_MIN_RADIUS + clamp(currentSpeed / HALO_SPEED_SPAN, 0f, 1f) * HALO_EXTRA_RADIUS
+    val extraRadius = haloExtraRadius()
+    val target = CharacterRuntime.HALO_MIN_RADIUS + clamp(currentSpeed / HALO_SPEED_SPAN, 0f, 1f) * extraRadius
     if (ability.previousSpeed < HALO_BURST_SPEED && currentSpeed >= HALO_BURST_SPEED && elapsed >= ability.haloBurstReadyAt) {
         // The ring snaps out to the burst radius and strikes every enemy it crosses on the way.
         val inner = ability.haloRadius
@@ -576,7 +645,7 @@ private fun MutableGameState.updateHalo(ability: CharacterRuntime, delta: Float,
         ability.haloRadius += (target - ability.haloRadius) * min(1f, delta * HALO_EASE)
     }
     val radius = ability.haloRadius
-    ability.charge = ((radius - CharacterRuntime.HALO_MIN_RADIUS) / HALO_EXTRA_RADIUS).coerceIn(0f, 1f)
+    ability.charge = ((radius - CharacterRuntime.HALO_MIN_RADIUS) / extraRadius).coerceIn(0f, 1f)
     if (moved <= 0.01f || currentSpeed < HALO_MIN_SPEED) return
     val damage = HALO_BAND_DPS * delta * abilityPower()
     for (index in enemies.indices) {
@@ -610,7 +679,7 @@ private fun MutableGameState.updateLattice(ability: CharacterRuntime) {
                 ability.latticeNodes[count * 2 + 1] = originY
                 ability.latticeCount = count + 1
                 if (ability.latticeCount >= CharacterRuntime.MAX_LATTICE_NODES) collapseLattice(ability.latticeCount)
-                else ability.latticeTime = LATTICE_LIFE_SECONDS
+                else ability.latticeTime = latticeLifeSeconds()
             }
         }
     }
@@ -674,7 +743,7 @@ private fun MutableGameState.supernova() {
     val ability = characterRuntime
     val stacks = ability.stellarMass
     if (stacks <= 0 || elapsed < ability.supernovaReadyAt) return
-    val radius = SUPERNOVA_RADIUS + SUPERNOVA_RADIUS_PER_STACK * stacks
+    val radius = supernovaBaseRadius() + SUPERNOVA_RADIUS_PER_STACK * stacks
     val damage = (SUPERNOVA_DAMAGE + SUPERNOVA_DAMAGE_PER_STACK * stacks) * abilityPower()
     val dominant = build.dominant
     val elementStacks = stacks / SUPERNOVA_STACKS_PER_ELEMENT
@@ -715,7 +784,7 @@ private fun MutableGameState.updateEcho(ability: CharacterRuntime, delta: Float)
             if (segmentCircleIntersects(shot.previousX - fromX, shot.previousY - fromY, shot.x - x, shot.y - y, 0f, 0f, reach + shot.radius)) {
                 // Spent, not removed: the collision pass removes spent shots once no pass walks the list.
                 shot.life = 0f
-                ability.ghostAbsorbReadyAt = elapsed + GHOST_ABSORB_INTERVAL
+                ability.ghostAbsorbReadyAt = elapsed + ghostAbsorbInterval()
                 ability.damagePrevented += shot.damage.toDouble()
                 burst(x, y, 5, 2)
                 break
@@ -741,7 +810,7 @@ private fun MutableGameState.updateEcho(ability: CharacterRuntime, delta: Float)
 
 private fun MutableGameState.updatePolarity(ability: CharacterRuntime, delta: Float) {
     val attract = ability.polarity == Polarity.ATTRACT
-    val radius = if (attract) ATTRACT_RADIUS else REPEL_RADIUS
+    val radius = if (attract) attractRadius() else repelRadius()
     val acceleration = (if (attract) -ATTRACT_ACCELERATION else REPEL_ACCELERATION) * delta
     for (index in enemies.indices) {
         val enemy = enemies[index]
@@ -828,15 +897,16 @@ private fun MutableGameState.onBeatAction() {
 }
 
 private fun MutableGameState.updateEclipse(ability: CharacterRuntime, delta: Float) {
+    val recharge = blinkRechargeSeconds()
     if (ability.blinkCharges < CharacterRuntime.MAX_BLINK_CHARGES) {
         ability.blinkRecharge += delta
-        if (ability.blinkRecharge >= BLINK_RECHARGE_SECONDS) {
-            ability.blinkRecharge -= BLINK_RECHARGE_SECONDS
+        if (ability.blinkRecharge >= recharge) {
+            ability.blinkRecharge -= recharge
             ability.blinkCharges++
         }
     }
     if (ability.blinkCharges >= CharacterRuntime.MAX_BLINK_CHARGES) ability.blinkRecharge = 0f
-    ability.charge = (ability.blinkCharges + ability.blinkRecharge / BLINK_RECHARGE_SECONDS) / CharacterRuntime.MAX_BLINK_CHARGES
+    ability.charge = (ability.blinkCharges + ability.blinkRecharge / recharge) / CharacterRuntime.MAX_BLINK_CHARGES
     var index = 0
     while (index < ability.scarCount) {
         val age = ability.scarValue(index, SCAR_AGE)
@@ -1079,6 +1149,8 @@ private fun characterHash(value: Long): Long {
 
 internal const val DASH_PHASE_SECONDS: Float = 0.24f
 private const val FLASH_DECAY: Float = 2.5f
+/** No Refit signature moves its constant below this share of the base ([refitSignature]). */
+private const val REFIT_SIGNATURE_FLOOR_SHARE: Float = 0.5f
 
 // Ability damage is calibrated by CharacterBalanceTest: averaged over its seeded 90 s fights (packs at
 // random bearings, content bolt damage, exact and jittered timing) every offensive character's ability

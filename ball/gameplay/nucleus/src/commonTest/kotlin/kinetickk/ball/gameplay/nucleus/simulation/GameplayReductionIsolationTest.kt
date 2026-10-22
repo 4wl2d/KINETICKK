@@ -185,6 +185,8 @@ class GameplayReductionIsolationTest {
             unlockedWeaponSet += WeaponId.MORNINGSTAR
             unlockedWeaponView = unlockedWeaponSet.toSet()
             matrixRanks[0] = 1
+            characterUpgradeLevels[0] = 4
+            weaponUpgradeLevels[weaponIndex] = 6
             discoveredItemIds += 17
             itemStacks[0] = 2
             rebornItems[0] = 1
@@ -258,6 +260,8 @@ class GameplayReductionIsolationTest {
         // These assertions prove the test actually traverses the optimized scalar-COW path.
         assertSame(source.gameplayRandom, pointerBranch.model.gameplayRandom)
         assertSame(source.matrixRanks, pointerBranch.model.matrixRanks)
+        assertSame(source.characterUpgradeLevels, pointerBranch.model.characterUpgradeLevels)
+        assertSame(source.weaponUpgradeLevels, pointerBranch.model.weaponUpgradeLevels)
         assertSame(source.enemies, pointerBranch.model.enemies)
         assertSame(source.projectiles, pointerBranch.model.projectiles)
         assertSame(source.enemies, siblingBranch.model.enemies)
@@ -273,6 +277,8 @@ class GameplayReductionIsolationTest {
 
         assertNotSame(pointerBranch.model.gameplayRandom, isolated.gameplayRandom)
         assertNotSame(pointerBranch.model.matrixRanks, isolated.matrixRanks)
+        assertNotSame(pointerBranch.model.characterUpgradeLevels, isolated.characterUpgradeLevels)
+        assertNotSame(pointerBranch.model.weaponUpgradeLevels, isolated.weaponUpgradeLevels)
         assertNotSame(pointerBranch.model.enemies, isolated.enemies)
         assertNotSame(pointerBranch.model.projectiles, isolated.projectiles)
         assertNotSame(pointerBranch.model.totem, isolated.totem)
@@ -283,6 +289,8 @@ class GameplayReductionIsolationTest {
         isolated.gameplayRandom.nextInt()
         isolated.unlockedWeaponSet.clear()
         isolated.matrixRanks[0] = 91
+        isolated.characterUpgradeLevels[0] = 9
+        isolated.weaponUpgradeLevels[weaponIndex] = 10
         isolated.discoveredItemIds.clear()
         isolated.itemStacks[0] = 92
         isolated.rebornItems[0] = 0
@@ -321,6 +329,8 @@ class GameplayReductionIsolationTest {
             assertTrue(WeaponId.FLUX_WAKE in retained.unlockedWeaponSet)
             assertTrue(WeaponId.MORNINGSTAR in retained.unlockedWeaponSet)
             assertEquals(1, retained.matrixRanks[0])
+            assertEquals(4, retained.characterUpgradeLevels[0])
+            assertEquals(6, retained.weaponUpgradeLevels[weaponIndex])
             assertTrue(17 in retained.discoveredItemIds)
             assertEquals(2, retained.itemStacks[0])
             assertEquals(1, retained.rebornItems[0])
@@ -1082,6 +1092,10 @@ class GameplayReductionIsolationTest {
             value("unlockedWeaponView", unlockedWeaponView.toList())
             ints("matrixRanks", matrixRanks)
             value("matrix", matrix)
+            ints("characterUpgradeLevels", characterUpgradeLevels)
+            ints("weaponUpgradeLevels", weaponUpgradeLevels)
+            value("characterUpgradeLevel", characterUpgradeLevel)
+            float("characterUpgradePower", characterUpgradePower)
             value("discoveredItemIds", discoveredItemIds.toList())
             value("pendingDiscoveredItemIds", pendingDiscoveredItemIds.toList())
             ints("itemStacks", itemStacks)

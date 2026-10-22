@@ -153,6 +153,8 @@ enum class GameplayConfigurationRejection {
     REBIRTH_LEVEL_OUT_OF_RANGE,
     NEGATIVE_MATTER,
     LIFETIME_MATTER_BELOW_CURRENT,
+    /** A Refit or Honing list has the wrong size, or a level lies outside `0..UpgradePolicy.maxLevel`. */
+    UPGRADE_LEVEL_OUT_OF_RANGE,
 }
 
 sealed interface GameplayRejection {

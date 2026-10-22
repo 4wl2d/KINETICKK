@@ -544,7 +544,7 @@ private fun MutableGameState.characterAbilityProjection(
         beatWindow = if (shape == CoreShape.PENTAGON) BEAT_WINDOW else 0f,
         beatStreak = if (shape == CoreShape.PENTAGON) runtime.beatStreak else 0,
         blinkCharges = if (shape == CoreShape.CRESCENT) runtime.blinkCharges else 0,
-        blinkRecharge = if (shape == CoreShape.CRESCENT) runtime.blinkRecharge / BLINK_RECHARGE_SECONDS else 0f,
+        blinkRecharge = if (shape == CoreShape.CRESCENT) runtime.blinkRecharge / blinkRechargeSeconds() else 0f,
         scars = if (shape == CoreShape.CRESCENT) {
             immutableListOfSize(runtime.scarCount) { index -> scarProjection(runtime, index) }
         } else {
@@ -573,7 +573,7 @@ private fun MutableGameState.characterAbilityProjection(
 
 private fun MutableGameState.facetProgress(runtime: CharacterRuntime): Float =
     if (coreShape == CoreShape.PRISM && runtime.facets < CharacterRuntime.MAX_FACETS) {
-        (runtime.facetTimer / FACET_REGEN_SECONDS).coerceIn(0f, 1f)
+        (runtime.facetTimer / facetRegenSeconds()).coerceIn(0f, 1f)
     } else {
         0f
     }
@@ -614,7 +614,7 @@ private fun CharacterAbilityProjection.matches(state: MutableGameState, runtime:
         !beatWindow.sameBitsAs(if (shape == CoreShape.PENTAGON) BEAT_WINDOW else 0f) ||
         beatStreak != (if (shape == CoreShape.PENTAGON) runtime.beatStreak else 0) ||
         blinkCharges != (if (shape == CoreShape.CRESCENT) runtime.blinkCharges else 0) ||
-        !blinkRecharge.sameBitsAs(if (shape == CoreShape.CRESCENT) runtime.blinkRecharge / BLINK_RECHARGE_SECONDS else 0f) ||
+        !blinkRecharge.sameBitsAs(if (shape == CoreShape.CRESCENT) runtime.blinkRecharge / state.blinkRechargeSeconds() else 0f) ||
         ghostActive != state.ghostActive
     ) {
         return false

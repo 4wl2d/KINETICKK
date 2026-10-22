@@ -31,7 +31,7 @@ class ContentBalanceCharacterizationTest {
         assertEquals(173, items.size)
         assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
         assertEquals(
-            "90e79f6e50b84973",
+            "f0cbb70507a2b2bb",
             goldenFingerprint {
                 add("item-effects")
                 ItemEffect.entries.forEach { effect ->
@@ -269,7 +269,7 @@ class ContentBalanceCharacterizationTest {
     fun skillApexAndUpgradeContentIsGolden() {
         assertEquals(18, ui.skills.size)
         assertEquals(
-            "c731894c89232154",
+            "bd23a73850801dcf",
             goldenFingerprint {
                 add("skills")
                 ui.skills.forEach { skill ->
@@ -322,6 +322,7 @@ class ContentBalanceCharacterizationTest {
                 ui.tempo.skillSlotLevels.forEach(::add)
                 add(ui.tempo.skillRankEveryLevels)
                 add(ui.tempo.skillRankGapLevels)
+                add(ui.tempo.rebirthScaleFromLevel)
                 ui.rebirth.profiles.forEach { add(it.dataRequirementScale) }
             },
         )
