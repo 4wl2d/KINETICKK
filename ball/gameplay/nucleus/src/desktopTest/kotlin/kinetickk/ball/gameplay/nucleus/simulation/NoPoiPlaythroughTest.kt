@@ -367,9 +367,10 @@ internal class NoPoiBot(
             SkillId.MASS_DRIVER, SkillId.DUAL_INFUSION -> enemiesWithin(s.coreX, s.coreY, 400f) >= 3
             SkillId.METEOR, SkillId.STORM_COIL, SkillId.GRAVITY_WELL, SkillId.DECAY_SPORES, SkillId.RESONATOR ->
                 enemiesWithin(anchorX, anchorY, values[0]) >= 2
+            // Eligible as the cast reads it: two elements react, one element takes the partner's stacks.
             SkillId.CATALYZE -> s.enemies.count { enemy ->
                 enemy.alive && length(enemy.x - anchorX, enemy.y - anchorY) <= values[0] + enemy.radius &&
-                    StatusElement.entries.count { enemy.stacksOf(it) > 0 } >= 2
+                    StatusElement.entries.any { enemy.stacksOf(it) > 0 }
             } >= 3
             SkillId.FROST_LINE -> {
                 val half = values[0] * 0.5f
@@ -478,16 +479,31 @@ internal class NoPoiBot(
 
     /**
      * Skill cards (combat-final §4.10): a rank-up card is always taken; a draft takes the character's card, else
-     * the aligned card (the first), else the lowest skill.
+     * the aligned card (the first), else the lowest skill. The Data policy goes first (economy §2.1): SEEK drafts
+     * Decay Spores (Spored deaths drop Data), else Gravity Well (it pulls Data in); AVOID never drafts Decay Spores
+     * while another card is offered.
      */
     private fun skillChoice(s: MutableGameState): Int? {
         val rankUp = s.choices.indexOfFirst { it.type == ChoiceType.SKILL && (it.skillRank ?: 1) > 1 }
         if (rankUp >= 0) return rankUp
         if (s.choiceType != ChoiceType.SKILL || s.choices.isEmpty()) return null
+        if (dataPolicy == DataPolicy.SEEK) {
+            val seek = s.choices.indices.maxBy { seekSkillWeight(s.choices[it].skillId) }
+            if (seekSkillWeight(s.choices[seek].skillId) > 0f) return seek
+        }
+        val allowed = s.choices.indices.filter { dataPolicy != DataPolicy.AVOID || s.choices[it].skillId != SkillId.DECAY_SPORES }
+            .ifEmpty { s.choices.indices.toList() }
         val lane = s.coreShape.synergySkills()
-        val character = s.choices.indexOfFirst { it.skillId in lane }
-        if (character >= 0) return character
-        return if (s.choices[0].skillId != null) 0 else s.choices.indices.minByOrNull { s.choices[it].skillId?.ordinal ?: Int.MAX_VALUE }
+        val character = allowed.firstOrNull { s.choices[it].skillId in lane }
+        if (character != null) return character
+        return if (allowed.first() == 0 && s.choices[0].skillId != null) 0 else allowed.minByOrNull { s.choices[it].skillId?.ordinal ?: Int.MAX_VALUE }
+    }
+
+    /** SEEK's draft weights (economy §2.1): Decay Spores 5 000, Gravity Well 4 000, any other skill 0. */
+    private fun seekSkillWeight(id: SkillId?): Float = when (id) {
+        SkillId.DECAY_SPORES -> 5_000f
+        SkillId.GRAVITY_WELL -> 4_000f
+        else -> 0f
     }
 
     /**
