@@ -42,6 +42,12 @@ internal fun MutableGameState.openItemChoice() {
     activeChoiceType = ChoiceType.ITEM
     itemOffersOpened++
     buildItemChoices()
+    // A level at the rank cadence owes this offer a rank-up card (in place of the experimental card).
+    if (pendingRankUpOffers > 0) {
+        pendingRankUpOffers--
+        val slot = rankUpCandidateSlot()
+        if (slot >= 0) placeRankUpCard(rankUpCard(slot))
+    }
     if (choices.isEmpty()) {
         grantMatter(8f)
         message = "CATALOG COMPLETE // MATTER SALVAGED"
@@ -314,6 +320,12 @@ internal fun MutableGameState.openNextPendingChoice() {
         openHeirloomChoice()
         if (phase != GamePhase.RUNNING) return
     }
+    // A skill slot opened: its draft comes before the level's item offer.
+    while (pendingSkillDrafts > 0 && phase == GamePhase.RUNNING) {
+        pendingSkillDrafts--
+        openSkillDraft()
+    }
+    if (phase != GamePhase.RUNNING) return
     when {
         pendingLevelChoices > 0 -> {
             pendingLevelChoices--

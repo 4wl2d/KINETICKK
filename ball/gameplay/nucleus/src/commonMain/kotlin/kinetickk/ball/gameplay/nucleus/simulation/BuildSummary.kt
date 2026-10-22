@@ -69,13 +69,19 @@ internal fun MutableGameState.buildSummary(
     suppressedItemIds = ownedSuppressedItems(),
     rebornItemIds = content.items.filter { rebornItems[it.id] != 0 }.map { it.id }.toImmutableList(),
     severedRelicIds = severedRelics.map { it.id }.toImmutableList(),
+    dormantItemIds = content.items.filter { itemStacks[it.id] > 0 && itemDormantShare(it) >= 1f }.map { it.id }.toImmutableList(),
 )
 
 private fun MutableGameState.ownedSuppressedItems(): ImmutableList<Int> =
     content.items.filter { itemStacks[it.id] > 0 && itemSuppressedShare(it) >= 1f }.map { it.id }.toImmutableList()
 
+/**
+ * True when [item] could still do something if taken now: not maxed, not wholly suppressed by Relics or dormant
+ * for this run, not a second card adder, and a keystone only once its reaction is reachable.
+ */
 internal fun MutableGameState.hasUsefulItemEffect(item: ItemDefinition): Boolean =
-    itemStacks[item.id] < item.maxStacks && itemSuppressedShare(item) < 1f && !offerCardsAlreadyAdded(item)
+    itemStacks[item.id] < item.maxStacks && itemSuppressedShare(item) < 1f && itemDormantShare(item) < 1f &&
+        !offerCardsAlreadyAdded(item) && (item.keystone?.let(build::reactionReachable) ?: true)
 
 /** The presentation projection of the compiled build and the relic gauges. */
 internal fun MutableGameState.buildProjection(): BuildProjection = BuildProjection(

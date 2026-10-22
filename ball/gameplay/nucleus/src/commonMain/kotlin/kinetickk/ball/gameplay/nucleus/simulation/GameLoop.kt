@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.EffectTrigger
+import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 
@@ -15,6 +16,7 @@ import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kotlin.math.abs
 import kotlin.math.atan2
+import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
@@ -101,6 +103,8 @@ internal fun MutableGameState.simulateStep(delta: Float) {
     elapsed += delta
     // One cue budget covers every Break and reaction source in the step.
     statusCuesThisStep = 0
+    shotErasedDispatches = 0
+    markDispatches = 0
     if (runGrace.toRawBits() != 0) runGrace = max(0f, runGrace - delta)
     if (hurtCooldown.toRawBits() != 0) hurtCooldown = max(0f, hurtCooldown - delta)
     if (dashPhaseTime.toRawBits() != 0) {
@@ -124,6 +128,8 @@ internal fun MutableGameState.simulateStep(delta: Float) {
     updateSurvival(delta)
     updateOverdrive(delta)
     updateHeat(delta)
+    updateSkills(delta)
+    if (phase != GamePhase.RUNNING) return
     updateCore(delta)
     if (phase != GamePhase.RUNNING) return
     // Obstacles bend the Core's path before anything meets it at its new position.
@@ -151,6 +157,7 @@ internal fun MutableGameState.simulateStep(delta: Float) {
     updateBossEncounter()
     updateStatuses(delta)
     updateCombatFields(delta)
+    updateCoreReactionStates()
     updateRelicRuntime(delta)
     if (phase != GamePhase.RUNNING) return
     updateProjectiles(delta)
@@ -251,7 +258,8 @@ internal fun MutableGameState.updateHeat(delta: Float) {
 /** Furnace Covenant keeps Dash available through overheat; otherwise the usual heat rule applies. */
 internal fun MutableGameState.buildDashReady(): Boolean =
     characterDashReady() ?: if (build.upside(RelicId.FURNACE_COVENANT)) true
-    else !overheated && (heat <= MutableGameState.MAX_HEAT - effectiveDashHeatCost() * 0.5f || matrixFreeDashReady())
+    else !overheated && (heat <= MutableGameState.MAX_HEAT - effectiveDashHeatCost() * 0.5f || matrixFreeDashReady() ||
+        apexFreeDashReady())
 
 internal fun MutableGameState.performDash() {
     beginCharacterDash()
@@ -261,22 +269,59 @@ internal fun MutableGameState.performDash() {
     val dx = targetX - coreX
     val dy = targetY - coreY
     val distance = length(dx, dy)
-    val directionX = if (distance > 24f) dx / distance else lastAimDirectionX
-    val directionY = if (distance > 24f) dy / distance else lastAimDirectionY
+    var directionX = if (distance > 24f) dx / distance else lastAimDirectionX
+    var directionY = if (distance > 24f) dy / distance else lastAimDirectionY
     val onBeat = onCharacterDashDeparture()
     var cost = effectiveDashHeatCost() * if (onBeat) BEAT_DASH_HEAT else 1f
     val crescent = coreShape == kinetickk.ball.content.api.CoreShape.CRESCENT
     // The Crescent's Blink spends a charge instead of heat.
     if (crescent) cost = 0f
+    // Blast Jump: a Dash on Thunderclap's beat rides the blast for free.
+    val blastJump = blastJumpUntil > elapsed && hasVerb(ReactionId.THUNDERCLAP)
+    if (blastJump) {
+        blastJumpUntil = 0f
+        cost = 0f
+    }
+    // Frost Snap: a coiled Dash costs no heat and pushes harder (the Crescent's Blink reaches farther).
+    val coiled = consumeCoiledDash()
+    if (coiled > 1f) cost = 0f
+    // Void Anchor: a Dash aimed at the anchor first blinks the Core to it and then drives into it.
+    val anchor = voidAnchorAimedAt(directionX, directionY)
+    if (anchor != null) {
+        voidAnchorId = -1
+        voidAnchorUntil = 0f
+        val anchorDistance = max(1f, length(anchor.x - coreX, anchor.y - coreY))
+        directionX = (anchor.x - coreX) / anchorDistance
+        directionY = (anchor.y - coreY) / anchorDistance
+        if (keystoneOn(ReactionId.ANNIHILATE)) {
+            // Event Strike: the strike crits and costs no heat.
+            anchor.status[StatusCell.MARKED_UNTIL] = max(anchor.status[StatusCell.MARKED_UNTIL], elapsed + EVENT_STRIKE_CRIT_SECONDS)
+            cost = 0f
+        }
+        if (!crescent) voidBlink(anchor, directionX, directionY, anchorDistance, targetX, targetY)
+        onMarkCashed(anchor, ReactionId.ANNIHILATE, null)
+    }
+    // Prime Dash: an item made this Dash free.
+    if (cost > 0f && primedDashUntil > elapsed) {
+        primedDashUntil = 0f
+        cost = 0f
+    }
     if (cost > 0f && freeDashPrimed) {
         freeDashPrimed = false
         freeDashReadyAt = elapsed + build.freeDashCooldown
         cost = 0f
     }
     if (cost > 0f && spendMatrixFreeDash()) cost = 0f
+    // Vivisect: a Dash far enough after the last free one costs no heat.
+    if (cost > 0f && spendApexFreeDash()) cost = 0f
     if (crescent) {
         relicOnDashDeparture()
-        crescentBlink(directionX, directionY)
+        when {
+            anchor != null -> crescentBlink(directionX, directionY,
+                rangeOverride = reactionValue(ReactionId.ANNIHILATE, VOID_ANCHOR_REACH_VALUE))
+            blastJump -> crescentBlink(directionX, directionY, rangeScale = BLAST_JUMP_BLINK_RANGE * coiled)
+            else -> crescentBlink(directionX, directionY, rangeScale = coiled)
+        }
     } else if (!relicOnDash(directionX, directionY)) {
         val forwardVelocity = velocityX * directionX + velocityY * directionY
         if (forwardVelocity < 0f) {
@@ -284,12 +329,15 @@ internal fun MutableGameState.performDash() {
             velocityX -= directionX * reverseAssist
             velocityY -= directionY * reverseAssist
         }
-        val impulse = effectiveDashImpulse() * characterDashImpulseMultiplier(onBeat)
+        var impulse = effectiveDashImpulse() * characterDashImpulseMultiplier(onBeat)
+        if (blastJump) impulse *= reactionValue(ReactionId.THUNDERCLAP, BLAST_JUMP_IMPULSE_VALUE)
+        impulse *= coiled
         velocityX += directionX * impulse
         velocityY += directionY * impulse
     }
     val before = heat
     heat += cost
+    bankDashHeat(cost)
     if (heat > MutableGameState.MAX_HEAT && build.upside(RelicId.FURNACE_COVENANT)) {
         // Heat past full burns integrity instead of locking the Dash.
         loseIntegrity((heat - MutableGameState.MAX_HEAT) * 0.5f)
@@ -326,6 +374,62 @@ internal fun MutableGameState.applyOverheatEdge(before: Float) {
     }
 }
 
+/**
+ * Pushes the Core along ([dirX], [dirY]) (a unit vector) at [speed], at most [MAX_CORE_IMPULSE_SPEED]. A
+ * [gated] push (a reaction's or an item's) waits for [CORE_IMPULSE_GATE_SECONDS] after the previous gated
+ * one; player-timed pushes are never gated. True when the push applied.
+ */
+internal fun MutableGameState.applyCoreImpulse(dirX: Float, dirY: Float, speed: Float, gated: Boolean): Boolean {
+    if (!(speed > 0f)) return false
+    if (gated) {
+        if (coreImpulseReadyAt > elapsed) return false
+        coreImpulseReadyAt = elapsed + CORE_IMPULSE_GATE_SECONDS
+    }
+    val applied = min(speed, MAX_CORE_IMPULSE_SPEED)
+    velocityX += dirX * applied
+    velocityY += dirY * applied
+    return true
+}
+
+/**
+ * The live Void Anchor when the Dash along ([directionX], [directionY]) aims within the anchor's cone and it is
+ * within reach; otherwise null.
+ */
+private fun MutableGameState.voidAnchorAimedAt(directionX: Float, directionY: Float): Enemy? {
+    if (!hasVerb(ReactionId.ANNIHILATE)) return null
+    val anchor = voidAnchor() ?: return null
+    val dx = anchor.x - coreX
+    val dy = anchor.y - coreY
+    val distance = length(dx, dy)
+    if (distance < 1f || distance > reactionValue(ReactionId.ANNIHILATE, VOID_ANCHOR_REACH_VALUE)) return null
+    val cone = cos(reactionValue(ReactionId.ANNIHILATE, VOID_ANCHOR_CONE_VALUE) * RADIANS_PER_DEGREE)
+    return if ((directionX * dx + directionY * dy) / distance >= cone) anchor else null
+}
+
+/**
+ * Blinks the Core along ([directionX], [directionY]) to just short of [anchor] at [distance], never closer than
+ * the singularity gap to the pointer at ([targetX], [targetY]) and never into or past an obstacle.
+ */
+private fun MutableGameState.voidBlink(anchor: Enemy, directionX: Float, directionY: Float, distance: Float, targetX: Float, targetY: Float) {
+    var range = max(0f, distance - anchor.radius - coreRadius - VOID_BLINK_CLEARANCE)
+    val ahead = (targetX - coreX) * directionX + (targetY - coreY) * directionY
+    if (ahead > 0f) range = min(range, max(0f, length(targetX - coreX, targetY - coreY) - VOID_BLINK_SINGULARITY_GAP))
+    range = blinkRangeClearOfObstacles(directionX, directionY, range)
+    if (range <= 0f) return
+    val startX = coreX
+    val startY = coreY
+    coreX += directionX * range
+    coreY += directionY * range
+    previousCoreX = coreX
+    previousCoreY = coreY
+    previousSingularityX = targetX
+    previousSingularityY = targetY
+    markBlink(startX, startY, coreX, coreY)
+}
+
+internal const val MAX_CORE_IMPULSE_SPEED: Float = 700f
+internal const val CORE_IMPULSE_GATE_SECONDS: Float = 0.5f
+
 /** Brake release and other movement edges, derived inside the fixed step (inputs only set flags). */
 internal fun MutableGameState.updateBuildEdges(delta: Float) {
     if (braking) {
@@ -338,7 +442,7 @@ internal fun MutableGameState.updateBuildEdges(delta: Float) {
     wasBraking = braking
 }
 
-private fun MutableGameState.onBrakeRelease() {
+internal fun MutableGameState.onBrakeRelease() {
     fireClauses(EffectTrigger.BRAKE_RELEASE)
     if (tagTier(BuildTag.ANCHOR) >= 2) {
         pushEnemies(coreX, coreY, 200f, 320f, inward = false)
@@ -351,6 +455,8 @@ private fun MutableGameState.onBrakeRelease() {
         }
     }
     relicOnBrakeRelease()
+    // Breakpoint: the release detonates the Cracked enemies close by.
+    detonateCracked()
 }
 
 internal fun MutableGameState.updateCore(delta: Float) {
@@ -381,7 +487,11 @@ internal fun MutableGameState.updateCore(delta: Float) {
     velocityY += (directionY * pull - forwardY * suppressedPull) * brakeFactor * delta
     val perpetual = build.upside(RelicId.PERPETUAL_VECTOR)
     val brakeDamping = if (build.liability(RelicId.PERPETUAL_VECTOR)) -2.6f else -5.2f
-    val drag = if (perpetual) dragCoefficient * 0.15f else dragCoefficient
+    var drag = if (perpetual) dragCoefficient * 0.15f else dragCoefficient
+    // Frictionless: Superconduct strips most of the drag (the Brake still damps as before).
+    if (frictionlessUntil > elapsed && hasVerb(ReactionId.SUPERCONDUCT)) {
+        drag *= reactionValue(ReactionId.SUPERCONDUCT, FRICTIONLESS_DRAG_VALUE)
+    }
     val damping = exp((if (braking) brakeDamping else -drag) * delta)
     velocityX *= damping
     velocityY *= damping
@@ -465,9 +575,7 @@ internal fun MutableGameState.updatePolarityStability(delta: Float) {
                         val restore = if (build.liability(RelicId.GYRE_ENGINE)) 0.3f else tuning.turnRecovery
                         polarityStability = min(1f, polarityStability + restore)
                     }
-                    fireClauses(EffectTrigger.TURN)
-                    relicOnTurn()
-                    onCharacterTurn()
+                    fireTurnEdge()
                     turnRecoveryCooldown = tuning.turnCooldownSeconds
                     saturationHeadingX = headingX
                     saturationHeadingY = headingY
@@ -484,6 +592,14 @@ internal fun MutableGameState.updatePolarityStability(delta: Float) {
         messageTime = 1.4f
         emitSound(GameplayAudioCue.OVERHEAT)
     }
+}
+
+/** A sharp turn's build edge: TURN clauses, Relic and character turn rules and the reactions' turn verbs. */
+internal fun MutableGameState.fireTurnEdge() {
+    fireClauses(EffectTrigger.TURN)
+    relicOnTurn()
+    onCharacterTurn()
+    onTurnForReactions()
 }
 
 /** Thrust toward the singularity that does not depend on its distance. */

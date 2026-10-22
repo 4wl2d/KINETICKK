@@ -291,6 +291,7 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "THE ARCHITECT ENRAGES" to "АРХИТЕКТОР В ЯРОСТИ",
     "KINETIC OVERDRIVE" to "КИНЕТИЧЕСКАЯ ПЕРЕГРУЗКА",
     "DASH ONLINE" to "РЫВОК ГОТОВ",
+    "APEX ONLINE" to "АПЕКС В СЕТИ",
     "OVERHEAT" to "ПЕРЕГРЕВ",
     "SINGULARITY CONTACT" to "КОНТАКТ С СИНГУЛЯРНОСТЬЮ",
     "POLARITY FIELD STRAIN" to "ПОЛЕ ПОЛЯРНОСТИ ПЕРЕНАПРЯЖЕНО",

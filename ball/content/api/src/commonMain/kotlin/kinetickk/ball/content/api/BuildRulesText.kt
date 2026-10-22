@@ -78,6 +78,12 @@ enum class BuildRulesText(override val english: String, override val russian: St
     OnPickup("On data pickup", "При сборе данных"),
     OnRicochet("On ricochet", "При рикошете"),
     OnSlam("On slam", "При впечатывании врага"),
+    OnSkillCast("On skill cast", "При применении навыка"),
+    OnSkillHit("On skill hit", "При попадании навыком"),
+    OnApex("On Apex", "При Апексе"),
+    OnFieldEnter("On entering a field", "При входе в поле"),
+    OnShotErased("On erasing a shot", "При стирании снаряда"),
+    OnMarkConsumed("On cashing a mark", "При срабатывании метки"),
 
     EveryImpact("Every {0} impact", "Каждое {0}-е столкновение"),
     EveryWeaponHit("Every {0} weapon hit", "Каждое {0}-е попадание оружия"),
@@ -97,6 +103,12 @@ enum class BuildRulesText(override val english: String, override val russian: St
     EveryPickup("Every {0} data pickup", "Каждый {0}-й сбор данных"),
     EveryRicochet("Every {0} ricochet", "Каждый {0}-й рикошет"),
     EverySlam("Every {0} slam", "Каждое {0}-е впечатывание врага"),
+    EverySkillCast("Every {0} skill cast", "Каждое {0}-е применение навыка"),
+    EverySkillHit("Every {0} skill hit", "Каждое {0}-е попадание навыком"),
+    EveryApex("Every {0} Apex", "Каждый {0}-й Апекс"),
+    EveryFieldEnter("Every {0} field entry", "Каждый {0}-й вход в поле"),
+    EveryShotErased("Every {0} erased shot", "Каждый {0}-й стёртый снаряд"),
+    EveryMarkConsumed("Every {0} cashed mark", "Каждая {0}-я сработавшая метка"),
 
     OnElementBreak("On {0} break", "При пробое {0}"),
     EveryElementBreak("Every {0} {1} break", "Каждый {0}-й пробой {1}"),
@@ -139,6 +151,22 @@ enum class BuildRulesText(override val english: String, override val russian: St
     ConditionSourceImpact("by impact", "столкновением"),
     ConditionSourceWeapon("by the weapon", "оружием"),
     ConditionInvolving("involving {0}", "с участием {0}"),
+    ConditionItIs("if it is {0}", "если это {0}"),
+    ConditionSkillTagged("if the skill is {0}", "если навык — {0}"),
+    ConditionCoreInField("while inside a field", "пока вы внутри поля"),
+    ConditionTargetMarked("against a marked enemy", "по помеченному врагу"),
+    ConditionImpactMarked("with a marked enemy", "с помеченным врагом"),
+    ConditionKillMarked("of a marked enemy", "помеченного врага"),
+    ConditionTargetControlled("against a held enemy", "по скованному врагу"),
+    ConditionImpactControlled("with a held enemy", "со скованным врагом"),
+    ConditionKillControlled("of a held enemy", "скованного врага"),
+    ConditionTargetThrown("against a thrown enemy", "по отброшенному врагу"),
+    ConditionImpactThrown("with a thrown enemy", "с отброшенным врагом"),
+    ConditionKillThrown("of a thrown enemy", "отброшенного врага"),
+    ConditionApexActive("during Apex", "во время Апекса"),
+    ConditionSkillCharging("while a skill recharges", "пока перезаряжается навык"),
+    ConditionSkillsCharging("while {0} skills recharge", "пока перезаряжаются навыки: {0}"),
+    ConditionWeaponFamily("with {0} weapons", "с оружием типа «{0}»"),
 
     PickDominant("your dominant element", "вашей основной стихии"),
     PickSecondary("your second element", "вашей второй стихии"),
@@ -192,6 +220,40 @@ enum class BuildRulesText(override val english: String, override val russian: St
         "open a well for {0} that pulls enemies in, deals {1} and applies {2} each second",
         "открывает колодец на {0}: каждую секунду он притягивает врагов, наносит {1} и накладывает {2}",
     ),
+    ActionRefundSkills("recharge {1} by {0}", "ускоряет перезарядку {1} на {0}"),
+    ActionChargeApex(
+        "recharge the Apex by {0} (skills by a quarter before the maximum level)",
+        "ускоряет Апекс на {0} (до максимального уровня — навыки на четверть)",
+    ),
+    ActionForceReactionOne("set off a reaction on the target", "вызывает реакцию у цели"),
+    ActionForceReaction("set off reactions on up to {0} enemies", "вызывает реакции у {0} врагов"),
+    ActionZone("open {0} for {1}", "открывает {0} на {1}"),
+    ActionEraseShot("erase a hostile shot within {0}", "стирает вражеский снаряд в радиусе {0}"),
+    ActionEraseShots("erase up to {0} hostile shots within {1}", "стирает до {0} вражеских снарядов в радиусе {1}"),
+    ActionCoreImpulse("launch you {1} at {0}", "бросает вас {1} со скоростью {0}"),
+    ActionApplyMark("mark the target: {0} for {1}", "помечает цель: {0} на {1}"),
+    ActionThrow("throw the target", "отшвыривает цель"),
+    ActionPrimeDash("make your next dash free", "делает следующий рывок бесплатным"),
+
+    PickAllSkills("all skills", "всех навыков"),
+    PickThisSkill("this skill", "этого навыка"),
+    PickSlowestSkill("the slowest skill", "самого долгого навыка"),
+    ZonePlasma("a plasma pool", "плазменную лужу"),
+    ZoneHush("a hush", "зону тишины"),
+    ZoneTimeBubble("a time bubble", "пузырь времени"),
+    ZoneAttractor("an attractor", "аттрактор"),
+    ZoneMaw("a maw", "пасть"),
+    ImpulsePointer("toward the pointer", "к указателю"),
+    ImpulseAway("away from the target", "прочь от цели"),
+    ImpulseForward("forward", "вперёд"),
+    MarkSpall("Spall", "Откол"),
+    MarkCracked("Cracked", "Надлом"),
+    MarkSpored("Spored", "Споры"),
+    MarkEmbrittled("Embrittled", "Охрупчивание"),
+    AspectRadius("radius", "к радиусу"),
+    AspectDuration("duration", "к длительности"),
+    AspectForce("force", "к силе"),
+    AllReactions("Reactions", "Реакции"),
 
     RuleConditional("{0} {1}", "{0} {1}"),
     RulePotency("{0} {1} potency", "{0} к силе {1}"),
@@ -236,6 +298,31 @@ enum class BuildRulesText(override val english: String, override val russian: St
         "Each 1\u00A0% of critical chance above the cap becomes {0} critical damage",
         "Каждый 1\u00A0% шанса критического удара сверх предела превращается в {0} критического урона",
     ),
+    RuleKeystone("Keystone — {0} becomes {1}", "Ключ — {0} становится «{1}»"),
+    RuleReactionTuning("{0}: {1} {2}", "{0}: {1} {2}"),
+    RuleFieldRadius("Your fields reach {0} farther", "Ваши поля шире на {0}"),
+    RuleFieldDuration("Your fields last {0} longer", "Ваши поля держатся на {0} дольше"),
+    RuleSkillCooldown("{0} skills recharge {1} faster", "Навыки ({0}) перезаряжаются на {1} быстрее"),
+    RuleSkillCooldownAll("Skills recharge {0} faster", "Навыки перезаряжаются на {0} быстрее"),
+    RuleSkillPower("{0} skills deal {1} damage", "Навыки ({0}) наносят {1} урона"),
+    RuleSkillPowerAll("Skills deal {0} damage", "Навыки наносят {0} урона"),
+    RuleSkillCharges("Skills hold a second charge (one such item per run)", "Навыки получают второй заряд (один такой предмет за забег)"),
+    RuleSkillAttunement("Your skills become {0}", "Ваши навыки обретают стихию: {0}"),
+    RuleSkillAttunementDominant("Your skills take your dominant element", "Ваши навыки обретают вашу основную стихию"),
+    RuleSkillAttunementSecondary("Your skills take your second element", "Ваши навыки обретают вашу вторую стихию"),
+    RuleCatalysisRate("Reactions recharge skills {0} more", "Реакции ускоряют навыки на {0} сильнее"),
+    RuleApexCooldown("The Apex recharges {0} faster", "Апекс перезаряжается на {0} быстрее"),
+    RuleCoreLinkRadius("Reactions empower the Core from {0} farther", "Реакции усиливают Ядро на {0} дальше"),
+    RuleDashHeatToSkills("Every 10 dash heat recharges skills by {0}", "Каждые 10 жара рывков ускоряют навыки на {0}"),
+    RuleCoolSlower("You cool {0} slower", "Вы остываете на {0} медленнее"),
+    RuleDataToSkills("Each Data pickup recharges skills by {0}", "Каждые подобранные Данные ускоряют навыки на {0}"),
+    RuleDataToSkillsCost("Data pickups give {0} less", "Данные дают на {0} меньше"),
+    RuleSkillsCostHeat("Each skill cast costs {0} heat", "Каждое применение навыка стоит {0} жара"),
+    RuleSkillFieldsFollow(
+        "Your skill fields travel with you at {0} of their radius",
+        "Поля навыков следуют за вами, сохраняя {0} радиуса",
+    ),
+    RuleKnockbackToDamage("Enemies you cannot move take the throw as damage", "Враги, которых нельзя сдвинуть, получают урон от броска"),
 
     StatImpactDamage("{0} impact damage", "{0} к урону от столкновений"),
     StatWeaponPower("{0} weapon power", "{0} к мощности оружия"),
@@ -266,6 +353,8 @@ enum class BuildRulesText(override val english: String, override val russian: St
     BuffDamageReduction("{0} damage reduction", "{0} к снижению урона"),
     BuffCooling("{0} cooling", "{0} к охлаждению"),
     BuffDamageTaken("{0} damage taken", "{0} к получаемому урону"),
+    BuffSkillRecharge("{0} skill recharge", "{0} к скорости перезарядки навыков"),
+    BuffSkillPower("{0} skill power", "{0} к силе навыков"),
 
     UnitPercent("{0}\u00A0%", "{0}\u00A0%"),
     UnitSpeed("{0}\u00A0u/s", "{0}\u00A0ед/с"),
@@ -311,6 +400,15 @@ private const val RELIC_DECIMALS = 2
 
 /** Critical chance kept by [ConversionKind.CRIT_CHANCE_TO_DAMAGE]. */
 private const val CRIT_CHANCE_CONVERSION_CAP = 0.3
+
+/** Cooling kept by [ConversionKind.DASH_HEAT_TO_SKILLS]. */
+const val DASH_HEAT_CONVERSION_COOLING: Float = 0.8f
+
+/** Data gain kept by [ConversionKind.DATA_TO_SKILLS]. */
+const val DATA_CONVERSION_GAIN: Float = 0.8f
+
+/** Skill cooldown scale of [ConversionKind.SKILLS_COST_HEAT]. */
+const val SKILL_HEAT_CONVERSION_COOLDOWN: Float = 0.6f
 
 private enum class CountForm { ONE, FEW, MANY }
 
@@ -496,6 +594,70 @@ private class RuleWriter(private val language: AppLanguage, private val context:
         )
         is ItemRule.OfferCards -> listOf(RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleOfferCards)))
         is ItemRule.Convert -> conversion(rule)
+        is ItemRule.ReactionKeystone -> listOf(
+            RuleLine(
+                RuleLineKind.RULE,
+                text(BuildRulesText.RuleKeystone, reactionName(rule.reaction), localized(DefaultReactions.reaction(rule.reaction).keystone)),
+                rule.reaction.first,
+            ),
+        )
+        is ItemRule.ReactionTuning -> listOf(
+            RuleLine(
+                RuleLineKind.RULE,
+                text(
+                    BuildRulesText.RuleReactionTuning,
+                    rule.reaction?.let(::reactionName) ?: text(BuildRulesText.AllReactions),
+                    signedPercent(rule.amount * gain),
+                    text(rule.aspect.phrase),
+                ),
+                rule.reaction?.first,
+            ),
+        )
+        is ItemRule.FieldTuning -> listOf(
+            RuleLine(
+                RuleLineKind.RULE,
+                text(
+                    if (rule.aspect == FieldAspect.RADIUS) BuildRulesText.RuleFieldRadius else BuildRulesText.RuleFieldDuration,
+                    percent(rule.amount * gain),
+                ),
+            ),
+        )
+        is ItemRule.SkillCooldown -> listOf(
+            RuleLine(
+                RuleLineKind.RULE,
+                rule.element?.let { text(BuildRulesText.RuleSkillCooldown, elementName(it), percent(rule.amount * gain)) }
+                    ?: text(BuildRulesText.RuleSkillCooldownAll, percent(rule.amount * gain)),
+                rule.element,
+            ),
+        )
+        is ItemRule.SkillPower -> listOf(
+            RuleLine(
+                RuleLineKind.RULE,
+                rule.element?.let { text(BuildRulesText.RuleSkillPower, elementName(it), signedPercent(rule.amount * gain)) }
+                    ?: text(BuildRulesText.RuleSkillPowerAll, signedPercent(rule.amount * gain)),
+                rule.element,
+            ),
+        )
+        ItemRule.SkillCharges -> listOf(RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleSkillCharges)))
+        is ItemRule.SkillAttunement -> {
+            val resolved = resolve(rule.pick)
+            listOf(
+                RuleLine(
+                    RuleLineKind.RULE,
+                    when {
+                        resolved != null -> text(BuildRulesText.RuleSkillAttunement, elementName(resolved))
+                        rule.pick == ElementPick.SECONDARY -> text(BuildRulesText.RuleSkillAttunementSecondary)
+                        else -> text(BuildRulesText.RuleSkillAttunementDominant)
+                    },
+                    resolved,
+                ),
+            )
+        }
+        is ItemRule.CatalysisRate -> listOf(RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleCatalysisRate, percent(rule.amount * gain))))
+        is ItemRule.ApexCooldown -> listOf(RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleApexCooldown, percent(rule.amount * gain))))
+        is ItemRule.CoreLinkRadius -> listOf(
+            RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleCoreLinkRadius, language.number(rule.bonus * gain, 0))),
+        )
     }
 
     private fun conversion(rule: ItemRule.Convert): List<RuleLine> = when (rule.kind) {
@@ -517,6 +679,26 @@ private class RuleWriter(private val language: AppLanguage, private val context:
                 text(BuildRulesText.RuleCritChanceToDamage, text(BuildRulesText.UnitPercent, language.number(rule.amount * gain, PERCENT_DECIMALS))),
             ),
         )
+        ConversionKind.DASH_HEAT_TO_SKILLS -> listOf(
+            RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleDashHeatToSkills, seconds(rule.amount.toDouble()))),
+            RuleLine(RuleLineKind.COST, text(BuildRulesText.RuleCoolSlower, percent(1.0 - DASH_HEAT_CONVERSION_COOLING)), negative = true),
+        )
+        ConversionKind.DATA_TO_SKILLS -> listOf(
+            RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleDataToSkills, seconds(rule.amount.toDouble()))),
+            RuleLine(RuleLineKind.COST, text(BuildRulesText.RuleDataToSkillsCost, percent(1.0 - DATA_CONVERSION_GAIN)), negative = true),
+        )
+        ConversionKind.SKILLS_COST_HEAT -> listOf(
+            RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleSkillCooldownAll, percent(1.0 - SKILL_HEAT_CONVERSION_COOLDOWN))),
+            RuleLine(
+                RuleLineKind.COST,
+                text(BuildRulesText.RuleSkillsCostHeat, language.number(rule.amount.toDouble(), FLAT_DECIMALS)),
+                negative = true,
+            ),
+        )
+        ConversionKind.SKILL_FIELDS_FOLLOW -> listOf(
+            RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleSkillFieldsFollow, percent(rule.amount.toDouble()))),
+        )
+        ConversionKind.KNOCKBACK_TO_DAMAGE -> listOf(RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleKnockbackToDamage)))
     }
 
     private fun action(action: EffectAction): String = when (action) {
@@ -592,6 +774,19 @@ private class RuleWriter(private val language: AppLanguage, private val context:
                 text(BuildRulesText.ActionWellApplying, seconds(action.seconds.toDouble()), amount(action.basis, action.scale), pickStacks(1, pick))
             }
         }
+        is EffectAction.RefundSkills -> text(BuildRulesText.ActionRefundSkills, seconds(action.seconds * magnitude), text(action.pick.phrase))
+        is EffectAction.ChargeApex -> text(BuildRulesText.ActionChargeApex, seconds(action.seconds * magnitude))
+        is EffectAction.ForceReaction ->
+            if (action.maxTargets == 1) text(BuildRulesText.ActionForceReactionOne)
+            else text(BuildRulesText.ActionForceReaction, action.maxTargets)
+        is EffectAction.Zone -> text(BuildRulesText.ActionZone, text(action.kind.phrase), seconds(action.seconds.toDouble()))
+        is EffectAction.EraseShots ->
+            if (action.maximum == 1) text(BuildRulesText.ActionEraseShot, language.number(action.radius.toDouble(), 0))
+            else text(BuildRulesText.ActionEraseShots, action.maximum, language.number(action.radius.toDouble(), 0))
+        is EffectAction.CoreImpulse -> text(BuildRulesText.ActionCoreImpulse, speed(action.speed), text(action.direction.phrase))
+        is EffectAction.ApplyMark -> text(BuildRulesText.ActionApplyMark, text(action.mark.phrase), seconds(action.seconds.toDouble()))
+        is EffectAction.Throw -> text(BuildRulesText.ActionThrow)
+        EffectAction.PrimeDash -> text(BuildRulesText.ActionPrimeDash)
     }
 
     private fun condition(condition: EffectCondition, case: TargetCase = TargetCase.HIT): String = when (condition) {
@@ -653,6 +848,24 @@ private class RuleWriter(private val language: AppLanguage, private val context:
         EffectCondition.SourceImpact -> text(BuildRulesText.ConditionSourceImpact)
         EffectCondition.SourceWeapon -> text(BuildRulesText.ConditionSourceWeapon)
         is EffectCondition.ElementIs -> text(BuildRulesText.ConditionInvolving, element(condition.element))
+        is EffectCondition.ReactionIs -> text(BuildRulesText.ConditionItIs, reactionName(condition.reaction))
+        is EffectCondition.SkillIs -> text(BuildRulesText.ConditionItIs, localized(DefaultSkillNames[condition.skill.ordinal]))
+        is EffectCondition.SkillTagged -> text(BuildRulesText.ConditionSkillTagged, localized(condition.tag.displayLabel))
+        EffectCondition.CoreInField -> text(BuildRulesText.ConditionCoreInField)
+        EffectCondition.TargetMarked -> text(
+            case.pick(BuildRulesText.ConditionTargetMarked, BuildRulesText.ConditionImpactMarked, BuildRulesText.ConditionKillMarked),
+        )
+        EffectCondition.TargetControlled -> text(
+            case.pick(BuildRulesText.ConditionTargetControlled, BuildRulesText.ConditionImpactControlled, BuildRulesText.ConditionKillControlled),
+        )
+        EffectCondition.TargetThrown -> text(
+            case.pick(BuildRulesText.ConditionTargetThrown, BuildRulesText.ConditionImpactThrown, BuildRulesText.ConditionKillThrown),
+        )
+        EffectCondition.ApexActive -> text(BuildRulesText.ConditionApexActive)
+        is EffectCondition.SkillsCharging ->
+            if (condition.count == 1) text(BuildRulesText.ConditionSkillCharging)
+            else text(BuildRulesText.ConditionSkillsCharging, condition.count)
+        is EffectCondition.WeaponFamilyIs -> text(BuildRulesText.ConditionWeaponFamily, localized(condition.family.displayLabel))
     }
 
     /** %-of-maximum-integrity terms ignore stack multipliers and the bonus; every other basis scales with them. */
@@ -740,6 +953,14 @@ private class RuleWriter(private val language: AppLanguage, private val context:
             StatusElement.VOID -> "Развоплощения"
         }
     }
+
+    /** A reaction's name in this language. */
+    private fun reactionName(reaction: ReactionId): String = localized(DefaultReactions.reaction(reaction).name)
+
+    /** An element's own name (nominative in Russian), as a label rather than an element slot. */
+    private fun elementName(element: StatusElement): String = localized(element.displayLabel)
+
+    private fun localized(english: String): String = english.localizedContent(language)
 
     private fun line(cost: Boolean, text: String, element: StatusElement?): RuleLine =
         RuleLine(if (cost) RuleLineKind.COST else RuleLineKind.RULE, text, element, negative = cost)
@@ -869,7 +1090,52 @@ private val BuffStat.phrase: BuildRulesText
         BuffStat.DAMAGE_REDUCTION -> BuildRulesText.BuffDamageReduction
         BuffStat.COOLING -> BuildRulesText.BuffCooling
         BuffStat.DAMAGE_TAKEN -> BuildRulesText.BuffDamageTaken
+        BuffStat.SKILL_RECHARGE -> BuildRulesText.BuffSkillRecharge
+        BuffStat.SKILL_POWER -> BuildRulesText.BuffSkillPower
     }
+
+private val SkillPick.phrase: BuildRulesText
+    get() = when (this) {
+        SkillPick.ALL -> BuildRulesText.PickAllSkills
+        SkillPick.CAST -> BuildRulesText.PickThisSkill
+        SkillPick.LONGEST -> BuildRulesText.PickSlowestSkill
+    }
+
+private val ZoneKind.phrase: BuildRulesText
+    get() = when (this) {
+        ZoneKind.PLASMA -> BuildRulesText.ZonePlasma
+        ZoneKind.HUSH -> BuildRulesText.ZoneHush
+        ZoneKind.TIME_BUBBLE -> BuildRulesText.ZoneTimeBubble
+        ZoneKind.ATTRACTOR -> BuildRulesText.ZoneAttractor
+        ZoneKind.MAW -> BuildRulesText.ZoneMaw
+    }
+
+private val ImpulseDirection.phrase: BuildRulesText
+    get() = when (this) {
+        ImpulseDirection.POINTER -> BuildRulesText.ImpulsePointer
+        ImpulseDirection.AWAY_FROM_TARGET -> BuildRulesText.ImpulseAway
+        ImpulseDirection.FORWARD -> BuildRulesText.ImpulseForward
+    }
+
+private val MarkPick.phrase: BuildRulesText
+    get() = when (this) {
+        MarkPick.SPALL -> BuildRulesText.MarkSpall
+        MarkPick.CRACKED -> BuildRulesText.MarkCracked
+        MarkPick.SPORED -> BuildRulesText.MarkSpored
+        MarkPick.EMBRITTLED -> BuildRulesText.MarkEmbrittled
+    }
+
+private val ReactionAspect.phrase: BuildRulesText
+    get() = when (this) {
+        ReactionAspect.RADIUS -> BuildRulesText.AspectRadius
+        ReactionAspect.DURATION -> BuildRulesText.AspectDuration
+        ReactionAspect.FORCE -> BuildRulesText.AspectForce
+    }
+
+/** Shipped reaction names and keystone forms; mechanical text names reactions the way the catalog does. */
+private val DefaultReactions: BuildCatalog get() = defaultBuildCatalog()
+
+private val DefaultSkillNames: List<String> by lazy { defaultSkillDefinitions().map { it.name } }
 
 /** The "On …" phrase matching [EffectTrigger.displayLabel]. */
 val EffectTrigger.onPhrase: BuildRulesText
@@ -892,6 +1158,12 @@ val EffectTrigger.onPhrase: BuildRulesText
         EffectTrigger.PICKUP -> BuildRulesText.OnPickup
         EffectTrigger.RICOCHET -> BuildRulesText.OnRicochet
         EffectTrigger.SLAM -> BuildRulesText.OnSlam
+        EffectTrigger.SKILL_CAST -> BuildRulesText.OnSkillCast
+        EffectTrigger.SKILL_HIT -> BuildRulesText.OnSkillHit
+        EffectTrigger.APEX -> BuildRulesText.OnApex
+        EffectTrigger.FIELD_ENTER -> BuildRulesText.OnFieldEnter
+        EffectTrigger.SHOT_ERASED -> BuildRulesText.OnShotErased
+        EffectTrigger.MARK_CONSUMED -> BuildRulesText.OnMarkConsumed
     }
 
 private val EffectTrigger.everyPhrase: BuildRulesText
@@ -914,4 +1186,10 @@ private val EffectTrigger.everyPhrase: BuildRulesText
         EffectTrigger.PICKUP -> BuildRulesText.EveryPickup
         EffectTrigger.RICOCHET -> BuildRulesText.EveryRicochet
         EffectTrigger.SLAM -> BuildRulesText.EverySlam
+        EffectTrigger.SKILL_CAST -> BuildRulesText.EverySkillCast
+        EffectTrigger.SKILL_HIT -> BuildRulesText.EverySkillHit
+        EffectTrigger.APEX -> BuildRulesText.EveryApex
+        EffectTrigger.FIELD_ENTER -> BuildRulesText.EveryFieldEnter
+        EffectTrigger.SHOT_ERASED -> BuildRulesText.EveryShotErased
+        EffectTrigger.MARK_CONSUMED -> BuildRulesText.EveryMarkConsumed
     }

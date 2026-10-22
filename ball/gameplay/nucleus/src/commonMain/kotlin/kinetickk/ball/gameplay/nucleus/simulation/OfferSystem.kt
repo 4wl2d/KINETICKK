@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.EffectCondition
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.ItemRule
@@ -49,12 +50,19 @@ private fun MutableGameState.fit(item: ItemDefinition): Float {
         val elementsInPlay = kinetickk.ball.content.api.StatusElement.entries.count { affinityTier(it) >= 1 }
         shared += max(0, elementsInPlay - 1).toFloat()
     }
+    if (item.namesWeaponFamily(currentWeaponDefinition.family)) shared += 1f
     return shared
 }
 
 private fun ItemDefinition.isReactionItem(): Boolean = rules.any {
-    it is ItemRule.ReactionPower || it is ItemRule.ReactionResidue || it is ItemRule.ReactionRecoil
+    it is ItemRule.ReactionPower || it is ItemRule.ReactionResidue || it is ItemRule.ReactionRecoil ||
+        it is ItemRule.ReactionKeystone || it is ItemRule.ReactionTuning || it is ItemRule.CatalysisRate
 }
+
+/** True when one of [this] item's conditions names weapon [family]. */
+private fun ItemDefinition.namesWeaponFamily(family: kinetickk.ball.content.api.WeaponFamily): Boolean =
+    clauses.any { clause -> clause.conditions.any { it is EffectCondition.WeaponFamilyIs && it.family == family } } ||
+        rules.any { it is ItemRule.WhileModifier && it.condition.let { c -> c is EffectCondition.WeaponFamilyIs && c.family == family } }
 
 /** True when the item would open a tag or element the build has fewer than two points in. */
 private fun MutableGameState.experimental(item: ItemDefinition): Boolean =
@@ -97,7 +105,7 @@ internal fun MutableGameState.buildItemChoices() {
         val weights = FloatArray(candidates.size) { index ->
             val item = candidates[index]
             val base = if (lane == OfferLane.ALIGNED) 1f + 0.8f * fit(item) else 1f
-            base * (1f - itemSuppressedShare(item))
+            base * (1f - itemSuppressedShare(item)) * (1f - itemDormantShare(item))
         }
         val choice = candidates[weightedIndex(weights)]
         selected += choice

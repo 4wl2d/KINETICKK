@@ -91,6 +91,7 @@ internal fun MutableGameState.applySlamDamage(
     }
     burst(enemy.x, enemy.y, 6, 3)
     fireClauses(EffectTrigger.SLAM, enemy, damage)
+    onSkillSlam(enemy)
     return true
 }
 
@@ -757,6 +758,8 @@ private fun MutableGameState.resolveThrownEnemySlams() {
             other.vy -= closing * 0.5f * ny
             applySlamDamage(thrown, closing)
             applySlamDamage(other, closing)
+            // Repulsor: an enemy Magnetize hurled charges whatever it slams.
+            if (other.alive && repulsorCharges(thrown)) applyStatus(other, kinetickk.ball.content.api.StatusElement.ION, 1, 1)
             slams++
             if (slams >= tuning.maximumEnemySlamsPerStep) return
         }

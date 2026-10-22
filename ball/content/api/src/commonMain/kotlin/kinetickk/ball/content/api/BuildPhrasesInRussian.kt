@@ -53,66 +53,190 @@ internal val BuildPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Unmake: a moment later the target suffers the remembered damage again, amplified." to
         "Развоплощение: мгновение спустя цель снова получает запомненный урон, причём усиленный.",
 
-    // Reactions.
+    // Reactions, their verbs and cues, and their keystone forms.
     "Thermal Shock" to "Термошок",
-    "Fire meets ice: a violent single-target blast that leaves the target Brittle." to
-        "Огонь встречает лёд: мощный взрыв по одной цели делает её хрупкой.",
+    "Fire meets ice: a violent blast leaves the target Brittle, and your next hit sends it flying." to
+        "Огонь встречает лёд: мощный взрыв делает цель хрупкой, а следующий удар отправляет её в полёт.",
+    "Spall" to "Откол",
+    "Hit it into the pack" to "Отбей в толпу",
+    "Flash Freeze" to "Мгновенная заморозка",
+    "No throw; the next direct hit Freezes the target 0.8 s through the normal Freeze path; damage ×0.8." to
+        "Без броска; следующий прямой удар замораживает цель на 0,8 с обычной Заморозкой; урон ×0,8.",
     "Plasma Burst" to "Плазменный взрыв",
-    "Heat ionizes into an explosion that sets everything it reaches burning." to
-        "Жар ионизируется и взрывается, поджигая всё, до чего дотягивается.",
+    "Heat ionizes into an explosion that sets everything burning and leaves a plasma pool: inside it your " +
+        "weapon fires faster and Dashes cost half the heat." to
+        "Жар ионизируется во взрыв, поджигающий всё вокруг, и оставляет плазменную лужу: в ней оружие стреляет " +
+        "быстрее, а рывки стоят вдвое меньше жара.",
+    "Plasma Pool" to "Плазменная лужа",
+    "Fight in the pool" to "Бейся в луже",
+    "Arc Plasma" to "Дуговая плазма",
+    "No pool; the burst repeats once on up to 2 Charged enemies within 220 at 50 % with 1 Thermal." to
+        "Без лужи; взрыв один раз повторяется на 2 заряженных врагах в радиусе 220 с силой 50 % и 1 слоем Термо.",
     "Fusion" to "Синтез",
-    "The target becomes a small star that drags enemies in and burns them." to
-        "Цель превращается в маленькую звезду, которая затягивает врагов и сжигает их.",
+    "The target becomes a small star that drags in enemies and Data, then collapses and hurls them apart." to
+        "Цель становится маленькой звездой: она затягивает врагов и Данные, а затем схлопывается и разбрасывает их.",
+    "Accretion" to "Аккреция",
+    "Feed the star" to "Корми звезду",
+    "Dwarf Star" to "Белый карлик",
+    "Lasts 3.2 s, pull 440, damage per second ×0.5; no implosion." to
+        "Живёт 3,2 с, тяга 440, урон в секунду ×0,5; без схлопывания.",
     "Wildfire" to "Дикий огонь",
-    "Rot catches fire and leaps to nearby enemies as Thermal." to "Гниль вспыхивает и перекидывается на ближайших врагов слоями Термо.",
+    "Rot catches fire and leaps to nearby enemies; for a moment everything you ram catches fire too." to
+        "Гниль вспыхивает и перекидывается на ближайших врагов; ненадолго загорается и всё, во что вы врезаетесь.",
+    "Ablaze" to "Объятый пламенем",
+    "Dive and spread" to "Ныряй и поджигай",
+    "Firewalker" to "Огнеходец",
+    "Ablaze 6 s at any distance; an Ablaze contact on an enemy at Ignite threshold − 2 Scorch or more Ignites it; no spread." to
+        "Пламя 6 с на любой дистанции; удар по врагу, которому до Воспламенения не больше 2 слоёв Ожога, поджигает его; без распространения.",
     "Superconduct" to "Сверхпроводимость",
-    "Cold lightning races through three enemies and chills them." to "Холодная молния проносится через трёх врагов и остужает их.",
+    "Cold lightning races through three enemies and chills them; near you it strips the drag from your Core " +
+        "and cools it." to
+        "Холодная молния проносится через трёх врагов и остужает их; рядом с вами она снимает с Ядра сопротивление " +
+        "и охлаждает его.",
+    "Frictionless" to "Без трения",
+    "Glide" to "Скользи",
+    "Zero Resistance" to "Нулевое сопротивление",
+    "6 links; a link on a Frozen enemy deals ×1.5 and consumes Brittle; no Frictionless." to
+        "6 звеньев; звено по замёрзшему врагу бьёт ×1,5 и снимает хрупкость; без скольжения.",
     "Glacier Crush" to "Ледолом",
-    "Gravity shatters the ice into piercing shards." to "Гравитация раскалывает лёд на пронзающие осколки.",
+    "Gravity shatters the ice into a fan of shards that flies away from you and knocks enemies back." to
+        "Гравитация раскалывает лёд веером осколков: они летят прочь от вас и отбрасывают врагов.",
+    "Ice Fan" to "Ледяной веер",
+    "Aim with your approach" to "Целься заходом",
+    "Aimed Avalanche" to "Направленная лавина",
+    "The fan follows your aim from the target; shards Freeze enemies with 4 or more Chill." to
+        "Веер летит от цели по вашему прицелу; осколки замораживают врагов с 4 и более слоями Стужи.",
     "Embrittle" to "Охрупчивание",
-    "Frozen rot: the target takes far more damage and freezes sooner." to "Мёрзлая гниль: цель получает намного больше урона и быстрее замерзает.",
+    "Frozen rot: the target takes far more damage, freezes sooner and cannot stop your charge." to
+        "Мёрзлая гниль: цель получает намного больше урона, быстрее замерзает и не может остановить ваш разгон.",
+    "Glass Charge" to "Стеклянный таран",
+    "Plow through" to "Прорывайся",
+    "Glass Burst" to "Стеклянный взрыв",
+    "A pierced Embrittled enemy shatters: 3 Cryo shards for 0.5 × the impact, Embrittle consumed; Embrittle lasts 2 s." to
+        "Пронзённый охрупчённый враг раскалывается на 3 осколка Крио с силой 0,5 × столкновения, охрупчивание снимается; оно длится 2 с.",
     "Magnetize" to "Намагничивание",
-    "The target turns magnetic and yanks nearby enemies into a collision." to
-        "Цель намагничивается и резко стягивает ближайших врагов в столкновение.",
+    "The target turns magnetic: it yanks nearby enemies together and keeps pulling them and your shots for " +
+        "three seconds." to
+        "Цель намагничивается: она стягивает ближайших врагов и ещё три секунды притягивает их и ваши снаряды.",
+    "Attractor" to "Аттрактор",
+    "Shots home in" to "Снаряды летят к цели",
+    "Repulsor" to "Отталкиватель",
+    "No yank, no attractor; the target is hurled away from the Core at 900 × knockback and each enemy it slams takes 1 Charge." to
+        "Без притяжения и аттрактора; цель отбрасывает от Ядра со скоростью 900 × отбрасывание, и каждый, в кого она врезается, получает Заряд.",
     "Feedback" to "Обратный ток",
-    "Current tears through decayed armor and arcs onward, spreading Entropy." to
-        "Ток прорывается сквозь истлевшую броню и бьёт дальше, распространяя Энтропию.",
+    "Current tears through decayed armor, arcs onward spreading Entropy and kicks your weapon into its next shot." to
+        "Ток прорывается сквозь истлевшую броню, бьёт дальше, распространяя Энтропию, и подгоняет ваше оружие.",
+    "Overcurrent" to "Сверхток",
+    "Faster weapon" to "Оружие быстрее",
+    "Short Circuit" to "Короткое замыкание",
+    "Refreshes skills instead: 1.0 s to every skill, once per 1 s; no weapon refresh." to
+        "Ускоряет навыки вместо оружия: 1 с каждому навыку, не чаще раза в 1 с.",
     "Rot Well" to "Гнилой колодец",
-    "A rotting well opens on the target, pulling enemies in and decaying them." to
-        "На цели открывается гнилой колодец: он затягивает врагов и разлагает их.",
+    "A rotting well opens on the target, pulling enemies in, slowing and decaying them; every death inside " +
+        "widens it." to
+        "На цели открывается гнилой колодец: он затягивает, замедляет и разлагает врагов, а каждая смерть внутри " +
+        "расширяет его.",
+    "Compost" to "Перегной",
+    "Farm inside" to "Добивай внутри",
+    "Plague Pit" to "Чумная яма",
+    "Lasts 4 s; a death inside passes all its Decay to every enemy inside; no growth." to
+        "Живёт 4 с; смерть внутри передаёт весь Распад всем врагам внутри; без расширения.",
     "Thunderclap" to "Громовой раскат",
-    "Heat and sound burst outward in a blast that hurls enemies away." to
-        "Жар и звук вырываются наружу взрывом, который отшвыривает врагов.",
+    "Heat and sound hurl enemies away; Dash right on the clap to ride the blast for free." to
+        "Жар и звук отшвыривают врагов; сделайте рывок точно на хлопок, чтобы бесплатно оседлать взрыв.",
+    "Blast Jump" to "Взрывной прыжок",
+    "Dash on the clap" to "Рывок на хлопок",
+    "Rocket Clap" to "Реактивный хлопок",
+    "No Dash needed: a clap within 220 launches the Core away at 560; no free Dash." to
+        "Рывок не нужен: хлопок ближе 220 сам отбрасывает Ядро со скоростью 560; без бесплатного рывка.",
     "Shatterpoint" to "Точка раскола",
-    "The frozen ring of sound splits into five ice shards that chill what they pierce." to
-        "Застывший звон раскалывается на пять ледяных осколков, которые остужают всё, что пронзают.",
+    "The frozen ring of sound splits into ice shards; near you they circle the Core, striking enemies and " +
+        "breaking hostile shots." to
+        "Застывший звон раскалывается на ледяные осколки; рядом с вами они кружат вокруг Ядра, бьют врагов и " +
+        "разбивают вражеские снаряды.",
+    "Shard Guard" to "Осколочный страж",
+    "Get close" to "Иди вплотную",
+    "Crystal Choir" to "Хрустальный хор",
+    "No guard; 7 radial shards, each forces Shatter on enemies with 5 or more Resonance." to
+        "Без стража; 7 осколков веером, каждый вызывает Раскол у врагов с 5 и более слоями Резонанса.",
     "Resonant Arc" to "Резонансная дуга",
-    "Lightning rides the resonance through four enemies; more Resonance reaches farther." to
-        "Молния бежит по резонансу через четырёх врагов; чем сильнее Резонанс, тем дальше она достаёт.",
+    "Lightning rides the resonance through four enemies; near you, every sharp turn throws another arc." to
+        "Молния бежит по резонансу через четырёх врагов; рядом с вами каждый резкий поворот выпускает новую дугу.",
+    "Arc Weave" to "Плетение молний",
+    "Turn to arc" to "Поворот — дуга",
+    "Standing Wave" to "Стоячая волна",
+    "The weave lasts 6 s at any distance; turn arcs have 2 links at 0.35 × the reaction's strength." to
+        "Плетение длится 6 с на любой дистанции; дуги поворотов из 2 звеньев с силой 0,35 × реакции.",
     "Seismic" to "Сейсмический удар",
-    "A quake crushes nearby enemies and briefly stuns the ordinary ones." to
-        "Толчок сминает ближайших врагов и ненадолго оглушает обычных.",
+    "A quake crushes nearby enemies and stuns the ordinary ones; nearby rocks echo it." to
+        "Толчок сминает ближайших врагов и оглушает обычных; ближние скалы повторяют его.",
+    "Rock Echo" to "Эхо скал",
+    "Fight by rocks" to "Бейся у скал",
+    "Aftershock" to "Афтершок",
+    "A second quake at the same spot 0.6 s later at 60 %; no rock echo." to
+        "Повторный толчок на том же месте через 0,6 с с силой 60 %; без эха скал.",
     "Fracture" to "Трещина",
-    "The vibration cracks rot open and spreads Decay to everything close." to
-        "Вибрация вскрывает гниль и разносит Распад на всех поблизости.",
+    "The vibration cracks rot open, spreads Decay and leaves enemies Cracked: release the Brake to make them burst." to
+        "Вибрация вскрывает гниль, разносит Распад и оставляет врагов надломленными: отпустите тормоз, и они лопнут.",
+    "Breakpoint" to "Точка излома",
+    "Release the Brake" to "Отпусти тормоз",
+    "Crevasse" to "Расщелина",
+    "No Brake detonation; hit enemies are Suppressed 4 s: no aspect immunity, resistance or weakness, and armor plates crack; never on bosses." to
+        "Без подрыва; задетые враги 4 с подавлены: без стихийной неуязвимости, стойкости и слабости, броня трескается; не действует на боссов.",
     "Silence" to "Безмолвие",
-    "Sound falls into the void: nearby enemies take damage and cannot attack for two seconds." to
-        "Звук проваливается в пустоту: ближайшие враги получают урон и две секунды не могут атаковать.",
+    "Sound falls into the void: nearby enemies take damage and a zone of silence keeps them from attacking." to
+        "Звук проваливается в пустоту: ближайшие враги получают урон, а зона тишины не даёт им атаковать.",
+    "Hush" to "Затишье",
+    "Hold the quiet" to "Держи тишину",
+    "Dead Air" to "Мёртвый эфир",
+    "The hush follows the Core (radius 140, 3 s) and spends up to 20 hostile shots entering it; no damage when it forms." to
+        "Тишина следует за Ядром (радиус 140, 3 с) и гасит до 20 влетающих в неё вражеских снарядов; без урона при появлении.",
     "Blackfire" to "Чёрное пламя",
-    "A black flame burns the target for three seconds, ignoring every resistance and immunity." to
-        "Чёрное пламя три секунды жжёт цель, не считаясь ни со стойкостью, ни с неуязвимостью.",
+    "A black flame burns the target through every resistance; when a burning enemy dies, the flame leaps on and " +
+        "your skills recharge." to
+        "Чёрное пламя жжёт цель сквозь любую стойкость; когда горящий враг гибнет, пламя перекидывается дальше, а " +
+        "навыки перезаряжаются.",
+    "Flame Leap" to "Прыжок пламени",
+    "Burn, then kill" to "Подожги и добей",
+    "Hellfire" to "Адское пламя",
+    "Damage per second ×1.5; the flame never leaps; no skill refund." to
+        "Урон в секунду ×1,5; пламя не перекидывается; навыки не перезаряжаются.",
     "Stasis" to "Стазис",
-    "Time stops around the target: ordinary enemies halt in place and hostile shots vanish." to
-        "Время вокруг цели замирает: обычные враги застывают на месте, а вражеские снаряды исчезают.",
+    "Time stops around the target: enemies halt, hostile shots vanish, and inside the bubble your skills " +
+        "recharge faster." to
+        "Время вокруг цели замирает: враги застывают, вражеские снаряды исчезают, а внутри пузыря навыки " +
+        "перезаряжаются быстрее.",
+    "Time Bubble" to "Пузырь времени",
+    "Shelter inside" to "Укройся внутри",
+    "Rewind" to "Перемотка",
+    "Shots inside are returned as your shots (30 % of their damage, nearest enemy within 600, up to 12); no skill haste." to
+        "Снаряды внутри возвращаются вашими (30 % их урона, к ближайшему врагу в радиусе 600, до 12); без ускорения навыков.",
     "Annihilate" to "Аннигиляция",
-    "The void strikes the target and the toughest enemy nearby at once." to
-        "Пустота разом бьёт по цели и по самому прочному врагу поблизости.",
+    "The void strikes the target and the toughest enemy nearby; your next Dash toward that enemy blinks you to it." to
+        "Пустота бьёт по цели и по самому прочному врагу поблизости; следующий рывок в его сторону переносит вас к нему.",
+    "Void Anchor" to "Якорь пустоты",
+    "Dash to the doomed" to "Рывок к цели",
+    "Event Strike" to "Удар горизонта",
+    "Anchor blink-strikes always crit and refund their Dash heat; the anchor lasts 1.5 s." to
+        "Удар через якорь всегда критический и возвращает жар рывка; якорь держится 1,5 с.",
     "Null Well" to "Нуль-колодец",
-    "A well of nothing pulls enemies in and strips a share of their maximum integrity." to
-        "Колодец небытия затягивает врагов и отнимает часть их максимальной прочности.",
+    "A well of nothing pulls enemies in, strips a share of their integrity and swallows hostile shots." to
+        "Колодец небытия затягивает врагов, отнимает часть их прочности и поглощает вражеские снаряды.",
+    "Maw" to "Пасть",
+    "Park it in the fire" to "Подставь под огонь",
+    "Hungry Void" to "Голодная пустота",
+    "The well follows the Core (radius 120, 2.4 s) and stops pulling enemies; it still eats shots." to
+        "Колодец следует за Ядром (радиус 120, 2,4 с) и больше не тянет врагов; снаряды он по-прежнему ест.",
     "Oblivion" to "Забвение",
-    "Rot meets the void: a weakened enemy is erased outright, anything sturdier takes a heavy burst." to
-        "Гниль встречает пустоту: ослабленный враг стирается целиком, а более крепкий получает мощный удар.",
+    "Rot meets the void: a weakened enemy is erased, its Data rushes to you and your skills recharge; anything " +
+        "sturdier takes a heavy burst." to
+        "Гниль встречает пустоту: ослабленный враг стирается, его Данные летят к вам, а навыки перезаряжаются; кто " +
+        "покрепче, получает мощный удар.",
+    "Erasure" to "Стирание",
+    "Erase for Data" to "Стирай ради Данных",
+    "Last Rites" to "Последний обряд",
+    "Execute lines 16 % (Elites 9 %), never bosses; no Data latch, no skill refund." to
+        "Порог стирания 16 % (элита 9 %), никогда не боссы; без притяжения Данных и перезарядки навыков.",
 
     // Archetype tags and resonance tiers.
     "Ram" to "Таран",
@@ -189,6 +313,8 @@ internal val BuildPhrasesInRussian: List<Pair<String, String>> = listOf(
     // Timed stats that are not item effects.
     "Damage" to "Урон",
     "Damage taken" to "Получаемый урон",
+    "Skill recharge" to "Перезарядка навыков",
+    "Skill power" to "Сила навыков",
 
     // Clause trigger labels.
     "On impact" to "При столкновении",
@@ -209,4 +335,10 @@ internal val BuildPhrasesInRussian: List<Pair<String, String>> = listOf(
     "On data pickup" to "При сборе данных",
     "On ricochet" to "При рикошете",
     "On slam" to "При впечатывании врага",
+    "On skill cast" to "При применении навыка",
+    "On skill hit" to "При попадании навыком",
+    "On Apex" to "При Апексе",
+    "On entering a field" to "При входе в поле",
+    "On erasing a shot" to "При стирании снаряда",
+    "On cashing a mark" to "При срабатывании метки",
 )

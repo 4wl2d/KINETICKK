@@ -75,6 +75,10 @@ internal class MutableGameState(
         /** Volatile Remains bursts waiting at once (Rebirth R4); more deaths in the window add none. */
         const val MAX_VOLATILE_BURSTS = 48
         const val MAX_TRAIL_SAMPLES_PER_UPDATE = 32
+        const val MAX_GUARD_SHARDS = 6
+        const val SKILL_INPUT_BUFFER_SECONDS = 0.16f
+        /** Enemies one skill cast may pick at once (Catalyze's largest target cap). */
+        const val MAX_SKILL_SCRATCH = 10
     }
 
     internal var gameplayRandom: CloneableXorWowRandom = reductionSource?.gameplayRandom?.let { source ->
@@ -179,8 +183,75 @@ internal class MutableGameState(
         if (shareStableReductionStorage) it else it.fork()
     } ?: CopyOnWriteFloatArray(FloatArray(content.items.size))
     internal var buffs: List<ActiveBuff> = reductionSource?.buffs ?: emptyList()
-    internal var combatFields: List<kinetickk.ball.gameplay.nucleus.model.CombatField> =
-        reductionSource?.combatFields ?: emptyList()
+    /** Lingering fields; a full reduction forks the table, a scalar-input reduction shares it. */
+    internal val combatFieldTable: CombatFieldTable = reductionSource?.combatFieldTable?.let {
+        if (shareStableReductionStorage) it else it.fork()
+    } ?: CombatFieldTable()
+    /** Field kinds the Core stood in at the last field pass, one bit per [CombatFieldKind] ordinal. */
+    internal var coreFieldMask: Int = reductionSource?.coreFieldMask ?: 0
+    /** When entering a field may next count as a field entry. */
+    internal var fieldEnterReadyAt: Float = reductionSource?.fieldEnterReadyAt ?: 0f
+    // Core reaction state: lingering effects reactions leave on the Core (absolute run times).
+    internal var ablazeUntil: Float = reductionSource?.ablazeUntil ?: 0f
+    internal var frictionlessUntil: Float = reductionSource?.frictionlessUntil ?: 0f
+    internal var blastJumpUntil: Float = reductionSource?.blastJumpUntil ?: 0f
+    internal var weaveUntil: Float = reductionSource?.weaveUntil ?: 0f
+    internal var weaveDamage: Float = reductionSource?.weaveDamage ?: 0f
+    internal var weaveRange: Float = reductionSource?.weaveRange ?: 0f
+    /** Ice shards orbiting the Core (at most [MAX_GUARD_SHARDS]), until when and what each strikes for. */
+    internal var guardShards: Int = reductionSource?.guardShards ?: 0
+    internal var guardUntil: Float = reductionSource?.guardUntil ?: 0f
+    internal var guardDamage: Float = reductionSource?.guardDamage ?: 0f
+    /** The one Void Anchor (enemy id, -1 for none) and when it lapses. */
+    internal var voidAnchorId: Int = reductionSource?.voidAnchorId ?: -1
+    internal var voidAnchorUntil: Float = reductionSource?.voidAnchorUntil ?: 0f
+    internal var overcurrentReadyAt: Float = reductionSource?.overcurrentReadyAt ?: 0f
+    internal var flameRefundReadyAt: Float = reductionSource?.flameRefundReadyAt ?: 0f
+    /** The enemy whose execute is under way, so its Data latches to the Core; -1 between executes. */
+    internal var erasureLatchId: Int = reductionSource?.erasureLatchId ?: -1
+    /** When a reaction or item may next push the Core. */
+    internal var coreImpulseReadyAt: Float = reductionSource?.coreImpulseReadyAt ?: 0f
+    internal var primedDashUntil: Float = reductionSource?.primedDashUntil ?: 0f
+    /** Dash heat spent toward the next Dash-heat-to-skills refund (below its step of 10). */
+    internal var dashHeatBank: Float = reductionSource?.dashHeatBank ?: 0f
+    internal var phaseUntil: Float = reductionSource?.phaseUntil ?: 0f
+    /** Seismic's keystone keeps two pending aftershocks: when each strikes (negative when free), where and how hard. */
+    internal var aftershockAt0: Float = reductionSource?.aftershockAt0 ?: -1f
+    internal var aftershockX0: Float = reductionSource?.aftershockX0 ?: 0f
+    internal var aftershockY0: Float = reductionSource?.aftershockY0 ?: 0f
+    internal var aftershockDamage0: Float = reductionSource?.aftershockDamage0 ?: 0f
+    internal var aftershockAt1: Float = reductionSource?.aftershockAt1 ?: -1f
+    internal var aftershockX1: Float = reductionSource?.aftershockX1 ?: 0f
+    internal var aftershockY1: Float = reductionSource?.aftershockY1 ?: 0f
+    internal var aftershockDamage1: Float = reductionSource?.aftershockDamage1 ?: 0f
+    /** Erased bolts and cashed marks announced within the current fixed step; zero between steps. */
+    internal var shotErasedDispatches: Int = reductionSource?.shotErasedDispatches ?: 0
+    internal var markDispatches: Int = reductionSource?.markDispatches ?: 0
+    /** Hostile bolts erased this run (a run statistic). */
+    internal var shotsErased: Long = reductionSource?.shotsErased ?: 0L
+    // Skill and Apex input: drafts waiting to open, buffered slot requests and their age, the buffered Apex request.
+    internal var pendingSkillDrafts: Int = reductionSource?.pendingSkillDrafts ?: 0
+    internal var skillBufferMask: Int = reductionSource?.skillBufferMask ?: 0
+    internal var skillBufferTime: Float = reductionSource?.skillBufferTime ?: 0f
+    internal var apexBufferTime: Float = reductionSource?.apexBufferTime ?: 0f
+    /** Level item offers still owed a skill rank-up card (one per level reached at the rank cadence). */
+    internal var pendingRankUpOffers: Int = reductionSource?.pendingRankUpOffers ?: 0
+    /** What the skill slots hold; immutable, replaced by a draft or rank-up. */
+    internal var skillLoadout: SkillLoadout = reductionSource?.skillLoadout ?: SkillLoadout.EMPTY
+    /** Skill and Apex timing; a full reduction forks it, a scalar-input reduction shares it. */
+    internal var skillRuntime: SkillRuntime = reductionSource?.skillRuntime?.let { source ->
+        if (shareStableReductionStorage) source else source.fork()
+    } ?: SkillRuntime()
+    /** Candidate-private scratch of one skill cast (picked targets); never read across casts. */
+    internal val skillScratch: IntArray = IntArray(MAX_SKILL_SCRATCH)
+    /** The slot casting right now, -1 between casts; the cast's damaged-enemy count and the bosses it struck. */
+    internal var castSlot: Int = -1
+    internal var castHits: Int = 0
+    /** Enemies the running element-less cast attuned (SkillAttunement). */
+    internal var castAttunedStacks: Int = 0
+    internal var castPrimaryId: Int = -1
+    internal var castBossHitFirst: Int = -1
+    internal var castBossHitSecond: Int = -1
     internal var reactionTokens: Float = reductionSource?.reactionTokens ?: REACTION_BURST
     internal var breakTokens: Float = reductionSource?.breakTokens ?: BREAK_BURST
     internal var discoveredReactionMask: Int = reductionSource?.discoveredReactionMask
@@ -692,6 +763,7 @@ internal class MutableGameState(
             // Offers come from owned weapons only: with no more than one offer's worth a reroll would deal the same set.
             ChoiceType.WEAPON -> weaponOfferCandidates().size > WEAPON_OFFER_CHOICES
             ChoiceType.RELIC -> !heirloomOfferActive
+            ChoiceType.SKILL -> true
             ChoiceType.TOTEM, ChoiceType.RELIC_BIND -> false
         }
     val pendingRelicChoiceCount: Int get() = pendingRelicChoices

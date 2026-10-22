@@ -89,8 +89,23 @@ data class ItemDefinition(
         require(!risk || stats.any { it.amount < 0f } || rules.any(ItemRule::isLiability)) {
             "A high-risk item must declare its liability"
         }
+        require(rules.count { it is ItemRule.ReactionKeystone } <= 1) { "An item switches at most one reaction to its keystone" }
+        require(keystone == null || rarity.rank >= ItemRarity.EPIC.rank) { "Keystone items are Epic or Legendary" }
     }
+
+    /** The reaction this item switches to its keystone form, or null. */
+    val keystone: ReactionId?
+        get() = rules.firstNotNullOfOrNull { (it as? ItemRule.ReactionKeystone)?.reaction }
 }
+
+/** Conversions that cost the owner something (risk items may declare one as their liability). */
+private val LiabilityConversions: Set<ConversionKind> = setOf(
+    ConversionKind.REGENERATION_TO_DECAY,
+    ConversionKind.CRIT_CHANCE_TO_DAMAGE,
+    ConversionKind.DASH_HEAT_TO_SKILLS,
+    ConversionKind.DATA_TO_SKILLS,
+    ConversionKind.SKILLS_COST_HEAT,
+)
 
 /** Rules that cost the owner something; risk items must declare at least one. */
 val ItemRule.isLiability: Boolean
@@ -99,9 +114,19 @@ val ItemRule.isLiability: Boolean
         is ItemRule.NonCriticalDamage -> amount < 0f
         is ItemRule.DamageVersus -> amount < 0f
         is ItemRule.ReactionRecoil -> true
-        is ItemRule.Convert -> kind != ConversionKind.OVERHEAL_TO_SHIELD
+        is ItemRule.Convert -> kind in LiabilityConversions
         else -> false
     }
+
+/**
+ * An item of the Data economy: a positive Data gain, a Data grant, or a Spored mark (Spored deaths drop Data).
+ * The deck, the bots and the level calibration read it; a skill refund paid in Data is not Data economy.
+ */
+val ItemDefinition.isDataEconomy: Boolean
+    get() = stats.any { it.effect == ItemEffect.DATA_GAIN && it.amount > 0f } ||
+        clauses.any { clause ->
+            clause.actions.any { it is EffectAction.GainData || it is EffectAction.ApplyMark && it.mark == MarkPick.SPORED }
+        }
 
 /** Append only: persisted by stable codec ids and indexed by ordinal (Agony forms, icons, card marks). */
 enum class WeaponId {

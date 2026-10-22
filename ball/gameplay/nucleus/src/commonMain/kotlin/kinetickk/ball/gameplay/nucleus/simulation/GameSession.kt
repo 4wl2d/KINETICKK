@@ -17,6 +17,8 @@ internal fun MutableGameState.startRun() {
     interpolationPrimed = false
     matrix = foldMatrix()
     characterRuntime = CharacterRuntime()
+    skillRuntime = SkillRuntime()
+    skillLoadout = SkillLoadout.EMPTY
     enemies.clear()
     projectiles.clear()
     pickups.clear()
@@ -43,7 +45,10 @@ internal fun MutableGameState.startRun() {
     statusAccumulators.fill(0f)
     itemStatusReadyAt.fill(0f)
     buffs = emptyList()
-    combatFields = emptyList()
+    combatFieldTable.clear()
+    coreFieldMask = 0
+    fieldEnterReadyAt = 0f
+    resetCoreReactionState()
     reactionTokens = MutableGameState.REACTION_BURST
     breakTokens = MutableGameState.BREAK_BURST
     severedRelics = emptyList()
@@ -227,7 +232,7 @@ internal fun MutableGameState.resetRunStats() {
 }
 
 internal fun MutableGameState.togglePause() {
-    if (phase == GamePhase.RUNNING) dashBufferTime = 0f
+    if (phase == GamePhase.RUNNING) clearInputBuffers()
     phase = when (phase) {
         GamePhase.RUNNING -> GamePhase.PAUSED
         GamePhase.PAUSED -> GamePhase.RUNNING
@@ -242,7 +247,7 @@ internal fun MutableGameState.togglePause() {
 internal fun MutableGameState.pauseForOverlay() {
     if (phase == GamePhase.RUNNING) {
         phase = GamePhase.PAUSED
-        dashBufferTime = 0f
+        clearInputBuffers()
         accumulator = 0f
         lastTransitionSteps = 0
     }
@@ -258,10 +263,18 @@ internal fun MutableGameState.exitRun() {
     keyboardBrakeActive = false
     secondaryBrakeActive = false
     touchBrakeActive = false
-    dashBufferTime = 0f
+    clearInputBuffers()
     accumulator = 0f
     lastTransitionSteps = 0
     updateBraking()
+}
+
+/** Drops buffered Dash, skill and Apex requests, so none fires after a pause or an exit. */
+internal fun MutableGameState.clearInputBuffers() {
+    dashBufferTime = 0f
+    skillBufferMask = 0
+    skillBufferTime = 0f
+    apexBufferTime = 0f
 }
 
 internal fun MutableGameState.applyPreferences(preferences: PlayerPreferences) {
@@ -307,6 +320,26 @@ internal fun MutableGameState.requestDash() {
     if (phase == GamePhase.RUNNING) {
         dashBufferTime = MutableGameState.DASH_INPUT_BUFFER_SECONDS
     }
+}
+
+/**
+ * Buffers a cast of skill [slot] for [MutableGameState.SKILL_INPUT_BUFFER_SECONDS]; the next fixed steps cast it
+ * once it can. Scalars only (a scalar-input reduction shares the skill runtime). An empty slot or a run that is
+ * not RUNNING buffers nothing.
+ */
+internal fun MutableGameState.requestSkill(slot: Int) {
+    if (phase != GamePhase.RUNNING || slot !in 0 until SkillRuntime.SLOTS || skillLoadout.isEmpty(slot)) return
+    skillBufferMask = skillBufferMask or (1 shl slot)
+    skillBufferTime = MutableGameState.SKILL_INPUT_BUFFER_SECONDS
+}
+
+/**
+ * Buffers an Apex cast for [MutableGameState.SKILL_INPUT_BUFFER_SECONDS]; the next fixed steps cast it once the
+ * Apex is ready. A scalar only; a locked Apex or a run that is not RUNNING buffers nothing.
+ */
+internal fun MutableGameState.requestApex() {
+    if (phase != GamePhase.RUNNING || !apexUnlocked) return
+    apexBufferTime = MutableGameState.SKILL_INPUT_BUFFER_SECONDS
 }
 
 internal fun MutableGameState.choose(index: Int) {
@@ -374,6 +407,17 @@ internal fun MutableGameState.choose(index: Int) {
             }
             RelicChoiceAction.REPLACE, RelicChoiceAction.MELD_TARGET -> return
         }
+        ChoiceType.SKILL -> {
+            val skillId = option.skillId ?: return
+            if ((option.skillRank ?: 1) > 1) {
+                rankUpSkill(skillId)
+                // The rank-up card stood in for an item card: the offer resolves without a Rare.
+                if (activeChoiceType == ChoiceType.ITEM && directedReward == null) resolveItemOfferPity(null)
+            } else {
+                acquireSkill(skillId)
+            }
+            GameplayAudioCue.LEVEL_UP
+        }
         ChoiceType.RELIC_BIND -> {
             val slot = option.relicSlot ?: return
             when (option.relicAction ?: return) {
@@ -409,9 +453,15 @@ internal fun MutableGameState.rerollChoices() {
     if (!choicesCanReroll) return
     rerollsRemaining--
     when (activeChoiceType) {
-        ChoiceType.ITEM -> buildItemChoices()
+        ChoiceType.ITEM -> {
+            // A rank-up card stays through a reroll; only the item cards are dealt again.
+            val rankUp = choices.firstOrNull { it.type == ChoiceType.SKILL }
+            buildItemChoices()
+            if (rankUp != null) placeRankUpCard(rankUp)
+        }
         ChoiceType.WEAPON -> buildWeaponChoices()
         ChoiceType.RELIC -> buildRelicChoices()
+        ChoiceType.SKILL -> buildSkillDraft()
         ChoiceType.TOTEM, ChoiceType.RELIC_BIND -> return
     }
     emitSound(GameplayAudioCue.UI_CLICK)

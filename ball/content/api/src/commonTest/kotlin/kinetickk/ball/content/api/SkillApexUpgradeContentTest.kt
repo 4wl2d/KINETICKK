@@ -116,14 +116,72 @@ class SkillApexUpgradeContentTest {
     }
 
     @Test
-    fun reactionValuesAreEmptyByDefaultAndBoundedByFour() {
+    fun reactionValuesAreBoundedByFourAndEveryShippedReactionDeclaresItsVerb() {
         val catalog = defaultBuildCatalog()
-        assertTrue(catalog.reactions.all { it.values.isEmpty() })
-
+        catalog.reactions.forEach { reaction ->
+            assertTrue(reaction.values.isNotEmpty(), "${reaction.id} has verb values")
+            assertTrue(reaction.verb.isNotBlank() && reaction.cue.isNotBlank(), "${reaction.id} has a verb and a cue")
+            assertTrue(reaction.keystone.isNotBlank() && reaction.keystoneDescription.isNotBlank(), "${reaction.id} has a keystone")
+        }
         val base = catalog.reactions.first()
+        assertTrue(ReactionDefinition(base.id, base.name, base.description, base.power, base.radius).values.isEmpty(),
+            "A reaction declared without values has none")
+
         base.copy(values = floats(ContentBounds.MAX_REACTION_VALUES))
         assertFailsWith<IllegalArgumentException> { base.copy(values = floats(ContentBounds.MAX_REACTION_VALUES + 1)) }
         assertFailsWith<IllegalArgumentException> { base.copy(values = immutableListOf(Float.NaN)) }
+        base.copy(cue = "x".repeat(ContentBounds.MAX_REACTION_CUE_CHARS))
+        assertFailsWith<IllegalArgumentException> { base.copy(cue = "x".repeat(ContentBounds.MAX_REACTION_CUE_CHARS + 1)) }
+        assertFailsWith<IllegalArgumentException> { base.copy(cue = "") }
+        assertFailsWith<IllegalArgumentException> { base.copy(keystoneDescription = "") }
+    }
+
+    @Test
+    fun reactionVerbValuesFollowTheCombatSpec() {
+        val values = defaultBuildCatalog().reactions.associate { it.id to it.values.toList() }
+        assertEquals(
+            mapOf(
+                ReactionId.THERMAL_SHOCK to listOf(3f, 620f),
+                ReactionId.PLASMA_BURST to listOf(110f, 2.5f, 0.25f, 0.5f),
+                ReactionId.FUSION to listOf(300f, 500f, 500f),
+                ReactionId.WILDFIRE to listOf(3f, 3f, 2f),
+                ReactionId.SUPERCONDUCT to listOf(0.25f, 2.5f, 12f),
+                ReactionId.GLACIER_CRUSH to listOf(25f, 300f),
+                ReactionId.EMBRITTLE to listOf(500f),
+                ReactionId.MAGNETIZE to listOf(3f, 260f, 220f, 4f),
+                ReactionId.FEEDBACK to listOf(0.35f, 1f),
+                ReactionId.ROT_WELL to listOf(2f, 20f, 0.5f, 3f),
+                ReactionId.THUNDERCLAP to listOf(260f, 0.6f, 1.6f),
+                ReactionId.SHATTERPOINT to listOf(4f, 74f, 6f),
+                ReactionId.RESONANT_ARC to listOf(3f, 3f, 0.5f),
+                ReactionId.SEISMIC to listOf(3f, 260f, 90f, 0.5f),
+                ReactionId.FRACTURE to listOf(4f, 320f, 6f, 2f),
+                ReactionId.SILENCE to listOf(170f, 2.5f, 0.5f),
+                ReactionId.BLACKFIRE to listOf(200f, 0.6f, 8f, 1f),
+                ReactionId.STASIS to listOf(140f, 2f, 24f, 1.5f),
+                ReactionId.ANNIHILATE to listOf(3f, 30f, 520f),
+                ReactionId.NULL_WELL to listOf(20f, 5f, 400f),
+                ReactionId.OBLIVION to listOf(1.5f),
+            ),
+            values,
+        )
+        // The texts name two of these numbers in words; a retune must rewrite them.
+        val build = defaultBuildCatalog()
+        assertEquals(3f, build.reaction(ReactionId.MAGNETIZE).values[0])
+        assertTrue("for three seconds" in build.reaction(ReactionId.MAGNETIZE).description)
+        assertEquals(0.5f, build.reaction(ReactionId.PLASMA_BURST).values[3])
+        assertTrue("half the heat" in build.reaction(ReactionId.PLASMA_BURST).description)
+        // Pure damage only ever stayed or fell (combat spec §3.1).
+        val powers = build.reactions.associate { it.id to it.power }
+        val before = mapOf(
+            ReactionId.THERMAL_SHOCK to 12f, ReactionId.PLASMA_BURST to 6f, ReactionId.WILDFIRE to 5f, ReactionId.SUPERCONDUCT to 7f,
+            ReactionId.MAGNETIZE to 5f, ReactionId.SEISMIC to 4f, ReactionId.FRACTURE to 3f, ReactionId.ANNIHILATE to 9f,
+        )
+        assertEquals(mapOf(
+            ReactionId.THERMAL_SHOCK to 10f, ReactionId.PLASMA_BURST to 5f, ReactionId.WILDFIRE to 4f, ReactionId.SUPERCONDUCT to 6f,
+            ReactionId.MAGNETIZE to 4f, ReactionId.SEISMIC to 3.5f, ReactionId.FRACTURE to 2.5f, ReactionId.ANNIHILATE to 8f,
+        ), before.keys.associateWith { powers.getValue(it) })
+        before.forEach { (id, power) -> assertTrue(powers.getValue(id) < power, "$id power fell") }
     }
 
     @Test
@@ -191,6 +249,17 @@ class SkillApexUpgradeContentTest {
         assertEquals(skills[SkillId.VOID_STEP.ordinal], ui.skill(SkillId.VOID_STEP))
         assertFailsWith<IllegalArgumentException> { ui.copy(skills = reordered) }
         assertFailsWith<IllegalArgumentException> { ui.copy(skills = skills.dropLast(1).toImmutableList()) }
+    }
+
+    @Test
+    fun skillFieldReserveStaysBelowTheFieldBound() {
+        val shipped = BuildPolicy()
+        assertEquals(12, shipped.maximumFields)
+        assertEquals(3, shipped.maximumSkillFields)
+        BuildPolicy(maximumFields = 4, maximumSkillFields = 3)
+        BuildPolicy(maximumFields = 4, maximumSkillFields = 1)
+        assertFailsWith<IllegalArgumentException> { BuildPolicy(maximumFields = 4, maximumSkillFields = 4) }
+        assertFailsWith<IllegalArgumentException> { BuildPolicy(maximumFields = 4, maximumSkillFields = 0) }
     }
 
     private fun floats(count: Int): ImmutableList<Float> = List(count) { it.toFloat() }.toImmutableList()

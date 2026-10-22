@@ -37,8 +37,10 @@ class SonicVoidElementTest {
         blocks.zipWithNext().forEach { (a, b) -> assertEquals(StatusCell.ELEMENTS, b - a) }
         assertEquals(StatusCell.REARM_AT + StatusCell.ELEMENTS, StatusCell.FROZEN_UNTIL)
         assertEquals(StatusCell.REACTION_PAIR_READY_AT + StatusCell.PAIRS, StatusCell.CRYO_IMMUNE_CARRY)
-        assertEquals(StatusCell.BLACKFIRE_DPS + 1, StatusCell.COUNT)
-        assertEquals(71, StatusCell.COUNT)
+        assertEquals(StatusCell.BLACKFIRE_DPS + 1, StatusCell.MARK)
+        assertEquals(StatusCell.MARK + 1, StatusCell.MARK_UNTIL)
+        assertEquals(StatusCell.MARK_UNTIL + 1, StatusCell.COUNT)
+        assertEquals(73, StatusCell.COUNT)
     }
 
     @Test
@@ -454,6 +456,48 @@ class SonicVoidElementTest {
             steps++
             state.elapsed += MutableGameState.FIXED_STEP
         }
+        assertTrue(quietSteps > 0, "Silence still reaches the Architect")
+        assertTrue(longestQuiet * MutableGameState.FIXED_STEP <= SILENCE_BOSS_SECONDS + 0.02f, "no Silence is extended")
+        assertTrue(quietSteps < steps * 0.4f, "the Architect attacks most of the time ($quietSteps of $steps steps silent)")
+    }
+
+    @Test
+    fun chainedHushesFromManyReactorsStillLeaveTheArchitectAttackWindows() {
+        val state = buildTestState()
+        state.bossSpawned = true
+        val boss = state.addEnemyForTesting(400f, 0f, hp = 100_000f, radius = 74f, type = EnemyType.ARCHITECT)
+        val reactors = List(4) { index ->
+            val angle = index * TAU / 4f
+            state.dummy(x = 400f + 120f * cos(angle), y = 120f * sin(angle))
+        }
+        val start = state.elapsed
+        var nextSilenceAt = start
+        var fired = 0
+        var steps = 0
+        var quietSteps = 0
+        var quietRun = 0
+        var longestQuiet = 0
+        // The same chain of Silences, now each leaving a Hush that keeps ticking over the Architect.
+        while (state.elapsed < start + 12f) {
+            if (state.elapsed >= nextSilenceAt) {
+                val source = reactors[fired % reactors.size]
+                state.applyStatus(source, StatusElement.SONIC, 3, generation = 0)
+                state.applyStatus(source, StatusElement.VOID, 1, generation = 0)
+                fired++
+                nextSilenceAt += 0.6f
+            }
+            state.elapsed += MutableGameState.FIXED_STEP
+            state.updateCombatFields(MutableGameState.FIXED_STEP)
+            if (state.canAttack(boss)) {
+                quietRun = 0
+            } else {
+                quietSteps++
+                quietRun++
+                longestQuiet = max(longestQuiet, quietRun)
+            }
+            steps++
+        }
+        assertTrue(state.fieldRecords.isNotEmpty(), "Hushes linger over the Architect")
         assertTrue(quietSteps > 0, "Silence still reaches the Architect")
         assertTrue(longestQuiet * MutableGameState.FIXED_STEP <= SILENCE_BOSS_SECONDS + 0.02f, "no Silence is extended")
         assertTrue(quietSteps < steps * 0.4f, "the Architect attacks most of the time ($quietSteps of $steps steps silent)")

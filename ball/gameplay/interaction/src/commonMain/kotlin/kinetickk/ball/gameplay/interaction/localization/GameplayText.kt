@@ -58,6 +58,7 @@ internal enum class GameplayText : TextResource {
     BuildUpdated,
     WeaponTotem,
     ChooseArtifact,
+    ChooseSkill,
     TotemResonance,
     WeaponSynchronization,
     RelicIntercept,

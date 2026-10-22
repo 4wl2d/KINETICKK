@@ -57,7 +57,7 @@ class ContentBalanceCharacterizationTest {
         val build = ui.build
 
         assertEquals(
-            "6b94bfd3ccc1e1a6",
+            "d6fa6a5d0a26712d",
             goldenFingerprint {
                 build.elements.forEach { element ->
                     add(element.element.name)
@@ -78,6 +78,11 @@ class ContentBalanceCharacterizationTest {
                     add(reaction.radius)
                     add(reaction.residue?.name ?: "-")
                     add(reaction.residueStacks)
+                    reaction.values.forEach(::add)
+                    add(reaction.verb)
+                    add(reaction.cue)
+                    add(reaction.keystone)
+                    add(reaction.keystoneDescription)
                 }
                 build.resonances.forEach { resonance ->
                     add(resonance.tag.name)
@@ -447,6 +452,16 @@ private fun GoldenFingerprint.addCondition(condition: EffectCondition) {
         EffectCondition.SourceImpact -> add("source-impact")
         EffectCondition.SourceWeapon -> add("source-weapon")
         is EffectCondition.ElementIs -> { add("element-is"); add(condition.element.name) }
+        is EffectCondition.ReactionIs -> { add("reaction-is"); add(condition.reaction.name) }
+        is EffectCondition.SkillIs -> { add("skill-is"); add(condition.skill.name) }
+        is EffectCondition.SkillTagged -> { add("skill-tagged"); add(condition.tag.name) }
+        EffectCondition.CoreInField -> add("core-in-field")
+        EffectCondition.TargetMarked -> add("target-marked")
+        EffectCondition.TargetControlled -> add("target-controlled")
+        EffectCondition.TargetThrown -> add("target-thrown")
+        EffectCondition.ApexActive -> add("apex-active")
+        is EffectCondition.SkillsCharging -> { add("skills-charging"); add(condition.count) }
+        is EffectCondition.WeaponFamilyIs -> { add("weapon-family-is"); add(condition.family.name) }
     }
 }
 
@@ -475,6 +490,15 @@ private fun GoldenFingerprint.addAction(action: EffectAction) {
             add("well"); add(action.radius); add(action.seconds); add(action.basis.name); add(action.scale)
             add(action.pick?.name ?: "-")
         }
+        is EffectAction.RefundSkills -> { add("refund-skills"); add(action.seconds); add(action.pick.name) }
+        is EffectAction.ChargeApex -> { add("charge-apex"); add(action.seconds) }
+        is EffectAction.ForceReaction -> { add("force-reaction"); add(action.radius); add(action.maxTargets) }
+        is EffectAction.Zone -> { add("zone"); add(action.kind.name); add(action.radius); add(action.seconds) }
+        is EffectAction.EraseShots -> { add("erase-shots"); add(action.radius); add(action.maximum) }
+        is EffectAction.CoreImpulse -> { add("core-impulse"); add(action.speed); add(action.direction.name) }
+        is EffectAction.ApplyMark -> { add("apply-mark"); add(action.mark.name); add(action.seconds) }
+        is EffectAction.Throw -> { add("throw"); add(action.speed) }
+        EffectAction.PrimeDash -> add("prime-dash")
     }
 }
 
@@ -499,6 +523,16 @@ private fun GoldenFingerprint.addRule(rule: ItemRule) {
         is ItemRule.FreeDash -> { add("free-dash"); add(rule.heat); add(rule.cooldownSeconds) }
         is ItemRule.OfferCards -> { add("offer-cards"); add(rule.count) }
         is ItemRule.Convert -> { add("convert"); add(rule.kind.name); add(rule.amount) }
+        is ItemRule.ReactionKeystone -> { add("keystone"); add(rule.reaction.name) }
+        is ItemRule.ReactionTuning -> { add("reaction-tuning"); add(rule.reaction?.name ?: "-"); add(rule.aspect.name); add(rule.amount) }
+        is ItemRule.FieldTuning -> { add("field-tuning"); add(rule.aspect.name); add(rule.amount) }
+        is ItemRule.SkillCooldown -> { add("skill-cooldown"); add(rule.element?.name ?: "-"); add(rule.amount) }
+        is ItemRule.SkillPower -> { add("skill-power"); add(rule.element?.name ?: "-"); add(rule.amount) }
+        ItemRule.SkillCharges -> add("skill-charges")
+        is ItemRule.SkillAttunement -> { add("skill-attunement"); add(rule.pick.name) }
+        is ItemRule.CatalysisRate -> { add("catalysis-rate"); add(rule.amount) }
+        is ItemRule.ApexCooldown -> { add("apex-cooldown"); add(rule.amount) }
+        is ItemRule.CoreLinkRadius -> { add("core-link-radius"); add(rule.bonus) }
     }
 }
 

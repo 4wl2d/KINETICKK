@@ -109,8 +109,8 @@ sealed interface GameplayInteractionPulse {
     data object UserGestureObserved : GameplayInteractionPulse
 
     /**
-     * Asks to cast the skill in [slot] (0 = Z, 1 = X, 2 = C). While the run has no skill runtime the
-     * reducer accepts it without changing state.
+     * Asks to cast the skill in [slot] (0 = Z, 1 = X, 2 = C). A running run buffers the request briefly and
+     * casts it once the slot can; an empty slot or a run that is not running accepts it without a change.
      */
     class SkillRequested private constructor(
         val slot: Int,

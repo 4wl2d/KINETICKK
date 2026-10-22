@@ -11,19 +11,25 @@ import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.api.BuffStat
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.nucleus.model.ActiveBuff
-import kinetickk.ball.gameplay.nucleus.model.CombatField
 import kinetickk.ball.gameplay.nucleus.model.CombatFieldKind
+import kinetickk.ball.gameplay.nucleus.model.FieldFlags
+import kinetickk.ball.gameplay.nucleus.model.FieldSource
 import kinetickk.ball.gameplay.nucleus.model.EchoHit
 import kinetickk.ball.gameplay.nucleus.model.Obstacle
 import kinetickk.ball.gameplay.nucleus.model.ObstacleField
 import kinetickk.ball.gameplay.nucleus.model.SeveredRelic
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.model.CharacterRuntime
+import kinetickk.ball.gameplay.nucleus.model.ApexCell
+import kinetickk.ball.gameplay.nucleus.model.SkillCell
+import kinetickk.ball.gameplay.nucleus.model.SkillLoadout
+import kinetickk.ball.gameplay.nucleus.model.SkillRuntime
 import kinetickk.ball.gameplay.nucleus.model.Polarity
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.PointOfInterestState
@@ -759,6 +765,7 @@ class GameplayReductionIsolationTest {
         repeat(240) { index ->
             val pulse = when {
                 index % 61 == 0 -> GameplayInteractionPulse.DashRequested
+                index % 53 == 0 -> GameplayInteractionPulse.ApexRequested
                 index % 47 == 0 -> GameplayInteractionPulse.BrakeChanged(
                     source = BrakeSource.KEYBOARD,
                     active = (index / 47) % 2 == 0,
@@ -780,6 +787,7 @@ class GameplayReductionIsolationTest {
             // Step scratch is idle between accepted reductions, so no candidate inherits it.
             listOf(production.model, eagerReference).forEach { state ->
                 assertEquals(0, state.chainDepth, "transition $index chain scratch depth")
+                assertEquals(-1, state.castSlot, "transition $index skill cast scratch")
                 assertEquals(-1, state.shatteringEnemyId, "transition $index shatter target")
                 assertEquals(0, state.clauseDepth, "transition $index clause depth")
             }
@@ -793,6 +801,7 @@ class GameplayReductionIsolationTest {
         retained.forEachIndexed { index, (state, fingerprint) ->
             assertEquals(fingerprint, state.exactSimulationFingerprint(), "retained State $index")
         }
+        assertEquals(2f, production.model.skillRuntime.apex(ApexCell.CAST_COUNT), "the trace casts the Apex")
     }
 
     private fun MutableGameState.populateAdditionalRetainedState() {
@@ -868,20 +877,76 @@ class GameplayReductionIsolationTest {
         pendingDirectedRewards = listOf(DirectedReward.ITEM_AND_REPAIR, DirectedReward.WEAPON)
         directedReward = DirectedReward.RELIC
         selectedRewardFocus = RewardFocus.CONTROL
-        buffs = listOf(ActiveBuff(sourceItem = 0, stat = BuffStat.DAMAGE, amountPerStack = 0.2f, stacks = 2, expiresAt = 9f))
-        combatFields = listOf(
-            CombatField(
-                kind = CombatFieldKind.ROT_WELL,
-                remaining = 1.5f,
-                x = 200f,
-                y = 300f,
-                radius = 70f,
-                damagePerSecond = 4f,
-                element = StatusElement.ENTROPY,
-                stacksPerTick = 1,
-                tickClock = 0.1f,
-            ),
+        buffs = listOf(ActiveBuff(sourceKey = 0, stat = BuffStat.DAMAGE, amountPerStack = 0.2f, stacks = 2, expiresAt = 9f))
+        addField(
+            CombatFieldKind.ROT_WELL, FieldSource.REACTION, ReactionId.ROT_WELL.ordinal, x = 200f, y = 300f, radius = 70f,
+            seconds = 1.5f, damagePerSecond = 4f, element = StatusElement.ENTROPY, stacksPerTick = 1, tickClock = 0.1f,
         )
+        addField(
+            CombatFieldKind.ECHO_RING, FieldSource.SKILL, 1, x = 210f, y = 290f, radius = 90f, seconds = 4f,
+            damagePerSecond = 2f, anchorId = 11, flags = FieldFlags.FOLLOWS_CORE, power = 3f,
+        )
+        coreFieldMask = 1 shl CombatFieldKind.ROT_WELL.ordinal
+        fieldEnterReadyAt = 0.25f
+        ablazeUntil = 1.1f
+        frictionlessUntil = 1.2f
+        blastJumpUntil = 1.3f
+        weaveUntil = 1.4f
+        weaveDamage = 6f
+        weaveRange = 220f
+        guardShards = 3
+        guardUntil = 1.5f
+        guardDamage = 7f
+        voidAnchorId = 11
+        voidAnchorUntil = 1.6f
+        overcurrentReadyAt = 1.7f
+        flameRefundReadyAt = 1.8f
+        erasureLatchId = 13
+        coreImpulseReadyAt = 1.9f
+        primedDashUntil = 2.1f
+        phaseUntil = 2.2f
+        aftershockAt0 = 2.3f
+        aftershockX0 = 120f
+        aftershockY0 = -40f
+        aftershockDamage0 = 9f
+        aftershockAt1 = 2.4f
+        aftershockX1 = -60f
+        aftershockY1 = 80f
+        aftershockDamage1 = 7f
+        shotErasedDispatches = 2
+        markDispatches = 1
+        shotsErased = 5L
+        dashHeatBank = 4.5f
+        pendingSkillDrafts = 1
+        pendingRankUpOffers = 1
+        skillBufferMask = 0b101
+        skillBufferTime = 0.08f
+        apexBufferTime = 0.05f
+        // Slot Z casts inside the trace (its buffered request is ready); slot C cools and holds a pending landing.
+        skillLoadout = SkillLoadout.EMPTY.with(0, SkillId.FROST_SNAP, 2).with(2, SkillId.METEOR, 1)
+        skillRuntime = SkillRuntime().apply {
+            this[2, SkillCell.READY_AT] = 3f
+            this[2, SkillCell.CAST_AT] = 0.1f
+            this[2, SkillCell.LAST_COOLDOWN] = 12f
+            this[2, SkillCell.REFUNDED] = 0.25f
+            this[2, SkillCell.ANCHOR_X] = 140f
+            this[2, SkillCell.ANCHOR_Y] = -20f
+            this[2, SkillCell.PENDING_AT] = 0.9f
+            this[2, SkillCell.RANKED_AT_LEVEL] = 2f
+            this[2, SkillCell.CAST_COUNT] = 1f
+            // The Apex is unlocked and ready, so its buffered request casts inside the trace; a refund and held
+            // shots are on record.
+            setApex(ApexCell.UNLOCKED, 1f)
+            setApex(ApexCell.READY_AT, 0f)
+            setApex(ApexCell.LAST_CAST, -60f)
+            setApex(ApexCell.REFUNDED, 1.5f)
+            setApex(ApexCell.HELD, 2f)
+            setApex(ApexCell.HELD_RELEASE_AT, 30f)
+            setApex(ApexCell.CAST_COUNT, 1f)
+            setApex(ApexCell.AUX, 0.5f)
+            skillDamage = 12.5
+            apexBossDamage = 3.0
+        }
         severedRelics = listOf(SeveredRelic(RelicId.GLASS_COMET, until = 40f))
         echoHits += EchoHit(enemyId = 11, delay = 0.3f, damage = 5f, appliesDominant = true)
         clauseReadyAt[0] = 0.7f
@@ -1028,9 +1093,8 @@ class GameplayReductionIsolationTest {
             is GameplayInteractionPulse.ChoiceSelected -> choose(pulse.index)
             GameplayInteractionPulse.ChoicesRerolled -> rerollChoices()
             GameplayInteractionPulse.UserGestureObserved -> Unit
-            is GameplayInteractionPulse.SkillRequested,
-            GameplayInteractionPulse.ApexRequested,
-            -> Unit
+            is GameplayInteractionPulse.SkillRequested -> requestSkill(pulse.slot)
+            GameplayInteractionPulse.ApexRequested -> requestApex()
         }
     }
 
@@ -1109,27 +1173,78 @@ class GameplayReductionIsolationTest {
             value("buffs.size", buffs.size)
             buffs.forEachIndexed { index, buff ->
                 val prefix = "buffs[$index]"
-                value("$prefix.sourceItem", buff.sourceItem)
+                value("$prefix.sourceKey", buff.sourceKey)
                 value("$prefix.stat", buff.stat)
                 float("$prefix.amountPerStack", buff.amountPerStack)
                 value("$prefix.stacks", buff.stacks)
                 float("$prefix.expiresAt", buff.expiresAt)
             }
-            value("combatFields.size", combatFields.size)
-            combatFields.forEachIndexed { index, field ->
+            value("combatFieldTable.count", combatFieldTable.count)
+            value("combatFieldTable.revision", combatFieldTable.revision)
+            value("combatFieldTable.nextSequence", combatFieldTable.nextSequence)
+            combatFieldTable.records().forEachIndexed { index, field ->
                 val prefix = "combatFields[$index]"
                 value("$prefix.kind", field.kind)
-                float("$prefix.remaining", field.remaining)
+                value("$prefix.source", field.source)
+                value("$prefix.owner", field.owner)
                 float("$prefix.x", field.x)
                 float("$prefix.y", field.y)
+                float("$prefix.x2", field.x2)
+                float("$prefix.y2", field.y2)
                 float("$prefix.radius", field.radius)
                 float("$prefix.damagePerSecond", field.damagePerSecond)
                 value("$prefix.element", field.element)
                 value("$prefix.stacksPerTick", field.stacksPerTick)
                 value("$prefix.generation", field.generation)
                 float("$prefix.pull", field.pull)
+                float("$prefix.createdAt", field.createdAt)
+                float("$prefix.expiresAt", field.expiresAt)
+                float("$prefix.remaining", field.remaining)
                 float("$prefix.tickClock", field.tickClock)
+                float("$prefix.charge", field.charge)
+                value("$prefix.anchorId", field.anchorId)
+                value("$prefix.flags", field.flags)
+                float("$prefix.power", field.power)
+                value("$prefix.sequence", field.sequence)
             }
+            value("coreFieldMask", coreFieldMask)
+            float("fieldEnterReadyAt", fieldEnterReadyAt)
+            float("ablazeUntil", ablazeUntil)
+            float("frictionlessUntil", frictionlessUntil)
+            float("blastJumpUntil", blastJumpUntil)
+            float("weaveUntil", weaveUntil)
+            float("weaveDamage", weaveDamage)
+            float("weaveRange", weaveRange)
+            value("guardShards", guardShards)
+            float("guardUntil", guardUntil)
+            float("guardDamage", guardDamage)
+            value("voidAnchorId", voidAnchorId)
+            float("voidAnchorUntil", voidAnchorUntil)
+            float("overcurrentReadyAt", overcurrentReadyAt)
+            float("flameRefundReadyAt", flameRefundReadyAt)
+            value("erasureLatchId", erasureLatchId)
+            float("coreImpulseReadyAt", coreImpulseReadyAt)
+            float("primedDashUntil", primedDashUntil)
+            float("phaseUntil", phaseUntil)
+            float("aftershockAt0", aftershockAt0)
+            float("aftershockX0", aftershockX0)
+            float("aftershockY0", aftershockY0)
+            float("aftershockDamage0", aftershockDamage0)
+            float("aftershockAt1", aftershockAt1)
+            float("aftershockX1", aftershockX1)
+            float("aftershockY1", aftershockY1)
+            float("aftershockDamage1", aftershockDamage1)
+            value("shotErasedDispatches", shotErasedDispatches)
+            value("markDispatches", markDispatches)
+            value("shotsErased", shotsErased)
+            float("dashHeatBank", dashHeatBank)
+            value("pendingSkillDrafts", pendingSkillDrafts)
+            value("pendingRankUpOffers", pendingRankUpOffers)
+            value("skillLoadout", skillLoadout.toString())
+            value("skillRuntime", skillRuntime.toString())
+            value("skillBufferMask", skillBufferMask)
+            float("skillBufferTime", skillBufferTime)
+            float("apexBufferTime", apexBufferTime)
             float("reactionTokens", reactionTokens)
             float("breakTokens", breakTokens)
             value("discoveredRelicMask", discoveredRelicMask)

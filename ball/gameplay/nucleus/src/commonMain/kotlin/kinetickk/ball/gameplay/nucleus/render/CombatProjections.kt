@@ -166,4 +166,10 @@ object EnemyControlBits {
 
     /** The mark kind ordinal, or −1 for no mark. */
     fun markKind(bits: Int): Int = ((bits and MARK_MASK) ushr MARK_SHIFT) - 1
+
+    /** The mark, or null for no mark. */
+    fun mark(bits: Int): EnemyMarkVisual? = EnemyMarkVisual.entries.getOrNull(markKind(bits))
 }
+
+/** An enemy's one mark as renderers see it. Append-only; ordinals follow the run's mark kinds. */
+enum class EnemyMarkVisual { SPALL, CRACKED, SPORED, BOOMED, SUPPRESSED }

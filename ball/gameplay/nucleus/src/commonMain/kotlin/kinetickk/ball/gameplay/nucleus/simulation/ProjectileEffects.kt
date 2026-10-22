@@ -7,7 +7,9 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
+import kinetickk.ball.gameplay.nucleus.protocol.FxColorCode
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
+import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -187,6 +189,7 @@ internal fun MutableGameState.addWeaponArc(
     toX: Float,
     toY: Float,
     life: Float = 0.14f,
+    style: Int = LinkStyleCode.WEAPON,
 ) {
     emitVisualFx(
         VisualFxCue.WeaponArcAdded(
@@ -195,9 +198,42 @@ internal fun MutableGameState.addWeaponArc(
             toX = toX,
             toY = toY,
             life = life,
+            style = style,
         ),
     )
 }
+
+/** What spent a hostile bolt. */
+internal enum class EraseCause { REACTION, SKILL, ITEM, CHARACTER, APEX }
+
+/**
+ * Spends hostile bolt [shot] (its life drops to 0 and the list keeps its shape, so any pass may call this
+ * while it walks the projectiles). Friendly, already spent and MINE shots are refused; an Apex erasure spends
+ * one bolt of the running activation's budget and is refused once the budget is empty. The first
+ * [MAX_SHOT_ERASURES_SHOWN_PER_STEP] erasures of a fixed step show a burst at ([x], [y]) (Apex gold for the
+ * Apex's) and fire SHOT_ERASED clauses there. True when the shot was spent.
+ */
+internal fun MutableGameState.eraseHostileShot(shot: Projectile, cause: EraseCause, x: Float, y: Float): Boolean {
+    if (!shot.hostile || shot.spent || shot.kind != ProjectileKind.BOLT) return false
+    if (cause == EraseCause.APEX) {
+        val left = skillRuntime.apex(ApexCell.BOLTS_LEFT)
+        if (left < 1f) return false
+        skillRuntime.setApex(ApexCell.BOLTS_LEFT, left - 1f)
+    }
+    shot.life = 0f
+    shotsErased++
+    if (shotErasedDispatches < MAX_SHOT_ERASURES_SHOWN_PER_STEP) {
+        shotErasedDispatches++
+        burst(x, y, 5, if (cause == EraseCause.APEX) FxColorCode.APEX_GOLD else 2)
+        // The same bound caps SHOT_ERASED: at most four dispatches per fixed step.
+        if (listens(kinetickk.ball.content.api.EffectTrigger.SHOT_ERASED)) {
+            fireClauses(kinetickk.ball.content.api.EffectTrigger.SHOT_ERASED, originX = x, originY = y)
+        }
+    }
+    return true
+}
+
+internal const val MAX_SHOT_ERASURES_SHOWN_PER_STEP: Int = 4
 
 /** Nearest live enemy within [range]; a shifting Architect is never a target. */
 internal fun MutableGameState.nearestEnemy(x: Float, y: Float, range: Float): Enemy? {

@@ -35,6 +35,9 @@ internal fun MutableGameState.rewardPreviews(): ImmutableList<RewardPreview> {
                 }
                 candidate.acquireRelic(id)
             }
+            ChoiceType.SKILL -> option.skillId?.let { id ->
+                if ((option.skillRank ?: 1) > 1) candidate.rankUpSkill(id) else candidate.acquireSkill(id)
+            }
             ChoiceType.RELIC_BIND -> option.relicSlot?.let { slot ->
                 when (option.relicAction) {
                     RelicChoiceAction.REPLACE -> (option.relicId ?: pendingBindingRelic)?.let { candidate.replaceRelic(slot, it) }

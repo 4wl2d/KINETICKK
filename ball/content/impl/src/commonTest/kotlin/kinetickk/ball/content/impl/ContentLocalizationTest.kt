@@ -4,6 +4,7 @@
 package kinetickk.ball.content.impl
 
 import kinetickk.ball.content.api.EnemyType
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.BuffStat
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.EffectTrigger
@@ -55,7 +56,7 @@ class ContentLocalizationTest {
             content.rebirth.profiles.forEach { add(it.displayName) }
             RebirthMutator.entries.forEach { addAll(listOf(it.displayName, it.description)) }
             build.elements.forEach { addAll(listOf(it.statusDescription, it.breakDescription)) }
-            build.reactions.forEach { addAll(listOf(it.name, it.description)) }
+            build.reactions.forEach { addAll(listOf(it.name, it.description, it.verb, it.cue, it.keystone, it.keystoneDescription)) }
             build.resonances.forEach { add(it.description); addAll(it.tiers) }
             build.affinityTiers.forEach { add(it.description) }
             build.pairings.forEach { addAll(listOf(it.name, it.description)) }
@@ -80,6 +81,13 @@ class ContentLocalizationTest {
         assertDistinctInRussian(kinetickk.ball.content.api.WeaponScaling.entries.map { it.displayLabel })
         assertDistinctInRussian(build.pairings.map { it.name })
         assertDistinctInRussian(build.reactions.map { it.name })
+        assertDistinctInRussian(build.reactions.map { it.verb })
+        assertDistinctInRussian(build.reactions.map { it.cue })
+        assertDistinctInRussian(build.reactions.map { it.keystone })
+        build.reactions.forEach { reaction ->
+            val cue = reaction.cue.localizedContent(AppLanguage.Russian)
+            assertTrue(cue.length <= ContentBounds.MAX_REACTION_CUE_CHARS, "${reaction.id} Russian cue '$cue' is too long")
+        }
         assertDistinctInRussian(content.skills.map { it.name })
         assertDistinctInRussian(content.coreShapes.map { it.apex.name })
         assertDistinctInRussian(RebirthMutator.entries.map { it.displayName })
@@ -232,7 +240,7 @@ class ContentLocalizationTest {
             "CATALOG COMPLETE // MATTER SALVAGED", "CORE FRACTURED", "ELITE KEY ACQUIRED",
             "RELIC RESONANCE", "TOTEM DETECTED", "ELITE SIGNAL", "HERALD APPROACHES",
             "TWO ANOMALIES DETECTED // CHOOSE A COURSE", "ANOMALY LOST", "ANOMALY RESOLVED",
-            "SECOND WIND", "OBSTACLE COLLISION",
+            "SECOND WIND", "OBSTACLE COLLISION", "APEX ONLINE",
         ).forEach(::assertFullyLocalized)
     }
 

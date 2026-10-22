@@ -663,6 +663,25 @@ internal fun validateItems(items: List<ItemDefinition>) {
         check(items.count { element in it.elements } >= 5) { "$element needs at least five items" }
         check(items.any { element in it.elements && it.unlockLevel <= 2 }) { "$element needs an early enabler" }
     }
+    validateExclusiveRules(items)
+}
+
+/**
+ * A reaction has at most one keystone item, which declares both of the reaction's elements (the item itself is
+ * Epic or Legendary by construction); at most one item grants skill charges and at most one attunes skills.
+ */
+internal fun validateExclusiveRules(items: List<ItemDefinition>) {
+    val keystones = items.mapNotNull { item -> item.keystone?.let { it to item } }
+    keystones.groupBy({ it.first }, { it.second.name }).forEach { (reaction, names) ->
+        check(names.size == 1) { "$reaction has more than one keystone item: $names" }
+    }
+    keystones.forEach { (reaction, item) ->
+        check(reaction.first in item.elements && reaction.second in item.elements) {
+            "${item.name} switches $reaction to its keystone without declaring both of its elements"
+        }
+    }
+    check(items.count { item -> item.rules.any { it is ItemRule.SkillCharges } } <= 1) { "At most one item grants skill charges" }
+    check(items.count { item -> item.rules.any { it is ItemRule.SkillAttunement } } <= 1) { "At most one item attunes skills" }
 }
 
 /**
@@ -691,6 +710,9 @@ internal fun validateBuildReferences(items: List<ItemDefinition>, build: kinetic
                     is ItemRule.BreakThreshold -> add(rule.element)
                     is ItemRule.BreakPower -> add(rule.element)
                     is ItemRule.BreakSpread -> add(rule.element)
+                    is ItemRule.SkillAttunement -> rule.pick.element?.let(::add)
+                    is ItemRule.SkillCooldown -> rule.element?.let(::add)
+                    is ItemRule.SkillPower -> rule.element?.let(::add)
                     else -> Unit
                 }
             }

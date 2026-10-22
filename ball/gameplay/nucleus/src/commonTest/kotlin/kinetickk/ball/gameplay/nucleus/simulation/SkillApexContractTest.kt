@@ -38,7 +38,7 @@ class SkillApexContractTest {
     )
 
     @Test
-    fun castingRequestsAreAcceptedWithoutChangingTheRunWhileNoSkillRuntimeExists() {
+    fun castingRequestsForEmptySlotsAndTheLockedApexChangeNothing() {
         val running = EngineState(buildTestState())
         assertEquals(GamePhase.RUNNING, running.model.phase)
         val paused = EngineState(buildTestState().apply { togglePause() }.also { it.takeSoundCues(); it.takeVisualFxCues() })

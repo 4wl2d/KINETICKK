@@ -117,12 +117,15 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             )
             val newDashContact = dashPhaseTime > 0f && enemy.lastCharacterDash != characterRuntime.dashSequence
             onCharacterDashContact(enemy)
-            val characterMultiplier = characterImpactMultiplier()
+            val characterMultiplier = characterImpactMultiplier(enemy)
             val damage = impactPower(coreImpactSpeed) * characterMultiplier
             val defusable = enemy.type == EnemyType.BOMBER && enemy.mode != EnemyBehavior.PRIMED
-            val edgeCritical = edgeCriticalReady()
+            val edgeCritical = edgeCriticalReady(enemy)
             val impact = dealHit(enemy, damage, HitSource.IMPACT, canCrit = true, forceCrit = edgeCritical)
-            if (edgeCritical) spendEdgeCritical()
+            if (edgeCritical) spendEdgeCritical(enemy)
+            // Ablaze: while the Core burns, every contact sets the enemy burning.
+            onAblazeContact(enemy)
+            onSkillCoreImpact(enemy, coreImpactSpeed, damage, dashContact = newDashContact)
             onCharacterImpact(enemy, impact, coreImpactSpeed, characterMultiplier)
             onWeaponImpact(coreImpactSpeed, damage)
             // A fast impact destroys an unprimed Bomber outright, before it can prime, even through a tether.
@@ -135,7 +138,10 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             lastImpactTime = 0.72f
             enemy.contactCooldown = 0.26f
             screenShake = min(15f, 3f + softVelocity(impactSpeed) * 0.018f)
-            val keepsMomentum = tagTier(BuildTag.RAM) >= 3 && speed >= 1_200f
+            // Glass Charge: an Embrittled enemy cannot stop a fast Core (Glass Burst: it shatters as you pass).
+            val pierced = piercesEmbrittled(enemy, coreImpactSpeed)
+            if (pierced) glassBurst(enemy, damage)
+            val keepsMomentum = tagTier(BuildTag.RAM) >= 3 && speed >= 1_200f || pierced || slingshotKeepsMomentum()
             if (!keepsMomentum) {
                 val recoil = min(220f, softVelocity(impactSpeed) * 0.28f) / max(1f, effectiveMass() / mass) * impactRecoilScale()
                 velocityX += dx / distance * recoil
@@ -494,6 +500,8 @@ internal fun MutableGameState.resolveProjectileHits() {
                 hitRadius,
             )
             if (hit) {
+                // An Apex shot with no strike left passes through boss-class enemies without spending itself.
+                if (projectile.procKey == WeaponRuntime.PROC_APEX && apexShotPassesThrough(enemy)) continue
                 if (!projectile.tryRecordEnemyHit(enemy.id)) continue
                 // A Reflector's front shield meets shots by where they come from, not where the Core is.
                 val shieldBefore = enemy.guarded
@@ -502,6 +510,10 @@ internal fun MutableGameState.resolveProjectileHits() {
                 val sourceWeapon = projectile.sourceWeapon
                 if (sourceWeapon != null) {
                     weaponShotHit(projectile, sourceWeapon, enemy)
+                } else if (projectile.procKey == WeaponRuntime.PROC_SKILL) {
+                    skillShotHit(enemy, projectile.damage, projectile.statusElement)
+                } else if (projectile.procKey == WeaponRuntime.PROC_APEX) {
+                    apexShotHit(enemy, projectile.damage, projectile.statusElement)
                 } else {
                     // Relic shots deal element-less damage; a status element is a rider applied after it.
                     dealProcDamage(enemy, projectile.damage)
@@ -589,6 +601,7 @@ internal fun MutableGameState.resolvePickupCollection() {
                     onCharacterDataPickup()
                     gainData(dataGain * content.tempo.dataPickupMultiplier * (1f + matrix.pickupValueBonus))
                     fireClauses(EffectTrigger.PICKUP)
+                    dataPickupRechargesSkills()
                 }
                 PickupType.KEY -> {
                     keys++
@@ -624,6 +637,9 @@ internal fun MutableGameState.gainData(rawAmount: Float) {
         data -= nextLevelData
         level++
         pendingLevelChoices++
+        // Skill slots open at their levels (a draft each); every few levels an item offer carries a rank-up card.
+        if (level in content.tempo.skillSlotLevels) pendingSkillDrafts++
+        if (level % content.tempo.skillRankEveryLevels == 0) pendingRankUpOffers++
         onLevelUp()
         nextLevelData = dataRequiredForLevel(level)
         if (content.tempo.grantsWeaponAmplification(level) &&
@@ -662,17 +678,3 @@ internal fun MutableGameState.creditData(rawAmount: Float): Int {
     data += whole
     return whole
 }
-
-/**
- * Apex hook: the run has just reached its maximum level. The Apex runtime (combat-final §5.1) unlocks the
- * character's Apex here, ready at once; until that runtime lands this is a deliberate no-op.
- */
-internal fun MutableGameState.unlockApex() = Unit
-
-/**
- * Apex hook: [wholeData] Data was credited at the maximum level. The Apex runtime (combat-final §5.1) shortens
- * the cooldown by 0.03 s per Data within its per-cycle refund bound once the Apex is unlocked; until that runtime
- * lands this is a deliberate no-op, so post-cap Data only counts toward [MutableGameState.dataCollected].
- */
-@Suppress("UNUSED_PARAMETER")
-internal fun MutableGameState.chargeApexWithData(wholeData: Int) = Unit

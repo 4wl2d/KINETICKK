@@ -56,6 +56,7 @@ internal fun englishGameplayText(key: GameplayText): String = when (key) {
     GameplayText.BuildUpdated -> "Build updated"
     GameplayText.WeaponTotem -> "Weapon totem"
     GameplayText.ChooseArtifact -> "Upgrade"
+    GameplayText.ChooseSkill -> "Skill"
     GameplayText.TotemResonance -> "Upgrade"
     GameplayText.WeaponSynchronization -> "Weapon"
     GameplayText.RelicIntercept -> "Relic"

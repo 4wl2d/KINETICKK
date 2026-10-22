@@ -26,6 +26,19 @@ fun pointToSegmentDistanceSquared(
     by: Float,
 ): Float = pointToSegmentDistanceSquaredDouble(px, py, ax, ay, bx, by).toFloat()
 
+/** True when segment (ax, ay)-(bx, by) and segment (cx, cy)-(dx, dy) cross (touching ends count). */
+fun segmentsCross(ax: Float, ay: Float, bx: Float, by: Float, cx: Float, cy: Float, dx: Float, dy: Float): Boolean {
+    val d1 = orientation(cx, cy, dx, dy, ax, ay)
+    val d2 = orientation(cx, cy, dx, dy, bx, by)
+    val d3 = orientation(ax, ay, bx, by, cx, cy)
+    val d4 = orientation(ax, ay, bx, by, dx, dy)
+    return d1 * d2 <= 0.0 && d3 * d4 <= 0.0 && !(d1 == 0.0 && d2 == 0.0 && d3 == 0.0 && d4 == 0.0)
+}
+
+/** Twice the signed area of (ax, ay), (bx, by), (cx, cy), in Double so near-parallel segments stay exact enough. */
+private fun orientation(ax: Float, ay: Float, bx: Float, by: Float, cx: Float, cy: Float): Double =
+    (bx.toDouble() - ax) * (cy.toDouble() - ay) - (by.toDouble() - ay) * (cx.toDouble() - ax)
+
 fun segmentCircleIntersects(
     ax: Float,
     ay: Float,

@@ -22,6 +22,7 @@ import kinetickk.ball.gameplay.nucleus.characterization.gameScenario
 import kinetickk.ball.gameplay.nucleus.model.Obstacle
 import kinetickk.ball.gameplay.nucleus.model.CombatField
 import kinetickk.ball.gameplay.nucleus.model.CombatFieldKind
+import kinetickk.ball.gameplay.nucleus.model.FieldSource
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.Projectile
@@ -569,14 +570,14 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
 
     private fun reactionMetadata(model: MutableGameState, fixedSteps: Int): Map<String, String> =
         stateCardinality(model, seed + 10) + mapOf(
-            "workloadVersion" to "reaction-high-activation-v1",
+            "workloadVersion" to "reaction-high-activation-v2",
             "fixedSteps" to fixedSteps.toString(),
             "simulationSpeed" to model.settings.simulationSpeed.toString(),
             "weapon" to model.weapon.name,
             "weaponLevel" to model.weaponLevel.toString(),
             "attackSpeed" to model.attackSpeed.toString(),
             "ownedItems" to model.build.ownedItemCount.toString(),
-            "combatFields" to model.combatFields.size.toString(),
+            "combatFields" to model.combatFieldTable.count.toString(),
             "stateFingerprint" to canonicalStateFingerprint(model).toString(),
             "renderReuse" to "committed-predecessor",
         )
@@ -723,20 +724,32 @@ internal fun reactionPerformanceState(seed: Int, simulationSpeed: Float = 1f): M
     }
     val fusion = content.build.reaction(ReactionId.FUSION)
     val potency = (build.potency(StatusElement.THERMAL) + build.potency(StatusElement.GRAVITIC)) * 0.5f
-    repeat(content.build.policy.maximumFields) { index ->
-        addField(CombatField(
-            kind = CombatFieldKind.FUSION,
-            remaining = 1.2f,
+    // Saturate the field bound: the reaction and item pool in mixed kinds (each kind below its cap), then one
+    // field per skill slot, all with the Fusion's pull, damage and Thermal ticks.
+    val policy = content.build.policy
+    val pool = policy.maximumFields - policy.maximumSkillFields
+    val shared = listOf(
+        CombatFieldKind.FUSION to FieldSource.REACTION,
+        CombatFieldKind.ROT_WELL to FieldSource.REACTION,
+        CombatFieldKind.DARK_STAR to FieldSource.ITEM,
+    )
+    repeat(policy.maximumFields) { index ->
+        val (kind, source) = if (index < pool) shared[index % shared.size] else CombatFieldKind.ECHO_RING to FieldSource.SKILL
+        addField(
+            kind = kind,
+            source = source,
+            owner = if (index < pool) 0 else index - pool,
             x = 190f + (index % 4) * 90f,
             y = -100f + (index / 4) * 100f,
             radius = fusion.radius,
+            seconds = 1.2f,
             damagePerSecond = fusion.power * 4f * potency * build.reactionPower * runScale(),
             element = StatusElement.THERMAL,
             stacksPerTick = 1,
             generation = 1,
             pull = 220f,
             tickClock = CombatField.TICK_SECONDS - MutableGameState.FIXED_STEP * 0.5f,
-        ))
+        )
     }
     val volleySize = ionOrbitalCount()
     repeat(16) { volley ->
@@ -940,7 +953,7 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
     state.clauseCounters.forEach { signature = mix(signature, it) }
     state.statusAccumulators.forEach { signature = mix(signature, it.toRawBits()) }
     signature = mix(signature, state.buffs.toString().hashCode())
-    signature = mix(signature, state.combatFields.toString().hashCode())
+    signature = mix(signature, state.combatFieldTable.toString().hashCode())
     signature = mix(signature, state.echoHits.toString().hashCode())
     signature = mix(signature, state.severedRelics.toString().hashCode())
     signature = mix(signature, state.reactionTokens.toRawBits())
@@ -980,6 +993,20 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
     signature = mix(signature, state.rebirthRank)
     signature = mix(signature, state.volatileBursts.toString().hashCode())
     state.pickups.forEach { signature = mix(signature, if (it.attracted) 1 else 0) }
+    // 0.5.0 combat foundations: the field table's Core mask, the Core reaction state and the skill input buffers.
+    signature = mix(signature, state.coreFieldMask)
+    signature = mix(signature, state.fieldEnterReadyAt.toRawBits())
+    for (value in floatArrayOf(
+        state.ablazeUntil, state.frictionlessUntil, state.blastJumpUntil, state.weaveUntil, state.weaveDamage,
+        state.weaveRange, state.guardUntil, state.guardDamage, state.voidAnchorUntil, state.overcurrentReadyAt,
+        state.flameRefundReadyAt, state.coreImpulseReadyAt, state.primedDashUntil, state.phaseUntil,
+        state.skillBufferTime, state.apexBufferTime, state.dashHeatBank,
+    )) signature = mix(signature, value.toRawBits())
+    signature = mix(signature, state.shotsErased.hashCode())
+    for (value in intArrayOf(
+        state.guardShards, state.voidAnchorId, state.erasureLatchId, state.shotErasedDispatches, state.markDispatches,
+        state.pendingSkillDrafts, state.skillBufferMask,
+    )) signature = mix(signature, value)
     state.enemies.forEach {
         signature = mix(signature, it.characterMarkTime.toRawBits())
         signature = mix(signature, it.lastCharacterDash)
