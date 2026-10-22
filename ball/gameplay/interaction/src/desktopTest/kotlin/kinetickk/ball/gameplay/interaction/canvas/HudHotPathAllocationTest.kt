@@ -179,7 +179,11 @@ class HudHotPathAllocationTest {
                 }
                 repeat(FRAMES) { empty(); hud(it) }
                 val emptyBytes = allocated { repeat(FRAMES) { empty() } }
-                val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
+                // The steady frame: the quietest of three full cycles. Each cycle replays the same
+                // frames, so an allocation that recurs every frame or every cycle shows in all three;
+                // a one-off burst while the JIT recompiles (seen after other HUD tests in the same JVM,
+                // ≈ 27 KB once) shows in one only.
+                val hudBytes = List(STEADY_CYCLES) { allocated { repeat(FRAMES) { hud(it) } } }.min()
                 val perFrame = (hudBytes - emptyBytes) / FRAMES
                 assertTrue(perFrame <= 64, "$name level cluster at $width x $height allocates $perFrame bytes above an empty frame")
             }
@@ -288,5 +292,6 @@ class HudHotPathAllocationTest {
 
     private companion object {
         const val FRAMES = 400
+        const val STEADY_CYCLES = 3
     }
 }
