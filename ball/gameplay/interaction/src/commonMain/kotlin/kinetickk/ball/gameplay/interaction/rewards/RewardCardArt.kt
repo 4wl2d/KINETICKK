@@ -80,6 +80,18 @@ private val FamilyArtByName: Map<String, RewardCardArt> = mapOf(
     "Alchemical Core" to RewardCardArt.PRISMATIC_CORE,
     "Overture" to RewardCardArt.OVERCHARGED_CAPACITOR,
     "Encore Protocol" to RewardCardArt.VOLATILE_COMPOUND,
+    "Quench Seal" to RewardCardArt.SHATTERGLASS,
+    "Arc Furnace" to RewardCardArt.STORM_LATTICE,
+    "Degenerate Matter" to RewardCardArt.DARK_STAR,
+    "Ember Treads" to RewardCardArt.TUNGSTEN_HEART,
+    "Cryogenic Bus" to RewardCardArt.STORM_LATTICE,
+    "Glacier Scope" to RewardCardArt.SHATTERGLASS,
+    "Glassblower's Ram" to RewardCardArt.TUNGSTEN_HEART,
+    "Like Poles" to RewardCardArt.DARK_STAR,
+    "Shunt Resistor" to RewardCardArt.OVERCHARGED_CAPACITOR,
+    "Grave Mulch" to RewardCardArt.NECROTIC_EXCHANGE,
+    "Blast Rider" to RewardCardArt.REDLINE_GOVERNOR,
+    "Choir Prism" to RewardCardArt.SHATTERGLASS,
 )
 
 /**

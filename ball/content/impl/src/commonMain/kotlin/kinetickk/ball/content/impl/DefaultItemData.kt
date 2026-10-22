@@ -34,6 +34,8 @@ import kinetickk.ball.content.api.ItemRarity.LEGENDARY
 import kinetickk.ball.content.api.ItemRarity.RARE
 import kinetickk.ball.content.api.ItemRarity.UNCOMMON
 import kinetickk.ball.content.api.ItemRule
+import kinetickk.ball.content.api.ReactionAspect
+import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.SkillPick
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.foundation.collections.ImmutableList
@@ -731,6 +733,68 @@ private val Drafts: List<ItemDraft> = listOf(
         rules = listOf(ItemRule.WhileModifier(EffectCondition.ApexActive, BuffStat.DAMAGE, 0.2f)),
         unlock = 28,
         rebirth = 3),
+
+    // KEYSTONES I (REACTIONS 0–11) (ids 197-208).
+    ItemDraft("Quench Seal", "Fire meets frost and the steel sets hard.", EPIC, listOf(PRECISION), listOf(StatusElement.THERMAL, StatusElement.CRYO),
+        rules = listOf(ItemRule.ReactionKeystone(ReactionId.THERMAL_SHOCK), ItemRule.CritDamageVersus(EffectCondition.TargetFrozen, 0.5f)),
+        unlock = 10),
+    ItemDraft("Arc Furnace", "The plasma never pools; it leaps to the next charged hull.", EPIC, listOf(CHAIN),
+        listOf(StatusElement.THERMAL, StatusElement.ION),
+        clauses = listOf(on(EffectTrigger.REACTION, apply(StatusElement.ION, 2, 220f),
+            given = listOf(EffectCondition.ReactionIs(ReactionId.PLASMA_BURST)))),
+        rules = listOf(ItemRule.ReactionKeystone(ReactionId.PLASMA_BURST)),
+        unlock = 10),
+    ItemDraft("Degenerate Matter", "A star too small to burn and too heavy to let go.", EPIC, listOf(ANCHOR),
+        listOf(StatusElement.THERMAL, StatusElement.GRAVITIC),
+        rules = listOf(ItemRule.ReactionKeystone(ReactionId.FUSION), ItemRule.ReactionTuning(ReactionId.FUSION, ReactionAspect.RADIUS, 0.3f)),
+        unlock = 12),
+    ItemDraft("Ember Treads", "Wherever you roll, the rot catches.", EPIC, listOf(RAM), listOf(StatusElement.THERMAL, StatusElement.ENTROPY),
+        clauses = listOf(on(EffectTrigger.DASH_HIT, apply(StatusElement.ENTROPY, 2))),
+        rules = listOf(ItemRule.ReactionKeystone(ReactionId.WILDFIRE)),
+        unlock = 10),
+    ItemDraft("Cryogenic Bus", "Cold enough that the current meets no resistance at all.", EPIC, listOf(CHAIN),
+        listOf(StatusElement.CRYO, StatusElement.ION),
+        rules = listOf(
+            ItemRule.ReactionKeystone(ReactionId.SUPERCONDUCT),
+            ItemRule.ReactionTuning(ReactionId.SUPERCONDUCT, ReactionAspect.RADIUS, 0.3f),
+        ),
+        unlock = 12),
+    ItemDraft("Glacier Scope", "Point the avalanche where you want it to fall.", EPIC, listOf(PRECISION),
+        listOf(StatusElement.CRYO, StatusElement.GRAVITIC),
+        rules = listOf(
+            ItemRule.ReactionKeystone(ReactionId.GLACIER_CRUSH),
+            ItemRule.ReactionTuning(ReactionId.GLACIER_CRUSH, ReactionAspect.RADIUS, 0.4f),
+        ),
+        unlock = 12),
+    ItemDraft("Glassblower's Ram", "Blow through brittle things and they shatter behind you.", EPIC, listOf(RAM),
+        listOf(StatusElement.CRYO, StatusElement.ENTROPY),
+        rules = listOf(
+            ItemRule.ReactionKeystone(ReactionId.EMBRITTLE),
+            ItemRule.WhileModifier(EffectCondition.SpeedAtLeast(500f), BuffStat.IMPACT, 0.15f),
+        ),
+        unlock = 12),
+    ItemDraft("Like Poles", "Some things are not meant to touch.", EPIC, listOf(RAM), listOf(StatusElement.ION, StatusElement.GRAVITIC),
+        clauses = listOf(on(EffectTrigger.SLAM, EffectAction.Burst(120f, DamageBasis.FLAT, 40f), cooldown = 0.5f)),
+        rules = listOf(ItemRule.ReactionKeystone(ReactionId.MAGNETIZE)),
+        unlock = 12),
+    ItemDraft("Shunt Resistor", "The current skips the weapon and goes straight to your skills.", EPIC, listOf(OVERCLOCK),
+        listOf(StatusElement.ION, StatusElement.ENTROPY),
+        rules = listOf(ItemRule.ReactionKeystone(ReactionId.FEEDBACK), ItemRule.SkillPower(null, 0.15f)),
+        unlock = 10),
+    ItemDraft("Grave Mulch", "What dies in the pit feeds everything else in it.", EPIC, listOf(CHAIN),
+        listOf(StatusElement.GRAVITIC, StatusElement.ENTROPY),
+        rules = listOf(ItemRule.ReactionKeystone(ReactionId.ROT_WELL), ItemRule.ReactionTuning(ReactionId.ROT_WELL, ReactionAspect.RADIUS, 0.3f)),
+        unlock = 12),
+    ItemDraft("Blast Rider", "Why Dash when the thunder can carry you?", EPIC, listOf(DRIVE), listOf(StatusElement.THERMAL, StatusElement.SONIC),
+        rules = listOf(
+            ItemRule.ReactionKeystone(ReactionId.THUNDERCLAP),
+            ItemRule.WhileModifier(EffectCondition.SpeedAtLeast(900f), BuffStat.DAMAGE_REDUCTION, 0.2f),
+        ),
+        unlock = 14),
+    ItemDraft("Choir Prism", "Seven shards, one note, and everything ringing breaks.", EPIC, listOf(CHAIN),
+        listOf(StatusElement.CRYO, StatusElement.SONIC),
+        rules = listOf(ItemRule.ReactionKeystone(ReactionId.SHATTERPOINT), ItemRule.ElementPotency(StatusElement.SONIC, 0.3f)),
+        rebirth = 1),
 )
 
 /** A reaction clause condition naming both elements: it holds only for the reaction between them. */
