@@ -6,7 +6,7 @@ package kinetickk.ball.profile.interaction.localization
 import kinetickk.foundation.common.localization.TextResource
 
 /**
- * Copy for the redesigned Armory, Matrix and Rebirth screens and their shared header. Casing is
+ * Copy for the Workshop (characters, weapons, Core Matrix), the Rebirth screen and their shared header. Casing is
  * applied by the text style, so the strings stay in sentence case.
  */
 internal enum class ProfileScreensRedesignText(
@@ -18,10 +18,6 @@ internal enum class ProfileScreensRedesignText(
     CountOf("{0}/{1}", "{0}/{1}"),
     PageStep("Page {0} of {1}", "Страница {0} из {1}"),
 
-    ArmoryInfo(
-        "Unlock a weapon with Matter to start runs with it and to meet it in run offers. Every character can use every weapon; its signature character, a Relic with its key and points in its tags make it stronger.",
-        "Откройте оружие за материю, чтобы начинать с ним забеги и встречать его в предложениях забега. Любой персонаж может использовать любое оружие; его усиливают фирменный персонаж, реликвия с его ключом и очки его тегов.",
-    ),
     WeaponsList("Weapons", "Оружие"),
     Starter("Starter", "Стартовое"),
     Owned("Owned", "Открыто"),
@@ -45,8 +41,8 @@ internal enum class ProfileScreensRedesignText(
         "Действует с вашим персонажем: +20% мощности оружия, забег начинается на уровень оружия выше.",
     ),
     ArmorySignatureInactive(
-        "Choose {0} in the Hangar for +20% weapon power and a start one weapon level higher.",
-        "Выберите «{0}» в ангаре: +20% мощности оружия и старт на уровень оружия выше.",
+        "Choose {0} on the Characters tab for +20% weapon power and a start one weapon level higher.",
+        "Выберите «{0}» во вкладке «Персонажи»: +20% мощности оружия и старт на уровень оружия выше.",
     ),
     ArmoryTwist("Signature twist", "Фирменный эффект"),
     ArmoryHarmony("Harmony with the {0} key", "Гармония ключа «{0}»"),
@@ -76,10 +72,6 @@ internal enum class ProfileScreensRedesignText(
     ArmoryRefused("Not applied. Try again", "Не применено. Попробуйте ещё раз"),
     ArmorySignatureMark("Signature of your character", "Фирменное для вашего персонажа"),
 
-    MatrixInfo(
-        "The Core Matrix holds permanent upgrades bought with Matter. Every Form shares them and they apply from the start of every run. A node opens once any node joined to it from above is owned; Reset returns all the Matter for free.",
-        "Матрица Ядра хранит постоянные улучшения за материю. Они общие для всех форм и действуют с начала каждого забега. Узел открывается, когда куплен любой связанный с ним узел выше; сброс бесплатно возвращает всю материю.",
-    ),
     MatrixNodes("Matrix nodes", "Узлы матрицы"),
     RankOf("Rank {0}/{1}", "Ранг {0}/{1}"),
     BuyRank("Buy rank", "Купить ранг"),
@@ -87,10 +79,6 @@ internal enum class ProfileScreensRedesignText(
     Reset("Reset", "Сброс"),
     ResetRefund("Reset refunds {0} Matter", "Сброс вернёт {0} материи"),
     Keystone("Keystone", "Ключевой узел"),
-    HangarInfo(
-        "Choose the character for your next run. Each form has its own mechanic and traits; new forms unlock with achievements and Reborn ranks.",
-        "Выберите персонажа для следующего забега. У каждой формы своя механика и особенности; новые формы открываются достижениями и рангами перерождения.",
-    ),
     HangarRoster("Characters", "Персонажи"),
     HangarSelect("Select", "Выбрать"),
     HangarSelected("Selected", "Выбран"),
@@ -116,6 +104,40 @@ internal enum class ProfileScreensRedesignText(
     RequiresEitherNode("Requires {0} or {1}.", "Нужен узел «{0}» или «{1}»."),
     NodeAvailable("Available", "Доступно"),
     NodeMaxed("Every rank owned.", "Все ранги куплены."),
+
+    WorkshopTitle("Workshop", "Мастерская"),
+    TabCharacters("Characters", "Персонажи"),
+    TabWeapons("Weapons", "Оружие"),
+    TabMatrix("Core Matrix", "Матрица Ядра"),
+    TabMatrixShort("Matrix", "Матрица"),
+    SegmentUpgrade("Upgrade", "Улучшение"),
+    SegmentTraits("Traits", "Особенности"),
+    SegmentDetails("Details", "Подробности"),
+    UpgradeBuy("Upgrade", "Улучшить"),
+    UpgradeNow("Now", "Сейчас"),
+    UpgradeNext("Next", "Далее"),
+    UpgradeMaximum("Maximum", "Максимум"),
+    SelectInRun("In a run", "Идёт забег"),
+    WorkshopCharactersInfo(
+        "Pick the character for your next run and upgrade it with Matter. Each level costs twice the last one. Upgrades are permanent and stay after every rebirth; those bought during a run apply from the next one.",
+        "Выберите персонажа для следующего забега и улучшайте его за материю. Каждый уровень вдвое дороже предыдущего. Улучшения постоянны и сохраняются после перерождения; купленные во время забега действуют со следующего.",
+    ),
+    WorkshopWeaponsInfo(
+        "Unlock starting weapons and upgrade the ones you own. A weapon's upgrade works whenever you wield it, even after switching to it mid-run.",
+        "Открывайте стартовое оружие и улучшайте открытое. Улучшение оружия действует всегда, когда оно у вас в руках, даже если вы переключились на него посреди забега.",
+    ),
+    WorkshopMatrixInfo(
+        "The Core Matrix: permanent upgrades bought with Matter in four branches. Every form shares them, they stay after every rebirth, and a reset refunds them for free.",
+        "Матрица Ядра: постоянные улучшения за материю в четырёх ветвях. Они действуют на все формы, сохраняются после перерождения, а сброс бесплатно возвращает материю.",
+    ),
+    AnnounceTab("{0}, {1} of {2}", "{0}: {1} из {2}"),
+    AnnounceUpgrade("{0} upgraded to Lvl {1}. {2} Matter left", "{0}: улучшение до ур. {1}. Осталось {2} материи"),
+    AnnounceSelected("{0} selected", "Выбран персонаж «{0}»"),
+    AnnounceUnlocked("{0} unlocked and set as starter", "Открыто и выбрано стартовым: «{0}»"),
+    AnnounceEquipped("{0} set as starter", "Стартовое оружие: «{0}»"),
+    AnnounceRank("{0} rank {1}", "{0}: ранг {1}"),
+    AnnounceReset("Matrix reset. {0} Matter refunded", "Матрица сброшена. Возвращено {0} материи"),
+    AnnounceSelectionInRun("Characters change between runs", "Персонажа можно сменить только между забегами"),
 
     TierTag("Tier {0}", "Ступень {0}"),
     TierLadder("Rebirth tiers {0} to {1}, current {2}", "Ступени перерождения с {0} по {1}, текущая {2}"),

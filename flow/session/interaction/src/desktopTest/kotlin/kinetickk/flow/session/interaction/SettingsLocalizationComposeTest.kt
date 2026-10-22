@@ -20,8 +20,6 @@ import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.gameplay.interaction.GameplayPresentation
 import kinetickk.ball.profile.api.*
-import kinetickk.ball.profile.interaction.armory.api.*
-import kinetickk.ball.profile.interaction.matrix.api.*
 import kinetickk.ball.profile.interaction.rebirth.api.*
 import kinetickk.ball.profile.interaction.settings.impl.DefaultSettingsFeature
 import kinetickk.flow.session.api.*
@@ -115,12 +113,7 @@ private fun LocalizationShell(
                 override fun activePresentation() = null
                 @Composable override fun Content(inputEnabled: Boolean, onOutput: (GameplayInteractionOutput) -> Unit) = Unit
             },
-            matrixFeature = object : MatrixFeature {
-                @Composable override fun Content(routeToken: Long, onOutput: (MatrixOutput) -> Unit) = Unit
-            },
-            armoryFeature = object : ArmoryFeature {
-                @Composable override fun Content(activeRunWeapon: WeaponId?, onOutput: (ArmoryOutput) -> Unit) = Unit
-            },
+            workshopFeature = NoWorkshopFeature,
             rebirthFeature = object : RebirthFeature {
                 override fun playAcceptedFeedback() = Unit
                 @Composable override fun Content(routeToken: Long, eligible: Boolean, confirmationArmed: Boolean, onOutput: (RebirthOutput) -> Unit) = Unit

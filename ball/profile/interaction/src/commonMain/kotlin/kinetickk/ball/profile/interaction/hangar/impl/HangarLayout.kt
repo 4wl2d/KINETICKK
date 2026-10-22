@@ -9,6 +9,9 @@ import kinetickk.ball.profile.interaction.ProfileFrame
 import kinetickk.ball.profile.interaction.ProfileLayoutMode
 import kinetickk.ball.profile.interaction.profileHeaderBackRect
 import kinetickk.ball.profile.interaction.profileLayoutGrow
+import kinetickk.ball.profile.interaction.workshop.impl.WorkshopSegment
+import kinetickk.ball.profile.interaction.workshop.impl.workshopSegmentHeight
+import kinetickk.ball.profile.interaction.workshop.impl.workshopUpgradeBlockHeight
 import kotlin.math.max
 import kotlin.math.min
 
@@ -34,12 +37,19 @@ internal class HangarLayout(
     val difficulty: Rect,
     /** The signature block: its label beside one row per signature weapon (each with its harmony line). */
     val signature: Rect,
+    /** The unlock progress (a locked character's Upgrade segment). */
     val unlock: Rect,
     val select: Rect,
     /** One row per signature weapon inside [signature] (detail content coordinates), harmony line included. */
     val signatureRows: List<Rect> = emptyList(),
     /** Height (px) of a signature row's main line (icon, name, state), above its harmony line. */
     val signatureLine: Float = 0f,
+    /** The segmented switch under the description (Upgrade, Traits). */
+    val segments: Rect = Rect.Zero,
+    /** The shown segment: the blocks of the other one are 0 px tall at the segment body's top. */
+    val segment: WorkshopSegment = WorkshopSegment.UPGRADE,
+    /** The upgrade block's slot (an unlocked character's Upgrade segment). */
+    val upgrade: Rect = Rect.Zero,
 ) {
     val detailScrollMax: Float get() = max(0f, detailContentHeight - detailViewport.height)
 }
@@ -73,6 +83,10 @@ internal fun hangarLayout(
     backWidth: Float,
     /** Per signature weapon, whether it shows a harmony line under its row. */
     signatureHarmony: List<Boolean> = listOf(false, false),
+    /** The detail segment shown under the description; the other takes no room. */
+    segment: WorkshopSegment = WorkshopSegment.UPGRADE,
+    /** The inspected character is locked: its Upgrade segment shows the unlock progress instead of the upgrade block. */
+    locked: Boolean = false,
     descriptionHeight: ((width: Float) -> Float)? = null,
 ): HangarLayout {
     fun d(value: Float) = frame.d(value)
@@ -131,7 +145,7 @@ internal fun hangarLayout(
     val viewport = Rect(detailLeft, detailTop, detailRight, max(detailTop + d(40f), select.top - d(if (regular) 16f else 8f)))
     val monoHeight = d(type.mono) * 1.4f * t
     val previewHeight = d(when (frame.mode) {
-        ProfileLayoutMode.REGULAR -> 180f
+        ProfileLayoutMode.REGULAR -> 132f
         ProfileLayoutMode.COMPACT_LANDSCAPE -> 70f
         ProfileLayoutMode.COMPACT_PORTRAIT -> 80f
     })
@@ -142,29 +156,37 @@ internal fun hangarLayout(
     val descriptionTop = name.bottom + d(if (regular) 10f else 5f)
     val description = Rect(0f, descriptionTop, width,
         descriptionTop + (descriptionHeight?.invoke(width) ?: (d(type.body) * 1.4f * 3f * t)))
+    // The segmented switch under the description; only the shown segment's blocks take room below it.
+    val segmentsTop = description.bottom + d(if (regular) 16f else 8f)
+    val segments = Rect(0f, segmentsTop, width, segmentsTop + workshopSegmentHeight(frame))
+    val bodyTop = segments.bottom + d(if (regular) 16f else 8f)
+    fun hidden() = Rect(0f, bodyTop, width, bodyTop)
+    val showTraits = segment == WorkshopSegment.TRAITS
+    val showUpgrade = segment == WorkshopSegment.UPGRADE
     val rowHeight = d(if (regular) 24f else 17f) * grow
-    var y = description.bottom + d(if (regular) 16f else 8f)
+    var y = bodyTop
     val traits = List(4) { index ->
-        Rect(0f, y + index * rowHeight, width, y + (index + 1) * rowHeight)
+        if (showTraits) Rect(0f, y + index * rowHeight, width, y + (index + 1) * rowHeight) else hidden()
     }
-    y = traits.last().bottom + d(if (regular) 10f else 5f)
-    val difficulty = Rect(0f, y, width, y + rowHeight)
-    y = difficulty.bottom + d(if (regular) 10f else 5f)
+    y = if (showTraits) traits.last().bottom + d(if (regular) 10f else 5f) else bodyTop
+    val difficulty = if (showTraits) Rect(0f, y, width, y + rowHeight) else hidden()
+    y = if (showTraits) difficulty.bottom + d(if (regular) 10f else 5f) else bodyTop
     // Each signature weapon takes a row (icon, name, state), plus its harmony line when a heirloom
     // candidate carries its key.
     val weaponRow = max(rowHeight * 1.3f, frame.density * 28f)
     val signatureTop = y
     val signatureRows = signatureHarmony.ifEmpty { listOf(false) }.map { harmony ->
+        if (!showTraits) return@map hidden()
         val row = Rect(0f, y, width, y + weaponRow + if (harmony) monoHeight else 0f)
         y = row.bottom + d(if (regular) 4f else 2f)
         row
     }
-    val signature = Rect(0f, signatureTop, width, signatureRows.last().bottom)
-    y = signature.bottom + d(if (regular) 12f else 6f)
-    val unlock = Rect(0f, y, width, y + monoHeight * 2.2f)
-    val contentHeight = unlock.bottom + d(4f)
+    val signature = if (showTraits) Rect(0f, signatureTop, width, signatureRows.last().bottom) else hidden()
+    val unlock = if (showUpgrade && locked) Rect(0f, bodyTop, width, bodyTop + monoHeight * 2.2f) else hidden()
+    val upgrade = if (showUpgrade && !locked) Rect(0f, bodyTop, width, bodyTop + workshopUpgradeBlockHeight(frame)) else hidden()
+    val contentHeight = maxOf(signature.bottom, unlock.bottom, upgrade.bottom) + d(4f)
     return HangarLayout(frame, back, roster, tiles, viewport, contentHeight, preview, tag, name, description, traits, difficulty,
-        signature, unlock, select, signatureRows, weaponRow)
+        signature, unlock, select, signatureRows, weaponRow, segments, segment, upgrade)
 }
 
 /** Maps a press to the Hangar action it hits: header Back, a roster tile or the Select button. */

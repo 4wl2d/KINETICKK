@@ -17,6 +17,13 @@ import kinetickk.ball.profile.interaction.CatalogHeirlooms
 import kinetickk.ball.profile.interaction.CatalogRebirthRelics
 import kinetickk.ball.profile.interaction.CatalogWeapons
 import kinetickk.ball.profile.interaction.hangar.api.HangarRenderModel
+import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignText
+import kinetickk.ball.profile.interaction.profileTextScale
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopTab
+import kinetickk.ball.profile.interaction.workshop.impl.WorkshopPanel
+import kinetickk.ball.profile.interaction.workshop.impl.WorkshopSegment
+import kinetickk.foundation.common.localization.text
+import kinetickk.foundation.design.LocalAppLanguage
 
 /** Screenshot access to the Hangar's internal content for the profile shot suite. */
 internal object HangarShotAccess {
@@ -29,9 +36,31 @@ internal object HangarShotAccess {
             PlayerLoadout(selected, WeaponId.FLUX_WAKE, setOf(WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR, WeaponId.ION_SWARM))),
             CatalogHeirlooms, CatalogRebirthRelics))
 
+    /** The Characters tab as the Workshop hosts it, inspecting [inspected] with the detail on [segment]. */
     @Composable
-    fun Content(model: HangarRenderModel, inspected: CoreShape, textScale: Float, detail: HangarDetailProbe? = null) {
-        HangarContent(HangarState(model, inspected), textScale, remember { ScrollState(0) }, detail?.holder ?: remember { HangarLayoutHolder() }) {}
+    fun Content(
+        model: HangarRenderModel,
+        inspected: CoreShape,
+        textScale: Float,
+        detail: HangarDetailProbe? = null,
+        segment: WorkshopSegment = WorkshopSegment.UPGRADE,
+        selectionAvailable: Boolean = true,
+    ) {
+        val language = LocalAppLanguage.current
+        val holder = detail?.holder ?: remember { HangarLayoutHolder() }
+        val scroll = remember { ScrollState(0) }
+        WorkshopPanel(
+            tab = WorkshopTab.CHARACTERS,
+            count = language.text(ProfileScreensRedesignText.CountOf, model.unlockedCount, model.shapes.size),
+            info = language.text(ProfileScreensRedesignText.WorkshopCharactersInfo),
+            matter = model.matter,
+            scale = profileTextScale(textScale),
+            onBack = {},
+            onAction = {},
+            background = { frame -> drawHangarBackground(frame, holder.layout) },
+        ) { frame, _ ->
+            HangarBody(frame, HangarState(model, inspected, selectionAvailable), segment, textScale, scroll, holder) {}
+        }
     }
 
     /** The detail panel's geometry of the last frame (detail viewport and signature block). */

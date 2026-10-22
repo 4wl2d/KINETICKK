@@ -16,19 +16,17 @@ import kotlin.test.assertNull
 /** Deterministic cross-platform flow QA; Wasm executes this class in an isolated browser. */
 class BrowserRuntimeQaTest {
     @Test
-    fun exactEightRouteInventoryOpensAndClosesEveryOverlay() {
+    fun exactSixRouteInventoryOpensAndClosesEveryOverlay() {
         val inventory = listOf(
             AppDestination.Home,
             AppDestination.Gameplay,
             AppDestination.Settings,
-            AppDestination.Lab,
-            AppDestination.Armory,
+            AppDestination.Workshop,
             AppDestination.Rebirth,
             AppDestination.Codex,
-            AppDestination.Hangar,
         )
-        assertEquals(8, inventory.size)
-        assertEquals(8, inventory.toSet().size)
+        assertEquals(6, inventory.size)
+        assertEquals(6, inventory.toSet().size)
         val rig = AppSessionTestRig()
 
         inventory.drop(2).forEach { destination ->

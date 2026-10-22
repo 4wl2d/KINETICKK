@@ -162,7 +162,8 @@ class RedesignShotsProfileTest {
             shoot("armory", "sheet$suffix") {
                 ArmoryContent(active, Weapons, WeaponMastery.entries, ArmoryViewState(WeaponId.ION_SWARM), scale,
                     remember { ScrollState(0) }, remember { ArmoryLayoutHolder() },
-                    kinetickk.ball.content.api.defaultCoreShapeDefinitions(), CatalogRebirthRelics, detailScrollStart = 10_000) {}
+                    kinetickk.ball.content.api.defaultCoreShapeDefinitions(), CatalogRebirthRelics, detailScrollStart = 10_000,
+                    segment = kinetickk.ball.profile.interaction.workshop.impl.WorkshopSegment.DETAILS) {}
             }
             // A Rebirth-gated weapon, refused once: the tile names the rank and the panel the reason.
             shoot("armory", "reborn$suffix") {
@@ -175,7 +176,8 @@ class RedesignShotsProfileTest {
         // Between the default and the largest size (the phone ladder stacks here).
         shoot("armory", "owned-text150") {
             ArmoryContent(model, Weapons, WeaponMastery.entries, ArmoryViewState(WeaponId.MORNINGSTAR), 1.5f,
-                remember { ScrollState(0) }, remember { ArmoryLayoutHolder() }) {}
+                remember { ScrollState(0) }, remember { ArmoryLayoutHolder() },
+                segment = kinetickk.ball.profile.interaction.workshop.impl.WorkshopSegment.MASTERY) {}
         }
         // The same at 100 %.
         shoot("armory", "short-text100") {

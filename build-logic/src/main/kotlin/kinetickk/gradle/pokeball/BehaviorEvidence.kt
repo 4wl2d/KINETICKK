@@ -364,7 +364,7 @@ internal val runtimeBehaviorEvidence = listOf(
     BehaviorEvidence(
         ":flow:session:api", "kinetickk.flow.session.api.AppSessionApiContractTest",
         setOf(
-            "shellProjectionRetainsExactlyEightRoutesAndOnlySessionOwnedWorkflowState",
+            "shellProjectionRetainsExactlySixRoutesAndOnlySessionOwnedWorkflowState",
         ),
     ),
     BehaviorEvidence(

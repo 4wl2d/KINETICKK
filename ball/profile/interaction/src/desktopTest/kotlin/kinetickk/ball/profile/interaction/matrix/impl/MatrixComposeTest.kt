@@ -49,7 +49,12 @@ import kinetickk.ball.profile.api.ProfileRejection
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
-import kinetickk.ball.profile.interaction.matrix.api.MatrixOutput
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopOutput
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopTab
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopTabRequest
+import kinetickk.ball.profile.interaction.workshop.impl.DefaultWorkshopFeature
+import kinetickk.foundation.collections.immutableListOf
+import androidx.compose.runtime.remember
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.resource.audio.api.AudioPreferences
@@ -68,13 +73,16 @@ class MatrixComposeTest {
         port: MatrixTestPort,
         width: Float = 1440f,
         height: Float = 810f,
-        outputs: MutableList<MatrixOutput> = mutableListOf(),
+        outputs: MutableList<WorkshopOutput> = mutableListOf(),
         test: androidx.compose.ui.test.ComposeUiTest.() -> Unit,
     ) = runSkikoComposeUiTest(Size(width, height), Density(1f)) {
         setContent {
             CompositionLocalProvider(LocalAppLanguage provides AppLanguage.English) {
                 Box(Modifier.requiredSize(width.dp, height.dp)) {
-                    DefaultMatrixFeature(port, defaultMatrixNodes(), SilentAudio).Content(0L) { outputs += it }
+                    val feature = remember {
+                        DefaultWorkshopFeature(port, defaultMatrixNodes(), immutableListOf(), immutableListOf(), immutableListOf(), SilentAudio)
+                    }
+                    feature.Content(0L, WorkshopTabRequest(WorkshopTab.MATRIX, 1), true, null) { outputs += it }
                 }
             }
         }

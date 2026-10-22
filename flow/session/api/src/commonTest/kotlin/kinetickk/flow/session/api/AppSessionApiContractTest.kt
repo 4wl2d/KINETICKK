@@ -27,20 +27,18 @@ class AppSessionApiContractTest {
     }
 
     @Test
-    fun shellProjectionRetainsExactlyEightRoutesAndOnlySessionOwnedWorkflowState() {
+    fun shellProjectionRetainsExactlySixRoutesAndOnlySessionOwnedWorkflowState() {
         val destinations = listOf(
             AppDestination.Home,
             AppDestination.Gameplay,
             AppDestination.Settings,
-            AppDestination.Lab,
-            AppDestination.Armory,
+            AppDestination.Workshop,
             AppDestination.Rebirth,
             AppDestination.Codex,
-            AppDestination.Hangar,
         )
-        assertEquals(8, destinations.size)
+        assertEquals(6, destinations.size)
         assertEquals(2, destinations.count(AppDestination::isBaseDestination))
-        assertEquals(6, destinations.count(AppDestination::isOverlayDestination))
+        assertEquals(4, destinations.count(AppDestination::isOverlayDestination))
 
         val projection = AppShellProjection(
             instanceId = LOCAL_APP_SESSION_INSTANCE_ID,
@@ -64,7 +62,12 @@ class AppSessionApiContractTest {
         )
         assertTrue(projection.rebirthEligible)
         assertTrue(projection.normalInputEnabled)
+        // Characters change between runs: selection is offered over the Home base only, under any overlay.
+        assertFalse(projection.characterSelectionAvailable)
+        assertTrue(projection.copy(base = AppDestination.Home, overlay = AppDestination.Workshop, activeRunId = null)
+            .characterSelectionAvailable)
         assertFailsWith<IllegalArgumentException> { projection.copy(base = AppDestination.Settings) }
+        assertFailsWith<IllegalArgumentException> { projection.copy(base = AppDestination.Workshop) }
         assertFailsWith<IllegalArgumentException> { projection.copy(overlay = AppDestination.Home) }
         assertFailsWith<IllegalArgumentException> { projection.copy(activeRunId = null) }
     }

@@ -53,7 +53,13 @@ import kinetickk.ball.profile.api.ProfileRejection
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.RebirthProgressProjection
 import kinetickk.ball.profile.api.RunBootstrapProjection
-import kinetickk.ball.profile.interaction.hangar.api.HangarOutput
+import kinetickk.ball.content.api.WeaponMastery
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopOutput
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopTab
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopTabRequest
+import kinetickk.ball.profile.interaction.workshop.impl.DefaultWorkshopFeature
+import kinetickk.foundation.collections.immutableListOf
+import androidx.compose.runtime.remember
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
@@ -74,19 +80,26 @@ class HangarComposeTest {
         width: Float = 1440f,
         height: Float = 810f,
         language: AppLanguage = AppLanguage.English,
-        outputs: MutableList<HangarOutput> = mutableListOf(),
+        outputs: MutableList<WorkshopOutput> = mutableListOf(),
         withWeapons: Boolean = false,
+        selectionAvailable: Boolean = true,
         test: androidx.compose.ui.test.ComposeUiTest.() -> Unit,
     ) = runSkikoComposeUiTest(Size(width, height), Density(1f)) {
         setContent {
             CompositionLocalProvider(LocalAppLanguage provides language) {
                 Box(Modifier.requiredSize(width.dp, height.dp)) {
-                    val feature = if (withWeapons) {
-                        DefaultHangarFeature(port, defaultCoreShapeDefinitions(), HangarSilentAudio, CatalogWeapons, CatalogRebirthRelics)
-                    } else {
-                        DefaultHangarFeature(port, defaultCoreShapeDefinitions(), HangarSilentAudio)
+                    val feature = remember {
+                        DefaultWorkshopFeature(port, immutableListOf(), if (withWeapons) CatalogWeapons else immutableListOf(),
+                            WeaponMastery.entries.toImmutableList(), defaultCoreShapeDefinitions(), HangarSilentAudio,
+                            if (withWeapons) CatalogRebirthRelics else immutableListOf())
                     }
-                    feature.Content(0L) { outputs += it }
+                    feature.Content(0L, WorkshopTabRequest(WorkshopTab.CHARACTERS, 1), selectionAvailable, null) { output ->
+                        outputs += output
+                        // Session's part: between runs it runs the Profile's selection command inline.
+                        if (output is WorkshopOutput.SelectCharacter && selectionAvailable) {
+                            port.accept(ProfilePulse.SelectCoreShape(output.shape))
+                        }
+                    }
                 }
             }
         }
@@ -167,12 +180,64 @@ class HangarComposeTest {
     }
 
     @Test
-    fun backLeavesAndEveryLayoutShowsTheWholeRoster() {
-        val outputs = mutableListOf<HangarOutput>()
-        run(HangarTestPort(), outputs = outputs) {
-            onNodeWithTag("profile-hangar-back").performClick()
+    fun midRunTheSelectButtonSaysSoAndNothingIsAsked() {
+        val outputs = mutableListOf<WorkshopOutput>()
+        val port = HangarTestPort()
+        run(port, outputs = outputs, selectionAvailable = false) {
+            onNodeWithTag(tag(CoreShape.PRISM)).performClick()
             waitForIdle()
-            assertEquals(listOf<HangarOutput>(HangarOutput.Back), outputs)
+            onNodeWithTag("profile-hangar-select").assertIsNotEnabled()
+            onNodeWithTag("profile-hangar-select").assert(SemanticsMatcher("names the run") { node ->
+                node.config.getOrElseNullable(SemanticsProperties.ContentDescription) { null }?.joinToString()?.startsWith("In a run") == true
+            })
+            // A second press on the tile and Enter both stay local.
+            onNodeWithTag(tag(CoreShape.PRISM)).performClick()
+            onNodeWithTag(tag(CoreShape.PRISM)).performKeyInput { pressKey(Key.Enter) }
+            waitForIdle()
+            assertTrue(outputs.isEmpty(), "$outputs")
+            assertTrue(port.pulses.isEmpty(), "${port.pulses}")
+        }
+    }
+
+    @Test
+    fun aSelectionTheSessionRefusesIsAnnouncedAsBetweenRuns() {
+        // The Workshop believes selection is available, but Session (the authority) refuses it.
+        val outputs = mutableListOf<WorkshopOutput>()
+        runSkikoComposeUiTest(Size(1440f, 810f), Density(1f)) {
+            val port = HangarTestPort()
+            setContent {
+                CompositionLocalProvider(LocalAppLanguage provides AppLanguage.English) {
+                    Box(Modifier.requiredSize(1440.dp, 810.dp)) {
+                        val feature = remember {
+                            DefaultWorkshopFeature(port, immutableListOf(), immutableListOf(), WeaponMastery.entries.toImmutableList(),
+                                defaultCoreShapeDefinitions(), HangarSilentAudio)
+                        }
+                        feature.Content(0L, WorkshopTabRequest(WorkshopTab.CHARACTERS, 1), true, null) { outputs += it }
+                    }
+                }
+            }
+            mainClock.autoAdvance = false
+            mainClock.advanceTimeBy(64)
+            onNodeWithTag(tag(CoreShape.PRISM)).performClick()
+            mainClock.advanceTimeBy(64)
+            onNodeWithTag("profile-hangar-select").performClick()
+            mainClock.advanceTimeBy(64)
+            assertEquals(listOf<WorkshopOutput>(WorkshopOutput.SelectCharacter(CoreShape.PRISM)), outputs)
+            onNodeWithTag("kinetickk.workshop.announce.alert").assert(SemanticsMatcher.expectValue(
+                SemanticsProperties.ContentDescription, listOf("Characters change between runs")))
+            // The announcement clears after four seconds of presentation time.
+            mainClock.advanceTimeBy(4_100)
+            onNodeWithTag("kinetickk.workshop.announce.alert").assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.ContentDescription))
+        }
+    }
+
+    @Test
+    fun backLeavesAndEveryLayoutShowsTheWholeRoster() {
+        val outputs = mutableListOf<WorkshopOutput>()
+        run(HangarTestPort(), outputs = outputs) {
+            onNodeWithTag("profile-workshop-back").performClick()
+            waitForIdle()
+            assertEquals(listOf<WorkshopOutput>(WorkshopOutput.Back), outputs)
         }
         listOf(844f to 390f, 390f to 844f).forEach { (width, height) ->
             AppLanguage.entries.forEach { language ->
@@ -188,6 +253,10 @@ class HangarComposeTest {
     @Test
     fun theSignatureRowShowsTheInspectedCharactersTwoWeaponsAndTheirHarmony() {
         run(HangarTestPort(heirlooms = listOf(RelicId.STORMHEART_CAPACITOR)), withWeapons = true) {
+            // The signature rows sit behind the Traits segment; the Upgrade segment is shown first.
+            onNodeWithTag("profile-hangar-signature-FLUX_WAKE").assertDoesNotExist()
+            onNodeWithTag("kinetickk.workshop.segment.traits").performClick()
+            waitForIdle()
             // The Circle's signature weapons: Flux Wake (the starter) and Gyre Disc (120 Matter).
             onNodeWithTag("profile-hangar-signature-FLUX_WAKE").assert(stateContains("Starter"))
             onNodeWithTag("profile-hangar-signature-GYRE_DISC").assert(stateContains("120 Matter"))

@@ -3,7 +3,6 @@
 
 package kinetickk.ball.profile.interaction.armory.api
 
-import androidx.compose.runtime.Composable
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.RelicId
 import kinetickk.foundation.collections.ImmutableList
@@ -24,14 +23,7 @@ data class ArmoryRenderModel(
     val heirloomRelics: ImmutableList<RelicId> = immutableListOf(),
 )
 
+/** What the Weapons body asks of its host (the Workshop's shared header owns Back). */
 sealed interface ArmoryOutput {
     data object Back : ArmoryOutput
-}
-
-interface ArmoryFeature {
-    @Composable
-    fun Content(
-        activeRunWeapon: WeaponId?,
-        onOutput: (ArmoryOutput) -> Unit,
-    )
 }

@@ -31,19 +31,23 @@ internal sealed interface HangarAction {
     data object Back : HangarAction
 }
 
-/** Hangar presentation state: the Profile-backed [model] and the inspected character. */
+/**
+ * Characters presentation state: the Profile-backed [model], the inspected character and whether
+ * Session offers selection now ([selectionAvailable]: over the Home base, between runs).
+ */
 internal data class HangarState(
     val model: HangarRenderModel,
     val inspected: CoreShape = model.selected,
+    val selectionAvailable: Boolean = true,
 ) {
     val inspectedShape: HangarShapeRenderModel? get() = model.shape(inspected) ?: model.shapes.firstOrNull()
 
     /** The inspected character can become the next run's character. */
-    val canSelect: Boolean get() = inspectedShape?.let { it.unlocked && it.shape != model.selected } == true
+    val canSelect: Boolean get() = selectionAvailable && inspectedShape?.let { it.unlocked && it.shape != model.selected } == true
 }
 
 internal sealed interface HangarUiEffect {
-    /** Ask Profile to select [shape]; its Nucleus decides whether it is unlocked. */
+    /** Ask Session to select [shape] (between runs); Profile's Nucleus decides whether it is unlocked. */
     data class Select(val shape: CoreShape) : HangarUiEffect
     data class PlayAudio(val cue: ProfileAudioCue) : HangarUiEffect
     data class Emit(val output: HangarOutput) : HangarUiEffect
