@@ -121,6 +121,38 @@ class KkHotPathAllocationTest {
     }
 
     @Test
+    fun skillSlotsInEveryStateDoNotAllocatePerFrame() {
+        val measurer = kkTestMeasurer()
+        val key = measureKkKeyCap(measurer, "Space", 10f)
+        val slots = listOf(Rect(10f, 10f, 62f, 62f), Rect(80f, 10f, 132f, 62f), Rect(150f, 10f, 202f, 62f), Rect(220f, 10f, 272f, 62f))
+        val bitmap = ImageBitmap(400, 120)
+        val scope = CanvasDrawScope()
+        val canvas = Canvas(bitmap)
+        val thread = Thread.currentThread().id
+        var frameIndex = 0
+        fun frame(draw: Boolean) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, Size(400f, 120f)) {
+            val t = (frameIndex++ % 200) / 200f
+            if (!draw) return@draw
+            val ion = measurer.roles.element(2)
+            drawKkSkillSlot(measurer, slots[0], KkIcon.WEAPONS_ARC_COIL, ion, cooldown = 1f - t, ready = false, rank = 2,
+                refundFlash = 1f - t, refundColor = ion, keyLayout = key, rankFill = t)
+            drawKkSkillSlot(measurer, slots[1], KkIcon.WEAPONS_MORNINGSTAR, ion, cooldown = 0f, ready = true, rank = 3,
+                charges = 1, maxCharges = 2, active = t, activeColor = ion, pending = 1f - t, pressed = 1f, readyFlash = t, keyLayout = key)
+            drawKkSkillSlot(measurer, slots[2], KkIcon.WEAPONS_GYRE_DISC, Kk.Bone, cooldown = 0.4f, ready = false, rank = 1,
+                shakeX = 3f * (t - 0.5f), keyLayout = key)
+            drawKkSkillSlot(measurer, slots[3], null, Kk.Mute2, cooldown = 0f, ready = false, rank = 0, locked = true)
+        }
+        repeat(300) { frame(true) } // warm caches and JIT
+        val before = threads.getThreadAllocatedBytes(thread)
+        repeat(500) { frame(false) }
+        val baseline = (threads.getThreadAllocatedBytes(thread) - before) / 500
+        val start = threads.getThreadAllocatedBytes(thread)
+        repeat(500) { frame(true) }
+        val perFrame = (threads.getThreadAllocatedBytes(thread) - start) / 500
+        assertTrue(perFrame - baseline < 64, "skill slots allocate ${perFrame - baseline} bytes per frame")
+    }
+
+    @Test
     fun numbersThatChangeEveryFrameDoNotMeasureText() {
         val measurer = kkTestMeasurer()
         val style = measurer.typography.wideStyle(44f, tabular = true)

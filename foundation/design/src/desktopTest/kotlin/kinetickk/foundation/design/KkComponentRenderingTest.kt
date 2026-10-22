@@ -290,6 +290,64 @@ class KkComponentRenderingTest {
     }
 
     @Test
+    fun skillSlotsShowLockCooldownReadinessRanksChargesAndKeyCaps() {
+        val slot = Rect(60f, 30f, 112f, 82f)
+        val ion = measurer.roles.element(2)
+        fun draw(
+            cooldown: Float = 0f, ready: Boolean = false, rank: Int = 1, charges: Int = -1, maxCharges: Int = 1,
+            active: Float = 0f, pending: Float = 0f, locked: Boolean = false, pressed: Float = 0f, refund: Float = 0f,
+            shake: Float = 0f, key: androidx.compose.ui.text.TextLayoutResult? = null, rankFill: Float = 1f,
+        ) = image(200, 120) {
+            drawKkSkillSlot(measurer, slot, KkIcon.WEAPONS_ARC_COIL, ion, cooldown, ready, rank, charges = charges, maxCharges = maxCharges,
+                active = active, activeColor = ion, pending = pending, locked = locked, pressed = pressed, refundFlash = refund,
+                refundColor = Kk.Bone, shakeX = shake, keyLayout = key, rankFill = rankFill)
+        }
+        val ready = draw(ready = true)
+        val cooling = draw(cooldown = 0.6f)
+        // Ready: the `you` glow outside the face; cooling: none, and the sweep darkens the icon.
+        val glow = (20 until 100).count { y -> colorDistance(ready.at(56, y), Kk.Ink.toArgb()) > 8 }
+        assertTrue(glow > 10, "ready glow outside the slot ($glow)")
+        assertEquals(0, (20 until 100).count { y -> colorDistance(cooling.at(56, y), Kk.Ink.toArgb()) > 8 }, "glow while cooling")
+        assertTrue(cooling.countNear(ion, 20) < ready.countNear(ion, 20) - 20, "the sweep does not cover the icon")
+        // Locked: the lock in Mute2, no element icon, no pips.
+        val locked = draw(locked = true)
+        assertEquals(0, locked.countNear(ion, 20))
+        assertTrue(locked.countNear(Kk.Mute2, 20) > 20, "lock glyph")
+        assertEquals(0, locked.countNear(Kk.Volt, 20))
+        // Rank pips: one volt pip at rank I, three at rank II... gold at rank III (no volt pips left).
+        val pips = { image: androidx.compose.ui.graphics.ImageBitmap, color: Color -> image.regionCountNear(color, 60, 30, 100, 40, 20) }
+        val rankOne = pips(draw(rank = 1), Kk.Volt)
+        val rankTwo = pips(draw(rank = 2), Kk.Volt)
+        assertTrue(rankOne > 6 && rankTwo > rankOne + 6, "pips $rankOne → $rankTwo")
+        val top = draw(rank = 3)
+        assertEquals(0, pips(top, Kk.Volt))
+        assertTrue(pips(top, measurer.roles.gold.base) > rankTwo, "rank III pips are gold")
+        // The newest pip fills: half filled shows fewer volt pixels than a full one.
+        assertTrue(pips(draw(rank = 2, rankFill = 0.5f), Kk.Volt) in (rankOne + 1) until rankTwo)
+        // Charges: two squares top-right only when the slot holds two charges.
+        val chargeRegion = { image: androidx.compose.ui.graphics.ImageBitmap -> image.regionCountNear(Kk.Volt, 92, 30, 112, 40, 20) }
+        assertEquals(0, chargeRegion(draw(rank = 0)))
+        val twoCharges = chargeRegion(draw(rank = 0, charges = 2, maxCharges = 2))
+        val oneCharge = chargeRegion(draw(rank = 0, charges = 1, maxCharges = 2))
+        assertTrue(twoCharges > oneCharge && oneCharge > 4, "charges $oneCharge / $twoCharges")
+        // Active share in the element colour, pending in Bone, near the bottom.
+        val bar = { image: androidx.compose.ui.graphics.ImageBitmap, color: Color -> image.regionCountNear(color, 60, 70, 112, 78, 20) }
+        assertTrue(bar(draw(active = 1f, rank = 0), ion) > bar(draw(rank = 0), ion) + 20)
+        assertTrue(bar(draw(pending = 1f, rank = 0), Kk.Bone) > 20)
+        // Press flash: a Bone face; refund edge: Bone pixels inside a cooling face.
+        assertTrue(draw(pressed = 1f).countNear(Kk.Bone, 10) > 1_500)
+        assertTrue(draw(cooldown = 0.5f, refund = 1f).regionCountNear(Kk.Bone, 60, 30, 112, 82, 30) > 20)
+        // Shake moves the whole slot.
+        assertTrue(draw(shake = 3f).argb().zip(draw().argb()).count { (a, b) -> a != b } > 100)
+        // Key cap: an Ink3 plate below the slot with the label.
+        val key = measureKkKeyCap(measurer, "Z", 10f)
+        val capped = draw(key = key)
+        assertTrue(capped.regionCountNear(Kk.Ink3, 70, 85, 102, 97, 4) > 30, "no key plate")
+        assertTrue(capped.regionCountNear(Kk.Bone, 70, 85, 102, 97, 40) > 4, "no key label")
+        assertEquals(0, draw().regionCountNear(Kk.Bone, 70, 85, 102, 97, 40))
+    }
+
+    @Test
     fun tagsStampsChipsToastsAndTooltipsDrawTheirFaces() {
         val tag = image { drawKkTag(measurer, "Volt", Offset(20f, 20f), KkTagVariant.YOU) }
         assertTrue(tag.countNear(Kk.Volt) > 300)
