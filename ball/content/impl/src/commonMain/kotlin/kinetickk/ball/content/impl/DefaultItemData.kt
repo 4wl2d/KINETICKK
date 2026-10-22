@@ -34,6 +34,7 @@ import kinetickk.ball.content.api.ItemRarity.LEGENDARY
 import kinetickk.ball.content.api.ItemRarity.RARE
 import kinetickk.ball.content.api.ItemRarity.UNCOMMON
 import kinetickk.ball.content.api.ItemRule
+import kinetickk.ball.content.api.MarkPick
 import kinetickk.ball.content.api.ReactionAspect
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.SkillPick
@@ -795,6 +796,57 @@ private val Drafts: List<ItemDraft> = listOf(
         listOf(StatusElement.CRYO, StatusElement.SONIC),
         rules = listOf(ItemRule.ReactionKeystone(ReactionId.SHATTERPOINT), ItemRule.ElementPotency(StatusElement.SONIC, 0.3f)),
         rebirth = 1),
+
+    // KEYSTONES II AND MARKS (REACTIONS 12–20) (ids 209-220).
+    ItemDraft("Wavefront Rudder", "Steer by the standing wave and it steers the lightning.", EPIC, listOf(DRIVE),
+        listOf(StatusElement.ION, StatusElement.SONIC),
+        clauses = listOf(on(EffectTrigger.TURN, apply(StatusElement.ION, 2, 180f), cooldown = 0.75f)),
+        rules = listOf(ItemRule.ReactionKeystone(ReactionId.RESONANT_ARC)),
+        unlock = 14),
+    ItemDraft("Fault Hammer", "Strike once and the ground strikes again.", EPIC, listOf(RAM), listOf(StatusElement.GRAVITIC, StatusElement.SONIC),
+        rules = listOf(ItemRule.ReactionKeystone(ReactionId.SEISMIC), ItemRule.ReactionTuning(ReactionId.SEISMIC, ReactionAspect.RADIUS, 0.3f)),
+        rebirth = 2),
+    ItemDraft("Sapper's Wedge", "Drive it into the crack and nothing holds its shape.", EPIC, listOf(PRECISION),
+        listOf(StatusElement.ENTROPY, StatusElement.SONIC),
+        rules = listOf(ItemRule.ReactionKeystone(ReactionId.FRACTURE), ItemRule.DamageVersus(EffectCondition.TargetMarked, 0.15f)),
+        rebirth = 3),
+    ItemDraft("Anechoic Shell", "A pocket of silence that travels with you.", EPIC, listOf(BULWARK), listOf(StatusElement.SONIC, StatusElement.VOID),
+        stats = listOf(stat(ItemEffect.SHIELD_CAPACITY, 15f)),
+        rules = listOf(ItemRule.ReactionKeystone(ReactionId.SILENCE)),
+        rebirth = 5),
+    ItemDraft("Brazier of Ash", "Kept burning in one place, the black flame burns hotter.", EPIC, listOf(OVERCLOCK),
+        listOf(StatusElement.THERMAL, StatusElement.VOID),
+        rules = listOf(ItemRule.ReactionKeystone(ReactionId.BLACKFIRE), ItemRule.StatusDuration(StatusElement.THERMAL, 1.3f)),
+        rebirth = 4),
+    ItemDraft("Hourglass Relay", "Turn the glass and every shot runs back the way it came.", LEGENDARY, listOf(BULWARK),
+        listOf(StatusElement.CRYO, StatusElement.VOID),
+        clauses = listOf(on(EffectTrigger.SHOT_ERASED, EffectAction.Overdrive(3f), every = 4)),
+        rules = listOf(ItemRule.ReactionKeystone(ReactionId.STASIS)),
+        rebirth = 8),
+    ItemDraft("Horizon Knife", "Step across the horizon and strike before you arrive.", LEGENDARY, listOf(PRECISION),
+        listOf(StatusElement.ION, StatusElement.VOID),
+        rules = listOf(ItemRule.ReactionKeystone(ReactionId.ANNIHILATE), ItemRule.CritDamageVersus(EffectCondition.TargetMarked, 0.5f)),
+        rebirth = 6),
+    ItemDraft("Starving Lantern", "It carries its own hunger and eats whatever shines at it.", EPIC, listOf(BULWARK),
+        listOf(StatusElement.GRAVITIC, StatusElement.VOID),
+        clauses = listOf(on(EffectTrigger.SHOT_ERASED, EffectAction.Heal(3f), every = 5)),
+        rules = listOf(ItemRule.ReactionKeystone(ReactionId.NULL_WELL)),
+        rebirth = 7),
+    ItemDraft("Requiem Engine", "A deeper ending, sung for everything that rots.", LEGENDARY, listOf(CHAIN),
+        listOf(StatusElement.ENTROPY, StatusElement.VOID),
+        clauses = listOf(on(EffectTrigger.REACTION, EffectAction.ChargeApex(2f),
+            given = listOf(EffectCondition.ReactionIs(ReactionId.OBLIVION)), cooldown = 1f)),
+        rules = listOf(ItemRule.ReactionKeystone(ReactionId.OBLIVION)),
+        rebirth = 9),
+    ItemDraft("Breaker Switch", "Throw it on impact, pull it on release.", RARE, listOf(ANCHOR, RAM),
+        clauses = listOf(on(EffectTrigger.IMPACT, EffectAction.ApplyMark(MarkPick.CRACKED, 4f), cooldown = 0.4f)),
+        unlock = 7),
+    ItemDraft("Spore Brand", "A precise wound is the best soil.", RARE, listOf(PRECISION, FORTUNE), listOf(StatusElement.ENTROPY),
+        clauses = listOf(on(EffectTrigger.CRIT, EffectAction.ApplyMark(MarkPick.SPORED, 4f), cooldown = 0.5f)),
+        unlock = 8),
+    ItemDraft("Glass Brand", "Pass through and leave the target as thin as glass.", RARE, listOf(DRIVE), listOf(StatusElement.CRYO),
+        clauses = listOf(on(EffectTrigger.DASH_HIT, EffectAction.ApplyMark(MarkPick.EMBRITTLED, 2f), cooldown = 0.3f)),
+        rebirth = 10),
 )
 
 /** A reaction clause condition naming both elements: it holds only for the reaction between them. */

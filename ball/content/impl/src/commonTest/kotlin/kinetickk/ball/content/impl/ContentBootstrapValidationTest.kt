@@ -45,7 +45,7 @@ class ContentBootstrapValidationTest {
         val data = defaultContentBootstrapData()
         val gameplay = createContentCatalogForTesting(data).gameplayContent()
 
-        assertEquals(209, gameplay.items.size)
+        assertEquals(221, gameplay.items.size)
         assertEquals(ContentBounds.MAX_WEAPONS, gameplay.weapons.size)
         assertEquals(MatrixNodeId.entries.size, gameplay.matrixNodes.size)
         assertEquals(RelicId.entries.size, gameplay.relics.size)
@@ -458,6 +458,11 @@ class ContentBootstrapValidationTest {
         val charges = epic("Twin Chamber", listOf(ItemRule.SkillCharges))
         validateItems(withAppended(charges))
         assertFailsWith<IllegalStateException> { validateItems(withAppended(charges, charges.copy(name = "Third Chamber", description = "Another."))) }
+        // The shipped catalog holds one keystone item per reaction: one more for any reaction is rejected.
+        val shipped = defaultContentBootstrapData().items
+        val extra = assertFailsWith<IllegalStateException> { validateItems(shipped + twin.copy(id = shipped.size)) }
+        assertTrue(extra.message.orEmpty().contains("FUSION has more than one keystone item"), extra.message)
+
         val attune = epic("Alchemical Core", listOf(ItemRule.SkillAttunement(ElementPick.DOMINANT)))
         validateItems(withAppended(attune))
         assertFailsWith<IllegalStateException> { validateItems(withAppended(attune, attune.copy(name = "Second Core", description = "Again."))) }

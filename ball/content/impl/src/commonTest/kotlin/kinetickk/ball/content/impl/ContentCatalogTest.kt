@@ -92,7 +92,7 @@ class ContentCatalogTest {
     fun itemCatalogHoldsDistinctHandAuthoredItemsWithinTheBound() {
         val items = gameplay.items
 
-        assertEquals(209, items.size)
+        assertEquals(221, items.size)
         assertEquals(320, ContentBounds.MAX_ITEMS)
         assertTrue(items.size <= ContentBounds.MAX_ITEMS)
         assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
@@ -145,6 +145,8 @@ class ContentCatalogTest {
                 // The expansion's legendaries: Fortune, Ricochet, Weapon, Sonic, Void and Reaction.
                 "Cornucopia Core" to 3, "Perfect Carom" to 4, "Pyre Magazine" to 5, "Cathedral Bell" to 6,
                 "Nothing Left" to 8, "Last Word" to 10,
+                // The 0.5.0 legendaries: the Stasis, Annihilate and Oblivion keystones.
+                "Hourglass Relay" to 8, "Horizon Knife" to 6, "Requiem Engine" to 9,
             ),
             legendaries.associate { it.name to it.minimumRebirth },
         )
@@ -246,6 +248,20 @@ class ContentCatalogTest {
             assertEquals(setOf(reaction.first, reaction.second), matching.single().elements.toSet(), "${matching.single().name} declares both elements")
         }
         assertEquals(11, clausesOn(EffectTrigger.REACTION).size)
+    }
+
+    @Test
+    fun everyReactionHasExactlyOneKeystoneItemOfEpicRarityOrBetterThatDeclaresItsPair() {
+        val keystones = gameplay.items.filter { it.keystone != null }
+
+        assertEquals(ReactionId.entries.toList(), keystones.map { requireNotNull(it.keystone) }.sortedBy { it.ordinal })
+        keystones.forEach { item ->
+            val reaction = requireNotNull(item.keystone)
+            assertTrue(item.rarity.rank >= ItemRarity.EPIC.rank, "${item.name} is Epic or Legendary")
+            assertEquals(setOf(reaction.first, reaction.second), item.elements.toSet(), "${item.name} declares the elements of $reaction")
+            // The keystone rule and one part that pushes the new form.
+            assertTrue(item.stats.size + item.clauses.size + item.rules.size >= 2, "${item.name} supports its keystone form")
+        }
     }
 
     @Test
