@@ -17,6 +17,7 @@ import kinetickk.ball.content.api.PointOfInterestKind
 import kinetickk.ball.gameplay.interaction.fx.BuildNoticeKind
 import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
+import kinetickk.ball.gameplay.interaction.layout.RunningControlMask
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
@@ -82,7 +83,7 @@ class HudMinimapTest {
                     val rect = HudLayoutProbe.rect(block) ?: continue
                     assertFalse(rect.overlaps(minimap), "$where: the minimap $minimap overlaps $block $rect")
                 }
-                forEachRunningControlBounds(width, height, density) { target, left, top, right, bottom ->
+                forEachRunningControlBounds(width, height, density, RunningControlMask.ALL) { target, left, top, right, bottom ->
                     assertFalse(Rect(left, top, right, bottom).overlaps(minimap), "$where: the minimap $minimap overlaps $target")
                 }
                 val keepOut = WorldHudKeepOut().update(width, height, density, textScale, trial, boss != null)

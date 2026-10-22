@@ -86,4 +86,9 @@ internal fun englishGameplayText(key: GameplayText): String = when (key) {
     GameplayText.Milliseconds -> "{0} ms"
     GameplayText.MaxRegular -> "  MAX {0}"
     GameplayText.Samples -> "  N {0}  WIN {1}"
+    GameplayText.SkillSlotDescription -> "Skill {0}: {1}"
+    GameplayText.SkillSlotLocked -> "Skill {0}: locked"
+    GameplayText.ApexDescription -> "Apex: {0}"
+    GameplayText.ActiveState -> "active"
+    GameplayText.RechargingState -> "recharging"
 }

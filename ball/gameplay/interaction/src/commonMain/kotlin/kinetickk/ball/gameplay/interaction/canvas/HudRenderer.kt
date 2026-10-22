@@ -20,7 +20,9 @@ import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.localizedContent
+import kinetickk.ball.gameplay.interaction.input.RunningControlPressLog
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
+import kinetickk.ball.gameplay.interaction.layout.RunningControlMask
 import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_BOSS_ROW_DP
 import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_CHIP_ROW_DP
 import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_CHIP_ROW_HEIGHT_DP
@@ -35,6 +37,7 @@ import kinetickk.ball.gameplay.interaction.layout.regularHudUnit
 import kinetickk.ball.gameplay.interaction.layout.runningHudMargin
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
+import kinetickk.ball.profile.api.GameAction
 import kinetickk.ball.gameplay.nucleus.model.formatRunTime
 import kinetickk.ball.gameplay.nucleus.render.ApexProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
@@ -64,6 +67,7 @@ internal fun DrawScope.drawHud(
     shakeY: Float = 0f,
     memory: HudPresentationMemory? = null,
     trialInfoOpen: Boolean = false,
+    controls: RunningControlPressLog? = null,
 ) {
     val frame = HudScratch.frame.update(size.width, size.height, density)
     HudLayoutProbe.begin()
@@ -75,7 +79,7 @@ internal fun DrawScope.drawHud(
     drawHudScreenStates(engine, textMeasurer.roles, renderTime, memory, critical)
 
     drawDataLine(engine, frame, textMeasurer.roles, renderTime, memory)
-    val badgeBottom = drawLevelCluster(engine, textMeasurer, frame, renderTime, memory)
+    val badgeBottom = drawLevelCluster(engine, textMeasurer, frame, renderTime, memory, controls)
     drawClockAndBoss(engine, textMeasurer, frame, boss, renderTime, memory)
     drawEconomy(engine, textMeasurer, frame, badgeBottom)
     // The chain first: the portrait Rebirth strip shares its row and stops short of it.
@@ -86,7 +90,7 @@ internal fun DrawScope.drawHud(
     drawLoadout(engine, textMeasurer, frame)
     drawMinimap(engine, textMeasurer, frame)
     drawTrialPanel(engine, textMeasurer, renderTime, trialInfoOpen)
-    drawControls(engine, textMeasurer)
+    drawControls(engine, textMeasurer, renderTime, memory, controls)
 }
 
 /** Integrity reads critical at or below a fifth of its maximum (`HUD-Critical` board). */
@@ -132,6 +136,9 @@ internal object HudScratch {
     val dashLabel = HudKeyedText()
     val brakeLabel = HudKeyedText()
     val overheat = HudKeyedText()
+
+    /** The skill row's fade while it slides in with the first draft. */
+    val skillRowPaint = androidx.compose.ui.graphics.Paint()
     var aspectContent: GameplayContentSnapshot? = null
     var linkRelics: List<EquippedRelic>? = null
     var linkContent: GameplayContentSnapshot? = null
@@ -490,34 +497,42 @@ private fun DrawScope.drawLevelCluster(
     frame: HudFrame,
     renderTime: Float,
     memory: HudPresentationMemory?,
+    controls: RunningControlPressLog?,
 ): Float {
     val language = measurer.language
     val label = HudScratch.label.of(language, 0L) { language.text(HudRedesignText.LevelLabel) }
     val shots = HudScratch.badgeShots.update(memory, renderTime)
     val level = engine.level.coerceAtLeast(0)
     val apexState = engine.apex.badgeState()
+    // An Apex press while it cools shakes the badge (240 ms).
+    val shake = apexRefusalShake(controls, renderTime)
     // The numeral is display type (fixed size); the "Lvl" label follows the text size.
     val display = HudMeasurers.display(measurer)
     val growth = hudUiScale(measurer.scale)
     if (frame.regular) {
         val numberSize = frame.t(30f)
-        val badge = drawKkLevelBadge(display, Offset(frame.margin, frame.u(26f)), level, label, renderTime, shots.slam,
+        val badge = drawKkLevelBadge(display, Offset(frame.margin + shake, frame.u(26f)), level, label, renderTime, shots.slam,
             labelSize = frame.t(12f) * growth, numberSize = numberSize, maxLevel = engine.maxLevel, apex = apexState,
             apexActive = engine.apex.active01, echoGrow = shots.echoGrow, slamFrom = shots.slamFrom, slamKick = shots.slamKick,
             kick = shots.kick, shutter = shots.shutter, flash = shots.flash, raysScale = shots.raysScale)
         drawBadgeBursts(badge, numberSize / 30f, measurer.roles, renderTime, memory)
+        val left = badge.left - shake
         val top = badge.bottom + frame.u(10f)
-        val bar = HudDrawCache.rect(HudRect.DATA_BAR, badge.left + frame.u(4f), top, badge.left + frame.u(122f), top + frame.u(4f))
+        // At the cap, with the keyboard in use, the Apex key sits at the bar's left end.
+        val apexKey = engine.levelTier() == KkLevelTier.T6 && controls != null && controls.keyHints && keyCapsShown(frame)
+        val barLeft = left + frame.u(if (apexKey) APEX_KEY_BAR_START_DP else 4f)
+        val bar = HudDrawCache.rect(HudRect.DATA_BAR, barLeft, top, left + frame.u(122f), top + frame.u(4f))
         drawDataBar(engine, bar, measurer.roles, renderTime, memory)
-        HudLayoutProbe.record(HudBlock.BADGE, badge.left, badge.top, max(badge.right, bar.right), bar.bottom)
+        val keyBottom = if (apexKey) drawApexKeyCap(engine, measurer, frame, left, bar.center.y) else bar.bottom
+        HudLayoutProbe.record(HudBlock.BADGE, left, badge.top, max(badge.right, bar.right), max(bar.bottom, keyBottom))
         HudScratch.badgeTop = badge.top
         HudScratch.badgeBottom = badge.bottom
         HudScratch.badgeRight = max(badge.right, bar.right)
-        return bar.bottom
+        return max(bar.bottom, keyBottom)
     }
     val badgeSize = kkLevelBadgeSize(display, level, density, label, PHONE_BADGE_LABEL_SP * growth, PHONE_BADGE_NUMBER_SP)
     val top = if (frame.portrait) portraitRowCenter(frame) - badgeSize.height * 0.5f else frame.u(12f)
-    val badge = drawKkLevelBadge(display, Offset(frame.margin, top), level, label, renderTime, shots.slam,
+    val badge = drawKkLevelBadge(display, Offset(frame.margin + shake, top), level, label, renderTime, shots.slam,
         labelSize = PHONE_BADGE_LABEL_SP * growth, numberSize = PHONE_BADGE_NUMBER_SP, maxLevel = engine.maxLevel, apex = apexState,
         apexActive = engine.apex.active01, echoGrow = shots.echoGrow, slamFrom = shots.slamFrom, slamKick = shots.slamKick,
         kick = shots.kick, shutter = shots.shutter, flash = shots.flash, raysScale = shots.raysScale)
@@ -531,6 +546,37 @@ private fun DrawScope.drawLevelCluster(
 
 private const val PHONE_BADGE_LABEL_SP = 9f
 private const val PHONE_BADGE_NUMBER_SP = 19f
+
+/** With the Apex key cap the Data bar starts this far right of the badge (reference dp). */
+private const val APEX_KEY_BAR_START_DP = 24f
+
+/** The badge's shake after an Apex press found it cooling: 3 dp, 240 ms. */
+private fun DrawScope.apexRefusalShake(controls: RunningControlPressLog?, renderTime: Float): Float {
+    if (controls == null) return 0f
+    val p = (renderTime - controls.apexRefusedAt) / APEX_REFUSAL_SHAKE_SECONDS
+    if (p < 0f || p >= 1f) return 0f
+    return d(3f) * kotlin.math.sin(p * 6f * kotlin.math.PI.toFloat()) * (1f - p)
+}
+
+private const val APEX_REFUSAL_SHAKE_SECONDS = 0.24f
+
+/**
+ * The Apex key cap at the Data bar's left end: a sheared gold plate with an Ink seam and the bound
+ * key in Ink (mono 700, fitted to 12 u, never below 8 sp). Returns its bottom.
+ */
+private fun DrawScope.drawApexKeyCap(engine: GameplayRenderModel, measurer: TextMeasurer, frame: HudFrame, left: Float, centerY: Float): Float {
+    val plate = HudDrawCache.rect(HudRect.APEX_KEY, left + frame.u(4f), centerY - frame.u(7f), left + frame.u(20f), centerY + frame.u(7f))
+    val path = HudDrawCache.paths.sheared(HudPath.APEX_KEY.ordinal, plate)
+    drawPath(path, measurer.roles.gold.base)
+    drawPath(path, Kk.Ink, style = kkStroke(d(1f)))
+    val label = engine.settings.keyBindings.key(GameAction.APEX).label(measurer.language)
+    val display = HudMeasurers.display(measurer)
+    val layout = HudDrawCache.fitted(HudText.APEX_KEY, display, label, frame.t(KEY_CAP_TEXT_SP), frame.u(12f), uppercase = true,
+        minSize = KEY_CAP_MIN_SP) { size -> kkKeyCapStyle(display, size) }
+    drawKkText(layout, plate.center.x, plate.center.y, Kk.Ink, align = KkAlign.CENTER, valign = KkVAlign.CENTER)
+    HudLayoutProbe.record(HudBlock.APEX_KEY, plate.left, plate.top, plate.right, plate.bottom)
+    return plate.bottom
+}
 
 private fun portraitRowCenter(frame: HudFrame): Float = frame.top + frame.u(11f + 20f)
 
@@ -674,6 +720,7 @@ private fun DrawScope.drawBossBar(
     val barTop = top + layout.kkBoxHeight + HudTopGeometry.bossNameGap(frame)
     val left = center - width * 0.5f
     val barHeight = HudTopGeometry.bossBarHeight(frame, architect)
+    drawApexStrikes(engine, frame, roles, center + width * 0.5f, barTop)
     var bottom = barTop + barHeight
     if (rail > 0f) {
         if (inlineRail > 0f) {
@@ -1721,12 +1768,21 @@ internal fun relicAspect(content: GameplayContentSnapshot, id: RelicId): RelicAs
     return cache.aspects[id.ordinal] ?: content.relic(id).aspect.also { cache.aspects[id.ordinal] = it }
 }
 
-/** Running controls: Dash and Brake slabs, pause and performance icon buttons. */
-internal fun DrawScope.drawControls(engine: GameplayRenderModel, textMeasurer: TextMeasurer) {
+/**
+ * Running controls: Dash and Brake slabs, pause and performance icon buttons, and the Z/X/C skill row
+ * ([drawSkillBar]). The Apex control is the level badge itself.
+ */
+internal fun DrawScope.drawControls(
+    engine: GameplayRenderModel,
+    textMeasurer: TextMeasurer,
+    renderTime: Float = 0f,
+    memory: HudPresentationMemory? = null,
+    controls: RunningControlPressLog? = null,
+) {
     val roles = textMeasurer.roles
     val frame = HudScratch.frame.update(size.width, size.height, density)
     val regular = frame.regular
-    forEachRunningControlBounds(size.width, size.height, density) { target, left, top, right, bottom ->
+    forEachRunningControlBounds(size.width, size.height, density, RunningControlMask.of(engine)) { target, left, top, right, bottom ->
         when (target) {
             RunningControlTarget.DASH -> drawTouchButton(
                 textMeasurer, frame, HudPath.DASH, HudText.DASH_LABEL, left, top, right, bottom, KkIcon.SYSTEM_DASH,
@@ -1756,8 +1812,11 @@ internal fun DrawScope.drawControls(engine: GameplayRenderModel, textMeasurer: T
             RunningControlTarget.PERFORMANCE -> drawHudIconButton(frame, HudPath.PERFORMANCE, left, top, right, bottom, regular) { center, glyph ->
                 drawPerformanceGlyph(center, glyph)
             }
+            // The skill row draws as one (its entrance moves all three); the Apex is the level badge.
+            RunningControlTarget.SKILL_1, RunningControlTarget.SKILL_2, RunningControlTarget.SKILL_3, RunningControlTarget.APEX -> Unit
         }
     }
+    drawSkillBar(engine, textMeasurer, frame, renderTime, memory, controls)
 }
 
 private fun dashLabel(language: AppLanguage): String =

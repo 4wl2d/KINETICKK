@@ -16,6 +16,8 @@ object InteractionIngressLimits {
     const val MAX_DENSITY = GameplayInteractionLimits.MAX_DENSITY
     const val MIN_CHOICE_INDEX = GameplayInteractionLimits.MIN_CHOICE_INDEX
     const val MAX_CHOICE_INDEX = GameplayInteractionLimits.MAX_CHOICE_INDEX
+    const val MIN_SKILL_SLOT = GameplayInteractionLimits.MIN_SKILL_SLOT
+    const val MAX_SKILL_SLOT = GameplayInteractionLimits.MAX_SKILL_SLOT
 }
 
 enum class InteractionInputField {
@@ -26,6 +28,7 @@ enum class InteractionInputField {
     POINTER_X_PX,
     POINTER_Y_PX,
     CHOICE_INDEX,
+    SKILL_SLOT,
 }
 
 sealed interface ValidationFailure {
@@ -169,6 +172,21 @@ class GameInteractionValidator {
                     field = InteractionInputField.CHOICE_INDEX,
                     acceptedMinimum = InteractionIngressLimits.MIN_CHOICE_INDEX,
                     acceptedMaximum = InteractionIngressLimits.MAX_CHOICE_INDEX,
+                ),
+            )
+        }
+
+    fun skillRequested(
+        rawSlot: Int,
+    ): InteractionValidationResult<GameplayInteractionPulse.SkillRequested> =
+        if (rawSlot in InteractionIngressLimits.MIN_SKILL_SLOT..InteractionIngressLimits.MAX_SKILL_SLOT) {
+            InteractionValidationResult.Valid(GameplayInteractionPulse.SkillRequested.fromValidated(rawSlot))
+        } else {
+            InteractionValidationResult.Invalid(
+                ValidationFailure.IndexOutOfRange(
+                    field = InteractionInputField.SKILL_SLOT,
+                    acceptedMinimum = InteractionIngressLimits.MIN_SKILL_SLOT,
+                    acceptedMaximum = InteractionIngressLimits.MAX_SKILL_SLOT,
                 ),
             )
         }

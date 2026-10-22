@@ -16,6 +16,7 @@ import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_HUD_TOP_DP
 import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_PANEL_ROW_DP
 import kinetickk.ball.gameplay.interaction.layout.RUNNING_CONTROL_MIN_DP
 import kinetickk.ball.gameplay.interaction.layout.compactHudFactor
+import kinetickk.ball.gameplay.interaction.layout.RunningControlMask
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.regularHudUnit
@@ -390,7 +391,7 @@ internal object TrialRulesPlacement {
 
     private fun meetsControl(slip: Rect, width: Float, height: Float, density: Float): Boolean {
         var meets = false
-        forEachRunningControlBounds(width, height, density) { _, left, top, right, bottom ->
+        forEachRunningControlBounds(width, height, density, RunningControlMask.ALL) { _, left, top, right, bottom ->
             if (slip.left < right && left < slip.right && slip.top < bottom && top < slip.bottom) meets = true
         }
         return meets

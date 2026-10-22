@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.PointOfInterestKind
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
+import kinetickk.ball.gameplay.interaction.layout.RunningControlMask
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
@@ -91,7 +92,7 @@ class WorldEdgeMarkerHudTest {
             if (block == HudBlock.POLARITY_LABEL) return@forEach
             HudLayoutProbe.rect(block)?.let { add(block.name to it) }
         }
-        forEachRunningControlBounds(width, height, density) { target, left, top, right, bottom ->
+        forEachRunningControlBounds(width, height, density, RunningControlMask.ALL) { target, left, top, right, bottom ->
             add(target.name to Rect(left, top, right, bottom))
         }
     }

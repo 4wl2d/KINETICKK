@@ -4,13 +4,58 @@
 package kinetickk.ball.gameplay.interaction.layout
 
 import androidx.compose.ui.geometry.Rect
+import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kotlin.math.max
+import kotlin.math.min
 
+/** Running HUD controls. Append-only: the touch tracker and the press log index by ordinal. */
 internal enum class RunningControlTarget {
     BRAKE,
     DASH,
     PERFORMANCE,
     PAUSE,
+    SKILL_1,
+    SKILL_2,
+    SKILL_3,
+    APEX,
+}
+
+/** The skill slot (0..2) of a SKILL target, −1 for every other target. */
+internal val RunningControlTarget.skillSlot: Int
+    get() = when (this) {
+        RunningControlTarget.SKILL_1 -> 0
+        RunningControlTarget.SKILL_2 -> 1
+        RunningControlTarget.SKILL_3 -> 2
+        else -> -1
+    }
+
+/**
+ * Which optional running controls are placed. Controls that act on them (drawing, hit testing,
+ * semantics) pass the live mask; layouts that only keep clear of them pass [ALL], so nothing else
+ * moves when the first skill is drafted or the Apex unlocks.
+ */
+internal object RunningControlMask {
+    const val NONE = 0
+
+    /** The Z/X/C row: placed once any slot holds a skill (the first draft). */
+    const val SKILLS = 1
+
+    /** The level badge as the Apex control: placed once the Apex unlocks. */
+    const val APEX = 2
+    const val ALL = SKILLS or APEX
+
+    fun of(engine: GameplayRenderModel): Int {
+        var mask = NONE
+        val slots = engine.skillBar.slots
+        for (index in 0 until slots.size) {
+            if (slots[index].skill >= 0) {
+                mask = mask or SKILLS
+                break
+            }
+        }
+        if (engine.apex.unlocked) mask = mask or APEX
+        return mask
+    }
 }
 
 internal data class RunningControlBounds(
@@ -70,15 +115,49 @@ internal const val PORTRAIT_BOSS_ROW_HEIGHT_DP = 34f
 /** First free portrait row below the boss row (trial panel, feed), in dp below the HUD top. */
 internal const val PORTRAIT_PANEL_ROW_DP = PORTRAIT_BOSS_ROW_DP + PORTRAIT_BOSS_ROW_HEIGHT_DP + 10f
 
+/** Side of a phone skill square and the REGULAR minimum, in dp. */
+internal const val SKILL_SQUARE_DP = 48f
+
+/** REGULAR skill square in reference dp (the Dash row's height). */
+internal const val REGULAR_SKILL_SQUARE_DP = 52f
+
+/** Gap between the REGULAR skill squares and between C and Brake, in reference dp. */
+internal const val REGULAR_SKILL_GAP_DP = 8f
+internal const val REGULAR_SKILL_BRAKE_GAP_DP = 12f
+
 /**
- * Running controls in canvas px. REGULAR: pause top-right, Dash and Brake as one row right-aligned
- * above the bottom-right loadout. Phones follow the Mobile boards: Dash and Brake at the thumb side,
- * performance and pause in the top-right row. Every target is at least [RUNNING_CONTROL_MIN_DP].
+ * REGULAR skill key caps (keyboard in use): a plate this tall, this far below the square, so the
+ * caps reach [SKILL_KEY_CAP_REACH_DP] below the row (reference dp).
+ */
+internal const val SKILL_KEY_CAP_GAP_DP = 3f
+internal const val SKILL_KEY_CAP_HEIGHT_DP = 12f
+internal const val SKILL_KEY_CAP_REACH_DP = SKILL_KEY_CAP_GAP_DP + SKILL_KEY_CAP_HEIGHT_DP
+
+/** Key caps show only on windows at least this wide (dp). */
+internal const val KEY_CAP_MIN_WIDTH_DP = 600f
+
+/** Phone gaps: between landscape Z and X, below Dash, and between the portrait squares, in dp. */
+internal const val COMPACT_SKILL_GAP_DP = 6f
+internal const val LANDSCAPE_SKILL_DASH_GAP_DP = 8f
+
+/** Portrait Dash and Brake: their widest shares of the row and the room the skill squares need, in dp. */
+private const val PORTRAIT_BRAKE_DP = 80f
+private const val PORTRAIT_DASH_DP = 92f
+private const val PORTRAIT_SKILL_ROW_DP = 3f * SKILL_SQUARE_DP + 2f * COMPACT_SKILL_GAP_DP + 2f * COMPACT_SKILL_GAP_DP
+
+/**
+ * Running controls in canvas px. REGULAR: pause top-right, the skill squares, Brake and Dash as one
+ * row right-aligned above the bottom-right loadout. Landscape phones: Dash and Brake at the right
+ * thumb, Z and X left of Dash, C below it; performance and pause in the top-right row. Portrait
+ * phones: Brake, Z, X, C and Dash share the bottom row; pause top-right (performance stays in the
+ * pause menu). The Apex control is the level badge. [mask] ([RunningControlMask]) places the skill
+ * row and the Apex; every target is at least [RUNNING_CONTROL_MIN_DP] and they never overlap.
  */
 internal inline fun forEachRunningControlBounds(
     width: Float,
     height: Float,
     scale: Float,
+    mask: Int,
     action: (
         target: RunningControlTarget,
         left: Float,
@@ -91,6 +170,8 @@ internal inline fun forEachRunningControlBounds(
     val minimum = RUNNING_CONTROL_MIN_DP * safeScale
     val half = minimum * 0.5f
     val margin = runningHudMargin(width, height, safeScale)
+    val skills = mask and RunningControlMask.SKILLS != 0
+    val apex = mask and RunningControlMask.APEX != 0
     when (gameplayLayoutMode(width, height, safeScale)) {
         GameplayLayoutMode.REGULAR -> {
             val unit = regularHudUnit(width, safeScale)
@@ -100,21 +181,34 @@ internal inline fun forEachRunningControlBounds(
             val dashLeft = width - margin - max(REGULAR_TOUCH_BUTTON_DP * unit, minimum)
             action(RunningControlTarget.DASH, dashLeft, top, width - margin, bottom)
             val brakeRight = dashLeft - 8f * unit
-            action(RunningControlTarget.BRAKE, brakeRight - max(REGULAR_TOUCH_BUTTON_DP * unit, minimum), top, brakeRight, bottom)
+            val brakeLeft = brakeRight - max(REGULAR_TOUCH_BUTTON_DP * unit, minimum)
+            action(RunningControlTarget.BRAKE, brakeLeft, top, brakeRight, bottom)
+            if (skills) {
+                val side = max(REGULAR_SKILL_SQUARE_DP * unit, minimum)
+                val gap = REGULAR_SKILL_GAP_DP * unit
+                val cRight = brakeLeft - REGULAR_SKILL_BRAKE_GAP_DP * unit
+                val xRight = cRight - side - gap
+                val zRight = xRight - side - gap
+                action(RunningControlTarget.SKILL_1, zRight - side, top, zRight, bottom)
+                action(RunningControlTarget.SKILL_2, xRight - side, top, xRight, bottom)
+                action(RunningControlTarget.SKILL_3, cRight - side, top, cRight, bottom)
+            }
             val pauseX = width - margin - 20f * unit
             val pauseY = 24f * unit + 18f * unit
             action(RunningControlTarget.PAUSE, pauseX - half, pauseY - half, pauseX + half, pauseY + half)
+            if (apex) {
+                // The level badge with its Data bar: from 6 u left of the badge to 134 u, around its row.
+                val left = margin - 6f * unit
+                val halfHeight = max(33f * unit, half)
+                action(RunningControlTarget.APEX, left, 51f * unit - halfHeight, left + max(134f * unit, minimum), 51f * unit + halfHeight)
+            }
         }
         GameplayLayoutMode.COMPACT_LANDSCAPE -> {
             val factor = compactHudFactor(width, safeScale, portrait = false)
             val boxTop = height - (18f + 150f) * safeScale
-            action(
-                RunningControlTarget.DASH,
-                width - margin - max(104f * factor * safeScale, minimum),
-                boxTop,
-                width - margin,
-                boxTop + 84f * safeScale,
-            )
+            val dashLeft = width - margin - max(104f * factor * safeScale, minimum)
+            val dashBottom = boxTop + 84f * safeScale
+            action(RunningControlTarget.DASH, dashLeft, boxTop, width - margin, dashBottom)
             val brakeLeft = width - margin - 190f * factor * safeScale
             action(
                 RunningControlTarget.BRAKE,
@@ -123,45 +217,66 @@ internal inline fun forEachRunningControlBounds(
                 brakeLeft + max(84f * factor * safeScale, minimum),
                 height - 18f * safeScale,
             )
+            if (skills) {
+                // A 2 + 1 cluster around Dash for the right thumb: Z and X left of it, C in the free cell below.
+                val side = SKILL_SQUARE_DP * safeScale
+                val xRight = dashLeft - LANDSCAPE_SKILL_DASH_GAP_DP * safeScale
+                val zRight = xRight - side - COMPACT_SKILL_GAP_DP * safeScale
+                action(RunningControlTarget.SKILL_1, zRight - side, boxTop, zRight, boxTop + side)
+                action(RunningControlTarget.SKILL_2, xRight - side, boxTop, xRight, boxTop + side)
+                val cTop = dashBottom + COMPACT_SKILL_GAP_DP * safeScale
+                action(RunningControlTarget.SKILL_3, width - margin - side, cTop, width - margin, cTop + side)
+            }
             val pauseX = width - margin - 22f * safeScale
             val rowY = 30f * safeScale
             val performanceX = pauseX - 52f * safeScale
             action(RunningControlTarget.PERFORMANCE, performanceX - half, rowY - half, performanceX + half, rowY + half)
             action(RunningControlTarget.PAUSE, pauseX - half, rowY - half, pauseX + half, rowY + half)
+            if (apex) {
+                // The badge row; the box ends where the trial panel and the minimap begin (48 dp).
+                action(RunningControlTarget.APEX, margin - 6f * safeScale, 0f, margin + 84f * safeScale, minimum)
+            }
         }
         GameplayLayoutMode.COMPACT_PORTRAIT -> {
             val factor = compactHudFactor(width, safeScale, portrait = true)
             val bottom = height - 36f * safeScale
-            action(
-                RunningControlTarget.BRAKE,
-                margin,
-                bottom - 70f * safeScale,
-                margin + max(104f * factor * safeScale, minimum),
-                bottom,
-            )
-            action(
-                RunningControlTarget.DASH,
-                width - margin - max(120f * factor * safeScale, minimum),
-                bottom - 80f * safeScale,
-                width - margin,
-                bottom,
-            )
+            // Brake and Dash give up width to the skill squares between them, never below 48 dp.
+            val rest = width - margin * 2f - PORTRAIT_SKILL_ROW_DP * safeScale
+            val brakeWidth = max(minimum, min(PORTRAIT_BRAKE_DP * factor * safeScale, rest * PORTRAIT_BRAKE_DP / (PORTRAIT_BRAKE_DP + PORTRAIT_DASH_DP)))
+            val dashWidth = max(minimum, min(PORTRAIT_DASH_DP * factor * safeScale, rest * PORTRAIT_DASH_DP / (PORTRAIT_BRAKE_DP + PORTRAIT_DASH_DP)))
+            val brakeRight = margin + brakeWidth
+            val dashLeft = width - margin - dashWidth
+            action(RunningControlTarget.BRAKE, margin, bottom - 70f * safeScale, brakeRight, bottom)
+            if (skills) {
+                val side = SKILL_SQUARE_DP * safeScale
+                val gap = COMPACT_SKILL_GAP_DP * safeScale
+                var left = (brakeRight + dashLeft) * 0.5f - (side * 3f + gap * 2f) * 0.5f
+                action(RunningControlTarget.SKILL_1, left, bottom - side, left + side, bottom)
+                left += side + gap
+                action(RunningControlTarget.SKILL_2, left, bottom - side, left + side, bottom)
+                left += side + gap
+                action(RunningControlTarget.SKILL_3, left, bottom - side, left + side, bottom)
+            }
+            action(RunningControlTarget.DASH, dashLeft, bottom - 80f * safeScale, width - margin, bottom)
             val pauseX = width - margin - 22f * safeScale
             val rowY = (PORTRAIT_HUD_TOP_DP + 11f + 20f) * safeScale
-            val performanceX = pauseX - 52f * safeScale
-            action(RunningControlTarget.PERFORMANCE, performanceX - half, rowY - half, performanceX + half, rowY + half)
             action(RunningControlTarget.PAUSE, pauseX - half, rowY - half, pauseX + half, rowY + half)
+            if (apex) {
+                action(RunningControlTarget.APEX, margin - 6f * safeScale, rowY - half, margin + 84f * safeScale, rowY + half)
+            }
         }
     }
 }
 
+/** The controls [mask] places, as a list (tests and one-off layout checks; never per frame). */
 internal fun runningControlBounds(
     width: Float,
     height: Float,
     scale: Float,
+    mask: Int = RunningControlMask.ALL,
 ): List<RunningControlBounds> {
-    val controls = ArrayList<RunningControlBounds>(4)
-    forEachRunningControlBounds(width, height, scale) { target, left, top, right, bottom ->
+    val controls = ArrayList<RunningControlBounds>(RunningControlTarget.entries.size)
+    forEachRunningControlBounds(width, height, scale, mask) { target, left, top, right, bottom ->
         controls += RunningControlBounds(target, Rect(left, top, right, bottom))
     }
     return controls
@@ -169,20 +284,19 @@ internal fun runningControlBounds(
 
 /**
  * The running Build (Codex) button, a Compose control placed beside the canvas controls: left of
- * pause (REGULAR), left of performance (landscape phones), between Brake and Dash (portrait).
+ * pause (REGULAR), left of performance (landscape phones), in the top row where performance sits on
+ * the other layouts (portrait phones: their bottom row holds the skills).
  */
 internal fun runningBuildButtonBounds(width: Float, height: Float, scale: Float): Rect {
     val safeScale = scale.coerceAtLeast(1f)
     val half = RUNNING_CONTROL_MIN_DP * safeScale * 0.5f
     var pause = Rect.Zero
     var performance = Rect.Zero
-    var dash = Rect.Zero
-    forEachRunningControlBounds(width, height, safeScale) { target, left, top, right, bottom ->
+    forEachRunningControlBounds(width, height, safeScale, RunningControlMask.ALL) { target, left, top, right, bottom ->
         when (target) {
             RunningControlTarget.PAUSE -> pause = Rect(left, top, right, bottom)
             RunningControlTarget.PERFORMANCE -> performance = Rect(left, top, right, bottom)
-            RunningControlTarget.DASH -> dash = Rect(left, top, right, bottom)
-            RunningControlTarget.BRAKE -> Unit
+            else -> Unit
         }
     }
     return when (gameplayLayoutMode(width, height, safeScale)) {
@@ -195,8 +309,8 @@ internal fun runningBuildButtonBounds(width: Float, height: Float, scale: Float)
             Rect(x - half, performance.center.y - half, x + half, performance.center.y + half)
         }
         GameplayLayoutMode.COMPACT_PORTRAIT -> {
-            val x = width * 0.5f
-            Rect(x - half, dash.center.y - half, x + half, dash.center.y + half)
+            val x = pause.center.x - 52f * safeScale
+            Rect(x - half, pause.center.y - half, x + half, pause.center.y + half)
         }
     }
 }
