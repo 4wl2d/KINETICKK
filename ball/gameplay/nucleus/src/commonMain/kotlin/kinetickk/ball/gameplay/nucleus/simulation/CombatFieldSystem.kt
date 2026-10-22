@@ -252,11 +252,7 @@ private fun MutableGameState.eatsShots(index: Int, kind: CombatFieldKind): Boole
     if (table.source(index) != FieldSource.REACTION) return false
     val limit = when (kind) {
         CombatFieldKind.NULL_WELL -> if (hasVerb(ReactionId.NULL_WELL)) reactionValue(ReactionId.NULL_WELL, MAW_SHOTS_VALUE) else 0f
-        CombatFieldKind.TIME_BUBBLE -> when {
-            !hasVerb(ReactionId.STASIS) -> 0f
-            table.hasFlag(index, FieldFlags.KEYSTONE) -> REWIND_SHOTS.toFloat()
-            else -> reactionValue(ReactionId.STASIS, BUBBLE_SHOTS_VALUE)
-        }
+        CombatFieldKind.TIME_BUBBLE -> if (hasVerb(ReactionId.STASIS)) reactionValue(ReactionId.STASIS, BUBBLE_SHOTS_VALUE) else 0f
         CombatFieldKind.HUSH -> if (table.hasFlag(index, FieldFlags.KEYSTONE)) DEAD_AIR_SHOTS.toFloat() else 0f
         else -> 0f
     }
@@ -317,17 +313,16 @@ private fun MutableGameState.eatShot(index: Int, shot: Projectile): Boolean {
 }
 
 /**
- * Rewind: the bubble at [index] spends hostile [shot] and fires it back at the nearest enemy within
- * [REWIND_REACH] as a player shot of [REWIND_SHARE] of its damage, up to [REWIND_SHOTS] per bubble.
+ * Rewind: the bubble at [index] spends hostile [shot] like any bubble, and its first [REWIND_SHOTS] fly back at
+ * the nearest enemy within [REWIND_REACH] as player shots of [REWIND_SHARE] of their damage.
  */
 internal fun MutableGameState.rewindShot(index: Int, shot: Projectile): Boolean {
-    val table = combatFieldTable
-    if (table[index, FieldCell.CHARGE] >= REWIND_SHOTS) return eraseHostileShot(shot, EraseCause.REACTION, shot.x, shot.y)
+    val returns = combatFieldTable[index, FieldCell.CHARGE] < REWIND_SHOTS
     val x = shot.x
     val y = shot.y
     val damage = shot.damage
     if (!eatShot(index, shot)) return false
-    nearestEnemy(x, y, REWIND_REACH)?.let { target -> fireRelicProjectile(x, y, target, damage * REWIND_SHARE) }
+    if (returns) nearestEnemy(x, y, REWIND_REACH)?.let { target -> fireRelicProjectile(x, y, target, damage * REWIND_SHARE) }
     return true
 }
 

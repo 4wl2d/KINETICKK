@@ -422,7 +422,7 @@ private fun fieldReaction(table: CombatFieldTable, index: Int): Int =
     if (table.source(index) == FieldSource.REACTION) table.owner(index) else -1
 
 /**
- * The kind counter as a 0..1 fill: shots a Maw, a Time Bubble (Rewind) or Dead Air ate of its budget, a Rot
+ * The kind counter as a 0..1 fill: shots a Maw, a Time Bubble or Dead Air ate of its budget, a Rot
  * Well's growths; 0 for the other kinds.
  */
 private fun MutableGameState.fieldCharge01(table: CombatFieldTable, index: Int): Float {
@@ -430,7 +430,7 @@ private fun MutableGameState.fieldCharge01(table: CombatFieldTable, index: Int):
     val keystone = table.hasFlag(index, FieldFlags.KEYSTONE)
     val budget = when (table.kind(index)) {
         CombatFieldKind.NULL_WELL -> verbValueOrZero(ReactionId.NULL_WELL, MAW_SHOTS_VALUE)
-        CombatFieldKind.TIME_BUBBLE -> if (keystone) REWIND_SHOTS.toFloat() else verbValueOrZero(ReactionId.STASIS, BUBBLE_SHOTS_VALUE)
+        CombatFieldKind.TIME_BUBBLE -> verbValueOrZero(ReactionId.STASIS, BUBBLE_SHOTS_VALUE)
         CombatFieldKind.HUSH -> if (keystone) DEAD_AIR_SHOTS.toFloat() else 0f
         CombatFieldKind.ROT_WELL -> if (keystone) 0f else verbValueOrZero(ReactionId.ROT_WELL, COMPOST_GROWTHS_VALUE)
         else -> 0f

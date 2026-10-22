@@ -887,6 +887,14 @@ class GameplayReductionIsolationTest {
         coreImpulseReadyAt = 1.9f
         primedDashUntil = 2.1f
         phaseUntil = 2.2f
+        aftershockAt0 = 2.3f
+        aftershockX0 = 120f
+        aftershockY0 = -40f
+        aftershockDamage0 = 9f
+        aftershockAt1 = 2.4f
+        aftershockX1 = -60f
+        aftershockY1 = 80f
+        aftershockDamage1 = 7f
         shotErasedDispatches = 2
         markDispatches = 1
         pendingSkillDrafts = 1
@@ -1169,6 +1177,14 @@ class GameplayReductionIsolationTest {
             float("coreImpulseReadyAt", coreImpulseReadyAt)
             float("primedDashUntil", primedDashUntil)
             float("phaseUntil", phaseUntil)
+            float("aftershockAt0", aftershockAt0)
+            float("aftershockX0", aftershockX0)
+            float("aftershockY0", aftershockY0)
+            float("aftershockDamage0", aftershockDamage0)
+            float("aftershockAt1", aftershockAt1)
+            float("aftershockX1", aftershockX1)
+            float("aftershockY1", aftershockY1)
+            float("aftershockDamage1", aftershockDamage1)
             value("shotErasedDispatches", shotErasedDispatches)
             value("markDispatches", markDispatches)
             value("pendingSkillDrafts", pendingSkillDrafts)
