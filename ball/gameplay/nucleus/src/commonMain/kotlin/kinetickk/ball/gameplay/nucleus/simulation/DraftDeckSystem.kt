@@ -22,8 +22,9 @@ import kotlin.math.roundToInt
  * not the deal). Each rarity tier is ordered by weighted draws without replacement in id order, each weight the item's
  * history deck weight, raised for items the Profile has never discovered; the first share of each order is dealt, at
  * least the tier's minimum. Floors then grow the deck, in order: early choice, an early Rare or better, the rank-0 Data
- * ladder (and its early part), the character's archetype, every archetype, every element, the wagers and skill support;
- * a shortfall deals the best-priority qualifying reserve items, tiers Common to Legendary, and nothing is ever removed.
+ * ladder (the policy's floor plus the Matrix's Data stratum, then its early part), the character's archetype, every
+ * archetype, every element, the wagers and skill support; a shortfall deals the best-priority qualifying reserve items,
+ * tiers Common to Legendary, and nothing is ever removed.
  * Float sums run in a fixed order with no transcendental functions, so every platform deals the same deck.
  */
 internal fun MutableGameState.drawItemDeck() {
@@ -80,7 +81,7 @@ internal fun MutableGameState.drawItemDeck() {
     fun ItemDefinition.dataLadder(): Boolean = isDataEconomy && atMostRare() && minimumRebirth == 0
     promote(policy.earlyOpenFloor) { it.rarity.rank <= ItemRarity.UNCOMMON.rank && it.unlockLevel <= policy.earlyOpenUnlock }
     promote(policy.earlyRareFloor) { it.rarity.rank >= ItemRarity.RARE.rank && it.unlockLevel <= policy.earlyRareUnlock }
-    promote(policy.dataEconomyFloor) { it.dataLadder() }
+    promote(policy.dataEconomyFloor + matrix.dataStratumItems) { it.dataLadder() }
     promote(policy.earlyDataFloor) { it.dataLadder() && it.unlockLevel <= policy.earlyDataUnlock }
     val characterTag = coreShape.characterTag()
     promote(policy.characterTagFloor) { it.atMostRare() && characterTag in it.tags }

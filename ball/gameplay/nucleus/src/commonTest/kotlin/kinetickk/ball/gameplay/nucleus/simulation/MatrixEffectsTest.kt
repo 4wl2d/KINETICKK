@@ -13,6 +13,7 @@ import kinetickk.ball.content.api.MatrixEffect
 import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.isDataEconomy
 import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
@@ -332,6 +333,26 @@ class MatrixEffectsTest {
     @Test
     fun rerollsAddToTheRunStart() {
         assertEquals(isolated(null, false).rerollsRemaining + 2, isolated(MatrixEffect.Rerolls(1), true, rank = 2).rerollsRemaining)
+    }
+
+    @Test
+    fun dataStratumDealsMoreRankZeroDataItemsPerRank() {
+        fun dataItems(state: MutableGameState): Int = state.content.items.count { item ->
+            item.id in state.itemDeck && item.isDataEconomy && item.rarity.rank <= ItemRarity.RARE.rank && item.minimumRebirth == 0
+        }
+        val ladder = canonicalGameplayContent.items.count {
+            it.isDataEconomy && it.rarity.rank <= ItemRarity.RARE.rank && it.minimumRebirth == 0
+        }
+        val floor = canonicalGameplayContent.build.policy.draftDeck.dataEconomyFloor
+        for (seed in 1..12) {
+            val plain = isolated(null, false, seed = seed)
+            val one = isolated(MatrixEffect.DataStratum(3), true, node = MatrixNodeId.DATA_ARCHIVE, rank = 1, seed = seed)
+            val three = isolated(MatrixEffect.DataStratum(3), true, node = MatrixNodeId.DATA_ARCHIVE, rank = 3, seed = seed)
+            assertEquals(9, three.matrix.dataStratumItems)
+            assertTrue(dataItems(plain) >= floor, "seed $seed: the policy floor")
+            assertTrue(dataItems(one) >= minOf(ladder, floor + 3), "seed $seed: one rank deals three more")
+            assertEquals(ladder, dataItems(three), "seed $seed: a full Data Archive deals the whole rank-0 Data ladder")
+        }
     }
 
     @Test
