@@ -193,5 +193,16 @@ class SkillApexUpgradeContentTest {
         assertFailsWith<IllegalArgumentException> { ui.copy(skills = skills.dropLast(1).toImmutableList()) }
     }
 
+    @Test
+    fun skillFieldReserveStaysBelowTheFieldBound() {
+        val shipped = BuildPolicy()
+        assertEquals(12, shipped.maximumFields)
+        assertEquals(3, shipped.maximumSkillFields)
+        BuildPolicy(maximumFields = 4, maximumSkillFields = 3)
+        BuildPolicy(maximumFields = 4, maximumSkillFields = 1)
+        assertFailsWith<IllegalArgumentException> { BuildPolicy(maximumFields = 4, maximumSkillFields = 4) }
+        assertFailsWith<IllegalArgumentException> { BuildPolicy(maximumFields = 4, maximumSkillFields = 0) }
+    }
+
     private fun floats(count: Int): ImmutableList<Float> = List(count) { it.toFloat() }.toImmutableList()
 }

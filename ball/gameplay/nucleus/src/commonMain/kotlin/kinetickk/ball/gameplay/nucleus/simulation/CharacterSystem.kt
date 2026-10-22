@@ -714,10 +714,9 @@ private fun MutableGameState.updateEcho(ability: CharacterRuntime, delta: Float)
             if (!shot.hostile || shot.spent || shot.kind != kinetickk.ball.gameplay.nucleus.render.ProjectileKind.BOLT) continue
             if (segmentCircleIntersects(shot.previousX - fromX, shot.previousY - fromY, shot.x - x, shot.y - y, 0f, 0f, reach + shot.radius)) {
                 // Spent, not removed: the collision pass removes spent shots once no pass walks the list.
-                shot.life = 0f
+                if (!eraseHostileShot(shot, EraseCause.CHARACTER, x, y)) continue
                 ability.ghostAbsorbReadyAt = elapsed + GHOST_ABSORB_INTERVAL
                 ability.damagePrevented += shot.damage.toDouble()
-                burst(x, y, 5, 2)
                 break
             }
         }

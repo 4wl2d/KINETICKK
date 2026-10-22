@@ -275,7 +275,7 @@ class ReactionSystemTest {
                 assertTrue(target.alive)
             }
             ReactionId.FUSION, ReactionId.ROT_WELL, ReactionId.NULL_WELL -> {
-                val field = state.combatFields.single()
+                val field = state.fieldRecords.single()
                 if (reaction == ReactionId.NULL_WELL) {
                     assertEquals(CombatFieldKind.NULL_WELL, field.kind)
                     state.updateCombatFields(0.4f)

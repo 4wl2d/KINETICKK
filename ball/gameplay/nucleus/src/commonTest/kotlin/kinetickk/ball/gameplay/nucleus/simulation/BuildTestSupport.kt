@@ -10,7 +10,10 @@ import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.gameplay.nucleus.model.CombatFieldKind
+import kinetickk.ball.gameplay.nucleus.model.CombatFieldRecord
 import kinetickk.ball.gameplay.nucleus.model.Enemy
+import kinetickk.ball.gameplay.nucleus.model.FieldSource
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.toImmutableList
@@ -78,3 +81,27 @@ internal fun contentWithClauses(name: String, vararg clauses: EffectClause): Gam
             if (item.name == name) item.copy(clauses = clauses.toList().toImmutableList()) else item
         }.toImmutableList(),
     )
+
+/** Admits a field from its natural source (items own Dark Stars, skills the skill kinds, reactions the rest). */
+internal fun MutableGameState.addTestField(
+    kind: CombatFieldKind,
+    x: Float,
+    y: Float,
+    radius: Float,
+    seconds: Float = 1f,
+    damagePerSecond: Float = 0f,
+    element: StatusElement? = null,
+    stacksPerTick: Int = 0,
+    generation: Int = 1,
+    pull: Float = 0f,
+    tickClock: Float = 0f,
+    source: FieldSource = when (kind) {
+        CombatFieldKind.DARK_STAR -> FieldSource.ITEM
+        CombatFieldKind.FROST_LINE, CombatFieldKind.STORM_COIL, CombatFieldKind.GRAVITY_WELL -> FieldSource.SKILL
+        else -> FieldSource.REACTION
+    },
+    owner: Int = 0,
+): Int = addField(kind, source, owner, x, y, radius, seconds, damagePerSecond, element, stacksPerTick, generation, pull, tickClock)
+
+/** Detached copies of the live fields in table order. */
+internal val MutableGameState.fieldRecords: List<CombatFieldRecord> get() = combatFieldTable.records()

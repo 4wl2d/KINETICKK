@@ -14,6 +14,7 @@ import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.*
+import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -23,7 +24,10 @@ import kotlin.math.roundToLong
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-/** Where damage comes from. Direct sources roll crits and fire on-hit clauses; the rest never do. */
+/**
+ * Where damage comes from. Direct sources roll crits and fire on-hit clauses; the rest never do. Ordinals
+ * are stored (plus one) in [StatusCell.LAST_SOURCE], so sources are only appended.
+ */
 internal enum class HitSource(val direct: Boolean) {
     IMPACT(true),
     WEAPON(true),
@@ -31,6 +35,8 @@ internal enum class HitSource(val direct: Boolean) {
     ECHO(true),
     PROC(false),
     STATUS(false),
+    /** Skill damage: never crits, fires no on-hit clause; its kills fire KILL clauses with no source. */
+    SKILL(false),
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -195,7 +201,7 @@ private fun MutableGameState.itemAmplification(enemy: Enemy, source: HitSource):
             amp += buffAmount(BuffStat.WEAPON) + whileAmount(BuffStat.WEAPON, enemy, source)
             if (tagTier(BuildTag.ARSENAL) >= 2) amp += 0.20f
         }
-        HitSource.PROC, HitSource.STATUS -> Unit
+        HitSource.PROC, HitSource.STATUS, HitSource.SKILL -> Unit
     }
     val versus = build.damageVersus
     for (index in versus.indices) {
@@ -471,6 +477,36 @@ internal fun MutableGameState.dealStatusDamage(
 }
 
 /**
+ * Skill damage: never crits; scales with the Relic surge, the target's vulnerability (impact terms for a
+ * [kinetic] skill), damage liabilities and the Matrix multiplier. An element-tagged skill is refused only
+ * by an IMMUNE aspect; a kinetic one meets the impact frame, an element-less one the weapon frame. Kills
+ * fire KILL clauses (the source maps to none); the Architect's gate applies in [damageEnemy].
+ */
+internal fun MutableGameState.dealSkillDamage(
+    enemy: Enemy,
+    amount: Float,
+    element: StatusElement?,
+    kinetic: Boolean = false,
+): DamageResult {
+    if (amount <= 0f || !enemy.alive) return DamageResult(0f, false)
+    if (isShifting(enemy)) return DamageResult(0f, false)
+    val scaled = amount * relicSurge() * (1f + vulnerability(enemy, if (kinetic) HitSource.IMPACT else HitSource.SKILL)) *
+        damageLiability(HitSource.SKILL, false) * matrix.damageMultiplier
+    val received = when {
+        element != null -> if (enemy.aspectIsImmune && enemy.aspectElement == element.ordinal) 0f else 1f
+        kinetic -> enemy.impactTaken
+        else -> enemy.weaponTaken * armorWeaponFactor(enemy, HitSource.SKILL)
+    }
+    if (received <= 0f) {
+        signalImmunity(enemy)
+        return DamageResult(0f, false)
+    }
+    val tone = element?.let { it.ordinal + 1 } ?: 0
+    return damageEnemy(enemy, scaled * received, critical = false, killEligible = true, tone = tone,
+        source = HitSource.SKILL, unmitigated = scaled)
+}
+
+/**
  * Character abilities bypass the build pipeline but still meet the receiver's kinetic frame. The Edge
  * applies; the dealt amount counts as the run's ability output.
  */
@@ -659,6 +695,7 @@ internal inline fun MutableGameState.chain(
     originId: Int,
     count: Int,
     range: Float,
+    style: Int = LinkStyleCode.WEAPON,
     onLink: (Enemy) -> Unit,
 ) {
     if (chainDepth >= MAX_CHAIN_NESTING) return
@@ -695,7 +732,7 @@ internal inline fun MutableGameState.chain(
             }
             val chosen = target ?: break
             used[base + usedCount++] = chosen.id
-            addRelicArc(fromX, fromY, chosen.x, chosen.y)
+            addRelicArc(fromX, fromY, chosen.x, chosen.y, style)
             onLink(chosen)
             fromX = chosen.x
             fromY = chosen.y
@@ -732,8 +769,15 @@ internal fun MutableGameState.areaDamage(
 internal fun MutableGameState.areaRelicDamage(x: Float, y: Float, radius: Float, damage: Float, excludedId: Int = -1) =
     areaDamage(x, y, radius, damage, excludedId)
 
-internal fun MutableGameState.addRelicArc(fromX: Float, fromY: Float, toX: Float, toY: Float) {
-    addWeaponArc(fromX, fromY, toX, toY, 0.12f)
+/** A short link; [style] is the [LinkStyleCode] of its source (weapons, items and Relics keep the weapon look). */
+internal fun MutableGameState.addRelicArc(
+    fromX: Float,
+    fromY: Float,
+    toX: Float,
+    toY: Float,
+    style: Int = LinkStyleCode.WEAPON,
+) {
+    addWeaponArc(fromX, fromY, toX, toY, 0.12f, style)
 }
 
 internal fun MutableGameState.fireRelicProjectile(x: Float, y: Float, target: Enemy, damage: Float) {

@@ -101,6 +101,8 @@ internal fun MutableGameState.simulateStep(delta: Float) {
     elapsed += delta
     // One cue budget covers every Break and reaction source in the step.
     statusCuesThisStep = 0
+    shotErasedDispatches = 0
+    markDispatches = 0
     if (runGrace.toRawBits() != 0) runGrace = max(0f, runGrace - delta)
     if (hurtCooldown.toRawBits() != 0) hurtCooldown = max(0f, hurtCooldown - delta)
     if (dashPhaseTime.toRawBits() != 0) {
@@ -325,6 +327,26 @@ internal fun MutableGameState.applyOverheatEdge(before: Float) {
         fireClauses(EffectTrigger.OVERHEAT)
     }
 }
+
+/**
+ * Pushes the Core along ([dirX], [dirY]) (a unit vector) at [speed], at most [MAX_CORE_IMPULSE_SPEED]. A
+ * [gated] push (a reaction's or an item's) waits for [CORE_IMPULSE_GATE_SECONDS] after the previous gated
+ * one; player-timed pushes are never gated. True when the push applied.
+ */
+internal fun MutableGameState.applyCoreImpulse(dirX: Float, dirY: Float, speed: Float, gated: Boolean): Boolean {
+    if (!(speed > 0f)) return false
+    if (gated) {
+        if (coreImpulseReadyAt > elapsed) return false
+        coreImpulseReadyAt = elapsed + CORE_IMPULSE_GATE_SECONDS
+    }
+    val applied = min(speed, MAX_CORE_IMPULSE_SPEED)
+    velocityX += dirX * applied
+    velocityY += dirY * applied
+    return true
+}
+
+internal const val MAX_CORE_IMPULSE_SPEED: Float = 700f
+internal const val CORE_IMPULSE_GATE_SECONDS: Float = 0.5f
 
 /** Brake release and other movement edges, derived inside the fixed step (inputs only set flags). */
 internal fun MutableGameState.updateBuildEdges(delta: Float) {

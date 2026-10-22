@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.ReactionId
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableListOfSize
 import kinetickk.foundation.collections.toImmutableList
@@ -352,17 +353,137 @@ internal fun MutableGameState.toRenderModel(
         rebirthRank = rebirthRank,
         volatileBursts = volatileBursts,
         maxLevel = content.tempo.maximumLevel,
-        // No skill, Apex, field-table or Core-state runtime yet: shared neutral projections.
+        // No skill or Apex runtime yet: shared neutral projections.
         skillBar = SkillBarProjection.EMPTY,
         apex = ApexProjection.LOCKED,
-        combatFields = immutableListOf(),
-        coreState = CoreStateProjection.NEUTRAL,
+        combatFields = combatFieldProjection(reusableCollections?.combatFields, identitySource?.combatFieldTable),
+        coreState = coreStateProjection(reusableCollections?.coreState),
     )
 }
 
-/** Control and mark bits of [enemy] ([EnemyControlBits]); no control state is tracked yet. */
+/**
+ * Control and mark bits of [enemy] ([EnemyControlBits]): stopped (never a boss), silenced, thrown, burning
+ * with Blackfire, an Unmake pending, its live mark, the Void Anchor and an attractor's anchor.
+ */
+private fun MutableGameState.controlBits(enemy: Enemy): Int {
+    var bits = 0
+    if (enemy.disabledUntil > elapsed && !enemy.isBossClass) bits = bits or EnemyControlBits.STOPPED
+    if (enemy.silencedUntil > elapsed) bits = bits or EnemyControlBits.SILENCED
+    if (enemy.thrownUntil > elapsed) bits = bits or EnemyControlBits.THROWN
+    if (enemy.status[StatusCell.BLACKFIRE_UNTIL] > elapsed) bits = bits or EnemyControlBits.BLACKFIRE
+    if (enemy.status[StatusCell.UNMAKE_AT] > 0f) bits = bits or EnemyControlBits.UNMAKE_PENDING
+    val mark = markOf(enemy)
+    if (mark != null) bits = bits or ((mark.ordinal + 1) shl EnemyControlBits.MARK_SHIFT)
+    if (voidAnchorId == enemy.id && voidAnchorUntil > elapsed) bits = bits or EnemyControlBits.VOID_ANCHOR
+    if (anchorsAttractor(enemy.id)) bits = bits or EnemyControlBits.ATTRACTOR_ANCHOR
+    return bits
+}
+
+private fun MutableGameState.anchorsAttractor(enemyId: Int): Boolean {
+    val table = combatFieldTable
+    for (index in 0 until table.count) {
+        if (table.kind(index) == CombatFieldKind.ATTRACTOR && table[index, FieldCell.ANCHOR_ID].toInt() == enemyId) return true
+    }
+    return false
+}
+
+/** The same table (a scalar-input sibling) or equal records keep the previous projection. */
+private fun MutableGameState.combatFieldProjection(
+    reusable: ImmutableList<CombatFieldProjection>?,
+    identityTable: CombatFieldTable?,
+): ImmutableList<CombatFieldProjection> {
+    val table = combatFieldTable
+    if (reusable != null) {
+        if (table === identityTable) return reusable
+        if (reusable.matches(table)) return reusable
+    }
+    if (table.count == 0) return immutableListOf()
+    return immutableListOfSize(table.count) { index ->
+        CombatFieldProjection(
+            kind = CombatFieldVisual.entries[table.kind(index).ordinal],
+            source = CombatFieldSource.entries[table.source(index).ordinal],
+            x = table[index, FieldCell.X],
+            y = table[index, FieldCell.Y],
+            x2 = table[index, FieldCell.X2],
+            y2 = table[index, FieldCell.Y2],
+            radius = table[index, FieldCell.RADIUS],
+            element = table[index, FieldCell.ELEMENT].toInt(),
+            reaction = fieldReaction(table, index),
+            createdAt = table[index, FieldCell.CREATED_AT],
+            expiresAt = table[index, FieldCell.EXPIRES_AT],
+            charge01 = fieldCharge01(table, index),
+            anchorId = table[index, FieldCell.ANCHOR_ID].toInt(),
+            followsCore = table.hasFlag(index, FieldFlags.FOLLOWS_CORE),
+        )
+    }
+}
+
+private fun fieldReaction(table: CombatFieldTable, index: Int): Int =
+    if (table.source(index) == FieldSource.REACTION) table.owner(index) else -1
+
+/** The kind counter as a 0..1 fill; the shipped kinds keep none. */
 @Suppress("UNUSED_PARAMETER")
-private fun MutableGameState.controlBits(enemy: Enemy): Int = 0
+private fun fieldCharge01(table: CombatFieldTable, index: Int): Float = 0f
+
+private fun ImmutableList<CombatFieldProjection>.matches(table: CombatFieldTable): Boolean {
+    if (size != table.count) return false
+    for (index in 0 until size) if (!this[index].matches(table, index)) return false
+    return true
+}
+
+private fun CombatFieldProjection.matches(table: CombatFieldTable, index: Int): Boolean =
+    kind.ordinal == table.kind(index).ordinal &&
+        source.ordinal == table.source(index).ordinal &&
+        x.sameBitsAs(table[index, FieldCell.X]) &&
+        y.sameBitsAs(table[index, FieldCell.Y]) &&
+        x2.sameBitsAs(table[index, FieldCell.X2]) &&
+        y2.sameBitsAs(table[index, FieldCell.Y2]) &&
+        radius.sameBitsAs(table[index, FieldCell.RADIUS]) &&
+        element == table[index, FieldCell.ELEMENT].toInt() &&
+        reaction == fieldReaction(table, index) &&
+        createdAt.sameBitsAs(table[index, FieldCell.CREATED_AT]) &&
+        expiresAt.sameBitsAs(table[index, FieldCell.EXPIRES_AT]) &&
+        charge01.sameBitsAs(fieldCharge01(table, index)) &&
+        anchorId == table[index, FieldCell.ANCHOR_ID].toInt() &&
+        followsCore == table.hasFlag(index, FieldFlags.FOLLOWS_CORE)
+
+/**
+ * Lingering Core state from committed scalars. The remaining shares of Ablaze, Frictionless and Arc Weave
+ * are measured against their reaction's duration value ([ABLAZE_SECONDS_VALUE] and its siblings); with no
+ * such value a live state shows full. The shared [CoreStateProjection.NEUTRAL] stands for no state at all.
+ */
+private fun MutableGameState.coreStateProjection(previous: CoreStateProjection?): CoreStateProjection {
+    val ablaze = remainingShare(ablazeUntil, reactionValue(ReactionId.WILDFIRE, ABLAZE_SECONDS_VALUE))
+    val frictionless = remainingShare(frictionlessUntil, reactionValue(ReactionId.SUPERCONDUCT, FRICTIONLESS_SECONDS_VALUE))
+    val weave = remainingShare(weaveUntil, reactionValue(ReactionId.RESONANT_ARC, WEAVE_SECONDS_VALUE))
+    val blastJumpReady = blastJumpUntil > elapsed
+    val guard = if (guardUntil > elapsed) guardShards else 0
+    val phased = phaseUntil > elapsed
+    val primed = primedDashUntil > elapsed
+    if (ablaze == 0f && frictionless == 0f && weave == 0f && !blastJumpReady && guard == 0 && !phased && !primed &&
+        coreFieldMask == 0
+    ) return CoreStateProjection.NEUTRAL
+    val projection = CoreStateProjection(
+        ablaze01 = ablaze,
+        frictionless01 = frictionless,
+        blastJumpReady = blastJumpReady,
+        weave01 = weave,
+        guardShards = guard,
+        phased = phased,
+        primedDash = primed,
+        inFieldMask = coreFieldMask,
+    )
+    return if (projection == previous) previous else projection
+}
+
+private fun MutableGameState.reactionValue(reaction: ReactionId, index: Int): Float =
+    content.build.reaction(reaction).values.getOrNull(index) ?: 0f
+
+private fun MutableGameState.remainingShare(until: Float, seconds: Float): Float = when {
+    until <= elapsed -> 0f
+    seconds <= 0f -> 1f
+    else -> ((until - elapsed) / seconds).coerceIn(0f, 1f)
+}
 
 /** Relic gauges change during combat; the compiled build's immutable collections do not. */
 private fun MutableGameState.buildProjection(

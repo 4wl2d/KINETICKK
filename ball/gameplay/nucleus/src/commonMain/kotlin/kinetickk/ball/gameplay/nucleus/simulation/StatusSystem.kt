@@ -9,6 +9,8 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.model.*
+import kinetickk.ball.gameplay.nucleus.protocol.FxColorCode
+import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
 import kotlin.math.floor
@@ -298,7 +300,7 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
             }
             val spread = build.breakSpread(element)
             if (spread > 0) applyStatusAround(enemy.x, enemy.y, build.breakSpreadRadius(element), element, spread.toFloat(), outputGeneration, enemy.id)
-            shockwave(enemy.x, enemy.y, 0.28f, radius, 4)
+            shockwave(enemy.x, enemy.y, 0.28f, radius, FxColorCode.elementTone(element))
         }
         StatusElement.CRYO -> {
             val immunity = when {
@@ -319,11 +321,11 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
                 dealStatusDamage(enemy, enemy.status[StatusCell.CINDER_BANK] * 0.6f, StatusElement.THERMAL)
                 enemy.status[StatusCell.CINDER_BANK] = 0f
             }
-            shockwave(enemy.x, enemy.y, 0.3f, enemy.radius * 2.4f, 1)
+            shockwave(enemy.x, enemy.y, 0.3f, enemy.radius * 2.4f, FxColorCode.elementTone(element))
         }
         StatusElement.ION -> {
             val damage = power * count * potency * scale
-            chain(enemy.x, enemy.y, enemy.id, 3, definition.breakRadius) { target ->
+            chain(enemy.x, enemy.y, enemy.id, 3, definition.breakRadius, LinkStyleCode.elementBreak(element)) { target ->
                 dealStatusDamage(target, damage, element)
                 if (outputGeneration < 2) applyStatus(target, StatusElement.ION, 2, outputGeneration)
             }
@@ -358,7 +360,7 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
                     dealStatusDamage(target, damage, element)
                 }
             }
-            shockwave(enemy.x, enemy.y, 0.32f, definition.breakRadius, 3)
+            shockwave(enemy.x, enemy.y, 0.32f, definition.breakRadius, FxColorCode.elementTone(element))
         }
         StatusElement.ENTROPY -> {
             if (enemy.status[StatusCell.MAX_HP_PROC_READY_AT] <= elapsed) {
@@ -371,7 +373,7 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
                 relicCooldowns[RelicId.VERDANT_ROT.ordinal] = BLIGHT_GARDEN_HEAL_COOLDOWN
                 heal(BLIGHT_GARDEN_HEAL, HealSource.VERDANT)
             }
-            shockwave(enemy.x, enemy.y, 0.3f, enemy.radius * 2.2f, 4)
+            shockwave(enemy.x, enemy.y, 0.3f, enemy.radius * 2.2f, FxColorCode.elementTone(element))
         }
         StatusElement.SONIC -> {
             val damage = power * count * potency * scale
@@ -383,7 +385,7 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
                 throwFrom(enemy, target)
             }
             if (build.upside(RelicId.THUNDER_CHOIR)) thunderChoir(enemy, damage)
-            shockwave(enemy.x, enemy.y, 0.34f, radius, 3)
+            shockwave(enemy.x, enemy.y, 0.34f, radius, FxColorCode.elementTone(element))
         }
         StatusElement.VOID -> {
             var remembered = enemy.status[StatusCell.HOLLOW_MEMORY]
@@ -399,7 +401,7 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
                     enemy.status[StatusCell.UNMAKE_DAMAGE] = enemy.status[StatusCell.UNMAKE_DAMAGE] + damage
                 }
             }
-            shockwave(enemy.x, enemy.y, 0.3f, enemy.radius * 2.6f, 2)
+            shockwave(enemy.x, enemy.y, 0.3f, enemy.radius * 2.6f, FxColorCode.elementTone(element))
         }
     }
     if (affinityTier(element) >= 3) applyStatusAround(enemy.x, enemy.y, 130f, element, 2f, outputGeneration, enemy.id)
@@ -722,6 +724,31 @@ private fun MutableGameState.nearestOtherEnemyExcluding(origin: Enemy, alsoExclu
         }
     }
     return nearest
+}
+
+/**
+ * Marks [enemy] with [kind] for [seconds]. An enemy carries one mark: a newer mark replaces an older one,
+ * whatever its kind.
+ */
+internal fun MutableGameState.setMark(enemy: Enemy, kind: MarkKind, seconds: Float) {
+    enemy.status[StatusCell.MARK] = (kind.ordinal + 1).toFloat()
+    enemy.status[StatusCell.MARK_UNTIL] = elapsed + seconds
+}
+
+/** The live mark on [enemy], or null (none, or lapsed). */
+internal fun MutableGameState.markOf(enemy: Enemy): MarkKind? {
+    if (enemy.status[StatusCell.MARK_UNTIL] <= elapsed) return null
+    return MarkKind.entries.getOrNull(enemy.status[StatusCell.MARK].toInt() - 1)
+}
+
+internal fun MutableGameState.markIs(enemy: Enemy, kind: MarkKind): Boolean = markOf(enemy) == kind
+
+/** Cashes a live [kind] mark: clears it and returns true; any other mark stays. */
+internal fun MutableGameState.consumeMark(enemy: Enemy, kind: MarkKind): Boolean {
+    if (!markIs(enemy, kind)) return false
+    enemy.status[StatusCell.MARK] = 0f
+    enemy.status[StatusCell.MARK_UNTIL] = 0f
+    return true
 }
 
 /**

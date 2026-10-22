@@ -37,8 +37,10 @@ class SonicVoidElementTest {
         blocks.zipWithNext().forEach { (a, b) -> assertEquals(StatusCell.ELEMENTS, b - a) }
         assertEquals(StatusCell.REARM_AT + StatusCell.ELEMENTS, StatusCell.FROZEN_UNTIL)
         assertEquals(StatusCell.REACTION_PAIR_READY_AT + StatusCell.PAIRS, StatusCell.CRYO_IMMUNE_CARRY)
-        assertEquals(StatusCell.BLACKFIRE_DPS + 1, StatusCell.COUNT)
-        assertEquals(71, StatusCell.COUNT)
+        assertEquals(StatusCell.BLACKFIRE_DPS + 1, StatusCell.MARK)
+        assertEquals(StatusCell.MARK + 1, StatusCell.MARK_UNTIL)
+        assertEquals(StatusCell.MARK_UNTIL + 1, StatusCell.COUNT)
+        assertEquals(73, StatusCell.COUNT)
     }
 
     @Test

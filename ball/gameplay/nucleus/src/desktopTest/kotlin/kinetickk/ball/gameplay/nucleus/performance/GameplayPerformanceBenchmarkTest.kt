@@ -16,8 +16,9 @@ import kinetickk.ball.gameplay.nucleus.GameplayNucleusPulse
 import kinetickk.ball.gameplay.nucleus.GameplayOutput
 import kinetickk.ball.gameplay.nucleus.model.PointOfInterestState
 import kinetickk.ball.gameplay.nucleus.model.ActiveBuff
-import kinetickk.ball.gameplay.nucleus.model.CombatField
 import kinetickk.ball.gameplay.nucleus.model.CombatFieldKind
+import kinetickk.ball.gameplay.nucleus.model.FieldCell
+import kinetickk.ball.gameplay.nucleus.model.FieldSource
 import kinetickk.ball.gameplay.nucleus.model.EchoHit
 import kinetickk.ball.gameplay.nucleus.model.Obstacle
 import kinetickk.ball.gameplay.nucleus.model.ObstacleField
@@ -31,6 +32,7 @@ import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.simulation.ION_SWARM_COOLDOWN
 import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
+import kinetickk.ball.gameplay.nucleus.simulation.addField
 import kinetickk.ball.gameplay.nucleus.simulation.cooldown
 import kinetickk.ball.gameplay.nucleus.simulation.copyForReduction
 import kinetickk.ball.gameplay.nucleus.simulation.startRun
@@ -66,14 +68,21 @@ class GameplayPerformanceBenchmarkTest {
             val result = checkNotNull(frame.nextState.engine).model
 
             assertEquals(model.content.rebirth.maxActiveEnemies, model.enemies.size)
-            assertEquals(model.content.build.policy.maximumFields, model.combatFields.size)
+            assertEquals(model.content.build.policy.maximumFields, model.combatFieldTable.count)
             assertTrue(model.cooldown(ION_SWARM_COOLDOWN) < ION_SWARM_COOLDOWN * 0.5f)
             assertEquals(GamePhase.RUNNING, result.phase)
             assertEquals(steps, result.lastTransitionSteps)
             assertTrue(result.stormCharge > model.stormCharge, "The Stormheart gauge must change during the measured frame")
             assertTrue(result.damageDealt > model.damageDealt, "The crowd must receive actual damage")
-            assertTrue(result.combatFields.isNotEmpty())
-            assertTrue(result.combatFields.first().remaining < model.combatFields.first().remaining)
+            // Every field the frame did not replace (a new reaction overwrites the oldest of its kind) aged.
+            val aged = (0 until result.combatFieldTable.count).filter { index ->
+                index < model.combatFieldTable.count &&
+                    result.combatFieldTable.sequence(index) == model.combatFieldTable.sequence(index)
+            }
+            assertTrue(aged.isNotEmpty())
+            aged.forEach { index ->
+                assertTrue(result.combatFieldTable[index, FieldCell.REMAINING] < model.combatFieldTable[index, FieldCell.REMAINING])
+            }
             assertTrue(result.enemies.any { it.status[StatusCell.LAST_REACTION_AT] > model.elapsed })
             assertTrue(frame.outputs.filterIsInstance<GameplayOutput.EmitVisualFx>().any { output ->
                 output.cues.any { it is VisualFxCue.ReactionTriggered }
@@ -121,7 +130,7 @@ class GameplayPerformanceBenchmarkTest {
             { clauseCounters[0] = 1 },
             { statusAccumulators[0] = 0.5f },
             { buffs = listOf(ActiveBuff(0, BuffStat.DAMAGE, 0.1f, 1, 2f)) },
-            { combatFields = listOf(CombatField(CombatFieldKind.FUSION, 1f, 0f, 0f, 10f, 1f)) },
+            { addField(CombatFieldKind.FUSION, FieldSource.REACTION, 0, 0f, 0f, radius = 10f, seconds = 1f, damagePerSecond = 1f) },
             { echoHits += EchoHit(1, 0.3f, 2f, false) },
             { severedRelics = listOf(SeveredRelic(RelicId.GLASS_COMET, 30f)) },
             { reactionTokens = 3f },
@@ -191,6 +200,35 @@ class GameplayPerformanceBenchmarkTest {
             ) },
             { enemies.first().armored = true },
             { enemies.first().armorCracked = true },
+            // 0.5.0 combat foundations.
+            { addField(CombatFieldKind.ECHO_RING, FieldSource.SKILL, 2, 0f, 0f, radius = 10f, seconds = 1f, damagePerSecond = 0f) },
+            { coreFieldMask = 1 },
+            { fieldEnterReadyAt = 1f },
+            { ablazeUntil = 1f },
+            { frictionlessUntil = 1f },
+            { blastJumpUntil = 1f },
+            { weaveUntil = 1f },
+            { weaveDamage = 1f },
+            { weaveRange = 1f },
+            { guardShards = 2 },
+            { guardUntil = 1f },
+            { guardDamage = 1f },
+            { voidAnchorId = 3 },
+            { voidAnchorUntil = 1f },
+            { overcurrentReadyAt = 1f },
+            { flameRefundReadyAt = 1f },
+            { erasureLatchId = 3 },
+            { coreImpulseReadyAt = 1f },
+            { primedDashUntil = 1f },
+            { phaseUntil = 1f },
+            { shotErasedDispatches = 1 },
+            { markDispatches = 1 },
+            { pendingSkillDrafts = 1 },
+            { skillBufferMask = 2 },
+            { skillBufferTime = 0.1f },
+            { apexBufferTime = 0.1f },
+            { enemies.first().status[StatusCell.MARK] = 1f },
+            { enemies.first().status[StatusCell.MARK_UNTIL] = 2f },
         )
         changes.forEachIndexed { index, change ->
             val changed = source.copyForReduction().apply(change)

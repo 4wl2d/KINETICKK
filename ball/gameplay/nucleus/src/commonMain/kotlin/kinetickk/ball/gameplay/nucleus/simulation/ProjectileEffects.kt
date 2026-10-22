@@ -8,6 +8,7 @@ import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
+import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -187,6 +188,7 @@ internal fun MutableGameState.addWeaponArc(
     toX: Float,
     toY: Float,
     life: Float = 0.14f,
+    style: Int = LinkStyleCode.WEAPON,
 ) {
     emitVisualFx(
         VisualFxCue.WeaponArcAdded(
@@ -195,9 +197,32 @@ internal fun MutableGameState.addWeaponArc(
             toX = toX,
             toY = toY,
             life = life,
+            style = style,
         ),
     )
 }
+
+/** What spent a hostile bolt. */
+internal enum class EraseCause { REACTION, SKILL, ITEM, CHARACTER, APEX }
+
+/**
+ * Spends hostile bolt [shot] (its life drops to 0 and the list keeps its shape, so any pass may call this
+ * while it walks the projectiles). Friendly, already spent and MINE shots are refused; an Apex erasure is
+ * refused until an Apex bolt budget exists. The first [MAX_SHOT_ERASURES_SHOWN_PER_STEP] erasures of a fixed
+ * step show a burst at ([x], [y]). True when the shot was spent.
+ */
+internal fun MutableGameState.eraseHostileShot(shot: Projectile, cause: EraseCause, x: Float, y: Float): Boolean {
+    if (!shot.hostile || shot.spent || shot.kind != ProjectileKind.BOLT) return false
+    if (cause == EraseCause.APEX) return false
+    shot.life = 0f
+    if (shotErasedDispatches < MAX_SHOT_ERASURES_SHOWN_PER_STEP) {
+        shotErasedDispatches++
+        burst(x, y, 5, 2)
+    }
+    return true
+}
+
+internal const val MAX_SHOT_ERASURES_SHOWN_PER_STEP: Int = 4
 
 /** Nearest live enemy within [range]; a shifting Architect is never a target. */
 internal fun MutableGameState.nearestEnemy(x: Float, y: Float, range: Float): Enemy? {

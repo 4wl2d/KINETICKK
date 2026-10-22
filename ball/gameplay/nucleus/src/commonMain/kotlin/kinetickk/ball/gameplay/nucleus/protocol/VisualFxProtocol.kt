@@ -57,6 +57,20 @@ object SkillCueCodes {
 }
 
 /**
+ * Colour indices of [VisualFxCue.ShockwaveAdded], [VisualFxCue.Burst] and projectile colours past the base
+ * looks (0 and 3 you, 1 Bone, 2 Bone2, 4 threat, which stays reserved for damage the player takes): an
+ * element-tone ring per status element, the Apex gold, and a jagged quake ring per element.
+ */
+object FxColorCode {
+    const val ELEMENT_TONE_BASE: Int = 8
+    const val APEX_GOLD: Int = 15
+    const val QUAKE_BASE: Int = 16
+
+    fun elementTone(element: StatusElement): Int = ELEMENT_TONE_BASE + element.ordinal
+    fun quake(element: StatusElement): Int = QUAKE_BASE + element.ordinal
+}
+
+/**
  * Closed, bounded visual notifications emitted by the authoritative reducer.
  *
  * These values describe presentation consequences only. They never feed back

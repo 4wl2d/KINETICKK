@@ -178,6 +178,8 @@ data class BuildPolicy(
     val breaksPerSecond: Int = 40,
     val reactionsPerSecond: Int = 30,
     val maximumFields: Int = 12,
+    /** Lingering fields reserved for skills (one per slot); reactions and items share the rest of [maximumFields]. */
+    val maximumSkillFields: Int = 3,
     val reactionCooldownSeconds: Float = 0.5f,
     val reactionPairCooldownSeconds: Float = 2f,
     val masteredTagPoints: Int = 1,
@@ -202,6 +204,7 @@ data class BuildPolicy(
         require(overdriveGainCap.isFinite() && overdriveGainCap >= 1f)
         require(breaksPerSecond in 1..240 && reactionsPerSecond in 1..240)
         require(maximumFields in 1..ContentBounds.MAX_COMBAT_FIELDS)
+        require(maximumSkillFields in 1 until maximumFields)
         require(reactionCooldownSeconds.isFinite() && reactionCooldownSeconds > 0f)
         require(reactionPairCooldownSeconds.isFinite() && reactionPairCooldownSeconds >= reactionCooldownSeconds)
         require(masteredTagPoints in 0..2)

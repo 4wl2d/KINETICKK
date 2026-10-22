@@ -43,7 +43,10 @@ internal fun MutableGameState.startRun() {
     statusAccumulators.fill(0f)
     itemStatusReadyAt.fill(0f)
     buffs = emptyList()
-    combatFields = emptyList()
+    combatFieldTable.clear()
+    coreFieldMask = 0
+    fieldEnterReadyAt = 0f
+    resetCoreReactionState()
     reactionTokens = MutableGameState.REACTION_BURST
     breakTokens = MutableGameState.BREAK_BURST
     severedRelics = emptyList()

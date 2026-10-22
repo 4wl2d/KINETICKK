@@ -158,9 +158,9 @@ private fun MutableGameState.runClause(
             is EffectAction.Shield -> addShield(action.amount * magnitude * bonus)
             is EffectAction.Vent -> heat = max(0f, heat - action.heat * magnitude)
             is EffectAction.Overdrive -> gainOverdrive(action.charge * magnitude * bonus)
-            is EffectAction.Buff -> addBuff(itemId, action.stat, action.amount * magnitude * bonus, action.seconds, action.maxStacks)
+            is EffectAction.Buff -> addBuff(BuffSource.item(itemId), action.stat, action.amount * magnitude * bonus, action.seconds, action.maxStacks)
             is EffectAction.ExtendCombo -> if (combo > 0) comboTime = min(effectiveComboWindow() * 2f, comboTime + action.seconds * magnitude)
-            is EffectAction.RefreshWeapon -> refreshWeapon(action.seconds * magnitude, itemId)
+            is EffectAction.RefreshWeapon -> refreshWeapon(action.seconds * magnitude, BuffSource.item(itemId))
             // A level-up's dividend joins the level loop that fired it rather than starting a second one inside it.
             is EffectAction.GainData ->
                 if (clause.trigger == EffectTrigger.LEVEL_UP) creditData(action.amount * magnitude * bonus)
@@ -170,11 +170,11 @@ private fun MutableGameState.runClause(
                 val measured = if (action.basis == DamageBasis.FLAT) runScale() else basisAmount(action.basis, hit, target)
                 val dps = measured * action.scale * scale(action.basis)
                 val element = action.pick?.let(::resolvePick)
-                addField(CombatField(
-                    kind = CombatFieldKind.DARK_STAR, remaining = action.seconds, x = originX, y = originY,
-                    radius = action.radius, damagePerSecond = dps, element = element,
+                addField(
+                    CombatFieldKind.DARK_STAR, FieldSource.ITEM, itemId, originX, originY, radius = action.radius,
+                    seconds = action.seconds, damagePerSecond = dps, element = element,
                     stacksPerTick = if (element != null) 1 else 0, generation = 1, pull = 240f,
-                ))
+                )
             }
             is EffectAction.Detonate -> if (target != null && target.alive && !isShifting(target)) detonate(target, action, magnitude * bonus)
         }
@@ -198,7 +198,7 @@ internal fun MutableGameState.resolvePick(pick: ElementPick): StatusElement? = p
     else -> null
 }
 
-private fun MutableGameState.fireShards(
+internal fun MutableGameState.fireShards(
     x: Float,
     y: Float,
     count: Int,
@@ -232,15 +232,8 @@ private fun MutableGameState.detonate(target: Enemy, action: EffectAction.Detona
     for (index in action.elements.indices) {
         val listed = action.elements[index]
         val count = stacks(target, listed)
-        if (count <= 0) continue
-        val perStack = when (listed) {
-            StatusElement.THERMAL -> content.build.element(StatusElement.THERMAL).perStack
-            StatusElement.ENTROPY -> ENTROPY_DAMAGE_PER_STACK
-            else -> 0f
-        }
-        if (perStack == 0f) continue
-        // n stacks decaying one at a time deal perStack × n(n+1)/2 × decay seconds of damage.
-        total += perStack * build.potency(listed) * runScale() * count * (count + 1) * 0.5f * decaySeconds(listed)
+        if (count <= 0 || decayPerStack(listed) == 0f) continue
+        total += detonateDecayAmount(target, listed)
         target.status[StatusCell.STACKS + listed.ordinal] = 0f
         if (element == null || count * 2 >= breakThreshold(listed, target)) element = listed
     }
@@ -250,8 +243,26 @@ private fun MutableGameState.detonate(target: Enemy, action: EffectAction.Detona
     shockwave(target.x, target.y, 0.3f, target.radius * 2.6f, 4)
 }
 
-private fun MutableGameState.addBuff(itemId: Int, stat: kinetickk.ball.content.api.BuffStat, amount: Float, seconds: Float, maxStacks: Int) {
-    val existing = buffs.indexOfFirst { it.sourceItem == itemId && it.stat == stat }
+/**
+ * The damage [target]'s [element] stacks still hold as they decay one at a time: perStack × n(n+1)/2 × decay
+ * seconds (Thermal and Entropy decay into damage; other elements hold none). Reads, never consumes.
+ */
+internal fun MutableGameState.detonateDecayAmount(target: Enemy, element: StatusElement): Float {
+    val count = stacks(target, element)
+    val perStack = decayPerStack(element)
+    if (count <= 0 || perStack == 0f) return 0f
+    return perStack * build.potency(element) * runScale() * count * (count + 1) * 0.5f * decaySeconds(element)
+}
+
+private fun MutableGameState.decayPerStack(element: StatusElement): Float = when (element) {
+    StatusElement.THERMAL -> content.build.element(StatusElement.THERMAL).perStack
+    StatusElement.ENTROPY -> ENTROPY_DAMAGE_PER_STACK
+    else -> 0f
+}
+
+/** Grants or restacks the [sourceKey]'s ([BuffSource]) [stat] buff; at most [MutableGameState.MAX_BUFFS] live. */
+internal fun MutableGameState.addBuff(sourceKey: Int, stat: kinetickk.ball.content.api.BuffStat, amount: Float, seconds: Float, maxStacks: Int) {
+    val existing = buffs.indexOfFirst { it.sourceKey == sourceKey && it.stat == stat }
     val expires = elapsed + seconds
     buffs = if (existing >= 0) {
         buffs.mapIndexed { index, buff ->
@@ -259,7 +270,7 @@ private fun MutableGameState.addBuff(itemId: Int, stat: kinetickk.ball.content.a
         }
     } else {
         val live = buffs.filter { it.expiresAt > elapsed }
-        if (live.size >= MutableGameState.MAX_BUFFS) live else live + ActiveBuff(itemId, stat, amount, 1, expires)
+        if (live.size >= MutableGameState.MAX_BUFFS) live else live + ActiveBuff(sourceKey, stat, amount, 1, expires)
     }
 }
 
@@ -275,9 +286,9 @@ internal fun MutableGameState.expireBuffs() {
  * Bloom's volley, Glacier Bell's toll and pulse, Hollow Rift's passive rift, Concussion Engine's shockwave).
  * Continuous and contact weapons have no cooldown to advance: they get a short surge instead.
  */
-private fun MutableGameState.refreshWeapon(seconds: Float, itemId: Int) {
+internal fun MutableGameState.refreshWeapon(seconds: Float, sourceKey: Int) {
     if (weapon.isContinuous() || currentWeaponDefinition.cadence == WeaponCadence.CONTACT) {
-        addBuff(itemId, kinetickk.ball.content.api.BuffStat.WEAPON, 0.4f, max(0.18f, seconds), 1)
+        addBuff(sourceKey, kinetickk.ball.content.api.BuffStat.WEAPON, 0.4f, max(0.18f, seconds), 1)
         return
     }
     weaponClock -= cooldownRefund(seconds, weaponClock)
@@ -326,7 +337,7 @@ internal fun MutableGameState.onDirectHit(enemy: Enemy, result: DamageResult, so
             }
         }
         HitSource.ECHO -> fireClauses(EffectTrigger.WEAPON_HIT, enemy, basis, source, statusOnly = true)
-        HitSource.DASH, HitSource.PROC, HitSource.STATUS -> Unit
+        HitSource.DASH, HitSource.PROC, HitSource.STATUS, HitSource.SKILL -> Unit
     }
     if (result.critical) {
         fireClauses(EffectTrigger.CRIT, enemy, basis, source)

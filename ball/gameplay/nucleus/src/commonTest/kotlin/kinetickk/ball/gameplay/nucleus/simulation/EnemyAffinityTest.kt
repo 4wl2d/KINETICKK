@@ -168,9 +168,9 @@ class EnemyAffinityTest {
         assignAspect(warded, StatusElement.THERMAL.ordinal, immune = true)
         fun tick(kind: CombatFieldKind): Float {
             val before = warded.hp
-            fields.combatFields = emptyList()
-            fields.addField(CombatField(kind, remaining = 1f, x = warded.x, y = warded.y, radius = 60f,
-                damagePerSecond = 100f, element = StatusElement.THERMAL, stacksPerTick = 1))
+            fields.combatFieldTable.clear()
+            fields.addTestField(kind, x = warded.x, y = warded.y, radius = 60f,
+                damagePerSecond = 100f, element = StatusElement.THERMAL, stacksPerTick = 1)
             fields.updateCombatFields(CombatField.TICK_SECONDS)
             return before - warded.hp
         }
@@ -380,8 +380,7 @@ class EnemyAffinityTest {
                 applyStatus(source, StatusElement.GRAVITIC, 1, generation = 0)
             },
             Triple("Field pull", null) { target ->
-                addField(CombatField(CombatFieldKind.DARK_STAR, remaining = 1f, x = target.x - 40f, y = target.y, radius = 100f,
-                    damagePerSecond = 0f, pull = 240f))
+                addTestField(CombatFieldKind.DARK_STAR, x = target.x - 40f, y = target.y, radius = 100f, pull = 240f)
                 updateCombatFields(0.1f)
             },
             Triple("Event Horizon pull", RelicId.EVENT_HORIZON) { updateRelicRuntime(0.1f) },
