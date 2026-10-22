@@ -1207,7 +1207,8 @@ internal fun MutableGameState.shroudStored(): Int {
 
 /**
  * A death: a Spored enemy spreads Decay to its neighbours and drops Data (within its cast's budget); rank III
- * Decay Spores refunds every skill for it.
+ * Decay Spores refunds every skill for it. Without Decay Spores the mark came from an item's `ApplyMark`, whose
+ * clause rate already bounds it: each such death drops one Data pickup.
  */
 internal fun MutableGameState.onSkillCarrierDied(enemy: Enemy) {
     if (!consumeMark(enemy, MarkKind.SPORED)) return
@@ -1219,15 +1220,16 @@ internal fun MutableGameState.onSkillCarrierDied(enemy: Enemy) {
         }
     }
     val slot = skillLoadout.slotOf(SkillId.DECAY_SPORES)
-    if (slot < 0) return
+    if (slot < 0) {
+        dropSporedData(enemy)
+        return
+    }
     val runtime = skillRuntime
     val values = skillValues(slot)
     val dropped = runtime[slot, SkillCell.STORED]
     if (dropped < values[SPORES_DATA_CAP]) {
         runtime[slot, SkillCell.STORED] = dropped + 1f
-        // A golden-angle scatter from the enemy id: no draw from any random stream.
-        val angle = enemy.id * SPORES_SCATTER_ANGLE
-        addPickup(Pickup(PickupType.DATA, enemy.x, enemy.y, cos(angle) * SPORES_DATA_SPEED, sin(angle) * SPORES_DATA_SPEED))
+        dropSporedData(enemy)
     }
     // Rank III: every skill recharges for each Spored death, up to the cast's cap per skill.
     if (skillLoadout.rank(slot) >= ContentBounds.MAX_SKILL_RANK) {
@@ -1238,6 +1240,12 @@ internal fun MutableGameState.onSkillCarrierDied(enemy: Enemy) {
             refundAllSkills(seconds)
         }
     }
+}
+
+/** One Data pickup at a Spored corpse, scattered at a golden angle from the enemy id: no draw from any random stream. */
+private fun MutableGameState.dropSporedData(enemy: Enemy) {
+    val angle = enemy.id * SPORES_SCATTER_ANGLE
+    addPickup(Pickup(PickupType.DATA, enemy.x, enemy.y, cos(angle) * SPORES_DATA_SPEED, sin(angle) * SPORES_DATA_SPEED))
 }
 
 // ---------------------------------------------------------------------------------------------

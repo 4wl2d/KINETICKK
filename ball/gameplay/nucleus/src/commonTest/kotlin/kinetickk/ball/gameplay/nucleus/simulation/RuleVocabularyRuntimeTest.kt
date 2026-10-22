@@ -37,6 +37,7 @@ import kinetickk.ball.gameplay.nucleus.model.MarkKind
 import kinetickk.ball.gameplay.nucleus.model.SkillCell
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
@@ -399,6 +400,25 @@ class RuleVocabularyRuntimeTest {
         assertEquals(0f, state.primedDashUntil)
         state.performDash()
         assertTrue(state.heat > 10f)
+    }
+
+    @Test
+    fun anItemsSporedMarkSpreadsDecayAndDropsDataOnDeathWithoutDecaySpores() {
+        val brand = probe("Spore Probe", on(EffectTrigger.CRIT, EffectAction.ApplyMark(MarkPick.SPORED, 4f), cooldown = 0.5f),
+            elements = listOf(StatusElement.ENTROPY))
+        val state = stateWith(brand)
+        assertTrue(state.skillLoadout.slotOf(SkillId.DECAY_SPORES) < 0)
+        val target = state.dummy(x = 200f, y = 0f)
+        val neighbour = state.dummy(x = 260f, y = 0f)
+        state.fireClauses(EffectTrigger.CRIT, target, hit = 5f, source = HitSource.WEAPON)
+        assertEquals(MarkKind.SPORED, state.markOf(target))
+        val pickups = state.pickups.count { it.type == PickupType.DATA }
+        state.onSkillCarrierDied(target)
+        assertEquals(2, neighbour.stacksOf(StatusElement.ENTROPY), "the death spreads two Decay")
+        assertEquals(pickups + 1, state.pickups.count { it.type == PickupType.DATA }, "and drops one Data pickup")
+        assertEquals(null, state.markOf(target), "the mark is cashed once")
+        state.onSkillCarrierDied(target)
+        assertEquals(pickups + 1, state.pickups.count { it.type == PickupType.DATA }, "a cashed mark drops nothing more")
     }
 
     // -----------------------------------------------------------------------------------------
