@@ -537,7 +537,9 @@ internal fun MutableGameState.onRotWellDeath(enemy: Enemy) {
         val growths = table[index, FieldCell.CHARGE]
         if (growths >= reactionValue(ReactionId.ROT_WELL, COMPOST_GROWTHS_VALUE)) continue
         table[index, FieldCell.CHARGE] = growths + 1f
-        table[index, FieldCell.RADIUS] = min(COMPOST_MAX_RADIUS, radius + reactionValue(ReactionId.ROT_WELL, COMPOST_GROWTH_RADIUS_VALUE))
+        // Growth widens up to the cap and never narrows a well that Field Tuning already admitted past it.
+        table[index, FieldCell.RADIUS] =
+            max(radius, min(COMPOST_MAX_RADIUS, radius + reactionValue(ReactionId.ROT_WELL, COMPOST_GROWTH_RADIUS_VALUE)))
         extendField(index, reactionValue(ReactionId.ROT_WELL, COMPOST_GROWTH_SECONDS_VALUE))
     }
 }

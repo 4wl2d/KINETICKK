@@ -274,6 +274,22 @@ class ReactionBehaviourTest {
     }
 
     @Test
+    fun compostNeverShrinksAWellThatFieldTuningAlreadyWidenedPastItsCap() {
+        val state = buildTestState()
+        state.own("Meridian Engine")
+        state.own("Surveyor's Stakes")
+        state.setOff(ReactionId.ROT_WELL, state.dummy(x = 400f))
+        val admitted = state.fieldRecords.single().radius
+        assertTrue(admitted > 200f, "Field Tuning admits the well past Compost's 200 u cap: $admitted")
+        val life = state.fieldRecords.single().remaining
+        state.onStatusCarrierDied(state.dummy(x = 420f))
+        val well = state.fieldRecords.single()
+        assertEquals(admitted, well.radius, "Compost keeps the wider well")
+        assertEquals(1f, well.charge)
+        assertEquals(life + 0.5f, well.remaining, 1e-4f, "the growth still lengthens its life")
+    }
+
+    @Test
     fun blastJumpRidesTheClapWithOnePointSixTimesTheImpulseForNoHeat() {
         fun dash(clap: Boolean, at: Float = 200f): Pair<Float, Float> {
             val state = buildTestState()
