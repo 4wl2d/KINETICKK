@@ -74,7 +74,7 @@ class SessionPresentationLocalizationTest {
         mainClock.advanceTimeByFrame()
         onNodeWithTag("kinetickk.home.workshop").assertIsFocused()
         onRoot().performKeyInput { pressKey(Key.Enter) }
-        assertEquals(HomeOutput.OpenWorkshop(null), outputs.single())
+        assertEquals(HomeOutput.OpenWorkshop, outputs.single())
     }
 
     @Test
@@ -204,12 +204,12 @@ class SessionPresentationLocalizationTest {
         }
         mainClock.advanceTimeByFrame()
         onNodeWithTag("kinetickk.home.start").assertContentDescriptionEquals("Начать забег")
-        onNodeWithTag("kinetickk.home.hangar").assertContentDescriptionEquals("Выбрать персонажа. Текущая форма: Круг")
+        onNodeWithTag("kinetickk.home.workshop").assertContentDescriptionEquals("Открыть мастерскую")
         saveLocalizationCapture("home-ru")
         runOnIdle { languageValue = AppLanguage.English }
         mainClock.advanceTimeByFrame()
         onNodeWithTag("kinetickk.home.start").assertContentDescriptionEquals("Start run")
-        onNodeWithTag("kinetickk.home.hangar").assertContentDescriptionEquals("Choose a character. Current form: Circle")
+        onNodeWithTag("kinetickk.home.workshop").assertContentDescriptionEquals("Open the Workshop")
         saveLocalizationCapture("home-en")
     }
 }

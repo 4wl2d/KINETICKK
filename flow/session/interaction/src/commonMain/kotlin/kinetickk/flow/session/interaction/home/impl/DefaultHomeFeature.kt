@@ -179,7 +179,7 @@ class DefaultHomeFeature(
                         (event.key != Key.DirectionDown && event.key != Key.DirectionUp)) false
                     else {
                         val step = if (event.key == Key.DirectionDown) 1 else -1
-                        val targets = HomeNavigationTargets
+                        val targets = HomeMenuTargets
                         val index = targets.indexOf(activeTargetValue)
                         activeTargetValue = targets[(index + step + targets.size) % targets.size]
                         actionFocus.getValue(activeTargetValue).requestFocus()
@@ -215,7 +215,6 @@ class DefaultHomeFeature(
                         HomeSemanticAction(
                             action = action,
                             density = localDensity,
-                            characterName = uiModel.coreShape(uiModel.coreShape).displayName.localizedContent(language),
                             focusRequester = actionFocus.getValue(action.target),
                             onFocus = { focused ->
                                 if (focused) focusedTargetValue = action.target
@@ -256,14 +255,13 @@ class DefaultHomeFeature(
 private fun HomeSemanticAction(
     action: HomeActionBounds,
     density: Density,
-    characterName: String,
     focusRequester: FocusRequester,
     onFocus: (Boolean) -> Unit,
     onHover: () -> Unit,
     onClick: () -> Unit,
 ) {
     val language = LocalAppLanguage.current
-    val description = action.target.homeContentDescription(language, characterName)
+    val description = action.target.homeContentDescription(language)
     val onHoverValue by rememberUpdatedState(onHover)
     Box(
         Modifier
@@ -336,7 +334,6 @@ private fun Modifier.placeInHomeBounds(bounds: Rect, density: Density): Modifier
         )
 
 private fun HomeLayoutTarget.homeTestTag(): String = when (this) {
-    HomeLayoutTarget.HANGAR -> "kinetickk.home.hangar"
     HomeLayoutTarget.START -> "kinetickk.home.start"
     HomeLayoutTarget.WORKSHOP -> "kinetickk.home.workshop"
     HomeLayoutTarget.REBIRTH -> "kinetickk.home.rebirth"
@@ -349,8 +346,7 @@ private fun HomeInfoTarget.homeInfoTestTag(): String = when (this) {
     HomeInfoTarget.FORM -> "kinetickk.home.info.form"
 }
 
-private fun HomeLayoutTarget.homeContentDescription(language: AppLanguage, characterName: String): String = when (this) {
-    HomeLayoutTarget.HANGAR -> language.text(SessionText.HANGAR_DESCRIPTION, characterName)
+private fun HomeLayoutTarget.homeContentDescription(language: AppLanguage): String = when (this) {
     HomeLayoutTarget.START -> language.text(SessionText.START_DESCRIPTION)
     HomeLayoutTarget.WORKSHOP -> language.text(SessionText.WORKSHOP_DESCRIPTION)
     HomeLayoutTarget.REBIRTH -> language.text(SessionText.REBIRTH_DESCRIPTION)

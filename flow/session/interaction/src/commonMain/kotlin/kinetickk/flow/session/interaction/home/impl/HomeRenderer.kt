@@ -30,8 +30,6 @@ import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkAlign
-import kinetickk.foundation.design.KkButtonSize
-import kinetickk.foundation.design.KkButtonVariant
 import kinetickk.foundation.design.KkEase
 import kinetickk.foundation.design.KkFormGeometry
 import kinetickk.foundation.design.KkFormPaths
@@ -44,7 +42,6 @@ import kinetickk.foundation.design.KkTooltipPlacement
 import kinetickk.foundation.design.KkVAlign
 import kinetickk.foundation.design.bodyStyle
 import kinetickk.foundation.design.condStyle
-import kinetickk.foundation.design.drawKkButton
 import kinetickk.foundation.design.drawKkGem
 import kinetickk.foundation.design.drawKkGrid
 import kinetickk.foundation.design.drawKkHalftone
@@ -453,8 +450,7 @@ internal fun homeMenuStampText(target: HomeLayoutTarget, language: AppLanguage):
 }
 
 internal fun homeFacts(model: HomeUiModel, target: HomeLayoutTarget, language: AppLanguage, textScale: Float): HomeFacts {
-    val label = if (target == HomeLayoutTarget.HANGAR) language.text(SessionText.CHARACTERS)
-        else language.text(HomeMenuLabels[HomeMenuTargets.indexOf(target).coerceAtLeast(0)])
+    val label = language.text(HomeMenuLabels[HomeMenuTargets.indexOf(target)])
     val matter = homeNumber(model.totalMatter, language)
     val weapon = model.startingWeaponName?.localizedContent(language)
     val tierProfile = model.rebirthProfile
@@ -504,20 +500,6 @@ internal fun homeFacts(model: HomeUiModel, target: HomeLayoutTarget, language: A
             "${model.discoveredItemCount}/${model.itemCount}",
             null,
         )
-        HomeLayoutTarget.HANGAR -> {
-            val definition = model.coreShape(model.coreShape)
-            HomeFacts(
-                label,
-                "${model.unlockedCoreShapes.size}/${model.coreShapes.size}",
-                listOf(
-                    language.text(SessionRedesignText.FORM) to definition.displayName.localizedContent(language),
-                    language.text(SessionRedesignText.MECHANIC) to definition.mechanicName.localizedContent(language),
-                ),
-                language.text(SessionRedesignText.HANGAR_INFO),
-                null,
-                null,
-            )
-        }
         HomeLayoutTarget.SETTINGS -> HomeFacts(
             label,
             language.code.uppercase(),
@@ -698,7 +680,7 @@ internal fun DrawScope.drawHome(
     drawMenu(model, tinted, layout, motion, state.activeTarget, state.textScale)
     scene.facts?.let { drawFactsCard(tinted, it, facts, layout, state, motion, accent) }
     drawFormPanel(model, tinted, layout, state, motion)
-    drawLegal(text, layout)
+    drawVersion(text, layout)
     val open = state.openInfo ?: state.activeInfo
     if (open != null) {
         val info = layout.info(open)
@@ -1240,7 +1222,7 @@ private fun DrawScope.drawFactsCard(
     }
 }
 
-/** The current character: its name, its (!) (the mechanic) and the Characters card that changes it. */
+/** The current character: its name and its (!) (the mechanic); the Workshop changes it. */
 private fun DrawScope.drawFormPanel(
     model: HomeUiModel,
     text: CanvasTextMeasurer,
@@ -1257,54 +1239,15 @@ private fun DrawScope.drawFormPanel(
     if (info != null) {
         drawKkInfoButton(text, info.bounds, active = state.activeInfo == HomeInfoTarget.FORM || state.openInfo == HomeInfoTarget.FORM)
     }
-    val card = layout.bounds(HomeLayoutTarget.HANGAR)
-    drawKkButton(
-        text, card, language.text(SessionText.CHARACTERS),
-        variant = KkButtonVariant.GHOST,
-        size = if (card.height < 52f * density) KkButtonSize.SM else KkButtonSize.MD,
-        hover = if (state.activeTarget == HomeLayoutTarget.HANGAR) 1f else 0f,
-        icon = model.coreShape.formIcon(),
-    )
 }
 
-internal fun DrawScope.drawLegal(text: CanvasTextMeasurer, layout: HomeLayoutGeometry) {
+internal fun DrawScope.drawVersion(text: CanvasTextMeasurer, layout: HomeLayoutGeometry) {
     val scene = layout.scene
-    val legal = homeLegalLayout(text, layout, density)
-    var right = scene.legalRight
-    for (index in legal.parts.indices.reversed()) {
-        val part = legal.parts[index]
-        drawKkText(part, right, scene.legalBaseline, Kk.Mute, align = KkAlign.END, valign = KkVAlign.BASELINE)
-        right -= part.size.width + legal.gap
-    }
+    drawKkText(homeVersionLayout(text, scene, density), scene.versionRight, scene.versionBaseline, Kk.Mute,
+        align = KkAlign.END, valign = KkVAlign.BASELINE)
 }
 
-/** The legal line as separate mono texts (no separators) and the gap between them (px). */
-internal class HomeLegalLayout(val parts: List<TextLayoutResult>, val gap: Float) {
-    val width: Float get() = parts.sumOf { it.size.width.toDouble() }.toFloat() + gap * (parts.size - 1).coerceAtLeast(0)
-}
-
-/**
- * GPL notices kept visible on Home: copyright, license, no-warranty note, source and version on
- * desktop; copyright, license and source on phones. The size shrinks (to 70 %) to fit between
- * [HomeScene.legalLeft] and [HomeScene.legalRight].
- */
-internal fun homeLegalLayout(text: CanvasTextMeasurer, layout: HomeLayoutGeometry, density: Float): HomeLegalLayout {
-    val scene = layout.scene
-    val parts = if (layout.mode == HomeLayoutMode.REGULAR) LegalRegular else LegalCompact
-    val strings = parts.map { text.language.text(it) }
-    val available = scene.legalRight - scene.legalLeft
-    fun measure(sizePx: Float): HomeLegalLayout {
-        val style = text.typography.monoStyle(max(1f, sizePx / density / text.scale))
-        val measured = strings.mapIndexed { index, value -> measureKkText(text, value, style, uppercase = parts[index] != SessionRedesignText.SOURCE) }
-        return HomeLegalLayout(measured, sizePx * 2f)
-    }
-    val full = measure(scene.legalSize)
-    if (full.width <= available) return full
-    return measure(scene.legalSize * (available / full.width * 0.98f).coerceIn(0.7f, 1f))
-}
-
-private val LegalRegular = listOf(
-    SessionRedesignText.COPYRIGHT, SessionRedesignText.LICENSE, SessionRedesignText.NO_WARRANTY,
-    SessionRedesignText.SOURCE, SessionRedesignText.VERSION,
-)
-private val LegalCompact = listOf(SessionRedesignText.COPYRIGHT, SessionRedesignText.LICENSE, SessionRedesignText.SOURCE)
+/** The version line on Home: the build version in mono, kept at its size under every text-size setting. */
+internal fun homeVersionLayout(text: CanvasTextMeasurer, scene: HomeScene, density: Float): TextLayoutResult =
+    measureKkText(text, text.language.text(SessionRedesignText.VERSION),
+        text.typography.monoStyle(max(1f, scene.versionSize / density / text.scale)), uppercase = true)

@@ -170,19 +170,20 @@ class HomeMenuPixelComposeTest {
     }
 
     @Test
-    fun theFormNameKeepsFourPixelsAboveTheCharactersCard() {
-        // The mechanic's text left the panel for the form's (!): the name's ink sits clear above the card.
+    fun theFormNameInkEndsFourPixelsAboveTheVersionLine() {
+        // Without the Characters card the name takes its band: every form's name ink stays clear above the version's glyphs.
         for (language in AppLanguage.entries) for (textScale in listOf(1f, 1.25f, 1.75f)) withMeasurer(language, homeUiScale(textScale)) { text ->
-            for ((width, height) in listOf(1_000 to 700, 1_440 to 810, 1_920 to 1_080, 844 to 390, 390 to 844)) {
+            for ((width, height) in listOf(1_000 to 700, 1_440 to 810, 1_920 to 1_080, 844 to 390, 800 to 360, 390 to 844)) {
                 val layout = homeLayoutGeometry(width.toFloat(), height.toFloat(), 1f)
+                val scene = layout.scene
                 val nameRight = homeFormNameRight(layout, 1f)
-                val card = layout.bounds(HomeLayoutTarget.HANGAR)
+                val versionTop = kotlin.math.floor(scene.versionBaseline - HOME_VERSION_ASCENT_EM * scene.versionSize).toInt()
                 defaultCoreShapeDefinitions().forEach { form ->
                     val name = form.displayName.localizedContent(language)
                     val where = "$name ${language.code} ${width}x$height @$textScale"
-                    val nameInk = inkRows(rendered(width, height) { drawHomeFormName(text, layout.scene, name, nameRight, Kk.Bone) })
+                    val nameInk = inkRows(rendered(width, height) { drawHomeFormName(text, scene, name, nameRight, Kk.Bone) })
                         ?: fail("no name: $where")
-                    assertTrue(card.top.toInt() - nameInk.last - 1 >= 4, "name ink ends on row ${nameInk.last}, the card starts at ${card.top}: $where")
+                    assertTrue(versionTop - nameInk.last - 1 >= 4, "name ink ends on row ${nameInk.last}, the version from $versionTop: $where")
                 }
             }
         }

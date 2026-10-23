@@ -8,7 +8,6 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.CoreShapeDefinition
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.profile.api.CharacterAchievementProgress
-import kinetickk.ball.profile.interaction.workshop.api.WorkshopTab
 import kinetickk.foundation.collections.ImmutableSet
 import kinetickk.foundation.collections.ImmutableList
 
@@ -59,11 +58,8 @@ data class HomeUiModel(
 sealed interface HomeOutput {
     data object StartRun : HomeOutput
 
-    /**
-     * Open the Workshop on [tab]: the character card asks for the Characters tab; the Workshop row
-     * passes null and the Workshop shows the tab it showed last.
-     */
-    data class OpenWorkshop(val tab: WorkshopTab?) : HomeOutput
+    /** Open the Workshop on the tab it showed last; characters are chosen there. */
+    data object OpenWorkshop : HomeOutput
     data object OpenRebirth : HomeOutput
     data object OpenCodex : HomeOutput
     data object OpenSettings : HomeOutput

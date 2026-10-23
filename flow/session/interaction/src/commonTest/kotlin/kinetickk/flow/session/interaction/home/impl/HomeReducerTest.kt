@@ -15,7 +15,6 @@ import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.RebirthProgress
-import kinetickk.ball.profile.interaction.workshop.api.WorkshopTab
 import kinetickk.flow.session.interaction.audio.SessionAudioCue
 import kinetickk.flow.session.interaction.home.api.HomeOutput
 import kinetickk.flow.session.interaction.TestCoreShapes
@@ -158,12 +157,10 @@ class HomeReducerTest {
     fun actionsEmitTypedProfileIntentOrOrderedShellEffects() {
         val reducer = homeReducer()
 
-        // The character card opens the Workshop on Characters; the Workshop row on the tab shown last.
-        val characters = reducer.reduce(HomeAction.OpenCharacters).effects
-        assertEquals(SessionAudioCue.UI_CLICK, assertIs<HomeEffect.PlayAudio>(characters[0]).cue)
-        assertEquals(HomeOutput.OpenWorkshop(WorkshopTab.CHARACTERS), assertIs<HomeEffect.Emit>(characters[1]).output)
+        // The Workshop row opens the Workshop on the tab shown last; characters are chosen there.
         val workshop = reducer.reduce(HomeAction.OpenWorkshop).effects
-        assertEquals(HomeOutput.OpenWorkshop(null), assertIs<HomeEffect.Emit>(workshop[1]).output)
+        assertEquals(SessionAudioCue.UI_CLICK, assertIs<HomeEffect.PlayAudio>(workshop[0]).cue)
+        assertEquals(HomeOutput.OpenWorkshop, assertIs<HomeEffect.Emit>(workshop[1]).output)
 
         val start = reducer.reduce(HomeAction.StartRun).effects
         assertEquals(SessionAudioCue.UI_CLICK, assertIs<HomeEffect.PlayAudio>(start[0]).cue)
@@ -177,16 +174,12 @@ class HomeReducerTest {
     fun pointerGeometryPreservesCoreStartAndRouteHitboxes() {
         val viewport = HomeViewport(1_280f, 720f, 1f)
 
-        assertEquals(
-            HomeAction.OpenCharacters,
-            homeLayoutGeometry(1_280f, 720f, 1f).bounds(HomeLayoutTarget.HANGAR).center.let {
-                resolveHomePress(viewport, it.x, it.y)
-            },
-        )
         // 1280 × 720 is the 16:9 reference scaled by 8/9: the menu sits on the right half.
         assertEquals(HomeAction.StartRun, resolveHomePress(viewport, 1_000f, 140f))
         assertEquals(HomeAction.OpenRebirth, resolveHomePress(viewport, 1_000f, 340f))
         assertEquals(null, resolveHomePress(viewport, 300f, 275f), "The hero is decoration, not a target")
+        // Where the Characters card stood, under the form name, nothing opens: characters change in the Workshop.
+        assertEquals(null, resolveHomePress(viewport, 978f, 638f))
     }
 }
 

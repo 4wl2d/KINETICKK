@@ -12,7 +12,6 @@ import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.isAscendant
 import kinetickk.ball.profile.api.rank
-import kinetickk.ball.profile.interaction.workshop.api.WorkshopTab
 import kinetickk.flow.session.interaction.audio.SessionAudioCue
 import kinetickk.flow.session.interaction.home.api.HomeOutput
 import kinetickk.flow.session.interaction.home.api.HomeUiModel
@@ -20,8 +19,6 @@ import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 
 internal sealed interface HomeAction {
-    /** The current-character card: the Workshop on its Characters tab. */
-    data object OpenCharacters : HomeAction
     data object StartRun : HomeAction
     /** The Workshop row: the Workshop on the tab it showed last. */
     data object OpenWorkshop : HomeAction
@@ -82,9 +79,8 @@ internal class HomeReducer(
     )
 
     fun reduce(action: HomeAction): HomeReduction = when (action) {
-        HomeAction.OpenCharacters -> navigate(HomeOutput.OpenWorkshop(WorkshopTab.CHARACTERS))
         HomeAction.StartRun -> navigate(HomeOutput.StartRun)
-        HomeAction.OpenWorkshop -> navigate(HomeOutput.OpenWorkshop(null))
+        HomeAction.OpenWorkshop -> navigate(HomeOutput.OpenWorkshop)
         HomeAction.OpenRebirth -> navigate(HomeOutput.OpenRebirth)
         HomeAction.OpenCodex -> navigate(HomeOutput.OpenCodex)
         HomeAction.OpenSettings -> navigate(HomeOutput.OpenSettings)

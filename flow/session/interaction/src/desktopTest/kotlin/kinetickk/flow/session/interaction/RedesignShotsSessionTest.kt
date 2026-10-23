@@ -71,7 +71,7 @@ class RedesignShotsSessionTest {
     }
 
     @Test fun home() {
-        val targets = listOf("start", "workshop", "rebirth", "codex", "settings", "hangar")
+        val targets = listOf("start", "workshop", "rebirth", "codex", "settings")
         for ((w, h) in sizes) for (language in AppLanguage.entries) {
             for (target in targets) {
                 shot("home", target, w, h, language, { ShotProfile() }) {
@@ -84,11 +84,11 @@ class RedesignShotsSessionTest {
             }
             for (shape in CoreShape.entries) {
                 shot("home", "form-${shape.name.lowercase()}", w, h, language, { ShotProfile(coreShape = shape) }) {
-                    onNodeWithTag("kinetickk.home.hangar").performSemanticsAction(SemanticsActions.RequestFocus)
+                    onNodeWithTag("kinetickk.home.start").performSemanticsAction(SemanticsActions.RequestFocus)
                 }
             }
             shot("home", "form-info", w, h, language, { ShotProfile() }) {
-                onNodeWithTag("kinetickk.home.hangar").performSemanticsAction(SemanticsActions.RequestFocus)
+                onNodeWithTag("kinetickk.home.start").performSemanticsAction(SemanticsActions.RequestFocus)
                 mainClock.advanceTimeBy(300)
                 onNodeWithTag("kinetickk.home.info.form").performSemanticsAction(SemanticsActions.OnClick)
             }
@@ -112,14 +112,14 @@ class RedesignShotsSessionTest {
                 }
             }
             shot("home", "form-info-text175", w, h, language, { ShotProfile(textScale = 1.75f) }) {
-                onNodeWithTag("kinetickk.home.hangar").performSemanticsAction(SemanticsActions.RequestFocus)
+                onNodeWithTag("kinetickk.home.start").performSemanticsAction(SemanticsActions.RequestFocus)
                 mainClock.advanceTimeBy(300)
                 onNodeWithTag("kinetickk.home.info.form").performSemanticsAction(SemanticsActions.OnClick)
             }
         }
     }
 
-    /** 360-px-tall landscape (1080 × 2400 phones turned sideways): the lowest rows over the legal line. */
+    /** 360-px-tall landscape (1080 × 2400 phones turned sideways): the lowest rows over the version line. */
     @Test fun homeShortLandscape() {
         for (language in AppLanguage.entries) {
             for (target in listOf("start", "rebirth", "codex", "settings")) {
@@ -141,7 +141,7 @@ class RedesignShotsSessionTest {
                 onNodeWithTag("kinetickk.home.$target").performSemanticsAction(SemanticsActions.RequestFocus)
             }
             shot("home", "form-info", w, h, language, { ShotProfile() }) {
-                onNodeWithTag("kinetickk.home.hangar").performSemanticsAction(SemanticsActions.RequestFocus)
+                onNodeWithTag("kinetickk.home.start").performSemanticsAction(SemanticsActions.RequestFocus)
                 mainClock.advanceTimeBy(300)
                 onNodeWithTag("kinetickk.home.info.form").performSemanticsAction(SemanticsActions.OnClick)
             }

@@ -276,7 +276,7 @@ fun AppSessionContent(
             when (shellValue.base) {
                 AppDestination.Home -> homeFeature.Content(
                     inputEnabled = normalInputEnabled && shellValue.overlay == null,
-                    onOutput = { output -> output.workshopTab()?.let(::openWorkshop) ?: dispatch(output.toSessionPulse()) },
+                    onOutput = { output -> dispatch(output.toSessionPulse()) },
                 )
                 // The run keeps the raw density: the interface scale never changes the visible arena.
                 AppDestination.Gameplay -> CompositionLocalProvider(LocalDensity provides rawDensity) {

@@ -68,15 +68,8 @@ class AppSessionInputMappingTest {
             SessionInteractionPulse.OpenOverlay(AppDestination.Codex),
             HomeOutput.OpenCodex.toSessionPulse(),
         )
-        // The character card names the Characters tab; the Workshop row keeps the tab shown last (no tab).
-        for ((output, tab) in listOf(
-            HomeOutput.OpenWorkshop(WorkshopTab.CHARACTERS) to WorkshopTab.CHARACTERS,
-            HomeOutput.OpenWorkshop(null) to null,
-        )) {
-            assertEquals(SessionInteractionPulse.OpenOverlay(AppDestination.Workshop), output.toSessionPulse())
-            assertEquals(tab, output.workshopTab())
-        }
-        assertNull(HomeOutput.OpenCodex.workshopTab())
+        // The Workshop row keeps the tab shown last; characters are chosen there.
+        assertEquals(SessionInteractionPulse.OpenOverlay(AppDestination.Workshop), HomeOutput.OpenWorkshop.toSessionPulse())
         assertEquals(SessionInteractionPulse.CloseOverlay, WorkshopOutput.Back.toSessionPulse())
         // Character selection goes to Session, which decides whether it is between runs.
         assertEquals(

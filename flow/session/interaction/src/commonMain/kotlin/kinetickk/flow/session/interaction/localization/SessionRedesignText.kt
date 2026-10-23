@@ -5,14 +5,13 @@ package kinetickk.flow.session.interaction.localization
 
 import kinetickk.foundation.common.localization.TextResource
 
-/** Session copy added by the redesign: short labels, (!) explanations and the clean legal line. */
+/** Session copy added by the redesign: short labels, (!) explanations and the version line. */
 internal enum class SessionRedesignText(
     override val english: String,
     override val russian: String,
 ) : TextResource {
     MATTER("Matter", "Материя"),
     FORM("Form", "Форма"),
-    MECHANIC("Mechanic", "Механика"),
     MAXED("Maxed", "На максимуме"),
     RANKS("Ranks", "Ранги"),
     DIRECTIVE("Directive", "Директива"),
@@ -42,20 +41,12 @@ internal enum class SessionRedesignText(
         "Everything you have found in runs: items, weapons, relics, forms, reactions and relic pairings.",
         "Всё, что вы нашли в забегах: предметы, оружие, реликвии, формы, реакции и сочетания реликвий.",
     ),
-    HANGAR_INFO(
-        "Choose the character for your next run. Each form has its own mechanic and traits; new forms unlock with achievements and Reborn ranks.",
-        "Выберите персонажа для следующего забега. У каждой формы своя механика и особенности; новые формы открываются достижениями и рангами перерождения.",
-    ),
     SETTINGS_INFO(
         "Game, sound, graphics and interface options. Changes apply immediately.",
         "Параметры игры, звука, графики и интерфейса. Изменения применяются сразу.",
     ),
 
     VERSION("v0.5.0", "v0.5.0"),
-    COPYRIGHT("© 2026 Vladislav Tomilov", "© 2026 Владислав Томилов"),
-    LICENSE("GPL v3+", "GPL v3+"),
-    NO_WARRANTY("No warranty", "Без гарантий"),
-    SOURCE("github.com/4wl2d/KINETICKK", "github.com/4wl2d/KINETICKK"),
 
     BACK("Back", "Назад"),
     CLOSE("Close", "Закрыть"),
