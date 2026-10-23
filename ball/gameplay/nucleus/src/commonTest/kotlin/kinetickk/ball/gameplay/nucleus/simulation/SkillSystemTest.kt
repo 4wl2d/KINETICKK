@@ -557,6 +557,27 @@ class SkillSystemTest {
     }
 
     @Test
+    fun kineticSkillDamageLeavesBrittleForTheNextDirectHitInsteadOfTakingItsBonus() {
+        val state = arena()
+        val slot = state.learn(SkillId.FULL_STOP)
+        state.setVelocityForTesting(800f, 0f)
+        val brittle = state.dummy(x = state.coreX + 60f, y = state.coreY).apply { status[StatusCell.BRITTLE] = 1f }
+        val plain = state.dummy(x = state.coreX - 60f, y = state.coreY)
+        state.castSkill(slot)
+        val plainLoss = plain.maxHp - plain.hp
+        assertTrue(plainLoss > 0f)
+        assertEquals(plainLoss, brittle.maxHp - brittle.hp, DAMAGE_TOLERANCE, "the shockwave takes no Brittle bonus")
+        assertEquals(1f, brittle.status[StatusCell.BRITTLE], "Brittle waits for the next direct hit")
+        // The next direct hit takes the +60 % and spends it: Brittle pays out once.
+        val before = brittle.hp
+        state.dealHit(brittle, 100f, HitSource.WEAPON, canCrit = false)
+        assertEquals(0f, brittle.status[StatusCell.BRITTLE])
+        val beforePlain = plain.hp
+        state.dealHit(plain, 100f, HitSource.WEAPON, canCrit = false)
+        assertEquals((beforePlain - plain.hp) * (1f + BRITTLE_VULNERABILITY), before - brittle.hp, DAMAGE_TOLERANCE)
+    }
+
+    @Test
     fun aCastDealsTheArchitectOneCappedInstance() {
         val state = arena()
         val slot = state.learn(SkillId.FULL_STOP, 3)

@@ -316,8 +316,11 @@ private fun MutableGameState.damageLiability(source: HitSource, critical: Boolea
     return multiplier
 }
 
-/** Σ vulnerability on the target, capped by policy. */
-internal fun MutableGameState.vulnerability(enemy: Enemy, source: HitSource): Float {
+/**
+ * Σ vulnerability on the target, capped by policy. [brittle] false leaves out Brittle's bonus for damage that
+ * does not spend it (skill damage), so Brittle pays out once, on the direct hit that consumes it.
+ */
+internal fun MutableGameState.vulnerability(enemy: Enemy, source: HitSource, brittle: Boolean = true): Float {
     var vulnerable = stacks(enemy, StatusElement.ENTROPY) * content.build.element(StatusElement.ENTROPY).perStack *
         build.potency(StatusElement.ENTROPY)
     if (source == HitSource.IMPACT || source == HitSource.DASH) {
@@ -334,7 +337,7 @@ internal fun MutableGameState.vulnerability(enemy: Enemy, source: HitSource): Fl
         vulnerable += content.build.reaction(kinetickk.ball.content.api.ReactionId.EMBRITTLE).power
     }
     // Brittle strengthens the next direct hit inside the same cap; dealHit consumes it.
-    if (source.direct && enemy.status[StatusCell.BRITTLE] > 0f) vulnerable += BRITTLE_VULNERABILITY
+    if (brittle && source.direct && enemy.status[StatusCell.BRITTLE] > 0f) vulnerable += BRITTLE_VULNERABILITY
     return vulnerable.coerceIn(0f, content.build.policy.vulnerabilityCap)
 }
 
@@ -539,7 +542,8 @@ internal fun MutableGameState.dealStatusDamage(
 
 /**
  * Skill damage: never crits; scales with the Relic surge, the target's vulnerability (impact terms for a
- * [kinetic] skill), damage liabilities and the Matrix multiplier. An element-tagged skill is refused only
+ * [kinetic] skill; never Brittle, which only the direct hit that spends it takes), damage liabilities and the
+ * Matrix multiplier. An element-tagged skill is refused only
  * by an IMMUNE aspect; a kinetic one meets the impact frame, an element-less one the weapon frame. Kills
  * fire KILL clauses (the source maps to none); the Architect's gate applies in [damageEnemy].
  */
@@ -551,7 +555,8 @@ internal fun MutableGameState.dealSkillDamage(
 ): DamageResult {
     if (amount <= 0f || !enemy.alive) return DamageResult(0f, false)
     if (isShifting(enemy)) return DamageResult(0f, false)
-    val scaled = amount * relicSurge() * (1f + vulnerability(enemy, if (kinetic) HitSource.IMPACT else HitSource.SKILL)) *
+    val scaled = amount * relicSurge() *
+        (1f + vulnerability(enemy, if (kinetic) HitSource.IMPACT else HitSource.SKILL, brittle = false)) *
         damageLiability(HitSource.SKILL, false) * matrix.damageMultiplier
     val received = when {
         element != null -> if (aspectRefuses(enemy, element)) 0f else 1f
