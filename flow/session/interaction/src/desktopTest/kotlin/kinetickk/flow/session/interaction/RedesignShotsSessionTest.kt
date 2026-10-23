@@ -190,10 +190,7 @@ class RedesignShotsSessionTest {
             shotCodex("searched", w, h, language) {
                 onNodeWithTag("codex-search").performTextInput(if (language == AppLanguage.English) "ram" else "таран")
             }
-            shotCodex("selected", w, h, language) {
-                onNodeWithTag("codex-grid").performScrollToKey("item/10")
-                onNodeWithTag("codex-slot-item/10").performSemanticsAction(SemanticsActions.OnClick)
-            }
+            shotCodex("selected", w, h, language) { codexState("selected") }
             shotCodex("build", w, h, language, run = true) {
                 onNodeWithTag("codex-tab-0").performSemanticsAction(SemanticsActions.OnClick)
             }
@@ -204,13 +201,7 @@ class RedesignShotsSessionTest {
                 mainClock.advanceTimeBy(100)
                 onNodeWithTag("codex-slot-weapon/FLUX_WAKE").performSemanticsAction(SemanticsActions.OnClick)
             }
-            shotCodex("build-item", w, h, language, run = true) {
-                onNodeWithTag("codex-tab-0").performSemanticsAction(SemanticsActions.OnClick)
-                mainClock.advanceTimeBy(100)
-                onNodeWithTag("codex-grid").performScrollToKey("item/10")
-                mainClock.advanceTimeBy(100)
-                onNodeWithTag("codex-slot-item/10").performSemanticsAction(SemanticsActions.OnClick)
-            }
+            shotCodex("build-item", w, h, language, run = true) { codexState("build-item") }
             shotCodex("reactions", w, h, language) {
                 onNodeWithTag("codex-tab-2").performClick()
             }
@@ -243,13 +234,7 @@ class RedesignShotsSessionTest {
                 mainClock.advanceTimeBy(100)
                 onNodeWithTag("codex-slot-empty-relic/2").performSemanticsAction(SemanticsActions.OnClick)
             }
-            shotCodex("item-offer", w, h, language, run = true, lifetimeMatter = 1_000L) {
-                onNodeWithTag("codex-tab-1").performSemanticsAction(SemanticsActions.OnClick)
-                mainClock.advanceTimeBy(100)
-                onNodeWithTag("codex-grid").performScrollToKey("item/10")
-                onNodeWithTag("codex-slot-item/10").performSemanticsAction(SemanticsActions.OnClick)
-                mainClock.advanceTimeBy(100)
-            }
+            shotCodex("item-offer", w, h, language, run = true, lifetimeMatter = 1_000L) { codexState("item-offer") }
             for (state in listOf("build", "default", "selected", "build-stats", "item-offer", "build-item")) shotCodex("$state-text175", w, h, language,
                 run = state.startsWith("build") || state == "item-offer", scale = 1.75f, lifetimeMatter = if (state == "item-offer") 1_000L else 9_640L) {
                 codexState(state)
@@ -321,7 +306,9 @@ class RedesignShotsSessionTest {
                 mainClock.advanceTimeBy(100)
             }
             "selected" -> {
+                // The clock is paused: the scroll lands, and composes a slot below the fold, on the next frame.
                 onNodeWithTag("codex-grid").performScrollToKey("item/10")
+                mainClock.advanceTimeBy(100)
                 onNodeWithTag("codex-slot-item/10").performSemanticsAction(SemanticsActions.OnClick)
             }
             "sort-tag", "sort-element", "sort-rarity" -> {
@@ -340,6 +327,7 @@ class RedesignShotsSessionTest {
                 onNodeWithTag("codex-tab-1").performSemanticsAction(SemanticsActions.OnClick)
                 mainClock.advanceTimeBy(100)
                 onNodeWithTag("codex-grid").performScrollToKey("item/10")
+                mainClock.advanceTimeBy(100)
                 onNodeWithTag("codex-slot-item/10").performSemanticsAction(SemanticsActions.OnClick)
                 mainClock.advanceTimeBy(100)
             }
