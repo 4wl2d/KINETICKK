@@ -10,6 +10,9 @@ import android.view.Display
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 
 /**
  * The Android display host: the refresh rate (a display mode at the current resolution; Auto picks
@@ -19,6 +22,14 @@ import android.view.WindowInsetsController
  */
 class AndroidDisplayHost(private val activity: Activity) : PlatformDisplayHost {
     private var last: HostDisplayRequest? = null
+
+    /**
+     * Whether the system bars were last hidden. The activity then keeps only the cutout (and an
+     * open keyboard) clear: hidden bars still report their gesture areas, which would keep the
+     * play area as small as with the bars shown.
+     */
+    var systemBarsHidden: Boolean by mutableStateOf(false)
+        private set
 
     override fun support(): HostDisplaySupport = HostDisplaySupport(
         refreshRatesHz = hostRefreshRateChoices(currentResolutionModes().map { it.refreshRate }),
@@ -81,5 +92,6 @@ class AndroidDisplayHost(private val activity: Activity) : PlatformDisplayHost {
             val decor = window.decorView
             decor.systemUiVisibility = if (hidden) decor.systemUiVisibility or hiding else decor.systemUiVisibility and hiding.inv()
         }
+        systemBarsHidden = hidden
     }
 }

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.safeContent
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -46,7 +47,9 @@ class MainActivity : ComponentActivity() {
                     .background(Color(0xFF05080D))
                     .semantics { testTagsAsResourceId = true },
             ) {
-                val safePadding = WindowInsets.safeContent.asPaddingValues()
+                // Hidden bars leave the cutout to keep clear; shown bars also keep their gesture areas.
+                val safeInsets = if (displayHost.systemBarsHidden) WindowInsets.safeDrawing else WindowInsets.safeContent
+                val safePadding = safeInsets.asPaddingValues()
                 val layoutDirection = LocalLayoutDirection.current
                 val left = safePadding.calculateLeftPadding(layoutDirection)
                 val right = safePadding.calculateRightPadding(layoutDirection)
