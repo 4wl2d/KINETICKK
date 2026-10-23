@@ -652,9 +652,12 @@ fun GameplayContent(
                             val collectPerformance = performanceEnabledState.value
                             val currentRenderModel = renderModelValue
                             val changes = event.changes
-                            if (currentRenderModel.phase != GamePhase.RUNNING && tracker.reset()) {
+                            val running = currentRenderModel.phase == GamePhase.RUNNING
+                            // Away from RUNNING a held Brake is released, and engaged again on return;
+                            // pointers keep their roles, so a thumb held through a choice steers again.
+                            if (tracker.running(running)) {
                                 dispatch(
-                                    GameplayInteractionPulse.BrakeChanged(BrakeSource.TOUCH_CONTROL, active = false),
+                                    GameplayInteractionPulse.BrakeChanged(BrakeSource.TOUCH_CONTROL, active = running),
                                     collectPerformance,
                                 )
                             }
@@ -662,9 +665,13 @@ fun GameplayContent(
                                 currentRenderModel.phase == GamePhase.GAME_OVER ||
                                 currentRenderModel.phase == GamePhase.VICTORY
                             ) {
+                                // A finger lifted here is forgotten too, so no slot outlives its pointer.
+                                for (index in 0 until changes.size) {
+                                    val change = changes[index]
+                                    if (!change.pressed && change.previousPressed) tracker.up(change.id.value)
+                                }
                                 continue
                             }
-                            val running = currentRenderModel.phase == GamePhase.RUNNING
                             var anyPressed = false
                             for (index in 0 until changes.size) {
                                 if (changes[index].pressed) anyPressed = true

@@ -101,15 +101,26 @@ class RunningTouchTrackerTest {
     }
 
     @Test
-    fun resetReleasesAHeldBrakeAndForgetsEveryPointer() {
+    fun leavingRunningReleasesAHeldBrakeOnceAndReturningEngagesItAgainWithEveryRoleKept() {
         val tracker = RunningTouchTracker()
         tracker.down(1L, null)
         tracker.down(2L, RunningControlTarget.BRAKE)
-        assertTrue(tracker.reset())
-        assertTrue(tracker.isEmpty)
-        assertFalse(tracker.move(1L))
-        assertFalse(tracker.reset(), "a second reset released Brake again")
+        assertFalse(tracker.running(true), "still RUNNING changed Brake")
+        assertTrue(tracker.running(false))
+        assertFalse(tracker.running(false), "a second event away released Brake again")
+        assertTrue(tracker.move(1L), "the steering thumb lost its role")
+        assertTrue(tracker.running(true))
+        assertFalse(tracker.running(true))
+        assertTrue(tracker.move(1L))
+        // Brake lifted while away: already released, and nothing is engaged on return.
+        assertTrue(tracker.running(false))
         assertEquals(RunningTouchTracker.UP_NONE, tracker.up(2L))
+        assertFalse(tracker.running(true))
+        // Without a held Brake the phase changes nothing to dispatch.
+        assertFalse(tracker.running(false))
+        assertFalse(tracker.running(true))
+        assertEquals(RunningTouchTracker.UP_NONE, tracker.up(1L))
+        assertTrue(tracker.isEmpty)
     }
 
     @Test
