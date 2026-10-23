@@ -12,9 +12,12 @@ import kinetickk.ball.gameplay.nucleus.model.Polarity
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.WeaponRuntime
 import kinetickk.ball.gameplay.nucleus.model.weaponTaken
+import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
+import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.sin
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -150,7 +153,7 @@ class ApexFormsTest {
         state.elapsed += 0.13f
         assertTrue(state.tryPuncture(boss, 1f))
         assertEquals(3_000f - state.architectHitCap(boss), boss.hp, 1e-2f)
-        assertEquals(5, state.apexStrikesLeft)
+        assertEquals(state.apexDefinition.bossStrikes - 1, state.apexStrikesLeft)
         assertEquals(state.elapsed + 0.25f, state.characterRuntime.punctureReadyAt, 1e-5f)
     }
 
@@ -169,14 +172,15 @@ class ApexFormsTest {
         val power = state.abilityPower()
         assertEquals(10_000f - 32f * power * inside.weaponTaken, inside.hp, 1e-2f, "the burst at cast")
         assertEquals(10_000f, outside.hp)
-        assertEquals(5, state.apexStrikesLeft, "the burst strikes the boss once")
+        val strikes = state.apexDefinition.bossStrikes
+        assertEquals(strikes - 1, state.apexStrikesLeft, "the burst strikes the boss once")
         assertTrue(inBand.spent)
         assertFalse(within.spent)
         assertEquals(31f, state.skillRuntime.apex(ApexCell.BOLTS_LEFT))
         state.stepFor(1.45f)
-        assertEquals(5, state.apexStrikesLeft, "the next burst waits 1.5 s")
+        assertEquals(strikes - 1, state.apexStrikesLeft, "the next burst waits 1.5 s")
         state.stepFor(0.1f)
-        assertEquals(4, state.apexStrikesLeft)
+        assertEquals(strikes - 2, state.apexStrikesLeft)
 
         // The band burns ordinary enemies at 36/s; a boss keeps the base 12/s.
         state.skillRuntime.setApex(ApexCell.AUX, Float.MAX_VALUE)
@@ -238,11 +242,12 @@ class ApexFormsTest {
         assertTrue(crossing.spent)
         assertFalse(held.spent)
 
-        state.stepFor(1f)
+        // The first pulse comes 0.6 s after the fold.
+        state.stepFor(0.6f)
         val pulse = (7f + 3.5f * 4) * state.abilityPower()
         assertEquals(10_000f - pulse * onEdge.weaponTaken, onEdge.hp, 1e-2f)
         assertEquals(10_000f - pulse * 1.5f * inside.weaponTaken, inside.hp, 1e-2f)
-        assertEquals(5, state.apexStrikesLeft, "a pulse touching the boss is a strike")
+        assertEquals(state.apexDefinition.bossStrikes - 1, state.apexStrikesLeft, "a pulse strikes the boss in reach of the Core")
 
         // The cage holds while it runs; a folded square clears when it ends.
         state.stepFor(state.skillRuntime.apex(ApexCell.ACTIVE_UNTIL) - state.elapsed + MutableGameState.FIXED_STEP)
@@ -314,7 +319,7 @@ class ApexFormsTest {
         repeat(8) { state.moveAt(600f, 0f) }
         assertTrue(ordinary.hp < 10_000f)
         assertEquals(0.4f, ordinary.characterMarkTime, 0.1f)
-        assertEquals(5, state.apexStrikesLeft)
+        assertEquals(state.apexDefinition.bossStrikes - 1, state.apexStrikesLeft)
         assertEquals(0f, boss.characterMarkTime, "the first ghost's own gate on the boss is untouched")
 
         // The first ghost swallows a bolt every 0.5 s while the budget lasts (1.5 s at base).
@@ -372,11 +377,12 @@ class ApexFormsTest {
         state.elapsed = 31 * BEAT_PERIOD
         state.stepFor(MutableGameState.FIXED_STEP)
         assertEquals(10_000f - 40f * state.abilityPower() * ordinary.weaponTaken, ordinary.hp, 1e-2f)
-        assertEquals(5, state.apexStrikesLeft)
+        val strikes = state.apexDefinition.bossStrikes
+        assertEquals(strikes - 1, state.apexStrikesLeft)
         assertEquals(6, state.projectiles.count { it.hostile && it.spent }, "six bolts per beat")
         assertEquals(66f, state.skillRuntime.apex(ApexCell.BOLTS_LEFT))
         state.stepFor(0.5f)
-        assertEquals(5, state.apexStrikesLeft, "one burst per beat")
+        assertEquals(strikes - 1, state.apexStrikesLeft, "one burst per beat")
     }
 
     @Test
@@ -406,7 +412,7 @@ class ApexFormsTest {
         assertTrue(pulled.y < y - 20f, "drawn toward the scar")
         state.stepFor(0.35f)
         assertEquals(10_000f - SCAR_DAMAGE * state.abilityPower() * 1.6f * cut.weaponTaken, cut.hp, 1e-2f)
-        assertEquals(5, state.apexStrikesLeft, "the scar strikes the boss")
+        assertEquals(state.apexDefinition.bossStrikes - 1, state.apexStrikesLeft, "the scar strikes the boss")
     }
 
     @Test
@@ -435,10 +441,155 @@ class ApexFormsTest {
         state.enemies.remove(ordinary)
         val boss = state.testArchitect(x = state.coreX + 120f)
         state.stepFor(0.36f)
-        assertEquals(2, state.apexStrikesLeft)
+        val struck = state.apexDefinition.bossStrikes - 4
+        assertEquals(struck, state.apexStrikesLeft)
         state.stepFor(0.36f)
-        assertEquals(2, state.apexStrikesLeft, "each drone waits a second after a boss dart")
+        assertEquals(struck, state.apexStrikesLeft, "each drone waits a second after a boss dart")
         assertTrue(boss.hp < 3_000f)
+    }
+
+    @Test
+    fun aProximityChannelReachesAnArchitectOnItsOrbitButNotBeyondTheApexReach() {
+        // The Architect orbits the Core at 300-380 u: a beat, a burst, a nova, a pulse, a ghost, a scar or a Vivisect
+        // Dash strikes it there, and nothing past the reach (420 u from the event to its edge).
+        val orbit = 400f
+        val beyond = APEX_BOSS_REACH + 74f + 20f
+        fun strikesFrom(shape: CoreShape, bossDistance: Float, event: MutableGameState.() -> Unit): Int {
+            val state = arena(shape)
+            state.testArchitect(x = state.coreX - bossDistance)
+            state.unlockNow()
+            state.castNow()
+            state.skillRuntime.setApex(ApexCell.STRIKES_LEFT, 12f)
+            state.takeVisualFxCues()
+            state.event()
+            return 12 - state.apexStrikesLeft
+        }
+        val events = mapOf<CoreShape, MutableGameState.() -> Unit>(
+            CoreShape.PENTAGON to { elapsed = (floor(elapsed / BEAT_PERIOD) + 1f) * BEAT_PERIOD; stepFor(MutableGameState.FIXED_STEP) },
+            CoreShape.RING to { skillRuntime.setApex(ApexCell.AUX, 0f); stepFor(MutableGameState.FIXED_STEP) },
+            CoreShape.TESSERACT to { skillRuntime.setApex(ApexCell.AUX, 0f); stepFor(MutableGameState.FIXED_STEP) },
+            CoreShape.STAR to { stepFor(1f + MutableGameState.FIXED_STEP) },
+            CoreShape.SHARD to { heat = 0f; performDash() },
+        )
+        for ((shape, event) in events) {
+            assertEquals(1, strikesFrom(shape, orbit, event), "$shape strikes at $orbit u")
+            assertEquals(0, strikesFrom(shape, beyond, event), "$shape does not strike at $beyond u")
+        }
+
+        // A strike from afar is drawn as the character's Apex link from the event to the boss.
+        val state = arena(CoreShape.RING)
+        val boss = state.testArchitect(x = state.coreX - orbit)
+        state.unlockNow()
+        state.castNow()
+        state.stepFor(MutableGameState.FIXED_STEP)
+        val link = state.takeVisualFxCues().filterIsInstance<VisualFxCue.WeaponArcAdded>().single { it.style == LinkStyleCode.apex(CoreShape.RING) }
+        assertEquals(boss.x, link.toX)
+        assertEquals(state.coreX, link.fromX)
+    }
+
+    @Test
+    fun hypernovaNovasComeEverySecondEvenWithoutMassAndEachStrikesTheBossInReach() {
+        val state = arena(CoreShape.STAR)
+        // Past the cast nova's own radius (160 + 8 × 24 u), within the Apex reach.
+        val boss = state.testArchitect(x = state.coreX - 450f)
+        state.unlockNow()
+        state.castNow()
+        val strikes = state.apexDefinition.bossStrikes
+        assertEquals(strikes - 1, state.apexStrikesLeft, "the cast's Supernova")
+        assertEquals(0, state.characterRuntime.stellarMass)
+        state.stepFor(1f + MutableGameState.FIXED_STEP)
+        assertEquals(strikes - 2, state.apexStrikesLeft, "a Mass-less nova a second later still strikes")
+        assertEquals(3_000f - 2 * state.architectHitCap(boss), boss.hp, 1e-2f)
+    }
+
+    @Test
+    fun swarmQueenDronesReachForTheArchitectOnItsOrbitWhileStrikesRemain() {
+        val state = arena(CoreShape.HEXAGON)
+        val boss = state.testArchitect(x = state.coreX + 400f)
+        val ordinary = state.dummy(x = state.coreX - 150f, hp = 10_000f)
+        state.unlockNow()
+        state.castNow()
+        state.skillRuntime.setApex(ApexCell.STRIKES_LEFT, 2f)
+        state.stepFor(0.32f)
+        assertEquals(0, state.apexStrikesLeft, "two drones dart at the boss beyond their own 260 u")
+        assertEquals(3_000f - 2 * state.architectHitCap(boss), boss.hp, 1e-2f)
+        assertTrue(ordinary.hp < 10_000f, "the other drones keep to the nearest enemy")
+    }
+
+    @Test
+    fun totalEclipseScarsAndTwinEchoGhostsStrikeTheArchitectInReach() {
+        val crescent = arena(CoreShape.CRESCENT)
+        crescent.unlockNow()
+        crescent.castNow()
+        crescent.aimAt(crescent.coreX + 600f, crescent.coreY)
+        val startX = crescent.coreX
+        crescent.crescentBlink(1f, 0f)
+        crescent.testArchitect(x = startX + 100f, y = crescent.coreY + 350f)
+        crescent.stepFor(0.45f)
+        assertEquals(crescent.apexDefinition.bossStrikes - 1, crescent.apexStrikesLeft, "a scar 350 u away strikes")
+
+        val spiral = arena(CoreShape.SPIRAL)
+        spiral.unlockNow()
+        spiral.castNow()
+        repeat(70) { spiral.moveAt(600f, 0f) }
+        spiral.testArchitect(x = spiral.secondGhostX, y = spiral.coreY + 300f)
+        repeat(30) { spiral.moveAt(600f, 0f) }
+        assertEquals(spiral.apexDefinition.bossStrikes - 1, spiral.apexStrikesLeft, "the second ghost strikes once per 0.4 s")
+        repeat(21) { spiral.moveAt(600f, 0f) }
+        assertEquals(spiral.apexDefinition.bossStrikes - 2, spiral.apexStrikesLeft)
+    }
+
+    @Test
+    fun perihelionWaitsForAnArchitectThatStartsShiftingMidRelease() {
+        val state = arena(CoreShape.ORB)
+        state.unlockNow()
+        state.castNow()
+        state.skillRuntime.setApex(ApexCell.HELD, 6f)
+        val boss = state.testArchitect(x = state.coreX + 300f)
+        state.stepFor(state.skillRuntime.apex(ApexCell.ACTIVE_UNTIL) - state.elapsed + 0.15f)
+        assertEquals(2, state.apexShots().size, "the release began")
+        boss.shiftUntil = state.elapsed + 8f
+        state.stepFor(0.5f)
+        assertEquals(4f, state.skillRuntime.apex(ApexCell.HELD), "nothing more flies while it shifts")
+        assertEquals(boss.shiftUntil + 0.5f, state.skillRuntime.apex(ApexCell.HELD_RELEASE_AT), 1e-4f)
+    }
+
+    @Test
+    fun apexShotsAtTheArchitectCutThroughTheAddsOnTheirWay() {
+        val state = arena(CoreShape.PRISM)
+        val add = state.dummy(x = state.coreX + 150f, hp = 10_000f)
+        val boss = state.testArchitect(x = state.coreX + 400f)
+        state.unlockNow()
+        state.castNow()
+        state.fireApexShot(state.coreX, state.coreY, boss, 90f)
+        val shot = state.apexShots().single()
+        assertEquals(APEX_BOSS_SHOT_PIERCE, shot.pierce)
+        repeat(60) {
+            shot.previousX = shot.x
+            shot.previousY = shot.y
+            shot.x += shot.vx * MutableGameState.FIXED_STEP
+            shot.y += shot.vy * MutableGameState.FIXED_STEP
+            state.resolveProjectileHits()
+        }
+        assertTrue(add.hp < 10_000f, "the add on the way takes the shot's hit")
+        assertEquals(3_000f - state.architectHitCap(boss), boss.hp, 1e-2f, "and the shot still strikes the boss")
+        state.fireApexShot(state.coreX, state.coreY, add, 90f)
+        assertEquals(0, state.apexShots().last().pierce, "a shot at an ordinary enemy stops at it")
+    }
+
+    @Test
+    fun monolithFacetsAlsoTakeObstacleCollisions() {
+        val state = arena(CoreShape.PRISM)
+        state.hp = state.maxHp
+        state.takeDamage(10f, kind = IncomingDamage.OBSTACLE)
+        assertTrue(state.hp < state.maxHp, "at base no facet cancels a collision")
+        state.hp = state.maxHp
+        state.unlockNow()
+        state.castNow()
+        val integrity = state.hp
+        state.takeDamage(10f, kind = IncomingDamage.OBSTACLE)
+        assertEquals(integrity, state.hp, "a Monolith facet took it")
+        assertEquals(3, state.intactFacets)
     }
 
     private fun arena(shape: CoreShape): MutableGameState = buildTestState(shape = shape).apply {

@@ -126,7 +126,7 @@ class ArchitectEncounterTest {
         // The Apex reaches the boss only through its strikes and its shots, both through the same gate.
         state.unlockNow()
         state.castNow()
-        assertEquals(45f, state.apexStrike(boss, 10_000f), 0.01f)
+        assertEquals(45f, state.apexStrike(boss), 0.01f)
         state.apexShot(boss, 10_000f)
         state.resolveProjectileHits()
 

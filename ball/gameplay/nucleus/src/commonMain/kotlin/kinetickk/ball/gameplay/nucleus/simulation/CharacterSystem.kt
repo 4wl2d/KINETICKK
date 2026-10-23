@@ -110,7 +110,8 @@ internal fun MutableGameState.updateCharacterRuntime(delta: Float) {
         }
         CoreShape.TESSERACT -> updateLattice(ability)
         CoreShape.STAR -> {
-            if (ability.stellarMass >= CharacterRuntime.MAX_STELLAR_MASS) supernova()
+            // Hypernova: a nova comes on every Apex cooldown, with whatever Mass the Star holds.
+            if (ability.stellarMass >= CharacterRuntime.MAX_STELLAR_MASS || apexActive()) supernova()
             ability.charge = ability.stellarMass / CharacterRuntime.MAX_STELLAR_MASS.toFloat()
         }
         CoreShape.SPIRAL -> updateEcho(ability, delta)
@@ -514,6 +515,9 @@ private fun MutableGameState.fireRefraction() {
     fireApexShot(coreX, coreY, target, apexValue(MONOLITH_REFRACTION_DAMAGE) * abilityPower())
 }
 
+/** True while Monolith runs: its facets take obstacle collisions as well as hits. */
+internal fun MutableGameState.monolithTakesCollisions(): Boolean = coreShape == CoreShape.PRISM && apexActive()
+
 /** Seconds per regrown facet: Monolith regrows them fast. */
 internal fun MutableGameState.facetRegrowthSeconds(): Float =
     if (apexActive()) apexValue(MONOLITH_REGROWTH_SECONDS) else facetRegenSeconds()
@@ -649,7 +653,7 @@ private fun MutableGameState.punctureReady(enemy: Enemy): Boolean {
 /**
  * A Puncture of [multiplier] times its damage on [enemy] (its mark already spent). While Vivisect runs, punctures
  * come at the Apex interval on ordinary enemies and spread the mark to the next one; on a boss-class enemy the
- * first strikes of the activation are Apex strikes at the Apex's scale, at the base interval.
+ * first punctures of the activation are Apex strikes (full hit cap), at the base interval.
  */
 private fun MutableGameState.puncture(enemy: Enemy, multiplier: Float) {
     val ability = characterRuntime
@@ -657,7 +661,7 @@ private fun MutableGameState.puncture(enemy: Enemy, multiplier: Float) {
     val damage = PUNCTURE_DAMAGE * multiplier * abilityPower()
     ability.punctureReadyAt = elapsed + if (vivisect && !enemy.isBossClass) apexValue(VIVISECT_INTERVAL) else PUNCTURE_INTERVAL
     if (vivisect) skillRuntime.setApex(ApexCell.BOSS_BASE_READY_AT, elapsed + PUNCTURE_INTERVAL)
-    if (!(vivisect && enemy.isBossClass && apexStrike(enemy, damage * apexValue(VIVISECT_BOSS_SCALE)) > 0f)) {
+    if (!(vivisect && enemy.isBossClass && apexStrike(enemy) > 0f)) {
         dealCharacterDamage(enemy, damage)
     }
     heat = max(0f, heat - punctureHeatRefund())
@@ -926,13 +930,13 @@ internal fun MutableGameState.gainStellarMass(stacks: Int) {
 
 /**
  * Consumes all Stellar Mass into a nova whose radius, damage and element stacks grow with it. During Hypernova
- * novas come at the Apex interval and erase the hostile bolts they cover; a nova the base gate would not have
- * allowed reaches boss-class enemies only as an Apex strike.
+ * a nova comes at the Apex interval whatever the Mass, erases the hostile bolts it covers and strikes the boss-class
+ * enemies in Apex reach; one the base gate would not have allowed deals them nothing else.
  */
 private fun MutableGameState.supernova() {
     val ability = characterRuntime
     val stacks = ability.stellarMass
-    if (stacks <= 0 || elapsed < ability.supernovaReadyAt) return
+    if (stacks <= 0 && !apexActive() || elapsed < ability.supernovaReadyAt) return
     val radius = supernovaBaseRadius() + SUPERNOVA_RADIUS_PER_STACK * stacks
     val damage = (SUPERNOVA_DAMAGE + SUPERNOVA_DAMAGE_PER_STACK * stacks) * abilityPower()
     val dominant = build.dominant
@@ -946,13 +950,12 @@ private fun MutableGameState.supernova() {
     ability.supernovaReadyAt = elapsed + if (hypernova) apexValue(HYPERNOVA_COOLDOWN) else SUPERNOVA_COOLDOWN
     ability.novaFlash = 1f
     refreshCoreRadius()
+    // Every Hypernova nova strikes the boss-class enemies in reach; one the base gate would not allow does nothing else.
+    if (hypernova) apexStrikeBossesNear(coreX, coreY)
     for (index in enemies.indices) {
         val enemy = enemies[index]
         if (!enemy.alive || distanceSquared(coreX, coreY, enemy.x, enemy.y) > square(radius + enemy.radius)) continue
-        if (enemy.isBossClass && !baseNova) {
-            apexStrike(enemy, damage)
-            continue
-        }
+        if (enemy.isBossClass && !baseNova) continue
         dealCharacterDamage(enemy, damage)
         if (dominant != null && elementStacks > 0 && enemy.alive) applyStatus(enemy, dominant, elementStacks, 0)
     }
@@ -1032,8 +1035,8 @@ private fun MutableGameState.secondGhostDelaySteps(): Int =
 
 /**
  * Twin Echo: the second ghost strikes what it crosses at speed (ordinary enemies share the first ghost's
- * per-enemy interval; boss-class enemies only take Apex strikes, on their own interval) and swallows a bolt on the
- * Apex interval within the bolt budget.
+ * per-enemy interval; boss-class enemies in Apex reach take only Apex strikes, on their own interval) and swallows
+ * a bolt on the Apex interval within the bolt budget.
  */
 private fun MutableGameState.updateSecondGhost() {
     if (!secondGhostActive) return
@@ -1055,14 +1058,14 @@ private fun MutableGameState.updateSecondGhost() {
     for (index in enemies.indices) {
         val enemy = enemies[index]
         if (!enemy.alive || isShifting(enemy)) continue
+        if (enemy.isBossClass) {
+            if (elapsed < runtime.apex(ApexCell.AUX) || distanceSquared(x, y, enemy.x, enemy.y) > square(APEX_BOSS_REACH + enemy.radius)) continue
+            if (apexStrikeFrom(x, y, enemy) > 0f) runtime.setApex(ApexCell.AUX, elapsed + GHOST_HIT_INTERVAL)
+            continue
+        }
         if (!segmentCircleIntersects(fromX - enemy.previousX, fromY - enemy.previousY, x - enemy.x, y - enemy.y, 0f, 0f,
                 reach + enemy.radius)
         ) continue
-        if (enemy.isBossClass) {
-            if (elapsed < runtime.apex(ApexCell.AUX)) continue
-            if (apexStrike(enemy, damage) > 0f) runtime.setApex(ApexCell.AUX, elapsed + GHOST_HIT_INTERVAL)
-            continue
-        }
         if (enemy.characterMarkTime > 0f) continue
         enemy.characterMarkTime = GHOST_HIT_INTERVAL
         val integrity = enemy.hp
@@ -1370,7 +1373,7 @@ private fun MutableGameState.pullTowardScar(index: Int, delta: Float) {
 
 /**
  * A scar detonates on what touches its line, with one Void stack. During Total Eclipse it hits ordinary enemies
- * harder; boss-class enemies take the first strikes of the activation at that scale, and later detonations only
+ * harder; boss-class enemies take the first detonations of the activation as Apex strikes, and later ones only
  * at the base Blink cadence.
  */
 private fun MutableGameState.detonateScar(index: Int) {
@@ -1386,9 +1389,12 @@ private fun MutableGameState.detonateScar(index: Int) {
     val runtime = skillRuntime
     for (enemyIndex in enemies.indices) {
         val enemy = enemies[enemyIndex]
-        if (!enemy.alive || !segmentCircleIntersects(x0, y0, x1, y1, enemy.x, enemy.y, enemy.radius + SCAR_REACH)) continue
+        if (!enemy.alive) continue
+        if (eclipse && enemy.isBossClass && segmentCircleIntersects(x0, y0, x1, y1, enemy.x, enemy.y, enemy.radius + APEX_BOSS_REACH) &&
+            apexStrikeFrom((x0 + x1) * 0.5f, (y0 + y1) * 0.5f, enemy) > 0f
+        ) continue
+        if (!segmentCircleIntersects(x0, y0, x1, y1, enemy.x, enemy.y, enemy.radius + SCAR_REACH)) continue
         if (eclipse && enemy.isBossClass) {
-            if (apexStrike(enemy, damage * scale) > 0f) continue
             if (elapsed < runtime.apex(ApexCell.BOSS_BASE_READY_AT)) continue
             runtime.setApex(ApexCell.BOSS_BASE_READY_AT, elapsed + baseBlinkRechargeSeconds())
             dealCharacterDamage(enemy, damage)
@@ -1437,7 +1443,8 @@ private fun MutableGameState.updateHive(ability: CharacterRuntime, delta: Float)
         val orbitY = coreY + sin(angle) * DRONE_ORBIT_RADIUS
         var dart = drones[base + DRONE_DART]
         if (dart <= 0f && elapsed >= drones[base + DRONE_READY_AT]) {
-            val target = nearestEnemy(orbitX, orbitY, DRONE_RANGE)
+            // Swarm Queen: while strikes remain the drones reach for a boss-class enemy in Apex reach first.
+            val target = (if (apexActive()) apexBossInReach(coreX, coreY) else null) ?: nearestEnemy(orbitX, orbitY, DRONE_RANGE)
             if (target != null) {
                 // Swarm Queen: ordinary enemies take faster, harder darts; a boss-class target keeps the base
                 // interval, and the first darts of the activation at it are Apex strikes.
@@ -1447,7 +1454,7 @@ private fun MutableGameState.updateHive(ability: CharacterRuntime, delta: Float)
                 drones[base + DRONE_TARGET_Y] = target.y
                 dart = DRONE_DART_SECONDS
                 val integrity = target.hp
-                val strike = target.isBossClass && apexActive() && apexStrike(target, apexValue(SWARM_DART_DAMAGE) * abilityPower()) > 0f
+                val strike = target.isBossClass && apexActive() && apexStrike(target) > 0f
                 if (!strike) {
                     val damage = (if (queen) apexValue(SWARM_DART_DAMAGE) else DRONE_DAMAGE) * abilityPower()
                     recordAbilityDamage(integrity, dealProcDamage(target, damage))
@@ -1567,14 +1574,24 @@ private fun MutableGameState.updateApexForm(delta: Float) {
 
 /**
  * Perihelion's release: after the activation, one held shot per interval flies at the boss while strikes remain
- * (strikes at the held damage, raised to the strike floor), else at the nearest ordinary enemy within reach with
- * one dominant stack. With nothing in reach the shots wait.
+ * (each a full-cap strike; a boss that starts shifting meanwhile is waited for until half a second past its shift),
+ * else at the nearest ordinary enemy within reach with one dominant stack. With nothing in reach the shots wait.
  */
 private fun MutableGameState.releaseHeldShots() {
     val runtime = skillRuntime
     val held = runtime.apex(ApexCell.HELD)
     val releaseAt = runtime.apex(ApexCell.HELD_RELEASE_AT)
     if (held < 1f || apexActive() || elapsed < releaseAt) return
+    // A boss that starts shifting mid-release is waited for, as at the end of the activation, while strikes remain.
+    if (runtime.apex(ApexCell.STRIKES_LEFT) >= 1f) {
+        for (index in enemies.indices) {
+            val enemy = enemies[index]
+            if (enemy.isBossClass && enemy.alive && isShifting(enemy)) {
+                runtime.setApex(ApexCell.HELD_RELEASE_AT, enemy.shiftUntil + PERIHELION_SHIFT_GRACE)
+                return
+            }
+        }
+    }
     val target = apexShotTarget(coreX, coreY, PERIHELION_RELEASE_RANGE) ?: return
     runtime.setApex(ApexCell.HELD, held - 1f)
     // On the release schedule (a shot that waited for a target restarts it), so fixed steps add no drift.
@@ -1586,7 +1603,7 @@ private fun MutableGameState.releaseHeldShots() {
 
 /**
  * Corona: hostile bolts crossing the locked band are erased, and an Apex Halo Burst fires on its own interval
- * whatever the speed: ordinary enemies in its reach take its damage, boss-class enemies only a strike.
+ * whatever the speed: ordinary enemies in its reach take its damage, boss-class enemies in Apex reach only a strike.
  */
 private fun MutableGameState.updateCorona() {
     val runtime = skillRuntime
@@ -1606,9 +1623,10 @@ private fun MutableGameState.updateCorona() {
     val damage = apexValue(CORONA_BURST_DAMAGE) * abilityPower()
     for (index in enemies.indices) {
         val enemy = enemies[index]
-        if (!enemy.alive || distanceSquared(coreX, coreY, enemy.x, enemy.y) > square(HALO_BURST_RADIUS + enemy.radius)) continue
-        if (enemy.isBossClass) apexStrike(enemy, damage) else dealCharacterDamage(enemy, damage)
+        if (!enemy.alive || enemy.isBossClass || distanceSquared(coreX, coreY, enemy.x, enemy.y) > square(HALO_BURST_RADIUS + enemy.radius)) continue
+        dealCharacterDamage(enemy, damage)
     }
+    apexStrikeBossesNear(coreX, coreY)
     characterRuntime.haloBurstFlash = 1f
     shockwave(coreX, coreY, 0.35f, HALO_BURST_RADIUS, FxColorCode.APEX_GOLD)
 }
@@ -1637,7 +1655,7 @@ private fun MutableGameState.foldHypercube() {
 
 /**
  * Hypercube: bolts crossing a cage edge are erased (bolt budget); every pulse interval the edges strike what
- * touches them, harder inside, and a boss-class enemy they touch takes only a strike.
+ * touches them, harder inside, and boss-class enemies in Apex reach of the Core take only a strike.
  */
 private fun MutableGameState.updateHypercube() {
     val ability = characterRuntime
@@ -1663,7 +1681,7 @@ private fun MutableGameState.updateHypercube() {
     val damage = (apexValue(HYPERCUBE_PULSE_DAMAGE) + apexValue(HYPERCUBE_PULSE_PER_NODE) * count) * abilityPower()
     for (enemyIndex in enemies.indices) {
         val enemy = enemies[enemyIndex]
-        if (!enemy.alive) continue
+        if (!enemy.alive || enemy.isBossClass) continue
         var touches = false
         for (edge in 0 until count) {
             val next = (edge + 1) % count
@@ -1676,13 +1694,10 @@ private fun MutableGameState.updateHypercube() {
         }
         val inside = count >= 3 && insideLattice(ability, count, enemy.x, enemy.y)
         if (!touches && !inside) continue
-        val amount = damage * if (inside) LATTICE_INSIDE_MULTIPLIER else 1f
-        if (enemy.isBossClass) {
-            if (touches) apexStrike(enemy, amount)
-        } else {
-            dealCharacterDamage(enemy, amount)
-        }
+        dealCharacterDamage(enemy, damage * if (inside) LATTICE_INSIDE_MULTIPLIER else 1f)
     }
+    // The pulse runs through the Core the cage is folded from: boss-class enemies in reach of it take a strike.
+    apexStrikeBossesNear(coreX, coreY)
     for (edge in 0 until count) {
         val next = (edge + 1) % count
         addWeaponArc(ability.latticeX(edge), ability.latticeY(edge), ability.latticeX(next), ability.latticeY(next), 0.2f,
@@ -1740,8 +1755,8 @@ private fun MutableGameState.updateMagnetar() {
 private fun MutableGameState.beatOrdinal(): Int = floor(elapsed / BEAT_PERIOD).toInt()
 
 /**
- * Crescendo: on each new beat an on-beat burst strikes ordinary enemies nearby (a boss-class enemy only takes a
- * strike) and erases the hostile bolts around the Core, a few per beat within the bolt budget.
+ * Crescendo: on each new beat an on-beat burst strikes ordinary enemies nearby (boss-class enemies in Apex reach only
+ * take a strike) and erases the hostile bolts around the Core, a few per beat within the bolt budget.
  */
 private fun MutableGameState.updateCrescendo() {
     val runtime = skillRuntime
@@ -1752,9 +1767,10 @@ private fun MutableGameState.updateCrescendo() {
     val damage = apexValue(CRESCENDO_BURST_DAMAGE) * abilityPower()
     for (index in enemies.indices) {
         val enemy = enemies[index]
-        if (!enemy.alive || distanceSquared(coreX, coreY, enemy.x, enemy.y) > square(radius + enemy.radius)) continue
-        if (enemy.isBossClass) apexStrike(enemy, damage) else dealCharacterDamage(enemy, damage)
+        if (!enemy.alive || enemy.isBossClass || distanceSquared(coreX, coreY, enemy.x, enemy.y) > square(radius + enemy.radius)) continue
+        dealCharacterDamage(enemy, damage)
     }
+    apexStrikeBossesNear(coreX, coreY)
     var erased = 0
     val perBeat = apexValue(CRESCENDO_BOLTS_PER_BEAT).toInt()
     for (index in projectiles.indices) {
@@ -1801,6 +1817,11 @@ private fun MutableGameState.updateSwarmQueen() {
 /** Vivisect: a Dash at least the free gap after the last free one costs no heat. */
 internal fun MutableGameState.apexFreeDashReady(): Boolean =
     coreShape == CoreShape.SHARD && apexActive() && elapsed >= skillRuntime.apex(ApexCell.AUX) + apexValue(VIVISECT_FREE_DASH_GAP)
+
+/** A Dash during Vivisect cuts into the boss-class enemies in reach of the Core: Apex strikes. */
+internal fun MutableGameState.vivisectDash() {
+    if (coreShape == CoreShape.SHARD && apexActive()) apexStrikeBossesNear(coreX, coreY)
+}
 
 /** Spends Vivisect's free Dash; true when this Dash costs no heat. */
 internal fun MutableGameState.spendApexFreeDash(): Boolean {
@@ -1874,8 +1895,7 @@ private const val MONOLITH_IMPACT_BONUS = 1
 private const val MONOLITH_REFRACTION_DAMAGE = 2
 private const val VIVISECT_INTERVAL = 0
 private const val VIVISECT_SPREAD_RADIUS = 1
-private const val VIVISECT_BOSS_SCALE = 2
-private const val VIVISECT_FREE_DASH_GAP = 3
+private const val VIVISECT_FREE_DASH_GAP = 2
 private const val CORONA_HALO_RADIUS = 0
 private const val CORONA_BAND_DPS = 1
 private const val CORONA_BURST_INTERVAL = 2
@@ -1886,7 +1906,7 @@ private const val HYPERCUBE_HALF_SIDE = 0
 private const val HYPERCUBE_INSIDE_SPEED = 1
 private const val HYPERCUBE_PULSE_DAMAGE = 2
 private const val HYPERCUBE_PULSE_PER_NODE = 3
-private const val HYPERCUBE_PULSE_SECONDS: Float = 1f
+private const val HYPERCUBE_PULSE_SECONDS: Float = 0.6f
 private const val HYPERCUBE_EDGE_REACH: Float = 24f
 private const val HYPERNOVA_CAST_MASS = 0
 private const val HYPERNOVA_COOLDOWN = 1

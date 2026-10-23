@@ -21,10 +21,10 @@ import kotlin.math.min
  * [OBSTACLE] is an asteroid collision or blast: it scales with `1 + damagePerTier × tier` instead of the
  * Rebirth incoming-damage multiplier, ignores damage reduction and damage-taken modifiers, is absorbed
  * by shields, and neither uses nor grants the hit i-frames (collisions have their own cooldown).
- * [cancellableByFacets] is false for it: no damage-negating defence (Prism facets) may cancel it.
+ * [cancellableByFacets] is false for it: Prism facets cancel it only while Monolith runs (the Prism's Apex).
  */
 internal enum class IncomingDamage(
-    /** Prism facets may negate an incoming hit of this kind; obstacle collisions set false. */
+    /** Prism facets may negate an incoming hit of this kind; obstacle collisions set false (Monolith aside). */
     val cancellableByFacets: Boolean = true,
 ) {
     HIT,
@@ -139,6 +139,8 @@ internal const val OBSTACLE_COLLISION_REASON: String = "OBSTACLE COLLISION"
 private fun MutableGameState.takeObstacleDamage(rawAmount: Float) {
     if (rawAmount <= 0f || invulnerableUntil > elapsed) return
     var amount = rawAmount * (1f + content.obstacles.damagePerTier * rebirthLevel)
+    // Monolith: while it runs, a facet also takes an obstacle collision (and fires its refraction).
+    if (monolithTakesCollisions() && spendFacet(amount)) return
     val glass = build.liability(RelicId.GLASS_COMET)
     if (glass) {
         amount *= 2f
