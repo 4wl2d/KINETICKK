@@ -316,7 +316,7 @@ internal val runtimeBehaviorEvidence = listOf(
     BehaviorEvidence(
         ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.ApexSystemTest",
         setOf(
-            "apexStrikesStopAtTheBudgetAndNeverExceedTheCap",
+            "apexStrikesDealTheFullCapStopAtTheBudgetAndNeverPassAPhaseGate",
             "dataAtTheCapTakesThreeHundredthsOfASecondPerPointAndNeverBringsTheApexBelowThirtySeconds",
             "requestsBufferOnlyForAnUnlockedApexWhileRunningAndRepeatsChangeNothing",
         ),
