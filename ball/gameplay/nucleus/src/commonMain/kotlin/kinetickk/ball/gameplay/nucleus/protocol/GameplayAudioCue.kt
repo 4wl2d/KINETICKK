@@ -20,4 +20,6 @@ enum class GameplayAudioCue {
     WEAPON_ACQUIRED,
     GAME_OVER,
     VICTORY,
+    SKILL,
+    APEX,
 }

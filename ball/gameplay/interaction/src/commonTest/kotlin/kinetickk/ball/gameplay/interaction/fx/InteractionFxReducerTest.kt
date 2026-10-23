@@ -3,9 +3,17 @@
 
 package kinetickk.ball.gameplay.interaction.fx
 
+import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.SkillId
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.profile.api.ParticleDensity
+import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
+import kinetickk.ball.gameplay.nucleus.protocol.ReactionCueFlags
+import kinetickk.ball.gameplay.nucleus.protocol.SkillCueCodes
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotSame
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -337,6 +345,151 @@ class InteractionFxReducerTest {
         }
     }
 
+    @Test
+    fun reactionFxAcceptFourOfAKindAndTrimTheOldestOnTheFifth() {
+        val reducer = InteractionFxReducer(seed = 70)
+        val shock = ReactionId.THERMAL_SHOCK.ordinal
+        // Four Thermal Shocks 200 apart (outside the merge distance) and one Fusion.
+        reducer.apply((0 until InteractionFxLimits.MAX_BURSTS_PER_REACTION).map {
+            VisualFxCue.ReactionTriggered(it * 200f, 0f, shock, 60f, false)
+        } + VisualFxCue.ReactionTriggered(0f, 500f, ReactionId.FUSION.ordinal, 150f, false))
+        val four = reducer.snapshot().elementBursts
+        assertEquals(listOf(0f, 200f, 400f, 600f), four.filter { it.reaction == shock }.map { it.x })
+        // The fifth replaces that reaction's oldest; the other reaction keeps its flash.
+        reducer.apply(listOf(VisualFxCue.ReactionTriggered(800f, 0f, shock, 60f, false)))
+        val trimmed = reducer.snapshot().elementBursts
+        assertEquals(listOf(200f, 400f, 600f, 800f), trimmed.filter { it.reaction == shock }.map { it.x })
+        assertEquals(1, trimmed.count { it.reaction == ReactionId.FUSION.ordinal })
+        // A fifth within the merge distance of a live one merges instead of trimming.
+        reducer.apply(listOf(VisualFxCue.ReactionTriggered(810f, 0f, shock, 60f, false)))
+        val merged = reducer.snapshot().elementBursts.filter { it.reaction == shock }
+        assertEquals(4, merged.size)
+        assertEquals(2, merged.last().weight)
+        // Breaks have no per-kind cap: five Ignites 200 apart all stay.
+        val breaks = InteractionFxReducer(seed = 71)
+        breaks.apply((0..4).map { VisualFxCue.StatusBroken(it * 200f, 0f, StatusElement.THERMAL.ordinal) })
+        assertEquals(5, breaks.snapshot().elementBursts.size)
+    }
+
+    @Test
+    fun reactionLooksCarryTheirSpecLifeReachDirectionFlagsAndSeed() {
+        val reducer = InteractionFxReducer(seed = 72)
+        val flags = ReactionCueFlags.VERB or ReactionCueFlags.KEYSTONE
+        reducer.apply(listOf(
+            VisualFxCue.ReactionTriggered(0f, 0f, ReactionId.GLACIER_CRUSH.ordinal, 30f, false, direction = 1.25f, flags = flags),
+            VisualFxCue.ReactionTriggered(500f, 0f, ReactionId.MAGNETIZE.ordinal, 400f, false),
+            VisualFxCue.ReactionTriggered(900f, 0f, ReactionId.BLACKFIRE.ordinal, 10f, false),
+        ))
+        val (glacier, magnetize, blackfire) = reducer.snapshot().elementBursts
+        assertEquals(ReactionFxSpecs[ReactionId.GLACIER_CRUSH].life, glacier.maxLife)
+        assertEquals(220f, glacier.radius, "Glacier Crush reaches its fixed shard length")
+        assertEquals(240f, magnetize.radius, "an area look stops at 240")
+        assertEquals(48f, blackfire.radius, "a target look starts at 48")
+        assertEquals(1.25f, glacier.direction)
+        assertEquals(flags, glacier.flags)
+        assertTrue(magnetize.direction.isNaN())
+        assertNotEquals(glacier.seed, magnetize.seed, "each look hashes its own seed")
+        // A merge keeps the seed and takes the newest direction and flags; the flash starts again.
+        reducer.apply(listOf(VisualFxCue.EffectsAdvanced(0.2f),
+            VisualFxCue.ReactionTriggered(10f, 0f, ReactionId.GLACIER_CRUSH.ordinal, 30f, false, direction = -2f, flags = 0)))
+        val merged = reducer.snapshot().elementBursts.first()
+        assertEquals(-2f, merged.direction)
+        assertEquals(0, merged.flags)
+        assertEquals(glacier.seed, merged.seed)
+        assertEquals(merged.maxLife, merged.life)
+        // Each look ends on its own life.
+        reducer.apply(listOf(VisualFxCue.EffectsAdvanced(ReactionFxSpecs[ReactionId.GLACIER_CRUSH].life + 0.001f)))
+        assertTrue(reducer.snapshot().elementBursts.none { it.reaction == ReactionId.GLACIER_CRUSH.ordinal })
+    }
+
+    @Test
+    fun skillBurstsAcceptEightAndTrimTheOldestOnTheNinth() {
+        val reducer = InteractionFxReducer(seed = 73)
+        reducer.apply((0 until InteractionFxLimits.MAX_SKILL_BURSTS).map { skillCast(it.toFloat()) })
+        val accepted = reducer.snapshot().skillBursts
+        assertEquals(InteractionFxLimits.MAX_SKILL_BURSTS, accepted.size)
+        assertEquals(0f, accepted.first().x)
+        reducer.apply(listOf(skillCast(InteractionFxLimits.MAX_SKILL_BURSTS.toFloat())))
+        val trimmed = reducer.snapshot().skillBursts
+        assertEquals(InteractionFxLimits.MAX_SKILL_BURSTS, trimmed.size)
+        assertEquals(1f, trimmed.first().x)
+        assertEquals(InteractionFxLimits.MAX_SKILL_BURSTS.toFloat(), trimmed.last().x)
+        // A burst keeps the cue's facts and its look's life and reach; a phase without a look is ignored.
+        val impact = InteractionFxReducer(seed = 74)
+        impact.apply(listOf(
+            VisualFxCue.SkillCast(SkillId.METEOR, 40f, 50f, 0.6f, 0.8f, 150f, 2, SkillCueCodes.PHASE_IMPACT, SkillCueCodes.FLAG_CORE_INSIDE),
+            VisualFxCue.SkillCast(SkillId.SOLAR_FLARE, 0f, 0f, 0f, 0f, 200f, 1, SkillCueCodes.PHASE_IMPACT),
+            VisualFxCue.SkillCast(SkillId.VOID_STEP, 0f, 0f, 1f, 0f, 240f, 3, SkillCueCodes.PHASE_IMPACT),
+        ))
+        val (meteor, step) = impact.snapshot().skillBursts
+        assertEquals(SkillId.METEOR.ordinal, meteor.skill)
+        assertEquals(SkillCueCodes.PHASE_IMPACT, meteor.phase)
+        assertEquals(150f, meteor.radius)
+        assertEquals(2, meteor.rank)
+        assertEquals(SkillCueCodes.FLAG_CORE_INSIDE, meteor.flags)
+        assertEquals(SkillFxSpecs.of(SkillId.METEOR, 1)!!.life, meteor.maxLife)
+        assertEquals(90f, step.radius, "the Void Step rift has its fixed reach")
+        assertEquals(2, impact.snapshot().skillBursts.size, "Solar Flare has no impact look")
+    }
+
+    @Test
+    fun apexBurstsAcceptTwoAndTrimTheOldestOnTheThird() {
+        val reducer = InteractionFxReducer(seed = 75)
+        reducer.apply(listOf(VisualFxCue.ApexActivated(CoreShape.ORB, 0f, 0f), VisualFxCue.ApexActivated(CoreShape.STAR, 1f, 0f)))
+        assertEquals(listOf(CoreShape.ORB.ordinal, CoreShape.STAR.ordinal), reducer.snapshot().apexBursts.map { it.shape })
+        reducer.apply(listOf(VisualFxCue.ApexActivated(CoreShape.HEXAGON, 2f, 0f)))
+        val trimmed = reducer.snapshot().apexBursts
+        assertEquals(InteractionFxLimits.MAX_APEX_BURSTS, trimmed.size)
+        assertEquals(listOf(1f, 2f), trimmed.map { it.x })
+        assertEquals(ApexFxSpec.activation.life, trimmed.last().maxLife)
+        reducer.apply(listOf(VisualFxCue.EffectsAdvanced(ApexFxSpec.activation.life + 0.001f)))
+        assertTrue(reducer.snapshot().apexBursts.isEmpty())
+    }
+
+    @Test
+    fun skillAndApexLooksMoveWithARebaseAndLeaveWithClearAll() {
+        val reducer = InteractionFxReducer(seed = 76)
+        reducer.apply(listOf(
+            VisualFxCue.SkillCast(SkillId.FROST_SNAP, 100f, 50f, 0f, 0f, 180f, 1),
+            VisualFxCue.ApexActivated(CoreShape.DIPOLE, 300f, 70f),
+            VisualFxCue.WorldRebased(40f, 20f),
+        ))
+        val rebased = reducer.snapshot()
+        assertEquals(60f to 30f, rebased.skillBursts.single().let { it.x to it.y })
+        assertEquals(260f to 50f, rebased.apexBursts.single().let { it.x to it.y })
+        reducer.apply(listOf(VisualFxCue.ClearAll))
+        val cleared = reducer.snapshot()
+        assertTrue(cleared.skillBursts.isEmpty() && cleared.apexBursts.isEmpty())
+    }
+
+    @Test
+    fun styledLinksStayUpForTheirLookAndWeaponLinksKeepTheCueLife() {
+        val reducer = InteractionFxReducer(seed = 77)
+        reducer.apply(listOf(
+            VisualFxCue.WeaponArcAdded(0f, 0f, 1f, 1f, 0.12f),
+            VisualFxCue.WeaponArcAdded(0f, 0f, 1f, 1f, 0.12f, LinkStyleCode.reaction(ReactionId.BLACKFIRE)),
+            VisualFxCue.WeaponArcAdded(0f, 0f, 1f, 1f, 0.5f, LinkStyleCode.skill(SkillId.ARC_HOOK)),
+        ))
+        val arcs = reducer.snapshot().weaponArcs
+        assertEquals(listOf(0.12f, 0.35f, 0.5f), arcs.map { it.life })
+        assertEquals(arcs.map { it.life }, arcs.map { it.maxLife })
+        assertEquals(listOf(0, LinkStyleCode.reaction(ReactionId.BLACKFIRE), LinkStyleCode.skill(SkillId.ARC_HOOK)), arcs.map { it.style })
+    }
+
+    @Test
+    fun identicalSeedsAndCuesProduceIdenticalReactionSkillAndApexLooks() {
+        val cues = listOf(
+            VisualFxCue.ReactionTriggered(10f, 20f, ReactionId.SEISMIC.ordinal, 180f, false, flags = ReactionCueFlags.CASCADE),
+            VisualFxCue.StatusBroken(30f, 40f, StatusElement.VOID.ordinal),
+            VisualFxCue.SkillCast(SkillId.SONIC_BOOM, 5f, 6f, 1f, 0f, 300f, 3),
+            VisualFxCue.ApexActivated(CoreShape.SPIRAL, 0f, 0f),
+            VisualFxCue.EffectsAdvanced(1f / 120f),
+        )
+        assertEquals(InteractionFxReducer(seed = 78).applyAndSnapshot(cues), InteractionFxReducer(seed = 78).applyAndSnapshot(cues))
+    }
+
+    private fun skillCast(x: Float) = VisualFxCue.SkillCast(SkillId.STORM_COIL, x, 0f, 0f, 0f, 170f, 1)
+
     private fun InteractionFxReducer.applyAndSnapshot(cues: Iterable<VisualFxCue>) =
         apply(cues).let { snapshot() }
 
@@ -346,6 +499,9 @@ class InteractionFxReducerTest {
         shockwaves.size,
         damageNumbers.size,
         weaponArcs.size,
+        elementBursts.size,
+        skillBursts.size,
+        apexBursts.size,
     )
 
     private fun motionSample(index: Int) = VisualFxCue.MotionSample(

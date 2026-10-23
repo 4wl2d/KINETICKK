@@ -22,6 +22,7 @@ import kinetickk.ball.gameplay.nucleus.render.BuildProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kinetickk.ball.profile.api.ReactionEffectsLevel
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
@@ -244,6 +245,8 @@ class WorldStatusRenderingTest {
         val bitmap = ImageBitmap(WIDTH, HEIGHT)
         CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(WIDTH.toFloat(), HEIGHT.toFloat())) {
             drawRect(Kk.Ink)
+            // drawWorld starts each frame's FX detail and budget; these parts are drawn on their own.
+            FxFrame.begin(model.enemies.size, ReactionEffectsLevel.FULL)
             for (index in model.enemies.indices) drawEnemy(model, model.enemies[index], 0f, 0f, roles)
             drawElementBursts(model, fx, 0f, 0f, roles)
             drawReactionStamps(model, fx, 0f, 0f, measurer)

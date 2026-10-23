@@ -162,6 +162,12 @@ data class CoreShapeDefinition(
         CoreShape.SHARD, CoreShape.SPIRAL, CoreShape.DIPOLE, CoreShape.CRESCENT -> 2
         CoreShape.DIAMOND, CoreShape.TESSERACT, CoreShape.PENTAGON -> 3
     },
+    /** The character's level-cap ability. */
+    val apex: ApexDefinition = defaultApexDefinition(id),
+    /** Matter for Refit level 1; level `n + 1` costs `upgradeBaseCost × 2^n` ([UpgradePolicy.nextCost]). */
+    val upgradeBaseCost: Int = defaultCharacterUpgradeBaseCost(id),
+    /** The mechanic parameter each Refit level moves. */
+    val upgradeSignature: CharacterUpgradeSignature = defaultCharacterUpgradeSignature(id),
 ) {
     init {
         require(displayName.isNotBlank() && mechanicDescription.isNotBlank() && unlockDescription.isNotBlank())
@@ -169,6 +175,9 @@ data class CoreShapeDefinition(
         require(unlockTarget >= 0)
         require(unlockRequirement != CharacterUnlockRequirement.AVAILABLE || unlockTarget == 0)
         require(difficulty in 1..3)
+        require(upgradeBaseCost in 1..ContentBounds.MAX_UPGRADE_BASE_COST) {
+            "Refit base cost must be within 1..${ContentBounds.MAX_UPGRADE_BASE_COST}"
+        }
     }
 }
 

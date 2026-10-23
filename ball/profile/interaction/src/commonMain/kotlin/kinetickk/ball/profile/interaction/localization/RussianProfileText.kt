@@ -6,6 +6,8 @@ package kinetickk.ball.profile.interaction.localization
 internal object RussianProfileText {
     operator fun get(key: ProfileText): String = when (key) {
         ProfileText.SettingsInterface -> "Интерфейс"
+        ProfileText.SettingsDisplay -> "Экран"
+        ProfileText.SettingsControls -> "Управление"
         ProfileText.RunStatisticsSide -> "Статистика забега"
         ProfileText.LeftSide -> "Слева"
         ProfileText.RightSide -> "Справа"
@@ -38,9 +40,6 @@ internal object RussianProfileText {
         ProfileText.Huge -> "Огромный"
         ProfileText.Compact -> "Кратко"
         ProfileText.Full -> "Полно"
-        ProfileText.ArmoryTitle -> "Арсенал"
-        ProfileText.MatrixTitle -> "Матрица"
-        ProfileText.HangarTitle -> "Ангар"
         ProfileText.MaximumSynchrony -> "Максимум"
         ProfileText.RebirthTitle -> "Перерождение"
         ProfileText.HostileEscalation -> "Усиление врагов"

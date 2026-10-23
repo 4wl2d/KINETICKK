@@ -101,17 +101,58 @@ class HomeInfoGeometryTest {
         val layout = homeLayoutGeometry(1_440f, 810f, 1f)
         assertEquals(HomeLayoutMode.REGULAR, layout.mode)
         val menu = HomeMenuTargets.map(layout::bounds)
+        // Five rows: Play, Workshop, Rebirth, Codex, Settings.
+        assertEquals(listOf(HomeLayoutTarget.START, HomeLayoutTarget.WORKSHOP, HomeLayoutTarget.REBIRTH, HomeLayoutTarget.CODEX,
+            HomeLayoutTarget.SETTINGS), HomeMenuTargets)
         menu.forEachIndexed { index, bounds ->
-            // Home board: items at x = 880 - 12 i, 74 px apart, the first centered at y = 161.
+            // Items at x = 880 - 12 i, 80 px apart, the first centered at y = 186: the block stays centred on y 346.
             assertEquals(880f - index * 12f, bounds.left, 0.01f)
-            assertEquals(161f + index * 74f, bounds.center.y, 0.01f)
+            assertEquals(186f + index * 80f, bounds.center.y, 0.01f)
+            assertEquals(80f, bounds.height, 0.01f)
         }
-        val card = layout.bounds(HomeLayoutTarget.HANGAR)
-        // The Hangar card spans the form panel where the six form tiles stood.
-        assertEquals(826f, card.left, 0.01f)
-        assertEquals(1_392f, card.right, 0.01f)
-        assertEquals(680f, card.top, 0.01f)
-        assertTrue(card.top > menu.last().bottom, "The Hangar card sits under the menu")
+        assertEquals(346f, (menu.first().top + menu.last().bottom) * 0.5f, 0.01f)
+        // The menu rows are the only actions (characters change in the Workshop); the form name and its (!)
+        // share the facts card's center line under the menu.
+        assertEquals(HomeMenuTargets, layout.actions.map { it.target })
+        assertEquals(686f, layout.scene.formNameCenterY, 0.01f)
+        assertEquals(requireNotNull(layout.info(HomeInfoTarget.FACTS)).bounds.center.y,
+            requireNotNull(layout.info(HomeInfoTarget.FORM)).bounds.center.y, 0.01f)
+        assertTrue(layout.scene.formNameCenterY - layout.scene.formNameSize * 0.65f > menu.last().bottom, "The form name sits under the menu")
+        // Two chips (Matter keeps its label on desktop); the form's (!) holds the mechanic's text.
+        assertEquals(2, layout.scene.chipCount)
+        assertFalse(layout.scene.compactChips)
+        assertTrue(layout.info(HomeInfoTarget.FORM) != null)
+    }
+
+    @Test
+    fun phoneMenusStackFiveRowsAndTwoColumnsNeverLeaveALoneItem() {
+        // Landscape: five rows of 48 to 58 px, compact chips.
+        listOf(844f to 390f, 800f to 360f, 600f to 390f, 1_000f to 360f).forEach { (width, height) ->
+            val layout = homeLayoutGeometry(width, height, 1f)
+            assertEquals(HomeLayoutMode.COMPACT_LANDSCAPE, layout.mode)
+            assertTrue(layout.scene.compactChips)
+            HomeMenuTargets.map(layout::bounds).forEach { assertTrue(it.height in 48f..58f, "row ${it.height} at ${width}x$height") }
+        }
+        // Portrait from 600 px tall: one column of five rows.
+        val tall = homeLayoutGeometry(390f, 600f, 1f)
+        assertEquals(1, tall.scene.menuColumns)
+        assertTrue(tall.scene.compactChips)
+        HomeMenuTargets.map(tall::bounds).zipWithNext().forEach { (upper, lower) -> assertEquals(upper.bottom, lower.top, 0.01f) }
+        // Below 600 px: Play spans both columns, the other four fill two rows of two.
+        val short = homeLayoutGeometry(390f, 560f, 1f)
+        assertEquals(2, short.scene.menuColumns)
+        val start = short.bounds(HomeLayoutTarget.START)
+        assertEquals(16f, start.left, 0.01f)
+        assertEquals(374f, start.right, 0.01f)
+        val rows = HomeMenuTargets.drop(1).map(short::bounds).chunked(2)
+        assertEquals(2, rows.size)
+        rows.forEachIndexed { row, (left, right) ->
+            assertEquals(left.top, right.top, 0.01f)
+            assertEquals(start.top + (row + 1) * start.height, left.top, 0.01f)
+            assertTrue(left.right < right.left)
+            assertEquals(start.left, left.left, 0.01f)
+            assertEquals(start.right, right.right, 0.01f)
+        }
     }
 
     @Test
@@ -157,28 +198,28 @@ class HomeMenuClearanceTest {
     }
 
     @Test
-    fun selectedMenuItemsInLandscapeStayClearOfTheHangarCard() {
+    fun theLandscapeFormNameStaysOnScreenAndClearOfEverySelectedMenuItem() {
         val viewports = listOf(Triple(844f, 390f, 1f), Triple(800f, 360f, 1f), Triple(600f, 390f, 1f), Triple(873f, 393f, 1f),
             Triple(914f, 411f, 1f), Triple(2_532f, 1_170f, 3f)) +
             TargetDeviceProfiles.map { Triple(it.heightPx, it.widthPx, it.density) }
         viewports.forEach { (width, height, density) ->
             val layout = homeLayoutGeometry(width, height, density)
             assertEquals(HomeLayoutMode.COMPACT_LANDSCAPE, layout.mode, "${width}x$height")
+            val scene = layout.scene
+            // The name's line box (0.65 em each way, its Cyrillic descenders included) from its anchor to its right end.
+            val name = androidx.compose.ui.geometry.Rect(scene.formNameLeft, scene.formNameCenterY - scene.formNameSize * 0.65f,
+                homeFormNameRight(layout, density), scene.formNameCenterY + scene.formNameSize * 0.65f)
+            assertTrue(name.bottom <= height && name.width >= 48f * density, "form name $name at ${width}x$height")
             HomeMenuTargets.forEach { target ->
-                val extent = homeSelectedMenuExtent(layout.bounds(target), layout.scene.menuFontSize)
-                val bounds = layout.bounds(HomeLayoutTarget.HANGAR)
-                if (extent.top < bounds.bottom && extent.bottom > bounds.top) {
-                    // Slab, echo and all three speed lines end at least 8 px right of the card.
-                    assertTrue(extent.left - bounds.right >= 8f * density - 0.01f,
-                        "Selected $target reaches ${extent.left} over the Hangar card ending ${bounds.right} at ${width}x$height")
+                homeSelectedMenuFootprint(layout.bounds(target), scene.menuFontSize).forEach { part ->
+                    assertFalse(name.overlaps(part), "Selected $target covers the form name $name with $part at ${width}x$height")
                 }
             }
-            assertTrue(layout.bounds(HomeLayoutTarget.HANGAR).width / density >= 48f, "Hangar card at ${width}x$height")
         }
     }
 
     @Test
-    fun selectedMenuItemsOnPhonesEndAboveTheLegalNotices() {
+    fun selectedMenuItemsOnPhonesEndAboveTheVersionLine() {
         val viewports = listOf(Triple(844f, 390f, 1f), Triple(800f, 360f, 1f), Triple(600f, 390f, 1f), Triple(873f, 393f, 1f),
             Triple(914f, 411f, 1f), Triple(1_000f, 360f, 1f), Triple(2_532f, 1_170f, 3f),
             Triple(390f, 844f, 1f), Triple(412f, 915f, 1f), Triple(390f, 600f, 1f)) +
@@ -187,16 +228,15 @@ class HomeMenuClearanceTest {
             val layout = homeLayoutGeometry(width, height, density)
             val scene = layout.scene
             assertTrue(layout.mode != HomeLayoutMode.REGULAR, "${width}x$height")
-            // Linux renders the 8 px legal text up to 8 px above its baseline. Keep this
+            // Linux renders the 8 px version text up to 8 px above its baseline. Keep this
             // observed bound independent of the production allowance so it catches under-reservation.
-            val legalTop = scene.legalBaseline - scene.legalSize
+            val versionTop = scene.versionBaseline - scene.versionSize
             HomeMenuTargets.forEach { target ->
-                // Slab with echo, and speed lines, each dropped by the turn at their left end.
+                // Slab with echo, and speed lines, each dropped by the turn at their left end: all of it ends
+                // above the version line's band across the whole width.
                 homeSelectedMenuFootprint(layout.bounds(target), scene.menuFontSize).forEach { part ->
-                    if (part.right > scene.legalLeft && part.left < scene.legalRight) {
-                        assertTrue(part.bottom <= legalTop - 2f * density + 0.01f,
-                            "Selected $target reaches ${part.bottom} over the legal line (glyphs from $legalTop) at ${width}x$height")
-                    }
+                    assertTrue(part.bottom <= versionTop - 2f * density + 0.01f,
+                        "Selected $target reaches ${part.bottom} over the version line (glyphs from $versionTop) at ${width}x$height")
                 }
             }
             // Rows stay touch sized; the design's 36 px menu gives way only on 360-px-tall screens.
@@ -237,7 +277,7 @@ class HomeMenuClearanceTest {
                     assertFalse(name.overlaps(part), "Selected $target covers the form name $name with $part at ${width}x$height")
                 }
             }
-            assertFalse(name.overlaps(layout.bounds(HomeLayoutTarget.HANGAR)), "the name runs into the Hangar card at ${width}x$height")
+            assertTrue(name.bottom < scene.versionBaseline - scene.versionSize, "the name sits above the version line at ${width}x$height")
         }
     }
 

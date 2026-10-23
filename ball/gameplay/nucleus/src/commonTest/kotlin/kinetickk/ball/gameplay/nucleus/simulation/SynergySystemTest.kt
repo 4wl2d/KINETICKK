@@ -8,7 +8,6 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.StatusElement
-import kinetickk.ball.gameplay.nucleus.model.CombatField
 import kinetickk.ball.gameplay.nucleus.model.CombatFieldKind
 import kinetickk.ball.gameplay.nucleus.model.EchoHit
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
@@ -204,17 +203,20 @@ class SynergySystemTest {
     @Test
     fun combatFieldBoundAndRelicRemovalPreserveIsolatedSnapshots() {
         val state = engine(RelicId.ECHO_CHAMBER, RelicId.CINDER_CROWN)
-        val bound = state.content.build.policy.maximumFields
-        repeat(bound + 1) { index ->
-            state.addField(CombatField(CombatFieldKind.ROT_WELL, remaining = 1f, x = index.toFloat(), y = 0f,
-                radius = 50f, damagePerSecond = 1f))
+        val policy = state.content.build.policy
+        // Reactions and items share the bound left after the skill reserve; kinds stay below their caps.
+        val bound = policy.maximumFields - policy.maximumSkillFields
+        val kinds = listOf(CombatFieldKind.FUSION, CombatFieldKind.ROT_WELL, CombatFieldKind.DARK_STAR)
+        repeat(bound) { index ->
+            assertTrue(state.addTestField(kinds[index % kinds.size], x = index.toFloat(), y = 0f, radius = 50f, damagePerSecond = 1f) >= 0)
         }
-        assertEquals(bound, state.combatFields.size)
-        assertEquals((bound - 1).toFloat(), state.combatFields.last().x)
+        assertEquals(-1, state.addTestField(CombatFieldKind.NULL_WELL, x = bound.toFloat(), y = 0f, radius = 50f, damagePerSecond = 1f))
+        assertEquals(bound, state.combatFieldTable.count)
+        assertEquals((bound - 1).toFloat(), state.fieldRecords.last().x)
         val enemy = state.addEnemyForTesting(x = 400f, y = 400f)
         enemy.status[kinetickk.ball.gameplay.nucleus.model.StatusCell.CINDER_BANK] = 12f
         state.echoHits += EchoHit(enemy.id, delay = 0.3f, damage = 4f, appliesDominant = false)
-        val sourceFields = state.combatFields
+        val sourceFields = state.fieldRecords
         val sourceEchoes = state.echoHits.toList()
 
         // Replacing a relic removes the runtime it owned, only in the candidate.
@@ -224,18 +226,19 @@ class SynergySystemTest {
         assertTrue(copy.echoHits.isEmpty())
         assertEquals(0f, copy.enemies.single().status[kinetickk.ball.gameplay.nucleus.model.StatusCell.CINDER_BANK])
         copy.updateCombatFields(2f)
-        assertTrue(copy.combatFields.isEmpty())
-        assertNotSame(sourceFields, copy.combatFields)
+        assertEquals(0, copy.combatFieldTable.count)
+        assertNotSame(state.combatFieldTable, copy.combatFieldTable)
+        assertFalse(copy.combatFieldTable.sharesStorageWith(state.combatFieldTable))
 
         assertEquals(sourceEchoes, state.echoHits.toList())
         assertEquals(12f, state.enemies.single().status[kinetickk.ball.gameplay.nucleus.model.StatusCell.CINDER_BANK])
-        assertEquals(sourceFields, state.combatFields)
-        assertEquals(bound, state.combatFields.size)
+        assertEquals(sourceFields, state.fieldRecords)
+        assertEquals(bound, state.combatFieldTable.count)
         copy.startRun()
-        assertTrue(copy.combatFields.isEmpty())
+        assertEquals(0, copy.combatFieldTable.count)
         assertTrue(copy.echoHits.isEmpty())
         assertNull(copy.severedRelics.firstOrNull())
-        assertFalse(state.combatFields.isEmpty())
+        assertEquals(bound, state.combatFieldTable.count)
     }
 
     private fun engine(

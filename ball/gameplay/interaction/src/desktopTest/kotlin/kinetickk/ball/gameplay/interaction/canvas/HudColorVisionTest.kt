@@ -3,6 +3,9 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import kinetickk.ball.content.api.SkillId
+import kinetickk.ball.gameplay.nucleus.render.SkillBarProjection
+import kinetickk.ball.gameplay.nucleus.render.SkillSlotProjection
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Canvas
@@ -15,6 +18,7 @@ import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.gameplay.nucleus.render.ApexProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.foundation.collections.toImmutableList
@@ -92,6 +96,72 @@ class HudColorVisionTest {
         assertTrue(near(aspected, row, cryo) > 10, "the weakness glyph in the name row")
     }
 
+    /**
+     * The level cluster at the cap (every Apex state) and at 41 and 34: no pixel of the preset's threat
+     * in the badge, its echoes, rays and glow, the Data bar or the Data line, in every preset with a
+     * threat hue of its own; and under Mono the APEX still looks unlike the T4 badge it shares a dark
+     * face with.
+     */
+    @Test
+    fun theLevelClusterNeverShowsThreatAndTheApexStaysDistinctInMono() {
+        val cooling = ApexProjection(unlocked = true, cooldown01 = 0.4f)
+        val ready = ApexProjection(unlocked = true, ready = true)
+        val active = ApexProjection(unlocked = true, active01 = 0.6f)
+        listOf(1_440 to 810, 844 to 390, 390 to 844).forEach { (w, h) ->
+            fun model(level: Int, apex: ApexProjection = ApexProjection.LOCKED) =
+                hudTestModel(w.toFloat(), h.toFloat()).with(*levelOverrides(level, apex), "data" to 30, "nextLevelData" to 100)
+            val models = listOf(model(HUD_TEST_LEVEL_CAP, cooling), model(HUD_TEST_LEVEL_CAP, ready), model(HUD_TEST_LEVEL_CAP, active),
+                model(41), model(34))
+            listOf(KkRolePalette.Default, KkRolePalette.Protan, KkRolePalette.Deutan, KkRolePalette.Tritan).forEach { roles ->
+                models.forEachIndexed { index, model ->
+                    val map = render(model, w, h, roles)
+                    val cluster = clusterArea(w, h)
+                    assertEquals(0, near(map, cluster, roles.threat), "$w x $h model $index: threat pixels in the level cluster")
+                }
+            }
+            val t4 = render(model(34), w, h, KkRolePalette.Mono)
+            val apex = render(model(HUD_TEST_LEVEL_CAP, ready), w, h, KkRolePalette.Mono)
+            val distinct = differing(t4, apex, clusterArea(w, h))
+            assertTrue(distinct >= 300, "$w x $h: the Mono APEX differs from T4 in only $distinct px")
+        }
+    }
+
+    /**
+     * The skill row never shows the threat colour in any colour-vision preset: every skill element, the
+     * kinetic and Bone skills, ranks, charges, active and in-flight bars, a refusal edge and the key caps.
+     */
+    @Test
+    fun theSkillRowNeverShowsThreat() {
+        listOf(1_440 to 810, 844 to 390, 390 to 844).forEach { (w, h) ->
+            // Two rows cover all 18 skills' colours across six models.
+            val rows = SkillId.entries.chunked(3).map { chunk ->
+                SkillBarProjection(chunk.mapIndexed { index, id ->
+                    SkillSlotProjection(skill = id.ordinal, rank = index + 1, ready = index == 0, cooldown01 = if (index == 0) 0f else 0.5f,
+                        charges = 1, maxCharges = if (index == 0) 2 else 1, active01 = if (index == 1) 0.6f else 0f,
+                        pending01 = if (index == 2) 0.4f else 0f, refusal = if (index == 2) SkillSlotProjection.REFUSAL_COOLING else 0,
+                        refusedAt = if (index == 2) 99.95f else -1f)
+                }.toImmutableList())
+            }
+            listOf(KkRolePalette.Default, KkRolePalette.Protan, KkRolePalette.Deutan, KkRolePalette.Tritan).forEach { roles ->
+                rows.forEachIndexed { index, bar ->
+                    val model = hudTestModel(w.toFloat(), h.toFloat()).with(*levelOverrides(), "skillBar" to bar, "elapsed" to 100f)
+                    val map = render(model, w, h, roles, keyboardControls())
+                    val row = assertNotNull(HudLayoutProbe.rect(HudBlock.SKILLS))
+                    val keys = HudLayoutProbe.rect(HudBlock.SKILL_KEYS)
+                    val area = Rect(row.left - 16f, row.top - 16f, row.right + 16f, kotlin.math.max(row.bottom, keys?.bottom ?: 0f) + 4f)
+                        .intersect(Rect(0f, 0f, w.toFloat(), h.toFloat()))
+                    assertEquals(0, near(map, area, roles.threat), "$w x $h row $index ${roles.threat}: threat pixels in the skill row")
+                }
+            }
+        }
+    }
+
+    /** The badge (as last drawn) grown by its echoes, glow and inner rays, and the Data line row. */
+    private fun clusterArea(w: Int, h: Int): Rect {
+        val badge = assertNotNull(HudLayoutProbe.rect(HudBlock.BADGE))
+        return Rect(0f, 0f, kotlin.math.min(w.toFloat(), badge.right + 40f), kotlin.math.min(h.toFloat(), badge.bottom + 30f))
+    }
+
     private fun near(map: PixelMap, rect: Rect, color: androidx.compose.ui.graphics.Color): Int {
         var count = 0
         for (y in rect.top.toInt().coerceAtLeast(0) until rect.bottom.toInt()) for (x in rect.left.toInt().coerceAtLeast(0) until rect.right.toInt()) {
@@ -117,14 +187,20 @@ class HudColorVisionTest {
         return count
     }
 
-    private fun render(model: kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel, width: Int, height: Int, roles: KkRolePalette): PixelMap {
+    private fun render(
+        model: kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel,
+        width: Int,
+        height: Int,
+        roles: KkRolePalette,
+        controls: kinetickk.ball.gameplay.interaction.input.RunningControlPressLog? = null,
+    ): PixelMap {
         val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1.25f,
             AppLanguage.English, HudTestFonts.typography, roles)
         val bitmap = ImageBitmap(width, height)
         CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(width.toFloat(), height.toFloat())) {
             drawRect(Kk.Ink)
             // Render time 0.12 s: the critical heartbeat is near its peak, so the integrity fill is strong.
-            drawHud(model, measurer, 0.12f)
+            drawHud(model, measurer, 0.12f, controls = controls)
         }
         return bitmap.toPixelMap()
     }

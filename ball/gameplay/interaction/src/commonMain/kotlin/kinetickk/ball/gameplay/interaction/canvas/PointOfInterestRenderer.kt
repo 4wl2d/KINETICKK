@@ -119,8 +119,11 @@ internal object WorldDrawProbe {
  */
 internal enum class WorldDrawn { POINT_MARK, POINT_TIMER, EDGE_MARKER, BEACON_PIPS, POINT_NAME, ORBIT_LABEL }
 
-/** Updates the HUD keep-out for this frame: trial panel while a trial runs, boss bar while a boss lives. */
-internal fun DrawScope.worldHudKeepOut(engine: GameplayRenderModel, textMeasurer: TextMeasurer): WorldHudKeepOut {
+/**
+ * Updates the HUD keep-out for this frame: trial panel while a trial runs, boss bar while a boss lives;
+ * [hudDensity] is the density the HUD is drawn at (the interface scale applied).
+ */
+internal fun DrawScope.worldHudKeepOut(engine: GameplayRenderModel, textMeasurer: TextMeasurer, hudDensity: Float = density): WorldHudKeepOut {
     var trial = false
     val points = engine.pointsOfInterest
     for (index in points.indices) if (points[index].active) trial = true
@@ -130,7 +133,7 @@ internal fun DrawScope.worldHudKeepOut(engine: GameplayRenderModel, textMeasurer
         val enemy = enemies[index]
         if (!enemy.dead && (enemy.type == EnemyType.ELITE || enemy.type == EnemyType.HERALD || enemy.type == EnemyType.ARCHITECT)) boss = true
     }
-    return WorldOverlayScratch.keepOut.update(size.width, size.height, density, textMeasurer.scale, trial, boss,
+    return WorldOverlayScratch.keepOut.update(size.width, size.height, hudDensity, textMeasurer.scale, trial, boss,
         engine.settings.minimapEnabled)
 }
 

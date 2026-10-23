@@ -10,22 +10,25 @@ import kinetickk.flow.session.api.AppDestination
 import kinetickk.flow.session.api.SessionInteractionPulse
 import kinetickk.flow.session.api.SessionLifecycle
 import kinetickk.flow.session.api.SessionShortcut
+import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopOutput
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopTab
 import kinetickk.flow.session.interaction.home.api.HomeOutput
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class AppSessionInputMappingTest {
     @Test
     fun globalKeysMapToTheClosedSessionShortcutInventory() {
         val expected = listOf(
             Key.S to SessionShortcut.SETTINGS,
-            Key.L to SessionShortcut.LAB,
-            Key.A to SessionShortcut.ARMORY,
+            Key.W to SessionShortcut.WORKSHOP,
             Key.B to SessionShortcut.REBIRTH,
             Key.C to SessionShortcut.CODEX,
-            Key.H to SessionShortcut.HANGAR,
             Key.I to SessionShortcut.CODEX,
             Key.M to SessionShortcut.MUTE,
             Key.Escape to SessionShortcut.BACK,
@@ -35,7 +38,24 @@ class AppSessionInputMappingTest {
         expected.forEach { (key, shortcut) ->
             assertEquals(shortcut, key.toSessionShortcut())
         }
-        assertNull(Key.Z.toSessionShortcut())
+        assertEquals(SessionShortcut.entries.toSet(), expected.map { it.second }.toSet())
+        // The old screen keys are Workshop tab aliases now, and the skill keys stay free.
+        listOf(Key.L, Key.A, Key.H, Key.Z, Key.X, Key.V).forEach { assertNull(it.toSessionShortcut(), "$it") }
+    }
+
+    @Test
+    fun aliasKeysOpenTheWorkshopOnATabAndHOnlyOverHome() {
+        for (base in listOf(AppDestination.Home, AppDestination.Gameplay)) {
+            assertEquals(WorkshopTab.MATRIX, Key.L.toWorkshopAlias(base))
+            assertEquals(WorkshopTab.WEAPONS, Key.A.toWorkshopAlias(base))
+            listOf(Key.W, Key.S, Key.C, Key.Z).forEach { assertNull(it.toWorkshopAlias(base), "$it over $base") }
+        }
+        // Characters change between runs: H is a Home key only.
+        assertEquals(WorkshopTab.CHARACTERS, Key.H.toWorkshopAlias(AppDestination.Home))
+        assertNull(Key.H.toWorkshopAlias(AppDestination.Gameplay))
+        assertTrue(Key.H.isShellKey(AppDestination.Home))
+        assertFalse(Key.H.isShellKey(AppDestination.Gameplay))
+        assertFalse(Key.Z.isShellKey(AppDestination.Home))
     }
 
     @Test
@@ -48,17 +68,22 @@ class AppSessionInputMappingTest {
             SessionInteractionPulse.OpenOverlay(AppDestination.Codex),
             HomeOutput.OpenCodex.toSessionPulse(),
         )
+        // The Workshop row keeps the tab shown last; characters are chosen there.
+        assertEquals(SessionInteractionPulse.OpenOverlay(AppDestination.Workshop), HomeOutput.OpenWorkshop.toSessionPulse())
+        assertEquals(SessionInteractionPulse.CloseOverlay, WorkshopOutput.Back.toSessionPulse())
+        // Character selection goes to Session, which decides whether it is between runs.
         assertEquals(
-            SessionInteractionPulse.OpenOverlay(AppDestination.Hangar),
-            HomeOutput.OpenHangar.toSessionPulse(),
-        )
-        assertEquals(
-            SessionInteractionPulse.CloseOverlay,
-            kinetickk.ball.profile.interaction.hangar.api.HangarOutput.Back.toSessionPulse(),
+            SessionInteractionPulse.SelectCoreShapeRequested(CoreShape.PRISM),
+            WorkshopOutput.SelectCharacter(CoreShape.PRISM).toSessionPulse(),
         )
         assertEquals(
             SessionInteractionPulse.ExitRunRequested,
             GameplayInteractionOutput.ExitToHome.toSessionPulse(),
+        )
+        // The pause menu's Workshop opens the overlay over the paused run.
+        assertEquals(
+            SessionInteractionPulse.OpenOverlay(AppDestination.Workshop),
+            GameplayInteractionOutput.OpenWorkshop.toSessionPulse(),
         )
         assertEquals(
             SessionInteractionPulse.RestartRunRequested,

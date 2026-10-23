@@ -58,6 +58,10 @@ import kinetickk.ball.profile.interaction.CatalogWeapons
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopTab
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopTabRequest
+import kinetickk.ball.profile.interaction.workshop.impl.DefaultWorkshopFeature
+import androidx.compose.runtime.remember
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.resource.audio.api.AudioPreferences
@@ -86,8 +90,12 @@ class ArmoryComposeTest {
         setContent {
             CompositionLocalProvider(LocalAppLanguage provides AppLanguage.English) {
                 Box(Modifier.requiredSize(width.dp, height.dp)) {
-                    DefaultArmoryFeature(port, CatalogWeapons, WeaponMastery.entries.toImmutableList(), ArmorySilentAudio,
-                        defaultCoreShapeDefinitions(), relics.toImmutableList()).Content(activeRunWeapon = null) {}
+                    val feature = remember {
+                        DefaultWorkshopFeature(port, immutableListOf(), CatalogWeapons, WeaponMastery.entries.toImmutableList(),
+                            defaultCoreShapeDefinitions(), ArmorySilentAudio, relics.toImmutableList())
+                    }
+                    feature.Content(0L, WorkshopTabRequest(WorkshopTab.WEAPONS, 1), characterSelectionAvailable = true,
+                        activeRunWeapon = null) {}
                 }
             }
         }
@@ -128,6 +136,8 @@ class ArmoryComposeTest {
             onNodeWithTag("profile-armory-action").assert(stateContains("Reborn 1")).performClick()
             waitForIdle()
             onNodeWithTag("profile-armory-notice").assert(descriptionContains("Locked until Rebirth rank 1"))
+            // The Workshop's assertive live region announces the refusal.
+            onNodeWithTag("kinetickk.workshop.announce.alert").assert(descriptionContains("Locked until Rebirth rank 1"))
             // Gyre Disc costs 120 Matter: 110 more are needed.
             onNodeWithTag(tile(WeaponId.GYRE_DISC)).performScrollTo().performClick()
             waitForIdle()
@@ -167,6 +177,15 @@ class ArmoryComposeTest {
             })
             onNodeWithTag(tile(WeaponId.ION_SWARM)).performClick()
             waitForIdle()
+            // The synergy sits behind the Details segment (Upgrade is shown first).
+            onNodeWithTag("profile-armory-detail").assert(SemanticsMatcher("no synergy on Upgrade") { node ->
+                fun visit(current: androidx.compose.ui.semantics.SemanticsNode): Boolean =
+                    current.config.getOrNull(SemanticsProperties.ContentDescription)?.any { "Signature of Hexagon" in it } == true ||
+                        current.children.any(::visit)
+                !visit(node)
+            })
+            onNodeWithTag("kinetickk.workshop.segment.details").performClick()
+            waitForIdle()
             val detail = onNodeWithTag("profile-armory-detail")
             detail.assert(descendantDescriptionContains("Signature of Hexagon"))
             detail.assert(descendantDescriptionContains("Active with your character"))
@@ -185,7 +204,7 @@ class ArmoryComposeTest {
             // Another character's weapon names who it belongs to and how to get the bonus.
             onNodeWithTag(tile(WeaponId.MORNINGSTAR)).performClick()
             waitForIdle()
-            onNodeWithTag("profile-armory-detail").assert(descendantDescriptionContains("Choose Square in the Hangar"))
+            onNodeWithTag("profile-armory-detail").assert(descendantDescriptionContains("Choose Square on the Characters tab"))
             onNodeWithTag("profile-armory-detail").assert(descendantDescriptionContains("No heirloom candidate carries it"))
         }
     }

@@ -152,10 +152,6 @@ object AppSessionNucleus {
         if (!destination.isOverlayDestination()) {
             return rejected(SessionRejection.OverlayUnavailable(destination))
         }
-        // Characters change between runs: the Hangar opens only over the Home base.
-        if (destination == AppDestination.Hangar && state.base != AppDestination.Home) {
-            return rejected(SessionRejection.OverlayUnavailable(destination))
-        }
         val status = state.gameplayStatusIfActive(context)
         if (state.overlay == AppDestination.Settings && destination != AppDestination.Settings) {
             return finishSettings(
@@ -283,16 +279,11 @@ object AppSessionNucleus {
         context: AppSessionContext,
     ): AppSessionDecision = when (shortcut) {
         SessionShortcut.SETTINGS -> openOverlay(state, AppDestination.Settings, context)
-        SessionShortcut.LAB -> openOverlay(state, AppDestination.Lab, context)
-        SessionShortcut.ARMORY -> openOverlay(state, AppDestination.Armory, context)
+        SessionShortcut.WORKSHOP -> if (state.overlay == AppDestination.Workshop) closeOverlay(state, context)
+            else openOverlay(state, AppDestination.Workshop, context)
         SessionShortcut.REBIRTH -> openOverlay(state, AppDestination.Rebirth, context)
         SessionShortcut.CODEX -> if (state.overlay == AppDestination.Codex) closeOverlay(state, context)
             else openOverlay(state, AppDestination.Codex, context)
-        SessionShortcut.HANGAR -> when {
-            state.base != AppDestination.Home -> rejected(SessionRejection.ShortcutUnavailable)
-            state.overlay == AppDestination.Hangar -> closeOverlay(state, context)
-            else -> openOverlay(state, AppDestination.Hangar, context)
-        }
         SessionShortcut.MUTE -> toggleMute(state)
         SessionShortcut.BACK -> if (state.overlay != null) {
             closeOverlay(state, context)
@@ -322,7 +313,8 @@ object AppSessionNucleus {
         state: AppSessionState,
         shape: kinetickk.ball.content.api.CoreShape,
     ): AppSessionDecision {
-        if (state.base != AppDestination.Home || state.overlay != null) {
+        // Characters change between runs: only over the Home base, bare or under the Workshop.
+        if (state.base != AppDestination.Home || (state.overlay != null && state.overlay != AppDestination.Workshop)) {
             return rejected(SessionRejection.CoreShapeSelectionUnavailable)
         }
         val revision = state.nextRevision()

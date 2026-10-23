@@ -103,6 +103,7 @@ internal fun DrawScope.drawEnemy(
         val ring = enemy.radius * ARCHITECT_RING
         if (bits != 0) drawEnemyStatus(engine, center, ring, enemy.radius, bits, dominant, statusFill, roles, true)
         drawWeaknessTab(center, ring + STATUS_RING_GAP + WEAKNESS_TAB_GAP, EnemyAffinity.weakness(affinity), detailed = true, roles)
+        if (enemy.controlBits != 0) drawEnemyControl(engine, enemy, center, ring, roles)
         return
     }
     val silhouette = enemySilhouette(enemy.type)
@@ -160,6 +161,8 @@ internal fun DrawScope.drawEnemy(
     drawArmorPlates(enemy, center)
     if (bits != 0) drawEnemyStatus(engine, center, enemy.radius + STATUS_RING_GAP, enemy.radius, bits, dominant, statusFill, roles, patterned)
     drawWeaknessTab(center, enemy.radius + STATUS_RING_GAP + WEAKNESS_TAB_GAP, EnemyAffinity.weakness(affinity), patterned, roles)
+    // Control and mark glyphs (reactions, skills, the Apex) sit outside the status ring.
+    if (enemy.controlBits != 0) drawEnemyControl(engine, enemy, center, enemy.radius + STATUS_RING_GAP, roles)
 }
 
 /** How far off screen an enemy still draws: its telegraphs and tethers reach farther than its body. */
@@ -231,16 +234,20 @@ private const val WEAKNESS_DOT_RADIUS = 3f
 internal const val STATUS_PATTERN_ENEMY_LIMIT = 60
 
 /** Whether more than [STATUS_PATTERN_ENEMY_LIMIT] enemies are on screen (status level of detail). */
-internal fun DrawScope.crowdedForStatusPatterns(engine: GameplayRenderModel, shakeX: Float, shakeY: Float): Boolean {
+internal fun DrawScope.crowdedForStatusPatterns(engine: GameplayRenderModel, shakeX: Float, shakeY: Float): Boolean =
+    onScreenEnemyCount(engine, shakeX, shakeY, STATUS_PATTERN_ENEMY_LIMIT + 1) > STATUS_PATTERN_ENEMY_LIMIT
+
+/** Enemies on screen, counted up to [limit] (the world FX crowd level of detail stops counting there). */
+internal fun DrawScope.onScreenEnemyCount(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, limit: Int): Int {
     var shown = 0
     for (index in engine.enemies.indices) {
         val enemy = engine.enemies[index]
         val center = world(engine, engine.interpolated(enemy.previousX, enemy.x), engine.interpolated(enemy.previousY, enemy.y), shakeX, shakeY)
         if (!isOnScreen(center, enemy.radius)) continue
         shown++
-        if (shown > STATUS_PATTERN_ENEMY_LIMIT) return true
+        if (shown >= limit) return shown
     }
-    return false
+    return shown
 }
 
 /**
@@ -575,9 +582,11 @@ internal fun DrawScope.drawProjectiles(engine: GameplayRenderModel, shakeX: Floa
                 }
             }
         } else {
-            drawLine(roles.you.copy(alpha = 0.3f), previous, center, max(1.5f, projectile.radius * 1.2f))
-            drawCircle(roles.you.copy(alpha = 0.18f), projectile.radius + 4f, center)
-            drawCircle(Kk.Bone, max(2f, projectile.radius * 0.8f), center)
+            // Apex shots (colour index 15) fly gold; every other shot of the player in its colour.
+            val accent = if (projectile.colorIndex == APEX_GOLD_COLOR) roles.gold.base else roles.you
+            drawLine(accent.copy(alpha = 0.3f), previous, center, max(1.5f, projectile.radius * 1.2f))
+            drawCircle(accent.copy(alpha = 0.18f), projectile.radius + 4f, center)
+            drawCircle(if (projectile.colorIndex == APEX_GOLD_COLOR) roles.gold.light else Kk.Bone, max(2f, projectile.radius * 0.8f), center)
         }
     }
 }
@@ -764,38 +773,22 @@ internal fun DrawScope.drawTotemIcon(center: Offset, size: Float, color: android
 }
 
 /**
- * Break and reaction flashes ([kinetickk.ball.gameplay.interaction.fx.ElementBurstProjection]).
- * A Break flashes in its element with the element's own figure; a reaction is two-tone, its two
- * halves counter-turning in both elements' hues. Merged flashes reach further. Allocation-free.
+ * A Break's own figure in its element at [progress] of its life, at [strength] of its brightness
+ * (the reaction effects setting's peak alpha). Merged Breaks ([weight]) burn brighter.
  */
-internal fun DrawScope.drawElementBursts(
-    engine: GameplayRenderModel,
-    visualFx: VisualFxProjection,
-    shakeX: Float,
-    shakeY: Float,
-    roles: KkRolePalette,
+internal fun DrawScope.drawBreakBurst(
+    element: Int,
+    center: Offset,
+    reach: Float,
+    progress: Float,
+    color: androidx.compose.ui.graphics.Color,
+    weight: Int,
+    strength: Float = 1f,
 ) {
-    val bursts = visualFx.elementBursts
-    for (index in bursts.indices) {
-        val burst = bursts[index]
-        val center = world(engine, burst.x, burst.y, shakeX, shakeY)
-        val reach = burst.radius * (1f + 0.18f * (burst.weight - 1))
-        if (!isOnScreen(center, reach + 24f)) continue
-        val progress = 1f - clamp(burst.life / burst.maxLife, 0f, 1f)
-        val first = roles.element(burst.primary)
-        if (burst.secondary < 0) {
-            drawBreakBurst(burst.primary, center, reach, progress, first, burst.weight)
-        } else {
-            drawReactionBurst(center, reach, progress, first, roles.element(burst.secondary), burst.weight, burst.reaction)
-        }
-    }
-}
-
-private fun DrawScope.drawBreakBurst(element: Int, center: Offset, reach: Float, progress: Float, color: androidx.compose.ui.graphics.Color, weight: Int) {
     val out = KkEase.Out.transform(progress)
-    val fade = 1f - progress
-    val bright = (0.7f + 0.1f * weight).coerceAtMost(1f)
-    if (progress < 0.22f) drawCircle(color, reach * (0.28f + out * 0.3f), center, alpha = (1f - progress / 0.22f) * 0.4f)
+    val fade = (1f - progress) * strength
+    val bright = (0.7f + 0.1f * weight).coerceAtMost(1f) * strength
+    if (progress < 0.22f) drawCircle(color, reach * (0.28f + out * 0.3f), center, alpha = (1f - progress / 0.22f) * 0.4f * strength)
     when (element) {
         // Ignite: the stacks explode outward; flame ticks ride the ring.
         0 -> {
@@ -890,45 +883,6 @@ private fun DrawScope.drawBreakBurst(element: Int, center: Offset, reach: Float,
                 drawCircle(color, 2f, polar(center, radius * (0.4f + 0.11f * pit), a), alpha = fade)
             }
         }
-    }
-}
-
-/**
- * A reaction flash: a soft two-tone core, a ring split into the two elements' halves turning one
- * way and an inner split ring turning the other, with sparks alternating between the hues.
- */
-private fun DrawScope.drawReactionBurst(
-    center: Offset,
-    reach: Float,
-    progress: Float,
-    first: androidx.compose.ui.graphics.Color,
-    second: androidx.compose.ui.graphics.Color,
-    weight: Int,
-    reaction: Int,
-) {
-    val out = KkEase.Out.transform(progress)
-    val fade = 1f - progress
-    val bright = (0.75f + 0.08f * weight).coerceAtMost(1f)
-    if (progress < 0.3f) {
-        val flash = 1f - progress / 0.3f
-        drawCircle(first, reach * (0.3f + out * 0.35f), center, alpha = flash * 0.32f)
-        drawCircle(second, reach * (0.18f + out * 0.25f), center, alpha = flash * 0.4f)
-    }
-    val radius = reach * (0.25f + 0.75f * out)
-    val turn = (reaction * 37f) + progress * 140f
-    val outer = Size(radius * 2f, radius * 2f)
-    val outerLeft = Offset(center.x - radius, center.y - radius)
-    drawArc(first, turn, 172f, false, outerLeft, outer, alpha = fade * bright, style = kkStroke(3.5f))
-    drawArc(second, turn + 180f, 172f, false, outerLeft, outer, alpha = fade * bright, style = kkStroke(3.5f))
-    val inner = radius * 0.62f
-    val innerSize = Size(inner * 2f, inner * 2f)
-    val innerLeft = Offset(center.x - inner, center.y - inner)
-    drawArc(second, -turn, 150f, false, innerLeft, innerSize, alpha = fade * 0.85f, style = kkStroke(2f))
-    drawArc(first, -turn + 180f, 150f, false, innerLeft, innerSize, alpha = fade * 0.85f, style = kkStroke(2f))
-    for (spark in 0 until 8) {
-        val a = spark * TAU / 8f + turn / RAD_TO_DEG
-        val color = if (spark % 2 == 0) first else second
-        drawLine(color.copy(alpha = fade * bright), polar(center, radius * 1.05f, a), polar(center, radius * (1.2f + 0.25f * out), a), 2f)
     }
 }
 

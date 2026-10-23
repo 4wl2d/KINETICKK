@@ -11,8 +11,11 @@ import kinetickk.ball.content.api.ProfilePolicySnapshot
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
+import kinetickk.ball.profile.api.GameAction
 import kinetickk.ball.profile.api.GameplayProgressUpdate
+import kinetickk.ball.profile.api.KeyBindings
 import kinetickk.ball.profile.api.MatrixProgress
+import kinetickk.ball.profile.api.PermanentUpgrades
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerProfile
@@ -29,8 +32,12 @@ import kinetickk.ball.profile.api.ProfileCoreShapeSelected
 import kinetickk.ball.profile.api.ProfileRebirthTierSelected
 import kinetickk.ball.profile.api.ProfileProgressApplied
 import kinetickk.ball.profile.api.ProfileSnapshotReadResult
+import kinetickk.ball.profile.api.ReactionEffectsLevel
 import kinetickk.ball.profile.api.RebirthProgress
+import kinetickk.ball.profile.api.WindowMode
+import kinetickk.ball.profile.api.WindowSizePreset
 import kinetickk.foundation.collections.toImmutableList
+import kinetickk.foundation.common.input.BindableKey
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -55,6 +62,20 @@ class ProfileComponentCharacterizationTest {
             ProfilePreferenceAdjustment.StepDamageNumberSize(PreferenceAdjustmentDirection.INCREASE),
             ProfilePreferenceAdjustment.StepDamageNumberFormat(PreferenceAdjustmentDirection.INCREASE),
             ProfilePreferenceAdjustment.StepDamageNumberTierThreshold(PreferenceAdjustmentDirection.INCREASE),
+            ProfilePreferenceAdjustment.SetWindowMode(WindowMode.BORDERLESS),
+            ProfilePreferenceAdjustment.SetWindowSize(WindowSizePreset.W1920X1080),
+            ProfilePreferenceAdjustment.ToggleVsync,
+            ProfilePreferenceAdjustment.SetFrameRateCap(144),
+            ProfilePreferenceAdjustment.SetRefreshRate(120),
+            ProfilePreferenceAdjustment.ToggleImmersive,
+            ProfilePreferenceAdjustment.SetInterfaceScale(115),
+            ProfilePreferenceAdjustment.ToggleShowFps,
+            ProfilePreferenceAdjustment.TogglePauseOnFocusLoss,
+            ProfilePreferenceAdjustment.SetReactionEffects(ReactionEffectsLevel.MINIMAL),
+            ProfilePreferenceAdjustment.SetKeyBinding(GameAction.DASH, BindableKey.Z),
+            ProfilePreferenceAdjustment.SetKeyBinding(GameAction.APEX, BindableKey.F),
+            ProfilePreferenceAdjustment.ResetKeyBindings,
+            ProfilePreferenceAdjustment.SetKeyBinding(GameAction.PERFORMANCE_HUD, BindableKey.F12),
         )
 
         adjustments.forEach { adjustment ->
@@ -86,6 +107,17 @@ class ProfileComponentCharacterizationTest {
         assertEquals(DamageNumberSize.LARGE, preferences.damageNumberSize)
         assertEquals(DamageNumberFormat.FULL, preferences.damageNumberFormat)
         assertEquals(100, preferences.damageNumberTierThreshold)
+        assertEquals(WindowMode.BORDERLESS, preferences.windowMode)
+        assertEquals(WindowSizePreset.W1920X1080, preferences.windowSize)
+        assertFalse(preferences.vsync)
+        assertEquals(144, preferences.frameRateCap)
+        assertEquals(120, preferences.refreshRateHz)
+        assertTrue(preferences.immersive)
+        assertEquals(115, preferences.interfaceScalePercent)
+        assertTrue(preferences.showFps)
+        assertFalse(preferences.pauseOnFocusLoss)
+        assertEquals(ReactionEffectsLevel.MINIMAL, preferences.reactionEffects)
+        assertEquals(KeyBindings.DEFAULT.with(GameAction.PERFORMANCE_HUD, BindableKey.F12), preferences.keyBindings)
         assertEquals(adjustments.size + 1, resource.writes.size)
     }
 
@@ -171,6 +203,29 @@ class ProfileComponentCharacterizationTest {
         assertEquals(expectedMatter, view.economy.matter)
         assertEquals(weapon, view.loadout.selectedWeapon)
         assertEquals(setOf(WeaponId.FLUX_WAKE, weapon), view.loadout.unlockedWeapons)
+        assertEquals(3, resource.writes.size)
+    }
+
+    @Test
+    fun upgradePurchasesChargeDoublingPricesKeepLifetimeMatterAndWriteOncePerLevel() {
+        val initial = testDefaultProfile().copy(economy = PlayerEconomy(1_000L, 4_000L))
+        val resource = loadedResource(initial)
+        val component = testProfileComponent(resource)
+
+        listOf(
+            ProfilePulse.PurchaseCharacterUpgrade(CoreShape.ORB),
+            ProfilePulse.PurchaseCharacterUpgrade(CoreShape.ORB),
+            ProfilePulse.PurchaseWeaponUpgrade(WeaponId.FLUX_WAKE),
+        ).forEach { pulse ->
+            assertAcceptedAndWritten(component, resource, ProfileTestOperation.Local(pulse))
+        }
+
+        val view = component.query(ProfileQuery.GetLoadout).snapshot
+        // Refit 55 + 110 at Orb's base 55, Honing 40 at Flux Wake's base 40.
+        assertEquals(PlayerEconomy(1_000L - 55L - 110L - 40L, 4_000L), view.economy)
+        assertEquals(2, view.upgrades.characterLevel(CoreShape.ORB))
+        assertEquals(1, view.upgrades.weaponLevel(WeaponId.FLUX_WAKE))
+        assertEquals(initial.loadout, view.loadout)
         assertEquals(3, resource.writes.size)
     }
 
@@ -307,6 +362,32 @@ class ProfileComponentCharacterizationTest {
                 profile = testDefaultProfile(),
                 operation = ProfileTestOperation.ApplyGameplayProgress(GameplayProgressUpdate()),
                 reason = ProfileRejection.NoChange,
+            ),
+            RejectionCase(
+                profile = testDefaultProfile().copy(economy = PlayerEconomy(10_000L, 10_000L)),
+                operation = ProfileTestOperation.Local(ProfilePulse.PurchaseCharacterUpgrade(CoreShape.PRISM)),
+                reason = ProfileRejection.CoreShapeLocked,
+            ),
+            RejectionCase(
+                profile = testDefaultProfile().copy(economy = PlayerEconomy(10_000L, 10_000L)),
+                operation = ProfileTestOperation.Local(ProfilePulse.PurchaseWeaponUpgrade(WeaponId.MORNINGSTAR)),
+                reason = ProfileRejection.WeaponNotOwned,
+            ),
+            RejectionCase(
+                profile = testDefaultProfile().copy(
+                    economy = PlayerEconomy(10_000L, 10_000L),
+                    upgrades = PermanentUpgrades(
+                        characterLevels = CoreShape.entries.map { if (it == CoreShape.ORB) 10 else 0 },
+                        weaponLevels = List(WeaponId.entries.size) { 0 },
+                    ),
+                ),
+                operation = ProfileTestOperation.Local(ProfilePulse.PurchaseCharacterUpgrade(CoreShape.ORB)),
+                reason = ProfileRejection.UpgradeMaxLevel,
+            ),
+            RejectionCase(
+                profile = testDefaultProfile().copy(economy = PlayerEconomy(34L, 34L)),
+                operation = ProfileTestOperation.Local(ProfilePulse.PurchaseWeaponUpgrade(WeaponId.FLUX_WAKE)),
+                reason = ProfileRejection.InsufficientMatter,
             ),
         )
 

@@ -15,11 +15,8 @@ internal enum class HomeLayoutMode {
 }
 
 internal enum class HomeLayoutTarget {
-    /** The current-character card under the form panel; it opens the Hangar. */
-    HANGAR,
     START,
-    LAB,
-    ARMORY,
+    WORKSHOP,
     REBIRTH,
     CODEX,
     SETTINGS,
@@ -54,6 +51,8 @@ internal class HomeScene(
     val chipsTop: Float,
     val chipHeight: Float,
     val chipCount: Int,
+    /** Phone chips: the smaller value and gem, and no Matter label. */
+    val compactChips: Boolean,
     val heroCenter: Offset,
     val heroRadius: Float,
     val wordLeft: Float,
@@ -65,12 +64,10 @@ internal class HomeScene(
     val formNameLeft: Float,
     val formNameCenterY: Float,
     val formNameSize: Float,
-    val formDescription: Rect?,
-    val legalRight: Float,
-    val legalBaseline: Float,
-    val legalSize: Float,
-    /** The legal line (right-aligned at [legalRight]) must stay right of this x. */
-    val legalLeft: Float,
+    /** The version line: right-aligned at [versionRight] on [versionBaseline], [versionSize] px mono. */
+    val versionRight: Float,
+    val versionBaseline: Float,
+    val versionSize: Float,
 )
 
 internal class HomeLayoutGeometry(
@@ -85,18 +82,14 @@ internal class HomeLayoutGeometry(
     fun info(target: HomeInfoTarget): HomeInfoBounds? = infos.firstOrNull { it.target == target }
 }
 
-/** The game's menu order (labels and targets are the game's, never the board's). */
+/** The game's menu order, also the arrow-key order (labels and targets are the game's, never the board's). */
 internal val HomeMenuTargets = listOf(
     HomeLayoutTarget.START,
-    HomeLayoutTarget.LAB,
-    HomeLayoutTarget.ARMORY,
+    HomeLayoutTarget.WORKSHOP,
     HomeLayoutTarget.REBIRTH,
     HomeLayoutTarget.CODEX,
     HomeLayoutTarget.SETTINGS,
 )
-
-/** Arrow-key order: the menu rows, then the Hangar card, as one Home menu. */
-internal val HomeNavigationTargets = HomeMenuTargets + HomeLayoutTarget.HANGAR
 
 internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): HomeLayoutGeometry {
     val scale = density.coerceAtLeast(1f)
@@ -127,20 +120,16 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
             fun by(y: Float) = h - (810f - y) * s
             val centerOffset = (h - 810f * s) * 0.5f
             fun cy(y: Float) = y * s + centerOffset
-            var menuBottom = 0f
+            // Five rows of 80 board px, centred on board y 346 (146..546) like the six rows of 74 before.
             HomeMenuTargets.forEachIndexed { index, target ->
-                val top = cy(124f + index * 74f)
-                val row = Rect(rx(880f - index * 12f), top, w - 16f, top + 74f * s)
+                val top = cy(146f + index * 80f)
+                val row = Rect(rx(880f - index * 12f), top, w - 16f, top + 80f * s)
                 actions += HomeActionBounds(target, rect(row.left, row.top, row.right, row.bottom))
-                homeSelectedMenuFootprint(row, 64f * s).forEach { menuBottom = max(menuBottom, it.bottom) }
             }
-            // The form name (and its (!)) rises from the Deploy board's line by up to 12 px, as far as the
-            // lowest selected menu item leaves the name's line box (0.65 em each way) clear, so a
-            // description wrapped to two lines still clears the name's descenders (homeFormDescriptionSpan).
+            // The form name (and its (!)) shares the facts card's center line, under the menu. The mechanic's
+            // text is the form's (!) tooltip; characters change in the Workshop.
             val formNameSize = 30f * s
-            val formNameY = (menuBottom + formNameSize * 0.65f + 0.5f).coerceIn(by(608f), by(620f))
-            // The Hangar card spans the form panel where the old form tiles stood.
-            actions += HomeActionBounds(HomeLayoutTarget.HANGAR, rect(rx(826f), by(680f), rx(1392f), by(756f)))
+            val formNameY = by(686f)
             infos += info(HomeInfoTarget.FORM, rx(1368f), formNameY)
             // The facts card keeps at least 480 px (board 560) on smaller desktops, short of the form panel.
             val factsRight = max(lx(616f), min(lx(56f) + 480f, rx(826f) - 24f))
@@ -154,7 +143,8 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
                 chipsRight = px(rx(1392f)),
                 chipsTop = px(ty(25f)),
                 chipHeight = px(34f * s),
-                chipCount = 4,
+                chipCount = 2,
+                compactChips = false,
                 heroCenter = Offset(px(lx(340f)), px(cy(430f))),
                 heroRadius = px(260f * s),
                 wordLeft = px(lx(24f)),
@@ -166,49 +156,50 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
                 formNameLeft = px(rx(826f)),
                 formNameCenterY = px(formNameY),
                 formNameSize = px(formNameSize),
-                formDescription = rect(rx(826f), by(642f), rx(1392f), by(666f)),
-                legalRight = px(rx(1392f)),
-                legalBaseline = px(by(788f)),
-                legalSize = px(11f * s),
-                legalLeft = px(factsRight + 24f),
+                versionRight = px(rx(1392f)),
+                versionBaseline = px(by(788f)),
+                versionSize = px(11f * s),
             )
         }
         HomeLayoutMode.COMPACT_LANDSCAPE -> {
-            // Mobile-Home.png: hero left, stepped menu right, forms along the bottom-left.
+            // Mobile-Home.png: hero left, stepped menu right, the form name along the bottom-left.
             val side = (w * 0.04f).coerceIn(16f, 44f)
             val menuLeft = w * 0.58f
-            val legalBaseline = h - 5f
-            // The lowest (Settings) row is the widest and passes over the legal line. Selected, its echo
+            val versionBaseline = h - 5f
+            // The lowest (Settings) row is the widest and passes over the version line. Selected, its echo
             // ends (49 + 40 turn) × font / 64 below the row's center, dropped by the −2° turn of the
             // row's left half (see homeSelectedMenuFootprint): the rows shrink from 52 toward 48 px,
-            // then the font, until that edge ends 2 px above the notices' tallest glyphs.
+            // then the font, until that edge ends 2 px above the version's tallest glyphs.
             val lowestWidth = w - side - (menuLeft - (HomeMenuTargets.size - 1) * 9f)
-            val lowestCenter = legalBaseline - HOME_LEGAL_ASCENT_EM * COMPACT_LEGAL_SIZE - 2f - HOME_MENU_TURN * lowestWidth * 0.5f
+            val lowestCenter = versionBaseline - HOME_VERSION_ASCENT_EM * COMPACT_VERSION_SIZE - 2f - HOME_MENU_TURN * lowestWidth * 0.5f
             val echoDrop = (49f + 40f * HOME_MENU_TURN) / 64f
             val menuTop = 48f
             // 36 px from 660 px wide; narrower screens scale it so Russian labels with a stamp still fit.
             val widthFont = 36f * min(1f, w / 660f)
-            val rowHeight = ((lowestCenter - echoDrop * widthFont - menuTop) / 5.5f).coerceIn(48f, 52f)
+            val rowSpan = HomeMenuTargets.size - 0.5f
             // Never below the two-column phone font: that floor binds only under 356 px tall, or past
             // about 1,400 px wide at 360 px tall (no target size).
-            val menuFont = min(widthFont, (lowestCenter - menuTop - 5.5f * rowHeight) / echoDrop).coerceAtLeast(28f)
-            val rows = HomeMenuTargets.indices.map { index ->
+            fun menuFontFor(rowHeight: Float) = min(widthFont, (lowestCenter - menuTop - rowSpan * rowHeight) / echoDrop).coerceAtLeast(28f)
+            fun rowsFor(rowHeight: Float) = HomeMenuTargets.indices.map { index ->
                 val top = menuTop + index * rowHeight
                 Rect(menuLeft - index * 9f, top, w - side, top + rowHeight)
             }
+            // The form name centres on a touch-row band (50 px, 48 below 380 px tall) ending 10 px above the bottom.
+            val nameCenter = h - 10f - (if (h >= 380f) 50f else 48f) * 0.5f
+            // Rows grow from 48 toward 58 px with the height, but only while every selected row's slab and
+            // speed lines leave the form name its room (narrow screens keep the shorter rows).
+            var rowHeight = ((lowestCenter - echoDrop * widthFont - menuTop) / rowSpan).coerceIn(48f, 58f)
+            while (rowHeight > 48f &&
+                homeFormNameRoom(rowsFor(rowHeight), menuFontFor(rowHeight), side + 36f, w - side, nameCenter, COMPACT_FORM_NAME_SIZE) <
+                HOME_FORM_NAME_ROOM) {
+                rowHeight = max(48f, rowHeight - 0.5f)
+            }
+            val menuFont = menuFontFor(rowHeight)
+            val rows = rowsFor(rowHeight)
             HomeMenuTargets.forEachIndexed { index, target ->
                 val row = rows[index]
                 actions += HomeActionBounds(target, rect(row.left, row.top, row.right, row.bottom))
             }
-            // The Hangar card ends 8 px short of every selected menu slab and speed-line trail that
-            // reaches its band, and never grows past the old six-tile row.
-            fun cardRight(top: Float): Float = rows.map { homeSelectedMenuExtent(it, menuFont) }
-                .filter { it.bottom > top }.minOfOrNull { it.left - 8f } ?: (rows.minOf { it.left } - 12f)
-            val cardHeight = if (h >= 380f) 50f else 48f
-            val tilesTop = h - 10f - cardHeight
-            val tilesRight = side + min(HOME_CARD_MAX_WIDTH, cardRight(tilesTop) - side)
-            actions += HomeActionBounds(HomeLayoutTarget.HANGAR, rect(side, tilesTop, tilesRight, tilesTop + cardHeight))
-            val nameCenter = tilesTop - 24f
             // The (!) leads the form name at the left edge, clear of the selected menu slab and trail.
             infos += info(HomeInfoTarget.FORM, side, nameCenter)
             val regionTop = 44f
@@ -225,6 +216,7 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
                 chipsTop = px(12f),
                 chipHeight = px(28f),
                 chipCount = 2,
+                compactChips = true,
                 heroCenter = Offset(px(side + (menuLeft - 45f - side) * 0.44f), px((regionTop + regionBottom) * 0.5f)),
                 heroRadius = px(heroRadius),
                 wordLeft = px(12f),
@@ -235,18 +227,16 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
                 facts = null,
                 formNameLeft = px(side + 36f),
                 formNameCenterY = px(nameCenter),
-                formNameSize = px(14f),
-                formDescription = null,
-                legalRight = px(w - side),
-                legalBaseline = px(legalBaseline),
-                legalSize = px(COMPACT_LEGAL_SIZE),
-                legalLeft = px(tilesRight + 12f),
+                formNameSize = px(COMPACT_FORM_NAME_SIZE),
+                versionRight = px(w - side),
+                versionBaseline = px(versionBaseline),
+                versionSize = px(COMPACT_VERSION_SIZE),
             )
         }
         HomeLayoutMode.COMPACT_PORTRAIT -> {
-            // Portrait adaptation: header, hero, form showcase, then the menu at thumb height.
+            // Portrait adaptation: header, hero, the form name, then the menu at thumb height.
             val side = 16f
-            val columns = if (h < 660f) 2 else 1
+            val columns = if (h < 600f) 2 else 1
             val rowHeight = if (columns == 1) 52f else 50f
             val columnWidth = (w - side * 2f - 8f * (columns - 1)) / columns
             // One column: rows step 6 px left going down, and the lowest row sits so far right that
@@ -258,16 +248,17 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
             // label left of it.
             val menuFont = if (columns == 1) 36f * min(1f, w / 418f) else 28f * min(1f, columnWidth / 166f)
             val menuReach = HOME_MENU_REACH * menuFont / 64f
-            val legalBaseline = h - 4f
-            val rowCount = HomeMenuTargets.size / columns
+            val versionBaseline = h - 4f
+            // Two columns: Play spans the first row and the other four fill two rows, so no row has a lone item.
+            val rowCount = if (columns == 1) HomeMenuTargets.size else 1 + HomeMenuTargets.size / 2
             val lastRowLeft = if (columns == 1) side + menuReach else side + columnWidth + 8f
             val lastRow = Rect(lastRowLeft, 0f, w - side, rowHeight)
             val selectedBottom = homeSelectedMenuFootprint(lastRow, menuFont).maxOf { it.bottom }
-            // Reserve the whole legal line above its baseline, plus 2 px, including the
+            // Reserve the whole version line above its baseline, plus 2 px, including the
             // selected row's rotated echo. A fixed bottom inset overlaps taller Linux glyphs.
             val menuTop = min(
                 h - 16f - rowHeight * rowCount,
-                legalBaseline - HOME_LEGAL_ASCENT_EM * COMPACT_LEGAL_SIZE - 2f -
+                versionBaseline - HOME_VERSION_ASCENT_EM * COMPACT_VERSION_SIZE - 2f -
                     (rowCount - 1) * rowHeight - selectedBottom,
             )
             HomeMenuTargets.forEachIndexed { index, target ->
@@ -275,16 +266,16 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
                     val top = menuTop + index * rowHeight
                     val left = side + menuReach + (HomeMenuTargets.size - 1 - index) * 6f
                     actions += HomeActionBounds(target, rect(left, top, w - side, top + rowHeight))
+                } else if (index == 0) {
+                    actions += HomeActionBounds(target, rect(side, menuTop, w - side, menuTop + rowHeight))
                 } else {
-                    val left = side + (index % 2) * (columnWidth + 8f)
-                    val top = menuTop + (index / 2) * rowHeight
+                    val left = side + ((index - 1) % 2) * (columnWidth + 8f)
+                    val top = menuTop + (1 + (index - 1) / 2) * rowHeight
                     actions += HomeActionBounds(target, rect(left, top, left + columnWidth, top + rowHeight))
                 }
             }
-            val tileHeight = 56f
-            val tilesTop = menuTop - (if (columns == 1) 20f else 16f) - tileHeight
-            actions += HomeActionBounds(HomeLayoutTarget.HANGAR, rect(side, tilesTop, w - side, tilesTop + tileHeight))
-            val nameCenter = tilesTop - 24f
+            // The name sits over the menu, its line box clear of the top row's selected slab.
+            val nameCenter = menuTop - (if (columns == 1) 20f else 16f) - 16f
             infos += info(HomeInfoTarget.FORM, w - side - 24f, nameCenter)
             val regionTop = 52f
             val regionBottom = nameCenter - 20f
@@ -300,6 +291,7 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
                 chipsTop = px(14f),
                 chipHeight = px(28f),
                 chipCount = 2,
+                compactChips = true,
                 heroCenter = Offset(px(w * 0.5f), px((regionTop + regionBottom) * 0.5f)),
                 heroRadius = px(heroRadius),
                 wordLeft = px(8f),
@@ -311,11 +303,9 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
                 formNameLeft = px(side),
                 formNameCenterY = px(nameCenter),
                 formNameSize = px(16f),
-                formDescription = null,
-                legalRight = px(w - side),
-                legalBaseline = px(legalBaseline),
-                legalSize = px(COMPACT_LEGAL_SIZE),
-                legalLeft = px(side),
+                versionRight = px(w - side),
+                versionBaseline = px(versionBaseline),
+                versionSize = px(COMPACT_VERSION_SIZE),
             )
         }
     }
@@ -330,17 +320,35 @@ internal fun homeFormNameRight(layout: HomeLayoutGeometry, density: Float): Floa
     val scene = layout.scene
     val info = layout.info(HomeInfoTarget.FORM)?.bounds
     if (info != null && info.left > scene.formNameLeft) return info.left - 12f * density
-    val top = scene.formNameCenterY - scene.formNameSize * 0.65f
-    val bottom = scene.formNameCenterY + scene.formNameSize * 0.65f
-    var right = scene.legalRight
-    HomeMenuTargets.forEach { target ->
-        val bounds = layout.bounds(target)
-        (listOf(bounds) + homeSelectedMenuFootprint(bounds, scene.menuFontSize)).forEach { area ->
-            if (area.top < bottom && area.bottom > top) right = min(right, area.left - 8f * density)
+    return homeFormNameEnd(HomeMenuTargets.map(layout::bounds), scene.menuFontSize, scene.versionRight, scene.formNameCenterY,
+        scene.formNameSize, density)
+}
+
+/**
+ * Right end (px) of a form name on [centerY] ([size] px): up to 8 px short of every [rows] rect and
+ * every selected row's slab and speed lines that reach the name's band, and never past [right].
+ */
+private fun homeFormNameEnd(rows: List<Rect>, menuFont: Float, right: Float, centerY: Float, size: Float, density: Float): Float {
+    val top = centerY - size * 0.65f
+    val bottom = centerY + size * 0.65f
+    var end = right
+    rows.forEach { bounds ->
+        (listOf(bounds) + homeSelectedMenuFootprint(bounds, menuFont)).forEach { area ->
+            if (area.top < bottom && area.bottom > top) end = min(end, area.left - 8f * density)
         }
     }
-    return right
+    return end
 }
+
+/** The room (px before density) a landscape form name keeps from [left] beside the menu [rows]. */
+private fun homeFormNameRoom(rows: List<Rect>, menuFont: Float, left: Float, right: Float, centerY: Float, size: Float): Float =
+    homeFormNameEnd(rows, menuFont, right, centerY, size, 1f) - left
+
+/** The least room a form name keeps beside its (!) and the menu (px before density). */
+internal const val HOME_FORM_NAME_ROOM = 160f
+
+/** The landscape form name's size (px before density). */
+private const val COMPACT_FORM_NAME_SIZE = 14f
 
 /**
  * How far (board px at a 64 px menu font) a selected menu item reaches left of its row: it moves
@@ -391,26 +399,21 @@ internal fun homeSelectedMenuFootprint(bounds: Rect, fontSizePx: Float): List<Re
  */
 internal const val HOME_FORM_NAME_INK_EM = 0.6f
 
-/** Widest the phone Hangar card grows (px before density): the old row of six form tiles. */
-private const val HOME_CARD_MAX_WIDTH = 360f
-
 /** sin 2°, rounded up: how far a point of the turned menu item moves per px from its middle. */
 private const val HOME_MENU_TURN = 0.035f
 
-/** The phone legal line's mono size (px before density; see [homeLegalLayout]). */
-private const val COMPACT_LEGAL_SIZE = 8f
+/** The phone version line's mono size (px before density; see [homeVersionLayout]). */
+private const val COMPACT_VERSION_SIZE = 8f
 
 /**
- * Reserve a full em above the legal baseline: Linux rasterization reaches 8 px for the
+ * Reserve a full em above the version baseline: Linux rasterization reaches 8 px for the
  * bundled 8 px mono text, while macOS ink can be shorter. Keep the menu clear on both.
  */
-internal const val HOME_LEGAL_ASCENT_EM = 1f
+internal const val HOME_VERSION_ASCENT_EM = 1f
 
 internal fun HomeLayoutTarget.toHomeAction(): HomeAction = when (this) {
-    HomeLayoutTarget.HANGAR -> HomeAction.OpenHangar
     HomeLayoutTarget.START -> HomeAction.StartRun
-    HomeLayoutTarget.LAB -> HomeAction.OpenLab
-    HomeLayoutTarget.ARMORY -> HomeAction.OpenArmory
+    HomeLayoutTarget.WORKSHOP -> HomeAction.OpenWorkshop
     HomeLayoutTarget.REBIRTH -> HomeAction.OpenRebirth
     HomeLayoutTarget.CODEX -> HomeAction.OpenCodex
     HomeLayoutTarget.SETTINGS -> HomeAction.OpenSettings

@@ -250,11 +250,17 @@ internal fun codexItemEntry(
     val build = model.runStacks.build
     val reborn = build?.rebornItemIds?.contains(item.id) == true
     val suppressed = build?.suppressedItemIds?.contains(item.id) == true
+    // Every part waits for a skill or for a weapon of another family (never the relics' doing).
+    val dormant = build?.dormantItemIds?.contains(item.id) == true
+    // The run's draft deck left it out: no ordinary offer of this run shows it.
+    val outOfDeck = build?.outOfDeckItemIds?.contains(item.id) == true
     val lines = item.ruleLines(language, codexRuleContext(item, stack, reborn, catalog, build))
     val facts = buildList {
         // Offers depend on the run: the stack limit, then the game's current eligibility.
         when {
             suppressed -> add(codexStatus(language, language.text(CodexText.SUPPRESSED), language.text(CodexText.SUPPRESSED_EFFECT)))
+            dormant -> add(codexStatus(language, language.text(CodexText.DORMANT), language.text(CodexText.DORMANT_HELP)))
+            outOfDeck -> add(codexStatus(language, language.text(CodexText.NOT_IN_RUN), language.text(CodexText.NOT_IN_RUN_HELP)))
             stack >= item.maxStacks -> add(codexStatus(language, language.text(SessionText.STACK_LIMIT)))
             build != null && item.id in build.eligibleItemIds -> add(codexStatus(language, language.text(SessionText.NEXT_ACQUISITION)))
             build != null -> add(codexStatus(language, language.text(SessionText.OFFER_LIMIT), language.text(SessionText.OFFER_LIMIT_HELP)))
@@ -316,6 +322,8 @@ internal fun codexWeaponEntry(
         if (equipped && build != null) {
             add(CodexFact(language.text(SessionText.WEAPON_LEVEL), language.text(SessionText.LEVEL_SHORT, build.weaponLevel)))
             add(CodexFact(language.text(SessionText.MASTERY), build.mastery.localizedContent(language)))
+            // The permanent Honing the run applies to the weapon in hand.
+            add(CodexFact(language.text(CodexText.HONING), language.text(SessionText.LEVEL_SHORT, build.weaponUpgradeLevel)))
         }
         add(CodexFact(language.text(CodexText.WEAPON_FAMILY), weapon.family.displayLabel.localizedContent(language)))
         add(CodexFact(language.text(CodexText.WEAPON_ELEMENT), codexWeaponElementLabel(weapon, language)))
@@ -408,6 +416,10 @@ internal fun codexShapeEntry(shape: CoreShapeDefinition, model: CodexRenderModel
             else -> SessionText.LOCKED
         })))
         if (!unlocked) add(CodexFact(language.text(SessionText.PROGRESS), "$current/${shape.unlockTarget}"))
+        // The permanent Refit the run applies to the character it plays.
+        model.runStacks.build?.takeIf { equipped }?.let { build ->
+            add(CodexFact(language.text(CodexText.REFIT), language.text(SessionText.LEVEL_SHORT, build.characterUpgradeLevel)))
+        }
         add(CodexFact(language.text(CodexText.MECHANIC), shape.mechanicName.localizedContent(language)))
         add(CodexFact(language.text(CodexText.TRIGGER), shape.triggerKind.displayLabel.localizedContent(language)))
         add(CodexFact(language.text(CodexText.DIFFICULTY), "${shape.difficulty}/3"))

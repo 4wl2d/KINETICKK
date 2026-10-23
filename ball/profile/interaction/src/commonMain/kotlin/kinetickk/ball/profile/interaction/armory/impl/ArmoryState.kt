@@ -19,6 +19,9 @@ import kinetickk.ball.profile.interaction.armory.api.ArmoryRenderModel
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.profileHeaderBackRect
 import kinetickk.ball.profile.interaction.profileLayoutGrow
+import kinetickk.ball.profile.interaction.workshop.impl.WorkshopSegment
+import kinetickk.ball.profile.interaction.workshop.impl.workshopSegmentHeight
+import kinetickk.ball.profile.interaction.workshop.impl.workshopUpgradeBlockHeight
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kotlin.math.ceil
@@ -164,6 +167,7 @@ internal class ArmoryReducer(
         rebirthRank = snapshot.rebirthRank,
         character = snapshot.loadout.coreShape,
         heirloomRelics = heirloomRelics,
+        upgrades = snapshot.upgrades,
     )
 
     fun reduce(state: ArmoryViewState, model: ArmoryRenderModel, action: ArmoryAction): ArmoryReduction = when (action) {
@@ -271,6 +275,12 @@ internal class ArmoryLayout(
     val synergy: Rect = Rect.Zero,
     /** The weapon's typed facts: family, element, Relic key, scaling input and cadence. */
     val facts: Rect = Rect.Zero,
+    /** The segmented switch under the tags (Upgrade, Mastery, Details); its cells start at the left. */
+    val segments: Rect = Rect.Zero,
+    /** The shown segment: the blocks of the other segments are 0 px tall at the segment body's top. */
+    val segment: WorkshopSegment = WorkshopSegment.UPGRADE,
+    /** The upgrade block's slot (the Upgrade segment). */
+    val upgrade: Rect = Rect.Zero,
 ) {
     val gridScrollMax: Float get() = max(0f, gridContentHeight - gridViewport.height)
     val detailScrollMax: Float get() = max(0f, detailContentHeight - detailViewport.height)
@@ -347,7 +357,11 @@ internal fun armoryLayout(
     actionWidth: Float,
     needRoom: Boolean = false,
     masteryCount: Int = 4,
+    /** The detail segment shown under the tags; the others take no room. */
+    segment: WorkshopSegment = WorkshopSegment.UPGRADE,
     tileText: ((innerWidth: Float) -> ArmoryTileMetrics)? = null,
+    /** Measures the upgrade block at the panel width; without it the slot keeps the board's height. */
+    upgradeHeight: ((width: Float) -> Float)? = null,
     detail: ((nameWidth: Float, width: Float) -> ArmoryDetailMetrics)? = null,
 ): ArmoryLayout {
     fun d(value: Float) = frame.d(value)
@@ -464,9 +478,17 @@ internal fun armoryLayout(
             t / (if (regular) 3f else 2f))))
     val tagsTop = description.bottom + d(if (regular) 12f else 8f)
     val tags = Rect(detailLeft, tagsTop, detailRight, tagsTop + (metrics?.tagsHeight ?: armoryTagHeight(frame, t)))
-    val masteryTop = tags.bottom + d(if (regular) 26f else 10f)
-    val mastery = Rect(detailLeft, masteryTop, detailRight, masteryTop + max(frame.density * 24f, d(type.label) * t))
-    val ladderTop = mastery.bottom + d(if (regular) 16f else 6f)
+    // The segmented switch under the tags; only the shown segment's blocks take room below it.
+    val segmentsTop = tags.bottom + d(if (regular) 20f else 10f)
+    val segments = Rect(detailLeft, segmentsTop, detailRight, segmentsTop + workshopSegmentHeight(frame))
+    val bodyTop = segments.bottom + d(if (regular) 16f else 8f)
+    fun hidden() = Rect(detailLeft, bodyTop, detailRight, bodyTop)
+    val upgrade = if (segment == WorkshopSegment.UPGRADE) {
+        Rect(detailLeft, bodyTop, detailRight, bodyTop + (upgradeHeight?.invoke(detailRight - detailLeft) ?: workshopUpgradeBlockHeight(frame)))
+    } else hidden()
+    val showMastery = segment == WorkshopSegment.MASTERY
+    val mastery = if (showMastery) Rect(detailLeft, bodyTop, detailRight, bodyTop + max(frame.density * 24f, d(type.label) * t)) else hidden()
+    val ladderTop = mastery.bottom + if (showMastery) d(if (regular) 16f else 6f) else 0f
     // Large text, or a panel too narrow to keep the milestones' bonus groups clearly apart,
     // stacks the milestones (one line each) instead of squeezing them side by side.
     val ladderStacked = armoryMasteryStacked(t) || metrics?.masterySideBySide == false
@@ -476,23 +498,30 @@ internal fun armoryLayout(
     } else {
         d(if (regular) 94f else 60f) * t
     }
-    val ladder = Rect(detailLeft, ladderTop, detailRight, ladderTop + ladderHeight)
-    // The weapon sheet under the ladder: its mastery forms, the live synergy and the typed facts.
+    val ladder = Rect(detailLeft, ladderTop, detailRight, ladderTop + if (showMastery) ladderHeight else 0f)
+    // The weapon sheet: the mastery forms under the ladder; the live synergy and the typed facts on Details.
     val sectionGap = d(if (regular) 24f else 14f)
     val bodyLine = d(type.body) * 1.4f * t
     val labelLine = d(type.label) * 1.5f * t
-    val formsTop = ladder.bottom + sectionGap
-    val forms = Rect(detailLeft, formsTop, detailRight, formsTop + (metrics?.formsHeight ?: (labelLine + bodyLine * 3f + d(18f))))
-    val synergyTop = forms.bottom + sectionGap
-    val synergy = Rect(detailLeft, synergyTop, detailRight, synergyTop + (metrics?.synergyHeight ?: (labelLine * 4f + bodyLine * 5f)))
-    val factsTop = synergy.bottom + sectionGap
-    val facts = Rect(detailLeft, factsTop, detailRight, factsTop + (metrics?.factsHeight ?: (labelLine * 5f + d(16f))))
+    val forms = if (showMastery) {
+        val formsTop = ladder.bottom + sectionGap
+        Rect(detailLeft, formsTop, detailRight, formsTop + (metrics?.formsHeight ?: (labelLine + bodyLine * 3f + d(18f))))
+    } else hidden()
+    val showDetails = segment == WorkshopSegment.DETAILS
+    val synergy = if (showDetails) {
+        Rect(detailLeft, bodyTop, detailRight, bodyTop + (metrics?.synergyHeight ?: (labelLine * 4f + bodyLine * 5f)))
+    } else hidden()
+    val facts = if (showDetails) {
+        val factsTop = synergy.bottom + sectionGap
+        Rect(detailLeft, factsTop, detailRight, factsTop + (metrics?.factsHeight ?: (labelLine * 5f + d(16f))))
+    } else hidden()
+    val visibleBottom = maxOf(upgrade.bottom, forms.bottom, facts.bottom)
     val actionHeight = d(if (regular) 72f else 52f)
     // A locked weapon keeps room beside the button for "Need N more matter".
     val actionRoom = (detailRight - detailLeft) * if (needRoom) 0.64f else 1f
     val clampedAction = min(actionWidth, actionRoom)
     val limit = max(detailTop + actionHeight, detailBottom)
-    val naturalTop = facts.bottom + d(if (regular) 26f else 10f)
+    val naturalTop = visibleBottom + d(if (regular) 26f else 10f)
     // When the details run past the fold (large text, phones) the primary action is pinned to
     // the bottom of the panel and the details above it scroll.
     val actionPinned = naturalTop + actionHeight > limit
@@ -501,10 +530,10 @@ internal fun armoryLayout(
     val need = Rect(action.right + d(16f), action.top, detailRight, action.bottom)
     val detailViewport = Rect(detailLeft - pad, detailTop - pad, detailRight + pad,
         if (actionPinned) action.top - d(8f) else limit)
-    val detailContentHeight = facts.bottom + pad - detailViewport.top
+    val detailContentHeight = visibleBottom + pad - detailViewport.top
     return ArmoryLayout(frame, back, gridViewport, tiles, gridContentHeight, tileH + gap, columns, detailViewport,
         detailContentHeight, plate, name, description, tags, mastery, ladder, action, need, actionPinned,
-        tileIcon, tileIconY, ladderStacked, forms, synergy, facts)
+        tileIcon, tileIconY, ladderStacked, forms, synergy, facts, segments, segment, upgrade)
 }
 
 /** Height in px of one detail tag chip at the board-relative text multiplier [textScale]. */

@@ -20,7 +20,7 @@ val KINETICKK_CONTENT_VERSION: ContentVersion = ContentVersion("kinetickk-conten
 
 /** Bootstrap limits. Runtime decisions use the corresponding captured snapshot fields. */
 object ContentBounds {
-    const val MAX_ITEMS: Int = 192
+    const val MAX_ITEMS: Int = 320
     const val MAX_COMBAT_FIELDS: Int = 16
     const val MAX_WEAPONS: Int = 24
     const val MAX_MATRIX_NODES: Int = 40
@@ -58,4 +58,30 @@ object ContentBounds {
     const val MAX_EFFECT_RADIUS: Float = 600f
     const val MAX_STATUS_THRESHOLD: Int = 12
     const val RESONANCE_TIERS: Int = 3
+
+    /** Highest run level a tempo profile may set; the shipped cap is [RunTempoProfile.maximumLevel]. */
+    const val MAX_RUN_LEVEL: Int = 99
+
+    /** Active skill catalog size; the shipped pool has one definition per [SkillId]. */
+    const val MAX_SKILLS: Int = 24
+    /** Skill slots a run fills (Z, X, C). */
+    const val SKILL_SLOTS: Int = 3
+    /** Ranks every skill defines (I, II, III). */
+    const val MAX_SKILL_RANK: Int = 3
+    const val MAX_SKILL_VALUES: Int = 6
+    /** No skill rank may recast sooner than this, before any refund (the refund bank keeps the same floor). */
+    const val MIN_SKILL_COOLDOWN_SECONDS: Float = 2.5f
+    const val MAX_REACTION_VALUES: Int = 4
+    /** A reaction's verb cue is a short decision line (first-discovery stamp, Codex, tooltip). */
+    const val MAX_REACTION_CUE_CHARS: Int = 28
+    const val MAX_APEX_VALUES: Int = 4
+    /** Boss strikes one Apex activation may spend. */
+    const val MAX_APEX_STRIKES: Int = 12
+    /** Hostile bolts one Apex activation may erase. */
+    const val MAX_APEX_BOLTS: Int = 96
+
+    /** Highest Refit and Honing level. */
+    const val MAX_UPGRADE_LEVEL: Int = 10
+    /** Largest base price of an upgrade track, so the last level stays far inside Int. */
+    const val MAX_UPGRADE_BASE_COST: Int = 10_000
 }

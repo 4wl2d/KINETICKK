@@ -14,8 +14,23 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import kinetickk.ball.content.api.BuffStat
 import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.DamageBasis
+import kinetickk.ball.content.api.EffectAction
+import kinetickk.ball.content.api.EffectClause
+import kinetickk.ball.content.api.EffectCondition
+import kinetickk.ball.content.api.EffectTrigger
+import kinetickk.ball.content.api.ElementPick
+import kinetickk.ball.content.api.FieldAspect
 import kinetickk.ball.content.api.GameplayContentSnapshot
+import kinetickk.ball.content.api.ImpulseDirection
+import kinetickk.ball.content.api.ItemRule
+import kinetickk.ball.content.api.MarkPick
+import kinetickk.ball.content.api.ReactionAspect
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.WeaponFamily
+import kinetickk.ball.content.api.ZoneKind
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicId
@@ -447,6 +462,78 @@ class RewardCardStylesTest {
             assertTrue(glyphs.isEmpty(), "Kinetic $trigger items share a glyph three times or more: $glyphs")
         }
     }
+
+    @Test
+    fun theSkillApexFieldAndMarkVocabularyCarriesItsOwnGlyphs() {
+        fun clauseItem(trigger: EffectTrigger, action: EffectAction) = vocabularyItem(
+            clauses = listOf(EffectClause(trigger, actions = kinetickk.foundation.collections.immutableListOf(action), cooldownSeconds = 2f)),
+        )
+        fun ruleItem(rule: ItemRule) = vocabularyItem(rules = listOf(rule))
+        // A clause's glyph is its first action's mark; an action without one falls to its trigger's.
+        val strike = EffectAction.Strike(DamageBasis.HIT, 0.5f)
+        assertEquals(
+            listOf(
+                KkIcon.WEAPONS_SOLAR_SWEEP, KkIcon.WEAPONS_HUNTER_SALVO, KkIcon.SYSTEM_ELITE, KkIcon.WEAPONS_GRAVITY_MINES,
+                KkIcon.WEAPONS_AEGIS_SHARDS, KkIcon.WEAPONS_NULL_LANCE,
+            ),
+            listOf(EffectTrigger.SKILL_CAST, EffectTrigger.SKILL_HIT, EffectTrigger.APEX, EffectTrigger.FIELD_ENTER,
+                EffectTrigger.SHOT_ERASED, EffectTrigger.MARK_CONSUMED).map { clauseItem(it, strike).watermarkIcon() },
+        )
+        val actionGlyphs = listOf(
+            EffectAction.RefundSkills(0.5f) to KkIcon.WEAPONS_RESONANCE_DRUM,
+            EffectAction.ChargeApex(1f) to KkIcon.FORMS_STAR,
+            EffectAction.ForceReaction(100f, 2) to KkIcon.WEAPONS_SCATTER_BLOOM,
+            EffectAction.Zone(ZoneKind.HUSH, 120f, 2f) to KkIcon.WEAPONS_EVENT_LENS,
+            EffectAction.EraseShots(200f, 3) to KkIcon.WEAPONS_AEGIS_SHARDS,
+            EffectAction.CoreImpulse(300f, ImpulseDirection.FORWARD) to KkIcon.FORMS_CRESCENT,
+            EffectAction.ApplyMark(MarkPick.CRACKED, 2f) to KkIcon.WEAPONS_HOLLOW_RIFT,
+            EffectAction.Throw(400f) to KkIcon.WEAPONS_CONCUSSION_ENGINE,
+            EffectAction.PrimeDash to KkIcon.FORMS_SPIRAL,
+        )
+        for ((action, glyph) in actionGlyphs) {
+            // On a kill (its own glyph the Entropy Field) every new action shows its own mark, never the trigger's.
+            assertEquals(glyph, clauseItem(EffectTrigger.SLAM, action).watermarkIcon(), "$action")
+            assertEquals(glyph.name, glyphOutline(glyph), "$glyph reads as its own outline")
+        }
+        assertEquals(actionGlyphs.size, actionGlyphs.map { it.second }.toSet().size, "nine actions, nine glyphs")
+
+        val whileGlyphs = listOf(
+            EffectCondition.CoreInField to KkIcon.WEAPONS_GRAVITY_MINES,
+            EffectCondition.ApexActive to KkIcon.SYSTEM_ELITE,
+            EffectCondition.SkillsCharging(2) to KkIcon.SYSTEM_CYCLE_CLOCK,
+            EffectCondition.WeaponFamilyIs(WeaponFamily.MOMENTUM) to KkIcon.WEAPONS_GYRE_DISC,
+            EffectCondition.WeaponFamilyIs(WeaponFamily.ORBITAL) to KkIcon.FORMS_DIPOLE,
+            EffectCondition.WeaponFamilyIs(WeaponFamily.AURA) to KkIcon.WEAPONS_GLACIER_BELL,
+            EffectCondition.WeaponFamilyIs(WeaponFamily.PROJECTILE) to KkIcon.WEAPONS_SCATTER_BLOOM,
+            EffectCondition.WeaponFamilyIs(WeaponFamily.TRAP) to KkIcon.WEAPONS_SENTRY_GRID,
+            EffectCondition.WeaponFamilyIs(WeaponFamily.CHAIN) to KkIcon.FORMS_PENTAGON,
+            EffectCondition.WeaponFamilyIs(WeaponFamily.BEAM) to KkIcon.WEAPONS_SINGULARITY_SPEAR,
+            EffectCondition.WeaponFamilyIs(WeaponFamily.PULSE) to KkIcon.WEAPONS_CONCUSSION_ENGINE,
+        )
+        for ((condition, glyph) in whileGlyphs) {
+            assertEquals(glyph, ruleItem(ItemRule.WhileModifier(condition, BuffStat.DAMAGE, 0.1f)).watermarkIcon(), "$condition")
+        }
+        val ruleGlyphs = listOf(
+            ItemRule.ReactionKeystone(ReactionId.FUSION) to KkIcon.WEAPONS_TETHER_ARC,
+            ItemRule.ReactionTuning(null, ReactionAspect.RADIUS, 0.2f) to KkIcon.WEAPONS_PRISM_RELAY,
+            ItemRule.FieldTuning(FieldAspect.RADIUS, 0.2f) to KkIcon.WEAPONS_GRAVITY_MINES,
+            ItemRule.SkillCooldown(null, 0.1f) to KkIcon.SYSTEM_CYCLE_CLOCK,
+            ItemRule.SkillPower(null, 0.2f) to KkIcon.WEAPONS_SOLAR_SWEEP,
+            ItemRule.SkillCharges to KkIcon.SYSTEM_CYCLE_CLOCK,
+            ItemRule.SkillAttunement(ElementPick.DOMINANT) to KkIcon.WEAPONS_SOLAR_SWEEP,
+            ItemRule.CatalysisRate(0.5f) to KkIcon.WEAPONS_ARC_COIL,
+            ItemRule.ApexCooldown(0.1f) to KkIcon.SYSTEM_ELITE,
+            ItemRule.CoreLinkRadius(100f) to KkIcon.SYSTEM_POLARITY,
+        )
+        for ((rule, glyph) in ruleGlyphs) assertEquals(glyph, ruleItem(rule).watermarkIcon(), "$rule")
+    }
+
+    private fun vocabularyItem(clauses: List<EffectClause> = emptyList(), rules: List<ItemRule> = emptyList()) =
+        kinetickk.ball.content.api.ItemDefinition(
+            id = 0, name = "Glyph Probe", description = "Shows one glyph.", rarity = ItemRarity.EPIC,
+            tags = kinetickk.foundation.collections.immutableListOf(BuildTag.CHAIN), clauses = clauses.toImmutableList(),
+            rules = rules.toImmutableList(), maxStacks = 1, unlockLevel = 1,
+        )
 
     @Test
     fun elementNumbersReadOnTheCardFace() {

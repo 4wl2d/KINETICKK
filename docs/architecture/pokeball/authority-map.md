@@ -13,7 +13,7 @@ ownership by itself.
 |---|---|---|---|
 | ContentCatalog | application lifetime; singleton typed authority | immutable catalog definitions, stable IDs, `ContentVersion`, policy and UI snapshots | Content bootstrap validates and publishes once; no runtime mutation protocol |
 | Profile | `kinetickk.local/Profile/local-player`; application lifetime | complete `PlayerProfile`, `ProfileRevision`, captured `ProfilePolicySnapshot`, bootstrap and persistence status | Profile acceptor publishes one accepted Profile frame |
-| GameplayRun | one monotonically allocated `RunId`; at most one active run | simulation and RNG, run phase, captured `GameplayContentSnapshot`, viewport/pointer/brake/preferences, revision, at most one pending Profile command | that run's Gameplay acceptor publishes one accepted Gameplay frame |
+| GameplayRun | one monotonically allocated `RunId`; at most one active run | simulation and RNG, run phase, captured `GameplayContentSnapshot`, viewport/pointer/brake/preferences, skill and Apex input buffers, revision, at most one pending Profile command | that run's Gameplay acceptor publishes one accepted Gameplay frame |
 | AppSession | `kinetickk.local/AppSession/local-session`; application lifetime | base destination, overlay, active `RunId`, projection revision, workflow phase, Rebirth confirmation, bootstrap availability | Session acceptor publishes one accepted Session frame |
 
 `ProfileRevision`, Gameplay revision, and Session projection revision retain
@@ -31,15 +31,20 @@ fact or writing authority.
 | Fact or decision | Owner | Consumers and legal access |
 |---|---|---|
 | item, weapon, Core Matrix node, relic, enemy roster, and Rebirth definitions/policy | ContentCatalog | typed Content queries and captured immutable snapshots |
-| preferences and mute state | Profile | Profile queries; captured into Gameplay after accepted Session workflow |
+| skill, Apex and upgrade definitions (`SkillDefinition`, skill slot levels and rank cadence, `ApexDefinition`, `UpgradePolicy`, each character's `upgradeSignature`); the level requirement table, level cap, level integrity and repair, `rebirthScaleFromLevel` and `RebirthProfile.dataRequirementScale`; reaction values, verbs, cues and keystone forms; the item rule vocabulary, `ItemDefinition.keystone`, `isDataEconomy` and the conversion constants; `BuildPolicy.maximumSkillFields`, `skillTagPoints`, `DraftDeckPolicy` and `OfferLanePolicy`; Matrix effects including `DataStratum` and `DataOfferWeight` | ContentCatalog | captured into each run's `GameplayContentSnapshot` and into Profile's policy snapshot; Interaction formats their texts and never evaluates their rules |
+| preferences and mute state, including display, frame-pacing, focus, reaction-effects and key-binding preferences | Profile | Profile queries; captured into Gameplay after accepted Session workflow; the platform display host receives accepted display values and applies them mechanically |
 | economy, permanent Core Matrix ranks, cumulative achievements, loadout, collection, Rebirth progress | Profile | target-owned Profile queries; Gameplay captures the run-bootstrap result through a read capability, while later preferences arrive as explicit values in typed settings calls |
+| Refit and Honing levels and their purchases; the recent item history (the newest 64 first acquisitions); Workshop affordability | Profile | `PurchaseCharacterUpgrade` and `PurchaseWeaponUpgrade` decide ownership, maximum and Matter; Gameplay captures the levels and the history at `startRun`; Home reads `HomeProgressProjection.workshopAffordable` and `upgradeLevels`, the Workshop reads `LoadoutProfileSnapshot.upgrades`, and prices come from Content `UpgradePolicy.nextCost` |
 | current `ProfileSnapshot` bootstrap and persistence outcome | Profile | Resource exposes only `readSnapshot`/`writeSnapshot` and typed outcomes; Session reads bootstrap/persistence status |
 | live simulation, deterministic RNG, run matter, discoveries, active weapon, Codex stacks, run terminal result | GameplayRun | Gameplay queries and target-owned result to Session/Profile routes |
-| navigation, overlay policy, start/restart/exit ordering, settings propagation, Rebirth orchestration, bootstrap-unavailable lifecycle | AppSession | Session projection consumed by Session Interaction |
+| skill loadout, `SkillRuntime` with the Apex cells, owed rank-up cards, the combat field table, enemy marks, Core reaction state, aftershock slots, the compiled build (keystone mask, vocabulary clamps, dormant items), the run's draft deck and recent-item weights, the acquired-item report, applied Refit and Honing, Apex boss damage | GameplayRun | render model (`skillBar`, `apex`, `combatFields`, control bits, `coreState`, `maxLevel`) and `GameplayBuildSummaryProjection` (`dormantItemIds`, `outOfDeckItemIds`, upgrade levels); acquired item ids reach Profile only inside the accepted progress update |
+| navigation, overlay policy, start/restart/exit ordering, settings propagation, Rebirth orchestration, bootstrap-unavailable lifecycle, the character-selection gate | AppSession | Session projection (including `characterSelectionAvailable`) consumed by Session Interaction; the Workshop asks for a character only while selection is available |
 | UI page, focus, viewport gesture mechanics, animation clock, local visual FX | owning Interaction role | never consumed as hidden business input; a business-relevant value becomes a Pulse, Context field, or committed State |
+| Workshop tab and segment, Settings key capture, HUD one-shot memory (`HudPresentationMemory`), running touch tracker and press log, world FX looks and draw budget | owning Interaction role (Profile Interaction for the Workshop and Settings, Gameplay Interaction for the HUD and FX) | presentation only; the HUD derives its tier from the render model's level and `maxLevel`, its control mask from `skillBar` and `apex.unlocked`, and lingering visuals only from the render model; key capture writes nothing but typed Profile adjustments |
 | cue-to-tone meaning | originating Ball's private audio executor | mechanical `ToneRequest` only crosses into Audio Resource |
 | tone validation and bounded playback request selection | Audio Resource | receives only typed `ToneRequest` and a narrow playback capability; no provider acquisition |
 | platform storage/audio provider acquisition and mechanical execution | instance-owned platform capability brokers / Execution-Gate mechanics bound by AppAssembly | one platform broker is the sole physical storage authority for the current Profile key; Profile/Audio retain Resource operation semantics, Assembly selects and binds only, gains no effect/policy authority, and broad provider types never enter a Resource constructor |
+| platform display options and their mechanical application (window decoration, placement and size, V-Sync, Android display mode and system bars, browser fullscreen) | platform display host bound by AppAssembly | Profile owns the chosen values; Settings Interaction reads offered options and live window state through `SettingsDisplayPort`; Session Interaction propagates accepted preferences to the host and applies frame pacing and the interface scale in presentation; the host never writes Profile; browser fullscreen is browser-owned live state and is never stored |
 
 The closed platform bindings are actuals inside the `app:shared` KMP leaf:
 `androidMain` binds Android SharedPreferences/AudioTrack, `desktopMain` binds JVM providers, and
@@ -53,7 +58,17 @@ exactly one current location: Android preferences `kinetickk.profile.v2` key
 
 Home and Codex may combine independent Profile and Gameplay reads only in
 Session Interaction and must label the result non-atomic. Assembly never joins
-those reads into a fabricated business snapshot.
+those reads into a fabricated business snapshot. The Codex's Dormant and Not in
+this run statuses and its Refit and Honing facts are Gameplay reads of the
+current run; Home's Workshop stamp and bought-level count are Profile reads.
+Interaction keeps only the upgrade level cap for layout.
+
+Keyboard input has one owner per phase. While the base is Gameplay and no
+overlay is open, Session Interaction lets every key reach Gameplay Interaction
+first; Gameplay Interaction consumes only keys that Profile's `KeyBindings` map
+to an action its phase accepts (while paused, only Pause and the Brake release),
+and every other key bubbles back to the Session shortcuts. Over Home or an
+overlay the Session shortcuts apply as before.
 
 ## Physical role ownership
 

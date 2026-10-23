@@ -64,6 +64,8 @@ internal fun MutableGameState.queueVolatileRemains(enemy: Enemy) {
 /**
  * R4: detonates every due burst. A burst hurts a Core inside its ring that moves slower than
  * [VOLATILE_ESCAPE_SPEED] and is not in a Dash phase; the hit window keeps simultaneous bursts to one hit.
+ * A burst is a hostile blast, so a Diamond's open parry (and Mirror Stance while braking) takes it, as it takes
+ * any other blast ([hurtByHostileBlast]).
  */
 internal fun MutableGameState.updateVolatileRemains() {
     if (volatileBursts.isEmpty() || phase != GamePhase.RUNNING) return
@@ -80,7 +82,8 @@ internal fun MutableGameState.updateVolatileRemains() {
         if (phase == GamePhase.RUNNING && dashPhaseTime <= 0f && speed < VOLATILE_ESCAPE_SPEED &&
             distanceSquared(burst.x, burst.y, coreX, coreY) <= reach * reach
         ) {
-            takeDamage(hostileDamage(null, VOLATILE_BURST_DAMAGE))
+            val damage = hostileDamage(null, VOLATILE_BURST_DAMAGE)
+            if (!tryCharacterParry(burst.x, burst.y, coreX - burst.x, coreY - burst.y, damage = damage)) takeDamage(damage)
         }
     }
 }

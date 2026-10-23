@@ -119,16 +119,16 @@ fun DrawScope.drawKkShutter(elapsedMs: Float, roles: KkRolePalette) {
     }
 }
 
-/** Slam transform values (`a-slam` / level badge): scale 1.3 to 1, rotation to [rotationDeg]. */
+/** Slam transform values (`a-slam` / level badge): scale [from] (1.3) to 1, rotation to [rotationDeg]. */
 object KkSlam {
     const val DURATION_MS = KkTime.Pull
 
-    /** Scale at linear [progress] 0..1 (Pull easing, overshoot dips below 1). */
-    fun scale(progress: Float): Float = kkLerp(1.3f, 1f, KkEase.Pull.transform(progress.coerceIn(0f, 1f)))
+    /** Scale at linear [progress] 0..1 from [from] to 1 (Pull easing, overshoot passes 1). */
+    fun scale(progress: Float, from: Float = 1.3f): Float = kkLerp(from, 1f, KkEase.Pull.transform(progress.coerceIn(0f, 1f)))
 
-    /** Rotation in degrees at [progress], settling at [rotationDeg]. */
-    fun rotation(progress: Float, rotationDeg: Float = -3f): Float =
-        kkLerp(rotationDeg - 5f, rotationDeg, KkEase.Pull.transform(progress.coerceIn(0f, 1f)))
+    /** Rotation in degrees at [progress], starting [kick] degrees before and settling at [rotationDeg]. */
+    fun rotation(progress: Float, rotationDeg: Float = -3f, kick: Float = 5f): Float =
+        kkLerp(rotationDeg - kick, rotationDeg, KkEase.Pull.transform(progress.coerceIn(0f, 1f)))
 
     /** Opacity at [progress]: fully visible after the first 40 %. */
     fun alpha(progress: Float): Float = (progress / 0.4f).coerceIn(0f, 1f)

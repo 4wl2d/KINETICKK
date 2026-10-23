@@ -54,14 +54,18 @@ class ProfileApiContractTest {
             ProfilePulse.ResetMatrix,
             ProfilePulse.PurchaseOrEquipWeapon(WeaponId.MORNINGSTAR),
             ProfilePulse.SelectCoreShape(kinetickk.ball.content.api.CoreShape.HEXAGON),
+            ProfilePulse.PurchaseCharacterUpgrade(kinetickk.ball.content.api.CoreShape.PRISM),
+            ProfilePulse.PurchaseWeaponUpgrade(WeaponId.ARC_COIL),
         )
 
-        assertEquals(5, intents.size)
+        assertEquals(7, intents.size)
         assertIs<ProfilePulse.AdjustPreference>(intents[0])
         assertEquals(MatrixNodeId.IMPACT_DRIVER, assertIs<ProfilePulse.PurchaseMatrixNode>(intents[1]).id)
         assertIs<ProfilePulse.ResetMatrix>(intents[2])
         assertIs<ProfilePulse.PurchaseOrEquipWeapon>(intents[3])
         assertEquals(kinetickk.ball.content.api.CoreShape.HEXAGON, assertIs<ProfilePulse.SelectCoreShape>(intents[4]).shape)
+        assertEquals(kinetickk.ball.content.api.CoreShape.PRISM, assertIs<ProfilePulse.PurchaseCharacterUpgrade>(intents[5]).shape)
+        assertEquals(WeaponId.ARC_COIL, assertIs<ProfilePulse.PurchaseWeaponUpgrade>(intents[6]).id)
     }
 
     @Test

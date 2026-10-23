@@ -26,10 +26,60 @@ of an existing permitted capability changes composition, not Profile's inventory
 of caller names. Broad implementation composites remain restricted to their
 owners and Assembly; a capability reference does not replace a business check.
 
+`AppComposition` builds one `DefaultWorkshopFeature` for the Characters,
+Weapons and Core Matrix tabs from the Profile port and the UI catalog (Matrix
+nodes, weapons, masteries, characters, Relics and `uiCatalog.upgrades`) and
+passes it to `AppSessionContent`; the former Armory, Lab and Hangar features no
+longer exist. The Workshop sends only typed Profile purchase, selection and
+equip intents. `DefaultHomeFeature` reads the upgrade level cap from
+`uiCatalog.upgrades.maxLevel`; affordability stays a Profile read.
+
 The Android application plugin stays in the pure `app:android` packaging host.
 Its production project dependency is `implementation -> :app:shared`, wholly
 inside AppAssembly. The host adds no semantic authority or direct-control edge;
 platform persistence/audio authority stays in the existing restricted brokers.
+
+## Platform display host
+
+Each platform supplies one `PlatformDisplayHost` through
+`LocalPlatformDisplayHost`: `DesktopDisplayHost` (window decoration, placement,
+size and V-Sync), `AndroidDisplayHost` (display mode and system bars, built by
+`MainActivity` and applied again on resume and focus) and `WebDisplayHost`
+(browser fullscreen). `KinetickkApp(onLanguageChanged, displayHost)` hands it to
+`AppCompositionOwner`, which adapts it twice and nowhere else:
+`PlatformSettingsDisplay` implements `SettingsDisplayPort` for
+`DefaultSettingsFeature(profilePort, audioService, display)` (offered options,
+live window state, and a re-apply that reads the stored preferences through
+`GetPreferences`), and `applyDisplayPreferences` sends
+`PlayerPreferences.toHostDisplayRequest()` to the host whenever the shell reads
+accepted preferences. The host applies values mechanically and holds no Profile
+capability; browser fullscreen is the one display value that is live browser
+state and never stored. Frame pacing (`KkFramePacer`) and the interface scale
+(`LocalKkInterfaceScale`) are presentation in Session and Gameplay Interaction,
+not host calls.
+
+On desktop, `runKinetickkDesktop` builds the `AppCompositionOwner` (Profile,
+Gameplay, Session and audio) above `key(host.generation) { Window }`. A
+decoration or V-Sync change opens a new window and rebuilds only that window's
+composition: the session, the run and the open Settings tab survive, and
+Settings restores its view from `SettingsRetainedView`. The owner also keeps
+the shell's `AppShellMemory` (the last Workshop tab request) beside the
+features, so a new window never reuses a request the Workshop already applied
+and an `L`, `A` or `H` alias still shows its tab. The stored V-Sync
+preference decides only when neither `-Dskiko.vsync.enabled` nor the uncapped
+launch switch is given.
+
+## Keyboard precedence
+
+Session Interaction's root key handler lets every key reach Gameplay
+Interaction first while the base is Gameplay and no overlay is open. Gameplay
+Interaction maps keys through the accepted `KeyBindings` and its run phase
+(while paused it consumes only Pause and the Brake release); an unconsumed key
+bubbles back to the Session shortcuts. Otherwise the Session shortcuts apply:
+`S` Settings, `W` Workshop, `B` Rebirth, `C` or `I` Codex, `M` mute, `Escape`
+back and `Enter` contextual enter, with `L`, `A` and `H` opening the Workshop on
+its Matrix, Weapons and Characters tabs (`H` only over Home). A key that
+Settings is capturing never reaches the shell, even while held.
 
 ## Reads and local commands
 
@@ -75,8 +125,11 @@ capacities still require preflight and whole-candidate rejection on overflow.
 ```text
 start/restart: Profile GetRunBootstrap -> Gameplay StartRun accepted -> Session navigation accepted
 overlay:       Gameplay PauseForOverlay accepted -> Session overlay accepted
+workshop row:  Profile Interaction -> local Profile purchase or equip accepted (the overlay opens as above)
+character:     Workshop select -> Session SelectCoreShapeRequested accepted only over Home -> Profile selectCoreShape accepted -> Session handles the result
 settings row:  Profile Interaction -> local Profile adjustment accepted
 settings exit: Profile GetPreferences -> active Gameplay ApplyPreferences accepted -> Session closes/replaces overlay
+display:       accepted preferences read by the shell -> platform display host applies them mechanically
 rebirth:       Profile AdvanceRebirth accepted -> allocate/accept new GameplayRun -> Session navigation accepted
 exit:          Gameplay ExitRun accepted -> optional Profile progress outcome -> Gameplay exit result -> Session outcome
 bootstrap:     absent/rejected/incompatible current snapshot -> default Profile -> Session READY

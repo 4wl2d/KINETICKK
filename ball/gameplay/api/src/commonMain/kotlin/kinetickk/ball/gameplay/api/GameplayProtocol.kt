@@ -3,6 +3,8 @@
 
 package kinetickk.ball.gameplay.api
 
+import kinetickk.ball.content.api.ContentBounds
+
 enum class GameplayRunPhase {
     CREATED,
     RUNNING,
@@ -22,6 +24,9 @@ object GameplayInteractionLimits {
     const val MAX_DENSITY: Float = 8f
     const val MIN_CHOICE_INDEX: Int = 0
     const val MAX_CHOICE_INDEX: Int = 3
+    /** Skill slots Z, X and C. */
+    const val MIN_SKILL_SLOT: Int = 0
+    const val MAX_SKILL_SLOT: Int = ContentBounds.SKILL_SLOTS - 1
 }
 
 /** Closed, already-validated Interaction intent inventory. */
@@ -102,6 +107,37 @@ sealed interface GameplayInteractionPulse {
     }
     data object ChoicesRerolled : GameplayInteractionPulse
     data object UserGestureObserved : GameplayInteractionPulse
+
+    /**
+     * Asks to cast the skill in [slot] (0 = Z, 1 = X, 2 = C). A running run buffers the request briefly and
+     * casts it once the slot can; an empty slot or a run that is not running accepts it without a change.
+     */
+    class SkillRequested private constructor(
+        val slot: Int,
+    ) : GameplayInteractionPulse {
+        override fun toString(): String = "SkillRequested(slot=$slot)"
+
+        companion object {
+            private val bySlot: Array<SkillRequested> = Array(
+                GameplayInteractionLimits.MAX_SKILL_SLOT - GameplayInteractionLimits.MIN_SKILL_SLOT + 1,
+            ) { index -> SkillRequested(GameplayInteractionLimits.MIN_SKILL_SLOT + index) }
+
+            /** One shared instance per slot, so key and touch input allocate nothing. */
+            fun fromValidated(slot: Int): SkillRequested {
+                require(
+                    slot in GameplayInteractionLimits.MIN_SKILL_SLOT..
+                        GameplayInteractionLimits.MAX_SKILL_SLOT,
+                )
+                return bySlot[slot - GameplayInteractionLimits.MIN_SKILL_SLOT]
+            }
+        }
+    }
+
+    /**
+     * Asks to cast the character's Apex. While the run has no Apex runtime the reducer accepts it
+     * without changing state.
+     */
+    data object ApexRequested : GameplayInteractionPulse
 }
 
 enum class BrakeSource { KEYBOARD, SECONDARY_POINTER, TOUCH_CONTROL }
@@ -117,6 +153,10 @@ enum class GameplayConfigurationRejection {
     REBIRTH_LEVEL_OUT_OF_RANGE,
     NEGATIVE_MATTER,
     LIFETIME_MATTER_BELOW_CURRENT,
+    /** A Refit or Honing list has the wrong size, or a level lies outside `0..UpgradePolicy.maxLevel`. */
+    UPGRADE_LEVEL_OUT_OF_RANGE,
+    /** The recent-item history holds more than `MAX_RECENT_ITEM_IDS` entries or an id outside the captured catalog. */
+    RECENT_ITEM_HISTORY_INVALID,
 }
 
 sealed interface GameplayRejection {

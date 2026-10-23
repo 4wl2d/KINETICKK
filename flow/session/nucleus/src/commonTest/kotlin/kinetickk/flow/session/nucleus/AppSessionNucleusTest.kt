@@ -233,8 +233,7 @@ class AppSessionNucleusTest {
     fun runningGameplayPausesBeforeOpeningEveryOverlayRoute() {
         listOf(
             AppDestination.Settings,
-            AppDestination.Lab,
-            AppDestination.Armory,
+            AppDestination.Workshop,
             AppDestination.Rebirth,
             AppDestination.Codex,
         ).forEach { destination ->
@@ -258,51 +257,101 @@ class AppSessionNucleusTest {
     }
 
     @Test
-    fun theHangarOpensOnlyOverHomeAndItsShortcutTogglesItThere() {
-        val home = initialState()
-        val opened = decide(home, SessionInteractionPulse.OpenOverlay(AppDestination.Hangar)).accepted()
-        assertEquals(AppDestination.Hangar, opened.nextState.overlay)
+    fun workshopOpensOverHomeAndPausedOrRunningGameplayButNotChoiceOrTerminal() {
+        val opened = decide(initialState(), SessionInteractionPulse.OpenOverlay(AppDestination.Workshop)).accepted()
+        assertEquals(AppDestination.Workshop, opened.nextState.overlay)
         assertTrue(opened.outputs.isEmpty())
-        val byKey = decide(home, SessionInteractionPulse.ShortcutObserved(SessionShortcut.HANGAR)).accepted()
-        assertEquals(AppDestination.Hangar, byKey.nextState.overlay)
-        val closed = decide(byKey.nextState, SessionInteractionPulse.ShortcutObserved(SessionShortcut.HANGAR)).accepted()
-        assertNull(closed.nextState.overlay)
-        // During a run, every phase refuses it: characters change between runs.
-        GameplayRunPhase.entries.filter { it != GameplayRunPhase.CREATED && it != GameplayRunPhase.EXITED }.forEach { phase ->
-            val running = gameplayState(phase)
-            val context = AppSessionContext(gameplayStatus = gameplayStatus(running, phase))
-            assertEquals(
-                SessionRejection.OverlayUnavailable(AppDestination.Hangar),
-                decide(running, SessionInteractionPulse.OpenOverlay(AppDestination.Hangar), context).rejection(),
-            )
-            assertEquals(
-                SessionRejection.ShortcutUnavailable,
-                decide(running, SessionInteractionPulse.ShortcutObserved(SessionShortcut.HANGAR), context).rejection(),
-            )
+
+        val paused = gameplayState(GameplayRunPhase.PAUSED)
+        val overPause = decide(paused, SessionInteractionPulse.OpenOverlay(AppDestination.Workshop),
+            AppSessionContext(gameplayStatus = gameplayStatus(paused, GameplayRunPhase.PAUSED))).accepted()
+        assertEquals(AppDestination.Workshop, overPause.nextState.overlay)
+        assertTrue(overPause.outputs.isEmpty())
+
+        // A running run pauses first (the pause result opens the Workshop, see the overlay-route test).
+        val running = gameplayState(GameplayRunPhase.RUNNING)
+        val pausing = decide(running, SessionInteractionPulse.OpenOverlay(AppDestination.Workshop),
+            AppSessionContext(gameplayStatus = gameplayStatus(running, GameplayRunPhase.RUNNING))).accepted()
+        assertNull(pausing.nextState.overlay)
+        assertEquals(PendingWorkflow.PausingForOverlay(AppDestination.Workshop, RunId(0L)), pausing.nextState.pendingWorkflow)
+
+        for (phase in listOf(GameplayRunPhase.CHOICE, GameplayRunPhase.GAME_OVER, GameplayRunPhase.VICTORY)) {
+            val state = gameplayState(phase)
+            val context = AppSessionContext(gameplayStatus = gameplayStatus(state, phase))
+            assertEquals(SessionRejection.OverlayUnavailable(AppDestination.Workshop),
+                decide(state, SessionInteractionPulse.OpenOverlay(AppDestination.Workshop), context).rejection(), "$phase")
+            assertEquals(SessionRejection.OverlayUnavailable(AppDestination.Workshop),
+                decide(state, SessionInteractionPulse.ShortcutObserved(SessionShortcut.WORKSHOP), context).rejection(), "$phase")
         }
     }
 
     @Test
-    fun theHangarAndTheMatrixOrAnyOtherOverlayReplaceEachOtherOverHomeWithoutStacking() {
+    fun workshopShortcutTogglesTheOverlay() {
         val home = initialState()
-        for (other in listOf(AppDestination.Lab, AppDestination.Armory, AppDestination.Rebirth, AppDestination.Codex)) {
+        val opened = decide(home, SessionInteractionPulse.ShortcutObserved(SessionShortcut.WORKSHOP)).accepted().nextState
+        assertEquals(AppDestination.Workshop, opened.overlay)
+        val closed = decide(opened, SessionInteractionPulse.ShortcutObserved(SessionShortcut.WORKSHOP)).accepted().nextState
+        assertNull(closed.overlay)
+        assertEquals(AppDestination.Home, closed.base)
+
+        // Over a paused run the second press closes it again and keeps the run paused.
+        val paused = gameplayState(GameplayRunPhase.PAUSED)
+        val context = AppSessionContext(gameplayStatus = gameplayStatus(paused, GameplayRunPhase.PAUSED))
+        val inRun = decide(paused, SessionInteractionPulse.ShortcutObserved(SessionShortcut.WORKSHOP), context).accepted().nextState
+        assertEquals(AppDestination.Workshop, inRun.overlay)
+        val back = decide(inRun, SessionInteractionPulse.ShortcutObserved(SessionShortcut.WORKSHOP), context).accepted().nextState
+        assertNull(back.overlay)
+        assertEquals(GameplayRunPhase.PAUSED, back.gameplayPhase)
+
+        // Opening the Workshop again while it is shown (a tab alias) keeps the route token: no route change.
+        val again = decide(opened, SessionInteractionPulse.OpenOverlay(AppDestination.Workshop)).accepted().nextState
+        assertEquals(opened.routeRevision, again.routeRevision)
+        assertEquals(AppDestination.Workshop, again.overlay)
+    }
+
+    @Test
+    fun characterSelectionIsAcceptedOnlyOverHomeIncludingTheWorkshop() {
+        val home = initialState()
+        val workshop = home.copy(overlay = AppDestination.Workshop)
+        for (state in listOf(home, workshop)) {
+            val requested = decide(state, SessionInteractionPulse.SelectCoreShapeRequested(CoreShape.PRISM)).accepted()
+            assertEquals(AppSessionOutput.SelectCoreShape(CoreShape.PRISM), requested.outputs.single())
+            assertEquals(state.overlay, requested.nextState.overlay)
+            assertEquals(state.routeRevision, requested.nextState.routeRevision)
+            assertTrue(state.toShell().characterSelectionAvailable)
+        }
+        for (overlay in listOf(AppDestination.Settings, AppDestination.Rebirth, AppDestination.Codex)) {
+            assertEquals(SessionRejection.CoreShapeSelectionUnavailable,
+                decide(home.copy(overlay = overlay), SessionInteractionPulse.SelectCoreShapeRequested(CoreShape.PRISM)).rejection(), "$overlay")
+        }
+        // During a run, even under the Workshop, characters do not change.
+        for (phase in listOf(GameplayRunPhase.RUNNING, GameplayRunPhase.PAUSED, GameplayRunPhase.CHOICE)) {
+            for (overlay in listOf(null, AppDestination.Workshop)) {
+                val state = gameplayState(phase).copy(overlay = overlay)
+                assertFalse(state.toShell().characterSelectionAvailable)
+                assertEquals(SessionRejection.CoreShapeSelectionUnavailable,
+                    decide(state, SessionInteractionPulse.SelectCoreShapeRequested(CoreShape.PRISM)).rejection(), "$phase $overlay")
+            }
+        }
+    }
+
+    @Test
+    fun theWorkshopAndAnyOtherOverlayReplaceEachOtherOverHomeWithoutStacking() {
+        val home = initialState()
+        for (other in listOf(AppDestination.Rebirth, AppDestination.Codex)) {
             val first = decide(home, SessionInteractionPulse.OpenOverlay(other)).accepted().nextState
             assertEquals(other, first.overlay)
-            // H over another overlay on Home replaces it with the Hangar ...
-            val hangar = decide(first, SessionInteractionPulse.ShortcutObserved(SessionShortcut.HANGAR)).accepted().nextState
-            assertEquals(AppDestination.Hangar, hangar.overlay, "H over $other")
-            assertEquals(AppDestination.Home, hangar.base)
+            // W over another overlay on Home replaces it with the Workshop ...
+            val workshop = decide(first, SessionInteractionPulse.ShortcutObserved(SessionShortcut.WORKSHOP)).accepted().nextState
+            assertEquals(AppDestination.Workshop, workshop.overlay, "W over $other")
+            assertEquals(AppDestination.Home, workshop.base)
             // ... and closing it returns to Home, not to the replaced overlay.
-            assertNull(decide(hangar, SessionInteractionPulse.CloseOverlay).accepted().nextState.overlay)
-            // The other overlay replaces the Hangar the same way.
-            val back = decide(hangar, SessionInteractionPulse.OpenOverlay(other)).accepted().nextState
+            assertNull(decide(workshop, SessionInteractionPulse.CloseOverlay).accepted().nextState.overlay)
+            // The other overlay replaces the Workshop the same way.
+            val back = decide(workshop, SessionInteractionPulse.OpenOverlay(other)).accepted().nextState
             assertEquals(other, back.overlay)
             assertNull(decide(back, SessionInteractionPulse.CloseOverlay).accepted().nextState.overlay)
         }
-        val matrix = decide(home, SessionInteractionPulse.ShortcutObserved(SessionShortcut.LAB)).accepted().nextState
-        val fromMatrix = decide(matrix, SessionInteractionPulse.ShortcutObserved(SessionShortcut.HANGAR)).accepted().nextState
-        assertEquals(AppDestination.Lab to AppDestination.Hangar, matrix.overlay to fromMatrix.overlay)
-        assertEquals(AppDestination.Lab, decide(fromMatrix, SessionInteractionPulse.ShortcutObserved(SessionShortcut.LAB)).accepted().nextState.overlay)
     }
 
     @Test
@@ -563,7 +612,7 @@ class AppSessionNucleusTest {
         val running = gameplayState(GameplayRunPhase.RUNNING)
         val pausing = decide(
             running,
-            SessionInteractionPulse.OpenOverlay(AppDestination.Lab),
+            SessionInteractionPulse.OpenOverlay(AppDestination.Workshop),
             AppSessionContext(gameplayStatus = gameplayStatus(running, GameplayRunPhase.RUNNING)),
         ).accepted()
         val settings = gameplayState(GameplayRunPhase.PAUSED).copy(
@@ -715,7 +764,7 @@ class AppSessionNucleusTest {
             SessionRejection.ParticipantCommandPending,
             decide(
                 pending,
-                SessionInteractionPulse.OpenOverlay(AppDestination.Lab),
+                SessionInteractionPulse.OpenOverlay(AppDestination.Workshop),
             ).rejection(),
         )
     }

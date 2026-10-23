@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.EnemyType
 import kinetickk.ball.content.api.RebirthMutator
 import kinetickk.ball.content.api.RelicId
@@ -25,7 +26,8 @@ import kotlin.test.assertTrue
 class RebirthMutatorTest {
     @Test
     fun droppingToTierZeroAfterRankFiveKeepsRankUnlocksButTheTierZeroRosterAndScaling() {
-        val lowered = rankedState(level = 0, highestCleared = 4)
+        // The deck is dealt from the rank's universe; with the whole catalog dealt, only the rank gates the offer.
+        val lowered = rankedState(level = 0, highestCleared = 4).dealWholeCatalog()
         assertEquals(0, lowered.rebirthLevel)
         assertEquals(5, lowered.rebirthRank)
         assertEquals(0, lowered.rebirthProfile.tier)
@@ -95,6 +97,27 @@ class RebirthMutatorTest {
         val belowTier = buildTestState(rebirth = 3)
         belowTier.killEnemyForTesting(EnemyType.DRIFTER)
         assertTrue(belowTier.volatileBursts.isEmpty())
+    }
+
+    @Test
+    fun aVolatileBurstIsAHostileBlastThatAnOpenParryTakes() {
+        fun diamond(window: Float): MutableGameState = buildTestState(rebirth = 4, shape = CoreShape.DIAMOND).apply {
+            setVelocityForTesting(0f, 0f)
+            killEnemyForTesting(EnemyType.DRIFTER, x = coreX + 40f, y = coreY)
+            characterRuntime.parryWindow = window
+            elapsed += VOLATILE_BURST_DELAY_SECONDS + 0.01f
+        }
+        val parrying = diamond(window = 0.2f)
+        val hp = parrying.hp
+        parrying.updateVolatileRemains()
+        assertEquals(hp, parrying.hp, "the open window negates the burst")
+        assertEquals(0f, parrying.characterRuntime.parryWindow, "and is spent on it")
+        assertTrue(parrying.volatileBursts.isEmpty())
+
+        val closed = diamond(window = 0f)
+        val before = closed.hp
+        closed.updateVolatileRemains()
+        assertTrue(closed.hp < before, "without a window the burst lands")
     }
 
     @Test

@@ -3,12 +3,14 @@
 
 package kinetickk.ball.profile.nucleus
 
+import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.ProfilePolicySnapshot
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
+import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
 import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.ProfileBootstrapBlockReason
@@ -20,6 +22,7 @@ import kinetickk.ball.profile.api.ProfileSnapshotReadResult
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.isWithinRebirthBounds
 import kinetickk.foundation.collections.immutableSetOf
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
 
 /** Complete immutable snapshot owned and published by the Profile acceptor. */
@@ -79,6 +82,7 @@ private fun constructInitialProfileState(
         is ProfileSnapshotReadResult.Observed -> {
             val snapshot = result.snapshot
             val loaded = snapshot?.profile?.withCatalogDiscoveries(policy)?.withMatrixPolicy(policy)
+                ?.withUpgradePolicy(policy)
             when {
                 snapshot == null || loaded == null -> state(
                     revision = ProfileRevision(1L),
@@ -104,18 +108,21 @@ private fun constructInitialProfileState(
 
 /**
  * Item discoveries are catalog indices: an id the captured catalog no longer contains is a retired
- * entry, not a corrupt economy. Loading forgets such ids (and their unseen markers) and keeps every
- * other fact; the next accepted write persists the filtered collection.
+ * entry, not a corrupt economy. Loading forgets such ids (and their unseen markers and recent
+ * acquisitions) and keeps every other fact; the next accepted write persists the filtered collection.
  */
 private fun PlayerProfile.withCatalogDiscoveries(policy: ProfilePolicySnapshot): PlayerProfile {
     val current = collection
-    if (current.discoveredItemIds.all(policy::containsItem) && current.newItemIds.all(policy::containsItem)) {
+    if (current.discoveredItemIds.all(policy::containsItem) && current.newItemIds.all(policy::containsItem) &&
+        current.recentItemIds.all(policy::containsItem)
+    ) {
         return this
     }
     return copy(
         collection = current.copy(
             discoveredItemIds = current.discoveredItemIds.filter(policy::containsItem).toImmutableSet(),
             newItemIds = current.newItemIds.filter(policy::containsItem).toImmutableSet(),
+            recentItemIds = current.recentItemIds.filter(policy::containsItem).toImmutableList(),
         ),
     )
 }
@@ -190,6 +197,7 @@ private fun isPolicyCompatibleAtConstruction(
     policy.matrixNodes.forEach { definition ->
         if (matrix.rank(definition.id) > definition.maxRanks) return false
     }
+    if (!profile.upgrades.isWithin(policy.upgrades)) return false
     val heirlooms = profile.collection.heirloomRelicIds
     if (
         profile.collection.discoveredItemIds.size > policy.itemCount ||
@@ -197,12 +205,18 @@ private fun isPolicyCompatibleAtConstruction(
         !profile.collection.discoveredItemIds.containsAll(profile.collection.newItemIds) ||
         !profile.collection.discoveredRelicIds.containsAll(profile.collection.newRelicIds) ||
         profile.collection.discoveredRelicIds.size > kinetickk.ball.content.api.ContentBounds.MAX_RELICS ||
-        heirlooms.size > MAX_HEIRLOOM_RELICS || heirlooms.toSet().size != heirlooms.size
+        heirlooms.size > MAX_HEIRLOOM_RELICS || heirlooms.toSet().size != heirlooms.size ||
+        profile.collection.recentItemIds.size > MAX_RECENT_ITEM_IDS ||
+        profile.collection.recentItemIds.any { !policy.containsItem(it) }
     ) return false
     if (!profile.rebirthProgress.isWithinRebirthBounds(policy.rebirth.minimumLevel, policy.rebirth.maximumLevel)) {
         return false
     }
     if (!achievements.victoriousCharacters.containsAll(profile.rebirthProgress.ascendedCharacters)) return false
+    // A recorded clear is an Architect victory with that character.
+    if (CoreShape.entries.any { profile.rebirthProgress.characterClears[it.ordinal] >= 0 && it !in achievements.victoriousCharacters }) {
+        return false
+    }
     return true
 }
 

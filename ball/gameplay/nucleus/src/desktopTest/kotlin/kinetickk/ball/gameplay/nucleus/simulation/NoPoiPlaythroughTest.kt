@@ -144,6 +144,19 @@ private fun report(value: String) {
 /** How far the bot keeps the momentum-projected Core from a skipped POI's center. */
 private const val POI_CLEARANCE = 360f
 
+/** The bot looks at its skills this often (simulated seconds). */
+private const val SKILL_CHECK_SECONDS = 0.1f
+
+/** The bot's Apex rule: a crowd of this many enemies within this radius, or integrity below this share. */
+private const val APEX_CROWD = 8
+private const val APEX_CROWD_RADIUS = 400f
+private const val APEX_LOW_INTEGRITY = 0.4f
+/** Caps of margin above the Architect's phase gate, beyond the activation's strikes, the bot wants before casting. */
+private const val APEX_GATE_MARGIN_STRIKES = 2
+/** Mirror Stance: the bot brakes while a hostile shot, or an ordinary enemy, is this close. */
+private const val MIRROR_SHOT_REACH = 160f
+private const val MIRROR_CONTACT_REACH = 120f
+
 internal class NoPoiBot(
     private val archetypeTag: BuildTag = BuildTag.RAM,
     private val element: StatusElement? = StatusElement.ENTROPY,
@@ -162,10 +175,31 @@ internal class NoPoiBot(
         // It never manages heat, so the Covenant's cooling cut keeps it above 80 heat, bleeding integrity.
         RelicId.FURNACE_COVENANT to -20f,
     ),
+    /** How the bot treats Data-gain cards (economy §2.1); [DataPolicy.NEUTRAL] plays exactly as the reference bot. */
+    private val dataPolicy: DataPolicy = DataPolicy.NEUTRAL,
+    /**
+     * A setup measured without key harmony: the bot leaves a Relic slot hollow rather than bind a Relic that carries
+     * the equipped weapon's key. Off, the bot plays exactly as the reference bot.
+     */
+    private val avoidWeaponHarmony: Boolean = false,
 ) {
     private var cursorAngle = 0f
     private var braking = false
     private var decisions = 0
+    private var nextSkillCheckAt = 0f
+
+    /** An independent bot in this bot's current state (a forked run continues with it). */
+    fun copy(): NoPoiBot = NoPoiBot(archetypeTag, element, weaponOrder, relicTaste, dataPolicy, avoidWeaponHarmony).also { copy ->
+        copy.cursorAngle = cursorAngle
+        copy.braking = braking
+        copy.decisions = decisions
+        copy.nextSkillCheckAt = nextSkillCheckAt
+        copy.avoidBreaches = avoidBreaches
+    }
+
+    /** [DataPolicy.AVOID] only: offers of nothing but Data-gain cards with no reroll left, so one had to be taken. */
+    var avoidBreaches = 0
+        private set
 
     fun control(s: MutableGameState) {
         val boss = s.enemies.firstOrNull { it.type == EnemyType.ARCHITECT }
@@ -269,7 +303,13 @@ internal class NoPoiBot(
         s.updatePointer(s.screenWidth * 0.5f + offsetX + ux * tether, s.screenHeight * 0.5f + offsetY + uy * tether)
         if (s.speed > 900f) braking = true
         if (s.speed < 600f) braking = false
-        s.setBrake(braking)
+        // Mirror Stance parries only while the Core brakes: while it runs, the bot brakes as hostile shots or enemies close in.
+        val mirrorBrake = s.coreShape == CoreShape.DIAMOND && s.apexActive() && (s.projectiles.any {
+            it.hostile && !it.spent && distanceSquared(it.x, it.y, s.coreX, s.coreY) <= MIRROR_SHOT_REACH * MIRROR_SHOT_REACH
+        } || s.enemies.any {
+            it.alive && !it.isBossClass && distanceSquared(it.x, it.y, s.coreX, s.coreY) <= MIRROR_CONTACT_REACH * MIRROR_CONTACT_REACH
+        })
+        s.setBrake(braking || mirrorBrake)
         val threat = s.projectiles.any {
             if (!it.hostile) false else {
                 val px = it.x - s.coreX
@@ -284,7 +324,112 @@ internal class NoPoiBot(
         val blinkLandsOnPoi = s.relicRank(RelicId.BLINK_DRIVE) > 0 && s.pointsOfInterest.any { point ->
             segmentCircleIntersects(s.coreX, s.coreY, s.coreX + ux * 320f, s.coreY + uy * 320f, point.x, point.y, 150f)
         }
-        if (threat && s.dashReady && s.heat < 60f && !blinkLandsOnPoi) s.requestDash()
+        // Vivisect's free Dashes and Total Eclipse's fast Blinks are those Apexes: while one runs, the bot Dashes when it can.
+        val apexDashes = s.apexActive() && (s.coreShape == CoreShape.SHARD || s.coreShape == CoreShape.CRESCENT)
+        if ((threat || apexDashes) && s.dashReady && s.heat < 60f && !blinkLandsOnPoi) s.requestDash()
+        castSkills(s)
+    }
+
+    /**
+     * The opportunistic caster of combat-final §4.10: every 0.1 s of simulated time each ready skill is cast when
+     * its situation holds, and a ready Apex when the Architect is in the open, a crowd presses or integrity runs
+     * low. The bot never moves its pointer to aim; area skills land where it already points.
+     */
+    private fun castSkills(s: MutableGameState) {
+        if (s.elapsed < nextSkillCheckAt) return
+        nextSkillCheckAt = s.elapsed + SKILL_CHECK_SECONDS
+        for (slot in 0 until SkillRuntime.SLOTS) {
+            val id = s.skillLoadout.skill(slot) ?: continue
+            if (s.elapsed < s.skillRuntime[slot, SkillCell.READY_AT]) continue
+            if (wantsCast(s, id, s.content.skill(id).rank(s.skillLoadout.rank(slot)).values)) s.requestSkill(slot)
+        }
+        if (wantsApex(s)) s.requestApex()
+    }
+
+    private fun wantsApex(s: MutableGameState): Boolean {
+        if (!s.apexReady()) return false
+        val low = s.hp < s.maxHp * APEX_LOW_INTEGRITY
+        val architect = s.enemies.firstOrNull { it.type == EnemyType.ARCHITECT && it.alive }
+        if (architect != null) return low || apexLands(s, architect)
+        val crowd = s.enemies.count { it.alive && distanceSquared(s.coreX, s.coreY, it.x, it.y) <= APEX_CROWD_RADIUS * APEX_CROWD_RADIUS }
+        return crowd >= APEX_CROWD || low
+    }
+
+    /**
+     * A cast at the Architect lands its boss channel (lead addendum B1): the Architect is out of its shift, within the
+     * Apex reach of the Core (where it just arrived it is still far off), and in its last phase or far enough above
+     * its phase gate that the next shift does not cut the activation's strikes short.
+     */
+    private fun apexLands(s: MutableGameState, architect: Enemy): Boolean {
+        if (s.isShifting(architect)) return false
+        val reach = APEX_BOSS_REACH + architect.radius
+        if (distanceSquared(s.coreX, s.coreY, architect.x, architect.y) > reach * reach) return false
+        if (architect.phase >= s.architectFinalPhase()) return true
+        val strikes = s.apexDefinition.bossStrikes + APEX_GATE_MARGIN_STRIKES
+        return architect.hp - s.architectGate(architect) >= strikes * s.architectHitCap(architect)
+    }
+
+    private fun wantsCast(s: MutableGameState, id: SkillId, values: List<Float>): Boolean {
+        val singularityX = s.cameraX + s.pointerX - s.screenWidth * 0.5f
+        val singularityY = s.cameraY + s.pointerY - s.screenHeight * 0.5f
+        val toPointer = length(singularityX - s.coreX, singularityY - s.coreY)
+        val aimX = if (toPointer > 24f) (singularityX - s.coreX) / toPointer else s.lastAimDirectionX
+        val aimY = if (toPointer > 24f) (singularityY - s.coreY) / toPointer else s.lastAimDirectionY
+        val definition = s.content.skill(id)
+        val reach = min(toPointer, definition.reach)
+        val anchorX = if (toPointer > 24f) s.coreX + aimX * reach else s.coreX
+        val anchorY = if (toPointer > 24f) s.coreY + aimY * reach else s.coreY
+        fun enemiesWithin(x: Float, y: Float, radius: Float) =
+            s.enemies.count { it.alive && distanceSquared(x, y, it.x, it.y) <= (radius + it.radius) * (radius + it.radius) }
+        fun boltsWithin(radius: Float) = s.projectiles.count { it.hostile && !it.spent && distanceSquared(s.coreX, s.coreY, it.x, it.y) <= radius * radius }
+        fun inCone(x: Float, y: Float, range: Float): Boolean {
+            val dx = x - s.coreX
+            val dy = y - s.coreY
+            val distance = length(dx, dy)
+            return distance <= range && (distance < 1f || (dx * aimX + dy * aimY) / distance >= cos(35f * PI.toFloat() / 180f))
+        }
+        val boss = s.enemies.firstOrNull { it.type == EnemyType.ARCHITECT && it.alive }
+        return when (id) {
+            SkillId.SOLAR_FLARE -> s.heat >= 40f && enemiesWithin(s.coreX, s.coreY, values[1]) >= 3
+            SkillId.FROST_SNAP, SkillId.FULL_STOP -> enemiesWithin(s.coreX, s.coreY, values[0]) >= 3 ||
+                boss != null && length(boss.x - s.coreX, boss.y - s.coreY) <= values[0] + 100f
+            SkillId.ENTROPIC_TIDE -> s.hp < s.maxHp * 0.5f || s.enemies.filter {
+                it.alive && length(it.x - s.coreX, it.y - s.coreY) <= values[0] + it.radius
+            }.sumOf { it.stacksOf(StatusElement.ENTROPY) } >= 12
+            SkillId.NULL_SHROUD -> boltsWithin(250f) >= 4
+            SkillId.MASS_DRIVER, SkillId.DUAL_INFUSION -> enemiesWithin(s.coreX, s.coreY, 400f) >= 3
+            SkillId.METEOR, SkillId.STORM_COIL, SkillId.GRAVITY_WELL, SkillId.DECAY_SPORES, SkillId.RESONATOR ->
+                enemiesWithin(anchorX, anchorY, values[0]) >= 2
+            // Eligible as the cast reads it: two elements react, one element takes the partner's stacks.
+            SkillId.CATALYZE -> s.enemies.count { enemy ->
+                enemy.alive && length(enemy.x - anchorX, enemy.y - anchorY) <= values[0] + enemy.radius &&
+                    StatusElement.entries.any { enemy.stacksOf(it) > 0 }
+            } >= 3
+            SkillId.FROST_LINE -> {
+                val half = values[0] * 0.5f
+                val centreX = s.coreX + aimX * 160f
+                val centreY = s.coreY + aimY * 160f
+                val x0 = centreX - aimY * half
+                val y0 = centreY + aimX * half
+                val x1 = centreX + aimY * half
+                val y1 = centreY - aimX * half
+                s.enemies.count { it.alive && segmentCircleIntersects(x0, y0, x1, y1, it.x, it.y, it.radius + values[4]) } >= 2 ||
+                    s.projectiles.count { it.hostile && !it.spent && segmentCircleIntersects(x0, y0, x1, y1, it.x, it.y, values[4]) } >= 4
+            }
+            SkillId.SONIC_BOOM -> s.enemies.count { it.alive && inCone(it.x, it.y, values[0] + it.radius) } >= 2 ||
+                s.projectiles.count { it.hostile && !it.spent && inCone(it.x, it.y, values[0]) } >= 4
+            SkillId.VOID_STEP -> s.projectiles.any { shot ->
+                shot.hostile && !shot.spent && length(shot.x - s.coreX, shot.y - s.coreY) <= 140f &&
+                    (shot.vx - s.velocityX) * (s.coreX - shot.x) + (shot.vy - s.velocityY) * (s.coreY - shot.y) > 0f
+            }
+            // The hook throws the Core at its target, so (like a Blink) never along a line that touches a skipped POI.
+            SkillId.ARC_HOOK -> s.nearestSkillTarget(singularityX, singularityY, values[0])?.let { target ->
+                s.pointsOfInterest.none { point ->
+                    segmentCircleIntersects(s.coreX, s.coreY, target.x, target.y, point.x, point.y, 150f)
+                }
+            } == true
+            SkillId.SLINGSHOT -> s.speed >= 500f && (s.velocityX * aimX + s.velocityY * aimY) / s.speed <= 0f
+        }
     }
 
     private fun steeringScore(s: MutableGameState, angle: Float, force: Float, desiredX: Float, desiredY: Float, shots: List<Projectile>): Float {
@@ -314,9 +459,84 @@ internal class NoPoiBot(
     }
 
     fun choose(s: MutableGameState) {
-        val index = s.choices.indices.maxByOrNull { score(s, s.choices[it], it) } ?: return
+        val choices = s.choices
+        // Skill cards come first under every Data policy: a rank-up is always taken, a draft follows the lane.
+        val index = skillChoice(s) ?: run {
+            when (dataPolicy) {
+                DataPolicy.NEUTRAL -> Unit
+                // An item offer without a Data card is rerolled while a rank-0 Data item can still stack; the
+                // bot decides again on the next tick.
+                DataPolicy.SEEK -> if (
+                    s.choiceType == ChoiceType.ITEM && choices.none { isDataGainCard(s, it) } && s.choicesCanReroll &&
+                    s.content.items.any { it.minimumRebirth == 0 && it.isDataEconomy && s.itemStacks[it.id] < it.maxStacks }
+                ) {
+                    s.rerollChoices()
+                    return
+                }
+                DataPolicy.AVOID -> if (choices.isNotEmpty() && choices.all { isDataGainCard(s, it) }) {
+                    if (s.choicesCanReroll) {
+                        s.rerollChoices()
+                        return
+                    }
+                    // Every card gains Data: take the one that gains the least.
+                    avoidBreaches++
+                    val least = choices.indices.minBy { dataWeight(s, choices[it]) }
+                    decisions++
+                    s.choose(least)
+                    return
+                }
+            }
+            choices.indices.maxByOrNull { policyScore(s, choices[it], it) }
+        } ?: return
         decisions++
         s.choose(index)
+    }
+
+    /** SEEK ranks a Data-gain card by its Data weight above every other card; AVOID scores it −5 000. */
+    private fun policyScore(s: MutableGameState, c: ChoiceOption, index: Int): Float = when {
+        dataPolicy == DataPolicy.NEUTRAL || !isDataGainCard(s, c) -> score(s, c, index)
+        dataPolicy == DataPolicy.SEEK -> dataWeight(s, c)
+        else -> -5_000f
+    }
+
+    /** `5 000 + 1 000 × ΣDATA_GAIN + 500 × [has GainData]` for a Data-gain item card (economy §2.1). */
+    private fun dataWeight(s: MutableGameState, c: ChoiceOption): Float {
+        val item = c.itemId?.let(s.content::item) ?: return 0f
+        val dataGain = item.stats.filter { it.effect == ItemEffect.DATA_GAIN && it.amount > 0f }.sumOf { it.amount.toDouble() }
+        val gainsData = item.clauses.any { clause -> clause.actions.any { it is EffectAction.GainData } }
+        return 5_000f + 1_000f * dataGain.toFloat() + if (gainsData) 500f else 0f
+    }
+
+    private fun isDataGainCard(s: MutableGameState, c: ChoiceOption): Boolean =
+        c.itemId?.let(s.content::item)?.isDataEconomy == true
+
+    /**
+     * Skill cards (combat-final §4.10): a rank-up card is always taken; a draft takes the character's card, else
+     * the aligned card (the first), else the lowest skill. The Data policy goes first (economy §2.1): SEEK drafts
+     * Decay Spores (Spored deaths drop Data), else Gravity Well (it pulls Data in); AVOID never drafts Decay Spores
+     * while another card is offered.
+     */
+    private fun skillChoice(s: MutableGameState): Int? {
+        val rankUp = s.choices.indexOfFirst { it.type == ChoiceType.SKILL && (it.skillRank ?: 1) > 1 }
+        if (rankUp >= 0) return rankUp
+        if (s.choiceType != ChoiceType.SKILL || s.choices.isEmpty()) return null
+        if (dataPolicy == DataPolicy.SEEK) {
+            val seek = s.choices.indices.maxBy { seekSkillWeight(s.choices[it].skillId) }
+            if (seekSkillWeight(s.choices[seek].skillId) > 0f) return seek
+        }
+        val allowed = s.choices.indices.filter { dataPolicy != DataPolicy.AVOID || s.choices[it].skillId != SkillId.DECAY_SPORES }
+            .ifEmpty { s.choices.indices.toList() }
+        val lane = s.coreShape.synergySkills()
+        val character = allowed.firstOrNull { s.choices[it].skillId in lane }
+        if (character != null) return character
+        return if (allowed.first() == 0 && s.choices[0].skillId != null) 0 else allowed.minByOrNull { s.choices[it].skillId?.ordinal ?: Int.MAX_VALUE }
+    }
+
+    /** SEEK's draft weights (economy §2.1): Decay Spores 5 000, Gravity Well 4 000, any other skill 0. */
+    private fun seekSkillWeight(id: SkillId?): Float = when (id) {
+        SkillId.DECAY_SPORES -> 5_000f
+        SkillId.GRAVITY_WELL -> 4_000f
+        else -> 0f
     }
 
     /**
@@ -345,6 +565,10 @@ internal class NoPoiBot(
             // The reference flight steers around obstacles and seldom throws enemies into them: ricochet and slam
             // items would sit nearly idle in this build.
             if (item.clauses.any { it.trigger == EffectTrigger.RICOCHET || it.trigger == EffectTrigger.SLAM }) return -100f
+            // Nor does it cash marks, seek out fields or mark and throw on purpose (items.md §6.2).
+            val first = item.clauses.firstOrNull()
+            if (first != null && (first.trigger == EffectTrigger.MARK_CONSUMED || first.trigger == EffectTrigger.FIELD_ENTER ||
+                    first.actions.first().let { it is EffectAction.ApplyMark || it is EffectAction.Throw })) return -100f
             val archetype = (if (archetypeTag in item.tags) 50f else 0f) + (if (element != null && element in item.elements) 50f else 0f)
             val survival = item.stats.sumOf { stat ->
                 when (stat.effect) {
@@ -359,6 +583,7 @@ internal class NoPoiBot(
             return archetype + item.rarity.rank * 3f + spread + survival + committed
         }
         c.relicId?.let { id ->
+            if (avoidWeaponHarmony && s.currentWeaponDefinition.key in s.content.relic(id).keys) return -100f
             return when {
                 s.relicRank(id) > 0 -> if (full) 50f else 15f + spread
                 full -> -20f
@@ -368,6 +593,9 @@ internal class NoPoiBot(
         return 0f
     }
 }
+
+/** How a bot treats Data-gain cards: as any other card, first ([SEEK], with rerolls) or last ([AVOID]). */
+internal enum class DataPolicy { NEUTRAL, SEEK, AVOID }
 
 /**
  * The reference run owns the original twelve weapons, so its Totem recalibrations deal exactly the

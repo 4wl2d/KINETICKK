@@ -6,6 +6,8 @@ package kinetickk.ball.profile.interaction.localization
 internal object EnglishProfileText {
     operator fun get(key: ProfileText): String = when (key) {
         ProfileText.SettingsInterface -> "Interface"
+        ProfileText.SettingsDisplay -> "Display"
+        ProfileText.SettingsControls -> "Controls"
         ProfileText.RunStatisticsSide -> "Run statistics side"
         ProfileText.LeftSide -> "Left"
         ProfileText.RightSide -> "Right"
@@ -38,9 +40,6 @@ internal object EnglishProfileText {
         ProfileText.Huge -> "Huge"
         ProfileText.Compact -> "Compact"
         ProfileText.Full -> "Full"
-        ProfileText.ArmoryTitle -> "Armory"
-        ProfileText.MatrixTitle -> "Matrix"
-        ProfileText.HangarTitle -> "Hangar"
         ProfileText.MaximumSynchrony -> "Max"
         ProfileText.RebirthTitle -> "Rebirth"
         ProfileText.HostileEscalation -> "Hostile escalation"

@@ -3,7 +3,6 @@
 
 package kinetickk.ball.profile.interaction.matrix.api
 
-import androidx.compose.runtime.Composable
 import kinetickk.ball.content.api.MatrixBranch
 import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.foundation.collections.ImmutableList
@@ -58,14 +57,7 @@ data class MatrixRenderModel(
     fun node(id: MatrixNodeId): MatrixNodeRenderModel? = nodes.firstOrNull { it.id == id }
 }
 
+/** What the Core Matrix body asks of its host (the Workshop's shared header owns Back). */
 sealed interface MatrixOutput {
     data object Back : MatrixOutput
-}
-
-interface MatrixFeature {
-    @Composable
-    fun Content(
-        routeToken: Long,
-        onOutput: (MatrixOutput) -> Unit,
-    )
 }

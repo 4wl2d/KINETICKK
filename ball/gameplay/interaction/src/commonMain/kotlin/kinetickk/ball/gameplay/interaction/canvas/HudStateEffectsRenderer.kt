@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
+import kinetickk.ball.gameplay.interaction.layout.RunningControlMask
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
@@ -58,6 +59,7 @@ internal fun DrawScope.drawHudWorldAnchors(
         drawCoreHalo(engine, roles, worldCore, haloRadius)
         if (critical) drawCriticalRing(roles, worldCore, renderTime)
         drawCursorHaloArc(engine, roles, worldCursor, renderTime, draining)
+        drawSkillReachRings(engine, worldCore)
     }
     drawPolarityLabel(engine, measurer, cursor, CURSOR_HALO_RADIUS * scale, draining)
     if (engine.overheated) drawOverheatStamp(measurer, core, haloRadius * scale, renderTime)
@@ -231,7 +233,7 @@ internal fun placePolarityLabel(
         // Sideways placements may not slide over the cursor; vertical ones may slide along the edge.
         if (left < margin || top < margin || right > width - margin || bottom > height - margin) continue
         var blocked = false
-        forEachRunningControlBounds(width, height, density) { _, cl, ct, cr, cb ->
+        forEachRunningControlBounds(width, height, density, RunningControlMask.ALL) { _, cl, ct, cr, cb ->
             if (left < cr && right > cl && top < cb && bottom > ct) blocked = true
         }
         if (!blocked) {

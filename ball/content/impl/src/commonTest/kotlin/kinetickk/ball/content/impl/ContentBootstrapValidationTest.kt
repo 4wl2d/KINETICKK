@@ -20,10 +20,13 @@ import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
 import kinetickk.ball.content.api.MatrixNodeDefinition
 import kinetickk.ball.content.api.MatrixNodeId
+import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicKey
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.RelicPairingKind
+import kinetickk.ball.content.api.RunTempoProfile
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
@@ -42,7 +45,7 @@ class ContentBootstrapValidationTest {
         val data = defaultContentBootstrapData()
         val gameplay = createContentCatalogForTesting(data).gameplayContent()
 
-        assertEquals(173, gameplay.items.size)
+        assertEquals(269, gameplay.items.size)
         assertEquals(ContentBounds.MAX_WEAPONS, gameplay.weapons.size)
         assertEquals(MatrixNodeId.entries.size, gameplay.matrixNodes.size)
         assertEquals(RelicId.entries.size, gameplay.relics.size)
@@ -61,7 +64,20 @@ class ContentBootstrapValidationTest {
     fun itemBoundRejectsNPlusOne() {
         val data = defaultContentBootstrapData()
 
-        assertRejected(data.copy(items = data.items.paddedTo(ContentBounds.MAX_ITEMS + 1)), "items size 193")
+        assertRejected(data.copy(items = data.items.paddedTo(ContentBounds.MAX_ITEMS + 1)), "items size 321")
+    }
+
+    @Test
+    fun itemUnlockLevelsMayReachTheRunLevelCapButNotPassIt() {
+        val data = defaultContentBootstrapData().copy(tempo = RunTempoProfile(maximumLevel = 42))
+        val capped = data.items.last().copy(unlockLevel = 42)
+
+        val accepted = createContentCatalogForTesting(data.copy(items = data.items.replaceLast(capped)))
+        assertEquals(42, accepted.gameplayContent().items.last().unlockLevel)
+        assertRejected(
+            data.copy(items = data.items.replaceLast(capped.copy(unlockLevel = 43))),
+            "Item unlock levels must not exceed the maximum run level 42",
+        )
     }
 
     @Test
@@ -70,6 +86,35 @@ class ContentBootstrapValidationTest {
         val extra = data.weapons.first().copied(name = "Overflow Weapon")
 
         assertRejected(data.copy(weapons = data.weapons + extra), "weapons size 25")
+    }
+
+    @Test
+    fun skillPoolFollowsTheSkillIdOrderAndRejectsTheFirstSkillPastTheBound() {
+        val data = defaultContentBootstrapData()
+        val gameplay = createContentCatalogForTesting(data).gameplayContent()
+
+        assertEquals(SkillId.entries.toList(), gameplay.skills.map { it.id })
+        assertEquals(gameplay.skills, createContentCatalogForTesting(data).uiCatalog().skills)
+        val padded = data.skills + List(ContentBounds.MAX_SKILLS + 1 - data.skills.size) { data.skills.last() }
+        assertRejected(data.copy(skills = padded), "skills size 25")
+        assertRejected(data.copy(skills = data.skills.swappedHead()), "Skill ids must match")
+        assertRejected(data.copy(skills = data.skills.dropLast(1)), "Skill ids must match")
+    }
+
+    @Test
+    fun upgradeBasesAcceptTheBoundAndRejectOneMore() {
+        val data = defaultContentBootstrapData()
+        val weapon = data.weapons.first()
+
+        assertEquals(weapon, weapon.copied(upgradeBaseCost = weapon.upgradeBaseCost))
+        weapon.copied(upgradeBaseCost = ContentBounds.MAX_UPGRADE_BASE_COST)
+        assertFailsWith<IllegalArgumentException> {
+            weapon.copied(upgradeBaseCost = ContentBounds.MAX_UPGRADE_BASE_COST + 1)
+        }
+        assertFailsWith<IllegalArgumentException> { weapon.copied(upgradeBaseCost = 0) }
+        val policy = createContentCatalogForTesting(data).profilePolicy()
+        assertEquals(ContentBounds.MAX_UPGRADE_LEVEL, policy.upgrades.maxLevel)
+        assertEquals(policy.upgrades, createContentCatalogForTesting(data).gameplayContent().upgrades)
     }
 
     @Test
@@ -387,6 +432,62 @@ class ContentBootstrapValidationTest {
         assertFailsWith<IllegalStateException> { validateItems(renamed) }
     }
 
+    @Test
+    fun keystonesAndExclusiveSkillRulesStayOnePerCatalog() {
+        // The shipped catalog without its keystone, skill-charge and attunement items, so each probe below is the only
+        // one of its kind.
+        val items = defaultContentBootstrapData().items
+            .filter { item -> item.keystone == null && item.rules.none { it is ItemRule.SkillCharges || it is ItemRule.SkillAttunement } }
+            .mapIndexed { index, item -> item.copy(id = index) }
+        fun epic(name: String, rules: List<ItemRule>, vararg elements: StatusElement) = ItemDefinition(
+            id = 0, name = name, description = "$name exercises the exclusive rules.", rarity = ItemRarity.EPIC,
+            tags = immutableListOf(BuildTag.CHAIN), elements = elements.toList().toImmutableList(), rules = rules.toImmutableList(),
+            maxStacks = 1, unlockLevel = 1,
+        )
+        fun withAppended(vararg extra: ItemDefinition) = items + extra.mapIndexed { index, item -> item.copy(id = items.size + index) }
+        val star = epic("Star Seal", listOf(ItemRule.ReactionKeystone(ReactionId.FUSION)), StatusElement.THERMAL, StatusElement.GRAVITIC)
+        validateItems(withAppended(star))
+
+        val twin = epic("Second Star Seal", listOf(ItemRule.ReactionKeystone(ReactionId.FUSION)), StatusElement.THERMAL, StatusElement.GRAVITIC)
+        val doubled = assertFailsWith<IllegalStateException> { validateItems(withAppended(star, twin)) }
+        assertTrue(doubled.message.orEmpty().contains("FUSION has more than one keystone item"), doubled.message)
+        val halfDeclared = epic("Half Seal", listOf(ItemRule.ReactionKeystone(ReactionId.WILDFIRE)), StatusElement.THERMAL)
+        val undeclared = assertFailsWith<IllegalStateException> { validateItems(withAppended(halfDeclared)) }
+        assertTrue(undeclared.message.orEmpty().contains("without declaring both of its elements"), undeclared.message)
+
+        val charges = epic("Twin Chamber", listOf(ItemRule.SkillCharges))
+        validateItems(withAppended(charges))
+        assertFailsWith<IllegalStateException> { validateItems(withAppended(charges, charges.copy(name = "Third Chamber", description = "Another."))) }
+        // The shipped catalog holds one keystone item per reaction: one more for any reaction is rejected.
+        val shipped = defaultContentBootstrapData().items
+        val extra = assertFailsWith<IllegalStateException> { validateItems(shipped + twin.copy(id = shipped.size)) }
+        assertTrue(extra.message.orEmpty().contains("FUSION has more than one keystone item"), extra.message)
+
+        val attune = epic("Alchemical Core", listOf(ItemRule.SkillAttunement(ElementPick.DOMINANT)))
+        validateItems(withAppended(attune))
+        assertFailsWith<IllegalStateException> { validateItems(withAppended(attune, attune.copy(name = "Second Core", description = "Again."))) }
+    }
+
+    @Test
+    fun skillRulesDeclareTheElementsTheyName() {
+        val data = defaultContentBootstrapData()
+        val base = data.items.first { it.elements.isEmpty() && it.clauses.isNotEmpty() }
+        listOf(
+            ItemRule.SkillPower(StatusElement.SONIC, 0.2f),
+            ItemRule.SkillCooldown(StatusElement.SONIC, 0.1f),
+            ItemRule.SkillAttunement(ElementPick.SONIC),
+        ).forEach { rule ->
+            assertRejected(data.copy(items = data.items.withReplaced(base.id, base.copy(rules = immutableListOf(rule)))), "touches undeclared elements")
+            createContentCatalogForTesting(
+                data.copy(items = data.items.withReplaced(base.id, base.copy(rules = immutableListOf(rule), elements = immutableListOf(StatusElement.SONIC)))),
+            )
+        }
+        // Rules for every skill, or for the build's own element, name none.
+        createContentCatalogForTesting(data.copy(items = data.items.withReplaced(base.id, base.copy(rules = immutableListOf(
+            ItemRule.SkillPower(null, 0.2f), ItemRule.SkillAttunement(ElementPick.DOMINANT),
+        )))))
+    }
+
     private fun riskItem(
         stats: ImmutableList<StatDelta> = immutableListOf(),
         rules: ImmutableList<ItemRule> = immutableListOf(),
@@ -431,6 +532,7 @@ private fun WeaponDefinition.copied(
     id: WeaponId = this.id,
     name: String = this.name,
     key: RelicKey = this.key,
+    upgradeBaseCost: Int = this.upgradeBaseCost,
 ): WeaponDefinition = WeaponDefinition(
     id = id,
     name = name,
@@ -446,4 +548,5 @@ private fun WeaponDefinition.copied(
     minimumRebirth = minimumRebirth,
     masteryForms = masteryForms,
     signatureText = signatureText,
+    upgradeBaseCost = upgradeBaseCost,
 )

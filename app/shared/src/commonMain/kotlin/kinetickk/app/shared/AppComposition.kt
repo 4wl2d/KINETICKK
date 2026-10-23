@@ -15,23 +15,22 @@ import kinetickk.ball.content.api.ContentCatalog
 import kinetickk.ball.content.impl.createContentCatalog
 import kinetickk.ball.gameplay.impl.DefaultGameplayFeature
 import kinetickk.ball.gameplay.impl.GameplayCompositionComponent
+import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfilePort
+import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.impl.ProfileComponent
 import kinetickk.ball.profile.impl.ProfilePersistenceCapability
 import kinetickk.ball.profile.impl.createProfileComponent
-import kinetickk.ball.profile.interaction.armory.api.ArmoryFeature
-import kinetickk.ball.profile.interaction.armory.impl.DefaultArmoryFeature
-import kinetickk.ball.profile.interaction.hangar.api.HangarFeature
-import kinetickk.ball.profile.interaction.hangar.impl.DefaultHangarFeature
-import kinetickk.ball.profile.interaction.matrix.api.MatrixFeature
-import kinetickk.ball.profile.interaction.matrix.impl.DefaultMatrixFeature
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
 import kinetickk.ball.profile.interaction.rebirth.impl.DefaultRebirthFeature
 import kinetickk.ball.profile.interaction.settings.api.SettingsFeature
 import kinetickk.ball.profile.interaction.settings.impl.DefaultSettingsFeature
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopFeature
+import kinetickk.ball.profile.interaction.workshop.impl.DefaultWorkshopFeature
 import kinetickk.flow.session.api.AppSessionPort
 import kinetickk.flow.session.impl.createAppSessionComponent
 import kinetickk.flow.session.interaction.AppSessionContent
+import kinetickk.flow.session.interaction.AppShellMemory
 import kinetickk.flow.session.interaction.audio.SessionAudioExecutor
 import kinetickk.flow.session.interaction.codex.api.CodexFeature
 import kinetickk.flow.session.interaction.codex.impl.DefaultCodexFeature
@@ -43,11 +42,17 @@ import kinetickk.resource.audio.api.AudioService
 import kinetickk.resource.audio.impl.DefaultAudioService
 import kinetickk.resource.audio.impl.TonePlaybackCapability
 
-/** The single UI entry point used by Android, Desktop, and Web hosts. */
+/**
+ * The single UI entry point used by Android and Web hosts (Desktop hoists the owner above its
+ * window, see `runKinetickkDesktop`). [displayHost] applies the accepted display preferences.
+ */
 @Composable
-fun KinetickkApp(onLanguageChanged: (String) -> Unit = {}) {
+fun KinetickkApp(
+    onLanguageChanged: (String) -> Unit = {},
+    displayHost: PlatformDisplayHost = LocalPlatformDisplayHost.current,
+) {
     val diagnostics = LocalCrashDiagnostics.current
-    val ownerValue = remember { AppCompositionOwner(diagnostics = diagnostics) }
+    val ownerValue = remember { AppCompositionOwner(diagnostics = diagnostics, displayHost = displayHost) }
     DisposableEffect(ownerValue) {
         onDispose(ownerValue::close)
     }
@@ -63,13 +68,12 @@ internal class AppCompositionOwner(
     appSessionComponent: AppSessionPort? = null,
     homeFeature: HomeFeature? = null,
     settingsFeature: SettingsFeature? = null,
-    matrixFeature: MatrixFeature? = null,
-    armoryFeature: ArmoryFeature? = null,
-    hangarFeature: HangarFeature? = null,
+    workshopFeature: WorkshopFeature? = null,
     rebirthFeature: RebirthFeature? = null,
     codexFeature: CodexFeature? = null,
     profileUnavailableFeature: ProfileUnavailableFeature? = null,
     private val diagnostics: CrashDiagnostics = CrashDiagnostics.None,
+    private val displayHost: PlatformDisplayHost = PlatformDisplayHost.None,
 ) {
     private val profilePolicy = contentCatalog.profilePolicy()
     private val gameplayContent = contentCatalog.gameplayContent()
@@ -101,26 +105,17 @@ internal class AppCompositionOwner(
     private val settingsFeature: SettingsFeature = settingsFeature ?: DefaultSettingsFeature(
         this.profilePort,
         this.audioService,
+        PlatformSettingsDisplay(displayHost, ::preferences),
     )
-    private val matrixFeature: MatrixFeature = matrixFeature ?: DefaultMatrixFeature(
+    private val workshopFeature: WorkshopFeature = workshopFeature ?: DefaultWorkshopFeature(
         profilePort = this.profilePort,
         matrixNodes = uiCatalog.matrixNodes,
-        audioService = this.audioService,
-    )
-    private val armoryFeature: ArmoryFeature = armoryFeature ?: DefaultArmoryFeature(
-        profilePort = this.profilePort,
         weapons = uiCatalog.weapons,
         weaponMasteries = uiCatalog.weaponMasteries,
-        audioService = this.audioService,
-        coreShapes = uiCatalog.coreShapes,
-        relics = uiCatalog.relics,
-    )
-    private val hangarFeature: HangarFeature = hangarFeature ?: DefaultHangarFeature(
-        profilePort = this.profilePort,
         coreShapes = uiCatalog.coreShapes,
         audioService = this.audioService,
-        weapons = uiCatalog.weapons,
         relics = uiCatalog.relics,
+        upgrades = uiCatalog.upgrades,
     )
     private val rebirthFeature: RebirthFeature = rebirthFeature ?: DefaultRebirthFeature(
         profilePort = this.profilePort,
@@ -157,6 +152,18 @@ internal class AppCompositionOwner(
     internal val sessionPort
         get() = appSessionComponent
 
+    /** The accepted preferences (Profile loads synchronously when the owner is built). */
+    internal fun preferences(): PlayerPreferences = profilePort.query(ProfileQuery.GetPreferences).preferences
+
+    // Accepted display preferences reach the platform host only through this translation.
+    private val applyDisplayPreferences: (PlayerPreferences) -> Unit = { preferences ->
+        displayHost.apply(preferences.toHostDisplayRequest())
+    }
+    private val touchPrimary: Boolean by lazy { displayHost.support().touchPrimary }
+
+    // Lives with the features, above a desktop window that may be opened again.
+    private val shellMemory = AppShellMemory()
+
     @Composable
     @NonRestartableComposable
     fun Content(onLanguageChanged: (String) -> Unit = {}) {
@@ -168,12 +175,13 @@ internal class AppCompositionOwner(
             gameplayPresentation = gameplayComponent,
             homeFeature = homeFeature,
             settingsFeature = settingsFeature,
-            matrixFeature = matrixFeature,
-            armoryFeature = armoryFeature,
-            hangarFeature = hangarFeature,
+            workshopFeature = workshopFeature,
             rebirthFeature = rebirthFeature,
             codexFeature = codexFeature,
             profileUnavailableFeature = profileUnavailableFeature,
+            onPreferencesChanged = applyDisplayPreferences,
+            touchPrimary = touchPrimary,
+            shellMemory = shellMemory,
         )
     }
 

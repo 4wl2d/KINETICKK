@@ -189,8 +189,21 @@ internal object StatusCell {
     const val BLACKFIRE_UNTIL = UNMAKE_DAMAGE + 1
     /** Blackfire damage per second while it burns. */
     const val BLACKFIRE_DPS = BLACKFIRE_UNTIL + 1
-    const val COUNT = BLACKFIRE_DPS + 1
+    /** The enemy's one mark: [MarkKind] ordinal + 1, 0 for none. A newer mark replaces an older one. */
+    const val MARK = BLACKFIRE_DPS + 1
+    /** When the mark lapses. */
+    const val MARK_UNTIL = MARK + 1
+    /** 1 when a skill cast wrote the mark (Decay Spores' seeds), 0 for a reaction's or an item's mark. */
+    const val MARK_CAST = MARK_UNTIL + 1
+    const val COUNT = MARK_CAST + 1
 }
+
+/**
+ * Marks a reaction or skill leaves on an enemy, cashed by a later action: [SPALL] by the next direct hit,
+ * [CRACKED] by the next Brake release, [SPORED] by death, [BOOMED] by a slam; [SUPPRESSED] dampens what the
+ * enemy receives. Ordinals are stored and mirrored by [kinetickk.ball.gameplay.nucleus.render.EnemyMarkVisual].
+ */
+internal enum class MarkKind { SPALL, CRACKED, SPORED, BOOMED, SUPPRESSED }
 
 internal class Projectile(
     var x: Float,

@@ -30,10 +30,12 @@ import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.liabilityText
+import kinetickk.ball.content.api.rankLines
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.content.api.ruleLines
 import kinetickk.ball.content.api.upsideText
 import kinetickk.ball.gameplay.interaction.canvas.OverlayRelicLink
+import kinetickk.ball.gameplay.interaction.canvas.badgeState
 import kinetickk.ball.gameplay.interaction.canvas.OverlayRelicSlot
 import kinetickk.ball.gameplay.interaction.canvas.UNKNOWN_PAIRING_NAME
 import kinetickk.ball.gameplay.interaction.canvas.overlayColor
@@ -59,6 +61,7 @@ import kinetickk.ball.gameplay.nucleus.render.TotemAction
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
+import kinetickk.foundation.design.KkApexState
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.KkRolePalette
@@ -81,6 +84,9 @@ internal data class RewardPresentation(
     val kind: RewardLayoutKind = RewardLayoutKind.CARDS,
     /** Player level shown by the slamming badge when a level-up opened the choice. */
     val level: Int? = null,
+    /** The run's level cap (the badge turns APEX there) and the Apex state it shows. */
+    val levelCap: Int = Int.MAX_VALUE,
+    val apex: KkApexState = KkApexState.NONE,
     /** Screen position (px) the cards are dealt from: the Core. */
     val dealOrigin: Offset? = null,
     /** Current relic matrix for relic choices. */
@@ -98,7 +104,7 @@ internal fun GameplayRenderModel.rewardPresentation(language: AppLanguage = AppL
     val kind = when (choiceType) {
         ChoiceType.TOTEM -> RewardLayoutKind.TOTEM
         ChoiceType.RELIC_BIND -> RewardLayoutKind.RELIC_BIND
-        ChoiceType.ITEM, ChoiceType.WEAPON, ChoiceType.RELIC -> RewardLayoutKind.CARDS
+        ChoiceType.ITEM, ChoiceType.WEAPON, ChoiceType.RELIC, ChoiceType.SKILL -> RewardLayoutKind.CARDS
     }
     val relicChoice = choiceType == ChoiceType.RELIC || choiceType == ChoiceType.RELIC_BIND
     val incoming = choices.firstOrNull { it.relicAction == RelicChoiceAction.REPLACE }?.relicId?.let(content::relic)
@@ -112,6 +118,8 @@ internal fun GameplayRenderModel.rewardPresentation(language: AppLanguage = AppL
         rerollsRemaining = rerollsRemaining,
         kind = kind,
         level = level.takeIf { choiceType == ChoiceType.ITEM && !directedChoice && choices.none { it.rewardFocus != null } },
+        levelCap = maxLevel,
+        apex = apex.badgeState(),
         // The Core on screen in device pixels (the simulation viewport is dp).
         dealOrigin = Offset(
             (coreX - cameraX + screenWidth * 0.5f) * viewportDensity,
@@ -542,6 +550,11 @@ internal fun GameplayRenderModel.rewardCardPresentation(
             weapon != null -> add(weapon.description.localizedContent(language))
             choice.totemAction == TotemAction.CHANGE_WEAPON -> add(language.text(OverlayRedesignText.ChangeWeaponEffect))
             choice.relicAction == RelicChoiceAction.MELD -> add(language.text(OverlayRedesignText.MeldEffect))
+            // A skill card: what the skill does (a rank III card: what rank III adds), then the rank's numbers.
+            choice.skillId != null -> {
+                add(choice.description.localizedContent(language))
+                add(content.skill(choice.skillId!!).rankLines(choice.skillRank ?: 1, language).joinToString(" · "))
+            }
         }
     }.filter(String::isNotBlank).distinct()
     val relicAspect = relic?.aspect
@@ -894,7 +907,8 @@ private fun RewardFocus.relicAspect(): RelicAspect? = RelicAspect.entries.firstO
 
 /** What picking a focus leads to, by the directed reward's choice type (artifacts, relics, weapons). */
 private fun rewardFocusEffect(type: ChoiceType): OverlayRedesignText = when (type) {
-    ChoiceType.ITEM -> OverlayRedesignText.FocusArtifacts
+    // Skill drafts are never directed rewards; a focus never leads to one.
+    ChoiceType.ITEM, ChoiceType.SKILL -> OverlayRedesignText.FocusArtifacts
     ChoiceType.RELIC, ChoiceType.RELIC_BIND -> OverlayRedesignText.FocusRelics
     ChoiceType.TOTEM, ChoiceType.WEAPON -> OverlayRedesignText.FocusWeapons
 }
@@ -1241,4 +1255,5 @@ internal fun rewardHeading(
     ChoiceType.WEAPON -> language.text(GameplayText.WeaponSynchronization)
     ChoiceType.RELIC -> language.text(GameplayText.RelicIntercept)
     ChoiceType.RELIC_BIND -> if (action == RelicChoiceAction.MELD_TARGET) language.text(GameplayText.RelicMeld) else language.text(GameplayText.RelicRebind)
+    ChoiceType.SKILL -> language.text(GameplayText.ChooseSkill)
 }

@@ -13,6 +13,7 @@ import kinetickk.ball.content.api.MatrixEffect
 import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.isDataEconomy
 import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
@@ -27,6 +28,7 @@ import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
+import kinetickk.foundation.random.CloneableXorWowRandom
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -332,6 +334,55 @@ class MatrixEffectsTest {
     @Test
     fun rerollsAddToTheRunStart() {
         assertEquals(isolated(null, false).rerollsRemaining + 2, isolated(MatrixEffect.Rerolls(1), true, rank = 2).rerollsRemaining)
+    }
+
+    @Test
+    fun dataStratumDealsMoreRankZeroDataItemsPerRank() {
+        fun dataItems(state: MutableGameState): Int = state.content.items.count { item ->
+            item.id in state.itemDeck && item.isDataEconomy && item.rarity.rank <= ItemRarity.RARE.rank && item.minimumRebirth == 0
+        }
+        val ladder = canonicalGameplayContent.items.count {
+            it.isDataEconomy && it.rarity.rank <= ItemRarity.RARE.rank && it.minimumRebirth == 0
+        }
+        val floor = canonicalGameplayContent.build.policy.draftDeck.dataEconomyFloor
+        for (seed in 1..12) {
+            val plain = isolated(null, false, seed = seed)
+            val one = isolated(MatrixEffect.DataStratum(3), true, node = MatrixNodeId.DATA_ARCHIVE, rank = 1, seed = seed)
+            val three = isolated(MatrixEffect.DataStratum(3), true, node = MatrixNodeId.DATA_ARCHIVE, rank = 3, seed = seed)
+            assertEquals(9, three.matrix.dataStratumItems)
+            assertTrue(dataItems(plain) >= floor, "seed $seed: the policy floor")
+            assertTrue(dataItems(one) >= minOf(ladder, floor + 3), "seed $seed: one rank deals three more")
+            assertEquals(ladder, dataItems(three), "seed $seed: a full Data Archive deals the whole rank-0 Data ladder")
+        }
+    }
+
+    @Test
+    fun dataOfferWeightShowsDataCardsMoreOftenWithoutAnExtraRewardDraw() {
+        val effect = MatrixEffect.DataOfferWeight(1f)
+        /** One offer per seed from a fresh reward stream: the cards and the stream's state after the offer. */
+        fun offers(state: MutableGameState): List<Pair<List<Int>, CloneableXorWowRandom.Snapshot>> = state.run {
+            dealWholeCatalog()
+            level = 30
+            (1..600).map { seed ->
+                rewardRandom = CloneableXorWowRandom(seed)
+                buildItemChoices()
+                choices.map { requireNotNull(it.itemId) } to rewardRandom.snapshot()
+            }
+        }
+        fun dataCards(offers: List<Pair<List<Int>, CloneableXorWowRandom.Snapshot>>): Int =
+            offers.sumOf { (cards, _) -> cards.count { canonicalGameplayContent.items[it].isDataEconomy } }
+
+        val plain = offers(isolated(null, false, node = MatrixNodeId.DATA_ARCHIVE))
+        val notOwned = offers(isolated(effect, false, node = MatrixNodeId.DATA_ARCHIVE))
+        val full = isolated(effect, true, node = MatrixNodeId.DATA_ARCHIVE, rank = 3)
+        assertEquals(1f, isolated(null, false).matrix.dataOfferWeight)
+        assertEquals(4f, full.matrix.dataOfferWeight, "three ranks of +1 weigh Data items × 4")
+        val weighted = offers(full)
+
+        assertEquals(plain, notOwned, "an unowned node leaves every offer as it was")
+        assertEquals(plain.map { it.second }, weighted.map { it.second }, "the weight never adds or removes a reward draw")
+        assertTrue(dataCards(weighted) > dataCards(plain) * 2, "Data cards ${dataCards(plain)} -> ${dataCards(weighted)}")
+        assertTrue(weighted.all { (cards, _) -> cards.size == 3 && cards.toSet().size == 3 })
     }
 
     @Test

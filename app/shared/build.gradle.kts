@@ -53,6 +53,10 @@ kotlin {
             runtimeOnly("org.jetbrains.skiko:skiko-awt-runtime-$os-$arch:${libs.versions.skiko.get()}")
         }
         if (!isolatedProjectsProfileEnabled()) {
+            // The web display host reads the browser's fullscreen API.
+            wasmJsMain.dependencies {
+                implementation(libs.kotlinx.browser)
+            }
             wasmJsTest.dependencies {
                 implementation(libs.kotlinx.browser)
             }

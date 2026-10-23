@@ -9,6 +9,8 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.model.*
+import kinetickk.ball.gameplay.nucleus.protocol.FxColorCode
+import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
 import kotlin.math.floor
@@ -117,6 +119,8 @@ internal fun MutableGameState.enemyMotionScale(enemy: Enemy): Float {
         scale *= 1f - stasisSlow()
     }
     if (build.liability(RelicId.PANDEMIC_CODEX) && totalStacks(enemy) > 0) scale *= 1.2f
+    // Hypercube's cage slows the ordinary enemies inside.
+    scale *= hypercubeMotionScale(enemy)
     return scale
 }
 
@@ -139,15 +143,18 @@ internal fun MutableGameState.applyStatus(enemy: Enemy, element: StatusElement, 
         landing = StatusElement.CRYO
         if (amount <= 0) return
     }
+    // A Suppressed enemy has no aspect: no immunity, resistance or weakness.
+    val suppressed = markIs(enemy, MarkKind.SUPPRESSED)
     // An immune aspect refuses the landing element before any side effect.
-    if (enemy.aspectIsImmune && enemy.aspectElement == landing.ordinal) {
+    if (!suppressed && enemy.aspectIsImmune && enemy.aspectElement == landing.ordinal) {
         signalImmunity(enemy)
         return
     }
     if (converted && build.pairing(RelicPairingId.THERMAL_PARADOX)) heat = max(0f, heat - 3f * amount)
-    val affinityCarry = when (landing.ordinal) {
-        enemy.aspectElement -> StatusCell.RESIST_CARRY
-        enemy.weaknessElement -> StatusCell.WEAK_CARRY
+    val affinityCarry = when {
+        suppressed -> -1
+        landing.ordinal == enemy.aspectElement -> StatusCell.RESIST_CARRY
+        landing.ordinal == enemy.weaknessElement -> StatusCell.WEAK_CARRY
         else -> -1
     }
     if (affinityCarry >= 0) {
@@ -298,32 +305,19 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
             }
             val spread = build.breakSpread(element)
             if (spread > 0) applyStatusAround(enemy.x, enemy.y, build.breakSpreadRadius(element), element, spread.toFloat(), outputGeneration, enemy.id)
-            shockwave(enemy.x, enemy.y, 0.28f, radius, 4)
+            shockwave(enemy.x, enemy.y, 0.28f, radius, FxColorCode.elementTone(element))
         }
         StatusElement.CRYO -> {
-            val immunity = when {
-                enemy.isBoss -> ARCHITECT_FREEZE_IMMUNITY_SECONDS
-                enemy.isElite -> ELITE_FREEZE_IMMUNITY_SECONDS
-                else -> FREEZE_IMMUNITY_SECONDS
-            }
-            // The Herald never freezes; its Break still rearms and leaves it Brittle.
-            val duration = if (enemy.isMiniBoss) 0f else if (enemy.isBoss) 0.5f else min(2f, power)
-            enemy.status[StatusCell.FROZEN_UNTIL] = elapsed + duration
-            enemy.status[StatusCell.FREEZE_IMMUNE_UNTIL] = elapsed + duration + immunity
-            enemy.status[StatusCell.REARM_AT + element.ordinal] = elapsed + duration + BREAK_REARM_SECONDS
-            enemy.status[StatusCell.BRITTLE] = 1f
-            enemy.status[StatusCell.CRYO_IMMUNE_CARRY] = 0f
-            enemy.vx = 0f
-            enemy.vy = 0f
+            freeze(enemy, min(2f, power))
             if (build.pairing(RelicPairingId.EXTINGUISHED) && enemy.status[StatusCell.CINDER_BANK] > 0f) {
                 dealStatusDamage(enemy, enemy.status[StatusCell.CINDER_BANK] * 0.6f, StatusElement.THERMAL)
                 enemy.status[StatusCell.CINDER_BANK] = 0f
             }
-            shockwave(enemy.x, enemy.y, 0.3f, enemy.radius * 2.4f, 1)
+            shockwave(enemy.x, enemy.y, 0.3f, enemy.radius * 2.4f, FxColorCode.elementTone(element))
         }
         StatusElement.ION -> {
             val damage = power * count * potency * scale
-            chain(enemy.x, enemy.y, enemy.id, 3, definition.breakRadius) { target ->
+            chain(enemy.x, enemy.y, enemy.id, 3, definition.breakRadius, LinkStyleCode.elementBreak(element)) { target ->
                 dealStatusDamage(target, damage, element)
                 if (outputGeneration < 2) applyStatus(target, StatusElement.ION, 2, outputGeneration)
             }
@@ -358,7 +352,7 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
                     dealStatusDamage(target, damage, element)
                 }
             }
-            shockwave(enemy.x, enemy.y, 0.32f, definition.breakRadius, 3)
+            shockwave(enemy.x, enemy.y, 0.32f, definition.breakRadius, FxColorCode.elementTone(element))
         }
         StatusElement.ENTROPY -> {
             if (enemy.status[StatusCell.MAX_HP_PROC_READY_AT] <= elapsed) {
@@ -371,7 +365,7 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
                 relicCooldowns[RelicId.VERDANT_ROT.ordinal] = BLIGHT_GARDEN_HEAL_COOLDOWN
                 heal(BLIGHT_GARDEN_HEAL, HealSource.VERDANT)
             }
-            shockwave(enemy.x, enemy.y, 0.3f, enemy.radius * 2.2f, 4)
+            shockwave(enemy.x, enemy.y, 0.3f, enemy.radius * 2.2f, FxColorCode.elementTone(element))
         }
         StatusElement.SONIC -> {
             val damage = power * count * potency * scale
@@ -383,7 +377,7 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
                 throwFrom(enemy, target)
             }
             if (build.upside(RelicId.THUNDER_CHOIR)) thunderChoir(enemy, damage)
-            shockwave(enemy.x, enemy.y, 0.34f, radius, 3)
+            shockwave(enemy.x, enemy.y, 0.34f, radius, FxColorCode.elementTone(element))
         }
         StatusElement.VOID -> {
             var remembered = enemy.status[StatusCell.HOLLOW_MEMORY]
@@ -399,7 +393,7 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
                     enemy.status[StatusCell.UNMAKE_DAMAGE] = enemy.status[StatusCell.UNMAKE_DAMAGE] + damage
                 }
             }
-            shockwave(enemy.x, enemy.y, 0.3f, enemy.radius * 2.6f, 2)
+            shockwave(enemy.x, enemy.y, 0.3f, enemy.radius * 2.6f, FxColorCode.elementTone(element))
         }
     }
     if (affinityTier(element) >= 3) applyStatusAround(enemy.x, enemy.y, 130f, element, 2f, outputGeneration, enemy.id)
@@ -650,6 +644,27 @@ private fun MutableGameState.burnBlackfire(enemy: Enemy, delta: Float) {
     }
 }
 
+/**
+ * Freezes [enemy] the way a Freeze Break does: ordinary enemies and Elites for [seconds], the Architect for half
+ * a second, the Herald not at all (its Break still rearms and leaves it Brittle). The target stops, turns Brittle
+ * and resists the next Freeze for a while.
+ */
+internal fun MutableGameState.freeze(enemy: Enemy, seconds: Float) {
+    val immunity = when {
+        enemy.isBoss -> ARCHITECT_FREEZE_IMMUNITY_SECONDS
+        enemy.isElite -> ELITE_FREEZE_IMMUNITY_SECONDS
+        else -> FREEZE_IMMUNITY_SECONDS
+    }
+    val duration = if (enemy.isMiniBoss) 0f else if (enemy.isBoss) 0.5f else seconds
+    enemy.status[StatusCell.FROZEN_UNTIL] = elapsed + duration
+    enemy.status[StatusCell.FREEZE_IMMUNE_UNTIL] = elapsed + duration + immunity
+    enemy.status[StatusCell.REARM_AT + StatusElement.CRYO.ordinal] = elapsed + duration + BREAK_REARM_SECONDS
+    enemy.status[StatusCell.BRITTLE] = 1f
+    enemy.status[StatusCell.CRYO_IMMUNE_CARRY] = 0f
+    enemy.vx = 0f
+    enemy.vy = 0f
+}
+
 /** Ends a Freeze early (a shatter) while keeping the post-thaw immunity. */
 internal fun MutableGameState.thaw(enemy: Enemy) {
     if (!isFrozen(enemy)) return
@@ -675,7 +690,7 @@ internal fun MutableGameState.arcCharge(enemy: Enemy) {
     }
 }
 
-/** Contagion and banked fire on death. Runs for every death, eligible or not. */
+/** Contagion, banked fire and the reaction verbs that read deaths. Runs for every death, eligible or not. */
 internal fun MutableGameState.onStatusCarrierDied(enemy: Enemy) {
     if (build.upside(RelicId.PANDEMIC_CODEX) && totalStacks(enemy) > 0) {
         val share = min(0.8f, content.relic(RelicId.PANDEMIC_CODEX).value(0, relicRank(RelicId.PANDEMIC_CODEX)) / 100f *
@@ -707,6 +722,8 @@ internal fun MutableGameState.onStatusCarrierDied(enemy: Enemy) {
         }
         shockwave(enemy.x, enemy.y, 0.3f, 110f, 4)
     }
+    onReactionCarrierDied(enemy)
+    onSkillCarrierDied(enemy)
 }
 
 private fun MutableGameState.nearestOtherEnemyExcluding(origin: Enemy, alsoExcluded: Int, range: Float): Enemy? {
@@ -722,6 +739,33 @@ private fun MutableGameState.nearestOtherEnemyExcluding(origin: Enemy, alsoExclu
         }
     }
     return nearest
+}
+
+/**
+ * Marks [enemy] with [kind] for [seconds]; [cast] records that a skill cast wrote it. An enemy carries one mark:
+ * a newer mark replaces an older one, whatever its kind or writer.
+ */
+internal fun MutableGameState.setMark(enemy: Enemy, kind: MarkKind, seconds: Float, cast: Boolean = false) {
+    enemy.status[StatusCell.MARK] = (kind.ordinal + 1).toFloat()
+    enemy.status[StatusCell.MARK_UNTIL] = elapsed + seconds
+    enemy.status[StatusCell.MARK_CAST] = if (cast) 1f else 0f
+}
+
+/** The live mark on [enemy], or null (none, or lapsed). */
+internal fun MutableGameState.markOf(enemy: Enemy): MarkKind? {
+    if (enemy.status[StatusCell.MARK_UNTIL] <= elapsed) return null
+    return MarkKind.entries.getOrNull(enemy.status[StatusCell.MARK].toInt() - 1)
+}
+
+internal fun MutableGameState.markIs(enemy: Enemy, kind: MarkKind): Boolean = markOf(enemy) == kind
+
+/** Cashes a live [kind] mark: clears it and returns true; any other mark stays. */
+internal fun MutableGameState.consumeMark(enemy: Enemy, kind: MarkKind): Boolean {
+    if (!markIs(enemy, kind)) return false
+    enemy.status[StatusCell.MARK] = 0f
+    enemy.status[StatusCell.MARK_UNTIL] = 0f
+    enemy.status[StatusCell.MARK_CAST] = 0f
+    return true
 }
 
 /**

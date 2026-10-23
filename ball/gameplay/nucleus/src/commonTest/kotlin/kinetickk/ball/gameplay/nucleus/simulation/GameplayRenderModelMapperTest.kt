@@ -11,6 +11,9 @@ import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.nucleus.model.CharacterRuntime
+import kinetickk.ball.gameplay.nucleus.model.CombatFieldKind
+import kinetickk.ball.gameplay.nucleus.model.FieldSource
+import kinetickk.ball.gameplay.nucleus.model.MarkKind
 import kinetickk.ball.gameplay.nucleus.model.SeveredRelic
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.model.Pickup
@@ -74,6 +77,8 @@ class GameplayRenderModelMapperTest {
                 GameplayInteractionPulse.ViewportChanged.fromValidated(1_024f, 768f, 2f),
                 GameplayInteractionPulse.BrakeChanged(BrakeSource.KEYBOARD, true),
                 GameplayInteractionPulse.DashRequested,
+                GameplayInteractionPulse.SkillRequested.fromValidated(0),
+                GameplayInteractionPulse.ApexRequested,
                 frame,
                 GameplayInteractionPulse.PauseToggled,
                 frame,
@@ -145,6 +150,10 @@ class GameplayRenderModelMapperTest {
         assertSame(retained.itemStacks, projected.itemStacks)
         assertSame(retained.discoveredItemIds, projected.discoveredItemIds)
         assertSame(retained.relicRanks, projected.relicRanks)
+        assertSame(retained.combatFields, projected.combatFields)
+        assertSame(retained.coreState, projected.coreState)
+        assertTrue(retained.combatFields.isNotEmpty())
+        assertTrue(retained.enemies.single().controlBits != 0)
         assertTrue(candidate.itemStacks.sharesStorageWith(source.itemStacks))
         assertTrue(candidate.discoveredItemIds.sharesStorageWith(source.discoveredItemIds))
         assertTrue(candidate.relicRanks.sharesStorageWith(source.relicRanks))
@@ -496,7 +505,13 @@ class GameplayRenderModelMapperTest {
 
     private fun fullyPopulatedState(): MutableGameState = populatedState().apply {
         totem = Totem(x = 10f, y = 20f, pulse = 0.5f)
-        addEnemyForTesting(x = 10f, y = 20f)
+        addEnemyForTesting(x = 10f, y = 20f).apply {
+            silencedUntil = 0.5f
+            setMark(this, MarkKind.SPALL, 0.5f)
+        }
+        addField(CombatFieldKind.ROT_WELL, FieldSource.REACTION, 9, x = 30f, y = 40f, radius = 50f, seconds = 2f,
+            damagePerSecond = 0f)
+        ablazeUntil = 0.4f
         projectiles += Projectile(11f, 21f, 0f, 0f, radius = 2f, life = 1f)
         pickups += Pickup(PickupType.DATA, 12f, 22f)
         trail += TrailPoint(13f, 23f)
@@ -562,7 +577,7 @@ class GameplayRenderModelMapperTest {
                 it.hp.toRawBits(), it.maxHp.toRawBits(), it.radius.toRawBits(), it.actionTimer.toRawBits(),
                 it.flash.toRawBits(), it.contactCooldown.toRawBits(), it.weaponCooldown.toRawBits(),
                 it.previousX.toRawBits(), it.previousY.toRawBits(), it.dead, it.statusBits, it.affinityBits,
-                it.armored,
+                it.armored, it.controlBits,
             )
         },
         "projectiles" to projectiles.map {
@@ -612,6 +627,11 @@ class GameplayRenderModelMapperTest {
         "minimapRange" to minimapRange.toRawBits(),
         "rebirthRank" to rebirthRank,
         "volatileBursts" to volatileBursts.toList(),
+        "maxLevel" to maxLevel,
+        "skillBar" to skillBar,
+        "apex" to apex,
+        "combatFields" to combatFields.toList(),
+        "coreState" to coreState,
     )
 
     private class ReadGuardList<Element>(

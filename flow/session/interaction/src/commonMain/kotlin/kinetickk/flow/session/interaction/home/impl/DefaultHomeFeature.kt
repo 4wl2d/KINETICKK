@@ -28,7 +28,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -82,6 +81,7 @@ class DefaultHomeFeature(
         weapons = uiCatalog.weapons,
         relicCount = uiCatalog.relics.size,
         matrixNodes = uiCatalog.matrixNodes,
+        upgrades = uiCatalog.upgrades,
     )
     private val audioExecutor = SessionAudioExecutor(audioService)
 
@@ -149,10 +149,12 @@ class DefaultHomeFeature(
         }
 
         val elementHuesValue by rememberUpdatedState(roles.elements)
-        LaunchedEffect(Unit) {
-            var previousFrame = withFrameNanos { it }
+        val frameRateCap = LocalKkFrameRateCap.current
+        LaunchedEffect(frameRateCap) {
+            val pacer = KkFramePacer(frameRateCap)
+            var previousFrame = pacer.awaitFrame()
             while (true) {
-                val frame = withFrameNanos { it }
+                val frame = pacer.awaitFrame()
                 val delta = selectHomePresentationFrameDeltaSeconds((frame - previousFrame) / 1_000_000_000f)
                 renderTimeSecondsValue += delta
                 menuMotion.advance(activeTargetValue, delta, elementHuesValue)
@@ -177,7 +179,7 @@ class DefaultHomeFeature(
                         (event.key != Key.DirectionDown && event.key != Key.DirectionUp)) false
                     else {
                         val step = if (event.key == Key.DirectionDown) 1 else -1
-                        val targets = HomeNavigationTargets
+                        val targets = HomeMenuTargets
                         val index = targets.indexOf(activeTargetValue)
                         activeTargetValue = targets[(index + step + targets.size) % targets.size]
                         actionFocus.getValue(activeTargetValue).requestFocus()
@@ -213,7 +215,6 @@ class DefaultHomeFeature(
                         HomeSemanticAction(
                             action = action,
                             density = localDensity,
-                            characterName = uiModel.coreShape(uiModel.coreShape).displayName.localizedContent(language),
                             focusRequester = actionFocus.getValue(action.target),
                             onFocus = { focused ->
                                 if (focused) focusedTargetValue = action.target
@@ -254,14 +255,13 @@ class DefaultHomeFeature(
 private fun HomeSemanticAction(
     action: HomeActionBounds,
     density: Density,
-    characterName: String,
     focusRequester: FocusRequester,
     onFocus: (Boolean) -> Unit,
     onHover: () -> Unit,
     onClick: () -> Unit,
 ) {
     val language = LocalAppLanguage.current
-    val description = action.target.homeContentDescription(language, characterName)
+    val description = action.target.homeContentDescription(language)
     val onHoverValue by rememberUpdatedState(onHover)
     Box(
         Modifier
@@ -334,10 +334,8 @@ private fun Modifier.placeInHomeBounds(bounds: Rect, density: Density): Modifier
         )
 
 private fun HomeLayoutTarget.homeTestTag(): String = when (this) {
-    HomeLayoutTarget.HANGAR -> "kinetickk.home.hangar"
     HomeLayoutTarget.START -> "kinetickk.home.start"
-    HomeLayoutTarget.LAB -> "kinetickk.home.lab"
-    HomeLayoutTarget.ARMORY -> "kinetickk.home.armory"
+    HomeLayoutTarget.WORKSHOP -> "kinetickk.home.workshop"
     HomeLayoutTarget.REBIRTH -> "kinetickk.home.rebirth"
     HomeLayoutTarget.CODEX -> "kinetickk.home.codex"
     HomeLayoutTarget.SETTINGS -> "kinetickk.home.settings"
@@ -348,11 +346,9 @@ private fun HomeInfoTarget.homeInfoTestTag(): String = when (this) {
     HomeInfoTarget.FORM -> "kinetickk.home.info.form"
 }
 
-private fun HomeLayoutTarget.homeContentDescription(language: AppLanguage, characterName: String): String = when (this) {
-    HomeLayoutTarget.HANGAR -> language.text(SessionText.HANGAR_DESCRIPTION, characterName)
+private fun HomeLayoutTarget.homeContentDescription(language: AppLanguage): String = when (this) {
     HomeLayoutTarget.START -> language.text(SessionText.START_DESCRIPTION)
-    HomeLayoutTarget.LAB -> language.text(SessionText.LAB_DESCRIPTION)
-    HomeLayoutTarget.ARMORY -> language.text(SessionText.ARMORY_DESCRIPTION)
+    HomeLayoutTarget.WORKSHOP -> language.text(SessionText.WORKSHOP_DESCRIPTION)
     HomeLayoutTarget.REBIRTH -> language.text(SessionText.REBIRTH_DESCRIPTION)
     HomeLayoutTarget.CODEX -> language.text(SessionText.CODEX_DESCRIPTION)
     HomeLayoutTarget.SETTINGS -> language.text(SessionText.SETTINGS_DESCRIPTION)

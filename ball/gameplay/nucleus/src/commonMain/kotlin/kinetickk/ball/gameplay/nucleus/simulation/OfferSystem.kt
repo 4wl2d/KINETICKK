@@ -4,12 +4,13 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.EffectCondition
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
-import kinetickk.ball.content.api.lifetimeMatterOfferLevel
+import kinetickk.ball.content.api.isDataEconomy
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
@@ -21,12 +22,13 @@ internal enum class OfferLane { ALIGNED, EXPERIMENTAL, VOLATILE }
 
 internal const val PITY_OFFERS: Int = 6
 
-/** Items that may appear in an ordinary offer right now. */
+/** The top resonance tier, where a tag's points count only the lane policy's saturated share toward fit. */
+private const val TOP_RESONANCE_TIER: Int = 3
+
+/** Items that may appear in an ordinary offer right now: dealt into the run's deck and offerable. */
 internal fun MutableGameState.offerableItems(): List<ItemDefinition> {
-    val catalogLevel = max(level, lifetimeMatterOfferLevel(lifetimeMatter))
-    return content.items.filter { item ->
-        item.unlockLevel <= catalogLevel && item.minimumRebirth <= rebirthRank && hasUsefulItemEffect(item)
-    }
+    val catalogLevel = offerCatalogLevel()
+    return content.items.filter { item -> item.id in itemDeck && offerableOutsideDeck(item, catalogLevel) }
 }
 
 /**
@@ -40,21 +42,45 @@ internal fun MutableGameState.offerCardsAlreadyAdded(item: ItemDefinition): Bool
 internal fun MutableGameState.itemOfferSize(): Int =
     min(MAX_GENERATED_REWARD_CHOICES, 3 + (if (build.offerCards > 0) 1 else 0) + (if (matrixWidensItemOffer()) 1 else 0))
 
-/** Points the build has in [item]'s tags and elements; reaction items count the reaction pseudo-tag. */
-private fun MutableGameState.fit(item: ItemDefinition): Float {
+/**
+ * Points the build has in [item]'s tags and elements; reaction items count the reaction pseudo-tag. A tag counts only
+ * with points the player chose (the character's own point is left out unless the lane policy lets the loadout fit) and
+ * counts the policy's saturated share once it reached the top resonance tier. An item naming the equipped weapon's
+ * family fits once [familyFits]: the loadout fits, or the build already took an item of that family.
+ */
+private fun MutableGameState.fit(item: ItemDefinition, familyFits: Boolean): Float {
+    val lanes = content.build.policy.offerLanes
+    val characterTag = coreShape.characterTag()
     var shared = 0f
-    item.tags.forEach { if (build.tagPoints(it) > 0) shared += 1f }
+    item.tags.forEach { tag ->
+        val chosen = build.tagPoints(tag) - if (!lanes.loadoutFits && tag == characterTag) 1 else 0
+        if (chosen > 0) shared += if (tagTier(tag) >= TOP_RESONANCE_TIER) lanes.saturatedTagFit else 1f
+    }
     item.elements.forEach { if (build.affinity(it) > 0) shared += 0.75f }
     if (item.isReactionItem()) {
         val elementsInPlay = kinetickk.ball.content.api.StatusElement.entries.count { affinityTier(it) >= 1 }
         shared += max(0, elementsInPlay - 1).toFloat()
     }
+    if (familyFits && item.namesWeaponFamily(currentWeaponDefinition.family)) shared += 1f
     return shared
 }
 
-private fun ItemDefinition.isReactionItem(): Boolean = rules.any {
-    it is ItemRule.ReactionPower || it is ItemRule.ReactionResidue || it is ItemRule.ReactionRecoil
+/** True when family items fit the aligned lane: the loadout fits, or the build owns an item naming the equipped family. */
+private fun MutableGameState.weaponFamilyFits(): Boolean {
+    if (content.build.policy.offerLanes.loadoutFits) return true
+    val family = currentWeaponDefinition.family
+    return content.items.any { itemStacks[it.id] > 0 && it.namesWeaponFamily(family) }
 }
+
+private fun ItemDefinition.isReactionItem(): Boolean = rules.any {
+    it is ItemRule.ReactionPower || it is ItemRule.ReactionResidue || it is ItemRule.ReactionRecoil ||
+        it is ItemRule.ReactionKeystone || it is ItemRule.ReactionTuning || it is ItemRule.CatalysisRate
+}
+
+/** True when one of [this] item's conditions names weapon [family]. */
+private fun ItemDefinition.namesWeaponFamily(family: kinetickk.ball.content.api.WeaponFamily): Boolean =
+    clauses.any { clause -> clause.conditions.any { it is EffectCondition.WeaponFamilyIs && it.family == family } } ||
+        rules.any { it is ItemRule.WhileModifier && it.condition.let { c -> c is EffectCondition.WeaponFamilyIs && c.family == family } }
 
 /** True when the item would open a tag or element the build has fewer than two points in. */
 private fun MutableGameState.experimental(item: ItemDefinition): Boolean =
@@ -63,13 +89,20 @@ private fun MutableGameState.experimental(item: ItemDefinition): Boolean =
 /**
  * Builds a build-aware item offer from [rewardRandom]: an aligned card, an experimental card and a volatile card
  * (Gambler's Ledger adds a second volatile card). Every card rolls a rarity and keeps it; a lane only chooses
- * inside that tier. The volatile card usually rolls one rarity higher and then prefers risk items when it lands
- * on their tier, and the pity card never rolls below Rare. A rolled tier with no available item falls to the
+ * inside that tier. The volatile card usually rolls one rarity higher and then sometimes prefers risk items when it
+ * lands on their tier, and the pity card never rolls below Rare. A rolled tier with no available item falls to the
  * nearest lower tier (not below Rare for pity while any Rare or better is available), then to the nearest
- * higher one. Never guarantees a perfect synergy; suppressed items are excluded or down-weighted. Each card
- * draws the rarity, lane, pick and Reborn values from [rewardRandom] in that order.
+ * higher one. Never guarantees a perfect synergy; suppressed items are excluded or down-weighted, recently taken
+ * items (the Profile's history) are down-weighted in every lane, and the Matrix's Data offer weight raises Data-economy
+ * items in every lane (weights only, no draw). Only items dealt into the run's deck appear (the deck
+ * is refilled first). Each card draws the rarity, lane, pick and Reborn values from [rewardRandom] in that order.
+ * When [rankUpReplacesExperimental], a rank-up card will take the experimental card's place, so that card's rarity
+ * never satisfies pity: the volatile card is still forced to Rare.
  */
-internal fun MutableGameState.buildItemChoices() {
+internal fun MutableGameState.buildItemChoices(rankUpReplacesExperimental: Boolean = false) {
+    refillItemDeck()
+    val lanePolicy = content.build.policy.offerLanes
+    val familyFits = weaponFamilyFits()
     val pool = offerableItems()
     val selected = mutableListOf<ItemDefinition>()
     val reborns = mutableListOf<Boolean>()
@@ -83,25 +116,29 @@ internal fun MutableGameState.buildItemChoices() {
         if (available.isEmpty()) break
         var rarity = rollRarity()
         val laneRoll = rewardRandom.nextFloat()
-        val volatileLift = lane == OfferLane.VOLATILE && laneRoll < 0.6f
+        val volatileLift = lane == OfferLane.VOLATILE && laneRoll < lanePolicy.volatileLiftChance
         if (volatileLift) rarity = ItemRarity.entries.firstOrNull { it.rank == rarity.rank + 1 } ?: rarity
         val pityCard = lane == OfferLane.VOLATILE && pityDue && !rareOrBetter
         if (pityCard) rarity = maxOf(rarity, ItemRarity.RARE)
         val floor = if (pityCard && available.any { it.rarity.rank >= ItemRarity.RARE.rank }) ItemRarity.RARE else ItemRarity.COMMON
         val tier = available.nearestRarityTier(rarity, floor)
         val candidates = when (lane) {
-            OfferLane.ALIGNED -> if (laneRoll < 0.75f) tier.filter { fit(it) > 0f && itemSuppressedShare(it) == 0f } else emptyList()
+            OfferLane.ALIGNED -> if (laneRoll < lanePolicy.alignedChance) {
+                tier.filter { fit(it, familyFits) > 0f && itemSuppressedShare(it) == 0f }
+            } else emptyList()
             OfferLane.EXPERIMENTAL -> if (laneRoll < 0.7f) tier.filter(::experimental) else emptyList()
-            OfferLane.VOLATILE -> if (volatileLift) tier.filter { it.risk } else emptyList()
+            OfferLane.VOLATILE -> if (laneRoll < lanePolicy.volatileRiskChance) tier.filter { it.risk } else emptyList()
         }.ifEmpty { tier }
         val weights = FloatArray(candidates.size) { index ->
             val item = candidates[index]
-            val base = if (lane == OfferLane.ALIGNED) 1f + 0.8f * fit(item) else 1f
-            base * (1f - itemSuppressedShare(item))
+            val base = if (lane == OfferLane.ALIGNED) 1f + lanePolicy.alignedFitWeight * min(fit(item, familyFits), lanePolicy.alignedFitCap) else 1f
+            base * (1f - itemSuppressedShare(item)) * (1f - itemDormantShare(item)) * itemHistory.offerWeight(item.id) *
+                (if (item.isDataEconomy) matrix.dataOfferWeight else 1f)
         }
         val choice = candidates[weightedIndex(weights)]
         selected += choice
-        if (choice.rarity.rank >= ItemRarity.RARE.rank) rareOrBetter = true
+        val shown = !(rankUpReplacesExperimental && lane == OfferLane.EXPERIMENTAL)
+        if (shown && choice.rarity.rank >= ItemRarity.RARE.rank) rareOrBetter = true
         reborns += rewardRandom.nextFloat() < rebornChance()
     }
     choices = selected.mapIndexed { index, item ->

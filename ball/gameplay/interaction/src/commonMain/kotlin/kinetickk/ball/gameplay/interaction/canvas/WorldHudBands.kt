@@ -7,6 +7,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
+import kinetickk.ball.gameplay.interaction.layout.RunningControlMask
+import kinetickk.ball.gameplay.interaction.layout.SKILL_KEY_CAP_REACH_DP
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.regularHudUnit
@@ -77,15 +79,32 @@ internal class WorldHudKeepOut {
         val centerX = width * 0.5f
         var controlsLeft = Float.POSITIVE_INFINITY
         var controlsTop = Float.POSITIVE_INFINITY
+        var skillsLeft = Float.POSITIVE_INFINITY
+        var skillsTop = Float.POSITIVE_INFINITY
+        var skillsRight = Float.NEGATIVE_INFINITY
+        var skillsBottom = Float.NEGATIVE_INFINITY
         var headerBottom = 0f
-        forEachRunningControlBounds(width, height, scale) { target, left, top, _, bottom ->
-            if (target == RunningControlTarget.DASH || target == RunningControlTarget.BRAKE) {
-                controlsLeft = min(controlsLeft, left)
-                controlsTop = min(controlsTop, top)
-            } else {
-                headerBottom = max(headerBottom, bottom) // pause and performance in the top row
+        // Every control that may appear (the skill row and the Apex badge included), so the regions
+        // do not move when the first skill is drafted or the Apex unlocks.
+        forEachRunningControlBounds(width, height, scale, RunningControlMask.ALL) { target, left, top, right, bottom ->
+            when (target) {
+                RunningControlTarget.DASH, RunningControlTarget.BRAKE -> {
+                    controlsLeft = min(controlsLeft, left)
+                    controlsTop = min(controlsTop, top)
+                }
+                RunningControlTarget.SKILL_1, RunningControlTarget.SKILL_2, RunningControlTarget.SKILL_3 -> {
+                    skillsLeft = min(skillsLeft, left)
+                    skillsTop = min(skillsTop, top)
+                    skillsRight = max(skillsRight, right)
+                    skillsBottom = max(skillsBottom, bottom)
+                }
+                // Pause and performance in the top row, the Apex badge at the top-left.
+                RunningControlTarget.PAUSE, RunningControlTarget.PERFORMANCE, RunningControlTarget.APEX ->
+                    headerBottom = max(headerBottom, bottom)
             }
         }
+        // REGULAR skill squares carry their key caps below them.
+        if (mode == GameplayLayoutMode.REGULAR && skillsBottom.isFinite()) skillsBottom += SKILL_KEY_CAP_REACH_DP * unit
         val clockBottom = HudTopGeometry.clockTop(frame) + HudTopGeometry.clockHeight(frame)
         when (mode) {
             GameplayLayoutMode.REGULAR -> {
@@ -129,6 +148,7 @@ internal class WorldHudKeepOut {
             add(minimap[0] - pad, minimap[1] - pad, minimap[2] + pad, minimap[3] + pad)
         }
         if (controlsLeft.isFinite()) add(controlsLeft - pad, controlsTop - pad, width, height)
+        if (skillsLeft.isFinite()) add(skillsLeft - pad, skillsTop - pad, skillsRight + pad, skillsBottom + pad)
         return this
     }
 

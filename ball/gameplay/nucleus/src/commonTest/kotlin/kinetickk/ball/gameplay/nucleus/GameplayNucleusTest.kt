@@ -6,6 +6,7 @@ package kinetickk.ball.gameplay.nucleus
 import kinetickk.ball.profile.api.ProfileProgressApplied
 import kinetickk.ball.profile.api.ProfileRefusal
 
+import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.BrakeSource
@@ -31,6 +32,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.MatrixProgress
+import kinetickk.ball.profile.api.PermanentUpgrades
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
@@ -216,12 +218,70 @@ class GameplayNucleusTest {
             valid.copy(
                 profile = valid.profile.copy(economy = PlayerEconomy(2, 1)),
             ) to GameplayConfigurationRejection.LIFETIME_MATTER_BELOW_CURRENT,
+            valid.copy(
+                profile = valid.profile.copy(
+                    upgrades = PermanentUpgrades(
+                        characterLevels = List(CoreShape.entries.size) { 0 },
+                        weaponLevels = List(WeaponId.entries.size) { if (it == 0) 11 else 0 },
+                    ),
+                ),
+            ) to GameplayConfigurationRejection.UPGRADE_LEVEL_OUT_OF_RANGE,
+            valid.copy(
+                profile = valid.profile.copy(collection = valid.profile.collection.copy(recentItemIds = List(65) { 0 }.toImmutableList())),
+            ) to GameplayConfigurationRejection.RECENT_ITEM_HISTORY_INVALID,
+            valid.copy(
+                profile = valid.profile.copy(
+                    collection = valid.profile.collection.copy(recentItemIds = listOf(0, valid.content.items.size).toImmutableList()),
+                ),
+            ) to GameplayConfigurationRejection.RECENT_ITEM_HISTORY_INVALID,
         )
 
         configurations.forEach { (inputs, expected) ->
             assertEquals(expected, GameplayNucleus.validateStartInputs(inputs))
         }
         assertNull(GameplayNucleus.validateStartInputs(valid))
+        // The newest 64 acquisitions, repeats included, are a valid history.
+        val fullHistory = List(64) { it % 3 }.toImmutableList()
+        assertNull(GameplayNucleus.validateStartInputs(valid.copy(profile = valid.profile.copy(
+            collection = valid.profile.collection.copy(recentItemIds = fullHistory)))))
+    }
+
+    @Test
+    fun startRejectsUpgradeLevelsOutsideTheContentRange() {
+        val valid = validStartInputs()
+        val maxLevel = valid.content.upgrades.maxLevel
+        fun withUpgrades(characters: List<Int>, weapons: List<Int>) =
+            valid.copy(profile = valid.profile.copy(upgrades = PermanentUpgrades(characters, weapons)))
+        val noCharacters = List(CoreShape.entries.size) { 0 }
+        val noWeapons = List(WeaponId.entries.size) { 0 }
+        val shape = valid.profile.loadout.coreShape
+        val weapon = valid.profile.loadout.selectedWeapon
+        val maxed = withUpgrades(
+            List(CoreShape.entries.size) { if (it == shape.ordinal) maxLevel else 0 },
+            List(WeaponId.entries.size) { if (it == weapon.ordinal) maxLevel else 0 },
+        )
+        assertNull(GameplayNucleus.validateStartInputs(maxed))
+        listOf(
+            withUpgrades(noCharacters.mapIndexed { index, level -> if (index == 11) maxLevel + 1 else level }, noWeapons),
+            withUpgrades(noCharacters, noWeapons.mapIndexed { index, level -> if (index == 23) maxLevel + 1 else level }),
+            withUpgrades(noCharacters.mapIndexed { index, level -> if (index == 0) -1 else level }, noWeapons),
+            withUpgrades(noCharacters, noWeapons.mapIndexed { index, level -> if (index == 0) -1 else level }),
+            withUpgrades(noCharacters.dropLast(1), noWeapons),
+            withUpgrades(noCharacters + 0, noWeapons),
+            withUpgrades(noCharacters, noWeapons.dropLast(1)),
+            withUpgrades(noCharacters, noWeapons + 0),
+        ).forEach { inputs ->
+            assertEquals(GameplayConfigurationRejection.UPGRADE_LEVEL_OUT_OF_RANGE, GameplayNucleus.validateStartInputs(inputs))
+        }
+        // The accepted levels are what the started run applies: Refit for the selected character, Honing by weapon.
+        val frame = accepted(
+            GameplayNucleus.decide(initial(12), GameplayNucleusPulse.StartRun,
+                GameplayContext(start = GameplayStartContext.Ready(maxed))),
+        )
+        val model = frame.nextState.engine!!.model
+        assertEquals(maxLevel, model.characterUpgradeLevel)
+        assertEquals(maxLevel, model.weaponUpgradeLevels[weapon.ordinal])
+        assertEquals(0, model.weaponUpgradeLevels[(weapon.ordinal + 1) % WeaponId.entries.size])
     }
 
     @Test

@@ -44,10 +44,13 @@ internal fun MutableGameState.onEnemyKilled(enemy: Enemy) {
     grantMatter(profile.matterReward * comboMultiplier * content.tempo.matterRewardMultiplier)
     val dataCount = profile.dataDrops
     gainOverdrive(dataCount * 1.8f)
+    // Erasure: an executed victim's Data rushes to the Core (the scatter draws stay the same).
+    val latched = erasureLatchId == enemy.id && latchedVacuumActive()
+    if (erasureLatchId == enemy.id) erasureLatchId = -1
     repeat(dataCount) {
         val angle = gameplayRandom.nextFloat() * TAU
         val pickupSpeed = 28f + gameplayRandom.nextFloat() * 70f
-        addPickup(Pickup(PickupType.DATA, enemy.x, enemy.y, cos(angle) * pickupSpeed, sin(angle) * pickupSpeed))
+        addPickup(Pickup(PickupType.DATA, enemy.x, enemy.y, cos(angle) * pickupSpeed, sin(angle) * pickupSpeed, attracted = latched))
     }
     if (eliteReward) {
         addPickup(Pickup(PickupType.KEY, enemy.x, enemy.y))

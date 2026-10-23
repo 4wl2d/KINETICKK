@@ -257,10 +257,10 @@ class ExpansionItemsTest {
         val pair = listOf("Gambler's Ledger", "Cornucopia Core")
         for (held in pair) {
             val other = pair.single { it != held }
-            val fresh = buildTestState(rebirth = 10).apply { lifetimeMatter = 4_000L }
+            val fresh = buildTestState(rebirth = 10).dealWholeCatalog().apply { lifetimeMatter = 4_000L }
             assertTrue(fresh.itemNamed(other) in fresh.offerableItems(), "$other is offered to a build without $held")
 
-            val state = buildTestState(rebirth = 10).apply {
+            val state = buildTestState(rebirth = 10).dealWholeCatalog().apply {
                 lifetimeMatter = 4_000L
                 own(held)
             }
@@ -280,7 +280,8 @@ class ExpansionItemsTest {
             val item = state.itemNamed("Compound Interest")
             val perLevel = 8f * state.build.magnitude(item.id) * state.build.bonus(item.id)
             state.level = 2
-            state.nextLevelData = tempo.dataRequiredForLevel(2)
+            // Rebirth 7 scales every requirement of the run; the mirror reads the same tier-scaled table.
+            state.nextLevelData = state.dataRequiredForLevel(2)
             state.data = state.nextLevelData - 1
             state.dataFraction = 0f
 
@@ -297,8 +298,8 @@ class ExpansionItemsTest {
                 data += whole
             }
             gain(chunk)
-            while (data >= tempo.dataRequiredForLevel(level)) {
-                data -= tempo.dataRequiredForLevel(level)
+            while (level < tempo.maximumLevel && data >= state.dataRequiredForLevel(level)) {
+                data -= state.dataRequiredForLevel(level)
                 level++
                 if (tempo.grantsWeaponAmplification(level) && weapon < weaponCap) weapon++
                 gain(perLevel)
@@ -307,7 +308,7 @@ class ExpansionItemsTest {
             state.gainData(chunk)
             assertEquals(level, state.level, "Level after $chunk Data")
             assertEquals(data, state.data, "Data after $chunk Data")
-            assertEquals(tempo.dataRequiredForLevel(level), state.nextLevelData)
+            assertEquals(state.dataRequiredForLevel(level), state.nextLevelData)
             assertEquals(weapon, state.weaponLevel, "Weapon level after $chunk Data")
             assertTrue(abs(fraction - state.dataFraction) < 0.001f)
         }

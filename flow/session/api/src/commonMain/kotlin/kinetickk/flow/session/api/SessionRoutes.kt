@@ -3,17 +3,18 @@
 
 package kinetickk.flow.session.api
 
-/** Closed inventory of the eight application routes. */
+/** Closed inventory of the six application routes. */
 sealed interface AppDestination {
     data object Home : AppDestination
     data object Gameplay : AppDestination
     data object Settings : AppDestination
-    data object Lab : AppDestination
-    data object Armory : AppDestination
+    /**
+     * Characters, weapons and the Core Matrix behind one tabbed overlay. It opens over Home and
+     * over a paused (or pausing) run; character selection stays a Home-only Session decision.
+     */
+    data object Workshop : AppDestination
     data object Rebirth : AppDestination
     data object Codex : AppDestination
-    /** Character selection; opens only over the Home base. */
-    data object Hangar : AppDestination
 }
 
 fun AppDestination.isBaseDestination(): Boolean = when (this) {
@@ -21,11 +22,9 @@ fun AppDestination.isBaseDestination(): Boolean = when (this) {
     AppDestination.Gameplay,
     -> true
     AppDestination.Settings,
-    AppDestination.Lab,
-    AppDestination.Armory,
+    AppDestination.Workshop,
     AppDestination.Rebirth,
     AppDestination.Codex,
-    AppDestination.Hangar,
     -> false
 }
 
@@ -33,15 +32,13 @@ fun AppDestination.isOverlayDestination(): Boolean = !isBaseDestination()
 
 enum class SessionShortcut {
     SETTINGS,
-    LAB,
-    ARMORY,
+    /** W: toggles the Workshop (the tab aliases L, A and H are presentation keys mapped by Interaction). */
+    WORKSHOP,
     REBIRTH,
     CODEX,
     MUTE,
     BACK,
     ENTER,
-    /** H: the Hangar, from the Home base only. */
-    HANGAR,
 }
 
 enum class SessionLifecycle {

@@ -27,6 +27,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -51,7 +53,6 @@ import kinetickk.ball.profile.interaction.PROFILE_DESCRIPTION_MAX_LINES
 import kinetickk.ball.profile.interaction.PROFILE_SMALLEST_TEXT_SCALE
 import kinetickk.ball.profile.interaction.ProfileFrame
 import kinetickk.ball.profile.interaction.ProfileLayoutMode
-import kinetickk.ball.profile.interaction.ProfilePanel
 import kinetickk.ball.profile.interaction.ProfileSlabButton
 import kinetickk.ball.profile.interaction.ProfileTextProbe
 import kinetickk.ball.profile.interaction.dp
@@ -82,125 +83,131 @@ internal class MatrixLayoutHolder {
     var layout: MatrixLayout? = null
 }
 
-/** The Matrix screen; [textScale] is the player's text-size setting (1.25 = the boards' size). */
+/**
+ * The Workshop's Core Matrix body inside the panel's [frame]: the node grid, the detail panel and
+ * the Buy rank action. [textScale] is the player's text-size setting (1.25 = the boards' size).
+ * [gridExtra] (Reset, when the landscape header has no room for it) sits at the grid's top-right
+ * corner; [focusSerial] moves keyboard focus to the selected tile when it changes.
+ */
 @Composable
-internal fun MatrixContent(
+internal fun MatrixBody(
+    frame: ProfileFrame,
     state: MatrixState,
     textScale: Float,
     gridScroll: ScrollState,
     holder: MatrixLayoutHolder = remember { MatrixLayoutHolder() },
+    focusSerial: Int = 0,
+    gridExtra: (@Composable RowScope.() -> Unit)? = null,
     onAction: (MatrixAction) -> Unit,
 ) {
     val scale = profileTextScale(textScale)
     val language = LocalAppLanguage.current
     val model = state.model
-    val (owned, total) = model.nodeTotals()
-    val headerMeasurer = rememberKkCanvasMeasurer(scale)
-    ProfilePanel(
-        title = language.text(ProfileText.MatrixTitle),
-        count = language.text(ProfileScreensRedesignText.CountOf, owned, total),
-        info = language.text(ProfileScreensRedesignText.MatrixInfo),
-        matter = model.matter,
-        scale = scale,
-        tag = "profile-matrix",
-        onBack = { onAction(MatrixAction.Back) },
-        background = { frame -> drawMatrixBackground(frame, holder.layout) },
-        headerExtra = { frame -> MatrixResetButton(frame, state, headerMeasurer, scale, language, onAction) },
-        headerExtraWidth = { frame -> matrixResetWidth(headerMeasurer, frame, language) },
-    ) { frame ->
-        val measurer = rememberKkCanvasMeasurer(scale)
-        val type = matrixType(frame.mode)
-        val backWidth = profileHeaderBackWidth(measurer, frame, language.text(ProfileScreensRedesignText.Back))
-        val selected = state.selectedNode
-        val layout = matrixLayout(frame, model, scale, backWidth) { width ->
-            if (selected == null) 0f else matrixDescriptionLayout(measurer, frame, type, selected, language, width).kkBoxHeight
-        }
-        SideEffect { holder.layout = layout }
-        val grid = layout.gridViewport
-        val selectedIndex = model.nodes.indexOfFirst { it.id == selected?.id }
-        LaunchedEffect(selectedIndex, grid.height, layout.gridContentHeight) {
-            val tile = layout.tiles.getOrNull(selectedIndex) ?: return@LaunchedEffect
-            val target = matrixRevealScroll(gridScroll.value.toFloat(), tile, grid.height, layout.gridScrollMax,
-                matrixGridFade(frame)) ?: return@LaunchedEffect
-            gridScroll.animateScrollTo(target.roundToInt().coerceAtMost(gridScroll.maxValue))
-        }
-        val links = remember(layout, model) { matrixLinks(layout, model) }
+    val measurer = rememberKkCanvasMeasurer(scale)
+    val type = matrixType(frame.mode)
+    val backWidth = profileHeaderBackWidth(measurer, frame, language.text(ProfileScreensRedesignText.Back))
+    val selected = state.selectedNode
+    val layout = matrixLayout(frame, model, scale, backWidth) { width ->
+        if (selected == null) 0f else matrixDescriptionLayout(measurer, frame, type, selected, language, width).kkBoxHeight
+    }
+    SideEffect { holder.layout = layout }
+    val grid = layout.gridViewport
+    val selectedIndex = model.nodes.indexOfFirst { it.id == selected?.id }
+    LaunchedEffect(selectedIndex, grid.height, layout.gridContentHeight) {
+        val tile = layout.tiles.getOrNull(selectedIndex) ?: return@LaunchedEffect
+        val target = matrixRevealScroll(gridScroll.value.toFloat(), tile, grid.height, layout.gridScrollMax,
+            matrixGridFade(frame)) ?: return@LaunchedEffect
+        gridScroll.animateScrollTo(target.roundToInt().coerceAtMost(gridScroll.maxValue))
+    }
+    val links = remember(layout, model) { matrixLinks(layout, model) }
+    val selectedFocus = remember { FocusRequester() }
+    LaunchedEffect(focusSerial) { if (focusSerial > 0) selectedFocus.requestFocus() }
+    Box(
+        Modifier.offset { IntOffset(grid.left.roundToInt(), grid.top.roundToInt()) }
+            .size(frame.dp(grid.width), frame.dp(grid.height))
+            .semantics { contentDescription = language.text(ProfileScreensRedesignText.MatrixNodes) }
+            .profileScrollBar(gridScroll, grid.width - matrixScrollBarWidth(frame), matrixScrollBarWidth(frame),
+                frame.d(MATRIX_GRID_PAD), Kk.Mute, Kk.Line2, "matrix.grid.thumb")
+            .profileScrollCue(gridScroll, Kk.Ink, matrixGridFade(frame))
+            .verticalScroll(gridScroll)
+            .testTag("profile-matrix-scroll"),
+    ) {
         Box(
-            Modifier.offset { IntOffset(grid.left.roundToInt(), grid.top.roundToInt()) }
-                .size(frame.dp(grid.width), frame.dp(grid.height))
-                .semantics { contentDescription = language.text(ProfileScreensRedesignText.MatrixNodes) }
-                .profileScrollBar(gridScroll, grid.width - matrixScrollBarWidth(frame), matrixScrollBarWidth(frame),
-                    frame.d(MATRIX_GRID_PAD), Kk.Mute, Kk.Line2, "matrix.grid.thumb")
-                .profileScrollCue(gridScroll, Kk.Ink, matrixGridFade(frame))
-                .verticalScroll(gridScroll)
-                .testTag("profile-matrix-scroll"),
+            Modifier.fillMaxWidth().height(frame.dp(layout.gridContentHeight))
+                .drawBehind { drawMatrixGridBackdrop(measurer, frame, type, layout, model, links, language) },
+        ) {
+            model.nodes.forEachIndexed { index, node ->
+                MatrixTile(frame, type, layout.tiles[index], node, node.id == selected?.id,
+                    state.flash?.takeIf { it.id == node.id }, scale, language, onAction,
+                    focusRequester = if (node.id == selected?.id) selectedFocus else null)
+            }
+        }
+    }
+    if (gridExtra != null) {
+        // Landscape without header room: the extra sits in the grid's top-right corner, inset d(6).
+        val inset = frame.d(6f)
+        androidx.compose.foundation.layout.Row(
+            Modifier.offset { IntOffset(grid.left.roundToInt(), (grid.top + inset).roundToInt()) }
+                .size(frame.dp((grid.width - inset - matrixScrollBarWidth(frame)).coerceAtLeast(0f)), frame.dp(frame.d(30f))),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End,
+        ) { gridExtra() }
+    }
+    if (selected != null) {
+        val detail = layout.detailViewport
+        val detailScroll = remember(selected.id) { ScrollState(0) }
+        Box(
+            Modifier.offset { IntOffset(detail.left.roundToInt(), detail.top.roundToInt()) }
+                .size(frame.dp(detail.width), frame.dp(detail.height))
+                .profileScrollCue(detailScroll, Kk.Ink1, frame.d(24f))
+                .verticalScroll(detailScroll)
+                .testTag("profile-matrix-detail"),
         ) {
             Box(
-                Modifier.fillMaxWidth().height(frame.dp(layout.gridContentHeight))
-                    .drawBehind { drawMatrixGridBackdrop(measurer, frame, type, layout, model, links, language) },
-            ) {
-                model.nodes.forEachIndexed { index, node ->
-                    MatrixTile(frame, type, layout.tiles[index], node, node.id == selected?.id,
-                        state.flash?.takeIf { it.id == node.id }, scale, language, onAction)
-                }
-            }
-        }
-        if (selected != null) {
-            val detail = layout.detailViewport
-            val detailScroll = remember(selected.id) { ScrollState(0) }
-            Box(
-                Modifier.offset { IntOffset(detail.left.roundToInt(), detail.top.roundToInt()) }
-                    .size(frame.dp(detail.width), frame.dp(detail.height))
-                    .profileScrollCue(detailScroll, Kk.Ink1, frame.d(24f))
-                    .verticalScroll(detailScroll)
-                    .testTag("profile-matrix-detail"),
-            ) {
-                Box(
-                    Modifier.fillMaxWidth().height(frame.dp(layout.detailContentHeight))
-                        .semantics {
-                            contentDescription = selected.name.localizedContent(language) + ". " +
-                                selected.description.localizedContent(language) + " " +
-                                matrixStatusDetail(selected, model, language)
-                        }
-                        .drawBehind {
-                            translate(-detail.left, -detail.top) { drawMatrixDetail(measurer, frame, type, layout, selected, model, language) }
-                        },
-                )
-            }
-            val buy = layout.buy
-            if (layout.buyPinned) {
-                Box(Modifier.offset { IntOffset(detail.left.roundToInt(), detail.bottom.roundToInt()) }
-                    .size(frame.dp(detail.width), frame.dp(buy.bottom + frame.d(8f) - detail.bottom))
-                    .drawBehind { drawRect(Kk.Ink1) })
-            }
-            val label = if (selected.isMaxed) language.text(ProfileText.MaximumSynchrony) else language.text(ProfileScreensRedesignText.BuyRank)
-            val cost = if (selected.isMaxed) null else formatMatter(selected.nextCost, language)
-            ProfileSlabButton(
-                label = label,
-                onClick = { onAction(MatrixAction.PurchaseRequested(selected.id)) },
-                frame = frame,
-                tag = "profile-matrix-purchase",
-                size = if (frame.regular) KkButtonSize.LG else KkButtonSize.MD,
-                fontSize = type.buy,
-                enabled = selected.canBuy,
-                locked = selected.status == MatrixNodeStatus.REBIRTH_LOCKED || selected.status == MatrixNodeStatus.PREREQUISITE_MISSING,
-                cost = cost,
-                costScale = 1f,
-                spread = true,
-                textScale = scale,
-                contentDescription = if (cost == null) label else
-                    label + " " + language.text(ProfileScreensRedesignText.CostMatter, cost),
-                stateDescription = matrixStatusDetail(selected, model, language),
-                modifier = Modifier.offset { IntOffset(buy.left.roundToInt(), buy.top.roundToInt()) }
-                    .size(frame.dp(buy.width), frame.dp(buy.height)),
+                Modifier.fillMaxWidth().height(frame.dp(layout.detailContentHeight))
+                    .semantics {
+                        contentDescription = selected.name.localizedContent(language) + ". " +
+                            selected.description.localizedContent(language) + " " +
+                            matrixStatusDetail(selected, model, language)
+                    }
+                    .drawBehind {
+                        translate(-detail.left, -detail.top) { drawMatrixDetail(measurer, frame, type, layout, selected, model, language) }
+                    },
             )
         }
+        val buy = layout.buy
+        if (layout.buyPinned) {
+            Box(Modifier.offset { IntOffset(detail.left.roundToInt(), detail.bottom.roundToInt()) }
+                .size(frame.dp(detail.width), frame.dp(buy.bottom + frame.d(8f) - detail.bottom))
+                .drawBehind { drawRect(Kk.Ink1) })
+        }
+        val label = if (selected.isMaxed) language.text(ProfileText.MaximumSynchrony) else language.text(ProfileScreensRedesignText.BuyRank)
+        val cost = if (selected.isMaxed) null else formatMatter(selected.nextCost, language)
+        ProfileSlabButton(
+            label = label,
+            onClick = { onAction(MatrixAction.PurchaseRequested(selected.id)) },
+            frame = frame,
+            tag = "profile-matrix-purchase",
+            size = if (frame.regular) KkButtonSize.LG else KkButtonSize.MD,
+            fontSize = type.buy,
+            enabled = selected.canBuy,
+            locked = selected.status == MatrixNodeStatus.REBIRTH_LOCKED || selected.status == MatrixNodeStatus.PREREQUISITE_MISSING,
+            cost = cost,
+            costScale = 1f,
+            spread = true,
+            textScale = scale,
+            contentDescription = if (cost == null) label else
+                label + " " + language.text(ProfileScreensRedesignText.CostMatter, cost),
+            stateDescription = matrixStatusDetail(selected, model, language),
+            modifier = Modifier.offset { IntOffset(buy.left.roundToInt(), buy.top.roundToInt()) }
+                .size(frame.dp(buy.width), frame.dp(buy.height)),
+        )
     }
 }
 
 /** Header Reset: two presses (arm, confirm); disabled while no node is owned. */
 @Composable
-private fun RowScope.MatrixResetButton(
+internal fun RowScope.MatrixResetButton(
     frame: ProfileFrame,
     state: MatrixState,
     measurer: CanvasTextMeasurer,
@@ -249,6 +256,7 @@ private fun MatrixTile(
     textScale: Float,
     language: AppLanguage,
     onAction: (MatrixAction) -> Unit,
+    focusRequester: FocusRequester? = null,
 ) {
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
@@ -272,6 +280,7 @@ private fun MatrixTile(
         Modifier.offset { IntOffset(tile.left.roundToInt(), tile.top.roundToInt()) }
             .size(frame.dp(tile.width), frame.dp(tile.height))
             .testTag("profile-matrix-node-${node.id}")
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .semantics {
                 this.selected = selected
                 contentDescription = name
@@ -543,7 +552,7 @@ private fun DrawScope.drawMatrixDetail(
     drawProfileText(status, layout.status.left, layout.status.top, statusColor, "matrix.detail.status")
 }
 
-private fun DrawScope.drawMatrixBackground(frame: ProfileFrame, layout: MatrixLayout?) {
+internal fun DrawScope.drawMatrixBackground(frame: ProfileFrame, layout: MatrixLayout?) {
     drawRect(Kk.Ink)
     drawProfileGrid(frame)
     when (frame.mode) {

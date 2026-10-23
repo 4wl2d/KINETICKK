@@ -39,10 +39,13 @@ internal fun MutableGameState.buildSummary(
     weaponLevel = weaponLevel,
     mastery = currentWeaponMastery.displayLabel,
     relics = equippedRelics.toImmutableList(),
+    upgrades = upgradeLine(),
+    characterUpgradeLevel = characterUpgradeLevel,
+    weaponUpgradeLevel = weaponUpgradeLevels[weapon.ordinal],
     stats = buildStats(),
     eligibleItemIds = content.items.filter { item ->
         val ordinaryOfferEligible = item.unlockLevel <= maxOf(level, lifetimeMatterOfferLevel(lifetimeMatter)) &&
-            item.minimumRebirth <= rebirthRank
+            item.minimumRebirth <= rebirthRank && item.id in itemDeck
         val currentlyOffered = phase == GamePhase.CHOICE && choices.any { it.itemId == item.id }
         (ordinaryOfferEligible || currentlyOffered) && hasUsefulItemEffect(item)
     }.map { it.id }.toImmutableList(),
@@ -68,13 +71,20 @@ internal fun MutableGameState.buildSummary(
     suppressedItemIds = ownedSuppressedItems(),
     rebornItemIds = content.items.filter { rebornItems[it.id] != 0 }.map { it.id }.toImmutableList(),
     severedRelicIds = severedRelics.map { it.id }.toImmutableList(),
+    dormantItemIds = content.items.filter { itemStacks[it.id] > 0 && itemDormantShare(it) >= 1f }.map { it.id }.toImmutableList(),
+    outOfDeckItemIds = itemDeck.reserveIds().toImmutableList(),
 )
 
 private fun MutableGameState.ownedSuppressedItems(): ImmutableList<Int> =
     content.items.filter { itemStacks[it.id] > 0 && itemSuppressedShare(it) >= 1f }.map { it.id }.toImmutableList()
 
+/**
+ * True when [item] could still do something if taken now: not maxed, not wholly suppressed by Relics or dormant
+ * for this run, not a second card adder, and a keystone only once its reaction is reachable.
+ */
 internal fun MutableGameState.hasUsefulItemEffect(item: ItemDefinition): Boolean =
-    itemStacks[item.id] < item.maxStacks && itemSuppressedShare(item) < 1f && !offerCardsAlreadyAdded(item)
+    itemStacks[item.id] < item.maxStacks && itemSuppressedShare(item) < 1f && itemDormantShare(item) < 1f &&
+        !offerCardsAlreadyAdded(item) && (item.keystone?.let(build::reactionReachable) ?: true)
 
 /** The presentation projection of the compiled build and the relic gauges. */
 internal fun MutableGameState.buildProjection(): BuildProjection = BuildProjection(
@@ -119,9 +129,9 @@ internal fun MutableGameState.buildStats(includeTemporary: Boolean = true): Immu
     // Matrix contributions come from the folded content effects, never from duplicated numbers.
     fun matrixShare(effect: ItemEffect, base: Float): Float =
         matrix.statValue(effect, base, content.pickups.minimumMagnetRadius) - base
-    // The character's traits are part of its base column.
+    // The character's traits and its Refit are part of its base column.
     val traits = content.coreShape(coreShape).traits
-    val baseIntegrity = 100f + traits.integrityBonus
+    val baseIntegrity = 100f + traits.integrityBonus + content.upgrades.characterIntegrityPerLevel * characterUpgradeLevel
     val baseMass = traits.massMultiplier
     val baseDashHeat = 36f * traits.dashHeatMultiplier
     val baseCritChance = 0.05f + traits.critChanceBonus
@@ -129,8 +139,9 @@ internal fun MutableGameState.buildStats(includeTemporary: Boolean = true): Immu
     val basePickupRadius = content.pickups.magnetRadius + traits.pickupRadiusBonus
     stat("Impact power", damageMultiplier, 1f, matrixShare(ItemEffect.IMPACT_DAMAGE, 1f), unit = "×")
     val globalPower = rebirthProfile.playerPowerMultiplier
-    // Run growth reports with mastery: both are progression the run grants, not items.
-    val masteryPower = (1f + (weaponLevel - 1) * 0.08f) * (1f + currentWeaponMastery.damageBonus) * weaponRunGrowth()
+    // Run growth and the weapon's Honing report with mastery: progression of the weapon, not items.
+    val masteryPower = (1f + (weaponLevel - 1) * 0.08f) * (1f + currentWeaponMastery.damageBonus) * weaponRunGrowth() *
+        weaponUpgradePower()
     // Weapon synergies: tag resonance, signature and Relic key harmony last; the scaling stat and Overdrive are live.
     val synergyPower = permanentWeaponSynergy()
     val progressionPower = weaponPower * globalPower * masteryPower
@@ -186,6 +197,10 @@ internal fun MutableGameState.buildStats(includeTemporary: Boolean = true): Immu
         relics = overdriveGainFactor() - overdriveGain, unit = "×")
     return rows.toImmutableList()
 }
+
+/** The Build summary's upgrade line: the selected character's Refit and the current weapon's Honing level. */
+internal fun MutableGameState.upgradeLine(): String =
+    "Refit $characterUpgradeLevel · Honing ${weaponUpgradeLevels[weapon.ordinal]}"
 
 internal data class BuildChangeSnapshot(
     val stats: ImmutableList<BuildStatSummary>,

@@ -34,6 +34,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SkillId
+import kinetickk.ball.content.api.localizedContent
+import kinetickk.ball.gameplay.interaction.localization.GameplayText
+import kinetickk.foundation.common.localization.text
 import kinetickk.ball.gameplay.api.GameplayAcceptance
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.api.GameplayRejection
@@ -253,6 +257,104 @@ class GameplayHudSemanticsTest {
         assertRect(runningBuildButtonBounds(1_440f, 810f, 1f), build)
         assertTrue(build.right <= pause.left + 0.5f)
         assertRect(HudTrialPanelLayout().update(1_440f, 810f, 1f, model.settings.textScale).infoTarget(1f), bounds(GAMEPLAY_TRIAL_INFO_TAG))
+    }
+
+    @Test
+    fun skillSlotsAndTheApexAreButtonsWithNamesAndStatesInEnglish() = skillAndApexSemantics(AppLanguage.English)
+
+    @Test
+    fun skillSlotsAndTheApexAreButtonsWithNamesAndStatesInRussian() = skillAndApexSemantics(AppLanguage.Russian)
+
+    /**
+     * Z (ready), X (cooling) and C (not drafted) and the cooling Apex are focusable buttons over their
+     * canvas targets, described by slot and name with their state; activating a drafted slot casts it,
+     * the empty slot does nothing and the Apex node requests the Apex.
+     */
+    private fun skillAndApexSemantics(language: AppLanguage) {
+        val snapshot = hudTestSnapshot()
+        val model = requireNotNull(snapshot.renderModel).with(
+            *levelOverrides(HUD_TEST_LEVEL_CAP, kinetickk.ball.gameplay.nucleus.render.ApexProjection(unlocked = true, cooldown01 = 0.5f)),
+            "skillBar" to MIXED_SKILL_BAR,
+        )
+        val running = snapshot.withModel(model)
+        val pulses = mutableListOf<GameplayInteractionPulse>()
+        val port = object : GameplayInteractionPort {
+            override val instanceId get() = running.instanceId
+            override fun renderSnapshot() = running
+            override fun visualFxSnapshot() = VisualFxProjection.EMPTY
+            override fun accept(pulse: GameplayInteractionPulse): GameplayAcceptance {
+                pulses += pulse
+                return GameplayAcceptance.Rejected(running.instanceId, running.revision, GameplayRejection.RunExited)
+            }
+        }
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides language) {
+                Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
+            }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        val content = model.content
+        fun name(id: SkillId) = content.skill(id).name.localizedContent(language)
+        fun expect(tag: String, description: String, state: String?) {
+            val node = compose.onNodeWithTag(tag)
+            node.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf(description)))
+            node.assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, androidx.compose.ui.semantics.Role.Button))
+            if (state != null) node.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, state))
+            else node.assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.StateDescription))
+        }
+        expect("kinetickk.gameplay.skill.0", language.text(GameplayText.SkillSlotDescription, 1, name(SkillId.STORM_COIL)),
+            language.text(GameplayText.ReadyState))
+        expect("kinetickk.gameplay.skill.1", language.text(GameplayText.SkillSlotDescription, 2, name(SkillId.METEOR)),
+            language.text(GameplayText.RechargingState))
+        expect("kinetickk.gameplay.skill.2", language.text(GameplayText.SkillSlotLocked, 3), null)
+        val apexName = content.coreShape(model.coreShape).apex.name.localizedContent(language)
+        expect("kinetickk.gameplay.apex", language.text(GameplayText.ApexDescription, apexName), language.text(GameplayText.RechargingState))
+        if (language == AppLanguage.Russian) {
+            assertTrue(language.text(GameplayText.SkillSlotLocked, 3).startsWith("Навык 3"))
+            assertEquals("перезаряжается", language.text(GameplayText.RechargingState))
+        }
+        // Over their canvas targets.
+        val host = compose.onNodeWithTag(HOST_TAG).getUnclippedBoundsInRoot()
+        fun bounds(tag: String): Rect = compose.onNodeWithTag(tag).getUnclippedBoundsInRoot().let {
+            Rect(it.left.value - host.left.value, it.top.value - host.top.value, it.right.value - host.left.value, it.bottom.value - host.top.value)
+        }
+        val controls = runningControlBounds(1_440f, 810f, 1f).associate { it.target to it.bounds }
+        assertRect(controls.getValue(RunningControlTarget.SKILL_1), bounds("kinetickk.gameplay.skill.0"))
+        assertRect(controls.getValue(RunningControlTarget.SKILL_3), bounds("kinetickk.gameplay.skill.2"))
+        assertRect(controls.getValue(RunningControlTarget.APEX), bounds("kinetickk.gameplay.apex"))
+        fun activate(tag: String): List<GameplayInteractionPulse> {
+            pulses.clear()
+            compose.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.OnClick) { it() }
+            compose.mainClock.advanceTimeByFrame()
+            return pulses.filter { it !is GameplayInteractionPulse.FrameElapsed && it !is GameplayInteractionPulse.UserGestureObserved }
+        }
+        assertEquals(listOf(GameplayInteractionPulse.SkillRequested.fromValidated(0)), activate("kinetickk.gameplay.skill.0"))
+        assertEquals(emptyList(), activate("kinetickk.gameplay.skill.2"))
+        assertEquals(listOf(GameplayInteractionPulse.ApexRequested), activate("kinetickk.gameplay.apex"))
+    }
+
+    @Test
+    fun withoutASkillOrTheApexNoSkillOrApexNodeExists() {
+        val snapshot = hudTestSnapshot()
+        val running = snapshot.withModel(requireNotNull(snapshot.renderModel))
+        val port = object : GameplayInteractionPort {
+            override val instanceId get() = running.instanceId
+            override fun renderSnapshot() = running
+            override fun visualFxSnapshot() = VisualFxProjection.EMPTY
+            override fun accept(pulse: GameplayInteractionPulse): GameplayAcceptance =
+                GameplayAcceptance.Rejected(running.instanceId, running.revision, GameplayRejection.RunExited)
+        }
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides AppLanguage.English) {
+                Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
+            }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        compose.onNodeWithTag("kinetickk.gameplay.dash").assertExists()
+        listOf("kinetickk.gameplay.skill.0", "kinetickk.gameplay.skill.1", "kinetickk.gameplay.skill.2", "kinetickk.gameplay.apex")
+            .forEach { compose.onNodeWithTag(it).assertDoesNotExist() }
     }
 }
 

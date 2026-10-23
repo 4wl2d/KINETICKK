@@ -28,10 +28,12 @@ class ContentBalanceCharacterizationTest {
     fun itemCatalogCardinalityOrderingAndContentAreGolden() {
         val items = ui.items
 
-        assertEquals(173, items.size)
+        assertEquals(269, items.size)
         assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
+        // The items shipped through 0.4.0 keep their own pin: a release only appends to the catalog.
+        val shipped = items.subList(0, ITEMS_THROUGH_040)
         assertEquals(
-            "90e79f6e50b84973",
+            "68d4572118b9586d",
             goldenFingerprint {
                 add("item-effects")
                 ItemEffect.entries.forEach { effect ->
@@ -46,8 +48,18 @@ class ContentBalanceCharacterizationTest {
                     add(rarity.rank)
                 }
                 add("items")
-                add(items.size)
-                items.forEach(::addItem)
+                add(shipped.size)
+                shipped.forEach(::addItem)
+            },
+        )
+        // The 0.5.0 items, appended from id 173 and pinned on their own.
+        val appended = items.subList(ITEMS_THROUGH_040, items.size)
+        assertEquals(
+            "c11c59b06e52e3dc",
+            goldenFingerprint {
+                add("items-0.5.0")
+                add(appended.size)
+                appended.forEach(::addItem)
             },
         )
     }
@@ -57,7 +69,7 @@ class ContentBalanceCharacterizationTest {
         val build = ui.build
 
         assertEquals(
-            "6b94bfd3ccc1e1a6",
+            "d6fa6a5d0a26712d",
             goldenFingerprint {
                 build.elements.forEach { element ->
                     add(element.element.name)
@@ -78,6 +90,11 @@ class ContentBalanceCharacterizationTest {
                     add(reaction.radius)
                     add(reaction.residue?.name ?: "-")
                     add(reaction.residueStacks)
+                    reaction.values.forEach(::add)
+                    add(reaction.verb)
+                    add(reaction.cue)
+                    add(reaction.keystone)
+                    add(reaction.keystoneDescription)
                 }
                 build.resonances.forEach { resonance ->
                     add(resonance.tag.name)
@@ -190,7 +207,7 @@ class ContentBalanceCharacterizationTest {
             ui.matrixNodes.map { node -> node.id to node.costs.toList() },
         )
         assertEquals(
-            "047fe31440482621",
+            "6e61ebea0bcb73f7",
             goldenFingerprint {
                 add("weapons")
                 ui.weapons.forEach { weapon ->
@@ -266,6 +283,69 @@ class ContentBalanceCharacterizationTest {
     }
 
     @Test
+    fun skillApexAndUpgradeContentIsGolden() {
+        assertEquals(18, ui.skills.size)
+        assertEquals(
+            "0e1fa079fddfd61b",
+            goldenFingerprint {
+                add("skills")
+                ui.skills.forEach { skill ->
+                    add(skill.id.name)
+                    add(skill.name)
+                    add(skill.summary)
+                    add(skill.rankThree)
+                    add(skill.element?.name ?: "-")
+                    skill.tags.forEach { add(it.name) }
+                    add(skill.targeting.name)
+                    add(skill.reach)
+                    add(skill.family.name)
+                    skill.ranks.forEach { rank ->
+                        add(rank.cooldownSeconds)
+                        add(rank.values.size)
+                        rank.values.forEach(::add)
+                    }
+                }
+                add("apex")
+                ui.coreShapes.forEach { shape ->
+                    val apex = shape.apex
+                    add(shape.id.name)
+                    add(apex.name)
+                    add(apex.description)
+                    add(apex.durationSeconds)
+                    add(apex.cooldownSeconds)
+                    add(apex.minimumCooldownSeconds)
+                    add(apex.bossStrikes)
+                    add(apex.boltBudget)
+                    add(apex.values.size)
+                    apex.values.forEach(::add)
+                    add(shape.upgradeBaseCost)
+                    add(shape.upgradeSignature.perLevel)
+                    add(shape.upgradeSignature.secondaryPerLevel)
+                }
+                add("upgrades")
+                add(ui.upgrades.maxLevel)
+                add(ui.upgrades.characterIntegrityPerLevel)
+                add(ui.upgrades.characterPowerPerLevel)
+                add(ui.upgrades.weaponPowerPerLevel)
+                ui.weapons.forEach { weapon ->
+                    add(weapon.id.name)
+                    add(weapon.upgradeBaseCost)
+                }
+                add("tempo")
+                add(ui.tempo.maximumLevel)
+                ui.tempo.levelRequirements.forEach(::add)
+                add(ui.tempo.levelIntegrity)
+                add(ui.tempo.levelRepair)
+                ui.tempo.skillSlotLevels.forEach(::add)
+                add(ui.tempo.skillRankEveryLevels)
+                add(ui.tempo.skillRankGapLevels)
+                add(ui.tempo.rebirthScaleFromLevel)
+                ui.rebirth.profiles.forEach { add(it.dataRequirementScale) }
+            },
+        )
+    }
+
+    @Test
     fun relicLimitsOrderingAndContentIdentityAreGolden() {
         val relics = ui.relics
 
@@ -300,6 +380,9 @@ class ContentBalanceCharacterizationTest {
     }
 }
 
+/** The item catalog's size through 0.4.0: ids 0..172 (0.5.0 appends from 173). */
+private const val ITEMS_THROUGH_040 = 173
+
 /** Every Matrix effect kind with its numbers; floats enter by bits, so JVM and Wasm agree. */
 private fun GoldenFingerprint.addMatrixEffect(effect: MatrixEffect) {
     when (effect) {
@@ -327,6 +410,8 @@ private fun GoldenFingerprint.addMatrixEffect(effect: MatrixEffect) {
         is MatrixEffect.ContactDamage -> { add("contact"); add(effect.multiplier) }
         is MatrixEffect.FreeDashInterval -> { add("free-dash"); add(effect.seconds) }
         is MatrixEffect.Rerolls -> { add("rerolls"); add(effect.count) }
+        is MatrixEffect.DataStratum -> { add("data-stratum"); add(effect.items) }
+        is MatrixEffect.DataOfferWeight -> { add("data-offer-weight"); add(effect.fraction) }
         is MatrixEffect.WeaponRunGrowth -> { add("weapon-growth"); add(effect.bonusPerProgress) }
         is MatrixEffect.ShieldRegenDelay -> { add("shield-delay"); add(effect.multiplier) }
         is MatrixEffect.RicochetPhase -> { add("ricochet-phase"); add(effect.seconds) }
@@ -384,6 +469,16 @@ private fun GoldenFingerprint.addCondition(condition: EffectCondition) {
         EffectCondition.SourceImpact -> add("source-impact")
         EffectCondition.SourceWeapon -> add("source-weapon")
         is EffectCondition.ElementIs -> { add("element-is"); add(condition.element.name) }
+        is EffectCondition.ReactionIs -> { add("reaction-is"); add(condition.reaction.name) }
+        is EffectCondition.SkillIs -> { add("skill-is"); add(condition.skill.name) }
+        is EffectCondition.SkillTagged -> { add("skill-tagged"); add(condition.tag.name) }
+        EffectCondition.CoreInField -> add("core-in-field")
+        EffectCondition.TargetMarked -> add("target-marked")
+        EffectCondition.TargetControlled -> add("target-controlled")
+        EffectCondition.TargetThrown -> add("target-thrown")
+        EffectCondition.ApexActive -> add("apex-active")
+        is EffectCondition.SkillsCharging -> { add("skills-charging"); add(condition.count) }
+        is EffectCondition.WeaponFamilyIs -> { add("weapon-family-is"); add(condition.family.name) }
     }
 }
 
@@ -412,6 +507,15 @@ private fun GoldenFingerprint.addAction(action: EffectAction) {
             add("well"); add(action.radius); add(action.seconds); add(action.basis.name); add(action.scale)
             add(action.pick?.name ?: "-")
         }
+        is EffectAction.RefundSkills -> { add("refund-skills"); add(action.seconds); add(action.pick.name) }
+        is EffectAction.ChargeApex -> { add("charge-apex"); add(action.seconds) }
+        is EffectAction.ForceReaction -> { add("force-reaction"); add(action.radius); add(action.maxTargets) }
+        is EffectAction.Zone -> { add("zone"); add(action.kind.name); add(action.radius); add(action.seconds) }
+        is EffectAction.EraseShots -> { add("erase-shots"); add(action.radius); add(action.maximum) }
+        is EffectAction.CoreImpulse -> { add("core-impulse"); add(action.speed); add(action.direction.name) }
+        is EffectAction.ApplyMark -> { add("apply-mark"); add(action.mark.name); add(action.seconds) }
+        is EffectAction.Throw -> { add("throw"); add(action.speed) }
+        EffectAction.PrimeDash -> add("prime-dash")
     }
 }
 
@@ -436,6 +540,16 @@ private fun GoldenFingerprint.addRule(rule: ItemRule) {
         is ItemRule.FreeDash -> { add("free-dash"); add(rule.heat); add(rule.cooldownSeconds) }
         is ItemRule.OfferCards -> { add("offer-cards"); add(rule.count) }
         is ItemRule.Convert -> { add("convert"); add(rule.kind.name); add(rule.amount) }
+        is ItemRule.ReactionKeystone -> { add("keystone"); add(rule.reaction.name) }
+        is ItemRule.ReactionTuning -> { add("reaction-tuning"); add(rule.reaction?.name ?: "-"); add(rule.aspect.name); add(rule.amount) }
+        is ItemRule.FieldTuning -> { add("field-tuning"); add(rule.aspect.name); add(rule.amount) }
+        is ItemRule.SkillCooldown -> { add("skill-cooldown"); add(rule.element?.name ?: "-"); add(rule.amount) }
+        is ItemRule.SkillPower -> { add("skill-power"); add(rule.element?.name ?: "-"); add(rule.amount) }
+        ItemRule.SkillCharges -> add("skill-charges")
+        is ItemRule.SkillAttunement -> { add("skill-attunement"); add(rule.pick.name) }
+        is ItemRule.CatalysisRate -> { add("catalysis-rate"); add(rule.amount) }
+        is ItemRule.ApexCooldown -> { add("apex-cooldown"); add(rule.amount) }
+        is ItemRule.CoreLinkRadius -> { add("core-link-radius"); add(rule.bonus) }
     }
 }
 

@@ -23,6 +23,7 @@ class OverlayInputMappingTest {
         val resume = assertIs<GameplayInput.Action>(paused.resolveGameplayPress(center(PauseTarget.RESUME).x, center(PauseTarget.RESUME).y))
         assertSame(GameplayInteractionPulse.PauseToggled, resume.action)
         assertSame(GameplayInput.OpenSettings, paused.resolveGameplayPress(center(PauseTarget.SETTINGS).x, center(PauseTarget.SETTINGS).y))
+        assertSame(GameplayInput.OpenWorkshop, paused.resolveGameplayPress(center(PauseTarget.WORKSHOP).x, center(PauseTarget.WORKSHOP).y))
         assertSame(GameplayInput.OpenCodex, paused.resolveGameplayPress(center(PauseTarget.CODEX).x, center(PauseTarget.CODEX).y))
         assertSame(GameplayInput.ExitToHome, paused.resolveGameplayPress(center(PauseTarget.EXIT).x, center(PauseTarget.EXIT).y))
         // The menu sits on the left panel; the build overview on the right is not a target.
@@ -62,14 +63,15 @@ class OverlayInputMappingTest {
             screenHeight = 1_080f,
             uiScale = 3f,
         )
-        val performance = pauseLayoutGeometry(paused.screenWidth, paused.screenHeight, paused.uiScale)
+        // Phones reach the Workshop from the pause menu (it replaced the performance toggle there).
+        val workshop = pauseLayoutGeometry(paused.screenWidth, paused.screenHeight, paused.uiScale)
             .actions
-            .single { it.target == PauseTarget.PERFORMANCE }
+            .single { it.target == PauseTarget.WORKSHOP }
             .bounds
             .center
         assertSame(
-            GameplayInput.TogglePerformance,
-            paused.resolveGameplayPress(performance.x, performance.y),
+            GameplayInput.OpenWorkshop,
+            paused.resolveGameplayPress(workshop.x, workshop.y),
         )
 
         val choice = hitTestState(

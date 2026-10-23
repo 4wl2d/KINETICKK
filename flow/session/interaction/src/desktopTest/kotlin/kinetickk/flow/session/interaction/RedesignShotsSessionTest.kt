@@ -24,8 +24,6 @@ import kinetickk.ball.content.impl.createContentCatalog
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.gameplay.interaction.GameplayPresentation
 import kinetickk.ball.profile.api.*
-import kinetickk.ball.profile.interaction.armory.api.*
-import kinetickk.ball.profile.interaction.matrix.api.*
 import kinetickk.ball.profile.interaction.rebirth.api.*
 import kinetickk.ball.profile.interaction.settings.api.*
 import kinetickk.flow.session.api.*
@@ -73,51 +71,55 @@ class RedesignShotsSessionTest {
     }
 
     @Test fun home() {
-        val targets = listOf("start", "lab", "armory", "rebirth", "codex", "settings", "hangar")
+        val targets = listOf("start", "workshop", "rebirth", "codex", "settings")
         for ((w, h) in sizes) for (language in AppLanguage.entries) {
             for (target in targets) {
                 shot("home", target, w, h, language, { ShotProfile() }) {
                     onNodeWithTag("kinetickk.home.$target").performSemanticsAction(SemanticsActions.RequestFocus)
                 }
             }
+            // The Workshop row's Affordable stamp (the Profile would accept a purchase now).
+            shot("home", "workshop-affordable", w, h, language, { ShotProfile(workshopAffordable = true) }) {
+                onNodeWithTag("kinetickk.home.workshop").performSemanticsAction(SemanticsActions.RequestFocus)
+            }
             for (shape in CoreShape.entries) {
                 shot("home", "form-${shape.name.lowercase()}", w, h, language, { ShotProfile(coreShape = shape) }) {
-                    onNodeWithTag("kinetickk.home.hangar").performSemanticsAction(SemanticsActions.RequestFocus)
+                    onNodeWithTag("kinetickk.home.start").performSemanticsAction(SemanticsActions.RequestFocus)
                 }
             }
             shot("home", "form-info", w, h, language, { ShotProfile() }) {
-                onNodeWithTag("kinetickk.home.hangar").performSemanticsAction(SemanticsActions.RequestFocus)
+                onNodeWithTag("kinetickk.home.start").performSemanticsAction(SemanticsActions.RequestFocus)
                 mainClock.advanceTimeBy(300)
                 onNodeWithTag("kinetickk.home.info.form").performSemanticsAction(SemanticsActions.OnClick)
             }
             if (w > 900) shot("home", "facts-info", w, h, language, { ShotProfile() }) {
-                onNodeWithTag("kinetickk.home.lab").performSemanticsAction(SemanticsActions.RequestFocus)
+                onNodeWithTag("kinetickk.home.workshop").performSemanticsAction(SemanticsActions.RequestFocus)
                 mainClock.advanceTimeBy(300)
                 onNodeWithTag("kinetickk.home.info.facts").performSemanticsAction(SemanticsActions.OnClick)
             }
         }
     }
 
-    /** Text size 175 % (the setting's maximum) and the Rebirth "Ready" stamp, the widest menu rows. */
+    /** Text size 175 % (the setting's maximum) and the Rebirth "Ready" and Workshop "Affordable" stamps, the widest menu rows. */
     @Test fun homeTextSizes() {
         for ((w, h) in sizes + listOf(600 to 390, 360 to 800)) for (language in AppLanguage.entries) {
-            for (target in listOf("start", "armory", "rebirth", "codex", "settings")) {
-                shot("home", "$target-ready-text175", w, h, language, { ShotProfile(textScale = 1.75f, canRebirth = true) }) {
+            for (target in listOf("start", "workshop", "rebirth", "codex", "settings")) {
+                shot("home", "$target-ready-text175", w, h, language, { ShotProfile(textScale = 1.75f, canRebirth = true, workshopAffordable = true) }) {
                     onNodeWithTag("kinetickk.home.$target").performSemanticsAction(SemanticsActions.RequestFocus)
                 }
-                shot("home", "$target-ready", w, h, language, { ShotProfile(canRebirth = true) }) {
+                shot("home", "$target-ready", w, h, language, { ShotProfile(canRebirth = true, workshopAffordable = true) }) {
                     onNodeWithTag("kinetickk.home.$target").performSemanticsAction(SemanticsActions.RequestFocus)
                 }
             }
             shot("home", "form-info-text175", w, h, language, { ShotProfile(textScale = 1.75f) }) {
-                onNodeWithTag("kinetickk.home.hangar").performSemanticsAction(SemanticsActions.RequestFocus)
+                onNodeWithTag("kinetickk.home.start").performSemanticsAction(SemanticsActions.RequestFocus)
                 mainClock.advanceTimeBy(300)
                 onNodeWithTag("kinetickk.home.info.form").performSemanticsAction(SemanticsActions.OnClick)
             }
         }
     }
 
-    /** 360-px-tall landscape (1080 × 2400 phones turned sideways): the lowest rows over the legal line. */
+    /** 360-px-tall landscape (1080 × 2400 phones turned sideways): the lowest rows over the version line. */
     @Test fun homeShortLandscape() {
         for (language in AppLanguage.entries) {
             for (target in listOf("start", "rebirth", "codex", "settings")) {
@@ -135,18 +137,18 @@ class RedesignShotsSessionTest {
 
     @Test fun homeExtraViewports() {
         for ((w, h) in listOf(390 to 600, 600 to 390, 1000 to 700, 1920 to 1080, 800 to 360)) for (language in AppLanguage.entries) {
-            for (target in listOf("armory", "codex", "settings")) shot("home", target, w, h, language, { ShotProfile() }) {
+            for (target in listOf("workshop", "codex", "settings")) shot("home", target, w, h, language, { ShotProfile() }) {
                 onNodeWithTag("kinetickk.home.$target").performSemanticsAction(SemanticsActions.RequestFocus)
             }
             shot("home", "form-info", w, h, language, { ShotProfile() }) {
-                onNodeWithTag("kinetickk.home.hangar").performSemanticsAction(SemanticsActions.RequestFocus)
+                onNodeWithTag("kinetickk.home.start").performSemanticsAction(SemanticsActions.RequestFocus)
                 mainClock.advanceTimeBy(300)
                 onNodeWithTag("kinetickk.home.info.form").performSemanticsAction(SemanticsActions.OnClick)
             }
         }
     }
 
-    /** Fix round 3: form name over its description at every text size, and the two-column phone menu. */
+    /** Fix round 3: the form name at every text size, and the two-column phone menu (Play across both columns). */
     @Test fun homeFix3() {
         for ((w, h) in listOf(1000 to 700, 1440 to 810, 1920 to 1080)) for (language in AppLanguage.entries) {
             for ((suffix, scale) in listOf("text100" to 1f, "text125" to 1.25f, "text175" to 1.75f)) {
@@ -155,8 +157,8 @@ class RedesignShotsSessionTest {
                 }
             }
         }
-        for ((w, h) in listOf(390 to 600, 360 to 640)) for (language in AppLanguage.entries) {
-            for (target in listOf("start", "lab", "armory", "rebirth", "codex", "settings")) {
+        for ((w, h) in listOf(390 to 560, 360 to 580)) for (language in AppLanguage.entries) {
+            for (target in listOf("start", "workshop", "rebirth", "codex", "settings")) {
                 for ((suffix, scale) in listOf("" to 1.25f, "-text175" to 1.75f)) {
                     shot("home", "two-column-$target$suffix", w, h, language, { ShotProfile(textScale = scale, canRebirth = true) }) {
                         onNodeWithTag("kinetickk.home.$target").performSemanticsAction(SemanticsActions.RequestFocus)
@@ -168,8 +170,8 @@ class RedesignShotsSessionTest {
 
     /** Fix round 3, second pass: the two-column phone menu down to 320 px wide. */
     @Test fun homeTwoColumnNarrow() {
-        for ((w, h) in listOf(320 to 568, 328 to 568, 332 to 568, 360 to 640, 390 to 600)) for (language in AppLanguage.entries) {
-            for (target in listOf("start", "lab", "armory", "rebirth", "codex", "settings")) {
+        for ((w, h) in listOf(320 to 568, 328 to 568, 332 to 568, 360 to 580, 390 to 590)) for (language in AppLanguage.entries) {
+            for (target in listOf("start", "workshop", "rebirth", "codex", "settings")) {
                 for ((suffix, scale) in listOf("" to 1.25f, "-text175" to 1.75f)) {
                     shot("home", "two-column-$target$suffix", w, h, language, { ShotProfile(textScale = scale, canRebirth = true) }) {
                         onNodeWithTag("kinetickk.home.$target").performSemanticsAction(SemanticsActions.RequestFocus)
@@ -188,10 +190,7 @@ class RedesignShotsSessionTest {
             shotCodex("searched", w, h, language) {
                 onNodeWithTag("codex-search").performTextInput(if (language == AppLanguage.English) "ram" else "таран")
             }
-            shotCodex("selected", w, h, language) {
-                onNodeWithTag("codex-grid").performScrollToKey("item/10")
-                onNodeWithTag("codex-slot-item/10").performSemanticsAction(SemanticsActions.OnClick)
-            }
+            shotCodex("selected", w, h, language) { codexState("selected") }
             shotCodex("build", w, h, language, run = true) {
                 onNodeWithTag("codex-tab-0").performSemanticsAction(SemanticsActions.OnClick)
             }
@@ -202,13 +201,7 @@ class RedesignShotsSessionTest {
                 mainClock.advanceTimeBy(100)
                 onNodeWithTag("codex-slot-weapon/FLUX_WAKE").performSemanticsAction(SemanticsActions.OnClick)
             }
-            shotCodex("build-item", w, h, language, run = true) {
-                onNodeWithTag("codex-tab-0").performSemanticsAction(SemanticsActions.OnClick)
-                mainClock.advanceTimeBy(100)
-                onNodeWithTag("codex-grid").performScrollToKey("item/10")
-                mainClock.advanceTimeBy(100)
-                onNodeWithTag("codex-slot-item/10").performSemanticsAction(SemanticsActions.OnClick)
-            }
+            shotCodex("build-item", w, h, language, run = true) { codexState("build-item") }
             shotCodex("reactions", w, h, language) {
                 onNodeWithTag("codex-tab-2").performClick()
             }
@@ -241,13 +234,7 @@ class RedesignShotsSessionTest {
                 mainClock.advanceTimeBy(100)
                 onNodeWithTag("codex-slot-empty-relic/2").performSemanticsAction(SemanticsActions.OnClick)
             }
-            shotCodex("item-offer", w, h, language, run = true, lifetimeMatter = 1_000L) {
-                onNodeWithTag("codex-tab-1").performSemanticsAction(SemanticsActions.OnClick)
-                mainClock.advanceTimeBy(100)
-                onNodeWithTag("codex-grid").performScrollToKey("item/10")
-                onNodeWithTag("codex-slot-item/10").performSemanticsAction(SemanticsActions.OnClick)
-                mainClock.advanceTimeBy(100)
-            }
+            shotCodex("item-offer", w, h, language, run = true, lifetimeMatter = 1_000L) { codexState("item-offer") }
             for (state in listOf("build", "default", "selected", "build-stats", "item-offer", "build-item")) shotCodex("$state-text175", w, h, language,
                 run = state.startsWith("build") || state == "item-offer", scale = 1.75f, lifetimeMatter = if (state == "item-offer") 1_000L else 9_640L) {
                 codexState(state)
@@ -319,7 +306,9 @@ class RedesignShotsSessionTest {
                 mainClock.advanceTimeBy(100)
             }
             "selected" -> {
+                // The clock is paused: the scroll lands, and composes a slot below the fold, on the next frame.
                 onNodeWithTag("codex-grid").performScrollToKey("item/10")
+                mainClock.advanceTimeBy(100)
                 onNodeWithTag("codex-slot-item/10").performSemanticsAction(SemanticsActions.OnClick)
             }
             "sort-tag", "sort-element", "sort-rarity" -> {
@@ -338,6 +327,7 @@ class RedesignShotsSessionTest {
                 onNodeWithTag("codex-tab-1").performSemanticsAction(SemanticsActions.OnClick)
                 mainClock.advanceTimeBy(100)
                 onNodeWithTag("codex-grid").performScrollToKey("item/10")
+                mainClock.advanceTimeBy(100)
                 onNodeWithTag("codex-slot-item/10").performSemanticsAction(SemanticsActions.OnClick)
                 mainClock.advanceTimeBy(100)
             }
@@ -474,7 +464,12 @@ private val ItemsMatrixStates = listOf("sort-tag", "sort-element", "sort-rarity"
 
 private val DiscoveredItems: Set<Int> = (0 until 80).filter { (it * 2654435761L % 100) < 54 }.toSet() + 10
 
-internal fun ShotProgress(coreShape: CoreShape = CoreShape.PRISM, lifetimeMatter: Long = 9_640L, canRebirth: Boolean = false): HomeProgressProjection = HomeProgressProjection(
+internal fun ShotProgress(
+    coreShape: CoreShape = CoreShape.PRISM,
+    lifetimeMatter: Long = 9_640L,
+    canRebirth: Boolean = false,
+    workshopAffordable: Boolean = false,
+): HomeProgressProjection = HomeProgressProjection(
     LOCAL_PROFILE_INSTANCE_ID, ProfileRevision.ZERO,
     PlayerEconomy(matter = 1_284, lifetimeMatter = lifetimeMatter),
     PlayerLoadout(coreShape, WeaponId.FLUX_WAKE, WeaponId.entries.take(7).toSet()),
@@ -484,6 +479,8 @@ internal fun ShotProgress(coreShape: CoreShape = CoreShape.PRISM, lifetimeMatter
     characterAchievements = CharacterAchievementProgress(eliteKills = 5, dashHits = 40, completedOrbits = 2, architectVictories = 3,
         victoriousCharacters = immutableSetOf(CoreShape.ORB, CoreShape.PRISM)),
     unlockedCoreShapes = immutableSetOf(CoreShape.ORB, CoreShape.PRISM, CoreShape.SHARD, CoreShape.RING, CoreShape.DIAMOND),
+    workshopAffordable = workshopAffordable,
+    upgradeLevels = 23,
 )
 
 internal fun ShotCodexModel(run: Boolean = false): CodexRenderModel = CodexRenderModel(
@@ -516,7 +513,12 @@ private val ShotRun: CodexRunStacks by lazy {
     ))
 }
 
-internal class ShotProfile(private val coreShape: CoreShape = CoreShape.PRISM, private val textScale: Float = 1.25f, private val canRebirth: Boolean = false) : ProfileReadPort {
+internal class ShotProfile(
+    private val coreShape: CoreShape = CoreShape.PRISM,
+    private val textScale: Float = 1.25f,
+    private val canRebirth: Boolean = false,
+    private val workshopAffordable: Boolean = false,
+) : ProfileReadPort {
     override val instanceId = LOCAL_PROFILE_INSTANCE_ID
     override fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection = error("unused")
     override fun query(query: ProfileQuery.GetMatrixProgress) = MatrixProgressProjection(instanceId, ProfileRevision.ZERO,
@@ -526,7 +528,7 @@ internal class ShotProfile(private val coreShape: CoreShape = CoreShape.PRISM, p
     override fun query(query: ProfileQuery.GetRebirthProgress): RebirthProgressProjection = error("unused")
     override fun query(query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection = error("unused")
     override fun query(query: ProfileQuery.GetPreferences) = PreferencesProjection(instanceId, ProfileRevision.ZERO, PlayerPreferences(textScale = textScale))
-    override fun query(query: ProfileQuery.GetHomeProgress) = ShotProgress(coreShape, canRebirth = canRebirth)
+    override fun query(query: ProfileQuery.GetHomeProgress) = ShotProgress(coreShape, canRebirth = canRebirth, workshopAffordable = workshopAffordable)
     override fun query(query: ProfileQuery.GetCollection) = CollectionProjection(instanceId, ProfileRevision.ZERO, PlayerCollection(DiscoveredItems))
 }
 
@@ -568,12 +570,7 @@ private fun ShotShell(port: ShotSessionPort, language: AppLanguage) {
         settingsFeature = object : SettingsFeature {
             @Composable override fun Content(routeToken: Long, onOutput: (SettingsOutput) -> Unit) = Unit
         },
-        matrixFeature = object : MatrixFeature {
-            @Composable override fun Content(routeToken: Long, onOutput: (MatrixOutput) -> Unit) = Unit
-        },
-        armoryFeature = object : ArmoryFeature {
-            @Composable override fun Content(activeRunWeapon: WeaponId?, onOutput: (ArmoryOutput) -> Unit) = Unit
-        },
+        workshopFeature = NoWorkshopFeature,
         rebirthFeature = object : RebirthFeature {
             override fun playAcceptedFeedback() = Unit
             @Composable override fun Content(routeToken: Long, eligible: Boolean, confirmationArmed: Boolean, onOutput: (RebirthOutput) -> Unit) = Unit

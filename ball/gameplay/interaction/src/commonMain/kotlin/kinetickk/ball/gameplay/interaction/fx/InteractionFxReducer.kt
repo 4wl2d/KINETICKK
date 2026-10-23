@@ -55,8 +55,22 @@ internal object InteractionFxLimits {
     /** Events a merged flash can carry; each adds to its reach and brightness. */
     const val MAX_BURST_WEIGHT = 4
 
+    /**
+     * Live flashes of one reaction: a fifth one outside the merge distance replaces that reaction's
+     * oldest, so one chain-happy reaction never takes every slot.
+     */
+    const val MAX_BURSTS_PER_REACTION = 4
+
+    /** Concurrent skill cast and impact looks (three casts and three impacts a step, by construction). */
+    const val MAX_SKILL_BURSTS = 8
+
+    /** Concurrent Apex activation looks. */
+    const val MAX_APEX_BURSTS = 2
+
     const val BREAK_BURST_SECONDS = 0.5f
-    const val REACTION_BURST_SECONDS = 0.7f
+
+    /** The longest reaction look ([ReactionFxSpecs]); each reaction lives its own spec's life. */
+    val REACTION_BURST_SECONDS: Float = ReactionFxSpecs.maxLife
 
     /** The once-per-profile reaction name stamp (`cond`, −6°, 900 ms). */
     const val REACTION_STAMP_SECONDS = 0.9f
@@ -108,6 +122,8 @@ class InteractionFxReducer(seed: Int) {
     private val buildNotifications = mutableListOf<BuildNotificationProjection>()
     private val elementBursts = mutableListOf<ElementBurst>()
     private val reactionStamps = mutableListOf<ReactionStamp>()
+    private val skillBursts = mutableListOf<SkillBurst>()
+    private val apexBursts = mutableListOf<ApexBurst>()
     private var runReactionMask = 0
     private var runDiscoveryMask = 0
     private var runBreakMask = 0
@@ -120,6 +136,8 @@ class InteractionFxReducer(seed: Int) {
     private var weaponArcsDirty = false
     private var elementBurstsDirty = false
     private var reactionStampsDirty = false
+    private var skillBurstsDirty = false
+    private var apexBurstsDirty = false
 
     fun apply(cues: Iterable<VisualFxCue>) {
         if (cues is List<*>) {
@@ -180,12 +198,19 @@ class InteractionFxReducer(seed: Int) {
                 )
             } else cachedProjection.damageNumbers,
             weaponArcs = if (weaponArcsDirty) weaponArcs.mapToImmutableList { value ->
-                WeaponArcProjection(value.fromX, value.fromY, value.toX, value.toY, value.life)
+                WeaponArcProjection(value.fromX, value.fromY, value.toX, value.toY, value.life, value.style, value.maxLife)
             } else cachedProjection.weaponArcs,
             elementBursts = if (elementBurstsDirty) elementBursts.mapToImmutableList { value ->
                 ElementBurstProjection(value.x, value.y, value.primary, value.secondary, value.reaction, value.radius, value.life,
-                    value.maxLife, value.weight)
+                    value.maxLife, value.weight, value.direction, value.flags, value.seed)
             } else cachedProjection.elementBursts,
+            skillBursts = if (skillBurstsDirty) skillBursts.mapToImmutableList { value ->
+                SkillBurstProjection(value.skill, value.phase, value.x, value.y, value.dirX, value.dirY, value.radius, value.rank,
+                    value.flags, value.seed, value.life, value.maxLife)
+            } else cachedProjection.skillBursts,
+            apexBursts = if (apexBurstsDirty) apexBursts.mapToImmutableList { value ->
+                ApexBurstProjection(value.shape, value.x, value.y, value.seed, value.life, value.maxLife)
+            } else cachedProjection.apexBursts,
             reactionStamps = if (reactionStampsDirty) reactionStamps.mapToImmutableList { value ->
                 ReactionStampProjection(value.x, value.y, value.reaction, value.life, value.maxLife)
             } else cachedProjection.reactionStamps,
@@ -200,6 +225,8 @@ class InteractionFxReducer(seed: Int) {
         weaponArcsDirty = false
         elementBurstsDirty = false
         reactionStampsDirty = false
+        skillBurstsDirty = false
+        apexBurstsDirty = false
         return cachedProjection
     }
 
@@ -245,7 +272,9 @@ class InteractionFxReducer(seed: Int) {
             is VisualFxCue.StatusBroken -> statusBroken(cue)
             is VisualFxCue.ReactionTriggered -> reactionTriggered(cue)
             is VisualFxCue.WeaponArcAdded -> {
-                weaponArcs += WeaponArc(cue.fromX, cue.fromY, cue.toX, cue.toY, cue.life)
+                // A styled link stays up for its look ([LinkLooks]); the weapon look keeps the cue's life.
+                val life = if (cue.style == 0) cue.life else kotlin.math.max(cue.life, LinkLooks[cue.style].life)
+                weaponArcs += WeaponArc(cue.fromX, cue.fromY, cue.toX, cue.toY, life, cue.style, life)
                 trimFront(weaponArcs, InteractionFxLimits.MAX_WEAPON_ARCS)
                 weaponArcsDirty = true
                 true
@@ -277,13 +306,34 @@ class InteractionFxReducer(seed: Int) {
                     value.x -= cue.shiftX
                     value.y -= cue.shiftY
                 }
+                // Skill and Apex looks mark where the cast landed in the world.
+                for (index in skillBursts.indices) {
+                    val value = skillBursts[index]
+                    value.x -= cue.shiftX
+                    value.y -= cue.shiftY
+                }
+                for (index in apexBursts.indices) {
+                    val value = apexBursts[index]
+                    value.x -= cue.shiftX
+                    value.y -= cue.shiftY
+                }
                 if (particles.isNotEmpty()) particlesDirty = true
                 if (damageNumbers.isNotEmpty()) damageNumbersDirty = true
                 if (elementBursts.isNotEmpty()) elementBurstsDirty = true
                 if (reactionStamps.isNotEmpty()) reactionStampsDirty = true
-                changed || elementBursts.isNotEmpty() || reactionStamps.isNotEmpty()
+                if (skillBursts.isNotEmpty()) skillBurstsDirty = true
+                if (apexBursts.isNotEmpty()) apexBurstsDirty = true
+                changed || elementBursts.isNotEmpty() || reactionStamps.isNotEmpty() || skillBursts.isNotEmpty() || apexBursts.isNotEmpty()
             }
             is VisualFxCue.VisualCuesDropped -> false
+            is VisualFxCue.SkillCast -> skillCast(cue)
+            is VisualFxCue.ApexActivated -> {
+                apexBursts += ApexBurst(cue.shape.ordinal, cue.x, cue.y, random.nextInt(), ApexFxSpec.activation.life,
+                    ApexFxSpec.activation.life)
+                trimFront(apexBursts, InteractionFxLimits.MAX_APEX_BURSTS)
+                apexBurstsDirty = true
+                true
+            }
         }
 
     private fun clearAll(): Boolean {
@@ -294,9 +344,13 @@ class InteractionFxReducer(seed: Int) {
             weaponArcs.isNotEmpty() ||
             elementBursts.isNotEmpty() ||
             reactionStamps.isNotEmpty() ||
+            skillBursts.isNotEmpty() ||
+            apexBursts.isNotEmpty() ||
             runReactionMask != 0 || runDiscoveryMask != 0
         elementBursts.clear()
         reactionStamps.clear()
+        skillBursts.clear()
+        apexBursts.clear()
         runReactionMask = 0
         runDiscoveryMask = 0
         runBreakMask = 0
@@ -317,6 +371,8 @@ class InteractionFxReducer(seed: Int) {
             weaponArcsDirty = true
             elementBurstsDirty = true
             reactionStampsDirty = true
+            skillBurstsDirty = true
+            apexBurstsDirty = true
         }
         return changed
     }
@@ -358,7 +414,7 @@ class InteractionFxReducer(seed: Int) {
     private fun statusBroken(cue: VisualFxCue.StatusBroken): Boolean {
         val element = cue.element
         if (element !in BreakBurstRadii.indices) return false
-        addBurst(cue.x, cue.y, element, -1, -1, BreakBurstRadii[element], InteractionFxLimits.BREAK_BURST_SECONDS)
+        addBurst(cue.x, cue.y, element, -1, -1, BreakBurstRadii[element], InteractionFxLimits.BREAK_BURST_SECONDS, Float.NaN, 0)
         val bit = 1 shl element
         // The run remembers an element's first Break only once its note shows: a note the full feed
         // drops waits for the element's next Break.
@@ -372,8 +428,9 @@ class InteractionFxReducer(seed: Int) {
 
     private fun reactionTriggered(cue: VisualFxCue.ReactionTriggered): Boolean {
         val reaction = ReactionId.entries.getOrNull(cue.reaction) ?: return false
-        addBurst(cue.x, cue.y, reaction.first.ordinal, reaction.second.ordinal, cue.reaction, cue.radius.coerceIn(36f, 320f),
-            InteractionFxLimits.REACTION_BURST_SECONDS)
+        val spec = ReactionFxSpecs[reaction]
+        addBurst(cue.x, cue.y, reaction.first.ordinal, reaction.second.ordinal, cue.reaction, spec.reachOf(cue.radius), spec.life,
+            cue.direction, cue.flags)
         val bit = 1 shl cue.reaction
         runReactionMask = runReactionMask or bit
         if (cue.firstDiscovery) {
@@ -386,26 +443,61 @@ class InteractionFxReducer(seed: Int) {
         return true
     }
 
-    /** A flash of one kind joins a live flash of the same kind within the merge distance. */
-    private fun addBurst(x: Float, y: Float, primary: Int, secondary: Int, reaction: Int, radius: Float, life: Float) {
+    /**
+     * A flash of one kind joins a live flash of the same kind within the merge distance (the newest
+     * direction and flags win); otherwise a reaction already showing
+     * [InteractionFxLimits.MAX_BURSTS_PER_REACTION] flashes gives up its oldest first.
+     */
+    private fun addBurst(
+        x: Float,
+        y: Float,
+        primary: Int,
+        secondary: Int,
+        reaction: Int,
+        radius: Float,
+        life: Float,
+        direction: Float,
+        flags: Int,
+    ) {
         val reach = InteractionFxLimits.BURST_MERGE_DISTANCE
+        var sameReaction = 0
+        var oldestOfReaction = -1
         for (index in elementBursts.indices) {
             val burst = elementBursts[index]
             if (burst.primary != primary || burst.secondary != secondary || burst.reaction != reaction) continue
             val dx = burst.x - x
             val dy = burst.y - y
-            if (dx * dx + dy * dy > reach * reach) continue
+            if (dx * dx + dy * dy > reach * reach) {
+                if (oldestOfReaction < 0) oldestOfReaction = index
+                sameReaction++
+                continue
+            }
             burst.weight = (burst.weight + 1).coerceAtMost(InteractionFxLimits.MAX_BURST_WEIGHT)
             burst.life = burst.maxLife
             burst.radius = kotlin.math.max(burst.radius, radius)
             burst.x = (burst.x + x) * 0.5f
             burst.y = (burst.y + y) * 0.5f
+            burst.direction = direction
+            burst.flags = flags
             elementBurstsDirty = true
             return
         }
-        elementBursts += ElementBurst(x, y, primary, secondary, reaction, radius, life, life, 1)
+        if (reaction >= 0 && sameReaction >= InteractionFxLimits.MAX_BURSTS_PER_REACTION) elementBursts.removeAt(oldestOfReaction)
+        // Only reaction looks hash a seed (Break figures are fixed), so Breaks leave the particle stream as it was.
+        val seed = if (reaction >= 0) random.nextInt() else 0
+        elementBursts += ElementBurst(x, y, primary, secondary, reaction, radius, life, life, 1, direction, flags, seed)
         trimFront(elementBursts, InteractionFxLimits.MAX_ELEMENT_BURSTS)
         elementBurstsDirty = true
+    }
+
+    /** A skill look with a spec for its phase; the oldest gives way past [InteractionFxLimits.MAX_SKILL_BURSTS]. */
+    private fun skillCast(cue: VisualFxCue.SkillCast): Boolean {
+        val spec = SkillFxSpecs.of(cue.skill, cue.phase) ?: return false
+        skillBursts += SkillBurst(cue.skill.ordinal, cue.phase, cue.x, cue.y, cue.dirX, cue.dirY, spec.reachOf(cue.radius),
+            cue.rank.coerceIn(1, 3), cue.flags, random.nextInt(), spec.life, spec.life)
+        trimFront(skillBursts, InteractionFxLimits.MAX_SKILL_BURSTS)
+        skillBurstsDirty = true
+        return true
     }
 
     private fun sampleMotionEcho(cue: VisualFxCue.MotionSample): Boolean {
@@ -441,7 +533,9 @@ class InteractionFxReducer(seed: Int) {
             shockwaves.isEmpty() &&
             damageNumbers.isEmpty() &&
             elementBursts.isEmpty() &&
-            reactionStamps.isEmpty()
+            reactionStamps.isEmpty() &&
+            skillBursts.isEmpty() &&
+            apexBursts.isEmpty()
         ) return false
         for (index in buildNotifications.indices) {
             val value = buildNotifications[index]
@@ -475,6 +569,12 @@ class InteractionFxReducer(seed: Int) {
         removeExpired(reactionStamps) { value -> !(value.life <= 0f) }
         if (elementBursts.isNotEmpty() || cachedProjection.elementBursts.isNotEmpty()) elementBurstsDirty = true
         if (reactionStamps.isNotEmpty() || cachedProjection.reactionStamps.isNotEmpty()) reactionStampsDirty = true
+        for (index in skillBursts.indices) skillBursts[index].life -= delta
+        removeExpired(skillBursts) { value -> !(value.life <= 0f) }
+        for (index in apexBursts.indices) apexBursts[index].life -= delta
+        removeExpired(apexBursts) { value -> !(value.life <= 0f) }
+        if (skillBursts.isNotEmpty() || cachedProjection.skillBursts.isNotEmpty()) skillBurstsDirty = true
+        if (apexBursts.isNotEmpty() || cachedProjection.apexBursts.isNotEmpty()) apexBurstsDirty = true
         return true
     }
 
@@ -622,6 +722,33 @@ class InteractionFxReducer(seed: Int) {
         var life: Float,
         val maxLife: Float,
         var weight: Int,
+        var direction: Float,
+        var flags: Int,
+        val seed: Int,
+    )
+
+    private data class SkillBurst(
+        val skill: Int,
+        val phase: Int,
+        var x: Float,
+        var y: Float,
+        val dirX: Float,
+        val dirY: Float,
+        val radius: Float,
+        val rank: Int,
+        val flags: Int,
+        val seed: Int,
+        var life: Float,
+        val maxLife: Float,
+    )
+
+    private data class ApexBurst(
+        val shape: Int,
+        var x: Float,
+        var y: Float,
+        val seed: Int,
+        var life: Float,
+        val maxLife: Float,
     )
 
     private data class ReactionStamp(
@@ -638,6 +765,8 @@ class InteractionFxReducer(seed: Int) {
         val toX: Float,
         val toY: Float,
         var life: Float,
+        val style: Int,
+        val maxLife: Float,
     )
 
     private companion object {

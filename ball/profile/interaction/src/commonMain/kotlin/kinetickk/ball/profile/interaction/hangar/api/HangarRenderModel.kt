@@ -3,7 +3,6 @@
 
 package kinetickk.ball.profile.interaction.hangar.api
 
-import androidx.compose.runtime.Composable
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.CoreShapeDefinition
 import kinetickk.ball.content.api.RelicDefinition
@@ -26,6 +25,12 @@ data class HangarShapeRenderModel(
     val heatBar: Float,
     /** This character cleared the final Rebirth tier: its tile and details carry the gold crown. */
     val ascendant: Boolean = false,
+    /** This character has defeated the Architect: its tile and details show the clear plate. */
+    val victorious: Boolean = false,
+    /** Highest Rebirth tier it cleared, the plate's numeral; -1 when its victory recorded no tier. */
+    val highestCleared: Int = -1,
+    /** Bought Refit levels (the tile shows "Lvl N" from 1). */
+    val upgradeLevel: Int = 0,
 ) {
     val shape: CoreShape get() = definition.id
 }
@@ -62,14 +67,7 @@ data class HangarRenderModel(
     fun signatureWeapons(id: CoreShape): List<HangarWeaponRenderModel> = weapons.filter { it.definition.signature == id }
 }
 
+/** What the Characters body asks of its host (the Workshop's shared header owns Back). */
 sealed interface HangarOutput {
     data object Back : HangarOutput
-}
-
-interface HangarFeature {
-    @Composable
-    fun Content(
-        routeToken: Long,
-        onOutput: (HangarOutput) -> Unit,
-    )
 }

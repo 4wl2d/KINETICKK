@@ -211,9 +211,10 @@ internal fun MutableGameState.selectRewardFocus(focus: RewardFocus) {
             } + relicOfferTailCard()
         }
         DirectedReward.ITEM_AND_REPAIR -> {
-            val pool = content.items.filter {
+            refillItemDeck()
+            val pool = deckPool(content.items.filter {
                 it.minimumRebirth <= rebirthRank && hasUsefulItemEffect(it) && itemRewardFocus(it) == focus
-            }
+            }, 3)
             choices = pool.shuffled(rewardRandom).take(3).map {
                 ChoiceOption(ChoiceType.ITEM, it.name, it.description, it.rarity.displayLabel, itemId = it.id,
                     reborn = rewardRandom.nextFloat() < rebornChance())

@@ -37,16 +37,19 @@ item appears under **Intentional delta**.
 
 ### Routes and workflow
 
-All eight screens are available: Home, Gameplay, Settings, Lab, Armory,
-Rebirth, Codex, and Hangar. Home and Gameplay are base destinations; the other six are
-single overlays. Replacing an overlay never builds a feature-to-feature stack.
+All six screens are available: Home, Gameplay, Settings, Workshop, Rebirth and
+Codex (the Workshop replaced the Lab, Armory and Hangar in 0.5.0, see below).
+Home and Gameplay are base destinations; the other four are single overlays.
+Replacing an overlay never builds a feature-to-feature stack.
 Opening an allowed overlay during a running game pauses that run. A choice
 blocks overlays; Game Over and Victory allow only Rebirth. Closing Settings
 propagates the persisted preferences to an active run. Restart and completed
 Rebirth start a fresh run from the latest Profile snapshot.
 
-The keyboard mapping is `S/L/A/B/C/I/H/M/Escape/Enter` for Settings,
-Lab, Armory, Rebirth, Codex (C or I), Hangar (from Home only), mute, back, and contextual enter.
+The keyboard mapping is `S/W/L/A/H/B/C/I/M/Escape/Enter` for Settings, the
+Workshop, the Workshop's Matrix, Weapons and Characters tabs (H from Home only),
+Rebirth, Codex (C or I), mute, back, and contextual enter. While a run is
+running, keys bound to gameplay actions reach the run first.
 
 ### Profile
 
@@ -57,7 +60,8 @@ failure or uncertainty never rolls an accepted value back and does not cause an
 automatic new write. Rejections change neither state nor persistence.
 
 The frozen mutation matrix covers preference normalization, sound/music mute,
-Matrix purchases and reset, core-shape selection, weapon purchase/equip, Rebirth advance,
+Matrix purchases and reset, core-shape selection, weapon purchase/equip, Refit and
+Honing purchases, key bindings and display preferences, Rebirth advance,
 gameplay-progress merge, bootstrap, and the test-only replacement seam.
 The target removes production arbitrary replacement but preserves validated
 bootstrap semantics.
@@ -75,11 +79,12 @@ and counter-thrust remain available at exhaustion. Gameplay owns twelve characte
 abilities, optional world-fixed trials and bounded relic synergies. Codex reads
 one coherent immutable build summary and preserves pause/reward selection.
 
-The catalog has 173 hand-authored items, 12 weapons, 32 Core Matrix nodes, 22 Relics,
-19 enemy types, twelve characters, and Rebirth levels `0..10` (see the build-system
-and 0.4.0 intentional deltas below). Existing stable declaration order is captured as
-explicit stable IDs during the migration; consumers receive immutable versioned
-snapshots instead of reaching global catalog objects.
+The catalog has 269 hand-authored items, 24 weapons, 32 Core Matrix nodes, 22
+Relics, 19 enemy types, twelve characters, 18 skills, twelve Apex abilities and
+Rebirth levels `0..10` (see the build-system, 0.4.0 and 0.5.0 intentional deltas
+below). Existing stable declaration order is captured as explicit stable IDs
+during the migration; consumers receive immutable versioned snapshots instead of
+reaching global catalog objects.
 
 ### Audio
 
@@ -563,6 +568,354 @@ The migration may change internal ordering only where Pokeball acceptance
 semantics require it, such as pause acceptance before overlay publication and
 accepted Profile progress before returning Home. The rendered UX and final
 business outcomes remain the same.
+
+### Release 0.5.0
+
+Release 0.5.0 answers ten owner requests: a capped Data curve, 96 more items,
+reaction behaviors, run skills, a level-42 Apex ability, permanent upgrades, one
+Workshop for every upgrade screen, an evolving level badge, reaction visuals and
+display and control settings. Seven elements and 21 reactions stay; no balance
+gate was weakened, and every new feature has gates of its own. Each new Profile
+field is optional and written only when it differs from its default, so every
+earlier golden payload is byte-identical. Player text ships in English and
+Russian.
+
+- **Data curve and the level cap.** Content owns the level table. The run level
+  stops at `RunTempoProfile.maximumLevel` 42 (Content bound 99); levels 1 to 15
+  keep the 0.4.0 requirement, levels 16 to 20 ramp by up to `rampPlateau` 190
+  and levels 31 to 35 by `topPlateau` 0, so reaching 42 takes 15,148 Data (31
+  takes 7,898; the last level 746). From level 16 (`rebirthScaleFromLevel`)
+  Rebirth tier t scales each requirement by `1 + 0.14t`, rounded half up and
+  never below the base, so the totals at tiers 0, 3, 6 and 10 are 15,148,
+  20,933, 26,716 and 34,429. k = 0.14 is the smallest value on a 0.02 grid from
+  0.10 at which no full-Matrix run that avoids Data reached 42 before 720 s at
+  tier 3 or 6 on 60 population seeds, and the measured Data supply grows by
+  about the same `1 + 0.14t`. Scaling the whole table instead flipped gate D
+  (median 87.8 s), so the opening levels stay unscaled. Each level-up adds 2.5
+  maximum integrity and repairs 7.5 (`levelIntegrity`, `levelRepair`). Data
+  collected at the cap still counts toward `dataCollected` and charges the Apex
+  instead of leveling; Data past the cap owes no skill draft or rank-up card.
+  The render model carries `maxLevel`. The Data levers are content numbers: Data
+  Prospector GainData 2.5, Data Siphon DATA_GAIN 0.12 with 40 per Elite,
+  Windfall Sensor 0.12, Magnet Lens 0.08, Jackpot Relay GainData 3 and Decay
+  Spores up to 8 Data per cast. Each Data Archive rank gives +15 % Data, deals
+  three more rank-0 Data items into the run's draft deck
+  (`MatrixEffect.DataStratum(3)`; the deck's Data floor of 4 becomes all 13 at
+  rank 3) and adds 1.5 to the offer weight of Data-economy items in every lane
+  (`MatrixEffect.DataOfferWeight(1.5)`, fraction validated in (0, 2]; ×5.5 at
+  rank 3). The weight draws nothing, so a profile without the node sees exactly
+  the offers it saw before. Of 0.5, 1, 1.5 and 2, 1.5 is the smallest that
+  brought at least 85 % of 60 population seeds' Data-seeking tier-0 runs to 42
+  inside [510, 630] s with at most 5 % early: 54 of 60, and 51 of 60 on a
+  holdout set, against 5 of 60 without the weight.
+- **Items.** The catalog grows from 173 to 269 (bound 320). Items `173..268` are
+  appended in eight themed batches: 21 reaction keystones (exactly one Epic or
+  better per reaction, declaring both its elements), casting and Apex items,
+  marks, fields and terrain, Core movement, one item per weapon family, and
+  wardens, wagers and legends; 23 of them are gated by Rebirth rank. They use
+  the new rule vocabulary instead of flat stats. Items whose effects wait for a
+  skill or another weapon are Dormant until the run can use them; offers weigh
+  them down and the Codex says so. Each run deals a draft deck from its own
+  stream (run seed xor `0x0DEC_C0DE`), so reward draws keep their count and
+  order while the offers of a seed change; a rank-0 deck holds 117 to 130 of 203
+  items and the Codex marks the rest Not in this run. A tier refills from the
+  reserve only when it runs out of dealt items the run can still take. Offer
+  lanes are softer: the aligned lane is taken 55 % of the time, fit weighs `1 +
+  0.6 × min(fit, 3)`, the loadout point and an unpicked weapon family leave the
+  fit, saturated tags count half and risky lifts pass a 0.36 filter. The Profile
+  remembers the newest 64 first acquisitions; a remembered item is dealt with
+  weight `max(0.35, 1/(1 + 0.8p))` and offered with its square root. Launch Rail
+  DAMAGE 0.3 for 3 s, Echo Capacitor SkillCooldown 0.15, Overcharge Glyph
+  ACTIVATION 0.3 for 3 s, Tidewater Hull DR 0.2, Homing Rifling 3 s with a 2 s
+  cooldown and Like Poles FLAT 40 are calibrated numbers; Scavenger Protocol
+  (DATA_GAIN 0.035, GainData 0.5), Lodestar Ledger (0.04), Mycelial Ledger
+  (0.02, 0.3) and Rote Memory (0.05) carry halved Data amounts so a fresh run
+  does not level past 30 by accident. Every item passes the 5 %
+  perceptible-impact floor, the 173 older ones on the 0.4.0 setups alone; the
+  impact arenas gained skill, field, mark, throw, Apex and family-weapon
+  encounters, and an item whose clause needs a skill tag or a refreshed weapon
+  is flown with one. The no-POI bot passes on mark, field and throw items it
+  cannot aim and, when told to, seeks or avoids Data-economy items.
+- **Reactions.** Every reaction gains one play-style verb and a keystone form
+  that an item switches on; no reaction hits harder than before, and eight lost
+  power (Thermal Shock 12 → 10, Plasma 6 → 5, Wildfire 5 → 4, Superconduct 7 →
+  6, Magnetize 5 → 4, Seismic 4 → 3.5, Fracture 3 → 2.5, Annihilate 9 → 8). The
+  verbs leave marks, fields, Core states and refunds behind: Spall slams, Plasma
+  lances, Accretion Data, Ablaze contact, Frictionless drift, an Ice Fan, Glass
+  Charge piercing, an Attractor, Overcurrent, Compost, Blast Jump, Shard Guard,
+  Arc Weave, Rock Echo, Breakpoint, Hush, Flame Leap, a Time Bubble, Void
+  Anchor, the Maw and Erasure. Fields now live in one table of twelve (nine for
+  reactions and items, one per skill slot) with per-kind caps; a full kind
+  replaces its oldest field. Compost grows a Rot Well up to 200 u and never
+  shrinks one that Field Tuning already widened past it. The enemy status layout
+  grows from 71 to 74 cells for one mark per enemy: its kind, its expiry and
+  whether a skill cast wrote it. Wildfire's residue follows its declared
+  values, Stasis no longer spends Minelayer mines, and Breaks and reactions draw
+  in element colour indices 8 to 22, leaving the threat colour to damage the
+  Core takes. A gate plays every verb on and off in a scripted arena and
+  requires a 10 % change in its play metric (21 of 21 pass; for example Blast
+  Jump distance ×2.80, Shard Guard erases 32 shots against 0, Erasure Data
+  ×19.2). The Architect keeps its volleys and timers inside a Time Bubble, a
+  Maw or an Attractor (24 of 24 volleys each) and keeps attack windows under any
+  Hush (18 of 18, quiet share 0.275).
+- **Skills.** Eighteen skills are drafted during the run into slots Z, X and C,
+  which open at run levels 2, 8 and 16; a rank-up card every four levels takes
+  the experimental card's place and raises a skill one rank, up to III. The
+  card it replaces never counts toward rarity pity, so an offer that owes a Rare
+  still shows one. A draft costs three reward draws (a reroll three more) and a
+  rank-up card none. Skills are cooldown-based (never below 2.5 s): rank I runs
+  from 7 s (Arc Hook, Void Step) to 16 s (Null Shroud) and rank III from 4.5 s
+  (Void Step) to 13 s (Null Shroud, Dual Infusion). Refunds never exceed half a
+  cast's cooldown, and reactions, items and Catalysis refund them. Skill damage
+  goes through `dealSkillDamage` and the Architect gate, at most once per boss
+  per cast. Kinetic skill damage keeps the Resonance, Gravitic and Event Horizon
+  terms but never takes Brittle's bonus, so Brittle pays once, on the direct hit
+  that spends it. Decay Spores' Data cap and refund cap count only the deaths
+  its cast seeded; an item's Spored mark drops its Data without drawing on
+  them.
+  Every character has a skill hook (for example the Prism casts 15 %
+  faster and the Spiral's ghost repeats damage skills at 35 %). Skills fold into
+  build tags and affinity. Movement skills keep the Core clear of obstacles: Arc
+  Hook needs a clear line 200 past its target, Slingshot swings at most 1,100
+  u/s and no farther than its clear path, and Void Step lands at least 80 beyond
+  the Core's radius from a rock. Skill Charges holds two casts, each recharging
+  on its own clock. The no-POI bot drafts and casts skills (Data-seeking
+  profiles take Decay Spores and Gravity Well; Catalyze waits for three enemies
+  carrying an element). Skill numbers come from a phase-free 96-seed balance
+  arena that holds every rank III a third above its rank I (measured 1.54 for
+  Decay Spores to 2.70 for Full Stop) and every family within 40 % of its median
+  at both ranks (0.81 to 1.32 at rank I, 0.71 to 1.28 at rank III); the skills
+  golden pins them.
+- **Apex abilities.** Each character has one Apex ability (Perihelion, Monolith,
+  Vivisect, Corona, Mirror Stance, Hypercube, Hypernova, Twin Echo, Magnetar,
+  Crescendo, Total Eclipse, Swarm Queen) that unlocks at level 42 with an "APEX
+  ONLINE" banner, is ready at once and casts on V or the level badge. Its
+  cooldown is 60 s; Data collected at the cap takes 0.03 s per point off it,
+  never below 30 s after the last cast. Against the Architect and Heralds an
+  activation spends at most its character's `bossStrikes`: the Ring 5; the
+  Prism, Diamond, Star and Crescent 6; the Shard and Tesseract 8; the Spiral,
+  Dipole and Pentagon 9; the Orb and Hexagon 12 (Content bound 12). Characters
+  that kill the Architect fast get more strikes, so every Apex shortens a fight
+  by a like share. A strike asks for the boss's whole hit cap: through the
+  Architect gate it never passes a phase gate, nothing lands during a shift, and
+  a Herald's strike is clamped to its cap. The Architect circles the Core at 300
+  to 380 u, so instead of needing contact a proximity channel's event (a beat,
+  burst, nova, pulse, ghost or scar) strikes a boss whose edge is within 420 u
+  (`APEX_BOSS_REACH`), drawn as the character's Apex link.
+  The channels were changed so they land: Hypernova novas every second whatever
+  its Mass, the Hypercube pulses every 0.6 s, Swarm Queen's drones reach for a
+  boss in Apex reach, Perihelion's release waits through a shift that starts
+  mid-release, a Dash during Vivisect strikes, Apex shots aimed at a boss pierce
+  up to four ordinary enemies, and Monolith's facets also take obstacle
+  collisions and regrow in 1 s. An activation erases at most 96 bolts (the
+  characters' budgets run from 0 to 72). Mirror Stance parries the next four
+  hits while the Diamond brakes; four was chosen on 192 population runs by a
+  rule set before the grid. A parry now also takes a Volatile Remains burst like
+  any other hostile blast; before, the burst hit a braking Diamond unparried.
+- **Permanent upgrades.** Refit (per character) and Honing (per owned weapon)
+  run from level 0 to 10; the next level costs `base × 2^level` Matter
+  (characters 55 and weapons 40, 20 % more per Rebirth rank of their gate and
+  rounded to 5, so 65 to 130 and 50 to 110), saturating, and is never refunded.
+  The bases follow `round5(1.2 × M6 / 512)` and `round5(0.85 × M6 / 512)`, where
+  M6 = 23,247 is the median banked Matter of a full-Matrix tier-6 run over 200
+  population seeds; Refit 10 then costs 1.21 and Honing 10 0.88 of it, inside
+  [1, 1.5] and [0.7, 1]. Refit adds 2 maximum integrity and 2 %
+  character-mechanic damage per level and moves one signature parameter (never
+  below half its base); Corona never narrows a halo that Refit widened and Swarm
+  Queen never shortens a drone life that Refit lengthened. Honing adds 3 % to
+  the current weapon's own hits and follows a mid-run weapon switch. The run
+  captures the levels at start and rejects out-of-range ones
+  (`UPGRADE_LEVEL_OUT_OF_RANGE`); the Build summary and the Codex show them.
+  Loading clamps a level above a lowered maximum and refunds it. Profile adds
+  the pulses `PurchaseCharacterUpgrade` and `PurchaseWeaponUpgrade` and the
+  refusals `UpgradeMaxLevel` and `WeaponNotOwned`. Morningstar's speed share
+  fell from 0.036 to 0.031 to keep Honing 10 inside the weapon band.
+- **Workshop.** One Workshop overlay with Characters, Weapons and Core Matrix
+  tabs replaces the Lab, the Armory and the Hangar, so the app has six routes
+  and four overlays. W opens it; L, A and H open it on the Matrix, Weapons and
+  Characters tabs (H over Home only). It opens over a paused run as well;
+  characters change only over Home, and purchases apply from the next run. Each
+  character and weapon detail has an upgrade block with the level and the next
+  price, and a character's block names its Refit signature. Home has five rows
+  (Play, Workshop, Rebirth, Codex, Settings), two chips and a Workshop stamp
+  that is the Profile's affordability read; characters are chosen only in the
+  Workshop, so Home shows the current character's name and (!) on the facts
+  card's line and no Characters card, and its notice line is the version alone.
+  The pause menu offers Resume, Settings, Workshop, Codex and Exit. The composition owner keeps
+  the shell's last Workshop tab request beside the features, so L, A or H after
+  a reopened desktop window still shows its tab. The pinned
+  `AppSessionApiContractTest.shellProjectionRetainsExactlyEightRoutes…` became
+  `…ExactlySixRoutesAndOnlySessionOwnedWorkflowState`.
+- **Character clears.** The Profile records the highest Rebirth tier each
+  character cleared (an Architect victory with it at that tier), raised by a
+  higher clear and kept by a lower one. The Workshop's Characters tab marks
+  each victorious character with that tier's plate and numeral (the Ascendant
+  crown beside a tier-10 clear) and its detail reads Cleared with the tier, or
+  Not cleared. A victory saved before 0.5.0 recorded no tier: it shows a plain
+  plate (an Ascendant one reads tier 10) until the character wins again.
+- **Level badge.** Tiers T1 to T5 keep their thresholds (1, 10, 20, 30, 40) and
+  T6 APEX starts at the level cap with its own look and the Apex states; the
+  Data bar and line change per tier and become the Apex meter at the cap; tier,
+  unlock, ready, cast and refund edges play once. The skill row (Z, X, C) shows
+  in every layout with key caps while a keyboard is in use, and the Apex key
+  plate widens to any rebound key's label with the Data bar starting after it.
+  Touch accepts five pointers with one steering; a pointer held through a
+  choice or a pause keeps its role when the run returns. The badge is the Apex
+  control.
+- **Reaction visuals.** All 21 reactions and the Breaks draw distinct procedural
+  looks with element-coloured links and stay recognizable in monochrome;
+  lingering fields, control glyphs, marks and Core states come from the render
+  model. A per-frame draw budget and crowd level of detail (secondary layers off
+  above 60 on-screen enemies, signatures only above 90) bound the cost, and the
+  Reaction effects setting (Full, Reduced, Minimal) scales it.
+- **Settings.** Settings grows from 4 to 6 groups and from 15 to 41 rows: window
+  mode and size presets, V-Sync, a frame-rate limit, the Android refresh rate
+  and hidden system bars, web fullscreen, interface scale (85 to 130 %), Show
+  FPS, pause when unfocused (on by default), reaction effects and rebinding of
+  all 14 gameplay actions with conflict swap and reset. Profile stores the
+  values through twelve new `AdjustPreference` adjustments; the platform display
+  host lists and applies them. The desktop composition owner lives above the
+  window, so a decoration or V-Sync change reopens the window and keeps the
+  session and the run. Leaving fullscreen places the stored windowed preset
+  only once the window has left fullscreen, a Borderless window has no
+  resizable edges, Android offers at most four refresh rates and only within 24
+  to 360 Hz (the range a stored rate admits), and hidden Android system bars
+  give their space to the play area. Show FPS starts a new measuring window
+  after a stall instead of publishing a falsely low value. The interface scale
+  applies to menus and to the run's HUD, while the world keeps the raw density.
+  The worst-case Profile payload is 7,711 UTF-16 code units of the 8,192 one
+  Desktop Preferences value admits.
+
+The performance suites are `gameplay-core-v4` (the reaction workload fills the
+field table) and `profile-persistence-current-schema-v5` (the business maximum
+carries every 0.5.0 field). Content goldens: items `0..172` `68d4572118b9586d`
+(only the Data levers moved), items `173..268` `c11c59b06e52e3dc`, build tuning
+`d6fa6a5d0a26712d`, weapon and Matrix economy `6e61ebea0bcb73f7`, skills, Apex,
+upgrades and tempo `0e1fa079fddfd61b`; Rebirth `461252b1f47728a5` and Relics
+`c8c02a43bec87968` are unchanged, and the seeded baseline trace still passes
+unchanged.
+
+Each knob was chosen on population seeds disjoint from every fixed gate list
+and then confirmed on the gate seeds; a separate audit set, disjoint from both,
+measured the populations again. On the final 0.5.0 tree the desktop suite runs
+2,301 tests with no failure, and the gates read:
+
+- Rebirth gates: A tier 0 fresh 4/5 (floor 4; seed 55446 falls at 807 s), B 5/5
+  (fights 57 to 77 s), C 0/5, D tier 10 strong 0 wins with a median of 712 s
+  (bounds: median at least 480 s, at most 3 wins), E 5/5 at tier 2 and 0/5 at
+  tier 8, F 4/5 at tier 3 (seed 63365 touches the Singularity at 779 s) and
+  never at tier 10, G 0/5. New gate H (the strong build with every Matrix rank,
+  seeking Data with the Apex at tier 10, same bounds as D) wins 0/5 with a
+  median of 547 s. New gate I (skills help a fresh tier-0 run without
+  trivialising it) is judged on 31 seeds: 76.10 s against 81.25 s without
+  skills, ratio 0.937 (bound 0.8). Gates B and G play the bot with
+  `avoidWeaponHarmony`, which never binds a Relic carrying the equipped weapon's
+  key, so their setup without key harmony holds by construction rather than by
+  seed (the offer weight had moved seed 55446 into binding Stormheart
+  Capacitor). Over 200 disjoint seeds it binds no such Relic where the old bot
+  bound 9 at tier 3 and 4 at tier 10, and the wins stay 198 and 5.
+- Level gate: all 11 fresh runs are alive at 720 s, at levels 25 to 29 (band 22
+  to 30; two fall later, at 729 and 807 s), and the no-POI reference run wins
+  at 803.2 s at level 28. A full Matrix that avoids Data never reaches 42 before
+  720 s: levels 32 to 35 at tier 0, 32 to 36 with Refit and Honing at 10, 33 to
+  38 at tier 3, and at tier 6 one run reaches 42 at 804.7 s. Seeking Data, it
+  reaches 42 at tier 0 on 5 of 5 seeds inside [510, 630] s (561.0 to 593.1 s),
+  at tier 3 on 5 of 5 inside [480, 660] s (497.7 to 586.5 s) and at tier 6 on
+  the 3 seeds that live that long (522.4 to 590.0 s; two fall at 292 and 465 s).
+- Apex fight gate: every Apex keeps the Architect contract at tiers 0 and 10
+  (the volleys its own shots hold back stay under the bound), and an activation
+  never lowers a character's damage to the Architect. The benefit is judged on
+  forked pairs: per character the first 48 runs that reach the Architect, each
+  played four times with both arms' Core moved by k/100 u, with and without the
+  Apex, and the median of the paired kill-time ratios. Three fights per
+  character, as first specified, could not hold the ±40 % band (a bootstrap
+  passed it at most 0.6 % of the time). The median over 1,920 pairs is 0.849
+  (band [0.75, 0.95]), every character between 0.828 (Dipole) and 0.873 (Ring).
+  The defensive check runs at tier 10 on 64 runs × 4 forks and compares the
+  damage taken (integrity and shield) in the Apex windows with the same windows
+  without it: Prism 0.742 and Diamond 0.634 (band [0.55, 0.85]). At tier 0 the
+  Prism took damage in only a tenth of its windows, and most of what the first
+  check counted was shield decay from the test's own refill. The no-POI bot
+  casts the Apex where its boss channel lands (outside a shift, within 420 u
+  plus the boss's radius, and in the last phase or at least strikes + 2 hit caps
+  above the next phase gate, or below 40 % integrity), Dashes whenever it can
+  during Vivisect and Total Eclipse, and brakes during Mirror Stance when a
+  hostile shot is within 160 u or an ordinary enemy within 120 u.
+- Skill share: skills cause a median 0.111 of a fresh run's damage over the 25
+  of 31 runs that reach 720 s (band 0.08 to 0.20); Sonic Boom deals the largest
+  share of all skill damage, 0.283 (bound 0.30). Singularity contacts stay at 0
+  with every Core-moving skill and item over 30 seeds, and obstacle contacts
+  stay within 1.15 times the baseline 0.0131 per second (highest: Crest Rider
+  0.0148).
+- Item variety: on 12 seeds per character, isolated runs share 0.075 to 0.091
+  of their items on average (bound 0.30; the closest pair 0.294 against 0.55).
+  That is 0.668 (Star) to 0.728 (Orb) of what the same seeds share with every
+  item dealt and the 0.4.0 lanes, 0.112 to 0.133 (bound 0.75). Consecutive runs
+  that carry the Profile history share 0.034 to 0.071 (bound 0.22), and 194 of
+  199 rank-0 items are shown (bound 0.90).
+- Economy: median banked Matter is 2,619 fresh at tier 0, 5,168 with a full
+  Matrix, 12,749 at tier 3, 25,617 at tier 6 and 32,817 for the strong tier-10
+  build. On these five seeds the last Refit level (28,160) costs 1.10 and the
+  last Honing level (20,480) 0.80 of the tier-6 median; the old bases 50 and 35
+  read 0.999 and 0.6995 here, just below [1, 1.5] and [0.7, 1]. With Refit and
+  Honing at 10 the strong tier-10 build wins 0 of 5, the Signature build 1 of 5
+  (at 880 s), the half Matrix still loses all five at tier 8 and a fresh tier-6
+  run still never wins, while the Orb and the Pentagon fight 1.15 to 1.27 times
+  stronger in the J5 encounters. Refit 10 keeps every character in its band
+  (median 1,807.7; Orb 1.31, Shard 0.72) and Honing 10 keeps every weapon in its
+  family band (Morningstar crowd 1.32).
+
+The populations show what the fixed seeds cannot. They were measured on the
+calibration C tree. On the gate seeds the five review fixes that followed left
+gates A and I, the fresh level arm and the skill-share median as they were;
+they moved the Prism's variety ratio (0.721 to 0.687), the defensive Apex
+ratios (Prism 0.735 to 0.742, Diamond 0.612 to 0.634), some Data-seeking
+arrival times and one gate H seed, all inside their bounds.
+
+- The calibrated values hold on disjoint seeds. Data-seeking tier-0 runs reach
+  42 at a median of 586 s over 400 audit seeds (359 inside [510, 630] s, 2
+  early; 585.7 and 588.9 s on the tuning and holdout sets), tiers 3 and 6 at 535
+  and 546 s, and no full-Matrix run that avoids Data reaches 42 before 720 s at
+  tier 0, 3 or 6 or with Refit and Honing at 10 (0 of 400 each). The Apex
+  offence median is 0.851 over 96 runs × 4 forks (every character 0.838 to
+  0.858) and 0.843 on the audit seeds. The defence reads Prism 0.757 and 0.758
+  and Diamond 0.691 and 0.666 over 192 runs × 4 forks, so a 64-run gate lands in
+  its band with probability 0.96 or more. The audit's tier-6 Matter median,
+  23,550, derives the same bases 55 and 40.
+- Gates D and H hold but with less margin. The offer weight and k 0.14 moved
+  D's population median from 719 s to about 590 s; across the tuning, holdout
+  and audit sets the chance that a five-seed median reaches 480 s is 0.80 to
+  0.88 for D and 0.74 to 0.88 for H.
+- Fresh tier-0 survival to 720 s is 0.74 over 1,400 seeds (0.715 on the 400
+  audit seeds; 200-seed blocks 0.715 to 0.770), below the 0.75 target and the
+  0.80 of 0.4.0. Skills save early runs and lose more late ones: of the runs
+  alive at 500 s, 13.7 % fall before 720 s with skills and 9.1 % without. The
+  11 fixed FRESH seeds are a favourable draw (9 of 36 disjoint 11-seed blocks
+  pass that gate's rule). `levelIntegrity` 3.5 and `levelRepair` 10.5 would lift
+  survival to 0.77 over 400 seeds and steady D and H, but they turn the
+  Singularity contact gate red on its 30 fixed seeds (Crest Rider 0.0146 per
+  second against 0.0143), while over 120 other seeds Crest Rider sits at 0.84 of
+  the baseline. Lengthening that seed list after seeing the failure would choose
+  seeds by outcome, so the values stay 2.5 and 7.5: a recorded trade-off.
+- Gate I's ratio is 0.80 over 1,400 seeds (78.33 s against 97.82 s), short of
+  the 0.82 target. It swings from 0.69 to 1.02 between 100-seed blocks (5 of 14
+  reach 0.82), and the 31 gate seeds (0.937) rank 8th of 45 disjoint 31-seed
+  blocks. Only `skillTagPoints` 0 reaches 0.82 on 200 seeds, and it costs the
+  tier-10 strong build its skill resonance: the chance of a five-seed median of
+  at least 480 s falls from 0.80 to 0.55 for D and from 0.88 to 0.48 for H.
+  Raising level integrity to win them back pulls gate I to about 0.78, so
+  nothing was adopted.
+- ItemVariety V2 is 0.74 to 0.81 per character over 196 seeds (Orb 0.752, Prism
+  0.747, Star 0.738, Hexagon 0.808; on 96 audit seeds 0.699, 0.748, 0.736 and
+  0.814), against a target of 0.75 over 48 seeds; the 12 gate seeds are the
+  best block for every character. The deck lowers the overlap mostly through
+  one item the bot takes whenever it is offered: Detonator Spur is in 0.96 to
+  0.99 of runs on the 0.4.0 lanes and 0.64 to 0.66 with the deck, and without
+  it the ratio is 0.89 to 1.00. No documented deck, lane or skill knob brings
+  all four characters to 0.75 over 48 seeds without costing fresh survival, and
+  `skillTagPoints` 0 also breaks D and H. The history does what it is for:
+  consecutive runs share 0.03 to 0.07 of their items, against 0.11 to 0.13 for
+  two runs with every item dealt on the 0.4.0 lanes.
 
 ## Baseline evidence
 

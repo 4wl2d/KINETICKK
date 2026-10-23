@@ -19,12 +19,22 @@ import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkShutter
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.LocalCrashDiagnostics
+import kinetickk.foundation.design.LocalKkFrameRateCap
+import kinetickk.foundation.design.LocalKkInterfaceScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.unit.Density
+import kinetickk.ball.profile.api.DEFAULT_INTERFACE_SCALE_PERCENT
 import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.LocalKkRolePalette
 import kinetickk.foundation.design.drawKkShutter
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
+import kinetickk.ball.profile.interaction.settings.api.appliedInterfaceScalePercent
+import kinetickk.ball.profile.interaction.settings.api.offeredInterfaceScales
 import kinetickk.ball.profile.api.ColorVision
+import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfileReadPort
 import kinetickk.ball.profile.api.ProfileQuery
 import androidx.compose.runtime.SideEffect
@@ -43,11 +53,13 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.ball.gameplay.interaction.GameplayPresentation
-import kinetickk.ball.profile.interaction.armory.api.ArmoryFeature
-import kinetickk.ball.profile.interaction.hangar.api.HangarFeature
-import kinetickk.ball.profile.interaction.matrix.api.MatrixFeature
+import kinetickk.ball.profile.api.KeyBindings
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
 import kinetickk.ball.profile.interaction.settings.api.SettingsFeature
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopFeature
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopTab
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopTabRequest
+import kinetickk.foundation.design.toBindableKey
 import kinetickk.flow.session.api.AppDestination
 import kinetickk.flow.session.api.AppSessionPort
 import kinetickk.flow.session.api.AppSessionQuery
@@ -62,6 +74,16 @@ import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
 import kinetickk.flow.session.interaction.home.api.HomeFeature
 import kinetickk.flow.session.interaction.profile.api.ProfileUnavailableFeature
 
+/**
+ * Shell state that must live as long as the features it addresses. Assembly keeps one beside its
+ * features, so a desktop window opened again (its composition rebuilt, the owner kept) never reuses a
+ * Workshop request serial the Workshop has already applied.
+ */
+class AppShellMemory {
+    // The tab the shell last asked the Workshop to show; a new serial makes a repeated request apply again.
+    internal var workshopRequest: WorkshopTabRequest? by mutableStateOf(null)
+}
+
 /** Renders the closed AppSession route projection and translates UI outputs into Session Pulses. */
 @Composable
 fun AppSessionContent(
@@ -70,16 +92,19 @@ fun AppSessionContent(
     gameplayPresentation: GameplayPresentation,
     homeFeature: HomeFeature,
     settingsFeature: SettingsFeature,
-    matrixFeature: MatrixFeature,
-    armoryFeature: ArmoryFeature,
+    workshopFeature: WorkshopFeature,
     rebirthFeature: RebirthFeature,
     codexFeature: CodexFeature,
     profileUnavailableFeature: ProfileUnavailableFeature,
     initialLanguage: AppLanguage = AppLanguage.English,
     profileReadPort: ProfileReadPort? = null,
     onLanguageChanged: (AppLanguage) -> Unit = {},
-    /** Character selection over Home; without it the Hangar route shows nothing. */
-    hangarFeature: HangarFeature? = null,
+    /** Receives the accepted preferences at start and after every accepted change (display application). */
+    onPreferencesChanged: (PlayerPreferences) -> Unit = {},
+    /** Touch is the platform's primary input: the smallest interface scale is never applied. */
+    touchPrimary: Boolean = false,
+    /** Kept by the owner of the features when it outlives this composition (the desktop window). */
+    shellMemory: AppShellMemory = remember(sessionPort) { AppShellMemory() },
 ) {
     val diagnostics = LocalCrashDiagnostics.current
     var languageValue by remember(sessionPort, profileReadPort) {
@@ -88,6 +113,28 @@ fun AppSessionContent(
     var colorVisionValue by remember(sessionPort, profileReadPort) {
         mutableStateOf(profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences?.colorVision ?: ColorVision.DEFAULT)
     }
+    // Keys bound to gameplay actions reach a running run before the session shortcuts.
+    var bindingsValue by remember(sessionPort, profileReadPort) {
+        mutableStateOf(profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences?.keyBindings ?: KeyBindings.DEFAULT)
+    }
+    var workshopRequestValue by shellMemory::workshopRequest
+    // The accepted preferences as last read; display options, frame pacing and interface scale follow them.
+    var preferencesValue by remember(sessionPort, profileReadPort) {
+        mutableStateOf(profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences)
+    }
+    // Interface scale: Home and every overlay lay out at a scaled density; the run keeps the raw one.
+    val rawDensity = LocalDensity.current
+    val windowInfo = LocalWindowInfo.current
+    var rootSizeValue by remember { mutableStateOf(windowInfo.containerSize) }
+    val storedInterfaceScale = preferencesValue?.interfaceScalePercent ?: DEFAULT_INTERFACE_SCALE_PERCENT
+    val interfaceScale = remember(storedInterfaceScale, rootSizeValue, rawDensity.density, touchPrimary) {
+        // Offered for the window's unscaled size, so the choice never depends on the scale itself.
+        val offered = offeredInterfaceScales(
+            rootSizeValue.width / rawDensity.density, rootSizeValue.height / rawDensity.density, touchPrimary,
+        )
+        appliedInterfaceScalePercent(storedInterfaceScale, offered) / 100f
+    }
+    val menuDensity = remember(rawDensity, interfaceScale) { Density(rawDensity.density * interfaceScale, rawDensity.fontScale) }
     val focusRequester = remember(sessionPort) { FocusRequester() }
     var shellValue by remember(sessionPort) {
         mutableStateOf(sessionPort.query(AppSessionQuery.GetShell))
@@ -108,6 +155,27 @@ fun AppSessionContent(
         return accepted
     }
 
+    // An alias or a tabbed Home entry names its tab before Session opens the Workshop (directly, or
+    // once a running run has paused); a refusal leaves the previous request in place.
+    fun openWorkshop(tab: WorkshopTab): Boolean {
+        val previous = workshopRequestValue
+        workshopRequestValue = WorkshopTabRequest(tab, (previous?.serial ?: 0) + 1)
+        return dispatch(SessionInteractionPulse.OpenOverlay(AppDestination.Workshop)).also { accepted ->
+            if (!accepted) workshopRequestValue = previous
+        }
+    }
+
+    fun dispatchKey(key: Key): Boolean {
+        key.toSessionShortcut()?.let { return dispatch(SessionInteractionPulse.ShortcutObserved(it)) }
+        return key.toWorkshopAlias(shellValue.base)?.let(::openWorkshop) ?: false
+    }
+
+    // While a run is on screen without an overlay, a key bound to a gameplay action goes to gameplay
+    // first; gameplay consumes it only in the phases its action applies, and the rest bubbles back.
+    fun gameplayFirst(key: Key): Boolean =
+        shellValue.base == AppDestination.Gameplay && shellValue.overlay == null &&
+            key.toBindableKey()?.let(bindingsValue::action) != null
+
     SideEffect(sessionPort, shellValue.base, shellValue.overlay) {
         // Establish fallback routing after an overlay disposes its focused control.
         // Home can focus a semantic action after layout; Gameplay restores its own focus.
@@ -117,6 +185,7 @@ fun AppSessionContent(
     }
 
     SideEffect(languageValue, onLanguageChanged) { onLanguageChanged(languageValue) }
+    SideEffect(preferencesValue, onPreferencesChanged) { preferencesValue?.let(onPreferencesChanged) }
 
     val normalInputEnabled = shellValue.normalInputEnabled
     // Screen changes: the new destination composes and takes input at once; the previous frame
@@ -137,11 +206,16 @@ fun AppSessionContent(
     CompositionLocalProvider(
         LocalAppLanguage provides languageValue,
         LocalKkRolePalette provides colorVisionValue.rolePalette(),
+        LocalKkFrameRateCap provides (preferencesValue?.frameRateCap ?: 0),
+        LocalKkInterfaceScale provides interfaceScale,
+        // Home and every overlay lay out at the scaled logical size, like a zoom.
+        LocalDensity provides menuDensity,
     ) {
         val roles = LocalKkRolePalette.current
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .onSizeChanged { rootSizeValue = it }
                 .drawWithContent {
                     if (transition.recording) {
                         snapshot.record { this@drawWithContent.drawContent() }
@@ -171,18 +245,25 @@ fun AppSessionContent(
                     // this root, the bubble handler below preserves the global shortcut.
                     if (event.key == Key.Enter) return@onPreviewKeyEvent false
                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    if (gameplayFirst(event.key)) return@onPreviewKeyEvent false
+                    if (!event.key.isShellKey(shellValue.base)) return@onPreviewKeyEvent false
                     audioExecutor.ensureUnlocked()
-                    val shortcut = event.key.toSessionShortcut()
-                        ?: return@onPreviewKeyEvent false
-                    dispatch(SessionInteractionPulse.ShortcutObserved(shortcut))
+                    dispatchKey(event.key)
                 }
                 .onKeyEvent { event ->
                     if (shellValue.overlay == AppDestination.Codex) return@onKeyEvent true
                     if (shellValue.overlay == AppDestination.Settings) {
                         if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
-                        val shortcut = event.key.toSessionShortcut() ?: return@onKeyEvent false
+                        if (!event.key.isShellKey(shellValue.base)) return@onKeyEvent false
                         audioExecutor.ensureUnlocked()
-                        return@onKeyEvent dispatch(SessionInteractionPulse.ShortcutObserved(shortcut))
+                        return@onKeyEvent dispatchKey(event.key)
+                    }
+                    // A bound key the running run did not consume (its action does not apply now)
+                    // keeps its session meaning: C still opens the Codex while paused.
+                    if (event.type == KeyEventType.KeyDown && gameplayFirst(event.key)) {
+                        if (!event.key.isShellKey(shellValue.base)) return@onKeyEvent false
+                        audioExecutor.ensureUnlocked()
+                        return@onKeyEvent dispatchKey(event.key)
                     }
                     if (event.key != Key.Enter || event.type != KeyEventType.KeyDown) {
                         return@onKeyEvent false
@@ -197,16 +278,17 @@ fun AppSessionContent(
                     inputEnabled = normalInputEnabled && shellValue.overlay == null,
                     onOutput = { output -> dispatch(output.toSessionPulse()) },
                 )
-                AppDestination.Gameplay -> gameplayPresentation.Content(
-                    inputEnabled = normalInputEnabled && shellValue.overlay == null,
-                    onOutput = { output -> dispatch(output.toSessionPulse()) },
-                )
+                // The run keeps the raw density: the interface scale never changes the visible arena.
+                AppDestination.Gameplay -> CompositionLocalProvider(LocalDensity provides rawDensity) {
+                    gameplayPresentation.Content(
+                        inputEnabled = normalInputEnabled && shellValue.overlay == null,
+                        onOutput = { output -> dispatch(output.toSessionPulse()) },
+                    )
+                }
                 AppDestination.Settings,
-                AppDestination.Lab,
-                AppDestination.Armory,
+                AppDestination.Workshop,
                 AppDestination.Rebirth,
                 AppDestination.Codex,
-                AppDestination.Hangar,
                 -> error("Only Home and Gameplay may be base destinations")
             }
 
@@ -219,18 +301,20 @@ fun AppSessionContent(
                             is SettingsOutput.LanguageChanged -> {
                                 languageValue = output.language
                                 // Settings reports every accepted preference change through this output.
-                                profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences?.colorVision
-                                    ?.let { colorVisionValue = it }
+                                profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences?.let { preferences ->
+                                    colorVisionValue = preferences.colorVision
+                                    bindingsValue = preferences.keyBindings
+                                    preferencesValue = preferences
+                                }
                             }
                             SettingsOutput.Back -> output.toSessionPulse()?.let { dispatch(it) }
                         }
                     },
                 )
-                AppDestination.Lab -> matrixFeature.Content(
+                AppDestination.Workshop -> workshopFeature.Content(
                     routeToken = shellValue.routeToken.value,
-                    onOutput = { output -> dispatch(output.toSessionPulse()) },
-                )
-                AppDestination.Armory -> armoryFeature.Content(
+                    tabRequest = workshopRequestValue,
+                    characterSelectionAvailable = shellValue.characterSelectionAvailable,
                     activeRunWeapon = activeGameplayWeapon(shellValue, gameplayPresentation),
                     onOutput = { output -> dispatch(output.toSessionPulse()) },
                 )
@@ -242,10 +326,6 @@ fun AppSessionContent(
                 )
                 AppDestination.Codex -> codexFeature.Content(
                     runStacks = currentRunStacks(shellValue, gameplayPresentation),
-                    onOutput = { output -> dispatch(output.toSessionPulse()) },
-                )
-                AppDestination.Hangar -> hangarFeature?.Content(
-                    routeToken = shellValue.routeToken.value,
                     onOutput = { output -> dispatch(output.toSessionPulse()) },
                 )
                 AppDestination.Home,
