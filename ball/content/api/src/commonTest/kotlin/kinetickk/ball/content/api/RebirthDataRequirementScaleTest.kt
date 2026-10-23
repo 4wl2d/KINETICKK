@@ -10,14 +10,14 @@ import kotlin.test.assertTrue
 
 class RebirthDataRequirementScaleTest {
     @Test
-    fun everyTierScalesTheTableByATenthMore() {
-        assertEquals(0.10f, REBIRTH_DATA_REQUIREMENT_SCALE_PER_TIER)
+    fun everyTierScalesTheTableByFourteenHundredthsMore() {
+        assertEquals(0.14f, REBIRTH_DATA_REQUIREMENT_SCALE_PER_TIER)
         assertEquals(1f, defaultRebirthProfile(0).dataRequirementScale, "tier 0 keeps the base curve exactly")
         (ContentBounds.MIN_REBIRTH_LEVEL..ContentBounds.MAX_REBIRTH_LEVEL).forEach { tier ->
-            assertEquals(1f + tier * 0.10f, defaultRebirthProfile(tier).dataRequirementScale, "tier $tier")
+            assertEquals(1f + tier * 0.14f, defaultRebirthProfile(tier).dataRequirementScale, "tier $tier")
         }
-        assertEquals(1.3f, defaultRebirthProfile(3).dataRequirementScale, 1e-6f)
-        assertEquals(2f, defaultRebirthProfile(10).dataRequirementScale, 1e-6f)
+        assertEquals(1.42f, defaultRebirthProfile(3).dataRequirementScale, 1e-6f)
+        assertEquals(2.4f, defaultRebirthProfile(10).dataRequirementScale, 1e-6f)
     }
 
     @Test
@@ -27,9 +27,9 @@ class RebirthDataRequirementScaleTest {
         assertEquals(Int.MAX_VALUE, tierZero.dataRequirement(Int.MAX_VALUE))
 
         val tierThree = defaultRebirthProfile(3)
-        // 18 × 1.3 = 23.4 and 746 × 1.3 = 969.8.
-        assertEquals(23, tierThree.dataRequirement(18))
-        assertEquals(970, tierThree.dataRequirement(746))
+        // 18 × 1.42 = 25.56 and 746 × 1.42 = 1,059.32.
+        assertEquals(26, tierThree.dataRequirement(18))
+        assertEquals(1_059, tierThree.dataRequirement(746))
 
         val half = tierZero.copy(dataRequirementScale = 1.5f)
         assertEquals(2, half.dataRequirement(1), "1.5 rounds up")
@@ -55,11 +55,11 @@ class RebirthDataRequirementScaleTest {
             scaled.sum()
         }
         assertEquals(15_148, totals[0])
-        assertEquals(19_278, totals[3])
-        assertEquals(23_415, totals[6])
-        assertEquals(28_922, totals[10])
+        assertEquals(20_933, totals[3])
+        assertEquals(26_716, totals[6])
+        assertEquals(34_429, totals[10])
         assertTrue(totals.zipWithNext().all { (lower, higher) -> lower < higher }, "each tier needs more Data to 42")
-        assertEquals(281, tempo.dataRequiredForLevel(16, defaultRebirthProfile(3)), "216 × 1.3 = 280.8")
+        assertEquals(307, tempo.dataRequiredForLevel(16, defaultRebirthProfile(3)), "216 × 1.42 = 306.72")
         assertEquals(166, tempo.dataRequiredForLevel(15, defaultRebirthProfile(10)))
     }
 
@@ -70,10 +70,10 @@ class RebirthDataRequirementScaleTest {
         fun RunTempoProfile.total(tier: Int): Int =
             (1 until maximumLevel).sumOf { level -> dataRequiredForLevel(level, defaultRebirthProfile(tier)) }
 
-        assertEquals(listOf(15_148, 19_690, 24_240, 30_296), listOf(0, 3, 6, 10).map(whole::total))
+        assertEquals(listOf(15_148, 21_511, 27_870, 36_352), listOf(0, 3, 6, 10).map(whole::total))
         assertEquals(listOf(15_148, 15_148), listOf(0, 10).map(none::total))
-        assertEquals(36, whole.dataRequiredForLevel(1, defaultRebirthProfile(10)), "18 × 2 = 36")
-        assertEquals(36, whole.dataRequiredForLevel(Int.MIN_VALUE, defaultRebirthProfile(10)), "clamped like the table")
+        assertEquals(43, whole.dataRequiredForLevel(1, defaultRebirthProfile(10)), "18 × 2.4 = 43.2")
+        assertEquals(43, whole.dataRequiredForLevel(Int.MIN_VALUE, defaultRebirthProfile(10)), "clamped like the table")
 
         RunTempoProfile(rebirthScaleFromLevel = ContentBounds.MAX_RUN_LEVEL)
         assertFailsWith<IllegalArgumentException> { RunTempoProfile(rebirthScaleFromLevel = 0) }

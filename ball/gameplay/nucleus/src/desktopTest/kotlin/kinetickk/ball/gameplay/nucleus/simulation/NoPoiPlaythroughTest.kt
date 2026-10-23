@@ -172,6 +172,11 @@ internal class NoPoiBot(
     ),
     /** How the bot treats Data-gain cards (economy §2.1); [DataPolicy.NEUTRAL] plays exactly as the reference bot. */
     private val dataPolicy: DataPolicy = DataPolicy.NEUTRAL,
+    /**
+     * A setup measured without key harmony: the bot leaves a Relic slot hollow rather than bind a Relic that carries
+     * the equipped weapon's key. Off, the bot plays exactly as the reference bot.
+     */
+    private val avoidWeaponHarmony: Boolean = false,
 ) {
     private var cursorAngle = 0f
     private var braking = false
@@ -179,7 +184,7 @@ internal class NoPoiBot(
     private var nextSkillCheckAt = 0f
 
     /** An independent bot in this bot's current state (a forked run continues with it). */
-    fun copy(): NoPoiBot = NoPoiBot(archetypeTag, element, weaponOrder, relicTaste, dataPolicy).also { copy ->
+    fun copy(): NoPoiBot = NoPoiBot(archetypeTag, element, weaponOrder, relicTaste, dataPolicy, avoidWeaponHarmony).also { copy ->
         copy.cursorAngle = cursorAngle
         copy.braking = braking
         copy.decisions = decisions
@@ -550,6 +555,7 @@ internal class NoPoiBot(
             return archetype + item.rarity.rank * 3f + spread + survival + committed
         }
         c.relicId?.let { id ->
+            if (avoidWeaponHarmony && s.currentWeaponDefinition.key in s.content.relic(id).keys) return -100f
             return when {
                 s.relicRank(id) > 0 -> if (full) 50f else 15f + spread
                 full -> -20f

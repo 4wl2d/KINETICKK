@@ -10,6 +10,7 @@ import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.isDataEconomy
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
@@ -91,8 +92,9 @@ private fun MutableGameState.experimental(item: ItemDefinition): Boolean =
  * inside that tier. The volatile card usually rolls one rarity higher and then sometimes prefers risk items when it
  * lands on their tier, and the pity card never rolls below Rare. A rolled tier with no available item falls to the
  * nearest lower tier (not below Rare for pity while any Rare or better is available), then to the nearest
- * higher one. Never guarantees a perfect synergy; suppressed items are excluded or down-weighted, and recently taken
- * items (the Profile's history) are down-weighted in every lane. Only items dealt into the run's deck appear (the deck
+ * higher one. Never guarantees a perfect synergy; suppressed items are excluded or down-weighted, recently taken
+ * items (the Profile's history) are down-weighted in every lane, and the Matrix's Data offer weight raises Data-economy
+ * items in every lane (weights only, no draw). Only items dealt into the run's deck appear (the deck
  * is refilled first). Each card draws the rarity, lane, pick and Reborn values from [rewardRandom] in that order.
  */
 internal fun MutableGameState.buildItemChoices() {
@@ -128,7 +130,8 @@ internal fun MutableGameState.buildItemChoices() {
         val weights = FloatArray(candidates.size) { index ->
             val item = candidates[index]
             val base = if (lane == OfferLane.ALIGNED) 1f + lanePolicy.alignedFitWeight * min(fit(item, familyFits), lanePolicy.alignedFitCap) else 1f
-            base * (1f - itemSuppressedShare(item)) * (1f - itemDormantShare(item)) * itemHistory.offerWeight(item.id)
+            base * (1f - itemSuppressedShare(item)) * (1f - itemDormantShare(item)) * itemHistory.offerWeight(item.id) *
+                (if (item.isDataEconomy) matrix.dataOfferWeight else 1f)
         }
         val choice = candidates[weightedIndex(weights)]
         selected += choice
