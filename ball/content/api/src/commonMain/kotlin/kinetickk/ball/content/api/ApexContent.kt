@@ -92,8 +92,8 @@ fun defaultApexDefinition(shape: CoreShape): ApexDefinition = when (shape) {
     )
     CoreShape.DIAMOND -> apex(
         "Mirror Stance",
-        "For 6 s, while you brake, every hit is parried and returned at full Edge.",
-        6f, 24, 6, 65f, 5f,
+        "For 6 s, while you brake, the next four hits are parried and returned at full Edge.",
+        6f, 4, 6, 65f, 5f,
     )
     CoreShape.TESSERACT -> apex(
         "Hypercube",

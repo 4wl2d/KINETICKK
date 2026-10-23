@@ -551,7 +551,7 @@ internal fun MutableGameState.tryCharacterParry(
 ): Boolean {
     val ability = characterRuntime
     if (coreShape != CoreShape.DIAMOND) return false
-    // Mirror Stance: while braking, every hit is parried (no window, speed or cooldown) until its parries run out.
+    // Mirror Stance: while braking, hits are parried (no window, speed or cooldown) until its parries run out.
     val mirror = apexActive() && braking && skillRuntime.apex(ApexCell.BOLTS_LEFT) >= 1f
     if (ability.parryWindow <= 0f && !mirror) return false
     // Collision callers pass the beginning of the swept segment: an incoming projectile

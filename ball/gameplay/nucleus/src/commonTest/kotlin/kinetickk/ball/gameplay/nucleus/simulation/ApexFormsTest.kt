@@ -193,7 +193,7 @@ class ApexFormsTest {
     }
 
     @Test
-    fun mirrorStanceParriesEveryHitWhileBrakingAndReturnsItAtFullEdge() {
+    fun mirrorStanceParriesItsBudgetOfHitsWhileBrakingAndReturnsThemAtFullEdge() {
         val state = arena(CoreShape.DIAMOND)
         val ordinary = state.dummy(x = state.coreX - 300f)
         val boss = state.testArchitect(x = state.coreX + 2_000f)
@@ -205,8 +205,8 @@ class ApexFormsTest {
         val returned = state.apexShots().single()
         assertEquals(65f * state.abilityPower() * 1.4f, returned.damage, 1e-3f)
         assertEquals(0f, state.characterRuntime.parryWindow, "no window is needed or spent")
-        assertEquals(23f, state.skillRuntime.apex(ApexCell.BOLTS_LEFT))
-        repeat(23) { assertTrue(state.tryCharacterParry(state.coreX + 100f, state.coreY, -400f, 0f)) }
+        assertEquals(3f, state.skillRuntime.apex(ApexCell.BOLTS_LEFT))
+        repeat(3) { assertTrue(state.tryCharacterParry(state.coreX + 100f, state.coreY, -400f, 0f)) }
         assertFalse(state.tryCharacterParry(state.coreX + 100f, state.coreY, -400f, 0f), "then the normal rules")
 
         // Edge is held full against ordinary enemies only.
