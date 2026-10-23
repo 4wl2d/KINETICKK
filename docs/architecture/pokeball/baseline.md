@@ -37,16 +37,19 @@ item appears under **Intentional delta**.
 
 ### Routes and workflow
 
-All eight screens are available: Home, Gameplay, Settings, Lab, Armory,
-Rebirth, Codex, and Hangar. Home and Gameplay are base destinations; the other six are
-single overlays. Replacing an overlay never builds a feature-to-feature stack.
+All six screens are available: Home, Gameplay, Settings, Workshop, Rebirth and
+Codex (the Workshop replaced the Lab, Armory and Hangar in 0.5.0, see below).
+Home and Gameplay are base destinations; the other four are single overlays.
+Replacing an overlay never builds a feature-to-feature stack.
 Opening an allowed overlay during a running game pauses that run. A choice
 blocks overlays; Game Over and Victory allow only Rebirth. Closing Settings
 propagates the persisted preferences to an active run. Restart and completed
 Rebirth start a fresh run from the latest Profile snapshot.
 
-The keyboard mapping is `S/L/A/B/C/I/H/M/Escape/Enter` for Settings,
-Lab, Armory, Rebirth, Codex (C or I), Hangar (from Home only), mute, back, and contextual enter.
+The keyboard mapping is `S/W/L/A/H/B/C/I/M/Escape/Enter` for Settings, the
+Workshop, the Workshop's Matrix, Weapons and Characters tabs (H from Home only),
+Rebirth, Codex (C or I), mute, back, and contextual enter. While a run is
+running, keys bound to gameplay actions reach the run first.
 
 ### Profile
 
@@ -57,7 +60,8 @@ failure or uncertainty never rolls an accepted value back and does not cause an
 automatic new write. Rejections change neither state nor persistence.
 
 The frozen mutation matrix covers preference normalization, sound/music mute,
-Matrix purchases and reset, core-shape selection, weapon purchase/equip, Rebirth advance,
+Matrix purchases and reset, core-shape selection, weapon purchase/equip, Refit and
+Honing purchases, key bindings and display preferences, Rebirth advance,
 gameplay-progress merge, bootstrap, and the test-only replacement seam.
 The target removes production arbitrary replacement but preserves validated
 bootstrap semantics.
@@ -75,11 +79,12 @@ and counter-thrust remain available at exhaustion. Gameplay owns twelve characte
 abilities, optional world-fixed trials and bounded relic synergies. Codex reads
 one coherent immutable build summary and preserves pause/reward selection.
 
-The catalog has 173 hand-authored items, 12 weapons, 32 Core Matrix nodes, 22 Relics,
-19 enemy types, twelve characters, and Rebirth levels `0..10` (see the build-system
-and 0.4.0 intentional deltas below). Existing stable declaration order is captured as
-explicit stable IDs during the migration; consumers receive immutable versioned
-snapshots instead of reaching global catalog objects.
+The catalog has 269 hand-authored items, 24 weapons, 32 Core Matrix nodes, 22
+Relics, 19 enemy types, twelve characters, 18 skills, twelve Apex abilities and
+Rebirth levels `0..10` (see the build-system, 0.4.0 and 0.5.0 intentional deltas
+below). Existing stable declaration order is captured as explicit stable IDs
+during the migration; consumers receive immutable versioned snapshots instead of
+reaching global catalog objects.
 
 ### Audio
 
@@ -563,6 +568,211 @@ The migration may change internal ordering only where Pokeball acceptance
 semantics require it, such as pause acceptance before overlay publication and
 accepted Profile progress before returning Home. The rendered UX and final
 business outcomes remain the same.
+
+### Release 0.5.0
+
+Release 0.5.0 answers ten owner requests: a capped Data curve, 96 more items,
+reaction behaviors, run skills, a level-42 Apex ability, permanent upgrades, one
+Workshop for every upgrade screen, an evolving level badge, reaction visuals and
+display and control settings. Seven elements and 21 reactions stay; no balance
+gate was weakened, and every new feature has gates of its own. Each new Profile
+field is optional and written only when it differs from its default, so every
+earlier golden payload is byte-identical. Player text ships in English and
+Russian.
+
+- **Data curve and the level cap.** Content owns the level table. The run level
+  stops at `RunTempoProfile.maximumLevel` 42 (Content bound 99); levels 1 to 15
+  keep the 0.4.0 requirement, levels 16 to 20 ramp by up to `rampPlateau` 190
+  and levels 31 to 35 by `topPlateau` 0, so reaching 42 takes 15,148 Data (31
+  takes 7,898; the last level 746). From level 16 (`rebirthScaleFromLevel`)
+  Rebirth tier t scales each requirement by `1 + 0.10t`, rounded half up and
+  never below the base, so the totals at tiers 0, 3, 6 and 10 are 15,148,
+  19,278, 23,415 and 28,922. Each level-up adds 2.5 maximum integrity and
+  repairs 7.5 (`levelIntegrity`, `levelRepair`). Scaling the whole table instead
+  flipped gate D (median 87.8 s), so the opening levels stay unscaled. Data
+  collected at the cap still counts toward `dataCollected` and charges the Apex
+  instead of leveling; Data past the cap owes no skill draft or rank-up card.
+  The render model carries `maxLevel`. The Data levers are content numbers: Data
+  Prospector GainData 2.5, Data Siphon DATA_GAIN 0.12 with 40 per Elite,
+  Windfall Sensor 0.12, Magnet Lens 0.08, Jackpot Relay GainData 3 and Decay
+  Spores up to 8 Data per cast. Each Data Archive rank gives +15 % Data and
+  deals three more rank-0 Data items into the run's draft deck
+  (`MatrixEffect.DataStratum(3)`; the deck's Data floor of 4 becomes all 13 at
+  rank 3).
+- **Items.** The catalog grows from 173 to 269 (bound 320). Items `173..268` are
+  appended in eight themed batches: 21 reaction keystones (exactly one Epic or
+  better per reaction, declaring both its elements), casting and Apex items,
+  marks, fields and terrain, Core movement, one item per weapon family, and
+  wardens, wagers and legends; 23 of them are gated by Rebirth rank. They use
+  the new rule vocabulary instead of flat stats. Items whose effects wait for a
+  skill or another weapon are Dormant until the run can use them; offers weigh
+  them down and the Codex says so. Each run deals a draft deck from its own
+  stream (run seed xor `0x0DEC_C0DE`), so reward draws keep their count and
+  order while the offers of a seed change; a rank-0 deck holds 117 to 130 of 203
+  items and the Codex marks the rest Not in this run. A tier refills from the
+  reserve only when it runs out of dealt items the run can still take. Offer
+  lanes are softer: the aligned lane is taken 55 % of the time, fit weighs `1 +
+  0.6 × min(fit, 3)`, the loadout point and an unpicked weapon family leave the
+  fit, saturated tags count half and risky lifts pass a 0.36 filter. The Profile
+  remembers the newest 64 first acquisitions; a remembered item is dealt with
+  weight `max(0.35, 1/(1 + 0.8p))` and offered with its square root. Launch Rail
+  DAMAGE 0.3 for 3 s, Echo Capacitor SkillCooldown 0.15, Overcharge Glyph
+  ACTIVATION 0.3 for 3 s, Tidewater Hull DR 0.2, Homing Rifling 3 s with a 2 s
+  cooldown and Like Poles FLAT 40 are calibrated numbers; Scavenger Protocol
+  (DATA_GAIN 0.035, GainData 0.5), Lodestar Ledger (0.04), Mycelial Ledger
+  (0.02, 0.3) and Rote Memory (0.05) carry halved Data amounts so a fresh run
+  does not level past 30 by accident. Every item passes the 5 %
+  perceptible-impact floor, the 173 older ones on the 0.4.0 setups alone; the
+  impact arenas gained skill, field, mark, throw, Apex and family-weapon
+  encounters, and an item whose clause needs a skill tag or a refreshed weapon
+  is flown with one. The no-POI bot passes on mark, field and throw items it
+  cannot aim and, when told to, seeks or avoids Data-economy items.
+- **Reactions.** Every reaction gains one play-style verb and a keystone form
+  that an item switches on; no reaction hits harder than before, and eight lost
+  power (Thermal Shock 12 → 10, Plasma 6 → 5, Wildfire 5 → 4, Superconduct 7 →
+  6, Magnetize 5 → 4, Seismic 4 → 3.5, Fracture 3 → 2.5, Annihilate 9 → 8). The
+  verbs leave marks, fields, Core states and refunds behind: Spall slams, Plasma
+  lances, Accretion Data, Ablaze contact, Frictionless drift, an Ice Fan, Glass
+  Charge piercing, an Attractor, Overcurrent, Compost, Blast Jump, Shard Guard,
+  Arc Weave, Rock Echo, Breakpoint, Hush, Flame Leap, a Time Bubble, Void
+  Anchor, the Maw and Erasure. Fields now live in one table of twelve (nine for
+  reactions and items, one per skill slot) with per-kind caps; a full kind
+  replaces its oldest field. The enemy status layout grows from 71 to 73 cells
+  for one mark per enemy. Wildfire's residue follows its declared values, Stasis
+  no longer spends Minelayer mines, and Breaks and reactions draw in element
+  colour indices 8 to 22, leaving the threat colour to damage the Core takes. A
+  gate plays every verb on and off in a scripted arena and requires a 10 %
+  change in its play metric (21 of 21 pass; for example Blast Jump distance
+  ×2.80, Shard Guard erases 32 shots against 0, Erasure Data ×19.2). The
+  Architect keeps its volleys and timers inside a Time Bubble, a Maw or an
+  Attractor (24 of 24 volleys each) and keeps attack windows under any Hush (18
+  of 18, quiet share 0.275).
+- **Skills.** Eighteen skills are drafted during the run into slots Z, X and C,
+  which open at run levels 2, 8 and 16; a rank-up card every four levels takes
+  the experimental card's place and raises a skill one rank, up to III. A draft
+  costs three reward draws (a reroll three more) and a rank-up card none. Skills
+  are cooldown-based (never below 2.5 s), refunds never exceed half a cast's
+  cooldown, and reactions, items and Catalysis refund them. Skill damage goes
+  through `dealSkillDamage` and the Architect gate, at most once per boss per
+  cast. Every character has a skill hook (for example the Prism casts 15 %
+  faster and the Spiral's ghost repeats damage skills at 35 %). Skills fold into
+  build tags and affinity. Movement skills keep the Core clear of obstacles: Arc
+  Hook needs a clear line 200 past its target, Slingshot swings at most 1,100
+  u/s and no farther than its clear path, and Void Step lands at least 80 beyond
+  the Core's radius from a rock. Skill Charges holds two casts, each recharging
+  on its own clock. The no-POI bot drafts and casts skills (Data-seeking
+  profiles take Decay Spores and Gravity Well; Catalyze waits for three enemies
+  carrying an element). Skill numbers come from a phase-free 96-seed balance
+  arena that holds every rank III a third above its rank I and every family
+  within 40 % of its median at both ranks; the skills golden pins them.
+- **Apex abilities.** Each character has one Apex ability (Perihelion, Monolith,
+  Vivisect, Corona, Mirror Stance, Hypercube, Hypernova, Twin Echo, Magnetar,
+  Crescendo, Total Eclipse, Swarm Queen) that unlocks at level 42 with an "APEX
+  ONLINE" banner, is ready at once and casts on V or the level badge. Its
+  cooldown is 60 s; Data collected at the cap takes 0.03 s per point off it,
+  never below 30 s after the last cast. Against the Architect and Heralds it
+  spends at most `bossStrikes` (6) strikes per activation, each through the
+  Architect gate or clamped to a Herald's hit cap and never during a shift, and
+  it erases at most 96 bolts.
+- **Permanent upgrades.** Refit (per character) and Honing (per owned weapon)
+  run from level 0 to 10; the next level costs `base × 2^level` Matter
+  (characters 50 and weapons 35, 20 % more per Rebirth rank of their gate),
+  saturating, and is never refunded. Refit adds 2 maximum integrity and 2 %
+  character-mechanic damage per level and moves one signature parameter (never
+  below half its base); Honing adds 3 % to the current weapon's own hits and
+  follows a mid-run weapon switch. The run captures the levels at start and
+  rejects out-of-range ones (`UPGRADE_LEVEL_OUT_OF_RANGE`); the Build summary
+  and the Codex show them. Loading clamps a level above a lowered maximum and
+  refunds it. Profile adds the pulses `PurchaseCharacterUpgrade` and
+  `PurchaseWeaponUpgrade` and the refusals `UpgradeMaxLevel` and
+  `WeaponNotOwned`. Morningstar's speed share fell from 0.036 to 0.031 to keep
+  Honing 10 inside the weapon band.
+- **Workshop.** One Workshop overlay with Characters, Weapons and Core Matrix
+  tabs replaces the Lab, the Armory and the Hangar, so the app has six routes
+  and four overlays. W opens it; L, A and H open it on the Matrix, Weapons and
+  Characters tabs (H over Home only). It opens over a paused run as well;
+  characters change only over Home, and purchases apply from the next run. Each
+  character and weapon detail has an upgrade block with the level and the next
+  price, and a character's block names its Refit signature. Home has five rows
+  (Play, Workshop, Rebirth, Codex, Settings) and a Characters card, two chips
+  and a Workshop stamp that is the Profile's affordability read; the pause menu
+  offers Resume, Settings, Workshop, Codex and Exit. The pinned
+  `AppSessionApiContractTest.shellProjectionRetainsExactlyEightRoutes…` became
+  `…ExactlySixRoutesAndOnlySessionOwnedWorkflowState`.
+- **Level badge.** Tiers T1 to T5 keep their thresholds (1, 10, 20, 30, 40) and
+  T6 APEX starts at the level cap with its own look and the Apex states; the
+  Data bar and line change per tier and become the Apex meter at the cap; tier,
+  unlock, ready, cast and refund edges play once. The skill row (Z, X, C) shows
+  in every layout with key caps while a keyboard is in use, touch accepts five
+  pointers with one steering, and the badge is the Apex control.
+- **Reaction visuals.** All 21 reactions and the Breaks draw distinct procedural
+  looks with element-coloured links and stay recognizable in monochrome;
+  lingering fields, control glyphs, marks and Core states come from the render
+  model. A per-frame draw budget and crowd level of detail (secondary layers off
+  above 60 on-screen enemies, signatures only above 90) bound the cost, and the
+  Reaction effects setting (Full, Reduced, Minimal) scales it.
+- **Settings.** Settings grows from 4 to 6 groups and from 15 to 41 rows: window
+  mode and size presets, V-Sync, a frame-rate limit, the Android refresh rate
+  and hidden system bars, web fullscreen, interface scale (85 to 130 %), Show
+  FPS, pause when unfocused (on by default), reaction effects and rebinding of
+  all 14 gameplay actions with conflict swap and reset. Profile stores the
+  values through twelve new `AdjustPreference` adjustments; the platform display
+  host lists and applies them. The desktop composition owner lives above the
+  window, so a decoration or V-Sync change reopens the window and keeps the
+  session and the run. The interface scale applies to menus and to the run's
+  HUD, while the world keeps the raw density. The worst-case Profile payload is
+  7,678 UTF-16 code units of the 8,192 one Desktop Preferences value admits.
+
+The performance suites are `gameplay-core-v4` (the reaction workload fills the
+field table) and `profile-persistence-current-schema-v5` (the business maximum
+carries every 0.5.0 field). Content goldens: items `0..172` `68d4572118b9586d`
+(only the Data levers moved), items `173..268` `c11c59b06e52e3dc`, build tuning
+`d6fa6a5d0a26712d`, weapon and Matrix economy `a668ef80e74bd333`, skills, Apex,
+upgrades and tempo `e21686b5e4452b5e`; Rebirth `461252b1f47728a5` and Relics
+`c8c02a43bec87968` are unchanged, and the seeded baseline trace still passes
+unchanged.
+
+The gates were calibrated on population seeds disjoint from the fixed gate seeds
+and confirmed on the gate seeds. On the release candidate (`cecffe5a`) the
+desktop suite ran 2,274 tests with 2 failures:
+
+- Rebirth gates: A tier 0 fresh 4/5 (floor 4), B 5/5, C 0/5, D tier 10 strong 0
+  wins with a median of 900 s, E 5/5 at tier 2 and 0/5 at tier 8, F 5/5 at tier
+  3 and never at tier 10, G 0/5. New gate H (the strong build with every Matrix
+  rank, seeking Data with the Apex at tier 10) wins 0/5 with a median of 666 s.
+  New gate I (skills help a fresh tier-0 run without trivialising it) is judged
+  on 31 seeds: 76.10 s against 81.25 s without skills, ratio 0.937 (bound 0.8);
+  over 310 seeds it is 0.805.
+- Level gate: fresh runs 10 of 11 alive at 720 s at levels 25 to 29 (band 22 to
+  30); the no-POI reference run wins at 803.2 s at level 28. Full Matrix without
+  Data items never reaches 42 before 720 s (levels 33 to 37 at tier 0; the few
+  tier-3 and tier-6 runs that get there arrive after 740 s). Seeking Data
+  reaches 42 in its window at tier 3 on 5 of 5 seeds (571 to 660 s) and at tier
+  6 on 4 of 5 (569 to 608 s). At tier 0 it arrives at 646.7 to 724.1 s on four
+  seeds and not at all on the fifth, 0 of 5 inside [510, 630] s: this gate
+  fails.
+- Apex fight gate: every Apex keeps the Architect contract at tiers 0 and 10
+  (the volleys its own shots hold back stay under the bound), and an activation
+  never lowers a character's damage to the Architect. The benefit arm fails: the
+  median time-to-kill ratio is 0.9685 against the band [0.75, 0.95], and the
+  Prism's ratio is 1.0 against [0.55, 0.85].
+- Skill share: skills cause a median 0.111 of a fresh run's damage over the 25
+  of 31 runs that reach 720 s (band 0.08 to 0.20); no single skill deals more
+  than 0.280 of all skill damage (bound 0.30). Singularity contacts stay at 0
+  with every Core-moving skill over 30 seeds.
+- Item variety: the 12-seed gate reads Orb 0.728, Prism 0.721, Star 0.668 and
+  Hexagon 0.692 of the overlap under a full deck and the 0.4.0 lanes (bound
+  0.75), and 194 of 199 rank-0 items are shown. Over 48 seeds per character the
+  ratios are Orb 0.697, Prism 0.692, Star 0.739 and Hexagon 0.794.
+- Economy: median banked Matter is 2,619 fresh at tier 0, 5,256 with a full
+  Matrix, 12,519 at tier 3, 22,800 at tier 6 and 44,771 for the strong tier-10
+  build; the last Refit level costs 1.12 and the last Honing level 0.79 of the
+  tier-6 median. With Refit and Honing at 10 the strong tier-10 build wins 0 of
+  5, the half Matrix still loses all five at tier 8 and a fresh tier-6 run still
+  never wins, while the Orb and the Pentagon fight 1.15 to 1.27 times stronger
+  in the J5 encounters. Refit 10 keeps every character in its band (median
+  1,807.7) and Honing 10 keeps every weapon in its family band (Morningstar
+  crowd 1.32).
 
 ## Baseline evidence
 

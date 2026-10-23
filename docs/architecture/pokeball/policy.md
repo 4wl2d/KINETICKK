@@ -91,7 +91,7 @@ remain independently enforced.
 | Session participant commands at one time | 1 | Session State/Nucleus plus acceptor |
 | Profile / Gameplay / Session completion deque capacity | 8 / 8 / 8 | owned bounded completion storage; preflight and overflow tests |
 | active GameplayRun instances | 1 | Session allocation/lifecycle invariant |
-| application routes / overlays | 8 / 6 | closed `AppDestination` inventory; the Hangar overlay opens only over the Home base |
+| application routes / overlays | 6 / 4 | closed `AppDestination` inventory (Home and Gameplay bases; Settings, Workshop, Rebirth and Codex overlays); character selection is accepted only over the Home base, bare or under the Workshop overlay, and the Workshop opens over a paused run without it |
 | Gameplay fixed steps per render frame | 48 | Gameplay simulation loop |
 | Gameplay simulation raw-delta / accumulator cap seconds | `0.1` / `0.3` | production GameLoop clamps before and during accumulator admission |
 | Gameplay fixed-step admission rounding tolerance | 2 ulps of `1/120` s | GameLoop treats an accumulator within two Float ulps of a whole step as that step, so an input on a nominal step boundary lands on the same step at every frame rate; a frame below one step runs no step on a scalar copy |
@@ -106,10 +106,22 @@ remain independently enforced.
 | world obstacles held / destroyed unstable asteroids / obstacles per chunk | 128 (a 5 × 5 chunk window × 5) / 256 / 5 | Content validates the window against `MAX_OBSTACLES`; Gameplay regenerates the window only when the Core changes chunk and keeps destroyed ids as a bounded FIFO |
 | Core obstacle contacts per fixed step / enemy-enemy slams per step / thrown enemies checked per step | 3 / 6 / 24 | the swept Core resolution stops after three contacts and then pushes the Core out; further slams wait for the next step |
 | Data magnet / collection radius | 320 (item floor 120) / 56 | Content `PickupTuning`; latched pickups home at `max(950, 1.3 × Core speed)`; Keys and Relic resonances never expire and evict the oldest Data at the pickup cap |
+| run level / Data requirement table | `1..maximumLevel` = 42 (Content bound 99) / `maximumLevel − 1` positive non-decreasing entries; Rebirth tier t scales the entries from `rebirthScaleFromLevel` (16, validated `1..99`) to `max(req, floor(req × (1 + k·t) + 0.5))`, saturating, with k = `REBIRTH_DATA_REQUIREMENT_SCALE_PER_TIER` (0.10) | `RunTempoProfile` and `RebirthProfile` construction; `gainData` stops leveling at the cap; Data credited there still counts toward `dataCollected` and charges the Apex instead |
 | POI directed rewards | 6 per run | six Content schedule windows and checked queue growth before candidate publication |
 | Character lattice | 4 collapse vertices / at most 3 retained | fourth distinct Dash position collapses the lattice; nearby positions add nothing |
 | Character runtime: facets / Edge / Stellar Mass / Blink charges / void scars / drones / echo path / Dipole slams per step | 4 / 5 / 24 / 2 / 4 / 4 / 122 samples / 8 | copy-on-write buffers allocated once per run; the echo ring is paged (8 samples a page), so a step copies at most one page and a reduction the page table once, and the small lattice, drone and scar arrays are copied at most once per reduction; a full scar list detonates its oldest, a full hive refreshes instead of growing, the echo ring overwrites its oldest sample |
-| combat fields / active buffs / severed Relics | 12 (Content bound 16) / 16 / 4 | `addField` and buff insertion reject at capacity; severance keeps the newest four |
+| combat fields / active buffs / severed Relics | 12 (Content bound 16): reaction and item fields share `maximumFields − maximumSkillFields` = 9, skill fields at most `maximumSkillFields` = 3 (one per slot; a recast overwrites it); per kind FUSION 3, ROT_WELL 3, DARK_STAR 4, NULL_WELL 3, PLASMA 3, HUSH 2, TIME_BUBBLE 2, ATTRACTOR 2, a full kind replacing its oldest field in place / 16 / 4 | `addField` over a fixed 16 × 22 copy-on-write table refuses past the pool; Content validates `1 ≤ maximumSkillFields < maximumFields`; buff insertion rejects at capacity; severance keeps the newest four |
+| field passes | shot eating over the 4 newest shot-eating fields (Maw ≤ 20, Time Bubble ≤ 24 with Rewind returning ≤ 12, Dead Air ≤ 20 shots per field); star pickup pull over the 2 newest; attractor bend ≤ 4 rad/s within 220; Compost ≤ 3 growths up to radius 200; skill fields join the shot and pickup passes within the same caps | `CombatFieldSystem` pass order |
+| reaction verbs | values ≤ 4 and cue ≤ 28 characters per reaction; Core link radius 480 (Core Link items add ≤ 240); Shard Guard ≤ 6 shards (5 per guard) for 4 s; Rock Echo ≤ 3 rocks within 260; Breakpoint ≤ 12 detonations per Brake release within 320; Flame Leap stops below 8 × run scale (0.6 per leap); aftershock slots 2; Overcurrent ≤ 1 per s; Arc Weave one 3-link chain per TURN edge (2 links in Standing Wave); Void Anchor one per run, blink ≤ 520 in a 30° cone with a 60 u singularity gap; forced and echoed reactions scale ≤ 1.3 and echoes are token-gated | Content `ReactionDefinition` validation; `ReactionSystem` verb sites; the Architect gate and boss control rules stay in force |
+| Core impulses / erased-shot bursts shown | ≤ 700 u/s, reaction and item pushes sharing one 0.5 s gate (Rocket Clap 560) / 4 per fixed step | `applyCoreImpulse`; `eraseHostileShot` |
+| skills: pool / slots / ranks / values per rank | 18 (Content bound 24) / 3 (Z, X, C; opened at run levels 2, 8 and 16) / `1..3` / 6 | Content bootstrap requires the exact `SkillId` order and validates every rank; the Gameplay API admits skill slots `0..2` only |
+| skill cooldowns, refunds and charges | recast ≥ 2.5 s before any refund; static cooldown scale ≥ 0.5 (build cut ≤ 0.4); refunds ≤ 50 % of a cast's cooldown and never before the cast + 2.5 s; Decay Spores refunds ≤ 3 s per skill per cast; charges 1, or 2 with Skill Charges, each charge recharging on its own clock at cooldown × 1.2 | `SkillSystem` cast admission and refund bank; `BuildCompiler` clamps |
+| skill cast work | 4 skill hits per cast; one damage instance per boss-class enemy per cast; Catalyze ≤ 10 enemies (scratch 10 ids); Storm Coil ≤ 3 targets per zap; Resonator ≤ 5 echoes per field; Null Shroud stores ≤ 18 bolts and releases them over ≤ 4 enemies; Dual Infusion ≤ 8 stacks per s; Decay Spores ≤ 8 Data per cast; one skill field per slot | candidate-private cast scope and scratch; bounded per-cast counters |
+| movement-skill obstacle clearance | Arc Hook's nearest target needs a line to 200 u past it clear of obstacles by the Core radius + 30; Slingshot swings at most 1,100 u/s and at most the clear distance along its aim over 0.5 s; Void Step lands ≥ the Core radius + 80 from an obstacle surface, stepping back 20 u at a time | `SkillSystem` targeting and landing |
+| skill and Apex input | one slot mask and one Apex flag, each buffered 0.16 s; a request is taken only while RUNNING for a filled slot or an unlocked Apex, and a repeat inside the buffer changes nothing; pause, overlays, exit and a draft clear the buffers | Gameplay reducer scalar reduction; Interaction rejects a skill slot outside `0..2` before Pulse construction |
+| skill offers | a draft at each slot level (3 cards, 3 reward draws, a reroll 3 more); a rank-up card every 4 levels takes the experimental card's place with no added draw; no draft or rank-up card past the level cap; `BuildPolicy.skillTagPoints` `0..2` | reward stream draws in `OfferSystem`; Content `BuildPolicy` validation |
+| Apex ability | one per character (12 definitions, values ≤ 4), unlocked at the level cap; cooldown 60 s, build cut ≤ 0.3, never below 30 s; Data credited at the cap refunds 0.03 s per point, never before the last cast + 30 s; boss strikes ≤ `bossStrikes` per activation (6 shipped, Content bound 12), each at most the target's hit cap and never during a shift; hostile bolts erased ≤ 96 per activation (refractions and parries included); Perihelion holds ≤ 24 bolts; Hypercube cage ≤ 4 nodes; Apex shots 720 u/s for 2 s | Content `ApexDefinition` construction; `ApexSystem` bank and strike/bolt budgets; Architect damage passes `gateArchitectDamage`, a Herald strike is clamped to the cap |
+| item rule vocabulary | SKILL_HIT ≤ 4 per cast; SHOT_ERASED and MARK_CONSUMED ≤ 4 each per fixed step; FIELD_ENTER ≤ 1 per 0.5 s; APEX clauses every ≤ 3; ForceReaction ≤ 4 targets (cooldown ≥ 1 s or every ≥ 3 on a frequent trigger); Zone 60..300 for 0.5..4 s inside the field pool and kind caps (≥ 2 s or every ≥ 4 on a frequent trigger); EraseShots ≤ 12 within ≤ 400 (≥ 1 s on a frequent trigger); CoreImpulse 100..600 through the Core gate; PrimeDash 3 s; ReactionTuning ≤ +0.75 per reaction and aspect (shared rows ≤ +0.5, tuned radius ≤ 600); FieldTuning ≤ +0.5 per aspect with the reaction-field product ≤ 1.75; SkillCooldown cut ≤ 0.4; attuned stacks ≤ 8 per cast; CatalysisRate ≤ 2×; ApexCooldown ≤ 0.3; CoreLinkRadius ≤ +240; knockback conversion once per enemy per 0.5 s; one keystone per item (Epic or better), exactly one keystone item per reaction and at most one item each with Skill Charges and Skill Attunement | clause and rule validation at Content construction and catalog bootstrap; `BuildCompiler` clamps; per-step dispatch counters |
 | status Breaks / reactions | 40 per s burst 16 / 30 per s burst 12 | deterministic token buckets; generation-0 events are admitted whole, generation 1 is dropped when empty, generation 2 never cascades |
 | status and reaction visual cues per fixed step | 6 | Gameplay-owned per-step cue budget before the bounded accumulator |
 | clause dispatch depth / item status applications | 2 / 6 per s per item at one stack | clause engine depth guard; per-item rate gate scaled by stack magnitude |
@@ -120,13 +132,20 @@ remain independently enforced.
 | Interaction damage numbers / weapon arcs | 140 / 128 | Interaction-ephemeral bounded reducers |
 | Interaction frame delta seconds | `0..1` | Interaction ingress quarantine before Gameplay Pulse construction |
 | Interaction viewport pixels / density | `1..32768` / `0.5..8` | Interaction ingress quarantine before Gameplay Pulse construction; device pixels are then divided by the density into dp, clamped to `1..32768` |
-| Interaction pointer representation / choice index | finite / `0..3` | Interaction rejects non-finite pointer coordinates and a density outside `0.5..8`, then divides the pointer by the accepted viewport density; target-owned Gameplay API factories close choice admission |
+| Interaction pointer representation / choice index / skill slot | finite / `0..3` / `0..2` | Interaction rejects non-finite pointer coordinates and a density outside `0.5..8`, then divides the pointer by the accepted viewport density; target-owned Gameplay API factories close choice and skill-slot admission |
+| running touch pointers / HUD keep-out rectangles | 5, a sixth ignored until one lifts, one pointer steering / 12 (the running HUD uses at most 9) | `RunningTouchTracker`; `WorldHudKeepOut` fixed arrays |
 | authoritative Gameplay frame delta seconds | `0..1` | target-owned Gameplay API factory validates the fixed range before the Nucleus can receive the Pulse |
 | authoritative Gameplay viewport dp / density | `1..32768` / `0.5..8` | target-owned Gameplay API factory validates both dimensions and density before the Nucleus can receive the Pulse; the simulation, the viewport and the pointer are dp |
 | authoritative Gameplay pointer | `0..current viewport` | Gameplay Nucleus validates both pointer coordinates against committed viewport state |
-| Gameplay / Home / Armory presentation delta seconds | `0.1` / `0.1` / `0.1` | Interaction-owned presentation clocks clamp the first larger representable delta |
-| Codex catalog entries / search characters | 192 / 128 | Interaction rejects catalog overflow; bounded local name search feeds a lazy grid in original catalog order |
-| Armory grid tiles | 24 | one tile per validated catalog weapon (Content bound) on a scrolling grid; the pager and the selection reveal move the scroll, never the tile set |
+| Gameplay / Home / Workshop presentation delta seconds | `0.1` / `0.1` / `0.1` | Interaction-owned presentation clocks clamp the first larger representable delta |
+| Interaction frame pacing | before each frame of the run, Home and Settings-preview loops wait `max(0, 1/cap − elapsed − 0.5 ms)` in whole milliseconds; cap 0 waits nothing | `KkFramePacer`; Desktop V-Sync precedence is `-Dskiko.vsync.enabled`, then `-Pkinetickk.uncapped` / `KINETICKK_UNCAPPED_FPS`, then the stored preference |
+| interface scale offered / applied | 100 % always, another option only while the window at that scale keeps a short side of at least 320 dp and a long side of at least 568 dp, none below 100 % on a touch-primary device / the stored scale clamped to the largest offered option at or below it; menus lay out at density × scale, the run's HUD at `max(1, density × scale)` while the world and the Gameplay viewport keep the raw density | Settings Interaction; Session and Gameplay Interaction presentation |
+| Desktop window presets / Android refresh choices | offered only when within the screen's usable area, a larger stored preset clamped to it / at most 4 distinct whole-Hz rates at the current resolution, highest first; Auto or an unavailable rate selects the fastest mode | platform display host; the stored Profile value is never rewritten |
+| Codex catalog entries / search characters | 320 / 128 | Interaction rejects catalog overflow; bounded local name search feeds a lazy grid in original catalog order |
+| Workshop weapon tiles | 24 | one tile per validated catalog weapon (Content bound) on the Weapons tab's scrolling grid; the pager and the selection reveal move the scroll, never the tile set |
+| Settings groups / rows | 6 (Game, Sound, Display, Graphics, Interface, Controls; a group with no offered row is hidden) / 41 declared, each shown only when `SettingsDisplaySupport` offers it; Controls split into two columns from 600 dp of row width | Profile Interaction Settings reducer and layout; key capture is Interaction-ephemeral and consumes every key while it waits |
+| world FX draw operations per frame | transient 900, links 600, fields 220, enemy glyphs 480, Core states 60; signature layers always draw (≤ 14 operations per reaction burst, ≤ 24 per skill burst); secondary layers stop above 60 on-screen enemies and only signatures draw above 90 | `FxDrawBudget` and `FxFrame`, draw-thread confined |
+| Interaction element bursts / reaction stamps / skill bursts / Apex bursts / styled link life | 24 (≤ 4 live per reaction) / 3 / 8 / 2 / ≤ 0.35 s | Interaction-ephemeral bounded reducers trim the oldest |
 | accepted caller effect ToneRequests per advance | 32 | Audio Resource rejects an oversized caller batch atomically |
 | caller effect ToneRequests selected per advance | 3 | Audio Resource preserves caller order/deduplication within the accepted batch |
 | music clock advance delta seconds | `0.1` | Audio Resource clamps finite caller time before advancing its internal music clock |
@@ -135,19 +154,26 @@ remain independently enforced.
 | Desktop synthesis samples / PCM bytes per tone | 22050 / 44100 | validated one-second maximum buffer shape |
 | Android audio workers / queued tasks | 1 / 24 | fixed executor and discard-oldest queue policy |
 | Android synthesis samples / PCM bytes per tone | 22050 / 44100 | validated one-second maximum PCM16 buffer shape |
-| items / weapons / Matrix nodes / Relics / named pairings / reactions | 192 / 24 / 40 / 24 / 32 / 21 (current catalog 173 / 24 / 32 / 22 / 20 / 21) | Content bootstrap validation, including key-consistent pairings, every weapon key carried by two Relics (one not Sovereign), declared elements, Break floors and Matrix prerequisites within their branch, each node one row below its deepest prerequisite; reactions are exactly one per pair of the 7 status elements |
+| items / weapons / Matrix nodes / Relics / named pairings / reactions | 320 / 24 / 40 / 24 / 32 / 21 (current catalog 269 / 24 / 32 / 22 / 20 / 21) | Content bootstrap validation, including key-consistent pairings, every weapon key carried by two Relics (one not Sovereign), declared elements, Break floors and Matrix prerequisites within their branch, each node one row below its deepest prerequisite; reactions are exactly one per pair of the 7 status elements, each with exactly one keystone item of Epic rarity or better that declares both its elements |
 | Matrix node ranks / rows / effects per node | 5 / 8 / 4 | Content definition construction; every node lists one price per rank |
 | Rebirth level / highest cleared / Ascendant characters | selected tier `0..rank` with rank = highest cleared + 1 (at most 10) / `-1..10` / twelve stable character IDs, only once tier 10 is cleared and only victorious characters | Content typed policy plus one invariant shared by Profile construction, Resource validation and Gameplay start validation; a run's clear is validated against the rank |
 | Rebirth Volatile Remains bursts | 48 pending | Gameplay drops further bursts while 48 wait; each detonates 0.35 s after its death |
 | equipped Relic slots / rank | 4 / `1..3` (generic Meld reaches 2) | captured Content Relic policy plus Gameplay retention/saturation |
+| run draft deck | one deal per run from its own stream (run seed xor `0x0DEC_C0DE`), at most `MAX_ITEMS` draws; reward draws keep their count and order; a tier refills only when it holds fewer than its floor of dealt items the run can still take; the Data stratum deals the deck's Data floor plus `DataStratum` items per Data Archive rank; recent-item weights `max(0.35, 1/(1 + 0.8p))` on the deal, their square root on offers | `DraftDeckSystem`; immutable `ItemDeck`; Content `DraftDeckPolicy` and `OfferLanePolicy` |
+| permanent upgrade levels | 12 character and 24 weapon tracks, each `0..UpgradePolicy.maxLevel` (10); the next level costs `base × 2^level`, saturating at `Long.MAX_VALUE`, with base `1..10,000` | Content construction; Profile purchase checks ownership or unlock, then the maximum, then Matter; load clamps levels above a lowered maximum and refunds them; Resource schema; Gameplay start rejects other sizes or levels (`UPGRADE_LEVEL_OUT_OF_RANGE`) |
+| upgrade levels on the wire | `"c"` ≤ 12 and `"w"` ≤ 24 lowercase base-36 digits, each `0..10`, no trailing zero; slot order frozen and append-only | Resource schema |
+| Profile recent item history / acquired items per progress update | ≤ 64 ids, oldest first, repeats kept, each below the captured item count (Profile) and `MAX_ITEMS` (Resource) / ≤ 64 | Profile progress validation refuses the whole update above 64 (`TooManyAcquiredItems`) and keeps the newest 64; load filter; Resource schema; Gameplay keeps the newest 64 acquisitions and rejects a longer or foreign start history (`RECENT_ITEM_HISTORY_INVALID`) |
 | Profile retained Matrix node ranks / each rank | one slot per stable MatrixNodeId (at most 40) / `0..5` on the wire, clamped to the captured `maxRanks` on load with the excess refunded | Profile bootstrap compatibility plus policy-free Resource schema validation; prerequisites and Rebirth gates apply only at purchase |
 | Profile character achievement totals (including total kills, ricochets and Data pickups) / distinct winners | non-negative saturating `Long` / twelve stable character IDs | Profile validates deltas, persists cumulative progress and owns unlock evaluation |
-| Profile retained discoveries | items: captured `itemCount` (at most 192); Relics 24; reactions 21; pairings 32; heirloom Relics 4 | Profile bootstrap compatibility plus policy-free Resource schema validation; legacy (pre-epoch) lists up to 400 items / 40 Relics are discarded at decode |
+| Profile retained discoveries | items: captured `itemCount` (at most 320); Relics 24; reactions 21; pairings 32; heirloom Relics 4 | Profile bootstrap compatibility plus policy-free Resource schema validation; legacy (pre-epoch) lists up to 400 items / 40 Relics are discarded at decode |
 | Profile master volume / text scale | `0..1` / `1..1.75` | Profile and Gameplay normalized compatibility plus Resource ingress validation |
 | Profile simulation speed / damage-tier threshold | exact declared option sets | API declarations consumed by Profile Nucleus, Gameplay Nucleus, and Resource validation |
-| Profile Gameplay discoveries per Pulse | captured `itemCount` (at most 192) | Profile validates count and every stable item ID before acceptance |
+| Profile display preferences | frame cap ∈ {0, 30, 60, 90, 120, 144, 165, 240}; refresh rate 0 or `24..360` Hz; interface scale ∈ {85, 100, 115, 130} %; 3 window modes, 7 window sizes, 3 reaction-effects levels | adjustment construction; Profile load compatibility and the Gameplay preferences projection require `preferences == normalized()`; the Resource refuses explicit defaults, unknown ids and non-members |
+| Profile key bindings | 14 actions × 83 bindable keys, one distinct key per action; binding a held key swaps it with its holder; at most 14 non-default wire records sorted by action | `KeyBindings` construction (`of`, `with`); Resource schema |
+| Profile Gameplay discoveries per Pulse | captured `itemCount` (at most 320) | Profile validates count and every stable item ID before acceptance |
 | Profile snapshot UTF-8 payload | 65536 bytes | Profile Resource before decode and after encode |
 | Desktop Preferences value length | 8192 UTF-16 code units | exact platform broker refuses 8193 before provider execution |
+| Desktop worst-case Profile payload | 7,678 UTF-16 code units at `MAX_ITEMS` 320 | `ProfilePayloadBudgetTest` encodes every bounded fact at its longest form and requires it to fit one Desktop Preferences value |
 | Desktop Preferences key names admitted per exact node read | 64 | exact platform broker refuses 65 before project-owned membership iteration |
 
 ### Mechanically derived and schema-closed collections
@@ -166,18 +192,23 @@ copying modes or source-body expectations is a policy requirement.
 
 | Derived ID | Effective bound | Mechanical derivation |
 |---|---:|---|
-| `gameplay.item-indexed-state` | item arrays, Reborn flags, status accumulators and discoveries <=192; clause timers/counters <= 192 x 2 | validated contiguous Item IDs; pending is a subset; cardinality-stable COW |
+| `gameplay.item-indexed-state` | item arrays, Reborn flags, status accumulators and discoveries <=320; clause timers/counters <= 320 x 2 | validated contiguous Item IDs; pending is a subset; cardinality-stable COW |
 | `gameplay.weapon-indexed-state` | unlocked weapons/mutation counters <=24 | closed WeaponId bootstrap; invariant-preserving COW |
 | `gameplay.matrix-indexed-state` | rank slots <=40; folded run modifiers fixed-size | validated closed MatrixNodeId catalog sizes the array; one immutable fold per run start |
-| `gameplay.relic-indexed-state` | state arrays <=24; enemy status cells <=120 x 71 | validated RelicId catalog; per-enemy status layout driven by the element count (four 7-wide element blocks, 21 reaction-pair slots, Void memory, Unmake and Blackfire cells) times the enemy cap |
+| `gameplay.relic-indexed-state` | state arrays <=24; enemy status cells <=120 x 73 | validated RelicId catalog; per-enemy status layout driven by the element count (four 7-wide element blocks, 21 reaction-pair slots, Void memory, Unmake, Blackfire and the two mark cells) times the enemy cap |
+| `gameplay.upgrade-indexed-state` | 12 + 24 run-constant levels plus the run character's level and power | closed CoreShape/WeaponId catalogs; captured once at start, copy-on-write like the Matrix ranks |
+| `gameplay.combat-field-table` | 16 records x 22 cells | Content field bound; fixed copy-on-write float table forked on full reductions |
+| `gameplay.skill-runtime` | 3 slots x 24 cells + 12 Apex cells; loadout 3; cast scratch 10 ids | closed slot count; fixed copy-on-write float array forked on full reductions |
+| `gameplay.item-deck` | membership <=320 bits and priority ids; history weights from <=64 recent ids; acquired-item report <=64 ids, oldest dropped | dealt once at run start; immutable deck and immutable report replaced on change |
 | `gameplay.collision-live-enemy-ids` | <=120 | lazy compact sorted array from bounded live enemies |
 | `gameplay.reducer-copy-collections` | equal to bounded committed source cardinality | isolated candidate storage; immutable sharing or owned copies; bounded pending outputs |
 | `gameplay.render-projection-collections` | equal to bounded source cardinality | verified predecessor provenance; identity/storage reuse or exact ordered fallback |
 | `gameplay.stable-compaction` | retained cardinality <= bounded source; stable survivor order | forward survivor compaction/reverse-tail deletion or index-stable removal |
-| `profile.codec-temporary-collections` | unlocked <=24; Matrix ranks <=40; retired Lab ranks =8; discoveries <=400 legacy / <=192 current | materialized after schema validation |
+| `profile.codec-temporary-collections` | unlocked <=24; Matrix ranks <=40; retired Lab ranks =8; discoveries <=400 legacy / <=320 current; recent items <=64; key records <=14; upgrade digits <=12 / <=24 | materialized after schema validation |
 | `session.shell-entries` | 1..2 | one base plus one nullable overlay |
-| `content.closed-ui-catalogs` | CoreShape 12 / WeaponMastery 4 / EnemyType 19 | bootstrap requires exact stable order |
-| `ui.catalog-backed-sources` | Codex items <=192; Codex enemies <=24; Armory weapons <=24; Matrix nodes <=40; mastery closed | validated immutable Content plus bounded Profile state |
+| `content.closed-ui-catalogs` | CoreShape 12 / WeaponMastery 4 / EnemyType 19 / SkillId 18 / Apex 12 (one per CoreShape) | bootstrap requires exact stable order |
+| `profile.closed-input-catalogs` | GameAction 14 / BindableKey 83 / WindowMode 3 / WindowSizePreset 7 / ReactionEffectsLevel 3 | append-only enums persisted by stable wire id |
+| `ui.catalog-backed-sources` | Codex items <=320; Codex enemies <=24; Workshop characters 12, weapons <=24 and Matrix nodes <=40; skill bar 3 slots; mastery closed | validated immutable Content plus bounded Profile state |
 | `audio.music-notes` | 8 | fixed literal array with modulo-only indexing |
 | `foundation.immutable-set-copy` | list = input cardinality; set <= input cardinality | safe immutable reuse or owned copy; stable first-occurrence set semantics |
 
@@ -272,6 +303,27 @@ sorted `ascendedCharacterIds` list, written only when non-empty, that requires t
 final tier cleared and an Architect victory with each listed character. Unknown stable IDs in a current-epoch
 payload still fail closed.
 
+Release 0.5.0 adds optional fields to the same schema. Each is written only when
+it differs from its default, so a payload without them stays byte-identical:
+the preferences `windowModeId`, `windowSizeId`, `vsyncEnabled` (only `false`),
+`frameRateCap`, `refreshRateHz`, `immersiveEnabled` (only `true`),
+`interfaceScalePercent`, `showFps` (only `true`), `pauseOnFocusLoss` (only
+`false`), `reactionEffectsId` and `keyBindings`; the collection's
+`recentItemIds`; and the profile's `upgrades`. An explicitly written default
+and an unknown id are refused at decode; a value outside its option set is
+refused at decode and at encode, never clamped. `keyBindings` lists only rebound actions as
+`{action, key}` records strictly sorted by action wire id; more than 14 records,
+a record equal to its default or two actions on one key in the resulting map
+fail. `recentItemIds` is chronological (oldest first, repeats kept, at most 64,
+each below `MAX_ITEMS`); a retired-epoch payload must carry it empty. `upgrades`
+holds one lowercase base-36 digit per slot (`"c"` for characters in `CoreShape`
+order, `"w"` for weapons in `WeaponId` order, level 10 written `a`) with
+trailing zero levels trimmed; each string is absent while its track is all zero
+and the object is absent while nothing is bought. Slot order is frozen and only
+appended to. A Lab-era payload that carries upgrades is inconsistent. Loading
+clamps a level above a lowered `UpgradePolicy.maxLevel` and refunds the price of
+the removed levels into Matter, like Matrix ranks.
+
 The current payload is the canonical encoding of `ProfileSnapshot(revision,
 profile)`. It has no persisted schema-version discriminator, profile ID, or
 content-version field. The 65536-byte codec bound protects JSON representation ingress and encoded
@@ -353,7 +405,10 @@ reasons are closed variants. Open field/reason strings are prohibited.
 ## UI policy
 
 Compose render models are immutable. Page, focus, viewport, gestures, animation
-clock, and visual FX remain Interaction Ephemeral. Delegated Compose State reads
+clock, and visual FX remain Interaction Ephemeral. So do the Workshop tab and
+segment, Settings key capture, the HUD's one-shot memory of tier, skill and Apex
+edges, the running touch tracker and press log, and the world FX draw budget;
+none of them feeds a business decision. Delegated Compose State reads
 use a `Value` suffix. Stable composition identity uses the owning entity or
 screen identity; projection revision is a separate route/lifecycle token and is
 not reused as a `key(...)` identity.

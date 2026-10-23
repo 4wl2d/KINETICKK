@@ -46,7 +46,7 @@ import kotlin.test.assertTrue
 class GameplayPerformanceBenchmarkTest {
     @Test
     fun releaseWorkloadRetainsAllScenariosAndValidatesDeterministicOutcomes() {
-        assertEquals("gameplay-core-v3", GAMEPLAY_BENCHMARK_SUITE_VERSION)
+        assertEquals("gameplay-core-v4", GAMEPLAY_BENCHMARK_SUITE_VERSION)
         val first = gameplayBenchmarkScenarios()
         val second = gameplayBenchmarkScenarios()
         assertEquals(24, first.size)
