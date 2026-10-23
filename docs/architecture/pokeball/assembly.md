@@ -62,7 +62,10 @@ On desktop, `runKinetickkDesktop` builds the `AppCompositionOwner` (Profile,
 Gameplay, Session and audio) above `key(host.generation) { Window }`. A
 decoration or V-Sync change opens a new window and rebuilds only that window's
 composition: the session, the run and the open Settings tab survive, and
-Settings restores its view from `SettingsRetainedView`. The stored V-Sync
+Settings restores its view from `SettingsRetainedView`. The owner also keeps
+the shell's `AppShellMemory` (the last Workshop tab request) beside the
+features, so a new window never reuses a request the Workshop already applied
+and an `L`, `A` or `H` alias still shows its tab. The stored V-Sync
 preference decides only when neither `-Dskiko.vsync.enabled` nor the uncapped
 launch switch is given.
 
