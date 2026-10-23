@@ -41,6 +41,12 @@ internal val runtimeBehaviorEvidence = listOf(
         ),
     ),
     BehaviorEvidence(
+        ":app:shared", "kinetickk.app.shared.DisplayPreferenceProjectionTest",
+        setOf(
+            "refreshChoicesOutsideTheProfileRangeAreNotOfferedSoEveryChoiceBuildsItsAdjustment",
+        ),
+    ),
+    BehaviorEvidence(
         ":app:shared", "kinetickk.app.shared.InlineSessionLifecycleTest",
         setOf(
             "acceptedExitProgressFinishesBeforeReplacementAndPreservesTheOldSnapshot",
@@ -83,6 +89,7 @@ internal val runtimeBehaviorEvidence = listOf(
             "keystonesAreOnePerItemOnEpicOrBetterItems",
             "newActionsAcceptTheirBoundsAndRejectTheFirstValueOutside",
             "newRulesAcceptTheirBoundsAndRejectTheFirstValueOutside",
+            "theDataOfferWeightAcceptsAPositiveFractionUpToTwo",
         ),
     ),
     BehaviorEvidence(
@@ -314,6 +321,13 @@ internal val runtimeBehaviorEvidence = listOf(
         ),
     ),
     BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.ApexFormsTest",
+        setOf(
+            "aProximityChannelReachesAnArchitectOnItsOrbitButNotBeyondTheApexReach",
+            "mirrorStanceParriesItsBudgetOfHitsWhileBrakingAndReturnsThemAtFullEdge",
+        ),
+    ),
+    BehaviorEvidence(
         ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.ApexSystemTest",
         setOf(
             "apexStrikesDealTheFullCapStopAtTheBudgetAndNeverPassAPhaseGate",
@@ -408,6 +422,12 @@ internal val runtimeBehaviorEvidence = listOf(
         ),
     ),
     BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.MatrixEffectsTest",
+        setOf(
+            "dataOfferWeightShowsDataCardsMoreOftenWithoutAnExtraRewardDraw",
+        ),
+    ),
+    BehaviorEvidence(
         ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.ObstacleSystemTest",
         setOf(
             "destroyedObstaclesNeverRegenerateAndTheMemoryIsBounded",
@@ -443,6 +463,12 @@ internal val runtimeBehaviorEvidence = listOf(
         ),
     ),
     BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.ReactionBehaviourTest",
+        setOf(
+            "compostNeverShrinksAWellThatFieldTuningAlreadyWidenedPastItsCap",
+        ),
+    ),
+    BehaviorEvidence(
         ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.ReactionDamageNonIncreaseTest",
         setOf(
             "noReactionHitsHarderThanItDidBeforeItsVerb",
@@ -451,6 +477,7 @@ internal val runtimeBehaviorEvidence = listOf(
     BehaviorEvidence(
         ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.RuleVocabularyRuntimeTest",
         setOf(
+            "anItemsSporedMarkKeepsItsDataAndLeavesTheDecaySporesCastBudgetAlone",
             "cashedMarksDispatchWithTheReactionThatLeftThemAtMostFourTimesPerStep",
             "catalysisApexAndLinkRulesStopAtTheirCaps",
             "eachSkillChargeRechargesOnItsOwnClock",
@@ -560,6 +587,7 @@ internal val runtimeBehaviorEvidence = listOf(
         setOf(
             "aKeyCellCapturesTheNextBindableKeyAndSwapsWithItsHolder",
             "interfaceScalesAreOfferedWhileTheScaledWindowKeepsItsMinimumSides",
+            "offeredRefreshRatesAreClosedOverTheRangeEveryChoiceIsPressedInto",
             "resetKeysNeedsTwoPressesAndAnyOtherActionDisarmsIt",
             "whileCapturingAnyOtherPressOnlyEndsTheCapture",
             "windowSizeStepsThroughOfferedPresetsOnlyInWindowedMode",
