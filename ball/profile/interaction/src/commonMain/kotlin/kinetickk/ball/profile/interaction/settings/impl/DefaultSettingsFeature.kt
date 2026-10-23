@@ -77,6 +77,7 @@ import kinetickk.foundation.design.toBindableKey
 import kinetickk.foundation.design.rememberInterfaceTypography
 import kinetickk.resource.audio.api.AudioService
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 class DefaultSettingsFeature(
     private val profilePort: ProfilePort,
@@ -117,7 +118,21 @@ class DefaultSettingsFeature(
         var swappedAtValue by remember(routeToken) { mutableFloatStateOf(SETTINGS_NEVER) }
         var rejectAtValue by remember(routeToken) { mutableFloatStateOf(SETTINGS_NEVER) }
         var resetArmedValue by remember(routeToken) { mutableStateOf(false) }
+        // The live region's words, cleared after a while. Words equal to those it still says are cleared
+        // first, so a second refused key is a new change of the region and is spoken again.
+        var noticeValue by remember(routeToken) { mutableStateOf<SettingsNotice?>(null) }
+        var noticeSequence by remember(routeToken) { mutableIntStateOf(0) }
         var announcementValue by remember(routeToken) { mutableStateOf<SettingsAnnouncement?>(null) }
+        LaunchedEffect(noticeValue) {
+            val notice = noticeValue ?: return@LaunchedEffect
+            if (announcementValue == notice.announcement) {
+                announcementValue = null
+                delay(SETTINGS_ANNOUNCE_GAP_MS)
+            }
+            announcementValue = notice.announcement
+            delay(SETTINGS_ANNOUNCE_MS)
+            announcementValue = null
+        }
         // The key held when a capture began (Enter or Space on the cell): its repeats are not a choice.
         val heldKey = remember { arrayOfNulls<Key>(1) }
         val captureIgnoredKey = remember { arrayOfNulls<Key>(1) }
@@ -216,7 +231,10 @@ class DefaultSettingsFeature(
                     // Synchronously, inside the press that asked for it (browsers require a user gesture).
                     is SettingsEffect.SetBrowserFullscreen -> display.setBrowserFullscreen(effect.on)
                     SettingsEffect.ReapplyDisplay -> display.reapply()
-                    is SettingsEffect.Announce -> announcementValue = effect.announcement
+                    is SettingsEffect.Announce -> {
+                        noticeSequence += 1
+                        noticeValue = SettingsNotice(effect.announcement, noticeSequence)
+                    }
                 }
             }
             wake()
@@ -332,7 +350,7 @@ class DefaultSettingsFeature(
                     onFocusChanged = ::focusChanged,
                     onActivate = { target -> dispatch(target.toAction(resetArmedValue)) },
                 )
-                announcementValue?.let { announcement -> SettingsAnnouncer(announcement, language) }
+                SettingsAnnouncer(announcementValue, language)
                 layout.row(SettingsRow.MASTER_VOLUME)?.let { row ->
                     SettingsVolumeControl(
                         percent = (renderModelValue.preferences.masterVolume * 100f).roundToInt(),
@@ -360,17 +378,26 @@ class DefaultSettingsFeature(
 
 private const val PREVIEW_AWAKE_NANOS = 2_400_000_000L
 
+/** One announcement; [sequence] lets the same words announce again. */
+private data class SettingsNotice(val announcement: SettingsAnnouncement, val sequence: Int)
+
+/** Announcements clear after this much presentation time (the Workshop's 4 s). */
+private const val SETTINGS_ANNOUNCE_MS = 4_000L
+
+/** How long the region stays empty before it repeats the words it said (longer than a screen reader's poll). */
+private const val SETTINGS_ANNOUNCE_GAP_MS = 200L
+
 /**
- * The Settings live region (`kinetickk.settings.announce`): a key bound or moved and a reset are
- * polite; a key that cannot be bound is assertive.
+ * The Settings live region (`kinetickk.settings.announce`), always present and empty between
+ * announcements: a key bound or moved and a reset are polite; a key that cannot be bound is assertive.
  */
 @Composable
-private fun SettingsAnnouncer(announcement: SettingsAnnouncement, language: AppLanguage) {
-    val text = settingsAnnouncementText(announcement, language)
+private fun SettingsAnnouncer(announcement: SettingsAnnouncement?, language: AppLanguage) {
+    val text = announcement?.let { settingsAnnouncementText(it, language) }
     val assertive = announcement == SettingsAnnouncement.KeyUnavailable
     Box(Modifier.testTag("kinetickk.settings.announce").semantics {
         liveRegion = if (assertive) LiveRegionMode.Assertive else LiveRegionMode.Polite
-        contentDescription = text
+        if (text != null) contentDescription = text
     })
 }
 
