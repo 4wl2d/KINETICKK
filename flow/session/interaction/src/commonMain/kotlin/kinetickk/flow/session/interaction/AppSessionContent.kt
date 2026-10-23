@@ -74,6 +74,16 @@ import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
 import kinetickk.flow.session.interaction.home.api.HomeFeature
 import kinetickk.flow.session.interaction.profile.api.ProfileUnavailableFeature
 
+/**
+ * Shell state that must live as long as the features it addresses. Assembly keeps one beside its
+ * features, so a desktop window opened again (its composition rebuilt, the owner kept) never reuses a
+ * Workshop request serial the Workshop has already applied.
+ */
+class AppShellMemory {
+    // The tab the shell last asked the Workshop to show; a new serial makes a repeated request apply again.
+    internal var workshopRequest: WorkshopTabRequest? by mutableStateOf(null)
+}
+
 /** Renders the closed AppSession route projection and translates UI outputs into Session Pulses. */
 @Composable
 fun AppSessionContent(
@@ -93,6 +103,8 @@ fun AppSessionContent(
     onPreferencesChanged: (PlayerPreferences) -> Unit = {},
     /** Touch is the platform's primary input: the smallest interface scale is never applied. */
     touchPrimary: Boolean = false,
+    /** Kept by the owner of the features when it outlives this composition (the desktop window). */
+    shellMemory: AppShellMemory = remember(sessionPort) { AppShellMemory() },
 ) {
     val diagnostics = LocalCrashDiagnostics.current
     var languageValue by remember(sessionPort, profileReadPort) {
@@ -105,8 +117,7 @@ fun AppSessionContent(
     var bindingsValue by remember(sessionPort, profileReadPort) {
         mutableStateOf(profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences?.keyBindings ?: KeyBindings.DEFAULT)
     }
-    // The tab the shell last asked the Workshop to show; a new serial makes a repeated request apply again.
-    var workshopRequestValue by remember(sessionPort) { mutableStateOf<WorkshopTabRequest?>(null) }
+    var workshopRequestValue by shellMemory::workshopRequest
     // The accepted preferences as last read; display options, frame pacing and interface scale follow them.
     var preferencesValue by remember(sessionPort, profileReadPort) {
         mutableStateOf(profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences)

@@ -170,6 +170,63 @@ class DisplayApplicationComposeTest {
     }
 
     @Test
+    fun aWorkshopAliasAfterTheWindowOpensAgainShowsItsTab() = runComposeUiTest {
+        mainClock.autoAdvance = false
+        val catalog = createContentCatalog()
+        val profile = createProfileComponent(DisplayTestPersistence(), catalog.profilePolicy())
+        val audio = DisplayTestAudio()
+        val owner = AppCompositionOwner(
+            contentCatalog = catalog,
+            profileComponent = profile,
+            audioService = audio,
+            gameplayComponent = DefaultGameplayFeature(catalog.gameplayContent(), profile, profile, audio),
+            displayHost = RecordingDisplayHost(HostDisplaySupport(windowModes = true, usableWidthDp = 1920, usableHeightDp = 1050, vsync = true)),
+        )
+        var generation by mutableIntStateOf(0)
+        try {
+            setContent {
+                key(generation) {
+                    Box(Modifier.requiredSize(1000.dp, 700.dp)) { owner.Content() }
+                }
+            }
+            fun settle() {
+                mainClock.advanceTimeBy(260)
+                waitForIdle()
+            }
+            fun workshop() = owner.sessionPort.query(AppSessionQuery.GetShell).overlay
+            settle()
+            onRoot().performKeyInput { pressKey(Key.L) }
+            settle()
+            assertEquals(AppDestination.Workshop, workshop())
+            onNodeWithTag("kinetickk.workshop.tab.matrix").assertIsSelected()
+            onNodeWithTag("kinetickk.workshop.tab.weapons").performClick()
+            settle()
+            onNodeWithTag("kinetickk.workshop.tab.weapons").assertIsSelected()
+            onRoot().performKeyInput { pressKey(Key.W) }
+            settle()
+            assertEquals(null, workshop())
+
+            // A V-Sync or decoration change opens the window again; the owner and its features stay.
+            generation++
+            settle()
+            onRoot().performKeyInput { pressKey(Key.L) }
+            settle()
+            assertEquals(AppDestination.Workshop, workshop())
+            onNodeWithTag("kinetickk.workshop.tab.matrix").assertIsSelected()
+            // Without an alias the Workshop still opens on the tab shown last.
+            onNodeWithTag("kinetickk.workshop.tab.characters").performClick()
+            settle()
+            onRoot().performKeyInput { pressKey(Key.W) }
+            settle()
+            onRoot().performKeyInput { pressKey(Key.W) }
+            settle()
+            onNodeWithTag("kinetickk.workshop.tab.characters").assertIsSelected()
+        } finally {
+            owner.close()
+        }
+    }
+
+    @Test
     fun menusLayOutAtTheAppliedInterfaceScaleWhileTheRunKeepsTheRawDensity() {
         // Landscape window: 130 % fits 1280×800 (984×615 dp scaled); 720×540 at 130 % would be 554 dp
         // long, so 115 % is applied there. Profile keeps 130 % in both.
