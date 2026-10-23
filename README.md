@@ -24,23 +24,42 @@ and ramming one at full speed shatters the Core. Bumpers throw you back, and
 the minimap (Settings can hide it) shows what lies ahead. Data pickups latch on
 once you pass near them and every level-up pulls in the Data on screen.
 
+Data levels the run up to level 42, and only a build that invests in Data gets
+there. Skill drafts at levels 2, 8 and 16 fill three skill slots from a pool of
+18 active skills, and rank-up cards raise them to rank III. At level 42 your
+character's Apex ability comes online; after that every Data pickup shortens
+its cooldown. The level badge changes look at levels 10, 20, 30 and 40 and
+takes the Apex look at 42.
+
 | Input | Action |
 |---|---|
 | Mouse / touch drag | Move the singularity and attract the Core |
 | `Space` / **Dash** | Kinetic Dash and phase through bullets |
 | `Shift` / right mouse / **Brake** | Gravity Brake |
+| `Z` / `X` / `C`, skill buttons | Cast the skill in slot 1, 2 or 3 |
+| `V`, level badge | Cast the Apex ability (from level 42) |
 | `P` / `Esc` | Pause or return |
 | `1`–`4` | Select a reward |
-| `Q` | Reroll an item or weapon choice |
-| `L` / `A` / `B` / `C` or `I` / `S` | Core Matrix, Armory, Rebirth, Codex, Settings |
-| `H` | Hangar: choose a character (from Home) |
+| `Q` | Reroll an item, weapon or skill choice |
+| `W` | Workshop: characters, weapons and the Core Matrix |
+| `L` / `A` / `H` | Workshop on the Core Matrix, Weapons or Characters tab (`H` from Home) |
+| `B` / `C` or `I` / `S` | Rebirth, Codex, Settings |
 | `M` | Toggle sound and music |
 | `F3` | Toggle and reset the performance HUD |
 | `R` | Restart after a completed run |
 
-Twelve characters, chosen in the Hangar, each play a mechanic of their own
-(facets, an echo ghost, polarity, a beat, Blink and more), share permanent
-upgrades and can use all twenty-four weapons: trails, orbitals, auras,
+With a keyboard, Settings → Controls rebinds every gameplay action (Dash, Brake,
+the three skills, the Apex, pause, reroll, restart, the four reward choices and
+the performance HUD); binding a key another action holds swaps the two, and
+Reset restores the defaults above. While a run is running, keys bound to
+gameplay actions go to the run first, so `C` casts the third skill there and
+opens the Codex from Home or the pause menu. On touch screens the skill buttons
+sit next to Dash and Brake in every layout, and steering keeps working while you
+tap them.
+
+Twelve characters, chosen in the Workshop, each play a mechanic of their own
+(facets, an echo ghost, polarity, a beat, Blink and more), each have their own
+Apex ability and can use all twenty-four weapons: trails, orbitals, auras,
 projectiles, traps, chains, beams and pulses, sixteen open to Matter from the
 start and eight that also need a Reborn rank. Weapons link to the build: each
 point in the weapon's two tags adds 5 % power (up to 50 %); its signature
@@ -48,27 +67,42 @@ character (every character is the signature of two weapons) adds 20 %, starts
 the run a weapon level up and brings a twist; a bound Relic carrying the
 weapon's key (the heirloom included) adds 20 % once and grows 10 % stronger
 itself; one stat scales it, and three mastery forms open at weapon levels 3, 6
-and 10.
-Builds combine 173 items, twenty-two Relics and optional anomaly trials. Items are
-rules, not stat sticks: triggers, conditions and effects over nine archetype
-tags and seven elements (Thermal, Cryo, Ion, Gravitic, Entropy, Sonic, Void)
-whose statuses Break at a threshold and react with each other: every pair of
-elements has its own reaction, 21 in all. Every Relic rewrites a rule and
-carries a cost; Relic keys predict harmony and dissonance, and the Codex records
-discovered reactions, pairings and known incompatibilities.
-Nineteen enemy kinds, from Swarmling packs and Bombers to the Herald mini-boss,
-arrive through a spawn director that shapes every run's waves differently; later
-Rebirth tiers bring the toughest ones. Spend Kinetic Matter on the 32 nodes of
-the Core Matrix and in the Armory between runs. Defeat The Architect to earn the
-next Rebirth tier and a Reborn rank while keeping permanent progression. The
-Rebirth ladder shows tiers 0 to 10 and what each rank opens: at least four more
-items every rank, a weapon at ranks 1 to 7 and 9 (Glacier Bell first, Resonance
-Drum last), the Spiral, Pentagon, Crescent and Hexagon at ranks 1, 3, 5 and 7,
-Matrix nodes and the enemy kinds that join at that tier. Each tier is much
-harder and adds a mutator (packs, hardened Elites, volatile remains, armored
-vanguards, a blackout and an enraged Architect among them), and you can pick any
-earned tier for the next run, so a hard tier never locks you out. Clearing tier
-10 makes you Ascendant.
+and 10. Builds combine 269 items, eighteen skills, twenty-two Relics and
+optional anomaly trials. Items are rules, not stat sticks: triggers, conditions
+and effects over nine archetype tags and seven elements (Thermal, Cryo, Ion,
+Gravitic, Entropy, Sonic, Void) whose statuses Break at a threshold and react
+with each other: every pair of elements has its own reaction, 21 in all, and
+each reaction changes how you play (it leaves a field, a mark, a Core state or a
+skill refund) with a keystone item that rewrites it. Every run deals its own
+draft deck, and items you took in recent runs come up less often, so runs of one
+character build differently. Every Relic rewrites a rule and carries a cost;
+Relic keys predict harmony and dissonance, and the Codex records discovered
+reactions, pairings and known incompatibilities and tells you which items wait
+for a skill or were left out of this run's deck. Nineteen enemy kinds, from
+Swarmling packs and Bombers to the Herald mini-boss, arrive through a spawn
+director that shapes every run's waves differently; later Rebirth tiers bring
+the toughest ones. Between runs, spend Kinetic Matter in the Workshop: on the 32
+nodes of the Core Matrix, on weapons, and on Refit (per character) and Honing
+(per weapon) levels up to 10, each level twice the price of the last. You can
+open the Workshop during a run too; purchases apply from the next run. Defeat
+The Architect to earn the next Rebirth tier and a Reborn rank while keeping
+permanent progression. The Rebirth ladder shows tiers 0 to 10 and what each rank
+opens: at least four more items every rank, a weapon at ranks 1 to 7 and 9
+(Glacier Bell first, Resonance Drum last), the Spiral, Pentagon, Crescent and
+Hexagon at ranks 1, 3, 5 and 7, Matrix nodes and the enemy kinds that join at
+that tier. Each tier is much harder and adds a mutator (packs, hardened Elites,
+volatile remains, armored vanguards, a blackout and an enraged Architect among
+them), and you can pick any earned tier for the next run, so a hard tier never
+locks you out. Clearing tier 10 makes you Ascendant.
+
+The game has six screens: Home, the run, Settings, the Workshop, Rebirth and the
+Codex. Settings groups its options into Game, Sound, Display, Graphics,
+Interface and Controls. Display chooses the window mode (windowed, borderless or
+fullscreen), the window size and V-Sync on desktop, the refresh rate and hidden
+system bars on Android and fullscreen in the browser, and a frame-rate limit
+everywhere; Interface scales menus and the HUD from 85 to 130 %; Graphics sets
+how much of each reaction is animated. Show FPS adds a frame counter to the HUD,
+and the run pauses when the window loses focus unless you turn that off.
 
 ## Build and run
 
@@ -88,8 +122,9 @@ The simulation runs at a fixed 120 steps per second in density-independent
 units, and frames between steps draw interpolated positions, so the game is the
 same at any frame rate and any display density. With V-Sync the desktop frame
 rate follows the monitor (a 144 or 240 Hz display already renders above
-120 fps); Android asks for the panel's highest refresh rate. To lift the desktop
-cap, turn V-Sync off with the uncapped mode:
+120 fps); Android uses the refresh rate chosen in Settings, and Auto asks for
+the panel's highest. Settings can turn V-Sync off and limit the frame rate; the
+uncapped launch mode below turns V-Sync off whatever Settings stores:
 
 ```bash
 ./gradlew :app:desktop:run -Pkinetickk.uncapped=true
