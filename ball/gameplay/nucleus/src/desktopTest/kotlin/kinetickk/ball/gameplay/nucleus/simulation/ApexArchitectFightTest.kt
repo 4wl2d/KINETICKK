@@ -18,6 +18,9 @@ import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.RebirthProgress
+import java.util.concurrent.Callable
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
@@ -26,26 +29,32 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * The Apex against the Architect (combat-final §5.2, §10 "Apex").
+ * The Apex against the Architect (combat-final §5.2, §10 "Apex"; lead addendum B1).
  *
  * Fights: per character, tier (0 fresh; 10 with the strong build's Matrix, Arc Coil and Relics) and seed, the
- * no-POI bot plays the run to the Architect's arrival (the Core cannot be hurt on the way; the first three seeds of
- * a fixed list whose run reaches the Architect are used, since a singularity contact can still end one); the run
- * then forks into two arms that play the next 180 s with copies of the same bot, both with the level forced to the
- * cap (so neither keeps drafting): one unlocks the Apex (the bot casts it by its rule), one does not. In the fight
- * the Core's integrity is refilled every frame and its losses (shield and integrity) are counted.
+ * no-POI bot plays the run to the Architect's arrival (the Core cannot be hurt on the way; a singularity contact can
+ * still end a run, so a case takes the first runs of a fixed seed list that reach the Architect); the run then forks
+ * into two arms that play the next 180 s with copies of the same bot, both with the level forced to the cap (so
+ * neither keeps drafting): one unlocks the Apex (the bot casts it by its rule), one does not. In the fight the Core's
+ * integrity is refilled every frame and the damage it takes (shield and integrity) is counted.
  *
- * The contract holds in every Apex arm: each strike stays within the boss's hit cap, an activation spends at most
- * its strikes and its bolt budget, the boss's integrity never moves while it shifts, every shift starts at a phase
- * gate and lasts exactly 8 s, its escorts arrive, and the Apex costs the Architect at most 10 % of the volleys its
- * own timer schedules: a volley counts against it when the boss could attack and the shared projectile pool was at
- * the volley budget only because of live Apex shots (a Silence and a pool full of other shots hold volleys back with
- * or without an Apex). In a scripted arena where the Architect is the only enemy, the character's own damage to it
- * during an activation (strikes included) is never below the same script's without the Apex.
+ * The contract holds in every Apex arm of the first three runs per case: each strike stays within the boss's hit cap,
+ * an activation spends at most its strikes and its bolt budget, the boss's integrity never moves while it shifts,
+ * every shift starts at a phase gate and lasts exactly 8 s, its escorts arrive, and the Apex costs the Architect at
+ * most 10 % of the volleys its own timer schedules: a volley counts against it when the boss could attack and the
+ * shared projectile pool was at the volley budget only because of live Apex shots (a Silence and a pool full of other
+ * shots hold volleys back with or without an Apex). In a scripted arena where the Architect is the only enemy, the
+ * character's own damage to it during an activation (strikes included) is never below the same script's without the
+ * Apex.
  *
- * The benefit (tier 0, median over the seeds): the offensive characters' median time-to-kill with the Apex lies
- * in [0.75, 0.95] of the time without, each within ±40 % of the median benefit; the Prism and the Diamond lose
- * [0.55, 0.85] of what they lose in the same windows without it.
+ * The benefit is judged on many paired fights, because one fight's time-to-kill moves by ±15 % when the Core starts
+ * 0.01 u elsewhere: each run is forked into [FORKS] pairs whose two arms both start with the Core moved by k/100 u
+ * (k = 0 is the contract's own fight). Offensive characters (tier 0, [BENEFIT_RUNS] runs each): per character the
+ * median over its pairs of the with/without time-to-kill ratio; the median of the ten lies in [0.75, 0.95] and each
+ * character's benefit within ±40 % of that median benefit. The Prism and the Diamond (tier 10, [DEFENSIVE_RUNS] runs
+ * each, where the Architect's fire and the arena put real damage on them; at tier 0 their facets and parries leave
+ * almost nothing to defend): the damage taken during the Apex arm's windows, summed over the pairs, is [0.55, 0.85]
+ * of what the no-Apex arm takes in the same windows.
  */
 class ApexArchitectFightTest {
     @Test
@@ -92,14 +101,15 @@ class ApexArchitectFightTest {
     @Test
     fun theApexShortensOffensiveFightsAndShieldsTheDefensiveCharactersWithinItsBand() {
         val outside = mutableListOf<String>()
-        fun armsOf(shape: CoreShape) = fightsOf(shape, 0)
-        val ratios = OFFENSIVE.associateWith { shape ->
-            val arms = armsOf(shape)
-            median(arms.map { it.first.killSeconds }) / median(arms.map { it.second.killSeconds })
-        }
+        val pairs = OFFENSIVE.associateWith { shape -> benefitPairs(shape, 0) }
+        val ratios = pairs.mapValues { (_, list) -> median(list.map { it.apexKill / it.plainKill }) }
         val median = median(ratios.values.toList())
         val benefit = 1f - median
-        println("APEX-BENEFIT tier=0 median=$median " + ratios.entries.joinToString { (shape, ratio) -> "$shape=${"%.3f".format(ratio)}" })
+        println("APEX-BENEFIT tier=0 pairs=${pairs.values.sumOf { it.size }} median=${"%.3f".format(median)} " +
+            ratios.entries.joinToString { (shape, ratio) ->
+                val list = pairs.getValue(shape)
+                "$shape=${"%.3f".format(ratio)} (medians ${"%.3f".format(median(list.map { it.apexKill }) / median(list.map { it.plainKill }))})"
+            })
         if (median !in 0.75f..0.95f) outside += "median time-to-kill ratio $median"
         ratios.forEach { (shape, ratio) ->
             val own = 1f - ratio
@@ -108,11 +118,12 @@ class ApexArchitectFightTest {
             }
         }
         for (shape in DEFENSIVE) {
-            val arms = armsOf(shape)
-            val lost = arms.sumOf { (apex, _) -> apex.windowLoss(apex.windows).toDouble() }.toFloat()
-            val without = arms.sumOf { (apex, plain) -> plain.windowLoss(apex.windows).toDouble() }.toFloat()
-            println("APEX-DEFENSE $shape lost=$lost without=$without ratio=${lost / without}")
-            if (!(without > 0f) || lost / without !in 0.55f..0.85f) outside += "$shape lost $lost against $without"
+            val list = benefitPairs(shape, DEFENSIVE_TIER)
+            val taken = list.sumOf { it.apexWindowDamage }
+            val without = list.sumOf { it.plainWindowDamage }
+            println("APEX-DEFENSE $shape tier=$DEFENSIVE_TIER pairs=${list.size} taken=${"%.0f".format(taken)} " +
+                "without=${"%.0f".format(without)} ratio=${"%.3f".format(taken / without)}")
+            if (!(without > 0.0) || (taken / without).toFloat() !in 0.55f..0.85f) outside += "$shape took $taken against $without"
         }
         assertTrue(outside.isEmpty(), "Apex benefit: $outside")
     }
@@ -138,13 +149,10 @@ class ApexArchitectFightTest {
         val apexVolleyShare: Float,
         /** Apex windows (start, end) of this arm. */
         val windows: List<Pair<Float, Float>>,
-        /** Per frame: time and the Core's loss (shield and integrity). */
-        val losses: List<Pair<Float, Float>>,
+        /** Damage the Core took (shield and integrity) inside the windows this arm was measured over. */
+        val windowDamage: Double,
         val apexBossDamage: Double,
     ) {
-        fun windowLoss(windows: List<Pair<Float, Float>>): Float =
-            losses.filter { (time, _) -> windows.any { (start, end) -> time > start && time <= end } }.sumOf { it.second.toDouble() }.toFloat()
-
         fun line(): String = "kill=${"%.1f".format(killSeconds)}s casts=$casts strikes≤$maxStrikes/$strikeBudget " +
             "erased≤$maxErasures/$boltBudget volleys=${"%.3f".format(volleyShare)} apexHeldBack=$apexMissedVolleys shifts=${shiftLengths.size} " +
             "escorts=$shiftEscorts apexBoss=${"%.0f".format(apexBossDamage)}"
@@ -152,10 +160,26 @@ class ApexArchitectFightTest {
 
     private class ArenaOutcome(val mechanic: Float, val strikes: Float)
 
+    /** One forked pair of the benefit: both arms' time-to-kill and the damage each took inside the Apex arm's windows. */
+    private class BenefitPair(val plainKill: Float, val apexKill: Float, val apexWindowDamage: Double, val plainWindowDamage: Double)
+
     private companion object {
-        /** The seed list (the Rebirth gates' sequence, i · 7,919 + 13 from i = 6); each case uses its first three fights. */
-        val SEED_POOL = (6..20).map { it * 7_919 + 13 }
+        /**
+         * The seed list (the Rebirth gates' sequence, i · 7,919 + 13 from i = 6): the contract uses each case's first
+         * three runs that reach the Architect, the benefit its first [BENEFIT_RUNS].
+         */
+        val SEED_POOL = (6 until 6 + SEED_POOL_SIZE).map { it * 7_919 + 13 }
+        const val SEED_POOL_SIZE = 200
         const val FIGHTS_PER_CASE = 3
+        const val BENEFIT_RUNS = 48
+        /** The defensive characters' runs: their damage comes in rarer, larger events than a time-to-kill moves. */
+        const val DEFENSIVE_RUNS = 64
+        /** Pairs per benefit run; the k-th pair's arms both start with the Core moved by k × [FORK_OFFSET]. */
+        const val FORKS = 4
+        const val FORK_OFFSET = 0.01f
+        const val DEFENSIVE_TIER = 10
+        /** Runs approached at once while looking for a case's next runs that reach the Architect. */
+        const val SEED_BATCH = 8
         const val FIGHT_SECONDS = 180f
         const val FRAME = 0.02f
         const val ARENA_ARCHITECT_INTEGRITY = 13_500f
@@ -166,24 +190,65 @@ class ApexArchitectFightTest {
         val BotWeapons: List<WeaponId> = listOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.ENTROPY_FIELD, WeaponId.PRISM_RELAY)
         val StrongRelics = listOf(RelicId.STORMHEART_CAPACITOR, RelicId.PANDEMIC_CODEX, RelicId.THUNDER_CHOIR, RelicId.CINDER_CROWN)
 
-        /** Both arms of every fight (character, tier, seed), played once per test JVM. */
+        /**
+         * The fights run on a small pool: each run and its arms are independent and deterministic, and every case
+         * keeps its runs in seed order, so the outcome does not depend on scheduling.
+         */
+        val pool: ExecutorService by lazy {
+            Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors().coerceIn(1, 8)) { task ->
+                Thread(task, "apex-fight").apply { isDaemon = true }
+            }
+        }
+
+        /**
+         * [work] on the first [count] runs of [shape] at [tier] that reach the Architect, in seed order (runs are
+         * approached [SEED_BATCH] at a time); fails when the seed list runs out first.
+         */
+        fun <T> firstRuns(shape: CoreShape, tier: Int, count: Int, work: (Int, MutableGameState, NoPoiBot) -> T): List<Pair<Int, T>> {
+            val found = mutableListOf<Pair<Int, T>>()
+            var next = 0
+            while (found.size < count) {
+                check(next < SEED_POOL.size) { "$shape tier $tier: only ${found.size} of $count runs reached the Architect" }
+                val batch = SEED_POOL.subList(next, min(next + SEED_BATCH, SEED_POOL.size))
+                next += batch.size
+                val results = batch.map { seed ->
+                    pool.submit(Callable { approach(shape, tier, seed)?.let { (state, bot) -> seed to work(seed, state, bot) } })
+                }.map { it.get() }
+                results.filterNotNull().take(count - found.size).forEach { found += it }
+            }
+            return found
+        }
+
+        /** Both arms of every contract fight (character, tier, seed), played once per test JVM. */
         val fights: Map<Triple<CoreShape, Int, Int>, Pair<Fight, Fight>> by lazy {
             val played = linkedMapOf<Triple<CoreShape, Int, Int>, Pair<Fight, Fight>>()
             for (shape in CoreShape.entries) for (tier in listOf(0, 10)) {
-                var found = 0
-                for (seed in SEED_POOL) {
-                    if (found == FIGHTS_PER_CASE) break
-                    val (state, bot) = approach(shape, tier, seed) ?: continue
+                firstRuns(shape, tier, FIGHTS_PER_CASE) { _, state, bot ->
                     val apex = fight(state.copyForReduction(), bot.copy(), apex = true, windows = emptyList())
-                    played[Triple(shape, tier, seed)] = apex to fight(state.copyForReduction(), bot.copy(), apex = false, windows = apex.windows)
-                    found++
-                }
+                    apex to fight(state.copyForReduction(), bot.copy(), apex = false, windows = apex.windows)
+                }.forEach { (seed, pair) -> played[Triple(shape, tier, seed)] = pair }
             }
             played
         }
 
         fun fightsOf(shape: CoreShape, tier: Int): List<Pair<Fight, Fight>> =
             fights.filterKeys { it.first == shape && it.second == tier }.values.toList()
+
+        private val benefitCache = HashMap<Pair<CoreShape, Int>, List<BenefitPair>>()
+
+        /** The benefit's pairs of [shape] at [tier]: [BENEFIT_RUNS] ([DEFENSIVE_RUNS]) runs, each forked into [FORKS] pairs. */
+        fun benefitPairs(shape: CoreShape, tier: Int): List<BenefitPair> = benefitCache.getOrPut(shape to tier) {
+            firstRuns(shape, tier, if (shape in DEFENSIVE) DEFENSIVE_RUNS else BENEFIT_RUNS) { _, state, bot ->
+                (0 until FORKS).map { fork ->
+                    val apex = fight(state.forked(fork), bot.copy(), apex = true, windows = emptyList())
+                    val plain = fight(state.forked(fork), bot.copy(), apex = false, windows = apex.windows)
+                    BenefitPair(plain.killSeconds, apex.killSeconds, apex.windowDamage, plain.windowDamage)
+                }
+            }.flatMap { it.second }
+        }
+
+        /** An independent copy of the run at the Architect's arrival, its Core moved by [fork] × [FORK_OFFSET]. */
+        fun MutableGameState.forked(fork: Int): MutableGameState = copyForReduction().also { it.coreX += fork * FORK_OFFSET }
 
         fun median(values: List<Float>): Float {
             val sorted = values.sorted()
@@ -238,7 +303,8 @@ class ApexArchitectFightTest {
             if (apex) state.unlockApex()
             val definition = state.apexDefinition
             val ownWindows = mutableListOf<Pair<Float, Float>>()
-            val losses = mutableListOf<Pair<Float, Float>>()
+            val measured = if (apex) ownWindows else windows
+            var windowDamage = 0.0
             var killSeconds = FIGHT_SECONDS
             var casts = 0
             var maxStrikes = 0
@@ -266,7 +332,7 @@ class ApexArchitectFightTest {
                 val strikesBefore = runtime.apex(ApexCell.STRIKES_LEFT)
                 val bossDamageBefore = runtime.apexBossDamage
                 val hpBefore = boss.hp
-                val coreBefore = state.hp + state.shield
+                val takenBefore = state.damageTaken + state.damageAbsorbed
                 val shiftingBefore = state.isShifting(boss)
                 val phaseBefore = boss.phase
                 val shiftBefore = boss.shiftUntil
@@ -314,7 +380,11 @@ class ApexArchitectFightTest {
                         live - state.projectiles.count { !it.hostile && it.procKey == WeaponRuntime.PROC_APEX } < ARCHITECT_VOLLEY_PROJECTILE_BUDGET
                     ) apexMissed++
                 }
-                losses += now to max(0f, coreBefore - state.hp - state.shield)
+                // Damage taken, not the drop in integrity and shield: refilling integrity every frame turns each heal
+                // into overheal, and an overfilled shield decays back without anything hitting the Core.
+                if (measured.any { (from, to) -> now > from && now <= to }) {
+                    windowDamage += state.damageTaken + state.damageAbsorbed - takenBefore
+                }
                 state.hp = state.maxHp
                 drain(state)
                 if (!boss.alive || state.phase == GamePhase.VICTORY) {
@@ -338,8 +408,8 @@ class ApexArchitectFightTest {
                 volleyShare = if (scheduled > 0) volleys / scheduled.toFloat() else 1f,
                 apexMissedVolleys = apexMissed,
                 apexVolleyShare = if (volleys + apexMissed > 0) volleys / (volleys + apexMissed).toFloat() else 1f,
-                windows = if (apex) ownWindows else windows,
-                losses = losses,
+                windows = measured,
+                windowDamage = windowDamage,
                 apexBossDamage = state.skillRuntime.apexBossDamage,
             )
         }
