@@ -457,7 +457,7 @@ internal fun MutableGameState.rerollChoices() {
         ChoiceType.ITEM -> {
             // A rank-up card stays through a reroll; only the item cards are dealt again.
             val rankUp = choices.firstOrNull { it.type == ChoiceType.SKILL }
-            buildItemChoices()
+            buildItemChoices(rankUpReplacesExperimental = rankUp != null)
             if (rankUp != null) placeRankUpCard(rankUp)
         }
         ChoiceType.WEAPON -> buildWeaponChoices()

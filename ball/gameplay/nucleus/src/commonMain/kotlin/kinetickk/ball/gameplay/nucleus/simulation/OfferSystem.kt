@@ -96,8 +96,10 @@ private fun MutableGameState.experimental(item: ItemDefinition): Boolean =
  * items (the Profile's history) are down-weighted in every lane, and the Matrix's Data offer weight raises Data-economy
  * items in every lane (weights only, no draw). Only items dealt into the run's deck appear (the deck
  * is refilled first). Each card draws the rarity, lane, pick and Reborn values from [rewardRandom] in that order.
+ * When [rankUpReplacesExperimental], a rank-up card will take the experimental card's place, so that card's rarity
+ * never satisfies pity: the volatile card is still forced to Rare.
  */
-internal fun MutableGameState.buildItemChoices() {
+internal fun MutableGameState.buildItemChoices(rankUpReplacesExperimental: Boolean = false) {
     refillItemDeck()
     val lanePolicy = content.build.policy.offerLanes
     val familyFits = weaponFamilyFits()
@@ -135,7 +137,8 @@ internal fun MutableGameState.buildItemChoices() {
         }
         val choice = candidates[weightedIndex(weights)]
         selected += choice
-        if (choice.rarity.rank >= ItemRarity.RARE.rank) rareOrBetter = true
+        val shown = !(rankUpReplacesExperimental && lane == OfferLane.EXPERIMENTAL)
+        if (shown && choice.rarity.rank >= ItemRarity.RARE.rank) rareOrBetter = true
         reborns += rewardRandom.nextFloat() < rebornChance()
     }
     choices = selected.mapIndexed { index, item ->

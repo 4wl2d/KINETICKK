@@ -232,6 +232,34 @@ class OfferSystemTest {
     }
 
     @Test
+    fun aRankUpCardNeverTakesThePlaceOfTheRareCardThatPityOwes() {
+        // A skill ranked long enough ago that the level's offer owes a rank-up card in the experimental place.
+        val base = buildTestState().apply {
+            level = 2
+            acquireSkill(SkillId.SOLAR_FLARE)
+            level = 20
+            lifetimeMatter = 4_000L
+        }
+        fun MutableGameState.rareItemCards(): Int = choices.count { option ->
+            option.type == ChoiceType.ITEM && itemOf(option.itemId).rarity.rank >= ItemRarity.RARE.rank
+        }
+        val misses = (1..PITY_SWEEP_SEEDS).count { seed ->
+            val offer = base.copyForReduction().apply {
+                rewardRandom = CloneableXorWowRandom(seed)
+                offerPity = PITY_OFFERS
+                pendingRankUpOffers = 1
+                openItemChoice()
+            }
+            assertEquals(ChoiceType.SKILL, offer.choices[1].type, "seed $seed")
+            val opened = offer.rareItemCards() == 0
+            offer.rerollChoices()
+            assertEquals(ChoiceType.SKILL, offer.choices[1].type, "seed $seed reroll")
+            opened || offer.rareItemCards() == 0
+        }
+        assertEquals(0, misses, "an offer with pity due always shows a Rare or better item card beside the rank-up card")
+    }
+
+    @Test
     fun gamblersLedgerAddsAFourthCard() {
         val state = buildTestState().apply { own("Gambler's Ledger") }
         state.openItemChoice()

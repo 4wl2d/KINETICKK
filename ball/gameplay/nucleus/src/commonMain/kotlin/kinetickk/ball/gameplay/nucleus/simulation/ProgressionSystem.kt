@@ -42,13 +42,13 @@ internal const val WEAPON_OFFER_CHOICES: Int = 3
 internal fun MutableGameState.openItemChoice() {
     activeChoiceType = ChoiceType.ITEM
     itemOffersOpened++
-    buildItemChoices()
     // A level at the rank cadence owes this offer a rank-up card (in place of the experimental card).
-    if (pendingRankUpOffers > 0) {
+    val rankUpSlot = if (pendingRankUpOffers > 0) {
         pendingRankUpOffers--
-        val slot = rankUpCandidateSlot()
-        if (slot >= 0) placeRankUpCard(rankUpCard(slot))
-    }
+        rankUpCandidateSlot()
+    } else -1
+    buildItemChoices(rankUpReplacesExperimental = rankUpSlot >= 0)
+    if (rankUpSlot >= 0) placeRankUpCard(rankUpCard(rankUpSlot))
     if (choices.isEmpty()) {
         grantMatter(8f)
         message = "CATALOG COMPLETE // MATTER SALVAGED"
