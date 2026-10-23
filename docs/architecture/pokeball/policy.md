@@ -156,7 +156,7 @@ remain independently enforced.
 | Android synthesis samples / PCM bytes per tone | 22050 / 44100 | validated one-second maximum PCM16 buffer shape |
 | items / weapons / Matrix nodes / Relics / named pairings / reactions | 320 / 24 / 40 / 24 / 32 / 21 (current catalog 269 / 24 / 32 / 22 / 20 / 21) | Content bootstrap validation, including key-consistent pairings, every weapon key carried by two Relics (one not Sovereign), declared elements, Break floors and Matrix prerequisites within their branch, each node one row below its deepest prerequisite; reactions are exactly one per pair of the 7 status elements, each with exactly one keystone item of Epic rarity or better that declares both its elements |
 | Matrix node ranks / rows / effects per node | 5 / 8 / 4 | Content definition construction; every node lists one price per rank |
-| Rebirth level / highest cleared / Ascendant characters | selected tier `0..rank` with rank = highest cleared + 1 (at most 10) / `-1..10` / twelve stable character IDs, only once tier 10 is cleared and only victorious characters | Content typed policy plus one invariant shared by Profile construction, Resource validation and Gameplay start validation; a run's clear is validated against the rank |
+| Rebirth level / highest cleared / Ascendant characters / character clears | selected tier `0..rank` with rank = highest cleared + 1 (at most 10) / `-1..10` / twelve stable character IDs, only once tier 10 is cleared and only victorious characters / one tier per character in `CoreShape` order, each `-1` or `0..highest cleared`, only for victorious characters, tier 10 exactly for Ascendant ones (an Ascendant character may record `-1` from before the record) | Content typed policy plus one invariant shared by Profile construction, Resource validation and Gameplay start validation; a run's clear is validated against the rank |
 | Rebirth Volatile Remains bursts | 48 pending | Gameplay drops further bursts while 48 wait; each detonates 0.35 s after its death |
 | equipped Relic slots / rank | 4 / `1..3` (generic Meld reaches 2) | captured Content Relic policy plus Gameplay retention/saturation |
 | run draft deck | one deal per run from its own stream (run seed xor `0x0DEC_C0DE`), at most `MAX_ITEMS` draws; reward draws keep their count and order; a tier refills only when it holds fewer than its floor of dealt items the run can still take; the Data stratum deals the deck's Data floor plus `DataStratum` items per Data Archive rank; recent-item weights `max(0.35, 1/(1 + 0.8p))` on the deal, their square root on offers; Data-economy items weigh `1 + fraction × rank` in every offer lane (`DataOfferWeight` fraction `(0, 2]`, 1.5 shipped), with no added reward draw | `DraftDeckSystem`; immutable `ItemDeck`; Content `DraftDeckPolicy`, `OfferLanePolicy` and `MatrixEffect.DataOfferWeight` construction; `buildItemChoices` |
@@ -309,7 +309,8 @@ the preferences `windowModeId`, `windowSizeId`, `vsyncEnabled` (only `false`),
 `frameRateCap`, `refreshRateHz`, `immersiveEnabled` (only `true`),
 `interfaceScalePercent`, `showFps` (only `true`), `pauseOnFocusLoss` (only
 `false`), `reactionEffectsId` and `keyBindings`; the collection's
-`recentItemIds`; and the profile's `upgrades`. An explicitly written default
+`recentItemIds`; Rebirth progress's `characterClears`; and the profile's
+`upgrades`. An explicitly written default
 and an unknown id are refused at decode; a value outside its option set is
 refused at decode and at encode, never clamped. `keyBindings` lists only rebound actions as
 `{action, key}` records strictly sorted by action wire id; more than 14 records,
@@ -323,6 +324,12 @@ and the object is absent while nothing is bought. Slot order is frozen and only
 appended to. A Lab-era payload that carries upgrades is inconsistent. Loading
 clamps a level above a lowered `UpgradePolicy.maxLevel` and refunds the price of
 the removed levels into Matter, like Matrix ranks.
+`characterClears` holds one lowercase base-36 digit per character in the same
+frozen slot order as `"c"`: the highest cleared tier plus one (`0` none, tier
+10 written `b`), trailing zeros trimmed, absent while no character records a
+clear. Decode refuses a non-digit, a value above `b`, more than twelve digits,
+a trailing zero, a tier above the highest clear, a clear without that
+character's victory and a tier-10 clear that is not Ascendant.
 
 The current payload is the canonical encoding of `ProfileSnapshot(revision,
 profile)`. It has no persisted schema-version discriminator, profile ID, or

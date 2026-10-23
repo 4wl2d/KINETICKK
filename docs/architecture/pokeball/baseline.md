@@ -737,13 +737,22 @@ Russian.
   characters change only over Home, and purchases apply from the next run. Each
   character and weapon detail has an upgrade block with the level and the next
   price, and a character's block names its Refit signature. Home has five rows
-  (Play, Workshop, Rebirth, Codex, Settings) and a Characters card, two chips
-  and a Workshop stamp that is the Profile's affordability read; the pause menu
-  offers Resume, Settings, Workshop, Codex and Exit. The composition owner keeps
+  (Play, Workshop, Rebirth, Codex, Settings), two chips and a Workshop stamp
+  that is the Profile's affordability read; characters are chosen only in the
+  Workshop, so Home shows the current character's name and (!) on the facts
+  card's line and no Characters card, and its notice line is the version alone.
+  The pause menu offers Resume, Settings, Workshop, Codex and Exit. The composition owner keeps
   the shell's last Workshop tab request beside the features, so L, A or H after
   a reopened desktop window still shows its tab. The pinned
   `AppSessionApiContractTest.shellProjectionRetainsExactlyEightRoutes…` became
   `…ExactlySixRoutesAndOnlySessionOwnedWorkflowState`.
+- **Character clears.** The Profile records the highest Rebirth tier each
+  character cleared (an Architect victory with it at that tier), raised by a
+  higher clear and kept by a lower one. The Workshop's Characters tab marks
+  each victorious character with that tier's plate and numeral (the Ascendant
+  crown beside a tier-10 clear) and its detail reads Cleared with the tier, or
+  Not cleared. A victory saved before 0.5.0 recorded no tier: it shows a plain
+  plate (an Ascendant one reads tier 10) until the character wins again.
 - **Level badge.** Tiers T1 to T5 keep their thresholds (1, 10, 20, 30, 40) and
   T6 APEX starts at the level cap with its own look and the Apex states; the
   Data bar and line change per tier and become the Apex meter at the cap; tier,
