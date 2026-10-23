@@ -823,8 +823,8 @@ private fun MutableGameState.updateHalo(ability: CharacterRuntime, delta: Float,
         ability.haloBurstFlash = 1f
         shockwave(coreX, coreY, 0.35f, HALO_BURST_RADIUS, 2)
     } else if (corona) {
-        // Corona holds the widest ring.
-        ability.haloRadius = apexValue(CORONA_HALO_RADIUS)
+        // Corona holds the widest ring, never narrower than the one Refit already widened.
+        ability.haloRadius = max(apexValue(CORONA_HALO_RADIUS), CharacterRuntime.HALO_MIN_RADIUS + extraRadius)
     } else {
         ability.haloRadius += (target - ability.haloRadius) * min(1f, delta * HALO_EASE)
     }
@@ -1518,7 +1518,8 @@ internal fun MutableGameState.beginApexForm() {
         CoreShape.PENTAGON -> runtime.setApex(ApexCell.AUX, beatOrdinal().toFloat())
         CoreShape.CRESCENT -> runtime.setApex(ApexCell.BOSS_BASE_READY_AT, 0f)
         CoreShape.HEXAGON -> {
-            val life = apexValue(SWARM_DRONE_LIFE)
+            // Refreshed drones live the Apex's life, never shorter than the Refit-lengthened base life.
+            val life = max(apexValue(SWARM_DRONE_LIFE), droneLifeSeconds())
             for (drone in 0 until ability.droneCount) ability.drones[drone * DRONE_STRIDE + DRONE_LIFE] = life
             while (ability.droneCount < CharacterRuntime.MAX_DRONES) addDrone(life)
             runtime.setApex(ApexCell.AUX, elapsed)

@@ -449,6 +449,28 @@ class ApexFormsTest {
     }
 
     @Test
+    fun coronaAndSwarmQueenNeverFallBelowWhatRefitAlreadyGivesTheBaseMechanic() {
+        // Refit 10 widens the Ring's halo to 55 + 140 = 195 u: Corona holds that widest ring, not its own 165.
+        val ring = arena(CoreShape.RING).apply { characterUpgradeLevel = 10 }
+        val widest = CharacterRuntime.HALO_MIN_RADIUS + ring.haloExtraRadius()
+        assertEquals(195f, widest)
+        ring.unlockNow()
+        ring.castNow()
+        ring.stepFor(MutableGameState.FIXED_STEP)
+        assertEquals(widest, ring.characterRuntime.haloRadius, "Corona holds the Refit-widened ring")
+        assertEquals(1f, ring.characterRuntime.charge, "the halo reads full while Corona holds it")
+
+        // Refit 10 lets a drone live 12 + 4 = 16 s: Swarm Queen's refreshed life is never shorter.
+        val hive = arena(CoreShape.HEXAGON).apply { characterUpgradeLevel = 10 }
+        assertEquals(16f, hive.droneLifeSeconds())
+        hive.unlockNow()
+        hive.castNow()
+        val runtime = hive.characterRuntime
+        assertEquals(CharacterRuntime.MAX_DRONES, runtime.droneCount)
+        assertTrue((0 until runtime.droneCount).all { runtime.droneValue(it, CharacterRuntime.DRONE_LIFE) == 16f })
+    }
+
+    @Test
     fun aProximityChannelReachesAnArchitectOnItsOrbitButNotBeyondTheApexReach() {
         // The Architect orbits the Core at 300-380 u: a beat, a burst, a nova, a pulse, a ghost, a scar or a Vivisect
         // Dash strikes it there, and nothing past the reach (420 u from the event to its edge).
