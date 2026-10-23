@@ -174,6 +174,50 @@ class MobileGameUiTest {
         composeRule.awaitTag(HOME_SCREEN_TAG)
     }
 
+    @Test
+    fun hidingTheSystemBarsGivesTheirSpaceToTheGame() {
+        freezeContinuousFrameClock()
+        composeRule.awaitTag(HOME_SCREEN_TAG)
+        val shown = composeRule.onNodeWithTag(HOME_SCREEN_TAG).visibleBounds()
+
+        toggleImmersiveFromHome()
+        // Hidden bars keep reporting their gesture areas; only the cutout stays clear of the game.
+        val hidden = composeRule.awaitHomeBounds { it.width * it.height > shown.width * shown.height }
+        assertInside(hidden, shown, HOME_SCREEN_TAG)
+
+        toggleImmersiveFromHome()
+        composeRule.awaitHomeBounds { it == shown }
+    }
+
+    private fun toggleImmersiveFromHome() {
+        composeRule.onNodeWithTag(HOME_SETTINGS_TAG).performClick()
+        composeRule.mainClock.advanceTimeByFrame()
+        composeRule.awaitTag(SETTINGS_DISPLAY_TAG)
+        composeRule.onNodeWithTag(SETTINGS_DISPLAY_TAG).performClick()
+        composeRule.mainClock.advanceTimeByFrame()
+        var page = 0
+        while (composeRule.onAllNodesWithTag(SETTINGS_IMMERSIVE_TAG).fetchSemanticsNodes().isEmpty()) {
+            composeRule.onNodeWithTag("$SETTINGS_PAGE_TAG.${page++}").performClick()
+            composeRule.mainClock.advanceTimeByFrame()
+        }
+        composeRule.onNodeWithTag(SETTINGS_IMMERSIVE_TAG).performClick()
+        composeRule.mainClock.advanceTimeByFrame()
+        composeRule.onNodeWithTag(SETTINGS_BACK_TAG).performClick()
+        composeRule.mainClock.advanceTimeByFrame()
+        composeRule.awaitTag(HOME_SCREEN_TAG)
+    }
+
+    /** The system applies the bars' change asynchronously; frames drive Compose until the home bounds match. */
+    private fun androidx.compose.ui.test.junit4.AndroidComposeTestRule<*, *>.awaitHomeBounds(matches: (Rect) -> Boolean): Rect {
+        var bounds = Rect.Zero
+        waitUntil(timeoutMillis = UI_TIMEOUT.inWholeMilliseconds) {
+            mainClock.advanceTimeByFrame()
+            bounds = onNodeWithTag(HOME_SCREEN_TAG).visibleBounds()
+            matches(bounds)
+        }
+        return bounds
+    }
+
     private fun SemanticsNodeInteraction.assertMinimumTouchTarget(): SemanticsNodeInteraction =
         assertWidthIsAtLeast(MINIMUM_TOUCH_TARGET_DP.dp)
             .assertHeightIsAtLeast(MINIMUM_TOUCH_TARGET_DP.dp)
@@ -233,6 +277,10 @@ class MobileGameUiTest {
         const val HOME_CODEX_TAG = "kinetickk.home.codex"
         const val HOME_SETTINGS_TAG = "kinetickk.home.settings"
         const val HOME_HANGAR_TAG = "kinetickk.home.hangar"
+        const val SETTINGS_DISPLAY_TAG = "kinetickk.settings.group.display"
+        const val SETTINGS_IMMERSIVE_TAG = "kinetickk.settings.immersive.toggle"
+        const val SETTINGS_PAGE_TAG = "kinetickk.settings.page"
+        const val SETTINGS_BACK_TAG = "kinetickk.settings.back"
         const val GAMEPLAY_SCREEN_TAG = "kinetickk.gameplay"
         const val GAMEPLAY_PAUSE_TAG = "kinetickk.gameplay.pause"
         const val GAMEPLAY_PERFORMANCE_TAG = "kinetickk.gameplay.performance"
