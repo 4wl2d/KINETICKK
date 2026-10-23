@@ -151,6 +151,11 @@ private const val SKILL_CHECK_SECONDS = 0.1f
 private const val APEX_CROWD = 8
 private const val APEX_CROWD_RADIUS = 400f
 private const val APEX_LOW_INTEGRITY = 0.4f
+/** Caps of margin above the Architect's phase gate, beyond the activation's strikes, the bot wants before casting. */
+private const val APEX_GATE_MARGIN_STRIKES = 2
+/** Mirror Stance: the bot brakes while a hostile shot, or an ordinary enemy, is this close. */
+private const val MIRROR_SHOT_REACH = 160f
+private const val MIRROR_CONTACT_REACH = 120f
 
 internal class NoPoiBot(
     private val archetypeTag: BuildTag = BuildTag.RAM,
@@ -293,7 +298,13 @@ internal class NoPoiBot(
         s.updatePointer(s.screenWidth * 0.5f + offsetX + ux * tether, s.screenHeight * 0.5f + offsetY + uy * tether)
         if (s.speed > 900f) braking = true
         if (s.speed < 600f) braking = false
-        s.setBrake(braking)
+        // Mirror Stance parries only while the Core brakes: while it runs, the bot brakes as hostile shots or enemies close in.
+        val mirrorBrake = s.coreShape == CoreShape.DIAMOND && s.apexActive() && (s.projectiles.any {
+            it.hostile && !it.spent && distanceSquared(it.x, it.y, s.coreX, s.coreY) <= MIRROR_SHOT_REACH * MIRROR_SHOT_REACH
+        } || s.enemies.any {
+            it.alive && !it.isBossClass && distanceSquared(it.x, it.y, s.coreX, s.coreY) <= MIRROR_CONTACT_REACH * MIRROR_CONTACT_REACH
+        })
+        s.setBrake(braking || mirrorBrake)
         val threat = s.projectiles.any {
             if (!it.hostile) false else {
                 val px = it.x - s.coreX
@@ -308,7 +319,9 @@ internal class NoPoiBot(
         val blinkLandsOnPoi = s.relicRank(RelicId.BLINK_DRIVE) > 0 && s.pointsOfInterest.any { point ->
             segmentCircleIntersects(s.coreX, s.coreY, s.coreX + ux * 320f, s.coreY + uy * 320f, point.x, point.y, 150f)
         }
-        if (threat && s.dashReady && s.heat < 60f && !blinkLandsOnPoi) s.requestDash()
+        // Vivisect's free Dashes and Total Eclipse's fast Blinks are those Apexes: while one runs, the bot Dashes when it can.
+        val apexDashes = s.apexActive() && (s.coreShape == CoreShape.SHARD || s.coreShape == CoreShape.CRESCENT)
+        if ((threat || apexDashes) && s.dashReady && s.heat < 60f && !blinkLandsOnPoi) s.requestDash()
         castSkills(s)
     }
 
@@ -330,10 +343,25 @@ internal class NoPoiBot(
 
     private fun wantsApex(s: MutableGameState): Boolean {
         if (!s.apexReady()) return false
+        val low = s.hp < s.maxHp * APEX_LOW_INTEGRITY
         val architect = s.enemies.firstOrNull { it.type == EnemyType.ARCHITECT && it.alive }
-        if (architect != null && !s.isShifting(architect)) return true
+        if (architect != null) return low || apexLands(s, architect)
         val crowd = s.enemies.count { it.alive && distanceSquared(s.coreX, s.coreY, it.x, it.y) <= APEX_CROWD_RADIUS * APEX_CROWD_RADIUS }
-        return crowd >= APEX_CROWD || s.hp < s.maxHp * APEX_LOW_INTEGRITY
+        return crowd >= APEX_CROWD || low
+    }
+
+    /**
+     * A cast at the Architect lands its boss channel (lead addendum B1): the Architect is out of its shift, within the
+     * Apex reach of the Core (where it just arrived it is still far off), and in its last phase or far enough above
+     * its phase gate that the next shift does not cut the activation's strikes short.
+     */
+    private fun apexLands(s: MutableGameState, architect: Enemy): Boolean {
+        if (s.isShifting(architect)) return false
+        val reach = APEX_BOSS_REACH + architect.radius
+        if (distanceSquared(s.coreX, s.coreY, architect.x, architect.y) > reach * reach) return false
+        if (architect.phase >= s.architectFinalPhase()) return true
+        val strikes = s.apexDefinition.bossStrikes + APEX_GATE_MARGIN_STRIKES
+        return architect.hp - s.architectGate(architect) >= strikes * s.architectHitCap(architect)
     }
 
     private fun wantsCast(s: MutableGameState, id: SkillId, values: List<Float>): Boolean {
