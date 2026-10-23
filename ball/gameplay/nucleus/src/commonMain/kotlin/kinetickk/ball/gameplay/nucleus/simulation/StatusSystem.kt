@@ -742,12 +742,13 @@ private fun MutableGameState.nearestOtherEnemyExcluding(origin: Enemy, alsoExclu
 }
 
 /**
- * Marks [enemy] with [kind] for [seconds]. An enemy carries one mark: a newer mark replaces an older one,
- * whatever its kind.
+ * Marks [enemy] with [kind] for [seconds]; [cast] records that a skill cast wrote it. An enemy carries one mark:
+ * a newer mark replaces an older one, whatever its kind or writer.
  */
-internal fun MutableGameState.setMark(enemy: Enemy, kind: MarkKind, seconds: Float) {
+internal fun MutableGameState.setMark(enemy: Enemy, kind: MarkKind, seconds: Float, cast: Boolean = false) {
     enemy.status[StatusCell.MARK] = (kind.ordinal + 1).toFloat()
     enemy.status[StatusCell.MARK_UNTIL] = elapsed + seconds
+    enemy.status[StatusCell.MARK_CAST] = if (cast) 1f else 0f
 }
 
 /** The live mark on [enemy], or null (none, or lapsed). */
@@ -763,6 +764,7 @@ internal fun MutableGameState.consumeMark(enemy: Enemy, kind: MarkKind): Boolean
     if (!markIs(enemy, kind)) return false
     enemy.status[StatusCell.MARK] = 0f
     enemy.status[StatusCell.MARK_UNTIL] = 0f
+    enemy.status[StatusCell.MARK_CAST] = 0f
     return true
 }
 

@@ -35,8 +35,8 @@ import kotlin.test.assertTrue
 /** Combat foundations: marks, control bits, Core state, forced and echoed reactions, erasure, skill damage, impulses. */
 class CombatFoundationsTest {
     @Test
-    fun statusLayoutHoldsSeventyThreeCells() {
-        assertEquals(73, StatusCell.COUNT)
+    fun statusLayoutHoldsSeventyFourCells() {
+        assertEquals(74, StatusCell.COUNT)
         assertEquals(StatusCell.COUNT, buildTestState().dummy().status.size)
         assertEquals(MarkKind.entries.map { it.name }, EnemyMarkVisual.entries.map { it.name })
 

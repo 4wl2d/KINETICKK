@@ -515,7 +515,7 @@ private fun MutableGameState.resolveSkillCast(
             forEachEnemyWithin(anchorX, anchorY, radius) { enemy ->
                 applyStatus(enemy, element, values[SPORES_DECAY].toInt(), 0)
                 if (enemy.alive) {
-                    setMark(enemy, MarkKind.SPORED, values[SPORES_SECONDS])
+                    setMark(enemy, MarkKind.SPORED, values[SPORES_SECONDS], cast = true)
                     noteCastTarget(enemy)
                 }
             }
@@ -1241,11 +1241,12 @@ internal fun MutableGameState.shroudStored(): Int {
 }
 
 /**
- * A death: a Spored enemy spreads Decay to its neighbours and drops Data (within its cast's budget); rank III
- * Decay Spores refunds every skill for it. Without Decay Spores the mark came from an item's `ApplyMark`, whose
- * clause rate already bounds it: each such death drops one Data pickup.
+ * A death: a Spored enemy spreads Decay to its neighbours and drops Data. A Decay Spores seed drops it within its
+ * cast's budget, and rank III Decay Spores refunds every skill for it. An item's `ApplyMark` mark, whose clause rate
+ * already bounds it, always drops one Data pickup and never draws on a cast's Data or refund budget.
  */
 internal fun MutableGameState.onSkillCarrierDied(enemy: Enemy) {
+    val seeded = enemy.status[StatusCell.MARK_CAST] > 0f
     if (!consumeMark(enemy, MarkKind.SPORED)) return
     for (index in enemies.indices) {
         val target = enemies[index]
@@ -1255,7 +1256,7 @@ internal fun MutableGameState.onSkillCarrierDied(enemy: Enemy) {
         }
     }
     val slot = skillLoadout.slotOf(SkillId.DECAY_SPORES)
-    if (slot < 0) {
+    if (!seeded || slot < 0) {
         dropSporedData(enemy)
         return
     }

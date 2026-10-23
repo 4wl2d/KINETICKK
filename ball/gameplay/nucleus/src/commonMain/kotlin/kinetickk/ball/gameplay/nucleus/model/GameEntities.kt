@@ -193,7 +193,9 @@ internal object StatusCell {
     const val MARK = BLACKFIRE_DPS + 1
     /** When the mark lapses. */
     const val MARK_UNTIL = MARK + 1
-    const val COUNT = MARK_UNTIL + 1
+    /** 1 when a skill cast wrote the mark (Decay Spores' seeds), 0 for a reaction's or an item's mark. */
+    const val MARK_CAST = MARK_UNTIL + 1
+    const val COUNT = MARK_CAST + 1
 }
 
 /**

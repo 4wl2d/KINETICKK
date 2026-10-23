@@ -421,6 +421,44 @@ class RuleVocabularyRuntimeTest {
         assertEquals(pickups + 1, state.pickups.count { it.type == PickupType.DATA }, "a cashed mark drops nothing more")
     }
 
+    @Test
+    fun anItemsSporedMarkKeepsItsDataAndLeavesTheDecaySporesCastBudgetAlone() {
+        val brand = probe("Spore Probe", on(EffectTrigger.CRIT, EffectAction.ApplyMark(MarkPick.SPORED, 4f), cooldown = 0.5f),
+            elements = listOf(StatusElement.ENTROPY))
+        val state = stateWith(brand)
+        state.acquireSkill(SkillId.DECAY_SPORES)
+        repeat(2) { state.rankUpSkill(SkillId.DECAY_SPORES) }
+        val slot = state.skillLoadout.slotOf(SkillId.DECAY_SPORES)
+        val dataCap = state.content.skill(SkillId.DECAY_SPORES).rank(3).values[3]
+        fun data() = state.pickups.count { it.type == PickupType.DATA }
+
+        // The cast's own Data budget is spent: an item's mark still drops its pickup and counts toward nothing.
+        state.skillRuntime[slot, SkillCell.STORED] = dataCap
+        val branded = state.dummy(x = state.coreX - 200f, y = state.coreY)
+        state.fireClauses(EffectTrigger.CRIT, branded, hit = 5f, source = HitSource.WEAPON)
+        assertEquals(MarkKind.SPORED, state.markOf(branded))
+        val before = data()
+        state.onSkillCarrierDied(branded)
+        assertEquals(before + 1, data(), "the item's mark drops one Data pickup whatever the cast spent")
+        assertEquals(dataCap, state.skillRuntime[slot, SkillCell.STORED])
+        assertEquals(0f, state.skillRuntime[slot, SkillCell.AUX_COUNT], "an item's mark is no seeded death: no refund")
+
+        // A seeded enemy draws from the cast's budget and refunds; an item mark written over it makes it the item's.
+        state.skillRuntime[slot, SkillCell.STORED] = 0f
+        state.aimAt(state.coreX + 500f, state.coreY)
+        val seeded = state.dummy(x = state.coreX + 500f, y = state.coreY)
+        val rebranded = state.dummy(x = state.coreX + 540f, y = state.coreY)
+        assertTrue(state.castSkill(slot))
+        assertEquals(MarkKind.SPORED, state.markOf(rebranded))
+        state.elapsed += 0.6f
+        state.fireClauses(EffectTrigger.CRIT, rebranded, hit = 5f, source = HitSource.WEAPON)
+        state.onSkillCarrierDied(rebranded)
+        assertEquals(0f, state.skillRuntime[slot, SkillCell.STORED], "the item's mark replaced the seed")
+        state.onSkillCarrierDied(seeded)
+        assertEquals(1f, state.skillRuntime[slot, SkillCell.STORED], "a seeded death counts toward the cast's Data")
+        assertTrue(state.skillRuntime[slot, SkillCell.AUX_COUNT] > 0f, "and refunds at rank III")
+    }
+
     // -----------------------------------------------------------------------------------------
     // Rules.
 

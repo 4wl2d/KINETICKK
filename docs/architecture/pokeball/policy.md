@@ -195,7 +195,7 @@ copying modes or source-body expectations is a policy requirement.
 | `gameplay.item-indexed-state` | item arrays, Reborn flags, status accumulators and discoveries <=320; clause timers/counters <= 320 x 2 | validated contiguous Item IDs; pending is a subset; cardinality-stable COW |
 | `gameplay.weapon-indexed-state` | unlocked weapons/mutation counters <=24 | closed WeaponId bootstrap; invariant-preserving COW |
 | `gameplay.matrix-indexed-state` | rank slots <=40; folded run modifiers fixed-size | validated closed MatrixNodeId catalog sizes the array; one immutable fold per run start |
-| `gameplay.relic-indexed-state` | state arrays <=24; enemy status cells <=120 x 73 | validated RelicId catalog; per-enemy status layout driven by the element count (four 7-wide element blocks, 21 reaction-pair slots, Void memory, Unmake, Blackfire and the two mark cells) times the enemy cap |
+| `gameplay.relic-indexed-state` | state arrays <=24; enemy status cells <=120 x 74 | validated RelicId catalog; per-enemy status layout driven by the element count (four 7-wide element blocks, 21 reaction-pair slots, Void memory, Unmake, Blackfire and the three mark cells: kind, expiry and whether a skill cast wrote it) times the enemy cap |
 | `gameplay.upgrade-indexed-state` | 12 + 24 run-constant levels plus the run character's level and power | closed CoreShape/WeaponId catalogs; captured once at start, copy-on-write like the Matrix ranks |
 | `gameplay.combat-field-table` | 16 records x 22 cells | Content field bound; fixed copy-on-write float table forked on full reductions |
 | `gameplay.skill-runtime` | 3 slots x 24 cells + 12 Apex cells; loadout 3; cast scratch 10 ids | closed slot count; fixed copy-on-write float array forked on full reductions |

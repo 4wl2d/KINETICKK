@@ -39,8 +39,9 @@ class SonicVoidElementTest {
         assertEquals(StatusCell.REACTION_PAIR_READY_AT + StatusCell.PAIRS, StatusCell.CRYO_IMMUNE_CARRY)
         assertEquals(StatusCell.BLACKFIRE_DPS + 1, StatusCell.MARK)
         assertEquals(StatusCell.MARK + 1, StatusCell.MARK_UNTIL)
-        assertEquals(StatusCell.MARK_UNTIL + 1, StatusCell.COUNT)
-        assertEquals(73, StatusCell.COUNT)
+        assertEquals(StatusCell.MARK_UNTIL + 1, StatusCell.MARK_CAST)
+        assertEquals(StatusCell.MARK_CAST + 1, StatusCell.COUNT)
+        assertEquals(74, StatusCell.COUNT)
     }
 
     @Test
