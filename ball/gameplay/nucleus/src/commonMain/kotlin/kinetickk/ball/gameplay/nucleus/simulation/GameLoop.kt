@@ -314,6 +314,7 @@ internal fun MutableGameState.performDash() {
     if (cost > 0f && spendMatrixFreeDash()) cost = 0f
     // Vivisect: a Dash far enough after the last free one costs no heat.
     if (cost > 0f && spendApexFreeDash()) cost = 0f
+    vivisectDash()
     if (crescent) {
         relicOnDashDeparture()
         when {

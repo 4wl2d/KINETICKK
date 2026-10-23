@@ -93,7 +93,8 @@ class SkillApexUpgradeContentTest {
             assertTrue(apex.values.size <= ContentBounds.MAX_APEX_VALUES, apex.name)
             assertEquals(60f, apex.cooldownSeconds, apex.name)
             assertEquals(30f, apex.minimumCooldownSeconds, apex.name)
-            assertEquals(6, apex.bossStrikes, apex.name)
+            // Lead addendum B1: per character, enough full-cap strikes to shorten an Architect fight by a like share.
+            assertTrue(apex.bossStrikes in 5..ContentBounds.MAX_APEX_STRIKES, apex.name)
             assertTrue(apex.durationSeconds in 6f..10f, apex.name)
         }
         assertEquals(72, defaultApexDefinition(CoreShape.PENTAGON).boltBudget)

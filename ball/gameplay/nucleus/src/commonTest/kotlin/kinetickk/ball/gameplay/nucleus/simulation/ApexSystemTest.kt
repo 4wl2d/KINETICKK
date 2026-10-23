@@ -104,7 +104,7 @@ class ApexSystemTest {
             assertEquals(0f, state.apexBufferTime, "$shape spent the buffer")
             assertEquals(state.elapsed + definition.durationSeconds, runtime.apex(ApexCell.ACTIVE_UNTIL), "$shape duration")
             assertEquals(state.elapsed + 60f, runtime.apex(ApexCell.READY_AT), "$shape cooldown")
-            assertEquals(6f, runtime.apex(ApexCell.STRIKES_LEFT))
+            assertEquals(definition.bossStrikes.toFloat(), runtime.apex(ApexCell.STRIKES_LEFT), "$shape strikes")
             assertEquals(definition.boltBudget.toFloat(), runtime.apex(ApexCell.BOLTS_LEFT))
             assertEquals(1f, runtime.apex(ApexCell.CAST_COUNT))
             assertTrue(state.apexActive())
@@ -154,35 +154,42 @@ class ApexSystemTest {
     }
 
     @Test
-    fun apexStrikesStopAtTheBudgetAndNeverExceedTheCap() {
+    fun apexStrikesDealTheFullCapStopAtTheBudgetAndNeverPassAPhaseGate() {
         val state = arena()
         val boss = state.testArchitect()
         val ordinary = state.dummy(x = state.coreX - 300f)
         state.unlockNow()
         state.castNow()
         val cap = state.architectHitCap(boss)
+        val budget = state.apexDefinition.bossStrikes
 
-        // A small amount is raised to three quarters of the cap (through the boss's kinetic frame).
-        val floor = state.apexStrike(boss, 1f)
-        assertEquals(APEX_STRIKE_CAP_SHARE * cap * boss.weaponTaken, floor, 1e-3f)
-        // A large one is held to the cap by the Architect's gate.
-        assertEquals(cap, state.apexStrike(boss, 1_000_000f), 1e-3f)
-        assertEquals(4, state.apexStrikesLeft)
+        // A strike removes the boss's whole hit cap, whatever the channel's own number, and spends one strike.
+        assertEquals(cap, state.apexStrike(boss), 1e-3f)
+        assertEquals(budget - 1, state.apexStrikesLeft)
         // Ordinary enemies and a shifting boss take nothing and spend nothing.
-        assertEquals(0f, state.apexStrike(ordinary, 500f))
+        assertEquals(0f, state.apexStrike(ordinary))
         boss.shiftUntil = state.elapsed + 1f
         val hp = boss.hp
-        assertEquals(0f, state.apexStrike(boss, 500f))
+        assertEquals(0f, state.apexStrike(boss))
         assertEquals(hp, boss.hp)
-        assertEquals(4, state.apexStrikesLeft)
+        assertEquals(budget - 1, state.apexStrikesLeft)
         boss.shiftUntil = 0f
-        repeat(4) { assertTrue(state.apexStrike(boss, 1_000_000f) <= cap + 1e-3f) }
+        // Never past the phase gate: half a cap above the first gate, the strike removes that half and the shift starts.
+        val gate = boss.maxHp * 2f / 3f
+        boss.hp = gate + cap * 0.5f
+        assertEquals(cap * 0.5f, state.apexStrike(boss), 1e-2f)
+        assertEquals(gate, boss.hp, 1e-2f)
+        assertTrue(state.isShifting(boss))
+        assertEquals(0f, state.apexStrike(boss), "nothing lands while it shifts")
+        assertEquals(budget - 2, state.apexStrikesLeft)
+        boss.shiftUntil = 0f
+        repeat(budget - 2) { assertEquals(cap, state.apexStrike(boss), 1e-3f) }
         assertEquals(0, state.apexStrikesLeft)
         val spent = boss.hp
-        assertEquals(0f, state.apexStrike(boss, 1_000_000f), "the budget is spent")
+        assertEquals(0f, state.apexStrike(boss), "the budget is spent")
         assertEquals(spent, boss.hp)
-        assertEquals((3_000f - spent).toDouble(), state.skillRuntime.apexBossDamage, 1e-2)
-        assertTrue(state.takeVisualFxCues().filterIsInstance<VisualFxCue.ShockwaveAdded>().count { it.colorIndex == FxColorCode.APEX_GOLD } == 6)
+        assertEquals((gate + cap * 0.5f - spent + cap).toDouble(), state.skillRuntime.apexBossDamage, 1e-2)
+        assertEquals(budget, state.takeVisualFxCues().filterIsInstance<VisualFxCue.ShockwaveAdded>().count { it.colorIndex == FxColorCode.APEX_GOLD })
     }
 
     @Test
@@ -216,14 +223,15 @@ class ApexSystemTest {
         state.apexShot(boss, 10_000f)
         state.resolveProjectileHits()
         assertEquals(3_000f - cap, boss.hp, 1e-2f)
-        assertEquals(5, state.apexStrikesLeft)
+        val left = state.apexDefinition.bossStrikes - 1
+        assertEquals(left, state.apexStrikesLeft)
         assertTrue(state.projectiles.isEmpty(), "the shot spent itself")
 
         val ordinary = state.dummy(x = state.coreX - 300f, hp = 1_000f)
         state.apexShot(ordinary, 40f)
         state.resolveProjectileHits()
         assertEquals(1_000f - 40f * state.matrix.damageMultiplier * ordinary.weaponTaken, ordinary.hp, 1e-3f)
-        assertEquals(5, state.apexStrikesLeft)
+        assertEquals(left, state.apexStrikesLeft)
 
         state.skillRuntime.setApex(ApexCell.STRIKES_LEFT, 0f)
         val hp = boss.hp
@@ -288,7 +296,7 @@ class ApexSystemTest {
 
         state.castNow()
         val active = state.toRenderModel()
-        assertEquals(ApexProjection(unlocked = true, ready = false, cooldown01 = 1f, active01 = 1f, strikesLeft = 6, boltsLeft = 24),
+        assertEquals(ApexProjection(unlocked = true, ready = false, cooldown01 = 1f, active01 = 1f, strikesLeft = state.apexDefinition.bossStrikes, boltsLeft = 24),
             active.apex)
         val bits = active.enemies.associate { it.id to it.controlBits }
         assertEquals(EnemyControlBits.APEX_STRIKE_TARGET, bits.getValue(boss.id) and EnemyControlBits.APEX_STRIKE_TARGET)

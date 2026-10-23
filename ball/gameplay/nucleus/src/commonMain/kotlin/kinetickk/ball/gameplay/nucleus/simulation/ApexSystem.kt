@@ -8,6 +8,7 @@ import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.protocol.FxColorCode
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
+import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -131,31 +132,58 @@ private fun MutableGameState.castApex() {
 }
 
 /**
- * The boss channel (combat-final §5.2 rule 2): a strike on boss-class [enemy] deals at least
- * [APEX_STRIKE_CAP_SHARE] of its hit cap through the character damage path (so the Architect's gate still caps it
- * and holds every phase gate; a Herald, which has no gate, is held to the same cap) and spends one strike when
- * something landed. A shifting enemy, an ordinary one or an empty strike budget takes nothing and spends nothing.
- * Returns the integrity removed.
+ * The boss channel (combat-final §5.2 rule 2, lead addendum B1): a strike on boss-class [enemy] requests its full hit
+ * cap, whatever the channel's own number, through the single integrity writer, so the Architect's gate still holds it
+ * to the cap and to the current phase gate (a Herald, which has no gate, takes exactly its cap); the strike counts as
+ * character ability output and spends one strike when something landed. A shifting enemy, an ordinary one or an
+ * empty strike budget takes nothing and spends nothing. Returns the integrity removed.
  */
-internal fun MutableGameState.apexStrike(enemy: Enemy, amount: Float): Float {
+internal fun MutableGameState.apexStrike(enemy: Enemy): Float {
     if (!enemy.isBossClass || !enemy.alive || isShifting(enemy)) return 0f
     val runtime = skillRuntime
     val left = runtime.apex(ApexCell.STRIKES_LEFT)
     if (left < 1f) return 0f
     val integrity = enemy.hp
-    val cap = architectHitCap(enemy)
-    val requested = max(amount, APEX_STRIKE_CAP_SHARE * cap)
-    val result = if (enemy.isBoss) {
-        dealCharacterDamage(enemy, requested, edge = false)
-    } else {
-        val scaled = min(requested * matrix.damageMultiplier * characterUpgradePower * enemy.weaponTaken, cap)
-        damageEnemy(enemy, scaled, unmitigated = scaled).also { recordAbilityDamage(integrity, it) }
-    }
+    val result = damageEnemy(enemy, architectHitCap(enemy))
+    recordAbilityDamage(integrity, result)
     if (result.amount <= 0f) return 0f
     runtime.setApex(ApexCell.STRIKES_LEFT, left - 1f)
     runtime.apexBossDamage += min(result.amount, integrity.coerceAtLeast(0f)).toDouble()
     shockwave(enemy.x, enemy.y, APEX_STRIKE_RING_SECONDS, APEX_STRIKE_RING_RADIUS, FxColorCode.APEX_GOLD)
     return result.amount
+}
+
+/**
+ * A proximity channel's event at ([x], [y]) strikes every live, non-shifting boss-class enemy whose edge lies within
+ * [APEX_BOSS_REACH] of it, each strike drawn as an Apex link from the event; returns how many landed.
+ */
+internal fun MutableGameState.apexStrikeBossesNear(x: Float, y: Float): Int {
+    var landed = 0
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
+        if (!enemy.isBossClass || !enemy.alive || distanceSquared(x, y, enemy.x, enemy.y) > square(APEX_BOSS_REACH + enemy.radius)) continue
+        if (apexStrikeFrom(x, y, enemy) > 0f) landed++
+    }
+    return landed
+}
+
+/** While strikes remain, the first live, non-shifting boss-class enemy with its edge within [APEX_BOSS_REACH] of ([x], [y]). */
+internal fun MutableGameState.apexBossInReach(x: Float, y: Float): Enemy? {
+    if (skillRuntime.apex(ApexCell.STRIKES_LEFT) < 1f) return null
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
+        if (enemy.isBossClass && enemy.alive && !isShifting(enemy) &&
+            distanceSquared(x, y, enemy.x, enemy.y) <= square(APEX_BOSS_REACH + enemy.radius)
+        ) return enemy
+    }
+    return null
+}
+
+/** A strike on boss-class [enemy] reached from ([x], [y]), drawn as the character's Apex link; see [apexStrike]. */
+internal fun MutableGameState.apexStrikeFrom(x: Float, y: Float, enemy: Enemy): Float {
+    val landed = apexStrike(enemy)
+    if (landed > 0f) addWeaponArc(x, y, enemy.x, enemy.y, APEX_STRIKE_LINK_SECONDS, LinkStyleCode.apex(coreShape))
+    return landed
 }
 
 /** Spends hostile bolt [shot] from the Apex's bolt budget (see [eraseHostileShot]); true when it was spent. */
@@ -195,10 +223,14 @@ internal fun MutableGameState.nearestOrdinaryEnemy(x: Float, y: Float, range: Fl
     return nearest
 }
 
-/** Fires an Apex shot from ([x], [y]) at [target]; an [element] lands one stack on an ordinary enemy it hits. */
+/**
+ * Fires an Apex shot from ([x], [y]) at [target]; an [element] lands one stack on an ordinary enemy it hits. A shot
+ * at a boss-class target cuts through up to [APEX_BOSS_SHOT_PIERCE] ordinary enemies on its way (each takes its hit),
+ * so escorts and adds between the Core and the Architect do not swallow it.
+ */
 internal fun MutableGameState.fireApexShot(x: Float, y: Float, target: Enemy, damage: Float, element: StatusElement? = null) {
     val angle = atan2(target.y - y, target.x - x)
-    fireApexShotAlong(x, y, cos(angle), sin(angle), damage, element)
+    fireApexShotAlong(x, y, cos(angle), sin(angle), damage, element, pierce = if (target.isBossClass) APEX_BOSS_SHOT_PIERCE else 0)
 }
 
 /** Fires an Apex shot from ([x], [y]) along the unit direction ([directionX], [directionY]). */
@@ -209,6 +241,7 @@ internal fun MutableGameState.fireApexShotAlong(
     directionY: Float,
     damage: Float,
     element: StatusElement? = null,
+    pierce: Int = 0,
 ) {
     addProjectile(Projectile(
         x = x,
@@ -219,7 +252,7 @@ internal fun MutableGameState.fireApexShotAlong(
         life = APEX_SHOT_LIFE,
         hostile = false,
         damage = damage,
-        pierce = 0,
+        pierce = pierce,
         colorIndex = FxColorCode.APEX_GOLD,
         sourceWeapon = null,
         statusElement = element?.ordinal ?: -1,
@@ -237,7 +270,7 @@ internal fun MutableGameState.apexShotPassesThrough(enemy: Enemy): Boolean =
  */
 internal fun MutableGameState.apexShotHit(enemy: Enemy, damage: Float, statusElement: Int) {
     if (enemy.isBossClass) {
-        apexStrike(enemy, damage)
+        apexStrike(enemy)
         return
     }
     dealCharacterDamage(enemy, damage, edge = false)
@@ -251,12 +284,19 @@ private const val APEX_MESSAGE_SECONDS: Float = 2.5f
 internal const val APEX_SECONDS_PER_DATA: Float = 0.03f
 /** The most the build may cut the Apex's base cooldown (combat-final §6.4 ApexCooldown). */
 internal const val MAX_APEX_COOLDOWN_CUT: Float = 0.3f
-/** A strike deals at least this share of the boss's hit cap. */
-internal const val APEX_STRIKE_CAP_SHARE: Float = 0.75f
+/**
+ * How far a proximity boss channel reaches (lead addendum B1). The Architect orbits the Core at 300–380 u and steps
+ * back inside 180 u, so a channel that needed its burst, ghost, scar, puncture or cage to touch it almost never
+ * landed; such a channel's event strikes a boss-class enemy within this distance of where it happens instead.
+ */
+internal const val APEX_BOSS_REACH: Float = 420f
+private const val APEX_STRIKE_LINK_SECONDS: Float = 0.2f
 private const val APEX_STRIKE_RING_SECONDS: Float = 0.3f
 private const val APEX_STRIKE_RING_RADIUS: Float = 50f
 internal const val APEX_SHOT_SPEED: Float = 720f
 private const val APEX_SHOT_RADIUS: Float = 5f
 private const val APEX_SHOT_LIFE: Float = 2f
+/** Ordinary enemies an Apex shot aimed at a boss-class enemy passes through on its way. */
+internal const val APEX_BOSS_SHOT_PIERCE: Int = 4
 /** How far an Apex looks for the target of a shot it returns (refraction, parry, held shot). */
 internal const val APEX_SHOT_RANGE: Float = 800f

@@ -52,10 +52,13 @@ data class ApexDefinition(
 }
 
 /**
- * The shipped Apex of each character. Values, in order:
+ * The shipped Apex of each character: duration, bolt budget and boss strikes, then its values. The strikes are set
+ * per character (lead addendum B1) so each Apex shortens an Architect fight by a like share: a character that kills
+ * the Architect fast (Hexagon, Orb) needs more full-cap strikes for the same share than a slow one (Ring). Values,
+ * in order:
  * - ORB Perihelion: Orbit charge arc rad, capture radius, held shot damage, release interval s
  * - PRISM Monolith: facet regrowth s, full-facet impact multiplier, refraction damage
- * - SHARD Vivisect: puncture interval s, mark spread radius, boss strike scale, free Dash gap s
+ * - SHARD Vivisect: puncture interval s, mark spread radius, free Dash gap s
  * - RING Corona: locked halo radius, band burn per second, burst interval s, burst damage
  * - DIAMOND Mirror Stance: returned shot damage, locked Edge
  * - TESSERACT Hypercube: cage half-side, inside speed factor, pulse damage, pulse damage per node
@@ -70,62 +73,62 @@ fun defaultApexDefinition(shape: CoreShape): ApexDefinition = when (shape) {
     CoreShape.ORB -> apex(
         "Perihelion",
         "For 10 s Orbit charges on half the arc and every release captures hostile shots; when it ends, they fly back.",
-        10f, 24, 0.349f, 210f, 45f, 0.1f,
+        10f, 24, 12, 0.349f, 210f, 45f, 0.1f,
     )
     CoreShape.PRISM -> apex(
         "Monolith",
         "Restores every facet; for 8 s facets regrow fast and each blocked hit fires a refraction back.",
-        8f, 16, 2f, 1.4f, 90f,
+        8f, 16, 6, 1f, 1.4f, 90f,
     )
     CoreShape.SHARD -> apex(
         "Vivisect",
         "For 8 s Dashes cost no heat, punctures come faster and every puncture marks the next enemy.",
-        8f, 0, 0.12f, 260f, 1.5f, 0.35f,
+        8f, 0, 8, 0.12f, 260f, 0.35f,
     )
     CoreShape.RING -> apex(
         "Corona",
         "For 10 s the halo holds its widest ring, burns three times hotter and burns away shots that cross it.",
-        10f, 32, 165f, 36f, 1.5f, 32f,
+        10f, 32, 5, 165f, 36f, 1.5f, 32f,
     )
     CoreShape.DIAMOND -> apex(
         "Mirror Stance",
         "For 6 s, while you brake, every hit is parried and returned at full Edge.",
-        6f, 24, 65f, 5f,
+        6f, 24, 6, 65f, 5f,
     )
     CoreShape.TESSERACT -> apex(
         "Hypercube",
         "Folds your lattice into a cage for 8 s: shots crossing it vanish, enemies inside slow and its edges pulse.",
-        8f, 30, 220f, 0.5f, 7f, 3.5f,
+        8f, 30, 8, 220f, 0.5f, 7f, 3.5f,
     )
     CoreShape.STAR -> apex(
         "Hypernova",
         "Bursts into a full Supernova at once; for 8 s novas come twice as fast, hits shed no mass and novas erase shots.",
-        8f, 48, 24f, 1f, 3f, 12f,
+        8f, 48, 6, 24f, 1f, 3f, 12f,
     )
     CoreShape.SPIRAL -> apex(
         "Twin Echo",
         "For 10 s a second ghost follows half a second behind; both strike and swallow shots three times as often.",
-        10f, 30, 0.5f, 0.32f, 0.5f, 300f,
+        10f, 30, 9, 0.5f, 0.32f, 0.5f, 300f,
     )
     CoreShape.DIPOLE -> apex(
         "Magnetar",
         "For 8 s polarity flips every second, its reach grows and incoming shots are flung back.",
-        8f, 20, 1f, 1.4f, 1.5f, 30f,
+        8f, 20, 9, 1f, 1.4f, 1.5f, 30f,
     )
     CoreShape.PENTAGON -> apex(
         "Crescendo",
         "For twelve beats every move lands on the beat, the streak stays full and each beat erases nearby shots.",
-        9f, 72, 12f, 40f, 140f, 6f,
+        9f, 72, 9, 12f, 40f, 140f, 6f,
     )
     CoreShape.CRESCENT -> apex(
         "Total Eclipse",
         "For 8 s Blink recharges almost at once, each Blink cuts through shots and scars pull enemies in.",
-        8f, 40, 0.5f, 40f, 300f, 1.6f,
+        8f, 40, 6, 0.5f, 40f, 300f, 1.6f,
     )
     CoreShape.HEXAGON -> apex(
         "Swarm Queen",
         "Fills the hive; for 10 s drones dart three times as often, intercept shots and pull Data to you.",
-        10f, 32, 0.35f, 18f, 600f, 12f,
+        10f, 32, 12, 0.35f, 18f, 600f, 12f,
     )
 }
 
@@ -134,11 +137,13 @@ private fun apex(
     description: String,
     durationSeconds: Float,
     boltBudget: Int,
+    bossStrikes: Int,
     vararg values: Float,
 ): ApexDefinition = ApexDefinition(
     name = name,
     description = description,
     durationSeconds = durationSeconds,
+    bossStrikes = bossStrikes,
     boltBudget = boltBudget,
     values = values.toList().toImmutableList(),
 )
