@@ -5,6 +5,7 @@ package kinetickk.ball.profile.interaction.settings.api
 
 import kinetickk.ball.profile.api.DEFAULT_INTERFACE_SCALE_PERCENT
 import kinetickk.ball.profile.api.INTERFACE_SCALE_OPTIONS
+import kinetickk.ball.profile.api.REFRESH_RATE_RANGE
 import kinetickk.ball.profile.api.WindowMode
 import kinetickk.ball.profile.api.WindowSizePreset
 import kotlin.math.max
@@ -25,7 +26,7 @@ data class SettingsDisplaySupport(
     val refreshReadout: Boolean = false,
     /** The current monitor's refresh rate in Hz; 0 when unknown. */
     val monitorRefreshHz: Int = 0,
-    /** Selectable refresh rates in Hz, highest first, at most [MAX_REFRESH_CHOICES] (Android). */
+    /** Selectable refresh rates in Hz within [REFRESH_RATE_RANGE], highest first, at most [MAX_REFRESH_CHOICES] (Android). */
     val refreshRatesHz: List<Int> = emptyList(),
     /** The system bars can be hidden (Android). */
     val immersive: Boolean = false,
@@ -38,6 +39,8 @@ data class SettingsDisplaySupport(
 ) {
     init {
         require(refreshRatesHz.size <= MAX_REFRESH_CHOICES) { "At most $MAX_REFRESH_CHOICES refresh rates are offered" }
+        // Each offered rate is pressed into SetRefreshRate, so the list is closed over the same range.
+        require(refreshRatesHz.all { it in REFRESH_RATE_RANGE }) { "Offered refresh rates must be within $REFRESH_RATE_RANGE Hz" }
     }
 
     companion object {

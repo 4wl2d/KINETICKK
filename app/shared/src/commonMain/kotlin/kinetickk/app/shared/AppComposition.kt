@@ -30,6 +30,7 @@ import kinetickk.ball.profile.interaction.workshop.impl.DefaultWorkshopFeature
 import kinetickk.flow.session.api.AppSessionPort
 import kinetickk.flow.session.impl.createAppSessionComponent
 import kinetickk.flow.session.interaction.AppSessionContent
+import kinetickk.flow.session.interaction.AppShellMemory
 import kinetickk.flow.session.interaction.audio.SessionAudioExecutor
 import kinetickk.flow.session.interaction.codex.api.CodexFeature
 import kinetickk.flow.session.interaction.codex.impl.DefaultCodexFeature
@@ -160,6 +161,9 @@ internal class AppCompositionOwner(
     }
     private val touchPrimary: Boolean by lazy { displayHost.support().touchPrimary }
 
+    // Lives with the features, above a desktop window that may be opened again.
+    private val shellMemory = AppShellMemory()
+
     @Composable
     @NonRestartableComposable
     fun Content(onLanguageChanged: (String) -> Unit = {}) {
@@ -177,6 +181,7 @@ internal class AppCompositionOwner(
             profileUnavailableFeature = profileUnavailableFeature,
             onPreferencesChanged = applyDisplayPreferences,
             touchPrimary = touchPrimary,
+            shellMemory = shellMemory,
         )
     }
 

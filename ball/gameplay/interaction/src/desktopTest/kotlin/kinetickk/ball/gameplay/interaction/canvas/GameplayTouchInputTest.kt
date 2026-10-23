@@ -26,6 +26,7 @@ import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
 import kinetickk.ball.gameplay.interaction.layout.runningControlBounds
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
+import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
 import org.junit.Rule
@@ -44,18 +45,26 @@ class GameplayTouchInputTest {
     val compose = createComposeRule()
 
     private val pulses = mutableListOf<GameplayInteractionPulse>()
+    private lateinit var running: GameplayRenderSnapshot
+    private lateinit var current: GameplayRenderSnapshot
 
     private fun start() {
         val snapshot = hudTestSnapshot()
         val model = requireNotNull(snapshot.renderModel).with(*levelOverrides(), "skillBar" to FULL_SKILL_BAR)
-        val running = snapshot.withTouchModel(model)
+        running = snapshot.withTouchModel(model)
+        current = running
         val port = object : GameplayInteractionPort {
             override val instanceId get() = running.instanceId
-            override fun renderSnapshot() = running
+            override fun renderSnapshot() = current
             override fun visualFxSnapshot() = VisualFxProjection.EMPTY
             override fun accept(pulse: GameplayInteractionPulse): GameplayAcceptance {
                 pulses += pulse
-                return GameplayAcceptance.Rejected(running.instanceId, running.revision, GameplayRejection.RunExited)
+                // Accepted while the test moves the run between phases, so the host reads the new one.
+                return if (current === running) {
+                    GameplayAcceptance.Rejected(running.instanceId, running.revision, GameplayRejection.RunExited)
+                } else {
+                    GameplayAcceptance.Accepted(current.instanceId, current.revision)
+                }
             }
         }
         compose.mainClock.autoAdvance = false
@@ -64,6 +73,14 @@ class GameplayTouchInputTest {
                 Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST)) { GameplayContent(port, true) {} }
             }
         }
+        compose.mainClock.advanceTimeByFrame()
+    }
+
+    /** The run moves to [phase] (RUNNING is the started run); the host reads it on the next frame. */
+    private fun enter(phase: GamePhase) {
+        val model = requireNotNull(running.renderModel)
+        current = running.withTouchModel(model.with("phase" to phase))
+        compose.mainClock.advanceTimeByFrame()
         compose.mainClock.advanceTimeByFrame()
     }
 
@@ -130,6 +147,45 @@ class GameplayTouchInputTest {
         touch { moveTo(1, Offset(430f, 320f)) }
         assertEquals(listOf(Offset(430f, 320f)), steeredTo())
         touch { up(1) }
+    }
+
+    @Test
+    fun aThumbHeldThroughAChoiceOrAPauseSteersAndBrakesAgainWhenTheRunReturns() {
+        start()
+        val brake = runningControlBounds(1_440f, 810f, 1f).first { it.target == RunningControlTarget.BRAKE }.bounds.center
+        val braking = GameplayInteractionPulse.BrakeChanged(BrakeSource.TOUCH_CONTROL, true)
+        val released = GameplayInteractionPulse.BrakeChanged(BrakeSource.TOUCH_CONTROL, false)
+        touch { down(0, Offset(700f, 500f)) }
+        touch { down(1, brake) }
+        assertEquals(listOf<GameplayInteractionPulse>(braking), actions())
+
+        for (away in listOf(GamePhase.CHOICE, GamePhase.PAUSED)) {
+            enter(away)
+            // Away from RUNNING the held Brake is released once and the thumb does not steer.
+            touch { moveTo(0, Offset(710f, 505f)) }
+            assertEquals(listOf<GameplayInteractionPulse>(released), actions(), "$away")
+            assertTrue(steeredTo().isEmpty(), "$away: steered ${steeredTo()}")
+            touch { moveTo(0, Offset(715f, 508f)) }
+            assertTrue(actions().isEmpty(), "$away: ${actions()}")
+
+            enter(GamePhase.RUNNING)
+            touch { moveTo(0, Offset(720f, 520f)) }
+            assertEquals(listOf<GameplayInteractionPulse>(braking), actions(), "after $away the held Brake was not engaged again")
+            assertEquals(listOf(Offset(720f, 520f)), steeredTo(), "after $away the held thumb did not steer")
+        }
+
+        // A finger lifted while the run is away is forgotten: Brake stays released on return.
+        enter(GamePhase.CHOICE)
+        touch { up(1) }
+        assertEquals(listOf<GameplayInteractionPulse>(released), actions())
+        enter(GamePhase.RUNNING)
+        touch { moveTo(0, Offset(730f, 530f)) }
+        assertTrue(actions().isEmpty(), "${actions()}")
+        assertEquals(listOf(Offset(730f, 530f)), steeredTo())
+        touch { up(0) }
+        // The steering slot was freed with its finger: a new finger steers.
+        touch { down(2, Offset(400f, 300f)) }
+        assertEquals(listOf(Offset(400f, 300f)), steeredTo())
     }
 
     @Test

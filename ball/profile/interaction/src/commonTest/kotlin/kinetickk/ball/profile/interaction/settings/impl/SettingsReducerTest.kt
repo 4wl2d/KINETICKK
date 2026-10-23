@@ -17,6 +17,7 @@ import kinetickk.ball.profile.api.PreferenceAdjustmentDirection
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfilePreferenceAdjustment
+import kinetickk.ball.profile.api.REFRESH_RATE_RANGE
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.settings.api.SettingsLiveWindow
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
@@ -24,6 +25,7 @@ import kinetickk.foundation.common.input.BindableKey
 import kinetickk.foundation.common.localization.AppLanguage
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
@@ -194,6 +196,20 @@ class SettingsReducerTest {
         }
         assertTrue(SettingsReducer.reduce(initial, SettingsAction.Adjust(SettingsRow.COLOR_VISION, 1)).effects.isEmpty())
         assertEquals(ColorVision.TRITAN.ordinal, SettingsRow.COLOR_VISION.selectedOption(preferences))
+    }
+
+    @Test
+    fun offeredRefreshRatesAreClosedOverTheRangeEveryChoiceIsPressedInto() {
+        val bounds = listOf(REFRESH_RATE_RANGE.last, REFRESH_RATE_RANGE.first)
+        val platform = SettingsPlatform(DESKTOP_SUPPORT.copy(refreshRatesHz = bounds))
+        val initial = SettingsState(PlayerPreferences().toRenderModel(), page = 0, group = SettingsGroup.GRAPHICS, platform = platform)
+        for ((option, hz) in bounds.withIndex()) {
+            val reduction = SettingsReducer.reduce(initial, SettingsAction.Select(SettingsRow.REFRESH_RATE, option + 1))
+            assertEquals(SettingsEffect.AdjustPreference(ProfilePreferenceAdjustment.SetRefreshRate(hz)), reduction.effects.first())
+        }
+        for (outside in listOf(REFRESH_RATE_RANGE.first - 1, REFRESH_RATE_RANGE.last + 1, 0)) {
+            assertFailsWith<IllegalArgumentException> { DESKTOP_SUPPORT.copy(refreshRatesHz = listOf(60, outside)) }
+        }
     }
 
     @Test

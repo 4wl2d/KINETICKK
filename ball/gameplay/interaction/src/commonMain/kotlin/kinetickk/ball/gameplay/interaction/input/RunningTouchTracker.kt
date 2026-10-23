@@ -10,8 +10,9 @@ import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
  * singularity and which hold a control, so a thumb can steer while another taps Dash, a skill or
  * holds Brake. One pointer steers at a time (the first one down off the controls); later ones off
  * the controls wait as IDLE and the oldest takes over when the steering pointer lifts. A pointer that
- * went down on a control (or another HUD position) never steers, even after sliding off it. Pure and
- * pointer-thread confined: fixed arrays, no allocation.
+ * went down on a control (or another HUD position) never steers, even after sliding off it. Pointers
+ * keep their roles while the run is away from RUNNING (a choice, a pause), so a thumb held through it
+ * steers and brakes again on return. Pure and pointer-thread confined: fixed arrays, no allocation.
  */
 internal class RunningTouchTracker {
     private val ids = LongArray(MAX_POINTERS)
@@ -19,6 +20,7 @@ internal class RunningTouchTracker {
     private val targets = IntArray(MAX_POINTERS) { NO_TARGET } // RunningControlTarget ordinal
     private val order = LongArray(MAX_POINTERS) // down sequence, for the oldest IDLE pointer
     private var sequence = 0L
+    private var away = false // the run is not RUNNING: a held Brake does not apply
 
     /**
      * A pointer went down on [target] (null off the controls). [hudPosition] marks a press on a HUD
@@ -59,9 +61,9 @@ internal class RunningTouchTracker {
     }
 
     /**
-     * Pointer [id] lifted. Returns [UP_BRAKE_RELEASED] when it was the last one holding Brake,
-     * `UP_STEER_PROMOTED + slot` when it steered and the oldest IDLE pointer (read its id with
-     * [idAt]) now steers, else [UP_NONE].
+     * Pointer [id] lifted. Returns [UP_BRAKE_RELEASED] when it was the last one holding Brake while
+     * the run is RUNNING, `UP_STEER_PROMOTED + slot` when it steered and the oldest IDLE pointer
+     * (read its id with [idAt]) now steers, else [UP_NONE].
      */
     fun up(id: Long): Int {
         val slot = indexOf(id)
@@ -71,7 +73,7 @@ internal class RunningTouchTracker {
         roles[slot] = FREE
         targets[slot] = NO_TARGET
         if (role == CONTROL && target == RunningControlTarget.BRAKE.ordinal) {
-            return if (holds(RunningControlTarget.BRAKE)) UP_NONE else UP_BRAKE_RELEASED
+            return if (away || holds(RunningControlTarget.BRAKE)) UP_NONE else UP_BRAKE_RELEASED
         }
         if (role != STEER) return UP_NONE
         var oldest = -1
@@ -97,12 +99,15 @@ internal class RunningTouchTracker {
     /** Whether no pointer is tracked. */
     val isEmpty: Boolean get() = roles.all { it == FREE }
 
-    /** Forgets every pointer (the run left RUNNING); true when a held Brake must be released. */
-    fun reset(): Boolean {
-        val brake = holds(RunningControlTarget.BRAKE)
-        roles.fill(FREE)
-        targets.fill(NO_TARGET)
-        return brake
+    /**
+     * Whether the run is RUNNING at the current pointer event. Every pointer keeps its role either way.
+     * True when this call changes whether a held Brake applies: leaving RUNNING releases it and
+     * returning engages it again (dispatch `BrakeChanged(active = running)`).
+     */
+    fun running(running: Boolean): Boolean {
+        if (away != running) return false
+        away = !running
+        return holds(RunningControlTarget.BRAKE)
     }
 
     private fun indexOf(id: Long): Int {

@@ -282,6 +282,33 @@ class SettingsDisplayControlsComposeTest {
             assertTrue(port.adjustments.isEmpty())
         }
 
+    @Test
+    fun everyRefusedKeyIsAnnouncedAgainAndTheRegionClearsAfterAWhile() = settings(SettingsDisplayPort.None) { port, _, _ ->
+        // The region is there before anything is said, so the first words are a change too.
+        assertNull(announcement())
+        click("kinetickk.settings.group.controls")
+        click("kinetickk.settings.bind.dash.key")
+        key(Key.Tab)
+        assertEquals("Key not available", announcement())
+        for (refused in listOf(Key.Tab, Key.Backspace)) {
+            val heard = mutableListOf(announcement())
+            onRoot().performKeyInput { pressKey(refused) }
+            heard += announcement()
+            repeat(30) {
+                mainClock.advanceTimeByFrame()
+                heard += announcement()
+            }
+            // The same words again, after a clear: a new change of the region each time.
+            val changes = heard.fold(mutableListOf<String?>()) { said, words -> said.apply { if (isEmpty() || last() != words) add(words) } }
+            assertEquals(listOf("Key not available", null, "Key not available"), changes, "$refused")
+        }
+        assertEquals(waiting, onNodeWithTag("kinetickk.settings.bind.dash.key").state())
+        mainClock.advanceTimeBy(4_000)
+        waitForIdle()
+        assertNull(announcement())
+        assertTrue(port.adjustments.isEmpty())
+    }
+
     private fun settings(
         display: SettingsDisplayPort,
         width: Int = 1440,

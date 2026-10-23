@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.EquippedRelic
@@ -525,10 +526,13 @@ private fun DrawScope.drawLevelCluster(
         val top = badge.bottom + frame.u(10f)
         // At the cap, with the keyboard in use, the Apex key sits at the bar's left end.
         val apexKey = engine.levelTier() == KkLevelTier.T6 && controls != null && controls.keyHints && keyCapsShown(frame)
-        val barLeft = left + frame.u(if (apexKey) APEX_KEY_BAR_START_DP else 4f)
+        val keyLayout = if (apexKey) apexKeyLayout(engine, measurer, frame) else null
+        // The key's plate holds its label (16 u at least); the Data bar starts 4 u right of it.
+        val plateWidth = keyLayout?.let { max(frame.u(APEX_KEY_PLATE_DP), it.size.width + frame.u(APEX_KEY_PADDING_DP) * 2f) } ?: 0f
+        val barLeft = left + frame.u(4f) + if (keyLayout != null) plateWidth + frame.u(4f) else 0f
         val bar = HudDrawCache.rect(HudRect.DATA_BAR, barLeft, top, left + frame.u(122f), top + frame.u(4f))
         drawDataBar(engine, bar, measurer.roles, renderTime, memory)
-        val keyBottom = if (apexKey) drawApexKeyCap(engine, measurer, frame, left, bar.center.y) else bar.bottom
+        val keyBottom = if (keyLayout != null) drawApexKeyCap(keyLayout, measurer, frame, left, plateWidth, bar.center.y) else bar.bottom
         HudLayoutProbe.record(HudBlock.BADGE, left, badge.top, max(badge.right, bar.right), max(bar.bottom, keyBottom))
         HudScratch.badgeTop = badge.top
         HudScratch.badgeBottom = badge.bottom
@@ -552,8 +556,9 @@ private fun DrawScope.drawLevelCluster(
 private const val PHONE_BADGE_LABEL_SP = 9f
 private const val PHONE_BADGE_NUMBER_SP = 19f
 
-/** With the Apex key cap the Data bar starts this far right of the badge (reference dp). */
-private const val APEX_KEY_BAR_START_DP = 24f
+/** The Apex key's plate: 16 u wide at least, its label 2 u in from each side (reference dp). */
+private const val APEX_KEY_PLATE_DP = 16f
+private const val APEX_KEY_PADDING_DP = 2f
 
 /** The badge's shake after an Apex press found it cooling: 3 dp, 240 ms. */
 private fun DrawScope.apexRefusalShake(controls: RunningControlPressLog?, renderTime: Float): Float {
@@ -565,19 +570,31 @@ private fun DrawScope.apexRefusalShake(controls: RunningControlPressLog?, render
 
 private const val APEX_REFUSAL_SHAKE_SECONDS = 0.24f
 
+/** The bound Apex key in Ink: mono 700, fitted to 12 u and never below 8 sp (a longer label widens its plate). */
+private fun apexKeyLayout(engine: GameplayRenderModel, measurer: TextMeasurer, frame: HudFrame): TextLayoutResult {
+    val label = engine.settings.keyBindings.key(GameAction.APEX).label(measurer.language)
+    val display = HudMeasurers.display(measurer)
+    return HudDrawCache.fitted(HudText.APEX_KEY, display, label, frame.t(KEY_CAP_TEXT_SP), frame.u(12f), uppercase = true,
+        minSize = KEY_CAP_MIN_SP) { size -> kkKeyCapStyle(display, size) }
+}
+
 /**
- * The Apex key cap at the Data bar's left end: a sheared gold plate with an Ink seam and the bound
- * key in Ink (mono 700, fitted to 12 u, never below 8 sp). Returns its bottom.
+ * The Apex key cap at the Data bar's left end: a sheared gold plate [plateWidth] wide with an Ink
+ * seam and the bound key's [layout] centred on it. Returns its bottom.
  */
-private fun DrawScope.drawApexKeyCap(engine: GameplayRenderModel, measurer: TextMeasurer, frame: HudFrame, left: Float, centerY: Float): Float {
-    val plate = HudDrawCache.rect(HudRect.APEX_KEY, left + frame.u(4f), centerY - frame.u(7f), left + frame.u(20f), centerY + frame.u(7f))
+private fun DrawScope.drawApexKeyCap(
+    layout: TextLayoutResult,
+    measurer: TextMeasurer,
+    frame: HudFrame,
+    left: Float,
+    plateWidth: Float,
+    centerY: Float,
+): Float {
+    val plateLeft = left + frame.u(4f)
+    val plate = HudDrawCache.rect(HudRect.APEX_KEY, plateLeft, centerY - frame.u(7f), plateLeft + plateWidth, centerY + frame.u(7f))
     val path = HudDrawCache.paths.sheared(HudPath.APEX_KEY.ordinal, plate)
     drawPath(path, measurer.roles.gold.base)
     drawPath(path, Kk.Ink, style = kkStroke(d(1f)))
-    val label = engine.settings.keyBindings.key(GameAction.APEX).label(measurer.language)
-    val display = HudMeasurers.display(measurer)
-    val layout = HudDrawCache.fitted(HudText.APEX_KEY, display, label, frame.t(KEY_CAP_TEXT_SP), frame.u(12f), uppercase = true,
-        minSize = KEY_CAP_MIN_SP) { size -> kkKeyCapStyle(display, size) }
     drawKkText(layout, plate.center.x, plate.center.y, Kk.Ink, align = KkAlign.CENTER, valign = KkVAlign.CENTER)
     HudLayoutProbe.record(HudBlock.APEX_KEY, plate.left, plate.top, plate.right, plate.bottom)
     return plate.bottom
