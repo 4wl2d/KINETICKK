@@ -221,8 +221,8 @@ class ProfileComponentCharacterizationTest {
         }
 
         val view = component.query(ProfileQuery.GetLoadout).snapshot
-        // Refit 50 + 100 at Orb's base 50, Honing 35 at Flux Wake's base 35.
-        assertEquals(PlayerEconomy(1_000L - 50L - 100L - 35L, 4_000L), view.economy)
+        // Refit 55 + 110 at Orb's base 55, Honing 40 at Flux Wake's base 40.
+        assertEquals(PlayerEconomy(1_000L - 55L - 110L - 40L, 4_000L), view.economy)
         assertEquals(2, view.upgrades.characterLevel(CoreShape.ORB))
         assertEquals(1, view.upgrades.weaponLevel(WeaponId.FLUX_WAKE))
         assertEquals(initial.loadout, view.loadout)

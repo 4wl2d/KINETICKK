@@ -29,8 +29,8 @@ class WorkshopUpgradeBlockTest {
 
     @Test
     fun levelZeroAffordableOffersTheBasePriceAndPreviewsTheFirstLevel() {
-        val track = characterUpgradeTrack(policy, orb, level = 0, matter = 50L, unlocked = true)
-        assertEquals(50L, track.nextPrice)
+        val track = characterUpgradeTrack(policy, orb, level = 0, matter = 55L, unlocked = true)
+        assertEquals(55L, track.nextPrice)
         assertTrue(track.affordable && track.canBuy)
         assertEquals(0L, track.shortfall)
         assertEquals(listOf(UpgradeEffectLine(UpgradeStat.INTEGRITY, 0f, 2f), UpgradeEffectLine(UpgradeStat.CHARACTER_DAMAGE, 0f, 2f)),
@@ -41,22 +41,22 @@ class WorkshopUpgradeBlockTest {
         assertEquals("+2%", UpgradeStat.CHARACTER_DAMAGE.value(track.effects[1].next!!, english))
         val texts = workshopUpgradeTexts(track, english)
         assertEquals("Upgrade", texts.label)
-        assertEquals("50", texts.cost)
+        assertEquals("55", texts.cost)
         assertNull(texts.need)
         assertEquals("Lvl 0 of 10", upgradeLevelText(track, english))
     }
 
     @Test
     fun aShortBalanceNamesTheMissingMatterAndOneMoreMatterBuys() {
-        // Level 5 of a base-50 track costs 50 × 2^5 = 1,600.
-        val short = characterUpgradeTrack(policy, orb, level = 5, matter = 1_599L, unlocked = true)
-        assertEquals(1_600L, short.nextPrice)
+        // Level 5 of a base-55 track costs 55 × 2^5 = 1,760.
+        val short = characterUpgradeTrack(policy, orb, level = 5, matter = 1_759L, unlocked = true)
+        assertEquals(1_760L, short.nextPrice)
         assertFalse(short.affordable || short.canBuy)
         assertEquals(1L, short.shortfall)
         assertEquals("Need 1 more matter", workshopUpgradeTexts(short, english).need)
         assertEquals("+10", UpgradeStat.INTEGRITY.value(short.effects[0].now, english))
         assertEquals("+12", UpgradeStat.INTEGRITY.value(short.effects[0].next!!, english))
-        assertTrue(characterUpgradeTrack(policy, orb, level = 5, matter = 1_600L, unlocked = true).canBuy)
+        assertTrue(characterUpgradeTrack(policy, orb, level = 5, matter = 1_760L, unlocked = true).canBuy)
     }
 
     @Test

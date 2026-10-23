@@ -129,7 +129,7 @@ class WorkshopReducerTest {
         val orb = defaultCoreShapeDefinitions().first { it.id == CoreShape.ORB }
         val state = WorkshopState()
         val character = UpgradeTarget.Character(CoreShape.ORB)
-        val affordable = characterUpgradeTrack(policy, orb, level = 2, matter = 200L, unlocked = true)
+        val affordable = characterUpgradeTrack(policy, orb, level = 2, matter = 220L, unlocked = true)
         val buy = WorkshopReducer.reduce(state, WorkshopAction.BuyUpgrade(character, affordable))
         assertSame(state, buy.state)
         assertEquals(listOf<WorkshopEffect>(WorkshopEffect.PurchaseUpgrade(character)), buy.effects)
@@ -137,7 +137,7 @@ class WorkshopReducerTest {
         assertEquals(ProfilePulse.PurchaseWeaponUpgrade(WeaponId.MORNINGSTAR), UpgradeTarget.Weapon(WeaponId.MORNINGSTAR).pulse())
         // One Matter short, the maximum, or a track that is not sold: nothing reaches the Profile.
         listOf(
-            characterUpgradeTrack(policy, orb, level = 2, matter = 199L, unlocked = true),
+            characterUpgradeTrack(policy, orb, level = 2, matter = 219L, unlocked = true),
             characterUpgradeTrack(policy, orb, level = policy.maxLevel, matter = Long.MAX_VALUE, unlocked = true),
             characterUpgradeTrack(policy, orb, level = 0, matter = Long.MAX_VALUE, unlocked = false),
         ).forEach { track ->

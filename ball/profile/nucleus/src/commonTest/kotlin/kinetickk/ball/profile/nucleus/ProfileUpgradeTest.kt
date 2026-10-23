@@ -27,8 +27,8 @@ import kotlin.test.assertIs
 class ProfileUpgradeTest {
     @Test
     fun refitChargesTheDoublingPriceAtTheExactBalanceAndRejectsOneMatterShort() {
-        // Orb's Refit base is 50, so level 3 → 4 costs 50 × 2³.
-        val price = 400L
+        // Orb's Refit base is 55, so level 3 → 4 costs 55 × 2³.
+        val price = 440L
         val exact = state(matter = price, lifetime = 9_000L, characters = mapOf(CoreShape.ORB to 3))
 
         val bought = refit(exact, CoreShape.ORB).acceptedProfile()
@@ -42,10 +42,10 @@ class ProfileUpgradeTest {
 
     @Test
     fun honingUsesTheWeaponBaseAndIsSoldOnlyForOwnedWeapons() {
-        // Glacier Bell is gated at Rebirth 1, so its Honing base is round5(35 × 1.2) = 40.
-        assertEquals(40, TestProfilePolicy.weapon(WeaponId.GLACIER_BELL).upgradeBaseCost)
+        // Glacier Bell is gated at Rebirth 1, so its Honing base is round5(40 × 1.2) = 50.
+        assertEquals(50, TestProfilePolicy.weapon(WeaponId.GLACIER_BELL).upgradeBaseCost)
         val owned = state(
-            matter = 40L,
+            matter = 50L,
             unlocked = setOf(WeaponId.FLUX_WAKE, WeaponId.GLACIER_BELL),
         )
         val honed = hone(owned, WeaponId.GLACIER_BELL).acceptedProfile()
@@ -56,7 +56,7 @@ class ProfileUpgradeTest {
 
         val rich = state(matter = 1_000_000L)
         assertEquals(ProfileRejection.WeaponNotOwned, hone(rich, WeaponId.GLACIER_BELL).rejection())
-        assertEquals(35L, rich.profile.economy.matter - hone(rich, WeaponId.FLUX_WAKE).acceptedProfile().economy.matter)
+        assertEquals(40L, rich.profile.economy.matter - hone(rich, WeaponId.FLUX_WAKE).acceptedProfile().economy.matter)
     }
 
     @Test
@@ -71,10 +71,10 @@ class ProfileUpgradeTest {
 
         val refitTen = refit(nine, CoreShape.ORB).acceptedProfile()
         assertEquals(maxLevel, refitTen.upgrades.characterLevel(CoreShape.ORB))
-        assertEquals(1_000_000L - 50L * 512L, refitTen.economy.matter)
+        assertEquals(1_000_000L - 55L * 512L, refitTen.economy.matter)
         val honedTen = hone(nine, WeaponId.FLUX_WAKE).acceptedProfile()
         assertEquals(maxLevel, honedTen.upgrades.weaponLevel(WeaponId.FLUX_WAKE))
-        assertEquals(1_000_000L - 35L * 512L, honedTen.economy.matter)
+        assertEquals(1_000_000L - 40L * 512L, honedTen.economy.matter)
 
         val ten = state(
             matter = 1_000_000L,
@@ -135,7 +135,7 @@ class ProfileUpgradeTest {
         assertEquals(expected, ProfileNucleus.query(state, ProfileQuery.GetLoadout).snapshot.upgrades)
         val bootstrap = ProfileNucleus.query(state, ProfileQuery.GetRunBootstrap).result
         assertEquals(expected, assertIs<ProfileRunBootstrapResult.Ready>(bootstrap).snapshot.upgrades)
-        assertEquals(1_000L - 50L - 35L, state.profile.economy.matter)
+        assertEquals(1_000L - 55L - 40L, state.profile.economy.matter)
     }
 
     @Test
@@ -154,8 +154,8 @@ class ProfileUpgradeTest {
         assertEquals(4, loaded.profile.upgrades.characterLevel(CoreShape.ORB))
         assertEquals(3, loaded.profile.upgrades.characterLevel(CoreShape.HEXAGON))
         assertEquals(4, loaded.profile.upgrades.weaponLevel(WeaponId.FLUX_WAKE))
-        // Orb levels 5 and 6 cost 50 × (16 + 32); Flux Wake level 5 cost 35 × 16.
-        val refund = 50L * (16L + 32L) + 35L * 16L
+        // Orb levels 5 and 6 cost 55 × (16 + 32); Flux Wake level 5 cost 40 × 16.
+        val refund = 55L * (16L + 32L) + 40L * 16L
         assertEquals(PlayerEconomy(100L + refund, 100L + refund), loaded.profile.economy)
         assertEquals(ProfileRevision(4L), loaded.revision)
         assertIs<ProfilePersistenceStatus.Persisted>(loaded.persistence)
@@ -204,15 +204,15 @@ class ProfileUpgradeTest {
         assertEquals(true, home(state(matter = 25L)).workshopAffordable)
         assertEquals(0, home(state(matter = 25L)).upgradeLevels)
 
-        // With the Morningstar owned, Honing at 35 is the cheapest offer.
+        // With the Morningstar owned, Honing at 40 is the cheapest offer.
         val armed = setOf(WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR)
-        assertEquals(false, home(state(matter = 34L, unlocked = armed)).workshopAffordable)
-        assertEquals(true, home(state(matter = 35L, unlocked = armed)).workshopAffordable)
+        assertEquals(false, home(state(matter = 39L, unlocked = armed)).workshopAffordable)
+        assertEquals(true, home(state(matter = 40L, unlocked = armed)).workshopAffordable)
 
-        // Both owned weapons honed to the maximum: Orb's Refit at 50.
+        // Both owned weapons honed to the maximum: Orb's Refit at 55.
         val honed = mapOf(WeaponId.FLUX_WAKE to 10, WeaponId.MORNINGSTAR to 10)
-        assertEquals(false, home(state(matter = 49L, unlocked = armed, weapons = honed)).workshopAffordable)
-        assertEquals(true, home(state(matter = 50L, unlocked = armed, weapons = honed)).workshopAffordable)
+        assertEquals(false, home(state(matter = 54L, unlocked = armed, weapons = honed)).workshopAffordable)
+        assertEquals(true, home(state(matter = 55L, unlocked = armed, weapons = honed)).workshopAffordable)
 
         // Every weapon up to 100 owned and honed, Orb at Refit 10: only the Magnet Array rank at 100 is left.
         val cheapWeapons = setOf(WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR, WeaponId.PHASE_LATTICE, WeaponId.NULL_LANCE)

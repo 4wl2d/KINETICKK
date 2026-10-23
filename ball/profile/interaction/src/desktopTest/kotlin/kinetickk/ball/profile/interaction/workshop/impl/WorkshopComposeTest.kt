@@ -280,13 +280,13 @@ class WorkshopComposeTest {
         onNodeWithTag(WORKSHOP_UPGRADE_SIGNATURE_TAG).assert(description("Orbit charges on a 2% shorter arc per level"))
         assertTrue(onNodeWithTag(WORKSHOP_UPGRADE_SIGNATURE_TAG).fetchSemanticsNode().boundsInRoot.bottom <=
             onNodeWithTag(WORKSHOP_UPGRADE_BUY_TAG).fetchSemanticsNode().boundsInRoot.top)
-        onNodeWithTag(WORKSHOP_UPGRADE_BUY_TAG).assert(description("Upgrade Circle to Lvl 1 for 50 Matter")).assertIsEnabled()
+        onNodeWithTag(WORKSHOP_UPGRADE_BUY_TAG).assert(description("Upgrade Circle to Lvl 1 for 55 Matter")).assertIsEnabled()
         onNodeWithTag(WORKSHOP_UPGRADE_BUY_TAG).performClick()
         mainClock.advanceTimeBy(64)
         assertEquals(listOf<ProfilePulse.Business>(ProfilePulse.PurchaseCharacterUpgrade(CoreShape.ORB)), port.pulses)
-        onNodeWithTag(WORKSHOP_ANNOUNCE_TAG).assert(description("Circle upgraded to Lvl 1. 1,234 Matter left"))
+        onNodeWithTag(WORKSHOP_ANNOUNCE_TAG).assert(description("Circle upgraded to Lvl 1. 1,229 Matter left"))
         onNodeWithTag(WORKSHOP_UPGRADE_PIPS_TAG).assert(description("Lvl 1 of 10"))
-        onNodeWithTag("$WORKSHOP_TAG-matter").assert(description("1,234 Matter"))
+        onNodeWithTag("$WORKSHOP_TAG-matter").assert(description("1,229 Matter"))
         onNodeWithTag("profile-hangar-tile-${CoreShape.ORB}").assert(
             SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Selected, Lvl 1"))
         // A Profile that moved on refuses: the refusal is named in the assertive region, nothing changes.
@@ -300,18 +300,18 @@ class WorkshopComposeTest {
 
     @Test
     fun honingIsSoldOnlyForOwnedWeaponsAndAShortBalanceDisablesIt() = runSkikoComposeUiTest(Size(1440f, 810f), Density(1f)) {
-        val port = WorkshopTestPort(matter = 40L)
+        val port = WorkshopTestPort(matter = 45L)
         workshop(port, feature(port), { Opening(1L, WorkshopTabRequest(WorkshopTab.WEAPONS, 1)) })
         mainClock.autoAdvance = false
-        // Flux Wake (the starter, base 35) is affordable once.
+        // Flux Wake (the starter, base 40) is affordable once.
         // Honing has no signature line.
         onNodeWithTag(WORKSHOP_UPGRADE_SIGNATURE_TAG).assertDoesNotExist()
-        onNodeWithTag(WORKSHOP_UPGRADE_BUY_TAG).assert(description("Upgrade Flux Wake to Lvl 1 for 35 Matter")).performClick()
+        onNodeWithTag(WORKSHOP_UPGRADE_BUY_TAG).assert(description("Upgrade Flux Wake to Lvl 1 for 40 Matter")).performClick()
         mainClock.advanceTimeBy(64)
         assertEquals(listOf<ProfilePulse.Business>(ProfilePulse.PurchaseWeaponUpgrade(WeaponId.FLUX_WAKE)), port.pulses)
-        // Level 2 costs 70 with 5 Matter left: disabled, and the missing Matter is stated.
+        // Level 2 costs 80 with 5 Matter left: disabled, and the missing Matter is stated.
         onNodeWithTag(WORKSHOP_UPGRADE_BUY_TAG).assertIsNotEnabled()
-            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Lvl 1 of 10, Need 65 more matter"))
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Lvl 1 of 10, Need 75 more matter"))
         onNodeWithTag("profile-armory-equip-${WeaponId.FLUX_WAKE}").assert(
             SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Starter, Lvl 1, Signature of your character"))
         // A weapon that is not owned shows the locked action and its first-level preview.

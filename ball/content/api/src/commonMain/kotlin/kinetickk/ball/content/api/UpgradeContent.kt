@@ -70,7 +70,7 @@ fun defaultCharacterUpgradeSignature(shape: CoreShape): CharacterUpgradeSignatur
     CoreShape.HEXAGON -> CharacterUpgradeSignature(0.4f)
 }
 
-/** Refit base price of a character class: 50, raised by 20 % per Reborn-rank unlock step (rounded to 5). */
+/** Refit base price of a character class: 55, raised by 20 % per Reborn-rank unlock step (rounded to 5). */
 fun defaultCharacterUpgradeBaseCost(shape: CoreShape): Int = when (shape) {
     CoreShape.SPIRAL -> rebirthScaledUpgradeBase(CHARACTER_UPGRADE_BASE_COST, 1)
     CoreShape.PENTAGON -> rebirthScaledUpgradeBase(CHARACTER_UPGRADE_BASE_COST, 3)
@@ -81,12 +81,12 @@ fun defaultCharacterUpgradeBaseCost(shape: CoreShape): Int = when (shape) {
     -> CHARACTER_UPGRADE_BASE_COST
 }
 
-/** Honing base price of a weapon class: 35, raised by 20 % per Rebirth tier of its gate (rounded to 5). */
+/** Honing base price of a weapon class: 40, raised by 20 % per Rebirth tier of its gate (rounded to 5). */
 fun defaultWeaponUpgradeBaseCost(minimumRebirth: Int): Int =
     rebirthScaledUpgradeBase(WEAPON_UPGRADE_BASE_COST, minimumRebirth)
 
-private const val CHARACTER_UPGRADE_BASE_COST: Int = 50
-private const val WEAPON_UPGRADE_BASE_COST: Int = 35
+private const val CHARACTER_UPGRADE_BASE_COST: Int = 55
+private const val WEAPON_UPGRADE_BASE_COST: Int = 40
 
 private fun rebirthScaledUpgradeBase(base: Int, rebirth: Int): Int =
     ((base * (1f + 0.2f * rebirth.coerceAtLeast(0))) / 5f).roundToInt() * 5

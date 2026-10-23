@@ -214,13 +214,13 @@ class SkillApexUpgradeContentTest {
         val bases = defaultCoreShapeDefinitions().associate { it.id to it.upgradeBaseCost }
         assertEquals(
             mapOf(
-                CoreShape.ORB to 50, CoreShape.PRISM to 50, CoreShape.SHARD to 50, CoreShape.RING to 50,
-                CoreShape.DIAMOND to 50, CoreShape.TESSERACT to 50, CoreShape.STAR to 50, CoreShape.SPIRAL to 60,
-                CoreShape.DIPOLE to 50, CoreShape.PENTAGON to 80, CoreShape.CRESCENT to 100, CoreShape.HEXAGON to 120,
+                CoreShape.ORB to 55, CoreShape.PRISM to 55, CoreShape.SHARD to 55, CoreShape.RING to 55,
+                CoreShape.DIAMOND to 55, CoreShape.TESSERACT to 55, CoreShape.STAR to 55, CoreShape.SPIRAL to 65,
+                CoreShape.DIPOLE to 55, CoreShape.PENTAGON to 90, CoreShape.CRESCENT to 110, CoreShape.HEXAGON to 130,
             ),
             bases,
         )
-        assertEquals(listOf(35, 40, 50, 55, 65, 70, 75, 85, 90, 100, 105), (0..10).map(::defaultWeaponUpgradeBaseCost))
+        assertEquals(listOf(40, 50, 55, 65, 70, 80, 90, 95, 105, 110, 120), (0..10).map(::defaultWeaponUpgradeBaseCost))
         assertEquals(CharacterUpgradeSignature(4f, 3f), defaultCharacterUpgradeSignature(CoreShape.DIPOLE))
         assertEquals(-0.04f, defaultCharacterUpgradeSignature(CoreShape.CRESCENT).perLevel)
 
