@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.awt.ComposeWindow
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
@@ -26,13 +27,20 @@ import kotlin.math.roundToInt
  * survive a recreation. A decoration (Borderless) or V-Sync change needs a new window: it bumps
  * [generation], which the application keys its window on. Fullscreen and window sizes change the
  * window in place. Requests apply as diffs against the last one, so a window the player resized or
- * maximized keeps that until a size or mode is chosen again. The host never writes Profile.
+ * maximized keeps that until a size or mode is chosen again. Leaving fullscreen, the platform puts
+ * back the bounds it saved on the way in, so the windowed preset waits until the shown window has
+ * left fullscreen and the window calls [settle]. The host never writes Profile.
  */
 class DesktopDisplayHost internal constructor(
     private val screens: DesktopScreens,
     private val setSystemProperty: (String, String) -> Unit,
+    private val shownFullscreen: (Window?) -> Boolean,
 ) : PlatformDisplayHost {
-    constructor() : this(AwtDesktopScreens, { key, value -> System.setProperty(key, value) })
+    constructor() : this(
+        AwtDesktopScreens,
+        { key, value -> System.setProperty(key, value) },
+        { window -> (window as? ComposeWindow)?.placement == WindowPlacement.Fullscreen },
+    )
 
     val windowState: WindowState = WindowState(size = DpSize(DEFAULT_WIDTH_DP.dp, DEFAULT_HEIGHT_DP.dp))
 
@@ -48,6 +56,12 @@ class DesktopDisplayHost internal constructor(
     private var vsync = true
     private var last: HostDisplayRequest? = null
     private var window: Window? = null
+
+    /** The windowed preset chosen while the shown window was fullscreen; [settle] places it. */
+    private var pendingWindowed: HostDisplayRequest? by mutableStateOf(null)
+
+    /** Whether a windowed preset waits for the shown window to leave fullscreen. */
+    val leavingFullscreen: Boolean get() = pendingWindowed != null
 
     /** Before the first window: places it for the stored [request] under the decided [pacing]. */
     fun start(request: HostDisplayRequest, pacing: DesktopPacing) {
@@ -105,6 +119,17 @@ class DesktopDisplayHost internal constructor(
         if (reopen) generation++
     }
 
+    /**
+     * On a frame of the shown window: once it has left fullscreen (the platform has restored its
+     * saved bounds by then), the pending windowed preset applies, centred.
+     */
+    fun settle() {
+        val pending = pendingWindowed ?: return
+        if (shownFullscreen(window)) return
+        pendingWindowed = null
+        placeWindowed(pending)
+    }
+
     override val liveWindow: HostLiveWindow?
         get() {
             val size = windowState.size.takeIf { it.isSpecified } ?: return null
@@ -117,20 +142,19 @@ class DesktopDisplayHost internal constructor(
         }
 
     private fun place(request: HostDisplayRequest) {
-        val screen = screens.screen(window)
+        pendingWindowed = null
         when (request.windowMode) {
-            HostWindowMode.WINDOWED -> {
-                val usable = screen?.usable
+            HostWindowMode.WINDOWED -> if (shownFullscreen(window)) {
+                // Compose applies size and position before placement, so they would land while the
+                // window is still fullscreen and the platform's restore would then replace them.
                 windowState.placement = WindowPlacement.Floating
-                windowState.size = DpSize(
-                    (usable?.width?.let { minOf(it, request.windowWidthDp) } ?: request.windowWidthDp).dp,
-                    (usable?.height?.let { minOf(it, request.windowHeightDp) } ?: request.windowHeightDp).dp,
-                )
-                windowState.position = WindowPosition(Alignment.Center)
+                pendingWindowed = request
+            } else {
+                placeWindowed(request)
             }
             HostWindowMode.BORDERLESS -> {
                 windowState.placement = WindowPlacement.Floating
-                screen?.bounds?.let { bounds ->
+                screens.screen(window)?.bounds?.let { bounds ->
                     windowState.position = WindowPosition(bounds.x.dp, bounds.y.dp)
                     windowState.size = DpSize(bounds.width.dp, bounds.height.dp)
                 }
@@ -138,6 +162,16 @@ class DesktopDisplayHost internal constructor(
             // Native fullscreen on macOS, GraphicsDevice fullscreen elsewhere.
             HostWindowMode.FULLSCREEN -> windowState.placement = WindowPlacement.Fullscreen
         }
+    }
+
+    private fun placeWindowed(request: HostDisplayRequest) {
+        val usable = screens.screen(window)?.usable
+        windowState.placement = WindowPlacement.Floating
+        windowState.size = DpSize(
+            (usable?.width?.let { minOf(it, request.windowWidthDp) } ?: request.windowWidthDp).dp,
+            (usable?.height?.let { minOf(it, request.windowHeightDp) } ?: request.windowHeightDp).dp,
+        )
+        windowState.position = WindowPosition(Alignment.Center)
     }
 
     private companion object {

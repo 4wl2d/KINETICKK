@@ -23,7 +23,7 @@ class DesktopDisplayHostTest {
         request: HostDisplayRequest = HostDisplayRequest(),
         pacing: DesktopPacing = DesktopPacing(vsync = true, overridden = false),
         screen: DesktopScreen? = this.screen,
-    ) = DesktopDisplayHost({ screen }, { key, value -> written += key to value }).apply { start(request, pacing) }
+    ) = DesktopDisplayHost({ screen }, { key, value -> written += key to value }, { false }).apply { start(request, pacing) }
 
     @Test
     fun theStoredRequestPlacesTheFirstWindowWithoutReopeningIt() {
@@ -79,6 +79,44 @@ class DesktopDisplayHostTest {
         host.apply(windowed.copy(windowWidthDp = 1366, windowHeightDp = 768, vsync = true))
         assertEquals(4, host.generation)
         assertEquals(DesktopFramePacing.SKIKO_VSYNC_PROPERTY to "true", written.last())
+    }
+
+    @Test
+    fun leavingFullscreenPlacesTheStoredPresetOnlyOnceTheWindowHasLeftIt() {
+        var fullscreen = false
+        val host = DesktopDisplayHost({ screen }, { _, _ -> }, { fullscreen })
+        host.start(HostDisplayRequest(HostWindowMode.FULLSCREEN, windowWidthDp = 1600, windowHeightDp = 900), DesktopPacing(vsync = true, overridden = false))
+        // The window opened at the default size and went fullscreen; Compose copied the screen bounds.
+        fullscreen = true
+        host.windowState.size = DpSize(1920.dp, 1080.dp)
+        host.windowState.position = WindowPosition(1920.dp, 0.dp)
+
+        host.apply(HostDisplayRequest(windowWidthDp = 1600, windowHeightDp = 900))
+        assertEquals(WindowPlacement.Floating, host.windowState.placement)
+        host.settle()
+        // Leaving fullscreen, the JDK puts back the bounds it saved on the way in (here the default
+        // size at the platform's spot), after anything written while the window was still fullscreen.
+        fullscreen = false
+        host.windowState.size = DpSize(1280.dp, 800.dp)
+        host.windowState.position = WindowPosition(1960.dp, 40.dp)
+        host.settle()
+        assertEquals(DpSize(1600.dp, 900.dp), host.windowState.size)
+        assertEquals(WindowPosition(Alignment.Center), host.windowState.position)
+        assertEquals(HostLiveWindow(HostWindowMode.WINDOWED, 1600, 900), host.liveWindow)
+
+        // Placed once: a size the player drags to afterwards stays.
+        host.windowState.size = DpSize(1500.dp, 950.dp)
+        host.settle()
+        assertEquals(DpSize(1500.dp, 950.dp), host.windowState.size)
+
+        // Fullscreen chosen again before the window left it: no preset waits any more.
+        host.apply(HostDisplayRequest(HostWindowMode.FULLSCREEN, windowWidthDp = 1600, windowHeightDp = 900))
+        fullscreen = true
+        host.apply(HostDisplayRequest(windowWidthDp = 1366, windowHeightDp = 768))
+        assertTrue(host.leavingFullscreen)
+        host.apply(HostDisplayRequest(HostWindowMode.FULLSCREEN, windowWidthDp = 1366, windowHeightDp = 768))
+        assertFalse(host.leavingFullscreen)
+        assertEquals(WindowPlacement.Fullscreen, host.windowState.placement)
     }
 
     @Test

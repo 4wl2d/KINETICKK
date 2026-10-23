@@ -5,6 +5,8 @@ package kinetickk.app.shared
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.key
 import androidx.compose.ui.window.ApplicationScope
 import androidx.compose.ui.window.Window
@@ -42,6 +44,10 @@ fun runKinetickkDesktop(
                         DisposableEffect(window) {
                             host.attach(window)
                             onDispose { host.detach(window) }
+                        }
+                        // Leaving fullscreen: the windowed preset follows once the window has left it.
+                        LaunchedEffect(host.leavingFullscreen) {
+                            while (host.leavingFullscreen) withFrameNanos { host.settle() }
                         }
                         owner.Content()
                     }
