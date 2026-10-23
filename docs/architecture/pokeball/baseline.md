@@ -783,7 +783,7 @@ Russian.
   give their space to the play area. Show FPS starts a new measuring window
   after a stall instead of publishing a falsely low value. The interface scale
   applies to menus and to the run's HUD, while the world keeps the raw density.
-  The worst-case Profile payload is 7,678 UTF-16 code units of the 8,192 one
+  The worst-case Profile payload is 7,711 UTF-16 code units of the 8,192 one
   Desktop Preferences value admits.
 
 The performance suites are `gameplay-core-v4` (the reaction workload fills the
@@ -798,7 +798,7 @@ unchanged.
 Each knob was chosen on population seeds disjoint from every fixed gate list
 and then confirmed on the gate seeds; a separate audit set, disjoint from both,
 measured the populations again. On the final 0.5.0 tree the desktop suite runs
-2,299 tests with no failure, and the gates read:
+2,301 tests with no failure, and the gates read:
 
 - Rebirth gates: A tier 0 fresh 4/5 (floor 4; seed 55446 falls at 807 s), B 5/5
   (fights 57 to 77 s), C 0/5, D tier 10 strong 0 wins with a median of 712 s

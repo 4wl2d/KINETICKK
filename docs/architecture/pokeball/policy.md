@@ -173,7 +173,7 @@ remain independently enforced.
 | Profile Gameplay discoveries per Pulse | captured `itemCount` (at most 320) | Profile validates count and every stable item ID before acceptance |
 | Profile snapshot UTF-8 payload | 65536 bytes | Profile Resource before decode and after encode |
 | Desktop Preferences value length | 8192 UTF-16 code units | exact platform broker refuses 8193 before provider execution |
-| Desktop worst-case Profile payload | 7,678 UTF-16 code units at `MAX_ITEMS` 320 | `ProfilePayloadBudgetTest` encodes every bounded fact at its longest form and requires it to fit one Desktop Preferences value |
+| Desktop worst-case Profile payload | 7,711 UTF-16 code units at `MAX_ITEMS` 320 | `ProfilePayloadBudgetTest` encodes every bounded fact at its longest form and requires it to fit one Desktop Preferences value |
 | Desktop Preferences key names admitted per exact node read | 64 | exact platform broker refuses 65 before project-owned membership iteration |
 
 ### Mechanically derived and schema-closed collections
