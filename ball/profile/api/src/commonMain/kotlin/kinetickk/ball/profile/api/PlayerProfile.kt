@@ -203,7 +203,21 @@ data class RebirthProgress(
     val highestCleared: Int = -1,
     /** Characters that cleared the final Rebirth tier (Ascendant runs); empty until the first one does. */
     val ascendedCharacters: ImmutableSet<CoreShape> = immutableSetOf(),
+    /**
+     * Highest tier each character cleared (an Architect victory at that tier), in [CoreShape] order;
+     * -1 when none is recorded. Victories before 0.5.0 recorded no tier (see [highestClearedWith]).
+     */
+    val characterClears: ImmutableList<Int> = NO_CHARACTER_CLEARS,
 )
+
+private val NO_CHARACTER_CLEARS: ImmutableList<Int> = ImmutableList.copyOf(List(CoreShape.entries.size) { -1 })
+
+/**
+ * Highest tier [shape] cleared, or -1 when none is recorded. An Ascendant character cleared the final
+ * tier even when its victory predates [RebirthProgress.characterClears].
+ */
+fun RebirthProgress.highestClearedWith(shape: CoreShape): Int =
+    if (shape in ascendedCharacters) ContentBounds.MAX_REBIRTH_LEVEL else characterClears.getOrElse(shape.ordinal) { -1 }
 
 /** Highest Rebirth tier this profile may select: one above the highest cleared tier, within content bounds. */
 val RebirthProgress.rank: Int
@@ -221,11 +235,20 @@ fun RebirthProgress.rankWithin(minimumLevel: Int, maximumLevel: Int): Int =
  * The Rebirth invariant every reader enforces: the highest cleared tier is -1 (none) up to
  * [maximumLevel], and the selected tier is earned, from [minimumLevel] up to the rank one above the
  * highest clear ([rankWithin]). A player may select any lower tier again, so `highestCleared > level`
- * is valid.
+ * is valid. Each character's clear is -1 or a tier from [minimumLevel] up to the highest clear, and a
+ * clear of the final tier is exactly an Ascendant one (an older Ascendant victory may record none).
  */
 fun RebirthProgress.isWithinRebirthBounds(minimumLevel: Int, maximumLevel: Int): Boolean =
     highestCleared in -1..maximumLevel && level in minimumLevel..rankWithin(minimumLevel, maximumLevel) &&
-        (ascendedCharacters.isEmpty() || isAscendant)
+        (ascendedCharacters.isEmpty() || isAscendant) &&
+        characterClears.size == CoreShape.entries.size &&
+        CoreShape.entries.all { shape ->
+            val cleared = characterClears[shape.ordinal]
+            val ascended = shape in ascendedCharacters
+            (cleared == -1 || cleared in minimumLevel..highestCleared) &&
+                (cleared < ContentBounds.MAX_REBIRTH_LEVEL || ascended) &&
+                (!ascended || cleared == -1 || cleared == ContentBounds.MAX_REBIRTH_LEVEL)
+        }
 
 /** Cumulative Profile-owned achievements shared by every run and Matrix loadout. */
 data class CharacterAchievementProgress(

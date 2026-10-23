@@ -58,6 +58,7 @@ class ProfilePerformanceBenchmarkTest {
         assertEquals(REFRESH_RATE_RANGE.last, preferences.refreshRateHz)
         assertEquals(INTERFACE_SCALE_OPTIONS.last(), preferences.interfaceScalePercent)
         assertEquals(CoreShape.entries.toSet(), snapshot.profile.rebirthProgress.ascendedCharacters)
+        assertTrue(snapshot.profile.rebirthProgress.characterClears.all { it == ContentBounds.MAX_REBIRTH_LEVEL })
         assertTrue(
             (snapshot.profile.upgrades.characterLevels + snapshot.profile.upgrades.weaponLevels)
                 .all { it == ContentBounds.MAX_UPGRADE_LEVEL },
@@ -82,7 +83,7 @@ class ProfilePerformanceBenchmarkTest {
         listOf(
             "colorVisionId", "minimapEnabled", "windowModeId", "windowSizeId", "vsyncEnabled", "frameRateCap",
             "refreshRateHz", "immersiveEnabled", "interfaceScalePercent", "showFps", "pauseOnFocusLoss",
-            "reactionEffectsId", "keyBindings", "recentItemIds", "ascendedCharacterIds", "upgrades",
+            "reactionEffectsId", "keyBindings", "recentItemIds", "ascendedCharacterIds", "characterClears", "upgrades",
         ).forEach { field -> assertTrue(payload.contains("\"$field\":"), field) }
         val decoded = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(payload)).snapshot
         assertEquals(snapshot, decoded)

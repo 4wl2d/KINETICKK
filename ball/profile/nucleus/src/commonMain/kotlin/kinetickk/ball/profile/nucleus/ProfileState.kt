@@ -3,6 +3,7 @@
 
 package kinetickk.ball.profile.nucleus
 
+import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.ProfilePolicySnapshot
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
@@ -212,6 +213,10 @@ private fun isPolicyCompatibleAtConstruction(
         return false
     }
     if (!achievements.victoriousCharacters.containsAll(profile.rebirthProgress.ascendedCharacters)) return false
+    // A recorded clear is an Architect victory with that character.
+    if (CoreShape.entries.any { profile.rebirthProgress.characterClears[it.ordinal] >= 0 && it !in achievements.victoriousCharacters }) {
+        return false
+    }
     return true
 }
 

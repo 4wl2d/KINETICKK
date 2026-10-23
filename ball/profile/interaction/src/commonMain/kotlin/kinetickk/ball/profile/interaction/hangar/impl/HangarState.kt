@@ -123,6 +123,8 @@ internal fun HangarProjection.toRenderModel(
                 handlingBar = bar(handling, index),
                 heatBar = bar(heat, index),
                 ascendant = definition.id in ascendedCharacters,
+                victorious = progress?.victorious ?: false,
+                highestCleared = progress?.highestCleared ?: -1,
                 upgradeLevel = upgrades.characterLevel(definition.id),
             )
         }.toImmutableList(),

@@ -37,6 +37,7 @@ import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.ball.profile.api.WindowMode
 import kinetickk.ball.profile.api.WindowSizePreset
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.common.input.BindableKey
 import kinetickk.foundation.common.localization.AppLanguage
@@ -75,12 +76,13 @@ class ProfilePayloadBudgetTest {
         assertTrue((profile.upgrades.characterLevels + profile.upgrades.weaponLevels).all { it == ContentBounds.MAX_UPGRADE_LEVEL })
         assertTrue(GameAction.entries.none { profile.preferences.keyBindings.key(it) == KeyBindings.DEFAULT.key(it) })
         assertEquals(CoreShape.entries.toSet(), profile.rebirthProgress.ascendedCharacters)
+        assertTrue(profile.rebirthProgress.characterClears.all { it == ContentBounds.MAX_REBIRTH_LEVEL })
         val payload = assertIs<ProfileEncodeResult.Encoded>(ProfileCodec.encode(worstCaseSnapshot())).payload
         // Every optional preference is written.
         listOf(
             "colorVisionId", "minimapEnabled", "windowModeId", "windowSizeId", "vsyncEnabled", "frameRateCap",
             "refreshRateHz", "immersiveEnabled", "interfaceScalePercent", "showFps", "pauseOnFocusLoss",
-            "reactionEffectsId", "keyBindings", "recentItemIds", "ascendedCharacterIds", "upgrades",
+            "reactionEffectsId", "keyBindings", "recentItemIds", "ascendedCharacterIds", "characterClears", "upgrades",
         ).forEach { field -> assertTrue(payload.contains("\"$field\":"), field) }
     }
 }
@@ -146,6 +148,7 @@ private fun worstCaseSnapshot(): ProfileSnapshot {
                 level = ContentBounds.MAX_REBIRTH_LEVEL,
                 highestCleared = ContentBounds.MAX_REBIRTH_LEVEL,
                 ascendedCharacters = CoreShape.entries.toImmutableSet(),
+                characterClears = List(CoreShape.entries.size) { ContentBounds.MAX_REBIRTH_LEVEL }.toImmutableList(),
             ),
             characterAchievements = CharacterAchievementProgress(
                 eliteKills = Long.MAX_VALUE,

@@ -258,6 +258,7 @@ private fun HangarTile(
     val name = shape.definition.displayName.localizedContent(language)
     val status = hangarTileStatus(shape, selected, language)
     val level = workshopTileLevel(shape.upgradeLevel, shape.unlocked, maxLevel, language)
+    val clear = if (shape.victorious) hangarClearText(shape, language) else null
     Box(
         Modifier.offset { IntOffset(tile.left.roundToInt(), tile.top.roundToInt()) }
             .size(frame.dp(tile.width), frame.dp(tile.height))
@@ -266,7 +267,7 @@ private fun HangarTile(
             .semantics {
                 this.selected = selected
                 contentDescription = name
-                stateDescription = listOfNotNull(status, level).joinToString(", ")
+                stateDescription = listOfNotNull(status, level, clear).joinToString(", ")
             }
             .pointerInput(Unit) {
                 awaitPointerEventScope {
@@ -306,6 +307,14 @@ internal fun hangarUnlockText(shape: HangarShapeRenderModel, language: AppLangua
     }
 }
 
+/** The clear record in words: the highest tier cleared, Cleared when none is recorded, Not cleared, or null while locked. */
+internal fun hangarClearText(shape: HangarShapeRenderModel, language: AppLanguage): String? = when {
+    shape.victorious && shape.highestCleared >= 0 -> language.text(ProfileScreensRedesignText.HangarClearedOnTier, shape.highestCleared)
+    shape.victorious -> language.text(ProfileScreensRedesignText.HangarCleared)
+    shape.unlocked -> language.text(ProfileScreensRedesignText.HangarNotCleared)
+    else -> null
+}
+
 /** Everything the detail panel shows, as one accessible sentence list ([traits]: the Traits segment is shown). */
 internal fun hangarDetailDescription(
     shape: HangarShapeRenderModel,
@@ -323,6 +332,7 @@ internal fun hangarDetailDescription(
                 language.text(ProfileScreensRedesignText.CountOf, definition.difficulty, 3)
         } else "",
         hangarUnlockText(shape, language),
+        hangarClearText(shape, language).orEmpty(),
         if (shape.shape == model.selected) language.text(ProfileScreensRedesignText.HangarSelected) else "",
     ).filter { it.isNotBlank() }.joinToString(". ")
 }
@@ -424,11 +434,81 @@ private fun DrawScope.drawHangarTile(
         val gem = frame.d(if (frame.regular) 9f else 7f)
         drawKkGem(Offset(size.width - pad - gem * 0.5f, pad + gem * 0.6f), if (on) Kk.Ink else roles.you, gem / density)
     }
-    if (shape.ascendant) {
-        // Ascendant: the gold crown in the tile's top-left corner.
-        val crown = frame.d(if (frame.regular) 8f else 6f)
-        translate(pad + crown, pad + crown) { drawPath(KkMutatorSigilPaths.of(KkMutatorSigil.ASCENDANT, crown), Kk.Gold) }
+    // The clear plate in the top-left corner: the highest tier cleared with this character, outlined in
+    // ink on the inspected tile's light face; Ascendant adds the gold crown beside it.
+    var crownLeft = pad
+    if (shape.victorious) {
+        val plate = frame.d(if (frame.regular) 16f else 11f)
+        drawHangarClearPlate(measurer, Offset(pad + plate, pad + plate * 0.78f), plate, shape.highestCleared,
+            rim = if (on) Kk.Ink else null, role = "hangar.tile.clear", owner = shape.shape)
+        crownLeft = pad + plate * 2f + frame.d(4f)
     }
+    if (shape.ascendant) {
+        val crown = frame.d(if (frame.regular) 8f else 6f)
+        translate(crownLeft + crown, pad + crown) { drawPath(KkMutatorSigilPaths.of(KkMutatorSigil.ASCENDANT, crown), Kk.Gold) }
+    }
+}
+
+/**
+ * A tier plate of [radius] around [center]: the cleared [tier]'s color with its numeral, or a plain
+ * light plate when the victory recorded no tier. [rim] outlines it on a light face.
+ */
+private fun DrawScope.drawHangarClearPlate(
+    measurer: CanvasTextMeasurer,
+    center: Offset,
+    radius: Float,
+    tier: Int,
+    rim: Color?,
+    role: String,
+    owner: Any? = null,
+) {
+    translate(center.x, center.y) {
+        if (rim != null) drawPath(KkMutatorSigilPaths.of(KkMutatorSigil.TIER, radius + density * 1.5f), rim)
+        drawPath(KkMutatorSigilPaths.of(KkMutatorSigil.TIER, radius), if (tier >= 0) KkRebirthTiers.color(tier) else Kk.Bone2)
+    }
+    if (tier < 0) return
+    val numeral = fitKkText(measurer, tier.toString(), radius * 0.84f / density, radius * 1.1f, minFactor = 0.4f) {
+        measurer.typography.wideStyle(it, tabular = true, lineHeightEm = 1f)
+    }
+    drawProfileText(numeral, center.x, center.y, Kk.Ink, role, owner, align = KkAlign.CENTER, valign = KkVAlign.CENTER)
+}
+
+/**
+ * The clear record at the right of the preview, from [left]: Cleared over the tier on its plate,
+ * Cleared alone when the victory recorded no tier, Not cleared before the first victory, nothing
+ * while the character is locked.
+ */
+private fun DrawScope.drawHangarClearRecord(
+    measurer: CanvasTextMeasurer,
+    frame: ProfileFrame,
+    type: HangarType,
+    preview: Rect,
+    left: Float,
+    shape: HangarShapeRenderModel,
+    language: AppLanguage,
+) {
+    if (!shape.unlocked && !shape.victorious) return
+    val k = frame.k
+    val tier = shape.highestCleared
+    val plate = if (shape.victorious && tier >= 0) minOf(preview.height * 0.2f, frame.d(26f)) else 0f
+    val textRight = if (plate > 0f) preview.right - plate * 2f - frame.d(10f) else preview.right
+    val maxWidth = (textRight - left - frame.d(12f)).coerceAtLeast(frame.d(40f))
+    val labelText = language.text(if (shape.victorious) ProfileScreensRedesignText.HangarCleared else ProfileScreensRedesignText.HangarNotCleared)
+    val label = fitKkText(measurer, labelText, type.mono * k, maxWidth, minFactor = 0.5f) { measurer.typography.monoStyle(it) }
+    if (plate <= 0f) {
+        drawProfileText(label, textRight, preview.center.y, if (shape.victorious) Kk.Bone else Kk.Mute, "hangar.detail.clear",
+            align = KkAlign.END, valign = KkVAlign.CENTER)
+        return
+    }
+    val value = fitKkText(measurer, language.text(ProfileScreensRedesignText.TierTag, tier), type.name * 0.55f * k, maxWidth,
+        minFactor = 0.5f) { measurer.typography.condStyle(it, lineHeightEm = 1f) }
+    val gap = frame.d(4f)
+    val top = preview.center.y - (label.kkBoxHeight + gap + value.kkBoxHeight) * 0.5f
+    drawProfileText(label, textRight, top, Kk.Mute, "hangar.detail.clear", align = KkAlign.END)
+    drawProfileText(value, textRight, top + label.kkBoxHeight + gap, KkRebirthTiers.color(tier), "hangar.detail.clear.tier",
+        align = KkAlign.END)
+    drawHangarClearPlate(measurer, Offset(preview.right - plate, preview.center.y), plate, tier, rim = null,
+        role = "hangar.detail.clear.plate")
 }
 
 /** The inspected character's description wrapped to [width] (every line; the details scroll). */
@@ -471,6 +551,7 @@ private fun DrawScope.drawHangarDetail(
             drawPath(KkMutatorSigilPaths.of(KkMutatorSigil.ASCENDANT, crown), Kk.Gold)
         }
     }
+    drawHangarClearRecord(measurer, frame, type, preview, center.x + radius * 1.35f, shape, language)
     val tagText = definition.mechanicName.localizedContent(language) + " / " + definition.triggerKind.displayLabel.localizedContent(language)
     val tag = fitKkText(measurer, tagText, type.mono * k, layout.tag.width, minFactor = 0.5f) { measurer.typography.monoStyle(it) }
     drawProfileText(tag, layout.tag.left, layout.tag.top, roles.you, "hangar.detail.tag")

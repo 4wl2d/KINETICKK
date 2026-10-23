@@ -71,6 +71,29 @@ class HangarReducerTest {
     }
 
     @Test
+    fun eachCharacterCarriesItsClearRecordInPictureAndWords() {
+        val projection = hangarProjection().let { base ->
+            base.copy(shapes = base.shapes.map { progress ->
+                when (progress.shape) {
+                    CoreShape.ORB -> progress.copy(victorious = true, highestCleared = 7)
+                    CoreShape.STAR -> progress.copy(victorious = true)
+                    else -> progress
+                }
+            }.toImmutableList())
+        }
+        val model = projection.toRenderModel(definitions, 0L)
+        val orb = model.shape(CoreShape.ORB)!!
+        assertEquals(true to 7, orb.victorious to orb.highestCleared)
+        assertEquals("Cleared on tier 7", hangarClearText(orb, AppLanguage.English))
+        assertEquals("Пройдено на ступени 7", hangarClearText(orb, AppLanguage.Russian))
+        // A victory that recorded no tier, an unlocked character that never won, and a locked one.
+        assertEquals("Cleared", hangarClearText(model.shape(CoreShape.STAR)!!, AppLanguage.English))
+        assertEquals("Not cleared", hangarClearText(model.shape(CoreShape.PRISM)!!, AppLanguage.English))
+        assertEquals(null, hangarClearText(model.shape(CoreShape.HEXAGON)!!, AppLanguage.English))
+        assertTrue("Cleared on tier 7" in hangarDetailDescription(orb, model, AppLanguage.English))
+    }
+
+    @Test
     fun charactersThatClearedTheFinalTierAreAscendant() {
         assertTrue(hangarProjection().toRenderModel(definitions, 0L).shapes.none { it.ascendant })
         val crowned = hangarProjection().copy(ascendedCharacters = kinetickk.foundation.collections.immutableSetOf(CoreShape.PRISM))

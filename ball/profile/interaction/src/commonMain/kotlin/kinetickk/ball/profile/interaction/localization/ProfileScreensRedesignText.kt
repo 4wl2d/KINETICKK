@@ -95,6 +95,10 @@ internal enum class ProfileScreensRedesignText(
     HangarHarmony("Harmonizes with {0}", "Гармония: {0}"),
     HangarUnlockedBy("Unlocked: {0}", "Открыт: {0}"),
     HangarProgress("{0}: {1}/{2}", "{0}: {1}/{2}"),
+    /** A character that has defeated the Architect (its clear plate carries the highest tier). */
+    HangarCleared("Cleared", "Пройдено"),
+    HangarClearedOnTier("Cleared on tier {0}", "Пройдено на ступени {0}"),
+    HangarNotCleared("Not cleared", "Не пройдено"),
     RebornLock("Reborn {0}", "Перерождение {0}"),
     /** The short Rebirth gate a Matrix tile shows under its pips (the detail panel keeps [RebornLock]). */
     TileRebornLock("Reborn {0}", "Перерожд. {0}"),

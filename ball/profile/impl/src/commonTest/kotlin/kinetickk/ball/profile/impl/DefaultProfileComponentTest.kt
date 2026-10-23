@@ -4,6 +4,7 @@
 package kinetickk.ball.profile.impl
 
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
@@ -141,7 +142,9 @@ class DefaultProfileComponentTest {
         // Acquisitions append in order after the remembered ones, repeats kept.
         assertEquals(listOf(3, 1, 3), next.collection.recentItemIds)
         assertEquals(next.collection, resource.writes.single().profile.collection)
-        assertEquals(RebirthProgress(2, 2), next.rebirthProgress)
+        // The victory raises the highest clear and records it as Circle's.
+        assertEquals(RebirthProgress(2, 2, characterClears = CoreShape.entries.map { if (it == CoreShape.ORB) 2 else -1 }.toImmutableList()),
+            next.rebirthProgress)
         assertEquals(initial.characterAchievements.eliteKills + 5L, next.characterAchievements.eliteKills)
         assertEquals(initial.characterAchievements.dashHits + 8L, next.characterAchievements.dashHits)
         assertEquals(initial.characterAchievements.completedOrbits + 13L, next.characterAchievements.completedOrbits)

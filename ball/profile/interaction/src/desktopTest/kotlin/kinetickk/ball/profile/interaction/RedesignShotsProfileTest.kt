@@ -46,6 +46,7 @@ import kinetickk.ball.profile.interaction.rebirth.impl.RebirthContent
 import kinetickk.ball.profile.interaction.workshop.impl.WorkshopSegment
 import kinetickk.foundation.collections.immutableSetOf
 import kinetickk.foundation.collections.toImmutableList
+import kinetickk.ball.profile.api.HangarProjection
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
@@ -136,14 +137,27 @@ class RedesignShotsProfileTest {
         shoot("workshop-characters", "in-run") {
             HangarShotAccess.Content(characters(), CoreShape.PRISM, 1.25f, selectionAvailable = false)
         }
-        // Ascendant: the header reads Ascendant and the characters that cleared tier 10 wear the crown (the selected
-        // tile and its detail preview among them).
+        // Ascendant: the header reads Ascendant and the characters that cleared tier 10 wear the crown beside their
+        // tier 10 plate (the selected tile and its detail preview among them).
         val ascendant = hangarProjection(unlocked = roster)
             .copy(ascendant = true, ascendedCharacters = immutableSetOf(CoreShape.ORB, CoreShape.STAR))
+            .withClears(CoreShape.ORB to 10, CoreShape.STAR to 10)
             .let { projection -> with(HangarShotAccess) { projection.model(1_284L, characterLevels(orb = 2)) } }
         for ((scale, suffix) in scales) {
             shoot("workshop-characters", "ascendant$suffix") { HangarShotAccess.Content(ascendant, CoreShape.ORB, scale) }
         }
+        // Clears: Circle on tier 3 (inspected), Star on tier 7, and Square's victory from before tiers were
+        // recorded (a plain plate); an unlocked character that never won reads Not cleared.
+        val cleared = hangarProjection(unlocked = roster)
+            .withClears(CoreShape.ORB to 3, CoreShape.PRISM to -1, CoreShape.STAR to 7)
+            .let { projection -> with(HangarShotAccess) { projection.model(1_284L, characterLevels(orb = 2)) } }
+        for ((state, shape) in listOf("cleared" to CoreShape.ORB, "cleared-unknown" to CoreShape.PRISM)) {
+            for ((scale, suffix) in scales) {
+                shoot("workshop-characters", state + suffix) { HangarShotAccess.Content(cleared, shape, scale) }
+            }
+        }
+        val neverWon = characters()
+        shoot("workshop-characters", "not-cleared") { HangarShotAccess.Content(neverWon, CoreShape.PRISM, 1.25f) }
     }
 
     /**
@@ -298,3 +312,11 @@ private val Weapons = CatalogWeapons
 
 /** Mirrors the game's default Rebirth data (content impl) for realistic captures. */
 private fun rebirthProfile(tier: Int): RebirthProfile = kinetickk.ball.content.api.defaultRebirthProfile(tier)
+
+/** Marks each listed character victorious with its highest clear (-1: a victory that recorded no tier). */
+private fun HangarProjection.withClears(vararg clears: Pair<CoreShape, Int>): HangarProjection = copy(
+    shapes = shapes.map { progress ->
+        clears.firstOrNull { it.first == progress.shape }?.let { (_, tier) -> progress.copy(victorious = true, highestCleared = tier) }
+            ?: progress
+    }.toImmutableList(),
+)

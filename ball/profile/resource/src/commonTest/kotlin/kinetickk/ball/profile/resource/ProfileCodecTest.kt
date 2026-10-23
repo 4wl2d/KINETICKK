@@ -32,6 +32,7 @@ import kinetickk.ball.profile.api.ProfileSnapshotRejection
 import kinetickk.ball.profile.api.REFRESH_RATE_RANGE
 import kinetickk.ball.profile.api.ReactionEffectsLevel
 import kinetickk.ball.profile.api.RebirthProgress
+import kinetickk.ball.profile.api.highestClearedWith
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.ball.profile.api.WindowMode
 import kinetickk.ball.profile.api.WindowSizePreset
@@ -774,6 +775,47 @@ class ProfileCodecTest {
             decodeRejection(with("{\"level\":4,\"highestCleared\":10,\"ascendedCharacterIds\":[\"NONAGON\"]}")))
         assertEquals(ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD,
             decodeRejection(with("{\"level\":4,\"highestCleared\":10,\"ascendedCharacterIds\":[]}")))
+    }
+
+    @Test
+    fun characterClearsAreOneDigitPerCharacterWrittenOnlyOnceATierIsRecorded() {
+        val representative = "\"rebirthProgress\":{\"level\":4,\"highestCleared\":3}"
+        fun with(progress: String) = REPRESENTATIVE_GOLDEN.replace(representative, "\"rebirthProgress\":$progress")
+        // Older saves (no field) keep their exact bytes; their victories (Circle and Ring) recorded no tier.
+        val plain = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(REPRESENTATIVE_GOLDEN)).snapshot
+        assertTrue(plain.profile.rebirthProgress.characterClears.all { it == -1 })
+        assertEquals(REPRESENTATIVE_GOLDEN, requireEncoded(plain))
+
+        // The tier plus one per character slot (Circle, Square, Triangle, Ring, ...): Circle cleared tier 3 and
+        // Ring tier 0; the slots after Ring hold none and are dropped.
+        val cleared = with("{\"level\":4,\"highestCleared\":3,\"characterClears\":\"4001\"}")
+        val decoded = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(cleared)).snapshot
+        val progress = decoded.profile.rebirthProgress
+        assertEquals(listOf(3, -1, -1, 0), listOf(CoreShape.ORB, CoreShape.PRISM, CoreShape.SHARD, CoreShape.RING).map(progress::highestClearedWith))
+        assertEquals(cleared, requireEncoded(decoded))
+        // The final tier is an Ascendant clear: digit b.
+        val ascendant = with("{\"level\":4,\"highestCleared\":10,\"ascendedCharacterIds\":[\"ORB\"],\"characterClears\":\"b\"}")
+        assertEquals(ascendant, requireEncoded(assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(ascendant)).snapshot))
+
+        mapOf(
+            "\"40010\"" to ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD,
+            "\"\"" to ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD,
+            "\"A\"" to ProfileSnapshotRejection.INVALID_DECIMAL,
+            "\"-1\"" to ProfileSnapshotRejection.INVALID_DECIMAL,
+            "\"c\"" to ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            "\"1000000000001\"" to ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            // Above the highest clear.
+            "\"5\"" to ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            // Square never defeated the Architect.
+            "\"01\"" to ProfileSnapshotRejection.INCONSISTENT_PROFILE,
+        ).forEach { (digits, rejection) ->
+            assertEquals(rejection, decodeRejection(with("{\"level\":4,\"highestCleared\":3,\"characterClears\":$digits}")), digits)
+        }
+        // A final-tier clear is exactly an Ascendant one.
+        assertEquals(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            decodeRejection(with("{\"level\":4,\"highestCleared\":10,\"characterClears\":\"b\"}")))
+        assertEquals(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            decodeRejection(with("{\"level\":4,\"highestCleared\":10,\"ascendedCharacterIds\":[\"ORB\"],\"characterClears\":\"a\"}")))
     }
 
     @Test

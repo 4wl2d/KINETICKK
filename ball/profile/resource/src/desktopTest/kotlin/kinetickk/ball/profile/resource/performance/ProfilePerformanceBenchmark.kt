@@ -54,6 +54,7 @@ import kinetickk.performance.BenchmarkSuiteIdentity
 import kinetickk.performance.BenchmarkValidation
 import kinetickk.performance.BenchmarkValidationContext
 import kinetickk.performance.runBenchmarkSuite
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.common.input.BindableKey
 import kinetickk.foundation.common.localization.AppLanguage
@@ -384,6 +385,7 @@ internal fun maximumBusinessSnapshot(): ProfileSnapshot = ProfileSnapshot(
             level = ContentBounds.MAX_REBIRTH_LEVEL,
             highestCleared = ContentBounds.MAX_REBIRTH_LEVEL,
             ascendedCharacters = CoreShape.entries.reversed().toImmutableSet(),
+            characterClears = List(CoreShape.entries.size) { ContentBounds.MAX_REBIRTH_LEVEL }.toImmutableList(),
         ),
         characterAchievements = CharacterAchievementProgress(
             eliteKills = Long.MAX_VALUE,
@@ -536,6 +538,7 @@ internal fun snapshotSignature(snapshot: ProfileSnapshot): Long {
     result = result * 31L + achievements.ricochets
     result = result * 31L + achievements.dataPickups
     result = result * 31L + profile.rebirthProgress.ascendedCharacters.sumOf { 1L shl it.ordinal }
+    profile.rebirthProgress.characterClears.forEach { tier -> result = result * 31L + tier + 1L }
     collection.recentItemIds.forEach { id -> result = result * 31L + id + 1L }
     profile.upgrades.characterLevels.forEach { level -> result = result * 31L + level }
     profile.upgrades.weaponLevels.forEach { level -> result = result * 31L + level }

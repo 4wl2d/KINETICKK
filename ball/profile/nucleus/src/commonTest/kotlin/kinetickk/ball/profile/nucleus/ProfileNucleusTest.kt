@@ -49,6 +49,7 @@ import kinetickk.ball.profile.api.ProfileWriteOutcomeUnknownReason
 import kinetickk.ball.profile.api.ProfileWriteResult
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.RebirthProgressProjection
+import kinetickk.ball.profile.api.highestClearedWith
 import kinetickk.ball.profile.api.isAscendant
 import kinetickk.ball.profile.api.rank
 import kinetickk.ball.profile.api.RunBootstrapProjection
@@ -985,7 +986,7 @@ class ProfileNucleusTest {
         val ten = readyState(PlayerProfile(rebirthProgress = RebirthProgress(level = 10, highestCleared = 9)))
         val ascended = applyGameplayProgress(ten,
             GameplayProgressUpdate(clearedRebirthLevel = 10, architectDefeatedWith = CoreShape.ORB)).acceptedFrame().nextState
-        assertEquals(RebirthProgress(10, 10, kinetickk.foundation.collections.immutableSetOf(CoreShape.ORB)),
+        assertEquals(RebirthProgress(10, 10, kinetickk.foundation.collections.immutableSetOf(CoreShape.ORB), clears(CoreShape.ORB to 10)),
             ascended.profile.rebirthProgress)
         assertTrue(ascended.profile.rebirthProgress.isAscendant)
         // A later tier-10 clear with the same character changes nothing in the set; the record never drops.
@@ -998,6 +999,54 @@ class ProfileNucleusTest {
             kinetickk.foundation.collections.immutableSetOf(CoreShape.ORB))))
         assertTrue(forged.profile.rebirthProgress.ascendedCharacters.isEmpty())
     }
+
+    @Test
+    fun aVictoryRecordsTheHighestTierEachCharacterCleared() {
+        val unlocked = kinetickk.ball.profile.api.CharacterAchievementProgress(eliteKills = 3)
+        val start = readyState(PlayerProfile(characterAchievements = unlocked, rebirthProgress = RebirthProgress(level = 5, highestCleared = 4)))
+        fun ProfileState.win(tier: Int, with: CoreShape?) = applyGameplayProgress(copy(persistence = start.persistence),
+            GameplayProgressUpdate(bankedMatter = 1L, clearedRebirthLevel = tier, architectDefeatedWith = with)).acceptedFrame().nextState
+        fun ProfileState.cleared(shape: CoreShape) = profile.rebirthProgress.highestClearedWith(shape)
+
+        val first = start.win(3, CoreShape.ORB)
+        assertEquals(3 to -1, first.cleared(CoreShape.ORB) to first.cleared(CoreShape.PRISM))
+        // A lower tier replayed keeps the record; a higher one raises it; each character keeps its own.
+        assertEquals(3, first.win(1, CoreShape.ORB).cleared(CoreShape.ORB))
+        val raised = first.win(5, CoreShape.ORB).win(2, CoreShape.PRISM)
+        assertEquals(clears(CoreShape.ORB to 5, CoreShape.PRISM to 2), raised.profile.rebirthProgress.characterClears)
+        // A clear the run reports without a victor records no character.
+        assertEquals(raised.profile.rebirthProgress.characterClears, raised.win(4, null).profile.rebirthProgress.characterClears)
+        val hangar = ProfileNucleus.query(raised, ProfileQuery.GetHangar).shapes.associateBy { it.shape }
+        assertEquals(true to 5, hangar.getValue(CoreShape.ORB).let { it.victorious to it.highestCleared })
+        assertEquals(true to 2, hangar.getValue(CoreShape.PRISM).let { it.victorious to it.highestCleared })
+        assertEquals(false to -1, hangar.getValue(CoreShape.SPIRAL).let { it.victorious to it.highestCleared })
+
+        // Victories saved before the record: an Ascendant one reads tier 10, any other reads no tier.
+        val legacy = constructedProfile(PlayerProfile(
+            characterAchievements = unlocked.copy(architectVictories = 2,
+                victoriousCharacters = kinetickk.foundation.collections.immutableSetOf(CoreShape.ORB, CoreShape.PRISM)),
+            rebirthProgress = RebirthProgress(10, 10, kinetickk.foundation.collections.immutableSetOf(CoreShape.ORB)),
+        ))
+        val legacyHangar = ProfileNucleus.query(legacy, ProfileQuery.GetHangar).shapes.associateBy { it.shape }
+        assertEquals(true to 10, legacyHangar.getValue(CoreShape.ORB).let { it.victorious to it.highestCleared })
+        assertEquals(true to -1, legacyHangar.getValue(CoreShape.PRISM).let { it.victorious to it.highestCleared })
+
+        // Records the victories, the highest clear or the Ascendant set do not back are not valid saves.
+        listOf(
+            RebirthProgress(5, 4, characterClears = clears(CoreShape.SPIRAL to 3)),
+            RebirthProgress(5, 4, characterClears = clears(CoreShape.ORB to 5)),
+            RebirthProgress(10, 10, characterClears = clears(CoreShape.ORB to 10)),
+            RebirthProgress(10, 10, kinetickk.foundation.collections.immutableSetOf(CoreShape.ORB), clears(CoreShape.ORB to 9)),
+            RebirthProgress(5, 4, characterClears = List(CoreShape.entries.size - 1) { -1 }.toImmutableList()),
+        ).forEach { forged ->
+            val profile = PlayerProfile(characterAchievements = unlocked.copy(architectVictories = 1,
+                victoriousCharacters = kinetickk.foundation.collections.immutableSetOf(CoreShape.ORB)), rebirthProgress = forged)
+            assertEquals(defaultPlayerProfile(TestProfilePolicy), constructedProfile(profile).profile, "$forged")
+        }
+    }
+
+    private fun clears(vararg tiers: Pair<CoreShape, Int>) =
+        CoreShape.entries.map { shape -> tiers.firstOrNull { it.first == shape }?.second ?: -1 }.toImmutableList()
 
     private fun readyState(
         profile: PlayerProfile? = null,

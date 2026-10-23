@@ -481,12 +481,18 @@ object ProfileNucleus {
         }
         val rebirth = update.clearedRebirthLevel?.let { cleared ->
             // Clearing the final tier makes the victorious character Ascendant.
-            val ascended = update.architectDefeatedWith?.takeIf { cleared >= ContentBounds.MAX_REBIRTH_LEVEL }
+            val victor = update.architectDefeatedWith
+            val ascended = victor?.takeIf { cleared >= ContentBounds.MAX_REBIRTH_LEVEL }
             val progress = state.profile.rebirthProgress
             progress.copy(
                 highestCleared = max(progress.highestCleared, cleared),
                 ascendedCharacters = if (ascended == null) progress.ascendedCharacters
                 else (progress.ascendedCharacters + ascended).toImmutableSet(),
+                // The victorious character keeps its highest clear; a lower tier replayed leaves it.
+                characterClears = if (victor == null) progress.characterClears
+                else progress.characterClears.mapIndexed { index, best ->
+                    if (index == victor.ordinal) max(best, cleared) else best
+                }.toImmutableList(),
             )
         } ?: state.profile.rebirthProgress
         val previousAchievements = state.profile.characterAchievements

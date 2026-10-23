@@ -126,12 +126,18 @@ data class RebirthProgressProjection(
     val canAdvance: Boolean,
 ) : ProfileProjection
 
-/** Unlock progress of one character: [progress] of [target], capped at the target for display. */
+/**
+ * Unlock progress of one character: [progress] of [target], capped at the target for display, and
+ * its Architect victories: [victorious] once it has won, and the highest tier it cleared
+ * ([RebirthProgress.highestClearedWith], -1 when no tier is recorded).
+ */
 data class HangarShapeProgress(
     val shape: CoreShape,
     val unlocked: Boolean,
     val progress: Long,
     val target: Long,
+    val victorious: Boolean = false,
+    val highestCleared: Int = -1,
 )
 
 data class HangarProjection(

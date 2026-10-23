@@ -263,7 +263,7 @@ private data class MatrixNodeRankDto(
 
 /**
  * Bought levels as positional base-36 digits, one per track: [c] holds the Refit levels in
- * [CHARACTER_UPGRADE_SLOTS] order and [w] the Honing levels in [WEAPON_UPGRADE_SLOTS] order. Trailing
+ * [CHARACTER_SLOTS] order and [w] the Honing levels in [WEAPON_UPGRADE_SLOTS] order. Trailing
  * zero levels are dropped, so a track with nothing bought is absent and appending a character or a
  * weapon keeps every older save canonical. Positional digits keep the worst case (36 tracks at the
  * maximum) within the desktop Preferences value budget, which `{id, level}` records would exceed.
@@ -303,6 +303,10 @@ private data class RebirthProgressDto(
     // Characters that cleared the final tier, sorted by wire id; written only once one has, so older
     // saves keep their exact bytes.
     @EncodeDefault(EncodeDefault.Mode.NEVER) val ascendedCharacterIds: List<String> = emptyList(),
+    // Each character's highest clear as one positional base-36 digit in CHARACTER_SLOTS order: the
+    // tier plus one, so 0 is none. Trailing zeros are dropped, so it is absent until a character
+    // records a clear and older saves keep their exact bytes.
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val characterClears: String = "",
 )
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -401,10 +405,11 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
                 level = profile.rebirthProgress.level,
                 highestCleared = profile.rebirthProgress.highestCleared,
                 ascendedCharacterIds = profile.rebirthProgress.ascendedCharacters.map(CoreShape::wireId).sorted(),
+                characterClears = CHARACTER_SLOTS.map { profile.rebirthProgress.characterClears[it.ordinal] + 1 }.toPositionalDigits(),
             ),
             upgrades = PermanentUpgradesDto(
-                c = CHARACTER_UPGRADE_SLOTS.map(profile.upgrades::characterLevel).toUpgradeDigits(),
-                w = WEAPON_UPGRADE_SLOTS.map(profile.upgrades::weaponLevel).toUpgradeDigits(),
+                c = CHARACTER_SLOTS.map(profile.upgrades::characterLevel).toPositionalDigits(),
+                w = WEAPON_UPGRADE_SLOTS.map(profile.upgrades::weaponLevel).toPositionalDigits(),
             ),
         ),
     )
@@ -509,6 +514,7 @@ private fun ProfileSnapshotDto.toSnapshot(): ProfileSnapshot {
             level = profile.rebirthProgress.level,
             highestCleared = profile.rebirthProgress.highestCleared,
             ascendedCharacters = profile.rebirthProgress.ascendedCharacterIds.map { it.coreShape() }.toImmutableSet(),
+            characterClears = profile.rebirthProgress.characterClears.toCharacterClears().toImmutableList(),
         ),
         upgrades = upgrades,
     )
@@ -635,9 +641,10 @@ private fun validateProfile(profile: PlayerProfile) {
         profile.rebirthProgress.isWithinRebirthBounds(ContentBounds.MIN_REBIRTH_LEVEL, ContentBounds.MAX_REBIRTH_LEVEL),
         ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
     )
-    // An Ascendant clear is an Architect victory with that character.
+    // An Ascendant clear, and every recorded clear, is an Architect victory with that character.
     rejectUnless(
-        achievements.victoriousCharacters.containsAll(profile.rebirthProgress.ascendedCharacters),
+        achievements.victoriousCharacters.containsAll(profile.rebirthProgress.ascendedCharacters) &&
+            CoreShape.entries.all { profile.rebirthProgress.characterClears[it.ordinal] < 0 || it in achievements.victoriousCharacters },
         ProfileSnapshotRejection.INCONSISTENT_PROFILE,
     )
     val upgrades = profile.upgrades
@@ -1171,8 +1178,11 @@ private fun MatrixProgressDto.toRanks(): List<Int> {
     return result
 }
 
-/** Refit slots of `upgrades.c`: positions are persisted, so this list is append-only and never reordered. */
-private val CHARACTER_UPGRADE_SLOTS: List<CoreShape> = listOf(
+/**
+ * Character slots of `upgrades.c` (Refit) and `rebirthProgress.characterClears`: positions are
+ * persisted, so this list is append-only and never reordered.
+ */
+private val CHARACTER_SLOTS: List<CoreShape> = listOf(
     CoreShape.ORB, CoreShape.PRISM, CoreShape.SHARD, CoreShape.RING, CoreShape.DIAMOND, CoreShape.TESSERACT,
     CoreShape.STAR, CoreShape.SPIRAL, CoreShape.DIPOLE, CoreShape.PENTAGON, CoreShape.CRESCENT, CoreShape.HEXAGON,
 )
@@ -1186,11 +1196,35 @@ private val WEAPON_UPGRADE_SLOTS: List<WeaponId> = listOf(
     WeaponId.SOLAR_SWEEP, WeaponId.AEGIS_SHARDS, WeaponId.HOLLOW_RIFT, WeaponId.RESONANCE_DRUM,
 )
 
-private const val UPGRADE_DIGIT_RADIX: Int = 36
+private const val POSITIONAL_DIGIT_RADIX: Int = 36
 
-/** Levels (already validated to 0..MAX_UPGRADE_LEVEL) as lowercase base-36 digits without trailing zeros. */
-private fun List<Int>.toUpgradeDigits(): String =
-    joinToString(separator = "") { level -> level.toString(UPGRADE_DIGIT_RADIX) }.trimEnd('0')
+/** Values (already validated to 0..35) as lowercase base-36 digits without trailing zeros. */
+private fun List<Int>.toPositionalDigits(): String =
+    joinToString(separator = "") { value -> value.toString(POSITIONAL_DIGIT_RADIX) }.trimEnd('0')
+
+/** One lowercase base-36 positional digit. */
+private fun Char.positionalDigit(): Int = when (this) {
+    in '0'..'9' -> this - '0'
+    in 'a'..'z' -> this - 'a' + 10
+    else -> reject(ProfileSnapshotRejection.INVALID_DECIMAL)
+}
+
+/**
+ * Strict mapping of the positional clear digits to tiers in [CoreShape] order: at most one digit per
+ * character slot, each the tier plus one within 0..MAX_REBIRTH_LEVEL + 1, and no trailing zero. The
+ * Profile invariant then bounds each tier by the highest clear.
+ */
+private fun String.toCharacterClears(): List<Int> {
+    rejectUnless(length <= CHARACTER_SLOTS.size, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+    rejectUnless(!endsWith('0'), ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD)
+    val clears = MutableList(CoreShape.entries.size) { -1 }
+    forEachIndexed { slot, digit ->
+        val value = digit.positionalDigit()
+        rejectUnless(value <= ContentBounds.MAX_REBIRTH_LEVEL + 1, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
+        clears[CHARACTER_SLOTS[slot].ordinal] = value - 1
+    }
+    return clears
+}
 
 /**
  * Strict mapping of the positional upgrade digits: at most one lowercase base-36 digit per slot, every
@@ -1202,18 +1236,14 @@ private fun PermanentUpgradesDto.toUpgrades(): PermanentUpgrades {
         rejectUnless(!endsWith('0'), ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD)
         val levels = MutableList(size) { 0 }
         forEachIndexed { slot, digit ->
-            val level = when (digit) {
-                in '0'..'9' -> digit - '0'
-                in 'a'..'z' -> digit - 'a' + 10
-                else -> reject(ProfileSnapshotRejection.INVALID_DECIMAL)
-            }
+            val level = digit.positionalDigit()
             rejectUnless(level <= ContentBounds.MAX_UPGRADE_LEVEL, ProfileSnapshotRejection.VALUE_OUT_OF_RANGE)
             levels[ordinal(slots[slot])] = level
         }
         return levels
     }
     return PermanentUpgrades(
-        characterLevels = c.toLevels(CHARACTER_UPGRADE_SLOTS, CoreShape.entries.size, CoreShape::ordinal),
+        characterLevels = c.toLevels(CHARACTER_SLOTS, CoreShape.entries.size, CoreShape::ordinal),
         weaponLevels = w.toLevels(WEAPON_UPGRADE_SLOTS, WeaponId.entries.size, WeaponId::ordinal),
     )
 }
