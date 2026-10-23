@@ -39,6 +39,7 @@ fun runKinetickkDesktop(
                         state = host.windowState,
                         title = "KINETICKK",
                         undecorated = host.undecorated,
+                        resizable = host.resizable,
                     ) {
                         window.minimumSize = Dimension(MINIMUM_WIDTH_DP, MINIMUM_HEIGHT_DP)
                         DisposableEffect(window) {

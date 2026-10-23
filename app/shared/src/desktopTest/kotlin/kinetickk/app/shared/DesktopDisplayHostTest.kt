@@ -120,6 +120,21 @@ class DesktopDisplayHostTest {
     }
 
     @Test
+    fun aBorderlessWindowHasNoResizableEdges() {
+        // Undecorated and resizable, Compose lays an edge resizer over the outer 8 dp of the content.
+        assertFalse(host(HostDisplayRequest(HostWindowMode.BORDERLESS)).resizable)
+        val host = host()
+        assertTrue(host.resizable)
+        host.apply(HostDisplayRequest(HostWindowMode.BORDERLESS))
+        assertFalse(host.resizable)
+        host.apply(HostDisplayRequest(HostWindowMode.FULLSCREEN))
+        assertTrue(host.resizable)
+        host.apply(HostDisplayRequest(HostWindowMode.BORDERLESS))
+        host.apply(HostDisplayRequest())
+        assertTrue(host.resizable)
+    }
+
+    @Test
     fun aLaunchOverrideKeepsVsyncAndHidesItsRow() {
         val host = host(pacing = DesktopPacing(vsync = false, overridden = true))
         assertFalse(host.support().vsync)

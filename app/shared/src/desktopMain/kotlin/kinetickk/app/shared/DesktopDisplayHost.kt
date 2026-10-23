@@ -52,6 +52,12 @@ class DesktopDisplayHost internal constructor(
     var undecorated: Boolean by mutableStateOf(false)
         private set
 
+    /**
+     * Whether the next window can be resized at its edges. A Borderless window covers its screen;
+     * resizable and undecorated, Compose would lay an edge resizer over the game's outer 8 dp.
+     */
+    val resizable: Boolean get() = !undecorated
+
     private var pacing = DesktopPacing(vsync = true, overridden = false)
     private var vsync = true
     private var last: HostDisplayRequest? = null
