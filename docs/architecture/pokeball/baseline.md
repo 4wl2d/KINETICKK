@@ -699,8 +699,9 @@ Russian.
   by a like share. A strike asks for the boss's whole hit cap: through the
   Architect gate it never passes a phase gate, nothing lands during a shift, and
   a Herald's strike is clamped to its cap. The Architect circles the Core at 300
-  to 380 u, so instead of needing contact a channel event strikes a boss whose
-  edge is within 420 u (`APEX_BOSS_REACH`), drawn as the character's Apex link.
+  to 380 u, so instead of needing contact a proximity channel's event (a beat,
+  burst, nova, pulse, ghost or scar) strikes a boss whose edge is within 420 u
+  (`APEX_BOSS_REACH`), drawn as the character's Apex link.
   The channels were changed so they land: Hypernova novas every second whatever
   its Mass, the Hypercube pulses every 0.6 s, Swarm Queen's drones reach for a
   boss in Apex reach, Perihelion's release waits through a shift that starts
