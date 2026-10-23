@@ -7,6 +7,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kinetickk.ball.profile.api.PlayerPreferences
+import kinetickk.ball.profile.api.ProfilePreferenceAdjustment
+import kinetickk.ball.profile.api.REFRESH_RATE_RANGE
 import kinetickk.ball.profile.api.WindowMode
 import kinetickk.ball.profile.api.WindowSizePreset
 import kinetickk.ball.profile.interaction.settings.api.SettingsDisplaySupport
@@ -92,6 +94,24 @@ class DisplayPreferenceProjectionTest {
         assertEquals(listOf(165, 144, 120, 90), hostRefreshRateChoices(listOf(60f, 90f, 120f, 144f, 165f)))
         assertEquals(listOf(60), hostRefreshRateChoices(listOf(60f)))
         assertEquals(emptyList(), hostRefreshRateChoices(emptyList()))
+    }
+
+    @Test
+    fun refreshChoicesOutsideTheProfileRangeAreNotOfferedSoEveryChoiceBuildsItsAdjustment() {
+        assertEquals(listOf(60), hostRefreshRateChoices(listOf(60f, 20f, 400f)))
+        // The bounds of the range are offered, the first rate past either bound is not.
+        assertEquals(
+            listOf(REFRESH_RATE_RANGE.last, REFRESH_RATE_RANGE.first),
+            hostRefreshRateChoices(
+                listOf(REFRESH_RATE_RANGE.last + 1f, REFRESH_RATE_RANGE.last.toFloat(), REFRESH_RATE_RANGE.first.toFloat(), REFRESH_RATE_RANGE.first - 1f),
+            ),
+        )
+        // Rates above the range do not take the places of the four highest rates within it.
+        val offered = HostDisplaySupport(refreshRatesHz = hostRefreshRateChoices(listOf(500f, 400f, 240f, 165f, 144f, 120f, 60f)))
+            .toSettingsSupport()
+            .refreshRatesHz
+        assertEquals(listOf(240, 165, 144, 120), offered)
+        offered.forEach { hz -> assertEquals(hz, ProfilePreferenceAdjustment.SetRefreshRate(hz).hz) }
     }
 
     @Test

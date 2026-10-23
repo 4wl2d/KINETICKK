@@ -4,6 +4,7 @@
 package kinetickk.app.shared
 
 import androidx.compose.runtime.staticCompositionLocalOf
+import kinetickk.ball.profile.api.REFRESH_RATE_RANGE
 import kotlin.math.roundToInt
 
 /** How a desktop window is shown. Mechanical: no Profile type reaches a platform host. */
@@ -36,7 +37,7 @@ data class HostDisplaySupport(
     val refreshReadout: Boolean = false,
     /** The current monitor's refresh rate in Hz; 0 when unknown. */
     val monitorRefreshHz: Int = 0,
-    /** Selectable refresh rates in Hz, highest first, at most [MAX_HOST_REFRESH_CHOICES] (Android). */
+    /** Selectable refresh rates in Hz, from [hostRefreshRateChoices] (Android). */
     val refreshRatesHz: List<Int> = emptyList(),
     /** The system bars can be hidden (Android). */
     val immersive: Boolean = false,
@@ -86,10 +87,14 @@ const val MAX_HOST_REFRESH_CHOICES: Int = 4
 
 /**
  * The refresh rates to offer from the [rates] of the display modes at the current resolution:
- * distinct whole Hz, highest first, at most [MAX_HOST_REFRESH_CHOICES].
+ * distinct whole Hz within [REFRESH_RATE_RANGE] (a rate outside it cannot be requested), highest
+ * first, at most [MAX_HOST_REFRESH_CHOICES].
  */
-internal fun hostRefreshRateChoices(rates: List<Float>): List<Int> =
-    rates.map(Float::roundToInt).filter { it > 0 }.distinct().sortedDescending().take(MAX_HOST_REFRESH_CHOICES)
+internal fun hostRefreshRateChoices(rates: List<Float>): List<Int> = rates.map(Float::roundToInt)
+    .filter { it in REFRESH_RATE_RANGE }
+    .distinct()
+    .sortedDescending()
+    .take(MAX_HOST_REFRESH_CHOICES)
 
 /**
  * The index in [rates] of the display mode a [requestedHz] selects: the fastest mode that rounds to
