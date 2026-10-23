@@ -625,7 +625,8 @@ Russian.
   perceptible-impact floor, the 173 older ones on the 0.4.0 setups alone; the
   impact arenas gained skill, field, mark, throw, Apex and family-weapon
   encounters, and an item whose clause needs a skill tag or a refreshed weapon
-  is flown with one.
+  is flown with one. The no-POI bot passes on mark, field and throw items it
+  cannot aim and, when told to, seeks or avoids Data-economy items.
 - **Reactions.** Every reaction gains one play-style verb and a keystone form
   that an item switches on; no reaction hits harder than before, and eight lost
   power (Thermal Shock 12 → 10, Plasma 6 → 5, Wildfire 5 → 4, Superconduct 7 →
@@ -637,13 +638,15 @@ Russian.
   Anchor, the Maw and Erasure. Fields now live in one table of twelve (nine for
   reactions and items, one per skill slot) with per-kind caps; a full kind
   replaces its oldest field. The enemy status layout grows from 71 to 73 cells
-  for one mark per enemy. Wildfire's residue follows its declared values. A gate
-  plays every verb on and off in a scripted arena and requires a 10 % change in
-  its play metric (21 of 21 pass; for example Blast Jump distance ×2.80, Shard
-  Guard erases 32 shots against 0, Erasure Data ×19.2). The Architect keeps its
-  volleys and timers inside a Time Bubble, a Maw or an Attractor (24 of 24
-  volleys each) and keeps attack windows under any Hush (18 of 18, quiet share
-  0.275).
+  for one mark per enemy. Wildfire's residue follows its declared values, Stasis
+  no longer spends Minelayer mines, and Breaks and reactions draw in element
+  colour indices 8 to 22, leaving the threat colour to damage the Core takes. A
+  gate plays every verb on and off in a scripted arena and requires a 10 %
+  change in its play metric (21 of 21 pass; for example Blast Jump distance
+  ×2.80, Shard Guard erases 32 shots against 0, Erasure Data ×19.2). The
+  Architect keeps its volleys and timers inside a Time Bubble, a Maw or an
+  Attractor (24 of 24 volleys each) and keeps attack windows under any Hush (18
+  of 18, quiet share 0.275).
 - **Skills.** Eighteen skills are drafted during the run into slots Z, X and C,
   which open at run levels 2, 8 and 16; a rank-up card every four levels takes
   the experimental card's place and raises a skill one rank, up to III. A draft
@@ -661,7 +664,7 @@ Russian.
   profiles take Decay Spores and Gravity Well; Catalyze waits for three enemies
   carrying an element). Skill numbers come from a phase-free 96-seed balance
   arena that holds every rank III a third above its rank I and every family
-  within 40 % of its median at both ranks.
+  within 40 % of its median at both ranks; the skills golden pins them.
 - **Apex abilities.** Each character has one Apex ability (Perihelion, Monolith,
   Vivisect, Corona, Mirror Stance, Hypercube, Hypernova, Twin Echo, Magnetar,
   Crescendo, Total Eclipse, Swarm Queen) that unlocks at level 42 with an "APEX
@@ -713,12 +716,12 @@ Russian.
   and hidden system bars, web fullscreen, interface scale (85 to 130 %), Show
   FPS, pause when unfocused (on by default), reaction effects and rebinding of
   all 14 gameplay actions with conflict swap and reset. Profile stores the
-  values; the platform display host lists and applies them. The desktop
-  composition owner lives above the window, so a decoration or V-Sync change
-  reopens the window and keeps the session and the run. The interface scale
-  applies to menus and to the run's HUD, while the world keeps the raw density.
-  The worst-case Profile payload is 7,678 UTF-16 code units of the 8,192 one
-  Desktop Preferences value admits.
+  values through twelve new `AdjustPreference` adjustments; the platform display
+  host lists and applies them. The desktop composition owner lives above the
+  window, so a decoration or V-Sync change reopens the window and keeps the
+  session and the run. The interface scale applies to menus and to the run's
+  HUD, while the world keeps the raw density. The worst-case Profile payload is
+  7,678 UTF-16 code units of the 8,192 one Desktop Preferences value admits.
 
 The performance suites are `gameplay-core-v4` (the reaction workload fills the
 field table) and `profile-persistence-current-schema-v5` (the business maximum
@@ -756,7 +759,7 @@ desktop suite ran 2,274 tests with 2 failures:
 - Skill share: skills cause a median 0.111 of a fresh run's damage over the 25
   of 31 runs that reach 720 s (band 0.08 to 0.20); no single skill deals more
   than 0.280 of all skill damage (bound 0.30). Singularity contacts stay at 0
-  with every Core-moving skill.
+  with every Core-moving skill over 30 seeds.
 - Item variety: the 12-seed gate reads Orb 0.728, Prism 0.721, Star 0.668 and
   Hexagon 0.692 of the overlap under a full deck and the 0.4.0 lanes (bound
   0.75), and 194 of 199 rank-0 items are shown. Over 48 seeds per character the
