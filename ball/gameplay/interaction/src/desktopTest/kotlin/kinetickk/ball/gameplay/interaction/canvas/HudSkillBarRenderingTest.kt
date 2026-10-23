@@ -24,8 +24,10 @@ import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.SkillBarProjection
 import kinetickk.ball.gameplay.nucleus.render.SkillSlotProjection
+import kinetickk.ball.profile.api.GameAction
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
+import kinetickk.foundation.common.input.BindableKey
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.Kk
@@ -51,9 +53,15 @@ class HudSkillBarRenderingTest {
     private fun bar(first: SkillSlotProjection, second: SkillSlotProjection = SkillSlotProjection.EMPTY) =
         SkillBarProjection(immutableListOf(first, second, SkillSlotProjection.EMPTY))
 
-    private fun render(model: GameplayRenderModel, time: Float, memory: HudPresentationMemory? = null, controls: RunningControlPressLog? = null): PixelMap {
+    private fun render(
+        model: GameplayRenderModel,
+        time: Float,
+        memory: HudPresentationMemory? = null,
+        controls: RunningControlPressLog? = null,
+        language: AppLanguage = AppLanguage.English,
+    ): PixelMap {
         val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1.25f,
-            AppLanguage.English, HudTestFonts.typography, roles)
+            language, HudTestFonts.typography, roles)
         val bitmap = ImageBitmap(1_440, 810)
         CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(1_440f, 810f)) {
             drawRect(Kk.Ink)
@@ -178,6 +186,31 @@ class HudSkillBarRenderingTest {
         render(hudTestModel().with(*levelOverrides(41), "skillBar" to model.skillBar), 2f, controls = keyboard)
         assertNull(HudLayoutProbe.rect(HudBlock.APEX_KEY))
         assertNotNull(HudLayoutProbe.rect(HudBlock.SKILL_KEYS))
+    }
+
+    @Test
+    fun theApexKeyPlateHoldsEveryBindableKeyLabelAndTheDataBarStartsAfterIt() {
+        val model = base(bar(slot(SkillId.STORM_COIL)))
+        val keyboard = keyboardControls()
+        render(model, 2f)
+        val plainBar = assertNotNull(HudDrawCache.peekRect(HudRect.DATA_BAR))
+        for (language in AppLanguage.entries) for (key in BindableKey.entries) {
+            val bound = model.with("settings" to model.settings.copy(keyBindings = model.settings.keyBindings.with(GameAction.APEX, key)))
+            HudDrawCache.forgetLayouts()
+            render(bound, 2f, controls = keyboard, language = language)
+            val where = "$language $key"
+            val plate = assertNotNull(HudLayoutProbe.rect(HudBlock.APEX_KEY), where)
+            val label = assertNotNull(HudDrawCache.peekLayout(HudText.APEX_KEY), where)
+            val dataBar = assertNotNull(HudDrawCache.peekRect(HudRect.DATA_BAR), where)
+            // 1 u = 1 px here: the label keeps 2 u of gold on each side, at least the 16 u plate.
+            assertTrue(label.size.width + 4f <= plate.width + 0.5f, "$where: a ${label.size.width} px label on a ${plate.width} px plate")
+            assertTrue(plate.width >= 16f - 0.5f, "$where: plate $plate")
+            assertEquals(plainBar.left, plate.left, 0.5f, where)
+            // The Data bar starts 4 u right of the plate and keeps its right end.
+            assertEquals(plate.right + 4f, dataBar.left, 0.5f, where)
+            assertEquals(plainBar.right, dataBar.right, 0.5f, where)
+            assertTrue(dataBar.width >= 60f, "$where: Data bar $dataBar")
+        }
     }
 
     @Test
