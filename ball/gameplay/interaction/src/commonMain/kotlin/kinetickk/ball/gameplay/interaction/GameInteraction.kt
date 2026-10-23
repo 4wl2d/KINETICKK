@@ -361,8 +361,7 @@ fun GameplayContent(
             // The Show FPS counter measures the loop while the setting is on; the HUD reads its value.
             if (renderModelValue.settings.showFps) {
                 if (fpsCounter.frame(frame)) controlLog.fps = fpsCounter.fps
-            } else if (controlLog.fps != GameplayFpsCounter.NO_VALUE) {
-                fpsCounter.reset()
+            } else if (fpsCounter.hide()) {
                 controlLog.fps = GameplayFpsCounter.NO_VALUE
             }
             when (val result = interactionValidator.frameElapsed(delta)) {
