@@ -22,7 +22,7 @@ internal enum class OverlayRedesignText(
     RankLabel("Rank", "Ранг"),
     StackCount("Stack {0}/{1}", "Копии {0}/{1}"),
     // Active items: the rank their effect reaches, the active and passive parts, the slot chip (its key cap follows
-    // the label; touch names the slot by number), the slot replacement prompt.
+    // the label; touch names the slot by number), the slot replacement prompt (its rank stays with its number).
     ActiveRank("Rank {0}/{1}", "Ранг {0}/{1}"),
     ActivePart("Active", "Активный эффект"),
     PassivePart("Passive", "Пассивный эффект"),
@@ -30,7 +30,7 @@ internal enum class OverlayRedesignText(
     ActiveSlotChip("Slot {0}", "Ячейка {0}"),
     ActiveReplacesChip("Replaces a slot", "Заменит ячейку"),
     ReplaceActive("Replace {0}", "Заменить: {0}"),
-    ActiveIncoming("{0} takes this slot at rank 1", "{0} займёт эту ячейку с рангом 1"),
+    ActiveIncoming("{0} takes this slot at rank\u00A01", "{0} займёт эту ячейку с рангом\u00A01"),
     KeepLoadout("Keep loadout", "Оставить набор"),
     KeepLoadoutEffect("Every active stays and {0} is salvaged for matter", "Все активные эффекты остаются, {0} идёт в материю"),
     KeepLoadoutMatter("Every active stays and {0} is salvaged for +{1} matter", "Все активные эффекты остаются, {0} даёт +{1} материи"),

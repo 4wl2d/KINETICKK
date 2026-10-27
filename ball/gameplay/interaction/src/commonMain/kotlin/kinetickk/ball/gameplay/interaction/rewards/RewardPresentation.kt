@@ -766,7 +766,7 @@ private fun GameplayRenderModel.rewardActiveRules(item: ItemDefinition, rank: In
     return buildList {
         add(RewardRuleLine(RuleLineKind.TRIGGER, language.text(OverlayRedesignText.ActivePart), element))
         add(RewardRuleLine(RuleLineKind.EFFECT, skill.summary.localizedContent(language), element))
-        add(RewardRuleLine(RuleLineKind.RULE, skill.rankNumbers(rank, language), element))
+        add(RewardRuleLine(RuleLineKind.RULE, skill.activeRankNumbers(rank, language), element))
         if (rank >= ContentBounds.MAX_SKILL_RANK) add(RewardRuleLine(RuleLineKind.RULE, skill.rankThree.localizedContent(language), element))
         add(RewardRuleLine(RuleLineKind.TRIGGER, language.text(OverlayRedesignText.PassivePart)))
     }
@@ -831,7 +831,7 @@ private fun GameplayRenderModel.rewardActiveSlotCard(
         add(RewardRuleLine(RuleLineKind.TRIGGER, language.text(OverlayRedesignText.ActivePart), element))
         if (skill != null) {
             add(RewardRuleLine(RuleLineKind.EFFECT, skill.summary.localizedContent(language), element))
-            add(RewardRuleLine(RuleLineKind.RULE, skill.rankNumbers(rank, language), element))
+            add(RewardRuleLine(RuleLineKind.RULE, skill.activeRankNumbers(rank, language), element))
         }
         add(RewardRuleLine(RuleLineKind.RULE, language.text(OverlayRedesignText.ActiveIncoming, incomingName), incoming?.elements?.firstOrNull()))
     }
@@ -857,11 +857,13 @@ private fun GameplayRenderModel.rewardActiveSlotCard(
 }
 
 /**
- * The numbers of the effect at [rank] as one line: its cooldown and values ([SkillDefinition.rankLines] after the rank
- * line, which the card's band already shows), joined by commas since overlay copy uses no separator marks.
+ * The numbers of an active effect at [rank] as one line, as the reward cards and the Codex write them: its cooldown and
+ * values ([SkillDefinition.rankLines] after the rank line, which a card's band already shows), joined by commas since
+ * overlay copy uses no separator marks. Each value keeps its label and unit on its line (no-break spaces), so a wrap
+ * never leaves a number alone.
  */
-private fun SkillDefinition.rankNumbers(rank: Int, language: AppLanguage): String =
-    rankLines(rank, language).drop(1).joinToString(", ")
+fun SkillDefinition.activeRankNumbers(rank: Int, language: AppLanguage): String =
+    rankLines(rank, language).drop(1).joinToString(", ") { it.replace(' ', '\u00A0') }
 
 /** The active slot prompt's keep card: every held active stays and the incoming active item is salvaged. */
 internal val ChoiceOption.keepsActiveLoadout: Boolean get() = type == ChoiceType.ACTIVE_SLOT && activeSlot == null

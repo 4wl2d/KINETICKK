@@ -29,6 +29,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.RelicPolicy
 import kinetickk.ball.content.api.localizedContent
@@ -56,6 +57,7 @@ import kinetickk.foundation.design.measureKkText
 import kinetickk.foundation.design.rememberKkCanvasMeasurer
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 // Reward card chips: identity marks beside the icon (an active's slot and lane, Risk, Reborn, Heirloom, tags) and the forecast
 // row of what a card changes in the build. Glyphs carry identity, hues only element and role.
@@ -293,6 +295,8 @@ internal fun DrawScope.drawRewardChip(
 /**
  * Chips laid out left to right in up to [maxRows] rows of the available width: a chip that does
  * not fit is left out and the next one tried, so earlier chips (the more important) always show.
+ * The first chip (an active's slot, a relic's Risk) is never left out: wider than the whole row
+ * (a long key or a large text size), it is drawn scaled down to the row's width.
  */
 @Composable
 internal fun RewardChipFlow(
@@ -325,15 +329,27 @@ internal fun RewardChipFlow(
                                 contentDescription = chip.elements.joinToString(" ") { it.displayLabel.localizedContent(language) } + " " + chip.label
                             }
                         }
-                        .drawBehind { drawRewardChip(measurer, chip, Offset.Zero, size.width, style, paths) },
+                        .drawBehind {
+                            val natural = widths[index]
+                            val fit = size.width / natural
+                            if (fit < 0.999f) scale(fit, Offset.Zero) { drawRewardChip(measurer, chip, Offset.Zero, natural, style, paths) }
+                            else drawRewardChip(measurer, chip, Offset.Zero, size.width, style, paths)
+                        },
                 )
             } }
         },
         modifier = modifier,
     ) { measurables, constraints ->
         val gap = (gapDp * density).toInt()
-        val placeables = measurables.map { it.measure(androidx.compose.ui.unit.Constraints()) }
         val maxWidth = if (constraints.hasBoundedWidth) constraints.maxWidth else Int.MAX_VALUE
+        val placeables = measurables.mapIndexed { index, measurable ->
+            val natural = widths[index]
+            if (index == 0 && natural.roundToInt() > maxWidth) {
+                // Its height shrinks with its width, so the scaled chip keeps its proportions.
+                measurable.measure(androidx.compose.ui.unit.Constraints(maxWidth = maxWidth,
+                    maxHeight = (style.heightDp * density * maxWidth / natural).toInt()))
+            } else measurable.measure(androidx.compose.ui.unit.Constraints())
+        }
         val rowHeight = placeables.maxOfOrNull { it.height } ?: 0
         val positions = arrayOfNulls<androidx.compose.ui.unit.IntOffset>(placeables.size)
         // Never more rows than the height given: chips past them are left out like those too wide.
@@ -354,7 +370,8 @@ internal fun RewardChipFlow(
                 x = 0
             }
             val left = if (x == 0) 0 else x + gap
-            positions[index] = androidx.compose.ui.unit.IntOffset(left, row * (rowHeight + gap))
+            // A scaled first chip sits on its row's center line.
+            positions[index] = androidx.compose.ui.unit.IntOffset(left, row * (rowHeight + gap) + (rowHeight - placeables[index].height) / 2)
             x = left + width
             widest = max(widest, x)
             placed++

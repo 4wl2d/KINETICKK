@@ -132,7 +132,7 @@ class RewardActivePresentationTest {
             model(listOf(replace, keep), language, stacks = mapOf(base to 2), type = ChoiceType.ACTIVE_SLOT).rewardPresentation(language, touch)
         val english = prompt(AppLanguage.English)
         assertEquals(RewardLayoutKind.CARDS, english.kind)
-        assertEquals("Choose an active to replace", english.heading)
+        assertEquals("Replace an active", english.heading)
         assertNull(english.level, "the prompt is not a level-up")
         val slot = english.cards[0]
         assertEquals("Replace ${flare.name}", slot.title)
@@ -144,7 +144,8 @@ class RewardActivePresentationTest {
         assertEquals("Active", slot.rules.first().text)
         assertEquals(flare.summary, slot.rules[1].text)
         assertEquals(rankNumbers(flare.id, 2, AppLanguage.English), slot.rules[2].text)
-        assertEquals("${meteor.name} takes this slot at rank 1", slot.rules.last().text)
+        // The rank keeps its number on its line.
+        assertEquals("${meteor.name} takes this slot at rank\u00A01", slot.rules.last().text)
         assertEquals(listOf(StatusElement.THERMAL), slot.elements)
         assertFalse(slot.decline)
         assertEquals("Slot 2", prompt(AppLanguage.English, touch = true).cards[0].chips.first().label)
@@ -156,7 +157,7 @@ class RewardActivePresentationTest {
         assertTrue(kept.chips.isEmpty())
 
         val russian = prompt(AppLanguage.Russian)
-        assertEquals("Выберите активный предмет на замену", russian.heading)
+        assertEquals("Замена активного предмета", russian.heading)
         assertEquals("Заменить: " + flare.name.localizedContent(AppLanguage.Russian), russian.cards[0].title)
         assertEquals("Ранг 2/3", russian.cards[0].bandEnd)
         assertEquals("Активный эффект", russian.cards[0].rules.first().text)
@@ -190,9 +191,12 @@ class RewardActivePresentationTest {
         assertEquals(owned.keys.filter { id -> content.item(id)!!.tags.any { it in shared } }.toSet(), catalyzeItems.toSet())
     }
 
-    /** The numbers of [effect] at [rank] as the card shows them: the content's rank lines after the rank line. */
+    /**
+     * The numbers of [effect] at [rank] as the card shows them: the content's rank lines after the rank line, each held
+     * on one line with its label and unit.
+     */
     private fun rankNumbers(effect: SkillId, rank: Int, language: AppLanguage): String =
-        content.skill(effect).rankLines(rank, language).drop(1).joinToString(", ")
+        content.skill(effect).rankLines(rank, language).drop(1).joinToString(", ") { it.replace(' ', '\u00A0') }
 
     private fun model(
         choices: List<ChoiceOption>,
