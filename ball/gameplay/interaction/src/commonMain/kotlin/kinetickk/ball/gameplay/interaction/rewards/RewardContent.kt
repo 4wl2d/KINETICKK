@@ -150,6 +150,7 @@ import kinetickk.foundation.design.condStyle
 import kinetickk.foundation.design.drawKkCardBack
 import kinetickk.foundation.design.drawKkCardFrame
 import kinetickk.foundation.design.drawKkCardFront
+import kinetickk.foundation.design.kkCardFrameReachDp
 import kinetickk.foundation.design.kkLiftContrast
 import kinetickk.foundation.design.drawKkHalftone
 import kinetickk.foundation.design.drawKkIconPlate
@@ -650,6 +651,10 @@ internal fun RewardCard(
         // shown; only text longer than the last step scrolls. Cards dealt together share the
         // smallest step any of them needs ([bodyFit]).
         val end = spec.dp(spec.end)
+        // The face's right edge slants in by RewardCardCutDp toward the bottom and the frame (its border, the epic
+        // rim) reaches in from it: the body (and its costs) keeps its lowest line clear of both.
+        val bodyEnd = max(end.value, RewardCardCutDp * (bodyTop + bodyHeight).value / maxHeight.value +
+            kkCardFrameReachDp(look.style.material, maxWidth.value) + RewardBodyFrameClearanceDp).dp
         val gap = spec.dp(if (spec.compact) 3f else 6f)
         // Phone cards keep a card's mechanics (rules, a relic's upside); its numbers return when it has none.
         val mechanics = presentation.rules.any { it.kind != RuleLineKind.COST } || presentation.relic != null
@@ -657,7 +662,7 @@ internal fun RewardCard(
         val descriptions = if (spec.compact && changes.isNotEmpty()) emptyList() else presentation.descriptions
         val body: @Composable (Float, Modifier, RewardFacePlates?) -> Unit = { fit, bodyModifier, rowPlates ->
             val font = spec.font * fit
-            Column(bodyModifier.padding(start = start, end = end), verticalArrangement = Arrangement.spacedBy(gap * fit)) {
+            Column(bodyModifier.padding(start = start, end = bodyEnd), verticalArrangement = Arrangement.spacedBy(gap * fit)) {
                 RewardCardName(presentation.title, presentation.rank, typography, (if (spec.compact) 26f else 38f) * font, clock,
                     color = if (presentation.heirloom) roles.gold.base else Kk.Bone)
                 if (narrow) presentation.bandEnd?.let { bandEnd ->
@@ -699,7 +704,7 @@ internal fun RewardCard(
             { fit, probing ->
                 val font = spec.font * fit
                 val rowPlates = if (probing) null else plates
-                Column(Modifier.fillMaxWidth().padding(start = start, end = end)
+                Column(Modifier.fillMaxWidth().padding(start = start, end = bodyEnd)
                     .then(if (probing) Modifier else Modifier.testTag("kinetickk.gameplay.choice.${index + 1}.cost")),
                     verticalArrangement = Arrangement.spacedBy(gap * fit)) {
                     presentation.liabilities.forEachIndexed { line, liability ->
@@ -1402,7 +1407,10 @@ private object RewardCardStrokes {
 }
 
 /** The card face cut (`.card` clip-path, 22 dp). */
-private const val RewardCardCutDp = 22f
+internal const val RewardCardCutDp = 22f
+
+/** Air (dp) between the body's lowest line and the card frame's inner edge. */
+private const val RewardBodyFrameClearanceDp = 2f
 
 /**
  * Width (dp) over which the face plates fade out around the text: about three times the largest

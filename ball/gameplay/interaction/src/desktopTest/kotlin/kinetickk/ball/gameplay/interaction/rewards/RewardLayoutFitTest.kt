@@ -58,7 +58,9 @@ import kinetickk.ball.gameplay.nucleus.render.RewardStatChange
 import kinetickk.ball.gameplay.nucleus.render.TotemAction
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.LocalAppLanguage
+import kinetickk.foundation.design.kkCardFrameReachDp
 import kinetickk.foundation.design.rememberKkCanvasMeasurer
 import org.junit.Test
 import kotlin.math.abs
@@ -376,6 +378,56 @@ class RewardLayoutFitTest {
         }
         assertTrue(chips >= frames.size * 2 * settings.size * 6, "Checked every active card's slot chip ($chips)")
         assertTrue(rows >= frames.size * 2 * settings.size * 6, "Checked every active card's number rows ($rows)")
+    }
+
+    /**
+     * The card face's right edge slants in toward the bottom (the fixed 22 dp cut) and its frame (border, the epic rim)
+     * reaches in from it: every shown line of an active card's body ends clear of both, the long low lines of the slot
+     * prompt included, on the board, phone and portrait cards at both text sizes in both languages.
+     */
+    @Test
+    fun cardTextEndsClearOfTheSlantedFrame() {
+        var lines = 0
+        for ((width, height) in listOf(300 to 450, 220 to 254, 195 to 254, 178 to 305)) for (language in AppLanguage.entries) for (setting in settings) {
+            val cards = listOf(activeOffers(language, 1440f, 810f, setting), activeSlotPrompt(language, 1440f, 810f, setting)).flatMap { model ->
+                model.choices.mapIndexed { index, choice -> model.rewardCardPresentation(choice, index, language) }
+            }
+            runDesktopComposeUiTest(cards.size * (width + 10), height + 20, effectContext = object : MotionDurationScale {
+                override val scaleFactor = 0f
+            }) {
+                setContent {
+                    CompositionLocalProvider(LocalAppLanguage provides language, LocalDensity provides Density(1f)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            cards.forEachIndexed { index, card ->
+                                RewardCard(card, index, overlayUiTextScale(setting), 0f, true, Modifier.requiredSize(width.dp, height.dp),
+                                    phoneDeal = height == 254) {}
+                            }
+                        }
+                    }
+                }
+                waitForIdle()
+                cards.forEachIndexed { index, card ->
+                    val tag = "kinetickk.gameplay.choice.${index + 1}"
+                    val bounds = onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
+                    val viewport = onNode(hasTestTag("$tag.text"), useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                    val reach = kkCardFrameReachDp(rewardCardLook(card, KkRolePalette.Default).style.material, width.toFloat())
+                    textsUnder("$tag.text").forEach { (node, layout) ->
+                        val box = node.boundsInRoot
+                        (0 until layout.lineCount).forEach { line ->
+                            val bottom = box.top + layout.getLineBottom(line)
+                            val end = layout.getLineEnd(line, visibleEnd = true)
+                            if (bottom > viewport.bottom + 0.5f || end <= layout.getLineStart(line)) return@forEach
+                            val ink = box.left + layout.getBoundingBox(end - 1).right
+                            val edge = bounds.right - RewardCardCutDp * (bottom - bounds.top) / bounds.height - reach
+                            assertTrue(ink <= edge, "${card.title} ${width}x$height $language $setting: line ${line + 1} of " +
+                                "'${layout.layoutInput.text.text}' ends at $ink, past the frame at $edge")
+                            lines++
+                        }
+                    }
+                }
+            }
+        }
+        assertTrue(lines > 4 * 2 * 2 * 7 * 4, "Checked the cards' lines ($lines)")
     }
 
     /** [this] with its no-break spaces and word joiners read as the plain text they hold together. */
