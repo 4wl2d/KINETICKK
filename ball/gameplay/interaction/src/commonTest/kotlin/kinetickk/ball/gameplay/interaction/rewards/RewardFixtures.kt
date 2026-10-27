@@ -44,6 +44,8 @@ import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.RewardPreview
 import kinetickk.ball.gameplay.nucleus.render.RunStatistics
+import kinetickk.ball.gameplay.nucleus.render.SkillBarProjection
+import kinetickk.ball.profile.api.KeyBindings
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
@@ -232,10 +234,12 @@ internal fun rewardFixtureModel(
     rebirthLevel: Int = 3,
     runStatisticsOnLeft: Boolean = false,
     coreShape: CoreShape = CoreShape.ORB,
+    skillBar: SkillBarProjection = SkillBarProjection.EMPTY,
+    keyBindings: KeyBindings = KeyBindings.DEFAULT,
 ): GameplayRenderModel = GameplayRenderModel(
     content = content,
     phase = phase,
-    settings = PlayerPreferences(language = language, textScale = textScale, runStatisticsOnLeft = runStatisticsOnLeft),
+    settings = PlayerPreferences(language = language, textScale = textScale, runStatisticsOnLeft = runStatisticsOnLeft, keyBindings = keyBindings),
     rebirthLevel = rebirthLevel,
     screenWidth = width,
     screenHeight = height,
@@ -264,6 +268,7 @@ internal fun rewardFixtureModel(
     weaponBeamTime = 0f, weaponBeamStartX = 0f, weaponBeamStartY = 0f, weaponBeamEndX = 0f, weaponBeamEndY = 0f,
     totem = null,
     coreShape = coreShape,
+    skillBar = skillBar,
     enemies = immutableListOf(), projectiles = immutableListOf(), pickups = immutableListOf(), trail = immutableListOf(),
     weaponNodes = immutableListOf(), weaponOrbitals = immutableListOf(),
     choices = choices.toImmutableList(),

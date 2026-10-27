@@ -69,7 +69,9 @@ internal fun DrawScope.drawGameplay(
     }
 
     when (engine.phase) {
-        GamePhase.PAUSED -> withHudDensity(hudDensity) { drawPause(engine, hudTextMeasurer, requireNotNull(pauseLayout), renderTime) }
+        GamePhase.PAUSED -> withHudDensity(hudDensity) {
+            drawPause(engine, hudTextMeasurer, requireNotNull(pauseLayout), renderTime, touch = controls?.touchInput == true)
+        }
         GamePhase.CHOICE -> Unit // Reward cards and reroll are visible Compose controls.
         GamePhase.GAME_OVER, GamePhase.VICTORY -> Unit // TerminalContent owns the animated report and actions.
         GamePhase.RUNNING -> Unit

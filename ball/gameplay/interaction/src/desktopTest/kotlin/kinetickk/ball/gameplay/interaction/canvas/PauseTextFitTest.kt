@@ -27,7 +27,16 @@ import kinetickk.ball.gameplay.nucleus.render.WeaponSynergyProjection
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
+import kinetickk.ball.content.api.SkillId
+import kinetickk.ball.gameplay.interaction.rewards.rewardActiveFixtureContent
+import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureActiveBase
 import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureModel
+import kinetickk.ball.gameplay.nucleus.render.SkillBarProjection
+import kinetickk.ball.gameplay.nucleus.render.SkillSlotProjection
+import kinetickk.ball.profile.api.GameAction
+import kinetickk.ball.profile.api.KeyBindings
+import kinetickk.foundation.common.input.BindableKey
+import kinetickk.foundation.design.label
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.CanvasTextMeasurer
@@ -66,6 +75,14 @@ class PauseTextFitTest {
             val layout = pauseLayoutGeometry(width.toFloat(), height.toFloat(), 1f)
             listOf(PauseTextKind.MULTIPLIER, PauseTextKind.COST, PauseTextKind.TAG_NAME, PauseTextKind.REACTION).forEach { kind ->
                 assertTrue(records.any { it.kind == kind }, "$scene draws $kind")
+            }
+            // The desktop board's item grid leads with the three active items, each with its slot's key on a cap (the
+            // longest key names included); phones show no item grid.
+            val keys = records.filter { it.kind == PauseTextKind.KEY }.map { it.layout.layoutInput.text.text }
+            if (layout.mode == GameplayLayoutMode.REGULAR) {
+                assertEquals(listOf(BindableKey.SPACE, BindableKey.ARROW_RIGHT, BindableKey.C).map { it.label(language).uppercase() }, keys, scene)
+            } else {
+                assertEquals(emptyList(), keys, scene)
             }
             // The weapon's synergies show on the desktop board at every size and on phones up to the default size
             // (a section that no longer fits a phone at a larger size is left out, never cut).
@@ -196,6 +213,15 @@ class PauseTextFitTest {
         assertEquals(15f, size(default, PauseTextKind.LABEL), 0.05f)
     }
 
+    @Test
+    fun aTouchPlayerSeesTheActiveSlotsByNumberOnTheirCaps() {
+        for (language in AppLanguage.entries) for (textScale in listOf(1f, 1.75f)) {
+            val records = drawPause(1440, 810, language, textScale, touch = true)
+            assertEquals(listOf("1", "2", "3"), records.filter { it.kind == PauseTextKind.KEY }.map { it.layout.layoutInput.text.text },
+                "$language ${textScale}x")
+        }
+    }
+
     private fun drawPause(
         width: Int,
         height: Int,
@@ -203,11 +229,21 @@ class PauseTextFitTest {
         textScale: Float,
         relics: List<EquippedRelic> = this.relics,
         build: BuildProjection = this.build,
+        touch: Boolean = false,
     ): List<PauseTextRecord> {
-        // A full build: two named brackets, tags and elements with points, two reactions (one met).
-        val model = rewardFixtureModel(phase = GamePhase.PAUSED, relics = relics, language = language,
+        // A full build: two named brackets, tags and elements with points, two reactions (one met), and three active
+        // items held in Z/X/C (Solar Flare I, Meteor II, Frost Line I) bound to the longest key names.
+        val base = rewardFixtureActiveBase
+        val actives = SkillBarProjection(immutableListOf(SkillSlotProjection(SkillId.SOLAR_FLARE.ordinal, 1),
+            SkillSlotProjection(SkillId.METEOR.ordinal, 2), SkillSlotProjection(SkillId.FROST_LINE.ordinal, 1)))
+        val model = rewardFixtureModel(phase = GamePhase.PAUSED, content = rewardActiveFixtureContent, relics = relics, language = language,
             width = width.toFloat(), height = height.toFloat(), textScale = textScale, build = build,
-            discoveredPairings = setOf(RelicPairingId.ENDLESS_GYRE), itemStacks = listOf(1, 1, 1, 2, 2))
+            discoveredPairings = setOf(RelicPairingId.ENDLESS_GYRE),
+            itemStacks = List(rewardActiveFixtureContent.items.size) { id ->
+                when (id) { 0, 1, 2 -> 1; 3, 4 -> 2; base -> 1; base + 1 -> 2; base + 3 -> 1; else -> 0 }
+            },
+            skillBar = actives,
+            keyBindings = KeyBindings.DEFAULT.with(GameAction.SKILL_1, BindableKey.SPACE).with(GameAction.SKILL_2, BindableKey.ARROW_RIGHT))
             .with("discoveredReactionMask" to (1 shl ReactionId.WILDFIRE.ordinal), "weaponSynergy" to FullSynergy)
         val records = mutableListOf<PauseTextRecord>()
         PauseTextProbe.records = records
@@ -219,7 +255,7 @@ class PauseTextFitTest {
                         Box(Modifier.requiredSize(width.dp, height.dp)) {
                             Canvas(Modifier.fillMaxSize()) {
                                 records.clear()
-                                drawPause(model, measurer, pauseLayoutGeometry(size.width, size.height, 1f))
+                                drawPause(model, measurer, pauseLayoutGeometry(size.width, size.height, 1f), touch = touch)
                             }
                         }
                     }

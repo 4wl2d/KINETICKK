@@ -8,8 +8,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ItemDefinition
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.foundation.design.CanvasGlyphStyle
+import kinetickk.foundation.design.Kk
+import kinetickk.foundation.design.drawKkIcon
+import kinetickk.foundation.design.drawKkPips
 import kinetickk.foundation.design.drawLayeredGlyph
 
 /** Gameplay owns the mapping of item semantics to the shared geometric drawing. */
@@ -33,6 +37,30 @@ internal fun DrawScope.drawItemIcon(
         outerArcDegrees = stack?.coerceIn(0, item.maxStacks)?.let { 360f * it / item.maxStacks } ?: 0f,
         crossedOut = obscured,
     )
+}
+
+/**
+ * An active item's mark, as its Z/X/C slot draws it: the effect's glyph ([skillGlyph]) in [color] with [maxRank] sheared
+ * rank pips under it, [rank] of them filled (empty ones in [emptyColor]), in a square of [side] px centred at [center].
+ * The reward card's icon plate, the pause Build grid and the Codex's Build tiles draw an active this way. Allocation-free.
+ */
+fun DrawScope.drawActiveItemMark(
+    effect: SkillId,
+    center: Offset,
+    side: Float,
+    color: Color,
+    rank: Int,
+    maxRank: Int,
+    emptyColor: Color = Kk.Line2,
+) {
+    val top = center.y - side * 0.5f
+    drawKkIcon(skillGlyph(effect), Offset(center.x, top + side * 0.44f), side * 0.48f, color)
+    val pipHeight = side * 0.07f
+    val pipWidth = side * 0.13f
+    val gap = side * 0.05f
+    val row = maxRank * pipWidth + (maxRank - 1) * gap
+    drawKkPips(Offset(center.x - row * 0.5f, top + side * 0.78f), maxRank, rank.coerceIn(0, maxRank), color,
+        sizeDp = pipHeight / density, widthDp = pipWidth / density, gapDp = gap / density, emptyColor = emptyColor)
 }
 
 /** The item's first element when it has one, otherwise its first tag. */

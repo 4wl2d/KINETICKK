@@ -110,12 +110,11 @@ import kinetickk.ball.gameplay.interaction.canvas.drawRelicIcon
 import kinetickk.ball.gameplay.interaction.canvas.elementFill
 import kinetickk.ball.gameplay.interaction.canvas.overlayColor
 import kinetickk.ball.gameplay.interaction.canvas.overlayIcon
-import kinetickk.ball.gameplay.interaction.canvas.skillGlyph
+import kinetickk.ball.gameplay.interaction.canvas.drawActiveItemMark
 import kinetickk.foundation.design.KkFillKind
 import kinetickk.foundation.design.drawKkHatch
 import kinetickk.foundation.design.drawKkIcon
 import kinetickk.foundation.design.drawKkPattern
-import kinetickk.foundation.design.drawKkPips
 import kinetickk.foundation.design.drawKkSheared
 import kinetickk.foundation.design.kkStroke
 import kinetickk.foundation.design.measureKkText
@@ -986,7 +985,8 @@ private fun DrawScope.drawRewardIcon(
             // The plate carries the type's pattern: identity without hue (color vision).
             drawRadialPattern(bounds, item.elements.firstOrNull()?.let { elementFill(it.ordinal) } ?: KineticFill, iconColor, pattern)
             val effect = item.active
-            if (effect != null) drawActiveIcon(effect, bounds, iconColor, presentation.itemStack ?: 0, item.maxStacks)
+            if (effect != null) drawActiveItemMark(effect, Offset(bounds.center.x, bounds.top + bounds.minDimension * 0.5f), bounds.minDimension,
+                iconColor, presentation.itemStack ?: 0, item.maxStacks)
             else drawItemIcon(item, bounds.center, size.minDimension * 0.34f, iconColor, presentation.itemStack)
         }
         relic != null && policy != null -> {
@@ -1006,21 +1006,6 @@ private fun DrawScope.drawRewardIcon(
         }
         else -> drawKkIconPlate(bounds, presentation.icon, accent, cut, size.minDimension / density * 0.55f, rim = accent)
     }
-}
-
-/**
- * An active item's plate mark, as its Z/X/C slot draws it: the effect's glyph ([skillGlyph]) in the type hue with
- * [maxRank] sheared rank pips under it, [rank] filled (the rank the card reaches, or the held rank on the slot prompt).
- */
-private fun DrawScope.drawActiveIcon(effect: SkillId, bounds: Rect, color: Color, rank: Int, maxRank: Int) {
-    val side = bounds.minDimension
-    drawKkIcon(skillGlyph(effect), Offset(bounds.center.x, bounds.top + side * 0.44f), side * 0.48f, color)
-    val pipHeight = side * 0.07f
-    val pipWidth = side * 0.13f
-    val gap = side * 0.05f
-    val row = maxRank * pipWidth + (maxRank - 1) * gap
-    drawKkPips(Offset(bounds.center.x - row * 0.5f, bounds.top + side * 0.78f), maxRank, rank.coerceIn(0, maxRank), color,
-        sizeDp = pipHeight / density, widthDp = pipWidth / density, gapDp = gap / density, emptyColor = Kk.Line2)
 }
 
 /** [kind] in [color] at [alpha] over the plate, fading out toward its edges. */

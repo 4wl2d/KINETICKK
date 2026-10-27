@@ -17,7 +17,16 @@ import kinetickk.ball.gameplay.nucleus.render.BuildProjection
 import kinetickk.ball.gameplay.nucleus.render.SeveredRelicProjection
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
+import kinetickk.ball.content.api.SkillId
+import kinetickk.ball.gameplay.interaction.rewards.rewardActiveFixtureContent
+import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureActiveBase
 import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureModel
+import kinetickk.ball.gameplay.nucleus.render.SkillBarProjection
+import kinetickk.ball.gameplay.nucleus.render.SkillSlotProjection
+import kinetickk.ball.profile.api.GameAction
+import kinetickk.ball.profile.api.KeyBindings
+import kinetickk.foundation.common.input.BindableKey
+import kinetickk.foundation.design.label
 import kinetickk.foundation.common.localization.AppLanguage
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -127,6 +136,30 @@ class GameplayPresentationPolicyTest {
             russian.itemsLabel, russian.noItems, russian.noReactions) + russian.stats.map { it.label } + russian.tags.map { it.label } +
             russian.elements.map { it.label }
         assertTrue(russianShown.none { latin.containsMatchIn(it) }, russianShown.toString())
+    }
+
+    @Test
+    fun pauseBuildLeadsWithTheActiveItemsInSlotOrderWithTheirKeysOrSlotNumbers() {
+        val content = rewardActiveFixtureContent
+        val base = rewardFixtureActiveBase
+        val frostLine = base + 3
+        // Passive items 0 and 3; Frost Line (rank II) in Z and Solar Flare (rank I) in X; C empty; Meteor not owned.
+        val stacks = List(content.items.size) { id -> when (id) { 0 -> 1; 3 -> 2; frostLine -> 2; base -> 1; else -> 0 } }
+        val bar = SkillBarProjection(immutableListOf(SkillSlotProjection(SkillId.FROST_LINE.ordinal, 2),
+            SkillSlotProjection(SkillId.SOLAR_FLARE.ordinal, 1), SkillSlotProjection.EMPTY))
+        val rebound = KeyBindings.DEFAULT.with(GameAction.SKILL_2, BindableKey.SPACE)
+        for (language in AppLanguage.entries) {
+            val model = rewardFixtureModel(phase = GamePhase.PAUSED, content = content, itemStacks = stacks, skillBar = bar,
+                keyBindings = rebound, language = language)
+            val keyboard = model.pauseBuildOverview(language)
+            assertEquals(listOf(frostLine, base, 0, 3), keyboard.items.map { it.item.id }, "actives lead in Z/X/C order")
+            assertEquals(listOf(SkillId.FROST_LINE, SkillId.SOLAR_FLARE, null, null), keyboard.items.map { it.active })
+            assertEquals(listOf(2, 1, 1, 2), keyboard.items.map { it.stacks }, "an active's stacks are its rank")
+            assertEquals(listOf(BindableKey.Z.label(language), BindableKey.SPACE.label(language), null, null), keyboard.items.map { it.slotKey },
+                "each active names its slot's bound key")
+            assertEquals(listOf("1", "2", null, null), model.pauseBuildOverview(language, touch = true).items.map { it.slotKey },
+                "a touch player reads the slot's number")
+        }
     }
 
     @Test

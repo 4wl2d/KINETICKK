@@ -37,6 +37,11 @@ import kinetickk.ball.gameplay.interaction.fx.ReactionStampProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureModel
+import kinetickk.ball.gameplay.nucleus.render.SkillSlotProjection
+import kinetickk.ball.gameplay.nucleus.render.SkillBarProjection
+import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureActiveBase
+import kinetickk.ball.gameplay.interaction.rewards.rewardActiveFixtureContent
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.gameplay.interaction.terminal.TerminalContent
 import kinetickk.ball.gameplay.nucleus.render.BuildProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
@@ -226,14 +231,22 @@ class RedesignShotsBuildTest {
         BuildNotificationProjection("REACTION DISCOVERED", immutableListOf("+ Thermal Shock"), 5.8f, BuildNoticeKind.DISCOVERY),
     ))
 
-    /** A paused run with a full build: brackets, tags, elements, reactions (one met), items and costs. */
+    /**
+     * A paused run with a full build: brackets, tags, elements, reactions (one met), items and costs, and two active items
+     * (Frost Line III in Z, Solar Flare I in X) leading the item grid with their keys.
+     */
     private fun pauseBuild(width: Int, height: Int, language: AppLanguage, textScale: Float): GameplayRenderModel =
         rewardFixtureModel(
             phase = GamePhase.PAUSED, language = language, width = width.toFloat(), height = height.toFloat(), textScale = textScale,
+            content = rewardActiveFixtureContent,
+            skillBar = SkillBarProjection(immutableListOf(SkillSlotProjection(SkillId.FROST_LINE.ordinal, 3),
+                SkillSlotProjection(SkillId.SOLAR_FLARE.ordinal, 1), SkillSlotProjection.EMPTY)),
             relics = listOf(EquippedRelic(RelicId.PERPETUAL_VECTOR, 2), EquippedRelic(RelicId.GYRE_ENGINE, 1),
                 EquippedRelic(RelicId.FURNACE_COVENANT, 1), EquippedRelic(RelicId.HOLLOW_CROWN, 1)),
             discoveredPairings = setOf(RelicPairingId.ENDLESS_GYRE),
-            itemStacks = listOf(2, 1, 1, 3, 1),
+            itemStacks = List(rewardActiveFixtureContent.items.size) { id ->
+                when (id) { 0 -> 2; 1, 2, 4 -> 1; 3 -> 3; rewardFixtureActiveBase -> 1; rewardFixtureActiveBase + 3 -> 3; else -> 0 }
+            },
             build = BuildProjection(
                 tagPoints = immutableListOf(6, 4, 1, 2, 0, 0, 3, 1, 0),
                 tagTiers = immutableListOf(2, 1, 0, 0, 0, 0, 1, 0, 0),
