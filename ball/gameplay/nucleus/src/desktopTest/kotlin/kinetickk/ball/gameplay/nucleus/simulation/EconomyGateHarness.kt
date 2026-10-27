@@ -94,7 +94,8 @@ internal fun gateProfile(
 
 /**
  * Plays one gate run of [profile] on [seed] with [bot] and returns the final state. [relics] are bound at the
- * start; [observe] sees the state after every bot decision or step, before the cues are taken.
+ * start; [observe] sees the state after every bot decision or step, before the cues are taken; [shown] sees every
+ * choice screen the bot is shown (a reroll's new cards are a new screen) before the bot decides.
  */
 internal fun playGateRun(
     seed: Int,
@@ -102,6 +103,7 @@ internal fun playGateRun(
     bot: NoPoiBot,
     relics: List<RelicId> = emptyList(),
     content: GameplayContentSnapshot = canonicalGameplayContent,
+    shown: (MutableGameState) -> Unit = {},
     observe: (MutableGameState) -> Unit = {},
 ): MutableGameState {
     val state = MutableGameState(content, seed = seed, bootstrapProgress = profile)
@@ -109,7 +111,10 @@ internal fun playGateRun(
     state.startRun()
     relics.forEach(state::acquireRelicForTesting)
     while (state.elapsed < 900f && (state.phase == GamePhase.RUNNING || state.phase == GamePhase.CHOICE)) {
-        if (state.phase == GamePhase.CHOICE) bot.choose(state) else {
+        if (state.phase == GamePhase.CHOICE) {
+            shown(state)
+            bot.choose(state)
+        } else {
             bot.control(state)
             state.update(0.02f)
         }
