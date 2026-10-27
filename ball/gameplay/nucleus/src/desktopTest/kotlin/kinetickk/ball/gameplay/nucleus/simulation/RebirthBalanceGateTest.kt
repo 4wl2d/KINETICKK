@@ -67,14 +67,16 @@ import kotlin.test.assertTrue
  *
  * With active items (lead Addendum C5) A and the survival bounds of D and H are population gates over
  * [PopulationSeeds]: on the 05885fa9 base their five gate seeds passed with probability 0.49, 0.82 and 0.78, so they
- * re-rolled with every change to the reward stream. B, C, E, F, G and the win bounds of D and H keep their seeds and
- * thresholds (each passed with probability 1.00 at the base), and Gate I keeps its 31 seeds and 0.8 (Addendum C7).
+ * re-rolled with every change to the reward stream. Their floors follow Addendum D1 (the lower of the seeded threshold
+ * and the base minus two standard errors). B, C, E, F, G and the win bounds of D and H keep their seeds and thresholds
+ * (each passed with probability 1.00 at the base), and Gate I keeps its 31 seeds and 0.8 (Addendum C7).
  */
 class RebirthBalanceGateTest {
     /**
      * Gate A over the population (Addendum C5): a fresh tier-0 run won 204 of the 300 [PopulationSeeds] runs on the
      * 05885fa9 base (0.680, SE 0.027), so five seeds reached four wins with probability 0.49. At least
-     * [A_MIN_WIN_SHARE] of the population must win: the base share minus two standard errors, rounded down.
+     * [A_MIN_WIN_SHARE] of the population must win: by Addendum D1 the lower of the seeded 4 of 5 (0.80) and the base
+     * share minus two standard errors, rounded down.
      */
     @Test fun aFreshNoPoiBotStillWinsTierZero() {
         val outcomes = populationOf(PopulationSeeds) { seed -> play(seed, tier = 0, setup = Fresh) }
@@ -144,8 +146,9 @@ class RebirthBalanceGateTest {
     /**
      * D's survival bound is a population gate (Addendum C5): the base strong build's median survival over the 300
      * [PopulationSeeds] runs was 574.48 s (bootstrap SE 16.24 s), and five seeds reached a median of 480 s with
-     * probability 0.82. The population's median survival must be at least [D_MIN_MEDIAN_SURVIVAL] s, the base median
-     * minus two standard errors rounded down. The win bound stays on the five gate seeds (8 of the 300 base runs won).
+     * probability 0.82. The population's median survival must be at least [D_MIN_MEDIAN_SURVIVAL] s: by Addendum D1 the
+     * lower of the design's eight minutes and the base median minus two standard errors (541.99 s). The win bound stays
+     * on the five gate seeds (8 of the 300 base runs won).
      */
     @Test fun aStrongBuildSurvivesEightMinutesOfTierTenButRarelyClearsIt() {
         val outcomes = GateSeeds.map { seed -> play(seed, tier = 10, setup = Strong) }
@@ -167,8 +170,9 @@ class RebirthBalanceGateTest {
      *
      * The survival bound is a population gate (Addendum C5): the base median survival over the 300 [PopulationSeeds]
      * runs was 583.33 s (bootstrap SE 20.37 s), and five seeds reached 480 s with probability 0.78. The population's
-     * median must be at least [H_MIN_MEDIAN_SURVIVAL] s, the base median minus two standard errors rounded down. The
-     * win bound stays on the five gate seeds (1 of the 300 base runs won).
+     * median must be at least [H_MIN_MEDIAN_SURVIVAL] s: by Addendum D1 the lower of the design's eight minutes and the
+     * base median minus two standard errors (542.59 s). The win bound stays on the five gate seeds (1 of the 300 base
+     * runs won).
      */
     @Test fun aStrongBuildSeekingDataWithTheApexStillFindsTierTenHard() {
         val outcomes = GateSeeds.map { seed -> play(seed, tier = 10, setup = Strong, seekData = true) }
@@ -295,15 +299,15 @@ class RebirthBalanceGateTest {
 
         /**
          * Gate D: the least median survival over [PopulationSeeds] of the strong build at tier 10 (base 574.48 s, SE
-         * 16.24 s).
+         * 16.24 s, n 300; the design's 480 s by Addendum D1).
          */
-        const val D_MIN_MEDIAN_SURVIVAL = 541.99f
+        const val D_MIN_MEDIAN_SURVIVAL = 480f
 
         /**
          * Gate H: the least median survival over [PopulationSeeds] of the Data-seeking strong build (base 583.33 s, SE
-         * 20.37 s).
+         * 20.37 s, n 300; the design's 480 s by Addendum D1).
          */
-        const val H_MIN_MEDIAN_SURVIVAL = 542.59f
+        const val H_MIN_MEDIAN_SURVIVAL = 480f
 
         /** Gate I's seeds: the NoPoi probe sequence (`i * 7_919 + 13`) for i = 1..31, which holds the gate seeds. */
         val GateISeeds: List<Int> = (1..31).map { it * 7_919 + 13 }

@@ -23,9 +23,10 @@ import kotlin.test.assertTrue
  * base met "at most 15 % more obstacle contacts per second and no more singularity contacts" in every arm with
  * probability 0.20 (one arm alone with 0.44 for Slingshot to 0.94 for Arc Hook). Every arm now plays the 300
  * [PopulationSeeds] runs. An arm's obstacle-contact rate is at most [MaxBounceRatio] × the
- * baseline's (its base ratio plus two bootstrap standard errors, rounded up; base baseline 0.01061 per second, 899
- * contacts in 84,733 s), and the share of its runs ending in a singularity contact exceeds the baseline's by at most
- * [MaxExtraContactShare] (0 for every arm without a base contact; Slingshot's two base contacts in 300 runs give 0.02).
+ * baseline's (by Addendum D1 the higher of the design's 1.15 and its base ratio plus two bootstrap standard errors,
+ * rounded up; base baseline 0.01061 per second, 899 contacts in 84,733 s), and the share of its runs ending in a
+ * singularity contact exceeds the baseline's by at most [MaxExtraContactShare] (0 for every arm without a base contact;
+ * Slingshot's two base contacts in 300 runs give 0.02).
  */
 class SingularityContactGateTest {
     private class Arm(val label: String, val contacts: Int, val bouncesPerSecond: Double, val outcomes: String)
@@ -114,20 +115,20 @@ class SingularityContactGateTest {
         const val ARM_SECONDS = 300f
         const val REACTION_EVERY = 3f
         /**
-         * Each arm's largest obstacle-contact rate over the baseline's on [PopulationSeeds]: its 05885fa9 base ratio
-         * plus two bootstrap standard errors (20,000 resamples of the seeds), rounded up. Base ratio (SE): Meteor 0.965
-         * (0.068), Arc Hook 0.836 (0.056), Mass Driver 0.981 (0.074), Void Step 0.897 (0.058), Slingshot 1.129 (0.079),
-         * Sonic Boom 0.867 (0.056), Superconduct 0.881 (0.062), Thunderclap 0.995 (0.070), Annihilate 0.882 (0.062),
-         * Recoil Spring 1.040 (0.069), Kickback Plate 0.938 (0.070), Spin Turbine 1.083 (0.076), Event Saddle 0.934
-         * (0.067), Gravity Assist 0.960 (0.069), Crest Rider 1.041 (0.068).
+         * Each arm's largest obstacle-contact rate over the baseline's on [PopulationSeeds] (Addendum D1): the design's
+         * [DESIGN_BOUNCE_RATIO], or its 05885fa9 base ratio plus two bootstrap standard errors (20,000 resamples of the
+         * seeds, rounded up) where that is higher. Base ratio (SE, base + 2 SE) over 300 runs: Meteor 0.965 (0.068, 1.11),
+         * Arc Hook 0.836 (0.056, 0.95), Mass Driver 0.981 (0.074, 1.13), Void Step 0.897 (0.058, 1.02), Slingshot 1.129
+         * (0.079, 1.29), Sonic Boom 0.867 (0.056, 0.98), Superconduct 0.881 (0.062, 1.01), Thunderclap 0.995 (0.070,
+         * 1.14), Annihilate 0.882 (0.062, 1.01), Recoil Spring 1.040 (0.069, 1.18), Kickback Plate 0.938 (0.070, 1.08),
+         * Spin Turbine 1.083 (0.076, 1.24), Event Saddle 0.934 (0.067, 1.07), Gravity Assist 0.960 (0.069, 1.10), Crest
+         * Rider 1.041 (0.068, 1.18).
          */
-        val MaxBounceRatio: Map<String, Double> = mapOf(
-            SkillId.METEOR.name to 1.11, SkillId.ARC_HOOK.name to 0.95, SkillId.MASS_DRIVER.name to 1.13,
-            SkillId.VOID_STEP.name to 1.02, SkillId.SLINGSHOT.name to 1.29, SkillId.SONIC_BOOM.name to 0.98,
-            ReactionId.SUPERCONDUCT.name to 1.01, ReactionId.THUNDERCLAP.name to 1.14, ReactionId.ANNIHILATE.name to 1.01,
-            "Recoil Spring" to 1.18, "Kickback Plate" to 1.08, "Spin Turbine" to 1.24, "Event Saddle" to 1.07,
-            "Gravity Assist" to 1.10, "Crest Rider" to 1.18,
-        )
+        val MaxBounceRatio: Map<String, Double> =
+            (MovingSkills.map { it.name } + MovingReactions.map { it.name } + LaunchingItems).associateWith { DESIGN_BOUNCE_RATIO } +
+                mapOf(SkillId.SLINGSHOT.name to 1.29, "Spin Turbine" to 1.24, "Recoil Spring" to 1.18, "Crest Rider" to 1.18)
+        /** The design bound: at most 15 % more obstacle contacts per second than the baseline. */
+        const val DESIGN_BOUNCE_RATIO = 1.15
         /**
          * The largest share of an arm's runs ending in a singularity contact beyond the baseline's: the base difference
          * plus two standard errors, rounded up. Only Slingshot touched it at the base (2 of 300, SE 0.005); every other
