@@ -16,6 +16,7 @@ import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.model.BuffSource
 import kinetickk.ball.gameplay.nucleus.model.CombatFieldKind
 import kinetickk.ball.gameplay.nucleus.model.FieldSource
+import kinetickk.ball.gameplay.nucleus.model.ItemDeck
 import kinetickk.ball.gameplay.nucleus.model.MarkKind
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.Projectile
@@ -100,6 +101,10 @@ class ActiveItemOfferTest {
     @Test
     fun atMostOneActiveShowsPerOfferAndAZeroActiveWeightOffersNoneAnywhere() {
         val eager = contentWithLanes { copy(activeWeight = 1_000f) }
+        // Every direction an item-and-repair reward offers: all the directions an item can have.
+        val focuses = offerState(1, eager).apply { openDirectedReward(DirectedReward.ITEM_AND_REPAIR) }
+            .choices.mapNotNull { it.rewardFocus }
+        assertEquals(canonicalGameplayContent.items.map(::itemRewardFocus).toSet(), focuses.toSet())
         var single = 0
         for (seed in 1..120) {
             val state = offerState(seed, eager)
@@ -107,16 +112,39 @@ class ActiveItemOfferTest {
             val actives = state.choices.count { it.skillId != null }
             assertTrue(actives <= 1, "seed $seed: ${state.choices.map { it.title }}")
             if (actives == 1) single++
-            val reward = offerState(seed, eager).directedItemReward(RewardFocus.OFFENSE)
-            assertTrue(reward.count { it.skillId != null } <= 1, "seed $seed: a directed reward shows at most one active")
+            for (focus in focuses) {
+                val reward = offerState(seed, eager).directedItemReward(focus)
+                assertTrue(reward.count { it.skillId != null } <= 1, "seed $seed $focus: a directed reward shows at most one active")
+            }
         }
         assertTrue(single >= 60, "an eager active weight shows an active in most offers ($single of 120)")
+
+        // A deck dealing a direction's offerable actives and one passive: any three of its shuffle hold two actives or
+        // more, so the reward deals one active, skips the others (never redrawing one) and reaches the passive.
+        var forced = 0
+        for (focus in focuses) {
+            val probe = offerState(1, canonicalGameplayContent)
+            val pool = probe.content.items.filter { probe.offerableOutsideDeck(it) && itemRewardFocus(it) == focus }
+            val actives = pool.filter { it.isActive }
+            if (actives.size < 2) continue
+            val passive = pool.first { !it.isActive }
+            forced++
+            for (seed in 1..20) {
+                val state = offerState(seed, canonicalGameplayContent)
+                state.itemDeck = ItemDeck.dealt(state.content.items.size, IntArray(0), IntArray(ItemRarity.entries.size),
+                    actives.map { it.id } + passive.id)
+                val cards = state.directedItemReward(focus)
+                assertEquals(1, cards.count { it.skillId != null }, "seed $seed $focus: ${cards.map { it.title }}")
+                assertEquals(listOf(passive.id), cards.filter { it.skillId == null }.map { it.itemId }, "seed $seed $focus")
+            }
+        }
+        assertTrue(forced > 0, "some direction offers two actives or more")
 
         val none = withoutActiveItems()
         for (seed in 1..40) {
             val state = offerState(seed, none)
             assertTrue(state.offerableItems().none { it.isActive }, "seed $seed: no active is offerable")
-            for (focus in listOf(RewardFocus.OFFENSE, RewardFocus.DEFENSE, RewardFocus.ECONOMY)) {
+            for (focus in focuses) {
                 assertTrue(offerState(seed, none).directedItemReward(focus).none { it.skillId != null }, "seed $seed $focus")
             }
         }
