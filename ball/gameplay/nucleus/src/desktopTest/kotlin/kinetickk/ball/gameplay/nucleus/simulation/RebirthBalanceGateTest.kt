@@ -313,20 +313,24 @@ class RebirthBalanceGateTest {
          * Resonator and Storm Coil for free at levels 2, 8 and 16. Active items reach a run only through ordinary
          * offers, so a lane active often arrives late or not at all, and no difficulty lever makes up for that, since
          * Reborn 10 stays hard. The floor is therefore the shipped tuning's own, min(480 s, M - 2 SE) rounded down:
-         * M = 477.61 s is the median survival over the 600 runs of the calibration windows (`i * 7_919 + 13` for
-         * i = 1,301..1,900, never the gate population) and SE = 22.39 s the bootstrap SE of a 300-run median drawn from
-         * them (20,000 resamples), so 477.61 - 2 × 22.39 = 432.83 s.
+         * M = 471.082 s is the median survival over the 600 runs of the calibration windows (`i * 7_919 + 13` for
+         * i = 1,301..1,900, never the gate population) and SE = 21.602 s the bootstrap SE of a 300-run median drawn from
+         * them (20,000 resamples, RNG seed 20261027), so M - 2 SE = 427.879 s, rounded down to 427.87 s (Addendum E4,
+         * re-measured on the final content, with Null Shroud's base bolts; a 300-run median drawn from the windows
+         * clears it with probability 0.98).
          */
-        const val D_MIN_MEDIAN_SURVIVAL = 432.83f
+        const val D_MIN_MEDIAN_SURVIVAL = 427.87f
 
         /**
          * Gate H: the least median survival over [PopulationSeeds] of the Data-seeking strong build (Addendum D2). The
          * 05885fa9 base read 583.33 s (bootstrap SE 20.37 s, n 300) with the same free lane skills as D; through
          * ordinary offers the build waits for its lane actives as D does. The floor is min(480 s, M - 2 SE) rounded
-         * down, with M = 482.04 s over the 600 runs of the calibration windows (i = 1,301..1,900) and SE = 24.11 s for
-         * a 300-run median drawn from them (20,000 resamples): 482.04 - 2 × 24.11 = 433.82 s.
+         * down, with M = 481.605 s over the 600 runs of the calibration windows (i = 1,301..1,900) and SE = 25.072 s
+         * for a 300-run median drawn from them (20,000 resamples, RNG seed 20261027): M - 2 SE = 431.461 s, rounded down
+         * to 431.46 s (Addendum E4, re-measured on the final content and with the bot keeping its Data actives;
+         * probability 0.99 for a 300-run median drawn from the windows).
          */
-        const val H_MIN_MEDIAN_SURVIVAL = 433.82f
+        const val H_MIN_MEDIAN_SURVIVAL = 431.46f
 
         /**
          * Gate I: the least ratio of the population's median clear with active items to the median clear without them
