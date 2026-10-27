@@ -453,7 +453,7 @@ private class PreviewScope(
     }
 
     /**
-     * Controls: six sheared keycaps (Dash, Brake, Skill 1–3, Apex) with their keys; the capturing
+     * Controls: six sheared keycaps (Dash, Brake, Active 1–3, Apex) with their keys; the capturing
      * one pulses volt and the one that just took a swapped key shows the swap echo.
      */
     fun controls(frame: SettingsFrame) {

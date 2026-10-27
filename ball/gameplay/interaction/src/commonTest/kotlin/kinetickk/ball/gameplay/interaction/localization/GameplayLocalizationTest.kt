@@ -10,9 +10,11 @@ import kinetickk.ball.gameplay.interaction.rewards.rewardHeading
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.TextResource
 import kinetickk.foundation.common.localization.text
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
@@ -29,6 +31,16 @@ class GameplayLocalizationTest {
                 arguments.findAll(resource.russian).map { it.value }.sorted().toList(),
                 "Translation changed formatting arguments: $resource",
             )
+        }
+    }
+
+    @Test
+    fun noGameplayTextCallsAnActiveItemASkill() {
+        // The glossary: actives are "active" / "активный" everywhere a player reads them; code keeps the word skill.
+        val skill = Regex("skill|навык", RegexOption.IGNORE_CASE)
+        val resources: List<TextResource> = GameplayText.entries + HudRedesignText.entries + OverlayRedesignText.entries + WorldRedesignText.entries
+        resources.forEach { resource ->
+            listOf(resource.english, resource.russian).forEach { text -> assertFalse(skill.containsMatchIn(text), "$resource: $text") }
         }
     }
 

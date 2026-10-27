@@ -581,4 +581,22 @@ class SettingsReducerTest {
         assertEquals(listOf("full", "reduced", "minimal"), (0 until 3).map { SettingsRow.REACTION_EFFECTS.optionId(it) })
         assertEquals(listOf("windowed", "borderless", "fullscreen"), (0 until 3).map { SettingsRow.WINDOW_MODE.optionId(it) })
     }
+
+    @Test
+    fun theActiveBindingsNameTheActiveEffectSlotsAndNoRowCallsThemSkills() {
+        val rows = listOf(SettingsRow.BIND_SKILL_1, SettingsRow.BIND_SKILL_2, SettingsRow.BIND_SKILL_3)
+        assertEquals(listOf("Active 1", "Active 2", "Active 3"), rows.map { it.label(AppLanguage.English) })
+        assertEquals(listOf("Активный эффект 1", "Активный эффект 2", "Активный эффект 3"), rows.map { it.label(AppLanguage.Russian) })
+        rows.forEachIndexed { index, row ->
+            assertEquals("Casts the active effect in slot ${index + 1}.", row.about(AppLanguage.English))
+            assertEquals("Применяет активный эффект из ячейки ${index + 1}.", row.about(AppLanguage.Russian))
+        }
+        // The glossary: every row's name and its (!) text say "active", never "skill" / "навык".
+        val skill = Regex("skill|навык", RegexOption.IGNORE_CASE)
+        for (language in AppLanguage.entries) for (row in SettingsRow.entries) {
+            listOf(row.label(language), row.about(language)).forEach { text ->
+                assertFalse(skill.containsMatchIn(text), "$row in $language says \"$text\"")
+            }
+        }
+    }
 }
