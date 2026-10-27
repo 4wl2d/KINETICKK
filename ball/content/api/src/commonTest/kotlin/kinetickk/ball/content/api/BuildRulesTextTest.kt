@@ -452,31 +452,31 @@ class BuildRulesTextTest {
             EffectClause(trigger, given.toImmutableList(), actions.toList().toImmutableList(), cooldown, every)
 
         assertEquals(
-            listOf("On skill cast if the skill is Drive", "Apply 2 Ion nearby"),
+            listOf("On active cast if the active is Drive", "Apply 2 Ion nearby"),
             english(on(EffectTrigger.SKILL_CAST, EffectAction.ApplyStatus(ElementPick.ION, 2, 160f), given = listOf(EffectCondition.SkillTagged(BuildTag.DRIVE)))),
         )
         assertEquals(
-            listOf("При применении навыка если навык — Порыв", "Накладывает 2 слоя Иона рядом"),
+            listOf("При применении активного эффекта если активный эффект — Порыв", "Накладывает 2 слоя Иона рядом"),
             russian(on(EffectTrigger.SKILL_CAST, EffectAction.ApplyStatus(ElementPick.ION, 2, 160f), given = listOf(EffectCondition.SkillTagged(BuildTag.DRIVE)))),
         )
         val oblivion = on(EffectTrigger.REACTION, EffectAction.ChargeApex(2f), given = listOf(EffectCondition.ReactionIs(ReactionId.OBLIVION)), cooldown = 1f)
         assertEquals(
-            listOf("On reaction if it is Oblivion, once every 1 s", "Recharge the Apex by 2 s (skills by a quarter before the maximum level)"),
+            listOf("On reaction if it is Oblivion, once every 1 s", "Recharge the Apex by 2 s (actives by a quarter before the maximum level)"),
             english(oblivion),
         )
         assertEquals(
             listOf(
                 "При реакции если это ${"Oblivion".localizedContent(AppLanguage.Russian)}, не чаще раза в 1 с",
-                "Ускоряет Апекс на 2 с (до максимального уровня — навыки на четверть)",
+                "Ускоряет Апекс на 2 с (до максимального уровня — активные эффекты на четверть)",
             ),
             russian(oblivion),
         )
         assertEquals(
-            listOf("Every 3rd skill hit if it is Meteor", "Recharge this skill by 0.5 s"),
+            listOf("Every 3rd active hit if it is Meteor", "Recharge this active by 0.5 s"),
             english(on(EffectTrigger.SKILL_HIT, EffectAction.RefundSkills(0.5f, SkillPick.CAST), given = listOf(EffectCondition.SkillIs(SkillId.METEOR)), every = 3)),
         )
         assertEquals(
-            listOf("Каждое 3-е попадание навыком", "Ускоряет перезарядку самого долгого навыка на 0,5 с"),
+            listOf("Каждое 3-е попадание активным эффектом", "Ускоряет перезарядку самого долгого активного эффекта на 0,5 с"),
             russian(on(EffectTrigger.SKILL_HIT, EffectAction.RefundSkills(0.5f, SkillPick.LONGEST), every = 3)),
         )
         assertEquals(
@@ -516,7 +516,7 @@ class BuildRulesTextTest {
         )
         assertEquals("Каждый 2-й Апекс", russian(on(EffectTrigger.APEX, EffectAction.Vent(5f), every = 2)).first())
         assertEquals(
-            listOf("+20 % damage while a skill recharges", "+10 % damage while 2 skills recharge", "+15 % weapon power with Pulse weapons"),
+            listOf("+20 % damage while an active recharges", "+10 % damage while 2 actives recharge", "+15 % weapon power with Pulse weapons"),
             english(
                 ItemRule.WhileModifier(EffectCondition.SkillsCharging(1), BuffStat.DAMAGE, 0.2f),
                 ItemRule.WhileModifier(EffectCondition.SkillsCharging(2), BuffStat.DAMAGE, 0.1f),
@@ -524,7 +524,7 @@ class BuildRulesTextTest {
             ),
         )
         assertEquals(
-            listOf("+15 % к мощности оружия с оружием типа «Пульс»", "+20 % к урону пока вы внутри поля", "+10 % к силе навыков во время Апекса"),
+            listOf("+15 % к мощности оружия с оружием типа «Пульс»", "+20 % к урону пока вы внутри поля", "+10 % к силе активных эффектов во время Апекса"),
             russian(
                 ItemRule.WhileModifier(EffectCondition.WeaponFamilyIs(WeaponFamily.PULSE), BuffStat.WEAPON, 0.15f),
                 ItemRule.WhileModifier(EffectCondition.CoreInField, BuffStat.DAMAGE, 0.2f),
@@ -551,32 +551,32 @@ class BuildRulesTextTest {
             ),
         )
         assertEquals(
-            listOf("Your fields reach 20 % farther", "Ion skills recharge 10 % faster", "Skills deal +20 % damage"),
+            listOf("Your fields reach 20 % farther", "Ion actives recharge 10 % faster", "Actives deal +20 % damage"),
             english(ItemRule.FieldTuning(FieldAspect.RADIUS, 0.2f), ItemRule.SkillCooldown(StatusElement.ION, 0.1f), ItemRule.SkillPower(null, 0.2f)),
         )
         assertEquals(
-            listOf("Ваши поля держатся на 20 % дольше", "Навыки (Ион) перезаряжаются на 10 % быстрее", "Навыки (Пустота) наносят +20 % урона"),
+            listOf("Ваши поля держатся на 20 % дольше", "Активные эффекты (Ион) перезаряжаются на 10 % быстрее", "Активные эффекты (Пустота) наносят +20 % урона"),
             russian(ItemRule.FieldTuning(FieldAspect.DURATION, 0.2f), ItemRule.SkillCooldown(StatusElement.ION, 0.1f),
                 ItemRule.SkillPower(StatusElement.VOID, 0.2f)),
         )
         assertEquals(
-            listOf("Skills hold a second charge (one such item per run)", "Your skills take your dominant element", "Reactions recharge skills 50 % more"),
+            listOf("Actives hold a second charge (one such item per run)", "Your actives take your dominant element", "Reactions recharge actives 50 % more"),
             english(ItemRule.SkillCharges, ItemRule.SkillAttunement(ElementPick.DOMINANT), ItemRule.CatalysisRate(0.5f)),
         )
         assertEquals(
-            listOf("Your skills become Void", "The Apex recharges 10 % faster", "Reactions empower the Core from 120 farther"),
+            listOf("Your actives become Void", "The Apex recharges 10 % faster", "Reactions empower the Core from 120 farther"),
             lines(AppLanguage.English, RuleTextContext(dominant = StatusElement.VOID),
                 ItemRule.SkillAttunement(ElementPick.DOMINANT), ItemRule.ApexCooldown(0.1f), ItemRule.CoreLinkRadius(120f)),
         )
         assertEquals(
-            listOf("Ваши навыки обретают стихию: Пустота", "Апекс перезаряжается на 10 % быстрее", "Реакции усиливают Ядро на 120 дальше"),
+            listOf("Ваши активные эффекты обретают стихию: Пустота", "Апекс перезаряжается на 10 % быстрее", "Реакции усиливают Ядро на 120 дальше"),
             lines(AppLanguage.Russian, RuleTextContext(dominant = StatusElement.VOID),
                 ItemRule.SkillAttunement(ElementPick.DOMINANT), ItemRule.ApexCooldown(0.1f), ItemRule.CoreLinkRadius(120f)),
         )
         assertEquals(
             listOf(
-                "Every 10 dash heat recharges skills by 0.4 s", "Each Data pickup recharges skills by 0.15 s", "Skills recharge 40 % faster",
-                "You cool 20 % slower", "Data pickups give 20 % less", "Each skill cast costs 25 heat",
+                "Every 10 dash heat recharges actives by 0.4 s", "Each Data pickup recharges actives by 0.15 s", "Actives recharge 40 % faster",
+                "You cool 20 % slower", "Data pickups give 20 % less", "Each active cast costs 25 heat",
             ),
             english(
                 ItemRule.Convert(ConversionKind.DASH_HEAT_TO_SKILLS, 0.4f), ItemRule.Convert(ConversionKind.DATA_TO_SKILLS, 0.15f),
@@ -584,19 +584,19 @@ class BuildRulesTextTest {
             ),
         )
         assertEquals(
-            listOf("Your skill fields travel with you at 80 % of their radius", "Enemies you cannot move take the throw as damage"),
+            listOf("Your active fields travel with you at 80 % of their radius", "Enemies you cannot move take the throw as damage"),
             english(ItemRule.Convert(ConversionKind.SKILL_FIELDS_FOLLOW, 0.8f), ItemRule.Convert(ConversionKind.KNOCKBACK_TO_DAMAGE)),
         )
         assertEquals(
-            listOf("Поля навыков следуют за вами, сохраняя 80 % радиуса", "Враги, которых нельзя сдвинуть, получают урон от броска"),
+            listOf("Поля активных эффектов следуют за вами, сохраняя 80 % радиуса", "Враги, которых нельзя сдвинуть, получают урон от броска"),
             russian(ItemRule.Convert(ConversionKind.SKILL_FIELDS_FOLLOW, 0.8f), ItemRule.Convert(ConversionKind.KNOCKBACK_TO_DAMAGE)),
         )
         assertEquals(
-            listOf("On skill cast", "Gain +20 % skill power for 4 s"),
+            listOf("On active cast", "Gain +20 % active power for 4 s"),
             english(on(EffectTrigger.SKILL_CAST, EffectAction.Buff(BuffStat.SKILL_POWER, 0.2f, 4f))),
         )
         assertEquals(
-            "Даёт +20 % к скорости перезарядки навыков на 4 с",
+            "Даёт +20 % к скорости перезарядки активных эффектов на 4 с",
             russian(on(EffectTrigger.SKILL_CAST, EffectAction.Buff(BuffStat.SKILL_RECHARGE, 0.2f, 4f)))[1],
         )
     }

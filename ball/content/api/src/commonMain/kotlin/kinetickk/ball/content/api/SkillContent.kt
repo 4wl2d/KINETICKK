@@ -210,7 +210,7 @@ private fun defaultSkill(id: SkillId): SkillDefinition = when (id) {
     SkillId.DECAY_SPORES -> skill(
         id, "Decay Spores",
         "Seed a crowd with Decay; the seeded spread rot and drop Data when they die.",
-        "Each seeded death refunds 0.5 s to every skill, up to 3 s per cast.",
+        "Each seeded death refunds 0.5 s to every active, up to 3 s per cast.",
         StatusElement.ENTROPY, BuildTag.FORTUNE, BuildTag.CHAIN, SkillTargeting.AREA, 520f, SkillFamily.CATALYST,
         rank(11f, 170f, 4f, 6f, 8f),
         rank(9f, 205f, 6f, 6f, 8f),

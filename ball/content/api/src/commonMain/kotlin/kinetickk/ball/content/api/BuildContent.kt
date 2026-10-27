@@ -381,10 +381,10 @@ enum class EffectTrigger(val displayLabel: String) {
     RICOCHET("On ricochet"),
     /** An enemy struck an obstacle or another enemy hard enough to take slam damage; it is the clause target. */
     SLAM("On slam"),
-    /** A skill cast succeeded; its primary target (if any) is the clause target, else the effect starts at its anchor. */
-    SKILL_CAST("On skill cast"),
-    /** One of the first four enemies a skill cast damages; it is the clause target and the damage is the hit. */
-    SKILL_HIT("On skill hit"),
+    /** An active effect was cast; its primary target (if any) is the clause target, else the effect starts at its anchor. */
+    SKILL_CAST("On active cast"),
+    /** One of the first four enemies an active cast damages; it is the clause target and the damage is the hit. */
+    SKILL_HIT("On active hit"),
     /** The Apex activated. */
     APEX("On Apex"),
     /** The Core entered one of your fields; the effect starts at the field's centre. */
@@ -529,10 +529,10 @@ enum class BuffStat(val displayLabel: String) {
     DAMAGE_REDUCTION("Damage reduction"),
     COOLING("Cooling"),
     DAMAGE_TAKEN("Damage taken"),
-    /** Skill cooldowns tick faster by the amount (through the refund bank). */
-    SKILL_RECHARGE("Skill recharge"),
-    /** Skill damage grows by the amount. */
-    SKILL_POWER("Skill power"),
+    /** Active-effect cooldowns tick faster by the amount (through the refund bank). */
+    SKILL_RECHARGE("Active recharge"),
+    /** Active-effect damage grows by the amount. */
+    SKILL_POWER("Active power"),
 }
 
 /** Which skills a [EffectAction.RefundSkills] recharges. */

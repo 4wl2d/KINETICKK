@@ -55,7 +55,7 @@ class ContentBalanceCharacterizationTest {
         // The 0.5.0 items, appended from id 173 and pinned on their own: always exactly ids 173..268.
         val appended = items.subList(ITEMS_THROUGH_040, EXPANSION_050_END)
         assertEquals(
-            "c11c59b06e52e3dc",
+            "6ae3869a3317ee94",
             goldenFingerprint {
                 add("items-0.5.0")
                 add(appended.size)
@@ -92,7 +92,7 @@ class ContentBalanceCharacterizationTest {
         val build = ui.build
 
         assertEquals(
-            "d6fa6a5d0a26712d",
+            "90af4a2ca532d113",
             goldenFingerprint {
                 build.elements.forEach { element ->
                     add(element.element.name)
@@ -309,7 +309,7 @@ class ContentBalanceCharacterizationTest {
     fun skillApexAndUpgradeContentIsGolden() {
         assertEquals(18, ui.skills.size)
         assertEquals(
-            "0f61860d21ed6c61",
+            "b89dbf6df7b25f22",
             goldenFingerprint {
                 add("skills")
                 ui.skills.forEach { skill ->

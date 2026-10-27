@@ -3,7 +3,7 @@
 
 package kinetickk.ball.content.api
 
-/** Active skills: names, summaries and rank III texts. */
+/** Active effects (the active items share their names and summaries): names, summaries and rank III texts. */
 internal val SkillPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Solar Flare" to "Солнечная вспышка",
     "Vents heat into a flare; the more heat, the more Scorch." to
@@ -41,12 +41,12 @@ internal val SkillPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Your Core turns heavy: fast impacts throw enemies and add Mass." to
         "Ядро тяжелеет: быстрые удары отшвыривают врагов и добавляют Массу.",
     "Slams while it runs add 1 Mass to both enemies." to
-        "Пока навык действует, столкновения врагов добавляют обоим 1 слой Массы.",
+        "Пока эффект действует, столкновения врагов добавляют обоим 1 слой Массы.",
     "Decay Spores" to "Споры распада",
     "Seed a crowd with Decay; the seeded spread rot and drop Data when they die." to
         "Засевает толпу Распадом; заражённые при гибели разносят гниль и роняют Данные.",
-    "Each seeded death refunds 0.5 s to every skill, up to 3 s per cast." to
-        "Каждая гибель заражённого возвращает всем навыкам 0,5 с, но не больше 3 с за применение.",
+    "Each seeded death refunds 0.5 s to every active, up to 3 s per cast." to
+        "Каждая гибель заражённого возвращает всем активным эффектам 0,5 с, но не больше 3 с за применение.",
     "Entropic Tide" to "Энтропийный прилив",
     "Draws in all Decay around you: it bursts as damage and mends the Core." to
         "Вбирает весь Распад вокруг: он взрывается уроном и чинит Ядро.",
