@@ -79,6 +79,14 @@ import kotlin.test.assertTrue
  * condition (a skill or a skill tag) the skill loadout cannot meet is flown with the first such skill in the loadout's
  * last slot, so the clause can fire where it is measured.
  * [everyNewVocabularyKindMovesItsEncounter] holds one probe per new kind to those encounters.
+ *
+ * Active items (R1.13): an active item is measured in the skill arena with only itself in the loadout, acquired as the
+ * item at one stack, its own passive included. The skill arenas' loadout is support, not the subject: since every active
+ * item carries a passive, the loadout's (Solar Flare's and Arc Hook's element potency, Catalyze's reaction power) would
+ * lift both arms and hide what a skill-support item adds, which no loadout did before skills became items. A test-only
+ * content transform ([withInertLoadoutPassives]) therefore gives each loadout active an inert passive (0.01 % less
+ * damage taken while braking, which no skill arena output measures) wherever a loadout is held, so those arenas keep the
+ * conditions they had before active items; the item under test is never transformed.
  */
 class PerceptibleItemImpactTest {
     @Test
@@ -494,7 +502,19 @@ class PerceptibleItemImpactTest {
     private fun run(setup: Setup, item: ItemDefinition?, content: GameplayContentSnapshot = canonicalGameplayContent,
         variants: Int = VARIANTS): Outcome =
         if (setup.arena == Arena.OFFERS) offers(setup, item, content)
-        else (0 until variants).map { variant -> fight(setup, item, variant, content) }.reduce(Outcome::plus)
+        else {
+            val arenaContent = if (setup.arena.skills) withInertLoadoutPassives(content, setup.skills) else content
+            (0 until variants).map { variant -> fight(setup, item, variant, arenaContent) }.reduce(Outcome::plus)
+        }
+
+    /**
+     * [content] in which the active items carrying [loadout]'s effects hold [InertLoadoutPassive] instead of their own
+     * passive (test-only): a skill arena's loadout casts its effects but brings no passive bonus to either arm.
+     */
+    private fun withInertLoadoutPassives(content: GameplayContentSnapshot, loadout: List<SkillId>): GameplayContentSnapshot =
+        if (loadout.isEmpty()) content else content.copy(items = content.items.map { item ->
+            if (item.active != null && item.active in loadout) item.copy(rules = immutableListOf(InertLoadoutPassive)) else item
+        }.toImmutableList())
 
     /** Thirty consecutive item offers at Reborn 10 with every item unlocked: the summed rarity of the cards. */
     private fun offers(setup: Setup, item: ItemDefinition?, content: GameplayContentSnapshot): Outcome {
@@ -1215,6 +1235,13 @@ class PerceptibleItemImpactTest {
 
         /** The SKILLS arena's loadout (each at rank II). */
         val ArenaSkills: List<SkillId> = listOf(SkillId.SOLAR_FLARE, SkillId.ARC_HOOK, SkillId.CATALYZE)
+
+        /**
+         * The passive a skill arena's loadout actives hold instead of their own ([withInertLoadoutPassives]): 0.01 % less
+         * damage taken while braking, which none of the skill arenas' outputs (damage, refunds, kills, Data, Dashes)
+         * measures.
+         */
+        val InertLoadoutPassive: ItemRule = ItemRule.WhileModifier(EffectCondition.Braking, BuffStat.DAMAGE_TAKEN, -0.0001f)
 
         /** The reactions the FIELDS arena forces beside the Core, in turn: a pool, a hush, a bubble, a maw. */
         val FieldReactions: List<ReactionId> = listOf(ReactionId.PLASMA_BURST, ReactionId.SILENCE, ReactionId.STASIS, ReactionId.NULL_WELL)
