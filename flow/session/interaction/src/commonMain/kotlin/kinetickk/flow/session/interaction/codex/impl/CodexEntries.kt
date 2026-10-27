@@ -36,6 +36,7 @@ import kinetickk.ball.content.api.rankLines
 import kinetickk.ball.content.api.ruleLines
 import kinetickk.ball.content.api.upsideText
 import kinetickk.ball.gameplay.api.GameplayBuildSummaryProjection
+import kinetickk.ball.gameplay.interaction.rewards.activeRankNumbers
 import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.ball.profile.api.rank
 import kinetickk.flow.session.interaction.codex.api.CodexRenderModel
@@ -160,8 +161,8 @@ internal sealed interface CodexDetail {
 
 /**
  * The active part of an active item's sheet, from its effect's content: every rank's numbers ([ranks], rank I first:
- * its rank label and its cooldown and values as one comma-joined line, as the reward card writes them), what rank III
- * adds ([rankThree]) and the rank the run holds ([held], 0 when not owned).
+ * its rank label and its cooldown and values as one comma-joined line, as the reward card writes them, each value held
+ * on its label's line), what rank III adds ([rankThree]) and the rank the run holds ([held], 0 when not owned).
  */
 internal data class CodexActivePart(val effect: SkillId, val ranks: List<CodexActiveRank>, val rankThree: String, val held: Int)
 
@@ -173,8 +174,7 @@ internal fun codexActivePart(item: ItemDefinition, skills: List<SkillDefinition>
     val effect = item.active ?: return null
     val skill = skills[effect.ordinal]
     val ranks = (1..ContentBounds.MAX_SKILL_RANK).map { rank ->
-        val lines = skill.rankLines(rank, language)
-        CodexActiveRank(lines.first(), lines.drop(1).joinToString(", "))
+        CodexActiveRank(skill.rankLines(rank, language).first(), skill.activeRankNumbers(rank, language))
     }
     return CodexActivePart(effect, ranks, skill.rankThree.localizedContent(language), held)
 }

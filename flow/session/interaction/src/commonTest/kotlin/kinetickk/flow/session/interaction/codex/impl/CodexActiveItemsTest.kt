@@ -26,6 +26,7 @@ import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
+import kinetickk.foundation.design.KK_ICON_GRID
 import kotlin.math.sqrt
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -69,12 +70,14 @@ class CodexActiveItemsTest {
             val part = assertNotNull(detail.active, "$language: an active item's sheet has its active part")
             assertEquals(SkillId.SOLAR_FLARE, part.effect)
             assertEquals(held, part.held)
-            // Every rank: its label and its cooldown and values, as the effect's content writes them.
+            // Every rank: its label and its cooldown and values, as the effect's content writes them, each value held on
+            // its label's line.
             assertEquals(ContentBounds.MAX_SKILL_RANK, part.ranks.size)
             part.ranks.forEachIndexed { index, rank ->
                 val lines = skill.rankLines(index + 1, language)
                 assertEquals(lines.first(), rank.label)
-                assertEquals(lines.drop(1).joinToString(", "), rank.numbers)
+                assertEquals(lines.drop(1).joinToString(", "), rank.numbers.replace('\u00A0', ' '))
+                assertTrue(rank.numbers.split(", ").none { ' ' in it }, "$language rank ${index + 1} breaks only between values: ${rank.numbers}")
                 val cooldown = SkillLineKind.COOLDOWN.text(language, "").substringBefore(' ')
                 assertTrue(rank.numbers.startsWith(cooldown), "$language rank ${index + 1} leads with its cooldown: ${rank.numbers}")
             }
@@ -146,5 +149,22 @@ class CodexActiveItemsTest {
             assertTrue(box.top > marks.notch.bottom && box.right < marks.strip.left, where)
             assertTrue(box.width >= 5f * density - eps, where)
         }
+    }
+
+    @Test
+    fun theActiveGlyphKeepsAVisibleLineAtEveryCellSize() {
+        val widths = HashSet<Float>()
+        for (dp in listOf(22f, 24f, 30f, 36f, 40f, 56f)) for (density in listOf(1f, 1.5f, 2f)) {
+            val marks = codexItemCellMarks(dp * density, density)
+            val box = marks.glyphRadius * CODEX_ACTIVE_GLYPH_BOX
+            val stroke = codexActiveGlyphStroke(box, density)
+            // On screen at least the minimum line, never thinner than the icon's own 2 grid units.
+            assertTrue(stroke * box / KK_ICON_GRID >= CODEX_ACTIVE_GLYPH_MIN_STROKE_DP * density - 0.001f, "$dp dp at $density: $stroke")
+            assertTrue(stroke >= 2f, "$dp dp at $density: $stroke")
+            widths += stroke
+        }
+        // A large glyph keeps the icon's own weight, and the widths come in a few quarter steps.
+        assertEquals(2f, codexActiveGlyphStroke(48f, 1f))
+        assertTrue(widths.all { it * 4f == kotlin.math.floor(it * 4f) }, "$widths")
     }
 }

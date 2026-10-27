@@ -75,7 +75,7 @@ class CodexShippedCatalogTest {
             val skill = catalog.skill(requireNotNull(item.active))
             val part = assertNotNull((codexItemEntry(item, model, 0L, language, catalog).detail as CodexDetail.Item).active)
             assertEquals((1..ContentBounds.MAX_SKILL_RANK).map { skill.rankLines(it, language).drop(1).joinToString(", ") },
-                part.ranks.map { it.numbers }, "${item.name} $language")
+                part.ranks.map { it.numbers.replace('\u00A0', ' ') }, "${item.name} $language")
             assertEquals(skill.rankThree.localizedContent(language), part.rankThree)
         }
     }

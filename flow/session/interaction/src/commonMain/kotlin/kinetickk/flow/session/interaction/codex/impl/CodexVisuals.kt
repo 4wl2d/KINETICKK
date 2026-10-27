@@ -40,6 +40,7 @@ import kinetickk.foundation.design.KkCardMaterial
 import kinetickk.foundation.design.KkFillKind
 import kinetickk.foundation.design.KkFormGeometry
 import kinetickk.foundation.design.KkFormPaths
+import kinetickk.foundation.design.KK_ICON_GRID
 import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.KkVAlign
@@ -55,6 +56,7 @@ import kinetickk.foundation.design.kkMix
 import kinetickk.foundation.design.kkRarityTileInset
 import kinetickk.foundation.design.kkStroke
 import kinetickk.foundation.design.measureKkText
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 
@@ -387,8 +389,9 @@ internal fun DrawScope.drawCodexItemRowCell(
             if (icon.reborn) drawRect(if (gilded) Kk.Ink else Kk.Gold, marks.rim.topLeft, marks.rim.size, style = kkStroke(marks.rimWidth))
             val effect = item.active
             if (effect != null) {
-                // The icon's box keeps its corners within the glyph's reach.
-                drawKkIcon(skillGlyph(effect), marks.glyphCenter, marks.glyphRadius * CODEX_ACTIVE_GLYPH_BOX, fill?.accent ?: Kk.Bone)
+                // The icon's box keeps its corners within the glyph's reach; its line strokes keep a visible weight.
+                val box = marks.glyphRadius * CODEX_ACTIVE_GLYPH_BOX
+                drawKkIcon(skillGlyph(effect), marks.glyphCenter, box, fill?.accent ?: Kk.Bone, strokeWidth = codexActiveGlyphStroke(box, density))
             } else {
                 drawCanvasGlyph(item.primaryGlyphStyle(), marks.glyphCenter, marks.glyphRadius, fill?.accent ?: Kk.Bone)
             }
@@ -467,6 +470,17 @@ internal fun DrawScope.drawCodexItemRowCell(
  * the reach every mark keeps clear of ([CODEX_GLYPH_REACH], 1.15).
  */
 internal const val CODEX_ACTIVE_GLYPH_BOX = 1.6f
+
+/**
+ * The stroke, in icon grid units, of an active's glyph drawn [box] px wide: the icon's own 2 units, or more where those
+ * would draw under [CODEX_ACTIVE_GLYPH_MIN_STROKE_DP], so a line glyph at a cell's few pixels reads on the light chrome
+ * as firmly as the filled passive marks (quarter units, so one matrix shares one stroke).
+ */
+internal fun codexActiveGlyphStroke(box: Float, density: Float): Float =
+    if (box <= 0f) 2f else max(2f, ceil(CODEX_ACTIVE_GLYPH_MIN_STROKE_DP * density * KK_ICON_GRID / box * 4f) / 4f)
+
+/** The thinnest line an active's cell glyph draws, in dp. */
+internal const val CODEX_ACTIVE_GLYPH_MIN_STROKE_DP = 1.25f
 
 /** A [width] px outline just inside the cell's edge. */
 private fun DrawScope.drawCodexCellOutline(color: Color, width: Float) {
