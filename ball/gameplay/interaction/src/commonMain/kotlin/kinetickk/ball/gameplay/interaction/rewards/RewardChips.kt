@@ -395,18 +395,27 @@ private val RewardNumber = Regex("[−+×]?\\d+(?:[.,  ]\\d+)*(?:[   ]?%)?
 private const val WordJoiner = '\u2060'
 private const val NoBreakSpace = '\u00A0'
 
-/** Unit marks that follow a number and must stay on its line. */
-private val UnitMarks = arrayOf("%", "u/s", "ед/с", "ед", "s", "с")
+/** Unit marks that follow a number and must stay on its line (Matter as an amount's unit: "+6 matter"). */
+private val UnitMarks = arrayOf("%", "u/s", "ед/с", "ед", "s", "с", "matter", "материи")
 
 private fun unitStartsAt(text: String, index: Int): Boolean = UnitMarks.any { mark ->
     text.startsWith(mark, index) && (index + mark.length >= text.length || !text[index + mark.length].isLetter())
 }
 
+/** The Russian one-letter words (prepositions, conjunctions, "я") that never end a line. */
+private const val RussianShortWords = "авикосуя"
+
+/** Whether [index] holds a Russian one-letter word: never a unit after its number ("3 с" is seconds). */
+private fun shortWordAt(text: String, index: Int): Boolean =
+    text[index].lowercaseChar() in RussianShortWords && (index == 0 || !text[index - 1].isLetterOrDigit()) &&
+        !(index >= 2 && text[index - 1].isWhitespace() && text[index - 2].isDigit() && unitStartsAt(text, index))
+
 /**
  * [text] with its units kept whole and on their number's line: the space between a number and its
  * unit becomes a no-break space, and a slash between two marks ("ед/с", "u/s", "3/4") is held by
- * word joiners, so the line breaker never splits "40 %" or "ед/с". [offsets] (text length + 1),
- * when given, receives where each original character landed.
+ * word joiners, so the line breaker never splits "40 %" or "ед/с". A Russian one-letter word ("к",
+ * "в", "и") keeps the word after it the same way, so it never hangs at a line's end. [offsets]
+ * (text length + 1), when given, receives where each original character landed.
  */
 internal fun rewardKeepUnits(text: String, offsets: IntArray? = null): String {
     val out = StringBuilder(text.length + 4)
@@ -415,6 +424,7 @@ internal fun rewardKeepUnits(text: String, offsets: IntArray? = null): String {
         val char = text[index]
         when {
             char == ' ' && index > 0 && text[index - 1].isDigit() && unitStartsAt(text, index + 1) -> out.append(NoBreakSpace)
+            char == ' ' && index > 0 && shortWordAt(text, index - 1) -> out.append(NoBreakSpace)
             char == '/' && index > 0 && index < text.lastIndex && !text[index - 1].isWhitespace() && !text[index + 1].isWhitespace() ->
                 out.append(WordJoiner).append('/').append(WordJoiner)
             else -> out.append(char)

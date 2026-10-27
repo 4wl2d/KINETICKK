@@ -125,6 +125,9 @@ internal val CodexRelicMaterial = KkCardMaterial.CHROME
 /** [material]'s frame in the preset's gold and spectrum (the rarity channel, the same for every type). */
 internal fun KkRolePalette.frame(material: KkCardMaterial): KkCardFrame = material.frame(gold, spectrum)
 
+/** An item tile's face: Ink2 tinted by the item's [tone], a little more when [lit]. */
+internal fun codexItemFace(tone: Color, lit: Boolean): Color = kkMix(Kk.Ink2, tone, if (lit) 0.2f else 0.1f)
+
 /**
  * An item tile in two channels that never mix: the type tints the face (lighter when [lit]), runs an
  * element strip inside the frame below the [marks] band (px) the cell keeps for its stamp and badge,
@@ -135,7 +138,8 @@ internal fun DrawScope.drawCodexItemTile(icon: CodexIcon.Item, roles: KkRolePale
     val item = icon.definition
     val tone = codexItemColor(item, roles)
     val material = KkCardMaterial.ofRank(item.rarity.rank)
-    drawRect(kkMix(Kk.Ink2, tone, if (lit) 0.2f else 0.1f))
+    val face = codexItemFace(tone, lit)
+    drawRect(face)
     drawKkRarityTile(roles.frame(material), seed = item.id)
     val inset = kkRarityTileInset(material)
     if (item.elements.isNotEmpty()) {
@@ -155,7 +159,7 @@ internal fun DrawScope.drawCodexItemTile(icon: CodexIcon.Item, roles: KkRolePale
     val effect = item.active
     if (effect != null) {
         // An active item: its slot's mark (the effect's glyph and its rank pips), as the pause Build grid shows it.
-        drawActiveItemMark(effect, center, radius * 2.2f, if (icon.suppressed) Kk.Mute else tone, icon.stack, item.maxStacks)
+        drawActiveItemMark(effect, center, radius * 2.2f, if (icon.suppressed) Kk.Mute else tone, icon.stack, item.maxStacks, face)
     } else {
         drawItemIcon(item, center, radius, if (icon.suppressed) Kk.Mute else tone, stack = icon.stack.takeIf { it > 0 })
     }

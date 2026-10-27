@@ -1350,7 +1350,7 @@ private fun DrawScope.drawPauseItems(
             val plate = PauseShapes.activePlate(index, center.x - half, center.y - half, center.x + half, center.y + half, half * 0.34f)
             drawPath(plate, Kk.Ink2)
             drawPath(plate, hue, alpha = 0.6f, style = kkStroke(1.2f * k * density))
-            drawActiveItemMark(effect, center, half * 2f, hue, item.stacks, item.item.maxStacks)
+            drawActiveItemMark(effect, center, half * 2f, hue, item.stacks, item.item.maxStacks, plate = Kk.Ink2)
         } else {
             drawItemImage(item.item, center, radius, hue, item.stacks)
         }

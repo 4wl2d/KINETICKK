@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.SkillId
+import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.interaction.input.RunningControlPressLog
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
 import kinetickk.ball.gameplay.nucleus.render.ApexProjection
@@ -165,6 +166,16 @@ class HudSkillBarRenderingTest {
             assertTrue(near(frame, face, roles.kinetic) > 30, "$id is not drawn in the kinetic role")
             assertEquals(0, near(frame, face, Kk.Bone, 0.06f), "$id still draws in Bone")
         }
+    }
+
+    @Test
+    fun aSlotDrawsItsEffectsSharedGlyphWhicheverWeaponIsEquipped() {
+        // Dual Infusion's glyph is the starter Flux Wake's: the slot keeps it, as the card plate, pause grid and Codex do.
+        val model = base(bar(slot(SkillId.DUAL_INFUSION)))
+        val withItsWeapon = render(model.with("weapon" to WeaponId.FLUX_WAKE), 2f)
+        val face = slotRect(0)
+        val withAnother = render(model.with("weapon" to WeaponId.MORNINGSTAR), 2f)
+        assertEquals(0, differing(withItsWeapon, withAnother, face), "the slot's glyph changes with the equipped weapon")
     }
 
     @Test

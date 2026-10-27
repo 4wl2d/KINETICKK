@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
@@ -412,6 +413,35 @@ class RewardContentTest {
                 assertTrue(stamp.bottom <= cardTop + (RewardNewStampOverlapDp + 4f) * u,
                     "Stamp $stamp reaches into the band of a ${dimensions.first} × ${dimensions.second} card at $textScale (top $cardTop)")
             }
+        }
+    }
+
+    @Test
+    fun aBoardActiveCardsNewStampLeavesItsRankPipsInSight() {
+        val choice = rewardActiveChoice(rewardFixtureActiveBase, slot = 0)
+        val scale = mutableStateOf(1f)
+        val language = mutableStateOf(AppLanguage.English)
+        compose.setContent {
+            CompositionLocalProvider(LocalAppLanguage provides language.value, LocalDensity provides Density(1f)) {
+                val card = rewardFixtureModel(content = rewardActiveFixtureContent, choices = listOf(choice), language = language.value)
+                    .rewardCardPresentation(choice, 0, language.value).copy(isNewDiscovery = true)
+                Box(Modifier.requiredSize(400.dp, 500.dp)) {
+                    RewardCard(card, 0, scale.value, 0f, true, Modifier.requiredSize(300.dp, 450.dp)) {}
+                }
+            }
+        }
+        // English and the wider Russian stamp, at the default and the largest text size.
+        for (lang in AppLanguage.entries) for (textScale in listOf(1f, 1.4f)) {
+            compose.runOnIdle { language.value = lang; scale.value = textScale }
+            val plate = compose.onNodeWithTag("kinetickk.gameplay.choice.1.expanded", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            val stamp = compose.onNodeWithTag("kinetickk.gameplay.choice.1.new", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            val chips = compose.onNodeWithTag("kinetickk.gameplay.choice.1.chips", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            // The rank pips drawActiveItemMark draws: 0.78 to 0.85 of the plate down, 0.49 of it wide about its centre.
+            val side = plate.minDimension
+            val pips = Rect(plate.center.x - side * 0.245f, plate.top + side * 0.78f, plate.center.x + side * 0.245f, plate.top + side * 0.85f)
+            val where = "$lang at $textScale: the stamp $stamp"
+            assertTrue(!stamp.overlaps(pips), "$where covers the rank pips $pips")
+            assertTrue(stamp.top >= plate.top - 0.5f && stamp.right <= chips.left, "$where leaves the plate $plate for the band or the chips $chips")
         }
     }
 

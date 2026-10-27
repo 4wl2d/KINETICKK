@@ -7,6 +7,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Canvas
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.PixelMap
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -17,6 +26,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.test.runComposeUiTest
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ContentBounds
@@ -29,7 +40,9 @@ import kinetickk.flow.session.interaction.codex.api.CodexRenderModel
 import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.design.KkVisionMode
 import kinetickk.foundation.design.LocalAppLanguage
+import kinetickk.foundation.design.kkContrast
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -126,8 +139,53 @@ class CodexShippedCatalogTest {
         onNodeWithTag("codex-active-rank-three").assertExists()
     }
 
+    /**
+     * Every shipped active's Build tile keeps its unlit rank pips readable on the face it draws, at rest and lit, in every
+     * colour-vision mode: a rank I tile's two unlit pips stand at 1.35:1 or more from the face just above them (Line2 pips
+     * sat near 1:1 on a lit tile of a pale hue).
+     */
+    @Test
+    fun anActiveTilesUnlitRankPipsReadOnItsFace() {
+        val actives = catalog.items.filter { it.isActive }
+        for (mode in KkVisionMode.entries) for (item in actives) for (lit in listOf(false, true)) {
+            fun tileAt(stack: Int): PixelMap {
+                val bitmap = ImageBitmap(TilePx, TilePx)
+                CanvasDrawScope().draw(Density(2f), LayoutDirection.Ltr, Canvas(bitmap), Size(TilePx.toFloat(), TilePx.toFloat())) {
+                    drawCodexItemTile(CodexIcon.Item(item, stack), mode.palette, lit, Offset(TilePx * 0.5f, TilePx * 0.5f), TilePx * 0.3f)
+                }
+                return bitmap.toPixelMap()
+            }
+            // Rank I against every pip lit: the pixels the two draws differ in are the two unlit pips.
+            val (pips, face) = unlitPipsAndFace(tileAt(1), tileAt(item.maxStacks))
+            val contrast = kkContrast(pips, face)
+            assertTrue(contrast >= 1.35f, "$mode ${item.name} lit=$lit: unlit pips ${pips.toArgb().toUInt().toString(16)} at $contrast:1 " +
+                "on the face's ${face.toArgb().toUInt().toString(16)}")
+        }
+    }
+
+    /**
+     * The mean colour inside the unlit pips of a mark drawn at its rank ([atRank]) and fully lit ([lit]): the pixels the
+     * two draws differ in whose four neighbours differ too. With it, the mean colour of the face 3 px above them.
+     */
+    private fun unlitPipsAndFace(atRank: PixelMap, lit: PixelMap): Pair<Color, Color> {
+        fun differs(x: Int, y: Int) = x in 0 until atRank.width && y in 0 until atRank.height && atRank[x, y] != lit[x, y]
+        val cores = ArrayList<Pair<Int, Int>>()
+        var top = atRank.height
+        for (y in 0 until atRank.height) for (x in 0 until atRank.width) if (differs(x, y)) {
+            top = minOf(top, y)
+            if (differs(x - 1, y) && differs(x + 1, y) && differs(x, y - 1) && differs(x, y + 1)) cores += x to y
+        }
+        assertTrue(cores.size > 20, "the unlit pips are drawn (${cores.size} px inside them)")
+        fun mean(colors: List<Color>) = Color(colors.map { it.red }.average().toFloat(), colors.map { it.green }.average().toFloat(),
+            colors.map { it.blue }.average().toFloat())
+        return mean(cores.map { (x, y) -> atRank[x, y] }) to mean(cores.map { (x, _) -> atRank[x, top - 3] })
+    }
+
     private fun androidx.compose.ui.test.ComposeUiTest.onAllNodesWithTagPrefix(prefix: String): List<String> =
         onAllNodes(SemanticsMatcher("tag starts with $prefix") {
             it.config.getOrNull(SemanticsProperties.TestTag)?.startsWith(prefix) == true
         }, useUnmergedTree = true).fetchSemanticsNodes().map { it.config[SemanticsProperties.TestTag].removePrefix(prefix.removeSuffix("item/")) }
 }
+
+/** A board-size Codex tile: 96 dp at density 2. */
+private const val TilePx = 192

@@ -43,6 +43,16 @@ class RewardPresentationTest {
     }
 
     @Test
+    fun russianOneLetterWordsStayWithTheWordAfterThem() {
+        assertEquals("+170\u00A0% \u043A\u00A0\u043E\u0445\u043B\u0430\u0436\u0434\u0435\u043D\u0438\u044E \u0432\u043E \u0432\u0440\u0435\u043C\u044F \u0442\u043E\u0440\u043C\u043E\u0436\u0435\u043D\u0438\u044F", rewardKeepUnits("+170 % \u043A \u043E\u0445\u043B\u0430\u0436\u0434\u0435\u043D\u0438\u044E \u0432\u043E \u0432\u0440\u0435\u043C\u044F \u0442\u043E\u0440\u043C\u043E\u0436\u0435\u043D\u0438\u044F"))
+        assertEquals("\u041E\u0441\u0435\u0434\u043B\u0430\u0432 \u0432\u0437\u0440\u044B\u0432, \u042F\u0434\u0440\u043E \u0435\u0449\u0451 \u0438\u00A0\u043F\u044B\u043B\u0430\u0435\u0442 3\u00A0\u0441.", rewardKeepUnits("\u041E\u0441\u0435\u0434\u043B\u0430\u0432 \u0432\u0437\u0440\u044B\u0432, \u042F\u0434\u0440\u043E \u0435\u0449\u0451 \u0438 \u043F\u044B\u043B\u0430\u0435\u0442 3 \u0441."))
+        assertEquals("\u0412\u00A0\u0431\u043E\u044E \u0438\u00A0(\u0432\u00A0\u043F\u043E\u043A\u043E\u0435) \u0443\u00A0\u042F\u0434\u0440\u0430", rewardKeepUnits("\u0412 \u0431\u043E\u044E \u0438 (\u0432 \u043F\u043E\u043A\u043E\u0435) \u0443 \u042F\u0434\u0440\u0430"))
+        // Seconds after a number stay with the number, not with the next word; longer words and English stay as they are.
+        assertEquals("\u0414\u0435\u0440\u0436\u0438\u0442\u0441\u044F 3\u00A0\u0441 \u043F\u043E\u0441\u043B\u0435 \u0443\u0434\u0430\u0440\u0430, \u0432\u043D\u0435 \u0431\u043E\u044F", rewardKeepUnits("\u0414\u0435\u0440\u0436\u0438\u0442\u0441\u044F 3 \u0441 \u043F\u043E\u0441\u043B\u0435 \u0443\u0434\u0430\u0440\u0430, \u0432\u043D\u0435 \u0431\u043E\u044F"))
+        assertEquals("Gain a shield, I said", rewardKeepUnits("Gain a shield, I said"))
+    }
+
+    @Test
     fun stripPairingTagsShareARowWithoutOverlapAndStayLeftOfTheCount() {
         // Two pairings whose brackets overlap (Lightning Rod over slots 0 to 2, Faraday Cage over 1 to 2).
         val widths = floatArrayOf(110f, 104f)
