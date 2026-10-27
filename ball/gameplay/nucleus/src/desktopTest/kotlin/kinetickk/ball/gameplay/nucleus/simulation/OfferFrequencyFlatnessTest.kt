@@ -22,9 +22,13 @@ import kotlin.test.assertTrue
  * 30,000 offers per policy exceed the browser runner's per-test limit.
  *
  * Restated for active items (R1.15): the tier buckets and the worst-item check cover passive items only, since the lane
- * policy weights active items on purpose. The same offers bound the active items instead: their cards are 0.04–0.10 of
- * all cards (ActiveItemFrequencyGateTest's share), and in every tier holding both, the Orb's own lane actives are shown
- * per item [OfferLanePolicy.characterActiveWeight] times as often as the other actives, within 0.80–1.25 of it.
+ * policy weights active items on purpose. They measure the passive items' exposure as before active items existed: a
+ * passive item's rate is its share of its tier's passive cards times its tier's share of all cards (the tier's active
+ * cards leave both the tier's count and its draw total), so the tier odds, the deck and the lanes are checked against
+ * the Commons while what the actives take of a tier is not. The same offers bound the active items instead: their cards
+ * are 0.04–0.10 of all cards (ActiveItemFrequencyGateTest's share), and in every tier holding both, the Orb's own lane
+ * actives are shown per item [OfferLanePolicy.characterActiveWeight] times as often as the other actives, within
+ * 0.80–1.25 of it.
  */
 class OfferFrequencyFlatnessTest {
     @Test
@@ -72,9 +76,9 @@ class OfferFrequencyFlatnessTest {
     }
 
     /**
-     * Per-tier mean card rate per offerable passive item against the Common mean, the largest passive item rate over its
-     * tier's mean, the share of all cards that offer an active item, and per tier the mean card rate of the Orb's lane
-     * actives over the other actives' (a tier holding both).
+     * Per-tier mean passive card rate per offerable passive item (its tier's active cards left out) against the Common
+     * mean, the largest passive item rate over its tier's mean, the share of all cards that offer an active item, and per
+     * tier the mean card rate of the Orb's lane actives over the other actives' (a tier holding both).
      */
     private class Flatness(
         val ratios: Map<String, Double>,
@@ -86,6 +90,8 @@ class OfferFrequencyFlatnessTest {
     private fun flatness(content: GameplayContentSnapshot, decks: Int): Flatness {
         val shown = IntArray(content.items.size)
         val offerable = BooleanArray(content.items.size)
+        val tierCards = IntArray(ItemRarity.entries.size)
+        val tierActiveCards = IntArray(ItemRarity.entries.size)
         var cards = 0
         var activeCards = 0
         val perDeck = OFFERS / decks
@@ -96,15 +102,26 @@ class OfferFrequencyFlatnessTest {
                 state.rewardRandom = CloneableXorWowRandom(deckSeed * 100_003 + offer)
                 state.buildItemChoices()
                 state.choices.forEach { choice ->
-                    val id = requireNotNull(choice.itemId)
-                    shown[id]++
-                    if (content.items[id].isActive) activeCards++
+                    val item = content.items[requireNotNull(choice.itemId)]
+                    shown[item.id]++
+                    tierCards[item.rarity.ordinal]++
+                    if (item.isActive) {
+                        activeCards++
+                        tierActiveCards[item.rarity.ordinal]++
+                    }
                 }
                 cards += state.choices.size
             }
         }
         fun rate(item: ItemDefinition) = shown[item.id].toDouble() / cards
         fun List<ItemDefinition>.meanRate() = sumOf(::rate) / size
+        // A passive item's share of its tier's passive cards, times the tier's share of all cards: as if every card the
+        // tier drew had shown a passive item, as before active items existed (a tier without actives keeps its rate).
+        fun passiveRate(item: ItemDefinition): Double {
+            val tier = item.rarity.ordinal
+            return shown[item.id].toDouble() / (tierCards[tier] - tierActiveCards[tier]) * tierCards[tier] / cards
+        }
+        fun List<ItemDefinition>.meanPassiveRate() = sumOf(::passiveRate) / size
         val passive = content.items.filter { offerable[it.id] && !it.isActive }
         val buckets = linkedMapOf<String, List<ItemDefinition>>(
             "Common" to passive.filter { it.rarity == ItemRarity.COMMON },
@@ -113,9 +130,10 @@ class OfferFrequencyFlatnessTest {
             "Epic" to passive.filter { it.rarity == ItemRarity.EPIC && !it.risk && it.keystone == null },
             "risk Epic" to passive.filter { it.risk },
         )
-        val means = buckets.mapValues { (_, items) -> items.meanRate() }
+        val means = buckets.mapValues { (_, items) -> items.meanPassiveRate() }
         val common = means.getValue("Common")
-        val worst = buckets.flatMap { (bucket, items) -> items.map { it.name to rate(it) / means.getValue(bucket) } }.maxBy { it.second }
+        val worst = buckets.flatMap { (bucket, items) -> items.map { it.name to passiveRate(it) / means.getValue(bucket) } }
+            .maxBy { it.second }
         val lane = content.coreShape(CoreShape.ORB).activeLane.toSet()
         val actives = content.items.filter { offerable[it.id] && it.isActive }
         val laneFactors = ItemRarity.entries.mapNotNull { tier ->
