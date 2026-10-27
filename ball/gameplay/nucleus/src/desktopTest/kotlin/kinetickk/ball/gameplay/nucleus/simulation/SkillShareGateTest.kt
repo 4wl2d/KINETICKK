@@ -16,10 +16,10 @@ import kotlin.test.assertTrue
  *
  * Population (restated for active items, R1.5): an active item reaches a run only through ordinary item offers, so the
  * gate measures runs that own one. The share walks the no-POI probe sequence (`i * 7_919 + 13`, i = 1, 2, ...) in order
- * with the Orb until [SHARE_RUNS] runs have bound an active item by [OWNED_BY_SECONDS]; the spread walks the same
- * sequence for every character until [SPREAD_RUNS] runs of each have. Seeds are chosen by that definition, never by
- * outcome; a probe that binds no active item by then is reported and left out. The walk is bounded: a population that
- * cannot fill within [MAX_PROBES_PER_RUN] probes per run fails as such.
+ * with the Orb until [SHARE_RUNS] runs have bound an active item by [OWNED_BY_SECONDS]; the spread walks
+ * [PopulationSeeds] for every character until [SPREAD_RUNS] runs of each have. Seeds are chosen by that definition,
+ * never by outcome; a probe that binds no active item by then is reported and left out. The walk is bounded: a
+ * population that cannot fill within [MAX_PROBES_PER_RUN] probes per run fails as such.
  *
  * The share counts the damage the active effects cause ([kinetickk.ball.gameplay.nucleus.model.SkillRuntime.skillCausedDamage]):
  * their own hits, what a cast resolves (Catalyze's forced reactions) and the Core's impacts while an effect moves it
@@ -35,6 +35,12 @@ import kotlin.test.assertTrue
  * of the runs must be judged. The spread pools each effect's damage over the whole run
  * ([kinetickk.ball.gameplay.nucleus.model.SkillRuntime.effectDamage], kept when its item is replaced) across every
  * character's runs, over all active damage.
+ *
+ * The spread is a population gate (lead Addendum C5): with three runs per character the 05885fa9 base kept its top
+ * effect within 0.30 with probability 0.76 (Sonic Boom 0.253 over 100 runs per character), so it re-rolled with the
+ * reward stream. Each character now walks [PopulationSeeds] until [SPREAD_RUNS] runs bind an active item by
+ * [OWNED_BY_SECONDS]: 300 runs, on which the base's top effect read 0.280 (Sonic Boom, bootstrap SE 0.014, with the old
+ * per-slot damage). The base plus two standard errors is 0.31; the bound stays 0.30 (Addendum C6 keeps it).
  */
 class SkillShareGateTest {
     private class Run(
@@ -52,7 +58,7 @@ class SkillShareGateTest {
 
     @Test
     fun skillsDealBetweenEightAndTwentyPercentOfAFreshRunsDamage() {
-        val runs = population(CoreShape.ORB, SHARE_RUNS)
+        val runs = population(CoreShape.ORB, SHARE_RUNS, ShareProbes)
         runs.forEach { run ->
             println("SKILL-SHARE seed=${run.seed} share=${"%.3f".format(run.share)} sec=${run.seconds.toInt()} " +
                 "firstActive=${run.firstActiveAt?.toInt()}" + (if (run.judged) " " else " (ended early, not judged) ") +
@@ -68,7 +74,7 @@ class SkillShareGateTest {
 
     @Test
     fun noSingleSkillDealsMoreThanThirtyPercentOfAllSkillDamageAcrossTheCharacters() {
-        val runs = CoreShape.entries.flatMap { shape -> population(shape, SPREAD_RUNS) }
+        val runs = populationOf(CoreShape.entries) { shape -> population(shape, SPREAD_RUNS, PopulationSeeds) }.flatten()
         val totals = SkillId.entries.associateWith { skill -> runs.sumOf { it.bySkill[skill] ?: 0.0 } }
         val all = totals.values.sum()
         println("SKILL-SPREAD runs=${runs.size} total=${all.toInt()} " + totals.entries.sortedByDescending { it.value }
@@ -79,15 +85,15 @@ class SkillShareGateTest {
             "${top.key} dealt ${"%.3f".format(top.value / all)} of all skill damage")
     }
 
-    /** The first [size] runs of [shape] along the probe sequence that bind an active item by [OWNED_BY_SECONDS]. */
-    private fun population(shape: CoreShape, size: Int): List<Run> {
+    /** The first [size] runs of [shape] along [probes] that bind an active item by [OWNED_BY_SECONDS]. */
+    private fun population(shape: CoreShape, size: Int, probes: List<Int>): List<Run> {
         val runs = ArrayList<Run>(size)
         var probe = 0
         while (runs.size < size) {
             probe++
-            assertTrue(probe <= size * MAX_PROBES_PER_RUN,
+            assertTrue(probe <= size * MAX_PROBES_PER_RUN && probe <= probes.size,
                 "only ${runs.size} of ${probe - 1} $shape probes bound an active item by $OWNED_BY_SECONDS s; $size needed")
-            val run = play(probe * 7_919 + 13, shape)
+            val run = play(probes[probe - 1], shape)
             if (run.owned) runs += run
             else println("SKILL-SHARE $shape seed=${run.seed} bound no active item by $OWNED_BY_SECONDS s (sec=${run.seconds.toInt()}), left out")
         }
@@ -123,7 +129,7 @@ class SkillShareGateTest {
 
     private companion object {
         const val SHARE_RUNS = 31
-        const val SPREAD_RUNS = 3
+        const val SPREAD_RUNS = 25
         /** A population run has bound an active item by this run time. */
         const val OWNED_BY_SECONDS = 360f
         /** The walk's bound: at most this many probes per population run before the population counts as unfillable. */
@@ -132,5 +138,7 @@ class SkillShareGateTest {
         const val MIN_SHARE = 0.08
         const val MAX_SHARE = 0.20
         const val MAX_SINGLE_SKILL_SHARE = 0.30
+        /** The share's walk: the no-POI probe sequence `i * 7_919 + 13` from i = 1. */
+        val ShareProbes: List<Int> = (1..SHARE_RUNS * MAX_PROBES_PER_RUN).map { it * 7_919 + 13 }
     }
 }
