@@ -986,7 +986,7 @@ private fun DrawScope.drawRewardIcon(
             drawRadialPattern(bounds, item.elements.firstOrNull()?.let { elementFill(it.ordinal) } ?: KineticFill, iconColor, pattern)
             val effect = item.active
             if (effect != null) drawActiveItemMark(effect, Offset(bounds.center.x, bounds.top + bounds.minDimension * 0.5f), bounds.minDimension,
-                iconColor, presentation.itemStack ?: 0, item.maxStacks)
+                iconColor, presentation.itemStack ?: 0, item.maxStacks, plate)
             else drawItemIcon(item, bounds.center, size.minDimension * 0.34f, iconColor, presentation.itemStack)
         }
         relic != null && policy != null -> {

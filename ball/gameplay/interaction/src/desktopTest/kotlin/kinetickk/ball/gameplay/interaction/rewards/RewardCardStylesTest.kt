@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.ui.graphics.takeOrElse
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.text.TextMeasurer
@@ -39,6 +40,7 @@ import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.impl.createContentCatalog
+import kinetickk.ball.gameplay.interaction.canvas.activeItemEmptyPipColor
 import kinetickk.ball.gameplay.interaction.canvas.elementFill
 import kinetickk.ball.gameplay.interaction.canvas.skillGlyph
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
@@ -84,6 +86,24 @@ class RewardCardStylesTest {
         val choices = content.items.map { ChoiceOption(ChoiceType.ITEM, it.name, it.description, it.rarity.displayLabel.uppercase(), itemId = it.id) }
         val model = rewardFixtureModel(content = content, choices = choices, language = language)
         return choices.mapIndexed { index, choice -> model.rewardCardPresentation(choice, index, language) }
+    }
+
+    /**
+     * An active item's unlit rank pips read on every plate its mark is drawn on, in every colour-vision mode: the card's
+     * icon plate (plain, or tinted in a pale hue as Cryo and Void are by default, Ion in Protan and every hue in Mono)
+     * and the pause grid's Ink2 plate keep them at 1.35:1 or more (Line2 pips sat near 1:1 on the tinted plates).
+     */
+    @Test
+    fun anActiveItemsUnlitRankPipsReadOnEveryPlate() {
+        val actives = itemCards().filter { it.item?.active != null }
+        assertEquals(SkillId.entries.size, actives.size, "every active effect has its item")
+        for (mode in KkVisionMode.entries) for (card in actives) {
+            val look = rewardCardLook(card, mode.palette)
+            for (plate in listOf(look.plateTint.takeOrElse { Kk.Ink3 }, Kk.Ink2)) {
+                val contrast = kkContrast(activeItemEmptyPipColor(plate), plate)
+                assertTrue(contrast >= 1.35f, "$mode ${card.title}: unlit pips at $contrast:1 on ${plate.toArgb().toUInt().toString(16)}")
+            }
+        }
     }
 
     private fun otherCards(): List<RewardCardPresentation> {
