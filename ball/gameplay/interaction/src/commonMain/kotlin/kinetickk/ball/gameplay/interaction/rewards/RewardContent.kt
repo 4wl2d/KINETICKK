@@ -105,10 +105,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RuleLineKind
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.gameplay.interaction.canvas.drawRelicIcon
 import kinetickk.ball.gameplay.interaction.canvas.elementFill
 import kinetickk.ball.gameplay.interaction.canvas.overlayColor
 import kinetickk.ball.gameplay.interaction.canvas.overlayIcon
+import kinetickk.ball.gameplay.interaction.canvas.drawActiveItemMark
 import kinetickk.foundation.design.KkFillKind
 import kinetickk.foundation.design.drawKkHatch
 import kinetickk.foundation.design.drawKkIcon
@@ -199,9 +201,11 @@ internal fun RewardContent(
     onSelect: (Int) -> Unit,
     onReroll: () -> Unit,
     onBuild: () -> Unit = {},
+    /** The player's input is touch: cards name a Z/X/C slot by number instead of its key. */
+    touch: Boolean = false,
 ) {
     val language = LocalAppLanguage.current
-    val presentation = remember(engine, language) { engine.rewardPresentation(language) }
+    val presentation = remember(engine, language, touch) { engine.rewardPresentation(language, touch) }
     RewardContent(presentation, layout, engine.hudWidth, engine.uiScale, engine.settings.textScale, renderTime, enabled, onSelect, onReroll, onBuild)
 }
 
@@ -615,7 +619,7 @@ internal fun RewardCard(
                 .testTag("kinetickk.gameplay.choice.${index + 1}.${if (spec.compact) "compact" else "expanded"}")
                 .drawBehind { drawRewardIcon(presentation, accent, iconColor, look.secondHue, look.plateTint, spec.compact, clock.value) },
         )
-        // Identity beside the icon: a relic's keys, then Risk, Reborn, Heirloom and tag chips.
+        // Identity beside the icon: a relic's keys, then an active's slot and lane, Risk, Reborn, Heirloom and tag chips.
         val chipsLeft = spec.dp(spec.plateX + spec.plateSize + spec.chipsGap)
         val chipsWidth = (maxWidth - chipsLeft - spec.dp(spec.end)).coerceAtLeast(0.dp)
         val keys = presentation.keys
@@ -980,7 +984,10 @@ private fun DrawScope.drawRewardIcon(
                 fill = plate)
             // The plate carries the type's pattern: identity without hue (color vision).
             drawRadialPattern(bounds, item.elements.firstOrNull()?.let { elementFill(it.ordinal) } ?: KineticFill, iconColor, pattern)
-            drawItemIcon(item, bounds.center, size.minDimension * 0.34f, iconColor, presentation.itemStack)
+            val effect = item.active
+            if (effect != null) drawActiveItemMark(effect, Offset(bounds.center.x, bounds.top + bounds.minDimension * 0.5f), bounds.minDimension,
+                iconColor, presentation.itemStack ?: 0, item.maxStacks)
+            else drawItemIcon(item, bounds.center, size.minDimension * 0.34f, iconColor, presentation.itemStack)
         }
         relic != null && policy != null -> {
             drawKkIconPlate(bounds, null, accent, cut, rim = accent, fill = plate)

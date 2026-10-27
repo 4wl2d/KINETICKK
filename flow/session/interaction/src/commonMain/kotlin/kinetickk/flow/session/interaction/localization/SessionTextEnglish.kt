@@ -64,6 +64,7 @@ internal fun englishSessionText(text: SessionText): String = when (text) {
     SessionText.FILTER_ALL -> "All"
     SessionText.FILTER_DISCOVERED -> "Discovered"
     SessionText.FILTER_BUILD -> "In build"
+    SessionText.FILTER_ACTIVE -> "Active"
     SessionText.SEARCH_DESCRIPTION -> "Search catalog by name"
     SessionText.ITEMS -> "Items"
     SessionText.CHARACTER_SOURCE -> "Character"

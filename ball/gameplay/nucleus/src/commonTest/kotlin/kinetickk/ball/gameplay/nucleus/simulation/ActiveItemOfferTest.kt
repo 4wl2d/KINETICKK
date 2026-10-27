@@ -261,6 +261,8 @@ class ActiveItemOfferTest {
         assertEquals(loadout, state.skillLoadout, "the loadout stays")
         assertEquals(0, state.itemStack(incoming.id))
         assertEquals(matter + incoming.rarity.rank * 2 * state.matterGain, state.matterHeld(), 0.001f)
+        assertEquals(matter + checkNotNull(keep.salvageMatter) * state.matterGain, state.matterHeld(), 0.001f,
+            "the keep card names the Matter its salvage grants")
         assertEquals(3, state.offerPity, "pity resolves once")
     }
 

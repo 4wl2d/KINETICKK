@@ -115,6 +115,59 @@ class HudSkillBarRenderingTest {
     }
 
     @Test
+    fun aReplacedActiveSlamsItsSlotUnderARingWithoutARankRingOrANewEntrance() {
+        // A full slot whose active item is replaced: the slot's effect changes and its rank drops from III to I.
+        val held = base(bar(slot(SkillId.STORM_COIL, rank = 3)))
+        val replaced = base(bar(slot(SkillId.METEOR, rank = 1)))
+        val memory = HudPresentationMemory()
+        render(held, 0.9f, memory)
+        render(held, 1f, memory)
+        val heldRow = assertNotNull(HudLayoutProbe.rect(HudBlock.SKILLS))
+        render(replaced, 2f, memory) // the replacement's edge
+        val slamming = render(replaced, 2.01f, memory)
+        val slammingRow = assertNotNull(HudLayoutProbe.rect(HudBlock.SKILLS))
+        val settled = render(replaced, 4f, memory)
+        // The row stays in place (no second entrance); the slot slams and rings like a first bind.
+        assertEquals(heldRow.left, slammingRow.left, 0.5f)
+        assertTrue(differing(slamming, settled, slotRect(0).grown(40f)) > 400, "no slam or ring on the replacement")
+        assertEquals(0f, memory.skillAcquired(0, 2f))
+        assertEquals(1f, memory.skillRanked(0, 2f), "a lower rank after a replacement is no rank-up")
+        assertEquals(1f, memory.skillRow(2f))
+    }
+
+    @Test
+    fun anEmptySlotIsARecessedDashedFaceWithItsPipsUnlitNeverALock() {
+        val frame = render(base(bar(slot(SkillId.STORM_COIL))), 2f)
+        val empty = slotRect(2)
+        // Inside the edge only the recessed Ink1 face: no hatch, no lock (the lock glyph's Mute2), no glyph.
+        val inner = Rect(empty.left + 12f, empty.top + 12f, empty.right - 12f, empty.bottom - 12f)
+        val innerArea = (inner.width.toInt() * inner.height.toInt()).toFloat()
+        assertTrue(near(frame, inner, Kk.Ink1, 0.02f) >= innerArea * 0.98f, "the empty face is not a plain recess")
+        assertEquals(0, near(frame, empty, Kk.Mute2, 0.08f), "an empty slot shows a lock")
+        // The dashed Line2 edge: drawn, and broken by its gaps (a solid edge would light every edge pixel).
+        val top = Rect(empty.left + 12f, empty.top - 1f, empty.right - 4f, empty.top + 1f)
+        val lit = near(frame, top, Kk.Line2, 0.2f)
+        assertTrue(lit > 6, "no dashed edge ($lit px)")
+        assertTrue(lit < (top.width.toInt() * top.height.toInt()) * 0.8f, "the edge is not dashed ($lit px)")
+        // Three unlit pips at the top-left where a held active shows its rank.
+        val pips = Rect(empty.left + 9f, empty.top + 3f, empty.left + 40f, empty.top + 9f)
+        assertTrue(near(frame, pips, Kk.Ink4, 0.03f) >= 24, "no unlit rank pips")
+        // A held slot keeps its glyph in the element's hue.
+        assertTrue(near(frame, slotRect(0), roles.element(kinetickk.ball.content.api.StatusElement.ION.ordinal)) > 40)
+    }
+
+    @Test
+    fun elementLessActivesDrawInTheKineticRoleAsTheirCardsDo() {
+        for (id in listOf(SkillId.CATALYZE, SkillId.DUAL_INFUSION, SkillId.SLINGSHOT, SkillId.FULL_STOP)) {
+            val frame = render(base(bar(slot(id))), 2f)
+            // The glyph below the rank pips (the one rank I pip is `you` too).
+            val face = slotRect(0).let { Rect(it.left, it.top + 10f, it.right, it.bottom) }
+            assertTrue(near(frame, face, roles.kinetic) > 30, "$id is not drawn in the kinetic role")
+            assertEquals(0, near(frame, face, Kk.Bone, 0.06f), "$id still draws in Bone")
+        }
+    }
+
+    @Test
     fun aSlotTurningReadyFlashesBoneAndRingsThenSettles() {
         val cooling = base(bar(slot(SkillId.FROST_SNAP, ready = false)))
         val ready = base(bar(slot(SkillId.FROST_SNAP, ready = true)))

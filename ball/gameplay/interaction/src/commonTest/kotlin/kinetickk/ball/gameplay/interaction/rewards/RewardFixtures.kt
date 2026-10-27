@@ -6,6 +6,7 @@ package kinetickk.ball.gameplay.interaction.rewards
 import kinetickk.ball.gameplay.interaction.ShippedWeaponFixtures
 import kinetickk.ball.content.api.BuffStat
 import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.DamageBasis
 import kinetickk.ball.content.api.EffectAction
@@ -30,6 +31,7 @@ import kinetickk.ball.content.api.RelicKey
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.RelicPolicy
 import kinetickk.ball.content.api.RelicValue
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
@@ -42,6 +44,8 @@ import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.RewardPreview
 import kinetickk.ball.gameplay.nucleus.render.RunStatistics
+import kinetickk.ball.gameplay.nucleus.render.SkillBarProjection
+import kinetickk.ball.profile.api.KeyBindings
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
@@ -230,10 +234,12 @@ internal fun rewardFixtureModel(
     rebirthLevel: Int = 3,
     runStatisticsOnLeft: Boolean = false,
     coreShape: CoreShape = CoreShape.ORB,
+    skillBar: SkillBarProjection = SkillBarProjection.EMPTY,
+    keyBindings: KeyBindings = KeyBindings.DEFAULT,
 ): GameplayRenderModel = GameplayRenderModel(
     content = content,
     phase = phase,
-    settings = PlayerPreferences(language = language, textScale = textScale, runStatisticsOnLeft = runStatisticsOnLeft),
+    settings = PlayerPreferences(language = language, textScale = textScale, runStatisticsOnLeft = runStatisticsOnLeft, keyBindings = keyBindings),
     rebirthLevel = rebirthLevel,
     screenWidth = width,
     screenHeight = height,
@@ -262,6 +268,7 @@ internal fun rewardFixtureModel(
     weaponBeamTime = 0f, weaponBeamStartX = 0f, weaponBeamStartY = 0f, weaponBeamEndX = 0f, weaponBeamEndY = 0f,
     totem = null,
     coreShape = coreShape,
+    skillBar = skillBar,
     enemies = immutableListOf(), projectiles = immutableListOf(), pickups = immutableListOf(), trail = immutableListOf(),
     weaponNodes = immutableListOf(), weaponOrbitals = immutableListOf(),
     choices = choices.toImmutableList(),
@@ -281,4 +288,42 @@ internal fun rewardFixtureModel(
 internal fun itemChoice(id: Int, reborn: Boolean = false): ChoiceOption {
     val item = requireNotNull(rewardFixtureContent.item(id))
     return ChoiceOption(ChoiceType.ITEM, item.name, item.description, item.rarity.displayLabel.uppercase(), itemId = id, reborn = reborn)
+}
+
+/** The first active item id of [rewardActiveFixtureContent] (Solar Flare, then Meteor, Catalyze and Frost Line). */
+internal val rewardFixtureActiveBase: Int = rewardFixtureContent.items.size
+
+/**
+ * The fixture catalog plus three active items built like the shipped ones (name, flavor, tags and element from their
+ * effect, one passive rule, three ranks): Solar Flare and Meteor (Rare, Thermal), Catalyze (Epic, no element) and
+ * Frost Line (Uncommon, Cryo).
+ */
+internal val rewardActiveFixtureContent: GameplayContentSnapshot = rewardFixtureContent.copy(items = (rewardFixtureContent.items + listOf(
+    rewardActiveFixtureItem(rewardFixtureActiveBase, SkillId.SOLAR_FLARE, ItemRarity.RARE, ItemRule.ElementPotency(StatusElement.THERMAL, 0.2f)),
+    rewardActiveFixtureItem(rewardFixtureActiveBase + 1, SkillId.METEOR, ItemRarity.RARE, ItemRule.BreakPower(StatusElement.THERMAL, 0.25f)),
+    rewardActiveFixtureItem(rewardFixtureActiveBase + 2, SkillId.CATALYZE, ItemRarity.EPIC, ItemRule.ReactionPower(0.15f)),
+    rewardActiveFixtureItem(rewardFixtureActiveBase + 3, SkillId.FROST_LINE, ItemRarity.UNCOMMON, ItemRule.StatusDuration(StatusElement.CRYO, 1.2f)),
+)).toImmutableList())
+
+private fun rewardActiveFixtureItem(id: Int, effect: SkillId, rarity: ItemRarity, passive: ItemRule): ItemDefinition {
+    val definition = rewardFixtureContent.skill(effect)
+    return ItemDefinition(id, definition.name, definition.summary, rarity, definition.tags,
+        listOfNotNull(definition.element).toImmutableList(), rules = immutableListOf(passive),
+        maxStacks = ContentBounds.MAX_SKILL_RANK, unlockLevel = 7, active = effect)
+}
+
+/**
+ * An active item's offer card as the nucleus deals it: the item, its effect and the rank it reaches ([stacks] + 1, the
+ * redundant projection of content), the [slot] it binds to or ranks, or [replaces] while every slot holds another active.
+ */
+internal fun rewardActiveChoice(
+    id: Int,
+    slot: Int?,
+    replaces: Boolean = false,
+    stacks: Int = 0,
+    content: GameplayContentSnapshot = rewardActiveFixtureContent,
+): ChoiceOption {
+    val item = requireNotNull(content.item(id))
+    return ChoiceOption(ChoiceType.ITEM, item.name, item.description, item.rarity.displayLabel.uppercase(), itemId = id,
+        skillId = item.active, skillRank = stacks + 1, activeSlot = slot.takeIf { !replaces }, replacesActive = replaces)
 }

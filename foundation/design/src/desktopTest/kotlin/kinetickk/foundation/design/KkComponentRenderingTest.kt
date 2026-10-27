@@ -296,11 +296,11 @@ class KkComponentRenderingTest {
         fun draw(
             cooldown: Float = 0f, ready: Boolean = false, rank: Int = 1, charges: Int = -1, maxCharges: Int = 1,
             active: Float = 0f, pending: Float = 0f, locked: Boolean = false, pressed: Float = 0f, refund: Float = 0f,
-            shake: Float = 0f, key: androidx.compose.ui.text.TextLayoutResult? = null, rankFill: Float = 1f,
+            shake: Float = 0f, key: androidx.compose.ui.text.TextLayoutResult? = null, rankFill: Float = 1f, empty: Boolean = false,
         ) = image(200, 120) {
             drawKkSkillSlot(measurer, slot, KkIcon.WEAPONS_ARC_COIL, ion, cooldown, ready, rank, charges = charges, maxCharges = maxCharges,
                 active = active, activeColor = ion, pending = pending, locked = locked, pressed = pressed, refundFlash = refund,
-                refundColor = Kk.Bone, shakeX = shake, keyLayout = key, rankFill = rankFill)
+                refundColor = Kk.Bone, shakeX = shake, keyLayout = key, rankFill = rankFill, empty = empty)
         }
         val ready = draw(ready = true)
         val cooling = draw(cooldown = 0.6f)
@@ -314,6 +314,24 @@ class KkComponentRenderingTest {
         assertEquals(0, locked.countNear(ion, 20))
         assertTrue(locked.countNear(Kk.Mute2, 20) > 20, "lock glyph")
         assertEquals(0, locked.countNear(Kk.Volt, 20))
+        // Empty (an unbound slot, usable): a recessed Ink1 face, a dashed Line2 edge and three unlit pips; no lock, no
+        // hatch, no glyph, sweep, charges, bar or key cap whatever else is passed.
+        val empty = draw(empty = true, ready = true, rank = 2, cooldown = 0.5f, charges = 2, maxCharges = 2, active = 1f,
+            key = measureKkKeyCap(measurer, "Z", 10f))
+        assertEquals(0, empty.countNear(ion, 20), "an empty slot shows a glyph or a bar")
+        assertEquals(0, empty.countNear(Kk.Mute2, 20), "an empty slot shows a lock")
+        assertEquals(0, empty.countNear(Kk.Volt, 20), "an empty slot glows, ranks or charges")
+        assertEquals(0, empty.regionCountNear(Kk.Bone, 60, 82, 112, 100, 40), "an empty slot shows a key cap")
+        assertTrue(empty.regionCountNear(Kk.Ink1, 72, 42, 100, 70, 2) >= 27 * 27, "no recessed face")
+        // Along the top edge the Line2 dashes alternate with gaps.
+        val edgeRow = (27..32).map { y -> (72 until 108).map { x -> colorDistance(empty.at(x, y), Kk.Line2.toArgb()) <= 24 } }
+            .maxBy { row -> row.count { it } }
+        val breaks = edgeRow.zipWithNext().count { (a, b) -> a != b }
+        assertTrue(edgeRow.count { it } >= 8 && breaks >= 4, "the edge is not dashed: $edgeRow")
+        assertTrue(empty.regionCountNear(Kk.Ink4, 60, 30, 100, 40, 4) >= 30, "no unlit pips")
+        // A press still answers on an empty slot, fainter than on a held one.
+        val pressedEmpty = draw(empty = true, pressed = 1f).regionCountNear(Kk.Ink1, 72, 42, 100, 70, 2)
+        assertTrue(pressedEmpty < 50, "the press does not light the empty face")
         // Rank pips: one volt pip at rank I, three at rank II... gold at rank III (no volt pips left).
         val pips = { image: androidx.compose.ui.graphics.ImageBitmap, color: Color -> image.regionCountNear(color, 60, 30, 100, 40, 20) }
         val rankOne = pips(draw(rank = 1), Kk.Volt)

@@ -27,6 +27,7 @@ import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.api.RuleLineKind
 import kinetickk.ball.content.api.RuleTextContext
 import kinetickk.ball.content.api.SkillDefinition
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
@@ -103,7 +104,11 @@ internal data class RewardPresentation(
     val heirloom: Boolean get() = cards.any { it.heirloom }
 }
 
-internal fun GameplayRenderModel.rewardPresentation(language: AppLanguage = AppLanguage.English): RewardPresentation {
+/**
+ * The reward overlay of the current choice. [touch]: the player's input is touch, so the cards name a Z/X/C slot by its
+ * number instead of its key.
+ */
+internal fun GameplayRenderModel.rewardPresentation(language: AppLanguage = AppLanguage.English, touch: Boolean = false): RewardPresentation {
     val kind = when (choiceType) {
         ChoiceType.TOTEM -> RewardLayoutKind.TOTEM
         ChoiceType.RELIC_BIND -> RewardLayoutKind.RELIC_BIND
@@ -115,7 +120,7 @@ internal fun GameplayRenderModel.rewardPresentation(language: AppLanguage = AppL
         heading = if (choices.any { it.heirloom && it.relicId != null }) language.text(OverlayRedesignText.Heirloom)
             else rewardHeading(choiceType, choices.firstOrNull()?.relicAction, language),
         subtitle = "",
-        cards = choices.mapIndexed { index, choice -> rewardCardPresentation(choice, index, language) },
+        cards = choices.mapIndexed { index, choice -> rewardCardPresentation(choice, index, language, touch) },
         titleAccent = Kk.Bone,
         rerollAccent = Kk.Bone,
         rerollsRemaining = rerollsRemaining,
@@ -348,6 +353,13 @@ internal enum class RewardChipKind {
     SIGNATURE,
     /** A weapon offer's element (no glyph for a Kinetic weapon). */
     ELEMENT,
+    /**
+     * The Z/X/C slot an active item binds to or ranks (or, on the slot prompt, the slot a card replaces): the
+     * player's key for it as a key cap after the label ([RewardChip.keyCap]), or the slot's number in the label on touch.
+     */
+    ACTIVE,
+    /** An unowned active item offered while every slot holds another active: taking it asks which one to replace. */
+    REPLACES_ACTIVE,
 }
 
 /**
@@ -373,7 +385,12 @@ internal data class RewardChip(
     val active: Boolean = false,
     /** The character a SIGNATURE chip names. */
     val core: CoreShape? = null,
-)
+    /** The key an ACTIVE chip's slot is bound to, drawn as a key cap after the label (null on touch). */
+    val keyCap: String? = null,
+) {
+    /** What the chip reads as: its label, then its key cap. */
+    val spoken: String get() = if (keyCap == null) label else "$label $keyCap"
+}
 
 /** One mechanical line of an item ([RuleLineKind.TRIGGER] headers its effect); [suppressed] lines are void. */
 internal data class RewardRuleLine(
@@ -424,7 +441,7 @@ internal data class RewardCardPresentation(
     val totemRow: RewardTotemRow? = null,
     /** The card's elements: pips on the band and the icon hue (an item's elements). */
     val elements: List<StatusElement> = emptyList(),
-    /** Identity chips beside the icon: Risk, Reborn, Heirloom, tags or a relic's attuned tags. */
+    /** Identity chips beside the icon: an active item's slot and lane, Risk, Reborn, Heirloom, tags or a relic's attuned tags. */
     val chips: List<RewardChip> = emptyList(),
     /** Forecast chips in the footer, most important first. */
     val forecast: List<RewardChip> = emptyList(),
@@ -488,8 +505,9 @@ internal fun GameplayRenderModel.rewardCardPresentation(
     choice: ChoiceOption,
     index: Int,
     language: AppLanguage = AppLanguage.English,
+    touch: Boolean = false,
 ): RewardCardPresentation {
-    if (choice.type == ChoiceType.ACTIVE_SLOT) return rewardActiveSlotCard(choice, index, language)
+    if (choice.type == ChoiceType.ACTIVE_SLOT) return rewardActiveSlotCard(choice, index, language, touch)
     val item = choice.itemId?.let(content::item)
     val weapon = choice.weaponId?.let(content::weapon)
     val slotRelic = choice.relicSlot?.let(equippedRelics::getOrNull)
@@ -538,7 +556,7 @@ internal fun GameplayRenderModel.rewardCardPresentation(
     } else emptyList()
     val passiveRules = item?.let { rewardItemRules(it, reborn, itemStackAfter, liable, language) }.orEmpty()
     // An active item leads with its active part (the effect at the rank it reaches), then labels its passive.
-    val itemRules = if (item?.active != null) rewardActiveRules(item, choice, itemStackAfter, language) + passiveRules else passiveRules
+    val itemRules = if (item?.active != null) rewardActiveRules(item, itemStackAfter, language) + passiveRules else passiveRules
     val decline = choice.relicAction == RelicChoiceAction.DECLINE
     // The band already names the resulting rank; cards keep their lines for the relic's effects.
     val descriptions = buildList {
@@ -652,6 +670,11 @@ internal fun GameplayRenderModel.rewardCardPresentation(
         elements = item?.elements ?: weapon?.element?.let(::listOf).orEmpty(),
         chips = when {
             item != null -> buildList {
+                // An active item first names the slot it takes (or that it replaces one) and the character whose lane it is in.
+                item.active?.let { effect ->
+                    add(rewardActiveChip(choice.activeSlot, choice.replacesActive, touch, language))
+                    rewardLaneChip(effect, language)?.let(::add)
+                }
                 if (item.risk) add(RewardChip(RewardChipKind.RISK, language.text(OverlayRedesignText.Risk)))
                 if (choice.reborn) add(RewardChip(RewardChipKind.REBORN, language.text(OverlayRedesignText.Reborn), after = rebirthLevel))
                 item.tags.forEach { tag ->
@@ -733,48 +756,67 @@ private fun GameplayRenderModel.rewardItemRules(
 }
 
 /**
- * The active part of an active item card at the [rank] its effect reaches: a header naming the slot key it binds to
- * or ranks (or that taking it replaces a slot), what the effect does, the rank's numbers and, at rank III, what rank
- * III adds; then the header of the passive lines that follow. Read from content and the card's slot fields.
+ * The active part of an active item card at the [rank] its effect reaches: the Active header, what the effect does,
+ * the rank's numbers and, at rank III, what rank III adds; then the Passive header of the passive lines that follow.
+ * Read from content (the slot it takes is the card's ACTIVE chip, [rewardActiveChip]).
  */
-private fun GameplayRenderModel.rewardActiveRules(
-    item: ItemDefinition,
-    choice: ChoiceOption,
-    rank: Int,
-    language: AppLanguage,
-): List<RewardRuleLine> {
+private fun GameplayRenderModel.rewardActiveRules(item: ItemDefinition, rank: Int, language: AppLanguage): List<RewardRuleLine> {
     val skill = content.skill(item.active ?: return emptyList())
     val element = skill.element
-    val header = when {
-        choice.replacesActive -> language.text(OverlayRedesignText.ActiveReplacesSlot)
-        else -> choice.activeSlot?.let { language.text(OverlayRedesignText.ActiveOnKey, activeSlotKey(it, language)) }
-            ?: language.text(OverlayRedesignText.ActivePart)
-    }
     return buildList {
-        add(RewardRuleLine(RuleLineKind.TRIGGER, header, element))
+        add(RewardRuleLine(RuleLineKind.TRIGGER, language.text(OverlayRedesignText.ActivePart), element))
         add(RewardRuleLine(RuleLineKind.EFFECT, skill.summary.localizedContent(language), element))
-        add(RewardRuleLine(RuleLineKind.RULE, skill.rankNumbers(rank, language), element))
+        add(RewardRuleLine(RuleLineKind.RULE, skill.activeRankNumbers(rank, language), element))
         if (rank >= ContentBounds.MAX_SKILL_RANK) add(RewardRuleLine(RuleLineKind.RULE, skill.rankThree.localizedContent(language), element))
         add(RewardRuleLine(RuleLineKind.TRIGGER, language.text(OverlayRedesignText.PassivePart)))
     }
 }
 
 /**
- * A card of the active slot prompt ([ChoiceType.ACTIVE_SLOT]), built from its structured fields: a replace card shows
- * the held active item of its slot (slot key, rank, element hue, what its effect does), the incoming item taking the
- * slot at rank I and the replacement's preview; the keep card reads as a decline that salvages the incoming item.
+ * The ACTIVE chip of a card about Z/X/C [slot] (0 Z, 1 X, 2 C): the player's key for it as a key cap after the label,
+ * or the slot's number when the input is [touch]; [replaces] (an unowned active while every slot holds another) says
+ * taking it replaces a slot instead. A card that names no slot reads Active alone.
  */
-private fun GameplayRenderModel.rewardActiveSlotCard(choice: ChoiceOption, index: Int, language: AppLanguage): RewardCardPresentation {
+private fun GameplayRenderModel.rewardActiveChip(slot: Int?, replaces: Boolean, touch: Boolean, language: AppLanguage): RewardChip = when {
+    replaces -> RewardChip(RewardChipKind.REPLACES_ACTIVE, language.text(OverlayRedesignText.ActiveReplacesChip))
+    slot == null -> RewardChip(RewardChipKind.ACTIVE, language.text(OverlayRedesignText.ActiveChip))
+    touch -> RewardChip(RewardChipKind.ACTIVE, language.text(OverlayRedesignText.ActiveSlotChip, slot + 1))
+    else -> RewardChip(RewardChipKind.ACTIVE, language.text(OverlayRedesignText.ActiveChip), keyCap = activeSlotKey(slot, language))
+}
+
+/** The run character's signature chip, naming the character, when [effect] is in its active lane; else null. */
+private fun GameplayRenderModel.rewardLaneChip(effect: SkillId, language: AppLanguage): RewardChip? {
+    val character = content.coreShape(coreShape)
+    if (effect !in character.activeLane) return null
+    return RewardChip(RewardChipKind.SIGNATURE, character.displayName.localizedContent(language), core = coreShape)
+}
+
+/**
+ * A card of the active slot prompt ([ChoiceType.ACTIVE_SLOT]), built from its structured fields: a replace card is the
+ * held active item's card (its material, element hue, glyph and rank, the slot's ACTIVE chip and its lane chip, what
+ * its effect does at that rank), then the incoming item taking the slot at rank I and the replacement's preview; the
+ * keep card reads as a decline that salvages the incoming item for the Matter the nucleus names.
+ */
+private fun GameplayRenderModel.rewardActiveSlotCard(
+    choice: ChoiceOption,
+    index: Int,
+    language: AppLanguage,
+    touch: Boolean,
+): RewardCardPresentation {
     val incoming = choice.incomingItemId?.let(content::item)
     val incomingName = incoming?.name?.localizedContent(language).orEmpty()
     val slot = choice.activeSlot
     val held = choice.itemId?.let(content::item)
     if (slot == null || held == null) {
+        val salvage = choice.salvageMatter
         return RewardCardPresentation(
             choice = choice,
             accent = Kk.Mute2,
             tag = "",
-            descriptions = listOf(language.text(OverlayRedesignText.KeepLoadoutEffect, incomingName)),
+            descriptions = listOf(
+                if (salvage != null) language.text(OverlayRedesignText.KeepLoadoutMatter, incomingName, salvage)
+                else language.text(OverlayRedesignText.KeepLoadoutEffect, incomingName),
+            ),
             operation = "",
             title = language.text(OverlayRedesignText.KeepLoadout),
             icon = KkIcon.SYSTEM_MATTER,
@@ -786,10 +828,10 @@ private fun GameplayRenderModel.rewardActiveSlotCard(choice: ChoiceOption, index
     val rank = itemStack(held.id)
     val element = skill?.element
     val rules = buildList {
-        add(RewardRuleLine(RuleLineKind.TRIGGER, language.text(OverlayRedesignText.ActiveOnKey, activeSlotKey(slot, language)), element))
+        add(RewardRuleLine(RuleLineKind.TRIGGER, language.text(OverlayRedesignText.ActivePart), element))
         if (skill != null) {
             add(RewardRuleLine(RuleLineKind.EFFECT, skill.summary.localizedContent(language), element))
-            add(RewardRuleLine(RuleLineKind.RULE, skill.rankNumbers(rank, language), element))
+            add(RewardRuleLine(RuleLineKind.RULE, skill.activeRankNumbers(rank, language), element))
         }
         add(RewardRuleLine(RuleLineKind.RULE, language.text(OverlayRedesignText.ActiveIncoming, incomingName), incoming?.elements?.firstOrNull()))
     }
@@ -809,16 +851,19 @@ private fun GameplayRenderModel.rewardActiveSlotCard(choice: ChoiceOption, index
         bandEnd = language.text(OverlayRedesignText.ActiveRank, rank, held.maxStacks),
         elements = held.elements,
         forecast = rewardForecastChips(preview?.forecasts.orEmpty(), null, language),
+        chips = listOfNotNull(rewardActiveChip(slot, false, touch, language), held.active?.let { rewardLaneChip(it, language) }),
         rules = rules,
     )
 }
 
 /**
- * The numbers of the effect at [rank] as one line: its cooldown and values ([SkillDefinition.rankLines] after the rank
- * line, which the card's band already shows), joined by commas since overlay copy uses no separator marks.
+ * The numbers of an active effect at [rank] as one line, as the reward cards and the Codex write them: its cooldown and
+ * values ([SkillDefinition.rankLines] after the rank line, which a card's band already shows), joined by commas since
+ * overlay copy uses no separator marks. Each value keeps its label and unit on its line (no-break spaces), so a wrap
+ * never leaves a number alone.
  */
-private fun SkillDefinition.rankNumbers(rank: Int, language: AppLanguage): String =
-    rankLines(rank, language).drop(1).joinToString(", ")
+fun SkillDefinition.activeRankNumbers(rank: Int, language: AppLanguage): String =
+    rankLines(rank, language).drop(1).joinToString(", ") { it.replace(' ', '\u00A0') }
 
 /** The active slot prompt's keep card: every held active stays and the incoming active item is salvaged. */
 internal val ChoiceOption.keepsActiveLoadout: Boolean get() = type == ChoiceType.ACTIVE_SLOT && activeSlot == null

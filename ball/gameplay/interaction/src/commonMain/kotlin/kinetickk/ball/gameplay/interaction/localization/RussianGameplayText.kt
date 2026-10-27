@@ -57,7 +57,7 @@ internal fun russianGameplayText(key: GameplayText): String = when (key) {
     GameplayText.BuildUpdated -> "Сборка обновлена"
     GameplayText.WeaponTotem -> "Оружейный тотем"
     GameplayText.ChooseArtifact -> "Улучшение"
-    GameplayText.ChooseActiveSlot -> "Выберите активный предмет на замену"
+    GameplayText.ChooseActiveSlot -> "Замена активного предмета"
     GameplayText.TotemResonance -> "Улучшение"
     GameplayText.WeaponSynchronization -> "Оружие"
     GameplayText.RelicIntercept -> "Реликвия"

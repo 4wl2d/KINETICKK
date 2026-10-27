@@ -73,6 +73,11 @@ data class ChoiceOption(
     val replacesActive: Boolean = false,
     /** Every [ChoiceType.ACTIVE_SLOT] card (the keep card too): the incoming active item waiting for a slot. */
     val incomingItemId: Int? = null,
+    /**
+     * The [ChoiceType.ACTIVE_SLOT] keep card: the Matter the incoming item is salvaged for, as the salvage grants it
+     * before the run's Matter gain (presentation shows this number; it never recomputes the salvage).
+     */
+    val salvageMatter: Int? = null,
 )
 
 data class CharacterLatticePoint(val x: Float, val y: Float)

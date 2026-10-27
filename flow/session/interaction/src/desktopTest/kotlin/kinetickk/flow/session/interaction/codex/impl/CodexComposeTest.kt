@@ -348,7 +348,7 @@ class CodexComposeTest {
                     val range = row.config.getOrNull(SemanticsProperties.HorizontalScrollAxisRange)
                     assertTrue(range == null || range.maxValue() == 0f, "${row.config[SemanticsProperties.TestTag]} scrolls at rest at $where")
                 }
-                ((0..4).map { "codex-tab-$it" } + (0..4).map { "codex-category-$it" } + listOf("codex-filter-0", "codex-filter-2") +
+                ((0..4).map { "codex-tab-$it" } + (0..4).map { "codex-category-$it" } + listOf("codex-filter-0", "codex-filter-2", "codex-filter-3") +
                     (0..2).map { "codex-sort-$it" })
                     .forEach { tag ->
                         val bounds = onNodeWithTag(tag).getUnclippedBoundsInRoot()

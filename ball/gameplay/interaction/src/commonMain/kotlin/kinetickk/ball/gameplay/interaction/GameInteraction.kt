@@ -531,6 +531,7 @@ fun GameplayContent(
                 val down = event.type == KeyEventType.KeyDown
                 if (down) {
                     controlLog.keyHints = true
+                    controlLog.touchInput = false
                     dispatch(GameplayInteractionPulse.UserGestureObserved)
                 }
                 val running = model.phase == GamePhase.RUNNING
@@ -695,7 +696,10 @@ fun GameplayContent(
                                 when {
                                     change.pressed && !change.previousPressed -> {
                                         dispatch(GameplayInteractionPulse.UserGestureObserved, collectPerformance)
-                                        if (change.type == PointerType.Touch) controlLog.keyHints = false
+                                        if (change.type == PointerType.Touch) {
+                                            controlLog.keyHints = false
+                                            controlLog.touchInput = true
+                                        }
                                         // A press on the (!) toggles the rules; a press anywhere else closes them.
                                         val hudInterfaceScale = interfaceScaleState.value
                                         val onTrialInfo = currentRenderModel.isTrialInfoPosition(x, y, hudInterfaceScale)
@@ -804,6 +808,7 @@ fun GameplayContent(
                         dispatch(GameplayInteractionPulse.ChoicesRerolled)
                     },
                     onBuild = { onOutput(GameplayInteractionOutput.OpenCodex) },
+                    touch = controlLog.touchInput,
                 )
             }
             // Pause and reward overlays present Codex as their own menu item and button.

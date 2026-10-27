@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.SkillDefinition
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.gameplay.interaction.input.RunningControlPressLog
@@ -46,8 +47,9 @@ import kotlin.math.sin
  * refusal shake and Bone sweep edge, the ready flash and ring, the refund edge, the slam and ring when
  * an active item binds (or replaces) the slot's effect, the rank-up pip fill and ring, and the whole row
  * sliding in with the first active item — and, while the keyboard is in use on REGULAR windows at least
- * [KEY_CAP_MIN_WIDTH_DP] wide, the bound key under each filled slot. A slot without an active shows an
- * empty face (every slot is usable from the start; none is locked). Allocation-free on steady frames.
+ * [KEY_CAP_MIN_WIDTH_DP] wide, the bound key under each filled slot. A slot without an active is empty, not locked
+ * (every slot is usable from the start): a recessed face in a dashed edge with its rank pips unlit
+ * ([drawKkSkillSlot] `empty`). Allocation-free on steady frames.
  */
 internal fun DrawScope.drawSkillBar(
     engine: GameplayRenderModel,
@@ -122,7 +124,9 @@ private fun DrawScope.drawSkillSlotAt(
     val center = bounds.center
     val side = bounds.width
     if (id == null) {
-        drawKkSkillSlot(measurer, bounds, icon = null, iconColor = Kk.Mute2, cooldown = 0f, ready = false, rank = 0, maxRank = 0)
+        drawKkSkillSlot(measurer, bounds, icon = null, iconColor = Kk.Mute2, cooldown = 0f, ready = false, rank = 0,
+            maxRank = ContentBounds.MAX_SKILL_RANK, pressed = press?.pressFlash(target, renderTime) ?: 0f,
+            unit = if (frame.regular) frame.unit else 0f, empty = true)
         return 0f
     }
     val definition = engine.content.skill(id)
@@ -211,15 +215,12 @@ private fun DrawScope.skillKeyLayout(
 /** Key caps show on REGULAR windows at least [KEY_CAP_MIN_WIDTH_DP] dp wide. */
 internal fun keyCapsShown(frame: HudFrame): Boolean = frame.regular && frame.width >= KEY_CAP_MIN_WIDTH_DP * frame.density
 
-/** The skill's colour: its element; kinetic skills `kinetic`; Catalyze and Dual Infusion Bone. */
-internal fun skillColor(definition: SkillDefinition, roles: KkRolePalette): Color {
-    val element = definition.element
-    return when {
-        element != null -> roles.element(element.ordinal)
-        definition.id == SkillId.CATALYZE || definition.id == SkillId.DUAL_INFUSION -> Kk.Bone
-        else -> roles.kinetic
-    }
-}
+/**
+ * The active's colour, as its item card draws it: its element's hue, else the preset's `kinetic` (the card volt), so
+ * the element-less actives (Slingshot, Full Stop, Catalyze, Dual Infusion) read the same on the card and in the slot.
+ */
+internal fun skillColor(definition: SkillDefinition, roles: KkRolePalette): Color =
+    definition.element?.let { roles.element(it.ordinal) } ?: roles.kinetic
 
 /**
  * The skill's icon (an existing weapon glyph); when it equals the equipped weapon's, the skill shows
@@ -236,28 +237,6 @@ internal fun skillIcon(id: SkillId, engine: GameplayRenderModel): KkIcon {
         id == SkillId.DUAL_INFUSION -> KkIcon.TAG_ARSENAL
         else -> KkIcon.ASPECT_KINETIC
     }
-}
-
-/** Each skill's glyph (all 18 distinct). */
-internal fun skillGlyph(id: SkillId): KkIcon = when (id) {
-    SkillId.SOLAR_FLARE -> KkIcon.WEAPONS_SOLAR_SWEEP
-    SkillId.METEOR -> KkIcon.WEAPONS_MORNINGSTAR
-    SkillId.FROST_LINE -> KkIcon.WEAPONS_PHASE_LATTICE
-    SkillId.FROST_SNAP -> KkIcon.WEAPONS_GLACIER_BELL
-    SkillId.ARC_HOOK -> KkIcon.WEAPONS_TETHER_ARC
-    SkillId.STORM_COIL -> KkIcon.WEAPONS_ARC_COIL
-    SkillId.GRAVITY_WELL -> KkIcon.WEAPONS_GRAVITY_MINES
-    SkillId.MASS_DRIVER -> KkIcon.WEAPONS_SINGULARITY_SPEAR
-    SkillId.DECAY_SPORES -> KkIcon.WEAPONS_SCATTER_BLOOM
-    SkillId.ENTROPIC_TIDE -> KkIcon.WEAPONS_ENTROPY_FIELD
-    SkillId.SONIC_BOOM -> KkIcon.WEAPONS_RESONANCE_DRUM
-    SkillId.RESONATOR -> KkIcon.WEAPONS_SENTRY_GRID
-    SkillId.VOID_STEP -> KkIcon.WEAPONS_HOLLOW_RIFT
-    SkillId.NULL_SHROUD -> KkIcon.WEAPONS_EVENT_LENS
-    SkillId.SLINGSHOT -> KkIcon.WEAPONS_GYRE_DISC
-    SkillId.FULL_STOP -> KkIcon.WEAPONS_CONCUSSION_ENGINE
-    SkillId.CATALYZE -> KkIcon.WEAPONS_PRISM_RELAY
-    SkillId.DUAL_INFUSION -> KkIcon.WEAPONS_FLUX_WAKE
 }
 
 /**
@@ -301,7 +280,7 @@ internal fun DrawScope.drawApexStrikes(engine: GameplayRenderModel, frame: HudFr
 
 private val SkillRects = arrayOf(HudRect.SKILL_0, HudRect.SKILL_1, HudRect.SKILL_2)
 private val SkillKeyTexts = arrayOf(HudText.SKILL_KEY_0, HudText.SKILL_KEY_1, HudText.SKILL_KEY_2)
-private val StrikePaths = IntArray(kinetickk.ball.content.api.ContentBounds.MAX_APEX_STRIKES) { HudPath.STRIKE_0.ordinal + it }
+private val StrikePaths = IntArray(ContentBounds.MAX_APEX_STRIKES) { HudPath.STRIKE_0.ordinal + it }
 
 /** The first active item slides the row in from this far right (reference dp). */
 private const val SKILL_ROW_ENTRANCE_DP = 24f

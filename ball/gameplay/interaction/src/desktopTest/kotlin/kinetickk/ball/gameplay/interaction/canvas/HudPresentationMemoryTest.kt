@@ -205,6 +205,28 @@ class HudPresentationMemoryTest {
     }
 
     @Test
+    fun aReplacedActiveSlamsItsSlotOnTheNewEffectAndNeverRanksOrSlidesTheRow() {
+        val memory = HudPresentationMemory()
+        val boss = BossTarget()
+        val empty = SkillSlotProjection.EMPTY
+        fun observe(first: SkillSlotProjection, at: Float) {
+            val model = base.with("skillBar" to SkillBarProjection(immutableListOf(first, empty, empty)))
+            memory.observe(model, at, boss.select(model))
+        }
+        observe(empty, 0f)
+        observe(SkillSlotProjection(skill = 3, rank = 3, ready = true), 1f)
+        // The slot's active item is replaced: another effect at rank I, ready at once.
+        observe(SkillSlotProjection(skill = 7, rank = 1, ready = true), 5f)
+        assertEquals(0f, memory.skillAcquired(0, 5f), "the slam keys on the slot's effect")
+        assertEquals(1f, memory.skillRanked(0, 5f))
+        assertEquals(1f, memory.skillReady(0, 5f))
+        assertEquals(1f, memory.skillRow(5f))
+        // Ranking the new effect up rings as usual.
+        observe(SkillSlotProjection(skill = 7, rank = 2, ready = true), 6f)
+        assertEquals(0f, memory.skillRanked(0, 6f))
+    }
+
+    @Test
     fun aNewRunReArmsTheOneShotsWithoutFiringThem() {
         val memory = HudPresentationMemory()
         val boss = BossTarget()

@@ -21,11 +21,13 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RewardFocus
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
@@ -46,6 +48,8 @@ import kotlin.test.Test
  * - every shipped item's real [RewardCard] in sheets of eight, board (300 × 450) and phone (195 × 254),
  *   in the Default palette, and on the board in Protan, Deutan and Mono;
  * - one Russian sheet, all relics, and a sheet of weapon, totem, direction, meld and decline cards;
+ * - the active item cards as the nucleus deals them (a free slot in the character's lane, a full loadout, a rank-up to
+ *   rank III, an epic, a touch slot) and the slot prompt's replace and keep cards, board and phone, English and Russian;
  * - a six-frame strip (t = 0..5 s) of each legendary.
  *
  * `KK_GALLERY_ONLY` (comma-separated canonical item names) renders only those items: their sheets
@@ -86,6 +90,13 @@ class RewardCardGalleryShotsTest {
             }
             render(File(folder, "systems-phone-default.png"), systemCards().take(8), Phone, KkRolePalette.Default)
         }
+        if (only == null || items.any { it.isActive }) {
+            for (language in AppLanguage.entries) {
+                val suffix = if (language == AppLanguage.Russian) "-ru" else ""
+                render(File(folder, "actives-board-default$suffix.png"), activeCards(language), Board, KkRolePalette.Default, language)
+                render(File(folder, "actives-phone-default$suffix.png"), activeCards(language), Phone, KkRolePalette.Default, language)
+            }
+        }
         items.filter { it.rarity == ItemRarity.LEGENDARY }.forEach { item ->
             val card = itemCards(listOf(item), AppLanguage.English).single()
             val slug = item.name.lowercase().replace(Regex("[^a-z]+"), "-").trim('-')
@@ -98,6 +109,41 @@ class RewardCardGalleryShotsTest {
         render(null, itemCards(representativeItems(), AppLanguage.English), Board, KkRolePalette.Default)
         render(null, relicCards().take(8), Board, KkRolePalette.Default)
         render(null, systemCards().take(8), Phone, KkRolePalette.Default)
+        render(null, activeCards(AppLanguage.English), Phone, KkRolePalette.Default)
+    }
+
+    /**
+     * Active item cards as offers deal them and the slot prompt's cards: Solar Flare into a free Z slot in the run
+     * character's lane, Gravity Well into X, Meteor while every slot is full, Frost Line ranking C to rank III, Catalyze
+     * (epic) into X, Arc Hook into slot 2 on touch, then the prompt replacing a rank II Solar Flare in Z and keeping the
+     * loadout (salvaging the incoming Meteor for the Matter the nucleus names).
+     */
+    private fun activeCards(language: AppLanguage): List<RewardCardPresentation> {
+        fun active(effect: SkillId) = requireNotNull(content.items.singleOrNull { it.active == effect })
+        val flare = active(SkillId.SOLAR_FLARE)
+        val meteor = active(SkillId.METEOR)
+        val line = active(SkillId.FROST_LINE)
+        val character = CoreShape.entries.first { SkillId.SOLAR_FLARE in content.coreShape(it).activeLane }
+        // Frost Line is owned twice (its card ranks it to III); on the prompt, Solar Flare is held at rank II.
+        fun card(choice: ChoiceOption, type: ChoiceType = ChoiceType.ITEM, touch: Boolean = false, others: List<ChoiceOption> = listOf(choice)) =
+            rewardFixtureModel(content = content, choiceType = type, choices = others, coreShape = character,
+                itemStacks = List(content.items.size) { id -> if (id == line.id || (id == flare.id && type == ChoiceType.ACTIVE_SLOT)) 2 else 0 },
+                discoveredItems = content.items.map { it.id }.toSet(), language = language)
+                .rewardCardPresentation(choice, others.indexOf(choice), language, touch)
+        val replace = ChoiceOption(ChoiceType.ACTIVE_SLOT, flare.name, "", "", itemId = flare.id, skillId = SkillId.SOLAR_FLARE,
+            skillRank = 2, activeSlot = 0, incomingItemId = meteor.id)
+        // A Rare item's salvage as the nucleus names it.
+        val keep = ChoiceOption(ChoiceType.ACTIVE_SLOT, meteor.name, "", "", incomingItemId = meteor.id, salvageMatter = 6)
+        return listOf(
+            card(rewardActiveChoice(flare.id, slot = 0, content = content)),
+            card(rewardActiveChoice(active(SkillId.GRAVITY_WELL).id, slot = 1, content = content)),
+            card(rewardActiveChoice(meteor.id, slot = null, replaces = true, content = content)),
+            card(rewardActiveChoice(line.id, slot = 2, stacks = 2, content = content)),
+            card(rewardActiveChoice(active(SkillId.CATALYZE).id, slot = 1, content = content)),
+            card(rewardActiveChoice(active(SkillId.ARC_HOOK).id, slot = 1, content = content), touch = true),
+            card(replace, ChoiceType.ACTIVE_SLOT, others = listOf(replace, keep)),
+            card(keep, ChoiceType.ACTIVE_SLOT, others = listOf(replace, keep)),
+        )
     }
 
     private class CardSize(val width: Int, val height: Int, val phone: Boolean)
