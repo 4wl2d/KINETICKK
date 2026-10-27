@@ -66,20 +66,20 @@ import kotlin.test.assertTrue
  * tuning) the strong build won tier 10 3/5 (losses at 83 and 85 s), the full-Matrix Pentagon 4/5 and
  * the half Matrix tier 8 2/5.
  *
- * With active items (lead Addendum C5) A and the survival bounds of D and H are population gates over
- * [PopulationSeeds]: on the 05885fa9 base their five gate seeds passed with probability 0.49, 0.82 and 0.78, so they
- * re-rolled with every change to the reward stream. A's floor follows Addendum D1 (the lower of the seeded threshold
- * and the base minus two standard errors); D's and H's follow Addendum D2 (the shipped tuning's own median survival on
- * the calibration windows, see their constants). Gate I is a population gate as well (Addendum D5). B, C, E, F, G and
- * the win bounds of D and H keep their seeds and thresholds: their seeds pass with probability at least 0.99 on the
- * base's population and on the shipped active items' (Addendum D5).
+ * With active items A and the survival bounds of D and H are population gates over [PopulationSeeds] (policy.md,
+ * "Balance gate populations"): on the 05885fa9 base their five gate seeds passed with probability 0.49, 0.82 and 0.78,
+ * so they re-rolled with every change to the reward stream. A's floor is the lower of the seeded threshold and the
+ * base minus two standard errors; D's and H's are the shipped tuning's own median survival on the calibration windows
+ * (see their constants). Gate I is a population gate as well: its 31 seeds kept its ratio with probability 0.78 on the
+ * base. B, C, E, F, G and the win bounds of D and H keep their seeds and thresholds: their seeds pass with probability
+ * at least 0.99 on the base's population and on the shipped active items'.
  */
 class RebirthBalanceGateTest {
     /**
-     * Gate A over the population (Addendum C5): a fresh tier-0 run won 204 of the 300 [PopulationSeeds] runs on the
-     * 05885fa9 base (0.680, SE 0.027), so five seeds reached four wins with probability 0.49. At least
-     * [A_MIN_WIN_SHARE] of the population must win: by Addendum D1 the lower of the seeded 4 of 5 (0.80) and the base
-     * share minus two standard errors, rounded down.
+     * Gate A over the population: a fresh tier-0 run won 204 of the 300 [PopulationSeeds] runs on the 05885fa9 base
+     * (0.680, SE 0.027), so five seeds reached four wins with probability 0.49. At least [A_MIN_WIN_SHARE] of the
+     * population must win: by the population threshold rule the lower of the seeded 4 of 5 (0.80) and the base share
+     * minus two standard errors, rounded down.
      */
     @Test fun aFreshNoPoiBotStillWinsTierZero() {
         val outcomes = populationOf(PopulationSeeds) { seed -> play(seed, tier = 0, setup = Fresh) }
@@ -94,13 +94,13 @@ class RebirthBalanceGateTest {
      * catalog without the active items ([NoActives], a run as before they existed) clears the Architect no more than a
      * fifth slower than with the actives its offers dealt and it cast. A run that dies counts as never clearing.
      *
-     * A population gate over [PopulationSeeds] (Addendum D5). A five-seed median lands on whichever arm lost two seeds,
+     * A population gate over [PopulationSeeds]. A five-seed median lands on whichever arm lost two seeds,
      * since about a quarter of fresh runs die with or without skills, so the gate once read 31 seeds of the NoPoi probe
      * sequence (i = 1..31); they still kept the ratio at 0.8 with probability only 0.78 on the 05885fa9 base and 0.84
      * with the shipped active items. On the base the population's median clear was 83.91 s with skills against 94.13 s
      * without (ratio 0.891, bootstrap SE 0.042, n 300); the arm without active items reproduces the 94.13 s exactly.
-     * The ratio must be at least [I_MIN_CLEAR_RATIO]: by Addendum D1 the lower of the seeded 0.8 and the base minus two
-     * standard errors (0.807), rounded down.
+     * The ratio must be at least [I_MIN_CLEAR_RATIO]: by the population threshold rule the lower of the seeded 0.8 and
+     * the base minus two standard errors (0.807), rounded down.
      */
     @Test fun skillsHelpAFreshTierZeroRunWithoutTrivialisingIt() {
         val withSkills = populationOf(PopulationSeeds) { seed -> play(seed, tier = 0, setup = Fresh) }
@@ -150,9 +150,9 @@ class RebirthBalanceGateTest {
     }
 
     /**
-     * D's survival bound is a population gate (Addendum C5): the base strong build's median survival over the 300
+     * D's survival bound is a population gate: the base strong build's median survival over the 300
      * [PopulationSeeds] runs was 574.48 s (bootstrap SE 16.24 s), and five seeds reached a median of 480 s with
-     * probability 0.82. The population's median survival must be at least [D_MIN_MEDIAN_SURVIVAL] s, Addendum D2's
+     * probability 0.82. The population's median survival must be at least [D_MIN_MEDIAN_SURVIVAL] s, the
      * floor for active items (see the constant): the base handed the strong Pentagon its lane skills for free, and
      * active items reach it only through ordinary offers. The win bound stays on the five gate seeds (8 of the 300 base
      * runs won).
@@ -173,14 +173,14 @@ class RebirthBalanceGateTest {
      * Gate H (0.5.0 Apex, combat-final §10): the strong build seeking Data at tier 10 — every Matrix rank and lifetime
      * Matter equal to its price, so every rank-0 Data item can be offered; the bot takes Data cards first, takes Decay
      * Spores and Gravity Well, reaches level 42 soonest and casts the Apex as its post-cap Data recharges it. It takes
-     * a new active of its character's lane before a Data card (Addendum D6, rule R2), but never in place of Decay
-     * Spores or Gravity Well (Addendum E3): a lane active evicting a Data active and the next Data active evicting it
-     * again would undo each other. D's bounds still hold: a median survival of at least seven minutes and a clear in at
+     * a new active of its character's lane before a Data card, as a player building its lane would, but never in place
+     * of Decay Spores or Gravity Well: a lane active evicting a Data active and the next Data active evicting it again
+     * would undo each other. D's bounds still hold: a median survival of at least seven minutes and a clear in at
      * most three seeds of five.
      *
-     * The survival bound is a population gate (Addendum C5): the base median survival over the 300 [PopulationSeeds]
+     * The survival bound is a population gate: the base median survival over the 300 [PopulationSeeds]
      * runs was 583.33 s (bootstrap SE 20.37 s), and five seeds reached 480 s with probability 0.78. The population's
-     * median must be at least [H_MIN_MEDIAN_SURVIVAL] s, Addendum D2's floor for active items: the shipped tuning's own
+     * median must be at least [H_MIN_MEDIAN_SURVIVAL] s, the floor for active items: the shipped tuning's own
      * median over the calibration windows minus two standard errors, since the base handed the strong build its lane
      * skills for free (see the constant). The win bound stays on the five gate seeds (1 of the 300 base runs won).
      */
@@ -308,33 +308,33 @@ class RebirthBalanceGateTest {
         const val A_MIN_WIN_SHARE = 0.62
 
         /**
-         * Gate D: the least median survival over [PopulationSeeds] of the strong build at tier 10 (Addendum D2). The
+         * Gate D: the least median survival over [PopulationSeeds] of the strong build at tier 10. The
          * 05885fa9 base read 574.48 s (bootstrap SE 16.24 s, n 300) when the Pentagon got its lane skills Sonic Boom,
          * Resonator and Storm Coil for free at levels 2, 8 and 16. Active items reach a run only through ordinary
          * offers, so a lane active often arrives late or not at all, and no difficulty lever makes up for that, since
          * Reborn 10 stays hard. The floor is therefore the shipped tuning's own, min(480 s, M - 2 SE) rounded down:
          * M = 471.082 s is the median survival over the 600 runs of the calibration windows (`i * 7_919 + 13` for
          * i = 1,301..1,900, never the gate population) and SE = 21.602 s the bootstrap SE of a 300-run median drawn from
-         * them (20,000 resamples, RNG seed 20261027), so M - 2 SE = 427.879 s, rounded down to 427.87 s (Addendum E4,
-         * re-measured on the final content, with Null Shroud's base bolts; a 300-run median drawn from the windows
+         * them (20,000 resamples, RNG seed 20261027), so M - 2 SE = 427.879 s, rounded down to 427.87 s
+         * (re-measured on the final content, with Null Shroud's base bolts; a 300-run median drawn from the windows
          * clears it with probability 0.98).
          */
         const val D_MIN_MEDIAN_SURVIVAL = 427.87f
 
         /**
-         * Gate H: the least median survival over [PopulationSeeds] of the Data-seeking strong build (Addendum D2). The
+         * Gate H: the least median survival over [PopulationSeeds] of the Data-seeking strong build. The
          * 05885fa9 base read 583.33 s (bootstrap SE 20.37 s, n 300) with the same free lane skills as D; through
          * ordinary offers the build waits for its lane actives as D does. The floor is min(480 s, M - 2 SE) rounded
          * down, with M = 481.605 s over the 600 runs of the calibration windows (i = 1,301..1,900) and SE = 25.072 s
          * for a 300-run median drawn from them (20,000 resamples, RNG seed 20261027): M - 2 SE = 431.461 s, rounded down
-         * to 431.46 s (Addendum E4, re-measured on the final content and with the bot keeping its Data actives;
+         * to 431.46 s (re-measured on the final content and with the bot keeping its Data actives;
          * probability 0.99 for a 300-run median drawn from the windows).
          */
         const val H_MIN_MEDIAN_SURVIVAL = 431.46f
 
         /**
          * Gate I: the least ratio of the population's median clear with active items to the median clear without them
-         * (base 0.891, SE 0.042, n 300; Addendum D1 and D5).
+         * (base 0.891, SE 0.042, n 300; the population threshold rule).
          */
         const val I_MIN_CLEAR_RATIO = 0.80f
 

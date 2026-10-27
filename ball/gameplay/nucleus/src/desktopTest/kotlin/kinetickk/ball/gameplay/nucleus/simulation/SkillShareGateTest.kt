@@ -27,28 +27,29 @@ import kotlin.test.assertTrue
  * damage through the Core and reactions: counted by skill hits alone it read 0.3–2.6 % (q10–q90 of 200 runs, measured
  * on the 0.5.0 base before active items, when skills came as drafts), so that metric could not see the Orb's skills.
  *
- * The band is judged on the median run. A run's share depends on which effects it got: on the 0.5.0 base's drafts,
- * over 300 probe runs the 10th–90th percentile spanned 0.056–0.17, wider than the band itself, and no skill number
- * narrowed it (Catalyze reaction scale ×1.5, two more targets or a second off its cooldown, Arc Hook links ×1.5–×3 moved
- * the 10th percentile by at most 0.004), so "every run in the band" measured the offers, not the effects. The share is
- * read at 720 s as specified: a run that ends earlier is reported, not judged (gate A owns survival), and at least half
- * of the runs must be judged. The spread pools each effect's damage over the whole run
+ * The band is judged on the median run. A run's share depends on which effects it got: on the 0.5.0 base's drafts, over
+ * 300 probe runs the 10th–90th percentile spanned 0.056–0.17, wider than the band itself, and no skill number narrowed
+ * it (Catalyze reaction scale ×1.5, which a cast caps at 1.3, two more targets or a second off its cooldown, Arc Hook
+ * links ×1.5–×3 moved the 10th percentile by at most 0.004), so "every run in the band" measured the offers, not the
+ * effects. The share is read at 720 s as specified: a run that ends earlier is reported, not judged (gate A owns
+ * survival), and at least half of the runs must be judged. The spread pools each effect's damage over the whole run
  * ([kinetickk.ball.gameplay.nucleus.model.SkillRuntime.effectDamage], kept when its item is replaced) across every
  * character's runs, over all active damage.
  *
- * The share is a population gate (lead Addendum D3): judged on 31 owning runs walked from i = 1, it passed with
- * probability 0.84–0.86 at a population median of 0.10, so it re-rolled with the reward stream. On the 05885fa9 base
- * (its lane skills free from level 2) all 300 [PopulationSeeds] runs owned one, 214 were judged and their median share
- * was 0.113 (bootstrap SE 0.0038). By Addendum D1 the band is min(0.08, base − 2 SE) to max(0.20, base + 2 SE), that
- * is [MIN_SHARE] to [MAX_SHARE], the design band of Addendum C6. The walk also failed when fewer than 31 of its 124
- * probes owned an active item; that stays a population statement next to the band (Addendum E6): at least
- * [MIN_OWNED_SHARE] of the runs bind one by [OWNED_BY_SECONDS], a design bound that all 300 base runs met.
+ * The share is a population gate (policy.md, "Balance gate populations"): judged on 31 owning runs walked from i = 1,
+ * it passed with probability 0.99 on the 05885fa9 base but 0.70 with the shipped active items (population median
+ * 0.089), so it re-rolled with the reward stream. On the base (its lane skills free from level 2) all 300
+ * [PopulationSeeds] runs owned one, 214 were judged and their median share was 0.113 (bootstrap SE 0.0038). By the
+ * population threshold rule the band is min(0.08, base − 2 SE) to max(0.20, base + 2 SE), that is [MIN_SHARE] to
+ * [MAX_SHARE], the design band. The walk also failed when fewer than 31 of its 124 probes owned an active item; that
+ * stays a population statement next to the band: at least [MIN_OWNED_SHARE] of the runs bind one by [OWNED_BY_SECONDS],
+ * a design bound that all 300 base runs met.
  *
- * The spread is a population gate (lead Addendum C5): with three runs per character the 05885fa9 base kept its top
+ * The spread is a population gate: with three runs per character the 05885fa9 base kept its top
  * effect within 0.30 with probability 0.76 (Sonic Boom 0.253 over 100 runs per character, 300 for the Orb), so it
  * re-rolled with the reward stream. Each character now walks [PopulationSeeds] until [SPREAD_RUNS] runs bind an active
  * item by [OWNED_BY_SECONDS]: 300 runs, on which the base's top effect read 0.280 (Sonic Boom, bootstrap SE 0.014, with
- * the old per-slot damage). The base plus two standard errors is 0.31; the bound stays 0.30 (Addendum C6 keeps it).
+ * the old per-slot damage). The base plus two standard errors is 0.31; the bound stays the design's 0.30.
  */
 class SkillShareGateTest {
     private class Run(

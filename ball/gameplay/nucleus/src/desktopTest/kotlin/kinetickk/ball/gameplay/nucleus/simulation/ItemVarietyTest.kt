@@ -65,14 +65,14 @@ class ItemVarietyTest {
     }
 
     /**
-     * V2 over a population (lead Addendum C5, 0.5.0 active items). On the 05885fa9 base the twelve fixed seeds kept the
-     * ratio within 0.75 with probability 0.55 (Orb), 0.51 (Prism), 0.50 (Star) and 0.30 (Hexagon), so the gate re-rolled
-     * with the reward stream. Over the 300 runs per character on [VarietyPopulationSeeds] (each pair of runs counted, as
-     * on the twelve seeds), the ratio of the isolated runs' mean overlap to the whole-catalog, 0.4.0-lane runs' mean
-     * overlap on the same seeds is at most [MaxBaselineRatio]: by Addendum D1 the higher of the seeded 0.75 and the base
-     * ratio plus two jackknife standard errors, rounded up, and never above the 0.5.0 accepted 0.81, which the base meets.
-     * Base ratios (SE) over 300 runs: Orb 0.735 (0.019), Prism 0.752 (0.017), Star 0.743 (0.022), Hexagon 0.807 (0.018);
-     * the Hexagon's 0.85 is capped at 0.81.
+     * V2 over a population (0.5.0 active items). On the 05885fa9 base the twelve fixed seeds kept the ratio within 0.75
+     * with probability 0.55 (Orb), 0.51 (Prism), 0.50 (Star) and 0.30 (Hexagon), so the gate re-rolled with the reward
+     * stream. Over the 300 runs per character on [VarietyPopulationSeeds] (each pair of runs counted, as on the twelve
+     * seeds), the ratio of the isolated runs' mean overlap to the whole-catalog, 0.4.0-lane runs' mean overlap on the
+     * same seeds is at most [MaxBaselineRatio]: by the population threshold rule (policy.md, "Balance gate
+     * populations") the higher of the seeded 0.75 and the base ratio plus two jackknife standard errors, rounded up,
+     * and never above the 0.5.0 accepted 0.81, which the base meets. Base ratios (SE) over 300 runs: Orb 0.735 (0.019),
+     * Prism 0.752 (0.017), Star 0.743 (0.022), Hexagon 0.807 (0.018); the Hexagon's 0.85 is capped at 0.81.
      */
     @Test
     fun theDeckAndTheSoftenedLanesCutTheOverlap() {
@@ -147,7 +147,10 @@ class ItemVarietyTest {
         /** V2's population: the same seed form for k = 1,001..1,300, disjoint from [Seeds]. */
         val VarietyPopulationSeeds = (1_001..1_300).map { 7_919 * it + 101 }
 
-        /** V2's per-character bound on the population (Addendum D1: max(0.75, base + 2 SE) rounded up, at most 0.81). */
+        /**
+         * V2's per-character bound on the population (the population threshold rule: max(0.75, base + 2 SE) rounded up,
+         * at most 0.81).
+         */
         val MaxBaselineRatio = mapOf(CoreShape.ORB to 0.78, CoreShape.PRISM to 0.79, CoreShape.STAR to 0.79, CoreShape.HEXAGON to 0.81)
         const val CHAIN = 8
         const val SECONDS = 600f

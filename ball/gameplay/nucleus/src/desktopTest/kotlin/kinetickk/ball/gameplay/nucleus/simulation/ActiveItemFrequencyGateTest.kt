@@ -22,9 +22,10 @@ import kotlin.test.assertTrue
  * its archetype the character's (as in ItemVarietyTest), plays every one of the twelve characters on the gate harness to the
  * run's end or 900 s, on two arms of [POPULATION] runs each: the first [POPULATION] [PopulationSeeds] dealt to the
  * characters in their order, 25 disjoint seeds each, chosen by that definition and never by outcome. A population gate
- * (lead Addendum D4): on its former 48 seeds per arm (i = 1..48), disjoint 48-run windows read FRESH (c) 0.79–0.88 and
- * (b)'s highest level 0.12–0.24, so the seeded gate re-rolled with the reward stream. It is a new gate without a base:
- * its thresholds are the design's.
+ * (policy.md, "Balance gate populations"): it once played 48 seeds per arm (i = 1..48), and during calibration seven
+ * disjoint 48-run windows from i = 1,001 read FRESH (c) 0.79–0.94 (then judged over all 48 runs) and (b)'s highest
+ * level, level 7 in each, 0.158–0.244, with 3 of the 7 passing, so the seeded gate re-rolled with the reward stream.
+ * It is a new gate without a base: its thresholds are the design's.
  * - FRESH: tier 0, no Matrix, no lifetime Matter.
  * - VETERAN: RunLevelCalibrationGateTest's DATA_MAX profile (the full Matrix, its price and at least 3,160 as lifetime
  *   Matter, so catalog level 80 offers every passive item from level 1); active items still unlock by the run level.

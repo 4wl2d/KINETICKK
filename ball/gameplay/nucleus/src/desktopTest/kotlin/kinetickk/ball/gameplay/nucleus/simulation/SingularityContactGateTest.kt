@@ -19,11 +19,11 @@ import kotlin.test.assertTrue
  * arms play the catalog without its active items, a run as before they existed; a skill arm keeps them in the catalog
  * (it acquires the active item it measures) and is never offered another.
  *
- * A population gate (lead Addendum C5, 0.5.0 active items): on the thirty fixed seeds (`i * 7_919 + 13`, i = 1..30) the
- * base met "at most 15 % more obstacle contacts per second and no more singularity contacts" in every arm with
- * probability 0.20 (one arm alone with 0.44 for Slingshot to 0.94 for Arc Hook). Every arm now plays the 300
- * [PopulationSeeds] runs. An arm's obstacle-contact rate is at most [MaxBounceRatio] × the
- * baseline's (by Addendum D1 the higher of the design's 1.15 and its base ratio plus two bootstrap standard errors,
+ * A population gate (0.5.0 active items; policy.md, "Balance gate populations"): on the thirty fixed seeds
+ * (`i * 7_919 + 13`, i = 1..30) the base met "at most 15 % more obstacle contacts per second and no more singularity
+ * contacts" in every arm with probability 0.205 (one arm alone with 0.44 for Slingshot to 0.94 for Arc Hook). Every
+ * arm now plays the 300 [PopulationSeeds] runs. An arm's obstacle-contact rate is at most [MaxBounceRatio] × the
+ * baseline's (by the population threshold rule the higher of the design's 1.15 and its base ratio plus two bootstrap standard errors,
  * rounded up; base baseline 0.01061 per second, 899 contacts in 84,733 s), and the share of its runs ending in a
  * singularity contact exceeds the baseline's by at most [MaxExtraContactShare] (0 for every arm without a base contact;
  * Slingshot's two base contacts in 300 runs give 0.02).
@@ -115,7 +115,7 @@ class SingularityContactGateTest {
         const val ARM_SECONDS = 300f
         const val REACTION_EVERY = 3f
         /**
-         * Each arm's largest obstacle-contact rate over the baseline's on [PopulationSeeds] (Addendum D1): the design's
+         * Each arm's largest obstacle-contact rate over the baseline's on [PopulationSeeds]: the design's
          * [DESIGN_BOUNCE_RATIO], or its 05885fa9 base ratio plus two bootstrap standard errors (20,000 resamples of the
          * seeds, rounded up) where that is higher. Base ratio (SE, base + 2 SE) over 300 runs: Meteor 0.965 (0.068, 1.11),
          * Arc Hook 0.836 (0.056, 0.95), Mass Driver 0.981 (0.074, 1.13), Void Step 0.897 (0.058, 1.02), Slingshot 1.129

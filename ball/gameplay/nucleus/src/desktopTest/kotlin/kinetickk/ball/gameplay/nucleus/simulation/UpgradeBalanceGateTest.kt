@@ -24,7 +24,7 @@ import kotlin.test.assertTrue
  * perceptible in a scripted encounter with equal resources.
  *
  * - J1 (D at max): tier 10, strong build + Pentagon Refit 10 + Honing 10 on every owned weapon: at most 3/5
- *   wins and a median survival of at least 480 s, the median over [PopulationSeeds] (lead Addendum D5).
+ *   wins and a median survival of at least 480 s, the median over [PopulationSeeds] (a population gate).
  * - J2 (G at max): tier 10, full Matrix Pentagon/Arc Coil + the same upgrades: fewer than 5/5 wins.
  * - J3 (E's ceiling): tier 8, half Matrix + Orb Refit 5 + Honing 5 on every owned weapon: at least 4/5 losses.
  * - J4 (upgrades are not progression): tier 6, no Matrix, Orb Refit 10 + Honing 10 on every owned weapon: no win.
@@ -37,12 +37,13 @@ import kotlin.test.assertTrue
  */
 class UpgradeBalanceGateTest {
     /**
-     * J1's survival bound is a population gate (lead Addendum D5, 0.5.0 active items): five seeds reached a median of
-     * 480 s with probability 0.94 on the 05885fa9 base but 0.80 with the shipped active items, so it re-rolled with the
-     * reward stream. The base median survival over the 300 [PopulationSeeds] runs was 687.28 s (bootstrap SE 20.13 s);
-     * the population's median must be at least [J1_MIN_MEDIAN_SURVIVAL] s, by Addendum D1 the lower of the design's
-     * eight minutes and the base minus two standard errors (647.02 s). The win bound keeps the five gate seeds (they
-     * pass with probability 1.00 on the base and now; 1 and 3 of the 300 population runs won).
+     * J1's survival bound is a population gate (0.5.0 active items; policy.md, "Balance gate populations"): five seeds
+     * reached a median of 480 s with probability 0.94 on the 05885fa9 base but 0.80 with the shipped active items, so
+     * it re-rolled with the reward stream. The base median survival over the 300 [PopulationSeeds] runs was 687.28 s
+     * (bootstrap SE 20.13 s); the population's median must be at least [J1_MIN_MEDIAN_SURVIVAL] s, by the population
+     * threshold rule the lower of the design's eight minutes and the base minus two standard errors (647.02 s). The win
+     * bound keeps the five gate seeds (they pass with probability 1.00 on the base and now; 1 and 3 of the 300
+     * population runs won).
      */
     @Test fun maxedUpgradesKeepTierTenSurvivableButRareForTheStrongBuild() {
         fun strong(seed: Int): Outcome =
@@ -278,7 +279,8 @@ class UpgradeBalanceGateTest {
 
     private companion object {
         /**
-         * J1: the least median survival over [PopulationSeeds] (base 687.28 s, SE 20.13 s, n 300; Addendum D1 and D5).
+         * J1: the least median survival over [PopulationSeeds] (base 687.28 s, SE 20.13 s, n 300; the population
+         * threshold rule).
          */
         const val J1_MIN_MEDIAN_SURVIVAL = 480f
 

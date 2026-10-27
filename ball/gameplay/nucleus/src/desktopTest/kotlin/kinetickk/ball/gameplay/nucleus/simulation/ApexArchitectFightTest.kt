@@ -58,17 +58,22 @@ import kotlin.test.assertTrue
  * almost nothing to defend; the first [DEFENSIVE_RUNS] runs of each along [PopulationSeeds]): the damage taken during
  * the Apex arm's windows, summed over the pairs, is [0.55, 0.85] of what the no-Apex arm takes in the same windows.
  *
- * The offence band and both defensive bands are population rules (lead Addendum D5 and E7, 0.5.0 active items). On the
- * fixed seed list (48 offensive runs per character, 64 defensive) the offence passed with probability 0.97 on the
- * 05885fa9 base but 0.83 with the active items, through its ±40 % clause (the median band passed every time, and the
- * clause is measured against it), and the Diamond passed with probability 0.99 and 0.58. The Prism passed with
- * probability 0.99 on the base; with the active items 0.94 by [PopulationSeeds] but 0.75 by the calibration windows,
- * so the pooled evidence puts a 64-run draw below 0.90 (Addendum E7). Their populations are the ones the base was
- * measured on, 96 offensive and 128 defensive runs per character with four forks each: fewer than 300 runs, since
- * these fights already set the suite's runtime. On the base the offence median was 0.847 (bootstrap SE 0.005), each
- * character's benefit 0.80-1.17 of the median benefit (SE 0.06-0.08), the Diamond's ratio 0.694 (run-bootstrap SE
- * 0.041) and the Prism's 0.715 (SE 0.037); by Addendum D1 (the wider of the design's band and the base ± two standard
- * errors, rounded outward) every band stays the design's: the Prism's base ± 2 SE is 0.64-0.79, inside [0.55, 0.85].
+ * The offence band and both defensive bands are population rules (0.5.0 active items; policy.md, "Balance gate
+ * populations"). On the fixed seed list (48 offensive runs per character, 64 defensive) the offence passed with
+ * probability 0.97 on the 05885fa9 base but 0.83 with the active items, through its ±40 % clause (the median band
+ * passed every time, and the clause is measured against it), and the Diamond passed with probability 0.99 and 0.58. The
+ * Prism passed with probability 0.99 on the base; with the active items 0.94 by [PopulationSeeds] but 0.75 by the
+ * calibration windows, and where the two disagree the pooled runs decide: pooled, a 64-run draw passes about 0.82 of
+ * the time, below 0.90. Their populations are the ones the base was measured on, 96 offensive and 128 defensive runs
+ * per character with four forks each: fewer than 300 runs, since these fights already set the suite's runtime. On the
+ * base the offence median was 0.847 (bootstrap SE 0.005), each character's benefit 0.80-1.17 of the median benefit (SE
+ * 0.06-0.08), the Diamond's ratio 0.694 (run-bootstrap SE 0.041) and the Prism's 0.715 (SE 0.037); by the population
+ * threshold rule (the wider of the design's band and the base ± two standard errors, rounded outward) every band stays
+ * the design's: the Prism's base ± 2 SE is 0.64-0.79, inside [0.55, 0.85].
+ *
+ * 128 runs do not settle the defensive bands either: a fresh 128-run draw (four forks each) from the 256
+ * calibration-window runs lands in [0.55, 0.85] with probability about 0.82 for the Prism (window ratio 0.814) and
+ * 0.84 for the Diamond (0.589). baseline.md records this as a trade-off for the owner, not a reason to restate again.
  */
 class ApexArchitectFightTest {
     @Test
@@ -100,11 +105,11 @@ class ApexArchitectFightTest {
 
     /**
      * The no-POI bot casts its Apex in at least [MIN_CAST_SHARE] of the fights of [CAST_FIGHTS_PER_CASE] runs per
-     * character and tier along [PopulationSeeds] (312 fights). A population rule (lead Addendum C5, 0.5.0 active
-     * items): the contract once required a cast in every Apex arm of its 72 fights, and the 05885fa9 base left 3 of 1,816
-     * fights without a cast (the first 50 to 128 runs per character and tier along [PopulationSeeds]; Orb tier 10 once,
-     * Dipole tier 10 twice), so the 72 fights passed with probability 0.83. The bound is the base share 0.9983 minus two
-     * standard errors at 312 fights (0.0023), rounded down; the base's own first 13 runs per case all cast.
+     * character and tier along [PopulationSeeds] (312 fights). A population rule (0.5.0 active items): the contract
+     * once required a cast in every Apex arm of its 72 fights, and the 05885fa9 base left 3 of 1,816 fights without a
+     * cast (the first 50 to 128 runs per character and tier along [PopulationSeeds]; Orb tier 10 once, Dipole tier 10
+     * twice), so the 72 fights passed with probability 0.83. The bound is the base share 0.9983 minus two standard
+     * errors at 312 fights (0.0023), rounded down; the base's own first 13 runs per case all cast.
      */
     @Test
     fun theBotCastsItsApexInNearlyEveryArchitectFight() {
@@ -214,10 +219,10 @@ class ApexArchitectFightTest {
         const val CAST_FIGHTS_PER_CASE = 13
         /** The least share of those fights in which the bot casts its Apex (base 0.9983, SE 0.0023 at 312 fights). */
         const val MIN_CAST_SHARE = 0.99
-        /** The offence's runs per character along [PopulationSeeds] (Addendum D5: the base's population). */
+        /** The offence's runs per character along [PopulationSeeds] (the population the base was measured on). */
         const val BENEFIT_RUNS = 96
         /**
-         * The Prism's and the Diamond's runs along [PopulationSeeds] (Addendum D5 and E7: the base's population): a
+         * The Prism's and the Diamond's runs along [PopulationSeeds] (the population the base was measured on): a
          * defensive character's damage comes in rarer, larger events than a time-to-kill moves.
          */
         const val DEFENSIVE_RUNS = 128

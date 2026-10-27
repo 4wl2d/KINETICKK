@@ -17,7 +17,7 @@ import kotlin.test.assertNull
  * Real input-only runs of a fresh profile. The controller can inspect current threats, but cannot alter simulation
  * state.
  *
- * Both rules are population gates (lead Addendum C5, 0.5.0 active items) over [PopulationSeeds]: on the 05885fa9 base
+ * Both rules are population gates (0.5.0 active items) over [PopulationSeeds]: on the 05885fa9 base
  * the reference seed 2026 alone won as the reference does with probability 0.53, and the ten further probe seeds
  * reached five POI-free wins with probability 0.70, so both re-rolled with every change to the reward stream. Each
  * threshold is the base share minus two standard errors, rounded down. The reference seed is still flown twice to show
