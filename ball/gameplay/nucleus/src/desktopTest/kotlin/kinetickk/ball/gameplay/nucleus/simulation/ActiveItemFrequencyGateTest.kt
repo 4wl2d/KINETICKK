@@ -20,8 +20,11 @@ import kotlin.test.assertTrue
 /**
  * Active items are few in the item pool and still reach a run (0.5.0 active items, D2 as amended by R1.7). The NoPoi bot,
  * its archetype the character's (as in ItemVarietyTest), plays every one of the twelve characters on the gate harness to the
- * run's end or 900 s, on two arms of [POPULATION] runs each: the NoPoi probe sequence `i * 7_919 + 13` (i = 1..48) dealt to
- * the characters in their order, four disjoint seeds each, chosen by that definition and never by outcome.
+ * run's end or 900 s, on two arms of [POPULATION] runs each: the first [POPULATION] [PopulationSeeds] dealt to the
+ * characters in their order, 25 disjoint seeds each, chosen by that definition and never by outcome. A population gate
+ * (lead Addendum D4): on its former 48 seeds per arm (i = 1..48), disjoint 48-run windows read FRESH (c) 0.79–0.88 and
+ * (b)'s highest level 0.12–0.24, so the seeded gate re-rolled with the reward stream. It is a new gate without a base:
+ * its thresholds are the design's.
  * - FRESH: tier 0, no Matrix, no lifetime Matter.
  * - VETERAN: RunLevelCalibrationGateTest's DATA_MAX profile (the full Matrix, its price and at least 3,160 as lifetime
  *   Matter, so catalog level 80 offers every passive item from level 1); active items still unlock by the run level.
@@ -31,8 +34,9 @@ import kotlin.test.assertTrue
  * run does not own (a first acquisition); a card ranking up an owned one is reported, not bounded.
  * - (a) unowned-active cards are 0.04–0.10 of all item cards, pooled over the arm's runs ("few in the pool");
  * - (b) at every level 2..10, pooled over the arm's runs, they are at most 0.20 of that level's item cards (no early flood);
- * - (c) at least 0.80 of fresh runs are shown an active card by level 10; (c') at least 0.80 of veteran runs by level 16;
- *   a run that ends before that level without one counts as not shown;
+ * - (c) at least 0.80 of the fresh runs that reach level 10 are shown an active card by then; (c') at least 0.80 of the
+ *   veteran runs that reach level 16; a run that ends before that level says nothing about its offers and is not judged
+ *   (on the 48 seeds every fresh run left unshown had died at level 3–6 within 98 s);
  * - (d) the median run of each arm holds 1–3 active items at 720 s (a run that ends earlier: what it held at its end).
  * (a) and (b) hold on both arms: the pool must stay thin and the early levels unflooded for a veteran too.
  * [pointOfInterestItemRewardsKeepActivesToAFifthOfTheirCards] samples the directed item rewards of the same runs.
@@ -71,10 +75,13 @@ class ActiveItemFrequencyGateTest {
     fun freshRunsAreShownAnActiveByLevelTenAndVeteranRunsByLevelSixteen() {
         val failures = ArrayList<String>()
         for ((arm, flights) in listOf(Arm.FRESH to fresh, Arm.VETERAN to veteran)) {
-            val shown = flights.filter { flight -> flight.firstActiveCardLevel?.let { it <= arm.shownByLevel } == true }
-            val share = shown.size.toDouble() / flights.size
-            println("ACTIVE-FREQ $arm (c) shown an active by level ${arm.shownByLevel}: ${shown.size} of ${flights.size} " +
-                "(${"%.3f".format(share)}); not: " + (flights - shown.toSet()).joinToString { it.label() })
+            val reached = flights.filter { it.level >= arm.shownByLevel }
+            val shown = reached.filter { flight -> flight.firstActiveCardLevel?.let { it <= arm.shownByLevel } == true }
+            val share = shown.size.toDouble() / reached.size.coerceAtLeast(1)
+            println("ACTIVE-FREQ $arm (c) shown an active by level ${arm.shownByLevel}: ${shown.size} of the ${reached.size} runs " +
+                "that reached it (${"%.3f".format(share)}), ${flights.size - reached.size} ended before; not: " +
+                (reached - shown.toSet()).joinToString { it.label() })
+            if (reached.isEmpty()) failures += "$arm (c) no run reached level ${arm.shownByLevel}"
             if (share < MIN_SHOWN_SHARE) failures += "$arm (c) ${"%.3f".format(share)} of runs shown an active by level ${arm.shownByLevel} < $MIN_SHOWN_SHARE"
         }
         assertTrue(failures.isEmpty(), failures.joinToString("\n"))
@@ -147,7 +154,8 @@ class ActiveItemFrequencyGateTest {
     }
 
     private companion object {
-        const val POPULATION = 48
+        /** Runs per arm: the first [POPULATION] of [PopulationSeeds]. */
+        const val POPULATION = 300
         const val MIN_UNOWNED_SHARE = 0.04
         const val MAX_UNOWNED_SHARE = 0.10
         const val MAX_EARLY_LEVEL_SHARE = 0.20
@@ -160,17 +168,20 @@ class ActiveItemFrequencyGateTest {
         val POI_LEVELS: IntRange = 5..30
         val PoiFocuses: List<RewardFocus> = listOf(RewardFocus.OFFENSE, RewardFocus.DEFENSE, RewardFocus.ECONOMY)
 
-        /** The probe index of the population's first run: 1 unless `KK_ACTIVE_FIRST_PROBE` names another (calibration). */
-        val FirstProbe: Int = System.getenv("KK_ACTIVE_FIRST_PROBE")?.let { value ->
-            requireNotNull(value.trim().toIntOrNull()?.takeIf { it >= 1 }) { "KK_ACTIVE_FIRST_PROBE '$value' is not a probe index" }
-        } ?: 1
+        /**
+         * The population's seeds: the first [POPULATION] [PopulationSeeds], unless `KK_ACTIVE_FIRST_PROBE` names another
+         * first probe index i of `i * 7_919 + 13` (calibration windows).
+         */
+        val Seeds: List<Int> = System.getenv("KK_ACTIVE_FIRST_PROBE")?.let { value ->
+            val first = requireNotNull(value.trim().toIntOrNull()?.takeIf { it >= 1 }) { "KK_ACTIVE_FIRST_PROBE '$value' is not a probe index" }
+            (first until first + POPULATION).map { it * 7_919 + 13 }
+        } ?: PopulationSeeds.take(POPULATION)
 
         val fresh: List<Flight> by lazy { fly(Arm.FRESH) }
         val veteran: List<Flight> by lazy { fly(Arm.VETERAN) }
 
-        fun fly(arm: Arm): List<Flight> = (0 until POPULATION).map { run ->
-            val shape = CoreShape.entries[run % CoreShape.entries.size]
-            fly(arm, shape, (FirstProbe + run) * 7_919 + 13)
+        fun fly(arm: Arm): List<Flight> = populationOf(Seeds.indices.toList()) { run ->
+            fly(arm, CoreShape.entries[run % CoreShape.entries.size], Seeds[run])
         }
 
         fun profile(arm: Arm, shape: CoreShape): GameplayProfileSnapshot = when (arm) {
