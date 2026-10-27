@@ -128,7 +128,7 @@ class GameplayInputMappingTest {
 
     @Test
     fun anEmptySkillSlotIsAHudPositionThatDispatchesNothing() {
-        // Only Z holds a skill: X and C show locked; pressing them neither casts nor steers.
+        // Only Z holds a skill: X and C show empty; pressing them neither casts nor steers.
         val running = hitTestState(GamePhase.RUNNING, controlMask = RunningControlMask.SKILLS, skillSlots = 0b001)
         val controls = runningControlBounds(running.screenWidth, running.screenHeight, running.uiScale).associate { it.target to it.bounds }
         listOf(RunningControlTarget.SKILL_2, RunningControlTarget.SKILL_3).forEach { target ->

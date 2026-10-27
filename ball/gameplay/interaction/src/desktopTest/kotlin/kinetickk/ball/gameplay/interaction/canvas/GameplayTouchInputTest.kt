@@ -51,7 +51,7 @@ import kotlin.test.assertTrue
  * The running HUD's touch model end to end: one thumb steers while others tap Dash and a skill and hold
  * Brake; control pointers never steer; Brake releases only when its last pointer lifts; when the steering
  * thumb lifts, a waiting pointer takes over from where it is; a touch player's reward cards name a Z/X/C slot by its
- * number until a key is pressed.
+ * number until a key a player could bind is pressed (a volume key is not one).
  */
 @OptIn(ExperimentalTestApi::class)
 class GameplayTouchInputTest {
@@ -213,10 +213,18 @@ class GameplayTouchInputTest {
         fun chips(): List<String> = compose.onAllNodes(hasAnyAncestor(hasTestTag("kinetickk.gameplay.choice.1.chips")) and
             SemanticsMatcher.keyIsDefined(SemanticsProperties.Text), useUnmergedTree = true).fetchSemanticsNodes()
             .flatMap { node -> node.config[SemanticsProperties.Text].map { it.text } }
+        // A new snapshot each time: the port accepts pulses only then, and the host reads the run after an accepted one.
         fun show(model: kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel?) {
-            current = if (model == null) running else running.withTouchModel(model)
+            current = running.withTouchModel(model ?: requireNotNull(running.renderModel))
             compose.mainClock.advanceTimeByFrame()
             compose.mainClock.advanceTimeByFrame()
+        }
+
+        fun press(key: Key) {
+            show(null)
+            compose.onNodeWithTag("kinetickk.gameplay").performKeyInput { pressKey(key) }
+            compose.mainClock.advanceTimeByFrame()
+            show(offer)
         }
 
         touch { down(0, Offset(700f, 500f)) }
@@ -224,11 +232,22 @@ class GameplayTouchInputTest {
         show(offer)
         assertTrue("Slot 2" in chips(), "a touch player reads the slot's number: ${chips()}")
 
-        show(null)
-        compose.onNodeWithTag("kinetickk.gameplay").performKeyInput { pressKey(Key.A) }
-        compose.mainClock.advanceTimeByFrame()
-        show(offer)
+        // A device key no player can bind (a phone's volume rocker) is not keyboard play.
+        press(Key.VolumeDown)
+        assertTrue("Slot 2" in chips(), "a volume key kept the touch player's slot number: ${chips()}")
+        // A bound gameplay key is.
+        press(Key.Z)
         assertTrue("Active X" in chips(), "a keyboard player reads the slot's key: ${chips()}")
+
+        // So is any key a player could bind, bound or not.
+        show(null)
+        touch { down(0, Offset(700f, 500f)) }
+        assertEquals(listOf(Offset(700f, 500f)), steeredTo(), "the run is back")
+        touch { up(0) }
+        show(offer)
+        assertTrue("Slot 2" in chips(), "${chips()}")
+        press(Key.A)
+        assertTrue("Active X" in chips(), "${chips()}")
     }
 
     @Test

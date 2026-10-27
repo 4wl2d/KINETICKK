@@ -522,7 +522,8 @@ fun GameplayContent(
             .onKeyEvent { event ->
                 // Bound keys come from the player's key bindings; Escape and Enter stay fixed aliases.
                 val model = renderModelValue
-                val action = event.key.toBindableKey()?.let { model.settings.keyBindings.action(it) }
+                val bindable = event.key.toBindableKey()
+                val action = bindable?.let { model.settings.keyBindings.action(it) }
                 if (action == GameAction.PERFORMANCE_HUD) {
                     return@onKeyEvent keyDown(event.type, ::togglePerformanceTelemetry)
                 }
@@ -530,8 +531,12 @@ fun GameplayContent(
                 if (terminal && !terminalReady) return@onKeyEvent true
                 val down = event.type == KeyEventType.KeyDown
                 if (down) {
-                    controlLog.keyHints = true
-                    controlLog.touchInput = false
+                    // Keyboard play is a key a player could bind or a fixed alias; a device key (a phone's volume
+                    // rocker) shows no key caps and leaves a touch player's cards naming slots by number.
+                    if (bindable != null || event.key == Key.Escape || event.key == Key.Enter) {
+                        controlLog.keyHints = true
+                        controlLog.touchInput = false
+                    }
                     dispatch(GameplayInteractionPulse.UserGestureObserved)
                 }
                 val running = model.phase == GamePhase.RUNNING

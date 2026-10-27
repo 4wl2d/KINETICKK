@@ -285,7 +285,7 @@ private val StrikePaths = IntArray(ContentBounds.MAX_APEX_STRIKES) { HudPath.STR
 /** The first active item slides the row in from this far right (reference dp). */
 private const val SKILL_ROW_ENTRANCE_DP = 24f
 
-/** Draft and rank-up ring bursts (reference dp); the ready ring is this share of the square. */
+/** Bind and rank-up ring bursts (reference dp); the ready ring is this share of the square. */
 private const val SKILL_RING_DP = 40f
 private const val READY_RING_SCALE = 0.8f
 

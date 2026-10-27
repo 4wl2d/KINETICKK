@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.DirectedReward
 import kinetickk.ball.content.api.GameplayContentSnapshot
@@ -16,6 +17,7 @@ import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.model.BuffSource
 import kinetickk.ball.gameplay.nucleus.model.CombatFieldKind
 import kinetickk.ball.gameplay.nucleus.model.FieldSource
+import kinetickk.ball.gameplay.nucleus.model.ItemDeck
 import kinetickk.ball.gameplay.nucleus.model.MarkKind
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.Projectile
@@ -100,6 +102,10 @@ class ActiveItemOfferTest {
     @Test
     fun atMostOneActiveShowsPerOfferAndAZeroActiveWeightOffersNoneAnywhere() {
         val eager = contentWithLanes { copy(activeWeight = 1_000f) }
+        // Every direction an item-and-repair reward offers: all the directions an item can have.
+        val focuses = offerState(1, eager).apply { openDirectedReward(DirectedReward.ITEM_AND_REPAIR) }
+            .choices.mapNotNull { it.rewardFocus }
+        assertEquals(canonicalGameplayContent.items.map(::itemRewardFocus).toSet(), focuses.toSet())
         var single = 0
         for (seed in 1..120) {
             val state = offerState(seed, eager)
@@ -107,16 +113,39 @@ class ActiveItemOfferTest {
             val actives = state.choices.count { it.skillId != null }
             assertTrue(actives <= 1, "seed $seed: ${state.choices.map { it.title }}")
             if (actives == 1) single++
-            val reward = offerState(seed, eager).directedItemReward(RewardFocus.OFFENSE)
-            assertTrue(reward.count { it.skillId != null } <= 1, "seed $seed: a directed reward shows at most one active")
+            for (focus in focuses) {
+                val reward = offerState(seed, eager).directedItemReward(focus)
+                assertTrue(reward.count { it.skillId != null } <= 1, "seed $seed $focus: a directed reward shows at most one active")
+            }
         }
         assertTrue(single >= 60, "an eager active weight shows an active in most offers ($single of 120)")
+
+        // A deck dealing a direction's offerable actives and one passive: any three of its shuffle hold two actives or
+        // more, so the reward deals one active, skips the others (never redrawing one) and reaches the passive.
+        var forced = 0
+        for (focus in focuses) {
+            val probe = offerState(1, canonicalGameplayContent)
+            val pool = probe.content.items.filter { probe.offerableOutsideDeck(it) && itemRewardFocus(it) == focus }
+            val actives = pool.filter { it.isActive }
+            if (actives.size < 2) continue
+            val passive = pool.first { !it.isActive }
+            forced++
+            for (seed in 1..20) {
+                val state = offerState(seed, canonicalGameplayContent)
+                state.itemDeck = ItemDeck.dealt(state.content.items.size, IntArray(0), IntArray(ItemRarity.entries.size),
+                    actives.map { it.id } + passive.id)
+                val cards = state.directedItemReward(focus)
+                assertEquals(1, cards.count { it.skillId != null }, "seed $seed $focus: ${cards.map { it.title }}")
+                assertEquals(listOf(passive.id), cards.filter { it.skillId == null }.map { it.itemId }, "seed $seed $focus")
+            }
+        }
+        assertTrue(forced > 0, "some direction offers two actives or more")
 
         val none = withoutActiveItems()
         for (seed in 1..40) {
             val state = offerState(seed, none)
             assertTrue(state.offerableItems().none { it.isActive }, "seed $seed: no active is offerable")
-            for (focus in listOf(RewardFocus.OFFENSE, RewardFocus.DEFENSE, RewardFocus.ECONOMY)) {
+            for (focus in focuses) {
                 assertTrue(offerState(seed, none).directedItemReward(focus).none { it.skillId != null }, "seed $seed $focus")
             }
         }
@@ -397,6 +426,31 @@ class ActiveItemOfferTest {
     }
 
     @Test
+    fun aReplaceCardForecastsTheSuppressionOfTheItemItAddsNotOfTheHeldItemLeaving() {
+        // Absolute Zero voids the Thermal passive of the held Solar Flare and of an incoming Meteor, never Void Step's or
+        // Gravity Well's: every replace card warns of it exactly when the incoming item has a voided part.
+        for (effect in listOf(SkillId.VOID_STEP, SkillId.GRAVITY_WELL, SkillId.METEOR)) {
+            val state = fullLoadout(RelicId.ABSOLUTE_ZERO)
+            assertTrue(state.itemSuppressedShare(state.active(SkillId.SOLAR_FLARE)) > 0f, "the held Solar Flare's passive is void")
+            val incoming = state.active(effect)
+            val suppressed = effect == SkillId.METEOR
+            assertEquals(suppressed, state.itemSuppressedShare(incoming) > 0f, "$effect")
+            state.offer(incoming)
+            assertEquals(suppressed, state.rewardPreviews().single().forecasts.any { it.kind == ForecastKind.SUPPRESSED }, "$effect card")
+            state.choose(0)
+            assertEquals(ChoiceType.ACTIVE_SLOT, state.choiceType)
+            val previews = state.rewardPreviews()
+            assertEquals(4, previews.size)
+            state.choices.forEachIndexed { index, card ->
+                // The keep card adds nothing, so it forecasts nothing.
+                val expected = suppressed && card.activeSlot != null
+                assertEquals(expected, previews[index].forecasts.any { it.kind == ForecastKind.SUPPRESSED },
+                    "$effect replacing ${card.skillId ?: "nothing (keep)"}")
+            }
+        }
+    }
+
+    @Test
     fun theIncomingActiveIsCandidateState() {
         val state = fullLoadout()
         val incoming = state.active(SkillId.STORM_COIL)
@@ -432,6 +486,8 @@ class ActiveItemOfferTest {
             ),
         )
         var promoted = 0
+        // Floors met exactly while a dealt active also qualifies: a floor that counted that active would deal one passive fewer.
+        var activeQualifiedAtFloor = 0
         for (seed in 1..40) for (shape in listOf(CoreShape.ORB, CoreShape.HEXAGON, CoreShape.RING)) {
             val floored = buildTestState(seed = seed, shape = shape)
             val bare = buildTestState(seed = seed, shape = shape, content = floorless)
@@ -442,8 +498,33 @@ class ActiveItemOfferTest {
                 "seed $seed $shape: actives are dealt by their tier's share alone",
             )
             promoted += canonicalGameplayContent.items.count { it.id in floored.itemDeck && it.id !in bare.itemDeck }
+            for ((name, floor, qualifies) in archetypeAndElementFloors(policy.draftDeck.characterTagFloor,
+                policy.draftDeck.tagFloor, policy.draftDeck.elementFloor, shape)) {
+                val passive = canonicalGameplayContent.items.filter { !it.isActive && qualifies(it) }
+                val dealtPassive = passive.count { it.id in floored.itemDeck }
+                val target = minOf(floor, passive.size)
+                assertTrue(dealtPassive >= target, "seed $seed $shape $name: $dealtPassive passive items dealt, floor $target")
+                if (dealtPassive == target && actives.any { it.id in floored.itemDeck && qualifies(it) }) activeQualifiedAtFloor++
+            }
         }
         assertTrue(promoted > 0, "the floors promote passive items")
+        assertTrue(activeQualifiedAtFloor > 0, "some floor is met exactly while a dealt active qualifies for it")
+    }
+
+    /** The character's archetype, every archetype and every element floor, as the deck applies them (at most Rare). */
+    private fun archetypeAndElementFloors(
+        characterTagFloor: Int,
+        tagFloor: Int,
+        elementFloor: Int,
+        shape: CoreShape,
+    ): List<Triple<String, Int, (ItemDefinition) -> Boolean>> = buildList {
+        val atMostRare: (ItemDefinition) -> Boolean = { it.rarity.rank <= ItemRarity.RARE.rank }
+        val characterTag = shape.characterTag()
+        add(Triple("character $characterTag", characterTagFloor) { it: ItemDefinition -> atMostRare(it) && characterTag in it.tags })
+        BuildTag.entries.forEach { tag -> add(Triple("tag $tag", tagFloor) { it: ItemDefinition -> atMostRare(it) && tag in it.tags }) }
+        StatusElement.entries.forEach { element ->
+            add(Triple("element $element", elementFloor) { it: ItemDefinition -> atMostRare(it) && element in it.elements })
+        }
     }
 
     @Test
@@ -490,7 +571,7 @@ class ActiveItemOfferTest {
         assertEquals(ChoiceType.RELIC, state.choiceType)
         assertTrue(state.choices.any { it.heirloom })
         state.choose(state.choices.indexOfFirst { it.relicId != null })
-        assertEquals(ChoiceType.ITEM, state.choiceType, "no draft comes between")
+        assertEquals(ChoiceType.ITEM, state.choiceType, "the item offer follows the Heirloom directly")
         state.choose(0)
         assertEquals(GamePhase.RUNNING, state.phase)
     }
@@ -506,8 +587,8 @@ class ActiveItemOfferTest {
 
     private fun MutableGameState.matterHeld(): Float = runMatter + matterFraction
 
-    /** Every slot holds an active: Solar Flare (Z), Frost Line rank II (X) and Arc Hook (C), at level 20. */
-    private fun fullLoadout(): MutableGameState = buildTestState().dealWholeCatalog().apply {
+    /** Every slot holds an active: Solar Flare (Z), Frost Line rank II (X) and Arc Hook (C), at level 20, [relics] bound. */
+    private fun fullLoadout(vararg relics: RelicId): MutableGameState = buildTestState(*relics).dealWholeCatalog().apply {
         level = 20
         acquireActive(SkillId.SOLAR_FLARE)
         acquireActive(SkillId.FROST_LINE, 2)

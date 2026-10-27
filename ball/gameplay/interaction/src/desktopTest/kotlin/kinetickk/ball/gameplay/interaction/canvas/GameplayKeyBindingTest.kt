@@ -58,7 +58,7 @@ class GameplayKeyBindingTest {
     private val pulses = mutableListOf<GameplayInteractionPulse>()
     private val bubbled = mutableListOf<Key>()
 
-    /** Z and X hold skills, C is not drafted yet; the Apex is unlocked and cooling. */
+    /** Z and X hold actives, C is empty; the Apex is unlocked and cooling. */
     private fun runningModel(bindings: KeyBindings = KeyBindings.DEFAULT): GameplayRenderModel {
         val base = requireNotNull(hudTestSnapshot().renderModel)
         return base.with(*levelOverrides(HUD_TEST_LEVEL_CAP, ApexProjection(unlocked = true, cooldown01 = 0.5f)),
@@ -111,7 +111,7 @@ class GameplayKeyBindingTest {
         assertEquals(listOf(GameplayInteractionPulse.SkillRequested.fromValidated(0)), press(Key.Z))
         assertTrue(bubbled.isEmpty(), "Z bubbled while running")
         assertEquals(listOf(GameplayInteractionPulse.SkillRequested.fromValidated(1)), press(Key.X))
-        // C's slot is not drafted: the key is consumed (no Codex mid-run) and nothing is cast.
+        // C's slot is empty: the key is consumed (no Codex mid-run) and nothing is cast.
         assertEquals(emptyList(), press(Key.C))
         assertTrue(bubbled.isEmpty(), "C bubbled while running")
         assertEquals(listOf(GameplayInteractionPulse.ApexRequested), press(Key.V))
@@ -166,14 +166,14 @@ class GameplayKeyBindingTest {
 
     @Test
     fun reboundKeysFollowThePlayersBindings() {
-        // Dash on F (Space becomes free) and Skill 1 on C (Z takes Skill 3, still undrafted).
+        // Dash on F (Space becomes free) and Skill 1 on C (Z takes Skill 3, whose slot is still empty).
         val bindings = KeyBindings.DEFAULT.with(GameAction.DASH, BindableKey.F).with(GameAction.SKILL_1, BindableKey.C)
         start(runningModel(bindings))
         assertEquals(listOf(GameplayInteractionPulse.DashRequested), press(Key.F))
         assertEquals(emptyList(), press(Key.Spacebar))
         assertEquals(listOf(Key.Spacebar), bubbled, "the freed Space did not bubble")
         assertEquals(listOf(GameplayInteractionPulse.SkillRequested.fromValidated(0)), press(Key.C))
-        assertEquals(emptyList(), press(Key.Z), "Z now holds the undrafted Skill 3")
+        assertEquals(emptyList(), press(Key.Z), "Z now holds Skill 3, whose slot is empty")
         assertTrue(bubbled.isEmpty())
     }
 }

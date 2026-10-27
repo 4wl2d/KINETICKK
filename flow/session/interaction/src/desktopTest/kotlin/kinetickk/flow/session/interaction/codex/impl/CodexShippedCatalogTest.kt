@@ -11,6 +11,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -36,7 +37,7 @@ import kotlin.test.assertTrue
 
 /**
  * The real item catalog in the Codex: within its bound, every item in one slot of every sort; every shipped active item
- * carries its effect's active part, and the Active filter shows exactly them with their ACTIVE notch.
+ * carries its effect's active part and the ACTIVE notch no passive cell carries, and the Active filter shows exactly them.
  */
 @OptIn(ExperimentalTestApi::class)
 class CodexShippedCatalogTest {
@@ -94,13 +95,25 @@ class CodexShippedCatalogTest {
                 }
             }
         }
+        // The Codex opens on All: passive cells sit among the actives and carry no notch; every active cell in view does.
+        onNodeWithTag("codex-filter-0").assertIsSelected()
+        val activeKeys = actives.map { "item/${it.id}" }.toSet()
+        val passives = items.filter { !it.isActive }
+        listOf(passives.first(), passives[passives.size / 2], passives.last(), solarFlare).forEach { item ->
+            onNodeWithTag("codex-grid").performScrollToKey("item/${item.id}")
+            onNodeWithTag("codex-slot-item/${item.id}").assertExists()
+            if (!item.isActive) onNodeWithTag("codex-active-item/${item.id}", useUnmergedTree = true).assertDoesNotExist()
+            val shown = onAllNodesWithTagPrefix("codex-slot-item/")
+            assertTrue(shown.any { it !in activeKeys }, "passive cells are in view: $shown")
+            assertEquals(shown.filter { it in activeKeys }.toSet(), onAllNodesWithTagPrefix("codex-active-item/").toSet(),
+                "only the active cells in view carry the notch: $shown")
+        }
+
         onNodeWithTag("codex-filter-3").performClick()
         actives.forEach { item ->
             onNodeWithTag("codex-grid").performScrollToKey("item/${item.id}")
             onNodeWithTag("codex-active-item/${item.id}", useUnmergedTree = true).assertExists()
         }
-        val tagged = onAllNodesWithTagPrefix("codex-active-item/")
-        assertTrue(tagged.all { key -> actives.any { "item/${it.id}" == key } }, "only active cells carry the notch: $tagged")
         onNodeWithTag("codex-grid").performScrollToKey("item/${solarFlare.id}")
         onNodeWithTag("codex-slot-item/${solarFlare.id}").performClick()
         onNodeWithTag("codex-active-chip").assertExists()

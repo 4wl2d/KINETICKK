@@ -268,8 +268,8 @@ class GameplayHudSemanticsTest {
     fun skillSlotsAndTheApexAreButtonsWithNamesAndStatesInRussian() = skillAndApexSemantics(AppLanguage.Russian)
 
     /**
-     * Z (ready), X (cooling) and C (not drafted) and the cooling Apex are focusable buttons over their
-     * canvas targets, described by slot and name with their state; activating a drafted slot casts it,
+     * Z (ready), X (cooling) and C (empty) and the cooling Apex are focusable buttons over their
+     * canvas targets, described by slot and name with their state; activating a filled slot casts it,
      * the empty slot does nothing and the Apex node requests the Apex.
      */
     private fun skillAndApexSemantics(language: AppLanguage) {
