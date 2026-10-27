@@ -385,12 +385,15 @@ internal fun MutableGameState.acquireItem(itemId: Int, reborn: Boolean = false) 
 internal fun MutableGameState.needsActiveSlot(item: ItemDefinition): Boolean =
     item.isActive && itemStacks[item.id] == 0 && skillLoadout.lowestEmptySlot() < 0
 
-/** The maxed-item salvage: Matter by rarity (rank × 2) and nothing else. */
+/** The maxed-item salvage: Matter by rarity ([salvageMatter]) and nothing else. */
 private fun MutableGameState.salvageItem(item: ItemDefinition) {
-    grantMatter((item.rarity.rank * 2).toFloat())
+    grantMatter(salvageMatter(item).toFloat())
     message = item.name.uppercase() + " SALVAGED"
     messageTime = 1.4f
 }
+
+/** The Matter a salvaged item grants before the run's Matter gain: rarity rank × 2. */
+private fun salvageMatter(item: ItemDefinition): Int = item.rarity.rank * 2
 
 /**
  * One more stack of [item] counted for the run (history, first acquisition, Reborn roll, its stats' marginal share and
@@ -419,7 +422,7 @@ internal fun MutableGameState.stackItem(item: ItemDefinition, reborn: Boolean) {
 /**
  * Asks which held active the pending incoming active item ([MutableGameState.pendingActiveItemId]) replaces: one card
  * per slot, then a card keeping the loadout (the incoming item is salvaged). Cards carry facts only (slot, held item,
- * rank, incoming item); presentation words them. Never rerolled.
+ * rank, incoming item, the keep card's salvage Matter); presentation words them. Never rerolled.
  */
 internal fun MutableGameState.openActiveSlotChoice() {
     val incoming = pendingActiveItemId ?: return
@@ -444,6 +447,7 @@ internal fun MutableGameState.openActiveSlotChoice() {
         description = "",
         tag = "",
         incomingItemId = incoming,
+        salvageMatter = salvageMatter(content.items[incoming]),
     )
     clearInputBuffers()
     phase = GamePhase.CHOICE

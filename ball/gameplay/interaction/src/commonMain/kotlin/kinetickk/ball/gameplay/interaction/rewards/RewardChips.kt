@@ -49,6 +49,7 @@ import kinetickk.foundation.design.drawKkIcon
 import kinetickk.foundation.design.drawKkPips
 import kinetickk.foundation.design.drawKkText
 import kinetickk.foundation.design.drawKkThreatHatch
+import kinetickk.foundation.design.kkKeyCapStyle
 import kinetickk.foundation.design.kkStroke
 import kinetickk.foundation.design.labelStyle
 import kinetickk.foundation.design.measureKkText
@@ -56,7 +57,7 @@ import kinetickk.foundation.design.rememberKkCanvasMeasurer
 import kotlin.math.max
 import kotlin.math.min
 
-// Reward card chips: identity marks beside the icon (Risk, Reborn, Heirloom, tags) and the forecast
+// Reward card chips: identity marks beside the icon (an active's slot and lane, Risk, Reborn, Heirloom, tags) and the forecast
 // row of what a card changes in the build. Glyphs carry identity, hues only element and role.
 
 /** Chip metrics in dp and board sp (before the text setting). */
@@ -112,8 +113,20 @@ internal fun rewardChipWidth(measurer: CanvasTextMeasurer, chip: RewardChip, sty
             else -> marks * ringPitch(height)
         }
     }
+    chip.keyCap?.let { key -> width += chipGap(height) + keyCapWidth(measureKeyCap(measurer, key, style), height) - chipPad(height) * 0.5f }
     return width
 }
+
+/** An ACTIVE chip's key cap label: the HUD key cap's mono face at the chip's size. */
+private fun measureKeyCap(measurer: CanvasTextMeasurer, key: String, style: RewardChipStyle) =
+    measureKkText(measurer, key, kkKeyCapStyle(measurer, style.fontSize), uppercase = true)
+
+/** The key cap plate round its label: at least square, so a one-letter key reads as a key. */
+private fun keyCapWidth(label: androidx.compose.ui.text.TextLayoutResult, height: Float): Float =
+    max(label.size.width + keyCapPad(height) * 2f, keyCapHeight(height))
+
+private fun keyCapHeight(height: Float) = height * 0.74f
+private fun keyCapPad(height: Float) = height * 0.2f
 
 /** Faces and inks of a chip kind (under the color-vision preset [roles]). */
 private class ChipInk(val face: Color, val border: Color, val text: Color, val glyph: Color)
@@ -148,6 +161,10 @@ private fun RewardChip.ink(roles: KkRolePalette): ChipInk = when (kind) {
         val hue = elements.firstOrNull()?.overlayColor(roles) ?: roles.kinetic
         ChipInk(hue.copy(alpha = 0.14f), hue, Kk.Bone, hue)
     }
+    // The slot an active takes: outlined in `you` like the HUD slot's ready ring; its key cap is a bone plate.
+    RewardChipKind.ACTIVE -> ChipInk(Kk.Ink3, roles.you.copy(alpha = 0.7f), Kk.Bone, Kk.Bone)
+    // Taking it gives up a held active: outlined in the threat role, like a relic Replace.
+    RewardChipKind.REPLACES_ACTIVE -> ChipInk(Kk.Ink3, roles.threat.copy(alpha = 0.7f), roles.threat, roles.threat)
 }
 
 /** Dashed chip outline of an unmet pairing, cached per stroke width (draw-thread confined). */
@@ -164,7 +181,8 @@ private object ChipStrokes {
 }
 
 /**
- * Draws [chip] at [topLeft] ([width] px from [rewardChipWidth]). [paths] slot 0 holds the plate.
+ * Draws [chip] at [topLeft] ([width] px from [rewardChipWidth]). [paths] slot 0 holds the plate, slot 1 its
+ * outline and slot 2 an ACTIVE chip's key cap.
  * Unmet reactions and discords are hatched, an unmet concord is outlined dashed; a reaction's
  * plate is split in its two element hues.
  */
@@ -236,6 +254,16 @@ internal fun DrawScope.drawRewardChip(
     val label = measureKkText(measurer, chip.label, chipLabelStyle(measurer, style), uppercase = true)
     drawKkText(label, x, cy, ink.text, KkAlign.START, KkVAlign.CENTER)
     x += label.size.width
+    chip.keyCap?.let { key ->
+        // The bound key as the HUD shows it under a slot: a small bone cap with the key in ink.
+        val cap = measureKeyCap(measurer, key, style)
+        val capHeight = keyCapHeight(height)
+        val left = x + chipGap(height)
+        val capRect = Rect(left, cy - capHeight * 0.5f, left + keyCapWidth(cap, height), cy + capHeight * 0.5f)
+        drawPath(paths.slab(2, capRect, capHeight * 0.22f), Kk.Bone)
+        drawKkText(cap, capRect.center.x, cy, Kk.Ink, KkAlign.CENTER, KkVAlign.CENTER)
+        return
+    }
     val marks = chip.trailingMarks()
     if (marks <= 0) return
     x += chipGap(height)
@@ -287,11 +315,11 @@ internal fun RewardChipFlow(
     Layout(
         content = {
             chips.forEachIndexed { index, chip -> key(index, chip) {
-                val paths = remember { KkPathCache(2) }
+                val paths = remember { KkPathCache(3) }
                 Box(
                     Modifier.size((widths[index] / density).dp, style.heightDp.dp)
                         .semantics {
-                            text = AnnotatedString(chip.label)
+                            text = AnnotatedString(chip.spoken)
                             // An element chip's label already is its element's name.
                             if (chip.elements.isNotEmpty() && chip.kind != RewardChipKind.ELEMENT) {
                                 contentDescription = chip.elements.joinToString(" ") { it.displayLabel.localizedContent(language) } + " " + chip.label

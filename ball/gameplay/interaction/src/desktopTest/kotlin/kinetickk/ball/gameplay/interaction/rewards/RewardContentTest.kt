@@ -354,6 +354,39 @@ class RewardContentTest {
     }
 
     @Test
+    fun aPhoneActiveCardKeepsItsSlotChipItsActivePartAndItsPassive() {
+        // Solar Flare in a free slot: the slot chip (with its key), the effect's summary and numbers and the passive
+        // all stay on the phone card, in both languages.
+        val shown = mutableStateOf(AppLanguage.English)
+        val content = rewardActiveFixtureContent
+        val choice = rewardActiveChoice(rewardFixtureActiveBase, slot = 0)
+        compose.setContent {
+            val language = shown.value
+            val card = rewardFixtureModel(content = content, choices = listOf(choice), language = language).rewardCardPresentation(choice, 0, language)
+            CompositionLocalProvider(LocalAppLanguage provides language, LocalDensity provides Density(1f)) {
+                RewardCard(card, 0, 1f, 0f, true, Modifier.requiredSize(220.dp, 256.dp), phoneDeal = true) {}
+            }
+        }
+        val flare = content.skill(SkillId.SOLAR_FLARE)
+        listOf(AppLanguage.English, AppLanguage.Russian).forEach { language ->
+            compose.runOnIdle { shown.value = language }
+            compose.onNodeWithTag("kinetickk.gameplay.choice.1.compact", useUnmergedTree = true).assertExists()
+            fun textsUnder(tag: String) = compose.onAllNodes(androidx.compose.ui.test.hasAnyAncestor(androidx.compose.ui.test.hasTestTag(tag)) and
+                androidx.compose.ui.test.SemanticsMatcher.keyIsDefined(SemanticsProperties.Text), useUnmergedTree = true).fetchSemanticsNodes()
+                .flatMap { node -> node.config.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text } }
+            val chips = textsUnder("kinetickk.gameplay.choice.1.chips")
+            val slotChip = if (language == AppLanguage.English) "Active Z" else "Актив Z"
+            assertTrue(slotChip in chips, "$language: the slot chip shows ($chips)")
+            val texts = textsUnder("kinetickk.gameplay.choice.1.text").map { it.replace(' ', ' ').replace("⁠", "") }
+            assertTrue(texts.any { it == flare.summary.localizedContent(language) }, "$language: the active summary stays ($texts)")
+            val numbers = flare.rankLines(1, language).drop(1).joinToString(", ")
+            assertTrue(texts.any { it == numbers }, "$language: the rank's numbers stay ($texts)")
+            assertTrue(texts.any { it.equals(if (language == AppLanguage.English) "Passive" else "Пассивный эффект", ignoreCase = true) },
+                "$language: the passive part stays ($texts)")
+        }
+    }
+
+    @Test
     fun aPhoneCardsNewStampStaysAboveItsBandAtEveryTextSize() {
         val card = rewardFixtureModel(choices = listOf(itemChoice(1))).rewardCardPresentation(itemChoice(1), 0)
         check(card.isNewDiscovery)

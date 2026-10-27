@@ -142,9 +142,10 @@ internal class RunningTouchTracker {
 /**
  * Presentation-only record of the running controls, written by the key handler and the touch
  * tracker in render time: when each control was last pressed (its 90 ms face flash), when an Apex
- * press found it cooling (the badge's refusal shake), and whether key caps show ([keyHints]: set by
- * any gameplay key, cleared by a touch; a mouse leaves it). It never feeds gameplay. One instance per
- * gameplay host; no allocation.
+ * press found it cooling (the badge's refusal shake), whether key caps show ([keyHints]: set by
+ * any gameplay key, cleared by a touch; a mouse leaves it) and whether the input is touch ([touchInput]:
+ * set by a touch, cleared by any gameplay key; reward cards then name a Z/X/C slot by number). It never
+ * feeds gameplay. One instance per gameplay host; no allocation.
  */
 internal class RunningControlPressLog {
     private val pressedAt = FloatArray(RunningControlTarget.entries.size) { Float.NEGATIVE_INFINITY }
@@ -153,6 +154,8 @@ internal class RunningControlPressLog {
         private set
 
     var keyHints: Boolean = false
+
+    var touchInput: Boolean = false
 
     /** The Show FPS counter's value the PERFORMANCE slot draws (`GameplayFpsCounter.NO_VALUE` before one). */
     var fps: Int = -1

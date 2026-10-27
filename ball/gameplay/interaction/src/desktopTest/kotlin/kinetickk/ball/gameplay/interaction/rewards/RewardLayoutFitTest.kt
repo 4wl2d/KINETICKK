@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.render.BuildForecast
 import kinetickk.ball.gameplay.nucleus.render.ForecastKind
@@ -249,7 +250,13 @@ class RewardLayoutFitTest {
                         relicAction = RelicChoiceAction.ACQUIRE)
                 } + ChoiceOption(ChoiceType.RELIC, "Leave hollow", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE))
             val weapons = weapons(language, 1440f, 810f, 1.25f)
-            val cards = listOf(items, relics, weapons).flatMap { model ->
+            // Active items: a free slot in the run character's lane, a full loadout, an owned one reaching rank III.
+            val base = rewardFixtureActiveBase
+            val actives = rewardFixtureModel(content = rewardActiveFixtureContent, coreShape = laneOf(SkillId.SOLAR_FLARE),
+                itemStacks = List(rewardActiveFixtureContent.items.size) { if (it == base + 2) 2 else 0 },
+                choices = listOf(rewardActiveChoice(base, slot = 0), rewardActiveChoice(base + 1, slot = null, replaces = true),
+                    rewardActiveChoice(base + 2, slot = 2, stacks = 2)))
+            val cards = listOf(items, relics, weapons, actives).flatMap { model ->
                 model.choices.mapIndexed { index, choice -> model.rewardCardPresentation(choice, index, language) }
             }
             cards.forEach { card ->
@@ -293,7 +300,7 @@ class RewardLayoutFitTest {
                 }
             }
         }
-        assertTrue(checked >= 4 * 2 * 9, "Checked every card at every size ($checked)")
+        assertTrue(checked >= 4 * 2 * 12, "Checked every card at every size ($checked)")
         assertTrue(elementChips > 0, "Weapon element chips were read")
     }
 
@@ -397,6 +404,10 @@ class RewardLayoutFitTest {
             assertTrue(compared > 100, "Compared the glow beside the fade ($compared px)")
         }
     }
+
+    /** A character whose active lane holds [effect]. */
+    private fun laneOf(effect: SkillId): CoreShape =
+        CoreShape.entries.first { effect in rewardActiveFixtureContent.coreShape(it).activeLane }
 
     private fun forEachScene(
         vararg scenes: (AppLanguage, Float, Float, Float) -> GameplayRenderModel,
