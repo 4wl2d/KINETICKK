@@ -397,6 +397,31 @@ class ActiveItemOfferTest {
     }
 
     @Test
+    fun aReplaceCardForecastsTheSuppressionOfTheItemItAddsNotOfTheHeldItemLeaving() {
+        // Absolute Zero voids the Thermal passive of the held Solar Flare and of an incoming Meteor, never Void Step's or
+        // Gravity Well's: every replace card warns of it exactly when the incoming item has a voided part.
+        for (effect in listOf(SkillId.VOID_STEP, SkillId.GRAVITY_WELL, SkillId.METEOR)) {
+            val state = fullLoadout(RelicId.ABSOLUTE_ZERO)
+            assertTrue(state.itemSuppressedShare(state.active(SkillId.SOLAR_FLARE)) > 0f, "the held Solar Flare's passive is void")
+            val incoming = state.active(effect)
+            val suppressed = effect == SkillId.METEOR
+            assertEquals(suppressed, state.itemSuppressedShare(incoming) > 0f, "$effect")
+            state.offer(incoming)
+            assertEquals(suppressed, state.rewardPreviews().single().forecasts.any { it.kind == ForecastKind.SUPPRESSED }, "$effect card")
+            state.choose(0)
+            assertEquals(ChoiceType.ACTIVE_SLOT, state.choiceType)
+            val previews = state.rewardPreviews()
+            assertEquals(4, previews.size)
+            state.choices.forEachIndexed { index, card ->
+                // The keep card adds nothing, so it forecasts nothing.
+                val expected = suppressed && card.activeSlot != null
+                assertEquals(expected, previews[index].forecasts.any { it.kind == ForecastKind.SUPPRESSED },
+                    "$effect replacing ${card.skillId ?: "nothing (keep)"}")
+            }
+        }
+    }
+
+    @Test
     fun theIncomingActiveIsCandidateState() {
         val state = fullLoadout()
         val incoming = state.active(SkillId.STORM_COIL)
@@ -506,8 +531,8 @@ class ActiveItemOfferTest {
 
     private fun MutableGameState.matterHeld(): Float = runMatter + matterFraction
 
-    /** Every slot holds an active: Solar Flare (Z), Frost Line rank II (X) and Arc Hook (C), at level 20. */
-    private fun fullLoadout(): MutableGameState = buildTestState().dealWholeCatalog().apply {
+    /** Every slot holds an active: Solar Flare (Z), Frost Line rank II (X) and Arc Hook (C), at level 20, [relics] bound. */
+    private fun fullLoadout(vararg relics: RelicId): MutableGameState = buildTestState(*relics).dealWholeCatalog().apply {
         level = 20
         acquireActive(SkillId.SOLAR_FLARE)
         acquireActive(SkillId.FROST_LINE, 2)

@@ -850,7 +850,8 @@ private fun GameplayRenderModel.rewardActiveSlotCard(
         bandStart = held.rarity.displayLabel.localizedContent(language),
         bandEnd = language.text(OverlayRedesignText.ActiveRank, rank, held.maxStacks),
         elements = held.elements,
-        forecast = rewardForecastChips(preview?.forecasts.orEmpty(), null, language),
+        // The forecasts are the incoming item's, so a suppressed chip names the relic voiding part of it.
+        forecast = rewardForecastChips(preview?.forecasts.orEmpty(), incoming?.let { suppressor(it, liableRelics()) }, language),
         chips = listOfNotNull(rewardActiveChip(slot, false, touch, language), held.active?.let { rewardLaneChip(it, language) }),
         rules = rules,
     )

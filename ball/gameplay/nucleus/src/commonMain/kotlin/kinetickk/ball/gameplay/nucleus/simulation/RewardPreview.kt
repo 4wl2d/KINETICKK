@@ -77,10 +77,14 @@ internal fun MutableGameState.rewardPreviews(): ImmutableList<RewardPreview> {
     }.toImmutableList()
 }
 
-/** Build consequences of taking an option, most important first (the card shows the first few). */
+/**
+ * Build consequences of taking an option, most important first (the card shows the first few). Suppression reads the
+ * item the option adds: a replace card's incoming item, never the held item it removes; the keep card adds none.
+ */
 private fun MutableGameState.forecastsAgainst(candidate: MutableGameState, option: ChoiceOption): ImmutableList<BuildForecast> {
     val forecasts = mutableListOf<BuildForecast>()
-    option.itemId?.let { id ->
+    val added = if (option.type == ChoiceType.ACTIVE_SLOT) option.incomingItemId?.takeIf { option.activeSlot != null } else option.itemId
+    added?.let { id ->
         val item = content.item(id)
         if (item != null && itemSuppressedShare(item) > 0f) forecasts += BuildForecast(ForecastKind.SUPPRESSED)
     }

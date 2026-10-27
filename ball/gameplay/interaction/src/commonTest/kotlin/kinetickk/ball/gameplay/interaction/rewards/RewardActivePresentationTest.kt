@@ -5,14 +5,20 @@ package kinetickk.ball.gameplay.interaction.rewards
 
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RuleLineKind
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.content.api.rankLines
+import kinetickk.ball.gameplay.nucleus.render.BuildForecast
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
+import kinetickk.ball.gameplay.nucleus.render.ForecastKind
+import kinetickk.ball.gameplay.nucleus.render.RewardPreview
+import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.common.localization.AppLanguage
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -170,6 +176,20 @@ class RewardActivePresentationTest {
         val bare = keep.copy(salvageMatter = null)
         val unnamed = model(listOf(replace, bare), stacks = mapOf(base to 2), type = ChoiceType.ACTIVE_SLOT).rewardCardPresentation(bare, 1)
         assertEquals(listOf("Every active stays and ${meteor.name} is salvaged for matter"), unnamed.descriptions)
+    }
+
+    @Test
+    fun aReplaceCardsSuppressedChipNamesTheRelicVoidingTheIncomingItem() {
+        // Frost Line (Cryo) is held; the incoming Meteor's Thermal passive is what Absolute Zero voids.
+        val held = base + 3
+        val replace = ChoiceOption(ChoiceType.ACTIVE_SLOT, content.item(held)!!.name, "", "", itemId = held,
+            skillId = SkillId.FROST_LINE, skillRank = 1, activeSlot = 0, incomingItemId = base + 1)
+        val card = rewardFixtureModel(content = content, choiceType = ChoiceType.ACTIVE_SLOT, choices = listOf(replace),
+            relics = listOf(EquippedRelic(RelicId.ABSOLUTE_ZERO, 1)),
+            previews = listOf(RewardPreview(forecasts = immutableListOf(BuildForecast(ForecastKind.SUPPRESSED)))),
+            itemStacks = List(content.items.size) { if (it == held) 1 else 0 }).rewardCardPresentation(replace, 0)
+        assertEquals(RewardChip(RewardChipKind.SUPPRESSED, "Suppressed", relic = RelicId.ABSOLUTE_ZERO,
+            rune = content.relic(RelicId.ABSOLUTE_ZERO)), card.forecast.first())
     }
 
     @Test
