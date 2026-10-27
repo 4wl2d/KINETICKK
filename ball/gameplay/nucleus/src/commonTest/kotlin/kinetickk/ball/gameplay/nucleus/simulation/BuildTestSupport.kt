@@ -124,14 +124,26 @@ internal val contentWithoutReactionVerbs: GameplayContentSnapshot by lazy {
 }
 
 /**
- * [content] whose offers never show an active item (the lane policy's active weight 0), so a run never owns one: the
- * "no actives" arm of the active-item gates.
+ * [content] whose offers never show an active item (the lane policy's active weight 0) while the catalog still holds
+ * them: for the zero weight's own tests and for arms that acquire exactly the actives they measure. A run without active
+ * items is [withoutActiveItemCatalog].
  */
 internal fun withoutActiveItems(content: GameplayContentSnapshot = canonicalGameplayContent): GameplayContentSnapshot {
     val policy = content.build.policy
     return content.copy(
         build = content.build.copy(policy = policy.copy(offerLanes = policy.offerLanes.copy(activeWeight = 0f))),
     )
+}
+
+/**
+ * [content] without its active items: the catalog ends before the first of them (they are appended after every passive
+ * item) and the snapshot is rebuilt from it, so a run deals, offers and draws exactly as runs did before active items
+ * existed. The "no actives" arm of the active-item gates.
+ */
+internal fun withoutActiveItemCatalog(content: GameplayContentSnapshot = canonicalGameplayContent): GameplayContentSnapshot {
+    val end = content.items.indexOfFirst(ItemDefinition::isActive).takeIf { it >= 0 } ?: return content
+    check(content.items.drop(end).all(ItemDefinition::isActive)) { "Active items must follow every passive item" }
+    return content.copy(items = content.items.subList(0, end).toImmutableList())
 }
 
 /**

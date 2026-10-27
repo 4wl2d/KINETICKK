@@ -73,9 +73,9 @@ class RebirthBalanceGateTest {
     }
 
     /**
-     * Gate I (0.5.0 actives): active items help a fresh tier-0 run but do not trivialise it. The same bot on content that
-     * never offers an active item (active weight 0, [NoActives]) clears the Architect no more than a fifth slower than with
-     * the actives its offers dealt and it cast.
+     * Gate I (0.5.0 actives): active items help a fresh tier-0 run but do not trivialise it. The same bot on the catalog
+     * without the active items ([NoActives], a run as before they existed) clears the Architect no more than a fifth
+     * slower than with the actives its offers dealt and it cast.
      *
      * Measured on the NoPoi probe sequence i = 1..31 ([GateISeeds]), not the five gate seeds: a run that dies counts as
      * never clearing, and about a quarter of fresh runs die with or without skills, so a five-seed median lands on
@@ -264,8 +264,8 @@ class RebirthBalanceGateTest {
         /** Gate I's seeds: the NoPoi probe sequence (`i * 7_919 + 13`) for i = 1..31, which holds the gate seeds. */
         val GateISeeds: List<Int> = (1..31).map { it * 7_919 + 13 }
 
-        /** The shipped content whose offers never show an active item: no run here owns one. */
-        val NoActives: GameplayContentSnapshot = withoutActiveItems()
+        /** The shipped content without its active items: no run here owns one, and its deck and offers are the 0.5.0 ones. */
+        val NoActives: GameplayContentSnapshot = withoutActiveItemCatalog()
         val BotWeapons: List<WeaponId> = listOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.ENTROPY_FIELD, WeaponId.PRISM_RELAY)
 
         /** No Matrix ranks, the Orb and the starter weapon. */

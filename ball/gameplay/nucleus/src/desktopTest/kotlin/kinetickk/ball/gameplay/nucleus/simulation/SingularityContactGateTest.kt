@@ -17,6 +17,8 @@ import kotlin.test.assertTrue
  * effect from a single seed's run) for 300 s, with no skill drafts: a skill arm owns one skill from the
  * start and casts it by the bot's policy, a reaction arm sets the reaction off on the nearest enemy close to the
  * Core every three seconds, and an item arm owns one item that launches the Core (items.md §6.2) from the start.
+ * The baseline, reaction and item arms play the catalog without its active items, a run as before they existed; a skill
+ * arm keeps them in the catalog (it acquires the active item it measures) and is never offered another.
  */
 class SingularityContactGateTest {
     private class Arm(val label: String, val contacts: Int, val bouncesPerSecond: Double, val outcomes: String)
@@ -46,7 +48,7 @@ class SingularityContactGateTest {
         var seconds = 0.0
         val outcomes = StringBuilder()
         for (seed in Seeds) {
-            val state = MutableGameState(NoActives, seed = seed)
+            val state = MutableGameState(if (skill != null) NoOtherActives else NoActives, seed = seed)
             state.unlockWeaponsForTesting(ReferenceArmory)
             state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
             state.startRun()
@@ -84,8 +86,10 @@ class SingularityContactGateTest {
 
     private companion object {
         val Seeds: List<Int> = (1..30).map { it * 7_919 + 13 }
-        /** No arm is offered an active item mid-run: each arm owns exactly the active it measures, or none. */
-        val NoActives = withoutActiveItems()
+        /** The catalog without its active items: the arms that measure no active. */
+        val NoActives = withoutActiveItemCatalog()
+        /** Offers that never show an active item: a skill arm owns exactly the active it measures. */
+        val NoOtherActives = withoutActiveItems()
         /** Skills that move the Core: the MOTION family, Meteor's ride and Sonic Boom's recoil. */
         val MovingSkills = listOf(SkillId.METEOR, SkillId.ARC_HOOK, SkillId.MASS_DRIVER, SkillId.VOID_STEP,
             SkillId.SLINGSHOT, SkillId.SONIC_BOOM)
