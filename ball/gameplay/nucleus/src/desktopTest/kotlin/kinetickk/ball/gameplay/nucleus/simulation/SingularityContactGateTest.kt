@@ -23,10 +23,10 @@ import kotlin.test.assertTrue
  * (`i * 7_919 + 13`, i = 1..30) the base met "at most 15 % more obstacle contacts per second and no more singularity
  * contacts" in every arm with probability 0.205 (one arm alone with 0.44 for Slingshot to 0.94 for Arc Hook). Every
  * arm now plays the 300 [PopulationSeeds] runs. An arm's obstacle-contact rate is at most [MaxBounceRatio] × the
- * baseline's (by the population threshold rule the higher of the design's 1.15 and its base ratio plus two bootstrap standard errors,
- * rounded up; base baseline 0.01061 per second, 899 contacts in 84,733 s), and the share of its runs ending in a
- * singularity contact exceeds the baseline's by at most [MaxExtraContactShare] (0 for every arm without a base contact;
- * Slingshot's two base contacts in 300 runs give 0.02).
+ * baseline's (by the population threshold rule the higher of the design's 1.15 and its base ratio plus two bootstrap
+ * standard errors, rounded up; base baseline 0.01061 per second, 899 contacts in 84,733 s), and the share of its runs
+ * ending in a singularity contact exceeds the baseline's by at most [MaxExtraContactShare] (0 for every arm without a
+ * base contact; Slingshot's two base contacts in 300 runs give 0.02).
  */
 class SingularityContactGateTest {
     private class Arm(val label: String, val contacts: Int, val bouncesPerSecond: Double, val outcomes: String)

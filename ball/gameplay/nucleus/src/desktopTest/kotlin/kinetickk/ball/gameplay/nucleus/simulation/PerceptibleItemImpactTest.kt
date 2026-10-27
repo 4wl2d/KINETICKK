@@ -80,7 +80,7 @@ import kotlin.test.assertTrue
  * last slot, so the clause can fire where it is measured.
  * [everyNewVocabularyKindMovesItsEncounter] holds one probe per new kind to those encounters.
  *
- * Active items (R1.13): an active item is measured in the skill arena with only itself in the loadout, acquired as the
+ * Active items: an active item is measured in the skill arena with only itself in the loadout, acquired as the
  * item at one stack, its own passive included. The skill arenas' loadout is support, not the subject: since every active
  * item carries a passive, the loadout's (Solar Flare's and Arc Hook's element potency, Catalyze's reaction power) would
  * lift both arms and hide what a skill-support item adds, which no loadout did before skills became items. A test-only

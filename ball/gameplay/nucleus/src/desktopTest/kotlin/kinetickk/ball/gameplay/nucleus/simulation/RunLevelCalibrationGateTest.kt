@@ -15,16 +15,16 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * Level 42 is the goal of a maximal Data build (economy §2.1, decisions §1 and Addendum A1). Every arm is a
- * full run of the NoPoi bot on the gate harness; the bot's [DataPolicy] decides how it drafts Data-gain cards.
+ * Level 42 is the goal of a maximal Data build at every Rebirth tier (0.5.0's capped Data curve, economy §2.1). Every
+ * arm is a full run of the NoPoi bot on the gate harness; the bot's [DataPolicy] decides how it drafts Data-gain cards.
  *
  * - FRESH: a fresh profile reaches level 22-30 at 12 active minutes (a population gate, see its KDoc).
  * - DATA_MAX: a full Matrix (lifetime Matter = its price, so the whole catalog is offered from level 1) that
  *   seeks Data reaches 42 between 510 and 630 s.
  * - NO_DATA: the same profile avoiding Data never reaches 42 before 720 s; NO_DATA_MAXED adds Refit 10 and
  *   Honing 10 on every owned weapon (upgrades are not a Data source).
- * - A1: at Rebirth tiers 3 and 6 the same two arms keep their meaning (NO_DATA never before 720 s, DATA_MAX
- *   in 480-660 s on at least three of five seeds).
+ * - Rebirth tiers 3 and 6: the same two arms keep their meaning (NO_DATA never before 720 s, DATA_MAX in 480-660 s
+ *   on at least three of five seeds).
  *
  * The thresholds never move; the re-tune ladder of economy §2.1 (rampPlateau, topPlateau, the §1.5 Data levers, the
  * Rebirth Data requirement scale) is the only way to make an arm pass. FRESH alone was restated as a population gate

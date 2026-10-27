@@ -157,7 +157,7 @@ internal fun MutableGameState.acquireActive(id: SkillId, stacks: Int = 1): ItemD
     return item
 }
 
-/** Every bound slot's rank equals its active item's stacks, and every owned active item is bound (R1.9). */
+/** Every bound slot's rank equals its active item's stacks, and every owned active item is bound. */
 internal fun MutableGameState.activeLoadoutMismatch(): String? {
     for (slot in 0 until kinetickk.ball.gameplay.nucleus.model.SkillRuntime.SLOTS) {
         val effect = skillLoadout.skill(slot) ?: continue

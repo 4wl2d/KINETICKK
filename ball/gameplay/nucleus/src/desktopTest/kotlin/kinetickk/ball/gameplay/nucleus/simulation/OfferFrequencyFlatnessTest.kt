@@ -21,7 +21,7 @@ import kotlin.test.assertTrue
  * 20, an empty Orb build, against the Common rate, with the whole catalog dealt and with the draft deck. Desktop only:
  * 30,000 offers per policy exceed the browser runner's per-test limit.
  *
- * Restated for active items (R1.15): the tier buckets and the worst-item check cover passive items only, since the lane
+ * Restated for active items: the tier buckets and the worst-item check cover passive items only, since the lane
  * policy weights active items on purpose. They measure the passive items' exposure as before active items existed: a
  * passive item's rate is its share of its tier's passive cards times its tier's share of all cards (the tier's active
  * cards leave both the tier's count and its draw total), so the tier odds, the deck and the lanes are checked against
@@ -45,7 +45,7 @@ class OfferFrequencyFlatnessTest {
     /**
      * The character's own archetype point no longer steers the aligned card: an Orb's (Drive) first card is no more
      * likely to carry Drive than a Prism's (Anchor) is, while the 0.4.0 lanes funnel the Orb to Drive from the first offer.
-     * Passive cards only (R1.15): an offer whose first card is an active item is left out, since the Orb's lane actives
+     * Passive cards only: an offer whose first card is an active item is left out, since the Orb's lane actives
      * carry Drive and are weighted by the character on purpose (the flatness test bounds that factor).
      */
     @Test

@@ -68,11 +68,12 @@ import kotlin.test.assertTrue
  *
  * With active items A and the survival bounds of D and H are population gates over [PopulationSeeds] (policy.md,
  * "Balance gate populations"): on the 05885fa9 base their five gate seeds passed with probability 0.49, 0.82 and 0.78,
- * so they re-rolled with every change to the reward stream. A's floor is the lower of the seeded threshold and the
- * base minus two standard errors; D's and H's are the shipped tuning's own median survival on the calibration windows
- * (see their constants). Gate I is a population gate as well: its 31 seeds kept its ratio with probability 0.78 on the
- * base. B, C, E, F, G and the win bounds of D and H keep their seeds and thresholds: their seeds pass with probability
- * at least 0.99 on the base's population and on the shipped active items'.
+ * so they re-rolled with every change to the reward stream. A's floor is the lower of the seeded threshold and the base
+ * minus two standard errors; D's and H's are min(480 s, M - 2 SE), with M the shipped tuning's own median survival on
+ * the calibration windows and SE the bootstrap SE of a 300-run median drawn from them (see their constants). Gate I is
+ * a population gate as well: its 31 seeds kept its ratio with probability 0.78 on the base. B, C, E, F, G and the win
+ * bounds of D and H keep their seeds and thresholds: their seeds pass with probability at least 0.99 on the base's
+ * population and on the shipped active items'.
  */
 class RebirthBalanceGateTest {
     /**

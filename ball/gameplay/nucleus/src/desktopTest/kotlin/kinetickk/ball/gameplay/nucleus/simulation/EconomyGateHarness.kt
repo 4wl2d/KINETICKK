@@ -34,7 +34,7 @@ internal val EconomyGateSeeds: List<Int> = (6..10).map { it * 7_919 + 13 }
 /**
  * The population of the seeded gates restated for active items (0.5.0; policy.md, "Balance gate populations"): the
  * NoPoi probe sequence `i * 7_919 + 13` for i = 1,001..1,300. On the 05885fa9 base or with the active items those
- * gates' own five to thirty seeds passed with a probability below 0.90 (where these runs and the calibration windows
+ * gates' own fixed seeds passed with a probability below 0.90 (where these runs and the calibration windows
  * disagreed, as for the Apex Prism, both pooled decided), so a change to the reward stream re-rolled them; each now
  * states its rule over these 300 runs. They are disjoint from every fixed gate seed set (i ≤ 205, and 2026) and from
  * the windows the active-item calibration tunes on (i ≤ 900, and 1,301 onward). A restated threshold follows the

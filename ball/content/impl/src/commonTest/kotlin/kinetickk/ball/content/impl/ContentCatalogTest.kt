@@ -878,7 +878,7 @@ private val ActivePassives: Map<SkillId, Pair<ItemRule, Float>> = mapOf(
 
 /**
  * Caps on an active's base passive where no shipped passive of Rare or lower shares its kind. Frost Snap: only Quench
- * Seal (Epic, one stack) adds critical damage against Frozen enemies, +50 %; rank III (x2.2) stays below it.
+ * Seal (Epic, one stack) adds critical damage conditioned on a Frozen enemy, +50 %; rank III (x2.2) stays below it.
  */
 private val ExplicitPassiveCaps: Map<SkillId, Float> = mapOf(SkillId.FROST_SNAP to 0.22f)
 

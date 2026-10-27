@@ -18,7 +18,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Active items are few in the item pool and still reach a run (0.5.0 active items, D2 as amended by R1.7). The NoPoi bot,
+ * Active items are few in the item pool and still reach a run (0.5.0 active items). The NoPoi bot,
  * its archetype the character's (as in ItemVarietyTest), plays every one of the twelve characters on the gate harness to the
  * run's end or 900 s, on two arms of [POPULATION] runs each: the first [POPULATION] [PopulationSeeds] dealt to the
  * characters in their order, 25 disjoint seeds each, chosen by that definition and never by outcome. A population gate
@@ -103,7 +103,7 @@ class ActiveItemFrequencyGateTest {
     }
 
     /**
-     * POI item-and-repair rewards (R1.2, R1.7) stay a uniform shuffle of the focus pool with at most one active card. At
+     * POI item-and-repair rewards stay a uniform shuffle of the focus pool with at most one active card. At
      * every level 5..30 a run of either arm reaches, its running state is forked [POI_SAMPLES] times per focus, each fork
      * with its own reward seed, and the reward is opened and the focus chosen on the fork; the run itself is untouched
      * (its first fresh run flown again without sampling plays the same). Per arm and focus, active cards are at most 0.20

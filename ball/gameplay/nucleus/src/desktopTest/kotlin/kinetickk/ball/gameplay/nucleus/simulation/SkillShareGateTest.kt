@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
  * Skill share gate (combat-final §10 Skills): the no-POI bot takes, ranks and casts active items as a player would, and
  * their effects deal a meaningful but not dominant share of its damage.
  *
- * Population (restated for active items, R1.5): an active item reaches a run only through ordinary item offers, so the
+ * Population (restated for active items): an active item reaches a run only through ordinary item offers, so the
  * gate measures runs that own one. The share plays the Orb on every one of the 300 [PopulationSeeds] and judges the runs
  * that have bound an active item by [OWNED_BY_SECONDS]; the spread walks [PopulationSeeds] for every character until
  * [SPREAD_RUNS] runs of each have. Seeds are chosen by that definition, never by outcome; a run that binds no active item
@@ -29,10 +29,11 @@ import kotlin.test.assertTrue
  *
  * The band is judged on the median run. A run's share depends on which effects it got: on the 0.5.0 base's drafts, over
  * 300 probe runs the 10th–90th percentile spanned 0.056–0.17, wider than the band itself, and no skill number narrowed
- * it (Catalyze reaction scale ×1.5, which a cast caps at 1.3, two more targets or a second off its cooldown, Arc Hook
- * links ×1.5–×3 moved the 10th percentile by at most 0.004), so "every run in the band" measured the offers, not the
- * effects. The share is read at 720 s as specified: a run that ends earlier is reported, not judged (gate A owns
- * survival), and at least half of the runs must be judged. The spread pools each effect's damage over the whole run
+ * it (Catalyze's reaction scale ×1.5 or two more targets, which a cast caps at the 1.3 and the 10 enemies that rank III
+ * already had; a second off Catalyze's cooldown; Arc Hook links ×1.5–×3: none moved the 10th percentile by more than
+ * 0.004), so "every run in the band" measured the offers, not the effects. The share is read at 720 s as specified: a
+ * run that ends earlier is reported, not judged (gate A owns survival), and at least half of the runs must be judged.
+ * The spread pools each effect's damage over the whole run
  * ([kinetickk.ball.gameplay.nucleus.model.SkillRuntime.effectDamage], kept when its item is replaced) across every
  * character's runs, over all active damage.
  *

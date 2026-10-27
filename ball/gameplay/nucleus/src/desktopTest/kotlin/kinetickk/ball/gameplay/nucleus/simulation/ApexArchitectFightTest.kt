@@ -30,7 +30,8 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * The Apex against the Architect (combat-final §5.2, §10 "Apex"; lead addendum B1).
+ * The Apex against the Architect (combat-final §5.2, §10 "Apex"): the owner asked that the level-42 ability strongly
+ * affect the final fight.
  *
  * Fights: per character, tier (0 fresh; 10 with the strong build's Matrix, Arc Coil and Relics) and seed, the
  * no-POI bot plays the run to the Architect's arrival (the Core cannot be hurt on the way; a singularity contact can

@@ -385,9 +385,9 @@ internal class NoPoiBot(
     }
 
     /**
-     * A cast at the Architect lands its boss channel (lead addendum B1): the Architect is out of its shift, within the
-     * Apex reach of the Core (where it just arrived it is still far off), and in its last phase or far enough above
-     * its phase gate that the next shift does not cut the activation's strikes short.
+     * A cast at the Architect lands its boss channel: the Architect is out of its shift, within the Apex reach of the
+     * Core (where it just arrived it is still far off), and in its last phase or far enough above its phase gate that
+     * the next shift does not cut the activation's strikes short.
      */
     private fun apexLands(s: MutableGameState, architect: Enemy): Boolean {
         if (s.isShifting(architect)) return false
@@ -554,7 +554,7 @@ internal class NoPoiBot(
         c.itemId?.let(s.content::item)?.isDataEconomy == true
 
     /*
-     * Active items (combat-final §4.10, R1.8): a rank-up of an owned active is always taken; a new active is taken while
+     * Active items (combat-final §4.10): a rank-up of an owned active is always taken; a new active is taken while
      * a slot is free; with every slot full only a character-lane active is taken, to replace the lowest-rank active
      * outside the lane (the character is built around its lane, so a player trades an off-lane active of any rank for
      * one), and any other new active is passed over for the best other card. SEEK takes Decay Spores (Spored deaths drop
