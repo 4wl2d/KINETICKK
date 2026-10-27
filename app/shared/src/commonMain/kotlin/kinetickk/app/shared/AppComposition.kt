@@ -74,6 +74,8 @@ internal class AppCompositionOwner(
     profileUnavailableFeature: ProfileUnavailableFeature? = null,
     private val diagnostics: CrashDiagnostics = CrashDiagnostics.None,
     private val displayHost: PlatformDisplayHost = PlatformDisplayHost.None,
+    /** The host can close the game: Home offers Quit, which calls [Content]'s `onQuit`. */
+    quitAvailable: Boolean = false,
 ) {
     private val profilePolicy = contentCatalog.profilePolicy()
     private val gameplayContent = contentCatalog.gameplayContent()
@@ -101,6 +103,7 @@ internal class AppCompositionOwner(
         profilePort = this.profilePort,
         uiCatalog = uiCatalog,
         audioService = this.audioService,
+        quitAvailable = quitAvailable,
     )
     private val settingsFeature: SettingsFeature = settingsFeature ?: DefaultSettingsFeature(
         this.profilePort,
@@ -166,7 +169,7 @@ internal class AppCompositionOwner(
 
     @Composable
     @NonRestartableComposable
-    fun Content(onLanguageChanged: (String) -> Unit = {}) {
+    fun Content(onLanguageChanged: (String) -> Unit = {}, onQuit: () -> Unit = {}) {
         AppSessionContent(
             profileReadPort = profilePort,
             onLanguageChanged = { language -> onLanguageChanged(language.code) },
@@ -182,6 +185,7 @@ internal class AppCompositionOwner(
             onPreferencesChanged = applyDisplayPreferences,
             touchPrimary = touchPrimary,
             shellMemory = shellMemory,
+            onQuit = onQuit,
         )
     }
 

@@ -70,6 +70,8 @@ class AppSessionInputMappingTest {
         )
         // The Workshop row keeps the tab shown last; characters are chosen there.
         assertEquals(SessionInteractionPulse.OpenOverlay(AppDestination.Workshop), HomeOutput.OpenWorkshop.toSessionPulse())
+        // Quit closes the game through the host; Session has no transition for it.
+        assertNull(HomeOutput.Quit.toSessionPulse())
         assertEquals(SessionInteractionPulse.CloseOverlay, WorkshopOutput.Back.toSessionPulse())
         // Character selection goes to Session, which decides whether it is between runs.
         assertEquals(

@@ -70,11 +70,19 @@ internal class HomeScene(
     val versionSize: Float,
 )
 
+/** The Quit button: [bounds] is the drawn plate, [touch] its press area. */
+internal class HomeQuitBounds(
+    val bounds: Rect,
+    val touch: Rect,
+)
+
 internal class HomeLayoutGeometry(
     val mode: HomeLayoutMode,
     val actions: List<HomeActionBounds>,
     val infos: List<HomeInfoBounds>,
     val scene: HomeScene,
+    /** Present only when the host can close the game and the layout has room for it (desktop, regular). */
+    val quit: HomeQuitBounds? = null,
 ) {
     fun bounds(target: HomeLayoutTarget): Rect =
         requireNotNull(actions.firstOrNull { it.target == target }) { "Missing Home target $target" }.bounds
@@ -91,7 +99,7 @@ internal val HomeMenuTargets = listOf(
     HomeLayoutTarget.SETTINGS,
 )
 
-internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): HomeLayoutGeometry {
+internal fun homeLayoutGeometry(width: Float, height: Float, density: Float, quitAvailable: Boolean = false): HomeLayoutGeometry {
     val scale = density.coerceAtLeast(1f)
     val w = width / scale
     val h = height / scale
@@ -109,6 +117,7 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
     }
     val actions = ArrayList<HomeActionBounds>(HomeLayoutTarget.entries.size)
     val infos = ArrayList<HomeInfoBounds>(2)
+    var quit: HomeQuitBounds? = null
     val scene = when (mode) {
         HomeLayoutMode.REGULAR -> {
             // Home.png anchors: header and hero from the left, menu and form panel from the right,
@@ -130,7 +139,14 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
             // text is the form's (!) tooltip; characters change in the Workshop.
             val formNameSize = 30f * s
             val formNameY = by(686f)
-            infos += info(HomeInfoTarget.FORM, rx(1368f), formNameY)
+            // A small Quit plate ends at the version line's right edge on the form name's center line;
+            // the form's (!) then moves left of it.
+            if (quitAvailable) {
+                val plate = rect(rx(1268f), formNameY - 20f * s, rx(1392f), formNameY + 20f * s)
+                val touchHalf = max(22f, 20f * s)
+                quit = HomeQuitBounds(plate, rect(rx(1268f), formNameY - touchHalf, rx(1392f), formNameY + touchHalf))
+            }
+            infos += info(HomeInfoTarget.FORM, if (quitAvailable) rx(1268f) - 48f else rx(1368f), formNameY)
             // The facts card keeps at least 480 px (board 560) on smaller desktops, short of the form panel.
             val factsRight = max(lx(616f), min(lx(56f) + 480f, rx(826f) - 24f))
             infos += info(HomeInfoTarget.FACTS, factsRight - 44f * s, by(686f))
@@ -309,7 +325,7 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float): Ho
             )
         }
     }
-    return HomeLayoutGeometry(mode, actions, infos, scene)
+    return HomeLayoutGeometry(mode, actions, infos, scene, quit)
 }
 
 /**

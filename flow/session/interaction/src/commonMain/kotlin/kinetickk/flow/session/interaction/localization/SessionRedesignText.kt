@@ -47,6 +47,8 @@ internal enum class SessionRedesignText(
     ),
 
     VERSION("v0.5.0", "v0.5.0"),
+    QUIT("Quit", "Выход"),
+    QUIT_DESCRIPTION("Quit the game", "Выйти из игры"),
 
     BACK("Back", "Назад"),
     CLOSE("Close", "Закрыть"),

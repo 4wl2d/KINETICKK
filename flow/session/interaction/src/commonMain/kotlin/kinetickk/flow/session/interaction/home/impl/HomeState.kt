@@ -25,6 +25,7 @@ internal sealed interface HomeAction {
     data object OpenRebirth : HomeAction
     data object OpenCodex : HomeAction
     data object OpenSettings : HomeAction
+    data object Quit : HomeAction
 }
 
 internal sealed interface HomeEffect {
@@ -84,6 +85,7 @@ internal class HomeReducer(
         HomeAction.OpenRebirth -> navigate(HomeOutput.OpenRebirth)
         HomeAction.OpenCodex -> navigate(HomeOutput.OpenCodex)
         HomeAction.OpenSettings -> navigate(HomeOutput.OpenSettings)
+        HomeAction.Quit -> navigate(HomeOutput.Quit)
     }
 
     private fun navigate(output: HomeOutput): HomeReduction = HomeReduction(
@@ -98,10 +100,15 @@ internal data class HomeViewport(
     val width: Float,
     val height: Float,
     val density: Float,
+    /** The host can close the game: Home lays out its Quit button. */
+    val quitAvailable: Boolean = false,
 )
 
 internal fun resolveHomePress(viewport: HomeViewport, x: Float, y: Float): HomeAction? {
-    val hit = homeLayoutGeometry(viewport.width, viewport.height, viewport.density)
+    val layout = homeLayoutGeometry(viewport.width, viewport.height, viewport.density, viewport.quitAvailable)
+    val quit = layout.quit?.touch
+    if (quit != null && x in quit.left..quit.right && y in quit.top..quit.bottom) return HomeAction.Quit
+    val hit = layout
         .actions
         .firstOrNull { action ->
             x in action.bounds.left..action.bounds.right && y in action.bounds.top..action.bounds.bottom
@@ -111,7 +118,7 @@ internal fun resolveHomePress(viewport: HomeViewport, x: Float, y: Float): HomeA
 
 /** Resolves a press on a drawn (!) info button (its expanded touch rect), if any. */
 internal fun resolveHomeInfoPress(viewport: HomeViewport, x: Float, y: Float): HomeInfoTarget? =
-    homeLayoutGeometry(viewport.width, viewport.height, viewport.density)
+    homeLayoutGeometry(viewport.width, viewport.height, viewport.density, viewport.quitAvailable)
         .infos
         .firstOrNull { info ->
             x in info.touch.left..info.touch.right && y in info.touch.top..info.touch.bottom

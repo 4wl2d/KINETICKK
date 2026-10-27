@@ -5,6 +5,7 @@ package kinetickk.flow.session.interaction.home.impl
 
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
+import kinetickk.flow.session.interaction.localization.SessionRedesignText
 import kinetickk.flow.session.interaction.localization.SessionText
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -72,6 +73,8 @@ class DefaultHomeFeature(
     private val profilePort: ProfileReadPort,
     uiCatalog: UiCatalogSnapshot,
     audioService: AudioService,
+    /** The host can close the game: Home shows a Quit button that emits [HomeOutput.Quit]. */
+    private val quitAvailable: Boolean = false,
 ) : HomeFeature {
     private val reducer = HomeReducer(
         coreShapes = uiCatalog.coreShapes,
@@ -93,12 +96,13 @@ class DefaultHomeFeature(
         val roles = LocalKkRolePalette.current
         val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
         var revisionValue by remember { mutableIntStateOf(0) }
-        var viewportValue by remember { mutableStateOf(HomeViewport(0f, 0f, density)) }
+        var viewportValue by remember { mutableStateOf(HomeViewport(0f, 0f, density, quitAvailable)) }
         var renderTimeSecondsValue by remember { mutableFloatStateOf(0f) }
         var activeTargetValue by remember { mutableStateOf(HomeLayoutTarget.START) }
         var focusedTargetValue by remember { mutableStateOf<HomeLayoutTarget?>(null) }
         var openInfoValue by remember { mutableStateOf<HomeInfoTarget?>(null) }
         var activeInfoValue by remember { mutableStateOf<HomeInfoTarget?>(null) }
+        var quitActiveValue by remember { mutableStateOf(false) }
         val menuMotion = remember { HomeMenuMotion() }
         val actionFocus = remember { HomeLayoutTarget.entries.associateWith { FocusRequester() } }
         val actionsReady = inputEnabled && viewportValue.width > 0f && viewportValue.height > 0f
@@ -167,6 +171,7 @@ class DefaultHomeFeature(
                 viewportValue.width,
                 viewportValue.height,
                 viewportValue.density,
+                viewportValue.quitAvailable,
             )
         }
         Box(
@@ -190,7 +195,7 @@ class DefaultHomeFeature(
                     contentDescription = language.text(SessionText.HOME_DESCRIPTION)
                 }
                 .onSizeChanged { size ->
-                    viewportValue = HomeViewport(size.width.toFloat(), size.height.toFloat(), density)
+                    viewportValue = HomeViewport(size.width.toFloat(), size.height.toFloat(), density, quitAvailable)
                 }
                 .pointerInput(Unit) {
                     detectTapGestures { position -> currentTapHandlerValue(position) }
@@ -205,6 +210,7 @@ class DefaultHomeFeature(
                         openInfo = openInfoValue,
                         activeInfo = activeInfoValue,
                         textScale = textScale,
+                        quitActive = quitActiveValue,
                     ),
                     menuMotion,
                 )
@@ -245,6 +251,14 @@ class DefaultHomeFeature(
                             onToggle = { openInfoValue = if (openInfoValue == info.target) null else info.target },
                         )
                     }
+                }
+                layout.quit?.let { quit ->
+                    HomeQuitAction(
+                        quit = quit,
+                        density = localDensity,
+                        onActive = { active -> quitActiveValue = active },
+                        onClick = { dispatch(HomeAction.Quit) },
+                    )
                 }
             }
         }
@@ -323,6 +337,38 @@ private fun HomeInfoAction(
     )
 }
 
+/** Focusable Quit node over the drawn button: hover/focus light it, Enter, Space or a click quit. */
+@Composable
+private fun HomeQuitAction(
+    quit: HomeQuitBounds,
+    density: Density,
+    onActive: (Boolean) -> Unit,
+    onClick: () -> Unit,
+) {
+    val language = LocalAppLanguage.current
+    val description = language.text(SessionRedesignText.QUIT_DESCRIPTION)
+    val interactions = remember { MutableInteractionSource() }
+    val focused by interactions.collectIsFocusedAsState()
+    val hovered by interactions.collectIsHoveredAsState()
+    LaunchedEffect(focused || hovered) { onActive(focused || hovered) }
+    Box(
+        Modifier
+            .placeInHomeBounds(quit.touch, density)
+            .hoverable(interactions)
+            .testTag(HOME_QUIT_TAG)
+            .onKeyEvent { event -> activateHomeSemanticButtonFromKey(event.key, event.type, onClick) }
+            .semantics {
+                role = Role.Button
+                contentDescription = description
+                onClick(label = description) {
+                    onClick()
+                    true
+                }
+            }
+            .focusable(interactionSource = interactions),
+    )
+}
+
 private fun Modifier.placeInHomeBounds(bounds: Rect, density: Density): Modifier =
     this
         .offset {
@@ -355,6 +401,7 @@ private fun HomeLayoutTarget.homeContentDescription(language: AppLanguage): Stri
 }
 
 private const val HOME_ROOT_TAG = "kinetickk.home"
+internal const val HOME_QUIT_TAG = "kinetickk.home.quit"
 
 private inline fun activateHomeSemanticButtonFromKey(
     key: Key,

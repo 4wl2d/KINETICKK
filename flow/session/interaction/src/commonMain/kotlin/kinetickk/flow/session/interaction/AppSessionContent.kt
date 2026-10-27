@@ -72,6 +72,7 @@ import kinetickk.flow.session.interaction.audio.SessionAudioExecutor
 import kinetickk.flow.session.interaction.codex.api.CodexFeature
 import kinetickk.flow.session.interaction.codex.api.CodexRunStacks
 import kinetickk.flow.session.interaction.home.api.HomeFeature
+import kinetickk.flow.session.interaction.home.api.HomeOutput
 import kinetickk.flow.session.interaction.profile.api.ProfileUnavailableFeature
 
 /**
@@ -105,6 +106,8 @@ fun AppSessionContent(
     touchPrimary: Boolean = false,
     /** Kept by the owner of the features when it outlives this composition (the desktop window). */
     shellMemory: AppShellMemory = remember(sessionPort) { AppShellMemory() },
+    /** Closes the game when Home's Quit is pressed (hosts that offer Quit). */
+    onQuit: () -> Unit = {},
 ) {
     val diagnostics = LocalCrashDiagnostics.current
     var languageValue by remember(sessionPort, profileReadPort) {
@@ -276,7 +279,7 @@ fun AppSessionContent(
             when (shellValue.base) {
                 AppDestination.Home -> homeFeature.Content(
                     inputEnabled = normalInputEnabled && shellValue.overlay == null,
-                    onOutput = { output -> dispatch(output.toSessionPulse()) },
+                    onOutput = { output -> if (output == HomeOutput.Quit) onQuit() else output.toSessionPulse()?.let { dispatch(it) } },
                 )
                 // The run keeps the raw density: the interface scale never changes the visible arena.
                 AppDestination.Gameplay -> CompositionLocalProvider(LocalDensity provides rawDensity) {

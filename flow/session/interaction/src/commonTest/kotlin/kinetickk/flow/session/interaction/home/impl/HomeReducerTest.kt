@@ -26,6 +26,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class HomeReducerTest {
@@ -180,6 +182,35 @@ class HomeReducerTest {
         assertEquals(null, resolveHomePress(viewport, 300f, 275f), "The hero is decoration, not a target")
         // Where the Characters card stood, under the form name, nothing opens: characters change in the Workshop.
         assertEquals(null, resolveHomePress(viewport, 978f, 638f))
+    }
+
+    @Test
+    fun quitIsOfferedBesideTheFormNameOnlyWhenTheHostCanCloseTheGame() {
+        val viewport = HomeViewport(1_280f, 720f, 1f, quitAvailable = true)
+        val layout = homeLayoutGeometry(viewport.width, viewport.height, viewport.density, quitAvailable = true)
+        val quit = assertNotNull(layout.quit)
+        assertEquals(HomeAction.Quit, resolveHomePress(viewport, quit.bounds.center.x, quit.bounds.center.y))
+        assertEquals(null, resolveHomePress(viewport.copy(quitAvailable = false), quit.bounds.center.x, quit.bounds.center.y))
+        assertTrue(quit.touch.height >= 44f, "Quit keeps a 44 dp press height")
+
+        // It ends with the version line, clear of the form's (!), the selected menu rows and the version text.
+        val form = assertNotNull(layout.info(HomeInfoTarget.FORM))
+        assertTrue(form.touch.right <= quit.touch.left, "The form's (!) moves left of Quit")
+        assertTrue(quit.bounds.right <= layout.scene.versionRight + 0.5f)
+        assertTrue(quit.touch.bottom < layout.scene.versionBaseline - layout.scene.versionSize, "Quit stays above the version line")
+        HomeMenuTargets.forEach { target ->
+            homeSelectedMenuFootprint(layout.bounds(target), layout.scene.menuFontSize).forEach { area ->
+                assertFalse(area.overlaps(quit.touch), "A selected $target overlaps Quit")
+            }
+        }
+
+        val effects = homeReducer().reduce(HomeAction.Quit).effects
+        assertEquals(SessionAudioCue.UI_CLICK, assertIs<HomeEffect.PlayAudio>(effects[0]).cue)
+        assertEquals(HomeOutput.Quit, assertIs<HomeEffect.Emit>(effects[1]).output)
+
+        // Without the host's Quit, and on the phone layouts, nothing is laid out for it.
+        assertNull(homeLayoutGeometry(viewport.width, viewport.height, viewport.density).quit)
+        assertNull(homeLayoutGeometry(800f, 600f, 1f, quitAvailable = true).quit)
     }
 }
 

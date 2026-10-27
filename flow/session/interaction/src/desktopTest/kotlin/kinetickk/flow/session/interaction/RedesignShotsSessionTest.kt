@@ -100,6 +100,23 @@ class RedesignShotsSessionTest {
         }
     }
 
+    /** The desktop Quit button: idle, focused, and the form's (!) open beside it, with the longest form name. */
+    @Test fun homeQuit() {
+        for ((w, h) in listOf(1440 to 810, 1000 to 602)) for (language in AppLanguage.entries) {
+            shot("home-quit", "idle", w, h, language, { ShotProfile() }, quit = true) {
+                onNodeWithTag("kinetickk.home.settings").performSemanticsAction(SemanticsActions.RequestFocus)
+            }
+            shot("home-quit", "focused", w, h, language, { ShotProfile() }, quit = true) {
+                onNodeWithTag("kinetickk.home.quit").performSemanticsAction(SemanticsActions.RequestFocus)
+            }
+            for (shape in CoreShape.entries) {
+                shot("home-quit", "form-${shape.name.lowercase()}", w, h, language, { ShotProfile(coreShape = shape) }, quit = true) {
+                    onNodeWithTag("kinetickk.home.info.form").performSemanticsAction(SemanticsActions.OnClick)
+                }
+            }
+        }
+    }
+
     /** Text size 175 % (the setting's maximum) and the Rebirth "Ready" and Workshop "Affordable" stamps, the widest menu rows. */
     @Test fun homeTextSizes() {
         for ((w, h) in sizes + listOf(600 to 390, 360 to 800)) for (language in AppLanguage.entries) {
@@ -407,10 +424,11 @@ class RedesignShotsSessionTest {
         language: AppLanguage,
         profile: () -> ShotProfile,
         density: Float = 1f,
+        quit: Boolean = false,
         interact: ComposeUiTest.() -> Unit,
     ) {
         val port = profile()
-        val feature = DefaultHomeFeature(port, ShotCatalog, ShotSilentAudio)
+        val feature = DefaultHomeFeature(port, ShotCatalog, ShotSilentAudio, quitAvailable = quit)
         capture(screen, state, w, h, language, density = density, interact = {
             mainClock.advanceTimeBy(2_000)
             interact()

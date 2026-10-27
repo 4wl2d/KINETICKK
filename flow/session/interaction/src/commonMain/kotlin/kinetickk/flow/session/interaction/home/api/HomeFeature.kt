@@ -63,6 +63,9 @@ sealed interface HomeOutput {
     data object OpenRebirth : HomeOutput
     data object OpenCodex : HomeOutput
     data object OpenSettings : HomeOutput
+
+    /** Close the game; only a Home whose host can close it offers this. */
+    data object Quit : HomeOutput
 }
 
 interface HomeFeature {

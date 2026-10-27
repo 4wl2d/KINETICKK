@@ -50,6 +50,7 @@ import kinetickk.foundation.design.drawKkIcon
 import kinetickk.foundation.design.drawKkInfoButton
 import kinetickk.foundation.design.drawKkMenuItem
 import kinetickk.foundation.design.drawKkRadialFade
+import kinetickk.foundation.design.drawKkSheared
 import kinetickk.foundation.design.drawKkText
 import kinetickk.foundation.design.drawKkThreatHatch
 import kinetickk.foundation.design.drawKkTile
@@ -571,6 +572,8 @@ internal class HomeDrawState(
     val activeInfo: HomeInfoTarget?,
     /** The player's text size setting (the measurer carries the UI factor, [homeUiScale]). */
     val textScale: Float = HOME_DEFAULT_TEXT_SCALE,
+    /** The Quit button is hovered or focused. */
+    val quitActive: Boolean = false,
 )
 
 /** The game's default text size, at which Home UI text renders at the design's size. */
@@ -680,6 +683,7 @@ internal fun DrawScope.drawHome(
     drawMenu(model, tinted, layout, motion, state.activeTarget, state.textScale)
     scene.facts?.let { drawFactsCard(tinted, it, facts, layout, state, motion, accent) }
     drawFormPanel(model, tinted, layout, state, motion)
+    layout.quit?.let { drawQuit(tinted, it.bounds, layout.scene, state.quitActive) }
     drawVersion(text, layout)
     val open = state.openInfo ?: state.activeInfo
     if (open != null) {
@@ -1239,6 +1243,22 @@ private fun DrawScope.drawFormPanel(
     if (info != null) {
         drawKkInfoButton(text, info.bounds, active = state.activeInfo == HomeInfoTarget.FORM || state.openInfo == HomeInfoTarget.FORM)
     }
+}
+
+/** The Quit button: a small sheared outline plate, filled with the threat role while hovered or focused. */
+private fun DrawScope.drawQuit(text: CanvasTextMeasurer, bounds: Rect, scene: HomeScene, active: Boolean) {
+    val threat = text.roles.threat
+    if (active) {
+        drawKkSheared(bounds, threat)
+    } else {
+        val inset = 0.75f * density
+        drawKkSheared(Rect(bounds.left + inset, bounds.top + inset, bounds.right - inset, bounds.bottom - inset), Kk.Mute,
+            kkStroke(1.5f * density))
+    }
+    val label = measureKkText(text, text.language.text(SessionRedesignText.QUIT),
+        text.typography.condStyle(displaySize(text, 21f * scene.unit), trackingEm = 0.04f, lineHeightEm = 1f), uppercase = true,
+        maxWidth = bounds.width - 16f * scene.unit)
+    drawKkText(label, bounds.center.x, bounds.center.y, if (active) Kk.Ink else Kk.Bone, align = KkAlign.CENTER, valign = KkVAlign.CENTER)
 }
 
 internal fun DrawScope.drawVersion(text: CanvasTextMeasurer, layout: HomeLayoutGeometry) {

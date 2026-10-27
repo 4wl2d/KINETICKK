@@ -41,12 +41,14 @@ internal fun Key.toWorkshopAlias(base: AppDestination): WorkshopTab? = when (thi
 /** True for a key the shell maps: a session shortcut or a Workshop alias over [base]. */
 internal fun Key.isShellKey(base: AppDestination): Boolean = toSessionShortcut() != null || toWorkshopAlias(base) != null
 
-internal fun HomeOutput.toSessionPulse(): SessionInteractionPulse = when (this) {
+/** Null for [HomeOutput.Quit]: closing the game is the host's, not a Session transition. */
+internal fun HomeOutput.toSessionPulse(): SessionInteractionPulse? = when (this) {
     HomeOutput.OpenWorkshop -> SessionInteractionPulse.OpenOverlay(AppDestination.Workshop)
     HomeOutput.StartRun -> SessionInteractionPulse.StartRunRequested
     HomeOutput.OpenSettings -> SessionInteractionPulse.OpenOverlay(AppDestination.Settings)
     HomeOutput.OpenRebirth -> SessionInteractionPulse.OpenOverlay(AppDestination.Rebirth)
     HomeOutput.OpenCodex -> SessionInteractionPulse.OpenOverlay(AppDestination.Codex)
+    HomeOutput.Quit -> null
 }
 
 internal fun GameplayInteractionOutput.toSessionPulse(): SessionInteractionPulse = when (this) {

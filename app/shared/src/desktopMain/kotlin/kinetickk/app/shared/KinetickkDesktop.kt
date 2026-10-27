@@ -24,7 +24,7 @@ fun runKinetickkDesktop(
 ) {
     val host = DesktopDisplayHost()
     // Profile loads synchronously here, so the stored display preferences shape the first window.
-    val owner = AppCompositionOwner(diagnostics = crashes.reporter, displayHost = host)
+    val owner = AppCompositionOwner(diagnostics = crashes.reporter, displayHost = host, quitAvailable = true)
     try {
         val initial = owner.preferences()
         // Before the first window: Skiko reads the V-Sync setting when it creates a window's redrawer.
@@ -50,7 +50,8 @@ fun runKinetickkDesktop(
                         LaunchedEffect(host.leavingFullscreen) {
                             while (host.leavingFullscreen) withFrameNanos { host.settle() }
                         }
-                        owner.Content()
+                        // Home's Quit takes the window's close path: the owner closes after the application ends.
+                        owner.Content(onQuit = ::exitApplication)
                     }
                 }
                 hostEffects()
