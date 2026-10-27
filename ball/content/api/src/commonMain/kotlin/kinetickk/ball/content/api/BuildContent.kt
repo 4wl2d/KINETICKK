@@ -261,9 +261,9 @@ data class OfferLanePolicy(
     /** Offer weight factor of every active item; 0 means actives are never offered, not merely rare. */
     val activeWeight: Float = 1f,
     /** Extra factor for the active items in the run character's lane. */
-    val characterActiveWeight: Float = 2f,
+    val characterActiveWeight: Float = 3f,
     /** Extra factor for a card that would rank up an owned active item. */
-    val ownedActiveWeight: Float = 1.5f,
+    val ownedActiveWeight: Float = 8f,
 ) {
     init {
         require(alignedChance.isFinite() && alignedChance in 0f..1f)
@@ -280,7 +280,10 @@ data class OfferLanePolicy(
     }
 
     companion object {
-        /** The 0.4.0 lanes: the loadout fits, no saturation, an uncapped 0.8 fit weight, risk on every lift. */
+        /**
+         * The 0.4.0 lanes: the loadout fits, no saturation, an uncapped 0.8 fit weight, risk on every lift. The active
+         * factors are the shipped ones, so a comparison against these lanes isolates the lanes themselves.
+         */
         val RELEASE_040: OfferLanePolicy = OfferLanePolicy(
             alignedChance = 0.75f, alignedFitWeight = 0.8f, alignedFitCap = Float.POSITIVE_INFINITY, loadoutFits = true,
             saturatedTagFit = 1f, volatileLiftChance = 0.6f, volatileRiskChance = 0.6f,

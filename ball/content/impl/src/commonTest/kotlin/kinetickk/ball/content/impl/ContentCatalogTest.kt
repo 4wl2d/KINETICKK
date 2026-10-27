@@ -385,7 +385,7 @@ class ContentCatalogTest {
             actives.groupBy({ it.rarity }, { it.active }),
         )
         // Actives unlock by run level per rarity and never wait for a Rebirth.
-        val unlocks = mapOf(ItemRarity.UNCOMMON to 5, ItemRarity.RARE to 7, ItemRarity.EPIC to 12)
+        val unlocks = mapOf(ItemRarity.UNCOMMON to 5, ItemRarity.RARE to 7, ItemRarity.EPIC to 10)
         actives.forEach { item ->
             val effect = gameplay.skill(requireNotNull(item.active))
             assertEquals(unlocks.getValue(item.rarity), item.unlockLevel, "${item.name} unlock level")
@@ -856,24 +856,24 @@ class ContentCatalogTest {
  * ships ([ExplicitPassiveCaps]).
  */
 private val ActivePassives: Map<SkillId, Pair<ItemRule, Float>> = mapOf(
-    SkillId.SOLAR_FLARE to (ItemRule.ElementPotency(StatusElement.THERMAL, 0.2f) to 0.45f),
-    SkillId.METEOR to (ItemRule.BreakPower(StatusElement.THERMAL, 0.25f) to 0.55f),
-    SkillId.FROST_LINE to (ItemRule.StatusDuration(StatusElement.CRYO, 1.2f) to 0.5f),
-    SkillId.FROST_SNAP to (ItemRule.CritDamageVersus(EffectCondition.TargetFrozen, 0.15f) to 0.22f),
-    SkillId.ARC_HOOK to (ItemRule.ElementPotency(StatusElement.ION, 0.2f) to 0.45f),
-    SkillId.STORM_COIL to (ItemRule.BreakPower(StatusElement.ION, 0.25f) to 0.55f),
-    SkillId.GRAVITY_WELL to (ItemRule.BreakPower(StatusElement.GRAVITIC, 0.25f) to 0.55f),
-    SkillId.MASS_DRIVER to (ItemRule.ElementPotency(StatusElement.GRAVITIC, 0.2f) to 0.45f),
-    SkillId.DECAY_SPORES to (ItemRule.ElementPotency(StatusElement.ENTROPY, 0.2f) to 0.45f),
-    SkillId.ENTROPIC_TIDE to (ItemRule.StatusDuration(StatusElement.ENTROPY, 1.2f) to 0.5f),
-    SkillId.SONIC_BOOM to (ItemRule.BreakPower(StatusElement.SONIC, 0.25f) to 0.55f),
-    SkillId.RESONATOR to (ItemRule.StatusDuration(StatusElement.SONIC, 1.2f) to 0.5f),
-    SkillId.VOID_STEP to (ItemRule.BreakPower(StatusElement.VOID, 0.25f) to 0.55f),
-    SkillId.NULL_SHROUD to (ItemRule.ElementPotency(StatusElement.VOID, 0.2f) to 0.45f),
+    SkillId.SOLAR_FLARE to (ItemRule.ElementPotency(StatusElement.THERMAL, 0.346f) to 0.45f),
+    SkillId.METEOR to (ItemRule.BreakPower(StatusElement.THERMAL, 0.4225f) to 0.55f),
+    SkillId.FROST_LINE to (ItemRule.StatusDuration(StatusElement.CRYO, 1.384f) to 0.5f),
+    SkillId.FROST_SNAP to (ItemRule.CritDamageVersus(EffectCondition.TargetFrozen, 0.219f) to 0.22f),
+    SkillId.ARC_HOOK to (ItemRule.ElementPotency(StatusElement.ION, 0.346f) to 0.45f),
+    SkillId.STORM_COIL to (ItemRule.BreakPower(StatusElement.ION, 0.4225f) to 0.55f),
+    SkillId.GRAVITY_WELL to (ItemRule.BreakPower(StatusElement.GRAVITIC, 0.4225f) to 0.55f),
+    SkillId.MASS_DRIVER to (ItemRule.ElementPotency(StatusElement.GRAVITIC, 0.346f) to 0.45f),
+    SkillId.DECAY_SPORES to (ItemRule.ElementPotency(StatusElement.ENTROPY, 0.346f) to 0.45f),
+    SkillId.ENTROPIC_TIDE to (ItemRule.StatusDuration(StatusElement.ENTROPY, 1.384f) to 0.5f),
+    SkillId.SONIC_BOOM to (ItemRule.BreakPower(StatusElement.SONIC, 0.4225f) to 0.55f),
+    SkillId.RESONATOR to (ItemRule.StatusDuration(StatusElement.SONIC, 1.384f) to 0.5f),
+    SkillId.VOID_STEP to (ItemRule.BreakPower(StatusElement.VOID, 0.4225f) to 0.55f),
+    SkillId.NULL_SHROUD to (ItemRule.ElementPotency(StatusElement.VOID, 0.346f) to 0.45f),
     SkillId.SLINGSHOT to (ItemRule.WhileModifier(EffectCondition.SpeedAtLeast(900f), BuffStat.COOLING, 0.25f) to 0.6f),
     SkillId.FULL_STOP to (ItemRule.WhileModifier(EffectCondition.Braking, BuffStat.DAMAGE_TAKEN, -0.15f) to 0.4f),
-    SkillId.CATALYZE to (ItemRule.ReactionPower(0.15f) to 0.35f),
-    SkillId.DUAL_INFUSION to (ItemRule.DamageVersus(EffectCondition.TargetHas(null), 0.08f) to 0.15f),
+    SkillId.CATALYZE to (ItemRule.ReactionPower(0.2685f) to 0.35f),
+    SkillId.DUAL_INFUSION to (ItemRule.DamageVersus(EffectCondition.TargetHas(null), 0.1152f) to 0.15f),
 )
 
 /**

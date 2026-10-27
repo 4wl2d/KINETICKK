@@ -1033,26 +1033,26 @@ private val DefaultSkills: List<SkillDefinition> = defaultSkillDefinitions()
  */
 private val ActiveDrafts: List<ItemDraft> = SkillId.entries.map { id ->
     when (id) {
-        SkillId.SOLAR_FLARE -> active(id, RARE, ItemRule.ElementPotency(StatusElement.THERMAL, 0.2f))
-        SkillId.METEOR -> active(id, RARE, ItemRule.BreakPower(StatusElement.THERMAL, 0.25f))
-        SkillId.FROST_LINE -> active(id, UNCOMMON, ItemRule.StatusDuration(StatusElement.CRYO, 1.2f))
-        SkillId.FROST_SNAP -> active(id, RARE, ItemRule.CritDamageVersus(EffectCondition.TargetFrozen, 0.15f))
-        SkillId.ARC_HOOK -> active(id, UNCOMMON, ItemRule.ElementPotency(StatusElement.ION, 0.2f))
-        SkillId.STORM_COIL -> active(id, RARE, ItemRule.BreakPower(StatusElement.ION, 0.25f))
-        SkillId.GRAVITY_WELL -> active(id, RARE, ItemRule.BreakPower(StatusElement.GRAVITIC, 0.25f))
-        SkillId.MASS_DRIVER -> active(id, RARE, ItemRule.ElementPotency(StatusElement.GRAVITIC, 0.2f))
-        SkillId.DECAY_SPORES -> active(id, RARE, ItemRule.ElementPotency(StatusElement.ENTROPY, 0.2f))
-        SkillId.ENTROPIC_TIDE -> active(id, EPIC, ItemRule.StatusDuration(StatusElement.ENTROPY, 1.2f))
-        SkillId.SONIC_BOOM -> active(id, UNCOMMON, ItemRule.BreakPower(StatusElement.SONIC, 0.25f))
-        SkillId.RESONATOR -> active(id, EPIC, ItemRule.StatusDuration(StatusElement.SONIC, 1.2f))
-        SkillId.VOID_STEP -> active(id, UNCOMMON, ItemRule.BreakPower(StatusElement.VOID, 0.25f))
-        SkillId.NULL_SHROUD -> active(id, RARE, ItemRule.ElementPotency(StatusElement.VOID, 0.2f))
+        SkillId.SOLAR_FLARE -> active(id, RARE, ItemRule.ElementPotency(StatusElement.THERMAL, 0.346f))
+        SkillId.METEOR -> active(id, RARE, ItemRule.BreakPower(StatusElement.THERMAL, 0.4225f))
+        SkillId.FROST_LINE -> active(id, UNCOMMON, ItemRule.StatusDuration(StatusElement.CRYO, 1.384f))
+        SkillId.FROST_SNAP -> active(id, RARE, ItemRule.CritDamageVersus(EffectCondition.TargetFrozen, 0.219f))
+        SkillId.ARC_HOOK -> active(id, UNCOMMON, ItemRule.ElementPotency(StatusElement.ION, 0.346f))
+        SkillId.STORM_COIL -> active(id, RARE, ItemRule.BreakPower(StatusElement.ION, 0.4225f))
+        SkillId.GRAVITY_WELL -> active(id, RARE, ItemRule.BreakPower(StatusElement.GRAVITIC, 0.4225f))
+        SkillId.MASS_DRIVER -> active(id, RARE, ItemRule.ElementPotency(StatusElement.GRAVITIC, 0.346f))
+        SkillId.DECAY_SPORES -> active(id, RARE, ItemRule.ElementPotency(StatusElement.ENTROPY, 0.346f))
+        SkillId.ENTROPIC_TIDE -> active(id, EPIC, ItemRule.StatusDuration(StatusElement.ENTROPY, 1.384f))
+        SkillId.SONIC_BOOM -> active(id, UNCOMMON, ItemRule.BreakPower(StatusElement.SONIC, 0.4225f))
+        SkillId.RESONATOR -> active(id, EPIC, ItemRule.StatusDuration(StatusElement.SONIC, 1.384f))
+        SkillId.VOID_STEP -> active(id, UNCOMMON, ItemRule.BreakPower(StatusElement.VOID, 0.4225f))
+        SkillId.NULL_SHROUD -> active(id, RARE, ItemRule.ElementPotency(StatusElement.VOID, 0.346f))
         SkillId.SLINGSHOT ->
             active(id, UNCOMMON, ItemRule.WhileModifier(EffectCondition.SpeedAtLeast(900f), BuffStat.COOLING, 0.25f))
         SkillId.FULL_STOP ->
             active(id, UNCOMMON, ItemRule.WhileModifier(EffectCondition.Braking, BuffStat.DAMAGE_TAKEN, -0.15f))
-        SkillId.CATALYZE -> active(id, EPIC, ItemRule.ReactionPower(0.15f))
-        SkillId.DUAL_INFUSION -> active(id, EPIC, ItemRule.DamageVersus(EffectCondition.TargetHas(null), 0.08f))
+        SkillId.CATALYZE -> active(id, EPIC, ItemRule.ReactionPower(0.2685f))
+        SkillId.DUAL_INFUSION -> active(id, EPIC, ItemRule.DamageVersus(EffectCondition.TargetHas(null), 0.1152f))
     }
 }
 
@@ -1075,7 +1075,7 @@ private fun active(id: SkillId, rarity: ItemRarity, passive: ItemRule): ItemDraf
 private fun activeUnlockLevel(rarity: ItemRarity): Int = when (rarity) {
     UNCOMMON -> 5
     RARE -> 7
-    EPIC -> 12
+    EPIC -> 10
     COMMON, LEGENDARY -> error("Active items are Uncommon, Rare or Epic")
 }
 

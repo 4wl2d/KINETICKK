@@ -59,7 +59,7 @@ internal val SkillPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Resonator" to "Резонатор",
     "Plants a resonator that pulses on the beat and replays reactions near it." to
         "Ставит резонатор: он пульсирует в такт и повторяет реакции рядом.",
-    "Replays up to five reactions at 60% strength." to "Повторяет до пяти реакций с силой 60 %.",
+    "Replays up to five reactions at 84% strength." to "Повторяет до пяти реакций с силой 84 %.",
     "Void Step" to "Шаг в пустоту",
     "Step through the void toward the pointer, untouchable for a moment; a rift detonates where you were." to
         "Шаг сквозь пустоту к указателю: на миг вы неуязвимы, а позади взрывается разлом.",
@@ -79,7 +79,7 @@ internal val SkillPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Catalyze" to "Катализ",
     "Every enemy near the pointer carrying two elements reacts at once." to
         "Каждый враг у указателя с двумя стихиями сразу вступает в реакцию.",
-    "Forces up to ten reactions at 130% strength." to "Вызывает до десяти реакций с силой 130 %.",
+    "Forces up to fourteen reactions at 182% strength." to "Вызывает до четырнадцати реакций с силой 182 %.",
     "Dual Infusion" to "Двойная инфузия",
     "Your weapon sets up reactions: hits apply your two elements." to
         "Оружие готовит реакции: попадания накладывают обе ваши стихии.",

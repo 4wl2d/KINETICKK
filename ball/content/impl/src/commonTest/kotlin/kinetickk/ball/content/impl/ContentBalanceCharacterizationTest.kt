@@ -66,7 +66,7 @@ class ContentBalanceCharacterizationTest {
         // character's lane.
         val actives = items.subList(EXPANSION_050_END, ACTIVES_END)
         assertEquals(
-            "aea321347af3e7dc",
+            "a73030c02a213d44",
             goldenFingerprint {
                 add("actives-0.5.0")
                 add(actives.size)
@@ -309,7 +309,7 @@ class ContentBalanceCharacterizationTest {
     fun skillApexAndUpgradeContentIsGolden() {
         assertEquals(18, ui.skills.size)
         assertEquals(
-            "b89dbf6df7b25f22",
+            "c54b260e1e1389a1",
             goldenFingerprint {
                 add("skills")
                 ui.skills.forEach { skill ->

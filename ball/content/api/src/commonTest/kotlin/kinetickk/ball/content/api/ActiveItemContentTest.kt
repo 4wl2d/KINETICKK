@@ -76,8 +76,8 @@ class ActiveItemContentTest {
     fun offerLaneActiveFactorsAcceptZeroAndRejectTheFirstValueBelowIt() {
         val shipped = OfferLanePolicy()
         assertEquals(1f, shipped.activeWeight)
-        assertEquals(2f, shipped.characterActiveWeight)
-        assertEquals(1.5f, shipped.ownedActiveWeight)
+        assertEquals(3f, shipped.characterActiveWeight)
+        assertEquals(8f, shipped.ownedActiveWeight)
 
         OfferLanePolicy(activeWeight = 0f, characterActiveWeight = 0f, ownedActiveWeight = 0f)
         listOf(-0.01f, Float.NaN, Float.POSITIVE_INFINITY).forEach { bad ->

@@ -787,15 +787,16 @@ class SkillSystemTest {
     fun charactersShapeTheirSkillCasts() {
         // Square: every facet up casts at a shorter cooldown.
         val prism = arena(CoreShape.PRISM)
+        val flareCooldown = prism.content.skill(SkillId.SOLAR_FLARE).rank(1).cooldownSeconds
         val prismSlot = prism.learn(SkillId.SOLAR_FLARE)
         prism.castSkill(prismSlot)
-        assertEquals(10f * PRISM_SKILL_COOLDOWN, prism.skillRuntime[prismSlot, SkillCell.LAST_COOLDOWN], 1e-4f)
+        assertEquals(flareCooldown * PRISM_SKILL_COOLDOWN, prism.skillRuntime[prismSlot, SkillCell.LAST_COOLDOWN], 1e-4f)
         // Pentagon: an on-beat cast refunds a fifth of its cooldown and counts as an on-beat action.
         val pentagon = arena(CoreShape.PENTAGON)
         val beatSlot = pentagon.learn(SkillId.SOLAR_FLARE)
         pentagon.elapsed = BEAT_PERIOD * 4f
         pentagon.castSkill(beatSlot)
-        assertEquals(pentagon.elapsed + 10f * (1f - PENTAGON_SKILL_REFUND), pentagon.skillRuntime[beatSlot, SkillCell.READY_AT], 1e-4f)
+        assertEquals(pentagon.elapsed + flareCooldown * (1f - PENTAGON_SKILL_REFUND), pentagon.skillRuntime[beatSlot, SkillCell.READY_AT], 1e-4f)
         assertEquals(1, pentagon.characterRuntime.beatStreak)
         // Crescent: a cast advances the Blink recharge.
         val crescent = arena(CoreShape.CRESCENT)
