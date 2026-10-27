@@ -21,14 +21,18 @@ import kinetickk.ball.content.api.RelicPairingDefinition
 import kinetickk.ball.content.api.RelicPairingKind
 import kinetickk.ball.content.api.RuleLine
 import kinetickk.ball.content.api.RuleTextContext
+import kinetickk.ball.content.api.SkillDefinition
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.ball.content.api.WeaponCadence
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.defaultSkillDefinitions
 import kinetickk.ball.content.api.lifetimeMatterOfferLevel
 import kinetickk.ball.content.api.liabilityText
 import kinetickk.ball.content.api.localizedContent
+import kinetickk.ball.content.api.rankLines
 import kinetickk.ball.content.api.ruleLines
 import kinetickk.ball.content.api.upsideText
 import kinetickk.ball.gameplay.api.GameplayBuildSummaryProjection
@@ -83,12 +87,14 @@ internal enum class CodexPairingSection { CONCORDS, HARMONY, DISSONANCE, INCOMPA
 
 /** Structured detail of an entry beyond its plain paragraphs, drawn by the detail panel. */
 internal sealed interface CodexDetail {
+    /** An item's sheet: its passive [lines] and, for an active item, its [active] part. */
     data class Item(
         val item: ItemDefinition,
         val lines: List<RuleLine>,
         val stack: Int,
         val reborn: Boolean,
         val suppressed: Boolean,
+        val active: CodexActivePart? = null,
     ) : CodexDetail
 
     /** [upsides] holds the upside at every rank (index rank − 1); [rank] is the one shown first. */
@@ -152,6 +158,30 @@ internal sealed interface CodexDetail {
     }
 }
 
+/**
+ * The active part of an active item's sheet, from its effect's content: every rank's numbers ([ranks], rank I first:
+ * its rank label and its cooldown and values as one comma-joined line, as the reward card writes them), what rank III
+ * adds ([rankThree]) and the rank the run holds ([held], 0 when not owned).
+ */
+internal data class CodexActivePart(val effect: SkillId, val ranks: List<CodexActiveRank>, val rankThree: String, val held: Int)
+
+/** One rank of an active effect: its label ("Rank 2") and its numbers ("Cooldown 12 s, Radius 3"). */
+internal data class CodexActiveRank(val label: String, val numbers: String)
+
+/** The active part of [item] (null for a passive item) read from [skills] in [language], with the run's [held] rank. */
+internal fun codexActivePart(item: ItemDefinition, skills: List<SkillDefinition>, held: Int, language: AppLanguage): CodexActivePart? {
+    val effect = item.active ?: return null
+    val skill = skills[effect.ordinal]
+    val ranks = (1..ContentBounds.MAX_SKILL_RANK).map { rank ->
+        val lines = skill.rankLines(rank, language)
+        CodexActiveRank(lines.first(), lines.drop(1).joinToString(", "))
+    }
+    return CodexActivePart(effect, ranks, skill.rankThree.localizedContent(language), held)
+}
+
+/** The shipped effect table, for entries built without a catalog snapshot (the snapshot's own default). */
+private val DefaultSkills: List<SkillDefinition> by lazy { defaultSkillDefinitions() }
+
 /** A reaction a residue can feed next; [name] is null until that reaction is discovered. */
 internal data class CodexFeed(val id: ReactionId, val name: String?)
 
@@ -206,9 +236,12 @@ internal const val CODEX_NONE = "—"
 internal fun codexStatus(language: AppLanguage, value: String, info: String? = null): CodexFact =
     CodexFact(language.text(SessionText.STATUS), value, info, isStatus = true)
 
-/** Run level from which ordinary offers include [item]: 1 once lifetime Matter has unlocked its level. */
+/**
+ * Run level from which ordinary offers include [item]: 1 once lifetime Matter has unlocked its level; an active item
+ * always waits for the run level itself ([lifetimeMatterOfferLevel]).
+ */
 internal fun codexOfferedFromLevel(item: ItemDefinition, lifetimeMatter: Long): Int =
-    if (item.unlockLevel <= lifetimeMatterOfferLevel(lifetimeMatter)) 1 else item.unlockLevel
+    if (!item.isActive && item.unlockLevel <= lifetimeMatterOfferLevel(lifetimeMatter)) 1 else item.unlockLevel
 
 /**
  * The rule-line context of [item] as owned now, as the reward card writes it: the current stacks
@@ -266,17 +299,25 @@ internal fun codexItemEntry(
             build != null -> add(codexStatus(language, language.text(SessionText.OFFER_LIMIT), language.text(SessionText.OFFER_LIMIT_HELP)))
         }
         add(CodexFact(language.text(SessionText.OFFERS_FROM_LEVEL), language.text(SessionText.LEVEL_SHORT, codexOfferedFromLevel(item, lifetimeMatter)),
-            language.text(SessionText.OFFERS_FROM_LEVEL_HELP)))
+            language.text(if (item.isActive) CodexText.ACTIVE_OFFERS_HELP else SessionText.OFFERS_FROM_LEVEL_HELP)))
     }
+    val active = codexActivePart(item, catalog?.skills ?: DefaultSkills, stack, language)
     val description = buildString {
         append(item.description.localizedContent(language))
-        if (lines.isNotEmpty()) append("\n\n").append(lines.joinToString("\n") { it.text })
+        if (active != null) {
+            append("\n\n").append(language.text(CodexText.ACTIVE_PART))
+            active.ranks.forEach { append("\n").append(it.label).append(": ").append(it.numbers) }
+            append("\n").append(active.rankThree)
+            if (lines.isNotEmpty()) append("\n\n").append(language.text(CodexText.PASSIVE_PART))
+        }
+        if (lines.isNotEmpty()) append(if (active != null) "\n" else "\n\n").append(lines.joinToString("\n") { it.text })
     }
     return CodexEntry(
         "item/${item.id}", item.name.localizedContent(language), description,
         item.rarity.displayLabel.localizedContent(language), "$stack/${item.maxStacks}", facts,
         CodexIcon.Item(item, stack, reborn, suppressed), codexItemColor(item), true, item.rarity.rank, item.id in model.newItemIds,
-        detail = CodexDetail.Item(item, lines, stack, reborn, suppressed),
+        detail = CodexDetail.Item(item, lines, stack, reborn, suppressed, active),
+        spoken = if (active != null) language.text(CodexText.ACTIVE_ITEM) else null,
     )
 }
 

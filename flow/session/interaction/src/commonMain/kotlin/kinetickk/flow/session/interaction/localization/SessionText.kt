@@ -66,6 +66,7 @@ internal enum class SessionText : TextResource {
     FILTER_ALL,
     FILTER_DISCOVERED,
     FILTER_BUILD,
+    FILTER_ACTIVE,
     SEARCH_DESCRIPTION,
     ITEMS,
     CHARACTER_SOURCE,

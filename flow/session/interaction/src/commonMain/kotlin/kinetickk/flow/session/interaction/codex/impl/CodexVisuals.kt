@@ -28,7 +28,9 @@ import kinetickk.ball.content.api.RelicPolicy
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.ball.gameplay.interaction.canvas.EnemySilhouette
+import kinetickk.ball.gameplay.interaction.canvas.drawActiveItemMark
 import kinetickk.ball.gameplay.interaction.canvas.enemySilhouette
+import kinetickk.ball.gameplay.interaction.canvas.skillGlyph
 import kinetickk.flow.session.interaction.home.impl.formIndex
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.Kk
@@ -148,7 +150,13 @@ internal fun DrawScope.drawCodexItemTile(icon: CodexIcon.Item, roles: KkRolePale
         val rim = inset + 2.dp.toPx()
         drawRect(Kk.Gold, Offset(rim, rim), Size(size.width - rim * 2f, size.height - rim * 2f), style = kkStroke(1.5.dp.toPx()))
     }
-    drawItemIcon(item, center, radius, if (icon.suppressed) Kk.Mute else tone, stack = icon.stack.takeIf { it > 0 })
+    val effect = item.active
+    if (effect != null) {
+        // An active item: its slot's mark (the effect's glyph and its rank pips), as the pause Build grid shows it.
+        drawActiveItemMark(effect, center, radius * 2.2f, if (icon.suppressed) Kk.Mute else tone, icon.stack, item.maxStacks)
+    } else {
+        drawItemIcon(item, center, radius, if (icon.suppressed) Kk.Mute else tone, stack = icon.stack.takeIf { it > 0 })
+    }
     if (icon.suppressed) {
         drawRect(kkFillBrush(KkFillKind.HATCH, roles.threat.copy(alpha = 0.55f)), Offset.Zero, size)
         drawLine(roles.threat, Offset(size.width * 0.18f, size.height * 0.82f), Offset(size.width * 0.82f, size.height * 0.18f), 2.dp.toPx())
@@ -355,8 +363,10 @@ internal fun codexRarityFill(rank: Int, roles: KkRolePalette): CodexRarityFill {
  * accent (the fill and the band carry the rarity, so the inventory glyph's rank polygon and markers
  * would only crowd the mark), the element strip down the right, a gold rim when Reborn, the threat
  * hatch when suppressed, the stack bar along the bottom while in the build and the NEW notch top-left,
- * outlined in Ink so it stands off every fill. An undiscovered item is an anonymous hatch; a
- * Rebirth-gated one its gold tier numeral. [notch] is a scratch path. Allocation-free.
+ * outlined in Ink so it stands off every fill. An active item shows its effect's glyph instead (the one
+ * mark of an active everywhere) and the ACTIVE notch bottom-left: a Bone corner (the key cap's colour)
+ * edged in Ink like the NEW notch. An undiscovered item is an anonymous hatch; a Rebirth-gated one its
+ * gold tier numeral. [notch] is a scratch path. Allocation-free.
  */
 internal fun DrawScope.drawCodexItemRowCell(
     entry: CodexEntry,
@@ -375,7 +385,13 @@ internal fun DrawScope.drawCodexItemRowCell(
             val gilded = fill?.seam != null
             fill?.seam?.let { drawCodexCellOutline(it, hairline) }
             if (icon.reborn) drawRect(if (gilded) Kk.Ink else Kk.Gold, marks.rim.topLeft, marks.rim.size, style = kkStroke(marks.rimWidth))
-            drawCanvasGlyph(item.primaryGlyphStyle(), marks.glyphCenter, marks.glyphRadius, fill?.accent ?: Kk.Bone)
+            val effect = item.active
+            if (effect != null) {
+                // The icon's box keeps its corners within the glyph's reach.
+                drawKkIcon(skillGlyph(effect), marks.glyphCenter, marks.glyphRadius * CODEX_ACTIVE_GLYPH_BOX, fill?.accent ?: Kk.Bone)
+            } else {
+                drawCanvasGlyph(item.primaryGlyphStyle(), marks.glyphCenter, marks.glyphRadius, fill?.accent ?: Kk.Bone)
+            }
             if (icon.suppressed) {
                 drawRect(kkFillBrush(KkFillKind.HATCH, roles.threat.copy(alpha = 0.55f)), Offset.Zero, size)
                 drawLine(roles.threat, Offset(size.width * 0.18f, size.height * 0.82f), Offset(size.width * 0.82f, size.height * 0.18f), 2.dp.toPx())
@@ -400,6 +416,16 @@ internal fun DrawScope.drawCodexItemRowCell(
                     drawRect(if (index < icon.stack) roles.you else Kk.Ink.copy(alpha = 0.45f), segment.topLeft, segment.size)
                     if (index > 0) drawRect(Kk.Ink, Offset(segment.left - hairline, segment.top), Size(hairline, segment.height))
                 }
+            }
+            if (effect != null) {
+                // ACTIVE: a Bone corner triangle (the bottom-left half of its box) edged in Ink like the NEW notch.
+                val box = marks.activeNotch
+                notch.reset()
+                notch.moveTo(box.left, box.top); notch.lineTo(box.left, box.bottom); notch.lineTo(box.right, box.bottom); notch.close()
+                drawPath(notch, Kk.Bone)
+                drawRect(Kk.Ink, Offset(box.left - hairline, box.top - hairline), Size(hairline, box.height + hairline * 2f))
+                drawRect(Kk.Ink, Offset(box.left, box.bottom), Size(box.width + hairline, hairline))
+                drawLine(Kk.Ink, Offset(box.left, box.top), Offset(box.right, box.bottom), hairline)
             }
             if (entry.isNew) {
                 // NEW: a `you` corner triangle (the top-left half of its box) edged in Ink on all three sides, so it
@@ -435,6 +461,12 @@ internal fun DrawScope.drawCodexItemRowCell(
         }
     }
 }
+
+/**
+ * An active's glyph box over the cell glyph's radius: 1.6 keeps the icon box's corners (√2 × 0.8 = 1.13 radii) inside
+ * the reach every mark keeps clear of ([CODEX_GLYPH_REACH], 1.15).
+ */
+internal const val CODEX_ACTIVE_GLYPH_BOX = 1.6f
 
 /** A [width] px outline just inside the cell's edge. */
 private fun DrawScope.drawCodexCellOutline(color: Color, width: Float) {

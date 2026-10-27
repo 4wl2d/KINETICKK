@@ -18,7 +18,11 @@ import kinetickk.foundation.common.localization.AppLanguage
 /** The Codex never lists more items than the content bound allows. */
 internal const val CODEX_CATALOG_LIMIT = ContentBounds.MAX_ITEMS
 internal const val CODEX_SEARCH_LIMIT = 128
-internal enum class CodexItemFilter { ALL, DISCOVERED, IN_BUILD }
+/**
+ * The Items filters; saved state and test tags (`codex-filter-N`) use the ordinal. [DISCOVERED] is a legacy saved value
+ * read as [ALL]; [ACTIVE] keeps the active items.
+ */
+internal enum class CodexItemFilter { ALL, DISCOVERED, IN_BUILD, ACTIVE }
 
 /**
  * How the Items matrix groups its rows: by first tag (the default board rows), by first element or by
@@ -49,6 +53,7 @@ internal fun codexFilteredItems(model: CodexRenderModel, search: String, filter:
             CodexItemFilter.ALL -> true
             CodexItemFilter.DISCOVERED -> model.isDiscovered(item.id)
             CodexItemFilter.IN_BUILD -> model.runStacks.build != null && model.itemStack(item.id) > 0
+            CodexItemFilter.ACTIVE -> item.isActive
         }
     }
 

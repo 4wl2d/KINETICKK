@@ -204,7 +204,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
     var residueSourceValue by rememberSaveable { mutableStateOf<String?>(null) }
     val build = model.runStacks.build
     // A restored legacy discovery-only filter is equivalent to the collected catalog.
-    val filter = if (filterValue == CodexItemFilter.IN_BUILD.ordinal) CodexItemFilter.IN_BUILD else CodexItemFilter.ALL
+    val filter = CodexItemFilter.entries.getOrNull(filterValue)?.takeIf { it != CodexItemFilter.DISCOVERED } ?: CodexItemFilter.ALL
     val searchFocus = remember { FocusRequester() }
     val listFocus = remember { FocusRequester() }
     val slotFocus = remember { mutableMapOf<String, FocusRequester>() }
@@ -307,7 +307,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
     LaunchedEffect(Unit) { listFocus.requestFocus() }
     val categoryTitles = listOf(SessionText.ITEMS_TITLE, SessionText.WEAPONS_TITLE, SessionText.RELICS_TITLE, SessionText.FORMS_TITLE)
         .map { language.text(it) } + language.text(CodexText.ENEMIES_TITLE)
-    val filterTitles = listOf(0 to SessionText.FILTER_ALL, 2 to SessionText.FILTER_BUILD)
+    val filterTitles = listOf(0 to SessionText.FILTER_ALL, 2 to SessionText.FILTER_BUILD, 3 to SessionText.FILTER_ACTIVE)
     val policy = catalog.build.policy
     val onSelection: ((CodexSelection) -> CodexSelection) -> Unit = { change ->
         val next = change(selectionValue)
@@ -1353,7 +1353,7 @@ internal fun codexNavFocusRing(size: Size, selection: Float, density: Float): Re
     return Rect(shift - out, -out, size.width + shift + out, size.height + out)
 }
 
-/** The game's filters (All / In build) as a segmented control. */
+/** The game's filters (All / In build / Active) as a segmented control; In build waits for a run. */
 @Composable
 private fun CodexFilters(filters: List<Pair<Int, SessionText>>, filter: CodexItemFilter, hasBuild: Boolean, controlScale: Float, onSelect: (Int) -> Unit) {
     val language = LocalAppLanguage.current

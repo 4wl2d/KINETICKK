@@ -380,20 +380,25 @@ internal fun CodexItemRowSlot(
             }
         }) {
             val stacked = (item?.stack ?: 0) > 0
-            if ((item != null && entry.isNew) || stacked) CodexItemCellTags(entry.key, item != null && entry.isNew, stacked)
+            val active = item?.definition?.isActive == true
+            if ((item != null && entry.isNew) || stacked || active) CodexItemCellTags(entry.key, item != null && entry.isNew, stacked, active)
         }
     }
 }
 
-/** Tagged boxes over a cell's NEW notch (`codex-new-<key>`) and stack bar (`codex-badge-<key>`), placed by [codexItemCellMarks]. */
+/**
+ * Tagged boxes over a cell's NEW notch (`codex-new-<key>`), stack bar (`codex-badge-<key>`) and ACTIVE notch
+ * (`codex-active-<key>`), placed by [codexItemCellMarks].
+ */
 @Composable
-private fun CodexItemCellTags(key: String, isNew: Boolean, stacked: Boolean) {
+private fun CodexItemCellTags(key: String, isNew: Boolean, stacked: Boolean, active: Boolean) {
     Layout(content = {
         if (isNew) Box(Modifier.testTag("codex-new-$key"))
         if (stacked) Box(Modifier.testTag("codex-badge-$key"))
+        if (active) Box(Modifier.testTag("codex-active-$key"))
     }, modifier = Modifier.fillMaxSize()) { measurables, constraints ->
         val marks = codexItemCellMarks(constraints.maxWidth.toFloat(), density)
-        val rects = listOfNotNull(marks.notch.takeIf { isNew }, marks.bar.takeIf { stacked })
+        val rects = listOfNotNull(marks.notch.takeIf { isNew }, marks.bar.takeIf { stacked }, marks.activeNotch.takeIf { active })
         val placeables = measurables.mapIndexed { index, measurable ->
             val rect = rects[index]
             measurable.measure(Constraints.fixed(rect.width.roundToInt().coerceAtLeast(0), rect.height.roundToInt().coerceAtLeast(0))) to rect

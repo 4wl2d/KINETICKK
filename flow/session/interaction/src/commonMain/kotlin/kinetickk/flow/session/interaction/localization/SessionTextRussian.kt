@@ -64,6 +64,7 @@ internal fun russianSessionText(text: SessionText): String = when (text) {
     SessionText.FILTER_ALL -> "Все"
     SessionText.FILTER_DISCOVERED -> "Открытые"
     SessionText.FILTER_BUILD -> "В сборке"
+    SessionText.FILTER_ACTIVE -> "Активные"
     SessionText.SEARCH_DESCRIPTION -> "Поиск в справочнике по названию"
     SessionText.ITEMS -> "Предметы"
     SessionText.CHARACTER_SOURCE -> "Персонаж"
