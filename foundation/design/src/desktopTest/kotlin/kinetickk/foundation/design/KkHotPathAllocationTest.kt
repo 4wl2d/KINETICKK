@@ -124,7 +124,8 @@ class KkHotPathAllocationTest {
     fun skillSlotsInEveryStateDoNotAllocatePerFrame() {
         val measurer = kkTestMeasurer()
         val key = measureKkKeyCap(measurer, "Space", 10f)
-        val slots = listOf(Rect(10f, 10f, 62f, 62f), Rect(80f, 10f, 132f, 62f), Rect(150f, 10f, 202f, 62f), Rect(220f, 10f, 272f, 62f))
+        val slots = listOf(Rect(10f, 10f, 62f, 62f), Rect(80f, 10f, 132f, 62f), Rect(150f, 10f, 202f, 62f), Rect(220f, 10f, 272f, 62f),
+            Rect(290f, 10f, 342f, 62f))
         val bitmap = ImageBitmap(400, 120)
         val scope = CanvasDrawScope()
         val canvas = Canvas(bitmap)
@@ -141,6 +142,8 @@ class KkHotPathAllocationTest {
             drawKkSkillSlot(measurer, slots[2], KkIcon.WEAPONS_GYRE_DISC, Kk.Bone, cooldown = 0.4f, ready = false, rank = 1,
                 shakeX = 3f * (t - 0.5f), keyLayout = key)
             drawKkSkillSlot(measurer, slots[3], null, Kk.Mute2, cooldown = 0f, ready = false, rank = 0, locked = true)
+            drawKkSkillSlot(measurer, slots[4], null, Kk.Mute2, cooldown = 0f, ready = false, rank = 0, pressed = if (t < 0.5f) 1f else 0f,
+                empty = true)
         }
         repeat(300) { frame(true) } // warm caches and JIT
         val before = threads.getThreadAllocatedBytes(thread)

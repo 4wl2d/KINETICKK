@@ -473,11 +473,11 @@ class SettingsReducerTest {
             swap.effects.last(),
         )
         assertEquals(
-            "Dash set to Z. Skill 1 moved to Space",
+            "Dash set to Z. Active 1 moved to Space",
             settingsAnnouncementText(SettingsAnnouncement.KeyBound(GameAction.DASH, BindableKey.Z, GameAction.SKILL_1, BindableKey.SPACE), AppLanguage.English),
         )
         assertEquals(
-            "Рывок: Z. Навык 1: перенесено на Пробел",
+            "Рывок: Z. Активный эффект 1: перенесено на Пробел",
             settingsAnnouncementText(SettingsAnnouncement.KeyBound(GameAction.DASH, BindableKey.Z, GameAction.SKILL_1, BindableKey.SPACE), AppLanguage.Russian),
         )
         // The action's own key ends the capture with nothing to change.
@@ -575,10 +575,28 @@ class SettingsReducerTest {
         GameAction.entries.forEach { assertEquals(it, it.bindRow.boundAction) }
         assertEquals("Space", settingValue(PlayerPreferences(language = AppLanguage.English), SettingsRow.BIND_DASH))
         assertEquals("Пробел", settingValue(PlayerPreferences(), SettingsRow.BIND_DASH))
-        assertEquals("Навык 2", SettingsRow.BIND_SKILL_2.label(AppLanguage.Russian))
+        assertEquals("Активный эффект 2", SettingsRow.BIND_SKILL_2.label(AppLanguage.Russian))
         assertEquals("Choice 4", SettingsRow.BIND_CHOICE_4.label(AppLanguage.English))
         assertEquals("Takes card 4 of the offer.", SettingsRow.BIND_CHOICE_4.about(AppLanguage.English))
         assertEquals(listOf("full", "reduced", "minimal"), (0 until 3).map { SettingsRow.REACTION_EFFECTS.optionId(it) })
         assertEquals(listOf("windowed", "borderless", "fullscreen"), (0 until 3).map { SettingsRow.WINDOW_MODE.optionId(it) })
+    }
+
+    @Test
+    fun theActiveBindingsNameTheActiveEffectSlotsAndNoRowCallsThemSkills() {
+        val rows = listOf(SettingsRow.BIND_SKILL_1, SettingsRow.BIND_SKILL_2, SettingsRow.BIND_SKILL_3)
+        assertEquals(listOf("Active 1", "Active 2", "Active 3"), rows.map { it.label(AppLanguage.English) })
+        assertEquals(listOf("Активный эффект 1", "Активный эффект 2", "Активный эффект 3"), rows.map { it.label(AppLanguage.Russian) })
+        rows.forEachIndexed { index, row ->
+            assertEquals("Casts the active effect in slot ${index + 1}.", row.about(AppLanguage.English))
+            assertEquals("Применяет активный эффект из ячейки ${index + 1}.", row.about(AppLanguage.Russian))
+        }
+        // The glossary: every row's name and its (!) text say "active", never "skill" / "навык".
+        val skill = Regex("skill|навык", RegexOption.IGNORE_CASE)
+        for (language in AppLanguage.entries) for (row in SettingsRow.entries) {
+            listOf(row.label(language), row.about(language)).forEach { text ->
+                assertFalse(skill.containsMatchIn(text), "$row in $language says \"$text\"")
+            }
+        }
     }
 }

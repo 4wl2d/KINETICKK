@@ -25,22 +25,25 @@ the minimap (Settings can hide it) shows what lies ahead. Data pickups latch on
 once you pass near them and every level-up pulls in the Data on screen.
 
 Data levels the run up to level 42, and only a build that invests in Data gets
-there. Skill drafts at levels 2, 8 and 16 fill three skill slots from a pool of
-18 active skills, and rank-up cards raise them to rank III. At level 42 your
-character's Apex ability comes online; after that every Data pickup shortens
-its cooldown. The level badge changes look at levels 10, 20, 30 and 40 and
-takes the Apex look at 42.
+there. Eighteen items are active: on top of a small passive bonus, each puts an
+effect in slot Z, X or C that you cast yourself. Item offers show them rarely,
+at most one per offer and none in the first levels, and favour your character's
+own three; taking one again raises it to rank II, then III. With all three
+slots full, a new active replaces the one you pick, or you keep your loadout
+and salvage the new one for Matter. At level 42 your character's Apex ability
+comes online; after that every Data pickup shortens its cooldown. The level
+badge changes look at levels 10, 20, 30 and 40 and takes the Apex look at 42.
 
 | Input | Action |
 |---|---|
 | Mouse / touch drag | Move the singularity and attract the Core |
 | `Space` / **Dash** | Kinetic Dash and phase through bullets |
 | `Shift` / right mouse / **Brake** | Gravity Brake |
-| `Z` / `X` / `C`, skill buttons | Cast the skill in slot 1, 2 or 3 |
+| `Z` / `X` / `C`, active buttons | Cast the active effect in slot 1, 2 or 3 |
 | `V`, level badge | Cast the Apex ability (from level 42) |
 | `P` / `Esc` | Pause or return |
 | `1`–`4` | Select a reward |
-| `Q` | Reroll an item, weapon or skill choice |
+| `Q` | Reroll an item, weapon or Relic choice |
 | `W` | Workshop: characters, weapons and the Core Matrix |
 | `L` / `A` / `H` | Workshop on the Core Matrix, Weapons or Characters tab (`H` from Home) |
 | `B` / `C` or `I` / `S` | Rebirth, Codex, Settings |
@@ -48,14 +51,14 @@ takes the Apex look at 42.
 | `F3` | Toggle and reset the performance HUD |
 | `R` | Restart after a completed run |
 
-With a keyboard, Settings → Controls rebinds every gameplay action (Dash, Brake,
-the three skills, the Apex, pause, reroll, restart, the four reward choices and
-the performance HUD); binding a key another action holds swaps the two, and
-Reset restores the defaults above. While a run is running, keys bound to
-gameplay actions go to the run first, so `C` casts the third skill there and
-opens the Codex from Home or the pause menu. On touch screens the skill buttons
-sit next to Dash and Brake in every layout, and steering keeps working while you
-tap them.
+With a keyboard, Settings → Controls rebinds every gameplay action (Dash,
+Brake, the three actives, the Apex, pause, reroll, restart, the four reward
+choices and the performance HUD); binding a key another action holds swaps the
+two, and Reset restores the defaults above. While a run is running, keys bound
+to gameplay actions go to the run first, so `C` casts the third active there
+and opens the Codex from Home or the pause menu. On touch screens the active
+buttons sit next to Dash and Brake in every layout, and steering keeps working
+while you tap them.
 
 Twelve characters, chosen in the Workshop, each play a mechanic of their own
 (facets, an echo ghost, polarity, a beat, Blink and more), each have their own
@@ -67,33 +70,34 @@ character (every character is the signature of two weapons) adds 20 %, starts
 the run a weapon level up and brings a twist; a bound Relic carrying the
 weapon's key (the heirloom included) adds 20 % once and grows 10 % stronger
 itself; one stat scales it, and three mastery forms open at weapon levels 3, 6
-and 10. Builds combine 269 items, eighteen skills, twenty-two Relics and
+and 10. Builds combine 287 items (eighteen active), twenty-two Relics and
 optional anomaly trials. Items are rules, not stat sticks: triggers, conditions
 and effects over nine archetype tags and seven elements (Thermal, Cryo, Ion,
 Gravitic, Entropy, Sonic, Void) whose statuses Break at a threshold and react
 with each other: every pair of elements has its own reaction, 21 in all, and
-each reaction changes how you play (it leaves a field, a mark, a Core state or a
-skill refund) with a keystone item that rewrites it. Every run deals its own
-draft deck, and items you took in recent runs come up less often, so runs of one
-character build differently. Every Relic rewrites a rule and carries a cost;
-Relic keys predict harmony and dissonance, and the Codex records discovered
-reactions, pairings and known incompatibilities and tells you which items wait
-for a skill or were left out of this run's deck. Nineteen enemy kinds, from
-Swarmling packs and Bombers to the Herald mini-boss, arrive through a spawn
-director that shapes every run's waves differently; later Rebirth tiers bring
-the toughest ones. Between runs, spend Kinetic Matter in the Workshop: on the 32
-nodes of the Core Matrix, on weapons, and on Refit (per character) and Honing
-(per weapon) levels up to 10, each level twice the price of the last. You can
-open the Workshop during a run too; purchases apply from the next run. Defeat
-The Architect to earn the next Rebirth tier and a Reborn rank while keeping
-permanent progression. The Rebirth ladder shows tiers 0 to 10 and what each rank
-opens: at least four more items every rank, a weapon at ranks 1 to 7 and 9
-(Glacier Bell first, Resonance Drum last), the Spiral, Pentagon, Crescent and
-Hexagon at ranks 1, 3, 5 and 7, Matrix nodes and the enemy kinds that join at
-that tier. Each tier is much harder and adds a mutator (packs, hardened Elites,
-volatile remains, armored vanguards, a blackout and an enraged Architect among
-them), and you can pick any earned tier for the next run, so a hard tier never
-locks you out. Clearing tier 10 makes you Ascendant.
+each reaction changes how you play (it leaves a field, a mark, a Core state or
+a cooldown refund for your actives) with a keystone item that rewrites it.
+Every run deals its own draft deck, and items you took in recent runs come up
+less often, so runs of one character build differently. Every Relic rewrites a
+rule and carries a cost; Relic keys predict harmony and dissonance, and the
+Codex records discovered reactions, pairings and known incompatibilities and
+tells you which items wait for an active item or were left out of this run's
+deck. Nineteen enemy kinds, from Swarmling packs and Bombers to the Herald
+mini-boss, arrive through a spawn director that shapes every run's waves
+differently; later Rebirth tiers bring the toughest ones. Between runs, spend
+Kinetic Matter in the Workshop: on the 32 nodes of the Core Matrix, on weapons,
+and on Refit (per character) and Honing (per weapon) levels up to 10, each
+level twice the price of the last. You can open the Workshop during a run too;
+purchases apply from the next run. Defeat The Architect to earn the next
+Rebirth tier and a Reborn rank while keeping permanent progression. The Rebirth
+ladder shows tiers 0 to 10 and what each rank opens: at least four more items
+every rank, a weapon at ranks 1 to 7 and 9 (Glacier Bell first, Resonance Drum
+last), the Spiral, Pentagon, Crescent and Hexagon at ranks 1, 3, 5 and 7,
+Matrix nodes and the enemy kinds that join at that tier. Each tier is much
+harder and adds a mutator (packs, hardened Elites, volatile remains, armored
+vanguards, a blackout and an enraged Architect among them), and you can pick
+any earned tier for the next run, so a hard tier never locks you out. Clearing
+tier 10 makes you Ascendant.
 
 The game has six screens: Home, the run, Settings, the Workshop, Rebirth and the
 Codex. Settings groups its options into Game, Sound, Display, Graphics,

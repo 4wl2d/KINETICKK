@@ -35,6 +35,8 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.PointOfInterestKind
 import kinetickk.ball.content.api.SkillId
+import kinetickk.ball.gameplay.nucleus.render.SkillSlotProjection
+import kinetickk.ball.gameplay.nucleus.render.SkillBarProjection
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.foundation.common.localization.text
@@ -266,8 +268,8 @@ class GameplayHudSemanticsTest {
     fun skillSlotsAndTheApexAreButtonsWithNamesAndStatesInRussian() = skillAndApexSemantics(AppLanguage.Russian)
 
     /**
-     * Z (ready), X (cooling) and C (not drafted) and the cooling Apex are focusable buttons over their
-     * canvas targets, described by slot and name with their state; activating a drafted slot casts it,
+     * Z (ready), X (cooling) and C (empty) and the cooling Apex are focusable buttons over their
+     * canvas targets, described by slot and name with their state; activating a filled slot casts it,
      * the empty slot does nothing and the Apex node requests the Apex.
      */
     private fun skillAndApexSemantics(language: AppLanguage) {
@@ -276,7 +278,9 @@ class GameplayHudSemanticsTest {
             *levelOverrides(HUD_TEST_LEVEL_CAP, kinetickk.ball.gameplay.nucleus.render.ApexProjection(unlocked = true, cooldown01 = 0.5f)),
             "skillBar" to MIXED_SKILL_BAR,
         )
-        val running = snapshot.withModel(model)
+        var running = snapshot.withModel(model)
+        // Rejects every pulse (the run never moves) until the loadout changes below; then a frame commits it.
+        var committing = false
         val pulses = mutableListOf<GameplayInteractionPulse>()
         val port = object : GameplayInteractionPort {
             override val instanceId get() = running.instanceId
@@ -284,7 +288,8 @@ class GameplayHudSemanticsTest {
             override fun visualFxSnapshot() = VisualFxProjection.EMPTY
             override fun accept(pulse: GameplayInteractionPulse): GameplayAcceptance {
                 pulses += pulse
-                return GameplayAcceptance.Rejected(running.instanceId, running.revision, GameplayRejection.RunExited)
+                return if (committing) GameplayAcceptance.Accepted(running.instanceId, running.revision)
+                else GameplayAcceptance.Rejected(running.instanceId, running.revision, GameplayRejection.RunExited)
             }
         }
         compose.mainClock.autoAdvance = false
@@ -307,11 +312,11 @@ class GameplayHudSemanticsTest {
             language.text(GameplayText.ReadyState))
         expect("kinetickk.gameplay.skill.1", language.text(GameplayText.SkillSlotDescription, 2, name(SkillId.METEOR)),
             language.text(GameplayText.RechargingState))
-        expect("kinetickk.gameplay.skill.2", language.text(GameplayText.SkillSlotLocked, 3), null)
+        expect("kinetickk.gameplay.skill.2", language.text(GameplayText.SkillSlotEmpty, 3), null)
         val apexName = content.coreShape(model.coreShape).apex.name.localizedContent(language)
         expect("kinetickk.gameplay.apex", language.text(GameplayText.ApexDescription, apexName), language.text(GameplayText.RechargingState))
         if (language == AppLanguage.Russian) {
-            assertTrue(language.text(GameplayText.SkillSlotLocked, 3).startsWith("Навык 3"))
+            assertEquals("Активный эффект 3: пусто", language.text(GameplayText.SkillSlotEmpty, 3))
             assertEquals("перезаряжается", language.text(GameplayText.RechargingState))
         }
         // Over their canvas targets.
@@ -332,6 +337,17 @@ class GameplayHudSemanticsTest {
         assertEquals(listOf(GameplayInteractionPulse.SkillRequested.fromValidated(0)), activate("kinetickk.gameplay.skill.0"))
         assertEquals(emptyList(), activate("kinetickk.gameplay.skill.2"))
         assertEquals(listOf(GameplayInteractionPulse.ApexRequested), activate("kinetickk.gameplay.apex"))
+        // A replaced active renames its slot at once; a newly bound slot is no longer read as empty.
+        val replaced = SkillBarProjection(immutableListOf(SkillSlotProjection(SkillId.FROST_SNAP.ordinal, 1, ready = true),
+            MIXED_SKILL_BAR.slot(1), SkillSlotProjection(SkillId.SLINGSHOT.ordinal, 1, ready = true)))
+        running = snapshot.withModel(model.with("skillBar" to replaced))
+        committing = true
+        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeByFrame()
+        expect("kinetickk.gameplay.skill.0", language.text(GameplayText.SkillSlotDescription, 1, name(SkillId.FROST_SNAP)),
+            language.text(GameplayText.ReadyState))
+        expect("kinetickk.gameplay.skill.2", language.text(GameplayText.SkillSlotDescription, 3, name(SkillId.SLINGSHOT)),
+            language.text(GameplayText.ReadyState))
     }
 
     @Test

@@ -1126,7 +1126,10 @@ internal fun MutableGameState.rebaseCoreReactionStates(shiftX: Float, shiftY: Fl
     aftershockY1 -= shiftY
 }
 
-/** A new run starts with no lingering Core state, anchor, latch, prime, aftershock or buffered skill input. */
+/**
+ * A new run starts with no lingering Core state, anchor, latch, prime, aftershock, buffered skill input or active item
+ * waiting for a slot.
+ */
 internal fun MutableGameState.resetCoreReactionState() {
     aftershockAt0 = -1f
     aftershockX0 = 0f
@@ -1157,8 +1160,8 @@ internal fun MutableGameState.resetCoreReactionState() {
     shotErasedDispatches = 0
     markDispatches = 0
     shotsErased = 0L
-    pendingSkillDrafts = 0
-    pendingRankUpOffers = 0
+    pendingActiveItemId = null
+    pendingActiveReborn = false
     skillBufferMask = 0
     skillBufferTime = 0f
     apexBufferTime = 0f

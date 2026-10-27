@@ -180,7 +180,7 @@ class HudPresentationMemoryTest {
             memory.observe(model, at, boss.select(model))
         }
         observe(empty, empty, 0f)
-        // A draft slams the slot and slides the row in; its rank, ready and refund flashes stay quiet.
+        // A first active binding slams the slot and slides the row in; its rank, ready and refund flashes stay quiet.
         val drafted = SkillSlotProjection(skill = 3, rank = 1, ready = true)
         observe(drafted, empty, 1f)
         assertEquals(0f, memory.skillAcquired(0, 1f))
@@ -197,11 +197,33 @@ class HudPresentationMemoryTest {
         assertEquals(0f, memory.skillReady(0, 4f))
         observe(drafted.copy(rank = 2, refunded = 1.5f), empty, 5f)
         assertEquals(0f, memory.skillRefund(0, 5f))
-        // A second draft slams its own slot; the row is already in.
+        // A second active binding slams its own slot; the row is already in.
         observe(drafted.copy(rank = 2, refunded = 1.5f), SkillSlotProjection(skill = 9, rank = 1), 6f)
         assertEquals(0f, memory.skillAcquired(1, 6f))
         assertEquals(1f, memory.skillAcquired(0, 6f))
         assertEquals(1f, memory.skillRow(6f))
+    }
+
+    @Test
+    fun aReplacedActiveSlamsItsSlotOnTheNewEffectAndNeverRanksOrSlidesTheRow() {
+        val memory = HudPresentationMemory()
+        val boss = BossTarget()
+        val empty = SkillSlotProjection.EMPTY
+        fun observe(first: SkillSlotProjection, at: Float) {
+            val model = base.with("skillBar" to SkillBarProjection(immutableListOf(first, empty, empty)))
+            memory.observe(model, at, boss.select(model))
+        }
+        observe(empty, 0f)
+        observe(SkillSlotProjection(skill = 3, rank = 3, ready = true), 1f)
+        // The slot's active item is replaced: another effect at rank I, ready at once.
+        observe(SkillSlotProjection(skill = 7, rank = 1, ready = true), 5f)
+        assertEquals(0f, memory.skillAcquired(0, 5f), "the slam keys on the slot's effect")
+        assertEquals(1f, memory.skillRanked(0, 5f))
+        assertEquals(1f, memory.skillReady(0, 5f))
+        assertEquals(1f, memory.skillRow(5f))
+        // Ranking the new effect up rings as usual.
+        observe(SkillSlotProjection(skill = 7, rank = 2, ready = true), 6f)
+        assertEquals(0f, memory.skillRanked(0, 6f))
     }
 
     @Test
@@ -386,14 +408,14 @@ internal fun levelOverrides(
     apex: ApexProjection = if (level >= HUD_TEST_LEVEL_CAP) ApexProjection(unlocked = true, ready = true) else ApexProjection.LOCKED,
 ): Array<Pair<String, Any?>> = arrayOf("level" to level, "maxLevel" to HUD_TEST_LEVEL_CAP, "apex" to apex)
 
-/** A drafted skill row for HUD tests: Z ready at rank III, X cooling at rank II, C not drafted yet (locked). */
+/** A skill row for HUD tests: Z ready at rank III, X cooling at rank II, C empty. */
 internal val MIXED_SKILL_BAR = SkillBarProjection(immutableListOf(
     SkillSlotProjection(skill = SkillId.STORM_COIL.ordinal, rank = 3, ready = true, charges = 1),
     SkillSlotProjection(skill = SkillId.METEOR.ordinal, rank = 2, cooldown01 = 0.6f),
     SkillSlotProjection.EMPTY,
 ))
 
-/** Every slot drafted: two charges ready, one skill running, one in flight. */
+/** Every slot filled: two charges ready, one skill running, one in flight. */
 internal val FULL_SKILL_BAR = SkillBarProjection(immutableListOf(
     SkillSlotProjection(skill = SkillId.FROST_SNAP.ordinal, rank = 1, ready = true, charges = 2, maxCharges = 2),
     SkillSlotProjection(skill = SkillId.SOLAR_FLARE.ordinal, rank = 2, cooldown01 = 0.8f, active01 = 0.5f),

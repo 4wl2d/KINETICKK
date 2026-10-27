@@ -53,7 +53,10 @@ internal object SkillCell {
     /** Damage and radius the Spiral's ghost repeats. */
     const val GHOST_DAMAGE = 20
     const val GHOST_RADIUS = 21
-    /** Skill damage the slot dealt this run (each instance up to the integrity it removed). */
+    /**
+     * Skill damage the slot dealt since it was last filled (each instance up to the integrity it removed); a replaced
+     * active item's damage stays in [SkillRuntime.effectDamage].
+     */
     const val DAMAGE = 22
     /** With Skill Charges, when the second spent charge finishes recharging (each charge has its own clock); -1 = none. */
     const val CHARGE_READY_AT = 23
@@ -78,10 +81,10 @@ internal object ApexCell {
 }
 
 /**
- * Timing and per-cast state of the three skill slots and the Apex: one fixed copy-on-write float block
- * ([ContentBounds.SKILL_SLOTS] × [SkillCell.STRIDE] + [ApexCell.STRIDE]). A full reduction forks it (the block
- * is shared until the candidate first writes it), a scalar-input reduction shares it, a new run replaces it.
- * A step allocates nothing.
+ * Timing and per-cast state of the three skill slots and the Apex, then the run's skill damage per active effect: one
+ * fixed copy-on-write float block ([ContentBounds.SKILL_SLOTS] × [SkillCell.STRIDE] + [ApexCell.STRIDE] +
+ * [ContentBounds.MAX_SKILLS]). A full reduction forks it (the block is shared until the candidate first writes it), a
+ * scalar-input reduction shares it, a new run replaces it. A step allocates nothing.
  */
 internal class SkillRuntime private constructor(
     private val cells: CopyOnWriteFloatArray,
@@ -93,7 +96,7 @@ internal class SkillRuntime private constructor(
     /** Damage the Apex dealt to boss-class enemies this run. */
     var apexBossDamage: Double = 0.0
     /**
-     * Damage the drafted skills caused this run (each instance up to the integrity it removed): their own hits,
+     * Damage the active effects caused this run (each instance up to the integrity it removed): their own hits,
      * whatever a cast resolves (forced reactions, a cast's shockwave) and the Core's impacts while a skill moves it
      * (Slingshot's swing, Mass Driver's charge, Arc Hook's flight and Dash window). It contains [skillDamage].
      */
@@ -109,6 +112,17 @@ internal class SkillRuntime private constructor(
 
     fun setApex(cell: Int, value: Float) {
         cells[APEX_OFFSET + cell] = value
+    }
+
+    /**
+     * Skill damage [id] dealt this run from whichever slot held it (each instance up to the integrity it removed). Unlike
+     * a slot's [SkillCell.DAMAGE] it outlives a replacement, so a replaced active item keeps the damage it caused.
+     */
+    fun effectDamage(id: SkillId): Float = cells[EFFECT_DAMAGE_OFFSET + id.ordinal]
+
+    fun addEffectDamage(id: SkillId, dealt: Float) {
+        val index = EFFECT_DAMAGE_OFFSET + id.ordinal
+        cells[index] = cells[index] + dealt
     }
 
     /** Shifts every stored slot position after a world rebase. */
@@ -135,8 +149,9 @@ internal class SkillRuntime private constructor(
 
     companion object {
         const val SLOTS: Int = ContentBounds.SKILL_SLOTS
-        const val CELL_COUNT: Int = SLOTS * SkillCell.STRIDE + ApexCell.STRIDE
+        const val CELL_COUNT: Int = SLOTS * SkillCell.STRIDE + ApexCell.STRIDE + ContentBounds.MAX_SKILLS
         private const val APEX_OFFSET: Int = SLOTS * SkillCell.STRIDE
+        private const val EFFECT_DAMAGE_OFFSET: Int = APEX_OFFSET + ApexCell.STRIDE
 
         private fun initialCells(): FloatArray = FloatArray(CELL_COUNT).also { values ->
             for (slot in 0 until SLOTS) {
@@ -151,9 +166,9 @@ internal class SkillRuntime private constructor(
 }
 
 /**
- * What the three slots hold: a [SkillId] and its rank (1..[ContentBounds.MAX_SKILL_RANK]) per slot, or an empty
- * slot. Immutable: a draft or rank-up replaces it, and [kinetickk.ball.gameplay.nucleus.simulation.CompiledBuild]
- * compiles from it.
+ * What the three slots hold: the active effect ([SkillId]) of an owned active item and its rank
+ * (1..[ContentBounds.MAX_SKILL_RANK], the item's stacks) per slot, or an empty slot. Immutable: acquiring, stacking or
+ * replacing an active item replaces it, and nothing else writes it.
  */
 internal class SkillLoadout private constructor(
     private val skills: IntArray,
@@ -193,6 +208,12 @@ internal class SkillLoadout private constructor(
             skills.copyOf().also { it[slot] = id.ordinal },
             ranks.copyOf().also { it[slot] = rank },
         )
+    }
+
+    /** The loadout with [slot] empty. */
+    fun without(slot: Int): SkillLoadout {
+        require(slot in skills.indices) { "skill slot $slot is outside 0..${skills.lastIndex}" }
+        return SkillLoadout(skills.copyOf().also { it[slot] = -1 }, ranks.copyOf().also { it[slot] = 0 })
     }
 
     override fun equals(other: Any?): Boolean =

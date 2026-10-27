@@ -7,7 +7,10 @@ import kinetickk.ball.content.api.*
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 
-/** Matches the shipped catalog size; the item bound is [ContentBounds.MAX_ITEMS]. */
+/**
+ * The shipped passive catalog's size (the eighteen active items, ids 269..286, are not synthesized: these items carry
+ * no active effect); the item bound is [ContentBounds.MAX_ITEMS].
+ */
 private const val SYNTHETIC_ITEM_COUNT = 269
 
 internal val SyntheticGameplayContent: GameplayContentSnapshot by lazy(::syntheticGameplayContent)

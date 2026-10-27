@@ -31,6 +31,7 @@ import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPolicy
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
@@ -51,6 +52,8 @@ import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SkillBarProjection
+import kinetickk.ball.gameplay.nucleus.render.SkillSlotProjection
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
@@ -145,15 +148,18 @@ class RedesignShotsHudTest {
         // The level badge's upper tiers and the APEX at the cap in each Apex state; a tier change 300 ms and the
         // Apex unlock 400 ms into their one-shots.
         LEVEL_T4, LEVEL_T5, APEX_COOLING, APEX_READY, APEX_ACTIVE, TIER_UP, APEX_UNLOCK,
-        // The skill row with key caps (keyboard in use) at the cap: Z ready at rank III, X cooling 60 % at rank II
-        // with a refund flash, C locked; then every slot drafted with two charges, a running and an in-flight skill.
-        SKILLS_MIXED, SKILLS_FULL,
+        // The active row with key caps (keyboard in use) at the cap: Z ready at rank III, X cooling 60 % at rank II
+        // with a refund flash, C empty; then every slot bound with two charges, a running and an in-flight active; then
+        // the element-less Catalyze ready at rank II in Z and Dual Infusion cooling at rank I in X (the kinetic role)
+        // beside an empty C.
+        SKILLS_MIXED, SKILLS_FULL, SKILLS_KINETIC,
     }
 
     private fun level(shot: Shot, values: Values): Int = when (shot) {
         Shot.LEVEL_T4 -> 34
         Shot.LEVEL_T5 -> 41
-        Shot.APEX_COOLING, Shot.APEX_READY, Shot.APEX_ACTIVE, Shot.APEX_UNLOCK, Shot.SKILLS_MIXED, Shot.SKILLS_FULL -> LEVEL_CAP
+        Shot.APEX_COOLING, Shot.APEX_READY, Shot.APEX_ACTIVE, Shot.APEX_UNLOCK, Shot.SKILLS_MIXED, Shot.SKILLS_FULL,
+        Shot.SKILLS_KINETIC -> LEVEL_CAP
         Shot.TIER_UP -> 20
         else -> values.level
     }
@@ -162,7 +168,7 @@ class RedesignShotsHudTest {
         // Charged 40 %.
         Shot.APEX_COOLING -> ApexProjection(unlocked = true, cooldown01 = 0.6f)
         Shot.APEX_READY, Shot.APEX_UNLOCK, Shot.SKILLS_FULL -> ApexProjection(unlocked = true, ready = true)
-        Shot.SKILLS_MIXED -> ApexProjection(unlocked = true, cooldown01 = 0.3f)
+        Shot.SKILLS_MIXED, Shot.SKILLS_KINETIC -> ApexProjection(unlocked = true, cooldown01 = 0.3f)
         Shot.APEX_ACTIVE -> ApexProjection(unlocked = true, active01 = 0.6f)
         else -> ApexProjection.LOCKED
     }
@@ -251,10 +257,11 @@ class RedesignShotsHudTest {
             "screenShake" to 0f,
             "skillBar" to when (shot) {
                 Shot.SKILLS_MIXED -> MIXED_SKILL_BAR.let { bar ->
-                    kinetickk.ball.gameplay.nucleus.render.SkillBarProjection(immutableListOf(bar.slot(0), bar.slot(1).copy(refunded = 1f), bar.slot(2)))
+                    SkillBarProjection(immutableListOf(bar.slot(0), bar.slot(1).copy(refunded = 1f), bar.slot(2)))
                 }
                 Shot.SKILLS_FULL -> FULL_SKILL_BAR
-                else -> kinetickk.ball.gameplay.nucleus.render.SkillBarProjection.EMPTY
+                Shot.SKILLS_KINETIC -> KINETIC_SKILL_BAR
+                else -> SkillBarProjection.EMPTY
             },
             "rebirthLevel" to when (shot) {
                 Shot.REBIRTH_5 -> 5
@@ -290,13 +297,20 @@ class RedesignShotsHudTest {
             BuildNotificationProjection("Neon Ram", immutableListOf("Impact damage +0.05", "Weapon power +0.04", "+ Vector maneuver"), 5f),
             BuildNotificationProjection("Ghost Vector", immutableListOf("Dash power +12"), 3.2f),
         )) else VisualFxProjection.EMPTY
-        val controls = if (shot == Shot.SKILLS_MIXED || shot == Shot.SKILLS_FULL) keyboardControls() else null
+        val controls = if (shot == Shot.SKILLS_MIXED || shot == Shot.SKILLS_FULL || shot == Shot.SKILLS_KINETIC) keyboardControls() else null
         return Scene(model, fx, memory, time, shot == Shot.TRIAL_INFO, controls)
     }
 
     private companion object {
         /** The content's run level cap. */
         const val LEVEL_CAP = 42
+
+        /** The element-less actives in Z and X, which draw in the kinetic role as their cards do, beside an empty C. */
+        val KINETIC_SKILL_BAR = SkillBarProjection(immutableListOf(
+            SkillSlotProjection(skill = SkillId.CATALYZE.ordinal, rank = 2, ready = true),
+            SkillSlotProjection(skill = SkillId.DUAL_INFUSION.ordinal, rank = 1, cooldown01 = 0.4f),
+            SkillSlotProjection.EMPTY,
+        ))
     }
 
     private fun enemy(id: Int, type: EnemyType, x: Float, y: Float, integrity: Float, radius: Float) =

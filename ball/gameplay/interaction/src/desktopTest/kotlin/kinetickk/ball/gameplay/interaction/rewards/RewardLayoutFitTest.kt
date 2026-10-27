@@ -33,14 +33,21 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.RuleLineKind
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.render.BuildForecast
 import kinetickk.ball.gameplay.nucleus.render.ForecastKind
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.localizedContent
+import kinetickk.ball.content.api.rankLines
+import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
+import kinetickk.foundation.common.localization.text
 import kinetickk.ball.gameplay.interaction.canvas.isCut
 import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
@@ -52,7 +59,9 @@ import kinetickk.ball.gameplay.nucleus.render.RewardStatChange
 import kinetickk.ball.gameplay.nucleus.render.TotemAction
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.LocalAppLanguage
+import kinetickk.foundation.design.kkCardFrameReachDp
 import kinetickk.foundation.design.rememberKkCanvasMeasurer
 import org.junit.Test
 import kotlin.math.abs
@@ -249,7 +258,13 @@ class RewardLayoutFitTest {
                         relicAction = RelicChoiceAction.ACQUIRE)
                 } + ChoiceOption(ChoiceType.RELIC, "Leave hollow", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE))
             val weapons = weapons(language, 1440f, 810f, 1.25f)
-            val cards = listOf(items, relics, weapons).flatMap { model ->
+            // Active items: a free slot in the run character's lane, a full loadout, an owned one reaching rank III.
+            val base = rewardFixtureActiveBase
+            val actives = rewardFixtureModel(content = rewardActiveFixtureContent, coreShape = laneOf(SkillId.SOLAR_FLARE),
+                itemStacks = List(rewardActiveFixtureContent.items.size) { if (it == base + 2) 2 else 0 },
+                choices = listOf(rewardActiveChoice(base, slot = 0), rewardActiveChoice(base + 1, slot = null, replaces = true),
+                    rewardActiveChoice(base + 2, slot = 2, stacks = 2)))
+            val cards = listOf(items, relics, weapons, actives).flatMap { model ->
                 model.choices.mapIndexed { index, choice -> model.rewardCardPresentation(choice, index, language) }
             }
             cards.forEach { card ->
@@ -293,9 +308,209 @@ class RewardLayoutFitTest {
                 }
             }
         }
-        assertTrue(checked >= 4 * 2 * 9, "Checked every card at every size ($checked)")
+        assertTrue(checked >= 4 * 2 * 12, "Checked every card at every size ($checked)")
         assertTrue(elementChips > 0, "Weapon element chips were read")
     }
+
+    /**
+     * Every prompt's heading stamp stays on the screen at every frame and text size in both languages (the active slot
+     * prompt's in Russian at 175 % on a portrait phone included).
+     */
+    @Test
+    fun everyPromptHeadingStaysOnTheScreen() {
+        var checked = 0
+        forEachScene(::directedTotem, ::replacing, ::melding, ::weapons, ::relicOffers, ::activeSlotPrompt) { scene, model ->
+            val heading = onNodeWithTag("kinetickk.gameplay.rewards.heading", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            assertTrue(heading.left >= -0.5f && heading.right <= model.screenWidth + 0.5f, "$scene: heading $heading inside the screen")
+            checked++
+        }
+        assertTrue(checked == frames.size * 2 * settings.size * 6, "Checked every heading ($checked)")
+    }
+
+    /**
+     * An active item card always shows its slot chip (the key it binds to, or that it replaces a slot) inside its chip
+     * column, at every frame and text size in both languages, and its rank's numbers and what rank III adds never wrap a
+     * number away from the word before it, nor the prompt's "rank 1" its number or the Russian "с" its noun, nor the keep
+     * card's "+4 matter" its amount from its unit.
+     */
+    @Test
+    fun anActiveCardKeepsItsSlotChipAndItsNumbersWithTheirLabels() {
+        var chips = 0
+        var rows = 0
+        forEachScene(::activeOffers, ::activeSlotPrompt) { scene, model ->
+            val language = model.settings.language
+            val content = rewardActiveFixtureContent
+            model.choices.forEachIndexed { index, choice ->
+                val card = model.rewardCardPresentation(choice, index, language)
+                val tag = "kinetickk.gameplay.choice.${index + 1}"
+                card.chips.firstOrNull()?.let { first ->
+                    val column = onNodeWithTag("$tag.chips", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                    val shown = onAllNodes(hasAnyAncestor(hasTestTag("$tag.chips")) and SemanticsMatcher.expectValue(SemanticsProperties.Text,
+                        listOf(androidx.compose.ui.text.AnnotatedString(first.spoken))), useUnmergedTree = true).fetchSemanticsNodes()
+                        .map { it.boundsInRoot }.filter { it.width > 0f && it.height > 0f }
+                    assertTrue(shown.size == 1 && shown.single().left >= column.left - 0.5f && shown.single().right <= column.right + 0.5f,
+                        "$scene card ${index + 1}: '${first.spoken}' shows inside its chip column $column ($shown)")
+                    chips++
+                }
+                val active = card.item?.active?.let(content::skill)?.let { skill ->
+                    listOfNotNull(skill.rankLines(requireNotNull(card.itemStack), language).drop(1).joinToString(", "),
+                        skill.rankThree.localizedContent(language).takeIf { card.itemStack == ContentBounds.MAX_SKILL_RANK })
+                }.orEmpty()
+                val incoming = choice.incomingItemId?.takeIf { card.item != null }?.let { id ->
+                    language.text(OverlayRedesignText.ActiveIncoming,
+                        requireNotNull(content.item(id)).name.localizedContent(language)).normalized()
+                }
+                val kept = card.descriptions.takeIf { choice.keepsActiveLoadout }.orEmpty()
+                textsUnder("$tag.text").forEach { (node, layout) ->
+                    val text = node.config.getOrElseNullable(SemanticsProperties.Text) { null }?.joinToString("") { it.text }?.normalized()
+                    if (text == null || (text !in active && text != incoming && text !in kept)) return@forEach
+                    val shown = layout.layoutInput.text.text
+                    (0 until layout.lineCount).forEach { line ->
+                        val words = shown.substring(layout.getLineStart(line), layout.getLineEnd(line, visibleEnd = true))
+                        val where = "$scene card ${index + 1}: line ${line + 1} of '$text'"
+                        if (line > 0) assertTrue(!words.first().isDigit(), "$where starts with a number")
+                        if (line == layout.lineCount - 1) return@forEach
+                        if (text in kept) assertTrue(!words.last().isDigit(), "$where ends with an amount without its unit")
+                        if (text == incoming) assertTrue(words.substringAfterLast(' ').length > 1, "$where ends with a one-letter word")
+                    }
+                    rows++
+                }
+            }
+        }
+        assertTrue(chips >= frames.size * 2 * settings.size * 6, "Checked every active card's slot chip ($chips)")
+        assertTrue(rows >= frames.size * 2 * settings.size * 6, "Checked every active card's number rows ($rows)")
+    }
+
+    /**
+     * The card face's right edge slants in toward the bottom (the fixed 22 dp cut) and its frame (border, the epic rim)
+     * reaches in from it: every shown line of an active card's body ends clear of both, the long low lines of the slot
+     * prompt included, on the board, phone and portrait cards at both text sizes in both languages.
+     */
+    @Test
+    fun cardTextEndsClearOfTheSlantedFrame() {
+        var lines = 0
+        for ((width, height) in listOf(300 to 450, 220 to 254, 195 to 254, 178 to 305)) for (language in AppLanguage.entries) for (setting in settings) {
+            val cards = listOf(activeOffers(language, 1440f, 810f, setting), activeSlotPrompt(language, 1440f, 810f, setting)).flatMap { model ->
+                model.choices.mapIndexed { index, choice -> model.rewardCardPresentation(choice, index, language) }
+            }
+            runDesktopComposeUiTest(cards.size * (width + 10), height + 20, effectContext = object : MotionDurationScale {
+                override val scaleFactor = 0f
+            }) {
+                setContent {
+                    CompositionLocalProvider(LocalAppLanguage provides language, LocalDensity provides Density(1f)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            cards.forEachIndexed { index, card ->
+                                RewardCard(card, index, overlayUiTextScale(setting), 0f, true, Modifier.requiredSize(width.dp, height.dp),
+                                    phoneDeal = height == 254) {}
+                            }
+                        }
+                    }
+                }
+                waitForIdle()
+                cards.forEachIndexed { index, card ->
+                    val tag = "kinetickk.gameplay.choice.${index + 1}"
+                    val bounds = onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
+                    val viewport = onNode(hasTestTag("$tag.text"), useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                    val reach = kkCardFrameReachDp(rewardCardLook(card, KkRolePalette.Default).style.material, width.toFloat())
+                    textsUnder("$tag.text").forEach { (node, layout) ->
+                        val box = node.boundsInRoot
+                        (0 until layout.lineCount).forEach { line ->
+                            val bottom = box.top + layout.getLineBottom(line)
+                            val end = layout.getLineEnd(line, visibleEnd = true)
+                            if (bottom > viewport.bottom + 0.5f || end <= layout.getLineStart(line)) return@forEach
+                            val ink = box.left + layout.getBoundingBox(end - 1).right
+                            val edge = bounds.right - RewardCardCutDp * (bottom - bounds.top) / bounds.height - reach
+                            assertTrue(ink <= edge, "${card.title} ${width}x$height $language $setting: line ${line + 1} of " +
+                                "'${layout.layoutInput.text.text}' ends at $ink, past the frame at $edge")
+                            lines++
+                        }
+                    }
+                }
+            }
+        }
+        assertTrue(lines > 4 * 2 * 2 * 7 * 4, "Checked the cards' lines ($lines)")
+    }
+
+    /**
+     * Only the rows under a card's name step in from the slanted frame: the name sits high on the face, where the plain
+     * end padding already clears it, so names that fit one line there (long item, weapon and totem names, the Russian
+     * slot prompt's "Заменить: Метеор" and, on the landscape deal's card, "Заменить: Катализ") stay on one line on the
+     * landscape and portrait phone cards.
+     */
+    @Test
+    fun aPhoneCardsNameKeepsItsOneLineBesideTheSlantedFrame() {
+        val shipped = shippedRewardContent
+        val items = listOf("Killstreak Engine", "Kinetic Recapture", "Concussive Rivets", "Overcharge Glyph", "Finishing Cadence")
+            .map { name -> requireNotNull(shipped.items.singleOrNull { it.name == name }) { name } }
+        val choices = items.map { ChoiceOption(ChoiceType.ITEM, it.name, it.description, it.rarity.displayLabel.uppercase(), itemId = it.id) }
+        val english = rewardFixtureModel(content = shipped, choices = choices).let { model ->
+            choices.mapIndexed { index, choice -> model.rewardCardPresentation(choice, index) }
+        } + directedTotem(AppLanguage.English, 1440f, 810f, 1.25f).let { model -> model.rewardCardPresentation(model.choices.first(), 0) }
+        val prompt = activeSlotPrompt(AppLanguage.Russian, 1440f, 810f, 1.25f)
+        val arcCoil = weapons(AppLanguage.Russian, 1440f, 810f, 1.25f).let { model ->
+            model.rewardCardPresentation(model.choices.first(), 0, AppLanguage.Russian)
+        }
+        val russian = listOf(arcCoil) + listOf(1, 2).map { slot -> prompt.rewardCardPresentation(prompt.choices[slot], slot, AppLanguage.Russian) }
+        var names = 0
+        for ((width, height) in listOf(195 to 254, 178 to 305)) for ((language, deal) in listOf(AppLanguage.English to english, AppLanguage.Russian to russian)) {
+            // "Заменить: Катализ" takes two lines on the narrower portrait card at any padding.
+            val cards = if (width == 178 && language == AppLanguage.Russian) deal.dropLast(1) else deal
+            runDesktopComposeUiTest(cards.size * (width + 10), height + 20, effectContext = object : MotionDurationScale {
+                override val scaleFactor = 0f
+            }) {
+                setContent {
+                    CompositionLocalProvider(LocalAppLanguage provides language, LocalDensity provides Density(1f)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            cards.forEachIndexed { index, card ->
+                                RewardCard(card, index, overlayUiTextScale(1.25f), 0f, true, Modifier.requiredSize(width.dp, height.dp),
+                                    phoneDeal = height == 254) {}
+                            }
+                        }
+                    }
+                }
+                waitForIdle()
+                cards.forEachIndexed { index, card ->
+                    val name = card.title.uppercase()
+                    val layout = textsUnder("kinetickk.gameplay.choice.${index + 1}.text").map { it.second }
+                        .single { it.layoutInput.text.text.normalized() == name }
+                    assertEquals(1, layout.lineCount, "$name ${width}x$height: the name's lines")
+                    names++
+                }
+            }
+        }
+        assertEquals(2 * (english.size + russian.size) - 1, names, "Checked every name")
+    }
+
+    /**
+     * A Russian card's body rows on the phone frames (effects, rules, descriptions, costs) never end a line with a
+     * one-letter word ("к", "в", "и"): it keeps the word after it at both text sizes, as the narrower rows beside the
+     * slanted frame would otherwise leave it.
+     */
+    @Test
+    fun russianOneLetterWordsNeverEndAPhoneCardsLine() {
+        var rows = 0
+        forEachScene(::activeOffers, ::activeSlotPrompt, ::relicOffers, ::weapons, frames = listOf(844 to 390, 390 to 844),
+            languages = listOf(AppLanguage.Russian)) { scene, model ->
+            model.choices.forEachIndexed { index, choice ->
+                val card = model.rewardCardPresentation(choice, index, AppLanguage.Russian)
+                val body = (card.rules.filter { it.kind != RuleLineKind.TRIGGER }.map { it.text } + card.descriptions + card.liabilities)
+                    .map { it.normalized() }
+                textsUnder("kinetickk.gameplay.choice.${index + 1}.text").forEach { (_, layout) ->
+                    val shown = layout.layoutInput.text.text
+                    if (shown.normalized() !in body) return@forEach
+                    (0 until layout.lineCount - 1).forEach { line ->
+                        val last = shown.substring(layout.getLineStart(line), layout.getLineEnd(line, visibleEnd = true)).split(' ', '\u00A0').last()
+                        assertTrue(last.length > 1 || !last.single().isLetter(), "$scene card ${index + 1}: line ${line + 1} of '$shown' ends with '$last'")
+                    }
+                    rows++
+                }
+            }
+        }
+        assertTrue(rows >= 2 * 2 * 12, "Checked the cards' body rows ($rows)")
+    }
+
+    /** [this] with its no-break spaces and word joiners read as the plain text they hold together. */
+    private fun String.normalized(): String = replace('\u00A0', ' ').replace("\u2060", "")
 
     /**
      * A relic's cost always shows whole, at every frame and text size in both languages (the compact
@@ -398,13 +613,18 @@ class RewardLayoutFitTest {
         }
     }
 
+    /** A character whose active lane holds [effect]. */
+    private fun laneOf(effect: SkillId): CoreShape =
+        CoreShape.entries.first { effect in rewardActiveFixtureContent.coreShape(it).activeLane }
+
     private fun forEachScene(
         vararg scenes: (AppLanguage, Float, Float, Float) -> GameplayRenderModel,
         frames: List<Pair<Int, Int>> = this.frames,
         settings: List<Float> = this.settings,
+        languages: List<AppLanguage> = AppLanguage.entries,
         check: SemanticsNodeInteractionsProvider.(String, GameplayRenderModel) -> Unit,
     ) {
-        for ((width, height) in frames) for (language in AppLanguage.entries) for (setting in settings) for (scene in scenes) {
+        for ((width, height) in frames) for (language in languages) for (setting in settings) for (scene in scenes) {
             // These assertions inspect settled geometry, not the intermediate entrance frames.
             runDesktopComposeUiTest(width, height, effectContext = object : MotionDurationScale {
                 override val scaleFactor = 0f
@@ -493,6 +713,35 @@ class RewardLayoutFitTest {
             RewardPreview(),
         ),
     )
+
+    // Active items: Solar Flare into a free Z slot in the run character's lane, Meteor while every slot is full and
+    // Catalyze, owned twice, ranking C to rank III.
+    private fun activeOffers(language: AppLanguage, width: Float, height: Float, setting: Float): GameplayRenderModel {
+        val base = rewardFixtureActiveBase
+        return rewardFixtureModel(content = rewardActiveFixtureContent, coreShape = laneOf(SkillId.SOLAR_FLARE), language = language,
+            width = width, height = height, textScale = setting,
+            itemStacks = List(rewardActiveFixtureContent.items.size) { if (it == base + 2) 2 else 0 },
+            choices = listOf(rewardActiveChoice(base, slot = 0), rewardActiveChoice(base + 1, slot = null, replaces = true),
+                rewardActiveChoice(base + 2, slot = 2, stacks = 2)))
+    }
+
+    // The active slot prompt: Solar Flare (rank II), Meteor and Catalyze held while Frost Line comes in, and the keep card.
+    private fun activeSlotPrompt(language: AppLanguage, width: Float, height: Float, setting: Float): GameplayRenderModel {
+        val content = rewardActiveFixtureContent
+        val base = rewardFixtureActiveBase
+        val held = listOf(base to 2, base + 1 to 1, base + 2 to 1)
+        val incoming = base + 3
+        return rewardFixtureModel(content = content, choiceType = ChoiceType.ACTIVE_SLOT, coreShape = laneOf(SkillId.SOLAR_FLARE),
+            language = language, width = width, height = height, textScale = setting,
+            itemStacks = List(content.items.size) { id -> held.firstOrNull { it.first == id }?.second ?: 0 },
+            choices = held.mapIndexed { slot, (id, rank) ->
+                val item = requireNotNull(content.item(id))
+                ChoiceOption(ChoiceType.ACTIVE_SLOT, item.name, "", "", itemId = id, skillId = item.active, skillRank = rank, activeSlot = slot,
+                    incomingItemId = incoming)
+            } + ChoiceOption(ChoiceType.ACTIVE_SLOT, requireNotNull(content.item(incoming)).name, "", "", incomingItemId = incoming,
+                // An Uncommon item's salvage as the nucleus names it.
+                salvageMatter = 4))
+    }
 
     private fun relicOffersWithMeld(language: AppLanguage, width: Float, height: Float, setting: Float) = rewardFixtureModel(
         choiceType = ChoiceType.RELIC, relics = relics4, language = language, width = width, height = height, textScale = setting,

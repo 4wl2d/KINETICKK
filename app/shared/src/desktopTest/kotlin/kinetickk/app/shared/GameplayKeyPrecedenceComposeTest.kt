@@ -25,7 +25,10 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
+import kinetickk.ball.content.api.DraftDeckPolicy
+import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.impl.createContentCatalog
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.ball.gameplay.api.GameplayAcceptance
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.api.GameplayQuery
@@ -83,7 +86,7 @@ class GameplayKeyPrecedenceComposeTest {
             val catalog = createContentCatalog()
             val profile = createProfileComponent(MemoryPersistence(), catalog.profilePolicy())
             val audio = QuietAudio()
-            val gameplay = RecordingGameplay(DefaultGameplayFeature(catalog.gameplayContent(), profile, profile, audio))
+            val gameplay = RecordingGameplay(DefaultGameplayFeature(activesEarly(catalog.gameplayContent()), profile, profile, audio))
             val owner = AppCompositionOwner(
                 contentCatalog = catalog,
                 profileComponent = profile,
@@ -117,15 +120,15 @@ class GameplayKeyPrecedenceComposeTest {
                 press(Key.Enter)
                 assertEquals(AppDestination.Gameplay, shell().active)
                 assertEquals(GameplayRunPhase.RUNNING, phase())
-                // Play the real run to its first skill draft (Z holds a skill, C's slot is still closed).
+                // Play the real run to its first active item (Z holds its effect, C's slot is still empty).
                 val run = gameplay.activeRun() as GameplayInteractionPort
                 RunPilot(run).playUntilFirstSkill()
                 settle()
                 val model = requireNotNull(run.renderSnapshot().renderModel)
                 assertTrue(model.skillBar.slots[0].skill >= 0, "Z holds a skill")
-                assertTrue(model.skillBar.slots[2].skill < 0, "C's slot is closed")
+                assertTrue(model.skillBar.slots[2].skill < 0, "C's slot is empty")
 
-                // RUNNING: Z casts; C (an undrafted slot) and V (the locked Apex) are consumed by the run: no Codex, no overlay.
+                // RUNNING: Z casts; C (an empty slot) and V (the locked Apex) are consumed by the run: no Codex, no overlay.
                 assertEquals(listOf<GameplayInteractionPulse>(GameplayInteractionPulse.SkillRequested.fromValidated(0)), press(Key.Z))
                 assertEquals(emptyList(), press(Key.C))
                 assertNull(shell().overlay, "C opened ${shell().overlay} during a run")
@@ -232,8 +235,22 @@ private class RecordingGameplay(private val real: DefaultGameplayFeature) : Game
 }
 
 /**
+ * [content] whose offers bring active items from the first offer: every active unlocked at level 1, the whole catalog
+ * dealt and a high active weight, so the pilot meets one within a few offers whatever the seed.
+ */
+private fun activesEarly(content: GameplayContentSnapshot): GameplayContentSnapshot {
+    val policy = content.build.policy
+    return content.copy(
+        items = content.items.map { if (it.isActive) it.copy(unlockLevel = 1) else it }.toImmutableList(),
+        build = content.build.copy(
+            policy = policy.copy(draftDeck = DraftDeckPolicy.FULL, offerLanes = policy.offerLanes.copy(activeWeight = 1_000f)),
+        ),
+    )
+}
+
+/**
  * Plays the real run through its port between UI frames: the singularity sweeps around the Core toward the
- * nearest enemy (never across it) and drafts take a skill card, until Z holds a skill and the run is running.
+ * nearest enemy (never across it) and offers take an active item card, until Z holds an effect and the run is running.
  */
 private class RunPilot(private val run: GameplayInteractionPort) {
     private var cursorAngle = 0f
@@ -247,8 +264,9 @@ private class RunPilot(private val run: GameplayInteractionPort) {
             when (model.phase) {
                 GamePhase.CHOICE -> {
                     val choices = model.choices
-                    val index = (0 until minOf(choices.size, 4)).firstOrNull { choices[it].type == ChoiceType.SKILL }
-                        ?: (0 until minOf(choices.size, 4)).firstOrNull { choices[it].rewardFocus == null } ?: 0
+                    val index = (0 until minOf(choices.size, 4)).firstOrNull {
+                        choices[it].type == ChoiceType.ITEM && choices[it].skillId != null && !choices[it].replacesActive
+                    } ?: (0 until minOf(choices.size, 4)).firstOrNull { choices[it].rewardFocus == null } ?: 0
                     run.accept(GameplayInteractionPulse.ChoiceSelected.fromValidated(index))
                 }
                 GamePhase.RUNNING -> {
@@ -256,10 +274,10 @@ private class RunPilot(private val run: GameplayInteractionPort) {
                     steer(model)
                     run.accept(GameplayInteractionPulse.FrameElapsed.fromValidated(1f / 60f))
                 }
-                else -> error("the run ended (${model.phase}) before its first skill")
+                else -> error("the run ended (${model.phase}) before its first active item")
             }
         }
-        error("no skill drafted in $MAX_STEPS steps")
+        error("no active item taken in $MAX_STEPS steps")
     }
 
     private fun steer(model: GameplayRenderModel) {

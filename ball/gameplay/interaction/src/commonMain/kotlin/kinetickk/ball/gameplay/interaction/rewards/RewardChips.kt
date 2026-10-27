@@ -29,6 +29,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.RelicPolicy
 import kinetickk.ball.content.api.localizedContent
@@ -49,14 +50,16 @@ import kinetickk.foundation.design.drawKkIcon
 import kinetickk.foundation.design.drawKkPips
 import kinetickk.foundation.design.drawKkText
 import kinetickk.foundation.design.drawKkThreatHatch
+import kinetickk.foundation.design.kkKeyCapStyle
 import kinetickk.foundation.design.kkStroke
 import kinetickk.foundation.design.labelStyle
 import kinetickk.foundation.design.measureKkText
 import kinetickk.foundation.design.rememberKkCanvasMeasurer
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
-// Reward card chips: identity marks beside the icon (Risk, Reborn, Heirloom, tags) and the forecast
+// Reward card chips: identity marks beside the icon (an active's slot and lane, Risk, Reborn, Heirloom, tags) and the forecast
 // row of what a card changes in the build. Glyphs carry identity, hues only element and role.
 
 /** Chip metrics in dp and board sp (before the text setting). */
@@ -112,8 +115,20 @@ internal fun rewardChipWidth(measurer: CanvasTextMeasurer, chip: RewardChip, sty
             else -> marks * ringPitch(height)
         }
     }
+    chip.keyCap?.let { key -> width += chipGap(height) + keyCapWidth(measureKeyCap(measurer, key, style), height) - chipPad(height) * 0.5f }
     return width
 }
+
+/** An ACTIVE chip's key cap label: the HUD key cap's mono face at the chip's size. */
+private fun measureKeyCap(measurer: CanvasTextMeasurer, key: String, style: RewardChipStyle) =
+    measureKkText(measurer, key, kkKeyCapStyle(measurer, style.fontSize), uppercase = true)
+
+/** The key cap plate round its label: at least square, so a one-letter key reads as a key. */
+private fun keyCapWidth(label: androidx.compose.ui.text.TextLayoutResult, height: Float): Float =
+    max(label.size.width + keyCapPad(height) * 2f, keyCapHeight(height))
+
+private fun keyCapHeight(height: Float) = height * 0.74f
+private fun keyCapPad(height: Float) = height * 0.2f
 
 /** Faces and inks of a chip kind (under the color-vision preset [roles]). */
 private class ChipInk(val face: Color, val border: Color, val text: Color, val glyph: Color)
@@ -148,6 +163,10 @@ private fun RewardChip.ink(roles: KkRolePalette): ChipInk = when (kind) {
         val hue = elements.firstOrNull()?.overlayColor(roles) ?: roles.kinetic
         ChipInk(hue.copy(alpha = 0.14f), hue, Kk.Bone, hue)
     }
+    // The slot an active takes: outlined in `you` like the HUD slot's ready ring; its key cap is a bone plate.
+    RewardChipKind.ACTIVE -> ChipInk(Kk.Ink3, roles.you.copy(alpha = 0.7f), Kk.Bone, Kk.Bone)
+    // Taking it gives up a held active: outlined in the threat role, like a relic Replace.
+    RewardChipKind.REPLACES_ACTIVE -> ChipInk(Kk.Ink3, roles.threat.copy(alpha = 0.7f), roles.threat, roles.threat)
 }
 
 /** Dashed chip outline of an unmet pairing, cached per stroke width (draw-thread confined). */
@@ -164,7 +183,8 @@ private object ChipStrokes {
 }
 
 /**
- * Draws [chip] at [topLeft] ([width] px from [rewardChipWidth]). [paths] slot 0 holds the plate.
+ * Draws [chip] at [topLeft] ([width] px from [rewardChipWidth]). [paths] slot 0 holds the plate, slot 1 its
+ * outline and slot 2 an ACTIVE chip's key cap.
  * Unmet reactions and discords are hatched, an unmet concord is outlined dashed; a reaction's
  * plate is split in its two element hues.
  */
@@ -236,6 +256,16 @@ internal fun DrawScope.drawRewardChip(
     val label = measureKkText(measurer, chip.label, chipLabelStyle(measurer, style), uppercase = true)
     drawKkText(label, x, cy, ink.text, KkAlign.START, KkVAlign.CENTER)
     x += label.size.width
+    chip.keyCap?.let { key ->
+        // The bound key as the HUD shows it under a slot: a small bone cap with the key in ink.
+        val cap = measureKeyCap(measurer, key, style)
+        val capHeight = keyCapHeight(height)
+        val left = x + chipGap(height)
+        val capRect = Rect(left, cy - capHeight * 0.5f, left + keyCapWidth(cap, height), cy + capHeight * 0.5f)
+        drawPath(paths.slab(2, capRect, capHeight * 0.22f), Kk.Bone)
+        drawKkText(cap, capRect.center.x, cy, Kk.Ink, KkAlign.CENTER, KkVAlign.CENTER)
+        return
+    }
     val marks = chip.trailingMarks()
     if (marks <= 0) return
     x += chipGap(height)
@@ -265,6 +295,8 @@ internal fun DrawScope.drawRewardChip(
 /**
  * Chips laid out left to right in up to [maxRows] rows of the available width: a chip that does
  * not fit is left out and the next one tried, so earlier chips (the more important) always show.
+ * The first chip (an active's slot, a relic's Risk) is never left out: wider than the whole row
+ * (a long key or a large text size), it is drawn scaled down to the row's width.
  */
 @Composable
 internal fun RewardChipFlow(
@@ -287,25 +319,37 @@ internal fun RewardChipFlow(
     Layout(
         content = {
             chips.forEachIndexed { index, chip -> key(index, chip) {
-                val paths = remember { KkPathCache(2) }
+                val paths = remember { KkPathCache(3) }
                 Box(
                     Modifier.size((widths[index] / density).dp, style.heightDp.dp)
                         .semantics {
-                            text = AnnotatedString(chip.label)
+                            text = AnnotatedString(chip.spoken)
                             // An element chip's label already is its element's name.
                             if (chip.elements.isNotEmpty() && chip.kind != RewardChipKind.ELEMENT) {
                                 contentDescription = chip.elements.joinToString(" ") { it.displayLabel.localizedContent(language) } + " " + chip.label
                             }
                         }
-                        .drawBehind { drawRewardChip(measurer, chip, Offset.Zero, size.width, style, paths) },
+                        .drawBehind {
+                            val natural = widths[index]
+                            val fit = size.width / natural
+                            if (fit < 0.999f) scale(fit, Offset.Zero) { drawRewardChip(measurer, chip, Offset.Zero, natural, style, paths) }
+                            else drawRewardChip(measurer, chip, Offset.Zero, size.width, style, paths)
+                        },
                 )
             } }
         },
         modifier = modifier,
     ) { measurables, constraints ->
         val gap = (gapDp * density).toInt()
-        val placeables = measurables.map { it.measure(androidx.compose.ui.unit.Constraints()) }
         val maxWidth = if (constraints.hasBoundedWidth) constraints.maxWidth else Int.MAX_VALUE
+        val placeables = measurables.mapIndexed { index, measurable ->
+            val natural = widths[index]
+            if (index == 0 && natural.roundToInt() > maxWidth) {
+                // Its height shrinks with its width, so the scaled chip keeps its proportions.
+                measurable.measure(androidx.compose.ui.unit.Constraints(maxWidth = maxWidth,
+                    maxHeight = (style.heightDp * density * maxWidth / natural).toInt()))
+            } else measurable.measure(androidx.compose.ui.unit.Constraints())
+        }
         val rowHeight = placeables.maxOfOrNull { it.height } ?: 0
         val positions = arrayOfNulls<androidx.compose.ui.unit.IntOffset>(placeables.size)
         // Never more rows than the height given: chips past them are left out like those too wide.
@@ -326,7 +370,8 @@ internal fun RewardChipFlow(
                 x = 0
             }
             val left = if (x == 0) 0 else x + gap
-            positions[index] = androidx.compose.ui.unit.IntOffset(left, row * (rowHeight + gap))
+            // A scaled first chip sits on its row's center line.
+            positions[index] = androidx.compose.ui.unit.IntOffset(left, row * (rowHeight + gap) + (rowHeight - placeables[index].height) / 2)
             x = left + width
             widest = max(widest, x)
             placed++
@@ -350,18 +395,27 @@ private val RewardNumber = Regex("[−+×]?\\d+(?:[.,  ]\\d+)*(?:[   ]?%)?
 private const val WordJoiner = '\u2060'
 private const val NoBreakSpace = '\u00A0'
 
-/** Unit marks that follow a number and must stay on its line. */
-private val UnitMarks = arrayOf("%", "u/s", "ед/с", "ед", "s", "с")
+/** Unit marks that follow a number and must stay on its line (Matter as an amount's unit: "+6 matter"). */
+private val UnitMarks = arrayOf("%", "u/s", "ед/с", "ед", "s", "с", "matter", "материи")
 
 private fun unitStartsAt(text: String, index: Int): Boolean = UnitMarks.any { mark ->
     text.startsWith(mark, index) && (index + mark.length >= text.length || !text[index + mark.length].isLetter())
 }
 
+/** The Russian one-letter words (prepositions, conjunctions, "я") that never end a line. */
+private const val RussianShortWords = "авикосуя"
+
+/** Whether [index] holds a Russian one-letter word: never a unit after its number ("3 с" is seconds). */
+private fun shortWordAt(text: String, index: Int): Boolean =
+    text[index].lowercaseChar() in RussianShortWords && (index == 0 || !text[index - 1].isLetterOrDigit()) &&
+        !(index >= 2 && text[index - 1].isWhitespace() && text[index - 2].isDigit() && unitStartsAt(text, index))
+
 /**
  * [text] with its units kept whole and on their number's line: the space between a number and its
  * unit becomes a no-break space, and a slash between two marks ("ед/с", "u/s", "3/4") is held by
- * word joiners, so the line breaker never splits "40 %" or "ед/с". [offsets] (text length + 1),
- * when given, receives where each original character landed.
+ * word joiners, so the line breaker never splits "40 %" or "ед/с". A Russian one-letter word ("к",
+ * "в", "и") keeps the word after it the same way, so it never hangs at a line's end. [offsets]
+ * (text length + 1), when given, receives where each original character landed.
  */
 internal fun rewardKeepUnits(text: String, offsets: IntArray? = null): String {
     val out = StringBuilder(text.length + 4)
@@ -370,6 +424,7 @@ internal fun rewardKeepUnits(text: String, offsets: IntArray? = null): String {
         val char = text[index]
         when {
             char == ' ' && index > 0 && text[index - 1].isDigit() && unitStartsAt(text, index + 1) -> out.append(NoBreakSpace)
+            char == ' ' && index > 0 && shortWordAt(text, index - 1) -> out.append(NoBreakSpace)
             char == '/' && index > 0 && index < text.lastIndex && !text[index - 1].isWhitespace() && !text[index + 1].isWhitespace() ->
                 out.append(WordJoiner).append('/').append(WordJoiner)
             else -> out.append(char)

@@ -165,8 +165,8 @@ internal class MutableGameState(
     }
         ?: CopyOnWriteIntArray(IntArray(content.items.size))
     /**
-     * Build gains in order: item ids at first acquisition and relic binds or rank-three upgrades as
-     * [relicGain] entries. Decides affinity ties. Immutable value, replaced on change.
+     * Build gains in order: item ids at first acquisition (a replaced active item's id leaves it) and relic binds or
+     * rank-three upgrades as [relicGain] entries. Decides affinity ties. Immutable value, replaced on change.
      */
     internal var acquisitionOrder: List<Int> = reductionSource?.acquisitionOrder ?: emptyList()
     /**
@@ -246,14 +246,11 @@ internal class MutableGameState(
     internal var markDispatches: Int = reductionSource?.markDispatches ?: 0
     /** Hostile bolts erased this run (a run statistic). */
     internal var shotsErased: Long = reductionSource?.shotsErased ?: 0L
-    // Skill and Apex input: drafts waiting to open, buffered slot requests and their age, the buffered Apex request.
-    internal var pendingSkillDrafts: Int = reductionSource?.pendingSkillDrafts ?: 0
+    // Skill and Apex input: buffered slot requests and their age, the buffered Apex request.
     internal var skillBufferMask: Int = reductionSource?.skillBufferMask ?: 0
     internal var skillBufferTime: Float = reductionSource?.skillBufferTime ?: 0f
     internal var apexBufferTime: Float = reductionSource?.apexBufferTime ?: 0f
-    /** Level item offers still owed a skill rank-up card (one per level reached at the rank cadence). */
-    internal var pendingRankUpOffers: Int = reductionSource?.pendingRankUpOffers ?: 0
-    /** What the skill slots hold; immutable, replaced by a draft or rank-up. */
+    /** What the skill slots hold: the owned active items' effects; immutable, replaced when an active item binds, ranks or is replaced. */
     internal var skillLoadout: SkillLoadout = reductionSource?.skillLoadout ?: SkillLoadout.EMPTY
     /** Skill and Apex timing; a full reduction forks it, a scalar-input reduction shares it. */
     internal var skillRuntime: SkillRuntime = reductionSource?.skillRuntime?.let { source ->
@@ -461,6 +458,12 @@ internal class MutableGameState(
     internal var pendingRelicChoices: Int = reductionSource?.pendingRelicChoices ?: 0
     internal var pendingBindingRelic: RelicId? = reductionSource?.pendingBindingRelic
     internal var pendingRelicBindAction: RelicChoiceAction? = reductionSource?.pendingRelicBindAction
+    /**
+     * The unowned active item taken while every slot held an active: it waits, with its Reborn roll, for the
+     * [ChoiceType.ACTIVE_SLOT] prompt to replace a slot or salvage it; null otherwise.
+     */
+    internal var pendingActiveItemId: Int? = reductionSource?.pendingActiveItemId
+    internal var pendingActiveReborn: Boolean = reductionSource?.pendingActiveReborn ?: false
     internal val relicRanks: CopyOnWriteIntArray = reductionSource?.relicRanks?.let {
         if (shareStableReductionStorage) it else it.fork()
     }
@@ -780,8 +783,7 @@ internal class MutableGameState(
             // Offers come from owned weapons only: with no more than one offer's worth a reroll would deal the same set.
             ChoiceType.WEAPON -> weaponOfferCandidates().size > WEAPON_OFFER_CHOICES
             ChoiceType.RELIC -> !heirloomOfferActive
-            ChoiceType.SKILL -> true
-            ChoiceType.TOTEM, ChoiceType.RELIC_BIND -> false
+            ChoiceType.TOTEM, ChoiceType.RELIC_BIND, ChoiceType.ACTIVE_SLOT -> false
         }
     val pendingRelicChoiceCount: Int get() = pendingRelicChoices
 

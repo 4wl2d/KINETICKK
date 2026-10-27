@@ -28,7 +28,7 @@ class ContentBalanceCharacterizationTest {
     fun itemCatalogCardinalityOrderingAndContentAreGolden() {
         val items = ui.items
 
-        assertEquals(269, items.size)
+        assertEquals(ACTIVES_END, items.size)
         assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
         // The items shipped through 0.4.0 keep their own pin: a release only appends to the catalog.
         val shipped = items.subList(0, ITEMS_THROUGH_040)
@@ -52,14 +52,37 @@ class ContentBalanceCharacterizationTest {
                 shipped.forEach(::addItem)
             },
         )
-        // The 0.5.0 items, appended from id 173 and pinned on their own.
-        val appended = items.subList(ITEMS_THROUGH_040, items.size)
+        // The 0.5.0 items, appended from id 173 and pinned on their own: always exactly ids 173..268.
+        val appended = items.subList(ITEMS_THROUGH_040, EXPANSION_050_END)
         assertEquals(
-            "c11c59b06e52e3dc",
+            "6ae3869a3317ee94",
             goldenFingerprint {
                 add("items-0.5.0")
                 add(appended.size)
                 appended.forEach(::addItem)
+            },
+        )
+        // The active items (ids 269..286) with their effects, the offer factors that weight them and every
+        // character's lane.
+        val actives = items.subList(EXPANSION_050_END, ACTIVES_END)
+        assertEquals(
+            "a73030c02a213d44",
+            goldenFingerprint {
+                add("actives-0.5.0")
+                add(actives.size)
+                actives.forEach { item ->
+                    addItem(item)
+                    add(item.active?.name ?: "-")
+                }
+                with(ui.build.policy.offerLanes) {
+                    add(activeWeight)
+                    add(characterActiveWeight)
+                    add(ownedActiveWeight)
+                }
+                ui.coreShapes.forEach { shape ->
+                    add(shape.id.name)
+                    shape.activeLane.forEach { add(it.name) }
+                }
             },
         )
     }
@@ -69,7 +92,7 @@ class ContentBalanceCharacterizationTest {
         val build = ui.build
 
         assertEquals(
-            "d6fa6a5d0a26712d",
+            "90af4a2ca532d113",
             goldenFingerprint {
                 build.elements.forEach { element ->
                     add(element.element.name)
@@ -286,7 +309,7 @@ class ContentBalanceCharacterizationTest {
     fun skillApexAndUpgradeContentIsGolden() {
         assertEquals(18, ui.skills.size)
         assertEquals(
-            "0e1fa079fddfd61b",
+            "443334dcc0d91f0d",
             goldenFingerprint {
                 add("skills")
                 ui.skills.forEach { skill ->
@@ -336,9 +359,6 @@ class ContentBalanceCharacterizationTest {
                 ui.tempo.levelRequirements.forEach(::add)
                 add(ui.tempo.levelIntegrity)
                 add(ui.tempo.levelRepair)
-                ui.tempo.skillSlotLevels.forEach(::add)
-                add(ui.tempo.skillRankEveryLevels)
-                add(ui.tempo.skillRankGapLevels)
                 add(ui.tempo.rebirthScaleFromLevel)
                 ui.rebirth.profiles.forEach { add(it.dataRequirementScale) }
             },
@@ -382,6 +402,12 @@ class ContentBalanceCharacterizationTest {
 
 /** The item catalog's size through 0.4.0: ids 0..172 (0.5.0 appends from 173). */
 private const val ITEMS_THROUGH_040 = 173
+
+/** One past the 0.5.0 expansion (ids 173..268); the active items start here. */
+private const val EXPANSION_050_END = 269
+
+/** One past the active items (ids 269..286). */
+private const val ACTIVES_END = 287
 
 /** Every Matrix effect kind with its numbers; floats enter by bits, so JVM and Wasm agree. */
 private fun GoldenFingerprint.addMatrixEffect(effect: MatrixEffect) {

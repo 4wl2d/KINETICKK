@@ -19,16 +19,36 @@ import kotlin.test.assertTrue
  * The assertions lock the Refit and Honing prices to this income; they are a derivation lock, not a balance
  * verdict. If income drifts outside them, the class bases are re-derived in the same change
  * (`Bc = round5(1.2 × M6 / 512)`, `Bw = round5(0.85 × M6 / 512)`); the bounds never widen.
+ *
+ * The two price locks read their medians over [PopulationSeeds] (0.5.0 active items; policy.md, "Balance gate
+ * populations"): a five-seed median moves with the reward stream, and the active items' offers moved it enough that the
+ * gate seeds became a coin flip. Their bounds stay the design's (by the population threshold rule: the base population
+ * meets each with room to spare). The rising medians keep the five gate seeds, which pass with probability 0.99 on the
+ * 05885fa9 base and with the active items.
  */
 class MatterIncomeProbeTest {
+    /**
+     * Every rank-0 Refit and Honing base costs at most 3 % of a fresh tier-0 run's median Matter over
+     * [PopulationSeeds]. The five gate seeds met it with probability 0.91 on the 05885fa9 base and 0.84 with the
+     * shipped active items. The base population's median was 2,499 Matter (bootstrap SE 17, n 300), so the largest
+     * base, 55, was 0.022 of it (SE 0.0002); by the population threshold rule the bound is the higher of the design's
+     * 0.03 and that plus two standard errors: 0.03.
+     */
     @Test fun theFirstRefitAndHoningLevelsCostAtMostThreePercentOfAFreshWin() {
-        val fresh = measured(Setup.T0_FRESH).median
+        val fresh = population(Setup.T0_FRESH).median
         val outside = rankZeroBases().filter { (_, base) -> base > 0.03f * fresh }
-        assertTrue(outside.isEmpty(), "rank-0 bases above 3 % of the fresh tier-0 median $fresh: $outside")
+        assertTrue(outside.isEmpty(), "rank-0 bases above 3 % of the fresh tier-0 population median $fresh: $outside")
     }
 
+    /**
+     * The tenth Refit level costs 1.0-1.5 and the tenth Honing level 0.7-1.0 full-Matrix tier-6 runs, by the median
+     * Matter over [PopulationSeeds]. The five gate seeds met both with probability 0.95 on the 05885fa9 base and 0.89
+     * with the shipped active items. The base population's median was 23,517 Matter (bootstrap SE 183, n 300): Refit 10
+     * cost 1.197 of it (SE 0.009) and Honing 10 0.871 (SE 0.007), so by the population threshold rule each band (the
+     * wider of the design's and the base ± two standard errors) is the design's.
+     */
     @Test fun theTenthRefitAndHoningLevelsTrackAFullMatrixTierSixRun() {
-        val tierSix = measured(Setup.T6_FULL).median
+        val tierSix = population(Setup.T6_FULL).median
         val policy = canonicalGameplayContent.upgrades
         val characterClass = canonicalGameplayContent.coreShapes
             .filter { it.unlockRequirement != CharacterUnlockRequirement.REBIRTH_RANK }.map { it.upgradeBaseCost }.distinct()
@@ -74,6 +94,7 @@ class MatterIncomeProbeTest {
 
     private companion object {
         private val measurements = HashMap<Setup, Income>()
+        private val populations = HashMap<Setup, Income>()
 
         fun fullMatrix(tier: Int): GameplayProfileSnapshot =
             gateProfile(GateMatrix.FULL, tier, economy = PlayerEconomy(0L, fullMatrixPrice()))
@@ -96,6 +117,15 @@ class MatterIncomeProbeTest {
             }
             val income = Income(matter)
             println("MATTER_MEDIAN ${setup.name} median=${income.median.toLong()} min=${matter.min().toLong()} max=${matter.max().toLong()}")
+            income
+        }
+
+        /** The setup's banked Matter on each [PopulationSeeds] seed, measured once per test JVM. */
+        fun population(setup: Setup): Income = populations.getOrPut(setup) {
+            val income = Income(populationOf(PopulationSeeds) { seed ->
+                playGateRun(seed, setup.profile(), NoPoiBot(), setup.relics).runMatter.toFloat()
+            })
+            println("MATTER_POPULATION ${setup.name} median=${income.median.toLong()} runs=${income.runs.size}")
             income
         }
     }

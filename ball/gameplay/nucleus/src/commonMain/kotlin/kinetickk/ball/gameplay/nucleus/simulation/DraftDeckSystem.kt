@@ -24,7 +24,8 @@ import kotlin.math.roundToInt
  * least the tier's minimum. Floors then grow the deck, in order: early choice, an early Rare or better, the rank-0 Data
  * ladder (the policy's floor plus the Matrix's Data stratum, then its early part), the character's archetype, every
  * archetype, every element, the wagers and skill support; a shortfall deals the best-priority qualifying reserve items,
- * tiers Common to Legendary, and nothing is ever removed.
+ * tiers Common to Legendary, and nothing is ever removed. Active items are dealt by their tier's share like any item, but
+ * every floor counts and promotes passive items only.
  * Float sums run in a fixed order with no transcendental functions, so every platform deals the same deck.
  */
 internal fun MutableGameState.drawItemDeck() {
@@ -67,12 +68,14 @@ internal fun MutableGameState.drawItemDeck() {
         for (index in start until start + dealtCount) dealt[order[index]] = true
     }
 
+    // Floors guarantee passive coverage: an active item never counts toward one and is never promoted by one.
     fun promote(floor: Int, qualifies: (ItemDefinition) -> Boolean) {
-        val target = min(floor, universe.count(qualifies))
-        var missing = target - universe.count { dealt[it.id] && qualifies(it) }
+        val passive: (ItemDefinition) -> Boolean = { !it.isActive && qualifies(it) }
+        val target = min(floor, universe.count(passive))
+        var missing = target - universe.count { dealt[it.id] && passive(it) }
         for (id in order) {
             if (missing <= 0) return
-            if (dealt[id] || !qualifies(content.items[id])) continue
+            if (dealt[id] || !passive(content.items[id])) continue
             dealt[id] = true
             missing--
         }
@@ -92,12 +95,19 @@ internal fun MutableGameState.drawItemDeck() {
     itemDeck = ItemDeck.dealt(content.items.size, order, tierSizes, content.items.indices.filter { dealt[it] })
 }
 
-/** The catalog level ordinary offers open: the run level or the lifetime-Matter level, whichever is higher. */
+/**
+ * The catalog level ordinary offers open for passive items: the run level or the lifetime-Matter level, whichever is
+ * higher. Active items unlock by the run level alone ([activeOfferable]).
+ */
 internal fun MutableGameState.offerCatalogLevel(): Int = max(level, lifetimeMatterOfferLevel(lifetimeMatter))
 
-/** True when [item] could be offered now if the deck had dealt it. */
+/**
+ * True when [item] could be offered now if the deck had dealt it: unlocked (a passive item by [catalogLevel], an active
+ * item by the run level and the other active rules of [activeOfferable]), Rebirth-eligible and useful.
+ */
 internal fun MutableGameState.offerableOutsideDeck(item: ItemDefinition, catalogLevel: Int = offerCatalogLevel()): Boolean =
-    item.unlockLevel <= catalogLevel && item.minimumRebirth <= rebirthRank && hasUsefulItemEffect(item)
+    (if (item.isActive) activeOfferable(item) else item.unlockLevel <= catalogLevel) &&
+        item.minimumRebirth <= rebirthRank && hasUsefulItemEffect(item)
 
 /**
  * Keeps a tier from running dry: a tier holding fewer than the policy's refill floor of dealt items the run can still

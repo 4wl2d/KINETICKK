@@ -16,12 +16,14 @@ import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponFamily
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.interaction.canvas.elementFill
 import kinetickk.ball.gameplay.interaction.canvas.overlayColor
 import kinetickk.ball.gameplay.interaction.canvas.overlayIcon
+import kinetickk.ball.gameplay.interaction.canvas.skillGlyph
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
 import kinetickk.ball.gameplay.nucleus.render.TotemAction
@@ -320,16 +322,28 @@ private const val NEAR_TONE = 0.4f
 private const val NEAR_TONE_BOOST = 1.6f
 
 /**
- * The item's own watermark glyph: the mark of its headline (its first stat line, else its first
- * clause, by what the clause does on its trigger, else its first rule), so cards that share a rarity,
- * a tag and an element, or a trigger, still carry different glyphs. Never a letter-like or
- * arrow-like mark.
+ * The item's own watermark glyph: an active item's comes from its effect ([activeWatermark]), since its one small
+ * passive is never its identity; any other item's is the mark of its headline (its first stat line, else its first
+ * clause, by what the clause does on its trigger, else its first rule), so cards that share a rarity, a tag and an
+ * element, or a trigger, still carry different glyphs. Never a letter-like or arrow-like mark.
  */
 internal fun ItemDefinition.watermarkIcon(): KkIcon {
+    active?.let { return activeWatermark(it) }
     stats.firstOrNull()?.let { return it.effect.watermarkIcon() }
     clauses.firstOrNull()?.let { return it.watermarkIcon() }
     for (rule in rules) rule.watermarkIcon()?.let { return it }
     return elements.firstOrNull()?.overlayIcon() ?: KkIcon.FORMS_TESSERACT
+}
+
+/**
+ * The watermark of the active item carrying [effect]: the effect's own glyph ([skillGlyph], the mark its Z/X/C slot,
+ * icon plate and Codex entry show), except where that glyph's faint outline would repeat a card of the same rarity,
+ * element and ornament: Gravity Well's mines read as the ring of Gravity Loom's, so its watermark is the well's inward
+ * spiral.
+ */
+internal fun activeWatermark(effect: SkillId): KkIcon = when (effect) {
+    SkillId.GRAVITY_WELL -> KkIcon.FORMS_SPIRAL
+    else -> skillGlyph(effect)
 }
 
 /** A clause's mark: what its first action does, read with its trigger (the hue already names an applied element). */

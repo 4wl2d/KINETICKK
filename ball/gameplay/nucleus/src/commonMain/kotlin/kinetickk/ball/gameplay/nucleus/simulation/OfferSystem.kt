@@ -10,6 +10,7 @@ import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.isDataEconomy
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
@@ -25,7 +26,7 @@ internal const val PITY_OFFERS: Int = 6
 /** The top resonance tier, where a tag's points count only the lane policy's saturated share toward fit. */
 private const val TOP_RESONANCE_TIER: Int = 3
 
-/** Items that may appear in an ordinary offer right now: dealt into the run's deck and offerable. */
+/** Items that may appear in an ordinary offer right now: dealt into the run's deck and offerable ([offerableOutsideDeck]). */
 internal fun MutableGameState.offerableItems(): List<ItemDefinition> {
     val catalogLevel = offerCatalogLevel()
     return content.items.filter { item -> item.id in itemDeck && offerableOutsideDeck(item, catalogLevel) }
@@ -94,12 +95,12 @@ private fun MutableGameState.experimental(item: ItemDefinition): Boolean =
  * nearest lower tier (not below Rare for pity while any Rare or better is available), then to the nearest
  * higher one. Never guarantees a perfect synergy; suppressed items are excluded or down-weighted, recently taken
  * items (the Profile's history) are down-weighted in every lane, and the Matrix's Data offer weight raises Data-economy
- * items in every lane (weights only, no draw). Only items dealt into the run's deck appear (the deck
- * is refilled first). Each card draws the rarity, lane, pick and Reborn values from [rewardRandom] in that order.
- * When [rankUpReplacesExperimental], a rank-up card will take the experimental card's place, so that card's rarity
- * never satisfies pity: the volatile card is still forced to Rare.
+ * items in every lane (weights only, no draw). Active items take the lane policy's active factors ([activeOfferWeight])
+ * and at most one shows per offer: once a card is an active item, later cards leave actives out (a filter, never an
+ * extra draw). Only items dealt into the run's deck appear (the deck is refilled first). Each card draws the rarity,
+ * lane, pick and Reborn values from [rewardRandom] in that order.
  */
-internal fun MutableGameState.buildItemChoices(rankUpReplacesExperimental: Boolean = false) {
+internal fun MutableGameState.buildItemChoices() {
     refillItemDeck()
     val lanePolicy = content.build.policy.offerLanes
     val familyFits = weaponFamilyFits()
@@ -109,10 +110,13 @@ internal fun MutableGameState.buildItemChoices(rankUpReplacesExperimental: Boole
     val lanes = OfferLane.entries
     val size = itemOfferSize()
     var rareOrBetter = false
+    var activeShown = false
     val pityDue = offerPity >= pityOffers()
     for (cardIndex in 0 until size) {
         val lane = lanes[cardIndex.coerceAtMost(lanes.lastIndex)]
-        val available = pool.filter { candidate -> selected.none { it.id == candidate.id } }
+        val available = pool.filter { candidate ->
+            selected.none { it.id == candidate.id } && !(activeShown && candidate.isActive)
+        }
         if (available.isEmpty()) break
         var rarity = rollRarity()
         val laneRoll = rewardRandom.nextFloat()
@@ -133,24 +137,69 @@ internal fun MutableGameState.buildItemChoices(rankUpReplacesExperimental: Boole
             val item = candidates[index]
             val base = if (lane == OfferLane.ALIGNED) 1f + lanePolicy.alignedFitWeight * min(fit(item, familyFits), lanePolicy.alignedFitCap) else 1f
             base * (1f - itemSuppressedShare(item)) * (1f - itemDormantShare(item)) * itemHistory.offerWeight(item.id) *
-                (if (item.isDataEconomy) matrix.dataOfferWeight else 1f)
+                (if (item.isDataEconomy) matrix.dataOfferWeight else 1f) * activeOfferWeight(item)
         }
         val choice = candidates[weightedIndex(weights)]
         selected += choice
-        val shown = !(rankUpReplacesExperimental && lane == OfferLane.EXPERIMENTAL)
-        if (shown && choice.rarity.rank >= ItemRarity.RARE.rank) rareOrBetter = true
+        if (choice.isActive) activeShown = true
+        if (choice.rarity.rank >= ItemRarity.RARE.rank) rareOrBetter = true
         reborns += rewardRandom.nextFloat() < rebornChance()
     }
     choices = selected.mapIndexed { index, item ->
-        ChoiceOption(
-            type = ChoiceType.ITEM,
-            title = item.name,
-            description = item.description,
-            tag = item.rarity.displayLabel.uppercase(),
-            itemId = item.id,
-            reborn = reborns[index],
-        )
+        itemCard(item, item.rarity.displayLabel.uppercase(), reborns[index])
     }
+}
+
+/**
+ * The active factors of [item]'s offer weight (1 for a passive item): the lane policy's active weight, its character
+ * active weight when the effect is in the run character's lane and its owned active weight when the card would rank up
+ * an owned active ([kinetickk.ball.content.api.OfferLanePolicy]). Weights only; whether an active may be offered at all
+ * is [activeOfferable].
+ */
+internal fun MutableGameState.activeOfferWeight(item: ItemDefinition): Float {
+    val effect = item.active ?: return 1f
+    val lanes = content.build.policy.offerLanes
+    var weight = lanes.activeWeight
+    if (effect in content.coreShape(coreShape).activeLane) weight *= lanes.characterActiveWeight
+    if (itemStacks[item.id] > 0) weight *= lanes.ownedActiveWeight
+    return weight
+}
+
+/**
+ * The rules an active item meets on top of a passive item's to be offered (always true for a passive item): actives are
+ * offered at all (a positive active weight), [item]'s unlock level is reached by the run level (not the lifetime-Matter
+ * catalog level), and an unowned Catalyze waits for two elements in play ([catalyzeOfferable]); an owned one still ranks.
+ */
+internal fun MutableGameState.activeOfferable(item: ItemDefinition): Boolean {
+    val effect = item.active ?: return true
+    if (!(content.build.policy.offerLanes.activeWeight > 0f) || item.unlockLevel > level) return false
+    return effect != SkillId.CATALYZE || itemStacks[item.id] > 0 || catalyzeOfferable()
+}
+
+/**
+ * An item offer's card for [item]. An active item's card also names its effect, the rank it reaches (stacks + 1) and the
+ * slot it binds to or ranks, or says it would replace a slot while every slot holds another active.
+ */
+internal fun MutableGameState.itemCard(item: ItemDefinition, tag: String, reborn: Boolean): ChoiceOption {
+    val effect = item.active
+    val owned = effect != null && skillLoadout.owns(effect)
+    val replaces = effect != null && needsActiveSlot(item)
+    return ChoiceOption(
+        type = ChoiceType.ITEM,
+        title = item.name,
+        description = item.description,
+        tag = tag,
+        itemId = item.id,
+        reborn = reborn,
+        skillId = effect,
+        skillRank = if (effect != null) itemStacks[item.id] + 1 else null,
+        activeSlot = when {
+            effect == null || replaces -> null
+            owned -> skillLoadout.slotOf(effect)
+            else -> skillLoadout.lowestEmptySlot()
+        },
+        replacesActive = replaces,
+    )
 }
 
 /** The items of the rolled [rarity], else of the nearest lower tier down to [floor], else of the nearest higher tier. */
@@ -338,6 +387,6 @@ internal fun MutableGameState.openHeirloomChoice() {
         relicAction = RelicChoiceAction.DECLINE,
         heirloom = true,
     )
-    dashBufferTime = 0f
+    clearInputBuffers()
     phase = kinetickk.ball.gameplay.nucleus.render.GamePhase.CHOICE
 }

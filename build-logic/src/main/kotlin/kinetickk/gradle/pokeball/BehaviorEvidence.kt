@@ -321,6 +321,15 @@ internal val runtimeBehaviorEvidence = listOf(
         ),
     ),
     BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.ActiveItemOfferTest",
+        setOf(
+            "aFourthActiveAsksWhichSlotToReplaceAndTheKeepCardSalvagesIt",
+            "activeRulesFilterAndWeightOffersWithoutAnExtraRewardDraw",
+            "anActiveCardBindsTheLowestEmptySlotAndASecondStackRanksItReadyAtOnce",
+            "theIncomingActiveIsCandidateState",
+        ),
+    ),
+    BehaviorEvidence(
         ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.ApexFormsTest",
         setOf(
             "aProximityChannelReachesAnArchitectOnItsOrbitButNotBeyondTheApexReach",
@@ -494,13 +503,6 @@ internal val runtimeBehaviorEvidence = listOf(
             "activationClosesAlternativeAndNeverRetainsTwoActiveTrials",
             "fourthSeparatedDashCollapsesInsteadOfGrowingRetainedLattice",
             "sixthRewardFitsAndSeventhCannotPublishIntoSourceSnapshot",
-        ),
-    ),
-    BehaviorEvidence(
-        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.SkillOfferTest",
-        setOf(
-            "aDraftCostsExactlyThreeRewardDrawsAndARerollThreeMore",
-            "rankUpCardsTakeTheExperimentalPlaceWithoutAnExtraDrawAndRankTheSkill",
         ),
     ),
     BehaviorEvidence(

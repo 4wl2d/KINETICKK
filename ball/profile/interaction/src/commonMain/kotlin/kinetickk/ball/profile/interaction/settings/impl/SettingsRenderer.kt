@@ -566,7 +566,7 @@ internal fun SettingsRow.label(language: AppLanguage): String = when (this) {
     -> settingsActionName(checkNotNull(boundAction), language)
 }
 
-/** The name of a rebindable gameplay action ("Skill 2" / «Навык 2»). */
+/** The name of a rebindable gameplay action ("Active 2" / «Активный эффект 2»). */
 internal fun settingsActionName(action: GameAction, language: AppLanguage): String = when (action) {
     GameAction.DASH -> language.text(SettingsRedesignText.ActionDash)
     GameAction.BRAKE -> language.text(SettingsRedesignText.ActionBrake)

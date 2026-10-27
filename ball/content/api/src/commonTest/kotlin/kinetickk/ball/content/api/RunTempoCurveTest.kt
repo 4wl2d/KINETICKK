@@ -24,9 +24,6 @@ class RunTempoCurveTest {
         assertEquals(746, tempo.dataRequiredForLevel(42), "the capped level only displays the last entry")
         assertEquals(2.5f, tempo.levelIntegrity)
         assertEquals(7.5f, tempo.levelRepair)
-        assertEquals(listOf(2, 8, 16), tempo.skillSlotLevels)
-        assertEquals(4, tempo.skillRankEveryLevels)
-        assertEquals(2, tempo.skillRankGapLevels)
     }
 
     @Test

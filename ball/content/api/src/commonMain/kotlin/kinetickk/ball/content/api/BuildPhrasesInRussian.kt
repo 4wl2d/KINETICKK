@@ -129,8 +129,8 @@ internal val BuildPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Overcurrent" to "Сверхток",
     "Faster weapon" to "Оружие быстрее",
     "Short Circuit" to "Короткое замыкание",
-    "Refreshes skills instead: 1.0 s to every skill, once per 1 s; no weapon refresh." to
-        "Ускоряет навыки вместо оружия: 1 с каждому навыку, не чаще раза в 1 с.",
+    "Refreshes actives instead: 1.0 s to every active, once per 1 s; no weapon refresh." to
+        "Ускоряет активные эффекты вместо оружия: 1 с каждому, не чаще раза в 1 с.",
     "Rot Well" to "Гнилой колодец",
     "A rotting well opens on the target, pulling enemies in, slowing and decaying them; every death inside " +
         "widens it." to
@@ -193,24 +193,24 @@ internal val BuildPhrasesInRussian: List<Pair<String, String>> = listOf(
         "Тишина следует за Ядром (радиус 140, 3 с) и гасит до 20 влетающих в неё вражеских снарядов; без урона при появлении.",
     "Blackfire" to "Чёрное пламя",
     "A black flame burns the target through every resistance; when a burning enemy dies, the flame leaps on and " +
-        "your skills recharge." to
+        "your actives recharge." to
         "Чёрное пламя жжёт цель сквозь любую стойкость; когда горящий враг гибнет, пламя перекидывается дальше, а " +
-        "навыки перезаряжаются.",
+        "активные эффекты перезаряжаются.",
     "Flame Leap" to "Прыжок пламени",
     "Burn, then kill" to "Подожги и добей",
     "Hellfire" to "Адское пламя",
-    "Damage per second ×1.5; the flame never leaps; no skill refund." to
-        "Урон в секунду ×1,5; пламя не перекидывается; навыки не перезаряжаются.",
+    "Damage per second ×1.5; the flame never leaps; no refund for actives." to
+        "Урон в секунду ×1,5; пламя не перекидывается; активные эффекты не перезаряжаются.",
     "Stasis" to "Стазис",
-    "Time stops around the target: enemies halt, hostile shots vanish, and inside the bubble your skills " +
+    "Time stops around the target: enemies halt, hostile shots vanish, and inside the bubble your actives " +
         "recharge faster." to
-        "Время вокруг цели замирает: враги застывают, вражеские снаряды исчезают, а внутри пузыря навыки " +
+        "Время вокруг цели замирает: враги застывают, вражеские снаряды исчезают, а внутри пузыря активные эффекты " +
         "перезаряжаются быстрее.",
     "Time Bubble" to "Пузырь времени",
     "Shelter inside" to "Укройся внутри",
     "Rewind" to "Перемотка",
-    "Shots inside are returned as your shots (30 % of their damage, nearest enemy within 600, up to 12); no skill haste." to
-        "Снаряды внутри возвращаются вашими (30 % их урона, к ближайшему врагу в радиусе 600, до 12); без ускорения навыков.",
+    "Shots inside are returned as your shots (30 % of their damage, nearest enemy within 600, up to 12); no haste for actives." to
+        "Снаряды внутри возвращаются вашими (30 % их урона, к ближайшему врагу в радиусе 600, до 12); без ускорения активных эффектов.",
     "Annihilate" to "Аннигиляция",
     "The void strikes the target and the toughest enemy nearby; your next Dash toward that enemy blinks you to it." to
         "Пустота бьёт по цели и по самому прочному врагу поблизости; следующий рывок в его сторону переносит вас к нему.",
@@ -228,15 +228,15 @@ internal val BuildPhrasesInRussian: List<Pair<String, String>> = listOf(
     "The well follows the Core (radius 120, 2.4 s) and stops pulling enemies; it still eats shots." to
         "Колодец следует за Ядром (радиус 120, 2,4 с) и больше не тянет врагов; снаряды он по-прежнему ест.",
     "Oblivion" to "Забвение",
-    "Rot meets the void: a weakened enemy is erased, its Data rushes to you and your skills recharge; anything " +
+    "Rot meets the void: a weakened enemy is erased, its Data rushes to you and your actives recharge; anything " +
         "sturdier takes a heavy burst." to
-        "Гниль встречает пустоту: ослабленный враг стирается, его Данные летят к вам, а навыки перезаряжаются; кто " +
-        "покрепче, получает мощный удар.",
+        "Гниль встречает пустоту: ослабленный враг стирается, его Данные летят к вам, а активные эффекты " +
+        "перезаряжаются; кто покрепче, получает мощный удар.",
     "Erasure" to "Стирание",
     "Erase for Data" to "Стирай ради Данных",
     "Last Rites" to "Последний обряд",
-    "Execute lines 16 % (Elites 9 %), never bosses; no Data latch, no skill refund." to
-        "Порог стирания 16 % (элита 9 %), никогда не боссы; без притяжения Данных и перезарядки навыков.",
+    "Execute lines 16 % (Elites 9 %), never bosses; no Data latch, no refund for actives." to
+        "Порог стирания 16 % (элита 9 %), никогда не боссы; без притяжения Данных и перезарядки активных эффектов.",
 
     // Archetype tags and resonance tiers.
     "Ram" to "Таран",
@@ -313,8 +313,8 @@ internal val BuildPhrasesInRussian: List<Pair<String, String>> = listOf(
     // Timed stats that are not item effects.
     "Damage" to "Урон",
     "Damage taken" to "Получаемый урон",
-    "Skill recharge" to "Перезарядка навыков",
-    "Skill power" to "Сила навыков",
+    "Active recharge" to "Перезарядка активных эффектов",
+    "Active power" to "Сила активных эффектов",
 
     // Clause trigger labels.
     "On impact" to "При столкновении",
@@ -335,8 +335,8 @@ internal val BuildPhrasesInRussian: List<Pair<String, String>> = listOf(
     "On data pickup" to "При сборе данных",
     "On ricochet" to "При рикошете",
     "On slam" to "При впечатывании врага",
-    "On skill cast" to "При применении навыка",
-    "On skill hit" to "При попадании навыком",
+    "On active cast" to "При применении активного эффекта",
+    "On active hit" to "При попадании активным эффектом",
     "On Apex" to "При Апексе",
     "On entering a field" to "При входе в поле",
     "On erasing a shot" to "При стирании снаряда",

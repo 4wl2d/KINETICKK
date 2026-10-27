@@ -5,7 +5,7 @@ package kinetickk.ball.content.api
 
 import kinetickk.foundation.common.localization.AppLanguage
 
-/** The kinds of numbers a skill card lists, each with its English and Russian template. */
+/** The kinds of numbers an active effect's card lines list, each with its English and Russian template. */
 enum class SkillLineKind(private val english: String, private val russian: String) {
     RANK("Rank {0}", "Ранг {0}"),
     COOLDOWN("Cooldown {0} s", "Перезарядка {0} с"),
@@ -20,8 +20,8 @@ enum class SkillLineKind(private val english: String, private val russian: Strin
 }
 
 /**
- * The card lines of the skill at [rank]: its rank and cooldown, then its radius, duration, damage and stack values
- * in the order its values list them. Pure presentation of content numbers.
+ * The card lines of the active effect at [rank] (the carrying item's stacks): its rank and cooldown, then its radius,
+ * duration, damage and stack values in the order its values list them. Pure presentation of content numbers.
  */
 fun SkillDefinition.rankLines(rank: Int, language: AppLanguage): List<String> {
     val values = rank(rank).values

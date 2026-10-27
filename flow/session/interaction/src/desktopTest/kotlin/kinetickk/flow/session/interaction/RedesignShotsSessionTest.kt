@@ -235,6 +235,11 @@ class RedesignShotsSessionTest {
                 onNodeWithTag("codex-slot-empty-relic/2").performSemanticsAction(SemanticsActions.OnClick)
             }
             shotCodex("item-offer", w, h, language, run = true, lifetimeMatter = 1_000L) { codexState("item-offer") }
+            // Active items: one selected in the catalog (its Active section), the Active filter, one held in the build.
+            for (state in listOf("active-selected", "active-filter", "build-active")) {
+                shotCodex(state, w, h, language, run = state == "build-active") { codexState(state) }
+            }
+            shotCodex("active-selected-text175", w, h, language, scale = 1.75f) { codexState("active-selected") }
             for (state in listOf("build", "default", "selected", "build-stats", "item-offer", "build-item")) shotCodex("$state-text175", w, h, language,
                 run = state.startsWith("build") || state == "item-offer", scale = 1.75f, lifetimeMatter = if (state == "item-offer") 1_000L else 9_640L) {
                 codexState(state)
@@ -337,6 +342,20 @@ class RedesignShotsSessionTest {
                 onNodeWithTag("codex-grid").performScrollToKey("item/10")
                 mainClock.advanceTimeBy(100)
                 onNodeWithTag("codex-slot-item/10").performSemanticsAction(SemanticsActions.OnClick)
+            }
+            "active-selected", "build-active" -> {
+                if (state == "build-active") {
+                    onNodeWithTag("codex-tab-0").performSemanticsAction(SemanticsActions.OnClick)
+                    mainClock.advanceTimeBy(100)
+                }
+                val key = "item/${ShotActives.first().id}"
+                onNodeWithTag("codex-grid").performScrollToKey(key)
+                mainClock.advanceTimeBy(100)
+                onNodeWithTag("codex-slot-$key").performSemanticsAction(SemanticsActions.OnClick)
+            }
+            "active-filter" -> {
+                onNodeWithTag("codex-filter-3").performSemanticsAction(SemanticsActions.OnClick)
+                mainClock.advanceTimeBy(100)
             }
             "forms", "forms-locked", "enemies", "enemies-locked" -> {
                 val forms = state.startsWith("forms")
@@ -462,7 +481,12 @@ internal val ShotCatalog: UiCatalogSnapshot by lazy { createContentCatalog().uiC
 /** Items matrix shot states: the three sorts (in segment order), then a previewed cell. */
 private val ItemsMatrixStates = listOf("sort-tag", "sort-element", "sort-rarity", "items-preview")
 
-private val DiscoveredItems: Set<Int> = (0 until 80).filter { (it * 2654435761L % 100) < 54 }.toSet() + 10
+/** The first six shipped active items (Solar Flare first): discovered, and the first held by the shot run at rank II. */
+private val ShotActives: List<kinetickk.ball.content.api.ItemDefinition> by lazy { ShotCatalog.items.filter { it.isActive }.take(6) }
+
+private val DiscoveredItems: Set<Int> by lazy {
+    (0 until 80).filter { (it * 2654435761L % 100) < 54 }.toSet() + 10 + ShotActives.map { it.id }
+}
 
 internal fun ShotProgress(
     coreShape: CoreShape = CoreShape.PRISM,
@@ -491,7 +515,8 @@ internal fun ShotCodexModel(run: Boolean = false): CodexRenderModel = CodexRende
 )
 
 private val ShotRun: CodexRunStacks by lazy {
-    val stacks = List(80) { id -> when (id) { 10 -> 1; 21 -> 1; 57 -> 1; 68 -> 1; 40 -> 2; else -> 0 } }.toImmutableList()
+    val held = ShotActives.first().id
+    val stacks = List(ShotCatalog.items.size) { id -> when (id) { 10 -> 1; 21 -> 1; 57 -> 1; 68 -> 1; 40 -> 2; held -> 2; else -> 0 } }.toImmutableList()
     CodexRunStacks(stacks, kinetickk.ball.gameplay.api.GameplayBuildSummaryProjection(
         kinetickk.ball.gameplay.api.GameplayInstanceId(kinetickk.ball.gameplay.api.RunId(1)),
         kinetickk.ball.gameplay.api.GameplayRevision.ZERO, stacks,

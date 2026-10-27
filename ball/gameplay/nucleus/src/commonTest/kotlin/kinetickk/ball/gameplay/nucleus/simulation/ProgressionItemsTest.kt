@@ -27,7 +27,7 @@ class ProgressionItemsTest {
         assertEquals(min(60f, state.shieldCapacity()), state.shield, 1e-3f)
 
         // Before level 42 a level-up's 5 s Apex charge refunds a quarter of it to the skills.
-        state.acquireSkill(SkillId.SOLAR_FLARE)
+        state.acquireActive(SkillId.SOLAR_FLARE)
         state.elapsed = 20f
         state.skillRuntime[0, SkillCell.CAST_AT] = 15f
         state.skillRuntime[0, SkillCell.LAST_COOLDOWN] = 10f

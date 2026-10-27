@@ -21,7 +21,16 @@ internal fun MutableGameState.rewardPreviews(): ImmutableList<RewardPreview> {
         if (option.rewardFocus != null) return@map RewardPreview()
         val candidate = copyForReduction()
         when (option.type) {
-            ChoiceType.ITEM -> option.itemId?.let { candidate.acquireItem(it, option.reborn) }
+            ChoiceType.ITEM -> option.itemId?.let { id ->
+                val item = content.item(id) ?: return@map RewardPreview()
+                // An active item that still needs a slot forecasts what it brings itself; which slot it replaces is asked next.
+                if (needsActiveSlot(item)) {
+                    candidate.stackItem(item, option.reborn)
+                    candidate.recompileBuild()
+                    return@map RewardPreview(forecasts = forecastsAgainst(candidate, option), requiresSlot = true)
+                }
+                candidate.acquireItem(id, option.reborn)
+            }
             ChoiceType.TOTEM -> if (option.totemAction == TotemAction.AMPLIFY_CURRENT) candidate.amplifyCurrentWeapon()
             // Weapon level and global bonuses are preserved when switching systems.
             ChoiceType.WEAPON -> option.weaponId?.let {
@@ -35,8 +44,11 @@ internal fun MutableGameState.rewardPreviews(): ImmutableList<RewardPreview> {
                 }
                 candidate.acquireRelic(id)
             }
-            ChoiceType.SKILL -> option.skillId?.let { id ->
-                if ((option.skillRank ?: 1) > 1) candidate.rankUpSkill(id) else candidate.acquireSkill(id)
+            // Replacing previews the whole replacement; keeping the loadout changes nothing to preview.
+            ChoiceType.ACTIVE_SLOT -> {
+                val slot = option.activeSlot ?: return@map RewardPreview()
+                val incoming = pendingActiveItemId ?: return@map RewardPreview()
+                candidate.replaceActiveItem(slot, incoming, pendingActiveReborn)
             }
             ChoiceType.RELIC_BIND -> option.relicSlot?.let { slot ->
                 when (option.relicAction) {
@@ -65,10 +77,14 @@ internal fun MutableGameState.rewardPreviews(): ImmutableList<RewardPreview> {
     }.toImmutableList()
 }
 
-/** Build consequences of taking an option, most important first (the card shows the first few). */
+/**
+ * Build consequences of taking an option, most important first (the card shows the first few). Suppression reads the
+ * item the option adds: a replace card's incoming item, never the held item it removes; the keep card adds none.
+ */
 private fun MutableGameState.forecastsAgainst(candidate: MutableGameState, option: ChoiceOption): ImmutableList<BuildForecast> {
     val forecasts = mutableListOf<BuildForecast>()
-    option.itemId?.let { id ->
+    val added = if (option.type == ChoiceType.ACTIVE_SLOT) option.incomingItemId?.takeIf { option.activeSlot != null } else option.itemId
+    added?.let { id ->
         val item = content.item(id)
         if (item != null && itemSuppressedShare(item) > 0f) forecasts += BuildForecast(ForecastKind.SUPPRESSED)
     }

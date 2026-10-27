@@ -4,7 +4,6 @@
 package kinetickk.ball.content.api
 
 import kinetickk.foundation.collections.ImmutableList
-import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableListOfSize
 
 /** Content-owned starting values; seconds always mean active simulation time at 1x. */
@@ -57,12 +56,6 @@ data class RunTempoProfile(
     val levelIntegrity: Float = 2.5f,
     /** Integrity every level-up repairs. */
     val levelRepair: Float = 7.5f,
-    /** Run levels that open the skill slots, in slot order (one per [ContentBounds.SKILL_SLOTS]). */
-    val skillSlotLevels: ImmutableList<Int> = immutableListOf(2, 8, 16),
-    /** Item offers on levels divisible by this carry a skill rank-up card. */
-    val skillRankEveryLevels: Int = 4,
-    /** Levels a skill must be owned or ranked for before it is eligible for the next rank-up card. */
-    val skillRankGapLevels: Int = 2,
     /**
      * First run level whose requirement the Rebirth tier's [RebirthProfile.dataRequirementScale] scales. Earlier
      * levels keep the table at every tier, so a high tier's opening level-ups arrive as on tier 0; 1 scales the whole
@@ -89,15 +82,6 @@ data class RunTempoProfile(
         }
         require(levelIntegrity.isFinite() && levelIntegrity >= 0f)
         require(levelRepair.isFinite() && levelRepair >= 0f)
-        require(skillSlotLevels.size == ContentBounds.SKILL_SLOTS) { "Every skill slot needs an opening level" }
-        require(skillSlotLevels.all { it in MIN_MAXIMUM_LEVEL until maximumLevel }) {
-            "Skill slots open on a level-up below the maximum level"
-        }
-        require(skillSlotLevels.zipWithNext().all { (first, second) -> first < second }) {
-            "Skill slot levels must increase"
-        }
-        require(skillRankEveryLevels in 1 until maximumLevel)
-        require(skillRankGapLevels in 0 until maximumLevel)
         require(rebirthScaleFromLevel in 1..ContentBounds.MAX_RUN_LEVEL) {
             "The Rebirth Data scale must start on a run level within 1..${ContentBounds.MAX_RUN_LEVEL}"
         }

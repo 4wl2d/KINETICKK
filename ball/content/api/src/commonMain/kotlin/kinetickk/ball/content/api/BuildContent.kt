@@ -173,9 +173,11 @@ data class AffinityTierDefinition(val description: String) {
 /**
  * The per-run draft deck: each run deals a share of every rank-eligible rarity tier into its deck, and only dealt items
  * reach ordinary offers. The floors keep every run playable: early choice, an early Rare for pity, the Data ladder, the
- * character's archetype, every archetype and element, the risk wagers and skill support. History weights lower the
- * chance that recently taken items are dealt again. [FULL] deals the whole catalog (characterisation tests).
- * Shares and minimums are by [ItemRarity] (Common to Legendary).
+ * character's archetype, every archetype and element, the risk wagers and skill support. Active items
+ * ([ItemDefinition.isActive]) are dealt by their tier's share like any item, but every floor counts and promotes passive
+ * items only: the floors guarantee passive coverage and never inflate the actives. History weights lower the chance that
+ * recently taken items are dealt again. [FULL] deals the whole catalog (characterisation tests). Shares and minimums are
+ * by [ItemRarity] (Common to Legendary).
  */
 data class DraftDeckPolicy(
     val shares: ImmutableList<Float> = immutableListOf(0.55f, 0.55f, 0.6f, 0.65f, 0.75f),
@@ -201,7 +203,7 @@ data class DraftDeckPolicy(
     val elementFloor: Int = 4,
     /** Risk items (the wagers). */
     val riskFloor: Int = 4,
-    /** Items using skill vocabulary ([ItemDefinition.usesSkills]). */
+    /** Passive items using skill vocabulary ([ItemDefinition.usesSkills]): support for the run's active items. */
     val skillFloor: Int = 6,
     /** A tier holding fewer offerable dealt items than this deals its next offerable reserve item. */
     val refillFloor: Int = 3,
@@ -243,7 +245,10 @@ data class DraftDeckPolicy(
  * 1 + [alignedFitWeight] × min(fit, [alignedFitCap]); a tag counts toward fit only with points the player chose
  * ([loadoutFits] false leaves the character's own point out, and lets an item naming the equipped weapon's family fit
  * only once the build took one), and half when already at the top resonance tier ([saturatedTagFit]). The volatile card lifts its rarity [volatileLiftChance] of the time and prefers risk items only
- * [volatileRiskChance] of the time. [RELEASE_040] is the 0.4.0 funnel, for comparisons.
+ * [volatileRiskChance] of the time. In every lane an active item's weight is multiplied by [activeWeight], by
+ * [characterActiveWeight] when its effect is in the run character's [CoreShapeDefinition.activeLane], and by
+ * [ownedActiveWeight] when the card would rank up an owned active; the factors only weight a choice inside a rolled
+ * tier and never add a draw. [RELEASE_040] is the 0.4.0 funnel, for comparisons.
  */
 data class OfferLanePolicy(
     val alignedChance: Float = 0.55f,
@@ -253,6 +258,12 @@ data class OfferLanePolicy(
     val saturatedTagFit: Float = 0.5f,
     val volatileLiftChance: Float = 0.6f,
     val volatileRiskChance: Float = 0.36f,
+    /** Offer weight factor of every active item; 0 means actives are never offered, not merely rare. */
+    val activeWeight: Float = 1f,
+    /** Extra factor for the active items in the run character's lane. */
+    val characterActiveWeight: Float = 3f,
+    /** Extra factor for a card that would rank up an owned active item. */
+    val ownedActiveWeight: Float = 8f,
 ) {
     init {
         require(alignedChance.isFinite() && alignedChance in 0f..1f)
@@ -261,10 +272,18 @@ data class OfferLanePolicy(
         require(saturatedTagFit.isFinite() && saturatedTagFit in 0f..1f)
         require(volatileLiftChance.isFinite() && volatileLiftChance in 0f..1f)
         require(volatileRiskChance.isFinite() && volatileRiskChance in 0f..volatileLiftChance)
+        require(activeWeight.isFinite() && activeWeight >= 0f) { "Active weight must be finite and non-negative" }
+        require(characterActiveWeight.isFinite() && characterActiveWeight >= 0f) {
+            "Character active weight must be finite and non-negative"
+        }
+        require(ownedActiveWeight.isFinite() && ownedActiveWeight >= 0f) { "Owned active weight must be finite and non-negative" }
     }
 
     companion object {
-        /** The 0.4.0 lanes: the loadout fits, no saturation, an uncapped 0.8 fit weight, risk on every lift. */
+        /**
+         * The 0.4.0 lanes: the loadout fits, no saturation, an uncapped 0.8 fit weight, risk on every lift. The active
+         * factors are the shipped ones, so a comparison against these lanes isolates the lanes themselves.
+         */
         val RELEASE_040: OfferLanePolicy = OfferLanePolicy(
             alignedChance = 0.75f, alignedFitWeight = 0.8f, alignedFitCap = Float.POSITIVE_INFINITY, loadoutFits = true,
             saturatedTagFit = 1f, volatileLiftChance = 0.6f, volatileRiskChance = 0.6f,
@@ -294,16 +313,15 @@ data class BuildPolicy(
     val breaksPerSecond: Int = 40,
     val reactionsPerSecond: Int = 30,
     val maximumFields: Int = 12,
-    /** Lingering fields reserved for skills (one per slot); reactions and items share the rest of [maximumFields]. */
+    /** Lingering fields reserved for active effects (one per slot); reactions and items share the rest of [maximumFields]. */
     val maximumSkillFields: Int = 3,
     val reactionCooldownSeconds: Float = 0.5f,
     val reactionPairCooldownSeconds: Float = 2f,
-    val masteredTagPoints: Int = 1,
     /**
-     * Points an owned skill adds to each of its two tags and to its element's affinity (rank III adds as many
-     * again to the element, or to the first tag of an element-less skill).
+     * Extra points an item at its maximum stacks adds to its first element's affinity, or to its first tag when it has
+     * no element (an active item at rank III included: its tags and element count like any item's, once).
      */
-    val skillTagPoints: Int = 1,
+    val masteredTagPoints: Int = 1,
     /** The per-run draft deck of offerable items. */
     val draftDeck: DraftDeckPolicy = DraftDeckPolicy(),
     /** How the item offer's three lanes choose inside a rolled rarity. */
@@ -333,7 +351,6 @@ data class BuildPolicy(
         require(reactionCooldownSeconds.isFinite() && reactionCooldownSeconds > 0f)
         require(reactionPairCooldownSeconds.isFinite() && reactionPairCooldownSeconds >= reactionCooldownSeconds)
         require(masteredTagPoints in 0..2)
-        require(skillTagPoints in 0..2)
     }
 
     fun stackMagnitude(stacks: Int): Float =
@@ -367,10 +384,10 @@ enum class EffectTrigger(val displayLabel: String) {
     RICOCHET("On ricochet"),
     /** An enemy struck an obstacle or another enemy hard enough to take slam damage; it is the clause target. */
     SLAM("On slam"),
-    /** A skill cast succeeded; its primary target (if any) is the clause target, else the effect starts at its anchor. */
-    SKILL_CAST("On skill cast"),
-    /** One of the first four enemies a skill cast damages; it is the clause target and the damage is the hit. */
-    SKILL_HIT("On skill hit"),
+    /** An active effect was cast; its primary target (if any) is the clause target, else the effect starts at its anchor. */
+    SKILL_CAST("On active cast"),
+    /** One of the first four enemies an active cast damages; it is the clause target and the damage is the hit. */
+    SKILL_HIT("On active hit"),
     /** The Apex activated. */
     APEX("On Apex"),
     /** The Core entered one of your fields; the effect starts at the field's centre. */
@@ -515,10 +532,10 @@ enum class BuffStat(val displayLabel: String) {
     DAMAGE_REDUCTION("Damage reduction"),
     COOLING("Cooling"),
     DAMAGE_TAKEN("Damage taken"),
-    /** Skill cooldowns tick faster by the amount (through the refund bank). */
-    SKILL_RECHARGE("Skill recharge"),
-    /** Skill damage grows by the amount. */
-    SKILL_POWER("Skill power"),
+    /** Active-effect cooldowns tick faster by the amount (through the refund bank). */
+    SKILL_RECHARGE("Active recharge"),
+    /** Active-effect damage grows by the amount. */
+    SKILL_POWER("Active power"),
 }
 
 /** Which skills a [EffectAction.RefundSkills] recharges. */

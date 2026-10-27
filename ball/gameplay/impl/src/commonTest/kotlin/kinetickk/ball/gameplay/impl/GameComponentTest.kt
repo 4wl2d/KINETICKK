@@ -764,15 +764,6 @@ private fun GameComponent.advanceUntilItemChoice() {
         ) {
             return
         }
-        if (
-            render.phase == kinetickk.ball.gameplay.nucleus.render.GamePhase.CHOICE &&
-            render.choiceType == ChoiceType.SKILL &&
-            render.choices.isNotEmpty()
-        ) {
-            // Level 2 opens the Z slot: its skill draft comes before the level's item offer. Take the first card.
-            assertIs<GameplayAcceptance.Accepted>(accept(GameplayInteractionPulse.ChoiceSelected.fromValidated(0)))
-            return@repeat
-        }
         check(query(GameplayQuery.GetRunStatus).phase == GameplayRunPhase.RUNNING) {
             "Run stopped before its first item choice at frame $frameIndex: ${render.phase} / ${render.choiceType} / ${render.message} hp=${render.hp} kills=${render.kills} level=${render.level}"
         }

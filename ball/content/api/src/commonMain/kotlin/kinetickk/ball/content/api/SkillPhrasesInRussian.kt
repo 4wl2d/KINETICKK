@@ -3,7 +3,7 @@
 
 package kinetickk.ball.content.api
 
-/** Active skills: names, summaries and rank III texts. */
+/** Active effects (the active items share their names and summaries): names, summaries and rank III texts. */
 internal val SkillPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Solar Flare" to "Солнечная вспышка",
     "Vents heat into a flare; the more heat, the more Scorch." to
@@ -41,12 +41,12 @@ internal val SkillPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Your Core turns heavy: fast impacts throw enemies and add Mass." to
         "Ядро тяжелеет: быстрые удары отшвыривают врагов и добавляют Массу.",
     "Slams while it runs add 1 Mass to both enemies." to
-        "Пока навык действует, столкновения врагов добавляют обоим 1 слой Массы.",
+        "Пока эффект действует, столкновения врагов добавляют обоим 1 слой Массы.",
     "Decay Spores" to "Споры распада",
     "Seed a crowd with Decay; the seeded spread rot and drop Data when they die." to
         "Засевает толпу Распадом; заражённые при гибели разносят гниль и роняют Данные.",
-    "Each seeded death refunds 0.5 s to every skill, up to 3 s per cast." to
-        "Каждая гибель заражённого возвращает всем навыкам 0,5 с, но не больше 3 с за применение.",
+    "Each seeded death refunds 0.5 s to every active, up to 3 s per cast." to
+        "Каждая гибель заражённого возвращает всем активным эффектам 0,5 с, но не больше 3 с за применение.",
     "Entropic Tide" to "Энтропийный прилив",
     "Draws in all Decay around you: it bursts as damage and mends the Core." to
         "Вбирает весь Распад вокруг: он взрывается уроном и чинит Ядро.",
@@ -59,7 +59,7 @@ internal val SkillPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Resonator" to "Резонатор",
     "Plants a resonator that pulses on the beat and replays reactions near it." to
         "Ставит резонатор: он пульсирует в такт и повторяет реакции рядом.",
-    "Replays up to five reactions at 60% strength." to "Повторяет до пяти реакций с силой 60 %.",
+    "Replays up to five reactions at 84% strength." to "Повторяет до пяти реакций с силой 84 %.",
     "Void Step" to "Шаг в пустоту",
     "Step through the void toward the pointer, untouchable for a moment; a rift detonates where you were." to
         "Шаг сквозь пустоту к указателю: на миг вы неуязвимы, а позади взрывается разлом.",
@@ -79,7 +79,8 @@ internal val SkillPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Catalyze" to "Катализ",
     "Every enemy near the pointer carrying two elements reacts at once." to
         "Каждый враг у указателя с двумя стихиями сразу вступает в реакцию.",
-    "Forces up to ten reactions at 130% strength." to "Вызывает до десяти реакций с силой 130 %.",
+    "Across a wider area, forces up to ten reactions at 130% strength." to
+        "На большей площади вызывает до десяти реакций с силой 130 %.",
     "Dual Infusion" to "Двойная инфузия",
     "Your weapon sets up reactions: hits apply your two elements." to
         "Оружие готовит реакции: попадания накладывают обе ваши стихии.",

@@ -7,6 +7,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
@@ -35,10 +36,13 @@ import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RuleLineKind
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.impl.createContentCatalog
+import kinetickk.ball.gameplay.interaction.canvas.activeItemEmptyPipColor
 import kinetickk.ball.gameplay.interaction.canvas.elementFill
+import kinetickk.ball.gameplay.interaction.canvas.skillGlyph
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
@@ -82,6 +86,53 @@ class RewardCardStylesTest {
         val choices = content.items.map { ChoiceOption(ChoiceType.ITEM, it.name, it.description, it.rarity.displayLabel.uppercase(), itemId = it.id) }
         val model = rewardFixtureModel(content = content, choices = choices, language = language)
         return choices.mapIndexed { index, choice -> model.rewardCardPresentation(choice, index, language) }
+    }
+
+    /**
+     * An active item's unlit rank pips read on every plate its mark is drawn on, in every colour-vision mode: on the
+     * card's icon plate as drawn (plain, or tinted in a pale hue as Cryo and Void are by default, Ion in Protan and every
+     * hue in Mono, its pattern included) a rank I card's two unlit pips stand at 1.35:1 or more from the plate just above
+     * them (Line2 pips sat near 1:1 on the tinted plates), as they do on the pause grid's Ink2 plate.
+     */
+    @Test
+    fun anActiveItemsUnlitRankPipsReadOnEveryPlate() {
+        val actives = itemCards().filter { it.item?.active != null }
+        assertEquals(SkillId.entries.size, actives.size, "every active effect has its item")
+        for (mode in KkVisionMode.entries) for (card in actives) {
+            val look = rewardCardLook(card, mode.palette)
+            fun plateAt(rank: Int): PixelMap {
+                val shown = card.copy(itemStack = rank)
+                val bitmap = ImageBitmap(PlatePx, PlatePx)
+                CanvasDrawScope().draw(Density(2f), LayoutDirection.Ltr, Canvas(bitmap), Size(PlatePx.toFloat(), PlatePx.toFloat())) {
+                    drawRewardIcon(shown, shown.accentColor(mode.palette), shown.iconColor(mode.palette), look.secondHue, look.plateTint, false, 0f)
+                }
+                return bitmap.toPixelMap()
+            }
+            // Rank I against every pip lit: the pixels the two draws differ in are the two unlit pips.
+            val (pips, plate) = unlitPipsAndPlate(plateAt(1), plateAt(card.item!!.maxStacks))
+            val contrast = kkContrast(pips, plate)
+            assertTrue(contrast >= 1.35f, "$mode ${card.title}: unlit pips ${pips.toArgb().toUInt().toString(16)} at $contrast:1 " +
+                "on the plate's ${plate.toArgb().toUInt().toString(16)}")
+        }
+        assertTrue(kkContrast(activeItemEmptyPipColor(Kk.Ink2), Kk.Ink2) >= 1.35f, "unlit pips on the pause grid's Ink2 plate")
+    }
+
+    /**
+     * The mean colour inside the unlit pips of a mark drawn at its rank ([atRank]) and fully lit ([lit]): the pixels the
+     * two draws differ in whose four neighbours differ too. With it, the mean colour of the plate 3 px above them.
+     */
+    private fun unlitPipsAndPlate(atRank: PixelMap, lit: PixelMap): Pair<Color, Color> {
+        fun differs(x: Int, y: Int) = x in 0 until atRank.width && y in 0 until atRank.height && atRank[x, y] != lit[x, y]
+        val cores = ArrayList<Pair<Int, Int>>()
+        var top = atRank.height
+        for (y in 0 until atRank.height) for (x in 0 until atRank.width) if (differs(x, y)) {
+            top = minOf(top, y)
+            if (differs(x - 1, y) && differs(x + 1, y) && differs(x, y - 1) && differs(x, y + 1)) cores += x to y
+        }
+        assertTrue(cores.size > 20, "the unlit pips are drawn (${cores.size} px inside them)")
+        fun mean(colors: List<Color>) = Color(colors.map { it.red }.average().toFloat(), colors.map { it.green }.average().toFloat(),
+            colors.map { it.blue }.average().toFloat())
+        return mean(cores.map { (x, y) -> atRank[x, y] }) to mean(cores.map { (x, _) -> atRank[x, top - 3] })
     }
 
     private fun otherCards(): List<RewardCardPresentation> {
@@ -263,6 +314,43 @@ class RewardCardStylesTest {
             val owner = owners.getValue(rewardCardArt(item))
             assertTrue(owner.elements != item.elements || owner.tags.firstOrNull() != item.tags.firstOrNull(),
                 "${item.name} looks like ${owner.name}")
+        }
+    }
+
+    @Test
+    fun everyActiveItemWearsItsEffectsGlyph() {
+        // The one glyph table the HUD slots, the card plates and the other screens share: every effect its own mark.
+        assertEquals(SkillId.entries.size, SkillId.entries.map(::skillGlyph).toSet().size, "18 effects, 18 glyphs")
+        // The per-active watermark table: each effect's own glyph, except where its faint outline would repeat a card
+        // of the same rarity, element and ornament (the outline rule above).
+        val watermarks = mapOf(
+            SkillId.SOLAR_FLARE to KkIcon.WEAPONS_SOLAR_SWEEP, SkillId.METEOR to KkIcon.WEAPONS_MORNINGSTAR,
+            SkillId.FROST_LINE to KkIcon.WEAPONS_PHASE_LATTICE, SkillId.FROST_SNAP to KkIcon.WEAPONS_GLACIER_BELL,
+            SkillId.ARC_HOOK to KkIcon.WEAPONS_TETHER_ARC, SkillId.STORM_COIL to KkIcon.WEAPONS_ARC_COIL,
+            SkillId.GRAVITY_WELL to KkIcon.FORMS_SPIRAL, SkillId.MASS_DRIVER to KkIcon.WEAPONS_SINGULARITY_SPEAR,
+            SkillId.DECAY_SPORES to KkIcon.WEAPONS_SCATTER_BLOOM, SkillId.ENTROPIC_TIDE to KkIcon.WEAPONS_ENTROPY_FIELD,
+            SkillId.SONIC_BOOM to KkIcon.WEAPONS_RESONANCE_DRUM, SkillId.RESONATOR to KkIcon.WEAPONS_SENTRY_GRID,
+            SkillId.VOID_STEP to KkIcon.WEAPONS_HOLLOW_RIFT, SkillId.NULL_SHROUD to KkIcon.WEAPONS_EVENT_LENS,
+            SkillId.SLINGSHOT to KkIcon.WEAPONS_GYRE_DISC, SkillId.FULL_STOP to KkIcon.WEAPONS_CONCUSSION_ENGINE,
+            SkillId.CATALYZE to KkIcon.WEAPONS_PRISM_RELAY, SkillId.DUAL_INFUSION to KkIcon.WEAPONS_FLUX_WAKE,
+        )
+        assertEquals(SkillId.entries.toSet(), watermarks.keys)
+        SkillId.entries.forEach { assertEquals(watermarks.getValue(it), activeWatermark(it), "$it watermark") }
+        assertEquals(listOf(SkillId.GRAVITY_WELL), SkillId.entries.filter { activeWatermark(it) != skillGlyph(it) },
+            "only an outline clash moves a watermark off its effect's glyph")
+        val cards = itemCards().filter { it.item!!.isActive }
+        assertEquals(SkillId.entries.size, cards.size, "every effect is carried by one shipped item")
+        for (card in cards) {
+            val item = card.item!!
+            val look = rewardCardLook(card, KkVisionMode.DEFAULT.palette)
+            if (look.art == null) {
+                assertEquals(activeWatermark(item.active!!), look.style.watermark, "${item.name} wears its effect's watermark")
+            } else {
+                // An epic active borrows a scene of its own family, never one drawn for an item that looks like it.
+                assertEquals(ItemRarity.EPIC, item.rarity, item.name)
+                assertTrue(usesFamilyArt(item), "${item.name} has a family scene of its own")
+            }
+            assertEquals(item.rarity.rank, card.rank, "${item.name} takes its rarity's frame")
         }
     }
 
@@ -581,3 +669,6 @@ class RewardCardStylesTest {
         assertTrue(contrast >= KK_CARD_LABEL_CONTRAST, "$scene: $text on $background is only ${"%.2f".format(contrast)}:1")
     }
 }
+
+/** A board card's 88 dp icon plate at density 2. */
+private const val PlatePx = 176

@@ -13,7 +13,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.gameplay.api.BrakeSource
@@ -25,8 +32,14 @@ import kinetickk.ball.gameplay.interaction.GameplayInteractionPort
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
 import kinetickk.ball.gameplay.interaction.layout.runningControlBounds
+import kinetickk.ball.gameplay.interaction.rewards.rewardActiveChoice
+import kinetickk.ball.gameplay.interaction.rewards.rewardActiveFixtureContent
+import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureActiveBase
+import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
 import org.junit.Rule
@@ -37,7 +50,8 @@ import kotlin.test.assertTrue
 /**
  * The running HUD's touch model end to end: one thumb steers while others tap Dash and a skill and hold
  * Brake; control pointers never steer; Brake releases only when its last pointer lifts; when the steering
- * thumb lifts, a waiting pointer takes over from where it is.
+ * thumb lifts, a waiting pointer takes over from where it is; a touch player's reward cards name a Z/X/C slot by its
+ * number until a key a player could bind is pressed (a volume key is not one).
  */
 @OptIn(ExperimentalTestApi::class)
 class GameplayTouchInputTest {
@@ -186,6 +200,54 @@ class GameplayTouchInputTest {
         // The steering slot was freed with its finger: a new finger steers.
         touch { down(2, Offset(400f, 300f)) }
         assertEquals(listOf(Offset(400f, 300f)), steeredTo())
+    }
+
+    @Test
+    fun aTouchPlayerSeesAnActiveCardsSlotByNumberAndAKeyPressBringsBackItsKey() {
+        start()
+        // An offer dealing Solar Flare into the free X slot.
+        val content = rewardActiveFixtureContent
+        val offer = requireNotNull(running.renderModel).with("phase" to GamePhase.CHOICE, "content" to content,
+            "choiceType" to ChoiceType.ITEM, "choices" to immutableListOf(rewardActiveChoice(rewardFixtureActiveBase, slot = 1)),
+            "itemStacks" to List(content.items.size) { 0 }.toImmutableList())
+        fun chips(): List<String> = compose.onAllNodes(hasAnyAncestor(hasTestTag("kinetickk.gameplay.choice.1.chips")) and
+            SemanticsMatcher.keyIsDefined(SemanticsProperties.Text), useUnmergedTree = true).fetchSemanticsNodes()
+            .flatMap { node -> node.config[SemanticsProperties.Text].map { it.text } }
+        // A new snapshot each time: the port accepts pulses only then, and the host reads the run after an accepted one.
+        fun show(model: kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel?) {
+            current = running.withTouchModel(model ?: requireNotNull(running.renderModel))
+            compose.mainClock.advanceTimeByFrame()
+            compose.mainClock.advanceTimeByFrame()
+        }
+
+        fun press(key: Key) {
+            show(null)
+            compose.onNodeWithTag("kinetickk.gameplay").performKeyInput { pressKey(key) }
+            compose.mainClock.advanceTimeByFrame()
+            show(offer)
+        }
+
+        touch { down(0, Offset(700f, 500f)) }
+        touch { up(0) }
+        show(offer)
+        assertTrue("Slot 2" in chips(), "a touch player reads the slot's number: ${chips()}")
+
+        // A device key no player can bind (a phone's volume rocker) is not keyboard play.
+        press(Key.VolumeDown)
+        assertTrue("Slot 2" in chips(), "a volume key kept the touch player's slot number: ${chips()}")
+        // A bound gameplay key is.
+        press(Key.Z)
+        assertTrue("Active X" in chips(), "a keyboard player reads the slot's key: ${chips()}")
+
+        // So is any key a player could bind, bound or not.
+        show(null)
+        touch { down(0, Offset(700f, 500f)) }
+        assertEquals(listOf(Offset(700f, 500f)), steeredTo(), "the run is back")
+        touch { up(0) }
+        show(offer)
+        assertTrue("Slot 2" in chips(), "${chips()}")
+        press(Key.A)
+        assertTrue("Active X" in chips(), "${chips()}")
     }
 
     @Test

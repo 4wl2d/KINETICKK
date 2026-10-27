@@ -14,11 +14,11 @@ class SkillRankLinesTest {
     @Test
     fun rankLinesReadTheRanksNumbersInBothLanguages() {
         val flare = skills[SkillId.SOLAR_FLARE.ordinal]
-        assertEquals(listOf("Rank 2", "Cooldown 9 s", "Radius 220", "Damage 40", "Stacks 2"), flare.rankLines(2, AppLanguage.English))
-        assertEquals(listOf("Ранг 2", "Перезарядка 9 с", "Радиус 220", "Урон 40", "Слои 2"), flare.rankLines(2, AppLanguage.Russian))
+        assertEquals(listOf("Rank 2", "Cooldown 7.65 s", "Radius 220", "Damage 56", "Stacks 2"), flare.rankLines(2, AppLanguage.English))
+        assertEquals(listOf("Ранг 2", "Перезарядка 7,65 с", "Радиус 220", "Урон 56", "Слои 2"), flare.rankLines(2, AppLanguage.Russian))
         val well = skills[SkillId.GRAVITY_WELL.ordinal]
-        assertEquals("Duration 3.5 s", well.rankLines(2, AppLanguage.English)[3])
-        assertEquals("Длительность 3,5 с", well.rankLines(2, AppLanguage.Russian)[3])
+        assertEquals("Duration 4.9 s", well.rankLines(2, AppLanguage.English)[3])
+        assertEquals("Длительность 4,9 с", well.rankLines(2, AppLanguage.Russian)[3])
     }
 
     @Test

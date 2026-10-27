@@ -30,12 +30,12 @@ import kotlin.test.assertTrue
  */
 class ExpansionItemsTest {
     /** A run at ARSENAL III whose Arsenal items only carry their tag, so nothing else touches the targets. */
-    /** ARSENAL III with element-free Arsenal items; the kinetic Morningstar by default. */
+    /** ARSENAL III with element-free Arsenal items (an active one made plain); the kinetic Morningstar by default. */
     private fun arsenalThree(weapon: WeaponId = WeaponId.MORNINGSTAR): MutableGameState {
         val content = canonicalGameplayContent.copy(items = canonicalGameplayContent.items.map { item ->
             if (BuildTag.ARSENAL !in item.tags) item
             else item.copy(elements = immutableListOf(), stats = immutableListOf(StatDelta(ItemEffect.PICKUP_RADIUS, 1f)),
-                clauses = immutableListOf(), rules = immutableListOf(), risk = false)
+                clauses = immutableListOf(), rules = immutableListOf(), risk = false, active = null)
         }.toImmutableList())
         val state = buildTestState(content = content, weapon = weapon)
         for (item in content.items.filter { BuildTag.ARSENAL in it.tags }) {

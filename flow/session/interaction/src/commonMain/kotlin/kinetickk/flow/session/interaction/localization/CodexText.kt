@@ -106,8 +106,8 @@ internal enum class CodexText(
     ),
     DORMANT("Dormant", "Спит"),
     DORMANT_HELP(
-        "Its effects need a skill or a weapon of another type.",
-        "Его эффектам нужен навык или оружие другого типа.",
+        "Its effects need an active item or a weapon of another type.",
+        "Его эффектам нужен активный предмет или оружие другого типа.",
     ),
     NOT_IN_RUN("Not in this run", "Не в этом забеге"),
     NOT_IN_RUN_HELP(
@@ -116,6 +116,19 @@ internal enum class CodexText(
     ),
     REBORN("Reborn", "Перерождённый"),
     RISK("Risk", "Риск"),
+    /**
+     * Active items: the detail's chip (as the reward card's), the spoken mark of an active's cell, the detail's Active
+     * and Passive sections and the rank an owned active holds.
+     */
+    ACTIVE_CHIP("Active", "Актив"),
+    ACTIVE_ITEM("Active item", "Активный предмет"),
+    ACTIVE_PART("Active", "Активный эффект"),
+    PASSIVE_PART("Passive", "Пассивный эффект"),
+    ACTIVE_RANK("Rank {0}/{1}", "Ранг {0}/{1}"),
+    ACTIVE_OFFERS_HELP(
+        "An active item joins ordinary offers once your run level reaches the item's level; the Matter you have collected does not open it sooner.",
+        "Активный предмет попадает в обычные предложения, когда уровень забега достигает уровня предмета; собранная материя не открывает его раньше.",
+    ),
     SEVERED("Severed", "Отсечена"),
     SEVERED_HELP(
         "A replaced relic keeps its cost for a while after it leaves its slot.",

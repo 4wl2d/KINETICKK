@@ -109,6 +109,12 @@ private val FamilyArtByName: Map<String, RewardCardArt> = mapOf(
     "Philosopher's Engine" to RewardCardArt.SOLAR_CHOIR,
     "Summit Crown" to RewardCardArt.SOLAR_CHOIR,
     "Meridian Engine" to RewardCardArt.GLACIAL_HEART,
+    // The epic active items: a planted resonator's rings, the tide drawn in round the Core, the lattice a catalyst
+    // sets off at once, the weapon's two infusions mixed in one flask.
+    "Resonator" to RewardCardArt.REDLINE_REACTOR,
+    "Entropic Tide" to RewardCardArt.DARK_STAR,
+    "Catalyze" to RewardCardArt.STORM_LATTICE,
+    "Dual Infusion" to RewardCardArt.VOLATILE_COMPOUND,
 )
 
 /**

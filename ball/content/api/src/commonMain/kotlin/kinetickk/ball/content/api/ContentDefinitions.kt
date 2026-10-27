@@ -53,8 +53,11 @@ enum class ItemRarity(
 }
 
 /**
- * A hand-authored item. Passive [stats] apply per stack; [clauses] are Trigger–Condition–Effect
- * rules; [rules] modify whole systems while the item is owned. Ids are dense catalog indices.
+ * A hand-authored item. Its passive part: [stats] apply per stack; [clauses] are Trigger–Condition–Effect
+ * rules; [rules] modify whole systems while the item is owned. An active item also carries an [active]
+ * effect the run casts from a Z/X/C slot; its rank is the item's stacks (I–III), and its passive is
+ * exactly one small rule compiled from those stacks, so replacing the item leaves nothing behind.
+ * Ids are dense catalog indices.
  */
 data class ItemDefinition(
     val id: Int,
@@ -72,6 +75,8 @@ data class ItemDefinition(
     val minimumRebirth: Int = 0,
     /** High-risk items carry a liability and feed the Volatile offer lane. */
     val risk: Boolean = false,
+    /** The active effect this item binds to a slot while owned (rank = stacks), or null for a passive item. */
+    val active: SkillId? = null,
 ) {
     init {
         require(id >= 0) { "Item id must be non-negative" }
@@ -85,18 +90,52 @@ data class ItemDefinition(
         require(stats.size <= ContentBounds.MAX_ITEM_STATS)
         require(clauses.size <= ContentBounds.MAX_ITEM_CLAUSES)
         require(rules.size <= ContentBounds.MAX_ITEM_RULES)
-        require(stats.isNotEmpty() || clauses.isNotEmpty() || rules.isNotEmpty()) { "Item must do something" }
+        require(stats.isNotEmpty() || clauses.isNotEmpty() || rules.isNotEmpty() || active != null) { "Item must do something" }
         require(!risk || stats.any { it.amount < 0f } || rules.any(ItemRule::isLiability)) {
             "A high-risk item must declare its liability"
         }
         require(rules.count { it is ItemRule.ReactionKeystone } <= 1) { "An item switches at most one reaction to its keystone" }
         require(keystone == null || rarity.rank >= ItemRarity.EPIC.rank) { "Keystone items are Epic or Legendary" }
+        if (active != null) requireSmallPassive(active)
     }
+
+    /** True when the item carries an [active] effect. */
+    val isActive: Boolean get() = active != null
 
     /** The reaction this item switches to its keystone form, or null. */
     val keystone: ReactionId?
         get() = rules.firstNotNullOfOrNull { (it as? ItemRule.ReactionKeystone)?.reaction }
+
+    /**
+     * An active item ranks I–III with its stacks whatever its rarity, and its passive is one plain rule: no stat or
+     * clause, no cost, no wager, no Data economy, no skill vocabulary (it would support itself), no weapon-family
+     * condition, and none of the offer, reroll, threshold or keystone rules.
+     */
+    private fun requireSmallPassive(active: SkillId) {
+        require(maxStacks == ContentBounds.MAX_SKILL_RANK) {
+            "Active item $name ($active) stacks exactly to rank ${ContentBounds.MAX_SKILL_RANK}"
+        }
+        require(stats.isEmpty() && clauses.isEmpty() && rules.size == 1) { "Active item $name carries exactly one passive rule" }
+        val passive = rules.single()
+        require(!risk && !passive.isLiability) { "Active item $name carries no liability" }
+        require(!isDataEconomy && !usesSkills) { "Active item $name passive is neither Data economy nor skill support" }
+        require(
+            passive !is ItemRule.BonusRerolls && passive !is ItemRule.OfferCards && passive !is ItemRule.ReactionKeystone &&
+                passive !is ItemRule.BreakThreshold,
+        ) { "Active item $name passive is not a reroll, offer, threshold or keystone rule" }
+        require(passive.ruleCondition !is EffectCondition.WeaponFamilyIs) { "Active item $name passive names no weapon family" }
+    }
 }
+
+/** The condition a conditional rule holds under, or null. */
+private val ItemRule.ruleCondition: EffectCondition?
+    get() = when (this) {
+        is ItemRule.WhileModifier -> condition
+        is ItemRule.AlwaysCrit -> condition
+        is ItemRule.CritDamageVersus -> condition
+        is ItemRule.DamageVersus -> condition
+        else -> null
+    }
 
 /** Conversions that cost the owner something (risk items may declare one as their liability). */
 private val LiabilityConversions: Set<ConversionKind> = setOf(
@@ -120,7 +159,8 @@ val ItemRule.isLiability: Boolean
 
 /**
  * An item of the Data economy: a positive Data gain, a Data grant, or a Spored mark (Spored deaths drop Data).
- * The deck, the bots and the level calibration read it; a skill refund paid in Data is not Data economy.
+ * The deck, the bots and the level calibration read it; a skill refund paid in Data is not Data economy, and
+ * neither is an active effect that moves Data (Decay Spores, Gravity Well): only the passive part counts.
  */
 val ItemDefinition.isDataEconomy: Boolean
     get() = stats.any { it.effect == ItemEffect.DATA_GAIN && it.amount > 0f } ||
@@ -128,7 +168,7 @@ val ItemDefinition.isDataEconomy: Boolean
             clause.actions.any { it is EffectAction.GainData || it is EffectAction.ApplyMark && it.mark == MarkPick.SPORED }
         }
 
-/** Conversions that act on skills: they do nothing until the run has drafted one. */
+/** Conversions that act on skills (active effects): they do nothing until the run owns an active item. */
 val ConversionKind.actsOnSkills: Boolean
     get() = this == ConversionKind.DASH_HEAT_TO_SKILLS || this == ConversionKind.DATA_TO_SKILLS ||
         this == ConversionKind.SKILLS_COST_HEAT || this == ConversionKind.SKILL_FIELDS_FOLLOW
@@ -139,8 +179,9 @@ val BuffStat.actsOnSkills: Boolean
 
 /**
  * An item that uses skill vocabulary: a skill trigger, condition, refund or buff, a skill rule, Catalysis or a skill
- * conversion. Those parts wait until the run drafts a skill (the run's dormant share); the draft deck keeps a floor of
- * such items so casters find their support.
+ * conversion. Those parts support active effects and wait until the run owns an active item (the run's dormant share);
+ * the draft deck keeps a floor of such items so casters find their support. An active item is never support for
+ * itself: its passive uses no skill vocabulary ([ItemDefinition.isActive] and this predicate stay separate).
  */
 val ItemDefinition.usesSkills: Boolean
     get() {

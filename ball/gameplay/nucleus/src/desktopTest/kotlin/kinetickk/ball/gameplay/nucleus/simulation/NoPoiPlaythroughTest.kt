@@ -11,16 +11,73 @@ import kotlin.math.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
+/**
+ * Real input-only runs of a fresh profile. The controller can inspect current threats, but cannot alter simulation
+ * state.
+ *
+ * Both rules are population gates (0.5.0 active items) over [PopulationSeeds]: on the 05885fa9 base
+ * the reference seed 2026 alone won as the reference does with probability 0.53, and the ten further probe seeds
+ * reached five POI-free wins with probability 0.70, so both re-rolled with every change to the reward stream. Each
+ * threshold is the base share minus two standard errors, rounded down. The reference seed is still flown twice to show
+ * the run is deterministic, and every choice of every run keeps the loadout invariant.
+ */
 class NoPoiPlaythroughTest {
-    /** Real input-only runs. The controller can inspect current threats, but cannot alter simulation state. */
-    @Test fun freshProfileWinsReferenceNoPoiRunWithinTwelveToFifteenActiveMinutes() {
+    /**
+     * A fresh run wins as the reference did: VICTORY within 720-900 s with the Architect arriving at 720 s, every POI
+     * skipped, no completed orbit pending, the foundation at 180 s (weapon level 3, three items, a Relic slot) and the
+     * opportunity at 360 s (four Elites seen, four Relic slots), and weapon level 10 with four Relics, two of them
+     * ranked, at the end. The base share over the population was 158 of 300 (0.527, SE 0.029; 44 base wins touched a
+     * POI); at least [MIN_REFERENCE_SHARE] must win so.
+     */
+    @Test fun freshProfilesWinNoPoiRunsWithinTwelveToFifteenActiveMinutes() {
         java.io.File(System.getProperty("java.io.tmpdir"), "kinetickk-nopoi-evidence.txt").writeText("")
-        var firstOutcome: RunOutcome? = null
-        repeat(2) { attempt ->
-            val seed = 2026
-            report("REFERENCE attempt=${attempt + 1} seed=$seed simulationSpeed=1.0 inputHz=50 freshLab=true")
+        val replays = List(2) { attempt -> fly(REFERENCE_SEED, reportAttempt = attempt + 1) }
+        assertEquals(replays[0], replays[1], "the reference seed replays identically")
+        val share = population.shareOf { it.winsLikeTheReference }
+        report("NOPOI REFERENCE population ${population.count { it.winsLikeTheReference }} of ${population.size} (${"%.3f".format(share)}) " +
+            "reference seed ${replays[0].summary()}")
+        assertTrue(share >= MIN_REFERENCE_SHARE,
+            "only ${"%.3f".format(share)} of ${population.size} fresh runs won as the reference does; expected at least $MIN_REFERENCE_SHARE")
+    }
+
+    /**
+     * The reference win is not a knife-edge seed: other fresh-profile runs win without a POI. Only a victory that
+     * skipped every POI is a no-POI win (the bot's avoidance is a heuristic), and each one lasts 720-900 s and ends
+     * with four Relics. The base share over the population was 160 of 300 (0.533, SE 0.029); at least
+     * [MIN_NO_POI_WIN_SHARE] must win so. Earlier, on the ten fixed probe seeds: 6 wins after wave A, 7 after the
+     * second wave, all 10 after the final weapon balance (floor 5).
+     */
+    @Test fun freshProfileAlsoWinsFurtherReferenceNoPoiSeeds() {
+        population.filter { it.noPoiWin }.forEach { run ->
+            assertTrue(run.seconds in 720f..900f, "seed=${run.seed} activeSeconds=${run.seconds}")
+            assertEquals(4, run.relics.size, "seed=${run.seed}")
+        }
+        val share = population.shareOf { it.noPoiWin }
+        report("NOPOI FURTHER population ${population.count { it.noPoiWin }} of ${population.size} (${"%.3f".format(share)})")
+        assertTrue(share >= MIN_NO_POI_WIN_SHARE,
+            "only ${"%.3f".format(share)} of ${population.size} fresh runs won without a POI; expected at least $MIN_NO_POI_WIN_SHARE")
+    }
+
+    private companion object {
+        const val REFERENCE_SEED = 2026
+
+        /** The least share of [PopulationSeeds] runs that win as the reference does (base 0.527, SE 0.029). */
+        const val MIN_REFERENCE_SHARE = 0.46
+
+        /** The least share of [PopulationSeeds] runs that win without a POI (base 0.533, SE 0.029). */
+        const val MIN_NO_POI_WIN_SHARE = 0.47
+
+        /** One fresh run per [PopulationSeeds] seed, shared by both rules. */
+        val population: List<NoPoiRun> by lazy { populationOf(PopulationSeeds) { seed -> fly(seed) } }
+
+        /**
+         * One fresh run on [seed]; [reportAttempt] (the reference replays) also writes its minutes to the evidence
+         * file.
+         */
+        fun fly(seed: Int, reportAttempt: Int? = null): NoPoiRun {
+            if (reportAttempt != null) report("REFERENCE attempt=$reportAttempt seed=$seed simulationSpeed=1.0 inputHz=50 freshLab=true")
             val state = MutableGameState(canonicalGameplayContent, seed = seed)
             state.unlockWeaponsForTesting(ReferenceArmory)
             state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
@@ -36,95 +93,64 @@ class NoPoiPlaythroughTest {
             var foundation: Milestone? = null
             var fourSlotOpportunity: Milestone? = null
             val observedEliteIds = mutableSetOf<Int>()
-            var activePoiObserved = false
-            var poiRewardObserved = false
+            var poiEngaged = false
             var previousHealth = state.hp
             var damage = 0f
             while (state.elapsed < 900f && (state.phase == GamePhase.RUNNING || state.phase == GamePhase.CHOICE)) {
-                if (state.phase == GamePhase.CHOICE) bot.choose(state) else {
+                if (state.phase == GamePhase.CHOICE) {
+                    bot.choose(state)
+                    // Active items are the only writers of the slots: every slot's rank is its item's stacks.
+                    assertNull(state.activeLoadoutMismatch(), "seed=$seed sec=${state.elapsed}")
+                } else {
                     bot.control(state)
                     state.update(0.02f)
                 }
                 state.enemies.filter { it.type == EnemyType.ELITE }.forEach { observedEliteIds += it.id }
                 if (state.bossSpawned && bossObservedAt == null) bossObservedAt = state.elapsed
-                if (!activePoiObserved && state.pointsOfInterest.any { it.active }) {
+                if (reportAttempt != null && !poiEngaged && state.pointsOfInterest.any { it.active }) {
                     report("POI ACTIVATED sec=${state.elapsed} core=${state.coreX.toInt()},${state.coreY.toInt()} speed=${state.speed.toInt()} points=${state.pointsOfInterest.map { "${it.kind}@${it.x.toInt()},${it.y.toInt()}" }} relics=${state.equippedRelics}")
                 }
-                activePoiObserved = activePoiObserved || state.pointsOfInterest.any { it.active }
-                poiRewardObserved = poiRewardObserved || state.directedReward != null || state.pendingDirectedRewards.isNotEmpty()
+                poiEngaged = poiEngaged || state.pointsOfInterest.any { it.active } ||
+                    state.directedReward != null || state.pendingDirectedRewards.isNotEmpty()
                 if (state.elapsed >= 180f && foundation == null) foundation = milestone(state, observedEliteIds.size)
                 if (state.elapsed >= 360f && fourSlotOpportunity == null) fourSlotOpportunity = milestone(state, observedEliteIds.size)
                 damage += max(0f, previousHealth - state.hp)
                 previousHealth = state.hp
                 state.takeSoundCues()
                 state.takeVisualFxCues()
-                if (state.elapsed >= minute * 60f) {
-                    report("NOPOI seed=$seed sec=${state.elapsed.toInt()} hp=${state.hp.toInt()}/${state.maxHp.toInt()} shield=${state.shield.toInt()} speed=${state.speed.toInt()} level=${state.level} weapon=${state.weapon}/${state.weaponLevel} kills=${state.kills} items=${state.acquiredItemCount} relics=${state.equippedRelics} boss=${state.enemies.firstOrNull { it.type == EnemyType.ARCHITECT }?.hp?.toInt()} damage=${damage.toInt()}")
+                if (reportAttempt != null && state.elapsed >= minute * 60f) {
+                    report("NOPOI seed=$seed sec=${state.elapsed.toInt()} hp=${state.hp.toInt()}/${state.maxHp.toInt()} shield=${state.shield.toInt()} speed=${state.speed.toInt()} level=${state.level} weapon=${state.weapon}/${state.weaponLevel} kills=${state.kills} items=${state.acquiredItemCount} actives=${state.skillLoadout} relics=${state.equippedRelics} boss=${state.enemies.firstOrNull { it.type == EnemyType.ARCHITECT }?.hp?.toInt()} damage=${damage.toInt()}")
                     minute++
                 }
             }
-            report("NOPOI FINAL seed=$seed sec=${state.elapsed} phase=${state.phase} reason=${state.message} hp=${state.hp} kills=${state.kills} level=${state.level} weapon=${state.weapon}/${state.weaponLevel} damage=$damage bossAt=$bossObservedAt completedOrbits=${state.pendingCompletedOrbits} activePoi=$activePoiObserved poiReward=$poiRewardObserved foundation=$foundation sixMinutes=$fourSlotOpportunity")
-            assertEquals(GamePhase.VICTORY, state.phase, "seed=$seed ${state.message}")
-            assertTrue(state.elapsed in 720f..900f, "seed=$seed activeSeconds=${state.elapsed}")
-            assertTrue(assertNotNull(bossObservedAt) in 720f..720.05f)
-            assertTrue(!activePoiObserved && !poiRewardObserved, "seed=$seed must skip every POI")
-            assertEquals(0, state.pendingCompletedOrbits)
-            assertTrue(assertNotNull(foundation).weaponLevel >= 3 && foundation.items >= 3 && foundation.relicSlots >= 1)
-            assertTrue(assertNotNull(fourSlotOpportunity).eliteOpportunities >= 4)
-            assertEquals(4, fourSlotOpportunity.relicSlots)
-            assertTrue(state.weaponLevel >= 10 && state.equippedRelics.size == 4)
-            assertTrue(state.equippedRelics.count { it.rank > 1 } >= 2)
-            val outcome = RunOutcome(state.elapsed, state.hp, state.level, state.weapon, state.weaponLevel,
-                state.kills, state.itemStacks.indices.map { state.itemStacks[it] }, state.equippedRelics.toList(),
-                assertNotNull(foundation), assertNotNull(fourSlotOpportunity))
-            if (firstOutcome == null) firstOutcome = outcome else assertEquals(firstOutcome, outcome)
+            val run = NoPoiRun(seed, state.phase, state.elapsed, state.message, state.hp, state.level, state.weapon, state.weaponLevel,
+                state.kills, state.itemStacks.indices.map { state.itemStacks[it] }, state.equippedRelics.toList(), bossObservedAt,
+                poiEngaged, state.pendingCompletedOrbits, foundation, fourSlotOpportunity)
+            if (reportAttempt != null) report("NOPOI FINAL seed=$seed sec=${state.elapsed} phase=${state.phase} reason=${state.message} hp=${state.hp} kills=${state.kills} level=${state.level} weapon=${state.weapon}/${state.weaponLevel} damage=$damage bossAt=$bossObservedAt completedOrbits=${state.pendingCompletedOrbits} poi=$poiEngaged foundation=$foundation sixMinutes=$fourSlotOpportunity")
+            return run
         }
-    }
-
-    /** The reference win is not a single knife-edge seed: other fresh-profile seeds win the same way. */
-    @Test fun freshProfileAlsoWinsFurtherReferenceNoPoiSeeds() {
-        // The fixed balance probe after the reference (i * 7_919 + 13, i = 1..10). Seeds are never picked by
-        // their outcome; the floor catches a drop in robustness. After wave A (roster and director, Sonic and
-        // Void, frame pacing, Core Matrix) and its integration fixes, 6 of the 10 win, all without a POI. After the
-        // second wave (obstacles the bot steers around, twelve characters, the 173-item catalog; the bot skips
-        // ricochet and slam items, passes on the Furnace Covenant and keeps wider of skipped POIs) 7 win, all
-        // without a POI. After the final weapon balance (no weapon out-damages another family's best: Ion Swarm
-        // 4.5 per shot, a 20 % Prism Relay twin, a Flux Wake trail that shares its heat in a crowd) all 10 win.
-        val minimumWins = 5
-        var wins = 0
-        for (seed in (1..10).map { it * 7_919 + 13 }) {
-            val state = MutableGameState(canonicalGameplayContent, seed = seed)
-            state.unlockWeaponsForTesting(ReferenceArmory)
-            state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
-            state.startRun()
-            val bot = NoPoiBot()
-            var poiEngaged = false
-            while (state.elapsed < 900f && (state.phase == GamePhase.RUNNING || state.phase == GamePhase.CHOICE)) {
-                if (state.phase == GamePhase.CHOICE) bot.choose(state) else {
-                    bot.control(state)
-                    state.update(0.02f)
-                }
-                poiEngaged = poiEngaged || state.pointsOfInterest.any { it.active } ||
-                    state.directedReward != null || state.pendingDirectedRewards.isNotEmpty()
-                state.takeSoundCues()
-                state.takeVisualFxCues()
-            }
-            report("NOPOI SEED seed=$seed phase=${state.phase} sec=${state.elapsed} hp=${state.hp}/${state.maxHp} weapon=${state.weapon}/${state.weaponLevel} relics=${state.equippedRelics} poi=$poiEngaged reason=${state.message}")
-            // Only a victory that skipped every POI is a no-POI win; the bot's avoidance is a heuristic.
-            if (state.phase != GamePhase.VICTORY || poiEngaged) continue
-            wins++
-            assertTrue(state.elapsed in 720f..900f, "seed=$seed activeSeconds=${state.elapsed}")
-            assertEquals(4, state.equippedRelics.size, "seed=$seed")
-        }
-        assertTrue(wins >= minimumWins, "only $wins of 10 probe seeds won; expected at least $minimumWins")
     }
 }
 
-private data class RunOutcome(
-    val activeSeconds: Float, val remainingHp: Float, val level: Int, val weapon: WeaponId,
-    val weaponLevel: Int, val kills: Int, val itemStacks: List<Int>, val relics: List<EquippedRelic>,
-    val foundation: Milestone, val sixMinutes: Milestone,
-)
+/** One fresh no-POI run as the rules read it: its end, the Architect's arrival, POI contact and the two milestones. */
+private data class NoPoiRun(
+    val seed: Int, val phase: GamePhase, val seconds: Float, val reason: String, val remainingHp: Float, val level: Int,
+    val weapon: WeaponId, val weaponLevel: Int, val kills: Int, val itemStacks: List<Int>, val relics: List<EquippedRelic>,
+    val bossObservedAt: Float?, val poiEngaged: Boolean, val pendingCompletedOrbits: Int,
+    val foundation: Milestone?, val sixMinutes: Milestone?,
+) {
+    /** A victory that skipped every POI. */
+    val noPoiWin: Boolean get() = phase == GamePhase.VICTORY && !poiEngaged
+
+    /** The reference rule: a POI-free victory in 720-900 s that reached both milestones and the late build. */
+    val winsLikeTheReference: Boolean get() = noPoiWin && seconds in 720f..900f && bossObservedAt?.let { it in 720f..720.05f } == true &&
+        pendingCompletedOrbits == 0 &&
+        foundation?.let { it.weaponLevel >= 3 && it.items >= 3 && it.relicSlots >= 1 } == true &&
+        sixMinutes?.let { it.eliteOpportunities >= 4 && it.relicSlots == 4 } == true &&
+        weaponLevel >= 10 && relics.size == 4 && relics.count { it.rank > 1 } >= 2
+
+    fun summary(): String = "$seed:$phase@${seconds.toInt()}s(L$level $reason)"
+}
 
 private data class Milestone(val level: Int, val weaponLevel: Int, val items: Int, val relicSlots: Int, val eliteOpportunities: Int)
 private fun milestone(state: MutableGameState, eliteOpportunities: Int) = Milestone(
@@ -146,6 +172,9 @@ private const val POI_CLEARANCE = 360f
 
 /** The bot looks at its skills this often (simulated seconds). */
 private const val SKILL_CHECK_SECONDS = 0.1f
+
+/** Entropic Tide: the Decay stacks within its radius that make a cast worth it at full integrity. */
+private const val TIDE_DECAY_STACKS = 6
 
 /** The bot's Apex rule: a crowd of this many enemies within this radius, or integrity below this share. */
 private const val APEX_CROWD = 8
@@ -356,9 +385,9 @@ internal class NoPoiBot(
     }
 
     /**
-     * A cast at the Architect lands its boss channel (lead addendum B1): the Architect is out of its shift, within the
-     * Apex reach of the Core (where it just arrived it is still far off), and in its last phase or far enough above
-     * its phase gate that the next shift does not cut the activation's strikes short.
+     * A cast at the Architect lands its boss channel: the Architect is out of its shift, within the Apex reach of the
+     * Core (where it just arrived it is still far off), and in its last phase or far enough above its phase gate that
+     * the next shift does not cut the activation's strikes short.
      */
     private fun apexLands(s: MutableGameState, architect: Enemy): Boolean {
         if (s.isShifting(architect)) return false
@@ -390,12 +419,15 @@ internal class NoPoiBot(
         }
         val boss = s.enemies.firstOrNull { it.type == EnemyType.ARCHITECT && it.alive }
         return when (id) {
-            SkillId.SOLAR_FLARE -> s.heat >= 40f && enemiesWithin(s.coreX, s.coreY, values[1]) >= 3
+            // A crowd in reach is the cue at any heat: the vented heat only adds damage and Scorch, so a player does not
+            // hold a ready flare until the heat builds.
+            SkillId.SOLAR_FLARE -> enemiesWithin(s.coreX, s.coreY, values[1]) >= 3
             SkillId.FROST_SNAP, SkillId.FULL_STOP -> enemiesWithin(s.coreX, s.coreY, values[0]) >= 3 ||
                 boss != null && length(boss.x - s.coreX, boss.y - s.coreY) <= values[0] + 100f
+            // Low integrity, or Decay worth drawing in: six stacks in reach, a crowd's worth rather than a full harvest.
             SkillId.ENTROPIC_TIDE -> s.hp < s.maxHp * 0.5f || s.enemies.filter {
                 it.alive && length(it.x - s.coreX, it.y - s.coreY) <= values[0] + it.radius
-            }.sumOf { it.stacksOf(StatusElement.ENTROPY) } >= 12
+            }.sumOf { it.stacksOf(StatusElement.ENTROPY) } >= TIDE_DECAY_STACKS
             SkillId.NULL_SHROUD -> boltsWithin(250f) >= 4
             SkillId.MASS_DRIVER, SkillId.DUAL_INFUSION -> enemiesWithin(s.coreX, s.coreY, 400f) >= 3
             SkillId.METEOR, SkillId.STORM_COIL, SkillId.GRAVITY_WELL, SkillId.DECAY_SPORES, SkillId.RESONATOR ->
@@ -460,8 +492,13 @@ internal class NoPoiBot(
 
     fun choose(s: MutableGameState) {
         val choices = s.choices
-        // Skill cards come first under every Data policy: a rank-up is always taken, a draft follows the lane.
-        val index = skillChoice(s) ?: run {
+        if (s.choiceType == ChoiceType.ACTIVE_SLOT) {
+            decisions++
+            s.choose(slotChoice(s))
+            return
+        }
+        // SEEK takes a Data active first (economy §2.1); every policy takes a rank-up of an owned active next.
+        val index = seekActiveChoice(s) ?: activeRankUpChoice(s) ?: run {
             when (dataPolicy) {
                 DataPolicy.NEUTRAL -> Unit
                 // An item offer without a Data card is rerolled while a rank-0 Data item can still stack; the
@@ -486,7 +523,11 @@ internal class NoPoiBot(
                     return
                 }
             }
-            choices.indices.maxByOrNull { policyScore(s, choices[it], it) }
+            // SEEK's Data cards outrank a new active other than one of the character's lane; under the other policies a
+            // new active comes first.
+            val laneActive = choices.any { c -> activeEffect(s, c)?.let { it in lane(s) && it in wantedActives(s) } == true }
+            val dataCard = dataPolicy == DataPolicy.SEEK && choices.any { isDataGainCard(s, it) } && !laneActive
+            (if (dataCard) null else newActiveChoice(s)) ?: choices.indices.maxByOrNull { policyScore(s, choices[it], it) }
         } ?: return
         decisions++
         s.choose(index)
@@ -494,6 +535,8 @@ internal class NoPoiBot(
 
     /** SEEK ranks a Data-gain card by its Data weight above every other card; AVOID scores it −5 000. */
     private fun policyScore(s: MutableGameState, c: ChoiceOption, index: Int): Float = when {
+        // An active the bot would not take (it would only salvage, or AVOID's Decay Spores) is a last resort.
+        activeEffect(s, c) != null && activeEffect(s, c) !in wantedActives(s) -> -10_000f
         dataPolicy == DataPolicy.NEUTRAL || !isDataGainCard(s, c) -> score(s, c, index)
         dataPolicy == DataPolicy.SEEK -> dataWeight(s, c)
         else -> -5_000f
@@ -510,29 +553,82 @@ internal class NoPoiBot(
     private fun isDataGainCard(s: MutableGameState, c: ChoiceOption): Boolean =
         c.itemId?.let(s.content::item)?.isDataEconomy == true
 
-    /**
-     * Skill cards (combat-final §4.10): a rank-up card is always taken; a draft takes the character's card, else
-     * the aligned card (the first), else the lowest skill. The Data policy goes first (economy §2.1): SEEK drafts
-     * Decay Spores (Spored deaths drop Data), else Gravity Well (it pulls Data in); AVOID never drafts Decay Spores
-     * while another card is offered.
+    /*
+     * Active items (combat-final §4.10): a rank-up of an owned active is always taken; a new active is taken while
+     * a slot is free; with every slot full only a character-lane active is taken, to replace the lowest-rank active
+     * outside the lane (the character is built around its lane, so a player trades an off-lane active of any rank for
+     * one), and any other new active is passed over for the best other card. SEEK takes Decay Spores (Spored deaths drop
+     * Data), else Gravity Well (it pulls Data in), whether to bind, rank or replace the lowest-rank non-Data active, and a
+     * new lane active before any Data card, but never in place of one of its Data actives; AVOID never takes Decay
+     * Spores.
      */
-    private fun skillChoice(s: MutableGameState): Int? {
-        val rankUp = s.choices.indexOfFirst { it.type == ChoiceType.SKILL && (it.skillRank ?: 1) > 1 }
-        if (rankUp >= 0) return rankUp
-        if (s.choiceType != ChoiceType.SKILL || s.choices.isEmpty()) return null
-        if (dataPolicy == DataPolicy.SEEK) {
-            val seek = s.choices.indices.maxBy { seekSkillWeight(s.choices[it].skillId) }
-            if (seekSkillWeight(s.choices[seek].skillId) > 0f) return seek
+
+    private fun activeEffect(s: MutableGameState, c: ChoiceOption): SkillId? =
+        if (c.type == ChoiceType.ITEM) c.itemId?.let(s.content::item)?.active else null
+
+    /** The actives this bot takes now: owned ones (rank-ups), any while a slot is free, else lane actives with a slot to replace. */
+    private fun wantedActives(s: MutableGameState): Set<SkillId> = SkillId.entries.filterTo(HashSet()) { effect ->
+        when {
+            dataPolicy == DataPolicy.AVOID && effect == SkillId.DECAY_SPORES -> false
+            dataPolicy == DataPolicy.SEEK && seekSkillWeight(effect) > 0f -> true
+            s.skillLoadout.owns(effect) -> true
+            s.skillLoadout.lowestEmptySlot() >= 0 -> true
+            else -> effect in lane(s) && laneReplacementSlot(s) >= 0
         }
-        val allowed = s.choices.indices.filter { dataPolicy != DataPolicy.AVOID || s.choices[it].skillId != SkillId.DECAY_SPORES }
-            .ifEmpty { s.choices.indices.toList() }
-        val lane = s.coreShape.synergySkills()
-        val character = allowed.firstOrNull { s.choices[it].skillId in lane }
-        if (character != null) return character
-        return if (allowed.first() == 0 && s.choices[0].skillId != null) 0 else allowed.minByOrNull { s.choices[it].skillId?.ordinal ?: Int.MAX_VALUE }
     }
 
-    /** SEEK's draft weights (economy §2.1): Decay Spores 5 000, Gravity Well 4 000, any other skill 0. */
+    /** SEEK: the offered Data active with the highest SEEK weight, or null. */
+    private fun seekActiveChoice(s: MutableGameState): Int? {
+        if (dataPolicy != DataPolicy.SEEK) return null
+        val seek = s.choices.indices.filter { seekSkillWeight(activeEffect(s, s.choices[it])) > 0f }
+        return seek.maxByOrNull { seekSkillWeight(activeEffect(s, s.choices[it])) }
+    }
+
+    /** A card ranking up an owned active (AVOID still never Decay Spores), or null. */
+    private fun activeRankUpChoice(s: MutableGameState): Int? = s.choices.indices.firstOrNull { index ->
+        val effect = activeEffect(s, s.choices[index]) ?: return@firstOrNull false
+        s.skillLoadout.owns(effect) && effect in wantedActives(s)
+    }
+
+    /** A card with a new active the bot takes now (a free slot, or a lane active replacing an off-lane one), or null. */
+    private fun newActiveChoice(s: MutableGameState): Int? = s.choices.indices.firstOrNull { index ->
+        val effect = activeEffect(s, s.choices[index]) ?: return@firstOrNull false
+        !s.skillLoadout.owns(effect) && effect in wantedActives(s)
+    }
+
+    /**
+     * The slot prompt: SEEK replaces the lowest-rank non-Data active for a Data active; a lane active replaces the
+     * lowest-rank one outside the lane (for SEEK, outside its Data actives as well); else keep.
+     */
+    private fun slotChoice(s: MutableGameState): Int {
+        val keep = s.choices.indexOfFirst { it.activeSlot == null }
+        val incoming = s.pendingActiveItemId?.let(s.content::item)?.active
+        val slot = if (dataPolicy == DataPolicy.SEEK && seekSkillWeight(incoming) > 0f) {
+            (0 until SkillRuntime.SLOTS).filter { seekSkillWeight(s.skillLoadout.skill(it)) <= 0f }
+                .minByOrNull { s.skillLoadout.rank(it) } ?: -1
+        } else if (incoming != null && incoming in lane(s)) {
+            laneReplacementSlot(s)
+        } else -1
+        return s.choices.indexOfFirst { it.activeSlot == slot }.takeIf { slot >= 0 && it >= 0 } ?: keep
+    }
+
+    private fun lane(s: MutableGameState): List<SkillId> = s.content.coreShape(s.coreShape).activeLane
+
+    /**
+     * The slot holding the lowest-rank active outside the character's lane (the first of equals), or -1. SEEK never
+     * offers one of its Data actives here: a Data-seeking player keeps the Data actives it sought, and otherwise this
+     * rule and SEEK's own slot rule would undo each other, a lane active evicting a Data active and the next Data card
+     * evicting the lane active.
+     */
+    private fun laneReplacementSlot(s: MutableGameState): Int = (0 until SkillRuntime.SLOTS)
+        .filter { slot ->
+            s.skillLoadout.skill(slot).let { held ->
+                held != null && held !in lane(s) && !(dataPolicy == DataPolicy.SEEK && seekSkillWeight(held) > 0f)
+            }
+        }
+        .minByOrNull { s.skillLoadout.rank(it) } ?: -1
+
+    /** SEEK's active weights (economy §2.1): Decay Spores 5 000, Gravity Well 4 000, any other active 0. */
     private fun seekSkillWeight(id: SkillId?): Float = when (id) {
         SkillId.DECAY_SPORES -> 5_000f
         SkillId.GRAVITY_WELL -> 4_000f

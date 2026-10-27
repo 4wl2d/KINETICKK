@@ -45,7 +45,7 @@ class ContentBootstrapValidationTest {
         val data = defaultContentBootstrapData()
         val gameplay = createContentCatalogForTesting(data).gameplayContent()
 
-        assertEquals(269, gameplay.items.size)
+        assertEquals(287, gameplay.items.size)
         assertEquals(ContentBounds.MAX_WEAPONS, gameplay.weapons.size)
         assertEquals(MatrixNodeId.entries.size, gameplay.matrixNodes.size)
         assertEquals(RelicId.entries.size, gameplay.relics.size)
@@ -65,6 +65,33 @@ class ContentBootstrapValidationTest {
         val data = defaultContentBootstrapData()
 
         assertRejected(data.copy(items = data.items.paddedTo(ContentBounds.MAX_ITEMS + 1)), "items size 321")
+        // The bound refuses first: the active-item checks run after it, so copies of an active fail on size alone.
+        val activeCopies = data.items + (data.items.size..ContentBounds.MAX_ITEMS).map { id ->
+            data.items.last().copy(id = id, name = "Padding $id", description = "Bound padding $id.")
+        }
+        assertRejected(data.copy(items = activeCopies), "items size 321")
+    }
+
+    @Test
+    fun everyActiveEffectIsCarriedByExactlyOneItemThatRepeatsItsNameTagsAndElement() {
+        val data = defaultContentBootstrapData()
+        val flare = data.items.single { it.active == SkillId.SOLAR_FLARE }
+        val shroud = data.items.single { it.active == SkillId.NULL_SHROUD }
+        val slingshot = data.items.single { it.active == SkillId.SLINGSHOT }
+        fun replaced(item: ItemDefinition) = data.copy(items = data.items.withReplaced(item.id, item))
+
+        assertRejected(replaced(flare.copy(active = null)), "SOLAR_FLARE must be carried by exactly one item, not 0")
+        assertRejected(replaced(shroud.copy(active = SkillId.SOLAR_FLARE)), "SOLAR_FLARE must be carried by exactly one item, not 2")
+        assertRejected(replaced(flare.copy(name = "Sun Flare")), "Sun Flare must carry the name of its active effect Solar Flare")
+        assertRejected(replaced(flare.copy(tags = flare.tags.reversed().toImmutableList())), "must carry the tags of its active effect in order")
+        assertRejected(
+            replaced(flare.copy(elements = immutableListOf(StatusElement.THERMAL, StatusElement.CRYO))),
+            "must carry exactly the element of its active effect",
+        )
+        assertRejected(replaced(slingshot.copy(elements = immutableListOf(StatusElement.SONIC))), "exactly the element of its active effect")
+        // The shipped effects match their items; another name for the effect and its item together is accepted.
+        val renamed = data.skills.map { if (it.id == SkillId.SOLAR_FLARE) it.copy(name = "Sun Flare") else it }
+        createContentCatalogForTesting(replaced(flare.copy(name = "Sun Flare")).copy(skills = renamed))
     }
 
     @Test
@@ -513,10 +540,13 @@ class ContentBootstrapValidationTest {
     }
 }
 
-/** Pads the catalog with distinct copies of its last item so only the size changes. */
+/**
+ * Pads the catalog with distinct passive copies of its last item so only the size changes (the last item is an
+ * active one, and each effect is carried by exactly one item).
+ */
 private fun List<ItemDefinition>.paddedTo(size: Int): List<ItemDefinition> =
     this + (this.size until size).map { id ->
-        last().copy(id = id, name = "Padding $id", description = "Bound padding $id.")
+        last().copy(id = id, name = "Padding $id", description = "Bound padding $id.", active = null)
     }
 
 private fun <Value> List<Value>.swappedHead(): ImmutableList<Value> =

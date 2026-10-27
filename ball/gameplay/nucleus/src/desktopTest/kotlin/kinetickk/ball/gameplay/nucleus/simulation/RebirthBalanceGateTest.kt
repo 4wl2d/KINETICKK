@@ -23,7 +23,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Rebirth difficulty gates (SPEC 11.2), played by the input-only NoPoi bot on one fixed seed set: the
+ * Rebirth difficulty gates (SPEC 11.2), played by the input-only NoPoi bot. Gate A, Gate I and the survival bounds of
+ * D and H play the 300 [PopulationSeeds]; the other gates and the win bounds of D and H play one fixed seed set: the
  * second half of the NoPoi probe (`i * 7_919 + 13`, i = 6..10), chosen by its definition, never by
  * outcome. The weapons are the reworked 24 with their synergy rules; the gates read the weapon synergy
  * projection to confirm that the Pentagon's signature bonus (and, for the strong build, Stormheart
@@ -64,33 +65,54 @@ import kotlin.test.assertTrue
  * Fresh profiles win 5/5 at tier 1 and none from tier 2. Before the retune (reworked weapons, old
  * tuning) the strong build won tier 10 3/5 (losses at 83 and 85 s), the full-Matrix Pentagon 4/5 and
  * the half Matrix tier 8 2/5.
+ *
+ * With active items A and the survival bounds of D and H are population gates over [PopulationSeeds] (policy.md,
+ * "Balance gate populations"): on the 05885fa9 base their five gate seeds passed with probability 0.49, 0.82 and 0.78,
+ * so they re-rolled with every change to the reward stream. A's floor is the lower of the seeded threshold and the base
+ * minus two standard errors; D's and H's are min(480 s, M - 2 SE), with M the shipped tuning's own median survival on
+ * the calibration windows and SE the bootstrap SE of a 300-run median drawn from them (see their constants). Gate I is
+ * a population gate as well: its 31 seeds kept its ratio with probability 0.78 on the base. B, C, E, F, G and the win
+ * bounds of D and H keep their seeds and thresholds: their seeds pass with probability at least 0.99 on the base's
+ * population and on the shipped active items'.
  */
 class RebirthBalanceGateTest {
+    /**
+     * Gate A over the population: a fresh tier-0 run won 204 of the 300 [PopulationSeeds] runs on the 05885fa9 base
+     * (0.680, SE 0.027), so five seeds reached four wins with probability 0.49. At least [A_MIN_WIN_SHARE] of the
+     * population must win: by the population threshold rule the lower of the seeded 4 of 5 (0.80) and the base share
+     * minus two standard errors, rounded down.
+     */
     @Test fun aFreshNoPoiBotStillWinsTierZero() {
-        val outcomes = GateSeeds.map { seed -> play(seed, tier = 0, setup = Fresh) }
-        report("GATE A tier=0 fresh", outcomes)
-        assertTrue(outcomes.count { it.won } >= 4, "tier 0 must stay winnable: ${outcomes.summary()}")
+        val outcomes = populationOf(PopulationSeeds) { seed -> play(seed, tier = 0, setup = Fresh) }
+        val share = outcomes.shareOf { it.won }
+        println("GATE A tier=0 fresh population wins ${outcomes.count { it.won }} of ${outcomes.size} (${"%.3f".format(share)})")
+        assertTrue(share >= A_MIN_WIN_SHARE,
+            "tier 0 must stay winnable: ${"%.3f".format(share)} of ${outcomes.size} fresh runs won, below $A_MIN_WIN_SHARE")
     }
 
     /**
-     * Gate I (0.5.0 skills): skills help a fresh tier-0 run but do not trivialise it. The same bot with no skill slot in
-     * reach of the run clears the Architect no more than a fifth slower than with its drafted, cast skills.
+     * Gate I (0.5.0 actives): active items help a fresh tier-0 run but do not trivialise it. The same bot on the
+     * catalog without the active items ([NoActives], a run as before they existed) clears the Architect no more than a
+     * fifth slower than with the actives its offers dealt and it cast. A run that dies counts as never clearing.
      *
-     * Measured on the NoPoi probe sequence i = 1..31 ([GateISeeds]), not the five gate seeds: a run that dies counts as
-     * never clearing, and about a quarter of fresh runs die with or without skills, so a five-seed median lands on
-     * whichever arm lost two seeds (the five seeds read 0.37–0.49 while 400 seeds read 0.78–0.83, and five-seed blocks
-     * of those 400 passed in 53 %).
+     * A population gate over [PopulationSeeds]. A five-seed median lands on whichever arm lost two seeds,
+     * since about a quarter of fresh runs die with or without skills, so the gate once read 31 seeds of the NoPoi probe
+     * sequence (i = 1..31); they still kept the ratio at 0.8 with probability only 0.78 on the 05885fa9 base and 0.84
+     * with the shipped active items. On the base the population's median clear was 83.91 s with skills against 94.13 s
+     * without (ratio 0.891, bootstrap SE 0.042, n 300); the arm without active items reproduces the 94.13 s exactly.
+     * The ratio must be at least [I_MIN_CLEAR_RATIO]: by the population threshold rule the lower of the seeded 0.8 and
+     * the base minus two standard errors (0.807), rounded down.
      */
     @Test fun skillsHelpAFreshTierZeroRunWithoutTrivialisingIt() {
-        val withSkills = GateISeeds.map { seed -> play(seed, tier = 0, setup = Fresh) }
-        val without = GateISeeds.map { seed -> play(seed, tier = 0, setup = Fresh, content = NoSkillSlots) }
-        report("GATE I tier=0 fresh skills", withSkills)
-        report("GATE I tier=0 fresh no-skills", without)
+        val withSkills = populationOf(PopulationSeeds) { seed -> play(seed, tier = 0, setup = Fresh) }
+        val without = populationOf(PopulationSeeds) { seed -> play(seed, tier = 0, setup = Fresh, content = NoActives) }
         val skilled = withSkills.medianClear()
         val unskilled = without.medianClear()
-        println("GATE I median clear skills=$skilled no-skills=$unskilled ratio=${skilled / unskilled}")
-        assertTrue(skilled >= unskilled * 0.8f,
-            "skills must not trivialise tier 0: median clear $skilled s against $unskilled s without skills")
+        println("GATE I tier=0 fresh population median clear skills=$skilled no-skills=$unskilled ratio=${skilled / unskilled} " +
+            "(${withSkills.size} runs each)")
+        assertTrue(skilled >= unskilled * I_MIN_CLEAR_RATIO,
+            "skills must not trivialise tier 0: population median clear $skilled s against $unskilled s without skills, " +
+                "below $I_MIN_CLEAR_RATIO of it")
     }
 
     @Test fun aFullMatrixAndASignatureWeaponCanWinTierThree() {
@@ -128,27 +150,50 @@ class RebirthBalanceGateTest {
                 "${high.summary()} / ${low.summary()}")
     }
 
-    @Test fun aStrongBuildSurvivesEightMinutesOfTierTenButRarelyClearsIt() {
+    /**
+     * D's survival bound is a population gate: the base strong build's median survival over the 300
+     * [PopulationSeeds] runs was 574.48 s (bootstrap SE 16.24 s), and five seeds reached a median of 480 s with
+     * probability 0.82. The population's median survival must be at least [D_MIN_MEDIAN_SURVIVAL] s, the
+     * floor for active items (see the constant): the base handed the strong Pentagon its lane skills for free, and
+     * active items reach it only through ordinary offers. The win bound stays on the five gate seeds (8 of the 300 base
+     * runs won).
+     */
+    @Test fun aStrongBuildSurvivesSevenMinutesOfTierTenButRarelyClearsIt() {
         val outcomes = GateSeeds.map { seed -> play(seed, tier = 10, setup = Strong) }
+        val population = populationOf(PopulationSeeds) { seed -> play(seed, tier = 10, setup = Strong) }
         report("GATE D tier=10 strong", outcomes)
-        assertSignatureAndHarmony(outcomes, harmony = RelicId.STORMHEART_CAPACITOR)
-        val median = outcomes.map { it.seconds }.sorted()[outcomes.size / 2]
-        assertTrue(median >= 480f, "tier 10 must be survivable for a strong build: median $median s, ${outcomes.summary()}")
+        assertSignatureAndHarmony(outcomes + population, harmony = RelicId.STORMHEART_CAPACITOR)
+        val median = population.map { it.seconds }.gateMedian()
+        println("GATE D tier=10 strong population median survival $median s, wins ${population.count { it.won }} of ${population.size}")
+        assertTrue(median >= D_MIN_MEDIAN_SURVIVAL,
+            "tier 10 must be survivable for a strong build: population median $median s, below $D_MIN_MEDIAN_SURVIVAL s")
         assertTrue(outcomes.count { it.won } <= 3, "tier 10 must stay an achievement for the strong build: ${outcomes.summary()}")
     }
 
     /**
      * Gate H (0.5.0 Apex, combat-final §10): the strong build seeking Data at tier 10 — every Matrix rank and lifetime
-     * Matter equal to its price, so every rank-0 Data item can be offered; the bot takes Data cards first, drafts Decay
-     * Spores and Gravity Well, reaches level 42 soonest and casts the Apex as its post-cap Data recharges it. D's bounds
-     * still hold: it survives a median of eight minutes and clears in at most three seeds of five.
+     * Matter equal to its price, so every rank-0 Data item can be offered; the bot takes Data cards first, takes Decay
+     * Spores and Gravity Well, reaches level 42 soonest and casts the Apex as its post-cap Data recharges it. It takes
+     * a new active of its character's lane before a Data card, as a player building its lane would, but never in place
+     * of Decay Spores or Gravity Well: a lane active evicting a Data active and the next Data active evicting it again
+     * would undo each other. D's bounds still hold: a median survival of at least seven minutes and a clear in at
+     * most three seeds of five.
+     *
+     * The survival bound is a population gate: the base median survival over the 300 [PopulationSeeds]
+     * runs was 583.33 s (bootstrap SE 20.37 s), and five seeds reached 480 s with probability 0.78. The population's
+     * median must be at least [H_MIN_MEDIAN_SURVIVAL] s, the floor for active items: the shipped tuning's own
+     * median over the calibration windows minus two standard errors, since the base handed the strong build its lane
+     * skills for free (see the constant). The win bound stays on the five gate seeds (1 of the 300 base runs won).
      */
     @Test fun aStrongBuildSeekingDataWithTheApexStillFindsTierTenHard() {
         val outcomes = GateSeeds.map { seed -> play(seed, tier = 10, setup = Strong, seekData = true) }
+        val population = populationOf(PopulationSeeds) { seed -> play(seed, tier = 10, setup = Strong, seekData = true) }
         report("GATE H tier=10 strong+data", outcomes)
-        assertSignatureAndHarmony(outcomes, harmony = RelicId.STORMHEART_CAPACITOR)
-        val median = outcomes.map { it.seconds }.sorted()[outcomes.size / 2]
-        assertTrue(median >= 480f, "tier 10 must stay survivable for a Data-max strong build: median $median s, ${outcomes.summary()}")
+        assertSignatureAndHarmony(outcomes + population, harmony = RelicId.STORMHEART_CAPACITOR)
+        val median = population.map { it.seconds }.gateMedian()
+        println("GATE H tier=10 strong+data population median survival $median s, wins ${population.count { it.won }} of ${population.size}")
+        assertTrue(median >= H_MIN_MEDIAN_SURVIVAL,
+            "tier 10 must stay survivable for a Data-max strong build: population median $median s, below $H_MIN_MEDIAN_SURVIVAL s")
         assertTrue(outcomes.count { it.won } <= 3, "the Apex must not make tier 10 a formality: ${outcomes.summary()}")
     }
 
@@ -260,11 +305,42 @@ class RebirthBalanceGateTest {
     private companion object {
         val GateSeeds: List<Int> = (6..10).map { it * 7_919 + 13 }
 
-        /** Gate I's seeds: the NoPoi probe sequence (`i * 7_919 + 13`) for i = 1..31, which holds the gate seeds. */
-        val GateISeeds: List<Int> = (1..31).map { it * 7_919 + 13 }
+        /** Gate A: the least share of fresh tier-0 runs over [PopulationSeeds] that win (base 0.680, SE 0.027). */
+        const val A_MIN_WIN_SHARE = 0.62
 
-        /** The shipped content with every skill slot opening just below the level cap: no run here drafts a skill. */
-        val NoSkillSlots: GameplayContentSnapshot = withoutReachableSkillSlots()
+        /**
+         * Gate D: the least median survival over [PopulationSeeds] of the strong build at tier 10. The
+         * 05885fa9 base read 574.48 s (bootstrap SE 16.24 s, n 300) when the Pentagon got its lane skills Sonic Boom,
+         * Resonator and Storm Coil for free at levels 2, 8 and 16. Active items reach a run only through ordinary
+         * offers, so a lane active often arrives late or not at all, and no difficulty lever makes up for that, since
+         * Reborn 10 stays hard. The floor is therefore the shipped tuning's own, min(480 s, M - 2 SE) rounded down:
+         * M = 471.082 s is the median survival over the 600 runs of the calibration windows (`i * 7_919 + 13` for
+         * i = 1,301..1,900, never the gate population) and SE = 21.602 s the bootstrap SE of a 300-run median drawn from
+         * them (20,000 resamples, RNG seed 20261027), so M - 2 SE = 427.879 s, rounded down to 427.87 s
+         * (re-measured on the final content, with Null Shroud's base bolts; a 300-run median drawn from the windows
+         * clears it with probability 0.98).
+         */
+        const val D_MIN_MEDIAN_SURVIVAL = 427.87f
+
+        /**
+         * Gate H: the least median survival over [PopulationSeeds] of the Data-seeking strong build. The
+         * 05885fa9 base read 583.33 s (bootstrap SE 20.37 s, n 300) with the same free lane skills as D; through
+         * ordinary offers the build waits for its lane actives as D does. The floor is min(480 s, M - 2 SE) rounded
+         * down, with M = 481.605 s over the 600 runs of the calibration windows (i = 1,301..1,900) and SE = 25.072 s
+         * for a 300-run median drawn from them (20,000 resamples, RNG seed 20261027): M - 2 SE = 431.461 s, rounded down
+         * to 431.46 s (re-measured on the final content and with the bot keeping its Data actives;
+         * probability 0.99 for a 300-run median drawn from the windows).
+         */
+        const val H_MIN_MEDIAN_SURVIVAL = 431.46f
+
+        /**
+         * Gate I: the least ratio of the population's median clear with active items to the median clear without them
+         * (base 0.891, SE 0.042, n 300; the population threshold rule).
+         */
+        const val I_MIN_CLEAR_RATIO = 0.80f
+
+        /** The shipped content without its active items: no run here owns one, and its deck and offers are the 0.5.0 ones. */
+        val NoActives: GameplayContentSnapshot = withoutActiveItemCatalog()
         val BotWeapons: List<WeaponId> = listOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.ENTROPY_FIELD, WeaponId.PRISM_RELAY)
 
         /** No Matrix ranks, the Orb and the starter weapon. */

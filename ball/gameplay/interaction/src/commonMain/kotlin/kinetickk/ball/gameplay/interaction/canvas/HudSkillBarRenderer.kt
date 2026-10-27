@@ -10,8 +10,8 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.SkillDefinition
-import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.gameplay.interaction.input.RunningControlPressLog
 import kinetickk.ball.gameplay.interaction.layout.KEY_CAP_MIN_WIDTH_DP
 import kinetickk.ball.gameplay.interaction.layout.RunningControlMask
@@ -25,7 +25,6 @@ import kinetickk.ball.gameplay.nucleus.render.SkillSlotProjection
 import kinetickk.ball.profile.api.GameAction
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkEase
-import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.KkSlam
 import kinetickk.foundation.design.KkTime
@@ -41,12 +40,14 @@ import kotlin.math.min
 import kotlin.math.sin
 
 /**
- * The Z/X/C skill row at the SKILL targets of [forEachRunningControlBounds] (live mask): each slot's
+ * The Z/X/C active row at the SKILL targets of [forEachRunningControlBounds] (live mask): each slot's
  * look ([drawKkSkillSlot]) with its feedback — the 90 ms press flash ([RunningControlPressLog]), the
- * refusal shake and Bone sweep edge, the ready flash and ring, the refund edge, the draft slam and
- * ring, the rank-up pip fill and ring, and the whole row sliding in with the first draft — and, while
- * the keyboard is in use on REGULAR windows at least [KEY_CAP_MIN_WIDTH_DP] wide, the bound key under
- * each drafted slot. Slots before their draft show locked. Allocation-free on steady frames.
+ * refusal shake and Bone sweep edge, the ready flash and ring, the refund edge, the slam and ring when
+ * an active item binds (or replaces) the slot's effect, the rank-up pip fill and ring, and the whole row
+ * sliding in with the first active item — and, while the keyboard is in use on REGULAR windows at least
+ * [KEY_CAP_MIN_WIDTH_DP] wide, the bound key under each filled slot. A slot without an active is empty, not locked
+ * (every slot is usable from the start): a recessed face in a dashed edge with its rank pips unlit
+ * ([drawKkSkillSlot] `empty`). Allocation-free on steady frames.
  */
 internal fun DrawScope.drawSkillBar(
     engine: GameplayRenderModel,
@@ -58,7 +59,7 @@ internal fun DrawScope.drawSkillBar(
 ) {
     val mask = RunningControlMask.of(engine)
     if (mask and RunningControlMask.SKILLS == 0) return
-    // The first draft slides the row in from the right while it fades in (Pull).
+    // The first active item slides the row in from the right while it fades in (Pull).
     val row = memory?.skillRow(renderTime) ?: 1f
     val entrance = KkEase.Pull.transform(row)
     if (row < 1f) {
@@ -121,12 +122,14 @@ private fun DrawScope.drawSkillSlotAt(
     val center = bounds.center
     val side = bounds.width
     if (id == null) {
-        drawKkSkillSlot(measurer, bounds, icon = null, iconColor = Kk.Mute2, cooldown = 0f, ready = false, rank = 0, locked = true)
+        drawKkSkillSlot(measurer, bounds, icon = null, iconColor = Kk.Mute2, cooldown = 0f, ready = false, rank = 0,
+            maxRank = ContentBounds.MAX_SKILL_RANK, pressed = press?.pressFlash(target, renderTime) ?: 0f,
+            unit = if (frame.regular) frame.unit else 0f, empty = true)
         return 0f
     }
     val definition = engine.content.skill(id)
     val color = skillColor(definition, roles)
-    // Draft: the slot slams in (220 ms) under a `you` ring (420 ms).
+    // A new effect in the slot (bound or replaced): it slams in (220 ms) under a `you` ring (420 ms).
     val acquired = memory?.skillAcquired(slot, renderTime) ?: 1f
     val acquiredMs = acquired * HudPresentationMemory.SKILL_ACQUIRE_MS
     val slam = if (acquired < 1f) KkSlam.scale((acquiredMs / KkSlam.DURATION_MS).coerceIn(0f, 1f)) else 1f
@@ -156,7 +159,7 @@ private fun DrawScope.drawSkillSlotAt(
     val keyLayout = skillKeyLayout(engine, measurer, frame, slot, side, press)
     withTransform({ scale(slam, slam, center) }) {
         drawKkSkillSlot(
-            measurer, bounds, skillIcon(id, engine), color,
+            measurer, bounds, skillGlyph(id), color,
             cooldown = projection.cooldown01, ready = projection.ready, rank = projection.rank,
             charges = projection.charges, maxCharges = projection.maxCharges,
             active = projection.active01, activeColor = color, pending = projection.pending01,
@@ -185,7 +188,7 @@ internal fun refusalAge(engine: GameplayRenderModel, projection: SkillSlotProjec
     return if (age in 0f..REFUSAL_WINDOW_SECONDS) age else -1f
 }
 
-/** The key cap under a drafted REGULAR slot while the keyboard is in use, or null. */
+/** The key cap under a filled REGULAR slot while the keyboard is in use, or null. */
 private fun DrawScope.skillKeyLayout(
     engine: GameplayRenderModel,
     measurer: TextMeasurer,
@@ -210,54 +213,12 @@ private fun DrawScope.skillKeyLayout(
 /** Key caps show on REGULAR windows at least [KEY_CAP_MIN_WIDTH_DP] dp wide. */
 internal fun keyCapsShown(frame: HudFrame): Boolean = frame.regular && frame.width >= KEY_CAP_MIN_WIDTH_DP * frame.density
 
-/** The skill's colour: its element; kinetic skills `kinetic`; Catalyze and Dual Infusion Bone. */
-internal fun skillColor(definition: SkillDefinition, roles: KkRolePalette): Color {
-    val element = definition.element
-    return when {
-        element != null -> roles.element(element.ordinal)
-        definition.id == SkillId.CATALYZE || definition.id == SkillId.DUAL_INFUSION -> Kk.Bone
-        else -> roles.kinetic
-    }
-}
-
 /**
- * The skill's icon (an existing weapon glyph); when it equals the equipped weapon's, the skill shows
- * its element's aspect instead (kinetic for kinetic skills, chain for Catalyze, arsenal for Dual
- * Infusion), so the slot never repeats the weapon slot.
+ * The active's colour, as its item card draws it: its element's hue, else the preset's `kinetic` (the card volt), so
+ * the element-less actives (Slingshot, Full Stop, Catalyze, Dual Infusion) read the same on the card and in the slot.
  */
-internal fun skillIcon(id: SkillId, engine: GameplayRenderModel): KkIcon {
-    val icon = skillGlyph(id)
-    if (icon != weaponIcon(engine.weapon)) return icon
-    val element = engine.content.skill(id).element
-    return when {
-        element != null -> elementIcon(element.ordinal)
-        id == SkillId.CATALYZE -> KkIcon.TAG_CHAIN
-        id == SkillId.DUAL_INFUSION -> KkIcon.TAG_ARSENAL
-        else -> KkIcon.ASPECT_KINETIC
-    }
-}
-
-/** Each skill's glyph (all 18 distinct). */
-internal fun skillGlyph(id: SkillId): KkIcon = when (id) {
-    SkillId.SOLAR_FLARE -> KkIcon.WEAPONS_SOLAR_SWEEP
-    SkillId.METEOR -> KkIcon.WEAPONS_MORNINGSTAR
-    SkillId.FROST_LINE -> KkIcon.WEAPONS_PHASE_LATTICE
-    SkillId.FROST_SNAP -> KkIcon.WEAPONS_GLACIER_BELL
-    SkillId.ARC_HOOK -> KkIcon.WEAPONS_TETHER_ARC
-    SkillId.STORM_COIL -> KkIcon.WEAPONS_ARC_COIL
-    SkillId.GRAVITY_WELL -> KkIcon.WEAPONS_GRAVITY_MINES
-    SkillId.MASS_DRIVER -> KkIcon.WEAPONS_SINGULARITY_SPEAR
-    SkillId.DECAY_SPORES -> KkIcon.WEAPONS_SCATTER_BLOOM
-    SkillId.ENTROPIC_TIDE -> KkIcon.WEAPONS_ENTROPY_FIELD
-    SkillId.SONIC_BOOM -> KkIcon.WEAPONS_RESONANCE_DRUM
-    SkillId.RESONATOR -> KkIcon.WEAPONS_SENTRY_GRID
-    SkillId.VOID_STEP -> KkIcon.WEAPONS_HOLLOW_RIFT
-    SkillId.NULL_SHROUD -> KkIcon.WEAPONS_EVENT_LENS
-    SkillId.SLINGSHOT -> KkIcon.WEAPONS_GYRE_DISC
-    SkillId.FULL_STOP -> KkIcon.WEAPONS_CONCUSSION_ENGINE
-    SkillId.CATALYZE -> KkIcon.WEAPONS_PRISM_RELAY
-    SkillId.DUAL_INFUSION -> KkIcon.WEAPONS_FLUX_WAKE
-}
+internal fun skillColor(definition: SkillDefinition, roles: KkRolePalette): Color =
+    definition.element?.let { roles.element(it.ordinal) } ?: roles.kinetic
 
 /**
  * The skill's reach around the Core after a no-target refusal (Bone dashed ring, fading over
@@ -300,12 +261,12 @@ internal fun DrawScope.drawApexStrikes(engine: GameplayRenderModel, frame: HudFr
 
 private val SkillRects = arrayOf(HudRect.SKILL_0, HudRect.SKILL_1, HudRect.SKILL_2)
 private val SkillKeyTexts = arrayOf(HudText.SKILL_KEY_0, HudText.SKILL_KEY_1, HudText.SKILL_KEY_2)
-private val StrikePaths = IntArray(kinetickk.ball.content.api.ContentBounds.MAX_APEX_STRIKES) { HudPath.STRIKE_0.ordinal + it }
+private val StrikePaths = IntArray(ContentBounds.MAX_APEX_STRIKES) { HudPath.STRIKE_0.ordinal + it }
 
-/** The first draft slides the row in from this far right (reference dp). */
+/** The first active item slides the row in from this far right (reference dp). */
 private const val SKILL_ROW_ENTRANCE_DP = 24f
 
-/** Draft and rank-up ring bursts (reference dp); the ready ring is this share of the square. */
+/** Bind and rank-up ring bursts (reference dp); the ready ring is this share of the square. */
 private const val SKILL_RING_DP = 40f
 private const val READY_RING_SCALE = 0.8f
 

@@ -418,7 +418,8 @@ class CombatFoundationsTest {
         state.voidAnchorId = 4
         state.erasureLatchId = 9
         state.skillBufferMask = 1
-        state.pendingSkillDrafts = 1
+        state.pendingActiveItemId = state.content.activeItemIds.first { it >= 0 }
+        state.pendingActiveReborn = true
         state.startRun()
         assertEquals(0, state.combatFieldTable.count)
         assertEquals(0, state.coreFieldMask)
@@ -427,7 +428,8 @@ class CombatFoundationsTest {
         assertEquals(-1, state.voidAnchorId)
         assertEquals(-1, state.erasureLatchId)
         assertEquals(0, state.skillBufferMask)
-        assertEquals(0, state.pendingSkillDrafts)
+        assertNull(state.pendingActiveItemId, "no active item waits for a slot in a new run")
+        assertFalse(state.pendingActiveReborn)
     }
 
     private fun Enemy.stack(element: StatusElement, count: Int) {

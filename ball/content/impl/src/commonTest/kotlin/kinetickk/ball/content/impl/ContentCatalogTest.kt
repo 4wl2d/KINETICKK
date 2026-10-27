@@ -3,6 +3,7 @@
 
 package kinetickk.ball.content.impl
 
+import kinetickk.ball.content.api.BuffStat
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CharacterTraits
@@ -23,6 +24,7 @@ import kinetickk.ball.content.api.MatrixNodeDefinition
 import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RuleLineKind
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.ruleLines
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.ball.content.api.StatusElement
@@ -36,10 +38,12 @@ import kinetickk.ball.content.api.isLiability
 import kinetickk.ball.content.api.usesSkills
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -95,7 +99,7 @@ class ContentCatalogTest {
     fun itemCatalogHoldsDistinctHandAuthoredItemsWithinTheBound() {
         val items = gameplay.items
 
-        assertEquals(269, items.size)
+        assertEquals(287, items.size)
         assertEquals(320, ContentBounds.MAX_ITEMS)
         assertTrue(items.size <= ContentBounds.MAX_ITEMS)
         assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
@@ -104,7 +108,8 @@ class ContentCatalogTest {
         assertEquals(items.size, items.map(::mechanicalSignature).toSet().size, "Two items share the same mechanics")
 
         items.forEach { item ->
-            val expectedStacks = when (item.rarity) {
+            // An active item's stacks are its rank, whatever its rarity.
+            val expectedStacks = if (item.isActive) ContentBounds.MAX_SKILL_RANK else when (item.rarity) {
                 ItemRarity.COMMON -> 3
                 ItemRarity.UNCOMMON, ItemRarity.RARE -> 2
                 ItemRarity.EPIC, ItemRarity.LEGENDARY -> 1
@@ -275,7 +280,7 @@ class ContentCatalogTest {
 
         assertEquals(96, expansion.size)
         assertEquals((EXPANSION_END until EXPANSION_050_END).toList(), expansion.map(ItemDefinition::id))
-        assertEquals(gameplay.items.size, EXPANSION_050_END)
+        assertEquals(gameplay.items.size, ACTIVES_END)
         fun mix(items: List<ItemDefinition>) = ItemRarity.entries.associateWith { rarity -> items.count { it.rarity == rarity } }
         assertEquals(
             mapOf(ItemRarity.COMMON to 13, ItemRarity.UNCOMMON to 16, ItemRarity.RARE to 34, ItemRarity.EPIC to 27, ItemRarity.LEGENDARY to 6),
@@ -356,6 +361,78 @@ class ContentCatalogTest {
         // Batch 8 holds the four wagers and the three gated capstones.
         assertEquals(4, batches[7].count { it.risk })
         assertEquals(3, batches[7].count { it.rarity == ItemRarity.LEGENDARY })
+    }
+
+    @Test
+    fun theActiveItemsAppendOneItemPerEffectInEffectOrderWithTheirRarityAndRunLevelUnlock() {
+        val actives = actives()
+
+        assertEquals(SkillId.entries.size, actives.size)
+        assertEquals((EXPANSION_050_END until ACTIVES_END).toList(), actives.map(ItemDefinition::id))
+        assertEquals(SkillId.entries.toList(), actives.map { it.active })
+        assertTrue(gameplay.items.take(EXPANSION_050_END).none { it.isActive }, "Only the appended items are active")
+        assertEquals(
+            mapOf(
+                ItemRarity.UNCOMMON to listOf(
+                    SkillId.FROST_LINE, SkillId.ARC_HOOK, SkillId.SONIC_BOOM, SkillId.VOID_STEP, SkillId.SLINGSHOT, SkillId.FULL_STOP,
+                ),
+                ItemRarity.RARE to listOf(
+                    SkillId.SOLAR_FLARE, SkillId.METEOR, SkillId.FROST_SNAP, SkillId.STORM_COIL, SkillId.GRAVITY_WELL,
+                    SkillId.MASS_DRIVER, SkillId.DECAY_SPORES, SkillId.NULL_SHROUD,
+                ),
+                ItemRarity.EPIC to listOf(SkillId.ENTROPIC_TIDE, SkillId.RESONATOR, SkillId.CATALYZE, SkillId.DUAL_INFUSION),
+            ),
+            actives.groupBy({ it.rarity }, { it.active }),
+        )
+        // Actives unlock by run level per rarity and never wait for a Rebirth.
+        val unlocks = mapOf(ItemRarity.UNCOMMON to 5, ItemRarity.RARE to 7, ItemRarity.EPIC to 10)
+        actives.forEach { item ->
+            val effect = gameplay.skill(requireNotNull(item.active))
+            assertEquals(unlocks.getValue(item.rarity), item.unlockLevel, "${item.name} unlock level")
+            assertEquals(0, item.minimumRebirth, "${item.name} is ungated")
+            assertEquals(ContentBounds.MAX_SKILL_RANK, item.maxStacks, "${item.name} ranks with its stacks")
+            assertEquals(effect.name, item.name)
+            assertEquals(effect.summary, item.description, "${item.name} reads as its effect")
+            assertEquals(effect.tags, item.tags)
+            assertEquals(listOfNotNull(effect.element), item.elements.toList())
+            assertSame(item, gameplay.activeItem(effect.id))
+            assertFalse(item.risk || item.isDataEconomy || item.usesSkills, "${item.name} passive is plain")
+        }
+        assertEquals(gameplay.items.map { it.active }.filterNotNull(), SkillId.entries.toList())
+        assertTrue(gameplay.coreShapes.all { shape -> shape.activeLane.all { gameplay.activeItem(it) != null } })
+    }
+
+    @Test
+    fun everyActiveCarriesOnePinnedPassiveWithinTheShippedMedianOfItsKind() {
+        val policy = gameplay.build.policy
+        val actives = actives()
+        // Passive items of Rare or lower are the reference: an active at rank III gives at most what the median of
+        // its kind gives at two stacks (base x stackMagnitude(3) <= median x stackMagnitude(2)).
+        val references = gameplay.items.filter { !it.isActive && it.rarity.rank <= ItemRarity.RARE.rank }
+            .flatMap { it.rules }.filterNot { it.isLiability }
+
+        assertEquals(ActivePassives.keys.toList(), actives.map { requireNotNull(it.active) })
+        actives.forEach { item ->
+            val effect = requireNotNull(item.active)
+            val (pinned, reference) = ActivePassives.getValue(effect)
+            val passive = item.rules.single()
+            assertEquals(pinned, passive, "$effect passive")
+            val magnitude = assertNotNull(magnitudeOf(passive), "$effect passive has a magnitude")
+            val shipped = references.filter { passiveClass(it) == passiveClass(passive) }.mapNotNull(::magnitudeOf)
+            val bound = if (shipped.isEmpty()) {
+                assertEquals(ExplicitPassiveCaps[effect], reference, "$effect has no shipped reference: the cap table names it")
+                reference
+            } else {
+                assertNull(ExplicitPassiveCaps[effect], "$effect has a shipped reference")
+                assertEquals(reference, median(shipped), 1e-4f, "$effect reference median of ${passiveClass(passive)}")
+                reference * policy.stackMagnitude(2) / policy.stackMagnitude(ContentBounds.MAX_SKILL_RANK)
+            }
+            assertTrue(magnitude <= bound + 1e-5f, "$effect passive $magnitude exceeds its bound $bound")
+        }
+        // Two actives of one element never share a passive kind; element-less ones differ by condition (headline test).
+        actives.filter { it.elements.isNotEmpty() }.groupBy { it.elements.single() }.forEach { (element, group) ->
+            assertEquals(group.size, group.map { it.rules.single()::class }.toSet().size, "$element actives share a passive kind")
+        }
     }
 
     @Test
@@ -739,6 +816,9 @@ class ContentCatalogTest {
     /** The 0.5.0 expansion, ids [EXPANSION_END] until [EXPANSION_050_END]. */
     private fun expansion050(): List<ItemDefinition> = gameplay.items.subList(EXPANSION_END, EXPANSION_050_END)
 
+    /** The active items, ids [EXPANSION_050_END] until [ACTIVES_END]. */
+    private fun actives(): List<ItemDefinition> = gameplay.items.subList(EXPANSION_050_END, ACTIVES_END)
+
     /** An item with an Apex part: an Apex trigger, an Apex charge, an Apex cooldown cut or an Apex-active condition. */
     private fun usesApex(item: ItemDefinition): Boolean =
         item.clauses.any { clause ->
@@ -758,13 +838,74 @@ class ContentCatalogTest {
         /** One past the last id of the 0.4.0 expansion: the 0.5.0 items start here. */
         const val EXPANSION_END = 173
 
-        /** One past the last id of the 0.5.0 expansion (ids 173 to 268). */
+        /** One past the last id of the 0.5.0 expansion (ids 173 to 268): the active items start here. */
         const val EXPANSION_050_END = 269
+
+        /** One past the last active item (ids 269 to 286, one per SkillId). */
+        const val ACTIVES_END = 287
     }
 
     /** Everything that changes how an item plays, ignoring its name, flavor and id. */
-    private fun mechanicalSignature(item: ItemDefinition): List<Any> =
-        listOf(item.rarity, item.tags, item.elements, item.stats, item.clauses, item.rules, item.maxStacks, item.risk)
+    private fun mechanicalSignature(item: ItemDefinition): List<Any?> =
+        listOf(item.rarity, item.tags, item.elements, item.stats, item.clauses, item.rules, item.maxStacks, item.risk, item.active)
+}
+
+/**
+ * The pinned passive of every active, with its reference: the median magnitude of the same rule kind (and the same
+ * buff stat and condition class) among the shipped passive items of Rare or lower, or the explicit cap where none
+ * ships ([ExplicitPassiveCaps]).
+ */
+private val ActivePassives: Map<SkillId, Pair<ItemRule, Float>> = mapOf(
+    SkillId.SOLAR_FLARE to (ItemRule.ElementPotency(StatusElement.THERMAL, 0.346f) to 0.45f),
+    SkillId.METEOR to (ItemRule.BreakPower(StatusElement.THERMAL, 0.4225f) to 0.55f),
+    SkillId.FROST_LINE to (ItemRule.StatusDuration(StatusElement.CRYO, 1.384f) to 0.5f),
+    SkillId.FROST_SNAP to (ItemRule.CritDamageVersus(EffectCondition.TargetFrozen, 0.219f) to 0.22f),
+    SkillId.ARC_HOOK to (ItemRule.ElementPotency(StatusElement.ION, 0.346f) to 0.45f),
+    SkillId.STORM_COIL to (ItemRule.BreakPower(StatusElement.ION, 0.4225f) to 0.55f),
+    SkillId.GRAVITY_WELL to (ItemRule.BreakPower(StatusElement.GRAVITIC, 0.4225f) to 0.55f),
+    SkillId.MASS_DRIVER to (ItemRule.ElementPotency(StatusElement.GRAVITIC, 0.346f) to 0.45f),
+    SkillId.DECAY_SPORES to (ItemRule.ElementPotency(StatusElement.ENTROPY, 0.346f) to 0.45f),
+    SkillId.ENTROPIC_TIDE to (ItemRule.StatusDuration(StatusElement.ENTROPY, 1.384f) to 0.5f),
+    SkillId.SONIC_BOOM to (ItemRule.BreakPower(StatusElement.SONIC, 0.4225f) to 0.55f),
+    SkillId.RESONATOR to (ItemRule.StatusDuration(StatusElement.SONIC, 1.384f) to 0.5f),
+    SkillId.VOID_STEP to (ItemRule.BreakPower(StatusElement.VOID, 0.4225f) to 0.55f),
+    SkillId.NULL_SHROUD to (ItemRule.ElementPotency(StatusElement.VOID, 0.346f) to 0.45f),
+    SkillId.SLINGSHOT to (ItemRule.WhileModifier(EffectCondition.SpeedAtLeast(900f), BuffStat.COOLING, 0.25f) to 0.6f),
+    SkillId.FULL_STOP to (ItemRule.WhileModifier(EffectCondition.Braking, BuffStat.DAMAGE_TAKEN, -0.15f) to 0.4f),
+    SkillId.CATALYZE to (ItemRule.ReactionPower(0.2685f) to 0.35f),
+    SkillId.DUAL_INFUSION to (ItemRule.DamageVersus(EffectCondition.TargetHas(null), 0.1152f) to 0.15f),
+)
+
+/**
+ * Caps on an active's base passive where no shipped passive of Rare or lower shares its kind. Frost Snap: only Quench
+ * Seal (Epic, one stack) adds critical damage conditioned on a Frozen enemy, +50 %; rank III (x2.2) stays below it.
+ */
+private val ExplicitPassiveCaps: Map<SkillId, Float> = mapOf(SkillId.FROST_SNAP to 0.22f)
+
+/** What a passive's magnitude is compared against: its kind, plus the stat and condition class it is about. */
+private fun passiveClass(rule: ItemRule): String = when (rule) {
+    is ItemRule.WhileModifier -> "WhileModifier ${rule.stat} ${rule.condition::class.simpleName}"
+    is ItemRule.CritDamageVersus -> "CritDamageVersus ${rule.condition::class.simpleName}"
+    is ItemRule.DamageVersus -> "DamageVersus ${rule.condition::class.simpleName}"
+    else -> rule::class.simpleName.orEmpty()
+}
+
+/** The per-stack size of a passive rule that scales with stacks, or null for one without an amount. */
+private fun magnitudeOf(rule: ItemRule): Float? = when (rule) {
+    is ItemRule.ElementPotency -> rule.amount
+    is ItemRule.StatusDuration -> abs(rule.multiplier - 1f)
+    is ItemRule.BreakPower -> rule.amount
+    is ItemRule.ReactionPower -> rule.amount
+    is ItemRule.CritDamageVersus -> rule.amount
+    is ItemRule.DamageVersus -> abs(rule.amount)
+    is ItemRule.WhileModifier -> abs(rule.amount)
+    else -> null
+}
+
+private fun median(values: List<Float>): Float {
+    val sorted = values.sorted()
+    val middle = sorted.size / 2
+    return if (sorted.size % 2 == 1) sorted[middle] else (sorted[middle - 1] + sorted[middle]) / 2f
 }
 
 private const val ORIGINAL_WEAPONS = 12

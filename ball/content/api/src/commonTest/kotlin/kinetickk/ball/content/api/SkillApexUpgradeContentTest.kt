@@ -93,7 +93,7 @@ class SkillApexUpgradeContentTest {
             assertTrue(apex.values.size <= ContentBounds.MAX_APEX_VALUES, apex.name)
             assertEquals(60f, apex.cooldownSeconds, apex.name)
             assertEquals(30f, apex.minimumCooldownSeconds, apex.name)
-            // Lead addendum B1: per character, enough full-cap strikes to shorten an Architect fight by a like share.
+            // Per character, enough full-cap strikes to shorten an Architect fight by a like share.
             assertTrue(apex.bossStrikes in 5..ContentBounds.MAX_APEX_STRIKES, apex.name)
             assertTrue(apex.durationSeconds in 6f..10f, apex.name)
         }
@@ -234,8 +234,6 @@ class SkillApexUpgradeContentTest {
 
     @Test
     fun snapshotsCarryTheSkillPoolInOrder() {
-        val tempo = RunTempoProfile()
-        assertEquals(3, tempo.skillSlotLevels.size)
         val reordered = (listOf(skills[1], skills[0]) + skills.drop(2)).toImmutableList()
         val ui = UiCatalogSnapshot(
             version = KINETICKK_CONTENT_VERSION,

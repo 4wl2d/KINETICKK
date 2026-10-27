@@ -37,10 +37,13 @@ import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.MarkPick
 import kinetickk.ball.content.api.ReactionAspect
 import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.SkillDefinition
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.SkillPick
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.WeaponFamily
 import kinetickk.ball.content.api.ZoneKind
+import kinetickk.ball.content.api.defaultSkillDefinitions
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.toImmutableList
 
@@ -78,6 +81,7 @@ private class ItemDraft(
     val unlock: Int = 1,
     val rebirth: Int = 0,
     val risk: Boolean = false,
+    val active: SkillId? = null,
 )
 
 private val Drafts: List<ItemDraft> = listOf(
@@ -635,14 +639,14 @@ private val Drafts: List<ItemDraft> = listOf(
     // 0.5.0 (ids 173 onward): items built on skills, the Apex, reaction keystones, fields, marks and the Core's
     // movement, appended in themed batches of twelve.
     // CASTING (SKILL BUILDS) (ids 173-184).
-    ItemDraft("Spark Gap", "After every skill the air keeps crackling with charge.", COMMON, listOf(CHAIN), listOf(StatusElement.ION),
+    ItemDraft("Spark Gap", "After every active the air keeps crackling with charge.", COMMON, listOf(CHAIN), listOf(StatusElement.ION),
         clauses = listOf(on(EffectTrigger.SKILL_CAST, apply(StatusElement.ION, 2, 160f))),
         unlock = 3),
-    ItemDraft("Kiln Primer", "Whatever your skills touch comes out of the kiln a little hotter.", COMMON, listOf(OVERCLOCK),
+    ItemDraft("Kiln Primer", "Whatever your actives touch comes out of the kiln a little hotter.", COMMON, listOf(OVERCLOCK),
         listOf(StatusElement.THERMAL),
         clauses = listOf(on(EffectTrigger.SKILL_HIT, apply(StatusElement.THERMAL, 1))),
         unlock = 2),
-    ItemDraft("Launch Rail", "A moving skill leaves the rail greased for the next Dash.", COMMON, listOf(DRIVE),
+    ItemDraft("Launch Rail", "A moving active leaves the rail greased for the next Dash.", COMMON, listOf(DRIVE),
         clauses = listOf(on(EffectTrigger.SKILL_CAST, EffectAction.PrimeDash, EffectAction.Buff(BuffStat.DAMAGE, 0.3f, 3f),
             given = listOf(EffectCondition.SkillTagged(DRIVE)))),
         unlock = 4),
@@ -652,14 +656,14 @@ private val Drafts: List<ItemDraft> = listOf(
     ItemDraft("Overcharge Glyph", "A cast spills its surplus into the weapon.", UNCOMMON, listOf(ARSENAL),
         clauses = listOf(on(EffectTrigger.SKILL_CAST, EffectAction.Buff(BuffStat.ACTIVATION, 0.3f, 3f))),
         unlock = 5),
-    ItemDraft("Cascade Relay", "A skill that lands keeps looking for the next target.", RARE, listOf(CHAIN),
+    ItemDraft("Cascade Relay", "An active that lands keeps looking for the next target.", RARE, listOf(CHAIN),
         clauses = listOf(on(EffectTrigger.SKILL_HIT, EffectAction.Chain(2, 280f, DamageBasis.HIT, 0.5f), every = 3)),
         unlock = 7),
     ItemDraft("Finishing Cadence", "Finish the wounded and the rhythm comes round again.", RARE, listOf(PRECISION),
         clauses = listOf(on(EffectTrigger.SKILL_HIT, EffectAction.RefundSkills(0.4f, SkillPick.CAST),
             given = listOf(EffectCondition.TargetBelow(0.3f)), cooldown = 0.5f)),
         unlock = 6),
-    ItemDraft("Catalytic Converter", "Every reaction pays its toll back into your skills.", RARE, listOf(OVERCLOCK, CHAIN),
+    ItemDraft("Catalytic Converter", "Every reaction pays its toll back into your actives.", RARE, listOf(OVERCLOCK, CHAIN),
         rules = listOf(ItemRule.CatalysisRate(0.5f)),
         unlock = 6),
     ItemDraft("Empty Chamber", "With nothing left to cast, there is only the fight.", RARE, listOf(OVERCLOCK),
@@ -668,10 +672,10 @@ private val Drafts: List<ItemDraft> = listOf(
             ItemRule.WhileModifier(EffectCondition.SkillsCharging(3), BuffStat.COOLING, 0.4f),
         ),
         unlock = 9),
-    ItemDraft("Twin Chamber", "Load every skill twice and fire them back to back.", EPIC, listOf(ARSENAL),
+    ItemDraft("Twin Chamber", "Load every active twice and fire them back to back.", EPIC, listOf(ARSENAL),
         rules = listOf(ItemRule.SkillCharges),
         rebirth = 1),
-    ItemDraft("Alchemical Core", "Your skills forget their own element and learn yours.", EPIC, listOf(CHAIN),
+    ItemDraft("Alchemical Core", "Your actives forget their own element and learn yours.", EPIC, listOf(CHAIN),
         rules = listOf(ItemRule.SkillAttunement(ElementPick.DOMINANT), ItemRule.SkillPower(null, 0.2f)),
         unlock = 10),
     ItemDraft("Nomad Field", "The fields you raise pack up and follow you.", RARE, listOf(ANCHOR),
@@ -696,7 +700,7 @@ private val Drafts: List<ItemDraft> = listOf(
         stats = listOf(stat(ItemEffect.COOLING, 0.1f), stat(ItemEffect.DATA_GAIN, 0.06f)),
         clauses = listOf(on(EffectTrigger.PICKUP, EffectAction.Vent(10f), every = 6)),
         unlock = 5),
-    ItemDraft("Rote Memory", "Repetition is how a skill gets faster.", RARE, listOf(FORTUNE),
+    ItemDraft("Rote Memory", "Repetition is how an active gets faster.", RARE, listOf(FORTUNE),
         stats = listOf(stat(ItemEffect.LUCK, 0.2f), stat(ItemEffect.DATA_GAIN, 0.05f)),
         clauses = listOf(on(EffectTrigger.PICKUP, EffectAction.RefundSkills(0.3f, SkillPick.LONGEST), every = 8)),
         unlock = 6),
@@ -780,7 +784,7 @@ private val Drafts: List<ItemDraft> = listOf(
         clauses = listOf(on(EffectTrigger.SLAM, EffectAction.Burst(120f, DamageBasis.FLAT, 40f), cooldown = 0.5f)),
         rules = listOf(ItemRule.ReactionKeystone(ReactionId.MAGNETIZE)),
         unlock = 12),
-    ItemDraft("Shunt Resistor", "The current skips the weapon and goes straight to your skills.", EPIC, listOf(OVERCLOCK),
+    ItemDraft("Shunt Resistor", "The current skips the weapon and goes straight to your actives.", EPIC, listOf(OVERCLOCK),
         listOf(StatusElement.ION, StatusElement.ENTROPY),
         rules = listOf(ItemRule.ReactionKeystone(ReactionId.FEEDBACK), ItemRule.SkillPower(null, 0.15f)),
         unlock = 10),
@@ -906,7 +910,7 @@ private val Drafts: List<ItemDraft> = listOf(
     ItemDraft("Spin Turbine", "Every sharp turn spins the turbine up.", UNCOMMON, listOf(DRIVE),
         clauses = listOf(on(EffectTrigger.TURN, EffectAction.CoreImpulse(300f, ImpulseDirection.FORWARD), cooldown = 1f)),
         unlock = 5),
-    ItemDraft("Overspeed Clock", "At speed, the clock that counts your skills runs fast.", RARE, listOf(DRIVE, OVERCLOCK),
+    ItemDraft("Overspeed Clock", "At speed, the clock that counts your actives runs fast.", RARE, listOf(DRIVE, OVERCLOCK),
         rules = listOf(ItemRule.WhileModifier(EffectCondition.SpeedAtLeast(1_100f), BuffStat.SKILL_RECHARGE, 0.3f)),
         unlock = 9),
     ItemDraft("Phase Spurs", "Dash through and kick them into the scenery.", RARE, listOf(RAM, DRIVE),
@@ -981,22 +985,22 @@ private val Drafts: List<ItemDraft> = listOf(
     ItemDraft("Riot Baton", "Those who cannot move cannot dodge.", RARE, listOf(ANCHOR),
         rules = listOf(ItemRule.DamageVersus(EffectCondition.TargetControlled, 0.25f)),
         unlock = 8),
-    ItemDraft("Still Frame", "A control skill freezes the frame around its mark.", RARE, listOf(ANCHOR), listOf(StatusElement.CRYO),
+    ItemDraft("Still Frame", "A control active freezes the frame around its mark.", RARE, listOf(ANCHOR), listOf(StatusElement.CRYO),
         clauses = listOf(on(EffectTrigger.SKILL_CAST, EffectAction.Zone(ZoneKind.TIME_BUBBLE, 120f, 1.5f), given = listOf(EffectCondition.SkillTagged(ANCHOR)))),
         unlock = 8),
     ItemDraft("Anvil Doctrine", "If it will not move, the blow goes in instead.", RARE, listOf(RAM, ANCHOR),
         rules = listOf(ItemRule.Convert(ConversionKind.KNOCKBACK_TO_DAMAGE, 1f)),
         rebirth = 4),
-    ItemDraft("Furnace Liturgy", "Feed the furnace and your skills come faster, hotter.", EPIC, listOf(OVERCLOCK),
+    ItemDraft("Furnace Liturgy", "Feed the furnace and your actives come faster, hotter.", EPIC, listOf(OVERCLOCK),
         rules = listOf(ItemRule.Convert(ConversionKind.SKILLS_COST_HEAT, 25f), ItemRule.SkillPower(null, 0.25f)),
         unlock = 12,
         risk = true),
-    ItemDraft("Kinetic Rosary", "Every Dash a bead, every bead a prayer for your skills.", EPIC, listOf(DRIVE),
+    ItemDraft("Kinetic Rosary", "Every Dash a bead, every bead a prayer for your actives.", EPIC, listOf(DRIVE),
         stats = listOf(stat(ItemEffect.DASH_POWER, 0.15f)),
         rules = listOf(ItemRule.Convert(ConversionKind.DASH_HEAT_TO_SKILLS, 0.4f)),
         unlock = 12,
         risk = true),
-    ItemDraft("Siphon Script", "Spend the Data on skills before it ever reaches your level.", EPIC, listOf(FORTUNE),
+    ItemDraft("Siphon Script", "Spend the Data on actives before it ever reaches your level.", EPIC, listOf(FORTUNE),
         stats = listOf(stat(ItemEffect.PICKUP_RADIUS, 60f)),
         rules = listOf(ItemRule.Convert(ConversionKind.DATA_TO_SKILLS, 0.15f)),
         unlock = 12,
@@ -1019,12 +1023,68 @@ private val Drafts: List<ItemDraft> = listOf(
         rebirth = 5),
 )
 
+/** The shipped active effects the active items are authored from; initialised before [ActiveDrafts] reads them. */
+private val DefaultSkills: List<SkillDefinition> = defaultSkillDefinitions()
+
+/**
+ * ACTIVES (ids 269-286), appended in [SkillId] order so an active's id is 269 + its ordinal. Each item carries one
+ * active effect and one small passive rule, thematic to its element and tags and no larger than the shipped items'
+ * median of its kind allows (the content test pins the table). Uncommon, Rare and Epic only; none waits for a Rebirth.
+ */
+private val ActiveDrafts: List<ItemDraft> = SkillId.entries.map { id ->
+    when (id) {
+        SkillId.SOLAR_FLARE -> active(id, RARE, ItemRule.ElementPotency(StatusElement.THERMAL, 0.346f))
+        SkillId.METEOR -> active(id, RARE, ItemRule.BreakPower(StatusElement.THERMAL, 0.4225f))
+        SkillId.FROST_LINE -> active(id, UNCOMMON, ItemRule.StatusDuration(StatusElement.CRYO, 1.384f))
+        SkillId.FROST_SNAP -> active(id, RARE, ItemRule.CritDamageVersus(EffectCondition.TargetFrozen, 0.219f))
+        SkillId.ARC_HOOK -> active(id, UNCOMMON, ItemRule.ElementPotency(StatusElement.ION, 0.346f))
+        SkillId.STORM_COIL -> active(id, RARE, ItemRule.BreakPower(StatusElement.ION, 0.4225f))
+        SkillId.GRAVITY_WELL -> active(id, RARE, ItemRule.BreakPower(StatusElement.GRAVITIC, 0.4225f))
+        SkillId.MASS_DRIVER -> active(id, RARE, ItemRule.ElementPotency(StatusElement.GRAVITIC, 0.346f))
+        SkillId.DECAY_SPORES -> active(id, RARE, ItemRule.ElementPotency(StatusElement.ENTROPY, 0.346f))
+        SkillId.ENTROPIC_TIDE -> active(id, EPIC, ItemRule.StatusDuration(StatusElement.ENTROPY, 1.384f))
+        SkillId.SONIC_BOOM -> active(id, UNCOMMON, ItemRule.BreakPower(StatusElement.SONIC, 0.4225f))
+        SkillId.RESONATOR -> active(id, EPIC, ItemRule.StatusDuration(StatusElement.SONIC, 1.384f))
+        SkillId.VOID_STEP -> active(id, UNCOMMON, ItemRule.BreakPower(StatusElement.VOID, 0.4225f))
+        SkillId.NULL_SHROUD -> active(id, RARE, ItemRule.ElementPotency(StatusElement.VOID, 0.346f))
+        SkillId.SLINGSHOT ->
+            active(id, UNCOMMON, ItemRule.WhileModifier(EffectCondition.SpeedAtLeast(900f), BuffStat.COOLING, 0.25f))
+        SkillId.FULL_STOP ->
+            active(id, UNCOMMON, ItemRule.WhileModifier(EffectCondition.Braking, BuffStat.DAMAGE_TAKEN, -0.15f))
+        SkillId.CATALYZE -> active(id, EPIC, ItemRule.ReactionPower(0.2685f))
+        SkillId.DUAL_INFUSION -> active(id, EPIC, ItemRule.DamageVersus(EffectCondition.TargetHas(null), 0.1152f))
+    }
+}
+
+/**
+ * The active item for [id]: its name, tags and element are the effect's own and its flavor line is the effect's summary
+ * (bootstrap checks the same equality for every catalog); it stacks to rank III and unlocks by run level per rarity.
+ */
+private fun active(id: SkillId, rarity: ItemRarity, passive: ItemRule): ItemDraft {
+    val effect = DefaultSkills[id.ordinal]
+    return ItemDraft(
+        effect.name, effect.summary, rarity, effect.tags, listOfNotNull(effect.element),
+        rules = listOf(passive),
+        stacks = ContentBounds.MAX_SKILL_RANK,
+        unlock = activeUnlockLevel(rarity),
+        active = id,
+    )
+}
+
+/** The run level an active item of [rarity] waits for (calibration moves these per rarity, never the rarities). */
+private fun activeUnlockLevel(rarity: ItemRarity): Int = when (rarity) {
+    UNCOMMON -> 5
+    RARE -> 7
+    EPIC -> 10
+    COMMON, LEGENDARY -> error("Active items are Uncommon, Rare or Epic")
+}
+
 /** A reaction clause condition naming both elements: it holds only for the reaction between them. */
 private fun pair(first: StatusElement, second: StatusElement): List<EffectCondition> =
     listOf(EffectCondition.ElementIs(first), EffectCondition.ElementIs(second))
 
 internal fun defaultItems(): ImmutableList<ItemDefinition> =
-    Drafts.mapIndexed { index, draft ->
+    (Drafts + ActiveDrafts).mapIndexed { index, draft ->
         ItemDefinition(
             id = index,
             name = draft.name,
@@ -1039,6 +1099,7 @@ internal fun defaultItems(): ImmutableList<ItemDefinition> =
             unlockLevel = draft.unlock,
             minimumRebirth = draft.rebirth,
             risk = draft.risk,
+            active = draft.active,
         )
     }.toImmutableList().also(::validateItems)
 

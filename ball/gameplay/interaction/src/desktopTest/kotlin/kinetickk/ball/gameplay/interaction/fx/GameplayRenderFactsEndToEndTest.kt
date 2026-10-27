@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.interaction.fx
 
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.DraftDeckPolicy
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.SkillId
@@ -58,6 +59,7 @@ import kinetickk.ball.profile.api.ProfileProgressApplied
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.api.ReactionEffectsLevel
 import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kotlin.math.abs
@@ -74,8 +76,9 @@ import kotlin.test.assertTrue
  * Runs the real simulation through the public Nucleus contract and hands every published cue to the real
  * [InteractionFxReducer], as the gameplay component does, then draws what the runs published: the render facts
  * of hud-fx §1 that gameplay emits reach the reducer, the HUD's presentation memory and the world and HUD
- * renderers. A short content level curve (6 levels, skill slots at 2/3/4) lets a few minutes of bot play draft
- * three skills and use the Apex; several seeds together cover the facts that depend on the draft.
+ * renderers. A short content level curve (6 levels, every active item unlocked from level 1, the whole catalog dealt and
+ * actives weighted up) lets a few minutes of bot play take three active items and use the Apex; several seeds together
+ * cover the facts that depend on which actives the offers dealt.
  *
  * Covered elsewhere with targeted state: reaction headings (`ReactionBehaviourTest`), Skill Charges'
  * `maxCharges` 2 (`RuleVocabularyTest`) and every link style and colour index's look (`ReactionFxSpecTest`).
@@ -113,7 +116,7 @@ class GameplayRenderFactsEndToEndTest {
     @Test
     fun theRunsProjectionsCarryEveryHudFact() {
         assertTrue(runs.all { it.modelMaxLevel == SHORT_MAXIMUM_LEVEL }, "maxLevel is the content cap")
-        assertTrue(runs.any { it.maxSkillsOwned == 3 }, "three slots drafted")
+        assertTrue(runs.any { it.maxSkillsOwned == 3 }, "three slots filled")
         assertTrue(runs.any { it.refusals > 0 }, "a refused request shows on its slot")
         assertTrue(runs.any { it.skillRefunded > 0f }, "a refund shows on its slot")
         assertTrue(runs.any { it.skillPending > 0 }, "a delayed skill shows its pending impact")
@@ -135,7 +138,7 @@ class GameplayRenderFactsEndToEndTest {
     @Test
     fun theHudAndTheWorldDrawWhatTheRunsPublished() {
         // The presentation memory saw the one-shots the projections drive.
-        assertTrue(runs.any { it.skillAcquiredShown }, "skill draft one-shot")
+        assertTrue(runs.any { it.skillAcquiredShown }, "active acquired one-shot")
         assertTrue(runs.any { it.apexUnlockShown }, "Apex unlock one-shot")
         assertTrue(runs.any { it.apexCastShown }, "Apex cast one-shot")
         assertTrue(runs.any { it.apexRefundShown }, "Apex refund flash")
@@ -205,15 +208,28 @@ internal object FactRuns {
     val all: List<FactRun> by lazy { SEEDS.map { seed -> FactRun(seed).also { it.play() } } }
 }
 
-/** The shipped catalog with a short level curve, so a minute of play drafts three skills and unlocks the Apex. */
+/**
+ * The shipped catalog with a short level curve and active items offered from the first offer (unlocked at level 1, the
+ * whole catalog dealt, a high active weight), so a minute of play fills three slots and unlocks the Apex.
+ */
 internal fun shortCurveContent(): GameplayContentSnapshot {
     val shipped = createContentCatalog().gameplayContent()
     val maximum = SHORT_MAXIMUM_LEVEL
+    val policy = shipped.build.policy
     return shipped.copy(
+        items = shipped.items.map { if (it.isActive) it.copy(unlockLevel = 1) else it }.toImmutableList(),
+        build = shipped.build.copy(
+            policy = policy.copy(
+                draftDeck = DraftDeckPolicy.FULL,
+                // Flat lane and owned factors: the bot's draft preference, not the shipped lane tuning, picks the actives.
+                offerLanes = policy.offerLanes.copy(
+                    activeWeight = SHORT_ACTIVE_WEIGHT, characterActiveWeight = 1f, ownedActiveWeight = 1f,
+                ),
+            ),
+        ),
         tempo = shipped.tempo.copy(
             maximumLevel = maximum,
             levelRequirements = defaultLevelRequirements(maximumLevel = maximum),
-            skillSlotLevels = immutableListOf(2, 3, 4),
             firstEliteAtSeconds = 20f,
             // The Architect (boss-class: the Apex strikes it) arrives while the Apex is in play.
             bossAtSeconds = ARCHITECT_AT_SECONDS,
@@ -222,12 +238,15 @@ internal fun shortCurveContent(): GameplayContentSnapshot {
 }
 
 private const val SHORT_MAXIMUM_LEVEL = 6
+/** Inside a rolled tier an active item outweighs every passive one, so most offers carry one. */
+private const val SHORT_ACTIVE_WEIGHT = 1_000f
 private const val ARCHITECT_AT_SECONDS = 110f
 private val SEEDS = listOf(2026, 4711, 90_210, 31_337, 77_003, 123_456, 555, 8_080, 42_424, 271_828, 314_159, 1_618)
 
 /**
- * Skills a draft prefers: delayed impacts first, then lingering fields, then the rest; skills that move the Core
- * (Void Step, Arc Hook, Slingshot, Mass Driver, Full Stop) come last, so the bot keeps clear of the singularity.
+ * Active effects the bot takes, in preference: delayed impacts first, then lingering fields, then the rest; actives that
+ * move the Core (Void Step, Arc Hook, Slingshot, Mass Driver, Full Stop) are left out, so the bot keeps clear of the
+ * singularity.
  */
 private val DRAFT_PREFERENCE = listOf(
     SkillId.METEOR, SkillId.STORM_COIL, SkillId.NULL_SHROUD, SkillId.GRAVITY_WELL, SkillId.FROST_LINE, SkillId.RESONATOR,
@@ -236,7 +255,7 @@ private val DRAFT_PREFERENCE = listOf(
 )
 
 /**
- * One bot-driven run through the public Nucleus contract: steers at the nearest enemy, drafts skills, casts them
+ * One bot-driven run through the public Nucleus contract: steers at the nearest enemy, takes active items, casts them
  * (and, now and then, a cooling one) and the Apex, applies earned progress, and records the cues it published, what
  * the reducer projected from them and the render-model facts it showed.
  */
@@ -387,13 +406,17 @@ internal class FactRun(val seed: Int, private val seconds: Float = 240f) {
 
     private fun choose(model: GameplayRenderModel): Int {
         val choices = model.choices
+        // The run never replaces an active: the slot prompt keeps the loadout.
+        if (model.choiceType == ChoiceType.ACTIVE_SLOT) return choices.indexOfFirst { it.activeSlot == null }.coerceAtLeast(0)
         // A focus card only narrows the offer; take a card that resolves it.
         var best = (0 until minOf(choices.size, 4)).firstOrNull { choices[it].rewardFocus == null } ?: 0
         var bestRank = Int.MAX_VALUE
         for (index in 0 until minOf(choices.size, 4)) {
             val choice = choices[index]
-            if (choice.type != ChoiceType.SKILL) continue
-            val rank = DRAFT_PREFERENCE.indexOf(choice.skillId).let { if (it < 0) DRAFT_PREFERENCE.size else it }
+            // An active item card: a new active while a slot is free, or a rank-up.
+            val skill = choice.skillId ?: continue
+            if (choice.type != ChoiceType.ITEM || choice.replacesActive) continue
+            val rank = DRAFT_PREFERENCE.indexOf(skill).takeIf { it >= 0 } ?: continue
             if (rank < bestRank) {
                 bestRank = rank
                 best = index

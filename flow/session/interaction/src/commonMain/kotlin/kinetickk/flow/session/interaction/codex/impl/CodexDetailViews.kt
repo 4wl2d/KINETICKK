@@ -46,6 +46,7 @@ import kinetickk.ball.content.api.RuleLineKind
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.ball.content.api.localizedContent
+import kinetickk.ball.gameplay.interaction.canvas.skillGlyph
 import kinetickk.flow.session.interaction.localization.CodexText
 import kinetickk.flow.session.interaction.localization.SessionRedesignText
 import kinetickk.flow.session.interaction.localization.SessionText
@@ -236,6 +237,11 @@ private fun CodexChipLabel(text: String, ui: Float, color: Color = Kk.Mute) {
     BasicText(text.uppercase(), style = codexMeasurer().typography.monoStyle(10f * ui, color = color))
 }
 
+/**
+ * An item's sheet: its element, tag and status chips, its flavor and its rule lines. An active item adds an Active chip
+ * with its effect's glyph (as its reward card's Active chip), its Active section (every rank's numbers, what rank III
+ * adds) and labels its rule lines Passive; its stack chip reads as the rank it holds.
+ */
 @Composable
 private fun CodexItemDetail(detail: CodexDetail.Item, ui: Float, panel: Color) {
     val language = LocalAppLanguage.current
@@ -243,7 +249,11 @@ private fun CodexItemDetail(detail: CodexDetail.Item, ui: Float, panel: Color) {
     val typography = codexMeasurer().typography
     val item = detail.item
     val tone = codexItemColor(item, roles)
+    val active = detail.active
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (active != null) Box(Modifier.testTag("codex-active-chip")) {
+            CodexGlyphChip(skillGlyph(active.effect), language.text(CodexText.ACTIVE_CHIP), ui, glyphColor = tone, rim = roles.you)
+        }
         item.elements.forEach { element ->
             CodexGlyphChip(element.glyph(), element.displayLabel.localizedContent(language), ui, glyphColor = roles.of(element), rim = roles.of(element))
         }
@@ -252,12 +262,51 @@ private fun CodexItemDetail(detail: CodexDetail.Item, ui: Float, panel: Color) {
         if (detail.reborn) CodexGlyphChip(null, language.text(CodexText.REBORN), ui, rim = Kk.Gold, face = Kk.Gold, foreground = Kk.Ink)
         if (detail.suppressed) CodexGlyphChip(null, language.text(CodexText.SUPPRESSED), ui, rim = roles.threat, foreground = roles.threat)
         CodexGlyphChip(null, language.text(SessionRedesignText.MAX_STACKS, item.maxStacks), ui)
-        if (detail.stack > 0) CodexGlyphChip(null, language.text(SessionText.STACK_QUANTITY, "${detail.stack}/${item.maxStacks}"), ui,
+        if (detail.stack > 0) CodexGlyphChip(null,
+            if (active != null) language.text(CodexText.ACTIVE_RANK, detail.stack, item.maxStacks)
+            else language.text(SessionText.STACK_QUANTITY, "${detail.stack}/${item.maxStacks}"), ui,
             rim = roles.you, face = roles.you, foreground = Kk.Ink)
         if (item.minimumRebirth > 0) CodexGlyphChip(null, language.text(SessionText.REBIRTH_LEVEL, item.minimumRebirth), ui, rim = Kk.Gold, foreground = Kk.Gold)
     }
     BasicText(item.description.localizedContent(language), style = typography.bodyStyle(15f * ui, lineHeightEm = 1.35f, color = Kk.Mute))
-    if (detail.lines.isNotEmpty()) CodexRuleLines(detail.lines, tone, detail.suppressed, ui, panel)
+    if (active != null) CodexActiveSection(active, tone, ui, panel)
+    val lines = if (active != null && detail.lines.isNotEmpty()) {
+        listOf(RuleLine(RuleLineKind.TRIGGER, language.text(CodexText.PASSIVE_PART))) + detail.lines
+    } else {
+        detail.lines
+    }
+    if (lines.isNotEmpty()) CodexRuleLines(lines, tone, detail.suppressed, ui, panel)
+}
+
+/**
+ * An active item's Active section on the rule-line card: its effect's glyph and the Active label, then a row per rank
+ * (the rank in mono, `you` for I and II and gold for III like the slot's pips, then its cooldown and values with the
+ * numbers in the item's hue) and what rank III adds under the hue's rule.
+ */
+@Composable
+private fun CodexActiveSection(active: CodexActivePart, tone: Color, ui: Float, panel: Color) {
+    val language = LocalAppLanguage.current
+    val roles = LocalKkRolePalette.current
+    val typography = codexMeasurer().typography
+    val body = typography.bodyStyle(15f * ui, lineHeightEm = 1.32f, color = Kk.Bone)
+    Column(Modifier.fillMaxWidth().testTag("codex-active").background(panel).padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Canvas(Modifier.size((16f * ui).dp)) { drawKkIcon(skillGlyph(active.effect), center, size.minDimension, tone) }
+            BasicText(language.text(CodexText.ACTIVE_PART).uppercase(), style = typography.monoStyle(11f * ui, trackingEm = 0.06f, color = Kk.Bone))
+        }
+        active.ranks.forEachIndexed { index, rank ->
+            val top = index == active.ranks.lastIndex
+            Row(Modifier.testTag("codex-active-rank-${index + 1}"), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                BasicText(rank.label.uppercase(), style = typography.monoStyle(11f * ui, color = if (top) roles.gold.base else roles.you),
+                    softWrap = false, maxLines = 1)
+                BasicText(codexHighlightNumbers(codexKeepUnits(rank.numbers), tone), Modifier.weight(1f), style = body)
+            }
+        }
+        BasicText(codexHighlightNumbers(codexKeepUnits(active.rankThree), tone), Modifier.testTag("codex-active-rank-three").padding(start = 4.dp)
+            .drawBehind { drawRect(roles.gold.base, Offset(-4.dp.toPx(), 2.dp.toPx()), Size(2.dp.toPx(), size.height - 4.dp.toPx())) }
+            .padding(start = 10.dp), style = body)
+    }
 }
 
 /**

@@ -522,7 +522,8 @@ fun GameplayContent(
             .onKeyEvent { event ->
                 // Bound keys come from the player's key bindings; Escape and Enter stay fixed aliases.
                 val model = renderModelValue
-                val action = event.key.toBindableKey()?.let { model.settings.keyBindings.action(it) }
+                val bindable = event.key.toBindableKey()
+                val action = bindable?.let { model.settings.keyBindings.action(it) }
                 if (action == GameAction.PERFORMANCE_HUD) {
                     return@onKeyEvent keyDown(event.type, ::togglePerformanceTelemetry)
                 }
@@ -530,7 +531,12 @@ fun GameplayContent(
                 if (terminal && !terminalReady) return@onKeyEvent true
                 val down = event.type == KeyEventType.KeyDown
                 if (down) {
-                    controlLog.keyHints = true
+                    // Keyboard play is a key a player could bind or a fixed alias; a device key (a phone's volume
+                    // rocker) shows no key caps and leaves a touch player's cards naming slots by number.
+                    if (bindable != null || event.key == Key.Escape || event.key == Key.Enter) {
+                        controlLog.keyHints = true
+                        controlLog.touchInput = false
+                    }
                     dispatch(GameplayInteractionPulse.UserGestureObserved)
                 }
                 val running = model.phase == GamePhase.RUNNING
@@ -695,7 +701,10 @@ fun GameplayContent(
                                 when {
                                     change.pressed && !change.previousPressed -> {
                                         dispatch(GameplayInteractionPulse.UserGestureObserved, collectPerformance)
-                                        if (change.type == PointerType.Touch) controlLog.keyHints = false
+                                        if (change.type == PointerType.Touch) {
+                                            controlLog.keyHints = false
+                                            controlLog.touchInput = true
+                                        }
                                         // A press on the (!) toggles the rules; a press anywhere else closes them.
                                         val hudInterfaceScale = interfaceScaleState.value
                                         val onTrialInfo = currentRenderModel.isTrialInfoPosition(x, y, hudInterfaceScale)
@@ -804,6 +813,7 @@ fun GameplayContent(
                         dispatch(GameplayInteractionPulse.ChoicesRerolled)
                     },
                     onBuild = { onOutput(GameplayInteractionOutput.OpenCodex) },
+                    touch = controlLog.touchInput,
                 )
             }
             // Pause and reward overlays present Codex as their own menu item and button.
@@ -939,7 +949,7 @@ private fun GameplaySemanticControls(
                         density = density,
                         tag = "kinetickk.gameplay.skill.$slot",
                         description = if (name == null) {
-                            language.text(GameplayText.SkillSlotLocked, slot + 1)
+                            language.text(GameplayText.SkillSlotEmpty, slot + 1)
                         } else {
                             language.text(GameplayText.SkillSlotDescription, slot + 1, name)
                         },

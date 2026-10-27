@@ -152,7 +152,7 @@ private val DefaultBuildCatalog = BuildCatalog(
             power = 0.05f, radius = 260f, residue = StatusElement.ENTROPY, residueStacks = 2,
             values = immutableListOf(0.35f, 1f),
             verb = "Overcurrent", cue = "Faster weapon", keystone = "Short Circuit",
-            keystoneDescription = "Refreshes skills instead: 1.0 s to every skill, once per 1 s; no weapon refresh."),
+            keystoneDescription = "Refreshes actives instead: 1.0 s to every active, once per 1 s; no weapon refresh."),
         ReactionDefinition(ReactionId.ROT_WELL, "Rot Well",
             "A rotting well opens on the target, pulling enemies in, slowing and decaying them; every death inside " +
                 "widens it.",
@@ -195,16 +195,16 @@ private val DefaultBuildCatalog = BuildCatalog(
             keystoneDescription = "The hush follows the Core (radius 140, 3 s) and spends up to 20 hostile shots entering it; no damage when it forms."),
         ReactionDefinition(ReactionId.BLACKFIRE, "Blackfire",
             "A black flame burns the target through every resistance; when a burning enemy dies, the flame leaps on and " +
-                "your skills recharge.",
+                "your actives recharge.",
             power = 5f, radius = 0f, values = immutableListOf(200f, 0.6f, 8f, 1f),
             verb = "Flame Leap", cue = "Burn, then kill", keystone = "Hellfire",
-            keystoneDescription = "Damage per second ×1.5; the flame never leaps; no skill refund."),
+            keystoneDescription = "Damage per second ×1.5; the flame never leaps; no refund for actives."),
         ReactionDefinition(ReactionId.STASIS, "Stasis",
-            "Time stops around the target: enemies halt, hostile shots vanish, and inside the bubble your skills " +
+            "Time stops around the target: enemies halt, hostile shots vanish, and inside the bubble your actives " +
                 "recharge faster.",
             power = 3f, radius = 140f, values = immutableListOf(140f, 2f, 24f, 1.5f),
             verb = "Time Bubble", cue = "Shelter inside", keystone = "Rewind",
-            keystoneDescription = "Shots inside are returned as your shots (30 % of their damage, nearest enemy within 600, up to 12); no skill haste."),
+            keystoneDescription = "Shots inside are returned as your shots (30 % of their damage, nearest enemy within 600, up to 12); no haste for actives."),
         ReactionDefinition(ReactionId.ANNIHILATE, "Annihilate",
             "The void strikes the target and the toughest enemy nearby; your next Dash toward that enemy blinks you to it.",
             power = 8f, radius = 300f, values = immutableListOf(3f, 30f, 520f),
@@ -216,11 +216,11 @@ private val DefaultBuildCatalog = BuildCatalog(
             verb = "Maw", cue = "Park it in the fire", keystone = "Hungry Void",
             keystoneDescription = "The well follows the Core (radius 120, 2.4 s) and stops pulling enemies; it still eats shots."),
         ReactionDefinition(ReactionId.OBLIVION, "Oblivion",
-            "Rot meets the void: a weakened enemy is erased, its Data rushes to you and your skills recharge; anything " +
+            "Rot meets the void: a weakened enemy is erased, its Data rushes to you and your actives recharge; anything " +
                 "sturdier takes a heavy burst.",
             power = 6f, radius = 0f, values = immutableListOf(1.5f),
             verb = "Erasure", cue = "Erase for Data", keystone = "Last Rites",
-            keystoneDescription = "Execute lines 16 % (Elites 9 %), never bosses; no Data latch, no skill refund."),
+            keystoneDescription = "Execute lines 16 % (Elites 9 %), never bosses; no Data latch, no refund for actives."),
     ),
     resonances = immutableListOf(
         TagResonanceDefinition(BuildTag.RAM, "Collisions, mass and raw momentum.", immutableListOf(

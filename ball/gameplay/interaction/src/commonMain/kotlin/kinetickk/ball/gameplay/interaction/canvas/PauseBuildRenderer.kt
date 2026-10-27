@@ -10,11 +10,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.TextLayoutResult
 import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponMastery
 import kinetickk.ball.content.api.liabilityText
@@ -24,6 +26,7 @@ import kinetickk.ball.gameplay.interaction.layout.PauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
 import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
+import kinetickk.ball.gameplay.interaction.rewards.activeSlotKey
 import kinetickk.ball.gameplay.interaction.rewards.overlayUiTextScale
 import kinetickk.ball.gameplay.nucleus.model.formatRunTime
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
@@ -33,6 +36,8 @@ import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToLong
 
 /** Tone of a run statistic value in the build overview. */
@@ -86,8 +91,20 @@ internal class PauseSynergyChip(val text: String, val accent: PauseSynergyAccent
 /** What a synergy chip's edge shows: the player's color, an element's hue or a Relic's aspect. */
 internal enum class PauseSynergyAccent { YOU, ELEMENT, RELIC }
 
-/** An owned item: stacks as the icon's arc, hatched when bound relics disable it, a gold rim when Reborn. */
-internal class PauseItemEntry(val item: ItemDefinition, val stacks: Int, val suppressed: Boolean, val reborn: Boolean)
+/**
+ * An owned item: stacks as the icon's arc, hatched when bound relics disable it, a gold rim when Reborn. An active item
+ * ([active]) shows its effect's mark with its rank pips and [slotKey], the player's key for its Z/X/C slot (the slot's
+ * number on touch), on a key cap as its card's Active chip does.
+ */
+internal class PauseItemEntry(
+    val item: ItemDefinition,
+    val stacks: Int,
+    val suppressed: Boolean,
+    val reborn: Boolean,
+    val slotKey: String? = null,
+) {
+    val active: SkillId? get() = item.active
+}
 
 /**
  * The pause build view of one committed frame (SPEC build view): the run's weapon and its level,
@@ -146,7 +163,7 @@ internal class PauseBuildOverview(
     val bracketLevels: Int = (brackets.maxOfOrNull { it.level } ?: -1) + 1
 }
 
-internal fun GameplayRenderModel.pauseBuildOverview(language: AppLanguage): PauseBuildOverview {
+internal fun GameplayRenderModel.pauseBuildOverview(language: AppLanguage, touch: Boolean = false): PauseBuildOverview {
     val policy = content.relicPolicy
     val slots = List(policy.maxSlots) { index -> equippedRelics.getOrNull(index) }
     val relics = slots.map { equipped ->
@@ -185,9 +202,7 @@ internal fun GameplayRenderModel.pauseBuildOverview(language: AppLanguage): Paus
         PauseReactionEntry(id, if (discovered) content.build.reaction(id).name.localizedContent(language) else
             language.text(HudRedesignText.UnknownReaction), discovered)
     }
-    val items = content.items.filter { itemStack(it.id) > 0 }.map {
-        PauseItemEntry(it, itemStack(it.id), it.id in build.suppressedItemIds, it.id in build.rebornItemIds)
-    }
+    val items = pauseItems(language, touch)
     val stats = runStatistics
     val buildPolicy = content.build.policy
     val synergy = weaponSynergy
@@ -246,6 +261,23 @@ internal fun GameplayRenderModel.pauseBuildOverview(language: AppLanguage): Paus
         synergyElement = synergy.infusionElement,
         synergyRelic = synergy.harmonizingRelic?.let { content.relic(it) },
     )
+}
+
+/**
+ * The owned items in the grid's order: the active items first in Z/X/C order (so a long build never hides them under
+ * "+N"), each with its slot's key (its number on [touch]), then the passive items in catalog order.
+ */
+private fun GameplayRenderModel.pauseItems(language: AppLanguage, touch: Boolean): List<PauseItemEntry> {
+    fun entry(item: ItemDefinition, slotKey: String? = null) =
+        PauseItemEntry(item, itemStack(item.id), item.id in build.suppressedItemIds, item.id in build.rebornItemIds, slotKey)
+    val owned = content.items.filter { itemStack(it.id) > 0 }
+    val slots = skillBar.slots
+    val actives = (0 until slots.size).mapNotNull { slot ->
+        val effect = slots[slot].skillId ?: return@mapNotNull null
+        val item = owned.firstOrNull { it.active == effect } ?: return@mapNotNull null
+        entry(item, if (touch) (slot + 1).toString() else activeSlotKey(slot, language))
+    }
+    return actives + owned.filter { item -> actives.none { it.item.id == item.id } }.map { entry(it) }
 }
 
 /**
@@ -311,18 +343,21 @@ private fun GameplayRenderModel.pauseBrackets(links: List<OverlayRelicLink>, lan
 private object PauseBuildMemo {
     private var engine: GameplayRenderModel? = null
     private var language: AppLanguage? = null
+    private var touch = false
     private var overview: PauseBuildOverview? = null
 
-    fun of(engine: GameplayRenderModel, language: AppLanguage): PauseBuildOverview {
+    fun of(engine: GameplayRenderModel, language: AppLanguage, touch: Boolean): PauseBuildOverview {
         val cached = overview
         val previous = this.engine
-        if (cached != null && previous != null && this.language == language && (previous === engine || previous.sameBuild(engine))) {
+        if (cached != null && previous != null && this.language == language && this.touch == touch &&
+            (previous === engine || previous.sameBuild(engine))) {
             this.engine = engine
             return cached
         }
-        return engine.pauseBuildOverview(language).also {
+        return engine.pauseBuildOverview(language, touch).also {
             this.engine = engine
             this.language = language
+            this.touch = touch
             overview = it
         }
     }
@@ -335,8 +370,17 @@ private object PauseBuildMemo {
             equippedRelics == other.equippedRelics && build == other.build && runStatistics == other.runStatistics &&
             damageMultiplier == other.damageMultiplier && effectiveWeaponPower == other.effectiveWeaponPower &&
             critChance == other.critChance && maxShield == other.maxShield && itemStacksSnapshot == other.itemStacksSnapshot &&
-            weaponSynergy == other.weaponSynergy &&
+            weaponSynergy == other.weaponSynergy && sameSlots(other) && settings.keyBindings == other.settings.keyBindings &&
             reactionDiscoveries() == other.reactionDiscoveries() && pairingDiscoveries() == other.pairingDiscoveries()
+
+    /** The same effect in every Z/X/C slot (the active items' keys). */
+    private fun GameplayRenderModel.sameSlots(other: GameplayRenderModel): Boolean {
+        val slots = skillBar.slots
+        val others = other.skillBar.slots
+        if (slots.size != others.size) return false
+        for (index in 0 until slots.size) if (slots[index].skill != others[index].skill) return false
+        return true
+    }
 
     private fun GameplayRenderModel.reactionDiscoveries(): Int {
         var mask = 0
@@ -353,8 +397,14 @@ private object PauseBuildMemo {
     }
 }
 
-internal fun DrawScope.drawPauseBuild(engine: GameplayRenderModel, measurer: CanvasTextMeasurer, layout: PauseLayoutGeometry, time: Float) {
-    val overview = PauseBuildMemo.of(engine, measurer.language)
+internal fun DrawScope.drawPauseBuild(
+    engine: GameplayRenderModel,
+    measurer: CanvasTextMeasurer,
+    layout: PauseLayoutGeometry,
+    time: Float,
+    touch: Boolean = false,
+) {
+    val overview = PauseBuildMemo.of(engine, measurer.language, touch)
     val ui = PauseMeasurers.ui(measurer, engine.settings.textScale)
     val display = PauseMeasurers.display(measurer, engine.settings.textScale)
     when (layout.mode) {
@@ -391,7 +441,7 @@ internal object PauseMeasurers {
 /** What a pause text is, for the layout probe. */
 internal enum class PauseTextKind {
     TITLE, TIMER, HEADING, TAG, LABEL, SYNERGY_NAME, MULTIPLIER, COST, TAG_NAME, ELEMENT_NAME, REACTION, EMPTY,
-    STAT_LABEL, STAT_VALUE, RUN_LABEL, RUN_VALUE, MORE, SYNERGY,
+    STAT_LABEL, STAT_VALUE, RUN_LABEL, RUN_VALUE, MORE, SYNERGY, KEY,
 }
 
 /** One laid-out pause text: where it was drawn ([rect], px) and the width it had to fit ([box]). */
@@ -1251,7 +1301,10 @@ private object ReactionChips {
 /**
  * The owned items as an icon grid from [top] within [height]: the largest pitch up to [pitch]
  * that fits them all (never below 60 % of it), stacks as each icon's arc, a threat hatch over items
- * the bound relics disable and a gold rim on Reborn copies. Items past the grid leave a "+N" mark.
+ * the bound relics disable and a gold rim on Reborn copies. An active item draws as its Z/X/C slot in
+ * small (a sheared plate with its effect's mark and rank pips, as its card's plate shows them) with
+ * its slot's key on a bone key cap at the cell's top-right corner (its card's Active chip). Items
+ * past the grid leave a "+N" mark.
  */
 private fun DrawScope.drawPauseItems(
     overview: PauseBuildOverview,
@@ -1290,14 +1343,53 @@ private fun DrawScope.drawPauseItems(
         val center = Offset(left + (index % perRow) * cell + cell * 0.5f, top + (index / perRow) * cell + cell * 0.5f)
         val radius = cell * 0.36f
         val hue = item.item.elements.firstOrNull()?.let { roles.element(it.ordinal) } ?: roles.kinetic
-        drawItemImage(item.item, center, radius, hue, item.stacks)
+        val effect = item.active
+        if (effect != null) {
+            // Its Z/X/C slot in small: a sheared Ink2 plate edged in its hue, the effect's mark and rank pips on it.
+            val half = cell * ACTIVE_PLATE_SHARE * 0.5f
+            val plate = PauseShapes.activePlate(index, center.x - half, center.y - half, center.x + half, center.y + half, half * 0.34f)
+            drawPath(plate, Kk.Ink2)
+            drawPath(plate, hue, alpha = 0.6f, style = kkStroke(1.2f * k * density))
+            drawActiveItemMark(effect, center, half * 2f, hue, item.stacks, item.item.maxStacks, plate = Kk.Ink2)
+        } else {
+            drawItemImage(item.item, center, radius, hue, item.stacks)
+        }
         if (item.reborn) drawCircle(Kk.Gold, radius * 1.18f, center, style = kkStroke(1.5f * k * density))
         if (item.suppressed) {
             drawCircle(kkFillBrush(KkFillKind.HATCH, roles.threat), radius * 1.12f, center)
             drawCircle(roles.threat, radius * 1.12f, center, alpha = 0.8f, style = kkStroke(1.2f * k * density))
         }
+        item.slotKey?.let { key -> drawPauseKeyCap(index, key, ui, center.x + cell * 0.5f, center.y - cell * 0.5f, cell, k) }
     }
 }
+
+/**
+ * The key of an active item's slot on a bone key cap (ink mono, at least square) in the top-right corner of its
+ * [cell] whose top-right point is ([right], [top]). The cap keeps to a third of the cell like the grid's icons (the
+ * label follows the text size up to the cap's height); a long key name shrinks to the cell's width.
+ */
+private fun DrawScope.drawPauseKeyCap(index: Int, key: String, ui: CanvasTextMeasurer, right: Float, top: Float, cell: Float, k: Float) {
+    val inset = cell * 0.04f
+    val pad = cell * 0.06f
+    val box = cell - inset * 2f - pad * 2f
+    val height = cell * KEY_CAP_SHARE
+    val size = min(KEY_CAP_SP * k, height / density * 0.62f)
+    val label = fitOverlayText(ui, key, KkTextRole.MONO, size, box, uppercase = true, minScale = 0.3f)
+    val width = max(label.size.width + pad * 2f, height)
+    val left = right - inset - width
+    val capTop = top + inset
+    drawPath(PauseShapes.keyCap(index, left, capTop, left + width, capTop + height, height * 0.22f), Kk.Bone)
+    drawPauseText(PauseTextKind.KEY, label, left + width * 0.5f, capTop + height * 0.5f, Kk.Ink, box, KkAlign.CENTER, KkVAlign.CENTER)
+}
+
+/** An active's key cap label in the pause grid (board sp, before the text factor). */
+private const val KEY_CAP_SP = 10f
+
+/** An active's key cap is this share of its grid cell tall. */
+private const val KEY_CAP_SHARE = 0.32f
+
+/** An active's slot plate spans this share of its grid cell. */
+private const val ACTIVE_PLATE_SHARE = 0.8f
 
 /** The element's hue of a relic (the preset's volt for Kinetic, gold for Sovereign) in this color vision palette. */
 internal fun relicHue(definition: RelicDefinition, roles: KkRolePalette): Color = definition.aspect.overlayColor(roles)
@@ -1307,6 +1399,8 @@ private object PauseShapes {
     private val diamonds = KkPathCache(8)
     private val slabs = KkPathCache(16)
     private val synergySlabs = KkPathCache(6)
+    private val keyCaps = KkPathCache(ContentBounds.SKILL_SLOTS)
+    private val activePlates = KkPathCache(ContentBounds.SKILL_SLOTS)
 
     fun diamond(slot: Int, cx: Float, cy: Float, r: Float) = diamonds.diamond(slot.coerceIn(0, 7), cx, cy, r)
 
@@ -1315,6 +1409,14 @@ private object PauseShapes {
 
     fun synergySlab(slot: Int, left: Float, top: Float, right: Float, bottom: Float, cut: Float) =
         synergySlabs.slab(slot.coerceIn(0, 5), left, top, right, bottom, cut)
+
+    /** The slot plate of the active in grid cell [cell] (the actives lead the grid, so one per Z/X/C slot). */
+    fun activePlate(cell: Int, left: Float, top: Float, right: Float, bottom: Float, cut: Float) =
+        activePlates.slab(cell.coerceIn(0, ContentBounds.SKILL_SLOTS - 1), left, top, right, bottom, cut)
+
+    /** The key cap of the active in grid cell [cell] (the actives lead the grid, so one per Z/X/C slot). */
+    fun keyCap(cell: Int, left: Float, top: Float, right: Float, bottom: Float, cut: Float) =
+        keyCaps.slab(cell.coerceIn(0, ContentBounds.SKILL_SLOTS - 1), left, top, right, bottom, cut)
 }
 
 /**

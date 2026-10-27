@@ -85,7 +85,7 @@ internal class WorldHudKeepOut {
         var skillsBottom = Float.NEGATIVE_INFINITY
         var headerBottom = 0f
         // Every control that may appear (the skill row and the Apex badge included), so the regions
-        // do not move when the first skill is drafted or the Apex unlocks.
+        // do not move when the first active item binds a slot or the Apex unlocks.
         forEachRunningControlBounds(width, height, scale, RunningControlMask.ALL) { target, left, top, right, bottom ->
             when (target) {
                 RunningControlTarget.DASH, RunningControlTarget.BRAKE -> {

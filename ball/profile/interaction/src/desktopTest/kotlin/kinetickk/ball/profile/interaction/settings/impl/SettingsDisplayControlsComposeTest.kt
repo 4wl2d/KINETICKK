@@ -82,14 +82,14 @@ class SettingsDisplayControlsComposeTest {
         assertEquals(waiting, dash.state())
         assertEquals("Key not available", announcement())
         assertTrue(port.adjustments.isEmpty())
-        // Z belongs to Skill 1: Dash takes it and Skill 1 takes Space.
+        // Z belongs to Active 1: Dash takes it and Active 1 takes Space.
         key(Key.Z)
         assertNull(dash.state())
         assertEquals(BindableKey.Z, port.preferences.keyBindings.key(GameAction.DASH))
         assertEquals(BindableKey.SPACE, port.preferences.keyBindings.key(GameAction.SKILL_1))
         dash.assertContentDescriptionEquals("Dash: Z")
-        onNodeWithTag("kinetickk.settings.bind.skill_1.key").assertContentDescriptionEquals("Skill 1: Space")
-        assertEquals("Dash set to Z. Skill 1 moved to Space", announcement())
+        onNodeWithTag("kinetickk.settings.bind.skill_1.key").assertContentDescriptionEquals("Active 1: Space")
+        assertEquals("Dash set to Z. Active 1 moved to Space", announcement())
         assertEquals(listOf<ProfilePreferenceAdjustment>(ProfilePreferenceAdjustment.SetKeyBinding(GameAction.DASH, BindableKey.Z)), port.adjustments)
         // A press anywhere else ends the capture and does nothing more: the tab stays.
         click("kinetickk.settings.bind.dash.key")
@@ -105,7 +105,7 @@ class SettingsDisplayControlsComposeTest {
         settle()
         assertEquals(waiting, dash.state())
         assertEquals(1, port.adjustments.size)
-        assertEquals("Dash set to Z. Skill 1 moved to Space", announcement())
+        assertEquals("Dash set to Z. Active 1 moved to Space", announcement())
         key(Key.F)
         assertEquals(BindableKey.F, port.preferences.keyBindings.key(GameAction.DASH))
         // Reset keys: the first press arms Confirm, the second restores every default.
