@@ -80,7 +80,7 @@ data class GameplayContentSnapshot(
     val obstacles: ObstacleTuning = ObstacleTuning(),
     /** Data pickup magnet, vacuum and collection. */
     val pickups: PickupTuning = PickupTuning(),
-    /** Active skill pool in [SkillId] order. */
+    /** Active-effect table in [SkillId] order; the items carrying the effects are in [items]. */
     val skills: ImmutableList<SkillDefinition> = defaultSkillDefinitions(),
     /** Refit and Honing effects a run applies from the profile's upgrade levels. */
     val upgrades: UpgradePolicy = UpgradePolicy(),
@@ -103,6 +103,15 @@ data class GameplayContentSnapshot(
     val totalClauseCount: Int = items.sumOf { it.clauses.size }
 
     fun clauseIndex(itemId: Int, clause: Int): Int = clauseOffsets[itemId] + clause
+
+    /**
+     * The id of the item carrying each active effect, by [SkillId] ordinal (−1 when no item carries it); derived once
+     * per immutable snapshot. At most one item carries an effect; a catalog without active items still constructs.
+     */
+    val activeItemIds: ImmutableList<Int> = activeItemIdsOf(items)
+
+    /** The item carrying [id], or null when the catalog has none. */
+    fun activeItem(id: SkillId): ItemDefinition? = activeItemIds[id.ordinal].takeIf { it >= 0 }?.let(::item)
 
     fun pairing(a: RelicId, b: RelicId): RelicPairingDefinition? = build.pairing(a, b)
 
@@ -142,7 +151,7 @@ data class UiCatalogSnapshot(
     val enemies: ImmutableList<EnemyDefinition> = defaultEnemyDefinitions(),
     /** Core Matrix nodes in [MatrixNodeId] order. */
     val matrixNodes: ImmutableList<MatrixNodeDefinition> = defaultMatrixNodes(),
-    /** Active skill pool in [SkillId] order, for the HUD, cards and the Codex. */
+    /** Active-effect table in [SkillId] order, for the HUD, cards and the Codex. */
     val skills: ImmutableList<SkillDefinition> = defaultSkillDefinitions(),
     /** Refit and Honing prices and effects, for the Workshop. */
     val upgrades: UpgradePolicy = UpgradePolicy(),
@@ -175,6 +184,18 @@ data class UiCatalogSnapshot(
     fun coreShape(id: CoreShape): CoreShapeDefinition =
         coreShapes.first { definition -> definition.id == id }
 }
+
+private fun activeItemIdsOf(items: List<ItemDefinition>): ImmutableList<Int> {
+    val ids = IntArray(SkillId.entries.size) { NO_ACTIVE_ITEM }
+    items.forEach { item ->
+        val active = item.active ?: return@forEach
+        require(ids[active.ordinal] == NO_ACTIVE_ITEM) { "Active effect $active is carried by more than one item" }
+        ids[active.ordinal] = item.id
+    }
+    return ids.toList().toImmutableList()
+}
+
+private const val NO_ACTIVE_ITEM = -1
 
 private fun List<SkillDefinition>.hasOneDefinitionPerSkillIdInOrder(): Boolean =
     size == SkillId.entries.size && size <= ContentBounds.MAX_SKILLS &&

@@ -286,7 +286,7 @@ class ContentBalanceCharacterizationTest {
     fun skillApexAndUpgradeContentIsGolden() {
         assertEquals(18, ui.skills.size)
         assertEquals(
-            "0e1fa079fddfd61b",
+            "0f61860d21ed6c61",
             goldenFingerprint {
                 add("skills")
                 ui.skills.forEach { skill ->
@@ -336,9 +336,6 @@ class ContentBalanceCharacterizationTest {
                 ui.tempo.levelRequirements.forEach(::add)
                 add(ui.tempo.levelIntegrity)
                 add(ui.tempo.levelRepair)
-                ui.tempo.skillSlotLevels.forEach(::add)
-                add(ui.tempo.skillRankEveryLevels)
-                add(ui.tempo.skillRankGapLevels)
                 add(ui.tempo.rebirthScaleFromLevel)
                 ui.rebirth.profiles.forEach { add(it.dataRequirementScale) }
             },

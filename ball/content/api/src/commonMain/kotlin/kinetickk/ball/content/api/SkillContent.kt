@@ -8,8 +8,8 @@ import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 
 /**
- * Active skills a run drafts into its Z/X/C slots. Append only: gameplay indexes runtime cells,
- * cues and link styles by ordinal.
+ * The active effects an active item binds to a Z/X/C slot ([ItemDefinition.active]); exactly one item carries each.
+ * Append only: gameplay indexes runtime cells, cues and link styles by ordinal.
  */
 enum class SkillId {
     SOLAR_FLARE,
@@ -61,15 +61,16 @@ data class SkillRank(
 }
 
 /**
- * Content owns a skill's identity, text, element, build tags, targeting and per-rank numbers; the
- * run owns slots, cooldowns and casting. [element] is null for kinetic and build-element skills.
- * [reach] is the rank I distance a cast can reach from the Core (0 for [SkillTargeting.SELF]).
+ * The active-effect table: content owns an effect's identity, text, element, build tags, targeting and per-rank
+ * numbers; the run owns slots, cooldowns and casting. The item that carries the effect repeats its [name], [tags]
+ * (in order) and [element] (bootstrap checks it), and its stacks are the rank. [element] is null for kinetic and
+ * build-element effects. [reach] is the rank I distance a cast can reach from the Core (0 for [SkillTargeting.SELF]).
  */
 data class SkillDefinition(
     val id: SkillId,
     val name: String,
     val summary: String,
-    /** What rank III adds, shown on the rank-up card and in the Codex. */
+    /** What rank III adds, shown on the item card that raises the active to rank III and in the Codex. */
     val rankThree: String,
     val element: StatusElement?,
     val tags: ImmutableList<BuildTag>,
@@ -104,7 +105,7 @@ data class SkillDefinition(
     fun rank(rank: Int): SkillRank = ranks[rank.coerceIn(1, ranks.size) - 1]
 
     companion object {
-        /** Build tags per skill; each owned skill adds a point to both. */
+        /** Build tags per effect; the active item carrying it adds a point to both, like any item. */
         const val SKILL_TAG_COUNT: Int = 2
     }
 }

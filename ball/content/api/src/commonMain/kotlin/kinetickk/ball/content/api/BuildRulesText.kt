@@ -365,8 +365,10 @@ enum class BuildRulesText(override val english: String, override val russian: St
 }
 
 /**
- * The item's mechanics as display lines: passive stats, then one TRIGGER and one EFFECT line per
- * clause, then rules; every cost line follows the rest in declaration order.
+ * The item's passive mechanics as display lines: stats, then one TRIGGER and one EFFECT line per
+ * clause, then rules; every cost line follows the rest in declaration order. An active item's effect
+ * is not among them: cards and the Codex present it from its [SkillDefinition] (its summary, its
+ * [rankLines] at the rank the item reaches and its rank III text).
  */
 fun ItemDefinition.ruleLines(
     language: AppLanguage,

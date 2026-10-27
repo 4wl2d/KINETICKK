@@ -4,6 +4,7 @@
 package kinetickk.ball.content.api
 
 import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 
 /** Cumulative achievement a character unlocks with; persisted counters live in the Profile. Append only. */
@@ -168,6 +169,11 @@ data class CoreShapeDefinition(
     val upgradeBaseCost: Int = defaultCharacterUpgradeBaseCost(id),
     /** The mechanic parameter each Refit level moves. */
     val upgradeSignature: CharacterUpgradeSignature = defaultCharacterUpgradeSignature(id),
+    /**
+     * The character's lane: three active effects that play into its mechanic. Offers weight their items by
+     * [OfferLanePolicy.characterActiveWeight]; bots and cards read the same list.
+     */
+    val activeLane: ImmutableList<SkillId> = defaultActiveLane(id),
 ) {
     init {
         require(displayName.isNotBlank() && mechanicDescription.isNotBlank() && unlockDescription.isNotBlank())
@@ -178,7 +184,30 @@ data class CoreShapeDefinition(
         require(upgradeBaseCost in 1..ContentBounds.MAX_UPGRADE_BASE_COST) {
             "Refit base cost must be within 1..${ContentBounds.MAX_UPGRADE_BASE_COST}"
         }
+        require(activeLane.size == ACTIVE_LANE_SIZE && activeLane.toSet().size == ACTIVE_LANE_SIZE) {
+            "A character's active lane names exactly $ACTIVE_LANE_SIZE distinct effects"
+        }
     }
+
+    companion object {
+        /** Active effects in each character's lane. */
+        const val ACTIVE_LANE_SIZE: Int = 3
+    }
+}
+
+private fun defaultActiveLane(id: CoreShape): ImmutableList<SkillId> = when (id) {
+    CoreShape.ORB -> immutableListOf(SkillId.SLINGSHOT, SkillId.ARC_HOOK, SkillId.CATALYZE)
+    CoreShape.PRISM -> immutableListOf(SkillId.FULL_STOP, SkillId.FROST_SNAP, SkillId.MASS_DRIVER)
+    CoreShape.SHARD -> immutableListOf(SkillId.VOID_STEP, SkillId.ARC_HOOK, SkillId.SONIC_BOOM)
+    CoreShape.RING -> immutableListOf(SkillId.SOLAR_FLARE, SkillId.FROST_LINE, SkillId.ENTROPIC_TIDE)
+    CoreShape.DIAMOND -> immutableListOf(SkillId.FROST_SNAP, SkillId.FULL_STOP, SkillId.NULL_SHROUD)
+    CoreShape.TESSERACT -> immutableListOf(SkillId.VOID_STEP, SkillId.CATALYZE, SkillId.METEOR)
+    CoreShape.STAR -> immutableListOf(SkillId.MASS_DRIVER, SkillId.SOLAR_FLARE, SkillId.DECAY_SPORES)
+    CoreShape.SPIRAL -> immutableListOf(SkillId.FROST_LINE, SkillId.RESONATOR, SkillId.SLINGSHOT)
+    CoreShape.DIPOLE -> immutableListOf(SkillId.GRAVITY_WELL, SkillId.SONIC_BOOM, SkillId.SLINGSHOT)
+    CoreShape.PENTAGON -> immutableListOf(SkillId.SONIC_BOOM, SkillId.RESONATOR, SkillId.STORM_COIL)
+    CoreShape.CRESCENT -> immutableListOf(SkillId.VOID_STEP, SkillId.ARC_HOOK, SkillId.NULL_SHROUD)
+    CoreShape.HEXAGON -> immutableListOf(SkillId.DECAY_SPORES, SkillId.GRAVITY_WELL, SkillId.STORM_COIL)
 }
 
 fun defaultCoreShapeDefinitions(): ImmutableList<CoreShapeDefinition> =

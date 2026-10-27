@@ -234,8 +234,6 @@ class SkillApexUpgradeContentTest {
 
     @Test
     fun snapshotsCarryTheSkillPoolInOrder() {
-        val tempo = RunTempoProfile()
-        assertEquals(3, tempo.skillSlotLevels.size)
         val reordered = (listOf(skills[1], skills[0]) + skills.drop(2)).toImmutableList()
         val ui = UiCatalogSnapshot(
             version = KINETICKK_CONTENT_VERSION,

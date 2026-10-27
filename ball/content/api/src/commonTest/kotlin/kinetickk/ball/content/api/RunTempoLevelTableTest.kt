@@ -48,12 +48,12 @@ class RunTempoLevelTableTest {
         }
         assertFailsWith<IllegalArgumentException> { legacyLevelRequirements(ContentBounds.MAX_RUN_LEVEL + 1) }
 
+        // No level gates a slot any more, so the smallest cap is a profile of its own.
         val smallest = RunTempoProfile(
-            maximumLevel = 20,
-            levelRequirements = legacyLevelRequirements(20),
-            skillSlotLevels = immutableListOf(2, 8, 16),
+            maximumLevel = RunTempoProfile.MIN_MAXIMUM_LEVEL,
+            levelRequirements = legacyLevelRequirements(RunTempoProfile.MIN_MAXIMUM_LEVEL),
         )
-        assertEquals(19, smallest.levelRequirements.size)
+        assertEquals(1, smallest.levelRequirements.size)
         assertFailsWith<IllegalArgumentException> {
             RunTempoProfile(maximumLevel = 1, levelRequirements = immutableListOf())
         }
@@ -80,28 +80,9 @@ class RunTempoLevelTableTest {
     }
 
     @Test
-    fun levelRewardsAndSkillCadenceAreValidated() {
+    fun levelRewardsAreValidated() {
         assertFailsWith<IllegalArgumentException> { RunTempoProfile(levelIntegrity = Float.NaN) }
         assertFailsWith<IllegalArgumentException> { RunTempoProfile(levelRepair = -0.1f) }
         RunTempoProfile(levelIntegrity = 0f, levelRepair = 0f)
-
-        assertFailsWith<IllegalArgumentException> { RunTempoProfile(skillSlotLevels = immutableListOf(2, 8)) }
-        assertFailsWith<IllegalArgumentException> { RunTempoProfile(skillSlotLevels = immutableListOf(2, 8, 16, 24)) }
-        assertFailsWith<IllegalArgumentException> { RunTempoProfile(skillSlotLevels = immutableListOf(2, 8, 8)) }
-        assertFailsWith<IllegalArgumentException> { RunTempoProfile(skillSlotLevels = immutableListOf(1, 8, 16)) }
-        RunTempoProfile(
-            maximumLevel = 17,
-            levelRequirements = legacyLevelRequirements(17),
-            skillSlotLevels = immutableListOf(2, 8, 16),
-        )
-        assertFailsWith<IllegalArgumentException> {
-            RunTempoProfile(
-                maximumLevel = 16,
-                levelRequirements = legacyLevelRequirements(16),
-                skillSlotLevels = immutableListOf(2, 8, 16),
-            )
-        }
-        assertFailsWith<IllegalArgumentException> { RunTempoProfile(skillRankEveryLevels = 0) }
-        assertFailsWith<IllegalArgumentException> { RunTempoProfile(skillRankGapLevels = -1) }
     }
 }
