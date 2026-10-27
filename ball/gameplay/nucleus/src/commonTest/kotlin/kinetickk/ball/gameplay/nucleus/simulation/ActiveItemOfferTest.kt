@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.DirectedReward
 import kinetickk.ball.content.api.GameplayContentSnapshot
@@ -485,6 +486,8 @@ class ActiveItemOfferTest {
             ),
         )
         var promoted = 0
+        // Floors met exactly while a dealt active also qualifies: a floor that counted that active would deal one passive fewer.
+        var activeQualifiedAtFloor = 0
         for (seed in 1..40) for (shape in listOf(CoreShape.ORB, CoreShape.HEXAGON, CoreShape.RING)) {
             val floored = buildTestState(seed = seed, shape = shape)
             val bare = buildTestState(seed = seed, shape = shape, content = floorless)
@@ -495,8 +498,33 @@ class ActiveItemOfferTest {
                 "seed $seed $shape: actives are dealt by their tier's share alone",
             )
             promoted += canonicalGameplayContent.items.count { it.id in floored.itemDeck && it.id !in bare.itemDeck }
+            for ((name, floor, qualifies) in archetypeAndElementFloors(policy.draftDeck.characterTagFloor,
+                policy.draftDeck.tagFloor, policy.draftDeck.elementFloor, shape)) {
+                val passive = canonicalGameplayContent.items.filter { !it.isActive && qualifies(it) }
+                val dealtPassive = passive.count { it.id in floored.itemDeck }
+                val target = minOf(floor, passive.size)
+                assertTrue(dealtPassive >= target, "seed $seed $shape $name: $dealtPassive passive items dealt, floor $target")
+                if (dealtPassive == target && actives.any { it.id in floored.itemDeck && qualifies(it) }) activeQualifiedAtFloor++
+            }
         }
         assertTrue(promoted > 0, "the floors promote passive items")
+        assertTrue(activeQualifiedAtFloor > 0, "some floor is met exactly while a dealt active qualifies for it")
+    }
+
+    /** The character's archetype, every archetype and every element floor, as the deck applies them (at most Rare). */
+    private fun archetypeAndElementFloors(
+        characterTagFloor: Int,
+        tagFloor: Int,
+        elementFloor: Int,
+        shape: CoreShape,
+    ): List<Triple<String, Int, (ItemDefinition) -> Boolean>> = buildList {
+        val atMostRare: (ItemDefinition) -> Boolean = { it.rarity.rank <= ItemRarity.RARE.rank }
+        val characterTag = shape.characterTag()
+        add(Triple("character $characterTag", characterTagFloor) { it: ItemDefinition -> atMostRare(it) && characterTag in it.tags })
+        BuildTag.entries.forEach { tag -> add(Triple("tag $tag", tagFloor) { it: ItemDefinition -> atMostRare(it) && tag in it.tags }) }
+        StatusElement.entries.forEach { element ->
+            add(Triple("element $element", elementFloor) { it: ItemDefinition -> atMostRare(it) && element in it.elements })
+        }
     }
 
     @Test
