@@ -329,6 +329,8 @@ localization.
 - Headings: short, no trailing punctuation, uppercase applied by the text style (not baked into
   strings) where the renderer allows.
 - Russian strings are longer: check every changed layout in RU at the three layout modes.
+- Card text never ends a line on a fragment: a number keeps its unit ("40 %", "3 с") and a Russian one-letter word
+  ("к", "в", "с", "и") keeps the word after it, both held by a no-break space (`rewardKeepUnits`).
 
 ---
 

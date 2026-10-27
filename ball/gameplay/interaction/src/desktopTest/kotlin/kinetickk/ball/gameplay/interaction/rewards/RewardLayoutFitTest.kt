@@ -36,6 +36,7 @@ import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.RuleLineKind
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.render.BuildForecast
@@ -480,6 +481,34 @@ class RewardLayoutFitTest {
         assertEquals(2 * (english.size + russian.size) - 1, names, "Checked every name")
     }
 
+    /**
+     * A Russian card's body rows on the phone frames (effects, rules, descriptions, costs) never end a line with a
+     * one-letter word ("к", "в", "и"): it keeps the word after it at both text sizes, as the narrower rows beside the
+     * slanted frame would otherwise leave it.
+     */
+    @Test
+    fun russianOneLetterWordsNeverEndAPhoneCardsLine() {
+        var rows = 0
+        forEachScene(::activeOffers, ::activeSlotPrompt, ::relicOffers, ::weapons, frames = listOf(844 to 390, 390 to 844),
+            languages = listOf(AppLanguage.Russian)) { scene, model ->
+            model.choices.forEachIndexed { index, choice ->
+                val card = model.rewardCardPresentation(choice, index, AppLanguage.Russian)
+                val body = (card.rules.filter { it.kind != RuleLineKind.TRIGGER }.map { it.text } + card.descriptions + card.liabilities)
+                    .map { it.normalized() }
+                textsUnder("kinetickk.gameplay.choice.${index + 1}.text").forEach { (_, layout) ->
+                    val shown = layout.layoutInput.text.text
+                    if (shown.normalized() !in body) return@forEach
+                    (0 until layout.lineCount - 1).forEach { line ->
+                        val last = shown.substring(layout.getLineStart(line), layout.getLineEnd(line, visibleEnd = true)).split(' ', '\u00A0').last()
+                        assertTrue(last.length > 1 || !last.single().isLetter(), "$scene card ${index + 1}: line ${line + 1} of '$shown' ends with '$last'")
+                    }
+                    rows++
+                }
+            }
+        }
+        assertTrue(rows >= 2 * 2 * 12, "Checked the cards' body rows ($rows)")
+    }
+
     /** [this] with its no-break spaces and word joiners read as the plain text they hold together. */
     private fun String.normalized(): String = replace('\u00A0', ' ').replace("\u2060", "")
 
@@ -592,9 +621,10 @@ class RewardLayoutFitTest {
         vararg scenes: (AppLanguage, Float, Float, Float) -> GameplayRenderModel,
         frames: List<Pair<Int, Int>> = this.frames,
         settings: List<Float> = this.settings,
+        languages: List<AppLanguage> = AppLanguage.entries,
         check: SemanticsNodeInteractionsProvider.(String, GameplayRenderModel) -> Unit,
     ) {
-        for ((width, height) in frames) for (language in AppLanguage.entries) for (setting in settings) for (scene in scenes) {
+        for ((width, height) in frames) for (language in languages) for (setting in settings) for (scene in scenes) {
             // These assertions inspect settled geometry, not the intermediate entrance frames.
             runDesktopComposeUiTest(width, height, effectContext = object : MotionDurationScale {
                 override val scaleFactor = 0f
