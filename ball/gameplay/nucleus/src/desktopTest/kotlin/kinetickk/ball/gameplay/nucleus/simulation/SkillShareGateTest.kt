@@ -15,11 +15,11 @@ import kotlin.test.assertTrue
  * their effects deal a meaningful but not dominant share of its damage.
  *
  * Population (restated for active items, R1.5): an active item reaches a run only through ordinary item offers, so the
- * gate measures runs that own one. The share walks the no-POI probe sequence (`i * 7_919 + 13`, i = 1, 2, ...) in order
- * with the Orb until [SHARE_RUNS] runs have bound an active item by [OWNED_BY_SECONDS]; the spread walks
- * [PopulationSeeds] for every character until [SPREAD_RUNS] runs of each have. Seeds are chosen by that definition,
- * never by outcome; a probe that binds no active item by then is reported and left out. The walk is bounded: a
- * population that cannot fill within [MAX_PROBES_PER_RUN] probes per run fails as such.
+ * gate measures runs that own one. The share plays the Orb on every one of the 300 [PopulationSeeds] and judges the runs
+ * that have bound an active item by [OWNED_BY_SECONDS]; the spread walks [PopulationSeeds] for every character until
+ * [SPREAD_RUNS] runs of each have. Seeds are chosen by that definition, never by outcome; a run that binds no active item
+ * by then is left out. The spread's walk is bounded: a population that cannot fill within [MAX_PROBES_PER_RUN] probes
+ * per run fails as such.
  *
  * The share counts the damage the active effects cause ([kinetickk.ball.gameplay.nucleus.model.SkillRuntime.skillCausedDamage]):
  * their own hits, what a cast resolves (Catalyze's forced reactions) and the Core's impacts while an effect moves it
@@ -35,6 +35,12 @@ import kotlin.test.assertTrue
  * of the runs must be judged. The spread pools each effect's damage over the whole run
  * ([kinetickk.ball.gameplay.nucleus.model.SkillRuntime.effectDamage], kept when its item is replaced) across every
  * character's runs, over all active damage.
+ *
+ * The share is a population gate (lead Addendum D3): judged on 31 owning runs walked from i = 1, it passed with
+ * probability 0.84–0.86 at a population median of 0.10, so it re-rolled with the reward stream. On the 05885fa9 base
+ * (its lane skills free from level 2) all 300 [PopulationSeeds] runs owned one, 214 were judged and their median share
+ * was 0.113 (bootstrap SE 0.0038). By Addendum D1 the band is min(0.08, base − 2 SE) to max(0.20, base + 2 SE), that
+ * is [MIN_SHARE] to [MAX_SHARE], the design band of Addendum C6.
  *
  * The spread is a population gate (lead Addendum C5): with three runs per character the 05885fa9 base kept its top
  * effect within 0.30 with probability 0.76 (Sonic Boom 0.253 over 100 runs per character), so it re-rolled with the
@@ -58,7 +64,10 @@ class SkillShareGateTest {
 
     @Test
     fun skillsDealBetweenEightAndTwentyPercentOfAFreshRunsDamage() {
-        val runs = population(CoreShape.ORB, SHARE_RUNS, ShareProbes)
+        val probes = populationOf(PopulationSeeds) { seed -> play(seed, CoreShape.ORB) }
+        val runs = probes.filter { it.owned }
+        println("SKILL-SHARE ${runs.size} of ${probes.size} runs bound an active item by $OWNED_BY_SECONDS s; left out: " +
+            probes.filterNot { it.owned }.joinToString { "${it.seed}(sec=${it.seconds.toInt()})" })
         runs.forEach { run ->
             println("SKILL-SHARE seed=${run.seed} share=${"%.3f".format(run.share)} sec=${run.seconds.toInt()} " +
                 "firstActive=${run.firstActiveAt?.toInt()}" + (if (run.judged) " " else " (ended early, not judged) ") +
@@ -128,17 +137,14 @@ class SkillShareGateTest {
     }
 
     private companion object {
-        const val SHARE_RUNS = 31
         const val SPREAD_RUNS = 25
         /** A population run has bound an active item by this run time. */
         const val OWNED_BY_SECONDS = 360f
-        /** The walk's bound: at most this many probes per population run before the population counts as unfillable. */
+        /** The spread walk's bound: at most this many probes per run before the population counts as unfillable. */
         const val MAX_PROBES_PER_RUN = 4
         const val SHARE_SECONDS = 720f
         const val MIN_SHARE = 0.08
         const val MAX_SHARE = 0.20
         const val MAX_SINGLE_SKILL_SHARE = 0.30
-        /** The share's walk: the no-POI probe sequence `i * 7_919 + 13` from i = 1. */
-        val ShareProbes: List<Int> = (1..SHARE_RUNS * MAX_PROBES_PER_RUN).map { it * 7_919 + 13 }
     }
 }
