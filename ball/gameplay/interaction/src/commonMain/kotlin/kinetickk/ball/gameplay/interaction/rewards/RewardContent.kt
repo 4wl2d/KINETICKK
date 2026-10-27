@@ -772,6 +772,8 @@ internal fun RewardCard(
         if (presentation.isNewDiscovery) {
             // On the board the stamp sits on the icon plate's lower corner, clear of the chips and the
             // name at any text size (its bottom edge is fixed; a larger stamp grows up over the icon).
+            // An active item's plate keeps its lower band for the rank pips: there the stamp sits on the
+            // plate's upper corner, below the band, and a larger stamp grows down over the glyph.
             // Phone cards have no room beside their small icon: the stamp rides on the top edge, its
             // bottom fixed just inside the frame and above the band's labels and pips, so a larger
             // stamp grows up and away from the card.
@@ -791,7 +793,7 @@ internal fun RewardCard(
             } else {
                 Box(
                     Modifier.offset(spec.dp(spec.plateX - 8f), spec.dp(spec.plateY)).height(spec.dp(spec.plateSize + 6f)),
-                    contentAlignment = Alignment.BottomStart,
+                    contentAlignment = if (presentation.item?.active != null) Alignment.TopStart else Alignment.BottomStart,
                 ) {
                     DiscoveryBadge(
                         language.text(GameplayText.NewDiscovery), textScale * 0.9f,
