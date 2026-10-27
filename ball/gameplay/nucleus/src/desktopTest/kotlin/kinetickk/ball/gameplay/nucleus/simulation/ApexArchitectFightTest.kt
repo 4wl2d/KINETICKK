@@ -38,14 +38,15 @@ import kotlin.test.assertTrue
  * neither keeps drafting): one unlocks the Apex (the bot casts it by its rule), one does not. In the fight the Core's
  * integrity is refilled every frame and the damage it takes (shield and integrity) is counted.
  *
- * The contract holds in every Apex arm of the first three runs per case: each strike stays within the boss's hit cap,
- * an activation spends at most its strikes and its bolt budget, the boss's integrity never moves while it shifts,
- * every shift starts at a phase gate and lasts exactly 8 s, its escorts arrive, and the Apex costs the Architect at
- * most 10 % of the volleys its own timer schedules: a volley counts against it when the boss could attack and the
- * shared projectile pool was at the volley budget only because of live Apex shots (a Silence and a pool full of other
- * shots hold volleys back with or without an Apex). In a scripted arena where the Architect is the only enemy, the
- * character's own damage to it during an activation (strikes included) is never below the same script's without the
- * Apex.
+ * The bot casts its Apex in nearly every fight: a population rule over [PopulationSeeds] (see
+ * [theBotCastsItsApexInNearlyEveryArchitectFight]). The rest of the contract holds in every Apex arm of the first three
+ * runs per case: each strike stays within the boss's hit cap, an activation spends at most its strikes and its bolt
+ * budget, the boss's integrity never moves while it shifts, every shift starts at a phase gate and lasts exactly 8 s,
+ * its escorts arrive, and the Apex costs the Architect at most 10 % of the volleys its own timer schedules: a volley
+ * counts against it when the boss could attack and the shared projectile pool was at the volley budget only because of
+ * live Apex shots (a Silence and a pool full of other shots hold volleys back with or without an Apex). In a scripted
+ * arena where the Architect is the only enemy, the character's own damage to it during an activation (strikes included)
+ * is never below the same script's without the Apex.
  *
  * The benefit is judged on many paired fights, because one fight's time-to-kill moves by ±15 % when the Core starts
  * 0.01 u elsewhere: each run is forked into [FORKS] pairs whose two arms both start with the Core moved by k/100 u
@@ -68,7 +69,6 @@ class ApexArchitectFightTest {
             val label = "$shape tier $tier seed $seed"
             val (apex, plain) = pair
             println("APEX-FIGHT $shape tier=$tier seed=$seed ${apex.line()} | without ${plain.line()}")
-            if (apex.casts == 0) broken += "$label never cast its Apex"
             if (apex.strikeExcess > 1e-3f) broken += "$label strike over the cap by ${apex.strikeExcess}"
             if (apex.maxStrikes > apex.strikeBudget) broken += "$label spent ${apex.maxStrikes} strikes"
             if (apex.maxErasures > apex.boltBudget || apex.minBoltsLeft < 0f) broken += "$label erased ${apex.maxErasures}"
@@ -83,6 +83,31 @@ class ApexArchitectFightTest {
                 "(${apex.apexMissedVolleys} held back by Apex shots, ${apex.volleyShare} of all scheduled)"
         }
         assertTrue(broken.isEmpty(), "Apex contract: $broken")
+    }
+
+    /**
+     * The no-POI bot casts its Apex in at least [MIN_CAST_SHARE] of the fights of [CAST_FIGHTS_PER_CASE] runs per
+     * character and tier along [PopulationSeeds] (312 fights). A population rule (lead Addendum C5, 0.5.0 active
+     * items): the contract once required a cast in every Apex arm of its 72 fights, and the 05885fa9 base left 3 of 1,816
+     * fights without a cast (the first 50 to 128 runs per character and tier along [PopulationSeeds]; Orb tier 10 once,
+     * Dipole tier 10 twice), so the 72 fights passed with probability 0.83. The bound is the base share 0.9983 minus two
+     * standard errors at 312 fights (0.0023), rounded down; the base's own first 13 runs per case all cast.
+     */
+    @Test
+    fun theBotCastsItsApexInNearlyEveryArchitectFight() {
+        val fights = CoreShape.entries.flatMap { shape ->
+            listOf(0, 10).flatMap { tier ->
+                firstRuns(shape, tier, CAST_FIGHTS_PER_CASE, PopulationSeeds) { _, state, bot ->
+                    fight(state.copyForReduction(), bot.copy(), apex = true, windows = emptyList()).casts
+                }.map { (seed, casts) -> Triple("$shape tier $tier", seed, casts) }
+            }
+        }
+        val silent = fights.filter { it.third == 0 }
+        val share = fights.shareOf { it.third > 0 }
+        println("APEX-CASTS fights=${fights.size} cast=${"%.4f".format(share)} without a cast: " +
+            silent.joinToString { (case, seed) -> "$case seed $seed" })
+        assertTrue(share >= MIN_CAST_SHARE, "the bot cast its Apex in only ${"%.4f".format(share)} of ${fights.size} fights: " +
+            silent.joinToString { (case, seed) -> "$case seed $seed" })
     }
 
     @Test
@@ -171,6 +196,10 @@ class ApexArchitectFightTest {
         val SEED_POOL = (6 until 6 + SEED_POOL_SIZE).map { it * 7_919 + 13 }
         const val SEED_POOL_SIZE = 200
         const val FIGHTS_PER_CASE = 3
+        /** The cast rule's runs per character and tier along [PopulationSeeds]. */
+        const val CAST_FIGHTS_PER_CASE = 13
+        /** The least share of those fights in which the bot casts its Apex (base 0.9983, SE 0.0023 at 312 fights). */
+        const val MIN_CAST_SHARE = 0.99
         const val BENEFIT_RUNS = 48
         /** The defensive characters' runs: their damage comes in rarer, larger events than a time-to-kill moves. */
         const val DEFENSIVE_RUNS = 64
@@ -201,15 +230,17 @@ class ApexArchitectFightTest {
         }
 
         /**
-         * [work] on the first [count] runs of [shape] at [tier] that reach the Architect, in seed order (runs are
-         * approached [SEED_BATCH] at a time); fails when the seed list runs out first.
+         * [work] on the first [count] runs of [shape] at [tier] along [seeds] that reach the Architect, in seed order
+         * (runs are approached [SEED_BATCH] at a time); fails when the seed list runs out first.
          */
-        fun <T> firstRuns(shape: CoreShape, tier: Int, count: Int, work: (Int, MutableGameState, NoPoiBot) -> T): List<Pair<Int, T>> {
+        fun <T> firstRuns(
+            shape: CoreShape, tier: Int, count: Int, seeds: List<Int> = SEED_POOL, work: (Int, MutableGameState, NoPoiBot) -> T,
+        ): List<Pair<Int, T>> {
             val found = mutableListOf<Pair<Int, T>>()
             var next = 0
             while (found.size < count) {
-                check(next < SEED_POOL.size) { "$shape tier $tier: only ${found.size} of $count runs reached the Architect" }
-                val batch = SEED_POOL.subList(next, min(next + SEED_BATCH, SEED_POOL.size))
+                check(next < seeds.size) { "$shape tier $tier: only ${found.size} of $count runs reached the Architect" }
+                val batch = seeds.subList(next, min(next + SEED_BATCH, seeds.size))
                 next += batch.size
                 val results = batch.map { seed ->
                     pool.submit(Callable { approach(shape, tier, seed)?.let { (state, bot) -> seed to work(seed, state, bot) } })
