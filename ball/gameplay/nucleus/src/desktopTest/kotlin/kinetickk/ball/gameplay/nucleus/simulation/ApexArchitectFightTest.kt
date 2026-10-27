@@ -95,13 +95,13 @@ class ApexArchitectFightTest {
      */
     @Test
     fun theBotCastsItsApexInNearlyEveryArchitectFight() {
-        val fights = CoreShape.entries.flatMap { shape ->
-            listOf(0, 10).flatMap { tier ->
-                firstRuns(shape, tier, CAST_FIGHTS_PER_CASE, PopulationSeeds) { _, state, bot ->
-                    fight(state.copyForReduction(), bot.copy(), apex = true, windows = emptyList()).casts
-                }.map { (seed, casts) -> Triple("$shape tier $tier", seed, casts) }
-            }
-        }
+        // The cases look for their runs at once, so the fight pool never waits on one case's slowest batch.
+        val cases = CoreShape.entries.flatMap { shape -> listOf(0, 10).map { tier -> shape to tier } }
+        val fights = populationOf(cases) { (shape, tier) ->
+            firstRuns(shape, tier, CAST_FIGHTS_PER_CASE, PopulationSeeds) { _, state, bot ->
+                fight(state.copyForReduction(), bot.copy(), apex = true, windows = emptyList()).casts
+            }.map { (seed, casts) -> Triple("$shape tier $tier", seed, casts) }
+        }.flatten()
         val silent = fights.filter { it.third == 0 }
         val share = fights.shareOf { it.third > 0 }
         println("APEX-CASTS fights=${fights.size} cast=${"%.4f".format(share)} without a cast: " +
