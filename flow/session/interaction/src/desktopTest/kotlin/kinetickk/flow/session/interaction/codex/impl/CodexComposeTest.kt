@@ -370,6 +370,43 @@ class CodexComposeTest {
         }
     }
 
+    @Test fun theItemFiltersShowWholeAtOneScaleInsideTheirColumn() {
+        // A segment cut short by its row keeps the natural drawing and loses its end, so each node's width is compared with
+        // its label's natural width: one common scale for the three (never above 1, each within the pixel its size rounds
+        // to), and the last ends inside its column.
+        for (language in AppLanguage.entries) runComposeUiTest {
+            var widthValue by mutableIntStateOf(1440)
+            var heightValue by mutableIntStateOf(810)
+            var scaleValue by mutableFloatStateOf(1.25f)
+            var measurer: kinetickk.foundation.design.CanvasTextMeasurer? = null
+            var density = 1f
+            setContent {
+                CompositionLocalProvider(LocalAppLanguage provides language) {
+                    measurer = kinetickk.foundation.design.rememberKkCanvasMeasurer(codexUiScale(scaleValue))
+                    density = LocalDensity.current.density
+                    Box(Modifier.requiredSize(widthValue.dp, heightValue.dp)) {
+                        val catalog = remember { codexTestCatalog() }
+                        CodexContent(catalog, CodexRenderModel((0 until 80).toImmutableSet(), CodexRunStacks(), catalog.items), codexTestProgress(), scaleValue) { }
+                    }
+                }
+            }
+            val labels = listOf(SessionText.FILTER_ALL, SessionText.FILTER_BUILD, SessionText.FILTER_ACTIVE).map { language.text(it) }
+            for ((width, height) in listOf(1440 to 810, 1280 to 720, 1000 to 700, 844 to 390, 390 to 844)) for (scale in listOf(1f, 1.25f, 1.75f)) {
+                runOnIdle { widthValue = width; heightValue = height; scaleValue = scale }
+                val where = "${width}x$height ${language.code} @$scale"
+                val shown = listOf("codex-filter-0", "codex-filter-2", "codex-filter-3").map { onNodeWithTag(it).getUnclippedBoundsInRoot() }
+                val natural = runOnIdle { labels.map { kinetickk.foundation.design.kkSegmentWidth(requireNotNull(measurer), it, density) } }
+                val widths = shown.map { it.width.value * density }
+                val scale = widths.indices.maxOf { widths[it] / natural[it] }
+                assertTrue(scale <= 1.01f && widths.indices.all { widths[it] >= natural[it] * scale - 1f },
+                    "the filters are drawn $widths px wide for $natural at $where")
+                val column = onAllNodes(hasTestTag("codex-nav")).fetchSemanticsNodes().singleOrNull()?.let { onNodeWithTag("codex-nav").getUnclippedBoundsInRoot() }
+                    ?: onNodeWithTag("codex").getUnclippedBoundsInRoot()
+                assertTrue(shown.last().right <= column.right + 0.5.dp, "the Active filter ${shown.last()} leaves its column $column at $where")
+            }
+        }
+    }
+
     @Test fun aRowTooWideEvenAtItsSmallestScaleScrollsToEveryTab() = runComposeUiTest {
         // 300 dp at 175 % in Russian: the category row cannot fit at 60 %, so it scrolls instead.
         setContent {
