@@ -37,10 +37,13 @@ import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.MarkPick
 import kinetickk.ball.content.api.ReactionAspect
 import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.SkillDefinition
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.SkillPick
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.WeaponFamily
 import kinetickk.ball.content.api.ZoneKind
+import kinetickk.ball.content.api.defaultSkillDefinitions
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.toImmutableList
 
@@ -78,6 +81,7 @@ private class ItemDraft(
     val unlock: Int = 1,
     val rebirth: Int = 0,
     val risk: Boolean = false,
+    val active: SkillId? = null,
 )
 
 private val Drafts: List<ItemDraft> = listOf(
@@ -1019,12 +1023,68 @@ private val Drafts: List<ItemDraft> = listOf(
         rebirth = 5),
 )
 
+/** The shipped active effects the active items are authored from; initialised before [ActiveDrafts] reads them. */
+private val DefaultSkills: List<SkillDefinition> = defaultSkillDefinitions()
+
+/**
+ * ACTIVES (ids 269-286), appended in [SkillId] order so an active's id is 269 + its ordinal. Each item carries one
+ * active effect and one small passive rule, thematic to its element and tags and no larger than the shipped items'
+ * median of its kind allows (the content test pins the table). Uncommon, Rare and Epic only; none waits for a Rebirth.
+ */
+private val ActiveDrafts: List<ItemDraft> = SkillId.entries.map { id ->
+    when (id) {
+        SkillId.SOLAR_FLARE -> active(id, RARE, ItemRule.ElementPotency(StatusElement.THERMAL, 0.2f))
+        SkillId.METEOR -> active(id, RARE, ItemRule.BreakPower(StatusElement.THERMAL, 0.25f))
+        SkillId.FROST_LINE -> active(id, UNCOMMON, ItemRule.StatusDuration(StatusElement.CRYO, 1.2f))
+        SkillId.FROST_SNAP -> active(id, RARE, ItemRule.CritDamageVersus(EffectCondition.TargetFrozen, 0.15f))
+        SkillId.ARC_HOOK -> active(id, UNCOMMON, ItemRule.ElementPotency(StatusElement.ION, 0.2f))
+        SkillId.STORM_COIL -> active(id, RARE, ItemRule.BreakPower(StatusElement.ION, 0.25f))
+        SkillId.GRAVITY_WELL -> active(id, RARE, ItemRule.BreakPower(StatusElement.GRAVITIC, 0.25f))
+        SkillId.MASS_DRIVER -> active(id, RARE, ItemRule.ElementPotency(StatusElement.GRAVITIC, 0.2f))
+        SkillId.DECAY_SPORES -> active(id, RARE, ItemRule.ElementPotency(StatusElement.ENTROPY, 0.2f))
+        SkillId.ENTROPIC_TIDE -> active(id, EPIC, ItemRule.StatusDuration(StatusElement.ENTROPY, 1.2f))
+        SkillId.SONIC_BOOM -> active(id, UNCOMMON, ItemRule.BreakPower(StatusElement.SONIC, 0.25f))
+        SkillId.RESONATOR -> active(id, EPIC, ItemRule.StatusDuration(StatusElement.SONIC, 1.2f))
+        SkillId.VOID_STEP -> active(id, UNCOMMON, ItemRule.BreakPower(StatusElement.VOID, 0.25f))
+        SkillId.NULL_SHROUD -> active(id, RARE, ItemRule.ElementPotency(StatusElement.VOID, 0.2f))
+        SkillId.SLINGSHOT ->
+            active(id, UNCOMMON, ItemRule.WhileModifier(EffectCondition.SpeedAtLeast(900f), BuffStat.COOLING, 0.25f))
+        SkillId.FULL_STOP ->
+            active(id, UNCOMMON, ItemRule.WhileModifier(EffectCondition.Braking, BuffStat.DAMAGE_TAKEN, -0.15f))
+        SkillId.CATALYZE -> active(id, EPIC, ItemRule.ReactionPower(0.15f))
+        SkillId.DUAL_INFUSION -> active(id, EPIC, ItemRule.DamageVersus(EffectCondition.TargetHas(null), 0.08f))
+    }
+}
+
+/**
+ * The active item for [id]: its name, tags and element are the effect's own and its flavor line is the effect's summary
+ * (bootstrap checks the same equality for every catalog); it stacks to rank III and unlocks by run level per rarity.
+ */
+private fun active(id: SkillId, rarity: ItemRarity, passive: ItemRule): ItemDraft {
+    val effect = DefaultSkills[id.ordinal]
+    return ItemDraft(
+        effect.name, effect.summary, rarity, effect.tags, listOfNotNull(effect.element),
+        rules = listOf(passive),
+        stacks = ContentBounds.MAX_SKILL_RANK,
+        unlock = activeUnlockLevel(rarity),
+        active = id,
+    )
+}
+
+/** The run level an active item of [rarity] waits for (calibration moves these per rarity, never the rarities). */
+private fun activeUnlockLevel(rarity: ItemRarity): Int = when (rarity) {
+    UNCOMMON -> 5
+    RARE -> 7
+    EPIC -> 12
+    COMMON, LEGENDARY -> error("Active items are Uncommon, Rare or Epic")
+}
+
 /** A reaction clause condition naming both elements: it holds only for the reaction between them. */
 private fun pair(first: StatusElement, second: StatusElement): List<EffectCondition> =
     listOf(EffectCondition.ElementIs(first), EffectCondition.ElementIs(second))
 
 internal fun defaultItems(): ImmutableList<ItemDefinition> =
-    Drafts.mapIndexed { index, draft ->
+    (Drafts + ActiveDrafts).mapIndexed { index, draft ->
         ItemDefinition(
             id = index,
             name = draft.name,
@@ -1039,6 +1099,7 @@ internal fun defaultItems(): ImmutableList<ItemDefinition> =
             unlockLevel = draft.unlock,
             minimumRebirth = draft.rebirth,
             risk = draft.risk,
+            active = draft.active,
         )
     }.toImmutableList().also(::validateItems)
 

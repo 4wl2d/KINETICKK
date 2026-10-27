@@ -169,6 +169,7 @@ private fun validateBootstrap(data: ContentBootstrapData) {
     require(data.items.all { item -> item.unlockLevel <= data.tempo.maximumLevel }) {
         "Item unlock levels must not exceed the maximum run level ${data.tempo.maximumLevel}"
     }
+    validateActiveItems(data.items, data.skills)
 
     requireBound("weapons", data.weapons.size, ContentBounds.MAX_WEAPONS)
     requireUniqueIds("weapon", data.weapons.map(WeaponDefinition::id))
@@ -262,6 +263,25 @@ private fun validateWeaponKeys(weapons: List<WeaponDefinition>, relics: List<Rel
         val carriers = relics.filter { weapon.key in it.keys }
         require(carriers.size >= 2 && carriers.any { !it.isSovereign }) {
             "Weapon ${weapon.id} key ${weapon.key} must be carried by two Relics, one of them not Sovereign"
+        }
+    }
+}
+
+/**
+ * Every active effect is carried by exactly one item, which repeats the effect's name, its tags in the same order and
+ * its element: offers, cards and build points read the item, casting reads the effect. An effect missing from
+ * [skills] is left to [validateSkills].
+ */
+private fun validateActiveItems(items: List<ItemDefinition>, skills: List<SkillDefinition>) {
+    SkillId.entries.forEach { id ->
+        val carriers = items.filter { it.active == id }
+        require(carriers.size == 1) { "Active effect $id must be carried by exactly one item, not ${carriers.size}" }
+        val item = carriers.single()
+        val effect = skills.firstOrNull { it.id == id } ?: return@forEach
+        require(item.name == effect.name) { "${item.name} must carry the name of its active effect ${effect.name}" }
+        require(item.tags == effect.tags) { "${item.name} must carry the tags of its active effect in order: ${effect.tags}" }
+        require(item.elements == listOfNotNull(effect.element)) {
+            "${item.name} must carry exactly the element of its active effect: ${effect.element}"
         }
     }
 }
