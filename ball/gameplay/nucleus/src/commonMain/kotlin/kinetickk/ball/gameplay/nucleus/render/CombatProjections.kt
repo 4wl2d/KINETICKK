@@ -97,7 +97,7 @@ data class SkillBarProjection(
     fun slot(index: Int): SkillSlotProjection = slots[index]
 
     companion object {
-        /** No skill drafted yet. */
+        /** No active item owned yet: every slot is empty. */
         val EMPTY: SkillBarProjection = SkillBarProjection(
             immutableListOfSize(ContentBounds.SKILL_SLOTS) { SkillSlotProjection.EMPTY },
         )

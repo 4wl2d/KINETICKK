@@ -54,9 +54,10 @@ class DraftDeckTest {
     fun theRankZeroDeckDealsAboutSixtyPercentOfEveryTier() {
         val deck = buildTestState(seed = 7).itemDeck
         val universe = canonicalGameplayContent.items.filter { it.minimumRebirth == 0 }
-        assertEquals(203, universe.size)
-        // Base deals 32 / 37 / 26 / 22 of 58 / 68 / 43 / 34 (no rank-0 Legendary); floors may add a few.
-        assertTrue(deck.dealtIds().size in 117..130, "Rank-0 deck size ${deck.dealtIds().size}")
+        assertEquals(221, universe.size)
+        // Base deals 32 / 41 / 31 / 25 of 58 / 74 / 51 / 38 (the 18 actives among them, no rank-0 Legendary); floors,
+        // which promote passive items only, may add a few.
+        assertTrue(deck.dealtIds().size in 129..142, "Rank-0 deck size ${deck.dealtIds().size}")
     }
 
     @Test

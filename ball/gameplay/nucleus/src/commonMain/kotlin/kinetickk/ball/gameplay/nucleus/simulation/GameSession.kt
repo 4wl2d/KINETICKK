@@ -33,6 +33,8 @@ internal fun MutableGameState.startRun() {
     pendingRelicChoices = 0
     pendingBindingRelic = null
     pendingRelicBindAction = null
+    pendingActiveItemId = null
+    pendingActiveReborn = false
     relicRanks.fill(0)
     relicCooldowns.fill(0f)
     relicCounters.fill(0)
@@ -270,7 +272,7 @@ internal fun MutableGameState.exitRun() {
     updateBraking()
 }
 
-/** Drops buffered Dash, skill and Apex requests, so none fires after a pause or an exit. */
+/** Drops buffered Dash, skill and Apex requests, so none fires after a pause, an exit or a reward choice. */
 internal fun MutableGameState.clearInputBuffers() {
     dashBufferTime = 0f
     skillBufferMask = 0
@@ -351,8 +353,17 @@ internal fun MutableGameState.choose(index: Int) {
     val sound = when (option.type) {
         ChoiceType.ITEM -> {
             val itemId = option.itemId ?: return
+            val item = content.item(itemId) ?: return
+            // The offer resolves when its card is taken, even when the active item still needs a slot.
+            if (directedReward == null) resolveItemOfferPity(item)
+            if (needsActiveSlot(item)) {
+                pendingActiveItemId = itemId
+                pendingActiveReborn = option.reborn
+                openActiveSlotChoice()
+                emitSound(GameplayAudioCue.UI_CLICK)
+                return
+            }
             acquireItem(itemId, option.reborn)
-            if (directedReward == null) resolveItemOfferPity(content.item(itemId))
             GameplayAudioCue.LEVEL_UP
         }
         ChoiceType.TOTEM -> when (option.totemAction ?: return) {
@@ -408,16 +419,16 @@ internal fun MutableGameState.choose(index: Int) {
             }
             RelicChoiceAction.REPLACE, RelicChoiceAction.MELD_TARGET -> return
         }
-        ChoiceType.SKILL -> {
-            val skillId = option.skillId ?: return
-            if ((option.skillRank ?: 1) > 1) {
-                rankUpSkill(skillId)
-                // The rank-up card stood in for an item card: the offer resolves without a Rare.
-                if (activeChoiceType == ChoiceType.ITEM && directedReward == null) resolveItemOfferPity(null)
-            } else {
-                acquireSkill(skillId)
-            }
-            GameplayAudioCue.LEVEL_UP
+        ChoiceType.ACTIVE_SLOT -> {
+            val incoming = pendingActiveItemId ?: return
+            val reborn = pendingActiveReborn
+            pendingActiveItemId = null
+            pendingActiveReborn = false
+            val slot = option.activeSlot
+            if (slot != null) replaceActiveItem(slot, incoming, reborn) else keepActiveLoadout(incoming)
+            emitBuildChange(before, content.items[incoming].name)
+            finishChoice(if (slot != null) GameplayAudioCue.LEVEL_UP else GameplayAudioCue.UI_CLICK)
+            return
         }
         ChoiceType.RELIC_BIND -> {
             val slot = option.relicSlot ?: return
@@ -454,16 +465,10 @@ internal fun MutableGameState.rerollChoices() {
     if (!choicesCanReroll) return
     rerollsRemaining--
     when (activeChoiceType) {
-        ChoiceType.ITEM -> {
-            // A rank-up card stays through a reroll; only the item cards are dealt again.
-            val rankUp = choices.firstOrNull { it.type == ChoiceType.SKILL }
-            buildItemChoices(rankUpReplacesExperimental = rankUp != null)
-            if (rankUp != null) placeRankUpCard(rankUp)
-        }
+        ChoiceType.ITEM -> buildItemChoices()
         ChoiceType.WEAPON -> buildWeaponChoices()
         ChoiceType.RELIC -> buildRelicChoices()
-        ChoiceType.SKILL -> buildSkillDraft()
-        ChoiceType.TOTEM, ChoiceType.RELIC_BIND -> return
+        ChoiceType.TOTEM, ChoiceType.RELIC_BIND, ChoiceType.ACTIVE_SLOT -> return
     }
     emitSound(GameplayAudioCue.UI_CLICK)
 }

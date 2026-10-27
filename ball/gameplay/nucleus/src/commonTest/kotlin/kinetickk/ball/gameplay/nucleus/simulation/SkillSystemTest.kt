@@ -40,6 +40,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotSame
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -716,26 +717,36 @@ class SkillSystemTest {
     }
 
     @Test
-    fun draftsFillTheLowestSlotReadyAndRankUpsMakeTheSkillReadyAndCountForTheBuild() {
+    fun activeItemsFillTheLowestSlotReadyAndTheirStacksRankTheEffectReadyAndCountForTheBuildOnce() {
         val state = arena()
-        state.acquireSkill(SkillId.FROST_SNAP)
-        state.acquireSkill(SkillId.SOLAR_FLARE)
+        val snap = state.acquireActive(SkillId.FROST_SNAP)
+        state.acquireActive(SkillId.SOLAR_FLARE)
         assertEquals(SkillId.FROST_SNAP, state.skillLoadout.skill(0))
         assertEquals(SkillId.SOLAR_FLARE, state.skillLoadout.skill(1))
         assertEquals(1, state.skillLoadout.rank(0))
-        assertEquals(state.elapsed, state.skillRuntime[0, SkillCell.READY_AT], "a drafted skill is ready at once")
-        // Each skill counts a point in both tags and its element.
+        assertEquals(state.elapsed, state.skillRuntime[0, SkillCell.READY_AT], "a new active is ready at once")
+        // The item counts a point in each tag and its element, once (no separate skill points on top).
         assertEquals(1, state.build.affinity(StatusElement.CRYO))
         assertEquals(1, state.build.affinity(StatusElement.THERMAL))
+        snap.tags.forEach { tag ->
+            assertEquals(1, state.build.tagPoints(tag) - if (tag == state.coreShape.characterTag()) 1 else 0, "$tag counts once")
+        }
         state.castSkill(0)
-        state.rankUpSkill(SkillId.FROST_SNAP)
-        assertEquals(2, state.skillLoadout.rank(0))
-        assertEquals(state.elapsed, state.skillRuntime[0, SkillCell.READY_AT], "a rank-up makes the skill ready")
-        state.rankUpSkill(SkillId.FROST_SNAP)
-        state.rankUpSkill(SkillId.FROST_SNAP)
+        state.acquireActive(SkillId.FROST_SNAP)
+        assertEquals(2, state.skillLoadout.rank(0), "a second stack is rank II")
+        assertEquals(2, state.itemStack(snap.id))
+        assertEquals(state.elapsed, state.skillRuntime[0, SkillCell.READY_AT], "a rank-up makes the effect ready")
+        state.acquireActive(SkillId.FROST_SNAP)
         assertEquals(3, state.skillLoadout.rank(0), "rank III is the top")
-        assertEquals(2, state.build.affinity(StatusElement.CRYO), "rank III adds its element again")
-        // An element-less skill at rank III adds its first tag again instead.
+        assertEquals(2, state.build.affinity(StatusElement.CRYO), "the mastered third stack adds its element again")
+        // A fourth copy is salvaged like any maxed item and ranks nothing.
+        val matter = state.runMatter + state.matterFraction
+        state.acquireItem(snap.id)
+        assertEquals(3, state.skillLoadout.rank(0))
+        assertEquals(3, state.itemStack(snap.id))
+        assertTrue(state.runMatter + state.matterFraction > matter, "salvaged for Matter")
+        assertNull(state.activeLoadoutMismatch())
+        // An element-less active at rank III adds its first tag again instead.
         val kinetic = arena()
         val tag = kinetic.content.skill(SkillId.SLINGSHOT).tags.first()
         val base = kinetic.build.tagPoints(tag)
@@ -888,8 +899,8 @@ class SkillSystemTest {
     }
 
     private fun MutableGameState.learn(id: SkillId, rank: Int = 1): Int {
-        acquireSkill(id)
-        repeat(rank - 1) { rankUpSkill(id) }
+        acquireActive(id, rank)
+        takeProgressUpdate()
         takeVisualFxCues()
         takeSoundCues()
         return skillLoadout.slotOf(id)

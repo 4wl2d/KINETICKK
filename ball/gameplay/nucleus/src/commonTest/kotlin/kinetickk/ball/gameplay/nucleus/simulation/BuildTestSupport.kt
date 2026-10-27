@@ -8,6 +8,7 @@ import kinetickk.ball.content.api.EffectClause
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.CombatFieldKind
@@ -123,16 +124,41 @@ internal val contentWithoutReactionVerbs: GameplayContentSnapshot by lazy {
 }
 
 /**
- * [content] with every skill slot opening on the last levels before the run's level cap, so a run never drafts a
- * skill (the "no skills" arm of the skill gates).
+ * [content] whose offers never show an active item (the lane policy's active weight 0), so a run never owns one: the
+ * "no actives" arm of the active-item gates.
  */
-internal fun withoutReachableSkillSlots(content: GameplayContentSnapshot = canonicalGameplayContent): GameplayContentSnapshot {
-    val top = content.tempo.maximumLevel
+internal fun withoutActiveItems(content: GameplayContentSnapshot = canonicalGameplayContent): GameplayContentSnapshot {
+    val policy = content.build.policy
     return content.copy(
-        tempo = content.tempo.copy(
-            skillSlotLevels = kinetickk.foundation.collections.immutableListOf(top - 3, top - 2, top - 1),
-        ),
+        build = content.build.copy(policy = policy.copy(offerLanes = policy.offerLanes.copy(activeWeight = 0f))),
     )
+}
+
+/**
+ * Takes [stacks] stacks of the active item carrying [id], as offers deal it: the first binds the effect into the lowest
+ * empty slot at rank I, each later one ranks it. Fails when the effect did not end up bound (no free slot).
+ */
+internal fun MutableGameState.acquireActive(id: SkillId, stacks: Int = 1): ItemDefinition {
+    val item = checkNotNull(content.activeItem(id)) { "no item carries $id" }
+    repeat(stacks) { acquireItem(item.id) }
+    check(skillLoadout.owns(id)) { "$id found no free slot" }
+    return item
+}
+
+/** Every bound slot's rank equals its active item's stacks, and every owned active item is bound (R1.9). */
+internal fun MutableGameState.activeLoadoutMismatch(): String? {
+    for (slot in 0 until kinetickk.ball.gameplay.nucleus.model.SkillRuntime.SLOTS) {
+        val effect = skillLoadout.skill(slot) ?: continue
+        val item = content.activeItem(effect) ?: return "slot $slot holds $effect, which no item carries"
+        if (skillLoadout.rank(slot) != itemStacks[item.id]) {
+            return "slot $slot holds $effect at rank ${skillLoadout.rank(slot)}, its item has ${itemStacks[item.id]} stacks"
+        }
+    }
+    content.items.forEach { item ->
+        val effect = item.active ?: return@forEach
+        if (itemStacks[item.id] > 0 && !skillLoadout.owns(effect)) return "${item.name} is owned but its effect is not bound"
+    }
+    return null
 }
 
 /** Sets off [reaction] on [target]: [olderStacks] of its first element, then one of its second. */

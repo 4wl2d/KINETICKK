@@ -160,6 +160,19 @@ internal class CombatFieldTable private constructor(
         return -1
     }
 
+    /** Drops the live skill field of [slot], keeping the order of the rest (a replaced active's field ends with it). */
+    fun removeSkillField(slot: Int) {
+        val index = skillSlotIndex(slot)
+        if (index < 0) return
+        for (read in index + 1 until count) {
+            val from = offset(read)
+            val to = offset(read - 1)
+            for (cell in 0 until FieldCell.STRIDE) cells[to + cell] = cells[from + cell]
+        }
+        count--
+        revision++
+    }
+
     /** Claims a new record at the end; the caller fills every cell through [stamp] and the setters. */
     fun append(): Int {
         check(count < CAPACITY) { "combat field table holds at most $CAPACITY fields" }

@@ -537,7 +537,7 @@ private fun MutableGameState.coreStateProjection(previous: CoreStateProjection?)
 
 /**
  * The three skill slots from the loadout and the skill runtime. The shared [SkillBarProjection.EMPTY] stands for
- * no skill drafted; an unchanged bar keeps the previous instance.
+ * no active item owned; an unchanged bar keeps the previous instance.
  */
 private fun MutableGameState.skillBarProjection(previous: SkillBarProjection?): SkillBarProjection {
     val loadout = skillLoadout

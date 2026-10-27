@@ -5,8 +5,6 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.BuffStat
 import kinetickk.ball.content.api.BuildTag
-import kinetickk.ball.content.api.ContentBounds
-import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.ConversionKind
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.EffectAction
@@ -29,8 +27,6 @@ import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.actsOnSkills
 import kinetickk.ball.content.api.breakThresholdCut
 import kinetickk.ball.content.api.overhealOverfill
-import kinetickk.ball.gameplay.nucleus.model.SkillLoadout
-import kinetickk.ball.gameplay.nucleus.model.SkillRuntime
 import kinetickk.ball.gameplay.nucleus.render.RelicLinkKind
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
@@ -191,8 +187,6 @@ internal class CompiledBuild private constructor(
             weaponKey: kinetickk.ball.content.api.RelicKey? = null,
             /** Reaction keystone forms switched on beyond the items' own (no item rule declares one yet). */
             keystoneMask: Int = 0,
-            /** Owned skills: each adds tag points and element affinity like an item. */
-            skills: SkillLoadout = SkillLoadout.EMPTY,
         ): CompiledBuild {
             val policy = content.build.policy
             val itemCount = content.items.size
@@ -209,14 +203,10 @@ internal class CompiledBuild private constructor(
             // appears once, and owned items missing from the order count as the newest gains.
             val itemStamps = IntArray(itemCount)
             val relicStamps = IntArray(RelicId.entries.size)
-            val skillStamps = IntArray(SkillId.entries.size)
             var stamp = 1
             val order = ArrayList<Int>(acquisitionOrder.size)
             acquisitionOrder.forEach { entry ->
-                if (entry <= SKILL_GAIN_BASE) {
-                    val skill = SKILL_GAIN_BASE - entry
-                    if (skill in skillStamps.indices) skillStamps[skill] = stamp
-                } else if (entry < 0) {
+                if (entry < 0) {
                     val relic = relicOfGain(entry)
                     if (relic in relicStamps.indices) relicStamps[relic] = stamp
                 } else if (entry < itemCount && itemStacks[entry] > 0 && itemStamps[entry] == 0) {
@@ -250,21 +240,6 @@ internal class CompiledBuild private constructor(
                     } else {
                         item.tags.firstOrNull()?.let { tagPoints[it.ordinal] += policy.masteredTagPoints }
                     }
-                }
-            }
-            // Owned skills count like items: a point in each tag and in the element, rank III one more.
-            val skillPoints = policy.skillTagPoints
-            for (slot in 0 until SkillRuntime.SLOTS) {
-                val id = skills.skill(slot) ?: continue
-                val definition = content.skill(id)
-                definition.tags.forEach { tag -> tagPoints[tag.ordinal] += skillPoints }
-                val element = definition.element
-                val rankThree = skills.rank(slot) >= ContentBounds.MAX_SKILL_RANK
-                if (element != null) {
-                    affinity[element.ordinal] += if (rankThree) skillPoints * 2 else skillPoints
-                    affinityStamp[element.ordinal] = maxOf(affinityStamp[element.ordinal], skillStamps[id.ordinal])
-                } else if (rankThree) {
-                    tagPoints[definition.tags.first().ordinal] += skillPoints
                 }
             }
             coreShape?.characterTag()?.let { tagPoints[it.ordinal] += 1 }
@@ -575,18 +550,6 @@ internal fun MutableGameState.affinityTier(element: StatusElement): Int =
 /** A relic bind or rank-three upgrade in [MutableGameState.acquisitionOrder]; item ids stay non-negative. */
 internal fun relicGain(id: RelicId): Int = -(1 + id.ordinal)
 
-/** Skill gains sit far below every relic gain in [MutableGameState.acquisitionOrder]. */
-internal const val SKILL_GAIN_BASE: Int = -1_000
-
-/** A skill draft or rank-up in [MutableGameState.acquisitionOrder]. */
-internal fun skillGain(id: SkillId): Int = SKILL_GAIN_BASE - id.ordinal
-
-/** Records [id]'s affinity gain as the newest one; each skill appears at most once. */
-internal fun MutableGameState.recordSkillGain(id: SkillId) {
-    val entry = skillGain(id)
-    acquisitionOrder = acquisitionOrder.filter { it != entry } + entry
-}
-
 private fun relicOfGain(entry: Int): Int = -entry - 1
 
 /** Records [id]'s affinity gain as the newest one; each relic appears at most once. */
@@ -615,12 +578,14 @@ internal fun MutableGameState.compileBuild(keystoneMask: Int = 0): CompiledBuild
     reactionPowerBonus = matrix.reactionPowerBonus,
     weaponKey = currentWeaponDefinition.key,
     keystoneMask = keystoneMask,
-    skills = skillLoadout,
 )
 
-/** True when bound relic liabilities disable every effect of [item] (offers weight it 0; cards strike it). */
+/**
+ * The share of [item]'s parts bound relic liabilities disable (1: every effect, so offers weight it 0 and cards strike
+ * it). An active effect counts as one part no liability disables, so an active item stays offerable under any Relic.
+ */
 internal fun MutableGameState.itemSuppressedShare(item: ItemDefinition): Float {
-    var total = 0
+    var total = if (item.isActive) 1 else 0
     var suppressed = 0
     fun count(disabled: Boolean) {
         total++
@@ -668,9 +633,10 @@ internal fun MutableGameState.itemSuppressedShare(item: ItemDefinition): Float {
 
 /**
  * The share of [item]'s parts this run cannot use: skill parts (skill triggers and conditions, skill refunds,
- * skill buffs, skill rules, Catalysis and the skill conversions) while no skill is owned, and parts gated on a
+ * skill buffs, skill rules, Catalysis and the skill conversions) while no active item is owned, and parts gated on a
  * weapon family other than the equipped one. Kept apart from [itemSuppressedShare], which Relics cause; Apex parts
- * are never dormant (each refunds skills before the Apex unlocks).
+ * are never dormant (each refunds skills before the Apex unlocks), and neither is an active effect, which counts as one
+ * part an active item can always use.
  */
 internal fun MutableGameState.itemDormantShare(item: ItemDefinition): Float {
     val noSkills = skillLoadout.ownedCount == 0
@@ -680,7 +646,7 @@ internal fun MutableGameState.itemDormantShare(item: ItemDefinition): Float {
         is EffectCondition.WeaponFamilyIs -> condition.family != family
         else -> false
     }
-    var total = 0
+    var total = if (item.isActive) 1 else 0
     var dormant = 0
     fun count(isDormant: Boolean) {
         total++

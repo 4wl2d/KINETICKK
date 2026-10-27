@@ -64,7 +64,7 @@ class RuleVocabularyRuntimeTest {
             given = listOf(EffectCondition.SkillIs(SkillId.ARC_HOOK))))
         val state = stateWith(casts, thermalHits, otherSkill)
         repeat(6) { index -> state.dummy(x = 60f + index * 15f, y = 0f) }
-        state.acquireSkill(SkillId.SOLAR_FLARE)
+        state.acquireActive(SkillId.SOLAR_FLARE)
         val before = state.dataCollected
 
         assertTrue(state.castSkill(0))
@@ -201,8 +201,8 @@ class RuleVocabularyRuntimeTest {
         state.skillRuntime.setApex(ApexCell.ACTIVE_UNTIL, state.elapsed + 2f)
         assertTrue(holds(EffectCondition.ApexActive))
 
-        state.acquireSkill(SkillId.SOLAR_FLARE)
-        state.acquireSkill(SkillId.METEOR)
+        state.acquireActive(SkillId.SOLAR_FLARE)
+        state.acquireActive(SkillId.METEOR)
         assertFalse(holds(EffectCondition.SkillsCharging(1)))
         state.skillRuntime[0, SkillCell.READY_AT] = state.elapsed + 3f
         assertTrue(holds(EffectCondition.SkillsCharging(1)))
@@ -221,7 +221,7 @@ class RuleVocabularyRuntimeTest {
     fun skillRefundsSkipTheCastingSlotAndPickTheirSkill() {
         val all = probe("All Refund", on(EffectTrigger.SKILL_CAST, EffectAction.RefundSkills(1f, SkillPick.ALL)))
         val state = stateWith(all)
-        listOf(SkillId.SOLAR_FLARE, SkillId.METEOR, SkillId.FROST_LINE).forEach(state::acquireSkill)
+        listOf(SkillId.SOLAR_FLARE, SkillId.METEOR, SkillId.FROST_LINE).forEach { state.acquireActive(it) }
         state.elapsed = 10f
         fun cooling(slot: Int, left: Float) {
             state.skillRuntime[slot, SkillCell.CAST_AT] = state.elapsed - 3f
@@ -237,7 +237,7 @@ class RuleVocabularyRuntimeTest {
         val cast = probe("Cast Refund", on(EffectTrigger.SKILL_HIT, EffectAction.RefundSkills(1f, SkillPick.CAST), cooldown = 0.5f))
         val longest = probe("Longest Refund", on(EffectTrigger.KILL, EffectAction.RefundSkills(1f, SkillPick.LONGEST), cooldown = 0.5f))
         val picker = stateWith(cast, longest)
-        listOf(SkillId.SOLAR_FLARE, SkillId.METEOR, SkillId.FROST_LINE).forEach(picker::acquireSkill)
+        listOf(SkillId.SOLAR_FLARE, SkillId.METEOR, SkillId.FROST_LINE).forEach { picker.acquireActive(it) }
         picker.elapsed = 10f
         fun pickerCooling(slot: Int, left: Float) {
             picker.skillRuntime[slot, SkillCell.CAST_AT] = picker.elapsed - 3f
@@ -256,7 +256,7 @@ class RuleVocabularyRuntimeTest {
     @Test
     fun chargingTheApexRefundsItAtTheCapAndTheSkillsByAQuarterBefore() {
         val state = stateWith(probe("Crown Battery", on(EffectTrigger.LEVEL_UP, EffectAction.ChargeApex(4f))))
-        state.acquireSkill(SkillId.SOLAR_FLARE)
+        state.acquireActive(SkillId.SOLAR_FLARE)
         state.elapsed = 20f
         state.skillRuntime[0, SkillCell.CAST_AT] = 15f
         state.skillRuntime[0, SkillCell.LAST_COOLDOWN] = 10f
@@ -426,8 +426,7 @@ class RuleVocabularyRuntimeTest {
         val brand = probe("Spore Probe", on(EffectTrigger.CRIT, EffectAction.ApplyMark(MarkPick.SPORED, 4f), cooldown = 0.5f),
             elements = listOf(StatusElement.ENTROPY))
         val state = stateWith(brand)
-        state.acquireSkill(SkillId.DECAY_SPORES)
-        repeat(2) { state.rankUpSkill(SkillId.DECAY_SPORES) }
+        state.acquireActive(SkillId.DECAY_SPORES, 3)
         val slot = state.skillLoadout.slotOf(SkillId.DECAY_SPORES)
         val dataCap = state.content.skill(SkillId.DECAY_SPORES).rank(3).values[3]
         fun data() = state.pickups.count { it.type == PickupType.DATA }
@@ -491,7 +490,7 @@ class RuleVocabularyRuntimeTest {
         val wide = probe("Field Lens", rules = listOf(ItemRule.FieldTuning(FieldAspect.RADIUS, 0.5f), ItemRule.FieldTuning(FieldAspect.DURATION, 0.2f)))
         val plasma = probe("Pool Lens", rules = listOf(ItemRule.ReactionTuning(ReactionId.PLASMA_BURST, ReactionAspect.RADIUS, 0.5f)))
         val state = stateWith(wide, plasma)
-        state.acquireSkill(SkillId.STORM_COIL)
+        state.acquireActive(SkillId.STORM_COIL)
         state.addField(CombatFieldKind.PLASMA, FieldSource.REACTION, ReactionId.PLASMA_BURST.ordinal, 0f, 0f, radius = 100f,
             seconds = 2f, damagePerSecond = 0f)
         state.addField(CombatFieldKind.HUSH, FieldSource.REACTION, ReactionId.SILENCE.ordinal, 0f, 0f, radius = 100f,
@@ -522,8 +521,8 @@ class RuleVocabularyRuntimeTest {
 
         val attuned = stateWith(probe("Void Tuner", rules = listOf(ItemRule.SkillAttunement(ElementPick.VOID)), elements = listOf(StatusElement.VOID)))
         val targets = (0 until 10).map { attuned.dummy(x = 40f + it * 8f, y = 0f) }
-        attuned.acquireSkill(SkillId.SOLAR_FLARE)
-        attuned.acquireSkill(SkillId.FULL_STOP)
+        attuned.acquireActive(SkillId.SOLAR_FLARE)
+        attuned.acquireActive(SkillId.FULL_STOP)
         assertEquals(StatusElement.VOID, attuned.skillElement(SkillId.SOLAR_FLARE))
         attuned.castSkill(0)
         assertTrue(targets.all { it.stacksOf(StatusElement.THERMAL) == 0 && it.stacksOf(StatusElement.VOID) > 0 }, "Solar Flare burns Void")
@@ -536,7 +535,7 @@ class RuleVocabularyRuntimeTest {
     @Test
     fun skillChargesHoldTwoCastsAndKeepTheRecastFloor() {
         val state = stateWith(probe("Twin Drum", rules = listOf(ItemRule.SkillCharges), rarity = ItemRarity.EPIC))
-        state.acquireSkill(SkillId.SOLAR_FLARE)
+        state.acquireActive(SkillId.SOLAR_FLARE)
         val cooldown = state.content.skill(SkillId.SOLAR_FLARE).rank(1).cooldownSeconds * SKILL_CHARGE_RECHARGE
         val start = state.elapsed
 
@@ -556,7 +555,7 @@ class RuleVocabularyRuntimeTest {
     @Test
     fun eachSkillChargeRechargesOnItsOwnClock() {
         val state = stateWith(probe("Twin Drum", rules = listOf(ItemRule.SkillCharges), rarity = ItemRarity.EPIC))
-        state.acquireSkill(SkillId.SOLAR_FLARE)
+        state.acquireActive(SkillId.SOLAR_FLARE)
         val cooldown = state.content.skill(SkillId.SOLAR_FLARE).rank(1).cooldownSeconds * SKILL_CHARGE_RECHARGE
         val start = state.elapsed
 
@@ -599,7 +598,7 @@ class RuleVocabularyRuntimeTest {
             probe("Heat Ledger", rules = listOf(ItemRule.Convert(ConversionKind.DASH_HEAT_TO_SKILLS, 0.4f))),
             probe("Data Ledger", rules = listOf(ItemRule.Convert(ConversionKind.DATA_TO_SKILLS, 0.15f))),
         )
-        state.acquireSkill(SkillId.SOLAR_FLARE)
+        state.acquireActive(SkillId.SOLAR_FLARE)
         state.elapsed = 20f
         state.skillRuntime[0, SkillCell.CAST_AT] = 15f
         state.skillRuntime[0, SkillCell.LAST_COOLDOWN] = 10f
@@ -626,7 +625,7 @@ class RuleVocabularyRuntimeTest {
             probe("Hot Cog", rules = listOf(ItemRule.Convert(ConversionKind.SKILLS_COST_HEAT, 25f))),
             probe("Nomad Probe", rules = listOf(ItemRule.Convert(ConversionKind.SKILL_FIELDS_FOLLOW, 0.8f))),
         )
-        state.acquireSkill(SkillId.FROST_LINE)
+        state.acquireActive(SkillId.FROST_LINE)
         state.aimAt(300f, 0f)
         state.heat = 10f
         assertTrue(state.castSkill(0))
@@ -673,7 +672,7 @@ class RuleVocabularyRuntimeTest {
             probe("Spell Surge", on(EffectTrigger.LEVEL_UP, EffectAction.Buff(BuffStat.SKILL_POWER, 0.3f, 5f))),
             probe("Quick Hands", on(EffectTrigger.LEVEL_UP, EffectAction.Buff(BuffStat.SKILL_RECHARGE, 1f, 5f))),
         )
-        state.acquireSkill(SkillId.SOLAR_FLARE)
+        state.acquireActive(SkillId.SOLAR_FLARE)
         state.elapsed = 20f
         state.skillRuntime[0, SkillCell.CAST_AT] = 15f
         state.skillRuntime[0, SkillCell.LAST_COOLDOWN] = 10f
@@ -707,7 +706,7 @@ class RuleVocabularyRuntimeTest {
         state.acquireItem(caster.of(state).id)
         assertEquals(listOf(caster.idIn(state)), state.buildSummaryDormantIds())
 
-        state.acquireSkill(SkillId.SOLAR_FLARE)
+        state.acquireActive(SkillId.SOLAR_FLARE)
         assertEquals(0f, state.itemDormantShare(caster.of(state)))
         assertTrue(state.buildSummaryDormantIds().isEmpty())
 

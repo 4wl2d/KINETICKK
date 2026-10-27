@@ -9,7 +9,6 @@ import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
-import kinetickk.ball.content.api.lifetimeMatterOfferLevel
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.render.BuildProjection
@@ -44,8 +43,8 @@ internal fun MutableGameState.buildSummary(
     weaponUpgradeLevel = weaponUpgradeLevels[weapon.ordinal],
     stats = buildStats(),
     eligibleItemIds = content.items.filter { item ->
-        val ordinaryOfferEligible = item.unlockLevel <= maxOf(level, lifetimeMatterOfferLevel(lifetimeMatter)) &&
-            item.minimumRebirth <= rebirthRank && item.id in itemDeck
+        val unlocked = if (item.isActive) activeOfferable(item) else item.unlockLevel <= offerCatalogLevel()
+        val ordinaryOfferEligible = unlocked && item.minimumRebirth <= rebirthRank && item.id in itemDeck
         val currentlyOffered = phase == GamePhase.CHOICE && choices.any { it.itemId == item.id }
         (ordinaryOfferEligible || currentlyOffered) && hasUsefulItemEffect(item)
     }.map { it.id }.toImmutableList(),

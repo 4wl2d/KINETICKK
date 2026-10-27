@@ -5,7 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.content.api.SkillDefinition
+import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.SkillTargeting
 import kinetickk.ball.content.api.StatusElement
@@ -26,8 +26,8 @@ import kotlin.math.min
 import kotlin.math.sin
 
 /*
- * Active skills in the Z, X and C slots. The slots fill from in-run drafts ([SkillLoadout]); their timing and
- * per-cast state live in [SkillRuntime]. Every cast and every refund goes through this file: a cast spends its
+ * Active effects in the Z, X and C slots. Owned active items bind them ([SkillLoadout], rank = the item's stacks); their
+ * timing and per-cast state live in [SkillRuntime]. Every cast and every refund goes through this file: a cast spends its
  * slot's cooldown, and every cooldown loop (Catalysis, character refunds, reaction verbs) draws on one refund
  * bank, so no combination more than doubles a skill's cast rate and no skill recasts sooner than
  * [MIN_SKILL_RECAST_SECONDS]. No gameplay or spawn randomness is drawn here.
@@ -368,11 +368,13 @@ private fun MutableGameState.skillFieldHit(slot: Int, enemy: Enemy, amount: Floa
     if (result.amount > 0f) recordSkillDamage(slot, min(result.amount, integrity.coerceAtLeast(0f)))
 }
 
-/** Counts [dealt] skill damage for the run and for [slot] (when known). */
+/** Counts [dealt] skill damage for the run and, when [slot] is known, for the slot and the active effect it holds. */
 private fun MutableGameState.recordSkillDamage(slot: Int, dealt: Float) {
     val runtime = skillRuntime
     runtime.skillDamage += dealt.toDouble()
-    if (slot >= 0) runtime[slot, SkillCell.DAMAGE] = runtime[slot, SkillCell.DAMAGE] + dealt
+    if (slot < 0) return
+    runtime[slot, SkillCell.DAMAGE] = runtime[slot, SkillCell.DAMAGE] + dealt
+    skillLoadout.skill(slot)?.let { runtime.addEffectDamage(it, dealt) }
 }
 
 private fun MutableGameState.noteCastTarget(enemy: Enemy) {
@@ -1337,36 +1339,59 @@ internal fun MutableGameState.catalyze(older: StatusElement, incoming: StatusEle
 }
 
 // ---------------------------------------------------------------------------------------------
-// Slots, drafts and rank-ups.
+// Slots. Active items are the only writers: acquiring, stacking or replacing one.
 
-/** Fills the lowest empty slot with [id] at rank I, ready at once. */
-internal fun MutableGameState.acquireSkill(id: SkillId) {
-    val slot = skillLoadout.lowestEmptySlot()
-    if (slot < 0 || skillLoadout.owns(id)) return
-    skillLoadout = skillLoadout.with(slot, id, 1)
-    resetSkillSlot(slot)
-    recordSkillGain(id)
-    recompileBuild()
-    message = content.skill(id).name.uppercase() + " ACQUIRED"
-    messageTime = 1.7f
+/**
+ * The active effect of [item] after it gained a stack ([stacks] now): the first stack binds the effect into the lowest
+ * empty slot at rank I, ready at once; a later stack raises the rank to [stacks], ready at once. Stacks and rank never
+ * diverge. The caller recompiles the build.
+ */
+internal fun MutableGameState.stackActiveEffect(item: ItemDefinition, stacks: Int) {
+    val id = checkNotNull(item.active) { "${item.name} carries no active effect" }
+    if (stacks <= 1) acquireSkill(id) else rankUpSkill(id, stacks)
 }
 
-/** Raises [id] a rank (up to III); the skill is ready at once. */
-internal fun MutableGameState.rankUpSkill(id: SkillId) {
+/** Fills the lowest empty slot with [id] at rank I, ready at once. */
+private fun MutableGameState.acquireSkill(id: SkillId) {
+    val slot = skillLoadout.lowestEmptySlot()
+    check(slot >= 0 && !skillLoadout.owns(id)) { "$id needs an empty slot and must not be bound yet" }
+    skillLoadout = skillLoadout.with(slot, id, 1)
+    resetSkillSlot(slot)
+}
+
+/** Raises [id] to [rank] (up to III); the skill is ready at once. */
+private fun MutableGameState.rankUpSkill(id: SkillId, rank: Int) {
     val slot = skillLoadout.slotOf(id)
-    if (slot < 0) return
-    val rank = skillLoadout.rank(slot)
-    if (rank >= ContentBounds.MAX_SKILL_RANK) return
-    skillLoadout = skillLoadout.with(slot, id, rank + 1)
+    check(slot >= 0) { "$id is not bound" }
+    skillLoadout = skillLoadout.with(slot, id, rank.coerceAtMost(ContentBounds.MAX_SKILL_RANK))
     val runtime = skillRuntime
     runtime[slot, SkillCell.RANKED_AT_LEVEL] = level.toFloat()
     runtime[slot, SkillCell.READY_AT] = elapsed
     runtime[slot, SkillCell.REFUNDED] = 0f
-    // Rank III adds a second element point: a newer gain for affinity ties.
-    if (rank + 1 >= ContentBounds.MAX_SKILL_RANK) recordSkillGain(id)
-    recompileBuild()
-    message = content.skill(id).name.uppercase() + " // RANK " + (rank + 1)
-    messageTime = 1.7f
+}
+
+/**
+ * Empties [slot] for a replacement and ends everything the active effect it held still has running: the slot's
+ * timing and per-cast state (pending impacts, running effects, windows, ghost repeats), its skill field (without the
+ * field's closing effect), its own buffs, Null Shroud's returning bolts, the marks it seeded that would still pay out
+ * (Decay Spores' seeds, Sonic Boom's ringing) and the slot's buffered request. The effect's run damage stays counted.
+ */
+internal fun MutableGameState.releaseSkillSlot(slot: Int) {
+    val id = skillLoadout.skill(slot) ?: return
+    resetSkillSlot(slot)
+    combatFieldTable.removeSkillField(slot)
+    val buffSource = BuffSource.skill(id)
+    if (buffs.any { it.sourceKey == buffSource }) buffs = buffs.filter { it.sourceKey != buffSource }
+    when (id) {
+        SkillId.NULL_SHROUD -> projectiles.removeMatchingStable { !it.hostile && it.procKey == WeaponRuntime.PROC_SKILL }
+        SkillId.DECAY_SPORES -> for (index in enemies.indices) {
+            val enemy = enemies[index]
+            if (enemy.status[StatusCell.MARK_CAST] > 0f) consumeMark(enemy, MarkKind.SPORED)
+        }
+        SkillId.SONIC_BOOM -> for (index in enemies.indices) consumeMark(enemies[index], MarkKind.BOOMED)
+        else -> Unit
+    }
+    skillLoadout = skillLoadout.without(slot)
 }
 
 private fun MutableGameState.resetSkillSlot(slot: Int) {
@@ -1378,141 +1403,14 @@ private fun MutableGameState.resetSkillSlot(slot: Int) {
     runtime[slot, SkillCell.REFUSED_AT] = -1f
     runtime[slot, SkillCell.READY_AT] = elapsed
     runtime[slot, SkillCell.RANKED_AT_LEVEL] = level.toFloat()
+    // A request buffered for what the slot held before never casts what it holds now.
+    skillBufferMask = skillBufferMask and (1 shl slot).inv()
+    if (skillBufferMask == 0) skillBufferTime = 0f
 }
 
-/** The slot a rank-up card raises now: the lowest rank among skills held or ranked at least the gap ago (slot order on ties), or -1. */
-internal fun MutableGameState.rankUpCandidateSlot(): Int {
-    val loadout = skillLoadout
-    val gap = content.tempo.skillRankGapLevels
-    var best = -1
-    for (slot in 0 until SkillRuntime.SLOTS) {
-        if (loadout.isEmpty(slot)) continue
-        val rank = loadout.rank(slot)
-        if (rank >= ContentBounds.MAX_SKILL_RANK) continue
-        if (level - skillRuntime[slot, SkillCell.RANKED_AT_LEVEL].toInt() < gap) continue
-        if (best < 0 || rank < loadout.rank(best)) best = slot
-    }
-    return best
-}
-
-/** The rank-up card for [slot]'s skill (the rank it reaches). */
-internal fun MutableGameState.rankUpCard(slot: Int): kinetickk.ball.gameplay.nucleus.render.ChoiceOption {
-    val id = checkNotNull(skillLoadout.skill(slot))
-    val definition = content.skill(id)
-    val next = skillLoadout.rank(slot) + 1
-    return kinetickk.ball.gameplay.nucleus.render.ChoiceOption(
-        type = kinetickk.ball.gameplay.nucleus.render.ChoiceType.SKILL,
-        title = definition.name,
-        description = if (next >= ContentBounds.MAX_SKILL_RANK) definition.rankThree else definition.summary,
-        tag = "RANK $next",
-        skillId = id,
-        skillRank = next,
-    )
-}
-
-/** Characters' draft lanes: three skills each that play into the character's mechanic. */
-internal fun CoreShape.synergySkills(): List<SkillId> = when (this) {
-    CoreShape.ORB -> listOf(SkillId.SLINGSHOT, SkillId.ARC_HOOK, SkillId.CATALYZE)
-    CoreShape.PRISM -> listOf(SkillId.FULL_STOP, SkillId.FROST_SNAP, SkillId.MASS_DRIVER)
-    CoreShape.SHARD -> listOf(SkillId.VOID_STEP, SkillId.ARC_HOOK, SkillId.SONIC_BOOM)
-    CoreShape.RING -> listOf(SkillId.SOLAR_FLARE, SkillId.FROST_LINE, SkillId.ENTROPIC_TIDE)
-    CoreShape.DIAMOND -> listOf(SkillId.FROST_SNAP, SkillId.FULL_STOP, SkillId.NULL_SHROUD)
-    CoreShape.TESSERACT -> listOf(SkillId.VOID_STEP, SkillId.CATALYZE, SkillId.METEOR)
-    CoreShape.STAR -> listOf(SkillId.MASS_DRIVER, SkillId.SOLAR_FLARE, SkillId.DECAY_SPORES)
-    CoreShape.SPIRAL -> listOf(SkillId.FROST_LINE, SkillId.RESONATOR, SkillId.SLINGSHOT)
-    CoreShape.DIPOLE -> listOf(SkillId.GRAVITY_WELL, SkillId.SONIC_BOOM, SkillId.SLINGSHOT)
-    CoreShape.PENTAGON -> listOf(SkillId.SONIC_BOOM, SkillId.RESONATOR, SkillId.STORM_COIL)
-    CoreShape.CRESCENT -> listOf(SkillId.VOID_STEP, SkillId.ARC_HOOK, SkillId.NULL_SHROUD)
-    CoreShape.HEXAGON -> listOf(SkillId.DECAY_SPORES, SkillId.GRAVITY_WELL, SkillId.STORM_COIL)
-}
-
-/** True when [definition] may appear in a draft now: not owned, and Catalyze only once two elements are in play. */
-private fun MutableGameState.draftable(definition: SkillDefinition): Boolean =
-    !skillLoadout.owns(definition.id) &&
-        (definition.id != SkillId.CATALYZE || StatusElement.entries.count { build.affinity(it) >= 1 } >= CATALYZE_MIN_ELEMENTS)
-
-/** Aligned-lane weight: element fit and tags the build already has points in. */
-private fun MutableGameState.alignedSkillWeight(definition: SkillDefinition): Float {
-    var weight = 1f
-    val element = definition.element
-    if (element != null && element == build.dominant) weight += 1f
-    if (element != null && element == build.secondary) weight += 0.6f
-    definition.tags.forEach { tag -> if (build.tagPoints(tag) >= 1) weight += 0.4f }
-    return weight
-}
-
-/**
- * The skill draft: an aligned card (weighted by fit), a character card (uniform over the character's lane, else
- * aligned) and a wild card (uniform over the rest). Each card draws exactly one [MutableGameState.rewardRandom]
- * float, whatever the pool, so a draft always costs three draws.
- */
-internal fun MutableGameState.buildSkillDraft() {
-    val skills = content.skills
-    val cards = ArrayList<SkillDefinition>(DRAFT_CARDS)
-    fun available(definition: SkillDefinition): Boolean = draftable(definition) && cards.none { it.id == definition.id }
-    fun fallback(): List<SkillDefinition> = skills.filter { !skillLoadout.owns(it.id) && cards.none { card -> card.id == it.id } }
-
-    val alignedRoll = rewardRandom.nextFloat()
-    val alignedPool = skills.filter(::available).ifEmpty { fallback() }
-    weightedSkillPick(alignedPool, alignedRoll)?.let(cards::add)
-
-    val characterRoll = rewardRandom.nextFloat()
-    val lane = coreShape.synergySkills().map(content::skill).filter(::available)
-    if (lane.isNotEmpty()) {
-        cards += lane[(characterRoll * lane.size).toInt().coerceIn(0, lane.lastIndex)]
-    } else {
-        weightedSkillPick(skills.filter(::available).ifEmpty { fallback() }, characterRoll)?.let(cards::add)
-    }
-
-    val wildRoll = rewardRandom.nextFloat()
-    val wild = skills.filter(::available).ifEmpty { fallback() }
-    if (wild.isNotEmpty()) cards += wild[(wildRoll * wild.size).toInt().coerceIn(0, wild.lastIndex)]
-
-    choices = cards.map { definition ->
-        kinetickk.ball.gameplay.nucleus.render.ChoiceOption(
-            type = kinetickk.ball.gameplay.nucleus.render.ChoiceType.SKILL,
-            title = definition.name,
-            description = definition.summary,
-            tag = "RANK 1",
-            skillId = definition.id,
-            skillRank = 1,
-        )
-    }
-}
-
-private fun MutableGameState.weightedSkillPick(pool: List<SkillDefinition>, roll: Float): SkillDefinition? {
-    if (pool.isEmpty()) return null
-    var total = 0f
-    for (definition in pool) total += alignedSkillWeight(definition)
-    var remaining = roll * total
-    for (definition in pool) {
-        remaining -= alignedSkillWeight(definition)
-        if (remaining < 0f) return definition
-    }
-    return pool.last()
-}
-
-/** Opens the next skill draft (heirloom first, then drafts, then the level's item offer). */
-internal fun MutableGameState.openSkillDraft() {
-    if (skillLoadout.lowestEmptySlot() < 0) return
-    activeChoiceType = kinetickk.ball.gameplay.nucleus.render.ChoiceType.SKILL
-    buildSkillDraft()
-    if (choices.isEmpty()) return
-    clearInputBuffers()
-    phase = kinetickk.ball.gameplay.nucleus.render.GamePhase.CHOICE
-}
-
-/**
- * Puts the rank-up [card] in place of an item offer's experimental card (index 1), whose item was drawn and is
- * discarded so the reward stream does not shift; a short offer gains the card at its end.
- */
-internal fun MutableGameState.placeRankUpCard(card: kinetickk.ball.gameplay.nucleus.render.ChoiceOption) {
-    choices = when {
-        choices.size >= 2 -> choices.toMutableList().also { it[1] = card }
-        choices.size < MutableGameState.MAX_CHOICES -> choices + card
-        else -> choices
-    }
-}
+/** True when an unowned Catalyze may be offered: at least [CATALYZE_MIN_ELEMENTS] elements are in play. */
+internal fun MutableGameState.catalyzeOfferable(): Boolean =
+    StatusElement.entries.count { build.affinity(it) >= 1 } >= CATALYZE_MIN_ELEMENTS
 
 // ---------------------------------------------------------------------------------------------
 // Constants (nucleus rules; per-rank numbers are content values).
@@ -1545,7 +1443,7 @@ internal const val HOOK_OVERSHOOT: Float = 200f
 /** Room the hooked Core keeps from an obstacle surface along that line. */
 private const val HOOK_OBSTACLE_CLEARANCE: Float = 30f
 internal const val SKILL_BREAK_MARGIN: Int = 2
-internal const val DRAFT_CARDS: Int = 3
+/** An unowned Catalyze is offered only while this many elements have affinity. */
 internal const val CATALYZE_MIN_ELEMENTS: Int = 2
 private const val MAX_ENEMY_RADIUS_SLACK: Float = 80f
 
@@ -1688,7 +1586,7 @@ private const val INFUSION_HITS_PER_SECONDARY = 1
 private const val INFUSION_STACK_CAP = 2
 
 /**
- * True when a hit from [source] is caused by a drafted skill: a skill hit, anything dealt while a cast resolves (its
+ * True when a hit from [source] is caused by an active effect: a skill hit, anything dealt while a cast resolves (its
  * forced reactions and shockwaves), or the Core's impact or Dash hit while a skill moves it (Slingshot's swing, Mass
  * Driver's charge, Arc Hook's flight and Dash window). Utility skills deliver their damage this way.
  */

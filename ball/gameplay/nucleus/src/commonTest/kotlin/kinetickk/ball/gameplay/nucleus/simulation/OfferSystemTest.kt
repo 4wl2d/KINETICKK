@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.EffectCondition
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
@@ -99,11 +100,11 @@ class OfferSystemTest {
 
     @Test
     fun rebirthGatedItemsAndRelicsStayOutOfOffersBelowTheirTier() {
-        // A veteran's run that can use every gated item: a skill drafted and a plain item of each element held, so skill
-        // items have something to work on and every reaction a keystone item names is reachable.
+        // A veteran's run that can use every gated item: an active item owned and a plain item of each element held, so
+        // skill items have something to work on and every reaction a keystone item names is reachable.
         fun gatedItems(rebirth: Int): Set<String> = buildTestState(rebirth = rebirth).dealWholeCatalog().apply {
             lifetimeMatter = 4_000L
-            acquireSkill(SkillId.SOLAR_FLARE)
+            acquireActive(SkillId.SOLAR_FLARE)
             StatusElement.entries.forEach { element ->
                 acquireItem(content.items.first { it.elements.singleOrNull() == element && it.rarity == ItemRarity.COMMON }.id)
             }
@@ -128,11 +129,11 @@ class OfferSystemTest {
     @Test
     fun everyItemIsOfferedFromItsOwnTierAndLevelAndIsDiscoveredWhenTaken() {
         val items = canonicalGameplayContent.items
-        assertEquals(269, items.size)
-        // A fresh profile per tier: no lifetime Matter, so the run level alone opens the catalog. Each run has drafted
-        // a skill (the first slot opens at level 2), so skill items have something to work on, and has dealt the whole
-        // catalog into its deck (DraftDeckTest covers the deal).
-        val tiers = (0..10).map { tier -> buildTestState(rebirth = tier).dealWholeCatalog().apply { acquireSkill(SkillId.SOLAR_FLARE) } }
+        assertEquals(287, items.size)
+        // A fresh profile per tier: no lifetime Matter, so the run level alone opens the catalog. Each run owns an
+        // active item, so skill items have something to work on, and has dealt the whole catalog into its deck
+        // (DraftDeckTest covers the deal).
+        val tiers = (0..10).map { tier -> buildTestState(rebirth = tier).dealWholeCatalog().apply { acquireActive(SkillId.SOLAR_FLARE) } }
         for (item in items) {
             val own = runThatCanUse(item, item.minimumRebirth, tiers).apply { level = item.unlockLevel }
             assertTrue(item in own.offerableItems(), "${item.name} is offered at Reborn ${item.minimumRebirth}, level ${item.unlockLevel}")
@@ -146,10 +147,17 @@ class OfferSystemTest {
             }
         }
 
-        // Taking an item records its discovery for the Codex, whichever item it is.
+        // Taking an item records its discovery for the Codex, whichever item it is: every passive item on one run, the
+        // active items as many at a time as there are slots on fresh runs.
         val collector = buildTestState(rebirth = 10)
-        items.forEach { collector.acquireItem(it.id) }
-        assertEquals(items.map { it.id }.toSet(), collector.takeProgressUpdate()?.discoveredItemIds?.toSet())
+        items.filter { !it.isActive }.forEach { collector.acquireItem(it.id) }
+        val discovered = collector.takeProgressUpdate()?.discoveredItemIds.orEmpty().toMutableSet()
+        items.filter { it.isActive }.chunked(ContentBounds.SKILL_SLOTS).forEach { group ->
+            val fresh = buildTestState(rebirth = 10)
+            group.forEach { fresh.acquireItem(it.id) }
+            discovered += fresh.takeProgressUpdate()?.discoveredItemIds.orEmpty()
+        }
+        assertEquals(items.map { it.id }.toSet(), discovered)
     }
 
     @Test
@@ -229,34 +237,6 @@ class OfferSystemTest {
         assertEquals(1, state.offerPity)
         state.resolveItemOfferPity(state.itemNamed("Kinetic Lance"))
         assertEquals(0, state.offerPity)
-    }
-
-    @Test
-    fun aRankUpCardNeverTakesThePlaceOfTheRareCardThatPityOwes() {
-        // A skill ranked long enough ago that the level's offer owes a rank-up card in the experimental place.
-        val base = buildTestState().apply {
-            level = 2
-            acquireSkill(SkillId.SOLAR_FLARE)
-            level = 20
-            lifetimeMatter = 4_000L
-        }
-        fun MutableGameState.rareItemCards(): Int = choices.count { option ->
-            option.type == ChoiceType.ITEM && itemOf(option.itemId).rarity.rank >= ItemRarity.RARE.rank
-        }
-        val misses = (1..PITY_SWEEP_SEEDS).count { seed ->
-            val offer = base.copyForReduction().apply {
-                rewardRandom = CloneableXorWowRandom(seed)
-                offerPity = PITY_OFFERS
-                pendingRankUpOffers = 1
-                openItemChoice()
-            }
-            assertEquals(ChoiceType.SKILL, offer.choices[1].type, "seed $seed")
-            val opened = offer.rareItemCards() == 0
-            offer.rerollChoices()
-            assertEquals(ChoiceType.SKILL, offer.choices[1].type, "seed $seed reroll")
-            opened || offer.rareItemCards() == 0
-        }
-        assertEquals(0, misses, "an offer with pity due always shows a Rare or better item card beside the rank-up card")
     }
 
     @Test
@@ -457,16 +437,23 @@ class OfferSystemTest {
     /**
      * A run at Reborn [rebirth] that can use [item]: the tier's run, or, for an item that names a weapon family or
      * switches a reaction to its keystone, a fresh one with that family's weapon in hand or holding a plain item of
-     * each of the reaction's elements (a keystone is only offered while its reaction is reachable), a skill drafted.
+     * each of the reaction's elements (a keystone is only offered while its reaction is reachable), an active owned;
+     * Catalyze, which is offered unowned only with two elements in play, gets a plain item of two elements.
      */
     private fun runThatCanUse(item: ItemDefinition, rebirth: Int, tiers: List<MutableGameState>): MutableGameState {
         val family = (item.clauses.flatMap { it.conditions } + item.rules.mapNotNull { (it as? ItemRule.WhileModifier)?.condition })
             .firstNotNullOfOrNull { (it as? EffectCondition.WeaponFamilyIs)?.family }
         val keystone = item.keystone
+        if (item.active == SkillId.CATALYZE) {
+            return buildTestState(rebirth = rebirth).dealWholeCatalog().apply {
+                acquireActive(SkillId.SOLAR_FLARE)
+                acquireItem(content.items.first { it.elements.singleOrNull() == StatusElement.CRYO && it.rarity == ItemRarity.COMMON }.id)
+            }
+        }
         if (family == null && keystone == null) return tiers[rebirth]
         val weapon = family?.let { wanted -> canonicalGameplayContent.weapons.first { it.family == wanted }.id } ?: WeaponId.FLUX_WAKE
         return buildTestState(rebirth = rebirth, weapon = weapon).dealWholeCatalog().apply {
-            acquireSkill(SkillId.SOLAR_FLARE)
+            acquireActive(SkillId.SOLAR_FLARE)
             keystone?.let { reaction ->
                 listOf(reaction.first, reaction.second).forEach { element ->
                     val source = content.items.first { it.elements.singleOrNull() == element && it.rarity == ItemRarity.COMMON }

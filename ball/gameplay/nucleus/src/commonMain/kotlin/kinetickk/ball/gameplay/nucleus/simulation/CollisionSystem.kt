@@ -637,9 +637,6 @@ internal fun MutableGameState.gainData(rawAmount: Float) {
         data -= nextLevelData
         level++
         pendingLevelChoices++
-        // Skill slots open at their levels (a draft each); every few levels an item offer carries a rank-up card.
-        if (level in content.tempo.skillSlotLevels) pendingSkillDrafts++
-        if (level % content.tempo.skillRankEveryLevels == 0) pendingRankUpOffers++
         onLevelUp()
         nextLevelData = dataRequiredForLevel(level)
         if (content.tempo.grantsWeaponAmplification(level) &&

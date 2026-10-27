@@ -24,8 +24,11 @@ typealias EnemyType = kinetickk.ball.content.api.EnemyType
 enum class PickupType { DATA, KEY, REPAIR, RELIC }
 /** A hostile [BOLT] flies; a [MINE] stays put, arms and detonates when the Core comes close. */
 enum class ProjectileKind { BOLT, MINE }
-/** What an offer deals; [SKILL] is a skill draft (a level's item offer may also carry one skill rank-up card). */
-enum class ChoiceType { ITEM, TOTEM, WEAPON, RELIC, RELIC_BIND, SKILL }
+/**
+ * What an offer deals. [ACTIVE_SLOT] asks which active item an incoming active item replaces when every slot holds one:
+ * a card per held active plus a card that keeps the loadout and salvages the incoming item.
+ */
+enum class ChoiceType { ITEM, TOTEM, WEAPON, RELIC, RELIC_BIND, ACTIVE_SLOT }
 enum class TotemAction { AMPLIFY_CURRENT, CHANGE_WEAPON }
 enum class RelicChoiceAction { ACQUIRE, MELD, REPLACE, MELD_TARGET, DECLINE }
 enum class WeaponNodeType { GRAVITY_MINE }
@@ -42,6 +45,7 @@ data class ChoiceOption(
     val title: String,
     val description: String,
     val tag: String,
+    /** An item card's item; an [ChoiceType.ACTIVE_SLOT] card's held active item (null on the keep card). */
     val itemId: Int? = null,
     val weaponId: WeaponId? = null,
     val totemAction: TotemAction? = null,
@@ -53,10 +57,22 @@ data class ChoiceOption(
     val reborn: Boolean = false,
     /** Part of the run-opening Heirloom offer. */
     val heirloom: Boolean = false,
-    /** A skill card: the drafted skill, or the skill a rank-up card raises. */
+    /**
+     * An active item card: the item's active effect; an [ChoiceType.ACTIVE_SLOT] card: the effect of the held active it
+     * would replace. A projection of content ([itemId]'s [kinetickk.ball.content.api.ItemDefinition.active]).
+     */
     val skillId: kinetickk.ball.content.api.SkillId? = null,
-    /** The rank the skill has once picked (1 for a draft card, 2 or 3 for a rank-up card). */
+    /** An active item card: the rank its effect has once taken (stacks + 1); an [ChoiceType.ACTIVE_SLOT] card: the held rank. */
     val skillRank: Int? = null,
+    /**
+     * The skill slot (0 Z, 1 X, 2 C): the slot an active item card binds to or ranks (null while it would replace a
+     * slot) or the slot an [ChoiceType.ACTIVE_SLOT] card replaces (null on the keep card).
+     */
+    val activeSlot: Int? = null,
+    /** An unowned active item card offered while every slot holds another active: taking it asks which one to replace. */
+    val replacesActive: Boolean = false,
+    /** Every [ChoiceType.ACTIVE_SLOT] card (the keep card too): the incoming active item waiting for a slot. */
+    val incomingItemId: Int? = null,
 )
 
 data class CharacterLatticePoint(val x: Float, val y: Float)
@@ -487,8 +503,8 @@ class GameplayRenderModel(
         }
     val choicesCanReroll: Boolean
         get() = phase == GamePhase.CHOICE && !directedChoice && rerollsRemaining > 0 && when (choiceType) {
-            ChoiceType.ITEM, ChoiceType.WEAPON, ChoiceType.RELIC, ChoiceType.SKILL -> true
-            ChoiceType.TOTEM, ChoiceType.RELIC_BIND -> false
+            ChoiceType.ITEM, ChoiceType.WEAPON, ChoiceType.RELIC -> true
+            ChoiceType.TOTEM, ChoiceType.RELIC_BIND, ChoiceType.ACTIVE_SLOT -> false
         }
     val itemStacksSnapshot: ImmutableList<Int> get() = itemStacks
 

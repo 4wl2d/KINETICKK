@@ -97,6 +97,8 @@ class GameplayReductionIsolationTest {
         val cleared = source.copyForReduction().apply {
             pendingBindingRelic = null
             pendingRelicBindAction = null
+            pendingActiveItemId = null
+            pendingActiveReborn = false
             pendingClearedRebirthLevel = null
             recentItem = null
             totem = null
@@ -786,6 +788,7 @@ class GameplayReductionIsolationTest {
             eagerReference.drainReferenceOutputs()
             // Step scratch is idle between accepted reductions, so no candidate inherits it.
             listOf(production.model, eagerReference).forEach { state ->
+                assertNull(state.activeLoadoutMismatch(), "transition $index active loadout")
                 assertEquals(0, state.chainDepth, "transition $index chain scratch depth")
                 assertEquals(-1, state.castSlot, "transition $index skill cast scratch")
                 assertEquals(-1, state.shatteringEnemyId, "transition $index shatter target")
@@ -921,13 +924,17 @@ class GameplayReductionIsolationTest {
         markDispatches = 1
         shotsErased = 5L
         dashHeatBank = 4.5f
-        pendingSkillDrafts = 1
-        pendingRankUpOffers = 1
+        // An active item waits for a slot with its Reborn roll.
+        pendingActiveItemId = checkNotNull(content.activeItem(SkillId.VOID_STEP)).id
+        pendingActiveReborn = true
         skillBufferMask = 0b101
         skillBufferTime = 0.08f
         apexBufferTime = 0.05f
         // Slot Z casts inside the trace (its buffered request is ready); slot C cools and holds a pending landing.
         skillLoadout = SkillLoadout.EMPTY.with(0, SkillId.FROST_SNAP, 2).with(2, SkillId.METEOR, 1)
+        // The loadout's ranks are its active items' stacks.
+        itemStacks[checkNotNull(content.activeItem(SkillId.FROST_SNAP)).id] = 2
+        itemStacks[checkNotNull(content.activeItem(SkillId.METEOR)).id] = 1
         skillRuntime = SkillRuntime().apply {
             this[2, SkillCell.READY_AT] = 3f
             this[2, SkillCell.CAST_AT] = 0.1f
@@ -1248,8 +1255,8 @@ class GameplayReductionIsolationTest {
             value("markDispatches", markDispatches)
             value("shotsErased", shotsErased)
             float("dashHeatBank", dashHeatBank)
-            value("pendingSkillDrafts", pendingSkillDrafts)
-            value("pendingRankUpOffers", pendingRankUpOffers)
+            value("pendingActiveItemId", pendingActiveItemId)
+            value("pendingActiveReborn", pendingActiveReborn)
             value("skillLoadout", skillLoadout.toString())
             value("skillRuntime", skillRuntime.toString())
             value("skillBufferMask", skillBufferMask)

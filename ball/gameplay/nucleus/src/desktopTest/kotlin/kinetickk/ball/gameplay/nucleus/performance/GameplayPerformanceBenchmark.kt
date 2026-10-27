@@ -1005,7 +1005,7 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
     signature = mix(signature, state.shotsErased.hashCode())
     for (value in intArrayOf(
         state.guardShards, state.voidAnchorId, state.erasureLatchId, state.shotErasedDispatches, state.markDispatches,
-        state.pendingSkillDrafts, state.skillBufferMask,
+        state.pendingActiveItemId ?: -1, if (state.pendingActiveReborn) 1 else 0, state.skillBufferMask,
     )) signature = mix(signature, value)
     state.enemies.forEach {
         signature = mix(signature, it.characterMarkTime.toRawBits())

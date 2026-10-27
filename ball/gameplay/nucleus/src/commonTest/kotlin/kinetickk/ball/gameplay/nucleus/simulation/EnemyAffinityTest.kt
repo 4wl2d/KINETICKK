@@ -328,7 +328,7 @@ class EnemyAffinityTest {
             val content = canonicalGameplayContent.copy(items = canonicalGameplayContent.items.map { item ->
                 if (tag !in item.tags) item
                 else item.copy(stats = immutableListOf(StatDelta(ItemEffect.PICKUP_RADIUS, 1f)), clauses = immutableListOf(),
-                    rules = immutableListOf(), risk = false)
+                    rules = immutableListOf(), risk = false, active = null)
             }.toImmutableList())
             val state = buildTestState(content = content)
             for (item in content.items.filter { tag in it.tags && it.elements.isEmpty() }) {
