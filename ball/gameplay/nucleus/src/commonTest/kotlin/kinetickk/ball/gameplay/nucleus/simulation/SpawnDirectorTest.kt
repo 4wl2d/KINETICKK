@@ -404,7 +404,7 @@ class SpawnDirectorTest {
             observe()
             enemies.removeAll { enemy -> abs(enemy.x - coreX) + abs(enemy.y - coreY) < 260f && !enemy.isMiniBoss }
             pickups.clear()
-            pointsOfInterest = emptyList()
+            quietArenaForTesting()
             takeVisualFxCues()
             takeSoundCues()
         }

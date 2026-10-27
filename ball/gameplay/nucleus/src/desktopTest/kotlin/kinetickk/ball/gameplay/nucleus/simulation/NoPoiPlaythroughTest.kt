@@ -110,8 +110,7 @@ class NoPoiPlaythroughTest {
                 if (reportAttempt != null && !poiEngaged && state.pointsOfInterest.any { it.active }) {
                     report("POI ACTIVATED sec=${state.elapsed} core=${state.coreX.toInt()},${state.coreY.toInt()} speed=${state.speed.toInt()} points=${state.pointsOfInterest.map { "${it.kind}@${it.x.toInt()},${it.y.toInt()}" }} relics=${state.equippedRelics}")
                 }
-                poiEngaged = poiEngaged || state.pointsOfInterest.any { it.active } ||
-                    state.directedReward != null || state.pendingDirectedRewards.isNotEmpty()
+                poiEngaged = poiEngaged || state.optionalSitesTouched()
                 if (state.elapsed >= 180f && foundation == null) foundation = milestone(state, observedEliteIds.size)
                 if (state.elapsed >= 360f && fourSlotOpportunity == null) fourSlotOpportunity = milestone(state, observedEliteIds.size)
                 damage += max(0f, previousHealth - state.hp)
@@ -167,8 +166,11 @@ private fun report(value: String) {
  * Steering uses a short approximate projectile forecast; all actual motion/damage goes through update().
  * Each 20 ms input is a normal pointer/Brake/Dash action, independent of the configured simulation speed.
  */
-/** How far the bot keeps the momentum-projected Core from a skipped POI's center. */
-private const val POI_CLEARANCE = 360f
+/** How far beyond a skipped optional site's radius the bot keeps the momentum-projected Core (65 + 295 = 360). */
+private const val SITE_CLEARANCE_MARGIN = 295f
+
+/** How far beyond a skipped optional site's radius a Blink or an Arc Hook line must pass (65 + 85 = 150). */
+private const val SITE_GUARD_MARGIN = 85f
 
 /** The bot looks at its skills this often (simulated seconds). */
 private const val SKILL_CHECK_SECONDS = 0.1f
@@ -214,6 +216,8 @@ internal class NoPoiBot(
 ) {
     private var cursorAngle = 0f
     private var braking = false
+    /** Scratch for the optional-site marks, rewritten on every read. */
+    private val siteMarks = FloatArray(MAX_OPTIONAL_SITE_MARKS * 3)
     private var decisions = 0
     private var nextSkillCheckAt = 0f
 
@@ -267,15 +271,18 @@ internal class NoPoiBot(
             desiredX = -nx * 650f
             desiredY = -ny * 650f
         }
-        // Keep voluntarily skipped POI activation circles outside the intended path.
-        for (point in s.pointsOfInterest) {
+        // Keep voluntarily skipped optional sites outside the intended path.
+        val siteCount = s.optionalSiteMarks(siteMarks)
+        for (mark in 0 until siteCount) {
+            val base = mark * 3
             // Steer from where momentum carries the Core, so low-drag builds still clear the circle.
-            val px = s.coreX + s.velocityX * 0.35f - point.x
-            val py = s.coreY + s.velocityY * 0.35f - point.y
+            val px = s.coreX + s.velocityX * 0.35f - siteMarks[base]
+            val py = s.coreY + s.velocityY * 0.35f - siteMarks[base + 1]
+            val clearance = siteMarks[base + 2] + SITE_CLEARANCE_MARGIN
             val pd = max(1f, length(px, py))
-            if (pd < POI_CLEARANCE) {
-                desiredX += px / pd * (POI_CLEARANCE - pd) * 8f
-                desiredY += py / pd * (POI_CLEARANCE - pd) * 8f
+            if (pd < clearance) {
+                desiredX += px / pd * (clearance - pd) * 8f
+                desiredY += py / pd * (clearance - pd) * 8f
             }
         }
         // Steer around obstacles ahead, from where momentum carries the Core (a player reading the minimap).
@@ -304,7 +311,8 @@ internal class NoPoiBot(
         }
         val ax = (desiredX - s.velocityX) * 5f + s.velocityX * s.dragCoefficient
         val ay = (desiredY - s.velocityY) * 5f + s.velocityY * s.dragCoefficient
-        val desiredAngle = atan2(ay, ax)
+        val aim = s.steeringAimFor(ax, ay)
+        val desiredAngle = aim.heading
         val difference = atan2(sin(desiredAngle - cursorAngle), cos(desiredAngle - cursorAngle))
         val goalAngle = cursorAngle + difference.coerceIn(-0.30f, 0.30f)
         val force = length(ax, ay).coerceIn(395f, 1700f)
@@ -327,7 +335,7 @@ internal class NoPoiBot(
         val normalHalfHeight = s.screenHeight * 0.5f * s.content.tempo.fatigue.edgeStrainStart - 10f
         val availableX = if (ux > 0f) (normalHalfWidth - offsetX) / ux else if (ux < 0f) (-normalHalfWidth - offsetX) / ux else 10_000f
         val availableY = if (uy > 0f) (normalHalfHeight - offsetY) / uy else if (uy < 0f) (-normalHalfHeight - offsetY) / uy else 10_000f
-        val neededTether = ((length(ax, ay) - 92f) / s.magnetStrength).coerceIn(65f, 400f)
+        val neededTether = aim.distance.coerceIn(65f, 400f)
         val tether = min(neededTether, min(availableX, availableY)).coerceAtLeast(65f)
         s.updatePointer(s.screenWidth * 0.5f + offsetX + ux * tether, s.screenHeight * 0.5f + offsetY + uy * tether)
         if (s.speed > 900f) braking = true
@@ -349,10 +357,9 @@ internal class NoPoiBot(
                 time in 0f..0.20f && length(px + vx * time, py + vy * time) < 32f
             }
         }
-        // A Blink teleports along the cursor, so never Dash when the landing would touch a skipped POI.
-        val blinkLandsOnPoi = s.relicRank(RelicId.BLINK_DRIVE) > 0 && s.pointsOfInterest.any { point ->
-            segmentCircleIntersects(s.coreX, s.coreY, s.coreX + ux * 320f, s.coreY + uy * 320f, point.x, point.y, 150f)
-        }
+        // A Blink teleports along the cursor, so never Dash when the landing would touch a skipped optional site.
+        val blinkLandsOnPoi = s.relicRank(RelicId.BLINK_DRIVE) > 0 &&
+            crossesOptionalSite(s, s.coreX, s.coreY, s.coreX + ux * 320f, s.coreY + uy * 320f)
         // Vivisect's free Dashes and Total Eclipse's fast Blinks are those Apexes: while one runs, the bot Dashes when it can.
         val apexDashes = s.apexActive() && (s.coreShape == CoreShape.SHARD || s.coreShape == CoreShape.CRESCENT)
         if ((threat || apexDashes) && s.dashReady && s.heat < 60f && !blinkLandsOnPoi) s.requestDash()
@@ -454,14 +461,23 @@ internal class NoPoiBot(
                 shot.hostile && !shot.spent && length(shot.x - s.coreX, shot.y - s.coreY) <= 140f &&
                     (shot.vx - s.velocityX) * (s.coreX - shot.x) + (shot.vy - s.velocityY) * (s.coreY - shot.y) > 0f
             }
-            // The hook throws the Core at its target, so (like a Blink) never along a line that touches a skipped POI.
+            // The hook throws the Core at its target, so (like a Blink) never along a line that touches a skipped site.
             SkillId.ARC_HOOK -> s.nearestSkillTarget(singularityX, singularityY, values[0])?.let { target ->
-                s.pointsOfInterest.none { point ->
-                    segmentCircleIntersects(s.coreX, s.coreY, target.x, target.y, point.x, point.y, 150f)
-                }
+                !crossesOptionalSite(s, s.coreX, s.coreY, target.x, target.y)
             } == true
             SkillId.SLINGSHOT -> s.speed >= 500f && (s.velocityX * aimX + s.velocityY * aimY) / s.speed <= 0f
         }
+    }
+
+    /** True when the segment passes within [SITE_GUARD_MARGIN] of an optional site's radius. */
+    private fun crossesOptionalSite(s: MutableGameState, x0: Float, y0: Float, x1: Float, y1: Float): Boolean {
+        val count = s.optionalSiteMarks(siteMarks)
+        for (mark in 0 until count) {
+            val base = mark * 3
+            val radius = siteMarks[base + 2] + SITE_GUARD_MARGIN
+            if (segmentCircleIntersects(x0, y0, x1, y1, siteMarks[base], siteMarks[base + 1], radius)) return true
+        }
+        return false
     }
 
     private fun steeringScore(s: MutableGameState, angle: Float, force: Float, desiredX: Float, desiredY: Float, shots: List<Projectile>): Float {

@@ -549,7 +549,7 @@ class PerceptibleItemImpactTest {
             spawnClock = Float.MAX_VALUE
             nextEliteAt = Float.MAX_VALUE
             runGrace = 0f
-            nextPointOfferIndex = Int.MAX_VALUE / 2
+            quietArenaForTesting()
         }
         setup.support.forEach { name -> game.own(name, stacks = game.itemNamed(name).maxStacks) }
         val reach = game.effectivePickupRadius() + 30f
@@ -885,10 +885,11 @@ class PerceptibleItemImpactTest {
     ): Float {
         val accelerationX = (desiredX - game.coreX) * 5f + (desiredVx - game.velocityX) * 3f + feedX
         val accelerationY = (desiredY - game.coreY) * 5f + (desiredVy - game.velocityY) * 3f + feedY
-        val desiredHeading = atan2(accelerationY, accelerationX)
+        val aim = game.steeringAimFor(accelerationX, accelerationY)
+        val desiredHeading = aim.heading
         val next = heading + atan2(sin(desiredHeading - heading), cos(desiredHeading - heading)).coerceIn(-0.12f, 0.12f)
         // Never closer than 65: the singularity ends the run on contact.
-        val distance = ((length(accelerationX, accelerationY) - 92f) / game.magnetStrength).coerceIn(65f, 480f)
+        val distance = aim.distance.coerceIn(65f, 480f)
         point(game, next, distance)
         return next
     }

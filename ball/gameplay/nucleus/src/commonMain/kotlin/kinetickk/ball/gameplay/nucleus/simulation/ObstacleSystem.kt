@@ -374,22 +374,7 @@ private class ChunkRandom(private var state: Long) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Collision speeds.
-
-/**
- * Steady Core speed that holding the cursor at [reach] along the viewport's long axis sustains with the
- * base movement stats: thrust `pull + magnetism × offset` against drag and the camera's lag
- * `speed / followRate`. The long half-axis is the farthest the cursor sits from the centre along a screen
- * axis (the edge run's axis); measuring there keeps the collision bands independent of the heading, so a
- * turn never moves them and turning a phone leaves them in place.
- */
-internal fun MutableGameState.steadyCursorSpeed(reach: Float): Float =
-    steadyCursorSpeedAtOffset(reach * max(screenWidth, screenHeight) * 0.5f)
-
-/** Steady Core speed with the cursor held [offset] dp from the screen centre (base movement stats). */
-internal fun steadyCursorSpeedAtOffset(offset: Float): Float =
-    (CORE_BASE_PULL + BASE_MAGNET_STRENGTH * offset) /
-        (BASE_DRAG_COEFFICIENT + BASE_MAGNET_STRENGTH / CAMERA_FOLLOW_RATE)
+// Collision speeds (the steady model they scale lives in CoreSteering.kt).
 
 /** Share of the way from tier 0 to the end of collision forgiveness. */
 private fun MutableGameState.obstacleForgiveness(): Float =

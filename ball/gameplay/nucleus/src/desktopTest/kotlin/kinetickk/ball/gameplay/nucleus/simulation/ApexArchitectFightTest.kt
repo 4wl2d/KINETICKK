@@ -511,7 +511,7 @@ class ApexArchitectFightTest {
             while (state.elapsed < begin + duration && state.phase == GamePhase.RUNNING) {
                 state.spawnBudget = 0f
                 state.runGrace = 1f
-                state.pointsOfInterest = emptyList()
+                state.quietArenaForTesting()
                 state.enemies.removeAll { !it.isBoss }
                 val angle = frame / 60f * 1.4f
                 state.updatePointer(state.screenWidth * 0.5f + cos(angle) * 300f, state.screenHeight * 0.5f + sin(angle * 2f) * 220f)

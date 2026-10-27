@@ -177,8 +177,7 @@ class UpgradeBalanceGateTest {
             spawnClock = Float.MAX_VALUE
             nextEliteAt = Float.MAX_VALUE
             bossSpawned = true
-            nextPointOfferIndex = ((content.pointsOfInterest.lastOfferAt - content.pointsOfInterest.firstOfferAt) /
-                content.pointsOfInterest.offerInterval).toInt() + 1
+            quietArenaForTesting()
             coreX = 220f
             previousCoreX = coreX
             velocityY = 420f
@@ -248,9 +247,10 @@ class UpgradeBalanceGateTest {
                     if (time < 0.13f && closest < 28f) urgent = true
                 }
             }
-            val desiredHeading = atan2(accelerationY, accelerationX)
+            val aim = game.steeringAimFor(accelerationX, accelerationY)
+            val desiredHeading = aim.heading
             heading += atan2(sin(desiredHeading - heading), cos(desiredHeading - heading)).coerceIn(-0.08f, 0.08f)
-            val distance = ((length(accelerationX, accelerationY) - 92f) / game.magnetStrength).coerceIn(65f, 480f)
+            val distance = aim.distance.coerceIn(65f, 480f)
             val edgeMargin = (1f - game.content.tempo.fatigue.edgeStrainStart) * 0.5f
             game.updatePointer(
                 (game.coreX + cos(heading) * distance - game.cameraX + game.screenWidth / 2f)

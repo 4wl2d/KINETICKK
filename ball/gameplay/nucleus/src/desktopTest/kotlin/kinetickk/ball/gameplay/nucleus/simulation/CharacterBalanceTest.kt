@@ -258,7 +258,7 @@ class CharacterBalanceTest {
                 state.weaponLevel = 1
                 state.runGrace = 1f
                 // No trials: their rewards would open choices and shift the script.
-                state.pointsOfInterest = emptyList()
+                state.quietArenaForTesting()
                 val dashSequence = state.characterRuntime.dashSequence
                 script(state, frame)
                 val before = state.hp

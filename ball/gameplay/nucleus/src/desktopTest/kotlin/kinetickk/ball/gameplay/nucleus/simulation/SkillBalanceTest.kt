@@ -176,7 +176,7 @@ class SkillBalanceTest {
                 state.overdriveTime = 0f
                 state.weaponLevel = 1
                 state.runGrace = 1f
-                state.pointsOfInterest = emptyList()
+                state.quietArenaForTesting()
                 script(state, frame)
                 if (skill != null) state.requestSkill(0)
                 state.hp = state.maxHp - HEADROOM

@@ -121,7 +121,7 @@ class SpawnDirectorPacingTest {
             observe()
             enemies.removeAll { enemy -> abs(enemy.x - coreX) + abs(enemy.y - coreY) < 320f && !enemy.isMiniBoss }
             pickups.clear()
-            pointsOfInterest = emptyList()
+            quietArenaForTesting()
             takeVisualFxCues()
             takeSoundCues()
         }

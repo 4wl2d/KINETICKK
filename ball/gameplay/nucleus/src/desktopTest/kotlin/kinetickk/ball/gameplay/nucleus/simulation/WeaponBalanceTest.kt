@@ -282,8 +282,7 @@ class WeaponBalanceTest {
                 spawnClock = Float.MAX_VALUE
                 nextEliteAt = Float.MAX_VALUE
                 runGrace = 0f
-                pointsOfInterest = emptyList()
-                nextPointOfferIndex = Int.MAX_VALUE / 2
+                quietArenaForTesting()
                 nextLevelData = Int.MAX_VALUE / 2
                 clearObstaclesForTesting()
                 if (checkpoint == Checkpoint.ASCENDED) {
@@ -462,8 +461,9 @@ class WeaponBalanceTest {
         fun steer(game: MutableGameState, x: Float, y: Float, vx: Float, vy: Float) {
             val ax = (x - game.coreX) * 6f + (vx - game.velocityX) * 4f
             val ay = (y - game.coreY) * 6f + (vy - game.velocityY) * 4f
-            val heading = atan2(ay, ax)
-            val distance = ((length(ax, ay) - 92f) / game.magnetStrength).coerceIn(65f, 380f)
+            val aim = game.steeringAimFor(ax, ay)
+            val heading = aim.heading
+            val distance = aim.distance.coerceIn(65f, 380f)
             val edge = (1f - game.content.tempo.fatigue.edgeStrainStart) * 0.5f
             game.updatePointer(
                 (game.coreX + cos(heading) * distance - game.cameraX + game.screenWidth / 2f)

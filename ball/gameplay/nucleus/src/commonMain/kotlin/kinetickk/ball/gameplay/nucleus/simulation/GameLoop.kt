@@ -472,28 +472,12 @@ internal fun MutableGameState.updateCore(delta: Float) {
         lastAimDirectionX = dx / distance
         lastAimDirectionY = dy / distance
     }
-    val directionX = dx / distance
-    val directionY = dy / distance
-    val overdriveMultiplier = if (overdriveTime > 0f) 1.3f else 1f
-    val pull = (CORE_BASE_PULL + distance * effectiveMagnetism()) * overdriveMultiplier
-    val brakeFactor = if (braking) 1.12f else 1f
     val currentSpeed = speed
-    val forwardX = if (currentSpeed > 1f) velocityX / currentSpeed else directionX
-    val forwardY = if (currentSpeed > 1f) velocityY / currentSpeed else directionY
-    val forwardPull = max(0f, (directionX * forwardX + directionY * forwardY) * pull)
-    // Exhaustion only weakens acceleration along existing momentum. Lateral steering,
-    // counter-thrust and the Brake damping remain available even at zero stability.
-    val suppressedPull = if (currentSpeed > 1f) forwardPull * (1f - tetherAuthority) else 0f
-    velocityX += (directionX * pull - forwardX * suppressedPull) * brakeFactor * delta
-    velocityY += (directionY * pull - forwardY * suppressedPull) * brakeFactor * delta
-    val perpetual = build.upside(RelicId.PERPETUAL_VECTOR)
+    val acceleration = steeringAcceleration(dx, dy, pointerX - screenWidth * 0.5f, pointerY - screenHeight * 0.5f, velocityX, velocityY)
+    velocityX += acceleration.x * delta
+    velocityY += acceleration.y * delta
     val brakeDamping = if (build.liability(RelicId.PERPETUAL_VECTOR)) -2.6f else -5.2f
-    var drag = if (perpetual) dragCoefficient * 0.15f else dragCoefficient
-    // Frictionless: Superconduct strips most of the drag (the Brake still damps as before).
-    if (frictionlessUntil > elapsed && hasVerb(ReactionId.SUPERCONDUCT)) {
-        drag *= reactionValue(ReactionId.SUPERCONDUCT, FRICTIONLESS_DRAG_VALUE)
-    }
-    val damping = exp((if (braking) brakeDamping else -drag) * delta)
+    val damping = exp((if (braking) brakeDamping else -steeringDrag()) * delta)
     velocityX *= damping
     velocityY *= damping
 

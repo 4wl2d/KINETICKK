@@ -79,7 +79,7 @@ class ReactionPlayStyleGateTest {
         state.hp = state.maxHp
         // No level or anomaly choice interrupts the arena.
         state.nextLevelData = Int.MAX_VALUE
-        state.nextPointOfferIndex = 1_000_000
+        state.quietArenaForTesting()
         val crowd = crowdFor(reaction)
         val step = MutableGameState.FIXED_STEP
         var spawned = 0
