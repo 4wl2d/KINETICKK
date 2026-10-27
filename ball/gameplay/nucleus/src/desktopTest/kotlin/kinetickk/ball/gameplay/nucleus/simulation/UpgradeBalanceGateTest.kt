@@ -24,7 +24,7 @@ import kotlin.test.assertTrue
  * perceptible in a scripted encounter with equal resources.
  *
  * - J1 (D at max): tier 10, strong build + Pentagon Refit 10 + Honing 10 on every owned weapon: at most 3/5
- *   wins and a median survival of at least 480 s.
+ *   wins and a median survival of at least 480 s, the median over [PopulationSeeds] (lead Addendum D5).
  * - J2 (G at max): tier 10, full Matrix Pentagon/Arc Coil + the same upgrades: fewer than 5/5 wins.
  * - J3 (E's ceiling): tier 8, half Matrix + Orb Refit 5 + Honing 5 on every owned weapon: at least 4/5 losses.
  * - J4 (upgrades are not progression): tier 6, no Matrix, Orb Refit 10 + Honing 10 on every owned weapon: no win.
@@ -36,13 +36,24 @@ import kotlin.test.assertTrue
  * 0.02 → 0.015, characterIntegrityPerLevel 2 → 1.5, then the signature step that breaks a band.
  */
 class UpgradeBalanceGateTest {
+    /**
+     * J1's survival bound is a population gate (lead Addendum D5, 0.5.0 active items): five seeds reached a median of
+     * 480 s with probability 0.94 on the 05885fa9 base but 0.79 with the shipped active items, so it re-rolled with the
+     * reward stream. The base median survival over the 300 [PopulationSeeds] runs was 687.28 s (bootstrap SE 20.13 s);
+     * the population's median must be at least [J1_MIN_MEDIAN_SURVIVAL] s, by Addendum D1 the lower of the design's
+     * eight minutes and the base minus two standard errors (647.02 s). The win bound keeps the five gate seeds (they
+     * pass with probability 1.00 on the base and now; 1 and 4 of the 300 population runs won).
+     */
     @Test fun maxedUpgradesKeepTierTenSurvivableButRareForTheStrongBuild() {
-        val outcomes = EconomyGateSeeds.map { seed ->
+        fun strong(seed: Int): Outcome =
             play(seed, maxed(GateMatrix.FULL, tier = 10, CoreShape.PENTAGON, WeaponId.ARC_COIL, level = 10), StrongRelics)
-        }
+        val outcomes = EconomyGateSeeds.map(::strong)
+        val population = populationOf(PopulationSeeds, ::strong)
         report("UPGRADE_GATE J1 tier=10 strong+", outcomes)
-        val median = outcomes.map { it.seconds }.gateMedian()
-        assertTrue(median >= 480f, "tier 10 must stay survivable for a maxed strong build: median $median s, ${outcomes.summary()}")
+        val median = population.map { it.seconds }.gateMedian()
+        println("UPGRADE_GATE J1 population median survival $median s, wins ${population.count { it.won }} of ${population.size}")
+        assertTrue(median >= J1_MIN_MEDIAN_SURVIVAL,
+            "tier 10 must stay survivable for a maxed strong build: population median $median s, below $J1_MIN_MEDIAN_SURVIVAL s")
         assertTrue(outcomes.count { it.won } <= 3, "maxed upgrades must not make tier 10 routine: ${outcomes.summary()}")
     }
 
@@ -266,6 +277,11 @@ class UpgradeBalanceGateTest {
     }
 
     private companion object {
+        /**
+         * J1: the least median survival over [PopulationSeeds] (base 687.28 s, SE 20.13 s, n 300; Addendum D1 and D5).
+         */
+        const val J1_MIN_MEDIAN_SURVIVAL = 480f
+
         /** The crowd Drifters' integrity pool (WeaponBalanceTest's crowd arena). */
         const val CROWD_INTEGRITY = 900f
 

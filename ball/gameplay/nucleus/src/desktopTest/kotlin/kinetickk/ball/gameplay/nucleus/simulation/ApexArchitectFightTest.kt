@@ -50,12 +50,23 @@ import kotlin.test.assertTrue
  *
  * The benefit is judged on many paired fights, because one fight's time-to-kill moves by ±15 % when the Core starts
  * 0.01 u elsewhere: each run is forked into [FORKS] pairs whose two arms both start with the Core moved by k/100 u
- * (k = 0 is the contract's own fight). Offensive characters (tier 0, [BENEFIT_RUNS] runs each): per character the
- * median over its pairs of the with/without time-to-kill ratio; the median of the ten lies in [0.75, 0.95] and each
- * character's benefit within ±40 % of that median benefit. The Prism and the Diamond (tier 10, [DEFENSIVE_RUNS] runs
- * each, where the Architect's fire and the arena put real damage on them; at tier 0 their facets and parries leave
- * almost nothing to defend): the damage taken during the Apex arm's windows, summed over the pairs, is [0.55, 0.85]
- * of what the no-Apex arm takes in the same windows.
+ * (k = 0 is the unmoved fight). Offensive characters (tier 0, the first [BENEFIT_RUNS] runs each along
+ * [PopulationSeeds]): per character the median over its pairs of the with/without time-to-kill ratio; the median of the
+ * ten lies in [0.75, 0.95] and each character's benefit within ±40 % of that median benefit. The Prism and the Diamond
+ * (tier 10, where the Architect's fire and the arena put real damage on them; at tier 0 their facets and parries leave
+ * almost nothing to defend; the Prism's first [DEFENSIVE_RUNS] runs along the fixed seed list, the Diamond's first
+ * [DIAMOND_RUNS] along [PopulationSeeds]): the damage taken during the Apex arm's windows, summed over the pairs, is
+ * [0.55, 0.85] of what the no-Apex arm takes in the same windows.
+ *
+ * The offence band and the Diamond's band are population rules (lead Addendum D5, 0.5.0 active items). On the fixed
+ * seed list (48 offensive runs per character, 64 defensive) the offence passed with probability 0.97 on the 05885fa9
+ * base but 0.87 with the shipped active items, through its ±40 % clause (the median band passed every time, and the
+ * clause is measured against it), and the Diamond passed with probability 0.99 and 0.72. Their populations are the
+ * ones the base was measured on, 96 offensive and 128 Diamond runs with four forks each: fewer than 300 runs, since
+ * these fights already set the suite's runtime. On the base the offence median was 0.847 (bootstrap SE 0.005), each
+ * character's benefit 0.80-1.17 of the median benefit (SE 0.06-0.08), and the Diamond's ratio 0.694 (SE 0.041); by
+ * Addendum D1 (the wider of the design's band and the base ± two standard errors) every band stays the design's. The
+ * Prism's band passed with probability 0.99 and 0.95 and keeps the fixed seed list.
  */
 class ApexArchitectFightTest {
     @Test
@@ -191,7 +202,7 @@ class ApexArchitectFightTest {
     private companion object {
         /**
          * The seed list (the Rebirth gates' sequence, i · 7,919 + 13 from i = 6): the contract uses each case's first
-         * three runs that reach the Architect, the benefit its first [BENEFIT_RUNS].
+         * three runs that reach the Architect, the Prism's benefit its first [DEFENSIVE_RUNS].
          */
         val SEED_POOL = (6 until 6 + SEED_POOL_SIZE).map { it * 7_919 + 13 }
         const val SEED_POOL_SIZE = 200
@@ -200,9 +211,15 @@ class ApexArchitectFightTest {
         const val CAST_FIGHTS_PER_CASE = 13
         /** The least share of those fights in which the bot casts its Apex (base 0.9983, SE 0.0023 at 312 fights). */
         const val MIN_CAST_SHARE = 0.99
-        const val BENEFIT_RUNS = 48
-        /** The defensive characters' runs: their damage comes in rarer, larger events than a time-to-kill moves. */
+        /** The offence's runs per character along [PopulationSeeds] (Addendum D5: the base's population). */
+        const val BENEFIT_RUNS = 96
+        /**
+         * The Prism's runs along [SEED_POOL]: a defensive character's damage comes in rarer, larger events than a
+         * time-to-kill moves.
+         */
         const val DEFENSIVE_RUNS = 64
+        /** The Diamond's runs along [PopulationSeeds] (Addendum D5: the base's population). */
+        const val DIAMOND_RUNS = 128
         /** Pairs per benefit run; the k-th pair's arms both start with the Core moved by k × [FORK_OFFSET]. */
         const val FORKS = 4
         const val FORK_OFFSET = 0.01f
@@ -267,9 +284,18 @@ class ApexArchitectFightTest {
 
         private val benefitCache = HashMap<Pair<CoreShape, Int>, List<BenefitPair>>()
 
-        /** The benefit's pairs of [shape] at [tier]: [BENEFIT_RUNS] ([DEFENSIVE_RUNS]) runs, each forked into [FORKS] pairs. */
+        /**
+         * The benefit's pairs of [shape] at [tier], each run forked into [FORKS] pairs: an offensive character's first
+         * [BENEFIT_RUNS] runs and the Diamond's first [DIAMOND_RUNS] along [PopulationSeeds], the Prism's first
+         * [DEFENSIVE_RUNS] along [SEED_POOL].
+         */
         fun benefitPairs(shape: CoreShape, tier: Int): List<BenefitPair> = benefitCache.getOrPut(shape to tier) {
-            firstRuns(shape, tier, if (shape in DEFENSIVE) DEFENSIVE_RUNS else BENEFIT_RUNS) { _, state, bot ->
+            val (runs, seeds) = when (shape) {
+                CoreShape.PRISM -> DEFENSIVE_RUNS to SEED_POOL
+                CoreShape.DIAMOND -> DIAMOND_RUNS to PopulationSeeds
+                else -> BENEFIT_RUNS to PopulationSeeds
+            }
+            firstRuns(shape, tier, runs, seeds) { _, state, bot ->
                 (0 until FORKS).map { fork ->
                     val apex = fight(state.forked(fork), bot.copy(), apex = true, windows = emptyList())
                     val plain = fight(state.forked(fork), bot.copy(), apex = false, windows = apex.windows)

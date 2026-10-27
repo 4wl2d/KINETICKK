@@ -69,8 +69,9 @@ import kotlin.test.assertTrue
  * [PopulationSeeds]: on the 05885fa9 base their five gate seeds passed with probability 0.49, 0.82 and 0.78, so they
  * re-rolled with every change to the reward stream. A's floor follows Addendum D1 (the lower of the seeded threshold
  * and the base minus two standard errors); D's and H's follow Addendum D2 (the shipped tuning's own median survival on
- * the calibration windows, see their constants). B, C, E, F, G and the win bounds of D and H keep their seeds and
- * thresholds (each passed with probability 1.00 at the base), and Gate I keeps its 31 seeds and 0.8 (Addendum C7).
+ * the calibration windows, see their constants). Gate I is a population gate as well (Addendum D5). B, C, E, F, G and
+ * the win bounds of D and H keep their seeds and thresholds: their seeds pass with probability at least 0.99 on the
+ * base's population and on the shipped active items' (Addendum D5).
  */
 class RebirthBalanceGateTest {
     /**
@@ -88,25 +89,28 @@ class RebirthBalanceGateTest {
     }
 
     /**
-     * Gate I (0.5.0 actives): active items help a fresh tier-0 run but do not trivialise it. The same bot on the catalog
-     * without the active items ([NoActives], a run as before they existed) clears the Architect no more than a fifth
-     * slower than with the actives its offers dealt and it cast.
+     * Gate I (0.5.0 actives): active items help a fresh tier-0 run but do not trivialise it. The same bot on the
+     * catalog without the active items ([NoActives], a run as before they existed) clears the Architect no more than a
+     * fifth slower than with the actives its offers dealt and it cast. A run that dies counts as never clearing.
      *
-     * Measured on the NoPoi probe sequence i = 1..31 ([GateISeeds]), not the five gate seeds: a run that dies counts as
-     * never clearing, and about a quarter of fresh runs die with or without skills, so a five-seed median lands on
-     * whichever arm lost two seeds (the five seeds read 0.37–0.49 while 400 seeds read 0.78–0.83, and five-seed blocks
-     * of those 400 passed in 53 %).
+     * A population gate over [PopulationSeeds] (Addendum D5). A five-seed median lands on whichever arm lost two seeds,
+     * since about a quarter of fresh runs die with or without skills, so the gate once read 31 seeds of the NoPoi probe
+     * sequence (i = 1..31); they still kept the ratio at 0.8 with probability only 0.78 on the 05885fa9 base and 0.86
+     * with the shipped active items. On the base the population's median clear was 83.91 s with skills against 94.13 s
+     * without (ratio 0.891, bootstrap SE 0.042, n 300); the arm without active items reproduces the 94.13 s exactly.
+     * The ratio must be at least [I_MIN_CLEAR_RATIO]: by Addendum D1 the lower of the seeded 0.8 and the base minus two
+     * standard errors (0.807), rounded down.
      */
     @Test fun skillsHelpAFreshTierZeroRunWithoutTrivialisingIt() {
-        val withSkills = GateISeeds.map { seed -> play(seed, tier = 0, setup = Fresh) }
-        val without = GateISeeds.map { seed -> play(seed, tier = 0, setup = Fresh, content = NoActives) }
-        report("GATE I tier=0 fresh skills", withSkills)
-        report("GATE I tier=0 fresh no-skills", without)
+        val withSkills = populationOf(PopulationSeeds) { seed -> play(seed, tier = 0, setup = Fresh) }
+        val without = populationOf(PopulationSeeds) { seed -> play(seed, tier = 0, setup = Fresh, content = NoActives) }
         val skilled = withSkills.medianClear()
         val unskilled = without.medianClear()
-        println("GATE I median clear skills=$skilled no-skills=$unskilled ratio=${skilled / unskilled}")
-        assertTrue(skilled >= unskilled * 0.8f,
-            "skills must not trivialise tier 0: median clear $skilled s against $unskilled s without skills")
+        println("GATE I tier=0 fresh population median clear skills=$skilled no-skills=$unskilled ratio=${skilled / unskilled} " +
+            "(${withSkills.size} runs each)")
+        assertTrue(skilled >= unskilled * I_MIN_CLEAR_RATIO,
+            "skills must not trivialise tier 0: population median clear $skilled s against $unskilled s without skills, " +
+                "below $I_MIN_CLEAR_RATIO of it")
     }
 
     @Test fun aFullMatrixAndASignatureWeaponCanWinTierThree() {
@@ -319,8 +323,11 @@ class RebirthBalanceGateTest {
          */
         const val H_MIN_MEDIAN_SURVIVAL = 433.82f
 
-        /** Gate I's seeds: the NoPoi probe sequence (`i * 7_919 + 13`) for i = 1..31, which holds the gate seeds. */
-        val GateISeeds: List<Int> = (1..31).map { it * 7_919 + 13 }
+        /**
+         * Gate I: the least ratio of the population's median clear with active items to the median clear without them
+         * (base 0.891, SE 0.042, n 300; Addendum D1 and D5).
+         */
+        const val I_MIN_CLEAR_RATIO = 0.80f
 
         /** The shipped content without its active items: no run here owns one, and its deck and offers are the 0.5.0 ones. */
         val NoActives: GameplayContentSnapshot = withoutActiveItemCatalog()
