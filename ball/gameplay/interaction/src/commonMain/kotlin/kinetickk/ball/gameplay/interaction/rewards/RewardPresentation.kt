@@ -767,7 +767,10 @@ private fun GameplayRenderModel.rewardActiveRules(item: ItemDefinition, rank: In
         add(RewardRuleLine(RuleLineKind.TRIGGER, language.text(OverlayRedesignText.ActivePart), element))
         add(RewardRuleLine(RuleLineKind.EFFECT, skill.summary.localizedContent(language), element))
         add(RewardRuleLine(RuleLineKind.RULE, skill.activeRankNumbers(rank, language), element))
-        if (rank >= ContentBounds.MAX_SKILL_RANK) add(RewardRuleLine(RuleLineKind.RULE, skill.rankThree.localizedContent(language), element))
+        if (rank >= ContentBounds.MAX_SKILL_RANK) {
+            // Its numbers keep the word before them, as the numbers line does, so a wrap never leaves "3 s." alone.
+            add(RewardRuleLine(RuleLineKind.RULE, skill.rankThree.localizedContent(language).replace(SpaceBeforeNumber, "\u00A0"), element))
+        }
         add(RewardRuleLine(RuleLineKind.TRIGGER, language.text(OverlayRedesignText.PassivePart)))
     }
 }
@@ -820,7 +823,7 @@ private fun GameplayRenderModel.rewardActiveSlotCard(
             operation = "",
             title = language.text(OverlayRedesignText.KeepLoadout),
             icon = KkIcon.SYSTEM_MATTER,
-            bandStart = language.text(OverlayRedesignText.ActivePart),
+            bandStart = language.text(OverlayRedesignText.Actives),
         )
     }
     val preview = rewardPreviews.getOrNull(index)?.takeIf { choices.getOrNull(index) == choice }
@@ -865,6 +868,9 @@ private fun GameplayRenderModel.rewardActiveSlotCard(
  */
 fun SkillDefinition.activeRankNumbers(rank: Int, language: AppLanguage): String =
     rankLines(rank, language).drop(1).joinToString(", ") { it.replace(' ', '\u00A0') }
+
+/** A space before a number, which a no-break space replaces to keep the number with the word before it. */
+private val SpaceBeforeNumber = Regex(" (?=[−+]?\\d)")
 
 /** The active slot prompt's keep card: every held active stays and the incoming active item is salvaged. */
 internal val ChoiceOption.keepsActiveLoadout: Boolean get() = type == ChoiceType.ACTIVE_SLOT && activeSlot == null

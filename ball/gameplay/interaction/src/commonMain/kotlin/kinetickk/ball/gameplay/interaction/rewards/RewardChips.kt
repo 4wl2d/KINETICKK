@@ -395,8 +395,8 @@ private val RewardNumber = Regex("[−+×]?\\d+(?:[.,  ]\\d+)*(?:[   ]?%)?
 private const val WordJoiner = '\u2060'
 private const val NoBreakSpace = '\u00A0'
 
-/** Unit marks that follow a number and must stay on its line. */
-private val UnitMarks = arrayOf("%", "u/s", "ед/с", "ед", "s", "с")
+/** Unit marks that follow a number and must stay on its line (Matter as an amount's unit: "+6 matter"). */
+private val UnitMarks = arrayOf("%", "u/s", "ед/с", "ед", "s", "с", "matter", "материи")
 
 private fun unitStartsAt(text: String, index: Int): Boolean = UnitMarks.any { mark ->
     text.startsWith(mark, index) && (index + mark.length >= text.length || !text[index + mark.length].isLetter())

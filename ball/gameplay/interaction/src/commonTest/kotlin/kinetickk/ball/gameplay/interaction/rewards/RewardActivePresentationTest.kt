@@ -75,6 +75,14 @@ class RewardActivePresentationTest {
         assertEquals("C", ranked.chips.first().keyCap, "an owned active ranks its own slot")
         assertTrue(ranked.rules.any { it.text == rankNumbers(flare.id, 3, AppLanguage.English) })
         assertTrue(ranked.rules.any { it.text == flare.rankThree })
+
+        // What rank III adds keeps each number with the word before it, so "ablaze for 3 s" never leaves "3 s" alone.
+        val meteorThird = rewardActiveChoice(base + 1, slot = 0, stacks = 2)
+        for (language in AppLanguage.entries) {
+            val rules = model(listOf(meteorThird), language, stacks = mapOf(base + 1 to 2)).rewardCardPresentation(meteorThird, 0, language).rules
+            val line = rules.single { it.text.replace('\u00A0', ' ') == meteor.rankThree.localizedContent(language) }.text
+            assertTrue("\u00A03" in line && Regex(" [−+]?\\d") !in line, "$language: '$line'")
+        }
     }
 
     @Test
@@ -159,6 +167,10 @@ class RewardActivePresentationTest {
         assertTrue(kept.decline, "the keep card reads as a decline")
         assertEquals("Keep loadout", kept.title)
         assertEquals(listOf("Every active stays and ${meteor.name} is salvaged for +7 matter"), kept.descriptions)
+        // Shown with the amount and its unit on one line.
+        assertTrue(rewardKeepUnits(kept.descriptions.single()).endsWith("+7\u00A0matter"))
+        // The band names the category it keeps, as the relic Leave hollow's reads "Relics".
+        assertEquals("Actives", kept.bandStart)
         assertNull(kept.item)
         assertTrue(kept.chips.isEmpty())
 
@@ -168,9 +180,13 @@ class RewardActivePresentationTest {
         assertEquals("Ранг 2/3", russian.cards[0].bandEnd)
         assertEquals("Активный эффект", russian.cards[0].rules.first().text)
         assertTrue(meteor.name.localizedContent(AppLanguage.Russian) in russian.cards[0].rules.last().text)
+        // The preposition stays with its noun and the rank with its number: "с рангом 1" is never broken.
+        assertTrue(russian.cards[0].rules.last().text.endsWith(" с\u00A0рангом\u00A01"), russian.cards[0].rules.last().text)
         assertEquals("Оставить набор", russian.cards[1].title)
         assertEquals(listOf("Все активные эффекты остаются, ${meteor.name.localizedContent(AppLanguage.Russian)} даёт +7 материи"),
             russian.cards[1].descriptions)
+        assertTrue(rewardKeepUnits(russian.cards[1].descriptions.single()).endsWith("+7\u00A0материи"))
+        assertEquals("Активные", russian.cards[1].bandStart)
 
         // A keep card without the nucleus number says what happens without one.
         val bare = keep.copy(salvageMatter = null)

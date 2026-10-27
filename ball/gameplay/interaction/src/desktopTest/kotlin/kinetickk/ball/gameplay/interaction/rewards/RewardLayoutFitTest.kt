@@ -33,6 +33,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.SkillId
@@ -325,8 +326,9 @@ class RewardLayoutFitTest {
 
     /**
      * An active item card always shows its slot chip (the key it binds to, or that it replaces a slot) inside its chip
-     * column, at every frame and text size in both languages, and its rank's numbers never wrap a number away from its
-     * label, nor the prompt's "rank 1" its number.
+     * column, at every frame and text size in both languages, and its rank's numbers and what rank III adds never wrap a
+     * number away from the word before it, nor the prompt's "rank 1" its number or the Russian "с" its noun, nor the keep
+     * card's "+4 matter" its amount from its unit.
      */
     @Test
     fun anActiveCardKeepsItsSlotChipAndItsNumbersWithTheirLabels() {
@@ -347,19 +349,26 @@ class RewardLayoutFitTest {
                         "$scene card ${index + 1}: '${first.spoken}' shows inside its chip column $column ($shown)")
                     chips++
                 }
-                val item = card.item ?: return@forEachIndexed
-                val effect = item.active ?: return@forEachIndexed
-                val numbers = content.skill(effect).rankLines(requireNotNull(card.itemStack), language).drop(1).joinToString(", ")
-                val incoming = choice.incomingItemId?.let { id ->
+                val active = card.item?.active?.let(content::skill)?.let { skill ->
+                    listOfNotNull(skill.rankLines(requireNotNull(card.itemStack), language).drop(1).joinToString(", "),
+                        skill.rankThree.localizedContent(language).takeIf { card.itemStack == ContentBounds.MAX_SKILL_RANK })
+                }.orEmpty()
+                val incoming = choice.incomingItemId?.takeIf { card.item != null }?.let { id ->
                     language.text(OverlayRedesignText.ActiveIncoming,
                         requireNotNull(content.item(id)).name.localizedContent(language)).normalized()
                 }
+                val kept = card.descriptions.takeIf { choice.keepsActiveLoadout }.orEmpty()
                 textsUnder("$tag.text").forEach { (node, layout) ->
                     val text = node.config.getOrElseNullable(SemanticsProperties.Text) { null }?.joinToString("") { it.text }?.normalized()
-                    if (text != numbers && text != incoming) return@forEach
-                    (1 until layout.lineCount).forEach { line ->
-                        val start = layout.layoutInput.text.text[layout.getLineStart(line)]
-                        assertTrue(!start.isDigit(), "$scene card ${index + 1}: line ${line + 1} of '$text' starts with a number")
+                    if (text == null || (text !in active && text != incoming && text !in kept)) return@forEach
+                    val shown = layout.layoutInput.text.text
+                    (0 until layout.lineCount).forEach { line ->
+                        val words = shown.substring(layout.getLineStart(line), layout.getLineEnd(line, visibleEnd = true))
+                        val where = "$scene card ${index + 1}: line ${line + 1} of '$text'"
+                        if (line > 0) assertTrue(!words.first().isDigit(), "$where starts with a number")
+                        if (line == layout.lineCount - 1) return@forEach
+                        if (text in kept) assertTrue(!words.last().isDigit(), "$where ends with an amount without its unit")
+                        if (text == incoming) assertTrue(words.substringAfterLast(' ').length > 1, "$where ends with a one-letter word")
                     }
                     rows++
                 }
