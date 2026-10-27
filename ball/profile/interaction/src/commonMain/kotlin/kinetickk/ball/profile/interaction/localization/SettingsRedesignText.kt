@@ -142,7 +142,7 @@ internal enum class SettingsRedesignText(override val english: String, override 
     // CONTROLS
     ActionDash("Dash", "Рывок"),
     ActionBrake("Brake", "Тормоз"),
-    ActionSkill("Skill {0}", "Навык {0}"),
+    ActionSkill("Active {0}", "Активный эффект {0}"),
     ActionApex("Apex", "Апекс"),
     ActionPause("Pause", "Пауза"),
     ActionChoice("Choice {0}", "Выбор {0}"),
@@ -151,7 +151,7 @@ internal enum class SettingsRedesignText(override val english: String, override 
     ActionPerformance("Performance panel", "Производительность"),
     AboutBindDash("Spends heat for a burst of speed.", "Тратит нагрев на резкое ускорение."),
     AboutBindBrake("Hold to slow the Core down.", "Удерживайте, чтобы замедлить Ядро."),
-    AboutBindSkill("Casts the skill in slot {0}.", "Применяет навык из ячейки {0}."),
+    AboutBindSkill("Casts the active effect in slot {0}.", "Применяет активный эффект из ячейки {0}."),
     AboutBindApex("Casts your character's Apex once it is ready.", "Применяет Апекс персонажа, когда он готов."),
     AboutBindPause("Pauses and resumes the run. Esc always works too.", "Ставит забег на паузу и снимает её. Esc работает всегда."),
     AboutBindReroll("Redraws the offered cards.", "Заново раскладывает предложенные карты."),

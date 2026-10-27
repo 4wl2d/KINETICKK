@@ -41,12 +41,13 @@ import kotlin.math.min
 import kotlin.math.sin
 
 /**
- * The Z/X/C skill row at the SKILL targets of [forEachRunningControlBounds] (live mask): each slot's
+ * The Z/X/C active row at the SKILL targets of [forEachRunningControlBounds] (live mask): each slot's
  * look ([drawKkSkillSlot]) with its feedback — the 90 ms press flash ([RunningControlPressLog]), the
- * refusal shake and Bone sweep edge, the ready flash and ring, the refund edge, the draft slam and
- * ring, the rank-up pip fill and ring, and the whole row sliding in with the first draft — and, while
- * the keyboard is in use on REGULAR windows at least [KEY_CAP_MIN_WIDTH_DP] wide, the bound key under
- * each drafted slot. Slots before their draft show locked. Allocation-free on steady frames.
+ * refusal shake and Bone sweep edge, the ready flash and ring, the refund edge, the slam and ring when
+ * an active item binds (or replaces) the slot's effect, the rank-up pip fill and ring, and the whole row
+ * sliding in with the first active item — and, while the keyboard is in use on REGULAR windows at least
+ * [KEY_CAP_MIN_WIDTH_DP] wide, the bound key under each filled slot. A slot without an active shows an
+ * empty face (every slot is usable from the start; none is locked). Allocation-free on steady frames.
  */
 internal fun DrawScope.drawSkillBar(
     engine: GameplayRenderModel,
@@ -58,7 +59,7 @@ internal fun DrawScope.drawSkillBar(
 ) {
     val mask = RunningControlMask.of(engine)
     if (mask and RunningControlMask.SKILLS == 0) return
-    // The first draft slides the row in from the right while it fades in (Pull).
+    // The first active item slides the row in from the right while it fades in (Pull).
     val row = memory?.skillRow(renderTime) ?: 1f
     val entrance = KkEase.Pull.transform(row)
     if (row < 1f) {
@@ -121,12 +122,12 @@ private fun DrawScope.drawSkillSlotAt(
     val center = bounds.center
     val side = bounds.width
     if (id == null) {
-        drawKkSkillSlot(measurer, bounds, icon = null, iconColor = Kk.Mute2, cooldown = 0f, ready = false, rank = 0, locked = true)
+        drawKkSkillSlot(measurer, bounds, icon = null, iconColor = Kk.Mute2, cooldown = 0f, ready = false, rank = 0, maxRank = 0)
         return 0f
     }
     val definition = engine.content.skill(id)
     val color = skillColor(definition, roles)
-    // Draft: the slot slams in (220 ms) under a `you` ring (420 ms).
+    // A new effect in the slot (bound or replaced): it slams in (220 ms) under a `you` ring (420 ms).
     val acquired = memory?.skillAcquired(slot, renderTime) ?: 1f
     val acquiredMs = acquired * HudPresentationMemory.SKILL_ACQUIRE_MS
     val slam = if (acquired < 1f) KkSlam.scale((acquiredMs / KkSlam.DURATION_MS).coerceIn(0f, 1f)) else 1f
@@ -185,7 +186,7 @@ internal fun refusalAge(engine: GameplayRenderModel, projection: SkillSlotProjec
     return if (age in 0f..REFUSAL_WINDOW_SECONDS) age else -1f
 }
 
-/** The key cap under a drafted REGULAR slot while the keyboard is in use, or null. */
+/** The key cap under a filled REGULAR slot while the keyboard is in use, or null. */
 private fun DrawScope.skillKeyLayout(
     engine: GameplayRenderModel,
     measurer: TextMeasurer,
@@ -302,7 +303,7 @@ private val SkillRects = arrayOf(HudRect.SKILL_0, HudRect.SKILL_1, HudRect.SKILL
 private val SkillKeyTexts = arrayOf(HudText.SKILL_KEY_0, HudText.SKILL_KEY_1, HudText.SKILL_KEY_2)
 private val StrikePaths = IntArray(kinetickk.ball.content.api.ContentBounds.MAX_APEX_STRIKES) { HudPath.STRIKE_0.ordinal + it }
 
-/** The first draft slides the row in from this far right (reference dp). */
+/** The first active item slides the row in from this far right (reference dp). */
 private const val SKILL_ROW_ENTRANCE_DP = 24f
 
 /** Draft and rank-up ring bursts (reference dp); the ready ring is this share of the square. */

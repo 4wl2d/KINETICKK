@@ -401,7 +401,7 @@ private fun SettingsAnnouncer(announcement: SettingsAnnouncement?, language: App
     })
 }
 
-/** The words of an announcement: "Dash set to F" (plus "Skill 1 moved to Space" after a swap). */
+/** The words of an announcement: "Dash set to F" (plus "Active 1 moved to Space" after a swap). */
 internal fun settingsAnnouncementText(announcement: SettingsAnnouncement, language: AppLanguage): String = when (announcement) {
     is SettingsAnnouncement.KeyBound -> {
         val set = language.text(SettingsRedesignText.KeySetTo, settingsActionName(announcement.action, language), announcement.key.label(language))

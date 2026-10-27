@@ -939,7 +939,7 @@ private fun GameplaySemanticControls(
                         density = density,
                         tag = "kinetickk.gameplay.skill.$slot",
                         description = if (name == null) {
-                            language.text(GameplayText.SkillSlotLocked, slot + 1)
+                            language.text(GameplayText.SkillSlotEmpty, slot + 1)
                         } else {
                             language.text(GameplayText.SkillSlotDescription, slot + 1, name)
                         },

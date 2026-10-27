@@ -26,6 +26,7 @@ import kinetickk.ball.content.api.RelicPolicy
 import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.api.RuleLineKind
 import kinetickk.ball.content.api.RuleTextContext
+import kinetickk.ball.content.api.SkillDefinition
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
@@ -58,6 +59,7 @@ import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
 import kinetickk.ball.gameplay.nucleus.render.RelicLinkKind
 import kinetickk.ball.gameplay.nucleus.render.RewardStatChange
 import kinetickk.ball.gameplay.nucleus.render.TotemAction
+import kinetickk.ball.profile.api.GameAction
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
@@ -65,6 +67,7 @@ import kinetickk.foundation.design.KkApexState
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.KkRolePalette
+import kinetickk.foundation.design.label
 import kotlin.math.pow
 import kotlin.math.sqrt
 
@@ -104,7 +107,7 @@ internal fun GameplayRenderModel.rewardPresentation(language: AppLanguage = AppL
     val kind = when (choiceType) {
         ChoiceType.TOTEM -> RewardLayoutKind.TOTEM
         ChoiceType.RELIC_BIND -> RewardLayoutKind.RELIC_BIND
-        ChoiceType.ITEM, ChoiceType.WEAPON, ChoiceType.RELIC, ChoiceType.SKILL -> RewardLayoutKind.CARDS
+        ChoiceType.ITEM, ChoiceType.WEAPON, ChoiceType.RELIC, ChoiceType.ACTIVE_SLOT -> RewardLayoutKind.CARDS
     }
     val relicChoice = choiceType == ChoiceType.RELIC || choiceType == ChoiceType.RELIC_BIND
     val incoming = choices.firstOrNull { it.relicAction == RelicChoiceAction.REPLACE }?.relicId?.let(content::relic)
@@ -433,7 +436,8 @@ internal data class RewardCardPresentation(
     /** Rebirth tier shown as ring marks on Reborn and Heirloom cards. */
     val rebirthTier: Int = 0,
 ) {
-    val decline: Boolean get() = choice.relicAction == RelicChoiceAction.DECLINE
+    /** A relic decline, or the active slot prompt's keep card: both read as declining the offer. */
+    val decline: Boolean get() = choice.relicAction == RelicChoiceAction.DECLINE || choice.keepsActiveLoadout
     val reborn: Boolean get() = choice.reborn && item != null
     val heirloom: Boolean get() = choice.heirloom && relic != null
 
@@ -485,6 +489,7 @@ internal fun GameplayRenderModel.rewardCardPresentation(
     index: Int,
     language: AppLanguage = AppLanguage.English,
 ): RewardCardPresentation {
+    if (choice.type == ChoiceType.ACTIVE_SLOT) return rewardActiveSlotCard(choice, index, language)
     val item = choice.itemId?.let(content::item)
     val weapon = choice.weaponId?.let(content::weapon)
     val slotRelic = choice.relicSlot?.let(equippedRelics::getOrNull)
@@ -531,7 +536,9 @@ internal fun GameplayRenderModel.rewardCardPresentation(
         val scale = marginal * if (reborn) stackPolicy.rebornMagnitude else 1f
         item.stats.filter { it.amount > 0f }.map { stat -> stat.presentation(scale, language).copy(suppressed = stat in voidedStats) }
     } else emptyList()
-    val itemRules = item?.let { rewardItemRules(it, reborn, itemStackAfter, liable, language) }.orEmpty()
+    val passiveRules = item?.let { rewardItemRules(it, reborn, itemStackAfter, liable, language) }.orEmpty()
+    // An active item leads with its active part (the effect at the rank it reaches), then labels its passive.
+    val itemRules = if (item?.active != null) rewardActiveRules(item, choice, itemStackAfter, language) + passiveRules else passiveRules
     val decline = choice.relicAction == RelicChoiceAction.DECLINE
     // The band already names the resulting rank; cards keep their lines for the relic's effects.
     val descriptions = buildList {
@@ -550,11 +557,6 @@ internal fun GameplayRenderModel.rewardCardPresentation(
             weapon != null -> add(weapon.description.localizedContent(language))
             choice.totemAction == TotemAction.CHANGE_WEAPON -> add(language.text(OverlayRedesignText.ChangeWeaponEffect))
             choice.relicAction == RelicChoiceAction.MELD -> add(language.text(OverlayRedesignText.MeldEffect))
-            // A skill card: what the skill does (a rank III card: what rank III adds), then the rank's numbers.
-            choice.skillId != null -> {
-                add(choice.description.localizedContent(language))
-                add(content.skill(choice.skillId!!).rankLines(choice.skillRank ?: 1, language).joinToString(" · "))
-            }
         }
     }.filter(String::isNotBlank).distinct()
     val relicAspect = relic?.aspect
@@ -628,6 +630,7 @@ internal fun GameplayRenderModel.rewardCardPresentation(
             else -> choiceTag
         },
         bandEnd = when {
+            item?.active != null -> language.text(OverlayRedesignText.ActiveRank, itemStackAfter, item.maxStacks)
             item != null -> language.text(OverlayRedesignText.StackCount, itemStackAfter, item.maxStacks)
             relic != null && rank != null -> language.text(OverlayRedesignText.Rank, rank)
             weapon != null -> overlayLevel(weaponLevel, language)
@@ -728,6 +731,106 @@ private fun GameplayRenderModel.rewardItemRules(
     }
     return lines.filter { it.kind != RuleLineKind.COST } + lines.filter { it.kind == RuleLineKind.COST }
 }
+
+/**
+ * The active part of an active item card at the [rank] its effect reaches: a header naming the slot key it binds to
+ * or ranks (or that taking it replaces a slot), what the effect does, the rank's numbers and, at rank III, what rank
+ * III adds; then the header of the passive lines that follow. Read from content and the card's slot fields.
+ */
+private fun GameplayRenderModel.rewardActiveRules(
+    item: ItemDefinition,
+    choice: ChoiceOption,
+    rank: Int,
+    language: AppLanguage,
+): List<RewardRuleLine> {
+    val skill = content.skill(item.active ?: return emptyList())
+    val element = skill.element
+    val header = when {
+        choice.replacesActive -> language.text(OverlayRedesignText.ActiveReplacesSlot)
+        else -> choice.activeSlot?.let { language.text(OverlayRedesignText.ActiveOnKey, activeSlotKey(it, language)) }
+            ?: language.text(OverlayRedesignText.ActivePart)
+    }
+    return buildList {
+        add(RewardRuleLine(RuleLineKind.TRIGGER, header, element))
+        add(RewardRuleLine(RuleLineKind.EFFECT, skill.summary.localizedContent(language), element))
+        add(RewardRuleLine(RuleLineKind.RULE, skill.rankNumbers(rank, language), element))
+        if (rank >= ContentBounds.MAX_SKILL_RANK) add(RewardRuleLine(RuleLineKind.RULE, skill.rankThree.localizedContent(language), element))
+        add(RewardRuleLine(RuleLineKind.TRIGGER, language.text(OverlayRedesignText.PassivePart)))
+    }
+}
+
+/**
+ * A card of the active slot prompt ([ChoiceType.ACTIVE_SLOT]), built from its structured fields: a replace card shows
+ * the held active item of its slot (slot key, rank, element hue, what its effect does), the incoming item taking the
+ * slot at rank I and the replacement's preview; the keep card reads as a decline that salvages the incoming item.
+ */
+private fun GameplayRenderModel.rewardActiveSlotCard(choice: ChoiceOption, index: Int, language: AppLanguage): RewardCardPresentation {
+    val incoming = choice.incomingItemId?.let(content::item)
+    val incomingName = incoming?.name?.localizedContent(language).orEmpty()
+    val slot = choice.activeSlot
+    val held = choice.itemId?.let(content::item)
+    if (slot == null || held == null) {
+        return RewardCardPresentation(
+            choice = choice,
+            accent = Kk.Mute2,
+            tag = "",
+            descriptions = listOf(language.text(OverlayRedesignText.KeepLoadoutEffect, incomingName)),
+            operation = "",
+            title = language.text(OverlayRedesignText.KeepLoadout),
+            icon = KkIcon.SYSTEM_MATTER,
+            bandStart = language.text(OverlayRedesignText.ActivePart),
+        )
+    }
+    val preview = rewardPreviews.getOrNull(index)?.takeIf { choices.getOrNull(index) == choice }
+    val skill = held.active?.let(content::skill)
+    val rank = itemStack(held.id)
+    val element = skill?.element
+    val rules = buildList {
+        add(RewardRuleLine(RuleLineKind.TRIGGER, language.text(OverlayRedesignText.ActiveOnKey, activeSlotKey(slot, language)), element))
+        if (skill != null) {
+            add(RewardRuleLine(RuleLineKind.EFFECT, skill.summary.localizedContent(language), element))
+            add(RewardRuleLine(RuleLineKind.RULE, skill.rankNumbers(rank, language), element))
+        }
+        add(RewardRuleLine(RuleLineKind.RULE, language.text(OverlayRedesignText.ActiveIncoming, incomingName), incoming?.elements?.firstOrNull()))
+    }
+    return RewardCardPresentation(
+        choice = choice,
+        accent = Kk.rarity(held.rarity.rank),
+        tag = "",
+        descriptions = rules.map { it.text },
+        operation = "",
+        item = held,
+        itemStack = rank,
+        title = language.text(OverlayRedesignText.ReplaceActive, held.name.localizedContent(language)),
+        changes = preview?.changes?.map { it.presentation(language) }.orEmpty(),
+        forecasts = preview?.forecasts.orEmpty(),
+        rank = held.rarity.rank,
+        bandStart = held.rarity.displayLabel.localizedContent(language),
+        bandEnd = language.text(OverlayRedesignText.ActiveRank, rank, held.maxStacks),
+        elements = held.elements,
+        forecast = rewardForecastChips(preview?.forecasts.orEmpty(), null, language),
+        rules = rules,
+    )
+}
+
+/**
+ * The numbers of the effect at [rank] as one line: its cooldown and values ([SkillDefinition.rankLines] after the rank
+ * line, which the card's band already shows), joined by commas since overlay copy uses no separator marks.
+ */
+private fun SkillDefinition.rankNumbers(rank: Int, language: AppLanguage): String =
+    rankLines(rank, language).drop(1).joinToString(", ")
+
+/** The active slot prompt's keep card: every held active stays and the incoming active item is salvaged. */
+internal val ChoiceOption.keepsActiveLoadout: Boolean get() = type == ChoiceType.ACTIVE_SLOT && activeSlot == null
+
+/** The key bound to skill slot [slot] (0 Z, 1 X, 2 C) in the player's bindings. */
+internal fun GameplayRenderModel.activeSlotKey(slot: Int, language: AppLanguage): String = settings.keyBindings.key(
+    when (slot) {
+        0 -> GameAction.SKILL_1
+        1 -> GameAction.SKILL_2
+        else -> GameAction.SKILL_3
+    },
+).label(language)
 
 /** The damage of one weapon unit; mirrors the nucleus damage pipeline. */
 private const val WeaponUnitDamage = 40f
@@ -907,8 +1010,8 @@ private fun RewardFocus.relicAspect(): RelicAspect? = RelicAspect.entries.firstO
 
 /** What picking a focus leads to, by the directed reward's choice type (artifacts, relics, weapons). */
 private fun rewardFocusEffect(type: ChoiceType): OverlayRedesignText = when (type) {
-    // Skill drafts are never directed rewards; a focus never leads to one.
-    ChoiceType.ITEM, ChoiceType.SKILL -> OverlayRedesignText.FocusArtifacts
+    // The active slot prompt is never a directed reward; a focus never leads to one.
+    ChoiceType.ITEM, ChoiceType.ACTIVE_SLOT -> OverlayRedesignText.FocusArtifacts
     ChoiceType.RELIC, ChoiceType.RELIC_BIND -> OverlayRedesignText.FocusRelics
     ChoiceType.TOTEM, ChoiceType.WEAPON -> OverlayRedesignText.FocusWeapons
 }
@@ -1255,5 +1358,5 @@ internal fun rewardHeading(
     ChoiceType.WEAPON -> language.text(GameplayText.WeaponSynchronization)
     ChoiceType.RELIC -> language.text(GameplayText.RelicIntercept)
     ChoiceType.RELIC_BIND -> if (action == RelicChoiceAction.MELD_TARGET) language.text(GameplayText.RelicMeld) else language.text(GameplayText.RelicRebind)
-    ChoiceType.SKILL -> language.text(GameplayText.ChooseSkill)
+    ChoiceType.ACTIVE_SLOT -> language.text(GameplayText.ChooseActiveSlot)
 }

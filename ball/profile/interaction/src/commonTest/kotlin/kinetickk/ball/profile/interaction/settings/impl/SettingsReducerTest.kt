@@ -473,11 +473,11 @@ class SettingsReducerTest {
             swap.effects.last(),
         )
         assertEquals(
-            "Dash set to Z. Skill 1 moved to Space",
+            "Dash set to Z. Active 1 moved to Space",
             settingsAnnouncementText(SettingsAnnouncement.KeyBound(GameAction.DASH, BindableKey.Z, GameAction.SKILL_1, BindableKey.SPACE), AppLanguage.English),
         )
         assertEquals(
-            "Рывок: Z. Навык 1: перенесено на Пробел",
+            "Рывок: Z. Активный эффект 1: перенесено на Пробел",
             settingsAnnouncementText(SettingsAnnouncement.KeyBound(GameAction.DASH, BindableKey.Z, GameAction.SKILL_1, BindableKey.SPACE), AppLanguage.Russian),
         )
         // The action's own key ends the capture with nothing to change.
@@ -575,7 +575,7 @@ class SettingsReducerTest {
         GameAction.entries.forEach { assertEquals(it, it.bindRow.boundAction) }
         assertEquals("Space", settingValue(PlayerPreferences(language = AppLanguage.English), SettingsRow.BIND_DASH))
         assertEquals("Пробел", settingValue(PlayerPreferences(), SettingsRow.BIND_DASH))
-        assertEquals("Навык 2", SettingsRow.BIND_SKILL_2.label(AppLanguage.Russian))
+        assertEquals("Активный эффект 2", SettingsRow.BIND_SKILL_2.label(AppLanguage.Russian))
         assertEquals("Choice 4", SettingsRow.BIND_CHOICE_4.label(AppLanguage.English))
         assertEquals("Takes card 4 of the offer.", SettingsRow.BIND_CHOICE_4.about(AppLanguage.English))
         assertEquals(listOf("full", "reduced", "minimal"), (0 until 3).map { SettingsRow.REACTION_EFFECTS.optionId(it) })

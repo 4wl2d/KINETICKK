@@ -61,7 +61,7 @@ data class GameplayBuildSummaryProjection(
     val severedRelicIds: ImmutableList<RelicId> = immutableListOf(),
     /** The run's permanent upgrades, "Refit {character level} · Honing {current weapon level}" (content-localized). */
     val upgrades: String = "",
-    /** Owned items none of whose effects can work in this run (they need a skill or a weapon of another type). */
+    /** Owned items none of whose effects can work in this run (they need an active item or a weapon of another type). */
     val dormantItemIds: ImmutableList<Int> = immutableListOf(),
     /** The run's Refit level of [character] (the levels behind [upgrades], for screens that show them apart). */
     val characterUpgradeLevel: Int = 0,

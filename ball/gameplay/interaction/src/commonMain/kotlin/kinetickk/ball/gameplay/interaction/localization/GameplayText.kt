@@ -59,7 +59,7 @@ internal enum class GameplayText : TextResource {
     BuildUpdated,
     WeaponTotem,
     ChooseArtifact,
-    ChooseSkill,
+    ChooseActiveSlot,
     TotemResonance,
     WeaponSynchronization,
     RelicIntercept,
@@ -91,7 +91,7 @@ internal enum class GameplayText : TextResource {
     MaxRegular,
     Samples,
     SkillSlotDescription,
-    SkillSlotLocked,
+    SkillSlotEmpty,
     ApexDescription,
     ActiveState,
     RechargingState;

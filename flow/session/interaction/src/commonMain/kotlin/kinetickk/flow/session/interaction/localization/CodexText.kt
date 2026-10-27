@@ -106,8 +106,8 @@ internal enum class CodexText(
     ),
     DORMANT("Dormant", "Спит"),
     DORMANT_HELP(
-        "Its effects need a skill or a weapon of another type.",
-        "Его эффектам нужен навык или оружие другого типа.",
+        "Its effects need an active item or a weapon of another type.",
+        "Его эффектам нужен активный предмет или оружие другого типа.",
     ),
     NOT_IN_RUN("Not in this run", "Не в этом забеге"),
     NOT_IN_RUN_HELP(

@@ -307,11 +307,11 @@ class GameplayHudSemanticsTest {
             language.text(GameplayText.ReadyState))
         expect("kinetickk.gameplay.skill.1", language.text(GameplayText.SkillSlotDescription, 2, name(SkillId.METEOR)),
             language.text(GameplayText.RechargingState))
-        expect("kinetickk.gameplay.skill.2", language.text(GameplayText.SkillSlotLocked, 3), null)
+        expect("kinetickk.gameplay.skill.2", language.text(GameplayText.SkillSlotEmpty, 3), null)
         val apexName = content.coreShape(model.coreShape).apex.name.localizedContent(language)
         expect("kinetickk.gameplay.apex", language.text(GameplayText.ApexDescription, apexName), language.text(GameplayText.RechargingState))
         if (language == AppLanguage.Russian) {
-            assertTrue(language.text(GameplayText.SkillSlotLocked, 3).startsWith("Навык 3"))
+            assertEquals("Активный эффект 3: пусто", language.text(GameplayText.SkillSlotEmpty, 3))
             assertEquals("перезаряжается", language.text(GameplayText.RechargingState))
         }
         // Over their canvas targets.

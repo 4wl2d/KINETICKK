@@ -159,7 +159,7 @@ internal class HudPresentationMemory {
             if (lastSkill[index] >= 0) shownBefore = true
             if (slot.skill >= 0) shownNow = true
             if (armed && slot.skill != lastSkill[index]) {
-                // A drafted skill: its slam, not a rank, ready or refund flash.
+                // A new effect in the slot (an active item bound or replaced): its slam, not a rank, ready or refund flash.
                 if (slot.skill >= 0) acquiredAt[index] = renderTime
             } else if (armed && slot.skill >= 0) {
                 if (slot.rank > lastRank[index]) rankedAt[index] = renderTime
@@ -206,7 +206,7 @@ internal class HudPresentationMemory {
     /** Data refunding Apex cooldown, over [REFUND_MS]. */
     fun apexRefund(renderTime: Float): Float = progress(apexRefundAt, REFUND_MS, renderTime)
 
-    /** Skill [slot] drafted, over [SKILL_ACQUIRE_MS]. */
+    /** A new active effect in [slot] (bound or replaced), over [SKILL_ACQUIRE_MS]. */
     fun skillAcquired(slot: Int, renderTime: Float): Float = progress(acquiredAt[slot], SKILL_ACQUIRE_MS, renderTime)
 
     /** Skill [slot] ranked up, over [SKILL_RANK_MS]. */
@@ -218,7 +218,7 @@ internal class HudPresentationMemory {
     /** Cooldown refunded to skill [slot], over [REFUND_MS]. */
     fun skillRefund(slot: Int, renderTime: Float): Float = progress(refundAt[slot], REFUND_MS, renderTime)
 
-    /** The skill row sliding in with the run's first drafted skill, over [SKILL_ROW_MS]. */
+    /** The active row sliding in with the run's first active item, over [SKILL_ROW_MS]. */
     fun skillRow(renderTime: Float): Float = progress(skillRowShownAt, SKILL_ROW_MS, renderTime)
 
     private fun progress(at: Float, durationMs: Int, renderTime: Float): Float =
@@ -254,7 +254,7 @@ internal class HudPresentationMemory {
         /** Refund flashes (Apex meters, skill sweeps). */
         const val REFUND_MS = KkTime.Pull
 
-        /** Skill draft: slot slam and ring burst. */
+        /** A new active effect in a slot: slot slam and ring burst. */
         const val SKILL_ACQUIRE_MS = KkTime.Shutter
 
         /** Skill rank-up: pip fill and ring burst. */
