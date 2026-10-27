@@ -575,15 +575,17 @@ business outcomes remain the same.
 Release 0.5.0 answers ten owner requests: a capped Data curve, 96 more items,
 reaction behaviors, run skills, a level-42 Apex ability, permanent upgrades, one
 Workshop for every upgrade screen, an evolving level badge, reaction visuals and
-display and control settings. Seven elements and 21 reactions stay; no balance
-gate was weakened, and every new feature has gates of its own. Each new Profile
-field is optional and written only when it differs from its default, so every
-earlier golden payload is byte-identical. Player text ships in English and
-Russian. A follow-up inside 0.5.0 (content version unchanged) turns the run
-skills into active items reached only through ordinary item offers; it restates
-the gates its reward stream turned into coin flips as population gates and
-accepts lower bounds where the free lane skills were the premise (see the gate
-records below).
+display and control settings. Seven elements and 21 reactions stay; those ten
+requests weakened no balance gate, and every new feature has gates of its own.
+Each new Profile field is optional and written only when it differs from its
+default, so every earlier golden payload is byte-identical. Player text ships in
+English and Russian. A follow-up inside 0.5.0 (content version unchanged) turns
+the run skills into active items reached only through ordinary item offers. It
+restates the gates its reward stream turned into coin flips as population gates
+whose thresholds follow from the 05885fa9 base population, which drops fresh
+survival's 0.73 for 0.66 and gives four Singularity arms ceilings above 1.15,
+and it lowers the survival floors of gates D and H, whose premise was the free
+lane skills (see the gate records below).
 
 - **Data curve and the level cap.** Content owns the level table. The run level
   stops at `RunTempoProfile.maximumLevel` 42 (Content bound 99); levels 1 to 15
@@ -683,25 +685,30 @@ records below).
   and III, ready at once. Each active also carries one passive rule whose rank
   III gives at most what the median of its kind among shipped Rare-or-lower
   passive items gives at two stacks: ElementPotency 0.346, BreakPower 0.4225 or
-  StatusDuration 1.384 by element, Frost Snap's critical damage against Frozen
-  targets 0.219, Catalyze's ReactionPower 0.2685 and Dual Infusion's damage
-  against targets with a status 0.1152, while Slingshot (COOLING 0.25 at speed
-  900 or more) and Full Stop (DAMAGE_TAKEN −0.15 while braking) keep their first
-  values. A new active taken with all three slots held opens a slot prompt: a
-  card per held active replaces it (the old item leaves the run and its effects
-  end; the new one binds there at rank I), and Keep salvages the new item for
-  rarity rank × 2 Matter. Effects are cooldown-based (never below 2.5 s): rank I
-  runs from 7 s (Arc Hook, Void Step) to 13.6 s (Null Shroud) and rank III from
-  4.5 s (Void Step) to 11.05 s (Null Shroud, Dual Infusion). Calibration gave
-  ten effects 40 % more power, read per parameter (Solar Flare, Meteor, Frost
-  Line's duration, Frost Snap, Arc Hook, Gravity Well's damage per second and
-  duration, Resonator, Null Shroud's returned damage, Full Stop, and Catalyze's
-  radius, targets and reaction scale), and seven cooldowns 15 % less (Solar
-  Flare, Frost Line, Entropic Tide, Resonator, Null Shroud at 13.6, 12.35 and
-  11.05 s, Catalyze, Dual Infusion); Null Shroud keeps its 10, 14 and 18 stored
-  bolts, and Storm Coil, Mass Driver, Decay Spores, Sonic Boom, Void Step and
-  Slingshot are unchanged. Refunds never exceed half a cast's cooldown, and
-  reactions, items and Catalysis refund them. Skill damage goes through
+  StatusDuration 1.384 by element, Catalyze's ReactionPower 0.2685 and Dual
+  Infusion's damage against targets with a status 0.1152, while Slingshot
+  (COOLING 0.25 at speed 900 or more) and Full Stop (DAMAGE_TAKEN −0.15 while
+  braking) keep their first values. No Rare-or-lower passive adds critical
+  damage against Frozen targets, so an explicit cap of 0.22 bounds Frost Snap's
+  0.219, which keeps its rank III (about 0.48) below the +50 % of Quench Seal,
+  the Epic item that adds it. A new active taken with all three slots held
+  opens a slot prompt: a card per held active replaces it (the old item leaves
+  the run and its effects end; the new one binds there at rank I), and Keep
+  salvages the new item for rarity rank × 2 Matter. Effects are cooldown-based
+  (never below 2.5 s): rank I runs from 7 s (Arc Hook, Void Step) to 13.6 s
+  (Null Shroud) and rank III from 4.5 s (Void Step) to 11.05 s (Null Shroud,
+  Dual Infusion). Calibration gave ten effects 40 % more power, read per
+  parameter (Solar Flare, Meteor, Frost Line's duration, Frost Snap, Arc Hook,
+  Gravity Well's damage per second and duration, Resonator, Null Shroud's
+  returned damage, Full Stop, and Catalyze's radius), and seven cooldowns 15 %
+  less (Solar Flare, Frost Line, Entropic Tide, Resonator, Null Shroud at 13.6,
+  12.35 and 11.05 s, Catalyze, Dual Infusion); Null Shroud keeps its 10, 14 and
+  18 stored bolts, and Storm Coil, Mass Driver, Decay Spores, Sonic Boom, Void
+  Step and Slingshot are unchanged. Catalyze's ranks list the targets and
+  reaction scale a cast runs (8, 10 and 10 enemies, each at the forced-reaction
+  ceiling of 1.3), and a Nucleus test fails when any shipped rank value passes
+  the bound its cast runs through. Refunds never exceed half a cast's cooldown,
+  and reactions, items and Catalysis refund them. Skill damage goes through
   `dealSkillDamage` and the Architect gate, at most once per boss per cast.
   Kinetic skill damage keeps the Resonance, Gravitic and Event Horizon terms but
   never takes Brittle's bonus, so Brittle pays once, on the direct hit that
@@ -835,14 +842,15 @@ carries every 0.5.0 field). Content goldens: items `0..172` `68d4572118b9586d`
 items `269..286` with the active offer factors and every character's lane
 `a73030c02a213d44`, build tuning `90af4a2ca532d113`, weapon and Matrix economy
 `6e61ebea0bcb73f7`, active effects, Apex, upgrades and tempo
-`89ee5df86f73e928`; Rebirth `461252b1f47728a5` and Relics `c8c02a43bec87968`
+`ec03a7fedb2fb169`; Rebirth `461252b1f47728a5` and Relics `c8c02a43bec87968`
 are unchanged, and the seeded baseline trace still passes unchanged. Active
 items re-pinned four goldens on purpose: items `173..268` (from
 `c11c59b06e52e3dc`) and build tuning (from `d6fa6a5d0a26712d`) for player text
 that names actives instead of skills; the effects golden (from
 `0e1fa079fddfd61b`) for the removed skill cadence and tag points, that wording,
-the calibrated rank numbers, two rank III texts (Resonator replays at 84 %,
-Catalyze lists fourteen reactions at 182 %) and Null Shroud's base bolts and
+the calibrated rank numbers (Catalyze's targets and reaction scale at its cast
+bounds, so its rank III text is the base's ten reactions at 130 % again),
+Resonator's rank III text (it replays at 84 %) and Null Shroud's base bolts and
 12.35 s rank II cooldown; the actives golden (first `aea321347af3e7dc`) for the
 calibrated passives, the Epic unlock at 10 and the lane factors 3 and 8. The
 behavior evidence that pinned `SkillOfferTest`'s draft and rank-up methods now
@@ -854,7 +862,7 @@ pins four `ActiveItemOfferTest` methods
 
 Each knob was chosen on population seeds disjoint from every fixed gate list
 and then confirmed on the gate seeds. On the final tree the desktop suite runs
-2,351 tests with no failure (the Gameplay nucleus 895, its interaction 434);
+2,361 tests with no failure (the Gameplay nucleus 896, its interaction 441);
 the nucleus suite takes 891 s of wall time, 614 s of it in the Apex fight class
 on the critical fork, and a second run of the eleven reward-stream gate classes
 prints the same lines.
@@ -933,24 +941,28 @@ named, standard error SE) by the policy's rule. The gates read:
   `PopulationSeeds`, four forks each, and compares the damage taken (integrity
   and shield) in the Apex windows with the same windows without it: Prism 0.771
   and Diamond 0.560 (band [0.55, 0.85]; base 0.715, SE 0.037, and 0.694, SE
-  0.041; their fixed 64 runs passed 0.99 of the time each at the base, now 0.94
-  and 0.58). At tier 0 the Prism took damage in only a tenth of its windows, and
-  most of what the first check counted was shield decay from the test's own
-  refill. The no-POI bot casts the Apex where its boss channel lands (outside a
-  shift, within 420 u plus the boss's radius, and in the last phase or at least
-  strikes + 2 hit caps above the next phase gate, or below 40 % integrity),
-  Dashes whenever it can during Vivisect and Total Eclipse, and brakes during
-  Mirror Stance when a hostile shot is within 160 u or an ordinary enemy within
-  120 u.
+  0.041). Their fixed 64 runs passed 0.99 of the time each at the base; on the
+  final tree the Diamond's pass 0.58 of the time, and the Prism's 0.94 on
+  `PopulationSeeds` but 0.75 on the calibration windows. Where the two disagree
+  the pooled runs decide: pooled, a 64-run Prism draw passes about 0.82 of the
+  time, below 0.90, so the Prism became a population gate as well. At tier 0
+  the Prism took damage in only a tenth of its windows, and most of what the
+  first check counted was shield decay from the test's own refill. The no-POI
+  bot casts the Apex where its boss channel lands (outside a shift, within 420 u
+  plus the boss's radius, and in the last phase or at least strikes + 2 hit
+  caps above the next phase gate, or below 40 % integrity), Dashes whenever it
+  can during Vivisect and Total Eclipse, and brakes during Mirror Stance when a
+  hostile shot is within 160 u or an ordinary enemy within 120 u.
 - Active share: the Orb plays all 300 `PopulationSeeds`. The runs that bind an
   active item by 360 s count (286 of 300, floor 0.25; all 300 at the base, when
   its lane skills came free), at least half of them must reach 720 s (210 do),
   and their median share of the damage active effects cause is 0.089 (q10
   0.024, q90 0.181) against the band [0.08, 0.20] (base 0.113 over 214 judged
-  runs, SE 0.0038). Judged on 31 owning runs walked from i = 1, it passed 0.84
-  to 0.86 of the time at a population median of 0.10. On the calibration
-  windows it read 0.1025 and 0.0988, and the medians of their 31-run blocks
-  reached 0.08 in 9 of 9 (lowest 0.082) and 7 of 9 (lowest 0.072). Each
+  runs, SE 0.0038). Judged on 31 owning runs walked from i = 1, it passed 0.99
+  of the time at the base and 0.70 on the final tree (population median
+  0.089). On the calibration windows it read 0.1025 and 0.0988, and the medians
+  of their 31-run blocks reached 0.08 in 9 of 9 (lowest 0.082) and 7 of 9
+  (lowest 0.072). Each
   character's first 25 owning runs along `PopulationSeeds` keep the top
   effect's pooled share at most 0.30: Storm Coil 0.224 (base Sonic Boom 0.280,
   SE 0.014; three runs per character passed 0.76 of the time at the base).
@@ -959,7 +971,7 @@ named, standard error SE) by the policy's rule. The gates read:
   per second baseline: 1.15, or the base ratio plus two SE where that is higher
   (Slingshot 1.29, Spin Turbine 1.24, Recoil Spring 1.18, Crest Rider 1.18); the
   arms read 0.873 to 1.088 (base 0.836 to 1.129; all 15 arms passed their 30
-  seeds 0.21 of the time at the base).
+  seeds 0.205 of the time at the base).
 - Active frequency, a new gate without a base, so its thresholds are the
   design's: two arms of the first 300 `PopulationSeeds` (25 per character),
   fresh at tier 0 and a veteran with the full Matrix at catalog level 80.
@@ -969,13 +981,16 @@ named, standard error SE) by the policy's rule. The gates read:
   been shown one in 241 of 249 (51 ended earlier) and a veteran by level 16 in
   290 of 300 (floor 0.80 each); the median run holds 3 actives at 720 s on both
   arms (band 1 to 3); POI item rewards stay at most 0.120 actives (fresh,
-  economy focus; bound 0.20). Disjoint 48-run windows read fresh (c) 0.79 to
-  0.88 and (b)'s highest level 0.12 to 0.24, so the gate plays the population
-  from the start. The flatness gate measures each tier's passive items over its
-  passive cards: with the deck Uncommon 0.93, Rare 1.23, Epic 0.70 and risk
-  1.17 of the Common rate (worst item Graviton Seed 1.35); the actives are 0.095
-  of all cards and the Orb's lane actives come 2.63 times as often as the others
-  (bounds [0.04, 0.10] and 0.80 to 1.25 times `characterActiveWeight`).
+  economy focus; bound 0.20). The gate once played 48 seeds per arm; during
+  calibration seven disjoint 48-run windows of the same sequence from i = 1,001
+  read fresh (c) 0.79 to 0.94, then judged over all 48 runs, and (b)'s highest
+  level, level 7 in each, 0.158 to 0.244, and 3 of the 7 passed, so the gate
+  plays the population from the start. The flatness gate measures each tier's
+  passive items over its passive cards: with the deck Uncommon 0.93, Rare 1.23,
+  Epic 0.70 and risk 1.17 of the Common rate (worst item Graviton Seed 1.35);
+  the actives are 0.095 of all cards and the Orb's lane actives come 2.63 times
+  as often as the others (bounds [0.04, 0.10] and 0.80 to 1.25 times
+  `characterActiveWeight`).
 - Item variety: on 12 seeds per character, isolated runs share 0.092 to 0.101
   of their items on average (bound 0.30; the closest pair 0.231 against 0.55),
   consecutive runs that carry the Profile history share 0.037 to 0.052 (bound
@@ -1012,12 +1027,13 @@ min(480 s, M − 2 SE), with M the median survival over the 600
 calibration-window runs (D 471.08 s, H 481.60 s) and SE the bootstrap SE of a
 300-run median drawn from them (21.60 s and 25.07 s), rounded down to 427.87 s
 and 431.46 s. Both stay above 420 s, the seven minutes gate D's name states,
-below which the change would have gone back to the owner. Fresh tier-0
-survival to 720 s keeps a floor of 0.66 instead of 0.5.0's 0.73, since the
-05885fa9 base itself reads 0.713 here (0.715 on 0.5.0's 400 audit seeds). The
-active share's band and the active frequency's bounds are judged over
-populations instead of 31 and 48 seeds, and every Singularity arm whose base
-ratio plus two SE exceeds 1.15 has that as its own ceiling.
+below which the change would have gone back to the owner. Two other bounds
+follow from the 05885fa9 base population by the policy's threshold rule, not
+from the premise: fresh tier-0 survival to 720 s keeps a floor of 0.66 instead
+of 0.5.0's 0.73, since the base itself reads 0.713 here (0.715 on 0.5.0's 400
+audit seeds), and every Singularity arm whose base ratio plus two SE exceeds
+1.15 has that as its own ceiling. The active share's band and the active
+frequency's bounds are judged over populations instead of 31 and 48 seeds.
 
 The Apex Diamond's band holds by 0.010: its population reads 0.560 against
 0.55, less than a quarter of its SE (0.044). On the calibration windows the
@@ -1028,15 +1044,22 @@ shorter cooldowns too, which leaves Null Shroud at its base, 0.584. Frost Snap's
 power stays, since without it Solar Flare leaves the strike family's 40 % band.
 The next change on the Diamond's lane can tip this gate.
 
+Both defensive Apex bands play 128 runs, the population the base was measured
+on, since these fights already set the suite's runtime, and that population
+does not settle them either: a fresh 128-run draw (four forks each) from the
+256 calibration-window runs lands in [0.55, 0.85] with probability about 0.82
+for the Prism (window ratio 0.814, near the ceiling) and 0.84 for the Diamond
+(0.589, near the floor). This is a trade-off for the owner, not a further
+restatement.
+
 Calibration reads its 40 % per parameter, so an effect scaled in two
 parameters gains more per cast: Gravity Well's longer duration and stronger
 damage per second together give about 1.96 times the damage of a cast.
-Catalyze's radius grows by 40 % and its ranks list 8, 11 and 14 targets at
-reaction scales 1.4, 1.61 and 1.82, but a cast still picks at most 10 enemies
-(the cast scratch) and a forced reaction scales at most 1.3, so ranks II and
-III force at most ten reactions at 130 %: rank III reaches farther and comes
-15 % sooner but forces no more and no stronger reactions than before
-calibration, while its text says fourteen at 182 %.
+Catalyze's 40 % is its radius (×1.4), beside its 15 % shorter cooldown. A cast
+picks at most 10 enemies (the cast scratch) and scales a forced reaction at
+most 1.3, so its targets and reaction scale rose only to those bounds (rank I
+from 6 at 1.0 to 8 at 1.3, rank II from 8 at 1.15 to 10 at 1.3, rank III still
+10 at 1.3), and rank III gains over rank II only its radius and cooldown.
 
 Other margins are thin but pass (distance to the bound in standard errors of
 the final population): the active share 1.4 SE above 0.08, fresh survival 1.5
