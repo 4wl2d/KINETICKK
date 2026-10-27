@@ -28,7 +28,7 @@ import kotlin.test.assertTrue
 class MatterIncomeProbeTest {
     /**
      * Every rank-0 Refit and Honing base costs at most 3 % of a fresh tier-0 run's median Matter over
-     * [PopulationSeeds]. The five gate seeds met it with probability 0.91 on the 05885fa9 base and 0.82 with the
+     * [PopulationSeeds]. The five gate seeds met it with probability 0.91 on the 05885fa9 base and 0.84 with the
      * shipped active items. The base population's median was 2,499 Matter (bootstrap SE 17, n 300), so the largest
      * base, 55, was 0.022 of it (SE 0.0002); by Addendum D1 the bound is the higher of the design's 0.03 and that plus
      * two standard errors: 0.03.
@@ -41,7 +41,7 @@ class MatterIncomeProbeTest {
 
     /**
      * The tenth Refit level costs 1.0-1.5 and the tenth Honing level 0.7-1.0 full-Matrix tier-6 runs, by the median
-     * Matter over [PopulationSeeds]. The five gate seeds met both with probability 0.95 on the 05885fa9 base and 0.88
+     * Matter over [PopulationSeeds]. The five gate seeds met both with probability 0.95 on the 05885fa9 base and 0.89
      * with the shipped active items. The base population's median was 23,517 Matter (bootstrap SE 183, n 300): Refit 10
      * cost 1.197 of it (SE 0.009) and Honing 10 0.871 (SE 0.007), so by Addendum D1 each band (the wider of the
      * design's and the base ± two standard errors) is the design's.

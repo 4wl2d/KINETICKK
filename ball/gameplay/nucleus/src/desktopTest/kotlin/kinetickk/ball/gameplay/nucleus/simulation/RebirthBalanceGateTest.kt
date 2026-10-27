@@ -96,7 +96,7 @@ class RebirthBalanceGateTest {
      *
      * A population gate over [PopulationSeeds] (Addendum D5). A five-seed median lands on whichever arm lost two seeds,
      * since about a quarter of fresh runs die with or without skills, so the gate once read 31 seeds of the NoPoi probe
-     * sequence (i = 1..31); they still kept the ratio at 0.8 with probability only 0.78 on the 05885fa9 base and 0.86
+     * sequence (i = 1..31); they still kept the ratio at 0.8 with probability only 0.78 on the 05885fa9 base and 0.84
      * with the shipped active items. On the base the population's median clear was 83.91 s with skills against 94.13 s
      * without (ratio 0.891, bootstrap SE 0.042, n 300); the arm without active items reproduces the 94.13 s exactly.
      * The ratio must be at least [I_MIN_CLEAR_RATIO]: by Addendum D1 the lower of the seeded 0.8 and the base minus two

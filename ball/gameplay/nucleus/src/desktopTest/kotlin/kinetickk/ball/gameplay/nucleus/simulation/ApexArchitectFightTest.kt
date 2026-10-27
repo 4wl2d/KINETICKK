@@ -60,9 +60,9 @@ import kotlin.test.assertTrue
  *
  * The offence band and both defensive bands are population rules (lead Addendum D5 and E7, 0.5.0 active items). On the
  * fixed seed list (48 offensive runs per character, 64 defensive) the offence passed with probability 0.97 on the
- * 05885fa9 base but 0.87 with the active items, through its ±40 % clause (the median band passed every time, and the
- * clause is measured against it), and the Diamond passed with probability 0.99 and 0.72. The Prism passed with
- * probability 0.99 on the base; with the active items 0.95 by [PopulationSeeds] but 0.71 by the calibration windows,
+ * 05885fa9 base but 0.83 with the active items, through its ±40 % clause (the median band passed every time, and the
+ * clause is measured against it), and the Diamond passed with probability 0.99 and 0.58. The Prism passed with
+ * probability 0.99 on the base; with the active items 0.94 by [PopulationSeeds] but 0.75 by the calibration windows,
  * so the pooled evidence puts a 64-run draw below 0.90 (Addendum E7). Their populations are the ones the base was
  * measured on, 96 offensive and 128 defensive runs per character with four forks each: fewer than 300 runs, since
  * these fights already set the suite's runtime. On the base the offence median was 0.847 (bootstrap SE 0.005), each
