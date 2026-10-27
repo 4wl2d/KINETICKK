@@ -12,7 +12,6 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.SkillDefinition
-import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.gameplay.interaction.input.RunningControlPressLog
 import kinetickk.ball.gameplay.interaction.layout.KEY_CAP_MIN_WIDTH_DP
 import kinetickk.ball.gameplay.interaction.layout.RunningControlMask
@@ -26,7 +25,6 @@ import kinetickk.ball.gameplay.nucleus.render.SkillSlotProjection
 import kinetickk.ball.profile.api.GameAction
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkEase
-import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.KkSlam
 import kinetickk.foundation.design.KkTime
@@ -161,7 +159,7 @@ private fun DrawScope.drawSkillSlotAt(
     val keyLayout = skillKeyLayout(engine, measurer, frame, slot, side, press)
     withTransform({ scale(slam, slam, center) }) {
         drawKkSkillSlot(
-            measurer, bounds, skillIcon(id, engine), color,
+            measurer, bounds, skillGlyph(id), color,
             cooldown = projection.cooldown01, ready = projection.ready, rank = projection.rank,
             charges = projection.charges, maxCharges = projection.maxCharges,
             active = projection.active01, activeColor = color, pending = projection.pending01,
@@ -221,23 +219,6 @@ internal fun keyCapsShown(frame: HudFrame): Boolean = frame.regular && frame.wid
  */
 internal fun skillColor(definition: SkillDefinition, roles: KkRolePalette): Color =
     definition.element?.let { roles.element(it.ordinal) } ?: roles.kinetic
-
-/**
- * The skill's icon (an existing weapon glyph); when it equals the equipped weapon's, the skill shows
- * its element's aspect instead (kinetic for kinetic skills, chain for Catalyze, arsenal for Dual
- * Infusion), so the slot never repeats the weapon slot.
- */
-internal fun skillIcon(id: SkillId, engine: GameplayRenderModel): KkIcon {
-    val icon = skillGlyph(id)
-    if (icon != weaponIcon(engine.weapon)) return icon
-    val element = engine.content.skill(id).element
-    return when {
-        element != null -> elementIcon(element.ordinal)
-        id == SkillId.CATALYZE -> KkIcon.TAG_CHAIN
-        id == SkillId.DUAL_INFUSION -> KkIcon.TAG_ARSENAL
-        else -> KkIcon.ASPECT_KINETIC
-    }
-}
 
 /**
  * The skill's reach around the Core after a no-target refusal (Bone dashed ring, fading over
