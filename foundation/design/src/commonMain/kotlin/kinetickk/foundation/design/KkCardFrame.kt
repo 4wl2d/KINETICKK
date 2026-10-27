@@ -364,7 +364,9 @@ internal fun KkCardMaterial.selectedEchoDp(): Float = when (this) {
 }
 
 /** The scale of a card's border and rim: its [cardScale], never under 80 % (a phone card). */
-internal fun DrawScope.frameScale(bounds: Rect): Float = max(cardScale(bounds), 0.8f)
+internal fun DrawScope.frameScale(bounds: Rect): Float = frameScaleOf(bounds.width / density)
+
+private fun frameScaleOf(widthDp: Float): Float = max(cardScaleOf(widthDp), 0.8f)
 
 /** The border width of [material] in px at [scale] (a card's [frameScale] by default). */
 internal fun DrawScope.borderWidth(material: KkCardMaterial, bounds: Rect, scale: Float = frameScale(bounds)): Float =
@@ -379,6 +381,13 @@ private fun DrawScope.prismRimWidth(scale: Float): Float = d(PRISM_RIM_DP) * sca
  */
 internal fun DrawScope.frameInnerWidth(material: KkCardMaterial, bounds: Rect, scale: Float = frameScale(bounds), rimScale: Float = scale): Float =
     borderWidth(material, bounds, scale) + if (material == KkCardMaterial.PRISMATIC) prismRimWidth(rimScale) else 0f
+
+/**
+ * How far in dp the frame of [material] reaches into the face of a card [widthDp] wide ([frameInnerWidth] at the card's
+ * own scale): what text beside the face's edge keeps clear of.
+ */
+fun kkCardFrameReachDp(material: KkCardMaterial, widthDp: Float): Float =
+    (material.frame.borderDp + if (material == KkCardMaterial.PRISMATIC) PRISM_RIM_DP else 0f) * frameScaleOf(widthDp)
 
 /**
  * The face slab of [bounds] inset by [inset] px on every side, its slanted edges parallel to the
@@ -801,7 +810,9 @@ private const val GLINT_LENGTH = 0.22f
 private const val GLINT_ALPHA = 0.3f
 
 /** The scale of a card's frame and ornaments: 1 on a 300 dp board card. */
-internal fun DrawScope.cardScale(bounds: Rect): Float = (bounds.width / density / 300f).coerceIn(0.6f, 1.25f)
+internal fun DrawScope.cardScale(bounds: Rect): Float = cardScaleOf(bounds.width / density)
+
+private fun cardScaleOf(widthDp: Float): Float = (widthDp / 300f).coerceIn(0.6f, 1.25f)
 
 /** x of the face's slanted left edge at [y]. */
 internal fun leftEdge(bounds: Rect, cut: Float, y: Float): Float = bounds.left + cut * (1f - (y - bounds.top) / bounds.height)

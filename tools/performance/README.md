@@ -18,7 +18,8 @@ Press `F3` in-game for the rolling frame, dispatch, and Canvas performance HUD.
 
 The `published_reaction_frame_60hz_1x`, `published_reaction_frame_60hz_2x`, and
 `published_reaction_burst_100ms_2x` scenarios cover a canonical high-activation
-elemental build with 120 enemies, reaction fields and in-flight weapon volleys.
+elemental build with 120 enemies, in-flight weapon volleys and a full combat field
+table: nine reaction and item fields in mixed kinds plus one field per skill slot.
 They measure simulation and immutable render publication, including reuse of the
 previous frame, and validate deterministic state, outputs and projection values.
 
@@ -51,8 +52,11 @@ bash tools/performance/scripts/compare-pr-base.sh --base FULL_BASE_SHA --profile
 
 The runner uses separate base worktrees and fresh JVMs in A-B-B-A order.
 It requires matching harness, semantic workloads, fingerprints, and environment.
-Release 0.2.0 uses `gameplay-core-v3` and
-`profile-persistence-current-schema-v4`; older workloads are not comparable.
+Release 0.5.0 uses `gameplay-core-v4` and
+`profile-persistence-current-schema-v5`; older workloads are not comparable.
+The gameplay reaction workload fills the 0.5.0 combat field table, and the
+profile business maximum adds Refit and Honing levels, the 64-entry recent item
+history, every display and control preference and all Ascendant characters.
 CI produces candidate-only results when the base lacks the current contract,
 then resumes comparisons once both sides support it. Candidate-only results
 carry no claim about improvement or regression against the base.

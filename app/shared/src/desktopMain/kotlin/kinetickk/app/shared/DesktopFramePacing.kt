@@ -24,17 +24,28 @@ object DesktopFramePacing {
             environment?.trim().let { it == "1" || it.equals("true", ignoreCase = true) }
 
     /**
-     * Turns V-Sync off when the uncapped mode is requested and returns whether it is. Must run
-     * before `application {}`; an explicit `skiko.vsync.enabled` set by the user is respected.
+     * Decides V-Sync before `application {}` and writes it for Skiko when it must be off. Precedence:
+     * an explicit `skiko.vsync.enabled` set by the user, then the uncapped property or variable, then
+     * the stored [preferenceVsync]. Either launch setting makes the choice [DesktopPacing.overridden],
+     * which hides the V-Sync row.
      */
     fun apply(
         property: String? = System.getProperty(UNCAPPED_PROPERTY),
         environment: String? = System.getenv(UNCAPPED_ENVIRONMENT),
         currentVsync: String? = System.getProperty(SKIKO_VSYNC_PROPERTY),
+        preferenceVsync: Boolean = true,
         setSystemProperty: (String, String) -> Unit = { key, value -> System.setProperty(key, value) },
-    ): Boolean {
-        if (!uncappedRequested(property, environment)) return false
-        if (currentVsync == null) setSystemProperty(SKIKO_VSYNC_PROPERTY, "false")
-        return currentVsync == null || currentVsync.equals("false", ignoreCase = true)
+    ): DesktopPacing {
+        // Skiko reads the property with toBoolean(): anything but "true" turns V-Sync off.
+        if (currentVsync != null) return DesktopPacing(vsync = currentVsync.trim().toBoolean(), overridden = true)
+        if (uncappedRequested(property, environment)) {
+            setSystemProperty(SKIKO_VSYNC_PROPERTY, "false")
+            return DesktopPacing(vsync = false, overridden = true)
+        }
+        if (!preferenceVsync) setSystemProperty(SKIKO_VSYNC_PROPERTY, "false")
+        return DesktopPacing(vsync = preferenceVsync, overridden = false)
     }
 }
+
+/** V-Sync as decided before the first window; [overridden] when a launch setting decided it. */
+data class DesktopPacing(val vsync: Boolean, val overridden: Boolean)

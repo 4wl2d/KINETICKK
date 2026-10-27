@@ -77,6 +77,30 @@ class CodexEntryFactsTest {
         }
     }
 
+    /** The run's permanent upgrades: the played character's Refit and the weapon in hand's Honing, as levels. */
+    @Test
+    fun buildTabNamesTheRunsRefitAndHoningLevels() {
+        val build = GameplayBuildSummaryProjection(
+            GameplayInstanceId(RunId(1)), GameplayRevision.ZERO, immutableListOf(),
+            character = CoreShape.ORB, weapon = WeaponId.FLUX_WAKE, weaponLevel = 3,
+            upgrades = "Refit 4 · Honing 7", characterUpgradeLevel = 4, weaponUpgradeLevel = 7,
+        )
+        val model = CodexRenderModel(immutableSetOf(), CodexRunStacks(build = build), catalog.items)
+        for (language in AppLanguage.entries) {
+            val entries = codexBuildEntries(model, catalog, codexTestProgress(), language)
+            val character = entries.single { it.key == "shape/${CoreShape.ORB}" }
+            assertEquals(language.text(SessionText.LEVEL_SHORT, 4), character.facts.single { it.label == language.text(CodexText.REFIT) }.value)
+            val weapon = entries.single { it.icon is CodexIcon.Weapon }
+            assertEquals(language.text(SessionText.LEVEL_SHORT, 7), weapon.facts.single { it.label == language.text(CodexText.HONING) }.value)
+            // Facts never carry the summary's separator (no `·` on screen).
+            (character.facts + weapon.facts).forEach { assertFalse('·' in it.value, "${it.label}: ${it.value}") }
+        }
+        // Outside a run the catalog shows no run upgrades.
+        val idle = CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items)
+        val shape = codexShapeEntry(catalog.coreShapes.first { it.id == CoreShape.ORB }, idle, codexTestProgress())
+        assertTrue(shape.facts.none { it.label == CodexText.REFIT.english })
+    }
+
     @Test
     fun harmonyAndDissonanceFollowTheKeysWhileNamedPairingsStayHiddenUntilDiscovered() {
         val model = CodexRenderModel(immutableSetOf(), CodexRunStacks(), catalog.items, discoveredRelicIds = RelicId.entries.toImmutableSet())
@@ -137,6 +161,47 @@ class CodexEntryFactsTest {
         val suppression = codexPairingEntries(model, withReticle).single { it.key == "conflict/item/3" }
         assertEquals(AppLanguage.English.text(CodexText.SUPPRESSED), suppression.kind)
         assertTrue(suppression.facts.none { it.value == suppression.kind })
+    }
+
+    @Test
+    fun aDormantItemSaysItsEffectsWaitForASkillOrAnotherWeapon() {
+        val item = catalog.items[3]
+        fun build(dormant: List<Int>, suppressed: List<Int> = emptyList()) = GameplayBuildSummaryProjection(
+            GameplayInstanceId(RunId(1)), GameplayRevision.ZERO, immutableListOf(),
+            suppressedItemIds = suppressed.toImmutableList(), dormantItemIds = dormant.toImmutableList(),
+        )
+        for (language in AppLanguage.entries) {
+            fun status(build: GameplayBuildSummaryProjection) =
+                codexItemEntry(item, CodexRenderModel(immutableSetOf(item.id), CodexRunStacks(build = build), catalog.items), 0L, language)
+                    .facts.single { it.isStatus }
+            val dormant = status(build(dormant = listOf(item.id)))
+            assertEquals(language.text(CodexText.DORMANT), dormant.value)
+            assertEquals(language.text(CodexText.DORMANT_HELP), dormant.info)
+            // Relics disabling it say so first; an item that can act shows its offer state instead.
+            assertEquals(language.text(CodexText.SUPPRESSED), status(build(dormant = listOf(item.id), suppressed = listOf(item.id))).value)
+            assertNotEquals(language.text(CodexText.DORMANT), status(build(dormant = listOf(item.id + 1))).value)
+        }
+    }
+
+    @Test
+    fun anItemTheDeckLeftOutSaysItIsNotInThisRun() {
+        val item = catalog.items[3]
+        fun build(outOfDeck: List<Int>, dormant: List<Int> = emptyList(), eligible: List<Int> = emptyList()) = GameplayBuildSummaryProjection(
+            GameplayInstanceId(RunId(1)), GameplayRevision.ZERO, immutableListOf(),
+            eligibleItemIds = eligible.toImmutableList(), dormantItemIds = dormant.toImmutableList(),
+            outOfDeckItemIds = outOfDeck.toImmutableList(),
+        )
+        for (language in AppLanguage.entries) {
+            fun status(build: GameplayBuildSummaryProjection) =
+                codexItemEntry(item, CodexRenderModel(immutableSetOf(item.id), CodexRunStacks(build = build), catalog.items), 0L, language)
+                    .facts.single { it.isStatus }
+            val left = status(build(outOfDeck = listOf(item.id)))
+            assertEquals(language.text(CodexText.NOT_IN_RUN), left.value)
+            assertEquals(language.text(CodexText.NOT_IN_RUN_HELP), left.info)
+            // A dormant item says so first; a dealt item shows its offer state instead.
+            assertEquals(language.text(CodexText.DORMANT), status(build(outOfDeck = listOf(item.id), dormant = listOf(item.id))).value)
+            assertEquals(language.text(SessionText.NEXT_ACQUISITION), status(build(outOfDeck = listOf(item.id + 1), eligible = listOf(item.id))).value)
+        }
     }
 
     @Test

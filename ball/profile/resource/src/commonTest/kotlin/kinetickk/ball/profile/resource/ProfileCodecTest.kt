@@ -14,17 +14,29 @@ import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
+import kinetickk.ball.profile.api.FRAME_RATE_CAP_OPTIONS
+import kinetickk.ball.profile.api.GameAction
+import kinetickk.ball.profile.api.INTERFACE_SCALE_OPTIONS
+import kinetickk.ball.profile.api.KeyBindings
 import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
+import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
 import kinetickk.ball.profile.api.ParticleDensity
+import kinetickk.ball.profile.api.PermanentUpgrades
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
 import kinetickk.ball.profile.api.ProfileSnapshotRejection
+import kinetickk.ball.profile.api.REFRESH_RATE_RANGE
+import kinetickk.ball.profile.api.ReactionEffectsLevel
 import kinetickk.ball.profile.api.RebirthProgress
+import kinetickk.ball.profile.api.highestClearedWith
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
+import kinetickk.ball.profile.api.WindowMode
+import kinetickk.ball.profile.api.WindowSizePreset
+import kinetickk.foundation.common.input.BindableKey
 import kinetickk.foundation.common.localization.AppLanguage
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -386,6 +398,161 @@ class ProfileCodecTest {
     }
 
     @Test
+    fun displayAndControlPreferencesAreWrittenOnlyWhenNonDefaultAfterTheExistingFields() {
+        // Saves from before these settings read as the defaults and keep their bytes.
+        for (existing in listOf(DEFAULT_GOLDEN, REPRESENTATIVE_GOLDEN, MATRIX_GOLDEN, UPGRADES_GOLDEN)) {
+            val snapshot = decoded(existing)
+            assertEquals(PlayerPreferences().displayAndControls(), snapshot.profile.preferences.displayAndControls())
+            assertEquals(existing, requireEncoded(snapshot))
+        }
+
+        val base = decoded(REPRESENTATIVE_GOLDEN)
+        fun choosing(preferences: PlayerPreferences) = base.copy(profile = base.profile.copy(preferences = preferences))
+        val every = choosing(everyDisplayChoice(base.profile.preferences))
+        val encoded = requireEncoded(every)
+        assertEquals(
+            REPRESENTATIVE_GOLDEN.replace("\"runStatisticsOnLeft\":true}", "\"runStatisticsOnLeft\":true$EVERY_DISPLAY_FIELD}"),
+            encoded,
+        )
+        assertEquals(every, decoded(encoded))
+
+        // Each field alone is appended after the existing preferences; nothing else moves.
+        val preferences = base.profile.preferences
+        listOf(
+            preferences.copy(windowMode = WindowMode.FULLSCREEN) to ",\"windowModeId\":\"FULLSCREEN\"",
+            preferences.copy(windowSize = WindowSizePreset.W2560X1440) to ",\"windowSizeId\":\"W2560X1440\"",
+            preferences.copy(vsync = false) to ",\"vsyncEnabled\":false",
+            preferences.copy(frameRateCap = 30) to ",\"frameRateCap\":30",
+            preferences.copy(refreshRateHz = REFRESH_RATE_RANGE.first) to ",\"refreshRateHz\":24",
+            preferences.copy(immersive = true) to ",\"immersiveEnabled\":true",
+            preferences.copy(interfaceScalePercent = 85) to ",\"interfaceScalePercent\":85",
+            preferences.copy(showFps = true) to ",\"showFps\":true",
+            preferences.copy(pauseOnFocusLoss = false) to ",\"pauseOnFocusLoss\":false",
+            preferences.copy(reactionEffects = ReactionEffectsLevel.REDUCED) to ",\"reactionEffectsId\":\"REDUCED\"",
+            preferences.copy(keyBindings = KeyBindings.DEFAULT.with(GameAction.PERFORMANCE_HUD, BindableKey.F12)) to
+                ",\"keyBindings\":[{\"action\":\"PERFORMANCE_HUD\",\"key\":\"F12\"}]",
+        ).forEach { (chosen, field) ->
+            val single = requireEncoded(choosing(chosen))
+            assertTrue(single.contains("\"runStatisticsOnLeft\":true$field},\"economy\""), single)
+            assertEquals(choosing(chosen), decoded(single))
+            assertEquals(REPRESENTATIVE_GOLDEN, single.replace(field, ""))
+        }
+
+        // Every member of every option set round-trips.
+        val choices = WindowMode.entries.map { preferences.copy(windowMode = it) } +
+            WindowSizePreset.entries.map { preferences.copy(windowSize = it) } +
+            ReactionEffectsLevel.entries.map { preferences.copy(reactionEffects = it) } +
+            FRAME_RATE_CAP_OPTIONS.map { preferences.copy(frameRateCap = it) } +
+            INTERFACE_SCALE_OPTIONS.map { preferences.copy(interfaceScalePercent = it) } +
+            listOf(0, REFRESH_RATE_RANGE.first, 60, REFRESH_RATE_RANGE.last).map { preferences.copy(refreshRateHz = it) } +
+            BindableKey.entries.map { key ->
+                preferences.copy(keyBindings = KeyBindings.DEFAULT.with(GameAction.PERFORMANCE_HUD, key))
+            }
+        choices.forEach { chosen -> assertEquals(choosing(chosen), decoded(requireEncoded(choosing(chosen))), chosen.toString()) }
+    }
+
+    @Test
+    fun displayPreferenceIngressRejectsExplicitDefaultsUnknownIdsAndNonMembers() {
+        val payload = requireEncoded(testSnapshot(PlayerProfile(preferences = everyDisplayChoice(PlayerPreferences()))))
+        assertTrue(payload.contains(EVERY_DISPLAY_FIELD), payload)
+        listOf(
+            Triple("\"windowModeId\":\"BORDERLESS\"", "\"windowModeId\":\"WINDOWED\"", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"windowModeId\":\"BORDERLESS\"", "\"windowModeId\":\"borderless\"", ProfileSnapshotRejection.INVALID_STABLE_ID),
+            Triple("\"windowModeId\":\"BORDERLESS\"", "\"windowModeId\":\"\"", ProfileSnapshotRejection.INVALID_STABLE_ID),
+            Triple("\"windowModeId\":\"BORDERLESS\"", "\"windowModeId\":null", ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD),
+            Triple("\"windowModeId\":\"BORDERLESS\"", "\"windowModeId\":1", ProfileSnapshotRejection.MALFORMED_JSON),
+            Triple("\"windowSizeId\":\"W1920X1080\"", "\"windowSizeId\":\"W1280X800\"", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"windowSizeId\":\"W1920X1080\"", "\"windowSizeId\":\"W800X600\"", ProfileSnapshotRejection.INVALID_STABLE_ID),
+            Triple("\"vsyncEnabled\":false", "\"vsyncEnabled\":true", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"frameRateCap\":144", "\"frameRateCap\":0", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"frameRateCap\":144", "\"frameRateCap\":143", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"frameRateCap\":144", "\"frameRateCap\":241", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"frameRateCap\":144", "\"frameRateCap\":-144", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"frameRateCap\":144", "\"frameRateCap\":\"144\"", ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD),
+            Triple("\"refreshRateHz\":120", "\"refreshRateHz\":0", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"refreshRateHz\":120", "\"refreshRateHz\":23", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"refreshRateHz\":120", "\"refreshRateHz\":361", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"immersiveEnabled\":true", "\"immersiveEnabled\":false", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"interfaceScalePercent\":115", "\"interfaceScalePercent\":100", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"interfaceScalePercent\":115", "\"interfaceScalePercent\":116", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"interfaceScalePercent\":115", "\"interfaceScalePercent\":84", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"showFps\":true", "\"showFps\":false", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"pauseOnFocusLoss\":false", "\"pauseOnFocusLoss\":true", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"reactionEffectsId\":\"MINIMAL\"", "\"reactionEffectsId\":\"FULL\"", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple("\"reactionEffectsId\":\"MINIMAL\"", "\"reactionEffectsId\":\"NONE\"", ProfileSnapshotRejection.INVALID_STABLE_ID),
+            // The fields keep their declared order.
+            Triple("\"showFps\":true,\"pauseOnFocusLoss\":false", "\"pauseOnFocusLoss\":false,\"showFps\":true",
+                ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD),
+        ).forEach { (canonical, invalid, expected) ->
+            assertTrue(payload.contains(canonical), canonical)
+            assertEquals(expected, decodeRejection(payload.replace(canonical, invalid)), invalid)
+        }
+        // The refresh range bounds are stored values.
+        for (hz in listOf(REFRESH_RATE_RANGE.first, REFRESH_RATE_RANGE.last)) {
+            assertEquals(hz, decoded(payload.replace("\"refreshRateHz\":120", "\"refreshRateHz\":$hz")).profile.preferences.refreshRateHz)
+        }
+
+        // Outbound values outside the option sets are refused, never clamped.
+        listOf(
+            PlayerPreferences(frameRateCap = 59),
+            PlayerPreferences(frameRateCap = 241),
+            PlayerPreferences(refreshRateHz = REFRESH_RATE_RANGE.first - 1),
+            PlayerPreferences(refreshRateHz = REFRESH_RATE_RANGE.last + 1),
+            PlayerPreferences(interfaceScalePercent = 101),
+            PlayerPreferences(interfaceScalePercent = 84),
+        ).forEach { invalid ->
+            assertEncodeRejection(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE, testSnapshot(PlayerProfile(preferences = invalid)))
+        }
+    }
+
+    @Test
+    fun keyBindingRecordsRejectUnsortedDuplicateUnknownDefaultAndConflictingForms() {
+        val payload = requireEncoded(testSnapshot(PlayerProfile(preferences = everyDisplayChoice(PlayerPreferences()))))
+        val records = "[{\"action\":\"APEX\",\"key\":\"F\"},{\"action\":\"DASH\",\"key\":\"Z\"},{\"action\":\"SKILL_1\",\"key\":\"SPACE\"}]"
+        assertTrue(payload.contains("\"keyBindings\":$records"), payload)
+        fun rebound(list: String) = payload.replace("\"keyBindings\":$records", "\"keyBindings\":$list")
+        listOf(
+            // Unsorted and duplicate actions.
+            "[{\"action\":\"DASH\",\"key\":\"Z\"},{\"action\":\"APEX\",\"key\":\"F\"},{\"action\":\"SKILL_1\",\"key\":\"SPACE\"}]" to
+                ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
+            "[{\"action\":\"APEX\",\"key\":\"F\"},{\"action\":\"APEX\",\"key\":\"G\"}]" to ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
+            // Two actions on one key, explicitly or by leaving the default holder in place.
+            "[{\"action\":\"APEX\",\"key\":\"F\"},{\"action\":\"DASH\",\"key\":\"F\"},{\"action\":\"SKILL_1\",\"key\":\"SPACE\"}]" to
+                ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
+            "[{\"action\":\"APEX\",\"key\":\"F\"},{\"action\":\"DASH\",\"key\":\"Z\"}]" to ProfileSnapshotRejection.INVALID_ORDER_OR_DUPLICATE,
+            // Unknown ids; Escape is never bindable and ids are case-sensitive.
+            "[{\"action\":\"JUMP\",\"key\":\"F\"}]" to ProfileSnapshotRejection.INVALID_STABLE_ID,
+            "[{\"action\":\"APEX\",\"key\":\"ESCAPE\"}]" to ProfileSnapshotRejection.INVALID_STABLE_ID,
+            "[{\"action\":\"APEX\",\"key\":\"f\"}]" to ProfileSnapshotRejection.INVALID_STABLE_ID,
+            // A record repeating its default is never written.
+            "[{\"action\":\"APEX\",\"key\":\"V\"}]" to ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            "[]" to ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD,
+            "[{\"key\":\"F\",\"action\":\"APEX\"}]" to ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD,
+            "null" to ProfileSnapshotRejection.MALFORMED_JSON,
+            "[{\"action\":\"APEX\"}]" to ProfileSnapshotRejection.MALFORMED_JSON,
+        ).forEach { (list, expected) ->
+            assertEquals(expected, decodeRejection(rebound(list)), list)
+        }
+        assertEquals(
+            KeyBindings.DEFAULT.with(GameAction.APEX, BindableKey.F),
+            decoded(rebound("[{\"action\":\"APEX\",\"key\":\"F\"}]")).profile.preferences.keyBindings,
+        )
+
+        // Every action rebound is the largest record list; one record more is refused.
+        val shifted = GameAction.entries.zip(BindableKey.entries.filter { it !in KeyBindings.DEFAULT.keys })
+        val everyAction = shifted.fold(KeyBindings.DEFAULT) { bindings, (action, key) -> bindings.with(action, key) }
+        val full = requireEncoded(testSnapshot(PlayerProfile(preferences = PlayerPreferences(keyBindings = everyAction))))
+        assertEquals(everyAction, decoded(full).profile.preferences.keyBindings)
+        val fullRecords = GameAction.entries.map { it.name }.sorted()
+        assertEquals(fullRecords, ACTION_ID.findAll(full).map { it.groupValues[1] }.toList())
+        val lastRecord = shifted.maxBy { it.first.name }.let { (action, key) -> "{\"action\":\"${action.name}\",\"key\":\"${key.name}\"}" }
+        assertEquals(
+            ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            decodeRejection(full.replace("$lastRecord]", "$lastRecord,{\"action\":\"ZOOM\",\"key\":\"Y\"}]")),
+        )
+    }
+
+    @Test
     fun profilesPredatingLanguageSelectionKeepProgressAndDefaultToRussian() {
         val profile = PlayerProfile(
             economy = PlayerEconomy(matter = 150L, lifetimeMatter = 900L),
@@ -608,6 +775,47 @@ class ProfileCodecTest {
             decodeRejection(with("{\"level\":4,\"highestCleared\":10,\"ascendedCharacterIds\":[\"NONAGON\"]}")))
         assertEquals(ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD,
             decodeRejection(with("{\"level\":4,\"highestCleared\":10,\"ascendedCharacterIds\":[]}")))
+    }
+
+    @Test
+    fun characterClearsAreOneDigitPerCharacterWrittenOnlyOnceATierIsRecorded() {
+        val representative = "\"rebirthProgress\":{\"level\":4,\"highestCleared\":3}"
+        fun with(progress: String) = REPRESENTATIVE_GOLDEN.replace(representative, "\"rebirthProgress\":$progress")
+        // Older saves (no field) keep their exact bytes; their victories (Circle and Ring) recorded no tier.
+        val plain = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(REPRESENTATIVE_GOLDEN)).snapshot
+        assertTrue(plain.profile.rebirthProgress.characterClears.all { it == -1 })
+        assertEquals(REPRESENTATIVE_GOLDEN, requireEncoded(plain))
+
+        // The tier plus one per character slot (Circle, Square, Triangle, Ring, ...): Circle cleared tier 3 and
+        // Ring tier 0; the slots after Ring hold none and are dropped.
+        val cleared = with("{\"level\":4,\"highestCleared\":3,\"characterClears\":\"4001\"}")
+        val decoded = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(cleared)).snapshot
+        val progress = decoded.profile.rebirthProgress
+        assertEquals(listOf(3, -1, -1, 0), listOf(CoreShape.ORB, CoreShape.PRISM, CoreShape.SHARD, CoreShape.RING).map(progress::highestClearedWith))
+        assertEquals(cleared, requireEncoded(decoded))
+        // The final tier is an Ascendant clear: digit b.
+        val ascendant = with("{\"level\":4,\"highestCleared\":10,\"ascendedCharacterIds\":[\"ORB\"],\"characterClears\":\"b\"}")
+        assertEquals(ascendant, requireEncoded(assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(ascendant)).snapshot))
+
+        mapOf(
+            "\"40010\"" to ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD,
+            "\"\"" to ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD,
+            "\"A\"" to ProfileSnapshotRejection.INVALID_DECIMAL,
+            "\"-1\"" to ProfileSnapshotRejection.INVALID_DECIMAL,
+            "\"c\"" to ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            "\"1000000000001\"" to ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            // Above the highest clear.
+            "\"5\"" to ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            // Square never defeated the Architect.
+            "\"01\"" to ProfileSnapshotRejection.INCONSISTENT_PROFILE,
+        ).forEach { (digits, rejection) ->
+            assertEquals(rejection, decodeRejection(with("{\"level\":4,\"highestCleared\":3,\"characterClears\":$digits}")), digits)
+        }
+        // A final-tier clear is exactly an Ascendant one.
+        assertEquals(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            decodeRejection(with("{\"level\":4,\"highestCleared\":10,\"characterClears\":\"b\"}")))
+        assertEquals(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            decodeRejection(with("{\"level\":4,\"highestCleared\":10,\"ascendedCharacterIds\":[\"ORB\"],\"characterClears\":\"a\"}")))
     }
 
     @Test
@@ -873,6 +1081,223 @@ class ProfileCodecTest {
         assertEquals(0L, decoded(DEFAULT_GOLDEN).profile.characterAchievements.totalKills)
     }
 
+    @Test
+    fun recentItemIdsRoundTripInAcquisitionOrderWithRepeatsAndOlderSavesReadEmpty() {
+        val history = List(MAX_RECENT_ITEM_IDS) { index -> listOf(57, 12, 57, ContentBounds.MAX_ITEMS - 1)[index % 4] }
+        val snapshot = testSnapshot(PlayerProfile(collection = PlayerCollection(emptySet(), recentItemIds = history)))
+        val encoded = requireEncoded(snapshot)
+        assertEquals(snapshot, decoded(encoded))
+        assertEquals(history, encoded.extractIntArray("recentItemIds"))
+        assertTrue(encoded.contains("\"discoveredItemIds\":[],\"recentItemIds\":[57,12,57,"), encoded)
+
+        for (existing in listOf(DEFAULT_GOLDEN, REPRESENTATIVE_GOLDEN, MATRIX_GOLDEN, UPGRADES_GOLDEN)) {
+            assertEquals(emptyList<Int>(), decoded(existing).profile.collection.recentItemIds)
+            assertFalse(existing.contains("recentItemIds"))
+        }
+        // An empty history is never written.
+        assertEquals(
+            ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD,
+            decodeRejection(DEFAULT_GOLDEN.replace("\"discoveredItemIds\":[]}", "\"discoveredItemIds\":[],\"recentItemIds\":[]}")),
+        )
+        // The field follows the Heirlooms in the collection object.
+        val withHeirlooms = REPRESENTATIVE_GOLDEN.replace(
+            "\"heirloomRelicIds\":[\"GLASS_COMET\",\"BLINK_DRIVE\"]}",
+            "\"heirloomRelicIds\":[\"GLASS_COMET\",\"BLINK_DRIVE\"],\"recentItemIds\":[42,3,42]}",
+        )
+        assertEquals(listOf(42, 3, 42), decoded(withHeirlooms).profile.collection.recentItemIds)
+        assertEquals(withHeirlooms, requireEncoded(decoded(withHeirlooms)))
+    }
+
+    @Test
+    fun recentItemIdsAcceptSixtyFourInRangeIdsAndRejectOneMoreOrAnIdOutsideTheBounds() {
+        val atBound = List(MAX_RECENT_ITEM_IDS) { it }
+        val payload = requireEncoded(testSnapshot(PlayerProfile(collection = PlayerCollection(emptySet(), recentItemIds = atBound))))
+        val canonical = "\"recentItemIds\":[${atBound.joinToString(",")}]"
+        assertTrue(payload.contains(canonical), payload)
+
+        listOf(
+            atBound + 0 to ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            listOf(ContentBounds.MAX_ITEMS) to ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+            listOf(-1) to ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+        ).forEach { (ids, expected) ->
+            assertEquals(expected, decodeRejection(payload.replace(canonical, "\"recentItemIds\":[${ids.joinToString(",")}]")), "$ids")
+        }
+        assertEquals(ProfileSnapshotRejection.MALFORMED_JSON,
+            decodeRejection(payload.replace(canonical, "\"recentItemIds\":[\"ORB\"]")))
+
+        listOf(
+            List(MAX_RECENT_ITEM_IDS + 1) { 0 },
+            listOf(ContentBounds.MAX_ITEMS),
+            listOf(-1),
+        ).forEach { ids ->
+            assertEncodeRejection(
+                ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+                testSnapshot(PlayerProfile(collection = PlayerCollection(emptySet(), recentItemIds = ids))),
+            )
+        }
+
+        // The retired catalog generation never wrote a history.
+        val retired = LEGACY_DEFAULT_GOLDEN.replace(
+            "\"collection\":{\"discoveredItemIds\":[]}",
+            "\"collection\":{\"discoveredItemIds\":[],\"recentItemIds\":[1]}",
+        )
+        assertEquals(ProfileSnapshotRejection.INCONSISTENT_PROFILE, decodeRejection(retired))
+    }
+
+    @Test
+    fun upgradeLevelsHaveACanonicalGoldenAndOlderSavesReadAsNothingBought() {
+        val snapshot = decoded(UPGRADES_GOLDEN)
+        val upgrades = snapshot.profile.upgrades
+        assertEquals(3, upgrades.characterLevel(CoreShape.ORB))
+        assertEquals(1, upgrades.characterLevel(CoreShape.PENTAGON))
+        assertEquals(2, upgrades.weaponLevel(WeaponId.ARC_COIL))
+        assertEquals(ContentBounds.MAX_UPGRADE_LEVEL, upgrades.weaponLevel(WeaponId.FLUX_WAKE))
+        assertEquals(4, (upgrades.characterLevels + upgrades.weaponLevels).count { it > 0 })
+        assertEquals(UPGRADES_GOLDEN, requireEncoded(snapshot))
+
+        // Saves from before upgrades keep their bytes and read as nothing bought.
+        for (existing in listOf(DEFAULT_GOLDEN, REPRESENTATIVE_GOLDEN, MATRIX_GOLDEN)) {
+            val previous = decoded(existing)
+            assertEquals(PermanentUpgrades(), previous.profile.upgrades)
+            assertEquals(existing, requireEncoded(previous))
+        }
+        // One track alone writes only its own digits.
+        val weaponsOnly = snapshot.copy(profile = snapshot.profile.copy(upgrades = upgrades.copy(
+            characterLevels = PermanentUpgrades().characterLevels,
+        )))
+        val encoded = requireEncoded(weaponsOnly)
+        assertTrue(encoded.endsWith("\"upgrades\":{\"w\":\"a0000002\"}}}"), encoded)
+        assertEquals(weaponsOnly, decoded(encoded))
+        // Nothing bought: the object is absent again.
+        assertEquals(
+            UPGRADES_GOLDEN.substringBefore(",\"upgrades\"") + "}}",
+            requireEncoded(snapshot.copy(profile = snapshot.profile.copy(upgrades = PermanentUpgrades()))),
+        )
+    }
+
+    @Test
+    fun upgradeDigitsKeepTheirFrozenSlotPositions() {
+        // Positions are persisted: each character and weapon owns one digit, in this order, forever.
+        val characterSlots = listOf(
+            "ORB", "PRISM", "SHARD", "RING", "DIAMOND", "TESSERACT", "STAR", "SPIRAL", "DIPOLE", "PENTAGON",
+            "CRESCENT", "HEXAGON",
+        )
+        val weaponSlots = listOf(
+            "FLUX_WAKE", "MORNINGSTAR", "PHASE_LATTICE", "NULL_LANCE", "GRAVITY_MINES", "ION_SWARM", "RIFT_BLADES",
+            "ARC_COIL", "QUASAR_CANNON", "ENTROPY_FIELD", "SINGULARITY_SPEAR", "PRISM_RELAY", "GYRE_DISC",
+            "SCATTER_BLOOM", "TETHER_ARC", "SENTRY_GRID", "HUNTER_SALVO", "CONCUSSION_ENGINE", "GLACIER_BELL",
+            "EVENT_LENS", "SOLAR_SWEEP", "AEGIS_SHARDS", "HOLLOW_RIFT", "RESONANCE_DRUM",
+        )
+        assertEquals(CoreShape.entries.map(CoreShape::name).toSet(), characterSlots.toSet())
+        assertEquals(WeaponId.entries.map(WeaponId::name).toSet(), weaponSlots.toSet())
+        characterSlots.forEachIndexed { slot, name ->
+            val shape = CoreShape.valueOf(name)
+            val snapshot = testSnapshot(PlayerProfile(upgrades = PermanentUpgrades(
+                characterLevels = CoreShape.entries.map { if (it == shape) 7 else 0 },
+                weaponLevels = List(WeaponId.entries.size) { 0 },
+            )))
+            val encoded = requireEncoded(snapshot)
+            assertTrue(encoded.endsWith("\"upgrades\":{\"c\":\"${"0".repeat(slot)}7\"}}}"), encoded)
+            assertEquals(snapshot, decoded(encoded))
+        }
+        weaponSlots.forEachIndexed { slot, name ->
+            val id = WeaponId.valueOf(name)
+            val snapshot = testSnapshot(PlayerProfile(upgrades = PermanentUpgrades(
+                characterLevels = List(CoreShape.entries.size) { 0 },
+                weaponLevels = WeaponId.entries.map { if (it == id) 4 else 0 },
+            )))
+            val encoded = requireEncoded(snapshot)
+            assertTrue(encoded.endsWith("\"upgrades\":{\"w\":\"${"0".repeat(slot)}4\"}}}"), encoded)
+            assertEquals(snapshot, decoded(encoded))
+        }
+    }
+
+    @Test
+    fun upgradeDigitsRejectForeignDigitsTrailingZerosExtraSlotsAndExplicitEmptyForms() {
+        val characters = "\"c\":\"3000000001\""
+        val weapons = "\"w\":\"a0000002\""
+        assertTrue(UPGRADES_GOLDEN.contains("\"upgrades\":{$characters,$weapons}"))
+        listOf(
+            // A trailing zero level is never written.
+            Triple(characters, "\"c\":\"30000000010\"", ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD),
+            Triple(weapons, "\"w\":\"a00000020\"", ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD),
+            // Only lowercase base-36 digits are levels.
+            Triple(characters, "\"c\":\"300000000A\"", ProfileSnapshotRejection.INVALID_DECIMAL),
+            Triple(characters, "\"c\":\"3-00000001\"", ProfileSnapshotRejection.INVALID_DECIMAL),
+            Triple(weapons, "\"w\":\" a0000002\"", ProfileSnapshotRejection.INVALID_DECIMAL),
+            // One digit per slot: 12 characters and 24 weapons.
+            Triple(characters, "\"c\":\"${"1".repeat(CoreShape.entries.size + 1)}\"", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple(weapons, "\"w\":\"${"1".repeat(WeaponId.entries.size + 1)}\"", ProfileSnapshotRejection.VALUE_OUT_OF_RANGE),
+            Triple(characters, "\"c\":\"\"", ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD),
+            Triple(weapons, "\"w\":\"\"", ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD),
+            Triple("{$characters,$weapons}", "{$weapons,$characters}", ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD),
+            Triple("{$characters,$weapons}", "{}", ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD),
+            Triple("{$characters,$weapons}", "null", ProfileSnapshotRejection.MALFORMED_JSON),
+            Triple(characters, "\"c\":3000000001", ProfileSnapshotRejection.MALFORMED_JSON),
+            Triple(characters, "\"c\":null", ProfileSnapshotRejection.MALFORMED_JSON),
+            Triple(characters, "\"characters\":\"3000000001\"", ProfileSnapshotRejection.MALFORMED_JSON),
+        ).forEach { (canonical, invalid, expected) ->
+            assertTrue(UPGRADES_GOLDEN.contains(canonical), canonical)
+            assertEquals(expected, decodeRejection(UPGRADES_GOLDEN.replace(canonical, invalid)), invalid)
+        }
+        // Every slot filled is the longest form.
+        assertEquals(
+            CoreShape.entries.size,
+            decoded(UPGRADES_GOLDEN.replace(characters, "\"c\":\"${"1".repeat(CoreShape.entries.size)}\""))
+                .profile.upgrades.characterLevels.count { it == 1 },
+        )
+        // Upgrades postdate the retired Lab: a Lab-era save never carries them.
+        val labWithUpgrades = LAB_DEFAULT_GOLDEN.removeSuffix("}}") + ",\"upgrades\":{$characters}}}"
+        assertEquals(ProfileSnapshotRejection.INCONSISTENT_PROFILE, decodeRejection(labWithUpgrades))
+    }
+
+    @Test
+    fun upgradeLevelsAcceptTenAndRejectEleven() {
+        fun leveled(character: Int = 0, weapon: Int = 0) = testSnapshot(PlayerProfile(upgrades = PermanentUpgrades(
+            characterLevels = CoreShape.entries.map { if (it == CoreShape.HEXAGON) character else 0 },
+            weaponLevels = WeaponId.entries.map { if (it == WeaponId.RESONANCE_DRUM) weapon else 0 },
+        )))
+        val atBound = leveled(ContentBounds.MAX_UPGRADE_LEVEL, ContentBounds.MAX_UPGRADE_LEVEL)
+        val encoded = requireEncoded(atBound)
+        assertEquals(atBound, decoded(encoded))
+        assertEncodeRejection(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE, leveled(character = ContentBounds.MAX_UPGRADE_LEVEL + 1))
+        assertEncodeRejection(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE, leveled(weapon = ContentBounds.MAX_UPGRADE_LEVEL + 1))
+        assertEncodeRejection(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE, leveled(character = -1))
+        assertEncodeRejection(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE, leveled(weapon = -1))
+
+        // Level 10 is the base-36 digit "a"; "b" (11) and every later digit are above the maximum.
+        val hexagon = "\"c\":\"${"0".repeat(CoreShape.entries.size - 1)}a\""
+        val drum = "\"w\":\"${"0".repeat(WeaponId.entries.size - 1)}a\""
+        assertTrue(encoded.contains(hexagon) && encoded.contains(drum), encoded)
+        for (invalid in listOf('b', 'z')) {
+            assertEquals(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+                decodeRejection(encoded.replace(hexagon, hexagon.replace('a', invalid))), "$invalid")
+            assertEquals(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+                decodeRejection(encoded.replace(drum, drum.replace('a', invalid))), "$invalid")
+        }
+
+        // Every track at the maximum round-trips as one digit per slot; lists sized off the closed catalogs are refused.
+        val maximum = testSnapshot(PlayerProfile(upgrades = PermanentUpgrades(
+            characterLevels = List(CoreShape.entries.size) { ContentBounds.MAX_UPGRADE_LEVEL },
+            weaponLevels = List(WeaponId.entries.size) { ContentBounds.MAX_UPGRADE_LEVEL },
+        )))
+        val maximumPayload = requireEncoded(maximum)
+        assertEquals(maximum, decoded(maximumPayload))
+        assertTrue(
+            maximumPayload.endsWith("\"upgrades\":{\"c\":\"${"a".repeat(CoreShape.entries.size)}\"," +
+                "\"w\":\"${"a".repeat(WeaponId.entries.size)}\"}}}"),
+            maximumPayload,
+        )
+        assertEncodeRejection(ProfileSnapshotRejection.INCONSISTENT_PROFILE, testSnapshot(PlayerProfile(upgrades = PermanentUpgrades(
+            characterLevels = List(CoreShape.entries.size + 1) { 0 },
+            weaponLevels = List(WeaponId.entries.size) { 0 },
+        ))))
+        assertEncodeRejection(ProfileSnapshotRejection.INCONSISTENT_PROFILE, testSnapshot(PlayerProfile(upgrades = PermanentUpgrades(
+            characterLevels = List(CoreShape.entries.size) { 0 },
+            weaponLevels = List(WeaponId.entries.size - 1) { 0 },
+        ))))
+    }
+
     private fun decoded(payload: String) = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(payload)).snapshot
 
     private fun decodeRejection(payload: String): ProfileSnapshotRejection =
@@ -905,6 +1330,35 @@ private fun String.extractIntArray(field: String): List<Int> {
     return body.split(',').map(String::toInt)
 }
 
+/** Every display and controls preference at a non-default choice; Dash takes Z, so Skill 1 takes Space. */
+private fun everyDisplayChoice(preferences: PlayerPreferences): PlayerPreferences = preferences.copy(
+    windowMode = WindowMode.BORDERLESS,
+    windowSize = WindowSizePreset.W1920X1080,
+    vsync = false,
+    frameRateCap = 144,
+    refreshRateHz = 120,
+    immersive = true,
+    interfaceScalePercent = 115,
+    showFps = true,
+    pauseOnFocusLoss = false,
+    reactionEffects = ReactionEffectsLevel.MINIMAL,
+    keyBindings = KeyBindings.DEFAULT.with(GameAction.DASH, BindableKey.Z).with(GameAction.APEX, BindableKey.F),
+)
+
+/** [everyDisplayChoice] on the wire: appended after the existing preferences in declaration order. */
+private const val EVERY_DISPLAY_FIELD: String =
+    ",\"windowModeId\":\"BORDERLESS\",\"windowSizeId\":\"W1920X1080\",\"vsyncEnabled\":false,\"frameRateCap\":144," +
+        "\"refreshRateHz\":120,\"immersiveEnabled\":true,\"interfaceScalePercent\":115,\"showFps\":true," +
+        "\"pauseOnFocusLoss\":false,\"reactionEffectsId\":\"MINIMAL\",\"keyBindings\":[{\"action\":\"APEX\",\"key\":\"F\"}," +
+        "{\"action\":\"DASH\",\"key\":\"Z\"},{\"action\":\"SKILL_1\",\"key\":\"SPACE\"}]"
+
+private fun PlayerPreferences.displayAndControls(): List<Any> = listOf(
+    windowMode, windowSize, vsync, frameRateCap, refreshRateHz, immersive, interfaceScalePercent, showFps,
+    pauseOnFocusLoss, reactionEffects, keyBindings,
+)
+
+private val ACTION_ID = Regex("\\{\\\"action\\\":\\\"([^\\\"]+)\\\",\\\"key\\\":")
+
 private val RANK_ID = Regex("\\{\\\"id\\\":\\\"([^\\\"]+)\\\",\\\"rank\\\":")
 
 /** A fresh profile: the retired Lab is never written and an empty Matrix and zero counters are omitted. */
@@ -921,6 +1375,25 @@ private const val DEFAULT_GOLDEN: String =
         "\"rebirthProgress\":{\"level\":0,\"highestCleared\":-1}," +
         "\"characterAchievements\":{\"eliteKills\":\"0\",\"dashHits\":\"0\",\"completedOrbits\":\"0\"," +
         "\"architectVictories\":\"0\",\"victoriousCharacterIds\":[]}}}"
+
+/**
+ * A current save with Refit (Orb 3, Pentagon 1) and Honing (Arc Coil 2, Flux Wake at the maximum 10 = "a"):
+ * one base-36 digit per slot without trailing zeros, the object last.
+ */
+private const val UPGRADES_GOLDEN: String =
+    "{\"revision\":\"77\",\"profile\":{" +
+        "\"preferences\":{\"soundEnabled\":true,\"musicEnabled\":true,\"masterVolumePercent\":65," +
+        "\"simulationSpeedPercent\":100,\"textScalePercent\":125,\"screenShake\":true," +
+        "\"particleDensityId\":\"NORMAL\",\"damageNumbers\":true,\"damageNumberSizeId\":\"NORMAL\"," +
+        "\"damageNumberFormatId\":\"COMPACT\",\"damageNumberTierThreshold\":50,\"languageCode\":\"ru\",\"runStatisticsOnLeft\":false}," +
+        "\"economy\":{\"matter\":\"120\",\"lifetimeMatter\":\"60000\"}," +
+        "\"loadout\":{\"coreShapeId\":\"PENTAGON\",\"selectedWeaponId\":\"ARC_COIL\"," +
+        "\"unlockedWeaponIds\":[\"ARC_COIL\",\"FLUX_WAKE\"]}," +
+        "\"collection\":{\"itemCatalogEpoch\":2,\"discoveredItemIds\":[]}," +
+        "\"rebirthProgress\":{\"level\":3,\"highestCleared\":2}," +
+        "\"characterAchievements\":{\"eliteKills\":\"0\",\"dashHits\":\"0\",\"completedOrbits\":\"0\"," +
+        "\"architectVictories\":\"0\",\"victoriousCharacterIds\":[]}," +
+        "\"upgrades\":{\"c\":\"3000000001\",\"w\":\"a0000002\"}}}"
 
 /** Byte-exact default save of the current catalog written before the Core Matrix (it carries the Lab). */
 private const val LAB_DEFAULT_GOLDEN: String =

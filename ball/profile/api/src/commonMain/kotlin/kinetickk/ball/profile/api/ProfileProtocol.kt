@@ -11,9 +11,11 @@ import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.ImmutableSet
+import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableSetOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
+import kinetickk.foundation.common.input.BindableKey
 import kinetickk.foundation.common.localization.AppLanguage
 
 enum class PreferenceAdjustmentDirection {
@@ -52,6 +54,34 @@ sealed interface ProfilePreferenceAdjustment {
     data class StepDamageNumberTierThreshold(val direction: PreferenceAdjustmentDirection) : ProfilePreferenceAdjustment
     data class SetColorVision(val colorVision: ColorVision) : ProfilePreferenceAdjustment
     data object ToggleMinimap : ProfilePreferenceAdjustment
+
+    // Display and controls. Steppers send the next option the platform offers as a direct choice, so
+    // no Step variants exist; a choice equal to the current value is NoChange.
+    data class SetWindowMode(val mode: WindowMode) : ProfilePreferenceAdjustment
+    data class SetWindowSize(val preset: WindowSizePreset) : ProfilePreferenceAdjustment
+    data object ToggleVsync : ProfilePreferenceAdjustment
+    data class SetFrameRateCap(val fps: Int) : ProfilePreferenceAdjustment {
+        init {
+            require(fps in FRAME_RATE_CAP_OPTIONS) { "Frame rate cap must be one of the listed options" }
+        }
+    }
+    data class SetRefreshRate(val hz: Int) : ProfilePreferenceAdjustment {
+        init {
+            require(hz == REFRESH_RATE_AUTO || hz in REFRESH_RATE_RANGE) { "Refresh rate must be automatic or 24..360 Hz" }
+        }
+    }
+    data object ToggleImmersive : ProfilePreferenceAdjustment
+    data class SetInterfaceScale(val percent: Int) : ProfilePreferenceAdjustment {
+        init {
+            require(percent in INTERFACE_SCALE_OPTIONS) { "Interface scale must be one of the listed options" }
+        }
+    }
+    data object ToggleShowFps : ProfilePreferenceAdjustment
+    data object TogglePauseOnFocusLoss : ProfilePreferenceAdjustment
+    data class SetReactionEffects(val level: ReactionEffectsLevel) : ProfilePreferenceAdjustment
+    /** Binds [key] to [action]; the action that held [key] takes [action]'s previous key ([KeyBindings.with]). */
+    data class SetKeyBinding(val action: GameAction, val key: BindableKey) : ProfilePreferenceAdjustment
+    data object ResetKeyBindings : ProfilePreferenceAdjustment
 }
 
 data class GameplayProgressUpdate(
@@ -78,6 +108,8 @@ data class GameplayProgressUpdate(
     val ricochets: Int = 0,
     /** Data pickups collected since the last update. */
     val dataPickups: Int = 0,
+    /** Items first acquired in the run since the last update, in acquisition order. */
+    val acquiredItemIds: ImmutableList<Int> = immutableListOf(),
 ) {
     constructor(
         bankedMatter: Long = 0L,
@@ -95,11 +127,13 @@ data class GameplayProgressUpdate(
         totalKills: Int = 0,
         ricochets: Int = 0,
         dataPickups: Int = 0,
+        acquiredItemIds: List<Int> = emptyList(),
     ) : this(
         bankedMatter, discoveredItemIds.toImmutableSet(), clearedRebirthLevel,
         eliteKills, dashHits, completedOrbits, architectDefeatedWith, discoveredRelicIds.toImmutableSet(),
         discoveredReactionIds.toImmutableSet(), discoveredPairingIds.toImmutableSet(),
         victoryRelicIds?.toImmutableList(), heirloomResolved, totalKills, ricochets, dataPickups,
+        acquiredItemIds.toImmutableList(),
     )
 
     /** True when the update carries no fact for Profile to apply, so no command needs to be sent. */
@@ -107,7 +141,8 @@ data class GameplayProgressUpdate(
         get() = bankedMatter == 0L && discoveredItemIds.isEmpty() && clearedRebirthLevel == null &&
             eliteKills == 0 && dashHits == 0 && completedOrbits == 0 && architectDefeatedWith == null &&
             discoveredRelicIds.isEmpty() && discoveredReactionIds.isEmpty() && discoveredPairingIds.isEmpty() &&
-            victoryRelicIds == null && !heirloomResolved && totalKills == 0 && ricochets == 0 && dataPickups == 0
+            victoryRelicIds == null && !heirloomResolved && totalKills == 0 && ricochets == 0 && dataPickups == 0 &&
+            acquiredItemIds.isEmpty()
 }
 
 sealed interface CollectionEntry {
@@ -144,6 +179,15 @@ sealed interface ProfilePulse {
 
     /** Chooses the character for the next run from the Hangar; it must be unlocked. */
     data class SelectCoreShape(val shape: CoreShape) : Business
+
+    /**
+     * Buys the next Refit level of an unlocked character. Permanent (never refunded); a run captures
+     * the levels when it starts, so a level bought mid-run applies from the next run.
+     */
+    data class PurchaseCharacterUpgrade(val shape: CoreShape) : Business
+
+    /** Buys the next Honing level of an owned weapon; permanent, and applied from the next run. */
+    data class PurchaseWeaponUpgrade(val id: WeaponId) : Business
 }
 
 sealed interface ProfileGameplayProgressRejection {
@@ -152,6 +196,8 @@ sealed interface ProfileGameplayProgressRejection {
     data object NegativeBankedMatter : ProfileGameplayProgressRejection
     data class UnknownItem(val itemId: Int) : ProfileGameplayProgressRejection
     data object TooManyDiscoveries : ProfileGameplayProgressRejection
+    /** More first acquisitions than the Profile remembers ([MAX_RECENT_ITEM_IDS]) in one update. */
+    data object TooManyAcquiredItems : ProfileGameplayProgressRejection
     data class ClearedLevelBelowMinimum(val level: Int) : ProfileGameplayProgressRejection
     /** The cleared tier lies above the profile's Rebirth rank, so no run could have selected it. */
     data class ClearedLevelAboveRank(val level: Int) : ProfileGameplayProgressRejection
@@ -175,6 +221,10 @@ sealed interface ProfileRejection {
     data object WeaponRebirthLocked : ProfileRejection
     /** The requested Rebirth tier lies outside the policy range or above the profile's rank. */
     data object RebirthTierLocked : ProfileRejection
+    /** The Refit or Honing track is already at the policy's maximum level. */
+    data object UpgradeMaxLevel : ProfileRejection
+    /** Honing is sold only for a weapon the profile owns. */
+    data object WeaponNotOwned : ProfileRejection
 
     data class InvalidGameplayProgress(
         val reason: ProfileGameplayProgressRejection,

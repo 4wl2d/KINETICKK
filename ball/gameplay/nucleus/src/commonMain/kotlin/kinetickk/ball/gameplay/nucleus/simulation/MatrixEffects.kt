@@ -43,6 +43,10 @@ internal data class MatrixModifiers(
     /** Seconds between heat-free Dashes; 0 = none. */
     val freeDashInterval: Float = 0f,
     val rerolls: Int = 0,
+    /** Rank-0 Data-economy items the draft deck deals beyond the deck policy's Data floor. */
+    val dataStratumItems: Int = 0,
+    /** Offer weight of Data-economy items in ordinary item offers; 1 = not owned. */
+    val dataOfferWeight: Float = 1f,
     val weaponRunGrowthBonus: Float = 0f,
     val shieldRegenDelayMultiplier: Float = 1f,
     val ricochetPhaseSeconds: Float = 0f,
@@ -107,6 +111,8 @@ private fun MatrixModifiers.with(effect: MatrixEffect, ranks: Int, stats: FloatA
             freeDashInterval = if (freeDashInterval == 0f) effect.seconds else min(freeDashInterval, effect.seconds),
         )
         is MatrixEffect.Rerolls -> copy(rerolls = rerolls + effect.count * ranks)
+        is MatrixEffect.DataStratum -> copy(dataStratumItems = dataStratumItems + effect.items * ranks)
+        is MatrixEffect.DataOfferWeight -> copy(dataOfferWeight = dataOfferWeight + effect.fraction * ranks)
         is MatrixEffect.WeaponRunGrowth -> copy(weaponRunGrowthBonus = weaponRunGrowthBonus + effect.bonusPerProgress * ranks)
         is MatrixEffect.ShieldRegenDelay -> copy(
             shieldRegenDelayMultiplier = multiplier(shieldRegenDelayMultiplier, effect.multiplier),

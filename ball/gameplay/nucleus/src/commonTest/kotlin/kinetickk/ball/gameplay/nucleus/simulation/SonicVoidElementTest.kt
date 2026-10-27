@@ -37,8 +37,11 @@ class SonicVoidElementTest {
         blocks.zipWithNext().forEach { (a, b) -> assertEquals(StatusCell.ELEMENTS, b - a) }
         assertEquals(StatusCell.REARM_AT + StatusCell.ELEMENTS, StatusCell.FROZEN_UNTIL)
         assertEquals(StatusCell.REACTION_PAIR_READY_AT + StatusCell.PAIRS, StatusCell.CRYO_IMMUNE_CARRY)
-        assertEquals(StatusCell.BLACKFIRE_DPS + 1, StatusCell.COUNT)
-        assertEquals(71, StatusCell.COUNT)
+        assertEquals(StatusCell.BLACKFIRE_DPS + 1, StatusCell.MARK)
+        assertEquals(StatusCell.MARK + 1, StatusCell.MARK_UNTIL)
+        assertEquals(StatusCell.MARK_UNTIL + 1, StatusCell.MARK_CAST)
+        assertEquals(StatusCell.MARK_CAST + 1, StatusCell.COUNT)
+        assertEquals(74, StatusCell.COUNT)
     }
 
     @Test
@@ -295,14 +298,14 @@ class SonicVoidElementTest {
         assertEquals(state.maxHp, state.hp, 0.01f, "integrity rises by the ceiling actually gained")
 
         state.onLevelUp()
-        assertEquals(0.9f * (200f + LEVEL_INTEGRITY), state.maxHp, 0.01f)
+        assertEquals(0.9f * (200f + state.content.tempo.levelIntegrity), state.maxHp, 0.01f)
 
         // Ending the liability returns the whole cut and heals nothing.
         val integrity = state.hp
         state.replaceRelic(0, RelicId.PERPETUAL_VECTOR)
         state.elapsed += state.content.build.policy.severanceSeconds + 1f
         state.updateRelicRuntime(MutableGameState.FIXED_STEP)
-        assertEquals(200f + LEVEL_INTEGRITY, state.maxHp, 0.01f)
+        assertEquals(200f + state.content.tempo.levelIntegrity, state.maxHp, 0.01f)
         assertEquals(0f, state.integrityLiabilityCut)
         assertEquals(integrity, state.hp)
 
@@ -454,6 +457,48 @@ class SonicVoidElementTest {
             steps++
             state.elapsed += MutableGameState.FIXED_STEP
         }
+        assertTrue(quietSteps > 0, "Silence still reaches the Architect")
+        assertTrue(longestQuiet * MutableGameState.FIXED_STEP <= SILENCE_BOSS_SECONDS + 0.02f, "no Silence is extended")
+        assertTrue(quietSteps < steps * 0.4f, "the Architect attacks most of the time ($quietSteps of $steps steps silent)")
+    }
+
+    @Test
+    fun chainedHushesFromManyReactorsStillLeaveTheArchitectAttackWindows() {
+        val state = buildTestState()
+        state.bossSpawned = true
+        val boss = state.addEnemyForTesting(400f, 0f, hp = 100_000f, radius = 74f, type = EnemyType.ARCHITECT)
+        val reactors = List(4) { index ->
+            val angle = index * TAU / 4f
+            state.dummy(x = 400f + 120f * cos(angle), y = 120f * sin(angle))
+        }
+        val start = state.elapsed
+        var nextSilenceAt = start
+        var fired = 0
+        var steps = 0
+        var quietSteps = 0
+        var quietRun = 0
+        var longestQuiet = 0
+        // The same chain of Silences, now each leaving a Hush that keeps ticking over the Architect.
+        while (state.elapsed < start + 12f) {
+            if (state.elapsed >= nextSilenceAt) {
+                val source = reactors[fired % reactors.size]
+                state.applyStatus(source, StatusElement.SONIC, 3, generation = 0)
+                state.applyStatus(source, StatusElement.VOID, 1, generation = 0)
+                fired++
+                nextSilenceAt += 0.6f
+            }
+            state.elapsed += MutableGameState.FIXED_STEP
+            state.updateCombatFields(MutableGameState.FIXED_STEP)
+            if (state.canAttack(boss)) {
+                quietRun = 0
+            } else {
+                quietSteps++
+                quietRun++
+                longestQuiet = max(longestQuiet, quietRun)
+            }
+            steps++
+        }
+        assertTrue(state.fieldRecords.isNotEmpty(), "Hushes linger over the Architect")
         assertTrue(quietSteps > 0, "Silence still reaches the Architect")
         assertTrue(longestQuiet * MutableGameState.FIXED_STEP <= SILENCE_BOSS_SECONDS + 0.02f, "no Silence is extended")
         assertTrue(quietSteps < steps * 0.4f, "the Architect attacks most of the time ($quietSteps of $steps steps silent)")

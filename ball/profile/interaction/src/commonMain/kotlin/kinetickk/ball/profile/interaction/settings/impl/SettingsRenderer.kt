@@ -14,7 +14,10 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.DamageNumberFormat
+import kinetickk.ball.profile.api.GameAction
+import kinetickk.ball.profile.api.KeyBindings
 import kinetickk.ball.profile.api.PlayerPreferences
+import kinetickk.ball.profile.api.WindowMode
 import kinetickk.ball.profile.interaction.localization.ProfileText
 import kinetickk.ball.profile.interaction.localization.SettingsRedesignText
 import kinetickk.foundation.common.localization.AppLanguage
@@ -25,6 +28,8 @@ import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkAlign
 import kinetickk.foundation.design.KkButtonSize
 import kinetickk.foundation.design.KkButtonVariant
+import kinetickk.foundation.design.KkEase
+import kinetickk.foundation.design.KkTagVariant
 import kinetickk.foundation.design.KkPathCache
 import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.KkVAlign
@@ -41,6 +46,13 @@ import kinetickk.foundation.design.drawKkTab
 import kinetickk.foundation.design.drawKkText
 import kinetickk.foundation.design.drawKkToggle
 import kinetickk.foundation.design.drawKkSlip
+import kinetickk.foundation.design.drawKkTag
+import kinetickk.foundation.design.kkLoop
+import kinetickk.foundation.design.kkProgress
+import kinetickk.foundation.design.kkPulse
+import kinetickk.foundation.design.kkTagSize
+import kinetickk.foundation.design.label
+import kinetickk.foundation.design.monoStyle
 import kinetickk.foundation.design.drawKkThreatHatch
 import kinetickk.foundation.design.kkBoxHeight
 import kinetickk.foundation.design.measureKkTooltip
@@ -50,9 +62,11 @@ import kinetickk.foundation.design.kkShearOffset
 import kinetickk.foundation.design.kkStroke
 import kinetickk.foundation.design.labelStyle
 import kinetickk.foundation.design.measureKkText
+import kotlin.math.PI
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /** The design's 100 % text corresponds to the game's default 125 % text size. */
 internal const val SETTINGS_TEXT_BASELINE = 1.25f
@@ -110,6 +124,7 @@ internal fun SettingsMeasurers.metrics(mode: SettingsLayoutMode): SettingsTextMe
             SettingsTextKind.SEGMENT -> measureKkText(ui, text, typography.labelStyle(16f, trackingEm = 0.07f), uppercase = true).size.width.toFloat()
             SettingsTextKind.OUTPUT -> measureKkText(ui, text, outputStyle(), uppercase = true).size.width.toFloat()
             SettingsTextKind.ROW_LABEL -> measureKkText(body, text, typography.condStyle(type.rowLabel), uppercase = true).size.width.toFloat()
+            SettingsTextKind.READOUT -> measureKkText(ui, text, readoutStyle(), uppercase = true).size.width.toFloat()
         }
 
         override fun rowLabelLineHeight(): Float =
@@ -125,6 +140,12 @@ private fun SettingsMeasurers.titleStyle(type: SettingsType): TextStyle = typogr
 
 internal fun SettingsMeasurers.outputStyle(): TextStyle = typography.condStyle(22f, tabular = true, lineHeightEm = 1f)
 
+/** Readout value (`.t-mono` 16). */
+internal fun SettingsMeasurers.readoutStyle(): TextStyle = typography.monoStyle(16f, lineHeightEm = 1f)
+
+/** Key cap text in a key cell (`.t-label` 16). */
+internal fun SettingsMeasurers.keyStyle(): TextStyle = typography.labelStyle(16f, trackingEm = 0.07f)
+
 /** Transient interaction state the canvas reflects; the feature owns it. */
 internal class SettingsFrame(
     val layout: SettingsLayout,
@@ -134,7 +155,15 @@ internal class SettingsFrame(
     val focus: SettingsTarget?,
     val info: SettingsRow?,
     val time: Float,
+    /** Key capture and reset state (see [SettingsState]). */
+    val capture: GameAction? = null,
+    val swapped: GameAction? = null,
+    val swappedAt: Float = SETTINGS_NEVER,
+    val rejectAt: Float = SETTINGS_NEVER,
+    val resetArmed: Boolean = false,
 ) {
+    val platform: SettingsPlatform get() = layout.platform
+
     /** The (!) explanation on screen (see [settingsOpenInfo]). */
     val openInfo: SettingsRow?
         get() = settingsOpenInfo(focus, hover, info)
@@ -162,7 +191,7 @@ internal fun settingsSlipTakesPresses(focus: SettingsTarget?, hover: SettingsTar
 internal class SettingsInfoSlip(val row: SettingsRow, val bounds: Rect, val body: TextLayoutResult)
 
 internal fun SettingsMeasurers.infoSlip(layout: SettingsLayout, row: SettingsRow): SettingsInfoSlip? {
-    val text = measureKkTooltip(body, row.about(language), layout.density)
+    val text = measureKkTooltip(body, row.about(language, layout.platform), layout.density)
     val bounds = layout.tooltipRect(row, text.kkBoxHeight) ?: return null
     return SettingsInfoSlip(row, bounds, text)
 }
@@ -198,16 +227,19 @@ internal fun DrawScope.drawSettings(frame: SettingsFrame, measurers: SettingsMea
         hover = if (frame.hover == SettingsTarget.Back) 1f else 0f, focused = frame.focus == SettingsTarget.Back,
     )
     layout.rule?.let { drawRect(Kk.Line, it.topLeft, it.size) }
-    drawKkText(
-        measurers.body, measurers.language.text(ProfileText.SettingsTitle), measurers.titleStyle(type),
-        layout.title.left, layout.title.center.y, Kk.Bone, valign = KkVAlign.CENTER, uppercase = true,
-        maxWidth = layout.title.width,
-    )
+    layout.title?.let { title ->
+        drawKkText(
+            measurers.body, measurers.language.text(ProfileText.SettingsTitle), measurers.titleStyle(type),
+            title.left, title.center.y, Kk.Bone, valign = KkVAlign.CENTER, uppercase = true,
+            maxWidth = title.width,
+        )
+    }
 
+    val tabMeasurer = measurers.fit(layout.tabScale)
     layout.tabs.forEach { tab ->
         val target = SettingsTarget.Tab(tab.group)
         drawKkTab(
-            measurers.ui, tab.bounds, measurers.language.text(tab.group.label), tab.group == layout.group,
+            tabMeasurer, tab.bounds, measurers.language.text(tab.group.label), tab.group == layout.group,
             hovered = frame.hover == target, focused = frame.focus == target,
         )
     }
@@ -238,38 +270,40 @@ private fun DrawScope.drawSettingsRow(
     val roles = measurers.roles
     val language = measurers.language
     val preferences = frame.preferences
+    val platform = frame.platform
     if (frame.activeRow == row.row) {
         drawKkSlab(row.bounds, Kk.Ink3, cut = d(10f))
         val cy = row.bounds.center.y
         drawKkSheared(Rect(row.bounds.left - d(14f), cy - d(13f), row.bounds.left - d(9f), cy + d(13f)), roles.you)
     }
-    val labelLayout = measureKkText(
-        measurers.body, row.row.label(language), measurers.typography.condStyle(type.rowLabel),
-        uppercase = true, maxWidth = row.label.width, maxLines = type.rowLabelLines,
-    )
-    drawKkText(labelLayout, row.label.left, row.label.center.y, Kk.Bone, valign = KkVAlign.CENTER)
+    drawKkText(settingsRowLabel(measurers, row, frame.layout.mode, type), row.label.left, row.label.center.y, Kk.Bone, valign = KkVAlign.CENTER)
 
-    val info = SettingsTarget.Info(row.row)
-    drawKkInfoButton(measurers.fixed, row.info, active = frame.openInfo == row.row || frame.hover == info || frame.focus == info)
-    if (frame.focus == info) drawSettingsFocus(row.info)
+    if (row.hasInfo) {
+        val info = SettingsTarget.Info(row.row)
+        drawKkInfoButton(measurers.fixed, row.info, active = frame.openInfo == row.row || frame.hover == info || frame.focus == info)
+        if (frame.focus == info) drawSettingsFocus(row.info)
+    }
 
-    when (row.row.control) {
+    when (row.control) {
         SettingsControl.SEGMENTED -> {
-            val selected = row.row.selectedOption(preferences)
+            val selected = row.row.selectedOption(preferences, platform)
             val measurer = measurers.fit(row.controlScale)
+            // The mode the system shows when it differs from the stored one (OS-driven): outlined, not filled.
+            val live = if (row.row == SettingsRow.WINDOW_MODE) platform.liveModeOverride(preferences)?.ordinal else null
             row.options.forEachIndexed { option, cell ->
                 val target = SettingsTarget.Option(row.row, option)
                 drawKkSegment(
-                    measurer, cell, row.row.optionLabel(option, language), option == selected,
+                    measurer, cell, row.row.optionLabel(option, language, platform), option == selected,
                     hovered = frame.hover == target, focused = frame.focus == target,
                 )
+                if (option == live) drawKkSheared(cell, roles.you, style = kkStroke(d(1.5f)))
             }
             if (row.swatches.isNotEmpty()) drawSettingsSwatches(row.swatches, preferences.colorVision.previewPalette(), measurers)
         }
         SettingsControl.TOGGLE -> {
             val toggle = row.toggle ?: return
             drawKkToggle(
-                measurers.fixed, toggle, if (row.row.isOn(preferences)) 1f else 0f,
+                measurers.fixed, toggle, if (row.row.isOn(preferences, platform)) 1f else 0f,
                 onLabel = language.text(ProfileText.On), offLabel = language.text(ProfileText.Off),
                 focused = frame.focus == SettingsTarget.Toggle(row.row),
             )
@@ -283,17 +317,139 @@ private fun DrawScope.drawSettingsRow(
             val output = row.output ?: return
             val minus = SettingsTarget.Step(row.row, -1)
             val plus = SettingsTarget.Step(row.row, 1)
-            drawKkStepButton(decrease, plus = false, hovered = frame.hover == minus, enabled = row.row.canStep(preferences, -1))
-            drawKkStepButton(increase, plus = true, hovered = frame.hover == plus, enabled = row.row.canStep(preferences, 1))
+            drawKkStepButton(decrease, plus = false, hovered = frame.hover == minus, enabled = row.row.canStep(preferences, -1, platform))
+            drawKkStepButton(increase, plus = true, hovered = frame.hover == plus, enabled = row.row.canStep(preferences, 1, platform))
             if (frame.focus == minus) drawSettingsFocus(decrease)
             if (frame.focus == plus) drawSettingsFocus(increase)
-            drawKkSlider(track, row.row.sliderValue(preferences), roles)
+            val enabled = row.row.isEnabled(preferences)
+            if (enabled) drawKkSlider(track, row.row.sliderValue(preferences, platform), roles)
+            else drawKkSlider(track, row.row.sliderValue(preferences, platform), roles.copy(you = Kk.Mute2))
+            // A disabled row reads Mute 2; a live window size that differs from the stored preset reads Mute.
+            val color = when {
+                !enabled -> Kk.Mute2
+                row.row == SettingsRow.WINDOW_SIZE && platform.liveSizeOverride(preferences) != null -> Kk.Mute
+                else -> Kk.Bone
+            }
             drawKkText(
-                measurers.ui, row.row.sliderOutput(preferences, language), measurers.outputStyle(),
-                output.right, output.center.y, Kk.Bone, align = KkAlign.END, valign = KkVAlign.CENTER, uppercase = true,
+                measurers.ui, row.row.sliderOutput(preferences, language, platform), measurers.outputStyle(),
+                output.right, output.center.y, color, align = KkAlign.END, valign = KkVAlign.CENTER, uppercase = true,
+            )
+        }
+        SettingsControl.KEYBIND -> drawSettingsKeyCell(frame, measurers, row)
+        SettingsControl.READOUT -> {
+            val readout = row.readout ?: return
+            drawKkText(
+                measurers.ui, settingValue(preferences, row.row, language, platform), measurers.readoutStyle(),
+                readout.right, readout.center.y, Kk.Bone, align = KkAlign.END, valign = KkVAlign.CENTER, uppercase = true,
+            )
+        }
+        SettingsControl.ACTION -> {
+            val button = row.action ?: return
+            val armed = frame.resetArmed
+            drawKkButton(
+                measurers.ui, button,
+                language.text(if (armed) SettingsRedesignText.ResetBindingsConfirm else SettingsRedesignText.ResetBindingsButton),
+                if (armed) KkButtonVariant.HAZARD else KkButtonVariant.GHOST, KkButtonSize.SM,
+                hover = if (frame.hover == SettingsTarget.Reset) 1f else 0f, focused = frame.focus == SettingsTarget.Reset,
+                enabled = settingsResetAvailable(preferences, platform), armed = armed, time = frame.time,
             )
         }
     }
+}
+
+/** Swap highlight length and the share of it spent fading out. */
+internal const val SETTINGS_SWAP_SECONDS = 1.6f
+private const val SETTINGS_SWAP_FADE_SECONDS = 0.4f
+private const val SETTINGS_SWAP_SLIDE_SECONDS = 0.22f
+/** A refused key flashes hazard for one frame (16 ms), then the cell shakes ±3 dp for 120 ms. */
+private const val SETTINGS_REJECT_FLASH_SECONDS = 0.016f
+private const val SETTINGS_REJECT_SHAKE_SECONDS = 0.12f
+/** Capture caret: 530 ms on, 530 ms off; the volt echo pulses every 1.2 s. */
+private const val SETTINGS_CARET_PERIOD_SECONDS = 1.06f
+private const val SETTINGS_ECHO_PERIOD_SECONDS = 1.2f
+
+/**
+ * One key cell: ink-3 sheared cell with the key cap in bone (ink-4 on hover, bone outline on
+ * focus); a volt face with a blinking ink caret and a pulsing echo, and no text, while it waits for
+ * a key; a hazard flash and a shake for a refused key; a `you` pip when the key is not the
+ * default; and, for the row that received the old key of a swap, a volt echo and a Swapped tag.
+ */
+private fun DrawScope.drawSettingsKeyCell(frame: SettingsFrame, measurers: SettingsMeasurers, row: SettingsRowLayout) {
+    val cell = row.key ?: return
+    val action = row.row.boundAction ?: return
+    val roles = measurers.roles
+    val target = SettingsTarget.Key(action)
+    val capturing = frame.capture == action
+    val bindings = frame.preferences.keyBindings
+    val key = bindings.key(action)
+    val sinceSwap = frame.time - frame.swappedAt
+    val swapped = frame.swapped == action && sinceSwap in 0f..SETTINGS_SWAP_SECONDS
+    val sinceReject = frame.time - frame.rejectAt
+    val shakeX = if (capturing && sinceReject in SETTINGS_REJECT_FLASH_SECONDS..SETTINGS_REJECT_FLASH_SECONDS + SETTINGS_REJECT_SHAKE_SECONDS) {
+        // Three half-swings of ±3 dp, damped to rest.
+        val t = (sinceReject - SETTINGS_REJECT_FLASH_SECONDS) / SETTINGS_REJECT_SHAKE_SECONDS
+        d(3f) * sin(t * PI.toFloat() * 3f) * (1f - t)
+    } else 0f
+    val face = translateRect(cell, shakeX)
+    if (capturing) {
+        val pulse = kkPulse(frame.time, SETTINGS_ECHO_PERIOD_SECONDS)
+        drawKkSheared(translateRect(face, d(4f) * pulse, d(4f) * pulse), roles.you.copy(alpha = 0.45f))
+        val flash = sinceReject in 0f..SETTINGS_REJECT_FLASH_SECONDS
+        drawKkSheared(face, if (flash) Kk.Hazard else roles.you)
+        if (kkLoop(frame.time, SETTINGS_CARET_PERIOD_SECONDS) < 0.5f) {
+            val center = face.center
+            drawKkSheared(Rect(center.x - d(1f), center.y - d(8f), center.x + d(1f), center.y + d(8f)), Kk.Ink)
+        }
+    } else {
+        if (swapped) drawKkSheared(translateRect(face, d(4f), d(4f)), roles.you)
+        drawKkSheared(face, if (frame.hover == target) Kk.Ink4 else Kk.Ink3)
+        val slide = if (swapped) (1f - kkProgress(sinceSwap * 1000f, SETTINGS_SWAP_SLIDE_SECONDS * 1000f, KkEase.Pull)) * d(12f) else 0f
+        drawKkText(
+            measurers.ui, key.label(measurers.language), measurers.keyStyle(), face.center.x + slide, face.center.y, Kk.Bone,
+            align = KkAlign.CENTER, valign = KkVAlign.CENTER, uppercase = true, maxWidth = face.width - d(16f),
+        )
+    }
+    if (key != KeyBindings.DEFAULT.key(action)) {
+        drawKkSheared(Rect(face.left + d(5f), face.center.y - d(6f), face.left + d(9f), face.center.y + d(6f)), roles.you)
+    }
+    if (frame.focus == target) drawSettingsFocus(face)
+    if (swapped) {
+        val fade = ((SETTINGS_SWAP_SECONDS - sinceSwap) / SETTINGS_SWAP_FADE_SECONDS).coerceIn(0f, 1f)
+        val alpha = KkEase.Out.transform(fade)
+        val tag = measurers.language.text(SettingsRedesignText.Swapped)
+        val size = kkTagSize(measurers.fixed, tag, density)
+        drawKkTag(
+            measurers.fixed, tag, Offset(face.left - d(10f) - size.width, face.center.y - size.height * 0.5f),
+            KkTagVariant.YOU, alpha = alpha,
+        )
+    }
+}
+
+private fun translateRect(rect: Rect, dx: Float, dy: Float = 0f): Rect =
+    if (dx == 0f && dy == 0f) rect else Rect(rect.left + dx, rect.top + dy, rect.right + dx, rect.bottom + dy)
+
+/** Smallest factor a one-line row label shrinks to before it ends in an ellipsis. */
+private const val SETTINGS_LABEL_MIN_FIT = 0.8f
+
+/**
+ * A row label in its box: compact landscape and the one-line rows of portrait wrap to two lines
+ * (their layout made room); a single-line label wider than its box shrinks to 80 % first.
+ */
+private fun settingsRowLabel(
+    measurers: SettingsMeasurers,
+    row: SettingsRowLayout,
+    mode: SettingsLayoutMode,
+    type: SettingsType,
+): TextLayoutResult {
+    val text = row.row.label(measurers.language)
+    val style = measurers.typography.condStyle(type.rowLabel)
+    val stacked = row.control == SettingsControl.SEGMENTED || row.control == SettingsControl.SLIDER
+    val lines = if (mode == SettingsLayoutMode.COMPACT_PORTRAIT && !stacked) 2 else type.rowLabelLines
+    val wrapped = measureKkText(measurers.body, text, style, uppercase = true, maxWidth = row.label.width, maxLines = lines)
+    if (!wrapped.hasVisualOverflow && (lines > 1 || wrapped.lineCount == 1)) return wrapped
+    val natural = measureKkText(measurers.body, text, style, uppercase = true).size.width.toFloat()
+    val factor = (row.label.width * lines / natural.coerceAtLeast(1f)).coerceIn(SETTINGS_LABEL_MIN_FIT, 1f)
+    return measureKkText(measurers.at(measurers.bodyScale * factor), text, style, uppercase = true, maxWidth = row.label.width, maxLines = lines)
 }
 
 /** Keyboard focus ring (`:focus-visible`: 2 dp bone, 4 dp outside) for controls without one. */
@@ -381,55 +537,171 @@ internal fun SettingsRow.label(language: AppLanguage): String = when (this) {
     SettingsRow.RUN_STATISTICS_SIDE -> language.text(ProfileText.RunStatisticsSide)
     SettingsRow.COLOR_VISION -> language.text(SettingsRedesignText.ColorVision)
     SettingsRow.MINIMAP -> language.text(SettingsRedesignText.Minimap)
+    SettingsRow.PAUSE_ON_FOCUS_LOSS -> language.text(SettingsRedesignText.PauseOnFocusLoss)
+    SettingsRow.WINDOW_MODE -> language.text(SettingsRedesignText.WindowMode)
+    SettingsRow.WINDOW_SIZE -> language.text(SettingsRedesignText.WindowSize)
+    SettingsRow.FULLSCREEN -> language.text(SettingsRedesignText.Fullscreen)
+    SettingsRow.VSYNC -> language.text(SettingsRedesignText.Vsync)
+    SettingsRow.FRAME_RATE_CAP -> language.text(SettingsRedesignText.FrameRateCap)
+    SettingsRow.REFRESH_RATE -> language.text(SettingsRedesignText.RefreshRate)
+    SettingsRow.IMMERSIVE -> language.text(SettingsRedesignText.Immersive)
+    SettingsRow.INTERFACE_SCALE -> language.text(SettingsRedesignText.InterfaceScale)
+    SettingsRow.SHOW_FPS -> language.text(SettingsRedesignText.ShowFps)
+    SettingsRow.REACTION_EFFECTS -> language.text(SettingsRedesignText.ReactionEffects)
+    SettingsRow.RESET_BINDINGS -> language.text(SettingsRedesignText.ResetBindings)
+    SettingsRow.BIND_DASH,
+    SettingsRow.BIND_BRAKE,
+    SettingsRow.BIND_SKILL_1,
+    SettingsRow.BIND_SKILL_2,
+    SettingsRow.BIND_SKILL_3,
+    SettingsRow.BIND_APEX,
+    SettingsRow.BIND_PAUSE,
+    SettingsRow.BIND_CHOICE_1,
+    SettingsRow.BIND_CHOICE_2,
+    SettingsRow.BIND_CHOICE_3,
+    SettingsRow.BIND_CHOICE_4,
+    SettingsRow.BIND_REROLL,
+    SettingsRow.BIND_RESTART,
+    SettingsRow.BIND_PERFORMANCE,
+    -> settingsActionName(checkNotNull(boundAction), language)
 }
 
-/** The row's (!) explanation. */
-internal fun SettingsRow.about(language: AppLanguage): String = language.text(when (this) {
-    SettingsRow.LANGUAGE -> SettingsRedesignText.AboutLanguage
-    SettingsRow.SFX -> SettingsRedesignText.AboutSfx
-    SettingsRow.MUSIC -> SettingsRedesignText.AboutMusic
-    SettingsRow.MASTER_VOLUME -> SettingsRedesignText.AboutMasterVolume
-    SettingsRow.SIMULATION_SPEED -> SettingsRedesignText.AboutSimulationSpeed
-    SettingsRow.TEXT_SIZE -> SettingsRedesignText.AboutTextSize
-    SettingsRow.SCREEN_SHAKE -> SettingsRedesignText.AboutScreenShake
-    SettingsRow.PARTICLES -> SettingsRedesignText.AboutParticles
-    SettingsRow.DAMAGE_NUMBERS -> SettingsRedesignText.AboutDamageNumbers
-    SettingsRow.DAMAGE_NUMBER_SIZE -> SettingsRedesignText.AboutDamageNumberSize
-    SettingsRow.DAMAGE_NUMBER_FORMAT -> SettingsRedesignText.AboutDamageNumberFormat
-    SettingsRow.DAMAGE_COLOR_THRESHOLDS -> SettingsRedesignText.AboutDamageColorTiers
-    SettingsRow.RUN_STATISTICS_SIDE -> SettingsRedesignText.AboutRunStatisticsSide
-    SettingsRow.COLOR_VISION -> SettingsRedesignText.AboutColorVision
-    SettingsRow.MINIMAP -> SettingsRedesignText.AboutMinimap
-})
+/** The name of a rebindable gameplay action ("Active 2" / «Активный эффект 2»). */
+internal fun settingsActionName(action: GameAction, language: AppLanguage): String = when (action) {
+    GameAction.DASH -> language.text(SettingsRedesignText.ActionDash)
+    GameAction.BRAKE -> language.text(SettingsRedesignText.ActionBrake)
+    GameAction.SKILL_1 -> language.text(SettingsRedesignText.ActionSkill, 1)
+    GameAction.SKILL_2 -> language.text(SettingsRedesignText.ActionSkill, 2)
+    GameAction.SKILL_3 -> language.text(SettingsRedesignText.ActionSkill, 3)
+    GameAction.APEX -> language.text(SettingsRedesignText.ActionApex)
+    GameAction.PAUSE -> language.text(SettingsRedesignText.ActionPause)
+    GameAction.REROLL -> language.text(SettingsRedesignText.ActionReroll)
+    GameAction.RESTART -> language.text(SettingsRedesignText.ActionRestart)
+    GameAction.CHOICE_1 -> language.text(SettingsRedesignText.ActionChoice, 1)
+    GameAction.CHOICE_2 -> language.text(SettingsRedesignText.ActionChoice, 2)
+    GameAction.CHOICE_3 -> language.text(SettingsRedesignText.ActionChoice, 3)
+    GameAction.CHOICE_4 -> language.text(SettingsRedesignText.ActionChoice, 4)
+    GameAction.PERFORMANCE_HUD -> language.text(SettingsRedesignText.ActionPerformance)
+}
 
-internal fun SettingsRow.isOn(preferences: PlayerPreferences): Boolean = when (this) {
+/**
+ * The row's (!) explanation; on key binding rows the key cell's accessibility hint. The refresh
+ * rate explains a choice where [platform] offers one and the monitor readout elsewhere.
+ */
+internal fun SettingsRow.about(language: AppLanguage, platform: SettingsPlatform = SettingsPlatform.DEFAULT): String = when (this) {
+    SettingsRow.LANGUAGE -> language.text(SettingsRedesignText.AboutLanguage)
+    SettingsRow.SFX -> language.text(SettingsRedesignText.AboutSfx)
+    SettingsRow.MUSIC -> language.text(SettingsRedesignText.AboutMusic)
+    SettingsRow.MASTER_VOLUME -> language.text(SettingsRedesignText.AboutMasterVolume)
+    SettingsRow.SIMULATION_SPEED -> language.text(SettingsRedesignText.AboutSimulationSpeed)
+    SettingsRow.TEXT_SIZE -> language.text(SettingsRedesignText.AboutTextSize)
+    SettingsRow.SCREEN_SHAKE -> language.text(SettingsRedesignText.AboutScreenShake)
+    SettingsRow.PARTICLES -> language.text(SettingsRedesignText.AboutParticles)
+    SettingsRow.DAMAGE_NUMBERS -> language.text(SettingsRedesignText.AboutDamageNumbers)
+    SettingsRow.DAMAGE_NUMBER_SIZE -> language.text(SettingsRedesignText.AboutDamageNumberSize)
+    SettingsRow.DAMAGE_NUMBER_FORMAT -> language.text(SettingsRedesignText.AboutDamageNumberFormat)
+    SettingsRow.DAMAGE_COLOR_THRESHOLDS -> language.text(SettingsRedesignText.AboutDamageColorTiers)
+    SettingsRow.RUN_STATISTICS_SIDE -> language.text(SettingsRedesignText.AboutRunStatisticsSide)
+    SettingsRow.COLOR_VISION -> language.text(SettingsRedesignText.AboutColorVision)
+    SettingsRow.MINIMAP -> language.text(SettingsRedesignText.AboutMinimap)
+    SettingsRow.PAUSE_ON_FOCUS_LOSS -> language.text(SettingsRedesignText.AboutPauseOnFocusLoss)
+    SettingsRow.WINDOW_MODE -> language.text(SettingsRedesignText.AboutWindowMode)
+    SettingsRow.WINDOW_SIZE -> language.text(SettingsRedesignText.AboutWindowSize)
+    SettingsRow.FULLSCREEN -> language.text(SettingsRedesignText.AboutFullscreen)
+    SettingsRow.VSYNC -> language.text(SettingsRedesignText.AboutVsync)
+    SettingsRow.FRAME_RATE_CAP -> language.text(SettingsRedesignText.AboutFrameRateCap)
+    SettingsRow.REFRESH_RATE -> language.text(
+        if (platform.control(this) == SettingsControl.READOUT) SettingsRedesignText.AboutRefreshRateDesktop
+        else SettingsRedesignText.AboutRefreshRateAndroid,
+    )
+    SettingsRow.IMMERSIVE -> language.text(SettingsRedesignText.AboutImmersive)
+    SettingsRow.INTERFACE_SCALE -> language.text(SettingsRedesignText.AboutInterfaceScale)
+    SettingsRow.SHOW_FPS -> language.text(SettingsRedesignText.AboutShowFps)
+    SettingsRow.REACTION_EFFECTS -> language.text(SettingsRedesignText.AboutReactionEffects)
+    SettingsRow.RESET_BINDINGS -> language.text(SettingsRedesignText.AboutResetBindings)
+    SettingsRow.BIND_DASH -> language.text(SettingsRedesignText.AboutBindDash)
+    SettingsRow.BIND_BRAKE -> language.text(SettingsRedesignText.AboutBindBrake)
+    SettingsRow.BIND_SKILL_1 -> language.text(SettingsRedesignText.AboutBindSkill, 1)
+    SettingsRow.BIND_SKILL_2 -> language.text(SettingsRedesignText.AboutBindSkill, 2)
+    SettingsRow.BIND_SKILL_3 -> language.text(SettingsRedesignText.AboutBindSkill, 3)
+    SettingsRow.BIND_APEX -> language.text(SettingsRedesignText.AboutBindApex)
+    SettingsRow.BIND_PAUSE -> language.text(SettingsRedesignText.AboutBindPause)
+    SettingsRow.BIND_CHOICE_1 -> language.text(SettingsRedesignText.AboutBindChoice, 1)
+    SettingsRow.BIND_CHOICE_2 -> language.text(SettingsRedesignText.AboutBindChoice, 2)
+    SettingsRow.BIND_CHOICE_3 -> language.text(SettingsRedesignText.AboutBindChoice, 3)
+    SettingsRow.BIND_CHOICE_4 -> language.text(SettingsRedesignText.AboutBindChoice, 4)
+    SettingsRow.BIND_REROLL -> language.text(SettingsRedesignText.AboutBindReroll)
+    SettingsRow.BIND_RESTART -> language.text(SettingsRedesignText.AboutBindRestart)
+    SettingsRow.BIND_PERFORMANCE -> language.text(SettingsRedesignText.AboutBindPerformance)
+}
+
+internal fun SettingsRow.isOn(preferences: PlayerPreferences, platform: SettingsPlatform = SettingsPlatform.DEFAULT): Boolean = when (this) {
     SettingsRow.SFX -> preferences.soundEnabled
     SettingsRow.MUSIC -> preferences.musicEnabled
     SettingsRow.SCREEN_SHAKE -> preferences.screenShake
     SettingsRow.DAMAGE_NUMBERS -> preferences.damageNumbers
     SettingsRow.MINIMAP -> preferences.minimapEnabled
+    SettingsRow.PAUSE_ON_FOCUS_LOSS -> preferences.pauseOnFocusLoss
+    SettingsRow.VSYNC -> preferences.vsync
+    SettingsRow.IMMERSIVE -> preferences.immersive
+    SettingsRow.SHOW_FPS -> preferences.showFps
+    // Live browser state, never stored.
+    SettingsRow.FULLSCREEN -> platform.browserFullscreen
     else -> false
 }
 
+/** False while the row's control is disabled: the window size outside windowed mode. */
+internal fun SettingsRow.isEnabled(preferences: PlayerPreferences): Boolean =
+    this != SettingsRow.WINDOW_SIZE || preferences.windowMode == WindowMode.WINDOWED
+
+/** Whether Reset keys can be pressed: some key is not its default. */
+internal fun settingsResetAvailable(preferences: PlayerPreferences, platform: SettingsPlatform): Boolean =
+    platform.offers(SettingsRow.RESET_BINDINGS) && !preferences.keyBindings.isDefault
+
 /** Slider position 0..1 of a slider row. */
-internal fun SettingsRow.sliderValue(preferences: PlayerPreferences): Float = when (this) {
+internal fun SettingsRow.sliderValue(preferences: PlayerPreferences, platform: SettingsPlatform = SettingsPlatform.DEFAULT): Float = when (this) {
     SettingsRow.MASTER_VOLUME -> preferences.masterVolume
     SettingsRow.TEXT_SIZE -> (preferences.textScale - 1f) / 0.75f
     SettingsRow.DAMAGE_COLOR_THRESHOLDS -> thresholdIndex(preferences).toFloat() / DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.lastIndex
+    SettingsRow.WINDOW_SIZE -> settingsWindowSizePosition(preferences, platform)
+    SettingsRow.FRAME_RATE_CAP -> FRAME_RATE_CAP_STEPS.indexOf(preferences.frameRateCap).coerceAtLeast(0).toFloat() / FRAME_RATE_CAP_STEPS.lastIndex
     else -> 0f
 }.coerceIn(0f, 1f)
 
 /** Whether one step in [direction] still changes the value (the stepper greys out at the ends). */
-internal fun SettingsRow.canStep(preferences: PlayerPreferences, direction: Int): Boolean {
-    val value = sliderValue(preferences)
-    return if (direction < 0) value > 0f else value < 1f
+internal fun SettingsRow.canStep(
+    preferences: PlayerPreferences,
+    direction: Int,
+    platform: SettingsPlatform = SettingsPlatform.DEFAULT,
+): Boolean = when (this) {
+    SettingsRow.WINDOW_SIZE -> settingsWindowSizeStep(preferences, platform, direction) != null
+    SettingsRow.FRAME_RATE_CAP -> settingsFrameRateCapStep(preferences, direction) != null
+    else -> {
+        val value = sliderValue(preferences, platform)
+        if (direction < 0) value > 0f else value < 1f
+    }
 }
 
-/** Short value next to a slider: percent, or the first damage color threshold. */
-internal fun SettingsRow.sliderOutput(preferences: PlayerPreferences, language: AppLanguage): String = when (this) {
+/** Short value next to a slider: percent, the first damage color threshold, a window size or a frame limit. */
+internal fun SettingsRow.sliderOutput(
+    preferences: PlayerPreferences,
+    language: AppLanguage,
+    platform: SettingsPlatform = SettingsPlatform.DEFAULT,
+): String = when (this) {
     SettingsRow.DAMAGE_COLOR_THRESHOLDS -> formatCompact(preferences.damageNumberTierThreshold.toLong(), language)
+    SettingsRow.WINDOW_SIZE -> platform.liveSizeOverride(preferences)?.let { settingsWindowSizeText(it.widthDp, it.heightDp, language) }
+        ?: settingsWindowSizeText(preferences.windowSize.widthDp, preferences.windowSize.heightDp, language)
+    SettingsRow.FRAME_RATE_CAP -> settingsFrameRateText(preferences.frameRateCap, language)
     else -> "${(sliderValueRaw(preferences) * 100f).roundToInt()}%"
 }
+
+/** "1600×900". */
+internal fun settingsWindowSizeText(widthDp: Int, heightDp: Int, language: AppLanguage): String =
+    language.text(SettingsRedesignText.WindowSizeValue, widthDp, heightDp)
+
+/** "60 FPS" / «60 к/с», or "Unlimited" for 0. */
+internal fun settingsFrameRateText(fps: Int, language: AppLanguage): String =
+    if (fps <= 0) language.text(SettingsRedesignText.FrameRateUnlimited) else language.text(SettingsRedesignText.FrameRateValue, fps)
 
 private fun SettingsRow.sliderValueRaw(preferences: PlayerPreferences): Float = when (this) {
     SettingsRow.MASTER_VOLUME -> preferences.masterVolume
@@ -445,32 +717,47 @@ private fun thresholdIndex(preferences: PlayerPreferences): Int =
         kotlin.math.abs(DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS[index].toLong() - preferences.damageNumberTierThreshold)
     } ?: 0
 
+private fun onOff(on: Boolean, language: AppLanguage): String = language.text(if (on) ProfileText.On else ProfileText.Off)
+
 /** Spoken value of a row (state descriptions); matches what the row shows. */
 internal fun settingValue(
     preferences: PlayerPreferences,
     row: SettingsRow,
     language: AppLanguage = preferences.language,
+    platform: SettingsPlatform = SettingsPlatform.DEFAULT,
 ): String = when (row) {
     SettingsRow.LANGUAGE -> preferences.language.nativeName
-    SettingsRow.SFX -> if (preferences.soundEnabled) language.text(ProfileText.On) else language.text(ProfileText.Off)
-    SettingsRow.MUSIC -> if (preferences.musicEnabled) language.text(ProfileText.On) else language.text(ProfileText.Off)
+    SettingsRow.SFX -> onOff(preferences.soundEnabled, language)
+    SettingsRow.MUSIC -> onOff(preferences.musicEnabled, language)
     SettingsRow.MASTER_VOLUME -> "${(preferences.masterVolume * 100f).roundToInt()}%"
     SettingsRow.SIMULATION_SPEED -> formatMultiplier(preferences.simulationSpeed, language)
     SettingsRow.TEXT_SIZE -> "${(preferences.textScale * 100f).roundToInt()}%"
     SettingsRow.RUN_STATISTICS_SIDE -> language.text(
         if (preferences.runStatisticsOnLeft) ProfileText.LeftSide else ProfileText.RightSide,
     )
-    SettingsRow.SCREEN_SHAKE -> if (preferences.screenShake) language.text(ProfileText.On) else language.text(ProfileText.Off)
-    SettingsRow.PARTICLES, SettingsRow.DAMAGE_NUMBER_SIZE, SettingsRow.DAMAGE_NUMBER_FORMAT, SettingsRow.COLOR_VISION ->
-        row.optionLabel(row.selectedOption(preferences), language)
-    SettingsRow.DAMAGE_NUMBERS -> if (preferences.damageNumbers) language.text(ProfileText.On) else language.text(ProfileText.Off)
-    SettingsRow.MINIMAP -> if (preferences.minimapEnabled) language.text(ProfileText.On) else language.text(ProfileText.Off)
+    SettingsRow.SCREEN_SHAKE -> onOff(preferences.screenShake, language)
+    SettingsRow.PARTICLES, SettingsRow.DAMAGE_NUMBER_SIZE, SettingsRow.DAMAGE_NUMBER_FORMAT, SettingsRow.COLOR_VISION,
+    SettingsRow.WINDOW_MODE, SettingsRow.INTERFACE_SCALE, SettingsRow.REACTION_EFFECTS,
+    -> row.optionLabel(row.selectedOption(preferences, platform), language, platform)
+    SettingsRow.DAMAGE_NUMBERS -> onOff(preferences.damageNumbers, language)
+    SettingsRow.MINIMAP -> onOff(preferences.minimapEnabled, language)
     SettingsRow.DAMAGE_COLOR_THRESHOLDS -> {
         val first = preferences.damageNumberTierThreshold.toLong()
         val second = first * DAMAGE_NUMBER_POWERFUL_MULTIPLIER
         val third = first * DAMAGE_NUMBER_DEVASTATING_MULTIPLIER
         "${formatCompact(first, language)}/${formatCompact(second, language)}/${formatCompact(third, language)}"
     }
+    SettingsRow.PAUSE_ON_FOCUS_LOSS, SettingsRow.VSYNC, SettingsRow.IMMERSIVE, SettingsRow.SHOW_FPS, SettingsRow.FULLSCREEN ->
+        onOff(row.isOn(preferences, platform), language)
+    SettingsRow.WINDOW_SIZE, SettingsRow.FRAME_RATE_CAP -> row.sliderOutput(preferences, language, platform)
+    SettingsRow.REFRESH_RATE -> if (platform.control(row) == SettingsControl.READOUT) {
+        val hz = platform.support.monitorRefreshHz
+        if (hz > 0) refreshRateText(hz, language) else language.text(SettingsRedesignText.RefreshUnknown)
+    } else {
+        row.optionLabel(row.selectedOption(preferences, platform), language, platform)
+    }
+    SettingsRow.RESET_BINDINGS -> language.text(SettingsRedesignText.ResetBindingsButton)
+    else -> preferences.keyBindings.key(checkNotNull(row.boundAction)).label(language)
 }
 
 /** Damage number color tiers start at the threshold, four times it and twenty times it. */

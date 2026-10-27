@@ -44,7 +44,7 @@ internal fun MutableGameState.isShifting(enemy: Enemy): Boolean = enemy.shiftUnt
 internal fun MutableGameState.isPhasedPhantom(enemy: Enemy): Boolean = enemy.type == EnemyType.PHANTOM && isShifting(enemy)
 
 /** Integrity at which the current phase ends: the boss bar's thirds (quarters for the Singularity Architect). */
-private fun MutableGameState.architectGate(enemy: Enemy): Float {
+internal fun MutableGameState.architectGate(enemy: Enemy): Float {
     val finalPhase = architectFinalPhase()
     return enemy.maxHp * (finalPhase - enemy.phase) / (finalPhase + 1f)
 }

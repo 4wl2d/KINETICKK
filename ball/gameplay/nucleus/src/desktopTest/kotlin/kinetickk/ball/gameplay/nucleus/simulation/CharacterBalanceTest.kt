@@ -77,6 +77,31 @@ class CharacterBalanceTest {
         }
     }
 
+    /**
+     * Refit 10 for every character (economy §4.6): the same fights keep the offensive characters within ±40 % of
+     * their median and the Prism and the Diamond within their share of the Orb's integrity loss.
+     */
+    @Test
+    fun everyCharacterAtRefitTenStaysInBand() {
+        val outside = mutableListOf<String>()
+        for ((jittered, outcomes) in refitRuns) {
+            val outputs = OFFENSIVE.associateWith { shape -> outcomes.getValue(shape).dealt }
+            val median = median(outputs.values)
+            val orb = outcomes.getValue(CoreShape.ORB)
+            val prism = outcomes.getValue(CoreShape.PRISM)
+            val diamond = outcomes.getValue(CoreShape.DIAMOND)
+            println("CHARACTER-BALANCE refit=10 jittered=$jittered median=${"%.1f".format(median)} " +
+                outputs.entries.joinToString { (shape, value) -> "$shape=${"%.1f".format(value)} (${"%.2f".format(value / median)})" } +
+                "; ORB lost=${orb.hpLost} PRISM lost=${prism.hpLost} DIAMOND lost=${diamond.hpLost}")
+            outputs.forEach { (shape, value) ->
+                if (value !in median * 0.6..median * 1.4) outside += "$shape=$value (median $median, jittered=$jittered)"
+            }
+            if (prism.hpLost > orb.hpLost * PRISM_LOSS_SHARE) outside += "PRISM lost ${prism.hpLost} of the Orb's ${orb.hpLost} (jittered=$jittered)"
+            if (diamond.hpLost > orb.hpLost * DIAMOND_LOSS_SHARE) outside += "DIAMOND lost ${diamond.hpLost} of the Orb's ${orb.hpLost} (jittered=$jittered)"
+        }
+        assertTrue(outside.isEmpty(), "Refit 10 characters outside their band: $outside")
+    }
+
     @Test
     fun aPrismRammingPacksWhileShotAtLosesIntegrityWithinAMinute() {
         // Swarmling packs to ram every second and one aimed bolt per second: facets cannot keep up.
@@ -161,16 +186,22 @@ class CharacterBalanceTest {
          * Both balance variants (exact timing, then jittered timing) for every character, each the mean of
          * [BALANCE_SEEDS] fights with their own pack bearings and timing, run once per test JVM.
          */
-        val balanceRuns: Map<Boolean, Map<CoreShape, Outcome>> by lazy {
+        val balanceRuns: Map<Boolean, Map<CoreShape, Outcome>> by lazy { balance(refit = 0) }
+
+        /** [balanceRuns] with every character at Refit 10. */
+        val refitRuns: Map<Boolean, Map<CoreShape, Outcome>> by lazy { balance(refit = content.upgrades.maxLevel) }
+
+        fun balance(refit: Int): Map<Boolean, Map<CoreShape, Outcome>> =
             listOf(false, true).associateWith { jittered ->
                 CoreShape.entries.associateWith { shape ->
-                    val fights = BALANCE_SEEDS.map { seed -> scripted(shape, 90f, seed = seed, script = BalanceScript(jittered, seed)) }
+                    val fights = BALANCE_SEEDS.map { seed ->
+                        scripted(shape, 90f, seed = seed, refit = refit, script = BalanceScript(jittered, seed))
+                    }
                     Outcome(fights.sumOf { it.dealt } / fights.size, fights.sumOf { it.prevented } / fights.size,
                         fights.sumOf { it.hpLost.toDouble() }.toFloat() / fights.size, fights.sumOf { it.kills } / fights.size,
                         fights.sumOf { it.dashes } / fights.size, fights.any { it.overheated })
                 }
             }
-        }
 
         const val KEPT_INTEGRITY = 1_000f
         val BALANCE_SEEDS = 4_241..4_264
@@ -199,12 +230,14 @@ class CharacterBalanceTest {
             seconds: Float,
             keepAlive: Boolean = true,
             seed: Int = 4_242,
+            refit: Int = 0,
             script: (state: MutableGameState, frame: Int) -> Unit,
         ): Outcome {
             val state = MutableGameState(content, seed = seed)
             state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
             state.resize(1_280f, 720f)
             state.coreShape = shape
+            state.characterUpgradeLevels[shape.ordinal] = refit
             state.startRun()
             state.enemies.clear()
             state.nextEliteAt = Float.MAX_VALUE

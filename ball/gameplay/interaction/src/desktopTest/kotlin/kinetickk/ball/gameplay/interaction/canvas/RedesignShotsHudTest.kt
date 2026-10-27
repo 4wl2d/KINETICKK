@@ -31,6 +31,7 @@ import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPolicy
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
@@ -46,10 +47,13 @@ import kinetickk.ball.gameplay.nucleus.GameplayNucleusPulse
 import kinetickk.ball.gameplay.nucleus.GameplayStartContext
 import kinetickk.ball.gameplay.nucleus.GameplayStartInputs
 import kinetickk.ball.gameplay.nucleus.GameplayState
+import kinetickk.ball.gameplay.nucleus.render.ApexProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SkillBarProjection
+import kinetickk.ball.gameplay.nucleus.render.SkillSlotProjection
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
@@ -88,7 +92,9 @@ class RedesignShotsHudTest {
     @Test
     fun renderHudStates() {
         if (fullShots) output.mkdirs()
-        val sizes = listOf(1440 to 810, 844 to 390, 390 to 844).matrix()
+        // KK_SHOTS_SIZES ("1000x700,640x360") replaces the three reference sizes.
+        val sizes = (System.getenv("KK_SHOTS_SIZES")?.split(',')?.map { it.substringBefore('x').toInt() to it.substringAfter('x').toInt() }
+            ?: listOf(1440 to 810, 844 to 390, 390 to 844)).matrix()
         val only = System.getenv("KK_SHOTS_ONLY")
         // The game's default text size (1.25) and the setting's maximum (1.75, suffix -175).
         val scales = (System.getenv("KK_SHOTS_SCALES") ?: "1.25,1.75").split(',').map { it.toFloat() }.matrix()
@@ -110,7 +116,7 @@ class RedesignShotsHudTest {
                     val bitmap = ImageBitmap(width, height)
                     CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(width.toFloat(), height.toFloat())) {
                         drawGameplay(scene.model, scene.fx, measurer, scene.time, null, hudMemory = scene.memory,
-                            trialInfoOpen = scene.focused)
+                            trialInfoOpen = scene.focused, controls = scene.controls)
                         // The Compose Build button sits beside pause; outline its bounds for review.
                         val build = kinetickk.ball.gameplay.interaction.layout.runningBuildButtonBounds(size.width, size.height, 1f)
                         drawRect(kinetickk.foundation.design.Kk.Ink3, build.topLeft + androidx.compose.ui.geometry.Offset(4f, 6f),
@@ -124,7 +130,14 @@ class RedesignShotsHudTest {
         }
     }
 
-    private class Scene(val model: GameplayRenderModel, val fx: VisualFxProjection, val memory: HudPresentationMemory, val time: Float, val focused: Boolean)
+    private class Scene(
+        val model: GameplayRenderModel,
+        val fx: VisualFxProjection,
+        val memory: HudPresentationMemory,
+        val time: Float,
+        val focused: Boolean,
+        val controls: kinetickk.ball.gameplay.interaction.input.RunningControlPressLog? = null,
+    )
 
     private enum class Shot {
         CRUISE, DASH, OVERHEAT, POLARITY, OVERDRIVE, CRITICAL, ELITE, ARCHITECT, TRIAL, TRIAL_INFO, FEED, FEED_ANOMALY,
@@ -132,6 +145,32 @@ class RedesignShotsHudTest {
         SYNERGY, ELITE_MARKERS, ARCHITECT_TRIAL,
         // The Rebirth strip: the tier plate with five and with every mutator sigil.
         REBIRTH_5, REBIRTH_10,
+        // The level badge's upper tiers and the APEX at the cap in each Apex state; a tier change 300 ms and the
+        // Apex unlock 400 ms into their one-shots.
+        LEVEL_T4, LEVEL_T5, APEX_COOLING, APEX_READY, APEX_ACTIVE, TIER_UP, APEX_UNLOCK,
+        // The active row with key caps (keyboard in use) at the cap: Z ready at rank III, X cooling 60 % at rank II
+        // with a refund flash, C empty; then every slot bound with two charges, a running and an in-flight active; then
+        // the element-less Catalyze ready at rank II in Z and Dual Infusion cooling at rank I in X (the kinetic role)
+        // beside an empty C.
+        SKILLS_MIXED, SKILLS_FULL, SKILLS_KINETIC,
+    }
+
+    private fun level(shot: Shot, values: Values): Int = when (shot) {
+        Shot.LEVEL_T4 -> 34
+        Shot.LEVEL_T5 -> 41
+        Shot.APEX_COOLING, Shot.APEX_READY, Shot.APEX_ACTIVE, Shot.APEX_UNLOCK, Shot.SKILLS_MIXED, Shot.SKILLS_FULL,
+        Shot.SKILLS_KINETIC -> LEVEL_CAP
+        Shot.TIER_UP -> 20
+        else -> values.level
+    }
+
+    private fun apex(shot: Shot): ApexProjection = when (shot) {
+        // Charged 40 %.
+        Shot.APEX_COOLING -> ApexProjection(unlocked = true, cooldown01 = 0.6f)
+        Shot.APEX_READY, Shot.APEX_UNLOCK, Shot.SKILLS_FULL -> ApexProjection(unlocked = true, ready = true)
+        Shot.SKILLS_MIXED, Shot.SKILLS_KINETIC -> ApexProjection(unlocked = true, cooldown01 = 0.3f)
+        Shot.APEX_ACTIVE -> ApexProjection(unlocked = true, active01 = 0.6f)
+        else -> ApexProjection.LOCKED
     }
 
     private data class Values(
@@ -196,7 +235,7 @@ class RedesignShotsHudTest {
             "heat" to v.heat, "overheated" to (v.heat >= 100f),
             "dashPhaseTime" to if (shot == Shot.DASH) 0.16f else 0f,
             "hp" to v.integrity, "maxHp" to 180f, "shield" to v.shield, "maxShield" to 60f,
-            "level" to v.level, "data" to 77, "nextLevelData" to 100, "keys" to v.keys,
+            "level" to level(shot, v), "maxLevel" to LEVEL_CAP, "apex" to apex(shot), "data" to 77, "nextLevelData" to 100, "keys" to v.keys,
             "combo" to v.chain, "comboTime" to v.chainWindow * 2.8f, "comboWindow" to 2.8f,
             "runMatter" to if (shot == Shot.ARCHITECT) 1_234_567L else 486L, "elapsed" to v.time, "polarityStability" to v.polarity,
             "overdriveCharge" to v.overdrive, "overdriveTime" to if (shot == Shot.OVERDRIVE) 5f else 0f,
@@ -216,6 +255,14 @@ class RedesignShotsHudTest {
             },
             "messageTime" to if (shot == Shot.FEED || shot == Shot.FEED_ANOMALY) 1.5f else 0f,
             "screenShake" to 0f,
+            "skillBar" to when (shot) {
+                Shot.SKILLS_MIXED -> MIXED_SKILL_BAR.let { bar ->
+                    SkillBarProjection(immutableListOf(bar.slot(0), bar.slot(1).copy(refunded = 1f), bar.slot(2)))
+                }
+                Shot.SKILLS_FULL -> FULL_SKILL_BAR
+                Shot.SKILLS_KINETIC -> KINETIC_SKILL_BAR
+                else -> SkillBarProjection.EMPTY
+            },
             "rebirthLevel" to when (shot) {
                 Shot.REBIRTH_5 -> 5
                 Shot.REBIRTH_10 -> 10
@@ -232,14 +279,38 @@ class RedesignShotsHudTest {
             Shot.CRUISE -> model.with("hp" to 151f)
             Shot.ELITE, Shot.ELITE_MARKERS -> model.with("enemies" to listOf(enemy(1, EnemyType.ELITE, 0f, 0f, 0.7f, 38f)).toImmutableList())
             Shot.ARCHITECT, Shot.ARCHITECT_TRIAL -> model.with("enemies" to listOf(enemy(2, EnemyType.ARCHITECT, 0f, 0f, 0.62f, 74f)).toImmutableList())
+            // Before the drawn frame X had no refund: the frame plays its refund flash.
+            Shot.SKILLS_MIXED -> model.with("skillBar" to MIXED_SKILL_BAR)
             else -> model
         }
-        memory.observe(pre, time - 0.2f, boss.select(pre))
+        when (shot) {
+            // The one-shot started 300 / 400 ms before the drawn frame: the frame before it shows the lower tier.
+            Shot.TIER_UP, Shot.APEX_UNLOCK -> {
+                val lower = model.with("level" to level(shot, v) - 1, "apex" to ApexProjection.LOCKED)
+                val lead = if (shot == Shot.TIER_UP) 0.3f else 0.4f
+                memory.observe(lower, time - lead - 0.1f, boss.select(lower))
+                memory.observe(model, time - lead, boss.select(model))
+            }
+            else -> memory.observe(pre, time - 0.2f, boss.select(pre))
+        }
         val fx = if (shot == Shot.FEED || shot == Shot.FEED_ANOMALY) VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(
             BuildNotificationProjection("Neon Ram", immutableListOf("Impact damage +0.05", "Weapon power +0.04", "+ Vector maneuver"), 5f),
             BuildNotificationProjection("Ghost Vector", immutableListOf("Dash power +12"), 3.2f),
         )) else VisualFxProjection.EMPTY
-        return Scene(model, fx, memory, time, shot == Shot.TRIAL_INFO)
+        val controls = if (shot == Shot.SKILLS_MIXED || shot == Shot.SKILLS_FULL || shot == Shot.SKILLS_KINETIC) keyboardControls() else null
+        return Scene(model, fx, memory, time, shot == Shot.TRIAL_INFO, controls)
+    }
+
+    private companion object {
+        /** The content's run level cap. */
+        const val LEVEL_CAP = 42
+
+        /** The element-less actives in Z and X, which draw in the kinetic role as their cards do, beside an empty C. */
+        val KINETIC_SKILL_BAR = SkillBarProjection(immutableListOf(
+            SkillSlotProjection(skill = SkillId.CATALYZE.ordinal, rank = 2, ready = true),
+            SkillSlotProjection(skill = SkillId.DUAL_INFUSION.ordinal, rank = 1, cooldown01 = 0.4f),
+            SkillSlotProjection.EMPTY,
+        ))
     }
 
     private fun enemy(id: Int, type: EnemyType, x: Float, y: Float, integrity: Float, radius: Float) =

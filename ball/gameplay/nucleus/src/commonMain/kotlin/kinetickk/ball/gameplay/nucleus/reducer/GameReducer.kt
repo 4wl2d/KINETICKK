@@ -162,6 +162,8 @@ internal class GameReducer {
             is GameplayInteractionPulse.ChoiceSelected -> state.choose(intent.index)
             GameplayInteractionPulse.ChoicesRerolled -> state.rerollChoices()
             GameplayInteractionPulse.UserGestureObserved -> error("handled before state cloning")
+            is GameplayInteractionPulse.SkillRequested -> state.requestSkill(intent.slot)
+            GameplayInteractionPulse.ApexRequested -> state.requestApex()
         }
     }
 
@@ -198,6 +200,8 @@ internal class GameReducer {
         is GameplayInteractionPulse.BrakeChanged,
         GameplayInteractionPulse.DashRequested,
         GameplayInteractionPulse.PauseToggled,
+        is GameplayInteractionPulse.SkillRequested,
+        GameplayInteractionPulse.ApexRequested,
         -> true
         is GameplayInteractionPulse.FrameElapsed,
         is GameplayInteractionPulse.ChoiceSelected,
@@ -222,6 +226,17 @@ internal class GameReducer {
             GameplayInteractionPulse.DashRequested ->
                 state.phase != GamePhase.RUNNING ||
                     state.dashBufferTime.sameBitsAs(MutableGameState.DASH_INPUT_BUFFER_SECONDS)
+            // An empty slot or a stopped run buffers nothing; a request already fresh in the buffer is a repeat.
+            is GameplayInteractionPulse.SkillRequested ->
+                state.phase != GamePhase.RUNNING ||
+                    state.skillLoadout.isEmpty(slot) ||
+                    (state.skillBufferMask and (1 shl slot) != 0 &&
+                        state.skillBufferTime.sameBitsAs(MutableGameState.SKILL_INPUT_BUFFER_SECONDS))
+            // A locked Apex or a stopped run buffers nothing; a request already fresh in the buffer is a repeat.
+            GameplayInteractionPulse.ApexRequested ->
+                state.phase != GamePhase.RUNNING ||
+                    !state.apexUnlocked ||
+                    state.apexBufferTime.sameBitsAs(MutableGameState.SKILL_INPUT_BUFFER_SECONDS)
             is GameplayInteractionPulse.FrameElapsed,
             GameplayInteractionPulse.PauseToggled,
             is GameplayInteractionPulse.ChoiceSelected,

@@ -104,8 +104,31 @@ internal enum class CodexText(
         "Your bound relics disable every effect of this item.",
         "Связанные реликвии отключают все эффекты этого предмета.",
     ),
+    DORMANT("Dormant", "Спит"),
+    DORMANT_HELP(
+        "Its effects need an active item or a weapon of another type.",
+        "Его эффектам нужен активный предмет или оружие другого типа.",
+    ),
+    NOT_IN_RUN("Not in this run", "Не в этом забеге"),
+    NOT_IN_RUN_HELP(
+        "This run's draft deck left it out; the next run deals a new deck.",
+        "Колода этого забега его не включила; следующий забег раздаст новую колоду.",
+    ),
     REBORN("Reborn", "Перерождённый"),
     RISK("Risk", "Риск"),
+    /**
+     * Active items: the detail's chip (as the reward card's), the spoken mark of an active's cell, the detail's Active
+     * and Passive sections and the rank an owned active holds.
+     */
+    ACTIVE_CHIP("Active", "Актив"),
+    ACTIVE_ITEM("Active item", "Активный предмет"),
+    ACTIVE_PART("Active", "Активный эффект"),
+    PASSIVE_PART("Passive", "Пассивный эффект"),
+    ACTIVE_RANK("Rank {0}/{1}", "Ранг {0}/{1}"),
+    ACTIVE_OFFERS_HELP(
+        "An active item joins ordinary offers once your run level reaches the item's level; the Matter you have collected does not open it sooner.",
+        "Активный предмет попадает в обычные предложения, когда уровень забега достигает уровня предмета; собранная материя не открывает его раньше.",
+    ),
     SEVERED("Severed", "Отсечена"),
     SEVERED_HELP(
         "A replaced relic keeps its cost for a while after it leaves its slot.",
@@ -158,6 +181,8 @@ internal enum class CodexText(
     BOSS_KIND("Boss", "Босс"),
     THREAT("Threat", "Угроза"),
     MECHANIC("Mechanic", "Механика"),
+    REFIT("Refit", "Доработка"),
+    HONING("Honing", "Заточка"),
     TRIGGER("Trigger", "Источник"),
     DIFFICULTY("Difficulty", "Сложность"),
     APPEARS("Appears", "Появляется"),

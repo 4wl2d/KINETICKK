@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.interaction.canvas
 
 import androidx.compose.ui.graphics.Color
 import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.DamageNumberTier
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
@@ -20,14 +21,27 @@ import kotlin.math.sin
 
 /**
  * Presentation meaning of a nucleus visual color index: 0 dash/Core, 1 kill or pickup, 2 weapon
- * and relic procs, 3 ram impact, elite kill and key pickups, 4 damage taken.
+ * and relic procs, 3 ram impact, elite kill and key pickups, 4 damage taken (the only threat one),
+ * 8..14 an element's ring (Breaks and reactions), 15 the Apex gold, 16..22 an element's jagged
+ * quake ring ([isQuakeColor]).
  */
 internal fun fxColor(colorIndex: Int, roles: KkRolePalette): Color = when (colorIndex) {
     0, 3 -> roles.you
     4 -> roles.threat
     2 -> Kk.Bone2
+    in ELEMENT_RING_COLORS -> roles.element(colorIndex - ELEMENT_RING_COLORS.first)
+    APEX_GOLD_COLOR -> roles.gold.base
+    in QUAKE_RING_COLORS -> roles.element(colorIndex - QUAKE_RING_COLORS.first)
     else -> Kk.Bone
 }
+
+/** Element ring colour indices (8 + element), the Apex gold (15) and element quake rings (16 + element). */
+internal val ELEMENT_RING_COLORS = 8..14
+internal const val APEX_GOLD_COLOR = 15
+internal val QUAKE_RING_COLORS = 16..22
+
+/** Shockwaves of these colour indices draw as a jagged quake ring. */
+internal fun isQuakeColor(colorIndex: Int): Boolean = colorIndex in QUAKE_RING_COLORS
 
 /** Damage numbers take the hue of their element (the preset's volt for Kinetic); the tier shows only as size. */
 internal fun damageNumberColor(tone: Int, roles: KkRolePalette): Color = roles.tone(tone)
@@ -173,6 +187,32 @@ internal fun weaponIcon(id: WeaponId): KkIcon = when (id) {
     WeaponId.AEGIS_SHARDS -> KkIcon.WEAPONS_AEGIS_SHARDS
     WeaponId.HOLLOW_RIFT -> KkIcon.WEAPONS_HOLLOW_RIFT
     WeaponId.RESONANCE_DRUM -> KkIcon.WEAPONS_RESONANCE_DRUM
+}
+
+/**
+ * The glyph of an active effect (all 18 distinct): the one mark of an active item wherever it shows, the HUD's Z/X/C
+ * slot, the reward card's icon plate and watermark, and the other screens (the pause Build grid, the Codex). Public
+ * so those screens draw an active the same way.
+ */
+fun skillGlyph(id: SkillId): KkIcon = when (id) {
+    SkillId.SOLAR_FLARE -> KkIcon.WEAPONS_SOLAR_SWEEP
+    SkillId.METEOR -> KkIcon.WEAPONS_MORNINGSTAR
+    SkillId.FROST_LINE -> KkIcon.WEAPONS_PHASE_LATTICE
+    SkillId.FROST_SNAP -> KkIcon.WEAPONS_GLACIER_BELL
+    SkillId.ARC_HOOK -> KkIcon.WEAPONS_TETHER_ARC
+    SkillId.STORM_COIL -> KkIcon.WEAPONS_ARC_COIL
+    SkillId.GRAVITY_WELL -> KkIcon.WEAPONS_GRAVITY_MINES
+    SkillId.MASS_DRIVER -> KkIcon.WEAPONS_SINGULARITY_SPEAR
+    SkillId.DECAY_SPORES -> KkIcon.WEAPONS_SCATTER_BLOOM
+    SkillId.ENTROPIC_TIDE -> KkIcon.WEAPONS_ENTROPY_FIELD
+    SkillId.SONIC_BOOM -> KkIcon.WEAPONS_RESONANCE_DRUM
+    SkillId.RESONATOR -> KkIcon.WEAPONS_SENTRY_GRID
+    SkillId.VOID_STEP -> KkIcon.WEAPONS_HOLLOW_RIFT
+    SkillId.NULL_SHROUD -> KkIcon.WEAPONS_EVENT_LENS
+    SkillId.SLINGSHOT -> KkIcon.WEAPONS_GYRE_DISC
+    SkillId.FULL_STOP -> KkIcon.WEAPONS_CONCUSSION_ENGINE
+    SkillId.CATALYZE -> KkIcon.WEAPONS_PRISM_RELAY
+    SkillId.DUAL_INFUSION -> KkIcon.WEAPONS_FLUX_WAKE
 }
 
 /**

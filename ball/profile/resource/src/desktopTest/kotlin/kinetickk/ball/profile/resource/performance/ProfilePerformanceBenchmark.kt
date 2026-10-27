@@ -13,11 +13,18 @@ import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.CharacterAchievementProgress
+import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.DamageNumberSize
+import kinetickk.ball.profile.api.FRAME_RATE_CAP_OPTIONS
+import kinetickk.ball.profile.api.GameAction
+import kinetickk.ball.profile.api.INTERFACE_SCALE_OPTIONS
+import kinetickk.ball.profile.api.KeyBindings
 import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
+import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
 import kinetickk.ball.profile.api.ParticleDensity
+import kinetickk.ball.profile.api.PermanentUpgrades
 import kinetickk.ball.profile.api.PlayerCollection
 import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
@@ -28,8 +35,12 @@ import kinetickk.ball.profile.api.ProfileSnapshot
 import kinetickk.ball.profile.api.ProfileSnapshotReadResult
 import kinetickk.ball.profile.api.ProfileSnapshotRejection
 import kinetickk.ball.profile.api.ProfileWriteResult
+import kinetickk.ball.profile.api.REFRESH_RATE_RANGE
+import kinetickk.ball.profile.api.ReactionEffectsLevel
 import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
+import kinetickk.ball.profile.api.WindowMode
+import kinetickk.ball.profile.api.WindowSizePreset
 import kinetickk.ball.profile.resource.ExactProfilePersistence
 import kinetickk.ball.profile.resource.MAX_PROFILE_PAYLOAD_BYTES
 import kinetickk.ball.profile.resource.ProfileCodec
@@ -43,11 +54,13 @@ import kinetickk.performance.BenchmarkSuiteIdentity
 import kinetickk.performance.BenchmarkValidation
 import kinetickk.performance.BenchmarkValidationContext
 import kinetickk.performance.runBenchmarkSuite
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
+import kinetickk.foundation.common.input.BindableKey
 import kinetickk.foundation.common.localization.AppLanguage
 
 internal const val PROFILE_PERSISTENCE_BENCHMARK_SUITE_VERSION =
-    "profile-persistence-current-schema-v4"
+    "profile-persistence-current-schema-v5"
 
 fun main() {
     runBenchmarkSuite(
@@ -334,6 +347,22 @@ internal fun maximumBusinessSnapshot(): ProfileSnapshot = ProfileSnapshot(
             damageNumberFormat = DamageNumberFormat.FULL,
             damageNumberTierThreshold = DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.last(),
             language = AppLanguage.English,
+            runStatisticsOnLeft = true,
+            colorVision = ColorVision.MONO,
+            minimapEnabled = false,
+            windowMode = WindowMode.BORDERLESS,
+            windowSize = WindowSizePreset.W2560X1440,
+            vsync = false,
+            frameRateCap = FRAME_RATE_CAP_OPTIONS.last(),
+            refreshRateHz = REFRESH_RATE_RANGE.last,
+            immersive = true,
+            interfaceScalePercent = INTERFACE_SCALE_OPTIONS.last(),
+            showFps = true,
+            pauseOnFocusLoss = false,
+            reactionEffects = ReactionEffectsLevel.MINIMAL,
+            keyBindings = KeyBindings.of(
+                BindableKey.entries.filter { it !in KeyBindings.DEFAULT.keys }.take(GameAction.entries.size),
+            ),
         ),
         economy = PlayerEconomy(Long.MAX_VALUE - 1L, Long.MAX_VALUE),
         loadout = PlayerLoadout(
@@ -350,10 +379,13 @@ internal fun maximumBusinessSnapshot(): ProfileSnapshot = ProfileSnapshot(
             discoveredReactionIds = ReactionId.entries.reversed().toSet(),
             discoveredPairingIds = RelicPairingId.entries.reversed().toSet(),
             heirloomRelicIds = RelicId.entries.reversed().take(MAX_HEIRLOOM_RELICS),
+            recentItemIds = List(MAX_RECENT_ITEM_IDS) { index -> ContentBounds.MAX_ITEMS - 1 - index },
         ),
         rebirthProgress = RebirthProgress(
             level = ContentBounds.MAX_REBIRTH_LEVEL,
             highestCleared = ContentBounds.MAX_REBIRTH_LEVEL,
+            ascendedCharacters = CoreShape.entries.reversed().toImmutableSet(),
+            characterClears = List(CoreShape.entries.size) { ContentBounds.MAX_REBIRTH_LEVEL }.toImmutableList(),
         ),
         characterAchievements = CharacterAchievementProgress(
             eliteKills = Long.MAX_VALUE,
@@ -364,6 +396,10 @@ internal fun maximumBusinessSnapshot(): ProfileSnapshot = ProfileSnapshot(
             totalKills = Long.MAX_VALUE,
             ricochets = Long.MAX_VALUE,
             dataPickups = Long.MAX_VALUE,
+        ),
+        upgrades = PermanentUpgrades(
+            characterLevels = List(CoreShape.entries.size) { ContentBounds.MAX_UPGRADE_LEVEL },
+            weaponLevels = List(WeaponId.entries.size) { ContentBounds.MAX_UPGRADE_LEVEL },
         ),
     ),
 )
@@ -407,6 +443,14 @@ private fun payloadMetadata(
         "${it.eliteKills},${it.dashHits},${it.completedOrbits},${it.architectVictories}," +
             "${it.totalKills},${it.ricochets},${it.dataPickups}"
     },
+    "ascendedCharacters" to snapshot.profile.rebirthProgress.ascendedCharacters.size.toString(),
+    "recentItems" to snapshot.profile.collection.recentItemIds.size.toString(),
+    "upgradeLevels" to snapshot.profile.upgrades.let {
+        "${it.characterLevels.sum()},${it.weaponLevels.sum()}"
+    },
+    "reboundActions" to GameAction.entries.count { action ->
+        snapshot.profile.preferences.keyBindings.key(action) != KeyBindings.DEFAULT.key(action)
+    }.toString(),
 )
 
 private fun rejectionMetadata(
@@ -493,6 +537,22 @@ internal fun snapshotSignature(snapshot: ProfileSnapshot): Long {
     result = result * 31L + achievements.totalKills
     result = result * 31L + achievements.ricochets
     result = result * 31L + achievements.dataPickups
+    result = result * 31L + profile.rebirthProgress.ascendedCharacters.sumOf { 1L shl it.ordinal }
+    profile.rebirthProgress.characterClears.forEach { tier -> result = result * 31L + tier + 1L }
+    collection.recentItemIds.forEach { id -> result = result * 31L + id + 1L }
+    profile.upgrades.characterLevels.forEach { level -> result = result * 31L + level }
+    profile.upgrades.weaponLevels.forEach { level -> result = result * 31L + level }
+    val preferences = profile.preferences
+    result = result * 31L + preferences.windowMode.ordinal
+    result = result * 31L + preferences.windowSize.ordinal
+    result = result * 31L + preferences.frameRateCap
+    result = result * 31L + preferences.refreshRateHz
+    result = result * 31L + preferences.interfaceScalePercent
+    result = result * 31L + preferences.reactionEffects.ordinal
+    result = result * 31L + listOf(
+        preferences.vsync, preferences.immersive, preferences.showFps, preferences.pauseOnFocusLoss,
+    ).fold(0L) { bits, flag -> bits * 2L + if (flag) 1L else 0L }
+    preferences.keyBindings.keys.forEach { key -> result = result * 31L + key.ordinal }
     return result
 }
 

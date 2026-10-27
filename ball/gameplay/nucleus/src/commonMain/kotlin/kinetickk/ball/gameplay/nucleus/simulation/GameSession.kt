@@ -16,7 +16,10 @@ internal fun MutableGameState.startRun() {
     phase = GamePhase.RUNNING
     interpolationPrimed = false
     matrix = foldMatrix()
+    drawItemDeck()
     characterRuntime = CharacterRuntime()
+    skillRuntime = SkillRuntime()
+    skillLoadout = SkillLoadout.EMPTY
     enemies.clear()
     projectiles.clear()
     pickups.clear()
@@ -30,6 +33,8 @@ internal fun MutableGameState.startRun() {
     pendingRelicChoices = 0
     pendingBindingRelic = null
     pendingRelicBindAction = null
+    pendingActiveItemId = null
+    pendingActiveReborn = false
     relicRanks.fill(0)
     relicCooldowns.fill(0f)
     relicCounters.fill(0)
@@ -43,7 +48,10 @@ internal fun MutableGameState.startRun() {
     statusAccumulators.fill(0f)
     itemStatusReadyAt.fill(0f)
     buffs = emptyList()
-    combatFields = emptyList()
+    combatFieldTable.clear()
+    coreFieldMask = 0
+    fieldEnterReadyAt = 0f
+    resetCoreReactionState()
     reactionTokens = MutableGameState.REACTION_BURST
     breakTokens = MutableGameState.BREAK_BURST
     severedRelics = emptyList()
@@ -135,7 +143,7 @@ internal fun MutableGameState.startRun() {
     level = 1
     data = 0
     dataFraction = 0f
-    nextLevelData = content.tempo.dataRequiredForLevel(1)
+    nextLevelData = dataRequiredForLevel(1)
     pendingLevelChoices = 0
     keys = 0
     kills = 0
@@ -168,6 +176,9 @@ internal fun MutableGameState.startRun() {
     weapon = startingWeapon
     // The signature character starts its weapon one level up.
     weaponLevel = 1 + matrix.startingWeaponLevels + signatureLevelBonus()
+    // Refit of the selected character is a run constant; Honing is read by the current weapon.
+    characterUpgradeLevel = characterUpgradeLevels[coreShape.ordinal]
+    characterUpgradePower = 1f + content.upgrades.characterPowerPerLevel * characterUpgradeLevel
     resetRunStats()
     recompileBuild()
     // A new run starts with a new character runtime (Dash count 0), so the weapon's input tracking starts over too.
@@ -185,7 +196,7 @@ internal const val BASE_MAGNET_STRENGTH: Float = 4.65f
 /** Base exponential drag on the Core's velocity per second. */
 internal const val BASE_DRAG_COEFFICIENT: Float = 0.29f
 
-/** Character base stats, then the owned Core Matrix effects from content, then Rebirth. */
+/** Character base stats, then the owned Core Matrix effects from content, Refit integrity, then Rebirth. */
 internal fun MutableGameState.resetRunStats() {
     mass = 1f
     damageMultiplier = 1f
@@ -212,6 +223,7 @@ internal fun MutableGameState.resetRunStats() {
     dragCoefficient = BASE_DRAG_COEFFICIENT
     applyCharacterTraits()
     applyMatrixStats()
+    maxHp += content.upgrades.characterIntegrityPerLevel * characterUpgradeLevel
     matterGain *= rebirthProfile.matterGainMultiplier
     dashHeatCost *= matrix.dashHeatMultiplier
     dragCoefficient *= matrix.dragMultiplier
@@ -223,7 +235,7 @@ internal fun MutableGameState.resetRunStats() {
 }
 
 internal fun MutableGameState.togglePause() {
-    if (phase == GamePhase.RUNNING) dashBufferTime = 0f
+    if (phase == GamePhase.RUNNING) clearInputBuffers()
     phase = when (phase) {
         GamePhase.RUNNING -> GamePhase.PAUSED
         GamePhase.PAUSED -> GamePhase.RUNNING
@@ -238,7 +250,7 @@ internal fun MutableGameState.togglePause() {
 internal fun MutableGameState.pauseForOverlay() {
     if (phase == GamePhase.RUNNING) {
         phase = GamePhase.PAUSED
-        dashBufferTime = 0f
+        clearInputBuffers()
         accumulator = 0f
         lastTransitionSteps = 0
     }
@@ -254,10 +266,18 @@ internal fun MutableGameState.exitRun() {
     keyboardBrakeActive = false
     secondaryBrakeActive = false
     touchBrakeActive = false
-    dashBufferTime = 0f
+    clearInputBuffers()
     accumulator = 0f
     lastTransitionSteps = 0
     updateBraking()
+}
+
+/** Drops buffered Dash, skill and Apex requests, so none fires after a pause, an exit or a reward choice. */
+internal fun MutableGameState.clearInputBuffers() {
+    dashBufferTime = 0f
+    skillBufferMask = 0
+    skillBufferTime = 0f
+    apexBufferTime = 0f
 }
 
 internal fun MutableGameState.applyPreferences(preferences: PlayerPreferences) {
@@ -305,6 +325,26 @@ internal fun MutableGameState.requestDash() {
     }
 }
 
+/**
+ * Buffers a cast of skill [slot] for [MutableGameState.SKILL_INPUT_BUFFER_SECONDS]; the next fixed steps cast it
+ * once it can. Scalars only (a scalar-input reduction shares the skill runtime). An empty slot or a run that is
+ * not RUNNING buffers nothing.
+ */
+internal fun MutableGameState.requestSkill(slot: Int) {
+    if (phase != GamePhase.RUNNING || slot !in 0 until SkillRuntime.SLOTS || skillLoadout.isEmpty(slot)) return
+    skillBufferMask = skillBufferMask or (1 shl slot)
+    skillBufferTime = MutableGameState.SKILL_INPUT_BUFFER_SECONDS
+}
+
+/**
+ * Buffers an Apex cast for [MutableGameState.SKILL_INPUT_BUFFER_SECONDS]; the next fixed steps cast it once the
+ * Apex is ready. A scalar only; a locked Apex or a run that is not RUNNING buffers nothing.
+ */
+internal fun MutableGameState.requestApex() {
+    if (phase != GamePhase.RUNNING || !apexUnlocked) return
+    apexBufferTime = MutableGameState.SKILL_INPUT_BUFFER_SECONDS
+}
+
 internal fun MutableGameState.choose(index: Int) {
     if (phase != GamePhase.CHOICE || index !in choices.indices) return
     val option = choices[index]
@@ -313,8 +353,17 @@ internal fun MutableGameState.choose(index: Int) {
     val sound = when (option.type) {
         ChoiceType.ITEM -> {
             val itemId = option.itemId ?: return
+            val item = content.item(itemId) ?: return
+            // The offer resolves when its card is taken, even when the active item still needs a slot.
+            if (directedReward == null) resolveItemOfferPity(item)
+            if (needsActiveSlot(item)) {
+                pendingActiveItemId = itemId
+                pendingActiveReborn = option.reborn
+                openActiveSlotChoice()
+                emitSound(GameplayAudioCue.UI_CLICK)
+                return
+            }
             acquireItem(itemId, option.reborn)
-            if (directedReward == null) resolveItemOfferPity(content.item(itemId))
             GameplayAudioCue.LEVEL_UP
         }
         ChoiceType.TOTEM -> when (option.totemAction ?: return) {
@@ -370,6 +419,17 @@ internal fun MutableGameState.choose(index: Int) {
             }
             RelicChoiceAction.REPLACE, RelicChoiceAction.MELD_TARGET -> return
         }
+        ChoiceType.ACTIVE_SLOT -> {
+            val incoming = pendingActiveItemId ?: return
+            val reborn = pendingActiveReborn
+            pendingActiveItemId = null
+            pendingActiveReborn = false
+            val slot = option.activeSlot
+            if (slot != null) replaceActiveItem(slot, incoming, reborn) else keepActiveLoadout(incoming)
+            emitBuildChange(before, content.items[incoming].name)
+            finishChoice(if (slot != null) GameplayAudioCue.LEVEL_UP else GameplayAudioCue.UI_CLICK)
+            return
+        }
         ChoiceType.RELIC_BIND -> {
             val slot = option.relicSlot ?: return
             when (option.relicAction ?: return) {
@@ -408,7 +468,7 @@ internal fun MutableGameState.rerollChoices() {
         ChoiceType.ITEM -> buildItemChoices()
         ChoiceType.WEAPON -> buildWeaponChoices()
         ChoiceType.RELIC -> buildRelicChoices()
-        ChoiceType.TOTEM, ChoiceType.RELIC_BIND -> return
+        ChoiceType.TOTEM, ChoiceType.RELIC_BIND, ChoiceType.ACTIVE_SLOT -> return
     }
     emitSound(GameplayAudioCue.UI_CLICK)
 }

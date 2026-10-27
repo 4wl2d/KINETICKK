@@ -60,8 +60,11 @@ class OverlayLayoutGeometryTest {
         listOf(1440f to 810f, 1280f to 720f, 1000f to 720f, 1920f to 1080f).forEach { (width, height) ->
             val pause = pauseLayoutGeometry(width, height, 1f)
             assertEquals(GameplayLayoutMode.REGULAR, pause.mode)
-            // The game's desktop pause targets, in menu order; no invented entries.
-            assertEquals(listOf(PauseTarget.RESUME, PauseTarget.SETTINGS, PauseTarget.CODEX, PauseTarget.EXIT), pause.actions.map { it.target })
+            // The game's desktop pause targets, in menu order (meta-ui §1.10 C1); no invented entries.
+            assertEquals(
+                listOf(PauseTarget.RESUME, PauseTarget.SETTINGS, PauseTarget.WORKSHOP, PauseTarget.CODEX, PauseTarget.EXIT),
+                pause.actions.map { it.target },
+            )
             pause.actions.zipWithNext().forEach { (upper, lower) ->
                 assertTrue(upper.bounds.bottom <= lower.bounds.top, "$width x $height items do not overlap")
                 assertTrue(upper.bounds.left < lower.bounds.left, "$width x $height items step right (Pause board)")

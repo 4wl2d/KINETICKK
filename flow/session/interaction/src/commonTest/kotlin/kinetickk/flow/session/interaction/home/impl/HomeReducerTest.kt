@@ -26,6 +26,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class HomeReducerTest {
@@ -88,26 +90,21 @@ class HomeReducerTest {
     }
 
     @Test
-    fun theArmoryIsUnlockableOnlyForAWeaponTheRebirthRankAllows() {
-        // Every ungated weapon owned; only Glacier Bell (Reborn 1) is left to buy.
-        val weapons = listOf(
-            testWeapon(WeaponId.FLUX_WAKE, cost = 0),
-            testWeapon(WeaponId.MORNINGSTAR, cost = 120),
-            testWeapon(WeaponId.GLACIER_BELL, cost = 700, minimumRebirth = 1),
-        ).toImmutableList()
+    fun theWorkshopStampIsTheProfilesAffordabilityRead() {
+        // Home never repeats a purchase rule: the stamp is the Profile's own dry run of its purchases.
+        val weapons = listOf(testWeapon(WeaponId.FLUX_WAKE, cost = 0), testWeapon(WeaponId.GLACIER_BELL, cost = 700, minimumRebirth = 1))
+            .toImmutableList()
         val reducer = HomeReducer(TestCoreShapes, 80, weapons.size, TestRebirthPolicy, weapons = weapons)
-        val loadout = PlayerLoadout(
-            coreShape = CoreShape.ORB,
-            selectedWeapon = WeaponId.FLUX_WAKE,
-            unlockedWeapons = setOf(WeaponId.FLUX_WAKE, WeaponId.MORNINGSTAR),
-        )
-        val rich = PlayerEconomy(matter = 10_000, lifetimeMatter = 10_000)
-
-        assertFalse(reducer.uiModel(homeProjection(economy = rich, loadout = loadout)).weaponUnlockAffordable)
-        // Rank 1 (tier 0 cleared) opens the gate.
-        val reborn = homeProjection(economy = rich, loadout = loadout, rebirth = RebirthProgress(level = 0, highestCleared = 0))
-        assertTrue(reducer.uiModel(reborn).weaponUnlockAffordable)
-        assertFalse(reducer.uiModel(reborn.copy(economy = PlayerEconomy(matter = 699, lifetimeMatter = 10_000))).weaponUnlockAffordable)
+        val rich = homeProjection(economy = PlayerEconomy(matter = 10_000, lifetimeMatter = 10_000))
+        assertFalse(reducer.uiModel(rich).workshopAffordable)
+        assertEquals(null, homeFacts(reducer.uiModel(rich), HomeLayoutTarget.WORKSHOP, AppLanguage.English, 1f).stamp)
+        val affordable = reducer.uiModel(homeProjection().copy(workshopAffordable = true, upgradeLevels = 7))
+        assertTrue(affordable.workshopAffordable)
+        assertEquals(7, affordable.upgradeLevels)
+        assertEquals("Affordable", homeFacts(affordable, HomeLayoutTarget.WORKSHOP, AppLanguage.English, 1f).stamp)
+        assertEquals("Доступно", homeFacts(affordable, HomeLayoutTarget.WORKSHOP, AppLanguage.Russian, 1f).stamp)
+        // The level cap is every level the Workshop sells: 10 per character and per weapon.
+        assertEquals(10 * (TestCoreShapes.size + weapons.size), affordable.upgradeLevelCap)
     }
 
     @Test
@@ -128,28 +125,44 @@ class HomeReducerTest {
         assertEquals(11, model.matrixRanks)
         assertEquals(nodes.sumOf { it.maxRanks }, model.matrixMaxRanks)
 
-        val english = homeFacts(model, HomeLayoutTarget.LAB, AppLanguage.English, 1f)
-        assertEquals("Matrix", english.label)
-        assertEquals("7/32", english.big)
-        assertEquals("7/32", english.sub)
+        // The Workshop facts: what is bought of everything it sells, in whole percent, then each part.
+        val english = homeFacts(model, HomeLayoutTarget.WORKSHOP, AppLanguage.English, 1f)
+        assertEquals("Workshop", english.label)
+        val total = 12 + model.matrixMaxRanks + model.upgradeLevelCap
+        assertEquals("${(model.unlockedWeaponCount + 11) * 100 / total}%", english.big)
+        assertEquals(english.big, english.sub)
+        assertEquals(listOf("Weapons", "Ranks", "Upgrades"), english.facts.map { it.first })
         assertTrue("Ranks" to "11/${model.matrixMaxRanks}" in english.facts, english.facts.toString())
-        val russian = homeFacts(model, HomeLayoutTarget.LAB, AppLanguage.Russian, 1f)
-        assertEquals("Матрица", russian.label)
-        assertEquals("7/32", russian.big)
+        assertTrue("Upgrades" to "0/${model.upgradeLevelCap}" in english.facts, english.facts.toString())
+        val russian = homeFacts(model, HomeLayoutTarget.WORKSHOP, AppLanguage.Russian, 1f)
+        assertEquals("Мастерская", russian.label)
+        assertEquals(listOf("Оружие", "Ранги", "Улучшения"), russian.facts.map { it.first })
 
-        // Before the Matrix is read the tile falls back to the Matter balance and claims no count.
-        val unread = homeFacts(reducer.uiModel(projection), HomeLayoutTarget.LAB, AppLanguage.English, 1f)
-        assertEquals(null, unread.sub)
+        // Before the Matrix is read the facts claim no rank count.
+        val unread = homeFacts(reducer.uiModel(projection), HomeLayoutTarget.WORKSHOP, AppLanguage.English, 1f)
         assertTrue(unread.facts.none { it.first == "Ranks" })
+    }
+
+    @Test
+    fun workshopCompletionCountsWeaponsRanksAndLevelsRoundedDown() {
+        val base = homeReducer().uiModel(homeProjection())
+        assertEquals(0, homeWorkshopCompletion(base.copy(unlockedWeaponCount = 0, weaponCount = 0)))
+        // 1 + 2 + 3 of 24 + 50 + 360 = 6/434 → 1 %; everything bought → 100 %.
+        val some = base.copy(unlockedWeaponCount = 1, weaponCount = 24, matrixRanks = 2, matrixMaxRanks = 50, upgradeLevels = 3,
+            upgradeLevelCap = 360)
+        assertEquals(1, homeWorkshopCompletion(some))
+        assertEquals(100, homeWorkshopCompletion(some.copy(unlockedWeaponCount = 24, matrixRanks = 50, upgradeLevels = 360)))
+        assertEquals(99, homeWorkshopCompletion(some.copy(unlockedWeaponCount = 24, matrixRanks = 50, upgradeLevels = 359)))
     }
 
     @Test
     fun actionsEmitTypedProfileIntentOrOrderedShellEffects() {
         val reducer = homeReducer()
 
-        val hangar = reducer.reduce(HomeAction.OpenHangar).effects
-        assertEquals(SessionAudioCue.UI_CLICK, assertIs<HomeEffect.PlayAudio>(hangar[0]).cue)
-        assertIs<HomeOutput.OpenHangar>(assertIs<HomeEffect.Emit>(hangar[1]).output)
+        // The Workshop row opens the Workshop on the tab shown last; characters are chosen there.
+        val workshop = reducer.reduce(HomeAction.OpenWorkshop).effects
+        assertEquals(SessionAudioCue.UI_CLICK, assertIs<HomeEffect.PlayAudio>(workshop[0]).cue)
+        assertEquals(HomeOutput.OpenWorkshop, assertIs<HomeEffect.Emit>(workshop[1]).output)
 
         val start = reducer.reduce(HomeAction.StartRun).effects
         assertEquals(SessionAudioCue.UI_CLICK, assertIs<HomeEffect.PlayAudio>(start[0]).cue)
@@ -163,16 +176,41 @@ class HomeReducerTest {
     fun pointerGeometryPreservesCoreStartAndRouteHitboxes() {
         val viewport = HomeViewport(1_280f, 720f, 1f)
 
-        assertEquals(
-            HomeAction.OpenHangar,
-            homeLayoutGeometry(1_280f, 720f, 1f).bounds(HomeLayoutTarget.HANGAR).center.let {
-                resolveHomePress(viewport, it.x, it.y)
-            },
-        )
         // 1280 × 720 is the 16:9 reference scaled by 8/9: the menu sits on the right half.
         assertEquals(HomeAction.StartRun, resolveHomePress(viewport, 1_000f, 140f))
         assertEquals(HomeAction.OpenRebirth, resolveHomePress(viewport, 1_000f, 340f))
         assertEquals(null, resolveHomePress(viewport, 300f, 275f), "The hero is decoration, not a target")
+        // Where the Characters card stood, under the form name, nothing opens: characters change in the Workshop.
+        assertEquals(null, resolveHomePress(viewport, 978f, 638f))
+    }
+
+    @Test
+    fun quitIsOfferedBesideTheFormNameOnlyWhenTheHostCanCloseTheGame() {
+        val viewport = HomeViewport(1_280f, 720f, 1f, quitAvailable = true)
+        val layout = homeLayoutGeometry(viewport.width, viewport.height, viewport.density, quitAvailable = true)
+        val quit = assertNotNull(layout.quit)
+        assertEquals(HomeAction.Quit, resolveHomePress(viewport, quit.bounds.center.x, quit.bounds.center.y))
+        assertEquals(null, resolveHomePress(viewport.copy(quitAvailable = false), quit.bounds.center.x, quit.bounds.center.y))
+        assertTrue(quit.touch.height >= 44f, "Quit keeps a 44 dp press height")
+
+        // It ends with the version line, clear of the form's (!), the selected menu rows and the version text.
+        val form = assertNotNull(layout.info(HomeInfoTarget.FORM))
+        assertTrue(form.touch.right <= quit.touch.left, "The form's (!) moves left of Quit")
+        assertTrue(quit.bounds.right <= layout.scene.versionRight + 0.5f)
+        assertTrue(quit.touch.bottom < layout.scene.versionBaseline - layout.scene.versionSize, "Quit stays above the version line")
+        HomeMenuTargets.forEach { target ->
+            homeSelectedMenuFootprint(layout.bounds(target), layout.scene.menuFontSize).forEach { area ->
+                assertFalse(area.overlaps(quit.touch), "A selected $target overlaps Quit")
+            }
+        }
+
+        val effects = homeReducer().reduce(HomeAction.Quit).effects
+        assertEquals(SessionAudioCue.UI_CLICK, assertIs<HomeEffect.PlayAudio>(effects[0]).cue)
+        assertEquals(HomeOutput.Quit, assertIs<HomeEffect.Emit>(effects[1]).output)
+
+        // Without the host's Quit, and on the phone layouts, nothing is laid out for it.
+        assertNull(homeLayoutGeometry(viewport.width, viewport.height, viewport.density).quit)
+        assertNull(homeLayoutGeometry(800f, 600f, 1f, quitAvailable = true).quit)
     }
 }
 

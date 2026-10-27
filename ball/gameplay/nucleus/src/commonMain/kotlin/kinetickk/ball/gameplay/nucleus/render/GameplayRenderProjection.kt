@@ -24,7 +24,11 @@ typealias EnemyType = kinetickk.ball.content.api.EnemyType
 enum class PickupType { DATA, KEY, REPAIR, RELIC }
 /** A hostile [BOLT] flies; a [MINE] stays put, arms and detonates when the Core comes close. */
 enum class ProjectileKind { BOLT, MINE }
-enum class ChoiceType { ITEM, TOTEM, WEAPON, RELIC, RELIC_BIND }
+/**
+ * What an offer deals. [ACTIVE_SLOT] asks which active item an incoming active item replaces when every slot holds one:
+ * a card per held active plus a card that keeps the loadout and salvages the incoming item.
+ */
+enum class ChoiceType { ITEM, TOTEM, WEAPON, RELIC, RELIC_BIND, ACTIVE_SLOT }
 enum class TotemAction { AMPLIFY_CURRENT, CHANGE_WEAPON }
 enum class RelicChoiceAction { ACQUIRE, MELD, REPLACE, MELD_TARGET, DECLINE }
 enum class WeaponNodeType { GRAVITY_MINE }
@@ -41,6 +45,7 @@ data class ChoiceOption(
     val title: String,
     val description: String,
     val tag: String,
+    /** An item card's item; an [ChoiceType.ACTIVE_SLOT] card's held active item (null on the keep card). */
     val itemId: Int? = null,
     val weaponId: WeaponId? = null,
     val totemAction: TotemAction? = null,
@@ -52,6 +57,27 @@ data class ChoiceOption(
     val reborn: Boolean = false,
     /** Part of the run-opening Heirloom offer. */
     val heirloom: Boolean = false,
+    /**
+     * An active item card: the item's active effect; an [ChoiceType.ACTIVE_SLOT] card: the effect of the held active it
+     * would replace. A projection of content ([itemId]'s [kinetickk.ball.content.api.ItemDefinition.active]).
+     */
+    val skillId: kinetickk.ball.content.api.SkillId? = null,
+    /** An active item card: the rank its effect has once taken (stacks + 1); an [ChoiceType.ACTIVE_SLOT] card: the held rank. */
+    val skillRank: Int? = null,
+    /**
+     * The skill slot (0 Z, 1 X, 2 C): the slot an active item card binds to or ranks (null while it would replace a
+     * slot) or the slot an [ChoiceType.ACTIVE_SLOT] card replaces (null on the keep card).
+     */
+    val activeSlot: Int? = null,
+    /** An unowned active item card offered while every slot holds another active: taking it asks which one to replace. */
+    val replacesActive: Boolean = false,
+    /** Every [ChoiceType.ACTIVE_SLOT] card (the keep card too): the incoming active item waiting for a slot. */
+    val incomingItemId: Int? = null,
+    /**
+     * The [ChoiceType.ACTIVE_SLOT] keep card: the Matter the incoming item is salvaged for, as the salvage grants it
+     * before the run's Matter gain (presentation shows this number; it never recomputes the salvage).
+     */
+    val salvageMatter: Int? = null,
 )
 
 data class CharacterLatticePoint(val x: Float, val y: Float)
@@ -111,6 +137,10 @@ data class CharacterAbilityProjection(
     val ghostY: Float = 0f,
     val previousGhostX: Float = 0f,
     val previousGhostY: Float = 0f,
+    /** Twin Echo's second ghost (Spiral Apex): shown while [secondGhostActive], at its current position. */
+    val secondGhostActive: Boolean = false,
+    val secondGhostX: Float = 0f,
+    val secondGhostY: Float = 0f,
 )
 
 data class PointOfInterestProjection(
@@ -160,6 +190,8 @@ data class EnemyProjection(
     val shielded: Boolean = false,
     /** True while an Armored Vanguard plate (Rebirth R8) still blunts weapon hits; an impact cracks it. */
     val armored: Boolean = false,
+    /** Control and mark state; decode with [EnemyControlBits]. */
+    val controlBits: Int = 0,
 )
 
 /** Behavior steps published in [EnemyProjection.behavior]; meaning depends on the enemy type. */
@@ -430,6 +462,16 @@ class GameplayRenderModel(
     val rebirthRank: Int = rebirthLevel,
     /** Volatile Remains bursts waiting to detonate (Rebirth R4). */
     val volatileBursts: ImmutableList<VolatileBurstProjection> = kinetickk.foundation.collections.immutableListOf(),
+    /** The run's level cap; at it [level] equals it and Data charges the Apex instead. */
+    val maxLevel: Int = content.tempo.maximumLevel,
+    /** The Z, X and C skill slots. */
+    val skillBar: SkillBarProjection = SkillBarProjection.EMPTY,
+    /** The character's Apex. */
+    val apex: ApexProjection = ApexProjection.LOCKED,
+    /** Lingering combat fields in creation order. */
+    val combatFields: ImmutableList<CombatFieldProjection> = kinetickk.foundation.collections.immutableListOf(),
+    /** Lingering reaction and skill states on the Core. */
+    val coreState: CoreStateProjection = CoreStateProjection.NEUTRAL,
 ) {
     val speed: Float get() = vectorLength(velocityX, velocityY)
     val runProgress: Float get() = content.tempo.progress(elapsed)
@@ -467,7 +509,7 @@ class GameplayRenderModel(
     val choicesCanReroll: Boolean
         get() = phase == GamePhase.CHOICE && !directedChoice && rerollsRemaining > 0 && when (choiceType) {
             ChoiceType.ITEM, ChoiceType.WEAPON, ChoiceType.RELIC -> true
-            ChoiceType.TOTEM, ChoiceType.RELIC_BIND -> false
+            ChoiceType.TOTEM, ChoiceType.RELIC_BIND, ChoiceType.ACTIVE_SLOT -> false
         }
     val itemStacksSnapshot: ImmutableList<Int> get() = itemStacks
 

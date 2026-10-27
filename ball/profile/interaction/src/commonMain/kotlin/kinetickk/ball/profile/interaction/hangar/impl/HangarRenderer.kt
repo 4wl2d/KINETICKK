@@ -24,6 +24,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -48,11 +50,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.IntOffset
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.UpgradePolicy
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.profile.interaction.PROFILE_DESCRIPTION_MAX_LINES
 import kinetickk.ball.profile.interaction.ProfileFrame
 import kinetickk.ball.profile.interaction.ProfileLayoutMode
-import kinetickk.ball.profile.interaction.ProfilePanel
 import kinetickk.ball.profile.interaction.ProfileSlabButton
 import kinetickk.ball.profile.interaction.dp
 import kinetickk.ball.profile.interaction.drawProfileGrid
@@ -65,11 +67,21 @@ import kinetickk.ball.profile.interaction.hangar.api.HangarWeaponRenderModel
 import kinetickk.ball.profile.interaction.formatMatter
 import kinetickk.ball.profile.interaction.armory.impl.armoryWeaponIcon
 import kinetickk.ball.profile.interaction.localization.ProfileScreensRedesignText
-import kinetickk.ball.profile.interaction.localization.ProfileText
 import kinetickk.ball.profile.interaction.profileHeaderBackWidth
 import kinetickk.ball.profile.interaction.profileLoopTime
 import kinetickk.ball.profile.interaction.profileScrollCue
 import kinetickk.ball.profile.interaction.profileTextScale
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopTab
+import kinetickk.ball.profile.interaction.workshop.impl.WorkshopAction
+import kinetickk.ball.profile.interaction.workshop.impl.WorkshopSegment
+import kinetickk.ball.profile.interaction.workshop.impl.WorkshopSegmentStrip
+import kinetickk.ball.profile.interaction.workshop.impl.UpgradeTarget
+import kinetickk.ball.profile.interaction.workshop.impl.WorkshopUpgradeBlock
+import kinetickk.ball.profile.interaction.workshop.impl.characterUpgradeTrack
+import kinetickk.ball.profile.interaction.workshop.impl.workshopTileLevel
+import kinetickk.ball.profile.interaction.workshop.impl.workshopTileLevelColor
+import kinetickk.ball.profile.interaction.workshop.impl.workshopUpgradeLayoutFor
+import kinetickk.ball.profile.interaction.workshop.impl.segments
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
@@ -86,13 +98,25 @@ internal fun CoreShape.hangarFormIndex(): Int = ordinal
 /** Seconds per turn of the animated forms (tiles and the preview). */
 private const val HANGAR_SPIN_SECONDS = 24f
 
-/** The Hangar screen; [textScale] is the player's text-size setting (1.25 = the boards' size). */
+/**
+ * The Workshop's Characters body inside the panel's [frame]: the roster, the detail panel with its
+ * [segment] (the Refit block of [upgrades] or the traits) and the pinned Select button. [textScale]
+ * is the player's text-size setting (1.25 = the boards' size); [focusSerial] moves keyboard focus to
+ * the inspected tile when it changes; [refusalSerial] flashes the Refit action after a refusal.
+ * Segment and Refit presses go to [onWorkshop].
+ */
 @Composable
-internal fun HangarContent(
+internal fun HangarBody(
+    frame: ProfileFrame,
     state: HangarState,
+    segment: WorkshopSegment,
     textScale: Float,
     detailScroll: ScrollState,
     holder: HangarLayoutHolder = remember { HangarLayoutHolder() },
+    focusSerial: Int = 0,
+    upgrades: UpgradePolicy = UpgradePolicy(),
+    refusalSerial: Int = 0,
+    onWorkshop: (WorkshopAction) -> Unit = {},
     onAction: (HangarAction) -> Unit,
 ) {
     val scale = profileTextScale(textScale)
@@ -101,7 +125,7 @@ internal fun HangarContent(
     val time = profileLoopTime(HANGAR_SPIN_SECONDS)
     // Enter selects the inspected character even while focus rests on the panel itself (after
     // opening, or when hover inspected a tile): a focused tile or button consumes Enter first, and
-    // an unconsumed Enter must not reach the Session, which would close the Hangar.
+    // an unconsumed Enter must not reach the Session, which would close the Workshop.
     Box(
         Modifier.fillMaxSize().onKeyEvent { event ->
             if (event.key != Key.Enter && event.key != Key.NumPadEnter) return@onKeyEvent false
@@ -109,54 +133,62 @@ internal fun HangarContent(
             true
         },
     ) {
-        ProfilePanel(
-            title = language.text(ProfileText.HangarTitle),
-            count = language.text(ProfileScreensRedesignText.CountOf, model.unlockedCount, model.shapes.size) +
-                if (model.ascendant) ", " + language.text(ProfileScreensRedesignText.Ascendant) else "",
-            info = language.text(ProfileScreensRedesignText.HangarInfo),
-            matter = model.matter,
-            scale = scale,
-            tag = "profile-hangar",
-            onBack = { onAction(HangarAction.Back) },
-            background = { frame -> drawHangarBackground(frame, holder.layout) },
-        ) { frame ->
-            val measurer = rememberKkCanvasMeasurer(scale)
-            val type = hangarType(frame.mode)
-            val backWidth = profileHeaderBackWidth(measurer, frame, language.text(ProfileScreensRedesignText.Back))
-            val inspected = state.inspectedShape
-            val signature = inspected?.let { model.signatureWeapons(it.shape) }.orEmpty()
-            val layout = hangarLayout(frame, scale, backWidth, signatureHarmony = signature.map { it.harmonizing.isNotEmpty() }) { width ->
+        val measurer = rememberKkCanvasMeasurer(scale)
+        val type = hangarType(frame.mode)
+        val backWidth = profileHeaderBackWidth(measurer, frame, language.text(ProfileScreensRedesignText.Back))
+        val inspected = state.inspectedShape
+        val signature = inspected?.let { model.signatureWeapons(it.shape) }.orEmpty()
+        val track = inspected?.let { characterUpgradeTrack(upgrades, it.definition, it.upgradeLevel, model.matter, it.unlocked) }
+        val layout = hangarLayout(frame, scale, backWidth, signatureHarmony = signature.map { it.harmonizing.isNotEmpty() },
+            segment = segment, locked = inspected?.unlocked == false,
+            descriptionHeight = { width ->
                 if (inspected == null) 0f else hangarDescriptionLayout(measurer, frame, type, inspected, language, width).kkBoxHeight
+            },
+            upgradeHeight = track?.let { { width -> workshopUpgradeLayoutFor(measurer, frame, it, language, 0f, 0f, width).height } },
+        )
+        SideEffect { holder.layout = layout }
+        val inspectedFocus = remember { FocusRequester() }
+        LaunchedEffect(focusSerial) { if (focusSerial > 0) inspectedFocus.requestFocus() }
+        Box(
+            Modifier.semantics { contentDescription = language.text(ProfileScreensRedesignText.HangarRoster) }
+                .testTag("profile-hangar-roster"),
+        ) {
+            model.shapes.forEachIndexed { index, shape ->
+                val tile = layout.tiles.getOrNull(index) ?: return@forEachIndexed
+                HangarTile(frame, type, tile, shape, shape.shape == state.inspected, shape.shape == model.selected, time, scale,
+                    language, onAction, focusRequester = if (shape.shape == inspected?.shape) inspectedFocus else null,
+                    maxLevel = upgrades.maxLevel)
             }
-            SideEffect { holder.layout = layout }
+        }
+        if (inspected != null) {
+            val detail = layout.detailViewport
+            LaunchedEffect(inspected.shape) { detailScroll.scrollTo(0) }
             Box(
-                Modifier.semantics { contentDescription = language.text(ProfileScreensRedesignText.HangarRoster) }
-                    .testTag("profile-hangar-roster"),
+                Modifier.offset { IntOffset(detail.left.roundToInt(), detail.top.roundToInt()) }
+                    .size(frame.dp(detail.width), frame.dp(detail.height))
+                    .profileScrollCue(detailScroll, Kk.Ink1, frame.d(24f))
+                    .verticalScroll(detailScroll)
+                    .testTag("profile-hangar-detail"),
             ) {
-                model.shapes.forEachIndexed { index, shape ->
-                    val tile = layout.tiles.getOrNull(index) ?: return@forEachIndexed
-                    HangarTile(frame, type, tile, shape, shape.shape == state.inspected, shape.shape == model.selected, time, scale,
-                        language, onAction)
-                }
-            }
-            if (inspected != null) {
-                val detail = layout.detailViewport
-                LaunchedEffect(inspected.shape) { detailScroll.scrollTo(0) }
                 Box(
-                    Modifier.offset { IntOffset(detail.left.roundToInt(), detail.top.roundToInt()) }
-                        .size(frame.dp(detail.width), frame.dp(detail.height))
-                        .profileScrollCue(detailScroll, Kk.Ink1, frame.d(24f))
-                        .verticalScroll(detailScroll)
-                        .testTag("profile-hangar-detail"),
+                    Modifier.fillMaxWidth().height(frame.dp(layout.detailContentHeight))
+                        .semantics {
+                            contentDescription = hangarDetailDescription(inspected, model, language, traits = segment == WorkshopSegment.TRAITS)
+                        }
+                        .drawBehind { drawHangarDetail(measurer, frame, type, layout, inspected, model, signature, time, language) },
                 ) {
-                    Box(
-                        Modifier.fillMaxWidth().height(frame.dp(layout.detailContentHeight))
-                            .semantics {
-                                contentDescription = hangarDetailDescription(inspected, model, language)
-                            }
-                            .drawBehind { drawHangarDetail(measurer, frame, type, layout, inspected, model, signature, time, language) },
-                    ) {
-                        // Each signature weapon reads as its own node: its name, state and harmony.
+                    WorkshopSegmentStrip(frame, layout.segments, WorkshopTab.CHARACTERS.segments, segment, scale, onWorkshop)
+                    val slot = layout.upgrade
+                    if (track != null && slot.height > 0f) {
+                        val target = UpgradeTarget.Character(inspected.shape)
+                        WorkshopUpgradeBlock(frame, workshopUpgradeLayoutFor(measurer, frame, track, language, slot.left, slot.top, slot.width),
+                            track, target, inspected.definition.displayName.localizedContent(language),
+                            inspected.definition.mechanicName.localizedContent(language), scale, refusalSerial) {
+                            onWorkshop(WorkshopAction.BuyUpgrade(target, track))
+                        }
+                    }
+                    // Each signature weapon reads as its own node: its name, state and harmony.
+                    if (layout.signature.height > 0f) {
                         signature.forEachIndexed { index, weapon ->
                             val row = layout.signatureRows.getOrNull(index) ?: return@forEachIndexed
                             Box(
@@ -172,29 +204,30 @@ internal fun HangarContent(
                         }
                     }
                 }
-                val select = layout.select
-                val selected = inspected.shape == model.selected
-                val label = when {
-                    selected -> language.text(ProfileScreensRedesignText.HangarSelected)
-                    inspected.unlocked -> language.text(ProfileScreensRedesignText.HangarSelect)
-                    else -> language.text(ProfileScreensRedesignText.HangarLocked)
-                }
-                ProfileSlabButton(
-                    label = label,
-                    onClick = { onAction(HangarAction.SelectInspected) },
-                    frame = frame,
-                    tag = "profile-hangar-select",
-                    size = if (frame.regular) KkButtonSize.LG else KkButtonSize.MD,
-                    fontSize = type.select,
-                    enabled = state.canSelect,
-                    locked = !inspected.unlocked,
-                    textScale = scale,
-                    contentDescription = label + " " + inspected.definition.displayName.localizedContent(language),
-                    stateDescription = hangarUnlockText(inspected, language),
-                    modifier = Modifier.offset { IntOffset(select.left.roundToInt(), select.top.roundToInt()) }
-                        .size(frame.dp(select.width), frame.dp(select.height)),
-                )
             }
+            val select = layout.select
+            val selected = inspected.shape == model.selected
+            val label = when {
+                selected -> language.text(ProfileScreensRedesignText.HangarSelected)
+                !inspected.unlocked -> language.text(ProfileScreensRedesignText.HangarLocked)
+                !state.selectionAvailable -> language.text(ProfileScreensRedesignText.SelectInRun)
+                else -> language.text(ProfileScreensRedesignText.HangarSelect)
+            }
+            ProfileSlabButton(
+                label = label,
+                onClick = { onAction(HangarAction.SelectInspected) },
+                frame = frame,
+                tag = "profile-hangar-select",
+                size = if (frame.regular) KkButtonSize.LG else KkButtonSize.MD,
+                fontSize = type.select,
+                enabled = state.canSelect,
+                locked = !inspected.unlocked,
+                textScale = scale,
+                contentDescription = label + " " + inspected.definition.displayName.localizedContent(language),
+                stateDescription = hangarUnlockText(inspected, language),
+                modifier = Modifier.offset { IntOffset(select.left.roundToInt(), select.top.roundToInt()) }
+                    .size(frame.dp(select.width), frame.dp(select.height)),
+            )
         }
     }
 }
@@ -211,6 +244,8 @@ private fun HangarTile(
     textScale: Float,
     language: AppLanguage,
     onAction: (HangarAction) -> Unit,
+    focusRequester: FocusRequester? = null,
+    maxLevel: Int = UpgradePolicy().maxLevel,
 ) {
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
@@ -222,14 +257,17 @@ private fun HangarTile(
     val measurer = rememberKkCanvasMeasurer(textScale)
     val name = shape.definition.displayName.localizedContent(language)
     val status = hangarTileStatus(shape, selected, language)
+    val level = workshopTileLevel(shape.upgradeLevel, shape.unlocked, maxLevel, language)
+    val clear = if (shape.victorious) hangarClearText(shape, language) else null
     Box(
         Modifier.offset { IntOffset(tile.left.roundToInt(), tile.top.roundToInt()) }
             .size(frame.dp(tile.width), frame.dp(tile.height))
             .testTag("profile-hangar-tile-${shape.shape}")
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .semantics {
                 this.selected = selected
                 contentDescription = name
-                stateDescription = status
+                stateDescription = listOfNotNull(status, level, clear).joinToString(", ")
             }
             .pointerInput(Unit) {
                 awaitPointerEventScope {
@@ -245,7 +283,10 @@ private fun HangarTile(
                 if (!it.isFocused) pointerPress = false
             }
             .clickable(interactionSource = source, indication = null, role = Role.Button) { onAction(HangarAction.Activate(shape.shape)) }
-            .drawBehind { drawHangarTile(measurer, frame, type, shape, name, status, selection, hovered, focused, selected, time) },
+            .drawBehind {
+                drawHangarTile(measurer, frame, type, shape, name, status, selection, hovered, focused, selected, time,
+                    level, shape.upgradeLevel >= maxLevel)
+            },
     )
 }
 
@@ -266,16 +307,32 @@ internal fun hangarUnlockText(shape: HangarShapeRenderModel, language: AppLangua
     }
 }
 
-/** Everything the detail panel shows, as one accessible sentence list. */
-internal fun hangarDetailDescription(shape: HangarShapeRenderModel, model: HangarRenderModel, language: AppLanguage): String {
+/** The clear record in words: the highest tier cleared, Cleared when none is recorded, Not cleared, or null while locked. */
+internal fun hangarClearText(shape: HangarShapeRenderModel, language: AppLanguage): String? = when {
+    shape.victorious && shape.highestCleared >= 0 -> language.text(ProfileScreensRedesignText.HangarClearedOnTier, shape.highestCleared)
+    shape.victorious -> language.text(ProfileScreensRedesignText.HangarCleared)
+    shape.unlocked -> language.text(ProfileScreensRedesignText.HangarNotCleared)
+    else -> null
+}
+
+/** Everything the detail panel shows, as one accessible sentence list ([traits]: the Traits segment is shown). */
+internal fun hangarDetailDescription(
+    shape: HangarShapeRenderModel,
+    model: HangarRenderModel,
+    language: AppLanguage,
+    traits: Boolean = true,
+): String {
     val definition = shape.definition
     return listOf(
         definition.displayName.localizedContent(language),
         definition.mechanicName.localizedContent(language) + ", " + definition.triggerKind.displayLabel.localizedContent(language),
         definition.mechanicDescription.localizedContent(language),
-        language.text(ProfileScreensRedesignText.HangarDifficulty) + " " +
-            language.text(ProfileScreensRedesignText.CountOf, definition.difficulty, 3),
+        if (traits) {
+            language.text(ProfileScreensRedesignText.HangarDifficulty) + " " +
+                language.text(ProfileScreensRedesignText.CountOf, definition.difficulty, 3)
+        } else "",
         hangarUnlockText(shape, language),
+        hangarClearText(shape, language).orEmpty(),
         if (shape.shape == model.selected) language.text(ProfileScreensRedesignText.HangarSelected) else "",
     ).filter { it.isNotBlank() }.joinToString(". ")
 }
@@ -325,6 +382,8 @@ private fun DrawScope.drawHangarTile(
     focused: Boolean,
     selected: Boolean,
     time: Float,
+    level: String? = null,
+    maxed: Boolean = false,
 ) {
     val k = frame.k
     val roles = measurer.roles
@@ -355,6 +414,14 @@ private fun DrawScope.drawHangarTile(
     if (!shape.unlocked) drawKkIcon(KkIcon.SYSTEM_LOCKED, center, radius * 0.9f, fg)
     val nameTop = size.height - pad - textHeight
     drawProfileText(nameLayout, size.width * 0.5f, nameTop, fg, "hangar.tile.name", shape.shape, align = KkAlign.CENTER)
+    if (level != null) {
+        // The Refit level sits at the bottom-right of the form's area, above the name (gold at the maximum).
+        val mark = fitKkText(measurer, level, type.tileStatus * k, size.width * 0.5f - pad, minFactor = 0.6f) {
+            measurer.typography.monoStyle(it)
+        }
+        drawProfileText(mark, size.width - pad, nameTop - frame.d(2f), workshopTileLevelColor(maxed, on), "hangar.tile.level",
+            shape.shape, align = KkAlign.END, valign = KkVAlign.BASELINE)
+    }
     // A locked tile keeps its dark face when inspected, so its unlock progress reads in light ink then.
     val statusColor = when {
         !shape.unlocked -> if (on) Kk.Bone2 else Kk.Mute
@@ -367,11 +434,81 @@ private fun DrawScope.drawHangarTile(
         val gem = frame.d(if (frame.regular) 9f else 7f)
         drawKkGem(Offset(size.width - pad - gem * 0.5f, pad + gem * 0.6f), if (on) Kk.Ink else roles.you, gem / density)
     }
-    if (shape.ascendant) {
-        // Ascendant: the gold crown in the tile's top-left corner.
-        val crown = frame.d(if (frame.regular) 8f else 6f)
-        translate(pad + crown, pad + crown) { drawPath(KkMutatorSigilPaths.of(KkMutatorSigil.ASCENDANT, crown), Kk.Gold) }
+    // The clear plate in the top-left corner: the highest tier cleared with this character, outlined in
+    // ink on the inspected tile's light face; Ascendant adds the gold crown beside it.
+    var crownLeft = pad
+    if (shape.victorious) {
+        val plate = frame.d(if (frame.regular) 16f else 11f)
+        drawHangarClearPlate(measurer, Offset(pad + plate, pad + plate * 0.78f), plate, shape.highestCleared,
+            rim = if (on) Kk.Ink else null, role = "hangar.tile.clear", owner = shape.shape)
+        crownLeft = pad + plate * 2f + frame.d(4f)
     }
+    if (shape.ascendant) {
+        val crown = frame.d(if (frame.regular) 8f else 6f)
+        translate(crownLeft + crown, pad + crown) { drawPath(KkMutatorSigilPaths.of(KkMutatorSigil.ASCENDANT, crown), Kk.Gold) }
+    }
+}
+
+/**
+ * A tier plate of [radius] around [center]: the cleared [tier]'s color with its numeral, or a plain
+ * light plate when the victory recorded no tier. [rim] outlines it on a light face.
+ */
+private fun DrawScope.drawHangarClearPlate(
+    measurer: CanvasTextMeasurer,
+    center: Offset,
+    radius: Float,
+    tier: Int,
+    rim: Color?,
+    role: String,
+    owner: Any? = null,
+) {
+    translate(center.x, center.y) {
+        if (rim != null) drawPath(KkMutatorSigilPaths.of(KkMutatorSigil.TIER, radius + density * 1.5f), rim)
+        drawPath(KkMutatorSigilPaths.of(KkMutatorSigil.TIER, radius), if (tier >= 0) KkRebirthTiers.color(tier) else Kk.Bone2)
+    }
+    if (tier < 0) return
+    val numeral = fitKkText(measurer, tier.toString(), radius * 0.84f / density, radius * 1.1f, minFactor = 0.4f) {
+        measurer.typography.wideStyle(it, tabular = true, lineHeightEm = 1f)
+    }
+    drawProfileText(numeral, center.x, center.y, Kk.Ink, role, owner, align = KkAlign.CENTER, valign = KkVAlign.CENTER)
+}
+
+/**
+ * The clear record at the right of the preview, from [left]: Cleared over the tier on its plate,
+ * Cleared alone when the victory recorded no tier, Not cleared before the first victory, nothing
+ * while the character is locked.
+ */
+private fun DrawScope.drawHangarClearRecord(
+    measurer: CanvasTextMeasurer,
+    frame: ProfileFrame,
+    type: HangarType,
+    preview: Rect,
+    left: Float,
+    shape: HangarShapeRenderModel,
+    language: AppLanguage,
+) {
+    if (!shape.unlocked && !shape.victorious) return
+    val k = frame.k
+    val tier = shape.highestCleared
+    val plate = if (shape.victorious && tier >= 0) minOf(preview.height * 0.2f, frame.d(26f)) else 0f
+    val textRight = if (plate > 0f) preview.right - plate * 2f - frame.d(10f) else preview.right
+    val maxWidth = (textRight - left - frame.d(12f)).coerceAtLeast(frame.d(40f))
+    val labelText = language.text(if (shape.victorious) ProfileScreensRedesignText.HangarCleared else ProfileScreensRedesignText.HangarNotCleared)
+    val label = fitKkText(measurer, labelText, type.mono * k, maxWidth, minFactor = 0.5f) { measurer.typography.monoStyle(it) }
+    if (plate <= 0f) {
+        drawProfileText(label, textRight, preview.center.y, if (shape.victorious) Kk.Bone else Kk.Mute, "hangar.detail.clear",
+            align = KkAlign.END, valign = KkVAlign.CENTER)
+        return
+    }
+    val value = fitKkText(measurer, language.text(ProfileScreensRedesignText.TierTag, tier), type.name * 0.55f * k, maxWidth,
+        minFactor = 0.5f) { measurer.typography.condStyle(it, lineHeightEm = 1f) }
+    val gap = frame.d(4f)
+    val top = preview.center.y - (label.kkBoxHeight + gap + value.kkBoxHeight) * 0.5f
+    drawProfileText(label, textRight, top, Kk.Mute, "hangar.detail.clear", align = KkAlign.END)
+    drawProfileText(value, textRight, top + label.kkBoxHeight + gap, KkRebirthTiers.color(tier), "hangar.detail.clear.tier",
+        align = KkAlign.END)
+    drawHangarClearPlate(measurer, Offset(preview.right - plate, preview.center.y), plate, tier, rim = null,
+        role = "hangar.detail.clear.plate")
 }
 
 /** The inspected character's description wrapped to [width] (every line; the details scroll). */
@@ -414,6 +551,7 @@ private fun DrawScope.drawHangarDetail(
             drawPath(KkMutatorSigilPaths.of(KkMutatorSigil.ASCENDANT, crown), Kk.Gold)
         }
     }
+    drawHangarClearRecord(measurer, frame, type, preview, center.x + radius * 1.35f, shape, language)
     val tagText = definition.mechanicName.localizedContent(language) + " / " + definition.triggerKind.displayLabel.localizedContent(language)
     val tag = fitKkText(measurer, tagText, type.mono * k, layout.tag.width, minFactor = 0.5f) { measurer.typography.monoStyle(it) }
     drawProfileText(tag, layout.tag.left, layout.tag.top, roles.you, "hangar.detail.tag")
@@ -424,6 +562,16 @@ private fun DrawScope.drawHangarDetail(
         valign = KkVAlign.CENTER)
     drawProfileText(hangarDescriptionLayout(measurer, frame, type, shape, language, layout.description.width),
         layout.description.left, layout.description.top, Kk.Bone, "hangar.detail.description")
+    if (layout.unlock.height > 0f) {
+        val unlock = fitKkText(measurer, hangarUnlockText(shape, language), type.mono * k, layout.unlock.width, maxLines = 2,
+            minFactor = 0.5f) { measurer.typography.monoStyle(it) }
+        drawProfileText(unlock, layout.unlock.left, layout.unlock.top, if (shape.unlocked) Kk.Bone2 else roles.threat, "hangar.detail.unlock")
+    }
+    if (shape.shape == model.selected) {
+        drawKkGem(Offset(layout.name.right - frame.d(10f), layout.tag.center.y), roles.you, frame.d(9f) / density)
+    }
+    // Traits, difficulty and the signature weapons show on the Traits segment only.
+    if (layout.signature.height <= 0f) return
     val labels = listOf(
         ProfileScreensRedesignText.HangarMass to shape.massBar,
         ProfileScreensRedesignText.HangarIntegrity to shape.integrityBar,
@@ -463,15 +611,9 @@ private fun DrawScope.drawHangarDetail(
         drawHangarSignatureWeapon(measurer, frame, type, Rect(row.left + labelWidth, row.top, row.right, row.bottom), layout.signatureLine,
             weapon, language)
     }
-    val unlock = fitKkText(measurer, hangarUnlockText(shape, language), type.mono * k, layout.unlock.width, maxLines = 2,
-        minFactor = 0.5f) { measurer.typography.monoStyle(it) }
-    drawProfileText(unlock, layout.unlock.left, layout.unlock.top, if (shape.unlocked) Kk.Bone2 else roles.threat, "hangar.detail.unlock")
-    if (shape.shape == model.selected) {
-        drawKkGem(Offset(layout.name.right - frame.d(10f), layout.tag.center.y), roles.you, frame.d(9f) / density)
-    }
 }
 
-private fun DrawScope.drawHangarBackground(frame: ProfileFrame, layout: HangarLayout?) {
+internal fun DrawScope.drawHangarBackground(frame: ProfileFrame, layout: HangarLayout?) {
     drawRect(Kk.Ink)
     drawProfileGrid(frame)
     when (frame.mode) {

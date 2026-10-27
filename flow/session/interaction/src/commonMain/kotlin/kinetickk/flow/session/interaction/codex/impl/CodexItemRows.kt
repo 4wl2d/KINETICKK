@@ -478,7 +478,8 @@ private fun codexNearestOnLine(cells: List<CodexItemPosition>, from: CodexItemPo
 /**
  * Geometry (px from the cell's top-left) of one Items matrix cell: the glyph and the marks around it.
  * The glyph of [glyphRadius] at [glyphCenter] reaches [CODEX_GLYPH_REACH] times as far; the NEW
- * [notch], the element [strip] and the stack [bar] stay clear of that reach and of each other.
+ * [notch], the ACTIVE [activeNotch], the element [strip] and the stack [bar] stay clear of that reach
+ * and of each other.
  */
 internal data class CodexItemCellMarks(
     /** 2 dp: the marks sit inside it. */
@@ -490,6 +491,11 @@ internal data class CodexItemCellMarks(
      * bottom-left; the Ink edge of its legs lies a hairline outside it, in the inset.
      */
     val notch: Rect,
+    /**
+     * The ACTIVE notch's box at the bottom-left, above the stack bar: its triangle is the bottom-left half, cut by the
+     * diagonal from top-left to bottom-right; like the NEW notch its Ink edge lies a hairline outside it.
+     */
+    val activeNotch: Rect,
     /** The element strip down the right edge, its 1 dp Ink line on the left included. */
     val strip: Rect,
     /** The in-build stack bar along the bottom: its Ink underlay, a 1 dp Ink line on top included. */
@@ -519,14 +525,16 @@ internal data class CodexItemCellMarks(
 
 /**
  * The marks of a [cellPx] matrix cell at [density]: the glyph at (0.5, 0.47) of the cell with a 0.27
- * radius; a NEW notch with max(6 dp, 0.22) legs in the top-left corner; an element strip max(2 dp,
- * 0.08) wide on the right edge, ending 1 dp above a stack bar max(2 dp, 0.08) tall along the bottom,
- * all inside a 2 dp inset. For 22–56 dp cells every mark stays clear of the glyph's reach.
+ * radius; a NEW notch with max(6 dp, 0.22) legs in the top-left corner; an ACTIVE notch with max(5 dp,
+ * 0.2) legs in the bottom-left corner, 1 dp above the stack bar; an element strip max(2 dp, 0.08) wide on
+ * the right edge, ending 1 dp above a stack bar max(2 dp, 0.08) tall along the bottom, all inside a
+ * 2 dp inset. For 22–56 dp cells every mark stays clear of the glyph's reach.
  */
 internal fun codexItemCellMarks(cellPx: Float, density: Float): CodexItemCellMarks {
     val inset = 2f * density
     val hairline = density
     val legs = max(6f * density, 0.22f * cellPx)
+    val activeLegs = max(5f * density, 0.2f * cellPx)
     val stripWidth = max(2f * density, 0.08f * cellPx)
     val barHeight = max(2f * density, 0.08f * cellPx)
     val bar = Rect(inset, cellPx - inset - barHeight, cellPx - inset, cellPx - inset)
@@ -537,6 +545,7 @@ internal fun codexItemCellMarks(cellPx: Float, density: Float): CodexItemCellMar
         glyphCenter = Offset(0.5f * cellPx, 0.47f * cellPx),
         glyphRadius = 0.27f * cellPx,
         notch = Rect(inset, inset, inset + legs, inset + legs),
+        activeNotch = Rect(inset, bar.top - hairline - activeLegs, inset + activeLegs, bar.top - hairline),
         strip = Rect(cellPx - inset - stripWidth, inset, cellPx - inset, bar.top - hairline),
         bar = bar,
         rim = Rect(rim, rim, cellPx - rim, cellPx - rim),

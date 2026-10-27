@@ -9,6 +9,7 @@ import kinetickk.ball.content.api.CoreShapeDefinition
 import kinetickk.ball.content.api.ProfilePolicySnapshot
 import kinetickk.ball.profile.api.HangarShapeProgress
 import kinetickk.ball.profile.api.PlayerProfile
+import kinetickk.ball.profile.api.highestClearedWith
 import kinetickk.ball.profile.api.rank
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.ImmutableSet
@@ -48,5 +49,7 @@ internal fun hangarShapeProgress(profile: PlayerProfile, policy: ProfilePolicySn
             unlocked = progress >= target,
             progress = progress.coerceIn(0L, target),
             target = target,
+            victorious = definition.id in profile.characterAchievements.victoriousCharacters,
+            highestCleared = profile.rebirthProgress.highestClearedWith(definition.id),
         )
     }.toImmutableList()

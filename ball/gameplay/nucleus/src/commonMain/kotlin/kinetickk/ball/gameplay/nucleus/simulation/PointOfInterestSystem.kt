@@ -181,7 +181,7 @@ internal fun MutableGameState.openDirectedReward(reward: DirectedReward) {
         focuses.map { ChoiceOption(activeChoiceType, it.label, "Choose a direction, then one of three matching offers.",
             "FOCUS", rewardFocus = it) }
     }
-    dashBufferTime = 0f
+    clearInputBuffers()
     phase = GamePhase.CHOICE
 }
 
@@ -211,13 +211,19 @@ internal fun MutableGameState.selectRewardFocus(focus: RewardFocus) {
             } + relicOfferTailCard()
         }
         DirectedReward.ITEM_AND_REPAIR -> {
-            val pool = content.items.filter {
-                it.minimumRebirth <= rebirthRank && hasUsefulItemEffect(it) && itemRewardFocus(it) == focus
+            // A uniform shuffle of the focus pool, no weights. Actives must meet their offer rules first, and the cards
+            // take the first three of the shuffle with at most one active (later actives are skipped, never redrawn).
+            refillItemDeck()
+            val pool = deckPool(content.items.filter {
+                it.minimumRebirth <= rebirthRank && hasUsefulItemEffect(it) && activeOfferable(it) && itemRewardFocus(it) == focus
+            }, 3)
+            val picks = ArrayList<ItemDefinition>(3)
+            for (item in pool.shuffled(rewardRandom)) {
+                if (picks.size == 3) break
+                if (item.isActive && picks.any { it.isActive }) continue
+                picks += item
             }
-            choices = pool.shuffled(rewardRandom).take(3).map {
-                ChoiceOption(ChoiceType.ITEM, it.name, it.description, it.rarity.displayLabel, itemId = it.id,
-                    reborn = rewardRandom.nextFloat() < rebornChance())
-            }
+            choices = picks.map { itemCard(it, it.rarity.displayLabel, reborn = rewardRandom.nextFloat() < rebornChance()) }
         }
         DirectedReward.WEAPON -> {
             choices = directedWeaponChoices(

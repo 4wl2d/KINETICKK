@@ -43,12 +43,10 @@ class MobileGameUiTest {
         val screenBounds = composeRule.onNodeWithTag(HOME_SCREEN_TAG).visibleBounds()
         val actionTags = listOf(
             HOME_START_TAG,
-            HOME_LAB_TAG,
-            HOME_ARMORY_TAG,
+            HOME_WORKSHOP_TAG,
             HOME_REBIRTH_TAG,
             HOME_CODEX_TAG,
             HOME_SETTINGS_TAG,
-            HOME_HANGAR_TAG,
         )
 
         val actionBounds = actionTags.map { tag ->
@@ -82,10 +80,11 @@ class MobileGameUiTest {
         val gameplayBounds = composeRule.onNodeWithTag(GAMEPLAY_SCREEN_TAG)
             .assertIsDisplayed()
             .visibleBounds()
+        // The performance slot is the Show FPS counter: a fresh profile (Show FPS off) has none.
+        composeRule.onNodeWithTag(GAMEPLAY_PERFORMANCE_TAG).assertDoesNotExist()
         val runningTags = listOf(
             GAMEPLAY_BRAKE_TAG,
             GAMEPLAY_DASH_TAG,
-            GAMEPLAY_PERFORMANCE_TAG,
             GAMEPLAY_PAUSE_TAG,
         )
         val runningBounds = runningTags.map { tag ->
@@ -137,7 +136,6 @@ class MobileGameUiTest {
                 down(center)
                 up()
             }
-        composeRule.onNodeWithTag(GAMEPLAY_PERFORMANCE_TAG).performClick()
         composeRule.onNodeWithTag(GAMEPLAY_PAUSE_TAG).performClick()
         composeRule.mainClock.advanceTimeByFrame()
 
@@ -148,7 +146,7 @@ class MobileGameUiTest {
         val pausedTags = listOf(
             GAMEPLAY_RESUME_TAG,
             GAMEPLAY_SETTINGS_TAG,
-            GAMEPLAY_PERFORMANCE_TAG,
+            GAMEPLAY_WORKSHOP_TAG,
             GAMEPLAY_EXIT_TAG,
         )
         val pausedBounds = pausedTags.map { tag ->
@@ -173,6 +171,50 @@ class MobileGameUiTest {
             .performClick()
         composeRule.mainClock.advanceTimeByFrame()
         composeRule.awaitTag(HOME_SCREEN_TAG)
+    }
+
+    @Test
+    fun hidingTheSystemBarsGivesTheirSpaceToTheGame() {
+        freezeContinuousFrameClock()
+        composeRule.awaitTag(HOME_SCREEN_TAG)
+        val shown = composeRule.onNodeWithTag(HOME_SCREEN_TAG).visibleBounds()
+
+        toggleImmersiveFromHome()
+        // Hidden bars keep reporting their gesture areas; only the cutout stays clear of the game.
+        val hidden = composeRule.awaitHomeBounds { it.width * it.height > shown.width * shown.height }
+        assertInside(hidden, shown, HOME_SCREEN_TAG)
+
+        toggleImmersiveFromHome()
+        composeRule.awaitHomeBounds { it == shown }
+    }
+
+    private fun toggleImmersiveFromHome() {
+        composeRule.onNodeWithTag(HOME_SETTINGS_TAG).performClick()
+        composeRule.mainClock.advanceTimeByFrame()
+        composeRule.awaitTag(SETTINGS_DISPLAY_TAG)
+        composeRule.onNodeWithTag(SETTINGS_DISPLAY_TAG).performClick()
+        composeRule.mainClock.advanceTimeByFrame()
+        var page = 0
+        while (composeRule.onAllNodesWithTag(SETTINGS_IMMERSIVE_TAG).fetchSemanticsNodes().isEmpty()) {
+            composeRule.onNodeWithTag("$SETTINGS_PAGE_TAG.${page++}").performClick()
+            composeRule.mainClock.advanceTimeByFrame()
+        }
+        composeRule.onNodeWithTag(SETTINGS_IMMERSIVE_TAG).performClick()
+        composeRule.mainClock.advanceTimeByFrame()
+        composeRule.onNodeWithTag(SETTINGS_BACK_TAG).performClick()
+        composeRule.mainClock.advanceTimeByFrame()
+        composeRule.awaitTag(HOME_SCREEN_TAG)
+    }
+
+    /** The system applies the bars' change asynchronously; frames drive Compose until the home bounds match. */
+    private fun androidx.compose.ui.test.junit4.AndroidComposeTestRule<*, *>.awaitHomeBounds(matches: (Rect) -> Boolean): Rect {
+        var bounds = Rect.Zero
+        waitUntil(timeoutMillis = UI_TIMEOUT.inWholeMilliseconds) {
+            mainClock.advanceTimeByFrame()
+            bounds = onNodeWithTag(HOME_SCREEN_TAG).visibleBounds()
+            matches(bounds)
+        }
+        return bounds
     }
 
     private fun SemanticsNodeInteraction.assertMinimumTouchTarget(): SemanticsNodeInteraction =
@@ -229,12 +271,14 @@ class MobileGameUiTest {
     private companion object {
         const val HOME_SCREEN_TAG = "kinetickk.home"
         const val HOME_START_TAG = "kinetickk.home.start"
-        const val HOME_LAB_TAG = "kinetickk.home.lab"
-        const val HOME_ARMORY_TAG = "kinetickk.home.armory"
+        const val HOME_WORKSHOP_TAG = "kinetickk.home.workshop"
         const val HOME_REBIRTH_TAG = "kinetickk.home.rebirth"
         const val HOME_CODEX_TAG = "kinetickk.home.codex"
         const val HOME_SETTINGS_TAG = "kinetickk.home.settings"
-        const val HOME_HANGAR_TAG = "kinetickk.home.hangar"
+        const val SETTINGS_DISPLAY_TAG = "kinetickk.settings.group.display"
+        const val SETTINGS_IMMERSIVE_TAG = "kinetickk.settings.immersive.toggle"
+        const val SETTINGS_PAGE_TAG = "kinetickk.settings.page"
+        const val SETTINGS_BACK_TAG = "kinetickk.settings.back"
         const val GAMEPLAY_SCREEN_TAG = "kinetickk.gameplay"
         const val GAMEPLAY_PAUSE_TAG = "kinetickk.gameplay.pause"
         const val GAMEPLAY_PERFORMANCE_TAG = "kinetickk.gameplay.performance"
@@ -242,6 +286,7 @@ class MobileGameUiTest {
         const val GAMEPLAY_BRAKE_TAG = "kinetickk.gameplay.brake"
         const val GAMEPLAY_RESUME_TAG = "kinetickk.gameplay.resume"
         const val GAMEPLAY_SETTINGS_TAG = "kinetickk.gameplay.settings"
+        const val GAMEPLAY_WORKSHOP_TAG = "kinetickk.gameplay.workshop"
         const val GAMEPLAY_EXIT_TAG = "kinetickk.gameplay.exit"
         const val MINIMUM_TOUCH_TARGET_DP = 48
         const val NO_COMPOSE_HIERARCHIES_PREFIX = "No compose hierarchies found in the app"

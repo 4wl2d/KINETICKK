@@ -3,6 +3,9 @@
 
 package kinetickk.ball.content.api
 
+import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.immutableListOfSize
+
 /** Content-owned starting values; seconds always mean active simulation time at 1x. */
 data class FatigueTuning(
     val velocitySmoothingSeconds: Float = 0.15f,
@@ -42,6 +45,23 @@ data class RunTempoProfile(
     val weaponAmplificationEveryLevels: Int = 2,
     val maximumAutomaticWeaponLevel: Int = 10,
     val fatigue: FatigueTuning = FatigueTuning(),
+    /** Highest run level; Data stops levelling here (the Apex unlocks at it). */
+    val maximumLevel: Int = DEFAULT_MAXIMUM_LEVEL,
+    /**
+     * Data needed to go from level `L` to `L + 1`, for `L = 1 until maximumLevel` (entry `L - 1`):
+     * positive and non-decreasing. The default is the shipped curve ([defaultLevelRequirements]).
+     */
+    val levelRequirements: ImmutableList<Int> = defaultLevelRequirements(maximumLevel = maximumLevel),
+    /** Maximum integrity every level-up adds. */
+    val levelIntegrity: Float = 2.5f,
+    /** Integrity every level-up repairs. */
+    val levelRepair: Float = 7.5f,
+    /**
+     * First run level whose requirement the Rebirth tier's [RebirthProfile.dataRequirementScale] scales. Earlier
+     * levels keep the table at every tier, so a high tier's opening level-ups arrive as on tier 0; 1 scales the whole
+     * table and a value at or above [maximumLevel] scales nothing.
+     */
+    val rebirthScaleFromLevel: Int = LEGACY_LEVELS + 1,
 ) {
     init {
         require(bossAtSeconds.isFinite() && bossAtSeconds > 0f)
@@ -50,6 +70,21 @@ data class RunTempoProfile(
         require(matterRewardMultiplier.isFinite() && matterRewardMultiplier > 0f)
         require(weaponAmplificationEveryLevels > 0)
         require(maximumAutomaticWeaponLevel in 1..100)
+        require(maximumLevel in MIN_MAXIMUM_LEVEL..ContentBounds.MAX_RUN_LEVEL) {
+            "Maximum run level must be within $MIN_MAXIMUM_LEVEL..${ContentBounds.MAX_RUN_LEVEL}"
+        }
+        require(levelRequirements.size == maximumLevel - 1) {
+            "Level requirements must list one entry per level below the maximum"
+        }
+        require(levelRequirements.all { it > 0 }) { "Level requirements must be positive" }
+        require(levelRequirements.zipWithNext().all { (first, second) -> first <= second }) {
+            "Level requirements must not decrease"
+        }
+        require(levelIntegrity.isFinite() && levelIntegrity >= 0f)
+        require(levelRepair.isFinite() && levelRepair >= 0f)
+        require(rebirthScaleFromLevel in 1..ContentBounds.MAX_RUN_LEVEL) {
+            "The Rebirth Data scale must start on a run level within 1..${ContentBounds.MAX_RUN_LEVEL}"
+        }
     }
 
     fun progress(elapsedSeconds: Float): Float = (elapsedSeconds / bossAtSeconds).coerceIn(0f, 1f)
@@ -81,6 +116,77 @@ data class RunTempoProfile(
     fun selfDamageRunGrowth(elapsedSeconds: Float): Float = 1f + 1.6f * progress(elapsedSeconds)
     fun attackRateMultiplier(elapsedSeconds: Float): Float = 1f + progress(elapsedSeconds) * 0.40f
     fun denseAttacks(elapsedSeconds: Float): Boolean = progress(elapsedSeconds) >= 0.58f
-    fun dataRequiredForLevel(level: Int): Int = if (level <= 1) 18 else 18 + level * 8 + level * level / 8
+    /** Total: at and past the cap it returns the last entry, which the capped state only displays. */
+    fun dataRequiredForLevel(level: Int): Int = levelRequirements[level.coerceIn(1, maximumLevel - 1) - 1]
+
+    /**
+     * [dataRequiredForLevel] at the Rebirth tier [rebirth]: scaled by its [RebirthProfile.dataRequirement] from
+     * [rebirthScaleFromLevel] on. Total like [dataRequiredForLevel]; the level is clamped before the comparison, so
+     * the capped level displays the last scaled entry.
+     */
+    fun dataRequiredForLevel(level: Int, rebirth: RebirthProfile): Int {
+        val tableLevel = level.coerceIn(1, maximumLevel - 1)
+        val base = levelRequirements[tableLevel - 1]
+        return if (tableLevel < rebirthScaleFromLevel) base else rebirth.dataRequirement(base)
+    }
+
     fun grantsWeaponAmplification(level: Int): Boolean = level > 1 && level % weaponAmplificationEveryLevels == 0
+
+    companion object {
+        /** A run needs at least one level-up below its cap. */
+        const val MIN_MAXIMUM_LEVEL: Int = 2
+
+        /** The shipped run level cap. */
+        const val DEFAULT_MAXIMUM_LEVEL: Int = 42
+
+        /** Levels whose requirement equals the legacy curve; the ramp starts on the next one. */
+        const val LEGACY_LEVELS: Int = 15
+
+        /** Levels over which a plateau ramps in, in equal integer steps. */
+        const val PLATEAU_RAMP_LEVELS: Int = 5
+
+        /** Extra Data per level once the first ramp (levels 16..20) is complete. */
+        const val DEFAULT_RAMP_PLATEAU: Int = 190
+
+        /** Extra Data per level once the second ramp (levels 31..35) is complete. */
+        const val DEFAULT_TOP_PLATEAU: Int = 0
+
+        /** Last level before the second ramp. */
+        const val TOP_RAMP_AFTER_LEVEL: Int = 30
+    }
 }
+
+/**
+ * The shipped curve for levels `1 until maximumLevel` (integer arithmetic):
+ * `req(L) = legacy(L) + rampPlateau × clamp(L − 15, 0, 5) / 5 + topPlateau × clamp(L − 30, 0, 5) / 5`, where
+ * `legacy` is [legacyLevelRequirements]' quadratic. Levels 1–15 keep the legacy requirement; [rampPlateau] adds up to
+ * its value over levels 16–20 and [topPlateau] over levels 31–35. Both are calibration knobs, so a test can rebuild
+ * the table with other values.
+ */
+fun defaultLevelRequirements(
+    rampPlateau: Int = RunTempoProfile.DEFAULT_RAMP_PLATEAU,
+    topPlateau: Int = RunTempoProfile.DEFAULT_TOP_PLATEAU,
+    maximumLevel: Int = RunTempoProfile.DEFAULT_MAXIMUM_LEVEL,
+): ImmutableList<Int> {
+    require(maximumLevel in RunTempoProfile.MIN_MAXIMUM_LEVEL..ContentBounds.MAX_RUN_LEVEL)
+    require(rampPlateau >= 0 && topPlateau >= 0) { "Level plateaus must not be negative" }
+    return immutableListOfSize(maximumLevel - 1) { index ->
+        val level = index + 1
+        val requirement = legacyLevelRequirement(level).toLong() +
+            plateauStep(rampPlateau, level - RunTempoProfile.LEGACY_LEVELS) +
+            plateauStep(topPlateau, level - RunTempoProfile.TOP_RAMP_AFTER_LEVEL)
+        require(requirement <= Int.MAX_VALUE) { "Level $level requirement exceeds the Int range" }
+        requirement.toInt()
+    }
+}
+
+private fun plateauStep(plateau: Int, levelsIntoRamp: Int): Long =
+    plateau.toLong() * levelsIntoRamp.coerceIn(0, RunTempoProfile.PLATEAU_RAMP_LEVELS) / RunTempoProfile.PLATEAU_RAMP_LEVELS
+
+/** The pre-0.5 quadratic curve `18 + 8L + L²/8` (18 at level 1) for levels `1 until maximumLevel`. */
+fun legacyLevelRequirements(maximumLevel: Int): ImmutableList<Int> {
+    require(maximumLevel in RunTempoProfile.MIN_MAXIMUM_LEVEL..ContentBounds.MAX_RUN_LEVEL)
+    return immutableListOfSize(maximumLevel - 1) { index -> legacyLevelRequirement(index + 1) }
+}
+
+private fun legacyLevelRequirement(level: Int): Int = if (level <= 1) 18 else 18 + level * 8 + level * level / 8

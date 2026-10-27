@@ -39,6 +39,8 @@ data class LoadoutProfileSnapshot(
     val loadout: PlayerLoadout,
     /** Rebirth rank the weapon unlock gates compare against. */
     val rebirthRank: Int = 0,
+    /** Bought Refit and Honing levels. */
+    val upgrades: PermanentUpgrades = PermanentUpgrades(),
 )
 
 data class RebirthProfileSnapshot(
@@ -52,7 +54,12 @@ data class GameplayProfileSnapshot(
     val matrix: MatrixProgress,
     val collection: PlayerCollection,
     val rebirthProgress: RebirthProgress,
-)
+    /** Refit and Honing levels the run applies; captured when the run starts. */
+    val upgrades: PermanentUpgrades = PermanentUpgrades(),
+) {
+    /** Recent acquisitions the run's offers down-weight (oldest first). */
+    val recentItemIds: ImmutableList<Int> get() = collection.recentItemIds
+}
 
 sealed interface ProfileRunBootstrapResult {
     data class Ready(val snapshot: GameplayProfileSnapshot) : ProfileRunBootstrapResult
@@ -84,6 +91,13 @@ data class HomeProgressProjection(
     val unlockedCoreShapes: ImmutableSet<CoreShape> = immutableSetOf(CoreShape.ORB),
     /** Every character's unlock progress in stable order (the Hangar query's [HangarProjection.shapes]). */
     val characterProgress: ImmutableList<HangarShapeProgress> = immutableListOf(),
+    /**
+     * True when the Profile would accept a Workshop purchase now: a weapon unlock, a Core Matrix rank, a
+     * Refit or a Honing level (the same checks its purchase decisions run).
+     */
+    val workshopAffordable: Boolean = false,
+    /** Refit and Honing levels bought across every character and weapon. */
+    val upgradeLevels: Int = 0,
 ) : ProfileProjection
 
 data class MatrixProgressProjection(
@@ -112,12 +126,18 @@ data class RebirthProgressProjection(
     val canAdvance: Boolean,
 ) : ProfileProjection
 
-/** Unlock progress of one character: [progress] of [target], capped at the target for display. */
+/**
+ * Unlock progress of one character: [progress] of [target], capped at the target for display, and
+ * its Architect victories: [victorious] once it has won, and the highest tier it cleared
+ * ([RebirthProgress.highestClearedWith], -1 when no tier is recorded).
+ */
 data class HangarShapeProgress(
     val shape: CoreShape,
     val unlocked: Boolean,
     val progress: Long,
     val target: Long,
+    val victorious: Boolean = false,
+    val highestCleared: Int = -1,
 )
 
 data class HangarProjection(

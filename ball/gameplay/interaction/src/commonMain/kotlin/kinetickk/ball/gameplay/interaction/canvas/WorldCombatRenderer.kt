@@ -62,10 +62,12 @@ internal fun DrawScope.drawWorld(
     shakeX: Float,
     shakeY: Float,
     textMeasurer: TextMeasurer,
+    hudDensity: Float = density,
 ) {
     WorldDrawProbe.begin()
-    // The HUD keep-out is screen space: update it before the world layer changes the scope's units.
-    worldHudKeepOut(engine, textMeasurer)
+    // The HUD keep-out is screen space, at the HUD's (interface-scaled) density: update it before the
+    // world layer changes the scope's units.
+    worldHudKeepOut(engine, textMeasurer, hudDensity)
     val markers = WorldOverlayScratch.markers.clear()
     val scale = engine.worldScale
     withWorldUnits(scale) {
@@ -90,9 +92,15 @@ private fun DrawScope.drawWorldLayer(
     // The pointer is current input, never interpolated: the singularity sits exactly under it.
     val pointer = Offset(engine.pointerX + shakeX * 0.18f, engine.pointerY + shakeY * 0.18f)
 
+    // The crowd and the reaction effects setting pick every world look's level of detail this frame.
+    val crowd = onScreenEnemyCount(engine, shakeX, shakeY, FxFrame.CROWD_SIG_ONLY + 1)
+    FxFrame.begin(crowd, engine.settings.reactionEffects)
     // Obstacles lie on the backdrop, under everything that moves.
     drawObstacles(engine, shakeX, shakeY, roles)
     drawPointsOfInterest(engine, shakeX, shakeY, textMeasurer)
+    // Lingering fields and skill zones are ground decals.
+    drawCombatFields(engine, shakeX, shakeY, roles)
+    drawSkillMarkers(engine, shakeX, shakeY, roles)
     drawCharacterField(engine, shakeX, shakeY, roles)
     drawTotem(engine, shakeX, shakeY, textMeasurer)
     drawShockwaves(engine, visualFx, shakeX, shakeY, roles)
@@ -105,19 +113,26 @@ private fun DrawScope.drawWorldLayer(
     drawWeapon(engine, core, shakeX, shakeY, roles)
     drawWeaponEntities(engine, shakeX, shakeY, roles, airborne = true)
     drawWeaponArcs(engine, visualFx, shakeX, shakeY, roles)
+    drawPersistentLinks(engine, shakeX, shakeY, roles)
     drawParticles(engine, visualFx, shakeX, shakeY, roles)
     // Telegraphs and threats remain readable over cosmetic trails and secondary effects. A crowded
     // screen drops the status patterns of ordinary enemies for a flat tint.
-    val statusDetail = !crowdedForStatusPatterns(engine, shakeX, shakeY)
+    val statusDetail = crowd <= STATUS_PATTERN_ENEMY_LIMIT
     for (index in engine.enemies.indices) {
         drawEnemy(engine, engine.enemies[index], shakeX, shakeY, roles, statusDetail)
     }
     drawElementBursts(engine, visualFx, shakeX, shakeY, roles)
+    drawSkillBursts(engine, visualFx, shakeX, shakeY, roles)
+    drawApexBursts(engine, visualFx, shakeX, shakeY, roles)
     drawCharacterActors(engine, shakeX, shakeY, roles)
     drawProjectiles(engine, shakeX, shakeY, roles)
     drawImpactMarks(engine, visualFx, shakeX, shakeY)
     // The tether and the Core/cursor halos are HUD (screen-space) elements drawn by HudRenderer.
-    if (engine.phase != GamePhase.GAME_OVER) drawCore(engine, core, roles)
+    if (engine.phase != GamePhase.GAME_OVER) {
+        drawCore(engine, core, roles)
+        drawCoreStates(engine, core, roles)
+        drawApexActive(engine, core, shakeX, shakeY, roles)
+    }
     drawSingularity(pointer, engine.renderElapsed, engine.tetherDistance < 75f, roles)
     // Decided in world units, like the marks they stand in for.
     collectPointOfInterestEdgeMarkers(engine, textMeasurer, markers)
@@ -232,7 +247,10 @@ internal fun DrawScope.drawMotionEchoes(
     }
 }
 
-/** Expanding rings for kills (bone), dash (you), ram impacts (you, 3 px) and damage taken (threat). */
+/**
+ * Expanding rings for kills (bone), dash (you), ram impacts (you, 3 px), damage taken (threat),
+ * Breaks and reactions (element rings), Apex strikes (gold) and quakes (a jagged element ring).
+ */
 internal fun DrawScope.drawShockwaves(
     engine: GameplayRenderModel,
     visualFx: VisualFxProjection,
@@ -248,7 +266,12 @@ internal fun DrawScope.drawShockwaves(
         val radius = max(2f, wave.maxRadius * KkEase.Out.transform(1f - life))
         val color = fxColor(wave.colorIndex, roles)
         drawCircle(color.copy(alpha = life * 0.06f), radius * 0.72f, center)
-        drawCircle(color.copy(alpha = life * 0.8f), radius, center, style = kkStroke(if (wave.colorIndex == 3) 3f else 2f))
+        if (isQuakeColor(wave.colorIndex)) {
+            // The quake's vertices come from its spot, so each one keeps its own jagged outline.
+            drawQuakeRing(center, radius, (wave.x.toRawBits() * 31) xor wave.y.toRawBits(), color, life * 0.8f, 3f)
+        } else {
+            drawCircle(color.copy(alpha = life * 0.8f), radius, center, style = kkStroke(if (wave.colorIndex == 3) 3f else 2f))
+        }
     }
 }
 
@@ -483,36 +506,6 @@ internal fun DrawScope.drawWeaponNodes(engine: GameplayRenderModel, shakeX: Floa
     }
 }
 
-/** Arc Coil lightning: a bone zigzag over a soft you-color stroke (`HUD.dc.html`). */
-internal fun DrawScope.drawWeaponArcs(
-    engine: GameplayRenderModel,
-    visualFx: VisualFxProjection,
-    shakeX: Float,
-    shakeY: Float,
-    roles: KkRolePalette,
-) {
-    for (index in visualFx.weaponArcs.indices) {
-        val arc = visualFx.weaponArcs[index]
-        val start = world(engine, arc.fromX, arc.fromY, shakeX, shakeY)
-        val end = world(engine, arc.toX, arc.toY, shakeX, shakeY)
-        val dx = end.x - start.x
-        val dy = end.y - start.y
-        val length = max(1f, kotlin.math.sqrt(dx * dx + dy * dy))
-        val nx = -dy / length
-        val ny = dx / length
-        val alpha = clamp(arc.life / 0.14f, 0f, 1f)
-        var previous = start
-        for (segment in 0 until 6) {
-            val t = (segment + 1f) / 6f
-            val jitter = if (segment == 5) 0f else sin(index * 7f + segment * 4.1f + engine.renderElapsed * 40f) * 8f
-            val next = Offset(start.x + dx * t + nx * jitter, start.y + dy * t + ny * jitter)
-            drawLine(roles.you.copy(alpha = alpha * 0.25f), previous, next, 6f)
-            drawLine(Kk.Bone.copy(alpha = alpha), previous, next, 2f)
-            previous = next
-        }
-    }
-}
-
 /**
  * The Core: a bone form silhouette ([KkFormGeometry]) with a hard ink rim and a soft glow; you-color
  * in overdrive and heat-tinted while overheated (`HUD.dc.html`). Integrity/heat/shield arcs are
@@ -538,7 +531,8 @@ internal fun DrawScope.drawCore(engine: GameplayRenderModel, center: Offset, rol
         val compression = (sin(engine.renderElapsed * 15f) + 1f) * 0.5f
         drawCircle(Kk.Bone.copy(alpha = 0.6f), 30f - compression * 5f, center, style = WorldStrokes.dashedMedium)
     }
-    drawCoreForm(engine, center, fill, roles)
+    // Phased by Void Step: the Core shows at half strength.
+    drawCoreForm(engine, center, if (engine.coreState.phased) fill.copy(alpha = 0.5f) else fill, roles)
     val ability = engine.characterAbility
     if (ability.charge > 0f && engine.coreShape != CoreShape.RING && engine.coreShape != CoreShape.PRISM) {
         drawArc(roles.you, -90f, 360f * ability.charge.coerceIn(0f, 1f), false,

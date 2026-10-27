@@ -48,6 +48,17 @@ internal val GameplayRenderModel.renderElapsed: Float
     }
 
 /**
+ * Age in seconds of a transient look that started with [maxLife] and has [life] left, at the
+ * interpolated time: one fixed step behind at alpha 0 (as the interpolated enemies are), exactly
+ * `maxLife − life` at alpha 1, never negative. Looks drawn with it stay in step with the world.
+ */
+internal fun GameplayRenderModel.fxAge(life: Float, maxLife: Float): Float {
+    val alpha = interpolationAlpha
+    val age = maxLife - life
+    return if (alpha >= 1f) max(0f, age) else max(0f, age - (1f - alpha) * GameplayRenderModel.FIXED_STEP)
+}
+
+/**
  * Device pixels per world unit. The simulation runs in dp (viewport, pointer and every world
  * length), so the world layer is drawn magnified by the viewport density it accepted.
  */
@@ -133,23 +144,32 @@ internal inline fun <T> DrawScope.inScreenUnits(scale: Float, block: DrawScope.(
     }
 }
 
-/** Retained scope densities for the world and screen layers, so switching layers allocates nothing per frame. */
+/**
+ * Retained scope densities for the world and screen layers, so switching layers allocates nothing per frame.
+ * Two of each: the world itself and the HUD's world-anchored layer, which runs at the interface-scaled density.
+ */
 internal object WorldUnitDensities {
-    private var worldDensity: UnitDensity? = null
-    private var screenDensity: UnitDensity? = null
+    private val worldDensities = arrayOfNulls<UnitDensity>(2)
+    private val screenDensities = arrayOfNulls<UnitDensity>(2)
 
-    fun world(screen: Density, scale: Float): Density {
-        val value = screen.density / scale
-        val cached = worldDensity
-        if (cached != null && cached.density == value && cached.fontScale == screen.fontScale) return cached
-        return UnitDensity(value, screen.fontScale).also { worldDensity = it }
-    }
+    fun world(screen: Density, scale: Float): Density = retained(worldDensities, screen.density / scale, screen.fontScale)
 
-    fun screen(world: Density, scale: Float): Density {
-        val value = world.density * scale
-        val cached = screenDensity
-        if (cached != null && cached.density == value && cached.fontScale == world.fontScale) return cached
-        return UnitDensity(value, world.fontScale).also { screenDensity = it }
+    fun screen(world: Density, scale: Float): Density = retained(screenDensities, world.density * scale, world.fontScale)
+
+    /** The retained density of [value] and [fontScale]; a new one replaces the older of the two. */
+    private fun retained(slots: Array<UnitDensity?>, value: Float, fontScale: Float): Density {
+        val first = slots[0]
+        if (first != null && first.density == value && first.fontScale == fontScale) return first
+        val second = slots[1]
+        if (second != null && second.density == value && second.fontScale == fontScale) {
+            slots[1] = first
+            slots[0] = second
+            return second
+        }
+        return UnitDensity(value, fontScale).also {
+            slots[1] = first
+            slots[0] = it
+        }
     }
 
     private class UnitDensity(override val density: Float, override val fontScale: Float) : Density

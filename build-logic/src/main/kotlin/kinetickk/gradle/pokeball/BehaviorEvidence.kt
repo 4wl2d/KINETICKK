@@ -20,6 +20,33 @@ internal data class BehaviorEvidence(
 
 internal val runtimeBehaviorEvidence = listOf(
     BehaviorEvidence(
+        ":app:shared", "kinetickk.app.shared.DesktopDisplayHostTest",
+        setOf(
+            "anUnrelatedChangeKeepsAWindowThePlayerResizedAndForceRestoresTheStoredOne",
+            "onlyDecorationAndVsyncChangesOpenTheWindowAgain",
+        ),
+    ),
+    BehaviorEvidence(
+        ":app:shared", "kinetickk.app.shared.DesktopFramePacingTest",
+        setOf(
+            "theStoredPreferenceDecidesOnlyWithoutALaunchOverride",
+        ),
+    ),
+    BehaviorEvidence(
+        ":app:shared", "kinetickk.app.shared.DisplayApplicationComposeTest",
+        setOf(
+            "aWindowOpenedAgainKeepsTheSessionTheRunAndTheOpenSettingsTab",
+            "acceptedDisplayPreferencesReachTheHostAndAStoredModePressReappliesIt",
+            "menusLayOutAtTheAppliedInterfaceScaleWhileTheRunKeepsTheRawDensity",
+        ),
+    ),
+    BehaviorEvidence(
+        ":app:shared", "kinetickk.app.shared.DisplayPreferenceProjectionTest",
+        setOf(
+            "refreshChoicesOutsideTheProfileRangeAreNotOfferedSoEveryChoiceBuildsItsAdjustment",
+        ),
+    ),
+    BehaviorEvidence(
         ":app:shared", "kinetickk.app.shared.InlineSessionLifecycleTest",
         setOf(
             "acceptedExitProgressFinishesBeforeReplacementAndPreservesTheOldSnapshot",
@@ -49,6 +76,45 @@ internal val runtimeBehaviorEvidence = listOf(
         ),
     ),
     BehaviorEvidence(
+        ":ball:content:api", "kinetickk.ball.content.api.RebirthDataRequirementScaleTest",
+        setOf(
+            "theFirstScaledLevelIsAContentKnobFromTheWholeTableToNone",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:content:api", "kinetickk.ball.content.api.RuleVocabularyTest",
+        setOf(
+            "conditionsHoldOnlyOnTriggersThatCarryTheirFacts",
+            "frequentTriggersRateLimitTheNewActions",
+            "keystonesAreOnePerItemOnEpicOrBetterItems",
+            "newActionsAcceptTheirBoundsAndRejectTheFirstValueOutside",
+            "newRulesAcceptTheirBoundsAndRejectTheFirstValueOutside",
+            "theDataOfferWeightAcceptsAPositiveFractionUpToTwo",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:content:api", "kinetickk.ball.content.api.RunTempoCurveTest",
+        setOf(
+            "levelRequirementsMustBePositiveAndNonDecreasing",
+            "maximumLevelAcceptsNinetyNineAndRejectsOneHundred",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:content:api", "kinetickk.ball.content.api.RunTempoLevelTableTest",
+        setOf(
+            "maximumLevelAcceptsItsBoundsAndRejectsTheFirstValueOutside",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:content:api", "kinetickk.ball.content.api.SkillApexUpgradeContentTest",
+        setOf(
+            "apexBoundsAcceptTheMaximumAndRejectOneMore",
+            "skillFieldReserveStaysBelowTheFieldBound",
+            "skillRankValuesAcceptTheBoundAndRejectOneMore",
+            "upgradePolicyBoundsAndDoublingPricesSaturate",
+        ),
+    ),
+    BehaviorEvidence(
         ":ball:content:api", "kinetickk.ball.content.api.WorldContentTest",
         setOf(
             "obstacleTuningRejectsAWindowPastTheBoundAndInvertedReaches",
@@ -64,6 +130,8 @@ internal val runtimeBehaviorEvidence = listOf(
             "relicBoundRejectsNPlusOne",
             "synergyBoundRejectsNPlusOne",
             "weaponBoundRejectsNPlusOne",
+            "keystonesAndExclusiveSkillRulesStayOnePerCatalog",
+            "skillPoolFollowsTheSkillIdOrderAndRejectsTheFirstSkillPastTheBound",
         ),
     ),
     BehaviorEvidence(
@@ -72,6 +140,7 @@ internal val runtimeBehaviorEvidence = listOf(
             "coreShapeUnlockPolicyIsCapturedInStableIdOrder",
             "publishedCatalogCollectionsExposeNoMutationAuthorityAndCopyBootstrapInputs",
             "weaponCatalogAndCapturedMasteryPolicyAreOrderedAndQueryable",
+            "everyReactionHasExactlyOneKeystoneItemOfEpicRarityOrBetterThatDeclaresItsPair",
         ),
     ),
     BehaviorEvidence(
@@ -85,6 +154,7 @@ internal val runtimeBehaviorEvidence = listOf(
         setOf(
             "fixedInteractionRepresentationsRequireValidatedFactories",
             "runIdentityAndRevisionAreStable",
+            "skillRequestsAcceptTheThreeSlotsAndRejectTheFirstOutside",
         ),
     ),
     BehaviorEvidence(
@@ -109,6 +179,36 @@ internal val runtimeBehaviorEvidence = listOf(
         ),
     ),
     BehaviorEvidence(
+        ":ball:gameplay:interaction", "kinetickk.ball.gameplay.interaction.GameplayWindowPreferencesTest",
+        setOf(
+            "losingWindowFocusPausesOnlyARunningRunAndOnlyWithThePreferenceOn",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:gameplay:interaction", "kinetickk.ball.gameplay.interaction.canvas.FxBudgetTest",
+        setOf(
+            "aSaturatedTransientPoolSkipsSecondaryLayersAndDrawsEverySignature",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:gameplay:interaction", "kinetickk.ball.gameplay.interaction.canvas.GameplayKeyBindingTest",
+        setOf(
+            "whilePausedOnlyPauseAndBrakeReleaseAreConsumedSoCOpensTheCodex",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:gameplay:interaction", "kinetickk.ball.gameplay.interaction.canvas.HudHotPathAllocationTest",
+        setOf(
+            "levelClusterAtT5AndEveryApexStateAllocatesNothing",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:gameplay:interaction", "kinetickk.ball.gameplay.interaction.canvas.HudPresentationMemoryTest",
+        setOf(
+            "aNewRunReArmsTheOneShotsWithoutFiringThem",
+        ),
+    ),
+    BehaviorEvidence(
         ":ball:gameplay:interaction", "kinetickk.ball.gameplay.interaction.fx.InteractionFxReducerTest",
         setOf(
             "buildNotificationsAreGroupedBoundedDetachedAndExpireOnlyWhenEffectsAdvance",
@@ -119,6 +219,9 @@ internal val runtimeBehaviorEvidence = listOf(
             "particlesAcceptSevenHundredAndRejectSevenHundredFirst",
             "shockwavesAcceptFortyEightAndTrimOldestOnFortyNinth",
             "weaponArcsAcceptOneHundredTwentyEightAndTrimOldestOnOneHundredTwentyNinth",
+            "apexBurstsAcceptTwoAndTrimTheOldestOnTheThird",
+            "reactionFxAcceptFourOfAKindAndTrimTheOldestOnTheFifth",
+            "skillBurstsAcceptEightAndTrimTheOldestOnTheNinth",
         ),
     ),
     BehaviorEvidence(
@@ -132,6 +235,18 @@ internal val runtimeBehaviorEvidence = listOf(
         ),
     ),
     BehaviorEvidence(
+        ":ball:gameplay:interaction", "kinetickk.ball.gameplay.interaction.input.GameplayInputMappingTest",
+        setOf(
+            "anEmptySkillSlotIsAHudPositionThatDispatchesNothing",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:gameplay:interaction", "kinetickk.ball.gameplay.interaction.input.RunningTouchTrackerTest",
+        setOf(
+            "touchTrackerAcceptsFivePointersAndIgnoresTheSixth",
+        ),
+    ),
+    BehaviorEvidence(
         ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.GameplayNucleusTest",
         setOf(
             "acceptedFrameEnforcesOutputBoundOrderAndFinalCompletion",
@@ -140,6 +255,13 @@ internal val runtimeBehaviorEvidence = listOf(
             "pointerViewportMembershipAcceptsInclusiveEdgesAndRejectsAllFourAdjacentCoordinates",
             "retainedRenderAndQueryCollectionsStayImmutable",
             "reusableRenderSnapshotMustMatchItsExactCommittedSource",
+            "startRejectsUpgradeLevelsOutsideTheContentRange",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.PreferencesProjectionValidationTest",
+        setOf(
+            "displayAndControlPreferencesAreValidOnlyWithinTheirOptionSets",
         ),
     ),
     BehaviorEvidence(
@@ -193,6 +315,69 @@ internal val runtimeBehaviorEvidence = listOf(
         ),
     ),
     BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.AcquiredItemReportTest",
+        setOf(
+            "theBufferKeepsTheNewestSixtyFourAcquisitions",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.ActiveItemOfferTest",
+        setOf(
+            "aFourthActiveAsksWhichSlotToReplaceAndTheKeepCardSalvagesIt",
+            "activeRulesFilterAndWeightOffersWithoutAnExtraRewardDraw",
+            "anActiveCardBindsTheLowestEmptySlotAndASecondStackRanksItReadyAtOnce",
+            "theIncomingActiveIsCandidateState",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.ApexFormsTest",
+        setOf(
+            "aProximityChannelReachesAnArchitectOnItsOrbitButNotBeyondTheApexReach",
+            "mirrorStanceParriesItsBudgetOfHitsWhileBrakingAndReturnsThemAtFullEdge",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.ApexSystemTest",
+        setOf(
+            "apexStrikesDealTheFullCapStopAtTheBudgetAndNeverPassAPhaseGate",
+            "dataAtTheCapTakesThreeHundredthsOfASecondPerPointAndNeverBringsTheApexBelowThirtySeconds",
+            "requestsBufferOnlyForAnUnlockedApexWhileRunningAndRepeatsChangeNothing",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.ArchitectZoneTest",
+        setOf(
+            "aHushOnTheArchitectStillLeavesItsAttackWindows",
+            "timeBubbleMawAndAttractorLeaveTheArchitectsVolleysAndTimersAlone",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.CombatFieldAllocationTest",
+        setOf(
+            "sixHundredStepsOverShotEatingBendingAndPickupFieldsAllocateNothingBeyondTheEmptyArena",
+            "sixHundredStepsOverTheSkillFieldKindsAllocateNothingBeyondTheEmptyArena",
+            "sixHundredStepsOverTwelveMixedFieldsAllocateNothingBeyondTheEmptyArena",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.CombatFieldTableTest",
+        setOf(
+            "combatFieldsAcceptTwelveAndRejectTheThirteenthReactionField",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.CombatFoundationsTest",
+        setOf(
+            "statusLayoutHoldsSeventyFourCells",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.DraftDeckTest",
+        setOf(
+            "dealingDrawsFromItsOwnStreamSoRewardDrawsStayPut",
+        ),
+    ),
+    BehaviorEvidence(
         ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.GameplayCollectionBoundsTest",
         setOf(
             "arcCoilChainsAtMostFourTargetsAndLeavesFifthUntouched",
@@ -240,10 +425,29 @@ internal val runtimeBehaviorEvidence = listOf(
         ),
     ),
     BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.LevelCapTest",
+        setOf(
+            "dataAfterTheMaximumLevelChargesTheApexAndNeverLevels",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.MatrixEffectsTest",
+        setOf(
+            "dataOfferWeightShowsDataCardsMoreOftenWithoutAnExtraRewardDraw",
+        ),
+    ),
+    BehaviorEvidence(
         ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.ObstacleSystemTest",
         setOf(
             "destroyedObstaclesNeverRegenerateAndTheMemoryIsBounded",
             "theWindowIsDeterministicPerSeedBoundedGappedAndClearOfTheOrigin",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.PermanentUpgradeRunTest",
+        setOf(
+            "honingScalesTheCurrentWeaponOnlyAndFollowsAMidRunSwitch",
+            "levelsAreCapturedOnceClampedToTheContentMaximum",
         ),
     ),
     BehaviorEvidence(
@@ -268,6 +472,32 @@ internal val runtimeBehaviorEvidence = listOf(
         ),
     ),
     BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.ReactionBehaviourTest",
+        setOf(
+            "compostNeverShrinksAWellThatFieldTuningAlreadyWidenedPastItsCap",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.ReactionDamageNonIncreaseTest",
+        setOf(
+            "noReactionHitsHarderThanItDidBeforeItsVerb",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.RuleVocabularyRuntimeTest",
+        setOf(
+            "anItemsSporedMarkKeepsItsDataAndLeavesTheDecaySporesCastBudgetAlone",
+            "cashedMarksDispatchWithTheReactionThatLeftThemAtMostFourTimesPerStep",
+            "catalysisApexAndLinkRulesStopAtTheirCaps",
+            "eachSkillChargeRechargesOnItsOwnClock",
+            "enteringAFieldDispatchesOncePerEntryAndAtMostEveryHalfSecond",
+            "erasedShotsDispatchAtMostFourTimesPerStepAsCascades",
+            "fieldTuningScalesEveryFieldAndReactionFieldsStayWithinTheirProduct",
+            "keystoneItemsSwitchTheirReactionAndTuningStaysWithinItsBounds",
+            "skillChargesHoldTwoCastsAndKeepTheRecastFloor",
+        ),
+    ),
+    BehaviorEvidence(
         ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.RunFeatureBoundsTest",
         setOf(
             "activationClosesAlternativeAndNeverRetainsTwoActiveTrials",
@@ -276,9 +506,30 @@ internal val runtimeBehaviorEvidence = listOf(
         ),
     ),
     BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.SkillSystemTest",
+        setOf(
+            "movementSkillsKeepTheCoreClearOfObstacles",
+            "refundsNeverMoreThanDoubleTheCastRate",
+            "requestsBufferOnlyForFilledSlotsWhileRunningAndRepeatsChangeNothing",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.SonicVoidElementTest",
+        setOf(
+            "chainedHushesFromManyReactorsStillLeaveTheArchitectAttackWindows",
+        ),
+    ),
+    BehaviorEvidence(
         ":ball:gameplay:nucleus", "kinetickk.ball.gameplay.nucleus.simulation.SynergySystemTest",
         setOf(
             "combatFieldBoundAndRelicRemovalPreserveIsolatedSnapshots",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:profile:api", "kinetickk.ball.profile.api.PlayerSettingsContractTest",
+        setOf(
+            "bindingsRequireOneDistinctKeyPerAction",
+            "displayAdjustmentsAdmitOnlyListedOptionsAndTheRefreshRange",
         ),
     ),
     BehaviorEvidence(
@@ -328,12 +579,71 @@ internal val runtimeBehaviorEvidence = listOf(
         ),
     ),
     BehaviorEvidence(
+        ":ball:profile:interaction", "kinetickk.ball.profile.interaction.settings.impl.SettingsDisplayControlsComposeTest",
+        setOf(
+            "keysOfACaptureNeverReachTheShellEvenWhileHeld",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:profile:interaction", "kinetickk.ball.profile.interaction.settings.impl.SettingsReducerTest",
+        setOf(
+            "aKeyCellCapturesTheNextBindableKeyAndSwapsWithItsHolder",
+            "interfaceScalesAreOfferedWhileTheScaledWindowKeepsItsMinimumSides",
+            "offeredRefreshRatesAreClosedOverTheRangeEveryChoiceIsPressedInto",
+            "resetKeysNeedsTwoPressesAndAnyOtherActionDisarmsIt",
+            "whileCapturingAnyOtherPressOnlyEndsTheCapture",
+            "windowSizeStepsThroughOfferedPresetsOnlyInWindowedMode",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:profile:interaction", "kinetickk.ball.profile.interaction.workshop.impl.WorkshopComposeTest",
+        setOf(
+            "aRefitLevelIsBoughtThroughTheProfileAndARefusalIsNamed",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:profile:interaction", "kinetickk.ball.profile.interaction.workshop.impl.WorkshopReducerTest",
+        setOf(
+            "aTabRequestAppliesOncePerSerial",
+            "buyAsksForTheTypedUpgradeOnlyForAnOwnedAffordableTrackBelowItsMaximum",
+            "selectAsksForTheCharacterOnlyWhenSelectionIsAvailable",
+            "tabsAndSegmentsAreLocalPresentationEffects",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:profile:interaction", "kinetickk.ball.profile.interaction.workshop.impl.WorkshopUpgradeBlockTest",
+        setOf(
+            "aShortBalanceNamesTheMissingMatterAndOneMoreMatterBuys",
+            "theMaximumHasNoPriceNoNextValueAndClampsLevelsAboveIt",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:profile:nucleus", "kinetickk.ball.profile.nucleus.ProfileDisplayPreferencesTest",
+        setOf(
+            "bindingAKeyAnotherActionHoldsSwapsTheTwoAndResetRestoresTheDefaults",
+        ),
+    ),
+    BehaviorEvidence(
         ":ball:profile:nucleus", "kinetickk.ball.profile.nucleus.ProfileNucleusTest",
         setOf(
             "achievementCountersSaturateWithoutOverflowAndTheDecisionIsDeterministic",
             "achievementThresholdsAccumulateAcrossRunsAndUnlockAllTwelveShapes",
             "gameplayProgressValidationUsesClosedRejectionReasons",
             "targetOwnedCommandOrdersPersistenceBeforeCorrelatedCompletion",
+            "upgradePriceDoublesAndSaturates",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:profile:nucleus", "kinetickk.ball.profile.nucleus.ProfileRecentItemsTest",
+        setOf(
+            "sixtyFourAcquisitionsAreAcceptedAndSixtyFiveRejectWithoutChangingTheProfile",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:profile:nucleus", "kinetickk.ball.profile.nucleus.ProfileUpgradeTest",
+        setOf(
+            "loadingClampsLevelsAboveALoweredMaximumAndRefundsTheirPrice",
+            "ownershipIsCheckedBeforeTheMaximumAndTheMaximumBeforeMatter",
         ),
     ),
     BehaviorEvidence(
@@ -345,6 +655,17 @@ internal val runtimeBehaviorEvidence = listOf(
             "outboundMatrixRanksAndDiscoveriesRejectFirstNPlusOne",
             "preferenceConfigurationAcceptsExactMaximaAndRejectsAdjacentOverflowOrNonMembers",
             "preferenceIngressAcceptsMembersAndRejectsAdjacentInRangeNonMembers",
+            "displayPreferenceIngressRejectsExplicitDefaultsUnknownIdsAndNonMembers",
+            "keyBindingRecordsRejectUnsortedDuplicateUnknownDefaultAndConflictingForms",
+            "recentItemIdsAcceptSixtyFourInRangeIdsAndRejectOneMoreOrAnIdOutsideTheBounds",
+            "upgradeDigitsKeepTheirFrozenSlotPositions",
+            "upgradeLevelsAcceptTenAndRejectEleven",
+        ),
+    ),
+    BehaviorEvidence(
+        ":ball:profile:resource", "kinetickk.ball.profile.resource.ProfilePayloadBudgetTest",
+        setOf(
+            "aWorstCaseProfileFitsOneDesktopPreferenceValue",
         ),
     ),
     BehaviorEvidence(
@@ -364,7 +685,13 @@ internal val runtimeBehaviorEvidence = listOf(
     BehaviorEvidence(
         ":flow:session:api", "kinetickk.flow.session.api.AppSessionApiContractTest",
         setOf(
-            "shellProjectionRetainsExactlyEightRoutesAndOnlySessionOwnedWorkflowState",
+            "shellProjectionRetainsExactlySixRoutesAndOnlySessionOwnedWorkflowState",
+        ),
+    ),
+    BehaviorEvidence(
+        ":flow:session:impl", "kinetickk.flow.session.impl.BrowserRuntimeQaTest",
+        setOf(
+            "characterSelectionUnderTheWorkshopRunsTheProfileCommandOnlyBetweenRuns",
         ),
     ),
     BehaviorEvidence(
@@ -389,6 +716,19 @@ internal val runtimeBehaviorEvidence = listOf(
         ),
     ),
     BehaviorEvidence(
+        ":flow:session:interaction", "kinetickk.flow.session.interaction.AppSessionKeyboardTest",
+        setOf(
+            "boundGameplayKeysReachGameplayFirstOnlyWhileRunning",
+        ),
+    ),
+    BehaviorEvidence(
+        ":flow:session:interaction", "kinetickk.flow.session.interaction.codex.impl.CodexEntryFactsTest",
+        setOf(
+            "aDormantItemSaysItsEffectsWaitForASkillOrAnotherWeapon",
+            "anItemTheDeckLeftOutSaysItIsNotInThisRun",
+        ),
+    ),
+    BehaviorEvidence(
         ":flow:session:interaction", "kinetickk.flow.session.interaction.codex.impl.CodexReducerTest",
         setOf(
             "catalogAcceptsTheContentBoundAndRejectsOneMore",
@@ -399,6 +739,7 @@ internal val runtimeBehaviorEvidence = listOf(
         ":flow:session:interaction", "kinetickk.flow.session.interaction.home.impl.HomeReducerTest",
         setOf(
             "presentationClockAcceptsMaximumAndClampsNextRepresentableDelta",
+            "theWorkshopStampIsTheProfilesAffordabilityRead",
         ),
     ),
     BehaviorEvidence(
@@ -407,6 +748,7 @@ internal val runtimeBehaviorEvidence = listOf(
             "acceptedFrameOutputBoundAcceptsThreeAndRejectsFour",
             "initialStateOwnsOnlySessionWorkflowAndPublishesNarrowHomeShell",
             "pendingAndRunNamespaceGatesRejectWithoutOutputs",
+            "characterSelectionIsAcceptedOnlyOverHomeIncludingTheWorkshop",
         ),
     ),
     BehaviorEvidence(
@@ -457,6 +799,18 @@ internal val runtimeBehaviorEvidence = listOf(
             "missingCompletionCapacityStopsTheTargetWithoutDroppingEarlierWork",
             "normalReturnWithoutAnOutcomeIsAFaultAndDoesNotInventARefusal",
             "refusalEntersTheSerializedSourceWithoutAnAcceptedTargetMutation",
+        ),
+    ),
+    BehaviorEvidence(
+        ":foundation:design", "kinetickk.foundation.design.KkFramePacingTest",
+        setOf(
+            "aCapWaitsOutTheRestOfItsIntervalHalfAMillisecondEarlyInWholeMilliseconds",
+        ),
+    ),
+    BehaviorEvidence(
+        ":foundation:design", "kinetickk.foundation.design.KkTokensTest",
+        setOf(
+            "levelBadgeTierReachesApexExactlyAtTheCap",
         ),
     ),
     BehaviorEvidence(

@@ -14,6 +14,7 @@ import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.*
+import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -23,7 +24,10 @@ import kotlin.math.roundToLong
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-/** Where damage comes from. Direct sources roll crits and fire on-hit clauses; the rest never do. */
+/**
+ * Where damage comes from. Direct sources roll crits and fire on-hit clauses; the rest never do. Ordinals
+ * are stored (plus one) in [StatusCell.LAST_SOURCE], so sources are only appended.
+ */
 internal enum class HitSource(val direct: Boolean) {
     IMPACT(true),
     WEAPON(true),
@@ -31,6 +35,8 @@ internal enum class HitSource(val direct: Boolean) {
     ECHO(true),
     PROC(false),
     STATUS(false),
+    /** Skill damage: never crits, fires no on-hit clause; its kills fire KILL clauses with no source. */
+    SKILL(false),
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -56,7 +62,7 @@ internal fun MutableGameState.effectiveMass(): Float {
         content.relic(RelicId.NEUTRON_HEART).value(0, relicRank(RelicId.NEUTRON_HEART)) / 100f *
             build.relicUpside(RelicId.NEUTRON_HEART)
     } else 0f
-    return mass * (1f + neutron) * characterMassMultiplier()
+    return mass * (1f + neutron) * characterMassMultiplier() * skillMassMultiplier()
 }
 
 /** Impact power at [atSpeed], including run growth; the shared basis of impacts and IMPACT procs. */
@@ -74,15 +80,46 @@ internal fun MutableGameState.effectiveCooling(): Float {
     var cooling = coolingRate * (1f + buffAmount(BuffStat.COOLING) + whileAmount(BuffStat.COOLING, null))
     if (tagTier(BuildTag.OVERCLOCK) >= 1) cooling *= 1.15f
     if (build.liability(RelicId.FURNACE_COVENANT)) cooling *= 0.45f
+    // Dash Heat to Skills: the Core cools slower.
+    if (build.dashHeatToSkills > 0f) cooling *= kinetickk.ball.content.api.DASH_HEAT_CONVERSION_COOLING
     return cooling
 }
+
+/** Data to Skills: a Data pickup recharges every skill (at the level cap also the Apex, twice as much). */
+internal fun MutableGameState.dataPickupRechargesSkills() {
+    val amount = build.dataToSkills
+    if (amount <= 0f) return
+    refundAllSkills(amount)
+    if (apexUnlocked) refundApex(amount * DATA_APEX_REFUND_SHARE)
+}
+
+/** Dash Heat to Skills: every [DASH_HEAT_PER_REFUND] Dash heat spent recharges every skill by the conversion's amount. */
+internal fun MutableGameState.bankDashHeat(spent: Float) {
+    val amount = build.dashHeatToSkills
+    if (amount <= 0f || !(spent > 0f)) return
+    var bank = dashHeatBank + spent
+    while (bank >= DASH_HEAT_PER_REFUND) {
+        bank -= DASH_HEAT_PER_REFUND
+        refundAllSkills(amount)
+    }
+    dashHeatBank = bank
+}
+
+internal const val DATA_APEX_REFUND_SHARE: Float = 2f
+internal const val DASH_HEAT_PER_REFUND: Float = 10f
 
 internal fun MutableGameState.effectiveDashHeatCost(): Float {
     var cost = dashHeatCost
     if (tagTier(BuildTag.DRIVE) >= 1) cost *= 0.85f
     if (build.upside(RelicId.BLINK_DRIVE) && !build.pairing(RelicPairingId.FOLD_VECTOR)) cost *= 0.65f
+    // Plasma Pool: Dashes from inside a pool cost less heat.
+    if (inPlasmaPool()) cost *= reactionValue(ReactionId.PLASMA_BURST, PLASMA_DASH_HEAT_VALUE)
     return cost
 }
+
+/** True while the Core stands in a Plasma Burst's pool. */
+internal fun MutableGameState.inPlasmaPool(): Boolean =
+    coreInField(CombatFieldKind.PLASMA) && hasVerb(ReactionId.PLASMA_BURST)
 
 /** Magnet radius; Event Horizon's liability removes the latch instead of shrinking it. */
 internal fun MutableGameState.effectivePickupRadius(): Float = pickupRadius
@@ -92,6 +129,7 @@ internal fun MutableGameState.buildActivationBonus(): Float {
     var bonus = buffAmount(BuffStat.ACTIVATION) + whileAmount(BuffStat.ACTIVATION, null)
     if (tagTier(BuildTag.ARSENAL) >= 1) bonus += 0.10f
     if (build.upside(RelicId.HOLLOW_CROWN)) bonus += 0.08f * emptyRelicSlots()
+    if (inPlasmaPool()) bonus += reactionValue(ReactionId.PLASMA_BURST, PLASMA_ACTIVATION_VALUE)
     var multiplier = 1f + bonus
     if (build.liability(RelicId.STASIS_ANCHOR) && !braking) multiplier *= 0.7f
     return multiplier
@@ -157,6 +195,7 @@ internal fun MutableGameState.holds(
     source: HitSource?,
     element: StatusElement?,
     reaction: ReactionId? = null,
+    skill: kinetickk.ball.content.api.SkillId? = null,
 ): Boolean = when (condition) {
     is EffectCondition.SpeedAtLeast -> speed >= condition.speed
     is EffectCondition.SpeedBelow -> speed < condition.speed
@@ -175,8 +214,34 @@ internal fun MutableGameState.holds(
     is EffectCondition.TargetBelow -> target != null && target.hp < target.maxHp * condition.fraction
     EffectCondition.SourceImpact -> source == HitSource.IMPACT || source == HitSource.DASH
     EffectCondition.SourceWeapon -> source == HitSource.WEAPON || source == HitSource.ECHO
-    // A reaction involves both of its elements; a Break names its own.
+    // A reaction (fired, or behind a field or mark) involves both of its elements; a Break, skill or other field
+    // names its own.
     is EffectCondition.ElementIs -> reaction?.involves(condition.element) ?: (element == condition.element)
+    is EffectCondition.ReactionIs -> reaction == condition.reaction
+    is EffectCondition.SkillIs -> skill == condition.skill
+    is EffectCondition.SkillTagged -> skill != null && condition.tag in content.skill(skill).tags
+    EffectCondition.CoreInField -> coreFieldMask != 0
+    EffectCondition.TargetMarked -> target != null && targetMarked(target)
+    EffectCondition.TargetControlled -> target != null &&
+        (isFrozen(target) || target.disabledUntil > elapsed || target.silencedUntil > elapsed)
+    EffectCondition.TargetThrown -> target != null && (target.thrownUntil > elapsed || isThrownByPolarity(target))
+    EffectCondition.ApexActive -> apexActive()
+    is EffectCondition.SkillsCharging -> skillsCharging() >= condition.count
+    is EffectCondition.WeaponFamilyIs -> currentWeaponDefinition.family == condition.family
+}
+
+/** A live mark, Blackfire or Embrittle on [target], or [target] is the Void Anchor. */
+internal fun MutableGameState.targetMarked(target: Enemy): Boolean =
+    markOf(target) != null || target.status[StatusCell.BLACKFIRE_UNTIL] > elapsed ||
+        target.status[StatusCell.EMBRITTLED_UNTIL] > elapsed || voidAnchorId == target.id && voidAnchorUntil > elapsed
+
+/** Owned skills still recharging. */
+internal fun MutableGameState.skillsCharging(): Int {
+    var count = 0
+    for (slot in 0 until SkillRuntime.SLOTS) {
+        if (!skillLoadout.isEmpty(slot) && skillRuntime[slot, SkillCell.READY_AT] > elapsed) count++
+    }
+    return count
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -195,7 +260,7 @@ private fun MutableGameState.itemAmplification(enemy: Enemy, source: HitSource):
             amp += buffAmount(BuffStat.WEAPON) + whileAmount(BuffStat.WEAPON, enemy, source)
             if (tagTier(BuildTag.ARSENAL) >= 2) amp += 0.20f
         }
-        HitSource.PROC, HitSource.STATUS -> Unit
+        HitSource.PROC, HitSource.STATUS, HitSource.SKILL -> Unit
     }
     val versus = build.damageVersus
     for (index in versus.indices) {
@@ -251,8 +316,11 @@ private fun MutableGameState.damageLiability(source: HitSource, critical: Boolea
     return multiplier
 }
 
-/** Σ vulnerability on the target, capped by policy. */
-internal fun MutableGameState.vulnerability(enemy: Enemy, source: HitSource): Float {
+/**
+ * Σ vulnerability on the target, capped by policy. [brittle] false leaves out Brittle's bonus for damage that
+ * does not spend it (skill damage), so Brittle pays out once, on the direct hit that consumes it.
+ */
+internal fun MutableGameState.vulnerability(enemy: Enemy, source: HitSource, brittle: Boolean = true): Float {
     var vulnerable = stacks(enemy, StatusElement.ENTROPY) * content.build.element(StatusElement.ENTROPY).perStack *
         build.potency(StatusElement.ENTROPY)
     if (source == HitSource.IMPACT || source == HitSource.DASH) {
@@ -269,7 +337,7 @@ internal fun MutableGameState.vulnerability(enemy: Enemy, source: HitSource): Fl
         vulnerable += content.build.reaction(kinetickk.ball.content.api.ReactionId.EMBRITTLE).power
     }
     // Brittle strengthens the next direct hit inside the same cap; dealHit consumes it.
-    if (source.direct && enemy.status[StatusCell.BRITTLE] > 0f) vulnerable += BRITTLE_VULNERABILITY
+    if (brittle && source.direct && enemy.status[StatusCell.BRITTLE] > 0f) vulnerable += BRITTLE_VULNERABILITY
     return vulnerable.coerceIn(0f, content.build.policy.vulnerabilityCap)
 }
 
@@ -347,7 +415,7 @@ internal fun MutableGameState.dealHit(
     val crit = resolveCrit(enemy, source, canCrit, forceCrit, critChanceBonus)
     var amount = base * (1f + itemAmplification(enemy, source)) * relicSurge() * crit.multiplier *
         (1f + vulnerability(enemy, source)) * damageLiability(source, crit.critical) * matrix.damageMultiplier *
-        characterDamageMultiplier()
+        characterDamageMultiplier(enemy)
     if (enemy.status[StatusCell.BRITTLE] > 0f) enemy.status[StatusCell.BRITTLE] = 0f
     val shatter = build.upside(RelicId.ABSOLUTE_ZERO) && isFrozen(enemy)
     if (shatter) {
@@ -361,6 +429,8 @@ internal fun MutableGameState.dealHit(
         shockwave(enemy.x, enemy.y, 0.3f, 120f, 1)
         applyStatusAround(enemy.x, enemy.y, 120f, StatusElement.CRYO, 2f, generation = 1, excludedId = enemy.id)
     }
+    // Spall: the hit cashes Thermal Shock's mark.
+    cashSpall(enemy)
     if (result.amount > 0f && qualified) {
         // The shattering hit's own clauses still count the target as Frozen.
         if (shatter) shatteringEnemyId = enemy.id
@@ -471,12 +541,46 @@ internal fun MutableGameState.dealStatusDamage(
 }
 
 /**
- * Character abilities bypass the build pipeline but still meet the receiver's kinetic frame. The Edge
- * applies; the dealt amount counts as the run's ability output.
+ * Skill damage: never crits; scales with the Relic surge, the target's vulnerability (impact terms for a
+ * [kinetic] skill; never Brittle, which only the direct hit that spends it takes), damage liabilities and the
+ * Matrix multiplier. An element-tagged skill is refused only
+ * by an IMMUNE aspect; a kinetic one meets the impact frame, an element-less one the weapon frame. Kills
+ * fire KILL clauses (the source maps to none); the Architect's gate applies in [damageEnemy].
  */
-internal fun MutableGameState.dealCharacterDamage(enemy: Enemy, amount: Float): DamageResult {
+internal fun MutableGameState.dealSkillDamage(
+    enemy: Enemy,
+    amount: Float,
+    element: StatusElement?,
+    kinetic: Boolean = false,
+): DamageResult {
     if (amount <= 0f || !enemy.alive) return DamageResult(0f, false)
-    val scaled = amount * matrix.damageMultiplier * characterDamageMultiplier()
+    if (isShifting(enemy)) return DamageResult(0f, false)
+    val scaled = amount * relicSurge() *
+        (1f + vulnerability(enemy, if (kinetic) HitSource.IMPACT else HitSource.SKILL, brittle = false)) *
+        damageLiability(HitSource.SKILL, false) * matrix.damageMultiplier
+    val received = when {
+        element != null -> if (aspectRefuses(enemy, element)) 0f else 1f
+        kinetic -> enemy.impactTaken
+        else -> enemy.weaponTaken * armorWeaponFactor(enemy, HitSource.SKILL)
+    }
+    if (received <= 0f) {
+        signalImmunity(enemy)
+        return DamageResult(0f, false)
+    }
+    val tone = element?.let { it.ordinal + 1 } ?: 0
+    return damageEnemy(enemy, scaled * received, critical = false, killEligible = true, tone = tone,
+        source = HitSource.SKILL, unmitigated = scaled)
+}
+
+/**
+ * Character abilities bypass the build pipeline but still meet the receiver's kinetic frame. Refit
+ * ([MutableGameState.characterUpgradePower]) always applies; the Edge applies unless the amount already carries
+ * it ([edge] false: Apex strikes and shots); the dealt amount counts as the run's ability output.
+ */
+internal fun MutableGameState.dealCharacterDamage(enemy: Enemy, amount: Float, edge: Boolean = true): DamageResult {
+    if (amount <= 0f || !enemy.alive) return DamageResult(0f, false)
+    val scaled = amount * matrix.damageMultiplier * characterUpgradePower *
+        if (edge) characterDamageMultiplier(enemy) else 1f
     val integrity = enemy.hp
     val result = damageEnemy(enemy, scaled * enemy.weaponTaken, unmitigated = scaled)
     recordAbilityDamage(integrity, result)
@@ -495,11 +599,15 @@ internal const val KILL_PROC_SHARE_CAP: Float = 0.4f
  * The receiving enemy's own multiplier, applied once per damage instance: element-tagged damage is
  * refused only by an IMMUNE aspect; element-less damage meets the kinetic frame of its source.
  */
-internal fun receivedScale(enemy: Enemy, source: HitSource, element: StatusElement?): Float = when {
-    element != null -> if (enemy.aspectIsImmune && enemy.aspectElement == element.ordinal) 0f else 1f
+internal fun MutableGameState.receivedScale(enemy: Enemy, source: HitSource, element: StatusElement?): Float = when {
+    element != null -> if (aspectRefuses(enemy, element)) 0f else 1f
     source == HitSource.IMPACT || source == HitSource.DASH -> enemy.impactTaken
     else -> enemy.weaponTaken * armorWeaponFactor(enemy, source)
 }
+
+/** An immune aspect refuses its own element, unless the enemy is Suppressed (Crevasse). */
+internal fun MutableGameState.aspectRefuses(enemy: Enemy, element: StatusElement): Boolean =
+    enemy.aspectIsImmune && enemy.aspectElement == element.ordinal && !markIs(enemy, MarkKind.SUPPRESSED)
 
 private fun MutableGameState.dealReceived(
     enemy: Enemy,
@@ -557,7 +665,9 @@ internal fun MutableGameState.damageEnemy(
         else -> guarded
     }
     if (applied <= 0f) return DamageResult(0f, false)
-    damageDealt += minOf(applied, enemy.hp).toDouble()
+    val removed = minOf(applied, enemy.hp).toDouble()
+    damageDealt += removed
+    if (skillCausedHit(source)) skillRuntime.skillCausedDamage += removed
     rememberHollowDamage(enemy, applied)
     enemy.hp -= applied
     crackArmor(enemy, source)
@@ -595,7 +705,7 @@ internal fun MutableGameState.executeEnemy(enemy: Enemy, source: HitSource, tone
 // ---------------------------------------------------------------------------------------------
 // Healing and shields: one path, so conversions and blocks apply everywhere.
 
-internal enum class HealSource { REGENERATION, REPAIR, ITEM, LEVEL, VERDANT, RELIC }
+internal enum class HealSource { REGENERATION, REPAIR, ITEM, LEVEL, VERDANT, RELIC, SKILL }
 
 internal fun MutableGameState.heal(requested: Float, source: HealSource) {
     if (requested <= 0f) return
@@ -659,6 +769,7 @@ internal inline fun MutableGameState.chain(
     originId: Int,
     count: Int,
     range: Float,
+    style: Int = LinkStyleCode.WEAPON,
     onLink: (Enemy) -> Unit,
 ) {
     if (chainDepth >= MAX_CHAIN_NESTING) return
@@ -695,7 +806,7 @@ internal inline fun MutableGameState.chain(
             }
             val chosen = target ?: break
             used[base + usedCount++] = chosen.id
-            addRelicArc(fromX, fromY, chosen.x, chosen.y)
+            addRelicArc(fromX, fromY, chosen.x, chosen.y, style)
             onLink(chosen)
             fromX = chosen.x
             fromY = chosen.y
@@ -732,8 +843,15 @@ internal fun MutableGameState.areaDamage(
 internal fun MutableGameState.areaRelicDamage(x: Float, y: Float, radius: Float, damage: Float, excludedId: Int = -1) =
     areaDamage(x, y, radius, damage, excludedId)
 
-internal fun MutableGameState.addRelicArc(fromX: Float, fromY: Float, toX: Float, toY: Float) {
-    addWeaponArc(fromX, fromY, toX, toY, 0.12f)
+/** A short link; [style] is the [LinkStyleCode] of its source (weapons, items and Relics keep the weapon look). */
+internal fun MutableGameState.addRelicArc(
+    fromX: Float,
+    fromY: Float,
+    toX: Float,
+    toY: Float,
+    style: Int = LinkStyleCode.WEAPON,
+) {
+    addWeaponArc(fromX, fromY, toX, toY, 0.12f, style)
 }
 
 internal fun MutableGameState.fireRelicProjectile(x: Float, y: Float, target: Enemy, damage: Float) {
@@ -757,11 +875,12 @@ internal fun MutableGameState.pushEnemies(x: Float, y: Float, radius: Float, str
     for (index in enemies.indices) {
         val target = enemies[index]
         val knockback = knockbackTaken(target)
-        if (!target.alive || knockback <= 0f) continue
+        if (!target.alive || knockback <= 0f && build.knockbackToDamage <= 0f) continue
         val dx = target.x - x
         val dy = target.y - y
         val distance = max(1f, length(dx, dy))
         if (distance > radius + target.radius) continue
+        if (knockbackAsDamage(target, knockback, strength) || knockback <= 0f) continue
         val falloff = 1f - (distance / (radius + target.radius)) * 0.5f
         val sign = if (inward) -1f else 1f
         target.vx += dx / distance * strength * falloff * sign * knockback

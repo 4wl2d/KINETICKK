@@ -39,35 +39,50 @@ import kotlin.test.assertTrue
 class WeaponBalanceTest {
     @Test
     fun everyWeaponSitsWithinItsFamilyBandAtBothCheckpoints() {
-        val outside = mutableListOf<String>()
-        for (checkpoint in Checkpoint.entries) {
-            val results = WeaponId.entries.associateWith { weapon ->
-                Arena.entries.associateWith { arena -> weaponDps(weapon, arena, checkpoint) }
-            }
-            val singleMedian = median(results.values.map { it.getValue(Arena.SINGLE) })
-            val crowdMedian = median(results.values.map { it.getValue(Arena.CROWD) })
-            println("WEAPON-BALANCE $checkpoint singleMedian=${"%.1f".format(singleMedian)} crowdMedian=${"%.1f".format(crowdMedian)}")
-            for ((weapon, dps) in results) {
-                val single = dps.getValue(Arena.SINGLE) / singleMedian
-                val crowd = dps.getValue(Arena.CROWD) / crowdMedian
-                val primary = primaryArena(weapon)
-                println("WEAPON-BALANCE $checkpoint $weapon primary=$primary single=${"%.2f".format(single)} crowd=${"%.2f".format(crowd)}")
-                val (main, other) = if (primary == Arena.SINGLE) single to crowd else crowd to single
-                if (main !in PRIMARY_BAND || other !in OTHER_BAND) outside += "$checkpoint $weapon single=$single crowd=$crowd"
-                if (sqrt(single * crowd) > OVERALL_CEILING) outside += "$checkpoint $weapon overall=${sqrt(single * crowd)} (single=$single crowd=$crowd)"
-            }
-            for (arena in Arena.entries) {
-                val (family, others) = results.entries.partition { (weapon, _) -> primaryArena(weapon) == arena }
-                val best = family.maxBy { (_, dps) -> dps.getValue(arena) }
-                // The arena's own families lead it: no weapon of the other families out-damages their best there.
-                for ((weapon, dps) in others) {
-                    if (dps.getValue(arena) >= best.value.getValue(arena)) outside += "$checkpoint $weapon out-damages ${best.key} in the $arena arena"
-                }
-                // Arc Coil, the weapon that once dominated, leads neither arena.
-                if (results.maxBy { (_, dps) -> dps.getValue(arena) }.key == WeaponId.ARC_COIL) outside += "$checkpoint ARC_COIL leads the $arena arena"
-            }
-        }
+        val outside = Checkpoint.entries.flatMap { checkpoint -> bandViolations(checkpoint) }
         assertTrue(outside.isEmpty(), "weapons outside their band: $outside")
+    }
+
+    /**
+     * The UPGRADED checkpoint (economy §4.6): every weapon at Honing 10, otherwise ASCENDED, meets the same bands
+     * and ceiling. Honing is uniform today, so this guards any later per-weapon upgrade effect.
+     */
+    @Test
+    fun everyWeaponAtHoningTenSitsWithinItsFamilyBand() {
+        val outside = bandViolations(Checkpoint.ASCENDED, honing = canonicalGameplayContent.upgrades.maxLevel)
+        assertTrue(outside.isEmpty(), "Honing 10 weapons outside their band: $outside")
+    }
+
+    /** Every band, ceiling and family-lead violation of every weapon at [checkpoint] with Honing [honing]. */
+    private fun bandViolations(checkpoint: Checkpoint, honing: Int = 0): List<String> {
+        val outside = mutableListOf<String>()
+        val label = if (honing == 0) "$checkpoint" else "$checkpoint+HONING$honing"
+        val results = WeaponId.entries.associateWith { weapon ->
+            Arena.entries.associateWith { arena -> weaponDps(weapon, arena, checkpoint, honing = honing) }
+        }
+        val singleMedian = median(results.values.map { it.getValue(Arena.SINGLE) })
+        val crowdMedian = median(results.values.map { it.getValue(Arena.CROWD) })
+        println("WEAPON-BALANCE $label singleMedian=${"%.1f".format(singleMedian)} crowdMedian=${"%.1f".format(crowdMedian)}")
+        for ((weapon, dps) in results) {
+            val single = dps.getValue(Arena.SINGLE) / singleMedian
+            val crowd = dps.getValue(Arena.CROWD) / crowdMedian
+            val primary = primaryArena(weapon)
+            println("WEAPON-BALANCE $label $weapon primary=$primary single=${"%.2f".format(single)} crowd=${"%.2f".format(crowd)}")
+            val (main, other) = if (primary == Arena.SINGLE) single to crowd else crowd to single
+            if (main !in PRIMARY_BAND || other !in OTHER_BAND) outside += "$label $weapon single=$single crowd=$crowd"
+            if (sqrt(single * crowd) > OVERALL_CEILING) outside += "$label $weapon overall=${sqrt(single * crowd)} (single=$single crowd=$crowd)"
+        }
+        for (arena in Arena.entries) {
+            val (family, others) = results.entries.partition { (weapon, _) -> primaryArena(weapon) == arena }
+            val best = family.maxBy { (_, dps) -> dps.getValue(arena) }
+            // The arena's own families lead it: no weapon of the other families out-damages their best there.
+            for ((weapon, dps) in others) {
+                if (dps.getValue(arena) >= best.value.getValue(arena)) outside += "$label $weapon out-damages ${best.key} in the $arena arena"
+            }
+            // Arc Coil, the weapon that once dominated, leads neither arena.
+            if (results.maxBy { (_, dps) -> dps.getValue(arena) }.key == WeaponId.ARC_COIL) outside += "$label ARC_COIL leads the $arena arena"
+        }
+        return outside
     }
 
     @Test
@@ -231,25 +246,29 @@ class WeaponBalanceTest {
             seconds: Float = SECONDS,
             anchored: Boolean = false,
             variants: Int = VARIANTS,
+            honing: Int = 0,
         ): Double {
             val impacts = weapon == WeaponId.CONCUSSION_ENGINE
             var total = 0.0
             // Each variant starts the pilot on another axis with another seed, so firing times meet the passes differently.
             for (variant in 0 until variants) {
-                val dealt = flight(weapon, arena, checkpoint, attackSpeedBonus, silenced = false, impacts = impacts, variant = variant, seconds = seconds, anchored = anchored)
+                val dealt = flight(weapon, arena, checkpoint, attackSpeedBonus, silenced = false, impacts = impacts, variant = variant, seconds = seconds, anchored = anchored,
+                    honing = honing)
                 total += dealt
-                if (impacts) total -= flight(weapon, arena, checkpoint, attackSpeedBonus, silenced = true, impacts = true, variant = variant, seconds = seconds, anchored = anchored)
+                if (impacts) total -= flight(weapon, arena, checkpoint, attackSpeedBonus, silenced = true, impacts = true, variant = variant, seconds = seconds, anchored = anchored,
+                    honing = honing)
             }
             return total / variants / seconds
         }
 
         const val VARIANTS = 4
 
-        fun arenaState(weapon: WeaponId, checkpoint: Checkpoint, shape: CoreShape, seed: Int = 6_061): MutableGameState =
+        fun arenaState(weapon: WeaponId, checkpoint: Checkpoint, shape: CoreShape, seed: Int = 6_061, honing: Int = 0): MutableGameState =
             MutableGameState(canonicalGameplayContent, seed = seed).apply {
                 coreShape = shape
                 unlockWeaponsForTesting(listOf(weapon))
                 startingWeapon = weapon
+                weaponUpgradeLevels[weapon.ordinal] = honing
                 if (checkpoint == Checkpoint.ASCENDED) {
                     val node = content.matrixNodes.indexOfFirst { it.id == MatrixNodeId.WEAPON_CALIBRATION }
                     matrixRanks[node] = 3
@@ -286,8 +305,9 @@ class WeaponBalanceTest {
             variant: Int,
             seconds: Float,
             anchored: Boolean,
+            honing: Int = 0,
         ): Double {
-            val game = arenaState(weapon, checkpoint, nonSignature(weapon), seed = 6_061 + variant)
+            val game = arenaState(weapon, checkpoint, nonSignature(weapon), seed = 6_061 + variant, honing = honing)
             if (checkpoint == Checkpoint.ASCENDED) game.attackSpeed = 1.25f
             game.attackSpeed += attackSpeedBonus
             val targets = when (arena) {

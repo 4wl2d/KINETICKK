@@ -23,9 +23,9 @@ class DamagePipelineTest {
     fun itemAmplificationAboveTheSoftCapCountsHalf() {
         val state = buildTestState()
         val target = state.dummy()
-        state.buffs = listOf(ActiveBuff(sourceItem = 0, stat = BuffStat.DAMAGE, amountPerStack = 1f, stacks = 1, expiresAt = 10f))
+        state.buffs = listOf(ActiveBuff(sourceKey = 0, stat = BuffStat.DAMAGE, amountPerStack = 1f, stacks = 1, expiresAt = 10f))
         assertEquals(200f, state.dealHit(target, 100f, HitSource.WEAPON, canCrit = false).amount, 0.01f)
-        state.buffs = listOf(ActiveBuff(sourceItem = 0, stat = BuffStat.DAMAGE, amountPerStack = 3.5f, stacks = 1, expiresAt = 10f))
+        state.buffs = listOf(ActiveBuff(sourceKey = 0, stat = BuffStat.DAMAGE, amountPerStack = 3.5f, stacks = 1, expiresAt = 10f))
         val cap = state.content.build.policy.amplificationSoftCap
         assertEquals(100f * (1f + cap + (3.5f - cap) * 0.5f), state.dealHit(target, 100f, HitSource.WEAPON, canCrit = false).amount, 0.01f)
         state.elapsed = 10f

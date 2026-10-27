@@ -21,10 +21,10 @@ import kotlin.math.min
  * [OBSTACLE] is an asteroid collision or blast: it scales with `1 + damagePerTier × tier` instead of the
  * Rebirth incoming-damage multiplier, ignores damage reduction and damage-taken modifiers, is absorbed
  * by shields, and neither uses nor grants the hit i-frames (collisions have their own cooldown).
- * [cancellableByFacets] is false for it: no damage-negating defence (Prism facets) may cancel it.
+ * [cancellableByFacets] is false for it: Prism facets cancel it only while Monolith runs (the Prism's Apex).
  */
 internal enum class IncomingDamage(
-    /** Prism facets may negate an incoming hit of this kind; obstacle collisions set false. */
+    /** Prism facets may negate an incoming hit of this kind; obstacle collisions set false (Monolith aside). */
     val cancellableByFacets: Boolean = true,
 ) {
     HIT,
@@ -53,6 +53,9 @@ internal fun MutableGameState.hostileOutputFactor(enemy: Enemy?): Float = hollow
 /** Hostile damage grows by this fraction of run progress; see [hostileDamage]. */
 internal const val HOSTILE_RUN_GROWTH: Float = 0.5f
 
+/** Damage-taken buffs and liabilities together never bring the multiplier on a hit below this. */
+internal const val MIN_DAMAGE_TAKEN_MULTIPLIER: Float = 0.1f
+
 internal fun MutableGameState.takeDamage(
     rawAmount: Float,
     ignoreReduction: Boolean = false,
@@ -62,6 +65,8 @@ internal fun MutableGameState.takeDamage(
         takeObstacleDamage(rawAmount)
         return
     }
+    // Void Step's phase: contacts and shots pass through the Core (the shots are still spent).
+    if ((kind == IncomingDamage.CONTACT || kind == IncomingDamage.PROJECTILE) && phaseUntil > elapsed) return
     // Self-inflicted damage neither uses nor grants the hit i-frames, so real hits are never dropped behind it.
     val incoming = kind != IncomingDamage.SELF
     if ((incoming && hurtCooldown > 0f) || invulnerableUntil > elapsed) return
@@ -79,7 +84,7 @@ internal fun MutableGameState.takeDamage(
     }
     if (kind == IncomingDamage.CONTACT && build.liability(RelicId.EVENT_HORIZON)) taken += 0.5f
     if (kind == IncomingDamage.PROJECTILE && build.pairing(RelicPairingId.BLACK_STAR)) taken += 0.5f
-    amount *= taken.coerceAtLeast(0.1f)
+    amount *= taken.coerceAtLeast(MIN_DAMAGE_TAKEN_MULTIPLIER)
     if (build.liability(RelicId.GLASS_COMET)) {
         amount *= 2f
         glassCharge = 0f
@@ -137,6 +142,8 @@ internal const val OBSTACLE_COLLISION_REASON: String = "OBSTACLE COLLISION"
 private fun MutableGameState.takeObstacleDamage(rawAmount: Float) {
     if (rawAmount <= 0f || invulnerableUntil > elapsed) return
     var amount = rawAmount * (1f + content.obstacles.damagePerTier * rebirthLevel)
+    // Monolith: while it runs, a facet also takes an obstacle collision (and fires its refraction).
+    if (monolithTakesCollisions() && spendFacet(amount)) return
     val glass = build.liability(RelicId.GLASS_COMET)
     if (glass) {
         amount *= 2f

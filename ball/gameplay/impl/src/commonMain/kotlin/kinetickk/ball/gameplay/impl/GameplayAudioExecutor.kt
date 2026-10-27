@@ -46,14 +46,17 @@ private fun GameplayAudioCue.toToneRequest(): ToneRequest = when (this) {
     GameplayAudioCue.WEAPON_ACQUIRED -> ToneRequest(640f, 0.18f, 0.2f, ToneWave.TRIANGLE)
     GameplayAudioCue.GAME_OVER -> ToneRequest(64f, 0.34f, 0.24f, ToneWave.SAW)
     GameplayAudioCue.VICTORY -> ToneRequest(784f, 0.32f, 0.2f, ToneWave.TRIANGLE)
+    GameplayAudioCue.SKILL -> ToneRequest(480f, 0.09f, 0.16f, ToneWave.TRIANGLE)
+    GameplayAudioCue.APEX -> ToneRequest(988f, 0.3f, 0.22f, ToneWave.SAW)
 }
 
 private val GameplayAudioCue.priority: Int
     get() = when (this) {
         GameplayAudioCue.GAME_OVER, GameplayAudioCue.VICTORY -> 100
         GameplayAudioCue.HURT, GameplayAudioCue.OVERHEAT -> 90
+        GameplayAudioCue.APEX -> 85
         GameplayAudioCue.DASH, GameplayAudioCue.OVERDRIVE -> 80
-        GameplayAudioCue.WEAPON_HEAVY, GameplayAudioCue.IMPACT -> 70
+        GameplayAudioCue.WEAPON_HEAVY, GameplayAudioCue.IMPACT, GameplayAudioCue.SKILL -> 70
         GameplayAudioCue.LEVEL_UP,
         GameplayAudioCue.WEAPON_ACQUIRED,
         GameplayAudioCue.RECOVERED,

@@ -84,6 +84,23 @@ data class PlayerPreferences(
     val colorVision: ColorVision = ColorVision.DEFAULT,
     /** Shows the run minimap; absent from saves while it is on. */
     val minimapEnabled: Boolean = true,
+    /** Desktop window mode; the platform lists and applies it. */
+    val windowMode: WindowMode = WindowMode.WINDOWED,
+    /** Desktop windowed-mode size. */
+    val windowSize: WindowSizePreset = WindowSizePreset.W1280X800,
+    val vsync: Boolean = true,
+    /** One of [FRAME_RATE_CAP_OPTIONS]; 0 is unlimited. */
+    val frameRateCap: Int = 0,
+    /** [REFRESH_RATE_AUTO] or a rate within [REFRESH_RATE_RANGE] (Android). */
+    val refreshRateHz: Int = REFRESH_RATE_AUTO,
+    /** Hides the system bars (Android). */
+    val immersive: Boolean = false,
+    /** One of [INTERFACE_SCALE_OPTIONS]. */
+    val interfaceScalePercent: Int = DEFAULT_INTERFACE_SCALE_PERCENT,
+    val showFps: Boolean = false,
+    val pauseOnFocusLoss: Boolean = true,
+    val reactionEffects: ReactionEffectsLevel = ReactionEffectsLevel.FULL,
+    val keyBindings: KeyBindings = KeyBindings.DEFAULT,
 ) {
     fun normalized(): PlayerPreferences = copy(
         masterVolume = masterVolume.coerceIn(0f, 1f),
@@ -93,6 +110,17 @@ data class PlayerPreferences(
             DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.first(),
             DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.last(),
         ),
+        frameRateCap = if (frameRateCap in FRAME_RATE_CAP_OPTIONS) frameRateCap else 0,
+        refreshRateHz = if (refreshRateHz == REFRESH_RATE_AUTO || refreshRateHz in REFRESH_RATE_RANGE) {
+            refreshRateHz
+        } else {
+            REFRESH_RATE_AUTO
+        },
+        interfaceScalePercent = if (interfaceScalePercent in INTERFACE_SCALE_OPTIONS) {
+            interfaceScalePercent
+        } else {
+            DEFAULT_INTERFACE_SCALE_PERCENT
+        },
     )
 }
 
@@ -130,6 +158,9 @@ data class MatrixProgress(
 /** Relics remembered as Heirlooms: at most one per Relic slot bound at the Architect victory. */
 const val MAX_HEIRLOOM_RELICS: Int = 4
 
+/** Most recent item acquisitions remembered across runs (oldest dropped first). */
+const val MAX_RECENT_ITEM_IDS: Int = 64
+
 data class PlayerCollection(
     val discoveredItemIds: ImmutableSet<Int> = immutableSetOf(),
     val newItemIds: ImmutableSet<Int> = immutableSetOf(),
@@ -144,6 +175,11 @@ data class PlayerCollection(
      * distinct. The next run offers them once; resolving that offer clears the list.
      */
     val heirloomRelicIds: ImmutableList<RelicId> = immutableListOf(),
+    /**
+     * Item ids first acquired in recent runs, oldest first, duplicates kept, at most
+     * [MAX_RECENT_ITEM_IDS]; offers down-weight recently taken items.
+     */
+    val recentItemIds: ImmutableList<Int> = immutableListOf(),
 ) {
     constructor(
         discoveredItemIds: Set<Int>,
@@ -153,11 +189,12 @@ data class PlayerCollection(
         discoveredReactionIds: Set<ReactionId> = emptySet(),
         discoveredPairingIds: Set<RelicPairingId> = emptySet(),
         heirloomRelicIds: List<RelicId> = emptyList(),
+        recentItemIds: List<Int> = emptyList(),
     ) : this(
         discoveredItemIds.toImmutableSet(), newItemIds.toImmutableSet(),
         discoveredRelicIds.toImmutableSet(), newRelicIds.toImmutableSet(),
         discoveredReactionIds.toImmutableSet(), discoveredPairingIds.toImmutableSet(),
-        heirloomRelicIds.toImmutableList(),
+        heirloomRelicIds.toImmutableList(), recentItemIds.toImmutableList(),
     )
 }
 
@@ -166,7 +203,21 @@ data class RebirthProgress(
     val highestCleared: Int = -1,
     /** Characters that cleared the final Rebirth tier (Ascendant runs); empty until the first one does. */
     val ascendedCharacters: ImmutableSet<CoreShape> = immutableSetOf(),
+    /**
+     * Highest tier each character cleared (an Architect victory at that tier), in [CoreShape] order;
+     * -1 when none is recorded. Victories before 0.5.0 recorded no tier (see [highestClearedWith]).
+     */
+    val characterClears: ImmutableList<Int> = NO_CHARACTER_CLEARS,
 )
+
+private val NO_CHARACTER_CLEARS: ImmutableList<Int> = ImmutableList.copyOf(List(CoreShape.entries.size) { -1 })
+
+/**
+ * Highest tier [shape] cleared, or -1 when none is recorded. An Ascendant character cleared the final
+ * tier even when its victory predates [RebirthProgress.characterClears].
+ */
+fun RebirthProgress.highestClearedWith(shape: CoreShape): Int =
+    if (shape in ascendedCharacters) ContentBounds.MAX_REBIRTH_LEVEL else characterClears.getOrElse(shape.ordinal) { -1 }
 
 /** Highest Rebirth tier this profile may select: one above the highest cleared tier, within content bounds. */
 val RebirthProgress.rank: Int
@@ -184,11 +235,20 @@ fun RebirthProgress.rankWithin(minimumLevel: Int, maximumLevel: Int): Int =
  * The Rebirth invariant every reader enforces: the highest cleared tier is -1 (none) up to
  * [maximumLevel], and the selected tier is earned, from [minimumLevel] up to the rank one above the
  * highest clear ([rankWithin]). A player may select any lower tier again, so `highestCleared > level`
- * is valid.
+ * is valid. Each character's clear is -1 or a tier from [minimumLevel] up to the highest clear, and a
+ * clear of the final tier is exactly an Ascendant one (an older Ascendant victory may record none).
  */
 fun RebirthProgress.isWithinRebirthBounds(minimumLevel: Int, maximumLevel: Int): Boolean =
     highestCleared in -1..maximumLevel && level in minimumLevel..rankWithin(minimumLevel, maximumLevel) &&
-        (ascendedCharacters.isEmpty() || isAscendant)
+        (ascendedCharacters.isEmpty() || isAscendant) &&
+        characterClears.size == CoreShape.entries.size &&
+        CoreShape.entries.all { shape ->
+            val cleared = characterClears[shape.ordinal]
+            val ascended = shape in ascendedCharacters
+            (cleared == -1 || cleared in minimumLevel..highestCleared) &&
+                (cleared < ContentBounds.MAX_REBIRTH_LEVEL || ascended) &&
+                (!ascended || cleared == -1 || cleared == ContentBounds.MAX_REBIRTH_LEVEL)
+        }
 
 /** Cumulative Profile-owned achievements shared by every run and Matrix loadout. */
 data class CharacterAchievementProgress(
@@ -213,4 +273,6 @@ data class PlayerProfile(
     val collection: PlayerCollection = PlayerCollection(),
     val rebirthProgress: RebirthProgress = RebirthProgress(),
     val characterAchievements: CharacterAchievementProgress = CharacterAchievementProgress(),
+    /** Bought Refit and Honing levels. */
+    val upgrades: PermanentUpgrades = PermanentUpgrades(),
 )

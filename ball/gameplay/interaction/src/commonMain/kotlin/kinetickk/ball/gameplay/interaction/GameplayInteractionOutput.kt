@@ -7,6 +7,7 @@ package kinetickk.ball.gameplay.interaction
 sealed interface GameplayInteractionOutput {
     data object OpenCodex : GameplayInteractionOutput
     data object OpenSettings : GameplayInteractionOutput
+    data object OpenWorkshop : GameplayInteractionOutput
     data object OpenRebirth : GameplayInteractionOutput
     data object ExitToHome : GameplayInteractionOutput
     data object RestartRun : GameplayInteractionOutput

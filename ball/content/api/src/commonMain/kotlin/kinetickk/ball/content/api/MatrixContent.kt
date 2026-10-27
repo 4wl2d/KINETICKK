@@ -188,6 +188,23 @@ sealed interface MatrixEffect {
         init { require(count in 1..MAX_MATRIX_REROLLS) { "Rerolls must be 1..$MAX_MATRIX_REROLLS" } }
     }
 
+    /**
+     * The run's draft deck deals [items] more rank-0 Data-economy items (the level-42 Data ladder) per rank, on top of
+     * the deck policy's Data floor: a profile that invested in Data finds its Data cards.
+     */
+    data class DataStratum(val items: Int) : MatrixEffect {
+        init { require(items in 1..MAX_DATA_STRATUM_ITEMS) { "Data stratum items must be 1..$MAX_DATA_STRATUM_ITEMS" } }
+    }
+
+    /**
+     * Data-economy items ([ItemDefinition.isDataEconomy]) weigh × (1 + [fraction] × ranks) when an ordinary item offer
+     * picks a card in any lane, so a profile that invested in Data sees its Data cards more often. It changes only the
+     * pick's weights: the offer draws exactly as many reward values as without it.
+     */
+    data class DataOfferWeight(val fraction: Float) : MatrixEffect {
+        init { requireFraction(fraction) }
+    }
+
     /** Weapon run growth gains [bonusPerProgress] × run progress. */
     data class WeaponRunGrowth(val bonusPerProgress: Float) : MatrixEffect {
         init { requireFraction(bonusPerProgress) }
@@ -207,6 +224,7 @@ sealed interface MatrixEffect {
 private const val MAX_STARTING_WEAPON_LEVELS: Int = 3
 private const val MAX_EXTRA_HEIRLOOM_OFFERS: Int = 2
 private const val MAX_MATRIX_REROLLS: Int = 3
+private const val MAX_DATA_STRATUM_ITEMS: Int = 5
 
 private fun requireFraction(value: Float) {
     require(value.isFinite() && value > 0f && value <= 2f) { "Matrix fraction must be within 0..2" }

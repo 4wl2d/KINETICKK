@@ -122,11 +122,18 @@ class ArchitectEncounterTest {
         assertEquals(45f, state.dealHit(boss, 10_000f, HitSource.WEAPON, canCrit = false).amount, 0.01f)
         assertEquals(45f, state.dealStatusDamage(boss, 10_000f, StatusElement.THERMAL).amount, 0.01f)
         assertEquals(45f, state.dealProcDamage(boss, 10_000f, rescale = false).amount, 0.01f)
+        assertEquals(45f, state.dealSkillDamage(boss, 10_000f, element = null).amount, 0.01f)
+        // The Apex reaches the boss only through its strikes and its shots, both through the same gate.
+        state.unlockNow()
+        state.castNow()
+        assertEquals(45f, state.apexStrike(boss), 0.01f)
+        state.apexShot(boss, 10_000f)
+        state.resolveProjectileHits()
 
-        assertEquals(3_000f - 5 * 45f, boss.hp, 0.01f)
-        assertEquals(225.0, state.damageDealt - dealt, 0.01)
+        assertEquals(3_000f - 8 * 45f, boss.hp, 0.01f)
+        assertEquals(360.0, state.damageDealt - dealt, 0.01)
         val numbers = state.takeVisualFxCues().filterIsInstance<VisualFxCue.DamageNumberAdded>()
-        assertEquals(List(5) { 45L }, numbers.map { it.amount }, "Numbers show what landed")
+        assertEquals(List(8) { 45L }, numbers.map { it.amount }, "Numbers show what landed")
     }
 
     @Test

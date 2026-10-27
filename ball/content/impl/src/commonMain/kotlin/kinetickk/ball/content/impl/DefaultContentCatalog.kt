@@ -29,8 +29,12 @@ import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
 import kinetickk.ball.content.api.RunTempoProfile
+import kinetickk.ball.content.api.SkillDefinition
+import kinetickk.ball.content.api.SkillId
+import kinetickk.ball.content.api.UpgradePolicy
 import kinetickk.ball.content.api.defaultBuildCatalog
 import kinetickk.ball.content.api.defaultEnemyDefinitions
+import kinetickk.ball.content.api.defaultSkillDefinitions
 import kinetickk.foundation.collections.toImmutableList
 
 /** Creates the query-only Content authority that application composition owns for its lifetime. */
@@ -53,6 +57,8 @@ internal data class ContentBootstrapData(
     val tempo: RunTempoProfile = RunTempoProfile(),
     val build: BuildCatalog = defaultBuildCatalog(),
     val enemies: List<EnemyDefinition> = defaultEnemyDefinitions(),
+    val skills: List<SkillDefinition> = defaultSkillDefinitions(),
+    val upgrades: UpgradePolicy = UpgradePolicy(),
 )
 
 internal fun defaultContentBootstrapData(): ContentBootstrapData = ContentBootstrapData(
@@ -88,6 +94,7 @@ private class DefaultContentCatalog(data: ContentBootstrapData) : ContentCatalog
     private val coreShapes = data.coreShapes.toImmutableList()
     private val rebirthProfiles = data.rebirthProfiles.toImmutableList()
     private val enemies = data.enemies.toImmutableList()
+    private val skills = data.skills.toImmutableList()
 
     private val rebirth = RebirthPolicySnapshot(
         minimumLevel = ContentBounds.MIN_REBIRTH_LEVEL,
@@ -105,6 +112,7 @@ private class DefaultContentCatalog(data: ContentBootstrapData) : ContentCatalog
         weapons = weapons,
         rebirth = rebirth,
         matrixNodes = matrixNodes,
+        upgrades = data.upgrades,
     )
 
     private val gameplayContent = GameplayContentSnapshot(
@@ -120,6 +128,8 @@ private class DefaultContentCatalog(data: ContentBootstrapData) : ContentCatalog
         coreShapes = coreShapes,
         enemies = enemies,
         matrixNodes = matrixNodes,
+        skills = skills,
+        upgrades = data.upgrades,
     )
 
     private val uiCatalog = UiCatalogSnapshot(
@@ -135,6 +145,8 @@ private class DefaultContentCatalog(data: ContentBootstrapData) : ContentCatalog
         build = data.build,
         enemies = enemies,
         matrixNodes = matrixNodes,
+        skills = skills,
+        upgrades = data.upgrades,
     )
 
     override fun profilePolicy(): ProfilePolicySnapshot = profilePolicy
@@ -154,6 +166,10 @@ private fun validateBootstrap(data: ContentBootstrapData) {
     require(data.items.withIndex().all { (index, item) -> item.id == index }) {
         "Item ids must be contiguous and ordered from zero"
     }
+    require(data.items.all { item -> item.unlockLevel <= data.tempo.maximumLevel }) {
+        "Item unlock levels must not exceed the maximum run level ${data.tempo.maximumLevel}"
+    }
+    validateActiveItems(data.items, data.skills)
 
     requireBound("weapons", data.weapons.size, ContentBounds.MAX_WEAPONS)
     requireUniqueIds("weapon", data.weapons.map(WeaponDefinition::id))
@@ -185,6 +201,7 @@ private fun validateBootstrap(data: ContentBootstrapData) {
     require(data.coreShapes.map(CoreShapeDefinition::id) == CoreShape.entries.toList()) {
         "Core shape ids must match the stable CoreShape order"
     }
+    require(data.coreShapes.map { it.apex.name }.toSet().size == data.coreShapes.size) { "Apex names must be unique" }
 
     requireUniqueIds("weapon-mastery", data.weaponMasteries)
     require(data.weaponMasteries == WeaponMastery.entries.toList()) {
@@ -210,6 +227,7 @@ private fun validateBootstrap(data: ContentBootstrapData) {
     }
 
     validateEnemies(data.enemies)
+    validateSkills(data.skills)
 
     require(data.relicPolicy.maxSlots <= data.relics.size) {
         "Relic maxSlots must not exceed the relic catalog size"
@@ -247,6 +265,35 @@ private fun validateWeaponKeys(weapons: List<WeaponDefinition>, relics: List<Rel
             "Weapon ${weapon.id} key ${weapon.key} must be carried by two Relics, one of them not Sovereign"
         }
     }
+}
+
+/**
+ * Every active effect is carried by exactly one item, which repeats the effect's name, its tags in the same order and
+ * its element: offers, cards and build points read the item, casting reads the effect. An effect missing from
+ * [skills] is left to [validateSkills].
+ */
+private fun validateActiveItems(items: List<ItemDefinition>, skills: List<SkillDefinition>) {
+    SkillId.entries.forEach { id ->
+        val carriers = items.filter { it.active == id }
+        require(carriers.size == 1) { "Active effect $id must be carried by exactly one item, not ${carriers.size}" }
+        val item = carriers.single()
+        val effect = skills.firstOrNull { it.id == id } ?: return@forEach
+        require(item.name == effect.name) { "${item.name} must carry the name of its active effect ${effect.name}" }
+        require(item.tags == effect.tags) { "${item.name} must carry the tags of its active effect in order: ${effect.tags}" }
+        require(item.elements == listOfNotNull(effect.element)) {
+            "${item.name} must carry exactly the element of its active effect: ${effect.element}"
+        }
+    }
+}
+
+/** One skill per [SkillId] in order, with distinct names; each definition validates its own ranks. */
+private fun validateSkills(skills: List<SkillDefinition>) {
+    requireBound("skills", skills.size, ContentBounds.MAX_SKILLS)
+    requireUniqueIds("skill", skills.map(SkillDefinition::id))
+    require(skills.map(SkillDefinition::id) == SkillId.entries.toList()) {
+        "Skill ids must match the stable SkillId order"
+    }
+    require(skills.map(SkillDefinition::name).toSet().size == skills.size) { "Skill names must be unique" }
 }
 
 private fun requireBound(name: String, size: Int, maximum: Int) {

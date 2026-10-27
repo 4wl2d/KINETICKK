@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
@@ -354,6 +355,39 @@ class RewardContentTest {
     }
 
     @Test
+    fun aPhoneActiveCardKeepsItsSlotChipItsActivePartAndItsPassive() {
+        // Solar Flare in a free slot: the slot chip (with its key), the effect's summary and numbers and the passive
+        // all stay on the phone card, in both languages.
+        val shown = mutableStateOf(AppLanguage.English)
+        val content = rewardActiveFixtureContent
+        val choice = rewardActiveChoice(rewardFixtureActiveBase, slot = 0)
+        compose.setContent {
+            val language = shown.value
+            val card = rewardFixtureModel(content = content, choices = listOf(choice), language = language).rewardCardPresentation(choice, 0, language)
+            CompositionLocalProvider(LocalAppLanguage provides language, LocalDensity provides Density(1f)) {
+                RewardCard(card, 0, 1f, 0f, true, Modifier.requiredSize(220.dp, 256.dp), phoneDeal = true) {}
+            }
+        }
+        val flare = content.skill(SkillId.SOLAR_FLARE)
+        listOf(AppLanguage.English, AppLanguage.Russian).forEach { language ->
+            compose.runOnIdle { shown.value = language }
+            compose.onNodeWithTag("kinetickk.gameplay.choice.1.compact", useUnmergedTree = true).assertExists()
+            fun textsUnder(tag: String) = compose.onAllNodes(androidx.compose.ui.test.hasAnyAncestor(androidx.compose.ui.test.hasTestTag(tag)) and
+                androidx.compose.ui.test.SemanticsMatcher.keyIsDefined(SemanticsProperties.Text), useUnmergedTree = true).fetchSemanticsNodes()
+                .flatMap { node -> node.config.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text } }
+            val chips = textsUnder("kinetickk.gameplay.choice.1.chips")
+            val slotChip = if (language == AppLanguage.English) "Active Z" else "Актив Z"
+            assertTrue(slotChip in chips, "$language: the slot chip shows ($chips)")
+            val texts = textsUnder("kinetickk.gameplay.choice.1.text").map { it.replace(' ', ' ').replace("⁠", "") }
+            assertTrue(texts.any { it == flare.summary.localizedContent(language) }, "$language: the active summary stays ($texts)")
+            val numbers = flare.rankLines(1, language).drop(1).joinToString(", ")
+            assertTrue(texts.any { it == numbers }, "$language: the rank's numbers stay ($texts)")
+            assertTrue(texts.any { it.equals(if (language == AppLanguage.English) "Passive" else "Пассивный эффект", ignoreCase = true) },
+                "$language: the passive part stays ($texts)")
+        }
+    }
+
+    @Test
     fun aPhoneCardsNewStampStaysAboveItsBandAtEveryTextSize() {
         val card = rewardFixtureModel(choices = listOf(itemChoice(1))).rewardCardPresentation(itemChoice(1), 0)
         check(card.isNewDiscovery)
@@ -379,6 +413,35 @@ class RewardContentTest {
                 assertTrue(stamp.bottom <= cardTop + (RewardNewStampOverlapDp + 4f) * u,
                     "Stamp $stamp reaches into the band of a ${dimensions.first} × ${dimensions.second} card at $textScale (top $cardTop)")
             }
+        }
+    }
+
+    @Test
+    fun aBoardActiveCardsNewStampLeavesItsRankPipsInSight() {
+        val choice = rewardActiveChoice(rewardFixtureActiveBase, slot = 0)
+        val scale = mutableStateOf(1f)
+        val language = mutableStateOf(AppLanguage.English)
+        compose.setContent {
+            CompositionLocalProvider(LocalAppLanguage provides language.value, LocalDensity provides Density(1f)) {
+                val card = rewardFixtureModel(content = rewardActiveFixtureContent, choices = listOf(choice), language = language.value)
+                    .rewardCardPresentation(choice, 0, language.value).copy(isNewDiscovery = true)
+                Box(Modifier.requiredSize(400.dp, 500.dp)) {
+                    RewardCard(card, 0, scale.value, 0f, true, Modifier.requiredSize(300.dp, 450.dp)) {}
+                }
+            }
+        }
+        // English and the wider Russian stamp, at the default and the largest text size.
+        for (lang in AppLanguage.entries) for (textScale in listOf(1f, 1.4f)) {
+            compose.runOnIdle { language.value = lang; scale.value = textScale }
+            val plate = compose.onNodeWithTag("kinetickk.gameplay.choice.1.expanded", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            val stamp = compose.onNodeWithTag("kinetickk.gameplay.choice.1.new", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            val chips = compose.onNodeWithTag("kinetickk.gameplay.choice.1.chips", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            // The rank pips drawActiveItemMark draws: 0.78 to 0.85 of the plate down, 0.49 of it wide about its centre.
+            val side = plate.minDimension
+            val pips = Rect(plate.center.x - side * 0.245f, plate.top + side * 0.78f, plate.center.x + side * 0.245f, plate.top + side * 0.85f)
+            val where = "$lang at $textScale: the stamp $stamp"
+            assertTrue(!stamp.overlaps(pips), "$where covers the rank pips $pips")
+            assertTrue(stamp.top >= plate.top - 0.5f && stamp.right <= chips.left, "$where leaves the plate $plate for the band or the chips $chips")
         }
     }
 

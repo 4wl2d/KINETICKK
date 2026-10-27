@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.PointOfInterestKind
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
+import kinetickk.ball.gameplay.interaction.layout.RunningControlMask
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
@@ -50,7 +51,7 @@ class WorldEdgeMarkerHudTest {
                     val base = hudTestModel(dpWidth, dpHeight).with(
                         "screenWidth" to width, "screenHeight" to height, "uiScale" to density,
                         "coreX" to 0f, "coreY" to 0f, "cameraX" to 0f, "cameraY" to 0f,
-                        "keys" to 12, "runMatter" to 9_876_543L, "combo" to 128, "comboTime" to 1f, "comboWindow" to 2.8f, "level" to 45,
+                        "keys" to 12, "runMatter" to 9_876_543L, "combo" to 128, "comboTime" to 1f, "comboWindow" to 2.8f, *levelOverrides(),
                         "enemies" to (if (boss == null) emptyList() else listOf(EnemyProjection(4, boss, 0f, -9_000f, 0f, 0f, 500f, 1_000f,
                             60f, 0f, 0f, 0f, 0f, 0f, 0f, false))).toImmutableList(),
                     )
@@ -91,7 +92,7 @@ class WorldEdgeMarkerHudTest {
             if (block == HudBlock.POLARITY_LABEL) return@forEach
             HudLayoutProbe.rect(block)?.let { add(block.name to it) }
         }
-        forEachRunningControlBounds(width, height, density) { target, left, top, right, bottom ->
+        forEachRunningControlBounds(width, height, density, RunningControlMask.ALL) { target, left, top, right, bottom ->
             add(target.name to Rect(left, top, right, bottom))
         }
     }

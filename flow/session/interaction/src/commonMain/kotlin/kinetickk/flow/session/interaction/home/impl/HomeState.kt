@@ -6,6 +6,7 @@ package kinetickk.flow.session.interaction.home.impl
 import kinetickk.ball.content.api.CoreShapeDefinition
 import kinetickk.ball.content.api.MatrixNodeDefinition
 import kinetickk.ball.content.api.RebirthPolicySnapshot
+import kinetickk.ball.content.api.UpgradePolicy
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.ball.profile.api.MatrixProgress
@@ -18,13 +19,13 @@ import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 
 internal sealed interface HomeAction {
-    data object OpenHangar : HomeAction
     data object StartRun : HomeAction
-    data object OpenLab : HomeAction
-    data object OpenArmory : HomeAction
+    /** The Workshop row: the Workshop on the tab it showed last. */
+    data object OpenWorkshop : HomeAction
     data object OpenRebirth : HomeAction
     data object OpenCodex : HomeAction
     data object OpenSettings : HomeAction
+    data object Quit : HomeAction
 }
 
 internal sealed interface HomeEffect {
@@ -44,6 +45,7 @@ internal class HomeReducer(
     private val weapons: ImmutableList<WeaponDefinition> = immutableListOf(),
     private val relicCount: Int = 0,
     private val matrixNodes: ImmutableList<MatrixNodeDefinition> = immutableListOf(),
+    private val upgrades: UpgradePolicy = UpgradePolicy(),
 ) {
     /** Maps the authoritative Home projection (and, when read, the Matrix ranks) into render facts. */
     fun uiModel(projection: HomeProgressProjection, matrix: MatrixProgress? = null): HomeUiModel = HomeUiModel(
@@ -63,12 +65,10 @@ internal class HomeReducer(
         discoveredRelicCount = projection.collection.discoveredRelicIds.size,
         relicCount = relicCount,
         startingWeaponName = weapons.firstOrNull { it.id == projection.loadout.selectedWeapon }?.name,
-        // The Profile refuses a weapon gated above the Rebirth rank, so only a weapon it would sell counts.
-        weaponUnlockAffordable = weapons.any { weapon ->
-            weapon.id !in projection.loadout.unlockedWeapons &&
-                projection.rebirthProgress.rank >= weapon.minimumRebirth &&
-                projection.economy.matter >= weapon.permanentUnlockCost.toLong()
-        },
+        // The Profile reads its own purchase rules for the stamp; Home never repeats them.
+        workshopAffordable = projection.workshopAffordable,
+        upgradeLevels = projection.upgradeLevels,
+        upgradeLevelCap = upgrades.maxLevel * (coreShapes.size + weaponCount),
         matrixRanks = matrix?.let { progress ->
             matrixNodes.sumOf { node -> progress.rank(node.id).coerceIn(0, node.maxRanks) }
         } ?: 0,
@@ -80,13 +80,12 @@ internal class HomeReducer(
     )
 
     fun reduce(action: HomeAction): HomeReduction = when (action) {
-        HomeAction.OpenHangar -> navigate(HomeOutput.OpenHangar)
         HomeAction.StartRun -> navigate(HomeOutput.StartRun)
-        HomeAction.OpenLab -> navigate(HomeOutput.OpenLab)
-        HomeAction.OpenArmory -> navigate(HomeOutput.OpenArmory)
+        HomeAction.OpenWorkshop -> navigate(HomeOutput.OpenWorkshop)
         HomeAction.OpenRebirth -> navigate(HomeOutput.OpenRebirth)
         HomeAction.OpenCodex -> navigate(HomeOutput.OpenCodex)
         HomeAction.OpenSettings -> navigate(HomeOutput.OpenSettings)
+        HomeAction.Quit -> navigate(HomeOutput.Quit)
     }
 
     private fun navigate(output: HomeOutput): HomeReduction = HomeReduction(
@@ -101,10 +100,15 @@ internal data class HomeViewport(
     val width: Float,
     val height: Float,
     val density: Float,
+    /** The host can close the game: Home lays out its Quit button. */
+    val quitAvailable: Boolean = false,
 )
 
 internal fun resolveHomePress(viewport: HomeViewport, x: Float, y: Float): HomeAction? {
-    val hit = homeLayoutGeometry(viewport.width, viewport.height, viewport.density)
+    val layout = homeLayoutGeometry(viewport.width, viewport.height, viewport.density, viewport.quitAvailable)
+    val quit = layout.quit?.touch
+    if (quit != null && x in quit.left..quit.right && y in quit.top..quit.bottom) return HomeAction.Quit
+    val hit = layout
         .actions
         .firstOrNull { action ->
             x in action.bounds.left..action.bounds.right && y in action.bounds.top..action.bounds.bottom
@@ -114,7 +118,7 @@ internal fun resolveHomePress(viewport: HomeViewport, x: Float, y: Float): HomeA
 
 /** Resolves a press on a drawn (!) info button (its expanded touch rect), if any. */
 internal fun resolveHomeInfoPress(viewport: HomeViewport, x: Float, y: Float): HomeInfoTarget? =
-    homeLayoutGeometry(viewport.width, viewport.height, viewport.density)
+    homeLayoutGeometry(viewport.width, viewport.height, viewport.density, viewport.quitAvailable)
         .infos
         .firstOrNull { info ->
             x in info.touch.left..info.touch.right && y in info.touch.top..info.touch.bottom

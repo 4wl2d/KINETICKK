@@ -23,6 +23,7 @@ internal enum class GameplayText : TextResource {
     SettingsDescription,
     ExitDescription,
     PerformanceDescription,
+    WorkshopDescription,
     OnState,
     OffState,
     BrakeDescription,
@@ -32,7 +33,7 @@ internal enum class GameplayText : TextResource {
     SystemPaused,
     Resume,
     Settings,
-    PerformanceMetrics,
+    Workshop,
     ReturnHome,
     ArchitectFallen,
     DetailedStatistics,
@@ -58,6 +59,7 @@ internal enum class GameplayText : TextResource {
     BuildUpdated,
     WeaponTotem,
     ChooseArtifact,
+    ChooseActiveSlot,
     TotemResonance,
     WeaponSynchronization,
     RelicIntercept,
@@ -87,7 +89,12 @@ internal enum class GameplayText : TextResource {
     CompactTrail,
     Milliseconds,
     MaxRegular,
-    Samples;
+    Samples,
+    SkillSlotDescription,
+    SkillSlotEmpty,
+    ApexDescription,
+    ActiveState,
+    RechargingState;
 
     override val english: String get() = englishGameplayText(this)
     override val russian: String get() = russianGameplayText(this)

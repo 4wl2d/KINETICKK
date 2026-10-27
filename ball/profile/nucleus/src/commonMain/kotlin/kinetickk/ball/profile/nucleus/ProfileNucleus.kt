@@ -13,12 +13,14 @@ import kinetickk.ball.profile.api.DamageNumberSize
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.HangarProjection
 import kinetickk.ball.profile.api.HomeProgressProjection
+import kinetickk.ball.profile.api.KeyBindings
 import kinetickk.ball.profile.api.MatrixProfileSnapshot
 import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.MatrixProgressProjection
 import kinetickk.ball.profile.api.LoadoutProfileSnapshot
 import kinetickk.ball.profile.api.LoadoutProjection
 import kinetickk.ball.profile.api.MAX_HEIRLOOM_RELICS
+import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerEconomy
@@ -53,6 +55,7 @@ import kinetickk.ball.profile.api.isAscendant
 import kinetickk.ball.profile.api.rank
 import kinetickk.ball.profile.api.rankWithin
 import kinetickk.foundation.collections.toImmutableSet
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kotlin.math.abs
@@ -117,6 +120,8 @@ object ProfileNucleus {
             characterAchievements = state.profile.characterAchievements,
             unlockedCoreShapes = unlockedCoreShapes(state.profile, state.policy),
             characterProgress = hangarShapeProgress(state.profile, state.policy),
+            workshopAffordable = isWorkshopAffordable(state.profile, state.policy),
+            upgradeLevels = state.profile.upgrades.totalLevels,
         )
 
     fun query(state: ProfileState, query: ProfileQuery.GetMatrixProgress): MatrixProgressProjection =
@@ -138,6 +143,7 @@ object ProfileNucleus {
                 economy = state.profile.economy,
                 loadout = state.profile.loadout,
                 rebirthRank = state.profile.rebirthProgress.rank,
+                upgrades = state.profile.upgrades,
             ),
         )
 
@@ -181,6 +187,8 @@ object ProfileNucleus {
         is ProfilePulse.PurchaseOrEquipWeapon -> purchaseOrEquipWeapon(state, pulse.id)
         is ProfilePulse.MarkCollectionEntryViewed -> markCollectionEntryViewed(state, pulse.entry)
         is ProfilePulse.SelectCoreShape -> selectCoreShape(state, pulse.shape, commandReply = false)
+        is ProfilePulse.PurchaseCharacterUpgrade -> purchaseCharacterUpgrade(state, pulse.shape)
+        is ProfilePulse.PurchaseWeaponUpgrade -> purchaseWeaponUpgrade(state, pulse.id)
     }
 
     private fun markCollectionEntryViewed(state: ProfileState, entry: CollectionEntry): ProfileDecision {
@@ -263,6 +271,21 @@ object ProfileNucleus {
                     ],
                 )
             }
+            is ProfilePreferenceAdjustment.SetWindowMode -> current.copy(windowMode = adjustment.mode)
+            is ProfilePreferenceAdjustment.SetWindowSize -> current.copy(windowSize = adjustment.preset)
+            ProfilePreferenceAdjustment.ToggleVsync -> current.copy(vsync = !current.vsync)
+            is ProfilePreferenceAdjustment.SetFrameRateCap -> current.copy(frameRateCap = adjustment.fps)
+            is ProfilePreferenceAdjustment.SetRefreshRate -> current.copy(refreshRateHz = adjustment.hz)
+            ProfilePreferenceAdjustment.ToggleImmersive -> current.copy(immersive = !current.immersive)
+            is ProfilePreferenceAdjustment.SetInterfaceScale -> current.copy(interfaceScalePercent = adjustment.percent)
+            ProfilePreferenceAdjustment.ToggleShowFps -> current.copy(showFps = !current.showFps)
+            ProfilePreferenceAdjustment.TogglePauseOnFocusLoss ->
+                current.copy(pauseOnFocusLoss = !current.pauseOnFocusLoss)
+            is ProfilePreferenceAdjustment.SetReactionEffects -> current.copy(reactionEffects = adjustment.level)
+            // A key another action holds swaps with it, so the map stays complete and conflict-free.
+            is ProfilePreferenceAdjustment.SetKeyBinding ->
+                current.copy(keyBindings = current.keyBindings.with(adjustment.action, adjustment.key))
+            ProfilePreferenceAdjustment.ResetKeyBindings -> current.copy(keyBindings = KeyBindings.DEFAULT)
         }.normalized()
         if (next == current) return rejected(ProfileRejection.NoChange)
         return acceptedMutation(
@@ -285,34 +308,22 @@ object ProfileNucleus {
     }
 
     /**
-     * Buys the next rank of [id]. Checked in order: a rank below the maximum, the Rebirth rank at the
-     * node's gate, any one prerequisite owned, then the next price in Matter. Gates apply only here,
-     * never on load.
+     * Buys the next rank of [id] (see [matrixNodeQuote] for the order of checks). Gates apply only
+     * here, never on load.
      */
     private fun purchaseMatrixNode(
         state: ProfileState,
         id: MatrixNodeId,
     ): ProfileDecision {
-        val definition = state.policy.matrixNode(id)
-        val matrix = state.profile.matrix
-        val currentRank = matrix.rank(id)
-        if (currentRank >= definition.maxRanks) return rejected(ProfileRejection.MatrixNodeMaxRank)
-        if (state.profile.rebirthProgress.rank < definition.minimumRebirth) {
-            return rejected(ProfileRejection.MatrixRebirthLocked)
+        val cost = when (val quote = matrixNodeQuote(state.profile, state.policy.matrixNode(id))) {
+            is PurchaseQuote.Refused -> return rejected(quote.reason)
+            is PurchaseQuote.Priced -> quote.cost
         }
-        if (definition.prerequisites.isNotEmpty() && definition.prerequisites.none(matrix::owns)) {
-            return rejected(ProfileRejection.MatrixPrerequisiteMissing)
-        }
-        val cost = definition.cost(currentRank).toLong()
-        if (state.profile.economy.matter < cost) return rejected(ProfileRejection.InsufficientMatter)
-
-        val ranks = matrix.ranks.toMutableList()
-        ranks[id.ordinal] = currentRank + 1
         return acceptedMutation(
             state = state,
             nextProfile = state.profile.copy(
                 economy = state.profile.economy.copy(matter = state.profile.economy.matter - cost),
-                matrix = MatrixProgress(ranks),
+                matrix = MatrixProgress(state.profile.matrix.ranks.raisedAt(id.ordinal)),
             ),
         )
     }
@@ -367,12 +378,10 @@ object ProfileNucleus {
         val unlocked = state.profile.loadout.unlockedWeapons.toMutableSet()
         var economy = state.profile.economy
         if (id !in unlocked) {
-            val definition = state.policy.weapon(id)
-            if (state.profile.rebirthProgress.rank < definition.minimumRebirth) {
-                return rejected(ProfileRejection.WeaponRebirthLocked)
+            val cost = when (val quote = weaponUnlockQuote(state.profile, state.policy.weapon(id))) {
+                is PurchaseQuote.Refused -> return rejected(quote.reason)
+                is PurchaseQuote.Priced -> quote.cost
             }
-            val cost = definition.permanentUnlockCost.toLong()
-            if (economy.matter < cost) return rejected(ProfileRejection.InsufficientMatter)
             economy = economy.copy(matter = economy.matter - cost)
             unlocked += id
         } else if (id == state.profile.loadout.selectedWeapon) {
@@ -386,6 +395,43 @@ object ProfileNucleus {
                     coreShape = state.profile.loadout.coreShape,
                     selectedWeapon = id,
                     unlockedWeapons = unlocked,
+                ),
+            ),
+        )
+    }
+
+    /**
+     * Buys the next Refit level of [shape] (see [characterUpgradeQuote] for the order of checks).
+     * Upgrades are permanent spending, so lifetime Matter is unchanged and nothing refunds them.
+     */
+    private fun purchaseCharacterUpgrade(
+        state: ProfileState,
+        shape: kinetickk.ball.content.api.CoreShape,
+    ): ProfileDecision = when (val quote = characterUpgradeQuote(state.profile, state.policy, shape)) {
+        is PurchaseQuote.Refused -> rejected(quote.reason)
+        is PurchaseQuote.Priced -> acceptedMutation(
+            state = state,
+            nextProfile = state.profile.copy(
+                economy = state.profile.economy.copy(matter = state.profile.economy.matter - quote.cost),
+                upgrades = state.profile.upgrades.copy(
+                    characterLevels = state.profile.upgrades.characterLevels.raisedAt(shape.ordinal),
+                ),
+            ),
+        )
+    }
+
+    /** Buys the next Honing level of [id] (see [weaponUpgradeQuote]); lifetime Matter is unchanged. */
+    private fun purchaseWeaponUpgrade(
+        state: ProfileState,
+        id: kinetickk.ball.content.api.WeaponId,
+    ): ProfileDecision = when (val quote = weaponUpgradeQuote(state.profile, state.policy, id)) {
+        is PurchaseQuote.Refused -> rejected(quote.reason)
+        is PurchaseQuote.Priced -> acceptedMutation(
+            state = state,
+            nextProfile = state.profile.copy(
+                economy = state.profile.economy.copy(matter = state.profile.economy.matter - quote.cost),
+                upgrades = state.profile.upgrades.copy(
+                    weaponLevels = state.profile.upgrades.weaponLevels.raisedAt(id.ordinal),
                 ),
             ),
         )
@@ -435,12 +481,18 @@ object ProfileNucleus {
         }
         val rebirth = update.clearedRebirthLevel?.let { cleared ->
             // Clearing the final tier makes the victorious character Ascendant.
-            val ascended = update.architectDefeatedWith?.takeIf { cleared >= ContentBounds.MAX_REBIRTH_LEVEL }
+            val victor = update.architectDefeatedWith
+            val ascended = victor?.takeIf { cleared >= ContentBounds.MAX_REBIRTH_LEVEL }
             val progress = state.profile.rebirthProgress
             progress.copy(
                 highestCleared = max(progress.highestCleared, cleared),
                 ascendedCharacters = if (ascended == null) progress.ascendedCharacters
                 else (progress.ascendedCharacters + ascended).toImmutableSet(),
+                // The victorious character keeps its highest clear; a lower tier replayed leaves it.
+                characterClears = if (victor == null) progress.characterClears
+                else progress.characterClears.mapIndexed { index, best ->
+                    if (index == victor.ordinal) max(best, cleared) else best
+                }.toImmutableList(),
             )
         } ?: state.profile.rebirthProgress
         val previousAchievements = state.profile.characterAchievements
@@ -472,6 +524,12 @@ object ProfileNucleus {
                 discoveredReactionIds = (collection.discoveredReactionIds + update.discoveredReactionIds).toImmutableSet(),
                 discoveredPairingIds = (collection.discoveredPairingIds + update.discoveredPairingIds).toImmutableSet(),
                 heirloomRelicIds = heirlooms,
+                // Oldest first; only the newest MAX_RECENT_ITEM_IDS acquisitions are remembered.
+                recentItemIds = if (update.acquiredItemIds.isEmpty()) {
+                    collection.recentItemIds
+                } else {
+                    (collection.recentItemIds + update.acquiredItemIds).takeLast(MAX_RECENT_ITEM_IDS).toImmutableList()
+                },
             ),
             rebirthProgress = rebirth,
         )
@@ -553,6 +611,12 @@ object ProfileNucleus {
         update.discoveredItemIds.firstOrNull { !state.policy.containsItem(it) }?.let {
             return ProfileGameplayProgressRejection.UnknownItem(it)
         }
+        if (update.acquiredItemIds.size > MAX_RECENT_ITEM_IDS) {
+            return ProfileGameplayProgressRejection.TooManyAcquiredItems
+        }
+        update.acquiredItemIds.firstOrNull { !state.policy.containsItem(it) }?.let {
+            return ProfileGameplayProgressRejection.UnknownItem(it)
+        }
         update.clearedRebirthLevel?.let { level ->
             if (level < state.policy.rebirth.minimumLevel) {
                 return ProfileGameplayProgressRejection.ClearedLevelBelowMinimum(level)
@@ -614,6 +678,7 @@ object ProfileNucleus {
         matrix = matrix,
         collection = collection,
         rebirthProgress = rebirthProgress,
+        upgrades = upgrades,
     )
 
     private fun accepted(

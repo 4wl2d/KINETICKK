@@ -30,18 +30,16 @@ class BuildRuleIntegrityTest {
         val state = buildTestState()
         val target = state.dummy()
         target.status[StatusCell.STACKS + StatusElement.GRAVITIC.ordinal] = 2f
-        state.combatFields = listOf(
-            CombatField(
-                CombatFieldKind.FUSION, remaining = 1f, x = target.x, y = target.y, radius = 120f, damagePerSecond = 1f,
-                element = StatusElement.THERMAL, stacksPerTick = 1, generation = 1, tickClock = CombatField.TICK_SECONDS,
-            ),
+        state.addTestField(
+            CombatFieldKind.FUSION, x = target.x, y = target.y, radius = 120f, damagePerSecond = 1f,
+            element = StatusElement.THERMAL, stacksPerTick = 1, generation = 1, tickClock = CombatField.TICK_SECONDS,
         )
 
         state.updateCombatFields(0.01f)
 
         assertEquals(0, target.stacksOf(StatusElement.GRAVITIC), "The tick's Thermal reacted with the Gravitic stacks")
-        assertEquals(2, state.combatFields.size)
-        assertTrue(state.combatFields.any { it.kind == CombatFieldKind.FUSION && it.generation == 2 })
+        assertEquals(2, state.combatFieldTable.count)
+        assertTrue(state.fieldRecords.any { it.kind == CombatFieldKind.FUSION && it.generation == 2 })
     }
 
     @Test
@@ -82,7 +80,7 @@ class BuildRuleIntegrityTest {
         state.fireClauses(EffectTrigger.BREAK, target, 0f, HitSource.STATUS, StatusElement.GRAVITIC)
 
         val action = star.clauses.single().actions.single() as EffectAction.Well
-        val well = state.combatFields.single { it.kind == CombatFieldKind.DARK_STAR }
+        val well = state.fieldRecords.single { it.kind == CombatFieldKind.DARK_STAR }
         assertEquals(state.runScale() * action.scale * state.build.magnitude(star.id) * state.build.bonus(star.id), well.damagePerSecond, 0.001f)
     }
 

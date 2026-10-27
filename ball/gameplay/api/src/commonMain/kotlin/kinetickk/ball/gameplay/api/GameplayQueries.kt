@@ -59,6 +59,16 @@ data class GameplayBuildSummaryProjection(
     val suppressedItemIds: ImmutableList<Int> = immutableListOf(),
     val rebornItemIds: ImmutableList<Int> = immutableListOf(),
     val severedRelicIds: ImmutableList<RelicId> = immutableListOf(),
+    /** The run's permanent upgrades, "Refit {character level} · Honing {current weapon level}" (content-localized). */
+    val upgrades: String = "",
+    /** Owned items none of whose effects can work in this run (they need an active item or a weapon of another type). */
+    val dormantItemIds: ImmutableList<Int> = immutableListOf(),
+    /** The run's Refit level of [character] (the levels behind [upgrades], for screens that show them apart). */
+    val characterUpgradeLevel: Int = 0,
+    /** The run's Honing level of the current [weapon]. */
+    val weaponUpgradeLevel: Int = 0,
+    /** Items the run's Rebirth rank allows that its draft deck left out (ascending): no ordinary offer shows them. */
+    val outOfDeckItemIds: ImmutableList<Int> = immutableListOf(),
 ) : GameplayProjection
 
 enum class BuildStatSource { CHARACTER, LAB, ITEMS, RELICS, SYNERGIES, MASTERY, TEMPORARY }

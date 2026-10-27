@@ -3,16 +3,9 @@
 
 package kinetickk.app.desktop
 
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.DpSize
-import androidx.compose.ui.window.application
-import androidx.compose.ui.window.Window
-import androidx.compose.ui.window.WindowState
-import kinetickk.app.shared.KinetickkApp
 import kinetickk.app.shared.enableKinetickkComposeRuntimeOptimizations
 import kinetickk.app.shared.DesktopCrashHandler
-import kinetickk.app.shared.DesktopCrashBoundary
-import kinetickk.app.shared.DesktopFramePacing
+import kinetickk.app.shared.runKinetickkDesktop
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.delay
 
@@ -35,33 +28,22 @@ fun main(args: Array<String>) {
         if (crashTest == "main") error("KINETICKK deliberate main crash")
         if (crashTest == "worker") Thread({ error("KINETICKK deliberate worker crash") }, "crash-test-worker").start()
         enableKinetickkComposeRuntimeOptimizations()
-        // Before the first window: Skiko reads the V-Sync setting when it creates the redrawer.
-        if (DesktopFramePacing.apply()) println("KINETICKK uncapped frame rate (V-Sync off)")
-        application(exitProcessOnExit = false) {
-            DesktopCrashBoundary(crashes) {
-                Window(
-                    onCloseRequest = ::exitApplication,
-                    title = "KINETICKK",
-                    state = WindowState(size = DpSize(1280.dp, 800.dp)),
-                ) {
-                    window.minimumSize = java.awt.Dimension(720, 540)
-                    KinetickkApp()
-                    LaunchedEffect(Unit) {
-                        if (crashTest == null) crashes.showPreviousCrash()
-                        if (crashTest == "compose") {
-                            delay(500)
-                            error("KINETICKK deliberate Compose coroutine crash")
-                        }
-                        if (crashTest == "awt") java.awt.EventQueue.invokeLater {
-                            error("KINETICKK deliberate AWT crash")
-                        }
-                        if (crashTest == "halt") {
-                            delay(1500)
-                            Runtime.getRuntime().halt(137)
-                        }
-                        if ("--smoke-test" in args) { delay(1500); exitApplication() }
-                    }
+        // The owner lives above the window, so a window opened again for a display change keeps the run.
+        runKinetickkDesktop(crashes) {
+            LaunchedEffect(Unit) {
+                if (crashTest == null) crashes.showPreviousCrash()
+                if (crashTest == "compose") {
+                    delay(500)
+                    error("KINETICKK deliberate Compose coroutine crash")
                 }
+                if (crashTest == "awt") java.awt.EventQueue.invokeLater {
+                    error("KINETICKK deliberate AWT crash")
+                }
+                if (crashTest == "halt") {
+                    delay(1500)
+                    Runtime.getRuntime().halt(137)
+                }
+                if ("--smoke-test" in args) { delay(1500); exitApplication() }
             }
         }
         crashes.close()

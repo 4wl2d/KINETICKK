@@ -254,7 +254,10 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Drag −40% and magnetism −10%. One Dash every 6 seconds costs no heat." to
         "Сопротивление −40%, магнетизм −10%. Один рывок раз в 6 секунд не нагревает Ядро.",
     "+15% Matter per rank." to "+15% материи за ранг.",
-    "+15% Data per rank." to "+15% данных за ранг.",
+    "+15% Data per rank. Each rank deals three more Data items into the run's draft deck and gives Data items +150% " +
+        "weight in item offers." to
+        "+15% данных за ранг. Каждый ранг кладёт в колоду забега ещё три предмета данных и даёт предметам данных +150% " +
+        "веса в предложениях предметов.",
     "+1 reroll per rank at the start of every run." to "+1 переброс за ранг в начале каждого забега.",
     "Every fourth item offer shows four cards." to "Каждое четвёртое предложение предметов показывает четыре карты.",
     "+0.5 luck per rank. A Rare or better card is guaranteed after 4 offers instead of 6." to
@@ -291,6 +294,7 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "THE ARCHITECT ENRAGES" to "АРХИТЕКТОР В ЯРОСТИ",
     "KINETIC OVERDRIVE" to "КИНЕТИЧЕСКАЯ ПЕРЕГРУЗКА",
     "DASH ONLINE" to "РЫВОК ГОТОВ",
+    "APEX ONLINE" to "АПЕКС В СЕТИ",
     "OVERHEAT" to "ПЕРЕГРЕВ",
     "SINGULARITY CONTACT" to "КОНТАКТ С СИНГУЛЯРНОСТЬЮ",
     "POLARITY FIELD STRAIN" to "ПОЛЕ ПОЛЯРНОСТИ ПЕРЕНАПРЯЖЕНО",

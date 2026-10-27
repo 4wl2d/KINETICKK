@@ -57,20 +57,37 @@ class GameSystemsTest {
 
     @Test
     fun everyCatalogItemCanBeAcquiredAndDiscovered() {
+        // Every passive item on one run; the active items as many at a time as there are slots, each group on a fresh run.
         val engine = gameScenario(seed = 13, initialMatter = 0)
+        val passive = engine.content.items.filter { !it.isActive }
+        val active = engine.content.items.filter { it.isActive }
+        assertTrue(active.isNotEmpty())
 
-        engine.content.items.forEach { engine.acquireItemForTesting(it.id) }
+        passive.forEach { engine.acquireItemForTesting(it.id) }
 
-        assertEquals(engine.content.items.size, engine.acquiredItemCount)
-        assertEquals(engine.content.items.size, engine.discoveredItemCount)
-        assertEquals(engine.content.items.last(), engine.recentItem)
-        engine.content.items.forEach { item ->
+        assertEquals(passive.size, engine.acquiredItemCount)
+        assertEquals(passive.size, engine.discoveredItemCount)
+        assertEquals(passive.last(), engine.recentItem)
+        passive.forEach { item ->
             assertEquals(1, engine.itemStack(item.id), "Item ${item.id} was not acquired exactly once")
             assertTrue(engine.isItemDiscovered(item.id), "Item ${item.id} was not discovered")
         }
         assertTrue(engine.damageMultiplier.isFinite())
         assertTrue(engine.weaponPower.isFinite())
         assertTrue(engine.maxHp.isFinite())
+
+        active.chunked(ContentBounds.SKILL_SLOTS).forEach { group ->
+            val fresh = gameScenario(seed = 13, initialMatter = 0)
+            group.forEach { fresh.acquireItemForTesting(it.id) }
+            assertEquals(group.size, fresh.acquiredItemCount)
+            assertEquals(group.size, fresh.discoveredItemCount)
+            assertEquals(group.last(), fresh.recentItem)
+            group.forEach { item ->
+                assertEquals(1, fresh.itemStack(item.id), "Item ${item.id} was not acquired exactly once")
+                assertTrue(fresh.isItemDiscovered(item.id), "Item ${item.id} was not discovered")
+                assertEquals(1, fresh.skillLoadout.rank(fresh.skillLoadout.slotOf(checkNotNull(item.active))), "${item.name} binds at rank I")
+            }
+        }
     }
 
     @Test
@@ -122,6 +139,8 @@ class GameSystemsTest {
         assertEquals(52, engine.nextLevelData)
         assertEquals(GamePhase.CHOICE, engine.phase)
         assertTrue(engine.choices.isNotEmpty())
+        // The queued item offers open one after another (no skill draft comes first).
+        assertEquals(ChoiceType.ITEM, engine.choiceType)
 
         repeat(2) {
             engine.choose(0)

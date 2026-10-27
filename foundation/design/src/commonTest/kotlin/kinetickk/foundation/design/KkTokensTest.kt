@@ -26,6 +26,23 @@ class KkTokensTest {
     }
 
     @Test
+    fun levelBadgeTierReachesApexExactlyAtTheCap() {
+        // With the content cap 42: 40–41 stay T5, the cap and anything past it is T6.
+        val capped = listOf(
+            1 to KkLevelTier.T1, 9 to KkLevelTier.T1, 10 to KkLevelTier.T2, 29 to KkLevelTier.T3, 39 to KkLevelTier.T4,
+            40 to KkLevelTier.T5, 41 to KkLevelTier.T5, 42 to KkLevelTier.T6, 250 to KkLevelTier.T6,
+        )
+        capped.forEach { (level, tier) -> assertEquals(tier, KkLevelTier.of(level, 42), "level $level of 42") }
+        // Without a cap (the component sheet, screens that show no run) nothing reaches T6.
+        assertEquals(KkLevelTier.T5, KkLevelTier.of(41))
+        assertEquals(KkLevelTier.T5, KkLevelTier.of(250))
+        assertEquals(KkLevelTier.T5, KkLevelTier.of(Int.MAX_VALUE - 1))
+        // A lower cap takes precedence over the decades.
+        assertEquals(KkLevelTier.T6, KkLevelTier.of(30, 30))
+        assertEquals(KkLevelTier.T3, KkLevelTier.of(29, 30))
+    }
+
+    @Test
     fun rarityColorsAreMaterialInRankOrderAndClamp() {
         // Material ramp: graphite, bone-grey, bone (sheen), bone (chrome), gold foil.
         val expected = listOf(0xFF86857B, 0xFFC9C8BE, 0xFFF1F0E8, 0xFFF1F0E8, 0xFFFFC93C)
@@ -149,15 +166,14 @@ class KkTokensTest {
     @Test
     fun homePalettesAndRebirthTiersAreCompleteAndOrdered() {
         assertEquals(
-            listOf(0xFFD8FF3E, 0xFFF1F0E8, 0xFFBDE82A, 0xFFFFC93C, 0xFFBDEBFF, 0xFFA3A298, 0xFF86857B).map(::Color),
+            listOf(0xFFD8FF3E, 0xFFBDE82A, 0xFFFFC93C, 0xFFBDEBFF, 0xFFA3A298, 0xFF86857B).map(::Color),
             KkHomePalette.entries.map { it.accent },
         )
-        // Each accent names what the destination means: you, the armory in bone (never START's volt,
-        // even though Kinetic is volt), deeper volt, Rebirth gold.
+        // Each accent names what the destination means: you, the Workshop's deeper volt (never START's
+        // volt), Rebirth gold.
         assertEquals(Kk.Volt, KkHomePalette.START.accent)
-        assertEquals(Kk.Bone, KkHomePalette.ARMORY.accent)
-        assertNotEquals(KkHomePalette.START.accent, KkHomePalette.ARMORY.accent)
-        assertEquals(Kk.Volt2, KkHomePalette.LAB.accent)
+        assertEquals(Kk.Volt2, KkHomePalette.WORKSHOP.accent)
+        assertNotEquals(KkHomePalette.START.accent, KkHomePalette.WORKSHOP.accent)
         assertEquals(Kk.Gold, KkHomePalette.REBIRTH.accent)
         assertTrue(KkHomePalette.CODEX.accent in Kk.Elements, "the codex accent rests on an element hue")
         assertEquals(KkHomePalette.entries.size, KkHomePalette.entries.map { it.accent }.toSet().size, "accents are distinct")
@@ -183,6 +199,16 @@ class KkTokensTest {
         assertEquals(1.3f, KkSlam.scale(0f))
         assertEquals(1f, KkSlam.scale(1f))
         assertTrue((1..99).any { KkSlam.scale(it / 100f) < 1f }, "Pull overshoots past the resting scale")
+        // The Apex unlock slams from 1.6 with an 8° kick; the cast kick grows from 0.92 without one.
+        assertEquals(1.6f, KkSlam.scale(0f, from = 1.6f))
+        assertEquals(1f, KkSlam.scale(1f, from = 1.6f))
+        assertEquals(0.92f, KkSlam.scale(0f, from = 0.92f))
+        assertEquals(-8f, KkSlam.rotation(0f, 0f, kick = 8f))
+        assertEquals(0f, KkSlam.rotation(1f, 0f, kick = 8f))
+        assertEquals(-8f, KkSlam.rotation(0f, -3f), "the default kick stays 5°")
+        assertEquals(600, KkTime.TierBurst)
+        assertEquals(1_200, KkTime.ApexUnlock)
+        assertEquals(420, KkTime.ApexPing)
         assertEquals(0f, KkDeal.progress(89f, 1))
         assertTrue(KkDeal.progress(200f, 1) > 0f)
         assertEquals(1f, KkEase.Pull.transform(1f), 0.001f)

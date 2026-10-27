@@ -196,6 +196,7 @@ class RelicSystemTest {
         assertEquals(ChoiceType.RELIC, engine.choiceType, "The active Relic reward was overwritten")
 
         chooseFirstCompletingOption(engine)
+        // The level's item offer follows the Relic reward directly (no skill draft opens before it).
         assertEquals(ChoiceType.ITEM, engine.choiceType)
         chooseFirstCompletingOption(engine)
 
@@ -210,10 +211,11 @@ class RelicSystemTest {
         val engine = runningEngine(seed = 207)
         engine.enemies.clear()
         engine.grantDataForTesting(100f)
+        // The first queued item offer opens at once.
         assertEquals(ChoiceType.ITEM, engine.choiceType)
 
         engine.openRelicChoiceForTesting()
-        assertEquals(ChoiceType.ITEM, engine.choiceType, "The active item reward was overwritten")
+        assertEquals(ChoiceType.ITEM, engine.choiceType, "The active item offer was overwritten")
         assertEquals(1, engine.pendingRelicChoiceCount)
 
         val seen = mutableListOf<ChoiceType>()
@@ -224,6 +226,7 @@ class RelicSystemTest {
         }
 
         assertEquals(GamePhase.RUNNING, engine.phase, "Queued choices were stranded: $seen")
+        assertEquals(ChoiceType.ITEM, seen.first())
         assertEquals(3, seen.count { it == ChoiceType.ITEM })
         assertEquals(1, seen.count { it == ChoiceType.RELIC })
         assertEquals(3, engine.acquiredItemCount)

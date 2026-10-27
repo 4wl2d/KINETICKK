@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -19,7 +20,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
@@ -28,9 +28,11 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -38,9 +40,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -49,26 +55,40 @@ import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntSize
+import kinetickk.ball.profile.api.GameAction
 import kinetickk.ball.profile.api.ProfilePort
 import kinetickk.ball.profile.api.ProfilePulse
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.interaction.audio.ProfileAudioExecutor
+import kinetickk.ball.profile.interaction.localization.ProfileText
 import kinetickk.ball.profile.interaction.localization.SettingsRedesignText
+import kinetickk.ball.profile.interaction.settings.api.SettingsDisplayPort
 import kinetickk.ball.profile.interaction.settings.api.SettingsFeature
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.LocalKkRolePalette
+import kinetickk.foundation.design.KkFramePacer
+import kinetickk.foundation.design.LocalKkFrameRateCap
+import kinetickk.foundation.design.LocalKkInterfaceScale
+import kinetickk.foundation.design.label
+import kinetickk.foundation.design.toBindableKey
 import kinetickk.foundation.design.rememberInterfaceTypography
 import kinetickk.resource.audio.api.AudioService
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 class DefaultSettingsFeature(
     private val profilePort: ProfilePort,
     audioService: AudioService,
+    private val display: SettingsDisplayPort = SettingsDisplayPort.None,
 ) : SettingsFeature {
     private val audioExecutor = ProfileAudioExecutor(audioService)
+
+    // The view a window opened again for a display change (V-Sync, Borderless) comes back to: the
+    // new window's composition starts without the previous rememberSaveable registry.
+    private var retained: SettingsRetainedView? = null
 
     @Composable
     override fun Content(
@@ -83,23 +103,71 @@ class DefaultSettingsFeature(
         val focusRequester = remember { FocusRequester() }
         val density = LocalDensity.current.density
         var viewportValue by remember { mutableStateOf(IntSize.Zero) }
-        var pageValue by rememberSaveable(routeToken) { mutableIntStateOf(0) }
-        var groupIndexValue by rememberSaveable(routeToken) { mutableIntStateOf(SettingsGroup.GAME.ordinal) }
+        val restored = retained?.takeIf { it.routeToken == routeToken }
+        var pageValue by rememberSaveable(routeToken) { mutableIntStateOf(restored?.page ?: 0) }
+        var groupIndexValue by rememberSaveable(routeToken) { mutableIntStateOf(restored?.group ?: SettingsGroup.GAME.ordinal) }
         var infoValue by remember(routeToken) { mutableStateOf<SettingsRow?>(null) }
         var hoverValue by remember { mutableStateOf<SettingsTarget?>(null) }
         var focusValue by remember { mutableStateOf<SettingsTarget?>(null) }
-        var activeRowValue by remember(routeToken) { mutableStateOf<SettingsRow?>(null) }
+        var activeRowValue by remember(routeToken) { mutableStateOf(restored?.activeRow) }
         var previewTimeValue by remember { mutableFloatStateOf(0f) }
         var previewWakeValue by remember { mutableIntStateOf(0) }
-        val group = SettingsGroup.entries[groupIndexValue]
+        // Key capture and the two-press reset (Interaction-ephemeral).
+        var captureValue by remember(routeToken) { mutableStateOf<GameAction?>(null) }
+        var swappedValue by remember(routeToken) { mutableStateOf<GameAction?>(null) }
+        var swappedAtValue by remember(routeToken) { mutableFloatStateOf(SETTINGS_NEVER) }
+        var rejectAtValue by remember(routeToken) { mutableFloatStateOf(SETTINGS_NEVER) }
+        var resetArmedValue by remember(routeToken) { mutableStateOf(false) }
+        // The live region's words, cleared after a while. Words equal to those it still says are cleared
+        // first, so a second refused key is a new change of the region and is spoken again.
+        var noticeValue by remember(routeToken) { mutableStateOf<SettingsNotice?>(null) }
+        var noticeSequence by remember(routeToken) { mutableIntStateOf(0) }
+        var announcementValue by remember(routeToken) { mutableStateOf<SettingsAnnouncement?>(null) }
+        LaunchedEffect(noticeValue) {
+            val notice = noticeValue ?: return@LaunchedEffect
+            if (announcementValue == notice.announcement) {
+                announcementValue = null
+                delay(SETTINGS_ANNOUNCE_GAP_MS)
+            }
+            announcementValue = notice.announcement
+            delay(SETTINGS_ANNOUNCE_MS)
+            announcementValue = null
+        }
+        // The key held when a capture began (Enter or Space on the cell): its repeats are not a choice.
+        val heldKey = remember { arrayOfNulls<Key>(1) }
+        val captureIgnoredKey = remember { arrayOfNulls<Key>(1) }
+        // The key that ended a capture: its repeats and release still belong to that press, so they
+        // reach no shortcut (holding Escape does not also close Settings, a new S does not toggle it).
+        val releaseKey = remember { arrayOfNulls<Key>(1) }
+        val capturing = captureValue != null
+        val support = remember(display, routeToken, viewportValue) { display.support() }
+        // Settings is drawn at the scaled density; the offered scales follow the window's unscaled size.
+        val screenScale = LocalKkInterfaceScale.current
+        val unscaledDensity = density / screenScale
+        val platform = SettingsPlatform(
+            support = support,
+            interfaceScales = settingsInterfaceScales(
+                viewportValue.width / unscaledDensity, viewportValue.height / unscaledDensity, support.touchPrimary,
+            ),
+            screenScale = screenScale,
+            live = display.liveWindow(),
+            browserFullscreen = display.browserFullscreen,
+        )
+        SideEffect(routeToken, groupIndexValue, pageValue, activeRowValue) {
+            retained = SettingsRetainedView(routeToken, groupIndexValue, pageValue, activeRowValue)
+        }
+        val requestedGroup = SettingsGroup.entries[groupIndexValue]
+        val group = if (requestedGroup in platform.groups) requestedGroup else platform.groups.first()
         LaunchedEffect(pageValue) { focusRequester.requestFocus() }
         // The preview animates while the player interacts and settles shortly after, so an idle
-        // Settings screen stops requesting frames.
-        LaunchedEffect(previewWakeValue) {
-            var last = withFrameNanos { it }
+        // Settings screen stops requesting frames; a key cell waiting for a key keeps it running.
+        val frameRateCap = LocalKkFrameRateCap.current
+        LaunchedEffect(previewWakeValue, capturing, frameRateCap) {
+            val pacer = KkFramePacer(frameRateCap)
+            var last = pacer.awaitFrame()
             val end = last + PREVIEW_AWAKE_NANOS
-            while (last < end) {
-                val now = withFrameNanos { it }
+            while (last < end || capturing) {
+                val now = pacer.awaitFrame()
                 previewTimeValue += ((now - last) / 1_000_000_000f).coerceIn(0f, 0.1f)
                 last = now
             }
@@ -116,9 +184,9 @@ class DefaultSettingsFeature(
         val measurers = remember(composeTextMeasurer, typography, language, roles, textScale, mode) {
             settingsMeasurers(composeTextMeasurer, typography, language, roles, textScale, mode)
         }
-        val layout = remember(measurers, width, height, density, group, pageValue) {
+        val layout = remember(measurers, width, height, density, group, pageValue, platform) {
             if (width <= 0f || height <= 0f) null
-            else settingsLayout(width, height, density, group, pageValue, language, measurers.metrics(mode))
+            else settingsLayout(width, height, density, group, pageValue, language, measurers.metrics(mode), platform)
         }
         val activeRow = activeRowValue?.takeIf { row -> layout?.row(row) != null } ?: layout?.rows?.firstOrNull()?.row
         val canvasCache = remember { SettingsCanvasCache() }
@@ -129,14 +197,24 @@ class DefaultSettingsFeature(
 
         fun dispatch(action: SettingsAction) {
             val reduction = SettingsReducer.reduce(
-                state = SettingsState(renderModelValue, pageValue, group, infoValue),
+                state = SettingsState(
+                    renderModelValue, pageValue, group, infoValue, platform,
+                    captureValue, swappedValue, swappedAtValue, rejectAtValue, resetArmedValue,
+                ),
                 action = action,
             )
-            renderModelValue = reduction.state.model
-            if (reduction.state.group != group || reduction.state.page != pageValue) activeRowValue = null
-            pageValue = reduction.state.page
-            groupIndexValue = reduction.state.group.ordinal
-            infoValue = reduction.state.info
+            val next = reduction.state
+            renderModelValue = next.model
+            if (next.group != group || next.page != pageValue) activeRowValue = null
+            pageValue = next.page
+            groupIndexValue = next.group.ordinal
+            infoValue = next.info
+            if (next.capture != null && captureValue == null) captureIgnoredKey[0] = heldKey[0]
+            captureValue = next.capture
+            swappedValue = next.swapped
+            swappedAtValue = next.swappedAt
+            rejectAtValue = next.rejectAt
+            resetArmedValue = next.resetArmed
             reduction.effects.forEach { effect ->
                 when (effect) {
                     is SettingsEffect.AdjustPreference -> {
@@ -150,9 +228,33 @@ class DefaultSettingsFeature(
                     }
                     is SettingsEffect.PlayAudio -> audioExecutor.play(effect.cue)
                     is SettingsEffect.Emit -> onOutput(effect.output)
+                    // Synchronously, inside the press that asked for it (browsers require a user gesture).
+                    is SettingsEffect.SetBrowserFullscreen -> display.setBrowserFullscreen(effect.on)
+                    SettingsEffect.ReapplyDisplay -> display.reapply()
+                    is SettingsEffect.Announce -> {
+                        noticeSequence += 1
+                        noticeValue = SettingsNotice(effect.announcement, noticeSequence)
+                    }
                 }
             }
             wake()
+        }
+
+        /** Every key event while a key cell waits for a key: consumed, so no shortcut or focus move sees it. */
+        fun captureKey(event: KeyEvent) {
+            val ignored = captureIgnoredKey[0]
+            if (event.type == KeyEventType.KeyUp) {
+                if (event.key == ignored) captureIgnoredKey[0] = null
+                return
+            }
+            if (event.type != KeyEventType.KeyDown || event.key == ignored) return
+            val key = event.key.toBindableKey()
+            dispatch(when {
+                event.key == Key.Escape -> SettingsAction.CancelCapture
+                key != null -> SettingsAction.CaptureKey(key, previewTimeValue)
+                else -> SettingsAction.CaptureRejected(previewTimeValue)
+            })
+            if (captureValue == null) releaseKey[0] = event.key
         }
 
         fun focusChanged(target: SettingsTarget, focused: Boolean) {
@@ -168,6 +270,27 @@ class DefaultSettingsFeature(
         Box(
             Modifier
                 .fillMaxSize()
+                .semantics { paneTitle = language.text(ProfileText.SettingsTitle) }
+                .onPreviewKeyEvent { event ->
+                    when (event.type) {
+                        KeyEventType.KeyDown -> {
+                            heldKey[0] = event.key
+                            if (releaseKey[0] != event.key) releaseKey[0] = null
+                        }
+                        KeyEventType.KeyUp -> if (heldKey[0] == event.key) heldKey[0] = null
+                    }
+                    when {
+                        captureValue != null -> {
+                            captureKey(event)
+                            true
+                        }
+                        event.key == releaseKey[0] -> {
+                            if (event.type == KeyEventType.KeyUp) releaseKey[0] = null
+                            true
+                        }
+                        else -> false
+                    }
+                }
                 .focusRequester(focusRequester)
                 .focusable()
                 .onSizeChanged { viewportValue = it }
@@ -201,13 +324,18 @@ class DefaultSettingsFeature(
                     .pointerInput(layout) {
                         val current = layout ?: return@pointerInput
                         detectTapGestures { position ->
-                            resolveSettingsPress(current, position.x, position.y)?.let(::dispatch)
+                            // While a key cell waits, a press anywhere else only ends the capture.
+                            (resolveSettingsPress(current, position.x, position.y, resetArmedValue)
+                                ?: SettingsAction.CancelCapture.takeIf { captureValue != null })?.let(::dispatch)
                         }
                     },
             ) {
                 val current = layout ?: return@Canvas
                 drawSettings(
-                    SettingsFrame(current, renderModelValue.preferences, activeRow, hoverValue, focusValue, infoValue, previewTimeValue),
+                    SettingsFrame(
+                        current, renderModelValue.preferences, activeRow, hoverValue, focusValue, infoValue, previewTimeValue,
+                        captureValue, swappedValue, swappedAtValue, rejectAtValue, resetArmedValue,
+                    ),
                     measurers,
                     canvasCache,
                 )
@@ -217,9 +345,12 @@ class DefaultSettingsFeature(
                     layout = layout,
                     model = renderModelValue,
                     language = language,
+                    capture = captureValue,
+                    resetArmed = resetArmedValue,
                     onFocusChanged = ::focusChanged,
-                    onActivate = { target -> dispatch(target.toAction()) },
+                    onActivate = { target -> dispatch(target.toAction(resetArmedValue)) },
                 )
+                SettingsAnnouncer(announcementValue, language)
                 layout.row(SettingsRow.MASTER_VOLUME)?.let { row ->
                     SettingsVolumeControl(
                         percent = (renderModelValue.preferences.masterVolume * 100f).roundToInt(),
@@ -246,6 +377,42 @@ class DefaultSettingsFeature(
 }
 
 private const val PREVIEW_AWAKE_NANOS = 2_400_000_000L
+
+/** One announcement; [sequence] lets the same words announce again. */
+private data class SettingsNotice(val announcement: SettingsAnnouncement, val sequence: Int)
+
+/** Announcements clear after this much presentation time (the Workshop's 4 s). */
+private const val SETTINGS_ANNOUNCE_MS = 4_000L
+
+/** How long the region stays empty before it repeats the words it said (longer than a screen reader's poll). */
+private const val SETTINGS_ANNOUNCE_GAP_MS = 200L
+
+/**
+ * The Settings live region (`kinetickk.settings.announce`), always present and empty between
+ * announcements: a key bound or moved and a reset are polite; a key that cannot be bound is assertive.
+ */
+@Composable
+private fun SettingsAnnouncer(announcement: SettingsAnnouncement?, language: AppLanguage) {
+    val text = announcement?.let { settingsAnnouncementText(it, language) }
+    val assertive = announcement == SettingsAnnouncement.KeyUnavailable
+    Box(Modifier.testTag("kinetickk.settings.announce").semantics {
+        liveRegion = if (assertive) LiveRegionMode.Assertive else LiveRegionMode.Polite
+        if (text != null) contentDescription = text
+    })
+}
+
+/** The words of an announcement: "Dash set to F" (plus "Active 1 moved to Space" after a swap). */
+internal fun settingsAnnouncementText(announcement: SettingsAnnouncement, language: AppLanguage): String = when (announcement) {
+    is SettingsAnnouncement.KeyBound -> {
+        val set = language.text(SettingsRedesignText.KeySetTo, settingsActionName(announcement.action, language), announcement.key.label(language))
+        val moved = announcement.moved
+        val movedTo = announcement.movedTo
+        if (moved == null || movedTo == null) set
+        else "$set. " + language.text(SettingsRedesignText.KeyMovedTo, settingsActionName(moved, language), movedTo.label(language))
+    }
+    SettingsAnnouncement.KeyUnavailable -> language.text(SettingsRedesignText.KeyUnavailable)
+    SettingsAnnouncement.KeysReset -> language.text(SettingsRedesignText.KeysReset)
+}
 
 /**
  * The open (!) explanation, composed last so it sits above the canvas and the Compose volume
@@ -275,10 +442,13 @@ private fun SettingsAccessibleControls(
     layout: SettingsLayout,
     model: kinetickk.ball.profile.interaction.settings.api.SettingsRenderModel,
     language: AppLanguage,
+    capture: GameAction?,
+    resetArmed: Boolean,
     onFocusChanged: (SettingsTarget, Boolean) -> Unit,
     onActivate: (SettingsTarget) -> Unit,
 ) {
     val preferences = model.preferences
+    val platform = layout.platform
     val density = layout.density
     SettingsSemanticTarget(layout.back, "kinetickk.settings.back", language.text(SettingsRedesignText.Back), Role.Button,
         SettingsTarget.Back, onFocusChanged, onActivate)
@@ -292,13 +462,14 @@ private fun SettingsAccessibleControls(
     }
     layout.rows.forEach { row ->
         val label = row.row.label(language)
-        when (row.row.control) {
+        val tag = "kinetickk.settings.${row.row.tagId}"
+        when (row.control) {
             SettingsControl.SEGMENTED -> Box(Modifier.fillMaxSize().selectableGroup()) {
-                val selected = row.row.selectedOption(preferences)
+                val selected = row.row.selectedOption(preferences, platform)
                 row.options.forEachIndexed { option, cell ->
-                    val optionLabel = row.row.optionLabel(option, language)
+                    val optionLabel = row.row.optionLabel(option, language, platform)
                     SettingsSemanticTarget(
-                        cell, "kinetickk.settings.${row.row.tagId}.${row.row.optionId(option)}",
+                        cell, "$tag.${row.row.optionId(option, platform)}",
                         optionLabel, Role.RadioButton, SettingsTarget.Option(row.row, option), onFocusChanged, onActivate,
                         selected = option == selected,
                     )
@@ -306,26 +477,52 @@ private fun SettingsAccessibleControls(
             }
             SettingsControl.TOGGLE -> row.toggle?.let { toggle ->
                 SettingsSemanticTarget(
-                    toggle, "kinetickk.settings.${row.row.tagId}.toggle", label, Role.Switch,
-                    SettingsTarget.Toggle(row.row), onFocusChanged, onActivate, toggled = row.row.isOn(preferences),
+                    toggle, "$tag.toggle", label, Role.Switch,
+                    SettingsTarget.Toggle(row.row), onFocusChanged, onActivate, toggled = row.row.isOn(preferences, platform),
                 )
             }
             SettingsControl.SLIDER -> if (row.row != SettingsRow.MASTER_VOLUME) {
-                val value = settingValue(preferences, row.row, language)
+                val value = settingValue(preferences, row.row, language, platform)
+                val enabled = row.row.isEnabled(preferences)
                 row.decrease?.let {
-                    SettingsSemanticTarget(it, "kinetickk.settings.${row.row.tagId}.decrease", "$label −", Role.Button,
-                        SettingsTarget.Step(row.row, -1), onFocusChanged, onActivate, state = value)
+                    SettingsSemanticTarget(it, "$tag.decrease", "$label −", Role.Button,
+                        SettingsTarget.Step(row.row, -1), onFocusChanged, onActivate, state = value, enabled = enabled)
                 }
                 row.increase?.let {
-                    SettingsSemanticTarget(it, "kinetickk.settings.${row.row.tagId}.increase", "$label +", Role.Button,
-                        SettingsTarget.Step(row.row, 1), onFocusChanged, onActivate, state = value)
+                    SettingsSemanticTarget(it, "$tag.increase", "$label +", Role.Button,
+                        SettingsTarget.Step(row.row, 1), onFocusChanged, onActivate, state = value, enabled = enabled)
                 }
             }
+            SettingsControl.KEYBIND -> {
+                val action = checkNotNull(row.row.boundAction)
+                row.key?.let { cell ->
+                    val key = preferences.keyBindings.key(action).label(language)
+                    SettingsSemanticTarget(
+                        cell, "$tag.key", language.text(SettingsRedesignText.KeyCell, label, key), Role.Button,
+                        SettingsTarget.Key(action), onFocusChanged, onActivate,
+                        state = if (capture == action) language.text(SettingsRedesignText.WaitingForKey) else null,
+                        actionLabel = row.row.about(language, platform),
+                    )
+                }
+            }
+            // A readout has no control; its (!) below carries the value as state.
+            SettingsControl.READOUT -> Unit
+            SettingsControl.ACTION -> row.action?.let { button ->
+                SettingsSemanticTarget(
+                    button, "$tag.action",
+                    language.text(if (resetArmed) SettingsRedesignText.ResetBindingsConfirm else SettingsRedesignText.ResetBindingsButton),
+                    Role.Button, SettingsTarget.Reset, onFocusChanged, onActivate,
+                    enabled = settingsResetAvailable(preferences, platform),
+                )
+            }
         }
-        SettingsSemanticTarget(
-            row.info.settingsTouch(density, 32f), "kinetickk.settings.${row.row.tagId}.info", row.row.about(language), Role.Button,
-            SettingsTarget.Info(row.row), onFocusChanged, onActivate,
-        )
+        if (row.hasInfo) {
+            SettingsSemanticTarget(
+                row.info.settingsTouch(density, 32f), "$tag.info", row.row.about(language, platform), Role.Button,
+                SettingsTarget.Info(row.row), onFocusChanged, onActivate,
+                state = if (row.control == SettingsControl.READOUT) settingValue(preferences, row.row, language, platform) else null,
+            )
+        }
     }
     layout.pages.forEachIndexed { index, pip ->
         SettingsSemanticTarget(
@@ -348,6 +545,8 @@ private fun SettingsSemanticTarget(
     selected: Boolean? = null,
     toggled: Boolean? = null,
     state: String? = null,
+    enabled: Boolean = true,
+    actionLabel: String? = null,
 ) {
     PlacedBox(bounds, Modifier
         .testTag(tag)
@@ -357,7 +556,8 @@ private fun SettingsSemanticTarget(
             if (selected != null) this.selected = selected
             if (toggled != null) toggleableState = ToggleableState(toggled)
             if (state != null) stateDescription = state
-            onClick { onActivate(target); true }
+            if (!enabled) disabled()
+            onClick(label = actionLabel) { onActivate(target); true }
         }
         .onFocusChanged { onFocusChanged(target, it.isFocused) }
         .onKeyEvent { event ->
@@ -367,3 +567,6 @@ private fun SettingsSemanticTarget(
         }
         .focusable())
 }
+
+/** What Settings shows for one route, kept by the feature instance for a window opened again. */
+internal class SettingsRetainedView(val routeToken: Long, val group: Int, val page: Int, val activeRow: SettingsRow?)

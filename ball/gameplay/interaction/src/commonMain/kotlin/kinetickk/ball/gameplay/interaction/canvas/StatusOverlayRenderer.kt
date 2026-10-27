@@ -22,13 +22,15 @@ import kinetickk.foundation.design.*
  * Pause (Pause / Mobile-Pause boards): world dimmed by the scrim, a skewed ink panel on the left
  * with "Paused" and the frozen run timer, the game's pause targets as menu items (Resume
  * selected) and the build overview on the right. [renderTime] drives the selected item's speed
- * lines; the committed frame supplies every value shown.
+ * lines; the committed frame supplies every value shown. [touch] (the host's last running input was a touch) names
+ * the active items' Z/X/C slots by number instead of key.
  */
 internal fun DrawScope.drawPause(
     engine: GameplayRenderModel,
     textMeasurer: TextMeasurer,
     layout: PauseLayoutGeometry,
     renderTime: Float = 0f,
+    touch: Boolean = false,
 ) {
     drawRect(pauseOverlayScrimColor(layout.mode))
     drawPausePanel(layout)
@@ -56,8 +58,8 @@ internal fun DrawScope.drawPause(
             val label = when (action.target) {
                 PauseTarget.RESUME -> language.text(GameplayText.Resume)
                 PauseTarget.SETTINGS -> language.text(GameplayText.Settings)
+                PauseTarget.WORKSHOP -> language.text(GameplayText.Workshop)
                 PauseTarget.CODEX -> language.text(OverlayRedesignText.Codex)
-                PauseTarget.PERFORMANCE -> language.text(GameplayText.PerformanceMetrics)
                 PauseTarget.EXIT -> language.text(GameplayText.ReturnHome)
             }
             drawKkMenuItem(
@@ -73,7 +75,7 @@ internal fun DrawScope.drawPause(
             )
         }
     }
-    drawPauseBuild(engine, textMeasurer, layout, renderTime)
+    drawPauseBuild(engine, textMeasurer, layout, renderTime, touch)
 }
 
 /** Skewed ink panel behind the title and menu (−12°, anchored at the board's bottom edge). */

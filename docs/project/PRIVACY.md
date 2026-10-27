@@ -1,9 +1,9 @@
 <!-- SPDX-FileCopyrightText: 2026 Vladislav Tomilov -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# KINETICKK 0.4.0 privacy note
+# KINETICKK 0.5.0 privacy note
 
-Updated: 17 October 2026
+Updated: 23 October 2026
 
 The game has no user accounts, advertising, analytics service, tracking pixels,
 remote APIs, or application cookies. Gameplay and settings are not uploaded.
@@ -22,6 +22,6 @@ Android and web do not use the desktop crash reporter.
 The optional performance HUD measures frame timing and entity counts locally.
 It does not transmit measurements.
 
-This note covers the 0.4.0 application code. GitHub, hosting providers, and app
+This note covers the 0.5.0 application code. GitHub, hosting providers, and app
 stores may process their own logs, account information, or purchases under
 their separate privacy terms.

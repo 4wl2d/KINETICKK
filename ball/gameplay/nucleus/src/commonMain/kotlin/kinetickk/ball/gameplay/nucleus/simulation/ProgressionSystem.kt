@@ -28,6 +28,7 @@ import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.ball.profile.api.GameplayProgressUpdate
+import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kotlin.math.floor
 import kotlin.math.max
@@ -48,7 +49,7 @@ internal fun MutableGameState.openItemChoice() {
         messageTime = 1.5f
         return
     }
-    dashBufferTime = 0f
+    clearInputBuffers()
     phase = GamePhase.CHOICE
 }
 
@@ -80,14 +81,14 @@ internal fun MutableGameState.openTotemChoice() {
             totemAction = TotemAction.CHANGE_WEAPON,
         ).takeIf { canRecalibrate },
     )
-    dashBufferTime = 0f
+    clearInputBuffers()
     phase = GamePhase.CHOICE
 }
 
 internal fun MutableGameState.openWeaponChoice() {
     activeChoiceType = ChoiceType.WEAPON
     buildWeaponChoices()
-    dashBufferTime = 0f
+    clearInputBuffers()
     phase = GamePhase.CHOICE
 }
 
@@ -140,7 +141,7 @@ internal fun MutableGameState.buildWeaponChoices() {
 internal fun MutableGameState.openRelicChoice() {
     activeChoiceType = ChoiceType.RELIC
     buildRelicChoices()
-    dashBufferTime = 0f
+    clearInputBuffers()
     phase = GamePhase.CHOICE
 }
 
@@ -186,7 +187,7 @@ internal fun MutableGameState.openRelicBindChoice() {
         grantMatter(content.relicPolicy.salvageMatter.toFloat())
         return
     }
-    dashBufferTime = 0f
+    clearInputBuffers()
     phase = GamePhase.CHOICE
 }
 
@@ -354,18 +355,60 @@ internal fun MutableGameState.amplifyCurrentWeapon() {
     messageTime = 1.5f
 }
 
+/**
+ * Takes one stack of [itemId]. A maxed item, or an unowned active item while every slot holds another active, is
+ * salvaged for Matter instead (an offer asks which slot to replace first: [openActiveSlotChoice]); an active item's
+ * first stack binds its effect into the lowest empty slot and each later stack ranks it ([stackActiveEffect]).
+ */
 internal fun MutableGameState.acquireItem(itemId: Int, reborn: Boolean = false) {
     val item = content.item(itemId) ?: return
     val before = itemStacks[itemId]
-    if (before >= item.maxStacks) {
-        grantMatter((item.rarity.rank * 2).toFloat())
-        message = item.name.uppercase() + " SALVAGED"
-        messageTime = 1.4f
+    if (before >= item.maxStacks || before == 0 && needsActiveSlot(item)) {
+        salvageItem(item)
         return
     }
+    stackItem(item, reborn)
+    val tiersBefore = BuildTag.entries.map { tagTier(it) }
+    item.active?.let { stackActiveEffect(item, before + 1) }
+    recompileBuild()
+    val reachedTier = BuildTag.entries.firstOrNull { tagTier(it) > tiersBefore[it.ordinal] }
+    message = when {
+        reachedTier != null -> reachedTier.displayLabel.uppercase() + " RESONANCE"
+        item.isActive && before > 0 -> item.name.uppercase() + " // RANK " + (before + 1)
+        else -> item.name.uppercase() + " ACQUIRED"
+    }
+    messageTime = 1.7f
+    if (discoveredItemIds.add(itemId)) pendingDiscoveredItemIds += itemId
+}
+
+/** True when [item] is an unowned active item and every slot holds another active: taking it replaces one. */
+internal fun MutableGameState.needsActiveSlot(item: ItemDefinition): Boolean =
+    item.isActive && itemStacks[item.id] == 0 && skillLoadout.lowestEmptySlot() < 0
+
+/** The maxed-item salvage: Matter by rarity ([salvageMatter]) and nothing else. */
+private fun MutableGameState.salvageItem(item: ItemDefinition) {
+    grantMatter(salvageMatter(item).toFloat())
+    message = item.name.uppercase() + " SALVAGED"
+    messageTime = 1.4f
+}
+
+/** The Matter a salvaged item grants before the run's Matter gain: rarity rank × 2. */
+private fun salvageMatter(item: ItemDefinition): Int = item.rarity.rank * 2
+
+/**
+ * One more stack of [item] counted for the run (history, first acquisition, Reborn roll, its stats' marginal share and
+ * one-shot grants) without the slot rules; the caller recompiles. Reward previews use it to forecast an active item that
+ * still needs a slot.
+ */
+internal fun MutableGameState.stackItem(item: ItemDefinition, reborn: Boolean) {
+    val itemId = item.id
+    val before = itemStacks[itemId]
     itemStacks[itemId] = before + 1
     if (reborn) rebornItems[itemId] = 1
-    if (before == 0) acquisitionOrder = acquisitionOrder + itemId
+    if (before == 0) {
+        acquisitionOrder = acquisitionOrder + itemId
+        pendingAcquiredItemIds = (pendingAcquiredItemIds + itemId).takeLast(MAX_RECENT_ITEM_IDS)
+    }
     acquiredItemCount++
     recentItem = item
     val policy = content.build.policy
@@ -374,12 +417,66 @@ internal fun MutableGameState.acquireItem(itemId: Int, reborn: Boolean = false) 
     val rebornScale = if (rebornItems[itemId] != 0) policy.rebornMagnitude else 1f
     item.stats.forEach { stat -> applyStatDelta(stat.effect, stat.amount * marginal * rebornScale) }
     item.rules.forEach { rule -> if (rule is ItemRule.BonusRerolls) rerollsRemaining += rule.count }
-    val tiersBefore = BuildTag.entries.map { tagTier(it) }
+}
+
+/**
+ * Asks which held active the pending incoming active item ([MutableGameState.pendingActiveItemId]) replaces: one card
+ * per slot, then a card keeping the loadout (the incoming item is salvaged). Cards carry facts only (slot, held item,
+ * rank, incoming item, the keep card's salvage Matter); presentation words them. Never rerolled.
+ */
+internal fun MutableGameState.openActiveSlotChoice() {
+    val incoming = pendingActiveItemId ?: return
+    activeChoiceType = ChoiceType.ACTIVE_SLOT
+    choices = (0 until SkillRuntime.SLOTS).mapNotNull { slot ->
+        val effect = skillLoadout.skill(slot) ?: return@mapNotNull null
+        val held = content.activeItem(effect) ?: return@mapNotNull null
+        ChoiceOption(
+            type = ChoiceType.ACTIVE_SLOT,
+            title = held.name,
+            description = "",
+            tag = "",
+            itemId = held.id,
+            skillId = effect,
+            skillRank = skillLoadout.rank(slot),
+            activeSlot = slot,
+            incomingItemId = incoming,
+        )
+    } + ChoiceOption(
+        type = ChoiceType.ACTIVE_SLOT,
+        title = content.items[incoming].name,
+        description = "",
+        tag = "",
+        incomingItemId = incoming,
+        salvageMatter = salvageMatter(content.items[incoming]),
+    )
+    clearInputBuffers()
+    phase = GamePhase.CHOICE
+}
+
+/**
+ * Replaces the active item in [slot] with [incomingId]: the held item leaves the run entirely (no stacks, no Reborn
+ * flag, out of the gain order, its passive gone on the recompile) and everything its effect still has running ends;
+ * discovery and history stay. The gauges are kept within the capacities the change leaves, then [incomingId] binds that
+ * slot at rank I, ready at once. The held item may be offered again later.
+ */
+internal fun MutableGameState.replaceActiveItem(slot: Int, incomingId: Int, reborn: Boolean) {
+    val effect = skillLoadout.skill(slot) ?: return
+    val held = content.activeItem(effect) ?: return
+    releaseSkillSlot(slot)
+    itemStacks[held.id] = 0
+    rebornItems[held.id] = 0
+    statusAccumulators[held.id] = 0f
+    itemStatusReadyAt[held.id] = 0f
+    acquisitionOrder = acquisitionOrder.filter { it != held.id }
     recompileBuild()
-    val reachedTier = BuildTag.entries.firstOrNull { tagTier(it) > tiersBefore[it.ordinal] }
-    message = if (reachedTier != null) reachedTier.displayLabel.uppercase() + " RESONANCE" else item.name.uppercase() + " ACQUIRED"
-    messageTime = 1.7f
-    if (discoveredItemIds.add(itemId)) pendingDiscoveredItemIds += itemId
+    shield = min(shield, shieldCapacity() * max(1f, build.overhealOverfill))
+    hp = min(hp, maxHp)
+    acquireItem(incomingId, reborn)
+}
+
+/** The keep card: the loadout stays and the incoming active item is salvaged like a maxed item. */
+internal fun MutableGameState.keepActiveLoadout(incomingId: Int) {
+    content.item(incomingId)?.let { salvageItem(it) }
 }
 
 /** Applies a signed passive stat change. Capped stats use incremental diminishing returns. */
@@ -487,6 +584,7 @@ internal fun MutableGameState.takeProgressUpdate(): GameplayProgressUpdate? {
         totalKills = pendingTotalKills,
         ricochets = pendingRicochets,
         dataPickups = pendingDataPickups,
+        acquiredItemIds = pendingAcquiredItemIds.toImmutableList(),
     )
     pendingBankedMatter = 0L
     pendingDiscoveredItemIds.clear()
@@ -503,6 +601,7 @@ internal fun MutableGameState.takeProgressUpdate(): GameplayProgressUpdate? {
     pendingTotalKills = 0
     pendingRicochets = 0
     pendingDataPickups = 0
+    pendingAcquiredItemIds = emptyList()
     return update
 }
 
@@ -515,8 +614,9 @@ internal fun MutableGameState.hasUrgentProgress(): Boolean =
         pendingClearedRebirthLevel != null || pendingEliteKills != 0 || pendingDashHits != 0 ||
         pendingCompletedOrbits != 0 || pendingArchitectDefeatedWith != null
 
+/** Non-urgent progress: counters and first acquisitions ride along with the next update or the run-end flush. */
 internal fun MutableGameState.hasPendingAchievementCounters(): Boolean =
-    pendingTotalKills != 0 || pendingRicochets != 0 || pendingDataPickups != 0
+    pendingTotalKills != 0 || pendingRicochets != 0 || pendingDataPickups != 0 || pendingAcquiredItemIds.isNotEmpty()
 
 /** True when [takeProgressUpdate] would publish an update now. */
 internal fun MutableGameState.hasPublishableProgress(): Boolean =

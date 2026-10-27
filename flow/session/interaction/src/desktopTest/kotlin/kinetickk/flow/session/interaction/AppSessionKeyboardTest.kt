@@ -34,13 +34,23 @@ import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.defaultCoreShapeDefinitions
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.gameplay.interaction.GameplayPresentation
-import kinetickk.ball.profile.interaction.armory.api.ArmoryFeature
-import kinetickk.ball.profile.interaction.armory.api.ArmoryOutput
-import kinetickk.ball.profile.interaction.hangar.api.HangarFeature
-import kinetickk.ball.profile.interaction.hangar.api.HangarOutput
-import kinetickk.ball.profile.interaction.hangar.impl.DefaultHangarFeature
-import kinetickk.ball.profile.interaction.matrix.api.MatrixFeature
-import kinetickk.ball.profile.interaction.matrix.api.MatrixOutput
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopFeature
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopOutput
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopTab
+import kinetickk.ball.profile.interaction.workshop.api.WorkshopTabRequest
+import kinetickk.ball.profile.interaction.workshop.impl.DefaultWorkshopFeature
+import kinetickk.ball.profile.api.GameAction
+import kinetickk.ball.profile.api.KeyBindings
+import kinetickk.ball.profile.api.ProfileReadPort
+import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.common.input.BindableKey
+import kinetickk.foundation.design.toBindableKey
+import androidx.compose.foundation.focusable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.onKeyEvent
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthOutput
 import kinetickk.ball.profile.interaction.settings.api.SettingsFeature
@@ -88,7 +98,7 @@ class AppSessionKeyboardTest {
     fun codexFocusedControlsReceiveEveryHotLetterAndEscapeWithoutSessionShortcuts() = runComposeUiTest {
         val port = KeyboardSessionPort()
         val received = mutableListOf<Key>()
-        val keys = listOf(Key.S, Key.L, Key.A, Key.B, Key.C, Key.I, Key.H, Key.M, Key.Enter, Key.Escape)
+        val keys = listOf(Key.S, Key.W, Key.L, Key.A, Key.B, Key.C, Key.I, Key.H, Key.M, Key.Enter, Key.Escape)
         setContent {
             Box(Modifier.size(1000.dp, 700.dp)) {
                 KeyboardShell(port, object : CodexFeature {
@@ -113,41 +123,169 @@ class AppSessionKeyboardTest {
     }
 
     @Test
-    fun hOverTheHomeBaseOpensTheHangarFeatureAndHAgainClosesIt() = runComposeUiTest {
+    fun hOverTheHomeBaseOpensTheWorkshopOnCharactersAndWClosesIt() = runComposeUiTest {
         val port = KeyboardSessionPort().apply { overlay = null }
-        val noCodex = object : CodexFeature {
-            @Composable override fun Content(runStacks: CodexRunStacks, onOutput: (CodexOutput) -> Unit) = Unit
-        }
-        val hangar = object : HangarFeature {
-            @Composable override fun Content(routeToken: Long, onOutput: (HangarOutput) -> Unit) {
-                Box(Modifier.size(48.dp).testTag("keyboard-hangar"))
-            }
-        }
+        val workshop = RecordingWorkshop()
         setContent {
-            Box(Modifier.size(1000.dp, 700.dp)) { KeyboardShell(port, noCodex, hangar) }
+            Box(Modifier.size(1000.dp, 700.dp)) { KeyboardShell(port, NoCodex, workshop) }
         }
         onRoot().performKeyInput { pressKey(Key.H) }
         runOnIdle {
-            assertEquals(SessionInteractionPulse.ShortcutObserved(SessionShortcut.HANGAR), port.pulses.last())
-            assertEquals(AppDestination.Hangar, port.overlay)
+            assertEquals(SessionInteractionPulse.OpenOverlay(AppDestination.Workshop), port.pulses.last())
+            assertEquals(AppDestination.Workshop, port.overlay)
+            assertEquals(WorkshopTab.CHARACTERS, workshop.requests.last()?.tab)
         }
-        onNodeWithTag("keyboard-hangar").assertExists()
-        onRoot().performKeyInput { pressKey(Key.H) }
-        runOnIdle { assertEquals(null, port.overlay) }
-        onNodeWithTag("keyboard-hangar").assertDoesNotExist()
+        onNodeWithTag("keyboard-workshop").assertExists()
+        // An alias while the Workshop is shown asks again with a new serial: the tab switches in place.
+        onRoot().performKeyInput { pressKey(Key.L) }
+        runOnIdle {
+            val (first, second) = workshop.requests.filterNotNull().distinct().takeLast(2)
+            assertEquals(WorkshopTab.MATRIX, second.tab)
+            assertTrue(second.serial > first.serial)
+            assertEquals(AppDestination.Workshop, port.overlay)
+        }
+        onRoot().performKeyInput { pressKey(Key.W) }
+        runOnIdle {
+            assertEquals(SessionInteractionPulse.ShortcutObserved(SessionShortcut.WORKSHOP), port.pulses.last())
+            assertEquals(null, port.overlay)
+        }
+        onNodeWithTag("keyboard-workshop").assertDoesNotExist()
     }
 
     @Test
-    fun enterAfterInspectingAHangarTileSelectsItAndKeepsTheHangarOpen() = runComposeUiTest {
-        val port = KeyboardSessionPort().apply { overlay = AppDestination.Hangar }
+    fun hOverARunIsANoOpWhileLAndAOpenTheWorkshopOnTheirTabs() = runComposeUiTest {
+        val port = KeyboardSessionPort().apply { overlay = null; base = AppDestination.Gameplay }
+        val workshop = RecordingWorkshop()
+        val gameplay = KeyboardGameplay()
+        setContent {
+            Box(Modifier.size(1000.dp, 700.dp)) { KeyboardShell(port, NoCodex, workshop, gameplay) }
+        }
+        waitForIdle()
+        onRoot().performKeyInput { pressKey(Key.H) }
+        runOnIdle { assertTrue(port.pulses.isEmpty(), "H over a run: ${port.pulses}") }
+        onRoot().performKeyInput { pressKey(Key.A) }
+        runOnIdle {
+            assertEquals(listOf<SessionInteractionPulse>(SessionInteractionPulse.OpenOverlay(AppDestination.Workshop)), port.pulses)
+            assertEquals(WorkshopTab.WEAPONS, workshop.requests.last()?.tab)
+        }
+    }
+
+    @Test
+    fun aRefusedAliasLeavesThePreviousTabRequest() = runComposeUiTest {
+        val port = KeyboardSessionPort().apply { overlay = null; refuseWorkshop = true }
+        val workshop = RecordingWorkshop()
+        setContent {
+            Box(Modifier.size(1000.dp, 700.dp)) { KeyboardShell(port, NoCodex, workshop) }
+        }
+        onRoot().performKeyInput { pressKey(Key.L) }
+        runOnIdle { assertEquals(null, port.overlay) }
+        // Once Session accepts, W opens the Workshop on the tab shown last, with no stale request.
+        port.refuseWorkshop = false
+        onRoot().performKeyInput { pressKey(Key.W) }
+        runOnIdle {
+            assertEquals(AppDestination.Workshop, port.overlay)
+            assertEquals(null, workshop.requests.last())
+        }
+    }
+
+    @Test
+    fun boundGameplayKeysReachGameplayFirstOnlyWhileRunning() = runComposeUiTest {
+        val port = KeyboardSessionPort().apply { overlay = null; base = AppDestination.Gameplay }
+        val gameplay = KeyboardGameplay()
+        setContent {
+            Box(Modifier.size(1000.dp, 700.dp)) { KeyboardShell(port, NoCodex, gameplay = gameplay) }
+        }
+        waitForIdle()
+        // Running: C is Skill 3 and gameplay consumes it; the Codex does not open.
+        onRoot().performKeyInput { pressKey(Key.C) }
+        runOnIdle {
+            assertEquals(listOf(Key.C), gameplay.consumed)
+            assertTrue(port.pulses.isEmpty(), "${port.pulses}")
+        }
+        // An unbound shell key (B) still goes to Session first; Escape then closes its overlay.
+        onRoot().performKeyInput { pressKey(Key.B) }
+        runOnIdle {
+            assertEquals(SessionInteractionPulse.ShortcutObserved(SessionShortcut.REBIRTH), port.pulses.last())
+            assertTrue(Key.B !in gameplay.seen, "B never reached gameplay")
+        }
+        onRoot().performKeyInput { pressKey(Key.Escape) }
+        runOnIdle { assertEquals(null, port.overlay) }
+        // Paused: Skill 3 does not apply, the key bubbles back and opens the Codex as before.
+        gameplay.running = false
+        onRoot().performKeyInput { pressKey(Key.C) }
+        runOnIdle {
+            assertEquals(listOf(Key.C), gameplay.consumed)
+            assertEquals(SessionInteractionPulse.ShortcutObserved(SessionShortcut.CODEX), port.pulses.last())
+            assertEquals(AppDestination.Codex, port.overlay)
+        }
+    }
+
+    @Test
+    fun rebindingSToDashShadowsSettingsOnlyWhileRunning() = runComposeUiTest {
+        val port = KeyboardSessionPort().apply { overlay = null; base = AppDestination.Gameplay }
+        val bindings = KeyBindings.DEFAULT.with(GameAction.DASH, BindableKey.S)
+        val gameplay = KeyboardGameplay(bindings)
+        setContent {
+            Box(Modifier.size(1000.dp, 700.dp)) {
+                KeyboardShell(port, NoCodex, gameplay = gameplay, profile = KeyboardPreferencesPort(PlayerPreferences(keyBindings = bindings)))
+            }
+        }
+        waitForIdle()
+        onRoot().performKeyInput { pressKey(Key.S) }
+        runOnIdle {
+            assertEquals(listOf(Key.S), gameplay.consumed)
+            assertTrue(port.pulses.isEmpty(), "S dashes while running: ${port.pulses}")
+        }
+        // Space, no longer bound to Dash, is not one of gameplay's keys now.
+        onRoot().performKeyInput { pressKey(Key.Spacebar) }
+        runOnIdle { assertTrue(Key.Spacebar !in gameplay.consumed) }
+        gameplay.running = false
+        onRoot().performKeyInput { pressKey(Key.S) }
+        runOnIdle {
+            assertEquals(listOf<SessionInteractionPulse>(SessionInteractionPulse.ShortcutObserved(SessionShortcut.SETTINGS)), port.pulses)
+            assertEquals(AppDestination.Settings, port.overlay)
+        }
+    }
+
+    @Test
+    fun escapeStillPausesARunningRun() = runComposeUiTest {
+        val port = KeyboardSessionPort().apply { overlay = null; base = AppDestination.Gameplay }
+        val gameplay = KeyboardGameplay()
+        setContent {
+            Box(Modifier.size(1000.dp, 700.dp)) { KeyboardShell(port, NoCodex, gameplay = gameplay) }
+        }
+        waitForIdle()
+        onRoot().performKeyInput { pressKey(Key.Escape) }
+        runOnIdle {
+            // Escape is not bindable: Session sees Back first, refuses it without an overlay, and gameplay pauses.
+            assertEquals(listOf<SessionInteractionPulse>(SessionInteractionPulse.ShortcutObserved(SessionShortcut.BACK)), port.pulses)
+            assertEquals(listOf(Key.Escape), gameplay.consumed)
+        }
+    }
+
+    @Test
+    fun enterAfterInspectingACharacterSelectsItThroughSessionAndKeepsTheWorkshopOpen() = runComposeUiTest {
         val profile = KeyboardHangarProfilePort()
-        val noCodex = object : CodexFeature {
-            @Composable override fun Content(runStacks: CodexRunStacks, onOutput: (CodexOutput) -> Unit) = Unit
+        val port = KeyboardSessionPort().apply {
+            overlay = AppDestination.Workshop
+            onSelect = { shape -> profile.accept(ProfilePulse.SelectCoreShape(shape)) }
         }
         setContent {
             Box(Modifier.size(1280.dp, 720.dp)) {
-                KeyboardShell(port, noCodex, DefaultHangarFeature(profile, defaultCoreShapeDefinitions(), KeyboardSilentAudio))
+                val workshop = remember {
+                    DefaultWorkshopFeature(profile, immutableListOf(), immutableListOf(), immutableListOf(), defaultCoreShapeDefinitions(),
+                        KeyboardSilentAudio)
+                }
+                KeyboardShell(port, NoCodex, workshop)
             }
+        }
+        waitForIdle()
+        // Right after opening, focus rests on the panel: Enter belongs to the Characters tab, not to Session
+        // (the selected character is inspected, so nothing is asked and the Workshop stays open).
+        onRoot().performKeyInput { pressKey(Key.Enter) }
+        runOnIdle {
+            assertTrue(port.pulses.isEmpty(), "${port.pulses}")
+            assertEquals(AppDestination.Workshop, port.overlay)
         }
         // A press inspects a tile; hovering another one on the way only highlights it, so Enter selects the inspected one.
         onNodeWithTag("profile-hangar-tile-${CoreShape.PRISM}").performMouseInput { click() }
@@ -157,15 +295,84 @@ class AppSessionKeyboardTest {
         waitForIdle()
         onRoot().performKeyInput { pressKey(Key.Enter) }
         runOnIdle {
+            assertEquals(SessionInteractionPulse.SelectCoreShapeRequested(CoreShape.PRISM), port.pulses.last())
             assertEquals(listOf<ProfilePulse.Business>(ProfilePulse.SelectCoreShape(CoreShape.PRISM)), profile.pulses)
-            assertTrue(SessionInteractionPulse.ShortcutObserved(SessionShortcut.ENTER) !in port.pulses, "Enter stays in the Hangar")
-            assertEquals(AppDestination.Hangar, port.overlay)
+            assertTrue(SessionInteractionPulse.ShortcutObserved(SessionShortcut.ENTER) !in port.pulses, "Enter stays in the Workshop")
+            assertEquals(AppDestination.Workshop, port.overlay)
         }
         onNodeWithTag("profile-hangar-tile-${CoreShape.PRISM}").assertIsSelected()
     }
 }
 
-/** The Profile reads and the character selection the Hangar needs, with all twelve characters available. */
+private val NoCodex = object : CodexFeature {
+    @Composable override fun Content(runStacks: CodexRunStacks, onOutput: (CodexOutput) -> Unit) = Unit
+}
+
+/** A Workshop stand-in that records every tab request the shell passes. */
+private class RecordingWorkshop : WorkshopFeature {
+    val requests = mutableListOf<WorkshopTabRequest?>()
+
+    @Composable
+    override fun Content(
+        routeToken: Long,
+        tabRequest: WorkshopTabRequest?,
+        characterSelectionAvailable: Boolean,
+        activeRunWeapon: WeaponId?,
+        onOutput: (WorkshopOutput) -> Unit,
+    ) {
+        SideEffect { requests += tabRequest }
+        Box(Modifier.size(48.dp).testTag("keyboard-workshop"))
+    }
+}
+
+/**
+ * A gameplay stand-in with the precedence table's RUNNING rule: while [running] it consumes the keys
+ * bound to Dash and the skills (and Escape, its fixed pause key); in every other phase they bubble.
+ */
+private class KeyboardGameplay(private val bindings: KeyBindings = KeyBindings.DEFAULT) : GameplayPresentation {
+    var running = true
+    val seen = mutableListOf<Key>()
+    val consumed = mutableListOf<Key>()
+
+    override fun activePresentation() = null
+
+    @Composable
+    override fun Content(inputEnabled: Boolean, onOutput: (GameplayInteractionOutput) -> Unit) {
+        val focus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { focus.requestFocus() }
+        Box(
+            Modifier.size(64.dp).focusRequester(focus).onKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                seen += event.key
+                val action = event.key.toBindableKey()?.let(bindings::action)
+                val takes = event.key == Key.Escape || (running && action in RunningActions)
+                if (takes) consumed += event.key
+                takes
+            }.focusable(),
+        )
+    }
+
+    private companion object {
+        val RunningActions = setOf(GameAction.DASH, GameAction.SKILL_1, GameAction.SKILL_2, GameAction.SKILL_3, GameAction.APEX)
+    }
+}
+
+/** Preferences only: the shell reads the key bindings from them. */
+private class KeyboardPreferencesPort(private val preferences: PlayerPreferences) : ProfileReadPort {
+    override val instanceId = LOCAL_PROFILE_INSTANCE_ID
+    private val revision = ProfileRevision(1L)
+    override fun query(query: ProfileQuery.GetPreferences): PreferencesProjection = PreferencesProjection(instanceId, revision, preferences)
+    override fun query(query: ProfileQuery.GetHangar): HangarProjection = error("unused")
+    override fun query(query: ProfileQuery.GetLoadout): LoadoutProjection = error("unused")
+    override fun query(query: ProfileQuery.GetMatrixProgress): MatrixProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetRunBootstrap): RunBootstrapProjection = error("unused")
+    override fun query(query: ProfileQuery.GetHomeProgress): HomeProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetCollection): CollectionProjection = error("unused")
+    override fun query(query: ProfileQuery.GetRebirthProgress): RebirthProgressProjection = error("unused")
+    override fun query(query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection = error("unused")
+}
+
+/** The Profile reads and the character selection the Workshop's Characters tab needs, with all twelve characters available. */
 private class KeyboardHangarProfilePort : ProfilePort {
     private var selected = CoreShape.ORB
     private var revision = ProfileRevision(1L)
@@ -203,48 +410,87 @@ private class KeyboardHangarProfilePort : ProfilePort {
     override fun query(query: ProfileQuery.GetPersistenceStatus): PersistenceStatusProjection = error("unused")
 }
 
+/**
+ * A Session stand-in over the Home or Gameplay [base] with the Nucleus' route rules the shell relies
+ * on: shortcuts open, toggle or close overlays, Back without an overlay is refused, and a character
+ * selection runs [onSelect] inline as the participant command.
+ */
 internal class KeyboardSessionPort : AppSessionPort {
     override val instanceId = LOCAL_APP_SESSION_INSTANCE_ID
     val pulses = mutableListOf<SessionInteractionPulse>()
     var overlay: AppDestination? = AppDestination.Codex
+    var base: AppDestination = AppDestination.Home
+    var refuseWorkshop = false
+    var onSelect: (CoreShape) -> Unit = {}
+
     override fun accept(pulse: SessionInteractionPulse): SessionAcceptance {
         pulses += pulse
-        if (pulse == SessionInteractionPulse.CloseOverlay) overlay = null
-        // Like the Session Nucleus, an Enter that reaches the Session closes any overlay.
-        if (pulse == SessionInteractionPulse.ShortcutObserved(SessionShortcut.ENTER)) overlay = null
-        // The Hangar shortcut toggles its overlay over the Home base.
-        if (pulse == SessionInteractionPulse.ShortcutObserved(SessionShortcut.HANGAR)) {
-            overlay = if (overlay == AppDestination.Hangar) null else AppDestination.Hangar
+        val accepted = when (pulse) {
+            SessionInteractionPulse.CloseOverlay -> overlay != null && run { overlay = null; true }
+            is SessionInteractionPulse.OpenOverlay -> open(pulse.destination)
+            is SessionInteractionPulse.ShortcutObserved -> when (pulse.shortcut) {
+                // Like the Session Nucleus, an Enter or Back that reaches the Session closes any overlay.
+                SessionShortcut.ENTER, SessionShortcut.BACK -> overlay != null && run { overlay = null; true }
+                SessionShortcut.CODEX -> toggle(AppDestination.Codex)
+                SessionShortcut.WORKSHOP -> toggle(AppDestination.Workshop)
+                SessionShortcut.SETTINGS -> open(AppDestination.Settings)
+                SessionShortcut.REBIRTH -> open(AppDestination.Rebirth)
+                SessionShortcut.MUTE -> true
+            }
+            is SessionInteractionPulse.SelectCoreShapeRequested -> {
+                onSelect(pulse.shape)
+                true
+            }
+            else -> true
         }
-        return SessionAcceptance.Accepted(instanceId, SessionRevision(pulses.size.toLong()))
+        return if (accepted) {
+            SessionAcceptance.Accepted(instanceId, SessionRevision(pulses.size.toLong()))
+        } else {
+            SessionAcceptance.Rejected(instanceId, SessionRevision(pulses.size.toLong()), SessionRejection.ShortcutUnavailable)
+        }
     }
+
+    private fun open(destination: AppDestination): Boolean {
+        if (destination == AppDestination.Workshop && refuseWorkshop) return false
+        overlay = destination
+        return true
+    }
+
+    private fun toggle(destination: AppDestination): Boolean = if (overlay == destination) {
+        overlay = null
+        true
+    } else {
+        open(destination)
+    }
+
     override fun query(query: AppSessionQuery.GetShell) = AppShellProjection(
-        instanceId, SessionRevision.ZERO, SessionRevision.ZERO, AppDestination.Home, overlay,
-        null, false, null, SessionLifecycle.READY, false, null,
+        instanceId, SessionRevision.ZERO, SessionRevision.ZERO, base, overlay,
+        if (base == AppDestination.Gameplay) kinetickk.ball.gameplay.api.RunId(1L) else null, false, null, SessionLifecycle.READY, false, null,
     )
 }
 
 @Composable
-internal fun KeyboardShell(port: AppSessionPort, codex: CodexFeature, hangar: HangarFeature? = null) {
+internal fun KeyboardShell(
+    port: AppSessionPort,
+    codex: CodexFeature,
+    workshop: WorkshopFeature = RecordingWorkshop(),
+    gameplay: GameplayPresentation = object : GameplayPresentation {
+        override fun activePresentation() = null
+        @Composable override fun Content(inputEnabled: Boolean, onOutput: (GameplayInteractionOutput) -> Unit) = Unit
+    },
+    profile: ProfileReadPort? = null,
+) {
     AppSessionContent(
         sessionPort = port,
         audioExecutor = remember { SessionAudioExecutor(KeyboardSilentAudio) },
-        gameplayPresentation = object : GameplayPresentation {
-            override fun activePresentation() = null
-            @Composable override fun Content(inputEnabled: Boolean, onOutput: (GameplayInteractionOutput) -> Unit) = Unit
-        },
+        gameplayPresentation = gameplay,
         homeFeature = object : HomeFeature {
             @Composable override fun Content(inputEnabled: Boolean, onOutput: (HomeOutput) -> Unit) = Unit
         },
         settingsFeature = object : SettingsFeature {
             @Composable override fun Content(routeToken: Long, onOutput: (SettingsOutput) -> Unit) = Unit
         },
-        matrixFeature = object : MatrixFeature {
-            @Composable override fun Content(routeToken: Long, onOutput: (MatrixOutput) -> Unit) = Unit
-        },
-        armoryFeature = object : ArmoryFeature {
-            @Composable override fun Content(activeRunWeapon: WeaponId?, onOutput: (ArmoryOutput) -> Unit) = Unit
-        },
+        workshopFeature = workshop,
         rebirthFeature = object : RebirthFeature {
             override fun playAcceptedFeedback() = Unit
             @Composable override fun Content(routeToken: Long, eligible: Boolean, confirmationArmed: Boolean, onOutput: (RebirthOutput) -> Unit) = Unit
@@ -253,7 +499,7 @@ internal fun KeyboardShell(port: AppSessionPort, codex: CodexFeature, hangar: Ha
         profileUnavailableFeature = object : ProfileUnavailableFeature {
             @Composable override fun Content() = Unit
         },
-        hangarFeature = hangar,
+        profileReadPort = profile,
     )
 }
 

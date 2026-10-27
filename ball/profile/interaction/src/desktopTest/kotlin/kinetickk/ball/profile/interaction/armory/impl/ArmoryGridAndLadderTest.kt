@@ -23,6 +23,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kinetickk.ball.profile.interaction.workshop.impl.WorkshopSegment
 
 /**
  * The Armory's grid and detail panel drawn with the bundled fonts and the game's copy, in English
@@ -42,8 +43,9 @@ class ArmoryGridAndLadderTest {
     private fun render(width: Int, height: Int, scenes: List<Scene>, check: (Scene, ArmoryLayout, ProbedFrame) -> Unit) {
         val holders = HashMap<Scene, ArmoryLayoutHolder>()
         renderProbed(width, height, scenes, language = { it.language }, content = { scene ->
+            // The ladder sits behind the Mastery segment.
             ArmoryContent(model, CatalogWeapons, WeaponMastery.entries, ArmoryViewState(scene.inspected), scene.setting,
-                remember { ScrollState(0) }, holders.getOrPut(scene) { ArmoryLayoutHolder() }) {}
+                remember { ScrollState(0) }, holders.getOrPut(scene) { ArmoryLayoutHolder() }, segment = WorkshopSegment.MASTERY) {}
         }) { scene, frame -> check(scene, assertNotNull(holders[scene]?.layout, "$scene"), frame) }
     }
 
@@ -127,8 +129,13 @@ class ArmoryGridAndLadderTest {
                 // Like the board's word: from x 40, ending at least 20 px inside the right edge.
                 assertEquals(frame.x(40f), word.box.left, 0.5f, context)
                 assertTrue(word.box.right <= frame.x(ARMORY_WORD_RIGHT) + 0.5f, "$context word ends at ${word.box.right}")
-                // A title that fits keeps the board's 230 px (English "ARMORY").
-                if (scene.language == AppLanguage.English) assertEquals(230f * frame.k, layout.layoutInput.style.fontSize.value, 0.01f, context)
+                // The word is the tab's name: it keeps the board's 230 px when that fits and otherwise shrinks
+                // only until it ends at the bound (English "WEAPONS" is a little wider than the board's "ARMORY").
+                val size = layout.layoutInput.style.fontSize.value
+                assertTrue(size <= 230f * frame.k + 0.01f, context)
+                if (size < 230f * frame.k - 0.01f) {
+                    assertTrue(word.box.right >= frame.x(ARMORY_WORD_RIGHT) - frame.d(ARMORY_WORD_RIGHT - 40f) * 0.03f, "$context shrank too far")
+                }
             }
         }
     }

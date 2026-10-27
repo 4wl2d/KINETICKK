@@ -70,32 +70,17 @@ class HomeTextFitComposeTest {
     }
 
     @Test
-    fun theHangarCardKeepsItsIconAndLabelInsideItsFace() = forMeasurers { text, language, scale ->
-        val label = language.text(kinetickk.flow.session.interaction.localization.SessionText.HANGAR)
-        for ((width, height) in listOf(1_440f to 810f, 1_280f to 720f, 1_000f to 700f, 900f to 560f, 844f to 390f, 800f to 360f,
-            600f to 390f, 390f to 844f, 390f to 600f)) {
-            val card = homeLayoutGeometry(width, height, 1f).bounds(HomeLayoutTarget.HANGAR)
-            val size = if (card.height < 52f) KkButtonSize.SM else KkButtonSize.MD
-            val natural = kkButtonWidth(text, label, size, 1f, icon = kinetickk.foundation.design.KkIcon.FORMS_CIRCLE)
-            assertTrue(natural <= card.width, "Hangar card label needs $natural in ${card.width} at ${width}x$height ${language.code} @$scale")
-            // Phones keep 48 dp targets; desktop Home keeps its 44 dp minimum.
-            assertTrue(card.height >= if (width >= 900f && height >= 560f) 44f else 48f, "Hangar card at ${width}x$height")
-        }
-    }
-
-    @Test
-    fun legalLineKeepsItsNoticesWholeBetweenItsBounds() = forMeasurers { text, language, _ ->
+    fun theVersionLineShowsOnlyTheVersionWholeAndOnScreen() = forMeasurers { text, language, _ ->
         for ((width, height) in listOf(1_440f to 810f, 1_000f to 700f, 844f to 390f, 600f to 390f, 390f to 844f, 390f to 600f)) {
             val layout = homeLayoutGeometry(width, height, 1f)
-            val legal = homeLegalLayout(text, layout, 1f)
-            val expected = if (layout.mode == HomeLayoutMode.REGULAR) 5 else 3
-            assertEquals(expected, legal.parts.size, "desktop: copyright, license, no warranty, source, version")
-            legal.parts.forEach { assertWhole(it, "legal ${language.code} ${width}x$height") }
-            assertTrue(legal.width <= layout.scene.legalRight - layout.scene.legalLeft + 1f,
-                "legal ${legal.width} > ${layout.scene.legalRight - layout.scene.legalLeft} at ${width}x$height ${language.code}")
-            val texts = legal.parts.map { it.layoutInput.text.text }
-            assertTrue(texts.any { "2026" in it } && texts.any { "GPL" in it } && texts.any { "github.com" in it })
-            assertFalse(texts.any { '·' in it || "//" in it })
+            val version = homeVersionLayout(text, layout.scene, 1f)
+            val where = "${language.code} ${width}x$height"
+            assertWhole(version, "version $where")
+            assertTrue(version.size.width <= layout.scene.versionRight, "version ${version.size.width} at $where")
+            // The copyright, license, warranty and source notices left Home: the line is the version alone.
+            val shown = version.layoutInput.text.text
+            assertTrue("0.5.0" in shown, shown)
+            assertFalse(listOf("2026", "GPL", "github.com").any { it in shown }, shown)
         }
     }
 
@@ -111,8 +96,8 @@ class HomeTextFitComposeTest {
             waitForIdle()
             runOnIdle {
                 val menu = requireNotNull(measurer)
-                // Stamps on Armory ("Unlockable") and Rebirth ("Ready"), sub values on the others.
-                val model = model(WeaponId.SINGULARITY_SPEAR, TierNames.first()).copy(weaponUnlockAffordable = true, canRebirth = true)
+                // Stamps on the Workshop ("Affordable") and Rebirth ("Ready"), sub values on the others.
+                val model = model(WeaponId.SINGULARITY_SPEAR, TierNames.first()).copy(workshopAffordable = true, canRebirth = true)
                 for ((width, height) in listOf(1_440f to 810f, 1_000f to 700f, 844f to 390f, 800f to 360f, 600f to 390f, 390f to 844f, 360f to 800f, 412f to 915f)) {
                     val layout = homeLayoutGeometry(width, height, 1f)
                     if (layout.scene.menuColumns != 1) continue
@@ -165,32 +150,20 @@ class HomeTextFitComposeTest {
     }
 
     @Test
-    fun theFormDescriptionIsShownWholeBetweenTheNameAndTheHangarCard() = forMeasurers { text, language, scale ->
-        val descriptions = defaultCoreShapeDefinitions().map { it.mechanicDescription.localizedContent(language) }
-        for ((width, height) in listOf(1_440f to 810f, 1_280f to 720f, 1_000f to 700f, 900f to 560f)) {
-            val layout = homeLayoutGeometry(width, height, 1f)
-            val rect = requireNotNull(layout.scene.formDescription)
-            val (top, bottom) = homeFormDescriptionSpan(layout, 1f)
-            // The name's wide type has a 0.9 em line box; the description keeps 8 px above the Hangar card.
-            assertTrue(top >= layout.scene.formNameCenterY + layout.scene.formNameSize * 0.45f - 0.01f)
-            assertTrue(bottom <= layout.bounds(HomeLayoutTarget.HANGAR).top - 8f + 0.01f)
-            descriptions.forEach { description ->
-                val where = "${description.take(24)} ${language.code} ${width}x$height @$scale"
-                val laid = homeFormDescriptionLayout(text, description, rect.width, bottom - top)
-                if (laid == null) {
-                    // Only when even two small lines cannot hold it; the form's (!) carries the text.
-                    assertTrue(width < 1_440f || scale > 1.25f, "description dropped at the reference size: $where")
-                    assertTrue(layout.info(HomeInfoTarget.FORM) != null)
-                } else {
-                    assertFalse(laid.isCut() || laid.didOverflowHeight, "cut: $where")
-                    assertTrue(laid.size.width <= rect.width + 0.5f && laid.kkBoxHeight <= bottom - top + 0.01f, "too large: $where")
-                }
-            }
+    fun theFormInfoCarriesTheMechanicThePanelNoLongerRepeats() = forMeasurers { _, language, _ ->
+        // Every mode shows the form's (!), and it holds the mechanic's name and text (the panel shows only the name).
+        for ((width, height) in listOf(1_440f to 810f, 1_280f to 720f, 1_000f to 700f, 900f to 560f, 844f to 390f, 390f to 844f)) {
+            assertTrue(homeLayoutGeometry(width, height, 1f).info(HomeInfoTarget.FORM) != null, "form (!) at ${width}x$height")
+        }
+        defaultCoreShapeDefinitions().forEach { form ->
+            val model = model(WeaponId.FLUX_WAKE, TierNames.first()).copy(coreShape = form.id)
+            assertEquals(form.mechanicName.localizedContent(language) + "\n" + form.mechanicDescription.localizedContent(language),
+                homeFormInfo(model, language))
         }
     }
 
     @Test
-    fun selectedMenuItemsDrawNoPixelOverTheLegalNotices() {
+    fun selectedMenuItemsDrawNoPixelOverTheVersionLine() {
         // Phone landscape and portrait (360-px-tall landscape is the 1080 × 2400 targets turned sideways) and desktop.
         val viewports = listOf(
             Triple(800, 360, 1f), Triple(844, 390, 1f), Triple(600, 390, 1f), Triple(873, 393, 1f), Triple(914, 411, 1f),
@@ -210,19 +183,21 @@ class HomeTextFitComposeTest {
             runOnIdle {
                 val text = requireNotNull(home)
                 val menu = requireNotNull(menuMeasurer)
-                // Stamps on Armory and Rebirth, sub values on the others: the widest rows.
-                val model = model(WeaponId.SINGULARITY_SPEAR, TierNames.first()).copy(weaponUnlockAffordable = true, canRebirth = true)
+                // Stamps on the Workshop and Rebirth, sub values on the others: the widest rows.
+                val model = model(WeaponId.SINGULARITY_SPEAR, TierNames.first()).copy(workshopAffordable = true, canRebirth = true)
                 viewports.filter { it.third == density }.forEach { (width, height, _) ->
                     val layout = homeLayoutGeometry(width.toFloat(), height.toFloat(), density)
                     val scene = layout.scene
-                    val legal = rendered(width, height, density) { drawLegal(text, layout) }
-                    val ink = requireNotNull(inkBounds(legal, (scene.legalBaseline - 3f * scene.legalSize).toInt(), height)) { "no legal line" }
+                    val version = rendered(width, height, density) { drawVersion(text, layout) }
+                    val ink = requireNotNull(inkBounds(version, (scene.versionBaseline - 3f * scene.versionSize).toInt(), height)) {
+                        "no version line"
+                    }
                     val where = "${language.code} ${width}x$height @$textScale"
-                    // The phone layouts' allowance for the notices' tallest glyphs holds for the bundled font
-                    // (desktop adds "Без гарантий", whose Й rises higher, far below its menu).
+                    // The phone layouts' allowance for the version's tallest glyphs holds for the bundled font
+                    // (desktop keeps its version far below its menu).
                     if (layout.mode != HomeLayoutMode.REGULAR) {
-                        assertTrue(ink.top >= kotlin.math.floor(scene.legalBaseline - HOME_LEGAL_ASCENT_EM * scene.legalSize),
-                            "legal glyphs rise to row ${ink.top}, baseline ${scene.legalBaseline} $where")
+                        assertTrue(ink.top >= kotlin.math.floor(scene.versionBaseline - HOME_VERSION_ASCENT_EM * scene.versionSize),
+                            "version glyphs rise to row ${ink.top}, baseline ${scene.versionBaseline} $where")
                     }
                     val stampSize = homeMenuStampSize(menu, layout, density)
                     HomeMenuTargets.forEachIndexed { index, target ->
@@ -238,7 +213,7 @@ class HomeTextFitComposeTest {
                             drawHomeMenuItem(menu, layout, index, label, facts, placement.left, placement.showSub, stampSize, 1f, HOME_TRAIL_REST_SECONDS)
                         }
                         val over = inkBounds(item, ink.top, ink.bottom, ink.left, ink.right)
-                        assertEquals(null, over, "Selected $target (slab, echo or speed line) covers the legal glyphs $ink at $over $where")
+                        assertEquals(null, over, "Selected $target (slab, echo or speed line) covers the version glyphs $ink at $over $where")
                     }
                 }
             }

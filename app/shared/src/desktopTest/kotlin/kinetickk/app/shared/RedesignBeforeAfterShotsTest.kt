@@ -80,8 +80,9 @@ class RedesignBeforeAfterShotsTest {
                 }
                 shot("home")
                 key(Key.S); shot("settings"); key(Key.Escape)
-                key(Key.L); shot("lab"); key(Key.Escape)
-                key(Key.A); shot("armory"); key(Key.Escape)
+                key(Key.W); shot("workshop")
+                key(Key.L); shot("workshop-matrix")
+                key(Key.A); shot("workshop-weapons"); key(Key.Escape)
                 key(Key.B); shot("rebirth"); key(Key.Escape)
                 key(Key.C); shot("codex"); key(Key.Escape); key(Key.Escape)
                 shot("home-after-menus", 300)

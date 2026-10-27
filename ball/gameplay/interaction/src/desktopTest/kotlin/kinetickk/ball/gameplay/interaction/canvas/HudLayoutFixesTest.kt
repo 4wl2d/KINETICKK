@@ -120,10 +120,12 @@ class HudLayoutFixesTest {
             val height = h.toFloat()
             val controls = runningControlBounds(width, height, 1f).map { it.target.name to it.bounds } +
                 ("BUILD" to runningBuildButtonBounds(width, height, 1f))
-            for (textScale in textScales) for (boss in listOf(EnemyType.ELITE, EnemyType.ARCHITECT)) for (trial in listOf(false, true)) {
+            // The last T5 level and the cap (APEX ready: its echoes, rays and glow at their widest).
+            for (level in listOf(41, HUD_TEST_LEVEL_CAP)) for (textScale in textScales) for (boss in listOf(EnemyType.ELITE, EnemyType.ARCHITECT))
+            for (trial in listOf(false, true)) {
                 val model = hudTestModel(width, height).with(
                     "keys" to 12, "runMatter" to 9_876_543L, "combo" to 128, "comboTime" to 1f, "comboWindow" to 2.8f,
-                    "level" to 45, "weaponLevel" to 12, "hp" to 1_234f, "maxHp" to 1_500f, "velocityX" to 2_600f,
+                    *levelOverrides(level), "weaponLevel" to 12, "hp" to 1_234f, "maxHp" to 1_500f, "velocityX" to 2_600f,
                     "message" to "ELITE SIGNAL", "messageTime" to 1.5f,
                     "equippedRelics" to listOf(EquippedRelic(RelicId.PERPETUAL_VECTOR, 1), EquippedRelic(RelicId.GYRE_ENGINE, 1))
                         .toImmutableList(),
@@ -137,7 +139,7 @@ class HudLayoutFixesTest {
                     drawHud(model, measurer, 1f)
                     drawHudFeed(model, fx, measurer, 1f, null)
                 }
-                val where = "$language $w x $h x$textScale $boss trial=$trial"
+                val where = "$language $w x $h level $level x$textScale $boss trial=$trial"
                 fun rect(block: HudBlock) = HudLayoutProbe.rect(block)
                 fun apart(a: HudBlock, b: HudBlock) {
                     val first = rect(a) ?: return
@@ -162,6 +164,105 @@ class HudLayoutFixesTest {
                     val layout = HudDrawCache.peekLayout(slot) ?: return@forEach
                     assertFalse(layout.isCut(), "$where: $slot is cut")
                 }
+            }
+        }
+    }
+
+    /**
+     * Show FPS on desktop and landscape phones: the counter (value and label) fits inside its slot's
+     * visual and never meets the clock, the badge, the chips (which step left of it on desktop), the
+     * chain or a boss block, at every text size in both languages; the full panel stays closed.
+     */
+    @Test
+    fun theFpsCounterStaysInItsSlotClearOfTheHeader() {
+        val windows = listOf(1_440 to 810, 1_280 to 720, 1_000 to 700, 844 to 390, 740 to 360, 640 to 360, 568 to 320)
+        for (language in AppLanguage.entries) for ((w, h) in windows) for (textScale in textScales)
+        for (boss in listOf(EnemyType.ELITE, EnemyType.ARCHITECT)) {
+            val width = w.toFloat()
+            val height = h.toFloat()
+            val base = hudTestModel(width, height)
+            val model = base.with(
+                "settings" to base.settings.copy(showFps = true),
+                "keys" to 12, "runMatter" to 9_876_543L, "combo" to 128, "comboTime" to 1f, "comboWindow" to 2.8f,
+                "enemies" to listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f, 0f, 0f, 0f, 0f, 0f, 0f, false,
+                    affinityBits = bossAffinity(boss)))
+                    .toImmutableList(),
+            )
+            val controls = kinetickk.ball.gameplay.interaction.input.RunningControlPressLog().apply { fps = 144 }
+            HudDrawCache.forgetLayouts()
+            draw(w, h, language, textScale) { measurer -> drawHud(model, measurer, 1f, controls = controls) }
+            val where = "$language $w x $h x$textScale $boss"
+            val slot = runningControlBounds(width, height, 1f, kinetickk.ball.gameplay.interaction.layout.RunningControlMask.of(model))
+                .single { it.target == RunningControlTarget.PERFORMANCE }.bounds
+            val counter = assertNotNull(HudLayoutProbe.rect(HudBlock.FPS), "$where: no counter")
+            assertTrue(slot.contains(counter.topLeft) && slot.contains(counter.bottomRight), "$where: counter $counter outside its slot $slot")
+            listOf(HudBlock.CLOCK, HudBlock.BADGE, HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.CHAIN, HudBlock.BOSS).forEach { block ->
+                val other = HudLayoutProbe.rect(block) ?: return@forEach
+                assertFalse(other.overlaps(slot), "$where: $block $other meets the counter's slot $slot")
+            }
+            val build = runningBuildButtonBounds(width, height, 1f)
+            listOf(HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.CHAIN).forEach { block ->
+                val other = HudLayoutProbe.rect(block) ?: return@forEach
+                assertFalse(other.overlaps(build), "$where: $block $other meets Build $build")
+            }
+            HudDrawCache.peekLayout(HudText.FPS)?.let { assertFalse(it.isCut(), "$where: the value is cut") }
+        }
+    }
+
+    /**
+     * The skill row, its key caps and the Apex key cap at every reference size, text size and language, mixed
+     * and full rows, with and without a trial: they stay on screen, never meet the bottom clusters, the
+     * loadout, the feed, the minimap, the clock, the chips or the trial panel, and no key label is cut.
+     */
+    @Test
+    fun skillRowAndKeyCapsStayClearOfTheHudAtEveryTextSize() {
+        val orbit = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
+            immutableListOf(), 0f, 0f)
+        val fx = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(
+            BuildNotificationProjection("Neon Ram", immutableListOf("Impact damage +0.05", "Weapon power +0.04"), 5f),
+        ))
+        val windows = listOf(1_440 to 810, 1_280 to 720, 1_000 to 700, 481 to 800, 844 to 390, 740 to 360, 640 to 360, 568 to 320,
+            390 to 844, 375 to 667, 360 to 640, 320 to 568)
+        val keySlots = listOf(HudText.SKILL_KEY_0, HudText.SKILL_KEY_1, HudText.SKILL_KEY_2, HudText.APEX_KEY)
+        for (language in AppLanguage.entries) for ((w, h) in windows) for (textScale in textScales)
+        for (bar in listOf(MIXED_SKILL_BAR, FULL_SKILL_BAR)) for (trial in listOf(false, true)) {
+            val width = w.toFloat()
+            val height = h.toFloat()
+            val model = hudTestModel(width, height).with(
+                "keys" to 12, "runMatter" to 9_876_543L, *levelOverrides(), "skillBar" to bar, "weaponLevel" to 12,
+                "message" to "ELITE SIGNAL", "messageTime" to 1.5f,
+                "equippedRelics" to listOf(EquippedRelic(RelicId.PERPETUAL_VECTOR, 1), EquippedRelic(RelicId.GYRE_ENGINE, 1))
+                    .toImmutableList(),
+                "pointsOfInterest" to (if (trial) listOf(orbit) else emptyList()).toImmutableList(),
+            )
+            HudDrawCache.forgetLayouts()
+            draw(w, h, language, textScale) { measurer ->
+                drawHud(model, measurer, 1f, controls = keyboardControls())
+                drawHudFeed(model, fx, measurer, 1f, null)
+            }
+            val where = "$language $w x $h x$textScale ${if (bar === FULL_SKILL_BAR) "full" else "mixed"} trial=$trial"
+            fun rect(block: HudBlock) = HudLayoutProbe.rect(block)
+            val skills = assertNotNull(rect(HudBlock.SKILLS), "$where: no skill row")
+            val keyCaps = w >= 600 && kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode(width, height, 1f) ==
+                kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode.REGULAR
+            if (keyCaps) assertNotNull(rect(HudBlock.SKILL_KEYS), "$where: no key caps") else assertNull(rect(HudBlock.SKILL_KEYS), where)
+            val others = listOf(HudBlock.INTEGRITY, HudBlock.SPEED, HudBlock.LOADOUT, HudBlock.FEED, HudBlock.MINIMAP, HudBlock.CLOCK,
+                HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.CHAIN, HudBlock.TRIAL_PANEL, HudBlock.REBIRTH)
+            assertTrue(skills.left >= 0f && skills.top >= 0f && skills.right <= width && skills.bottom <= height, "$where: row $skills off screen")
+            // Each square (the landscape 2 + 1 cluster's union box spans free space), the key-cap row and the Apex key.
+            val drawn = listOf(HudRect.SKILL_0, HudRect.SKILL_1, HudRect.SKILL_2).map { it.name to assertNotNull(HudDrawCache.peekRect(it)) } +
+                listOfNotNull(rect(HudBlock.SKILL_KEYS)?.let { "SKILL_KEYS" to it }, rect(HudBlock.APEX_KEY)?.let { "APEX_KEY" to it })
+            drawn.forEach { (name, box) ->
+                assertTrue(box.left >= 0f && box.top >= 0f && box.right <= width && box.bottom <= height, "$where: $name $box off screen")
+                others.forEach { other ->
+                    val second = rect(other) ?: return@forEach
+                    assertFalse(box.overlaps(second), "$where: $name $box meets $other $second")
+                }
+                if (name != "APEX_KEY") assertFalse(box.overlaps(assertNotNull(rect(HudBlock.BADGE))), "$where: $name meets the badge")
+            }
+            keySlots.forEach { slot ->
+                val layout = HudDrawCache.peekLayout(slot) ?: return@forEach
+                assertFalse(layout.isCut(), "$where: $slot is cut")
             }
         }
     }

@@ -204,7 +204,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
     var residueSourceValue by rememberSaveable { mutableStateOf<String?>(null) }
     val build = model.runStacks.build
     // A restored legacy discovery-only filter is equivalent to the collected catalog.
-    val filter = if (filterValue == CodexItemFilter.IN_BUILD.ordinal) CodexItemFilter.IN_BUILD else CodexItemFilter.ALL
+    val filter = CodexItemFilter.entries.getOrNull(filterValue)?.takeIf { it != CodexItemFilter.DISCOVERED } ?: CodexItemFilter.ALL
     val searchFocus = remember { FocusRequester() }
     val listFocus = remember { FocusRequester() }
     val slotFocus = remember { mutableMapOf<String, FocusRequester>() }
@@ -307,7 +307,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
     LaunchedEffect(Unit) { listFocus.requestFocus() }
     val categoryTitles = listOf(SessionText.ITEMS_TITLE, SessionText.WEAPONS_TITLE, SessionText.RELICS_TITLE, SessionText.FORMS_TITLE)
         .map { language.text(it) } + language.text(CodexText.ENEMIES_TITLE)
-    val filterTitles = listOf(0 to SessionText.FILTER_ALL, 2 to SessionText.FILTER_BUILD)
+    val filterTitles = listOf(0 to SessionText.FILTER_ALL, 2 to SessionText.FILTER_BUILD, 3 to SessionText.FILTER_ACTIVE)
     val policy = catalog.build.policy
     val onSelection: ((CodexSelection) -> CodexSelection) -> Unit = { change ->
         val next = change(selectionValue)
@@ -354,7 +354,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                 true
             } else false
         }) {
-            // Header: Back, title, the Codex tabs, then the tab's progress chip and rule (!).
+            // Header: Back, title, the Codex tabs, then the tab's progress chip (Catalog: phones only) and rule (!).
             Row(Modifier.fillMaxWidth().heightIn(min = if (wide) 60.dp else 48.dp), verticalAlignment = Alignment.CenterVertically) {
                 KkButton(language.text(SessionRedesignText.BACK), onClick = onClose, modifier = Modifier.testTag("codex-close"),
                     variant = KkButtonVariant.GHOST, size = KkButtonSize.SM, enabled = !sheetVisible, textScale = ui)
@@ -372,8 +372,11 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                 }
                 if (compactHeader || wide) CodexNavigationTabs(tab, controlScale, compactTabs, Modifier.weight(1f)) { selectTab(it) }
                 when (tab) {
-                    CodexTab.CATALOG -> CodexChip("$collectionDiscovered/$collectionTotal", language.text(SessionText.COLLECTION_PROGRESS, collectionDiscovered, collectionTotal), ui,
-                        Modifier.padding(start = 8.dp).testTag("codex-collection-progress"))
+                    // Wide screens list every section's count in the left nav; the header repeats it only on phones.
+                    CodexTab.CATALOG -> if (!wide) {
+                        CodexChip("$collectionDiscovered/$collectionTotal", language.text(SessionText.COLLECTION_PROGRESS, collectionDiscovered, collectionTotal), ui,
+                            Modifier.padding(start = 8.dp).testTag("codex-collection-progress"))
+                    }
                     CodexTab.REACTIONS -> {
                         KkInfoButton(language.text(CodexText.REACTION_RULE), Modifier.padding(horizontal = 8.dp), placement = KkTooltipPlacement.BELOW, textScale = ui)
                         val found = ReactionId.entries.count(model::isReactionDiscovered)
@@ -413,7 +416,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                         CodexSearchField(search, !sheetVisible, ui, inlineLabel = false, searchFocus) { searchValue = codexSearchInput(it) }
                         if (category == 0) {
                             Spacer(Modifier.height(10.dp))
-                            CodexFilters(filterTitles, filter, build != null, controlScale)
+                            CodexFilters(filterTitles, filter, build != null, controlScale, available = navWidth)
                                 { filterValue = it }
                             Spacer(Modifier.height(18.dp))
                             BasicText(language.text(SessionRedesignText.RARITY).uppercase(), style = typography.labelStyle(13f * ui, color = Kk.Mute))
@@ -432,7 +435,8 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                     }
                     if (tab == CodexTab.CATALOG && !wide) {
                         val trailingFilters = compactHeader && category == 0
-                        val filtersWidth = if (trailingFilters) codexFiltersWidth(filterTitles.map { language.text(it.second) }) + 8.dp else 0.dp
+                        // The filters, their 8 dp spacer and the tab row's two 6 dp gaps around that spacer.
+                        val filtersWidth = if (trailingFilters) codexFiltersWidth(filterTitles.map { language.text(it.second) }) + 20.dp else 0.dp
                         CodexTabRow(categoryTitles, category, "codex-category-", controlScale, Modifier.fillMaxWidth(), reserved = filtersWidth,
                             trailing = {
                                 if (trailingFilters) {
@@ -464,7 +468,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
                             BoxWithConstraints(Modifier.fillMaxWidth()) {
                                 val rowWidth = maxWidth
                                 FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    CodexFilters(filterTitles, filter, build != null, controlScale) { filterValue = it }
+                                    CodexFilters(filterTitles, filter, build != null, controlScale, available = rowWidth) { filterValue = it }
                                     CodexSortSegments(sort, controlScale, ui, rowWidth, withLabel = true, onSort)
                                 }
                             }
@@ -1350,13 +1354,28 @@ internal fun codexNavFocusRing(size: Size, selection: Float, density: Float): Re
     return Rect(shift - out, -out, size.width + shift + out, size.height + out)
 }
 
-/** The game's filters (All / In build) as a segmented control. */
+/**
+ * The game's filters (All / In build / Active) as a segmented control; In build waits for a run. Like the sort, the
+ * segments shrink together to fit [available] dp ([codexSortFit]), so none is cut at the column's edge.
+ */
 @Composable
-private fun CodexFilters(filters: List<Pair<Int, SessionText>>, filter: CodexItemFilter, hasBuild: Boolean, controlScale: Float, onSelect: (Int) -> Unit) {
+private fun CodexFilters(
+    filters: List<Pair<Int, SessionText>>,
+    filter: CodexItemFilter,
+    hasBuild: Boolean,
+    controlScale: Float,
+    available: Dp = Dp.Infinity,
+    onSelect: (Int) -> Unit,
+) {
     val language = LocalAppLanguage.current
-    Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-        filters.forEach { (index, label) ->
-            CodexSegment(language.text(label), filter.ordinal == index, index != 2 || hasBuild, "codex-filter-$index", controlScale) { onSelect(index) }
+    val measurer = codexMeasurer()
+    val density = LocalDensity.current.density
+    val titles = filters.map { language.text(it.second) }
+    val natural = remember(measurer, titles, density) { titles.map { kkSegmentWidth(measurer, it, density) / density } }
+    val scale = if (available == Dp.Infinity) 1f else codexSortFit(natural, null, available.value).scale
+    Row(horizontalArrangement = Arrangement.spacedBy(CODEX_SORT_GAP_DP.dp)) {
+        filters.forEachIndexed { position, (index, _) ->
+            CodexSegment(titles[position], filter.ordinal == index, index != 2 || hasBuild, "codex-filter-$index", controlScale, scale) { onSelect(index) }
         }
     }
 }
@@ -1390,7 +1409,7 @@ private fun CodexSegment(text: String, selected: Boolean, enabled: Boolean, tag:
 /** How the Items sort control fits its width: with its visible label or not, at [scale] of its natural size. */
 internal data class CodexSortFit(val label: Boolean, val scale: Float)
 
-/** Gap (dp) between the sort segments. */
+/** Gap (dp) between the sort segments (and between the filters). */
 private const val CODEX_SORT_GAP_DP = 3f
 
 /**

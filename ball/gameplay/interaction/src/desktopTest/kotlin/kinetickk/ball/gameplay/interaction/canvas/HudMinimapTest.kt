@@ -17,6 +17,7 @@ import kinetickk.ball.content.api.PointOfInterestKind
 import kinetickk.ball.gameplay.interaction.fx.BuildNoticeKind
 import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
+import kinetickk.ball.gameplay.interaction.layout.RunningControlMask
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
@@ -66,7 +67,7 @@ class HudMinimapTest {
                 val height = dpHeight * density
                 val model = hudTestModel(dpWidth, dpHeight).with(
                     "screenWidth" to width, "screenHeight" to height, "uiScale" to density,
-                    "keys" to 12, "runMatter" to 9_876_543L, "combo" to 128, "comboTime" to 1f, "comboWindow" to 2.8f, "level" to 45,
+                    "keys" to 12, "runMatter" to 9_876_543L, "combo" to 128, "comboTime" to 1f, "comboWindow" to 2.8f, *levelOverrides(),
                     // Tier 10: the Rebirth strip with every mutator sigil.
                     "rebirthLevel" to 10,
                     "enemies" to (if (boss == null) emptyList() else listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f,
@@ -82,7 +83,7 @@ class HudMinimapTest {
                     val rect = HudLayoutProbe.rect(block) ?: continue
                     assertFalse(rect.overlaps(minimap), "$where: the minimap $minimap overlaps $block $rect")
                 }
-                forEachRunningControlBounds(width, height, density) { target, left, top, right, bottom ->
+                forEachRunningControlBounds(width, height, density, RunningControlMask.ALL) { target, left, top, right, bottom ->
                     assertFalse(Rect(left, top, right, bottom).overlaps(minimap), "$where: the minimap $minimap overlaps $target")
                 }
                 val keepOut = WorldHudKeepOut().update(width, height, density, textScale, trial, boss != null)

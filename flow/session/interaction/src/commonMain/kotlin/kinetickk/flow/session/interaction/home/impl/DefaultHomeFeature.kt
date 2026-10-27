@@ -5,6 +5,7 @@ package kinetickk.flow.session.interaction.home.impl
 
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
+import kinetickk.flow.session.interaction.localization.SessionRedesignText
 import kinetickk.flow.session.interaction.localization.SessionText
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -28,7 +29,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -73,6 +73,8 @@ class DefaultHomeFeature(
     private val profilePort: ProfileReadPort,
     uiCatalog: UiCatalogSnapshot,
     audioService: AudioService,
+    /** The host can close the game: Home shows a Quit button that emits [HomeOutput.Quit]. */
+    private val quitAvailable: Boolean = false,
 ) : HomeFeature {
     private val reducer = HomeReducer(
         coreShapes = uiCatalog.coreShapes,
@@ -82,6 +84,7 @@ class DefaultHomeFeature(
         weapons = uiCatalog.weapons,
         relicCount = uiCatalog.relics.size,
         matrixNodes = uiCatalog.matrixNodes,
+        upgrades = uiCatalog.upgrades,
     )
     private val audioExecutor = SessionAudioExecutor(audioService)
 
@@ -93,12 +96,13 @@ class DefaultHomeFeature(
         val roles = LocalKkRolePalette.current
         val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
         var revisionValue by remember { mutableIntStateOf(0) }
-        var viewportValue by remember { mutableStateOf(HomeViewport(0f, 0f, density)) }
+        var viewportValue by remember { mutableStateOf(HomeViewport(0f, 0f, density, quitAvailable)) }
         var renderTimeSecondsValue by remember { mutableFloatStateOf(0f) }
         var activeTargetValue by remember { mutableStateOf(HomeLayoutTarget.START) }
         var focusedTargetValue by remember { mutableStateOf<HomeLayoutTarget?>(null) }
         var openInfoValue by remember { mutableStateOf<HomeInfoTarget?>(null) }
         var activeInfoValue by remember { mutableStateOf<HomeInfoTarget?>(null) }
+        var quitActiveValue by remember { mutableStateOf(false) }
         val menuMotion = remember { HomeMenuMotion() }
         val actionFocus = remember { HomeLayoutTarget.entries.associateWith { FocusRequester() } }
         val actionsReady = inputEnabled && viewportValue.width > 0f && viewportValue.height > 0f
@@ -149,10 +153,12 @@ class DefaultHomeFeature(
         }
 
         val elementHuesValue by rememberUpdatedState(roles.elements)
-        LaunchedEffect(Unit) {
-            var previousFrame = withFrameNanos { it }
+        val frameRateCap = LocalKkFrameRateCap.current
+        LaunchedEffect(frameRateCap) {
+            val pacer = KkFramePacer(frameRateCap)
+            var previousFrame = pacer.awaitFrame()
             while (true) {
-                val frame = withFrameNanos { it }
+                val frame = pacer.awaitFrame()
                 val delta = selectHomePresentationFrameDeltaSeconds((frame - previousFrame) / 1_000_000_000f)
                 renderTimeSecondsValue += delta
                 menuMotion.advance(activeTargetValue, delta, elementHuesValue)
@@ -165,6 +171,7 @@ class DefaultHomeFeature(
                 viewportValue.width,
                 viewportValue.height,
                 viewportValue.density,
+                viewportValue.quitAvailable,
             )
         }
         Box(
@@ -177,7 +184,7 @@ class DefaultHomeFeature(
                         (event.key != Key.DirectionDown && event.key != Key.DirectionUp)) false
                     else {
                         val step = if (event.key == Key.DirectionDown) 1 else -1
-                        val targets = HomeNavigationTargets
+                        val targets = HomeMenuTargets
                         val index = targets.indexOf(activeTargetValue)
                         activeTargetValue = targets[(index + step + targets.size) % targets.size]
                         actionFocus.getValue(activeTargetValue).requestFocus()
@@ -188,7 +195,7 @@ class DefaultHomeFeature(
                     contentDescription = language.text(SessionText.HOME_DESCRIPTION)
                 }
                 .onSizeChanged { size ->
-                    viewportValue = HomeViewport(size.width.toFloat(), size.height.toFloat(), density)
+                    viewportValue = HomeViewport(size.width.toFloat(), size.height.toFloat(), density, quitAvailable)
                 }
                 .pointerInput(Unit) {
                     detectTapGestures { position -> currentTapHandlerValue(position) }
@@ -203,6 +210,7 @@ class DefaultHomeFeature(
                         openInfo = openInfoValue,
                         activeInfo = activeInfoValue,
                         textScale = textScale,
+                        quitActive = quitActiveValue,
                     ),
                     menuMotion,
                 )
@@ -213,7 +221,6 @@ class DefaultHomeFeature(
                         HomeSemanticAction(
                             action = action,
                             density = localDensity,
-                            characterName = uiModel.coreShape(uiModel.coreShape).displayName.localizedContent(language),
                             focusRequester = actionFocus.getValue(action.target),
                             onFocus = { focused ->
                                 if (focused) focusedTargetValue = action.target
@@ -245,6 +252,14 @@ class DefaultHomeFeature(
                         )
                     }
                 }
+                layout.quit?.let { quit ->
+                    HomeQuitAction(
+                        quit = quit,
+                        density = localDensity,
+                        onActive = { active -> quitActiveValue = active },
+                        onClick = { dispatch(HomeAction.Quit) },
+                    )
+                }
             }
         }
     }
@@ -254,14 +269,13 @@ class DefaultHomeFeature(
 private fun HomeSemanticAction(
     action: HomeActionBounds,
     density: Density,
-    characterName: String,
     focusRequester: FocusRequester,
     onFocus: (Boolean) -> Unit,
     onHover: () -> Unit,
     onClick: () -> Unit,
 ) {
     val language = LocalAppLanguage.current
-    val description = action.target.homeContentDescription(language, characterName)
+    val description = action.target.homeContentDescription(language)
     val onHoverValue by rememberUpdatedState(onHover)
     Box(
         Modifier
@@ -323,6 +337,38 @@ private fun HomeInfoAction(
     )
 }
 
+/** Focusable Quit node over the drawn button: hover/focus light it, Enter, Space or a click quit. */
+@Composable
+private fun HomeQuitAction(
+    quit: HomeQuitBounds,
+    density: Density,
+    onActive: (Boolean) -> Unit,
+    onClick: () -> Unit,
+) {
+    val language = LocalAppLanguage.current
+    val description = language.text(SessionRedesignText.QUIT_DESCRIPTION)
+    val interactions = remember { MutableInteractionSource() }
+    val focused by interactions.collectIsFocusedAsState()
+    val hovered by interactions.collectIsHoveredAsState()
+    LaunchedEffect(focused || hovered) { onActive(focused || hovered) }
+    Box(
+        Modifier
+            .placeInHomeBounds(quit.touch, density)
+            .hoverable(interactions)
+            .testTag(HOME_QUIT_TAG)
+            .onKeyEvent { event -> activateHomeSemanticButtonFromKey(event.key, event.type, onClick) }
+            .semantics {
+                role = Role.Button
+                contentDescription = description
+                onClick(label = description) {
+                    onClick()
+                    true
+                }
+            }
+            .focusable(interactionSource = interactions),
+    )
+}
+
 private fun Modifier.placeInHomeBounds(bounds: Rect, density: Density): Modifier =
     this
         .offset {
@@ -334,10 +380,8 @@ private fun Modifier.placeInHomeBounds(bounds: Rect, density: Density): Modifier
         )
 
 private fun HomeLayoutTarget.homeTestTag(): String = when (this) {
-    HomeLayoutTarget.HANGAR -> "kinetickk.home.hangar"
     HomeLayoutTarget.START -> "kinetickk.home.start"
-    HomeLayoutTarget.LAB -> "kinetickk.home.lab"
-    HomeLayoutTarget.ARMORY -> "kinetickk.home.armory"
+    HomeLayoutTarget.WORKSHOP -> "kinetickk.home.workshop"
     HomeLayoutTarget.REBIRTH -> "kinetickk.home.rebirth"
     HomeLayoutTarget.CODEX -> "kinetickk.home.codex"
     HomeLayoutTarget.SETTINGS -> "kinetickk.home.settings"
@@ -348,17 +392,16 @@ private fun HomeInfoTarget.homeInfoTestTag(): String = when (this) {
     HomeInfoTarget.FORM -> "kinetickk.home.info.form"
 }
 
-private fun HomeLayoutTarget.homeContentDescription(language: AppLanguage, characterName: String): String = when (this) {
-    HomeLayoutTarget.HANGAR -> language.text(SessionText.HANGAR_DESCRIPTION, characterName)
+private fun HomeLayoutTarget.homeContentDescription(language: AppLanguage): String = when (this) {
     HomeLayoutTarget.START -> language.text(SessionText.START_DESCRIPTION)
-    HomeLayoutTarget.LAB -> language.text(SessionText.LAB_DESCRIPTION)
-    HomeLayoutTarget.ARMORY -> language.text(SessionText.ARMORY_DESCRIPTION)
+    HomeLayoutTarget.WORKSHOP -> language.text(SessionText.WORKSHOP_DESCRIPTION)
     HomeLayoutTarget.REBIRTH -> language.text(SessionText.REBIRTH_DESCRIPTION)
     HomeLayoutTarget.CODEX -> language.text(SessionText.CODEX_DESCRIPTION)
     HomeLayoutTarget.SETTINGS -> language.text(SessionText.SETTINGS_DESCRIPTION)
 }
 
 private const val HOME_ROOT_TAG = "kinetickk.home"
+internal const val HOME_QUIT_TAG = "kinetickk.home.quit"
 
 private inline fun activateHomeSemanticButtonFromKey(
     key: Key,

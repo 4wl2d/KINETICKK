@@ -30,12 +30,12 @@ import kotlin.test.assertTrue
  */
 class ExpansionItemsTest {
     /** A run at ARSENAL III whose Arsenal items only carry their tag, so nothing else touches the targets. */
-    /** ARSENAL III with element-free Arsenal items; the kinetic Morningstar by default. */
+    /** ARSENAL III with element-free Arsenal items (an active one made plain); the kinetic Morningstar by default. */
     private fun arsenalThree(weapon: WeaponId = WeaponId.MORNINGSTAR): MutableGameState {
         val content = canonicalGameplayContent.copy(items = canonicalGameplayContent.items.map { item ->
             if (BuildTag.ARSENAL !in item.tags) item
             else item.copy(elements = immutableListOf(), stats = immutableListOf(StatDelta(ItemEffect.PICKUP_RADIUS, 1f)),
-                clauses = immutableListOf(), rules = immutableListOf(), risk = false)
+                clauses = immutableListOf(), rules = immutableListOf(), risk = false, active = null)
         }.toImmutableList())
         val state = buildTestState(content = content, weapon = weapon)
         for (item in content.items.filter { BuildTag.ARSENAL in it.tags }) {
@@ -257,10 +257,10 @@ class ExpansionItemsTest {
         val pair = listOf("Gambler's Ledger", "Cornucopia Core")
         for (held in pair) {
             val other = pair.single { it != held }
-            val fresh = buildTestState(rebirth = 10).apply { lifetimeMatter = 4_000L }
+            val fresh = buildTestState(rebirth = 10).dealWholeCatalog().apply { lifetimeMatter = 4_000L }
             assertTrue(fresh.itemNamed(other) in fresh.offerableItems(), "$other is offered to a build without $held")
 
-            val state = buildTestState(rebirth = 10).apply {
+            val state = buildTestState(rebirth = 10).dealWholeCatalog().apply {
                 lifetimeMatter = 4_000L
                 own(held)
             }
@@ -280,7 +280,8 @@ class ExpansionItemsTest {
             val item = state.itemNamed("Compound Interest")
             val perLevel = 8f * state.build.magnitude(item.id) * state.build.bonus(item.id)
             state.level = 2
-            state.nextLevelData = tempo.dataRequiredForLevel(2)
+            // Rebirth 7 scales every requirement of the run; the mirror reads the same tier-scaled table.
+            state.nextLevelData = state.dataRequiredForLevel(2)
             state.data = state.nextLevelData - 1
             state.dataFraction = 0f
 
@@ -297,8 +298,8 @@ class ExpansionItemsTest {
                 data += whole
             }
             gain(chunk)
-            while (data >= tempo.dataRequiredForLevel(level)) {
-                data -= tempo.dataRequiredForLevel(level)
+            while (level < tempo.maximumLevel && data >= state.dataRequiredForLevel(level)) {
+                data -= state.dataRequiredForLevel(level)
                 level++
                 if (tempo.grantsWeaponAmplification(level) && weapon < weaponCap) weapon++
                 gain(perLevel)
@@ -307,7 +308,7 @@ class ExpansionItemsTest {
             state.gainData(chunk)
             assertEquals(level, state.level, "Level after $chunk Data")
             assertEquals(data, state.data, "Data after $chunk Data")
-            assertEquals(tempo.dataRequiredForLevel(level), state.nextLevelData)
+            assertEquals(state.dataRequiredForLevel(level), state.nextLevelData)
             assertEquals(weapon, state.weaponLevel, "Weapon level after $chunk Data")
             assertTrue(abs(fraction - state.dataFraction) < 0.001f)
         }

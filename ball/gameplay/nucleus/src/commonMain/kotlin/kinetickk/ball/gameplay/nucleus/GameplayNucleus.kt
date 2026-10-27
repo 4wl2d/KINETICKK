@@ -5,7 +5,9 @@ package kinetickk.ball.gameplay.nucleus
 
 import kinetickk.ball.gameplay.nucleus.simulation.buildSummary
 
+import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MatrixNodeId
+import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.GameplayActiveWeaponProjection
 import kinetickk.ball.gameplay.api.GameplayBuildSummaryProjection
 import kinetickk.ball.gameplay.api.GameplayConfigurationRejection
@@ -39,6 +41,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
 import kinetickk.ball.gameplay.nucleus.simulation.takeVisualFxCues
 import kinetickk.ball.gameplay.nucleus.simulation.toRenderModel
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
+import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.ball.profile.api.isWithinRebirthBounds
@@ -384,6 +387,9 @@ object GameplayNucleus {
         if (profile.collection.discoveredRelicIds.any { id -> content.relics.none { it.id == id } }) {
             return GameplayConfigurationRejection.UNKNOWN_DISCOVERED_RELIC
         }
+        if (profile.recentItemIds.size > MAX_RECENT_ITEM_IDS || profile.recentItemIds.any { content.item(it) == null }) {
+            return GameplayConfigurationRejection.RECENT_ITEM_HISTORY_INVALID
+        }
         if (!profile.rebirthProgress.isWithinRebirthBounds(content.rebirth.minimumLevel, content.rebirth.maximumLevel)) {
             return GameplayConfigurationRejection.REBIRTH_LEVEL_OUT_OF_RANGE
         }
@@ -391,6 +397,14 @@ object GameplayNucleus {
         if (profile.economy.lifetimeMatter < profile.economy.matter) {
             return GameplayConfigurationRejection.LIFETIME_MATTER_BELOW_CURRENT
         }
+        val upgradeLevels = 0..content.upgrades.maxLevel
+        val upgrades = profile.upgrades
+        if (
+            upgrades.characterLevels.size != CoreShape.entries.size ||
+            upgrades.weaponLevels.size != WeaponId.entries.size ||
+            upgrades.characterLevels.any { it !in upgradeLevels } ||
+            upgrades.weaponLevels.any { it !in upgradeLevels }
+        ) return GameplayConfigurationRejection.UPGRADE_LEVEL_OUT_OF_RANGE
         return null
     }
 

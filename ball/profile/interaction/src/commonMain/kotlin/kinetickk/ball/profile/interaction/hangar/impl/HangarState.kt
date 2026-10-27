@@ -10,6 +10,7 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.profile.api.HangarProjection
 import kinetickk.ball.profile.api.LoadoutProfileSnapshot
+import kinetickk.ball.profile.api.PermanentUpgrades
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
 import kinetickk.ball.profile.interaction.hangar.api.HangarOutput
 import kinetickk.ball.profile.interaction.hangar.api.HangarRenderModel
@@ -31,19 +32,23 @@ internal sealed interface HangarAction {
     data object Back : HangarAction
 }
 
-/** Hangar presentation state: the Profile-backed [model] and the inspected character. */
+/**
+ * Characters presentation state: the Profile-backed [model], the inspected character and whether
+ * Session offers selection now ([selectionAvailable]: over the Home base, between runs).
+ */
 internal data class HangarState(
     val model: HangarRenderModel,
     val inspected: CoreShape = model.selected,
+    val selectionAvailable: Boolean = true,
 ) {
     val inspectedShape: HangarShapeRenderModel? get() = model.shape(inspected) ?: model.shapes.firstOrNull()
 
     /** The inspected character can become the next run's character. */
-    val canSelect: Boolean get() = inspectedShape?.let { it.unlocked && it.shape != model.selected } == true
+    val canSelect: Boolean get() = selectionAvailable && inspectedShape?.let { it.unlocked && it.shape != model.selected } == true
 }
 
 internal sealed interface HangarUiEffect {
-    /** Ask Profile to select [shape]; its Nucleus decides whether it is unlocked. */
+    /** Ask Session to select [shape] (between runs); Profile's Nucleus decides whether it is unlocked. */
     data class Select(val shape: CoreShape) : HangarUiEffect
     data class PlayAudio(val cue: ProfileAudioCue) : HangarUiEffect
     data class Emit(val output: HangarOutput) : HangarUiEffect
@@ -87,12 +92,14 @@ internal const val HANGAR_BAR_FLOOR = 0.25f
  * Maps the Profile's Hangar projection onto the content roster. Trait bars are normalized over the
  * roster: mass by its multiplier, integrity as 100 plus the bonus, handling as the inverse drag and
  * heat as the inverse Dash heat multiplier, each placed between the roster's smallest value (a
- * quarter bar, so every bar stays visible) and its largest (a full bar).
+ * quarter bar, so every bar stays visible) and its largest (a full bar). [upgrades] carries the
+ * bought Refit levels from the loadout.
  */
 internal fun HangarProjection.toRenderModel(
     definitions: ImmutableList<CoreShapeDefinition>,
     matter: Long,
     weapons: List<HangarWeaponRenderModel> = emptyList(),
+    upgrades: PermanentUpgrades = PermanentUpgrades(),
 ): HangarRenderModel {
     val mass = definitions.map { it.traits.massMultiplier }
     val integrity = definitions.map { 100f + it.traits.integrityBonus }
@@ -116,6 +123,9 @@ internal fun HangarProjection.toRenderModel(
                 handlingBar = bar(handling, index),
                 heatBar = bar(heat, index),
                 ascendant = definition.id in ascendedCharacters,
+                victorious = progress?.victorious ?: false,
+                highestCleared = progress?.highestCleared ?: -1,
+                upgradeLevel = upgrades.characterLevel(definition.id),
             )
         }.toImmutableList(),
         selected = selected,

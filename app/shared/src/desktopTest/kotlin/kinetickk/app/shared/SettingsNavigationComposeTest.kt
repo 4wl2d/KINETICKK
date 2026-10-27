@@ -28,6 +28,8 @@ import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.impl.DefaultGameplayFeature
 import kinetickk.ball.profile.api.ColorVision
+import kinetickk.ball.profile.api.GameAction
+import kinetickk.ball.profile.api.KeyBindings
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.impl.ProfilePersistenceCapability
 import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
@@ -35,6 +37,7 @@ import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
 import kinetickk.ball.profile.impl.createProfileComponent
 import kinetickk.flow.session.api.AppDestination
 import kinetickk.flow.session.api.AppSessionQuery
+import kinetickk.foundation.common.input.BindableKey
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
@@ -262,7 +265,7 @@ class SettingsNavigationComposeTest {
                     input.performTextClearance()
                     input.performTextInput("100")
                     assertVolume(100)
-                    // This key must reach the editor before the session's Armory shortcut.
+                    // This key must reach the editor before the session's Workshop alias.
                     val selectAllModifier = if (System.getProperty("os.name").startsWith("Mac")) Key.MetaLeft else Key.CtrlLeft
                     input.performKeyInput { keyDown(selectAllModifier); pressKey(Key.A); keyUp(selectAllModifier) }
                     render(AppDestination.Settings)
@@ -303,12 +306,42 @@ class SettingsNavigationComposeTest {
                     assertEquals(0.61f, reloaded.query(ProfileQuery.GetPreferences).preferences.masterVolume)
                     captureSettings("sound-volume")
                 }
+                // Key cells: capture, Escape, a swap, a session shortcut key, reset; persisted through the codec.
+                fun exerciseKeys() {
+                    val defaults = preferences().keyBindings
+                    fun bindings() = preferences().keyBindings
+                    showPageWith("kinetickk.settings.bind.dash.key")
+                    click("kinetickk.settings.bind.dash.key")
+                    // Escape ends the capture inside Settings: the shell does not go back.
+                    key(Key.Escape, AppDestination.Settings)
+                    assertEquals(defaults, bindings())
+                    click("kinetickk.settings.bind.dash.key")
+                    key(Key.Z, AppDestination.Settings)
+                    assertEquals(BindableKey.Z, bindings().key(GameAction.DASH))
+                    assertEquals(BindableKey.SPACE, bindings().key(GameAction.SKILL_1))
+                    assertTrue(persistence.payload!!.contains("\"keyBindings\":[{\"action\":\"DASH\",\"key\":\"Z\"}"), persistence.payload)
+                    // While a cell waits, S (the Settings shortcut) is just a key.
+                    showPageWith("kinetickk.settings.bind.pause.key")
+                    click("kinetickk.settings.bind.pause.key")
+                    key(Key.S, AppDestination.Settings)
+                    assertEquals(BindableKey.S, bindings().key(GameAction.PAUSE))
+                    // Reset keys: two presses restore every default and drop the record from the payload.
+                    showPageWith("kinetickk.settings.resetbindings.action")
+                    click("kinetickk.settings.resetbindings.action")
+                    assertEquals(BindableKey.S, bindings().key(GameAction.PAUSE))
+                    click("kinetickk.settings.resetbindings.action")
+                    assertEquals(KeyBindings.DEFAULT, bindings())
+                    assertTrue(!persistence.payload!!.contains("keyBindings"))
+                    captureSettings("controls")
+                }
                 fun exerciseRow(row: SettingsRowTags) {
                     val prefix = "kinetickk.settings.${row.id}"
                     when {
                         row.options.isNotEmpty() -> {
-                            val original = row.options.first { onNodeWithTag("$prefix.$it").fetchSemanticsNode().config.getOrElse(androidx.compose.ui.semantics.SemanticsProperties.Selected) { false } }
-                            for (option in row.options - original) {
+                            // Rows whose choices depend on the window offer a subset of the listed options.
+                            val options = if (row.offeredBySize) row.options.filter { exists("$prefix.$it") } else row.options
+                            val original = options.first { onNodeWithTag("$prefix.$it").fetchSemanticsNode().config.getOrElse(androidx.compose.ui.semantics.SemanticsProperties.Selected) { false } }
+                            for (option in options - original) {
                                 changes("$prefix.$option")
                                 onNodeWithTag("$prefix.$option").assertIsSelected()
                                 onNodeWithTag("$prefix.$original").assertIsNotSelected()
@@ -329,6 +362,10 @@ class SettingsNavigationComposeTest {
                             changes("$prefix.toggle")
                             changes("$prefix.toggle")
                         }
+                        row.stepper && row.decreaseFirst -> {
+                            changes("$prefix.decrease")
+                            changes("$prefix.increase")
+                        }
                         row.stepper -> {
                             changes("$prefix.increase")
                             changes("$prefix.decrease")
@@ -348,6 +385,8 @@ class SettingsNavigationComposeTest {
                     onNodeWithTag("kinetickk.settings.group.sound").assertContentDescriptionEquals("Sound")
                     onNodeWithTag("kinetickk.settings.group.graphics").assertContentDescriptionEquals("Graphics")
                     onNodeWithTag("kinetickk.settings.group.interface").assertContentDescriptionEquals("Interface")
+                    onNodeWithTag("kinetickk.settings.group.display").assertContentDescriptionEquals("Display")
+                    onNodeWithTag("kinetickk.settings.group.controls").assertContentDescriptionEquals("Controls")
                     captureSettings("game")
                     onNodeWithTag("kinetickk.settings.language.ru").performClick()
                     render(AppDestination.Settings)
@@ -356,6 +395,10 @@ class SettingsNavigationComposeTest {
                         selectGroup(group)
                         captureSettings(group)
                         for (row in rows) {
+                            if (row.keys) {
+                                exerciseKeys()
+                                continue
+                            }
                             val probe = "kinetickk.settings.${row.id}.info"
                             showPageWith(probe)
                             when {
@@ -414,28 +457,27 @@ class SettingsNavigationComposeTest {
                     mainClock.advanceTimeBy(1_000)
                     waitForIdle()
                 }
-                for ((shortcut, destination) in listOf(Key.L to AppDestination.Lab, Key.A to AppDestination.Armory, Key.B to AppDestination.Rebirth)) {
-                    key(shortcut, destination)
-                    when (destination) {
-                        AppDestination.Lab -> {
-                            scrollProfileToEnd("profile-matrix-scroll")
-                            onNodeWithTag("profile-matrix-node-${kinetickk.ball.content.api.MatrixNodeId.entries.last()}").assertIsDisplayed()
-                        }
-                        AppDestination.Rebirth -> {
-                            scrollProfileToEnd("profile-rebirth-scroll")
-                            onNodeWithTag("profile-rebirth-advance").assertIsDisplayed()
-                        }
-                        AppDestination.Armory -> {
-                            repeat(3) { onNodeWithTag("profile-armory-next").performClick() }
-                            scrollProfileToEnd("profile-armory-scroll")
-                            render(AppDestination.Armory)
-                            onNodeWithTag("profile-armory-equip-${catalog.uiCatalog().weapons.last().id}").assertIsDisplayed()
-                            onNodeWithTag("profile-armory-next").assertIsNotEnabled()
-                        }
-                        else -> Unit
-                    }
-                    key(Key.Escape, AppDestination.Home)
-                }
+                // L opens the Workshop on the Core Matrix; A switches it to the weapons in place; W closes it.
+                key(Key.L, AppDestination.Workshop)
+                onNodeWithTag("kinetickk.workshop.tab.matrix").assertIsSelected()
+                scrollProfileToEnd("profile-matrix-scroll")
+                onNodeWithTag("profile-matrix-node-${kinetickk.ball.content.api.MatrixNodeId.entries.last()}").assertIsDisplayed()
+                key(Key.A, AppDestination.Workshop)
+                onNodeWithTag("kinetickk.workshop.tab.weapons").assertIsSelected()
+                repeat(3) { onNodeWithTag("profile-armory-next").performClick() }
+                scrollProfileToEnd("profile-armory-scroll")
+                render(AppDestination.Workshop)
+                onNodeWithTag("profile-armory-equip-${catalog.uiCatalog().weapons.last().id}").assertIsDisplayed()
+                onNodeWithTag("profile-armory-next").assertIsNotEnabled()
+                key(Key.W, AppDestination.Home)
+                // W again opens the Workshop on the tab shown last.
+                key(Key.W, AppDestination.Workshop)
+                onNodeWithTag("kinetickk.workshop.tab.weapons").assertIsSelected()
+                key(Key.Escape, AppDestination.Home)
+                key(Key.B, AppDestination.Rebirth)
+                scrollProfileToEnd("profile-rebirth-scroll")
+                onNodeWithTag("profile-rebirth-advance").assertIsDisplayed()
+                key(Key.Escape, AppDestination.Home)
                 key(Key.C, AppDestination.Codex)
                 onNodeWithTag("codex-tab-0").performClick()
                 render(AppDestination.Codex)
@@ -529,23 +571,42 @@ class SettingsNavigationComposeTest {
 private const val APP_TAG = "settings-navigation-app"
 
 /** Test tags of one Settings row: segmented option ids, a toggle, or -/+ steppers. */
-private class SettingsRowTags(val id: String, val options: List<String> = emptyList(), val toggle: Boolean = false, val stepper: Boolean = false)
+private class SettingsRowTags(
+    val id: String,
+    val options: List<String> = emptyList(),
+    val toggle: Boolean = false,
+    val stepper: Boolean = false,
+    /** The stepper starts at its top value (the frame limit's Unlimited). */
+    val decreaseFirst: Boolean = false,
+    /** Options are offered by the window size (interface scale). */
+    val offeredBySize: Boolean = false,
+    /** The Controls key cells and Reset keys, exercised together. */
+    val keys: Boolean = false,
+)
 
 /** The game's Settings tabs and rows in order (Color vision leads Graphics). */
 private val SETTINGS_GROUPS: Map<String, List<SettingsRowTags>> = linkedMapOf(
     "game" to listOf(
         SettingsRowTags("language", listOf("ru", "en")),
         SettingsRowTags("simulation_speed", listOf("75", "100", "115", "135", "160", "200")),
+        SettingsRowTags("pauseonfocusloss", toggle = true),
     ),
     "sound" to listOf(
         SettingsRowTags("sfx", toggle = true),
         SettingsRowTags("music", toggle = true),
         SettingsRowTags("master_volume"),
     ),
+    // Without a platform display host only the rows every platform offers are shown.
+    "display" to listOf(
+        SettingsRowTags("framecap", stepper = true, decreaseFirst = true),
+        SettingsRowTags("interfacescale", listOf("85", "100", "115", "130"), offeredBySize = true),
+        SettingsRowTags("showfps", toggle = true),
+    ),
     "graphics" to listOf(
         SettingsRowTags("colorvision", listOf("default", "protan", "deutan", "tritan", "mono")),
         SettingsRowTags("screen_shake", toggle = true),
         SettingsRowTags("particles", listOf("low", "normal", "high")),
+        SettingsRowTags("reactioneffects", listOf("full", "reduced", "minimal")),
         SettingsRowTags("damage_numbers", toggle = true),
         SettingsRowTags("damage_number_size", listOf("small", "normal", "large", "huge")),
         SettingsRowTags("damage_number_format", listOf("compact", "full")),
@@ -555,6 +616,7 @@ private val SETTINGS_GROUPS: Map<String, List<SettingsRowTags>> = linkedMapOf(
         SettingsRowTags("text_size", stepper = true),
         SettingsRowTags("run_statistics_side", listOf("left", "right")),
     ),
+    "controls" to listOf(SettingsRowTags("bind", keys = true)),
 )
 
 private class InMemorySettingsPersistence : ProfilePersistenceCapability {

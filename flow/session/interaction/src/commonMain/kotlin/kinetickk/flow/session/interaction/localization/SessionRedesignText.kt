@@ -5,14 +5,13 @@ package kinetickk.flow.session.interaction.localization
 
 import kinetickk.foundation.common.localization.TextResource
 
-/** Session copy added by the redesign: short labels, (!) explanations and the clean legal line. */
+/** Session copy added by the redesign: short labels, (!) explanations and the version line. */
 internal enum class SessionRedesignText(
     override val english: String,
     override val russian: String,
 ) : TextResource {
     MATTER("Matter", "Материя"),
     FORM("Form", "Форма"),
-    MECHANIC("Mechanic", "Механика"),
     MAXED("Maxed", "На максимуме"),
     RANKS("Ranks", "Ранги"),
     DIRECTIVE("Directive", "Директива"),
@@ -23,17 +22,16 @@ internal enum class SessionRedesignText(
     SELECTED("Selected", "Выбрана"),
     STATUS("Status", "Статус"),
     READY("Ready", "Готово"),
-    UNLOCKABLE("Unlockable", "Можно открыть"),
+    AFFORDABLE("Affordable", "Доступно"),
+    UPGRADES("Upgrades", "Улучшения"),
+    WEAPONS_FACT("Weapons", "Оружие"),
+    PERCENT("{0}%", "{0}%"),
     LANGUAGE("Language", "Язык"),
     TEXT_SIZE("Text size", "Размер текста"),
 
-    LAB_INFO(
-        "The Core Matrix: permanent upgrades bought with Matter in four branches. Every form shares them, they stay after every rebirth, and a reset refunds them for free.",
-        "Матрица Ядра: постоянные улучшения за материю в четырёх ветвях. Они действуют на все формы, сохраняются после перерождения, а сброс бесплатно возвращает материю.",
-    ),
-    ARMORY_INFO(
-        "Unlock starting weapons with Matter. Every form can use every weapon.",
-        "Открывайте стартовое оружие за материю. Любая форма может использовать любое оружие.",
+    WORKSHOP_INFO(
+        "Spend Matter on characters, weapons and the Core Matrix. Everything bought here stays after every rebirth.",
+        "Тратьте материю на персонажей, оружие и Матрицу Ядра. Всё купленное здесь сохраняется после перерождения.",
     ),
     REBIRTH_INFO(
         "Defeat the Architect to earn the next, harder tier and a Reborn rank; any earned tier can be chosen for the next run. Matter, Matrix nodes, unlocked weapons, discoveries and settings are kept.",
@@ -43,20 +41,14 @@ internal enum class SessionRedesignText(
         "Everything you have found in runs: items, weapons, relics, forms, reactions and relic pairings.",
         "Всё, что вы нашли в забегах: предметы, оружие, реликвии, формы, реакции и сочетания реликвий.",
     ),
-    HANGAR_INFO(
-        "Choose the character for your next run. Each form has its own mechanic and traits; new forms unlock with achievements and Reborn ranks.",
-        "Выберите персонажа для следующего забега. У каждой формы своя механика и особенности; новые формы открываются достижениями и рангами перерождения.",
-    ),
     SETTINGS_INFO(
         "Game, sound, graphics and interface options. Changes apply immediately.",
         "Параметры игры, звука, графики и интерфейса. Изменения применяются сразу.",
     ),
 
-    VERSION("v0.4.0", "v0.4.0"),
-    COPYRIGHT("© 2026 Vladislav Tomilov", "© 2026 Владислав Томилов"),
-    LICENSE("GPL v3+", "GPL v3+"),
-    NO_WARRANTY("No warranty", "Без гарантий"),
-    SOURCE("github.com/4wl2d/KINETICKK", "github.com/4wl2d/KINETICKK"),
+    VERSION("v0.5.0", "v0.5.0"),
+    QUIT("Quit", "Выход"),
+    QUIT_DESCRIPTION("Quit the game", "Выйти из игры"),
 
     BACK("Back", "Назад"),
     CLOSE("Close", "Закрыть"),
