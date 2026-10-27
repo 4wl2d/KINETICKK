@@ -62,11 +62,11 @@ object ContentBounds {
     /** Highest run level a tempo profile may set; the shipped cap is [RunTempoProfile.maximumLevel]. */
     const val MAX_RUN_LEVEL: Int = 99
 
-    /** Active skill catalog size; the shipped pool has one definition per [SkillId]. */
+    /** Active-effect table size; the shipped table has one definition per [SkillId], each carried by one item. */
     const val MAX_SKILLS: Int = 24
-    /** Skill slots a run fills (Z, X, C). */
+    /** Slots a run's active items bind their effects to (Z, X, C). */
     const val SKILL_SLOTS: Int = 3
-    /** Ranks every skill defines (I, II, III). */
+    /** Ranks every active effect defines (I, II, III); an active item stacks to exactly this many. */
     const val MAX_SKILL_RANK: Int = 3
     const val MAX_SKILL_VALUES: Int = 6
     /** No skill rank may recast sooner than this, before any refund (the refund bank keeps the same floor). */
