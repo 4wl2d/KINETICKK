@@ -98,20 +98,20 @@ class HudSkillBarRenderingTest {
     private fun Rect.grown(by: Float) = Rect(left - by, top - by, right + by, bottom + by)
 
     @Test
-    fun theFirstDraftSlamsTheSlotAndSlidesTheRowIn() {
+    fun theFirstBoundActiveSlamsTheSlotAndSlidesTheRowIn() {
         val empty = base(SkillBarProjection.EMPTY)
-        val drafted = base(bar(slot(SkillId.STORM_COIL)))
+        val bound = base(bar(slot(SkillId.STORM_COIL)))
         val memory = HudPresentationMemory()
         render(empty, 0.9f, memory)
-        assertNull(HudLayoutProbe.rect(HudBlock.SKILLS), "a row before any draft")
-        render(drafted, 1f, memory) // the first binding's edge
-        val entering = render(drafted, 1.01f, memory)
+        assertNull(HudLayoutProbe.rect(HudBlock.SKILLS), "no row before any active binds")
+        render(bound, 1f, memory) // the first binding's edge
+        val entering = render(bound, 1.01f, memory)
         val enteringRow = assertNotNull(HudLayoutProbe.rect(HudBlock.SKILLS))
-        val settled = render(drafted, 3f, memory)
+        val settled = render(bound, 3f, memory)
         val settledRow = assertNotNull(HudLayoutProbe.rect(HudBlock.SKILLS))
         // 10 ms into the 220 ms entrance the row is still right of its place and differs from the settled frame.
         assertTrue(enteringRow.left > settledRow.left + 2f, "row at ${enteringRow.left} vs ${settledRow.left}")
-        assertTrue(differing(entering, settled, slotRect(0).grown(40f)) > 400, "no slam or ring on the draft")
+        assertTrue(differing(entering, settled, slotRect(0).grown(40f)) > 400, "no slam or ring on the first binding")
     }
 
     @Test

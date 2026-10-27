@@ -571,7 +571,7 @@ class ActiveItemOfferTest {
         assertEquals(ChoiceType.RELIC, state.choiceType)
         assertTrue(state.choices.any { it.heirloom })
         state.choose(state.choices.indexOfFirst { it.relicId != null })
-        assertEquals(ChoiceType.ITEM, state.choiceType, "no draft comes between")
+        assertEquals(ChoiceType.ITEM, state.choiceType, "the item offer follows the Heirloom directly")
         state.choose(0)
         assertEquals(GamePhase.RUNNING, state.phase)
     }

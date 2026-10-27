@@ -173,7 +173,7 @@ class GameplayKeyBindingTest {
         assertEquals(emptyList(), press(Key.Spacebar))
         assertEquals(listOf(Key.Spacebar), bubbled, "the freed Space did not bubble")
         assertEquals(listOf(GameplayInteractionPulse.SkillRequested.fromValidated(0)), press(Key.C))
-        assertEquals(emptyList(), press(Key.Z), "Z now holds the undrafted Skill 3")
+        assertEquals(emptyList(), press(Key.Z), "Z now holds Skill 3, whose slot is empty")
         assertTrue(bubbled.isEmpty())
     }
 }
