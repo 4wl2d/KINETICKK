@@ -79,7 +79,7 @@ internal val SkillPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Catalyze" to "Катализ",
     "Every enemy near the pointer carrying two elements reacts at once." to
         "Каждый враг у указателя с двумя стихиями сразу вступает в реакцию.",
-    "Forces up to fourteen reactions at 182% strength." to "Вызывает до четырнадцати реакций с силой 182 %.",
+    "Forces up to ten reactions at 130% strength." to "Вызывает до десяти реакций с силой 130 %.",
     "Dual Infusion" to "Двойная инфузия",
     "Your weapon sets up reactions: hits apply your two elements." to
         "Оружие готовит реакции: попадания накладывают обе ваши стихии.",
