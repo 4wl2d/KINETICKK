@@ -582,10 +582,10 @@ default, so every earlier golden payload is byte-identical. Player text ships in
 English and Russian. A follow-up inside 0.5.0 (content version unchanged) turns
 the run skills into active items reached only through ordinary item offers. It
 restates the gates its reward stream turned into coin flips as population gates
-whose thresholds follow from the 05885fa9 base population, which drops fresh
-survival's 0.73 for 0.66 and gives four Singularity arms ceilings above 1.15,
-and it lowers the survival floors of gates D and H, whose premise was the free
-lane skills (see the gate records below).
+whose thresholds follow from the 05885fa9 base population, which loosens some of
+them (fresh survival's 0.73 becomes 0.66 and four Singularity arms get ceilings
+above 1.15, for example), and it lowers the survival floors of gates D and H,
+whose premise was the free lane skills (see the gate records below).
 
 - **Data curve and the level cap.** Content owns the level table. The run level
   stops at `RunTempoProfile.maximumLevel` 42 (Content bound 99); levels 1 to 15
@@ -689,9 +689,9 @@ lane skills (see the gate records below).
   Infusion's damage against targets with a status 0.1152, while Slingshot
   (COOLING 0.25 at speed 900 or more) and Full Stop (DAMAGE_TAKEN −0.15 while
   braking) keep their first values. No Rare-or-lower passive adds critical
-  damage against Frozen targets, so an explicit cap of 0.22 bounds Frost Snap's
-  0.219, which keeps its rank III (about 0.48) below the +50 % of Quench Seal,
-  the Epic item that adds it. A new active taken with all three slots held
+  damage conditioned on a Frozen target, so an explicit cap of 0.22 bounds Frost
+  Snap's 0.219, which keeps its rank III (about 0.48) below the +50 % of Quench
+  Seal, the Epic item that adds it. A new active taken with all three slots held
   opens a slot prompt: a card per held active replaces it (the old item leaves
   the run and its effects end; the new one binds there at rank I), and Keep
   salvages the new item for rarity rank × 2 Matter. Effects are cooldown-based
@@ -1027,13 +1027,17 @@ min(480 s, M − 2 SE), with M the median survival over the 600
 calibration-window runs (D 471.08 s, H 481.60 s) and SE the bootstrap SE of a
 300-run median drawn from them (21.60 s and 25.07 s), rounded down to 427.87 s
 and 431.46 s. Both stay above 420 s, the seven minutes gate D's name states,
-below which the change would have gone back to the owner. Two other bounds
-follow from the 05885fa9 base population by the policy's threshold rule, not
-from the premise: fresh tier-0 survival to 720 s keeps a floor of 0.66 instead
-of 0.5.0's 0.73, since the base itself reads 0.713 here (0.715 on 0.5.0's 400
-audit seeds), and every Singularity arm whose base ratio plus two SE exceeds
-1.15 has that as its own ceiling. The active share's band and the active
-frequency's bounds are judged over populations instead of 31 and 48 seeds.
+below which the change would have gone back to the owner. Other bounds follow
+from the 05885fa9 base population by the policy's threshold rule, not from the
+premise. Among them, fresh tier-0 survival to 720 s keeps a floor of 0.66
+instead of 0.5.0's 0.73, since the base itself reads 0.713 here (0.715 on
+0.5.0's 400 audit seeds); every Singularity arm whose base ratio plus two SE
+exceeds 1.15 has that as its own ceiling, and Slingshot may end 0.02 more of its
+runs in a singularity contact where the seeded gate allowed no more; gate A's
+floor is 0.62 against the seeded 4 of 5; and the bot casts its Apex in at least
+0.99 of 312 fights where every one of 72 needed a cast. The active share's band
+and the active frequency's bounds are judged over populations instead of
+31 and 48 seeds.
 
 The Apex Diamond's band holds by 0.010: its population reads 0.560 against
 0.55, less than a quarter of its SE (0.044). On the calibration windows the
