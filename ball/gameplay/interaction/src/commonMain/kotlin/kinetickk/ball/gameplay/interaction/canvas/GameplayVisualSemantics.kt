@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.interaction.canvas
 
 import androidx.compose.ui.graphics.Color
 import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.DamageNumberTier
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
@@ -186,6 +187,32 @@ internal fun weaponIcon(id: WeaponId): KkIcon = when (id) {
     WeaponId.AEGIS_SHARDS -> KkIcon.WEAPONS_AEGIS_SHARDS
     WeaponId.HOLLOW_RIFT -> KkIcon.WEAPONS_HOLLOW_RIFT
     WeaponId.RESONANCE_DRUM -> KkIcon.WEAPONS_RESONANCE_DRUM
+}
+
+/**
+ * The glyph of an active effect (all 18 distinct): the one mark of an active item wherever it shows, the HUD's Z/X/C
+ * slot, the reward card's icon plate and watermark, and the other screens (the pause Build grid, the Codex). Public
+ * so those screens draw an active the same way.
+ */
+fun skillGlyph(id: SkillId): KkIcon = when (id) {
+    SkillId.SOLAR_FLARE -> KkIcon.WEAPONS_SOLAR_SWEEP
+    SkillId.METEOR -> KkIcon.WEAPONS_MORNINGSTAR
+    SkillId.FROST_LINE -> KkIcon.WEAPONS_PHASE_LATTICE
+    SkillId.FROST_SNAP -> KkIcon.WEAPONS_GLACIER_BELL
+    SkillId.ARC_HOOK -> KkIcon.WEAPONS_TETHER_ARC
+    SkillId.STORM_COIL -> KkIcon.WEAPONS_ARC_COIL
+    SkillId.GRAVITY_WELL -> KkIcon.WEAPONS_GRAVITY_MINES
+    SkillId.MASS_DRIVER -> KkIcon.WEAPONS_SINGULARITY_SPEAR
+    SkillId.DECAY_SPORES -> KkIcon.WEAPONS_SCATTER_BLOOM
+    SkillId.ENTROPIC_TIDE -> KkIcon.WEAPONS_ENTROPY_FIELD
+    SkillId.SONIC_BOOM -> KkIcon.WEAPONS_RESONANCE_DRUM
+    SkillId.RESONATOR -> KkIcon.WEAPONS_SENTRY_GRID
+    SkillId.VOID_STEP -> KkIcon.WEAPONS_HOLLOW_RIFT
+    SkillId.NULL_SHROUD -> KkIcon.WEAPONS_EVENT_LENS
+    SkillId.SLINGSHOT -> KkIcon.WEAPONS_GYRE_DISC
+    SkillId.FULL_STOP -> KkIcon.WEAPONS_CONCUSSION_ENGINE
+    SkillId.CATALYZE -> KkIcon.WEAPONS_PRISM_RELAY
+    SkillId.DUAL_INFUSION -> KkIcon.WEAPONS_FLUX_WAKE
 }
 
 /**

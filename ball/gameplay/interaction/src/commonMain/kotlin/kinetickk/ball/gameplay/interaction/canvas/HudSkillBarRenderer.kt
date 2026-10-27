@@ -238,28 +238,6 @@ internal fun skillIcon(id: SkillId, engine: GameplayRenderModel): KkIcon {
     }
 }
 
-/** Each skill's glyph (all 18 distinct). */
-internal fun skillGlyph(id: SkillId): KkIcon = when (id) {
-    SkillId.SOLAR_FLARE -> KkIcon.WEAPONS_SOLAR_SWEEP
-    SkillId.METEOR -> KkIcon.WEAPONS_MORNINGSTAR
-    SkillId.FROST_LINE -> KkIcon.WEAPONS_PHASE_LATTICE
-    SkillId.FROST_SNAP -> KkIcon.WEAPONS_GLACIER_BELL
-    SkillId.ARC_HOOK -> KkIcon.WEAPONS_TETHER_ARC
-    SkillId.STORM_COIL -> KkIcon.WEAPONS_ARC_COIL
-    SkillId.GRAVITY_WELL -> KkIcon.WEAPONS_GRAVITY_MINES
-    SkillId.MASS_DRIVER -> KkIcon.WEAPONS_SINGULARITY_SPEAR
-    SkillId.DECAY_SPORES -> KkIcon.WEAPONS_SCATTER_BLOOM
-    SkillId.ENTROPIC_TIDE -> KkIcon.WEAPONS_ENTROPY_FIELD
-    SkillId.SONIC_BOOM -> KkIcon.WEAPONS_RESONANCE_DRUM
-    SkillId.RESONATOR -> KkIcon.WEAPONS_SENTRY_GRID
-    SkillId.VOID_STEP -> KkIcon.WEAPONS_HOLLOW_RIFT
-    SkillId.NULL_SHROUD -> KkIcon.WEAPONS_EVENT_LENS
-    SkillId.SLINGSHOT -> KkIcon.WEAPONS_GYRE_DISC
-    SkillId.FULL_STOP -> KkIcon.WEAPONS_CONCUSSION_ENGINE
-    SkillId.CATALYZE -> KkIcon.WEAPONS_PRISM_RELAY
-    SkillId.DUAL_INFUSION -> KkIcon.WEAPONS_FLUX_WAKE
-}
-
 /**
  * The skill's reach around the Core after a no-target refusal (Bone dashed ring, fading over
  * [REFUSAL_WINDOW_SECONDS]), in world units (call inside the world-unit layer at the drawn Core).

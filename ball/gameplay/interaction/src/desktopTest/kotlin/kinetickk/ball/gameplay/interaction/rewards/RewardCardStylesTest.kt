@@ -35,10 +35,12 @@ import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RuleLineKind
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.impl.createContentCatalog
 import kinetickk.ball.gameplay.interaction.canvas.elementFill
+import kinetickk.ball.gameplay.interaction.canvas.skillGlyph
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
@@ -263,6 +265,43 @@ class RewardCardStylesTest {
             val owner = owners.getValue(rewardCardArt(item))
             assertTrue(owner.elements != item.elements || owner.tags.firstOrNull() != item.tags.firstOrNull(),
                 "${item.name} looks like ${owner.name}")
+        }
+    }
+
+    @Test
+    fun everyActiveItemWearsItsEffectsGlyph() {
+        // The one glyph table the HUD slots, the card plates and the other screens share: every effect its own mark.
+        assertEquals(SkillId.entries.size, SkillId.entries.map(::skillGlyph).toSet().size, "18 effects, 18 glyphs")
+        // The per-active watermark table: each effect's own glyph, except where its faint outline would repeat a card
+        // of the same rarity, element and ornament (the outline rule above).
+        val watermarks = mapOf(
+            SkillId.SOLAR_FLARE to KkIcon.WEAPONS_SOLAR_SWEEP, SkillId.METEOR to KkIcon.WEAPONS_MORNINGSTAR,
+            SkillId.FROST_LINE to KkIcon.WEAPONS_PHASE_LATTICE, SkillId.FROST_SNAP to KkIcon.WEAPONS_GLACIER_BELL,
+            SkillId.ARC_HOOK to KkIcon.WEAPONS_TETHER_ARC, SkillId.STORM_COIL to KkIcon.WEAPONS_ARC_COIL,
+            SkillId.GRAVITY_WELL to KkIcon.FORMS_SPIRAL, SkillId.MASS_DRIVER to KkIcon.WEAPONS_SINGULARITY_SPEAR,
+            SkillId.DECAY_SPORES to KkIcon.WEAPONS_SCATTER_BLOOM, SkillId.ENTROPIC_TIDE to KkIcon.WEAPONS_ENTROPY_FIELD,
+            SkillId.SONIC_BOOM to KkIcon.WEAPONS_RESONANCE_DRUM, SkillId.RESONATOR to KkIcon.WEAPONS_SENTRY_GRID,
+            SkillId.VOID_STEP to KkIcon.WEAPONS_HOLLOW_RIFT, SkillId.NULL_SHROUD to KkIcon.WEAPONS_EVENT_LENS,
+            SkillId.SLINGSHOT to KkIcon.WEAPONS_GYRE_DISC, SkillId.FULL_STOP to KkIcon.WEAPONS_CONCUSSION_ENGINE,
+            SkillId.CATALYZE to KkIcon.WEAPONS_PRISM_RELAY, SkillId.DUAL_INFUSION to KkIcon.WEAPONS_FLUX_WAKE,
+        )
+        assertEquals(SkillId.entries.toSet(), watermarks.keys)
+        SkillId.entries.forEach { assertEquals(watermarks.getValue(it), activeWatermark(it), "$it watermark") }
+        assertEquals(listOf(SkillId.GRAVITY_WELL), SkillId.entries.filter { activeWatermark(it) != skillGlyph(it) },
+            "only an outline clash moves a watermark off its effect's glyph")
+        val cards = itemCards().filter { it.item!!.isActive }
+        assertEquals(SkillId.entries.size, cards.size, "every effect is carried by one shipped item")
+        for (card in cards) {
+            val item = card.item!!
+            val look = rewardCardLook(card, KkVisionMode.DEFAULT.palette)
+            if (look.art == null) {
+                assertEquals(activeWatermark(item.active!!), look.style.watermark, "${item.name} wears its effect's watermark")
+            } else {
+                // An epic active borrows a scene of its own family, never one drawn for an item that looks like it.
+                assertEquals(ItemRarity.EPIC, item.rarity, item.name)
+                assertTrue(usesFamilyArt(item), "${item.name} has a family scene of its own")
+            }
+            assertEquals(item.rarity.rank, card.rank, "${item.name} takes its rarity's frame")
         }
     }
 
