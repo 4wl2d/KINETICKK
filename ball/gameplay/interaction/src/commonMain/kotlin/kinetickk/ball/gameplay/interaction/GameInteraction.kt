@@ -531,10 +531,12 @@ fun GameplayContent(
                 if (terminal && !terminalReady) return@onKeyEvent true
                 val down = event.type == KeyEventType.KeyDown
                 if (down) {
-                    controlLog.keyHints = true
                     // Keyboard play is a key a player could bind or a fixed alias; a device key (a phone's volume
-                    // rocker) leaves a touch player's cards naming slots by number.
-                    if (bindable != null || event.key == Key.Escape || event.key == Key.Enter) controlLog.touchInput = false
+                    // rocker) shows no key caps and leaves a touch player's cards naming slots by number.
+                    if (bindable != null || event.key == Key.Escape || event.key == Key.Enter) {
+                        controlLog.keyHints = true
+                        controlLog.touchInput = false
+                    }
                     dispatch(GameplayInteractionPulse.UserGestureObserved)
                 }
                 val running = model.phase == GamePhase.RUNNING
