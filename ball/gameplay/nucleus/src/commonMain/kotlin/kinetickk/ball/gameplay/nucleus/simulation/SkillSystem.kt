@@ -1447,19 +1447,20 @@ internal const val SKILL_BREAK_MARGIN: Int = 2
 internal const val CATALYZE_MIN_ELEMENTS: Int = 2
 private const val MAX_ENEMY_RADIUS_SLACK: Float = 80f
 
-// Value indices, per skill.
-private const val SOLAR_VENT_CAP = 0
+// Value indices, per skill. Those a runtime bound applies to, and those bounds, are internal: a test holds every
+// shipped rank value within the bound its cast runs through.
+internal const val SOLAR_VENT_CAP = 0
 private const val SOLAR_RADIUS = 1
 private const val SOLAR_DAMAGE = 2
 private const val SOLAR_DAMAGE_PER_HEAT = 3
-private const val SOLAR_SCORCH = 4
-private const val SOLAR_SCORCH_CAP = 6
-private const val SOLAR_HEAT_PER_SCORCH = 15f
+internal const val SOLAR_SCORCH = 4
+internal const val SOLAR_SCORCH_CAP = 6
+internal const val SOLAR_HEAT_PER_SCORCH = 15f
 
 private const val METEOR_RADIUS = 0
 private const val METEOR_DAMAGE = 1
-private const val METEOR_SCORCH = 2
-private const val METEOR_BOOST = 3
+internal const val METEOR_SCORCH = 2
+internal const val METEOR_BOOST = 3
 private const val METEOR_DELAY = 4
 private const val METEOR_HURL = 5
 internal const val METEOR_MAX_SPEED: Float = 1_800f
@@ -1468,7 +1469,7 @@ private const val METEOR_ABLAZE_SECONDS: Float = 3f
 private const val FROST_LINE_LENGTH = 0
 private const val FROST_LINE_SECONDS = 1
 private const val FROST_LINE_BOLTS = 2
-private const val FROST_LINE_CHILL = 3
+internal const val FROST_LINE_CHILL = 3
 private const val FROST_LINE_HALF_WIDTH = 4
 internal const val FROST_LINE_AHEAD: Float = 160f
 private const val FROST_LINE_DAMPING: Float = 4f
@@ -1476,16 +1477,16 @@ private const val FROST_LINE_SLAM_CHILL: Int = 2
 private const val FROST_LINE_EMBRITTLE_SECONDS: Float = 1f
 
 private const val FROST_SNAP_RADIUS = 0
-private const val FROST_SNAP_CHILL = 1
+internal const val FROST_SNAP_CHILL = 1
 private const val FROST_SNAP_SHATTER = 2
 private const val FROST_SNAP_COILED_PUSH = 3
 private const val FROST_SNAP_COILED_SECONDS = 4
 private const val FROST_SNAP_MIN_SPEED: Float = 600f
 
 private const val ARC_HOOK_REACH = 0
-private const val ARC_HOOK_CHARGE = 1
+internal const val ARC_HOOK_CHARGE = 1
 private const val ARC_HOOK_SPEED = 2
-private const val ARC_HOOK_LINKS = 3
+internal const val ARC_HOOK_LINKS = 3
 private const val ARC_HOOK_LINK_DAMAGE = 4
 private const val ARC_HOOK_WINDOW = 5
 private const val ARC_HOOK_LINK_RANGE: Float = 260f
@@ -1493,10 +1494,10 @@ private const val ARC_HOOK_KILL_WINDOW: Float = 1.5f
 
 private const val STORM_COIL_RADIUS = 0
 private const val STORM_COIL_SECONDS = 1
-private const val STORM_COIL_TARGETS = 2
+internal const val STORM_COIL_TARGETS = 2
 private const val STORM_COIL_DAMAGE = 3
 internal const val STORM_COIL_ZAP_SECONDS: Float = 0.5f
-private const val STORM_COIL_MAX_TARGETS: Int = 3
+internal const val STORM_COIL_MAX_TARGETS: Int = 3
 
 private const val GRAVITY_WELL_RADIUS = 0
 private const val GRAVITY_WELL_SECONDS = 1
@@ -1508,13 +1509,13 @@ private const val GRAVITY_WELL_COLLAPSE_MASS: Int = 3
 
 private const val MASS_DRIVER_SECONDS = 0
 private const val MASS_DRIVER_MASS = 1
-private const val MASS_DRIVER_GUARD = 2
+internal const val MASS_DRIVER_GUARD = 2
 private const val MASS_DRIVER_THROW = 3
 private const val MASS_DRIVER_THRESHOLD = 4
 private const val MASS_DRIVER_IMPACT_MASS: Int = 2
 
 private const val SPORES_RADIUS = 0
-private const val SPORES_DECAY = 1
+internal const val SPORES_DECAY = 1
 private const val SPORES_SECONDS = 2
 private const val SPORES_DATA_CAP = 3
 private const val SPORES_SPREAD_RADIUS: Float = 130f
@@ -1532,21 +1533,21 @@ private const val TIDE_HEAT_PER_STACK: Float = 1f
 
 private const val BOOM_RANGE = 0
 private const val BOOM_DAMAGE = 1
-private const val BOOM_RESONANCE = 2
+internal const val BOOM_RESONANCE = 2
 private const val BOOM_BOLTS = 3
 private const val BOOM_PUSH = 4
-private const val BOOM_RECOIL = 5
+internal const val BOOM_RECOIL = 5
 private const val BOOM_HALF_ANGLE_DEGREES: Float = 35f
 private const val BOOMED_SECONDS: Float = 0.8f
 
 private const val RESONATOR_RADIUS = 0
 private const val RESONATOR_SECONDS = 1
-private const val RESONATOR_SCALE = 2
+internal const val RESONATOR_SCALE = 2
 private const val RESONATOR_ECHOES = 3
 
 private const val VOID_STEP_DISTANCE = 0
 private const val VOID_STEP_RIFT_DAMAGE = 1
-private const val VOID_STEP_HOLLOW = 2
+internal const val VOID_STEP_HOLLOW = 2
 private const val VOID_STEP_RIFT_RADIUS = 3
 private const val VOID_STEP_PHASE = 4
 private const val VOID_STEP_RIFT_DELAY = 5
@@ -1577,12 +1578,12 @@ private const val FULL_STOP_SCALE = 1
 private const val FULL_STOP_BREAK = 2
 
 private const val CATALYZE_RADIUS = 0
-private const val CATALYZE_TARGETS = 1
-private const val CATALYZE_SCALE = 2
-private const val CATALYZE_FALLBACK = 3
+internal const val CATALYZE_TARGETS = 1
+internal const val CATALYZE_SCALE = 2
+internal const val CATALYZE_FALLBACK = 3
 
 private const val INFUSION_SECONDS = 0
-private const val INFUSION_HITS_PER_SECONDARY = 1
+internal const val INFUSION_HITS_PER_SECONDARY = 1
 private const val INFUSION_STACK_CAP = 2
 
 /**

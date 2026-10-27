@@ -53,6 +53,9 @@ internal fun MutableGameState.hostileOutputFactor(enemy: Enemy?): Float = hollow
 /** Hostile damage grows by this fraction of run progress; see [hostileDamage]. */
 internal const val HOSTILE_RUN_GROWTH: Float = 0.5f
 
+/** Damage-taken buffs and liabilities together never bring the multiplier on a hit below this. */
+internal const val MIN_DAMAGE_TAKEN_MULTIPLIER: Float = 0.1f
+
 internal fun MutableGameState.takeDamage(
     rawAmount: Float,
     ignoreReduction: Boolean = false,
@@ -81,7 +84,7 @@ internal fun MutableGameState.takeDamage(
     }
     if (kind == IncomingDamage.CONTACT && build.liability(RelicId.EVENT_HORIZON)) taken += 0.5f
     if (kind == IncomingDamage.PROJECTILE && build.pairing(RelicPairingId.BLACK_STAR)) taken += 0.5f
-    amount *= taken.coerceAtLeast(0.1f)
+    amount *= taken.coerceAtLeast(MIN_DAMAGE_TAKEN_MULTIPLIER)
     if (build.liability(RelicId.GLASS_COMET)) {
         amount *= 2f
         glassCharge = 0f
