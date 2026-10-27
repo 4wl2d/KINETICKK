@@ -12,12 +12,12 @@ import kotlin.test.assertTrue
  * Singularity contact gate (combat-final §9 and §10 Skills): skills and reaction verbs that move the Core are all
  * player-timed or bounded, so a bot using them touches the singularity no more often than the same bot without
  * them, and touches obstacles no more often than the 05885fa9 base measured beyond noise (a contact is the frame the
- * Core first touches a rock or bumper, sampled every 0.02 s input frame). Each arm is the no-POI bot for 300 s, with no
- * skill drafts: a skill arm owns one skill from the start and casts it by the bot's policy, a reaction arm sets the
- * reaction off on the nearest enemy close to the Core every three seconds, and an item arm owns one item that launches
- * the Core (items.md §6.2) from the start. The baseline, reaction and item arms play the catalog without its active
- * items, a run as before they existed; a skill arm keeps them in the catalog (it acquires the active item it measures)
- * and is never offered another.
+ * Core first touches a rock or bumper, sampled every 0.02 s input frame). Each arm is the no-POI bot for 300 s, and no
+ * active item reaches it through its offers: a skill arm owns one active item from the start and casts its effect
+ * by the bot's policy, a reaction arm sets the reaction off on the nearest enemy close to the Core every three seconds,
+ * and an item arm owns one item that launches the Core (items.md §6.2) from the start. The baseline, reaction and item
+ * arms play the catalog without its active items, a run as before they existed; a skill arm keeps them in the catalog
+ * (it acquires the active item it measures) and is never offered another.
  *
  * A population gate (lead Addendum C5, 0.5.0 active items): on the thirty fixed seeds (`i * 7_919 + 13`, i = 1..30) the
  * base met "at most 15 % more obstacle contacts per second and no more singularity contacts" in every arm with

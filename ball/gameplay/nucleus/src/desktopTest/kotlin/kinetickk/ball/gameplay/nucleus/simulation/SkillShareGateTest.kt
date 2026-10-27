@@ -24,10 +24,10 @@ import kotlin.test.assertTrue
  * The share counts the damage the active effects cause ([kinetickk.ball.gameplay.nucleus.model.SkillRuntime.skillCausedDamage]):
  * their own hits, what a cast resolves (Catalyze's forced reactions) and the Core's impacts while an effect moves it
  * (Slingshot, Mass Driver, Arc Hook). The NoPoi bot is the Orb, whose lane (Slingshot, Arc Hook, Catalyze) delivers its
- * damage through the Core and reactions: counted by skill hits alone it read 0.3–2.6 % (q10–q90 of 200 runs, with the
- * 0.5.0 skill drafts), so that metric could not see the Orb's skills at all.
+ * damage through the Core and reactions: counted by skill hits alone it read 0.3–2.6 % (q10–q90 of 200 runs, measured
+ * on the 0.5.0 base before active items, when skills came as drafts), so that metric could not see the Orb's skills.
  *
- * The band is judged on the median run. A run's share depends on which effects its offers brought: with the 0.5.0 drafts,
+ * The band is judged on the median run. A run's share depends on which effects it got: on the 0.5.0 base's drafts,
  * over 300 probe runs the 10th–90th percentile spanned 0.056–0.17, wider than the band itself, and no skill number
  * narrowed it (Catalyze reaction scale ×1.5, two more targets or a second off its cooldown, Arc Hook links ×1.5–×3 moved
  * the 10th percentile by at most 0.004), so "every run in the band" measured the offers, not the effects. The share is
@@ -43,10 +43,10 @@ import kotlin.test.assertTrue
  * is [MIN_SHARE] to [MAX_SHARE], the design band of Addendum C6.
  *
  * The spread is a population gate (lead Addendum C5): with three runs per character the 05885fa9 base kept its top
- * effect within 0.30 with probability 0.76 (Sonic Boom 0.253 over 100 runs per character), so it re-rolled with the
- * reward stream. Each character now walks [PopulationSeeds] until [SPREAD_RUNS] runs bind an active item by
- * [OWNED_BY_SECONDS]: 300 runs, on which the base's top effect read 0.280 (Sonic Boom, bootstrap SE 0.014, with the old
- * per-slot damage). The base plus two standard errors is 0.31; the bound stays 0.30 (Addendum C6 keeps it).
+ * effect within 0.30 with probability 0.76 (Sonic Boom 0.253 over 100 runs per character, 300 for the Orb), so it
+ * re-rolled with the reward stream. Each character now walks [PopulationSeeds] until [SPREAD_RUNS] runs bind an active
+ * item by [OWNED_BY_SECONDS]: 300 runs, on which the base's top effect read 0.280 (Sonic Boom, bootstrap SE 0.014, with
+ * the old per-slot damage). The base plus two standard errors is 0.31; the bound stays 0.30 (Addendum C6 keeps it).
  */
 class SkillShareGateTest {
     private class Run(

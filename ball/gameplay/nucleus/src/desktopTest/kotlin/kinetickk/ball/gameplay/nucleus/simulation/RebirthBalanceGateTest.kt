@@ -23,7 +23,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Rebirth difficulty gates (SPEC 11.2), played by the input-only NoPoi bot on one fixed seed set: the
+ * Rebirth difficulty gates (SPEC 11.2), played by the input-only NoPoi bot. Gate A, Gate I and the survival bounds of
+ * D and H play the 300 [PopulationSeeds]; the other gates and the win bounds of D and H play one fixed seed set: the
  * second half of the NoPoi probe (`i * 7_919 + 13`, i = 6..10), chosen by its definition, never by
  * outcome. The weapons are the reworked 24 with their synergy rules; the gates read the weapon synergy
  * projection to confirm that the Pentagon's signature bonus (and, for the strong build, Stormheart
@@ -156,7 +157,7 @@ class RebirthBalanceGateTest {
      * active items reach it only through ordinary offers. The win bound stays on the five gate seeds (8 of the 300 base
      * runs won).
      */
-    @Test fun aStrongBuildSurvivesEightMinutesOfTierTenButRarelyClearsIt() {
+    @Test fun aStrongBuildSurvivesSevenMinutesOfTierTenButRarelyClearsIt() {
         val outcomes = GateSeeds.map { seed -> play(seed, tier = 10, setup = Strong) }
         val population = populationOf(PopulationSeeds) { seed -> play(seed, tier = 10, setup = Strong) }
         report("GATE D tier=10 strong", outcomes)
@@ -170,14 +171,18 @@ class RebirthBalanceGateTest {
 
     /**
      * Gate H (0.5.0 Apex, combat-final §10): the strong build seeking Data at tier 10 — every Matrix rank and lifetime
-     * Matter equal to its price, so every rank-0 Data item can be offered; the bot takes Data cards first, drafts Decay
-     * Spores and Gravity Well, reaches level 42 soonest and casts the Apex as its post-cap Data recharges it. D's bounds
-     * still hold: it survives a median of eight minutes and clears in at most three seeds of five.
+     * Matter equal to its price, so every rank-0 Data item can be offered; the bot takes Data cards first, takes Decay
+     * Spores and Gravity Well, reaches level 42 soonest and casts the Apex as its post-cap Data recharges it. It takes
+     * a new active of its character's lane before a Data card (Addendum D6, rule R2), but never in place of Decay
+     * Spores or Gravity Well (Addendum E3): a lane active evicting a Data active and the next Data active evicting it
+     * again would undo each other. D's bounds still hold: a median survival of at least seven minutes and a clear in at
+     * most three seeds of five.
      *
      * The survival bound is a population gate (Addendum C5): the base median survival over the 300 [PopulationSeeds]
      * runs was 583.33 s (bootstrap SE 20.37 s), and five seeds reached 480 s with probability 0.78. The population's
-     * median must be at least [H_MIN_MEDIAN_SURVIVAL] s, Addendum D2's floor for active items (see the constant). The
-     * win bound stays on the five gate seeds (1 of the 300 base runs won).
+     * median must be at least [H_MIN_MEDIAN_SURVIVAL] s, Addendum D2's floor for active items: the shipped tuning's own
+     * median over the calibration windows minus two standard errors, since the base handed the strong build its lane
+     * skills for free (see the constant). The win bound stays on the five gate seeds (1 of the 300 base runs won).
      */
     @Test fun aStrongBuildSeekingDataWithTheApexStillFindsTierTenHard() {
         val outcomes = GateSeeds.map { seed -> play(seed, tier = 10, setup = Strong, seekData = true) }
