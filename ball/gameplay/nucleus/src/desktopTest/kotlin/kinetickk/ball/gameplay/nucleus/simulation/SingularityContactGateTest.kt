@@ -46,11 +46,11 @@ class SingularityContactGateTest {
         var seconds = 0.0
         val outcomes = StringBuilder()
         for (seed in Seeds) {
-            val state = MutableGameState(NoDrafts, seed = seed)
+            val state = MutableGameState(NoActives, seed = seed)
             state.unlockWeaponsForTesting(ReferenceArmory)
             state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
             state.startRun()
-            skill?.let(state::acquireSkill)
+            skill?.let { state.acquireActive(it) }
             item?.let { name -> state.acquireItem(state.content.items.single { it.name == name }.id) }
             val bot = NoPoiBot()
             var nextReactionAt = REACTION_EVERY
@@ -84,7 +84,8 @@ class SingularityContactGateTest {
 
     private companion object {
         val Seeds: List<Int> = (1..30).map { it * 7_919 + 13 }
-        val NoDrafts = withoutReachableSkillSlots()
+        /** No arm is offered an active item mid-run: each arm owns exactly the active it measures, or none. */
+        val NoActives = withoutActiveItems()
         /** Skills that move the Core: the MOTION family, Meteor's ride and Sonic Boom's recoil. */
         val MovingSkills = listOf(SkillId.METEOR, SkillId.ARC_HOOK, SkillId.MASS_DRIVER, SkillId.VOID_STEP,
             SkillId.SLINGSHOT, SkillId.SONIC_BOOM)

@@ -159,10 +159,7 @@ class SkillBalanceTest {
             state.nextEliteAt = Float.MAX_VALUE
             state.nextLevelData = Int.MAX_VALUE
             state.maxHp = KEPT_INTEGRITY
-            if (skill != null) {
-                state.acquireSkill(skill)
-                repeat(rank - 1) { state.rankUpSkill(skill) }
-            }
+            if (skill != null) state.acquireActive(skill, rank)
             val script = Script(seed, setup)
             val runtime = state.skillRuntime
             var netLoss = 0.0

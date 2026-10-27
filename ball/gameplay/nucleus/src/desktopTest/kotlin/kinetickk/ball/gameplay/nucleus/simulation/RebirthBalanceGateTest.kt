@@ -73,8 +73,9 @@ class RebirthBalanceGateTest {
     }
 
     /**
-     * Gate I (0.5.0 skills): skills help a fresh tier-0 run but do not trivialise it. The same bot with no skill slot in
-     * reach of the run clears the Architect no more than a fifth slower than with its drafted, cast skills.
+     * Gate I (0.5.0 actives): active items help a fresh tier-0 run but do not trivialise it. The same bot on content that
+     * never offers an active item (active weight 0, [NoActives]) clears the Architect no more than a fifth slower than with
+     * the actives its offers dealt and it cast.
      *
      * Measured on the NoPoi probe sequence i = 1..31 ([GateISeeds]), not the five gate seeds: a run that dies counts as
      * never clearing, and about a quarter of fresh runs die with or without skills, so a five-seed median lands on
@@ -83,7 +84,7 @@ class RebirthBalanceGateTest {
      */
     @Test fun skillsHelpAFreshTierZeroRunWithoutTrivialisingIt() {
         val withSkills = GateISeeds.map { seed -> play(seed, tier = 0, setup = Fresh) }
-        val without = GateISeeds.map { seed -> play(seed, tier = 0, setup = Fresh, content = NoSkillSlots) }
+        val without = GateISeeds.map { seed -> play(seed, tier = 0, setup = Fresh, content = NoActives) }
         report("GATE I tier=0 fresh skills", withSkills)
         report("GATE I tier=0 fresh no-skills", without)
         val skilled = withSkills.medianClear()
@@ -263,8 +264,8 @@ class RebirthBalanceGateTest {
         /** Gate I's seeds: the NoPoi probe sequence (`i * 7_919 + 13`) for i = 1..31, which holds the gate seeds. */
         val GateISeeds: List<Int> = (1..31).map { it * 7_919 + 13 }
 
-        /** The shipped content with every skill slot opening just below the level cap: no run here drafts a skill. */
-        val NoSkillSlots: GameplayContentSnapshot = withoutReachableSkillSlots()
+        /** The shipped content whose offers never show an active item: no run here owns one. */
+        val NoActives: GameplayContentSnapshot = withoutActiveItems()
         val BotWeapons: List<WeaponId> = listOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.ENTROPY_FIELD, WeaponId.PRISM_RELAY)
 
         /** No Matrix ranks, the Orb and the starter weapon. */

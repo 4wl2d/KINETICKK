@@ -4,8 +4,6 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.SkillId
-import kinetickk.ball.gameplay.nucleus.model.SkillCell
-import kinetickk.ball.gameplay.nucleus.model.SkillRuntime
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.test.Test
@@ -79,9 +77,8 @@ class SkillShareGateTest {
             state.takeSoundCues()
             state.takeVisualFxCues()
         }
-        val bySkill = (0 until SkillRuntime.SLOTS).mapNotNull { slot ->
-            state.skillLoadout.skill(slot)?.let { it to state.skillRuntime[slot, SkillCell.DAMAGE].toDouble() }
-        }.toMap()
+        // Per active effect over the whole run, so a replaced active keeps the damage it dealt.
+        val bySkill = SkillId.entries.associateWith { state.skillRuntime.effectDamage(it).toDouble() }.filterValues { it > 0.0 }
         val share = if (state.damageDealt > 0.0) state.skillRuntime.skillCausedDamage / state.damageDealt else 0.0
         return Run(seed, shape, share, bySkill, state.elapsed)
     }

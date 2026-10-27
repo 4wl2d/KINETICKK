@@ -29,6 +29,7 @@ import kinetickk.ball.gameplay.nucleus.model.MarkKind
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.SkillCell
+import kinetickk.ball.gameplay.nucleus.model.SkillRuntime
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.model.TAU
 import kinetickk.ball.gameplay.nucleus.model.distanceSquared
@@ -265,7 +266,10 @@ class PerceptibleItemImpactTest {
         val wounded: Float = 0f,
         /** A target the item throws flies its throw out (slamming whatever it meets) before it is anchored again. */
         val loose: Boolean = false,
-        /** The skill loadout of a skill arena: [ArenaSkills], or with the skill an item names (by id or tag) in its place. */
+        /**
+         * The skill loadout of a skill arena, acquired as active items at rank II: [ArenaSkills], or with the skill an item
+         * names (by id or tag) in its place, or none for an active item, whose own effect is the whole loadout.
+         */
         val skills: List<SkillId> = ArenaSkills,
     )
 
@@ -295,7 +299,10 @@ class PerceptibleItemImpactTest {
         val pressure: Boolean = false,
         /** Every target fires a bolt at the Core each second and one bolt near the Core is erased every 0.6 s. */
         val shots: Boolean = false,
-        /** The Orb holds Solar Flare II, Arc Hook II and Catalyze II and casts each the moment it is ready. */
+        /**
+         * The Orb holds the Solar Flare, Arc Hook and Catalyze active items at rank II (an active item: itself at rank I)
+         * and casts each the moment it is ready.
+         */
         val skills: Boolean = false,
         /** Every 1.2 s the target nearest the Core is made to react: a Plasma Burst, Silence, Stasis or Null Well. */
         val fields: Boolean = false,
@@ -526,12 +533,7 @@ class PerceptibleItemImpactTest {
         }
         setup.support.forEach { name -> game.own(name, stacks = game.itemNamed(name).maxStacks) }
         val reach = game.effectivePickupRadius() + 30f
-        if (arena.skills) {
-            setup.skills.forEach { skill ->
-                game.acquireSkill(skill)
-                game.rankUpSkill(skill)
-            }
-        }
+        if (arena.skills) setup.skills.forEach { skill -> game.acquireActive(skill, 2) }
         if (arena.apex) game.unlockApex()
         item?.let { game.acquireItem(it.id) }
         if (arena.pressure || arena.shots) {
@@ -682,7 +684,7 @@ class PerceptibleItemImpactTest {
             if (arena.marks && frame % MARK_FRAMES == 0) markTargets(game)
             if (arena.skills) {
                 // Every slot asks to cast each frame: it casts the moment it is ready, through the real buffer.
-                game.skillBufferMask = (1 shl setup.skills.size) - 1
+                game.skillBufferMask = (1 shl SkillRuntime.SLOTS) - 1
                 game.skillBufferTime = MutableGameState.SKILL_INPUT_BUFFER_SECONDS
             }
             if (arena.apex && game.apexReady()) game.apexBufferTime = MutableGameState.SKILL_INPUT_BUFFER_SECONDS
@@ -970,6 +972,8 @@ class PerceptibleItemImpactTest {
             }
         }
         conditions.forEach { arenas += conditionArenas(it) }
+        // An active item is measured casting its own effect.
+        if (item.isActive) arenas += Arena.SKILLS
         // Slows, freezes and Hollow show as damage not taken from attacking enemies.
         if (StatusElement.CRYO in item.elements || StatusElement.VOID in item.elements) arenas += Arena.SIEGE
         // Immovable frames (an Elite takes 0.35 knockback) are what the knockback conversion needs.
@@ -1027,7 +1031,7 @@ class PerceptibleItemImpactTest {
                 else -> null
             }
             if (wanted == null) skills else skills.dropLast(1) + wanted
-        }
+        }.takeIf { !item.isActive } ?: emptyList()
         val flown = (setups + carried).map { setup ->
             val wounded = if (wound != null && setup.arena.vocabulary && (setup.arena.pressure || setup.arena.shots)) wound * 0.8f else 0f
             setup.copy(wounded = wounded, loose = throws, skills = if (setup.arena.skills) loadout else ArenaSkills)
@@ -1138,9 +1142,11 @@ class PerceptibleItemImpactTest {
             }
         }
         val support = ArrayList<String>()
-        if (ElementPick.DOMINANT in picks || ElementPick.SECONDARY in picks) {
+        // Catalyze reacts what carries two elements and Dual Infusion applies the build's two: both get the two sources.
+        val twoElementActive = item.active == SkillId.CATALYZE || item.active == SkillId.DUAL_INFUSION
+        if (ElementPick.DOMINANT in picks || ElementPick.SECONDARY in picks || twoElementActive) {
             support += "Kindling"
-            if (ElementPick.SECONDARY in picks) support += "Necrotic Lattice"
+            if (ElementPick.SECONDARY in picks || twoElementActive) support += "Necrotic Lattice"
         }
         elements.forEach { element -> support += ElementSources.getValue(element) }
         val crits = item.clauses.any { it.trigger == EffectTrigger.CRIT } ||
@@ -1227,8 +1233,8 @@ class PerceptibleItemImpactTest {
 
         /**
          * The item ids [everyItemAtOneStackMovesAMeasuredOutputByAtLeastFivePercent] judges: the whole catalog, or the
-         * `KK_IMPACT_RANGE` environment variable's `first..last` so CI can shard the catalog (for example `0..172`
-         * and `173..268`). A malformed value fails the test rather than silently judging nothing.
+         * `KK_IMPACT_RANGE` environment variable's `first..last` so CI can shard the catalog (for example `0..172`,
+         * `173..268` and the active items `269..286`). A malformed value fails the test rather than silently judging nothing.
          */
         val ImpactRange: IntRange = System.getenv("KK_IMPACT_RANGE")?.let { value ->
             val bounds = value.split("..").map { it.trim().toIntOrNull() }

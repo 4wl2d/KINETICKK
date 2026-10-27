@@ -12,6 +12,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class NoPoiPlaythroughTest {
     /** Real input-only runs. The controller can inspect current threats, but cannot alter simulation state. */
@@ -41,7 +42,11 @@ class NoPoiPlaythroughTest {
             var previousHealth = state.hp
             var damage = 0f
             while (state.elapsed < 900f && (state.phase == GamePhase.RUNNING || state.phase == GamePhase.CHOICE)) {
-                if (state.phase == GamePhase.CHOICE) bot.choose(state) else {
+                if (state.phase == GamePhase.CHOICE) {
+                    bot.choose(state)
+                    // Active items are the only writers of the slots: every slot's rank is its item's stacks.
+                    assertNull(state.activeLoadoutMismatch(), "seed=$seed sec=${state.elapsed}")
+                } else {
                     bot.control(state)
                     state.update(0.02f)
                 }
@@ -59,7 +64,7 @@ class NoPoiPlaythroughTest {
                 state.takeSoundCues()
                 state.takeVisualFxCues()
                 if (state.elapsed >= minute * 60f) {
-                    report("NOPOI seed=$seed sec=${state.elapsed.toInt()} hp=${state.hp.toInt()}/${state.maxHp.toInt()} shield=${state.shield.toInt()} speed=${state.speed.toInt()} level=${state.level} weapon=${state.weapon}/${state.weaponLevel} kills=${state.kills} items=${state.acquiredItemCount} relics=${state.equippedRelics} boss=${state.enemies.firstOrNull { it.type == EnemyType.ARCHITECT }?.hp?.toInt()} damage=${damage.toInt()}")
+                    report("NOPOI seed=$seed sec=${state.elapsed.toInt()} hp=${state.hp.toInt()}/${state.maxHp.toInt()} shield=${state.shield.toInt()} speed=${state.speed.toInt()} level=${state.level} weapon=${state.weapon}/${state.weaponLevel} kills=${state.kills} items=${state.acquiredItemCount} actives=${state.skillLoadout} relics=${state.equippedRelics} boss=${state.enemies.firstOrNull { it.type == EnemyType.ARCHITECT }?.hp?.toInt()} damage=${damage.toInt()}")
                     minute++
                 }
             }
@@ -460,8 +465,13 @@ internal class NoPoiBot(
 
     fun choose(s: MutableGameState) {
         val choices = s.choices
-        // Skill cards come first under every Data policy: a rank-up is always taken, a draft follows the lane.
-        val index = skillChoice(s) ?: run {
+        if (s.choiceType == ChoiceType.ACTIVE_SLOT) {
+            decisions++
+            s.choose(slotChoice(s))
+            return
+        }
+        // SEEK takes a Data active first (economy §2.1); every policy takes a rank-up of an owned active next.
+        val index = seekActiveChoice(s) ?: activeRankUpChoice(s) ?: run {
             when (dataPolicy) {
                 DataPolicy.NEUTRAL -> Unit
                 // An item offer without a Data card is rerolled while a rank-0 Data item can still stack; the
@@ -486,7 +496,9 @@ internal class NoPoiBot(
                     return
                 }
             }
-            choices.indices.maxByOrNull { policyScore(s, choices[it], it) }
+            // SEEK's Data cards outrank a new active; under the other policies a new active comes first.
+            val dataCard = dataPolicy == DataPolicy.SEEK && choices.any { isDataGainCard(s, it) }
+            (if (dataCard) null else newActiveChoice(s)) ?: choices.indices.maxByOrNull { policyScore(s, choices[it], it) }
         } ?: return
         decisions++
         s.choose(index)
@@ -494,6 +506,8 @@ internal class NoPoiBot(
 
     /** SEEK ranks a Data-gain card by its Data weight above every other card; AVOID scores it −5 000. */
     private fun policyScore(s: MutableGameState, c: ChoiceOption, index: Int): Float = when {
+        // An active the bot would not take (it would only salvage, or AVOID's Decay Spores) is a last resort.
+        activeEffect(s, c) != null && activeEffect(s, c) !in wantedActives(s) -> -10_000f
         dataPolicy == DataPolicy.NEUTRAL || !isDataGainCard(s, c) -> score(s, c, index)
         dataPolicy == DataPolicy.SEEK -> dataWeight(s, c)
         else -> -5_000f
@@ -510,29 +524,69 @@ internal class NoPoiBot(
     private fun isDataGainCard(s: MutableGameState, c: ChoiceOption): Boolean =
         c.itemId?.let(s.content::item)?.isDataEconomy == true
 
-    /**
-     * Skill cards (combat-final §4.10): a rank-up card is always taken; a draft takes the character's card, else
-     * the aligned card (the first), else the lowest skill. The Data policy goes first (economy §2.1): SEEK drafts
-     * Decay Spores (Spored deaths drop Data), else Gravity Well (it pulls Data in); AVOID never drafts Decay Spores
-     * while another card is offered.
+    /*
+     * Active items (combat-final §4.10, R1.8): a rank-up of an owned active is always taken; a new active is taken while
+     * a slot is free; with every slot full only a character-lane active is taken, to replace a rank-I active outside the
+     * lane, and any other new active is passed over for the best other card. SEEK takes Decay Spores (Spored deaths drop
+     * Data), else Gravity Well (it pulls Data in), whether to bind, rank or replace the lowest-rank non-Data active, before
+     * any Data card; AVOID never takes Decay Spores.
      */
-    private fun skillChoice(s: MutableGameState): Int? {
-        val rankUp = s.choices.indexOfFirst { it.type == ChoiceType.SKILL && (it.skillRank ?: 1) > 1 }
-        if (rankUp >= 0) return rankUp
-        if (s.choiceType != ChoiceType.SKILL || s.choices.isEmpty()) return null
-        if (dataPolicy == DataPolicy.SEEK) {
-            val seek = s.choices.indices.maxBy { seekSkillWeight(s.choices[it].skillId) }
-            if (seekSkillWeight(s.choices[seek].skillId) > 0f) return seek
+
+    private fun activeEffect(s: MutableGameState, c: ChoiceOption): SkillId? =
+        if (c.type == ChoiceType.ITEM) c.itemId?.let(s.content::item)?.active else null
+
+    /** The actives this bot takes now: owned ones (rank-ups), any while a slot is free, else lane actives with a slot to replace. */
+    private fun wantedActives(s: MutableGameState): Set<SkillId> = SkillId.entries.filterTo(HashSet()) { effect ->
+        when {
+            dataPolicy == DataPolicy.AVOID && effect == SkillId.DECAY_SPORES -> false
+            dataPolicy == DataPolicy.SEEK && seekSkillWeight(effect) > 0f -> true
+            s.skillLoadout.owns(effect) -> true
+            s.skillLoadout.lowestEmptySlot() >= 0 -> true
+            else -> effect in lane(s) && laneReplacementSlot(s) >= 0
         }
-        val allowed = s.choices.indices.filter { dataPolicy != DataPolicy.AVOID || s.choices[it].skillId != SkillId.DECAY_SPORES }
-            .ifEmpty { s.choices.indices.toList() }
-        val lane = s.coreShape.synergySkills()
-        val character = allowed.firstOrNull { s.choices[it].skillId in lane }
-        if (character != null) return character
-        return if (allowed.first() == 0 && s.choices[0].skillId != null) 0 else allowed.minByOrNull { s.choices[it].skillId?.ordinal ?: Int.MAX_VALUE }
     }
 
-    /** SEEK's draft weights (economy §2.1): Decay Spores 5 000, Gravity Well 4 000, any other skill 0. */
+    /** SEEK: the offered Data active with the highest SEEK weight, or null. */
+    private fun seekActiveChoice(s: MutableGameState): Int? {
+        if (dataPolicy != DataPolicy.SEEK) return null
+        val seek = s.choices.indices.filter { seekSkillWeight(activeEffect(s, s.choices[it])) > 0f }
+        return seek.maxByOrNull { seekSkillWeight(activeEffect(s, s.choices[it])) }
+    }
+
+    /** A card ranking up an owned active (AVOID still never Decay Spores), or null. */
+    private fun activeRankUpChoice(s: MutableGameState): Int? = s.choices.indices.firstOrNull { index ->
+        val effect = activeEffect(s, s.choices[index]) ?: return@firstOrNull false
+        s.skillLoadout.owns(effect) && effect in wantedActives(s)
+    }
+
+    /** A card with a new active the bot takes now (a free slot, or a lane active replacing a rank-I one), or null. */
+    private fun newActiveChoice(s: MutableGameState): Int? = s.choices.indices.firstOrNull { index ->
+        val effect = activeEffect(s, s.choices[index]) ?: return@firstOrNull false
+        !s.skillLoadout.owns(effect) && effect in wantedActives(s)
+    }
+
+    /** The slot prompt: SEEK replaces the lowest-rank non-Data active for a Data active; a lane active replaces a rank-I one outside the lane; else keep. */
+    private fun slotChoice(s: MutableGameState): Int {
+        val keep = s.choices.indexOfFirst { it.activeSlot == null }
+        val incoming = s.pendingActiveItemId?.let(s.content::item)?.active
+        val slot = if (dataPolicy == DataPolicy.SEEK && seekSkillWeight(incoming) > 0f) {
+            (0 until SkillRuntime.SLOTS).filter { seekSkillWeight(s.skillLoadout.skill(it)) <= 0f }
+                .minByOrNull { s.skillLoadout.rank(it) } ?: -1
+        } else if (incoming != null && incoming in lane(s)) {
+            laneReplacementSlot(s)
+        } else -1
+        return s.choices.indexOfFirst { it.activeSlot == slot }.takeIf { slot >= 0 && it >= 0 } ?: keep
+    }
+
+    private fun lane(s: MutableGameState): List<SkillId> = s.content.coreShape(s.coreShape).activeLane
+
+    /** The first slot holding a rank-I active outside the character's lane, or -1. */
+    private fun laneReplacementSlot(s: MutableGameState): Int = (0 until SkillRuntime.SLOTS).firstOrNull { slot ->
+        val held = s.skillLoadout.skill(slot)
+        held != null && held !in lane(s) && s.skillLoadout.rank(slot) == 1
+    } ?: -1
+
+    /** SEEK's active weights (economy §2.1): Decay Spores 5 000, Gravity Well 4 000, any other active 0. */
     private fun seekSkillWeight(id: SkillId?): Float = when (id) {
         SkillId.DECAY_SPORES -> 5_000f
         SkillId.GRAVITY_WELL -> 4_000f
