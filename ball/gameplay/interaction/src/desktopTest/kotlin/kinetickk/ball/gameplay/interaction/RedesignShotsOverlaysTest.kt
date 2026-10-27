@@ -24,9 +24,11 @@ import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RewardFocus
+import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.interaction.canvas.drawGameplay
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
@@ -34,6 +36,9 @@ import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.rewards.RewardContent
 import kinetickk.ball.gameplay.interaction.rewards.itemChoice
+import kinetickk.ball.gameplay.interaction.rewards.rewardActiveChoice
+import kinetickk.ball.gameplay.interaction.rewards.rewardActiveFixtureContent
+import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureActiveBase
 import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureContent
 import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureModel
 import kinetickk.ball.gameplay.interaction.terminal.TerminalContent
@@ -134,6 +139,60 @@ class RedesignShotsOverlaysTest {
                     rewardFixtureModel(
                         choices = listOf(itemChoice(3), itemChoice(4), itemChoice(0), itemChoice(1)),
                         itemStacks = listOf(1, 0, 0, 3, 1), discoveredItems = setOf(0, 3, 4), language = l, width = w, height = h, textScale = textScale,
+                    )
+                })
+            },
+            // Active items, one per deal as offers deal them: into a free slot in the character's lane, while every
+            // slot is full, and an owned one ranking to III; then the prompt asking which held active to replace.
+            Scene("levelup-active") { w, h, l ->
+                RewardShot(model {
+                    val content = rewardActiveFixtureContent
+                    rewardFixtureModel(
+                        content = content, coreShape = laneOf(SkillId.SOLAR_FLARE),
+                        choices = listOf(itemChoice(0), rewardActiveChoice(rewardFixtureActiveBase, slot = 0), itemChoice(2)),
+                        discoveredItems = setOf(0), language = l, width = w, height = h, textScale = textScale,
+                    )
+                })
+            },
+            Scene("levelup-active-full") { w, h, l ->
+                RewardShot(model {
+                    val content = rewardActiveFixtureContent
+                    val base = rewardFixtureActiveBase
+                    rewardFixtureModel(
+                        content = content, choices = listOf(itemChoice(3), rewardActiveChoice(base + 3, slot = null, replaces = true), itemChoice(4)),
+                        itemStacks = List(content.items.size) { if (it in base until base + 3) 1 else 0 },
+                        discoveredItems = setOf(3, 4), language = l, width = w, height = h, textScale = textScale,
+                    )
+                })
+            },
+            Scene("levelup-active-rank") { w, h, l ->
+                RewardShot(model {
+                    val content = rewardActiveFixtureContent
+                    val base = rewardFixtureActiveBase
+                    rewardFixtureModel(
+                        content = content, choices = listOf(itemChoice(5), rewardActiveChoice(base + 1, slot = 1, stacks = 2), itemChoice(1)),
+                        itemStacks = List(content.items.size) { if (it == base + 1) 2 else 0 },
+                        discoveredItems = setOf(1, 5, base + 1), language = l, width = w, height = h, textScale = textScale,
+                    )
+                })
+            },
+            Scene("active-slot") { w, h, l ->
+                RewardShot(model {
+                    val content = rewardActiveFixtureContent
+                    val base = rewardFixtureActiveBase
+                    val held = listOf(base to 2, base + 1 to 1, base + 2 to 1)
+                    val incoming = base + 3
+                    rewardFixtureModel(
+                        content = content, choiceType = ChoiceType.ACTIVE_SLOT, coreShape = laneOf(SkillId.SOLAR_FLARE),
+                        choices = held.mapIndexed { slot, (id, rank) ->
+                            val item = requireNotNull(content.item(id))
+                            ChoiceOption(ChoiceType.ACTIVE_SLOT, item.name, "", "", itemId = id, skillId = item.active, skillRank = rank,
+                                activeSlot = slot, incomingItemId = incoming)
+                        } + ChoiceOption(ChoiceType.ACTIVE_SLOT, requireNotNull(content.item(incoming)).name, "", "", incomingItemId = incoming,
+                            // An Uncommon item's salvage as the nucleus names it.
+                            salvageMatter = 4),
+                        itemStacks = List(content.items.size) { id -> held.firstOrNull { it.first == id }?.second ?: 0 },
+                        language = l, width = w, height = h, textScale = textScale,
                     )
                 })
             },
@@ -301,6 +360,9 @@ class RedesignShotsOverlaysTest {
         )
     }
 }
+
+/** A character whose active lane holds [effect]. */
+private fun laneOf(effect: SkillId): CoreShape = CoreShape.entries.first { effect in rewardActiveFixtureContent.coreShape(it).activeLane }
 
 @Composable
 private fun WorldShot(model: GameplayRenderModel) {
