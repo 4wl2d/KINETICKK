@@ -65,7 +65,7 @@ class ProfilePayloadBudgetTest {
     @Test
     fun theWorstCaseUsesTheLongestEncodingOfEveryBoundedFact() {
         val profile = worstCaseSnapshot().profile
-        // The 0.5.0 item bound (173 → 269 items, `ContentBounds.MAX_ITEMS` 192 → 320), every id owned.
+        // The 0.5.0 item bound (173 → 287 items, `ContentBounds.MAX_ITEMS` 192 → 320), every id owned.
         assertEquals(320, ContentBounds.MAX_ITEMS)
         assertEquals(ContentBounds.MAX_ITEMS, profile.collection.discoveredItemIds.size)
         assertEquals(profile.collection.discoveredItemIds, profile.collection.newItemIds)

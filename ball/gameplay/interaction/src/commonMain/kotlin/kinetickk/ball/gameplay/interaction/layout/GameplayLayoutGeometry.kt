@@ -32,12 +32,12 @@ internal val RunningControlTarget.skillSlot: Int
 /**
  * Which optional running controls are placed. Controls that act on them (drawing, hit testing,
  * semantics) pass the live mask; layouts that only keep clear of them pass [ALL], so nothing else
- * moves when the first skill is drafted or the Apex unlocks.
+ * moves when the first active item binds a slot or the Apex unlocks.
  */
 internal object RunningControlMask {
     const val NONE = 0
 
-    /** The Z/X/C row: placed once any slot holds a skill (the first draft). */
+    /** The Z/X/C row: placed once any slot holds an active effect (the first active item bound). */
     const val SKILLS = 1
 
     /** The level badge as the Apex control: placed once the Apex unlocks. */

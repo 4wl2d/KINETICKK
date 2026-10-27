@@ -104,7 +104,7 @@ class HudSkillBarRenderingTest {
         val memory = HudPresentationMemory()
         render(empty, 0.9f, memory)
         assertNull(HudLayoutProbe.rect(HudBlock.SKILLS), "a row before any draft")
-        render(drafted, 1f, memory) // the draft's edge
+        render(drafted, 1f, memory) // the first binding's edge
         val entering = render(drafted, 1.01f, memory)
         val enteringRow = assertNotNull(HudLayoutProbe.rect(HudBlock.SKILLS))
         val settled = render(drafted, 3f, memory)
@@ -228,7 +228,7 @@ class HudSkillBarRenderingTest {
         val keyboard = keyboardControls()
         render(model, 2f, controls = keyboard)
         val keys = assertNotNull(HudLayoutProbe.rect(HudBlock.SKILL_KEYS))
-        // Under the drafted squares only (C is locked), 3 u below the row.
+        // Under the filled squares only (C is empty), 3 u below the row.
         assertTrue(keys.left >= slotRect(0).left - 1f && keys.right <= slotRect(1).right + 1f, "caps $keys")
         assertEquals(slotRect(0).bottom + 3f, keys.top, 0.5f)
         val apexKey = assertNotNull(HudLayoutProbe.rect(HudBlock.APEX_KEY))

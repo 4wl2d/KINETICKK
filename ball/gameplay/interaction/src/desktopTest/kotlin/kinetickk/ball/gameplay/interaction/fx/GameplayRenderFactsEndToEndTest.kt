@@ -252,7 +252,7 @@ private val DRAFT_PREFERENCE = listOf(
 )
 
 /**
- * One bot-driven run through the public Nucleus contract: steers at the nearest enemy, drafts skills, casts them
+ * One bot-driven run through the public Nucleus contract: steers at the nearest enemy, takes active items, casts them
  * (and, now and then, a cooling one) and the Apex, applies earned progress, and records the cues it published, what
  * the reducer projected from them and the render-model facts it showed.
  */
