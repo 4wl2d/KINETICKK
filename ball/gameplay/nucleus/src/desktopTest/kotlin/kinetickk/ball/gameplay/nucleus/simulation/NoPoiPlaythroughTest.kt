@@ -559,7 +559,8 @@ internal class NoPoiBot(
      * outside the lane (the character is built around its lane, so a player trades an off-lane active of any rank for
      * one), and any other new active is passed over for the best other card. SEEK takes Decay Spores (Spored deaths drop
      * Data), else Gravity Well (it pulls Data in), whether to bind, rank or replace the lowest-rank non-Data active, and a
-     * new lane active before any Data card; AVOID never takes Decay Spores.
+     * new lane active before any Data card, but never in place of one of its Data actives; AVOID never takes Decay
+     * Spores.
      */
 
     private fun activeEffect(s: MutableGameState, c: ChoiceOption): SkillId? =
@@ -595,7 +596,10 @@ internal class NoPoiBot(
         !s.skillLoadout.owns(effect) && effect in wantedActives(s)
     }
 
-    /** The slot prompt: SEEK replaces the lowest-rank non-Data active for a Data active; a lane active replaces the lowest-rank one outside the lane; else keep. */
+    /**
+     * The slot prompt: SEEK replaces the lowest-rank non-Data active for a Data active; a lane active replaces the
+     * lowest-rank one outside the lane (for SEEK, outside its Data actives as well); else keep.
+     */
     private fun slotChoice(s: MutableGameState): Int {
         val keep = s.choices.indexOfFirst { it.activeSlot == null }
         val incoming = s.pendingActiveItemId?.let(s.content::item)?.active
@@ -610,9 +614,18 @@ internal class NoPoiBot(
 
     private fun lane(s: MutableGameState): List<SkillId> = s.content.coreShape(s.coreShape).activeLane
 
-    /** The slot holding the lowest-rank active outside the character's lane (the first of equals), or -1. */
+    /**
+     * The slot holding the lowest-rank active outside the character's lane (the first of equals), or -1. SEEK never
+     * offers one of its Data actives here: a Data-seeking player keeps the Data actives it sought, and otherwise this
+     * rule and SEEK's own slot rule would undo each other, a lane active evicting a Data active and the next Data card
+     * evicting the lane active.
+     */
     private fun laneReplacementSlot(s: MutableGameState): Int = (0 until SkillRuntime.SLOTS)
-        .filter { slot -> s.skillLoadout.skill(slot).let { it != null && it !in lane(s) } }
+        .filter { slot ->
+            s.skillLoadout.skill(slot).let { held ->
+                held != null && held !in lane(s) && !(dataPolicy == DataPolicy.SEEK && seekSkillWeight(held) > 0f)
+            }
+        }
         .minByOrNull { s.skillLoadout.rank(it) } ?: -1
 
     /** SEEK's active weights (economy §2.1): Decay Spores 5 000, Gravity Well 4 000, any other active 0. */
