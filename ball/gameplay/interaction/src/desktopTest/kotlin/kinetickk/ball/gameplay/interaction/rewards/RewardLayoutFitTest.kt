@@ -430,6 +430,56 @@ class RewardLayoutFitTest {
         assertTrue(lines > 4 * 2 * 2 * 7 * 4, "Checked the cards' lines ($lines)")
     }
 
+    /**
+     * Only the rows under a card's name step in from the slanted frame: the name sits high on the face, where the plain
+     * end padding already clears it, so names that fit one line there (long item, weapon and totem names, the Russian
+     * slot prompt's "Заменить: Метеор" and, on the landscape deal's card, "Заменить: Катализ") stay on one line on the
+     * landscape and portrait phone cards.
+     */
+    @Test
+    fun aPhoneCardsNameKeepsItsOneLineBesideTheSlantedFrame() {
+        val shipped = shippedRewardContent
+        val items = listOf("Killstreak Engine", "Kinetic Recapture", "Concussive Rivets", "Overcharge Glyph", "Finishing Cadence")
+            .map { name -> requireNotNull(shipped.items.singleOrNull { it.name == name }) { name } }
+        val choices = items.map { ChoiceOption(ChoiceType.ITEM, it.name, it.description, it.rarity.displayLabel.uppercase(), itemId = it.id) }
+        val english = rewardFixtureModel(content = shipped, choices = choices).let { model ->
+            choices.mapIndexed { index, choice -> model.rewardCardPresentation(choice, index) }
+        } + directedTotem(AppLanguage.English, 1440f, 810f, 1.25f).let { model -> model.rewardCardPresentation(model.choices.first(), 0) }
+        val prompt = activeSlotPrompt(AppLanguage.Russian, 1440f, 810f, 1.25f)
+        val arcCoil = weapons(AppLanguage.Russian, 1440f, 810f, 1.25f).let { model ->
+            model.rewardCardPresentation(model.choices.first(), 0, AppLanguage.Russian)
+        }
+        val russian = listOf(arcCoil) + listOf(1, 2).map { slot -> prompt.rewardCardPresentation(prompt.choices[slot], slot, AppLanguage.Russian) }
+        var names = 0
+        for ((width, height) in listOf(195 to 254, 178 to 305)) for ((language, deal) in listOf(AppLanguage.English to english, AppLanguage.Russian to russian)) {
+            // "Заменить: Катализ" takes two lines on the narrower portrait card at any padding.
+            val cards = if (width == 178 && language == AppLanguage.Russian) deal.dropLast(1) else deal
+            runDesktopComposeUiTest(cards.size * (width + 10), height + 20, effectContext = object : MotionDurationScale {
+                override val scaleFactor = 0f
+            }) {
+                setContent {
+                    CompositionLocalProvider(LocalAppLanguage provides language, LocalDensity provides Density(1f)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            cards.forEachIndexed { index, card ->
+                                RewardCard(card, index, overlayUiTextScale(1.25f), 0f, true, Modifier.requiredSize(width.dp, height.dp),
+                                    phoneDeal = height == 254) {}
+                            }
+                        }
+                    }
+                }
+                waitForIdle()
+                cards.forEachIndexed { index, card ->
+                    val name = card.title.uppercase()
+                    val layout = textsUnder("kinetickk.gameplay.choice.${index + 1}.text").map { it.second }
+                        .single { it.layoutInput.text.text.normalized() == name }
+                    assertEquals(1, layout.lineCount, "$name ${width}x$height: the name's lines")
+                    names++
+                }
+            }
+        }
+        assertEquals(2 * (english.size + russian.size) - 1, names, "Checked every name")
+    }
+
     /** [this] with its no-break spaces and word joiners read as the plain text they hold together. */
     private fun String.normalized(): String = replace('\u00A0', ' ').replace("\u2060", "")
 

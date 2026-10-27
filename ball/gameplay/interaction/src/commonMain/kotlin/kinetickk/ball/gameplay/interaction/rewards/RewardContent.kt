@@ -652,17 +652,18 @@ internal fun RewardCard(
         // smallest step any of them needs ([bodyFit]).
         val end = spec.dp(spec.end)
         // The face's right edge slants in by RewardCardCutDp toward the bottom and the frame (its border, the epic
-        // rim) reaches in from it: the body (and its costs) keeps its lowest line clear of both.
-        val bodyEnd = max(end.value, RewardCardCutDp * (bodyTop + bodyHeight).value / maxHeight.value +
-            kkCardFrameReachDp(look.style.material, maxWidth.value) + RewardBodyFrameClearanceDp).dp
+        // rim) reaches in from it: the rows under the name (and the costs) end clear of both at the lowest line they
+        // show, [lowest] down from the body's top. The name and the labels above the rows sit high enough for [end].
+        val frameReach = kkCardFrameReachDp(look.style.material, maxWidth.value) + RewardBodyFrameClearanceDp
+        val rowsEnd = { lowest: Dp -> max(end.value, RewardCardCutDp * (bodyTop + lowest).value / maxHeight.value + frameReach).dp }
         val gap = spec.dp(if (spec.compact) 3f else 6f)
         // Phone cards keep a card's mechanics (rules, a relic's upside); its numbers return when it has none.
         val mechanics = presentation.rules.any { it.kind != RuleLineKind.COST } || presentation.relic != null
         val changes = if (spec.compact && mechanics) emptyList() else presentation.changes
         val descriptions = if (spec.compact && changes.isNotEmpty()) emptyList() else presentation.descriptions
-        val body: @Composable (Float, Modifier, RewardFacePlates?) -> Unit = { fit, bodyModifier, rowPlates ->
+        val body: @Composable (Float, Modifier, RewardFacePlates?, Dp) -> Unit = { fit, bodyModifier, rowPlates, lowest ->
             val font = spec.font * fit
-            Column(bodyModifier.padding(start = start, end = bodyEnd), verticalArrangement = Arrangement.spacedBy(gap * fit)) {
+            Column(bodyModifier.padding(start = start, end = end), verticalArrangement = Arrangement.spacedBy(gap * fit)) {
                 RewardCardName(presentation.title, presentation.rank, typography, (if (spec.compact) 26f else 38f) * font, clock,
                     color = if (presentation.heirloom) roles.gold.base else Kk.Bone)
                 if (narrow) presentation.bandEnd?.let { bandEnd ->
@@ -672,27 +673,31 @@ internal fun RewardCard(
                     OverlayFitText(family, typography.monoStyle(11f * font, color = Kk.Mute), uppercase = true, maxLines = 2)
                 }
                 Spacer(Modifier.height(spec.dp(if (spec.compact) 2f else 8f) * fit))
-                // An item's values take its element hue (the preset's volt for Kinetic): rarity is the card's material, not a value color.
-                val valueColor = rewardTextTone(if (presentation.item != null) iconColor else accent)
-                changes.forEachIndexed { line, change ->
-                    RewardStatLine(change, line == 0, valueColor, spec.compact, font, typography, roles, Modifier.facePlate(rowPlates, "stat$line"))
-                }
-                val bodySize = (if (spec.compact) 13f else 14.5f) * font
-                if (presentation.rules.isNotEmpty()) {
-                    // Trigger bars and numbers take the line's element, else the card's own type hue.
-                    RewardRuleRows(presentation.rules, iconColor, bodySize, (if (spec.compact) 9f else 10.5f) * font, spec.lineHeight, typography, roles,
-                        rowPlates, gap * fit * 0.4f,
-                        costLabel = if (spec.compact) null else language.text(OverlayRedesignText.Cost),
-                        costLabelStyle = typography.monoStyle((if (spec.compact) 8.5f else 9.5f) * font, weight = FontWeight.Bold, color = roles.threat))
-                } else {
-                    descriptions.forEachIndexed { line, description ->
-                        val color = if (presentation.decline) Kk.Mute else Kk.Bone2
-                        val number = if (presentation.relic != null) Kk.Bone else color
-                        OverlayRichText(
-                            rewardRichText(description, number, if (line == 0) presentation.values else emptyList(), rewardTextTone(accent)),
-                            typography.bodyStyle(bodySize, lineHeightEm = spec.lineHeight, color = color),
-                            Modifier.fillMaxWidth().facePlate(rowPlates, "description$line"),
-                        )
+                if (changes.isNotEmpty() || presentation.rules.isNotEmpty() || descriptions.isNotEmpty()) Column(
+                    Modifier.padding(end = rowsEnd(lowest) - end), verticalArrangement = Arrangement.spacedBy(gap * fit),
+                ) {
+                    // An item's values take its element hue (the preset's volt for Kinetic): rarity is the card's material, not a value color.
+                    val valueColor = rewardTextTone(if (presentation.item != null) iconColor else accent)
+                    changes.forEachIndexed { line, change ->
+                        RewardStatLine(change, line == 0, valueColor, spec.compact, font, typography, roles, Modifier.facePlate(rowPlates, "stat$line"))
+                    }
+                    val bodySize = (if (spec.compact) 13f else 14.5f) * font
+                    if (presentation.rules.isNotEmpty()) {
+                        // Trigger bars and numbers take the line's element, else the card's own type hue.
+                        RewardRuleRows(presentation.rules, iconColor, bodySize, (if (spec.compact) 9f else 10.5f) * font, spec.lineHeight, typography,
+                            roles, rowPlates, gap * fit * 0.4f,
+                            costLabel = if (spec.compact) null else language.text(OverlayRedesignText.Cost),
+                            costLabelStyle = typography.monoStyle((if (spec.compact) 8.5f else 9.5f) * font, weight = FontWeight.Bold, color = roles.threat))
+                    } else {
+                        descriptions.forEachIndexed { line, description ->
+                            val color = if (presentation.decline) Kk.Mute else Kk.Bone2
+                            val number = if (presentation.relic != null) Kk.Bone else color
+                            OverlayRichText(
+                                rewardRichText(description, number, if (line == 0) presentation.values else emptyList(), rewardTextTone(accent)),
+                                typography.bodyStyle(bodySize, lineHeightEm = spec.lineHeight, color = color),
+                                Modifier.fillMaxWidth().facePlate(rowPlates, "description$line"),
+                            )
+                        }
                     }
                 }
             }
@@ -700,11 +705,11 @@ internal fun RewardCard(
         // Costs are never hidden: a relic's liability in a threat-striped block, laid out under the body
         // as its tail. It fits with the body; when the body still overflows at its smallest size, the
         // cost keeps its whole height at the bottom and only the text above it scrolls.
-        val costs: (@Composable (Float, Boolean) -> Unit)? = if (presentation.rules.isEmpty() && presentation.liabilities.isNotEmpty()) {
-            { fit, probing ->
+        val costs: (@Composable (Float, Boolean, Dp) -> Unit)? = if (presentation.rules.isEmpty() && presentation.liabilities.isNotEmpty()) {
+            { fit, probing, lowest ->
                 val font = spec.font * fit
                 val rowPlates = if (probing) null else plates
-                Column(Modifier.fillMaxWidth().padding(start = start, end = bodyEnd)
+                Column(Modifier.fillMaxWidth().padding(start = start, end = rowsEnd(lowest))
                     .then(if (probing) Modifier else Modifier.testTag("kinetickk.gameplay.choice.${index + 1}.cost")),
                     verticalArrangement = Arrangement.spacedBy(gap * fit)) {
                     presentation.liabilities.forEachIndexed { line, liability ->
@@ -727,8 +732,8 @@ internal fun RewardCard(
         val overflows = scrollState.maxValue in 1 until Int.MAX_VALUE
         Box(Modifier.offset(y = bodyTop).fillMaxWidth().height(bodyHeight).onPlaced { plates?.viewport = it }) {
             val steps = remember(textScale) { rewardCardFitSteps(textScale) }
-            RewardCardFitLayout(steps, bodyFit, probe, onBodyFit, Modifier.fillMaxSize(), probeContent = { fit -> body(fit, Modifier, null) },
-                tail = costs, tailGap = { fit -> (gap * fit).roundToPx() }) { fit ->
+            RewardCardFitLayout(steps, bodyFit, probe, onBodyFit, Modifier.fillMaxSize(), probeContent = { fit, lowest -> body(fit, Modifier, null, lowest) },
+                tail = costs, tailGap = { fit -> (gap * fit).roundToPx() }) { fit, lowest ->
                 body(
                     fit,
                     Modifier.fillMaxSize().testTag("kinetickk.gameplay.choice.${index + 1}.text")
@@ -737,6 +742,7 @@ internal fun RewardCard(
                         .then(if (overflows) Modifier.rewardScrollFade(scrollState, spec.dp(18f)) else Modifier)
                         .verticalScroll(scrollState, enabled = enabled),
                     plates,
+                    lowest,
                 )
             }
             RewardScrollIndicator(scrollState, iconColor, Modifier.align(Alignment.CenterEnd)
@@ -1627,10 +1633,10 @@ private object RewardCardBodySlot
 
 private object RewardCardTailSlot
 
-/** Subcompose keys of the measured-only body at a step, and of the tail. */
-private data class RewardCardProbeSlot(val step: Float)
+/** Subcompose keys of the measured-only body at a step, and of the tail, with the lowest line (px) they were measured for. */
+private data class RewardCardProbeSlot(val step: Float, val lowest: Int)
 
-private data class RewardCardTailProbeSlot(val step: Float)
+private data class RewardCardTailProbeSlot(val step: Float, val lowest: Int)
 
 /**
  * Lays out a card body at the largest of [steps] whose [probeContent] (the same body, measured
@@ -1641,6 +1647,12 @@ private data class RewardCardTailProbeSlot(val step: Float)
  * [tailGap] px under the body at the same step and fits with it. It always shows whole: when the
  * body overflows even at the smallest step, the body keeps the height the tail leaves (and scrolls)
  * and the tail sits at the bottom.
+ *
+ * The last argument of each is how far down the box its lowest line reaches. Steps are measured
+ * as if it reached the box's bottom. The shown body then tries, a few times, as low as its last
+ * measure ended, and keeps the highest such line at which it still ends no lower (wider rows can
+ * shrink a long word less and run lower); where none holds, the box's bottom. The tail takes how
+ * low it ends under the measured body when it measures no taller there, else the box's bottom.
  */
 @Composable
 private fun RewardCardFitLayout(
@@ -1649,25 +1661,42 @@ private fun RewardCardFitLayout(
     probe: TextMeasurer,
     onFit: (Float) -> Unit,
     modifier: Modifier,
-    probeContent: @Composable (Float) -> Unit,
-    tail: (@Composable (Float, Boolean) -> Unit)? = null,
+    probeContent: @Composable (Float, Dp) -> Unit,
+    tail: (@Composable (Float, Boolean, Dp) -> Unit)? = null,
     tailGap: Density.(Float) -> Int = { 0 },
-    content: @Composable (Float) -> Unit,
+    content: @Composable (Float, Dp) -> Unit,
 ) {
     SubcomposeLayout(modifier) { constraints ->
         var need = steps.last()
         val width = Constraints.fixedWidth(constraints.maxWidth)
-        // Each step is measured once per pass (a slot is composed once), so its heights are kept.
-        val bodies = HashMap<Float, Int>()
-        val tailHeights = HashMap<Float, Int>()
-        fun bodyHeight(step: Float): Int = bodies.getOrPut(step) {
-            subcompose(RewardCardProbeSlot(step)) { CompositionLocalProvider(LocalOverlayTextProbe provides probe) { probeContent(step) } }
-                .maxOfOrNull { it.measure(width).height } ?: 0
+        val box = constraints.maxHeight
+        // Each slot is measured once per pass (a slot is composed once), so its heights are kept.
+        val bodies = HashMap<RewardCardProbeSlot, Int>()
+        val tailHeights = HashMap<RewardCardTailProbeSlot, Int>()
+        fun bodyHeight(step: Float, lowest: Int = box): Int = RewardCardProbeSlot(step, lowest).let { slot ->
+            bodies.getOrPut(slot) {
+                subcompose(slot) { CompositionLocalProvider(LocalOverlayTextProbe provides probe) { probeContent(step, lowest.toDp()) } }
+                    .maxOfOrNull { it.measure(width).height } ?: 0
+            }
         }
-        fun tailHeight(step: Float): Int = if (tail == null) 0 else tailHeights.getOrPut(step) {
-            val measured = subcompose(RewardCardTailProbeSlot(step)) { CompositionLocalProvider(LocalOverlayTextProbe provides probe) { tail(step, true) } }
-                .maxOfOrNull { it.measure(width).height } ?: 0
-            measured + tailGap(step)
+        fun tailHeight(step: Float, lowest: Int = box): Int = if (tail == null) 0 else RewardCardTailProbeSlot(step, lowest).let { slot ->
+            tailHeights.getOrPut(slot) {
+                val measured = subcompose(slot) { CompositionLocalProvider(LocalOverlayTextProbe provides probe) { tail(step, true, lowest.toDp()) } }
+                    .maxOfOrNull { it.measure(width).height } ?: 0
+                measured + tailGap(step)
+            }
+        }
+        // How low the shown body's lines at [step] reach, at most [limit] unless only the box's bottom holds.
+        fun bodyLowest(step: Float, limit: Int): Int {
+            var lowest = box
+            var candidate = min(bodyHeight(step), limit)
+            repeat(3) {
+                if (candidate >= lowest) return lowest
+                val height = bodyHeight(step, candidate)
+                if (height <= candidate) lowest = candidate
+                candidate = min(height, limit)
+            }
+            return lowest
         }
         for (step in steps) {
             if (bodyHeight(step) + tailHeight(step) <= constraints.maxHeight) {
@@ -1678,13 +1707,17 @@ private fun RewardCardFitLayout(
         onFit(need)
         val fit = min(need, cap)
         if (tail == null) {
-            val placeables = subcompose(RewardCardBodySlot) { content(fit) }.map { it.measure(constraints) }
+            val lowest = bodyLowest(fit, box).toDp()
+            val placeables = subcompose(RewardCardBodySlot) { content(fit, lowest) }.map { it.measure(constraints) }
             return@SubcomposeLayout layout(constraints.maxWidth, constraints.maxHeight) { placeables.forEach { it.place(0, 0) } }
         }
-        val tails = subcompose(RewardCardTailSlot) { tail(fit, false) }.map { it.measure(width.copy(maxHeight = constraints.maxHeight)) }
         // A pixel of slack under the measured body, so a rounding step never makes it scroll.
+        val tailBottom = min(bodyHeight(fit) + 1 + tailHeight(fit), box)
+        val tailLowest = (if (tailHeight(fit, tailBottom) <= tailHeight(fit)) tailBottom else box).toDp()
+        val tails = subcompose(RewardCardTailSlot) { tail(fit, false, tailLowest) }.map { it.measure(width.copy(maxHeight = constraints.maxHeight)) }
         val tailTop = min(bodyHeight(fit) + 1, (constraints.maxHeight - (tails.maxOfOrNull { it.height } ?: 0) - tailGap(fit)).coerceAtLeast(0))
-        val body = subcompose(RewardCardBodySlot) { content(fit) }.map { it.measure(constraints.copy(minHeight = 0, maxHeight = tailTop)) }
+        val lowest = bodyLowest(fit, tailTop).toDp()
+        val body = subcompose(RewardCardBodySlot) { content(fit, lowest) }.map { it.measure(constraints.copy(minHeight = 0, maxHeight = tailTop)) }
         layout(constraints.maxWidth, constraints.maxHeight) {
             body.forEach { it.place(0, 0) }
             tails.forEach { it.place(0, tailTop + tailGap(fit)) }
