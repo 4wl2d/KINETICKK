@@ -144,8 +144,9 @@ internal class RunningTouchTracker {
  * tracker in render time: when each control was last pressed (its 90 ms face flash), when an Apex
  * press found it cooling (the badge's refusal shake), whether key caps show ([keyHints]: set by
  * any gameplay key, cleared by a touch; a mouse leaves it) and whether the input is touch ([touchInput]:
- * set by a touch, cleared by any gameplay key; reward cards then name a Z/X/C slot by number). It never
- * feeds gameplay. One instance per gameplay host; no allocation.
+ * set by a touch, cleared by a key a player could bind or the Escape/Enter aliases, never by a device key such as
+ * volume; reward cards then name a Z/X/C slot by number). It never feeds gameplay. One instance per gameplay host;
+ * no allocation.
  */
 internal class RunningControlPressLog {
     private val pressedAt = FloatArray(RunningControlTarget.entries.size) { Float.NEGATIVE_INFINITY }
