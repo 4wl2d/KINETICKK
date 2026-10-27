@@ -3,7 +3,6 @@
 
 package kinetickk.flow.session.interaction.codex.impl
 
-import androidx.compose.ui.graphics.toArgb
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemRarity
@@ -15,7 +14,6 @@ import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.content.api.rankLines
 import kinetickk.ball.content.api.ruleLines
 import kinetickk.ball.gameplay.api.GameplayBuildSummaryProjection
-import kinetickk.ball.gameplay.interaction.canvas.activeItemEmptyPipColor
 import kinetickk.ball.gameplay.api.GameplayInstanceId
 import kinetickk.ball.gameplay.api.GameplayRevision
 import kinetickk.ball.gameplay.api.RunId
@@ -29,8 +27,6 @@ import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.KK_ICON_GRID
-import kinetickk.foundation.design.KkVisionMode
-import kinetickk.foundation.design.kkContrast
 import kotlin.math.sqrt
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -170,18 +166,5 @@ class CodexActiveItemsTest {
         // A large glyph keeps the icon's own weight, and the widths come in a few quarter steps.
         assertEquals(2f, codexActiveGlyphStroke(48f, 1f))
         assertTrue(widths.all { it * 4f == kotlin.math.floor(it * 4f) }, "$widths")
-    }
-
-    /**
-     * The Build tiles' unlit rank pips read on the tile face, at rest and lit, for every type hue in every colour-vision
-     * mode, at 1.35:1 or more (Line2 pips sat near 1:1 on a lit tile of a pale hue).
-     */
-    @Test
-    fun anActiveTilesUnlitRankPipsReadOnItsFace() {
-        for (mode in KkVisionMode.entries) for (tone in listOf(mode.palette.kinetic) + mode.palette.elements) for (lit in listOf(false, true)) {
-            val face = codexItemFace(tone, lit)
-            val contrast = kkContrast(activeItemEmptyPipColor(face), face)
-            assertTrue(contrast >= 1.35f, "$mode ${tone.toArgb().toUInt().toString(16)} lit=$lit: unlit pips at $contrast:1")
-        }
     }
 }

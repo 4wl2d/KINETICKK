@@ -974,7 +974,7 @@ private fun RewardCostBlock(text: String, label: String?, style: TextStyle, labe
  * little apart by colour, [RewardCardLook.plateTint]) tints the plate in the hue and strengthens its
  * pattern, so the type still reads off the metal frame.
  */
-private fun DrawScope.drawRewardIcon(
+internal fun DrawScope.drawRewardIcon(
     presentation: RewardCardPresentation,
     accent: Color,
     iconColor: Color,
