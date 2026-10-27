@@ -4,41 +4,58 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.SkillId
+import kinetickk.ball.gameplay.nucleus.model.SkillRuntime
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * Skill share gate (combat-final §10 Skills): the no-POI bot drafts and casts skills as a player would, and its
- * skills deal a meaningful but not dominant share of its damage. Seeds are the no-POI probe sequence
- * (`i * 7_919 + 13`, i = 1..31) for the share, and the first three of it per character for the spread, chosen by
- * definition, never by outcome.
+ * Skill share gate (combat-final §10 Skills): the no-POI bot takes, ranks and casts active items as a player would, and
+ * their effects deal a meaningful but not dominant share of its damage.
  *
- * The share counts the damage the skills cause ([kinetickk.ball.gameplay.nucleus.model.SkillRuntime.skillCausedDamage]):
- * their own hits, what a cast resolves (Catalyze's forced reactions) and the Core's impacts while a skill moves it
- * (Slingshot, Mass Driver, Arc Hook). The NoPoi bot is the Orb, whose drafted lane (Slingshot, Arc Hook, Catalyze)
- * delivers its damage through the Core and reactions: counted by skill hits alone it read 0.3–2.6 % (q10–q90 of 200
- * runs), so that metric could not see the Orb's skills at all.
+ * Population (restated for active items, R1.5): an active item reaches a run only through ordinary item offers, so the
+ * gate measures runs that own one. The share walks the no-POI probe sequence (`i * 7_919 + 13`, i = 1, 2, ...) in order
+ * with the Orb until [SHARE_RUNS] runs have bound an active item by [OWNED_BY_SECONDS]; the spread walks the same
+ * sequence for every character until [SPREAD_RUNS] runs of each have. Seeds are chosen by that definition, never by
+ * outcome; a probe that binds no active item by then is reported and left out. The walk is bounded: a population that
+ * cannot fill within [MAX_PROBES_PER_RUN] probes per run fails as such.
  *
- * The band is judged on the median run. A run's share depends on which lane skills its three drafts offered: over
- * 300 probe runs the 10th–90th percentile spans 0.056–0.17, wider than the band itself, and no skill number narrows
- * it (Catalyze reaction scale ×1.5, two more targets or a second off its cooldown, Arc Hook links ×1.5–×3 move the
- * 10th percentile by at most 0.004), so "every run in the band" measured the draft, not the skills. The share is read
- * at 720 s as specified: a run that ends earlier is reported, not judged (gate A owns survival), and at least half of
- * the runs must be judged.
+ * The share counts the damage the active effects cause ([kinetickk.ball.gameplay.nucleus.model.SkillRuntime.skillCausedDamage]):
+ * their own hits, what a cast resolves (Catalyze's forced reactions) and the Core's impacts while an effect moves it
+ * (Slingshot, Mass Driver, Arc Hook). The NoPoi bot is the Orb, whose lane (Slingshot, Arc Hook, Catalyze) delivers its
+ * damage through the Core and reactions: counted by skill hits alone it read 0.3–2.6 % (q10–q90 of 200 runs, with the
+ * 0.5.0 skill drafts), so that metric could not see the Orb's skills at all.
+ *
+ * The band is judged on the median run. A run's share depends on which effects its offers brought: with the 0.5.0 drafts,
+ * over 300 probe runs the 10th–90th percentile spanned 0.056–0.17, wider than the band itself, and no skill number
+ * narrowed it (Catalyze reaction scale ×1.5, two more targets or a second off its cooldown, Arc Hook links ×1.5–×3 moved
+ * the 10th percentile by at most 0.004), so "every run in the band" measured the offers, not the effects. The share is
+ * read at 720 s as specified: a run that ends earlier is reported, not judged (gate A owns survival), and at least half
+ * of the runs must be judged. The spread pools each effect's damage over the whole run
+ * ([kinetickk.ball.gameplay.nucleus.model.SkillRuntime.effectDamage], kept when its item is replaced) across every
+ * character's runs, over all active damage.
  */
 class SkillShareGateTest {
-    private class Run(val seed: Int, val shape: CoreShape, val share: Double, val bySkill: Map<SkillId, Double>, val seconds: Float) {
+    private class Run(
+        val seed: Int,
+        val shape: CoreShape,
+        val share: Double,
+        val bySkill: Map<SkillId, Double>,
+        val seconds: Float,
+        /** When the run first held an active item, or null when it held none by [OWNED_BY_SECONDS]. */
+        val firstActiveAt: Float?,
+    ) {
+        val owned: Boolean get() = firstActiveAt != null
         val judged: Boolean get() = seconds >= SHARE_SECONDS
     }
 
     @Test
     fun skillsDealBetweenEightAndTwentyPercentOfAFreshRunsDamage() {
-        val runs = ShareSeeds.map { seed -> play(seed, CoreShape.ORB) }
+        val runs = population(CoreShape.ORB, SHARE_RUNS)
         runs.forEach { run ->
-            println("SKILL-SHARE seed=${run.seed} share=${"%.3f".format(run.share)} sec=${run.seconds.toInt()}" +
-                (if (run.judged) " " else " (ended early, not judged) ") +
+            println("SKILL-SHARE seed=${run.seed} share=${"%.3f".format(run.share)} sec=${run.seconds.toInt()} " +
+                "firstActive=${run.firstActiveAt?.toInt()}" + (if (run.judged) " " else " (ended early, not judged) ") +
                 run.bySkill.entries.joinToString { (skill, damage) -> "$skill=${damage.toInt()}" })
         }
         val judged = runs.filter { it.judged }.map { it.share }.sorted()
@@ -51,15 +68,30 @@ class SkillShareGateTest {
 
     @Test
     fun noSingleSkillDealsMoreThanThirtyPercentOfAllSkillDamageAcrossTheCharacters() {
-        val runs = CoreShape.entries.flatMap { shape -> SpreadSeeds.map { seed -> play(seed, shape) } }
+        val runs = CoreShape.entries.flatMap { shape -> population(shape, SPREAD_RUNS) }
         val totals = SkillId.entries.associateWith { skill -> runs.sumOf { it.bySkill[skill] ?: 0.0 } }
         val all = totals.values.sum()
-        println("SKILL-SPREAD total=${all.toInt()} " + totals.entries.sortedByDescending { it.value }
+        println("SKILL-SPREAD runs=${runs.size} total=${all.toInt()} " + totals.entries.sortedByDescending { it.value }
             .joinToString { (skill, damage) -> "$skill=${"%.3f".format(if (all > 0.0) damage / all else 0.0)}" })
         assertTrue(all > 0.0, "the bots dealt skill damage")
         val top = totals.maxBy { it.value }
         assertTrue(top.value / all <= MAX_SINGLE_SKILL_SHARE,
             "${top.key} dealt ${"%.3f".format(top.value / all)} of all skill damage")
+    }
+
+    /** The first [size] runs of [shape] along the probe sequence that bind an active item by [OWNED_BY_SECONDS]. */
+    private fun population(shape: CoreShape, size: Int): List<Run> {
+        val runs = ArrayList<Run>(size)
+        var probe = 0
+        while (runs.size < size) {
+            probe++
+            assertTrue(probe <= size * MAX_PROBES_PER_RUN,
+                "only ${runs.size} of ${probe - 1} $shape probes bound an active item by $OWNED_BY_SECONDS s; $size needed")
+            val run = play(probe * 7_919 + 13, shape)
+            if (run.owned) runs += run
+            else println("SKILL-SHARE $shape seed=${run.seed} bound no active item by $OWNED_BY_SECONDS s (sec=${run.seconds.toInt()}), left out")
+        }
+        return runs
     }
 
     private fun play(seed: Int, shape: CoreShape): Run {
@@ -69,6 +101,7 @@ class SkillShareGateTest {
         state.coreShape = shape
         state.startRun()
         val bot = NoPoiBot()
+        var firstActiveAt: Float? = null
         while (state.elapsed < SHARE_SECONDS && (state.phase == GamePhase.RUNNING || state.phase == GamePhase.CHOICE)) {
             if (state.phase == GamePhase.CHOICE) bot.choose(state) else {
                 bot.control(state)
@@ -76,16 +109,25 @@ class SkillShareGateTest {
             }
             state.takeSoundCues()
             state.takeVisualFxCues()
+            if (firstActiveAt == null && (0 until SkillRuntime.SLOTS).any { !state.skillLoadout.isEmpty(it) }) {
+                firstActiveAt = state.elapsed
+            }
+            // A run without an active item by then is not in the population: nothing later is read from it.
+            if (firstActiveAt == null && state.elapsed >= OWNED_BY_SECONDS) break
         }
         // Per active effect over the whole run, so a replaced active keeps the damage it dealt.
         val bySkill = SkillId.entries.associateWith { state.skillRuntime.effectDamage(it).toDouble() }.filterValues { it > 0.0 }
         val share = if (state.damageDealt > 0.0) state.skillRuntime.skillCausedDamage / state.damageDealt else 0.0
-        return Run(seed, shape, share, bySkill, state.elapsed)
+        return Run(seed, shape, share, bySkill, state.elapsed, firstActiveAt)
     }
 
     private companion object {
-        val ShareSeeds: List<Int> = (1..31).map { it * 7_919 + 13 }
-        val SpreadSeeds: List<Int> = (1..3).map { it * 7_919 + 13 }
+        const val SHARE_RUNS = 31
+        const val SPREAD_RUNS = 3
+        /** A population run has bound an active item by this run time. */
+        const val OWNED_BY_SECONDS = 360f
+        /** The walk's bound: at most this many probes per population run before the population counts as unfillable. */
+        const val MAX_PROBES_PER_RUN = 4
         const val SHARE_SECONDS = 720f
         const val MIN_SHARE = 0.08
         const val MAX_SHARE = 0.20
