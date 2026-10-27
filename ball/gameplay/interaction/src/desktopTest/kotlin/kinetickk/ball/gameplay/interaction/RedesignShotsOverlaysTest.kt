@@ -143,7 +143,8 @@ class RedesignShotsOverlaysTest {
                 })
             },
             // Active items, one per deal as offers deal them: into a free slot in the character's lane, while every
-            // slot is full, and an owned one ranking to III; then the prompt asking which held active to replace.
+            // slot is full, an owned one ranking to II and one to III, and the free-slot deal as a touch player sees it
+            // (the slot by number); then the prompt asking which held active to replace, by key and on touch.
             Scene("levelup-active") { w, h, l ->
                 RewardShot(model {
                     val content = rewardActiveFixtureContent
@@ -176,25 +177,32 @@ class RedesignShotsOverlaysTest {
                     )
                 })
             },
-            Scene("active-slot") { w, h, l ->
+            // Catalyze, element-less, owned at rank I in C and ranking to II beside two passive offers.
+            Scene("levelup-active-rank2") { w, h, l ->
                 RewardShot(model {
                     val content = rewardActiveFixtureContent
                     val base = rewardFixtureActiveBase
-                    val held = listOf(base to 2, base + 1 to 1, base + 2 to 1)
-                    val incoming = base + 3
                     rewardFixtureModel(
-                        content = content, choiceType = ChoiceType.ACTIVE_SLOT, coreShape = laneOf(SkillId.SOLAR_FLARE),
-                        choices = held.mapIndexed { slot, (id, rank) ->
-                            val item = requireNotNull(content.item(id))
-                            ChoiceOption(ChoiceType.ACTIVE_SLOT, item.name, "", "", itemId = id, skillId = item.active, skillRank = rank,
-                                activeSlot = slot, incomingItemId = incoming)
-                        } + ChoiceOption(ChoiceType.ACTIVE_SLOT, requireNotNull(content.item(incoming)).name, "", "", incomingItemId = incoming,
-                            // An Uncommon item's salvage as the nucleus names it.
-                            salvageMatter = 4),
-                        itemStacks = List(content.items.size) { id -> held.firstOrNull { it.first == id }?.second ?: 0 },
-                        language = l, width = w, height = h, textScale = textScale,
+                        content = content, choices = listOf(itemChoice(2), rewardActiveChoice(base + 2, slot = 2, stacks = 1), itemChoice(4)),
+                        itemStacks = List(content.items.size) { if (it == base + 2) 1 else 0 },
+                        discoveredItems = setOf(2, 4, base + 2), language = l, width = w, height = h, textScale = textScale,
                     )
                 })
+            },
+            Scene("levelup-active-touch") { w, h, l ->
+                RewardShot(model {
+                    rewardFixtureModel(
+                        content = rewardActiveFixtureContent, coreShape = laneOf(SkillId.SOLAR_FLARE),
+                        choices = listOf(itemChoice(0), rewardActiveChoice(rewardFixtureActiveBase, slot = 0), itemChoice(2)),
+                        discoveredItems = setOf(0), language = l, width = w, height = h, textScale = textScale,
+                    )
+                }, touch = true)
+            },
+            Scene("active-slot") { w, h, l ->
+                RewardShot(activeSlotModel(l, w, h, textScale))
+            },
+            Scene("active-slot-touch") { w, h, l ->
+                RewardShot(activeSlotModel(l, w, h, textScale), touch = true)
             },
             Scene("weapon") { w, h, l ->
                 RewardShot(model {
@@ -361,6 +369,29 @@ class RedesignShotsOverlaysTest {
     }
 }
 
+/**
+ * The active slot prompt while Solar Flare (rank II), Meteor and Catalyze hold Z/X/C and Frost Line comes in: a replace
+ * card per held active and the keep card.
+ */
+private fun activeSlotModel(language: AppLanguage, width: Float, height: Float, textScale: Float): GameplayRenderModel {
+    val content = rewardActiveFixtureContent
+    val base = rewardFixtureActiveBase
+    val held = listOf(base to 2, base + 1 to 1, base + 2 to 1)
+    val incoming = base + 3
+    return rewardFixtureModel(
+        content = content, choiceType = ChoiceType.ACTIVE_SLOT, coreShape = laneOf(SkillId.SOLAR_FLARE),
+        choices = held.mapIndexed { slot, (id, rank) ->
+            val item = requireNotNull(content.item(id))
+            ChoiceOption(ChoiceType.ACTIVE_SLOT, item.name, "", "", itemId = id, skillId = item.active, skillRank = rank,
+                activeSlot = slot, incomingItemId = incoming)
+        } + ChoiceOption(ChoiceType.ACTIVE_SLOT, requireNotNull(content.item(incoming)).name, "", "", incomingItemId = incoming,
+            // An Uncommon item's salvage as the nucleus names it.
+            salvageMatter = 4),
+        itemStacks = List(content.items.size) { id -> held.firstOrNull { it.first == id }?.second ?: 0 },
+        language = language, width = width, height = height, textScale = textScale,
+    )
+}
+
 /** A character whose active lane holds [effect]. */
 private fun laneOf(effect: SkillId): CoreShape = CoreShape.entries.first { effect in rewardActiveFixtureContent.coreShape(it).activeLane }
 
@@ -375,12 +406,12 @@ private fun WorldShot(model: GameplayRenderModel) {
 }
 
 @Composable
-private fun RewardShot(model: GameplayRenderModel) {
+private fun RewardShot(model: GameplayRenderModel, touch: Boolean = false) {
     WorldShot(model)
     RewardContent(
         model,
         choiceLayoutGeometry(model.screenWidth, model.screenHeight, 1f, model.choices.size, model.choicesCanReroll),
-        1.3f, true, {}, {}, {},
+        1.3f, true, {}, {}, {}, touch,
     )
 }
 
