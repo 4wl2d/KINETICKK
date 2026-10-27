@@ -437,9 +437,11 @@ fun kkKeyCapStyle(measurer: CanvasTextMeasurer, size: Float) =
  * top-right when [maxCharges] is 2 ([charges] available), the [active] share as a bar in [activeColor]
  * near the bottom ([pending] in Bone: a skill in flight), a Bone face while [pressed] or on the
  * [readyFlash], the sweep's leading edge in [refundColor] at [refundFlash] (a refund or a refusal), and
- * [keyLayout] on an Ink3 key cap centred below the slot. [locked] draws the hatch and the lock only.
- * [shakeX] moves the whole slot. [unit] is px per reference dp for the pips and the key cap (0 = dp).
- * Allocation-free: paths come from the shared memo; the shake is a translation.
+ * [keyLayout] on an Ink3 key cap centred below the slot. [empty] is a slot nothing is bound to yet (it is usable, not
+ * locked): a darker Ink1 face inside a dashed Line2 outline with its [maxRank] pips unlit and no glyph, sweep or bar.
+ * [locked] draws the hatch and the lock only. [shakeX] moves the whole slot. [unit] is px per reference dp for the
+ * pips and the key cap (0 = dp). Allocation-free: paths come from the shared memo, the dashed outline from a
+ * one-width stroke cache; the shake is a translation.
  */
 fun DrawScope.drawKkSkillSlot(
     measurer: CanvasTextMeasurer,
@@ -465,10 +467,12 @@ fun DrawScope.drawKkSkillSlot(
     iconSizeDp: Float = 26f,
     rankFill: Float = 1f,
     unit: Float = 0f,
+    empty: Boolean = false,
 ) {
     translate(shakeX, 0f) {
         drawSkillSlotBody(measurer, bounds, icon, iconColor, cooldown, ready, rank, maxRank, charges, maxCharges, active, activeColor,
-            pending, locked, pressed, readyFlash, refundFlash, refundColor, keyLayout, iconSizeDp, rankFill, if (unit > 0f) unit else density)
+            pending, locked, empty, pressed, readyFlash, refundFlash, refundColor, keyLayout, iconSizeDp, rankFill,
+            if (unit > 0f) unit else density)
     }
 }
 
@@ -487,6 +491,7 @@ private fun DrawScope.drawSkillSlotBody(
     activeColor: Color,
     pending: Float,
     locked: Boolean,
+    empty: Boolean,
     pressed: Float,
     readyFlash: Float,
     refundFlash: Float,
@@ -504,31 +509,40 @@ private fun DrawScope.drawSkillSlotBody(
         drawKkIcon(KkIcon.SYSTEM_LOCKED, bounds.center, d(16f), Kk.Mute2)
         return
     }
-    if (ready) {
-        // drop-shadow(0 0 5px you @55 %) as stacked strokes; the face covers their inner half.
-        for (index in 0 until SlotGlowWidths.size) {
-            drawPath(face, roles.you, alpha = SlotGlowAlphas[index], style = kkStroke(d(SlotGlowWidths[index])))
-        }
-    }
-    drawPath(face, if (ready) Kk.Ink3 else Kk.Ink2)
-    val flash = max(pressed, readyFlash).coerceIn(0f, 1f)
-    if (flash > 0f) drawPath(face, Kk.Bone, alpha = flash)
-    if (icon != null) drawKkIcon(icon, bounds.center, d(iconSizeDp), iconColor)
-    val cd = cooldown.coerceIn(0f, 1f)
-    val edge = refundFlash.coerceIn(0f, 1f)
-    if (cd > 0f || edge > 0f) {
-        clipPath(face) {
-            val radius = max(bounds.width, bounds.height)
-            val center = bounds.center
-            if (cd > 0f) {
-                drawArc(Kk.Ink.copy(alpha = 0.8f), -90f, 360f * cd, true,
-                    Offset(center.x - radius, center.y - radius), Size(radius * 2f, radius * 2f))
+    if (empty) {
+        // Room for an active item: a recessed face inside a dashed edge (the "not yet" outline of an unmet pairing chip),
+        // its rank pips unlit below; a press still flashes it, faintly.
+        drawPath(face, Kk.Ink1)
+        drawPath(face, Kk.Line2, style = KkSkillSlotStrokes.dashed(d(EMPTY_SLOT_STROKE_DP), density))
+        val flash = pressed.coerceIn(0f, 1f)
+        if (flash > 0f) drawPath(face, Kk.Bone, alpha = flash * EMPTY_SLOT_PRESS_ALPHA)
+    } else {
+        if (ready) {
+            // drop-shadow(0 0 5px you @55 %) as stacked strokes; the face covers their inner half.
+            for (index in 0 until SlotGlowWidths.size) {
+                drawPath(face, roles.you, alpha = SlotGlowAlphas[index], style = kkStroke(d(SlotGlowWidths[index])))
             }
-            if (edge > 0f) {
-                // The sweep's leading radius (where the remaining cooldown ends).
-                val angle = (-90f + 360f * cd) * DEGREES_TO_RADIANS
-                drawLine(refundColor, center, Offset(center.x + kotlin.math.cos(angle) * radius, center.y + kotlin.math.sin(angle) * radius),
-                    d(3f), alpha = edge)
+        }
+        drawPath(face, if (ready) Kk.Ink3 else Kk.Ink2)
+        val flash = max(pressed, readyFlash).coerceIn(0f, 1f)
+        if (flash > 0f) drawPath(face, Kk.Bone, alpha = flash)
+        if (icon != null) drawKkIcon(icon, bounds.center, d(iconSizeDp), iconColor)
+        val cd = cooldown.coerceIn(0f, 1f)
+        val edge = refundFlash.coerceIn(0f, 1f)
+        if (cd > 0f || edge > 0f) {
+            clipPath(face) {
+                val radius = max(bounds.width, bounds.height)
+                val center = bounds.center
+                if (cd > 0f) {
+                    drawArc(Kk.Ink.copy(alpha = 0.8f), -90f, 360f * cd, true,
+                        Offset(center.x - radius, center.y - radius), Size(radius * 2f, radius * 2f))
+                }
+                if (edge > 0f) {
+                    // The sweep's leading radius (where the remaining cooldown ends).
+                    val angle = (-90f + 360f * cd) * DEGREES_TO_RADIANS
+                    drawLine(refundColor, center, Offset(center.x + kotlin.math.cos(angle) * radius, center.y + kotlin.math.sin(angle) * radius),
+                        d(3f), alpha = edge)
+                }
             }
         }
     }
@@ -538,7 +552,7 @@ private fun DrawScope.drawSkillSlotBody(
     val pipGap = d(2f)
     val pipTop = bounds.top + d(4f)
     var pipLeft = bounds.left + cut + d(2f)
-    val owned = rank.coerceIn(0, maxRank)
+    val owned = if (empty) 0 else rank.coerceIn(0, maxRank)
     val top = owned >= maxRank
     for (index in 0 until maxRank) {
         val path = KkPathMemo.sheared(pipLeft, pipTop, pipLeft + pipWidth, pipTop + pipHeight)
@@ -556,6 +570,7 @@ private fun DrawScope.drawSkillSlotBody(
         }
         pipLeft += pipWidth + pipGap
     }
+    if (empty) return
     if (maxCharges >= 2) {
         val side = d(4f)
         var chargeRight = bounds.right - d(4f)
@@ -585,5 +600,22 @@ private fun DrawScope.drawSkillSlotBody(
         drawKkText(keyLayout, bounds.center.x, capTop + capHeight * 0.5f, Kk.Bone, align = KkAlign.CENTER, valign = KkVAlign.CENTER)
     }
 }
+
+/** The empty slot's dashed edge, cached for its one width (draw-thread confined). */
+private object KkSkillSlotStrokes {
+    private var key = -1f
+    private var stroke: Stroke? = null
+
+    fun dashed(width: Float, density: Float): Stroke {
+        if (key == width && stroke != null) return stroke!!
+        key = width
+        return Stroke(width, cap = StrokeCap.Butt, pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f * density, 4f * density)))
+            .also { stroke = it }
+    }
+}
+
+/** The empty slot's dashed edge (dp) and how strongly a press lights its face. */
+private const val EMPTY_SLOT_STROKE_DP = 1.5f
+private const val EMPTY_SLOT_PRESS_ALPHA = 0.35f
 
 private const val DEGREES_TO_RADIANS = (kotlin.math.PI / 180.0).toFloat()
