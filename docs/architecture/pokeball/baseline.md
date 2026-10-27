@@ -842,17 +842,18 @@ carries every 0.5.0 field). Content goldens: items `0..172` `68d4572118b9586d`
 items `269..286` with the active offer factors and every character's lane
 `a73030c02a213d44`, build tuning `90af4a2ca532d113`, weapon and Matrix economy
 `6e61ebea0bcb73f7`, active effects, Apex, upgrades and tempo
-`ec03a7fedb2fb169`; Rebirth `461252b1f47728a5` and Relics `c8c02a43bec87968`
+`443334dcc0d91f0d`; Rebirth `461252b1f47728a5` and Relics `c8c02a43bec87968`
 are unchanged, and the seeded baseline trace still passes unchanged. Active
 items re-pinned four goldens on purpose: items `173..268` (from
 `c11c59b06e52e3dc`) and build tuning (from `d6fa6a5d0a26712d`) for player text
 that names actives instead of skills; the effects golden (from
 `0e1fa079fddfd61b`) for the removed skill cadence and tag points, that wording,
 the calibrated rank numbers (Catalyze's targets and reaction scale at its cast
-bounds, so its rank III text is the base's ten reactions at 130 % again),
-Resonator's rank III text (it replays at 84 %) and Null Shroud's base bolts and
-12.35 s rank II cooldown; the actives golden (first `aea321347af3e7dc`) for the
-calibrated passives, the Epic unlock at 10 and the lane factors 3 and 8. The
+bounds, so its rank III text names the wider area and the ten reactions at
+130 % it shares with rank II), Resonator's rank III text (it replays at 84 %)
+and Null Shroud's base bolts and 12.35 s rank II cooldown; the actives golden
+(first `aea321347af3e7dc`) for the calibrated passives, the Epic unlock at 10
+and the lane factors 3 and 8. The
 behavior evidence that pinned `SkillOfferTest`'s draft and rank-up methods now
 pins four `ActiveItemOfferTest` methods
 (`anActiveCardBindsTheLowestEmptySlotAndASecondStackRanksItReadyAtOnce`,

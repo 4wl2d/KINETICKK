@@ -282,7 +282,7 @@ private fun defaultSkill(id: SkillId): SkillDefinition = when (id) {
     SkillId.CATALYZE -> skill(
         id, "Catalyze",
         "Every enemy near the pointer carrying two elements reacts at once.",
-        "Forces up to ten reactions at 130% strength.",
+        "Across a wider area, forces up to ten reactions at 130% strength.",
         null, BuildTag.CHAIN, BuildTag.OVERCLOCK, SkillTargeting.AREA, 420f, SkillFamily.CATALYST,
         rank(7.65f, 308f, 8f, 1.3f, 2f),
         rank(6.8f, 350f, 10f, 1.3f, 2f),
