@@ -257,9 +257,9 @@ private fun defaultSkill(id: SkillId): SkillDefinition = when (id) {
         "Swallow incoming fire, then spit it back.",
         "Returned shots pierce one enemy.",
         StatusElement.VOID, BuildTag.PRECISION, BuildTag.ARSENAL, SkillTargeting.SELF, 0f, SkillFamily.GUARD,
-        rank(13.6f, 2.5f, 14f, 19.6f, 600f),
-        rank(12.3f, 3.5f, 20f, 25.2f, 600f),
-        rank(11.05f, 4.5f, 25f, 30.8f, 600f),
+        rank(13.6f, 2.5f, 10f, 19.6f, 600f),
+        rank(12.35f, 3.5f, 14f, 25.2f, 600f),
+        rank(11.05f, 4.5f, 18f, 30.8f, 600f),
     )
     SkillId.SLINGSHOT -> skill(
         id, "Slingshot",
