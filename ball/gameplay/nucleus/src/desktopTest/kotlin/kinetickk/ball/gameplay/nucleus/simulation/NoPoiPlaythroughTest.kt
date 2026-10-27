@@ -173,6 +173,9 @@ private const val POI_CLEARANCE = 360f
 /** The bot looks at its skills this often (simulated seconds). */
 private const val SKILL_CHECK_SECONDS = 0.1f
 
+/** Entropic Tide: the Decay stacks within its radius that make a cast worth it at full integrity. */
+private const val TIDE_DECAY_STACKS = 6
+
 /** The bot's Apex rule: a crowd of this many enemies within this radius, or integrity below this share. */
 private const val APEX_CROWD = 8
 private const val APEX_CROWD_RADIUS = 400f
@@ -416,12 +419,15 @@ internal class NoPoiBot(
         }
         val boss = s.enemies.firstOrNull { it.type == EnemyType.ARCHITECT && it.alive }
         return when (id) {
-            SkillId.SOLAR_FLARE -> s.heat >= 40f && enemiesWithin(s.coreX, s.coreY, values[1]) >= 3
+            // A crowd in reach is the cue at any heat: the vented heat only adds damage and Scorch, so a player does not
+            // hold a ready flare until the heat builds.
+            SkillId.SOLAR_FLARE -> enemiesWithin(s.coreX, s.coreY, values[1]) >= 3
             SkillId.FROST_SNAP, SkillId.FULL_STOP -> enemiesWithin(s.coreX, s.coreY, values[0]) >= 3 ||
                 boss != null && length(boss.x - s.coreX, boss.y - s.coreY) <= values[0] + 100f
+            // Low integrity, or Decay worth drawing in: six stacks in reach, a crowd's worth rather than a full harvest.
             SkillId.ENTROPIC_TIDE -> s.hp < s.maxHp * 0.5f || s.enemies.filter {
                 it.alive && length(it.x - s.coreX, it.y - s.coreY) <= values[0] + it.radius
-            }.sumOf { it.stacksOf(StatusElement.ENTROPY) } >= 12
+            }.sumOf { it.stacksOf(StatusElement.ENTROPY) } >= TIDE_DECAY_STACKS
             SkillId.NULL_SHROUD -> boltsWithin(250f) >= 4
             SkillId.MASS_DRIVER, SkillId.DUAL_INFUSION -> enemiesWithin(s.coreX, s.coreY, 400f) >= 3
             SkillId.METEOR, SkillId.STORM_COIL, SkillId.GRAVITY_WELL, SkillId.DECAY_SPORES, SkillId.RESONATOR ->
@@ -517,8 +523,10 @@ internal class NoPoiBot(
                     return
                 }
             }
-            // SEEK's Data cards outrank a new active; under the other policies a new active comes first.
-            val dataCard = dataPolicy == DataPolicy.SEEK && choices.any { isDataGainCard(s, it) }
+            // SEEK's Data cards outrank a new active other than one of the character's lane; under the other policies a
+            // new active comes first.
+            val laneActive = choices.any { c -> activeEffect(s, c)?.let { it in lane(s) && it in wantedActives(s) } == true }
+            val dataCard = dataPolicy == DataPolicy.SEEK && choices.any { isDataGainCard(s, it) } && !laneActive
             (if (dataCard) null else newActiveChoice(s)) ?: choices.indices.maxByOrNull { policyScore(s, choices[it], it) }
         } ?: return
         decisions++
@@ -547,10 +555,11 @@ internal class NoPoiBot(
 
     /*
      * Active items (combat-final §4.10, R1.8): a rank-up of an owned active is always taken; a new active is taken while
-     * a slot is free; with every slot full only a character-lane active is taken, to replace a rank-I active outside the
-     * lane, and any other new active is passed over for the best other card. SEEK takes Decay Spores (Spored deaths drop
-     * Data), else Gravity Well (it pulls Data in), whether to bind, rank or replace the lowest-rank non-Data active, before
-     * any Data card; AVOID never takes Decay Spores.
+     * a slot is free; with every slot full only a character-lane active is taken, to replace the lowest-rank active
+     * outside the lane (the character is built around its lane, so a player trades an off-lane active of any rank for
+     * one), and any other new active is passed over for the best other card. SEEK takes Decay Spores (Spored deaths drop
+     * Data), else Gravity Well (it pulls Data in), whether to bind, rank or replace the lowest-rank non-Data active, and a
+     * new lane active before any Data card; AVOID never takes Decay Spores.
      */
 
     private fun activeEffect(s: MutableGameState, c: ChoiceOption): SkillId? =
@@ -580,13 +589,13 @@ internal class NoPoiBot(
         s.skillLoadout.owns(effect) && effect in wantedActives(s)
     }
 
-    /** A card with a new active the bot takes now (a free slot, or a lane active replacing a rank-I one), or null. */
+    /** A card with a new active the bot takes now (a free slot, or a lane active replacing an off-lane one), or null. */
     private fun newActiveChoice(s: MutableGameState): Int? = s.choices.indices.firstOrNull { index ->
         val effect = activeEffect(s, s.choices[index]) ?: return@firstOrNull false
         !s.skillLoadout.owns(effect) && effect in wantedActives(s)
     }
 
-    /** The slot prompt: SEEK replaces the lowest-rank non-Data active for a Data active; a lane active replaces a rank-I one outside the lane; else keep. */
+    /** The slot prompt: SEEK replaces the lowest-rank non-Data active for a Data active; a lane active replaces the lowest-rank one outside the lane; else keep. */
     private fun slotChoice(s: MutableGameState): Int {
         val keep = s.choices.indexOfFirst { it.activeSlot == null }
         val incoming = s.pendingActiveItemId?.let(s.content::item)?.active
@@ -601,11 +610,10 @@ internal class NoPoiBot(
 
     private fun lane(s: MutableGameState): List<SkillId> = s.content.coreShape(s.coreShape).activeLane
 
-    /** The first slot holding a rank-I active outside the character's lane, or -1. */
-    private fun laneReplacementSlot(s: MutableGameState): Int = (0 until SkillRuntime.SLOTS).firstOrNull { slot ->
-        val held = s.skillLoadout.skill(slot)
-        held != null && held !in lane(s) && s.skillLoadout.rank(slot) == 1
-    } ?: -1
+    /** The slot holding the lowest-rank active outside the character's lane (the first of equals), or -1. */
+    private fun laneReplacementSlot(s: MutableGameState): Int = (0 until SkillRuntime.SLOTS)
+        .filter { slot -> s.skillLoadout.skill(slot).let { it != null && it !in lane(s) } }
+        .minByOrNull { s.skillLoadout.rank(it) } ?: -1
 
     /** SEEK's active weights (economy §2.1): Decay Spores 5 000, Gravity Well 4 000, any other active 0. */
     private fun seekSkillWeight(id: SkillId?): Float = when (id) {
