@@ -64,12 +64,24 @@ import kotlin.test.assertTrue
  * Fresh profiles win 5/5 at tier 1 and none from tier 2. Before the retune (reworked weapons, old
  * tuning) the strong build won tier 10 3/5 (losses at 83 and 85 s), the full-Matrix Pentagon 4/5 and
  * the half Matrix tier 8 2/5.
+ *
+ * With active items (lead Addendum C5) A and the survival bounds of D and H are population gates over
+ * [PopulationSeeds]: on the 05885fa9 base their five gate seeds passed with probability 0.49, 0.82 and 0.78, so they
+ * re-rolled with every change to the reward stream. B, C, E, F, G and the win bounds of D and H keep their seeds and
+ * thresholds (each passed with probability 1.00 at the base), and Gate I keeps its 31 seeds and 0.8 (Addendum C7).
  */
 class RebirthBalanceGateTest {
+    /**
+     * Gate A over the population (Addendum C5): a fresh tier-0 run won 204 of the 300 [PopulationSeeds] runs on the
+     * 05885fa9 base (0.680, SE 0.027), so five seeds reached four wins with probability 0.49. At least
+     * [A_MIN_WIN_SHARE] of the population must win: the base share minus two standard errors, rounded down.
+     */
     @Test fun aFreshNoPoiBotStillWinsTierZero() {
-        val outcomes = GateSeeds.map { seed -> play(seed, tier = 0, setup = Fresh) }
-        report("GATE A tier=0 fresh", outcomes)
-        assertTrue(outcomes.count { it.won } >= 4, "tier 0 must stay winnable: ${outcomes.summary()}")
+        val outcomes = populationOf(PopulationSeeds) { seed -> play(seed, tier = 0, setup = Fresh) }
+        val share = outcomes.shareOf { it.won }
+        println("GATE A tier=0 fresh population wins ${outcomes.count { it.won }} of ${outcomes.size} (${"%.3f".format(share)})")
+        assertTrue(share >= A_MIN_WIN_SHARE,
+            "tier 0 must stay winnable: ${"%.3f".format(share)} of ${outcomes.size} fresh runs won, below $A_MIN_WIN_SHARE")
     }
 
     /**
@@ -129,12 +141,21 @@ class RebirthBalanceGateTest {
                 "${high.summary()} / ${low.summary()}")
     }
 
+    /**
+     * D's survival bound is a population gate (Addendum C5): the base strong build's median survival over the 300
+     * [PopulationSeeds] runs was 574.48 s (bootstrap SE 16.24 s), and five seeds reached a median of 480 s with
+     * probability 0.82. The population's median survival must be at least [D_MIN_MEDIAN_SURVIVAL] s, the base median
+     * minus two standard errors rounded down. The win bound stays on the five gate seeds (8 of the 300 base runs won).
+     */
     @Test fun aStrongBuildSurvivesEightMinutesOfTierTenButRarelyClearsIt() {
         val outcomes = GateSeeds.map { seed -> play(seed, tier = 10, setup = Strong) }
+        val population = populationOf(PopulationSeeds) { seed -> play(seed, tier = 10, setup = Strong) }
         report("GATE D tier=10 strong", outcomes)
-        assertSignatureAndHarmony(outcomes, harmony = RelicId.STORMHEART_CAPACITOR)
-        val median = outcomes.map { it.seconds }.sorted()[outcomes.size / 2]
-        assertTrue(median >= 480f, "tier 10 must be survivable for a strong build: median $median s, ${outcomes.summary()}")
+        assertSignatureAndHarmony(outcomes + population, harmony = RelicId.STORMHEART_CAPACITOR)
+        val median = population.map { it.seconds }.gateMedian()
+        println("GATE D tier=10 strong population median survival $median s, wins ${population.count { it.won }} of ${population.size}")
+        assertTrue(median >= D_MIN_MEDIAN_SURVIVAL,
+            "tier 10 must be survivable for a strong build: population median $median s, below $D_MIN_MEDIAN_SURVIVAL s")
         assertTrue(outcomes.count { it.won } <= 3, "tier 10 must stay an achievement for the strong build: ${outcomes.summary()}")
     }
 
@@ -143,13 +164,21 @@ class RebirthBalanceGateTest {
      * Matter equal to its price, so every rank-0 Data item can be offered; the bot takes Data cards first, drafts Decay
      * Spores and Gravity Well, reaches level 42 soonest and casts the Apex as its post-cap Data recharges it. D's bounds
      * still hold: it survives a median of eight minutes and clears in at most three seeds of five.
+     *
+     * The survival bound is a population gate (Addendum C5): the base median survival over the 300 [PopulationSeeds]
+     * runs was 583.33 s (bootstrap SE 20.37 s), and five seeds reached 480 s with probability 0.78. The population's
+     * median must be at least [H_MIN_MEDIAN_SURVIVAL] s, the base median minus two standard errors rounded down. The
+     * win bound stays on the five gate seeds (1 of the 300 base runs won).
      */
     @Test fun aStrongBuildSeekingDataWithTheApexStillFindsTierTenHard() {
         val outcomes = GateSeeds.map { seed -> play(seed, tier = 10, setup = Strong, seekData = true) }
+        val population = populationOf(PopulationSeeds) { seed -> play(seed, tier = 10, setup = Strong, seekData = true) }
         report("GATE H tier=10 strong+data", outcomes)
-        assertSignatureAndHarmony(outcomes, harmony = RelicId.STORMHEART_CAPACITOR)
-        val median = outcomes.map { it.seconds }.sorted()[outcomes.size / 2]
-        assertTrue(median >= 480f, "tier 10 must stay survivable for a Data-max strong build: median $median s, ${outcomes.summary()}")
+        assertSignatureAndHarmony(outcomes + population, harmony = RelicId.STORMHEART_CAPACITOR)
+        val median = population.map { it.seconds }.gateMedian()
+        println("GATE H tier=10 strong+data population median survival $median s, wins ${population.count { it.won }} of ${population.size}")
+        assertTrue(median >= H_MIN_MEDIAN_SURVIVAL,
+            "tier 10 must stay survivable for a Data-max strong build: population median $median s, below $H_MIN_MEDIAN_SURVIVAL s")
         assertTrue(outcomes.count { it.won } <= 3, "the Apex must not make tier 10 a formality: ${outcomes.summary()}")
     }
 
@@ -260,6 +289,21 @@ class RebirthBalanceGateTest {
 
     private companion object {
         val GateSeeds: List<Int> = (6..10).map { it * 7_919 + 13 }
+
+        /** Gate A: the least share of fresh tier-0 runs over [PopulationSeeds] that win (base 0.680, SE 0.027). */
+        const val A_MIN_WIN_SHARE = 0.62
+
+        /**
+         * Gate D: the least median survival over [PopulationSeeds] of the strong build at tier 10 (base 574.48 s, SE
+         * 16.24 s).
+         */
+        const val D_MIN_MEDIAN_SURVIVAL = 541.99f
+
+        /**
+         * Gate H: the least median survival over [PopulationSeeds] of the Data-seeking strong build (base 583.33 s, SE
+         * 20.37 s).
+         */
+        const val H_MIN_MEDIAN_SURVIVAL = 542.59f
 
         /** Gate I's seeds: the NoPoi probe sequence (`i * 7_919 + 13`) for i = 1..31, which holds the gate seeds. */
         val GateISeeds: List<Int> = (1..31).map { it * 7_919 + 13 }

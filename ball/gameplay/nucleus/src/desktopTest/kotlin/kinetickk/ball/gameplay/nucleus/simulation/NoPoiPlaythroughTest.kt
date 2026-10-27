@@ -11,17 +11,73 @@ import kotlin.math.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
+/**
+ * Real input-only runs of a fresh profile. The controller can inspect current threats, but cannot alter simulation
+ * state.
+ *
+ * Both rules are population gates (lead Addendum C5, 0.5.0 active items) over [PopulationSeeds]: on the 05885fa9 base
+ * the reference seed 2026 alone won as the reference does with probability 0.53, and the ten further probe seeds
+ * reached five POI-free wins with probability 0.70, so both re-rolled with every change to the reward stream. Each
+ * threshold is the base share minus two standard errors, rounded down. The reference seed is still flown twice to show
+ * the run is deterministic, and every choice of every run keeps the loadout invariant.
+ */
 class NoPoiPlaythroughTest {
-    /** Real input-only runs. The controller can inspect current threats, but cannot alter simulation state. */
-    @Test fun freshProfileWinsReferenceNoPoiRunWithinTwelveToFifteenActiveMinutes() {
+    /**
+     * A fresh run wins as the reference did: VICTORY within 720-900 s with the Architect arriving at 720 s, every POI
+     * skipped, no completed orbit pending, the foundation at 180 s (weapon level 3, three items, a Relic slot) and the
+     * opportunity at 360 s (four Elites seen, four Relic slots), and weapon level 10 with four Relics, two of them
+     * ranked, at the end. The base share over the population was 158 of 300 (0.527, SE 0.029; 44 base wins touched a
+     * POI); at least [MIN_REFERENCE_SHARE] must win so.
+     */
+    @Test fun freshProfilesWinNoPoiRunsWithinTwelveToFifteenActiveMinutes() {
         java.io.File(System.getProperty("java.io.tmpdir"), "kinetickk-nopoi-evidence.txt").writeText("")
-        var firstOutcome: RunOutcome? = null
-        repeat(2) { attempt ->
-            val seed = 2026
-            report("REFERENCE attempt=${attempt + 1} seed=$seed simulationSpeed=1.0 inputHz=50 freshLab=true")
+        val replays = List(2) { attempt -> fly(REFERENCE_SEED, reportAttempt = attempt + 1) }
+        assertEquals(replays[0], replays[1], "the reference seed replays identically")
+        val share = population.shareOf { it.winsLikeTheReference }
+        report("NOPOI REFERENCE population ${population.count { it.winsLikeTheReference }} of ${population.size} (${"%.3f".format(share)}) " +
+            "reference seed ${replays[0].summary()}")
+        assertTrue(share >= MIN_REFERENCE_SHARE,
+            "only ${"%.3f".format(share)} of ${population.size} fresh runs won as the reference does; expected at least $MIN_REFERENCE_SHARE")
+    }
+
+    /**
+     * The reference win is not a knife-edge seed: other fresh-profile runs win without a POI. Only a victory that
+     * skipped every POI is a no-POI win (the bot's avoidance is a heuristic), and each one lasts 720-900 s and ends
+     * with four Relics. The base share over the population was 160 of 300 (0.533, SE 0.029); at least
+     * [MIN_NO_POI_WIN_SHARE] must win so. Earlier, on the ten fixed probe seeds: 6 wins after wave A, 7 after the
+     * second wave, all 10 after the final weapon balance (floor 5).
+     */
+    @Test fun freshProfileAlsoWinsFurtherReferenceNoPoiSeeds() {
+        population.filter { it.noPoiWin }.forEach { run ->
+            assertTrue(run.seconds in 720f..900f, "seed=${run.seed} activeSeconds=${run.seconds}")
+            assertEquals(4, run.relics.size, "seed=${run.seed}")
+        }
+        val share = population.shareOf { it.noPoiWin }
+        report("NOPOI FURTHER population ${population.count { it.noPoiWin }} of ${population.size} (${"%.3f".format(share)})")
+        assertTrue(share >= MIN_NO_POI_WIN_SHARE,
+            "only ${"%.3f".format(share)} of ${population.size} fresh runs won without a POI; expected at least $MIN_NO_POI_WIN_SHARE")
+    }
+
+    private companion object {
+        const val REFERENCE_SEED = 2026
+
+        /** The least share of [PopulationSeeds] runs that win as the reference does (base 0.527, SE 0.029). */
+        const val MIN_REFERENCE_SHARE = 0.46
+
+        /** The least share of [PopulationSeeds] runs that win without a POI (base 0.533, SE 0.029). */
+        const val MIN_NO_POI_WIN_SHARE = 0.47
+
+        /** One fresh run per [PopulationSeeds] seed, shared by both rules. */
+        val population: List<NoPoiRun> by lazy { populationOf(PopulationSeeds) { seed -> fly(seed) } }
+
+        /**
+         * One fresh run on [seed]; [reportAttempt] (the reference replays) also writes its minutes to the evidence
+         * file.
+         */
+        fun fly(seed: Int, reportAttempt: Int? = null): NoPoiRun {
+            if (reportAttempt != null) report("REFERENCE attempt=$reportAttempt seed=$seed simulationSpeed=1.0 inputHz=50 freshLab=true")
             val state = MutableGameState(canonicalGameplayContent, seed = seed)
             state.unlockWeaponsForTesting(ReferenceArmory)
             state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
@@ -37,8 +93,7 @@ class NoPoiPlaythroughTest {
             var foundation: Milestone? = null
             var fourSlotOpportunity: Milestone? = null
             val observedEliteIds = mutableSetOf<Int>()
-            var activePoiObserved = false
-            var poiRewardObserved = false
+            var poiEngaged = false
             var previousHealth = state.hp
             var damage = 0f
             while (state.elapsed < 900f && (state.phase == GamePhase.RUNNING || state.phase == GamePhase.CHOICE)) {
@@ -52,84 +107,50 @@ class NoPoiPlaythroughTest {
                 }
                 state.enemies.filter { it.type == EnemyType.ELITE }.forEach { observedEliteIds += it.id }
                 if (state.bossSpawned && bossObservedAt == null) bossObservedAt = state.elapsed
-                if (!activePoiObserved && state.pointsOfInterest.any { it.active }) {
+                if (reportAttempt != null && !poiEngaged && state.pointsOfInterest.any { it.active }) {
                     report("POI ACTIVATED sec=${state.elapsed} core=${state.coreX.toInt()},${state.coreY.toInt()} speed=${state.speed.toInt()} points=${state.pointsOfInterest.map { "${it.kind}@${it.x.toInt()},${it.y.toInt()}" }} relics=${state.equippedRelics}")
                 }
-                activePoiObserved = activePoiObserved || state.pointsOfInterest.any { it.active }
-                poiRewardObserved = poiRewardObserved || state.directedReward != null || state.pendingDirectedRewards.isNotEmpty()
+                poiEngaged = poiEngaged || state.pointsOfInterest.any { it.active } ||
+                    state.directedReward != null || state.pendingDirectedRewards.isNotEmpty()
                 if (state.elapsed >= 180f && foundation == null) foundation = milestone(state, observedEliteIds.size)
                 if (state.elapsed >= 360f && fourSlotOpportunity == null) fourSlotOpportunity = milestone(state, observedEliteIds.size)
                 damage += max(0f, previousHealth - state.hp)
                 previousHealth = state.hp
                 state.takeSoundCues()
                 state.takeVisualFxCues()
-                if (state.elapsed >= minute * 60f) {
+                if (reportAttempt != null && state.elapsed >= minute * 60f) {
                     report("NOPOI seed=$seed sec=${state.elapsed.toInt()} hp=${state.hp.toInt()}/${state.maxHp.toInt()} shield=${state.shield.toInt()} speed=${state.speed.toInt()} level=${state.level} weapon=${state.weapon}/${state.weaponLevel} kills=${state.kills} items=${state.acquiredItemCount} actives=${state.skillLoadout} relics=${state.equippedRelics} boss=${state.enemies.firstOrNull { it.type == EnemyType.ARCHITECT }?.hp?.toInt()} damage=${damage.toInt()}")
                     minute++
                 }
             }
-            report("NOPOI FINAL seed=$seed sec=${state.elapsed} phase=${state.phase} reason=${state.message} hp=${state.hp} kills=${state.kills} level=${state.level} weapon=${state.weapon}/${state.weaponLevel} damage=$damage bossAt=$bossObservedAt completedOrbits=${state.pendingCompletedOrbits} activePoi=$activePoiObserved poiReward=$poiRewardObserved foundation=$foundation sixMinutes=$fourSlotOpportunity")
-            assertEquals(GamePhase.VICTORY, state.phase, "seed=$seed ${state.message}")
-            assertTrue(state.elapsed in 720f..900f, "seed=$seed activeSeconds=${state.elapsed}")
-            assertTrue(assertNotNull(bossObservedAt) in 720f..720.05f)
-            assertTrue(!activePoiObserved && !poiRewardObserved, "seed=$seed must skip every POI")
-            assertEquals(0, state.pendingCompletedOrbits)
-            assertTrue(assertNotNull(foundation).weaponLevel >= 3 && foundation.items >= 3 && foundation.relicSlots >= 1)
-            assertTrue(assertNotNull(fourSlotOpportunity).eliteOpportunities >= 4)
-            assertEquals(4, fourSlotOpportunity.relicSlots)
-            assertTrue(state.weaponLevel >= 10 && state.equippedRelics.size == 4)
-            assertTrue(state.equippedRelics.count { it.rank > 1 } >= 2)
-            val outcome = RunOutcome(state.elapsed, state.hp, state.level, state.weapon, state.weaponLevel,
-                state.kills, state.itemStacks.indices.map { state.itemStacks[it] }, state.equippedRelics.toList(),
-                assertNotNull(foundation), assertNotNull(fourSlotOpportunity))
-            if (firstOutcome == null) firstOutcome = outcome else assertEquals(firstOutcome, outcome)
+            val run = NoPoiRun(seed, state.phase, state.elapsed, state.message, state.hp, state.level, state.weapon, state.weaponLevel,
+                state.kills, state.itemStacks.indices.map { state.itemStacks[it] }, state.equippedRelics.toList(), bossObservedAt,
+                poiEngaged, state.pendingCompletedOrbits, foundation, fourSlotOpportunity)
+            if (reportAttempt != null) report("NOPOI FINAL seed=$seed sec=${state.elapsed} phase=${state.phase} reason=${state.message} hp=${state.hp} kills=${state.kills} level=${state.level} weapon=${state.weapon}/${state.weaponLevel} damage=$damage bossAt=$bossObservedAt completedOrbits=${state.pendingCompletedOrbits} poi=$poiEngaged foundation=$foundation sixMinutes=$fourSlotOpportunity")
+            return run
         }
-    }
-
-    /** The reference win is not a single knife-edge seed: other fresh-profile seeds win the same way. */
-    @Test fun freshProfileAlsoWinsFurtherReferenceNoPoiSeeds() {
-        // The fixed balance probe after the reference (i * 7_919 + 13, i = 1..10). Seeds are never picked by
-        // their outcome; the floor catches a drop in robustness. After wave A (roster and director, Sonic and
-        // Void, frame pacing, Core Matrix) and its integration fixes, 6 of the 10 win, all without a POI. After the
-        // second wave (obstacles the bot steers around, twelve characters, the 173-item catalog; the bot skips
-        // ricochet and slam items, passes on the Furnace Covenant and keeps wider of skipped POIs) 7 win, all
-        // without a POI. After the final weapon balance (no weapon out-damages another family's best: Ion Swarm
-        // 4.5 per shot, a 20 % Prism Relay twin, a Flux Wake trail that shares its heat in a crowd) all 10 win.
-        val minimumWins = 5
-        var wins = 0
-        for (seed in (1..10).map { it * 7_919 + 13 }) {
-            val state = MutableGameState(canonicalGameplayContent, seed = seed)
-            state.unlockWeaponsForTesting(ReferenceArmory)
-            state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
-            state.startRun()
-            val bot = NoPoiBot()
-            var poiEngaged = false
-            while (state.elapsed < 900f && (state.phase == GamePhase.RUNNING || state.phase == GamePhase.CHOICE)) {
-                if (state.phase == GamePhase.CHOICE) bot.choose(state) else {
-                    bot.control(state)
-                    state.update(0.02f)
-                }
-                poiEngaged = poiEngaged || state.pointsOfInterest.any { it.active } ||
-                    state.directedReward != null || state.pendingDirectedRewards.isNotEmpty()
-                state.takeSoundCues()
-                state.takeVisualFxCues()
-            }
-            report("NOPOI SEED seed=$seed phase=${state.phase} sec=${state.elapsed} hp=${state.hp}/${state.maxHp} weapon=${state.weapon}/${state.weaponLevel} relics=${state.equippedRelics} poi=$poiEngaged reason=${state.message}")
-            // Only a victory that skipped every POI is a no-POI win; the bot's avoidance is a heuristic.
-            if (state.phase != GamePhase.VICTORY || poiEngaged) continue
-            wins++
-            assertTrue(state.elapsed in 720f..900f, "seed=$seed activeSeconds=${state.elapsed}")
-            assertEquals(4, state.equippedRelics.size, "seed=$seed")
-        }
-        assertTrue(wins >= minimumWins, "only $wins of 10 probe seeds won; expected at least $minimumWins")
     }
 }
 
-private data class RunOutcome(
-    val activeSeconds: Float, val remainingHp: Float, val level: Int, val weapon: WeaponId,
-    val weaponLevel: Int, val kills: Int, val itemStacks: List<Int>, val relics: List<EquippedRelic>,
-    val foundation: Milestone, val sixMinutes: Milestone,
-)
+/** One fresh no-POI run as the rules read it: its end, the Architect's arrival, POI contact and the two milestones. */
+private data class NoPoiRun(
+    val seed: Int, val phase: GamePhase, val seconds: Float, val reason: String, val remainingHp: Float, val level: Int,
+    val weapon: WeaponId, val weaponLevel: Int, val kills: Int, val itemStacks: List<Int>, val relics: List<EquippedRelic>,
+    val bossObservedAt: Float?, val poiEngaged: Boolean, val pendingCompletedOrbits: Int,
+    val foundation: Milestone?, val sixMinutes: Milestone?,
+) {
+    /** A victory that skipped every POI. */
+    val noPoiWin: Boolean get() = phase == GamePhase.VICTORY && !poiEngaged
+
+    /** The reference rule: a POI-free victory in 720-900 s that reached both milestones and the late build. */
+    val winsLikeTheReference: Boolean get() = noPoiWin && seconds in 720f..900f && bossObservedAt?.let { it in 720f..720.05f } == true &&
+        pendingCompletedOrbits == 0 &&
+        foundation?.let { it.weaponLevel >= 3 && it.items >= 3 && it.relicSlots >= 1 } == true &&
+        sixMinutes?.let { it.eliteOpportunities >= 4 && it.relicSlots == 4 } == true &&
+        weaponLevel >= 10 && relics.size == 4 && relics.count { it.rank > 1 } >= 2
+
+    fun summary(): String = "$seed:$phase@${seconds.toInt()}s(L$level $reason)"
+}
 
 private data class Milestone(val level: Int, val weaponLevel: Int, val items: Int, val relicSlots: Int, val eliteOpportunities: Int)
 private fun milestone(state: MutableGameState, eliteOpportunities: Int) = Milestone(

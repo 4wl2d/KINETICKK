@@ -18,7 +18,7 @@ import kotlin.test.assertTrue
  * Level 42 is the goal of a maximal Data build (economy §2.1, decisions §1 and Addendum A1). Every arm is a
  * full run of the NoPoi bot on the gate harness; the bot's [DataPolicy] decides how it drafts Data-gain cards.
  *
- * - FRESH: a fresh profile reaches level 22-30 at 12 active minutes.
+ * - FRESH: a fresh profile reaches level 22-30 at 12 active minutes (a population gate, see its KDoc).
  * - DATA_MAX: a full Matrix (lifetime Matter = its price, so the whole catalog is offered from level 1) that
  *   seeks Data reaches 42 between 510 and 630 s.
  * - NO_DATA: the same profile avoiding Data never reaches 42 before 720 s; NO_DATA_MAXED adds Refit 10 and
@@ -27,17 +27,34 @@ import kotlin.test.assertTrue
  *   in 480-660 s on at least three of five seeds).
  *
  * The thresholds never move; the re-tune ladder of economy §2.1 (rampPlateau, topPlateau, the §1.5 Data
- * levers, the Rebirth Data requirement scale) is the only way to make an arm pass.
+ * levers, the Rebirth Data requirement scale) is the only way to make an arm pass. FRESH alone was restated once, by
+ * the lead's Addendum C5 (0.5.0 active items), anchored to the 05885fa9 base; the other arms passed their seeds with
+ * probability 0.92 (DATA_MAX tier 0), 0.96 (DATA_MAX tiers 3 and 6) and 1.00 (every NO_DATA arm) at the base.
  */
 class RunLevelCalibrationGateTest {
+    /**
+     * FRESH over the population (Addendum C5): on the 05885fa9 base 214 of the 300 [PopulationSeeds] runs were alive at
+     * 720 s (0.713, SE 0.026) and 6 of those 214 stood outside level 22-30 (all at 31: 0.028, SE 0.011), so the eleven
+     * fixed seeds (2026 and the probe i = 1..10) met both rules with probability 0.27. At least [FRESH_MIN_ALIVE_SHARE]
+     * of the population must be alive at 720 s: the base share minus two standard errors is 0.66, and the 0.5.0
+     * accepted fresh tier-0 survival of 0.73 is the stricter floor (the base itself reads 0.713 here). At most
+     * [FRESH_MAX_OUTSIDE_SHARE] of the alive runs may stand outside level 22-30 (the base share plus two standard
+     * errors, rounded up).
+     */
     @Test fun aFreshNoPoiBotIsAtLevelTwentyTwoToThirtyAfterTwelveActiveMinutes() {
-        val seeds = listOf(2026) + (1..10).map { it * 7_919 + 13 }
-        val runs = seeds.map { seed -> play("FRESH", seed, tier = 0, profile = gateProfile(GateMatrix.NONE, tier = 0), bot = NoPoiBot()) }
-        report("XP_GATE FRESH", runs)
+        val runs = populationOf(PopulationSeeds) { seed ->
+            play("FRESH", seed, tier = 0, profile = gateProfile(GateMatrix.NONE, tier = 0), bot = NoPoiBot())
+        }
         val alive = runs.filter { it.levelAtTwelveMinutes != null }
-        assertTrue(alive.size >= 9, "at least 9 of 11 fresh runs must be alive at 720 s: ${runs.summary()}")
-        assertTrue(alive.all { (it.levelAtTwelveMinutes ?: 0) in 22..30 },
-            "every fresh run alive at 720 s must be at level 22-30: ${runs.summary()}")
+        val outside = alive.filter { (it.levelAtTwelveMinutes ?: 0) !in 22..30 }
+        val aliveShare = runs.shareOf { it.levelAtTwelveMinutes != null }
+        val outsideShare = alive.shareOf { (it.levelAtTwelveMinutes ?: 0) !in 22..30 }
+        println("XP_GATE FRESH population alive at 720 s ${alive.size} of ${runs.size} (${"%.3f".format(aliveShare)}), outside 22-30 " +
+            "${outside.size} (${"%.3f".format(outsideShare)}): ${outside.summary()}")
+        assertTrue(aliveShare >= FRESH_MIN_ALIVE_SHARE,
+            "at least $FRESH_MIN_ALIVE_SHARE of the fresh runs must be alive at 720 s: ${alive.size} of ${runs.size}")
+        assertTrue(outsideShare <= FRESH_MAX_OUTSIDE_SHARE,
+            "at most $FRESH_MAX_OUTSIDE_SHARE of the fresh runs alive at 720 s may stand outside level 22-30: ${outside.summary()}")
     }
 
     @Test fun aFullMatrixThatSeeksDataReachesTheCapBetweenEightAndAHalfAndTenAndAHalfMinutes() {
@@ -145,4 +162,15 @@ class RunLevelCalibrationGateTest {
     }
 
     private fun report(label: String, runs: List<LevelRun>) = println("$label ${runs.summary()}")
+
+    private companion object {
+        /**
+         * FRESH: the least share of [PopulationSeeds] runs alive at 720 s (base 0.713, SE 0.026; floor 0.73, see the
+         * test).
+         */
+        const val FRESH_MIN_ALIVE_SHARE = 0.73
+
+        /** FRESH: the largest share of the alive runs outside level 22-30 at 720 s (base 0.028, SE 0.011). */
+        const val FRESH_MAX_OUTSIDE_SHARE = 0.06
+    }
 }

@@ -17,15 +17,47 @@ import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.api.PlayerLoadout
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.RebirthProgress
+import java.util.concurrent.Callable
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 /*
  * Shared full-run harness of the economy gates (run level calibration, Matter income, upgrades). It plays
  * exactly like RebirthBalanceGateTest: the input-only NoPoi bot, 0.02 s steps until the run ends or 900 s,
- * sound and visual cues taken every step, on seeds fixed by definition and never picked by outcome.
+ * sound and visual cues taken every step, on seeds fixed by definition and never picked by outcome. The gates restated
+ * as population gates play [PopulationSeeds] through [populationOf].
  */
 
 /** The gate seeds of RebirthBalanceGateTest: the second half of the NoPoi probe (`i * 7_919 + 13`, i = 6..10). */
 internal val EconomyGateSeeds: List<Int> = (6..10).map { it * 7_919 + 13 }
+
+/**
+ * The population of the seeded gates restated by the lead's Addendum C5 (0.5.0 active items): the NoPoi probe sequence
+ * `i * 7_919 + 13` for i = 1,001..1,300. On the 05885fa9 base those gates' own five to thirty seeds passed with a
+ * probability below 0.90, so a change to the reward stream re-rolled them; each now states its rule over these 300
+ * runs. They are disjoint from every fixed gate seed set (i ≤ 205, and 2026) and from the windows the active-item
+ * calibration tuned on (i ≤ 900). A restated threshold is the base value of the same statement on these seeds minus two
+ * standard errors for a floor (plus two for a ceiling), rounded outward to 0.01 and never looser than the 0.5.0
+ * accepted trade-offs (tier-0 fresh survival 0.73, ItemVariety V2 0.81); each test's KDoc records its base value, SE
+ * and threshold.
+ */
+internal val PopulationSeeds: List<Int> = (1_001..1_300).map { it * 7_919 + 13 }
+
+/**
+ * [work] on every one of [items] on a small pool of daemon threads. Each run is independent and deterministic and the
+ * results keep the order of [items], so the outcome does not depend on scheduling.
+ */
+internal fun <I, T> populationOf(items: List<I>, work: (I) -> T): List<T> =
+    items.map { item -> PopulationPool.submit(Callable { work(item) }) }.map { it.get() }
+
+/** The share of the list's elements matching [predicate] (0 for an empty list). */
+internal fun <T> List<T>.shareOf(predicate: (T) -> Boolean): Double = if (isEmpty()) 0.0 else count(predicate).toDouble() / size
+
+private val PopulationPool: ExecutorService by lazy {
+    Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors().coerceIn(1, 8)) { task ->
+        Thread(task, "gate-population").apply { isDaemon = true }
+    }
+}
 
 /** How many ranks of the Core Matrix a starting profile owns. */
 internal enum class GateMatrix { NONE, HALF, FULL }
