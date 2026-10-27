@@ -221,7 +221,10 @@ internal fun shortCurveContent(): GameplayContentSnapshot {
         build = shipped.build.copy(
             policy = policy.copy(
                 draftDeck = DraftDeckPolicy.FULL,
-                offerLanes = policy.offerLanes.copy(activeWeight = SHORT_ACTIVE_WEIGHT),
+                // Flat lane and owned factors: the bot's draft preference, not the shipped lane tuning, picks the actives.
+                offerLanes = policy.offerLanes.copy(
+                    activeWeight = SHORT_ACTIVE_WEIGHT, characterActiveWeight = 1f, ownedActiveWeight = 1f,
+                ),
             ),
         ),
         tempo = shipped.tempo.copy(
