@@ -40,7 +40,9 @@ import kotlin.test.assertTrue
  * probability 0.84–0.86 at a population median of 0.10, so it re-rolled with the reward stream. On the 05885fa9 base
  * (its lane skills free from level 2) all 300 [PopulationSeeds] runs owned one, 214 were judged and their median share
  * was 0.113 (bootstrap SE 0.0038). By Addendum D1 the band is min(0.08, base − 2 SE) to max(0.20, base + 2 SE), that
- * is [MIN_SHARE] to [MAX_SHARE], the design band of Addendum C6.
+ * is [MIN_SHARE] to [MAX_SHARE], the design band of Addendum C6. The walk also failed when fewer than 31 of its 124
+ * probes owned an active item; that stays a population statement next to the band (Addendum E6): at least
+ * [MIN_OWNED_SHARE] of the runs bind one by [OWNED_BY_SECONDS], a design bound that all 300 base runs met.
  *
  * The spread is a population gate (lead Addendum C5): with three runs per character the 05885fa9 base kept its top
  * effect within 0.30 with probability 0.76 (Sonic Boom 0.253 over 100 runs per character, 300 for the Orb), so it
@@ -68,6 +70,8 @@ class SkillShareGateTest {
         val runs = probes.filter { it.owned }
         println("SKILL-SHARE ${runs.size} of ${probes.size} runs bound an active item by $OWNED_BY_SECONDS s; left out: " +
             probes.filterNot { it.owned }.joinToString { "${it.seed}(sec=${it.seconds.toInt()})" })
+        assertTrue(runs.size >= probes.size * MIN_OWNED_SHARE,
+            "only ${runs.size} of ${probes.size} runs bound an active item by $OWNED_BY_SECONDS s, below $MIN_OWNED_SHARE of them")
         runs.forEach { run ->
             println("SKILL-SHARE seed=${run.seed} share=${"%.3f".format(run.share)} sec=${run.seconds.toInt()} " +
                 "firstActive=${run.firstActiveAt?.toInt()}" + (if (run.judged) " " else " (ended early, not judged) ") +
@@ -144,6 +148,8 @@ class SkillShareGateTest {
         const val MAX_PROBES_PER_RUN = 4
         const val SHARE_SECONDS = 720f
         const val MIN_SHARE = 0.08
+        /** The least share of the population that binds an active item by [OWNED_BY_SECONDS] (the walk's 31 of 124). */
+        const val MIN_OWNED_SHARE = 0.25
         const val MAX_SHARE = 0.20
         const val MAX_SINGLE_SKILL_SHARE = 0.30
     }
