@@ -167,10 +167,12 @@ class SpawnDirectorPacingTest {
 
     /**
      * Open space: a world without structures. A room's garrison is an owner-spawned encounter that picks its kinds a
-     * gate lead ahead of the run clock, and a sealed room's director is DungeonSystemTest's.
+     * gate lead ahead of the run clock, and a sealed room's director is DungeonSystemTest's. Realspace keeps its asteroid
+     * field without the obstacle kind mix: knots, vents and mines pull, mark and blow up the waves the director paces.
      */
     private fun runningState(seed: Int, tier: Int, arm: Arm): MutableGameState {
-        val content = if (arm.personality == null) structuresDisabledContent.withoutDirectorVariety() else structuresDisabledContent
+        val open = structuresDisabledContent.withoutObstacleVariants()
+        val content = if (arm.personality == null) open.withoutDirectorVariety() else open
         return MutableGameState(content, seed = seed, initialMatter = 0, initialRebirthLevel = tier).apply {
             resize(1_280f, 720f)
             startRun()
