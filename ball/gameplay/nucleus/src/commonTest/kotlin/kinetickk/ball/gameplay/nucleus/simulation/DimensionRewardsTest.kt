@@ -209,6 +209,31 @@ class DimensionRewardsTest {
     // ---- Boss objectives ----
 
     @Test
+    fun anObjectiveBossArrivesWithItsLayersIntegrityShare() {
+        fun arrival(objective: DimensionObjective, share: Float): Float {
+            val content = openWorld.withDimensions {
+                copy(definitions = definitions.map { if (it.layer == objective.layer) it.copy(bossIntegrityShare = share) else it }
+                    .toImmutableList())
+            }
+            val state = game(content).apply {
+                velocityX = dimensionPace() * 1.2f
+                velocityY = 0f
+                enterDimensionForTesting(objective.layer, objective)
+            }
+            val delay = if (objective == DimensionObjective.ANTECEDENT) tuning.antecedentDelaySeconds else tuning.bossDelaySeconds
+            state.elapsed = 200f + delay
+            state.updateDimension(step)
+            val boss = state.enemies.single { it.type == objective.boss }
+            assertEquals(boss.maxHp, boss.hp, "$objective arrives whole")
+            return boss.maxHp
+        }
+        for (objective in listOf(DimensionObjective.JUDGEMENT, DimensionObjective.PYRE, DimensionObjective.ANTECEDENT)) {
+            assertEquals(0.4f, arrival(objective, 0.4f) / arrival(objective, 1f), 1e-4f, "$objective takes its layer's share")
+        }
+        assertEquals(1f, policy.definition(WorldLayer.ARCHIVE).bossIntegrityShare, "the Archive's secret keeps all of its integrity")
+    }
+
+    @Test
     fun aBossObjectiveSpawnsItsBossThroughAnEncounterOnceItsDelayRunsOut() {
         val cases = listOf(
             Triple(WorldLayer.ZENITH, DimensionObjective.JUDGEMENT, tuning.bossDelaySeconds),

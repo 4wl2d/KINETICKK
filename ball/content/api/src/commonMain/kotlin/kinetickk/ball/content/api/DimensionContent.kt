@@ -101,9 +101,12 @@ data class DimensionDefinition(
     val physics: DimensionPhysics = DimensionPhysics(),
     val reward: DimensionReward = DimensionReward(DimensionRewardKind.NONE),
     val features: LayerFeatures = LayerFeatures.DIMENSION,
+    /** The share of its spawn integrity this layer's objective boss arrives with. */
+    val bossIntegrityShare: Float = 1f,
 ) {
     init {
         require(name.isNotBlank() && riftName.isNotBlank() && description.isNotBlank()) { "Dimension texts must not be blank" }
+        require(bossIntegrityShare in 0.1f..1f) { "Dimension boss integrity share must be in 0.1..1" }
         // The hostile-scale range of run modifiers.
         require(spawnRateMultiplier in 0.5f..1.5f && ordinaryCapMultiplier in 0.5f..1.5f) {
             "Dimension spawn and cap multipliers must be in 0.5..1.5"
@@ -252,6 +255,8 @@ fun defaultDimensionDefinitions(): ImmutableList<DimensionDefinition> = listOf(
         spawnRateMultiplier = 0.9f, ordinaryCapMultiplier = 0.9f,
         physics = DimensionPhysics(dragMultiplier = 0.65f, dragFloor = 0.035f, haloRepairShare = 0.05f, haloOverdrive = 15f, ambientHalos = 6),
         reward = DimensionReward(DimensionRewardKind.BLESSING_OFFER, cardsOnSuccess = 3, cardsOnFailure = 2),
+        // The Throne of a Judgement: a fresh run's visit at 165 s falls to it in about two thirds of the fights.
+        bossIntegrityShare = 0.2f,
     ),
     DimensionDefinition(
         WorldLayer.NADIR, "Nadir", "Nadir rift",
@@ -263,6 +268,9 @@ fun defaultDimensionDefinitions(): ImmutableList<DimensionDefinition> = listOf(
         spawnRateMultiplier = 1.2f, ordinaryCapMultiplier = 1.15f,
         physics = DimensionPhysics(scorchSharePerSecond = 0.035f, scorchGraceSeconds = 0.75f, scorchTickSeconds = 0.5f, matterMultiplier = 2f),
         reward = DimensionReward(DimensionRewardKind.PACT_OFFER, cardsOnSuccess = 3, cardsOnFailure = 2, declineMatter = 10),
+        // The Pyre Herald of a Pyre, fought at the pace the scorch asks for: a fresh run's visit at 165 s fells it in
+        // over half of the fights.
+        bossIntegrityShare = 0.12f,
     ),
     DimensionDefinition(
         WorldLayer.ARCHIVE, "Archive", "Glitch rift",

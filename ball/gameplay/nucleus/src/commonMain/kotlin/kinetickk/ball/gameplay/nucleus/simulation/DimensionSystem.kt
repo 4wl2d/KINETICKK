@@ -266,7 +266,8 @@ internal fun dimensionEncounterTag(visit: DimensionVisit): Long =
 /**
  * The objective boss arrives once its delay ran out: [DimensionObjectiveTuning.bossDistance] ahead of the Core,
  * moved clear of obstacles, as a one-member encounter that may evict ordinary enemies for room and is ended by the
- * visit rather than by distance. A refused spawn (no room yet) is tried again on the next step. Draws nothing.
+ * visit rather than by distance, with its layer's [DimensionDefinition.bossIntegrityShare] of its integrity. A refused
+ * spawn (no room yet) is tried again on the next step. Draws nothing.
  */
 private fun MutableGameState.spawnObjectiveBossIfDue() {
     val visit = dimensionRun.visit ?: return
@@ -285,6 +286,7 @@ private fun MutableGameState.spawnObjectiveBossIfDue() {
             centerY = y,
             areaRadius = OBJECTIVE_BOSS_AREA_RADIUS,
             members = listOf(type),
+            integrityShare = content.dimensions.definition(visit.layer).bossIntegrityShare,
             abandonDistance = OBJECTIVE_BOSS_ABANDON_DISTANCE,
             evictOrdinary = true,
             positions = floatArrayOf(x, y),

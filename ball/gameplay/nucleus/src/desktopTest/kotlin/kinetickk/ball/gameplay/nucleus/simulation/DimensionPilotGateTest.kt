@@ -108,7 +108,8 @@ class DimensionPilotGateTest {
      * calibration window, then flies every arm (or those `KK_DIMENSION_ARMS` lists) on the seeds `i * 7_919 + 13` for i in
      * it and prints one line per run and a summary per arm with bootstrap standard errors. It never plays the gate
      * population. `KK_DIMENSION_KNOBS=name=value,...` overrides the shipped dimension knobs (graceDrag, paceReach, scorch,
-     * rings, embers). The outcome arms OC (no rift), OZ and ON (a Zenith or Nadir visit at 165 s with its rolled
+     * rings, embers, emberLife, emberRadius, haloRadius, turnMin, turnMax, spacingMin, spacingMax, zenithBossShare,
+     * nadirBossShare). The outcome arms OC (no rift), OZ and ON (a Zenith or Nadir visit at 165 s with its rolled
      * objective) play whole runs and print the win shares the outcome gate compares.
      */
     @Test fun probeTheCalibrationWindow() {
@@ -240,6 +241,17 @@ class DimensionPilotGateTest {
                         "paceReach" -> copy(paceReach = value)
                         "rings" -> copy(objectives = objectives.copy(ascentRings = value.toInt()))
                         "embers" -> copy(objectives = objectives.copy(harvestEmbers = value.toInt()))
+                        "emberLife" -> copy(objectives = objectives.copy(emberLifeSeconds = value))
+                        "emberRadius" -> copy(objectives = objectives.copy(emberRadius = value))
+                        "haloRadius" -> copy(objectives = objectives.copy(haloRadius = value))
+                        "turnMin" -> copy(objectives = objectives.copy(ascentMinimumTurnDegrees = value))
+                        "turnMax" -> copy(objectives = objectives.copy(ascentMaximumTurnDegrees = value))
+                        "spacingMin" -> copy(objectives = objectives.copy(ascentMinimumSpacing = value))
+                        "spacingMax" -> copy(objectives = objectives.copy(ascentMaximumSpacing = value))
+                        "zenithBossShare", "nadirBossShare" -> copy(definitions = definitions.map { d ->
+                            val layer = if (name == "zenithBossShare") WorldLayer.ZENITH else WorldLayer.NADIR
+                            if (d.layer == layer) d.copy(bossIntegrityShare = value) else d
+                        }.toImmutableList())
                         else -> error("unknown dimension knob $name")
                     }
                 }
@@ -251,7 +263,12 @@ class DimensionPilotGateTest {
             val policy = content.dimensions
             return "graceDrag=${policy.definition(WorldLayer.ZENITH).physics.dragMultiplier} paceReach=${policy.paceReach} " +
                 "scorch=${policy.definition(WorldLayer.NADIR).physics.scorchSharePerSecond} rings=${policy.objectives.ascentRings} " +
-                "embers=${policy.objectives.harvestEmbers}"
+                "embers=${policy.objectives.harvestEmbers} emberLife=${policy.objectives.emberLifeSeconds} " +
+                "emberRadius=${policy.objectives.emberRadius} haloRadius=${policy.objectives.haloRadius} " +
+                "turns=${policy.objectives.ascentMinimumTurnDegrees}..${policy.objectives.ascentMaximumTurnDegrees} " +
+                "spacing=${policy.objectives.ascentMinimumSpacing}..${policy.objectives.ascentMaximumSpacing} " +
+                "zenithBossShare=${policy.definition(WorldLayer.ZENITH).bossIntegrityShare} " +
+                "nadirBossShare=${policy.definition(WorldLayer.NADIR).bossIntegrityShare}"
         }
 
         /** Z0: a fresh run's Zenith survival floor, its Ascent and Judgement completion bands and the completion median. */

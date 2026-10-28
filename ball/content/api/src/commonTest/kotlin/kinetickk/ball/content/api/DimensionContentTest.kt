@@ -39,6 +39,7 @@ class DimensionContentTest {
         assertEquals(0.25f, archive.physics.desyncMinimumScale)
         assertEquals(listOf(0.9f, 1.2f, 0.85f), listOf(zenith, nadir, archive).map { it.spawnRateMultiplier })
         assertEquals(listOf(0.9f, 1.15f, 0.8f), listOf(zenith, nadir, archive).map { it.ordinaryCapMultiplier })
+        assertEquals(listOf(0.2f, 0.12f, 1f), listOf(zenith, nadir, archive).map { it.bossIntegrityShare })
         // Only the duels name a boss, and each boss is the one the instruction names.
         assertEquals(
             mapOf(
@@ -139,6 +140,16 @@ class DimensionContentTest {
         assertFailsWith<IllegalArgumentException> {
             replacing(WorldLayer.NADIR, nadir.copy(reward = nadir.reward.copy(matterOnFailure = Float.POSITIVE_INFINITY)))
         }
+    }
+
+    @Test
+    fun anObjectiveBossShareAcceptsItsBoundsAndRejectsTheNextValue() {
+        val zenith = policy.definition(WorldLayer.ZENITH)
+        zenith.copy(bossIntegrityShare = 0.1f)
+        zenith.copy(bossIntegrityShare = 1f)
+        assertFailsWith<IllegalArgumentException> { zenith.copy(bossIntegrityShare = 0.099f) }
+        assertFailsWith<IllegalArgumentException> { zenith.copy(bossIntegrityShare = 1.01f) }
+        assertFailsWith<IllegalArgumentException> { zenith.copy(bossIntegrityShare = Float.NaN) }
     }
 
     @Test
