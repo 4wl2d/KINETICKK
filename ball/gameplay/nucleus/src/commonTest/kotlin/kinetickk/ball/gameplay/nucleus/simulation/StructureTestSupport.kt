@@ -20,6 +20,10 @@ import kinetickk.foundation.collections.toImmutableList
 internal val structuresEnabledContent: GameplayContentSnapshot =
     canonicalGameplayContent.copy(structures = canonicalGameplayContent.structures.copy(enabled = true))
 
+/** Canonical content in a world without structures; walls may then be placed by hand ([placeWallsForTesting]). */
+internal val structuresDisabledContent: GameplayContentSnapshot =
+    canonicalGameplayContent.copy(structures = canonicalGameplayContent.structures.copy(enabled = false))
+
 /**
  * Canonical content in which every cell away from the origin holds one of [templates] by weight: structures on, no
  * distance gate, full chance. Each template's own minimum distance is cleared so the policy accepts any of them.
@@ -123,4 +127,18 @@ internal fun wallGapForTesting(x: Float, y: Float, wall: Wall): Float {
     val dx = x - (wall.ax + (wall.bx - wall.ax) * along)
     val dy = y - (wall.ay + (wall.by - wall.ay) * along)
     return kotlin.math.sqrt(dx * dx + dy * dy) - wall.halfThickness
+}
+
+/**
+ * Kills every live enemy the dungeon's sealed room owns, as if the Core had destroyed them (kills, rewards and clauses
+ * run); the next dungeon step clears the room.
+ */
+internal fun MutableGameState.killGarrisonForTesting() {
+    val dungeon = requireNotNull(dungeon) { "No dungeon" }
+    require(dungeon.engagedRoom >= 0) { "No sealed room" }
+    val tag = roomEncounterTag(dungeon.structureId, dungeon.engagedRoom)
+    enemies.filter { it.ownerTag == tag && it.alive }.forEach { enemy ->
+        onEnemyKilled(enemy)
+        enemies.remove(enemy)
+    }
 }

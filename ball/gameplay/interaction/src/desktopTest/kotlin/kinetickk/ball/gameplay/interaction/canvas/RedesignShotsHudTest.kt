@@ -33,6 +33,7 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPolicy
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatDelta
+import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
@@ -162,6 +163,9 @@ class RedesignShotsHudTest {
         // A mini-boss's narrow block (the Throne in its second phase, three parts) and a secret boss's wide one (the
         // Antecedent in its third phase, four parts, hardened against Cryo so its weakness fills the icon slot).
         MINIBOSS, SECRET_BOSS,
+        // The dungeon panel: sealed in a Derelict Station's bay with its garrison, two of four rooms clear, the bay's cell
+        // at its pulse's peak, under the scrim and the vignette.
+        DUNGEON,
     }
 
     private fun level(shot: Shot, values: Values): Int = when (shot) {
@@ -292,7 +296,7 @@ class RedesignShotsHudTest {
                 else -> 0
             },
             "easyMode" to (shot == Shot.EASY || shot == Shot.EASY_TIER),
-        )
+        ).let { if (shot == Shot.DUNGEON) dungeonShot(it) else it }
         val time = 3.37f
         val memory = HudPresentationMemory()
         val boss = BossTarget()
@@ -350,6 +354,24 @@ class RedesignShotsHudTest {
             fragile = false, shifting = false, phase = if (mini) 1 else 2)
         return enemy(3, if (mini) EnemyType.THRONE else EnemyType.ANTECEDENT, x, y, integrity, if (mini) 48f else 58f)
             .copy(affinityBits = affinity, charges = 2, facing = 0.5f)
+    }
+
+    /** [Shot.DUNGEON]'s model: [model] with the Core sealed in a Derelict Station's bay among its garrison, depth full. */
+    private fun dungeonShot(model: GameplayRenderModel): GameplayRenderModel {
+        val station = StructureFixture(model.content.structures.template(StructureTemplateId.DERELICT_STATION),
+            model.coreX - 750f, model.coreY - 400f, clearedRooms = 0b0011, engagedRoom = 3)
+        fun member(id: Int, type: EnemyType, dx: Float, dy: Float, radius: Float) =
+            enemy(id, type, model.coreX + dx, model.coreY + dy, 1f, radius)
+        return model.withDungeon(station).with(
+            "previousCoreX" to model.coreX, "previousCoreY" to model.coreY,
+            // The brackets' and the cell's pulse at its peak.
+            "elapsed" to ((kotlin.math.PI / 2.0 + 2.0 * kotlin.math.PI * 441.0) / 6.0).toFloat(),
+            "enemies" to listOf(
+                member(31, EnemyType.CRAWLER, -290f, 250f, 18f), member(32, EnemyType.CRAWLER, 290f, -240f, 18f),
+                member(33, EnemyType.CRAWLER, 300f, 220f, 18f), member(34, EnemyType.DRIFTER, 120f, 110f, 16f),
+                member(35, EnemyType.SHOOTER, -160f, -120f, 18f), member(36, EnemyType.SENTRY, 40f, -260f, 20f),
+            ).toImmutableList(),
+        )
     }
 
     private fun GameplayRenderModel.with(vararg overrides: Pair<String, Any?>): GameplayRenderModel {

@@ -83,7 +83,7 @@ class StructurePlacementTest {
             assertEquals(0, sameSpot, "$layer salts its own placements")
             assertTrue(cells.all { (x, y) -> placeStructure(enabled, 731_991, layer, x, y) == null }, "$layer ships no structures")
         }
-        assertTrue(cells.all { (x, y) -> placeStructure(shipped, 731_991, WorldLayer.BASE, x, y) == null }, "disabled content")
+        assertTrue(cells.all { (x, y) -> placeStructure(shipped.copy(enabled = false), 731_991, WorldLayer.BASE, x, y) == null }, "disabled content")
     }
 
     @Test
@@ -162,7 +162,7 @@ class StructurePlacementTest {
         for (seed in listOf(11, 12, 13)) {
             for ((x, y) in listOf(60_000.0 to 30_000.0, -45_500.0 to 71_200.0, 20_400.0 to -90_100.0)) {
                 val with = state(denseStructureContent(), seed).apply { teleportCoreForTesting(x, y) }
-                val without = state(canonicalGameplayContent, seed).apply { teleportCoreForTesting(x, y) }
+                val without = state(structuresDisabledContent, seed).apply { teleportCoreForTesting(x, y) }
                 assertTrue(with.structureField.structures.isNotEmpty())
                 val kept = with.obstacleField.obstacles.toSet()
                 kept.forEach { assertTrue(it in without.obstacleField.obstacles, "an obstacle moved: $it") }
@@ -441,7 +441,7 @@ class StructurePlacementTest {
 
     @Test
     fun theArchitectCollapsesTheWindowAndDisabledContentKeepsItEmpty() {
-        val off = state(canonicalGameplayContent)
+        val off = state(structuresDisabledContent)
         off.teleportCoreForTesting(81_000.0, 79_000.0)
         assertSame(StructureField.EMPTY, off.structureField)
         assertNull(off.structurePlacement(16, 16))

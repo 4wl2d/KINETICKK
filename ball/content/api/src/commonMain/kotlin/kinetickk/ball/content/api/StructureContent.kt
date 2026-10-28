@@ -149,18 +149,21 @@ data class StructureReward(val kind: StructureRewardKind, val amount: Int = 1, v
         }
     }
 
-    /** English content phrase shown on the dungeon panel (localized at presentation). */
+    /**
+     * English content phrase shown on the dungeon panel (localized at presentation), short like the HUD's other reward
+     * words: the panel joins up to six on one line, which must stay legible on a phone. An item offer names its floor.
+     */
     val label: String
         get() = when (kind) {
             StructureRewardKind.RELIC -> "Relic"
-            StructureRewardKind.KEY -> "Elite Key"
-            StructureRewardKind.MATTER -> "Kinetic Matter"
-            StructureRewardKind.DATA -> "Data cache"
+            StructureRewardKind.KEY -> "Key"
+            StructureRewardKind.MATTER -> "Matter"
+            StructureRewardKind.DATA -> "Data"
             StructureRewardKind.REPAIR -> "Repair"
             StructureRewardKind.ITEM_OFFER -> when (rarityFloor) {
-                ItemRarity.UNCOMMON -> "Uncommon item or better"
-                ItemRarity.RARE -> "Rare item or better"
-                ItemRarity.EPIC -> "Epic item or better"
+                ItemRarity.UNCOMMON -> "Uncommon item"
+                ItemRarity.RARE -> "Rare item"
+                ItemRarity.EPIC -> "Epic item"
                 // Validation forbids every other floor; the branch keeps the mapping total.
                 else -> "Item"
             }
@@ -320,10 +323,10 @@ data class StructureTemplate(
 
 /**
  * Structures and dungeons far from the start: placement over [cellSize] cells, the dungeon runtime's knobs and the
- * templates in [StructureTemplateId] order. Shipped disabled until the dungeon runtime turns structures on.
+ * templates in [StructureTemplateId] order. [enabled] false plays a world without structures (the harness arms).
  */
 data class StructurePolicy(
-    val enabled: Boolean = false,
+    val enabled: Boolean = true,
     val cellSize: Float = 4_800f,
     val cellMargin: Float = 300f,
     val minimumDistance: Float = 4_000f,
@@ -401,12 +404,17 @@ fun rotateQuarterY(x: Float, y: Float, quarter: Int): Float = when (quarter and 
 
 /**
  * Bootstrap cross-check against the roster and the obstacle window: every fixed garrison kind is an ordinary kind or
- * a mini-boss other than the Herald, an ordinary STRUCTURE kind opens at tier 0 from the first second, the obstacle
- * window spans at most three cells per axis (so at most nine structures) and keeps the dungeon's structure inside it.
+ * a mini-boss other than the Herald, a room garrisons at most one mini-boss (its garrison is one encounter, which
+ * holds at most one boss), an ordinary STRUCTURE kind opens at tier 0 from the first second, the obstacle window spans
+ * at most three cells per axis (so at most nine structures) and keeps the dungeon's structure inside it.
  */
 fun validateStructurePolicy(policy: StructurePolicy, enemies: List<EnemyDefinition>, obstacles: ObstacleTuning) {
     policy.templates.forEach { template ->
         template.rooms.forEach { room ->
+            val miniBosses = room.garrison.sumOf { entry ->
+                if (enemies.firstOrNull { it.type == entry.type }?.rank == EnemyRank.MINI_BOSS) entry.count else 0
+            }
+            require(miniBosses <= 1) { "${template.name} garrisons $miniBosses mini-bosses in one room; at most one mini-boss" }
             room.garrison.forEach { entry ->
                 val type = entry.type ?: return@forEach
                 val definition = enemies.firstOrNull { it.type == type }

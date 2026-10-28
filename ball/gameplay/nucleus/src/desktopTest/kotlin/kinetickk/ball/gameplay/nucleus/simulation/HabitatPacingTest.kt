@@ -7,7 +7,6 @@ import kinetickk.ball.content.api.EnemyRank
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.model.profile
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
-import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
@@ -44,7 +43,8 @@ class HabitatPacingTest {
      * minutes. Entering clears the hostiles and drops an event planned in realspace, as a layer switch does.
      */
     private fun twoMinutesIn(layer: WorldLayer, seed: Int): List<Spawn> {
-        val state = MutableGameState(canonicalGameplayContent, seed = seed, initialMatter = 0).apply {
+        // Open space: a world without structures (a sealed room's director is DungeonSystemTest's).
+        val state = MutableGameState(structuresDisabledContent, seed = seed, initialMatter = 0).apply {
             resize(1_280f, 720f)
             startRun()
             invulnerableUntil = Float.MAX_VALUE

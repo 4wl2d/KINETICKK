@@ -62,10 +62,18 @@ internal fun MutableGameState.buildStructureField(chunkX: Int, chunkY: Int, coll
     val minY = (chunkY - half) * chunk
     val maxY = (chunkY + half + 1) * chunk
     val size = policy.cellSize.toDouble()
+    val firstCellX = floor(minX / size).toInt()
+    val firstCellY = floor(minY / size).toInt()
+    val endCellX = ceil(maxX / size).toInt()
+    val endCellY = ceil(maxY / size).toInt()
+    // Bootstrap validation guarantees this; content built past it (a test's huge chunks) fails here, not by growing.
+    check(endCellX - firstCellX <= MAX_WINDOW_CELLS && endCellY - firstCellY <= MAX_WINDOW_CELLS) {
+        "The obstacle window must span at most three structure cells per axis"
+    }
     val structures = ArrayList<PlacedStructure>()
     val walls = ArrayList<Wall>()
-    for (cellY in floor(minY / size).toInt() until ceil(maxY / size).toInt()) {
-        for (cellX in floor(minX / size).toInt() until ceil(maxX / size).toInt()) {
+    for (cellY in firstCellY until endCellY) {
+        for (cellX in firstCellX until endCellX) {
             val placement = availableStructure(cellX, cellY) ?: continue
             if (placement.absoluteX + placement.halfWidth <= minX || placement.absoluteX - placement.halfWidth >= maxX ||
                 placement.absoluteY + placement.halfHeight <= minY || placement.absoluteY - placement.halfHeight >= maxY
@@ -224,6 +232,9 @@ private fun MutableGameState.structureSignals(): List<StructureSignal> {
     }
     return if (signals.size > ContentBounds.MAX_STRUCTURE_SIGNALS) signals.subList(0, ContentBounds.MAX_STRUCTURE_SIGNALS) else signals
 }
+
+/** Structure cells the obstacle window spans per axis at most (validateStructurePolicy). */
+private const val MAX_WINDOW_CELLS: Int = 3
 
 /** Cells on each side of the Core's cell a signal may come from (the range reaches at most two cells). */
 private const val SIGNAL_CELL_REACH: Int = 2

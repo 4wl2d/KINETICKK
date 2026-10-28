@@ -32,6 +32,7 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPolicy
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
@@ -219,6 +220,16 @@ class WorldHotPathAllocationTest {
             decorate = ::withAmbientCaches)
         assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
             decorate = ::withAmbientCaches)
+    }
+
+    @Test
+    fun structuresWithASealedRoomTheScrimAndEntranceMarkersDrawWithoutAllocating() {
+        // A Foundry's furnace sealed around the Core (threat doors and brackets, its promise plates, cleared halls, the
+        // scrim at full depth), an unspent Spire beside it with open doors, and two entrances off screen (their markers).
+        assertFrameIsAllocationFree(KkRolePalette.Default, WeaponId.MORNINGSTAR, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = ::withStructures)
+        assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = ::withStructures)
     }
 
     @Test
@@ -819,6 +830,20 @@ class WorldHotPathAllocationTest {
             ),
             "secretFlags" to 1, "goldenDrifterId" to EnemyType.DRIFTER.ordinal + 1,
         )
+    }
+
+    /**
+     * The busy frame inside a Foundry's sealed furnace (the Core 300 inside its east wall, so the scrim is full), an
+     * unspent Spire just east of it, and the Spire's and a far Vault's entrances off screen.
+     */
+    private fun withStructures(model: GameplayRenderModel): GameplayRenderModel {
+        val templates = model.content.structures
+        val foundry = StructureFixture(templates.template(StructureTemplateId.FOUNDRY), CORE - 900f, CORE, clearedRooms = 0b011, engagedRoom = 2)
+        val spire = StructureFixture(templates.template(StructureTemplateId.SPIRE), CORE + 860f, CORE, id = 9L shl 8)
+        val vault = StructureFixture(templates.template(StructureTemplateId.VAULT), CORE - 1_200f, CORE - 3_400f, id = 10L shl 8)
+        check(structureInteriorAmount(model.with("structures" to structureProjection(foundry, dungeon = foundry))) == 1f)
+        return model.with("structures" to structureProjection(foundry, spire, signals = listOf(foundry, spire, vault), dungeon = foundry,
+            garrisonAlive = 4, garrisonTotal = 6))
     }
 
     private companion object {

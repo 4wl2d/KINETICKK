@@ -28,6 +28,7 @@ import kinetickk.ball.gameplay.nucleus.render.TrialReward
 import kinetickk.ball.gameplay.nucleus.render.TrialSource
 import kinetickk.ball.gameplay.nucleus.render.TrialValue
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.TextResource
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
 import kotlin.math.abs
@@ -38,10 +39,10 @@ import kotlin.math.roundToInt
 /** The engagement the trial panel shows, if any (the game runs at most one at a time). */
 internal fun GameplayRenderModel.activeTrial(): TrialProjection? = trial
 
-/** The trial's rules for its (!) info button: the content instruction in the player's language. */
+/** The trial's rules for its (!) info button: the content instruction, or a dungeon's own rules, in the player's language. */
 @Suppress("UnusedReceiverParameter")
 internal fun GameplayRenderModel.trialRules(trial: TrialProjection, language: AppLanguage): String =
-    trial.rules.localizedContent(language)
+    if (trial.source == TrialSource.STRUCTURE) structureTrialRules(language) else trial.rules.localizedContent(language)
 
 /**
  * Geometry of the top-left trial panel (`Anomaly` board), shared by the renderer, the focusable
@@ -197,7 +198,7 @@ internal fun DrawScope.drawTrialPanel(
     val iconSize = (if (layout.compact) 13f else 16f) * unit
     drawSiteGlyph(trialGlyph(trial), Offset(innerLeft + iconSize * 0.5f, layout.rowLabelCenter), iconSize, roles.you)
     val label = trialLabel(trial)
-    val labelText = TrialScratch.label.of(language, label.ordinal.toLong()) { language.text(label) }
+    val labelText = TrialScratch.label.of(label, language.ordinal.toLong()) { language.text(label) }
     val clockWidth = when (trial.clock) {
         TrialClock.COUNTDOWN -> {
             // The remaining time as m:ss, the same string as the ring and point timers in the world.
@@ -232,6 +233,7 @@ internal fun DrawScope.drawTrialPanel(
     // Row 3: segmented progress.
     val meter = HudDrawCache.rect(HudRect.TRIAL_METER, innerLeft, layout.meterTop, innerRight, layout.meterTop + layout.meterHeight)
     drawKkMeter(meter, trial.progress, roles.you, roles, segments = trial.segments)
+    if (trial.source == TrialSource.STRUCTURE) drawSealedRoomSegment(engine, trial, meter, roles)
 
     // Row 4: progress value, reward. Seconds change every frame while earned, so they are drawn from cached digit
     // layouts; counted goals change rarely and use one cached line; a duel shows no value.
@@ -251,7 +253,8 @@ internal fun DrawScope.drawTrialPanel(
             layout.rowValueCenter + valueHalf)
     }
     val reward = trialRewardText(trial)
-    val rewardText = TrialScratch.reward.of(language, reward.ordinal.toLong()) { language.text(reward) }
+    val rewardText = if (trial.reward == TrialReward.STRUCTURE_REWARDS) structureTrialRewards(engine, trial, language)
+        else TrialScratch.reward.of(language, reward.ordinal.toLong()) { language.text(reward) }
     // A race's medal pips sit left of its medal label.
     val pipSize = (if (layout.compact) 6f else 7f) * unit
     val pipGap = 3f * unit
@@ -281,8 +284,8 @@ internal fun trialGlyph(trial: TrialProjection): SiteGlyph = when (trial.source)
     TrialSource.DIMENSION -> SiteGlyph.DIMENSION
 }
 
-/** The panel's family label. */
-internal fun trialLabel(trial: TrialProjection): HudRedesignText = when (trial.family) {
+/** The panel's family label; a dungeon names itself by its source. */
+internal fun trialLabel(trial: TrialProjection): TextResource = if (trial.source == TrialSource.STRUCTURE) structureTrialLabel() else when (trial.family) {
     SiteFamily.ANOMALY -> HudRedesignText.AnomalyTrial
     SiteFamily.RACE -> HudRedesignText.RaceTrial
     SiteFamily.CHALLENGE -> HudRedesignText.ChallengeTrial

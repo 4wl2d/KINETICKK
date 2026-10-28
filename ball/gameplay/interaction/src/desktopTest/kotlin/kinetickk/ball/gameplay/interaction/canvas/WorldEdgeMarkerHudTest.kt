@@ -13,6 +13,7 @@ import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.layout.RunningControlMask
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
@@ -165,6 +166,60 @@ class WorldEdgeMarkerHudTest {
         val far = crowded.with("sites" to immutableListOf<SiteProjection>(),
             "ambientSites" to immutableListOf(cache(0f to 1_900f), egg(0f to -1_200f)))
         assertEquals(listOf(EdgeMarkerIcon.TOTEM), collect(far))
+    }
+
+    /**
+     * Structure entrances off screen: the two nearest get markers (never the dungeon the Core is in, never an entrance on
+     * screen), after the totem and before the ambient caches, apart from each other and clear of the HUD in every layout
+     * and language.
+     */
+    @Test
+    fun structureEntrancesMarkTheTwoNearestClearOfTheHud() {
+        for ((dpWidth, dpHeight) in listOf(1_440f to 810f, 844f to 390f, 390f to 844f)) for (language in AppLanguage.entries)
+        for (textScale in listOf(1f, 1.75f)) for (turn in 0 until 8) {
+            val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64),
+                textScale, language, HudTestFonts.typography.copy(localeList = language.localeList()))
+            val spin = turn * PI.toFloat() / 4f
+            fun at(angle: Float, distance: Float) = cos(spin + angle) * distance to sin(spin + angle) * distance
+            val base = familyModel(dpWidth, dpHeight)
+            val templates = base.content.structures
+            // The Core stands in a Spire (its entrance 1,200 below, nearer than any other); four entrances lie off screen
+            // and one on screen.
+            val held = StructureFixture(templates.template(StructureTemplateId.SPIRE), 0f, 0f, id = 1L shl 8)
+            val entrances = listOf(1_600f, 2_400f, 3_200f, 4_000f).mapIndexed { index, distance ->
+                entranceAt(templates.template(StructureTemplateId.VAULT), at(0.4f + index * 1.3f, distance), id = (index + 2L) shl 8)
+            }
+            val onScreen = entranceAt(templates.template(StructureTemplateId.LABYRINTH), 120f to 90f, id = 9L shl 8)
+            val model = base.with(
+                "totem" to at(5.6f, 3_000f).let { (x, y) -> TotemProjection(x, y, 1f) },
+                "ambientSites" to immutableListOf(cache(at(3.1f, 1_500f))),
+                "structures" to structureProjection(held, signals = listOf(held, onScreen) + entrances, dungeon = held),
+            )
+            CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, canvas, Size(dpWidth, dpHeight)) {
+                drawWorld(model, VisualFxProjection.EMPTY, 0f, 0f, measurer)
+                drawHud(model, measurer, 1f)
+            }
+            val where = "$language ${dpWidth}x$dpHeight text=$textScale turn=$turn"
+            val batch = WorldOverlayScratch.markers
+            assertEquals(listOf(EdgeMarkerIcon.TOTEM, EdgeMarkerIcon.STRUCTURE, EdgeMarkerIcon.STRUCTURE, EdgeMarkerIcon.CACHE),
+                (0 until batch.count).map { batch.icon[it] }, where)
+            assertEquals(1_600f, batch.distance[1], 0.5f, "$where: the nearest entrance first")
+            assertEquals(2_400f, batch.distance[2], 0.5f, "$where: then the second nearest")
+            val boxes = WorldDrawProbe.rects(WorldDrawn.EDGE_MARKER)
+            assertEquals(4, boxes.size, "$where: $boxes")
+            val drawn = drawnHud(dpWidth, dpHeight, 1f)
+            boxes.forEachIndexed { index, box ->
+                assertTrue(box.left >= 0f && box.top >= 0f && box.right <= dpWidth && box.bottom <= dpHeight, "$where: marker $box on screen")
+                drawn.forEach { (name, block) -> assertTrue(!box.overlaps(block), "$where: marker $box on the HUD's $name $block") }
+                boxes.drop(index + 1).forEach { other -> assertTrue(!box.overlaps(other), "$where: markers $box and $other meet") }
+            }
+        }
+    }
+
+    /** A structure of [template] placed so its entrance (outer door centre) lies at [entrance]. */
+    private fun entranceAt(template: kinetickk.ball.content.api.StructureTemplate, entrance: Pair<Float, Float>, id: Long): StructureFixture {
+        val (localX, localY) = StructureFixture(template, 0f, 0f).entrance()
+        return StructureFixture(template, entrance.first - localX, entrance.second - localY, id = id)
     }
 
     private fun familyModel(width: Float, height: Float) = hudTestModel(width, height).with(
