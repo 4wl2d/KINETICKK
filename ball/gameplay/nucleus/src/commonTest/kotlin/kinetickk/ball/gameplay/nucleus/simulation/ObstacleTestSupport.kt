@@ -3,12 +3,19 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.EffectClause
 import kinetickk.ball.content.api.GameplayContentSnapshot
+import kinetickk.ball.content.api.ItemDefinition
+import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.ObstacleMix
 import kinetickk.ball.gameplay.nucleus.model.Obstacle
 import kinetickk.ball.gameplay.nucleus.model.ObstacleField
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
+import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.floor
 import kotlin.math.roundToInt
 
@@ -68,6 +75,21 @@ internal fun GameplayContentSnapshot.withoutObstacleVariants(): GameplayContentS
 }
 
 internal fun withoutObstacleVariants(): GameplayContentSnapshot = canonicalGameplayContent.withoutObstacleVariants()
+
+/**
+ * A test item called [name] holding only [rules] and [clauses] (one CHAIN tag, one stack), for obstacle build hooks no
+ * catalog item combines yet. Append it with [withProbes] and own it by name.
+ */
+internal fun obstacleProbe(name: String, vararg rules: ItemRule, clauses: List<EffectClause> = emptyList()): ItemDefinition =
+    ItemDefinition(
+        id = 0, name = name, description = "$name tests one obstacle build hook.", rarity = ItemRarity.RARE,
+        tags = immutableListOf(BuildTag.CHAIN), clauses = clauses.toImmutableList(), rules = rules.toList().toImmutableList(),
+        maxStacks = 1, unlockLevel = 1,
+    )
+
+/** This content with [probes] appended after its catalog (ids follow on). */
+internal fun GameplayContentSnapshot.withProbes(vararg probes: ItemDefinition): GameplayContentSnapshot =
+    copy(items = (items + probes.mapIndexed { index, probe -> probe.copy(id = items.size + index) }).toImmutableList())
 
 /** A quiet run with no generated obstacles at all (the window is empty but current). */
 internal fun MutableGameState.clearObstaclesForTesting() = placeObstaclesForTesting()

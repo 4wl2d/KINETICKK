@@ -19,6 +19,9 @@ import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.MarkPick
+import kinetickk.ball.content.api.NEAR_OBSTACLE_MAX_DISTANCE
+import kinetickk.ball.content.api.ObstacleAspect
+import kinetickk.ball.content.api.ObstacleKind
 import kinetickk.ball.content.api.ReactionAspect
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.SkillId
@@ -49,7 +52,9 @@ import kotlin.test.assertTrue
 /**
  * The 0.5.0 rule vocabulary at run time: the six new triggers dispatch where and as often as combat-final §6.1
  * says, the new conditions read the run, the new actions, rules, conversions and timed stats do what their text
- * says within their bounds, and the offers leave out what a run cannot use.
+ * says within their bounds, and the offers leave out what a run cannot use. The 0.6.0 obstacle vocabulary too:
+ * ObstacleIs reads the kind a dispatch carries, NearObstacle the gap to the nearest solid surface, and obstacle tuning
+ * sums its items up to its caps.
  */
 class RuleVocabularyRuntimeTest {
     // -----------------------------------------------------------------------------------------
@@ -212,6 +217,24 @@ class RuleVocabularyRuntimeTest {
 
         assertTrue(holds(EffectCondition.WeaponFamilyIs(WeaponFamily.MOMENTUM)))
         assertFalse(holds(EffectCondition.WeaponFamilyIs(WeaponFamily.PULSE)))
+    }
+
+    @Test
+    fun obstacleConditionsReadTheKindStruckAndTheGapToTheNearestSurface() {
+        val state = buildTestState()
+        for (named in ObstacleKind.entries) {
+            for (struck in ObstacleKind.entries + null) {
+                assertEquals(named == struck, state.holds(EffectCondition.ObstacleIs(named), null, null, null, obstacle = struck),
+                    "$named with $struck struck")
+            }
+        }
+        state.coreObstacleGap = Float.POSITIVE_INFINITY
+        assertFalse(state.holds(EffectCondition.NearObstacle(NEAR_OBSTACLE_MAX_DISTANCE), null, null, null), "no surface in reach")
+        state.coreObstacleGap = 180f
+        assertTrue(state.holds(EffectCondition.NearObstacle(180f), null, null, null))
+        assertFalse(state.holds(EffectCondition.NearObstacle(179f), null, null, null))
+        state.coreObstacleGap = 0f
+        assertTrue(state.holds(EffectCondition.NearObstacle(40f), null, null, null), "touching is near")
     }
 
     // -----------------------------------------------------------------------------------------
@@ -571,6 +594,33 @@ class RuleVocabularyRuntimeTest {
         assertTrue(state.castSkill(0))
         state.elapsed += MIN_SKILL_RECAST_SECONDS
         assertTrue(state.castSkill(0), "a full pair again")
+    }
+
+    @Test
+    fun obstacleTuningSumsItsItemsAndStopsAtItsCaps() {
+        fun tuning(aspect: ObstacleAspect, amount: Float, copy: String) =
+            probe("Obstacle $aspect $copy", rules = listOf(ItemRule.ObstacleTuning(aspect, amount)))
+        val first = listOf(
+            tuning(ObstacleAspect.RESTITUTION, 0.2f, "A"), tuning(ObstacleAspect.COLLISION_DAMAGE, 0.3f, "A"),
+            tuning(ObstacleAspect.LETHAL_SPEED, 300f, "A"), tuning(ObstacleAspect.BOOST_POWER, 0.6f, "A"),
+            tuning(ObstacleAspect.WELL_PULL, 0.6f, "A"),
+        )
+        val second = first.map { it.copy(name = it.name.dropLast(1) + "B") }
+        val plain = buildTestState().build
+        assertEquals(listOf(0f, 1f, 0f, 1f, 1f), listOf(plain.obstacleRestitutionBonus, plain.obstacleDamageScale,
+            plain.obstacleLethalBonus, plain.boostPowerScale, plain.wellPullScale), "nothing owned, nothing tuned")
+        val once = stateWith(*first.toTypedArray()).build
+        assertEquals(0.2f, once.obstacleRestitutionBonus, 1e-6f)
+        assertEquals(0.7f, once.obstacleDamageScale, 1e-6f)
+        assertEquals(300f, once.obstacleLethalBonus)
+        assertEquals(1.6f, once.boostPowerScale, 1e-6f)
+        assertEquals(1.6f, once.wellPullScale, 1e-6f)
+        val twice = stateWith(*(first + second).toTypedArray()).build
+        assertEquals(MAX_OBSTACLE_RESTITUTION_BONUS, twice.obstacleRestitutionBonus)
+        assertEquals(1f - MAX_OBSTACLE_DAMAGE_CUT, twice.obstacleDamageScale)
+        assertEquals(MAX_ITEM_LETHAL_BONUS, twice.obstacleLethalBonus)
+        assertEquals(1f + MAX_BOOST_POWER_BONUS, twice.boostPowerScale)
+        assertEquals(1f + MAX_WELL_PULL_BONUS, twice.wellPullScale)
     }
 
     @Test
