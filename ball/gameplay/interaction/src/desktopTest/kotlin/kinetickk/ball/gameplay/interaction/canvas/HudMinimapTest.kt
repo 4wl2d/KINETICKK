@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.content.api.phaseShardSolid
 import kinetickk.ball.content.api.ventErupting
 import kinetickk.ball.gameplay.interaction.fx.BuildNoticeKind
 import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
@@ -228,6 +229,30 @@ class HudMinimapTest {
         assertEquals(empty.at(mineX, y - blast), quiet.at(mineX, y - blast), "a dormant mine draws no ring")
         assertTrue((-1..1).any { dy -> share(ringing.at(mineX, y - blast + dy), roles.threat) > 0.25f }, "an armed mine rings its blast")
         assertEquals(empty.at(mineX, y - blast * 0.6f), ringing.at(mineX, y - blast * 0.6f), "open between the dot and the ring")
+    }
+
+    @Test
+    fun phaseShardsAreVoidDotsFirmWhileSolidAndFaintAsGhosts() {
+        val void = KkRolePalette.Default.element(6)
+        val base = hudTestModel().with("velocityX" to 0f, "velocityY" to 0f)
+        val range = base.minimapRange * 0.25f
+        val kinds = base.content.obstacles.kinds
+        val seed = 31
+        // A shard half the range east of the Core, seen well inside its solid and its ghost time.
+        val shard = ObstacleProjection(1L, ObstacleKind.PHASE_SHARD, base.coreX + range * 0.5f, base.coreY, 90f, seed)
+        fun steady(solid: Boolean): Float = (0 until 960).map { 1f + it / 120f }.first { time ->
+            (-12..12).all { step -> kinds.phaseShardSolid(time + step / 120f, seed) == solid }
+        }
+        fun frame(time: Float) = render(base.with("minimapRange" to range, "elapsed" to time, "obstacles" to immutableListOf(shard)), 1_440, 810)
+        val solid = frame(steady(solid = true))
+        val ghost = frame(steady(solid = false))
+        val minimap = assertNotNull(HudLayoutProbe.rect(HudBlock.MINIMAP))
+        val x = minimap.center.x + minimap.width * 0.25f
+        val y = minimap.center.y
+        val firm = solid.at(x, y)
+        val faint = ghost.at(x, y)
+        assertTrue(share(firm, void) in 0.6f..0.8f && firm.blue - firm.green > 0.1f, "a solid shard is a firm Void dot: $firm")
+        assertTrue(share(faint, void) in 0.15f..0.35f && faint.blue > faint.green, "a ghost shard is a faint Void dot: $faint")
     }
 
     private fun drawHud(model: GameplayRenderModel, width: Float, height: Float, density: Float, textScale: Float) {

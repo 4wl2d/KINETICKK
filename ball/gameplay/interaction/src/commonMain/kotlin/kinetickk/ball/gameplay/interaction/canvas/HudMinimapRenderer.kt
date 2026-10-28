@@ -170,8 +170,8 @@ internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMe
                 ObstacleKind.CRYSTAL -> drawMinimapCrystal(Offset(x, y), radius, roles)
                 ObstacleKind.DERELICT_MINE ->
                     drawMinimapDerelictMine(obstacle, Offset(x, y), radius, scale, engine.content.obstacles.kinds, roles)
-                // The 0.6.0 kinds show as bone dots until their own marks land; no run generates them yet.
-                ObstacleKind.PHASE_SHARD -> drawCircle(Kk.Bone.copy(alpha = 0.32f), radius, Offset(x, y))
+                ObstacleKind.PHASE_SHARD ->
+                    drawMinimapPhaseShard(obstacle, Offset(x, y), radius, engine.renderElapsed, engine.content.obstacles.kinds, roles)
                 ObstacleKind.UNSTABLE -> drawCircle(roles.heat.copy(alpha = 0.7f), radius, Offset(x, y))
                 ObstacleKind.BUMPER -> drawCircle(roles.pol.copy(alpha = 0.8f), radius, Offset(x, y), style = kkStroke(max(1f, dot * 0.6f)))
             }

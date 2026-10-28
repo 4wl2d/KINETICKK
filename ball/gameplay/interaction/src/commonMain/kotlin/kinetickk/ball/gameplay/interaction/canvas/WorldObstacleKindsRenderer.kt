@@ -5,12 +5,15 @@ package kinetickk.ball.gameplay.interaction.canvas
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
 import kinetickk.ball.content.api.ObstacleKindTuning
 import kinetickk.ball.content.api.gateAngle
 import kinetickk.ball.content.api.gateHalfSpan
 import kinetickk.ball.content.api.obstacleSeedUnit
+import kinetickk.ball.content.api.phaseShardSecondsToSolid
+import kinetickk.ball.content.api.phaseShardSolid
 import kinetickk.ball.content.api.ventErupting
 import kinetickk.ball.content.api.ventEruptionEnd
 import kinetickk.ball.content.api.ventSecondsToEruption
@@ -23,6 +26,7 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.max
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /*
@@ -33,8 +37,8 @@ import kotlin.math.sin
 
 /**
  * Farthest a kind draws from its centre (culling): a gravity knot's field, a thermal vent's plume, an armed mine's
- * blast ring, otherwise an asteroid outline's reach (a gate's posts, a crystal's corners and a dormant mine's pips lie
- * within it).
+ * blast ring, otherwise an asteroid outline's reach (a gate's posts, a crystal's corners, a dormant mine's pips and a
+ * phase shard's outline or dashes lie within it).
  */
 internal fun obstacleVisualReach(obstacle: ObstacleProjection, kinds: ObstacleKindTuning): Float = when (obstacle.kind) {
     ObstacleKind.GRAVITY_WELL -> max(kinds.wellInfluence, obstacle.radius)
@@ -453,4 +457,103 @@ internal fun DrawScope.drawMinimapDerelictMine(
 ) {
     drawCircle(roles.threat.copy(alpha = 0.85f), radius, center)
     if (obstacle.fuseAt > 0f) drawCircle(roles.threat.copy(alpha = 0.5f), kinds.mineBlastRadius * scale, center, style = kkStroke(1f))
+}
+
+// ---------------------------------------------------------------------------------------------
+// Phase shards.
+
+/** The palette's element hue of Void (the content's element order). */
+private const val VOID_HUE: Int = 6
+
+/** One dash and its gap along a ghost shard's outline, roughly (world units; the dashes divide the outline evenly). */
+private const val PHASE_DASH_PERIOD: Float = 18f
+
+/** The drawn share of each dash period. */
+private const val PHASE_DASH_SHARE: Float = 0.55f
+
+/** Fewest dashes around a shard, however small. */
+private const val PHASE_MIN_DASHES: Int = 8
+
+/**
+ * The fill a ghost shard reaches at the end of its telegraph. Full fill is only ever a solid shard, so a shard about to
+ * materialise never reads as one that already collides.
+ */
+private const val PHASE_TELEGRAPH_FILL: Float = 0.8f
+
+/**
+ * A ghost shard's dashed outline: the asteroid [outline] of its shape cut into evenly spaced blunt dashes, so it hugs the
+ * same circle the solid shard fills (see [ObstaclePaths.phaseDashes]).
+ */
+internal fun buildPhaseShardDashes(path: Path, outline: Path) {
+    val measure = PathMeasure()
+    measure.setPath(outline, forceClosed = true)
+    val length = measure.length
+    if (length <= 0f) return
+    val dashes = max(PHASE_MIN_DASHES, (length / PHASE_DASH_PERIOD).roundToInt())
+    val period = length / dashes
+    for (dash in 0 until dashes) {
+        val start = dash * period
+        measure.getSegment(start, start + period * PHASE_DASH_SHARE, path, startWithMoveTo = true)
+    }
+}
+
+/**
+ * How far a ghost phase shard has come through its telegraph: 0 until the telegraph starts, rising to 1 as the shard
+ * materialises; 0 while it is solid.
+ */
+internal fun ObstacleKindTuning.phaseShardTelegraph(time: Float, seed: Int): Float {
+    if (phaseShardSolid(time, seed) || phaseTelegraphSeconds <= 0f) return 0f
+    val untilSolid = phaseShardSecondsToSolid(time, seed)
+    if (untilSolid > phaseTelegraphSeconds) return 0f
+    return (1f - untilSolid / phaseTelegraphSeconds).coerceIn(0f, 1f)
+}
+
+/**
+ * A phase shard. Solid, it is an asteroid with a Void edge: an ink polygon, an ink rim and a firm Void line. As a ghost
+ * only a faint dashed Void outline stays. Before it materialises the fill fades in, held below full, and the dashes
+ * brighten. It reads the same cycle the collisions do, so what is drawn filled is what collides.
+ */
+internal fun DrawScope.drawPhaseShard(
+    obstacle: ObstacleProjection,
+    center: Offset,
+    time: Float,
+    kinds: ObstacleKindTuning,
+    roles: KkRolePalette,
+) {
+    val seed = obstacle.shapeSeed
+    val radius = obstacle.radius
+    val void = roles.element(VOID_HUE)
+    if (kinds.phaseShardSolid(time, seed)) {
+        val outline = ObstaclePaths.outline(seed, radius)
+        translate(center.x, center.y) {
+            drawPath(outline, Kk.Ink3)
+            drawPath(outline, Kk.Ink4, alpha = 0.6f, style = kkStroke(rimWidth(radius)))
+            drawPath(outline, void.copy(alpha = 0.7f), style = kkStroke(2f))
+        }
+        return
+    }
+    val telegraph = kinds.phaseShardTelegraph(time, seed)
+    val dashes = ObstaclePaths.phaseDashes(seed, radius)
+    val outline = if (telegraph > 0f) ObstaclePaths.outline(seed, radius) else null
+    translate(center.x, center.y) {
+        if (outline != null) {
+            val fill = PHASE_TELEGRAPH_FILL * telegraph
+            drawPath(outline, Kk.Ink3, alpha = fill)
+            drawPath(outline, Kk.Ink4, alpha = 0.6f * fill, style = kkStroke(rimWidth(radius)))
+        }
+        drawPath(dashes, void.copy(alpha = 0.3f + 0.5f * telegraph), style = kkStroke(1.5f))
+    }
+}
+
+/** A phase shard on the minimap: a Void dot, firm while solid and faint while a ghost. */
+internal fun DrawScope.drawMinimapPhaseShard(
+    obstacle: ObstacleProjection,
+    center: Offset,
+    radius: Float,
+    time: Float,
+    kinds: ObstacleKindTuning,
+    roles: KkRolePalette,
+) {
+    val solid = kinds.phaseShardSolid(time, obstacle.shapeSeed)
+    drawCircle(roles.element(VOID_HUE).copy(alpha = if (solid) 0.7f else 0.25f), radius, center)
 }

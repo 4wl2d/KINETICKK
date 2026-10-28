@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.ObstacleKindTuning
+import kinetickk.ball.content.api.phaseShardSolid
 import kinetickk.ball.content.api.ventErupting
 import kinetickk.ball.content.api.ventEruptionEnd
 import kinetickk.ball.content.api.ventSecondsToEruption
@@ -427,6 +428,197 @@ class WorldObstacleRenderingTest {
             assertTrue((0 until edge.height).any { y -> edge[(2f * density).toInt(), y] != edgeEmpty[(2f * density).toInt(), y] },
                 "$label its ring reaches in from off screen")
         }
+    }
+
+    /**
+     * A phase shard is drawn filled exactly while its cycle has it solid, and the collisions read the same cycle. Solid,
+     * it has a full ink fill and an unbroken Void edge. As a ghost it has only a dashed outline and its middle stays
+     * open. In its telegraph a fill fades in, held below full, under dashes that brighten. Sampled across a cycle and
+     * one 480th of a second either side of both turns, at density 1 and 2.
+     */
+    @Test
+    fun phaseShardsDrawFilledExactlyWhileTheirCycleIsSolid() {
+        val void = KkRolePalette.Default.element(6)
+        for (density in listOf(1f, 2f)) {
+            val base = hudTestModel(960f, 600f).with("viewportDensity" to density, "uiScale" to density)
+            val kinds = base.content.obstacles.kinds
+            val radius = 80f
+            val seed = 31
+            val centerX = (480f - 180f) * density
+            val centerY = 300f * density
+            val shard = ObstacleProjection(15L, ObstacleKind.PHASE_SHARD, base.cameraX - 180f, base.cameraY, radius, seed)
+            val (materialises, fades) = phaseTurns(kinds, seed)
+            val telegraph = kinds.phaseTelegraphSeconds
+            val nudge = 1f / 480f
+            val ghost = materialises - telegraph - 0.2f
+            val early = materialises - telegraph * 0.9f
+            val midway = materialises - telegraph * 0.5f
+            val lastGhost = materialises - nudge
+            val firstSolid = materialises + nudge
+            val samples = listOf(
+                ghost to "a ghost",
+                early to "early in its telegraph",
+                midway to "midway through its telegraph",
+                lastGhost to "just before it materialises",
+                firstSolid to "just materialised",
+                (materialises + fades) * 0.5f to "solid",
+                fades - nudge to "just before it fades",
+                fades + nudge to "just faded",
+            )
+            val looks = samples.associate { (time, label) ->
+                val timed = base.with("elapsed" to time)
+                val empty = renderWorld(timed.with("obstacles" to immutableListOf<ObstacleProjection>()), density)
+                val drawn = renderWorld(timed.with("obstacles" to immutableListOf(shard)), density)
+                val look = PhaseLook(
+                    fill = fillShare(empty, drawn, centerX.toInt(), centerY.toInt()),
+                    edge = voidEdge(empty, drawn, ObstaclePaths.outline(seed, radius), centerX, centerY, density),
+                    centerUntouched = empty.at(centerX, centerY) == drawn.at(centerX, centerY),
+                )
+                val solid = kinds.phaseShardSolid(time, seed)
+                val name = "shard $label @$density (solid $solid): $look"
+                assertEquals(solid, look.fill >= 0.92f, "$name is drawn filled exactly while it collides")
+                if (solid) assertEquals(0, look.gaps, "$name has an unbroken edge")
+                else assertTrue(look.gaps >= look.samples * 0.15f, "$name has a dashed outline")
+                time to look
+            }
+            for ((time, label) in samples) assertEquals(label.startsWith("just materialised") || label == "solid" ||
+                label == "just before it fades", kinds.phaseShardSolid(time, seed), "the sample $label @$density")
+            val quiet = looks.getValue(ghost)
+            assertTrue(quiet.centerUntouched, "a ghost shard has no fill @$density")
+            assertTrue(looks.getValue(fades + nudge).centerUntouched, "a shard that just faded has no fill @$density")
+            val start = looks.getValue(early)
+            val half = looks.getValue(midway)
+            val late = looks.getValue(lastGhost)
+            assertTrue(start.fill in 0.02f..0.2f, "early in its telegraph the fill has only begun: $start @$density")
+            assertTrue(half.fill in 0.2f..0.6f && half.fill > start.fill + 0.15f, "half way through its telegraph the fill is fading in: $half @$density")
+            assertTrue(late.fill in 0.65f..0.88f && late.fill > half.fill + 0.15f,
+                "about to materialise, the fill is near full but held below it: $late @$density")
+            assertTrue(late.brightest > quiet.brightest + 0.2f, "its dashes brighten before it materialises: $quiet, then $late @$density")
+            assertTrue(void.blue - void.green > 0.2f, "Void rises more in blue than in green over ink, as the edge check reads it")
+        }
+    }
+
+    /**
+     * A ghost phase shard draws only its dashed outline, on its asteroid outline around the collision circle (nothing
+     * inside 0.97 radii or past the outline's reach), for shapes of several corner counts at density 1 and 2.
+     */
+    @Test
+    fun aGhostPhaseShardDrawsOnlyADashedOutlineOnItsCollisionCircle() {
+        for (density in listOf(1f, 2f)) {
+            val base = hudTestModel(960f, 600f).with("viewportDensity" to density, "uiScale" to density)
+            val kinds = base.content.obstacles.kinds
+            val centerX = (480f - 180f) * density
+            val centerY = 300f * density
+            for ((seed, radius) in listOf(31 to 80f, 32 to 46f, 33 to 140f)) {
+                val (materialises, _) = phaseTurns(kinds, seed)
+                val timed = base.with("elapsed" to materialises - kinds.phaseTelegraphSeconds - 0.2f)
+                val shard = ObstacleProjection(16L, ObstacleKind.PHASE_SHARD, base.cameraX - 180f, base.cameraY, radius, seed)
+                val empty = renderWorld(timed.with("obstacles" to immutableListOf<ObstacleProjection>()), density)
+                val drawn = renderWorld(timed.with("obstacles" to immutableListOf(shard)), density)
+                val label = "ghost seed $seed r $radius @$density"
+                var closest = Float.MAX_VALUE
+                var farthest = 0f
+                for (y in 0 until empty.height) {
+                    for (x in 0 until empty.width) {
+                        if (empty[x, y] == drawn[x, y]) continue
+                        val distance = kotlin.math.hypot(x + 0.5f - centerX, y + 0.5f - centerY)
+                        closest = minOf(closest, distance)
+                        farthest = maxOf(farthest, distance)
+                    }
+                }
+                assertTrue(closest >= (radius * 0.97f - 2f) * density, "$label draws inside its outline at $closest")
+                assertTrue(farthest <= (radius * ObstaclePaths.OUTLINE_MAX_REACH + 2f) * density, "$label reaches $farthest")
+                val edge = voidEdge(empty, drawn, ObstaclePaths.outline(seed, radius), centerX, centerY, density)
+                assertTrue(edge.gaps >= edge.samples * 0.15f && edge.marked >= edge.samples * 0.35f, "$label is dashed in Void: $edge")
+            }
+        }
+    }
+
+    /** What a phase shard's look shows: [fill] at its centre (see [fillShare]) and its [edge]. */
+    private data class PhaseLook(val fill: Float, val edge: VoidEdge, val centerUntouched: Boolean) {
+        val gaps: Int get() = edge.gaps
+        val samples: Int get() = edge.samples
+        val brightest: Float get() = edge.brightest
+    }
+
+    /**
+     * Void marks along an outline: of [samples] points spaced evenly along it, [marked] have a Void mark within one pixel
+     * (a rise in blue of at least 0.08 that outruns the rise in green by 0.03, as Void over ink does and bone and the ink
+     * rim do not) and [gaps] have none; [brightest] is the largest such rise in blue.
+     */
+    private data class VoidEdge(val samples: Int, val marked: Int, val brightest: Float) {
+        val gaps: Int get() = samples - marked
+    }
+
+    private fun voidEdge(empty: PixelMap, drawn: PixelMap, outline: androidx.compose.ui.graphics.Path, centerX: Float, centerY: Float, density: Float): VoidEdge {
+        val measure = PathMeasure()
+        measure.setPath(outline, forceClosed = true)
+        val samples = 240
+        var marked = 0
+        var brightest = 0f
+        for (sample in 0 until samples) {
+            val point = measure.getPosition(measure.length * sample / samples)
+            val x = (centerX + point.x * density).toInt()
+            val y = (centerY + point.y * density).toInt()
+            var mark = false
+            for (dy in -1..1) {
+                for (dx in -1..1) {
+                    val before = empty[x + dx, y + dy]
+                    val after = drawn[x + dx, y + dy]
+                    val blue = after.blue - before.blue
+                    if (blue >= 0.08f && blue - (after.green - before.green) >= 0.03f) {
+                        mark = true
+                        brightest = maxOf(brightest, blue)
+                    }
+                }
+            }
+            if (mark) marked++
+        }
+        return VoidEdge(samples, marked, brightest)
+    }
+
+    /**
+     * How far the look moved the pixels within two of ([x], [y]) from the backdrop toward ink 3, the shard's fill: 0 for
+     * untouched, 1 for a full fill.
+     */
+    private fun fillShare(empty: PixelMap, drawn: PixelMap, x: Int, y: Int): Float {
+        var sum = 0f
+        var count = 0
+        for (dy in -2..2) {
+            for (dx in -2..2) {
+                val before = empty[x + dx, y + dy]
+                val after = drawn[x + dx, y + dy]
+                for ((from, to, fill) in listOf(
+                    Triple(before.red, after.red, Kk.Ink3.red),
+                    Triple(before.green, after.green, Kk.Ink3.green),
+                    Triple(before.blue, after.blue, Kk.Ink3.blue),
+                )) {
+                    if (fill - from < 0.03f) continue
+                    sum += (to - from) / (fill - from)
+                    count++
+                }
+            }
+        }
+        check(count > 0) { "the backdrop at ($x, $y) is as light as the fill" }
+        return sum / count
+    }
+
+    /**
+     * The first time from 2 s on, on a 1/960 s grid, at which the phase shard with [seed] reads solid after reading a
+     * ghost, and the first time after that at which it reads a ghost again.
+     */
+    private fun phaseTurns(kinds: ObstacleKindTuning, seed: Int): Pair<Float, Float> {
+        var materialises = -1f
+        for (step in 0 until 8_000) {
+            val time = 2f + step / 960f
+            val next = 2f + (step + 1) / 960f
+            if (materialises < 0f) {
+                if (!kinds.phaseShardSolid(time, seed) && kinds.phaseShardSolid(next, seed)) materialises = next
+            } else if (kinds.phaseShardSolid(time, seed) && !kinds.phaseShardSolid(next, seed)) {
+                return materialises to next
+            }
+        }
+        error("no phase turns for seed $seed")
     }
 
     /** The first run time in 0..8 s, on a 1/120 s grid, that [accept] takes. */

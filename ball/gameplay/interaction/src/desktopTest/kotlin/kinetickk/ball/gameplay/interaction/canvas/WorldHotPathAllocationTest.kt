@@ -67,6 +67,8 @@ import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
 import kinetickk.ball.content.api.ObstacleKindTuning
+import kinetickk.ball.content.api.phaseShardSecondsToSolid
+import kinetickk.ball.content.api.phaseShardSolid
 import kinetickk.ball.content.api.ventErupting
 import kinetickk.ball.content.api.ventSecondsToEruption
 import kinetickk.ball.gameplay.nucleus.render.ProjectileKind
@@ -579,6 +581,13 @@ class WorldHotPathAllocationTest {
                 ObstacleProjection(12L, ObstacleKind.CRYSTAL, CORE + 200f, CORE + 330f, 90f, 21),
                 ObstacleProjection(13L, ObstacleKind.DERELICT_MINE, CORE - 420f, CORE + 330f, 64f, 22),
                 ObstacleProjection(14L, ObstacleKind.DERELICT_MINE, CORE + 470f, CORE - 330f, 50f, 23, fuseAt = BUSY_ELAPSED + 0.3f),
+                // Phase shards: solid, a dashed ghost, and one fading in before it materialises.
+                ObstacleProjection(15L, ObstacleKind.PHASE_SHARD, CORE - 230f, CORE - 140f, 70f,
+                    busyShardSeed { phaseShardSolid(BUSY_ELAPSED, it) }),
+                ObstacleProjection(16L, ObstacleKind.PHASE_SHARD, CORE + 60f, CORE + 200f, 60f,
+                    busyShardSeed { phaseShardSecondsToSolid(BUSY_ELAPSED, it) > phaseTelegraphSeconds + 0.2f }),
+                ObstacleProjection(17L, ObstacleKind.PHASE_SHARD, CORE + 250f, CORE + 120f, 80f,
+                    busyShardSeed { phaseShardSecondsToSolid(BUSY_ELAPSED, it) in 0.1f..0.35f }),
             ) + List(30) { index ->
                 ObstacleProjection(100L + index, if (index % 5 == 0) ObstacleKind.UNSTABLE else ObstacleKind.ASTEROID,
                     CORE - 450f + (index % 6) * 180f, CORE - 260f + (index / 6) * 130f, 46f + index * 3.47f, 200 + index * 13)
@@ -593,6 +602,9 @@ class WorldHotPathAllocationTest {
             val kinds = ObstacleKindTuning()
             return (1..10_000).first { kinds.accept(it) }
         }
+
+        /** The first phase shard shape seed whose cycle, under the default kind tuning, [accept]s. */
+        fun busyShardSeed(accept: ObstacleKindTuning.(Int) -> Boolean): Int = busyVentSeed(accept)
 
         /**
          * Statuses of the busy frame's enemies: a reaction ready (Thermal with Cryo), a primed Ion arc,

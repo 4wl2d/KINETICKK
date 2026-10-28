@@ -86,6 +86,9 @@ class HudHotPathAllocationTest {
                     ObstacleProjection(10L, ObstacleKind.CRYSTAL, 900f, -600f, 80f, 14),
                     ObstacleProjection(11L, ObstacleKind.DERELICT_MINE, -800f, -700f, 60f, 15),
                     ObstacleProjection(12L, ObstacleKind.DERELICT_MINE, 100f, 1_200f, 50f, 16, fuseAt = 1_000f),
+                    // Two phase shards whose cycles turn them solid and ghost over the measured frames.
+                    ObstacleProjection(13L, ObstacleKind.PHASE_SHARD, -1_000f, 300f, 80f, 17),
+                    ObstacleProjection(14L, ObstacleKind.PHASE_SHARD, 1_100f, 500f, 60f, 18),
                 ),
                 "pickups" to immutableListOf(
                     PickupProjection(PickupType.KEY, 300f, 300f, 0f, 0f, 20f, 300f, 300f),

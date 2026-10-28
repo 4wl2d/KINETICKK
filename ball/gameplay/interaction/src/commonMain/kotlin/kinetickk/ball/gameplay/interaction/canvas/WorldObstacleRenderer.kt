@@ -45,8 +45,7 @@ internal fun DrawScope.drawObstacles(engine: GameplayRenderModel, shakeX: Float,
             ObstacleKind.THERMAL_VENT -> drawThermalVent(obstacle, center, time, kinds, roles)
             ObstacleKind.CRYSTAL -> drawCrystal(obstacle, center, roles)
             ObstacleKind.DERELICT_MINE -> drawDerelictMine(obstacle, center, time, kinds, roles)
-            // The 0.6.0 kinds read as asteroids until their own looks land; no run generates them yet.
-            ObstacleKind.PHASE_SHARD -> drawAsteroid(obstacle, center, time, roles)
+            ObstacleKind.PHASE_SHARD -> drawPhaseShard(obstacle, center, time, kinds, roles)
         }
     }
 }
@@ -92,6 +91,7 @@ internal object ObstaclePaths {
     private const val CRACKS = 1
     private const val FACETS = 2
     private const val FACET_LINES = 3
+    private const val DASHED = 4
     private const val MINE_PIPS = 5
     private const val MINE_STUBS = 6
     private const val MINE_LIGHTS = 7
@@ -101,6 +101,7 @@ internal object ObstaclePaths {
     private val kinds = IntArray(CAPACITY) { -1 }
     private val paths = arrayOfNulls<Path>(CAPACITY)
     private var next = 0
+    private val scratch = Path()
 
     /** The jagged rim of an asteroid with [seed] and [radius]. */
     fun outline(seed: Int, radius: Float): Path = get(OUTLINE, seed, radius)
@@ -126,6 +127,9 @@ internal object ObstaclePaths {
     /** The warning lights at a derelict mine's pips. */
     fun mineLights(seed: Int, radius: Float): Path = get(MINE_LIGHTS, seed, radius)
 
+    /** The dashed outline of a ghost phase shard with [seed] and [radius] (the asteroid outline, cut into dashes). */
+    fun phaseDashes(seed: Int, radius: Float): Path = get(DASHED, seed, radius)
+
     /** Corner count of an outline: 8..12 from the seed. */
     fun corners(seed: Int): Int = 8 + ((seed % 5) + 5) % 5
 
@@ -142,6 +146,7 @@ internal object ObstaclePaths {
             MINE_PIPS -> buildMinePips(path, seed, radius)
             MINE_STUBS -> buildMineStubs(path, seed, radius)
             MINE_LIGHTS -> buildMineLights(path, seed, radius)
+            DASHED -> buildPhaseShardDashes(path, scratch.also { it.rewind(); buildOutline(it, seed, radius) })
             else -> buildGateBars(path, seed, radius)
         }
         kinds[next] = kind
