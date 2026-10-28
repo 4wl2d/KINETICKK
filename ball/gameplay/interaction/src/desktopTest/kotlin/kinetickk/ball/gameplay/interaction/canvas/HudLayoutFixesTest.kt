@@ -17,6 +17,7 @@ import androidx.compose.ui.text.platform.Font
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.content.api.SiteNotice
 import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.content.api.EquippedRelic
@@ -424,6 +425,8 @@ class HudLayoutFixesTest {
         assertEquals("TWO SITES DETECTED" to null, feedMessageParts("TWO SITES DETECTED // CHOOSE A COURSE", AppLanguage.English))
         assertEquals("ОБНАРУЖЕНЫ ДВЕ ЛОКАЦИИ" to null, feedMessageParts("TWO SITES DETECTED // CHOOSE A COURSE", AppLanguage.Russian))
         assertEquals("CATALOG COMPLETE" to "MATTER SALVAGED", feedMessageParts("CATALOG COMPLETE // MATTER SALVAGED", AppLanguage.English))
+        assertEquals("QUIET SIGNAL" to "THE ARCHITECT WAS NOT THE FIRST", feedMessageParts(SiteNotice.QUIET_SIGNAL.english, AppLanguage.English))
+        assertEquals("ТИХИЙ СИГНАЛ" to "АРХИТЕКТОР БЫЛ НЕ ПЕРВЫМ", feedMessageParts(SiteNotice.QUIET_SIGNAL.english, AppLanguage.Russian))
         assertEquals("ELITE SIGNAL" to null, feedMessageParts("ELITE SIGNAL", AppLanguage.English))
     }
 

@@ -14,13 +14,13 @@ internal const val POI_ACTIVATION_RADIUS: Float = 65f
 
 /**
  * Writes `(x, y, radius)` triples of every opt-in site into [out] for pilots that must not opt in, and returns how many
- * marks it wrote (at most [MAX_OPTIONAL_SITE_MARKS]): window offers, ambient sites, the sigil, event signals,
- * structures, then dimension portals. Allocation-free.
+ * marks it wrote (at most [MAX_OPTIONAL_SITE_MARKS]): window offers, the ambient sites near the Core, the sigil, event
+ * signals, structures, then dimension portals. Allocation-free.
  */
 internal fun MutableGameState.optionalSiteMarks(out: FloatArray): Int {
     require(out.size >= MAX_OPTIONAL_SITE_MARKS * 3) { "An optional-site buffer holds $MAX_OPTIONAL_SITE_MARKS marks" }
     var count = appendSiteMarks(out, 0, sites)
-    count = appendSiteMarks(out, count, ambientSites.sites)
+    count = appendAmbientSiteMarks(out, count)
     secretSigil?.let { count = appendSiteMark(out, count, it) }
     count = appendEventSignalMarks(out, count).coerceAtMost(MAX_OPTIONAL_SITE_MARKS)
     count = appendStructureMarks(out, count).coerceAtMost(MAX_OPTIONAL_SITE_MARKS)

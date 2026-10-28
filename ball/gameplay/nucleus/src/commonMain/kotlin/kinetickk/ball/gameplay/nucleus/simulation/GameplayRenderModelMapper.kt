@@ -362,8 +362,7 @@ internal fun MutableGameState.toRenderModel(
         coreState = coreStateProjection(reusableCollections?.coreState),
         coreStraightness = coreStraightness,
         easyMode = easyMode,
-        // The ambient site window joins the projection with the ambient sites themselves.
-        ambientSites = immutableListOf(),
+        ambientSites = ambientSiteProjections(reusableCollections?.ambientSites, identitySource),
         trial = trialProjection(reusableCollections?.trial),
         secretFlags = runSecretFlags,
         goldenDrifterId = goldenDrifterId,

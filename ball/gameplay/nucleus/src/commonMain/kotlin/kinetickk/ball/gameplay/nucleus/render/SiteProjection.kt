@@ -79,3 +79,12 @@ data class TrialProjection(
     val structure: StructureTemplateId? = null,
     val dimension: WorldLayer? = null,
 )
+
+/**
+ * Bit of [GameplayRenderModel.secretFlags] set once the Lost Cursor was found this run (the run's secret flag of that
+ * find; a nucleus test pins the two together).
+ */
+internal const val LOST_CURSOR_FOUND_FLAG: Int = 1
+
+/** The Lost Cursor was found this run: a tiny grey cursor now circles the Core. */
+val GameplayRenderModel.lostCursorFollows: Boolean get() = secretFlags and LOST_CURSOR_FOUND_FLAG != 0

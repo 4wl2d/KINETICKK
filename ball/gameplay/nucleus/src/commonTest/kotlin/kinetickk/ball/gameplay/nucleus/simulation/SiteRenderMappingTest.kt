@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.SiteFamily
 import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.gameplay.nucleus.model.AmbientSiteWindow
 import kinetickk.ball.gameplay.nucleus.model.SitePoint
 import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
@@ -215,5 +216,40 @@ class SiteRenderMappingTest {
         assertEquals(0.6f, after.sites.single().progress, 1e-5f)
         assertEquals(0.6f, after.trial!!.progress, 1e-5f)
         assertEquals(sibling.toRenderModel().sites, after.sites)
+    }
+
+    @Test
+    fun ambientSitesProjectOnlyOnceSettledWithTheirRevealAndKeepTheirList() {
+        val game = game()
+        val policy = game.content.sites
+        fun ambient(kind: SiteKind, cellX: Int, x: Float, settled: Boolean) =
+            SiteState(ambientSiteId(kind, cellX, 0), kind, x, 400f, Float.POSITIVE_INFINITY, settled = settled)
+        val cache = ambient(SiteKind.DRIFT_CACHE, 1, 900f, settled = true)
+        val quiet = ambient(SiteKind.QUIET_SIGNAL, 2, -700f, settled = true)
+        game.ambientSites = AmbientSiteWindow(0, 0, immutableListOf(cache, ambient(SiteKind.DRIFT_CACHE, 3, 5_000f, settled = false), quiet))
+
+        val first = game.toRenderModel()
+        assertEquals(listOf(SiteKind.DRIFT_CACHE, SiteKind.QUIET_SIGNAL), first.ambientSites.map { it.kind }, "an unsettled site is not shown")
+        val (cacheMark, quietMark) = first.ambientSites
+        assertEquals(900f to 400f, cacheMark.x to cacheMark.y)
+        assertEquals(policy.definition(SiteKind.DRIFT_CACHE).name, cacheMark.name)
+        assertEquals(policy.definition(SiteKind.DRIFT_CACHE).activationRadius, cacheMark.activationRadius)
+        assertEquals(1_800f, cacheMark.reveal)
+        assertEquals(3_000f, quietMark.reveal)
+        assertEquals(policy.definition(SiteKind.QUIET_SIGNAL).activationRadius, quietMark.activationRadius)
+        assertEquals(false to -1, cacheMark.active to cacheMark.step)
+        assertNull(first.trial, "an ambient site runs no trial")
+
+        // The same window, or a window with the same settled sites, keeps the published list.
+        assertSame(first.ambientSites, game.toRenderModel(reusableCollections = first, identitySource = game).ambientSites)
+        game.ambientSites = game.ambientSites.copy(sites = game.ambientSites.sites.toList().toImmutableList())
+        assertSame(first.ambientSites, game.toRenderModel(reusableCollections = first).ambientSites)
+        // A site that settles or opens publishes a new list.
+        game.ambientSites = AmbientSiteWindow(0, 0, immutableListOf(cache))
+        val opened = game.toRenderModel(reusableCollections = first)
+        assertNotSame(first.ambientSites, opened.ambientSites)
+        assertEquals(listOf(cacheMark), opened.ambientSites.toList())
+        game.ambientSites = AmbientSiteWindow.EMPTY
+        assertEquals(0, game.toRenderModel(reusableCollections = opened).ambientSites.size)
     }
 }

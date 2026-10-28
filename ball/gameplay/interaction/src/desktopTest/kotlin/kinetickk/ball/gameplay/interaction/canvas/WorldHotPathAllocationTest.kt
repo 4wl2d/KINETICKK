@@ -212,6 +212,16 @@ class WorldHotPathAllocationTest {
     }
 
     @Test
+    fun ambientCachesDrawWithoutAllocating() {
+        // Drift caches bobbing in view, one past the edge within its reveal distance (its marker instead) and one past
+        // the edge beyond it (nothing).
+        assertFrameIsAllocationFree(KkRolePalette.Default, WeaponId.MORNINGSTAR, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = ::withAmbientCaches)
+        assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = ::withAmbientCaches)
+    }
+
+    @Test
     fun worldColorsFollowTheRolePalette() {
         val model = busyModel(WeaponId.ARC_COIL)
         val fx = busyFx()
@@ -255,6 +265,16 @@ class WorldHotPathAllocationTest {
             assertTrue(standard.count(roles.threat) > 60, "$roles: the standard cursor is threat (${standard.count(roles.threat)} px)")
             assertTrue(standard.count(roles.soft) < 20, "$roles: the soft role is Baby mode's alone (${standard.count(roles.soft)} px)")
         }
+    }
+
+    @Test
+    fun easterEggsDrawWithoutAllocating() {
+        // The Lost Cursor drifting and the Quiet Signal rippling in view, a Quiet Signal past the edge within its reveal
+        // distance (its marker instead), the found Lost Cursor circling the Core and the Golden Drifter's glint.
+        assertFrameIsAllocationFree(KkRolePalette.Default, WeaponId.MORNINGSTAR, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = ::withEasterEggs)
+        assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = ::withEasterEggs)
     }
 
     private fun assertFrameIsAllocationFree(
@@ -776,6 +796,28 @@ class WorldHotPathAllocationTest {
             "worldEvent" to event,
             "eventSignals" to immutableListOf(signal),
             "enemies" to (model.enemies + affixed + champions).toImmutableList(),
+        )
+    }
+
+    /** The busy frame with drift caches: two in view, one past the edge within its reveal distance, one beyond it. */
+    private fun withAmbientCaches(model: GameplayRenderModel): GameplayRenderModel {
+        fun cache(x: Float, y: Float) = SiteProjection(SiteKind.DRIFT_CACHE, "Drift cache", CORE + x, CORE + y, false, 0f, -1, 0f,
+            immutableListOf(), 0f, 0f, activationRadius = 70f, reveal = 1_800f)
+        return model.with(
+            "ambientSites" to immutableListOf(cache(220f, -140f), cache(-280f, 120f), cache(1_300f, -900f), cache(2_600f, 1_400f)),
+        )
+    }
+
+    /** The busy frame with the eggs: a Lost Cursor and a Quiet Signal in view, a Quiet Signal off screen, both companions. */
+    private fun withEasterEggs(model: GameplayRenderModel): GameplayRenderModel {
+        fun egg(kind: SiteKind, x: Float, y: Float, reveal: Float) = SiteProjection(kind, kind.name, CORE + x, CORE + y, false, 0f, -1, 0f,
+            immutableListOf(), 0f, 0f, activationRadius = 90f, reveal = reveal)
+        return model.with(
+            "ambientSites" to immutableListOf(
+                egg(SiteKind.LOST_CURSOR, -260f, -180f, 0f), egg(SiteKind.QUIET_SIGNAL, 300f, 160f, 3_000f),
+                egg(SiteKind.QUIET_SIGNAL, 1_500f, -1_000f, 3_000f), egg(SiteKind.GOLDEN_DRIFTER, 200f, 260f, 0f),
+            ),
+            "secretFlags" to 1, "goldenDrifterId" to EnemyType.DRIFTER.ordinal + 1,
         )
     }
 

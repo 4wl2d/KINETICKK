@@ -140,6 +140,7 @@ private fun DrawScope.drawWorldLayer(
         drawCore(engine, core, roles)
         drawCoreStates(engine, core, roles)
         drawApexActive(engine, core, shakeX, shakeY, roles)
+        drawSecretCompanions(engine, core, shakeX, shakeY, roles)
     }
     drawStructureScrim(engine, shakeX, shakeY)
     drawSingularity(pointer, engine.renderElapsed, engine.tetherDistance < 75f, roles, engine.easyMode)

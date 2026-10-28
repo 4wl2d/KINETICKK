@@ -480,6 +480,15 @@ class RedesignShotsWorldTest {
             add(Scene("elite-affixes$suffix", roles = roles, model = { w, h -> eliteAffixes(w, h) }))
             add(Scene("champions$suffix", roles = roles, model = { w, h -> champions(w, h) }))
         }
+        // Drift caches: two bone crates in view, a third past the edge within its reveal distance (its edge marker and
+        // minimap mark).
+        add(Scene("site-cache", model = { w, h -> caches(w, h) }))
+        add(Scene("site-cache-hud", hud = true, model = { w, h -> caches(w, h) }))
+        // The easter eggs: the Lost Cursor drifting and the Quiet Signal rippling where they lie, the found Lost Cursor
+        // circling the Core, and the Golden Drifter fleeing with its gold glint; then under the HUD (the far Quiet
+        // Signal's marker).
+        add(Scene("site-eggs", model = { w, h -> eggs(w, h) }))
+        add(Scene("site-eggs-hud", hud = true, model = { w, h -> eggs(w, h) }))
     }
 
     /**
@@ -685,6 +694,25 @@ class RedesignShotsWorldTest {
         }.toImmutableList()
         return SiteProjection(SiteKind.GATE_RACE, "Gate race", 1_000f + 40f, 1_000f + 20f, true, 9.3f, step, step / 7f,
             immutableListOf(), 0f, 0f, course = course, clock = 5.7f, medal = 2)
+    }
+
+    /** Drift caches around the Core: two in view, one 1,500 u up and to the right (inside its 1,800 u reveal distance). */
+    private fun caches(w: Float, h: Float): GameplayRenderModel {
+        fun cache(dx: Float, dy: Float) = SiteProjection(SiteKind.DRIFT_CACHE, "Drift cache", 1_000f + dx, 1_000f + dy, false, 0f, -1,
+            0f, immutableListOf(), 0f, 0f, activationRadius = 70f, reveal = 1_800f)
+        return model(w, h).with("ambientSites" to immutableListOf(cache(-260f, -150f), cache(210f, 170f), cache(1_200f, -900f)))
+    }
+
+    private fun eggs(w: Float, h: Float): GameplayRenderModel {
+        fun egg(kind: SiteKind, dx: Float, dy: Float, reveal: Float) = SiteProjection(kind, kind.name, 1_000f + dx, 1_000f + dy, false,
+            0f, -1, 0f, immutableListOf(), 0f, 0f, activationRadius = 90f, reveal = reveal)
+        return model(w, h, enemies = listOf(enemy(9, EnemyType.DRIFTER, 260f, 150f, 15f))).with(
+            "ambientSites" to immutableListOf(
+                egg(SiteKind.LOST_CURSOR, -280f, -140f, 0f), egg(SiteKind.QUIET_SIGNAL, -150f, 190f, 3_000f),
+                egg(SiteKind.QUIET_SIGNAL, 1_400f, -1_000f, 3_000f),
+            ),
+            "secretFlags" to 1, "goldenDrifterId" to 9,
+        )
     }
 
     // Board HUD.png positions (1440 x 810) are converted to world offsets from the Core so every

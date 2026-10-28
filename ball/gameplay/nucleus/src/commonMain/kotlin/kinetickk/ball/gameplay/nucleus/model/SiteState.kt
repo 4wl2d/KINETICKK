@@ -71,17 +71,27 @@ internal enum class RunSecretFlag {
     FAR_TRAVEL, FAR_SIGIL_SPAWNED, CARTOGRAPHER_SUMMONED, CARTOGRAPHER_DEFEATED,
 }
 
-/** Flags that only exist because the player opted into something (FAR_TRAVEL is not one). */
+/**
+ * Flags that only exist because the player opted into something. FAR_TRAVEL is not one, and neither is SPIN_CYCLE:
+ * Spin Cycle is tracked in every run and pays nothing that acts in the run, so it never counts as engagement.
+ */
 internal val EngagementSecretMask: Int = RunSecretFlag.entries
-    .filter { it != RunSecretFlag.FAR_TRAVEL }
+    .filter { it != RunSecretFlag.FAR_TRAVEL && it != RunSecretFlag.SPIN_CYCLE }
     .fold(0) { mask, flag -> mask or (1 shl flag.ordinal) }
 
-/** Immutable window of hash-placed sites around the Core (at most MAX_AMBIENT_SITES by construction). */
+/**
+ * Immutable window of hash-placed sites around the Core (at most MAX_AMBIENT_SITES by construction), built for the
+ * absolute obstacle chunk ([chunkX], [chunkY]) the Core was in.
+ */
 internal data class AmbientSiteWindow(val chunkX: Int, val chunkY: Int, val sites: ImmutableList<SiteState>) {
     fun shifted(dx: Float, dy: Float): AmbientSiteWindow =
         if (sites.isEmpty()) this else copy(sites = sites.map { it.shifted(dx, dy) }.toImmutableList())
 
     companion object {
+        /** No ambient sites, and the ambient step builds none (a disabled policy, the Architect's fight, a quiet arena). */
         val EMPTY: AmbientSiteWindow = AmbientSiteWindow(Int.MIN_VALUE, Int.MIN_VALUE, immutableListOf())
+
+        /** No window yet: the next ambient step builds one around the Core (a new run, a return to realspace). */
+        val UNBUILT: AmbientSiteWindow = AmbientSiteWindow(Int.MAX_VALUE, Int.MAX_VALUE, immutableListOf())
     }
 }
