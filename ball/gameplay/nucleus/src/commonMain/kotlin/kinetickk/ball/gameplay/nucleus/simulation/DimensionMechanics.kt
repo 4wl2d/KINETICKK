@@ -164,8 +164,8 @@ private fun MutableGameState.mendAtHalo(ring: HaloRing, physics: DimensionPhysic
 /**
  * Heat: below the pace the slow clock runs; past the layer's grace each full tick scorches a share of max integrity
  * as a self hit (no hit i-frames or HURT clauses, damage reduction ignored, shields absorb it, a revival answers a
- * lethal tick). Flying at pace resets both clocks. Baby mode leaves self damage whole, so the scorch applies its
- * incoming-damage factor itself.
+ * lethal tick). Flying at pace resets both clocks. Baby mode scales only incoming kinds, so the scorch applies the
+ * run's incoming-damage factor itself.
  */
 private fun MutableGameState.updateScorch(delta: Float, physics: DimensionPhysics) {
     if (speed >= dimensionPace()) {
@@ -179,13 +179,9 @@ private fun MutableGameState.updateScorch(delta: Float, physics: DimensionPhysic
     if (dimensionScorchClock < physics.scorchTickSeconds) return
     dimensionScorchClock -= physics.scorchTickSeconds
     takeDamage(
-        maxHp * physics.scorchSharePerSecond * physics.scorchTickSeconds * scorchBabyModeFactor(),
+        maxHp * physics.scorchSharePerSecond * physics.scorchTickSeconds * incomingDamageFactor,
         ignoreReduction = true,
         kind = IncomingDamage.SELF,
         lethalReason = DimensionNotices.SCORCHED,
     )
 }
-
-/** Baby mode's incoming-damage multiplier in a Baby mode run, 1 otherwise. */
-private fun MutableGameState.scorchBabyModeFactor(): Float =
-    if (easyMode) content.easyMode.incomingDamageMultiplier else 1f
