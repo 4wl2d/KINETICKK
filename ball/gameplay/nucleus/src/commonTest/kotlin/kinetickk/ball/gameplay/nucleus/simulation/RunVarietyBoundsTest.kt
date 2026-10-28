@@ -8,11 +8,16 @@ import kinetickk.ball.content.api.EliteAffix
 import kinetickk.ball.content.api.EliteAffixPolicy
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.GameplayContentSnapshot
+import kinetickk.ball.content.api.OmenPolicy
+import kinetickk.ball.content.api.SignalKind
+import kinetickk.ball.content.api.SignalOption
 import kinetickk.ball.content.api.WorldEventKind
 import kinetickk.ball.content.api.WorldEventPolicy
 import kinetickk.ball.gameplay.nucleus.model.Enemy
+import kinetickk.ball.gameplay.nucleus.model.SignalPrompt
 import kinetickk.ball.gameplay.nucleus.model.WorldEventPlan
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kinetickk.ball.gameplay.nucleus.render.EventSignalProjection
 import kinetickk.ball.gameplay.nucleus.render.EventStrikeProjection
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
@@ -133,6 +138,72 @@ class RunVarietyBoundsTest {
         }
         assertEquals(ContentBounds.MAX_EVENT_STRIKES, strikesAfterAPulse(ContentBounds.MAX_EVENT_STRIKES - 1), "The fourth is armed")
         assertEquals(ContentBounds.MAX_EVENT_STRIKES, strikesAfterAPulse(ContentBounds.MAX_EVENT_STRIKES), "The fifth is skipped")
+    }
+
+    @Test
+    fun omenOfferHoldsThreeOmensAndNoOmen() {
+        val three = OmenPolicy(offers = 3)
+        assertFailsWith<IllegalArgumentException> { OmenPolicy(offers = 4) }
+        // At the bound the offer fills the choice inventory: three omens, then No omen.
+        val state = arena(content.copy(variety = content.variety.copy(omens = three)))
+        state.openOmenChoice()
+        assertEquals(MutableGameState.MAX_CHOICES, state.choices.size)
+        assertEquals(3, state.choices.count { it.omenId != null })
+        assertEquals(null, state.choices.last().omenId)
+    }
+
+    @Test
+    fun signalPromptQueueAcceptsTwoAndRejectsTheThirdAtomically() {
+        /** A run with [waiting] prompts queued whose Core sweeps through a live signal. */
+        fun touchWith(waiting: Int): MutableGameState = arena().apply {
+            pendingSignalPrompts = List(waiting) { SignalPrompt(SignalKind.SHRINE, it) }.toImmutableList()
+            eventSignals = immutableListOf(EventSignalProjection(77, SignalKind.DERELICT, coreX + 30f, coreY, elapsed + 20f))
+            signalsSpawned = waiting + 1
+            signalsEngaged = waiting
+            previousCoreX = coreX - 60f
+            previousCoreY = coreY
+            updateEventSignals()
+        }
+        val second = touchWith(ContentBounds.MAX_PENDING_SIGNAL_PROMPTS - 1)
+        assertEquals(ContentBounds.MAX_PENDING_SIGNAL_PROMPTS, second.pendingSignalPrompts.size, "The second prompt queues")
+        assertEquals(SignalPrompt(SignalKind.DERELICT, 1), second.pendingSignalPrompts.last())
+        assertTrue(second.eventSignals.isEmpty())
+
+        val full = arena().apply {
+            pendingSignalPrompts = List(ContentBounds.MAX_PENDING_SIGNAL_PROMPTS) { SignalPrompt(SignalKind.SHRINE, it) }.toImmutableList()
+        }
+        val queue = full.pendingSignalPrompts
+        val third = touchWith(ContentBounds.MAX_PENDING_SIGNAL_PROMPTS)
+        // The third touch changes nothing at all: the queue, the signal and the engagement count stay as they were.
+        assertEquals(queue, third.pendingSignalPrompts)
+        assertEquals(1, third.eventSignals.size, "The refused signal stays")
+        assertEquals(ContentBounds.MAX_PENDING_SIGNAL_PROMPTS, third.signalsEngaged)
+        // An open prompt fills the choice inventory: its three cards, then Ignore.
+        third.openSignalPrompt()
+        assertEquals(MutableGameState.MAX_CHOICES, third.choices.size)
+        assertEquals(ContentBounds.SIGNAL_OPTIONS, third.choices.count { it.signalOption != SignalOption.IGNORE })
+    }
+
+    @Test
+    fun liveSignalsHoldOne() {
+        // Slots every 10 s that live 30 s: a slot opening while a signal lives waits, then is skipped.
+        val overlapping = content.variety.signals.copy(
+            slots = 5, perRun = 5, intervalSeconds = 10f, lifetimeSeconds = 30f, firstAtSeconds = 20f,
+        )
+        val state = arena(content.copy(variety = content.variety.copy(signals = overlapping))).apply { elapsed = 0f }
+        var most = 0
+        var time = 0f
+        while (time < 100f) {
+            time += MutableGameState.FIXED_STEP * 6
+            state.elapsed = time
+            state.updateEventSignals()
+            most = maxOf(most, state.eventSignals.size)
+        }
+        assertEquals(1, most)
+        assertEquals(overlapping.slots, state.nextSignalSlot)
+        // Slot 0 spawns at 20 s and lives to 50 s; slot 1 (30 s) waits out its 10 s and is skipped; slot 2 (40 s) spawns
+        // at 50 s as slot 0 fades and lives to 70 s; slot 3 (50 s) is skipped at 60 s; slot 4 (60 s) spawns at 70 s.
+        assertEquals(3, state.signalsSpawned)
     }
 
     private companion object {

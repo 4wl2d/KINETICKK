@@ -24,6 +24,10 @@ internal fun GameplayContentSnapshot.withoutRunVariety(): GameplayContentSnapsho
 internal fun GameplayContentSnapshot.withoutWorldEvents(): GameplayContentSnapshot =
     copy(variety = variety.copy(worldEvents = variety.worldEvents.copy(enabled = false)))
 
+/** The content with event signals switched off: a run spawns none and its slots never advance. */
+internal fun GameplayContentSnapshot.withoutEventSignals(): GameplayContentSnapshot =
+    copy(variety = variety.copy(signals = variety.signals.copy(enabled = false)))
+
 /**
  * The content with the director's variety switched off: no personality, no onslaught themes, no Elite affixes and no
  * champions, so the director paces and spawns as it did before them.

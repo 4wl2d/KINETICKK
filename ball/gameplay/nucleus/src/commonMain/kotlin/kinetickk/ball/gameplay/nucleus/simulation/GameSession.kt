@@ -444,8 +444,10 @@ internal fun MutableGameState.choose(index: Int) {
             option.omenId?.let { acceptRunOmen(it) }
             GameplayAudioCue.UI_CLICK
         }
-        // Signal prompts and dimension boons are dealt only once their lanes open them.
-        ChoiceType.SIGNAL, ChoiceType.BOON -> return
+        // A signal card pays through its channel; a locked card or a chained item offer leaves without finishing here.
+        ChoiceType.SIGNAL -> resolveSignalOption(option, before) ?: return
+        // Dimension boons are dealt only once their lane opens them.
+        ChoiceType.BOON -> return
         ChoiceType.RELIC_BIND -> {
             val slot = option.relicSlot ?: return
             when (option.relicAction ?: return) {

@@ -31,16 +31,17 @@ import kotlin.math.sin
 
 /*
  * The run variety's step: the run-start announcements, then ambient world events (variety.md §6) and event signals
- * (inert until they land). World events are planned once at run start from stateless hashes of the run seed (no stream
- * gains a draw): two or three per run, one at a time, telegraphed from 60 s and over by 660 s. Every value an event
- * rolls while it runs is a hash of the run seed and the event's pulse index.
+ * (§7, [updateEventSignals]). World events are planned once at run start from stateless hashes of the run seed (no
+ * stream gains a draw): two or three per run, one at a time, telegraphed from 60 s and over by 660 s. Every value an
+ * event rolls while it runs is a hash of the run seed and the event's pulse index.
  */
 
-/** The run variety's single per-step hook: announcements, then the world event, then (later) signals. */
+/** The run variety's single per-step hook: announcements, then the world event, then signals while the run goes on. */
 internal fun MutableGameState.updateRunVariety(delta: Float) {
     announceHostilePattern()
     announceKeynote()
     updateWorldEvents(delta)
+    if (phase == GamePhase.RUNNING) updateEventSignals()
 }
 
 /** A world layer switch ends the event in progress silently. */
@@ -100,24 +101,35 @@ internal fun planWorldEvents(runSeed: Int, policy: WorldEventPolicy): ImmutableL
 
 /** [count] distinct kinds, each drawn by weight among the kinds not drawn yet; zero-weight kinds are never drawn. */
 private fun drawWorldEventKinds(runSeed: Int, policy: WorldEventPolicy, count: Int): List<WorldEventKind> {
-    val kinds = WorldEventKind.entries
-    val drawn = BooleanArray(kinds.size)
-    return List(count) { draw ->
+    // The policy keeps at least maxPerRun kinds weighted, so a draw always finds one.
+    val drawn = drawDistinctByWeight(policy.weights, count) { draw -> hashUnit(runHash(runSeed, WORLD_EVENT_SALT, KIND_KEY + draw)) }
+    return List(count) { WorldEventKind.entries[drawn[it]] }
+}
+
+/**
+ * [count] distinct indices of [weights], draw k picking by weight among the indices not drawn yet with the unit value
+ * [roll] gives for k; zero weights are never drawn. Float sums run in index order, so every platform draws the same.
+ * Callers keep at least [count] weights positive.
+ */
+internal fun drawDistinctByWeight(weights: List<Float>, count: Int, roll: (draw: Int) -> Float): IntArray {
+    val drawn = BooleanArray(weights.size)
+    val picks = IntArray(count)
+    for (draw in 0 until count) {
         var total = 0f
-        for (index in kinds.indices) if (!drawn[index]) total += policy.weights[index]
-        var roll = hashUnit(runHash(runSeed, WORLD_EVENT_SALT, KIND_KEY + draw)) * total
+        for (index in weights.indices) if (!drawn[index]) total += weights[index]
+        var remaining = roll(draw) * total
         var chosen = -1
-        for (index in kinds.indices) {
-            val weight = policy.weights[index]
+        for (index in weights.indices) {
+            val weight = weights[index]
             if (drawn[index] || weight <= 0f) continue
             chosen = index
-            if (roll < weight) break
-            roll -= weight
+            if (remaining < weight) break
+            remaining -= weight
         }
-        // The policy keeps at least maxPerRun kinds weighted, so a draw always finds one.
         drawn[chosen] = true
-        kinds[chosen]
+        picks[draw] = chosen
     }
+    return picks
 }
 
 /** How long an event of [kind] stays active after its telegraph. */

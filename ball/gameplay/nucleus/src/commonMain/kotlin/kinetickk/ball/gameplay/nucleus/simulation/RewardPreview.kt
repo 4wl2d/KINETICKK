@@ -52,8 +52,10 @@ internal fun MutableGameState.rewardPreviews(): ImmutableList<RewardPreview> {
             }
             // An omen previews its run modifiers on the candidate (no world rebuilt); No omen changes nothing.
             ChoiceType.OMEN -> option.omenId?.let { candidate.acceptRunOmen(it, preview = true) }
-            // Signal options and boons change the run through run modifiers, not the build preview.
-            ChoiceType.SIGNAL, ChoiceType.BOON -> return@map RewardPreview()
+            // A signal card previews only its deterministic stat part (the Shrine blessings).
+            ChoiceType.SIGNAL -> option.signalOption?.let { candidate.previewSignalOption(it) }
+            // Boons change the run through run modifiers, not the build preview.
+            ChoiceType.BOON -> return@map RewardPreview()
             ChoiceType.RELIC_BIND -> option.relicSlot?.let { slot ->
                 when (option.relicAction) {
                     RelicChoiceAction.REPLACE -> (option.relicId ?: pendingBindingRelic)?.let { candidate.replaceRelic(slot, it) }
