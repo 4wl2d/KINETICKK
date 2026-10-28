@@ -285,6 +285,48 @@ class WorldLayerGenerationTest {
         assertEquals(realspace - gone, state.obstacleField.obstacles)
     }
 
+    /**
+     * The shipped content through the real entry: each dimension regenerates its window with its own shipped kind mix
+     * (only kinds that mix gives a share, converted kinds present), and the arrival keep-out clears every placed field
+     * kind by the widest field reach and every other body by its own circle, so nothing acts on the arrival point.
+     */
+    @Test
+    fun everyDimensionEntryDrawsItsShippedMixAndKeepsTheArrivalClearOfEveryReach() {
+        val kinds = canonicalGameplayContent.obstacles.kinds
+        val layout = setOf(ObstacleKind.ASTEROID, ObstacleKind.BUMPER)
+        for (target in listOf(WorldLayer.ZENITH, WorldLayer.NADIR, WorldLayer.ARCHIVE)) {
+            val mix = when (target) {
+                WorldLayer.ZENITH -> kinds.zenith
+                WorldLayer.NADIR -> kinds.nadir
+                else -> kinds.archive
+            }
+            val shared = ObstacleKind.entries.filter { it !in layout && mix.share(it) > 0f }.toSet()
+            val seen = HashSet<ObstacleKind>()
+            for (seed in listOf(4_242, 2_026, 313)) {
+                val state = farState(seed).apply {
+                    elapsed = 200f
+                    enterDimensionForTesting(target)
+                }
+                assertEquals(target, state.worldLayer)
+                val keepOut = checkNotNull(state.worldKeepOut)
+                assertEquals(target, keepOut.layer)
+                val obstacles = state.obstacleField.obstacles
+                assertTrue(obstacles.isNotEmpty(), "$target seed $seed")
+                for (obstacle in obstacles) {
+                    assertEquals(target.ordinal.toLong(), obstacle.id ushr 60, "$target ids carry the layer")
+                    assertTrue(obstacle.kind in layout || obstacle.kind in shared, "$target placed ${obstacle.kind} outside its mix")
+                    val reach = if (obstacle.kind.field) kinds.maximumInfluence else obstacle.radius
+                    assertTrue(
+                        state.distanceFrom(obstacle, keepOut.x, keepOut.y) >= keepOut.radius + reach - 0.01,
+                        "$target seed $seed: ${obstacle.kind} reaches into the arrival keep-out",
+                    )
+                    seen += obstacle.kind
+                }
+            }
+            assertTrue(seen.any { it in shared }, "$target converts candidates by its mix: $seen")
+        }
+    }
+
     private fun farState(seed: Int, content: GameplayContentSnapshot = canonicalGameplayContent) =
         buildTestState(seed = seed, content = content).apply {
             coreX = FAR_X
