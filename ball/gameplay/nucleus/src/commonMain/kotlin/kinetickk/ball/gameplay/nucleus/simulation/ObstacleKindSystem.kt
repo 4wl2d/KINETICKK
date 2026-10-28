@@ -11,24 +11,35 @@ import kinetickk.ball.content.api.ObstacleMix
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.content.api.bodyRadius
+import kinetickk.ball.content.api.gateAngle
+import kinetickk.ball.content.api.gateHalfSpan
 import kinetickk.ball.content.api.phaseShardSolid
 import kinetickk.ball.content.api.pick
+import kinetickk.ball.content.api.ventErupting
+import kinetickk.ball.content.api.ventEruptionEnd
 import kinetickk.ball.gameplay.nucleus.model.Obstacle
 import kinetickk.ball.gameplay.nucleus.model.distanceSquared
 import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.protocol.FxColorCode
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kotlin.math.abs
 import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /*
  * Obstacle kinds. The content owns each kind's properties; every obstacle query here and in ObstacleSystem reads them
  * instead of naming kinds. Generation rolls the newer kinds on asteroid candidates from a stream of their own, so the
  * layout (positions, ids, candidate radii, gaps) never moves. After the Core's collisions a per-step pass measures
  * the Core's proximity to solid obstacles (NearObstacle, Matrix Near Miss), applies the field kinds to the Core
- * (gravity knots pull or push it, and leaving a knot after a hard turn slings it on) and then to nearby enemies.
+ * (gravity knots pull or push it, and leaving a knot after a hard turn slings it on; crossing an accelerator gate
+ * boosts it; riding an erupting thermal vent heats and lifts it) and then to nearby enemies (knots pull them, plumes
+ * scorch them).
  */
 
 // ---------------------------------------------------------------------------------------------
@@ -178,14 +189,15 @@ private fun MutableGameState.updateObstacleProximity(collided: Boolean) {
 /**
  * One lookup around the Core for the field kinds within [ObstacleKindTuning.maximumInfluence]: every gravity knot
  * whose field holds the Core pulls it toward its centre (a Repulsor pushes it away), strongest at the knot's surface
- * and fading linearly to nothing at the field's edge. Returns the id of the nearest knot whose field holds the Core,
- * or [NO_OBSTACLE_ID].
+ * and fading linearly to nothing at the field's edge; an accelerator gate the Core's step crossed boosts it; an
+ * erupting thermal vent whose plume holds the Core heats and lifts it. Returns the id of the nearest knot whose field
+ * holds the Core, or [NO_OBSTACLE_ID].
  */
 private fun MutableGameState.updateCoreObstacleFields(): Long {
     val kinds = content.obstacles.kinds
     var heldBy = NO_OBSTACLE_ID
     var heldDistanceSquared = Float.POSITIVE_INFINITY
-    forEachObstacleNear(coreX, coreY, kinds.maximumInfluence + coreRadius) { _, obstacle ->
+    forEachObstacleNear(coreX, coreY, kinds.maximumInfluence + coreRadius) { index, obstacle ->
         when (obstacle.kind) {
             ObstacleKind.GRAVITY_WELL -> {
                 val centreDistanceSquared = distanceSquared(coreX, coreY, obstacle.x, obstacle.y)
@@ -198,14 +210,111 @@ private fun MutableGameState.updateCoreObstacleFields(): Long {
                 velocityX += acceleration.x * MutableGameState.FIXED_STEP
                 velocityY += acceleration.y * MutableGameState.FIXED_STEP
             }
-            // Accelerator gates, vents and mines act on the Core with their own steps.
-            ObstacleKind.ACCEL_GATE, ObstacleKind.THERMAL_VENT, ObstacleKind.DERELICT_MINE,
+            ObstacleKind.ACCEL_GATE -> boostThroughGate(index, obstacle, kinds)
+            ObstacleKind.THERMAL_VENT -> rideVent(index, obstacle, kinds)
+            // Mines act on the Core with their own step.
+            ObstacleKind.DERELICT_MINE,
             ObstacleKind.ASTEROID, ObstacleKind.BUMPER, ObstacleKind.UNSTABLE, ObstacleKind.CRYSTAL, ObstacleKind.PHASE_SHARD,
             -> Unit
         }
     }
     return heldBy
 }
+
+/**
+ * True when the step from ([x0], [y0]) to ([x1], [y1]) crosses the line of an accelerator gate centred at ([cx], [cy])
+ * whose normal points along [angle]: it changes sides of the line between the posts ([halfSpan] either side of the
+ * centre) travelling within the alignment of the normal (|cos| at least [alignment]), in either direction. A step
+ * that only reaches the line, or stays on it, does not cross it; the next step leaving it does.
+ */
+internal fun accelGateCrossed(
+    x0: Float,
+    y0: Float,
+    x1: Float,
+    y1: Float,
+    cx: Float,
+    cy: Float,
+    angle: Float,
+    halfSpan: Float,
+    alignment: Float,
+): Boolean {
+    val fx = cos(angle)
+    val fy = sin(angle)
+    val s0 = (x0 - cx) * fx + (y0 - cy) * fy
+    val s1 = (x1 - cx) * fx + (y1 - cy) * fy
+    val crossed = (s0 < 0f && s1 >= 0f) || (s0 > 0f && s1 <= 0f)
+    if (!crossed) return false
+    val t = s0 / (s0 - s1)
+    val px = x0 + (x1 - x0) * t - cx
+    val py = y0 + (y1 - y0) * t - cy
+    if (abs(-px * fy + py * fx) > halfSpan) return false
+    val dx = x1 - x0
+    val dy = y1 - y0
+    val travelled = sqrt(dx * dx + dy * dy)
+    return travelled > 1e-3f && abs((dx * fx + dy * fy) / travelled) >= alignment
+}
+
+/**
+ * An accelerator gate: when the Core's step crossed it and the gate is ready, the gate rests for
+ * [ObstacleKindTuning.gateCooldownSeconds] and boosts the Core by [ObstacleKindTuning.gateImpulse] (BOOST with the
+ * gate's kind). Nothing else acts once a boost opened a choice.
+ */
+private fun MutableGameState.boostThroughGate(index: Int, gate: Obstacle, kinds: ObstacleKindTuning) {
+    if (gate.ricochetReadyAt > elapsed || phase != GamePhase.RUNNING) return
+    val halfSpan = kinds.gateHalfSpan(gate.radius)
+    val angle = gateAngle(gate.shapeSeed)
+    if (!accelGateCrossed(previousCoreX, previousCoreY, coreX, coreY, gate.x, gate.y, angle, halfSpan, kinds.gateAlignment)) return
+    obstacleField = obstacleField.replaced(index, gate.copy(ricochetReadyAt = elapsed + kinds.gateCooldownSeconds))
+    applyObstacleBoost(kinds.gateImpulse, ObstacleKind.ACCEL_GATE)
+    shockwave(gate.x, gate.y, GATE_RING_SECONDS, halfSpan * GATE_RING_SPAN, YOU_TONE)
+    burstBehindCore(GATE_BURST, YOU_TONE)
+    emitSound(GameplayAudioCue.DASH)
+}
+
+/**
+ * A thermal vent: while it erupts, a Core inside its plume (the vent's body plus [ObstacleKindTuning.ventPlumeMargin])
+ * rides it once per eruption: [ObstacleKindTuning.ventHeat] heat (OVERHEAT at full) and an updraft of
+ * [ObstacleKindTuning.ventImpulse] along the Core's travel, outward from the vent while the Core rests (BOOST with the
+ * vent's kind). The vent remembers the end of the eruption that lifted the Core. Nothing else acts once a boost opened
+ * a choice.
+ */
+private fun MutableGameState.rideVent(index: Int, vent: Obstacle, kinds: ObstacleKindTuning) {
+    if (vent.ricochetReadyAt > elapsed || phase != GamePhase.RUNNING) return
+    if (!kinds.ventErupting(elapsed, vent.shapeSeed)) return
+    val plume = vent.radius + kinds.ventPlumeMargin
+    val dx = coreX - vent.x
+    val dy = coreY - vent.y
+    val reach = plume + coreRadius
+    if (dx * dx + dy * dy >= reach * reach) return
+    obstacleField = obstacleField.replaced(index, vent.copy(ricochetReadyAt = kinds.ventEruptionEnd(elapsed, vent.shapeSeed)))
+    val before = heat
+    heat = min(MutableGameState.MAX_HEAT, heat + kinds.ventHeat)
+    applyOverheatEdge(before)
+    val distance = sqrt(dx * dx + dy * dy)
+    val outwardX = if (distance > 0.001f) dx / distance else lastAimDirectionX
+    val outwardY = if (distance > 0.001f) dy / distance else lastAimDirectionY
+    applyObstacleBoost(kinds.ventImpulse, ObstacleKind.THERMAL_VENT, outwardX, outwardY)
+    val thermal = FxColorCode.elementTone(StatusElement.THERMAL)
+    shockwave(vent.x, vent.y, VENT_RING_SECONDS, plume, thermal)
+    burstBehindCore(VENT_BURST, thermal)
+    emitSound(GameplayAudioCue.DASH)
+}
+
+/** Sparks thrown back from the Core against its travel (along the aim's reverse while it rests). */
+private fun MutableGameState.burstBehindCore(count: Int, colorIndex: Int) {
+    val current = speed
+    val directionX = if (current > 1f) velocityX / current else lastAimDirectionX
+    val directionY = if (current > 1f) velocityY / current else lastAimDirectionY
+    directionalBurst(coreX, coreY, count, colorIndex, -directionX, -directionY)
+}
+
+/** The volt (you) effect tone: a gate's boost is the player's. */
+private const val YOU_TONE: Int = 0
+private const val GATE_RING_SECONDS: Float = 0.25f
+private const val GATE_RING_SPAN: Float = 1.3f
+private const val GATE_BURST: Int = 10
+private const val VENT_RING_SECONDS: Float = 0.35f
+private const val VENT_BURST: Int = 12
 
 /**
  * The acceleration a gravity knot's field gives a body of [bodyRadius] at ([x], [y]): [surfacePull] toward the knot
@@ -266,18 +375,24 @@ private fun MutableGameState.obstacleInWindow(id: Long): Boolean {
 }
 
 /**
- * Speeds the Core along its travel (along its aim while it rests) by [impulse] (times the build's boost power), never
- * past [ObstacleKindTuning.boostLethalShare] of the lethal collision speed and never slowing it, then fires BOOST with
+ * Speeds the Core along its travel (along ([restDirectionX], [restDirectionY]) while it rests, its aim unless the
+ * caller names another) by [impulse] (times the build's boost power), never past
+ * [ObstacleKindTuning.boostLethalShare] of the lethal collision speed and never slowing it, then fires BOOST with
  * [kind]. BOOST fires even when the cap absorbs the whole impulse, so builds stay consistent at speed. Gates, slings
  * and vents share it.
  */
-internal fun MutableGameState.applyObstacleBoost(impulse: Float, kind: ObstacleKind) {
+internal fun MutableGameState.applyObstacleBoost(
+    impulse: Float,
+    kind: ObstacleKind,
+    restDirectionX: Float = lastAimDirectionX,
+    restDirectionY: Float = lastAimDirectionY,
+) {
     val cap = obstacleLethalSpeed() * content.obstacles.kinds.boostLethalShare
     val current = speed
     val target = max(current, min(current + impulse * build.boostPowerScale, cap))
     if (target > current) {
-        val directionX = if (current > 1f) velocityX / current else lastAimDirectionX
-        val directionY = if (current > 1f) velocityY / current else lastAimDirectionY
+        val directionX = if (current > 1f) velocityX / current else restDirectionX
+        val directionY = if (current > 1f) velocityY / current else restDirectionY
         velocityX = directionX * target
         velocityY = directionY * target
     }
@@ -288,20 +403,25 @@ internal fun MutableGameState.applyObstacleBoost(impulse: Float, kind: ObstacleK
  * The field kinds' effect on enemies: every field obstacle (gates aside) within [ENEMY_FIELD_ACTIVITY_RANGE] of the
  * Core acts on the live, tangible enemies inside its reach. A gravity knot pulls them toward its core (a Repulsor
  * pushes) by [ObstacleKindTuning.wellEnemyPull] times their knockback intake and the build's knot pull; the obstacle
- * pass then slams those it drags in hard enough.
+ * pass then slams those it drags in hard enough. An erupting vent's plume gives each enemy it touches one Thermal
+ * stack every [ObstacleKindTuning.ventStatusInterval].
  */
 private fun MutableGameState.updateEnemyObstacleFields() {
     val obstacles = obstacleField.obstacles
     if (obstacles.isEmpty() || enemies.isEmpty()) return
     val kinds = content.obstacles.kinds
     val range = ENEMY_FIELD_ACTIVITY_RANGE * ENEMY_FIELD_ACTIVITY_RANGE
+    // Plumes scorch on the steps that start a new status interval (one tick per interval for every plume).
+    val interval = kinds.ventStatusInterval
+    val statusTick = floor(elapsed / interval) != floor((elapsed - MutableGameState.FIXED_STEP) / interval)
     for (index in obstacles.indices) {
         val obstacle = obstacles[index]
         if (!obstacle.kind.field || distanceSquared(coreX, coreY, obstacle.x, obstacle.y) > range) continue
         when (obstacle.kind) {
             ObstacleKind.GRAVITY_WELL -> pullEnemiesIntoKnot(obstacle, kinds)
-            // Gates never touch enemies; vents and mines act on them with their own steps.
-            ObstacleKind.ACCEL_GATE, ObstacleKind.THERMAL_VENT, ObstacleKind.DERELICT_MINE,
+            ObstacleKind.THERMAL_VENT -> if (statusTick) scorchEnemiesInPlume(obstacle, kinds)
+            // Gates never touch enemies; mines act on them with their own step.
+            ObstacleKind.ACCEL_GATE, ObstacleKind.DERELICT_MINE,
             ObstacleKind.ASTEROID, ObstacleKind.BUMPER, ObstacleKind.UNSTABLE, ObstacleKind.CRYSTAL, ObstacleKind.PHASE_SHARD,
             -> Unit
         }
@@ -319,5 +439,17 @@ private fun MutableGameState.pullEnemiesIntoKnot(knot: Obstacle, kinds: Obstacle
         val acceleration = wellPullAt(knot, enemy.x, enemy.y, enemy.radius, surfacePull * intake, kinds)
         enemy.vx += acceleration.x * MutableGameState.FIXED_STEP
         enemy.vy += acceleration.y * MutableGameState.FIXED_STEP
+    }
+}
+
+private fun MutableGameState.scorchEnemiesInPlume(vent: Obstacle, kinds: ObstacleKindTuning) {
+    if (!kinds.ventErupting(elapsed, vent.shapeSeed)) return
+    val plume = vent.radius + kinds.ventPlumeMargin
+    for (enemyIndex in enemies.indices) {
+        val enemy = enemies[enemyIndex]
+        if (!enemy.alive || isPhasedPhantom(enemy)) continue
+        val reach = plume + enemy.radius
+        if (distanceSquared(enemy.x, enemy.y, vent.x, vent.y) >= reach * reach) continue
+        applyStatus(enemy, StatusElement.THERMAL, 1, generation = 0)
     }
 }

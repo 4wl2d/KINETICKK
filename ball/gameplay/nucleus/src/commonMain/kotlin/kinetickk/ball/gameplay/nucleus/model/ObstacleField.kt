@@ -16,7 +16,7 @@ internal data class Obstacle(
     val y: Float,
     val radius: Float,
     val shapeSeed: Int,
-    /** Bumpers only: run time before which a bounce fires no further ricochet. */
+    /** Bumpers: next ricochet time. Accelerator gates: next boost time. Thermal vents: end of the boosting eruption. */
     val ricochetReadyAt: Float = 0f,
     /** Derelict mines: run time the armed cluster detonates; 0 while dormant. */
     val fuseAt: Float = 0f,

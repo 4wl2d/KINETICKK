@@ -9,6 +9,8 @@ import kinetickk.ball.gameplay.nucleus.model.Obstacle
 import kinetickk.ball.gameplay.nucleus.model.ObstacleField
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
+import kotlin.math.floor
+import kotlin.math.roundToInt
 
 /**
  * Replaces the generated window with exactly [obstacles] (run-local positions), keeping it centred on the
@@ -38,6 +40,16 @@ internal fun testObstacle(
     shapeSeed: Int = 7,
     repels: Boolean = false,
 ): Obstacle = Obstacle(id = id, kind = kind, x = x, y = y, radius = radius, shapeSeed = shapeSeed, repels = repels)
+
+/**
+ * An accelerator gate at ([x], [y]) whose normal points along [angle] radians: its shape seed carries the angle, so
+ * `gateAngle(shapeSeed)` gives it back to within 2π / 65 536.
+ */
+internal fun testGate(x: Float, y: Float, angle: Float, radius: Float = 100f, id: Long = 61L): Obstacle {
+    val turns = angle / 6.2831855f
+    val seed = ((turns - floor(turns)) * 65_536f).roundToInt() and 0xFFFF
+    return testObstacle(x, y, radius, ObstacleKind.ACCEL_GATE, id, shapeSeed = seed)
+}
 
 /** The canonical content with [mix] as the realspace obstacle kind mix. */
 internal fun contentWithObstacleMix(mix: ObstacleMix): GameplayContentSnapshot {

@@ -263,6 +263,9 @@ fun ObstacleKindTuning.ventEruptionEnd(elapsed: Float, seed: Int): Float =
 /** Gate normal angle: the seed's low 16 bits (invertible, so tests can build a gate at a chosen angle). */
 fun gateAngle(shapeSeed: Int): Float = (shapeSeed and 0xFFFF) / 65_536f * 6.2831855f
 
+/** From an accelerator gate's centre to each post's centre, for a gate body of [bodyRadius] (the posts sit inside it). */
+fun ObstacleKindTuning.gateHalfSpan(bodyRadius: Float): Float = max(0f, bodyRadius - gatePostRadius)
+
 /** True when a candidate of [candidateRadius] may become [kind]. */
 fun ObstacleKindTuning.eligible(kind: ObstacleKind, candidateRadius: Float): Boolean = when (kind) {
     ObstacleKind.GRAVITY_WELL -> candidateRadius >= wellMinimumCandidate

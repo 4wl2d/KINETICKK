@@ -14,6 +14,7 @@ import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.phaseShardSolid
+import kinetickk.ball.content.api.ventErupting
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.WeaponEntity
 import kinetickk.ball.gameplay.nucleus.protocol.FxColorCode
@@ -480,5 +481,253 @@ class ObstacleKindSystemTest {
         state.applyObstacleBoost(kinds.slingImpulse, ObstacleKind.GRAVITY_WELL)
         assertEquals(kinds.slingImpulse * state.lastAimDirectionX, state.velocityX, 0.01f)
         assertEquals(kinds.slingImpulse * state.lastAimDirectionY, state.velocityY, 0.01f)
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Accelerator gates.
+
+    private val gateRadius = 100f
+    /** From the gate's centre to each post's centre: the posts sit inside its body. */
+    private val halfSpan = gateRadius - kinds.gatePostRadius
+
+    /** A run with the BOOST clauses and one gate of radius 100 at (300, 0) whose normal points along [angle]. */
+    private fun gateState(angle: Float = 0f): MutableGameState = buildTestState(content = boostContent).apply {
+        own("Calibrated Coil")
+        heat = 50f
+        placeObstaclesForTesting(testGate(300f, 0f, angle, gateRadius))
+    }
+
+    /** One step at [speed] heading [headingDegrees] whose midpoint lies on the gate line x = 300 at height [y]. */
+    private fun MutableGameState.stepAcrossGateLine(headingDegrees: Float, speed: Float, y: Float = 0f) {
+        val heading = radians(headingDegrees)
+        val vx = cos(heading) * speed
+        val vy = sin(heading) * speed
+        val half = 0.5f * MutableGameState.FIXED_STEP
+        flyIntoObstaclesForTesting(300f + vx * half, y + vy * half, vx, vy)
+    }
+
+    @Test
+    fun crossingAnAcceleratorGateBoostsTheCoreAlongItsTravelEitherWay() {
+        val cap = gateState().obstacleLethalSpeed() * kinds.boostLethalShare
+        assertTrue(800f + kinds.gateImpulse < cap, "the test crossing stays under the boost cap: $cap")
+        for (heading in listOf(0f, 180f, 30f, 210f)) {
+            val state = gateState()
+            state.takeSoundCues()
+            state.takeVisualFxCues()
+            state.stepAcrossGateLine(heading, 800f)
+            assertEquals(800f + kinds.gateImpulse, state.speed, 0.01f, "heading $heading")
+            assertEquals(cos(radians(heading)), state.velocityX / state.speed, 0.0001f, "along its travel, heading $heading")
+            assertEquals(sin(radians(heading)), state.velocityY / state.speed, 0.0001f)
+            assertTrue(state.heat < 50f, "BOOST fired with the gate's kind (heading $heading)")
+            assertEquals(0f, state.overdriveCharge, "a knot's BOOST clause stays quiet")
+            assertEquals(1, state.takeSoundCues().count { it == GameplayAudioCue.DASH })
+            val rings = state.takeVisualFxCues().filterIsInstance<VisualFxCue.ShockwaveAdded>().filter { it.x == 300f && it.y == 0f }
+            assertEquals(1, rings.size, "one ring around the gate")
+            assertEquals(halfSpan * 1.3f, rings.single().maxRadius, 0.01f)
+            assertEquals(0, rings.single().colorIndex, "the volt tone")
+        }
+    }
+
+    @Test
+    fun aGateBoostsOnlyACrossingBetweenItsPostsWithinSixtyDegreesOfItsNormal() {
+        for ((heading, y, boosts) in listOf(
+            Triple(0f, halfSpan - 1f, true), Triple(0f, halfSpan + 1f, false), Triple(180f, -(halfSpan - 1f), true),
+            Triple(180f, -(halfSpan + 1f), false), Triple(58f, 0f, true), Triple(62f, 0f, false), Triple(70f, 0f, false),
+            Triple(238f, 0f, true), Triple(-70f, 0f, false), Triple(90f, 0f, false),
+        )) {
+            val state = gateState()
+            state.stepAcrossGateLine(heading, 800f, y)
+            assertEquals(if (boosts) 800f + kinds.gateImpulse else 800f, state.speed, 0.01f, "heading $heading at $y")
+            assertEquals(boosts, state.heat < 50f, "BOOST heading $heading at $y")
+        }
+        // A step that only reaches the line crosses it; the next step leaving the line does not cross it again.
+        assertTrue(accelGateCrossed(290f, 0f, 300f, 0f, 300f, 0f, 0f, halfSpan, kinds.gateAlignment))
+        assertFalse(accelGateCrossed(300f, 0f, 310f, 0f, 300f, 0f, 0f, halfSpan, kinds.gateAlignment))
+        assertFalse(accelGateCrossed(280f, 0f, 290f, 0f, 300f, 0f, 0f, halfSpan, kinds.gateAlignment), "the same side")
+        // A turned gate, its normal along 135 degrees: along the normal, 45 degrees off its reverse, and 75 degrees off it.
+        for ((heading, boosts) in listOf(135f to true, 0f to true, 210f to false)) {
+            val turned = gateState(radians(135f))
+            turned.stepAcrossGateLine(heading, 800f)
+            assertEquals(if (boosts) 800f + kinds.gateImpulse else 800f, turned.speed, 0.01f, "heading $heading through a turned gate")
+        }
+    }
+
+    @Test
+    fun aGateRestsForItsCooldownAfterABoost() {
+        val state = gateState()
+        state.elapsed = 1f
+        state.stepAcrossGateLine(0f, 800f)
+        assertEquals(800f + kinds.gateImpulse, state.speed, 0.01f)
+        // Back through before the cooldown ends: nothing.
+        state.elapsed = 1f + kinds.gateCooldownSeconds - 0.01f
+        state.stepAcrossGateLine(180f, 800f)
+        assertEquals(800f, state.speed, 0.01f, "still resting")
+        // Through again as it ends: boosted.
+        state.elapsed = 1f + kinds.gateCooldownSeconds
+        state.stepAcrossGateLine(180f, 800f)
+        assertEquals(800f + kinds.gateImpulse, state.speed, 0.01f, "ready again after its cooldown")
+        // Each gate keeps its own cooldown.
+        val first = state.obstacleField.obstacles.single { it.kind == ObstacleKind.ACCEL_GATE }
+        assertEquals(1f + 2f * kinds.gateCooldownSeconds, first.ricochetReadyAt, "the gate keeps its own next boost time")
+        state.placeObstaclesForTesting(first, testGate(300f, 400f, 0f, gateRadius, id = 62L))
+        state.stepAcrossGateLine(0f, 800f, 400f)
+        assertEquals(800f + kinds.gateImpulse, state.speed, 0.01f, "the second gate is ready")
+    }
+
+    @Test
+    fun aGateBoostStopsAtNineTenthsOfTheLethalSpeedAndStillFiresBoost() {
+        val probe = gateState()
+        val lethal = probe.obstacleLethalSpeed()
+        val cap = lethal * kinds.boostLethalShare
+        val near = gateState()
+        near.stepAcrossGateLine(0f, lethal * 0.85f)
+        assertEquals(cap, near.speed, 0.01f, "at 0.85 of the lethal speed the gate tops out at 0.9")
+        assertTrue(near.heat < 50f)
+        val above = gateState()
+        above.stepAcrossGateLine(0f, lethal * 0.95f)
+        assertEquals(lethal * 0.95f, above.speed, 0.01f, "above the cap the speed stays")
+        assertTrue(above.heat < 50f, "BOOST fires even when the cap absorbs the impulse")
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Thermal vents.
+
+    private val ventSeed = 23
+    private val ventRadius = 80f
+    private val plume = ventRadius + kinds.ventPlumeMargin
+
+    /** Lifts on BOOST from a vent show as Overdrive; a gate's BOOST clause would vent heat. */
+    private val ventBoostContent = contentWithClauses(
+        "Calibrated Coil",
+        EffectClause(EffectTrigger.BOOST, immutableListOf(EffectCondition.ObstacleIs(ObstacleKind.THERMAL_VENT)),
+            immutableListOf(EffectAction.Overdrive(10f)), cooldownSeconds = 0.5f),
+        EffectClause(EffectTrigger.BOOST, immutableListOf(EffectCondition.ObstacleIs(ObstacleKind.ACCEL_GATE)),
+            immutableListOf(EffectAction.Vent(20f)), cooldownSeconds = 0.5f),
+    )
+
+    /** A run time from [from] at which the vent with [seed] erupts (or stays quiet) for the next half second. */
+    private fun ventTime(seed: Int, erupting: Boolean, from: Float = 1f): Float {
+        var time = from
+        repeat(2_000) {
+            if ((0..60).all { step -> kinds.ventErupting(time + step * MutableGameState.FIXED_STEP, seed) == erupting }) return time
+            time += MutableGameState.FIXED_STEP
+        }
+        fail("no ${if (erupting) "eruption" else "quiet"} window for seed $seed")
+    }
+
+    /** A run with the vent BOOST clause and one vent (radius 80) at (300, 0), at heat 20. */
+    private fun ventState(time: Float): MutableGameState = buildTestState(content = ventBoostContent).apply {
+        own("Calibrated Coil")
+        heat = 20f
+        elapsed = time
+        placeObstaclesForTesting(testObstacle(300f, 0f, radius = ventRadius, kind = ObstacleKind.THERMAL_VENT, shapeSeed = ventSeed))
+    }
+
+    @Test
+    fun ridingAnEruptingVentHeatsAndLiftsTheCoreOncePerEruption() {
+        val eruption = ventTime(ventSeed, erupting = true)
+        val state = ventState(eruption)
+        state.takeSoundCues()
+        state.takeVisualFxCues()
+        state.flyIntoObstaclesForTesting(200f, 0f, 400f, 0f)
+        assertEquals(20f + kinds.ventHeat, state.heat, "the plume's heat, and no gate clause")
+        assertEquals(400f + kinds.ventImpulse, state.speed, 0.01f)
+        assertEquals(0f, state.velocityY, "lifted along its travel")
+        assertTrue(state.overdriveCharge > 0f, "BOOST fired with the vent's kind")
+        assertEquals(1, state.takeSoundCues().count { it == GameplayAudioCue.DASH })
+        val rings = state.takeVisualFxCues().filterIsInstance<VisualFxCue.ShockwaveAdded>()
+            .filter { it.colorIndex == FxColorCode.elementTone(StatusElement.THERMAL) }
+        assertEquals(1, rings.size)
+        assertEquals(plume, rings.single().maxRadius, "the ring fills the plume")
+        // Later in the same eruption: nothing more.
+        val charge = state.overdriveCharge
+        state.elapsed += 0.2f
+        state.flyIntoObstaclesForTesting(200f, 0f, 400f, 0f)
+        assertEquals(20f + kinds.ventHeat, state.heat)
+        assertEquals(400f, state.speed, 0.01f)
+        assertEquals(charge, state.overdriveCharge)
+        // The next eruption lifts again, and the one after that brings the Core to full heat: OVERHEAT.
+        state.elapsed = eruption + kinds.ventPeriodSeconds
+        state.flyIntoObstaclesForTesting(200f, 0f, 400f, 0f)
+        assertEquals(20f + 2f * kinds.ventHeat, state.heat)
+        assertEquals(400f + kinds.ventImpulse, state.speed, 0.01f)
+        assertFalse(state.overheated)
+        state.elapsed = eruption + 2f * kinds.ventPeriodSeconds
+        state.takeSoundCues()
+        state.flyIntoObstaclesForTesting(200f, 0f, 400f, 0f)
+        assertEquals(MutableGameState.MAX_HEAT, state.heat, "heat stops at full")
+        assertTrue(state.overheated, "OVERHEAT at full heat")
+        assertTrue(GameplayAudioCue.OVERHEAT in state.takeSoundCues())
+        assertEquals(400f + kinds.ventImpulse, state.speed, 0.01f, "the updraft lifts an overheated Core too")
+    }
+
+    @Test
+    fun aVentLiftsOnlyACoreInsideItsPlumeWhileItErupts() {
+        val eruption = ventTime(ventSeed, erupting = true)
+        for ((distance, rides) in listOf(plume + core - 1f to true, plume + core + 1f to false)) {
+            val state = ventState(eruption)
+            state.flyIntoObstaclesForTesting(300f, distance, 400f, 0f)
+            assertEquals(if (rides) 20f + kinds.ventHeat else 20f, state.heat, "at $distance from the vent")
+            assertEquals(if (rides) 400f + kinds.ventImpulse else 400f, state.speed, 0.01f)
+        }
+        val quiet = ventState(ventTime(ventSeed, erupting = false))
+        quiet.flyIntoObstaclesForTesting(300f, 0f, 400f, 0f)
+        assertEquals(20f, quiet.heat, "a quiet vent")
+        assertEquals(400f, quiet.speed, 0.01f)
+        assertEquals(0f, quiet.overdriveCharge)
+        // A resting Core is lifted away from the vent, not along its aim.
+        val resting = ventState(eruption)
+        resting.lastAimDirectionX = 0f
+        resting.lastAimDirectionY = 1f
+        resting.flyIntoObstaclesForTesting(200f, 0f, 0f, 0f)
+        assertEquals(-kinds.ventImpulse, resting.velocityX, 0.01f)
+        assertEquals(0f, resting.velocityY, 0.01f)
+    }
+
+    @Test
+    fun aCoreHoveringInAPlumeIsLiftedOnceInEveryEruptionItMeets() {
+        // Step by step through a few periods, early in a run and late in one (coarser times), always inside the plume.
+        for (start in listOf(1f, 600f)) {
+            val state = ventState(start)
+            state.takeSoundCues()
+            var eruptions = 0
+            var lifts = 0
+            var wasErupting = false
+            repeat((3.5f * kinds.ventPeriodSeconds / MutableGameState.FIXED_STEP).toInt()) {
+                state.elapsed += MutableGameState.FIXED_STEP
+                val erupting = kinds.ventErupting(state.elapsed, ventSeed)
+                if (erupting && !wasErupting) eruptions++
+                wasErupting = erupting
+                state.flyIntoObstaclesForTesting(260f, 0f, 0f, 0f)
+                lifts += state.takeSoundCues().count { it == GameplayAudioCue.DASH }
+            }
+            assertTrue(eruptions >= 3, "from $start: $eruptions eruptions")
+            assertEquals(eruptions, lifts, "from $start")
+        }
+    }
+
+    @Test
+    fun anEruptingPlumeScorchesEveryEnemyInsideItFourTimesASecond() {
+        val eruption = ventTime(ventSeed, erupting = true)
+        val state = ventState(eruption)
+        val inside = state.dummy(x = 300f + plume, y = 0f)
+        val outside = state.dummy(x = 300f, y = 0f).apply { y = -(plume + radius + 1f) }
+        // The Core rests far from the plume (inside the field pass's range) for half a second of the eruption.
+        repeat(60) {
+            state.elapsed += MutableGameState.FIXED_STEP
+            state.flyIntoObstaclesForTesting(1_000f, 600f, 0f, 0f)
+        }
+        assertTrue(kinds.ventErupting(state.elapsed, ventSeed))
+        assertEquals(2, inside.stacksOf(StatusElement.THERMAL), "two Thermal stacks in half a second")
+        assertEquals(0, outside.stacksOf(StatusElement.THERMAL), "nothing just outside the plume")
+        assertEquals(20f, state.heat, "the Core never touched the plume")
+
+        val quiet = ventState(ventTime(ventSeed, erupting = false))
+        val idle = quiet.dummy(x = 300f, y = 0f)
+        repeat(60) {
+            quiet.elapsed += MutableGameState.FIXED_STEP
+            quiet.flyIntoObstaclesForTesting(1_000f, 600f, 0f, 0f)
+        }
+        assertEquals(0, idle.stacksOf(StatusElement.THERMAL), "a quiet vent scorches nobody")
     }
 }
