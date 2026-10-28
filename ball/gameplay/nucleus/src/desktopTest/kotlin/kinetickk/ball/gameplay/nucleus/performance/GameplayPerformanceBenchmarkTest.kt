@@ -3,7 +3,9 @@
 
 package kinetickk.ball.gameplay.nucleus.performance
 
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.DimensionObjective
 import kinetickk.ball.content.api.DirectedReward
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.BuffStat
@@ -62,6 +64,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
 import kinetickk.ball.gameplay.nucleus.simulation.addField
 import kinetickk.ball.gameplay.nucleus.simulation.cooldown
 import kinetickk.ball.gameplay.nucleus.simulation.copyForReduction
+import kinetickk.ball.gameplay.nucleus.simulation.simulateStep
 import kinetickk.ball.gameplay.nucleus.simulation.startRun
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.performance.validateBenchmarkScenario
@@ -76,7 +79,7 @@ class GameplayPerformanceBenchmarkTest {
         assertEquals("gameplay-core-v4", GAMEPLAY_BENCHMARK_SUITE_VERSION)
         val first = gameplayBenchmarkScenarios()
         val second = gameplayBenchmarkScenarios()
-        assertEquals(24, first.size)
+        assertEquals(25, first.size)
         assertEquals(first.map { it.name }.toSet().size, first.size)
         assertEquals(first.map { it.metadata }, second.map { it.metadata })
         first.forEach { validateBenchmarkScenario(it) }
@@ -374,5 +377,32 @@ class GameplayPerformanceBenchmarkTest {
         assertNotEquals(obstacleFieldFingerprint(17L, obstacles), obstacleFieldFingerprint(17L, fused))
         val repelling = obstacles.mapIndexed { index, obstacle -> if (index == 0) obstacle.copy(repels = true) else obstacle }
         assertNotEquals(obstacleFieldFingerprint(17L, obstacles), obstacleFieldFingerprint(17L, repelling))
+    }
+
+    // ---- 0.6.0 DIMENSIONS ----
+
+    /**
+     * The dimension visit workload measures what it names: a copy of a Nadir Harvest visit with every ember slot filled
+     * steps once inside the visit, the resting Core keeps its scorch clock running, no ember is in reach, and the
+     * source stays as it was.
+     */
+    @Test
+    fun dimensionVisitWorkloadStepsAFullHarvestAndTheScorchWithoutMutatingTheSource() {
+        val source = dimensionVisitState(seed = 732_003)
+        val original = canonicalStateFingerprint(source)
+        val visit = checkNotNull(source.dimensionRun.visit)
+        assertEquals(WorldLayer.NADIR, source.worldLayer)
+        assertEquals(DimensionObjective.HARVEST, visit.objective)
+        assertEquals(ContentBounds.MAX_EMBERS, visit.embers.size)
+
+        val candidate = source.copyForReduction()
+        candidate.simulateStep(MutableGameState.FIXED_STEP)
+
+        assertEquals(GamePhase.RUNNING, candidate.phase)
+        assertEquals(WorldLayer.NADIR, candidate.worldLayer, "the step stays inside the visit")
+        assertTrue(candidate.dimensionSlowSeconds > source.dimensionSlowSeconds, "a Core below the pace keeps its slow clock")
+        assertTrue(candidate.dimensionScorchClock > source.dimensionScorchClock, "past the grace the scorch clock runs")
+        assertEquals(ContentBounds.MAX_EMBERS, checkNotNull(candidate.dimensionRun.visit).embers.size, "no ember is in reach")
+        assertEquals(original, canonicalStateFingerprint(source))
     }
 }
