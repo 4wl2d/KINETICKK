@@ -509,7 +509,10 @@ internal fun codexEnemyEntry(
         add(codexStatus(language, language.text(if (locked) SessionText.LOCKED else CodexText.IN_ROSTER)))
         add(CodexFact(language.text(CodexText.THREAT), threat))
         add(CodexFact(language.text(CodexText.HABITAT), codexHabitats(enemy, language)))
-        if (enemy.livesIn(EnemyHabitat.SPACE)) {
+        val arrival = enemy.arrival
+        if (arrival != null) {
+            add(CodexFact(language.text(CodexText.APPEARS), arrival.localizedContent(language)))
+        } else if (enemy.livesIn(EnemyHabitat.SPACE)) {
             add(CodexFact(language.text(CodexText.APPEARS), language.text(CodexText.FROM_TIME, codexClock(enemy.timeGateSeconds))))
         }
         if (enemy.minimumRebirth > 0) {

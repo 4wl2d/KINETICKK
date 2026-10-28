@@ -360,6 +360,7 @@ class ContentLocalizationTest {
         roster.forEach { enemy ->
             assertFullyLocalized(enemy.name)
             assertFullyLocalized(enemy.description)
+            enemy.arrival?.let(::assertFullyLocalized)
         }
         assertDistinctInRussian(roster.map { it.name })
         assertDistinctInRussian(roster.map { it.description })
