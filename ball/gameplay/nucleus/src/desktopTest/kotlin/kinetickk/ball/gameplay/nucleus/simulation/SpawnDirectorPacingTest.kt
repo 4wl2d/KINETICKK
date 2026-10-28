@@ -97,12 +97,15 @@ class SpawnDirectorPacingTest {
 
     @Test
     fun aTierZeroRunNeverSpawnsRebirthGatedKinds() {
+        val gated = listOf(EnemyType.COMET, EnemyType.PYLON)
         for (arm in arms) {
+            val armTypes = mutableSetOf<EnemyType>()
             for (seed in listOf(11, 22, 33)) {
                 val state = runningState(seed, tier = 0, arm)
                 val firstSeen = mutableMapOf<EnemyType, Float>()
                 state.drive(600f) { state.enemies.forEach { firstSeen.getOrPut(it.type) { state.elapsed } } }
                 val types = firstSeen.keys
+                armTypes += types
                 assertTrue(types.none { it == EnemyType.PHANTOM || it == EnemyType.BROODMOTHER || it == EnemyType.REFLECTOR },
                     "$arm seed=$seed $types")
                 assertTrue(EnemyType.HERALD !in types, "$arm seed=$seed: no Herald below tier 2")
@@ -111,13 +114,14 @@ class SpawnDirectorPacingTest {
                 val roster = listOf(EnemyType.SWARMLING, EnemyType.LANCER, EnemyType.SNIPER)
                 assertTrue(types.containsAll(roster), "$arm seed=$seed $types")
                 // The Comet joins at two minutes and the Pylon at four and a half, never before their gates.
-                assertTrue(types.containsAll(listOf(EnemyType.COMET, EnemyType.PYLON)),
-                    "$arm seed=$seed: Comet and Pylon appear: $types")
-                assertTrue(firstSeen.getValue(EnemyType.COMET) >= 120f,
-                    "$arm seed=$seed: first Comet at ${firstSeen[EnemyType.COMET]}")
-                assertTrue(firstSeen.getValue(EnemyType.PYLON) >= 270f,
-                    "$arm seed=$seed: first Pylon at ${firstSeen[EnemyType.PYLON]}")
+                if (arm.personality == null) {
+                    assertTrue(types.containsAll(gated), "$arm seed=$seed: Comet and Pylon appear: $types")
+                }
+                firstSeen[EnemyType.COMET]?.let { assertTrue(it >= 120f, "$arm seed=$seed: first Comet at $it") }
+                firstSeen[EnemyType.PYLON]?.let { assertTrue(it >= 270f, "$arm seed=$seed: first Pylon at $it") }
             }
+            // A personality reweights the rare Pylon, so its three seeds share the appearance check.
+            assertTrue(armTypes.containsAll(gated), "$arm: Comet and Pylon appear over three seeds: $armTypes")
         }
     }
 
