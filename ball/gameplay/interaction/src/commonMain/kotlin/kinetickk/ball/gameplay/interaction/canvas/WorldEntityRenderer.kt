@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
+import kinetickk.ball.content.api.EnemyRank
 import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
 import kinetickk.ball.gameplay.nucleus.render.EnemyBehavior
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
@@ -81,6 +82,11 @@ internal fun DrawScope.drawEnemy(
         rotate(engine.renderElapsed * spin(2f), center) {
             drawCircle(threat.copy(alpha = 0.32f), enemy.radius * 1.2f, center, style = WorldStrokes.dashedThin)
         }
+        return
+    }
+    if (enemy.type == EnemyType.CIPHER && enemy.behavior == EnemyBehavior.PHASED && EnemyAffinity.shifting(enemy.affinityBits)) {
+        // Glitched out (and untargetable): its outline doubled sideways, faint and dashed, with no body.
+        drawCipherGlitch(engine, enemy, center, threat)
         return
     }
     val affinity = enemy.affinityBits
@@ -163,8 +169,12 @@ internal fun DrawScope.drawEnemy(
             drawArc(Kk.Bone, start, MOUNT_ARC_DEGREES, false, Offset(center.x - arc, center.y - arc), Size(arc * 2f, arc * 2f),
                 style = kkStroke(3f))
         }
+        // Secondary accents of ordinary kinds follow the crowd's level of detail.
+        EnemyType.SERAPH -> if (statusDetail) drawCircle(Kk.Bone, enemy.radius * SERAPH_RING, center, style = kkStroke(1.5f))
+        EnemyType.CHOIR -> if (statusDetail) drawCircle(Kk.Bone, enemy.radius * CHOIR_RING, center, style = kkStroke(1.5f))
         else -> Unit
     }
+    if (enemy.shielded && enemy.type != EnemyType.HERALD) drawImpactShield(engine, enemy, center)
     drawArmorPlates(enemy, center)
     if (bits != 0) drawEnemyStatus(engine, center, enemy.radius + STATUS_RING_GAP, enemy.radius, bits, dominant, statusFill, roles, patterned)
     drawWeaknessTab(center, enemy.radius + STATUS_RING_GAP + WEAKNESS_TAB_GAP, EnemyAffinity.weakness(affinity), patterned, roles)
@@ -182,6 +192,9 @@ private fun enemyRenderMargin(enemy: EnemyProjection): Float = when (enemy.type)
         if (enemy.behavior == EnemyBehavior.TELEGRAPH || enemy.behavior == EnemyBehavior.STRIKE) LANCE_LANE_LENGTH + 20f else 120f
     EnemyType.COMET, EnemyType.PYLON, EnemyType.SENTRY ->
         max(worldsTelegraphReach(enemy), if (enemy.linkedTo >= 0) AEGIS_TETHER_REACH else 120f)
+    EnemyType.SERAPH ->
+        if (enemy.actionTimer in 0f..SERAPH_MEND_LEAD) SERAPH_MEND_REACH + 20f else if (enemy.linkedTo >= 0) AEGIS_TETHER_REACH else 120f
+    EnemyType.CHOIR -> CHOIR_WAVE_REACH + 20f
     else -> if (enemy.linkedTo >= 0) AEGIS_TETHER_REACH else 120f
 }
 
@@ -212,6 +225,22 @@ private const val SENTRY_LINE_REACH = 760f
 private const val SENTRY_AIM_SECONDS = 0.45f
 private const val MOUNT_ARC_DEGREES = 120f
 private const val MOUNT_ARC_GAP = 5f
+
+/** Presentation copies of the dimension kinds' reaches and timings (Seraph, Choir, Imp, Hound, Cipher), and accents. */
+private const val SERAPH_MEND_REACH = 260f
+private const val SERAPH_MEND_LEAD = 0.4f
+private const val SERAPH_RING = 0.5f
+private const val CHOIR_WAVE_REACH = 300f
+private const val CHOIR_SING_SECONDS = 0.6f
+private const val CHOIR_RING = 0.32f
+private const val IMP_BLAST_REACH = 95f
+private const val IMP_FUSE_SECONDS = 0.5f
+private const val HOUND_WINDUP_SECONDS = 0.35f
+private const val CIPHER_AIM_SECONDS = 0.3f
+private const val CIPHER_GLITCH_OFFSET = 4f
+private const val CIPHER_GLITCH_ALPHA = 0.28f
+/** An impact-only shield on an ordinary or Elite enemy (a Seraph's mend): smaller and lighter than a boss's. */
+private const val IMPACT_SHIELD_RING = 1.35f
 
 /** Distance of the status ring outside an enemy's silhouette (world units). */
 private const val STATUS_RING_GAP = 4f
@@ -548,10 +577,46 @@ private fun DrawScope.drawEnemyTelegraph(
             val charge = (1f - enemy.behaviorRemaining / SENTRY_AIM_SECONDS).coerceIn(0f, 1f)
             drawLine(threat.copy(alpha = 0.3f + charge * 0.5f), center, polar(center, SENTRY_LINE_REACH, enemy.facing), 1f + charge * 2f)
         }
+        // The reach of its next mend, shown just before it pulses.
+        EnemyType.SERAPH -> if (enemy.actionTimer in 0f..SERAPH_MEND_LEAD) {
+            drawCircle(Kk.Bone.copy(alpha = 0.25f), SERAPH_MEND_REACH, center, style = WorldStrokes.dashedThin)
+        }
+        // Two rings contract onto it while it sings; the hairline is the reach of its shove.
+        EnemyType.CHOIR -> if (enemy.behavior == EnemyBehavior.TELEGRAPH) {
+            val charge = (1f - enemy.behaviorRemaining / CHOIR_SING_SECONDS).coerceIn(0f, 1f)
+            val ring = CHOIR_WAVE_REACH + (enemy.radius + 12f - CHOIR_WAVE_REACH) * charge
+            drawCircle(threat.copy(alpha = 0.18f), CHOIR_WAVE_REACH, center, style = kkStroke(1f))
+            drawCircle(threat.copy(alpha = 0.3f + charge * 0.5f), ring, center, style = WorldStrokes.dashedThin)
+            drawCircle(threat.copy(alpha = 0.3f + charge * 0.5f), ring * 0.6f, center, style = WorldStrokes.dashedThin)
+        }
+        // The Bomber's fuse look at the Imp's smaller reach.
+        EnemyType.IMP -> if (enemy.behavior == EnemyBehavior.PRIMED) {
+            val remaining = enemy.behaviorRemaining
+            val blink = if (sin(engine.renderElapsed * (18f + (IMP_FUSE_SECONDS - remaining).coerceAtLeast(0f) * 60f)) > 0f) 1f else 0.35f
+            drawCircle(threat.copy(alpha = 0.10f * blink), IMP_BLAST_REACH, center)
+            drawCircle(threat.copy(alpha = 0.75f * blink), IMP_BLAST_REACH, center, style = WorldStrokes.dashedMedium)
+            drawCircle(Kk.Bone.copy(alpha = 0.8f * blink), enemy.radius + 5f, center, style = kkStroke(2f))
+        }
+        // The Charger's wind-up look over the Hound's shorter wind-up.
+        EnemyType.HOUND -> if (enemy.actionTimer < 0f) {
+            val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
+            val charge = clamp(-enemy.actionTimer / HOUND_WINDUP_SECONDS, 0f, 1f)
+            drawLine(threat.copy(alpha = 0.2f + charge * 0.62f), center, core, 2f + charge * 2f)
+            drawCircle(threat.copy(alpha = 0.72f), enemy.radius + 28f * (1f - charge), center, style = WorldStrokes.dashedMedium)
+        }
+        EnemyType.CIPHER -> if (enemy.behavior == EnemyBehavior.TELEGRAPH) {
+            val charge = (1f - enemy.behaviorRemaining / CIPHER_AIM_SECONDS).coerceIn(0f, 1f)
+            val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
+            drawLine(threat.copy(alpha = 0.25f + charge * 0.5f), center, core, 1.2f, pathEffect = WorldStrokes.dashEffect)
+        }
+        // A hairline to the cursor it mirrors the Core through (the singularity's draw point).
+        EnemyType.MIRROR -> {
+            val pointer = Offset(engine.pointerX + shakeX * 0.18f, engine.pointerY + shakeY * 0.18f)
+            drawLine(threat.copy(alpha = 0.18f), center, pointer, 1f, pathEffect = WorldStrokes.dashedHair.pathEffect)
+        }
         EnemyType.DRIFTER, EnemyType.SPLITTER, EnemyType.ARCHITECT, EnemyType.SWARMLING, EnemyType.AEGIS,
         EnemyType.MINELAYER, EnemyType.REFLECTOR,
-        EnemyType.CRAWLER, EnemyType.SERAPH, EnemyType.CHOIR,
-        EnemyType.IMP, EnemyType.HOUND, EnemyType.CIPHER, EnemyType.MIRROR, EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN,
+        EnemyType.CRAWLER, EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN,
         EnemyType.THRONE, EnemyType.PYRE_HERALD, EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT,
         -> Unit
     }
@@ -568,6 +633,43 @@ private fun DrawScope.drawAegisTether(engine: GameplayRenderModel, enemy: EnemyP
         drawLine(Kk.Bone.copy(alpha = 0.45f), from, center, 1.5f, pathEffect = WorldStrokes.dashEffect)
         drawCircle(Kk.Bone.copy(alpha = 0.7f), enemy.radius + 3f, center, style = kkStroke(1.5f))
         return
+    }
+}
+
+/**
+ * A shield that only impacts break on anything but the Herald (which draws its own): boss ranks keep the Herald's
+ * ring; ordinary and Elite enemies (a Seraph's mend) a smaller, lighter one with the same pulse.
+ */
+private fun DrawScope.drawImpactShield(engine: GameplayRenderModel, enemy: EnemyProjection, center: Offset) {
+    val pulse = (sin(engine.renderElapsed * SHIELD_PULSE) + 1f) * 0.5f
+    when (engine.content.enemy(enemy.type).rank) {
+        EnemyRank.MINI_BOSS, EnemyRank.BOSS, EnemyRank.SECRET_BOSS -> {
+            val shield = enemy.radius * (1.55f + 0.04f * pulse)
+            drawCircle(Kk.Bone, shield, center, alpha = 0.05f + 0.05f * pulse)
+            drawCircle(Kk.Bone, shield, center, alpha = 0.45f + 0.4f * pulse, style = kkStroke(3f))
+        }
+        EnemyRank.ORDINARY, EnemyRank.ELITE ->
+            drawCircle(Kk.Bone, enemy.radius * IMPACT_SHIELD_RING, center, alpha = 0.35f + 0.4f * pulse, style = kkStroke(2f))
+    }
+}
+
+/** A glitched Cipher: its outline stroked twice, offset sideways, in faint dashed threat. */
+private fun DrawScope.drawCipherGlitch(
+    engine: GameplayRenderModel,
+    enemy: EnemyProjection,
+    center: Offset,
+    threat: androidx.compose.ui.graphics.Color,
+) {
+    val path = WorldPaths.silhouette(enemySilhouette(enemy.type), enemy.radius)
+    val degrees = enemyRotation(enemy.type, engine.renderElapsed, enemy.id)
+    val ghost = threat.copy(alpha = CIPHER_GLITCH_ALPHA)
+    repeat(2) { index ->
+        withTransform({
+            translate(center.x + (index * 2 - 1) * CIPHER_GLITCH_OFFSET, center.y)
+            rotate(degrees, Offset.Zero)
+        }) {
+            drawPath(path, ghost, style = WorldStrokes.dashedThin)
+        }
     }
 }
 
