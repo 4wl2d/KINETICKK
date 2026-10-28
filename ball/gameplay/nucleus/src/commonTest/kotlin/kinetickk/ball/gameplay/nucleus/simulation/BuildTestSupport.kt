@@ -136,13 +136,17 @@ internal fun withoutActiveItems(content: GameplayContentSnapshot = canonicalGame
 }
 
 /**
- * [content] without its active items: the catalog ends before the first of them (they are appended after every passive
- * item) and the snapshot is rebuilt from it, so a run deals, offers and draws exactly as runs did before active items
- * existed. The "no actives" arm of the active-item gates.
+ * [content] without its active items: the catalog ends before the first of them (they were appended as one block after
+ * every earlier passive item) and the snapshot is rebuilt from it, so a run deals, offers and draws exactly as runs did
+ * before active items existed. Item ids are catalog positions, so the cut also drops the items appended after the
+ * actives (the 0.6.0 terrain items). The "no actives" arm of the active-item gates.
  */
 internal fun withoutActiveItemCatalog(content: GameplayContentSnapshot = canonicalGameplayContent): GameplayContentSnapshot {
     val end = content.items.indexOfFirst(ItemDefinition::isActive).takeIf { it >= 0 } ?: return content
-    check(content.items.drop(end).all(ItemDefinition::isActive)) { "Active items must follow every passive item" }
+    val last = content.items.indexOfLast(ItemDefinition::isActive)
+    check(content.items.subList(end, last + 1).all(ItemDefinition::isActive)) {
+        "Active items must form one block after the passive items they follow"
+    }
     return content.copy(items = content.items.subList(0, end).toImmutableList())
 }
 
