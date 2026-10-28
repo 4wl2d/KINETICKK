@@ -7,8 +7,10 @@ import kinetickk.ball.content.api.EffectAction
 import kinetickk.ball.content.api.EffectClause
 import kinetickk.ball.content.api.EffectCondition
 import kinetickk.ball.content.api.EffectTrigger
+import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.MatrixEffect
 import kinetickk.ball.content.api.NEAR_OBSTACLE_MAX_DISTANCE
+import kinetickk.ball.content.api.ObstacleAspect
 import kinetickk.ball.content.api.ObstacleKind
 import kinetickk.ball.content.api.ObstacleMix
 import kinetickk.ball.content.api.ReactionId
@@ -16,9 +18,12 @@ import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.phaseShardSolid
 import kinetickk.ball.content.api.ventErupting
+import kinetickk.ball.gameplay.api.RunMode
+import kinetickk.ball.gameplay.nucleus.model.Obstacle
 import kinetickk.ball.gameplay.nucleus.model.ObstacleField
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.WeaponEntity
+import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.protocol.FxColorCode
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
@@ -1131,5 +1136,339 @@ class ObstacleKindSystemTest {
         assertEquals(0f, source.mineWithId(71L)!!.fuseAt, "with the mine dormant")
         assertSame(destroyed, source.destroyedObstacleIds)
         assertTrue(source.destroyedObstacleIds.isEmpty())
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Builds around obstacles: GRAZE, the kind every obstacle trigger carries, obstacle tuning.
+
+    private val grazeRadius = 40f
+
+    /** Every GRAZE gains Data; one off an asteroid also charges Overdrive. */
+    private val grazeContent = contentWithClauses(
+        "Calibrated Coil",
+        EffectClause(EffectTrigger.GRAZE, immutableListOf(), immutableListOf(EffectAction.GainData(5f))),
+        EffectClause(EffectTrigger.GRAZE, immutableListOf(EffectCondition.ObstacleIs(ObstacleKind.ASTEROID)),
+            immutableListOf(EffectAction.Overdrive(10f)), cooldownSeconds = 0.5f),
+    )
+
+    /** A run at [time] with the GRAZE clauses and one obstacle of [kind] (radius 40, shape seed [seed]) at (300, 0). */
+    private fun grazeState(kind: ObstacleKind = ObstacleKind.ASTEROID, seed: Int = 7, time: Float = 1f): MutableGameState =
+        buildTestState(content = grazeContent).apply {
+            own("Calibrated Coil")
+            nextLevelData = Int.MAX_VALUE / 2
+            elapsed = time
+            placeObstaclesForTesting(testObstacle(300f, 0f, radius = grazeRadius, kind = kind, shapeSeed = seed))
+        }
+
+    /** One step east at [speed] that ends [gap] above the surface of the obstacle at (300, 0). */
+    private fun MutableGameState.skim(gap: Float, speed: Float) =
+        flyIntoObstaclesForTesting(300f, grazeRadius + core + gap, speed, 0f)
+
+    private fun MutableGameState.grazeSparks(): List<VisualFxCue.Burst> =
+        takeVisualFxCues().filterIsInstance<VisualFxCue.Burst>().filter { it.colorIndex == 2 }
+
+    @Test
+    fun aFastSkimPastAnAsteroidGrazesWithItsKindAtMostOncePerCooldown() {
+        val state = grazeState()
+        state.takeVisualFxCues()
+        state.skim(20f, 1_000f)
+        val perGraze = state.dataCollected
+        assertTrue(perGraze > 0L, "GRAZE fired")
+        assertTrue(state.overdriveCharge > 0f, "with the asteroid's kind")
+        val sparks = state.grazeSparks()
+        assertEquals(1, sparks.size, "one spray of sparks")
+        assertEquals(300f, sparks.single().x, 0.001f, "off the surface, toward the Core")
+        assertEquals(grazeRadius, sparks.single().y, 0.001f)
+        assertEquals(4, sparks.single().requestedCount)
+        // Within the cooldown the next skim grazes nothing; once it ends, the next one grazes again.
+        state.elapsed = 1f + kinds.grazeCooldownSeconds - 0.01f
+        state.skim(20f, 1_000f)
+        assertEquals(perGraze, state.dataCollected, "still within the cooldown")
+        assertTrue(state.grazeSparks().isEmpty())
+        state.elapsed = 1f + kinds.grazeCooldownSeconds
+        state.skim(20f, 1_000f)
+        assertEquals(2L * perGraze, state.dataCollected, "the cooldown ended")
+    }
+
+    @Test
+    fun aGrazeNeedsTheGrazeDistanceAndSpeedAndAStepThatTouchesNothing() {
+        fun grazes(gap: Float, speed: Float): Boolean = grazeState().run {
+            skim(gap, speed)
+            dataCollected > 0L
+        }
+        assertTrue(grazes(kinds.grazeDistance, kinds.grazeMinimumSpeed), "at the graze distance and speed")
+        assertFalse(grazes(kinds.grazeDistance + 1f, 1_000f), "just beyond the graze distance")
+        assertFalse(grazes(20f, kinds.grazeMinimumSpeed - 1f), "just below the graze speed")
+        assertFalse(grazes(20f, 800f))
+        // A step that scrapes a second rock above its path at full speed grazes nothing, though it ends close to the first.
+        val scraped = grazeState()
+        scraped.placeObstaclesForTesting(
+            testObstacle(300f, 0f, radius = grazeRadius),
+            testObstacle(300f, 2f * (grazeRadius + core) + 20f - 0.5f, radius = grazeRadius, id = 2L),
+        )
+        scraped.skim(20f, 1_000f)
+        assertTrue(scraped.speed >= kinds.grazeMinimumSpeed, "a scrape keeps the graze speed: ${scraped.speed}")
+        val firstGap = length(scraped.coreX - 300f, scraped.coreY) - grazeRadius - core
+        assertTrue(firstGap in 0f..kinds.grazeDistance, "and ends within the graze distance of the first rock: $firstGap")
+        assertEquals(scraped.maxHp, scraped.hp, "a harmless scrape")
+        assertEquals(0L, scraped.dataCollected, "but a touch is no graze")
+    }
+
+    @Test
+    fun onlyAGrazeableSolidSurfaceGrazesAndTheGrazeCarriesItsKind() {
+        val seed = 11
+        for ((kind, solidPhase, grazes) in listOf(
+            Triple(ObstacleKind.ASTEROID, true, true),
+            Triple(ObstacleKind.CRYSTAL, true, true),
+            Triple(ObstacleKind.GRAVITY_WELL, true, true),
+            Triple(ObstacleKind.PHASE_SHARD, true, true),
+            Triple(ObstacleKind.PHASE_SHARD, false, false),
+            Triple(ObstacleKind.BUMPER, true, false),
+            Triple(ObstacleKind.ACCEL_GATE, true, false),
+            Triple(ObstacleKind.DERELICT_MINE, true, false),
+            Triple(ObstacleKind.THERMAL_VENT, true, false),
+        )) {
+            val state = grazeState(kind, seed, phaseTime(seed, solidPhase))
+            state.skim(20f, 1_000f)
+            assertEquals(grazes, state.dataCollected > 0L, "$kind solid phase $solidPhase")
+            assertEquals(grazes && kind == ObstacleKind.ASTEROID, state.overdriveCharge > 0f, "$kind: only an asteroid holds ASTEROID")
+        }
+    }
+
+    @Test
+    fun aGrazeLeavesMatrixNearMissAsItWas() {
+        // A crystal: Near Miss counts it, and the asteroid's Overdrive clause stays quiet, so all Overdrive is Near Miss.
+        val state = grazeState(ObstacleKind.CRYSTAL).apply { matrix = matrix.copy(nearMiss = MatrixEffect.NearMiss(40f, 900f, 6f, 0.5f)) }
+        state.skim(20f, 1_000f)
+        assertTrue(state.dataCollected > 0L, "GRAZE fired")
+        assertEquals(6f, state.overdriveCharge, 0.01f, "Near Miss granted its own Overdrive")
+    }
+
+    /** Calibrated Coil gains Overdrive when [named] hurts the Core and vents heat on a ricochet off [named]. */
+    private fun hitContent(named: ObstacleKind) = contentWithClauses(
+        "Calibrated Coil",
+        EffectClause(EffectTrigger.HURT, immutableListOf(EffectCondition.ObstacleIs(named)),
+            immutableListOf(EffectAction.Overdrive(10f)), cooldownSeconds = 0.5f),
+        EffectClause(EffectTrigger.RICOCHET, immutableListOf(EffectCondition.ObstacleIs(named)),
+            immutableListOf(EffectAction.Vent(20f)), cooldownSeconds = 0.5f),
+    )
+
+    /** A run at [time] naming [named] in its HURT and RICOCHET clauses, at heat 50 with no shield, with [obstacle] placed. */
+    private fun hitState(named: ObstacleKind, obstacle: Obstacle, time: Float = 1f): MutableGameState =
+        buildTestState(content = hitContent(named)).apply {
+            own("Calibrated Coil")
+            heat = 50f
+            shield = 0f
+            elapsed = time
+            placeObstaclesForTesting(obstacle)
+        }
+
+    /** One step east at [speed] into the body of [radius] at (300, 0), meeting its surface halfway through the step. */
+    private fun MutableGameState.ram(radius: Float, speed: Float) =
+        flyIntoObstaclesForTesting(300f - radius - core + speed * 0.5f * MutableGameState.FIXED_STEP, 0f, speed, 0f)
+
+    @Test
+    fun aHurtingBounceOffASolidBodyCarriesItsKindToHurtAndRicochet() {
+        val seed = 11
+        val time = phaseTime(seed, solid = true)
+        for ((kind, radius) in listOf(
+            ObstacleKind.ASTEROID to 40f, ObstacleKind.GRAVITY_WELL to knotRadius, ObstacleKind.PHASE_SHARD to 40f,
+        )) {
+            for (named in listOf(kind, ObstacleKind.CRYSTAL)) {
+                val state = hitState(named, testObstacle(300f, 0f, radius = radius, kind = kind, shapeSeed = seed), time)
+                val speed = state.obstacleRicochetSpeed() + 20f
+                assertTrue(speed < state.obstacleLethalSpeed(), "a band hit")
+                state.ram(radius, speed)
+                assertTrue(state.hp < state.maxHp, "$kind hurts at $speed")
+                assertEquals(named == kind, state.overdriveCharge > 0f, "HURT off $kind naming $named")
+                assertEquals(named == kind, state.heat < 50f, "RICOCHET off $kind naming $named")
+            }
+        }
+        // A bumper throw is a ricochet off a bumper, and never hurts.
+        for (named in listOf(ObstacleKind.BUMPER, ObstacleKind.ASTEROID)) {
+            val state = hitState(named, testObstacle(300f, 0f, radius = 34f, kind = ObstacleKind.BUMPER))
+            state.ram(34f, state.obstacleRicochetSpeed() + 20f)
+            assertEquals(state.maxHp, state.hp)
+            assertEquals(named == ObstacleKind.BUMPER, state.heat < 50f, "RICOCHET off a bumper naming $named")
+        }
+        // A structure wall's hit names no obstacle kind.
+        val wall = hitState(ObstacleKind.ASTEROID, testObstacle(2_000f, 0f))
+        wall.setVelocityForTesting(-(wall.obstacleRicochetSpeed() + 20f), 0f)
+        wall.resolveSolidImpact(surfaceId = 77L, nx = 1f, ny = 0f, contactX = wall.coreX, contactY = wall.coreY)
+        assertTrue(wall.hp < wall.maxHp, "the wall hurts")
+        assertEquals(0f, wall.overdriveCharge, "with no kind to name")
+        assertEquals(50f, wall.heat)
+        // In Baby mode a lethal hit only hurts, and its HURT names the kind.
+        val easy = MutableGameState(hitContent(ObstacleKind.ASTEROID), seed = 5, runMode = RunMode.EASY).apply {
+            startRun()
+            enemies.clear()
+            spawnClock = Float.MAX_VALUE
+            own("Calibrated Coil")
+            shield = 0f
+            hurtCooldown = 0f
+            invulnerableUntil = 0f
+            placeObstaclesForTesting(testObstacle(300f, 0f, radius = 40f))
+        }
+        easy.ram(40f, easy.obstacleLethalSpeed() + 100f)
+        assertEquals(GamePhase.RUNNING, easy.phase)
+        assertTrue(easy.hp < easy.maxHp)
+        assertTrue(easy.overdriveCharge > 0f, "the lethal hit's HURT names the asteroid")
+    }
+
+    @Test
+    fun anEnemySlammedIntoAnObstacleCarriesItsKindAndOneSlammedIntoAnotherEnemyNone() {
+        for (named in listOf(ObstacleKind.GRAVITY_WELL, ObstacleKind.ASTEROID)) {
+            val content = contentWithClauses(
+                "Calibrated Coil",
+                EffectClause(EffectTrigger.SLAM, immutableListOf(EffectCondition.ObstacleIs(named)),
+                    immutableListOf(EffectAction.Overdrive(10f)), cooldownSeconds = 0.5f),
+            )
+            val state = buildTestState(content = content).apply {
+                own("Calibrated Coil")
+                placeObstaclesForTesting(knot(500f, 0f))
+            }
+            val thrown = state.dummy(x = 0f, y = 0f, hp = 10_000f).apply {
+                x = 500f - knotRadius - radius + 4f
+                vx = 700f
+                state.markThrown(this)
+            }
+            state.resolveEnemyObstacles()
+            assertTrue(thrown.hp < thrown.maxHp, "the slam into the knot landed")
+            assertEquals(named == ObstacleKind.GRAVITY_WELL, state.overdriveCharge > 0f, "SLAM into a knot naming $named")
+            // Two enemies slamming into each other strike no obstacle.
+            state.overdriveCharge = 0f
+            state.elapsed += 1f
+            state.clearObstaclesForTesting()
+            val hurled = state.dummy(x = 0f, y = 300f, hp = 10_000f)
+            val struck = state.dummy(x = hurled.radius * 2f - 4f, y = 300f, hp = 10_000f)
+            hurled.vx = 700f
+            state.markThrown(hurled)
+            state.resolveEnemyObstacles()
+            assertTrue(struck.hp < struck.maxHp, "the enemies slammed")
+            assertEquals(0f, state.overdriveCharge, "no kind to name")
+        }
+    }
+
+    /** The canonical content (or [base]) with one probe item per amount, each holding one [aspect] tuning; the run owns them. */
+    private fun tunedState(
+        aspect: ObstacleAspect,
+        vararg amounts: Float,
+        base: kinetickk.ball.content.api.GameplayContentSnapshot = canonicalGameplayContent,
+    ): MutableGameState {
+        val probes = amounts.mapIndexed { index, amount -> obstacleProbe("Test $aspect $index", ItemRule.ObstacleTuning(aspect, amount)) }
+        return buildTestState(content = base.withProbes(*probes.toTypedArray())).apply {
+            probes.forEach { own(it.name) }
+            shield = 0f
+        }
+    }
+
+    @Test
+    fun restitutionTuningAddsToEveryBounceUpToItsCap() {
+        fun bounce(vararg amounts: Float, rig: Boolean = false): Float {
+            val state = tunedState(ObstacleAspect.RESTITUTION, *amounts).apply {
+                if (rig) matrix = matrix.copy(ricochetRig = MatrixEffect.RicochetRig(0.75f, 0f))
+                placeObstaclesForTesting(testObstacle(300f, 0f, radius = 40f))
+            }
+            val speed = state.obstacleDamageStartSpeed() - 10f
+            state.ram(40f, speed)
+            assertEquals(state.maxHp, state.hp, "a bounce below the damage start")
+            return -state.velocityX / speed
+        }
+        val restitution = canonicalGameplayContent.obstacles.restitution
+        assertEquals(restitution, bounce(), 1e-4f)
+        assertEquals(restitution + 0.15f, bounce(0.15f), 1e-4f, "a bonus adds to the restitution")
+        assertEquals(restitution + MAX_OBSTACLE_RESTITUTION_BONUS, bounce(0.3f, 0.3f), 1e-4f, "two stop at the bonus cap")
+        assertEquals(0.75f + 0.15f, bounce(0.15f, rig = true), 1e-4f, "on top of Ricochet Rig")
+        assertEquals(MAX_OBSTACLE_RESTITUTION, bounce(0.3f, rig = true), 1e-4f, "never past the restitution cap")
+    }
+
+    @Test
+    fun theObstacleDamageCutScalesBandHitsAndBlastsAtMostByHalf() {
+        fun bandLoss(vararg cuts: Float): Float = tunedState(ObstacleAspect.COLLISION_DAMAGE, *cuts).run {
+            placeObstaclesForTesting(testObstacle(300f, 0f, radius = 40f))
+            val start = obstacleDamageStartSpeed()
+            ram(40f, start + (obstacleLethalSpeed() - start) * 0.5f)
+            maxHp - hp
+        }
+        fun mineLoss(vararg cuts: Float): Float = tunedState(ObstacleAspect.COLLISION_DAMAGE, *cuts).run {
+            elapsed = 1f
+            placeObstaclesForTesting(testObstacle(300f, 0f, radius = 50f, kind = ObstacleKind.DERELICT_MINE, fuseAt = 1f))
+            flyIntoObstaclesForTesting(250f, 0f, 0f, 0f)
+            maxHp - hp
+        }
+        fun unstableLoss(vararg cuts: Float): Float = tunedState(ObstacleAspect.COLLISION_DAMAGE, *cuts).run {
+            placeObstaclesForTesting(testObstacle(300f, 0f, radius = 40f, kind = ObstacleKind.UNSTABLE))
+            ram(40f, obstacleDamageStartSpeed())
+            maxHp - hp
+        }
+        val band = bandLoss()
+        val mine = mineLoss()
+        val unstable = unstableLoss()
+        assertTrue(band > 0f && mine > 0f && unstable > 0f)
+        assertEquals(band * 0.65f, bandLoss(0.35f), band * 1e-4f, "a band hit")
+        assertEquals(mine * 0.65f, mineLoss(0.35f), mine * 1e-4f, "a mine blast")
+        assertEquals(unstable * 0.65f, unstableLoss(0.35f), unstable * 1e-4f, "an unstable asteroid's blast")
+        assertEquals(band * (1f - MAX_OBSTACLE_DAMAGE_CUT), bandLoss(0.5f, 0.5f), band * 1e-4f, "two cuts stop at half")
+        assertEquals(mine * (1f - MAX_OBSTACLE_DAMAGE_CUT), mineLoss(0.5f, 0.5f), mine * 1e-4f)
+    }
+
+    @Test
+    fun theItemLethalBonusRaisesTheLethalSpeedOnlyUpToTheBuildsOwnCeiling() {
+        val plain = buildTestState()
+        val caged = tunedState(ObstacleAspect.LETHAL_SPEED, 150f)
+        assertEquals(150f, caged.obstacleLethalSpeedBonus())
+        assertEquals(plain.obstacleLethalSpeed() + 150f, caged.obstacleLethalSpeed(), 0.01f, "under the ceiling the bonus adds")
+        assertEquals(MAX_ITEM_LETHAL_BONUS, tunedState(ObstacleAspect.LETHAL_SPEED, 300f, 300f).obstacleLethalSpeedBonus(),
+            "two stop at the item cap")
+        // Two of them with Impact Dampers II and Gravity Surfer's 700: the sum stops at the build's own ceiling.
+        val stacked = tunedState(ObstacleAspect.LETHAL_SPEED, 300f, 300f).apply {
+            matrix = matrix.copy(obstacleLethalSpeedBonus = 700f)
+        }
+        val ceiling = stacked.buildSteadyCursorSpeed(stacked.content.obstacles.lethalCeilingReach)
+        assertTrue(ceiling < plain.obstacleLethalSpeed() + MAX_ITEM_LETHAL_BONUS + 700f)
+        assertEquals(ceiling, stacked.obstacleLethalSpeed(), 0.01f, "the ceiling holds")
+        // A hit just past the plain lethal speed is only a band hit for the caged build.
+        caged.placeObstaclesForTesting(testObstacle(300f, 0f, radius = 40f))
+        caged.ram(40f, plain.obstacleLethalSpeed() + 50f)
+        assertEquals(GamePhase.RUNNING, caged.phase)
+        assertTrue(caged.hp < caged.maxHp)
+    }
+
+    @Test
+    fun boostPowerScalesEveryObstacleBoostUpToDoubleAndTheCapStillHolds() {
+        fun boosted(vararg powers: Float): MutableGameState =
+            tunedState(ObstacleAspect.BOOST_POWER, *powers, base = boostContent).apply {
+                own("Calibrated Coil")
+                heat = 50f
+                placeObstaclesForTesting(testGate(300f, 0f, 0f, gateRadius))
+            }
+        val clean = boosted(0.3f)
+        val cap = clean.obstacleLethalSpeed() * kinds.boostLethalShare
+        assertTrue(800f + kinds.gateImpulse * 1.3f < cap, "the test crossing stays under the boost cap: $cap")
+        clean.stepAcrossGateLine(0f, 800f)
+        assertEquals(800f + kinds.gateImpulse * 1.3f, clean.speed, 0.01f, "a gate gives +494 at +30 %")
+        assertTrue(clean.heat < 50f, "BOOST fired with the gate's kind")
+        val doubled = boosted(0.6f, 0.6f)
+        doubled.stepAcrossGateLine(0f, 200f)
+        assertEquals(200f + kinds.gateImpulse * (1f + MAX_BOOST_POWER_BONUS), doubled.speed, 0.01f, "two stop at double")
+        var speed = 0f
+        while (speed <= cap * 1.2f) {
+            doubled.setVelocityForTesting(speed, 0f)
+            doubled.applyObstacleBoost(kinds.gateImpulse, ObstacleKind.ACCEL_GATE)
+            assertTrue(doubled.speed <= max(speed, cap) + 0.01f, "a doubled boost at $speed left at ${doubled.speed} (cap $cap)")
+            speed += 53f
+        }
+    }
+
+    @Test
+    fun knotPullTuningDragsEnemiesHarderAndLeavesTheCoreAlone() {
+        val step = MutableGameState.FIXED_STEP
+        val tuned = tunedState(ObstacleAspect.WELL_PULL, 0.6f, 0.6f).apply { placeObstaclesForTesting(knot(600f, 0f)) }
+        val drifter = tuned.dummy(x = 600f, y = 150f)
+        tuned.flyIntoObstaclesForTesting(450f, 0f, 0f, 0f)
+        assertEquals(expectedPull(kinds.wellCorePull, 150f, core) * step, tuned.velocityX, 0.0005f, "the Core feels the plain pull")
+        val doubled = expectedPull(kinds.wellEnemyPull, 150f, drifter.radius) * tuned.knockbackTaken(drifter) *
+            (1f + MAX_WELL_PULL_BONUS) * step
+        assertEquals(-doubled, drifter.vy, 0.001f, "an enemy feels it doubled")
     }
 }

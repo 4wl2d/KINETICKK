@@ -6,6 +6,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
@@ -45,8 +46,11 @@ internal fun MutableGameState.obstacleRicochetSpeed(): Float {
     return steadyCursorSpeed(tuning.ricochetReach) + tuning.forgivingStartBonus * (1f - obstacleForgiveness())
 }
 
-/** Summed lethal-speed bonus of the Core's state (Matrix nodes today). */
-internal fun MutableGameState.obstacleLethalSpeedBonus(): Float = matrix.obstacleLethalSpeedBonus
+/**
+ * Summed lethal-speed bonus of the Core's state: Matrix nodes and the build's obstacle tuning (itself capped when the
+ * build compiles). [obstacleLethalSpeed] holds the sum under the build's own ceiling.
+ */
+internal fun MutableGameState.obstacleLethalSpeedBonus(): Float = matrix.obstacleLethalSpeedBonus + build.obstacleLethalBonus
 
 /**
  * Impact speed at which an asteroid collision is lethal. Bonuses raise it at most to this build's own straight
@@ -88,10 +92,12 @@ internal fun MutableGameState.obstacleBandDamage(impact: Float, start: Float, le
 
 /**
  * The Core meets a solid surface [surfaceId] along the outward normal ([nx], [ny]) at its rest point ([contactX],
- * [contactY]): it bounces (sliding below the slide speed), and from the damage-start impact speed the hit hurts (band
- * damage scaled by [damageScale]) and costs part of the sliding speed, or kills. The cooldown spaces hits on the same
- * surface; another surface, or a lethal hit, lands at once. Only a hit whose normal speed reaches the ricochet speed
- * counts and pays out as a ricochet.
+ * [contactY]): it bounces (sliding below the slide speed) at the restitution plus the build's bonus (at most
+ * [MAX_OBSTACLE_RESTITUTION]), and from the damage-start impact speed the hit hurts (band damage scaled by
+ * [damageScale] and the build's obstacle damage scale) and costs part of the sliding speed, or kills. The cooldown
+ * spaces hits on the same surface; another surface, or a lethal hit, lands at once. Only a hit whose normal speed
+ * reaches the ricochet speed counts and pays out as a ricochet. HURT and RICOCHET carry the [obstacle] kind struck
+ * (none for a structure wall).
  */
 internal fun MutableGameState.resolveSolidImpact(
     surfaceId: Long,
@@ -100,6 +106,7 @@ internal fun MutableGameState.resolveSolidImpact(
     contactX: Float,
     contactY: Float,
     damageScale: Float = 1f,
+    obstacle: ObstacleKind? = null,
 ) {
     val tuning = content.obstacles
     val normalSpeed = -(velocityX * nx + velocityY * ny)
@@ -107,7 +114,8 @@ internal fun MutableGameState.resolveSolidImpact(
     val tangentX = velocityX + normalSpeed * nx
     val tangentY = velocityY + normalSpeed * ny
     val impact = obstacleImpactSpeed(normalSpeed, length(tangentX, tangentY))
-    val restitution = (matrix.ricochetRig?.restitution ?: tuning.restitution).coerceIn(0f, 1f)
+    val restitution = ((matrix.ricochetRig?.restitution ?: tuning.restitution) + build.obstacleRestitutionBonus)
+        .coerceIn(0f, MAX_OBSTACLE_RESTITUTION)
     val elasticity = if (normalSpeed < tuning.slideSpeed) 0f else restitution
     velocityX += (1f + elasticity) * normalSpeed * nx
     velocityY += (1f + elasticity) * normalSpeed * ny
@@ -126,14 +134,21 @@ internal fun MutableGameState.resolveSolidImpact(
     val ricochet = normalSpeed >= obstacleRicochetSpeed()
     if (ricochet) pendingRicochets++
     if (impact >= lethal) {
-        takeLethalObstacleHit()
+        takeLethalObstacleHit(obstacle)
     } else {
         // Severity runs from the floor's share of the lethal share (0.11 shipped) to 1 at the lethal end of the band.
         val lost = tuning.scrapeFriction * obstacleBandShare(impact, start, lethal) / tuning.damageShare
         velocityX -= tangentX * lost
         velocityY -= tangentY * lost
-        takeDamage(obstacleBandDamage(impact, start, lethal) * damageScale, kind = IncomingDamage.OBSTACLE)
+        takeDamage(
+            obstacleBandDamage(impact, start, lethal) * damageScale * build.obstacleDamageScale,
+            kind = IncomingDamage.OBSTACLE,
+            obstacle = obstacle,
+        )
     }
     if (phase != GamePhase.RUNNING) return
-    if (ricochet) onRicochet(surfaceX, surfaceY, normalSpeed)
+    if (ricochet) onRicochet(surfaceX, surfaceY, normalSpeed, obstacle)
 }
+
+/** The most a bounce off a solid surface keeps of the normal speed, whatever the build adds to the restitution. */
+internal const val MAX_OBSTACLE_RESTITUTION: Float = 0.95f

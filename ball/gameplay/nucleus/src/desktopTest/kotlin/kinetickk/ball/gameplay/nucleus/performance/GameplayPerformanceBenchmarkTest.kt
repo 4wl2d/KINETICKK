@@ -295,7 +295,7 @@ class GameplayPerformanceBenchmarkTest {
             { surgeThemeType = 3 },
             { varietyAnnouncement = 1 },
             { keynoteTag = BuildTag.DRIVE },
-            { keynoteElement = StatusElement.SONIC },
+            { keynoteElement = StatusElement.entries.first { it != keynoteElement } },
             { worldEventPlans = immutableListOf(WorldEventPlan(WorldEventKind.DATA_STORM, 1f, 2f, 3f)) },
             { nextWorldEvent = 1 },
             { worldEvent = WorldEventProjection(WorldEventKind.SOLAR_FLARE, 1f, 2f, 3f) },

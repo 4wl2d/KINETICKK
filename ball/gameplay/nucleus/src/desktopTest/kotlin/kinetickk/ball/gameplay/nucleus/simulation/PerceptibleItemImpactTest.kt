@@ -16,6 +16,8 @@ import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.MarkPick
+import kinetickk.ball.content.api.ObstacleAspect
+import kinetickk.ball.content.api.ObstacleKind
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatDelta
@@ -64,7 +66,14 @@ import kotlin.test.assertTrue
  * every 0.25 s) a weapon's cadence decides how often WEAPON_HIT effects fire.
  *
  * Ricochets and slams are dispatched directly every 0.6 s; the collisions that fire them belong to the
- * obstacle field, which the scripted paths never reach (they stay inside the run origin's safe area).
+ * obstacle field, which the scripted paths never reach (they stay inside the run origin's safe area). So are grazes,
+ * broken obstacles and boosts at the same cadence, each naming the kind the item's first ObstacleIs condition names (an
+ * asteroid, a crystal and an accelerator gate otherwise). The 0.6.0 obstacle vocabulary also has encounters with test
+ * obstacles of their own: hurting hits on a rock set just ahead of the Core every 0.6 s, 55 % of the way into the damage
+ * band, flown on the leash (COLLISIONS); three accelerator gates on the orbit, flown without Dashes (GATES); loose,
+ * thrown targets dragged into an attracting gravity knot, anchored again every 1.5 s (WELL); and the defense circle
+ * beside ten rocks while hits land (ROCKS). A scripted path keeps its clearance from solid obstacles, except the hits
+ * COLLISIONS is built from.
  *
  * The 0.5.0 vocabulary has its own encounters: skills cast on cooldown (SKILLS), reactions forced next to the Core
  * that leave pools, hushes, bubbles and maws on its path while bolts fly at it (FIELDS), bolt volleys with one
@@ -154,7 +163,7 @@ class PerceptibleItemImpactTest {
     }
 
     /**
-     * The 0.5.0 vocabulary before any item uses it: one probe item per new trigger, condition, action, rule,
+     * The 0.5.0 and 0.6.0 vocabulary before any item uses it: one probe item per new trigger, condition, action, rule,
      * conversion and buff (each at a strength its validation allows) must move a measured output of the encounters
      * [setupsFor] picks for it by at least [MIN_GAIN], under the same measure as the catalog. Kinds no scripted
      * encounter can show are listed in [UNPROBED_VOCABULARY] with the reason.
@@ -245,7 +254,22 @@ class PerceptibleItemImpactTest {
             "KNOCKBACK_TO_DAMAGE" to probe(rules = listOf(ItemRule.Convert(ConversionKind.KNOCKBACK_TO_DAMAGE, 1f))),
             "SKILL_POWER buff" to probe(listOf(on(EffectTrigger.SKILL_CAST, EffectAction.Buff(BuffStat.SKILL_POWER, 0.5f, 6f)))),
             "SKILL_RECHARGE buff" to probe(listOf(on(EffectTrigger.KILL, EffectAction.Buff(BuffStat.SKILL_RECHARGE, 1f, 5f), cooldown = 1f))),
-        )
+            // 0.6.0: builds around obstacles.
+            "SHATTER" to probe(listOf(on(EffectTrigger.SHATTER, weaponBurst))),
+            "BOOST" to probe(listOf(on(EffectTrigger.BOOST, EffectAction.Buff(BuffStat.DAMAGE, 0.5f, 2f)))),
+            "GRAZE" to probe(listOf(on(EffectTrigger.GRAZE, weaponBurst))),
+            "ObstacleIs" to probe(listOf(on(EffectTrigger.RICOCHET, weaponBurst, given = listOf(EffectCondition.ObstacleIs(ObstacleKind.BUMPER))))),
+            "NearObstacle" to probe(rules = listOf(ItemRule.WhileModifier(EffectCondition.NearObstacle(200f), BuffStat.DAMAGE, 0.5f))),
+        ) + ObstacleAspect.entries.map { aspect ->
+            // Each aspect at the most one item may carry.
+            val most = when (aspect) {
+                ObstacleAspect.RESTITUTION -> 0.3f
+                ObstacleAspect.COLLISION_DAMAGE -> 0.5f
+                ObstacleAspect.LETHAL_SPEED -> 300f
+                ObstacleAspect.BOOST_POWER, ObstacleAspect.WELL_PULL -> 0.6f
+            }
+            "ObstacleTuning/$aspect" to probe(rules = listOf(ItemRule.ObstacleTuning(aspect, most)))
+        }
     }
 
     /**
@@ -259,12 +283,13 @@ class PerceptibleItemImpactTest {
         val elite: Boolean,
         val weapon: WeaponId?,
         /** The pilot keeps the Core inside the start area ([leash]): the vocabulary encounters, and any item that launches it. */
-        val leashed: Boolean = arena.vocabulary,
+        val leashed: Boolean = arena.leashed,
         /** Every target is an Elite whose aspect is immune to this element (null: plain targets). */
         val immuneTo: StatusElement? = null,
         /**
          * A trigger the arena's own script never fires, scripted in for an item whose 0.5.0 action is measured there: a
-         * held Brake for BRAKE_RELEASE, ricochets and slams for RICOCHET and SLAM, targets as fragile as the crowd's for KILL.
+         * held Brake for BRAKE_RELEASE, ricochets and slams for RICOCHET and SLAM, grazes, broken obstacles and boosts for
+         * GRAZE, SHATTER and BOOST, targets as fragile as the crowd's for KILL.
          */
         val trigger: EffectTrigger? = null,
         /**
@@ -279,6 +304,8 @@ class PerceptibleItemImpactTest {
          * names (by id or tag) in its place, or none for an active item, whose own effect is the whole loadout.
          */
         val skills: List<SkillId> = ArenaSkills,
+        /** The kind the item's first ObstacleIs condition names: every scripted obstacle trigger carries it. */
+        val obstacleKind: ObstacleKind? = null,
     )
 
     private fun Arena.weapons(): List<WeaponId?> = if (armed) ARENA_WEAPONS else listOf(null)
@@ -286,7 +313,8 @@ class PerceptibleItemImpactTest {
     /** The arena and weapon, and what the setup scripts beyond the arena's own encounter. */
     private fun Setup.label(): String = "$arena/$weapon" + immuneTo?.let { " vs $it-immune" }.orEmpty() +
         trigger?.let { " with $it scripted" }.orEmpty() + (if (wounded > 0f) " wounded to $wounded" else "") +
-        (if (loose) " loose" else "") + (if (skills != ArenaSkills) " skills $skills" else "")
+        (if (loose) " loose" else "") + (if (skills != ArenaSkills) " skills $skills" else "") +
+        obstacleKind?.let { " off $it" }.orEmpty()
 
     private enum class Arena(
         /** False silences the weapon so only impacts and procs deal damage. */
@@ -319,6 +347,21 @@ class PerceptibleItemImpactTest {
         /** The Apex is unlocked at the start and cast whenever it is ready. */
         val apex: Boolean = false,
         val seconds: Float = SECONDS,
+        /**
+         * Every 0.6 s the Core is set to 55 % of the way into the damage band (of the content's lethal reach, before any
+         * build bonus) along its travel with a rock just ahead; the window holds nothing else, and the rock is gone after
+         * the frame.
+         */
+        val collisions: Boolean = false,
+        /** Three accelerator gates sit on the orbit, their normals along it. */
+        val gates: Boolean = false,
+        /**
+         * An attracting gravity knot sits at the centre; the targets are loose and thrown, so its pull drags them in, and
+         * are anchored again every 1.5 s.
+         */
+        val well: Boolean = false,
+        /** Ten rocks sit just outside the Core's circle (NearObstacle 180 holds all the way round). */
+        val rocks: Boolean = false,
     ) {
         /** Impacts only: the weapon is silenced; the Core orbits through a ring and dashes into it. */
         IMPACT(false, Motion.ORBIT, 10, 600f, dashEvery = 0.8f),
@@ -383,6 +426,17 @@ class PerceptibleItemImpactTest {
         RUSH(false, Motion.PASS, 8, 600f, dashEvery = 0.5f, hits = 4.5f),
         /** The fast passes with the skill loadout cast on cooldown: a skill clock that runs only at speed. */
         SPRINT(false, Motion.PASS, 8, 600f, dashEvery = 0.5f, skills = true),
+        /** Hurting rock hits every 0.6 s through the status ring: damage taken, the speed a bounce leaves, ricochets. */
+        COLLISIONS(true, Motion.ORBIT, 10, 1_500f, collisions = true),
+        /**
+         * Impacts only, through three accelerator gates on the orbit: the boosts and the speed they leave. No Dashes: one
+         * right after a boost would throw the Core through the singularity.
+         */
+        GATES(false, Motion.ORBIT, 10, 600f, gates = true),
+        /** Unarmed, circling outside a gravity knot that drags the targets into its core: knot slams. */
+        WELL(false, Motion.HOVER, 8, 600f, well = true),
+        /** The defense circle beside a ring of rocks while bursts of hits land. */
+        ROCKS(true, Motion.CLOSE_HOVER, 8, 1_500f, hits = 4.5f, rocks = true),
         ;
 
         /** Only these arenas count integrity: elsewhere glancing contacts are topped up and integrity is ignored. */
@@ -390,6 +444,9 @@ class PerceptibleItemImpactTest {
 
         /** The 0.5.0 vocabulary encounters, whose hooks and launches the pilot keeps inside the start area. */
         val vocabulary: Boolean get() = skills || fields || marks || apex || shots
+
+        /** The pilot keeps the Core inside the start area: the vocabulary encounters, and the hits that throw it about. */
+        val leashed: Boolean get() = vocabulary || collisions
     }
 
     private enum class Motion { ORBIT, PASS, HOVER, CLOSE_HOVER, INNER_HOVER }
@@ -438,6 +495,10 @@ class PerceptibleItemImpactTest {
         Arena.APEX -> listOf(Output.DAMAGE, Output.REFUNDED, Output.APEX, Output.APEX_RECHARGE)
         Arena.RUSH -> listOf(Output.DAMAGE, Output.TAKEN, Output.INTEGRITY, Output.SURVIVAL)
         Arena.SPRINT -> listOf(Output.DAMAGE, Output.REFUNDED, Output.DASHES)
+        Arena.COLLISIONS -> listOf(Output.TAKEN, Output.DAMAGE, Output.FAST_DISTANCE)
+        Arena.GATES -> listOf(Output.FAST_DISTANCE, Output.DAMAGE)
+        Arena.WELL -> listOf(Output.DAMAGE, Output.SLAMS)
+        Arena.ROCKS -> listOf(Output.DAMAGE, Output.TAKEN, Output.INTEGRITY, Output.SURVIVAL)
     }
 
     /** What an encounter measured. Higher is better except for damage taken. */
@@ -562,20 +623,30 @@ class PerceptibleItemImpactTest {
             game.hp = if (setup.wounded > 0f) 10_000f * setup.wounded else 10_000f
         }
         game.shield = game.shieldCapacity()
-        val slots = slotsFor(arena.motion, arena.targets)
+        val slots = slotsFor(arena)
         val targets = arrayOfNulls<Enemy>(slots.size)
         val path = PathFor.getValue(arena.motion)
-        game.coreX = path.startX
-        game.coreY = path.startY
+        // The singularity starts ahead of the Core, so its first sweep never crosses it.
+        var heading = if (arena.motion == Motion.PASS) 0f else TAU / 4f
+        if (arena.well) {
+            // The knot sits at the circle's centre: the Core starts on its circle where this fight's phase puts it, so it
+            // never cuts across the middle toward its path.
+            val startAngle = path.angular * phase
+            game.coreX = cos(startAngle) * path.radius
+            game.coreY = sin(startAngle) * path.radius
+            heading += startAngle
+        } else {
+            game.coreX = path.startX
+            game.coreY = path.startY
+        }
         game.previousCoreX = game.coreX
         game.previousCoreY = game.coreY
         game.cameraX = game.coreX
         game.cameraY = game.coreY
-        // The singularity starts ahead of the Core, so its first sweep never crosses it.
-        var heading = if (arena.motion == Motion.PASS) 0f else TAU / 4f
         game.updatePointer(game.screenWidth / 2f + cos(heading) * 120f, game.screenHeight / 2f + sin(heading) * 120f)
         game.previousSingularityX = game.coreX + cos(heading) * 120f
         game.previousSingularityY = game.coreY + sin(heading) * 120f
+        placeArenaObstacles(game, arena)
         var dashes = 0
         var overdrive = 0f
         var control = 0f
@@ -621,13 +692,23 @@ class PerceptibleItemImpactTest {
                         targets[index] = spawned
                     }
                 } else current
-                target.x = x
-                target.y = y
-                target.previousX = x
-                target.previousY = y
-                target.vx = 0f
-                target.vy = 0f
-                target.disabledUntil = Float.MAX_VALUE
+                // The knot's targets drift with its pull between anchorings.
+                if (!arena.well || target !== current || frame % WELL_ANCHOR_FRAMES == 0) {
+                    target.x = x
+                    target.y = y
+                    target.previousX = x
+                    target.previousY = y
+                    target.vx = 0f
+                    target.vy = 0f
+                }
+                if (arena.well) {
+                    // Loose and thrown: a held target would bleed its momentum off, and a steering one would slide around
+                    // the knot instead of striking it.
+                    target.disabledUntil = 0f
+                    game.markThrown(target)
+                } else {
+                    target.disabledUntil = Float.MAX_VALUE
+                }
             }
             if (setup.weapon == null) game.weaponPower = 0f
             if (arena == Arena.ALCHEMY) {
@@ -709,17 +790,19 @@ class PerceptibleItemImpactTest {
             }
             if (arena.apex && game.apexReady()) game.apexBufferTime = MutableGameState.SKILL_INPUT_BUFFER_SECONDS
             if (arena.forcedOverdrive && frame % (10 * FPS).toInt() == 60 && game.overdriveTime <= 0f) game.overdriveCharge = 100f
-            if ((arena.obstacles || setup.trigger == EffectTrigger.RICOCHET || setup.trigger == EffectTrigger.SLAM) && frame % 36 == 0) {
-                game.fireClauses(EffectTrigger.RICOCHET)
-                val slammed = game.enemies.filter { it.alive }.minByOrNull { distanceSquared(it.x, it.y, game.coreX, game.coreY) }
-                if (slammed != null) game.fireClauses(EffectTrigger.SLAM, slammed, hit = 20f)
-            }
+            scriptObstacleTriggers(game, setup, frame)
+            val rockAhead = arena.collisions && frame % 36 == 18
+            if (rockAhead) setRockAhead(game, heading, frame)
             if (setup.leashed) leash(game)
             val dashSequence = game.characterRuntime.dashSequence
             game.update(1f / FPS)
-            // The scripted paths stay inside the obstacle-free start area: a collision never enters a measurement.
-            game.forEachObstacleNear(game.coreX, game.coreY, OBSTACLE_MARGIN) { _, obstacle ->
-                if (length(obstacle.x - game.coreX, obstacle.y - game.coreY) < obstacle.radius + game.coreRadius + OBSTACLE_MARGIN) {
+            if (arena.collisions) game.clearObstaclesForTesting()
+            // The scripted paths keep clear of solid obstacles (the start area holds none): a collision never enters a
+            // measurement, except the hits COLLISIONS is built from.
+            if (!arena.collisions) game.forEachObstacleNear(game.coreX, game.coreY, OBSTACLE_MARGIN) { _, obstacle ->
+                if (obstacle.kind.solid &&
+                    length(obstacle.x - game.coreX, obstacle.y - game.coreY) < obstacle.radius + game.coreRadius + OBSTACLE_MARGIN
+                ) {
                     nearObstacle = true
                 }
             }
@@ -741,10 +824,82 @@ class PerceptibleItemImpactTest {
         assertFalse(nearObstacle, "${arena} came within $OBSTACLE_MARGIN of an obstacle")
         // A fallen Core keeps nothing and still meets every scripted hit it did not live to take.
         val integrity = if (arena.defended) max(0f, game.hp + game.shield) else 0f
-        var taken = if (arena.defended) game.damageTaken else 0.0
+        // The collision arena tops integrity up and its hits cost a share of maximum integrity, so it counts damage taken
+        // in points of a 100-point Core: more or less integrity alone moves nothing.
+        var taken = when {
+            arena.defended -> game.damageTaken
+            arena.collisions -> game.damageTaken * COLLISION_TAKEN_SCALE / game.maxHp
+            else -> 0.0
+        }
         if (arena.hits > 0f) for (frame in fellAt until frames) if (burstHit(frame)) taken += arena.hits
         return Outcome(game.damageDealt, taken, integrity, fellAt / FPS, game.kills, game.dataCollected, game.runMatter, overdrive,
             dashes, 0f, game.shotsErased, refunds.total, control, fastDistance, apexSeconds, apexRecharges(game), slams)
+    }
+
+    /**
+     * Every 0.6 s a ricochet and a slam on the nearest enemy, a graze, a broken obstacle and a boost, 0.2 s apart, in the
+     * arenas built on them, or the one trigger a setup scripts in. Each names the setup's obstacle kind (an asteroid, a
+     * crystal and an accelerator gate when the item names none).
+     */
+    private fun scriptObstacleTriggers(game: MutableGameState, setup: Setup, frame: Int) {
+        fun scripted(trigger: EffectTrigger) = setup.arena.obstacles || setup.trigger == trigger
+        when (frame % 36) {
+            0 -> {
+                if (scripted(EffectTrigger.RICOCHET) || scripted(EffectTrigger.SLAM)) {
+                    val kind = setup.obstacleKind ?: ObstacleKind.ASTEROID
+                    game.fireClauses(EffectTrigger.RICOCHET, obstacle = kind)
+                    val slammed = game.enemies.filter { it.alive }.minByOrNull { distanceSquared(it.x, it.y, game.coreX, game.coreY) }
+                    if (slammed != null) game.fireClauses(EffectTrigger.SLAM, slammed, hit = 20f, obstacle = kind)
+                }
+                if (scripted(EffectTrigger.GRAZE)) {
+                    game.fireClauses(EffectTrigger.GRAZE, hit = game.impactPower(game.speed), obstacle = setup.obstacleKind ?: ObstacleKind.ASTEROID)
+                }
+            }
+            12 -> if (scripted(EffectTrigger.SHATTER)) {
+                game.fireClauses(EffectTrigger.SHATTER, hit = game.impactPower(game.speed), obstacle = setup.obstacleKind ?: ObstacleKind.CRYSTAL)
+            }
+            24 -> if (scripted(EffectTrigger.BOOST)) {
+                game.fireClauses(EffectTrigger.BOOST, hit = game.impactPower(game.speed), obstacle = setup.obstacleKind ?: ObstacleKind.ACCEL_GATE)
+            }
+        }
+    }
+
+    /** The test obstacles an arena is built around (placed once; the scripted paths keep their window). */
+    private fun placeArenaObstacles(game: MutableGameState, arena: Arena) {
+        val kinds = game.content.obstacles.kinds
+        when {
+            // Normals along the orbit's travel, so every lap crosses each gate between its posts.
+            arena.gates -> game.placeObstaclesForTesting(*Array(3) { index ->
+                val angle = index * TAU / 3f
+                testGate(cos(angle) * RING, sin(angle) * RING, angle + TAU / 4f, radius = GATE_RADIUS, id = ARENA_OBSTACLE_ID + index)
+            })
+            arena.well -> game.placeObstaclesForTesting(
+                testObstacle(0f, 0f, radius = kinds.wellCoreRadius, kind = ObstacleKind.GRAVITY_WELL, id = ARENA_OBSTACLE_ID),
+            )
+            arena.rocks -> game.placeObstaclesForTesting(*Array(ROCK_COUNT) { index ->
+                val angle = index * TAU / ROCK_COUNT
+                testObstacle(cos(angle) * ROCK_RING, sin(angle) * ROCK_RING, radius = ROCK_RADIUS, id = ARENA_OBSTACLE_ID + index)
+            })
+        }
+    }
+
+    /**
+     * Sets the Core to 55 % of the way from the damage start to the content's lethal speed (no build bonus moves it) along
+     * its travel (along [heading] while it rests), with a rock just ahead that the next step meets.
+     */
+    private fun setRockAhead(game: MutableGameState, heading: Float, frame: Int) {
+        val start = game.obstacleDamageStartSpeed()
+        val lethal = game.steadyCursorSpeed(game.content.obstacles.lethalReach)
+        val impact = start + COLLISION_BAND_SHARE * (lethal - start)
+        val current = game.speed
+        val directionX = if (current > 1f) game.velocityX / current else cos(heading)
+        val directionY = if (current > 1f) game.velocityY / current else sin(heading)
+        game.setVelocityForTesting(directionX * impact, directionY * impact)
+        val distance = game.coreRadius + ROCK_RADIUS + 1f
+        game.placeObstaclesForTesting(
+            testObstacle(game.coreX + directionX * distance, game.coreY + directionY * distance, radius = ROCK_RADIUS,
+                id = ARENA_OBSTACLE_ID + frame),
+        )
     }
 
     /** [Output.APEX_RECHARGE] at the end of a fight: recharges finished since the first cast plus the share of the current one. */
@@ -849,11 +1004,12 @@ class PerceptibleItemImpactTest {
         game.phase = GamePhase.RUNNING
     }
 
-    private fun slotsFor(motion: Motion, count: Int): List<Pair<Float, Float>> = (0 until count).map { index ->
-        val angle = index * TAU / count
-        when (motion) {
+    private fun slotsFor(arena: Arena): List<Pair<Float, Float>> = (0 until arena.targets).map { index ->
+        val angle = index * TAU / arena.targets
+        if (arena.well) return@map cos(angle) * WELL_RING to sin(angle) * WELL_RING
+        when (arena.motion) {
             Motion.ORBIT -> cos(angle) * RING to sin(angle) * RING
-            Motion.PASS -> 0f to (index - (count - 1) / 2f) * 30f
+            Motion.PASS -> 0f to (index - (arena.targets - 1) / 2f) * 30f
             Motion.HOVER -> cos(angle) * 60f to sin(angle) * 60f
             Motion.CLOSE_HOVER -> cos(angle) * 40f to sin(angle) * 40f
             Motion.INNER_HOVER -> cos(angle) * 260f to sin(angle) * 260f
@@ -995,7 +1151,11 @@ class PerceptibleItemImpactTest {
                 is ItemRule.SkillCooldown, is ItemRule.SkillPower, ItemRule.SkillCharges, is ItemRule.SkillAttunement,
                 is ItemRule.CatalysisRate -> listOf(Arena.SKILLS)
                 is ItemRule.ApexCooldown -> listOf(Arena.APEX)
-                is ItemRule.ObstacleTuning -> listOf(Arena.OBSTACLE, Arena.SHELTER)
+                is ItemRule.ObstacleTuning -> when (rule.aspect) {
+                    ObstacleAspect.RESTITUTION, ObstacleAspect.COLLISION_DAMAGE, ObstacleAspect.LETHAL_SPEED -> listOf(Arena.COLLISIONS)
+                    ObstacleAspect.BOOST_POWER -> listOf(Arena.GATES)
+                    ObstacleAspect.WELL_PULL -> listOf(Arena.WELL)
+                }
             }
         }
         conditions.forEach { arenas += conditionArenas(it) }
@@ -1029,7 +1189,7 @@ class PerceptibleItemImpactTest {
                     Arena.OFFERS -> emptyList()
                     Arena.SIEGE -> siegeSupport
                     else -> support
-                }, elite, weapon, leashed = arena.vocabulary || launches)
+                }, elite, weapon, leashed = arena.leashed || launches)
             }
         }
         // A 0.5.0 action is measured in an encounter its trigger may never fire in (a hush planted on a Brake release among
@@ -1038,7 +1198,7 @@ class PerceptibleItemImpactTest {
             clause.actions.filter(::isVocabularyAction).flatMap(::actionArenas).map { it to clause.trigger }
         }.distinct().flatMap { (arena, trigger) ->
             (if (familyWeapons != null && arena.armed) familyWeapons else arena.weapons()).map { weapon ->
-                Setup(arena, support, elite, weapon, leashed = arena.vocabulary || launches, trigger = trigger)
+                Setup(arena, support, elite, weapon, leashed = arena.leashed || launches, trigger = trigger)
             }
         }
         // An IntegrityBelow item is flown wounded below its threshold where the deep pool would otherwise never let it hold.
@@ -1059,9 +1219,12 @@ class PerceptibleItemImpactTest {
             }
             if (wanted == null) skills else skills.dropLast(1) + wanted
         }.takeIf { !item.isActive } ?: emptyList()
+        // An item naming an obstacle kind meets it on every scripted obstacle trigger.
+        val obstacleKind = conditions.firstNotNullOfOrNull { (it as? EffectCondition.ObstacleIs)?.kind }
         val flown = (setups + carried).map { setup ->
             val wounded = if (wound != null && setup.arena.vocabulary && (setup.arena.pressure || setup.arena.shots)) wound * 0.8f else 0f
-            setup.copy(wounded = wounded, loose = throws, skills = if (setup.arena.skills) loadout else ArenaSkills)
+            setup.copy(wounded = wounded, loose = throws, skills = if (setup.arena.skills) loadout else ArenaSkills,
+                obstacleKind = obstacleKind)
         }
         // A keystone that strips defenses (Crevasse) is also flown against Elites immune to the weapon's own element.
         val armored = if (item.keystone in DefenseBreakingKeystones) {
@@ -1094,7 +1257,8 @@ class PerceptibleItemImpactTest {
         EffectCondition.TargetControlled -> listOf(Arena.WEAPON, Arena.SIEGE)
         EffectCondition.ApexActive -> listOf(Arena.APEX)
         is EffectCondition.WeaponFamilyIs -> listOf(Arena.WEAPON, Arena.STATUS)
-        is EffectCondition.ObstacleIs, is EffectCondition.NearObstacle -> listOf(Arena.OBSTACLE, Arena.SHELTER)
+        is EffectCondition.ObstacleIs -> listOf(Arena.OBSTACLE, Arena.SHELTER, Arena.COLLISIONS)
+        is EffectCondition.NearObstacle -> listOf(Arena.ROCKS)
         else -> emptyList()
     }
 
@@ -1201,8 +1365,22 @@ class PerceptibleItemImpactTest {
         const val PASS_TURN = 520f
         const val PASS_PULL = 240f
         const val PASS_SPEED = 1_500f
-        /** The clearance every scripted path keeps from obstacles (the run origin's safe area holds them all). */
+        /** The clearance every scripted path keeps from solid obstacles (the run origin's safe area holds them all). */
         const val OBSTACLE_MARGIN = 60f
+        /** Ids of the obstacle arenas' test obstacles (a rock set ahead adds its frame). */
+        const val ARENA_OBSTACLE_ID = 7_000_000L
+        /** Where in the damage band the collision arena's hits land, from the damage start to the content's lethal speed. */
+        const val COLLISION_BAND_SHARE = 0.55f
+        /** The collision arena's damage taken is counted on this much maximum integrity. */
+        const val COLLISION_TAKEN_SCALE = 100.0
+        const val ROCK_RADIUS = 40f
+        /** The rocks' ring: 90 clear of the close circle (170), so its margin holds and NearObstacle 180 always does. */
+        const val ROCK_RING = 316f
+        const val ROCK_COUNT = 10
+        const val GATE_RADIUS = 92f
+        /** The knot arena's targets sit inside the knot's field, off the hovering Core's path. */
+        const val WELL_RING = 200f
+        const val WELL_ANCHOR_FRAMES = 90
 
         val PathFor: Map<Motion, Path> = mapOf(
             Motion.ORBIT to Path(RING, 0f, RING, 2.9f),
@@ -1269,7 +1447,8 @@ class PerceptibleItemImpactTest {
         /**
          * The item ids [everyItemAtOneStackMovesAMeasuredOutputByAtLeastFivePercent] judges: the whole catalog, or the
          * `KK_IMPACT_RANGE` environment variable's `first..last` so CI can shard the catalog (for example `0..172`,
-         * `173..268` and the active items `269..286`). A malformed value fails the test rather than silently judging nothing.
+         * `173..268`, the active items `269..286` and the obstacle items `287..301`). A malformed value fails the test rather
+         * than silently judging nothing.
          */
         val ImpactRange: IntRange = System.getenv("KK_IMPACT_RANGE")?.let { value ->
             val bounds = value.split("..").map { it.trim().toIntOrNull() }
@@ -1289,8 +1468,10 @@ class PerceptibleItemImpactTest {
         val DefenseBreakingKeystones: Set<ReactionId> = setOf(ReactionId.FRACTURE)
 
         /** Triggers a setup can script into an encounter whose own script never fires them ([Setup.trigger]). */
-        val ScriptedTriggers: Set<EffectTrigger> =
-            setOf(EffectTrigger.BRAKE_RELEASE, EffectTrigger.RICOCHET, EffectTrigger.SLAM, EffectTrigger.KILL)
+        val ScriptedTriggers: Set<EffectTrigger> = setOf(
+            EffectTrigger.BRAKE_RELEASE, EffectTrigger.RICOCHET, EffectTrigger.SLAM, EffectTrigger.KILL, EffectTrigger.SHATTER,
+            EffectTrigger.BOOST, EffectTrigger.GRAZE,
+        )
 
         /** Items whose effect no scripted encounter can show, by name, with the reason. None today. */
         val JUSTIFIED_EXCEPTIONS: Map<String, String> = emptyMap()

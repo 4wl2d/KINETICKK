@@ -377,16 +377,26 @@ class ObstacleSystemTest {
 
     @Test
     fun bumpersStillLetShotsThroughAndNeverGraze() {
-        val state = buildTestState().apply { matrix = matrix.copy(nearMiss = MatrixEffect.NearMiss(40f, 900f, 6f, 0.5f)) }
+        // Every GRAZE would gain Data.
+        val grazing = contentWithClauses(
+            "Calibrated Coil", EffectClause(EffectTrigger.GRAZE, immutableListOf(), immutableListOf(EffectAction.GainData(5f))),
+        )
+        val state = buildTestState(content = grazing).apply {
+            own("Calibrated Coil")
+            nextLevelData = Int.MAX_VALUE / 2
+            matrix = matrix.copy(nearMiss = MatrixEffect.NearMiss(40f, 900f, 6f, 0.5f))
+        }
         state.placeObstaclesForTesting(testObstacle(asteroidX, 0f, radius = 34f, kind = ObstacleKind.BUMPER))
         val shot = Projectile(x = asteroidX + 30f, y = 0f, vx = 500f, vy = 0f, radius = 5f, life = 2f, hostile = false,
             previousX = asteroidX - 60f, previousY = 0f)
         state.projectiles += shot
         state.blockProjectilesAtObstacles()
         assertFalse(shot.spent)
-        // Skimming 20 above its surface at 1 000 u/s earns no Near Miss, though the bumper is a solid surface nearby.
+        // Skimming 20 above its surface at 1 000 u/s earns no Near Miss and no GRAZE, though the bumper is a solid surface
+        // nearby.
         state.flyIntoObstaclesForTesting(asteroidX, 34f + MutableGameState.CORE_RADIUS + 20f, 1_000f, 0f)
         assertEquals(0f, state.overdriveCharge)
+        assertEquals(0L, state.dataCollected, "no GRAZE")
         assertEquals(20f, state.coreObstacleGap, 0.01f)
     }
 
