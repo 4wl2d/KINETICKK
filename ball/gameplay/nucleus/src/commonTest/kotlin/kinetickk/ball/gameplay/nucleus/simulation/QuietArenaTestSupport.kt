@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.model.AmbientSiteWindow
+import kinetickk.ball.gameplay.nucleus.model.RunSecretFlag
 import kinetickk.foundation.collections.immutableListOf
 
 /**
@@ -17,6 +18,8 @@ internal fun MutableGameState.quietArenaForTesting() {
     nextSiteWindowIndex = Int.MAX_VALUE / 2
     ambientSites = AmbientSiteWindow.EMPTY
     secretSigil = null
+    // Far travel counts as measured, so no sigil appears however far the encounter flies.
+    setSecret(RunSecretFlag.FAR_TRAVEL)
     goldenDrifterId = -1
     worldEventPlans = immutableListOf()
     worldEvent = null

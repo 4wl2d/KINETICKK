@@ -496,6 +496,14 @@ class RedesignShotsWorldTest {
         // Signal's marker).
         add(Scene("site-eggs", model = { w, h -> eggs(w, h) }))
         add(Scene("site-eggs-hud", hud = true, model = { w, h -> eggs(w, h) }))
+        // The bounty: Warden Prime at 60 % integrity with two Warden guards inside the arena's threat edge, the faint exit
+        // band beyond it, and the target in threat brackets; then under the HUD (the trial panel and the boss block).
+        add(Scene("site-bounty", model = { w, h -> bounty(w, h) }))
+        add(Scene("site-bounty-hud", hud = true, model = { w, h -> bounty(w, h) }))
+        // The Cartographer's sigil: offered ahead of the Core in its void ring with its name and time left; then its duel
+        // under the HUD (the sigil dimmed, the Cartographer above it at 65 % integrity, the trial panel and the boss block).
+        add(Scene("site-sigil", model = { w, h -> sigil(w, h, summoned = false) }))
+        add(Scene("site-sigil-hud", hud = true, model = { w, h -> sigil(w, h, summoned = true) }))
         // Structures: two entrances off screen (their markers, a third entrance farther unmarked), a Spire's crown with its
         // promise plates seen from outside, a sealed bay around its garrison under the scrim (in each palette), a
         // Reliquary's locked sanctum doors with the next way to the chapels, a spent station and the Architect's Doodle.
@@ -795,6 +803,30 @@ class RedesignShotsWorldTest {
             ),
             "secretFlags" to 1, "goldenDrifterId" to 9,
         )
+    }
+
+    /** A running bounty centred left of the Core: its target at 60 % integrity and two guards of its encounter. */
+    private fun bounty(w: Float, h: Float): GameplayRenderModel {
+        val centerX = -380f
+        val centerY = 120f
+        val arena = SiteProjection(SiteKind.BOUNTY_ARENA, "Bounty", 1_000f + centerX, 1_000f + centerY, true, 0f, 0, 0.4f,
+            immutableListOf(1), 0f, 0f, radius = 900f)
+        return model(w, h, points = listOf(arena), enemies = listOf(
+            enemy(1, EnemyType.WARDEN_PRIME, -200f, -60f, 44f, hp = 60f),
+            enemy(2, EnemyType.WARDEN, -290f, 40f, 29f),
+            enemy(3, EnemyType.WARDEN, -110f, -170f, 29f),
+        ), projectiles = (0 until 12).map { index -> projectile(-200f + cos(index * 0.524f) * 130f, -60f + sin(index * 0.524f) * 130f, true) })
+    }
+
+    /** The far sigil ahead of the Core, untouched with four minutes left, or [summoned] with the Cartographer above it. */
+    private fun sigil(w: Float, h: Float, summoned: Boolean): GameplayRenderModel {
+        // Away from the pointer's reticle (up and to the right of the Core).
+        val dx = if (summoned) -220f else 330f
+        val dy = if (summoned) 170f else 160f
+        val sigil = SiteProjection(SiteKind.FAR_SIGIL, "Far sigil", 1_000f + dx, 1_000f + dy, summoned, if (summoned) 0f else 240f,
+            0, if (summoned) 0.35f else 0f, if (summoned) immutableListOf(1) else immutableListOf(), 0f, 0f, activationRadius = 80f)
+        val enemies = if (summoned) listOf(enemy(1, EnemyType.CARTOGRAPHER, dx, dy - 260f, 54f, hp = 65f)) else emptyList()
+        return model(w, h, points = listOf(sigil), enemies = enemies)
     }
 
     // Board HUD.png positions (1440 x 810) are converted to world offsets from the Core so every

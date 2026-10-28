@@ -83,6 +83,32 @@ class RunFeatureBoundsTest {
     }
 
     @Test
+    fun aBountyActivationClosesItsAlternativeAndIsTheOnlyTrial() {
+        // A bounty and an anomaly share the 165 s window (two anomalies keep every window drawable); the bounty owns its
+        // boss and nothing else starts.
+        val content = canonicalGameplayContent.withWindowWeights(
+            mapOf(SiteKind.BOUNTY_ARENA to 1f, SiteKind.RESONANT_CIRCUIT to 1f, SiteKind.SEALED_ANOMALY to 1f),
+        )
+        val (state, offered) = (1..50).asSequence()
+            .map { seed -> MutableGameState(content, seed).apply { startRun(); enemies.clear() } }
+            .map { it to it.offerWindowForTesting(1) }
+            .first { (_, pair) -> pair.any { it.kind == SiteKind.BOUNTY_ARENA } }
+        val bounty = offered.single { it.kind == SiteKind.BOUNTY_ARENA }
+        val other = offered.single { it.kind != SiteKind.BOUNTY_ARENA }
+        state.activateWindowSite(bounty)
+        assertEquals(bounty.id, state.sites.single().id)
+        assertTrue(state.sites.single().active)
+        assertEquals(state.enemies.map { it.id }, state.engagementFoeIds())
+
+        state.previousCoreX = other.x - 50f
+        state.previousCoreY = other.y
+        state.coreX = other.x
+        state.coreY = other.y
+        state.updateSites(0.01f)
+        assertTrue(state.sites.all { it.id == bounty.id && it.active })
+    }
+
+    @Test
     fun tenthDirectedRewardFitsAndEleventhSalvagesWithoutTouchingSource() {
         val source = game()
         val bound = source.content.sites.maxPendingDirectedRewards

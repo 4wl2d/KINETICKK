@@ -505,9 +505,14 @@ private fun DrawScope.drawActivePoint(
             drawChallengeRing(engine, point, center, roles)
             drawFoeBrackets(engine, point, shakeX, shakeY, roles)
         }
-        // The bounty's arena is drawn by its family's step; caches, eggs and rifts never run a trial.
-        SiteKind.BOUNTY_ARENA, SiteKind.DRIFT_CACHE, SiteKind.LOST_CURSOR, SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL,
-        SiteKind.ZENITH_RIFT, SiteKind.NADIR_RIFT,
+        // The bounty's target carries threat brackets inside its arena.
+        SiteKind.BOUNTY_ARENA -> {
+            drawBountyArena(engine, point, center, roles)
+            drawFoeBrackets(engine, point, shakeX, shakeY, roles)
+        }
+        // Caches, eggs and rifts never run a trial.
+        SiteKind.DRIFT_CACHE, SiteKind.LOST_CURSOR, SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL, SiteKind.ZENITH_RIFT,
+        SiteKind.NADIR_RIFT,
         -> Unit
     }
 }
@@ -558,7 +563,10 @@ private fun DrawScope.drawOrbitLabel(
 internal fun orbitRingTenths(progress: Float, requiredSeconds: Float): Long =
     (progress.coerceIn(0f, 1f) * requiredSeconds * 10f).roundToInt().toLong()
 
-/** Threat corner brackets around every living foe the site owns (the vault's defenders, the Ram rite's marked foes). */
+/**
+ * Threat corner brackets around every living foe the site owns (the vault's defenders, the Ram rite's marked foes, the
+ * bounty's target).
+ */
 private fun DrawScope.drawFoeBrackets(engine: GameplayRenderModel, point: SiteProjection, shakeX: Float, shakeY: Float, roles: KkRolePalette) {
     for (index in engine.enemies.indices) {
         val enemy = engine.enemies[index]

@@ -3,7 +3,9 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.EnemyNotices
 import kinetickk.ball.content.api.GameplayContentSnapshot
+import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.SPIN_REWARD_MAX_MATTER
 import kinetickk.ball.content.api.SecretPolicy
 import kinetickk.ball.content.api.SiteKind
@@ -11,11 +13,14 @@ import kinetickk.ball.content.api.SiteNotice
 import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.model.AmbientSiteWindow
+import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.model.EngagementSecretMask
 import kinetickk.ball.gameplay.nucleus.model.RunSecretFlag
 import kinetickk.ball.gameplay.nucleus.model.SiteState
+import kinetickk.ball.gameplay.nucleus.model.StructureField
 import kinetickk.ball.gameplay.nucleus.model.TAU
 import kinetickk.ball.gameplay.nucleus.model.length
+import kinetickk.ball.gameplay.nucleus.model.windowSiteId
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.LOST_CURSOR_FOUND_FLAG
@@ -35,7 +40,8 @@ import kotlin.test.assertTrue
 /**
  * The easter eggs: the Lost Cursor and the Quiet Signal found by flying through them, the Golden Drifter released near
  * its hidden trigger, chased and caught or escaped, Spin Cycle's window of turns around the singularity, the
- * structures' Doodle hook, and the run secret flags.
+ * structures' Doodle hook; the Cartographer's sigil placed by far travel, refused and faded at its cutoff and its duel's
+ * ends; and the run secret flags.
  */
 class SecretSiteTest {
     private fun game(content: GameplayContentSnapshot = canonicalGameplayContent) =
@@ -47,6 +53,8 @@ class SecretSiteTest {
             coreY = FAR_Y
             previousCoreX = coreX
             previousCoreY = coreY
+            // The eggs lie 30,000 u from the spawn: far travel counts as measured, so no sigil appears among them.
+            setSecret(RunSecretFlag.FAR_TRAVEL)
         }
 
     private fun secrets(configure: (SecretPolicy) -> SecretPolicy): GameplayContentSnapshot =
@@ -445,6 +453,342 @@ class SecretSiteTest {
         assertEquals("", game.message)
     }
 
+    /**
+     * A run at [at] seconds whose absolute origin lies [ORIGIN_X] east of the spawn, with no obstacles, structures,
+     * window offers or ambient sites to meet, the Core resting at the run-local origin and flying east.
+     */
+    private fun sigilGame(content: GameplayContentSnapshot = canonicalGameplayContent, at: Float = 300f) =
+        MutableGameState(content, 40_417).apply {
+            startRun()
+            enemies.clear()
+            pickups.clear()
+            elapsed = at
+            worldOriginX = ORIGIN_X
+            coreX = 0f
+            coreY = 0f
+            previousCoreX = 0f
+            previousCoreY = 0f
+            clearObstaclesForTesting()
+            structureField = StructureField.EMPTY
+            nextSiteWindowIndex = Int.MAX_VALUE / 2
+            ambientSites = AmbientSiteWindow.EMPTY
+            setVelocityForTesting(600f, 0f)
+        }
+
+    private val secretPolicy = canonicalGameplayContent.sites.secrets
+    private val sigilCutoff = canonicalGameplayContent.tempo.bossAtSeconds - secretPolicy.sigilCutoff
+
+    /** A run whose far travel placed the sigil (ahead of the Core at the far-travel distance). */
+    private fun placed(content: GameplayContentSnapshot = canonicalGameplayContent): MutableGameState =
+        sigilGame(content).apply { standAt(FAR_TRAVEL_X, 0f) }.also { assertNotNull(it.secretSigil) }
+
+    /** One step that sweeps the Core across the sigil's centre from 200 u before it. */
+    private fun MutableGameState.touchSigil() {
+        val sigil = checkNotNull(secretSigil)
+        flyStep(sigil.x - 200f, sigil.y, sigil.x + 200f, sigil.y)
+    }
+
+    /** A run whose Core touched the placed sigil and summoned its duel. */
+    private fun summoned(): MutableGameState = placed().apply { touchSigil() }.also { assertTrue(it.secretSigil!!.active) }
+
+    private fun MutableGameState.duelBoss(): Enemy = enemies.single { it.id == secretSigil!!.foeIds.single() }
+
+    @Test
+    fun farTravelThirtyThousandUnitsFromTheSpawnPlacesTheSigilAheadOfTheCoreOnce() {
+        val game = sigilGame()
+        val streams = game.streams()
+        // The origin carries 20,000 of the distance: 29,999 u is not far enough, 30,000 u is.
+        game.standAt(FAR_TRAVEL_X - 1f, 0f)
+        assertFalse(game.hasSecret(RunSecretFlag.FAR_TRAVEL))
+        assertNull(game.secretSigil)
+        game.standAt(FAR_TRAVEL_X, 0f)
+        assertTrue(game.hasSecret(RunSecretFlag.FAR_TRAVEL))
+        assertTrue(game.hasSecret(RunSecretFlag.FAR_SIGIL_SPAWNED))
+        val sigil = assertNotNull(game.secretSigil)
+        assertEquals(SiteKind.FAR_SIGIL, sigil.kind)
+        assertEquals(FAR_SIGIL_ID, sigil.id)
+        assertFalse(sigil.active)
+        // Ahead of the Core along its flight, until the cutoff 90 s before the Architect.
+        assertEquals(FAR_TRAVEL_X + secretPolicy.sigilAhead, sigil.x, 1e-2f)
+        assertEquals(0f, sigil.y)
+        assertEquals(sigilCutoff, sigil.expiresAt)
+        assertEquals(SiteNotice.SIGIL_APPEARS.english, game.message)
+        assertEquals(streams, game.streams(), "placing the sigil draws from no run stream")
+
+        // Far travel sets once: flying farther, or on after the sigil left, places none again.
+        game.standAt(FAR_TRAVEL_X + 5_000f, 3_000f)
+        assertEquals(sigil, game.secretSigil)
+        game.secretSigil = null
+        game.standAt(FAR_TRAVEL_X + 9_000f, 0f)
+        assertNull(game.secretSigil)
+
+        // A rock where the sigil would lie moves it on, away from the Core, until it is clear.
+        val blocked = sigilGame()
+        blocked.coreX = FAR_TRAVEL_X
+        blocked.placeObstaclesForTesting(testObstacle(FAR_TRAVEL_X + secretPolicy.sigilAhead, 0f, radius = 100f))
+        blocked.standAt(FAR_TRAVEL_X, 0f)
+        val moved = assertNotNull(blocked.secretSigil)
+        assertTrue(moved.x > FAR_TRAVEL_X + secretPolicy.sigilAhead)
+        assertEquals(0f, moved.y, 1e-3f)
+        assertFalse(blocked.isSpawnPointBlocked(moved.x, moved.y, 140f))
+    }
+
+    @Test
+    fun farTravelCountsOnlyBeforeEightMinutesInALayerWithSitesAndNeverInAQuietArena() {
+        val late = sigilGame(at = secretPolicy.farTravelBefore)
+        late.standAt(FAR_TRAVEL_X, 0f)
+        assertFalse(late.hasSecret(RunSecretFlag.FAR_TRAVEL))
+        assertNull(late.secretSigil)
+        val early = sigilGame(at = secretPolicy.farTravelBefore - 0.01f)
+        early.standAt(FAR_TRAVEL_X, 0f)
+        assertTrue(early.hasSecret(RunSecretFlag.FAR_TRAVEL))
+        assertNotNull(early.secretSigil)
+
+        // A dimension holds no sites: far travel waits for realspace.
+        val layered = sigilGame()
+        layered.worldLayer = WorldLayer.ZENITH
+        layered.standAt(FAR_TRAVEL_X, 0f)
+        assertFalse(layered.hasSecret(RunSecretFlag.FAR_TRAVEL))
+        layered.worldLayer = WorldLayer.BASE
+        layered.ambientSites = AmbientSiteWindow.EMPTY
+        layered.standAt(FAR_TRAVEL_X, 0f)
+        assertTrue(layered.hasSecret(RunSecretFlag.FAR_TRAVEL))
+        assertNotNull(layered.secretSigil)
+
+        val quiet = sigilGame()
+        quiet.quietArenaForTesting()
+        quiet.standAt(FAR_TRAVEL_X, 0f)
+        assertNull(quiet.secretSigil, "a quiet arena meets no sigil")
+        assertFalse(quiet.optionalSitesTouched())
+    }
+
+    @Test
+    fun theSigilIsRefusedAtItsCutoffFadesThereAndNeedsTheCartographerUnspent() {
+        val lateTravel = secrets { it.copy(farTravelBefore = 700f) }
+        val refused = sigilGame(lateTravel, at = sigilCutoff)
+        refused.standAt(FAR_TRAVEL_X, 0f)
+        assertTrue(refused.hasSecret(RunSecretFlag.FAR_TRAVEL))
+        assertFalse(refused.hasSecret(RunSecretFlag.FAR_SIGIL_SPAWNED))
+        assertNull(refused.secretSigil)
+        assertFalse(refused.optionalSitesTouched(), "far travel alone is no opt-in")
+
+        val game = sigilGame(lateTravel, at = sigilCutoff - 0.01f)
+        game.standAt(FAR_TRAVEL_X, 0f)
+        val sigil = assertNotNull(game.secretSigil)
+        assertEquals(sigilCutoff, sigil.expiresAt)
+        game.standAt(FAR_TRAVEL_X, 0f)
+        assertEquals(sigil, game.secretSigil, "untouched before its cutoff it waits")
+        // Touched just before the cutoff it summons; at the cutoff it fades before a touch can summon anything.
+        val justInTime = sigilGame(lateTravel, at = sigilCutoff - 0.01f)
+        justInTime.standAt(FAR_TRAVEL_X, 0f)
+        justInTime.touchSigil()
+        assertTrue(justInTime.secretSigil!!.active)
+        game.elapsed = sigilCutoff
+        game.touchSigil()
+        assertNull(game.secretSigil)
+        assertEquals(SiteNotice.SIGIL_FADES.english, game.message)
+        assertTrue(game.enemies.isEmpty())
+        assertFalse(game.hasSecret(RunSecretFlag.CARTOGRAPHER_SUMMONED))
+        assertNull(game.encounter(encounterTag(EncounterOwner.SITE, FAR_SIGIL_ID)))
+
+        // The Cartographer arrives at most once per run: once it came, no sigil is placed for it.
+        val spent = sigilGame()
+        spent.secretBossMask = 1L shl EnemyType.CARTOGRAPHER.ordinal
+        spent.standAt(FAR_TRAVEL_X, 0f)
+        assertTrue(spent.hasSecret(RunSecretFlag.FAR_TRAVEL))
+        assertNull(spent.secretSigil)
+    }
+
+    @Test
+    fun touchingTheSigilSummonsTheCartographerAboveItAsTheSigilsOwnEncounter() {
+        val game = placed()
+        val sigil = game.secretSigil!!
+        val streams = game.streams()
+        // A pass 80.01 u beside the sigil misses it; one 80 u beside it touches it.
+        val reach = secretPolicy.sigilRadius
+        game.flyStep(sigil.x - 200f, sigil.y + reach + 0.01f, sigil.x + 200f, sigil.y + reach + 0.01f)
+        assertFalse(game.secretSigil!!.active)
+        assertTrue(game.enemies.isEmpty())
+        game.flyStep(sigil.x - 200f, sigil.y + reach, sigil.x + 200f, sigil.y + reach)
+        assertEquals(streams, game.streams(), "the summoning draws from no run stream")
+
+        val duel = assertNotNull(game.secretSigil)
+        assertTrue(duel.active)
+        val boss = game.enemies.single()
+        assertEquals(EnemyType.CARTOGRAPHER, boss.type)
+        assertTrue(boss.isSecretBoss)
+        assertEquals(listOf(boss.id), duel.foeIds)
+        assertEquals(sigil.x, boss.x, 1e-2f)
+        assertEquals(sigil.y - SIGIL_BOSS_OFFSET, boss.y, 1e-2f)
+        val integrity = game.spawnIntegrity(EnemyType.CARTOGRAPHER) * secretPolicy.secretBossIntegrityShare
+        assertEquals(integrity, boss.maxHp, integrity * 1e-5f)
+        assertEquals(integrity, boss.hp, integrity * 1e-5f)
+        val tag = encounterTag(EncounterOwner.SITE, FAR_SIGIL_ID)
+        assertEquals(tag, boss.ownerTag)
+        val encounter = assertNotNull(game.encounter(tag))
+        assertEquals(sigil.x, encounter.centerX)
+        assertEquals(sigil.y, encounter.centerY)
+        assertEquals(secretPolicy.duelLeash, encounter.areaRadius)
+        assertEquals(secretPolicy.duelLeash, encounter.abandonDistance)
+        assertEquals(boss.id, encounter.bossId)
+        assertTrue(game.hasSecret(RunSecretFlag.CARTOGRAPHER_SUMMONED))
+        assertEquals(EnemyNotices.SECRET_SIGNAL + " // " + game.content.enemy(EnemyType.CARTOGRAPHER).name.uppercase(), game.message)
+        assertTrue(game.engagementActive())
+        assertTrue(game.isPlaceBound(boss))
+        assertTrue(game.leashExempt(boss))
+    }
+
+    @Test
+    fun theSigilRefusesToSummonWhileAnotherEngagementRunsOrTheEncounterHasNoRoom() {
+        val game = placed()
+        val sigil = game.secretSigil!!
+        val tag = encounterTag(EncounterOwner.SITE, FAR_SIGIL_ID)
+        game.sites = listOf(
+            SiteState(windowSiteId(3, 0), SiteKind.RESONANT_CIRCUIT, sigil.x + 600f, sigil.y, 400f, active = true, remaining = 20f),
+        )
+        game.touchSigil()
+        assertTrue(game.activeWindowSite() != null)
+        assertFalse(game.secretSigil!!.active, "one engagement at a time")
+        assertTrue(game.enemies.isEmpty())
+        assertNull(game.encounter(tag))
+        game.sites = emptyList()
+        game.touchSigil()
+        assertTrue(game.secretSigil!!.active, "the sigil waited to be touched again")
+
+        // At the hard cap the oldest ordinary enemy makes room; with nothing evictable the sigil waits.
+        val cap = canonicalGameplayContent.rebirth.maxActiveEnemies
+        val full = placed()
+        repeat(cap) { full.addEnemyForTesting(FAR_TRAVEL_X - 1_500f, 40f * it) }
+        val fullIds = full.enemies.map { it.id }
+        full.touchSigil()
+        assertTrue(full.secretSigil!!.active)
+        assertEquals(fullIds.drop(1), full.enemies.map { it.id }.dropLast(1))
+        assertEquals(EnemyType.CARTOGRAPHER, full.enemies.last().type)
+        val elites = placed()
+        repeat(cap) { elites.addEnemyForTesting(FAR_TRAVEL_X - 1_500f, 40f * it, type = EnemyType.ELITE) }
+        val eliteIds = elites.enemies.map { it.id }
+        elites.touchSigil()
+        assertFalse(elites.secretSigil!!.active)
+        assertEquals(eliteIds, elites.enemies.map { it.id })
+        assertNull(elites.encounter(tag))
+        assertFalse(elites.hasSecret(RunSecretFlag.CARTOGRAPHER_SUMMONED))
+    }
+
+    @Test
+    fun theCartographersFallBreaksTheSigilForItsRewardOnTopOfTheSecretBossPayout() {
+        val game = summoned()
+        val sigil = game.secretSigil!!
+        val boss = game.duelBoss()
+        val tag = boss.ownerTag
+        game.onEnemyKilled(boss)
+        // ENEMIES' payout for the kill: two Keys, a Relic, the four repairs, the discovery and its notice.
+        val defeated = EnemyNotices.SECRET_BOSS_DEFEATED + " // " + game.content.enemy(EnemyType.CARTOGRAPHER).name.uppercase()
+        assertEquals(defeated, game.message)
+        assertEquals(2, game.pickups.count { it.type == PickupType.KEY })
+        assertEquals(1, game.pickups.count { it.type == PickupType.RELIC })
+        assertTrue(game.pickups.count { it.type == PickupType.REPAIR } >= SECRET_BOSS_DEFEAT_REPAIRS)
+        assertTrue(game.worldDiscoveryMask and WorldDiscovery.CARTOGRAPHER.bit != 0)
+        assertEquals(1, game.secretSigil!!.count, "the sigil breaks at its next step")
+        assertFalse(game.hasSecret(RunSecretFlag.CARTOGRAPHER_DEFEATED))
+
+        // The next step breaks it wherever the Core is, past the leash here.
+        val matter = game.matter()
+        val streams = game.streams()
+        game.standAt(sigil.x, sigil.y + secretPolicy.duelLeash + 500f)
+        assertNull(game.secretSigil)
+        assertTrue(game.hasSecret(RunSecretFlag.CARTOGRAPHER_DEFEATED))
+        assertEquals(matter + 60.0 * game.matterGain, game.matter(), 1e-3)
+        assertEquals(listOf(ItemRarity.EPIC), game.pendingFloorOffers, "one Epic-floor item offer")
+        assertEquals(1, game.pickups.count { it.type == PickupType.RELIC }, "the sigil adds no Relic of its own")
+        assertEquals(defeated, game.message, "the boss's defeat notice stays")
+        assertNull(game.encounter(tag))
+        assertFalse(game.engagementActive())
+        assertEquals(streams, game.streams())
+
+        // Once the defeat notice is gone, the sigil says it broke.
+        val late = summoned()
+        late.onEnemyKilled(late.duelBoss())
+        late.messageTime = 0f
+        late.standAt(late.coreX, late.coreY)
+        assertEquals(SiteNotice.SIGIL_BROKEN.english, late.message)
+    }
+
+    @Test
+    fun leavingTheDuelPastItsLeashRemovesTheCartographerForTheRunAndGrantsNothing() {
+        val game = summoned()
+        val sigil = game.secretSigil!!
+        val tag = game.duelBoss().ownerTag
+        val kills = game.kills
+        val matter = game.matter()
+        // Exactly the leash keeps the duel, and the encounter keeps its boss.
+        game.standAt(sigil.x, sigil.y + secretPolicy.duelLeash)
+        game.updateEncounters()
+        assertTrue(game.secretSigil!!.active)
+        assertEquals(1, game.enemies.size)
+
+        game.standAt(sigil.x, sigil.y + secretPolicy.duelLeash + 1f)
+        assertNull(game.secretSigil)
+        assertEquals(SiteNotice.SIGIL_FADES.english, game.message)
+        assertTrue(game.enemies.isEmpty(), "the Cartographer leaves")
+        assertEquals(kills, game.kills, "without a kill")
+        assertTrue(game.pickups.isEmpty())
+        assertEquals(matter, game.matter(), 1e-6)
+        assertTrue(game.pendingFloorOffers.isEmpty())
+        assertFalse(game.hasSecret(RunSecretFlag.CARTOGRAPHER_DEFEATED))
+        assertNull(game.encounter(tag))
+        assertFalse(game.engagementActive())
+        // It came once this run: no sigil calls it again.
+        game.spawnSecretSigil(game.coreX + 300f, game.coreY)
+        assertNull(game.secretSigil)
+
+        // A Cartographer gone some other way ends the duel the same way.
+        val gone = summoned()
+        gone.enemies.clear()
+        gone.standAt(gone.coreX, gone.coreY)
+        assertNull(gone.secretSigil)
+        assertEquals(SiteNotice.SIGIL_FADES.english, gone.message)
+        assertNull(gone.encounter(tag))
+    }
+
+    @Test
+    fun aSummonedDuelOutlastsTheCutoffUntilTheArchitectRemovesItsBossWithoutAKill() {
+        val game = summoned()
+        val tag = game.duelBoss().ownerTag
+        game.elapsed = sigilCutoff + 20f
+        game.standAt(game.coreX, game.coreY)
+        assertTrue(game.secretSigil!!.active)
+        val kills = game.kills
+        val message = game.message
+        game.elapsed = game.content.tempo.bossAtSeconds
+        game.standAt(game.coreX, game.coreY)
+        assertNull(game.secretSigil)
+        assertTrue(game.enemies.isEmpty())
+        assertEquals(kills, game.kills)
+        assertNull(game.encounter(tag))
+        assertFalse(game.hasSecret(RunSecretFlag.CARTOGRAPHER_DEFEATED))
+        assertEquals(message, game.message, "the Architect's arrival says nothing for the sigil")
+    }
+
+    @Test
+    fun aRebaseShiftsTheSigilItsBossAndItsLeash() {
+        val game = sigilGame()
+        game.standAt(300_000f, 0f)
+        val sigil = assertNotNull(game.secretSigil)
+        assertEquals(300_000f + secretPolicy.sigilAhead, sigil.x)
+        game.touchSigil()
+        val boss = game.duelBoss()
+        game.coreX = 300_000f
+        game.coreY = 0f
+        game.rebaseWorldIfNeeded()
+        val shifted = game.secretSigil!!
+        assertEquals(secretPolicy.sigilAhead, shifted.x)
+        assertEquals(0f, shifted.y)
+        assertEquals(secretPolicy.sigilAhead, boss.x, 1e-1f)
+        assertEquals(secretPolicy.sigilAhead, game.encounter(boss.ownerTag)!!.centerX)
+        game.standAt(shifted.x, secretPolicy.duelLeash)
+        assertTrue(game.secretSigil!!.active, "the leash follows the shifted sigil")
+    }
+
     @Test
     fun runSecretFlagsFitTheirBitmaskAndOnlyOptInsCountAsEngagement() {
         assertTrue(RunSecretFlag.entries.size <= 31)
@@ -461,5 +805,9 @@ class SecretSiteTest {
         /** A run-local point far from the spawn (eggs lie at least 9,000 u out). */
         const val FAR_X = 24_000f
         const val FAR_Y = 18_000f
+
+        /** The sigil runs' absolute origin, east of the spawn, and the run-local x 30,000 u from the spawn. */
+        const val ORIGIN_X = 20_000.0
+        const val FAR_TRAVEL_X = 10_000f
     }
 }

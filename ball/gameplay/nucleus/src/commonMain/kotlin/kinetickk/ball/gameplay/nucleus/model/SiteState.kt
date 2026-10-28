@@ -37,7 +37,7 @@ internal data class SiteState(
     val volleyClock: Float = 2f,
     val warningRemaining: Float = 0f,
     val volleyAngle: Float = 0f,
-    /** Untouched volley aim point (run-local coordinates at the warning's start). */
+    /** Untouched volley aim point (run-local coordinates at the warning's start); a sigil duel: where its boss fell. */
     val aimX: Float = 0f,
     val aimY: Float = 0f,
     /** Enemies the site owns: vault defenders, marked Ram foes, the bounty or secret boss. */
