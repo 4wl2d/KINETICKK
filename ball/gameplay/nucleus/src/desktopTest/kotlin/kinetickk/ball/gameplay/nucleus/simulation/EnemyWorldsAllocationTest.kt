@@ -11,7 +11,8 @@ import kotlin.test.assertTrue
 
 /**
  * The 0.6.0 kinds' steps allocate nothing per step: Comet, Pylon, Sentry and Crawler (seek, mount, aim, lane, hug,
- * flock) and Seraph, Choir, Imp, Hound, Cipher and Mirror (weave, sing, fuse, wind-up and dash, glitch, mirror).
+ * flock), Seraph, Choir, Imp, Hound, Cipher and Mirror (weave, sing, fuse, wind-up and dash, glitch, mirror) and the
+ * mini-bosses (well cycle, turning arcs and their guard, judgement telegraph, attack clocks).
  */
 class EnemyWorldsAllocationTest {
     private val threads = ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
@@ -40,12 +41,28 @@ class EnemyWorldsAllocationTest {
         assertEquals(drifterBytes, dimensionBytes, "$STEPS steps of the dimension kinds allocated beyond as many Drifters")
     }
 
+    @Test
+    fun sixHundredStepsOfTheMiniBossesAllocateNothingBeyondAsManyDrifters() {
+        val bosses = arena(worldsKinds = true, kinds = MINI_BOSS_KINDS)
+        val drifters = arena(worldsKinds = false, kinds = MINI_BOSS_KINDS)
+        val bossBytes = bytesPerRound(bosses)
+        val drifterBytes = bytesPerRound(drifters)
+        println("ENEMY-MINI-BOSS-ALLOCATION bosses=$bossBytes drifters=$drifterBytes steps=$STEPS")
+        val modes = bosses.enemies.map { it.mode }.toSet()
+        assertTrue(EnemyBehavior.PRIMED in modes || EnemyBehavior.TELEGRAPH in modes, "pushing wells or judging Thrones: $modes")
+        assertEquals(MINI_BOSS_KINDS.toSet(), bosses.enemies.map { it.type }.toSet(), "every mini-boss stays in the measured crowd")
+        assertEquals(drifterBytes, bossBytes, "$STEPS steps of the mini-bosses allocated beyond as many Drifters")
+    }
+
     /**
      * Rocks around the Core; Comets cycling their lanes, Pylons seeking and mounting, Sentries turning and aiming
      * (silenced, so no shot is ever allocated) and Crawlers hugging rocks, flocking and lunging, or as many Drifters.
      * With [DIMENSION_KINDS]: Seraphs weaving, Choirs singing, Imps closing in and Ciphers holding their range, Mirrors
      * chasing the cursor's image (all silenced: no shot, mend, burst or ember is allocated; the steps below send fuses
-     * and glitches that a silenced kind lets fizzle), and Hounds flocking, winding up and dashing.
+     * and glitches that a silenced kind lets fizzle), and Hounds flocking, winding up and dashing. With [MINI_BOSS_KINDS]
+     * (silenced, gated so no hit lands, the Pyre Herald's shield held off): Warden Prime cycling its well in its second
+     * phase, Thrones turning their arcs (and judging in their final phase) and Brood Queens and Pyre Heralds running
+     * their clocks.
      */
     private fun arena(worldsKinds: Boolean, kinds: List<EnemyType> = WORLD_KINDS): MutableGameState = buildTestState().apply {
         updatePointer(640f, 360f)
@@ -65,6 +82,12 @@ class EnemyWorldsAllocationTest {
                 ownerTag = if (type == EnemyType.SENTRY && index % 2 == 0) 3L else 0L)
             if (type != EnemyType.COMET && type != EnemyType.CRAWLER && type != EnemyType.HOUND && type != EnemyType.DRIFTER) {
                 enemy.silencedUntil = Float.MAX_VALUE
+            }
+            when (type) {
+                EnemyType.WARDEN_PRIME -> enemy.phase = 1
+                EnemyType.THRONE -> enemy.phase = index % 3
+                EnemyType.PYRE_HERALD -> enemy.abilityAt = Float.MAX_VALUE
+                else -> Unit
             }
             enemies += enemy
         }
@@ -94,6 +117,11 @@ class EnemyWorldsAllocationTest {
                             enemy.modeUntil = state.elapsed + 0.3f
                             enemy.shiftUntil = enemy.modeUntil
                         }
+                        // A judgement shows (a silenced Throne passes none).
+                        EnemyType.THRONE -> if (enemy.phase == 2 && enemy.mode == EnemyBehavior.IDLE) {
+                            enemy.mode = EnemyBehavior.TELEGRAPH
+                            enemy.modeUntil = state.elapsed + 0.3f
+                        }
                         else -> Unit
                     }
                 }
@@ -118,5 +146,6 @@ class EnemyWorldsAllocationTest {
         val WORLD_KINDS = listOf(EnemyType.COMET, EnemyType.PYLON, EnemyType.SENTRY, EnemyType.CRAWLER, EnemyType.CRAWLER)
         val DIMENSION_KINDS = listOf(EnemyType.SERAPH, EnemyType.CHOIR, EnemyType.IMP, EnemyType.HOUND, EnemyType.HOUND,
             EnemyType.CIPHER, EnemyType.MIRROR)
+        val MINI_BOSS_KINDS = listOf(EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN, EnemyType.THRONE, EnemyType.PYRE_HERALD)
     }
 }
