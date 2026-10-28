@@ -10,6 +10,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 @Suppress("UNUSED_PARAMETER")
 internal fun MutableGameState.updateRunVariety(delta: Float) {
+    announceHostilePattern()
     announceKeynote()
 }
 

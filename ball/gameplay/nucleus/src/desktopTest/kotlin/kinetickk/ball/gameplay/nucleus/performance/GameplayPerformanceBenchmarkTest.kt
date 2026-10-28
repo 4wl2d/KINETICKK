@@ -288,7 +288,7 @@ class GameplayPerformanceBenchmarkTest {
             { omenPending = true },
             { runOmen = OmenId.RICH_VEINS },
             { runMutatorMask = 1 },
-            { directorPersonality = DirectorPersonalityId.TIDE },
+            { directorPersonality = DirectorPersonalityId.entries.first { it != directorPersonality } },
             { featuredAspect = 2 },
             { surgeIndex = 1 },
             { surgeThemeType = 3 },

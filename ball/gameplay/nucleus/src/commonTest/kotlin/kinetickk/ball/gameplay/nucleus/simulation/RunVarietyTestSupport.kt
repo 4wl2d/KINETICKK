@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.DirectorPersonalityId
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.KeynotePolicy
 import kinetickk.ball.content.api.OmenId
@@ -19,6 +20,18 @@ import kotlin.test.assertIs
 /** The content with every run-variety system switched off: the run plays as it did before them. */
 internal fun GameplayContentSnapshot.withoutRunVariety(): GameplayContentSnapshot = copy(variety = RunVarietyContent.DISABLED)
 
+/**
+ * The content with the director's variety switched off: no personality, no onslaught themes, no Elite affixes and no
+ * champions, so the director paces and spawns as it did before them.
+ */
+internal fun GameplayContentSnapshot.withoutDirectorVariety(): GameplayContentSnapshot = copy(
+    variety = variety.copy(
+        director = variety.director.copy(personalitiesEnabled = false, surgeThemesEnabled = false),
+        affixes = variety.affixes.copy(enabled = false),
+        champions = variety.champions.copy(enabled = false),
+    ),
+)
+
 /** The content with the Keynote switched off: no featured tag or element, no Keynote floors and no Elite bias. */
 internal fun GameplayContentSnapshot.withoutKeynote(): GameplayContentSnapshot = withKeynote(KeynotePolicy(enabled = false))
 
@@ -30,6 +43,15 @@ internal fun GameplayContentSnapshot.withKeynote(keynote: KeynotePolicy): Gamepl
 internal fun MutableGameState.forceRunOmenForTesting(id: OmenId?) {
     omenPending = false
     id?.let { acceptRunOmen(it) }
+}
+
+/**
+ * Makes [id] the run's personality (null: the plain director) with its featured aspect, then resets the director so the
+ * opening calm takes the personality's length. Both arms of a comparison take the same extra draw.
+ */
+internal fun MutableGameState.forcePersonalityForTesting(id: DirectorPersonalityId?) {
+    applyDirectorPersonality(id)
+    resetSpawnDirector()
 }
 
 /**

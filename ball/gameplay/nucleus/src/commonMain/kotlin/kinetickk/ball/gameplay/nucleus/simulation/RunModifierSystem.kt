@@ -63,12 +63,12 @@ internal fun MutableGameState.resetRunVariety() {
 }
 
 /**
- * Run-start rolls, after the deal drew the Keynote: the director personality, the featured aspect (the one weak to the
- * Keynote element, or none) and the world event plan.
+ * Run-start rolls, after the deal drew the Keynote and before the director's reset reads the opening calm's length: the
+ * director personality, the featured aspect (the one weak to the Keynote element, or the Elemental Storm's) and the world
+ * event plan.
  */
 internal fun MutableGameState.startRunVariety() {
-    directorPersonality = null
-    featuredAspect = keynoteElement?.let(::weakAspectFor) ?: -1
+    applyDirectorPersonality(directorPersonalityFor(runSeed, content.variety.director))
     varietyAnnouncement = 0
     worldEventPlans = immutableListOf()
     nextWorldEvent = 0

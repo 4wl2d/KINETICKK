@@ -187,12 +187,14 @@ class KeynoteTest {
 
     @Test
     fun elitesTakeTheFeaturedAspectAtTheBiasWithoutAStreamDraw() {
-        val always = canonicalGameplayContent.withKeynote(keynote.copy(eliteAspectBias = 1f))
-        val never = canonicalGameplayContent.withKeynote(keynote.copy(eliteAspectBias = 0f))
+        // The plain director, so no Elemental Storm swaps the bias or the aspect (its own case follows).
+        val plainDirector = canonicalGameplayContent.withoutDirectorVariety()
+        val always = plainDirector.withKeynote(keynote.copy(eliteAspectBias = 1f))
+        val never = plainDirector.withKeynote(keynote.copy(eliteAspectBias = 0f))
         for (seed in 1..8) {
             val biased = buildTestState(seed = seed, content = always)
             val plain = buildTestState(seed = seed, content = never)
-            val off = buildTestState(seed = seed, content = withoutKeynote)
+            val off = buildTestState(seed = seed, content = plainDirector.withoutKeynote())
             val element = assertNotNull(biased.keynoteElement)
             repeat(6) {
                 val elite = biased.spawnedEnemy(EnemyType.ELITE, 0f, 0f)
@@ -211,8 +213,10 @@ class KeynoteTest {
 
         // The Elemental Storm uses its own bias.
         val storm = canonicalGameplayContent.withKeynote(keynote.copy(eliteAspectBias = 0f, stormEliteAspectBias = 1f))
-        val stormRun = buildTestState(seed = 9, content = storm).apply { directorPersonality = DirectorPersonalityId.ELEMENTAL_STORM }
-        val calmRun = buildTestState(seed = 9, content = storm)
+        val stormRun = buildTestState(seed = 9, content = storm).apply {
+            forcePersonalityForTesting(DirectorPersonalityId.ELEMENTAL_STORM)
+        }
+        val calmRun = buildTestState(seed = 9, content = storm.withoutDirectorVariety())
         val offRun = buildTestState(seed = 9, content = withoutKeynote)
         repeat(4) {
             val rolled = offRun.spawnedEnemy(EnemyType.ELITE, 0f, 0f).aspect
@@ -224,8 +228,10 @@ class KeynoteTest {
     @Test
     fun theKeynoteBannerNamesTheTagAndElementOnceAtItsTime() {
         val at = canonicalGameplayContent.variety.director.keynoteAnnounceAtSeconds
+        // The hostile pattern, the first stage, was announced at its own earlier time.
         val state = buildTestState(seed = 31).apply {
             elapsed = at - 0.05f
+            varietyAnnouncement = HOSTILE_PATTERN_ANNOUNCEMENT
             message = ""
         }
         val tag = assertNotNull(state.keynoteTag)
@@ -233,8 +239,8 @@ class KeynoteTest {
         repeat(5) { state.simulateStep(MutableGameState.FIXED_STEP) }
         assertTrue(state.elapsed < at)
         assertEquals("", state.message)
-        assertEquals(0, state.varietyAnnouncement)
-        while (state.varietyAnnouncement == 0) state.simulateStep(MutableGameState.FIXED_STEP)
+        assertEquals(HOSTILE_PATTERN_ANNOUNCEMENT, state.varietyAnnouncement)
+        while (state.varietyAnnouncement == HOSTILE_PATTERN_ANNOUNCEMENT) state.simulateStep(MutableGameState.FIXED_STEP)
         assertTrue(state.elapsed >= at && state.elapsed - MutableGameState.FIXED_STEP < at, "At the first step past ${state.elapsed}")
         assertEquals("KEYNOTE // ${tag.displayLabel.uppercase()} // ${element.displayLabel.uppercase()}", state.message)
         assertEquals(KEYNOTE_BANNER_SECONDS, state.messageTime)
@@ -247,6 +253,7 @@ class KeynoteTest {
         // Without a Keynote the stage passes silently.
         val plain = buildTestState(seed = 31, content = withoutKeynote).apply {
             elapsed = at - 0.01f
+            varietyAnnouncement = HOSTILE_PATTERN_ANNOUNCEMENT
             message = ""
         }
         repeat(3) { plain.simulateStep(MutableGameState.FIXED_STEP) }

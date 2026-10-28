@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.DirectorPersonalityId
 import kinetickk.ball.content.api.RebirthMutator
 import kinetickk.ball.gameplay.nucleus.model.profile
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
@@ -34,33 +35,50 @@ class SpawnDirectorTest {
 
     @Test
     fun budgetAccruesAtThePhaseRateOverTheTempoInterval() {
-        val state = directorState(seed = 5)
-        state.elapsed = 200f
-        state.directorPhase = SpawnDirectorPhase.SURGE.ordinal
-        state.directorPhaseUntil = 1_000f
-        state.spawnBudget = 0f
-        state.spawnClock = Float.MAX_VALUE
-        state.spawnWave(0.5f)
-        val expected = 0.5f * SpawnDirectorPhase.SURGE.rate * DIRECTOR_RATE_SCALE *
-            state.rebirthProfile.spawnRateMultiplier / state.content.tempo.spawnIntervalSeconds(200f)
-        assertEquals(expected, 0.5f * SpawnDirectorPhase.SURGE.rate * DIRECTOR_RATE_SCALE /
-            state.rebirthProfile.spawnInterval(state.content.tempo.spawnIntervalSeconds(200f)), 1e-6f)
-        assertEquals(expected, state.spawnBudget, 1e-5f)
-        state.spawnBudget = MAX_SPAWN_BUDGET
-        state.spawnWave(10f)
-        assertEquals(MAX_SPAWN_BUDGET, state.spawnBudget, "The bank is bounded")
+        // The plain director, then every personality at its surge rate and budget scale.
+        for (personality in personalityArms) {
+            val definition = personality?.let { canonicalGameplayContent.variety.director.personalities[it.ordinal] }
+            val scale = (definition?.phaseRate?.surge ?: 1f) * (definition?.budgetScale ?: 1f)
+            val state = personalityState(seed = 5, personality)
+            state.elapsed = 200f
+            state.directorPhase = SpawnDirectorPhase.SURGE.ordinal
+            state.directorPhaseUntil = 1_000f
+            state.spawnBudget = 0f
+            state.spawnClock = Float.MAX_VALUE
+            state.spawnWave(0.5f)
+            val expected = 0.5f * SpawnDirectorPhase.SURGE.rate * DIRECTOR_RATE_SCALE *
+                state.rebirthProfile.spawnRateMultiplier / state.content.tempo.spawnIntervalSeconds(200f)
+            assertEquals(expected, 0.5f * SpawnDirectorPhase.SURGE.rate * DIRECTOR_RATE_SCALE /
+                state.rebirthProfile.spawnInterval(state.content.tempo.spawnIntervalSeconds(200f)), 1e-6f)
+            assertEquals(expected * scale, state.spawnBudget, 1e-5f, "$personality")
+            state.spawnBudget = MAX_SPAWN_BUDGET
+            state.spawnWave(10f)
+            assertEquals(MAX_SPAWN_BUDGET, state.spawnBudget, "The bank is bounded ($personality)")
 
-        // The Rebirth minimum spawn interval caps the cadence however fast a tier spawns.
-        val fast = directorState(seed = 5)
-        fast.activeRebirthProfile = fast.rebirthProfile.copy(spawnRateMultiplier = 1_000f)
-        fast.elapsed = 200f
-        fast.directorPhase = SpawnDirectorPhase.SURGE.ordinal
-        fast.directorPhaseUntil = 1_000f
-        fast.spawnBudget = 0f
-        fast.spawnClock = Float.MAX_VALUE
-        fast.spawnWave(0.01f)
-        val capped = 0.01f * SpawnDirectorPhase.SURGE.rate * DIRECTOR_RATE_SCALE / fast.rebirthProfile.minimumSpawnIntervalSeconds
-        assertEquals(capped, fast.spawnBudget, 1e-5f)
+            // The Rebirth minimum spawn interval caps the cadence however fast a tier spawns.
+            val fast = personalityState(seed = 5, personality)
+            fast.activeRebirthProfile = fast.rebirthProfile.copy(spawnRateMultiplier = 1_000f)
+            fast.elapsed = 200f
+            fast.directorPhase = SpawnDirectorPhase.SURGE.ordinal
+            fast.directorPhaseUntil = 1_000f
+            fast.spawnBudget = 0f
+            fast.spawnClock = Float.MAX_VALUE
+            fast.spawnWave(0.01f)
+            val capped =
+                0.01f * SpawnDirectorPhase.SURGE.rate * DIRECTOR_RATE_SCALE / fast.rebirthProfile.minimumSpawnIntervalSeconds
+            assertEquals(capped * scale, fast.spawnBudget, 1e-5f, "$personality")
+        }
+        // The plain content reproduces the director without personalities.
+        val plain = directorState(seed = 5)
+        assertEquals(null, plain.directorPersonality)
+        plain.elapsed = 200f
+        plain.directorPhase = SpawnDirectorPhase.SURGE.ordinal
+        plain.directorPhaseUntil = 1_000f
+        plain.spawnBudget = 0f
+        plain.spawnClock = Float.MAX_VALUE
+        plain.spawnWave(0.5f)
+        assertEquals(0.5f * SpawnDirectorPhase.SURGE.rate * DIRECTOR_RATE_SCALE /
+            plain.rebirthProfile.spawnInterval(plain.content.tempo.spawnIntervalSeconds(200f)), plain.spawnBudget, 1e-5f)
     }
 
     @Test
@@ -100,23 +118,27 @@ class SpawnDirectorTest {
 
     @Test
     fun swarmlingPicksBecomeSwarmsAndSwarmlingsCostAThirdOfABudgetSlot() {
+        for (personality in personalityArms) {
+            val planner = personalityState(seed = 17, personality)
+            planner.elapsed = 600f
+            var walls = 0
+            repeat(400) {
+                planner.directorPhase = SpawnDirectorPhase.BUILD.ordinal
+                planner.planSpawnEvent()
+                val kind = SpawnEventKind.entries[planner.pendingEventKind]
+                if (kind == SpawnEventKind.SINGLE || kind == SpawnEventKind.PACK || kind == SpawnEventKind.WALL) {
+                    assertNotEquals(EnemyType.SWARMLING.ordinal, planner.pendingEventType, "$personality")
+                }
+                if (kind == SpawnEventKind.WALL) walls++
+                if (kind == SpawnEventKind.SWARM) {
+                    assertEquals(EnemyType.SWARMLING.ordinal, planner.pendingEventType, "$personality")
+                    assertTrue(planner.pendingEventSize in 6..10, "$personality")
+                }
+            }
+            assertTrue(walls > 0, "The draw covered walls ($personality)")
+        }
         val state = directorState(seed = 17)
         state.elapsed = 600f
-        var walls = 0
-        repeat(400) {
-            state.directorPhase = SpawnDirectorPhase.BUILD.ordinal
-            state.planSpawnEvent()
-            val kind = SpawnEventKind.entries[state.pendingEventKind]
-            if (kind == SpawnEventKind.SINGLE || kind == SpawnEventKind.PACK || kind == SpawnEventKind.WALL) {
-                assertNotEquals(EnemyType.SWARMLING.ordinal, state.pendingEventType)
-            }
-            if (kind == SpawnEventKind.WALL) walls++
-            if (kind == SpawnEventKind.SWARM) {
-                assertEquals(EnemyType.SWARMLING.ordinal, state.pendingEventType)
-                assertTrue(state.pendingEventSize in 6..10)
-            }
-        }
-        assertTrue(walls > 0, "The draw covered walls")
         state.plan(SpawnEventKind.SWARM, size = 9, type = EnemyType.SWARMLING)
         state.spawnBudget = 3f
         state.fireNow(budget = 3f)
@@ -126,22 +148,24 @@ class SpawnDirectorTest {
 
     @Test
     fun mixedEventsNeverBringSwarmlingsAtFullCost() {
-        val state = directorState(seed = 29)
-        state.elapsed = 600f
-        state.nextEliteAt = Float.MAX_VALUE
-        var spawned = 0
-        repeat(40) { round ->
-            state.enemies.clear()
-            val kind = if (round % 2 == 0) SpawnEventKind.FLANK else SpawnEventKind.ENCIRCLE
-            state.pendingEventKind = kind.ordinal
-            state.pendingEventSize = if (kind == SpawnEventKind.FLANK) 6 else 8
-            state.pendingEventType = -1
-            state.fireNow()
-            assertEquals(kind.ordinal, state.lastSpawnEventKind)
-            assertTrue(state.enemies.none { it.type == EnemyType.SWARMLING }, "Round $round ($kind) spawned Swarmlings")
-            spawned += state.enemies.size
+        for (personality in personalityArms) {
+            val state = personalityState(seed = 29, personality)
+            state.elapsed = 600f
+            state.nextEliteAt = Float.MAX_VALUE
+            var spawned = 0
+            repeat(40) { round ->
+                state.enemies.clear()
+                val kind = if (round % 2 == 0) SpawnEventKind.FLANK else SpawnEventKind.ENCIRCLE
+                state.pendingEventKind = kind.ordinal
+                state.pendingEventSize = if (kind == SpawnEventKind.FLANK) 6 else 8
+                state.pendingEventType = -1
+                state.fireNow()
+                assertEquals(kind.ordinal, state.lastSpawnEventKind)
+                assertTrue(state.enemies.none { it.type == EnemyType.SWARMLING }, "$personality round $round ($kind)")
+                spawned += state.enemies.size
+            }
+            assertEquals(20 * 6 + 20 * 8, spawned, "$personality")
         }
-        assertEquals(20 * 6 + 20 * 8, spawned)
     }
 
     @Test
@@ -382,9 +406,19 @@ class SpawnDirectorTest {
         assertTrue(ratios.minOrNull()!! < 0.85f && ratios.maxOrNull()!! > 1.15f, "Intervals vary: $ratios")
     }
 
-    /** A running tier [tier] arena whose Core cannot die and whose director runs on its own. */
+    /**
+     * A running tier [tier] arena whose Core cannot die and whose director runs on its own, without personalities or
+     * onslaught themes (the director these tests pin).
+     */
     private fun directorState(seed: Int, tier: Int = 0): MutableGameState =
-        MutableGameState(canonicalGameplayContent, seed = seed, initialMatter = 0, initialRebirthLevel = tier).apply {
+        arena(canonicalGameplayContent.withoutDirectorVariety(), seed, tier)
+
+    /** The same arena with the shipped run variety and [personality] forced (null: none). */
+    private fun personalityState(seed: Int, personality: DirectorPersonalityId?): MutableGameState =
+        arena(canonicalGameplayContent, seed, tier = 0).apply { forcePersonalityForTesting(personality) }
+
+    private fun arena(content: kinetickk.ball.content.api.GameplayContentSnapshot, seed: Int, tier: Int): MutableGameState =
+        MutableGameState(content, seed = seed, initialMatter = 0, initialRebirthLevel = tier).apply {
             resize(1_280f, 720f)
             startRun()
             enemies.clear()
@@ -393,6 +427,10 @@ class SpawnDirectorTest {
             takeVisualFxCues()
             takeSoundCues()
         }
+
+    /** No personality, then every shipped one. */
+    private val personalityArms: List<DirectorPersonalityId?> =
+        listOf<DirectorPersonalityId?>(null) + DirectorPersonalityId.entries
 
     /** Steps the run for [seconds] with the Core circling; enemies that reach it are cleared like kills. */
     private fun MutableGameState.drive(seconds: Float, observe: () -> Unit) {
