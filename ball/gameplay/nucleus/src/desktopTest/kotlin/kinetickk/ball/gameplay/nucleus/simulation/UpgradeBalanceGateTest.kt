@@ -40,11 +40,12 @@ class UpgradeBalanceGateTest {
     /**
      * J1's survival bound is a population gate (0.5.0 active items; policy.md, "Balance gate populations"): five seeds
      * reached a median of 480 s with probability 0.94 on the 05885fa9 base but 0.80 with the shipped active items, so
-     * it re-rolled with the reward stream. The base median survival over the 300 [PopulationSeeds] runs was 687.28 s
-     * (bootstrap SE 20.13 s); the population's median must be at least [J1_MIN_MEDIAN_SURVIVAL] s, by the population
-     * threshold rule the lower of the design's eight minutes and the base minus two standard errors (647.02 s). The win
-     * bound keeps the five gate seeds (they pass with probability 1.00 on the base and now; 1 and 3 of the 300
-     * population runs won).
+     * it re-rolled with the reward stream. On the 0.6.0 base the median survival over the 300 [PopulationSeeds] runs is
+     * 900.01 s (0.62 of the runs are alive at the 900 s cap, so the bootstrap SE is 0.00 s; mean 739.02 s); the
+     * population's median must be at least [J1_MIN_MEDIAN_SURVIVAL] s, by the population threshold rule the lower of the
+     * design's eight minutes and the base minus two standard errors. The win bound keeps the five gate seeds (6 of the
+     * 300 population runs win; the seeds pass with probability 1.00 on the 0.6.0 tree), as do J2-J4 (1.00, 0.998 and
+     * 1.00).
      */
     @Test fun maxedUpgradesKeepTierTenSurvivableButRareForTheStrongBuild() {
         fun strong(seed: Int): Outcome =
@@ -291,8 +292,8 @@ class UpgradeBalanceGateTest {
 
     private companion object {
         /**
-         * J1: the least median survival over [PopulationSeeds] (base 687.28 s, SE 20.13 s, n 300; the population
-         * threshold rule).
+         * J1: the least median survival over [PopulationSeeds] (design 480 s; 0.6.0 base 900.01 s, SE 0.00 s, n 300;
+         * the population threshold rule).
          */
         const val J1_MIN_MEDIAN_SURVIVAL = 480f
 
