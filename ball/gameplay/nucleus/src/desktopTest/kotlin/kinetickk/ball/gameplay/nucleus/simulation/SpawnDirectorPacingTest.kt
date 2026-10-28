@@ -165,8 +165,12 @@ class SpawnDirectorPacingTest {
         SpawnDirectorPhase.BREATHER -> scales?.breather
     } ?: 1f
 
+    /**
+     * Open space: a world without structures. A room's garrison is an owner-spawned encounter that picks its kinds a
+     * gate lead ahead of the run clock, and a sealed room's director is DungeonSystemTest's.
+     */
     private fun runningState(seed: Int, tier: Int, arm: Arm): MutableGameState {
-        val content = if (arm.personality == null) canonicalGameplayContent.withoutDirectorVariety() else canonicalGameplayContent
+        val content = if (arm.personality == null) structuresDisabledContent.withoutDirectorVariety() else structuresDisabledContent
         return MutableGameState(content, seed = seed, initialMatter = 0, initialRebirthLevel = tier).apply {
             resize(1_280f, 720f)
             startRun()

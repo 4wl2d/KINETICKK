@@ -15,6 +15,7 @@ import kinetickk.ball.gameplay.nucleus.model.DungeonState
 import kinetickk.ball.gameplay.nucleus.model.ObstacleField
 import kinetickk.ball.gameplay.nucleus.model.PlacedStructure
 import kinetickk.ball.gameplay.nucleus.model.Projectile
+import kinetickk.ball.gameplay.nucleus.model.StructureField
 import kinetickk.ball.gameplay.nucleus.model.WeaponEntity
 import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.render.EnemyBehavior
@@ -24,7 +25,6 @@ import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.ProjectileKind
 import kinetickk.ball.gameplay.nucleus.render.WallKind
 import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
-import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
 import kotlin.math.PI
 import kotlin.math.abs
@@ -41,7 +41,7 @@ class StructureCollisionTest {
     private val wallX = 300f
     private val contactX = wallX - 24f - MutableGameState.CORE_RADIUS
 
-    private fun quiet(content: GameplayContentSnapshot = canonicalGameplayContent, shape: CoreShape = CoreShape.ORB, weapon: WeaponId = WeaponId.FLUX_WAKE) =
+    private fun quiet(content: GameplayContentSnapshot = structuresDisabledContent, shape: CoreShape = CoreShape.ORB, weapon: WeaponId = WeaponId.FLUX_WAKE) =
         buildTestState(content = content, shape = shape, weapon = weapon).apply { clearObstaclesForTesting() }
 
     private fun MutableGameState.bandSpeed(fraction: Float): Float {
@@ -56,7 +56,7 @@ class StructureCollisionTest {
     }
 
     private fun withWallDamageScale(scale: Float): GameplayContentSnapshot =
-        canonicalGameplayContent.copy(structures = canonicalGameplayContent.structures.copy(wallDamageScale = scale))
+        structuresDisabledContent.copy(structures = structuresDisabledContent.structures.copy(wallDamageScale = scale))
 
     // -----------------------------------------------------------------------------------------
     // The Core.
@@ -156,10 +156,7 @@ class StructureCollisionTest {
         val afterFirst = state.hp
         assertTrue(afterFirst < state.maxHp)
         assertEquals(1, state.pendingRicochets)
-        assertTrue(
-            state.obstacleHitSurfaceId == NO_SURFACE_ID || state.obstacleHitSurfaceId == structureSurfaceId(structure.id),
-            "the hit is keyed by the structure, not the wall",
-        )
+        assertEquals(structureSurfaceId(structure.id), state.obstacleHitSurfaceId, "the hit is keyed by the structure, not the wall")
 
         // Its other wall, inside the cooldown, bounces the Core without hurting it.
         state.flyIntoObstaclesForTesting(700f - 40f + speed / 240f, 0f, speed, 0f)
@@ -181,6 +178,34 @@ class StructureCollisionTest {
         assertNotEquals(NO_SURFACE_ID, structureSurfaceId(origin))
         assertNotEquals(structureSurfaceId(origin), structureSurfaceId(structureId(WorldLayer.BASE, 0, 1)))
         for (index in 0 until 48) assertNotEquals(structureSurfaceId(origin), origin or index.toLong())
+    }
+
+    @Test
+    fun aSecondStructureInsideTheCooldownHurts() {
+        val state = quiet()
+        val speed = state.bandSpeed(0.4f)
+        val (first, second) = state.placeWallsForTesting(
+            listOf(testWall(300f, -200f, 300f, 200f)),
+            listOf(testWall(700f, -200f, 700f, 200f)),
+        )
+        state.flyIntoObstaclesForTesting(contactX + speed / 240f, 0f, speed, 0f)
+        val afterFirst = state.hp
+        assertTrue(afterFirst < state.maxHp)
+        assertEquals(structureSurfaceId(first.id), state.obstacleHitSurfaceId)
+
+        // Another structure is another surface: inside the first one's cooldown it still hurts and takes the cooldown.
+        state.flyIntoObstaclesForTesting(700f - 40f + speed / 240f, 0f, speed, 0f)
+        assertTrue(state.hp < afterFirst, "a second structure is a second surface")
+        assertEquals(structureSurfaceId(second.id), state.obstacleHitSurfaceId)
+        assertEquals(2, state.pendingRicochets)
+        val afterSecond = state.hp
+
+        // An asteroid is a surface of its own as well.
+        state.structureField = StructureField.EMPTY
+        state.placeObstaclesForTesting(testObstacle(300f, 0f))
+        state.flyIntoObstaclesForTesting(300f - 80f - MutableGameState.CORE_RADIUS + speed / 240f, 0f, speed, 0f)
+        assertTrue(state.hp < afterSecond, "a rock inside a structure's cooldown hurts")
+        assertNotEquals(structureSurfaceId(second.id), state.obstacleHitSurfaceId)
     }
 
     @Test
@@ -269,7 +294,7 @@ class StructureCollisionTest {
     // -----------------------------------------------------------------------------------------
     // Blinks, steps, swings and hooks.
 
-    private fun arena(shape: CoreShape = CoreShape.ORB): MutableGameState = buildTestState(shape = shape).apply {
+    private fun arena(shape: CoreShape = CoreShape.ORB): MutableGameState = buildTestState(shape = shape, content = structuresDisabledContent).apply {
         obstacleField = ObstacleField.EMPTY
         aimAt(coreX + 300f, coreY)
     }
@@ -283,7 +308,7 @@ class StructureCollisionTest {
     @Test
     fun blinksVoidStepsSlingshotsAndHooksStopShortOfWalls() {
         // Crescent Blink: the wall's surface sits 150 ahead of the Core's leading edge, inside the 240 Blink range.
-        val blink = buildTestState(shape = CoreShape.CRESCENT)
+        val blink = buildTestState(shape = CoreShape.CRESCENT, content = structuresDisabledContent)
         blink.clearObstaclesForTesting()
         blink.heat = 0f
         val surface = blink.coreX + blink.coreRadius + 150f
@@ -388,6 +413,34 @@ class StructureCollisionTest {
         state.resolveEnemyObstacles()
         assertEquals(500f, phantom.x, "a shifting Phantom is not pushed")
         assertTrue(state.enemies.filter { it !== doorway && it !== phantom }.all { abs(it.x - 500f) >= 24f + it.radius - 0.01f })
+    }
+
+    @Test
+    fun aCrawlerHugsAWallLikeARock() {
+        val state = buildTestState(content = structuresDisabledContent).apply {
+            updatePointer(640f, 360f)
+            runGrace = Float.MAX_VALUE
+            clearObstaclesForTesting()
+        }
+        // A long wall 600 u east of the Core; the Crawler stands on its Core side, 80 u off it and 500 u north.
+        val wallX = state.coreX + 600f
+        state.placeWallsForTesting(listOf(testWall(wallX, state.coreY - 1_500f, wallX, state.coreY + 1_500f)))
+        val crawler = state.spawnedEnemy(EnemyType.CRAWLER, wallX - 24f - 80f, state.coreY - 500f)
+        state.enemies += crawler
+        fun gap() = wallX - 24f - crawler.x
+        repeat(240) { state.stepEnemies() }
+        assertTrue(gap() in crawler.radius - 0.5f..CRAWLER_HUG_GAP + 30f, "it closes on the wall: gap ${gap()}")
+        val northOfCore = state.coreY - crawler.y
+        repeat(60) {
+            state.stepEnemies()
+            assertTrue(gap() in crawler.radius - 0.5f..CRAWLER_HUG_GAP + 30f, "it hugs the wall: gap ${gap()}")
+        }
+        assertTrue(state.coreY - crawler.y < northOfCore - 40f, "it creeps along the wall toward the Core's side")
+    }
+
+    private fun MutableGameState.stepEnemies() {
+        elapsed += MutableGameState.FIXED_STEP
+        updateEnemies(MutableGameState.FIXED_STEP)
     }
 
     @Test

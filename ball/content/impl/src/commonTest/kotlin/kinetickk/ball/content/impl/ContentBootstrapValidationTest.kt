@@ -612,12 +612,34 @@ class ContentBootstrapValidationTest {
         assertStructureRejected("leave radius") { validateStructurePolicy(policy, roster, obstacles.copy(chunkSize = 1_199.5f)) }
     }
 
+    @Test
+    fun aStructureRoomGarrisonsAtMostOneMiniBoss() {
+        val gameplay = createContentCatalogForTesting(defaultContentBootstrapData()).gameplayContent()
+        val roster = gameplay.enemies
+        val policy = gameplay.structures
+        val obstacles = gameplay.obstacles
+        fun fixed(type: EnemyType, count: Int) = GarrisonEntry(GarrisonSelector.FIXED, count, type)
+
+        // A room's garrison is one encounter, and an encounter holds at most one boss.
+        validateStructurePolicy(policy.withFurnaceGarrison(fixed(EnemyType.THRONE, 1), fixed(EnemyType.CRAWLER, 3)), roster, obstacles)
+        assertStructureRejected("at most one mini-boss") {
+            validateStructurePolicy(policy.withFurnaceGarrison(fixed(EnemyType.THRONE, 2)), roster, obstacles)
+        }
+        assertStructureRejected("at most one mini-boss") {
+            validateStructurePolicy(policy.withFurnaceGarrison(fixed(EnemyType.THRONE, 1), fixed(EnemyType.BROOD_QUEEN, 1)), roster, obstacles)
+        }
+    }
+
     /** The Foundry's furnace guarded by one [type] instead of its Wardens and habitat picks. */
-    private fun StructurePolicy.withFurnaceGuard(type: EnemyType): StructurePolicy = copy(
+    private fun StructurePolicy.withFurnaceGuard(type: EnemyType): StructurePolicy =
+        withFurnaceGarrison(GarrisonEntry(GarrisonSelector.FIXED, 1, type))
+
+    /** The Foundry's furnace garrisoned by [entries] instead of its Wardens and habitat picks. */
+    private fun StructurePolicy.withFurnaceGarrison(vararg entries: GarrisonEntry): StructurePolicy = copy(
         templates = templates.map { template ->
             if (template.id != StructureTemplateId.FOUNDRY) return@map template
             val rooms = template.rooms.mapIndexed { index, room ->
-                if (index == template.finalRoom) room.copy(garrison = immutableListOf(GarrisonEntry(GarrisonSelector.FIXED, 1, type))) else room
+                if (index == template.finalRoom) room.copy(garrison = entries.toList().toImmutableList()) else room
             }
             template.copy(rooms = rooms.toImmutableList())
         }.toImmutableList(),

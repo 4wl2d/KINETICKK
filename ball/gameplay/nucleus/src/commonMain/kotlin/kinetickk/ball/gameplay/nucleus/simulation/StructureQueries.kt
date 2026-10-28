@@ -145,13 +145,21 @@ internal inline fun MutableGameState.forEachSolidWallNear(
 }
 
 /**
- * The nearest solid wall surface (sealed doors included) within [reach] of ([x], [y]): returns the gap to it
- * (negative inside a wall) or +∞ when none is that close, and writes the surface point and the outward normal into
- * [out] as (x, y, nx, ny) (four slots). A point on a wall's centre line takes the segment's left normal; on a
- * pillar's centre, +x.
+ * The nearest solid wall surface (sealed doors included) within [reach] of ([x], [y]): calls [found] once with the
+ * surface point, the outward normal and the gap to it (negative inside a wall), or never when no wall is that close.
+ * A point on a wall's centre line takes the segment's left normal; on a pillar's centre, +x. Allocation-free.
  */
-internal fun MutableGameState.nearestWallSurface(x: Float, y: Float, reach: Float, out: FloatArray): Float {
+internal inline fun MutableGameState.nearestWall(
+    x: Float,
+    y: Float,
+    reach: Float,
+    found: (surfaceX: Float, surfaceY: Float, nx: Float, ny: Float, gap: Float) -> Unit,
+) {
     var best = Float.POSITIVE_INFINITY
+    var bestX = 0f
+    var bestY = 0f
+    var bestNx = 1f
+    var bestNy = 0f
     forEachSolidWallNear(x, y, reach) { _, wall ->
         val along = segmentNearest(x, y, wall.ax, wall.ay, wall.bx, wall.by)
         val nearestX = wall.ax + (wall.bx - wall.ax) * along
@@ -161,30 +169,37 @@ internal fun MutableGameState.nearestWallSurface(x: Float, y: Float, reach: Floa
         val distance = sqrt(dx * dx + dy * dy)
         val gap = distance - wall.halfThickness
         if (gap > reach || gap >= best) return@forEachSolidWallNear
-        val normalX: Float
-        val normalY: Float
-        if (distance >= MIN_NORMAL_LENGTH) {
-            normalX = dx / distance
-            normalY = dy / distance
+        if (distance >= WALL_NORMAL_MIN_LENGTH) {
+            bestNx = dx / distance
+            bestNy = dy / distance
         } else {
             val segmentX = wall.bx - wall.ax
             val segmentY = wall.by - wall.ay
             val length = hypot(segmentX, segmentY)
-            if (length > 0f) {
-                normalX = -segmentY / length
-                normalY = segmentX / length
-            } else {
-                normalX = 1f
-                normalY = 0f
-            }
+            bestNx = if (length > 0f) -segmentY / length else 1f
+            bestNy = if (length > 0f) segmentX / length else 0f
         }
         best = gap
-        out[0] = nearestX + normalX * wall.halfThickness
-        out[1] = nearestY + normalY * wall.halfThickness
-        out[2] = normalX
-        out[3] = normalY
+        bestX = nearestX + bestNx * wall.halfThickness
+        bestY = nearestY + bestNy * wall.halfThickness
     }
-    return best
+    if (best <= reach) found(bestX, bestY, bestNx, bestNy, best)
+}
+
+/**
+ * [nearestWall] into [out] as (surface x, surface y, nx, ny) (four slots): returns the gap (negative inside a wall)
+ * or +∞ when no wall is within [reach].
+ */
+internal fun MutableGameState.nearestWallSurface(x: Float, y: Float, reach: Float, out: FloatArray): Float {
+    var result = Float.POSITIVE_INFINITY
+    nearestWall(x, y, reach) { surfaceX, surfaceY, nx, ny, gap ->
+        out[0] = surfaceX
+        out[1] = surfaceY
+        out[2] = nx
+        out[3] = ny
+        result = gap
+    }
+    return result
 }
 
 /**
@@ -211,4 +226,4 @@ internal fun roomAt(template: StructureTemplate, rotation: Int, centerX: Float, 
 private const val MIN_SEGMENT_LENGTH: Double = 1e-6
 
 /** Below this distance from a wall's centre line the contact normal falls back to the segment's own normal. */
-private const val MIN_NORMAL_LENGTH: Float = 0.001f
+internal const val WALL_NORMAL_MIN_LENGTH: Float = 0.001f

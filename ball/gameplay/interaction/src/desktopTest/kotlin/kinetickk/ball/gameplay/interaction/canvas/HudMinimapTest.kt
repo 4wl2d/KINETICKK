@@ -178,6 +178,64 @@ class HudMinimapTest {
         assertTrue(eggs.inside(minimap).contentEquals(empty), "easter eggs never show on the map")
     }
 
+    /**
+     * Structures on the map: their walls as faint lines, sealed doors in threat only while their room's garrison is alive
+     * (a locked door stays bone), open doors left out, and each entrance a hollow square pinned to the rim beyond range.
+     */
+    @Test
+    fun structuresDrawTheirWallsSealedDoorsAndPinnedEntrances() {
+        val roles = KkRolePalette.Default
+        val range = 2_400f
+        val base = hudTestModel().with(
+            "velocityX" to 0f, "velocityY" to 0f, "obstacles" to immutableListOf<ObstacleProjection>(), "totem" to null,
+            "enemies" to immutableListOf<EnemyProjection>(), "pickups" to immutableListOf<kinetickk.ball.gameplay.nucleus.render.PickupProjection>(),
+            "minimapRange" to range,
+        )
+        val templates = base.content.structures
+        // A Spire a third of the range east of the Core, its lower hall sealed; then the same Spire with every door open.
+        fun spire(engaged: Int) = StructureFixture(templates.template(kinetickk.ball.content.api.StructureTemplateId.SPIRE),
+            base.coreX + range / 3f, base.coreY, clearedRooms = 0b0001, engagedRoom = engaged)
+        val sealed = render(base.with("structures" to structureProjection(spire(1))), 1_440, 810)
+        val open = render(base.with("structures" to structureProjection(spire(-1))), 1_440, 810)
+        val empty = render(base, 1_440, 810)
+        val minimap = assertNotNull(HudLayoutProbe.rect(HudBlock.MINIMAP))
+        val half = minimap.width * 0.5f
+        val scale = half / range
+        fun mapX(dx: Float) = minimap.center.x + dx * scale
+        fun mapY(dy: Float) = minimap.center.y + dy * scale
+        fun around(dx: Float, dy: Float, reach: Float) = Rect(mapX(dx) - reach, mapY(dy) - reach, mapX(dx) + reach, mapY(dy) + reach)
+        val east = range / 3f
+        // The Spire's west wall (x −500 from its centre) draws; the map west of the Core stays as it was.
+        val westWall = Rect(mapX(east - 500f) - 2f, mapY(-900f), mapX(east - 500f) + 2f, mapY(900f))
+        assertFalse(open.inside(westWall).contentEquals(empty.inside(westWall)), "the west wall is on the map")
+        val west = Rect(minimap.left + 2f, minimap.top + 2f, mapX(-range / 3f), minimap.bottom - 2f)
+        assertTrue(open.inside(west).contentEquals(empty.inside(west)), "nothing drawn west of the Core")
+        // Bone lines at any coverage read as greys, never as threat.
+        val palette = listOf(roles.threat, roles.you, Kk.Bone, Kk.Ink) + (1..6).map { kinetickk.foundation.design.kkMix(Kk.Ink, Kk.Bone, it / 7f) }
+        // The hall's two sealed doors (lower at y 600, upper at y 0) are threat; with every door open none is drawn.
+        assertTrue(sealed.anyNearest(around(east - 250f, 600f, 3f), roles.threat, palette), "the lower sealed door is threat")
+        assertTrue(sealed.anyNearest(around(east + 250f, 0f, 3f), roles.threat, palette), "the upper sealed door is threat")
+        val doorCenter = around(east + 250f, 0f, 1.5f)
+        assertTrue(open.inside(doorCenter).contentEquals(empty.inside(doorCenter)), "an open door is not drawn")
+        // A Vault whose locked doors wait on its galleries: sealed, but no threat anywhere on the map.
+        val vault = StructureFixture(templates.template(kinetickk.ball.content.api.StructureTemplateId.VAULT),
+            base.coreX - range / 3f, base.coreY + range / 6f)
+        check(vault.doorKind(3) == kinetickk.ball.gameplay.nucleus.render.WallKind.DOOR_SEALED)
+        val locked = render(base.with("structures" to structureProjection(vault)), 1_440, 810)
+        assertFalse(locked.anyNearest(minimap, roles.threat, palette), "a locked door is no live danger")
+        assertFalse(open.anyNearest(minimap, roles.threat, palette), "nor is a cleared hall's wall")
+        // An entrance four ranges east pins its square to the east rim.
+        // (Its outer door is 700 west and 1,050 south of its centre.)
+        val far = StructureFixture(templates.template(kinetickk.ball.content.api.StructureTemplateId.LABYRINTH),
+            base.coreX + range * 4f, base.coreY - 1_050f)
+        val pinned = render(base.with("structures" to structureProjection(far, signals = listOf(far))), 1_440, 810)
+        val band = half * 0.12f
+        val rim = Rect(minimap.center.x + half * 0.7f, minimap.center.y - band, minimap.right, minimap.center.y + band)
+        assertFalse(pinned.inside(rim).contentEquals(empty.inside(rim)), "the entrance sits on the east rim")
+        val inner = Rect(minimap.left + 2f, minimap.top + 2f, minimap.center.x + half * 0.6f, minimap.bottom - 2f)
+        assertTrue(pinned.inside(inner).contentEquals(empty.inside(inner)), "only the pinned entrance draws")
+    }
+
     private fun androidx.compose.ui.graphics.PixelMap.anyTinted(rect: Rect, color: androidx.compose.ui.graphics.Color): Boolean {
         for (y in rect.top.toInt() until rect.bottom.toInt()) for (x in rect.left.toInt() until rect.right.toInt()) {
             if (tinted(this[x, y], color)) return true

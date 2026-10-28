@@ -256,7 +256,7 @@ internal fun Obstacle.isSteadySurface(): Boolean = kind.solid && !kind.phased
 
 /**
  * Nearest solid surface within [reach] of ([x], [y]): calls [found] once with its outward normal and the gap from
- * the point to it, or never. Obstacles only for now; STRUCTURES adds capsule walls here.
+ * the point to it, or never. Steady obstacles and solid structure walls (sealed doors included).
  */
 internal inline fun MutableGameState.nearestSurface(
     x: Float,
@@ -285,6 +285,7 @@ internal inline fun MutableGameState.nearestSurface(
             }
         }
     }
+    nearestWall(x, y, reach) { _, _, nx, ny, gap -> if (gap < bestGap) { bestGap = gap; bestNx = nx; bestNy = ny } }
     if (bestGap <= reach) found(bestNx, bestNy, bestGap)
 }
 

@@ -137,7 +137,8 @@ class ObstacleSystemTest {
     @Test
     fun fracturedSpaceAddsDensityAndUnstableAsteroidsWithFewerBumpers() {
         fun census(tier: Int): Map<ObstacleKind, Int> {
-            val state = buildTestState(seed = 5, rebirth = tier)
+            // Far from the origin: a world without structures, whose footprints would clear part of the census.
+            val state = buildTestState(seed = 5, rebirth = tier, content = structuresDisabledContent)
             val counts = mutableMapOf<ObstacleKind, Int>()
             for (chunkX in 10 until 40) for (chunkY in -15 until 15) {
                 state.generateChunk(chunkX, chunkY).forEach { counts[it.kind] = (counts[it.kind] ?: 0) + 1 }

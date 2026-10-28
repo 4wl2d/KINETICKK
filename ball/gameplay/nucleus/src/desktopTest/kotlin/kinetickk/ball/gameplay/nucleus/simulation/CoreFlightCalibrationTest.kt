@@ -196,8 +196,9 @@ class CoreFlightCalibrationTest {
     private class Orbit(val lateMean: Float, val maximum: Float)
 
     private fun world(steering: SteeringTuning): GameplayContentSnapshot = canonicalGameplayContent.copy(
-        // No generated obstacles, and chunks so large that the Core never regenerates the window.
+        // No generated obstacles or structures, and chunks so large that the Core never regenerates the window.
         obstacles = canonicalGameplayContent.obstacles.copy(meanPerChunk = 0f, chunkSize = HUGE_CHUNK),
+        structures = canonicalGameplayContent.structures.copy(enabled = false),
         tempo = canonicalGameplayContent.tempo.copy(steering = steering),
     )
 

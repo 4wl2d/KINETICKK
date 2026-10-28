@@ -38,6 +38,7 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPolicy
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
@@ -493,6 +494,76 @@ class RedesignShotsWorldTest {
         // band beyond it, and the target in threat brackets; then under the HUD (the trial panel and the boss block).
         add(Scene("site-bounty", model = { w, h -> bounty(w, h) }))
         add(Scene("site-bounty-hud", hud = true, model = { w, h -> bounty(w, h) }))
+        // Structures: two entrances off screen (their markers, a third entrance farther unmarked), a Spire's crown with its
+        // promise plates seen from outside, a sealed bay around its garrison under the scrim (in each palette), a
+        // Reliquary's locked sanctum doors with the next way to the chapels, a spent station and the Architect's Doodle.
+        add(Scene("structure-signal", hud = true, model = { w, h -> structureSignals(w, h) }))
+        add(Scene("structure-exterior", model = { w, h ->
+            structureModel(model(w, h), structure(StructureTemplateId.SPIRE, -1_350f, 80f, rotation = 1))
+        }))
+        add(Scene("dungeon-sealed", model = { w, h -> sealedBay(w, h) }))
+        add(Scene("dungeon-sealed-mono", roles = KkRolePalette.Mono, model = { w, h -> sealedBay(w, h) }))
+        add(Scene("dungeon-sealed-protan", roles = KkRolePalette.Protan, model = { w, h -> sealedBay(w, h) }))
+        add(Scene("dungeon-locked", model = { w, h -> lockedSanctum(w, h) }))
+        add(Scene("dungeon-cleared", model = { w, h ->
+            structureModel(model(w, h), structure(StructureTemplateId.DERELICT_STATION, 100f, 0f, spent = true))
+        }))
+        add(Scene("doodle", model = { w, h -> doodle(w, h) }))
+    }
+
+    /** A structure of the shots' content centred ([dx], [dy]) from the Core. */
+    private fun structure(
+        template: StructureTemplateId,
+        dx: Float,
+        dy: Float,
+        rotation: Int = 0,
+        cleared: Int = 0,
+        engaged: Int = -1,
+        spent: Boolean = false,
+        id: Long = (template.ordinal + 1).toLong() shl 8,
+    ) = StructureFixture(Content.structures.template(template), 1_000f + dx, 1_000f + dy, rotation, cleared, engaged, spent, id)
+
+    /** [base] with [structures] in the window, [dungeon] (one of them) held, and [signals] announced. */
+    private fun structureModel(
+        base: GameplayRenderModel,
+        vararg structures: StructureFixture,
+        dungeon: StructureFixture? = null,
+        signals: List<StructureFixture> = emptyList(),
+    ): GameplayRenderModel =
+        base.with("structures" to structureProjection(*structures, signals = signals, dungeon = dungeon, garrisonAlive = 4, garrisonTotal = 6))
+
+    /** A Vault, a Spire and a Labyrinth off screen: the two nearest entrances get their markers. */
+    private fun structureSignals(w: Float, h: Float): GameplayRenderModel {
+        val vault = structure(StructureTemplateId.VAULT, 2_600f, -400f, rotation = 1)
+        val spire = structure(StructureTemplateId.SPIRE, -1_800f, -2_600f)
+        val labyrinth = structure(StructureTemplateId.LABYRINTH, -3_400f, 2_600f)
+        return structureModel(model(w, h), vault, spire, labyrinth, signals = listOf(vault, spire, labyrinth))
+    }
+
+    /** The station's bay sealed around the Core and its garrison (the airlock and the hall cleared), the scrim at full depth. */
+    private fun sealedBay(w: Float, h: Float): GameplayRenderModel {
+        val enemies = listOf(
+            enemy(31, EnemyType.CRAWLER, -290f, 250f, 18f), enemy(32, EnemyType.CRAWLER, 290f, -240f, 18f),
+            enemy(33, EnemyType.CRAWLER, 300f, 220f, 18f), enemy(34, EnemyType.DRIFTER, 120f, 110f, 16f),
+            enemy(35, EnemyType.SHOOTER, -160f, -120f, 18f), enemy(36, EnemyType.SENTRY, 40f, -260f, 20f),
+        )
+        // A brackets' pulse at its peak.
+        val station = structure(StructureTemplateId.DERELICT_STATION, -750f, -400f, cleared = 0b0011, engaged = 3)
+        return structureModel(model(w, h, enemies = enemies, elapsed = 3.4034f), station, dungeon = station)
+    }
+
+    /** A Reliquary's nave: the sanctum's doors locked until the chapels fall, the doors to the two near chapels the next way. */
+    private fun lockedSanctum(w: Float, h: Float): GameplayRenderModel {
+        val reliquary = structure(StructureTemplateId.RELIQUARY, 0f, -560f, cleared = 1 shl 7)
+        return structureModel(model(w, h), reliquary, dungeon = reliquary).with("cameraX" to 1_000f, "cameraY" to 1_000f - 90f,
+            "previousCameraX" to 1_000f, "previousCameraY" to 1_000f - 90f)
+    }
+
+    /** The Doodle's planet, held from inside its ring (a secret: no plates, no scrim). */
+    private fun doodle(w: Float, h: Float): GameplayRenderModel {
+        val doodle = structure(StructureTemplateId.ARCHITECTS_DOODLE, 560f, -120f)
+        return structureModel(model(w, h), doodle, dungeon = doodle).with("cameraX" to 1_560f, "cameraY" to 880f,
+            "previousCameraX" to 1_560f, "previousCameraY" to 880f)
     }
 
     /**

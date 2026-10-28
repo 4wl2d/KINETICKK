@@ -150,10 +150,11 @@ class DimensionMechanicsTest {
         assertTrue(gain in 0.08f..0.16f, "Grace raised the steady speed by ${gain * 100f} %")
     }
 
-    /** The Core's speed after cruising from rest for [CRUISE_SECONDS] with the pointer held ahead, no obstacles. */
+    /** The Core's speed after cruising from rest for [CRUISE_SECONDS] with the pointer held ahead, no obstacles or structures. */
     private fun cruise(layer: WorldLayer): Float {
         val huge = 10_000_000f
-        val empty = canonicalGameplayContent.copy(obstacles = canonicalGameplayContent.obstacles.copy(meanPerChunk = 0f, chunkSize = huge))
+        val empty = canonicalGameplayContent.copy(obstacles = canonicalGameplayContent.obstacles.copy(meanPerChunk = 0f, chunkSize = huge),
+            structures = canonicalGameplayContent.structures.copy(enabled = false))
         val state = buildTestState(content = empty).apply {
             resize(1_280f, 800f)
             startRun()
