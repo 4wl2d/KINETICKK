@@ -269,6 +269,14 @@ class ContentLocalizationTest {
     }
 
     @Test
+    fun everySignalCardTitleIsLocalizedAndDistinct() {
+        val titles = kinetickk.ball.content.api.SignalOption.entries.map { it.title }
+        titles.forEach(::assertFullyLocalized)
+        assertDistinctInRussian(titles)
+        assertEquals("Пройти мимо", "Ignore".localizedContent(AppLanguage.Russian))
+    }
+
+    @Test
     fun everyRunVarietyNameAndTextIsLocalizedAndDistinctAndItsComposedBannersRead() {
         val variety = createContentCatalog().gameplayContent().variety
         val omens = variety.omens.definitions

@@ -45,14 +45,27 @@ enum class SignalKind(val displayName: String) {
     DERELICT("Derelict"),
 }
 
-/** Every prompt card; [kind] null only for [IGNORE]. Three per kind, in card order. */
-enum class SignalOption(val kind: SignalKind?) {
-    MERCHANT_RARE_OFFER(SignalKind.MERCHANT), MERCHANT_EPIC_OFFER(SignalKind.MERCHANT), MERCHANT_REROLLS(SignalKind.MERCHANT),
-    SHRINE_BLOOD(SignalKind.SHRINE), SHRINE_WARD(SignalKind.SHRINE), SHRINE_RELIC(SignalKind.SHRINE),
-    GAMBLE_REROLL(SignalKind.GAMBLE), GAMBLE_MATTER(SignalKind.GAMBLE), GAMBLE_INTEGRITY(SignalKind.GAMBLE),
-    CACHE_CRATE(SignalKind.CURSED_CACHE), CACHE_RELIQUARY(SignalKind.CURSED_CACHE), CACHE_IDOL(SignalKind.CURSED_CACHE),
-    DERELICT_REPAIR(SignalKind.DERELICT), DERELICT_CARGO(SignalKind.DERELICT), DERELICT_VAULT(SignalKind.DERELICT),
-    IGNORE(null),
+/**
+ * Every prompt card; [kind] null only for [IGNORE]. Three per kind, in card order. [title] is the card's English
+ * content key, which the build-change notice of a taken card shows.
+ */
+enum class SignalOption(val kind: SignalKind?, val title: String) {
+    MERCHANT_RARE_OFFER(SignalKind.MERCHANT, "Rare offer"),
+    MERCHANT_EPIC_OFFER(SignalKind.MERCHANT, "Epic offer"),
+    MERCHANT_REROLLS(SignalKind.MERCHANT, "Reroll bundle"),
+    SHRINE_BLOOD(SignalKind.SHRINE, "Blood blessing"),
+    SHRINE_WARD(SignalKind.SHRINE, "Ward blessing"),
+    SHRINE_RELIC(SignalKind.SHRINE, "Relic rite"),
+    GAMBLE_REROLL(SignalKind.GAMBLE, "Wager a reroll"),
+    GAMBLE_MATTER(SignalKind.GAMBLE, "Wager matter"),
+    GAMBLE_INTEGRITY(SignalKind.GAMBLE, "Wager integrity"),
+    CACHE_CRATE(SignalKind.CURSED_CACHE, "Sealed crate"),
+    CACHE_RELIQUARY(SignalKind.CURSED_CACHE, "Black reliquary"),
+    CACHE_IDOL(SignalKind.CURSED_CACHE, "Bound idol"),
+    DERELICT_REPAIR(SignalKind.DERELICT, "Patch the hull"),
+    DERELICT_CARGO(SignalKind.DERELICT, "Strip the cargo"),
+    DERELICT_VAULT(SignalKind.DERELICT, "Pry the vault"),
+    IGNORE(null, "Ignore"),
 }
 
 /** One run-long change an omen, Blessing or Pact applies; every value is validated at construction. */
