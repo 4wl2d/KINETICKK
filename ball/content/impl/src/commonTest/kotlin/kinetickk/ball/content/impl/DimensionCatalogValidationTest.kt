@@ -102,18 +102,26 @@ class DimensionCatalogValidationTest {
         // Window 4 (525 s) closes at 565 s, 20 s before 720 - 75 - 60; window 5 (645 s) can never host a rift.
         createContentCatalogForTesting(data.copy(dimensions = data.dimensions.copy(firstPortalWindow = 4)))
         assertRejected(data.copy(dimensions = data.dimensions.copy(firstPortalWindow = 5)), "No POI window can host a rift")
+        // World events (until 660 s) and signals (until 625 s) must end before the boss too; switched off here, so the
+        // rift schedule is the rule an earlier boss meets.
+        val earlyBoss = data.copy(
+            variety = data.variety.copy(
+                worldEvents = data.variety.worldEvents.copy(enabled = false),
+                signals = data.variety.signals.copy(enabled = false),
+            ),
+        )
         // An earlier boss: window 1 (165 s, closing 205 s) still fits at 340 s, not at 339 s.
-        createContentCatalogForTesting(data.copy(tempo = RunTempoProfile(bossAtSeconds = 340f)))
-        assertRejected(data.copy(tempo = RunTempoProfile(bossAtSeconds = 339f)), "No POI window can host a rift")
+        createContentCatalogForTesting(earlyBoss.copy(tempo = RunTempoProfile(bossAtSeconds = 340f)))
+        assertRejected(earlyBoss.copy(tempo = RunTempoProfile(bossAtSeconds = 339f)), "No POI window can host a rift")
         // From window 0 the Archive binds first: its glitch rift (100 s visit, 30 s offer, 60 s margin) must fit after 45 s.
         val fromTheFirstWindow = data.dimensions.copy(firstPortalWindow = 0)
-        createContentCatalogForTesting(data.copy(dimensions = fromTheFirstWindow, tempo = RunTempoProfile(bossAtSeconds = 235f)))
+        createContentCatalogForTesting(earlyBoss.copy(dimensions = fromTheFirstWindow, tempo = RunTempoProfile(bossAtSeconds = 235f)))
         assertRejected(
-            data.copy(dimensions = fromTheFirstWindow, tempo = RunTempoProfile(bossAtSeconds = 234f)),
+            earlyBoss.copy(dimensions = fromTheFirstWindow, tempo = RunTempoProfile(bossAtSeconds = 234f)),
             "glitch rift could not appear",
         )
         // A disabled policy opens no rift, so no schedule binds it.
-        createContentCatalogForTesting(data.copy(dimensions = data.dimensions.copy(enabled = false), tempo = RunTempoProfile(bossAtSeconds = 200f)))
+        createContentCatalogForTesting(earlyBoss.copy(dimensions = data.dimensions.copy(enabled = false), tempo = RunTempoProfile(bossAtSeconds = 200f)))
     }
 
     private fun List<EnemyDefinition>.replace(type: EnemyType, change: (EnemyDefinition) -> EnemyDefinition): List<EnemyDefinition> =
