@@ -51,6 +51,8 @@ import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
+import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.render.SiteMarkProjection
@@ -441,7 +443,91 @@ class RedesignShotsWorldTest {
             model(w, h, points = listOf(ringChallenge(SiteKind.UNTOUCHED_TRIAL, -150f, 100f, 650f, 0.3f, warning = 0.5f)))
         }))
         add(Scene("site-velocity", hud = true, model = { w, h -> model(w, h, points = listOf(ringChallenge(SiteKind.VELOCITY_TRIAL, 300f, 200f, 1_800f, 0.6f))) }))
+        // The 0.6.0 roster: the ten new ordinary kinds, the four mini-bosses and the two secret bosses; a judging Throne and a
+        // hardened Antecedent with their bars; a Comet marking its lane and one streaking; Pylons docked on a rock.
+        add(Scene("roster-worlds", model = { w, h -> rosterWorlds(w, h) }))
+        add(Scene("roster-worlds-mono", roles = KkRolePalette.Mono, model = { w, h -> rosterWorlds(w, h) }))
+        add(Scene("roster-worlds-protan", roles = KkRolePalette.Protan, model = { w, h -> rosterWorlds(w, h) }))
+        add(Scene("miniboss-throne", hud = true, model = { w, h -> minibossThrone(w, h) }))
+        add(Scene("secret-antecedent", hud = true, model = { w, h -> secretAntecedent(w, h) }))
+        add(Scene("comet-lane", model = { w, h -> cometLane(w, h) }))
+        add(Scene("pylon-dock", model = { w, h -> pylonDock(w, h) }))
     }
+
+    /**
+     * The ten new ordinary kinds at their run radii in a row (the Pylon and the Sentry mounted, the Seraph and the Choir
+     * with their rings), the four mini-bosses below (three egg sacs, three arcs) and the two secret bosses (the
+     * Antecedent's two arcs of its third phase).
+     */
+    private fun rosterWorlds(w: Float, h: Float): GameplayRenderModel {
+        val ordinary = listOf(EnemyType.COMET to 14f, EnemyType.PYLON to 22f, EnemyType.SENTRY to 20f, EnemyType.CRAWLER to 12f,
+            EnemyType.SERAPH to 21f, EnemyType.CHOIR to 25f, EnemyType.IMP to 15f, EnemyType.HOUND to 16f, EnemyType.CIPHER to 19f,
+            EnemyType.MIRROR to 20f)
+        val minis = listOf(EnemyType.WARDEN_PRIME to 44f, EnemyType.BROOD_QUEEN to 46f, EnemyType.THRONE to 48f, EnemyType.PYRE_HERALD to 50f)
+        val secrets = listOf(EnemyType.CARTOGRAPHER to 54f, EnemyType.ANTECEDENT to 58f)
+        val enemies = ordinary.mapIndexed { index, (type, radius) ->
+            val mounted = type == EnemyType.PYLON || type == EnemyType.SENTRY
+            enemy(index + 1, type, -405f + index * 90f, -270f, radius).copy(
+                behavior = if (mounted) kinetickk.ball.gameplay.nucleus.render.EnemyBehavior.ANCHORED else 0,
+                facing = (PI / 2).toFloat(),
+            )
+        } + minis.mapIndexed { index, (type, radius) ->
+            enemy(20 + index, type, -330f + index * 220f, 70f, radius).copy(charges = if (type == EnemyType.WARDEN_PRIME || type == EnemyType.PYRE_HERALD) 0 else 3)
+        } + secrets.mapIndexed { index, (type, radius) ->
+            enemy(30 + index, type, -160f + index * 320f, 250f, radius,
+                affinity = if (type == EnemyType.ANTECEDENT) phaseAffinity(StatusElement.CRYO, phase = 2) else runAffinity(type))
+                .copy(charges = if (type == EnemyType.ANTECEDENT) 2 else 0, facing = 0.4f)
+        }
+        return model(w, h, enemies = enemies)
+    }
+
+    /** A Throne in its final phase passing judgement (its four lanes firming) behind its last arc, a third of it left. */
+    private fun minibossThrone(w: Float, h: Float) = model(w, h, enemies = listOf(
+        enemy(1, EnemyType.THRONE, 160f, -220f, 48f, hp = 30f, affinity = phaseAffinity(StatusElement.VOID, phase = 2, immune = true)).copy(
+            behavior = kinetickk.ball.gameplay.nucleus.render.EnemyBehavior.TELEGRAPH, behaviorRemaining = 0.35f, facing = 0.6f, charges = 1),
+        enemy(2, EnemyType.SERAPH, -260f, -150f, 21f),
+        enemy(3, EnemyType.CHOIR, 330f, 60f, 25f),
+    ), projectiles = (0 until 8).map { index -> projectile(160f + cos(index * 0.785f) * 120f, -220f + sin(index * 0.785f) * 120f, true) })
+
+    /**
+     * The Antecedent in its third phase behind its two turning arcs, hardened against Cryo (so weak to Thermal), with two
+     * Imps of its second phase still about and an aimed fan in flight.
+     */
+    private fun secretAntecedent(w: Float, h: Float) = model(w, h, enemies = listOf(
+        enemy(1, EnemyType.ANTECEDENT, 140f, -230f, 58f, hp = 45f, affinity = phaseAffinity(StatusElement.CRYO, phase = 2)).copy(
+            charges = 2, facing = 1.1f),
+        enemy(2, EnemyType.IMP, -220f, -90f, 15f),
+        enemy(3, EnemyType.IMP, 300f, 110f, 15f),
+    ), projectiles = (0 until 5).map { index -> projectile(140f - 60f - index * 4f, -230f + 70f + (index - 2) * 22f, true) })
+
+    /** A Comet marking its lane toward the Core and another streaking along its own. */
+    private fun cometLane(w: Float, h: Float) = model(w, h, enemies = listOf(
+        enemy(1, EnemyType.COMET, -320f, -210f, 14f).copy(behavior = kinetickk.ball.gameplay.nucleus.render.EnemyBehavior.TELEGRAPH,
+            behaviorRemaining = 0.45f, facing = kotlin.math.atan2(210f, 320f)),
+        enemy(2, EnemyType.COMET, 260f, 140f, 14f).copy(behavior = kinetickk.ball.gameplay.nucleus.render.EnemyBehavior.STRIKE,
+            facing = (PI * 0.92).toFloat(), vx = -1_100f, vy = 140f),
+    ))
+
+    /** Two Pylons docked on a rock's rim facing the Core: one idle on its mount, one aiming (its sight locked). */
+    private fun pylonDock(w: Float, h: Float): GameplayRenderModel {
+        val rockX = 230f
+        val rockY = -170f
+        val rock = 90f
+        fun docked(id: Int, angle: Float, behavior: Int, remaining: Float): EnemyProjection {
+            val x = rockX + cos(angle) * (rock + 22f)
+            val y = rockY + sin(angle) * (rock + 22f)
+            return enemy(id, EnemyType.PYLON, x, y, 22f).copy(behavior = behavior, behaviorRemaining = remaining,
+                facing = kotlin.math.atan2(-y, -x))
+        }
+        return model(w, h, enemies = listOf(
+            docked(1, (PI * 0.82).toFloat(), kinetickk.ball.gameplay.nucleus.render.EnemyBehavior.ANCHORED, 0f),
+            docked(2, (PI * 0.55).toFloat(), kinetickk.ball.gameplay.nucleus.render.EnemyBehavior.TELEGRAPH, 0.15f),
+        )).with("obstacles" to immutableListOf(ObstacleProjection(1L, ObstacleKind.ASTEROID, 1_000f + rockX, 1_000f + rockY, rock, 7)))
+    }
+
+    /** A boss's affinity: [aspect] (weak to its counter) in [phase], as the nucleus publishes a boss's phase. */
+    private fun phaseAffinity(aspect: StatusElement, phase: Int, immune: Boolean = false) = kinetickk.ball.gameplay.nucleus.render.EnemyAffinity.encode(
+        aspect.ordinal, immune, counterOf(aspect).ordinal, armored = true, fragile = false, shifting = false, phase = phase)
 
     /**
      * A cruise moving +x at [speed] whose path bends up behind the Core on a circle of [radius] (centre straight above it),

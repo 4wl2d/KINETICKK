@@ -334,6 +334,69 @@ class HudHotPathAllocationTest {
         }
     }
 
+    /**
+     * A tracked mini-boss (the Throne: narrow block, three parts) or secret boss (the Antecedent: wide block, four parts,
+     * its weakness or anomaly glyph, the bone ring on its minimap pin) beside the other boss ranks: once warm, frames whose
+     * integrity falls every frame and which cross a phase gate and shift allocate nothing.
+     */
+    @Test
+    fun aTrackedMiniOrSecretBossAllocatesNothingOnSteadyFrames() {
+        listOf(1_440 to 810, 844 to 390, 390 to 844).forEach { (width, height) ->
+            val base = hudTestModel(width.toFloat(), height.toFloat())
+            val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f, AppLanguage.Russian)
+            val bitmap = ImageBitmap(width, height)
+            val canvas = Canvas(bitmap)
+            val scope = CanvasDrawScope()
+            val size = Size(width.toFloat(), height.toFloat())
+            val density = Density(1f)
+            val clear: DrawScope.() -> Unit = { drawRect(Kk.Ink) }
+            fun empty() = scope.draw(density, LayoutDirection.Ltr, canvas, size, clear)
+            for (type in listOf(EnemyType.THRONE, EnemyType.ANTECEDENT)) for (aspected in listOf(false, true)) {
+                val frames = List(FRAMES) { frame ->
+                    // From 70 % down across the two-thirds gate, shifting for the frames after it, then into the next phase.
+                    val hp = 700f - frame * 0.25f
+                    val phase = if (hp > 2_000f / 3f) 0 else 1
+                    val shifting = phase == 1 && frame % 200 < 120
+                    val aspect = if (aspected) kinetickk.ball.content.api.StatusElement.THERMAL.ordinal else kinetickk.ball.gameplay.nucleus.render.EnemyAffinity.NONE
+                    val weakness = if (aspected) kinetickk.ball.content.api.StatusElement.CRYO.ordinal else kinetickk.ball.gameplay.nucleus.render.EnemyAffinity.NONE
+                    val affinity = kinetickk.ball.gameplay.nucleus.render.EnemyAffinity.encode(aspect, false, weakness, armored = true, fragile = false,
+                        shifting = shifting, phase = phase)
+                    base.with(
+                        "elapsed" to frame * GameplayRenderModel.FIXED_STEP,
+                        "enemies" to listOf(
+                            EnemyProjection(3, type, base.coreX + 600f, base.coreY - 300f, 0f, 0f, hp, 1_000f, 48f, 0f, 0f, 0f, 0f,
+                                base.coreX + 600f, base.coreY - 300f, false, affinityBits = affinity),
+                            EnemyProjection(4, EnemyType.CARTOGRAPHER, base.coreX - 900f, base.coreY + 400f, 0f, 0f, 900f, 1_000f, 40f, 0f, 0f,
+                                0f, 0f, base.coreX - 900f, base.coreY + 400f, false),
+                            EnemyProjection(5, EnemyType.WARDEN_PRIME, base.coreX + 9_000f, base.coreY, 0f, 0f, 900f, 1_000f, 40f, 0f, 0f,
+                                0f, 0f, base.coreX + 9_000f, base.coreY, false),
+                            EnemyProjection(6, EnemyType.ELITE, base.coreX - 500f, base.coreY - 300f, 0f, 0f, 400f, 1_000f, 30f, 0f, 0f, 0f, 0f,
+                                base.coreX - 500f, base.coreY - 300f, false, affinityBits = bossAffinity(EnemyType.ELITE)),
+                            EnemyProjection(7, EnemyType.COMET, base.coreX + 300f, base.coreY + 200f, 0f, 0f, 40f, 40f, 17f, 0f, 0f, 0f, 0f,
+                                base.coreX + 300f, base.coreY + 200f, false),
+                        ).toImmutableList(),
+                        "minimapRange" to 2_200f,
+                    )
+                }
+                val memory = HudPresentationMemory()
+                var current = 0
+                val block: DrawScope.() -> Unit = {
+                    drawHud(frames[current % FRAMES], measurer, 10f + (current % FRAMES) * 0.0001f, 0f, 0f, memory)
+                }
+                fun hud(frame: Int) {
+                    current = frame
+                    scope.draw(density, LayoutDirection.Ltr, canvas, size, block)
+                }
+                repeat(FRAMES) { empty(); hud(it) }
+                kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.BOSS), "$type: no boss block")
+                val emptyBytes = allocated { repeat(FRAMES) { empty() } }
+                val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
+                val perFrame = (hudBytes - emptyBytes) / FRAMES
+                assertTrue(perFrame <= 64, "$type (aspect $aspected) at $width x $height allocates $perFrame bytes above an empty frame")
+            }
+        }
+    }
+
     private inline fun allocated(block: () -> Unit): Long {
         val threads = ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
         val id = Thread.currentThread().id
