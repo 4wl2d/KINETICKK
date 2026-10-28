@@ -9,13 +9,13 @@ internal val SitePhrasesInRussian: List<Pair<String, String>> = listOf(
     "Fly through the gates in order. Beat the par time for gold." to
         "Пролетите через врата по порядку. Уложитесь в норматив, чтобы взять золото.",
     "Brakeless run" to "Без тормозов",
-    "Keep moving inside the shrinking ring for twelve seconds. Braking fails the trial." to
-        "Двигайтесь внутри сужающегося кольца двенадцать секунд. Торможение проваливает вызов.",
+    "Keep moving inside the shrinking ring for fourteen seconds. Braking fails the trial." to
+        "Двигайтесь внутри сужающегося кольца четырнадцать секунд. Торможение проваливает вызов.",
     "Ram rite" to "Обряд тарана",
-    "Destroy six marked drifters with Dash impacts." to "Уничтожьте шесть отмеченных дрейферов ударами в рывке.",
+    "Destroy two marked drifters with Dash impacts." to "Уничтожьте двух отмеченных дрейферов ударами в рывке.",
     "Untouched" to "Неприкасаемый",
-    "Stay inside the ring for twelve seconds without taking damage." to
-        "Продержитесь в кольце двенадцать секунд, не получив урона.",
+    "Stay inside the ring for ten seconds without taking damage." to
+        "Продержитесь в кольце десять секунд, не получив урона.",
     "Velocity hold" to "Удержание скорости",
     "Hold Overdrive velocity for six seconds within the zone." to "Шесть секунд держите скорость перегрузки в пределах зоны.",
     "Slalom" to "Слалом",

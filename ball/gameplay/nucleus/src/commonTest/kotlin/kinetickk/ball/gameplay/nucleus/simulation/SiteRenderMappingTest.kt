@@ -18,6 +18,7 @@ import kinetickk.ball.gameplay.nucleus.render.TrialValue
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
+import kotlin.math.ceil
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -103,14 +104,14 @@ class SiteRenderMappingTest {
         val brakeless = game.running(active(SiteKind.BRAKELESS_TRIAL).copy(meter = 6f, clock = 10f))
         assertEquals(SiteFamily.CHALLENGE, brakeless.family)
         assertEquals(TrialValue.SECONDS to (6f to challenges.brakelessRequired), brakeless.value to (brakeless.done to brakeless.required))
-        assertEquals(12, brakeless.segments)
-        assertEquals(0.5f, brakeless.progress)
+        assertEquals(ceil(challenges.brakelessRequired).toInt(), brakeless.segments, "one segment per required second")
+        assertEquals(6f / challenges.brakelessRequired, brakeless.progress)
         assertEquals(TrialReward.ITEM_AND_REPAIR, brakeless.reward)
         // The ring shrinks with the clock: half way through its 20 s, half way from 900 to 450.
         assertEquals(675f, game.toRenderModel().sites.single().radius)
 
         val untouched = game.running(active(SiteKind.UNTOUCHED_TRIAL).copy(meter = 3f, aimX = 420f, aimY = -260f))
-        assertEquals(3f / 12f, untouched.progress)
+        assertEquals(3f / challenges.untouchedRequired, untouched.progress)
         assertEquals(TrialReward.RELIC, untouched.reward)
         val aimed = game.toRenderModel().sites.single()
         assertEquals(120f to -60f, aimed.aimDx to aimed.aimDy, "the volley aims from the centre")
@@ -121,9 +122,9 @@ class SiteRenderMappingTest {
         assertEquals(TrialValue.SECONDS to (4.5f to 6f), velocity.value to (velocity.done to velocity.required))
         assertEquals(challenges.velocityZoneRadius, game.toRenderModel().sites.single().radius)
 
-        val ram = game.running(active(SiteKind.RAM_TRIAL).copy(count = 3, foeIds = (20 until 28).toList().toImmutableList()))
-        assertEquals(6, ram.segments)
-        assertEquals(TrialValue.COUNT to (3f to 6f), ram.value to (ram.done to ram.required))
+        val ram = game.running(active(SiteKind.RAM_TRIAL).copy(count = 1, foeIds = (20 until 28).toList().toImmutableList()))
+        assertEquals(challenges.ramRequired, ram.segments, "one segment per required Dash kill")
+        assertEquals(TrialValue.COUNT to (1f to challenges.ramRequired.toFloat()), ram.value to (ram.done to ram.required))
         assertEquals(TrialReward.WEAPON, ram.reward)
 
         val slalom = game.running(active(SiteKind.SLALOM_TRIAL).copy(step = 4, sides = 0b101010))

@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.DirectedReward
+import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.SiteFamily
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.SiteNotice
@@ -35,7 +36,15 @@ import kotlin.test.assertTrue
 class ChallengeSiteTest {
     private val policy = canonicalGameplayContent.sites.challenges
 
-    private fun game(seed: Int = 40_417) = MutableGameState(canonicalGameplayContent, seed).apply {
+    /**
+     * The Ram rite's rules on a rite that needs six Dash kills of its eight foes (the shipped rite needs [policy]'s
+     * `ramRequired`), so a count can climb past two and wasted kills have room before the rite fails.
+     */
+    private val sixOfEightRite = canonicalGameplayContent.copy(
+        sites = canonicalGameplayContent.sites.copy(challenges = policy.copy(ramRequired = 6)),
+    )
+
+    private fun game(seed: Int = 40_417, content: GameplayContentSnapshot = canonicalGameplayContent) = MutableGameState(content, seed).apply {
         startRun()
         enemies.clear()
         projectiles.clear()
@@ -219,7 +228,7 @@ class ChallengeSiteTest {
 
     @Test
     fun onlyDashKillsCountTowardTheRamRite() {
-        val game = game()
+        val game = game(content = sixOfEightRite)
         val rite = game.startChallenge(SiteKind.RAM_TRIAL)
         val foes = game.enemies.toList()
         game.kill(foes[0], HitSource.DASH)
@@ -244,7 +253,7 @@ class ChallengeSiteTest {
 
     @Test
     fun wastedKillsFailTheRamRiteOnceTooFewFoesRemainAndTheSurvivorsStayAsOrdinaryEnemies() {
-        val game = game()
+        val game = game(content = sixOfEightRite)
         val rite = game.startChallenge(SiteKind.RAM_TRIAL)
         val foes = game.enemies.toList()
         game.kill(foes[0], HitSource.WEAPON)
