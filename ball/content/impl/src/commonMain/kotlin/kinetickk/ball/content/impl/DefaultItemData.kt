@@ -668,7 +668,7 @@ private val Drafts: List<ItemDraft> = listOf(
         unlock = 6),
     ItemDraft("Empty Chamber", "With nothing left to cast, there is only the fight.", RARE, listOf(OVERCLOCK),
         rules = listOf(
-            ItemRule.WhileModifier(EffectCondition.SkillsCharging(3), BuffStat.DAMAGE, 0.2f),
+            ItemRule.WhileModifier(EffectCondition.SkillsCharging(3), BuffStat.DAMAGE, 0.25f),
             ItemRule.WhileModifier(EffectCondition.SkillsCharging(3), BuffStat.COOLING, 0.4f),
         ),
         unlock = 9),
