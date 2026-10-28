@@ -837,6 +837,7 @@ class GameplayReductionIsolationTest {
         assertEquals(2f, production.model.skillRuntime.apex(ApexCell.CAST_COUNT), "the trace casts the Apex")
     }
 
+    // ---- 0.6.0 DIMENSIONS ----
     @Test
     fun aDimensionVisitIsIsolatedAcrossReductions() {
         val source = MutableGameState(canonicalGameplayContent, seed = 6_061, initialMatter = 0).apply {
@@ -868,6 +869,32 @@ class GameplayReductionIsolationTest {
         assertEquals(committedFingerprint, source.exactSimulationFingerprint(), "the return left the committed visit alone")
         assertSame(committedRun, source.dimensionRun)
         assertEquals(WorldLayer.ZENITH, source.worldLayer)
+    }
+
+    // ---- 0.6.0 VARIETY ----
+    @Test
+    fun omenAcceptanceAndPreviewsInAForkNeverChangeTheCommittedState() {
+        // An offer dealing Fault Line, the omen that rebuilds the obstacle window.
+        val source = (1..60).asSequence().map { seed ->
+            MutableGameState(canonicalGameplayContent, seed = seed, offerRunOmen = true).apply {
+                startRun()
+                simulateStep(MutableGameState.FIXED_STEP)
+                drainReferenceOutputs()
+            }
+        }.first { state -> state.choices.any { it.omenId == OmenId.FAULT_LINE } }
+        assertEquals(kinetickk.ball.gameplay.nucleus.render.ChoiceType.OMEN, source.choiceType)
+        val retained = source.exactSimulationFingerprint()
+        val reducer = GameReducer()
+        source.choices.indices.forEach { index ->
+            val reduced = assertIs<GameReductionResult.Accepted>(
+                reducer.reduce(EngineState(source), GameplayInteractionPulse.ChoiceSelected.fromValidated(index)),
+            ).state.model
+            assertEquals(retained, source.exactSimulationFingerprint(), "card $index changed the committed state")
+            assertEquals(source.choices[index].omenId, reduced.runOmen)
+            assertEquals(kinetickk.ball.gameplay.nucleus.render.GamePhase.RUNNING, reduced.phase)
+        }
+        source.rewardPreviews()
+        assertEquals(retained, source.exactSimulationFingerprint(), "the previews changed the committed state")
     }
 
     private fun MutableGameState.populateAdditionalRetainedState() {

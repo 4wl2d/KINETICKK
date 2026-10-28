@@ -188,12 +188,6 @@ internal const val MIRROR_VOLLEY: Int = 2
 internal const val MIRROR_VOLLEY_SPACING: Float = 0.2f
 internal const val MIRROR_SHOT_SPEED: Float = 230f
 
-/** A 0.6.0 kind whose behaviour has not landed: it steers like a Drifter. */
-@Suppress("UNUSED_PARAMETER")
-internal fun MutableGameState.updatePendingKind(enemy: Enemy, dx: Float, dy: Float, distance: Float, delta: Float) {
-    steerEnemy(enemy, dx / distance * 78f, dy / distance * 78f, 2.1f, delta)
-}
-
 /** Initial modes and timers of the 0.6.0 kinds (facing already points at the Core). */
 internal fun MutableGameState.initializeWorldsBehavior(enemy: Enemy) {
     when (enemy.type) {
@@ -469,7 +463,12 @@ internal fun MutableGameState.updateSentry(enemy: Enemy, dx: Float, dy: Float, d
             enemy.vx = 0f
             enemy.vy = 0f
             if (elapsed >= enemy.modeUntil) {
-                if (canAttack(enemy)) fireSentryTrain(enemy)
+                if (canAttack(enemy)) {
+                    fireBoltTrain(
+                        enemy.x, enemy.y, enemy.facing, enemy.radius + 4f, SENTRY_TRAIN, SENTRY_BOLT_SPACING, SENTRY_BOLT_SPEED,
+                        SENTRY_BOLT_RADIUS, SENTRY_BOLT_LIFE, shotDamage(enemy),
+                    )
+                }
                 enemy.mode = EnemyBehavior.ANCHORED
                 enemy.modeUntil = elapsed
                 enemy.abilityAt = elapsed + SENTRY_COOLDOWN_SECONDS / hostileAttackRate()
@@ -482,21 +481,34 @@ internal fun MutableGameState.updateSentry(enemy: Enemy, dx: Float, dy: Float, d
     }
 }
 
-/** Bolts in a line along the Sentry's facing, all at one velocity, so the train runs down a corridor. */
-private fun MutableGameState.fireSentryTrain(enemy: Enemy) {
-    val boltSpeed = SENTRY_BOLT_SPEED * rebirthProfile.enemySpeedMultiplier
-    val directionX = cos(enemy.facing)
-    val directionY = sin(enemy.facing)
-    val damage = shotDamage(enemy)
-    for (bolt in 0 until SENTRY_TRAIN) {
-        val offset = enemy.radius + 4f - SENTRY_BOLT_SPACING * bolt
+/**
+ * [count] bolts in a line along [angle], all at one velocity, so the train runs down a lane: the lead bolt
+ * [leadOffset] from ([x], [y]), each next one [spacing] behind it (a Sentry's corridor, a Throne's judgement).
+ */
+internal fun MutableGameState.fireBoltTrain(
+    x: Float,
+    y: Float,
+    angle: Float,
+    leadOffset: Float,
+    count: Int,
+    spacing: Float,
+    boltSpeed: Float,
+    boltRadius: Float,
+    life: Float,
+    damage: Float,
+) {
+    val speed = boltSpeed * rebirthProfile.enemySpeedMultiplier
+    val directionX = cos(angle)
+    val directionY = sin(angle)
+    for (bolt in 0 until count) {
+        val offset = leadOffset - spacing * bolt
         addProjectile(Projectile(
-            x = enemy.x + directionX * offset,
-            y = enemy.y + directionY * offset,
-            vx = directionX * boltSpeed,
-            vy = directionY * boltSpeed,
-            radius = SENTRY_BOLT_RADIUS,
-            life = SENTRY_BOLT_LIFE,
+            x = x + directionX * offset,
+            y = y + directionY * offset,
+            vx = directionX * speed,
+            vy = directionY * speed,
+            radius = boltRadius,
+            life = life,
             damage = damage,
         ))
     }

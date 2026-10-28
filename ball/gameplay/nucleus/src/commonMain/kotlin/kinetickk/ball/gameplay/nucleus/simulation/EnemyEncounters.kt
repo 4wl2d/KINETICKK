@@ -299,9 +299,13 @@ internal fun MutableGameState.updateEncounters() {
     }
 }
 
-/** Kill hook of onEnemyKilled: a killed Imp (any owner) leaves an ember; a tagged kill counts once toward its encounter. */
+/**
+ * Kill hook of onEnemyKilled: a killed Imp (any owner) leaves an ember; a secret boss (any owner) pays the secret-boss
+ * reward; a tagged kill counts once toward its encounter.
+ */
 internal fun MutableGameState.onEncounterEnemyKilled(enemy: Enemy) {
     if (enemy.type == EnemyType.IMP) queueEmber(enemy.x, enemy.y, IMP_KILL_EMBER_SECONDS)
+    if (enemy.isSecretBoss) paySecretBossDefeat(enemy)
     if (enemy.ownerTag == 0L) return
     val index = encounterIndex(enemy.ownerTag)
     if (index < 0) return

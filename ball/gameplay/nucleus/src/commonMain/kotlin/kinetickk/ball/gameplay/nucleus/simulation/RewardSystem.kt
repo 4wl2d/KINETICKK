@@ -68,11 +68,11 @@ internal fun MutableGameState.onEnemyKilled(enemy: Enemy) {
     shockwave(
         enemy.x,
         enemy.y,
-        if (enemy.type == EnemyType.ARCHITECT || enemy.isMiniBoss) 0.8f else 0.3f,
-        enemy.radius * if (enemy.type == EnemyType.ARCHITECT) 4.5f else 2.7f,
+        if (enemy.type == EnemyType.ARCHITECT || enemy.isMiniBoss || enemy.isSecretBoss) 0.8f else 0.3f,
+        enemy.radius * if (enemy.type == EnemyType.ARCHITECT) 4.5f else if (enemy.isSecretBoss) 3.5f else 2.7f,
         if (eliteReward) 3 else 1,
     )
-    burst(enemy.x, enemy.y, if (enemy.type == EnemyType.ARCHITECT) 60 else if (enemy.isMiniBoss) 40 else 12, if (eliteReward) 3 else 1)
+    burst(enemy.x, enemy.y, if (enemy.type == EnemyType.ARCHITECT) 60 else if (enemy.isSecretBoss) 50 else if (enemy.isMiniBoss) 40 else 12, if (eliteReward) 3 else 1)
     emitSound(GameplayAudioCue.ENEMY_DESTROYED)
     if (victory) {
         message = "ARCHITECT DISMANTLED"

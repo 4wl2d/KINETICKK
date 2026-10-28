@@ -203,10 +203,14 @@ internal fun MutableGameState.itemCard(item: ItemDefinition, tag: String, reborn
     )
 }
 
-/** The items of the rolled [rarity], else of the nearest lower tier down to [floor], else of the nearest higher tier. */
+/**
+ * The items of the rolled [rarity], else of the nearest lower tier down to [floor], else of the nearest higher tier,
+ * else (a rarity floor no remaining item meets) of the nearest tier below [floor].
+ */
 private fun List<ItemDefinition>.nearestRarityTier(rarity: ItemRarity, floor: ItemRarity): List<ItemDefinition> {
     val order = ItemRarity.entries.filter { it.rank in floor.rank..rarity.rank }.asReversed() +
-        ItemRarity.entries.filter { it.rank > rarity.rank }
+        ItemRarity.entries.filter { it.rank > rarity.rank } +
+        ItemRarity.entries.filter { it.rank < floor.rank }.asReversed()
     return order.firstNotNullOfOrNull { tier -> filter { it.rarity == tier }.takeIf { it.isNotEmpty() } } ?: this
 }
 
