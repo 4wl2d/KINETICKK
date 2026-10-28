@@ -115,6 +115,7 @@ class CosmicPresentationTest {
         assertEquals(remapped.threat, fxColor(4, remapped), "Damage taken is a threat")
         assertEquals(Kk.Bone, fxColor(1, remapped), "Kill shards are bone")
         listOf(-1, 2, 99).forEach { index -> assertTrue(fxColor(index, remapped) in setOf(Kk.Bone, Kk.Bone2)) }
+        kinetickk.foundation.design.KkVisionMode.entries.forEach { mode -> assertEquals(mode.palette.soft, fxColor(SOFT_RING_COLOR, mode.palette), "$mode soft rings") }
     }
 
     @Test

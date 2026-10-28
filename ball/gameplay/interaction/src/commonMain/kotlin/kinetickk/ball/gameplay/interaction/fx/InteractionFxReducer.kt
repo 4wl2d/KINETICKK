@@ -25,6 +25,9 @@ internal object InteractionFxLimits {
     const val MAX_DAMAGE_NUMBERS = 140
     const val MAX_WEAPON_ARCS = 128
 
+    /** Samples of the Core ribbon ring (presentation memory of the Core's path); the oldest is trimmed on overflow. */
+    const val MAX_CORE_RIBBON_SAMPLES = 64
+
     /** Damage numbers pop, settle and drift away from the Core over 600 ms (`KkTime.Drift`). */
     const val DAMAGE_NUMBER_LIFE_SECONDS = 0.6f
 
