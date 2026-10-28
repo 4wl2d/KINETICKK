@@ -16,7 +16,13 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.DirectorPersonalityId
 import kinetickk.ball.content.api.EquippedRelic
+import kinetickk.ball.content.api.OmenId
+import kinetickk.ball.content.api.WorldEventKind
+import kinetickk.ball.content.api.localizedContent
+import kinetickk.ball.gameplay.nucleus.render.WorldEventProjection
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
@@ -222,6 +228,62 @@ class PauseTextFitTest {
         }
     }
 
+    /**
+     * A run with every condition (Glass Sun taken, the Tidewave pattern, a Fortune Cryo Keynote whose tag has no point
+     * yet, a meteor shower in progress): every text still fits whole, inside the build area and clear of the others; the
+     * board lists the Keynote tag without points, keeps one cost entry per relic, the reactions and the weapon's
+     * synergies, and names every condition with what the omen does and costs up to the default text size (larger sizes
+     * show them where the column leaves room, the synergies first); phones show them as chips where a row is left.
+     */
+    @Test
+    fun theRunConditionsFitAndTheKeynoteTagIsListedAtEveryTextSize() {
+        for ((width, height) in frames) for (language in AppLanguage.entries) for (textScale in listOf(1f, 1.25f, 1.75f)) {
+            val scene = "pause conditions ${width}x$height $language ${textScale}x"
+            val records = drawPause(width, height, language, textScale, conditions = true)
+            val layout = pauseLayoutGeometry(width.toFloat(), height.toFloat(), 1f)
+            records.forEach { record ->
+                val text = record.layout.layoutInput.text.text
+                assertTrue(record.layout.size.width <= record.box + 0.5f, "$scene: \"$text\" (${record.kind}) fits ${record.box}")
+                assertWhole(record.layout, "$scene: ${record.kind}")
+                if (record.kind != PauseTextKind.TITLE && record.kind != PauseTextKind.TIMER) {
+                    val r = record.rect
+                    assertTrue(r.left >= layout.build.left - 1f && r.right <= layout.build.right + 1f && r.bottom <= layout.build.bottom + 1f,
+                        "$scene: \"$text\" (${record.kind}) inside the build area ${layout.build}: $r")
+                }
+            }
+            val drawn = records.filter { it.kind !in setOf(PauseTextKind.TAG, PauseTextKind.TITLE, PauseTextKind.TIMER) }
+            drawn.forEachIndexed { index, a ->
+                drawn.drop(index + 1).forEach { b ->
+                    val overlap = a.rect.intersect(b.rect)
+                    assertTrue(overlap.width <= 1f || overlap.height <= 1f,
+                        "$scene: \"${a.layout.layoutInput.text}\" (${a.kind}) ${a.rect} meets \"${b.layout.layoutInput.text}\" (${b.kind}) ${b.rect}")
+                }
+            }
+            val names = records.filter { it.kind == PauseTextKind.CONDITION }.map { it.layout.layoutInput.text.text.uppercase() }
+            val expected = listOf("Glass Sun", "Tidewave", "Meteor shower").map { it.localizedContent(language).uppercase() } +
+                (BuildTag.FORTUNE.displayLabel.localizedContent(language) + " " + StatusElement.CRYO.displayLabel.localizedContent(language)).uppercase()
+            assertTrue(expected.containsAll(names), "$scene names only the run's conditions: $names")
+            if (layout.mode == GameplayLayoutMode.REGULAR) {
+                val fortune = BuildTag.FORTUNE.displayLabel.localizedContent(language).uppercase()
+                assertTrue(records.any { it.kind == PauseTextKind.TAG_NAME && it.layout.layoutInput.text.text.uppercase() == fortune },
+                    "$scene lists the Keynote tag without points")
+                assertEquals(relics.size, records.count { it.kind == PauseTextKind.COST }, "$scene: one cost line per bound relic")
+                assertTrue(records.any { it.kind == PauseTextKind.SYNERGY }, "$scene draws the weapon synergies")
+                assertTrue(records.any { it.kind == PauseTextKind.REACTION }, "$scene draws the reactions")
+                if (textScale <= 1.25f) {
+                    assertEquals(expected.sorted(), names.sorted(), "$scene names every condition")
+                    val lines = records.filter { it.kind == PauseTextKind.CONDITION_TEXT }.map { it.layout.layoutInput.text.text }
+                    assertEquals(listOf("+25% impact damage and +20% weapon power.", "−30 maximum integrity.",
+                        "Swarms and packs roll in on long surges, then the field goes quiet.").map { it.localizedContent(language) }, lines,
+                        "$scene: the omen's upside and cost and the pattern's description read")
+                }
+            } else {
+                // Phones show the conditions as chips where the board leaves a row, never as text lines.
+                assertTrue(records.none { it.kind == PauseTextKind.CONDITION_TEXT || it.kind == PauseTextKind.CONDITION_LABEL }, "$scene: chips only")
+            }
+        }
+    }
+
     private fun drawPause(
         width: Int,
         height: Int,
@@ -230,6 +292,7 @@ class PauseTextFitTest {
         relics: List<EquippedRelic> = this.relics,
         build: BuildProjection = this.build,
         touch: Boolean = false,
+        conditions: Boolean = false,
     ): List<PauseTextRecord> {
         // A full build: two named brackets, tags and elements with points, two reactions (one met), and three active
         // items held in Z/X/C (Solar Flare I, Meteor II, Frost Line I) bound to the longest key names.
@@ -245,6 +308,7 @@ class PauseTextFitTest {
             skillBar = actives,
             keyBindings = KeyBindings.DEFAULT.with(GameAction.SKILL_1, BindableKey.SPACE).with(GameAction.SKILL_2, BindableKey.ARROW_RIGHT))
             .with("discoveredReactionMask" to (1 shl ReactionId.WILDFIRE.ordinal), "weaponSynergy" to FullSynergy)
+            .let { if (conditions) it.with(*RunConditions) else it }
         val records = mutableListOf<PauseTextRecord>()
         PauseTextProbe.records = records
         try {
@@ -268,6 +332,15 @@ class PauseTextFitTest {
         return records.toList()
     }
 }
+
+/** A run with every condition: an omen taken, a director pattern, a Keynote whose tag has no point yet and a world event. */
+private val RunConditions: Array<Pair<String, Any?>> = arrayOf(
+    "runOmen" to OmenId.GLASS_SUN,
+    "directorPersonality" to DirectorPersonalityId.TIDE,
+    "keynoteTag" to BuildTag.FORTUNE,
+    "keynoteElement" to StatusElement.CRYO,
+    "worldEvent" to WorldEventProjection(WorldEventKind.METEOR_SHOWER, telegraphAt = 440f, startsAt = 443f, endsAt = 473f),
+)
 
 /** Every synergy chip at once: resonance, signature, a harmonizing Relic, an element, scaling and two forms. */
 private val FullSynergy = WeaponSynergyProjection(

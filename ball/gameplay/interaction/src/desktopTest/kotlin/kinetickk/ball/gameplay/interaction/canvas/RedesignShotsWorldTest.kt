@@ -27,6 +27,9 @@ import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
 import kinetickk.ball.content.api.ANOMALY_KIND_COUNT
 import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.content.api.SignalKind
+import kinetickk.ball.content.api.EliteAffix
+import kinetickk.ball.content.api.WorldEventKind
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicAspect
@@ -49,6 +52,10 @@ import kinetickk.ball.gameplay.interaction.fx.WeaponArcProjection
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
+import kinetickk.ball.gameplay.nucleus.render.EventSignalProjection
+import kinetickk.ball.gameplay.nucleus.render.EventStrikeProjection
+import kinetickk.ball.gameplay.nucleus.render.WorldEventProjection
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
@@ -457,6 +464,22 @@ class RedesignShotsWorldTest {
         add(Scene("secret-antecedent", hud = true, model = { w, h -> secretAntecedent(w, h) }))
         add(Scene("comet-lane", model = { w, h -> cometLane(w, h) }))
         add(Scene("pylon-dock", model = { w, h -> pylonDock(w, h) }))
+        // Run variety: each world event in progress under the HUD (its edge band; the meteor's and the ion storm's strikes
+        // filling, the flare's band crossing, the storms' motes), the gravity storm in its telegraph, a Merchant signal on
+        // screen and past the edge, an Elite with each affix and champions beside plain kinds; the meteor, the affixes and
+        // the champions also on the mono and protan palettes.
+        for (kind in WorldEventKind.entries) {
+            add(Scene("event-${eventShotName(kind)}", hud = true, model = { w, h -> worldEvent(w, h, kind) }, fx = ::cruiseFx))
+        }
+        add(Scene("event-gravity-telegraph", hud = true, model = { w, h -> worldEvent(w, h, WorldEventKind.GRAVITY_STORM, elapsed = 1.8f) }))
+        add(Scene("event-meteor-mono", roles = KkRolePalette.Mono, hud = true, model = { w, h -> worldEvent(w, h, WorldEventKind.METEOR_SHOWER) }))
+        add(Scene("event-meteor-protan", roles = KkRolePalette.Protan, hud = true, model = { w, h -> worldEvent(w, h, WorldEventKind.METEOR_SHOWER) }))
+        add(Scene("signal-merchant", hud = true, model = { w, h -> signal(w, h, onScreen = true) }))
+        add(Scene("signal-far", hud = true, model = { w, h -> signal(w, h, onScreen = false) }))
+        for ((suffix, roles) in listOf("" to KkRolePalette.Default, "-mono" to KkRolePalette.Mono, "-protan" to KkRolePalette.Protan)) {
+            add(Scene("elite-affixes$suffix", roles = roles, model = { w, h -> eliteAffixes(w, h) }))
+            add(Scene("champions$suffix", roles = roles, model = { w, h -> champions(w, h) }))
+        }
     }
 
     /**
@@ -533,6 +556,58 @@ class RedesignShotsWorldTest {
     /** A boss's affinity: [aspect] (weak to its counter) in [phase], as the nucleus publishes a boss's phase. */
     private fun phaseAffinity(aspect: StatusElement, phase: Int, immune: Boolean = false) = kinetickk.ball.gameplay.nucleus.render.EnemyAffinity.encode(
         aspect.ordinal, immune, counterOf(aspect).ordinal, armored = true, fragile = false, shifting = false, phase = phase)
+
+    private fun eventShotName(kind: WorldEventKind): String = when (kind) {
+        WorldEventKind.METEOR_SHOWER -> "meteor"
+        WorldEventKind.DATA_STORM -> "data"
+        WorldEventKind.GRAVITY_STORM -> "gravity"
+        WorldEventKind.ION_STORM -> "ion"
+        WorldEventKind.SOLAR_FLARE -> "solar"
+    }
+
+    /**
+     * The cruise with [kind] at [elapsed] (telegraphed from 0 s, running from 3 s to 33 s): three strikes at different
+     * fills for the meteor (95 u) and the ion storm (120 u), the flare's band half way across, the wind at 30 degrees.
+     */
+    private fun worldEvent(w: Float, h: Float, kind: WorldEventKind, elapsed: Float = 12f): GameplayRenderModel {
+        val ion = kind == WorldEventKind.ION_STORM
+        val radius = if (ion) 120f else 95f
+        val span = if (ion) 1f else 1.4f
+        val strikes = listOf(Triple(-0.22f, -0.14f, 0.2f), Triple(0.18f, 0.16f, 0.6f), Triple(-0.05f, 0.3f, 0.95f)).map { (fx, fy, fill) ->
+            EventStrikeProjection(1_000f + fx * w, 1_000f + fy * h, radius, elapsed - span * fill, elapsed - span * fill + span)
+        }.toImmutableList()
+        return cruise(w, h, elapsed = elapsed).with("worldEvent" to WorldEventProjection(kind, telegraphAt = 0f, startsAt = 3f, endsAt = 33f,
+            windAngle = 0.52f, windStrength = if (elapsed < 3f) 0f else 1f, sweepStartedAt = elapsed - 0.6f, sweepAngle = 0.35f,
+            strikes = if (kind == WorldEventKind.METEOR_SHOWER || ion) strikes else immutableListOf()))
+    }
+
+    /** A Merchant signal 18 s from its end, on screen beside the heading or far past the edge (its marker). */
+    private fun signal(w: Float, h: Float, onScreen: Boolean): GameplayRenderModel {
+        val dx = if (onScreen) w * 0.22f else 2_600f
+        val dy = if (onScreen) -h * 0.12f else -500f
+        return model(w, h).with("eventSignals" to immutableListOf(EventSignalProjection(5, SignalKind.MERCHANT, 1_000f + dx, 1_000f + dy, 21f)))
+    }
+
+    /** One Elite per affix in two rows of three (a Gravitic aspect, as the Keynote bias often deals). */
+    private fun eliteAffixes(w: Float, h: Float) = model(w, h, enemies = EliteAffix.entries.mapIndexed { index, affix ->
+        val spacing = minOf(170f, w * 0.28f)
+        enemy(index + 1, EnemyType.ELITE, (index % 3 - 1) * spacing, (index / 3 - 0.5f) * 190f, 30f,
+            affinity = runAffinity(EnemyType.ELITE, eliteAspect = StatusElement.GRAVITIC) or
+                EnemyAffinity.encode(EnemyAffinity.NONE, false, EnemyAffinity.NONE, false, false, false, 0, affix = affix.ordinal))
+    })
+
+    /** Champions (top row) over the same kinds plain (bottom row). */
+    private fun champions(w: Float, h: Float): GameplayRenderModel {
+        val kinds = listOf(EnemyType.DRIFTER to 17f, EnemyType.CHARGER to 23f, EnemyType.SHOOTER to 20f)
+        val spacing = minOf(170f, w * 0.28f)
+        val championBit = EnemyAffinity.encode(EnemyAffinity.NONE, false, EnemyAffinity.NONE, false, false, false, 0, champion = true)
+        return model(w, h, enemies = kinds.flatMapIndexed { index, (type, radius) ->
+            listOf(
+                enemy(index + 1, type, (index - 1) * spacing, -95f, radius, affinity = runAffinity(type) or championBit),
+                enemy(index + 11, type, (index - 1) * spacing, 95f, radius),
+            )
+        })
+    }
 
     /**
      * A cruise moving +x at [speed] whose path bends up behind the Core on a circle of [radius] (centre straight above it),

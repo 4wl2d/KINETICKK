@@ -291,7 +291,7 @@ internal class RewardOverlayState(
 internal fun RewardPresentation.defaultSelection(): Int? = when {
     cards.isEmpty() -> null
     kind == RewardLayoutKind.RELIC_BIND && cards.first().choice.relicAction == RelicChoiceAction.REPLACE -> null
-    kind == RewardLayoutKind.CARDS -> (cards.size - 1) / 2
+    kind == RewardLayoutKind.CARDS -> rewardDefaultCard(cards)
     else -> 0
 }
 
@@ -393,7 +393,7 @@ private fun RewardHeader(state: RewardOverlayState, modifier: Modifier) {
     val language = LocalAppLanguage.current
     val regular = state.mode == GameplayLayoutMode.REGULAR
     val slam = { ((state.entrance() - 100f) / 500f).coerceIn(0f, 1f) }
-    Box(modifier) {
+    RewardHeadingFrame(presentation.conditions, state.textScale, beside = state.mode == GameplayLayoutMode.COMPACT_LANDSCAPE, modifier) {
         val level = presentation.level
         if (level != null) {
             // The level numeral is display type: the text-size setting does not apply.
@@ -471,7 +471,7 @@ internal fun RewardFooter(state: RewardOverlayState, takeLabel: String, selected
         modifier = Modifier.overlayBounds(layout.take).then(fade).testTag("kinetickk.gameplay.take"),
         variant = KkButtonVariant.PRIMARY,
         size = size,
-        enabled = state.enabled && selected != null,
+        enabled = state.enabled && selected != null && state.presentation.cards.getOrNull(selected)?.locked != true,
         textScale = state.textScale,
         stateDescription = selectedTitle,
     )
@@ -565,16 +565,17 @@ internal fun RewardCard(
     BoxWithConstraints(
         modifier
             .testTag("kinetickk.gameplay.choice.${index + 1}")
+            .rewardLockedLook(presentation.locked)
             .semantics { stateDescription = listOfNotNull(presentation.bandStart, presentation.bandEnd).joinToString(", ") }
             .rewardDragGestures(enabled, scrollState)
             // The body consumes its own scroll first. Header drags and wheel input reach this
             // parent, moving the same text viewport once.
             .scrollable(scrollState, Orientation.Vertical, enabled = enabled, reverseDirection = true)
-            .rewardPreviewInput(enabled, onPreview)
+            .rewardPreviewInput(enabled && !presentation.locked, onPreview)
             // A single activation surface. The nested scrollable cancels this click on drag;
             // wheel events never synthesize activation.
             .clickable(
-                enabled = enabled,
+                enabled = enabled && !presentation.locked,
                 interactionSource = interactionSource,
                 indication = null,
                 role = Role.Button,

@@ -131,6 +131,7 @@ internal fun DrawScope.drawEnemy(
         drawCircle(threat.copy(alpha = 0.10f + pulse * 0.06f), enemy.radius * 1.45f, center)
         drawCircle(threat.copy(alpha = 0.05f + pulse * 0.04f), enemy.radius * 1.9f, center)
     }
+    drawEliteVariety(engine, enemy, center, patterned)
     withTransform({
         translate(center.x, center.y)
         rotate(degrees, Offset.Zero)
@@ -138,7 +139,7 @@ internal fun DrawScope.drawEnemy(
         drawPath(path, fill)
         if (dominant >= 0) drawStatusFill(path, dominant, statusFill, patterned, roles)
         drawKkThreatHatch(path, roles)
-        drawPath(path, threat, style = kkStroke(outlineWidth(affinity)))
+        drawPath(path, threat, style = kkStroke(outlineWidth(affinity) + championOutlineBonus(affinity)))
         if (aspect >= 0) drawPath(WorldPaths.silhouette(silhouette, enemy.radius * ASPECT_CONTOUR), aspectHue, style = kkStroke(1.5f))
         if (enemy.type == EnemyType.ELITE) {
             // The elite's own inner contour carries its aspect rather than a third one.

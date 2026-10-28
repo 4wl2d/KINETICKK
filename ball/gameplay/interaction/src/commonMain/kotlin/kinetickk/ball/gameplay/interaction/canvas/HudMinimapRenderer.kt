@@ -179,6 +179,7 @@ internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMe
             drawPinnedMark(centerX, centerY, half, (pickup.x - coreX) * scale, (pickup.y - coreY) * scale, dot * 1.6f, color, filled = true)
         }
         drawMinimapSites(engine, centerX, centerY, half, scale, dot, roles)
+        drawMinimapSignals(engine, centerX, centerY, half, scale, dot)
         engine.totem?.let { totem ->
             drawPinnedMark(centerX, centerY, half, (totem.x - coreX) * scale, (totem.y - coreY) * scale, dot * 2f, roles.you, filled = true)
         }

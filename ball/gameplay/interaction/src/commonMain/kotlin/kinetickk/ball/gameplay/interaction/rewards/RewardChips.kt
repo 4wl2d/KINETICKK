@@ -82,6 +82,9 @@ private fun RewardChip.glyphCount(): Int = when (kind) {
     RewardChipKind.AFFINITY, RewardChipKind.ELEMENT -> elements.size.coerceAtMost(1)
     RewardChipKind.SIGNATURE -> if (core != null) 1 else 0
     RewardChipKind.SUPPRESSED -> if (rune != null) 2 else 1
+    RewardChipKind.PATTERN, RewardChipKind.COST -> if (icon != null) 1 else 0
+    RewardChipKind.KEYNOTE -> (if (tag != null) 1 else 0) + elements.size.coerceAtMost(1)
+    RewardChipKind.MUTATOR -> if (mutator != null) 1 else 0
     else -> 0
 }
 
@@ -167,6 +170,11 @@ private fun RewardChip.ink(roles: KkRolePalette): ChipInk = when (kind) {
     RewardChipKind.ACTIVE -> ChipInk(Kk.Ink3, roles.you.copy(alpha = 0.7f), Kk.Bone, Kk.Bone)
     // Taking it gives up a held active: outlined in the threat role, like a relic Replace.
     RewardChipKind.REPLACES_ACTIVE -> ChipInk(Kk.Ink3, roles.threat.copy(alpha = 0.7f), roles.threat, roles.threat)
+    // The run's conditions and a signal's price: bone on the card face, no role hue (run variety, RewardRunVariety.kt).
+    RewardChipKind.PATTERN, RewardChipKind.KEYNOTE -> ChipInk(Kk.Ink3, Kk.Bone2.copy(alpha = 0.55f), Kk.Bone, Kk.Bone)
+    RewardChipKind.COST -> ChipInk(Kk.Ink3, Kk.Line2, Kk.Bone, Kk.Bone2)
+    // An omen's mutator is its liability: outlined in the threat role like the cost it names.
+    RewardChipKind.MUTATOR -> ChipInk(roles.threat.copy(alpha = 0.12f), roles.threat, roles.threat, roles.threat)
 }
 
 /** Dashed chip outline of an unmet pairing, cached per stroke width (draw-thread confined). */
@@ -230,6 +238,9 @@ internal fun DrawScope.drawRewardChip(
             chip.kind == RewardChipKind.SUPPRESSED && index == 1 && rune != null ->
                 // The rune of the bound relic whose liability voids the card, in its aspect hue.
                 drawRelicIcon(rune, ChipRunePolicy, center, glyph * 0.5f, accent = rune.aspect.overlayColor(roles))
+            chip.kind == RewardChipKind.MUTATOR && chip.mutator != null -> drawRewardMutatorSigil(chip.mutator, center, glyph * 0.5f, ink.glyph)
+            chip.kind == RewardChipKind.KEYNOTE && chip.tag != null && index == 0 -> drawKkIcon(chip.tag.overlayIcon(), center, glyph, ink.glyph)
+            chip.kind == RewardChipKind.KEYNOTE -> drawKkIcon(chip.elements[0].overlayIcon(), center, glyph, chip.elements[0].overlayColor(roles))
             chip.kind == RewardChipKind.ATTUNED && index == 0 -> {
                 val half = glyph * 0.28f
                 rotate(45f, center) {
@@ -241,6 +252,7 @@ internal fun DrawScope.drawRewardChip(
                     RewardChipKind.SUPPRESSED -> KkIcon.SYSTEM_LOCKED
                     RewardChipKind.TAG, RewardChipKind.TAG_TIER, RewardChipKind.ATTUNED -> chip.tag?.overlayIcon() ?: KkIcon.UI_PLUS
                     RewardChipKind.SIGNATURE -> chip.core?.let { KkIcon.Forms.getOrNull(it.ordinal) } ?: KkIcon.UI_PLUS
+                    RewardChipKind.PATTERN, RewardChipKind.COST -> chip.icon ?: KkIcon.UI_PLUS
                     else -> chip.elements[index].overlayIcon()
                 }
                 val color = when (chip.kind) {
@@ -325,7 +337,7 @@ internal fun RewardChipFlow(
                         .semantics {
                             text = AnnotatedString(chip.spoken)
                             // An element chip's label already is its element's name.
-                            if (chip.elements.isNotEmpty() && chip.kind != RewardChipKind.ELEMENT) {
+                            if (chip.elements.isNotEmpty() && chip.kind != RewardChipKind.ELEMENT && chip.kind != RewardChipKind.KEYNOTE) {
                                 contentDescription = chip.elements.joinToString(" ") { it.displayLabel.localizedContent(language) } + " " + chip.label
                             }
                         }
