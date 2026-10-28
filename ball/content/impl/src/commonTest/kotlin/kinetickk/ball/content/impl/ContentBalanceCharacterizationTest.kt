@@ -57,10 +57,11 @@ class ContentBalanceCharacterizationTest {
         // The 0.5.0 items, appended from id 173 and pinned on their own: always exactly ids 173..268. The pin moved when
         // 0.6.0 retuned six of them back over the 5 % perceptible floor under the new flight law
         // (6ae3869a3317ee94 -> 17777e466f80fc29), and again when Empty Chamber's damage rose 20 -> 25 % after the
-        // Solar Flare retune (17777e466f80fc29 -> bfc80fdf55b64617).
+        // Solar Flare retune (17777e466f80fc29 -> bfc80fdf55b64617), and when Loader Sigil's refresh rose 0.5 -> 0.6 s
+        // after the Orbit retune (bfc80fdf55b64617 -> ef1306c885aae256).
         val appended = items.subList(ITEMS_THROUGH_040, EXPANSION_050_END)
         assertEquals(
-            "bfc80fdf55b64617",
+            "ef1306c885aae256",
             goldenFingerprint {
                 add("items-0.5.0")
                 add(appended.size)

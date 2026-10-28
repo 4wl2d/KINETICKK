@@ -966,7 +966,7 @@ private val Drafts: List<ItemDraft> = listOf(
         clauses = listOf(on(EffectTrigger.WEAPON_HIT, EffectAction.RefundSkills(0.3f, SkillPick.LONGEST), every = 10)),
         unlock = 3),
     ItemDraft("Loader Sigil", "Each cast racks the weapon.", UNCOMMON, listOf(OVERCLOCK, ARSENAL),
-        clauses = listOf(on(EffectTrigger.SKILL_CAST, EffectAction.RefreshWeapon(0.5f))),
+        clauses = listOf(on(EffectTrigger.SKILL_CAST, EffectAction.RefreshWeapon(0.6f))),
         unlock = 6),
     ItemDraft("Spall Rounds", "The shot cracks the shell; the Core finishes the throw.", UNCOMMON, listOf(ARSENAL, RAM),
         clauses = listOf(on(EffectTrigger.WEAPON_HIT, EffectAction.ApplyMark(MarkPick.SPALL, 3f), every = 5)),
