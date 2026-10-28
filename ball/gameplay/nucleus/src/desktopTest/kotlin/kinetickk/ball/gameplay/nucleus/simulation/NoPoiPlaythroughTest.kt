@@ -169,7 +169,7 @@ private fun report(value: String) {
 /** How far beyond a skipped optional site's radius the bot keeps the momentum-projected Core (65 + 295 = 360). */
 private const val SITE_CLEARANCE_MARGIN = 295f
 
-/** How far beyond a skipped optional site's radius a Blink or an Arc Hook line must pass (65 + 85 = 150). */
+/** How far beyond a skipped optional site's radius a Blink, Arc Hook or Slingshot line must pass (65 + 85 = 150). */
 private const val SITE_GUARD_MARGIN = 85f
 
 /** The bot looks at its skills this often (simulated seconds). */
@@ -543,7 +543,13 @@ internal class NoPoiBot(
             SkillId.ARC_HOOK -> s.nearestSkillTarget(singularityX, singularityY, values[0])?.let { target ->
                 !crossesOptionalSite(s, s.coreX, s.coreY, target.x, target.y)
             } == true
-            SkillId.SLINGSHOT -> s.speed >= 500f && (s.velocityX * aimX + s.velocityY * aimY) / s.speed <= 0f
+            // The swing throws the Core along the aim at its swing speed (the speed times the scale, within the minimum
+            // and maximum), so (like a Blink and the hook) never along a line that touches a skipped site within the
+            // swing's own clear-path horizon.
+            SkillId.SLINGSHOT -> s.speed >= 500f && (s.velocityX * aimX + s.velocityY * aimY) / s.speed <= 0f && run {
+                val reach = (s.speed * values[0]).coerceIn(values[1], values[2]) * SLING_CLEAR_SECONDS
+                !crossesOptionalSite(s, s.coreX, s.coreY, s.coreX + aimX * reach, s.coreY + aimY * reach)
+            }
         }
     }
 
