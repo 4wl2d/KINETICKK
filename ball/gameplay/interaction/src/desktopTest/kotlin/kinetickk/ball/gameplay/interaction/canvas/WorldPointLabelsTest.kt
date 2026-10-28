@@ -12,7 +12,7 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
-import kinetickk.ball.content.api.ANOMALY_KIND_COUNT
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
@@ -124,7 +124,8 @@ class WorldPointLabelsTest {
         for ((width, height) in sizes) for (language in AppLanguage.entries) for (textScale in textScales) {
             val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64),
                 textScale, language, HudTestFonts.typography.copy(localeList = language.localeList()))
-            for (kind in SiteKind.entries.take(ANOMALY_KIND_COUNT)) {
+            // Every kind a window can offer, and the sigil, which lies in the world the same way.
+            for (kind in WindowSiteKinds + SiteKind.FAR_SIGIL) {
                 val base = model(width, height, emptyList())
                 val name = base.content.sites.definition(kind).name
                 val model = base.with("sites" to immutableListOf(
@@ -158,8 +159,11 @@ class WorldPointLabelsTest {
                 assertTrue(pairs > 50, "$language $kind at $width x $height text=$textScale draws its name in the open field ($pairs)")
             }
         }
-        // The name is drawn in the kind's color: gravitic for the sealed anomaly, you for the circuit.
-        listOf(SiteKind.SEALED_ANOMALY to Kk.AGravitic, SiteKind.RESONANT_CIRCUIT to KkRolePalette.Default.you)
+        // The name is drawn in the kind's color: gravitic for the sealed anomaly, you for the circuit and the race, threat
+        // for the bounty, bone for a challenge, the void hue for the sigil.
+        listOf(SiteKind.SEALED_ANOMALY to Kk.AGravitic, SiteKind.RESONANT_CIRCUIT to KkRolePalette.Default.you,
+            SiteKind.GATE_RACE to KkRolePalette.Default.you, SiteKind.BOUNTY_ARENA to KkRolePalette.Default.threat,
+            SiteKind.SLALOM_TRIAL to Kk.Bone, SiteKind.FAR_SIGIL to KkRolePalette.Default.element(StatusElement.VOID.ordinal))
             .forEach { (kind, color) ->
                 val base = model(1_440, 810, emptyList())
                 val model = base.with("sites" to immutableListOf(SiteProjection(kind,
@@ -187,14 +191,15 @@ class WorldPointLabelsTest {
         listOf(0f, 0.3f, 0.65f, 0.99f, 1f, 1.3f).forEach { progress ->
             val tenths = orbitRingTenths(progress, required)
             val point = orbit(progress, remaining = 14.2f)
-            assertTrue(trialProgressText(base, point, AppLanguage.English).startsWith("${tenths / 10}.${tenths % 10} / "), "EN at $progress")
-            assertTrue(trialProgressText(base, point, AppLanguage.Russian).startsWith("${tenths / 10},${tenths % 10} / "), "RU at $progress")
+            val trial = siteTrial(point, base.content.sites)
+            assertTrue(trialProgressText(trial, AppLanguage.English).startsWith("${tenths / 10}.${tenths % 10} / "), "EN at $progress")
+            assertTrue(trialProgressText(trial, AppLanguage.Russian).startsWith("${tenths / 10},${tenths % 10} / "), "RU at $progress")
         }
         assertEquals("S", WorldStrings.secondsSuffix(AppLanguage.English))
         assertEquals(" С", WorldStrings.secondsSuffix(AppLanguage.Russian))
         // Rendered: the label follows the time in the ring and ignores the trial clock.
         fun label(progress: Float, remaining: Float, box: Rect? = null): Pair<Rect, IntArray> {
-            val model = base.with("sites" to immutableListOf(orbit(progress, remaining)))
+            val model = base.withSites(orbit(progress, remaining))
             val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64),
                 1.25f, AppLanguage.English, HudTestFonts.typography)
             val bitmap = ImageBitmap(1_440, 810)
@@ -251,6 +256,8 @@ class WorldPointLabelsTest {
         hudTestModel(width.toFloat(), height.toFloat()).with(
             "coreX" to 0f, "coreY" to 0f, "cameraX" to 0f, "cameraY" to 0f, "totem" to null,
             "enemies" to immutableListOf<EnemyProjection>(), "sites" to points.toImmutableList(),
+            // A running site's trial panel joins the HUD's keep-out.
+            "trial" to points.firstOrNull { it.active }?.let { siteTrial(it) },
         )
 
     private fun point(kind: SiteKind, x: Float, y: Float, active: Boolean) =

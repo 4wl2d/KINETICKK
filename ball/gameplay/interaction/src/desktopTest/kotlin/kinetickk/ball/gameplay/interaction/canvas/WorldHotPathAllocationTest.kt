@@ -148,6 +148,14 @@ class WorldHotPathAllocationTest {
     }
 
     @Test
+    fun siteMarksGlyphsAndMarkersOfEveryFamilyDrawWithoutAllocating() {
+        assertFrameIsAllocationFree(KkRolePalette.Default, WeaponId.MORNINGSTAR, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = ::withSitesOfEveryFamily)
+        assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = ::withSitesOfEveryFamily)
+    }
+
+    @Test
     fun worldColorsFollowTheRolePalette() {
         val model = busyModel(WeaponId.ARC_COIL)
         val fx = busyFx()
@@ -239,11 +247,9 @@ class WorldHotPathAllocationTest {
         val height = 810
         val base = hudTestModel(width.toFloat(), height.toFloat())
         val frames = List(HUD_FRAMES) { frame ->
-            base.with(
-                "totem" to TotemProjection(base.coreX - 1_300f - frame * 11f, base.coreY + 90f, 1f),
-                "sites" to immutableListOf(SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit",
-                    base.coreX + 60f, base.coreY + 40f, true, 12f, -1, frame / HUD_FRAMES.toFloat(), immutableListOf(), 0f, 0f)),
-            )
+            base.with("totem" to TotemProjection(base.coreX - 1_300f - frame * 11f, base.coreY + 90f, 1f))
+                .withSites(SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit",
+                    base.coreX + 60f, base.coreY + 40f, true, 12f, -1, frame / HUD_FRAMES.toFloat(), immutableListOf(), 0f, 0f))
         }
         val measurer = CanvasTextMeasurer(
             ComposeTextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64),
@@ -285,6 +291,31 @@ class WorldHotPathAllocationTest {
                 if (other != index) assertFalse(style.hasSameLayoutAffectingAttributes(otherStyle), "marker styles $index and $other")
             }
         }
+    }
+
+    @Test
+    fun everyEdgeMarkerColorHasItsOwnDigitParagraphs() {
+        // The site families add colors (race volt, bounty threat, ambient mute, sigil void): markers of one color share
+        // their digit style, markers of two colors never share a paragraph, and none shares the HUD's mono digits.
+        val typography = HudTestFonts.typography
+        for (roles in listOf(KkRolePalette.Default, KkRolePalette.Mono)) {
+            val icons = EdgeMarkerIcon.entries
+            icons.forEach { icon ->
+                val style = edgeMarkerStyle(typography, icon, roles)
+                assertFalse(style.hasSameLayoutAffectingAttributes(typography.monoStyle(style.fontSize.value)), "$icon vs the HUD's mono digits")
+                icons.forEach { other ->
+                    val otherStyle = edgeMarkerStyle(typography, other, roles)
+                    if (edgeMarkerColorGroup(icon) == edgeMarkerColorGroup(other)) {
+                        assertTrue(edgeMarkerColor(icon, roles) == edgeMarkerColor(other, roles), "$icon and $other share a group, not a color")
+                    } else {
+                        assertFalse(style.hasSameLayoutAffectingAttributes(otherStyle), "$icon and $other share digit paragraphs")
+                    }
+                }
+            }
+        }
+        assertTrue(edgeMarkerColor(EdgeMarkerIcon.RACE, KkRolePalette.Default) == KkRolePalette.Default.you, "the race is the player's course")
+        assertTrue(edgeMarkerColor(EdgeMarkerIcon.BOUNTY, KkRolePalette.Default) == KkRolePalette.Default.threat, "a bounty is a threat")
+        assertFalse(edgeMarkerColor(EdgeMarkerIcon.CHALLENGE, KkRolePalette.Default) == KkRolePalette.Default.threat, "a rule is no threat")
     }
 
     private fun render(model: GameplayRenderModel, fx: VisualFxProjection, roles: KkRolePalette): IntArray {
@@ -503,6 +534,37 @@ class WorldHotPathAllocationTest {
             volatileBursts = immutableListOf(
                 kinetickk.ball.gameplay.nucleus.render.VolatileBurstProjection(CORE + 90f, CORE + 70f, 70f, 2.8f, 3.15f),
                 kinetickk.ball.gameplay.nucleus.render.VolatileBurstProjection(CORE - 120f, CORE + 30f, 70f, 2.9f, 3.25f),
+            ),
+            // The running orbit's panel, so the world keeps clear of it.
+            trial = siteTrial(SiteProjection(SiteKind.COLLAPSING_ORBIT, "Orbit", CORE + 60f, CORE + 40f, true, 14f, 0,
+                (drift % 80f) / 80f, immutableListOf(), 0.5f, 0.3f)),
+        )
+    }
+
+    /**
+     * The busy frame with an offer of every window family in view (race, a challenge, the bounty, a rift) and the
+     * sigil, a slalom offer and the sigil past the edge (their edge markers), and a cache and the quiet signal off
+     * screen within their reveal distance: the marks, glyphs and markers draw without allocating.
+     */
+    private fun withSitesOfEveryFamily(model: GameplayRenderModel): GameplayRenderModel {
+        fun offer(kind: SiteKind, x: Float, y: Float) = SiteProjection(kind, kind.name, x, y, false, 20f, -1, 0f, immutableListOf(), 0f, 0f)
+        fun ambient(kind: SiteKind, x: Float, y: Float, reveal: Float) =
+            SiteProjection(kind, kind.name, x, y, false, 0f, -1, 0f, immutableListOf(), 0f, 0f, reveal = reveal)
+        return model.with(
+            // The moving sealed offer stays last: its distance drives the measured frames.
+            "sites" to (listOf(
+                offer(SiteKind.GATE_RACE, CORE - 300f, CORE - 180f),
+                offer(SiteKind.UNTOUCHED_TRIAL, CORE + 260f, CORE - 200f),
+                offer(SiteKind.BOUNTY_ARENA, CORE + 300f, CORE + 160f),
+                offer(SiteKind.ZENITH_RIFT, CORE - 340f, CORE + 200f),
+                offer(SiteKind.FAR_SIGIL, CORE + 40f, CORE - 230f),
+                offer(SiteKind.SLALOM_TRIAL, CORE - 2_200f, CORE - 900f),
+            ) + model.sites).toImmutableList(),
+            "ambientSites" to immutableListOf(
+                ambient(SiteKind.DRIFT_CACHE, CORE + 1_200f, CORE + 900f, 1_800f),
+                ambient(SiteKind.QUIET_SIGNAL, CORE - 1_500f, CORE + 1_900f, 3_000f),
+                // Easter eggs are never drawn off screen.
+                ambient(SiteKind.LOST_CURSOR, CORE + 1_000f, CORE - 1_200f, 0f),
             ),
         )
     }

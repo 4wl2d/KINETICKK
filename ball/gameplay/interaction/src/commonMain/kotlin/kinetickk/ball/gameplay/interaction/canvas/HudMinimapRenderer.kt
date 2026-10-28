@@ -129,10 +129,7 @@ private object MinimapScratch {
  */
 internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMeasurer, frame: HudFrame) {
     if (!engine.settings.minimapEnabled) return
-    var trialActive = false
-    val points = engine.sites
-    for (index in points.indices) if (points[index].active) trialActive = true
-    val trial = if (trialActive) MinimapScratch.trial.update(size.width, size.height, density, measurer.scale) else null
+    val trial = if (engine.trial != null) MinimapScratch.trial.update(size.width, size.height, density, measurer.scale) else null
     val rect = MinimapScratch.rect
     if (!HudMinimapGeometry.place(frame, trial, rect)) return
     val left = rect[0]
@@ -180,11 +177,7 @@ internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMe
             val color = if (pickup.type == PickupType.KEY) roles.you else Kk.RLegend
             drawPinnedMark(centerX, centerY, half, (pickup.x - coreX) * scale, (pickup.y - coreY) * scale, dot * 1.6f, color, filled = true)
         }
-        for (index in points.indices) {
-            val point = points[index]
-            drawPinnedMark(centerX, centerY, half, (point.x - coreX) * scale, (point.y - coreY) * scale, dot * 2.2f, roles.you,
-                filled = point.active)
-        }
+        drawMinimapSites(engine, centerX, centerY, half, scale, dot, roles)
         engine.totem?.let { totem ->
             drawPinnedMark(centerX, centerY, half, (totem.x - coreX) * scale, (totem.y - coreY) * scale, dot * 2f, roles.you, filled = true)
         }
@@ -256,7 +249,7 @@ private fun DrawScope.drawPinnedMark(
 }
 
 /** ([dx], [dy]) from the centre, scaled back onto the square inset by [inset] when it lies beyond it. */
-private fun pinned(centerX: Float, centerY: Float, half: Float, dx: Float, dy: Float, inset: Float): Offset {
+internal fun pinned(centerX: Float, centerY: Float, half: Float, dx: Float, dy: Float, inset: Float): Offset {
     val limit = max(1f, half - inset)
     val reach = max(abs(dx), abs(dy))
     if (reach <= limit) return Offset(centerX + dx, centerY + dy)

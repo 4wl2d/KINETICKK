@@ -70,6 +70,8 @@ class HudHotPathAllocationTest {
                     .toImmutableList(),
                 "sites" to listOf(SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,
                     true, 12f, -1, 0.4f, immutableListOf(), 0f, 0f)).toImmutableList(),
+                "trial" to siteTrial(SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,
+                    true, 12f, -1, 0.4f, immutableListOf(), 0f, 0f)),
                 // The minimap: every obstacle kind, a Key and a Relic past its rim, the totem, an Elite and ordinary enemies.
                 "obstacles" to immutableListOf(
                     ObstacleProjection(1L, ObstacleKind.ASTEROID, 600f, 300f, 120f, 3),
@@ -98,14 +100,16 @@ class HudHotPathAllocationTest {
             // integrity (hit ghost + split channels), chain and orbit progress. Models are built up
             // front so the measured frames only draw.
             val frames = List(FRAMES) { frame ->
+                val orbit = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,
+                    true, 12f, -1, frame / FRAMES.toFloat(), immutableListOf(), 0f, 0f)
                 model.with(
                     "velocityX" to 300f + frame * 7.3f,
                     "polarityStability" to 0.24f - frame * 0.0005f,
                     "elapsed" to frame * GameplayRenderModel.FIXED_STEP,
                     "hp" to 36f - frame * 0.05f,
                     "combo" to 14 + frame,
-                    "sites" to listOf(SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,
-                        true, 12f, -1, frame / FRAMES.toFloat(), immutableListOf(), 0f, 0f)).toImmutableList(),
+                    "sites" to listOf(orbit).toImmutableList(),
+                    "trial" to siteTrial(orbit),
                 )
             }
             val bitmap = ImageBitmap(width, height)
@@ -279,6 +283,54 @@ class HudHotPathAllocationTest {
             val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
             val perFrame = (hudBytes - emptyBytes) / FRAMES
             assertTrue(perFrame <= 64, "chain + polarity frame at x$textScale allocates $perFrame bytes above an empty frame")
+        }
+    }
+
+    /**
+     * The trial panel of every family (the anomalies, the gate race, the five challenges, the bounty and the sigil
+     * duel) with its rules open: once warm, frames whose race clock ticks every frame, whose earned seconds and duel
+     * integrity change every frame allocate nothing (a counted goal changes rarely and keeps its line).
+     */
+    @Test
+    fun theTrialPanelOfEveryFamilyAllocatesNothingOnSteadyFrames() {
+        listOf(1_440 to 810, 390 to 844).forEach { (width, height) ->
+            val base = hudTestModel(width.toFloat(), height.toFloat())
+            val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
+                AppLanguage.Russian)
+            val bitmap = ImageBitmap(width, height)
+            val canvas = Canvas(bitmap)
+            val scope = CanvasDrawScope()
+            val size = Size(width.toFloat(), height.toFloat())
+            val density = Density(1f)
+            val clear: DrawScope.() -> Unit = { drawRect(Kk.Ink) }
+            fun empty() = scope.draw(density, LayoutDirection.Ltr, canvas, size, clear)
+            trialSites().forEach { site ->
+                val counted = siteTrial(site).value == kinetickk.ball.gameplay.nucleus.render.TrialValue.COUNT
+                val frames = List(FRAMES) { frame ->
+                    val running = site.copy(
+                        clock = site.clock + frame * GameplayRenderModel.FIXED_STEP,
+                        progress = if (counted) site.progress else (site.progress + frame * 0.001f).coerceAtMost(1f),
+                    )
+                    base.with("elapsed" to frame * GameplayRenderModel.FIXED_STEP).withSites(running)
+                }
+                val memory = HudPresentationMemory()
+                var current = 0
+                val block: DrawScope.() -> Unit = {
+                    val model = frames[current % FRAMES]
+                    drawHud(model, measurer, 10f + (current % FRAMES) * 0.0001f, 0f, 0f, memory, trialInfoOpen = true)
+                    drawTrialTooltip(model, measurer, open = true)
+                }
+                fun hud(frame: Int) {
+                    current = frame
+                    scope.draw(density, LayoutDirection.Ltr, canvas, size, block)
+                }
+                repeat(FRAMES) { empty(); hud(it) }
+                kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.TRIAL_PANEL), "${site.kind}: no trial panel")
+                val emptyBytes = allocated { repeat(FRAMES) { empty() } }
+                val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
+                val perFrame = (hudBytes - emptyBytes) / FRAMES
+                assertTrue(perFrame <= 64, "${site.kind} trial panel at $width x $height allocates $perFrame bytes above an empty frame")
+            }
         }
     }
 

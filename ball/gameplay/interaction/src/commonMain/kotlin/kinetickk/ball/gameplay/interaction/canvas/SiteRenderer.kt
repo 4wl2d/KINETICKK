@@ -11,6 +11,8 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.TextStyle
 import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.SiteProjection
@@ -23,11 +25,17 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-/** Radius inside which a passing Core accepts an offered point (SiteSystem). */
-private const val OFFER_RADIUS = 65f
-
-/** Half extent of an offer's mark (anomaly diamond with its corner brackets). */
+/** Half extent of an offer's mark (anomaly diamond with its corner brackets, a site glyph in its brackets). */
 private const val OFFER_MARK_HALF = 46f
+
+/** Half extent of a race gate's mark (two sheared posts across the gate). */
+private const val RACE_GATE_MARK_HALF = 60f
+
+/** Half extent of a slalom pole's mark (its plate and flag). */
+private const val SLALOM_POLE_MARK_HALF = 40f
+
+/** Size of a site glyph on an offer (the anomaly diamond's 52 less its corner reach). */
+private const val OFFER_GLYPH_SIZE = 48f
 
 /** Half extent of the active vault mark (anomaly diamond). */
 private const val VAULT_MARK_HALF = 30f
@@ -124,9 +132,8 @@ internal enum class WorldDrawn { POINT_MARK, POINT_TIMER, EDGE_MARKER, BEACON_PI
  * [hudDensity] is the density the HUD is drawn at (the interface scale applied).
  */
 internal fun DrawScope.worldHudKeepOut(engine: GameplayRenderModel, textMeasurer: TextMeasurer, hudDensity: Float = density): WorldHudKeepOut {
-    var trial = false
-    val points = engine.sites
-    for (index in points.indices) if (points[index].active) trial = true
+    // The panel shows whichever engagement runs: a site trial, a dungeon or a dimension objective.
+    val trial = engine.trial != null
     var boss = false
     val enemies = engine.enemies
     for (index in enemies.indices) {
@@ -156,51 +163,157 @@ internal fun DrawScope.drawSites(engine: GameplayRenderModel, shakeX: Float, sha
         val center = world(engine, point.x, point.y, shakeX, shakeY)
         if (point.active) {
             drawActivePoint(engine, point, center, shakeX, shakeY, textMeasurer, keepOut, scale)
-        } else if (isOnScreen(center, OFFER_RADIUS + 20f)) {
+        } else if (isOnScreen(center, point.activationRadius + 20f)) {
             drawOfferedPoint(engine, point, center, shakeX, shakeY, textMeasurer, keepOut, scale)
         }
     }
 }
 
 /**
- * Adds to [batch] the edge markers of points of interest whose mark is not shown ([markShown]);
- * [drawEdgeMarkers] draws them with the frame's other markers. The mark shakes with the world, but
- * whether it shows, and where its marker points, is decided in the unshaken view. Called in world
- * units like the marks, so both use one predicate; [batch] receives device pixels.
+ * Adds to [batch] the edge markers of sites whose mark is not shown ([markShown]); [drawEdgeMarkers]
+ * draws them with the frame's other markers. The active engagement's target comes first, then the
+ * window offers and the sigil (the batch keeps the first [EdgeMarkerBatch.CAPACITY], so order is
+ * priority). The mark shakes with the world, but whether it shows, and where its marker points, is
+ * decided in the unshaken view. Called in world units like the marks, so both use one predicate;
+ * [batch] receives device pixels.
  */
 internal fun DrawScope.collectSiteEdgeMarkers(
     engine: GameplayRenderModel,
     @Suppress("UNUSED_PARAMETER") textMeasurer: TextMeasurer,
     batch: EdgeMarkerBatch,
 ) {
-    val keepOut = WorldOverlayScratch.keepOut
-    val scale = engine.worldScale
-    for (index in engine.sites.indices) {
-        val point = engine.sites[index]
-        // An active circuit leads to its next beacon; every other point to its center.
-        val targetX: Float
-        val targetY: Float
-        if (point.active && point.kind == SiteKind.RESONANT_CIRCUIT) {
+    for (index in engine.sites.indices) if (engine.sites[index].active) collectSiteEdgeMarker(engine, engine.sites[index], batch)
+    for (index in engine.sites.indices) if (!engine.sites[index].active) collectSiteEdgeMarker(engine, engine.sites[index], batch)
+}
+
+/** One site's marker: an active course leads to its next mark (beacon, gate, pole), every other site to its center. */
+private fun DrawScope.collectSiteEdgeMarker(engine: GameplayRenderModel, point: SiteProjection, batch: EdgeMarkerBatch) {
+    var targetX = point.x
+    var targetY = point.y
+    if (point.active) when (point.kind) {
+        SiteKind.RESONANT_CIRCUIT -> {
             val beacon = (point.step + 1) % 3
             targetX = point.x + beaconDx(beacon)
             targetY = point.y + beaconDy(beacon)
-        } else {
-            targetX = point.x
-            targetY = point.y
         }
-        val target = world(engine, targetX, targetY, 0f, 0f)
-        if (markShown(target, markHalf(point), keepOut, scale)) continue
-        val dx = targetX - engine.coreX
-        val dy = targetY - engine.coreY
-        batch.add(target.x * scale, target.y * scale, sqrt(dx * dx + dy * dy), point.kind.edgeIcon())
+        SiteKind.GATE_RACE, SiteKind.SLALOM_TRIAL -> if (point.step in point.course.indices) {
+            targetX = point.x + point.course[point.step].dx
+            targetY = point.y + point.course[point.step].dy
+        }
+        else -> Unit
     }
+    val target = world(engine, targetX, targetY, 0f, 0f)
+    if (markShown(target, markHalf(point), WorldOverlayScratch.keepOut, engine.worldScale)) return
+    val dx = targetX - engine.coreX
+    val dy = targetY - engine.coreY
+    batch.add(target.x * engine.worldScale, target.y * engine.worldScale, sqrt(dx * dx + dy * dy), point.kind.edgeIcon())
 }
 
 private fun markHalf(point: SiteProjection): Float = when {
     !point.active -> OFFER_MARK_HALF
     point.kind == SiteKind.SEALED_ANOMALY -> VAULT_MARK_HALF
     point.kind == SiteKind.RESONANT_CIRCUIT -> BEACON_MARK_HALF
-    else -> 0f // the collapsing orbit's ring reaches well past its center
+    point.kind == SiteKind.GATE_RACE -> RACE_GATE_MARK_HALF
+    point.kind == SiteKind.SLALOM_TRIAL -> SLALOM_POLE_MARK_HALF
+    else -> 0f // rings, arenas and duels reach well past their center
+}
+
+/**
+ * Sites on the minimap, pinned to its rim when beyond its range: an anomaly a volt square (filled while it runs), a
+ * race two volt posts (and its next gate while it runs), a challenge a bone diamond, a bounty a square in threat
+ * outline, a rift a square in its layer's hue, the sigil a void ring around its dot; a cache and the quiet signal only
+ * within their reveal distance, easter eggs never.
+ */
+internal fun DrawScope.drawMinimapSites(
+    engine: GameplayRenderModel,
+    centerX: Float,
+    centerY: Float,
+    half: Float,
+    scale: Float,
+    dot: Float,
+    roles: KkRolePalette,
+) {
+    val sites = engine.sites
+    for (index in sites.indices) drawMinimapSite(engine, sites[index], centerX, centerY, half, scale, dot, roles)
+    val ambient = engine.ambientSites
+    for (index in ambient.indices) {
+        val point = ambient[index]
+        if (revealed(engine, point)) drawMinimapSite(engine, point, centerX, centerY, half, scale, dot, roles)
+    }
+}
+
+/** Whether an ambient site shows off-screen: within its reveal distance of the Core (0 never). */
+internal fun revealed(engine: GameplayRenderModel, point: SiteProjection): Boolean {
+    if (point.reveal <= 0f) return false
+    val dx = point.x - engine.coreX
+    val dy = point.y - engine.coreY
+    return dx * dx + dy * dy <= point.reveal * point.reveal
+}
+
+private fun DrawScope.drawMinimapSite(
+    engine: GameplayRenderModel,
+    point: SiteProjection,
+    centerX: Float,
+    centerY: Float,
+    half: Float,
+    scale: Float,
+    dot: Float,
+    roles: KkRolePalette,
+) {
+    val dx = (point.x - engine.renderCoreX) * scale
+    val dy = (point.y - engine.renderCoreY) * scale
+    when (point.kind) {
+        SiteKind.RESONANT_CIRCUIT, SiteKind.SEALED_ANOMALY, SiteKind.COLLAPSING_ORBIT ->
+            drawMinimapSquare(pinned(centerX, centerY, half, dx, dy, dot * 2.2f), dot * 2.2f, roles.you, filled = point.active)
+        SiteKind.GATE_RACE -> {
+            val at = pinned(centerX, centerY, half, dx, dy, dot * 2.2f)
+            val post = dot * 1.2f
+            val apart = dot * 0.8f
+            drawLine(roles.you, Offset(at.x - apart, at.y - post), Offset(at.x - apart, at.y + post), 1f)
+            drawLine(roles.you, Offset(at.x + apart, at.y - post), Offset(at.x + apart, at.y + post), 1f)
+            if (point.active && point.step in point.course.indices) {
+                val gate = point.course[point.step]
+                drawCircle(roles.you, dot, pinned(centerX, centerY, half, dx + gate.dx * scale, dy + gate.dy * scale, dot))
+            }
+        }
+        SiteKind.BRAKELESS_TRIAL, SiteKind.RAM_TRIAL, SiteKind.UNTOUCHED_TRIAL, SiteKind.VELOCITY_TRIAL, SiteKind.SLALOM_TRIAL -> {
+            val at = pinned(centerX, centerY, half, dx, dy, dot * 2.4f)
+            val reach = dot * 1.7f
+            rotate(45f, at) {
+                if (point.active) {
+                    drawRect(Kk.Bone, Offset(at.x - reach * 0.5f, at.y - reach * 0.5f), Size(reach, reach))
+                } else {
+                    drawRect(Kk.Bone, Offset(at.x - reach * 0.5f, at.y - reach * 0.5f), Size(reach, reach), style = kkStroke(1f))
+                }
+            }
+        }
+        SiteKind.BOUNTY_ARENA -> {
+            val at = pinned(centerX, centerY, half, dx, dy, dot * 2.2f)
+            drawMinimapSquare(at, dot * 2.2f, Kk.Bone.copy(alpha = if (point.active) 0.9f else 0.5f), filled = true)
+            drawMinimapSquare(at, dot * 2.2f, roles.threat, filled = false)
+        }
+        SiteKind.ZENITH_RIFT -> drawMinimapSquare(pinned(centerX, centerY, half, dx, dy, dot * 2.2f), dot * 2.2f, roles.shield, filled = false)
+        SiteKind.NADIR_RIFT -> drawMinimapSquare(pinned(centerX, centerY, half, dx, dy, dot * 2.2f), dot * 2.2f, roles.heat, filled = false)
+        SiteKind.FAR_SIGIL -> {
+            val at = pinned(centerX, centerY, half, dx, dy, dot * 2f)
+            val color = sigilColor(roles)
+            drawCircle(color, dot * 1.6f, at, style = kkStroke(1f))
+            drawCircle(color, dot * 0.6f, at)
+        }
+        SiteKind.DRIFT_CACHE -> drawMinimapSquare(pinned(centerX, centerY, half, dx, dy, dot * 1.4f), dot * 1.4f,
+            Kk.Bone.copy(alpha = 0.7f), filled = true)
+        SiteKind.QUIET_SIGNAL -> drawCircle(Kk.Mute, dot * 1.6f, pinned(centerX, centerY, half, dx, dy, dot * 2f), style = kkStroke(1f))
+        // Easter eggs are found, never shown.
+        SiteKind.LOST_CURSOR, SiteKind.GOLDEN_DRIFTER -> Unit
+    }
+}
+
+private fun DrawScope.drawMinimapSquare(at: Offset, size: Float, color: Color, filled: Boolean) {
+    if (filled) {
+        drawRect(color, Offset(at.x - size * 0.5f, at.y - size * 0.5f), Size(size, size))
+    } else {
+        drawRect(color, Offset(at.x - size * 0.5f, at.y - size * 0.5f), Size(size, size), style = kkStroke(1f))
+    }
 }
 
 /** Whether a mark of half extent [half] around [center] lies fully on screen. */
@@ -223,12 +336,10 @@ internal fun DrawScope.markShown(center: Offset, half: Float, keepOut: WorldHudK
  */
 internal fun steady(center: Offset, shakeX: Float, shakeY: Float): Offset = Offset(center.x - shakeX, center.y - shakeY)
 
-private fun SiteKind.edgeIcon(): EdgeMarkerIcon = when (this) {
+internal fun SiteKind.edgeIcon(): EdgeMarkerIcon = when (this) {
     SiteKind.RESONANT_CIRCUIT -> EdgeMarkerIcon.RESONANT_CIRCUIT
     SiteKind.SEALED_ANOMALY -> EdgeMarkerIcon.SEALED_ANOMALY
     SiteKind.COLLAPSING_ORBIT -> EdgeMarkerIcon.COLLAPSING_ORBIT
-    // Each family has its marker; the hidden easter eggs read as anomalies until the site lane decides them. Only the
-    // anomalies are offered until the site lane draws kinds by weight.
     SiteKind.GATE_RACE -> EdgeMarkerIcon.RACE
     SiteKind.BRAKELESS_TRIAL, SiteKind.RAM_TRIAL, SiteKind.UNTOUCHED_TRIAL, SiteKind.VELOCITY_TRIAL, SiteKind.SLALOM_TRIAL,
     -> EdgeMarkerIcon.CHALLENGE
@@ -237,7 +348,8 @@ private fun SiteKind.edgeIcon(): EdgeMarkerIcon = when (this) {
     SiteKind.QUIET_SIGNAL -> EdgeMarkerIcon.QUIET
     SiteKind.FAR_SIGIL -> EdgeMarkerIcon.SIGIL
     SiteKind.ZENITH_RIFT, SiteKind.NADIR_RIFT -> EdgeMarkerIcon.PORTAL
-    SiteKind.LOST_CURSOR, SiteKind.GOLDEN_DRIFTER -> EdgeMarkerIcon.SEALED_ANOMALY
+    // Easter eggs are never revealed off-screen; their icon is never collected.
+    SiteKind.LOST_CURSOR, SiteKind.GOLDEN_DRIFTER -> EdgeMarkerIcon.CACHE
 }
 
 /**
@@ -259,7 +371,8 @@ private fun DrawScope.drawOfferedPoint(
     val time = engine.renderElapsed
     val pulse = (sin(time * 3.1f) + 1f) * 0.5f
     rotate(time * 15f, center) {
-        drawCircle(Kk.Bone.copy(alpha = 0.22f + pulse * 0.1f), OFFER_RADIUS, center, style = WorldStrokes.dashedThin)
+        // The ring a passing Core must cross to take the offer (65 for every window site).
+        drawCircle(Kk.Bone.copy(alpha = 0.22f + pulse * 0.1f), point.activationRadius, center, style = WorldStrokes.dashedThin)
     }
     if (!markShown(steady(center, shakeX, shakeY), OFFER_MARK_HALF, keepOut, scale)) return
     recordMark(center, OFFER_MARK_HALF)
@@ -274,14 +387,25 @@ private fun DrawScope.drawOfferedPoint(
             drawCircle(roles.you.copy(alpha = 0.18f), 40f, center, style = kkStroke(4f))
         }
         SiteKind.RESONANT_CIRCUIT -> drawTotemPlates(center, 1.2f, roles.you, keyBlock = true, keyIcon = true)
-        // Only the anomalies are offered until the site lane draws kinds by weight.
-        SiteKind.GATE_RACE, SiteKind.BRAKELESS_TRIAL, SiteKind.RAM_TRIAL, SiteKind.UNTOUCHED_TRIAL,
-        SiteKind.VELOCITY_TRIAL, SiteKind.SLALOM_TRIAL, SiteKind.BOUNTY_ARENA, SiteKind.DRIFT_CACHE, SiteKind.LOST_CURSOR,
-        SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL, SiteKind.FAR_SIGIL, SiteKind.ZENITH_RIFT, SiteKind.NADIR_RIFT,
-        -> Unit
+        // The race is the player's own course; a challenge is a rule (bone) with the player's corner ticks; a bounty
+        // is a target in threat brackets.
+        SiteKind.GATE_RACE -> drawSiteGlyph(SiteGlyph.RACE, center, OFFER_GLYPH_SIZE, roles.you)
+        SiteKind.BRAKELESS_TRIAL, SiteKind.RAM_TRIAL, SiteKind.UNTOUCHED_TRIAL, SiteKind.VELOCITY_TRIAL, SiteKind.SLALOM_TRIAL -> {
+            drawSiteGlyph(siteGlyph(point.kind), center, OFFER_GLYPH_SIZE, Kk.Bone, alpha = 0.8f + pulse * 0.2f)
+            drawCornerBrackets(center, 40f, roles.you)
+        }
+        SiteKind.BOUNTY_ARENA -> {
+            drawSiteGlyph(SiteGlyph.BOUNTY, center, OFFER_GLYPH_SIZE, Kk.Bone, alpha = 0.8f + pulse * 0.2f)
+            drawCornerBrackets(center, 40f, roles.threat)
+        }
+        SiteKind.FAR_SIGIL -> drawSiteGlyph(SiteGlyph.SIGIL, center, OFFER_GLYPH_SIZE, sigilColor(roles))
+        SiteKind.ZENITH_RIFT -> drawPortal(center, WorldLayer.ZENITH, locked = false, glitch = false, time = time, roles = roles)
+        SiteKind.NADIR_RIFT -> drawPortal(center, WorldLayer.NADIR, locked = false, glitch = false, time = time, roles = roles)
+        // Caches and easter eggs lie in the ambient window, never among the offers.
+        SiteKind.DRIFT_CACHE, SiteKind.LOST_CURSOR, SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL -> Unit
     }
     inScreenUnits(scale) {
-        drawOfferLabels(point, Offset(center.x * scale, center.y * scale), (OFFER_RADIUS + 8f) * scale, textMeasurer, keepOut)
+        drawOfferLabels(point, Offset(center.x * scale, center.y * scale), (point.activationRadius + 8f) * scale, textMeasurer, keepOut)
     }
 }
 
@@ -386,13 +510,21 @@ private fun DrawScope.drawActivePoint(
                 drawOrbitLabel(engine, point, Offset(center.x * scale, center.y * scale), textMeasurer, keepOut, ORBIT_LABEL_OFFSET * scale)
             }
         }
-        // Only the anomalies are offered until the site lane draws kinds by weight.
+        // A summoned sigil dims while its duel runs.
+        SiteKind.FAR_SIGIL -> if (markShown(steady(center, shakeX, shakeY), OFFER_MARK_HALF, keepOut, scale)) {
+            drawSiteGlyph(SiteGlyph.SIGIL, center, OFFER_GLYPH_SIZE, sigilColor(roles), alpha = 0.35f)
+        }
+        // Courses, rings and arenas of the other window kinds are drawn by their families' steps; caches, eggs and
+        // rifts never run a trial.
         SiteKind.GATE_RACE, SiteKind.BRAKELESS_TRIAL, SiteKind.RAM_TRIAL, SiteKind.UNTOUCHED_TRIAL,
         SiteKind.VELOCITY_TRIAL, SiteKind.SLALOM_TRIAL, SiteKind.BOUNTY_ARENA, SiteKind.DRIFT_CACHE, SiteKind.LOST_CURSOR,
-        SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL, SiteKind.FAR_SIGIL, SiteKind.ZENITH_RIFT, SiteKind.NADIR_RIFT,
+        SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL, SiteKind.ZENITH_RIFT, SiteKind.NADIR_RIFT,
         -> Unit
     }
 }
+
+/** The secret sigil's hue: the void element's. */
+private fun sigilColor(roles: KkRolePalette): Color = roles.element(StatusElement.VOID.ordinal)
 
 /**
  * The collapsing orbit's seconds in the ring ("5.2S", the trial panel's progress value) above the
@@ -638,10 +770,17 @@ private fun DrawScope.drawEdgeMarker(x: Float, y: Float, distance: Float, icon: 
             drawArc(roles.you, -90f, 200f, false, Offset(marker.x - iconSize * 0.48f, marker.y - iconSize * 0.48f),
                 Size(iconSize * 0.96f, iconSize * 0.96f), style = kkStroke(d(2f)))
         }
-        // The 0.6.0 targets draw the anomaly glyph until their lanes give them their own; none is collected yet.
-        EdgeMarkerIcon.RACE, EdgeMarkerIcon.CHALLENGE, EdgeMarkerIcon.BOUNTY, EdgeMarkerIcon.CACHE, EdgeMarkerIcon.QUIET,
-        EdgeMarkerIcon.SIGIL, EdgeMarkerIcon.PORTAL, EdgeMarkerIcon.SIGNAL, EdgeMarkerIcon.STRUCTURE, EdgeMarkerIcon.HALO,
-        -> drawKkIcon(KkIcon.SYSTEM_ANOMALY, marker, iconSize, color)
+        EdgeMarkerIcon.RACE -> drawSiteGlyph(SiteGlyph.RACE, marker, iconSize, color)
+        EdgeMarkerIcon.CHALLENGE -> drawSiteGlyph(SiteGlyph.CHALLENGE, marker, iconSize, color)
+        EdgeMarkerIcon.BOUNTY -> drawSiteGlyph(SiteGlyph.BOUNTY, marker, iconSize, color)
+        EdgeMarkerIcon.CACHE -> drawSiteGlyph(SiteGlyph.CACHE, marker, iconSize, color)
+        EdgeMarkerIcon.QUIET -> drawSiteGlyph(SiteGlyph.QUIET, marker, iconSize, color)
+        EdgeMarkerIcon.SIGIL -> drawSiteGlyph(SiteGlyph.SIGIL, marker, iconSize, color)
+        EdgeMarkerIcon.PORTAL -> drawSiteGlyph(SiteGlyph.PORTAL, marker, iconSize, color)
+        EdgeMarkerIcon.SIGNAL -> drawSiteGlyph(SiteGlyph.SIGNAL, marker, iconSize, color)
+        EdgeMarkerIcon.STRUCTURE -> drawSiteGlyph(SiteGlyph.STRUCTURE, marker, iconSize, color)
+        // The next dimension halo draws its ring once its lane gives it one.
+        EdgeMarkerIcon.HALO -> drawKkIcon(KkIcon.SYSTEM_ANOMALY, marker, iconSize, color)
     }
     val onRight = marker.x > size.width * 0.5f
     val textX = if (onRight) marker.x - iconSize * 0.5f - d(EDGE_TEXT_GAP_DP) else marker.x + iconSize * 0.5f + d(EDGE_TEXT_GAP_DP)
@@ -655,13 +794,19 @@ private fun DrawScope.drawEdgeMarker(x: Float, y: Float, distance: Float, icon: 
     }
 }
 
-private fun edgeMarkerColor(icon: EdgeMarkerIcon, roles: KkRolePalette): Color = when (icon) {
-    EdgeMarkerIcon.TOTEM, EdgeMarkerIcon.RESONANT_CIRCUIT -> roles.you
+/**
+ * An edge marker's color: volt for the player's own course (totem, circuit, race), threat only for a bounty, the void
+ * hue for the sigil, mute for the quiet ambient sites, bone for rules and rifts.
+ */
+internal fun edgeMarkerColor(icon: EdgeMarkerIcon, roles: KkRolePalette): Color = when (icon) {
+    EdgeMarkerIcon.TOTEM, EdgeMarkerIcon.RESONANT_CIRCUIT, EdgeMarkerIcon.RACE -> roles.you
     EdgeMarkerIcon.SEALED_ANOMALY -> Kk.AGravitic
-    EdgeMarkerIcon.COLLAPSING_ORBIT -> Kk.Bone
-    EdgeMarkerIcon.RACE, EdgeMarkerIcon.CHALLENGE, EdgeMarkerIcon.BOUNTY, EdgeMarkerIcon.CACHE, EdgeMarkerIcon.QUIET,
-    EdgeMarkerIcon.SIGIL, EdgeMarkerIcon.PORTAL, EdgeMarkerIcon.SIGNAL, EdgeMarkerIcon.STRUCTURE, EdgeMarkerIcon.HALO,
-    -> Kk.Bone
+    EdgeMarkerIcon.COLLAPSING_ORBIT, EdgeMarkerIcon.CHALLENGE, EdgeMarkerIcon.PORTAL -> Kk.Bone
+    EdgeMarkerIcon.BOUNTY -> roles.threat
+    EdgeMarkerIcon.CACHE, EdgeMarkerIcon.QUIET -> Kk.Mute
+    EdgeMarkerIcon.SIGIL -> sigilColor(roles)
+    // Their lanes pick their colors; bone until then.
+    EdgeMarkerIcon.SIGNAL, EdgeMarkerIcon.STRUCTURE, EdgeMarkerIcon.HALO -> Kk.Bone
 }
 
 /** Line height of the edge-marker digits; the HUD's mono digits keep the builder's 1.35. */
@@ -674,15 +819,20 @@ private const val EDGE_LINE_HEIGHT_EM = 1.351f
  * them equals the line height of the HUD's mono digits (trial clock), which are drawn in bone.
  */
 internal fun edgeMarkerStyle(typography: InterfaceTypography, icon: EdgeMarkerIcon, roles: KkRolePalette): TextStyle {
-    val colorGroup = when (icon) {
-        EdgeMarkerIcon.TOTEM, EdgeMarkerIcon.RESONANT_CIRCUIT -> 0
-        EdgeMarkerIcon.SEALED_ANOMALY -> 1
-        EdgeMarkerIcon.COLLAPSING_ORBIT -> 2
-        EdgeMarkerIcon.RACE, EdgeMarkerIcon.CHALLENGE, EdgeMarkerIcon.BOUNTY, EdgeMarkerIcon.CACHE, EdgeMarkerIcon.QUIET,
-        EdgeMarkerIcon.SIGIL, EdgeMarkerIcon.PORTAL, EdgeMarkerIcon.SIGNAL, EdgeMarkerIcon.STRUCTURE, EdgeMarkerIcon.HALO,
-        -> 4
-    }
+    val colorGroup = edgeMarkerColorGroup(icon)
     return typography.monoStyle(EDGE_DISTANCE_SP, lineHeightEm = EDGE_LINE_HEIGHT_EM + colorGroup * 0.001f, color = edgeMarkerColor(icon, roles))
+}
+
+/** The line-height group of [icon]'s color in [edgeMarkerStyle]: one group per marker color. */
+internal fun edgeMarkerColorGroup(icon: EdgeMarkerIcon): Int = when (icon) {
+    EdgeMarkerIcon.TOTEM, EdgeMarkerIcon.RESONANT_CIRCUIT, EdgeMarkerIcon.RACE -> 0
+    EdgeMarkerIcon.SEALED_ANOMALY -> 1
+    EdgeMarkerIcon.COLLAPSING_ORBIT, EdgeMarkerIcon.CHALLENGE, EdgeMarkerIcon.PORTAL, EdgeMarkerIcon.SIGNAL,
+    EdgeMarkerIcon.STRUCTURE, EdgeMarkerIcon.HALO,
+    -> 2
+    EdgeMarkerIcon.BOUNTY -> 3
+    EdgeMarkerIcon.CACHE, EdgeMarkerIcon.QUIET -> 4
+    EdgeMarkerIcon.SIGIL -> 5
 }
 
 /** Edge-marker distance: world units rounded to tens, at most the laid-out four digits. */
