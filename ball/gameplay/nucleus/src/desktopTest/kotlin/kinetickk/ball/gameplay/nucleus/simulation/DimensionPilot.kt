@@ -260,7 +260,10 @@ internal class DimensionPilot(
             if (goalIsRift && marks[base] == goalX && marks[base + 1] == goalY) continue
             val px = s.coreX + s.velocityX * 0.35f - marks[base]
             val py = s.coreY + s.velocityY * 0.35f - marks[base + 1]
-            val clearance = marks[base + 2] + SITE_CLEARANCE_MARGIN
+            var clearance = marks[base + 2] + SITE_CLEARANCE_MARGIN
+            // A rift inside another skipped site's berth (a glitch rift beside a structure) would hold the Core where the
+            // berth balances the approach: the berth then reaches only to the rift.
+            if (goalIsRift) clearance = min(clearance, length(goalX - marks[base], goalY - marks[base + 1]))
             val pd = max(1f, length(px, py))
             if (pd < clearance) {
                 desiredX += px / pd * (clearance - pd) * 8f
