@@ -301,6 +301,32 @@ class GameComponentTest {
     }
 
     @Test
+    fun anEasyRunNeverCallsTheProfileProgressCommand() {
+        val standardProfile = TestProfilePort()
+        val standard = component(standardProfile)
+        standard.start(RunMode.STANDARD)
+        standard.advanceUntilMatter()
+        assertEquals(GameplayExitProgressResult.Applied, standard.exit().progress)
+        assertEquals(1, standardProfile.calls.size)
+
+        val profile = TestProfilePort()
+        val component = component(profile)
+        component.start(RunMode.EASY)
+        component.advanceUntilMatter()
+        assertTrue(profile.calls.isEmpty(), "a Baby mode run publishes nothing while it runs")
+        val result = component.exit()
+
+        assertEquals(GameplayExitProgressResult.NoProgress, result.progress)
+        assertTrue(profile.calls.isEmpty())
+        assertTrue(profile.replies.isEmpty())
+        assertEquals(GameplayRunPhase.EXITED, component.query(GameplayQuery.GetRunStatus).phase)
+        assertFalse(component.query(GameplayQuery.GetRunStatus).progressPending)
+        val render = checkNotNull(component.renderSnapshot().renderModel)
+        assertTrue(render.easyMode)
+        assertTrue(render.runMatter > 0L, "the run still shows the Matter it earned")
+    }
+
+    @Test
     fun wrongTargetAndUnavailableBootstrapRefuseBeforePublication() {
         val closed = GameplayCommandTestCaller<GameplayRunStarted>()
         val closedComponent = component()
@@ -681,13 +707,17 @@ class GameComponentTest {
             audio = frameAudio,
         )
         val frameStart = frameComponent.start()
+        // The first fixed step opens the omen offer; the run takes No omen (revisions 2 and 3) before the faulting frame.
+        assertIs<GameplayAcceptance.Accepted>(frameComponent.accept(GameplayInteractionPulse.FrameElapsed.fromValidated(1f / 60f)))
+        assertTrue(frameComponent.declineOmenIfOffered())
+        frameAudio.frames.clear()
         frameAudio.throwOnAdvance = true
 
         assertFailsWith<AudioResourceFault> {
             frameComponent.accept(GameplayInteractionPulse.FrameElapsed.fromValidated(0.1f))
         }
         val advanced = frameComponent.query(GameplayQuery.GetRunStatus)
-        assertEquals(GameplayRevision(2), advanced.revision)
+        assertEquals(GameplayRevision(4), advanced.revision)
         assertEquals(GameplayRunPhase.RUNNING, advanced.phase)
         assertEquals(1, frameAudio.frames.size)
         assertEquals(GameplayRevision(1), frameStart.revision)
@@ -763,6 +793,7 @@ private fun GameComponent.advanceUntilMatter() {
     repeat(1_200) { frameIndex ->
         val render = checkNotNull(renderSnapshot().renderModel)
         if (render.runMatter > 0L) return
+        if (declineOmenIfOffered()) return@repeat
         check(query(GameplayQuery.GetRunStatus).phase == GameplayRunPhase.RUNNING) {
             "Run stopped before earning progress at frame $frameIndex"
         }
@@ -786,6 +817,7 @@ private fun GameComponent.advanceUntilItemChoice() {
         ) {
             return
         }
+        if (declineOmenIfOffered()) return@repeat
         check(query(GameplayQuery.GetRunStatus).phase == GameplayRunPhase.RUNNING) {
             "Run stopped before its first item choice at frame $frameIndex: ${render.phase} / ${render.choiceType} / ${render.message} hp=${render.hp} kills=${render.kills} level=${render.level}"
         }

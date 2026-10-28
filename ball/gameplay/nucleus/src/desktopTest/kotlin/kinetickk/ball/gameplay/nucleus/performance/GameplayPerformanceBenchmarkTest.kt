@@ -25,6 +25,7 @@ import kinetickk.ball.content.api.WorldEventKind
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.nucleus.model.AmbientSiteWindow
+import kinetickk.ball.gameplay.nucleus.model.DimensionRunState
 import kinetickk.ball.gameplay.nucleus.model.DungeonState
 import kinetickk.ball.gameplay.nucleus.model.PlacedStructure
 import kinetickk.ball.gameplay.nucleus.model.SignalPrompt
@@ -288,7 +289,7 @@ class GameplayPerformanceBenchmarkTest {
             { omenPending = true },
             { runOmen = OmenId.RICH_VEINS },
             { runMutatorMask = 1 },
-            { directorPersonality = DirectorPersonalityId.TIDE },
+            { directorPersonality = DirectorPersonalityId.entries.first { it != directorPersonality } },
             { featuredAspect = 2 },
             { surgeIndex = 1 },
             { surgeThemeType = 3 },
@@ -322,6 +323,11 @@ class GameplayPerformanceBenchmarkTest {
             { worldLayer = WorldLayer.ZENITH },
             { worldKeepOut = WorldKeepOut(WorldLayer.BASE, 0.0, 0.0, 900f) },
             { runBoons = immutableListOf(32) },
+            { dimensionRun = DimensionRunState(visitedMask = 2) },
+            { dimensionSlowSeconds = 0.5f },
+            { dimensionScorchClock = 0.25f },
+            { dimensionLocalClock = 3f },
+            { dimensionRewardLayer = WorldLayer.NADIR },
             { enemies.first().ownerTag = 5L },
             { enemies.first().charges = 1 },
             { enemies.first().phaseStartPending = true },

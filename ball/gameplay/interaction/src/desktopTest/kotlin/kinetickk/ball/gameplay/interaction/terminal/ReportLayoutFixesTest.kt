@@ -32,6 +32,7 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.canvas.overlayIcon
+import kinetickk.ball.gameplay.interaction.canvas.with
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
 import kinetickk.ball.gameplay.interaction.rewards.OverlayButtonProbe
@@ -264,6 +265,54 @@ class ReportLayoutFixesTest {
                 }
             }
         }
+    }
+
+    /**
+     * A Baby mode defeat and victory count nothing: the report shows the soft "Not counted" stamp and its (!) under the
+     * cause stamp, inside the summary column, reads the run's matter as not banked, and shows neither the bank line nor
+     * the Victory's Rebirth lines, in both languages at every text size and on every layout (the standard twin has both).
+     */
+    @Test
+    fun aBabyModeReportSaysNotCountedAndHidesTheBankAndRebirthLines() {
+        for ((width, height) in frames) for (language in AppLanguage.entries) for (textScale in listOf(1f, 1.25f, 1.75f))
+            for (victory in listOf(false, true)) {
+                val scene = "Baby mode report ${width}x$height $language ${textScale}x victory $victory"
+                val model = rewardFixtureModel(phase = if (victory) GamePhase.VICTORY else GamePhase.GAME_OVER, relics = relics, language = language,
+                    width = width.toFloat(), height = height.toFloat(), textScale = textScale,
+                    message = if (victory) "ARCHITECT DISMANTLED" else "CORE FRACTURED")
+                val standard = model.terminalPresentation(language)
+                val presentation = model.with("easyMode" to true).terminalPresentation(language)
+                assertTrue(standard.bank != null && (!victory || standard.rebirthEarned != null), "$scene: the standard twin banks and earns")
+                assertTrue(presentation.easy && presentation.bank == null && presentation.rebirthEarned == null, "$scene: $presentation")
+                runDesktopComposeUiTest(width, height) {
+                    var soft = Color.Unspecified
+                    setContent {
+                        soft = LocalKkRolePalette.current.soft
+                        CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides language) {
+                            Box(Modifier.requiredSize(width.dp, height.dp)) { TerminalContent(presentation, textScale, false, 3f, true) {} }
+                        }
+                    }
+                    waitForIdle()
+                    fun bounds(tag: String) = onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                    val column = bounds("kinetickk.gameplay.results.summary")
+                    val cause = bounds("kinetickk.gameplay.results.cause")
+                    val stamp = bounds("kinetickk.gameplay.results.not-counted")
+                    val info = bounds("kinetickk.gameplay.results.not-counted-info")
+                    assertTrue(stamp.top >= cause.bottom - 1f, "$scene: the stamp ($stamp) sits under the cause ($cause)")
+                    assertTrue(stamp.left >= column.left - 1f && info.left >= stamp.right && info.right <= column.right + 0.5f,
+                        "$scene: the stamp ($stamp) and its (!) ($info) fit the summary column ($column)")
+                    onNode(hasText(language.text(OverlayRedesignText.NotCounted)), useUnmergedTree = true).assertExists()
+                    onNode(hasText(language.text(OverlayRedesignText.MatterNotBanked), ignoreCase = true), useUnmergedTree = true).assertExists()
+                    onNode(hasText(language.text(OverlayRedesignText.MatterBanked), ignoreCase = true), useUnmergedTree = true).assertDoesNotExist()
+                    onNodeWithTag("kinetickk.gameplay.results.bank-info", useUnmergedTree = true).assertDoesNotExist()
+                    onNodeWithTag("kinetickk.gameplay.results.rebirth", useUnmergedTree = true).assertDoesNotExist()
+                    // The stamp's face is the soft role (Baby mode's harmless green).
+                    val pixels = onNodeWithTag("kinetickk.gameplay.results.not-counted", useUnmergedTree = true).captureToImage().toPixelMap()
+                    var face = 0
+                    for (y in 0 until pixels.height) for (x in 0 until pixels.width) if (distance(pixels[x, y], soft) < 12f) face++
+                    assertTrue(face > pixels.width * pixels.height / 4, "$scene: the stamp's face is soft ($face px)")
+                }
+            }
     }
 
     @Test

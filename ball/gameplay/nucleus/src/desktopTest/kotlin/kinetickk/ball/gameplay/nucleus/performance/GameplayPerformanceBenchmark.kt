@@ -1106,6 +1106,11 @@ private fun worldContractFingerprint(current: Long, state: MutableGameState): Lo
     signature = mix(signature, state.worldLayer.ordinal)
     signature = mix(signature, state.worldKeepOut.toString().hashCode())
     signature = mix(signature, state.runBoons.toString().hashCode())
+    signature = mix(signature, state.dimensionRun.toString().hashCode())
+    signature = mix(signature, state.dimensionSlowSeconds.toRawBits())
+    signature = mix(signature, state.dimensionScorchClock.toRawBits())
+    signature = mix(signature, state.dimensionLocalClock.toRawBits())
+    signature = mix(signature, state.dimensionRewardLayer?.ordinal ?: -1)
     return signature
 }
 

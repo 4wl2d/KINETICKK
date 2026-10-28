@@ -119,6 +119,7 @@ class GameplayKeyPrecedenceComposeTest {
                 onNodeWithTag("kinetickk.home.start").performSemanticsAction(SemanticsActions.RequestFocus)
                 press(Key.Enter)
                 assertEquals(AppDestination.Gameplay, shell().active)
+                (gameplay.activeRun() as GameplayInteractionPort).declineOmenIfOffered()
                 assertEquals(GameplayRunPhase.RUNNING, phase())
                 // Play the real run to its first active item (Z holds its effect, C's slot is still empty).
                 val run = gameplay.activeRun() as GameplayInteractionPort
@@ -263,6 +264,7 @@ private class RunPilot(private val run: GameplayInteractionPort) {
             val model = model()
             when (model.phase) {
                 GamePhase.CHOICE -> {
+                    if (run.declineOmenIfOffered()) continue
                     val choices = model.choices
                     val index = (0 until minOf(choices.size, 4)).firstOrNull {
                         choices[it].type == ChoiceType.ITEM && choices[it].skillId != null && !choices[it].replacesActive

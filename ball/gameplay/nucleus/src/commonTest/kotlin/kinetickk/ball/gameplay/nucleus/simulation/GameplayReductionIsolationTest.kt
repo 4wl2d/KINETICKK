@@ -23,6 +23,7 @@ import kinetickk.ball.content.api.SignalKind
 import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.WorldEventKind
 import kinetickk.ball.content.api.WorldLayer
+import kinetickk.ball.content.api.DimensionObjective
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.nucleus.model.ActiveBuff
@@ -42,7 +43,13 @@ import kinetickk.ball.gameplay.nucleus.model.SkillRuntime
 import kinetickk.ball.gameplay.nucleus.model.Polarity
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.AmbientSiteWindow
+import kinetickk.ball.gameplay.nucleus.model.DimensionPortal
+import kinetickk.ball.gameplay.nucleus.model.DimensionRewardGrant
+import kinetickk.ball.gameplay.nucleus.model.DimensionRunState
+import kinetickk.ball.gameplay.nucleus.model.DimensionVisit
 import kinetickk.ball.gameplay.nucleus.model.DungeonState
+import kinetickk.ball.gameplay.nucleus.model.Ember
+import kinetickk.ball.gameplay.nucleus.model.HaloRing
 import kinetickk.ball.gameplay.nucleus.model.PlacedStructure
 import kinetickk.ball.gameplay.nucleus.model.SignalPrompt
 import kinetickk.ball.gameplay.nucleus.model.SitePoint
@@ -128,6 +135,7 @@ class GameplayReductionIsolationTest {
             pendingArchitectDefeatedWith = null
             directedReward = null
             selectedRewardFocus = null
+            dimensionRewardLayer = null
         }
         listOf(cleared.copyForReduction(), cleared.copyForScalarInputReduction()).forEach { fork ->
             assertEquivalentSimulation(cleared, fork)
@@ -829,6 +837,97 @@ class GameplayReductionIsolationTest {
         assertEquals(2f, production.model.skillRuntime.apex(ApexCell.CAST_COUNT), "the trace casts the Apex")
     }
 
+    // ---- 0.6.0 DIMENSIONS ----
+    @Test
+    fun aDimensionVisitIsIsolatedAcrossReductions() {
+        val source = MutableGameState(canonicalGameplayContent, seed = 6_061, initialMatter = 0).apply {
+            startRun()
+            enemies.clear()
+            elapsed = 200f
+            enterDimensionForTesting(WorldLayer.ZENITH)
+            completeObjectiveForTesting()
+            // The visit's timer runs out inside the candidate's frame.
+            dimensionRun = dimensionRun.copy(visit = checkNotNull(dimensionRun.visit).copy(endsAt = 200f + MutableGameState.FIXED_STEP))
+            drainReferenceOutputs()
+        }
+        val committedFingerprint = source.exactSimulationFingerprint()
+        val committedRun = source.dimensionRun
+        val engine = EngineState(source)
+        val reducer = GameReducer()
+
+        val pointer = assertIs<GameReductionResult.Accepted>(
+            reducer.reduce(engine, GameplayInteractionPulse.PointerMoved.fromValidated(700f, 380f)),
+        ).state.model
+        assertSame(committedRun, pointer.dimensionRun, "a scalar-input reduction shares the dimension value")
+
+        val candidate = assertIs<GameReductionResult.Accepted>(
+            reducer.reduce(engine, GameplayInteractionPulse.FrameElapsed.fromValidated(3f * MutableGameState.FIXED_STEP)),
+        ).state.model
+        assertEquals(WorldLayer.BASE, candidate.worldLayer)
+        assertNull(candidate.dimensionRun.visit)
+        assertEquals(1, candidate.dimensionRun.pendingRewards.size)
+        assertEquals(committedFingerprint, source.exactSimulationFingerprint(), "the return left the committed visit alone")
+        assertSame(committedRun, source.dimensionRun)
+        assertEquals(WorldLayer.ZENITH, source.worldLayer)
+    }
+
+    @Test
+    fun aHaloPassedInACandidateLeavesTheCommittedVisitAlone() {
+        val source = MutableGameState(canonicalGameplayContent, seed = 6_061, initialMatter = 0).apply {
+            startRun()
+            enemies.clear()
+            elapsed = 200f
+            enterDimensionForTesting(WorldLayer.ZENITH, DimensionObjective.JUDGEMENT)
+            hp = maxHp * 0.5f
+            velocityX = dimensionPace() * 1.5f
+            velocityY = 0f
+            // The Core starts inside the ring and is fast: the candidate's first step passes it.
+            val visit = checkNotNull(dimensionRun.visit)
+            dimensionRun = dimensionRun.copy(visit = visit.copy(halos = immutableListOf(HaloRing(7, coreX + 10f, coreY, -1))))
+            drainReferenceOutputs()
+        }
+        val committedFingerprint = source.exactSimulationFingerprint()
+        val committedRun = source.dimensionRun
+        val committedHp = source.hp
+
+        val candidate = assertIs<GameReductionResult.Accepted>(
+            GameReducer().reduce(EngineState(source), GameplayInteractionPulse.FrameElapsed.fromValidated(MutableGameState.FIXED_STEP)),
+        ).state.model
+        assertTrue(checkNotNull(candidate.dimensionRun.visit).halos.none { it.id == 7 }, "the candidate passed the ring")
+        assertTrue(candidate.hp > committedHp, "the ring mended the candidate")
+
+        assertEquals(committedFingerprint, source.exactSimulationFingerprint(), "the pass left the committed visit alone")
+        assertSame(committedRun, source.dimensionRun)
+        assertEquals(listOf(7), checkNotNull(source.dimensionRun.visit).halos.map { it.id })
+        assertEquals(committedHp, source.hp)
+    }
+
+    // ---- 0.6.0 VARIETY ----
+    @Test
+    fun omenAcceptanceAndPreviewsInAForkNeverChangeTheCommittedState() {
+        // An offer dealing Fault Line, the omen that rebuilds the obstacle window.
+        val source = (1..60).asSequence().map { seed ->
+            MutableGameState(canonicalGameplayContent, seed = seed, offerRunOmen = true).apply {
+                startRun()
+                simulateStep(MutableGameState.FIXED_STEP)
+                drainReferenceOutputs()
+            }
+        }.first { state -> state.choices.any { it.omenId == OmenId.FAULT_LINE } }
+        assertEquals(kinetickk.ball.gameplay.nucleus.render.ChoiceType.OMEN, source.choiceType)
+        val retained = source.exactSimulationFingerprint()
+        val reducer = GameReducer()
+        source.choices.indices.forEach { index ->
+            val reduced = assertIs<GameReductionResult.Accepted>(
+                reducer.reduce(EngineState(source), GameplayInteractionPulse.ChoiceSelected.fromValidated(index)),
+            ).state.model
+            assertEquals(retained, source.exactSimulationFingerprint(), "card $index changed the committed state")
+            assertEquals(source.choices[index].omenId, reduced.runOmen)
+            assertEquals(kinetickk.ball.gameplay.nucleus.render.GamePhase.RUNNING, reduced.phase)
+        }
+        source.rewardPreviews()
+        assertEquals(retained, source.exactSimulationFingerprint(), "the previews changed the committed state")
+    }
+
     private fun MutableGameState.populateAdditionalRetainedState() {
         characterRuntime = CharacterRuntime().apply {
             charge = 0.3f
@@ -956,6 +1055,13 @@ class GameplayReductionIsolationTest {
         secretBossMask = 1L shl 33
         worldKeepOut = WorldKeepOut(WorldLayer.ZENITH, 1_234.5, -987.25, 900f)
         runBoons = immutableListOf(32, 48)
+        dimensionRun = DimensionRunState(
+            portalOffers = 2, visitedMask = WorldLayer.ZENITH.bit, completedMask = WorldLayer.ZENITH.bit,
+            glitchPortal = DimensionPortal(4, 5_000f, -4_000f, WorldLayer.ARCHIVE, 900f), nextPortalId = 5,
+        )
+        dimensionSlowSeconds = 0.4f
+        dimensionScorchClock = 0.2f
+        dimensionLocalClock = 3.5f
         obstacleHitSurfaceId = 7L
         coreObstacleGap = 120f
         grazeReadyAt = 0.4f
@@ -1201,6 +1307,17 @@ class GameplayReductionIsolationTest {
         omenPending = true
         runMutatorMask = 1 shl RebirthMutator.PACK_HUNTERS.ordinal
         worldLayer = WorldLayer.NADIR
+        dimensionRun = dimensionRun.copy(
+            visit = DimensionVisit(
+                WorldLayer.NADIR, DimensionObjective.HARVEST, serial = 1, enteredAt = 0.1f, endsAt = 75.1f, progress = 3,
+                goal = 12, bossSpawnAt = Float.POSITIVE_INFINITY,
+                exitPortal = DimensionPortal(6, 300f, 200f, WorldLayer.BASE, 75.1f),
+                halos = immutableListOf(HaloRing(100, 10f, 20f, -1)), haloSerial = 1, courseX = 5f, courseY = 6f,
+                courseHeading = 0.7f, embers = immutableListOf(Ember(30f, 40f, 7f)),
+            ),
+            pendingRewards = immutableListOf(DimensionRewardGrant(WorldLayer.ZENITH, completed = true)),
+        )
+        dimensionRewardLayer = WorldLayer.ZENITH
         encounters = immutableListOf(EncounterState(
             encounterTag(EncounterOwner.ROOM, 6L), 300f, -200f, 600f, 2_400f, spawned = 3, killed = 1, bossId = 41,
             startedAt = 0.2f,
@@ -1551,6 +1668,11 @@ class GameplayReductionIsolationTest {
             value("worldLayer", worldLayer)
             value("worldKeepOut", worldKeepOut)
             value("runBoons", runBoons.toList())
+            value("dimensionRun", dimensionRun)
+            float("dimensionSlowSeconds", dimensionSlowSeconds)
+            float("dimensionScorchClock", dimensionScorchClock)
+            float("dimensionLocalClock", dimensionLocalClock)
+            value("dimensionRewardLayer", dimensionRewardLayer)
             float("obstacleHitReadyAt", obstacleHitReadyAt)
             value("obstacleHitSurfaceId", obstacleHitSurfaceId)
             float("nearMissReadyAt", nearMissReadyAt)

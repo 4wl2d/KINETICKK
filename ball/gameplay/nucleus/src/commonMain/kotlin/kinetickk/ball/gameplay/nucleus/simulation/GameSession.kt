@@ -95,7 +95,7 @@ internal fun MutableGameState.startRun() {
     arsenalCounter = 0
     necroticClock = 0f
     heirloomOfferActive = false
-    heirloomPending = heirloomCandidates.isNotEmpty() && rebirthRank >= 1
+    heirloomPending = !easyMode && heirloomCandidates.isNotEmpty() && rebirthRank >= 1
     omenPending = offersRunOmen && content.variety.omens.enabled
     volatileBursts = kinetickk.foundation.collections.immutableListOf()
     totem = null
@@ -233,6 +233,7 @@ internal fun MutableGameState.resetRunStats() {
     applyMatrixStats()
     maxHp += content.upgrades.characterIntegrityPerLevel * characterUpgradeLevel
     matterGain *= rebirthProfile.matterGainMultiplier
+    applyOmenStats()
     dashHeatCost *= matrix.dashHeatMultiplier
     dragCoefficient *= matrix.dragMultiplier
     hp = maxHp
@@ -438,8 +439,15 @@ internal fun MutableGameState.choose(index: Int) {
             finishChoice(if (slot != null) GameplayAudioCue.LEVEL_UP else GameplayAudioCue.UI_CLICK)
             return
         }
-        // Omens, signal prompts and dimension boons are dealt only once their lanes open them.
-        ChoiceType.OMEN, ChoiceType.SIGNAL, ChoiceType.BOON -> return
+        // An omen card accepts its omen; No omen changes nothing.
+        ChoiceType.OMEN -> {
+            option.omenId?.let { acceptRunOmen(it) }
+            GameplayAudioCue.UI_CLICK
+        }
+        // A signal card pays through its channel; a locked card or a chained item offer leaves without finishing here.
+        ChoiceType.SIGNAL -> resolveSignalOption(option, before) ?: return
+        // Dimension boons are dealt only once their lane opens them.
+        ChoiceType.BOON -> return
         ChoiceType.RELIC_BIND -> {
             val slot = option.relicSlot ?: return
             when (option.relicAction ?: return) {

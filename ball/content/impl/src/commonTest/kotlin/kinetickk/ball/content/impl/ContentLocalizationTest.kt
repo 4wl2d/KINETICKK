@@ -252,6 +252,7 @@ class ContentLocalizationTest {
             "RELIC RESONANCE", "TOTEM DETECTED", "ELITE SIGNAL", "HERALD APPROACHES",
             "TWO ANOMALIES DETECTED // CHOOSE A COURSE", "ANOMALY LOST", "ANOMALY RESOLVED",
             "SECOND WIND", "OBSTACLE COLLISION", "APEX ONLINE",
+            "BOOP",
         ).forEach(::assertFullyLocalized)
     }
 
@@ -263,6 +264,12 @@ class ContentLocalizationTest {
     }
 
     @Test
+    fun everyComposedSecretBossDefeatIsLocalized() {
+        listOf("SECRET BOSS DEFEATED // CARTOGRAPHER", "SECRET BOSS DEFEATED // ANTECEDENT").forEach(::assertFullyLocalized)
+        assertEquals("ТАЙНЫЙ БОСС ПОВЕРЖЕН // ПРЕДТЕЧА", "SECRET BOSS DEFEATED // ANTECEDENT".localizedContent(AppLanguage.Russian))
+    }
+
+    @Test
     fun everySiteNoticeIsLocalized() {
         SiteNotice.entries.forEach { assertFullyLocalized(it.english) }
     }
@@ -270,6 +277,48 @@ class ContentLocalizationTest {
     @Test
     fun everyRunVarietyNoticeIsLocalized() {
         RunVarietyNotices.forEach(::assertFullyLocalized)
+    }
+
+    @Test
+    fun everySignalCardTitleIsLocalizedAndDistinct() {
+        val titles = kinetickk.ball.content.api.SignalOption.entries.map { it.title }
+        titles.forEach(::assertFullyLocalized)
+        assertDistinctInRussian(titles)
+        assertEquals("Пройти мимо", "Ignore".localizedContent(AppLanguage.Russian))
+    }
+
+    @Test
+    fun everyRunVarietyNameAndTextIsLocalizedAndDistinctAndItsComposedBannersRead() {
+        val variety = createContentCatalog().gameplayContent().variety
+        val omens = variety.omens.definitions
+        val personalities = variety.director.personalities
+        val affixes = kinetickk.ball.content.api.EliteAffix.entries.map { it.displayName }
+        val events = kinetickk.ball.content.api.WorldEventKind.entries.map { it.displayName }
+        val signals = kinetickk.ball.content.api.SignalKind.entries.map { it.displayName }
+        buildList {
+            omens.forEach { addAll(listOf(it.name, it.upside, it.liability)) }
+            personalities.forEach { addAll(listOf(it.name, it.description)) }
+            addAll(affixes + events + signals)
+            addAll(listOf("No omen", "Start the run as it is."))
+        }.forEach(::assertFullyLocalized)
+        assertDistinctInRussian(omens.map { it.name })
+        assertDistinctInRussian(omens.map { it.upside })
+        assertDistinctInRussian(omens.map { it.liability })
+        assertDistinctInRussian(personalities.map { it.name })
+        assertDistinctInRussian(personalities.map { it.description })
+        assertDistinctInRussian(affixes)
+        assertDistinctInRussian(events)
+        assertDistinctInRussian(signals)
+
+        // Banners composed at run time: an ONSLAUGHT names an ordinary kind, the Keynote a tag and an element.
+        content.enemies.filter { !it.isScheduled }.forEach { assertFullyLocalized("ONSLAUGHT // ${it.name.uppercase()}") }
+        BuildTag.entries.forEach { tag ->
+            StatusElement.entries.forEach { element ->
+                assertFullyLocalized("KEYNOTE // ${tag.displayLabel.uppercase()} // ${element.displayLabel.uppercase()}")
+            }
+        }
+        assertEquals("ТАКТИКА ВРАГА // ПРИЛИВНАЯ ВОЛНА", "HOSTILE PATTERN // TIDEWAVE".localizedContent(AppLanguage.Russian))
+        assertEquals("ЗНАМЕНИЕ // СТЕКЛЯННОЕ СОЛНЦЕ", "OMEN // GLASS SUN".localizedContent(AppLanguage.Russian))
     }
 
     @Test
@@ -312,6 +361,26 @@ class ContentLocalizationTest {
         }
         assertDistinctInRussian(roster.map { it.name })
         assertDistinctInRussian(roster.map { it.description })
+    }
+
+    @Test
+    fun everyDimensionHeadingRiftSiteAndBoonFlavorReadsInRussian() {
+        val gameplay = createContentCatalog().gameplayContent()
+        // The dimension plate, the trial panel and the banners draw layer and objective names as canvas headings.
+        gameplay.dimensions.definitions.forEach { assertFullyLocalized(it.name.uppercase()) }
+        kinetickk.ball.content.api.DimensionObjective.entries.forEach { assertFullyLocalized(it.label.uppercase()) }
+        assertDistinctInRussian(kinetickk.ball.content.api.DimensionObjective.entries.map { it.label })
+        assertEquals("ОБНАРУЖЕН РАЗЛОМ // ВЫБЕРИТЕ ПУТЬ", DimensionNotices.RIFT_DETECTED.localizedContent(AppLanguage.Russian))
+        // The two window rifts are sites named by their layers' rift names.
+        val rifts = content.sites.definitions.filter { it.kind.family == kinetickk.ball.content.api.SiteFamily.PORTAL }
+        assertEquals(
+            listOf(kinetickk.ball.content.api.WorldLayer.ZENITH, kinetickk.ball.content.api.WorldLayer.NADIR).map {
+                gameplay.dimensions.definition(it).riftName
+            },
+            rifts.map { it.name },
+        )
+        rifts.forEach { listOf(it.name, it.instruction).forEach(::assertFullyLocalized) }
+        assertDistinctInRussian(gameplay.boons.map { it.description })
     }
 
     @Test

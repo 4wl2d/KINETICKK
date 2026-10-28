@@ -28,20 +28,21 @@ private val CoreHalftoneRect = Rect(
 /**
  * Ink ground with a world-anchored 40-unit grid and a faint halftone disc around the Core, drawn
  * in world units ([withWorldUnits]); [shakeX]/[shakeY] are device pixels. The run's rebirth tier
- * tints the grid and halftone only. [roles] is the Color vision palette.
+ * tints the grid and halftone only; a Baby mode run's halftone is pastel mint. [roles] is the Color
+ * vision palette.
  */
 internal fun DrawScope.drawBackdrop(
     engine: GameplayRenderModel,
     shakeX: Float,
     shakeY: Float,
     @Suppress("UNUSED_PARAMETER") renderTime: Float,
-    @Suppress("UNUSED_PARAMETER") roles: KkRolePalette,
+    roles: KkRolePalette,
 ) {
     val scale = engine.worldScale
-    withWorldUnits(scale) { drawBackdropLayer(engine, shakeX / scale, shakeY / scale) }
+    withWorldUnits(scale) { drawBackdropLayer(engine, shakeX / scale, shakeY / scale, roles) }
 }
 
-private fun DrawScope.drawBackdropLayer(engine: GameplayRenderModel, shakeX: Float, shakeY: Float) {
+private fun DrawScope.drawBackdropLayer(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, roles: KkRolePalette) {
     // A dimension draws its own ground instead of the realspace grid.
     if (engine.dimension.layer != WorldLayer.BASE) {
         drawDimensionBackdrop(engine, shakeX, shakeY)
@@ -63,10 +64,11 @@ private fun DrawScope.drawBackdropLayer(engine: GameplayRenderModel, shakeX: Flo
         y += WORLD_GRID_SPACING
     }
     val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
+    val halftone = if (engine.easyMode) easyPastelMint(roles).copy(alpha = 0.08f) else theme.halftone
     // Dots are anchored to the Core, like the board's halftone element, and fade out radially.
     translate(core.x, core.y) {
         drawKkRadialFade(CoreHalftoneRect) {
-            drawKkHalftone(CoreHalftoneRect, theme.halftone)
+            drawKkHalftone(CoreHalftoneRect, halftone)
         }
     }
 }

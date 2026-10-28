@@ -4,20 +4,26 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.EffectCondition
+import kinetickk.ball.content.api.EnemyNotices
 import kinetickk.ball.content.api.RebirthMutator
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RunModifierEffect
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
+import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.min
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /** The generic boss phase gate: the Architect reproduced bit for bit, and the rules every other gated boss inherits. */
@@ -192,6 +198,49 @@ class BossEncounterTest {
     }
 
     @Test
+    fun aMiniBossRunsItsFirstPhaseStartOnItsFirstStepAndEachGateRingsAndDropsTwoRepairsFromTheStep() {
+        val state = buildTestState().apply {
+            runGrace = Float.MAX_VALUE
+            quietArenaForTesting()
+        }
+        val tag = encounterTag(EncounterOwner.DIMENSION, 9)
+        assertTrue(state.spawnEncounter(EncounterRequest(tag, state.coreX + 600f, state.coreY, 500f, listOf(EnemyType.THRONE))))
+        val throne = state.enemies.single()
+        assertTrue(throne.phaseStartPending, "a gated boss spawns with its first phase start pending")
+        assertEquals(0, throne.charges)
+        // Kinds without a gate never wait for one; the Architect's phase starts run in the pipeline.
+        assertFalse(state.spawnedEnemy(EnemyType.HERALD, 0f, 0f).phaseStartPending)
+        assertFalse(state.spawnedEnemy(EnemyType.DRIFTER, 0f, 0f).phaseStartPending)
+        assertFalse(state.spawnedEnemy(EnemyType.ARCHITECT, 0f, 0f).phaseStartPending)
+
+        state.simulateStep(MutableGameState.FIXED_STEP)
+        assertFalse(throne.phaseStartPending)
+        assertEquals(THRONE_ARCS, throne.charges, "phase 0 grew its arcs")
+        assertTrue(state.pickups.none { it.type == kinetickk.ball.gameplay.nucleus.render.PickupType.REPAIR }, "no gate yet")
+        state.takeVisualFxCues()
+
+        // A gate: the damage pipeline only advances the phase; the step then rings, drops two repairs and shatters an arc.
+        throne.hp = state.bossGate(throne, checkNotNull(state.encounterSpec(throne))) + 5f
+        state.damageEnemy(throne, 20f)
+        assertEquals(1, throne.phase)
+        assertTrue(throne.phaseStartPending)
+        assertEquals(THRONE_ARCS, throne.charges)
+        assertTrue(state.pickups.isEmpty())
+        val x = throne.x
+        val y = throne.y
+        state.updateBossEncounter()
+        assertFalse(throne.phaseStartPending)
+        assertEquals(THRONE_ARCS - 1, throne.charges)
+        val repairs = state.pickups.filter { it.type == kinetickk.ball.gameplay.nucleus.render.PickupType.REPAIR }
+        assertEquals(MINI_BOSS_SHIFT_REPAIRS, repairs.size)
+        repairs.forEach { assertTrue(kotlin.math.abs(it.x - x) <= 22.01f && kotlin.math.abs(it.y - y) <= 10.01f, "at the boss") }
+        val rings = state.takeVisualFxCues().filterIsInstance<kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue.ShockwaveAdded>()
+        assertTrue(rings.any { it.x == x && it.y == y && it.maxRadius == throne.radius * MINI_BOSS_SHIFT_RING }, "the shift rings")
+        state.updateBossEncounter()
+        assertEquals(MINI_BOSS_SHIFT_REPAIRS, state.pickups.size, "once per gate")
+    }
+
+    @Test
     fun bossClassRulesCoverMiniAndSecretBosses() {
         val state = buildTestState()
         val mini = state.addEnemyForTesting(300f, 0f, hp = 3_000f, radius = 44f, type = EnemyType.BROOD_QUEEN)
@@ -328,6 +377,96 @@ class BossEncounterTest {
         assertTrue(below(herald))
         herald.hp = 360f
         assertFalse(below(herald))
+    }
+
+    @Test
+    fun aSecretBossNeverEndsTheRunAndPaysItsDiscovery() {
+        val state = buildTestState().apply { quietArenaForTesting() }
+        val tag = encounterTag(EncounterOwner.SITE, 0x00F0_0000_0000_0010L)
+        assertTrue(state.spawnEncounter(EncounterRequest(tag, state.coreX + 600f, state.coreY, 900f, listOf(EnemyType.CARTOGRAPHER))))
+        assertEquals("SECRET SIGNAL // CARTOGRAPHER", state.message)
+        val boss = state.enemies.single { it.type == EnemyType.CARTOGRAPHER }
+        state.takeVisualFxCues()
+        val eliteKills = state.eliteKills
+
+        // Its final third, out of its shift: one capped hit finishes it.
+        boss.phase = state.bossFinalPhaseOf(boss)
+        boss.hp = 1f
+        state.damageEnemy(boss, 10f, killEligible = true)
+        state.sweepKills()
+        assertEquals(GamePhase.RUNNING, state.phase, "a secret boss never ends the run")
+        assertTrue(state.enemies.none { it.type == EnemyType.CARTOGRAPHER })
+        assertEquals(1, assertNotNull(state.encounter(tag)).killed)
+        assertEquals(eliteKills + 1, state.eliteKills, "it pays like an Elite")
+        // Two Keys, a Relic and four repairs in the Architect's shift pattern (its own luck roll may add a fifth).
+        assertEquals(2, state.pickups.count { it.type == PickupType.KEY })
+        assertEquals(1, state.pickups.count { it.type == PickupType.RELIC })
+        val repairs = state.pickups.filter { it.type == PickupType.REPAIR }
+        for (index in 0 until SECRET_BOSS_DEFEAT_REPAIRS) {
+            val side = if (index % 2 == 0) 1f else -1f
+            assertTrue(repairs.any { it.x == boss.x + side * 22f && it.y == boss.y - 10f * index }, "repair $index")
+        }
+        assertTrue(repairs.size in SECRET_BOSS_DEFEAT_REPAIRS..SECRET_BOSS_DEFEAT_REPAIRS + 1)
+        // The discovery that reveals it in the Codex waits for the Profile, with the defeat notice.
+        assertEquals(WorldDiscovery.CARTOGRAPHER.bit, state.pendingWorldDiscoveryMask)
+        assertEquals("SECRET BOSS DEFEATED // CARTOGRAPHER", state.message)
+        assertEquals(SECRET_BOSS_DEFEAT_NOTICE_SECONDS, state.messageTime)
+        val cues = state.takeVisualFxCues()
+        assertTrue(cues.filterIsInstance<VisualFxCue.ShockwaveAdded>().any { it.life == 0.8f && it.maxRadius == boss.radius * 3.5f })
+        assertTrue(cues.filterIsInstance<VisualFxCue.Burst>().any { it.requestedCount == 50 })
+
+        // The Antecedent pays its own discovery, untagged too; a repeated discovery records nothing new.
+        val antecedent = state.addEnemyForTesting(state.coreX - 400f, state.coreY, hp = 4_000f, radius = 58f, type = EnemyType.ANTECEDENT)
+        antecedent.phase = state.bossFinalPhaseOf(antecedent)
+        antecedent.hp = 1f
+        state.damageEnemy(antecedent, 10f, killEligible = true)
+        state.sweepKills()
+        assertEquals(GamePhase.RUNNING, state.phase)
+        assertEquals("SECRET BOSS DEFEATED // ANTECEDENT", state.message)
+        val both = WorldDiscovery.CARTOGRAPHER.bit or WorldDiscovery.ANTECEDENT.bit
+        assertEquals(both, state.pendingWorldDiscoveryMask)
+        state.discoverWorld(WorldDiscovery.CARTOGRAPHER)
+        assertEquals(both, state.pendingWorldDiscoveryMask)
+        assertEquals(4, state.pickups.count { it.type == PickupType.KEY })
+    }
+
+    @Test
+    fun enrageAfterTheEncounterTimeRaisesTheCadenceOnce() {
+        for ((type, notice) in listOf(
+            EnemyType.CARTOGRAPHER to EnemyNotices.CARTOGRAPHER_ENRAGES,
+            EnemyType.ANTECEDENT to EnemyNotices.ANTECEDENT_ENRAGES,
+        )) {
+            val state = buildTestState().apply { quietArenaForTesting() }
+            val tag = encounterTag(EncounterOwner.DIMENSION, type.ordinal.toLong())
+            assertTrue(state.spawnEncounter(EncounterRequest(tag, state.coreX + 600f, state.coreY, 900f, listOf(type),
+                abandonDistance = 6_000f)))
+            val boss = state.enemies.single { it.type == type }
+            val untagged = state.addEnemyForTesting(state.coreX - 600f, state.coreY, hp = 3_000f, radius = 54f, type = type)
+            val start = assertNotNull(state.encounter(tag)).startedAt
+            val after = assertNotNull(state.encounterSpec(boss)).enrageAfterSeconds
+            assertEquals(if (type == EnemyType.CARTOGRAPHER) 120f else 150f, after)
+            state.elapsed = start + after - 0.25f
+            assertEquals(1f, state.bossAttackScale(boss))
+            // Frozen across the crossing: the notice still comes from the step after enemy movement.
+            state.freeze(boss, 3f)
+            assertTrue(state.isFrozen(boss))
+            var notices = 0
+            var noticedAt = Float.NaN
+            repeat(240) {
+                state.message = ""
+                state.elapsed += MutableGameState.FIXED_STEP
+                state.updateEnemies(MutableGameState.FIXED_STEP)
+                state.updateBossEncounter()
+                if (state.message == notice) {
+                    notices++
+                    noticedAt = state.elapsed
+                }
+            }
+            assertEquals(1, notices, "$type announces its enrage once")
+            assertTrue(noticedAt - start >= after && noticedAt - MutableGameState.FIXED_STEP - start < after, "on the crossing step")
+            assertEquals(1.35f, state.bossAttackScale(boss), "and stays 1.35 times faster")
+            assertEquals(1f, state.bossAttackScale(untagged), "no encounter, no clock and no notice")
+        }
     }
 
     private fun MutableGameState.withSingularity(on: Boolean): MutableGameState = apply {
