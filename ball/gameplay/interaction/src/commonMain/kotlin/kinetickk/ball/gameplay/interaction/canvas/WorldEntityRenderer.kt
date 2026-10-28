@@ -118,8 +118,11 @@ internal fun DrawScope.drawEnemy(
     val degrees = if (facesAim(enemy.type)) aimDegrees(enemy.facing) else FrozenPoses.rotation(
         enemy.id, bits and EnemyStatusBits.FROZEN != 0, engine.renderElapsed, enemyRotation(enemy.type, engine.renderElapsed, enemy.id),
     )
-    val patterned = statusDetail || enemy.type == EnemyType.ELITE || enemy.type == EnemyType.HERALD
-    if (enemy.type == EnemyType.ELITE || enemy.type == EnemyType.HERALD) {
+    // Elites and the boss ranks (the Herald and the other mini-bosses, the secret bosses) keep their detail and a halo.
+    val rank = engine.content.enemy(enemy.type).rank
+    val haloed = rank == EnemyRank.ELITE || rank == EnemyRank.MINI_BOSS || rank == EnemyRank.SECRET_BOSS
+    val patterned = statusDetail || haloed
+    if (haloed) {
         val pulse = (sin(engine.renderElapsed * 3.2f) + 1f) * 0.5f
         drawCircle(threat.copy(alpha = 0.10f + pulse * 0.06f), enemy.radius * 1.45f, center)
         drawCircle(threat.copy(alpha = 0.05f + pulse * 0.04f), enemy.radius * 1.9f, center)
@@ -172,6 +175,24 @@ internal fun DrawScope.drawEnemy(
         // Secondary accents of ordinary kinds follow the crowd's level of detail.
         EnemyType.SERAPH -> if (statusDetail) drawCircle(Kk.Bone, enemy.radius * SERAPH_RING, center, style = kkStroke(1.5f))
         EnemyType.CHOIR -> if (statusDetail) drawCircle(Kk.Bone, enemy.radius * CHOIR_RING, center, style = kkStroke(1.5f))
+        // Mini-bosses carry the Herald's glyph; the Brood Queen's egg sacs orbit it, the Throne's shield arcs ring it.
+        EnemyType.WARDEN_PRIME, EnemyType.PYRE_HERALD -> drawKkIcon(KkIcon.SYSTEM_ELITE, center, enemy.radius * 0.8f, threat)
+        EnemyType.BROOD_QUEEN -> {
+            drawKkIcon(KkIcon.SYSTEM_ELITE, center, enemy.radius * 0.8f, threat)
+            repeat(enemy.charges) { sac ->
+                val angle = engine.renderElapsed * QUEEN_SAC_ORBIT_RATE + sac * QUEEN_SAC_SPACING
+                drawCircle(Kk.Bone, QUEEN_SAC_RADIUS, polar(center, enemy.radius + QUEEN_SAC_GAP, angle))
+            }
+        }
+        EnemyType.THRONE -> {
+            drawKkIcon(KkIcon.SYSTEM_ELITE, center, enemy.radius * 0.8f, threat)
+            val arc = enemy.radius + THRONE_ARC_GAP
+            repeat(enemy.charges) { index ->
+                val start = (enemy.facing + index * THRONE_ARC_SPACING) * RAD_TO_DEG - THRONE_ARC_DEGREES * 0.5f
+                drawArc(Kk.Bone, start, THRONE_ARC_DEGREES, false, Offset(center.x - arc, center.y - arc), Size(arc * 2f, arc * 2f),
+                    style = kkStroke(3f))
+            }
+        }
         else -> Unit
     }
     if (enemy.shielded && enemy.type != EnemyType.HERALD) drawImpactShield(engine, enemy, center)
@@ -195,6 +216,9 @@ private fun enemyRenderMargin(enemy: EnemyProjection): Float = when (enemy.type)
     EnemyType.SERAPH ->
         if (enemy.actionTimer in 0f..SERAPH_MEND_LEAD) SERAPH_MEND_REACH + 20f else if (enemy.linkedTo >= 0) AEGIS_TETHER_REACH else 120f
     EnemyType.CHOIR -> CHOIR_WAVE_REACH + 20f
+    EnemyType.WARDEN_PRIME -> PRIME_WELL_REACH + 20f
+    EnemyType.THRONE -> if (enemy.behavior == EnemyBehavior.TELEGRAPH) THRONE_LANE_REACH + 20f else MINI_BOSS_MARGIN
+    EnemyType.BROOD_QUEEN, EnemyType.PYRE_HERALD -> MINI_BOSS_MARGIN
     else -> if (enemy.linkedTo >= 0) AEGIS_TETHER_REACH else 120f
 }
 
@@ -241,6 +265,27 @@ private const val CIPHER_GLITCH_OFFSET = 4f
 private const val CIPHER_GLITCH_ALPHA = 0.28f
 /** An impact-only shield on an ordinary or Elite enemy (a Seraph's mend): smaller and lighter than a boss's. */
 private const val IMPACT_SHIELD_RING = 1.35f
+
+/**
+ * Presentation copies of the mini-bosses' reaches and timings (Warden Prime's well and its double volley cycle, the
+ * Throne's arcs and judgement lanes), the Brood Queen's sac pips and a mini-boss's draw margin.
+ */
+private const val MINI_BOSS_MARGIN = 220f
+private const val PRIME_WELL_REACH = 560f
+/** Warden Prime's second phase fires a ring at the half of its double cycle: the half is one volley period. */
+private const val PRIME_PAIR_HALF = 2f
+private const val PRIME_VOLLEY_LEAD = 0.35f
+private const val QUEEN_BROOD_LEAD = 0.6f
+private const val QUEEN_SAC_RADIUS = 4.5f
+private const val QUEEN_SAC_GAP = 10f
+private const val QUEEN_SAC_ORBIT_RATE = 0.7f
+private const val QUEEN_SAC_SPACING = (2.0 * PI / 3.0).toFloat()
+private const val THRONE_ARC_DEGREES = 80f
+private const val THRONE_ARC_SPACING = (2.0 * PI / 3.0).toFloat()
+private const val THRONE_ARC_GAP = 9f
+private const val THRONE_LANE_REACH = 900f
+private const val THRONE_JUDGEMENT_SECONDS = 1f
+private const val HERALD_VOLLEY_LEAD = 0.3f
 
 /** Distance of the status ring outside an enemy's silhouette (world units). */
 private const val STATUS_RING_GAP = 4f
@@ -614,10 +659,41 @@ private fun DrawScope.drawEnemyTelegraph(
             val pointer = Offset(engine.pointerX + shakeX * 0.18f, engine.pointerY + shakeY * 0.18f)
             drawLine(threat.copy(alpha = 0.18f), center, pointer, 1f, pathEffect = WorldStrokes.dashedHair.pathEffect)
         }
+        // The well's reach: a hairline while it pulls, a firmer dashed ring while it pushes; the Warden's volley ring.
+        EnemyType.WARDEN_PRIME -> {
+            if (enemy.behavior == EnemyBehavior.PRIMED) {
+                drawCircle(threat.copy(alpha = 0.35f), PRIME_WELL_REACH, center, style = WorldStrokes.dashedMedium)
+            } else {
+                val gravityPulse = (sin(engine.renderElapsed * 2.2f + enemy.id) + 1f) * 0.5f
+                drawCircle(threat.copy(alpha = 0.12f + gravityPulse * 0.08f), PRIME_WELL_REACH, center, style = WorldStrokes.dashedHair)
+            }
+            // Its second phase fires at the half of a double cycle too.
+            val doubled = EnemyAffinity.phase(enemy.affinityBits) == 1 && enemy.actionTimer > PRIME_PAIR_HALF
+            val volley = if (doubled) enemy.actionTimer - PRIME_PAIR_HALF else enemy.actionTimer
+            if (volley in 0f..PRIME_VOLLEY_LEAD) {
+                drawCircle(threat.copy(alpha = 0.52f), enemy.radius + 18f + volley * 50f, center, style = kkStroke(2f))
+            }
+        }
+        // The Broodmother's look before a brood.
+        EnemyType.BROOD_QUEEN -> if (enemy.actionTimer in 0f..QUEEN_BROOD_LEAD) {
+            drawCircle(threat.copy(alpha = 0.45f), enemy.radius + 10f + enemy.actionTimer * 30f, center, style = WorldStrokes.dashedThin)
+        }
+        // Judgement: the four lanes its bolt trains will run down, firming while the arcs stand still.
+        EnemyType.THRONE -> if (enemy.behavior == EnemyBehavior.TELEGRAPH) {
+            val charge = (1f - enemy.behaviorRemaining / THRONE_JUDGEMENT_SECONDS).coerceIn(0f, 1f)
+            val lane = threat.copy(alpha = 0.2f + charge * 0.6f)
+            repeat(4) { index ->
+                val angle = enemy.facing + PI.toFloat() * 0.25f + index * PI.toFloat() * 0.5f
+                drawLine(lane, center, polar(center, THRONE_LANE_REACH, angle), 1.5f, pathEffect = WorldStrokes.dashEffect)
+            }
+        }
+        // The Herald's volley ring.
+        EnemyType.PYRE_HERALD -> if (enemy.actionTimer in 0f..HERALD_VOLLEY_LEAD) {
+            drawCircle(threat.copy(alpha = 0.5f), enemy.radius + 22f + enemy.actionTimer * 40f, center, style = kkStroke(2f))
+        }
         EnemyType.DRIFTER, EnemyType.SPLITTER, EnemyType.ARCHITECT, EnemyType.SWARMLING, EnemyType.AEGIS,
         EnemyType.MINELAYER, EnemyType.REFLECTOR,
-        EnemyType.CRAWLER, EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN,
-        EnemyType.THRONE, EnemyType.PYRE_HERALD, EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT,
+        EnemyType.CRAWLER, EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT,
         -> Unit
     }
     if (enemy.linkedTo >= 0) drawAegisTether(engine, enemy, center, shakeX, shakeY)
