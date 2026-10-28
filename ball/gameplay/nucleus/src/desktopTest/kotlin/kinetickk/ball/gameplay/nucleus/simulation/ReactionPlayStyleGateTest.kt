@@ -30,7 +30,10 @@ import kotlin.test.assertTrue
  * that cannot die, with the reaction set off on a ready enemy at a fixed cadence. The scripted player follows
  * the verb's cue the same way in both runs: it fights inside the latest pool or well, lets the Core glide,
  * holds position while stars and erasures work at range, meets a pack from its near side, dashes on the clap
- * and at the anchor, and releases the Brake; otherwise it whirls through a crowd after a wandering point.
+ * and at the anchor, and releases the Brake; otherwise it whirls through a crowd after a wandering point. Where the
+ * cue needs the Core on a point (the pool or well, the held spot, the wandering point the Magnetize lances home in
+ * around) the player follows the point through the flight law's inverse. The Seismic arena keeps its rocks; there
+ * the player stays below the dash-safe speed near them, so no impact is lethal. Every other arena is obstacle-free.
  */
 class ReactionPlayStyleGateTest {
     @Test
@@ -125,6 +128,7 @@ class ReactionPlayStyleGateTest {
             }
             aim(state, reaction, t, hoverX, hoverY)
             if (reaction == ReactionId.FRACTURE) state.braking = t % 1.2f < 0.45f
+            if (reaction == ReactionId.SEISMIC) state.braking = tooFastNearRocks(state)
             if (state.elapsed >= nextTriggerAt) {
                 nextTriggerAt = state.elapsed + crowd.triggerSeconds
                 val target = readyTarget(state, reaction, crowd)
@@ -252,7 +256,8 @@ class ReactionPlayStyleGateTest {
 
     private fun aim(state: MutableGameState, reaction: ReactionId, t: Float, hoverX: Float, hoverY: Float) {
         when (reaction) {
-            ReactionId.PLASMA_BURST, ReactionId.ROT_WELL -> state.aimAt(hoverX + 40f * cos(3f * t), hoverY + 40f * sin(3f * t))
+            ReactionId.PLASMA_BURST, ReactionId.ROT_WELL ->
+                follow(state, hoverX + 40f * cos(3f * t), hoverY + 40f * sin(3f * t), -120f * sin(3f * t), 120f * cos(3f * t))
             ReactionId.SUPERCONDUCT -> {
                 val speed = state.speed
                 if (length(state.coreX, state.coreY) > 350f || speed < 50f) {
@@ -261,9 +266,42 @@ class ReactionPlayStyleGateTest {
                     state.aimAt(state.coreX + state.velocityX / speed * 40f, state.coreY + state.velocityY / speed * 40f)
                 }
             }
-            ReactionId.FUSION, ReactionId.OBLIVION, ReactionId.SILENCE -> state.aimAt(40f * cos(2f * t), 40f * sin(2f * t))
+            ReactionId.FUSION, ReactionId.OBLIVION, ReactionId.SILENCE ->
+                follow(state, 40f * cos(2f * t), 40f * sin(2f * t), -80f * sin(2f * t), 80f * cos(2f * t))
             ReactionId.GLACIER_CRUSH, ReactionId.THERMAL_SHOCK -> state.aimAt(200f + 60f * cos(1.3f * t), 120f * sin(0.9f * t))
+            ReactionId.MAGNETIZE ->
+                follow(state, 220f * cos(1.7f * t), 220f * sin(1.1f * t), -374f * sin(1.7f * t), 242f * cos(1.1f * t))
             else -> state.aimAt(220f * cos(1.7f * t), 220f * sin(1.1f * t))
+        }
+    }
+
+    /**
+     * Flies the Core after the point ([x], [y]) moving at ([vx], [vy]) through the production inverse of the flight
+     * law, the pointer kept on the screen. Under the 0.6.0 law a pointer laid on the point no longer holds a spot:
+     * grip and the slingshot carry the Core round it at speed, far from a pool, a star or its own homing shots.
+     */
+    private fun follow(state: MutableGameState, x: Float, y: Float, vx: Float, vy: Float) {
+        val aim = state.steeringAimFor(
+            (x - state.coreX) * FOLLOW_POSITION_GAIN + (vx - state.velocityX) * FOLLOW_VELOCITY_GAIN,
+            (y - state.coreY) * FOLLOW_POSITION_GAIN + (vy - state.velocityY) * FOLLOW_VELOCITY_GAIN,
+        )
+        val distance = aim.distance.coerceIn(FOLLOW_MIN_TETHER, FOLLOW_MAX_TETHER)
+        state.updatePointer(
+            state.coreX - state.cameraX + state.screenWidth * 0.5f + cos(aim.heading) * distance,
+            state.coreY - state.cameraY + state.screenHeight * 0.5f + sin(aim.heading) * distance,
+        )
+    }
+
+    /**
+     * The Seismic arena keeps its rocks, since its verb works near them, so its player flies as a competent player
+     * does: it brakes while the Core is faster than the dash-safe speed with a rock within [ROCK_LOOKAHEAD_SECONDS]
+     * of travel, and no impact there is lethal.
+     */
+    private fun tooFastNearRocks(state: MutableGameState): Boolean {
+        val speed = state.speed
+        if (speed <= state.steadyCursorSpeed(state.content.obstacles.dashSafeReach)) return false
+        return ROCKS.any { rock ->
+            length(rock.x - state.coreX, rock.y - state.coreY) - rock.radius - state.coreRadius <= speed * ROCK_LOOKAHEAD_SECONDS
         }
     }
 
@@ -336,6 +374,13 @@ class ReactionPlayStyleGateTest {
         const val HOVER_SECONDS = 2f
         /** The content's magnet floor. */
         const val WEAK_MAGNET = 120f
+        /** The following player's gains on the position and velocity error and its tether (the balance pilots' values). */
+        const val FOLLOW_POSITION_GAIN = 6f
+        const val FOLLOW_VELOCITY_GAIN = 4f
+        const val FOLLOW_MIN_TETHER = 65f
+        const val FOLLOW_MAX_TETHER = 380f
+        /** How far ahead (in seconds of travel) the Seismic arena's player looks for a rock. */
+        const val ROCK_LOOKAHEAD_SECONDS = 0.3f
         val ROCKS = arrayOf(
             testObstacle(260f, 0f, 50f), testObstacle(-260f, 0f, 50f), testObstacle(0f, 260f, 50f), testObstacle(0f, -260f, 50f),
             testObstacle(180f, 180f, 40f), testObstacle(-180f, -180f, 40f),
