@@ -20,7 +20,7 @@ import kotlin.math.sin
 
 /*
  * The mini-bosses of 0.6.0: Warden Prime, Brood Queen, Throne and Pyre Herald. Each is gated by its content encounter
- * spec (thirds, a 3 % hit cap, a shift at each gate) and runs its phase start once per step outside the damage
+ * spec (thirds, a 6 % hit cap, a shift at each gate) and runs its phase start once per step outside the damage
  * pipeline (startMiniBossPhase). While a mini-boss shifts it attacks nothing: each update holds its attack clocks.
  * Attack cadence runs faster while the boss is enraged (bossAttackScale). Nothing here draws from a run stream.
  */
