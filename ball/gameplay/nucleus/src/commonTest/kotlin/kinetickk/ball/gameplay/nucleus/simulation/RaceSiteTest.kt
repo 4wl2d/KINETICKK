@@ -20,7 +20,6 @@ import kinetickk.foundation.collections.immutableListOf
 import kotlin.math.atan2
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.nextUp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -279,11 +278,11 @@ class RaceSiteTest {
         val policy = game.content.sites.race
         fun medal(clock: Float) = game.raceMedal(race.copy(clock = clock))
         assertEquals(3, medal(race.par * policy.goldFactor))
-        assertEquals(2, medal((race.par * policy.goldFactor).nextUp()))
+        assertEquals(2, medal((race.par * policy.goldFactor).nextAbove()))
         assertEquals(2, medal(race.par * policy.silverFactor))
-        assertEquals(1, medal((race.par * policy.silverFactor).nextUp()))
+        assertEquals(1, medal((race.par * policy.silverFactor).nextAbove()))
         assertEquals(1, medal(race.par * policy.bronzeFactor))
-        assertEquals(0, medal((race.par * policy.bronzeFactor).nextUp()))
+        assertEquals(0, medal((race.par * policy.bronzeFactor).nextAbove()))
         assertEquals(0, game.raceMedal(race.copy(par = 0f)), "no par, no medal")
     }
 
@@ -375,5 +374,8 @@ class RaceSiteTest {
         assertEquals(game.content.sites.definition(SiteKind.GATE_RACE).instruction, game.message)
     }
 }
+
+/** The next float above this positive finite value (portable: Float.nextUp is not common on every target). */
+private fun Float.nextAbove(): Float = Float.fromBits(toRawBits() + 1)
 
 private fun GameplayContentSnapshot.withRace(race: RacePolicy): GameplayContentSnapshot = copy(sites = sites.copy(race = race))
