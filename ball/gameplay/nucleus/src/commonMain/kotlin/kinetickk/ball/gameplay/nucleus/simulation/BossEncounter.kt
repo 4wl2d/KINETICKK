@@ -113,6 +113,10 @@ internal fun MutableGameState.updateBossPhaseStarts() {
     }
 }
 
-/** The phase-start effects of the mini and secret bosses; each kind adds its branch with its behaviour. */
-@Suppress("UNUSED_PARAMETER", "UnusedReceiverParameter")
-private fun MutableGameState.startMiniOrSecretPhase(enemy: Enemy) = Unit
+/** The phase-start effects of the mini and secret bosses; a kind without its own runs none. */
+private fun MutableGameState.startMiniOrSecretPhase(enemy: Enemy) {
+    when (enemy.type) {
+        EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN, EnemyType.THRONE, EnemyType.PYRE_HERALD -> startMiniBossPhase(enemy)
+        else -> Unit
+    }
+}

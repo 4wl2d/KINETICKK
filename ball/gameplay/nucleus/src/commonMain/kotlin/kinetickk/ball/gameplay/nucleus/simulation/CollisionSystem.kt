@@ -129,6 +129,7 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             onSkillCoreImpact(enemy, coreImpactSpeed, damage, dashContact = newDashContact)
             onCharacterImpact(enemy, impact, coreImpactSpeed, characterMultiplier)
             onWeaponImpact(coreImpactSpeed, damage)
+            onEnemyCoreImpact(enemy, coreImpactSpeed)
             // A fast impact destroys an unprimed Bomber outright, before it can prime, even through a tether.
             if (defusable && enemy.alive && coreImpactSpeed >= BOMBER_DEFUSE_SPEED) {
                 executeEnemy(enemy, HitSource.IMPACT)
@@ -504,10 +505,12 @@ internal fun MutableGameState.resolveProjectileHits() {
                 // An Apex shot with no strike left passes through boss-class enemies without spending itself.
                 if (projectile.procKey == WeaponRuntime.PROC_APEX && apexShotPassesThrough(enemy)) continue
                 if (!projectile.tryRecordEnemyHit(enemy.id)) continue
-                // A Reflector's front shield meets shots by where they come from, not where the Core is.
+                // A directional guard (the Reflector's front, a Throne's arcs) meets shots by where they come from, not
+                // where the Core is.
                 val shieldBefore = enemy.guarded
-                val shieldFaces = reflectorShieldFaces(enemy, projectile.previousX, projectile.previousY)
-                if (enemy.type == EnemyType.REFLECTOR) enemy.guarded = shieldFaces
+                val directional = enemy.type.profile.directionalGuard
+                val guardFaces = directional && shieldFaces(enemy, projectile.previousX, projectile.previousY)
+                if (directional) enemy.guarded = guardFaces
                 val sourceWeapon = projectile.sourceWeapon
                 if (sourceWeapon != null) {
                     weaponShotHit(projectile, sourceWeapon, enemy)
@@ -522,11 +525,11 @@ internal fun MutableGameState.resolveProjectileHits() {
                         applyStatus(enemy, kinetickk.ball.content.api.StatusElement.entries[projectile.statusElement], 2, 1)
                     }
                 }
-                if (enemy.type == EnemyType.REFLECTOR) enemy.guarded = shieldBefore
+                if (directional) enemy.guarded = shieldBefore
                 burst(enemy.x, enemy.y, 4, projectile.colorIndex)
-                if (shieldFaces) {
-                    // The shield stops the shot and may send one back.
-                    reflectShot(enemy)
+                if (guardFaces) {
+                    // The guard stops the shot; only the Reflector may send one back.
+                    if (enemy.type == EnemyType.REFLECTOR) reflectShot(enemy)
                     consumed = true
                     break
                 }

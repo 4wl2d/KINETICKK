@@ -89,6 +89,7 @@ internal fun MutableGameState.strikeDamage(enemy: Enemy): Float {
         EnemyType.PHANTOM -> if (striking) hostileDamage(enemy, PHANTOM_STRIKE_DAMAGE) else 0f
         EnemyType.HERALD -> contactDamage(enemy)
         EnemyType.HOUND -> if (striking) contactDamage(enemy) else 0f
+        EnemyType.PYRE_HERALD -> contactDamage(enemy)
         else -> 0f
     }
 }
@@ -510,9 +511,22 @@ internal fun MutableGameState.updateReflector(enemy: Enemy, dx: Float, dy: Float
     )
 }
 
+/**
+ * True when a hit arriving from ([fromX], [fromY]) meets a directional guard: the Reflector's front shield, or one of
+ * the shield arcs of the Throne or the Antecedent.
+ */
+internal fun shieldFaces(enemy: Enemy, fromX: Float, fromY: Float): Boolean {
+    val theta = atan2(fromY - enemy.y, fromX - enemy.x)
+    return when (enemy.type) {
+        EnemyType.REFLECTOR -> angleBetween(enemy.facing, theta) <= REFLECTOR_ARC
+        EnemyType.THRONE, EnemyType.ANTECEDENT -> arcGuards(enemy, theta)
+        else -> false
+    }
+}
+
 /** True when a hit arriving from ([fromX], [fromY]) meets the Reflector's front shield. */
 internal fun reflectorShieldFaces(enemy: Enemy, fromX: Float, fromY: Float): Boolean =
-    enemy.type == EnemyType.REFLECTOR && angleBetween(enemy.facing, atan2(fromY - enemy.y, fromX - enemy.x)) <= REFLECTOR_ARC
+    enemy.type == EnemyType.REFLECTOR && shieldFaces(enemy, fromX, fromY)
 
 /** Sends a blocked shot back at the Core with the Reflector's own projectile damage, at most once per 0.3 s. */
 internal fun MutableGameState.reflectShot(enemy: Enemy) {
@@ -603,6 +617,9 @@ internal fun MutableGameState.initializeBehavior(enemy: Enemy) {
         EnemyType.PHANTOM -> enemy.abilityAt = elapsed + 2f
         EnemyType.HERALD -> enemy.abilityAt = elapsed + HERALD_FIRST_SHIELD_SECONDS
         EnemyType.COMET, EnemyType.PYLON, EnemyType.SENTRY, EnemyType.CIPHER -> initializeWorldsBehavior(enemy)
+        EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN, EnemyType.THRONE, EnemyType.PYRE_HERALD -> initializeMiniBoss(enemy)
         else -> Unit
     }
+    // A mini or secret boss runs its first phase start on its first step.
+    if (!enemy.isBoss && encounterSpec(enemy) != null) enemy.phaseStartPending = true
 }

@@ -192,6 +192,49 @@ class BossEncounterTest {
     }
 
     @Test
+    fun aMiniBossRunsItsFirstPhaseStartOnItsFirstStepAndEachGateRingsAndDropsTwoRepairsFromTheStep() {
+        val state = buildTestState().apply {
+            runGrace = Float.MAX_VALUE
+            quietArenaForTesting()
+        }
+        val tag = encounterTag(EncounterOwner.DIMENSION, 9)
+        assertTrue(state.spawnEncounter(EncounterRequest(tag, state.coreX + 600f, state.coreY, 500f, listOf(EnemyType.THRONE))))
+        val throne = state.enemies.single()
+        assertTrue(throne.phaseStartPending, "a gated boss spawns with its first phase start pending")
+        assertEquals(0, throne.charges)
+        // Kinds without a gate never wait for one; the Architect's phase starts run in the pipeline.
+        assertFalse(state.spawnedEnemy(EnemyType.HERALD, 0f, 0f).phaseStartPending)
+        assertFalse(state.spawnedEnemy(EnemyType.DRIFTER, 0f, 0f).phaseStartPending)
+        assertFalse(state.spawnedEnemy(EnemyType.ARCHITECT, 0f, 0f).phaseStartPending)
+
+        state.simulateStep(MutableGameState.FIXED_STEP)
+        assertFalse(throne.phaseStartPending)
+        assertEquals(THRONE_ARCS, throne.charges, "phase 0 grew its arcs")
+        assertTrue(state.pickups.none { it.type == kinetickk.ball.gameplay.nucleus.render.PickupType.REPAIR }, "no gate yet")
+        state.takeVisualFxCues()
+
+        // A gate: the damage pipeline only advances the phase; the step then rings, drops two repairs and shatters an arc.
+        throne.hp = state.bossGate(throne, checkNotNull(state.encounterSpec(throne))) + 5f
+        state.damageEnemy(throne, 20f)
+        assertEquals(1, throne.phase)
+        assertTrue(throne.phaseStartPending)
+        assertEquals(THRONE_ARCS, throne.charges)
+        assertTrue(state.pickups.isEmpty())
+        val x = throne.x
+        val y = throne.y
+        state.updateBossEncounter()
+        assertFalse(throne.phaseStartPending)
+        assertEquals(THRONE_ARCS - 1, throne.charges)
+        val repairs = state.pickups.filter { it.type == kinetickk.ball.gameplay.nucleus.render.PickupType.REPAIR }
+        assertEquals(MINI_BOSS_SHIFT_REPAIRS, repairs.size)
+        repairs.forEach { assertTrue(kotlin.math.abs(it.x - x) <= 22.01f && kotlin.math.abs(it.y - y) <= 10.01f, "at the boss") }
+        val rings = state.takeVisualFxCues().filterIsInstance<kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue.ShockwaveAdded>()
+        assertTrue(rings.any { it.x == x && it.y == y && it.maxRadius == throne.radius * MINI_BOSS_SHIFT_RING }, "the shift rings")
+        state.updateBossEncounter()
+        assertEquals(MINI_BOSS_SHIFT_REPAIRS, state.pickups.size, "once per gate")
+    }
+
+    @Test
     fun bossClassRulesCoverMiniAndSecretBosses() {
         val state = buildTestState()
         val mini = state.addEnemyForTesting(300f, 0f, hp = 3_000f, radius = 44f, type = EnemyType.BROOD_QUEEN)
