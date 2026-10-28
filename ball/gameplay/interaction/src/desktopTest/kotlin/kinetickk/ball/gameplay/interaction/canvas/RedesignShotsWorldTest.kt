@@ -647,6 +647,8 @@ class RedesignShotsWorldTest {
             choices = immutableListOf(), choiceType = ChoiceType.ITEM, pendingRelicChoiceCount = 0,
             itemStacks = immutableListOf(), discoveredItemIds = immutableSetOf(), relicRanks = immutableListOf(),
             sites = points.toImmutableList(),
+            // A running site's panel, as Gameplay publishes it with the site.
+            trial = points.firstOrNull { it.active }?.let { siteTrial(it) },
         )
     }
 
