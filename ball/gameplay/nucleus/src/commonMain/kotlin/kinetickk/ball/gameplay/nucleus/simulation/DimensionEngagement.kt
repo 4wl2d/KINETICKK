@@ -96,7 +96,7 @@ private fun MutableGameState.objectiveBossIntegrityLost(visit: DimensionVisit): 
 /**
  * Kill hook of onEnemyKilled during a visit whose objective is still open: the objective boss's fall completes it and
  * ends its encounter (its adds stay as ordinary enemies; a secret boss keeps its defeat notice); a burning enemy (a
- * Nadir native or one carrying Thermal) leaves an ember during a Harvest. Draws nothing.
+ * Nadir native or one carrying Thermal) throws an ember during a Harvest. Draws nothing.
  */
 internal fun MutableGameState.onDimensionEnemyKilled(enemy: Enemy) {
     val visit = dimensionRun.visit ?: return
@@ -106,7 +106,7 @@ internal fun MutableGameState.onDimensionEnemyKilled(enemy: Enemy) {
         endEncounter(dimensionEncounterTag(visit), despawn = false)
         return
     }
-    if (visit.objective == DimensionObjective.HARVEST && burning(enemy)) dropEmber(enemy.x, enemy.y)
+    if (visit.objective == DimensionObjective.HARVEST && !visit.failed && burning(enemy)) throwEmber(enemy)
 }
 
 /** True for a Nadir native or an enemy carrying Thermal stacks. */

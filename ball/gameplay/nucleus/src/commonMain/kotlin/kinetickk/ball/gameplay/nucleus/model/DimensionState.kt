@@ -24,9 +24,9 @@ internal data class HaloRing(val id: Int, val x: Float, val y: Float, val course
     fun shifted(dx: Float, dy: Float): HaloRing = copy(x = x - dx, y = y - dy)
 }
 
-/** A Nadir ember waiting to be collected until [expiresAt]. */
-internal data class Ember(val x: Float, val y: Float, val expiresAt: Float) {
-    fun shifted(dx: Float, dy: Float): Ember = copy(x = x - dx, y = y - dy)
+/** A Nadir ember waiting to be collected until [expiresAt], thrown there from the burning kill at ([fromX], [fromY]). */
+internal data class Ember(val x: Float, val y: Float, val expiresAt: Float, val fromX: Float = x, val fromY: Float = y) {
+    fun shifted(dx: Float, dy: Float): Ember = copy(x = x - dx, y = y - dy, fromX = fromX - dx, fromY = fromY - dy)
 }
 
 /** The visit in progress: its layer, objective, clock and the objective's world marks. */
@@ -41,6 +41,8 @@ internal data class DimensionVisit(
     val progress: Int = 0,
     val goal: Int,
     val completed: Boolean = false,
+    /** The objective can no longer be completed before the visit's end (a broken Ascent course). */
+    val failed: Boolean = false,
     /** The objective boss once it spawned (-1: none yet, or the objective has none). */
     val bossId: Int = -1,
     /** The run second the objective boss arrives; +∞ when the objective has none. */
@@ -55,6 +57,10 @@ internal data class DimensionVisit(
     val courseHeading: Float,
     /** At most ContentBounds.MAX_EMBERS. */
     val embers: ImmutableList<Ember> = immutableListOf(),
+    /** The run second the next Ascent ring must be passed by; +∞ while no split runs (before the first ring counts). */
+    val splitEndsAt: Float = Float.POSITIVE_INFINITY,
+    /** The running split's length in seconds; 0 while none runs. */
+    val splitSeconds: Float = 0f,
 ) {
     fun shifted(dx: Float, dy: Float): DimensionVisit = copy(
         exitPortal = exitPortal?.shifted(dx, dy),

@@ -22,7 +22,7 @@ import kotlin.math.min
 /**
  * The world layer and its visit as presentation draws them. Realspace with no open glitch rift, no locked window rift
  * and no open dimension reward publishes the shared [DimensionProjection.REALSPACE]. A visit publishes its layer, objective, clock, pace and
- * heat, the ring to fly through next, the exit rift, its halo rings and embers. An equal projection keeps [previous];
+ * heat, the ring to fly through next and the split to it, the exit rift, its halo rings and embers. An equal projection keeps [previous];
  * the halo list keeps its previous instance when the [identitySource] held the same rings, and otherwise each list
  * whose content matches (raw float bits) keeps its previous instance. A pure read: nothing here writes state.
  */
@@ -79,6 +79,9 @@ private fun MutableGameState.visitProjection(
         },
         embers = emberProjections(visit.embers, previous?.embers),
         rewardLayer = dimensionRewardLayer,
+        splitRemaining = if (visit.splitSeconds > 0f) max(0f, visit.splitEndsAt - elapsed) else 0f,
+        splitDuration = visit.splitSeconds,
+        failed = visit.failed,
     )
 }
 
@@ -106,9 +109,9 @@ private fun MutableGameState.scorching(physics: DimensionPhysics): Float = when 
     else -> min(1f, dimensionSlowSeconds / physics.scorchGraceSeconds)
 }
 
-/** The course ring to fly through next: the one whose place is the objective's progress, -1 once completed or none. */
+/** The course ring to fly through next: the one whose place is the objective's progress, -1 once completed, failed or none. */
 private fun nextHaloId(visit: DimensionVisit): Int {
-    if (visit.completed) return -1
+    if (visit.completed || visit.failed) return -1
     val halos = visit.halos
     for (index in halos.indices) if (halos[index].courseIndex == visit.progress) return halos[index].id
     return -1
@@ -149,7 +152,8 @@ private fun MutableGameState.emberProjections(embers: ImmutableList<Ember>, reus
             val ember = embers[index]
             val projected = reusable[index]
             if (!projected.x.sameBitsAs(ember.x) || !projected.y.sameBitsAs(ember.y) ||
-                !projected.remaining.sameBitsAs(emberRemaining(ember))
+                !projected.remaining.sameBitsAs(emberRemaining(ember)) || !projected.fromX.sameBitsAs(ember.fromX) ||
+                !projected.fromY.sameBitsAs(ember.fromY) || !projected.age.sameBitsAs(emberAge(ember))
             ) {
                 same = false
                 break
@@ -157,7 +161,11 @@ private fun MutableGameState.emberProjections(embers: ImmutableList<Ember>, reus
         }
         if (same) return reusable
     }
-    return embers.mapToImmutableList { EmberProjection(it.x, it.y, emberRemaining(it)) }
+    return embers.mapToImmutableList { EmberProjection(it.x, it.y, emberRemaining(it), it.fromX, it.fromY, emberAge(it)) }
 }
 
 private fun MutableGameState.emberRemaining(ember: Ember): Float = max(0f, ember.expiresAt - elapsed)
+
+/** Seconds since the ember was thrown (its life less what remains of it). */
+private fun MutableGameState.emberAge(ember: Ember): Float =
+    max(0f, content.dimensions.objectives.emberLifeSeconds - (ember.expiresAt - elapsed))

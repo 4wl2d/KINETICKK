@@ -166,9 +166,10 @@ class RedesignShotsHudTest {
         // The dungeon panel: sealed in a Derelict Station's bay with its garrison, two of four rooms clear, the bay's cell
         // at its pulse's peak, under the scrim and the vignette.
         DUNGEON,
-        // A dimension visit: the plate in the Rebirth slot and the objective's panel; the Zenith's course at pace, the
-        // Nadir's harvest in its last seconds with the Core scorching (the heat edge), the Archive's duel with the
-        // Antecedent; then the shutter 150 ms into the Zenith.
+        // A dimension visit: the plate in the Rebirth slot and the objective's panel; the Zenith's course at pace with its
+        // next ring's arc half into the split, the Nadir's harvest in its last seconds with the Core scorching (the heat
+        // edge) and an ember just thrown from its kill, the Archive's duel with the Antecedent; then the shutter 150 ms
+        // into the Zenith.
         DIMENSION_ZENITH, DIMENSION_NADIR, DIMENSION_ARCHIVE, DIMENSION_SHUTTER,
     }
 
@@ -379,9 +380,9 @@ class RedesignShotsHudTest {
         fun native(id: Int, type: EnemyType, dx: Float, dy: Float, radius: Float) = enemy(id, type, x + dx, y + dy, 1f, radius)
         val visit = when (layer) {
             kinetickk.ball.content.api.WorldLayer.ZENITH -> dimensionVisit(layer, x, y, course = listOf(420f to -150f, 900f to 120f),
-                ambient = listOf(-380f to 260f), progress = 3, pace = 900f)
+                ambient = listOf(-380f to 260f), progress = 3, pace = 900f, splitRemaining = 1.3f, splitDuration = 2.6f)
             kinetickk.ball.content.api.WorldLayer.NADIR -> dimensionVisit(layer, x, y, embers = listOf(160f to -90f, -220f to 140f, 300f to 210f),
-                progress = 7, scorching = 1f).copy(remaining = 8.2f)
+                progress = 7, scorching = 1f, thrownFrom = listOf(-60f to 120f), emberAge = 0.1f).copy(remaining = 8.2f)
             else -> dimensionVisit(layer, x, y).copy(remaining = 71f)
         }
         val natives = when (layer) {

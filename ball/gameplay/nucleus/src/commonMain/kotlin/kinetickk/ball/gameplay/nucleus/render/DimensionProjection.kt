@@ -22,8 +22,18 @@ data class PortalProjection(
 /** A Zenith halo ring; [courseIndex] is its place in the Ascent course, or -1 for an ambient halo. */
 data class HaloProjection(val id: Int, val x: Float, val y: Float, val courseIndex: Int)
 
-/** A Nadir ember waiting to be collected. */
-data class EmberProjection(val x: Float, val y: Float, val remaining: Float)
+/**
+ * A Nadir ember waiting to be collected, thrown from the burning kill at ([fromX], [fromY]) [age] seconds ago (a
+ * placed ember has no throw: its origin is its position).
+ */
+data class EmberProjection(
+    val x: Float,
+    val y: Float,
+    val remaining: Float,
+    val fromX: Float = x,
+    val fromY: Float = y,
+    val age: Float = Float.POSITIVE_INFINITY,
+)
 
 /** The world layer the Core is in and its visit; [REALSPACE] outside every dimension. */
 data class DimensionProjection(
@@ -53,6 +63,12 @@ data class DimensionProjection(
     val lockedRifts: Int = 0,
     /** The layer whose reward choice is open (its Blessings, its Pacts or the Archive's trove); null otherwise. */
     val rewardLayer: WorldLayer? = null,
+    /** Seconds left to pass the ring to fly through next ([nextHaloId]); 0 while no split runs. */
+    val splitRemaining: Float = 0f,
+    /** The running split's length; the next ring's dashed ring empties over it. 0 while no split runs. */
+    val splitDuration: Float = 0f,
+    /** The objective can no longer be completed before the visit's end (a broken Ascent course). */
+    val failed: Boolean = false,
 ) {
     companion object {
         val REALSPACE: DimensionProjection = DimensionProjection()

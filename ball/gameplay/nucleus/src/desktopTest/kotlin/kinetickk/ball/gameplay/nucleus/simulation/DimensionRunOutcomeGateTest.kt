@@ -15,9 +15,8 @@ import kotlin.test.assertTrue
  * [EconomyGateSeeds] (the spirit of gate D). The first gate plays the first 120 [PopulationSeeds] (i = 1,001..1,120).
  *
  * Measured on the 0.6.0 lane tree: on the window i = 2,401..2,500 the Zenith moves the win share by +0.02 and the Nadir
- * by -0.01 (control 0.65); on the gate seeds by +0.042 (paired SE 0.052) and -0.117 (0.053) against the control's
- * 79 of 120, which the records step restates by the population rule. The strong build won none of its five seeds with
- * either visit.
+ * by +0.06 (control 0.78); on the gate seeds by +0.025 (paired SE 0.038) and -0.008 (0.046) against the control's 88 of
+ * 120. The strong build won none of its five seeds with either visit.
  */
 class DimensionRunOutcomeGateTest {
     /**

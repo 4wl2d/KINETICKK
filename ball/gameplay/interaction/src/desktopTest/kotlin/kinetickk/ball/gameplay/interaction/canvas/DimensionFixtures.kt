@@ -27,8 +27,10 @@ internal fun fixtureObjective(layer: WorldLayer): DimensionObjective = when (lay
 
 /**
  * A visit of [layer] around the Core at ([coreX], [coreY]), as Gameplay publishes it: course rings at [course] offsets
- * (their places in order, the first the ring to fly through next unless [completed]), ambient rings at [ambient], embers
- * at [embers] with [emberLife] seconds left, and the exit rift at [exit] once the objective is [completed].
+ * (their places in order, the first the ring to fly through next unless [completed]) with [splitRemaining] of a
+ * [splitDuration]-second split to it, ambient rings at [ambient], embers at [embers] with [emberLife] seconds left (the
+ * first ones thrown [emberAge] seconds ago from the kills at [thrownFrom]), and the exit rift at [exit] once the
+ * objective is [completed].
  */
 internal fun dimensionVisit(
     layer: WorldLayer,
@@ -44,6 +46,10 @@ internal fun dimensionVisit(
     pace: Float = 900f,
     localClock: Float = 3f,
     scorching: Float = 0f,
+    splitRemaining: Float = 0f,
+    splitDuration: Float = 0f,
+    thrownFrom: List<Pair<Float, Float>> = emptyList(),
+    emberAge: Float = Float.POSITIVE_INFINITY,
 ): DimensionProjection {
     val courseRings = course.mapIndexed { index, (dx, dy) -> HaloProjection(index, coreX + dx, coreY + dy, progress + index) }
     val ambientRings = ambient.mapIndexed { index, (dx, dy) -> HaloProjection(100 + index, coreX + dx, coreY + dy, -1) }
@@ -61,7 +67,13 @@ internal fun dimensionVisit(
         nextHaloId = if (completed || courseRings.isEmpty()) -1 else courseRings.first().id,
         exitPortal = exit?.let { (dx, dy) -> PortalProjection(1, coreX + dx, coreY + dy, WorldLayer.BASE, locked = false, glitch = false, remaining = 40f) },
         halos = (courseRings + ambientRings).toImmutableList(),
-        embers = embers.mapIndexed { index, (dx, dy) -> EmberProjection(coreX + dx, coreY + dy, emberLife - index * 0.05f) }.toImmutableList(),
+        embers = embers.mapIndexed { index, (dx, dy) ->
+            val (fromX, fromY) = thrownFrom.getOrNull(index) ?: (dx to dy)
+            val age = if (index < thrownFrom.size) emberAge else Float.POSITIVE_INFINITY
+            EmberProjection(coreX + dx, coreY + dy, emberLife - index * 0.05f, coreX + fromX, coreY + fromY, age)
+        }.toImmutableList(),
+        splitRemaining = splitRemaining,
+        splitDuration = splitDuration,
     )
 }
 

@@ -157,20 +157,54 @@ class DimensionRenderMapperTest {
     fun embersCarryTheirRemainingLifeAndReprojectOnlyWhenItChanges() {
         val game = game()
         game.enterDimensionForTesting(WorldLayer.NADIR, DimensionObjective.HARVEST)
-        game.dropEmber(game.coreX + 400f, game.coreY - 120f)
+        // One ember thrown in from a kill, one placed where it lies.
+        game.dropEmber(game.coreX + 400f, game.coreY - 120f, fromX = game.coreX + 250f, fromY = game.coreY - 40f)
         game.dropEmber(game.coreX - 300f, game.coreY + 260f)
-        game.elapsed += 2f
+        game.elapsed += 0.5f
+        val life = policy.objectives.emberLifeSeconds
         val embers = checkNotNull(game.dimensionRun.visit).embers
         val first = game.dimensionProjection(null, null)
-        assertEquals(embers.map { EmberProjection(it.x, it.y, it.expiresAt - game.elapsed) }, first.embers.toList())
+        assertEquals(
+            embers.map { EmberProjection(it.x, it.y, it.expiresAt - game.elapsed, it.fromX, it.fromY, life - (it.expiresAt - game.elapsed)) },
+            first.embers.toList(),
+        )
+        assertEquals(game.coreX + 250f to game.coreY - 40f, first.embers[0].fromX to first.embers[0].fromY)
+        assertEquals(first.embers[1].x to first.embers[1].y, first.embers[1].fromX to first.embers[1].fromY, "a placed ember has no throw")
+        assertEquals(0.5f, first.embers[0].age, 1e-5f)
 
         // The same state keeps the previous projection whole; a later clock reprojects the embers (their life ran on).
         assertSame(first, game.dimensionProjection(first, game))
-        game.elapsed += 0.5f
+        game.elapsed += 0.25f
         val later = game.dimensionProjection(first, game)
         assertNotSame(first.embers, later.embers)
-        assertEquals(first.embers[0].remaining - 0.5f, later.embers[0].remaining, 1e-5f)
+        assertEquals(first.embers[0].remaining - 0.25f, later.embers[0].remaining, 1e-5f)
+        assertEquals(first.embers[0].age + 0.25f, later.embers[0].age, 1e-5f)
         assertSame(first.halos, later.halos)
+    }
+
+    @Test
+    fun theSplitToTheNextRingAndABrokenCourseArePublished() {
+        val game = game()
+        game.enterDimensionForTesting(WorldLayer.ZENITH, DimensionObjective.ASCENT)
+        val idle = game.dimensionProjection(null, null)
+        assertEquals(0f to 0f, idle.splitRemaining to idle.splitDuration, "no split before the first ring counts")
+        assertFalse(idle.failed)
+        val visit = checkNotNull(game.dimensionRun.visit)
+        game.dimensionRun = game.dimensionRun.copy(visit = visit.copy(splitEndsAt = game.elapsed + 1.5f, splitSeconds = 2.5f))
+        val running = game.dimensionProjection(null, null)
+        assertEquals(1.5f, running.splitRemaining, 1e-4f)
+        assertEquals(2.5f, running.splitDuration)
+        assertEquals(visit.halos.single { it.courseIndex == 0 }.id, running.nextHaloId)
+        // Run out but not yet stepped: nothing is left of it; the next step breaks the course.
+        game.elapsed += 2f
+        assertEquals(0f, game.dimensionProjection(null, null).splitRemaining)
+        game.updateDimension(MutableGameState.FIXED_STEP)
+        val broken = game.dimensionProjection(null, null)
+        assertTrue(broken.failed)
+        assertFalse(broken.completed)
+        assertEquals(-1, broken.nextHaloId)
+        assertEquals(0f to 0f, broken.splitRemaining to broken.splitDuration)
+        assertTrue(broken.halos.none { it.courseIndex >= 0 }, "the broken course's rings left")
     }
 
     @Test

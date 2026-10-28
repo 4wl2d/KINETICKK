@@ -72,7 +72,9 @@ private const val HALO_EXTENT = HALO_NEXT_RADIUS + 6f
 /** An ember's diamond side, its glow ring and the seconds over which it fades out at the end of its life. */
 private const val EMBER_SIDE = 7f
 private const val EMBER_GLOW_RADIUS = 12f
-private const val EMBER_FADE_SECONDS = 1.5f
+private const val EMBER_FADE_SECONDS = 0.5f
+/** A thrown ember trails a heat streak from the kill that shrinks into it over this long. */
+private const val EMBER_THROW_SECONDS = 0.45f
 
 /** The halftone disc under the Core, as realspace draws it. */
 private const val HALFTONE_DIAMETER = 700f
@@ -363,6 +365,8 @@ internal fun DrawScope.drawDimensionWorld(engine: GameplayRenderModel, shakeX: F
     if (dimension.layer == WorldLayer.BASE) return
     val halos = dimension.halos
     val slow = engine.speed < dimension.pace
+    // The share of the split to the next ring still left (the whole ring while no split runs).
+    val split = if (dimension.splitDuration > 0f) (dimension.splitRemaining / dimension.splitDuration).coerceIn(0f, 1f) else 1f
     for (index in halos.indices) {
         val halo = halos[index]
         val center = world(engine, halo.x, halo.y, shakeX, shakeY)
@@ -370,7 +374,7 @@ internal fun DrawScope.drawDimensionWorld(engine: GameplayRenderModel, shakeX: F
         // The course ring after the next one waits in grey; every other ring shows its Grace.
         val following = !dimension.completed && halo.courseIndex >= 0 && halo.courseIndex == dimension.progress + 1
         if (following) drawCircle(Kk.Mute.copy(alpha = 0.7f), HALO_RADIUS, center, style = kkStroke(3f)) else drawHalo(center, roles)
-        if (halo.id == dimension.nextHaloId) drawNextHaloRing(center, time, slow, roles)
+        if (halo.id == dimension.nextHaloId) drawNextHaloRing(center, time, slow, split, roles)
     }
     val embers = dimension.embers
     for (index in embers.indices) {
@@ -378,6 +382,13 @@ internal fun DrawScope.drawDimensionWorld(engine: GameplayRenderModel, shakeX: F
         val center = world(engine, ember.x, ember.y, shakeX, shakeY)
         if (!isOnScreen(center, EMBER_GLOW_RADIUS + 2f)) continue
         val alpha = min(1f, ember.remaining / EMBER_FADE_SECONDS).coerceAtLeast(0f)
+        if (ember.age < EMBER_THROW_SECONDS && (ember.fromX != ember.x || ember.fromY != ember.y)) {
+            // The throw: a heat streak from the kill whose tail catches up with the ember.
+            val flown = ember.age / EMBER_THROW_SECONDS
+            val from = world(engine, ember.fromX, ember.fromY, shakeX, shakeY)
+            val tail = Offset(from.x + (center.x - from.x) * flown, from.y + (center.y - from.y) * flown)
+            drawLine(roles.heat.copy(alpha = 0.6f * (1f - flown) * alpha), tail, center, 2f)
+        }
         drawCircle(roles.heat.copy(alpha = 0.25f * alpha), EMBER_GLOW_RADIUS, center, style = kkStroke(2f))
         rotate(45f, center) {
             drawRect(roles.heat.copy(alpha = alpha), Offset(center.x - EMBER_SIDE * 0.5f, center.y - EMBER_SIDE * 0.5f), Size(EMBER_SIDE, EMBER_SIDE))
@@ -419,9 +430,23 @@ private val HaloTickDirections = FloatArray(HALO_TICKS * 2) { index ->
 
 /**
  * The ring to fly through next: a dashed ring in the player's colour turning at 15° per second, grey with hatched dashes
- * while the Core flies below the layer's pace (a slow pass would not count).
+ * while the Core flies below the layer's pace (a slow pass would not count). While the split to it runs, the ring is
+ * an arc from the top over the [split] share still left, emptying clockwise as the split runs out.
  */
-private fun DrawScope.drawNextHaloRing(center: Offset, time: Float, slow: Boolean, roles: KkRolePalette) {
+private fun DrawScope.drawNextHaloRing(center: Offset, time: Float, slow: Boolean, split: Float, roles: KkRolePalette) {
+    if (split < 1f) {
+        val sweep = 360f * split
+        val topLeft = Offset(center.x - HALO_NEXT_RADIUS, center.y - HALO_NEXT_RADIUS)
+        val size = Size(HALO_NEXT_RADIUS * 2f, HALO_NEXT_RADIUS * 2f)
+        if (slow) {
+            drawArc(kkFillBrush(KkFillKind.HATCH, Kk.Mute), -90f, sweep, useCenter = false, topLeft = topLeft, size = size,
+                style = DimensionStrokes.hatchedRing)
+            drawArc(Kk.Mute, -90f, sweep, useCenter = false, topLeft = topLeft, size = size, style = DimensionStrokes.ring)
+        } else {
+            drawArc(roles.you, -90f, sweep, useCenter = false, topLeft = topLeft, size = size, style = DimensionStrokes.ring)
+        }
+        return
+    }
     rotate(time * 15f, center) {
         if (slow) {
             drawCircle(kkFillBrush(KkFillKind.HATCH, Kk.Mute), HALO_NEXT_RADIUS, center, style = DimensionStrokes.hatchedRing)

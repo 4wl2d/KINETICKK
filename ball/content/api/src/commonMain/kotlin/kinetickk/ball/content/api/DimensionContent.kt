@@ -23,9 +23,15 @@ enum class WorldLayer(val habitat: EnemyHabitat) {
  * and must defeat (null for a course or a collection); the bootstrap checks its rank and habitat against the roster.
  */
 enum class DimensionObjective(val layer: WorldLayer, val label: String, val instruction: String, val boss: EnemyType? = null) {
-    ASCENT(WorldLayer.ZENITH, "Ascent", "Fly through the halo gates in order, faster than cruising."),
+    ASCENT(
+        WorldLayer.ZENITH, "Ascent",
+        "Fly through the halo gates in order, faster than cruising. Reach each gate before its time runs out.",
+    ),
     JUDGEMENT(WorldLayer.ZENITH, "Judgement", "Defeat the Throne.", EnemyType.THRONE),
-    HARVEST(WorldLayer.NADIR, "Harvest", "Collect twelve embers from burning enemies. Keep moving: slow flight scorches the Core."),
+    HARVEST(
+        WorldLayer.NADIR, "Harvest",
+        "Collect twenty embers thrown from burning enemies. Keep moving: slow flight scorches the Core.",
+    ),
     PYRE(WorldLayer.NADIR, "Pyre", "Defeat the Pyre Herald. Keep moving: slow flight scorches the Core.", EnemyType.PYRE_HERALD),
     ANTECEDENT(WorldLayer.ARCHIVE, "Antecedent", "Defeat the Antecedent. Time moves only when you move.", EnemyType.ANTECEDENT),
 }
@@ -103,10 +109,13 @@ data class DimensionDefinition(
     val features: LayerFeatures = LayerFeatures.DIMENSION,
     /** The share of its spawn integrity this layer's objective boss arrives with. */
     val bossIntegrityShare: Float = 1f,
+    /** The share of its damage (shots, contact and blasts) this layer's objective boss deals. */
+    val bossDamageShare: Float = 1f,
 ) {
     init {
         require(name.isNotBlank() && riftName.isNotBlank() && description.isNotBlank()) { "Dimension texts must not be blank" }
         require(bossIntegrityShare in 0.1f..1f) { "Dimension boss integrity share must be in 0.1..1" }
+        require(bossDamageShare in 0.25f..1f) { "Dimension boss damage share must be in 0.25..1" }
         // The hostile-scale range of run modifiers.
         require(spawnRateMultiplier in 0.5f..1.5f && ordinaryCapMultiplier in 0.5f..1.5f) {
             "Dimension spawn and cap multipliers must be in 0.5..1.5"
@@ -121,10 +130,19 @@ data class DimensionObjectiveTuning(
     val ascentMaximumSpacing: Float = 900f,
     val ascentMinimumTurnDegrees: Float = 20f,
     val ascentMaximumTurnDegrees: Float = 70f,
+    /**
+     * Once a course ring counts, the next must be passed within this multiple of the cruise time between the two
+     * (their distance over the pace), or the course breaks.
+     */
+    val ascentSplitFactor: Float = 4.25f,
     val haloRadius: Float = 70f,
-    val harvestEmbers: Int = 12,
-    val emberLifeSeconds: Float = 7f,
+    val harvestEmbers: Int = 20,
+    /** A thrown ember waits this long: the Harvest is a chase to each one, not a sweep behind the kills. */
+    val emberLifeSeconds: Float = 1.25f,
     val emberRadius: Float = 70f,
+    /** A burning kill throws its ember this far (from the minimum to the maximum, by a stateless hash). */
+    val emberThrowMinimum: Float = 140f,
+    val emberThrowMaximum: Float = 320f,
     val bossDistance: Float = 900f,
     val bossDelaySeconds: Float = 2f,
     val antecedentDelaySeconds: Float = 4f,
@@ -139,6 +157,10 @@ data class DimensionObjectiveTuning(
             "Ascent spacing and turn bounds must be ordered"
         }
         require(ascentMinimumTurnDegrees >= 0f && ascentMaximumTurnDegrees <= 180f) { "Ascent turns must be in 0..180 degrees" }
+        require(ascentSplitFactor in 1f..10f) { "Ascent split factor must be in 1..10" }
+        require(emberThrowMinimum in 0f..600f && emberThrowMaximum in emberThrowMinimum..600f) {
+            "Ember throws must be ordered within 0..600"
+        }
         require(bossDelaySeconds.isFinite() && bossDelaySeconds >= 0f && antecedentDelaySeconds.isFinite() && antecedentDelaySeconds >= 0f) {
             "Boss delays must be non-negative"
         }
@@ -255,8 +277,9 @@ fun defaultDimensionDefinitions(): ImmutableList<DimensionDefinition> = listOf(
         spawnRateMultiplier = 0.9f, ordinaryCapMultiplier = 0.9f,
         physics = DimensionPhysics(dragMultiplier = 0.65f, dragFloor = 0.035f, haloRepairShare = 0.05f, haloOverdrive = 15f, ambientHalos = 6),
         reward = DimensionReward(DimensionRewardKind.BLESSING_OFFER, cardsOnSuccess = 3, cardsOnFailure = 2),
-        // The Throne of a Judgement: a fresh run's visit at 165 s falls to it in about two thirds of the fights.
-        bossIntegrityShare = 0.2f,
+        // The Throne of a Judgement: a fresh run's visit at 165 s fells it in about four of five fights, a strong
+        // tier-10 build's at 285 s in about two of three (the share shortens the fight in capped hits too).
+        bossIntegrityShare = 0.16f,
     ),
     DimensionDefinition(
         WorldLayer.NADIR, "Nadir", "Nadir rift",
@@ -273,6 +296,9 @@ fun defaultDimensionDefinitions(): ImmutableList<DimensionDefinition> = listOf(
         // The Pyre Herald of a Pyre, fought at the pace the scorch asks for: a fresh run's visit at 165 s fells it in
         // over half of the fights.
         bossIntegrityShare = 0.12f,
+        // Its spiral volleys late in a fresh run's visit were the Nadir's trap (the deaths inside a Pyre outweighed what
+        // its Pacts cost afterwards).
+        bossDamageShare = 0.6f,
     ),
     DimensionDefinition(
         WorldLayer.ARCHIVE, "Archive", "Glitch rift",
@@ -294,6 +320,7 @@ object DimensionNotices {
     const val ARCHIVE_STIRS: String = "THE ARCHIVE STIRS"
     const val SCORCHED: String = "SCORCHED"
     const val RIFT_DETECTED: String = "RIFT DETECTED // CHOOSE A COURSE"
+    const val COURSE_BROKEN: String = "Course broken"
 
     /** Layer names equal the definitions' `name` keys: Realspace, Zenith, Nadir, Archive. */
     fun layerName(layer: WorldLayer): String = when (layer) {
@@ -307,10 +334,14 @@ object DimensionNotices {
 
     fun completed(objective: DimensionObjective): String = "${objective.label} // $COMPLETE".uppercase()
 
-    /** Every entry banner of a layer and its own objectives, every completion, and the constants above. */
+    /** The Ascent's course broke: its next ring was not reached in time. */
+    fun broken(objective: DimensionObjective): String = "${objective.label} // $COURSE_BROKEN".uppercase()
+
+    /** Every entry banner of a layer and its own objectives, every completion, the broken course, and the constants above. */
     val all: List<String> = buildList {
         DimensionObjective.entries.forEach { add(entry(it.layer, it)) }
         DimensionObjective.entries.forEach { add(completed(it)) }
+        add(broken(DimensionObjective.ASCENT))
         addAll(listOf(COMPLETE, EXIT_OPEN, PULLED_BACK, REALSPACE, ARCHIVE_STIRS, SCORCHED, RIFT_DETECTED))
     }
 }

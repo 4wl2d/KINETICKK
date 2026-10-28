@@ -39,7 +39,16 @@ class DimensionContentTest {
         assertEquals(0.25f, archive.physics.desyncMinimumScale)
         assertEquals(listOf(0.9f, 1.2f, 0.85f), listOf(zenith, nadir, archive).map { it.spawnRateMultiplier })
         assertEquals(listOf(0.9f, 1.15f, 0.8f), listOf(zenith, nadir, archive).map { it.ordinaryCapMultiplier })
-        assertEquals(listOf(0.2f, 0.12f, 1f), listOf(zenith, nadir, archive).map { it.bossIntegrityShare })
+        assertEquals(listOf(0.16f, 0.12f, 1f), listOf(zenith, nadir, archive).map { it.bossIntegrityShare })
+        assertEquals(listOf(1f, 0.6f, 1f), listOf(zenith, nadir, archive).map { it.bossDamageShare })
+        // The Ascent's split and the Harvest's thrown embers; the Harvest's instruction names its goal.
+        val objectives = policy.objectives
+        assertEquals(10, objectives.ascentRings)
+        assertEquals(4.25f, objectives.ascentSplitFactor)
+        assertEquals(20, objectives.harvestEmbers)
+        assertTrue(DimensionObjective.HARVEST.instruction.startsWith("Collect twenty embers"))
+        assertEquals(1.25f, objectives.emberLifeSeconds)
+        assertEquals(140f to 320f, objectives.emberThrowMinimum to objectives.emberThrowMaximum)
         // Only the duels name a boss, and each boss is the one the instruction names.
         assertEquals(
             mapOf(
@@ -155,6 +164,16 @@ class DimensionContentTest {
     }
 
     @Test
+    fun anObjectiveBossDamageShareAcceptsItsBoundsAndRejectsTheNextValue() {
+        val nadir = policy.definition(WorldLayer.NADIR)
+        nadir.copy(bossDamageShare = 0.25f)
+        nadir.copy(bossDamageShare = 1f)
+        assertFailsWith<IllegalArgumentException> { nadir.copy(bossDamageShare = 0.249f) }
+        assertFailsWith<IllegalArgumentException> { nadir.copy(bossDamageShare = 1.01f) }
+        assertFailsWith<IllegalArgumentException> { nadir.copy(bossDamageShare = Float.NaN) }
+    }
+
+    @Test
     fun directorMultipliersStayInTheHostileScaleRange() {
         val nadir = policy.definition(WorldLayer.NADIR)
         nadir.copy(spawnRateMultiplier = 1.5f, ordinaryCapMultiplier = 0.5f)
@@ -200,6 +219,9 @@ class DimensionContentTest {
             { DimensionObjectiveTuning(ascentMinimumSpacing = 900f) },
             { DimensionObjectiveTuning(ascentMinimumTurnDegrees = 0f, ascentMaximumTurnDegrees = 180f) },
             { DimensionObjectiveTuning(bossDelaySeconds = 0f, antecedentDelaySeconds = 0f) },
+            { DimensionObjectiveTuning(ascentSplitFactor = 1f) }, { DimensionObjectiveTuning(ascentSplitFactor = 10f) },
+            { DimensionObjectiveTuning(emberThrowMinimum = 0f, emberThrowMaximum = 0f) },
+            { DimensionObjectiveTuning(emberThrowMinimum = 600f, emberThrowMaximum = 600f) },
         )
         val rejected = listOf(
             { DimensionObjectiveTuning(ascentRings = 1) }, { DimensionObjectiveTuning(ascentRings = 17) },
@@ -208,6 +230,11 @@ class DimensionContentTest {
             { DimensionObjectiveTuning(ascentMinimumTurnDegrees = -1f) }, { DimensionObjectiveTuning(ascentMaximumTurnDegrees = 181f) },
             { DimensionObjectiveTuning(haloRadius = 0f) }, { DimensionObjectiveTuning(emberLifeSeconds = Float.POSITIVE_INFINITY) },
             { DimensionObjectiveTuning(bossDelaySeconds = -0.01f) }, { DimensionObjectiveTuning(antecedentDelaySeconds = Float.NaN) },
+            { DimensionObjectiveTuning(ascentSplitFactor = 0.99f) }, { DimensionObjectiveTuning(ascentSplitFactor = 10.01f) },
+            { DimensionObjectiveTuning(ascentSplitFactor = Float.NaN) },
+            { DimensionObjectiveTuning(emberThrowMinimum = -0.01f) }, { DimensionObjectiveTuning(emberThrowMaximum = 600.1f) },
+            { DimensionObjectiveTuning(emberThrowMinimum = 300f, emberThrowMaximum = 299f) },
+            { DimensionObjectiveTuning(emberThrowMaximum = Float.NaN) },
         )
         accepted.forEach { it() }
         rejected.forEach { build -> assertFailsWith<IllegalArgumentException> { build() } }
@@ -275,6 +302,8 @@ class DimensionContentTest {
         WorldLayer.entries.forEach { assertEquals(policy.definition(it).name, DimensionNotices.layerName(it)) }
         assertEquals("ZENITH // ASCENT", DimensionNotices.entry(WorldLayer.ZENITH, DimensionObjective.ASCENT))
         assertEquals("PYRE // COMPLETE", DimensionNotices.completed(DimensionObjective.PYRE))
+        assertEquals("ASCENT // COURSE BROKEN", DimensionNotices.broken(DimensionObjective.ASCENT))
+        assertTrue(DimensionNotices.broken(DimensionObjective.ASCENT) in DimensionNotices.all)
         assertTrue(DimensionObjective.entries.all { DimensionNotices.entry(it.layer, it) in DimensionNotices.all })
         assertTrue(DimensionObjective.entries.all { DimensionNotices.completed(it) in DimensionNotices.all })
     }

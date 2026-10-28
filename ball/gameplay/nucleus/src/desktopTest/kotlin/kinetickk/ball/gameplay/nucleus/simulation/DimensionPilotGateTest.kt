@@ -19,16 +19,15 @@ import kotlin.test.assertTrue
  * is read five seconds after the return. A window arm forces its first objective on the first 60 seeds and its second
  * objective on the other 60; the Archive arms play the Antecedent on all 120. A visit's survival counts the runs that
  * entered (a run that falls before its rift opens measures realspace, not the visit). The thresholds are the spec's
- * design bands; the knobs (Grace, pace reach, scorch, ring and ember counts) are calibrated on the lane's window
- * i = 2,401..2,500 only, through the probe at the end of this class.
+ * design bands; the knobs (Grace, pace, scorch, the Ascent's split factor, the Harvest's goal, ember life and throw,
+ * the objective bosses' shares) are calibrated on the lane's window i = 2,401..2,500 only, through the probe at the
+ * end of this class.
  *
- * Measured on the 0.6.0 lane tree (shares with bootstrap SE; the records step restates the bands by the population
- * rule on the final tree): on the window every band a lane knob reaches holds with the shipped knobs, while the
- * Ascent and the Harvest complete every visit (12 s and 15 s at the median; 16 rings and 24 embers still complete
- * 1.00 and 0.98) and the objective bosses fall in at most 0.15 of the visits (their integrity is ENEMIES'). On the gate
- * seeds: Z0 survival 0.965 (0.017), Ascent 1.000, Judgement 0.000, median 12.2 s; N0 survival 0.843 (0.034), Harvest
- * 1.000, Pyre 0.035 (0.024), scorch 0.100 (0.013); Z10 survival 0.796 (0.044), completion 0.500 (0.054); N10 0.966
- * (0.019) and 0.489 (0.054); A3 survival 1.000, defeat 0.168 (0.034); A0 survival 0.857 (0.036), defeat 0.092 (0.029).
+ * Measured on the 0.6.0 lane tree (shares with bootstrap SE): an Ascent breaks once a split to its next ring runs out
+ * and a Harvest chases twenty thrown embers. On the gate seeds: Z0 survival 0.974 (0.015), Ascent 0.754 (0.057),
+ * Judgement 0.847 (0.047), median 28.8 s; N0 survival 0.991 (0.009), Harvest 0.877 (0.044), Pyre 0.610 (0.064), scorch
+ * 0.357 (0.033); Z10 survival 0.980 (0.014), completion 0.630 (0.049); N10 0.930 (0.025) and 0.810 (0.039); A3 survival
+ * 1.000, defeat 0.292 (0.041); A0 survival 0.893 (0.030), defeat 0.117 (0.031).
  */
 class DimensionPilotGateTest {
     /**
@@ -109,7 +108,9 @@ class DimensionPilotGateTest {
      * it and prints one line per run and a summary per arm with bootstrap standard errors. It never plays the gate
      * population. `KK_DIMENSION_KNOBS=name=value,...` overrides the shipped dimension knobs (graceDrag, paceReach,
      * paceCeiling, scorch, rings, embers, emberLife, emberRadius, haloRadius, turnMin, turnMax, spacingMin, spacingMax,
-     * zenithBossShare, nadirBossShare, and the Nadir's nadirSpawn, nadirCap and nadirVisit seconds). The outcome arms
+     * splitFactor, throwMin, throwMax,
+     * zenithBossShare, nadirBossShare, zenithBossDamage, nadirBossDamage, and the Nadir's nadirSpawn, nadirCap and
+     * nadirVisit seconds). The outcome arms
      * OC (no rift), OZ and ON (a Zenith or Nadir visit at 165 s with its rolled objective) play whole runs and print the
      * win shares the outcome gate compares.
      */
@@ -257,9 +258,16 @@ class DimensionPilotGateTest {
                         "turnMax" -> copy(objectives = objectives.copy(ascentMaximumTurnDegrees = value))
                         "spacingMin" -> copy(objectives = objectives.copy(ascentMinimumSpacing = value))
                         "spacingMax" -> copy(objectives = objectives.copy(ascentMaximumSpacing = value))
+                        "splitFactor" -> copy(objectives = objectives.copy(ascentSplitFactor = value))
+                        "throwMin" -> copy(objectives = objectives.copy(emberThrowMinimum = value))
+                        "throwMax" -> copy(objectives = objectives.copy(emberThrowMaximum = value))
                         "zenithBossShare", "nadirBossShare" -> copy(definitions = definitions.map { d ->
                             val layer = if (name == "zenithBossShare") WorldLayer.ZENITH else WorldLayer.NADIR
                             if (d.layer == layer) d.copy(bossIntegrityShare = value) else d
+                        }.toImmutableList())
+                        "zenithBossDamage", "nadirBossDamage" -> copy(definitions = definitions.map { d ->
+                            val layer = if (name == "zenithBossDamage") WorldLayer.ZENITH else WorldLayer.NADIR
+                            if (d.layer == layer) d.copy(bossDamageShare = value) else d
                         }.toImmutableList())
                         else -> error("unknown dimension knob $name")
                     }
@@ -276,8 +284,11 @@ class DimensionPilotGateTest {
                 "emberRadius=${policy.objectives.emberRadius} haloRadius=${policy.objectives.haloRadius} " +
                 "turns=${policy.objectives.ascentMinimumTurnDegrees}..${policy.objectives.ascentMaximumTurnDegrees} " +
                 "spacing=${policy.objectives.ascentMinimumSpacing}..${policy.objectives.ascentMaximumSpacing} " +
+                "splitFactor=${policy.objectives.ascentSplitFactor} " +
+                "throw=${policy.objectives.emberThrowMinimum}..${policy.objectives.emberThrowMaximum} " +
                 "zenithBossShare=${policy.definition(WorldLayer.ZENITH).bossIntegrityShare} " +
-                "nadirBossShare=${policy.definition(WorldLayer.NADIR).bossIntegrityShare}"
+                "nadirBossShare=${policy.definition(WorldLayer.NADIR).bossIntegrityShare} " +
+                "nadirBossDamage=${policy.definition(WorldLayer.NADIR).bossDamageShare}"
         }
 
         /** Z0: a fresh run's Zenith survival floor, its Ascent and Judgement completion bands and the completion median. */

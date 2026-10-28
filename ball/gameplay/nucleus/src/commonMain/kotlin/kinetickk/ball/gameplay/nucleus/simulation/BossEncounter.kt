@@ -51,7 +51,7 @@ internal fun MutableGameState.bossHitCap(
     spec: BossEncounterSpec = encounterSpec(enemy) ?: architectSpec(),
 ): Float =
     spec.hitCapShare * enemy.maxHp / rebirthProfile.enemyHealthMultiplier.coerceAtLeast(1f) *
-        (1f - spec.hitCapTierShrink * rebirthProfile.tier).coerceIn(spec.hitCapMinimumScale, 1f)
+        (1f - spec.hitCapTierShrink * rebirthProfile.tier).coerceIn(spec.hitCapMinimumScale, 1f) / objectiveBossIntegrityShare(enemy)
 
 /**
  * Applies the phase gate to a requested amount: nothing while shifting, at most [bossHitCap], and never past the
