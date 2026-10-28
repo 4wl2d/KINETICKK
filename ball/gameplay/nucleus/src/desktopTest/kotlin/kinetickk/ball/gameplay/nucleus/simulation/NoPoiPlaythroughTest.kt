@@ -373,7 +373,7 @@ internal class NoPoiBot(
      * its situation holds, and a ready Apex when the Architect is in the open, a crowd presses or integrity runs
      * low. The bot never moves its pointer to aim; area skills land where it already points.
      */
-    private fun castSkills(s: MutableGameState) {
+    internal fun castSkills(s: MutableGameState) {
         if (s.elapsed < nextSkillCheckAt) return
         nextSkillCheckAt = s.elapsed + SKILL_CHECK_SECONDS
         for (slot in 0 until SkillRuntime.SLOTS) {
