@@ -40,7 +40,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** Objectives (the Ascent course, Harvest embers, boss duels) and their completion. */
+/** Objectives (the Ascent course, Harvest embers, boss duels), their completion, and the rewards a visit pays. */
 class DimensionRewardsTest {
     private val step = MutableGameState.FIXED_STEP
     private val tuning = canonicalGameplayContent.dimensions.objectives
@@ -196,10 +196,13 @@ class DimensionRewardsTest {
         assertEquals(DimensionNotices.completed(DimensionObjective.ASCENT), state.message)
         assertTrue(GameplayAudioCue.LEVEL_UP in state.takeSoundCues())
 
-        // Flying through it returns with the full reward.
+        // Flying through it returns with the full reward, which opens on the next pending choice.
         state.flyThrough(exit.x, exit.y)
         assertEquals(WorldLayer.BASE, state.worldLayer)
         assertEquals(immutableListOf(DimensionRewardGrant(WorldLayer.ZENITH, completed = true)), state.dimensionRun.pendingRewards)
+        state.openNextPendingChoice()
+        assertEquals(GamePhase.CHOICE, state.phase)
+        assertEquals(3, state.choices.size)
     }
 
     // ---- Boss objectives ----
@@ -353,5 +356,269 @@ class DimensionRewardsTest {
         assertEquals(tuning.harvestEmbers, state.visit().progress)
         assertNotNull(state.visit().exitPortal)
         assertEquals(DimensionNotices.completed(DimensionObjective.HARVEST), state.message)
+    }
+
+    // ---- Rewards ----
+
+    @Test
+    fun aZenithRewardDealsThreeUnownedBlessingsTwoOnFailureAndNeverRerolls() {
+        val state = game().apply {
+            rerollsRemaining = 3
+            queue(DimensionRewardGrant(WorldLayer.ZENITH, completed = true))
+        }
+        val streams = state.streams()
+        state.openPendingDimensionReward()
+        assertEquals(GamePhase.CHOICE, state.phase)
+        assertEquals(ChoiceType.BOON, state.choiceType)
+        assertTrue(state.dimensionRun.pendingRewards.isEmpty())
+        assertEquals(WorldLayer.ZENITH, state.dimensionRewardLayer)
+        val blessings = state.choices.map { checkNotNull(it.boonId) }
+        assertEquals(3, blessings.toSet().size)
+        assertTrue(blessings.all { state.content.boon(it)?.kind == RunBoonKind.BLESSING })
+        assertTrue(state.choices.all { it.tag == "BLESSING" && it.type == ChoiceType.BOON })
+        assertEquals(blessings.map { state.content.boon(it)?.name }, state.choices.map { it.title })
+        assertFalse(state.choicesCanReroll, "a dimension reward is never rerolled")
+        val render = state.toRenderModel()
+        assertTrue(render.directedChoice)
+        assertFalse(render.choicesCanReroll)
+        assertEquals(streams, state.streams(), "the hand is a hash, not a draw")
+        state.rerollChoices()
+        assertEquals(blessings, state.choices.map { it.boonId })
+        assertEquals(3, state.rerollsRemaining)
+
+        // The same run deals the same hand; a failed Zenith visit deals two.
+        val again = game().apply {
+            queue(DimensionRewardGrant(WorldLayer.ZENITH, completed = true))
+            openPendingDimensionReward()
+        }
+        assertEquals(blessings, again.choices.map { it.boonId })
+        val failed = game().apply {
+            queue(DimensionRewardGrant(WorldLayer.ZENITH, completed = false))
+            openPendingDimensionReward()
+        }
+        assertEquals(2, failed.choices.size)
+
+        // Owned Blessings are never dealt.
+        val blessingIds = state.content.boons.filter { it.kind == RunBoonKind.BLESSING }.map { it.id }
+        val owned = game().apply {
+            runBoons = blessingIds.dropLast(2).take(ContentBounds.MAX_RUN_BOONS - 1).toImmutableList()
+        }
+        val unowned = blessingIds.filter { it !in owned.runBoons }
+        owned.queue(DimensionRewardGrant(WorldLayer.ZENITH, completed = true))
+        owned.openPendingDimensionReward()
+        assertTrue(owned.choices.none { it.boonId in owned.runBoons })
+        assertEquals(minOf(3, unowned.size), owned.choices.size)
+    }
+
+    @Test
+    fun aPactOfferAddsTheRefuseCardWithinTheChoiceBound() {
+        val state = game().apply { queue(DimensionRewardGrant(WorldLayer.NADIR, completed = true)) }
+        state.openPendingDimensionReward()
+        assertEquals(MutableGameState.MAX_CHOICES, state.choices.size, "three Pacts and the Refuse card fill the bound")
+        val pacts = state.choices.dropLast(1)
+        assertTrue(pacts.all { state.content.boon(checkNotNull(it.boonId))?.kind == RunBoonKind.PACT && it.tag == "PACT" })
+        val refuse = state.choices.last()
+        assertNull(refuse.boonId)
+        assertEquals("DECLINE", refuse.tag)
+        assertEquals(PACT_DECLINE_TITLE, refuse.title)
+        assertEquals(policy.definition(WorldLayer.NADIR).reward.declineMatter, refuse.salvageMatter)
+
+        // The last card is a valid selection through the reducer: Refuse salvages its Matter and changes nothing else.
+        state.takeSoundCues()
+        val matter = state.runMatter + state.matterFraction
+        val result = assertIs<GameReductionResult.Accepted>(
+            GameReducer().reduce(EngineState(state), GameplayInteractionPulse.ChoiceSelected.fromValidated(MutableGameState.MAX_CHOICES - 1)),
+        ).state.model
+        assertEquals(GamePhase.RUNNING, result.phase)
+        assertTrue(result.runBoons.isEmpty())
+        assertNull(result.dimensionRewardLayer)
+        assertEquals(10f * result.matterGain, result.runMatter + result.matterFraction - matter, 0.001f)
+        assertEquals(GamePhase.CHOICE, state.phase, "the committed offer is untouched")
+
+        val failed = game().apply {
+            queue(DimensionRewardGrant(WorldLayer.NADIR, completed = false))
+            openPendingDimensionReward()
+        }
+        assertEquals(3, failed.choices.size)
+        assertNull(failed.choices.last().boonId)
+    }
+
+    @Test
+    fun takingAPactPaysItsUpsideAndItsLastingPrice() {
+        val cinder = game()
+        val damage = cinder.damageMultiplier
+        val power = cinder.weaponPower
+        val maxHp = cinder.maxHp
+        cinder.offer(boonCard(48))
+        cinder.takeSoundCues()
+        cinder.choose(0)
+        assertEquals(damage + 0.45f, cinder.damageMultiplier, 1e-5f)
+        assertEquals(power + 0.20f, cinder.weaponPower, 1e-5f)
+        assertEquals(maxHp - 20f, cinder.maxHp, 1e-5f)
+        assertEquals(immutableListOf(48), cinder.runBoons)
+        assertEquals(GamePhase.RUNNING, cinder.phase)
+        assertNull(cinder.dimensionRewardLayer)
+        assertTrue(GameplayAudioCue.WEAPON_ACQUIRED in cinder.takeSoundCues())
+
+        val hunger = game()
+        val health = hunger.activeRebirthProfile.enemyHealthMultiplier
+        val gain = hunger.matterGain
+        hunger.offer(boonCard(50))
+        hunger.choose(0)
+        assertEquals(health * 1.12f, hunger.activeRebirthProfile.enemyHealthMultiplier, 1e-5f)
+        assertEquals(gain + 0.30f, hunger.matterGain, 1e-5f)
+        val wrath = game()
+        val incoming = wrath.activeRebirthProfile.incomingDamageMultiplier
+        wrath.offer(boonCard(51))
+        wrath.choose(0)
+        assertEquals(incoming * 1.15f, wrath.activeRebirthProfile.incomingDamageMultiplier, 1e-5f)
+        assertEquals(immutableListOf(51), wrath.runBoons)
+    }
+
+    @Test
+    fun runBoonsAcceptEightAndRefuseANinth() {
+        val state = game()
+        val ids = state.content.boons.map { it.id }
+        for (index in 0 until ContentBounds.MAX_RUN_BOONS) state.applyRunBoon(ids[index])
+        assertEquals(ids.take(ContentBounds.MAX_RUN_BOONS), state.runBoons)
+        val boons = state.runBoons
+        val stats = state.buildStats()
+        val profile = state.activeRebirthProfile
+        assertFailsWith<IllegalStateException> { state.applyRunBoon(ids[ContentBounds.MAX_RUN_BOONS]) }
+        assertEquals(boons, state.runBoons)
+        assertEquals(stats, state.buildStats(), "a refused boon changes nothing")
+        assertEquals(profile, state.activeRebirthProfile)
+        assertFailsWith<IllegalStateException> { game().applyRunBoon(7) }
+
+        // An offer with the bound reached deals nothing and salvages Matter instead.
+        val matter = state.runMatter + state.matterFraction
+        state.queue(DimensionRewardGrant(WorldLayer.ZENITH, completed = true))
+        state.openPendingDimensionReward()
+        assertEquals(GamePhase.RUNNING, state.phase)
+        assertTrue(state.choices.isEmpty())
+        assertEquals(20f * state.matterGain, state.runMatter + state.matterFraction - matter, 0.001f)
+    }
+
+    @Test
+    fun everyBoonPreviewMatchesTakingItAndTheRefuseCardPreviewsNothing() {
+        for (boon in canonicalGameplayContent.boons) {
+            val state = game().apply { offer(boonCard(boon.id)) }
+            val before = state.buildStats()
+            val preview = state.rewardPreviews().single()
+            val taken = state.copyForReduction().apply { choose(0) }
+            val after = taken.buildStats()
+            var moved = 0
+            before.zip(after).forEach { (old, new) ->
+                val forecast = preview.changes.firstOrNull { it.name == old.name }
+                if (abs(old.value - new.value) >= 0.00001f) {
+                    moved++
+                    assertNotNull(forecast, "${boon.name}: ${old.name}")
+                    assertEquals(old.value, forecast.before)
+                    assertEquals(new.value, forecast.after)
+                } else assertNull(forecast, "${boon.name}: ${old.name}")
+            }
+            assertTrue(moved > 0, "${boon.name} moves a build stat")
+            assertEquals(before, state.buildStats(), "a preview leaves the offer's state alone")
+            assertTrue(state.runBoons.isEmpty())
+        }
+        val refuse = game().apply {
+            queue(DimensionRewardGrant(WorldLayer.NADIR, completed = true))
+            openPendingDimensionReward()
+        }
+        val previews = refuse.rewardPreviews()
+        assertEquals(MutableGameState.MAX_CHOICES, previews.size)
+        assertTrue(previews.last().changes.isEmpty() && previews.last().forecasts.isEmpty())
+        assertTrue(previews.dropLast(1).all { it.changes.isNotEmpty() })
+    }
+
+    @Test
+    fun theArchiveTroveDealsLegendariesToppedUpWithEpicsAndSalvagesWhenEmpty() {
+        // Every Legendary waits for a Rebirth rank: the trove is a late-run reward, met here at tier 10.
+        fun trove(rebirth: Int = 10, prepare: MutableGameState.() -> Unit = {}) = buildTestState(seed = 80_801, rebirth = rebirth).apply {
+            elapsed = 200f
+            level = 60
+            prepare()
+            queue(DimensionRewardGrant(WorldLayer.ARCHIVE, completed = true))
+        }
+        val legendaryIds = canonicalGameplayContent.items.filter { it.rarity == ItemRarity.LEGENDARY }.map { it.id }
+        val state = trove()
+        assertTrue(legendaryIds.count { state.offerableOutsideDeck(state.content.items[it]) } >= 3, "precondition: a full Legendary hand")
+        val streams = state.streams()
+        state.openPendingDimensionReward()
+        assertEquals(GamePhase.CHOICE, state.phase)
+        assertEquals(ChoiceType.ITEM, state.choiceType)
+        assertEquals(WorldLayer.ARCHIVE, state.dimensionRewardLayer)
+        val items = state.choices.map { state.content.items[checkNotNull(it.itemId)] }
+        assertEquals(3, items.map { it.id }.toSet().size)
+        assertTrue(items.all { it.rarity == ItemRarity.LEGENDARY })
+        assertTrue(items.count { it.isActive } <= 1)
+        assertTrue(state.choices.none { it.reborn })
+        assertEquals(streams, state.streams(), "the trove is a hash, not a draw")
+        state.rerollsRemaining = 2
+        assertFalse(state.choicesCanReroll)
+
+        // Taking a card leaves the item pity alone.
+        state.offerPity = 4
+        val taken = state.copyForReduction().apply { choose(state.choices.indexOfFirst { state.content.items[it.itemId!!].active == null }.coerceAtLeast(0)) }
+        assertEquals(4, taken.offerPity)
+        assertTrue(items.any { taken.itemStack(it.id) == 1 })
+
+        // One Legendary left: two Epics fill the hand.
+        val keep = legendaryIds.first { state.offerableOutsideDeck(state.content.items[it]) && state.content.items[it].active == null }
+        val topped = trove {
+            for (id in legendaryIds) if (id != keep) itemStacks[id] = content.items[id].maxStacks
+        }
+        topped.openPendingDimensionReward()
+        val toppedItems = topped.choices.map { topped.content.items[checkNotNull(it.itemId)] }
+        assertEquals(listOf(ItemRarity.LEGENDARY, ItemRarity.EPIC, ItemRarity.EPIC), toppedItems.map { it.rarity })
+        assertEquals(keep, toppedItems.first().id)
+
+        // A run below every Legendary's rank meets Epics only.
+        val early = trove(rebirth = 0)
+        early.openPendingDimensionReward()
+        assertEquals(3, early.choices.size)
+        assertTrue(early.choices.all { early.content.items[checkNotNull(it.itemId)].rarity == ItemRarity.EPIC })
+
+        // Nothing left of either: Matter instead of a choice.
+        val empty = trove {
+            for (item in content.items) if (item.rarity == ItemRarity.LEGENDARY || item.rarity == ItemRarity.EPIC) itemStacks[item.id] = item.maxStacks
+        }
+        val matter = empty.runMatter + empty.matterFraction
+        empty.openPendingDimensionReward()
+        assertEquals(GamePhase.RUNNING, empty.phase)
+        assertEquals(40f * empty.matterGain, empty.runMatter + empty.matterFraction - matter, 0.001f)
+        assertEquals("CATALOG COMPLETE // MATTER SALVAGED", empty.message)
+
+        // A failed Archive visit was paid in Matter on the way out and deals no cards.
+        val failed = game().apply {
+            queue(DimensionRewardGrant(WorldLayer.ARCHIVE, completed = false))
+            openPendingDimensionReward()
+        }
+        assertEquals(GamePhase.RUNNING, failed.phase)
+        assertTrue(failed.dimensionRun.pendingRewards.isEmpty())
+    }
+
+    @Test
+    fun dimensionRewardsOpenAfterRelicChoicesOneChoiceAtATime() {
+        val state = game().apply {
+            pendingRelicChoices = 1
+            queue(DimensionRewardGrant(WorldLayer.ZENITH, completed = true), DimensionRewardGrant(WorldLayer.NADIR, completed = false))
+        }
+        state.openNextPendingChoice()
+        assertEquals(ChoiceType.RELIC, state.choiceType, "Relic choices come before dimension rewards")
+        assertNull(state.dimensionRewardLayer)
+        assertEquals(2, state.dimensionRun.pendingRewards.size)
+        state.choose(state.choices.lastIndex)
+        assertEquals(ChoiceType.BOON, state.choiceType)
+        assertEquals(WorldLayer.ZENITH, state.dimensionRewardLayer)
+        assertEquals(1, state.dimensionRun.pendingRewards.size)
+        state.choose(0)
+        assertEquals(WorldLayer.NADIR, state.dimensionRewardLayer)
+        assertEquals(3, state.choices.size, "the failed Nadir visit: two Pacts and Refuse")
+        assertTrue(state.dimensionRun.pendingRewards.isEmpty())
+        state.choose(2)
+        assertEquals(GamePhase.RUNNING, state.phase)
+        assertNull(state.dimensionRewardLayer)
+        assertEquals(1, state.runBoons.size)
     }
 }

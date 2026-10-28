@@ -34,6 +34,8 @@ internal val DimensionPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Defeat the Pyre Herald. Keep moving: slow flight scorches the Core." to
         "Победите Огненного глашатая. Не останавливайтесь: медленный полёт обжигает Ядро.",
     "Defeat the Antecedent. Time moves only when you move." to "Победите Предтечу. Время идёт, только когда движетесь вы.",
+    "Blessing" to "Благословение",
+    "Pact" to "Сделка",
     "Refuse the pact" to "Отказаться от сделки",
     "Keep the run as it is and salvage 10 Kinetic Matter." to "Оставить забег как есть и извлечь 10 кинетической материи.",
     "A layer of light above realspace. Grace lightens the Core and halo gates mend it. Blessings wait for those who finish its trial." to

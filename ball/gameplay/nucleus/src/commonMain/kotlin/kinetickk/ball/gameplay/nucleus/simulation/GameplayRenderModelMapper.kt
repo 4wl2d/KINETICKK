@@ -309,7 +309,7 @@ internal fun MutableGameState.toRenderModel(
             ?: choices.toImmutableList(),
         choiceType = activeChoiceType,
         pendingRelicChoiceCount = pendingRelicChoices,
-        directedChoice = directedReward != null,
+        directedChoice = directedReward != null || dimensionRewardOpen(),
         characterAbility = characterAbilityProjection(
             reusable = reusableCollections?.characterAbility,
             identityRuntime = identitySource?.characterRuntime,

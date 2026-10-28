@@ -10,8 +10,8 @@ import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.render.TrialProjection
 
 /*
- * Dimension visits as an engagement and their hooks into the shared queues. The reward queue stays inert until the
- * rewards land; the optional-site marks and the trial panel until the presentation lands.
+ * Dimension visits as an engagement and their hooks into the shared queues: the kill hook here, the reward queue in
+ * DimensionRewards.kt. The optional-site marks and the trial panel stay inert until the presentation lands.
  */
 
 /** True while the Core is inside a dimension visit (one engagement at a time). */
@@ -46,10 +46,6 @@ internal fun MutableGameState.onDimensionEnemyKilled(enemy: Enemy) {
 /** True for a Nadir native or an enemy carrying Thermal stacks. */
 private fun MutableGameState.burning(enemy: Enemy): Boolean =
     content.enemy(enemy.type).habitats and EnemyHabitat.NADIR.bit != 0 || stacks(enemy, StatusElement.THERMAL) > 0
-
-internal fun MutableGameState.hasPendingDimensionReward(): Boolean = false
-
-internal fun MutableGameState.openPendingDimensionReward() = Unit
 
 /** True while the open choice is a dimension reward (it cannot be rerolled). */
 internal fun MutableGameState.dimensionRewardOpen(): Boolean = dimensionRewardLayer != null
