@@ -481,6 +481,46 @@ class HudHotPathAllocationTest {
         }
     }
 
+    /**
+     * The dungeon panel of a station with two rooms clear and a third sealed (its cell pulsing, the reward row joined
+     * from the template's labels, the (!) open) and the vignette, the Core walking deeper into the footprint so the
+     * vignette's depth changes every frame: once warm, nothing is allocated.
+     */
+    @Test
+    fun aDungeonPanelAndItsVignetteAllocateNothingOnSteadyFrames() {
+        listOf(1_440 to 810, 844 to 390, 390 to 844).forEach { (width, height) ->
+            val base = hudTestModel(width.toFloat(), height.toFloat())
+            val template = base.content.structures.template(StructureTemplateId.DERELICT_STATION)
+            // The Core 60 u inside the footprint's east edge, walking in: the vignette fades in over the frames.
+            val station = StructureFixture(template, base.coreX + 60f - template.halfWidth, base.coreY, clearedRooms = 0b0011, engagedRoom = 2)
+            val held = base.withDungeon(station)
+            val frames = List(FRAMES) { frame ->
+                val x = base.coreX - frame * 0.5f
+                held.with("elapsed" to frame * GameplayRenderModel.FIXED_STEP, "coreX" to x, "previousCoreX" to x)
+            }
+            check(structureInteriorAmount(frames.first()) < structureInteriorAmount(frames.last())) { "the vignette deepens" }
+            val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
+                AppLanguage.Russian)
+            val bitmap = ImageBitmap(width, height)
+            val canvas = Canvas(bitmap)
+            val scope = CanvasDrawScope()
+            val size = Size(width.toFloat(), height.toFloat())
+            val memory = HudPresentationMemory()
+            fun empty() = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) { drawRect(Kk.Ink) }
+            fun hud(frame: Int) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) {
+                val model = frames[frame % FRAMES]
+                drawHud(model, measurer, 10f + frame * 0.0001f, 0f, 0f, memory, trialInfoOpen = true)
+                drawTrialTooltip(model, measurer, open = true)
+            }
+            repeat(FRAMES) { empty(); hud(it) }
+            kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.TRIAL_PANEL), "no dungeon panel at $width x $height")
+            val emptyBytes = allocated { repeat(FRAMES) { empty() } }
+            val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
+            val perFrame = (hudBytes - emptyBytes) / FRAMES
+            assertTrue(perFrame <= 64, "The dungeon panel and vignette at $width x $height allocate $perFrame bytes above an empty frame")
+        }
+    }
+
     private inline fun allocated(block: () -> Unit): Long {
         val threads = ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
         val id = Thread.currentThread().id

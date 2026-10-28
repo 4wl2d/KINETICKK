@@ -6,26 +6,39 @@ package kinetickk.ball.gameplay.interaction.canvas
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.withTransform
 import kinetickk.ball.content.api.STRUCTURE_OUTSIDE
 import kinetickk.ball.content.api.StructureRoom
 import kinetickk.ball.content.api.StructureTemplate
 import kinetickk.ball.content.api.StructureTemplateId
+import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.content.api.rotateQuarterX
 import kinetickk.ball.content.api.rotateQuarterY
+import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
+import kinetickk.ball.gameplay.interaction.localization.StructureHudText
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.StructureProjection
 import kinetickk.ball.gameplay.nucleus.render.StructureRenderProjection
+import kinetickk.ball.gameplay.nucleus.render.TrialProjection
 import kinetickk.ball.gameplay.nucleus.render.WallKind
+import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.TextResource
+import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkFillKind
 import kinetickk.foundation.design.KkRolePalette
+import kinetickk.foundation.design.d
 import kinetickk.foundation.design.isOnScreen
 import kinetickk.foundation.design.kkFillBrush
 import kinetickk.foundation.design.kkMix
+import kinetickk.foundation.design.kkShear
 import kinetickk.foundation.design.kkStroke
 import kotlin.math.abs
 import kotlin.math.max
@@ -37,7 +50,7 @@ import kotlin.math.sqrt
 /*
  * Structures and dungeons in the world layer: room floor plates, wall slabs and doors, the sealed room's brackets, the
  * final room's plates and the scrim outside the dungeon the Core is inside; their entrances as edge markers and on the
- * minimap. Ink dominates, bone reads as solid, HATCH as locked, threat only for a live garrison and volt only for the
+ * minimap; on the HUD the dungeon trial panel's label, rules, rewards and sealed-room cell, and the vignette. Ink dominates, bone reads as solid, HATCH as locked, threat only for a live garrison and volt only for the
  * player's next way; no arrow, numeral or text marks a structure. Room and wall shapes come from the run's content
  * template, cached per template, rotation and kind in StructurePaths (never from projection floats, so a rebase keeps
  * them); positions, doors and progress come from the projection. Allocation-free per frame once the paths are cached.
@@ -287,9 +300,80 @@ internal fun DrawScope.drawMinimapStructures(
     }
 }
 
-/** The HUD vignette while the Core is inside a dungeon. */
-@Suppress("UNUSED_PARAMETER")
-internal fun DrawScope.drawDungeonVignette(engine: GameplayRenderModel) = Unit
+// ---------------------------------------------------------------------------------------------
+// HUD: the dungeon's trial panel pieces and the vignette.
+
+/** The vignette is clear out to this share of the corner radius and this ink alpha at the screen's corners. */
+private const val VIGNETTE_CLEAR = 0.55f
+private const val VIGNETTE_ALPHA = 0.5f
+
+/** The sealed room's meter cell pulses between these alphas on the brackets' beat (a cleared cell is solid). */
+private const val SEGMENT_PULSE_MIN = 0.2f
+private const val SEGMENT_PULSE_SPAN = 0.35f
+
+/** Draw-thread scratch of the dungeon panel's texts. */
+private object StructurePanelText {
+    val rewards = HudKeyedText()
+}
+
+/** The dungeon panel's label: a dungeon names itself a structure, whatever placeholder family its trial carries. */
+internal fun structureTrialLabel(): TextResource = StructureHudText.Structure
+
+/** The rules behind the dungeon panel's (!) in [language]. */
+internal fun structureTrialRules(language: AppLanguage): String = language.text(StructureHudText.Rules)
+
+/**
+ * The dungeon panel's reward row: its template's reward labels in [language] joined with " + " ("Relic + Rare item"),
+ * built once per template and language so a steady panel builds no string.
+ */
+internal fun structureTrialRewards(engine: GameplayRenderModel, trial: TrialProjection, language: AppLanguage): String {
+    val id = trial.structure ?: return language.text(HudRedesignText.RewardUnknown)
+    val template = engine.content.structures.template(id)
+    return StructurePanelText.rewards.of(template, language.ordinal.toLong()) {
+        template.rewards.joinToString(" + ") { it.label.localizedContent(language) }
+    }
+}
+
+/**
+ * The sealed room's cell of the dungeon panel's meter ([meter], drawn with the trial's segments, the cleared rooms
+ * filled from the left): while a room is sealed the first empty cell pulses in volt on the brackets' beat. A sealed
+ * room always counts (only a garrisoned room seals), so that cell is its own.
+ */
+internal fun DrawScope.drawSealedRoomSegment(engine: GameplayRenderModel, trial: TrialProjection, meter: Rect, roles: KkRolePalette) {
+    val dungeon = engine.structures.dungeon ?: return
+    val segments = trial.segments
+    val index = trial.done.roundToInt()
+    if (dungeon.engagedRoom < 0 || segments <= 0 || index < 0 || index >= segments) return
+    val pitch = meter.width / segments
+    val gap = d(3f).coerceAtMost(pitch * 0.5f)
+    val alpha = SEGMENT_PULSE_MIN + SEGMENT_PULSE_SPAN * (0.5f + 0.5f * sin(engine.renderElapsed * 6f))
+    withTransform({ kkShear(meter.center.y) }) {
+        drawRect(roles.you, Offset(meter.left + index * pitch, meter.top), Size(pitch - gap, meter.height), alpha)
+    }
+}
+
+/**
+ * The HUD vignette while the Core is inside a dungeon: ink closing in from the screen's edges (clear out to
+ * [VIGNETTE_CLEAR] of the corner radius, [VIGNETTE_ALPHA] at the corners), as deep as the world's scrim, so both fade in
+ * on the way in and out on the way out. None for a secret template or outside a dungeon.
+ */
+internal fun DrawScope.drawDungeonVignette(engine: GameplayRenderModel) {
+    val amount = structureInteriorAmount(engine)
+    if (amount <= 0.01f) return
+    val w = size.width
+    val h = size.height
+    if (w <= 0f || h <= 0f) return
+    // The critical vignette's geometry: a circle of the corner radius squashed vertically into the screen's ellipse.
+    val brush = HudDrawCache.brush(HudBrush.DUNGEON, w, h, 0f, 0f, Kk.Ink) {
+        Brush.radialGradient(
+            0f to Color.Transparent, VIGNETTE_CLEAR to Color.Transparent, 1f to Kk.Ink.copy(alpha = VIGNETTE_ALPHA),
+            center = Offset(w * 0.5f, h * 0.5f), radius = w * 0.5f / SQRT_HALF,
+        )
+    }
+    scale(1f, h / w, Offset(w * 0.5f, h * 0.5f)) {
+        drawRect(brush, Offset(0f, h * 0.5f - w * 0.5f), Size(w, w), amount)
+    }
+}
 
 // ---------------------------------------------------------------------------------------------
 // Pieces.

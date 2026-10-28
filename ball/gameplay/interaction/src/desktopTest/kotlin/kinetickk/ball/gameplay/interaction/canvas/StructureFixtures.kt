@@ -3,14 +3,21 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+import kinetickk.ball.content.api.SiteFamily
 import kinetickk.ball.content.api.StructureTemplate
 import kinetickk.ball.content.api.WallAxis
 import kinetickk.ball.content.api.rotateQuarterX
 import kinetickk.ball.content.api.rotateQuarterY
 import kinetickk.ball.gameplay.nucleus.render.DungeonProjection
+import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.StructureProjection
 import kinetickk.ball.gameplay.nucleus.render.StructureRenderProjection
 import kinetickk.ball.gameplay.nucleus.render.StructureSignalProjection
+import kinetickk.ball.gameplay.nucleus.render.TrialClock
+import kinetickk.ball.gameplay.nucleus.render.TrialProjection
+import kinetickk.ball.gameplay.nucleus.render.TrialReward
+import kinetickk.ball.gameplay.nucleus.render.TrialSource
+import kinetickk.ball.gameplay.nucleus.render.TrialValue
 import kinetickk.ball.gameplay.nucleus.render.WallKind
 import kinetickk.ball.gameplay.nucleus.render.WallProjection
 import kinetickk.foundation.collections.toImmutableList
@@ -114,3 +121,37 @@ internal fun structureProjection(
         dungeon = held,
     )
 }
+
+/**
+ * The trial panel facts Gameplay publishes while the Core holds [fixture]'s dungeon (null for a secret template), for HUD
+ * fixtures that build their structures by hand; `StructureRenderMapperTest` pins the real mapping.
+ */
+internal fun structureTrial(fixture: StructureFixture): TrialProjection? {
+    if (fixture.template.secret) return null
+    val counted = fixture.template.roomsToClearMask
+    val rooms = counted.countOneBits()
+    val cleared = (fixture.clearedRooms and counted).countOneBits()
+    return TrialProjection(
+        family = SiteFamily.CACHE,
+        kind = null,
+        title = fixture.template.name,
+        rules = "",
+        clock = TrialClock.NONE,
+        seconds = 0f,
+        segments = rooms,
+        progress = cleared.toFloat() / rooms,
+        value = TrialValue.COUNT,
+        done = cleared.toFloat(),
+        required = rooms.toFloat(),
+        reward = TrialReward.STRUCTURE_REWARDS,
+        source = TrialSource.STRUCTURE,
+        structure = fixture.template.id,
+    )
+}
+
+/** This model with the Core holding [fixture]'s dungeon: the structure in the window with its panel facts, and its trial. */
+internal fun GameplayRenderModel.withDungeon(fixture: StructureFixture, garrisonAlive: Int = 4, garrisonTotal: Int = 6): GameplayRenderModel =
+    with(
+        "structures" to structureProjection(fixture, dungeon = fixture, garrisonAlive = garrisonAlive, garrisonTotal = garrisonTotal),
+        "trial" to structureTrial(fixture),
+    )
