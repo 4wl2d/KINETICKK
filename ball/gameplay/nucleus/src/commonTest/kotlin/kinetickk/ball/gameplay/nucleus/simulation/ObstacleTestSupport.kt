@@ -3,9 +3,12 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.GameplayContentSnapshot
+import kinetickk.ball.content.api.ObstacleMix
 import kinetickk.ball.gameplay.nucleus.model.Obstacle
 import kinetickk.ball.gameplay.nucleus.model.ObstacleField
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
+import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 
 /**
  * Replaces the generated window with exactly [obstacles] (run-local positions), keeping it centred on the
@@ -32,7 +35,14 @@ internal fun testObstacle(
     radius: Float = 80f,
     kind: ObstacleKind = ObstacleKind.ASTEROID,
     id: Long = (x.toRawBits().toLong() shl 32) xor (y.toRawBits().toLong() and 0xFFFF_FFFFL),
-): Obstacle = Obstacle(id = id, kind = kind, x = x, y = y, radius = radius, shapeSeed = 7)
+    shapeSeed: Int = 7,
+): Obstacle = Obstacle(id = id, kind = kind, x = x, y = y, radius = radius, shapeSeed = shapeSeed)
+
+/** The canonical content with [mix] as the realspace obstacle kind mix. */
+internal fun contentWithObstacleMix(mix: ObstacleMix): GameplayContentSnapshot {
+    val obstacles = canonicalGameplayContent.obstacles
+    return canonicalGameplayContent.copy(obstacles = obstacles.copy(kinds = obstacles.kinds.copy(space = mix)))
+}
 
 /** A quiet run with no generated obstacles at all (the window is empty but current). */
 internal fun MutableGameState.clearObstaclesForTesting() = placeObstaclesForTesting()

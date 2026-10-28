@@ -11,9 +11,11 @@ import kinetickk.ball.content.api.EffectAction
 import kinetickk.ball.content.api.EffectClause
 import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.MatrixEffect
+import kinetickk.ball.content.api.ObstacleMix
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.gameplay.nucleus.model.Obstacle
 import kinetickk.ball.gameplay.nucleus.model.Polarity
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.distanceSquared
@@ -35,6 +37,13 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class ObstacleSystemTest {
+    private companion object {
+        /** A test mix that puts every newer kind on asteroid candidates. */
+        val EVERY_KIND_MIX = ObstacleMix(
+            gravityWell = 0.15f, accelGate = 0.15f, crystal = 0.15f, derelictMine = 0.15f, phaseShard = 0.15f, thermalVent = 0.15f,
+        )
+    }
+
     // The Core touches the test asteroid (centre 300, radius 80) when its centre reaches x = 204.
     private val asteroidX = 300f
     private val contactX = asteroidX - 80f - MutableGameState.CORE_RADIUS
@@ -161,6 +170,41 @@ class ObstacleSystemTest {
         assertEquals(2.2f * 1.2f, calmTotal / 900f, 0.25f)
     }
 
+    @Test
+    fun variantKindsLeaveTheFieldLayoutUnchanged() {
+        val tuning = canonicalGameplayContent.obstacles
+        val mixed = contentWithObstacleMix(EVERY_KIND_MIX)
+        fun compare(rebirth: Int, chunkXs: IntRange, chunkYs: IntRange): List<Obstacle> {
+            val plain = buildTestState(seed = 23, rebirth = rebirth)
+            val varied = buildTestState(seed = 23, rebirth = rebirth, content = mixed)
+            val converted = mutableListOf<Obstacle>()
+            for (chunkX in chunkXs) for (chunkY in chunkYs) {
+                val before = plain.generateChunk(chunkX, chunkY)
+                val after = varied.generateChunk(chunkX, chunkY)
+                assertEquals(before.map { it.id }, after.map { it.id }, "the same candidates survive in chunk $chunkX, $chunkY")
+                before.zip(after).forEach { (candidate, obstacle) ->
+                    assertEquals(candidate.x, obstacle.x)
+                    assertEquals(candidate.y, obstacle.y)
+                    assertEquals(candidate.shapeSeed, obstacle.shapeSeed)
+                    if (candidate.kind != ObstacleKind.ASTEROID) assertEquals(candidate, obstacle, "only asteroid candidates convert")
+                    assertTrue(obstacle.radius <= candidate.radius, "a body never outgrows the asteroid it replaced")
+                    assertTrue(obstacle.radius in tuning.bumperRadius..tuning.asteroidMaximumRadius)
+                    if (obstacle.repels) assertEquals(ObstacleKind.GRAVITY_WELL, obstacle.kind, "only knots repel")
+                    converted += obstacle
+                }
+            }
+            return converted
+        }
+        val realspace = compare(rebirth = 0, chunkXs = 10 until 30, chunkYs = -10 until 10)
+        assertEquals(ObstacleKind.entries.toSet() - ObstacleKind.UNSTABLE, realspace.map { it.kind }.toSet(),
+            "every newer kind appears on asteroid candidates, beside asteroids and bumpers")
+        val knots = realspace.filter { it.kind == ObstacleKind.GRAVITY_WELL }
+        assertTrue(knots.any { it.repels } && knots.any { !it.repels }, "both knots appear")
+        // Fractured Space keeps its unstable asteroids as the layout made them.
+        val fractured = compare(rebirth = 5, chunkXs = 10 until 20, chunkYs = -5 until 5)
+        assertTrue(fractured.any { it.kind == ObstacleKind.UNSTABLE })
+    }
+
     // -----------------------------------------------------------------------------------------
     // Queries.
 
@@ -186,6 +230,64 @@ class ObstacleSystemTest {
         val (pointX, pointY) = state.clearPointOfInterestSite(600f, 0f)
         assertFalse(state.pointSiteBlocked(pointX, pointY))
         assertTrue(pointX > 600f)
+    }
+
+    @Test
+    fun nonSolidKindsNeverCollideOrBlockSegments() {
+        for (kind in listOf(ObstacleKind.ACCEL_GATE, ObstacleKind.DERELICT_MINE, ObstacleKind.THERMAL_VENT)) {
+            val state = buildTestState()
+            val body = testObstacle(asteroidX, 0f, radius = 60f, kind = kind)
+            state.placeObstaclesForTesting(body)
+            // The step runs the Core straight through the body's centre above the lethal speed.
+            val speed = state.obstacleLethalSpeed() + 200f
+            val endX = asteroidX + speed / 240f
+            state.flyIntoObstaclesForTesting(endX, 0f, speed, 0f)
+            assertEquals(GamePhase.RUNNING, state.phase, "$kind")
+            assertEquals(state.maxHp, state.hp, "$kind")
+            assertEquals(0, state.pendingRicochets, "$kind")
+            assertEquals(speed, state.velocityX, "$kind never bounces the Core")
+            assertEquals(endX, state.coreX, "$kind never pushes the Core out")
+            assertFalse(state.obstacleBlocksSegment(0f, 0f, 600f, 0f, 7f), "$kind")
+            // Shots fly on and enemies are neither pushed out nor slowed.
+            val shot = Projectile(x = asteroidX + 30f, y = 0f, vx = 500f, vy = 0f, radius = 5f, life = 2f, hostile = false,
+                previousX = asteroidX - 90f, previousY = 0f)
+            state.projectiles += shot
+            state.blockProjectilesAtObstacles()
+            assertFalse(shot.spent, "$kind lets shots through")
+            val enemy = state.dummy(x = asteroidX - 20f, y = 0f, hp = 10_000f)
+            enemy.vx = 700f
+            state.markThrown(enemy)
+            state.resolveEnemyObstacles()
+            assertEquals(asteroidX - 20f, enemy.x, "$kind")
+            assertEquals(700f, enemy.vx, "$kind")
+            assertEquals(enemy.maxHp, enemy.hp, "$kind")
+            // Spawns keep clear of its hazard reach (a gate's body for a gate).
+            val keepOut = max(body.radius, state.obstacleHazardReach(body)) + 20f + SPAWN_OBSTACLE_CLEARANCE
+            assertTrue(state.isSpawnPointBlocked(asteroidX, keepOut - 1f, 20f), "$kind")
+            assertFalse(state.isSpawnPointBlocked(asteroidX, keepOut + 1f, 20f), "$kind")
+        }
+        val mine = testObstacle(0f, 0f, radius = 50f, kind = ObstacleKind.DERELICT_MINE)
+        val vent = testObstacle(0f, 0f, radius = 50f, kind = ObstacleKind.THERMAL_VENT)
+        val kinds = canonicalGameplayContent.obstacles.kinds
+        val state = buildTestState()
+        assertEquals(50f + kinds.mineArmMargin, state.obstacleHazardReach(mine))
+        assertEquals(50f + kinds.ventPlumeMargin, state.obstacleHazardReach(vent))
+        assertEquals(0f, state.obstacleHazardReach(testObstacle(0f, 0f, kind = ObstacleKind.ACCEL_GATE)))
+    }
+
+    @Test
+    fun bumpersStillLetShotsThroughAndNeverGraze() {
+        val state = buildTestState().apply { matrix = matrix.copy(nearMiss = MatrixEffect.NearMiss(40f, 900f, 6f, 0.5f)) }
+        state.placeObstaclesForTesting(testObstacle(asteroidX, 0f, radius = 34f, kind = ObstacleKind.BUMPER))
+        val shot = Projectile(x = asteroidX + 30f, y = 0f, vx = 500f, vy = 0f, radius = 5f, life = 2f, hostile = false,
+            previousX = asteroidX - 60f, previousY = 0f)
+        state.projectiles += shot
+        state.blockProjectilesAtObstacles()
+        assertFalse(shot.spent)
+        // Skimming 20 above its surface at 1 000 u/s earns no Near Miss, though the bumper is a solid surface nearby.
+        state.flyIntoObstaclesForTesting(asteroidX, 34f + MutableGameState.CORE_RADIUS + 20f, 1_000f, 0f)
+        assertEquals(0f, state.overdriveCharge)
+        assertEquals(20f, state.coreObstacleGap, 0.01f)
     }
 
     // -----------------------------------------------------------------------------------------
