@@ -13,6 +13,7 @@ import kinetickk.ball.gameplay.nucleus.model.DimensionPortal
 import kinetickk.ball.gameplay.nucleus.model.DimensionRewardGrant
 import kinetickk.ball.gameplay.nucleus.model.DimensionRunState
 import kinetickk.ball.gameplay.nucleus.model.DimensionVisit
+import kinetickk.ball.gameplay.nucleus.model.profile
 import kinetickk.ball.gameplay.nucleus.model.segmentCircleIntersects
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
@@ -43,6 +44,14 @@ private const val ARRIVAL_SPAWN_BUDGET: Float = 5f
 /** Back in realspace the director breathes for this long and keeps at most this budget. */
 private const val RETURN_BREATHER_SECONDS: Float = 6f
 private const val RETURN_SPAWN_BUDGET: Float = 3f
+/** Room kept between a placed rift and any obstacle, beyond the rift's own radius. */
+private const val PORTAL_CLEARANCE: Float = 30f
+/** Room kept between an arriving objective boss and any obstacle, beyond the boss's own radius. */
+private const val OBJECTIVE_BOSS_CLEARANCE: Float = 40f
+/** An objective boss fights inside the widest encounter area around its arrival point. */
+private const val OBJECTIVE_BOSS_AREA_RADIUS: Float = 2_400f
+/** The widest encounter abandon distance: the visit's end, not distance, ends an objective boss's encounter. */
+private const val OBJECTIVE_BOSS_ABANDON_DISTANCE: Float = 6_000f
 
 /** How a visit ended: through its exit rift, by its timer, or forced before the Architect. */
 internal enum class DimensionExit { PORTAL, TIMER, FORCED }
@@ -217,7 +226,10 @@ private fun MutableGameState.rollObjective(definition: DimensionDefinition, seri
     return objectives[objectives.size - 1].objective
 }
 
-/** A visit into [layer] entered now with [objective]: its goal, its boss's arrival and the course anchored at the Core. */
+/**
+ * A visit into [layer] entered now with [objective]: its goal, its boss's arrival and the course anchored at the Core.
+ * An Ascent places its first two course rings at once.
+ */
 internal fun MutableGameState.newVisit(layer: WorldLayer, objective: DimensionObjective, serial: Int, endsAt: Float): DimensionVisit {
     val tuning = content.dimensions.objectives
     val goal = when (objective) {
@@ -230,10 +242,77 @@ internal fun MutableGameState.newVisit(layer: WorldLayer, objective: DimensionOb
         DimensionObjective.JUDGEMENT, DimensionObjective.PYRE -> elapsed + tuning.bossDelaySeconds
         DimensionObjective.ANTECEDENT -> elapsed + tuning.antecedentDelaySeconds
     }
-    return DimensionVisit(
+    var visit = DimensionVisit(
         layer = layer, objective = objective, serial = serial, enteredAt = elapsed, endsAt = endsAt, goal = goal,
         bossSpawnAt = bossSpawnAt, courseX = coreX, courseY = coreY, courseHeading = travelHeading(),
     )
+    if (objective == DimensionObjective.ASCENT) {
+        for (index in 0 until min(ASCENT_RINGS_AHEAD, goal)) visit = withCourseRing(visit, index)
+    }
+    return visit
+}
+
+/** The encounter tag of the visit's objective boss: the dimension owner keyed by the layer and the visit's serial. */
+internal fun dimensionEncounterTag(visit: DimensionVisit): Long =
+    encounterTag(EncounterOwner.DIMENSION, (visit.layer.ordinal.toLong() shl 8) or visit.serial.toLong())
+
+/**
+ * The objective boss arrives once its delay ran out: [DimensionObjectiveTuning.bossDistance] ahead of the Core,
+ * moved clear of obstacles, as a one-member encounter that may evict ordinary enemies for room and is ended by the
+ * visit rather than by distance. A refused spawn (no room yet) is tried again on the next step. Draws nothing.
+ */
+private fun MutableGameState.spawnObjectiveBossIfDue() {
+    val visit = dimensionRun.visit ?: return
+    if (visit.completed || visit.bossId >= 0 || elapsed < visit.bossSpawnAt) return
+    val type = visit.objective.boss ?: return
+    val heading = travelHeading()
+    val distance = content.dimensions.objectives.bossDistance
+    val (x, y) = nudgedClearOfObstacles(
+        coreX + cos(heading) * distance, coreY + sin(heading) * distance, type.profile.radius + OBJECTIVE_BOSS_CLEARANCE,
+    )
+    val tag = dimensionEncounterTag(visit)
+    val spawned = spawnEncounter(
+        EncounterRequest(
+            tag = tag,
+            centerX = x,
+            centerY = y,
+            areaRadius = OBJECTIVE_BOSS_AREA_RADIUS,
+            members = listOf(type),
+            abandonDistance = OBJECTIVE_BOSS_ABANDON_DISTANCE,
+            evictOrdinary = true,
+            positions = floatArrayOf(x, y),
+        ),
+    )
+    if (!spawned) return
+    val bossId = encounter(tag)?.bossId ?: return
+    dimensionRun = dimensionRun.copy(visit = visit.copy(bossId = bossId))
+}
+
+/**
+ * Completes the visit's objective: the exit rift opens [DimensionPolicy.exitPortalDistance] ahead of the Core (moved
+ * clear of obstacles) until the visit's end, with the completion banner. A completed visit pays the full reward
+ * whether the Core leaves through the rift or the timer pulls it back.
+ */
+internal fun MutableGameState.completeObjective() {
+    val visit = dimensionRun.visit ?: return
+    if (visit.completed) return
+    val policy = content.dimensions
+    val heading = travelHeading()
+    val (x, y) = nudgedClearOfObstacles(
+        coreX + cos(heading) * policy.exitPortalDistance, coreY + sin(heading) * policy.exitPortalDistance,
+        policy.portalRadius + PORTAL_CLEARANCE,
+    )
+    dimensionRun = dimensionRun.copy(
+        visit = visit.copy(
+            progress = visit.goal,
+            completed = true,
+            exitPortal = DimensionPortal(dimensionRun.nextPortalId, x, y, WorldLayer.BASE, visit.endsAt),
+        ),
+        nextPortalId = dimensionRun.nextPortalId + 1,
+    )
+    message = DimensionNotices.completed(visit.objective)
+    messageTime = 2f
+    emitSound(GameplayAudioCue.LEVEL_UP)
 }
 
 /** The way the Core is going: its velocity when it moves, else its last aim (the window sites' heading). */
@@ -267,7 +346,7 @@ private fun MutableGameState.glitchPortalAhead(id: Int): DimensionPortal {
 
 private fun MutableGameState.glitchPortalAt(id: Int, x: Float, y: Float): DimensionPortal {
     val policy = content.dimensions
-    val (portalX, portalY) = nudgedClearOfObstacles(x, y, policy.portalRadius + 30f)
+    val (portalX, portalY) = nudgedClearOfObstacles(x, y, policy.portalRadius + PORTAL_CLEARANCE)
     return DimensionPortal(id, portalX, portalY, WorldLayer.ARCHIVE, elapsed + policy.glitchPortalLifetimeSeconds)
 }
 
@@ -304,7 +383,7 @@ private fun MutableGameState.updateGlitchPortal() {
 
 /**
  * One step of the dimension system (after the sites): the glitch rift in realspace; in a dimension the visit clock,
- * the timer's pull back, the layer's physics and the exit rift.
+ * the timer's pull back, the layer's physics and objective marks, the objective boss's arrival and the exit rift.
  */
 internal fun MutableGameState.updateDimension(delta: Float) {
     if (phase != GamePhase.RUNNING) return
@@ -321,6 +400,7 @@ internal fun MutableGameState.updateDimension(delta: Float) {
     updateLayerMechanics(delta)
     // A lethal scorch tick ends the run.
     if (phase != GamePhase.RUNNING) return
+    spawnObjectiveBossIfDue()
     val exit = dimensionRun.visit?.exitPortal ?: return
     if (segmentCircleIntersects(previousCoreX, previousCoreY, coreX, coreY, exit.x, exit.y, content.dimensions.portalRadius)) {
         exitDimension(DimensionExit.PORTAL)
