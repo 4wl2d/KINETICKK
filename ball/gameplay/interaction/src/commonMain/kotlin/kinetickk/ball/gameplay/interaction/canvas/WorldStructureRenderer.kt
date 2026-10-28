@@ -154,7 +154,7 @@ internal fun DrawScope.drawStructureWalls(engine: GameplayRenderModel, shakeX: F
                 }
             }
         }
-        if (engaged in template.rooms.indices) drawRoomBrackets(center, template.rooms[engaged], rotation, engine.renderElapsed, roles)
+        if (engaged >= 0 && engaged < template.rooms.size) drawRoomBrackets(center, template.rooms[engaged], rotation, engine.renderElapsed, roles)
         if (!template.secret && structure.clearedRooms and (1 shl template.finalRoom) == 0) {
             drawTotemPlates(roomCenter(center, template.rooms[template.finalRoom], rotation), PROMISE_SCALE, Kk.Bone,
                 keyBlock = false, keyIcon = false)
@@ -355,7 +355,7 @@ private fun DrawScope.drawRoomBrackets(center: Offset, room: StructureRoom, rota
 
 /** Whether door [door] of [template] opens onto [room]. */
 private fun doorTouches(template: StructureTemplate, door: Int, room: Int): Boolean {
-    if (door !in template.doors.indices) return false
+    if (door < 0 || door >= template.doors.size) return false
     val spec = template.doors[door]
     return spec.roomA == room || spec.roomB == room
 }
@@ -365,7 +365,7 @@ private fun doorTouches(template: StructureTemplate, door: Int, room: Int): Bool
  * the outside while the Core is in no room) to a room that still counts (a garrison or the final room) and is not clear.
  */
 private fun leadsOnward(template: StructureTemplate, door: Int, cleared: Int, coreRoom: Int): Boolean {
-    if (door !in template.doors.indices) return false
+    if (door < 0 || door >= template.doors.size) return false
     val spec = template.doors[door]
     val counted = template.roomsToClearMask
     return (reached(spec.roomA, cleared, coreRoom) && pending(spec.roomB, cleared, counted)) ||
