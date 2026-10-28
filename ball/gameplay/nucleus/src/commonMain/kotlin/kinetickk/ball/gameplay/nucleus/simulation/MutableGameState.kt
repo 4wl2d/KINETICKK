@@ -495,6 +495,16 @@ internal class MutableGameState(
     internal var worldKeepOut: WorldKeepOut? = reductionSource?.worldKeepOut
     /** Run boons owned, in grant order, at most [ContentBounds.MAX_RUN_BOONS]. */
     internal var runBoons: ImmutableList<Int> = reductionSource?.runBoons ?: immutableListOf()
+    /** Rift offers, visited and completed layers, the open glitch rift, the visit and its pending rewards; a value. */
+    internal var dimensionRun: DimensionRunState = reductionSource?.dimensionRun ?: DimensionRunState.EMPTY
+    /** Seconds the Core has flown below the layer's pace without a break (Nadir heat). */
+    internal var dimensionSlowSeconds: Float = reductionSource?.dimensionSlowSeconds ?: 0f
+    /** Seconds toward the next scorch tick once the heat grace ran out. */
+    internal var dimensionScorchClock: Float = reductionSource?.dimensionScorchClock ?: 0f
+    /** Visit time on the layer's own clock (the Archive's runs with the Core's speed). */
+    internal var dimensionLocalClock: Float = reductionSource?.dimensionLocalClock ?: 0f
+    /** The layer whose reward the open choice is (null: the open choice is no dimension reward). */
+    internal var dimensionRewardLayer: WorldLayer? = reductionSource?.dimensionRewardLayer
     /** Run time before which an asteroid collision deals no further damage and fires no ricochet. */
     internal var obstacleHitReadyAt: Float = reductionSource?.obstacleHitReadyAt ?: 0f
     // ---- 0.6.0 TERRAIN-P ----
