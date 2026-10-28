@@ -51,8 +51,8 @@ internal val RunVarietyPhrasesInRussian: List<Pair<String, String>> = listOf(
     "+25% impact damage and +20% weapon power." to "+25% урона от столкновений и +20% силы оружия.",
     "−30 maximum integrity." to "−30 к максимальной прочности.",
     "+30% Matter gain and one more reroll." to "+30% к добыче материи и ещё одно обновление.",
-    "Enemies carry 20% more integrity." to "У врагов на 20% больше прочности.",
-    "+30% Data gain." to "+30% к получению данных.",
+    "Enemies carry 12% more integrity." to "У врагов на 12% больше прочности.",
+    "+20% Data gain." to "+20% к получению данных.",
     "+0.5 luck and one more reroll." to "+0,5 к удаче и ещё одно обновление.",
     "+20% Dash power and +25% cooling." to "+20% к силе рывка и +25% к охлаждению.",
     "Enemies move 12% faster and arrive 10% more often." to "Враги двигаются на 12% быстрее и появляются на 10% чаще.",
@@ -60,13 +60,14 @@ internal val RunVarietyPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Enemy attacks deal 15% more damage." to "Атаки врагов наносят на 15% больше урона.",
     "The run's keynote tag and element fill the deck." to "Метка и стихия лейтмотива забега заполняют колоду.",
     "One reroll fewer; Elites arrive 15% more often." to "На одно обновление меньше; элитные враги появляются на 15% чаще.",
-    "+8% critical chance and +40% critical damage." to "+8% к шансу критического удара и +40% к критическому урону.",
+    "+8% critical chance, +40% critical damage and +15 shield capacity." to
+        "+8% к шансу критического удара, +40% к критическому урону и +15 к ёмкости щита.",
     "+20% mass and +15% impact damage." to "+20% к массе и +15% урона от столкновений.",
     "Two more rerolls and +1 luck." to "Ещё два обновления и +1 к удаче.",
     "−40% Matter gain." to "−40% к добыче материи.",
     "Elites arrive 30% more often, each with a Key and a Relic." to
         "Элитные враги появляются на 30% чаще, и каждый несёт ключ и реликвию.",
-    "+25 shield capacity and +6% damage reduction." to "+25 к ёмкости щита и +6% к снижению урона.",
+    "+5 shield capacity and +6% damage reduction." to "+5 к ёмкости щита и +6% к снижению урона.",
     "−15% impact damage and −10% weapon power." to "−15% урона от столкновений и −10% силы оружия.",
 
     "Shielded" to "Защищённый",
