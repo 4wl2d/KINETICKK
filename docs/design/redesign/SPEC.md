@@ -371,8 +371,6 @@ localization.
 
 ## 11. Architecture & repo rules
 
-- Follow `AGENTS.md`: read and use the installed `pokeball` skill (and `pokeball-composition`,
-  `pokeball-review` as relevant) before implementation and for review.
 - `foundation:design` must not depend on game modules. Screen code stays in its
   `interaction` module. Do not move logic between modules.
 - New files: SPDX header `// SPDX-FileCopyrightText: 2026 Vladislav Tomilov` +
