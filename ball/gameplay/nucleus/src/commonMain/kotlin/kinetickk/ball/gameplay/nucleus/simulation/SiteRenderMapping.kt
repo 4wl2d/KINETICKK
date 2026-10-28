@@ -269,18 +269,6 @@ private fun MutableGameState.siteRadius(site: SiteState): Float {
 private fun MutableGameState.siteMedal(site: SiteState): Int =
     if (site.active && site.kind == SiteKind.GATE_RACE) raceMedal(site) else 0
 
-/** The best medal a running race's clock still allows: 3 gold, 2 silver, 1 bronze, 0 none. */
-private fun MutableGameState.raceMedal(site: SiteState): Int {
-    val race = content.sites.race
-    return when {
-        site.par <= 0f -> 0
-        site.clock <= site.par * race.goldFactor -> 3
-        site.clock <= site.par * race.silverFactor -> 2
-        site.clock <= site.par * race.bronzeFactor -> 1
-        else -> 0
-    }
-}
-
 /** A running untouched trial's volley aim point from the centre; no other site aims. */
 private fun siteAimDx(site: SiteState): Float = if (aims(site)) site.aimX - site.x else 0f
 

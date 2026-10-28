@@ -14,4 +14,12 @@ enum class SiteNotice(val english: String) {
     ANOMALY_LOST("ANOMALY LOST"),
     ANOMALY_RESOLVED("ANOMALY RESOLVED"),
     REWARD_SALVAGED("REWARD SALVAGED"),
+    /** A finished gate race, by the best medal its clock earned (the tail is shown in the feed). */
+    RACE_GOLD("RACE FINISHED // GOLD"),
+    RACE_SILVER("RACE FINISHED // SILVER"),
+    RACE_BRONZE("RACE FINISHED // BRONZE"),
+    /** Finished past the bronze time: the finish reward only. */
+    RACE_FINISHED("RACE FINISHED"),
+    /** Timed out, or left the course: nothing is granted. */
+    RACE_LOST("RACE LOST"),
 }

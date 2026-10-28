@@ -412,7 +412,10 @@ data class SitePolicy(
 
 private const val RIFT_INSTRUCTION = "Fly through to cross over. The layer releases you before the Architect arrives."
 
-/** The shipped sites in [SiteKind] order; only the anomalies take window weight until each lane enables its kinds. */
+/**
+ * The shipped sites in [SiteKind] order. The anomalies and the gate race take window weight; challenges, the bounty and
+ * rifts stay at 0 until their lanes enable them.
+ */
 fun defaultSiteDefinitions(): ImmutableList<SiteDefinition> = immutableListOf(
     SiteDefinition(
         SiteKind.RESONANT_CIRCUIT, "Resonant circuit", "Visit beacons 2, 3, then return to 1.",
@@ -426,7 +429,11 @@ fun defaultSiteDefinitions(): ImmutableList<SiteDefinition> = immutableListOf(
         SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", "Move within the ring for eight seconds; dodge marked volleys.",
         SiteReward(directed = DirectedReward.ITEM_AND_REPAIR), windowWeight = 1f,
     ),
-    SiteDefinition(SiteKind.GATE_RACE, "Gate race", "Fly through the gates in order. Beat the par time for gold.", SiteReward.NONE),
+    // Medal rewards live in RacePolicy; the course sets its own limit within the window's trial cap.
+    SiteDefinition(
+        SiteKind.GATE_RACE, "Gate race", "Fly through the gates in order. Beat the par time for gold.", SiteReward.NONE,
+        windowWeight = 1.4f,
+    ),
     SiteDefinition(
         SiteKind.BRAKELESS_TRIAL, "Brakeless run",
         "Keep moving inside the shrinking ring for twelve seconds. Braking fails the trial.",

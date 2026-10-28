@@ -35,6 +35,30 @@ class RunFeatureBoundsTest {
     }
 
     @Test
+    fun aRaceActivationClosesItsAlternativeAndIsTheOnlyTrial() {
+        // A race and an anomaly share every window, so either side starts its own trial.
+        val content = canonicalGameplayContent.withWindowWeights(mapOf(SiteKind.GATE_RACE to 1f, SiteKind.RESONANT_CIRCUIT to 1f))
+        val state = game(content)
+        state.elapsed = 45f
+        state.updateSites(0.01f)
+        val offered = state.sites
+        assertEquals(setOf(SiteKind.GATE_RACE, SiteKind.RESONANT_CIRCUIT), offered.map { it.kind }.toSet())
+        val race = offered.single { it.kind == SiteKind.GATE_RACE }
+        val other = offered.single { it.kind != SiteKind.GATE_RACE }
+        state.activateWindowSite(race)
+        assertEquals(race.id, state.sites.single().id)
+        assertTrue(state.sites.single().active)
+
+        // Flying through the closed alternative never starts it: only the race (if still on course) remains.
+        state.previousCoreX = other.x - 50f
+        state.previousCoreY = other.y
+        state.coreX = other.x
+        state.coreY = other.y
+        state.updateSites(0.01f)
+        assertTrue(state.sites.all { it.id == race.id && it.active })
+    }
+
+    @Test
     fun tenthDirectedRewardFitsAndEleventhSalvagesWithoutTouchingSource() {
         val source = game()
         val bound = source.content.sites.maxPendingDirectedRewards

@@ -50,7 +50,6 @@ internal fun MutableGameState.updateSites(delta: Float) {
         secretSigil = null
         return
     }
-    val policy = content.sites.windows
     if (bossSpawned || elapsed >= content.tempo.bossAtSeconds) {
         sites = emptyList()
         return
@@ -68,6 +67,22 @@ internal fun MutableGameState.updateSites(delta: Float) {
         if (!engagementActive()) activateWindowSite(selected)
         return
     }
+    when (active.kind.family) {
+        SiteFamily.RACE -> advanceRaceSite(active, delta)
+        // Challenges and the bounty never start until their families land, and an accepted rift leaves the window
+        // sites to the dimension visit; the anomaly countdown is the step of everything else.
+        SiteFamily.ANOMALY, SiteFamily.CHALLENGE, SiteFamily.BOUNTY, SiteFamily.PORTAL, SiteFamily.CACHE,
+        SiteFamily.SECRET, SiteFamily.SIGNAL,
+        -> advanceAnomalySite(active, delta)
+    }
+}
+
+/**
+ * One step of a running anomaly: lost on time out or 2,400 u from its centre; resolved by the circuit's three
+ * beacons, the vault's three defenders or eight seconds in the orbit's ring.
+ */
+private fun MutableGameState.advanceAnomalySite(active: SiteState, delta: Float) {
+    val policy = content.sites.windows
     var trial = active.copy(remaining = max(0f, active.remaining - delta))
     if (trial.remaining <= 0f || distanceSquared(coreX, coreY, trial.x, trial.y) > square(2_400f)) {
         sites = emptyList()
@@ -245,12 +260,18 @@ private fun List<SiteState>.anyExpired(elapsed: Float): Boolean {
 internal fun MutableGameState.activateWindowSite(point: SiteState) {
     when (point.kind.family) {
         SiteFamily.ANOMALY -> activateAnomalySite(point)
+        SiteFamily.RACE -> startWindowTrial(startedRace(point))
         SiteFamily.PORTAL -> activatePortalSite(point)
-        // Only the anomalies are offered until the site families land.
-        SiteFamily.RACE, SiteFamily.CHALLENGE, SiteFamily.BOUNTY, SiteFamily.CACHE, SiteFamily.SECRET,
-        SiteFamily.SIGNAL,
-        -> Unit
+        // Challenges and the bounty are not offered until their families land; caches and secrets are never window sites.
+        SiteFamily.CHALLENGE, SiteFamily.BOUNTY, SiteFamily.CACHE, SiteFamily.SECRET, SiteFamily.SIGNAL -> Unit
     }
+}
+
+/** A started window trial replaces the offered pair, and its instruction becomes the run message. */
+private fun MutableGameState.startWindowTrial(started: SiteState) {
+    sites = listOf(started)
+    message = content.sites.definition(started.kind).instruction
+    messageTime = 4f
 }
 
 private fun MutableGameState.activateAnomalySite(point: SiteState) {
@@ -267,10 +288,7 @@ private fun MutableGameState.activateAnomalySite(point: SiteState) {
         enemies += enemy
         ids += enemy.id
     }
-    sites = listOf(point.copy(active = true, remaining = content.sites.windows.trialDuration,
-        foeIds = ids.toImmutableList()))
-    message = content.sites.definition(point.kind).instruction
-    messageTime = 4f
+    startWindowTrial(point.copy(active = true, remaining = content.sites.windows.trialDuration, foeIds = ids.toImmutableList()))
 }
 
 /** Kill hook of [onEnemyKilled]: a defeated foe of the active window site counts toward its trial. */
