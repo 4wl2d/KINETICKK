@@ -247,8 +247,7 @@ class ApexFormsTest {
         val returned = state.apexShots().single()
         assertEquals(65f * state.abilityPower() * 1.4f, returned.damage, 1e-3f)
         assertEquals(0f, state.characterRuntime.parryWindow, "no window is needed or spent")
-        assertEquals(3f, state.skillRuntime.apex(ApexCell.BOLTS_LEFT))
-        repeat(3) { assertTrue(state.tryCharacterParry(state.coreX + 100f, state.coreY, -400f, 0f)) }
+        assertEquals(0f, state.skillRuntime.apex(ApexCell.BOLTS_LEFT), "an activation parries one hit")
         assertFalse(state.tryCharacterParry(state.coreX + 100f, state.coreY, -400f, 0f), "then the normal rules")
 
         // Edge is held full against ordinary enemies only.
