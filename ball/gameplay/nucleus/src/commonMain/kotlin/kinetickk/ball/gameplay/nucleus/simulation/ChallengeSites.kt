@@ -347,8 +347,3 @@ internal fun MutableGameState.isDashKill(enemy: Enemy): Boolean {
     val source = enemy.status[StatusCell.LAST_SOURCE].toInt() - 1
     return source == HitSource.DASH.ordinal || (source == HitSource.IMPACT.ordinal && dashPhaseTime > 0f)
 }
-
-/** The Ram rite's foes outlive a site cleared at the Architect's arrival: they turn into ordinary enemies. */
-internal fun MutableGameState.releaseSiteFoes(site: SiteState) {
-    if (site.active && site.kind == SiteKind.RAM_TRIAL) endEncounter(siteEncounterTag(site), despawn = false)
-}

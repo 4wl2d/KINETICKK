@@ -445,8 +445,8 @@ private const val CHALLENGE_WINDOW_WEIGHT = 0.36f
 private const val RIFT_INSTRUCTION = "Fly through to cross over. The layer releases you before the Architect arrives."
 
 /**
- * The shipped sites in [SiteKind] order. The anomalies, the gate race and the five challenges take window weight; the
- * bounty and rifts stay at 0 until their lanes enable them.
+ * The shipped sites in [SiteKind] order. The anomalies, the gate race, the five challenges and the bounty take window
+ * weight; rifts stay at 0 (a rift claims its side of a window instead of being drawn).
  */
 fun defaultSiteDefinitions(): ImmutableList<SiteDefinition> = immutableListOf(
     SiteDefinition(
@@ -489,7 +489,7 @@ fun defaultSiteDefinitions(): ImmutableList<SiteDefinition> = immutableListOf(
     ),
     SiteDefinition(
         SiteKind.BOUNTY_ARENA, "Bounty", "Defeat the marked target. Leaving the arena forfeits the bounty.",
-        SiteReward(matter = 30), minimumOfferAt = 160f, reserveSeconds = 90f, duration = 0f,
+        SiteReward(matter = 30), windowWeight = 1f, minimumOfferAt = 160f, reserveSeconds = 90f, duration = 0f,
     ),
     SiteDefinition(SiteKind.DRIFT_CACHE, "Drift cache", "Fly through to open.", SiteReward.NONE, activationRadius = 70f, duration = 0f),
     SiteDefinition(

@@ -558,8 +558,9 @@ class ContentBootstrapValidationTest {
         assertEquals(data.boons.first(), gameplay.boon(32))
         assertEquals(null, gameplay.boon(42))
 
-        // The bounty duel needs a mini-boss.
-        createContentCatalogForTesting(data.copy(sites = data.sites.copy(bounty = BountyPolicy(bossType = EnemyType.HERALD))))
+        // The bounty duel needs a mini-boss its encounter can hold: any but the Herald.
+        createContentCatalogForTesting(data.copy(sites = data.sites.copy(bounty = BountyPolicy(bossType = EnemyType.BROOD_QUEEN))))
+        assertRejected(data.copy(sites = data.sites.copy(bounty = BountyPolicy(bossType = EnemyType.HERALD))), "never an encounter boss")
         assertRejected(data.copy(sites = data.sites.copy(bounty = BountyPolicy(bossType = EnemyType.WARDEN))), "must be a mini-boss")
         assertRejected(data.copy(sites = data.sites.copy(bounty = BountyPolicy(bossType = EnemyType.CARTOGRAPHER))), "must be a mini-boss")
         // A personality biases ordinary kinds only.

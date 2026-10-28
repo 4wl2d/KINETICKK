@@ -26,6 +26,10 @@ enum class SiteNotice(val english: String) {
     CHALLENGE_COMPLETE("CHALLENGE COMPLETE"),
     /** A challenge's rule was broken, its time ran out or the Core left it: nothing is granted. */
     CHALLENGE_FAILED("CHALLENGE FAILED"),
+    /** The bounty's mini-boss fell: the site adds its Matter to the boss's own drops. */
+    BOUNTY_CLAIMED("BOUNTY CLAIMED"),
+    /** The Core left the arena (or the boss left without a kill): the boss is gone and nothing is granted. */
+    BOUNTY_ABANDONED("BOUNTY ABANDONED"),
     /** The Core flew through a drift cache: its contents are granted. */
     CACHE_OPENED("CACHE OPENED"),
     /** The Core flew through the Lost Cursor: it follows the Core for the rest of the run. */

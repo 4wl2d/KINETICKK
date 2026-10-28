@@ -87,9 +87,10 @@ private fun MutableGameState.advanceWindowSites(delta: Float) {
     when (active.kind.family) {
         SiteFamily.RACE -> advanceRaceSite(active, delta)
         SiteFamily.CHALLENGE -> advanceChallengeSite(active, delta)
-        // The bounty never starts until its family lands, and an accepted rift leaves the window sites to the
-        // dimension visit; the anomaly countdown is the step of everything else.
-        SiteFamily.ANOMALY, SiteFamily.BOUNTY, SiteFamily.PORTAL, SiteFamily.CACHE, SiteFamily.SECRET, SiteFamily.SIGNAL,
+        SiteFamily.BOUNTY -> advanceBountySite(active, delta)
+        // An accepted rift leaves the window sites to the dimension visit; the anomaly countdown is the step of
+        // everything else.
+        SiteFamily.ANOMALY, SiteFamily.PORTAL, SiteFamily.CACHE, SiteFamily.SECRET, SiteFamily.SIGNAL,
         -> advanceAnomalySite(active, delta)
     }
 }
@@ -278,11 +279,12 @@ internal fun MutableGameState.activateWindowSite(point: SiteState) {
     when (point.kind.family) {
         SiteFamily.ANOMALY -> activateAnomalySite(point)
         SiteFamily.RACE -> startWindowTrial(startedRace(point))
-        // A Ram rite without room for its foes refuses to start and stays offered.
+        // A Ram rite without room for its foes, or a bounty whose boss finds no room, refuses to start and stays offered.
         SiteFamily.CHALLENGE -> startedChallenge(point)?.let { startWindowTrial(it) }
+        SiteFamily.BOUNTY -> startedBounty(point)?.let { startWindowTrial(it) }
         SiteFamily.PORTAL -> activatePortalSite(point)
-        // The bounty is not offered until its family lands; caches and secrets are never window sites.
-        SiteFamily.BOUNTY, SiteFamily.CACHE, SiteFamily.SECRET, SiteFamily.SIGNAL -> Unit
+        // Caches and secrets are never window sites.
+        SiteFamily.CACHE, SiteFamily.SECRET, SiteFamily.SIGNAL -> Unit
     }
 }
 
@@ -312,7 +314,8 @@ private fun MutableGameState.activateAnomalySite(point: SiteState) {
 
 /**
  * Kill hook of [onEnemyKilled]: the Golden Drifter is caught; a defeated foe of the active window site counts toward
- * its trial (a Ram rite's foe only when a Dash killed it; any other kill shows as one foe fewer).
+ * its trial (a Ram rite's foe only when a Dash killed it; any other kill shows as one foe fewer; the bounty's boss
+ * claims the bounty at the next site step).
  */
 internal fun MutableGameState.recordSiteKill(enemy: Enemy) {
     if (enemy.id == goldenDrifterId) {
@@ -323,6 +326,7 @@ internal fun MutableGameState.recordSiteKill(enemy: Enemy) {
     // Called once by onEnemyKilled, whose dead guard also protects this counter.
     val count = when (trial.kind) {
         SiteKind.RAM_TRIAL -> if (isDashKill(enemy)) trial.count + 1 else return
+        SiteKind.BOUNTY_ARENA -> 1
         else -> min(3, trial.count + 1)
     }
     sites = listOf(trial.copy(count = count))
@@ -337,5 +341,18 @@ private fun MutableGameState.fireOrbitVolley(point: SiteState) {
         addProjectile(Projectile(point.x - dx * 320f - dy * lateral,
             point.y - dy * 320f + dx * lateral, dx * 460f, dy * 460f,
             radius = 7f, life = 1.5f, hostile = true, damage = damage))
+    }
+}
+
+/**
+ * A running site cleared at the Architect's arrival: the Ram rite's foes stay on as ordinary enemies, and the bounty's
+ * boss and its guards leave without a kill.
+ */
+internal fun MutableGameState.releaseSiteFoes(site: SiteState) {
+    if (!site.active) return
+    when (site.kind) {
+        SiteKind.RAM_TRIAL -> endEncounter(siteEncounterTag(site), despawn = false)
+        SiteKind.BOUNTY_ARENA -> endEncounter(siteEncounterTag(site), despawn = true)
+        else -> Unit
     }
 }
