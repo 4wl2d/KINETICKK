@@ -40,7 +40,7 @@ import kotlin.test.assertTrue
  * neither keeps drafting): one unlocks the Apex (the bot casts it by its rule), one does not. In the fight the Core's
  * integrity is refilled every frame and the damage it takes (shield and integrity) is counted.
  *
- * The bot casts its Apex in nearly every fight: a population rule over [PopulationSeeds] (see
+ * The bot casts its Apex in every one of 312 population fights: a population rule over [PopulationSeeds] (see
  * [theBotCastsItsApexInNearlyEveryArchitectFight]). The rest of the contract holds in every Apex arm of the first three
  * runs per case: each strike stays within the boss's hit cap, an activation spends at most its strikes and its bolt
  * budget, the boss's integrity never moves while it shifts, every shift starts at a phase gate and lasts exactly 8 s,
@@ -48,7 +48,8 @@ import kotlin.test.assertTrue
  * counts against it when the boss could attack and the shared projectile pool was at the volley budget only because of
  * live Apex shots (a Silence and a pool full of other shots hold volleys back with or without an Apex). In a scripted
  * arena where the Architect is the only enemy, the character's own damage to it during an activation (strikes included)
- * is never below the same script's without the Apex.
+ * is never below the same script's without the Apex. The contract keeps its fixed seeds: on the 0.6.0 tree no clause
+ * broke in the 312 population fights of the cast rule.
  *
  * The benefit is judged on many paired fights, because one fight's time-to-kill moves by ±15 % when the Core starts
  * 0.01 u elsewhere: each run is forked into [FORKS] pairs whose two arms both start with the Core moved by k/100 u
@@ -67,14 +68,17 @@ import kotlin.test.assertTrue
  * calibration windows, and where the two disagree the pooled runs decide: pooled, a 64-run draw passes about 0.82 of
  * the time, below 0.90. Their populations are the ones the base was measured on, 96 offensive and 128 defensive runs
  * per character with four forks each: fewer than 300 runs, since these fights already set the suite's runtime. On the
- * base the offence median was 0.847 (bootstrap SE 0.005), each character's benefit 0.80-1.17 of the median benefit (SE
- * 0.06-0.08), the Diamond's ratio 0.694 (run-bootstrap SE 0.041) and the Prism's 0.715 (SE 0.037); by the population
- * threshold rule (the wider of the design's band and the base ± two standard errors, rounded outward) every band stays
- * the design's: the Prism's base ± 2 SE is 0.64-0.79, inside [0.55, 0.85].
+ * 0.6.0 base the offence median is 0.850 (bootstrap SE 0.005, resampling whole runs with their forks), each character's
+ * benefit 0.87 (Ring) to 1.39 (Crescent) of the median benefit (SE 0.05-0.11), the Diamond's ratio 0.695 (run-bootstrap
+ * SE 0.035) and the Prism's 0.684 (SE 0.052). By the population threshold rule (the wider of the design's band and the
+ * base ± two standard errors, rounded outward) the median band and both defensive bands stay the design's (Prism
+ * 0.58-0.79, Diamond 0.62-0.77, inside [0.55, 0.85]). The ±40 % clause is the design's character band and never
+ * weakens, although Crescent's and Shard's base + 2 SE reach 1.56 of the median benefit; Crescent passes by 0.13 SE.
  *
- * 128 runs do not settle the defensive bands either: a fresh 128-run draw (four forks each) from the 256
- * calibration-window runs lands in [0.55, 0.85] with probability about 0.82 for the Prism (window ratio 0.814) and
- * 0.84 for the Diamond (0.589). baseline.md records this as a trade-off for the owner, not a reason to restate again.
+ * In 0.5.0, 128 runs did not settle the defensive bands either: a fresh 128-run draw (four forks each) from the 256
+ * calibration-window runs landed in [0.55, 0.85] with probability about 0.82 for the Prism (window ratio 0.814) and
+ * 0.84 for the Diamond (0.589); 0.6.0's single Mirror Stance parry moved the Diamond's pooled window reading to 0.701.
+ * baseline.md records this as a trade-off for the owner, not a reason to restate again.
  */
 class ApexArchitectFightTest {
     @Test
@@ -109,8 +113,10 @@ class ApexArchitectFightTest {
      * character and tier along [PopulationSeeds] (312 fights). A population rule (0.5.0 active items): the contract
      * once required a cast in every Apex arm of its 72 fights, and the 05885fa9 base left 3 of 1,816 fights without a
      * cast (the first 50 to 128 runs per character and tier along [PopulationSeeds]; Orb tier 10 once, Dipole tier 10
-     * twice), so the 72 fights passed with probability 0.83. The bound is the base share 0.9983 minus two standard
-     * errors at 312 fights (0.0023), rounded down; the base's own first 13 runs per case all cast.
+     * twice), so the 72 fights passed with probability 0.83, and 0.5.0 bounded the share at 0.99 (that base's 0.9983
+     * minus two standard errors at 312 fights). On the 0.6.0 base the bot casts in all 312 fights (binomial SE 0), so by
+     * the population threshold rule the bound is the lower of the seeded "every fight" and the base share minus two
+     * standard errors: every fight casts.
      */
     @Test
     fun theBotCastsItsApexInNearlyEveryArchitectFight() {
@@ -218,8 +224,8 @@ class ApexArchitectFightTest {
         const val FIGHTS_PER_CASE = 3
         /** The cast rule's runs per character and tier along [PopulationSeeds]. */
         const val CAST_FIGHTS_PER_CASE = 13
-        /** The least share of those fights in which the bot casts its Apex (base 0.9983, SE 0.0023 at 312 fights). */
-        const val MIN_CAST_SHARE = 0.99
+        /** The least share of those fights in which the bot casts its Apex (0.6.0 base 1.0000, SE 0 at 312 fights). */
+        const val MIN_CAST_SHARE = 1.0
         /** The offence's runs per character along [PopulationSeeds] (the population the base was measured on). */
         const val BENEFIT_RUNS = 96
         /**
