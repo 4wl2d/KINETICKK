@@ -31,6 +31,8 @@ import kotlin.test.assertTrue
  * V3: eight consecutive runs per character, each booted with the history of the ones before (append, keep the newest 64),
  * overlap ≤ 0.22 on average between consecutive runs.
  * V4: across the 48 isolated runs at least 90 % of the rank-0 items unlocking by level 16 appear on some card.
+ * V1, V3 and V4 keep their seeds: on the 0.6.0 tree they pass with probability 1.00 (V1 and V4 read from 12-run draws of
+ * V2's 300 isolated runs per character, V3 from 37 eight-run chains per character along V2's seeds).
  */
 class ItemVarietyTest {
     @Test
@@ -70,9 +72,10 @@ class ItemVarietyTest {
      * stream. Over the 300 runs per character on [VarietyPopulationSeeds] (each pair of runs counted, as on the twelve
      * seeds), the ratio of the isolated runs' mean overlap to the whole-catalog, 0.4.0-lane runs' mean overlap on the
      * same seeds is at most [MaxBaselineRatio]: by the population threshold rule (policy.md, "Balance gate
-     * populations") the higher of the seeded 0.75 and the base ratio plus two jackknife standard errors, rounded up,
-     * and never above the 0.5.0 accepted 0.81, which the base meets. Base ratios (SE) over 300 runs: Orb 0.735 (0.019),
-     * Prism 0.752 (0.017), Star 0.743 (0.022), Hexagon 0.807 (0.018); the Hexagon's 0.85 is capped at 0.81.
+     * populations") the higher of the seeded 0.75 and the 0.6.0 base ratio plus two delete-one jackknife standard
+     * errors, rounded up, and never above the 0.5.0 accepted 0.81, which the base meets. 0.6.0 base ratios (SE, base +
+     * 2 SE) over 300 runs: Orb 0.720 (0.019, 0.76), Prism 0.735 (0.020, 0.78), Star 0.743 (0.021, 0.79), Hexagon 0.768
+     * (0.018, 0.81).
      */
     @Test
     fun theDeckAndTheSoftenedLanesCutTheOverlap() {
@@ -148,10 +151,10 @@ class ItemVarietyTest {
         val VarietyPopulationSeeds = (1_001..1_300).map { 7_919 * it + 101 }
 
         /**
-         * V2's per-character bound on the population (the population threshold rule: max(0.75, base + 2 SE) rounded up,
-         * at most 0.81).
+         * V2's per-character bound on the population (the population threshold rule on the 0.6.0 base: max(0.75,
+         * base + 2 SE) rounded up, at most 0.81).
          */
-        val MaxBaselineRatio = mapOf(CoreShape.ORB to 0.78, CoreShape.PRISM to 0.79, CoreShape.STAR to 0.79, CoreShape.HEXAGON to 0.81)
+        val MaxBaselineRatio = mapOf(CoreShape.ORB to 0.76, CoreShape.PRISM to 0.78, CoreShape.STAR to 0.79, CoreShape.HEXAGON to 0.81)
         const val CHAIN = 8
         const val SECONDS = 600f
     }
