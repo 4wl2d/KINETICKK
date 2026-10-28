@@ -605,4 +605,49 @@ class DimensionSystemTest {
         assertEquals(first.streams(), second.streams())
         assertEquals(first.enemies.map { it.type to (it.x to it.y) }, second.enemies.map { it.type to (it.x to it.y) })
     }
+
+    @Test
+    fun theOpenGlitchRiftIsAnOptionalSiteMarkAndEnteringItIsEngagement() {
+        val game = game()
+        val marks = FloatArray(MAX_OPTIONAL_SITE_MARKS * 3)
+        assertEquals(0, game.optionalSiteMarks(marks), "no rift, no mark")
+
+        // A window rift is a site: the sites mark it once, with the radius that enters it.
+        val (windowX, windowY) = game.openPortalForTesting(WorldLayer.ZENITH)
+        assertEquals(1, game.optionalSiteMarks(marks))
+        assertEquals(listOf(windowX, windowY, canonicalGameplayContent.sites.definition(SiteKind.ZENITH_RIFT).activationRadius), marks.take(3))
+        game.sites = emptyList()
+
+        // The glitch rift: its centre and the portal radius.
+        assertTrue(game.openArchiveRiftAt(1_000f, 200f))
+        val glitch = checkNotNull(game.dimensionRun.glitchPortal)
+        assertEquals(1, game.optionalSiteMarks(marks))
+        assertEquals(listOf(glitch.x, glitch.y, policy.portalRadius), marks.take(3))
+        assertEquals(MAX_OPTIONAL_SITE_MARKS, game.appendDimensionMarks(marks, MAX_OPTIONAL_SITE_MARKS - 1), "the last slot")
+        assertEquals(MAX_OPTIONAL_SITE_MARKS, game.appendDimensionMarks(marks, MAX_OPTIONAL_SITE_MARKS), "nothing past the bound")
+
+        // The mark is the circle that enters the rift: a pass just outside it skips the Archive, one just inside enters.
+        fun passEnters(offset: Float): Boolean = game.copyForReduction().run {
+            previousCoreX = glitch.x - 40f
+            previousCoreY = glitch.y + policy.portalRadius + offset
+            coreX = glitch.x + 40f
+            coreY = glitch.y + policy.portalRadius + offset
+            updateDimension(MutableGameState.FIXED_STEP)
+            worldLayer == WorldLayer.ARCHIVE
+        }
+        assertFalse(passEnters(offset = 0.5f))
+        assertTrue(passEnters(offset = -0.5f))
+
+        // Skipping it is no engagement; entering is, and stays so after the return, when no mark is left.
+        assertFalse(game.optionalSitesTouched())
+        game.flyThroughForTesting(glitch.x, glitch.y)
+        game.updateDimension(MutableGameState.FIXED_STEP)
+        assertEquals(WorldLayer.ARCHIVE, game.worldLayer)
+        assertTrue(game.optionalSitesTouched())
+        game.skipToVisitEndForTesting()
+        game.updateDimension(MutableGameState.FIXED_STEP)
+        assertEquals(WorldLayer.BASE, game.worldLayer)
+        assertTrue(game.optionalSitesTouched(), "an opted-in run stays opted in")
+        assertEquals(0, game.optionalSiteMarks(marks))
+    }
 }

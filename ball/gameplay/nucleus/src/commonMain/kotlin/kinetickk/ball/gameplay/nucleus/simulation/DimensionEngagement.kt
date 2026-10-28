@@ -18,8 +18,8 @@ import kinetickk.ball.gameplay.nucleus.render.TrialValue
 import kotlin.math.min
 
 /*
- * Dimension visits as an engagement and their hooks into the shared queues: the kill hook and the trial panel's facts
- * here, the reward queue in DimensionRewards.kt. The optional-site marks stay inert until the bots learn the rifts.
+ * Dimension visits as an engagement and their hooks into the shared queues: the opt-in marks, the kill hook and the
+ * trial panel's facts here, the reward queue in DimensionRewards.kt.
  */
 
 /** True while the Core is inside a dimension visit (one engagement at a time). */
@@ -28,9 +28,20 @@ internal fun MutableGameState.dimensionVisitActive(): Boolean = dimensionRun.vis
 /** True once the run entered any dimension (an opted-in run). */
 internal fun MutableGameState.dimensionTouched(): Boolean = dimensionRun.visitedMask != 0
 
-/** Appends optional-site marks of non-window portals; returns the new mark count. */
-@Suppress("UNUSED_PARAMETER")
-internal fun MutableGameState.appendDimensionMarks(out: FloatArray, count: Int): Int = count
+/**
+ * Appends the optional-site mark of the open glitch rift (its centre and the radius that enters it) after [count]
+ * marks and returns the new count. Window rifts are sites and already marked; an exit rift exists only inside a visit,
+ * which a pilot that must not opt in never reaches. Writes nothing once [MAX_OPTIONAL_SITE_MARKS] are written.
+ */
+internal fun MutableGameState.appendDimensionMarks(out: FloatArray, count: Int): Int {
+    val portal = dimensionRun.glitchPortal ?: return count
+    if (count >= MAX_OPTIONAL_SITE_MARKS) return count
+    val base = count * 3
+    out[base] = portal.x
+    out[base + 1] = portal.y
+    out[base + 2] = content.dimensions.portalRadius
+    return count + 1
+}
 
 /** The trial panel's meter shows at most this many cells (the course and the Harvest stay well inside it). */
 private const val MAX_DIMENSION_TRIAL_SEGMENTS = 24
