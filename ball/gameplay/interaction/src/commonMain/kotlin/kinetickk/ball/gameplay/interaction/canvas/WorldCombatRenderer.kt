@@ -142,7 +142,7 @@ private fun DrawScope.drawWorldLayer(
         drawApexActive(engine, core, shakeX, shakeY, roles)
     }
     drawStructureScrim(engine, shakeX, shakeY)
-    drawSingularity(pointer, engine.renderElapsed, engine.tetherDistance < 75f, roles)
+    drawSingularity(pointer, engine.renderElapsed, engine.tetherDistance < 75f, roles, engine.easyMode)
     // Decided in world units, like the marks they stand in for; the collection order is the priority order (the
     // batch keeps the first markers it receives).
     collectSiteEdgeMarkers(engine, textMeasurer, markers)
@@ -506,7 +506,7 @@ internal fun DrawScope.drawWeaponNodes(engine: GameplayRenderModel, shakeX: Floa
 /**
  * The Core: a bone form silhouette ([KkFormGeometry]) with a hard ink rim and a soft glow; you-color
  * in overdrive and heat-tinted while overheated (`HUD.dc.html`). Integrity/heat/shield arcs are
- * the HUD's Core halo.
+ * the HUD's Core halo. In Baby mode the form wears a diaper ([drawDiaper]).
  */
 internal fun DrawScope.drawCore(engine: GameplayRenderModel, center: Offset, roles: KkRolePalette) {
     val overdrive = engine.overdriveTime > 0f
@@ -530,6 +530,7 @@ internal fun DrawScope.drawCore(engine: GameplayRenderModel, center: Offset, rol
     }
     // Phased by Void Step: the Core shows at half strength.
     drawCoreForm(engine, center, if (engine.coreState.phased) fill.copy(alpha = 0.5f) else fill, roles)
+    if (engine.easyMode) drawDiaper(engine, center, roles, if (engine.coreState.phased) 0.5f else 1f)
     val ability = engine.characterAbility
     if (ability.charge > 0f && engine.coreShape != CoreShape.RING && engine.coreShape != CoreShape.PRISM) {
         drawArc(roles.you, -90f, 360f * ability.charge.coerceIn(0f, 1f), false,

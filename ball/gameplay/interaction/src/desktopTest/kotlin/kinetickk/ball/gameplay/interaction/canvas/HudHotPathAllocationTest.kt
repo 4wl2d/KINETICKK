@@ -334,6 +334,49 @@ class HudHotPathAllocationTest {
         }
     }
 
+    /**
+     * A Baby mode run's HUD at tier 0 (the pacifier plate alone in the Rebirth slot) and at tier 3 (the pacifier, then
+     * the tier plate and its sigils), with critical integrity, low polarity and the cursor sweeping from contact range
+     * (the soft solid tether) out past it (the soft pulsing tether): steady frames allocate nothing.
+     */
+    @Test
+    fun babyModeHudFramesAllocateNothing() {
+        listOf(1_440 to 810, 844 to 390, 390 to 844).forEach { (width, height) ->
+            for (tier in listOf(0, 3)) {
+                val base = hudTestModel(width.toFloat(), height.toFloat()).with(*levelOverrides(), "easyMode" to true, "rebirthLevel" to tier,
+                    "coreX" to 0f, "coreY" to 0f, "cameraX" to 0f, "cameraY" to 0f, "hp" to 30f, "maxHp" to 180f, "polarityStability" to 0.2f)
+                val frames = List(FRAMES) { frame ->
+                    base.with("pointerX" to width * 0.5f + 40f + (frame % 100) * 1.6f, "pointerY" to height * 0.5f - 30f,
+                        "velocityX" to 300f + frame * 7.3f, "elapsed" to frame * GameplayRenderModel.FIXED_STEP)
+                }
+                val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
+                    AppLanguage.Russian)
+                val bitmap = ImageBitmap(width, height)
+                val canvas = Canvas(bitmap)
+                val scope = CanvasDrawScope()
+                val size = Size(width.toFloat(), height.toFloat())
+                val density = Density(1f)
+                val clear: DrawScope.() -> Unit = { drawRect(Kk.Ink) }
+                fun empty() = scope.draw(density, LayoutDirection.Ltr, canvas, size, clear)
+                val memory = HudPresentationMemory()
+                var current = 0
+                val block: DrawScope.() -> Unit = {
+                    drawHud(frames[current % FRAMES], measurer, 10f + (current % FRAMES) * 0.002f, 0f, 0f, memory)
+                }
+                fun hud(frame: Int) {
+                    current = frame
+                    scope.draw(density, LayoutDirection.Ltr, canvas, size, block)
+                }
+                repeat(FRAMES) { empty(); hud(it) }
+                kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.REBIRTH), "$width x $height tier $tier: no Baby mode plate")
+                val emptyBytes = allocated { repeat(FRAMES) { empty() } }
+                val hudBytes = List(STEADY_CYCLES) { allocated { repeat(FRAMES) { hud(it) } } }.min()
+                val perFrame = (hudBytes - emptyBytes) / FRAMES
+                assertTrue(perFrame <= 64, "Baby mode HUD at $width x $height tier $tier allocates $perFrame bytes above an empty frame")
+            }
+        }
+    }
+
     private inline fun allocated(block: () -> Unit): Long {
         val threads = ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
         val id = Thread.currentThread().id

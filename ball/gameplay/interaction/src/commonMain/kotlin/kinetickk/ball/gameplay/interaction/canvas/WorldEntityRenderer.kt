@@ -38,22 +38,25 @@ private fun spin(seconds: Float): Float = 360f / seconds
 /**
  * The singularity (cursor): a threat ring with a soft halo, a slowly turning dashed outer ring, a
  * bone dot and four crosshair ticks (`kk.css .sing`). [danger] (contact is close) brightens the halo.
+ * In Baby mode ([easy]) the cursor is harmless: the soft role instead of threat, no danger pulse, and
+ * the pacifier guard's wings left and right of the ring.
  */
-internal fun DrawScope.drawSingularity(center: Offset, time: Float, danger: Boolean, roles: KkRolePalette) {
-    val threat = roles.threat
-    val pulse = if (danger) (sin(time * 10f) + 1f) * 0.5f else 0f
-    drawCircle(threat.copy(alpha = 0.10f + pulse * 0.10f), 24f, center, style = kkStroke(8f))
-    drawCircle(threat.copy(alpha = 0.05f + pulse * 0.06f), 28f, center, style = kkStroke(10f))
+internal fun DrawScope.drawSingularity(center: Offset, time: Float, danger: Boolean, roles: KkRolePalette, easy: Boolean = false) {
+    val tone = if (easy) roles.soft else roles.threat
+    val pulse = if (danger && !easy) (sin(time * 10f) + 1f) * 0.5f else 0f
+    drawCircle(tone.copy(alpha = 0.10f + pulse * 0.10f), 24f, center, style = kkStroke(8f))
+    drawCircle(tone.copy(alpha = 0.05f + pulse * 0.06f), 28f, center, style = kkStroke(10f))
     rotate(time * spin(3.2f), center) {
-        drawCircle(threat.copy(alpha = 0.7f), 27.25f, center, style = WorldStrokes.dashedThin)
+        drawCircle(tone.copy(alpha = 0.7f), 27.25f, center, style = WorldStrokes.dashedThin)
     }
+    if (easy) drawPacifierWings(center, tone)
     // `.sing .r1` is a border with no background: whatever the cursor sits on stays visible inside it.
-    drawCircle(threat, 13.5f, center, style = kkStroke(3f))
+    drawCircle(tone, 13.5f, center, style = kkStroke(3f))
     drawCircle(Kk.Bone, 4f, center)
-    drawRect(threat, Offset(center.x - 1f, center.y - 40f), Size(2f, 8f))
-    drawRect(threat, Offset(center.x - 1f, center.y + 32f), Size(2f, 8f))
-    drawRect(threat, Offset(center.x - 40f, center.y - 1f), Size(8f, 2f))
-    drawRect(threat, Offset(center.x + 32f, center.y - 1f), Size(8f, 2f))
+    drawRect(tone, Offset(center.x - 1f, center.y - 40f), Size(2f, 8f))
+    drawRect(tone, Offset(center.x - 1f, center.y + 32f), Size(2f, 8f))
+    drawRect(tone, Offset(center.x - 40f, center.y - 1f), Size(8f, 2f))
+    drawRect(tone, Offset(center.x + 32f, center.y - 1f), Size(8f, 2f))
 }
 
 /**

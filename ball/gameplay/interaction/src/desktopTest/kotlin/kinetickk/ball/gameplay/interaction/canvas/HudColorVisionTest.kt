@@ -156,6 +156,53 @@ class HudColorVisionTest {
         }
     }
 
+    /**
+     * Baby mode's cursor is harmless: its tether and its polarity arc never take the threat colour, at contact range (the
+     * solid tether) and farther out while integrity is critical (the pulsing critical tether), with the polarity low, in
+     * every preset with a threat hue of its own. The standard run's tether and arc on the same frames are threat.
+     */
+    @Test
+    fun babyModeTetherAndCursorArcNeverShowThreat() {
+        val w = 1_440
+        val h = 810
+        val cx = w * 0.5f
+        val cy = h * 0.5f
+        // The cursor right of the Core; the checked area holds the tether and the cursor's arc (lower left of the cursor),
+        // clear of the critical ring at 70 while integrity is critical, inside the clear middle of the critical vignette.
+        // At full integrity the Core's halo arcs (bone and heat) may share it.
+        listOf(Triple(60f, 180f, Rect(cx + 20f, cy - 45f, cx + 110f, cy + 45f)),
+            Triple(200f, 30f, Rect(cx + 76f, cy - 45f, cx + 250f, cy + 45f))).forEach { (offset, hp, area) ->
+            listOf(KkRolePalette.Default, KkRolePalette.Protan, KkRolePalette.Deutan, KkRolePalette.Tritan).forEach { roles ->
+                fun model(easy: Boolean) = hudTestModel(w.toFloat(), h.toFloat()).with(
+                    "easyMode" to easy, "coreX" to 0f, "coreY" to 0f, "cameraX" to 0f, "cameraY" to 0f,
+                    "pointerX" to cx + offset, "pointerY" to cy, "polarityStability" to 0.2f, "hp" to hp, "maxHp" to 180f,
+                )
+                val where = "cursor $offset u, integrity $hp, ${roles.threat}"
+                val easy = threatTinted(render(model(easy = true), w, h, roles), area, roles.threat)
+                val standard = threatTinted(render(model(easy = false), w, h, roles), area, roles.threat)
+                assertEquals(0, easy, "$where: threat pixels on Baby mode's tether or cursor arc")
+                assertTrue(standard > 30, "$where: the standard tether and arc read as threat ($standard px)")
+            }
+        }
+    }
+
+    /** Pixels in [rect] that read as [threat] over ink from 35 % strength up: blends on the ink-to-threat line. */
+    private fun threatTinted(map: PixelMap, rect: Rect, threat: androidx.compose.ui.graphics.Color): Int {
+        val dr = threat.red - Kk.Ink.red
+        val dg = threat.green - Kk.Ink.green
+        val db = threat.blue - Kk.Ink.blue
+        val length = dr * dr + dg * dg + db * db
+        var count = 0
+        for (y in rect.top.toInt() until rect.bottom.toInt()) for (x in rect.left.toInt() until rect.right.toInt()) {
+            val p = map[x, y]
+            val t = (((p.red - Kk.Ink.red) * dr + (p.green - Kk.Ink.green) * dg + (p.blue - Kk.Ink.blue) * db) / length).coerceAtMost(1f)
+            if (t < 0.35f) continue
+            val off = abs(p.red - (Kk.Ink.red + t * dr)) + abs(p.green - (Kk.Ink.green + t * dg)) + abs(p.blue - (Kk.Ink.blue + t * db))
+            if (off < 0.08f) count++
+        }
+        return count
+    }
+
     /** The badge (as last drawn) grown by its echoes, glow and inner rays, and the Data line row. */
     private fun clusterArea(w: Int, h: Int): Rect {
         val badge = assertNotNull(HudLayoutProbe.rect(HudBlock.BADGE))

@@ -554,6 +554,46 @@ class HudLayoutFixesTest {
         }
     }
 
+    /**
+     * Baby mode's pacifier plate leads the Rebirth slot: alone at tier 0, and before the tier plate and its ten sigils at
+     * tier 10. In every layout, language and text size, with a boss, a running trial and a feed message on screen, the
+     * slot stays on screen and clear of the clock, the badge, the chips, the chain, the boss block, the trial panel and
+     * the feed.
+     */
+    @Test
+    fun babyModePlateStaysClearOfTheHeaderAtTierZeroAndTen() {
+        val orbit = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, -1, 0.4f,
+            immutableListOf(), 0f, 0f)
+        for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
+            for (textScale in textScales) for (tier in listOf(0, 10)) for (boss in listOf(EnemyType.ELITE, EnemyType.ARCHITECT)) {
+                val model = hudTestModel(w.toFloat(), h.toFloat()).with(
+                    "easyMode" to true, "rebirthLevel" to tier,
+                    "keys" to 12, "runMatter" to 9_876_543L, "combo" to 128, "comboTime" to 1f, "comboWindow" to 2.8f, *levelOverrides(41),
+                    "message" to "ELITE SIGNAL", "messageTime" to 1.5f,
+                    "enemies" to listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f, 0f, 0f, 0f, 0f, 0f, 0f, false,
+                        affinityBits = bossAffinity(boss))).toImmutableList(),
+                    "sites" to listOf(orbit).toImmutableList(), "trial" to siteTrial(orbit),
+                )
+                HudDrawCache.forgetLayouts()
+                draw(w, h, language, textScale) { measurer -> drawHud(model, measurer, 1f) }
+                val where = "$language $w x $h x$textScale tier $tier $boss"
+                val strip = assertNotNull(HudLayoutProbe.rect(HudBlock.REBIRTH), "$where: no Baby mode plate")
+                assertTrue(strip.left >= 0f && strip.top >= 0f && strip.right <= w && strip.bottom <= h, "$where: plate $strip off screen")
+                listOf(HudBlock.CLOCK, HudBlock.BADGE, HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.CHAIN, HudBlock.BOSS,
+                    HudBlock.TRIAL_PANEL, HudBlock.FEED).forEach { block ->
+                    val other = HudLayoutProbe.rect(block) ?: return@forEach
+                    assertFalse(strip.overlaps(other), "$where: the Rebirth slot $strip meets $block $other")
+                }
+                // The pacifier is a square plate as tall as the slot; at tier 10 the tier plate follows it on the same row.
+                if (tier == 0) {
+                    assertEquals(strip.height, strip.width, 0.5f, "$where: the pacifier plate alone")
+                } else {
+                    assertTrue(strip.width >= strip.height * 2f, "$where: the tier plate follows the pacifier ($strip)")
+                }
+            }
+        }
+    }
+
     private fun draw(width: Int, height: Int, language: AppLanguage, textScale: Float = 1f, block: androidx.compose.ui.graphics.drawscope.DrawScope.(CanvasTextMeasurer) -> Unit) {
         val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), textScale, language,
             HudTestFonts.typography.copy(localeList = language.localeList()))
