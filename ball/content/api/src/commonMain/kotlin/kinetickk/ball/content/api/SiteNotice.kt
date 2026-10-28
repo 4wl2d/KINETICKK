@@ -44,4 +44,10 @@ enum class SiteNotice(val english: String) {
     DOODLE("THE ARCHITECT'S DOODLE"),
     /** The Quiet Signal heard (the tail is shown in the feed). */
     QUIET_SIGNAL("QUIET SIGNAL // THE ARCHITECT WAS NOT THE FIRST"),
+    /** Far travel placed the Cartographer's sigil ahead of the Core. */
+    SIGIL_APPEARS("A SIGIL AWAKENS"),
+    /** The sigil was never touched before its cutoff, or its duel ended without the boss's fall. */
+    SIGIL_FADES("THE SIGIL FADES"),
+    /** The sigil's boss fell: the sigil pays its reward. */
+    SIGIL_BROKEN("SIGIL BROKEN"),
 }

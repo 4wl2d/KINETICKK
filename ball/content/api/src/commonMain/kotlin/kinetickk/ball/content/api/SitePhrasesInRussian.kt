@@ -51,6 +51,9 @@ internal val SitePhrasesInRussian: List<Pair<String, String>> = listOf(
     "GOLDEN DRIFTER CAUGHT" to "ЗОЛОТОЙ ДРЕЙФЕР ПОЙМАН",
     "IT GOT AWAY" to "УСКОЛЬЗНУЛ",
     "QUIET SIGNAL // THE ARCHITECT WAS NOT THE FIRST" to "ТИХИЙ СИГНАЛ // АРХИТЕКТОР БЫЛ НЕ ПЕРВЫМ",
+    "A SIGIL AWAKENS" to "ПРОБУЖДАЕТСЯ ПЕЧАТЬ",
+    "THE SIGIL FADES" to "ПЕЧАТЬ УГАСАЕТ",
+    "SIGIL BROKEN" to "ПЕЧАТЬ СЛОМЛЕНА",
 
     "Trials" to "Вызовы",
     "The Lost Cursor" to "Потерянный курсор",

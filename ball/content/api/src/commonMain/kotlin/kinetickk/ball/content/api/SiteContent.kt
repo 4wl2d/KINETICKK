@@ -348,7 +348,9 @@ data class SecretPolicy(
     /** Sigils are refused and fade at `bossAt − sigilCutoff`. */
     val sigilCutoff: Float = 90f,
     val sigilAhead: Float = 1_100f,
+    /** The sigil is touched inside this radius (the far sigil's activation radius, which draws its ring). */
     val sigilRadius: Float = 80f,
+    /** The duel ends when the Core is farther than this from the sigil; its boss is kept inside this circle. */
     val duelLeash: Float = 2_400f,
     val secretBossIntegrityShare: Float = 1f,
     /** Granted by the sigil when its boss falls; the boss's own kill payout is separate. */
@@ -388,6 +390,12 @@ data class SecretPolicy(
         require(goldenEscapeDistance.isFinite() && goldenEscapeDistance > 0f) { "The Golden Drifter's escape distance must be positive" }
         require(farTravelDistance >= 6_000f) { "Far travel starts at least 6000 u from the origin" }
         require(sigilCutoff in 30f..300f) { "Sigil cutoff must be in 30..300 s" }
+        require(farTravelBefore.isFinite() && farTravelBefore > 0f) { "Far travel counts for a positive time" }
+        require(sigilAhead.isFinite() && sigilAhead >= 0f) { "The sigil is placed ahead of the Core" }
+        require(sigilRadius.isFinite() && sigilRadius > 0f) { "The sigil radius must be positive" }
+        // The sigil's boss is an encounter: its area and abandonment (the duel leash) and its integrity share hold.
+        require(duelLeash in 120f..2_400f) { "The duel leash must be in 120..2400" }
+        require(secretBossIntegrityShare in 0.1f..2f) { "Secret boss integrity share must be in 0.1..2" }
     }
 }
 
@@ -433,6 +441,10 @@ data class SitePolicy(
         // A Golden Drifter released within its trigger radius must not count as escaped at once.
         require(ambient.rules.none { it.kind == SiteKind.GOLDEN_DRIFTER && it.triggerRadius >= secrets.goldenEscapeDistance }) {
             "The Golden Drifter escapes farther away than its trigger reaches"
+        }
+        // The far sigil's drawn ring is the circle that touches it.
+        require(definition(SiteKind.FAR_SIGIL).activationRadius == secrets.sigilRadius) {
+            "The far sigil's activation radius is the sigil radius"
         }
     }
 
