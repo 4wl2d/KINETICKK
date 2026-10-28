@@ -7,7 +7,6 @@ import kinetickk.ball.content.api.LayerFeatures
 import kinetickk.ball.content.api.ObstacleKind
 import kinetickk.ball.content.api.ObstacleMix
 import kinetickk.ball.content.api.WorldLayer
-import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.model.ObstacleField
 import kotlin.math.max
 
@@ -82,19 +81,3 @@ internal fun MutableGameState.onWorldLayerChanged(from: WorldLayer, to: WorldLay
     onStructureLayerChanged()
     endWorldEventForLayerChange()
 }
-
-/** The current layer's change to the Core's drag. */
-internal fun MutableGameState.layerDrag(drag: Float): Float = drag
-
-/** The current layer's scale of the director's spawn rate. */
-internal fun MutableGameState.layerSpawnRateMultiplier(): Float = 1f
-
-/** The current layer's scale of the ordinary enemy cap. */
-internal fun MutableGameState.layerOrdinaryCapMultiplier(): Float = 1f
-
-/** World time scale for [enemy] (null: hostile projectiles) in the current layer. */
-@Suppress("UNUSED_PARAMETER")
-internal fun MutableGameState.layerTimeScale(enemy: Enemy?): Float = 1f
-
-/** The current layer's scale of Matter earned. */
-internal fun MutableGameState.layerMatterMultiplier(): Float = 1f
