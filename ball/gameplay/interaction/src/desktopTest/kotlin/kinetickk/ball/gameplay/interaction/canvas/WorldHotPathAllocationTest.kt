@@ -70,6 +70,11 @@ import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
+import kinetickk.ball.content.api.ObstacleKindTuning
+import kinetickk.ball.content.api.phaseShardSecondsToSolid
+import kinetickk.ball.content.api.phaseShardSolid
+import kinetickk.ball.content.api.ventErupting
+import kinetickk.ball.content.api.ventSecondsToEruption
 import kinetickk.ball.gameplay.nucleus.render.ProjectileKind
 import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
 import kinetickk.ball.gameplay.nucleus.render.EnemyBehavior
@@ -636,7 +641,7 @@ class WorldHotPathAllocationTest {
             content = Content, phase = GamePhase.RUNNING, settings = PlayerPreferences(textScale = 1.25f), rebirthLevel = 5,
             screenWidth = WIDTH.toFloat(), screenHeight = HEIGHT.toFloat(), uiScale = 1f, coreX = CORE, coreY = CORE,
             velocityX = 420f, velocityY = -160f, cameraX = CORE, cameraY = CORE, pointerX = WIDTH * 0.5f + 180f,
-            pointerY = HEIGHT * 0.5f - 120f, pointerActive = true, braking = true, elapsed = 3f, heat = 20f, overheated = false,
+            pointerY = HEIGHT * 0.5f - 120f, pointerActive = true, braking = true, elapsed = BUSY_ELAPSED, heat = 20f, overheated = false,
             dashPhaseTime = dash, hp = 100f, maxHp = 180f, shield = 1f, maxShield = 3f, level = 5, data = 1, nextLevelData = 5,
             keys = 1, kills = 3, combo = 3, comboTime = 1f, runMatter = 10L, totalMatter = 10L, lastImpact = 20f, lastImpactTime = 0.3f,
             damageFlash = 0.6f, runGrace = 0f, screenShake = 0f, message = "", messageTime = 0f, mass = 1f, damageMultiplier = 1f,
@@ -858,11 +863,45 @@ class WorldHotPathAllocationTest {
                 ObstacleProjection(3L, ObstacleKind.UNSTABLE, CORE + 330f, CORE - 230f, 80f, 27),
                 ObstacleProjection(4L, ObstacleKind.BUMPER, CORE - 120f, CORE + 220f, 34f, 0),
                 ObstacleProjection(5L, ObstacleKind.ASTEROID, CORE + 2_400f, CORE, 140f, 9),
+                // A Mass Knot and a Repulsor, their rings drifting every frame.
+                ObstacleProjection(6L, ObstacleKind.GRAVITY_WELL, CORE - 520f, CORE + 60f, 34f, 13),
+                ObstacleProjection(7L, ObstacleKind.GRAVITY_WELL, CORE + 560f, CORE + 300f, 34f, 17, repels = true),
+                // An accelerator gate, its bars pulsing, and three vents: quiet, glowing before they erupt and erupting.
+                ObstacleProjection(8L, ObstacleKind.ACCEL_GATE, CORE + 120f, CORE - 300f, 100f, 9_000),
+                ObstacleProjection(9L, ObstacleKind.THERMAL_VENT, CORE - 300f, CORE + 260f, 90f,
+                    busyVentSeed { ventSecondsToEruption(BUSY_ELAPSED, it) in 1.5f..2.5f }),
+                ObstacleProjection(10L, ObstacleKind.THERMAL_VENT, CORE + 380f, CORE + 20f, 70f,
+                    busyVentSeed { ventSecondsToEruption(BUSY_ELAPSED, it) in 0.2f..0.4f }),
+                ObstacleProjection(11L, ObstacleKind.THERMAL_VENT, CORE - 120f, CORE - 80f, 110f,
+                    busyVentSeed { ventErupting(BUSY_ELAPSED - 0.1f, it) && ventErupting(BUSY_ELAPSED + 0.1f, it) }),
+                // A crystal, a dormant mine and a half-fused one blinking inside its blast ring.
+                ObstacleProjection(12L, ObstacleKind.CRYSTAL, CORE + 200f, CORE + 330f, 90f, 21),
+                ObstacleProjection(13L, ObstacleKind.DERELICT_MINE, CORE - 420f, CORE + 330f, 64f, 22),
+                ObstacleProjection(14L, ObstacleKind.DERELICT_MINE, CORE + 470f, CORE - 330f, 50f, 23, fuseAt = BUSY_ELAPSED + 0.3f),
+                // Phase shards: solid, a dashed ghost, and one fading in before it materialises.
+                ObstacleProjection(15L, ObstacleKind.PHASE_SHARD, CORE - 230f, CORE - 140f, 70f,
+                    busyShardSeed { phaseShardSolid(BUSY_ELAPSED, it) }),
+                ObstacleProjection(16L, ObstacleKind.PHASE_SHARD, CORE + 60f, CORE + 200f, 60f,
+                    busyShardSeed { phaseShardSecondsToSolid(BUSY_ELAPSED, it) > phaseTelegraphSeconds + 0.2f }),
+                ObstacleProjection(17L, ObstacleKind.PHASE_SHARD, CORE + 250f, CORE + 120f, 80f,
+                    busyShardSeed { phaseShardSecondsToSolid(BUSY_ELAPSED, it) in 0.1f..0.35f }),
             ) + List(30) { index ->
                 ObstacleProjection(100L + index, if (index % 5 == 0) ObstacleKind.UNSTABLE else ObstacleKind.ASTEROID,
                     CORE - 450f + (index % 6) * 180f, CORE - 260f + (index / 6) * 130f, 46f + index * 3.47f, 200 + index * 13)
             }
             ).toImmutableList()
+
+        /** The busy frame's run time. */
+        const val BUSY_ELAPSED = 3f
+
+        /** The first vent shape seed whose cycle, under the default kind tuning, [accept]s. */
+        fun busyVentSeed(accept: ObstacleKindTuning.(Int) -> Boolean): Int {
+            val kinds = ObstacleKindTuning()
+            return (1..10_000).first { kinds.accept(it) }
+        }
+
+        /** The first phase shard shape seed whose cycle, under the default kind tuning, [accept]s. */
+        fun busyShardSeed(accept: ObstacleKindTuning.(Int) -> Boolean): Int = busyVentSeed(accept)
 
         /**
          * Statuses of the busy frame's enemies: a reaction ready (Thermal with Cryo), a primed Ion arc,

@@ -98,14 +98,32 @@ fun ObstacleMix.pick(roll: Float, candidateRadius: Float, kinds: ObstacleKindTun
 }
 
 /**
- * Every number of the obstacle kinds: one [ObstacleMix] per world layer and the mechanics of each new kind. The mixes
- * ship empty, so the field is today's asteroids and bumpers until the terrain lane turns its kinds on.
+ * Every number of the obstacle kinds: one [ObstacleMix] per world layer and the mechanics of each new kind. A layer
+ * whose mix is `ObstacleMix()` keeps the 0.5.0 field of asteroids and bumpers (the "without new kinds" content arm).
  */
 data class ObstacleKindTuning(
-    val space: ObstacleMix = ObstacleMix(),
-    val zenith: ObstacleMix = ObstacleMix(),
-    val nadir: ObstacleMix = ObstacleMix(),
-    val archive: ObstacleMix = ObstacleMix(),
+    /**
+     * Realspace: 0.45 of asteroid candidates rolled, 0.359 after eligibility, so 29.5 % of all candidates become new
+     * kinds; asteroids stay 52.5 % and bumpers 18 %.
+     */
+    val space: ObstacleMix = ObstacleMix(
+        gravityWell = 0.09f, accelGate = 0.09f, crystal = 0.11f, derelictMine = 0.05f, phaseShard = 0.06f, thermalVent = 0.05f,
+    ),
+    /** Heaven: gates, crystals and lifting Repulsors among more bumpers, a little sparser, no mines or vents. */
+    val zenith: ObstacleMix = ObstacleMix(
+        gravityWell = 0.06f, accelGate = 0.22f, crystal = 0.22f, phaseShard = 0.10f,
+        repelShare = 0.7f, densityScale = 0.9f, bumperScale = 1.3f,
+    ),
+    /** Hell: dense vents and mines with pulling knots and few bumpers. */
+    val nadir: ObstacleMix = ObstacleMix(
+        gravityWell = 0.10f, accelGate = 0.04f, crystal = 0.04f, derelictMine = 0.14f, phaseShard = 0.04f, thermalVent = 0.24f,
+        repelShare = 0.25f, densityScale = 1.15f, bumperScale = 0.6f,
+    ),
+    /** The Architect's memory: glitching phase shards. */
+    val archive: ObstacleMix = ObstacleMix(
+        gravityWell = 0.10f, accelGate = 0.08f, crystal = 0.08f, derelictMine = 0.06f, phaseShard = 0.24f, thermalVent = 0.04f,
+        bumperScale = 0.8f,
+    ),
     /** Gravity knots only replace mid and large rocks, so their field sits in open space. */
     val wellMinimumCandidate: Float = 70f,
     /** A gate needs an opening wide enough for the Core between its posts. */
@@ -262,6 +280,9 @@ fun ObstacleKindTuning.ventEruptionEnd(elapsed: Float, seed: Int): Float =
 
 /** Gate normal angle: the seed's low 16 bits (invertible, so tests can build a gate at a chosen angle). */
 fun gateAngle(shapeSeed: Int): Float = (shapeSeed and 0xFFFF) / 65_536f * 6.2831855f
+
+/** From an accelerator gate's centre to each post's centre, for a gate body of [bodyRadius] (the posts sit inside it). */
+fun ObstacleKindTuning.gateHalfSpan(bodyRadius: Float): Float = max(0f, bodyRadius - gatePostRadius)
 
 /** True when a candidate of [candidateRadius] may become [kind]. */
 fun ObstacleKindTuning.eligible(kind: ObstacleKind, candidateRadius: Float): Boolean = when (kind) {

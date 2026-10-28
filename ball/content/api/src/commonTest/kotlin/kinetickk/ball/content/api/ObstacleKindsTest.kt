@@ -106,17 +106,51 @@ class ObstacleKindsTest {
     }
 
     @Test
-    fun theShippedMixesAreEmptySoEveryCandidateStaysAnAsteroid() {
-        val kinds = ObstacleKindTuning()
-        listOf(kinds.space, kinds.zenith, kinds.nadir, kinds.archive).forEach { mix ->
-            assertEquals(ObstacleMix(), mix)
-            assertEquals(0f, mix.total)
-            assertEquals(1f, mix.densityScale)
-            assertEquals(1f, mix.bumperScale)
+    fun theShippedMixesTurnTheirTableShareOfCandidatesIntoNewKinds() {
+        val obstacles = ObstacleTuning()
+        val kinds = obstacles.kinds
+        // Asteroid candidates take a uniform radius between the smallest and the largest asteroid; integrating pick over
+        // that radius and a uniform roll gives the share that becomes a new kind once eligibility has had its say.
+        // Times the layer's non-bumper share, it is the share of all candidates (spec table: 29.5, 34.5, 46.4, 44.7 %).
+        val layers = listOf(
+            Triple("space", kinds.space, 0.359f to 0.295f),
+            Triple("zenith", kinds.zenith, 0.451f to 0.345f),
+            Triple("nadir", kinds.nadir, 0.520f to 0.464f),
+            Triple("archive", kinds.archive, 0.522f to 0.447f),
+        )
+        for ((name, mix, expected) in layers) {
+            val (ofAsteroids, ofAll) = expected
+            val converted = convertedShare(mix, kinds, obstacles.asteroidMinimumRadius, obstacles.asteroidMaximumRadius)
+            assertEquals(ofAsteroids, converted, 0.005f, "$name: share of asteroid candidates that become new kinds")
+            val bumpers = obstacles.bumperShare * mix.bumperScale
+            assertEquals(ofAll, converted * (1f - bumpers), 0.005f, "$name: share of all candidates")
+            assertTrue(converted < mix.total, "$name: eligibility leaves some rolled candidates asteroids")
         }
-        for (step in 0..100) {
-            assertEquals(ObstacleKind.ASTEROID, kinds.space.pick(step / 101f, 46f + step, kinds))
+        // Realspace stays inside the 25-35 % the obstacle decision allows, with today's density and bumpers.
+        val space = convertedShare(kinds.space, kinds, obstacles.asteroidMinimumRadius, obstacles.asteroidMaximumRadius) *
+            (1f - obstacles.bumperShare)
+        assertTrue(space in 0.25f..0.35f, "realspace share $space")
+        assertEquals(1f, kinds.space.densityScale)
+        assertEquals(1f, kinds.space.bumperScale)
+        // The layers read apart: no mines or vents in the Zenith, the most vents in the Nadir, the most shards in the Archive.
+        assertEquals(0f, kinds.zenith.share(ObstacleKind.DERELICT_MINE) + kinds.zenith.share(ObstacleKind.THERMAL_VENT))
+        val mixes = listOf(kinds.space, kinds.zenith, kinds.nadir, kinds.archive)
+        assertEquals(kinds.nadir, mixes.maxBy { it.thermalVent })
+        assertEquals(kinds.nadir, mixes.maxBy { it.derelictMine })
+        assertEquals(kinds.archive, mixes.maxBy { it.phaseShard })
+        assertTrue(kinds.zenith.repelShare > kinds.space.repelShare && kinds.nadir.repelShare < kinds.space.repelShare)
+    }
+
+    /** The share of rolls over a uniform candidate radius in [minimum, maximum] that [ObstacleMix.pick] makes a new kind. */
+    private fun convertedShare(mix: ObstacleMix, kinds: ObstacleKindTuning, minimum: Float, maximum: Float): Float {
+        val radii = 520
+        val rolls = 1_000
+        var converted = 0
+        for (r in 0 until radii) {
+            val radius = minimum + (maximum - minimum) * (r + 0.5f) / radii
+            for (roll in 0 until rolls) if (mix.pick((roll + 0.5f) / rolls, radius, kinds) != ObstacleKind.ASTEROID) converted++
         }
+        return converted.toFloat() / (radii * rolls)
     }
 
     @Test

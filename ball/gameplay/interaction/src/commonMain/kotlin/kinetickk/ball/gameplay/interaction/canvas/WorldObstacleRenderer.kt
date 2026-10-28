@@ -23,7 +23,8 @@ import kotlin.math.sqrt
 /**
  * World obstacles, drawn over the backdrop and under everything else: an asteroid is an irregular ink
  * polygon (8 to 12 corners from its shape seed) with a bone rim whose edges hug its collision circle, an
- * unstable asteroid adds heat cracks and a pulsing core, and a bumper is a glowing polarity ring.
+ * unstable asteroid adds heat cracks and a pulsing core, a bumper is a glowing polarity ring, and the 0.6.0
+ * kinds draw their own looks (WorldObstacleKindsRenderer).
  * Outlines are cached per shape and radius and drawn translated; obstacles off the view are skipped.
  * Allocation-free per frame.
  */
@@ -31,17 +32,20 @@ internal fun DrawScope.drawObstacles(engine: GameplayRenderModel, shakeX: Float,
     val obstacles = engine.obstacles
     if (obstacles.isEmpty()) return
     val time = engine.renderElapsed
+    val kinds = engine.content.obstacles.kinds
     for (index in obstacles.indices) {
         val obstacle = obstacles[index]
         val center = world(engine, obstacle.x, obstacle.y, shakeX, shakeY)
-        if (!isOnScreen(center, obstacle.radius * ObstaclePaths.OUTLINE_MAX_REACH + 8f)) continue
+        if (!isOnScreen(center, obstacleVisualReach(obstacle, kinds) + 8f)) continue
         when (obstacle.kind) {
             ObstacleKind.BUMPER -> drawBumper(center, obstacle.radius, time, roles)
             ObstacleKind.ASTEROID, ObstacleKind.UNSTABLE -> drawAsteroid(obstacle, center, time, roles)
-            // The 0.6.0 kinds read as asteroids until their own looks land; no run generates them yet.
-            ObstacleKind.GRAVITY_WELL, ObstacleKind.ACCEL_GATE, ObstacleKind.CRYSTAL, ObstacleKind.DERELICT_MINE,
-            ObstacleKind.PHASE_SHARD, ObstacleKind.THERMAL_VENT,
-            -> drawAsteroid(obstacle, center, time, roles)
+            ObstacleKind.GRAVITY_WELL -> drawGravityWell(obstacle, center, time, kinds, roles)
+            ObstacleKind.ACCEL_GATE -> drawAccelGate(obstacle, center, time, kinds, roles)
+            ObstacleKind.THERMAL_VENT -> drawThermalVent(obstacle, center, time, kinds, roles)
+            ObstacleKind.CRYSTAL -> drawCrystal(obstacle, center, roles)
+            ObstacleKind.DERELICT_MINE -> drawDerelictMine(obstacle, center, time, kinds, roles)
+            ObstacleKind.PHASE_SHARD -> drawPhaseShard(obstacle, center, time, kinds, roles)
         }
     }
 }
@@ -82,20 +86,49 @@ private fun DrawScope.drawBumper(center: Offset, radius: Float, time: Float, rol
  * draw-thread confined.
  */
 internal object ObstaclePaths {
-    private const val CAPACITY = 96
+    private const val CAPACITY = 128
     private const val OUTLINE = 0
     private const val CRACKS = 1
+    private const val FACETS = 2
+    private const val FACET_LINES = 3
+    private const val DASHED = 4
+    private const val MINE_PIPS = 5
+    private const val MINE_STUBS = 6
+    private const val MINE_LIGHTS = 7
+    private const val GATE_BARS = 8
     private val seeds = IntArray(CAPACITY)
     private val radii = FloatArray(CAPACITY) { -1f }
     private val kinds = IntArray(CAPACITY) { -1 }
     private val paths = arrayOfNulls<Path>(CAPACITY)
     private var next = 0
+    private val scratch = Path()
 
     /** The jagged rim of an asteroid with [seed] and [radius]. */
     fun outline(seed: Int, radius: Float): Path = get(OUTLINE, seed, radius)
 
     /** Three cracks from the centre of an unstable asteroid toward its rim. */
     fun cracks(seed: Int, radius: Float): Path = get(CRACKS, seed, radius)
+
+    /** The four bars across an accelerator gate with shape [seed] and [halfSpan] (keyed by the half-span). */
+    fun gateBars(seed: Int, halfSpan: Float): Path = get(GATE_BARS, seed, halfSpan)
+
+    /** The facet hexagon of a crystal with [seed] and [radius]. */
+    fun crystalFacets(seed: Int, radius: Float): Path = get(FACETS, seed, radius)
+
+    /** The inner facet and spokes of a crystal with [seed] and [radius]. */
+    fun crystalFacetLines(seed: Int, radius: Float): Path = get(FACET_LINES, seed, radius)
+
+    /** The three pip discs of a derelict mine with [seed] and [radius]. */
+    fun minePips(seed: Int, radius: Float): Path = get(MINE_PIPS, seed, radius)
+
+    /** The stubs around a derelict mine's pips. */
+    fun mineStubs(seed: Int, radius: Float): Path = get(MINE_STUBS, seed, radius)
+
+    /** The warning lights at a derelict mine's pips. */
+    fun mineLights(seed: Int, radius: Float): Path = get(MINE_LIGHTS, seed, radius)
+
+    /** The dashed outline of a ghost phase shard with [seed] and [radius] (the asteroid outline, cut into dashes). */
+    fun phaseDashes(seed: Int, radius: Float): Path = get(DASHED, seed, radius)
 
     /** Corner count of an outline: 8..12 from the seed. */
     fun corners(seed: Int): Int = 8 + ((seed % 5) + 5) % 5
@@ -105,7 +138,17 @@ internal object ObstaclePaths {
             if (kinds[index] == kind && seeds[index] == seed && radii[index] == radius) return paths[index]!!
         }
         val path = paths[next]?.also { it.rewind() } ?: Path()
-        if (kind == OUTLINE) buildOutline(path, seed, radius) else buildCracks(path, seed, radius)
+        when (kind) {
+            OUTLINE -> buildOutline(path, seed, radius)
+            CRACKS -> buildCracks(path, seed, radius)
+            FACETS -> buildCrystalFacets(path, seed, radius)
+            FACET_LINES -> buildCrystalFacetLines(path, seed, radius)
+            MINE_PIPS -> buildMinePips(path, seed, radius)
+            MINE_STUBS -> buildMineStubs(path, seed, radius)
+            MINE_LIGHTS -> buildMineLights(path, seed, radius)
+            DASHED -> buildPhaseShardDashes(path, scratch.also { it.rewind(); buildOutline(it, seed, radius) })
+            else -> buildGateBars(path, seed, radius)
+        }
         kinds[next] = kind
         seeds[next] = seed
         radii[next] = radius

@@ -31,11 +31,14 @@ import kotlin.math.sqrt
  * regenerated only when the Core changes chunk. Absolute positions are run-local positions plus the
  * accumulated rebase origin.
  *
- * Collisions:
- * - the Core sweeps against obstacles right after it moves; asteroids hurt above the damage-start
- *   speed and kill above the lethal speed, bumpers throw it back, unstable asteroids explode;
- * - enemies are pushed out, slide around obstacles and slam into them when thrown;
- * - asteroids stop player and hostile shots.
+ * Collisions (every query reads the kind's properties, see ObstacleKindSystem.kt):
+ * - the Core sweeps against solid obstacles right after it moves; asteroids hurt above the damage-start
+ *   speed and kill above the lethal speed, bumpers throw it back, unstable asteroids explode and crystals
+ *   shatter;
+ * - enemies are pushed out of solid obstacles, slide around them and slam into them when thrown (a slam
+ *   can shatter a crystal);
+ * - asteroids and the other shot-stopping kinds stop player and hostile shots; a player shot sets off a
+ *   derelict mine it runs into.
  */
 
 // ---------------------------------------------------------------------------------------------
@@ -44,25 +47,32 @@ import kotlin.math.sqrt
 /** Clear space a spawn keeps from an obstacle surface. */
 internal const val SPAWN_OBSTACLE_CLEARANCE: Float = 24f
 
-/** True when a circle of [radius] at ([x], [y]) would overlap an obstacle, so a spawn there must move. */
+/**
+ * True when a circle of [radius] at ([x], [y]) would overlap an obstacle's body or its hazard reach (a mine's arming
+ * reach, a vent's plume), so a spawn there must move.
+ */
 internal fun MutableGameState.isSpawnPointBlocked(x: Float, y: Float, radius: Float): Boolean {
     val reach = radius + SPAWN_OBSTACLE_CLEARANCE
-    forEachObstacleNear(x, y, reach) { _, obstacle ->
-        if (distanceSquared(x, y, obstacle.x, obstacle.y) < square(obstacle.radius + reach)) return true
+    forEachObstacleNear(x, y, reach + content.obstacles.kinds.hazardMargin()) { _, obstacle ->
+        val keepOut = max(obstacle.radius, obstacleHazardReach(obstacle)) + reach
+        if (distanceSquared(x, y, obstacle.x, obstacle.y) < square(keepOut)) return true
     }
     return wallBlocksPoint(x, y, radius)
 }
 
 /**
- * True when a circle of [radius] swept from ([x0], [y0]) to ([x1], [y1]) would touch an obstacle;
+ * True when a circle of [radius] swept from ([x0], [y0]) to ([x1], [y1]) would touch a solid obstacle;
  * blinks stop short of it and hostile sight lines and shots are blocked by it.
  */
 internal fun MutableGameState.obstacleBlocksSegment(x0: Float, y0: Float, x1: Float, y1: Float, radius: Float): Boolean {
     val centerX = (x0 + x1) * 0.5f
     val centerY = (y0 + y1) * 0.5f
     val reach = length(x1 - x0, y1 - y0) * 0.5f + radius
+    val kinds = content.obstacles.kinds
     forEachObstacleNear(centerX, centerY, reach) { _, obstacle ->
-        if (sweepEntry(x0, y0, x1, y1, obstacle.x, obstacle.y, obstacle.radius + radius) >= 0f) return true
+        if (obstacle.solidAt(elapsed, kinds) &&
+            sweepEntry(x0, y0, x1, y1, obstacle.x, obstacle.y, obstacle.radius + radius) >= 0f
+        ) return true
     }
     return wallBlocksSegment(x0, y0, x1, y1, radius)
 }
@@ -249,13 +259,10 @@ internal fun MutableGameState.generateChunk(chunkX: Int, chunkY: Int): List<Obst
         if (id in destroyedObstacleIds) continue
         if (keepOutCovers(chunkX, chunkY, candidate.offsetX, candidate.offsetY, candidate.kind, candidate.radius)) continue
         if (structureSuppresses(chunkX, chunkY, candidate.offsetX, candidate.offsetY, candidate.radius)) continue
-        result += Obstacle(
-            id = id,
-            kind = candidate.kind,
+        result += variantObstacle(
+            chunkX, chunkY, candidate.slot, candidate.kind, candidate.radius, candidate.shapeSeed, id,
             x = (chunkX.toDouble() * chunk + candidate.offsetX - worldOriginX).toFloat(),
             y = (chunkY.toDouble() * chunk + candidate.offsetY - worldOriginY).toFloat(),
-            radius = candidate.radius,
-            shapeSeed = candidate.shapeSeed,
         )
     }
     return result
@@ -383,13 +390,13 @@ internal fun MutableGameState.minimapRange(): Float {
 
 /**
  * Runs right after the Core moves: keeps the window current, resolves the swept Core path against
- * obstacles (bounces, damage, ricochets, explosions) and grants Near Miss.
+ * obstacles (bounces, damage, ricochets, explosions), then runs the obstacle kinds' pass (proximity, Near Miss).
  */
 internal fun MutableGameState.updateObstacles() {
     refreshObstacleWindow()
     val collided = resolveCoreObstacleCollisions()
     if (phase != GamePhase.RUNNING) return
-    if (!collided) checkNearMiss()
+    updateObstacleKinds(collided)
 }
 
 private const val MAX_CORE_BOUNCES: Int = 3
@@ -416,6 +423,7 @@ private fun MutableGameState.resolveCoreObstacleCollisions(): Boolean {
         val segmentEndX = endX
         val segmentEndY = endY
         forEachObstacleNear((startX + endX) * 0.5f, (startY + endY) * 0.5f, reach) { index, obstacle ->
+            if (!coreMayHit(obstacle, segmentStartX, segmentStartY)) return@forEachObstacleNear
             val t = sweepEntry(
                 segmentStartX, segmentStartY, segmentEndX, segmentEndY,
                 obstacle.x, obstacle.y, obstacle.radius + coreRadius,
@@ -492,10 +500,10 @@ private fun MutableGameState.resolveCoreObstacleCollisions(): Boolean {
 }
 
 /**
- * Last guard after the bounces: the Core never rests inside an obstacle. It is pushed out of every obstacle it
- * overlaps. Inward speed below the damage-start impact speed is removed silently; the first contact at that speed or
- * faster keeps it and, once the walk is done (the field does not change during it), responds like a swept contact:
- * it bounces, hurts, kills or ricochets.
+ * Last guard after the bounces: the Core never rests inside a solid obstacle. It is pushed out of every steady solid
+ * obstacle it overlaps (a phase shard that materialised around it lets it drift out instead). Inward speed below the
+ * damage-start impact speed is removed silently; the first contact at that speed or faster keeps it and, once the walk
+ * is done (the field does not change during it), responds like a swept contact: it bounces, hurts, kills or ricochets.
  */
 internal fun MutableGameState.pushCoreOutOfObstacles() {
     var hitIndex = -1
@@ -503,6 +511,7 @@ internal fun MutableGameState.pushCoreOutOfObstacles() {
     var hitNormalX = 0f
     var hitNormalY = 0f
     forEachObstacleNear(coreX, coreY, coreRadius) { index, obstacle ->
+        if (!obstacle.isSteadySurface()) return@forEachObstacleNear
         val combined = obstacle.radius + coreRadius
         val dx = coreX - obstacle.x
         val dy = coreY - obstacle.y
@@ -534,8 +543,9 @@ internal fun MutableGameState.pushCoreOutOfObstacles() {
 /**
  * Velocity response, damage and triggers of the Core meeting [obstacle] along the outward normal
  * ([nx], [ny]) at ([contactX], [contactY]), dispatched by kind: bumpers throw, an unstable asteroid hit at
- * the damage-start impact speed bursts, every other obstacle is a solid surface. Returns true when the
- * obstacle shattered and the Core passes on without bouncing.
+ * the damage-start impact speed bursts and a crystal hit that hard shatters, every other solid obstacle is a
+ * solid surface (a crystal hit more gently only bounces, it never hurts); a kind with no solid body never
+ * responds. Returns true when the obstacle shattered and the Core passes on without bouncing.
  */
 private fun MutableGameState.respondToObstacle(
     index: Int,
@@ -547,16 +557,27 @@ private fun MutableGameState.respondToObstacle(
 ): Boolean {
     val normalSpeed = -(velocityX * nx + velocityY * ny)
     if (normalSpeed <= 0f) return false
-    if (obstacle.kind == ObstacleKind.BUMPER) {
-        bounceOffBumper(index, obstacle, nx, ny, normalSpeed, contactX, contactY)
-        return false
-    }
-    if (obstacle.kind == ObstacleKind.UNSTABLE) {
-        val impact = obstacleImpactSpeed(normalSpeed, length(velocityX + normalSpeed * nx, velocityY + normalSpeed * ny))
-        if (impact >= obstacleDamageStartSpeed()) {
-            explodeUnstable(index, obstacle, impact)
-            return true
+    when (obstacle.kind) {
+        ObstacleKind.BUMPER -> {
+            bounceOffBumper(index, obstacle, nx, ny, normalSpeed, contactX, contactY)
+            return false
         }
+        ObstacleKind.UNSTABLE -> {
+            val impact = obstacleImpactSpeed(normalSpeed, length(velocityX + normalSpeed * nx, velocityY + normalSpeed * ny))
+            if (impact >= obstacleDamageStartSpeed()) {
+                explodeUnstable(index, obstacle, impact)
+                return true
+            }
+        }
+        ObstacleKind.CRYSTAL -> {
+            val impact = obstacleImpactSpeed(normalSpeed, length(velocityX + normalSpeed * nx, velocityY + normalSpeed * ny))
+            if (impact >= obstacleDamageStartSpeed()) {
+                shatterCrystal(index, obstacle, impact, byCore = true)
+                return true
+            }
+        }
+        ObstacleKind.ACCEL_GATE, ObstacleKind.DERELICT_MINE, ObstacleKind.THERMAL_VENT -> return false
+        ObstacleKind.ASTEROID, ObstacleKind.GRAVITY_WELL, ObstacleKind.PHASE_SHARD -> Unit
     }
     resolveSolidImpact(obstacle.id, nx, ny, contactX, contactY)
     return false
@@ -605,75 +626,69 @@ private fun MutableGameState.bounceOffBumper(
 }
 
 /**
- * An unstable asteroid hit at the damage-start impact speed bursts: it hurts the Core a little and enemies around
- * it, as hard as the [impact] speed.
+ * An unstable asteroid hit at the damage-start impact speed bursts for good: it hurts the Core a little and enemies
+ * around it, as hard as the [impact] speed, then fires SHATTER with its kind from its centre.
  */
 private fun MutableGameState.explodeUnstable(index: Int, obstacle: Obstacle, impact: Float) {
     val tuning = content.obstacles
     obstacleField = obstacleField.removed(index)
-    val destroyed = destroyedObstacleIds + obstacle.id
-    destroyedObstacleIds = if (destroyed.size > ContentBounds.MAX_DESTROYED_OBSTACLES) {
-        destroyed.subList(destroyed.size - ContentBounds.MAX_DESTROYED_OBSTACLES, destroyed.size).toList()
-    } else destroyed
+    recordDestroyedObstacle(obstacle.id)
     areaDamage(obstacle.x, obstacle.y, tuning.unstableBlastRadius, impactPower(impact))
     burst(obstacle.x, obstacle.y, 24, 4)
     screenShake = max(screenShake, 12f)
     emitSound(GameplayAudioCue.IMPACT)
     if (distanceSquared(coreX, coreY, obstacle.x, obstacle.y) <= square(tuning.unstableBlastRadius + coreRadius + obstacle.radius)) {
-        takeDamage(tuning.unstableBlastDamage, kind = IncomingDamage.OBSTACLE)
+        takeDamage(tuning.unstableBlastDamage * build.obstacleDamageScale, kind = IncomingDamage.OBSTACLE, obstacle = ObstacleKind.UNSTABLE)
     }
-}
-
-/** Near Miss: skimming past an asteroid fast enough, without touching it, grants Overdrive. */
-private fun MutableGameState.checkNearMiss() {
-    val nearMiss = matrix.nearMiss ?: return
-    if (speed < nearMiss.minSpeed || nearMissReadyAt > elapsed) return
-    val reach = coreRadius + nearMiss.distance
-    forEachObstacleNear(coreX, coreY, reach) { _, obstacle ->
-        if (obstacle.kind == ObstacleKind.BUMPER) return@forEachObstacleNear
-        val gap = length(coreX - obstacle.x, coreY - obstacle.y) - obstacle.radius - coreRadius
-        if (gap > 0f && gap <= nearMiss.distance) {
-            nearMissReadyAt = elapsed + nearMiss.cooldown
-            gainOverdrive(nearMiss.overdrive)
-            return
-        }
-    }
+    if (phase != GamePhase.RUNNING) return
+    fireClauses(EffectTrigger.SHATTER, null, impactPower(impact), obstacle = ObstacleKind.UNSTABLE, originX = obstacle.x, originY = obstacle.y)
 }
 
 // ---------------------------------------------------------------------------------------------
 // Enemies.
 
 /**
- * After enemies move: pushes each out of any obstacle (its inward velocity is removed, and a hard
- * contact slams it), turns self-propelled enemies along the surface before they reach it, then lets
- * thrown enemies slam into each other (bounded per step).
+ * After enemies move: pushes each out of any solid obstacle (its inward velocity is removed, and a hard
+ * contact slams it unless the obstacle phases), turns self-propelled enemies along the surface before they
+ * reach it, shatters the first crystal a landed slam struck this step (the others wait for their next
+ * contact), then lets thrown enemies slam into each other (bounded per step).
  */
 internal fun MutableGameState.resolveEnemyObstacles() {
     val tuning = content.obstacles
     if (obstacleField.size > 0) {
         // The lookup adds the largest obstacle radius once; avoidance scales the combined radii.
         val largest = max(tuning.asteroidMaximumRadius, tuning.bumperRadius)
+        val kinds = tuning.kinds
+        var breakId = NO_OBSTACLE_ID
+        var breakSpeed = 0f
         for (enemyIndex in enemies.indices) {
             val enemy = enemies[enemyIndex]
             if (!enemy.alive || isPhasedPhantom(enemy)) continue
             val avoidReach = (enemy.radius + largest) * tuning.avoidanceRange - largest
             forEachObstacleNear(enemy.x, enemy.y, avoidReach) { _, obstacle ->
-                resolveEnemyObstacle(enemy, obstacle)
+                if (!obstacle.solidAt(elapsed, kinds)) return@forEachObstacleNear
+                val slam = resolveEnemyObstacle(enemy, obstacle)
+                if (slam > 0f && breakId == NO_OBSTACLE_ID && obstacle.kind == ObstacleKind.CRYSTAL) {
+                    breakId = obstacle.id
+                    breakSpeed = slam
+                }
             }
         }
+        if (breakId != NO_OBSTACLE_ID) shatterCrystalStruckByEnemy(breakId, breakSpeed)
     }
     resolveEnemyWalls()
     resolveThrownEnemySlams()
 }
 
-private fun MutableGameState.resolveEnemyObstacle(enemy: Enemy, obstacle: Obstacle) {
+/** Pushes [enemy] out of [obstacle] or bends its approach; returns the speed of a slam that landed, else 0. */
+private fun MutableGameState.resolveEnemyObstacle(enemy: Enemy, obstacle: Obstacle): Float {
     val tuning = content.obstacles
     val combined = obstacle.radius + enemy.radius
     val dx = enemy.x - obstacle.x
     val dy = enemy.y - obstacle.y
     val distanceSquared = dx * dx + dy * dy
     val avoidRadius = combined * tuning.avoidanceRange
-    if (distanceSquared >= avoidRadius * avoidRadius) return
+    if (distanceSquared >= avoidRadius * avoidRadius) return 0f
     val distance = sqrt(distanceSquared)
     val nx = if (distance > 0.001f) dx / distance else 1f
     val ny = if (distance > 0.001f) dy / distance else 0f
@@ -684,14 +699,17 @@ private fun MutableGameState.resolveEnemyObstacle(enemy: Enemy, obstacle: Obstac
         if (inward > 0f) {
             enemy.vx += inward * nx
             enemy.vy += inward * ny
-            if (applySlamDamage(enemy, inward)) endPolarityThrow(enemy)
+            if (!obstacle.kind.phased && applySlamDamage(enemy, inward)) {
+                endPolarityThrow(enemy)
+                return inward
+            }
         }
-        return
+        return 0f
     }
     // Slide: self-propelled enemies bend their approach along the surface; thrown ones and strikes do not.
     if (inward <= 0f || !canAct(enemy) || enemy.thrownUntil > elapsed || isThrownByPolarity(enemy) ||
         enemy.mode == EnemyBehavior.STRIKE
-    ) return
+    ) return 0f
     val closeness = (1f - (distance - combined) / (avoidRadius - combined)).coerceIn(0f, 1f)
     val removed = inward * closeness
     var tangentX = -ny
@@ -702,6 +720,7 @@ private fun MutableGameState.resolveEnemyObstacle(enemy: Enemy, obstacle: Obstac
     }
     enemy.vx += removed * nx + removed * tangentX
     enemy.vy += removed * ny + removed * tangentY
+    return 0f
 }
 
 /** Thrown enemies hitting others at the slam speed slam both; at most a few per step. */
@@ -749,11 +768,14 @@ private const val MAX_THROWN_CHECKS_PER_STEP: Int = 24
 // Shots.
 
 /**
- * Asteroids stop player and hostile shots: a shot whose step crosses one is spent (removed after the
- * collision passes). Bumpers let shots through; mines never move.
+ * Shot-stopping obstacles (asteroids, and a phase shard only while materialised) stop player and hostile shots: a
+ * shot whose step crosses one is spent (removed after the collision passes). Bumpers and the kinds with no solid
+ * body let shots through; a player shot running into a derelict mine sets it off on the quick fuse. Mine
+ * projectiles never move.
  */
 internal fun MutableGameState.blockProjectilesAtObstacles() {
     if (obstacleField.size == 0) return
+    val kinds = content.obstacles.kinds
     for (projectileIndex in projectiles.indices) {
         val projectile = projectiles[projectileIndex]
         if (projectile.spent || projectile.kind == ProjectileKind.MINE) continue
@@ -762,8 +784,9 @@ internal fun MutableGameState.blockProjectilesAtObstacles() {
         val x1 = projectile.x
         val y1 = projectile.y
         val reach = length(x1 - x0, y1 - y0) * 0.5f + projectile.radius
-        forEachObstacleNear((x0 + x1) * 0.5f, (y0 + y1) * 0.5f, reach) { _, obstacle ->
-            if (obstacle.kind == ObstacleKind.BUMPER) return@forEachObstacleNear
+        forEachObstacleNear((x0 + x1) * 0.5f, (y0 + y1) * 0.5f, reach) { index, obstacle ->
+            if (!projectile.hostile) fuseMineCrossedByShot(index, obstacle, x0, y0, x1, y1, projectile.radius)
+            if (!obstacle.stopsShotsAt(elapsed, kinds)) return@forEachObstacleNear
             val t = obstacleStepEntry(x0, y0, x1, y1, obstacle.x, obstacle.y, obstacle.radius, projectile.radius)
             if (t >= 0f) {
                 projectile.life = 0f

@@ -24,6 +24,7 @@ import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.ObstacleKindTuning
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
 import kinetickk.ball.content.api.ANOMALY_KIND_COUNT
 import kinetickk.ball.content.api.SiteKind
@@ -42,6 +43,10 @@ import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
+import kinetickk.ball.content.api.phaseShardSecondsToSolid
+import kinetickk.ball.content.api.phaseShardSolid
+import kinetickk.ball.content.api.ventErupting
+import kinetickk.ball.content.api.ventSecondsToEruption
 import kinetickk.ball.gameplay.interaction.fx.CoreRibbonProjection
 import kinetickk.ball.gameplay.interaction.fx.DamageNumberProjection
 import kinetickk.ball.gameplay.interaction.fx.InteractionFxLimits
@@ -97,6 +102,7 @@ import kotlin.test.Test
  */
 class RedesignShotsWorldTest {
     private val fullShots = System.getenv("KK_SHOTS") == "1"
+    private val only = System.getenv("KK_SHOTS_ONLY")?.split(',')?.toSet()
 
     /** The whole list with `KK_SHOTS=1`, else its first entry. */
     private fun <T> List<T>.matrix(): List<T> = if (fullShots) this else take(1)
@@ -105,7 +111,7 @@ class RedesignShotsWorldTest {
     fun rendersWorldStates() {
         val sizes = listOf(1440 to 810, 844 to 390, 390 to 844)
         val languages = listOf(AppLanguage.English to "en", AppLanguage.Russian to "ru")
-        val scenes = scenes()
+        val scenes = scenes().filter { only == null || it.name in only }
         for ((width, height) in sizes.matrix()) for ((language, code) in languages.matrix()) for (scene in scenes) {
             val roles = scene.roles
             val measurer = CanvasTextMeasurer(
@@ -505,6 +511,11 @@ class RedesignShotsWorldTest {
             structureModel(model(w, h), structure(StructureTemplateId.DERELICT_STATION, 100f, 0f, spent = true))
         }))
         add(Scene("doodle", model = { w, h -> doodle(w, h) }))
+        // Every obstacle kind in each state it shows, beside a rock and a bumper; the HUD adds their minimap marks.
+        add(Scene("terrain", model = { w, h -> terrain(w, h) }))
+        add(Scene("terrain-hud", hud = true, model = { w, h -> terrain(w, h) }))
+        add(Scene("terrain-mono", roles = KkRolePalette.Mono, model = { w, h -> terrain(w, h) }))
+        add(Scene("terrain-protan", roles = KkRolePalette.Protan, model = { w, h -> terrain(w, h) }))
     }
 
     /** A structure of the shots' content centred ([dx], [dy]) from the Core. */
@@ -921,6 +932,48 @@ class RedesignShotsWorldTest {
             enemy(24, EnemyType.DRIFTER, 60f, -233f, 16f),
         )
         return model(w, h, points = listOf(point), enemies = enemies)
+    }
+
+    /**
+     * The terrain scene at 3 s: a Mass Knot and a Repulsor, an accelerator gate, a quiet, a glowing and an erupting
+     * thermal vent, a crystal, a dormant and a half-fused derelict mine, a solid, a ghost and a materialising phase shard,
+     * a rock and a bumper, laid on a grid around the Core (five columns on a wide screen, three on a tall one).
+     */
+    private fun terrain(w: Float, h: Float): GameplayRenderModel {
+        val kinds = ObstacleKindTuning()
+        val elapsed = 3f
+        fun seed(accept: ObstacleKindTuning.(Int) -> Boolean) = (1..10_000).first { kinds.accept(it) }
+        val looks = listOf(
+            Triple(ObstacleKind.GRAVITY_WELL, 34f, 13) to false,
+            Triple(ObstacleKind.GRAVITY_WELL, 34f, 17) to true,
+            Triple(ObstacleKind.ACCEL_GATE, 76f, 9_000) to false,
+            Triple(ObstacleKind.THERMAL_VENT, 64f, seed { ventSecondsToEruption(elapsed, it) in 1.5f..2.5f }) to false,
+            Triple(ObstacleKind.THERMAL_VENT, 64f, seed { ventSecondsToEruption(elapsed, it) in 0.2f..0.4f }) to false,
+            Triple(ObstacleKind.THERMAL_VENT, 64f, seed { ventErupting(elapsed - 0.1f, it) && ventErupting(elapsed + 0.1f, it) }) to false,
+            Triple(ObstacleKind.CRYSTAL, 62f, 21) to false,
+            Triple(ObstacleKind.DERELICT_MINE, 56f, 22) to false,
+            Triple(ObstacleKind.DERELICT_MINE, 50f, 23) to false,
+            Triple(ObstacleKind.PHASE_SHARD, 60f, seed { phaseShardSolid(elapsed, it) }) to false,
+            Triple(ObstacleKind.PHASE_SHARD, 60f, seed { phaseShardSecondsToSolid(elapsed, it) > phaseTelegraphSeconds + 0.2f }) to false,
+            Triple(ObstacleKind.PHASE_SHARD, 60f, seed { phaseShardSecondsToSolid(elapsed, it) in 0.1f..0.35f }) to false,
+            Triple(ObstacleKind.ASTEROID, 58f, 11) to false,
+            Triple(ObstacleKind.BUMPER, 34f, 0) to false,
+        )
+        val columns = if (w >= h) 5 else 3
+        val rows = (looks.size + 1 + columns - 1) / columns
+        // Grid cells row by row, skipping the centre cell where the Core flies.
+        val cells = (0 until rows * columns).filter { it != (rows / 2) * columns + columns / 2 }
+        val obstacles = looks.mapIndexed { index, (look, repels) ->
+            val (kind, radius, shapeSeed) = look
+            val cell = cells[index]
+            ObstacleProjection(
+                id = 900L + index, kind = kind,
+                x = worldX(w, (cell % columns + 0.5f) * w / columns), y = worldY(h, (cell / columns + 0.5f) * h / rows),
+                radius = radius, shapeSeed = shapeSeed, repels = repels,
+                fuseAt = if (kind == ObstacleKind.DERELICT_MINE && shapeSeed == 23) elapsed + kinds.mineFuseSeconds * 0.5f else 0f,
+            )
+        }
+        return model(w, h, elapsed = elapsed).with("obstacles" to obstacles.toImmutableList())
     }
 
     /** Screen position ([x], [y]) at [w] x [h] as a world position (the Core sits at 1000, 1000 at the screen center). */

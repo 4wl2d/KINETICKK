@@ -83,6 +83,19 @@ class HudHotPathAllocationTest {
                     ObstacleProjection(2L, ObstacleKind.UNSTABLE, -900f, 400f, 90f, 8),
                     ObstacleProjection(3L, ObstacleKind.BUMPER, 200f, -700f, 34f, 1),
                     ObstacleProjection(4L, ObstacleKind.ASTEROID, 9_000f, 0f, 120f, 5),
+                    ObstacleProjection(5L, ObstacleKind.GRAVITY_WELL, -300f, -400f, 34f, 6),
+                    ObstacleProjection(6L, ObstacleKind.GRAVITY_WELL, 700f, -200f, 34f, 9, repels = true),
+                    // A gate and two vents whose eruptions come and go over the measured frames.
+                    ObstacleProjection(7L, ObstacleKind.ACCEL_GATE, -600f, -100f, 100f, 9_000),
+                    ObstacleProjection(8L, ObstacleKind.THERMAL_VENT, 400f, 600f, 90f, 4),
+                    ObstacleProjection(9L, ObstacleKind.THERMAL_VENT, -200f, 900f, 70f, 12),
+                    // A crystal, a dormant mine and an armed one ringing its blast.
+                    ObstacleProjection(10L, ObstacleKind.CRYSTAL, 900f, -600f, 80f, 14),
+                    ObstacleProjection(11L, ObstacleKind.DERELICT_MINE, -800f, -700f, 60f, 15),
+                    ObstacleProjection(12L, ObstacleKind.DERELICT_MINE, 100f, 1_200f, 50f, 16, fuseAt = 1_000f),
+                    // Two phase shards whose cycles turn them solid and ghost over the measured frames.
+                    ObstacleProjection(13L, ObstacleKind.PHASE_SHARD, -1_000f, 300f, 80f, 17),
+                    ObstacleProjection(14L, ObstacleKind.PHASE_SHARD, 1_100f, 500f, 60f, 18),
                 ),
                 "pickups" to immutableListOf(
                     PickupProjection(PickupType.KEY, 300f, 300f, 0f, 0f, 20f, 300f, 300f),

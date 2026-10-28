@@ -3,9 +3,14 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.GameplayContentSnapshot
+import kinetickk.ball.content.api.ObstacleMix
 import kinetickk.ball.gameplay.nucleus.model.Obstacle
 import kinetickk.ball.gameplay.nucleus.model.ObstacleField
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
+import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
+import kotlin.math.floor
+import kotlin.math.roundToInt
 
 /**
  * Replaces the generated window with exactly [obstacles] (run-local positions), keeping it centred on the
@@ -32,7 +37,37 @@ internal fun testObstacle(
     radius: Float = 80f,
     kind: ObstacleKind = ObstacleKind.ASTEROID,
     id: Long = (x.toRawBits().toLong() shl 32) xor (y.toRawBits().toLong() and 0xFFFF_FFFFL),
-): Obstacle = Obstacle(id = id, kind = kind, x = x, y = y, radius = radius, shapeSeed = 7)
+    shapeSeed: Int = 7,
+    repels: Boolean = false,
+    fuseAt: Float = 0f,
+): Obstacle = Obstacle(id = id, kind = kind, x = x, y = y, radius = radius, shapeSeed = shapeSeed, fuseAt = fuseAt, repels = repels)
+
+/**
+ * An accelerator gate at ([x], [y]) whose normal points along [angle] radians: its shape seed carries the angle, so
+ * `gateAngle(shapeSeed)` gives it back to within 2π / 65 536.
+ */
+internal fun testGate(x: Float, y: Float, angle: Float, radius: Float = 100f, id: Long = 61L): Obstacle {
+    val turns = angle / 6.2831855f
+    val seed = ((turns - floor(turns)) * 65_536f).roundToInt() and 0xFFFF
+    return testObstacle(x, y, radius, ObstacleKind.ACCEL_GATE, id, shapeSeed = seed)
+}
+
+/** The canonical content with [mix] as the realspace obstacle kind mix. */
+internal fun contentWithObstacleMix(mix: ObstacleMix): GameplayContentSnapshot {
+    val obstacles = canonicalGameplayContent.obstacles
+    return canonicalGameplayContent.copy(obstacles = obstacles.copy(kinds = obstacles.kinds.copy(space = mix)))
+}
+
+/**
+ * This content (the canonical content by default) with every world layer's mix empty: the 0.5.0 field of asteroids and
+ * bumpers on the same layout, each obstacle at its candidate's radius.
+ */
+internal fun GameplayContentSnapshot.withoutObstacleVariants(): GameplayContentSnapshot {
+    val empty = ObstacleMix()
+    return copy(obstacles = obstacles.copy(kinds = obstacles.kinds.copy(space = empty, zenith = empty, nadir = empty, archive = empty)))
+}
+
+internal fun withoutObstacleVariants(): GameplayContentSnapshot = canonicalGameplayContent.withoutObstacleVariants()
 
 /** A quiet run with no generated obstacles at all (the window is empty but current). */
 internal fun MutableGameState.clearObstaclesForTesting() = placeObstaclesForTesting()

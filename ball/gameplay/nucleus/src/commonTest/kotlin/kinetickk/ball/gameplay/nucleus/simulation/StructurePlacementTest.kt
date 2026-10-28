@@ -164,10 +164,13 @@ class StructurePlacementTest {
                 val with = state(denseStructureContent(), seed).apply { teleportCoreForTesting(x, y) }
                 val without = state(structuresDisabledContent, seed).apply { teleportCoreForTesting(x, y) }
                 assertTrue(with.structureField.structures.isNotEmpty())
+                // Footprints read each layout candidate's circle; a variant kind's body sits inside its candidate's.
+                val candidateRadius = state(without.content.withoutObstacleVariants(), seed).apply { teleportCoreForTesting(x, y) }
+                    .obstacleField.obstacles.associate { it.id to it.radius }
                 val kept = with.obstacleField.obstacles.toSet()
                 kept.forEach { assertTrue(it in without.obstacleField.obstacles, "an obstacle moved: $it") }
                 without.obstacleField.obstacles.forEach { obstacle ->
-                    val meets = with.meetsAFootprint(obstacle)
+                    val meets = with.meetsAFootprint(obstacle, candidateRadius.getValue(obstacle.id))
                     assertEquals(meets, obstacle !in kept, "only obstacles meeting an inflated footprint go: $obstacle")
                     if (meets) suppressed++
                 }
@@ -176,7 +179,7 @@ class StructurePlacementTest {
         assertTrue(suppressed > 0, "footprints cleared some obstacles")
     }
 
-    private fun MutableGameState.meetsAFootprint(obstacle: Obstacle): Boolean {
+    private fun MutableGameState.meetsAFootprint(obstacle: Obstacle, radius: Float = obstacle.radius): Boolean {
         val x = worldOriginX + obstacle.x
         val y = worldOriginY + obstacle.y
         val clearance = content.structures.obstacleClearance
@@ -184,7 +187,7 @@ class StructurePlacementTest {
             val placement = structurePlacement(cellX, cellY) ?: continue
             val dx = max(0.0, abs(x - placement.absoluteX) - placement.halfWidth - clearance)
             val dy = max(0.0, abs(y - placement.absoluteY) - placement.halfHeight - clearance)
-            if (sqrt(dx * dx + dy * dy) < obstacle.radius) return true
+            if (sqrt(dx * dx + dy * dy) < radius) return true
         }
         return false
     }
