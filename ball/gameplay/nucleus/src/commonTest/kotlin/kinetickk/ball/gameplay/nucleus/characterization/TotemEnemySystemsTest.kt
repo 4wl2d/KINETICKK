@@ -295,6 +295,12 @@ class TotemEnemySystemsTest {
         // Rebirth-gated kinds never appear at tier 0, however late; scheduled kinds never take ordinary weight.
         listOf(EnemyType.PHANTOM, EnemyType.BROODMOTHER, EnemyType.REFLECTOR, EnemyType.ELITE, EnemyType.HERALD, EnemyType.ARCHITECT)
             .forEach { type -> assertEquals(0f, engine.weightAt(700f, type), "$type at tier 0") }
+        // Habitat-only kinds take no open-space weight, and owner-spawned mini and secret bosses no ordinary weight.
+        listOf(
+            EnemyType.SENTRY, EnemyType.CRAWLER, EnemyType.SERAPH, EnemyType.CHOIR, EnemyType.IMP, EnemyType.HOUND,
+            EnemyType.CIPHER, EnemyType.MIRROR, EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN, EnemyType.THRONE,
+            EnemyType.PYRE_HERALD, EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT,
+        ).forEach { type -> assertEquals(0f, engine.weightAt(700f, type), "$type in open space") }
     }
 
     @Test

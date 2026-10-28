@@ -86,6 +86,7 @@ class SpawnDirectorPacingTest {
             state.drive(600f) { state.enemies.forEach { types += it.type } }
             assertTrue(types.none { it == EnemyType.PHANTOM || it == EnemyType.BROODMOTHER || it == EnemyType.REFLECTOR }, "seed=$seed $types")
             assertTrue(EnemyType.HERALD !in types, "seed=$seed: no Herald below tier 2")
+            assertTrue(types.none { it in HABITAT_ONLY_OR_OWNER_SPAWNED }, "seed=$seed: realspace keeps to its roster: $types")
             assertTrue(types.containsAll(listOf(EnemyType.SWARMLING, EnemyType.LANCER, EnemyType.SNIPER)), "seed=$seed $types")
         }
     }
@@ -125,5 +126,14 @@ class SpawnDirectorPacingTest {
             takeVisualFxCues()
             takeSoundCues()
         }
+    }
+
+    private companion object {
+        /** Kinds of the structure and dimension habitats, and the mini and secret bosses their owners spawn. */
+        val HABITAT_ONLY_OR_OWNER_SPAWNED = setOf(
+            EnemyType.SENTRY, EnemyType.CRAWLER, EnemyType.SERAPH, EnemyType.CHOIR, EnemyType.IMP, EnemyType.HOUND,
+            EnemyType.CIPHER, EnemyType.MIRROR, EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN, EnemyType.THRONE,
+            EnemyType.PYRE_HERALD, EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT,
+        )
     }
 }
