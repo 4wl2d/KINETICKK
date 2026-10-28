@@ -51,7 +51,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--baseline", nargs="+", required=True, type=Path, help="Baseline fork JSON files")
     parser.add_argument("--candidate", nargs="+", required=True, type=Path, help="Candidate fork JSON files")
     parser.add_argument("--baseline-name", default="main")
-    parser.add_argument("--candidate-name", default="feature/pokeball-full-refactor")
+    parser.add_argument("--candidate-name", default="candidate")
     parser.add_argument("--expected-baseline-revision")
     parser.add_argument("--expected-candidate-revision")
     parser.add_argument("--expected-baseline-label")

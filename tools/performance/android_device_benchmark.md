@@ -34,7 +34,7 @@ four devices, then run:
 python3 tools/performance/android_device_benchmark.py \
   --apk app/android/build/outputs/apk/benchmark/app-android-benchmark.apk \
   --output build/performance/android-device/current \
-  --label feature/pokeball-full-refactor \
+  --label feature/worlds-0.6.0 \
   --forks 3
 ```
 
@@ -67,7 +67,7 @@ python3 tools/performance/android_device_benchmark.py \
   --apk app/android/build/outputs/apk/benchmark/app-android-benchmark.apk \
   --flow tools/performance/android_gameplay_telemetry_flow.json \
   --output build/performance/android-device/telemetry-current \
-  --label feature/pokeball-full-refactor-telemetry \
+  --label feature/worlds-0.6.0-telemetry \
   --forks 3
 ```
 
