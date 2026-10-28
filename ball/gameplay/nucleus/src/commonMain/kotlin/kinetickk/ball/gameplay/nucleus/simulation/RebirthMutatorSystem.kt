@@ -42,8 +42,8 @@ internal const val BLACKOUT_DATA_LIFE_SECONDS: Float = 10f
 /** The Singularity Architect fires its enraged volleys this much more often. */
 internal const val ARCHITECT_ENRAGE_ATTACK_RATE: Float = 1.45f
 
-/** Ordinary enemies are neither Elites nor boss class (Architect, Herald). */
-internal val Enemy.isOrdinary: Boolean get() = !isElite && !isBoss && !isMiniBoss
+/** Ordinary enemies are neither Elites nor boss class (the Architect, mini-bosses such as the Herald, secret bosses). */
+internal val Enemy.isOrdinary: Boolean get() = !isElite && !isBossClass
 
 /** True while an Armored Vanguard plate still guards [this] against weapons. */
 internal val Enemy.armorIntact: Boolean get() = armored && !armorCracked
@@ -126,12 +126,11 @@ internal fun MutableGameState.blackoutDataLife(life: Float): Float =
     if (runMutatorActive(RebirthMutator.BLACKOUT)) min(life, BLACKOUT_DATA_LIFE_SECONDS) else life
 
 /** R10: the Architect's last phase index: 3 (a fourth, enraged phase) under Singularity, else 2. */
-internal fun MutableGameState.architectFinalPhase(): Int =
-    if (runMutatorActive(RebirthMutator.SINGULARITY)) ARCHITECT_FINAL_PHASE + 1 else ARCHITECT_FINAL_PHASE
+internal fun MutableGameState.architectFinalPhase(): Int = bossFinalPhase(architectSpec())
 
 /** R10: true while the Singularity Architect is in its enraged fourth phase. */
 internal fun MutableGameState.architectEnraged(enemy: Enemy): Boolean =
-    enemy.isBoss && enemy.phase > ARCHITECT_FINAL_PHASE
+    enemy.isBoss && bossEnraged(enemy, architectSpec())
 
 /** R10: the Singularity Architect arrives with a Herald escort, the run's third and last Herald. */
 internal fun MutableGameState.spawnSingularityEscort() {

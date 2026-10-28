@@ -113,7 +113,7 @@ internal fun MutableGameState.enemyMotionScale(enemy: Enemy): Float {
     val chill = stacks(enemy, StatusElement.CRYO)
     if (chill > 0) {
         val slow = min(0.63f, chill * content.build.element(StatusElement.CRYO).perStack * build.potency(StatusElement.CRYO))
-        scale *= 1f - if (enemy.isBoss || enemy.isMiniBoss) slow * 0.5f else slow
+        scale *= 1f - if (enemy.isBossClass) slow * 0.5f else slow
     }
     if (stasisActive() && distanceSquared(enemy.x, enemy.y, coreX, coreY) <= square(stasisRadius())) {
         scale *= 1f - stasisSlow()
@@ -496,7 +496,7 @@ internal fun MutableGameState.hollowOutputFactor(enemy: Enemy?): Float {
 }
 
 internal fun maxHpProcCooldown(enemy: Enemy): Float = when {
-    enemy.isBoss -> 4f
+    enemy.isBoss || enemy.isSecretBoss -> 4f
     enemy.isElite || enemy.isMiniBoss -> 2f
     else -> 1f
 }
@@ -646,17 +646,17 @@ private fun MutableGameState.burnBlackfire(enemy: Enemy, delta: Float) {
 }
 
 /**
- * Freezes [enemy] the way a Freeze Break does: ordinary enemies and Elites for [seconds], the Architect for half
- * a second, the Herald not at all (its Break still rearms and leaves it Brittle). The target stops, turns Brittle
- * and resists the next Freeze for a while.
+ * Freezes [enemy] the way a Freeze Break does: ordinary enemies and Elites for [seconds], the Architect and secret
+ * bosses for half a second, mini-bosses such as the Herald not at all (its Break still rearms and leaves it Brittle).
+ * The target stops, turns Brittle and resists the next Freeze for a while.
  */
 internal fun MutableGameState.freeze(enemy: Enemy, seconds: Float) {
     val immunity = when {
-        enemy.isBoss -> ARCHITECT_FREEZE_IMMUNITY_SECONDS
+        enemy.isBoss || enemy.isSecretBoss -> ARCHITECT_FREEZE_IMMUNITY_SECONDS
         enemy.isElite -> ELITE_FREEZE_IMMUNITY_SECONDS
         else -> FREEZE_IMMUNITY_SECONDS
     }
-    val duration = if (enemy.isMiniBoss) 0f else if (enemy.isBoss) 0.5f else seconds
+    val duration = if (enemy.isMiniBoss) 0f else if (enemy.isBoss || enemy.isSecretBoss) 0.5f else seconds
     enemy.status[StatusCell.FROZEN_UNTIL] = elapsed + duration
     enemy.status[StatusCell.FREEZE_IMMUNE_UNTIL] = elapsed + duration + immunity
     enemy.status[StatusCell.REARM_AT + StatusElement.CRYO.ordinal] = elapsed + duration + BREAK_REARM_SECONDS
@@ -670,7 +670,7 @@ internal fun MutableGameState.freeze(enemy: Enemy, seconds: Float) {
 internal fun MutableGameState.thaw(enemy: Enemy) {
     if (!isFrozen(enemy)) return
     val immunity = when {
-        enemy.isBoss -> ARCHITECT_FREEZE_IMMUNITY_SECONDS
+        enemy.isBoss || enemy.isSecretBoss -> ARCHITECT_FREEZE_IMMUNITY_SECONDS
         enemy.isElite -> ELITE_FREEZE_IMMUNITY_SECONDS
         else -> FREEZE_IMMUNITY_SECONDS
     }
@@ -803,7 +803,7 @@ internal fun MutableGameState.affinityBits(enemy: Enemy): Int {
         armored = impact < 1f,
         fragile = impact > 1f,
         shifting = isShifting(enemy),
-        phase = if (enemy.isBoss || enemy.isMiniBoss) enemy.phase else 0,
+        phase = if (enemy.isBossClass) enemy.phase else 0,
         affix = enemy.affix?.ordinal ?: EnemyAffinity.NONE,
         champion = enemy.champion,
     )

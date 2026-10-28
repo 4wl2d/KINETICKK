@@ -321,7 +321,7 @@ internal fun MutableGameState.updateAegis(enemy: Enemy, dx: Float, dy: Float, di
         1.5f,
         delta,
     )
-    // Tether the three nearest allies in range; the Herald, the Architect and other Aegises are never linked.
+    // Tether the three nearest allies in range; boss-class kinds and other Aegises are never linked.
     var firstIndex = -1
     var secondIndex = -1
     var thirdIndex = -1
@@ -331,7 +331,7 @@ internal fun MutableGameState.updateAegis(enemy: Enemy, dx: Float, dy: Float, di
     val rangeSquared = AEGIS_LINK_RANGE * AEGIS_LINK_RANGE
     for (index in enemies.indices) {
         val ally = enemies[index]
-        if (ally === enemy || !ally.alive || ally.isBoss || ally.isMiniBoss || ally.type == EnemyType.AEGIS) continue
+        if (ally === enemy || !ally.alive || ally.isBossClass || ally.type == EnemyType.AEGIS) continue
         val squared = distanceSquared(enemy.x, enemy.y, ally.x, ally.y)
         if (squared > rangeSquared) continue
         if (squared < first) {
