@@ -103,21 +103,22 @@ internal fun MutableGameState.personalityTypeMultiplier(type: EnemyType): Float 
     return definition.typeMultipliers[type.ordinal] * if (featured) definition.aspectWeight else 1f
 }
 
-/** The onslaught theme's weight: [type] is the current surge's featured kind. */
+/** The onslaught theme's weight: [type] is the current surge's featured kind (never during the Architect's fight). */
 internal fun MutableGameState.surgeThemeMultiplier(type: EnemyType): Float =
-    if (type.ordinal == surgeThemeType) content.variety.director.surgeThemeWeight else 1f
+    if (type.ordinal == surgeThemeType && !bossSpawned) content.variety.director.surgeThemeWeight else 1f
 
 /**
  * A new phase: a surge counts itself and, with enough eligible ordinary kinds, features one of them, picked by weight
  * (personality included, recency and the old theme left out) from a stateless hash of its index, and announces it.
- * Every other phase has no theme.
+ * Every other phase has no theme, and neither has a surge of the Architect's fight (it keeps its authored adds; a
+ * dimension's surges keep their habitat's themes).
  */
 internal fun MutableGameState.onDirectorPhaseStarted(phase: SpawnDirectorPhase) {
     surgeThemeType = -1
     if (phase != SpawnDirectorPhase.SURGE) return
     surgeIndex++
     val director = content.variety.director
-    if (!director.surgeThemesEnabled) return
+    if (!director.surgeThemesEnabled || bossSpawned) return
     val roster = content.enemies
     var eligible = 0
     var total = 0f
