@@ -808,7 +808,7 @@ private fun DrawScope.drawEdgeMarker(x: Float, y: Float, distance: Float, icon: 
 
 /**
  * An edge marker's color: volt for the player's own course (totem, circuit, race), threat only for a bounty, the void
- * hue for the sigil, mute for the quiet ambient sites, bone for rules and rifts.
+ * hue for the sigil, mute for the quiet ambient sites, bone for rules, rifts, event signals and structure entrances.
  */
 internal fun edgeMarkerColor(icon: EdgeMarkerIcon, roles: KkRolePalette): Color = when (icon) {
     EdgeMarkerIcon.TOTEM, EdgeMarkerIcon.RESONANT_CIRCUIT, EdgeMarkerIcon.RACE -> roles.you
@@ -817,7 +817,7 @@ internal fun edgeMarkerColor(icon: EdgeMarkerIcon, roles: KkRolePalette): Color 
     EdgeMarkerIcon.BOUNTY -> roles.threat
     EdgeMarkerIcon.CACHE, EdgeMarkerIcon.QUIET -> Kk.Mute
     EdgeMarkerIcon.SIGIL -> sigilColor(roles)
-    // Their lanes pick their colors; bone until then.
+    // A signal and a structure entrance are bone by their lanes' specs; the halo still awaits its color.
     EdgeMarkerIcon.SIGNAL, EdgeMarkerIcon.STRUCTURE, EdgeMarkerIcon.HALO -> Kk.Bone
 }
 

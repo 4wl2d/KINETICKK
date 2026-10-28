@@ -38,7 +38,7 @@ internal enum class SpawnDirectorPhase(val rate: Float, val minimumSeconds: Floa
 
 internal enum class SpawnEventKind { SINGLE, PACK, FLANK, SWARM, WALL, ENCIRCLE, AMBUSH }
 
-/** An ambush waits for the Core to hold this share of the obstacle damage-start speed. */
+/** An ambush waits for the Core to hold this share of the obstacle ricochet speed ([obstacleRicochetSpeed]). */
 internal const val AMBUSH_SPEED_FRACTION: Float = 0.75f
 internal const val AMBUSH_HOLD_SECONDS: Float = 1.5f
 internal const val AMBUSH_COOLDOWN_SECONDS: Float = 20f
