@@ -401,12 +401,17 @@ fun rotateQuarterY(x: Float, y: Float, quarter: Int): Float = when (quarter and 
 
 /**
  * Bootstrap cross-check against the roster and the obstacle window: every fixed garrison kind is an ordinary kind or
- * a mini-boss other than the Herald, an ordinary STRUCTURE kind opens at tier 0 from the first second, the obstacle
- * window spans at most three cells per axis (so at most nine structures) and keeps the dungeon's structure inside it.
+ * a mini-boss other than the Herald, a room garrisons at most one mini-boss (its garrison is one encounter, which
+ * holds at most one boss), an ordinary STRUCTURE kind opens at tier 0 from the first second, the obstacle window spans
+ * at most three cells per axis (so at most nine structures) and keeps the dungeon's structure inside it.
  */
 fun validateStructurePolicy(policy: StructurePolicy, enemies: List<EnemyDefinition>, obstacles: ObstacleTuning) {
     policy.templates.forEach { template ->
         template.rooms.forEach { room ->
+            val miniBosses = room.garrison.sumOf { entry ->
+                if (enemies.firstOrNull { it.type == entry.type }?.rank == EnemyRank.MINI_BOSS) entry.count else 0
+            }
+            require(miniBosses <= 1) { "${template.name} garrisons $miniBosses mini-bosses in one room; at most one mini-boss" }
             room.garrison.forEach { entry ->
                 val type = entry.type ?: return@forEach
                 val definition = enemies.firstOrNull { it.type == type }
