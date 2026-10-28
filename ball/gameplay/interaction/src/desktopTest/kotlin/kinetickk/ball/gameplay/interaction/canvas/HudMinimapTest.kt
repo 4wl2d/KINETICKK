@@ -197,6 +197,39 @@ class HudMinimapTest {
         assertTrue(share(erupting.at(ventX, y), roles.heat) > 0.35f, "filled in heat while erupting")
     }
 
+    @Test
+    fun crystalsAreCryoDotsAndMinesThreatDotsThatRingTheirBlastOnceArmed() {
+        val roles = KkRolePalette.Default
+        val cryo = roles.element(1)
+        val base = hudTestModel().with("velocityX" to 0f, "velocityY" to 0f)
+        val range = base.minimapRange * 0.25f
+        val kinds = base.content.obstacles.kinds
+        // A crystal half the range east of the Core, a mine half the range west.
+        val crystal = ObstacleProjection(1L, ObstacleKind.CRYSTAL, base.coreX + range * 0.5f, base.coreY, 90f, 3)
+        val dormant = ObstacleProjection(2L, ObstacleKind.DERELICT_MINE, base.coreX - range * 0.5f, base.coreY, 60f, 5)
+        val armed = dormant.copy(fuseAt = 2f)
+        fun frame(vararg obstacles: ObstacleProjection) =
+            render(base.with("minimapRange" to range, "elapsed" to 1.7f, "obstacles" to immutableListOf(*obstacles)), 1_440, 810)
+        val empty = frame()
+        val quiet = frame(crystal, dormant)
+        val ringing = frame(crystal, armed)
+        val minimap = assertNotNull(HudLayoutProbe.rect(HudBlock.MINIMAP))
+        val half = minimap.width * 0.5f
+        val scale = half / range
+        val y = minimap.center.y
+        val crystalX = minimap.center.x + half * 0.5f
+        val mineX = minimap.center.x - half * 0.5f
+        assertTrue(tinted(quiet.at(crystalX, y), cryo) && quiet.at(crystalX, y).blue > quiet.at(crystalX, y).red,
+            "a crystal is a Cryo dot")
+        assertTrue(tinted(quiet.at(mineX, y), roles.threat) && quiet.at(mineX, y).red - quiet.at(mineX, y).green > 0.3f,
+            "a mine is a threat dot")
+        val blast = kinds.mineBlastRadius * scale
+        assertTrue(blast < half * 0.5f, "the blast ring stays on the map: $blast")
+        assertEquals(empty.at(mineX, y - blast), quiet.at(mineX, y - blast), "a dormant mine draws no ring")
+        assertTrue((-1..1).any { dy -> share(ringing.at(mineX, y - blast + dy), roles.threat) > 0.25f }, "an armed mine rings its blast")
+        assertEquals(empty.at(mineX, y - blast * 0.6f), ringing.at(mineX, y - blast * 0.6f), "open between the dot and the ring")
+    }
+
     private fun drawHud(model: GameplayRenderModel, width: Float, height: Float, density: Float, textScale: Float) {
         val measurer = measurer(density, textScale)
         CanvasDrawScope().draw(Density(density), LayoutDirection.Ltr, Canvas(ImageBitmap(64, 64)), Size(width, height)) {

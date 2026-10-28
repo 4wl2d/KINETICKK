@@ -575,6 +575,10 @@ class WorldHotPathAllocationTest {
                     busyVentSeed { ventSecondsToEruption(BUSY_ELAPSED, it) in 0.2f..0.4f }),
                 ObstacleProjection(11L, ObstacleKind.THERMAL_VENT, CORE - 120f, CORE - 80f, 110f,
                     busyVentSeed { ventErupting(BUSY_ELAPSED - 0.1f, it) && ventErupting(BUSY_ELAPSED + 0.1f, it) }),
+                // A crystal, a dormant mine and a half-fused one blinking inside its blast ring.
+                ObstacleProjection(12L, ObstacleKind.CRYSTAL, CORE + 200f, CORE + 330f, 90f, 21),
+                ObstacleProjection(13L, ObstacleKind.DERELICT_MINE, CORE - 420f, CORE + 330f, 64f, 22),
+                ObstacleProjection(14L, ObstacleKind.DERELICT_MINE, CORE + 470f, CORE - 330f, 50f, 23, fuseAt = BUSY_ELAPSED + 0.3f),
             ) + List(30) { index ->
                 ObstacleProjection(100L + index, if (index % 5 == 0) ObstacleKind.UNSTABLE else ObstacleKind.ASTEROID,
                     CORE - 450f + (index % 6) * 180f, CORE - 260f + (index / 6) * 130f, 46f + index * 3.47f, 200 + index * 13)

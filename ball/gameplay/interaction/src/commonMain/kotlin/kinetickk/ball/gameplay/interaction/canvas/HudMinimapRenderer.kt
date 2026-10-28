@@ -167,9 +167,11 @@ internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMe
                 ObstacleKind.ACCEL_GATE -> drawMinimapAccelGate(obstacle, Offset(x, y), scale, dot, engine.content.obstacles.kinds, roles)
                 ObstacleKind.THERMAL_VENT ->
                     drawMinimapThermalVent(obstacle, Offset(x, y), radius, dot, engine.renderElapsed, engine.content.obstacles.kinds, roles)
+                ObstacleKind.CRYSTAL -> drawMinimapCrystal(Offset(x, y), radius, roles)
+                ObstacleKind.DERELICT_MINE ->
+                    drawMinimapDerelictMine(obstacle, Offset(x, y), radius, scale, engine.content.obstacles.kinds, roles)
                 // The 0.6.0 kinds show as bone dots until their own marks land; no run generates them yet.
-                ObstacleKind.CRYSTAL, ObstacleKind.DERELICT_MINE, ObstacleKind.PHASE_SHARD,
-                -> drawCircle(Kk.Bone.copy(alpha = 0.32f), radius, Offset(x, y))
+                ObstacleKind.PHASE_SHARD -> drawCircle(Kk.Bone.copy(alpha = 0.32f), radius, Offset(x, y))
                 ObstacleKind.UNSTABLE -> drawCircle(roles.heat.copy(alpha = 0.7f), radius, Offset(x, y))
                 ObstacleKind.BUMPER -> drawCircle(roles.pol.copy(alpha = 0.8f), radius, Offset(x, y), style = kkStroke(max(1f, dot * 0.6f)))
             }

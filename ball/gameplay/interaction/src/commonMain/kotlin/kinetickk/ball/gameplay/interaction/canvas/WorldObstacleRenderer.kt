@@ -43,9 +43,10 @@ internal fun DrawScope.drawObstacles(engine: GameplayRenderModel, shakeX: Float,
             ObstacleKind.GRAVITY_WELL -> drawGravityWell(obstacle, center, time, kinds, roles)
             ObstacleKind.ACCEL_GATE -> drawAccelGate(obstacle, center, time, kinds, roles)
             ObstacleKind.THERMAL_VENT -> drawThermalVent(obstacle, center, time, kinds, roles)
+            ObstacleKind.CRYSTAL -> drawCrystal(obstacle, center, roles)
+            ObstacleKind.DERELICT_MINE -> drawDerelictMine(obstacle, center, time, kinds, roles)
             // The 0.6.0 kinds read as asteroids until their own looks land; no run generates them yet.
-            ObstacleKind.CRYSTAL, ObstacleKind.DERELICT_MINE, ObstacleKind.PHASE_SHARD,
-            -> drawAsteroid(obstacle, center, time, roles)
+            ObstacleKind.PHASE_SHARD -> drawAsteroid(obstacle, center, time, roles)
         }
     }
 }
@@ -89,6 +90,11 @@ internal object ObstaclePaths {
     private const val CAPACITY = 128
     private const val OUTLINE = 0
     private const val CRACKS = 1
+    private const val FACETS = 2
+    private const val FACET_LINES = 3
+    private const val MINE_PIPS = 5
+    private const val MINE_STUBS = 6
+    private const val MINE_LIGHTS = 7
     private const val GATE_BARS = 8
     private val seeds = IntArray(CAPACITY)
     private val radii = FloatArray(CAPACITY) { -1f }
@@ -105,6 +111,21 @@ internal object ObstaclePaths {
     /** The four bars across an accelerator gate with shape [seed] and [halfSpan] (keyed by the half-span). */
     fun gateBars(seed: Int, halfSpan: Float): Path = get(GATE_BARS, seed, halfSpan)
 
+    /** The facet hexagon of a crystal with [seed] and [radius]. */
+    fun crystalFacets(seed: Int, radius: Float): Path = get(FACETS, seed, radius)
+
+    /** The inner facet and spokes of a crystal with [seed] and [radius]. */
+    fun crystalFacetLines(seed: Int, radius: Float): Path = get(FACET_LINES, seed, radius)
+
+    /** The three pip discs of a derelict mine with [seed] and [radius]. */
+    fun minePips(seed: Int, radius: Float): Path = get(MINE_PIPS, seed, radius)
+
+    /** The stubs around a derelict mine's pips. */
+    fun mineStubs(seed: Int, radius: Float): Path = get(MINE_STUBS, seed, radius)
+
+    /** The warning lights at a derelict mine's pips. */
+    fun mineLights(seed: Int, radius: Float): Path = get(MINE_LIGHTS, seed, radius)
+
     /** Corner count of an outline: 8..12 from the seed. */
     fun corners(seed: Int): Int = 8 + ((seed % 5) + 5) % 5
 
@@ -116,6 +137,11 @@ internal object ObstaclePaths {
         when (kind) {
             OUTLINE -> buildOutline(path, seed, radius)
             CRACKS -> buildCracks(path, seed, radius)
+            FACETS -> buildCrystalFacets(path, seed, radius)
+            FACET_LINES -> buildCrystalFacetLines(path, seed, radius)
+            MINE_PIPS -> buildMinePips(path, seed, radius)
+            MINE_STUBS -> buildMineStubs(path, seed, radius)
+            MINE_LIGHTS -> buildMineLights(path, seed, radius)
             else -> buildGateBars(path, seed, radius)
         }
         kinds[next] = kind

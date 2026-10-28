@@ -513,6 +513,7 @@ internal fun MutableGameState.shatterCrystal(index: Int, crystal: Obstacle, impa
     shockwave(crystal.x, crystal.y, CRYSTAL_RING_SECONDS, crystal.radius * CRYSTAL_RING_SPAN, cryo)
     emitSound(GameplayAudioCue.IMPACT)
     screenShake = max(screenShake, CRYSTAL_SHAKE)
+    if (phase != GamePhase.RUNNING) return
     fireClauses(
         EffectTrigger.SHATTER, null, impactPower(impact), obstacle = ObstacleKind.CRYSTAL,
         originX = crystal.x, originY = crystal.y,

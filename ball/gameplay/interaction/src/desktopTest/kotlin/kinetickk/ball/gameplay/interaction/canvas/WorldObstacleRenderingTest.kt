@@ -285,6 +285,150 @@ class WorldObstacleRenderingTest {
         }
     }
 
+    /** A crystal's facet hexagon lies on or just inside its collision circle, like an asteroid's outline, at any rotation. */
+    @Test
+    fun crystalFacetsHugTheCollisionCircle() {
+        val radius = 100f
+        val measure = PathMeasure()
+        var closest = Float.MAX_VALUE
+        var farthest = 0f
+        for (index in 0 until 300) {
+            measure.setPath(ObstaclePaths.crystalFacets(index * 104_729 - 31_000_000, radius), forceClosed = true)
+            val length = measure.length
+            for (sample in 0 until 360) {
+                val distance = measure.getPosition(length * sample / 360f).getDistance()
+                closest = minOf(closest, distance)
+                farthest = maxOf(farthest, distance)
+            }
+        }
+        assertTrue(closest >= radius * 0.97f, "an edge sags inside the collision circle: $closest")
+        assertTrue(farthest <= radius * ObstaclePaths.OUTLINE_MAX_REACH, "a corner reaches too far past it: $farthest")
+    }
+
+    /**
+     * A crystal: an ink hexagon with a Cryo rim at its edges, an inner facet and Cryo spokes out to alternate corners only,
+     * all within its outline reach; at density 1 and 2.
+     */
+    @Test
+    fun crystalsDrawAnInkHexagonWithACryoRimAndSpokesToAlternateCorners() {
+        val cryo = KkRolePalette.Default.element(1)
+        // Cryo, not bone: bone also lies more than half way toward the pale Cryo from the ink, but Cryo is blue.
+        fun cryoLike(color: Color, share: Float, blue: Float) = leans(color, cryo, share) && color.blue - color.red > blue
+        for (density in listOf(1f, 2f)) {
+            val base = hudTestModel(960f, 600f).with("viewportDensity" to density, "uiScale" to density)
+            val radius = 90f
+            val seed = 21
+            val centerX = (480f - 180f) * density
+            val centerY = 300f * density
+            val crystal = ObstacleProjection(12L, ObstacleKind.CRYSTAL, base.cameraX - 180f, base.cameraY, radius, seed)
+            val empty = renderWorld(base.with("obstacles" to immutableListOf<ObstacleProjection>()), density)
+            val drawn = renderWorld(base.with("obstacles" to immutableListOf(crystal)), density)
+            val label = "crystal @$density"
+            var farthest = 0f
+            for (y in 0 until empty.height) {
+                for (x in 0 until empty.width) {
+                    if (empty[x, y] != drawn[x, y]) farthest = maxOf(farthest, kotlin.math.hypot(x + 0.5f - centerX, y + 0.5f - centerY))
+                }
+            }
+            assertTrue(farthest <= (radius * ObstaclePaths.OUTLINE_MAX_REACH + 2f) * density, "$label reaches $farthest")
+            assertTrue(near(drawn.at(centerX, centerY), Kk.Ink2), "$label ink body")
+            val angle = crystalFacetAngle(seed)
+            fun pixel(direction: Float, reach: Float): Pair<Int, Int> =
+                (centerX + kotlin.math.cos(direction) * reach * density).toInt() to (centerY + kotlin.math.sin(direction) * reach * density).toInt()
+            /** The pixels within one of the point [reach] from the centre along [direction]. */
+            fun around(map: PixelMap, direction: Float, reach: Float): List<Color> {
+                val (x, y) = pixel(direction, reach)
+                return (-1..1).flatMap { dy -> (-1..1).map { dx -> map[x + dx, y + dy] } }
+            }
+            val step = 2f * kotlin.math.PI.toFloat() / CRYSTAL_CORNERS
+            val edge = angle + step * 0.5f
+            assertTrue(around(drawn, edge, radius * CRYSTAL_APOTHEM).any { cryoLike(it, 0.5f, 0.1f) }, "$label Cryo rim at an edge")
+            assertTrue(around(drawn, edge, radius * CRYSTAL_APOTHEM - 6f).all { near(it, Kk.Ink2) }, "$label filled up to its rim")
+            assertEquals(around(empty, edge, radius * CRYSTAL_APOTHEM + 4f), around(drawn, edge, radius * CRYSTAL_APOTHEM + 4f),
+                "$label open just past an edge")
+            // Spokes run to the first, third and fifth corners; the others stay plain ink.
+            val spokeReach = radius * 0.72f * 1.1547005f
+            for (corner in 0 until CRYSTAL_CORNERS) {
+                val pixels = around(drawn, angle + corner * step, spokeReach)
+                if (corner % 2 == 0) {
+                    assertTrue(pixels.any { cryoLike(it, 0.25f, 0.04f) }, "$label spoke to corner $corner")
+                } else {
+                    assertTrue(pixels.all { near(it, Kk.Ink2) }, "$label no spoke to corner $corner")
+                }
+            }
+        }
+    }
+
+    /**
+     * A derelict mine: three ink pips with threat stubs and lights and no body (its middle stays open), within its body
+     * circle while dormant; armed, a threat ring at its blast's edge, reaching in from off screen too, and its look moves
+     * from frame to frame as its lights blink.
+     */
+    @Test
+    fun derelictMinesDrawThreatPipsWithoutABodyAndRingTheirBlastOnceArmed() {
+        val threat = KkRolePalette.Default.threat
+        // Threat, not bone: bone also projects onto the threat hue from the ink, but threat is red over green.
+        fun threatLike(color: Color, share: Float, red: Float) = leans(color, threat, share) && color.red - color.green > red
+        for (density in listOf(1f, 2f)) {
+            val base = hudTestModel(960f, 600f).with("viewportDensity" to density, "uiScale" to density)
+            val kinds = base.content.obstacles.kinds
+            val radius = 60f
+            val seed = 22
+            val centerX = (480f - 180f) * density
+            val centerY = 300f * density
+            val dormant = ObstacleProjection(13L, ObstacleKind.DERELICT_MINE, base.cameraX - 180f, base.cameraY, radius, seed)
+            fun frames(mine: ObstacleProjection, time: Float): Pair<PixelMap, PixelMap> {
+                val timed = base.with("elapsed" to time)
+                return renderWorld(timed.with("obstacles" to immutableListOf<ObstacleProjection>()), density) to
+                    renderWorld(timed.with("obstacles" to immutableListOf(mine)), density)
+            }
+            fun farthest(empty: PixelMap, drawn: PixelMap): Float {
+                var farthest = 0f
+                for (y in 0 until empty.height) {
+                    for (x in 0 until empty.width) {
+                        if (empty[x, y] != drawn[x, y]) farthest = maxOf(farthest, kotlin.math.hypot(x + 0.5f - centerX, y + 0.5f - centerY))
+                    }
+                }
+                return farthest
+            }
+            val label = "mine @$density"
+            // At the top of the dormant lights' slow breath.
+            val (empty, quiet) = frames(dormant, kotlin.math.PI.toFloat() / 4f)
+            assertTrue(farthest(empty, quiet) <= (radius + 2f) * density, "$label stays within its body while dormant")
+            assertEquals(empty.at(centerX, centerY), quiet.at(centerX, centerY), "$label has no body")
+            forEachMinePip(seed, radius) { x, y, angle ->
+                val px = centerX + x * density
+                val py = centerY + y * density
+                assertTrue(threatLike(quiet.at(px, py), 0.4f, 0.3f), "$label threat light at a pip")
+                assertTrue(near(quiet.at(px + kotlin.math.cos(angle) * 5f * density, py + kotlin.math.sin(angle) * 5f * density), Kk.Ink2),
+                    "$label ink pip")
+                val stub = angle + kotlin.math.PI.toFloat() / 4f
+                val reach = (MINE_STUB_TO + MINE_PIP_RADIUS) * 0.5f * density
+                val stubX = (px + kotlin.math.cos(stub) * reach).toInt()
+                val stubY = (py + kotlin.math.sin(stub) * reach).toInt()
+                assertTrue((-1..1).any { dy -> (-1..1).any { dx -> threatLike(quiet[stubX + dx, stubY + dy], 0.3f, 0.2f) } },
+                    "$label threat stub")
+            }
+            // Armed half way through its fuse: a ring at the blast's edge.
+            val armedAt = 2f
+            val armed = dormant.copy(fuseAt = armedAt + kinds.mineFuseSeconds * 0.5f)
+            val (armedEmpty, ringing) = frames(armed, armedAt)
+            val reach = farthest(armedEmpty, ringing)
+            assertTrue(reach in (kinds.mineBlastRadius - 2f) * density..(kinds.mineBlastRadius + 2f) * density,
+                "$label armed rings its blast: $reach")
+            val ringY = (centerY - kinds.mineBlastRadius * density).toInt()
+            assertTrue((-1..1).any { dy -> threatLike(ringing[centerX.toInt(), ringY + dy], 0.25f, 0.15f) }, "$label threat ring")
+            val (_, later) = frames(armed, armedAt + 1f / 48f)
+            assertTrue((0 until ringing.height).any { y -> (0 until ringing.width).any { x -> ringing[x, y] != later[x, y] } },
+                "$label an armed mine's frames differ")
+            // An armed mine just off the left edge, its pips out of view: its ring still reaches in.
+            val offscreen = armed.copy(x = base.cameraX - 480f - radius - 30f)
+            val (edgeEmpty, edge) = frames(offscreen, armedAt)
+            assertTrue((0 until edge.height).any { y -> edge[(2f * density).toInt(), y] != edgeEmpty[(2f * density).toInt(), y] },
+                "$label its ring reaches in from off screen")
+        }
+    }
+
     /** The first run time in 0..8 s, on a 1/120 s grid, that [accept] takes. */
     private fun ventTime(kinds: ObstacleKindTuning, seed: Int, accept: (Float) -> Boolean): Float {
         for (step in 0 until 960) {
