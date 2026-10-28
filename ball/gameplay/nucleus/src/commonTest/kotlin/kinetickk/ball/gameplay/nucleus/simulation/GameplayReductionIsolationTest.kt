@@ -14,6 +14,15 @@ import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.DirectorPersonalityId
+import kinetickk.ball.content.api.EliteAffix
+import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.OmenId
+import kinetickk.ball.content.api.RebirthMutator
+import kinetickk.ball.content.api.SignalKind
+import kinetickk.ball.content.api.StructureTemplateId
+import kinetickk.ball.content.api.WorldEventKind
+import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.nucleus.model.ActiveBuff
@@ -32,14 +41,22 @@ import kinetickk.ball.gameplay.nucleus.model.SkillLoadout
 import kinetickk.ball.gameplay.nucleus.model.SkillRuntime
 import kinetickk.ball.gameplay.nucleus.model.Polarity
 import kinetickk.ball.gameplay.nucleus.model.Pickup
-import kinetickk.ball.gameplay.nucleus.model.PointOfInterestState
+import kinetickk.ball.gameplay.nucleus.model.AmbientSiteWindow
+import kinetickk.ball.gameplay.nucleus.model.DungeonState
+import kinetickk.ball.gameplay.nucleus.model.PlacedStructure
+import kinetickk.ball.gameplay.nucleus.model.SignalPrompt
+import kinetickk.ball.gameplay.nucleus.model.SitePoint
+import kinetickk.ball.gameplay.nucleus.model.SiteState
+import kinetickk.ball.gameplay.nucleus.model.StructureField
+import kinetickk.ball.gameplay.nucleus.model.StructureSignal
+import kinetickk.ball.gameplay.nucleus.model.Wall
+import kinetickk.ball.gameplay.nucleus.model.WorldEventPlan
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.Totem
 import kinetickk.ball.gameplay.nucleus.model.TrailPoint
 import kinetickk.ball.gameplay.nucleus.model.WeaponNode
 import kinetickk.ball.gameplay.nucleus.model.WeaponEntity
 import kinetickk.ball.gameplay.nucleus.model.WeaponOrbital
-import kinetickk.ball.gameplay.nucleus.model.WorldPoint
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.reducer.EngineState
@@ -50,6 +67,10 @@ import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
 import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
+import kinetickk.ball.gameplay.nucleus.render.EventSignalProjection
+import kinetickk.ball.gameplay.nucleus.render.EventStrikeProjection
+import kinetickk.ball.gameplay.nucleus.render.WallKind
+import kinetickk.ball.gameplay.nucleus.render.WorldEventProjection
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
 import kotlin.test.Test
@@ -82,6 +103,7 @@ class GameplayReductionIsolationTest {
             velocityX = -0f
             weaponBeamTime = Float.fromBits(0x7fc00001)
             populateAdditionalRetainedState()
+            populateWorldControlState()
         }
 
         listOf(source.copyForReduction(), source.copyForScalarInputReduction()).forEach { fork ->
@@ -863,24 +885,99 @@ class GameplayReductionIsolationTest {
             content.items.size, IntArray(content.items.size) { it }, intArrayOf(content.items.size, 0, 0, 0, 0), listOf(0, 3, 5),
         )
         achievementFlushDue = true
-        pointsOfInterest = listOf(
-            PointOfInterestState(
-                offerId = 1,
+        sites = listOf(
+            SiteState(
+                id = 3L,
                 kind = SiteKind.SEALED_ANOMALY,
                 x = 400f,
                 y = 300f,
                 expiresAt = 100f,
                 remaining = 20f,
-                nextBeacon = 2,
-                orbitSeconds = 1f,
-                defenderIds = immutableListOf(11, 13),
-                defeatedDefenders = 1,
+                clock = 0.15f,
+                step = 1,
+                count = 1,
+                meter = 1f,
                 volleyClock = 1.8f,
                 warningRemaining = 0.3f,
                 volleyAngle = 0.4f,
+                aimX = 12f,
+                aimY = -14f,
+                foeIds = immutableListOf(11, 13),
+                course = immutableListOf(SitePoint(20f, 30f), SitePoint(-5f, 6f)),
+                sides = 0b10,
+                par = 7.5f,
+                axis = 0.6f,
+                limit = 9.5f,
+                hurtBaseline = 12.5,
+                settled = false,
             ),
         )
-        nextPointOfferIndex = 2
+        nextSiteWindowIndex = 2
+        siteRandom.nextInt()
+        ambientSites = AmbientSiteWindow(3, -2, immutableListOf(
+            SiteState(id = 0x0100_0000_0000_0005L, kind = SiteKind.DRIFT_CACHE, x = 900f, y = -700f,
+                expiresAt = Float.POSITIVE_INFINITY, settled = false),
+        ))
+        secretSigil = SiteState(id = 0x10L + SiteKind.FAR_SIGIL.ordinal, kind = SiteKind.FAR_SIGIL, x = -800f, y = 600f,
+            expiresAt = Float.POSITIVE_INFINITY, foeIds = immutableListOf(17))
+        openedSiteIds = listOf(5L, 9L)
+        runSecretFlags = 0b101
+        worldDiscoveryMask = 0b11
+        pendingWorldDiscoveryMask = 0b10
+        goldenDrifterId = 99
+        goldenDrifterUntil = 33f
+        spinBuckets = listOf(1.5f, -0.5f)
+        spinCurrent = 0.75f
+        spinClock = 0.4f
+        spinLastAngle = 1.2f
+        spinPrimed = true
+        runOmen = OmenId.GLASS_SUN
+        directorPersonality = DirectorPersonalityId.SIEGE
+        featuredAspect = StatusElement.CRYO.ordinal
+        surgeIndex = 2
+        surgeThemeType = 4
+        varietyAnnouncement = 3
+        keynoteTag = BuildTag.RAM
+        keynoteElement = StatusElement.ION
+        worldEventPlans = immutableListOf(WorldEventPlan(WorldEventKind.ION_STORM, 70f, 85f, 115f))
+        nextWorldEvent = 1
+        worldEvent = WorldEventProjection(
+            WorldEventKind.METEOR_SHOWER, 60f, 75f, 105f, windAngle = 0.3f, windStrength = 0.4f,
+            sweepStartedAt = 76f, sweepAngle = 0.9f,
+            strikes = immutableListOf(EventStrikeProjection(150f, -60f, 90f, 77f, 78f)),
+        )
+        worldEventPulse = 2
+        worldEventNextPulseAt = 79f
+        eventSignals = immutableListOf(EventSignalProjection(4, SignalKind.SHRINE, 500f, 450f, 130f))
+        nextSignalSlot = 2
+        signalsSpawned = 3
+        signalsEngaged = 1
+        pendingSignalPrompts = immutableListOf(SignalPrompt(SignalKind.GAMBLE, 1))
+        secretBossMask = 1L shl 33
+        worldKeepOut = WorldKeepOut(WorldLayer.ZENITH, 1_234.5, -987.25, 900f)
+        runBoons = immutableListOf(32, 48)
+        obstacleHitSurfaceId = 7L
+        coreObstacleGap = 120f
+        grazeReadyAt = 0.4f
+        slingWellId = 9L
+        slingEntryHeading = 0.3f
+        structureField = StructureField.of(
+            4, -3, WorldLayer.BASE.ordinal, false,
+            listOf(PlacedStructure((1L shl 63) or (5L shl 34) or (6L shl 8), StructureTemplateId.VAULT, 1,
+                2_000f, 1_500f, 600f, 400f, 0, 1, false)),
+            listOf(Wall((1L shl 63) or (5L shl 34) or (6L shl 8), WallKind.DOOR_SEALED, 1_800f, 1_400f, 2_200f, 1_400f, 24f, door = 0)),
+            listOf(StructureSignal(77L, StructureTemplateId.SPIRE, 5_000f, 4_000f, 5_100f, 4_200f)),
+        )
+        dungeon = DungeonState(
+            structureId = (1L shl 63) or (5L shl 34) or (6L shl 8), template = StructureTemplateId.VAULT, rotation = 1,
+            x = 2_000f, y = 1_500f, clearedRooms = 0b1, engagedRoom = 2, garrisonIds = immutableListOf(21, 22),
+            garrisonTotal = 4, engaged = true, enteredAt = 0.5f,
+        )
+        spentStructureIds = listOf(11L, 12L)
+        lastAnnouncedStructureId = 13L
+        coreStraightness = 0.25f
+        gripStrength = 1.5f
+        slingStrength = 0.75f
         pendingDirectedRewards = listOf(DirectedReward.ITEM_AND_REPAIR, DirectedReward.WEAPON)
         directedReward = DirectedReward.RELIC
         selectedRewardFocus = RewardFocus.CONTROL
@@ -1031,8 +1128,8 @@ class GameplayReductionIsolationTest {
         pendingEventKind = 3
         pendingEventSize = 7
         pendingEventType = 9
-        recentEventTypes = 0b101
-        previousEventTypes = 0b110
+        recentEventTypes = 0b101L or (1L shl 34)
+        previousEventTypes = 0b110L or (1L shl 33)
         ambushReadyAt = 21f
         encircleReadyAt = 41f
         wallReadyAt = 31f
@@ -1047,7 +1144,8 @@ class GameplayReductionIsolationTest {
         worldOriginX = 2_400.5
         worldOriginY = -1_200.25
         obstacleField = ObstacleField.of(1, -1, 1, listOf(listOf(
-            Obstacle(id = 7L, kind = ObstacleKind.BUMPER, x = 30f, y = -40f, radius = 34f, shapeSeed = 9, ricochetReadyAt = 1.5f),
+            Obstacle(id = 7L, kind = ObstacleKind.BUMPER, x = 30f, y = -40f, radius = 34f, shapeSeed = 9, ricochetReadyAt = 1.5f,
+                fuseAt = 2.5f, repels = true),
         )))
         destroyedObstacleIds = listOf(3L, 4L)
         obstacleHitReadyAt = 0.6f
@@ -1081,12 +1179,33 @@ class GameplayReductionIsolationTest {
             slamReadyAt = 0.95f
             armored = true
             armorCracked = true
+            charges = 2
+            phaseStartPending = true
+            affix = EliteAffix.HASTED
+            champion = true
             status[StatusCell.STACKS + StatusElement.THERMAL.ordinal] = 2f
             status[StatusCell.DECAY_AT + StatusElement.THERMAL.ordinal] = 0.5f
             status[StatusCell.FREEZE_IMMUNE_UNTIL] = 0.6f
             status[StatusCell.CRYO_IMMUNE_CARRY] = 0.5f
             status[StatusCell.REACTION_PAIR_READY_AT + ReactionId.FUSION.ordinal] = 0.4f
         }
+    }
+
+    /**
+     * Retained facts that would steer a production trace (a queued offer opens a choice, a run mutator or another world
+     * layer changes generation, a tagged enemy leaves the ordinary cap), so only fork tests populate them.
+     */
+    private fun MutableGameState.populateWorldControlState() {
+        pendingFloorOffers = listOf(ItemRarity.RARE, ItemRarity.EPIC)
+        offerRarityFloor = ItemRarity.RARE
+        omenPending = true
+        runMutatorMask = 1 shl RebirthMutator.PACK_HUNTERS.ordinal
+        worldLayer = WorldLayer.NADIR
+        encounters = immutableListOf(EncounterState(
+            encounterTag(EncounterOwner.ROOM, 6L), 300f, -200f, 600f, 2_400f, spawned = 3, killed = 1, bossId = 41,
+            startedAt = 0.2f,
+        ))
+        enemies.firstOrNull()?.ownerTag = encounterTag(EncounterOwner.ROOM, 6L)
     }
 
     private fun MutableGameState.applyReferencePulse(pulse: GameplayInteractionPulse) {
@@ -1179,6 +1298,8 @@ class GameplayReductionIsolationTest {
             value("acquisitionOrder", acquisitionOrder.toList())
             value("pendingAcquiredItemIds", pendingAcquiredItemIds.toList())
             value("deckSeed", deckSeed)
+            value("easyMode", easyMode)
+            value("offersRunOmen", offersRunOmen)
             value("itemDeck", itemDeck.dealtIds() to itemDeck.reserve())
             value("itemDeck.dealsEverything", itemDeck.dealsEverything)
             value("itemHistory", content.items.indices.map(itemHistory::deckWeight))
@@ -1338,25 +1459,45 @@ class GameplayReductionIsolationTest {
             value("achievementFlushDue", achievementFlushDue)
             value("characterRuntime", characterRuntime.toString())
             value("weaponRuntime", weaponRuntime.toString())
-            value("pointsOfInterest.size", pointsOfInterest.size)
-            pointsOfInterest.forEachIndexed { index, point ->
-                val prefix = "pointsOfInterest[$index]"
-                value("$prefix.offerId", point.offerId)
-                value("$prefix.kind", point.kind)
-                float("$prefix.x", point.x)
-                float("$prefix.y", point.y)
-                float("$prefix.expiresAt", point.expiresAt)
-                value("$prefix.active", point.active)
-                float("$prefix.remaining", point.remaining)
-                value("$prefix.nextBeacon", point.nextBeacon)
-                float("$prefix.orbitSeconds", point.orbitSeconds)
-                value("$prefix.defenderIds", point.defenderIds.toList())
-                value("$prefix.defeatedDefenders", point.defeatedDefenders)
-                float("$prefix.volleyClock", point.volleyClock)
-                float("$prefix.warningRemaining", point.warningRemaining)
-                float("$prefix.volleyAngle", point.volleyAngle)
-            }
-            value("nextPointOfferIndex", nextPointOfferIndex)
+            site("sites", sites)
+            value("nextSiteWindowIndex", nextSiteWindowIndex)
+            value("siteRandom", siteRandom.snapshot())
+            value("ambientSites.cell", ambientSites.chunkX to ambientSites.chunkY)
+            site("ambientSites", ambientSites.sites)
+            site("secretSigil", listOfNotNull(secretSigil))
+            value("openedSiteIds", openedSiteIds.toList())
+            value("runSecretFlags", runSecretFlags)
+            value("worldDiscoveryMask", worldDiscoveryMask)
+            value("pendingWorldDiscoveryMask", pendingWorldDiscoveryMask)
+            value("pendingFloorOffers", pendingFloorOffers.toList())
+            value("goldenDrifterId", goldenDrifterId)
+            float("goldenDrifterUntil", goldenDrifterUntil)
+            floats("spinBuckets", spinBuckets)
+            float("spinCurrent", spinCurrent)
+            float("spinClock", spinClock)
+            float("spinLastAngle", spinLastAngle)
+            value("spinPrimed", spinPrimed)
+            value("omenPending", omenPending)
+            value("runOmen", runOmen)
+            value("runMutatorMask", runMutatorMask)
+            value("directorPersonality", directorPersonality)
+            value("featuredAspect", featuredAspect)
+            value("surgeIndex", surgeIndex)
+            value("surgeThemeType", surgeThemeType)
+            value("varietyAnnouncement", varietyAnnouncement)
+            value("keynoteTag", keynoteTag)
+            value("keynoteElement", keynoteElement)
+            value("worldEventPlans", worldEventPlans.toList())
+            value("nextWorldEvent", nextWorldEvent)
+            value("worldEvent", worldEvent)
+            value("worldEventPulse", worldEventPulse)
+            float("worldEventNextPulseAt", worldEventNextPulseAt)
+            value("eventSignals", eventSignals.toList())
+            value("nextSignalSlot", nextSignalSlot)
+            value("signalsSpawned", signalsSpawned)
+            value("signalsEngaged", signalsEngaged)
+            value("pendingSignalPrompts", pendingSignalPrompts.toList())
+            value("offerRarityFloor", offerRarityFloor)
             value("pendingDirectedRewards", pendingDirectedRewards.toList())
             value("directedReward", directedReward)
             value("selectedRewardFocus", selectedRewardFocus)
@@ -1374,6 +1515,8 @@ class GameplayReductionIsolationTest {
             value("pendingEventType", pendingEventType)
             value("recentEventTypes", recentEventTypes)
             value("previousEventTypes", previousEventTypes)
+            value("secretBossMask", secretBossMask)
+            value("encounters", encounters.toList())
             float("ambushReadyAt", ambushReadyAt)
             float("encircleReadyAt", encircleReadyAt)
             float("wallReadyAt", wallReadyAt)
@@ -1398,14 +1541,32 @@ class GameplayReductionIsolationTest {
                 float("$prefix.radius", obstacle.radius)
                 value("$prefix.shapeSeed", obstacle.shapeSeed)
                 float("$prefix.ricochetReadyAt", obstacle.ricochetReadyAt)
+                float("$prefix.fuseAt", obstacle.fuseAt)
+                value("$prefix.repels", obstacle.repels)
             }
             for (cell in 0 until obstacleField.span * obstacleField.span) {
                 value("obstacleField.cell[$cell]", obstacleField.cellBegin(cell) to obstacleField.cellEnd(cell))
             }
             value("destroyedObstacleIds", destroyedObstacleIds.toList())
+            value("worldLayer", worldLayer)
+            value("worldKeepOut", worldKeepOut)
+            value("runBoons", runBoons.toList())
             float("obstacleHitReadyAt", obstacleHitReadyAt)
+            value("obstacleHitSurfaceId", obstacleHitSurfaceId)
             float("nearMissReadyAt", nearMissReadyAt)
+            float("coreObstacleGap", coreObstacleGap)
+            float("grazeReadyAt", grazeReadyAt)
+            value("slingWellId", slingWellId)
+            float("slingEntryHeading", slingEntryHeading)
             float("reviveInvulnerableUntil", reviveInvulnerableUntil)
+            value("structureField.key", listOf(structureField.centerChunkX, structureField.centerChunkY, structureField.layer))
+            value("structureField.bossCollapsed", structureField.bossCollapsed)
+            value("structureField.structures", structureField.structures.toList())
+            value("structureField.walls", structureField.walls.toList())
+            value("structureField.signals", structureField.signals.toList())
+            value("dungeon", dungeon)
+            value("spentStructureIds", spentStructureIds.toList())
+            value("lastAnnouncedStructureId", lastAnnouncedStructureId)
             float("dashBufferTime", dashBufferTime)
             value("bossSpawned", bossSpawned)
             value("keyboardBrakeActive", keyboardBrakeActive)
@@ -1446,6 +1607,7 @@ class GameplayReductionIsolationTest {
             float("turnHoldTime", turnHoldTime)
             float("turnRecoveryCooldown", turnRecoveryCooldown)
             value("turnDirection", turnDirection)
+            float("coreStraightness", coreStraightness)
             float("timeSinceDamage", timeSinceDamage)
             float("hurtCooldown", hurtCooldown)
             float("lastAimDirectionX", lastAimDirectionX)
@@ -1537,6 +1699,8 @@ class GameplayReductionIsolationTest {
             float("comboWindow", comboWindow)
             float("overdriveGain", overdriveGain)
             float("dragCoefficient", dragCoefficient)
+            float("gripStrength", gripStrength)
+            float("slingStrength", slingStrength)
             float("polarityStability", polarityStability)
 
             value("weapon", weapon)
@@ -1613,6 +1777,11 @@ class GameplayReductionIsolationTest {
                 float("$prefix.slamReadyAt", enemy.slamReadyAt)
                 value("$prefix.armored", enemy.armored)
                 value("$prefix.armorCracked", enemy.armorCracked)
+                value("$prefix.ownerTag", enemy.ownerTag)
+                value("$prefix.charges", enemy.charges)
+                value("$prefix.phaseStartPending", enemy.phaseStartPending)
+                value("$prefix.affix", enemy.affix)
+                value("$prefix.champion", enemy.champion)
                 floats("$prefix.status", enemy.status)
             }
 
@@ -1746,6 +1915,11 @@ class GameplayReductionIsolationTest {
         value("build.guaranteedCritAfter", build.guaranteedCritAfter)
         float("build.freeDashHeat", build.freeDashHeat)
         float("build.freeDashCooldown", build.freeDashCooldown)
+        float("build.obstacleRestitutionBonus", build.obstacleRestitutionBonus)
+        float("build.obstacleDamageScale", build.obstacleDamageScale)
+        float("build.obstacleLethalBonus", build.obstacleLethalBonus)
+        float("build.boostPowerScale", build.boostPowerScale)
+        float("build.wellPullScale", build.wellPullScale)
     }
 
     private class ExactFingerprint {
@@ -1767,6 +1941,42 @@ class GameplayReductionIsolationTest {
         fun floats(name: String, values: Iterable<Float>) {
             var index = 0
             values.forEach { float("$name[$index]", it); index++ }
+        }
+
+        /** Every field of each site, Floats by their bits. */
+        fun site(name: String, sites: List<SiteState>) {
+            value("$name.size", sites.size)
+            sites.forEachIndexed { index, site ->
+                val prefix = "$name[$index]"
+                value("$prefix.id", site.id)
+                value("$prefix.kind", site.kind)
+                float("$prefix.x", site.x)
+                float("$prefix.y", site.y)
+                float("$prefix.expiresAt", site.expiresAt)
+                value("$prefix.active", site.active)
+                float("$prefix.remaining", site.remaining)
+                float("$prefix.clock", site.clock)
+                value("$prefix.step", site.step)
+                value("$prefix.count", site.count)
+                float("$prefix.meter", site.meter)
+                float("$prefix.volleyClock", site.volleyClock)
+                float("$prefix.warningRemaining", site.warningRemaining)
+                float("$prefix.volleyAngle", site.volleyAngle)
+                float("$prefix.aimX", site.aimX)
+                float("$prefix.aimY", site.aimY)
+                value("$prefix.foeIds", site.foeIds.toList())
+                site.course.forEachIndexed { mark, point ->
+                    float("$prefix.course[$mark].dx", point.dx)
+                    float("$prefix.course[$mark].dy", point.dy)
+                }
+                value("$prefix.course.size", site.course.size)
+                value("$prefix.sides", site.sides)
+                float("$prefix.par", site.par)
+                float("$prefix.axis", site.axis)
+                float("$prefix.limit", site.limit)
+                value("$prefix.hurtBaseline", site.hurtBaseline.toRawBits())
+                value("$prefix.settled", site.settled)
+            }
         }
     }
 }

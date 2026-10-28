@@ -6,7 +6,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.DirectedReward
 import kinetickk.ball.content.api.SiteKind
-import kinetickk.ball.gameplay.nucleus.model.PointOfInterestState
+import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -23,35 +23,35 @@ class RunFeatureBoundsTest {
     fun activationClosesAlternativeAndNeverRetainsTwoActiveTrials() {
         val state = game()
         state.elapsed = 45f
-        state.updatePointsOfInterest(0.01f)
-        val offered = state.pointsOfInterest
+        state.updateSites(0.01f)
+        val offered = state.sites
         assertEquals(2, offered.size)
-        state.activatePointOfInterest(offered.first())
-        assertEquals(1, state.pointsOfInterest.size)
-        assertTrue(state.pointsOfInterest.single().active)
-        assertEquals(offered.first().kind, state.pointsOfInterest.single().kind)
+        state.activateWindowSite(offered.first())
+        assertEquals(1, state.sites.size)
+        assertTrue(state.sites.single().active)
+        assertEquals(offered.first().kind, state.sites.single().kind)
     }
 
     @Test
     fun sixthRewardFitsAndSeventhCannotPublishIntoSourceSnapshot() {
         val source = game()
         source.pendingDirectedRewards = List(5) { DirectedReward.WEAPON }
-        source.pointsOfInterest = listOf(PointOfInterestState(
-            0, SiteKind.RESONANT_CIRCUIT, source.coreX, source.coreY, 85f,
-            active = true, nextBeacon = 3,
+        source.sites = listOf(SiteState(
+            0L, SiteKind.RESONANT_CIRCUIT, source.coreX, source.coreY, 85f,
+            active = true, step = 2,
         ))
         source.previousCoreX = source.coreX
         source.previousCoreY = source.coreY
-        source.updatePointsOfInterest(0.01f)
+        source.updateSites(0.01f)
         assertEquals(6, source.pendingDirectedRewards.size)
         val candidate = source.copyForReduction()
-        candidate.pointsOfInterest = listOf(PointOfInterestState(
-            0, SiteKind.RESONANT_CIRCUIT, source.coreX, source.coreY, 85f,
-            active = true, nextBeacon = 3,
+        candidate.sites = listOf(SiteState(
+            0L, SiteKind.RESONANT_CIRCUIT, source.coreX, source.coreY, 85f,
+            active = true, step = 2,
         ))
-        assertFailsWith<IllegalStateException> { candidate.updatePointsOfInterest(0.01f) }
+        assertFailsWith<IllegalStateException> { candidate.updateSites(0.01f) }
         assertEquals(6, source.pendingDirectedRewards.size)
-        assertTrue(source.pointsOfInterest.isEmpty())
+        assertTrue(source.sites.isEmpty())
     }
 
     @Test

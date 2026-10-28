@@ -265,11 +265,11 @@ class SpawnDirectorTest {
     @Test
     fun aHeraldAtTheHardCapEvictsTheOldestOrdinaryEnemyButNeverAnActiveDefender() {
         val state = directorState(seed = 33)
-        val offer = kinetickk.ball.gameplay.nucleus.model.PointOfInterestState(
-            0, kinetickk.ball.content.api.SiteKind.SEALED_ANOMALY, 0f, 0f, 85f,
+        val offer = kinetickk.ball.gameplay.nucleus.model.SiteState(
+            0L, kinetickk.ball.content.api.SiteKind.SEALED_ANOMALY, 0f, 0f, 85f,
         )
-        state.activatePointOfInterest(offer)
-        val defenders = state.pointsOfInterest.single().defenderIds
+        state.activateWindowSite(offer)
+        val defenders = state.sites.single().foeIds
         assertEquals(3, defenders.size)
         val elite = state.spawnedEnemy(EnemyType.ELITE, 3_000f, 0f).also { state.enemies += it }
         val oldest = state.addEnemyForTesting(2_000f, 900f)

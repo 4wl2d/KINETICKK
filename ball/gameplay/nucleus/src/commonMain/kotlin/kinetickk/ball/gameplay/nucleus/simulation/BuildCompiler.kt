@@ -19,6 +19,7 @@ import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRule
+import kinetickk.ball.content.api.ObstacleAspect
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicId
@@ -120,6 +121,16 @@ internal class CompiledBuild private constructor(
     val skillsCostHeat: Float = 0f,
     val skillFieldsFollow: Float = 0f,
     val knockbackToDamage: Float = 0f,
+    /** ObstacleTuning: restitution added to obstacle bounces, at most [MAX_OBSTACLE_RESTITUTION_BONUS]. */
+    val obstacleRestitutionBonus: Float = 0f,
+    /** ObstacleTuning: scale of obstacle damage to the Core, cut by at most [MAX_OBSTACLE_DAMAGE_CUT]. */
+    val obstacleDamageScale: Float = 1f,
+    /** ObstacleTuning: lethal collision speed added, at most [MAX_ITEM_LETHAL_BONUS]. */
+    val obstacleLethalBonus: Float = 0f,
+    /** ObstacleTuning: scale of accelerator boosts, raised by at most [MAX_BOOST_POWER_BONUS]. */
+    val boostPowerScale: Float = 1f,
+    /** ObstacleTuning: scale of gravity knot pull on enemies, raised by at most [MAX_WELL_PULL_BONUS]. */
+    val wellPullScale: Float = 1f,
 ) {
     /** Skill damage bonus for a skill of [element] (null: an element-less skill): the shared bonus plus its element's. */
     fun skillPowerBonus(element: StatusElement?): Float =
@@ -310,6 +321,11 @@ internal class CompiledBuild private constructor(
             var skillsCostHeat = 0f
             var skillFieldsFollow = 0f
             var knockbackToDamage = 0f
+            var obstacleRestitution = 0f
+            var obstacleDamageCut = 0f
+            var obstacleLethal = 0f
+            var boostPower = 0f
+            var wellPull = 0f
 
             for (id in order) {
                 val item = content.items[id]
@@ -374,8 +390,13 @@ internal class CompiledBuild private constructor(
                         is ItemRule.CatalysisRate -> catalysis += rule.amount * scale
                         is ItemRule.ApexCooldown -> apexCut += rule.amount * scale
                         is ItemRule.CoreLinkRadius -> linkBonus += rule.bonus * scale
-                        // Compiled by the terrain lane; no shipped item carries it yet.
-                        is ItemRule.ObstacleTuning -> Unit
+                        is ItemRule.ObstacleTuning -> when (rule.aspect) {
+                            ObstacleAspect.RESTITUTION -> obstacleRestitution += rule.amount * scale
+                            ObstacleAspect.COLLISION_DAMAGE -> obstacleDamageCut += rule.amount * scale
+                            ObstacleAspect.LETHAL_SPEED -> obstacleLethal += rule.amount * scale
+                            ObstacleAspect.BOOST_POWER -> boostPower += rule.amount * scale
+                            ObstacleAspect.WELL_PULL -> wellPull += rule.amount * scale
+                        }
                     }
                 }
             }
@@ -507,6 +528,11 @@ internal class CompiledBuild private constructor(
                 skillsCostHeat = skillsCostHeat,
                 skillFieldsFollow = skillFieldsFollow,
                 knockbackToDamage = knockbackToDamage,
+                obstacleRestitutionBonus = minOf(MAX_OBSTACLE_RESTITUTION_BONUS, obstacleRestitution),
+                obstacleDamageScale = 1f - minOf(MAX_OBSTACLE_DAMAGE_CUT, obstacleDamageCut),
+                obstacleLethalBonus = minOf(MAX_ITEM_LETHAL_BONUS, obstacleLethal),
+                boostPowerScale = 1f + minOf(MAX_BOOST_POWER_BONUS, boostPower),
+                wellPullScale = 1f + minOf(MAX_WELL_PULL_BONUS, wellPull),
             )
         }
     }
@@ -528,6 +554,12 @@ internal const val MAX_TUNED_RADIUS: Float = 600f
 internal const val MAX_SKILL_COOLDOWN_CUT: Float = 0.4f
 /** CatalysisRate: at most doubles Catalysis. */
 internal const val MAX_CATALYSIS_BONUS: Float = 1f
+/** ObstacleTuning caps: summed restitution bonus, damage cut, item lethal-speed bonus, boost and knot pull bonuses. */
+internal const val MAX_OBSTACLE_RESTITUTION_BONUS: Float = 0.3f
+internal const val MAX_OBSTACLE_DAMAGE_CUT: Float = 0.5f
+internal const val MAX_ITEM_LETHAL_BONUS: Float = 400f
+internal const val MAX_BOOST_POWER_BONUS: Float = 1f
+internal const val MAX_WELL_PULL_BONUS: Float = 1f
 /** CoreLinkRadius: at most this much farther. */
 internal const val MAX_CORE_LINK_BONUS: Float = 240f
 

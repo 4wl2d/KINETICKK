@@ -3,32 +3,49 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kotlin.math.min
+import kinetickk.ball.gameplay.nucleus.model.EngagementSecretMask
+import kinetickk.ball.gameplay.nucleus.model.SiteState
 
 /** Most opt-in site marks [optionalSiteMarks] writes in one call. */
 internal const val MAX_OPTIONAL_SITE_MARKS: Int = 64
 
-/** Activation radius of a point-of-interest window offer (the circle `updatePointsOfInterest` tests). */
+/** Activation radius of a point-of-interest window offer (the circle `updateSites` tests). */
 internal const val POI_ACTIVATION_RADIUS: Float = 65f
 
 /**
- * Writes `(x, y, radius)` triples of every opt-in site, in list order, into [out] for pilots that must
- * not opt in, and returns how many marks it wrote (at most [MAX_OPTIONAL_SITE_MARKS]). Allocation-free.
+ * Writes `(x, y, radius)` triples of every opt-in site into [out] for pilots that must not opt in, and returns how many
+ * marks it wrote (at most [MAX_OPTIONAL_SITE_MARKS]): window offers, ambient sites, the sigil, event signals,
+ * structures, then dimension portals. Allocation-free.
  */
 internal fun MutableGameState.optionalSiteMarks(out: FloatArray): Int {
     require(out.size >= MAX_OPTIONAL_SITE_MARKS * 3) { "An optional-site buffer holds $MAX_OPTIONAL_SITE_MARKS marks" }
-    val points = pointsOfInterest
-    val count = min(points.size, MAX_OPTIONAL_SITE_MARKS)
-    for (index in 0 until count) {
-        val point = points[index]
-        val base = index * 3
-        out[base] = point.x
-        out[base + 1] = point.y
-        out[base + 2] = POI_ACTIVATION_RADIUS
-    }
+    var count = appendSiteMarks(out, 0, sites)
+    count = appendSiteMarks(out, count, ambientSites.sites)
+    secretSigil?.let { count = appendSiteMark(out, count, it) }
+    count = appendEventSignalMarks(out, count).coerceAtMost(MAX_OPTIONAL_SITE_MARKS)
+    count = appendStructureMarks(out, count).coerceAtMost(MAX_OPTIONAL_SITE_MARKS)
+    count = appendDimensionMarks(out, count).coerceAtMost(MAX_OPTIONAL_SITE_MARKS)
     return count
 }
 
-/** True while the run is engaged with optional content (callers keep it sticky). */
+private fun MutableGameState.appendSiteMarks(out: FloatArray, count: Int, from: List<SiteState>): Int {
+    var written = count
+    for (index in from.indices) written = appendSiteMark(out, written, from[index])
+    return written
+}
+
+/** One site's mark: its centre and the activation radius its definition gives. */
+private fun MutableGameState.appendSiteMark(out: FloatArray, count: Int, site: SiteState): Int {
+    if (count >= MAX_OPTIONAL_SITE_MARKS) return count
+    val base = count * 3
+    out[base] = site.x
+    out[base + 1] = site.y
+    out[base + 2] = content.sites.definition(site.kind).activationRadius
+    return count + 1
+}
+
+/** True once the run opted into any optional site (sticky facts only; callers keep it sticky too). */
 internal fun MutableGameState.optionalSitesTouched(): Boolean =
-    pointsOfInterest.any { it.active } || directedReward != null || pendingDirectedRewards.isNotEmpty()
+    activeWindowSite() != null || directedReward != null || pendingDirectedRewards.isNotEmpty() ||
+        openedSiteIds.isNotEmpty() || (runSecretFlags and EngagementSecretMask) != 0 || secretSigil?.active == true ||
+        eventSignalTouched() || structureTouched() || dimensionTouched()

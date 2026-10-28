@@ -17,13 +17,12 @@ import kinetickk.ball.gameplay.nucleus.model.MarkKind
 import kinetickk.ball.gameplay.nucleus.model.SeveredRelic
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.model.Pickup
-import kinetickk.ball.gameplay.nucleus.model.PointOfInterestState
+import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.Totem
 import kinetickk.ball.gameplay.nucleus.model.TrailPoint
 import kinetickk.ball.gameplay.nucleus.model.WeaponNode
 import kinetickk.ball.gameplay.nucleus.model.WeaponOrbital
-import kinetickk.ball.gameplay.nucleus.model.WorldPoint
 import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
 import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
@@ -60,9 +59,9 @@ class GameplayRenderModelMapperTest {
                 latticeNodes[3] = -4f
                 latticeTime = 5f
             }
-            pointsOfInterest = listOf(
-                PointOfInterestState(
-                    offerId = 1,
+            sites = listOf(
+                SiteState(
+                    id = 2L,
                     kind = SiteKind.COLLAPSING_ORBIT,
                     x = 300f,
                     y = 400f,

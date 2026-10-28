@@ -60,9 +60,11 @@ internal fun MutableGameState.takeDamage(
     rawAmount: Float,
     ignoreReduction: Boolean = false,
     kind: IncomingDamage = IncomingDamage.HIT,
+    obstacle: kinetickk.ball.content.api.ObstacleKind? = null,
+    lethalReason: String = "CORE FRACTURED",
 ) {
     if (kind == IncomingDamage.OBSTACLE) {
-        takeObstacleDamage(rawAmount)
+        takeObstacleDamage(rawAmount, obstacle)
         return
     }
     // Void Step's phase: contacts and shots pass through the Core (the shots are still spent).
@@ -129,7 +131,7 @@ internal fun MutableGameState.takeDamage(
         if (incoming) onShieldBroken() else aegisAbsorbed = 0f
     }
     if (incoming) fireClauses(EffectTrigger.HURT, null, rawAmount)
-    if (hp <= 0f) resolveLethal()
+    if (hp <= 0f) resolveLethal(lethalReason)
 }
 
 /** Run end message of a collision that leaves the Core at zero integrity. */
@@ -139,7 +141,7 @@ internal const val OBSTACLE_COLLISION_REASON: String = "OBSTACLE COLLISION"
  * See [IncomingDamage.OBSTACLE]. Glass Comet's liability still holds: collisions deal double damage and
  * shields do not absorb them.
  */
-private fun MutableGameState.takeObstacleDamage(rawAmount: Float) {
+private fun MutableGameState.takeObstacleDamage(rawAmount: Float, obstacle: kinetickk.ball.content.api.ObstacleKind? = null) {
     if (rawAmount <= 0f || invulnerableUntil > elapsed) return
     var amount = rawAmount * (1f + content.obstacles.damagePerTier * rebirthLevel)
     // Monolith: while it runs, a facet also takes an obstacle collision (and fires its refraction).
@@ -161,7 +163,7 @@ private fun MutableGameState.takeObstacleDamage(rawAmount: Float) {
     }
     noteObstacleHurt()
     if (shieldBefore > 0f && shield <= 0f) onShieldBroken()
-    fireClauses(EffectTrigger.HURT, null, rawAmount)
+    fireClauses(EffectTrigger.HURT, null, rawAmount, obstacle = obstacle)
     if (hp <= 0f) resolveLethal(OBSTACLE_COLLISION_REASON)
 }
 

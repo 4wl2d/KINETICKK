@@ -196,6 +196,7 @@ internal fun MutableGameState.holds(
     element: StatusElement?,
     reaction: ReactionId? = null,
     skill: kinetickk.ball.content.api.SkillId? = null,
+    obstacle: kinetickk.ball.content.api.ObstacleKind? = null,
 ): Boolean = when (condition) {
     is EffectCondition.SpeedAtLeast -> speed >= condition.speed
     is EffectCondition.SpeedBelow -> speed < condition.speed
@@ -228,9 +229,9 @@ internal fun MutableGameState.holds(
     EffectCondition.ApexActive -> apexActive()
     is EffectCondition.SkillsCharging -> skillsCharging() >= condition.count
     is EffectCondition.WeaponFamilyIs -> currentWeaponDefinition.family == condition.family
-    // No dispatch carries an obstacle and no obstacle gap is measured yet; no shipped item names either condition.
-    is EffectCondition.ObstacleIs -> false
-    is EffectCondition.NearObstacle -> false
+    // The obstacle kind the dispatch carries, and the Core's measured gap to the nearest solid obstacle (+∞: none).
+    is EffectCondition.ObstacleIs -> obstacle == condition.kind
+    is EffectCondition.NearObstacle -> coreObstacleGap <= condition.distance
 }
 
 /** A live mark, Blackfire or Embrittle on [target], or [target] is the Void Anchor. */

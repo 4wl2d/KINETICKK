@@ -58,6 +58,7 @@ internal fun MutableGameState.fireClauses(
     skill: SkillId? = null,
     originX: Float = Float.NaN,
     originY: Float = Float.NaN,
+    obstacle: kinetickk.ball.content.api.ObstacleKind? = null,
 ) {
     val packed = build.clauses(trigger)
     if (packed.isEmpty() || clauseDepth >= MAX_CLAUSE_DEPTH) return
@@ -72,7 +73,7 @@ internal fun MutableGameState.fireClauses(
             if (clauseReadyAt[global] > elapsed) continue
             var conditionsHold = true
             for (conditionIndex in clause.conditions.indices) {
-                if (!holds(clause.conditions[conditionIndex], target, source, element, reaction, skill)) {
+                if (!holds(clause.conditions[conditionIndex], target, source, element, reaction, skill, obstacle)) {
                     conditionsHold = false
                     break
                 }

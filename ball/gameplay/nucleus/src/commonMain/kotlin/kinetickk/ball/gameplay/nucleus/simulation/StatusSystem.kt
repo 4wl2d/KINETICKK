@@ -59,10 +59,10 @@ internal fun totalStacks(enemy: Enemy): Int {
 }
 
 /**
- * The Architect and the Herald mini-boss: immune to executes, stops and stuns, only briefly silenced, and
- * Unmake meets their weighted integrity. Every element rule and [canAct] ask this one question.
+ * The Architect, the mini-bosses and the secret bosses: immune to executes, stops and stuns, only briefly silenced,
+ * and Unmake meets their weighted integrity. Every element rule and [canAct] ask this one question.
  */
-internal val Enemy.isBossClass: Boolean get() = isBoss || isMiniBoss
+internal val Enemy.isBossClass: Boolean get() = isBoss || isMiniBoss || isSecretBoss
 
 /** Elites and the bosses; Null Covenant keeps Hollow on them. */
 internal val Enemy.isEliteClass: Boolean get() = isElite || isBossClass
@@ -121,6 +121,7 @@ internal fun MutableGameState.enemyMotionScale(enemy: Enemy): Float {
     if (build.liability(RelicId.PANDEMIC_CODEX) && totalStacks(enemy) > 0) scale *= 1.2f
     // Hypercube's cage slows the ordinary enemies inside.
     scale *= hypercubeMotionScale(enemy)
+    scale *= layerTimeScale(enemy)
     return scale
 }
 
@@ -803,6 +804,8 @@ internal fun MutableGameState.affinityBits(enemy: Enemy): Int {
         fragile = impact > 1f,
         shifting = isShifting(enemy),
         phase = if (enemy.isBoss || enemy.isMiniBoss) enemy.phase else 0,
+        affix = enemy.affix?.ordinal ?: EnemyAffinity.NONE,
+        champion = enemy.champion,
     )
 }
 

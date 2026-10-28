@@ -7,7 +7,7 @@ import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.nucleus.model.Pickup
-import kinetickk.ball.gameplay.nucleus.model.PointOfInterestState
+import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.TrailPoint
 import kinetickk.ball.gameplay.nucleus.model.WeaponEntity
@@ -32,9 +32,9 @@ class FramePacingTest {
     @Test
     fun subStepFramePublishesAlphaAndReusesEveryProjectionByIdentity() {
         val committed = runningState().apply {
-            pointsOfInterest = listOf(
-                PointOfInterestState(
-                    offerId = 0,
+            sites = listOf(
+                SiteState(
+                    id = 0L,
                     kind = SiteKind.SEALED_ANOMALY,
                     x = 400f,
                     y = 0f,

@@ -876,6 +876,8 @@ private fun stateSignature(state: MutableGameState): Long {
     signature = mix(signature, state.projectiles.size)
     signature = mix(signature, state.pickups.size)
     signature = mix(signature, state.trail.size)
+    // 0.6.0 Baby mode
+    signature = mix(signature, if (state.easyMode) 1 else 0)
     return signature
 }
 
@@ -907,8 +909,8 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
     signature = mix(signature, state.pendingEventKind)
     signature = mix(signature, state.pendingEventSize)
     signature = mix(signature, state.pendingEventType)
-    signature = mix(signature, state.recentEventTypes)
-    signature = mix(signature, state.previousEventTypes)
+    signature = mixLong(signature, state.recentEventTypes)
+    signature = mixLong(signature, state.previousEventTypes)
     signature = mix(signature, state.ambushReadyAt.toRawBits())
     signature = mix(signature, state.encircleReadyAt.toRawBits())
     signature = mix(signature, state.wallReadyAt.toRawBits())
@@ -939,8 +941,8 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
     signature = mix(signature, state.pendingRicochets)
     signature = mix(signature, state.pendingDataPickups)
     signature = mix(signature, if (state.achievementFlushDue) 1 else 0)
-    signature = mix(signature, state.pointsOfInterest.toString().hashCode())
-    signature = mix(signature, state.nextPointOfferIndex)
+    signature = mix(signature, state.sites.toString().hashCode())
+    signature = mix(signature, state.nextSiteWindowIndex)
     signature = mix(signature, state.pendingDirectedRewards.toString().hashCode())
     signature = mix(signature, state.directedReward?.ordinal ?: -1)
     signature = mix(signature, state.selectedRewardFocus?.ordinal ?: -1)
@@ -1030,9 +1032,81 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
         signature = mix(signature, it.slamReadyAt.toRawBits())
         signature = mix(signature, if (it.armored) 1 else 0)
         signature = mix(signature, if (it.armorCracked) 1 else 0)
+        // 0.6.0: encounter tag, kind counter, pending phase start, Elite affix and champion flag.
+        signature = mixLong(signature, it.ownerTag)
+        signature = mix(signature, it.charges)
+        signature = mix(signature, if (it.phaseStartPending) 1 else 0)
+        signature = mix(signature, it.affix?.ordinal ?: -1)
+        signature = mix(signature, if (it.champion) 1 else 0)
         it.status.forEach { cell -> signature = mix(signature, cell.toRawBits()) }
     }
+    signature = worldContractFingerprint(signature, state)
     return mixLong(signature, fixtureFingerprint(state))
+}
+
+/** 0.6.0 shared world contracts: terrain, sites, run variety, enemies, structures and dimensions. */
+private fun worldContractFingerprint(current: Long, state: MutableGameState): Long {
+    var signature = current
+    signature = mix(signature, state.coreStraightness.toRawBits())
+    signature = mix(signature, state.gripStrength.toRawBits())
+    signature = mix(signature, state.slingStrength.toRawBits())
+    signature = mixLong(signature, state.obstacleHitSurfaceId)
+    signature = mix(signature, state.coreObstacleGap.toRawBits())
+    signature = mix(signature, state.grazeReadyAt.toRawBits())
+    signature = mixLong(signature, state.slingWellId)
+    signature = mix(signature, state.slingEntryHeading.toRawBits())
+    signature = mix(signature, state.siteRandom.snapshot().hashCode())
+    signature = mix(signature, state.ambientSites.toString().hashCode())
+    signature = mix(signature, state.secretSigil.toString().hashCode())
+    signature = mix(signature, state.openedSiteIds.toString().hashCode())
+    signature = mix(signature, state.runSecretFlags)
+    signature = mix(signature, state.worldDiscoveryMask)
+    signature = mix(signature, state.pendingWorldDiscoveryMask)
+    signature = mix(signature, state.pendingFloorOffers.toString().hashCode())
+    signature = mix(signature, state.goldenDrifterId)
+    signature = mix(signature, state.goldenDrifterUntil.toRawBits())
+    signature = mix(signature, state.spinBuckets.size)
+    state.spinBuckets.forEach { signature = mix(signature, it.toRawBits()) }
+    signature = mix(signature, state.spinCurrent.toRawBits())
+    signature = mix(signature, state.spinClock.toRawBits())
+    signature = mix(signature, state.spinLastAngle.toRawBits())
+    signature = mix(signature, if (state.spinPrimed) 1 else 0)
+    signature = mix(signature, if (state.omenPending) 1 else 0)
+    signature = mix(signature, state.runOmen?.ordinal ?: -1)
+    signature = mix(signature, state.runMutatorMask)
+    signature = mix(signature, state.directorPersonality?.ordinal ?: -1)
+    signature = mix(signature, state.featuredAspect)
+    signature = mix(signature, state.surgeIndex)
+    signature = mix(signature, state.surgeThemeType)
+    signature = mix(signature, state.varietyAnnouncement)
+    signature = mix(signature, state.keynoteTag?.ordinal ?: -1)
+    signature = mix(signature, state.keynoteElement?.ordinal ?: -1)
+    signature = mix(signature, state.worldEventPlans.toString().hashCode())
+    signature = mix(signature, state.nextWorldEvent)
+    signature = mix(signature, state.worldEvent.toString().hashCode())
+    signature = mix(signature, state.worldEventPulse)
+    signature = mix(signature, state.worldEventNextPulseAt.toRawBits())
+    signature = mix(signature, state.eventSignals.toString().hashCode())
+    signature = mix(signature, state.nextSignalSlot)
+    signature = mix(signature, state.signalsSpawned)
+    signature = mix(signature, state.signalsEngaged)
+    signature = mix(signature, state.pendingSignalPrompts.toString().hashCode())
+    signature = mix(signature, state.offerRarityFloor?.ordinal ?: -1)
+    signature = mixLong(signature, state.secretBossMask)
+    signature = mix(signature, state.encounters.toString().hashCode())
+    val structures = state.structureField
+    signature = mix(signature, listOf(structures.centerChunkX, structures.centerChunkY, structures.layer).toString().hashCode())
+    signature = mix(signature, if (structures.bossCollapsed) 1 else 0)
+    signature = mix(signature, structures.structures.toString().hashCode())
+    signature = mix(signature, structures.walls.toString().hashCode())
+    signature = mix(signature, structures.signals.toString().hashCode())
+    signature = mix(signature, state.dungeon.toString().hashCode())
+    signature = mix(signature, state.spentStructureIds.toString().hashCode())
+    signature = mixLong(signature, state.lastAnnouncedStructureId)
+    signature = mix(signature, state.worldLayer.ordinal)
+    signature = mix(signature, state.worldKeepOut.toString().hashCode())
+    signature = mix(signature, state.runBoons.toString().hashCode())
+    return signature
 }
 
 private fun canonicalRenderFingerprint(state: MutableGameState): Long {
@@ -1296,6 +1370,8 @@ internal fun obstacleFieldFingerprint(current: Long, obstacles: List<Obstacle>):
         signature = mix(signature, obstacle.radius.toRawBits())
         signature = mix(signature, obstacle.shapeSeed)
         signature = mix(signature, obstacle.ricochetReadyAt.toRawBits())
+        signature = mix(signature, obstacle.fuseAt.toRawBits())
+        signature = mix(signature, if (obstacle.repels) 1 else 0)
     }
     return signature
 }

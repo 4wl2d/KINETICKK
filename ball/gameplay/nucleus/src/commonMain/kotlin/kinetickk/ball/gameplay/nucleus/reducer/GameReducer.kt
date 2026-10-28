@@ -7,6 +7,7 @@ import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.api.GameplayPointerAxis
 import kinetickk.ball.gameplay.api.GameplayRejection
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.gameplay.nucleus.model.clamp
@@ -28,6 +29,8 @@ internal fun initialEngineState(
     bootstrapProgress: GameplayProfileSnapshot?,
     initialMatter: Int? = null,
     initialRebirthLevel: Int = 0,
+    runMode: RunMode = RunMode.STANDARD,
+    offerRunOmen: Boolean = false,
 ): EngineState {
     val model = MutableGameState(
         content = content,
@@ -35,6 +38,8 @@ internal fun initialEngineState(
         initialMatter = initialMatter,
         initialRebirthLevel = initialRebirthLevel,
         bootstrapProgress = bootstrapProgress,
+        runMode = runMode,
+        offerRunOmen = offerRunOmen,
     )
     return EngineState(model)
 }

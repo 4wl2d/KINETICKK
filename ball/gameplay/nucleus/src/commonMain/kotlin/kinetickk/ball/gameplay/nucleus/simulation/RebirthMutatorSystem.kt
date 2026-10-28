@@ -50,7 +50,7 @@ internal val Enemy.armorIntact: Boolean get() = armored && !armorCracked
 
 /** R4: an ordinary enemy's death arms a burst [VOLATILE_BURST_DELAY_SECONDS] later inside a telegraph ring. */
 internal fun MutableGameState.queueVolatileRemains(enemy: Enemy) {
-    if (!rebirthProfile.has(RebirthMutator.VOLATILE_REMAINS) || !enemy.isOrdinary) return
+    if (!runMutatorActive(RebirthMutator.VOLATILE_REMAINS) || !enemy.isOrdinary) return
     if (volatileBursts.size >= MutableGameState.MAX_VOLATILE_BURSTS) return
     volatileBursts = (volatileBursts + VolatileBurstProjection(
         x = enemy.x,
@@ -90,18 +90,18 @@ internal fun MutableGameState.updateVolatileRemains() {
 
 /** R7: the share of a heal Entropy Tide lets through. */
 internal fun MutableGameState.entropyTideHealing(): Float =
-    if (rebirthProfile.has(RebirthMutator.ENTROPY_TIDE)) ENTROPY_TIDE_HEALING else 1f
+    if (runMutatorActive(RebirthMutator.ENTROPY_TIDE)) ENTROPY_TIDE_HEALING else 1f
 
 /** R7: the share of shield regeneration Entropy Tide lets through. */
 internal fun MutableGameState.entropyTideShieldRegen(): Float =
-    if (rebirthProfile.has(RebirthMutator.ENTROPY_TIDE)) ENTROPY_TIDE_SHIELD_REGEN else 1f
+    if (runMutatorActive(RebirthMutator.ENTROPY_TIDE)) ENTROPY_TIDE_SHIELD_REGEN else 1f
 
 /**
  * R8: one ordinary spawn in five arrives armored. The roll is a stateless SplitMix64 hash of the run
  * seed and the enemy id, so it draws nothing from the spawn stream and never shifts later spawns.
  */
 internal fun MutableGameState.rollVanguardArmor(enemy: Enemy) {
-    if (!rebirthProfile.has(RebirthMutator.ARMORED_VANGUARD) || !enemy.isOrdinary) return
+    if (!runMutatorActive(RebirthMutator.ARMORED_VANGUARD) || !enemy.isOrdinary) return
     val hash = splitMix64(splitMix64(runSeed.toLong() xor ARMOR_SEED_SALT) xor enemy.id.toLong())
     enemy.armored = (hash ushr 40).toFloat() / (1 shl 24) < ARMORED_VANGUARD_CHANCE
 }
@@ -123,11 +123,11 @@ internal fun armorWeaponFactor(enemy: Enemy, source: HitSource): Float =
 
 /** R9: a fresh Data pickup fades after [BLACKOUT_DATA_LIFE_SECONDS] unless the magnet latches it first. */
 internal fun MutableGameState.blackoutDataLife(life: Float): Float =
-    if (rebirthProfile.has(RebirthMutator.BLACKOUT)) min(life, BLACKOUT_DATA_LIFE_SECONDS) else life
+    if (runMutatorActive(RebirthMutator.BLACKOUT)) min(life, BLACKOUT_DATA_LIFE_SECONDS) else life
 
 /** R10: the Architect's last phase index: 3 (a fourth, enraged phase) under Singularity, else 2. */
 internal fun MutableGameState.architectFinalPhase(): Int =
-    if (rebirthProfile.has(RebirthMutator.SINGULARITY)) ARCHITECT_FINAL_PHASE + 1 else ARCHITECT_FINAL_PHASE
+    if (runMutatorActive(RebirthMutator.SINGULARITY)) ARCHITECT_FINAL_PHASE + 1 else ARCHITECT_FINAL_PHASE
 
 /** R10: true while the Singularity Architect is in its enraged fourth phase. */
 internal fun MutableGameState.architectEnraged(enemy: Enemy): Boolean =
@@ -135,7 +135,7 @@ internal fun MutableGameState.architectEnraged(enemy: Enemy): Boolean =
 
 /** R10: the Singularity Architect arrives with a Herald escort, the run's third and last Herald. */
 internal fun MutableGameState.spawnSingularityEscort() {
-    if (!rebirthProfile.has(RebirthMutator.SINGULARITY)) return
+    if (!runMutatorActive(RebirthMutator.SINGULARITY)) return
     if (content.enemy(EnemyType.HERALD).minimumRebirth > rebirthLevel) return
     heraldsSpawned++
     if (enemies.size >= content.rebirth.maxActiveEnemies) evictOldestOrdinaryEnemy()

@@ -5,7 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.DirectedReward
 import kinetickk.ball.content.api.SiteKind
-import kinetickk.ball.gameplay.nucleus.model.PointOfInterestState
+import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -19,8 +19,8 @@ class OptionalSitesTest {
     /** A run with its first window offered: two points, neither entered. */
     private fun offered() = game().apply {
         elapsed = 45f
-        updatePointsOfInterest(0.01f)
-        check(pointsOfInterest.size == 2)
+        updateSites(0.01f)
+        check(sites.size == 2)
     }
 
     /** Flies the Core past the first offered point, [offset] from its centre, and reports whether it activated. */
@@ -32,8 +32,8 @@ class OptionalSitesTest {
         game.previousCoreY = marks[1] + marks[2] + offset
         game.coreX = marks[0] + 40f
         game.coreY = marks[1] + marks[2] + offset
-        game.updatePointsOfInterest(0.01f)
-        return game.pointsOfInterest.any { it.active }
+        game.updateSites(0.01f)
+        return game.sites.any { it.active }
     }
 
     @Test
@@ -42,7 +42,7 @@ class OptionalSitesTest {
         val marks = FloatArray(MAX_OPTIONAL_SITE_MARKS * 3)
 
         assertEquals(2, game.optionalSiteMarks(marks))
-        game.pointsOfInterest.forEachIndexed { index, point ->
+        game.sites.forEachIndexed { index, point ->
             assertEquals(point.x, marks[index * 3])
             assertEquals(point.y, marks[index * 3 + 1])
         }
@@ -59,12 +59,12 @@ class OptionalSitesTest {
         val game = game()
         val marks = FloatArray(MAX_OPTIONAL_SITE_MARKS * 3)
         fun points(count: Int) = List(count) { index ->
-            PointOfInterestState(index, SiteKind.RESONANT_CIRCUIT, index * 10f, 0f, 85f)
+            SiteState(index.toLong(), SiteKind.RESONANT_CIRCUIT, index * 10f, 0f, 85f)
         }
 
-        game.pointsOfInterest = points(MAX_OPTIONAL_SITE_MARKS)
+        game.sites = points(MAX_OPTIONAL_SITE_MARKS)
         assertEquals(MAX_OPTIONAL_SITE_MARKS, game.optionalSiteMarks(marks))
-        game.pointsOfInterest = points(MAX_OPTIONAL_SITE_MARKS + 1)
+        game.sites = points(MAX_OPTIONAL_SITE_MARKS + 1)
         assertEquals(MAX_OPTIONAL_SITE_MARKS, game.optionalSiteMarks(marks))
         assertEquals((MAX_OPTIONAL_SITE_MARKS - 1) * 10f, marks[(MAX_OPTIONAL_SITE_MARKS - 1) * 3])
         assertFailsWith<IllegalArgumentException> { game.optionalSiteMarks(FloatArray(MAX_OPTIONAL_SITE_MARKS * 3 - 1)) }
@@ -74,7 +74,7 @@ class OptionalSitesTest {
     fun engagementCoversAnEnteredPointAndEveryDirectedReward() {
         val skipped = offered()
         assertFalse(skipped.optionalSitesTouched(), "An offer the Core has not entered is not engagement")
-        skipped.activatePointOfInterest(skipped.pointsOfInterest.first())
+        skipped.activateWindowSite(skipped.sites.first())
         assertTrue(skipped.optionalSitesTouched())
 
         val pending = game().apply { pendingDirectedRewards = listOf(DirectedReward.WEAPON) }

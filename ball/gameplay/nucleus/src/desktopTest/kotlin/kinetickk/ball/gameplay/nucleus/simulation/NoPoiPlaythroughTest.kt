@@ -107,8 +107,8 @@ class NoPoiPlaythroughTest {
                 }
                 state.enemies.filter { it.type == EnemyType.ELITE }.forEach { observedEliteIds += it.id }
                 if (state.bossSpawned && bossObservedAt == null) bossObservedAt = state.elapsed
-                if (reportAttempt != null && !poiEngaged && state.pointsOfInterest.any { it.active }) {
-                    report("POI ACTIVATED sec=${state.elapsed} core=${state.coreX.toInt()},${state.coreY.toInt()} speed=${state.speed.toInt()} points=${state.pointsOfInterest.map { "${it.kind}@${it.x.toInt()},${it.y.toInt()}" }} relics=${state.equippedRelics}")
+                if (reportAttempt != null && !poiEngaged && state.sites.any { it.active }) {
+                    report("POI ACTIVATED sec=${state.elapsed} core=${state.coreX.toInt()},${state.coreY.toInt()} speed=${state.speed.toInt()} points=${state.sites.map { "${it.kind}@${it.x.toInt()},${it.y.toInt()}" }} relics=${state.equippedRelics}")
                 }
                 poiEngaged = poiEngaged || state.optionalSitesTouched()
                 if (state.elapsed >= 180f && foundation == null) foundation = milestone(state, observedEliteIds.size)

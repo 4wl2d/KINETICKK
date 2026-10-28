@@ -31,6 +31,7 @@ internal fun MutableGameState.resolveCollisions(delta: Float) {
 private fun MutableGameState.resolveCollisionPasses(delta: Float) {
     // Shots stopped by an asteroid are spent before they can hit anything beyond it.
     blockProjectilesAtObstacles()
+    blockProjectilesAtWalls()
     resolveEnemyCoreCollisions()
     if (phase != GamePhase.RUNNING) return
     resolveWeaponDamage(delta)

@@ -103,15 +103,35 @@ private fun MutableGameState.advanceDisc(disc: WeaponEntity, delta: Float) {
     disc.angle += GYRE_SPIN * delta
     if (disc.phase == 1) disc.timer = max(0f, disc.timer - delta)
     val blocker = obstacleOnPath(disc.x, disc.y, disc.x + disc.vx * delta, disc.y + disc.vy * delta, disc.radius)
-    if (blocker != null) {
+    val wallIndex = if (blocker == null) {
+        wallOnPath(disc.x, disc.y, disc.x + disc.vx * delta, disc.y + disc.vy * delta, disc.radius)
+    } else -1
+    if (blocker != null || wallIndex >= 0) {
         if (!hasMasteryForm(3)) {
             if (disc.phase == 0) beginDiscReturn(disc) else disc.life = 0f
             return
         }
-        deflectDisc(disc, blocker)
-        // The new heading runs along or away from that rock; a second rock on it holds the disc for this step.
-        val next = obstacleOnPath(disc.x, disc.y, disc.x + disc.vx * delta, disc.y + disc.vy * delta, disc.radius)
-        if (next != null && next !== blocker) return
+        if (blocker != null) {
+            val nx = disc.x - blocker.x
+            val ny = disc.y - blocker.y
+            val distance = max(1f, length(nx, ny))
+            deflectDisc(disc, nx / distance, ny / distance)
+            // The new heading runs along or away from that rock; a second rock on it holds the disc for this step.
+            val next = obstacleOnPath(disc.x, disc.y, disc.x + disc.vx * delta, disc.y + disc.vy * delta, disc.radius)
+            if (next != null && next !== blocker) return
+        } else {
+            // A wall deflects like a rock, off the normal from its nearest point.
+            val wall = structureField.walls[wallIndex]
+            val along = segmentParameter(disc.x, disc.y, wall.ax, wall.ay, wall.bx, wall.by)
+            val nx = disc.x - (wall.ax + (wall.bx - wall.ax) * along)
+            val ny = disc.y - (wall.ay + (wall.by - wall.ay) * along)
+            val distance = max(1f, length(nx, ny))
+            deflectDisc(disc, nx / distance, ny / distance)
+            val nextX = disc.x + disc.vx * delta
+            val nextY = disc.y + disc.vy * delta
+            val nextWall = wallOnPath(disc.x, disc.y, nextX, nextY, disc.radius)
+            if ((nextWall >= 0 && nextWall != wallIndex) || obstacleOnPath(disc.x, disc.y, nextX, nextY, disc.radius) != null) return
+        }
     }
     val stepX = disc.vx * delta
     val stepY = disc.vy * delta
@@ -129,13 +149,11 @@ private fun beginDiscReturn(disc: WeaponEntity) {
     disc.clearHits()
 }
 
-/** The third form at a rock: an outgoing disc reflects off it; a returning one glances along it toward the Core. */
-private fun MutableGameState.deflectDisc(disc: WeaponEntity, blocker: Obstacle) {
-    val nx = disc.x - blocker.x
-    val ny = disc.y - blocker.y
-    val distance = max(1f, length(nx, ny))
-    val ux = nx / distance
-    val uy = ny / distance
+/**
+ * The third form at a rock or wall with outward normal ([ux], [uy]): an outgoing disc reflects off it; a returning one
+ * glances along it toward the Core.
+ */
+private fun MutableGameState.deflectDisc(disc: WeaponEntity, ux: Float, uy: Float) {
     val along = disc.vx * ux + disc.vy * uy
     if (along >= 0f) return
     if (disc.phase == 0) {
@@ -191,7 +209,7 @@ private fun MutableGameState.advanceLens(lens: WeaponEntity, delta: Float) {
     lens.life -= delta
     val nextX = lens.x + lens.vx * delta
     val nextY = lens.y + lens.vy * delta
-    if (obstacleOnPath(lens.x, lens.y, nextX, nextY, lens.radius) != null) {
+    if (obstacleOnPath(lens.x, lens.y, nextX, nextY, lens.radius) != null || wallOnPath(lens.x, lens.y, nextX, nextY, lens.radius) >= 0) {
         collapseLens(lens)
         return
     }
@@ -291,7 +309,9 @@ private fun MutableGameState.advanceShard(shard: WeaponEntity, delta: Float) {
     if (target != null && target.alive) steer(shard, target.x, target.y, AEGIS_SPEED, AEGIS_TURN_RATE, delta)
     val nextX = shard.x + shard.vx * delta
     val nextY = shard.y + shard.vy * delta
-    if (obstacleOnPath(shard.x, shard.y, nextX, nextY, shard.radius) != null) {
+    if (obstacleOnPath(shard.x, shard.y, nextX, nextY, shard.radius) != null ||
+        wallOnPath(shard.x, shard.y, nextX, nextY, shard.radius) >= 0
+    ) {
         shard.life = 0f
         burst(shard.x, shard.y, 3, 0)
         return
@@ -318,7 +338,9 @@ private fun MutableGameState.advanceMissile(missile: WeaponEntity, delta: Float)
     missile.angle = atan2(missile.vy, missile.vx)
     val nextX = missile.x + missile.vx * delta
     val nextY = missile.y + missile.vy * delta
-    if (obstacleOnPath(missile.x, missile.y, nextX, nextY, missile.radius) != null) {
+    if (obstacleOnPath(missile.x, missile.y, nextX, nextY, missile.radius) != null ||
+        wallOnPath(missile.x, missile.y, nextX, nextY, missile.radius) >= 0
+    ) {
         missileBurst(missile, null)
         missile.life = 0f
         return

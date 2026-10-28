@@ -96,12 +96,14 @@ internal fun MutableGameState.startRun() {
     necroticClock = 0f
     heirloomOfferActive = false
     heirloomPending = heirloomCandidates.isNotEmpty() && rebirthRank >= 1
+    omenPending = offersRunOmen && content.variety.omens.enabled
     volatileBursts = kinetickk.foundation.collections.immutableListOf()
     totem = null
     nextEntityId = 1
     spawnClock = 0.2f
     nextEliteAt = rebirthProfile.eliteInterval(content.tempo.firstEliteAtSeconds)
     elitesSpawned = 0
+    startRunVariety()
     resetSpawnDirector()
     bossSpawned = false
     accumulator = 0f
@@ -135,6 +137,7 @@ internal fun MutableGameState.startRun() {
     turnHoldTime = 0f
     turnRecoveryCooldown = 0f
     turnDirection = 0
+    coreStraightness = 0f
     elapsed = 0f
     heat = 0f
     overheated = false
@@ -184,7 +187,10 @@ internal fun MutableGameState.startRun() {
     // A new run starts with a new character runtime (Dash count 0), so the weapon's input tracking starts over too.
     weaponRuntime = WeaponRuntime()
     resetWeaponRuntime()
-    resetPointsOfInterest()
+    resetSites()
+    resetRunVariety()
+    resetDimensions()
+    resetStructures()
     resetObstacles()
     emitSound(GameplayAudioCue.UI_CLICK)
     spawnOpeningPacks()
@@ -221,6 +227,8 @@ internal fun MutableGameState.resetRunStats() {
     comboWindow = 2.8f
     overdriveGain = 1f
     dragCoefficient = BASE_DRAG_COEFFICIENT
+    gripStrength = 1f
+    slingStrength = 1f
     applyCharacterTraits()
     applyMatrixStats()
     maxHp += content.upgrades.characterIntegrityPerLevel * characterUpgradeLevel
@@ -452,6 +460,7 @@ internal fun MutableGameState.finishChoice(sound: GameplayAudioCue) {
     }
     directedReward = null
     selectedRewardFocus = null
+    offerRarityFloor = null
     choices = emptyList()
     phase = GamePhase.RUNNING
     interpolationPrimed = false

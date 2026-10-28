@@ -916,11 +916,11 @@ private fun MutableGameState.pointsOfInterestProjection(
     identitySource: MutableGameState?,
 ): ImmutableList<PointOfInterestProjection> {
     if (reusable != null) {
-        if (pointsOfInterest === identitySource?.pointsOfInterest && elapsed.sameBitsAs(identitySource.elapsed)) return reusable
-        if (reusable.size == pointsOfInterest.size) {
+        if (sites === identitySource?.sites && elapsed.sameBitsAs(identitySource.elapsed)) return reusable
+        if (reusable.size == sites.size) {
             var same = true
-            for (index in pointsOfInterest.indices) {
-                if (!pointProjectionMatches(reusable[index], pointsOfInterest[index])) {
+            for (index in sites.indices) {
+                if (!pointProjectionMatches(reusable[index], sites[index])) {
                     same = false
                     break
                 }
@@ -928,37 +928,40 @@ private fun MutableGameState.pointsOfInterestProjection(
             if (same) return reusable
         }
     }
-    return pointsOfInterest.mapToImmutableList { point ->
+    return sites.mapToImmutableList { point ->
         PointOfInterestProjection(point.kind, content.sites.definition(point.kind).name,
-            point.x, point.y, point.active, pointRemaining(point), point.nextBeacon, pointProgress(point),
-            point.defenderIds, point.warningRemaining, point.volleyAngle)
+            point.x, point.y, point.active, pointRemaining(point), nextBeacon(point), pointProgress(point),
+            point.foeIds, point.warningRemaining, point.volleyAngle)
     }
 }
 
-private fun MutableGameState.pointRemaining(point: PointOfInterestState): Float =
+/** The projection's 1-based beacon number of a site's next course mark. */
+private fun nextBeacon(point: SiteState): Int = point.step + 1
+
+private fun MutableGameState.pointRemaining(point: SiteState): Float =
     if (point.active) point.remaining else (point.expiresAt - elapsed).coerceAtLeast(0f)
 
-private fun MutableGameState.pointProgress(point: PointOfInterestState): Float = when (point.kind) {
-    kinetickk.ball.content.api.SiteKind.RESONANT_CIRCUIT -> (point.nextBeacon - 1) / 3f
-    kinetickk.ball.content.api.SiteKind.SEALED_ANOMALY -> point.defeatedDefenders / 3f
+private fun MutableGameState.pointProgress(point: SiteState): Float = when (point.kind) {
+    kinetickk.ball.content.api.SiteKind.RESONANT_CIRCUIT -> point.step / 3f
+    kinetickk.ball.content.api.SiteKind.SEALED_ANOMALY -> point.count / 3f
     kinetickk.ball.content.api.SiteKind.COLLAPSING_ORBIT ->
-        point.orbitSeconds / content.sites.windows.orbitRequiredSeconds
+        point.meter / content.sites.windows.orbitRequiredSeconds
     // Only the anomalies are offered until the site lane draws kinds by weight.
     else -> 0f
 }
 
 private fun MutableGameState.pointProjectionMatches(
     projection: PointOfInterestProjection,
-    point: PointOfInterestState,
+    point: SiteState,
 ): Boolean =
     projection.kind == point.kind &&
         projection.x.sameBitsAs(point.x) &&
         projection.y.sameBitsAs(point.y) &&
         projection.active == point.active &&
         projection.remaining.sameBitsAs(pointRemaining(point)) &&
-        projection.nextBeacon == point.nextBeacon &&
+        projection.nextBeacon == nextBeacon(point) &&
         projection.progress.sameBitsAs(pointProgress(point)) &&
-        (projection.defenderIds === point.defenderIds || projection.defenderIds == point.defenderIds) &&
+        (projection.defenderIds === point.foeIds || projection.defenderIds == point.foeIds) &&
         projection.warningRemaining.sameBitsAs(point.warningRemaining) &&
         projection.volleyAngle.sameBitsAs(point.volleyAngle)
 

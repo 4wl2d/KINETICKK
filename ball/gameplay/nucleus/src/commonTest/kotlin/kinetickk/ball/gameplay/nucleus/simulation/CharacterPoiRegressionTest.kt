@@ -7,7 +7,7 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.DirectedReward
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.nucleus.model.CharacterRuntime
-import kinetickk.ball.gameplay.nucleus.model.PointOfInterestState
+import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
@@ -54,17 +54,17 @@ class CharacterPoiRegressionTest {
     @Test
     fun activeVaultDefendersRemainAvailableInsideTheTrialEscapeDistance() {
         val game = game()
-        game.activatePointOfInterest(PointOfInterestState(0, SiteKind.SEALED_ANOMALY, 0f, 0f, 85f))
-        val defenderIds = game.pointsOfInterest.single().defenderIds
+        game.activateWindowSite(SiteState(0L, SiteKind.SEALED_ANOMALY, 0f, 0f, 85f))
+        val defenderIds = game.sites.single().foeIds
         game.coreX = 2_000f
         game.previousCoreX = game.coreX
-        game.updatePointsOfInterest(0.01f)
-        assertTrue(game.pointsOfInterest.single().active)
+        game.updateSites(0.01f)
+        assertTrue(game.sites.single().active)
         game.updateEnemies(0.01f)
         assertEquals(3, game.enemies.count { it.id in defenderIds })
         game.coreX = 0f
         game.enemies.filter { it.id in defenderIds }.forEach { game.onEnemyKilled(it) }
-        game.updatePointsOfInterest(0.01f)
+        game.updateSites(0.01f)
         assertEquals(listOf(DirectedReward.RELIC), game.pendingDirectedRewards)
     }
 

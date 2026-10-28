@@ -548,6 +548,36 @@ class EnemyRosterBehaviorTest {
         runGrace = Float.MAX_VALUE
     }
 
+    @Test
+    fun everyProfileRankMatchesTheShippedRoster() {
+        val content = quietState().content
+        for (type in EnemyType.entries) {
+            val definition = content.enemy(type)
+            assertEquals(definition.rank, type.profile.rank, "$type rank")
+            val enemy = Enemy(id = 1, type = type, x = 0f, y = 0f, hp = 1f, maxHp = 1f, radius = 1f)
+            assertEquals(definition.isBoss, enemy.isBoss, "$type boss")
+            assertEquals(definition.isElite, enemy.isElite, "$type Elite")
+            assertEquals(definition.isMiniBoss, enemy.isMiniBoss, "$type mini-boss")
+            assertEquals(definition.isSecretBoss, enemy.isSecretBoss, "$type secret boss")
+        }
+        assertEquals(listOf(EnemyType.ARCHITECT), EnemyType.entries.filter { Enemy(1, it, 0f, 0f, hp = 1f, maxHp = 1f, radius = 1f).isBoss })
+        assertEquals(listOf(EnemyType.HERALD), EnemyType.entries.take(19).filter { Enemy(1, it, 0f, 0f, hp = 1f, maxHp = 1f, radius = 1f).isMiniBoss })
+    }
+
+    @Test
+    fun aBossFrameHardensOnlyOverItsProfilesPhases() {
+        val state = quietState()
+        val architect = state.spawn(EnemyType.ARCHITECT, 900f, 0f)
+        val taken = EnemyType.ARCHITECT.profile.impactTaken
+        for (phase in 0..3) {
+            architect.phase = phase
+            assertEquals(taken - 0.05f * phase.coerceAtMost(2), architect.impactTaken, "Architect phase $phase")
+        }
+        val drifter = state.spawn(EnemyType.DRIFTER, 900f, 200f)
+        drifter.phase = 2
+        assertEquals(EnemyType.DRIFTER.profile.impactTaken, drifter.impactTaken, "a kind without a frame never hardens")
+    }
+
     private fun MutableGameState.spawn(type: EnemyType, x: Float, y: Float, hp: Float? = null): Enemy {
         val enemy = spawnedEnemy(type, coreX + x, coreY + y)
         if (hp != null) enemy.hp = hp

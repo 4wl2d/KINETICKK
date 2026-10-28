@@ -23,9 +23,11 @@ internal fun MutableGameState.onEnemyKilled(enemy: Enemy) {
     // that completes a level cannot open a choice in place of the victory.
     val victory = enemy.type == EnemyType.ARCHITECT && phase == GamePhase.RUNNING
     if (victory) phase = GamePhase.VICTORY
-    recordPointDefenderKilled(enemy)
-    // The Herald pays out like an Elite: a Key, a Relic and an Elite kill.
-    val eliteReward = enemy.isElite || enemy.isMiniBoss
+    recordSiteKill(enemy)
+    onEncounterEnemyKilled(enemy)
+    onDimensionEnemyKilled(enemy)
+    // Mini-bosses (the Herald) and secret bosses pay out like an Elite: a Key, a Relic and an Elite kill.
+    val eliteReward = enemy.isElite || enemy.isMiniBoss || enemy.isSecretBoss
     if (eliteReward) pendingEliteKills++
     enemy.dead = true
     kills++
@@ -62,6 +64,7 @@ internal fun MutableGameState.onEnemyKilled(enemy: Enemy) {
     // A Splitter crushed by Mass or a fresh Collapse leaves no fragments.
     if (enemy.type == EnemyType.SPLITTER && !splitterCrushed(enemy)) spawnSplitterFragments(enemy)
     queueVolatileRemains(enemy)
+    onAffixedEnemyKilled(enemy)
     shockwave(
         enemy.x,
         enemy.y,
@@ -102,7 +105,8 @@ internal fun MutableGameState.spawnSplitterFragments(enemy: Enemy) {
             maxHp = fragmentHp,
             radius = SPLITTER_FRAGMENT_RADIUS,
             actionTimer = 0.2f,
-        )
+        ).also { fragment -> fragment.ownerTag = enemy.ownerTag }
+        recordEncounterSpawn(enemy.ownerTag)
     }
 }
 

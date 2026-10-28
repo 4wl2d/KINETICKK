@@ -18,6 +18,10 @@ internal data class Obstacle(
     val shapeSeed: Int,
     /** Bumpers only: run time before which a bounce fires no further ricochet. */
     val ricochetReadyAt: Float = 0f,
+    /** Derelict mines: run time the armed cluster detonates; 0 while dormant. */
+    val fuseAt: Float = 0f,
+    /** Gravity knots: true pushes (Repulsor), false pulls (Mass Knot). */
+    val repels: Boolean = false,
 )
 
 /**

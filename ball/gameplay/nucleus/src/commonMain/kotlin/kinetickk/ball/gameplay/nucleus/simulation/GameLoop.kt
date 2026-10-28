@@ -150,7 +150,10 @@ internal fun MutableGameState.simulateStep(delta: Float) {
     // A slam can level up through a Data clause and open a choice: nothing else acts once it is open.
     if (phase != GamePhase.RUNNING) return
     updateCamera(delta)
-    updatePointsOfInterest(delta)
+    updateSites(delta)
+    updateStructures(delta)
+    updateDimension(delta)
+    updateRunVariety(delta)
     updateWeapons(delta)
     updateEnemies(delta)
     if (phase != GamePhase.RUNNING) return
@@ -177,6 +180,9 @@ internal fun MutableGameState.simulateStep(delta: Float) {
         message = "THE ARCHITECT"
         messageTime = 3f
         projectiles.removeMatchingStable { projectile -> projectile.hostile }
+        // The Architect meets the Core in realspace, and no encounter survives into its fight.
+        forceRealspaceBeforeArchitect()
+        endAllEncounters(despawn = true)
         // The terminal boss has priority over the oldest ordinary enemy at the hard cap.
         if (enemies.size >= content.rebirth.maxActiveEnemies) enemies.removeAt(0)
         spawnEnemy(EnemyType.ARCHITECT)

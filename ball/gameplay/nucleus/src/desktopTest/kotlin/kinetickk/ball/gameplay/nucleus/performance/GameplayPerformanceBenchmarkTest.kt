@@ -14,7 +14,33 @@ import kinetickk.ball.gameplay.nucleus.GameplayDecision
 import kinetickk.ball.gameplay.nucleus.GameplayNucleus
 import kinetickk.ball.gameplay.nucleus.GameplayNucleusPulse
 import kinetickk.ball.gameplay.nucleus.GameplayOutput
-import kinetickk.ball.gameplay.nucleus.model.PointOfInterestState
+import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.DirectorPersonalityId
+import kinetickk.ball.content.api.EliteAffix
+import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.OmenId
+import kinetickk.ball.content.api.SignalKind
+import kinetickk.ball.content.api.StructureTemplateId
+import kinetickk.ball.content.api.WorldEventKind
+import kinetickk.ball.content.api.WorldLayer
+import kinetickk.ball.gameplay.api.RunMode
+import kinetickk.ball.gameplay.nucleus.model.AmbientSiteWindow
+import kinetickk.ball.gameplay.nucleus.model.DungeonState
+import kinetickk.ball.gameplay.nucleus.model.PlacedStructure
+import kinetickk.ball.gameplay.nucleus.model.SignalPrompt
+import kinetickk.ball.gameplay.nucleus.model.SiteState
+import kinetickk.ball.gameplay.nucleus.model.StructureField
+import kinetickk.ball.gameplay.nucleus.model.Wall
+import kinetickk.ball.gameplay.nucleus.model.WorldEventPlan
+import kinetickk.ball.gameplay.nucleus.render.EventSignalProjection
+import kinetickk.ball.gameplay.nucleus.render.WallKind
+import kinetickk.ball.gameplay.nucleus.render.WorldEventProjection
+import kinetickk.ball.gameplay.nucleus.simulation.EncounterOwner
+import kinetickk.ball.gameplay.nucleus.simulation.EncounterState
+import kinetickk.ball.gameplay.nucleus.simulation.WorldKeepOut
+import kinetickk.ball.gameplay.nucleus.simulation.copyForScalarInputReduction
+import kinetickk.ball.gameplay.nucleus.simulation.encounterTag
+import kinetickk.foundation.collections.immutableListOf
 import kinetickk.ball.gameplay.nucleus.model.ActiveBuff
 import kinetickk.ball.gameplay.nucleus.model.CombatFieldKind
 import kinetickk.ball.gameplay.nucleus.model.FieldCell
@@ -122,8 +148,8 @@ class GameplayPerformanceBenchmarkTest {
             { matrixRanks[0] = 1 },
             { matrix = matrix.copy(eliteBounty = true) },
             { pendingDirectedRewards = listOf(DirectedReward.RELIC) },
-            { pointsOfInterest = listOf(PointOfInterestState(
-                0, SiteKind.RESONANT_CIRCUIT, 10f, 20f, 40f,
+            { sites = listOf(SiteState(
+                0L, SiteKind.RESONANT_CIRCUIT, 10f, 20f, 40f,
             )) },
             { rebornItems[0] = 1 },
             { clauseReadyAt[0] = 1f },
@@ -158,7 +184,7 @@ class GameplayPerformanceBenchmarkTest {
             { directorPhase = 2 },
             { spawnBudget = 3f },
             { pendingEventKind = 1 },
-            { recentEventTypes = 4 },
+            { recentEventTypes = 4L },
             { ambushReadyAt = 5f },
             { capOverflowReadyAt = 5f },
             { spawnEventCount = 3 },
@@ -232,6 +258,75 @@ class GameplayPerformanceBenchmarkTest {
             { apexBufferTime = 0.1f },
             { enemies.first().status[StatusCell.MARK] = 1f },
             { enemies.first().status[StatusCell.MARK_UNTIL] = 2f },
+            // 0.6.0 shared world contracts: terrain, sites, run variety, enemies, structures and dimensions.
+            { coreStraightness = 0.5f },
+            { gripStrength = 2f },
+            { slingStrength = 2f },
+            { obstacleHitSurfaceId = 7L },
+            { coreObstacleGap = 40f },
+            { grazeReadyAt = 1f },
+            { slingWellId = 3L },
+            { slingEntryHeading = 1f },
+            { nextSiteWindowIndex = 3 },
+            { siteRandom.nextInt() },
+            { ambientSites = AmbientSiteWindow(1, 2, immutableListOf(
+                SiteState(5L, SiteKind.DRIFT_CACHE, 1f, 2f, Float.POSITIVE_INFINITY),
+            )) },
+            { secretSigil = SiteState(16L, SiteKind.FAR_SIGIL, 1f, 2f, Float.POSITIVE_INFINITY) },
+            { openedSiteIds = listOf(4L) },
+            { runSecretFlags = 1 },
+            { worldDiscoveryMask = 2 },
+            { pendingWorldDiscoveryMask = 2 },
+            { pendingFloorOffers = listOf(ItemRarity.RARE) },
+            { goldenDrifterId = 5 },
+            { goldenDrifterUntil = 3f },
+            { spinBuckets = listOf(1f) },
+            { spinCurrent = 1f },
+            { spinClock = 1f },
+            { spinLastAngle = 1f },
+            { spinPrimed = true },
+            { omenPending = true },
+            { runOmen = OmenId.RICH_VEINS },
+            { runMutatorMask = 1 },
+            { directorPersonality = DirectorPersonalityId.TIDE },
+            { featuredAspect = 2 },
+            { surgeIndex = 1 },
+            { surgeThemeType = 3 },
+            { varietyAnnouncement = 1 },
+            { keynoteTag = BuildTag.DRIVE },
+            { keynoteElement = StatusElement.SONIC },
+            { worldEventPlans = immutableListOf(WorldEventPlan(WorldEventKind.DATA_STORM, 1f, 2f, 3f)) },
+            { nextWorldEvent = 1 },
+            { worldEvent = WorldEventProjection(WorldEventKind.SOLAR_FLARE, 1f, 2f, 3f) },
+            { worldEventPulse = 1 },
+            { worldEventNextPulseAt = 2f },
+            { eventSignals = immutableListOf(EventSignalProjection(1, SignalKind.MERCHANT, 1f, 2f, 3f)) },
+            { nextSignalSlot = 1 },
+            { signalsSpawned = 1 },
+            { signalsEngaged = 1 },
+            { pendingSignalPrompts = immutableListOf(SignalPrompt(SignalKind.DERELICT, 0)) },
+            { offerRarityFloor = ItemRarity.EPIC },
+            { secretBossMask = 1L shl 34 },
+            { encounters = immutableListOf(
+                EncounterState(encounterTag(EncounterOwner.SITE, 1L), 0f, 0f, 300f, 2_400f, 1, 0, -1, 0f),
+            ) },
+            { structureField = StructureField.of(
+                0, 0, 0, false,
+                listOf(PlacedStructure(1L shl 63, StructureTemplateId.VAULT, 0, 900f, 0f, 300f, 200f, 0, 1, false)),
+                listOf(Wall(1L shl 63, WallKind.SOLID, 600f, -200f, 1_200f, -200f, 24f)),
+                emptyList(),
+            ) },
+            { dungeon = DungeonState(1L shl 63, StructureTemplateId.VAULT, 0, 900f, 0f, enteredAt = 1f) },
+            { spentStructureIds = listOf(1L) },
+            { lastAnnouncedStructureId = 1L },
+            { worldLayer = WorldLayer.ZENITH },
+            { worldKeepOut = WorldKeepOut(WorldLayer.BASE, 0.0, 0.0, 900f) },
+            { runBoons = immutableListOf(32) },
+            { enemies.first().ownerTag = 5L },
+            { enemies.first().charges = 1 },
+            { enemies.first().phaseStartPending = true },
+            { enemies.first().affix = EliteAffix.SHIELDED },
+            { enemies.first().champion = true },
         )
         changes.forEachIndexed { index, change ->
             val changed = source.copyForReduction().apply(change)
@@ -239,6 +334,11 @@ class GameplayPerformanceBenchmarkTest {
             assertEquals(canonicalStateFingerprint(changed), canonicalStateFingerprint(changed.copyForReduction()))
             assertEquals(original, canonicalStateFingerprint(source))
         }
+        // Baby mode is fixed when the run is created, so it is witnessed by construction and survives every copy.
+        val easy = MutableGameState(canonicalGameplayContent, runMode = RunMode.EASY).apply { startRun() }
+        assertNotEquals(original, canonicalStateFingerprint(easy))
+        assertTrue(easy.copyForReduction().easyMode)
+        assertTrue(easy.copyForScalarInputReduction().easyMode)
     }
 
     /**
@@ -253,12 +353,16 @@ class GameplayPerformanceBenchmarkTest {
             Obstacle(id = 2L, kind = ObstacleKind.BUMPER, x = -300f, y = 75.25f, radius = 34f, shapeSeed = -9, ricochetReadyAt = 1.5f),
             Obstacle(id = 3L, kind = ObstacleKind.UNSTABLE, x = 900f, y = 900f, radius = 150f, shapeSeed = 123_456),
         )
-        assertEquals(-757_718_850_270_372_542L, obstacleFieldFingerprint(17L, obstacles))
+        assertEquals(6_813_101_050_753_336_834L, obstacleFieldFingerprint(17L, obstacles))
         val projections = obstacles.map { ObstacleProjection(it.id, it.kind, it.x, it.y, it.radius, it.shapeSeed) }
         assertEquals(2_368_442_101_832_176_810L, obstacleProjectionFingerprint(17L, projections))
         val rekinded = obstacles.mapIndexed { index, obstacle -> if (index == 0) obstacle.copy(kind = ObstacleKind.UNSTABLE) else obstacle }
         assertNotEquals(obstacleFieldFingerprint(17L, obstacles), obstacleFieldFingerprint(17L, rekinded))
         val rearmed = obstacles.mapIndexed { index, obstacle -> if (index == 1) obstacle.copy(ricochetReadyAt = 3f) else obstacle }
         assertNotEquals(obstacleFieldFingerprint(17L, obstacles), obstacleFieldFingerprint(17L, rearmed))
+        val fused = obstacles.mapIndexed { index, obstacle -> if (index == 2) obstacle.copy(fuseAt = 4f) else obstacle }
+        assertNotEquals(obstacleFieldFingerprint(17L, obstacles), obstacleFieldFingerprint(17L, fused))
+        val repelling = obstacles.mapIndexed { index, obstacle -> if (index == 0) obstacle.copy(repels = true) else obstacle }
+        assertNotEquals(obstacleFieldFingerprint(17L, obstacles), obstacleFieldFingerprint(17L, repelling))
     }
 }

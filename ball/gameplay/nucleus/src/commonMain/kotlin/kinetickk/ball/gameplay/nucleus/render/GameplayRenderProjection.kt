@@ -39,6 +39,8 @@ enum class WeaponNodeType { GRAVITY_MINE }
 enum class WeaponEntityKind { DISC, SENTRY, LENS, WELL, RIFT, SHARD, MISSILE, RING, TETHER, BEAM }
 /** World obstacles: an [ASTEROID] hurts at speed, a [BUMPER] throws the Core back, an [UNSTABLE] asteroid explodes. */
 enum class ObstacleKind { ASTEROID, BUMPER, UNSTABLE }
+/** Structure capsule walls: a [SOLID] wall, a [DOOR_SEALED] door that blocks like a wall, a [DOOR_OPEN] door that lets the Core through. */
+enum class WallKind { SOLID, DOOR_SEALED, DOOR_OPEN }
 
 data class ChoiceOption(
     val type: ChoiceType,

@@ -71,7 +71,7 @@ internal fun MutableGameState.steeringDrag(): Float {
     if (frictionlessUntil > elapsed && hasVerb(ReactionId.SUPERCONDUCT)) {
         drag *= reactionValue(ReactionId.SUPERCONDUCT, FRICTIONLESS_DRAG_VALUE)
     }
-    return drag
+    return layerDrag(drag)
 }
 
 /**

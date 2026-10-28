@@ -309,8 +309,17 @@ internal fun MutableGameState.clearRelicRuntime(id: RelicId) {
     }
 }
 
+/**
+ * Opens the next waiting choice in queue order: the run omen, the Heirloom, plain level offers, directed rewards,
+ * rarity-floor offers, Relic choices, dimension rewards, then signal prompts. Level offers chain into the next of
+ * the later kinds.
+ */
 internal fun MutableGameState.openNextPendingChoice() {
     if (phase != GamePhase.RUNNING) return
+    if (omenPending) {
+        openOmenChoice()
+        if (phase != GamePhase.RUNNING) return
+    }
     if (heirloomPending) {
         openHeirloomChoice()
         if (phase != GamePhase.RUNNING) return
@@ -327,9 +336,15 @@ internal fun MutableGameState.openNextPendingChoice() {
                 val reward = pendingDirectedRewards.first()
                 pendingDirectedRewards = pendingDirectedRewards.drop(1)
                 openDirectedReward(reward)
+            } else if (phase == GamePhase.RUNNING && pendingFloorOffers.isNotEmpty()) {
+                openNextFloorOffer()
             } else if (phase == GamePhase.RUNNING && pendingRelicChoices > 0) {
                 pendingRelicChoices--
                 openRelicChoice()
+            } else if (phase == GamePhase.RUNNING && hasPendingDimensionReward()) {
+                openPendingDimensionReward()
+            } else if (phase == GamePhase.RUNNING && pendingSignalPrompts.isNotEmpty()) {
+                openSignalPrompt()
             }
         }
         pendingDirectedRewards.isNotEmpty() -> {
@@ -337,11 +352,21 @@ internal fun MutableGameState.openNextPendingChoice() {
             pendingDirectedRewards = pendingDirectedRewards.drop(1)
             openDirectedReward(reward)
         }
+        pendingFloorOffers.isNotEmpty() -> openNextFloorOffer()
         pendingRelicChoices > 0 -> {
             pendingRelicChoices--
             openRelicChoice()
         }
+        hasPendingDimensionReward() -> openPendingDimensionReward()
+        pendingSignalPrompts.isNotEmpty() -> openSignalPrompt()
     }
+}
+
+/** Opens the oldest waiting rarity-floor item offer. */
+private fun MutableGameState.openNextFloorOffer() {
+    val floor = pendingFloorOffers.first()
+    pendingFloorOffers = pendingFloorOffers.drop(1)
+    openItemOfferWithFloor(floor)
 }
 
 internal fun MutableGameState.amplifyCurrentWeapon() {
@@ -512,8 +537,9 @@ internal fun MutableGameState.applyStatDelta(effect: ItemEffect, amount: Float) 
         ItemEffect.DAMAGE_REDUCTION -> damageReduction = (damageReduction + amount * (1f - damageReduction / 0.65f)).coerceIn(0f, 0.65f)
         ItemEffect.COMBO_WINDOW -> comboWindow = max(0.5f, comboWindow + amount)
         ItemEffect.OVERDRIVE_GAIN -> overdriveGain = max(0.1f, overdriveGain + amount)
-        // The flight law's grip and sling stats; no shipped item or node carries them yet.
-        ItemEffect.GRIP, ItemEffect.SLING -> Unit
+        // The flight law's grip and sling stats; the law reads them clamped.
+        ItemEffect.GRIP -> gripStrength += amount
+        ItemEffect.SLING -> slingStrength += amount
     }
 }
 
@@ -549,7 +575,7 @@ internal fun MutableGameState.resetWeaponRuntime() {
 }
 
 internal fun MutableGameState.grantMatter(base: Float) {
-    matterFraction += base * matterGain
+    matterFraction += base * matterGain * layerMatterMultiplier()
     val whole = floor(matterFraction).toLong()
     if (whole > 0L) {
         runMatter = saturatedAdd(runMatter, whole)
@@ -588,6 +614,12 @@ internal fun MutableGameState.takeProgressUpdate(): GameplayProgressUpdate? {
         dataPickups = pendingDataPickups,
         acquiredItemIds = pendingAcquiredItemIds.toImmutableList(),
     )
+    clearPendingProgress()
+    return update
+}
+
+/** Drops every pending Profile fact. Every new outbox field must be cleared here (Baby mode relies on it). */
+internal fun MutableGameState.clearPendingProgress() {
     pendingBankedMatter = 0L
     pendingDiscoveredItemIds.clear()
     pendingDiscoveredRelicMask = 0L
@@ -604,7 +636,6 @@ internal fun MutableGameState.takeProgressUpdate(): GameplayProgressUpdate? {
     pendingRicochets = 0
     pendingDataPickups = 0
     pendingAcquiredItemIds = emptyList()
-    return update
 }
 
 /** Progress that is published by the next reduction. */

@@ -124,8 +124,9 @@ internal fun MutableGameState.buildItemChoices() {
         if (volatileLift) rarity = ItemRarity.entries.firstOrNull { it.rank == rarity.rank + 1 } ?: rarity
         val pityCard = lane == OfferLane.VOLATILE && pityDue && !rareOrBetter
         if (pityCard) rarity = maxOf(rarity, ItemRarity.RARE)
+        offerRarityFloor?.let { rarity = maxOf(rarity, it) }
         val floor = if (pityCard && available.any { it.rarity.rank >= ItemRarity.RARE.rank }) ItemRarity.RARE else ItemRarity.COMMON
-        val tier = available.nearestRarityTier(rarity, floor)
+        val tier = available.nearestRarityTier(rarity, maxOf(floor, offerRarityFloor ?: ItemRarity.COMMON))
         val candidates = when (lane) {
             OfferLane.ALIGNED -> if (laneRoll < lanePolicy.alignedChance) {
                 tier.filter { fit(it, familyFits) > 0f && itemSuppressedShare(it) == 0f }
