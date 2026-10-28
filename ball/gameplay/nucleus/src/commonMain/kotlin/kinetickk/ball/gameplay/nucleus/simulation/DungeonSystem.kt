@@ -274,7 +274,7 @@ private fun MutableGameState.finishStructure(current: DungeonState, template: St
         current.y + rotateQuarterY(localX, localY, current.rotation),
     )
     if (template.secret) {
-        discoverWorld(template.id.discovery)
+        if (template.id == StructureTemplateId.ARCHITECTS_DOODLE) discoverDoodle() else discoverWorld(template.id.discovery)
         message = template.name.uppercase()
     } else {
         message = StructureNotice.STRUCTURE_CLEARED.key

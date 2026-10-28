@@ -16,6 +16,7 @@ import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.content.api.rotateQuarterX
 import kinetickk.ball.content.api.rotateQuarterY
 import kinetickk.ball.gameplay.nucleus.model.PlacedStructure
+import kinetickk.ball.gameplay.nucleus.model.RunSecretFlag
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.content.api.SiteKind
@@ -627,6 +628,7 @@ class DungeonSystemTest {
         assertNotNull(run.dungeon)
         assertEquals("", run.message, "a secret shows no entry banner")
         assertEquals(0, run.worldDiscoveryMask)
+        val matter = run.runMatter + run.matterFraction.toDouble()
         run.updateStructures(step)
         assertNull(run.dungeon)
         assertTrue(run.enemies.isEmpty())
@@ -636,11 +638,15 @@ class DungeonSystemTest {
         assertEquals(WorldDiscovery.ARCHITECTS_DOODLE.bit, run.pendingWorldDiscoveryMask)
         assertEquals("THE ARCHITECT'S DOODLE", run.message)
         assertTrue(run.isSpent(dungeon.placement.id))
+        // SITES' discoverDoodle (C08): the run's secret flag and its Matter on top of the template's Data.
+        assertTrue(run.hasSecret(RunSecretFlag.DOODLE_FOUND))
+        assertEquals(matter + 30.0 * run.matterGain, run.runMatter + run.matterFraction.toDouble(), 1e-3)
 
         run.pickups.clear()
         run.updateStructures(step)
         run.updateStructures(step)
         assertTrue(run.pickups.isEmpty(), "found once")
+        assertEquals(matter + 30.0 * run.matterGain, run.runMatter + run.matterFraction.toDouble(), 1e-3, "found once")
     }
 
     // -----------------------------------------------------------------------------------------
