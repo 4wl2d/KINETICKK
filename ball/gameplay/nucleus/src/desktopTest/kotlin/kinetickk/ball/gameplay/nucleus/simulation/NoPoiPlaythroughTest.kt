@@ -285,11 +285,14 @@ internal class NoPoiBot(
                 desiredY += py / pd * (clearance - pd) * 8f
             }
         }
-        // Steer around obstacles ahead, from where momentum carries the Core (a player reading the minimap).
+        // Steer around obstacles ahead, from where momentum carries the Core (a player reading the minimap): solid bodies
+        // with a wide berth, a mine's arming reach or a vent's plume with a narrow one; accelerator gates are harmless.
         for (obstacle in s.obstacleField.obstacles) {
+            val reach = s.obstacleHazardReach(obstacle)
+            if (reach <= 0f) continue
             val px = s.coreX + s.velocityX * 0.3f - obstacle.x
             val py = s.coreY + s.velocityY * 0.3f - obstacle.y
-            val clearance = obstacle.radius + s.coreRadius + 110f
+            val clearance = reach + s.coreRadius + if (obstacle.kind.solid) 110f else 40f
             val pd = max(1f, length(px, py))
             if (pd < clearance) {
                 desiredX += px / pd * (clearance - pd) * 6f

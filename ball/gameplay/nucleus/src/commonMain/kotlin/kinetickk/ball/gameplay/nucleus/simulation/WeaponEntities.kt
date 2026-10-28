@@ -360,14 +360,17 @@ private fun steer(entity: WeaponEntity, x: Float, y: Float, speed: Float, turnRa
 }
 
 /**
- * The first asteroid or unstable rock a circle of [radius] runs into from (x0, y0) to (x1, y1) (one it starts
- * overlapping only when it moves inward, see [obstacleStepEntry]); bumpers let it pass.
+ * The first shot-stopping obstacle a circle of [radius] runs into from (x0, y0) to (x1, y1) (one it starts
+ * overlapping only when it moves inward, see [obstacleStepEntry]); bumpers and kinds with no solid body let it pass.
  */
 private fun MutableGameState.obstacleOnPath(x0: Float, y0: Float, x1: Float, y1: Float, radius: Float): Obstacle? {
     if (obstacleField.size == 0) return null
     val reach = length(x1 - x0, y1 - y0) * 0.5f + radius
+    val kinds = content.obstacles.kinds
     forEachObstacleNear((x0 + x1) * 0.5f, (y0 + y1) * 0.5f, reach) { _, obstacle ->
-        if (obstacle.kind != ObstacleKind.BUMPER && obstacleStepEntry(x0, y0, x1, y1, obstacle.x, obstacle.y, obstacle.radius, radius) >= 0f) {
+        if (obstacle.stopsShotsAt(elapsed, kinds) &&
+            obstacleStepEntry(x0, y0, x1, y1, obstacle.x, obstacle.y, obstacle.radius, radius) >= 0f
+        ) {
             return obstacle
         }
     }
