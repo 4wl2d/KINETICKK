@@ -96,7 +96,7 @@ class CharacterAbilityTest {
     @Test fun theEchoGhostJumpsABlinkDriveTeleportWithoutStrikingAlongIt() {
         // Real fixed steps: the Blink happens in the heat pass and the Core keeps moving after it in the
         // same step, so the teleport cannot be told from the positions alone.
-        val emptyWorld = canonicalGameplayContent.copy(obstacles = canonicalGameplayContent.obstacles.copy(meanPerChunk = 0f))
+        val emptyWorld = structuresDisabledContent.copy(obstacles = structuresDisabledContent.obstacles.copy(meanPerChunk = 0f))
         val game = buildTestState(RelicId.BLINK_DRIVE, shape = CoreShape.SPIRAL, content = emptyWorld)
         game.runGrace = 10f
         game.updatePointer(game.screenWidth * 0.5f + 400f, game.screenHeight * 0.5f)
