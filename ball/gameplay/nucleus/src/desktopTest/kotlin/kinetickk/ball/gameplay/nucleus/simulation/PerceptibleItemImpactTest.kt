@@ -66,7 +66,8 @@ import kotlin.test.assertTrue
  * every 0.25 s) a weapon's cadence decides how often WEAPON_HIT effects fire.
  *
  * Ricochets and slams are dispatched directly every 0.6 s; the collisions that fire them belong to the
- * obstacle field, which the scripted paths never reach (they stay inside the run origin's safe area). So are grazes,
+ * obstacle field, which every encounter flies empty (nothing is generated; the obstacle arenas below place their own test
+ * obstacles). So are grazes,
  * broken obstacles and boosts at the same cadence, each naming the kind the item's first ObstacleIs condition names (an
  * asteroid, a crystal and an accelerator gate otherwise). The 0.6.0 obstacle vocabulary also has encounters with test
  * obstacles of their own: hurting hits on a rock set just ahead of the Core every 0.6 s, 55 % of the way into the damage
@@ -577,6 +578,14 @@ class PerceptibleItemImpactTest {
             if (item.active != null && item.active in loadout) item.copy(rules = immutableListOf(InertLoadoutPassive)) else item
         }.toImmutableList())
 
+    /**
+     * [this] content with an empty generated obstacle field: no encounter is about the generated field (the obstacle arenas
+     * place their own test obstacles), and a scripted path whose Dashes carry it toward the start area's rim must not meet
+     * the rocks the window holds there (Addendum B2: a harness whose subject is not terrain flies an emptied field).
+     */
+    private fun GameplayContentSnapshot.withoutGeneratedObstacles(): GameplayContentSnapshot =
+        copy(obstacles = obstacles.copy(meanPerChunk = 0f))
+
     /** Thirty consecutive item offers at Reborn 10 with every item unlocked: the summed rarity of the cards. */
     private fun offers(setup: Setup, item: ItemDefinition?, content: GameplayContentSnapshot): Outcome {
         val game = MutableGameState(content, seed = SEED, initialMatter = 0, initialRebirthLevel = 10).apply {
@@ -597,7 +606,7 @@ class PerceptibleItemImpactTest {
     private fun fight(setup: Setup, item: ItemDefinition?, variant: Int, content: GameplayContentSnapshot): Outcome {
         val arena = setup.arena
         val phase = variant * 0.7f
-        val game = MutableGameState(content, seed = SEED + variant, initialMatter = 0).apply {
+        val game = MutableGameState(content.withoutGeneratedObstacles(), seed = SEED + variant, initialMatter = 0).apply {
             coreShape = CoreShape.ORB
             startingWeapon = setup.weapon ?: WeaponId.FLUX_WAKE
             unlockWeaponsForTesting(listOf(startingWeapon))
@@ -797,8 +806,8 @@ class PerceptibleItemImpactTest {
             val dashSequence = game.characterRuntime.dashSequence
             game.update(1f / FPS)
             if (arena.collisions) game.clearObstaclesForTesting()
-            // The scripted paths keep clear of solid obstacles (the start area holds none): a collision never enters a
-            // measurement, except the hits COLLISIONS is built from.
+            // The scripted paths keep clear of the arenas' own solid obstacles (nothing is generated): a collision never enters
+            // a measurement, except the hits COLLISIONS is built from.
             if (!arena.collisions) game.forEachObstacleNear(game.coreX, game.coreY, OBSTACLE_MARGIN) { _, obstacle ->
                 if (obstacle.kind.solid &&
                     length(obstacle.x - game.coreX, obstacle.y - game.coreY) < obstacle.radius + game.coreRadius + OBSTACLE_MARGIN
@@ -1365,7 +1374,7 @@ class PerceptibleItemImpactTest {
         const val PASS_TURN = 520f
         const val PASS_PULL = 240f
         const val PASS_SPEED = 1_500f
-        /** The clearance every scripted path keeps from solid obstacles (the run origin's safe area holds them all). */
+        /** The clearance every scripted path keeps from an arena's own solid obstacles (the generated field is empty). */
         const val OBSTACLE_MARGIN = 60f
         /** Ids of the obstacle arenas' test obstacles (a rock set ahead adds its frame). */
         const val ARENA_OBSTACLE_ID = 7_000_000L
