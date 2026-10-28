@@ -83,6 +83,7 @@ import kinetickk.ball.gameplay.nucleus.render.WeaponNodeProjection
 import kinetickk.ball.gameplay.nucleus.render.WeaponOrbitalProjection
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
 import kinetickk.ball.profile.api.PlayerPreferences
+import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableSetOf
 import kinetickk.foundation.collections.toImmutableList
@@ -164,6 +165,17 @@ class WorldHotPathAllocationTest {
             decorate = { withRunningRace(it, step = 2) })
         assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
             decorate = { withRunningRace(it, step = 6) })
+    }
+
+    @Test
+    fun runningChallengesDrawWithoutAllocating() {
+        // Every challenge's ring or course at once (the brakeless ring and arc, the Ram rite's ring and bracketed foes,
+        // the untouched ring with a telegraphed volley, the velocity zone and its progress ring, the slalom's flagged
+        // poles), with the slalom's next pole on screen and then past the edge (its marker instead).
+        assertFrameIsAllocationFree(KkRolePalette.Default, WeaponId.MORNINGSTAR, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = { withRunningChallenges(it, slalomStep = 1) })
+        assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = { withRunningChallenges(it, slalomStep = 5) })
     }
 
     @Test
@@ -593,6 +605,31 @@ class WorldHotPathAllocationTest {
         val race = SiteProjection(SiteKind.GATE_RACE, "Gate race", CORE + 40f, CORE - 30f, true, 11f, step, step / 7f,
             immutableListOf(), 0f, 0f, course = course, clock = 4.2f, medal = 2)
         return model.with("sites" to (listOf(race) + model.sites).toImmutableList(), "trial" to siteTrial(race, model.content.sites))
+    }
+
+    /**
+     * The busy frame with all five challenges running around the Core (one runs at a time in play; together they draw
+     * every challenge branch): the slalom's poles 0..3 on screen and 4..5 past the edge, [slalomStep] its next pole; the
+     * Ram rite marks four of the busy frame's enemies, and the first challenge's trial joins the HUD.
+     */
+    private fun withRunningChallenges(model: GameplayRenderModel, slalomStep: Int): GameplayRenderModel {
+        fun challenge(kind: SiteKind, x: Float, y: Float, radius: Float, progress: Float, foes: ImmutableList<Int> = immutableListOf(),
+            warning: Float = 0f) = SiteProjection(kind, kind.name, CORE + x, CORE + y, true, 11f, 0, progress, foes, warning, 0.6f,
+            radius = radius, aimDx = 240f, aimDy = 160f)
+        val poles = List(6) { index ->
+            val along = if (index < 4) 120f + 150f * index else 1_500f + 300f * index
+            SiteMarkProjection(along, if (index % 2 == 0) 120f else -120f)
+        }.toImmutableList()
+        val slalom = SiteProjection(SiteKind.SLALOM_TRIAL, "Slalom", CORE - 260f, CORE + 60f, true, 9f, slalomStep, slalomStep / 6f,
+            immutableListOf(), 0f, 0f, course = poles, sides = 0b010101)
+        val running = listOf(
+            challenge(SiteKind.BRAKELESS_TRIAL, -40f, 30f, 520f, 0.4f),
+            challenge(SiteKind.RAM_TRIAL, 60f, -20f, 650f, 0.3f, foes = immutableListOf(1, 2, 3, 4)),
+            challenge(SiteKind.UNTOUCHED_TRIAL, 20f, 40f, 650f, 0.55f, warning = 0.5f),
+            challenge(SiteKind.VELOCITY_TRIAL, -80f, -60f, 1_800f, 0.7f),
+            slalom,
+        )
+        return model.with("sites" to (running + model.sites).toImmutableList(), "trial" to siteTrial(running.first(), model.content.sites))
     }
 
     private companion object {

@@ -32,7 +32,7 @@ private const val OFFER_MARK_HALF = 46f
 internal const val RACE_GATE_MARK_HALF = 60f
 
 /** Half extent of a slalom pole's mark (its plate and flag). */
-private const val SLALOM_POLE_MARK_HALF = 40f
+internal const val SLALOM_POLE_MARK_HALF = 40f
 
 /** Size of a site glyph on an offer (the anomaly diamond's 52 less its corner reach). */
 private const val OFFER_GLYPH_SIZE = 48f
@@ -464,18 +464,7 @@ private fun DrawScope.drawActivePoint(
                     drawPointTimer(point, Offset(center.x * scale, center.y * scale), 40f * scale, textMeasurer, keepOut)
                 }
             }
-            for (index in engine.enemies.indices) {
-                val enemy = engine.enemies[index]
-                if (enemy.dead || !point.isDefender(enemy.id)) continue
-                val defender = world(
-                    engine,
-                    engine.interpolated(enemy.previousX, enemy.x),
-                    engine.interpolated(enemy.previousY, enemy.y),
-                    shakeX,
-                    shakeY,
-                )
-                drawCornerBrackets(defender, enemy.radius + 12f, roles.threat)
-            }
+            drawFoeBrackets(engine, point, shakeX, shakeY, roles)
         }
         SiteKind.COLLAPSING_ORBIT -> {
             if (point.warningRemaining > 0f) {
@@ -515,11 +504,16 @@ private fun DrawScope.drawActivePoint(
             drawSiteGlyph(SiteGlyph.SIGIL, center, OFFER_GLYPH_SIZE, sigilColor(roles), alpha = 0.35f)
         }
         SiteKind.GATE_RACE -> drawRaceCourse(engine, point, center, shakeX, shakeY, keepOut, scale, roles)
-        // Rings and arenas of the other window kinds are drawn by their families' steps; caches, eggs and rifts never
-        // run a trial.
-        SiteKind.BRAKELESS_TRIAL, SiteKind.RAM_TRIAL, SiteKind.UNTOUCHED_TRIAL,
-        SiteKind.VELOCITY_TRIAL, SiteKind.SLALOM_TRIAL, SiteKind.BOUNTY_ARENA, SiteKind.DRIFT_CACHE, SiteKind.LOST_CURSOR,
-        SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL, SiteKind.ZENITH_RIFT, SiteKind.NADIR_RIFT,
+        SiteKind.SLALOM_TRIAL -> drawSlalomCourse(point, center, shakeX, shakeY, keepOut, scale, roles)
+        SiteKind.BRAKELESS_TRIAL, SiteKind.UNTOUCHED_TRIAL, SiteKind.VELOCITY_TRIAL -> drawChallengeRing(engine, point, center, roles)
+        // The Ram rite's marked foes carry threat brackets like the vault's defenders.
+        SiteKind.RAM_TRIAL -> {
+            drawChallengeRing(engine, point, center, roles)
+            drawFoeBrackets(engine, point, shakeX, shakeY, roles)
+        }
+        // The bounty's arena is drawn by its family's step; caches, eggs and rifts never run a trial.
+        SiteKind.BOUNTY_ARENA, SiteKind.DRIFT_CACHE, SiteKind.LOST_CURSOR, SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL,
+        SiteKind.ZENITH_RIFT, SiteKind.NADIR_RIFT,
         -> Unit
     }
 }
@@ -569,6 +563,22 @@ private fun DrawScope.drawOrbitLabel(
  */
 internal fun orbitRingTenths(progress: Float, requiredSeconds: Float): Long =
     (progress.coerceIn(0f, 1f) * requiredSeconds * 10f).roundToInt().toLong()
+
+/** Threat corner brackets around every living foe the site owns (the vault's defenders, the Ram rite's marked foes). */
+private fun DrawScope.drawFoeBrackets(engine: GameplayRenderModel, point: SiteProjection, shakeX: Float, shakeY: Float, roles: KkRolePalette) {
+    for (index in engine.enemies.indices) {
+        val enemy = engine.enemies[index]
+        if (enemy.dead || !point.isDefender(enemy.id)) continue
+        val defender = world(
+            engine,
+            engine.interpolated(enemy.previousX, enemy.x),
+            engine.interpolated(enemy.previousY, enemy.y),
+            shakeX,
+            shakeY,
+        )
+        drawCornerBrackets(defender, enemy.radius + 12f, roles.threat)
+    }
+}
 
 /** Index scan without boxing the id (ImmutableList<Int>.contains would box large ids). */
 private fun SiteProjection.isDefender(id: Int): Boolean {

@@ -423,6 +423,47 @@ class RedesignShotsWorldTest {
         add(Scene("site-race", model = { w, h -> model(w, h, points = listOf(race(step = 2))) }))
         add(Scene("site-race-hud", hud = true, model = { w, h -> model(w, h, points = listOf(race(step = 2))) }))
         add(Scene("site-race-far-hud", hud = true, model = { w, h -> model(w, h, points = listOf(race(step = 5, far = true))) }))
+        // The five challenges: a slalom with one pole passed and the next in volt (then under the HUD), the brakeless
+        // run's shrinking ring, the Ram rite's ring with its bracketed drifters (two already destroyed), the untouched
+        // trial's ring with a telegraphed volley, and the velocity hold's wide zone with its progress at the center.
+        add(Scene("site-slalom", model = { w, h -> model(w, h, points = listOf(slalom())) }))
+        add(Scene("site-slalom-hud", hud = true, model = { w, h -> model(w, h, points = listOf(slalom())) }))
+        add(Scene("site-brakeless", hud = true, model = { w, h -> model(w, h, points = listOf(ringChallenge(SiteKind.BRAKELESS_TRIAL, -200f, 150f, 765f, 0.45f))) }))
+        add(Scene("site-ram", hud = true, model = { w, h -> ram(w, h) }))
+        add(Scene("site-untouched", hud = true, model = { w, h ->
+            model(w, h, points = listOf(ringChallenge(SiteKind.UNTOUCHED_TRIAL, -150f, 100f, 650f, 0.3f, warning = 0.5f)))
+        }))
+        add(Scene("site-velocity", hud = true, model = { w, h -> model(w, h, points = listOf(ringChallenge(SiteKind.VELOCITY_TRIAL, 300f, 200f, 1_800f, 0.6f))) }))
+    }
+
+    /** A six-pole slalom from just behind the Core, its axis turned 0.2 rad, pole 0 passed and pole 1 next. */
+    private fun slalom(): SiteProjection {
+        val axis = 0.2f
+        val course = List(6) { index ->
+            val along = 360f + 340f * index
+            val lateral = if (index % 2 == 0) 150f else -150f
+            SiteMarkProjection(cos(axis) * along - sin(axis) * lateral, sin(axis) * along + cos(axis) * lateral)
+        }.toImmutableList()
+        return SiteProjection(SiteKind.SLALOM_TRIAL, "Slalom", 1_000f - 300f, 1_000f - 40f, true, 12.4f, 1, 1f / 6f,
+            immutableListOf(), 0f, 0f, course = course, sides = 0b010101)
+    }
+
+    /** A running ring challenge centred ([dx], [dy]) from the Core; the untouched trial aims its volley at the Core. */
+    private fun ringChallenge(kind: SiteKind, dx: Float, dy: Float, radius: Float, progress: Float, warning: Float = 0f) =
+        SiteProjection(kind, kind.name, 1_000f + dx, 1_000f + dy, true, 13.2f, 0, progress, immutableListOf(), warning,
+            kotlin.math.atan2(-dy, -dx), radius = radius, aimDx = -dx, aimDy = -dy)
+
+    /** The Ram rite with its eight drifters on their ring, two of them already destroyed (gone) and counted. */
+    private fun ram(w: Float, h: Float): GameplayRenderModel {
+        val centerX = 150f
+        val centerY = -80f
+        val foes = (2 until 8).map { index ->
+            val angle = index * 2f * kotlin.math.PI.toFloat() / 8f
+            enemy(index + 1, EnemyType.DRIFTER, centerX + cos(angle) * 320f, centerY + sin(angle) * 320f, 17f)
+        }
+        val rite = SiteProjection(SiteKind.RAM_TRIAL, "Ram rite", 1_000f + centerX, 1_000f + centerY, true, 14.6f, 0, 2f / 6f,
+            (1..8).toList().toImmutableList(), 0f, 0f, radius = 650f)
+        return model(w, h, enemies = foes, points = listOf(rite))
     }
 
     /** A seven-gate race around the Core: a loop of 330 (the far course 1,300, past every edge). */
