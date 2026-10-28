@@ -14,6 +14,8 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.content.api.SignalKind
+import kinetickk.ball.content.api.WorldEventKind
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.gameplay.interaction.fx.BuildNoticeKind
@@ -26,6 +28,8 @@ import kinetickk.ball.gameplay.nucleus.render.SkillSlotProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kinetickk.ball.gameplay.nucleus.render.EventSignalProjection
+import kinetickk.ball.gameplay.nucleus.render.WorldEventProjection
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
@@ -373,6 +377,51 @@ class HudHotPathAllocationTest {
                 val hudBytes = List(STEADY_CYCLES) { allocated { repeat(FRAMES) { hud(it) } } }.min()
                 val perFrame = (hudBytes - emptyBytes) / FRAMES
                 assertTrue(perFrame <= 64, "Baby mode HUD at $width x $height tier $tier allocates $perFrame bytes above an empty frame")
+            }
+        }
+    }
+
+    /**
+     * Every world event's edge band over its whole life (the telegraph ramp, the steady glow, the fade at its end; the
+     * gravity storm's downwind edges with its wind turning a full circle and more) with a live signal pinned on the
+     * minimap's rim: steady frames allocate nothing.
+     */
+    @Test
+    fun everyWorldEventEdgeBandAndALiveSignalOnTheMinimapAllocateNothing() {
+        listOf(1_440 to 810, 844 to 390, 390 to 844).forEach { (width, height) ->
+            val base = hudTestModel(width.toFloat(), height.toFloat()).with(*levelOverrides(), "coreX" to 0f, "coreY" to 0f,
+                "cameraX" to 0f, "cameraY" to 0f, "minimapRange" to 2_200f,
+                "eventSignals" to immutableListOf(EventSignalProjection(9, SignalKind.GAMBLE, 2_900f, -1_100f, 400f)))
+            val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
+                AppLanguage.Russian)
+            val bitmap = ImageBitmap(width, height)
+            val canvas = Canvas(bitmap)
+            val scope = CanvasDrawScope()
+            val size = Size(width.toFloat(), height.toFloat())
+            val density = Density(1f)
+            val clear: DrawScope.() -> Unit = { drawRect(Kk.Ink) }
+            fun empty() = scope.draw(density, LayoutDirection.Ltr, canvas, size, clear)
+            for (kind in WorldEventKind.entries) {
+                val event = WorldEventProjection(kind, telegraphAt = 100f, startsAt = 103f, endsAt = 133f)
+                // From a second into the telegraph to a second before the end.
+                val frames = List(FRAMES) { frame ->
+                    base.with("elapsed" to 101f + frame * (31f / FRAMES),
+                        "worldEvent" to event.copy(windAngle = frame * 0.02f, windStrength = (frame / 100f).coerceAtMost(1f)))
+                }
+                val memory = HudPresentationMemory()
+                var current = 0
+                val block: DrawScope.() -> Unit = {
+                    drawHud(frames[current % FRAMES], measurer, 10f + (current % FRAMES) * 0.002f, 0f, 0f, memory)
+                }
+                fun hud(frame: Int) {
+                    current = frame
+                    scope.draw(density, LayoutDirection.Ltr, canvas, size, block)
+                }
+                repeat(FRAMES) { empty(); hud(it) }
+                val emptyBytes = allocated { repeat(FRAMES) { empty() } }
+                val hudBytes = List(STEADY_CYCLES) { allocated { repeat(FRAMES) { hud(it) } } }.min()
+                val perFrame = (hudBytes - emptyBytes) / FRAMES
+                assertTrue(perFrame <= 64, "$kind edge band at $width x $height allocates $perFrame bytes above an empty frame")
             }
         }
     }

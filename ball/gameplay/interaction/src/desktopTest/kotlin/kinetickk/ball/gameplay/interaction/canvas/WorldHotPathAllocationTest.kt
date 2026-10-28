@@ -23,6 +23,9 @@ import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
 import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.content.api.SignalKind
+import kinetickk.ball.content.api.EliteAffix
+import kinetickk.ball.content.api.WorldEventKind
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicId
@@ -70,6 +73,9 @@ import kinetickk.ball.gameplay.nucleus.render.ProjectileKind
 import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
 import kinetickk.ball.gameplay.nucleus.render.EnemyBehavior
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kinetickk.ball.gameplay.nucleus.render.EventSignalProjection
+import kinetickk.ball.gameplay.nucleus.render.EventStrikeProjection
+import kinetickk.ball.gameplay.nucleus.render.WorldEventProjection
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.PickupProjection
@@ -98,6 +104,8 @@ import kotlin.test.assertFalse
 import java.lang.management.ManagementFactory
 import kotlin.test.Test
 import kotlin.test.assertTrue
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * The world layer runs every frame: once caches are warm (paths, strokes, brushes, strings, text
@@ -187,6 +195,20 @@ class WorldHotPathAllocationTest {
             decorate = { withRunningChallenges(it, slalomStep = 1) })
         assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
             decorate = { withRunningChallenges(it, slalomStep = 5) })
+    }
+
+    @Test
+    fun worldEventsSignalsAffixesAndChampionsDrawWithoutAllocating() {
+        // Every world event in progress over the busy frame (the meteor's and the ion storm's four strikes filling, the
+        // flare's band mid-sweep, the storms' motes drifting with a turning wind), a live signal with its life arc and name,
+        // six affixed Elites and four champions; the event clock moves with the measured frames. Then the meteor on the
+        // mono palette with the signal past the edge (its marker instead).
+        for (kind in WorldEventKind.entries) {
+            assertFrameIsAllocationFree(KkRolePalette.Default, WeaponId.MORNINGSTAR, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+                decorate = { withRunVariety(it, kind, signalOnScreen = true) })
+        }
+        assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = { withRunVariety(it, WorldEventKind.METEOR_SHOWER, signalOnScreen = false) })
     }
 
     @Test
@@ -720,6 +742,41 @@ class WorldHotPathAllocationTest {
             slalom,
         )
         return model.with("sites" to (running + model.sites).toImmutableList(), "trial" to siteTrial(running.first(), model.content.sites))
+    }
+
+    /**
+     * The busy frame with [kind] in progress (its clock following the moving sealed offer, so every measured frame draws a
+     * new moment): four strikes armed half a second ago, a sweep 0.6 s in, a wind turning with the clock; a Merchant signal
+     * on screen or past the edge ([signalOnScreen]); six Elites, one per affix, and four champion Drifters around the Core.
+     */
+    private fun withRunVariety(model: GameplayRenderModel, kind: WorldEventKind, signalOnScreen: Boolean): GameplayRenderModel {
+        val elapsed = 3f + (model.sites.last().x - CORE - 900f) * 0.0005f
+        val strikes = List(4) { index ->
+            EventStrikeProjection(CORE - 300f + index * 200f, CORE + (if (index % 2 == 0) -150f else 120f), 95f, elapsed - 0.5f, elapsed + 0.9f)
+        }.toImmutableList()
+        val event = WorldEventProjection(kind, telegraphAt = 0f, startsAt = 2f, endsAt = 40f, windAngle = elapsed * 0.4f, windStrength = 0.8f,
+            sweepStartedAt = elapsed - 0.6f, sweepAngle = 0.4f, strikes = strikes)
+        val signal = if (signalOnScreen) EventSignalProjection(900, SignalKind.MERCHANT, CORE + 120f, CORE + 110f, elapsed + 20f)
+        else EventSignalProjection(900, SignalKind.MERCHANT, CORE + 2_600f, CORE - 400f, elapsed + 20f)
+        val affixed = EliteAffix.entries.mapIndexed { index, affix ->
+            val angle = index * 1.05f
+            EnemyProjection(300 + index, EnemyType.ELITE, CORE + cos(angle) * 230f, CORE + sin(angle) * 230f, 0f, 0f, 400f, 1000f, 30f, 0f, 0f,
+                0f, 0f, CORE + cos(angle) * 230f, CORE + sin(angle) * 230f, false,
+                affinityBits = EnemyAffinity.encode(StatusElement.GRAVITIC.ordinal, false, EnemyAffinity.NONE, false, false, false, 0,
+                    affix = affix.ordinal))
+        }
+        val champions = List(4) { index ->
+            val x = CORE - 330f + index * 70f
+            EnemyProjection(320 + index, EnemyType.DRIFTER, x, CORE + 200f, 0f, 0f, 90f, 90f, 17f, 0f, 0f, 0f, 0f, x, CORE + 200f, false,
+                affinityBits = EnemyAffinity.encode(EnemyAffinity.NONE, false, EnemyAffinity.NONE, index == 1, index == 2, false, 0,
+                    champion = true))
+        }
+        return model.with(
+            "elapsed" to elapsed,
+            "worldEvent" to event,
+            "eventSignals" to immutableListOf(signal),
+            "enemies" to (model.enemies + affixed + champions).toImmutableList(),
+        )
     }
 
     private companion object {
