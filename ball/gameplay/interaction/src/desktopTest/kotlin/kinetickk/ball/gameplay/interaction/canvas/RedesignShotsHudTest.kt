@@ -166,6 +166,10 @@ class RedesignShotsHudTest {
         // The dungeon panel: sealed in a Derelict Station's bay with its garrison, two of four rooms clear, the bay's cell
         // at its pulse's peak, under the scrim and the vignette.
         DUNGEON,
+        // A dimension visit: the plate in the Rebirth slot and the objective's panel; the Zenith's course at pace, the
+        // Nadir's harvest in its last seconds with the Core scorching (the heat edge), the Archive's duel with the
+        // Antecedent; then the shutter 150 ms into the Zenith.
+        DIMENSION_ZENITH, DIMENSION_NADIR, DIMENSION_ARCHIVE, DIMENSION_SHUTTER,
     }
 
     private fun level(shot: Shot, values: Values): Int = when (shot) {
@@ -296,7 +300,7 @@ class RedesignShotsHudTest {
                 else -> 0
             },
             "easyMode" to (shot == Shot.EASY || shot == Shot.EASY_TIER),
-        ).let { if (shot == Shot.DUNGEON) dungeonShot(it) else it }
+        ).let { if (shot == Shot.DUNGEON) dungeonShot(it) else it }.let { dimensionShot(shot, it) ?: it }
         val time = 3.37f
         val memory = HudPresentationMemory()
         val boss = BossTarget()
@@ -319,6 +323,12 @@ class RedesignShotsHudTest {
                 val lead = if (shot == Shot.TIER_UP) 0.3f else 0.4f
                 memory.observe(lower, time - lead - 0.1f, boss.select(lower))
                 memory.observe(model, time - lead, boss.select(model))
+            }
+            // The layer changed 150 ms before the drawn frame: the shutter is a third of the way across.
+            Shot.DIMENSION_SHUTTER -> {
+                val realspace = model.with("dimension" to kinetickk.ball.gameplay.nucleus.render.DimensionProjection.REALSPACE, "trial" to null)
+                memory.observe(realspace, time - 0.3f, boss.select(realspace))
+                memory.observe(model, time - 0.15f, boss.select(model))
             }
             else -> memory.observe(pre, time - 0.2f, boss.select(pre))
         }
@@ -354,6 +364,37 @@ class RedesignShotsHudTest {
             fragile = false, shifting = false, phase = if (mini) 1 else 2)
         return enemy(3, if (mini) EnemyType.THRONE else EnemyType.ANTECEDENT, x, y, integrity, if (mini) 48f else 58f)
             .copy(affinityBits = affinity, charges = 2, facing = 0.5f)
+    }
+
+    /** The dimension shots' models: [model] inside the shot's visit with the layer's natives (null for every other shot). */
+    private fun dimensionShot(shot: Shot, model: GameplayRenderModel): GameplayRenderModel? {
+        val layer = when (shot) {
+            Shot.DIMENSION_ZENITH, Shot.DIMENSION_SHUTTER -> kinetickk.ball.content.api.WorldLayer.ZENITH
+            Shot.DIMENSION_NADIR -> kinetickk.ball.content.api.WorldLayer.NADIR
+            Shot.DIMENSION_ARCHIVE -> kinetickk.ball.content.api.WorldLayer.ARCHIVE
+            else -> return null
+        }
+        val x = model.coreX
+        val y = model.coreY
+        fun native(id: Int, type: EnemyType, dx: Float, dy: Float, radius: Float) = enemy(id, type, x + dx, y + dy, 1f, radius)
+        val visit = when (layer) {
+            kinetickk.ball.content.api.WorldLayer.ZENITH -> dimensionVisit(layer, x, y, course = listOf(420f to -150f, 900f to 120f),
+                ambient = listOf(-380f to 260f), progress = 3, pace = 900f)
+            kinetickk.ball.content.api.WorldLayer.NADIR -> dimensionVisit(layer, x, y, embers = listOf(160f to -90f, -220f to 140f, 300f to 210f),
+                progress = 7, scorching = 1f).copy(remaining = 8.2f)
+            else -> dimensionVisit(layer, x, y).copy(remaining = 71f)
+        }
+        val natives = when (layer) {
+            kinetickk.ball.content.api.WorldLayer.ZENITH -> listOf(native(41, EnemyType.SERAPH, 330f, 220f, 22f), native(42, EnemyType.CHOIR, -300f, -200f, 24f))
+            kinetickk.ball.content.api.WorldLayer.NADIR -> listOf(native(43, EnemyType.IMP, 260f, -200f, 18f), native(44, EnemyType.HOUND, -260f, 60f, 16f))
+            else -> listOf(rankBoss(Shot.SECRET_BOSS, x + 360f, y - 160f, 0.62f), native(45, EnemyType.CIPHER, -300f, 180f, 18f))
+        }
+        val speed = if (layer == kinetickk.ball.content.api.WorldLayer.NADIR) 520f else 1_150f
+        return model.inVisit(visit, bossShare = 0.38f).with(
+            "enemies" to natives.toImmutableList(),
+            "velocityX" to speed, "velocityY" to 0f,
+            "rebirthLevel" to 4,
+        )
     }
 
     /** [Shot.DUNGEON]'s model: [model] with the Core sealed in a Derelict Station's bay among its garrison, depth full. */

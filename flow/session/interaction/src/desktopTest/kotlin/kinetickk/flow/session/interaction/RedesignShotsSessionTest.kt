@@ -303,8 +303,9 @@ class RedesignShotsSessionTest {
                 shotCodex(state, w, h, language, run = true) { codexState(state) }
                 shotCodex("$state-text175", w, h, language, run = true, scale = 1.75f) { codexState(state) }
             }
-            // The World: a found place (the Gate race) and one not found yet (a structure under its hint).
-            for (state in listOf("world", "world-hidden")) {
+            // The World: a found place (the Gate race) and one not found yet (a structure under its hint); a found dimension
+            // (the Zenith's sigil) and one not found yet (the Nadir's sigil muted over the hatch).
+            for (state in listOf("world", "world-hidden", "world-dimension", "world-dimension-hidden")) {
                 shotCodex(state, w, h, language) { codexState(state) }
                 shotCodex("$state-text175", w, h, language, scale = 1.75f) { codexState(state) }
             }
@@ -432,8 +433,13 @@ class RedesignShotsSessionTest {
                 mainClock.advanceTimeBy(100)
                 onNodeWithTag("codex-slot-$key").performSemanticsAction(SemanticsActions.OnClick)
             }
-            "world", "world-hidden" -> {
-                val key = if (state == "world") "world/GATE_RACE" else "world/SPIRE"
+            "world", "world-hidden", "world-dimension", "world-dimension-hidden" -> {
+                val key = when (state) {
+                    "world" -> "world/GATE_RACE"
+                    "world-hidden" -> "world/SPIRE"
+                    "world-dimension" -> "world/ZENITH"
+                    else -> "world/NADIR"
+                }
                 onNodeWithTag("codex-category-5").performSemanticsAction(SemanticsActions.OnClick)
                 mainClock.advanceTimeBy(100)
                 onNodeWithTag("codex-grid").performScrollToKey(key)
