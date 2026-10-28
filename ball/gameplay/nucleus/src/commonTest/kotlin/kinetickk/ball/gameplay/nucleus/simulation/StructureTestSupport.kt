@@ -7,8 +7,12 @@ import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.StructurePolicy
 import kinetickk.ball.content.api.StructureTemplate
 import kinetickk.ball.content.api.StructureTemplateId
+import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.model.ObstacleField
+import kinetickk.ball.gameplay.nucleus.model.PlacedStructure
 import kinetickk.ball.gameplay.nucleus.model.StructureField
+import kinetickk.ball.gameplay.nucleus.model.Wall
+import kinetickk.ball.gameplay.nucleus.render.WallKind
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.toImmutableList
 
@@ -57,4 +61,66 @@ internal fun MutableGameState.teleportCoreForTesting(absoluteX: Double, absolute
     obstacleField = ObstacleField.EMPTY
     structureField = StructureField.EMPTY
     refreshObstacleWindow()
+}
+
+/** A wall for [placeWallsForTesting] (run-local); its id comes from the structure it is placed in. */
+internal fun testWall(
+    ax: Float,
+    ay: Float,
+    bx: Float,
+    by: Float,
+    halfThickness: Float = 24f,
+    kind: WallKind = WallKind.SOLID,
+): Wall = Wall(id = 0L, kind = kind, ax = ax, ay = ay, bx = bx, by = by, halfThickness = halfThickness, door = if (kind == WallKind.SOLID) -1 else 0)
+
+/**
+ * Replaces the structure window with one structure per list of walls, each framed by the bounds of its walls' centre
+ * lines, with ids from realspace cells (40 + i, 40) and wall ids `structureId or index`. Only for content with
+ * structures disabled, whose refresh never replaces the window; returns the placed structures.
+ */
+internal fun MutableGameState.placeWallsForTesting(vararg structures: List<Wall>): List<PlacedStructure> {
+    require(!content.structures.enabled) { "Test walls replace the window only while structures are disabled" }
+    val placed = ArrayList<PlacedStructure>()
+    val walls = ArrayList<Wall>()
+    structures.forEachIndexed { structureIndex, list ->
+        val id = structureId(WorldLayer.BASE, 40 + structureIndex, 40)
+        val minX = list.minOf { minOf(it.ax, it.bx) }
+        val maxX = list.maxOf { maxOf(it.ax, it.bx) }
+        val minY = list.minOf { minOf(it.ay, it.by) }
+        val maxY = list.maxOf { maxOf(it.ay, it.by) }
+        val start = walls.size
+        list.forEachIndexed { index, wall -> walls += wall.copy(id = id or index.toLong()) }
+        placed += PlacedStructure(
+            id = id,
+            template = StructureTemplateId.DERELICT_STATION,
+            rotation = 0,
+            x = (minX + maxX) / 2f,
+            y = (minY + maxY) / 2f,
+            halfWidth = (maxX - minX) / 2f,
+            halfHeight = (maxY - minY) / 2f,
+            wallStart = start,
+            wallEnd = walls.size,
+            spent = false,
+        )
+    }
+    structureField = StructureField.of(obstacleField.centerChunkX, obstacleField.centerChunkY, worldLayer.ordinal, false, placed, walls, emptyList())
+    return placed
+}
+
+/** Sweeps the Core from ([fromX], [fromY]) to ([toX], [toY]) at velocity ([vx], [vy]) through the obstacle pass. */
+internal fun MutableGameState.sweepCoreForTesting(fromX: Float, fromY: Float, toX: Float, toY: Float, vx: Float, vy: Float) {
+    previousCoreX = fromX
+    previousCoreY = fromY
+    coreX = toX
+    coreY = toY
+    setVelocityForTesting(vx, vy)
+    updateObstacles()
+}
+
+/** Distance from ([x], [y]) to the surface of [wall] (negative inside it). */
+internal fun wallGapForTesting(x: Float, y: Float, wall: Wall): Float {
+    val along = segmentNearest(x, y, wall.ax, wall.ay, wall.bx, wall.by)
+    val dx = x - (wall.ax + (wall.bx - wall.ax) * along)
+    val dy = y - (wall.ay + (wall.by - wall.ay) * along)
+    return kotlin.math.sqrt(dx * dx + dy * dy) - wall.halfThickness
 }

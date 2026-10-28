@@ -47,6 +47,15 @@ internal fun structureId(layer: WorldLayer, cellX: Int, cellY: Int): Long =
     Long.MIN_VALUE or ((layer.ordinal.toLong() and 0x7L) shl 60) or ((cellX.toLong() and STRUCTURE_CELL_MASK) shl 34) or
         ((cellY.toLong() and STRUCTURE_CELL_MASK) shl 8)
 
+/**
+ * The solid-impact surface of a structure, from its id or the id of any of its walls: the low byte set, so every wall
+ * of one structure shares one hit cooldown. Disjoint from every wall id (index ≤ 47) and from [NO_SURFACE_ID], even for
+ * the realspace structure at cell (0, 0) whose id is [Long.MIN_VALUE].
+ */
+internal fun structureSurfaceId(id: Long): Long = id or STRUCTURE_SURFACE_BITS
+
+private const val STRUCTURE_SURFACE_BITS: Long = 0xFFL
+
 /** The absolute cell column of a structure id (sign-extended from its 26 bits). */
 internal fun structureCellX(id: Long): Int = ((id shl 4) shr 38).toInt()
 
