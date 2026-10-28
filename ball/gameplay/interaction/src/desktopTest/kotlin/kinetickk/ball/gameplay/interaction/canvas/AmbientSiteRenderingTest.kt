@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
+import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.foundation.collections.immutableListOf
@@ -30,7 +31,8 @@ import kotlin.test.assertTrue
 /**
  * Ambient sites drawn by the real world renderer: a drift cache is a bone crate where it lies, a cache within its
  * reveal distance and its edge marker never draw together, a cache beyond it never shows a marker, and the Golden
- * Drifter's trigger is never drawn.
+ * Drifter's trigger is never drawn; the Lost Cursor and the Quiet Signal draw inside their marks, and the found Lost
+ * Cursor and the Golden Drifter's glint follow their render facts.
  */
 class AmbientSiteRenderingTest {
     private val sizes = listOf(1_440 to 810, 844 to 390, 390 to 844)
@@ -93,6 +95,58 @@ class AmbientSiteRenderingTest {
         assertTrue(golden.contentEquals(empty), "the Golden Drifter's trigger is never drawn")
     }
 
+    @Test
+    fun theLostCursorAndTheQuietSignalDrawInsideTheirMarks() {
+        val empty = render(model(1_440, 810, coreX = 600f))
+        for ((kind, color) in listOf(SiteKind.LOST_CURSOR to Kk.Mute, SiteKind.QUIET_SIGNAL to null)) {
+            val reveal = if (kind == SiteKind.QUIET_SIGNAL) 3_000f else 0f
+            val drawn = render(model(1_440, 810, coreX = 600f, cache(kind, reveal = reveal)))
+            val changed = changedPixels(empty, drawn) { x, y ->
+                assertTrue(abs(x + 0.5f - 720f) <= AMBIENT_MARK_HALF && abs(y + 0.5f - 405f) <= AMBIENT_MARK_HALF,
+                    "a $kind pixel at ($x, $y) lies inside its mark")
+            }
+            assertTrue(changed > 30, "$kind is drawn ($changed px)")
+            if (color != null) assertTrue(drawn.count { it == color.toArgb() } > 10, "$kind is grey")
+        }
+    }
+
+    @Test
+    fun theFoundLostCursorCirclesTheCoreAndTheGoldenDrifterGlintsOnlyByItsFact() {
+        // The Core at world (600, 0) draws at screen (1320, 405); the found Lost Cursor circles it 34 u out.
+        val plain = render(model(1_440, 810, coreX = 600f))
+        val followed = render(model(1_440, 810, coreX = 600f).with("secretFlags" to LOST_CURSOR_FOUND_BIT))
+        val companion = changedPixels(plain, followed) { x, y ->
+            val dx = x + 0.5f - 1_320f
+            val dy = y + 0.5f - 405f
+            assertTrue(dx * dx + dy * dy <= 44f * 44f, "a companion pixel at ($x, $y) lies on its orbit")
+        }
+        assertTrue(companion > 20, "the found Lost Cursor is drawn ($companion px)")
+
+        // A Drifter at world (-300, 0), screen (420, 405): only the Golden Drifter's id adds the rim around it.
+        val drifter = EnemyProjection(7, EnemyType.DRIFTER, -300f, 0f, 0f, 0f, 30f, 30f, 15f, 0f, 0f, 0f, 0f, -300f, 0f, false)
+        val ordinary = render(model(1_440, 810, coreX = 600f).with("enemies" to immutableListOf(drifter)))
+        val golden = render(model(1_440, 810, coreX = 600f).with("enemies" to immutableListOf(drifter), "goldenDrifterId" to 7))
+        val unrelated = render(model(1_440, 810, coreX = 600f).with("enemies" to immutableListOf(drifter), "goldenDrifterId" to 8))
+        assertTrue(unrelated.contentEquals(ordinary), "another id glints nothing")
+        val glint = changedPixels(ordinary, golden) { x, y ->
+            val dx = x + 0.5f - 420f
+            val dy = y + 0.5f - 405f
+            assertTrue(dx * dx + dy * dy <= 22f * 22f && dx * dx + dy * dy >= 16f * 16f, "a glint pixel at ($x, $y) rims the Drifter")
+        }
+        assertTrue(glint > 40, "the Golden Drifter glints ($glint px)")
+    }
+
+    private fun changedPixels(before: IntArray, after: IntArray, check: (Int, Int) -> Unit): Int {
+        var changed = 0
+        for (y in 0 until 810) for (x in 0 until 1_440) {
+            val index = y * 1_440 + x
+            if (before[index] == after[index]) continue
+            changed++
+            check(x, y)
+        }
+        return changed
+    }
+
     private fun cache(kind: SiteKind, reveal: Float) =
         SiteProjection(kind, kind.name, 0f, 0f, false, 0f, -1, 0f, immutableListOf(), 0f, 0f, activationRadius = 70f, reveal = reveal)
 
@@ -144,4 +198,9 @@ class AmbientSiteRenderingTest {
         )
 
     private fun Rect.onScreen(width: Int, height: Int) = left >= 0f && top >= 0f && right <= width && bottom <= height
+
+    private companion object {
+        /** The render model's Lost Cursor bit (the nucleus pins it to the run's secret flag). */
+        const val LOST_CURSOR_FOUND_BIT = 1
+    }
 }
