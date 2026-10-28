@@ -47,6 +47,7 @@ import kinetickk.ball.gameplay.interaction.fx.ApexBurstProjection
 import kinetickk.ball.gameplay.interaction.fx.InteractionFxLimits
 import kinetickk.ball.gameplay.interaction.fx.ReactionFxSpecs
 import kinetickk.ball.gameplay.interaction.fx.SkillBurstProjection
+import kinetickk.ball.gameplay.interaction.fx.ribbonLength
 import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
 import kinetickk.ball.gameplay.nucleus.protocol.ReactionCueFlags
 import kinetickk.ball.gameplay.nucleus.render.ApexProjection
@@ -148,6 +149,15 @@ class WorldHotPathAllocationTest {
     }
 
     @Test
+    fun coreRibbonWithDashGhostsDrawsWithoutAllocating() {
+        // busyFx's curved ribbon in a Dash: tapered segments, rails over the curve and the three ghosts on the path.
+        check(ribbonLength(busyModel(WeaponId.MORNINGSTAR, dash = 0.12f).speed) > 132f) { "the busy speed draws every ghost" }
+        for (roles in listOf(KkRolePalette.Default, KkRolePalette.Mono)) {
+            assertFrameIsAllocationFree(roles, WeaponId.MORNINGSTAR, warmFrames = WARM_MODELS, measuredFrames = 20, dash = 0.12f)
+        }
+    }
+
+    @Test
     fun worldColorsFollowTheRolePalette() {
         val model = busyModel(WeaponId.ARC_COIL)
         val fx = busyFx()
@@ -175,15 +185,18 @@ class WorldHotPathAllocationTest {
         level: Int = 3,
         fx: VisualFxProjection = busyFx(),
         decorate: (GameplayRenderModel) -> GameplayRenderModel = { it },
+        dash: Float = 0f,
     ) {
         // The off-screen totem and sealed-anomaly offer move every frame, so their edge-marker
         // distances change every frame: they must be drawn from cached digit layouts, never
         // measured as text. Warm-up frames draw distances from a range the measured frames never
         // use, and every measured frame draws two distances no earlier frame drew (a measuring
         // pass never repeats an earlier pass's), so measuring a distance string would allocate.
-        val warm = Array(WARM_MODELS) { frame -> decorate(busyModel(weapon, drift = WARM_DRIFT + frame * 23f, shape = shape, level = level)) }
+        val warm = Array(WARM_MODELS) { frame ->
+            decorate(busyModel(weapon, drift = WARM_DRIFT + frame * 23f, shape = shape, level = level, dash = dash))
+        }
         fun measured(pass: Int) = Array(measuredFrames) { frame ->
-            decorate(busyModel(weapon, drift = (pass * measuredFrames + frame) * 20f, shape = shape, level = level))
+            decorate(busyModel(weapon, drift = (pass * measuredFrames + frame) * 20f, shape = shape, level = level, dash = dash))
         }.also { measured ->
             check(measured.map { roundedDistance(edgeDistance(it)) }.toSet().size == measuredFrames)
             check(measured.maxOf(::edgeDistance) < warm.minOf(::edgeDistance))
@@ -327,6 +340,8 @@ class WorldHotPathAllocationTest {
             ElementBurstProjection(CORE - 160f, CORE - 160f, 2, 4, 8, 120f, 0.2f, 0.7f, 1),
         )).toImmutableList(),
         reactionStamps = immutableListOf(ReactionStampProjection(CORE + 40f, CORE - 40f, 0, 0.5f, 0.9f)),
+        // A 48-sample ribbon on a 520 u arc ending at the Core, 14 u apart, aged 0 to 0.4 s, the newest 8 from a Dash.
+        coreRibbon = curvedRibbon(CORE, CORE - 520f, 520f, (kotlin.math.PI / 2).toFloat(), 47 * 14f / 520f, 48, dashNewest = 8),
     )
 
     /** [busyFx] plus every reaction's look, three skill looks, an Apex activation and 40 styled links. */
@@ -421,7 +436,13 @@ class WorldHotPathAllocationTest {
         previousGhostX = CORE - 165f + drift * 0.01f, previousGhostY = CORE + 28f,
     )
 
-    private fun busyModel(weapon: WeaponId, drift: Float = 0f, shape: CoreShape = CoreShape.TESSERACT, level: Int = 3): GameplayRenderModel {
+    private fun busyModel(
+        weapon: WeaponId,
+        drift: Float = 0f,
+        shape: CoreShape = CoreShape.TESSERACT,
+        level: Int = 3,
+        dash: Float = 0f,
+    ): GameplayRenderModel {
         val enemies = EnemyType.entries.mapIndexed { index, type ->
             val angle = index * 0.7f
             val distance = if (type == EnemyType.ARCHITECT) 260f else 180f + index * 12f
@@ -451,7 +472,7 @@ class WorldHotPathAllocationTest {
             screenWidth = WIDTH.toFloat(), screenHeight = HEIGHT.toFloat(), uiScale = 1f, coreX = CORE, coreY = CORE,
             velocityX = 420f, velocityY = -160f, cameraX = CORE, cameraY = CORE, pointerX = WIDTH * 0.5f + 180f,
             pointerY = HEIGHT * 0.5f - 120f, pointerActive = true, braking = true, elapsed = 3f, heat = 20f, overheated = false,
-            dashPhaseTime = 0f, hp = 100f, maxHp = 180f, shield = 1f, maxShield = 3f, level = 5, data = 1, nextLevelData = 5,
+            dashPhaseTime = dash, hp = 100f, maxHp = 180f, shield = 1f, maxShield = 3f, level = 5, data = 1, nextLevelData = 5,
             keys = 1, kills = 3, combo = 3, comboTime = 1f, runMatter = 10L, totalMatter = 10L, lastImpact = 20f, lastImpactTime = 0.3f,
             damageFlash = 0.6f, runGrace = 0f, screenShake = 0f, message = "", messageTime = 0f, mass = 1f, damageMultiplier = 1f,
             weaponPower = 1f, coolingRate = 1f, magnetStrength = 1f, dashImpulse = 1f, dashHeatCost = 20f, regenPerSecond = 0f,

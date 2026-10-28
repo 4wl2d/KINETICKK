@@ -38,6 +38,7 @@ import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
+import kinetickk.ball.gameplay.interaction.fx.CoreRibbonProjection
 import kinetickk.ball.gameplay.interaction.fx.DamageNumberProjection
 import kinetickk.ball.gameplay.interaction.fx.InteractionFxLimits
 import kinetickk.ball.gameplay.interaction.fx.MotionEchoProjection
@@ -72,6 +73,7 @@ import kinetickk.foundation.design.KkRolePalette
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
+import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.test.Test
@@ -417,6 +419,48 @@ class RedesignShotsWorldTest {
         listOf(0, 5, 10).forEach { tier ->
             add(Scene("tier$tier", model = { w, h -> cruise(w, h, rebirthLevel = tier) }, fx = ::cruiseFx))
         }
+        // The Core ribbon follows the recorded path: a carved curve, a Dash with its ghosts, Overdrive, a blink's break.
+        add(Scene("ribbon-curve", model = { w, h -> ribbonRun(w, h, 1_400f, 520f) }, fx = { ribbonFx(it, 520f) }))
+        add(Scene("ribbon-dash", model = { w, h -> ribbonRun(w, h, 1_800f, 900f, dash = 0.18f) }, fx = { ribbonFx(it, 900f, dashNewest = 10) }))
+        add(Scene("ribbon-overdrive", model = { w, h -> ribbonRun(w, h, 2_400f, 700f, overdrive = 3f) }, fx = { ribbonFx(it, 700f) }))
+        add(Scene("ribbon-break", model = { w, h -> ribbonRun(w, h, 1_200f, 600f) }, fx = ::ribbonBreakFx))
+    }
+
+    /**
+     * A cruise moving +x at [speed] whose path bends up behind the Core on a circle of [radius] (centre straight above it),
+     * the nucleus trail on the same circle.
+     */
+    private fun ribbonRun(w: Float, h: Float, speed: Float, radius: Float, dash: Float = 0f, overdrive: Float = 0f): GameplayRenderModel {
+        val step = speed / 120f / radius
+        val trail = (0 until 24).map { index ->
+            val angle = (PI / 2).toFloat() + (index * 6 + 1) * step
+            TrailPointProjection(1_000f + cos(angle) * radius, 1_000f - radius + sin(angle) * radius, index * 0.05f)
+        }
+        return cruise(w, h).with("velocityX" to speed, "velocityY" to 0f, "dashPhaseTime" to dash, "overdriveTime" to overdrive,
+            "trail" to trail.toImmutableList())
+    }
+
+    /** One sample per fixed step on [ribbonRun]'s circle for the model's speed, newest one step behind the Core. */
+    private fun ribbonFx(model: GameplayRenderModel, radius: Float, dashNewest: Int = 0): VisualFxProjection {
+        val step = model.speed / 120f / radius
+        return cruiseFx(model).copy(coreRibbon = curvedRibbon(model.coreX, model.coreY - radius, radius,
+            (PI / 2).toFloat() + step, 47 * step, 48, dashNewest, oldestAge = 0.39f))
+    }
+
+    /** A blink 300 u back: six samples since it, then the older path, which no segment joins. */
+    private fun ribbonBreakFx(model: GameplayRenderModel): VisualFxProjection {
+        val step = model.speed / 120f
+        val since = (1..6).map { model.coreX - it * step to model.coreY }
+        val before = (0 until 30).map { model.coreX - 300f - it * step * cos(it * 0.03f) to model.coreY - 170f - it * step * sin(it * 0.03f) }
+        val points = since + before
+        val ribbon = CoreRibbonProjection.of(
+            FloatArray(points.size * 2) { if (it % 2 == 0) points[it / 2].first else points[it / 2].second },
+            FloatArray(points.size) { it / 120f },
+            IntArray(points.size) {
+                if (it == since.lastIndex || it == points.lastIndex) CoreRibbonProjection.START else 0
+            },
+        )
+        return cruiseFx(model).copy(coreRibbon = ribbon)
     }
 
     // Board HUD.png positions (1440 x 810) are converted to world offsets from the Core so every
