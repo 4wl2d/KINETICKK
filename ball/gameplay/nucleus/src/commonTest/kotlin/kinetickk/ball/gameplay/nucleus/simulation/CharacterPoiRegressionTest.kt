@@ -100,6 +100,7 @@ class CharacterPoiRegressionTest {
         game.pendingRelicChoices = 1
         game.pendingDirectedRewards = listOf(DirectedReward.ITEM_AND_REPAIR)
         game.hp = 50f
+        val startCeiling = game.maxHp
         val startLevel = game.weaponLevel
         game.activateTotemForTesting()
         game.updateTotem(0.01f)
@@ -112,7 +113,8 @@ class CharacterPoiRegressionTest {
         game.choose(0) // focus
         game.choose(0) // item
         assertEquals(ChoiceType.RELIC, game.choiceType)
-        assertEquals(75f, game.hp)
+        // 50 + the repair's 25 once; an item the deal puts first may raise the ceiling, and integrity with it.
+        assertEquals(50f + (game.maxHp - startCeiling) + 25f, game.hp)
         game.choose(0)
         assertEquals(GamePhase.RUNNING, game.phase)
         assertEquals(1, game.equippedRelics.size)
