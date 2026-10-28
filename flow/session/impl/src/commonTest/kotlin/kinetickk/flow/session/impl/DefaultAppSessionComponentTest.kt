@@ -10,6 +10,7 @@ import kinetickk.ball.gameplay.api.GameplayInstanceId
 import kinetickk.ball.gameplay.api.GameplayRejection
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.api.GameplayRefusal
 import kinetickk.ball.gameplay.api.GameplayRunStarted
 import kinetickk.ball.profile.api.PlayerPreferences
@@ -101,6 +102,32 @@ class DefaultAppSessionComponentTest {
         assertNull(completed.pendingWorkflow)
         val reply = rig.gameplay.activeFakeRun()!!.startReplies.single()
         assertFailsWith<IllegalStateException> { reply.checkAvailable() }
+    }
+
+    @Test
+    fun startPassesTheSelectedRunModeToTheGameplayRun() {
+        val rig = AppSessionTestRig()
+
+        assertIs<SessionAcceptance.Accepted>(
+            rig.component.accept(SessionInteractionPulse.SelectRunModeRequested(RunMode.EASY)),
+        )
+        assertEquals(RunMode.EASY, shell(rig).runMode)
+        assertTrue(rig.gameplay.createdRunIds.isEmpty())
+        assertTrue(rig.gameplay.startModes.isEmpty())
+
+        assertIs<SessionAcceptance.Accepted>(rig.component.accept(SessionInteractionPulse.StartRunRequested))
+        assertEquals(listOf(RunMode.EASY), rig.gameplay.startModes)
+        assertEquals(AppDestination.Gameplay, shell(rig).base)
+
+        // Inside a run the mode cannot change; the restart carries the committed one.
+        assertIs<SessionAcceptance.Rejected>(
+            rig.component.accept(SessionInteractionPulse.SelectRunModeRequested(RunMode.STANDARD)),
+        )
+        rig.gameplay.activeFakeRun()!!.phase = GameplayRunPhase.GAME_OVER
+        assertIs<SessionAcceptance.Accepted>(rig.component.accept(SessionInteractionPulse.RestartRunRequested))
+        assertEquals(listOf(RunMode.EASY, RunMode.EASY), rig.gameplay.startModes)
+        assertEquals(listOf(RunId(0L), RunId(1L)), rig.gameplay.createdRunIds)
+        assertEquals(RunMode.EASY, shell(rig).runMode)
     }
 
     @Test

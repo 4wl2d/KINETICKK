@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.v2.runSkikoComposeUiTest
 import androidx.compose.ui.unit.Density
 import kinetickk.ball.gameplay.impl.GameplayCompositionComponent
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.profile.api.ProfilePreferenceAdjustment
 import kinetickk.ball.profile.api.ProfilePulse
@@ -258,7 +259,7 @@ class DisplayApplicationComposeTest {
                 },
                 homeFeature = object : HomeFeature {
                     @Composable
-                    override fun Content(inputEnabled: Boolean, onOutput: (HomeOutput) -> Unit) {
+                    override fun Content(inputEnabled: Boolean, runMode: RunMode, onOutput: (HomeOutput) -> Unit) {
                         probe = probe.copy(
                             menuDensity = LocalDensity.current.density,
                             scale = LocalKkInterfaceScale.current,

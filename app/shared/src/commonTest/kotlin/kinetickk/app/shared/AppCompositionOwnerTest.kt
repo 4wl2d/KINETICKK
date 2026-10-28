@@ -19,6 +19,7 @@ import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
 import kinetickk.ball.gameplay.api.GameplayRunPort
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.gameplay.impl.GameplayCompositionComponent
 import kinetickk.ball.profile.api.CollectionProjection
@@ -272,7 +273,10 @@ private class RecordingGameplayRun(
         reply: InlineReply<GameplaySettingsApplied, GameplayRefusal>,
     ): Unit = error("unused")
 
-    override fun startRun(reply: InlineReply<GameplayRunStarted, GameplayRefusal>) {
+    override fun startRun(
+        mode: RunMode,
+        reply: InlineReply<GameplayRunStarted, GameplayRefusal>,
+    ) {
         reply.checkAvailable()
         recordCommand(instanceId.runId)
         revision = GameplayRevision(revision.value + 1L)

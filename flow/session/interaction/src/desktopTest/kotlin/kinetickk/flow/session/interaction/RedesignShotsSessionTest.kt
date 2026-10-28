@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.*
 import kinetickk.ball.content.impl.createContentCatalog
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.gameplay.interaction.GameplayPresentation
 import kinetickk.ball.profile.api.*
@@ -45,6 +46,7 @@ import java.io.File
 import javax.imageio.ImageIO
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
@@ -114,6 +116,39 @@ class RedesignShotsSessionTest {
                     onNodeWithTag("kinetickk.home.info.form").performSemanticsAction(SemanticsActions.OnClick)
                 }
             }
+        }
+    }
+
+    /** Baby mode chosen: the soft hero and its stamp, and the lit toggle in the header (through the real shell). */
+    @Test fun homeEasy() {
+        for ((w, h) in sizes) for (language in AppLanguage.entries) {
+            val port = ShotSessionPort(runMode = RunMode.EASY)
+            capture("home-easy", "start", w, h, language, {
+                mainClock.advanceTimeBy(2_000)
+                onNodeWithTag("kinetickk.home.start").performSemanticsAction(SemanticsActions.RequestFocus)
+                mainClock.advanceTimeBy(900)
+            }) { ShotShell(port, language) }
+        }
+    }
+
+    /** The toggle focused with its tooltip, on and off, and a tap that turns Baby mode on through Session. */
+    @Test fun homeEasyFocus() {
+        for ((w, h) in sizes) for (language in AppLanguage.entries) {
+            for ((state, mode) in listOf("toggle-focused" to RunMode.EASY, "toggle-off-focused" to RunMode.STANDARD)) {
+                val port = ShotSessionPort(runMode = mode)
+                capture("home-easy", state, w, h, language, {
+                    mainClock.advanceTimeBy(2_000)
+                    onNodeWithTag("kinetickk.home.run-mode").performSemanticsAction(SemanticsActions.RequestFocus)
+                    mainClock.advanceTimeBy(900)
+                }) { ShotShell(port, language) }
+            }
+            val port = ShotSessionPort()
+            capture("home-easy", "toggle-tapped", w, h, language, {
+                mainClock.advanceTimeBy(2_000)
+                onNodeWithTag("kinetickk.home.run-mode").performTouchInput { click(center) }
+                mainClock.advanceTimeBy(900)
+                assertEquals(RunMode.EASY, port.runMode, "the tap asked Session for Baby mode")
+            }) { ShotShell(port, language) }
         }
     }
 
@@ -425,6 +460,7 @@ class RedesignShotsSessionTest {
         profile: () -> ShotProfile,
         density: Float = 1f,
         quit: Boolean = false,
+        runMode: RunMode = RunMode.STANDARD,
         interact: ComposeUiTest.() -> Unit,
     ) {
         val port = profile()
@@ -434,7 +470,7 @@ class RedesignShotsSessionTest {
             interact()
             mainClock.advanceTimeBy(900)
         }) {
-            feature.Content(inputEnabled = true) { }
+            feature.Content(inputEnabled = true, runMode = runMode) { }
         }
     }
 
@@ -575,7 +611,7 @@ internal class ShotProfile(
     override fun query(query: ProfileQuery.GetCollection) = CollectionProjection(instanceId, ProfileRevision.ZERO, PlayerCollection(DiscoveredItems))
 }
 
-internal class ShotSessionPort : AppSessionPort {
+internal class ShotSessionPort(var runMode: RunMode = RunMode.STANDARD) : AppSessionPort {
     override val instanceId = LOCAL_APP_SESSION_INSTANCE_ID
     var overlay: AppDestination? = null
     private var revision = 0L
@@ -583,11 +619,12 @@ internal class ShotSessionPort : AppSessionPort {
         revision++
         if (pulse is SessionInteractionPulse.OpenOverlay) overlay = pulse.destination
         if (pulse == SessionInteractionPulse.CloseOverlay) overlay = null
+        if (pulse is SessionInteractionPulse.SelectRunModeRequested && overlay == null) runMode = pulse.mode
         return SessionAcceptance.Accepted(instanceId, SessionRevision(revision))
     }
     override fun query(query: AppSessionQuery.GetShell) = AppShellProjection(
         instanceId, SessionRevision(revision), SessionRevision.ZERO, AppDestination.Home, overlay,
-        null, false, null, SessionLifecycle.READY, false, null,
+        null, false, null, SessionLifecycle.READY, false, null, runMode,
     )
 }
 
@@ -603,8 +640,8 @@ private fun ShotShell(port: ShotSessionPort, language: AppLanguage) {
             @Composable override fun Content(inputEnabled: Boolean, onOutput: (GameplayInteractionOutput) -> Unit) = Unit
         },
         homeFeature = object : HomeFeature {
-            @Composable override fun Content(inputEnabled: Boolean, onOutput: (HomeOutput) -> Unit) {
-                home.Content(inputEnabled) { }
+            @Composable override fun Content(inputEnabled: Boolean, runMode: RunMode, onOutput: (HomeOutput) -> Unit) {
+                home.Content(inputEnabled, runMode, onOutput)
                 Box(Modifier.requiredSize(1.dp).testTag("shot-open").semantics {
                     onClick { onOutput(HomeOutput.OpenCodex); true }
                 })

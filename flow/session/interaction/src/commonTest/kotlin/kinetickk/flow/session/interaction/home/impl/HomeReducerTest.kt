@@ -7,6 +7,7 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.defaultMatrixNodes
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.MatrixProgress
@@ -211,6 +212,46 @@ class HomeReducerTest {
         // Without the host's Quit, and on the phone layouts, nothing is laid out for it.
         assertNull(homeLayoutGeometry(viewport.width, viewport.height, viewport.density).quit)
         assertNull(homeLayoutGeometry(800f, 600f, 1f, quitAvailable = true).quit)
+    }
+
+    @Test
+    fun theBabyModeToggleAsksForTheOtherModeAndTakesNoOtherPress() {
+        val easy = homeReducer().reduce(HomeAction.SelectRunMode(RunMode.EASY)).effects
+        assertEquals(
+            listOf(HomeEffect.PlayAudio(SessionAudioCue.UI_CLICK), HomeEffect.Emit(HomeOutput.SelectRunMode(RunMode.EASY))),
+            easy,
+        )
+        assertEquals(HomeOutput.SelectRunMode(RunMode.STANDARD),
+            assertIs<HomeEffect.Emit>(homeReducer().reduce(HomeAction.SelectRunMode(RunMode.STANDARD)).effects[1]).output)
+
+        // A press on the toggle asks for the mode other than the current one, in every layout (Quit laid out or not).
+        for ((width, height) in listOf(1_280f to 720f, 844f to 390f, 390f to 844f)) for (quitAvailable in listOf(false, true)) {
+            val viewport = HomeViewport(width, height, 1f, quitAvailable)
+            val layout = homeLayoutGeometry(width, height, 1f, quitAvailable)
+            val toggle = layout.runModeToggle
+            val where = "${width}x$height quit=$quitAvailable"
+            for (current in RunMode.entries) {
+                val other = if (current == RunMode.EASY) RunMode.STANDARD else RunMode.EASY
+                assertEquals(HomeAction.SelectRunMode(other), resolveHomePress(viewport, toggle.bounds.center.x, toggle.bounds.center.y, current), where)
+                // The whole press area counts, beyond the smaller drawn plate.
+                assertEquals(HomeAction.SelectRunMode(other),
+                    resolveHomePress(viewport, toggle.touch.left + 0.5f, toggle.touch.bottom - 0.5f, current), where)
+                // Quit and the menu rows keep their own presses whatever the mode.
+                layout.quit?.let { quit ->
+                    assertEquals(HomeAction.Quit, resolveHomePress(viewport, quit.bounds.center.x, quit.bounds.center.y, current), where)
+                }
+                layout.actions.forEach { action ->
+                    assertEquals(action.target.toHomeAction(),
+                        resolveHomePress(viewport, action.bounds.center.x, action.bounds.center.y, current), "$where ${action.target}")
+                }
+            }
+            assertTrue(resolveHomeRunModePress(viewport, toggle.bounds.center.x, toggle.bounds.center.y), where)
+            // Just outside the press area nothing toggles, and the (!) buttons stay the (!) buttons.
+            assertFalse(resolveHomeRunModePress(viewport, toggle.touch.left - 1f, toggle.bounds.center.y), where)
+            assertFalse(resolveHomeRunModePress(viewport, toggle.bounds.center.x, toggle.touch.bottom + 1f), where)
+            assertFalse(resolveHomePress(viewport, toggle.touch.left - 1f, toggle.bounds.center.y) is HomeAction.SelectRunMode, where)
+            layout.infos.forEach { info -> assertFalse(resolveHomeRunModePress(viewport, info.bounds.center.x, info.bounds.center.y), where) }
+        }
     }
 }
 

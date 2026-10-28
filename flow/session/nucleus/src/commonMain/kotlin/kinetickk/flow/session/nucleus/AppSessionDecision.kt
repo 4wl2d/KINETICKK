@@ -5,6 +5,7 @@ package kinetickk.flow.session.nucleus
 
 import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.api.GameplaySettingsApplied
 import kinetickk.ball.gameplay.api.GameplayRefusal
 import kinetickk.ball.gameplay.api.GameplayRunStarted
@@ -145,7 +146,7 @@ public data class AppSessionAcceptedFrame(
 
 sealed interface AppSessionOutput {
     data class EnsureGameplayRun(val runId: RunId) : AppSessionOutput
-    data class StartRun(val runId: RunId) : AppSessionOutput
+    data class StartRun(val runId: RunId, val mode: RunMode) : AppSessionOutput
     data class PauseForOverlay(val runId: RunId) : AppSessionOutput
     data class ExitRun(val runId: RunId) : AppSessionOutput
     data class SelectRebirthTier(val tier: Int) : AppSessionOutput

@@ -139,16 +139,6 @@ internal object WorldUnitShapes {
             close()
         }
     }
-
-    /** The speed tail (`clip-path: polygon(0 20%, 100% 50%, 0 80%)`) from x = 0 to x = 1. */
-    val tail: Path by lazy {
-        Path().apply {
-            moveTo(0f, -0.3f)
-            lineTo(1f, 0f)
-            lineTo(0f, 0.3f)
-            close()
-        }
-    }
 }
 
 /**
@@ -175,25 +165,8 @@ internal object WorldStrokes {
     val dashEffect: PathEffect by lazy { PathEffect.dashPathEffect(floatArrayOf(8f, 7f)) }
 }
 
-/** Horizontal fades from a color to transparent over x = 0..1 (scaled by the caller's transform). */
-internal object WorldBrushes {
-    private const val CAPACITY = 8
-    private val colors = LongArray(CAPACITY)
-    private val brushes = arrayOfNulls<Brush>(CAPACITY)
-    private var next = 0
-
-    fun fade(color: Color): Brush {
-        val key = color.value.toLong()
-        for (index in 0 until CAPACITY) {
-            if (brushes[index] != null && colors[index] == key) return brushes[index]!!
-        }
-        val brush = Brush.horizontalGradient(listOf(color, color.copy(alpha = 0f)), startX = 0f, endX = 1f)
-        colors[next] = key
-        brushes[next] = brush
-        next = (next + 1) % CAPACITY
-        return brush
-    }
-}
+/** Cached world brushes ([edgeGlow]). */
+internal object WorldBrushes
 
 /** Edge glow gradients (color at the edge, transparent [depth] inside); rebuilt only on resize. */
 internal class EdgeGlow(val left: Brush, val right: Brush, val top: Brush, val bottom: Brush)
