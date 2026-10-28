@@ -10,11 +10,13 @@ import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.MatrixEffect
 import kinetickk.ball.content.api.NEAR_OBSTACLE_MAX_DISTANCE
 import kinetickk.ball.content.api.ObstacleKind
+import kinetickk.ball.content.api.ObstacleMix
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.phaseShardSolid
 import kinetickk.ball.content.api.ventErupting
+import kinetickk.ball.gameplay.nucleus.model.ObstacleField
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.WeaponEntity
 import kinetickk.ball.gameplay.nucleus.protocol.FxColorCode
@@ -22,6 +24,7 @@ import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
@@ -34,6 +37,7 @@ import kotlin.math.sin
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
@@ -729,5 +733,362 @@ class ObstacleKindSystemTest {
             quiet.flyIntoObstaclesForTesting(1_000f, 600f, 0f, 0f)
         }
         assertEquals(0, idle.stacksOf(StatusElement.THERMAL), "a quiet vent scorches nobody")
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Crystals.
+
+    private val crystalRadius = 80f
+    private val crystalContactX = 300f - crystalRadius - core
+
+    /** Calibrated Coil gains Overdrive on SHATTER from a crystal and vents heat on SHATTER from a mine. */
+    private val crystalContent = contentWithClauses(
+        "Calibrated Coil",
+        EffectClause(EffectTrigger.SHATTER, immutableListOf(EffectCondition.ObstacleIs(ObstacleKind.CRYSTAL)),
+            immutableListOf(EffectAction.Overdrive(10f)), cooldownSeconds = 0.5f),
+        EffectClause(EffectTrigger.SHATTER, immutableListOf(EffectCondition.ObstacleIs(ObstacleKind.DERELICT_MINE)),
+            immutableListOf(EffectAction.Vent(20f)), cooldownSeconds = 0.5f),
+    )
+
+    /** A run with the SHATTER clauses, at heat 50, with one crystal (radius 80, id 81) at (300, 0). */
+    private fun crystalState(): MutableGameState = buildTestState(content = crystalContent).apply {
+        own("Calibrated Coil")
+        heat = 50f
+        shield = 0f
+        placeObstaclesForTesting(crystal(300f, 0f))
+    }
+
+    private fun crystal(x: Float, y: Float, id: Long = 81L) =
+        testObstacle(x, y, radius = crystalRadius, kind = ObstacleKind.CRYSTAL, id = id, shapeSeed = 13)
+
+    /** One step head-on into the crystal at (300, 0) at [speed], meeting its surface halfway through the step. */
+    private fun MutableGameState.flyIntoCrystal(speed: Float) =
+        flyIntoObstaclesForTesting(crystalContactX + speed * 0.5f * MutableGameState.FIXED_STEP, 0f, speed, 0f)
+
+    @Test
+    fun aCrystalHitAtTheDamageStartShattersForGoodAndTheCoreFliesOnUnhurt() {
+        val state = crystalState()
+        val speed = state.obstacleDamageStartSpeed()
+        // A dummy on the first shard's line, 150 from the crystal's centre.
+        val shardAngle = state.elapsed * 1.7f
+        val onLine = state.dummy(x = 300f + cos(shardAngle) * 150f, y = sin(shardAngle) * 150f)
+        state.takeVisualFxCues()
+        state.flyIntoCrystal(speed)
+        assertTrue(state.obstacleField.obstacles.none { it.id == 81L }, "the crystal is gone")
+        assertEquals(listOf(81L), state.destroyedObstacleIds, "and remembered as destroyed")
+        assertEquals(speed * kinds.crystalSpeedRetention, state.velocityX, 0.01f, "the Core keeps 88 % of its speed")
+        assertEquals(0f, state.velocityY)
+        val flown = speed * kinds.crystalSpeedRetention * 0.5f * MutableGameState.FIXED_STEP
+        assertEquals(crystalContactX + flown, state.coreX, 0.05f, "and flies on through where the crystal stood")
+        assertEquals(state.maxHp, state.hp, "a crystal never hurts")
+        assertEquals(GamePhase.RUNNING, state.phase)
+        val arcs = state.takeVisualFxCues().filterIsInstance<VisualFxCue.WeaponArcAdded>().filter { it.fromX == 300f && it.fromY == 0f }
+        assertEquals(kinds.crystalShards, arcs.size, "six shard lines from its centre")
+        assertEquals(kinds.crystalShardDamage * state.runScale(), onLine.maxHp - onLine.hp, 0.01f, "a shard cuts the dummy on its line")
+        assertEquals(1, onLine.stacksOf(StatusElement.CRYO), "and chills it")
+        val data = state.pickups.filter { it.type == PickupType.DATA }
+        assertEquals(kinds.crystalData, data.size, "two Data")
+        data.forEach { pickup ->
+            assertEquals(300f, pickup.x)
+            assertEquals(0f, pickup.y)
+            assertEquals(160f, kotlin.math.hypot(pickup.vx, pickup.vy), 0.01f)
+        }
+        assertTrue(state.overdriveCharge > 0f, "SHATTER fired with the crystal's kind")
+        assertEquals(50f, state.heat, "a mine's SHATTER clause stays quiet")
+    }
+
+    @Test
+    fun aGentlerHitOnlyBouncesOffACrystalAndAFatalOneStillShattersIt() {
+        val gentle = crystalState()
+        gentle.flyIntoCrystal(gentle.obstacleDamageStartSpeed() - 1f)
+        assertTrue(gentle.velocityX < 0f, "it bounces: ${gentle.velocityX}")
+        assertEquals(1, gentle.obstacleField.obstacles.count { it.id == 81L }, "the crystal stays")
+        assertTrue(gentle.destroyedObstacleIds.isEmpty())
+        assertEquals(gentle.maxHp, gentle.hp)
+        assertEquals(0f, gentle.overdriveCharge, "no SHATTER")
+        assertTrue(gentle.pickups.isEmpty())
+        // Past the lethal speed a crystal still only breaks.
+        val fast = crystalState()
+        val speed = fast.obstacleLethalSpeed() + 200f
+        fast.flyIntoCrystal(speed)
+        assertEquals(GamePhase.RUNNING, fast.phase)
+        assertEquals(fast.maxHp, fast.hp)
+        assertEquals(speed * kinds.crystalSpeedRetention, fast.velocityX, 0.01f)
+        assertEquals(listOf(81L), fast.destroyedObstacleIds)
+    }
+
+    @Test
+    fun aShatteredCrystalStaysGoneWhenItsChunkIsGeneratedAgain() {
+        val state = buildTestState(content = contentWithObstacleMix(ObstacleMix(crystal = 1f)))
+        val crystals = state.obstacleField.obstacles.filter { it.kind == ObstacleKind.CRYSTAL }
+        assertTrue(crystals.isNotEmpty(), "the window holds crystals")
+        val broken = crystals.first()
+        state.shatterCrystal(state.obstacleField.obstacles.indexOf(broken), broken, 0f, byCore = false)
+        val before = state.obstacleField.size
+        state.obstacleField = ObstacleField.EMPTY
+        state.refreshObstacleWindow()
+        assertEquals(before, state.obstacleField.size, "everything else comes back")
+        assertTrue(state.obstacleField.obstacles.none { it.id == broken.id }, "the broken crystal does not")
+    }
+
+    @Test
+    fun slammedEnemiesBreakOneCrystalPerStepAndTheOthersWaitForTheirNextContact() {
+        val state = crystalState()
+        state.placeObstaclesForTesting(crystal(500f, 0f, id = 81L), crystal(500f, 400f, id = 82L))
+        fun thrownInto(y: Float) = state.dummy(x = 0f, y = y, hp = 10_000f).apply {
+            x = 500f - crystalRadius - radius + 4f
+            vx = 700f
+            state.markThrown(this)
+        }
+        val first = thrownInto(0f)
+        val second = thrownInto(400f)
+        state.resolveEnemyObstacles()
+        assertTrue(first.hp < first.maxHp && second.hp < second.maxHp, "both slams landed")
+        assertEquals(listOf(81L), state.destroyedObstacleIds, "one crystal breaks this step")
+        assertEquals(listOf(82L), state.obstacleField.obstacles.map { it.id })
+        assertTrue(state.overdriveCharge > 0f, "SHATTER fired with the crystal's kind")
+        // The second crystal waits for its next contact: the enemy is thrown in again once its slam is ready.
+        state.elapsed += canonicalGameplayContent.obstacles.slamCooldownSeconds
+        second.x = 500f - crystalRadius - second.radius + 4f
+        second.vx = 700f
+        state.resolveEnemyObstacles()
+        assertEquals(listOf(81L, 82L), state.destroyedObstacleIds)
+        // An enemy drifting into a crystal never breaks it.
+        val calm = crystalState()
+        val drifter = calm.dummy(x = 0f, y = 0f).apply {
+            x = 300f - crystalRadius - radius + 2f
+            vx = 100f
+        }
+        calm.resolveEnemyObstacles()
+        assertEquals(drifter.maxHp, drifter.hp)
+        assertEquals(1, calm.obstacleField.size)
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Derelict mines.
+
+    private val mineRadius = 50f
+    private val armReach = mineRadius + kinds.mineArmMargin + core
+    private val blastReach = kinds.mineBlastRadius + core
+
+    /** Calibrated Coil gains Overdrive on SHATTER from a mine and vents heat when a mine hurts the Core. */
+    private val mineContent = contentWithClauses(
+        "Calibrated Coil",
+        EffectClause(EffectTrigger.SHATTER, immutableListOf(EffectCondition.ObstacleIs(ObstacleKind.DERELICT_MINE)),
+            immutableListOf(EffectAction.Overdrive(10f)), cooldownSeconds = 0.5f),
+        EffectClause(EffectTrigger.HURT, immutableListOf(EffectCondition.ObstacleIs(ObstacleKind.DERELICT_MINE)),
+            immutableListOf(EffectAction.Vent(20f)), cooldownSeconds = 0.5f),
+    )
+
+    private fun mine(x: Float, y: Float, id: Long = 71L, fuseAt: Float = 0f) =
+        testObstacle(x, y, radius = mineRadius, kind = ObstacleKind.DERELICT_MINE, id = id, fuseAt = fuseAt)
+
+    /** A run 1 s in with the mine clauses, at heat 50 and no shield, with [obstacles] placed. */
+    private fun mineState(vararg obstacles: kinetickk.ball.gameplay.nucleus.model.Obstacle, rebirth: Int = 0): MutableGameState =
+        buildTestState(rebirth = rebirth, content = mineContent).apply {
+            own("Calibrated Coil")
+            heat = 50f
+            shield = 0f
+            elapsed = 1f
+            placeObstaclesForTesting(*obstacles)
+        }
+
+    private fun MutableGameState.mineWithId(id: Long) = obstacleField.obstacles.singleOrNull { it.id == id }
+
+    @Test
+    fun aMineArmsWhenTheCoreComesNearAndBlowsAfterItsFuse() {
+        val state = mineState(mine(300f, 0f), rebirth = 3)
+        val near = state.dummy(x = 400f, y = 0f)
+        val far = state.dummy(x = 300f, y = 0f).apply { y = kinds.mineBlastRadius + radius + 1f }
+        state.flyIntoObstaclesForTesting(300f - armReach - 1f, 0f, 0f, 0f)
+        assertEquals(0f, state.mineWithId(71L)!!.fuseAt, "just outside its arming reach it sleeps")
+        state.takeVisualFxCues()
+        state.flyIntoObstaclesForTesting(300f - armReach + 1f, 0f, 0f, 0f)
+        assertEquals(1f + kinds.mineFuseSeconds, state.mineWithId(71L)!!.fuseAt, "just inside it arms")
+        val telegraph = state.takeVisualFxCues().filterIsInstance<VisualFxCue.ShockwaveAdded>().filter { it.x == 300f && it.y == 0f }
+        assertEquals(1, telegraph.size)
+        assertEquals(kinds.mineFuseSeconds, telegraph.single().life, "the telegraph lasts the fuse")
+        assertEquals(kinds.mineBlastRadius, telegraph.single().maxRadius, "and reaches the blast's edge")
+        assertEquals(4, telegraph.single().colorIndex, "in the threat tone")
+        // Moving away again does not disarm it.
+        state.elapsed = 1f + kinds.mineFuseSeconds - 0.01f
+        state.flyIntoObstaclesForTesting(300f - armReach + 1f, 0f, 0f, 0f)
+        assertEquals(state.maxHp, state.hp, "nothing before the fuse runs out")
+        assertTrue(state.mineWithId(71L) != null)
+        state.elapsed = 1f + kinds.mineFuseSeconds
+        state.flyIntoObstaclesForTesting(300f - armReach + 1f, 0f, 0f, 0f)
+        assertEquals(null, state.mineWithId(71L), "it blew")
+        assertEquals(listOf(71L), state.destroyedObstacleIds, "for good")
+        val expected = state.maxHp * kinds.mineBlastShare * (1f + canonicalGameplayContent.obstacles.damagePerTier * 3)
+        assertEquals(state.maxHp - expected, state.hp, 0.01f, "a tenth of integrity, grown by the tier, as obstacle damage")
+        val dealt = near.maxHp - near.hp
+        assertEquals(kinds.mineBlastEnemyDamage * state.runScale(), dealt, kinds.mineBlastEnemyDamage * state.runScale() * 0.01f)
+        assertEquals(far.maxHp, far.hp, "nothing just outside the blast")
+        assertTrue(state.overdriveCharge > 0f, "SHATTER fired with the mine's kind")
+        assertEquals(30f, state.heat, "HURT fired with the mine's kind")
+        assertEquals(GamePhase.RUNNING, state.phase)
+    }
+
+    @Test
+    fun aMineBlastReachesTheCoreOnlyWithinItsRadius() {
+        for ((distance, hurts) in listOf(blastReach - 1f to true, blastReach + 1f to false)) {
+            val state = mineState(mine(300f, 0f, fuseAt = 1f))
+            state.flyIntoObstaclesForTesting(300f - distance, 0f, 0f, 0f)
+            assertEquals(null, state.mineWithId(71L))
+            assertEquals(hurts, state.hp < state.maxHp, "a blast $distance from the Core")
+            assertEquals(hurts, state.heat < 50f, "HURT at $distance")
+        }
+    }
+
+    @Test
+    fun aFastPassEscapesAMineAndASlowOneIsCaught() {
+        for ((speed, escapes) in listOf(1_000f to true, 300f to false)) {
+            val state = mineState(mine(600f, 0f))
+            var x = 300f
+            repeat(150) {
+                state.elapsed += MutableGameState.FIXED_STEP
+                x += speed * MutableGameState.FIXED_STEP
+                state.flyIntoObstaclesForTesting(x, 0f, speed, 0f)
+            }
+            assertEquals(null, state.mineWithId(71L), "the mine blew behind a pass at $speed")
+            assertEquals(escapes, state.hp == state.maxHp, "a pass at $speed")
+        }
+    }
+
+    @Test
+    fun aPlayerShotSetsAMineOffOnTheQuickFuseAndAHostileOneDoesNot() {
+        val quick = 1f + kinds.mineQuickFuseSeconds
+        val friendly = mineState(mine(300f, 0f))
+        val shot = friendly.friendlyShotThrough(300f)
+        friendly.blockProjectilesAtObstacles()
+        assertFalse(shot.spent, "the shot flies on")
+        assertEquals(quick, friendly.mineWithId(71L)!!.fuseAt)
+
+        val hostile = mineState(mine(300f, 0f))
+        val enemyShot = Projectile(x = 360f, y = 0f, vx = 500f, vy = 0f, radius = 5f, life = 2f, hostile = true, previousX = 180f, previousY = 0f)
+        hostile.projectiles += enemyShot
+        hostile.blockProjectilesAtObstacles()
+        assertFalse(enemyShot.spent)
+        assertEquals(0f, hostile.mineWithId(71L)!!.fuseAt, "a hostile shot leaves it dormant")
+
+        // Beside the body: nothing.
+        val beside = mineState(mine(300f, 0f))
+        beside.projectiles += Projectile(x = 360f, y = mineRadius + 6f, vx = 500f, vy = 0f, radius = 5f, life = 2f, hostile = false,
+            previousX = 180f, previousY = mineRadius + 6f)
+        beside.blockProjectilesAtObstacles()
+        assertEquals(0f, beside.mineWithId(71L)!!.fuseAt)
+
+        // An armed mine's longer fuse shortens; a shorter one stays.
+        for ((fuse, after) in listOf(1.5f to quick, 1.05f to 1.05f)) {
+            val armed = mineState(mine(300f, 0f, fuseAt = fuse))
+            armed.friendlyShotThrough(300f)
+            armed.blockProjectilesAtObstacles()
+            assertEquals(after, armed.mineWithId(71L)!!.fuseAt, "a fuse ending at $fuse")
+        }
+    }
+
+    @Test
+    fun aThrownEnemyTouchingAMineSetsItOffOnTheQuickFuse() {
+        val quick = 1f + kinds.mineQuickFuseSeconds
+        for ((offset, thrown, fused) in listOf(
+            Triple(-1f, true, true), Triple(1f, true, false), Triple(-1f, false, false),
+        )) {
+            val state = mineState(mine(300f, 0f))
+            val enemy = state.dummy(x = 0f, y = 0f)
+            enemy.x = 300f + mineRadius + enemy.radius + offset
+            if (thrown) state.markThrown(enemy)
+            // The Core rests far outside the arming reach, inside the field pass's range.
+            state.flyIntoObstaclesForTesting(1_000f, 600f, 0f, 0f)
+            assertEquals(if (fused) quick else 0f, state.mineWithId(71L)!!.fuseAt, "thrown $thrown, ${offset} off its body's edge")
+        }
+    }
+
+    @Test
+    fun aBlastSetsOffTheMinesItReachesOnTheQuickFuse() {
+        val chainReach = kinds.mineBlastRadius + mineRadius
+        val state = mineState(
+            mine(300f, 0f, id = 71L, fuseAt = 1f),
+            mine(300f + chainReach - 1f, 0f, id = 72L),
+            mine(300f, chainReach + 1f, id = 73L),
+        )
+        state.flyIntoObstaclesForTesting(1_000f, -600f, 0f, 0f)
+        assertEquals(null, state.mineWithId(71L))
+        assertEquals(1f + kinds.mineQuickFuseSeconds, state.mineWithId(72L)!!.fuseAt, "inside the blast: the quick fuse")
+        assertEquals(0f, state.mineWithId(73L)!!.fuseAt, "just outside it: dormant")
+        state.elapsed = 1f + kinds.mineQuickFuseSeconds
+        state.flyIntoObstaclesForTesting(1_000f, -600f, 0f, 0f)
+        assertEquals(null, state.mineWithId(72L), "the second one follows")
+        assertEquals(listOf(71L, 72L), state.destroyedObstacleIds)
+    }
+
+    @Test
+    fun atMostFourMinesDetonateInOneStepAndTheFifthWaitsForTheNext() {
+        for (count in listOf(kinds.maximumMineDetonationsPerStep, kinds.maximumMineDetonationsPerStep + 1)) {
+            val mines = Array(count) { index -> mine(400f + 300f * index, 600f, id = 100L + index, fuseAt = 1f) }
+            val state = mineState(*mines)
+            state.flyIntoObstaclesForTesting(0f, 0f, 0f, 0f)
+            val left = count - kinds.maximumMineDetonationsPerStep
+            assertEquals(left, state.obstacleField.size, "$count due mines: ${kinds.maximumMineDetonationsPerStep} blow this step")
+            assertEquals(kinds.maximumMineDetonationsPerStep, state.destroyedObstacleIds.size)
+            state.elapsed += MutableGameState.FIXED_STEP
+            state.flyIntoObstaclesForTesting(0f, 0f, 0f, 0f)
+            assertEquals(0, state.obstacleField.size, "$count due mines: the rest blow the next step")
+            assertEquals(count, state.destroyedObstacleIds.size)
+        }
+    }
+
+    @Test
+    fun aLethalMineBlastEndsTheRunAsAnObstacleCollision() {
+        val state = mineState(mine(300f, 0f, fuseAt = 1f))
+        state.hp = 1f
+        state.flyIntoObstaclesForTesting(250f, 0f, 0f, 0f)
+        assertEquals(GamePhase.GAME_OVER, state.phase)
+        assertEquals(OBSTACLE_COLLISION_REASON, state.message)
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Unstable asteroids and candidate isolation.
+
+    @Test
+    fun anUnstableAsteroidFiresShatterAndItsBlastHurtsWithItsKind() {
+        val content = contentWithClauses(
+            "Calibrated Coil",
+            EffectClause(EffectTrigger.SHATTER, immutableListOf(EffectCondition.ObstacleIs(ObstacleKind.UNSTABLE)),
+                immutableListOf(EffectAction.Overdrive(10f)), cooldownSeconds = 0.5f),
+            EffectClause(EffectTrigger.HURT, immutableListOf(EffectCondition.ObstacleIs(ObstacleKind.UNSTABLE)),
+                immutableListOf(EffectAction.Vent(20f)), cooldownSeconds = 0.5f),
+        )
+        val state = buildTestState(content = content).apply {
+            own("Calibrated Coil")
+            heat = 50f
+            shield = 0f
+            placeObstaclesForTesting(testObstacle(300f, 0f, radius = 80f, kind = ObstacleKind.UNSTABLE, id = 91L))
+        }
+        val speed = state.obstacleDamageStartSpeed()
+        state.flyIntoObstaclesForTesting(300f - 80f - core + speed * 0.5f * MutableGameState.FIXED_STEP, 0f, speed, 0f)
+        assertEquals(listOf(91L), state.destroyedObstacleIds)
+        assertEquals(state.maxHp - canonicalGameplayContent.obstacles.unstableBlastDamage, state.hp, 0.01f)
+        assertTrue(state.overdriveCharge > 0f, "SHATTER fired with the unstable rock's kind")
+        assertEquals(30f, state.heat, "its blast's HURT carries the kind")
+    }
+
+    @Test
+    fun breakingAndArmingInACandidateLeaveTheSourceUntouched() {
+        val source = crystalState()
+        source.placeObstaclesForTesting(crystal(300f, 0f), mine(200f, 150f))
+        val field = source.obstacleField
+        val destroyed = source.destroyedObstacleIds
+        val candidate = source.copyForReduction()
+        candidate.flyIntoCrystal(candidate.obstacleDamageStartSpeed())
+        assertEquals(listOf(81L), candidate.destroyedObstacleIds)
+        assertEquals(candidate.elapsed + kinds.mineFuseSeconds, candidate.mineWithId(71L)!!.fuseAt, "the candidate armed the mine")
+        candidate.elapsed += kinds.mineFuseSeconds
+        candidate.flyIntoObstaclesForTesting(candidate.coreX, candidate.coreY, 0f, 0f)
+        assertEquals(0, candidate.obstacleField.size, "and saw it blow")
+        assertSame(field, source.obstacleField, "the source keeps its window")
+        assertEquals(listOf(81L, 71L), source.obstacleField.obstacles.map { it.id })
+        assertEquals(0f, source.mineWithId(71L)!!.fuseAt, "with the mine dormant")
+        assertSame(destroyed, source.destroyedObstacleIds)
+        assertTrue(source.destroyedObstacleIds.isEmpty())
     }
 }

@@ -39,7 +39,8 @@ internal fun testObstacle(
     id: Long = (x.toRawBits().toLong() shl 32) xor (y.toRawBits().toLong() and 0xFFFF_FFFFL),
     shapeSeed: Int = 7,
     repels: Boolean = false,
-): Obstacle = Obstacle(id = id, kind = kind, x = x, y = y, radius = radius, shapeSeed = shapeSeed, repels = repels)
+    fuseAt: Float = 0f,
+): Obstacle = Obstacle(id = id, kind = kind, x = x, y = y, radius = radius, shapeSeed = shapeSeed, fuseAt = fuseAt, repels = repels)
 
 /**
  * An accelerator gate at ([x], [y]) whose normal points along [angle] radians: its shape seed carries the angle, so
