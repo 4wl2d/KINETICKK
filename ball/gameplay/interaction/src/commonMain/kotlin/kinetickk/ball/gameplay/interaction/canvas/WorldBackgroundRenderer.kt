@@ -45,7 +45,7 @@ internal fun DrawScope.drawBackdrop(
 private fun DrawScope.drawBackdropLayer(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, roles: KkRolePalette) {
     // A dimension draws its own ground instead of the realspace grid.
     if (engine.dimension.layer != WorldLayer.BASE) {
-        drawDimensionBackdrop(engine, shakeX, shakeY)
+        drawDimensionBackdrop(engine, shakeX, shakeY, roles)
         return
     }
     val theme = arenaTheme(engine.rebirthLevel)

@@ -393,8 +393,8 @@ private fun DrawScope.drawOfferedPoint(
             drawCornerBrackets(center, 40f, roles.threat)
         }
         SiteKind.FAR_SIGIL -> drawSiteGlyph(SiteGlyph.SIGIL, center, OFFER_GLYPH_SIZE, sigilColor(roles))
-        SiteKind.ZENITH_RIFT -> drawPortal(center, WorldLayer.ZENITH, locked = false, glitch = false, time = time, roles = roles)
-        SiteKind.NADIR_RIFT -> drawPortal(center, WorldLayer.NADIR, locked = false, glitch = false, time = time, roles = roles)
+        SiteKind.ZENITH_RIFT -> drawPortal(center, WorldLayer.ZENITH, riftLocked(engine, WorldLayer.ZENITH), glitch = false, time = time, roles = roles)
+        SiteKind.NADIR_RIFT -> drawPortal(center, WorldLayer.NADIR, riftLocked(engine, WorldLayer.NADIR), glitch = false, time = time, roles = roles)
         // Caches and easter eggs lie in the ambient window, never among the offers.
         SiteKind.DRIFT_CACHE, SiteKind.LOST_CURSOR, SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL -> Unit
     }
@@ -792,8 +792,7 @@ private fun DrawScope.drawEdgeMarker(x: Float, y: Float, distance: Float, icon: 
         EdgeMarkerIcon.PORTAL -> drawSiteGlyph(SiteGlyph.PORTAL, marker, iconSize, color)
         EdgeMarkerIcon.SIGNAL -> drawSiteGlyph(SiteGlyph.SIGNAL, marker, iconSize, color)
         EdgeMarkerIcon.STRUCTURE -> drawSiteGlyph(SiteGlyph.STRUCTURE, marker, iconSize, color)
-        // The next dimension halo draws its ring once its lane gives it one.
-        EdgeMarkerIcon.HALO -> drawKkIcon(KkIcon.SYSTEM_ANOMALY, marker, iconSize, color)
+        EdgeMarkerIcon.HALO -> drawHaloEdgeGlyph(marker, iconSize, color)
     }
     val onRight = marker.x > size.width * 0.5f
     val textX = if (onRight) marker.x - iconSize * 0.5f - d(EDGE_TEXT_GAP_DP) else marker.x + iconSize * 0.5f + d(EDGE_TEXT_GAP_DP)

@@ -16,6 +16,7 @@ import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.SignalKind
 import kinetickk.ball.content.api.WorldEventKind
+import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StructureTemplateId
@@ -580,6 +581,41 @@ class HudHotPathAllocationTest {
             val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
             val perFrame = (hudBytes - emptyBytes) / FRAMES
             assertTrue(perFrame <= 64, "The dungeon panel and vignette at $width x $height allocate $perFrame bytes above an empty frame")
+        }
+    }
+
+    /**
+     * The minimap inside the Zenith: course and ambient rings, twenty-four embers around the Core and the exit rift pinned
+     * to the rim, the Core drifting so every mark moves each frame: once warm, nothing is allocated.
+     */
+    @Test
+    fun minimapDimensionMarksAllocateNothingOnSteadyFrames() {
+        listOf(1_440 to 810, 390 to 844).forEach { (width, height) ->
+            val base = hudTestModel(width.toFloat(), height.toFloat()).with("minimapRange" to 2_400f)
+            val embers = List(24) { index -> (300f + index * 40f) * kotlin.math.cos(index * 0.5f) to (300f + index * 40f) * kotlin.math.sin(index * 0.5f) }
+            val visit = dimensionVisit(WorldLayer.ZENITH, base.coreX, base.coreY, course = listOf(600f to 200f, -500f to -400f),
+                ambient = listOf(900f to -300f, -1_200f to 700f, 1_500f to 1_500f), embers = embers, exit = 6_000f to 1_000f, completed = false)
+            val frames = List(FRAMES) { frame ->
+                base.withDimension(visit).with("elapsed" to frame * GameplayRenderModel.FIXED_STEP,
+                    "coreX" to base.coreX + frame * 0.37f, "coreY" to base.coreY - frame * 0.21f)
+            }
+            val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
+                AppLanguage.Russian)
+            val bitmap = ImageBitmap(width, height)
+            val canvas = Canvas(bitmap)
+            val scope = CanvasDrawScope()
+            val size = Size(width.toFloat(), height.toFloat())
+            val memory = HudPresentationMemory()
+            fun empty() = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) { drawRect(Kk.Ink) }
+            fun hud(frame: Int) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) {
+                drawHud(frames[frame % FRAMES], measurer, 10f + frame * 0.0001f, 0f, 0f, memory)
+            }
+            repeat(FRAMES) { empty(); hud(it) }
+            kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.MINIMAP), "no minimap at $width x $height")
+            val emptyBytes = allocated { repeat(FRAMES) { empty() } }
+            val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
+            val perFrame = (hudBytes - emptyBytes) / FRAMES
+            assertTrue(perFrame <= 64, "Minimap dimension marks at $width x $height allocate $perFrame bytes above an empty frame")
         }
     }
 
