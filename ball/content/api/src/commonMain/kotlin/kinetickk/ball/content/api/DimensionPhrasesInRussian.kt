@@ -37,7 +37,6 @@ internal val DimensionPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Blessing" to "Благословение",
     "Pact" to "Сделка",
     "Refuse the pact" to "Отказаться от сделки",
-    "Keep the run as it is and salvage 10 Kinetic Matter." to "Оставить забег как есть и извлечь 10 кинетической материи.",
     "A layer of light above realspace. Grace lightens the Core and halo gates mend it. Blessings wait for those who finish its trial." to
         "Слой света над явью. Благодать облегчает Ядро, кольца нимба чинят его. Тех, кто пройдёт испытание, ждут благословения.",
     "A layer of heat beneath realspace. Slow flight scorches, and Matter burns twice as bright. Pacts are offered at a price." to

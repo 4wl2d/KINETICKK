@@ -37,7 +37,9 @@ private const val BOON_SALVAGE_MATTER: Float = 20f
 private const val TROVE_SALVAGE_MATTER: Float = 40f
 /** The Pact offer's decline card (English content keys). */
 internal const val PACT_DECLINE_TITLE: String = "Refuse the pact"
-internal const val PACT_DECLINE_DESCRIPTION: String = "Keep the run as it is and salvage 10 Kinetic Matter."
+
+/** The decline card's description, naming the [matter] the card salvages (localized by a content message template). */
+internal fun pactDeclineDescription(matter: Int): String = "Keep the run as it is and salvage $matter Kinetic Matter."
 /** Card tags (English content keys; uppercase variants localize). */
 private const val BLESSING_TAG: String = "BLESSING"
 private const val PACT_TAG: String = "PACT"
@@ -94,7 +96,7 @@ private fun MutableGameState.openBoonOffer(grant: DimensionRewardGrant, kind: Ru
         cards += ChoiceOption(
             type = ChoiceType.BOON,
             title = PACT_DECLINE_TITLE,
-            description = PACT_DECLINE_DESCRIPTION,
+            description = pactDeclineDescription(reward.declineMatter),
             tag = DECLINE_TAG,
             salvageMatter = reward.declineMatter,
         )
