@@ -59,6 +59,9 @@ import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
 import kinetickk.ball.gameplay.nucleus.simulation.takeVisualFxCues
 import kinetickk.ball.gameplay.nucleus.simulation.toRenderModel
 import kinetickk.ball.gameplay.nucleus.simulation.togglePause
+import kinetickk.ball.gameplay.nucleus.simulation.placeObstaclesForTesting
+import kinetickk.ball.gameplay.nucleus.simulation.testGate
+import kinetickk.ball.gameplay.nucleus.simulation.testObstacle
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.performance.BenchmarkScenario
 import kinetickk.performance.BenchmarkSuiteIdentity
@@ -66,6 +69,8 @@ import kinetickk.performance.BenchmarkValidation
 import kinetickk.performance.BenchmarkValidationContext
 import kinetickk.performance.runBenchmarkSuite
 import java.lang.reflect.Modifier
+import kotlin.math.cos
+import kotlin.math.sin
 
 internal const val GAMEPLAY_BENCHMARK_SUITE_VERSION = "gameplay-core-v4"
 private const val DEFAULT_SEED = 731_991
@@ -76,6 +81,8 @@ private const val MAX_TRAIL = 110
 private const val COLLISION_ENEMIES = 90
 private const val COLLISION_PROJECTILES = 325
 private const val TRACE_FRAMES = 120
+private const val TERRAIN_ENEMIES = 60
+private const val TERRAIN_OBSTACLES_PER_KIND = 3
 private const val SEMANTIC_OUTPUT_SEED = 1_469_598_103_934_665_603L
 private const val SEMANTIC_VISUAL_FX = 1
 private const val SEMANTIC_AUDIO = 2
@@ -122,6 +129,7 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
     private val fastReactionsSnapshot = GameplayNucleus.renderSnapshot(fastReactionsAuthority)
     private var controlCounter = 1L
     private val traceFingerprint = deterministicTraceFingerprint(seed + 9)
+    private val terrainWindow = terrainWindowState(seed + 11)
 
     fun scenarios(): List<BenchmarkScenario> = listOf(
         BenchmarkScenario(
@@ -391,6 +399,23 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
             validation.observeOutcome { result }
             result
         },
+        BenchmarkScenario(
+            name = "terrain_window",
+            category = "simulation",
+            description = "Copy and execute one fixed step through a window of every obstacle kind with 60 enemies among them.",
+            metadata = stateCardinality(terrainWindow, seed) + baseMetadata(
+                seed,
+                "workloadVersion" to "terrain-window-v1",
+                "obstacles" to terrainWindow.obstacleField.obstacles.size.toString(),
+                "obstacleKinds" to terrainWindow.obstacleField.obstacles.map { it.kind }.toSet().size.toString(),
+            ),
+            maximumOperations = 5_000,
+        ) { validation ->
+            val candidate = terrainWindow.copyForReduction()
+            candidate.simulateStep(MutableGameState.FIXED_STEP)
+            validation.observeOutcome { canonicalStateFingerprint(candidate) }
+            stateSignature(candidate)
+        },
     ).map { scenario ->
         val expectedOutcomeWitness = outcomeFingerprint(scenario.name)
         scenario.copy(
@@ -442,6 +467,7 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
         "nucleus_frame_paused", "published_frame_paused" ->
             authorityOutcomeFingerprint(pausedAuthority, frame60)
         "trace_2s_60hz" -> traceFingerprint
+        "terrain_window" -> fixedStepOutcomeFingerprint(terrainWindow)
         else -> error("Missing semantic outcome fingerprint for benchmark scenario: $name")
     }
 
@@ -488,6 +514,10 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
         "published_reaction_burst_100ms_2x" ->
             publishedReactionSignature(fastReactionsAuthority, fastReactionsSnapshot, frame100Millis)
         "trace_2s_60hz" -> deterministicTraceFingerprint(seed + 9)
+        "terrain_window" -> terrainWindow.copyForReduction().run {
+            simulateStep(MutableGameState.FIXED_STEP)
+            stateSignature(this)
+        }
         else -> error("Missing expected timed result for benchmark scenario: $name")
     }
 
@@ -801,6 +831,54 @@ private fun collisionState(seed: Int, hit: Boolean): MutableGameState = newRunni
         )
     }
     repeat(MAX_TRAIL) { index -> trail += TrailPoint(-1_300f + index, -700f, 0.5f) }
+}
+
+/**
+ * A running Core crossing a hand-placed obstacle window that holds [TERRAIN_OBSTACLES_PER_KIND] of every obstacle kind
+ * (pulling and pushing knots, an accelerator gate on its line, a vent and a mine within reach) in rings around it, with
+ * [TERRAIN_ENEMIES] enemies spread among them. The window stays centred on the Core's chunk, so the measured step keeps
+ * it and runs the kind systems, the solid sweeps and the enemy-obstacle contacts rather than a regeneration.
+ */
+internal fun terrainWindowState(seed: Int): MutableGameState = newRunningState(seed).apply {
+    enemies.clear()
+    projectiles.clear()
+    pickups.clear()
+    val radii = mapOf(
+        ObstacleKind.ASTEROID to 80f, ObstacleKind.BUMPER to 40f, ObstacleKind.UNSTABLE to 90f, ObstacleKind.GRAVITY_WELL to 70f,
+        ObstacleKind.ACCEL_GATE to 100f, ObstacleKind.CRYSTAL to 50f, ObstacleKind.DERELICT_MINE to 30f,
+        ObstacleKind.PHASE_SHARD to 60f, ObstacleKind.THERMAL_VENT to 60f,
+    )
+    val kinds = ObstacleKind.entries
+    val count = kinds.size * TERRAIN_OBSTACLES_PER_KIND
+    val ring = List(count) { index ->
+        val kind = kinds[index % kinds.size]
+        val angle = index * 6.2831855f / count
+        val distance = 280f + (index / kinds.size) * 260f
+        testObstacle(
+            coreX + cos(angle) * distance, coreY + sin(angle) * distance, checkNotNull(radii[kind]), kind,
+            id = 9_000L + index, shapeSeed = 11 + index, repels = kind == ObstacleKind.GRAVITY_WELL && index % 2 == 0,
+        )
+    }
+    // On the Core's line: the gate it crosses in the step; within reach: a vent's plume and a mine's arming ring.
+    val near = listOf(
+        testGate(coreX + 12f, coreY, angle = 0f, id = 9_100L),
+        testObstacle(coreX - 140f, coreY + 120f, 60f, ObstacleKind.THERMAL_VENT, id = 9_101L, shapeSeed = 5),
+        testObstacle(coreX + 150f, coreY - 160f, 30f, ObstacleKind.DERELICT_MINE, id = 9_102L, shapeSeed = 6),
+    )
+    placeObstaclesForTesting(*(ring + near).toTypedArray())
+    val types = listOf(EnemyType.DRIFTER, EnemyType.CHARGER, EnemyType.WEAVER, EnemyType.SHOOTER)
+    repeat(TERRAIN_ENEMIES) { index ->
+        val angle = (index + 0.5f) * 6.2831855f / TERRAIN_ENEMIES
+        val distance = 340f + (index % 3) * 260f
+        addEnemyForTesting(coreX + cos(angle) * distance, coreY + sin(angle) * distance, hp = 1_000_000f, radius = 14f,
+            type = types[index % types.size])
+    }
+    velocityX = 900f
+    velocityY = 0f
+    pointerX = 1_000f
+    pointerY = 360f
+    takeSoundCues()
+    takeVisualFxCues()
 }
 
 internal fun authorityState(model: MutableGameState): GameplayState = GameplayState(
