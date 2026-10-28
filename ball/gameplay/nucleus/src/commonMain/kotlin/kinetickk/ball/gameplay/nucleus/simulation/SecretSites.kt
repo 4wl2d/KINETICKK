@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.EnemyNotices
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.SiteNotice
 import kinetickk.ball.content.api.WorldDiscovery
@@ -11,8 +12,10 @@ import kinetickk.ball.gameplay.nucleus.model.RunSecretFlag
 import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.model.TAU
 import kinetickk.ball.gameplay.nucleus.model.distanceSquared
+import kinetickk.ball.gameplay.nucleus.model.segmentCircleIntersects
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kinetickk.foundation.collections.immutableListOf
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -23,7 +26,8 @@ import kotlin.math.sin
  * Easter eggs: the Lost Cursor and the Quiet Signal are found by flying through them, the Golden Drifter is released by
  * coming near its hidden trigger, Spin Cycle is tracked around the singularity in every run, and the structures report
  * the Architect's Doodle. Each is found at most once per run, pays a small reward and records its world discovery.
- * Nothing here draws from a run stream.
+ * The Cartographer's sigil appears ahead of a Core that flew far enough early enough; touching it summons the
+ * Cartographer for a duel the sigil pays for when the boss falls. Nothing here draws from a run stream.
  */
 
 /** The Golden Drifter's encounter id (one alive at a time); its tag never meets a window, bounty or sigil tag. */
@@ -50,10 +54,167 @@ private const val CORE_FX_COLOR: Int = 0
 private const val LOST_CURSOR_BURST_COUNT: Int = 8
 private const val BONE_FX_COLOR: Int = 1
 
-/** The secret trackers after the ambient sites: Spin Cycle, then the Golden Drifter's escape. */
+/** Site and encounter id of the far sigil (the sigils' base plus the kind's ordinal); its tag meets no other site's. */
+internal const val SIGIL_ID_BASE: Long = 0x00F0_0000_0000_0010L
+internal val FAR_SIGIL_ID: Long = SIGIL_ID_BASE + SiteKind.FAR_SIGIL.ordinal
+
+/** The secret boss the far sigil summons. */
+internal val SIGIL_BOSS: EnemyType = EnemyType.CARTOGRAPHER
+
+/** The sigil's boss arrives this far above it; the sigil is placed clear of obstacles by this radius. */
+internal const val SIGIL_BOSS_OFFSET: Float = 260f
+private const val SIGIL_CLEARANCE: Float = 140f
+private const val SIGIL_APPEARS_NOTICE_SECONDS: Float = 2.5f
+private const val SIGIL_FADES_NOTICE_SECONDS: Float = 1.6f
+private const val SIGIL_BROKEN_NOTICE_SECONDS: Float = 2f
+
+/** The secret trackers after the sigil: far travel, Spin Cycle, then the Golden Drifter's escape. */
 internal fun MutableGameState.updateSecretTrackers(delta: Float) {
+    updateFarTravel()
     updateSpinCycle(delta)
     updateGoldenDrifter()
+}
+
+/**
+ * Far travel, the Cartographer's condition: the first step, before the policy's time, on which the Core is at least the
+ * far-travel distance from the run's spawn in absolute space sets the flag once and places the sigil ahead of the Core.
+ * Only where the layer has sites; after the flag or the time nothing is measured.
+ */
+private fun MutableGameState.updateFarTravel() {
+    val policy = content.sites.secrets
+    if (hasSecret(RunSecretFlag.FAR_TRAVEL) || elapsed >= policy.farTravelBefore || !layerFeatures().sites) return
+    val reach = policy.farTravelDistance.toDouble()
+    if (absoluteDistanceSquared(coreX, coreY) < reach * reach) return
+    setSecret(RunSecretFlag.FAR_TRAVEL)
+    val heading = travelHeading()
+    spawnSecretSigil(coreX + cos(heading) * policy.sigilAhead, coreY + sin(heading) * policy.sigilAhead)
+}
+
+/** Sigils neither appear nor summon from this second, and an untouched one fades then. */
+internal fun MutableGameState.sigilCutoffAt(): Float = content.tempo.bossAtSeconds - content.sites.secrets.sigilCutoff
+
+/** True while [type] may still be summoned this run (a secret boss arrives at most once). */
+private fun MutableGameState.secretBossAvailable(type: EnemyType): Boolean = secretBossMask and (1L shl type.ordinal) == 0L
+
+/**
+ * Places the far sigil at ([x], [y]), moved clear of obstacles and structures, unless a sigil already lies in the world,
+ * the sigil cutoff has come or the Cartographer cannot arrive any more. It waits there until the cutoff.
+ */
+internal fun MutableGameState.spawnSecretSigil(x: Float, y: Float) {
+    val cutoff = sigilCutoffAt()
+    if (secretSigil != null || elapsed >= cutoff || !secretBossAvailable(SIGIL_BOSS)) return
+    val (sigilX, sigilY) = nudgedClearOfObstacles(x, y, SIGIL_CLEARANCE)
+    secretSigil = SiteState(FAR_SIGIL_ID, SiteKind.FAR_SIGIL, sigilX, sigilY, expiresAt = cutoff)
+    setSecret(RunSecretFlag.FAR_SIGIL_SPAWNED)
+    message = SiteNotice.SIGIL_APPEARS.english
+    messageTime = SIGIL_APPEARS_NOTICE_SECONDS
+}
+
+/**
+ * The sigil's step before the secret trackers. Untouched, it fades at its cutoff, and the Core's swept step through its
+ * circle summons the Cartographer unless another engagement runs or the encounter is refused (it stays to be touched
+ * again). Summoned, the duel is the engagement: the boss's fall breaks the sigil at the next step, wherever the Core
+ * is; the Core farther than the duel leash from the sigil, or a boss gone without a kill, fades it.
+ */
+internal fun MutableGameState.updateSecretSigil() {
+    val sigil = secretSigil ?: return
+    val policy = content.sites.secrets
+    if (!sigil.active) {
+        if (elapsed >= sigil.expiresAt) {
+            secretSigil = null
+            message = SiteNotice.SIGIL_FADES.english
+            messageTime = SIGIL_FADES_NOTICE_SECONDS
+            return
+        }
+        if (segmentCircleIntersects(previousCoreX, previousCoreY, coreX, coreY, sigil.x, sigil.y, policy.sigilRadius) &&
+            !engagementActive()
+        ) {
+            summonSigilBoss(sigil)
+        }
+        return
+    }
+    when {
+        sigil.count >= 1 -> breakSigil(sigil)
+        distanceSquared(coreX, coreY, sigil.x, sigil.y) > policy.duelLeash * policy.duelLeash || !sigilBossAlive(sigil) ->
+            fadeSigilDuel(sigil)
+    }
+}
+
+/**
+ * The Cartographer arrives above the sigil as an encounter the sigil owns: kept within the duel leash of it,
+ * leash-exempt, with its own profile aspect, evicting the oldest ordinary enemy at the hard cap, announced by its
+ * secret signal and drawn from no run stream. A refused summoning changes nothing.
+ */
+private fun MutableGameState.summonSigilBoss(sigil: SiteState) {
+    val policy = content.sites.secrets
+    val tag = siteEncounterTag(sigil)
+    val summoned = spawnEncounter(
+        EncounterRequest(
+            tag = tag,
+            centerX = sigil.x,
+            centerY = sigil.y,
+            areaRadius = policy.duelLeash,
+            members = listOf(SIGIL_BOSS),
+            integrityShare = policy.secretBossIntegrityShare,
+            abandonDistance = policy.duelLeash,
+            evictOrdinary = true,
+            positions = floatArrayOf(sigil.x, sigil.y - SIGIL_BOSS_OFFSET),
+        ),
+    )
+    if (!summoned) return
+    val boss = encounter(tag)?.bossId ?: -1
+    check(boss >= 0) { "A sigil's encounter holds its secret boss" }
+    secretSigil = sigil.copy(active = true, foeIds = immutableListOf(boss))
+    setSecret(RunSecretFlag.CARTOGRAPHER_SUMMONED)
+}
+
+/** True while the duel's boss is alive. */
+private fun MutableGameState.sigilBossAlive(sigil: SiteState): Boolean {
+    val boss = sigil.foeIds.firstOrNull() ?: return false
+    for (index in enemies.indices) {
+        val enemy = enemies[index]
+        if (enemy.id == boss) return enemy.alive
+    }
+    return false
+}
+
+/** Kill hook ([recordSiteKill]): the duel's boss fell where it stood; the sigil breaks at its next step. */
+internal fun MutableGameState.recordSigilKill(enemy: Enemy): Boolean {
+    val sigil = secretSigil?.takeIf { it.active && enemy.id in it.foeIds } ?: return false
+    secretSigil = sigil.copy(count = 1, aimX = enemy.x, aimY = enemy.y)
+    return true
+}
+
+/**
+ * The Cartographer fell: its own kill already paid the secret-boss reward and its discovery; the sigil adds its reward
+ * where the boss fell and the run's defeat flag. Its notice never replaces the boss's own defeat notice while that shows.
+ */
+private fun MutableGameState.breakSigil(sigil: SiteState) {
+    endEncounter(siteEncounterTag(sigil), despawn = false)
+    secretSigil = null // consume before any choice can open
+    setSecret(RunSecretFlag.CARTOGRAPHER_DEFEATED)
+    discoverWorld(WorldDiscovery.CARTOGRAPHER)
+    if (messageTime <= 0f || !message.startsWith(EnemyNotices.SECRET_BOSS_DEFEATED)) {
+        message = SiteNotice.SIGIL_BROKEN.english
+        messageTime = SIGIL_BROKEN_NOTICE_SECONDS
+    }
+    // Granted after the notice, so a salvaged reward's notice is the one shown.
+    grantSiteReward(content.sites.secrets.secretReward, sigil.aimX, sigil.aimY, runHash(runSeed, REWARD_SCATTER_SALT, sigil.id))
+}
+
+/** The duel ended without the boss's fall: the boss leaves without a kill and nothing is granted. */
+private fun MutableGameState.fadeSigilDuel(sigil: SiteState) {
+    endEncounter(siteEncounterTag(sigil), despawn = true)
+    secretSigil = null
+    message = SiteNotice.SIGIL_FADES.english
+    messageTime = SIGIL_FADES_NOTICE_SECONDS
+}
+
+/** The Architect's arrival: a sigil leaves the world, and a summoned boss leaves without a kill. */
+internal fun MutableGameState.releaseSecretSigil() {
+    val sigil = secretSigil ?: return
+    if (sigil.active) endEncounter(siteEncounterTag(sigil), despawn = true)
+    secretSigil = null
 }
 
 /**

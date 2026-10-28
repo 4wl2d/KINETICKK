@@ -11,6 +11,7 @@ import kinetickk.ball.content.api.SiteNotice
 import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.model.AmbientSiteWindow
+import kinetickk.ball.gameplay.nucleus.model.RunSecretFlag
 import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.model.windowSiteId
@@ -38,6 +39,8 @@ class AmbientSiteTest {
         MutableGameState(content, seed).apply {
             startRun()
             enemies.clear()
+            // The sites lie tens of thousands of units out: far travel counts as measured, so no sigil appears among them.
+            setSecret(RunSecretFlag.FAR_TRAVEL)
         }
 
     private fun ambient(configure: (AmbientSitePolicy) -> AmbientSitePolicy): GameplayContentSnapshot =

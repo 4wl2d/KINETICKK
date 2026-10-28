@@ -263,6 +263,18 @@ internal fun DrawScope.drawChallengeRing(engine: GameplayRenderModel, point: Sit
     }
 }
 
+/**
+ * A running bounty's arena at [center]: its edge as a dashed threat ring at the arena radius ([SiteProjection.radius])
+ * and, faint and mute, the exit band past which leaving forfeits the bounty (the arena plus its exit margin). Each ring is
+ * drawn only while it reaches the screen. Allocation-free.
+ */
+internal fun DrawScope.drawBountyArena(engine: GameplayRenderModel, point: SiteProjection, center: Offset, roles: KkRolePalette) {
+    val radius = point.radius
+    val exit = radius + engine.content.sites.bounty.exitMargin
+    if (isOnScreen(center, exit + 20f)) drawCircle(Kk.Mute.copy(alpha = 0.12f), exit, center, style = WorldStrokes.arc6)
+    if (isOnScreen(center, radius + 20f)) drawCircle(roles.threat.copy(alpha = 0.35f), radius, center, style = WorldStrokes.dashedMedium)
+}
+
 /** A clockwise arc of [progress] of a full turn from the top of a ring of [radius] at [center]. */
 private fun DrawScope.drawProgressArc(center: Offset, radius: Float, progress: Float, color: Color) {
     if (progress <= 0f) return

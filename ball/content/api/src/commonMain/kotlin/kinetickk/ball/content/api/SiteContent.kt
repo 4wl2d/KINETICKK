@@ -348,7 +348,9 @@ data class SecretPolicy(
     /** Sigils are refused and fade at `bossAt − sigilCutoff`. */
     val sigilCutoff: Float = 90f,
     val sigilAhead: Float = 1_100f,
+    /** The sigil is touched inside this radius (the far sigil's activation radius, which draws its ring). */
     val sigilRadius: Float = 80f,
+    /** The duel ends when the Core is farther than this from the sigil; its boss is kept inside this circle. */
     val duelLeash: Float = 2_400f,
     val secretBossIntegrityShare: Float = 1f,
     /** Granted by the sigil when its boss falls; the boss's own kill payout is separate. */
@@ -388,6 +390,12 @@ data class SecretPolicy(
         require(goldenEscapeDistance.isFinite() && goldenEscapeDistance > 0f) { "The Golden Drifter's escape distance must be positive" }
         require(farTravelDistance >= 6_000f) { "Far travel starts at least 6000 u from the origin" }
         require(sigilCutoff in 30f..300f) { "Sigil cutoff must be in 30..300 s" }
+        require(farTravelBefore.isFinite() && farTravelBefore > 0f) { "Far travel counts for a positive time" }
+        require(sigilAhead.isFinite() && sigilAhead >= 0f) { "The sigil is placed ahead of the Core" }
+        require(sigilRadius.isFinite() && sigilRadius > 0f) { "The sigil radius must be positive" }
+        // The sigil's boss is an encounter: its area and abandonment (the duel leash) and its integrity share hold.
+        require(duelLeash in 120f..2_400f) { "The duel leash must be in 120..2400" }
+        require(secretBossIntegrityShare in 0.1f..2f) { "Secret boss integrity share must be in 0.1..2" }
     }
 }
 
@@ -434,6 +442,10 @@ data class SitePolicy(
         require(ambient.rules.none { it.kind == SiteKind.GOLDEN_DRIFTER && it.triggerRadius >= secrets.goldenEscapeDistance }) {
             "The Golden Drifter escapes farther away than its trigger reaches"
         }
+        // The far sigil's drawn ring is the circle that touches it.
+        require(definition(SiteKind.FAR_SIGIL).activationRadius == secrets.sigilRadius) {
+            "The far sigil's activation radius is the sigil radius"
+        }
     }
 
     fun definition(kind: SiteKind): SiteDefinition = definitions[kind.ordinal]
@@ -445,8 +457,8 @@ private const val CHALLENGE_WINDOW_WEIGHT = 0.36f
 private const val RIFT_INSTRUCTION = "Fly through to cross over. The layer releases you before the Architect arrives."
 
 /**
- * The shipped sites in [SiteKind] order. The anomalies, the gate race and the five challenges take window weight; the
- * bounty and rifts stay at 0 until their lanes enable them.
+ * The shipped sites in [SiteKind] order. The anomalies, the gate race, the five challenges and the bounty take window
+ * weight; rifts stay at 0 (a rift claims its side of a window instead of being drawn).
  */
 fun defaultSiteDefinitions(): ImmutableList<SiteDefinition> = immutableListOf(
     SiteDefinition(
@@ -489,7 +501,7 @@ fun defaultSiteDefinitions(): ImmutableList<SiteDefinition> = immutableListOf(
     ),
     SiteDefinition(
         SiteKind.BOUNTY_ARENA, "Bounty", "Defeat the marked target. Leaving the arena forfeits the bounty.",
-        SiteReward(matter = 30), minimumOfferAt = 160f, reserveSeconds = 90f, duration = 0f,
+        SiteReward(matter = 30), windowWeight = 1f, minimumOfferAt = 160f, reserveSeconds = 90f, duration = 0f,
     ),
     SiteDefinition(SiteKind.DRIFT_CACHE, "Drift cache", "Fly through to open.", SiteReward.NONE, activationRadius = 70f, duration = 0f),
     SiteDefinition(

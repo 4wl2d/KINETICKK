@@ -19,7 +19,7 @@ import kotlin.test.assertTrue
  */
 class WorldContractBoundsTest {
     @Test
-    fun theAnomaliesTheGateRaceAndTheChallengesTakeWindowWeightAndTheAnomaliesLeadTheSiteKinds() {
+    fun theAnomaliesTheGateRaceTheChallengesAndTheBountyTakeWindowWeightAndTheAnomaliesLeadTheSiteKinds() {
         val sites = SitePolicy()
         assertEquals(SiteKind.entries, sites.definitions.map { it.kind })
         assertEquals(3, ANOMALY_KIND_COUNT)
@@ -31,7 +31,7 @@ class WorldContractBoundsTest {
         assertTrue(SiteKind.entries.drop(ANOMALY_KIND_COUNT).none { it.family == SiteFamily.ANOMALY })
         assertEquals(
             SiteKind.entries.take(ANOMALY_KIND_COUNT).associateWith { 1f } + (SiteKind.GATE_RACE to 1.4f) +
-                SiteKind.entries.filter { it.family == SiteFamily.CHALLENGE }.associateWith { 0.36f },
+                SiteKind.entries.filter { it.family == SiteFamily.CHALLENGE }.associateWith { 0.36f } + (SiteKind.BOUNTY_ARENA to 1f),
             sites.definitions.filter { it.windowWeight > 0f }.associate { it.kind to it.windowWeight },
         )
         assertTrue(sites.definitions.all { it.activationRadius == 65f || it.windowWeight == 0f })
@@ -77,6 +77,20 @@ class WorldContractBoundsTest {
         // A released Golden Drifter must not count as escaped at once.
         SitePolicy(secrets = SecretPolicy(goldenEscapeDistance = 1_300.001f))
         assertFailsWith<IllegalArgumentException> { SitePolicy(secrets = SecretPolicy(goldenEscapeDistance = 1_300f)) }
+        // The sigil's boss is an encounter: the duel leash is its area and abandonment, its integrity share the encounter's.
+        SecretPolicy(duelLeash = 2_400f)
+        assertFailsWith<IllegalArgumentException> { SecretPolicy(duelLeash = 2_401f) }
+        SecretPolicy(duelLeash = 120f)
+        assertFailsWith<IllegalArgumentException> { SecretPolicy(duelLeash = 119f) }
+        SecretPolicy(secretBossIntegrityShare = 2f)
+        assertFailsWith<IllegalArgumentException> { SecretPolicy(secretBossIntegrityShare = 2.01f) }
+        SecretPolicy(secretBossIntegrityShare = 0.1f)
+        assertFailsWith<IllegalArgumentException> { SecretPolicy(secretBossIntegrityShare = 0.099f) }
+        // The far sigil's drawn ring is the circle that touches it.
+        val widerSigil = SitePolicy().definitions
+            .map { if (it.kind == SiteKind.FAR_SIGIL) it.copy(activationRadius = 90f) else it }.toImmutableList()
+        SitePolicy(definitions = widerSigil, secrets = SecretPolicy(sigilRadius = 90f))
+        assertFailsWith<IllegalArgumentException> { SitePolicy(secrets = SecretPolicy(sigilRadius = 90f)) }
         assertFailsWith<IllegalArgumentException> { SiteReward(matter = 121) }
         assertFailsWith<IllegalArgumentException> { SiteReward(relics = 2) }
         // Only window families take window weight; only untimed families last 0 s.
