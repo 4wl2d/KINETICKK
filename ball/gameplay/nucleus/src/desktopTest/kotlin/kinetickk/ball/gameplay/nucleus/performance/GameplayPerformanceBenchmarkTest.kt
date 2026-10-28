@@ -62,6 +62,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
 import kinetickk.ball.gameplay.nucleus.simulation.addField
 import kinetickk.ball.gameplay.nucleus.simulation.cooldown
 import kinetickk.ball.gameplay.nucleus.simulation.copyForReduction
+import kinetickk.ball.gameplay.nucleus.simulation.simulateStep
 import kinetickk.ball.gameplay.nucleus.simulation.startRun
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.performance.validateBenchmarkScenario
@@ -76,7 +77,7 @@ class GameplayPerformanceBenchmarkTest {
         assertEquals("gameplay-core-v4", GAMEPLAY_BENCHMARK_SUITE_VERSION)
         val first = gameplayBenchmarkScenarios()
         val second = gameplayBenchmarkScenarios()
-        assertEquals(24, first.size)
+        assertEquals(25, first.size)
         assertEquals(first.map { it.name }.toSet().size, first.size)
         assertEquals(first.map { it.metadata }, second.map { it.metadata })
         first.forEach { validateBenchmarkScenario(it) }
@@ -374,5 +375,31 @@ class GameplayPerformanceBenchmarkTest {
         assertNotEquals(obstacleFieldFingerprint(17L, obstacles), obstacleFieldFingerprint(17L, fused))
         val repelling = obstacles.mapIndexed { index, obstacle -> if (index == 0) obstacle.copy(repels = true) else obstacle }
         assertNotEquals(obstacleFieldFingerprint(17L, obstacles), obstacleFieldFingerprint(17L, repelling))
+    }
+
+    /**
+     * The `structure_dungeon` workload holds what it names: the Core sealed in a Reliquary chapel around its garrison,
+     * 60 enemies and 300 shots; its fixed step stops shots at the chapel's walls, keeps the room sealed, repeats exactly
+     * and leaves the source untouched.
+     */
+    @Test
+    fun structureWorkloadStepsASealedReliquaryChapelWithoutChangingTheSource() {
+        val model = structureDungeonState(seed = 731_991 + 11)
+        val held = checkNotNull(model.dungeon)
+        assertEquals(StructureTemplateId.RELIQUARY, held.template)
+        assertEquals(STRUCTURE_WORKLOAD_CHAPEL, held.engagedRoom)
+        assertTrue(model.enemies.any { it.ownerTag != 0L }, "the chapel's garrison is in the crowd")
+        assertEquals(STRUCTURE_WORKLOAD_ENEMIES, model.enemies.size)
+        assertEquals(STRUCTURE_WORKLOAD_PROJECTILES, model.projectiles.size)
+        assertTrue(model.structureField.walls.any { it.kind == WallKind.DOOR_SEALED })
+        val original = canonicalStateFingerprint(model)
+
+        val result = model.copyForReduction().apply { simulateStep(MutableGameState.FIXED_STEP) }
+        assertEquals(GamePhase.RUNNING, result.phase)
+        assertEquals(STRUCTURE_WORKLOAD_CHAPEL, result.dungeon?.engagedRoom)
+        assertTrue(result.projectiles.size < model.projectiles.size, "shots stop at the chapel's walls")
+        val repeated = model.copyForReduction().apply { simulateStep(MutableGameState.FIXED_STEP) }
+        assertEquals(canonicalStateFingerprint(result), canonicalStateFingerprint(repeated))
+        assertEquals(original, canonicalStateFingerprint(model), "Benchmark repetitions must retain the source")
     }
 }
