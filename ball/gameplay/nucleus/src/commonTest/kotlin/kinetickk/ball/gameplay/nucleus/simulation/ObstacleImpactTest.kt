@@ -7,6 +7,7 @@ import kinetickk.ball.content.api.EffectAction
 import kinetickk.ball.content.api.EffectClause
 import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
@@ -22,7 +23,8 @@ import kotlin.test.assertTrue
  * The 0.6.0 impact rule on the 1280×720 test viewport: a collision counts its normal speed plus a share of its
  * sliding speed (never more than the Core's speed), every hurting hit costs at least the damage floor and part of
  * its sliding speed, shields let a share through, one cooldown spaces hits per surface, ricochets need their own
- * speed and the lethal-speed bonuses stop at the build's ceiling.
+ * speed and the lethal-speed bonuses stop at the build's ceiling. No contact is silent: a push-out at the damage start
+ * responds like a swept hit, and a third contact in one step ends its motion.
  */
 class ObstacleImpactTest {
     private fun MutableGameState.bandSpeed(fraction: Float): Float {
@@ -295,7 +297,72 @@ class ObstacleImpactTest {
         assertEquals(1, gentle.obstacleField.size, "below the damage start it is an ordinary rock")
     }
 
+    private fun MutableGameState.assertOutsideEveryRock() {
+        obstacleField.obstacles.forEach { rock ->
+            val gap = length(coreX - rock.x, coreY - rock.y) - rock.radius - coreRadius
+            assertTrue(gap >= 0f, "the Core rests outside the rock at (${rock.x}, ${rock.y}): gap $gap")
+        }
+    }
+
+    @Test
+    fun aPushOutAtDamageSpeedHurtsLikeAContact() {
+        /** The Core 2 dp inside the rock, moving straight into it at [inward]; then the push-out alone. */
+        fun pushedOut(inward: Float): MutableGameState = buildTestState().apply {
+            placeObstaclesForTesting(testObstacle(ROCK_X, 0f, ROCK_RADIUS))
+            coreX = ROCK_X - ROCK_RADIUS - coreRadius + 2f
+            coreY = 0f
+            setVelocityForTesting(inward, 0f)
+            pushCoreOutOfObstacles()
+        }
+        val probe = buildTestState()
+        val start = probe.obstacleDamageStartSpeed()
+
+        val band = pushedOut(probe.bandSpeed(0.5f))
+        band.assertOutsideEveryRock()
+        assertEquals(band.shippedBandDamage(probe.bandSpeed(0.5f)), band.lost(), 0.05f, "a band hit, as if swept into")
+        assertEquals(-0.6f * probe.bandSpeed(0.5f), band.velocityX, 0.5f, "it bounces off at the restitution")
+        assertEquals(1, band.pendingRicochets, "above the ricochet speed it is a ricochet")
+
+        val floor = pushedOut(start + 1f)
+        assertEquals(floor.maxHp * 0.06f * 0.7f, floor.lost(), floor.maxHp * 0.001f, "the damage start costs the floor")
+
+        val slow = pushedOut(start - 1f)
+        slow.assertOutsideEveryRock()
+        assertEquals(0f, slow.lost(), "just below the damage start the push-out stays silent")
+        assertEquals(0f, slow.velocityX, "and only removes the inward speed")
+        assertEquals(0, slow.pendingRicochets)
+
+        val lethal = pushedOut(probe.obstacleLethalSpeed() + 50f)
+        assertEquals(GamePhase.GAME_OVER, lethal.phase, "a push-out at the lethal speed kills")
+        assertEquals(OBSTACLE_COLLISION_REASON, lethal.message)
+    }
+
+    @Test
+    fun aThirdContactEndsTheStepsMotion() {
+        val state = buildTestState()
+        val combined = ROCK_RADIUS + state.coreRadius
+        // Two rocks leave the Core's centre a 0.5 dp corridor along x: one step bounces right, left and right again.
+        val corridor = 0.5f
+        state.placeObstaclesForTesting(
+            testObstacle(combined + corridor * 0.5f, 0f, ROCK_RADIUS),
+            testObstacle(-combined - corridor * 0.5f, 0f, ROCK_RADIUS),
+        )
+        val speed = state.obstacleDamageStartSpeed() * 0.8f
+        val delta = MutableGameState.FIXED_STEP
+        // The step starts in the middle of the corridor.
+        state.flyIntoObstaclesForTesting(speed * delta, 0f, speed, 0f)
+
+        val restitution = state.content.obstacles.restitution
+        assertEquals(-speed * restitution * restitution * restitution, state.velocityX, 0.5f, "three bounces in one step")
+        val thirdRest = corridor * 0.5f - CONTACT_GAP
+        assertEquals(thirdRest, state.coreX, 0.01f, "the Core stops at the third contact's rest point")
+        assertEquals(0f, state.coreY, 0.01f)
+        state.assertOutsideEveryRock()
+        assertEquals(state.maxHp, state.hp, "slow contacts stay free")
+    }
+
     private companion object {
+        const val CONTACT_GAP: Float = 0.05f
         const val ROCK_X: Float = 300f
         const val ROCK_RADIUS: Float = 80f
         const val SECOND_ROCK_Y: Float = 600f

@@ -394,7 +394,10 @@ internal fun MutableGameState.updateObstacles() {
 private const val MAX_CORE_BOUNCES: Int = 3
 private const val CONTACT_SEPARATION: Float = 0.05f
 
-/** Returns true when the Core touched an obstacle this step. */
+/**
+ * Returns true when the Core touched an obstacle this step. At most [MAX_CORE_BOUNCES] contacts resolve per step;
+ * the last one ends the step's motion at its rest point.
+ */
 private fun MutableGameState.resolveCoreObstacleCollisions(): Boolean {
     if (obstacleField.size == 0 && structureField.structures.isEmpty()) return false
     var startX = previousCoreX
@@ -466,9 +469,16 @@ private fun MutableGameState.resolveCoreObstacleCollisions(): Boolean {
                 startY = restY
             }
         }
-        val remaining = (1f - hitT) * delta
-        endX = startX + velocityX * remaining
-        endY = startY + velocityY * remaining
+        if (bounce == MAX_CORE_BOUNCES - 1) {
+            // The last allowed contact ends the step's motion at its rest point: the remainder is never moved
+            // un-swept into whatever lies behind it.
+            endX = startX
+            endY = startY
+        } else {
+            val remaining = (1f - hitT) * delta
+            endX = startX + velocityX * remaining
+            endY = startY + velocityY * remaining
+        }
         if (phase != GamePhase.RUNNING) break
     }
     coreX = endX
@@ -480,9 +490,18 @@ private fun MutableGameState.resolveCoreObstacleCollisions(): Boolean {
     return collided
 }
 
-/** Last guard after the bounces: the Core never rests inside an obstacle. */
-private fun MutableGameState.pushCoreOutOfObstacles() {
-    forEachObstacleNear(coreX, coreY, coreRadius) { _, obstacle ->
+/**
+ * Last guard after the bounces: the Core never rests inside an obstacle. It is pushed out of every obstacle it
+ * overlaps. Inward speed below the damage-start impact speed is removed silently; the first contact at that speed or
+ * faster keeps it and, once the walk is done (the field does not change during it), responds like a swept contact:
+ * it bounces, hurts, kills or ricochets.
+ */
+internal fun MutableGameState.pushCoreOutOfObstacles() {
+    var hitIndex = -1
+    var hitObstacle: Obstacle? = null
+    var hitNormalX = 0f
+    var hitNormalY = 0f
+    forEachObstacleNear(coreX, coreY, coreRadius) { index, obstacle ->
         val combined = obstacle.radius + coreRadius
         val dx = coreX - obstacle.x
         val dy = coreY - obstacle.y
@@ -494,11 +513,21 @@ private fun MutableGameState.pushCoreOutOfObstacles() {
             coreY = obstacle.y + ny * (combined + CONTACT_SEPARATION)
             val inward = -(velocityX * nx + velocityY * ny)
             if (inward > 0f) {
-                velocityX += inward * nx
-                velocityY += inward * ny
+                val sliding = length(velocityX + inward * nx, velocityY + inward * ny)
+                if (hitObstacle == null && obstacleImpactSpeed(inward, sliding) >= obstacleDamageStartSpeed()) {
+                    hitIndex = index
+                    hitObstacle = obstacle
+                    hitNormalX = nx
+                    hitNormalY = ny
+                } else {
+                    velocityX += inward * nx
+                    velocityY += inward * ny
+                }
             }
         }
     }
+    val hit = hitObstacle ?: return
+    respondToObstacle(hitIndex, hit, hitNormalX, hitNormalY, coreX, coreY)
 }
 
 /**
