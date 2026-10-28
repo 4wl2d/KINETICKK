@@ -24,7 +24,7 @@ internal value class SteeringVector(private val packed: Long) {
 internal fun steeringVector(x: Float, y: Float): SteeringVector =
     SteeringVector((x.toRawBits().toLong() shl 32) or (y.toRawBits().toLong() and 0xFFFF_FFFFL))
 
-/** Where to hold the singularity: [heading] (radians) and [distance] from the Core (dp). */
+/** Where to hold the singularity: [heading] (radians) and [distance] from the Core (dp; below 0 asks for less than the base pull). */
 @JvmInline
 internal value class SteeringAim(private val packed: Long) {
     val heading: Float get() = Float.fromBits((packed ushr 32).toInt())
@@ -153,16 +153,77 @@ internal fun MutableGameState.steeringDrag(): Float {
     return layerDrag(drag)
 }
 
+/** Law evaluations one inverse makes: test pilots call it, the fixed step never does. */
+private const val STEERING_AIM_ITERATIONS: Int = 16
+
+/** The inverse searches tethers up to this many long half-axes; a request beyond them saturates there. */
+private const val AIM_TETHER_LIMIT_HALF_AXES: Float = 4f
+
 /**
- * Inverse of [steeringAcceleration] for the current state: the heading and tether length that ask the
- * law for the acceleration ([accelerationX], [accelerationY]). The pilots' approximation of the plain law at
- * full tether authority without Overdrive, Brake or a magnetism liability; pilots clamp the distance themselves.
+ * Inverse of [steeringAcceleration] for the current state: the heading and tether length that ask the law for
+ * the acceleration ([accelerationX], [accelerationY]) with the camera's current lag, so the pointer belongs at
+ * that lag plus the tether. The turning part is exact, since grip scales it by a factor of the speed alone. The
+ * along-track pull is found by bisection, because the law turns it monotonically into along-track acceleration:
+ * the gate opens as the pull swings back, the sling reads only the turning part and the assist grows with the
+ * forward throttle. The last bracket is interpolated, which makes the plain law exact. A request the law cannot
+ * give saturates at the search bound. The Brake flies the plain law and inverts in closed form. Pilots clamp the
+ * distance themselves.
  */
-internal fun MutableGameState.steeringAimFor(accelerationX: Float, accelerationY: Float): SteeringAim =
-    steeringAim(
-        atan2(accelerationY, accelerationX),
-        (length(accelerationX, accelerationY) - content.tempo.steering.basePull) / magnetStrength,
-    )
+internal fun MutableGameState.steeringAimFor(accelerationX: Float, accelerationY: Float): SteeringAim {
+    val tuning = content.tempo.steering
+    val magnetism = effectiveMagnetism()
+    val overdriveMultiplier = if (overdriveTime > 0f) 1.3f else 1f
+    val requested = length(accelerationX, accelerationY)
+    if (braking) {
+        val factor = overdriveMultiplier * BRAKE_PULL_FACTOR
+        return steeringAim(atan2(accelerationY, accelerationX), (requested / factor - tuning.basePull) / magnetism)
+    }
+    val speed = length(velocityX, velocityY)
+    // At rest the law's heading is the tether itself, so the request's direction is the only axis.
+    val moving = speed > 1f
+    val forwardX = if (moving) velocityX / speed else if (requested > 0f) accelerationX / requested else 1f
+    val forwardY = if (moving) velocityY / speed else if (requested > 0f) accelerationY / requested else 0f
+    val requestedAlong = accelerationX * forwardX + accelerationY * forwardY
+    val grip = gripFactor(tuning, speed)
+    val lateralX = (accelerationX - forwardX * requestedAlong) / grip
+    val lateralY = (accelerationY - forwardY * requestedAlong) / grip
+    val lagX = coreX - cameraX
+    val lagY = coreY - cameraY
+    val limit = (tuning.basePull + magnetism * AIM_TETHER_LIMIT_HALF_AXES * longHalfAxis()) * overdriveMultiplier
+    var low = -limit
+    var high = limit
+    // What the law gives at each end of the bracket; NaN until that end has been evaluated.
+    var producedLow = Float.NaN
+    var producedHigh = Float.NaN
+    repeat(STEERING_AIM_ITERATIONS) {
+        val middle = (low + high) * 0.5f
+        val pullX = forwardX * middle + lateralX
+        val pullY = forwardY * middle + lateralY
+        val pull = length(pullX, pullY)
+        val tether = max(0f, (pull / overdriveMultiplier - tuning.basePull) / magnetism)
+        val scale = if (pull > 0f) tether / pull else 0f
+        val tetherX = pullX * scale
+        val tetherY = pullY * scale
+        val produced = steeringAcceleration(tetherX, tetherY, lagX + tetherX, lagY + tetherY, velocityX, velocityY)
+        val producedAlong = produced.x * forwardX + produced.y * forwardY
+        if (producedAlong < requestedAlong) {
+            low = middle
+            producedLow = producedAlong
+        } else {
+            high = middle
+            producedHigh = producedAlong
+        }
+    }
+    // Both ends evaluated (a NaN fails the comparison): interpolate inside the bracket, else take its middle.
+    val along = if (producedHigh > producedLow) {
+        low + (high - low) * ((requestedAlong - producedLow) / (producedHigh - producedLow)).coerceIn(0f, 1f)
+    } else {
+        (low + high) * 0.5f
+    }
+    val pullX = forwardX * along + lateralX
+    val pullY = forwardY * along + lateralY
+    return steeringAim(atan2(pullY, pullX), (length(pullX, pullY) / overdriveMultiplier - tuning.basePull) / magnetism)
+}
 
 /**
  * Light straight-line fatigue: [MutableGameState.coreStraightness] rises toward 1 while the smoothed heading

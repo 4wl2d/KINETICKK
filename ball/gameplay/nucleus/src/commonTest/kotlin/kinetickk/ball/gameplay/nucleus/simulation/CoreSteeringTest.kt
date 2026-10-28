@@ -27,19 +27,72 @@ class CoreSteeringTest {
 
     @Test
     fun theAimAsksTheLawForTheRequestedAccelerationAtFullAuthority() {
-        // The aim inverts the plain law (the legacy tuning): none of the piloting terms is part of it.
-        val state = steeringState(SteeringTuning.LEGACY)
+        // The aim inverts the piloting law itself: gate, grip, sling and launch assist are all part of it.
+        val state = steeringState()
         val velocities = listOf(0f to 0f, 640f to -210f, -1_200f to 900f)
         val requests = listOf(900f to 0f, -400f to 1_300f, 150f to -2_000f, -1_700f to -1_700f)
         for ((velocityX, velocityY) in velocities) for ((requestX, requestY) in requests) {
+            state.velocityX = velocityX
+            state.velocityY = velocityY
             val aim = state.steeringAimFor(requestX, requestY)
-            val tetherX = cos(aim.heading) * aim.distance
-            val tetherY = sin(aim.heading) * aim.distance
-            val law = state.steeringAcceleration(tetherX, tetherY, tetherX, tetherY, velocityX, velocityY)
+            val law = state.lawForAim(aim)
             val case = "request=($requestX, $requestY) velocity=($velocityX, $velocityY)"
             assertEquals(requestX, law.x, abs(requestX) * 1e-4f + 0.05f, case)
             assertEquals(requestY, law.y, abs(requestY) * 1e-4f + 0.05f, case)
         }
+    }
+
+    @Test
+    fun theInverseReproducesTheRequestedAcceleration() {
+        // Every request is what the law gives for some tether, so each one is reachable.
+        val state = steeringState()
+        var braked = 0
+        var rested = 0
+        repeat(200) { index ->
+            state.braking = unit(index, 1) < 0.15f
+            state.polarityStability = if (state.braking) 1f else 0.3f + 0.7f * unit(index, 2)
+            state.overdriveTime = if (unit(index, 3) < 0.3f) 2f else 0f
+            state.magnetStrength = 3f + 4f * unit(index, 4)
+            state.gripStrength = 3f * unit(index, 5)
+            state.slingStrength = 3f * unit(index, 6)
+            val speed = if (index % 10 == 0) 0f else 50f + 2_550f * unit(index, 7)
+            val heading = TWO_PI * unit(index, 8)
+            state.velocityX = speed * cos(heading)
+            state.velocityY = speed * sin(heading)
+            // The camera trails the Core by about its steady lag.
+            val lag = CAMERA_LAG_SECONDS * (0.5f + unit(index, 9))
+            state.cameraX = state.coreX - state.velocityX * lag
+            state.cameraY = state.coreY - state.velocityY * lag
+            val distance = 65f + 535f * unit(index, 10)
+            val direction = TWO_PI * unit(index, 11)
+            val request = state.lawForAim(steeringAim(direction, distance))
+            val aim = state.steeringAimFor(request.x, request.y)
+            val law = state.lawForAim(aim)
+            val error = hypot(law.x - request.x, law.y - request.y)
+            val size = hypot(request.x, request.y)
+            assertTrue(
+                error <= 0.01f * size,
+                "state $index (speed $speed, braking ${state.braking}): request (${request.x}, ${request.y}), " +
+                    "aim gives (${law.x}, ${law.y})",
+            )
+            if (state.braking) braked++
+            if (speed == 0f) rested++
+        }
+        assertTrue(braked > 0 && rested > 0, "the states include braking ($braked) and resting ($rested) Cores")
+    }
+
+    @Test
+    fun theInverseSearchesTethersUpToFourLongHalfAxes() {
+        val state = steeringState().apply {
+            velocityX = 900f
+            cameraX = coreX - CAMERA_LAG_SECONDS * 900f
+        }
+        val bound = 4f * 640f
+        fun requestFor(distance: Float): SteeringVector = state.lawForAim(steeringAim(0f, distance))
+        val inside = requestFor(bound - 10f)
+        assertEquals(bound - 10f, state.steeringAimFor(inside.x, inside.y).distance, 1f, "a tether inside the bound is found")
+        val beyond = requestFor(bound + 200f)
+        assertEquals(bound, state.steeringAimFor(beyond.x, beyond.y).distance, 1f, "a request past the bound saturates at it")
     }
 
     @Test
@@ -343,6 +396,20 @@ class CoreSteeringTest {
             if (definition.id == node) definition.copy(effects = effects.toList().toImmutableList()) else definition
         }.toImmutableList())
 
+    /** The law for the singularity held at [aim] from the Core, the pointer at the camera's current lag plus that tether. */
+    private fun MutableGameState.lawForAim(aim: SteeringAim): SteeringVector {
+        val tetherX = cos(aim.heading) * aim.distance
+        val tetherY = sin(aim.heading) * aim.distance
+        return steeringAcceleration(
+            tetherX,
+            tetherY,
+            coreX - cameraX + tetherX,
+            coreY - cameraY + tetherY,
+            velocityX,
+            velocityY,
+        )
+    }
+
     /** One fixed step of the heading bookkeeping as updateCore runs it. */
     private fun MutableGameState.straightnessStep() {
         val beforeX = smoothedVelocityX
@@ -392,6 +459,7 @@ class CoreSteeringTest {
     private companion object {
         const val STEP = MutableGameState.FIXED_STEP
         const val PI_OVER_FOUR = 0.785_398_16f
+        const val TWO_PI = 6.283_185_3f
         val VELOCITIES = listOf(0f to 0f, 1_400f to 0f, -600f to 900f, 2_100f to -1_300f)
         val TETHERS = listOf(300f to 0f, -250f to 120f, 40f to -380f)
         val OFFSETS = listOf(0f to 0f, 500f to 0f, 0f to 300f, -400f to -200f)
