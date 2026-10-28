@@ -152,13 +152,13 @@ class StructureContentTest {
         assertEquals(listOf(2, 3, 3, 2, 2, 4, 0), templates.map { it.finalRoom })
         assertEquals(
             listOf(
-                listOf("Elite Key", "Kinetic Matter", "Data cache"),
-                listOf("Relic", "Rare item or better"),
-                listOf("Uncommon item or better", "Elite Key", "Data cache"),
-                listOf("Relic", "Kinetic Matter"),
-                listOf("Kinetic Matter", "Repair", "Elite Key"),
-                listOf("Relic", "Epic item or better", "Elite Key"),
-                listOf("Data cache"),
+                listOf("Key", "Matter", "Data"),
+                listOf("Relic", "Rare item"),
+                listOf("Uncommon item", "Key", "Data"),
+                listOf("Relic", "Matter"),
+                listOf("Matter", "Repair", "Key"),
+                listOf("Relic", "Epic item", "Key"),
+                listOf("Data"),
             ),
             templates.map { template -> template.rewards.map { it.label } },
         )

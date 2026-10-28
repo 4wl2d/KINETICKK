@@ -149,18 +149,21 @@ data class StructureReward(val kind: StructureRewardKind, val amount: Int = 1, v
         }
     }
 
-    /** English content phrase shown on the dungeon panel (localized at presentation). */
+    /**
+     * English content phrase shown on the dungeon panel (localized at presentation), short like the HUD's other reward
+     * words: the panel joins up to six on one line, which must stay legible on a phone. An item offer names its floor.
+     */
     val label: String
         get() = when (kind) {
             StructureRewardKind.RELIC -> "Relic"
-            StructureRewardKind.KEY -> "Elite Key"
-            StructureRewardKind.MATTER -> "Kinetic Matter"
-            StructureRewardKind.DATA -> "Data cache"
+            StructureRewardKind.KEY -> "Key"
+            StructureRewardKind.MATTER -> "Matter"
+            StructureRewardKind.DATA -> "Data"
             StructureRewardKind.REPAIR -> "Repair"
             StructureRewardKind.ITEM_OFFER -> when (rarityFloor) {
-                ItemRarity.UNCOMMON -> "Uncommon item or better"
-                ItemRarity.RARE -> "Rare item or better"
-                ItemRarity.EPIC -> "Epic item or better"
+                ItemRarity.UNCOMMON -> "Uncommon item"
+                ItemRarity.RARE -> "Rare item"
+                ItemRarity.EPIC -> "Epic item"
                 // Validation forbids every other floor; the branch keeps the mapping total.
                 else -> "Item"
             }
