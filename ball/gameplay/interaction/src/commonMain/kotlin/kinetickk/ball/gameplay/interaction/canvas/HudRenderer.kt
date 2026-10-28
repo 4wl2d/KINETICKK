@@ -81,7 +81,7 @@ internal fun DrawScope.drawHud(
 
     drawHudWorldAnchors(engine, textMeasurer, renderTime, shakeX, shakeY, memory, critical)
     drawHudScreenStates(engine, textMeasurer.roles, renderTime, memory, critical)
-    drawDimensionShutter(engine, textMeasurer.roles, renderTime)
+    drawDimensionShutter(engine, textMeasurer.roles, renderTime, memory)
 
     drawDataLine(engine, frame, textMeasurer.roles, renderTime, memory)
     val badgeBottom = drawLevelCluster(engine, textMeasurer, frame, renderTime, memory, controls)

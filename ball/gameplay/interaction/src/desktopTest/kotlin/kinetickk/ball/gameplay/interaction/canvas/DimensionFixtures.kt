@@ -4,12 +4,18 @@
 package kinetickk.ball.gameplay.interaction.canvas
 
 import kinetickk.ball.content.api.DimensionObjective
+import kinetickk.ball.content.api.SiteFamily
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.render.DimensionProjection
 import kinetickk.ball.gameplay.nucleus.render.EmberProjection
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.HaloProjection
 import kinetickk.ball.gameplay.nucleus.render.PortalProjection
+import kinetickk.ball.gameplay.nucleus.render.TrialClock
+import kinetickk.ball.gameplay.nucleus.render.TrialProjection
+import kinetickk.ball.gameplay.nucleus.render.TrialReward
+import kinetickk.ball.gameplay.nucleus.render.TrialSource
+import kinetickk.ball.gameplay.nucleus.render.TrialValue
 import kinetickk.foundation.collections.toImmutableList
 
 /** The objective each layer's fixtures show: the Ascent's course, the Harvest's embers, the Archive's boss. */
@@ -68,3 +74,37 @@ internal fun glitchRift(coreX: Float, coreY: Float, dx: Float, dy: Float, locked
 
 /** [this] model with [dimension] published. */
 internal fun GameplayRenderModel.withDimension(dimension: DimensionProjection): GameplayRenderModel = with("dimension" to dimension)
+
+/**
+ * The trial panel Gameplay publishes during [visit]: the objective's name and instruction, no clock, a counted
+ * objective's cells and count, or a boss objective's one cell at [bossShare] of its integrity lost, and the layer's
+ * reward.
+ */
+internal fun dimensionTrial(visit: DimensionProjection, bossShare: Float = 0.4f): TrialProjection {
+    val objective = checkNotNull(visit.objective)
+    val boss = objective.boss != null
+    return TrialProjection(
+        family = SiteFamily.PORTAL,
+        kind = null,
+        title = objective.label,
+        rules = objective.instruction,
+        clock = TrialClock.NONE,
+        seconds = 0f,
+        segments = if (boss) 1 else visit.goal,
+        progress = if (boss) bossShare else visit.progress.toFloat() / visit.goal,
+        value = if (boss) TrialValue.NONE else TrialValue.COUNT,
+        done = if (boss) 0f else visit.progress.toFloat(),
+        required = if (boss) 0f else visit.goal.toFloat(),
+        reward = when (visit.layer) {
+            WorldLayer.ZENITH -> TrialReward.BLESSING
+            WorldLayer.NADIR -> TrialReward.PACT
+            WorldLayer.ARCHIVE, WorldLayer.BASE -> TrialReward.TROVE
+        },
+        source = TrialSource.DIMENSION,
+        dimension = visit.layer,
+    )
+}
+
+/** [this] model inside [visit] with its trial panel published. */
+internal fun GameplayRenderModel.inVisit(visit: DimensionProjection, bossShare: Float = 0.4f): GameplayRenderModel =
+    with("dimension" to visit, "trial" to dimensionTrial(visit, bossShare))

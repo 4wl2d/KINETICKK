@@ -196,7 +196,9 @@ internal fun DrawScope.drawTrialPanel(
     val innerRight = panel.right - layout.padding
     // Row 1: family glyph + label, clock.
     val iconSize = (if (layout.compact) 13f else 16f) * unit
-    drawSiteGlyph(trialGlyph(trial), Offset(innerLeft + iconSize * 0.5f, layout.rowLabelCenter), iconSize, roles.you)
+    val iconCenter = Offset(innerLeft + iconSize * 0.5f, layout.rowLabelCenter)
+    if (trial.source == TrialSource.DIMENSION) drawDimensionTrialIcon(trial, iconCenter, iconSize, roles.you)
+    else drawSiteGlyph(trialGlyph(trial), iconCenter, iconSize, roles.you)
     val label = trialLabel(trial)
     val labelText = TrialScratch.label.of(label, language.ordinal.toLong()) { language.text(label) }
     val clockWidth = when (trial.clock) {
@@ -254,6 +256,7 @@ internal fun DrawScope.drawTrialPanel(
     }
     val reward = trialRewardText(trial)
     val rewardText = if (trial.reward == TrialReward.STRUCTURE_REWARDS) structureTrialRewards(engine, trial, language)
+        else if (trial.source == TrialSource.DIMENSION) dimensionTrialReward(trial, language)
         else TrialScratch.reward.of(language, reward.ordinal.toLong()) { language.text(reward) }
     // A race's medal pips sit left of its medal label.
     val pipSize = (if (layout.compact) 6f else 7f) * unit
@@ -284,8 +287,9 @@ internal fun trialGlyph(trial: TrialProjection): SiteGlyph = when (trial.source)
     TrialSource.DIMENSION -> SiteGlyph.DIMENSION
 }
 
-/** The panel's family label; a dungeon names itself by its source. */
-internal fun trialLabel(trial: TrialProjection): TextResource = if (trial.source == TrialSource.STRUCTURE) structureTrialLabel() else when (trial.family) {
+/** The panel's family label; a dungeon or a dimension objective names itself by its source. */
+internal fun trialLabel(trial: TrialProjection): TextResource = if (trial.source == TrialSource.STRUCTURE) structureTrialLabel()
+    else if (trial.source == TrialSource.DIMENSION) dimensionTrialLabel() else when (trial.family) {
     SiteFamily.ANOMALY -> HudRedesignText.AnomalyTrial
     SiteFamily.RACE -> HudRedesignText.RaceTrial
     SiteFamily.CHALLENGE -> HudRedesignText.ChallengeTrial
