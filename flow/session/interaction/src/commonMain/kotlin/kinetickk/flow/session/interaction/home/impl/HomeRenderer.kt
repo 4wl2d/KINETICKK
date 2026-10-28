@@ -37,6 +37,8 @@ import kinetickk.foundation.design.KkHomePalette
 import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.KkMutatorSigil
 import kinetickk.foundation.design.KkMutatorSigilPaths
+import kinetickk.foundation.design.KkPacifierSigilPaths
+import kinetickk.foundation.design.KkStampVariant
 import kinetickk.foundation.design.KkTime
 import kinetickk.foundation.design.KkTooltipPlacement
 import kinetickk.foundation.design.KkVAlign
@@ -51,6 +53,7 @@ import kinetickk.foundation.design.drawKkInfoButton
 import kinetickk.foundation.design.drawKkMenuItem
 import kinetickk.foundation.design.drawKkRadialFade
 import kinetickk.foundation.design.drawKkSheared
+import kinetickk.foundation.design.drawKkStamp
 import kinetickk.foundation.design.drawKkText
 import kinetickk.foundation.design.drawKkThreatHatch
 import kinetickk.foundation.design.drawKkTile
@@ -574,6 +577,12 @@ internal class HomeDrawState(
     val textScale: Float = HOME_DEFAULT_TEXT_SCALE,
     /** The Quit button is hovered or focused. */
     val quitActive: Boolean = false,
+    /** The next runs are Baby mode runs: a soft hero, the stamp under it and a lit toggle. */
+    val easy: Boolean = false,
+    /** The Baby mode toggle is hovered or focused: it is outlined and shows its tooltip. */
+    val runModeActive: Boolean = false,
+    /** The Baby mode toggle was just tapped: its tooltip shows until the next tap elsewhere. */
+    val runModeTip: Boolean = false,
 )
 
 /** The game's default text size, at which Home UI text renders at the design's size. */
@@ -679,23 +688,24 @@ internal fun DrawScope.drawHome(
     drawKkGrid(Rect(Offset.Zero, size), Kk.Bone.copy(alpha = 0.045f), scene.gridSpacing / density)
     drawBackgroundWord(text, facts.label, scene, accent)
     drawHero(model, text, time, scene, state, motion)
-    drawHeader(model, text, scene, accent)
+    if (state.easy) drawHomeBabyStamp(text, scene)
+    drawHeader(model, text, layout, state, accent)
     drawMenu(model, tinted, layout, motion, state.activeTarget, state.textScale)
     scene.facts?.let { drawFactsCard(tinted, it, facts, layout, state, motion, accent) }
     drawFormPanel(model, tinted, layout, state, motion)
     layout.quit?.let { drawQuit(tinted, it.bounds, layout.scene, state.quitActive) }
     drawVersion(text, layout)
     val open = state.openInfo ?: state.activeInfo
-    if (open != null) {
-        val info = layout.info(open)
-        if (info != null) {
-            val content = when (open) {
-                HomeInfoTarget.FACTS -> facts.info
-                HomeInfoTarget.FORM -> homeFormInfo(model, language)
-            }
-            val placement = if (layout.mode == HomeLayoutMode.COMPACT_PORTRAIT) KkTooltipPlacement.ABOVE else KkTooltipPlacement.ABOVE_END
-            drawKkTooltip(text, info.bounds, content, placement)
+    val info = open?.let(layout::info)
+    if (open != null && info != null) {
+        val content = when (open) {
+            HomeInfoTarget.FACTS -> facts.info
+            HomeInfoTarget.FORM -> homeFormInfo(model, language)
         }
+        val placement = if (layout.mode == HomeLayoutMode.COMPACT_PORTRAIT) KkTooltipPlacement.ABOVE else KkTooltipPlacement.ABOVE_END
+        drawKkTooltip(text, info.bounds, content, placement)
+    } else if (state.runModeActive || state.runModeTip) {
+        drawKkTooltip(text, layout.runModeToggle.bounds, language.text(SessionRedesignText.BABY_MODE_INFO), KkTooltipPlacement.BELOW)
     }
 }
 
@@ -719,10 +729,11 @@ private fun DrawScope.drawHero(
     val center = scene.heroCenter
     val k = scene.heroRadius / 260f
     motion.strokes(scene.unit, density)
-    // Halftone disc (accent @12 %), radially faded.
+    // Halftone disc (accent @12 %, a pastel soft in Baby mode), radially faded.
     val halftoneRadius = 310f * k
     val halftone = Rect(center.x - halftoneRadius, center.y - halftoneRadius, center.x + halftoneRadius, center.y + halftoneRadius)
-    drawKkRadialFade(halftone) { drawKkHalftone(halftone, accent.copy(alpha = 0.12f)) }
+    val halftoneTint = if (state.easy) kkMix(roles.soft, Kk.Bone, 0.45f).copy(alpha = 0.12f) else accent.copy(alpha = 0.12f)
+    drawKkRadialFade(halftone) { drawKkHalftone(halftone, halftoneTint) }
     // Accretion rays: dashes crawling inward along 14 spokes.
     val rayScale = max(scene.unit, density)
     for (index in 0 until 14) {
@@ -776,27 +787,29 @@ private fun DrawScope.drawHero(
     val core = Offset(center.x + 260f * k * sin(coreRadians), center.y + 260f * k * planeY * TILT)
     val coreFar = planeY < 0f
     val perspective = 1500f / (1500f - 260f * planeY * SIN_TILT)
+    // Baby mode's singularity is the harmless soft cursor, and so is its end of the tether.
+    val cursorTone = if (state.easy) roles.soft else roles.threat
     // Far half first: enemies and Core behind the singularity.
     drawEnemies(text, time, center, k, spin, accent, far = true, motion)
     if (coreFar) {
-        drawTether(core, center, k, accent, roles.threat)
+        drawTether(core, center, k, accent, cursorTone)
         drawCore(model, core, k, perspective, time, motion)
     }
-    drawSingularity(center, k, time, roles.threat, motion)
+    drawSingularity(center, k, time, cursorTone, motion)
     drawEnemies(text, time, center, k, spin, accent, far = false, motion)
     if (!coreFar) {
-        drawTether(core, center, k, accent, roles.threat)
+        drawTether(core, center, k, accent, cursorTone)
         drawCore(model, core, k, perspective, time, motion)
     }
 }
 
-private fun DrawScope.drawTether(core: Offset, center: Offset, k: Float, accent: Color, threat: Color) {
+private fun DrawScope.drawTether(core: Offset, center: Offset, k: Float, accent: Color, cursor: Color) {
     val width = max(3f * k, density * 1.5f)
     for (segment in 0 until 8) {
         val a = segment / 8f
         val b = (segment + 1) / 8f
         drawLine(
-            lerp(accent, threat.copy(alpha = 0.9f), (a + b) * 0.5f),
+            lerp(accent, cursor.copy(alpha = 0.9f), (a + b) * 0.5f),
             Offset(kkLerp(core.x, center.x, a), kkLerp(core.y, center.y, a)),
             Offset(kkLerp(core.x, center.x, b), kkLerp(core.y, center.y, b)),
             width,
@@ -804,19 +817,19 @@ private fun DrawScope.drawTether(core: Offset, center: Offset, k: Float, accent:
     }
 }
 
-private fun DrawScope.drawSingularity(center: Offset, k: Float, time: Float, threat: Color, motion: HomeMenuMotion) {
+private fun DrawScope.drawSingularity(center: Offset, k: Float, time: Float, tone: Color, motion: HomeMenuMotion) {
     val turn = (time / HOME_ORBIT_SECONDS * 360f) % 360f
     rotate(turn, center) {
-        drawCircle(threat.copy(alpha = 0.5f), 70f * k, center, style = motion.dashedRing)
+        drawCircle(tone.copy(alpha = 0.5f), 70f * k, center, style = motion.dashedRing)
     }
     rotate(-turn, center) {
-        drawCircle(threat.copy(alpha = 0.7f), 44f * k, center, style = motion.dashedRing)
+        drawCircle(tone.copy(alpha = 0.7f), 44f * k, center, style = motion.dashedRing)
     }
     val ring = 24f * k
     val width = max(4f * k, density * 2f)
-    drawCircle(threat.copy(alpha = 0.08f), ring, center, style = kkStroke(width * 4.5f))
-    drawCircle(threat.copy(alpha = 0.16f), ring, center, style = kkStroke(width * 2.5f))
-    drawCircle(threat, ring, center, style = kkStroke(width))
+    drawCircle(tone.copy(alpha = 0.08f), ring, center, style = kkStroke(width * 4.5f))
+    drawCircle(tone.copy(alpha = 0.16f), ring, center, style = kkStroke(width * 2.5f))
+    drawCircle(tone, ring, center, style = kkStroke(width))
     drawCircle(Kk.Bone, max(6f * k, density * 3f), center)
 }
 
@@ -942,7 +955,14 @@ private fun DrawScope.drawShard(path: Path, origin: Offset, index: Int, progress
     }
 }
 
-private fun DrawScope.drawHeader(model: HomeUiModel, text: CanvasTextMeasurer, scene: HomeScene, accent: Color) {
+private fun DrawScope.drawHeader(
+    model: HomeUiModel,
+    text: CanvasTextMeasurer,
+    layout: HomeLayoutGeometry,
+    state: HomeDrawState,
+    accent: Color,
+) {
+    val scene = layout.scene
     // Logo lockup (Title board): bone planet cut by an ink slash and an accent slash.
     val mark = scene.logoMark
     val unit = mark / 64f
@@ -967,6 +987,51 @@ private fun DrawScope.drawHeader(model: HomeUiModel, text: CanvasTextMeasurer, s
         val chipAccent = if (index == 1) Kk.Gold else text.roles.you
         right -= drawChip(text, right, scene, homeChip(model, language, compact, index), chipAccent) + 8f * density
     }
+    drawRunModeToggle(text, layout.runModeToggle.bounds, state.easy, state.runModeActive)
+}
+
+/**
+ * The Baby mode toggle: a chip-shaped plate with the pacifier, filled with the soft role while on (ink pacifier) and
+ * ink-2 while off (a mute pacifier, bone when hovered or focused); hovered or focused it is outlined.
+ */
+private fun DrawScope.drawRunModeToggle(text: CanvasTextMeasurer, bounds: Rect, easy: Boolean, active: Boolean) {
+    val cut = 8f * density
+    val path = runModePlatePath
+    path.rewind()
+    path.moveTo(bounds.left + cut, bounds.top)
+    path.lineTo(bounds.right, bounds.top)
+    path.lineTo(bounds.right - cut, bounds.bottom)
+    path.lineTo(bounds.left, bounds.bottom)
+    path.close()
+    drawPath(path, if (easy) text.roles.soft else Kk.Ink2)
+    if (active) drawPath(path, if (easy) Kk.Ink else Kk.Bone, style = kkStroke(1.5f * density))
+    val pacifier = KkPacifierSigilPaths.of(bounds.height * 0.34f)
+    translate(bounds.center.x, bounds.center.y) {
+        drawPath(pacifier, if (easy) Kk.Ink else if (active) Kk.Bone else Kk.Mute)
+    }
+}
+
+private val runModePlatePath = Path()
+
+/** The stamp's size (px before the measurer's scale): 17 at the reference hero, never under 11. */
+internal fun homeBabyStampSize(scene: HomeScene, density: Float): Float = (17f * scene.heroRadius / density / 260f).coerceIn(11f, 17f)
+
+/**
+ * The unrotated Baby mode stamp under the hero's singularity (px): centred on the hero, its top 0.34 hero radii below the
+ * centre, under the dashed 0.27 R ring.
+ */
+internal fun homeBabyStampRect(text: CanvasTextMeasurer, scene: HomeScene, density: Float): Rect {
+    val size = kkStampSize(text, text.language.text(SessionRedesignText.BABY_MODE), density, homeBabyStampSize(scene, density))
+    val left = scene.heroCenter.x - size.width * 0.5f
+    val top = scene.heroCenter.y + 0.34f * scene.heroRadius
+    return Rect(left, top, left + size.width, top + size.height)
+}
+
+/** The soft "Baby mode" stamp under the hero while the next runs are Baby mode runs. */
+private fun DrawScope.drawHomeBabyStamp(text: CanvasTextMeasurer, scene: HomeScene) {
+    val rect = homeBabyStampRect(text, scene, density)
+    drawKkStamp(text, text.language.text(SessionRedesignText.BABY_MODE), rect.topLeft, KkStampVariant.YOU,
+        fontSize = homeBabyStampSize(scene, density), color = text.roles.soft)
 }
 
 /** A header chip; [crown] draws the gold Ascendant crown before the label. */

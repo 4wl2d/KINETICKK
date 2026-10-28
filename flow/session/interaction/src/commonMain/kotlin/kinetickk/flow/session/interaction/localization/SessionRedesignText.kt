@@ -56,4 +56,12 @@ internal enum class SessionRedesignText(
     RARITY("Rarity", "Редкость"),
     STATS("Stats", "Характеристики"),
     MAX_STACKS("Max {0}", "Макс. {0}"),
+
+    BABY_MODE("Baby mode", "Режим малыша"),
+    BABY_MODE_ON("On", "Включён"),
+    BABY_MODE_OFF("Off", "Выключен"),
+    BABY_MODE_INFO(
+        "Baby mode: the cursor turns green and harmless, incoming damage is halved and rock collisions never finish you off. Nothing is counted: no Matter, Rank, Codex entries or unlocks. It stays on until you switch it off or restart the game.",
+        "Режим малыша: курсор становится зелёным и безвредным, входящий урон уменьшается вдвое, а столкновения с камнями никогда не добивают. Ничего не засчитывается: ни материя, ни ранг, ни записи кодекса, ни открытия. Режим действует, пока вы его не выключите или не перезапустите игру.",
+    ),
 }

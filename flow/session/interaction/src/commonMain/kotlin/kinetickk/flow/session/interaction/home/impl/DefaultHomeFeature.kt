@@ -55,17 +55,21 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.content.api.UiCatalogSnapshot
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.foundation.design.*
 import kinetickk.ball.profile.api.ProfileReadPort
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.flow.session.interaction.audio.SessionAudioExecutor
 import kinetickk.flow.session.interaction.home.api.HomeFeature
 import kinetickk.flow.session.interaction.home.api.HomeOutput
+import kinetickk.flow.session.interaction.toggled
 import kinetickk.resource.audio.api.AudioService
 import kotlin.math.roundToInt
 
@@ -89,7 +93,7 @@ class DefaultHomeFeature(
     private val audioExecutor = SessionAudioExecutor(audioService)
 
     @Composable
-    override fun Content(inputEnabled: Boolean, onOutput: (HomeOutput) -> Unit) {
+    override fun Content(inputEnabled: Boolean, runMode: RunMode, onOutput: (HomeOutput) -> Unit) {
         val language = LocalAppLanguage.current
         val localDensity = LocalDensity.current
         val density = localDensity.density
@@ -103,6 +107,9 @@ class DefaultHomeFeature(
         var openInfoValue by remember { mutableStateOf<HomeInfoTarget?>(null) }
         var activeInfoValue by remember { mutableStateOf<HomeInfoTarget?>(null) }
         var quitActiveValue by remember { mutableStateOf(false) }
+        // The Baby mode toggle: hovered or focused, and whether a tap on it left its tooltip open.
+        var runModeActiveValue by remember { mutableStateOf(false) }
+        var runModeTipValue by remember { mutableStateOf(false) }
         val menuMotion = remember { HomeMenuMotion() }
         val actionFocus = remember { HomeLayoutTarget.entries.associateWith { FocusRequester() } }
         val actionsReady = inputEnabled && viewportValue.width > 0f && viewportValue.height > 0f
@@ -141,13 +148,21 @@ class DefaultHomeFeature(
 
         val currentTapHandlerValue by rememberUpdatedState<(Offset) -> Unit> { position ->
             if (inputEnabled) {
-                val info = resolveHomeInfoPress(viewportValue, position.x, position.y)
-                if (info != null) {
-                    openInfoValue = if (openInfoValue == info) null else info
-                } else {
-                    openInfoValue = null
-                    val action = resolveHomePress(viewportValue, position.x, position.y)
-                    if (action != null) dispatch(action)
+                // A tap on the toggle asks Session for the other mode and leaves its tooltip open; any other tap closes it.
+                val toggle = resolveHomeRunModePress(viewportValue, position.x, position.y)
+                runModeTipValue = toggle
+                val info = if (toggle) null else resolveHomeInfoPress(viewportValue, position.x, position.y)
+                when {
+                    toggle -> {
+                        openInfoValue = null
+                        dispatch(HomeAction.SelectRunMode(runMode.toggled()))
+                    }
+                    info != null -> openInfoValue = if (openInfoValue == info) null else info
+                    else -> {
+                        openInfoValue = null
+                        val action = resolveHomePress(viewportValue, position.x, position.y, runMode)
+                        if (action != null) dispatch(action)
+                    }
                 }
             }
         }
@@ -211,6 +226,9 @@ class DefaultHomeFeature(
                         activeInfo = activeInfoValue,
                         textScale = textScale,
                         quitActive = quitActiveValue,
+                        easy = runMode == RunMode.EASY,
+                        runModeActive = runModeActiveValue,
+                        runModeTip = runModeTipValue,
                     ),
                     menuMotion,
                 )
@@ -260,6 +278,13 @@ class DefaultHomeFeature(
                         onClick = { dispatch(HomeAction.Quit) },
                     )
                 }
+                HomeRunModeAction(
+                    toggle = layout.runModeToggle,
+                    density = localDensity,
+                    easy = runMode == RunMode.EASY,
+                    onActive = { active -> runModeActiveValue = active },
+                    onClick = { dispatch(HomeAction.SelectRunMode(runMode.toggled())) },
+                )
             }
         }
     }
@@ -369,6 +394,45 @@ private fun HomeQuitAction(
     )
 }
 
+/**
+ * Focusable Baby mode switch over the drawn toggle: it announces its name and state, hover/focus light it and show its
+ * tooltip, and Enter, Space or a click ask Session for the other mode. Tab reaches it; the arrow keys keep the menu rows.
+ */
+@Composable
+private fun HomeRunModeAction(
+    toggle: HomeToggleBounds,
+    density: Density,
+    easy: Boolean,
+    onActive: (Boolean) -> Unit,
+    onClick: () -> Unit,
+) {
+    val language = LocalAppLanguage.current
+    val label = language.text(SessionRedesignText.BABY_MODE)
+    val state = language.text(if (easy) SessionRedesignText.BABY_MODE_ON else SessionRedesignText.BABY_MODE_OFF)
+    val interactions = remember { MutableInteractionSource() }
+    val focused by interactions.collectIsFocusedAsState()
+    val hovered by interactions.collectIsHoveredAsState()
+    LaunchedEffect(focused || hovered) { onActive(focused || hovered) }
+    Box(
+        Modifier
+            .placeInHomeBounds(toggle.touch, density)
+            .hoverable(interactions)
+            .testTag(HOME_RUN_MODE_TAG)
+            .onKeyEvent { event -> activateHomeSemanticButtonFromKey(event.key, event.type, onClick) }
+            .semantics {
+                role = Role.Switch
+                toggleableState = ToggleableState(easy)
+                contentDescription = label
+                stateDescription = state
+                onClick(label = label) {
+                    onClick()
+                    true
+                }
+            }
+            .focusable(interactionSource = interactions),
+    )
+}
+
 private fun Modifier.placeInHomeBounds(bounds: Rect, density: Density): Modifier =
     this
         .offset {
@@ -402,6 +466,7 @@ private fun HomeLayoutTarget.homeContentDescription(language: AppLanguage): Stri
 
 private const val HOME_ROOT_TAG = "kinetickk.home"
 internal const val HOME_QUIT_TAG = "kinetickk.home.quit"
+internal const val HOME_RUN_MODE_TAG = "kinetickk.home.run-mode"
 
 private inline fun activateHomeSemanticButtonFromKey(
     key: Key,

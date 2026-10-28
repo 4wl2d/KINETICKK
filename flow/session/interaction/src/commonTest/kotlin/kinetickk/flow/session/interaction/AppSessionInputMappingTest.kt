@@ -4,6 +4,7 @@
 package kinetickk.flow.session.interaction
 
 import androidx.compose.ui.input.key.Key
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthOutput
 import kinetickk.flow.session.api.AppDestination
@@ -99,6 +100,26 @@ class AppSessionInputMappingTest {
             SessionInteractionPulse.RebirthRequested(0),
             RebirthOutput.ConfirmRequested(0).toSessionPulse(),
         )
+    }
+
+    @Test
+    fun theBabyModeToggleAndItsEKeyAskSessionForTheOtherModeOnlyOverHome() {
+        // The toggle's output is a Session request; Session alone decides whether the mode changes.
+        assertEquals(SessionInteractionPulse.SelectRunModeRequested(RunMode.EASY), HomeOutput.SelectRunMode(RunMode.EASY).toSessionPulse())
+        assertEquals(
+            SessionInteractionPulse.SelectRunModeRequested(RunMode.STANDARD),
+            HomeOutput.SelectRunMode(RunMode.STANDARD).toSessionPulse(),
+        )
+        assertEquals(RunMode.STANDARD, RunMode.EASY.toggled())
+        assertEquals(RunMode.EASY, RunMode.STANDARD.toggled())
+        // E is a Home presentation key like H, not a Session shortcut: the closed inventory stays as it is and E is free in a run.
+        assertNull(Key.E.toSessionShortcut())
+        assertNull(Key.E.toWorkshopAlias(AppDestination.Home))
+        assertTrue(Key.E.isRunModeKey(AppDestination.Home))
+        assertFalse(Key.E.isRunModeKey(AppDestination.Gameplay))
+        assertTrue(Key.E.isShellKey(AppDestination.Home))
+        assertFalse(Key.E.isShellKey(AppDestination.Gameplay))
+        listOf(Key.H, Key.S, Key.Enter, Key.Z).forEach { assertFalse(it.isRunModeKey(AppDestination.Home), "$it") }
     }
 
     @Test

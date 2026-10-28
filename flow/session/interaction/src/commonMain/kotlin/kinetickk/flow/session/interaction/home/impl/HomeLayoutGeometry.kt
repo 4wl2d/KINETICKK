@@ -76,6 +76,12 @@ internal class HomeQuitBounds(
     val touch: Rect,
 )
 
+/** The Baby mode toggle at the header's right end: [bounds] is the drawn plate (chip height), [touch] its press area. */
+internal class HomeToggleBounds(
+    val bounds: Rect,
+    val touch: Rect,
+)
+
 internal class HomeLayoutGeometry(
     val mode: HomeLayoutMode,
     val actions: List<HomeActionBounds>,
@@ -83,6 +89,8 @@ internal class HomeLayoutGeometry(
     val scene: HomeScene,
     /** Present only when the host can close the game and the layout has room for it (desktop, regular). */
     val quit: HomeQuitBounds? = null,
+    /** The Baby mode toggle: every layout has one, and the header chips end 8 dp left of it. */
+    val runModeToggle: HomeToggleBounds,
 ) {
     fun bounds(target: HomeLayoutTarget): Rect =
         requireNotNull(actions.firstOrNull { it.target == target }) { "Missing Home target $target" }.bounds
@@ -118,6 +126,8 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float, qui
     val actions = ArrayList<HomeActionBounds>(HomeLayoutTarget.entries.size)
     val infos = ArrayList<HomeInfoBounds>(2)
     var quit: HomeQuitBounds? = null
+    // The Baby mode toggle takes the header's right end in every layout; the text chips end 8 dp left of it.
+    lateinit var runModeToggle: HomeToggleBounds
     val scene = when (mode) {
         HomeLayoutMode.REGULAR -> {
             // Home.png anchors: header and hero from the left, menu and form panel from the right,
@@ -150,13 +160,22 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float, qui
             // The facts card keeps at least 480 px (board 560) on smaller desktops, short of the form panel.
             val factsRight = max(lx(616f), min(lx(56f) + 480f, rx(826f) - 24f))
             infos += info(HomeInfoTarget.FACTS, factsRight - 44f * s, by(686f))
+            // The toggle plate is a chip-high slab 46 board px wide; its press area keeps 44 dp on the smallest desktop.
+            val toggle = Rect(rx(1392f) - 46f * s, ty(25f), rx(1392f), ty(25f) + 34f * s)
+            val toggleHalfWidth = max(22f, 23f * s)
+            val toggleHalfHeight = max(22f, 17f * s)
+            runModeToggle = HomeToggleBounds(
+                rect(toggle.left, toggle.top, toggle.right, toggle.bottom),
+                rect(toggle.center.x - toggleHalfWidth, toggle.center.y - toggleHalfHeight, toggle.center.x + toggleHalfWidth,
+                    toggle.center.y + toggleHalfHeight),
+            )
             HomeScene(
                 unit = px(s),
                 gridSpacing = px(48f * s),
                 logo = Offset(px(lx(56f)), px(ty(42f))),
                 logoMark = px(30f * s),
                 wordmarkSize = px(19f * s),
-                chipsRight = px(rx(1392f)),
+                chipsRight = px(toggle.left - 8f),
                 chipsTop = px(ty(25f)),
                 chipHeight = px(34f * s),
                 chipCount = 2,
@@ -222,13 +241,15 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float, qui
             val regionBottom = nameCenter - 16f
             val heroRadius = min(135f, min((menuLeft - 45f - side) * 0.42f, (regionBottom - regionTop) * 0.9f))
             val wordSize = 104f * h / 390f
+            // The toggle plate spans the chips' row; its press area ends where the first menu row starts.
+            runModeToggle = HomeToggleBounds(rect(w - side - 38f, 12f, w - side, 40f), rect(w - side - 41f, 4f, w - side + 3f, 48f))
             HomeScene(
                 unit = px(heroRadius / 260f),
                 gridSpacing = px(32f),
                 logo = Offset(px(side), px(26f)),
                 logoMark = px(22f),
                 wordmarkSize = px(14f),
-                chipsRight = px(w - side),
+                chipsRight = px(w - side - 46f),
                 chipsTop = px(12f),
                 chipHeight = px(28f),
                 chipCount = 2,
@@ -297,13 +318,14 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float, qui
             val regionBottom = nameCenter - 20f
             val heroRadius = min(w * 0.42f, (regionBottom - regionTop) * 0.5f)
             val wordSize = w * 0.26f
+            runModeToggle = HomeToggleBounds(rect(w - side - 38f, 14f, w - side, 42f), rect(w - side - 41f, 6f, w - side + 3f, 50f))
             HomeScene(
                 unit = px(heroRadius / 260f),
                 gridSpacing = px(32f),
                 logo = Offset(px(side), px(28f)),
                 logoMark = px(22f),
                 wordmarkSize = px(14f),
-                chipsRight = px(w - side),
+                chipsRight = px(w - side - 46f),
                 chipsTop = px(14f),
                 chipHeight = px(28f),
                 chipCount = 2,
@@ -325,7 +347,7 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float, qui
             )
         }
     }
-    return HomeLayoutGeometry(mode, actions, infos, scene, quit)
+    return HomeLayoutGeometry(mode, actions, infos, scene, quit, runModeToggle)
 }
 
 /**
