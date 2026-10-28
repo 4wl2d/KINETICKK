@@ -277,6 +277,16 @@ class WorldHotPathAllocationTest {
             decorate = ::withEasterEggs)
     }
 
+    @Test
+    fun aRunningBountyArenaDrawsWithoutAllocating() {
+        // The bounty's threat edge and faint exit band crossing the screen with its bracketed Warden Prime, then the arena
+        // centred farther off (only arcs of both rings in view) on the mono palette.
+        assertFrameIsAllocationFree(KkRolePalette.Default, WeaponId.MORNINGSTAR, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = { withRunningBounty(it, centerDx = -520f) })
+        assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = { withRunningBounty(it, centerDx = -1_150f) })
+    }
+
     private fun assertFrameIsAllocationFree(
         roles: KkRolePalette,
         weapon: WeaponId,
@@ -819,6 +829,16 @@ class WorldHotPathAllocationTest {
             ),
             "secretFlags" to 1, "goldenDrifterId" to EnemyType.DRIFTER.ordinal + 1,
         )
+    }
+
+    /**
+     * The busy frame with a running bounty whose arena is centred [centerDx] left of the Core, the busy frame's Warden
+     * Prime its bracketed target, and the bounty's trial on the HUD.
+     */
+    private fun withRunningBounty(model: GameplayRenderModel, centerDx: Float): GameplayRenderModel {
+        val bounty = SiteProjection(SiteKind.BOUNTY_ARENA, "Bounty", CORE + centerDx, CORE + 40f, true, 0f, 0, 0.35f,
+            immutableListOf(EnemyType.WARDEN_PRIME.ordinal + 1), 0f, 0f, radius = model.content.sites.bounty.arenaRadius)
+        return model.with("sites" to (listOf(bounty) + model.sites).toImmutableList(), "trial" to siteTrial(bounty, model.content.sites))
     }
 
     private companion object {
