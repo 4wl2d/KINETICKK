@@ -106,21 +106,21 @@ internal fun MutableGameState.hurtByHostileBlast(x: Float, y: Float, damage: Flo
     screenShake = max(screenShake, 7f)
 }
 
-private fun turnToward(current: Float, target: Float, maximumStep: Float): Float {
+internal fun turnToward(current: Float, target: Float, maximumStep: Float): Float {
     var difference = target - current
     while (difference > TAU * 0.5f) difference -= TAU
     while (difference < -TAU * 0.5f) difference += TAU
     return current + clamp(difference, -maximumStep, maximumStep)
 }
 
-private fun angleBetween(a: Float, b: Float): Float {
+internal fun angleBetween(a: Float, b: Float): Float {
     var difference = a - b
     while (difference > TAU * 0.5f) difference -= TAU
     while (difference < -TAU * 0.5f) difference += TAU
     return abs(difference)
 }
 
-private fun Enemy.damp(rate: Float, delta: Float) {
+internal fun Enemy.damp(rate: Float, delta: Float) {
     val factor = exp(-rate * delta)
     vx *= factor
     vy *= factor
@@ -145,28 +145,7 @@ internal fun MutableGameState.updateCharger(enemy: Enemy, dx: Float, dy: Float, 
 }
 
 internal fun MutableGameState.updateSwarmling(enemy: Enemy, dx: Float, dy: Float, distance: Float, delta: Float) {
-    val swirl = if (enemy.id % 2 == 0) 1f else -1f
-    var separationX = 0f
-    var separationY = 0f
-    for (index in enemies.indices) {
-        val other = enemies[index]
-        if (other === enemy || other.type != EnemyType.SWARMLING || other.dead) continue
-        val ox = enemy.x - other.x
-        val oy = enemy.y - other.y
-        val squared = ox * ox + oy * oy
-        if (squared >= SWARM_SPACING * SWARM_SPACING || squared < 1e-4f) continue
-        val apart = kotlin.math.sqrt(squared)
-        val push = (SWARM_SPACING - apart) / SWARM_SPACING
-        separationX += ox / apart * push
-        separationY += oy / apart * push
-    }
-    steerEnemy(
-        enemy,
-        dx / distance * 150f - dy / distance * 42f * swirl + separationX * 110f,
-        dy / distance * 150f + dx / distance * 42f * swirl + separationY * 110f,
-        3.2f,
-        delta,
-    )
+    flock(enemy, dx, dy, distance, delta, SWARM_SPACING, 150f, 42f, 110f, 3.2f)
 }
 
 private const val SWARM_SPACING: Float = 34f
@@ -622,6 +601,7 @@ internal fun MutableGameState.initializeBehavior(enemy: Enemy) {
         EnemyType.SNIPER -> enemy.abilityAt = elapsed + 1.5f
         EnemyType.PHANTOM -> enemy.abilityAt = elapsed + 2f
         EnemyType.HERALD -> enemy.abilityAt = elapsed + HERALD_FIRST_SHIELD_SECONDS
+        EnemyType.COMET, EnemyType.PYLON, EnemyType.SENTRY -> initializeWorldsBehavior(enemy)
         else -> Unit
     }
 }

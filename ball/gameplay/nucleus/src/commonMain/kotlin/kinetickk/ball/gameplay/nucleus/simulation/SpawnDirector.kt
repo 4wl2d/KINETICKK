@@ -718,6 +718,7 @@ internal fun MutableGameState.relocateLeashedEnemy(enemy: Enemy) {
     enemy.previousY = y
     enemy.vx = 0f
     enemy.vy = 0f
+    onLeashedEnemyRelocated(enemy)
 }
 
 /** True when [enemy] stays wherever it is: scheduled leaders, the boss class and place-bound enemies. */
