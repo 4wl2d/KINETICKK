@@ -28,8 +28,8 @@ import kotlin.math.sqrt
 /** Half extent of an offer's mark (anomaly diamond with its corner brackets, a site glyph in its brackets). */
 private const val OFFER_MARK_HALF = 46f
 
-/** Half extent of a race gate's mark (two sheared posts across the gate). */
-private const val RACE_GATE_MARK_HALF = 60f
+/** Half extent of a race gate's mark (the gate's center and its order pips; the posts reach past it). */
+internal const val RACE_GATE_MARK_HALF = 60f
 
 /** Half extent of a slalom pole's mark (its plate and flag). */
 private const val SLALOM_POLE_MARK_HALF = 40f
@@ -121,9 +121,9 @@ internal object WorldDrawProbe {
 }
 
 /**
- * What [WorldDrawProbe] records: a point's mark (offer, vault, target beacon), a point timer, an
- * edge marker, the target beacon's place pips as drawn, an offer's name, the collapsing orbit's
- * seconds-in-ring label.
+ * What [WorldDrawProbe] records: a point's mark (offer, vault, target beacon, a race's next gate), a
+ * point timer, an edge marker, the place pips of the target beacon or the next gate as drawn, an
+ * offer's name, the collapsing orbit's seconds-in-ring label.
  */
 internal enum class WorldDrawn { POINT_MARK, POINT_TIMER, EDGE_MARKER, BEACON_PIPS, POINT_NAME, ORBIT_LABEL }
 
@@ -514,9 +514,10 @@ private fun DrawScope.drawActivePoint(
         SiteKind.FAR_SIGIL -> if (markShown(steady(center, shakeX, shakeY), OFFER_MARK_HALF, keepOut, scale)) {
             drawSiteGlyph(SiteGlyph.SIGIL, center, OFFER_GLYPH_SIZE, sigilColor(roles), alpha = 0.35f)
         }
-        // Courses, rings and arenas of the other window kinds are drawn by their families' steps; caches, eggs and
-        // rifts never run a trial.
-        SiteKind.GATE_RACE, SiteKind.BRAKELESS_TRIAL, SiteKind.RAM_TRIAL, SiteKind.UNTOUCHED_TRIAL,
+        SiteKind.GATE_RACE -> drawRaceCourse(engine, point, center, shakeX, shakeY, keepOut, scale, roles)
+        // Rings and arenas of the other window kinds are drawn by their families' steps; caches, eggs and rifts never
+        // run a trial.
+        SiteKind.BRAKELESS_TRIAL, SiteKind.RAM_TRIAL, SiteKind.UNTOUCHED_TRIAL,
         SiteKind.VELOCITY_TRIAL, SiteKind.SLALOM_TRIAL, SiteKind.BOUNTY_ARENA, SiteKind.DRIFT_CACHE, SiteKind.LOST_CURSOR,
         SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL, SiteKind.ZENITH_RIFT, SiteKind.NADIR_RIFT,
         -> Unit
@@ -629,7 +630,7 @@ private fun DrawScope.drawCornerBrackets(center: Offset, half: Float, color: Col
     drawRect(color, Offset(right - 2f, bottom - arm), Size(2f, arm))
 }
 
-private fun DrawScope.recordMark(center: Offset, half: Float) =
+internal fun DrawScope.recordMark(center: Offset, half: Float) =
     WorldDrawProbe.record(WorldDrawn.POINT_MARK, center.x - half, center.y - half, center.x + half, center.y + half)
 
 /**

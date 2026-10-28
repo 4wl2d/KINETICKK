@@ -72,6 +72,7 @@ import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.PickupProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupType
+import kinetickk.ball.gameplay.nucleus.render.SiteMarkProjection
 import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.ProjectileProjection
 import kinetickk.ball.gameplay.nucleus.render.TotemProjection
@@ -153,6 +154,16 @@ class WorldHotPathAllocationTest {
             decorate = ::withSitesOfEveryFamily)
         assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
             decorate = ::withSitesOfEveryFamily)
+    }
+
+    @Test
+    fun aRunningRaceCourseDrawsWithoutAllocating() {
+        // Seven gates (passed, next with its pulsing bar, later, the doubled finish) with their order pips, and the
+        // same race with its next gate past the edge (its marker instead).
+        assertFrameIsAllocationFree(KkRolePalette.Default, WeaponId.MORNINGSTAR, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = { withRunningRace(it, step = 2) })
+        assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = { withRunningRace(it, step = 6) })
     }
 
     @Test
@@ -567,6 +578,21 @@ class WorldHotPathAllocationTest {
                 ambient(SiteKind.LOST_CURSOR, CORE + 1_000f, CORE - 1_200f, 0f),
             ),
         )
+    }
+
+    /**
+     * The busy frame with a running seven-gate race around the Core: gates 0..4 on screen on a loop of 340, gates 5 and 6
+     * past the edge; [step] picks the next gate (on screen at 2, past the edge at 6), and the race's trial joins the HUD.
+     */
+    private fun withRunningRace(model: GameplayRenderModel, step: Int): GameplayRenderModel {
+        val course = List(7) { index ->
+            val radius = if (index < 5) 340f else 1_400f
+            val angle = index * 0.76f
+            SiteMarkProjection(kotlin.math.cos(angle) * radius, kotlin.math.sin(angle) * radius)
+        }.toImmutableList()
+        val race = SiteProjection(SiteKind.GATE_RACE, "Gate race", CORE + 40f, CORE - 30f, true, 11f, step, step / 7f,
+            immutableListOf(), 0f, 0f, course = course, clock = 4.2f, medal = 2)
+        return model.with("sites" to (listOf(race) + model.sites).toImmutableList(), "trial" to siteTrial(race, model.content.sites))
     }
 
     private companion object {

@@ -52,6 +52,7 @@ import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.PickupProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupType
+import kinetickk.ball.gameplay.nucleus.render.SiteMarkProjection
 import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.ProjectileProjection
 import kinetickk.ball.gameplay.nucleus.render.TotemProjection
@@ -417,6 +418,22 @@ class RedesignShotsWorldTest {
         listOf(0, 5, 10).forEach { tier ->
             add(Scene("tier$tier", model = { w, h -> cruise(w, h, rebirthLevel = tier) }, fx = ::cruiseFx))
         }
+        // A running gate race: two gates passed, the next in volt, later gates mute, the doubled finish; then the same
+        // course with the next gate far off screen (its edge marker) under the HUD's trial panel.
+        add(Scene("site-race", model = { w, h -> model(w, h, points = listOf(race(step = 2))) }))
+        add(Scene("site-race-hud", hud = true, model = { w, h -> model(w, h, points = listOf(race(step = 2))) }))
+        add(Scene("site-race-far-hud", hud = true, model = { w, h -> model(w, h, points = listOf(race(step = 5, far = true))) }))
+    }
+
+    /** A seven-gate race around the Core: a loop of 330 (the far course 1,300, past every edge). */
+    private fun race(step: Int, far: Boolean = false): SiteProjection {
+        val radius = if (far) 1_300f else 330f
+        val course = List(7) { index ->
+            val angle = -2.4f + index * 0.76f
+            SiteMarkProjection(cos(angle) * radius, sin(angle) * radius)
+        }.toImmutableList()
+        return SiteProjection(SiteKind.GATE_RACE, "Gate race", 1_000f + 40f, 1_000f + 20f, true, 9.3f, step, step / 7f,
+            immutableListOf(), 0f, 0f, course = course, clock = 5.7f, medal = 2)
     }
 
     // Board HUD.png positions (1440 x 810) are converted to world offsets from the Core so every
