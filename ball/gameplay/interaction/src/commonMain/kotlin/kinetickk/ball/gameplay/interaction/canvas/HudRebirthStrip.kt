@@ -28,33 +28,37 @@ import kotlin.math.min
  * and never reaches the clock. Portrait phones leave no room beside the badge, so there it takes the
  * chip row, right of the chips and clear of the chain at the row's end. Either way it lies inside the
  * world keep-out's top region. Sigils shrink (and wrap into up to three rows) to fit; below a legible
- * size only the plate is drawn. Tier 0 draws nothing. Cached paths and number text: a steady frame
+ * size only the plate is drawn. Tier 0 has no tier plate. Cached paths and number text: a steady frame
  * allocates nothing.
+ *
+ * The slot's lead plates: a dimension visit's plate takes the whole slot while it lasts; otherwise a
+ * Baby mode run leads with the pacifier plate ([drawEasyStripPlate]), at tier 0 too, and the tier
+ * plate and sigils follow it on the same row.
  */
 internal fun DrawScope.drawRebirthStrip(engine: GameplayRenderModel, hostMeasurer: TextMeasurer, frame: HudFrame) {
     // A dimension visit's plate takes the strip's slot while it lasts.
     if (drawDimensionPlate(engine, hostMeasurer, frame)) return
     val tier = engine.rebirthLevel
-    if (tier <= 0) return
-    val mutators = engine.content.rebirth.profile(tier).mutators
+    val easy = engine.easyMode
+    if (tier <= 0 && !easy) return
     val centerY: Float
     val height: Float
-    val left: Float
+    val stripLeft: Float
     when (frame.mode) {
         GameplayLayoutMode.REGULAR -> {
             centerY = HudScratch.badgeTop + (HudScratch.badgeBottom - HudScratch.badgeTop) * 0.5f
             height = min(frame.u(34f), HudScratch.badgeBottom - HudScratch.badgeTop)
-            left = HudScratch.badgeRight + frame.u(18f)
+            stripLeft = HudScratch.badgeRight + frame.u(18f)
         }
         GameplayLayoutMode.COMPACT_LANDSCAPE -> {
             centerY = HudScratch.badgeTop + (HudScratch.badgeBottom - HudScratch.badgeTop) * 0.5f
             height = min(frame.u(28f), HudScratch.badgeBottom - HudScratch.badgeTop)
-            left = HudScratch.economyRight + frame.u(12f)
+            stripLeft = HudScratch.economyRight + frame.u(12f)
         }
         GameplayLayoutMode.COMPACT_PORTRAIT -> {
             height = frame.u(PORTRAIT_CHIP_ROW_HEIGHT_DP)
             centerY = frame.top + frame.u(PORTRAIT_CHIP_ROW_DP) + height * 0.5f
-            left = HudScratch.economyRight + frame.u(10f)
+            stripLeft = HudScratch.economyRight + frame.u(10f)
         }
     }
     val right = if (frame.mode == GameplayLayoutMode.COMPACT_PORTRAIT) {
@@ -66,9 +70,40 @@ internal fun DrawScope.drawRebirthStrip(engine: GameplayRenderModel, hostMeasure
         val clock = HudDrawCache.peekLayout(HudText.TIMER)?.size?.width?.toFloat() ?: frame.u(120f)
         frame.width * 0.5f - clock * 0.5f - frame.u(14f)
     }
-    val plate = min(height, right - left)
-    if (plate < frame.u(14f)) return
     val top = centerY - height * 0.5f
+    var left = stripLeft
+    var drawnRight = stripLeft
+    if (easy) {
+        val plate = min(height, right - left)
+        if (plate >= frame.u(14f)) {
+            drawEasyStripPlate(hostMeasurer.roles, left + plate * 0.5f, centerY, plate * 0.5f, frame)
+            drawnRight = left + plate
+            left += plate + frame.u(6f)
+        }
+    }
+    val plate = min(height, right - left)
+    if (tier > 0 && plate >= frame.u(14f)) {
+        drawnRight = max(drawnRight, drawTierPlateAndSigils(engine, hostMeasurer, frame, tier, left, plate, height, centerY, right))
+    }
+    if (drawnRight > stripLeft) HudLayoutProbe.record(HudBlock.REBIRTH, stripLeft, top, drawnRight, top + height)
+}
+
+/**
+ * The tier plate of [plate] px at [left] (the tier numeral on the tier's color) and the mutator sigils after it up to
+ * [right]; returns the drawn right edge.
+ */
+private fun DrawScope.drawTierPlateAndSigils(
+    engine: GameplayRenderModel,
+    hostMeasurer: TextMeasurer,
+    frame: HudFrame,
+    tier: Int,
+    left: Float,
+    plate: Float,
+    height: Float,
+    centerY: Float,
+    right: Float,
+): Float {
+    val mutators = engine.content.rebirth.profile(tier).mutators
     val color = KkRebirthTiers.color(tier)
     val plateRadius = plate * 0.5f
     val plateCenterX = left + plateRadius
@@ -109,7 +144,7 @@ internal fun DrawScope.drawRebirthStrip(engine: GameplayRenderModel, hostMeasure
             }
         }
     }
-    HudLayoutProbe.record(HudBlock.REBIRTH, left, top, drawnRight, top + height)
+    return drawnRight
 }
 
 /** Chip-row width (reference dp) the portrait strip leaves for the chain at the row's end. */

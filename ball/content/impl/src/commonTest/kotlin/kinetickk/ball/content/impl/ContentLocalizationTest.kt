@@ -252,6 +252,7 @@ class ContentLocalizationTest {
             "RELIC RESONANCE", "TOTEM DETECTED", "ELITE SIGNAL", "HERALD APPROACHES",
             "TWO ANOMALIES DETECTED // CHOOSE A COURSE", "ANOMALY LOST", "ANOMALY RESOLVED",
             "SECOND WIND", "OBSTACLE COLLISION", "APEX ONLINE",
+            "BOOP",
         ).forEach(::assertFullyLocalized)
     }
 
@@ -360,6 +361,26 @@ class ContentLocalizationTest {
         }
         assertDistinctInRussian(roster.map { it.name })
         assertDistinctInRussian(roster.map { it.description })
+    }
+
+    @Test
+    fun everyDimensionHeadingRiftSiteAndBoonFlavorReadsInRussian() {
+        val gameplay = createContentCatalog().gameplayContent()
+        // The dimension plate, the trial panel and the banners draw layer and objective names as canvas headings.
+        gameplay.dimensions.definitions.forEach { assertFullyLocalized(it.name.uppercase()) }
+        kinetickk.ball.content.api.DimensionObjective.entries.forEach { assertFullyLocalized(it.label.uppercase()) }
+        assertDistinctInRussian(kinetickk.ball.content.api.DimensionObjective.entries.map { it.label })
+        assertEquals("ОБНАРУЖЕН РАЗЛОМ // ВЫБЕРИТЕ ПУТЬ", DimensionNotices.RIFT_DETECTED.localizedContent(AppLanguage.Russian))
+        // The two window rifts are sites named by their layers' rift names.
+        val rifts = content.sites.definitions.filter { it.kind.family == kinetickk.ball.content.api.SiteFamily.PORTAL }
+        assertEquals(
+            listOf(kinetickk.ball.content.api.WorldLayer.ZENITH, kinetickk.ball.content.api.WorldLayer.NADIR).map {
+                gameplay.dimensions.definition(it).riftName
+            },
+            rifts.map { it.name },
+        )
+        rifts.forEach { listOf(it.name, it.instruction).forEach(::assertFullyLocalized) }
+        assertDistinctInRussian(gameplay.boons.map { it.description })
     }
 
     @Test

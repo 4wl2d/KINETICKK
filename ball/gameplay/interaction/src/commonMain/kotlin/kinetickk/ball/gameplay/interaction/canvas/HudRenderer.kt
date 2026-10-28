@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.EnemyRank
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.RelicAspect
@@ -624,7 +625,7 @@ private fun DrawScope.drawClockAndBoss(
     HudLayoutProbe.record(HudBlock.CLOCK, x - layout.size.width * 0.5f, clockTop, x + layout.size.width * 0.5f, clockTop + layout.kkBoxHeight)
     if (boss.id < 0) return
     val ghost = if (memory != null) memory.bossGhost(renderTime) else 0f
-    drawBossBar(engine, measurer, frame, boss, HudTopGeometry.bossTop(frame), HudTopGeometry.bossBarWidth(frame, architect), ghost)
+    drawBossBar(engine, measurer, frame, boss, HudTopGeometry.bossTop(frame), HudTopGeometry.bossBarWidth(frame, wideBossBlock(boss.rank)), ghost)
 }
 
 /** Line height of the wide display type (`.hud-num`, `.t-wide`). */
@@ -636,7 +637,8 @@ internal const val COND_LINE_HEIGHT_EM = 0.86f
 /**
  * Geometry of the HUD's top-center column (clock, then the elite / Architect block under it),
  * shared by the renderer and the world keep-out ([WorldHudKeepOut]) so world labels and edge
- * markers follow the HUD at every text size. px for the [HudFrame]'s viewport.
+ * markers follow the HUD at every text size. px for the [HudFrame]'s viewport. An `architect` flag reads as the wide
+ * block ([wideBossBlock]: the Architect and the secret bosses).
  */
 internal object HudTopGeometry {
     /** Clock size in sp (display type: never scaled by the text-size setting). */
@@ -713,16 +715,26 @@ private fun DrawScope.drawBossBar(
 ) {
     val roles = measurer.roles
     val language = measurer.language
-    val architect = boss.type == EnemyType.ARCHITECT
+    val type = boss.type ?: return
+    val rank = boss.rank
+    // The Architect and the secret bosses take the wide block; mini-bosses and Elites the narrow one.
+    val wide = wideBossBlock(rank)
     val center = frame.width * 0.5f
-    val name = HudScratch.bossName.of(language, if (architect) 1L else if (boss.type == EnemyType.HERALD) 2L else 0L) {
-        if (architect) language.text(HudRedesignText.ArchitectTitle) else bossDisplayName(boss.type, language)
+    val name = HudScratch.bossName.of(language, type.ordinal + 1L) {
+        if (type == EnemyType.ARCHITECT) language.text(HudRedesignText.ArchitectTitle) else engine.content.enemy(type).name.localizedContent(language)
     }
-    val nameSize = HudTopGeometry.bossNameSize(frame, architect)
-    val lineHeight = HudTopGeometry.bossNameLineHeight(architect)
-    // The elite's icon slot; the Architect fills it with the glyph of its weakness while it has one.
-    val weakness = if (architect) EnemyAffinity.weakness(boss.affinityBits) else EnemyAffinity.NONE
-    val icon = !architect || weakness >= 0
+    val nameSize = HudTopGeometry.bossNameSize(frame, wide)
+    val lineHeight = HudTopGeometry.bossNameLineHeight(wide)
+    // The icon slot: a wide boss's weakness glyph while it has one, else a secret boss's anomaly glyph; the narrow
+    // block always shows the Elite glyph; the Architect without a weakness shows none.
+    val weakness = if (wide) EnemyAffinity.weakness(boss.affinityBits) else EnemyAffinity.NONE
+    val slotIcon = when {
+        weakness >= 0 -> null
+        rank == EnemyRank.SECRET_BOSS -> KkIcon.SYSTEM_ANOMALY
+        !wide -> KkIcon.SYSTEM_ELITE
+        else -> null
+    }
+    val icon = weakness >= 0 || slotIcon != null
     val iconSize = if (icon) frame.u(if (frame.regular) 18f else 14f) else 0f
     val gap = if (icon) frame.u(8f) else 0f
     // The status rail runs under the bar; portrait phones keep the boss row's height, so there the
@@ -732,17 +744,17 @@ private fun DrawScope.drawBossBar(
     // UI text: grows with the text size, shrinking to fit the bar's width rather than being cut.
     val layout = HudDrawCache.fitted(HudText.BOSS_NAME, HudMeasurers.ui(measurer), name, nameSize, width - iconSize - gap - inlineRail,
         uppercase = true) { size ->
-        if (architect) measurer.typography.wideStyle(size, lineHeightEm = lineHeight) else measurer.typography.condStyle(size, lineHeightEm = lineHeight)
+        if (wide) measurer.typography.wideStyle(size, lineHeightEm = lineHeight) else measurer.typography.condStyle(size, lineHeightEm = lineHeight)
     }
     val rowWidth = iconSize + gap + layout.size.width + inlineRail
     val rowLeft = center - rowWidth * 0.5f
     val rowCenter = top + layout.kkBoxHeight * 0.5f
-    if (!architect) drawKkIcon(KkIcon.SYSTEM_ELITE, Offset(rowLeft + iconSize * 0.5f, rowCenter), iconSize, roles.threat)
-    else if (weakness >= 0) drawKkIcon(elementIcon(weakness), Offset(rowLeft + iconSize * 0.5f, rowCenter), iconSize, roles.element(weakness))
+    if (weakness >= 0) drawKkIcon(elementIcon(weakness), Offset(rowLeft + iconSize * 0.5f, rowCenter), iconSize, roles.element(weakness))
+    else if (slotIcon != null) drawKkIcon(slotIcon, Offset(rowLeft + iconSize * 0.5f, rowCenter), iconSize, roles.threat)
     drawKkText(layout, rowLeft + iconSize + gap, rowCenter, Kk.Bone, valign = KkVAlign.CENTER)
     val barTop = top + layout.kkBoxHeight + HudTopGeometry.bossNameGap(frame)
     val left = center - width * 0.5f
-    val barHeight = HudTopGeometry.bossBarHeight(frame, architect)
+    val barHeight = HudTopGeometry.bossBarHeight(frame, wide)
     drawApexStrikes(engine, frame, roles, center + width * 0.5f, barTop)
     var bottom = barTop + barHeight
     if (rail > 0f) {
@@ -758,19 +770,20 @@ private fun DrawScope.drawBossBar(
     val railHalf = if (inlineRail > 0f) 0f else rail * 0.5f
     HudLayoutProbe.record(HudBlock.BOSS, min(min(left, rowLeft), center - railHalf), top, max(max(left + width, rowLeft + rowWidth), center + railHalf),
         bottom)
-    if (!architect) {
+    val parts = bossBarParts(engine.content, engine.rebirthLevel, type)
+    if (parts == 0) {
+        // A kind without an encounter spec (the Elite, the Herald): the 16-segment meter.
         val height = barHeight
         val bar = HudDrawCache.rect(HudRect.BOSS_0, left, barTop, left + width, barTop + height)
         drawKkMeter(bar, boss.integrity, roles.threat, roles, background = roles.threat.copy(alpha = 0.18f),
             segments = 16, ghost = ghost, ghostColor = Kk.Bone, threat = true)
         return
     }
-    // The Architect: three equal parts that empty from the left, one per phase (four for the
-    // Singularity Architect of Rebirth tier 10). The active part's track takes the hue of the aspect it
-    // hardened into, and it stripes while the Architect shifts.
+    // A boss with a spec: equal parts that empty from the left, one per phase (the Architect three, four at the
+    // Singularity tier; a mini-boss three; the Antecedent four). The active part's track takes the hue of the aspect it
+    // hardened into, and it stripes while the boss shifts.
     val height = barHeight
     val partGap = frame.u(6f)
-    val parts = if (engine.content.rebirth.profile(engine.rebirthLevel).has(kinetickk.ball.content.api.RebirthMutator.SINGULARITY)) 4 else 3
     val partWidth = (width - partGap * (parts - 1)) / parts
     val active = EnemyAffinity.phase(boss.affinityBits)
     val aspect = EnemyAffinity.aspect(boss.affinityBits)
@@ -908,14 +921,6 @@ private const val RAIL_PRIMED_PULSE = (2.0 * kotlin.math.PI * 4.0).toFloat()
 
 /** Segments a rail cell shows at most (a stack cap is the threshold plus four). */
 private const val MAX_RAIL_SEGMENTS = 14
-
-/** Display name of a tracked elite or Herald: the content phrase for its enemy type ("Elite", "Herald"). */
-private fun bossDisplayName(type: EnemyType?, language: AppLanguage): String =
-    when (type) {
-        EnemyType.ELITE -> "Elite"
-        EnemyType.HERALD -> "Herald"
-        else -> "Architect"
-    }.localizedContent(language)
 
 /** Matter and key chips (and their phone forms). */
 private fun DrawScope.drawEconomy(engine: GameplayRenderModel, hostMeasurer: TextMeasurer, frame: HudFrame, badgeBottom: Float) {

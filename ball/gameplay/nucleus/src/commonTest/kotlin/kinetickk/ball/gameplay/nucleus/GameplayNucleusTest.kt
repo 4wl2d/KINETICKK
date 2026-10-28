@@ -8,7 +8,9 @@ import kinetickk.ball.profile.api.ProfileRefusal
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
+import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayConfigurationRejection
 import kinetickk.ball.gameplay.api.GameplayExitProgressResult
@@ -19,6 +21,7 @@ import kinetickk.ball.gameplay.api.GameplayRejection
 import kinetickk.ball.gameplay.api.GameplayRevision
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.api.GameplayRunStarted
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
@@ -26,6 +29,7 @@ import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
 import kinetickk.ball.gameplay.nucleus.simulation.copyForReduction
+import kinetickk.ball.gameplay.nucleus.simulation.discoverWorld
 import kinetickk.ball.gameplay.nucleus.simulation.emitSound
 import kinetickk.ball.gameplay.nucleus.simulation.emitVisualFx
 import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
@@ -582,15 +586,53 @@ class GameplayNucleusTest {
         }
     }
 
+    @Test
+    fun easyRunPublishesNoProfileProgressThroughVictoryAndExit() {
+        fun victoryFacts(state: GameplayState): GameplayState = state.copy(
+            engine = EngineState(state.engine!!.model.copyForReduction().apply {
+                pendingClearedRebirthLevel = 0
+                pendingArchitectDefeatedWith = CoreShape.ORB
+                pendingVictoryRelics = listOf(RelicId.GYRE_ENGINE)
+                pendingBankedMatter = 12
+                pendingDiscoveredItemIds += 0
+                discoverWorld(WorldDiscovery.GATE_RACE)
+                runMatter = 30
+            }),
+        )
+
+        // The same facts in a STANDARD run are one Profile command.
+        val standard = interaction(
+            victoryFacts(start(initial(28)).nextState),
+            GameplayInteractionPulse.FrameElapsed.fromValidated(0f),
+        )
+        assertEquals(1, standard.outputs.count { it is GameplayOutput.SendProfileCommand })
+        assertTrue(standard.nextState.progressPending)
+
+        val started = start(initial(29), mode = RunMode.EASY).nextState
+        assertTrue(GameplayNucleus.renderSnapshot(started).renderModel!!.easyMode)
+        val frame = interaction(victoryFacts(started), GameplayInteractionPulse.FrameElapsed.fromValidated(0f))
+        assertTrue(frame.outputs.none { it is GameplayOutput.SendProfileCommand })
+        assertFalse(frame.nextState.progressPending)
+
+        val exited = exit(frame.nextState)
+        assertTrue(exited.outputs.none { it is GameplayOutput.SendProfileCommand })
+        assertEquals(
+            GameplayExitProgressResult.NoProgress,
+            exited.outputs.filterIsInstance<GameplayOutput.RunExited>().single().result.progress,
+        )
+        assertFalse(exited.nextState.progressPending)
+        assertEquals(GameplayRunPhase.EXITED, exited.nextState.phase)
+    }
+
     private fun initial(runId: Long): GameplayState =
         GameplayState.initial(RunId(runId), canonicalGameplayContent)
 
-    private fun start(state: GameplayState, seed: Int = 731_991): GameplayAcceptedFrame {
+    private fun start(state: GameplayState, seed: Int = 731_991, mode: RunMode = RunMode.STANDARD): GameplayAcceptedFrame {
         return accepted(
             GameplayNucleus.decide(
                 state,
                 GameplayNucleusPulse.StartRun,
-                GameplayContext(start = GameplayStartContext.Ready(validStartInputs(seed))),
+                GameplayContext(start = GameplayStartContext.Ready(validStartInputs(seed).copy(mode = mode))),
             ),
         )
     }

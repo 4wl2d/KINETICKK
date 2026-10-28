@@ -13,7 +13,6 @@ import androidx.compose.ui.text.TextStyle
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WorldLayer
-import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.foundation.design.*
@@ -134,12 +133,7 @@ internal enum class WorldDrawn { POINT_MARK, POINT_TIMER, EDGE_MARKER, BEACON_PI
 internal fun DrawScope.worldHudKeepOut(engine: GameplayRenderModel, textMeasurer: TextMeasurer, hudDensity: Float = density): WorldHudKeepOut {
     // The panel shows whichever engagement runs: a site trial, a dungeon or a dimension objective.
     val trial = engine.trial != null
-    var boss = false
-    val enemies = engine.enemies
-    for (index in enemies.indices) {
-        val enemy = enemies[index]
-        if (!enemy.dead && (enemy.type == EnemyType.ELITE || enemy.type == EnemyType.HERALD || enemy.type == EnemyType.ARCHITECT)) boss = true
-    }
+    val boss = bossBlockShown(engine)
     return WorldOverlayScratch.keepOut.update(size.width, size.height, hudDensity, textMeasurer.scale, trial, boss,
         engine.settings.minimapEnabled)
 }

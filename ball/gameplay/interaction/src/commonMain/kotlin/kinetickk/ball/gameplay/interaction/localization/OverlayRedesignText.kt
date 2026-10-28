@@ -109,4 +109,11 @@ internal enum class OverlayRedesignText(
     MatterShort("Matter", "Материя"),
     ChainShort("Best chain", "Лучшая серия"),
     DamageShort("Damage", "Урон"),
+    // The report of a Baby mode run: nothing is counted.
+    NotCounted("Not counted", "Не засчитано"),
+    NotCountedInfo(
+        "A Baby mode run counts nothing: no Matter, Rank, Codex entries, unlocks or achievements.",
+        "Забег в режиме малыша ничего не засчитывает: ни материю, ни ранг, ни записи кодекса, ни открытия, ни достижения.",
+    ),
+    MatterNotBanked("Matter not banked", "Материя не сохранена"),
 }

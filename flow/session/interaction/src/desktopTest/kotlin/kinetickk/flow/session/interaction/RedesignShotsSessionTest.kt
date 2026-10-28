@@ -298,8 +298,8 @@ class RedesignShotsSessionTest {
             }
             shotCodex("build-stats", w, h, language, run = true) { codexState("build-stats") }
             // The characters (an unlocked one, a locked one with its progress) and the enemy roster (an unlocked enemy, the
-            // Rebirth-locked Reflector), at the default text size and the largest.
-            for (state in listOf("forms", "forms-locked", "enemies", "enemies-locked")) {
+            // Rebirth-locked Reflector, the hidden Antecedent and the discovered Cartographer), at the default text size and the largest.
+            for (state in listOf("forms", "forms-locked", "enemies", "enemies-locked", "enemies-secret", "enemies-secret-found")) {
                 shotCodex(state, w, h, language, run = true) { codexState(state) }
                 shotCodex("$state-text175", w, h, language, run = true, scale = 1.75f) { codexState(state) }
             }
@@ -414,12 +414,14 @@ class RedesignShotsSessionTest {
                 onNodeWithTag("codex-filter-3").performSemanticsAction(SemanticsActions.OnClick)
                 mainClock.advanceTimeBy(100)
             }
-            "forms", "forms-locked", "enemies", "enemies-locked" -> {
+            "forms", "forms-locked", "enemies", "enemies-locked", "enemies-secret", "enemies-secret-found" -> {
                 val forms = state.startsWith("forms")
                 val key = when (state) {
                     "forms" -> "shape/PRISM"
                     "forms-locked" -> "shape/SPIRAL"
                     "enemies" -> "enemy/HERALD"
+                    "enemies-secret" -> "enemy/ANTECEDENT"
+                    "enemies-secret-found" -> "enemy/CARTOGRAPHER"
                     else -> "enemy/REFLECTOR"
                 }
                 onNodeWithTag("codex-tab-1").performSemanticsAction(SemanticsActions.OnClick)
@@ -580,7 +582,7 @@ internal fun ShotCodexModel(run: Boolean = false): CodexRenderModel = CodexRende
     discoveredReactionIds = immutableSetOf(ReactionId.THERMAL_SHOCK, ReactionId.PLASMA_BURST, ReactionId.SUPERCONDUCT, ReactionId.ROT_WELL),
     discoveredPairingIds = immutableSetOf(RelicPairingId.MELTDOWN, RelicPairingId.THERMAL_PARADOX),
     discoveredWorldEntries = immutableSetOf(WorldDiscovery.GATE_RACE, WorldDiscovery.TRIALS, WorldDiscovery.DRIFT_CACHE,
-        WorldDiscovery.ZENITH, WorldDiscovery.LOST_CURSOR, WorldDiscovery.SPIN_CYCLE),
+        WorldDiscovery.ZENITH, WorldDiscovery.LOST_CURSOR, WorldDiscovery.SPIN_CYCLE, WorldDiscovery.CARTOGRAPHER),
 )
 
 private val ShotRun: CodexRunStacks by lazy {

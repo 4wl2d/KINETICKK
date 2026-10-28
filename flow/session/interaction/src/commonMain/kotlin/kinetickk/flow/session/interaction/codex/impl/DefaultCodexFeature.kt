@@ -262,8 +262,8 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
         1 -> catalog.weapons.count { it.id in progress.loadout.unlockedWeapons } to catalog.weapons.size
         2 -> catalog.relics.count { model.isRelicDiscovered(it.id) } to catalog.relics.size
         3 -> progress.unlockedCoreShapes.size to catalog.coreShapes.size
-        // Enemies the current Rebirth rank lets into runs, out of the whole roster.
-        CODEX_ENEMIES_CATEGORY -> catalog.enemies.count { it.minimumRebirth <= progress.rebirthProgress.rank } to catalog.enemies.size
+        // Enemies the current Rebirth rank lets into runs (hidden secret bosses aside), out of the whole roster.
+        CODEX_ENEMIES_CATEGORY -> codexEnemyCounts(model, catalog, progress)
         // Places and secrets found, out of every one the World lists.
         CODEX_WORLD_CATEGORY -> codexWorldCounts(model, catalog)
         else -> error("No Codex catalog category $index")

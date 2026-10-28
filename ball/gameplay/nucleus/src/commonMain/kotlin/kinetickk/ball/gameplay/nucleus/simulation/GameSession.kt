@@ -95,7 +95,7 @@ internal fun MutableGameState.startRun() {
     arsenalCounter = 0
     necroticClock = 0f
     heirloomOfferActive = false
-    heirloomPending = heirloomCandidates.isNotEmpty() && rebirthRank >= 1
+    heirloomPending = !easyMode && heirloomCandidates.isNotEmpty() && rebirthRank >= 1
     omenPending = offersRunOmen && content.variety.omens.enabled
     volatileBursts = kinetickk.foundation.collections.immutableListOf()
     totem = null

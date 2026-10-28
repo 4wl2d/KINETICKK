@@ -73,7 +73,7 @@ internal fun MutableGameState.takeDamage(
     // Self-inflicted damage neither uses nor grants the hit i-frames, so real hits are never dropped behind it.
     val incoming = kind != IncomingDamage.SELF
     if ((incoming && hurtCooldown > 0f) || invulnerableUntil > elapsed) return
-    var amount = rawAmount * rebirthProfile.incomingDamageMultiplier
+    var amount = rawAmount * rebirthProfile.incomingDamageMultiplier * (if (incoming) incomingDamageFactor else 1f)
     if (kind == IncomingDamage.CONTACT) amount *= matrix.contactDamageMultiplier
     var taken = 1f + buffAmount(BuffStat.DAMAGE_TAKEN) + whileAmount(BuffStat.DAMAGE_TAKEN, null)
     if (build.liability(RelicId.HOLLOW_CROWN)) taken += 0.1f * emptyRelicSlots()
@@ -144,7 +144,7 @@ internal const val OBSTACLE_COLLISION_REASON: String = "OBSTACLE COLLISION"
  */
 private fun MutableGameState.takeObstacleDamage(rawAmount: Float, obstacle: kinetickk.ball.content.api.ObstacleKind? = null) {
     if (rawAmount <= 0f || invulnerableUntil > elapsed) return
-    var amount = rawAmount * (1f + content.obstacles.damagePerTier * rebirthLevel)
+    var amount = rawAmount * (1f + content.obstacles.damagePerTier * rebirthLevel) * incomingDamageFactor
     // Monolith: while it runs, a facet also takes an obstacle collision (and fires its refraction).
     if (monolithTakesCollisions() && spendFacet(amount)) return
     val glass = build.liability(RelicId.GLASS_COMET)
@@ -158,6 +158,7 @@ private fun MutableGameState.takeObstacleDamage(rawAmount: Float, obstacle: kine
         absorbShield(absorbed, incoming = true)
         amount -= absorbed
     }
+    amount = capEasyObstacleDamage(amount)
     if (amount > 0f) {
         damageTaken += min(amount, hp.coerceAtLeast(0f)).toDouble()
         hp -= amount
@@ -172,8 +173,10 @@ private fun MutableGameState.takeObstacleDamage(rawAmount: Float, obstacle: kine
  * A collision at or above the lethal speed: integrity drops to zero past shields, then only Second Wind
  * or the Ouroboros Seal may answer it. Only the invulnerability a revive granted protects (the Core may
  * still be flying into the same rock); Glass Comet's and Bulwark's windows do not.
+ * In Baby mode it is an obstacle hit of `lethalObstacleDamageShare` of max integrity instead, which never breaks the Core.
  */
 internal fun MutableGameState.takeLethalObstacleHit() {
+    if (easyMode) { takeObstacleDamage(maxHp * content.easyMode.lethalObstacleDamageShare); return }
     if (reviveInvulnerableUntil > elapsed) return
     damageTaken += hp.coerceAtLeast(0f).toDouble()
     hp = 0f

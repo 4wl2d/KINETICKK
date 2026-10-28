@@ -10,9 +10,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
+import kinetickk.ball.content.api.EnemyRank
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
-import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.PickupType
@@ -123,7 +123,8 @@ private object MinimapScratch {
 /**
  * The run minimap (`HudBlock.MINIMAP`): north-up and centred on the Core, out to
  * [GameplayRenderModel.minimapRange] world units. Obstacles (bumpers as rings, unstable rocks hot),
- * enemies as dots, Elites as aspect-coloured diamonds, Heralds and the Architect large, anomalies,
+ * enemies as dots, Elites as aspect-coloured diamonds, mini-bosses and the Architect large, secret bosses large
+ * in a bone ring, anomalies,
  * the Totem, Keys and Relic resonances (pinned to the rim when beyond it) and the Core's heading.
  * Hidden by the Minimap setting.
  */
@@ -187,13 +188,16 @@ internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMe
             if (enemy.dead) continue
             val dx = (enemy.x - coreX) * scale
             val dy = (enemy.y - coreY) * scale
-            when (enemy.type) {
-                EnemyType.HERALD, EnemyType.ARCHITECT -> {
-                    val (x, y) = pinned(centerX, centerY, half, dx, dy, dot * 3f)
+            when (val rank = engine.content.enemy(enemy.type).rank) {
+                EnemyRank.BOSS, EnemyRank.MINI_BOSS, EnemyRank.SECRET_BOSS -> {
+                    // A secret boss's big pin carries a bone ring, kept inside the rim with it.
+                    val secret = rank == EnemyRank.SECRET_BOSS
+                    val (x, y) = pinned(centerX, centerY, half, dx, dy, dot * if (secret) SECRET_RING_DOTS else 3f)
                     drawCircle(roles.threat, dot * 3f, Offset(x, y))
                     drawCircle(Kk.Bone.copy(alpha = 0.8f), dot * 3f, Offset(x, y), style = kkStroke(1f))
+                    if (secret) drawCircle(Kk.Bone.copy(alpha = 0.8f), dot * SECRET_RING_DOTS, Offset(x, y), style = kkStroke(1f))
                 }
-                EnemyType.ELITE -> {
+                EnemyRank.ELITE -> {
                     val (x, y) = pinned(centerX, centerY, half, dx, dy, dot * 2.4f)
                     val aspect = EnemyAffinity.aspect(enemy.affinityBits)
                     val color = if (aspect in roles.elements.indices) roles.elements[aspect] else roles.threat
@@ -202,7 +206,7 @@ internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMe
                         drawRect(color, Offset(x - reach * 0.7f, y - reach * 0.7f), Size(reach * 1.4f, reach * 1.4f))
                     }
                 }
-                else -> {
+                EnemyRank.ORDINARY -> {
                     val x = centerX + dx
                     val y = centerY + dy
                     if (abs(dx) > half || abs(dy) > half) continue
