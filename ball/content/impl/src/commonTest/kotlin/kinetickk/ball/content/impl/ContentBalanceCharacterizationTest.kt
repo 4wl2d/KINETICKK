@@ -16,6 +16,7 @@ import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RunModifierEffect
 import kinetickk.ball.content.api.WeaponId
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -399,6 +400,156 @@ class ContentBalanceCharacterizationTest {
             },
         )
     }
+
+    @Test
+    fun runVarietyContentIsGolden() {
+        // Slice variety-0.6.0: every run-variety identity, definition, policy number and notice (pinned when 0.6.0
+        // shipped the run-variety content).
+        val variety = catalog.gameplayContent().variety
+        assertEquals(
+            "0ee882129c87121f",
+            goldenFingerprint {
+                add("variety-0.6.0")
+                kinetickk.ball.content.api.EliteAffix.entries.forEach { add(it.name); add(it.displayName); add(it.signalNotice) }
+                kinetickk.ball.content.api.WorldEventKind.entries.forEach { add(it.name); add(it.displayName) }
+                kinetickk.ball.content.api.SignalKind.entries.forEach { add(it.name); add(it.displayName) }
+                kinetickk.ball.content.api.SignalOption.entries.forEach { add(it.name); add(it.kind?.name ?: "-") }
+
+                val omens = variety.omens
+                add("omens")
+                add(omens.enabled)
+                add(omens.offers)
+                omens.definitions.forEach { omen ->
+                    add(omen.id.name)
+                    add(omen.name)
+                    add(omen.upside)
+                    add(omen.liability)
+                    add(omen.gains.size)
+                    omen.gains.forEach { addRunModifier(it) }
+                    add(omen.costs.size)
+                    omen.costs.forEach { addRunModifier(it) }
+                    add(omen.minimumRank)
+                    add(omen.weight)
+                }
+
+                val director = variety.director
+                add("director")
+                add(director.personalitiesEnabled)
+                director.personalities.forEach { personality ->
+                    add(personality.id.name)
+                    add(personality.name)
+                    add(personality.description)
+                    add(personality.weight)
+                    add(personality.budgetScale)
+                    listOf(personality.phaseRate, personality.phaseDuration).forEach { scales ->
+                        add(scales.calm)
+                        add(scales.build)
+                        add(scales.surge)
+                        add(scales.breather)
+                    }
+                    with(personality.eventWeights) { listOf(single, pack, flank, swarm, wall, encircle).forEach(::add) }
+                    add(personality.ambushCooldownScale)
+                    add(personality.encircleCooldownScale)
+                    add(personality.wallCooldownScale)
+                    add(personality.packSizeBonus)
+                    add(personality.typeBias.size)
+                    personality.typeBias.forEach { bias ->
+                        add(bias.type.name)
+                        add(bias.multiplier)
+                    }
+                    add(personality.featuresAspect)
+                    add(personality.aspectWeight)
+                }
+                add(director.surgeThemesEnabled)
+                add(director.surgeThemeWeight)
+                add(director.surgeThemeMinimumKinds)
+                add(director.announceAtSeconds)
+                add(director.keynoteAnnounceAtSeconds)
+
+                with(variety.affixes) {
+                    add("affixes")
+                    add(enabled)
+                    listOf(
+                        fromThreatSeconds, baseChance, chancePerTier, shieldSeconds, shieldIntervalSeconds, firstShieldSeconds,
+                        wellStrength,
+                    ).forEach(::add)
+                    add(linkCount)
+                    add(splitFragments)
+                    listOf(burstRadius, burstDelaySeconds, hasteSpeed, hasteCadence).forEach(::add)
+                }
+                with(variety.champions) {
+                    add("champions")
+                    add(enabled)
+                    listOf(fromThreatSeconds, baseChance, chancePerTier, integrityScale).forEach(::add)
+                    add(bonusData)
+                    add(matterScale)
+                }
+                with(variety.keynote) {
+                    add("keynote")
+                    add(enabled)
+                    listOf(tagShare, elementShare, eliteAspectBias, stormEliteAspectBias).forEach(::add)
+                }
+                with(variety.worldEvents) {
+                    add("world-events")
+                    add(enabled)
+                    add(minPerRun)
+                    add(maxPerRun)
+                    listOf(extraEventChance, firstAtSeconds, lastEndSeconds, telegraphSeconds, gapSeconds).forEach(::add)
+                    weights.forEach(::add)
+                    with(meteor) {
+                        listOf(
+                            durationSeconds, intervalSeconds, armSeconds, minDistance, distanceSpread, angleSpread, radius,
+                            coreDamage, enemyDamageScale, pushSpeed,
+                        ).forEach(::add)
+                    }
+                    with(dataStorm) {
+                        listOf(durationSeconds, intervalSeconds, minDistance, maxDistance, angleSpread).forEach(::add)
+                        add(killBonusData)
+                    }
+                    with(gravity) { listOf(durationSeconds, turnRate, rampSeconds, coreAcceleration, enemyAcceleration).forEach(::add) }
+                    with(ion) {
+                        listOf(durationSeconds, intervalSeconds, armSeconds, minDistance, maxDistance, radius).forEach(::add)
+                        add(ionStacks)
+                        listOf(enemyDamageScale, coreRadius, coreDamage).forEach(::add)
+                    }
+                    with(solar) {
+                        listOf(durationSeconds, pulseSeconds, coolingPenalty, weaponBonus, buffSeconds, sweepIntervalSeconds).forEach(::add)
+                        add(sweepStacks)
+                        add(sweepRadius)
+                    }
+                }
+                with(variety.signals) {
+                    add("signals")
+                    add(enabled)
+                    add(firstAtSeconds)
+                    add(intervalSeconds)
+                    add(slots)
+                    add(perRun)
+                    listOf(lifetimeSeconds, distance, sideAngle, touchRadius, lostDistance, trialDelaySeconds).forEach(::add)
+                    weights.forEach(::add)
+                    with(tuning) {
+                        listOf(merchantRareCost, merchantEpicCost, merchantRerollCost).forEach(::add)
+                        add(merchantRerolls)
+                        listOf(
+                            shrineBloodShare, shrineBloodImpact, shrineBloodWeapon, shrineWardIntegrity, shrineWardMinimumIntegrity,
+                            shrineWardShield, shrineWardReduction, shrineRelicShare, gambleRerollChance,
+                        ).forEach(::add)
+                        add(gambleRerollWin)
+                        add(gambleMatterShare)
+                        add(gambleMatterMinimum)
+                        listOf(
+                            gambleMatterChance, gambleMatterPayout, gambleIntegrityShare, gambleIntegrityChance, crateCurse,
+                            crateCurseSeconds, reliquaryCurse, reliquaryCurseSeconds, idolCurse, idolCurseSeconds,
+                            derelictRepairShare, derelictCargoMatter, priceBase, priceRampSeconds,
+                        ).forEach(::add)
+                        add(priceStep)
+                    }
+                }
+                add("notices")
+                kinetickk.ball.content.api.RunVarietyNotices.forEach(::add)
+            },
+        )
+    }
 }
 
 /** The item catalog's size through 0.4.0: ids 0..172 (0.5.0 appends from 173). */
@@ -580,6 +731,21 @@ private fun GoldenFingerprint.addRule(rule: ItemRule) {
         is ItemRule.ApexCooldown -> { add("apex-cooldown"); add(rule.amount) }
         is ItemRule.CoreLinkRadius -> { add("core-link-radius"); add(rule.bonus) }
         is ItemRule.ObstacleTuning -> { add("obstacle-tuning"); add(rule.aspect.name); add(rule.amount) }
+    }
+}
+
+/** One run modifier with its kind and numbers (omens, Blessings and Pacts share the vocabulary). */
+private fun GoldenFingerprint.addRunModifier(effect: RunModifierEffect) {
+    when (effect) {
+        is RunModifierEffect.Stat -> { add("stat"); add(effect.effect.name); add(effect.amount) }
+        is RunModifierEffect.MatterGainScale -> { add("matter-gain"); add(effect.factor) }
+        is RunModifierEffect.Rerolls -> { add("rerolls"); add(effect.delta) }
+        is RunModifierEffect.HostileScale -> {
+            add("hostile")
+            listOf(effect.health, effect.speed, effect.incomingDamage, effect.spawnRate, effect.eliteRate).forEach(::add)
+        }
+        is RunModifierEffect.Mutator -> { add("mutator"); add(effect.mutator.name) }
+        is RunModifierEffect.KeynoteFloor -> { add("keynote-floor"); add(effect.share) }
     }
 }
 

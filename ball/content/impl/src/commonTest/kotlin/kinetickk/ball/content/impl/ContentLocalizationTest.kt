@@ -269,6 +269,40 @@ class ContentLocalizationTest {
     }
 
     @Test
+    fun everyRunVarietyNameAndTextIsLocalizedAndDistinctAndItsComposedBannersRead() {
+        val variety = createContentCatalog().gameplayContent().variety
+        val omens = variety.omens.definitions
+        val personalities = variety.director.personalities
+        val affixes = kinetickk.ball.content.api.EliteAffix.entries.map { it.displayName }
+        val events = kinetickk.ball.content.api.WorldEventKind.entries.map { it.displayName }
+        val signals = kinetickk.ball.content.api.SignalKind.entries.map { it.displayName }
+        buildList {
+            omens.forEach { addAll(listOf(it.name, it.upside, it.liability)) }
+            personalities.forEach { addAll(listOf(it.name, it.description)) }
+            addAll(affixes + events + signals)
+            addAll(listOf("No omen", "Start the run as it is."))
+        }.forEach(::assertFullyLocalized)
+        assertDistinctInRussian(omens.map { it.name })
+        assertDistinctInRussian(omens.map { it.upside })
+        assertDistinctInRussian(omens.map { it.liability })
+        assertDistinctInRussian(personalities.map { it.name })
+        assertDistinctInRussian(personalities.map { it.description })
+        assertDistinctInRussian(affixes)
+        assertDistinctInRussian(events)
+        assertDistinctInRussian(signals)
+
+        // Banners composed at run time: an ONSLAUGHT names an ordinary kind, the Keynote a tag and an element.
+        content.enemies.filter { !it.isScheduled }.forEach { assertFullyLocalized("ONSLAUGHT // ${it.name.uppercase()}") }
+        BuildTag.entries.forEach { tag ->
+            StatusElement.entries.forEach { element ->
+                assertFullyLocalized("KEYNOTE // ${tag.displayLabel.uppercase()} // ${element.displayLabel.uppercase()}")
+            }
+        }
+        assertEquals("ТАКТИКА ВРАГА // ПРИЛИВНАЯ ВОЛНА", "HOSTILE PATTERN // TIDEWAVE".localizedContent(AppLanguage.Russian))
+        assertEquals("ЗНАМЕНИЕ // СТЕКЛЯННОЕ СОЛНЦЕ", "OMEN // GLASS SUN".localizedContent(AppLanguage.Russian))
+    }
+
+    @Test
     fun everyDimensionNoticeIsLocalized() {
         DimensionNotices.all.forEach(::assertFullyLocalized)
         assertEquals("ЗЕНИТ // ВОСХОЖДЕНИЕ", DimensionNotices.all.first().localizedContent(AppLanguage.Russian))
