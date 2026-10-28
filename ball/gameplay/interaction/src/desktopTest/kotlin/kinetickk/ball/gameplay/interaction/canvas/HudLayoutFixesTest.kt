@@ -16,7 +16,6 @@ import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.text.platform.Font
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
-import kinetickk.ball.content.api.ANOMALY_KIND_COUNT
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
@@ -31,6 +30,8 @@ import kinetickk.ball.gameplay.interaction.layout.runningControlBounds
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.SiteProjection
+import kinetickk.ball.gameplay.nucleus.render.TrialClock
+import kinetickk.ball.gameplay.nucleus.render.TrialValue
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
@@ -134,6 +135,7 @@ class HudLayoutFixesTest {
                         affinityBits = bossAffinity(boss)))
                         .toImmutableList(),
                     "sites" to (if (trial) listOf(orbit) else emptyList()).toImmutableList(),
+                    "trial" to (if (trial) siteTrial(orbit) else null),
                 )
                 HudDrawCache.forgetLayouts()
                 draw(w, h, language, textScale) { measurer ->
@@ -235,6 +237,7 @@ class HudLayoutFixesTest {
                 "equippedRelics" to listOf(EquippedRelic(RelicId.PERPETUAL_VECTOR, 1), EquippedRelic(RelicId.GYRE_ENGINE, 1))
                     .toImmutableList(),
                 "sites" to (if (trial) listOf(orbit) else emptyList()).toImmutableList(),
+                "trial" to (if (trial) siteTrial(orbit) else null),
             )
             HudDrawCache.forgetLayouts()
             draw(w, h, language, textScale) { measurer ->
@@ -308,31 +311,45 @@ class HudLayoutFixesTest {
         }
     }
 
-    /** The trial panel's label, name and reward are never cut, for every trial, language and text size. */
+    /**
+     * The trial panel's label, name and reward are never cut, for every family's trial (anomalies, race, challenges,
+     * bounty, sigil), language and text size; a trial without a clock or a value draws neither.
+     */
     @Test
     fun trialPanelLinesAreNeverCutForAnyTrial() {
         for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
-            for (textScale in textScales) for (kind in SiteKind.entries.take(ANOMALY_KIND_COUNT)) {
-                val point = SiteProjection(kind, kind.name, 0f, 0f, true, 12f, 0, 0.4f, immutableListOf(1, 2, 3), 0f, 0f)
-                val model = hudTestModel(w.toFloat(), h.toFloat()).with("sites" to listOf(point).toImmutableList())
+            for (textScale in textScales) for (point in trialSites()) {
+                val kind = point.kind
+                val trial = siteTrial(point)
+                val model = hudTestModel(w.toFloat(), h.toFloat()).withSites(point)
                 HudDrawCache.forgetLayouts()
                 draw(w, h, language, textScale) { measurer -> drawHud(model, measurer, 1f) }
                 val where = "$language $w x $h x$textScale $kind"
                 val layout = HudTrialPanelLayout().update(w.toFloat(), h.toFloat(), 1f, textScale)
-                listOf(HudText.TRIAL_LABEL, HudText.TRIAL_NAME, HudText.TRIAL_REWARD, HudText.TRIAL_CLOCK).forEach { slot ->
+                // The countdown is one cached line; a race's tenths are drawn digit by digit.
+                val slots = listOf(HudText.TRIAL_LABEL, HudText.TRIAL_NAME, HudText.TRIAL_REWARD) +
+                    if (trial.clock == TrialClock.COUNTDOWN) listOf(HudText.TRIAL_CLOCK) else emptyList()
+                slots.forEach { slot ->
                     val line = assertNotNull(HudDrawCache.peekLayout(slot), "$where: $slot")
                     assertFalse(line.isCut(), "$where: $slot is cut")
                 }
+                if (trial.clock != TrialClock.COUNTDOWN) assertNull(HudDrawCache.peekLayout(HudText.TRIAL_CLOCK), "$where: a countdown line")
                 val innerLeft = layout.left + layout.padding - 0.5f
                 val innerRight = layout.right - layout.padding + 0.5f
-                listOf(HudBlock.TRIAL_LABEL, HudBlock.TRIAL_CLOCK, HudBlock.TRIAL_NAME, HudBlock.TRIAL_PROGRESS, HudBlock.TRIAL_REWARD).forEach { block ->
+                val clock = trial.clock != TrialClock.NONE
+                val value = trial.value != TrialValue.NONE
+                val blocks = listOf(HudBlock.TRIAL_LABEL, HudBlock.TRIAL_NAME, HudBlock.TRIAL_REWARD) +
+                    (if (clock) listOf(HudBlock.TRIAL_CLOCK) else emptyList()) + (if (value) listOf(HudBlock.TRIAL_PROGRESS) else emptyList())
+                blocks.forEach { block ->
                     val line = assertNotNull(HudLayoutProbe.rect(block), "$where: $block")
                     assertTrue(line.left >= innerLeft && line.right <= innerRight && line.top >= layout.top && line.bottom <= layout.bottom,
                         "$where: $block $line outside the panel")
                 }
+                if (!clock) assertNull(HudLayoutProbe.rect(HudBlock.TRIAL_CLOCK), "$where: a clock without one")
+                if (!value) assertNull(HudLayoutProbe.rect(HudBlock.TRIAL_PROGRESS), "$where: a value without one")
                 fun rect(block: HudBlock) = assertNotNull(HudLayoutProbe.rect(block))
-                assertFalse(rect(HudBlock.TRIAL_LABEL).overlaps(rect(HudBlock.TRIAL_CLOCK)), "$where: label meets the clock")
-                assertFalse(rect(HudBlock.TRIAL_PROGRESS).overlaps(rect(HudBlock.TRIAL_REWARD)), "$where: progress meets the reward")
+                if (clock) assertFalse(rect(HudBlock.TRIAL_LABEL).overlaps(rect(HudBlock.TRIAL_CLOCK)), "$where: label meets the clock")
+                if (value) assertFalse(rect(HudBlock.TRIAL_PROGRESS).overlaps(rect(HudBlock.TRIAL_REWARD)), "$where: progress meets the reward")
                 assertTrue(rect(HudBlock.TRIAL_NAME).right <= layout.infoLeft, "$where: name runs under the (!)")
             }
         }
@@ -404,6 +421,8 @@ class HudLayoutFixesTest {
     fun instructionTailsStayOutOfTheFeedWhileEventTailsRemain() {
         assertEquals("TWO ANOMALIES DETECTED" to null, feedMessageParts("TWO ANOMALIES DETECTED // CHOOSE A COURSE", AppLanguage.English))
         assertEquals("ОБНАРУЖЕНЫ ДВЕ АНОМАЛИИ" to null, feedMessageParts("TWO ANOMALIES DETECTED // CHOOSE A COURSE", AppLanguage.Russian))
+        assertEquals("TWO SITES DETECTED" to null, feedMessageParts("TWO SITES DETECTED // CHOOSE A COURSE", AppLanguage.English))
+        assertEquals("ОБНАРУЖЕНЫ ДВЕ ЛОКАЦИИ" to null, feedMessageParts("TWO SITES DETECTED // CHOOSE A COURSE", AppLanguage.Russian))
         assertEquals("CATALOG COMPLETE" to "MATTER SALVAGED", feedMessageParts("CATALOG COMPLETE // MATTER SALVAGED", AppLanguage.English))
         assertEquals("ELITE SIGNAL" to null, feedMessageParts("ELITE SIGNAL", AppLanguage.English))
     }
@@ -413,9 +432,9 @@ class HudLayoutFixesTest {
         val orbit = SiteProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, -1, 1f / 3f,
             immutableListOf(1, 2, 3), 0f, 0f)
         for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
-            for (textScale in textScales) for (kind in SiteKind.entries.take(ANOMALY_KIND_COUNT)) {
-                val trial = orbit.copy(kind = kind)
-                val model = hudTestModel(w.toFloat(), h.toFloat()).with("sites" to listOf(trial).toImmutableList())
+            for (textScale in textScales) for (trial in trialSites()) {
+                val kind = trial.kind
+                val model = hudTestModel(w.toFloat(), h.toFloat()).withSites(trial)
                 draw(w, h, language, textScale) { measurer ->
                     drawHud(model, measurer, 1f, trialInfoOpen = true)
                     drawTrialTooltip(model, measurer, open = true)
@@ -435,7 +454,7 @@ class HudLayoutFixesTest {
             }
         }
         // Closed: nothing drawn.
-        val model = hudTestModel().with("sites" to listOf(orbit).toImmutableList())
+        val model = hudTestModel().withSites(orbit)
         draw(1_440, 810, AppLanguage.English) { measurer -> drawHud(model, measurer, 1f); drawTrialTooltip(model, measurer, open = false) }
         assertNull(HudLayoutProbe.rect(HudBlock.TRIAL_TOOLTIP))
     }
@@ -451,9 +470,9 @@ class HudLayoutFixesTest {
     fun trialRulesKeepTheCoreClearOnPhones() {
         val phones = listOf(844 to 390, 780 to 360, 667 to 375, 640 to 360, 390 to 844, 360 to 780, 375 to 667, 360 to 640)
         for (language in AppLanguage.entries) phones.forEach { (w, h) ->
-            for (textScale in textScales) for (kind in SiteKind.entries.take(ANOMALY_KIND_COUNT)) {
-                val trial = SiteProjection(kind, kind.name, 0f, 0f, true, 12f, -1, 0.4f, immutableListOf(1, 2, 3), 0f, 0f)
-                val model = hudTestModel(w.toFloat(), h.toFloat()).with("sites" to listOf(trial).toImmutableList())
+            for (textScale in textScales) for (trial in trialSites()) {
+                val kind = trial.kind
+                val model = hudTestModel(w.toFloat(), h.toFloat()).withSites(trial)
                 draw(w, h, language, textScale) { measurer ->
                     drawHud(model, measurer, 1f, trialInfoOpen = true)
                     drawTrialTooltip(model, measurer, open = true)
@@ -505,7 +524,7 @@ class HudLayoutFixesTest {
             for ((remaining, expected) in listOf(14.2f to "0:15", 75.3f to "1:16", 0.4f to "0:01")) {
                 val point = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, remaining, -1, 0.4f,
                     immutableListOf(), 0f, 0f)
-                val model = hudTestModel(w.toFloat(), h.toFloat()).with("sites" to listOf(point).toImmutableList())
+                val model = hudTestModel(w.toFloat(), h.toFloat()).withSites(point)
                 HudDrawCache.forgetLayouts()
                 draw(w, h, language, 1.25f) { measurer -> drawHud(model, measurer, 1f) }
                 val clock = assertNotNull(HudDrawCache.peekLayout(HudText.TRIAL_CLOCK)).layoutInput.text.text

@@ -153,6 +153,9 @@ class RedesignShotsHudTest {
         // the element-less Catalyze ready at rank II in Z and Dual Infusion cooling at rank I in X (the kinetic role)
         // beside an empty C.
         SKILLS_MIXED, SKILLS_FULL, SKILLS_KINETIC,
+        // The trial panel of the other families: a gate race on its clock (silver still in reach), the brakeless
+        // challenge, the bounty duel and the summoned sigil; each with its edge markers, the race's next gate off screen.
+        TRIAL_RACE, TRIAL_CHALLENGE, TRIAL_BOUNTY, TRIAL_SIGIL,
     }
 
     private fun level(shot: Shot, values: Values): Int = when (shot) {
@@ -221,6 +224,17 @@ class RedesignShotsHudTest {
                 SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 1_400f, -2_600f, false, 20f, -1, 0f,
                     immutableListOf(), 0f, 0f),
             )
+            shot == Shot.TRIAL_RACE || shot == Shot.TRIAL_CHALLENGE || shot == Shot.TRIAL_BOUNTY || shot == Shot.TRIAL_SIGIL -> {
+                val kind = when (shot) {
+                    Shot.TRIAL_RACE -> SiteKind.GATE_RACE
+                    Shot.TRIAL_CHALLENGE -> SiteKind.BRAKELESS_TRIAL
+                    Shot.TRIAL_BOUNTY -> SiteKind.BOUNTY_ARENA
+                    else -> SiteKind.FAR_SIGIL
+                }
+                val running = trialSites(coreX, coreY).single { it.kind == kind }
+                listOf(running, SiteProjection(SiteKind.UNTOUCHED_TRIAL, "Untouched", 1_400f, -2_600f, false, 20f, -1, 0f,
+                    immutableListOf(), 0f, 0f))
+            }
             // An orbit whose ring center sits just under the top band: its timer must avoid the boss block.
             shot == Shot.ARCHITECT_TRIAL -> listOf(
                 SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", coreX, coreY - 120f, true, 14.2f, -1, 0.4f,
@@ -248,6 +262,7 @@ class RedesignShotsHudTest {
                 EquippedRelic(RelicId.entries[1], 1))).toImmutableList(),
             "enemies" to enemies.toImmutableList(),
             "sites" to points.toImmutableList(),
+            "trial" to points.firstOrNull { it.active }?.let { siteTrial(it) },
             "message" to when (shot) {
                 Shot.FEED -> "ELITE SIGNAL"
                 Shot.FEED_ANOMALY -> "TWO ANOMALIES DETECTED // CHOOSE A COURSE"

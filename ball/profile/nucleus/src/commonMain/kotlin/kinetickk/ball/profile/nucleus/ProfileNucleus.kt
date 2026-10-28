@@ -523,6 +523,7 @@ object ProfileNucleus {
                     (update.discoveredRelicIds - collection.discoveredRelicIds)).toImmutableSet(),
                 discoveredReactionIds = (collection.discoveredReactionIds + update.discoveredReactionIds).toImmutableSet(),
                 discoveredPairingIds = (collection.discoveredPairingIds + update.discoveredPairingIds).toImmutableSet(),
+                discoveredWorldEntries = (collection.discoveredWorldEntries + update.discoveredWorldEntries).toImmutableSet(),
                 heirloomRelicIds = heirlooms,
                 // Oldest first; only the newest MAX_RECENT_ITEM_IDS acquisitions are remembered.
                 recentItemIds = if (update.acquiredItemIds.isEmpty()) {

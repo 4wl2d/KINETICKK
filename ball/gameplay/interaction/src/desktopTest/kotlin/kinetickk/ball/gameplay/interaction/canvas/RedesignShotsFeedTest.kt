@@ -174,6 +174,7 @@ class RedesignShotsFeedTest {
                 EquippedRelic(RelicId.entries[1], 1)).toImmutableList(),
             "enemies" to enemies.toImmutableList(),
             "sites" to points.toImmutableList(),
+            "trial" to points.firstOrNull { it.active }?.let { siteTrial(it) },
             "message" to when (shot) {
                 Shot.FEED, Shot.FEED_FADE -> "ELITE SIGNAL"
                 Shot.FEED_ANOMALY -> "TWO ANOMALIES DETECTED // CHOOSE A COURSE"

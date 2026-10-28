@@ -7,11 +7,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.SiteFamily
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.interaction.localization.WorldRedesignText
 import kinetickk.ball.gameplay.nucleus.model.DamageNumberTier
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.Kk
+import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.KkRebirthTiers
 import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.positiveModulo
@@ -265,6 +268,64 @@ class CosmicPresentationTest {
         assertEquals(350L, roundedDistance(345f))
         assertEquals(9_990L, roundedDistance(1e9f))
         assertEquals(0L, roundedDistance(-5f))
+    }
+
+    @Test
+    fun siteGlyphsDrawNoNumeralsOrArrowheads() {
+        // Hard rules 1 and 3 for the site marks (trial panel, edge markers, Codex): lines, rings and plates on the icon
+        // grid, no digit and no arrowhead. A closed triangle is only the drifter's own outline (the Golden Drifter),
+        // and no open stroke turns at an acute angle, which would read as an arrow's barbs.
+        fun onGrid(x: Float, y: Float) = x in -0.01f..24.01f && y in -0.01f..24.01f
+        SiteGlyph.entries.forEach { glyph ->
+            assertTrue(glyph.icon != null || glyph.parts.isNotEmpty(), "$glyph draws something")
+            glyph.parts.forEach { part ->
+                when (part) {
+                    is GlyphLine -> {
+                        val points = part.points
+                        assertTrue(points.size >= 4 && points.size % 2 == 0, "$glyph line has whole points")
+                        for (index in points.indices step 2) assertTrue(onGrid(points[index], points[index + 1]), "$glyph stays on the grid")
+                        val vertices = points.size / 2
+                        if (part.closed) {
+                            if (vertices == 3) {
+                                assertEquals(SiteGlyph.GOLDEN, glyph, "$glyph closes a triangle")
+                                assertEquals(enemySilhouette(EnemyType.DRIFTER).contours.single().toList(), points.toList(),
+                                    "the Golden Drifter's outline is the drifter's own")
+                            }
+                        } else {
+                            for (vertex in 1 until vertices - 1) {
+                                val ax = points[vertex * 2 - 2] - points[vertex * 2]
+                                val ay = points[vertex * 2 - 1] - points[vertex * 2 + 1]
+                                val bx = points[vertex * 2 + 2] - points[vertex * 2]
+                                val by = points[vertex * 2 + 3] - points[vertex * 2 + 1]
+                                assertTrue(ax * bx + ay * by <= 0.0001f, "$glyph turns at an acute angle (an arrowhead)")
+                            }
+                        }
+                    }
+                    is GlyphArc -> {
+                        assertTrue(part.radius > 0f && part.sweepDegrees > 0f && part.sweepDegrees <= 360f, "$glyph arc")
+                        var degrees = part.startDegrees
+                        while (degrees <= part.startDegrees + part.sweepDegrees) {
+                            val radians = degrees * PI.toFloat() / 180f
+                            assertTrue(onGrid(part.cx + cos(radians) * part.radius, part.cy + sin(radians) * part.radius), "$glyph arc on the grid")
+                            degrees += 5f
+                        }
+                    }
+                }
+            }
+        }
+        // Every glyph reads differently; every site kind and family has one, and the anomalies keep the anomaly icon.
+        fun shape(glyph: SiteGlyph) = listOf(glyph.icon) + glyph.parts.map { part ->
+            when (part) {
+                is GlyphLine -> listOf(part.points.toList(), part.closed, part.fill, part.dashed)
+                is GlyphArc -> listOf(part.cx, part.cy, part.radius, part.startDegrees, part.sweepDegrees, part.fill)
+            }
+        }
+        assertEquals(SiteGlyph.entries.size, SiteGlyph.entries.map(::shape).toSet().size)
+        assertEquals(KkIcon.SYSTEM_ANOMALY, SiteGlyph.ANOMALY.icon)
+        assertTrue(SiteGlyph.ANOMALY.parts.isEmpty(), "the anomaly glyph is the 0.5.0 icon, unchanged")
+        assertEquals(setOf(SiteGlyph.ANOMALY), (0 until 3).map { siteGlyph(SiteKind.entries[it]) }.toSet())
+        assertEquals(SiteKind.entries.size, SiteKind.entries.map(::siteGlyph).size)
+        assertEquals(SiteFamily.entries.size, SiteFamily.entries.map(::siteFamilyGlyph).toSet().size, "each family its own glyph")
     }
 
     @Test

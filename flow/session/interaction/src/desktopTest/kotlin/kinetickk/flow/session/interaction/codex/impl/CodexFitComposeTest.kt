@@ -179,11 +179,11 @@ class CodexFitComposeTest {
         }
         waitForIdle()
         // The widest counts the collection can show.
-        val counts = listOf("400/400", "12/12", "40/40", "6/6", "24/24")
+        val counts = listOf("400/400", "12/12", "40/40", "6/6", "24/24", "18/18")
         measurers.forEach { (key, measurer) ->
             val (language, scale) = key
             val titles = listOf(SessionText.ITEMS_TITLE, SessionText.WEAPONS_TITLE, SessionText.RELICS_TITLE, SessionText.FORMS_TITLE)
-                .map { language.text(it) } + language.text(CodexText.ENEMIES_TITLE)
+                .map { language.text(it) } + language.text(CodexText.ENEMIES_TITLE) + language.text(CodexText.WORLD_TITLE)
             // The nav is min(250 dp, 22 % of the width) on wide screens (900 dp and up).
             for (row in listOf(250f, 198f)) {
                 val size = codexNavTitleSize(measurer, titles, counts, row, 1f)
@@ -198,8 +198,8 @@ class CodexFitComposeTest {
         // The case of the finding: the Russian Items title did not fit a 250 dp row at 175 %.
         val russian = measurers.getValue(AppLanguage.Russian to 1.75f)
         val titles = listOf(SessionText.ITEMS_TITLE, SessionText.WEAPONS_TITLE, SessionText.RELICS_TITLE, SessionText.FORMS_TITLE)
-            .map { AppLanguage.Russian.text(it) } + AppLanguage.Russian.text(CodexText.ENEMIES_TITLE)
-        assertTrue(codexNavTitleSize(russian, titles, listOf("216/400", "7/12", "23/40", "5/6", "16/19"), 250f, 1f) < 24f)
+            .map { AppLanguage.Russian.text(it) } + AppLanguage.Russian.text(CodexText.ENEMIES_TITLE) + AppLanguage.Russian.text(CodexText.WORLD_TITLE)
+        assertTrue(codexNavTitleSize(russian, titles, listOf("216/400", "7/12", "23/40", "5/6", "16/19", "3/18"), 250f, 1f) < 24f)
     }
 
     @Test fun collectionNavFitsA1440x810WindowAtEveryTextSizeAndScrollsWithACueWhenShorter() {
@@ -209,7 +209,17 @@ class CodexFitComposeTest {
             waitForIdle()
             val nav = onNodeWithTag("codex-nav").fetchSemanticsNode()
             val range = nav.config.getOrNull(SemanticsProperties.VerticalScrollAxisRange)
-            assertTrue(range == null || range.maxValue() == 0f, "the nav scrolls at rest ($where): ${range?.maxValue()}")
+            val overflow = range?.maxValue() ?: 0f
+            if (scale == 1.75f && overflow > 0f) {
+                // Six sections at 175 %: the nav runs past the window by less than its sixth row (the World), so it scrolls
+                // with its cue and reaches its last legend row.
+                assertTrue(overflow < codexNavRowHeight(codexUiScale(scale)) + 4f, "the nav overflows by $overflow px ($where)")
+                onNodeWithTag("codex-nav-scroll-cue").assertExists()
+                onNodeWithTag("codex-nav").performScrollToNode(hasText(language.text(SessionText.UNDISCOVERED)))
+                onNodeWithText(language.text(SessionText.UNDISCOVERED)).assertIsDisplayed()
+                return@codex
+            }
+            assertTrue(overflow == 0f, "the nav scrolls at rest ($where): $overflow")
             onNodeWithTag("codex-nav-scroll-cue").assertDoesNotExist()
             // The last legend row sits whole inside the nav.
             val last = onNodeWithText(language.text(SessionText.UNDISCOVERED)).fetchSemanticsNode().boundsInRoot

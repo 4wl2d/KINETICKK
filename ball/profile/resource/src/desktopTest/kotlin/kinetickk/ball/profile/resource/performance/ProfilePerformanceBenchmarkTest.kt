@@ -10,6 +10,7 @@ import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.profile.api.CharacterAchievementProgress
 import kinetickk.ball.profile.api.FRAME_RATE_CAP_OPTIONS
 import kinetickk.ball.profile.api.GameAction
@@ -77,6 +78,7 @@ class ProfilePerformanceBenchmarkTest {
         assertEquals(RelicId.entries.toSet(), collection.newRelicIds)
         assertEquals(ReactionId.entries.toSet(), collection.discoveredReactionIds)
         assertEquals(RelicPairingId.entries.toSet(), collection.discoveredPairingIds)
+        assertEquals(WorldDiscovery.entries.toSet(), collection.discoveredWorldEntries)
         assertEquals(MAX_HEIRLOOM_RELICS, collection.heirloomRelicIds.size)
         assertEquals(MAX_RECENT_ITEM_IDS, collection.recentItemIds.size)
         val payload = assertIs<ProfileEncodeResult.Encoded>(ProfileCodec.encode(snapshot)).payload
@@ -84,6 +86,7 @@ class ProfilePerformanceBenchmarkTest {
             "colorVisionId", "minimapEnabled", "windowModeId", "windowSizeId", "vsyncEnabled", "frameRateCap",
             "refreshRateHz", "immersiveEnabled", "interfaceScalePercent", "showFps", "pauseOnFocusLoss",
             "reactionEffectsId", "keyBindings", "recentItemIds", "ascendedCharacterIds", "characterClears", "upgrades",
+            "worldDiscoveryMask",
         ).forEach { field -> assertTrue(payload.contains("\"$field\":"), field) }
         val decoded = assertIs<ProfileDecodeResult.Decoded>(ProfileCodec.decode(payload)).snapshot
         assertEquals(snapshot, decoded)
@@ -130,6 +133,10 @@ class ProfilePerformanceBenchmarkTest {
                 heirloomRelicIds = listOf(RelicId.entries.first()),
             )),
             profile.copy(collection = profile.collection.copy(recentItemIds = listOf(1).toImmutableList())),
+            profile.copy(collection = PlayerCollection(
+                discoveredItemIds = emptySet(),
+                discoveredWorldEntries = setOf(WorldDiscovery.entries.first()),
+            )),
             profile.copy(rebirthProgress = profile.rebirthProgress.copy(
                 ascendedCharacters = setOf(CoreShape.SHARD).toImmutableSet(),
             )),

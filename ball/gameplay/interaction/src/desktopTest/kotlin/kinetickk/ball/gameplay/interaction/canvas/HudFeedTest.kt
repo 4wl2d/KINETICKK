@@ -98,7 +98,7 @@ class HudFeedTest {
             immutableListOf(1, 2, 3), 0f, 0f)
         for (language in AppLanguage.entries) listOf(844 to 390, 390 to 844).forEach { (w, h) ->
             for (textScale in TEXT_SCALES) for (message in listOf("", "ELITE SIGNAL")) for (toast in listOf(switched, swapped)) for (trials in 0..1) {
-                val model = feedModel(w, h, message).with("sites" to List(trials) { trial }.toImmutableList())
+                val model = feedModel(w, h, message).withSites(*Array(trials) { trial })
                 val fx = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(toast))
                 drawFeed(w, h, language, textScale) { measurer -> drawHudFeed(model, fx, measurer, 1f, null) }
                 val context = "$language $w x $h x$textScale \"$message\" ${toast.title} trial=$trials"
@@ -165,7 +165,7 @@ class HudFeedTest {
         for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
             var chainAtDisplaySize: androidx.compose.ui.geometry.Rect? = null
             for (textScale in TEXT_SCALES) for (message in messages) for (toast in toasts) for (trials in 0..1) {
-                val model = feedModel(w, h, message).with("sites" to List(trials) { trial }.toImmutableList())
+                val model = feedModel(w, h, message).withSites(*Array(trials) { trial })
                 val fx = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(toast))
                 drawFeed(w, h, language, textScale) { measurer ->
                     drawHud(model, measurer, 1f)
@@ -193,7 +193,7 @@ class HudFeedTest {
             notice("Replace Chroma Feedback", "Critical chance +2.5%", "Damage reduction +3%", *FOUR_SYNERGIES),
         )
         val scenes = listOf(
-            Triple(360 to 780, listOf(1f, 1.1f), "sites" to immutableListOf(TRIAL)),
+            Triple(360 to 780, listOf(1f, 1.1f), "trial" to siteTrial(TRIAL)),
             Triple(360 to 640, TEXT_SCALES, "enemies" to immutableListOf(ELITE)),
         )
         for (language in AppLanguage.entries) for ((screen, textScales, panel) in scenes) for (toast in toasts) {
@@ -230,7 +230,7 @@ class HudFeedTest {
             notice("Replace Ghost Vector", "Impact damage +0.05", *FOUR_SYNERGIES),
             notice("Replace Chroma Feedback", "Critical chance +2.5%", "Damage reduction +3%", *FOUR_SYNERGIES),
         )
-        val panels = listOf(null, "sites" to immutableListOf(TRIAL), "enemies" to immutableListOf(ELITE))
+        val panels = listOf(null, "trial" to siteTrial(TRIAL), "enemies" to immutableListOf(ELITE))
         val phones = listOf(360 to 640, 375 to 667, 360 to 740, 360 to 780, 390 to 844, 640 to 360, 667 to 375, 780 to 360, 844 to 390)
         for (language in AppLanguage.entries) for ((w, h) in phones) for (panel in panels) for (textScale in TEXT_SCALES) for (toast in toasts) {
             val fx = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(toast))
@@ -415,7 +415,7 @@ class HudFeedTest {
             Triple(844 to 390, AppLanguage.English, notice("Replace Chroma Feedback", "Critical chance +2.5%", "Damage reduction +3%", *FOUR_SYNERGIES)),
         ).forEach { (screen, language, toast) ->
             val (width, height) = screen
-            val model = feedModel(width, height, "ELITE SIGNAL").with("sites" to immutableListOf(trial))
+            val model = feedModel(width, height, "ELITE SIGNAL").withSites(trial)
             val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1.75f,
                 language, HudTestFonts.typography.copy(localeList = language.localeList()))
             val frames = List(FRAMES) { frame ->

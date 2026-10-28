@@ -29,8 +29,10 @@ import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.ball.gameplay.interaction.canvas.EnemySilhouette
 import kinetickk.ball.gameplay.interaction.canvas.drawActiveItemMark
+import kinetickk.ball.gameplay.interaction.canvas.drawSiteGlyph
 import kinetickk.ball.gameplay.interaction.canvas.enemySilhouette
 import kinetickk.ball.gameplay.interaction.canvas.skillGlyph
+import kinetickk.ball.gameplay.interaction.canvas.worldDiscoveryGlyph
 import kinetickk.flow.session.interaction.home.impl.formIndex
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.Kk
@@ -241,6 +243,13 @@ internal fun DrawScope.drawCodexCell(entry: CodexEntry, catalog: UiCatalogSnapsh
             drawCodexEnemy(enemySilhouette(icon.type), center, radius * 0.95f,
                 if (icon.locked) Kk.Mute else roles.threat, if (icon.locked) Kk.Ink3 else Kk.Ink1)
             if (icon.locked) drawKkIcon(KkIcon.SYSTEM_LOCKED, Offset(size.width - 11.dp.toPx(), 11.dp.toPx()), 11.dp.toPx(), Kk.Mute)
+        }
+        is CodexIcon.World -> {
+            // A found place or secret: its site glyph in Bone. One not found yet: the same glyph muted over a hatch.
+            drawRect(if (hovered) Kk.Ink3 else Kk.Ink2)
+            if (!icon.discovered) drawKkHatch(rect)
+            drawRect(Kk.Line2, style = kkStroke(1.dp.toPx()))
+            drawSiteGlyph(worldDiscoveryGlyph(icon.id), center, radius * 1.1f, if (icon.discovered) Kk.Bone else Kk.Mute)
         }
         is CodexIcon.Locked -> {
             drawRect(Kk.Ink3)

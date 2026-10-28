@@ -50,10 +50,7 @@ enum class SiteKind(val family: SiteFamily) {
     NADIR_RIFT(SiteFamily.PORTAL),
 }
 
-/**
- * The anomaly kinds lead [SiteKind] in this count; a POI window rotates through them only, so a run never offers a
- * newer kind before its lane draws kinds by weight.
- */
+/** The anomaly kinds lead [SiteKind] in this count (the 0.5.0 window kinds). */
 const val ANOMALY_KIND_COUNT: Int = 3
 
 /**
@@ -248,7 +245,11 @@ data class ChallengePolicy(
             brakelessStartRadius, brakelessEndRadius, ramRingRadius, ramClamp, untouchedRadius, velocityZoneRadius,
             slalomSpacing, slalomPoleOffset, slalomMaxLateral, slalomPoleClearance,
         ).forEach { require(it.isFinite() && it > 0f) { "Challenge radii must be positive" } }
-        require(ramFoeHealthShare > 0f && ramFoeHealthShare <= 1f) { "Ram foe integrity share must be in (0, 1]" }
+        // The Ram rite's foes are an encounter: its area, ring and integrity bounds hold for them.
+        require(ramFoeHealthShare in 0.1f..1f) { "Ram foe integrity share must be in 0.1..1" }
+        require(ramClamp in 120f..2_400f && ramRingRadius <= ramClamp) {
+            "The Ram rite's area must be in 120..2400 and hold its ring"
+        }
         require(slalomPoles in 2..7) { "Slalom poles must be in 2..7" }
         require(slalomFirstAlong + (slalomPoles - 1) * slalomSpacing <= 2_300f) { "A slalom must stay inside the obstacle window" }
     }
@@ -397,12 +398,14 @@ data class SitePolicy(
         require(maxPendingFloorOffers in 1..ContentBounds.MAX_FLOOR_OFFERS) {
             "Floor offer queue must be in 1..${ContentBounds.MAX_FLOOR_OFFERS}"
         }
-        require(
-            definitions.count {
-                it.windowWeight > 0f && it.kind.family != SiteFamily.PORTAL && it.minimumOfferAt <= windows.firstOfferAt &&
-                    it.minimumRebirth == 0 && it.reserveSeconds <= windows.trialDuration
-            } >= 2,
-        ) { "At least two unconditional window kinds must exist so every window can draw a pair" }
+        val unconditional = definitions.filter {
+            it.windowWeight > 0f && it.kind.family != SiteFamily.PORTAL && it.minimumOfferAt <= windows.firstOfferAt &&
+                it.minimumRebirth == 0 && it.reserveSeconds <= windows.trialDuration
+        }
+        require(unconditional.size >= 2) { "At least two unconditional window kinds must exist so every window can draw a pair" }
+        require(sameFamilyWeight > 0f || unconditional.map { it.kind.family }.toSet().size >= 2) {
+            "A zero same-family weight needs unconditional window kinds of two families, so the second draw always has a kind"
+        }
         require(definitions.all { it.windowWeight == 0f || it.duration <= windows.trialDuration }) {
             "A window site never lasts longer than the trial"
         }
@@ -411,9 +414,15 @@ data class SitePolicy(
     fun definition(kind: SiteKind): SiteDefinition = definitions[kind.ordinal]
 }
 
+/** Window weight of each of the five challenges (together 1.8, one family's share of a window's draw). */
+private const val CHALLENGE_WINDOW_WEIGHT = 0.36f
+
 private const val RIFT_INSTRUCTION = "Fly through to cross over. The layer releases you before the Architect arrives."
 
-/** The shipped sites in [SiteKind] order; only the anomalies take window weight until each lane enables its kinds. */
+/**
+ * The shipped sites in [SiteKind] order. The anomalies, the gate race and the five challenges take window weight; the
+ * bounty and rifts stay at 0 until their lanes enable them.
+ */
 fun defaultSiteDefinitions(): ImmutableList<SiteDefinition> = immutableListOf(
     SiteDefinition(
         SiteKind.RESONANT_CIRCUIT, "Resonant circuit", "Visit beacons 2, 3, then return to 1.",
@@ -427,27 +436,31 @@ fun defaultSiteDefinitions(): ImmutableList<SiteDefinition> = immutableListOf(
         SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", "Move within the ring for eight seconds; dodge marked volleys.",
         SiteReward(directed = DirectedReward.ITEM_AND_REPAIR), windowWeight = 1f,
     ),
-    SiteDefinition(SiteKind.GATE_RACE, "Gate race", "Fly through the gates in order. Beat the par time for gold.", SiteReward.NONE),
+    // Medal rewards live in RacePolicy; the course sets its own limit within the window's trial cap.
+    SiteDefinition(
+        SiteKind.GATE_RACE, "Gate race", "Fly through the gates in order. Beat the par time for gold.", SiteReward.NONE,
+        windowWeight = 1.4f,
+    ),
     SiteDefinition(
         SiteKind.BRAKELESS_TRIAL, "Brakeless run",
         "Keep moving inside the shrinking ring for twelve seconds. Braking fails the trial.",
-        SiteReward(directed = DirectedReward.ITEM_AND_REPAIR), duration = 20f,
+        SiteReward(directed = DirectedReward.ITEM_AND_REPAIR), windowWeight = CHALLENGE_WINDOW_WEIGHT, duration = 20f,
     ),
     SiteDefinition(
         SiteKind.RAM_TRIAL, "Ram rite", "Destroy six marked drifters with Dash impacts.",
-        SiteReward(directed = DirectedReward.WEAPON), duration = 20f,
+        SiteReward(directed = DirectedReward.WEAPON), windowWeight = CHALLENGE_WINDOW_WEIGHT, duration = 20f,
     ),
     SiteDefinition(
         SiteKind.UNTOUCHED_TRIAL, "Untouched", "Stay inside the ring for twelve seconds without taking damage.",
-        SiteReward(directed = DirectedReward.RELIC), duration = 22f,
+        SiteReward(directed = DirectedReward.RELIC), windowWeight = CHALLENGE_WINDOW_WEIGHT, duration = 22f,
     ),
     SiteDefinition(
         SiteKind.VELOCITY_TRIAL, "Velocity hold", "Hold Overdrive velocity for six seconds within the zone.",
-        SiteReward(directed = DirectedReward.ITEM_AND_REPAIR),
+        SiteReward(directed = DirectedReward.ITEM_AND_REPAIR), windowWeight = CHALLENGE_WINDOW_WEIGHT,
     ),
     SiteDefinition(
         SiteKind.SLALOM_TRIAL, "Slalom", "Pass each pole on its flagged side, in order.",
-        SiteReward(directed = DirectedReward.WEAPON), duration = 18f,
+        SiteReward(directed = DirectedReward.WEAPON), windowWeight = CHALLENGE_WINDOW_WEIGHT, duration = 18f,
     ),
     SiteDefinition(
         SiteKind.BOUNTY_ARENA, "Bounty", "Defeat the marked target. Leaving the arena forfeits the bounty.",
