@@ -11,7 +11,6 @@ import kinetickk.ball.gameplay.nucleus.model.StructureField
 import kinetickk.ball.gameplay.nucleus.model.StructureSignal
 import kinetickk.ball.gameplay.nucleus.model.Wall
 import kinetickk.ball.gameplay.nucleus.render.WallKind
-import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -65,7 +64,8 @@ class StructureFieldTest {
 
     @Test
     fun aNewRunClearsTheStructureStateAndARebaseMovesIt() {
-        val state = MutableGameState(canonicalGameplayContent).apply { startRun() }
+        // A world without structures, so the hand-placed window is the only one and a new run leaves it empty.
+        val state = MutableGameState(structuresDisabledContent).apply { startRun() }
         state.structureField = StructureField.of(0, 0, 0, false, listOf(structure(1, 0, 1)), listOf(wall(0)), emptyList())
         state.dungeon = DungeonState(1L shl 8, StructureTemplateId.VAULT, 0, 300_000f, 0f, enteredAt = 1f)
         state.spentStructureIds = listOf(5L)

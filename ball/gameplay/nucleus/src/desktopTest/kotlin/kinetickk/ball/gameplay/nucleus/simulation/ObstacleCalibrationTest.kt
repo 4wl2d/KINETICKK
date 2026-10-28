@@ -23,10 +23,11 @@ import kotlin.test.fail
  */
 class ObstacleCalibrationTest {
     private val step = MutableGameState.FIXED_STEP
-    // No generated obstacles, and chunks so large that the Core never changes chunk (which would regenerate
-    // the window and drop a placed test asteroid).
+    // No generated obstacles or structures, and chunks so large that the Core never changes chunk (which would
+    // regenerate the window and drop a placed test asteroid).
     private val emptyWorld = canonicalGameplayContent.copy(
         obstacles = canonicalGameplayContent.obstacles.copy(meanPerChunk = 0f, chunkSize = HUGE_CHUNK),
+        structures = canonicalGameplayContent.structures.copy(enabled = false),
     )
     private val viewports = listOf(1_280f to 800f, 412f to 915f)
 

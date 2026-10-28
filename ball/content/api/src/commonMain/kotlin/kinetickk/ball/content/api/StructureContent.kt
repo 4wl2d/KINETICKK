@@ -320,10 +320,10 @@ data class StructureTemplate(
 
 /**
  * Structures and dungeons far from the start: placement over [cellSize] cells, the dungeon runtime's knobs and the
- * templates in [StructureTemplateId] order. Shipped disabled until the dungeon runtime turns structures on.
+ * templates in [StructureTemplateId] order. [enabled] false plays a world without structures (the harness arms).
  */
 data class StructurePolicy(
-    val enabled: Boolean = false,
+    val enabled: Boolean = true,
     val cellSize: Float = 4_800f,
     val cellMargin: Float = 300f,
     val minimumDistance: Float = 4_000f,

@@ -271,8 +271,8 @@ class WorldContractBoundsTest {
     }
 
     @Test
-    fun structuresShipDisabledWithAWallBoundThatCoversTheirWindow() {
-        assertFalse(StructurePolicy().enabled)
+    fun structuresShipEnabledWithAWallBoundThatCoversTheirWindow() {
+        assertTrue(StructurePolicy().enabled)
         assertTrue(StructureTemplateId.entries.size <= ContentBounds.MAX_STRUCTURE_TEMPLATES)
         assertEquals(ContentBounds.MAX_STRUCTURES_IN_WINDOW * ContentBounds.MAX_STRUCTURE_TEMPLATE_WALLS, ContentBounds.MAX_STRUCTURE_WALLS)
     }

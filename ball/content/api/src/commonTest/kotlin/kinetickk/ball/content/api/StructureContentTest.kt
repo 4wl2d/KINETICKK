@@ -346,7 +346,7 @@ class StructureContentTest {
     @Test
     fun policyRejectsSignalsPastTwoCellsCellsTooSmallAndALeaveRadiusInsideTheFootprint() {
         val policy = StructurePolicy()
-        assertEquals(false, policy.enabled)
+        assertEquals(true, policy.enabled, "structures ship on")
         // Signals reach at most two cells and the four-digit marker readout.
         StructurePolicy(signalRange = 9_600f)
         assertRejected("two cells") { StructurePolicy(signalRange = 9_600f.nextUp()) }
