@@ -80,7 +80,7 @@ class HomeTextFitComposeTest {
             assertTrue(version.size.width <= layout.scene.versionRight, "version ${version.size.width} at $where")
             // The copyright, license, warranty and source notices left Home: the line is the version alone.
             val shown = version.layoutInput.text.text
-            assertTrue("0.5.0" in shown, shown)
+            assertTrue("0.6.0" in shown, shown)
             assertFalse(listOf("2026", "GPL", "github.com").any { it in shown }, shown)
         }
     }

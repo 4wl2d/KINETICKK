@@ -85,7 +85,7 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-internal const val GAMEPLAY_BENCHMARK_SUITE_VERSION = "gameplay-core-v4"
+internal const val GAMEPLAY_BENCHMARK_SUITE_VERSION = "gameplay-core-v5"
 private const val DEFAULT_SEED = 731_991
 private const val MAX_ENEMIES = 120
 private const val MAX_PROJECTILES = 650

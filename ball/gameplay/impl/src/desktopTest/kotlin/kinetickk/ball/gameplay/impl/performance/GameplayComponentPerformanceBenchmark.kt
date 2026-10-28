@@ -46,7 +46,7 @@ import kinetickk.performance.BenchmarkValidation
 import kinetickk.performance.BenchmarkValidationContext
 import kinetickk.performance.runBenchmarkSuite
 
-private const val SUITE_VERSION = "gameplay-component-v3"
+private const val SUITE_VERSION = "gameplay-component-v4"
 private const val DEFAULT_SEED = 731_991
 private const val OPERATIONS_PER_ITERATION = 128
 private val BENCHMARK_RUN_ID = RunId(31)

@@ -16,7 +16,7 @@ group = path
     .filter(String::isNotBlank)
     .joinToString(separator = ".", prefix = "kinetickk.")
     .removeSuffix(".")
-version = "0.5.0"
+version = "0.6.0"
 
 val sourceProjectPathValue = path
 val exportArchitectureEdgesTask = tasks.register<ExportArchitectureEdgesTask>(

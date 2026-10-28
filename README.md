@@ -16,13 +16,21 @@ survive twelve minutes to face **The Architect**.
 
 ## How to play
 
-Pull the cursor away from the Core to gain speed. Staying at the screen edges
-drains Magnetic Polarity; return inward, turn, or brake to recover. Fresh
-profiles start at 1× speed. Pauses and reward choices stop the run clock.
-Space is full of asteroids: brushing one is harmless, hitting one fast hurts,
-and ramming one at full speed shatters the Core. Bumpers throw you back, and
-the minimap (Settings can hide it) shows what lies ahead. Data pickups latch on
-once you pass near them and every level-up pulls in the Data on screen.
+Pull the cursor away from the Core to gain speed. The Core flies like a craft
+you pilot: it grips in turns, carving a curve adds speed instead of bleeding
+it, a launch from rest spools up quickly, and long straight runs slowly add
+drag. Staying at the screen edges drains Magnetic Polarity; return inward,
+turn, or brake to recover. Fresh profiles start at 1× speed. Pauses and reward
+choices stop the run clock. The Core's trail follows the path it flew.
+
+Space is full of asteroids: a slow touch is harmless, a fast hit hurts even at
+a glance and partly through shields, and ramming one at full speed shatters
+the Core. Bumpers throw you back, crystals shatter into shards and Data,
+accelerator gates and thermal vents boost you, gravity knots pull you in or
+push you away, derelict mines arm as you pass and go off, and phase shards are
+solid only part of the time. The minimap (Settings can hide it) shows what lies
+ahead. Data pickups latch on once you pass near them and every level-up pulls
+in the Data on screen.
 
 Data levels the run up to level 42, and only a build that invests in Data gets
 there. Eighteen items are active: on top of a small passive bonus, each puts an
@@ -47,6 +55,7 @@ badge changes look at levels 10, 20, 30 and 40 and takes the Apex look at 42.
 | `W` | Workshop: characters, weapons and the Core Matrix |
 | `L` / `A` / `H` | Workshop on the Core Matrix, Weapons or Characters tab (`H` from Home) |
 | `B` / `C` or `I` / `S` | Rebirth, Codex, Settings |
+| `E` | Toggle Baby mode on Home |
 | `M` | Toggle sound and music |
 | `F3` | Toggle and reset the performance HUD |
 | `R` | Restart after a completed run |
@@ -70,21 +79,23 @@ character (every character is the signature of two weapons) adds 20 %, starts
 the run a weapon level up and brings a twist; a bound Relic carrying the
 weapon's key (the heirloom included) adds 20 % once and grows 10 % stronger
 itself; one stat scales it, and three mastery forms open at weapon levels 3, 6
-and 10. Builds combine 287 items (eighteen active), twenty-two Relics and
-optional anomaly trials. Items are rules, not stat sticks: triggers, conditions
-and effects over nine archetype tags and seven elements (Thermal, Cryo, Ion,
-Gravitic, Entropy, Sonic, Void) whose statuses Break at a threshold and react
-with each other: every pair of elements has its own reaction, 21 in all, and
-each reaction changes how you play (it leaves a field, a mark, a Core state or
-a cooldown refund for your actives) with a keystone item that rewrites it.
+and 10. Builds combine 302 items (eighteen active and fifteen built around the
+obstacle kinds), twenty-two Relics and the optional sites below. Items are
+rules, not stat sticks: triggers, conditions and effects over nine archetype
+tags and seven elements (Thermal, Cryo, Ion, Gravitic, Entropy, Sonic, Void)
+whose statuses Break at a threshold and react with each other: every pair of
+elements has its own reaction, 21 in all, and each reaction changes how you
+play (it leaves a field, a mark, a Core state or a cooldown refund for your
+actives) with a keystone item that rewrites it.
 Every run deals its own draft deck, and items you took in recent runs come up
 less often, so runs of one character build differently. Every Relic rewrites a
 rule and carries a cost; Relic keys predict harmony and dissonance, and the
-Codex records discovered reactions, pairings and known incompatibilities and
+Codex records discovered reactions, pairings and known incompatibilities,
 tells you which items wait for an active item or were left out of this run's
-deck. Nineteen enemy kinds, from Swarmling packs and Bombers to the Herald
-mini-boss, arrive through a spawn director that shapes every run's waves
-differently; later Rebirth tiers bring the toughest ones. Between runs, spend
+deck, and keeps the places and secrets you have found under World.
+Thirty-five enemy kinds, from Swarmling packs and Bombers to five mini-bosses
+and two secret bosses, fill space, the ruins and the other layers; later
+Rebirth tiers bring the toughest ones. Between runs, spend
 Kinetic Matter in the Workshop: on the 32 nodes of the Core Matrix, on weapons,
 and on Refit (per character) and Honing (per weapon) levels up to 10, each
 level twice the price of the last. You can open the Workshop during a run too;
@@ -98,6 +109,42 @@ harder and adds a mutator (packs, hardened Elites, volatile remains, armored
 vanguards, a blackout and an enraged Architect among them), and you can pick
 any earned tier for the next run, so a hard tier never locks you out. Clearing
 tier 10 makes you Ascendant.
+
+No two runs open alike. At the start a run offers three of twelve omens, each a
+bonus with a cost, or No omen. The spawn director plays one of six
+personalities, from Tidewave to Long Calm, named on the HOSTILE PATTERN banner,
+and every surge features one ONSLAUGHT kind. Each run draws a Keynote tag and
+element that its deck leans on. From two minutes in, Elites can carry one of
+six affixes (Shielded, Splitting, Magnetic, Linked, Volatile or Hasted), and
+ordinary enemies may arrive as tougher champions that carry more Matter and
+Data. Two or three world events sweep the field: meteor showers, Data, gravity
+and ion storms, and solar flares. Event signals call you to a Merchant, a
+Shrine, a Gamble, a Cursed cache or a Derelict, each a trade you may take or
+fly past.
+
+Site windows offer two sites at a time: the anomaly trials, gate races against
+a gold, silver and bronze par, five challenges (Brakeless run, Ram rite,
+Untouched, Velocity hold and Slalom), bounty arenas where a marked mini-boss
+waits, and rifts into other layers. Drift caches float far from the start,
+easter eggs hide across the field, and a far sigil, found only by flying very
+far very early, summons the Cartographer, a secret boss. Ruins stand at least
+4,000 units from the start: a Derelict Station, Vault, Spire, Labyrinth,
+Foundry or Reliquary whose doors seal behind you, with rooms of guards, inner
+doors that open as you clear them and a final room that pays in Relics, Keys,
+items, Matter, Data or repairs. Rifts lead to the Zenith, a layer of light
+where grace lightens the Core and Blessings wait for those who finish an Ascent
+through halo gates or a Judgement against the Throne, and to the Nadir, a
+furnace where slow flight scorches, Matter burns twice as bright, the trial is
+a Harvest of embers or a fight with the Pyre Herald and Pacts are offered at a
+price. Finish both in one run, or find the quiet signal, and a glitch rift
+opens into the Archive, the Architect's memory, where time moves only when you
+move and the Antecedent waits. Every layer lets you go before the Architect
+arrives.
+
+Baby mode, switched on Home, is the joke easy mode: the cursor turns green and
+bounces the Core away instead of killing it, incoming damage is halved and
+rocks never finish you off. Nothing is counted: no Matter, Rank, Codex entries,
+unlocks or achievements.
 
 The game has six screens: Home, the run, Settings, the Workshop, Rebirth and the
 Codex. Settings groups its options into Game, Sound, Display, Graphics,
@@ -202,10 +249,16 @@ is uploaded. See the [privacy note](docs/project/PRIVACY.md).
 
 ## Status
 
-Version **0.5.0** is a playable prototype. Before 1.0.0, only the current
-profile schema is supported: incompatible profiles start from defaults, and
-older save locations remain untouched. Balance, content, and save formats may
-change during development.
+Version **0.6.0** is a playable prototype. It adds the piloted flight, six
+obstacle kinds and harsher fast impacts, the path-following Core trail, sites
+(races, challenges, bounties, caches, easter eggs and the secret sigil),
+mini-bosses and secret bosses, structures and dungeons far from the start, the
+Zenith, Nadir and Archive, run omens, director personalities, Elite affixes and
+champions, world events and event signals, and Baby mode. A 0.5.0 profile
+carries over as it is. Before 1.0.0, only the current profile schema is
+supported: incompatible profiles start from defaults, and older save locations
+remain untouched. Balance, content, and save formats may change during
+development.
 
 ## Contributing
 
