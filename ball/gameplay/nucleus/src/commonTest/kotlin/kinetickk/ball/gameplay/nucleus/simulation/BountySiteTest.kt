@@ -333,7 +333,7 @@ class BountySiteTest {
     @Test
     fun windowsOfferTheBountyFrom165To525AndEnteringItStartsTheOnlyEngagement() {
         assertEquals(1f, canonicalGameplayContent.sites.definition(SiteKind.BOUNTY_ARENA).windowWeight)
-        val offeredAt = sortedSetOf<Int>()
+        val offeredAt = mutableSetOf<Int>()
         var entered = false
         for (seed in 1..300) {
             val game = game(seed)
@@ -355,6 +355,6 @@ class BountySiteTest {
         }
         assertTrue(entered)
         // 165, 285, 405 and 525 s: never at 45 s (before 160 s) or 645 s (its 90 s reserve would reach the Architect).
-        assertEquals(sortedSetOf(1, 2, 3, 4), offeredAt)
+        assertEquals(setOf(1, 2, 3, 4), offeredAt)
     }
 }
