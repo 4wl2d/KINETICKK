@@ -17,7 +17,7 @@ import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
@@ -49,7 +49,7 @@ class WorldPointLabelsTest {
     @Test
     fun pointTimersNeverTouchTheHud() {
         val scenes = listOf(
-            // The circuit's target beacon (nextBeacon 1 leads to beacon order 2, right of center).
+            // The circuit's target beacon (step 0 leads to beacon order 2, right of center).
             "beacon" to listOf(point(SiteKind.RESONANT_CIRCUIT, -BEACON_DX, -BEACON_DY, active = true)),
             "vault" to listOf(point(SiteKind.SEALED_ANOMALY, 0f, 0f, active = true)),
             "offer" to listOf(point(SiteKind.RESONANT_CIRCUIT, 0f, 0f, active = false)),
@@ -127,8 +127,8 @@ class WorldPointLabelsTest {
             for (kind in SiteKind.entries.take(ANOMALY_KIND_COUNT)) {
                 val base = model(width, height, emptyList())
                 val name = base.content.sites.definition(kind).name
-                val model = base.with("pointsOfInterest" to immutableListOf(
-                    PointOfInterestProjection(kind, name, 0f, 0f, false, 31f, 0, 0f, immutableListOf(), 0f, 0f)))
+                val model = base.with("sites" to immutableListOf(
+                    SiteProjection(kind, name, 0f, 0f, false, 31f, -1, 0f, immutableListOf(), 0f, 0f)))
                 val full = measureKkText(measurer, name.localizedContent(language), measurer.typography.labelStyle(worldLabelSp(15f)),
                     uppercase = true)
                 assertFalse(full.isCut(), "$language $kind name at text=$textScale")
@@ -162,8 +162,8 @@ class WorldPointLabelsTest {
         listOf(SiteKind.SEALED_ANOMALY to Kk.AGravitic, SiteKind.RESONANT_CIRCUIT to KkRolePalette.Default.you)
             .forEach { (kind, color) ->
                 val base = model(1_440, 810, emptyList())
-                val model = base.with("pointsOfInterest" to immutableListOf(PointOfInterestProjection(kind,
-                    base.content.sites.definition(kind).name, 0f, 0f, false, 31f, 0, 0f, immutableListOf(), 0f, 0f)))
+                val model = base.with("sites" to immutableListOf(SiteProjection(kind,
+                    base.content.sites.definition(kind).name, 0f, 0f, false, 31f, -1, 0f, immutableListOf(), 0f, 0f)))
                 val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64),
                     1.25f, AppLanguage.Russian, HudTestFonts.typography.copy(localeList = AppLanguage.Russian.localeList()))
                 val bitmap = ImageBitmap(1_440, 810)
@@ -194,7 +194,7 @@ class WorldPointLabelsTest {
         assertEquals(" С", WorldStrings.secondsSuffix(AppLanguage.Russian))
         // Rendered: the label follows the time in the ring and ignores the trial clock.
         fun label(progress: Float, remaining: Float, box: Rect? = null): Pair<Rect, IntArray> {
-            val model = base.with("pointsOfInterest" to immutableListOf(orbit(progress, remaining)))
+            val model = base.with("sites" to immutableListOf(orbit(progress, remaining)))
             val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64),
                 1.25f, AppLanguage.English, HudTestFonts.typography)
             val bitmap = ImageBitmap(1_440, 810)
@@ -213,8 +213,8 @@ class WorldPointLabelsTest {
         assertFalse(early.contentEquals(label(0.3f, remaining = 14.2f, box).second), "the label shows the time in the ring")
     }
 
-    private fun orbit(progress: Float, remaining: Float) = PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT,
-        "Collapsing orbit", 0f, 0f, true, remaining, 0, progress, immutableListOf(), 0f, 0f)
+    private fun orbit(progress: Float, remaining: Float) = SiteProjection(SiteKind.COLLAPSING_ORBIT,
+        "Collapsing orbit", 0f, 0f, true, remaining, -1, progress, immutableListOf(), 0f, 0f)
 
     private fun sweep(width: Int, height: Int, textScale: Float, model: GameplayRenderModel, step: Int, check: (Float, Float) -> Unit) {
         for (y in -20..(height + 20) step step) for (x in -20..(width + 20) step step) {
@@ -247,21 +247,21 @@ class WorldPointLabelsTest {
     // The size passed to draw sets the screen; a 1 px bitmap keeps the sweep fast.
     private val canvas = Canvas(ImageBitmap(1, 1))
 
-    private fun model(width: Int, height: Int, points: List<PointOfInterestProjection>): GameplayRenderModel =
+    private fun model(width: Int, height: Int, points: List<SiteProjection>): GameplayRenderModel =
         hudTestModel(width.toFloat(), height.toFloat()).with(
             "coreX" to 0f, "coreY" to 0f, "cameraX" to 0f, "cameraY" to 0f, "totem" to null,
-            "enemies" to immutableListOf<EnemyProjection>(), "pointsOfInterest" to points.toImmutableList(),
+            "enemies" to immutableListOf<EnemyProjection>(), "sites" to points.toImmutableList(),
         )
 
     private fun point(kind: SiteKind, x: Float, y: Float, active: Boolean) =
-        PointOfInterestProjection(kind, kind.name, x, y, active, 14f, 1, 0.4f, immutableListOf(), 0f, 0f)
+        SiteProjection(kind, kind.name, x, y, active, 14f, 0, 0.4f, immutableListOf(), 0f, 0f)
 
     private fun Rect.onScreen(width: Int, height: Int) = left >= 0f && top >= 0f && right <= width && bottom <= height
 
     private fun Rect.encloses(other: Rect) = left <= other.left && top <= other.top && right >= other.right && bottom >= other.bottom
 
     private companion object {
-        // PointOfInterestRenderer's beacon offsets: order 2 sits 230 right of and 200 below the center.
+        // SiteRenderer's beacon offsets: order 2 sits 230 right of and 200 below the center.
         const val BEACON_DX = 230f
         const val BEACON_DY = 200f
     }

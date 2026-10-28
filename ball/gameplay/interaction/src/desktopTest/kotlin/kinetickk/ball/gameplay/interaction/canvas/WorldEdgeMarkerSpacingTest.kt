@@ -19,7 +19,7 @@ import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.TotemProjection
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
@@ -578,8 +578,8 @@ class WorldEdgeMarkerSpacingTest {
             "totem" to totem?.let { TotemProjection(it.x, it.y, 1f) },
             "enemies" to (if (boss) listOf(EnemyProjection(4, EnemyType.ELITE, 0f, -9_000f, 0f, 0f, 500f, 1_000f, 38f, 0f, 0f, 0f, 0f, 0f, 0f,
                 false)) else emptyList()).toImmutableList(),
-            "pointsOfInterest" to offers.map { (at, kind) ->
-                PointOfInterestProjection(kind, kind.name, at.x, at.y, false, 20f, 0, 0f, immutableListOf(), 0f, 0f)
+            "sites" to offers.map { (at, kind) ->
+                SiteProjection(kind, kind.name, at.x, at.y, false, 20f, -1, 0f, immutableListOf(), 0f, 0f)
             }.toImmutableList(),
         )
         CanvasDrawScope().draw(Density(density), LayoutDirection.Ltr, canvas, Size(width, height)) {

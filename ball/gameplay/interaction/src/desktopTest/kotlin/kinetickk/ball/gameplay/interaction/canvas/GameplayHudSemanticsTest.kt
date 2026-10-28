@@ -51,7 +51,7 @@ import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
 import kinetickk.ball.gameplay.interaction.layout.runningBuildButtonBounds
 import kinetickk.ball.gameplay.interaction.layout.runningControlBounds
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
@@ -88,9 +88,9 @@ class GameplayHudSemanticsTest {
 
     private fun startTrial(pulses: MutableList<GameplayInteractionPulse>) {
         val snapshot = hudTestSnapshot()
-        val orbit = PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
+        val orbit = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, -1, 0.4f,
             immutableListOf(), 0f, 0f)
-        trialModel = requireNotNull(snapshot.renderModel).with("pointsOfInterest" to listOf(orbit).toImmutableList())
+        trialModel = requireNotNull(snapshot.renderModel).with("sites" to listOf(orbit).toImmutableList())
         val running = snapshot.withModel(trialModel)
         val port = object : GameplayInteractionPort {
             override val instanceId get() = running.instanceId
@@ -159,11 +159,11 @@ class GameplayHudSemanticsTest {
     @Test
     fun keyboardFocusReturnsToTheGameWhenTheTrialEndsWhileItsInfoIsFocused() {
         val snapshot = hudTestSnapshot()
-        val orbit = PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
+        val orbit = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, -1, 0.4f,
             immutableListOf(), 0f, 0f)
         val base = requireNotNull(snapshot.renderModel)
-        val withTrial = snapshot.withModel(base.with("pointsOfInterest" to listOf(orbit).toImmutableList()))
-        val afterTrial = snapshot.withModel(base.with("pointsOfInterest" to immutableListOf<PointOfInterestProjection>()))
+        val withTrial = snapshot.withModel(base.with("sites" to listOf(orbit).toImmutableList()))
+        val afterTrial = snapshot.withModel(base.with("sites" to immutableListOf<SiteProjection>()))
         var current = withTrial
         var trialEnds = false
         val pulses = mutableListOf<GameplayInteractionPulse>()
@@ -208,9 +208,9 @@ class GameplayHudSemanticsTest {
     @Test
     fun trialRulesSitBehindAFocusableInfoNodeAndDesktopPauseAndBuildAreHeaderButtons() {
         val snapshot = hudTestSnapshot()
-        val orbit = PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
+        val orbit = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, -1, 0.4f,
             immutableListOf(), 0f, 0f)
-        val model = requireNotNull(snapshot.renderModel).with("pointsOfInterest" to listOf(orbit).toImmutableList())
+        val model = requireNotNull(snapshot.renderModel).with("sites" to listOf(orbit).toImmutableList())
         trialModel = model
         val running = snapshot.withModel(model)
         val pulses = mutableListOf<GameplayInteractionPulse>()

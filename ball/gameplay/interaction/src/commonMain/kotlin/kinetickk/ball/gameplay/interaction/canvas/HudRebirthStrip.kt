@@ -32,6 +32,8 @@ import kotlin.math.min
  * allocates nothing.
  */
 internal fun DrawScope.drawRebirthStrip(engine: GameplayRenderModel, hostMeasurer: TextMeasurer, frame: HudFrame) {
+    // A dimension visit's plate takes the strip's slot while it lasts.
+    if (drawDimensionPlate(engine, hostMeasurer, frame)) return
     val tier = engine.rebirthLevel
     if (tier <= 0) return
     val mutators = engine.content.rebirth.profile(tier).mutators

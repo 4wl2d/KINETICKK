@@ -50,6 +50,8 @@ internal fun MutableGameState.rewardPreviews(): ImmutableList<RewardPreview> {
                 val incoming = pendingActiveItemId ?: return@map RewardPreview()
                 candidate.replaceActiveItem(slot, incoming, pendingActiveReborn)
             }
+            // Omens, signal options and boons change the run through run modifiers, not the build preview.
+            ChoiceType.OMEN, ChoiceType.SIGNAL, ChoiceType.BOON -> return@map RewardPreview()
             ChoiceType.RELIC_BIND -> option.relicSlot?.let { slot ->
                 when (option.relicAction) {
                     RelicChoiceAction.REPLACE -> (option.relicId ?: pendingBindingRelic)?.let { candidate.replaceRelic(slot, it) }

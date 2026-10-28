@@ -17,7 +17,7 @@ import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.interaction.layout.runningControlBounds
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
@@ -43,7 +43,7 @@ class HudKeepOutTest {
 
     @Test
     fun everyTopBlockTheHudDrawsLiesInsideTheWorldKeepOut() {
-        val orbit = PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
+        val orbit = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, -1, 0.4f,
             immutableListOf(), 0f, 0f)
         for ((dpWidth, dpHeight) in viewports) for (density in listOf(1f, 3f)) for (language in AppLanguage.entries) {
             val width = dpWidth * density
@@ -56,7 +56,7 @@ class HudKeepOutTest {
                     "enemies" to listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f, 0f, 0f, 0f, 0f, 0f, 0f, false,
                         affinityBits = bossAffinity(boss)))
                         .toImmutableList(),
-                    "pointsOfInterest" to (if (trial) listOf(orbit) else emptyList()).toImmutableList(),
+                    "sites" to (if (trial) listOf(orbit) else emptyList()).toImmutableList(),
                 )
                 drawHudAt(width, height, density, language, textScale) { measurer -> drawHud(model, measurer, 1f) }
                 val keepOut = WorldHudKeepOut().update(width, height, density, textScale, trial, bossPresent = true)

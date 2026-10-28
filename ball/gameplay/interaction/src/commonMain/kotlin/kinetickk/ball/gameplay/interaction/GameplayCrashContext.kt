@@ -33,7 +33,7 @@ internal fun GameplayRenderSnapshot.crashContext(): String = buildString {
         appendLine("cooling=$coolingRate magnet=$magnetStrength dash=$dashImpulse/$dashHeatCost regen=$regenPerSecond pickupRadius=$pickupRadius luck=$luck")
         appendLine("dataGain=$dataGain matterGain=$matterGain comboWindow=$comboWindow overdriveGain=$overdriveGain drag=$dragCoefficient")
         appendLine("choiceType=$choiceType directed=$directedChoice rerolls=$rerollsRemaining pendingRelics=$pendingRelicChoiceCount choices=$choices")
-        appendLine("characterAbility=$characterAbility pointsOfInterest=$pointsOfInterest totem=$totem")
+        appendLine("characterAbility=$characterAbility sites=$sites totem=$totem")
         appendLine("enemies(${enemies.size})=$enemies")
         appendLine("projectiles(${projectiles.size})=$projectiles")
         appendLine("pickups(${pickups.size})=$pickups")

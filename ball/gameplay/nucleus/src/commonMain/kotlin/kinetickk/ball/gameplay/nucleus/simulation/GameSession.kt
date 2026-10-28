@@ -438,6 +438,8 @@ internal fun MutableGameState.choose(index: Int) {
             finishChoice(if (slot != null) GameplayAudioCue.LEVEL_UP else GameplayAudioCue.UI_CLICK)
             return
         }
+        // Omens, signal prompts and dimension boons are dealt only once their lanes open them.
+        ChoiceType.OMEN, ChoiceType.SIGNAL, ChoiceType.BOON -> return
         ChoiceType.RELIC_BIND -> {
             val slot = option.relicSlot ?: return
             when (option.relicAction ?: return) {
@@ -477,7 +479,9 @@ internal fun MutableGameState.rerollChoices() {
         ChoiceType.ITEM -> buildItemChoices()
         ChoiceType.WEAPON -> buildWeaponChoices()
         ChoiceType.RELIC -> buildRelicChoices()
-        ChoiceType.TOTEM, ChoiceType.RELIC_BIND, ChoiceType.ACTIVE_SLOT -> return
+        ChoiceType.TOTEM, ChoiceType.RELIC_BIND, ChoiceType.ACTIVE_SLOT,
+        ChoiceType.OMEN, ChoiceType.SIGNAL, ChoiceType.BOON,
+        -> return
     }
     emitSound(GameplayAudioCue.UI_CLICK)
 }

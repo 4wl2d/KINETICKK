@@ -354,8 +354,12 @@ class GameplayPerformanceBenchmarkTest {
             Obstacle(id = 3L, kind = ObstacleKind.UNSTABLE, x = 900f, y = 900f, radius = 150f, shapeSeed = 123_456),
         )
         assertEquals(6_813_101_050_753_336_834L, obstacleFieldFingerprint(17L, obstacles))
-        val projections = obstacles.map { ObstacleProjection(it.id, it.kind, it.x, it.y, it.radius, it.shapeSeed) }
-        assertEquals(2_368_442_101_832_176_810L, obstacleProjectionFingerprint(17L, projections))
+        val projections = obstacles.map { ObstacleProjection(it.id, it.kind, it.x, it.y, it.radius, it.shapeSeed, it.fuseAt, it.repels) }
+        assertEquals(306_409_003_833_105_930L, obstacleProjectionFingerprint(17L, projections))
+        val fusedProjections = projections.mapIndexed { index, projection -> if (index == 2) projection.copy(fuseAt = 4f) else projection }
+        assertNotEquals(obstacleProjectionFingerprint(17L, projections), obstacleProjectionFingerprint(17L, fusedProjections))
+        val repellingProjections = projections.mapIndexed { index, projection -> if (index == 0) projection.copy(repels = true) else projection }
+        assertNotEquals(obstacleProjectionFingerprint(17L, projections), obstacleProjectionFingerprint(17L, repellingProjections))
         val rekinded = obstacles.mapIndexed { index, obstacle -> if (index == 0) obstacle.copy(kind = ObstacleKind.UNSTABLE) else obstacle }
         assertNotEquals(obstacleFieldFingerprint(17L, obstacles), obstacleFieldFingerprint(17L, rekinded))
         val rearmed = obstacles.mapIndexed { index, obstacle -> if (index == 1) obstacle.copy(ricochetReadyAt = 3f) else obstacle }

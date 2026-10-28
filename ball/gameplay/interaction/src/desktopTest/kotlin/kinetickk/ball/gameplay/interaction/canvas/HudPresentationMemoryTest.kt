@@ -33,7 +33,7 @@ import kinetickk.ball.gameplay.nucleus.render.ApexProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.SkillBarProjection
 import kinetickk.ball.gameplay.nucleus.render.SkillSlotProjection
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
@@ -357,20 +357,20 @@ class HudPresentationMemoryTest {
 
     @Test
     fun trialProgressReadsAsValuesWithoutRuleText() {
-        val orbit = PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.65f,
+        val orbit = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, -1, 0.65f,
             immutableListOf(), 0f, 0f)
-        val model = base.with("pointsOfInterest" to listOf(orbit).toImmutableList())
+        val model = base.with("sites" to listOf(orbit).toImmutableList())
         assertEquals(orbit, model.activeTrial())
         assertEquals("5.2 / 8.0 s", trialProgressText(model, orbit, AppLanguage.English))
         assertEquals("5,2 / 8,0 с", trialProgressText(model, orbit, AppLanguage.Russian))
         assertEquals(8, trialSegments(model, orbit))
-        val sealed = PointOfInterestProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, 0, 2f / 3f,
+        val sealed = SiteProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, -1, 2f / 3f,
             immutableListOf(1, 2, 3), 0f, 0f)
         assertEquals("2 / 3", trialProgressText(model, sealed, AppLanguage.English))
         assertEquals(base.content.sites.definition(SiteKind.SEALED_ANOMALY).instruction,
             model.trialRules(sealed, AppLanguage.English))
         val inactive = orbit.copy(active = false)
-        assertEquals(null, base.with("pointsOfInterest" to listOf(inactive).toImmutableList()).activeTrial())
+        assertEquals(null, base.with("sites" to listOf(inactive).toImmutableList()).activeTrial())
     }
 
     private fun enemy(id: Int, type: EnemyType, integrity: Float) =

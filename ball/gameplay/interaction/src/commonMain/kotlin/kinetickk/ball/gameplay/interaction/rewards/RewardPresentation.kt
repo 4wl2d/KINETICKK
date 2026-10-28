@@ -113,6 +113,8 @@ internal fun GameplayRenderModel.rewardPresentation(language: AppLanguage = AppL
         ChoiceType.TOTEM -> RewardLayoutKind.TOTEM
         ChoiceType.RELIC_BIND -> RewardLayoutKind.RELIC_BIND
         ChoiceType.ITEM, ChoiceType.WEAPON, ChoiceType.RELIC, ChoiceType.ACTIVE_SLOT -> RewardLayoutKind.CARDS
+        // Omens, signal prompts and boons lay out as cards; no run deals them yet.
+        ChoiceType.OMEN, ChoiceType.SIGNAL, ChoiceType.BOON -> RewardLayoutKind.CARDS
     }
     val relicChoice = choiceType == ChoiceType.RELIC || choiceType == ChoiceType.RELIC_BIND
     val incoming = choices.firstOrNull { it.relicAction == RelicChoiceAction.REPLACE }?.relicId?.let(content::relic)
@@ -1062,8 +1064,8 @@ private fun RewardFocus.relicAspect(): RelicAspect? = RelicAspect.entries.firstO
 
 /** What picking a focus leads to, by the directed reward's choice type (artifacts, relics, weapons). */
 private fun rewardFocusEffect(type: ChoiceType): OverlayRedesignText = when (type) {
-    // The active slot prompt is never a directed reward; a focus never leads to one.
-    ChoiceType.ITEM, ChoiceType.ACTIVE_SLOT -> OverlayRedesignText.FocusArtifacts
+    // The active slot prompt, omens, signal prompts and boons are never directed rewards; a focus never leads to one.
+    ChoiceType.ITEM, ChoiceType.ACTIVE_SLOT, ChoiceType.OMEN, ChoiceType.SIGNAL, ChoiceType.BOON -> OverlayRedesignText.FocusArtifacts
     ChoiceType.RELIC, ChoiceType.RELIC_BIND -> OverlayRedesignText.FocusRelics
     ChoiceType.TOTEM, ChoiceType.WEAPON -> OverlayRedesignText.FocusWeapons
 }
@@ -1411,4 +1413,6 @@ internal fun rewardHeading(
     ChoiceType.RELIC -> language.text(GameplayText.RelicIntercept)
     ChoiceType.RELIC_BIND -> if (action == RelicChoiceAction.MELD_TARGET) language.text(GameplayText.RelicMeld) else language.text(GameplayText.RelicRebind)
     ChoiceType.ACTIVE_SLOT -> language.text(GameplayText.ChooseActiveSlot)
+    // The generic card heading until omens, signal prompts and boons get their own; no run deals them yet.
+    ChoiceType.OMEN, ChoiceType.SIGNAL, ChoiceType.BOON -> language.text(GameplayText.ChooseArtifact)
 }

@@ -18,7 +18,7 @@ import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.layout.runningControlBounds
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
@@ -94,11 +94,11 @@ class HudFeedTest {
         val swapped = notice("Replace Ghost Vector", "Impact damage +0.05", "Weapon power +0.04", "Dash power +12",
             "\u2212 Vector maneuver", "+ Gravitic grouping")
         // With and without an active trial (its panel pushes the portrait feed down).
-        val trial = PointOfInterestProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, 0, 1f / 3f,
+        val trial = SiteProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, -1, 1f / 3f,
             immutableListOf(1, 2, 3), 0f, 0f)
         for (language in AppLanguage.entries) listOf(844 to 390, 390 to 844).forEach { (w, h) ->
             for (textScale in TEXT_SCALES) for (message in listOf("", "ELITE SIGNAL")) for (toast in listOf(switched, swapped)) for (trials in 0..1) {
-                val model = feedModel(w, h, message).with("pointsOfInterest" to List(trials) { trial }.toImmutableList())
+                val model = feedModel(w, h, message).with("sites" to List(trials) { trial }.toImmutableList())
                 val fx = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(toast))
                 drawFeed(w, h, language, textScale) { measurer -> drawHudFeed(model, fx, measurer, 1f, null) }
                 val context = "$language $w x $h x$textScale \"$message\" ${toast.title} trial=$trials"
@@ -159,13 +159,13 @@ class HudFeedTest {
         toasts: List<BuildNotificationProjection>,
         check: (context: String, language: AppLanguage, toast: BuildNotificationProjection, drawn: List<String>) -> Unit,
     ) {
-        val trial = PointOfInterestProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, 0, 1f / 3f,
+        val trial = SiteProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, -1, 1f / 3f,
             immutableListOf(1, 2, 3), 0f, 0f)
         val messages = listOf("", "ELITE SIGNAL", "TWO ANOMALIES DETECTED // CHOOSE A COURSE")
         for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
             var chainAtDisplaySize: androidx.compose.ui.geometry.Rect? = null
             for (textScale in TEXT_SCALES) for (message in messages) for (toast in toasts) for (trials in 0..1) {
-                val model = feedModel(w, h, message).with("pointsOfInterest" to List(trials) { trial }.toImmutableList())
+                val model = feedModel(w, h, message).with("sites" to List(trials) { trial }.toImmutableList())
                 val fx = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(toast))
                 drawFeed(w, h, language, textScale) { measurer ->
                     drawHud(model, measurer, 1f)
@@ -193,7 +193,7 @@ class HudFeedTest {
             notice("Replace Chroma Feedback", "Critical chance +2.5%", "Damage reduction +3%", *FOUR_SYNERGIES),
         )
         val scenes = listOf(
-            Triple(360 to 780, listOf(1f, 1.1f), "pointsOfInterest" to immutableListOf(TRIAL)),
+            Triple(360 to 780, listOf(1f, 1.1f), "sites" to immutableListOf(TRIAL)),
             Triple(360 to 640, TEXT_SCALES, "enemies" to immutableListOf(ELITE)),
         )
         for (language in AppLanguage.entries) for ((screen, textScales, panel) in scenes) for (toast in toasts) {
@@ -230,7 +230,7 @@ class HudFeedTest {
             notice("Replace Ghost Vector", "Impact damage +0.05", *FOUR_SYNERGIES),
             notice("Replace Chroma Feedback", "Critical chance +2.5%", "Damage reduction +3%", *FOUR_SYNERGIES),
         )
-        val panels = listOf(null, "pointsOfInterest" to immutableListOf(TRIAL), "enemies" to immutableListOf(ELITE))
+        val panels = listOf(null, "sites" to immutableListOf(TRIAL), "enemies" to immutableListOf(ELITE))
         val phones = listOf(360 to 640, 375 to 667, 360 to 740, 360 to 780, 390 to 844, 640 to 360, 667 to 375, 780 to 360, 844 to 390)
         for (language in AppLanguage.entries) for ((w, h) in phones) for (panel in panels) for (textScale in TEXT_SCALES) for (toast in toasts) {
             val fx = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(toast))
@@ -408,14 +408,14 @@ class HudFeedTest {
     fun toastsOnASmallerTextStepAllocateNothingPerFrame() {
         // At the largest text size these toasts only fit a few steps down (and, in portrait, below
         // the Core): every frame searches the steps again through the per-step layout banks.
-        val trial = PointOfInterestProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, 0, 1f / 3f,
+        val trial = SiteProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, -1, 1f / 3f,
             immutableListOf(1, 2, 3), 0f, 0f)
         listOf(
             Triple(390 to 844, AppLanguage.Russian, notice("Replace Ghost Vector", "Impact damage +0.05", *FOUR_SYNERGIES)),
             Triple(844 to 390, AppLanguage.English, notice("Replace Chroma Feedback", "Critical chance +2.5%", "Damage reduction +3%", *FOUR_SYNERGIES)),
         ).forEach { (screen, language, toast) ->
             val (width, height) = screen
-            val model = feedModel(width, height, "ELITE SIGNAL").with("pointsOfInterest" to immutableListOf(trial))
+            val model = feedModel(width, height, "ELITE SIGNAL").with("sites" to immutableListOf(trial))
             val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1.75f,
                 language, HudTestFonts.typography.copy(localeList = language.localeList()))
             val frames = List(FRAMES) { frame ->
@@ -459,7 +459,7 @@ class HudFeedTest {
         const val FRAMES = 240
         val TEXT_SCALES = listOf(1f, 1.25f, 1.75f)
         val FOUR_SYNERGIES = arrayOf("+ Gravitic grouping", "+ Brake compression", "\u2212 Vector maneuver", "\u2212 Ghost mirror")
-        val TRIAL = PointOfInterestProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, 0, 1f / 3f,
+        val TRIAL = SiteProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, -1, 1f / 3f,
             immutableListOf(1, 2, 3), 0f, 0f)
         val ELITE = EnemyProjection(4, EnemyType.ELITE, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f, 0f, 0f, 0f, 0f, 0f, 0f, false)
         const val SHOWN_AT = 20f

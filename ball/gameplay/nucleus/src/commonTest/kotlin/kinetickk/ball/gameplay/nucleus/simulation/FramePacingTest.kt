@@ -57,7 +57,7 @@ class FramePacingTest {
         assertSame(committedModel.trail, model.trail)
         assertSame(committedModel.weaponNodes, model.weaponNodes)
         assertSame(committedModel.weaponOrbitals, model.weaponOrbitals)
-        assertSame(committedModel.pointsOfInterest, model.pointsOfInterest)
+        assertSame(committedModel.sites, model.sites)
         assertSame(committedModel.characterAbility, model.characterAbility)
         assertSame(committedModel.runStatistics, model.runStatistics)
         assertSame(committedModel.equippedRelics, model.equippedRelics)

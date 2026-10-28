@@ -14,7 +14,8 @@ import kinetickk.ball.gameplay.nucleus.render.CharacterAbilityProjection
 import kinetickk.ball.gameplay.nucleus.render.CharacterDroneProjection
 import kinetickk.ball.gameplay.nucleus.render.CharacterScarProjection
 import kinetickk.ball.gameplay.nucleus.render.CharacterLatticePoint
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteMarkProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
@@ -140,12 +141,13 @@ class GameplayComponentFingerprintTest {
 
     @Test
     fun pointWitnessRetainsOfferTrialDefendersAndVolleyTelegraph() {
-        val point = PointOfInterestProjection(
+        val point = SiteProjection(
             SiteKind.SEALED_ANOMALY, "Vault", 10f, 20f, true, 24f,
-            1, 0.3f, immutableListOf(11, 12, 13), 0.8f, 1.2f,
+            0, 0.3f, immutableListOf(11, 12, 13), 0.8f, 1.2f,
+            course = immutableListOf(SiteMarkProjection(230f, 200f)),
         )
-        val expected = canonicalPointOfInterestFingerprint(point)
-        assertEquals(expected, canonicalPointOfInterestFingerprint(point.copy(defenderIds = immutableListOf(11, 12, 13))))
+        val expected = canonicalSiteFingerprint(point)
+        assertEquals(expected, canonicalSiteFingerprint(point.copy(foeIds = immutableListOf(11, 12, 13))))
         listOf(
             point.copy(kind = SiteKind.COLLAPSING_ORBIT),
             point.copy(name = "Orbit"),
@@ -153,13 +155,23 @@ class GameplayComponentFingerprintTest {
             point.copy(y = 21f),
             point.copy(active = false),
             point.copy(remaining = 23f),
-            point.copy(nextBeacon = 2),
+            point.copy(step = 1),
             point.copy(progress = 0.4f),
-            point.copy(defenderIds = immutableListOf(11, 12)),
-            point.copy(defenderIds = immutableListOf(13, 12, 11)),
+            point.copy(foeIds = immutableListOf(11, 12)),
+            point.copy(foeIds = immutableListOf(13, 12, 11)),
             point.copy(warningRemaining = 0.7f),
             point.copy(volleyAngle = 1.3f),
-        ).forEach { changed -> assertNotEquals(expected, canonicalPointOfInterestFingerprint(changed)) }
+            point.copy(course = immutableListOf(SiteMarkProjection(-230f, 200f))),
+            point.copy(course = immutableListOf()),
+            point.copy(radius = 650f),
+            point.copy(sides = 1),
+            point.copy(clock = 3f),
+            point.copy(medal = 2),
+            point.copy(activationRadius = 90f),
+            point.copy(reveal = 1_800f),
+            point.copy(aimDx = 5f),
+            point.copy(aimDy = 5f),
+        ).forEach { changed -> assertNotEquals(expected, canonicalSiteFingerprint(changed)) }
     }
 
     @Test

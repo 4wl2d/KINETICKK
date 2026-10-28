@@ -130,7 +130,7 @@ private object MinimapScratch {
 internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMeasurer, frame: HudFrame) {
     if (!engine.settings.minimapEnabled) return
     var trialActive = false
-    val points = engine.pointsOfInterest
+    val points = engine.sites
     for (index in points.indices) if (points[index].active) trialActive = true
     val trial = if (trialActive) MinimapScratch.trial.update(size.width, size.height, density, measurer.scale) else null
     val rect = MinimapScratch.rect
@@ -163,10 +163,16 @@ internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMe
             if (x < left - radius || x > left + side + radius || y < top - radius || y > top + side + radius) continue
             when (obstacle.kind) {
                 ObstacleKind.ASTEROID -> drawCircle(Kk.Bone.copy(alpha = 0.32f), radius, Offset(x, y))
+                // The 0.6.0 kinds show as bone dots until their own marks land; no run generates them yet.
+                ObstacleKind.GRAVITY_WELL, ObstacleKind.ACCEL_GATE, ObstacleKind.CRYSTAL, ObstacleKind.DERELICT_MINE,
+                ObstacleKind.PHASE_SHARD, ObstacleKind.THERMAL_VENT,
+                -> drawCircle(Kk.Bone.copy(alpha = 0.32f), radius, Offset(x, y))
                 ObstacleKind.UNSTABLE -> drawCircle(roles.heat.copy(alpha = 0.7f), radius, Offset(x, y))
                 ObstacleKind.BUMPER -> drawCircle(roles.pol.copy(alpha = 0.8f), radius, Offset(x, y), style = kkStroke(max(1f, dot * 0.6f)))
             }
         }
+        drawMinimapStructures(engine, centerX, centerY, half, scale, dot, roles)
+        drawDimensionMinimapMarks(engine, centerX, centerY, half, scale, dot, roles)
         val pickups = engine.pickups
         for (index in pickups.indices) {
             val pickup = pickups[index]

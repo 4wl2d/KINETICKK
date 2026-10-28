@@ -13,7 +13,7 @@ import androidx.compose.ui.text.TextStyle
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.foundation.design.*
 import kotlin.math.abs
 import kotlin.math.cos
@@ -23,7 +23,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-/** Radius inside which a passing Core accepts an offered point (PointOfInterestSystem). */
+/** Radius inside which a passing Core accepts an offered point (SiteSystem). */
 private const val OFFER_RADIUS = 65f
 
 /** Half extent of an offer's mark (anomaly diamond with its corner brackets). */
@@ -125,7 +125,7 @@ internal enum class WorldDrawn { POINT_MARK, POINT_TIMER, EDGE_MARKER, BEACON_PI
  */
 internal fun DrawScope.worldHudKeepOut(engine: GameplayRenderModel, textMeasurer: TextMeasurer, hudDensity: Float = density): WorldHudKeepOut {
     var trial = false
-    val points = engine.pointsOfInterest
+    val points = engine.sites
     for (index in points.indices) if (points[index].active) trial = true
     var boss = false
     val enemies = engine.enemies
@@ -143,16 +143,16 @@ internal fun DrawScope.worldHudKeepOut(engine: GameplayRenderModel, textMeasurer
  * circuit stacked sheared plates with a you-color key block. An offer carries its name and timer
  * (`Anomaly.png`); an active trial's name and rules live in the HUD's trial panel, so its mark
  * keeps a short timer (the orbit: its seconds in the ring). A mark that would be cut by the screen
- * edge or sit under the HUD is replaced by its edge marker ([collectPointOfInterestEdgeMarkers],
+ * edge or sit under the HUD is replaced by its edge marker ([collectSiteEdgeMarkers],
  * drawn over the world): both use [markShown] in the unshaken view ([steady]), so exactly one of
  * them draws and screen shake never trades one for the other.
  */
-internal fun DrawScope.drawPointsOfInterest(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, textMeasurer: TextMeasurer) {
+internal fun DrawScope.drawSites(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, textMeasurer: TextMeasurer) {
     // Drawn in world units; the HUD keep-out is screen space, updated by drawWorld for this frame.
     val keepOut = WorldOverlayScratch.keepOut
     val scale = engine.worldScale
-    for (index in engine.pointsOfInterest.indices) {
-        val point = engine.pointsOfInterest[index]
+    for (index in engine.sites.indices) {
+        val point = engine.sites[index]
         val center = world(engine, point.x, point.y, shakeX, shakeY)
         if (point.active) {
             drawActivePoint(engine, point, center, shakeX, shakeY, textMeasurer, keepOut, scale)
@@ -168,20 +168,20 @@ internal fun DrawScope.drawPointsOfInterest(engine: GameplayRenderModel, shakeX:
  * whether it shows, and where its marker points, is decided in the unshaken view. Called in world
  * units like the marks, so both use one predicate; [batch] receives device pixels.
  */
-internal fun DrawScope.collectPointOfInterestEdgeMarkers(
+internal fun DrawScope.collectSiteEdgeMarkers(
     engine: GameplayRenderModel,
     @Suppress("UNUSED_PARAMETER") textMeasurer: TextMeasurer,
     batch: EdgeMarkerBatch,
 ) {
     val keepOut = WorldOverlayScratch.keepOut
     val scale = engine.worldScale
-    for (index in engine.pointsOfInterest.indices) {
-        val point = engine.pointsOfInterest[index]
+    for (index in engine.sites.indices) {
+        val point = engine.sites[index]
         // An active circuit leads to its next beacon; every other point to its center.
         val targetX: Float
         val targetY: Float
         if (point.active && point.kind == SiteKind.RESONANT_CIRCUIT) {
-            val beacon = point.nextBeacon % 3
+            val beacon = (point.step + 1) % 3
             targetX = point.x + beaconDx(beacon)
             targetY = point.y + beaconDy(beacon)
         } else {
@@ -196,7 +196,7 @@ internal fun DrawScope.collectPointOfInterestEdgeMarkers(
     }
 }
 
-private fun markHalf(point: PointOfInterestProjection): Float = when {
+private fun markHalf(point: SiteProjection): Float = when {
     !point.active -> OFFER_MARK_HALF
     point.kind == SiteKind.SEALED_ANOMALY -> VAULT_MARK_HALF
     point.kind == SiteKind.RESONANT_CIRCUIT -> BEACON_MARK_HALF
@@ -227,8 +227,17 @@ private fun SiteKind.edgeIcon(): EdgeMarkerIcon = when (this) {
     SiteKind.RESONANT_CIRCUIT -> EdgeMarkerIcon.RESONANT_CIRCUIT
     SiteKind.SEALED_ANOMALY -> EdgeMarkerIcon.SEALED_ANOMALY
     SiteKind.COLLAPSING_ORBIT -> EdgeMarkerIcon.COLLAPSING_ORBIT
-    // Only the anomalies are offered until the site lane draws kinds by weight.
-    else -> EdgeMarkerIcon.SEALED_ANOMALY
+    // Each family has its marker; the hidden easter eggs read as anomalies until the site lane decides them. Only the
+    // anomalies are offered until the site lane draws kinds by weight.
+    SiteKind.GATE_RACE -> EdgeMarkerIcon.RACE
+    SiteKind.BRAKELESS_TRIAL, SiteKind.RAM_TRIAL, SiteKind.UNTOUCHED_TRIAL, SiteKind.VELOCITY_TRIAL, SiteKind.SLALOM_TRIAL,
+    -> EdgeMarkerIcon.CHALLENGE
+    SiteKind.BOUNTY_ARENA -> EdgeMarkerIcon.BOUNTY
+    SiteKind.DRIFT_CACHE -> EdgeMarkerIcon.CACHE
+    SiteKind.QUIET_SIGNAL -> EdgeMarkerIcon.QUIET
+    SiteKind.FAR_SIGIL -> EdgeMarkerIcon.SIGIL
+    SiteKind.ZENITH_RIFT, SiteKind.NADIR_RIFT -> EdgeMarkerIcon.PORTAL
+    SiteKind.LOST_CURSOR, SiteKind.GOLDEN_DRIFTER -> EdgeMarkerIcon.SEALED_ANOMALY
 }
 
 /**
@@ -238,7 +247,7 @@ private fun SiteKind.edgeIcon(): EdgeMarkerIcon = when (this) {
  */
 private fun DrawScope.drawOfferedPoint(
     engine: GameplayRenderModel,
-    point: PointOfInterestProjection,
+    point: SiteProjection,
     center: Offset,
     shakeX: Float,
     shakeY: Float,
@@ -266,7 +275,10 @@ private fun DrawScope.drawOfferedPoint(
         }
         SiteKind.RESONANT_CIRCUIT -> drawTotemPlates(center, 1.2f, roles.you, keyBlock = true, keyIcon = true)
         // Only the anomalies are offered until the site lane draws kinds by weight.
-        else -> Unit
+        SiteKind.GATE_RACE, SiteKind.BRAKELESS_TRIAL, SiteKind.RAM_TRIAL, SiteKind.UNTOUCHED_TRIAL,
+        SiteKind.VELOCITY_TRIAL, SiteKind.SLALOM_TRIAL, SiteKind.BOUNTY_ARENA, SiteKind.DRIFT_CACHE, SiteKind.LOST_CURSOR,
+        SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL, SiteKind.FAR_SIGIL, SiteKind.ZENITH_RIFT, SiteKind.NADIR_RIFT,
+        -> Unit
     }
     inScreenUnits(scale) {
         drawOfferLabels(point, Offset(center.x * scale, center.y * scale), (OFFER_RADIUS + 8f) * scale, textMeasurer, keepOut)
@@ -275,7 +287,7 @@ private fun DrawScope.drawOfferedPoint(
 
 private fun DrawScope.drawActivePoint(
     engine: GameplayRenderModel,
-    point: PointOfInterestProjection,
+    point: SiteProjection,
     center: Offset,
     shakeX: Float,
     shakeY: Float,
@@ -287,8 +299,8 @@ private fun DrawScope.drawActivePoint(
     val time = engine.renderElapsed
     when (point.kind) {
         SiteKind.RESONANT_CIRCUIT -> {
-            // Beacon order 1 is the center; the circuit visits 2, 3 and returns to 1 (nextBeacon 1..3).
-            val targetIndex = point.nextBeacon % 3
+            // Beacon order 1 is the center; the circuit visits 2, 3 and returns to 1 (step 0..2).
+            val targetIndex = (point.step + 1) % 3
             for (index in 0 until 3) {
                 val from = Offset(center.x + beaconDx(index), center.y + beaconDy(index))
                 val next = (index + 1) % 3
@@ -300,7 +312,7 @@ private fun DrawScope.drawActivePoint(
                 val target = index == targetIndex
                 // The target beacon shares its edge marker's predicate; the others may pass the edge.
                 if (if (target) !markShown(steady(beacon, shakeX, shakeY), BEACON_MARK_HALF, keepOut, scale) else !isOnScreen(beacon, 80f)) continue
-                val visited = !target && visitOrder(index) < point.nextBeacon
+                val visited = !target && visitOrder(index) <= point.step
                 if (target) {
                     rotate(time * 30f, beacon) {
                         drawCircle(roles.you.copy(alpha = 0.55f), 55f, beacon, style = WorldStrokes.dashedMedium)
@@ -375,7 +387,10 @@ private fun DrawScope.drawActivePoint(
             }
         }
         // Only the anomalies are offered until the site lane draws kinds by weight.
-        else -> Unit
+        SiteKind.GATE_RACE, SiteKind.BRAKELESS_TRIAL, SiteKind.RAM_TRIAL, SiteKind.UNTOUCHED_TRIAL,
+        SiteKind.VELOCITY_TRIAL, SiteKind.SLALOM_TRIAL, SiteKind.BOUNTY_ARENA, SiteKind.DRIFT_CACHE, SiteKind.LOST_CURSOR,
+        SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL, SiteKind.FAR_SIGIL, SiteKind.ZENITH_RIFT, SiteKind.NADIR_RIFT,
+        -> Unit
     }
 }
 
@@ -387,7 +402,7 @@ private fun DrawScope.drawActivePoint(
  */
 private fun DrawScope.drawOrbitLabel(
     engine: GameplayRenderModel,
-    point: PointOfInterestProjection,
+    point: SiteProjection,
     center: Offset,
     textMeasurer: TextMeasurer,
     keepOut: WorldHudKeepOut,
@@ -423,12 +438,12 @@ internal fun orbitRingTenths(progress: Float, requiredSeconds: Float): Long =
     (progress.coerceIn(0f, 1f) * requiredSeconds * 10f).roundToInt().toLong()
 
 /** Index scan without boxing the id (ImmutableList<Int>.contains would box large ids). */
-private fun PointOfInterestProjection.isDefender(id: Int): Boolean {
-    for (index in defenderIds.indices) if (defenderIds[index] == id) return true
+private fun SiteProjection.isDefender(id: Int): Boolean {
+    for (index in foeIds.indices) if (foeIds[index] == id) return true
     return false
 }
 
-/** Beacon offsets from the circuit center (PointOfInterestState.beacon): order 1 center, 2 right, 3 left. */
+/** Beacon offsets from the circuit center (SiteState CircuitBeacons): order 1 center, 2 right, 3 left. */
 private fun beaconDx(index: Int): Float = when (index) {
     1 -> 230f
     2 -> -230f
@@ -437,7 +452,7 @@ private fun beaconDx(index: Int): Float = when (index) {
 
 private fun beaconDy(index: Int): Float = if (index == 0) 0f else 200f
 
-/** The nextBeacon value at which each beacon has been reached: 2 first, then 3, then back to 1. */
+/** The circuit step from which each beacon counts as reached: the right one from 1, the left from 2, the center from 3. */
 private fun visitOrder(index: Int): Int = if (index == 0) 3 else index
 
 /**
@@ -492,7 +507,7 @@ private fun DrawScope.recordMark(center: Offset, half: Float) =
  * on screen, and a name wider than the screen shrinks to fit.
  */
 private fun DrawScope.drawOfferLabels(
-    point: PointOfInterestProjection,
+    point: SiteProjection,
     center: Offset,
     gap: Float,
     textMeasurer: TextMeasurer,
@@ -530,7 +545,7 @@ private fun DrawScope.drawOfferLabels(
  * is in the way; skipped when neither side is clear (an active trial's panel shows its clock).
  */
 private fun DrawScope.drawPointTimer(
-    point: PointOfInterestProjection,
+    point: SiteProjection,
     center: Offset,
     gap: Float,
     textMeasurer: TextMeasurer,
@@ -572,7 +587,10 @@ internal fun pointTimerTop(
 }
 
 /** Kinds of off-screen targets; each draws a small mark (no arrow shapes). */
-internal enum class EdgeMarkerIcon { TOTEM, SEALED_ANOMALY, COLLAPSING_ORBIT, RESONANT_CIRCUIT }
+internal enum class EdgeMarkerIcon {
+    TOTEM, SEALED_ANOMALY, COLLAPSING_ORBIT, RESONANT_CIRCUIT, RACE, CHALLENGE, BOUNTY, CACHE, QUIET, SIGIL, PORTAL, SIGNAL,
+    STRUCTURE, HALO,
+}
 
 /** The widest distance an edge marker is laid out for (world units; four digits). */
 private const val EDGE_DISTANCE_LAYOUT_VALUE = 8_880L
@@ -620,6 +638,10 @@ private fun DrawScope.drawEdgeMarker(x: Float, y: Float, distance: Float, icon: 
             drawArc(roles.you, -90f, 200f, false, Offset(marker.x - iconSize * 0.48f, marker.y - iconSize * 0.48f),
                 Size(iconSize * 0.96f, iconSize * 0.96f), style = kkStroke(d(2f)))
         }
+        // The 0.6.0 targets draw the anomaly glyph until their lanes give them their own; none is collected yet.
+        EdgeMarkerIcon.RACE, EdgeMarkerIcon.CHALLENGE, EdgeMarkerIcon.BOUNTY, EdgeMarkerIcon.CACHE, EdgeMarkerIcon.QUIET,
+        EdgeMarkerIcon.SIGIL, EdgeMarkerIcon.PORTAL, EdgeMarkerIcon.SIGNAL, EdgeMarkerIcon.STRUCTURE, EdgeMarkerIcon.HALO,
+        -> drawKkIcon(KkIcon.SYSTEM_ANOMALY, marker, iconSize, color)
     }
     val onRight = marker.x > size.width * 0.5f
     val textX = if (onRight) marker.x - iconSize * 0.5f - d(EDGE_TEXT_GAP_DP) else marker.x + iconSize * 0.5f + d(EDGE_TEXT_GAP_DP)
@@ -637,6 +659,9 @@ private fun edgeMarkerColor(icon: EdgeMarkerIcon, roles: KkRolePalette): Color =
     EdgeMarkerIcon.TOTEM, EdgeMarkerIcon.RESONANT_CIRCUIT -> roles.you
     EdgeMarkerIcon.SEALED_ANOMALY -> Kk.AGravitic
     EdgeMarkerIcon.COLLAPSING_ORBIT -> Kk.Bone
+    EdgeMarkerIcon.RACE, EdgeMarkerIcon.CHALLENGE, EdgeMarkerIcon.BOUNTY, EdgeMarkerIcon.CACHE, EdgeMarkerIcon.QUIET,
+    EdgeMarkerIcon.SIGIL, EdgeMarkerIcon.PORTAL, EdgeMarkerIcon.SIGNAL, EdgeMarkerIcon.STRUCTURE, EdgeMarkerIcon.HALO,
+    -> Kk.Bone
 }
 
 /** Line height of the edge-marker digits; the HUD's mono digits keep the builder's 1.35. */
@@ -653,6 +678,9 @@ internal fun edgeMarkerStyle(typography: InterfaceTypography, icon: EdgeMarkerIc
         EdgeMarkerIcon.TOTEM, EdgeMarkerIcon.RESONANT_CIRCUIT -> 0
         EdgeMarkerIcon.SEALED_ANOMALY -> 1
         EdgeMarkerIcon.COLLAPSING_ORBIT -> 2
+        EdgeMarkerIcon.RACE, EdgeMarkerIcon.CHALLENGE, EdgeMarkerIcon.BOUNTY, EdgeMarkerIcon.CACHE, EdgeMarkerIcon.QUIET,
+        EdgeMarkerIcon.SIGIL, EdgeMarkerIcon.PORTAL, EdgeMarkerIcon.SIGNAL, EdgeMarkerIcon.STRUCTURE, EdgeMarkerIcon.HALO,
+        -> 4
     }
     return typography.monoStyle(EDGE_DISTANCE_SP, lineHeightEm = EDGE_LINE_HEIGHT_EM + colorGroup * 0.001f, color = edgeMarkerColor(icon, roles))
 }

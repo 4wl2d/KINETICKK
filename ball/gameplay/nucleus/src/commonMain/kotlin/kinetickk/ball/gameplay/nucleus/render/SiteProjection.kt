@@ -7,6 +7,43 @@ import kinetickk.ball.content.api.SiteFamily
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.WorldLayer
+import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.immutableListOf
+
+/** A course mark's offset from its site's centre (circuit beacon, race gate, slalom pole). */
+data class SiteMarkProjection(val dx: Float, val dy: Float)
+
+/** A site as presentation draws it: a window offer or trial, an ambient site or the secret sigil. */
+data class SiteProjection(
+    val kind: SiteKind,
+    /** English content key. */
+    val name: String,
+    val x: Float,
+    val y: Float,
+    val active: Boolean,
+    /** Offer: seconds until it closes; timed trial: seconds left; untimed: 0. */
+    val remaining: Float,
+    /** Next course mark (circuit beacon 0..2, race gate, slalom pole). */
+    val step: Int,
+    val progress: Float,
+    /** Enemies the site owns: vault defenders, marked foes, the bounty or secret boss. */
+    val foeIds: ImmutableList<Int>,
+    val warningRemaining: Float,
+    val volleyAngle: Float,
+    val course: ImmutableList<SiteMarkProjection> = immutableListOf(),
+    /** Ring or arena radius drawn around an active site (brakeless: the current shrinking ring). */
+    val radius: Float = 0f,
+    val sides: Int = 0,
+    /** Race: seconds since the start and the medal the clock still allows (3 gold … 0 none). */
+    val clock: Float = 0f,
+    val medal: Int = 0,
+    val activationRadius: Float = 65f,
+    /** Off-screen reveal distance for markers and the minimap (0: never). */
+    val reveal: Float = Float.POSITIVE_INFINITY,
+    /** Untouched volley aim offset from (x, y). */
+    val aimDx: Float = 0f,
+    val aimDy: Float = 0f,
+)
 
 enum class TrialClock { COUNTDOWN, ELAPSED_TENTHS, NONE }
 enum class TrialValue { COUNT, SECONDS, NONE }

@@ -891,6 +891,8 @@ internal class MutableGameState(
             ChoiceType.WEAPON -> weaponOfferCandidates().size > WEAPON_OFFER_CHOICES
             ChoiceType.RELIC -> !heirloomOfferActive
             ChoiceType.TOTEM, ChoiceType.RELIC_BIND, ChoiceType.ACTIVE_SLOT -> false
+            // Omens and dimension boons are never rerolled; a signal prompt deals fixed options.
+            ChoiceType.OMEN, ChoiceType.SIGNAL, ChoiceType.BOON -> false
         } && !dimensionRewardOpen()
     val pendingRelicChoiceCount: Int get() = pendingRelicChoices
 

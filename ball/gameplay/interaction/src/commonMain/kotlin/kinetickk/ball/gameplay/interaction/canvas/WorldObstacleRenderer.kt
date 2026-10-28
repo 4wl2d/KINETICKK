@@ -38,6 +38,10 @@ internal fun DrawScope.drawObstacles(engine: GameplayRenderModel, shakeX: Float,
         when (obstacle.kind) {
             ObstacleKind.BUMPER -> drawBumper(center, obstacle.radius, time, roles)
             ObstacleKind.ASTEROID, ObstacleKind.UNSTABLE -> drawAsteroid(obstacle, center, time, roles)
+            // The 0.6.0 kinds read as asteroids until their own looks land; no run generates them yet.
+            ObstacleKind.GRAVITY_WELL, ObstacleKind.ACCEL_GATE, ObstacleKind.CRYSTAL, ObstacleKind.DERELICT_MINE,
+            ObstacleKind.PHASE_SHARD, ObstacleKind.THERMAL_VENT,
+            -> drawAsteroid(obstacle, center, time, roles)
         }
     }
 }

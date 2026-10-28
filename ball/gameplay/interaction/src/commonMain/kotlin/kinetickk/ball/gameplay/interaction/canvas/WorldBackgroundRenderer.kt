@@ -9,6 +9,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
+import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 
 /** World grid pitch in world units (`bg-grid`; the world spec asks for 40 px). */
@@ -41,6 +42,11 @@ internal fun DrawScope.drawBackdrop(
 }
 
 private fun DrawScope.drawBackdropLayer(engine: GameplayRenderModel, shakeX: Float, shakeY: Float) {
+    // A dimension draws its own ground instead of the realspace grid.
+    if (engine.dimension.layer != WorldLayer.BASE) {
+        drawDimensionBackdrop(engine, shakeX, shakeY)
+        return
+    }
     val theme = arenaTheme(engine.rebirthLevel)
     val origin = Offset(
         worldGridOffset(engine.renderCameraX, size.width, shakeX),

@@ -160,7 +160,8 @@ internal fun MutableGameState.toRenderModel(
                     linkedTo(value) == previous.linkedTo &&
                     shielded(value) == previous.shielded &&
                     value.armorIntact == previous.armored &&
-                    controlBits(value) == previous.controlBits
+                    controlBits(value) == previous.controlBits &&
+                    value.charges == previous.charges
             }
             ?: enemies.mapToImmutableList { value ->
                 EnemyProjection(
@@ -189,6 +190,7 @@ internal fun MutableGameState.toRenderModel(
                     shielded = shielded(value),
                     armored = value.armorIntact,
                     controlBits = controlBits(value),
+                    charges = value.charges,
                 )
             },
         projectiles = projectiles.reuseEmptyProjection(reusableCollections?.projectiles)
@@ -312,8 +314,8 @@ internal fun MutableGameState.toRenderModel(
             reusable = reusableCollections?.characterAbility,
             identityRuntime = identitySource?.characterRuntime,
         ),
-        pointsOfInterest = pointsOfInterestProjection(
-            reusable = reusableCollections?.pointsOfInterest,
+        sites = siteProjections(
+            reusable = reusableCollections?.sites,
             identitySource = identitySource,
         ),
         itemStacks = itemStacks.reuseIfStorageShared(
@@ -358,6 +360,24 @@ internal fun MutableGameState.toRenderModel(
         apex = apexProjection(reusableCollections?.apex),
         combatFields = combatFieldProjection(reusableCollections?.combatFields, identitySource?.combatFieldTable),
         coreState = coreStateProjection(reusableCollections?.coreState),
+        coreStraightness = coreStraightness,
+        easyMode = easyMode,
+        // The ambient site window joins the projection with the ambient sites themselves.
+        ambientSites = immutableListOf(),
+        trial = trialProjection(reusableCollections?.trial),
+        secretFlags = runSecretFlags,
+        goldenDrifterId = goldenDrifterId,
+        structures = structureRenderProjection(reusableCollections?.structures, identitySource),
+        dimension = dimensionProjection(reusableCollections?.dimension, identitySource),
+        runBoons = runBoons,
+        runOmen = runOmen,
+        runMutatorMask = runMutatorMask,
+        directorPersonality = directorPersonality,
+        featuredAspect = featuredAspect,
+        keynoteTag = keynoteTag,
+        keynoteElement = keynoteElement,
+        worldEvent = worldEvent,
+        eventSignals = eventSignals,
     )
 }
 
@@ -706,7 +726,7 @@ private fun MutableGameState.obstacleProjection(
         }
     }
     return field.obstacles.mapToImmutableList { value ->
-        ObstacleProjection(value.id, value.kind, value.x, value.y, value.radius, value.shapeSeed)
+        ObstacleProjection(value.id, value.kind, value.x, value.y, value.radius, value.shapeSeed, value.fuseAt, value.repels)
     }
 }
 
@@ -716,7 +736,9 @@ private fun ObstacleProjection.matches(obstacle: Obstacle): Boolean =
         x.sameBitsAs(obstacle.x) &&
         y.sameBitsAs(obstacle.y) &&
         radius.sameBitsAs(obstacle.radius) &&
-        shapeSeed == obstacle.shapeSeed
+        shapeSeed == obstacle.shapeSeed &&
+        fuseAt.sameBitsAs(obstacle.fuseAt) &&
+        repels == obstacle.repels
 
 /**
  * How far the accumulated real time has advanced past the last simulated state, in fixed steps.
@@ -907,64 +929,6 @@ private fun CharacterAbilityProjection.matches(state: MutableGameState, runtime:
     return true
 }
 
-/**
- * Points of interest change a few times per second at most: the same list at the same time, or
- * projections that already carry every derived value, keep the previous immutable list.
- */
-private fun MutableGameState.pointsOfInterestProjection(
-    reusable: ImmutableList<PointOfInterestProjection>?,
-    identitySource: MutableGameState?,
-): ImmutableList<PointOfInterestProjection> {
-    if (reusable != null) {
-        if (sites === identitySource?.sites && elapsed.sameBitsAs(identitySource.elapsed)) return reusable
-        if (reusable.size == sites.size) {
-            var same = true
-            for (index in sites.indices) {
-                if (!pointProjectionMatches(reusable[index], sites[index])) {
-                    same = false
-                    break
-                }
-            }
-            if (same) return reusable
-        }
-    }
-    return sites.mapToImmutableList { point ->
-        PointOfInterestProjection(point.kind, content.sites.definition(point.kind).name,
-            point.x, point.y, point.active, pointRemaining(point), nextBeacon(point), pointProgress(point),
-            point.foeIds, point.warningRemaining, point.volleyAngle)
-    }
-}
-
-/** The projection's 1-based beacon number of a site's next course mark. */
-private fun nextBeacon(point: SiteState): Int = point.step + 1
-
-private fun MutableGameState.pointRemaining(point: SiteState): Float =
-    if (point.active) point.remaining else (point.expiresAt - elapsed).coerceAtLeast(0f)
-
-private fun MutableGameState.pointProgress(point: SiteState): Float = when (point.kind) {
-    kinetickk.ball.content.api.SiteKind.RESONANT_CIRCUIT -> point.step / 3f
-    kinetickk.ball.content.api.SiteKind.SEALED_ANOMALY -> point.count / 3f
-    kinetickk.ball.content.api.SiteKind.COLLAPSING_ORBIT ->
-        point.meter / content.sites.windows.orbitRequiredSeconds
-    // Only the anomalies are offered until the site lane draws kinds by weight.
-    else -> 0f
-}
-
-private fun MutableGameState.pointProjectionMatches(
-    projection: PointOfInterestProjection,
-    point: SiteState,
-): Boolean =
-    projection.kind == point.kind &&
-        projection.x.sameBitsAs(point.x) &&
-        projection.y.sameBitsAs(point.y) &&
-        projection.active == point.active &&
-        projection.remaining.sameBitsAs(pointRemaining(point)) &&
-        projection.nextBeacon == nextBeacon(point) &&
-        projection.progress.sameBitsAs(pointProgress(point)) &&
-        (projection.defenderIds === point.foeIds || projection.defenderIds == point.foeIds) &&
-        projection.warningRemaining.sameBitsAs(point.warningRemaining) &&
-        projection.volleyAngle.sameBitsAs(point.volleyAngle)
-
 private fun <Source : Any, Projection> Source.reuseIfIdentical(
     previousSource: Source?,
     previousProjection: Projection?,
@@ -988,7 +952,7 @@ private inline fun <Source, Projection> List<Source>.reuseProjectionIfContentEqu
     return previous
 }
 
-private fun Float.sameBitsAs(other: Float): Boolean = toRawBits() == other.toRawBits()
+internal fun Float.sameBitsAs(other: Float): Boolean = toRawBits() == other.toRawBits()
 
 private fun <Element> List<Element>.reuseIfContentEqual(
     previous: ImmutableList<Element>?,

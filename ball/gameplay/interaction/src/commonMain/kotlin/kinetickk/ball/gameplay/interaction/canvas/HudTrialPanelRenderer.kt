@@ -23,7 +23,7 @@ import kinetickk.ball.gameplay.interaction.layout.regularHudUnit
 import kinetickk.ball.gameplay.interaction.layout.runningHudMargin
 import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
@@ -34,14 +34,14 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /** The active point-of-interest trial, if any (the game runs at most one at a time). */
-internal fun GameplayRenderModel.activeTrial(): PointOfInterestProjection? {
-    val points = pointsOfInterest
+internal fun GameplayRenderModel.activeTrial(): SiteProjection? {
+    val points = sites
     for (index in points.indices) if (points[index].active) return points[index]
     return null
 }
 
 /** The trial's rules for its (!) info button: the content instruction in the player's language. */
-internal fun GameplayRenderModel.trialRules(point: PointOfInterestProjection, language: AppLanguage): String =
+internal fun GameplayRenderModel.trialRules(point: SiteProjection, language: AppLanguage): String =
     content.sites.definition(point.kind).instruction.localizedContent(language)
 
 /**
@@ -246,7 +246,7 @@ internal fun DrawScope.drawTrialPanel(
 }
 
 /** The trial's remaining time as `m:ss` ("0:15"), shared with the world's ring and point timers. */
-internal fun trialClockText(point: PointOfInterestProjection): String = WorldStrings.timer(point.remaining)
+internal fun trialClockText(point: SiteProjection): String = WorldStrings.timer(point.remaining)
 
 /** Records a vertically centered one-line [layout] starting at [left] (layout tests). */
 private fun recordLine(block: HudBlock, left: Float, centerY: Float, layout: androidx.compose.ui.text.TextLayoutResult) {
@@ -412,7 +412,7 @@ private const val TOOLTIP_WIDE_DP = 380f
 /** Draws "5.2 / 8.0 s" at ([x], [centerY]) from cached digits; returns its width. */
 private fun DrawScope.drawOrbitProgress(
     engine: GameplayRenderModel,
-    point: PointOfInterestProjection,
+    point: SiteProjection,
     measurer: TextMeasurer,
     x: Float,
     centerY: Float,
@@ -438,19 +438,22 @@ private fun DrawScope.drawOrbitProgress(
 private const val TRIAL_DIGIT_LINE_HEIGHT_EM = 1.345f
 
 /** Progress cells: one per orbit second, per defender or per beacon of the circuit. */
-internal fun trialSegments(engine: GameplayRenderModel, point: PointOfInterestProjection): Int = when (point.kind) {
+internal fun trialSegments(engine: GameplayRenderModel, point: SiteProjection): Int = when (point.kind) {
     SiteKind.COLLAPSING_ORBIT -> ceil(engine.content.sites.windows.orbitRequiredSeconds).toInt().coerceIn(1, 24)
-    SiteKind.SEALED_ANOMALY -> point.defenderIds.size.coerceIn(1, 12)
+    SiteKind.SEALED_ANOMALY -> point.foeIds.size.coerceIn(1, 12)
     SiteKind.RESONANT_CIRCUIT -> RESONANT_CIRCUIT_BEACONS
     // Only the anomalies are offered until the site lane draws kinds by weight.
-    else -> 1
+    SiteKind.GATE_RACE, SiteKind.BRAKELESS_TRIAL, SiteKind.RAM_TRIAL, SiteKind.UNTOUCHED_TRIAL,
+    SiteKind.VELOCITY_TRIAL, SiteKind.SLALOM_TRIAL, SiteKind.BOUNTY_ARENA, SiteKind.DRIFT_CACHE, SiteKind.LOST_CURSOR,
+    SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL, SiteKind.FAR_SIGIL, SiteKind.ZENITH_RIFT, SiteKind.NADIR_RIFT,
+    -> 1
 }
 
 /** Beacons in a resonant circuit (the projection reports progress as visited beacons over three). */
 private const val RESONANT_CIRCUIT_BEACONS = 3
 
 /** The trial's progress as values: "5.2 / 8.0 s" for the orbit, "2 / 3" for counted goals. */
-internal fun trialProgressText(engine: GameplayRenderModel, point: PointOfInterestProjection, language: AppLanguage): String {
+internal fun trialProgressText(engine: GameplayRenderModel, point: SiteProjection, language: AppLanguage): String {
     val progress = point.progress.coerceIn(0f, 1f)
     return when (point.kind) {
         SiteKind.COLLAPSING_ORBIT -> {

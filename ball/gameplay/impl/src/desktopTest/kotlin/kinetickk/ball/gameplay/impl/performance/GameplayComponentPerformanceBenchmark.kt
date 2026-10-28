@@ -20,7 +20,7 @@ import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.CharacterAbilityProjection
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
 import kinetickk.foundation.dispatch.InlineReply
@@ -507,11 +507,13 @@ private fun canonicalRenderFingerprint(render: GameplayRenderModel): Long {
         signature = mix(signature, obstacle.y.toRawBits())
         signature = mix(signature, obstacle.radius.toRawBits())
         signature = mix(signature, obstacle.shapeSeed)
+        signature = mix(signature, obstacle.fuseAt.toRawBits())
+        signature = mix(signature, obstacle.repels.asInt())
     }
     signature = mixLong(signature, canonicalCharacterAbilityFingerprint(render.characterAbility))
-    signature = mix(signature, render.pointsOfInterest.size)
-    render.pointsOfInterest.forEach { point ->
-        signature = mixLong(signature, canonicalPointOfInterestFingerprint(point))
+    signature = mix(signature, render.sites.size)
+    render.sites.forEach { site ->
+        signature = mixLong(signature, canonicalSiteFingerprint(site))
     }
     signature = mix(signature, render.directedChoice.asInt())
     signature = mix(signature, render.choiceType.ordinal)
@@ -609,19 +611,32 @@ internal fun canonicalCharacterAbilityFingerprint(ability: CharacterAbilityProje
     return mix(signature, ability.previousGhostY.toRawBits())
 }
 
-internal fun canonicalPointOfInterestFingerprint(point: PointOfInterestProjection): Long {
-    var signature = mix(0L, point.kind.ordinal)
-    signature = mix(signature, point.name.hashCode())
-    signature = mix(signature, point.x.toRawBits())
-    signature = mix(signature, point.y.toRawBits())
-    signature = mix(signature, point.active.asInt())
-    signature = mix(signature, point.remaining.toRawBits())
-    signature = mix(signature, point.nextBeacon)
-    signature = mix(signature, point.progress.toRawBits())
-    signature = mix(signature, point.defenderIds.size)
-    point.defenderIds.forEach { id -> signature = mix(signature, id) }
-    signature = mix(signature, point.warningRemaining.toRawBits())
-    return mix(signature, point.volleyAngle.toRawBits())
+internal fun canonicalSiteFingerprint(site: SiteProjection): Long {
+    var signature = mix(0L, site.kind.ordinal)
+    signature = mix(signature, site.name.hashCode())
+    signature = mix(signature, site.x.toRawBits())
+    signature = mix(signature, site.y.toRawBits())
+    signature = mix(signature, site.active.asInt())
+    signature = mix(signature, site.remaining.toRawBits())
+    signature = mix(signature, site.step)
+    signature = mix(signature, site.progress.toRawBits())
+    signature = mix(signature, site.foeIds.size)
+    site.foeIds.forEach { id -> signature = mix(signature, id) }
+    signature = mix(signature, site.warningRemaining.toRawBits())
+    signature = mix(signature, site.volleyAngle.toRawBits())
+    signature = mix(signature, site.course.size)
+    site.course.forEach { mark ->
+        signature = mix(signature, mark.dx.toRawBits())
+        signature = mix(signature, mark.dy.toRawBits())
+    }
+    signature = mix(signature, site.radius.toRawBits())
+    signature = mix(signature, site.sides)
+    signature = mix(signature, site.clock.toRawBits())
+    signature = mix(signature, site.medal)
+    signature = mix(signature, site.activationRadius.toRawBits())
+    signature = mix(signature, site.reveal.toRawBits())
+    signature = mix(signature, site.aimDx.toRawBits())
+    return mix(signature, site.aimDy.toRawBits())
 }
 
 internal fun canonicalBuildNotificationFingerprint(notification: BuildNotificationProjection): Long {

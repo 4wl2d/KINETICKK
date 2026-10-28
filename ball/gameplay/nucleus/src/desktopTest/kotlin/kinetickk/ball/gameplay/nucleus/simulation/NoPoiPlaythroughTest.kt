@@ -508,6 +508,20 @@ internal class NoPoiBot(
 
     fun choose(s: MutableGameState) {
         val choices = s.choices
+        // The bot opts into nothing: it declines an omen and a signal prompt, and takes a boon's first card (it never
+        // enters a rift, so no boon offer reaches it). A missing decline card falls back to the first card rather
+        // than leaving the run stuck on the choice. An opt-out is not a build decision, so it leaves the tie-break
+        // counter (and every later pick) as it would be without the offer.
+        val optOut = when (s.choiceType) {
+            ChoiceType.OMEN -> choices.indexOfFirst { it.omenId == null }.coerceAtLeast(0)
+            ChoiceType.SIGNAL -> choices.indexOfFirst { it.signalOption == SignalOption.IGNORE }.coerceAtLeast(0)
+            ChoiceType.BOON -> 0
+            else -> -1
+        }
+        if (optOut >= 0) {
+            s.choose(optOut)
+            return
+        }
         if (s.choiceType == ChoiceType.ACTIVE_SLOT) {
             decisions++
             s.choose(slotChoice(s))

@@ -1154,7 +1154,7 @@ private fun canonicalRenderFingerprint(state: MutableGameState): Long {
     signature = mix(signature, render.coreShape.ordinal)
     signature = mix(signature, render.coreRadius.toRawBits())
     signature = mix(signature, render.characterAbility.toString().hashCode())
-    signature = mix(signature, render.pointsOfInterest.toString().hashCode())
+    signature = mix(signature, render.sites.toString().hashCode())
     signature = mix(signature, if (render.directedChoice) 1 else 0)
     signature = mix(signature, render.effectiveWeaponPower.toRawBits())
     signature = mix(signature, render.abilityPower.toRawBits())
@@ -1173,6 +1173,25 @@ private fun canonicalRenderFingerprint(state: MutableGameState): Long {
     signature = mix(signature, render.volatileBursts.toString().hashCode())
     render.enemies.forEach { signature = mix(signature, if (it.armored) 1 else 0) }
     render.itemStacksSnapshot.forEach { stack -> signature = mix(signature, stack) }
+    render.enemies.forEach { signature = mix(signature, it.charges) }
+    // 0.6.0 world facts: data-class text keeps enum names (stable across processes) where a hash code would not.
+    signature = mix(signature, render.coreStraightness.toRawBits())
+    signature = mix(signature, if (render.easyMode) 1 else 0)
+    signature = mix(signature, render.ambientSites.toString().hashCode())
+    signature = mix(signature, render.trial.toString().hashCode())
+    signature = mix(signature, render.secretFlags)
+    signature = mix(signature, render.goldenDrifterId)
+    signature = mix(signature, render.structures.toString().hashCode())
+    signature = mix(signature, render.dimension.toString().hashCode())
+    render.runBoons.forEach { boon -> signature = mix(signature, boon) }
+    signature = mix(signature, render.runOmen?.ordinal ?: -1)
+    signature = mix(signature, render.runMutatorMask)
+    signature = mix(signature, render.directorPersonality?.ordinal ?: -1)
+    signature = mix(signature, render.featuredAspect)
+    signature = mix(signature, render.keynoteTag?.ordinal ?: -1)
+    signature = mix(signature, render.keynoteElement?.ordinal ?: -1)
+    signature = mix(signature, render.worldEvent.toString().hashCode())
+    signature = mix(signature, render.eventSignals.toString().hashCode())
     return mixLong(signature, fixtureFingerprint(state))
 }
 
@@ -1386,6 +1405,8 @@ internal fun obstacleProjectionFingerprint(current: Long, obstacles: List<Obstac
         signature = mix(signature, obstacle.y.toRawBits())
         signature = mix(signature, obstacle.radius.toRawBits())
         signature = mix(signature, obstacle.shapeSeed)
+        signature = mix(signature, obstacle.fuseAt.toRawBits())
+        signature = mix(signature, if (obstacle.repels) 1 else 0)
     }
     return signature
 }

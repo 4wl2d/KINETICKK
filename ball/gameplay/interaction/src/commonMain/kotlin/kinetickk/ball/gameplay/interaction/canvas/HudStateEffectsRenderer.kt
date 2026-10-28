@@ -302,7 +302,10 @@ private fun DrawScope.drawOverheatStamp(measurer: TextMeasurer, core: Offset, ha
     }
 }
 
-/** Screen-space state effects: critical vignette, polarity edge glow, overdrive border. */
+/**
+ * Screen-space state effects: critical vignette, polarity edge glow, overdrive border, then the world event's edge,
+ * the Nadir scorch edge and the dungeon vignette.
+ */
 internal fun DrawScope.drawHudScreenStates(
     engine: GameplayRenderModel,
     roles: KkRolePalette,
@@ -313,6 +316,9 @@ internal fun DrawScope.drawHudScreenStates(
     if (critical) drawCriticalVignette(roles, heartbeat(renderTime))
     if (memory != null && memory.polarityDraining(renderTime)) drawPolarityEdge(engine, roles, renderTime)
     if (engine.overdriveTime > 0f) drawOverdriveBorder(roles, renderTime)
+    drawWorldEventEdge(engine, roles, renderTime)
+    drawScorchEdge(engine, roles, renderTime)
+    drawDungeonVignette(engine)
 }
 
 private fun DrawScope.drawCriticalVignette(roles: KkRolePalette, alpha: Float) {

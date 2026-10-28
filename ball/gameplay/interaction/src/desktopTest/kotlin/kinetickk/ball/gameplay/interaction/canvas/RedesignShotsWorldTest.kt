@@ -52,7 +52,7 @@ import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.PickupProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupType
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.ProjectileProjection
 import kinetickk.ball.gameplay.nucleus.render.TotemProjection
 import kinetickk.ball.gameplay.nucleus.render.TrailPointProjection
@@ -135,8 +135,8 @@ class RedesignShotsWorldTest {
                     (1_000f + 3_000f * cos(radians).toFloat()) to (1_000f + 3_000f * sin(radians).toFloat())
                 }
                 val model = model(width.toFloat(), height.toFloat(), points = listOf(
-                    PointOfInterestProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", targets[0].first, targets[0].second, false, 31f, 1, 0f, immutableListOf(), 0f, 0f),
-                    PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", targets[1].first, targets[1].second, false, 31f, 1, 0f, immutableListOf(), 0f, 0f)),
+                    SiteProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", targets[0].first, targets[0].second, false, 31f, 0, 0f, immutableListOf(), 0f, 0f),
+                    SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", targets[1].first, targets[1].second, false, 31f, 0, 0f, immutableListOf(), 0f, 0f)),
                     totem = TotemProjection(targets[2].first, targets[2].second, 1f))
                 val bitmap = ImageBitmap(width, height)
                 CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(width.toFloat(), height.toFloat())) {
@@ -171,7 +171,7 @@ class RedesignShotsWorldTest {
     fun rendersMarkerFlightStrips() {
         val offers = listOf(-1f, 1f).map { side -> 560f * cos(side) to 560f * sin(side) }
         fun point(kind: SiteKind, at: Pair<Float, Float>) =
-            PointOfInterestProjection(kind, kind.name, at.first, at.second, false, 31f, 1, 0f, immutableListOf(), 0f, 0f)
+            SiteProjection(kind, kind.name, at.first, at.second, false, 31f, 0, 0f, immutableListOf(), 0f, 0f)
         fun measurer(language: AppLanguage) = CanvasTextMeasurer(
             ComposeTextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr),
             1.25f, language, Fonts.typography, KkRolePalette.Default,
@@ -352,15 +352,15 @@ class RedesignShotsWorldTest {
         add(Scene("poi-offer", model = { w, h -> model(w, h, points = offers(), totem = TotemProjection(-900f, 120f, 1f)) }))
         add(Scene("poi-orbit", model = { w, h -> model(w, h, points = listOf(active(SiteKind.COLLAPSING_ORBIT, 60f, 30f, 0.65f, warning = 0.5f))) }))
         add(Scene("poi-sealed", model = { w, h -> sealed(w, h) }))
-        add(Scene("poi-circuit", model = { w, h -> model(w, h, points = listOf(active(SiteKind.RESONANT_CIRCUIT, -60f, -170f, 0.33f, nextBeacon = 2))) }))
+        add(Scene("poi-circuit", model = { w, h -> model(w, h, points = listOf(active(SiteKind.RESONANT_CIRCUIT, -60f, -170f, 0.33f, step = 1))) }))
         // Review-fix states: the HUD drawn over the world to check labels and edge markers clear it.
         add(Scene("poi-offer-hud", hud = true, model = { w, h -> model(w, h, points = offers(), totem = TotemProjection(-900f, 120f, 1f)) }))
         add(Scene("poi-orbit-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(SiteKind.COLLAPSING_ORBIT, 60f, 30f, 0.65f, warning = 0.5f))) }))
         add(Scene("poi-orbit-high-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(SiteKind.COLLAPSING_ORBIT, 40f, -(h * 0.5f + 150f), 0.4f))) }))
         add(Scene("poi-orbit-low-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(SiteKind.COLLAPSING_ORBIT, -60f, h * 0.5f - 120f, 0.8f))) }))
         add(Scene("poi-sealed-hud", hud = true, model = { w, h -> sealed(w, h) }))
-        add(Scene("poi-circuit-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(SiteKind.RESONANT_CIRCUIT, -60f, -170f, 0.33f, nextBeacon = 2))) }))
-        add(Scene("poi-circuit-far-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(SiteKind.RESONANT_CIRCUIT, -900f, -700f, 0.66f, nextBeacon = 3))) }))
+        add(Scene("poi-circuit-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(SiteKind.RESONANT_CIRCUIT, -60f, -170f, 0.33f, step = 1))) }))
+        add(Scene("poi-circuit-far-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(SiteKind.RESONANT_CIRCUIT, -900f, -700f, 0.66f, step = 2))) }))
         add(Scene("numbers-edge", model = { w, h -> model(w, h) }, fx = ::edgeNumbersFx))
         // Second review-fix states (world): timers and marks near the HUD, markers above/below.
         val fixScenes = listOf<Pair<String, (Float, Float) -> GameplayRenderModel>>(
@@ -403,8 +403,8 @@ class RedesignShotsWorldTest {
             "poi-offer-edge-hud" to { w, h -> model(w, h, points = listOf(offerAt(w, h, 50f, 0.45f * h))) },
             // Two offers and the totem off screen in nearly one direction (above right).
             "poi-markers-crowded-hud" to { w, h -> model(w, h, points = listOf(
-                PointOfInterestProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 1_000f + 900f, 1_000f - 2_600f, false, 31f, 1, 0f, immutableListOf(), 0f, 0f),
-                PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 1_000f + 1_150f, 1_000f - 2_500f, false, 31f, 1, 0f, immutableListOf(), 0f, 0f)),
+                SiteProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 1_000f + 900f, 1_000f - 2_600f, false, 31f, 0, 0f, immutableListOf(), 0f, 0f),
+                SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 1_000f + 1_150f, 1_000f - 2_500f, false, 31f, 0, 0f, immutableListOf(), 0f, 0f)),
                 totem = TotemProjection(1_000f + 1_300f, 1_000f - 2_300f, 1f)) },
         )
         fix3Scenes.forEach { (name, build) ->
@@ -561,23 +561,23 @@ class RedesignShotsWorldTest {
     private fun worldY(h: Float, y: Float) = 1_000f + y - h * 0.5f
 
     /** An active circuit whose target beacon (order 2: 230 right, 200 below the center) sits at screen ([x], [y]). */
-    private fun beaconAt(w: Float, h: Float, x: Float, y: Float) = PointOfInterestProjection(SiteKind.RESONANT_CIRCUIT, "Resonant circuit",
-        worldX(w, x) - 230f, worldY(h, y) - 200f, true, 14f, 1, 0.33f, immutableListOf(), 0f, 0f)
+    private fun beaconAt(w: Float, h: Float, x: Float, y: Float) = SiteProjection(SiteKind.RESONANT_CIRCUIT, "Resonant circuit",
+        worldX(w, x) - 230f, worldY(h, y) - 200f, true, 14f, 0, 0.33f, immutableListOf(), 0f, 0f)
 
-    private fun activeAt(kind: SiteKind, w: Float, h: Float, x: Float, y: Float) = PointOfInterestProjection(kind, "Sealed anomaly",
-        worldX(w, x), worldY(h, y), true, 14f, 1, 0.33f, immutableListOf(), 0f, 0f)
+    private fun activeAt(kind: SiteKind, w: Float, h: Float, x: Float, y: Float) = SiteProjection(kind, "Sealed anomaly",
+        worldX(w, x), worldY(h, y), true, 14f, 0, 0.33f, immutableListOf(), 0f, 0f)
 
     private fun offerAt(w: Float, h: Float, x: Float, y: Float, kind: SiteKind = SiteKind.SEALED_ANOMALY) =
-        PointOfInterestProjection(kind, kind.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() },
-            worldX(w, x), worldY(h, y), false, 31f, 1, 0f, immutableListOf(), 0f, 0f)
+        SiteProjection(kind, kind.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() },
+            worldX(w, x), worldY(h, y), false, 31f, 0, 0f, immutableListOf(), 0f, 0f)
 
     private fun offers() = listOf(
-        PointOfInterestProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 1_000f + 330f, 1_000f - 150f, false, 31f, 1, 0f, immutableListOf(), 0f, 0f),
-        PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 1_000f + 1_300f, 1_000f + 500f, false, 31f, 1, 0f, immutableListOf(), 0f, 0f),
+        SiteProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 1_000f + 330f, 1_000f - 150f, false, 31f, 0, 0f, immutableListOf(), 0f, 0f),
+        SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 1_000f + 1_300f, 1_000f + 500f, false, 31f, 0, 0f, immutableListOf(), 0f, 0f),
     )
 
-    private fun active(kind: SiteKind, dx: Float, dy: Float, progress: Float, nextBeacon: Int = 1, warning: Float = 0f, defenders: List<Int> = emptyList()) =
-        PointOfInterestProjection(kind, kind.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }, 1_000f + dx, 1_000f + dy, true, 14f, nextBeacon, progress,
+    private fun active(kind: SiteKind, dx: Float, dy: Float, progress: Float, step: Int = 0, warning: Float = 0f, defenders: List<Int> = emptyList()) =
+        SiteProjection(kind, kind.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }, 1_000f + dx, 1_000f + dy, true, 14f, step, progress,
             defenders.toImmutableList(), warning, -0.3f)
 
     private fun enemy(
@@ -605,7 +605,7 @@ class RedesignShotsWorldTest {
         enemies: List<EnemyProjection> = emptyList(),
         projectiles: List<ProjectileProjection> = emptyList(),
         pickups: List<Pair<PickupType, Pair<Float, Float>>> = emptyList(),
-        points: List<PointOfInterestProjection> = emptyList(),
+        points: List<SiteProjection> = emptyList(),
         totem: TotemProjection? = null,
         coreShape: CoreShape = CoreShape.ORB,
         weapon: WeaponId = WeaponId.ARC_COIL,
@@ -646,7 +646,7 @@ class RedesignShotsWorldTest {
             weaponOrbitals = if (orbitals) (0 until 4).map { index -> WeaponOrbitalProjection(index, coreX + cos(index * 1.57f) * 70f, coreY + sin(index * 1.57f) * 70f, 8f) }.toImmutableList() else immutableListOf(),
             choices = immutableListOf(), choiceType = ChoiceType.ITEM, pendingRelicChoiceCount = 0,
             itemStacks = immutableListOf(), discoveredItemIds = immutableSetOf(), relicRanks = immutableListOf(),
-            pointsOfInterest = points.toImmutableList(),
+            sites = points.toImmutableList(),
         )
     }
 

@@ -54,8 +54,11 @@ internal sealed interface CodexIcon {
     data class Relic(val definition: RelicDefinition, val rank: Int?, val severed: Boolean = false) : CodexIcon
     data class Weapon(val id: WeaponId) : CodexIcon
     data class Shape(val id: CoreShape) : CodexIcon
-    /** A roster enemy; [locked] while the profile's Rebirth rank is below its minimum. */
-    data class Enemy(val type: EnemyType, val locked: Boolean) : CodexIcon
+    /**
+     * A roster enemy; [locked] while the profile's Rebirth rank is below its minimum; [hidden] for a secret boss not
+     * yet discovered (its shape stays secret).
+     */
+    data class Enemy(val type: EnemyType, val locked: Boolean, val hidden: Boolean = false) : CodexIcon
     /** Content gated behind a Rebirth tier the player has not reached; its identity stays hidden. */
     data class Locked(val rebirth: Int) : CodexIcon
     data class Reaction(val id: ReactionId, val discovered: Boolean, val reachable: Boolean) : CodexIcon

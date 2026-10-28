@@ -18,7 +18,7 @@ import kinetickk.ball.gameplay.interaction.layout.RunningControlMask
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.TotemProjection
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
@@ -60,7 +60,7 @@ class WorldEdgeMarkerHudTest {
                         // The totem in this direction and, while a trial runs, its orbit on the opposite side.
                         val model = base.with(
                             "totem" to TotemProjection(cos(angle) * DISTANCE, sin(angle) * DISTANCE, 1f),
-                            "pointsOfInterest" to (if (trial) listOf(orbit(-cos(angle) * DISTANCE, -sin(angle) * DISTANCE)) else emptyList())
+                            "sites" to (if (trial) listOf(orbit(-cos(angle) * DISTANCE, -sin(angle) * DISTANCE)) else emptyList())
                                 .toImmutableList(),
                         )
                         CanvasDrawScope().draw(Density(density), LayoutDirection.Ltr, canvas, Size(width, height)) {
@@ -97,8 +97,8 @@ class WorldEdgeMarkerHudTest {
         }
     }
 
-    private fun orbit(x: Float, y: Float) = PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", x, y, true,
-        12f, 0, 0.4f, immutableListOf(), 0f, 0f)
+    private fun orbit(x: Float, y: Float) = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", x, y, true,
+        12f, -1, 0.4f, immutableListOf(), 0f, 0f)
 
     // The size passed to draw sets the screen; a 1 px bitmap keeps the sweep fast.
     private val canvas = Canvas(ImageBitmap(1, 1))

@@ -31,7 +31,7 @@ import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupType
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.TotemProjection
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
@@ -68,8 +68,8 @@ class HudHotPathAllocationTest {
                     EnemyProjection(6, EnemyType.DRIFTER, 700f, 900f, 0f, 0f, 40f, 40f, 17f, 0f, 0f, 0f, 0f, 700f, 900f, false),
                     EnemyProjection(7, EnemyType.SWARMLING, -50f, 1_900f, 0f, 0f, 9f, 9f, 10f, 0f, 0f, 0f, 0f, -50f, 1_900f, false))
                     .toImmutableList(),
-                "pointsOfInterest" to listOf(PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,
-                    true, 12f, 0, 0.4f, immutableListOf(), 0f, 0f)).toImmutableList(),
+                "sites" to listOf(SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,
+                    true, 12f, -1, 0.4f, immutableListOf(), 0f, 0f)).toImmutableList(),
                 // The minimap: every obstacle kind, a Key and a Relic past its rim, the totem, an Elite and ordinary enemies.
                 "obstacles" to immutableListOf(
                     ObstacleProjection(1L, ObstacleKind.ASTEROID, 600f, 300f, 120f, 3),
@@ -104,8 +104,8 @@ class HudHotPathAllocationTest {
                     "elapsed" to frame * GameplayRenderModel.FIXED_STEP,
                     "hp" to 36f - frame * 0.05f,
                     "combo" to 14 + frame,
-                    "pointsOfInterest" to listOf(PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,
-                        true, 12f, 0, frame / FRAMES.toFloat(), immutableListOf(), 0f, 0f)).toImmutableList(),
+                    "sites" to listOf(SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,
+                        true, 12f, -1, frame / FRAMES.toFloat(), immutableListOf(), 0f, 0f)).toImmutableList(),
                 )
             }
             val bitmap = ImageBitmap(width, height)

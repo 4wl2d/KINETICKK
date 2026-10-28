@@ -3,17 +3,24 @@
 
 package kinetickk.ball.gameplay.nucleus.render
 
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.DirectorPersonalityId
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
+import kinetickk.ball.content.api.OmenId
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.SignalKind
+import kinetickk.ball.content.api.SignalOption
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.ImmutableSet
+import kinetickk.foundation.collections.immutableListOf
 import kotlin.math.sqrt
 
 enum class GamePhase { RUNNING, PAUSED, CHOICE, GAME_OVER, VICTORY }
@@ -26,9 +33,11 @@ enum class PickupType { DATA, KEY, REPAIR, RELIC }
 enum class ProjectileKind { BOLT, MINE }
 /**
  * What an offer deals. [ACTIVE_SLOT] asks which active item an incoming active item replaces when every slot holds one:
- * a card per held active plus a card that keeps the loadout and salvages the incoming item.
+ * a card per held active plus a card that keeps the loadout and salvages the incoming item. [OMEN] is the run-start
+ * omen offer (three omens and No omen), [SIGNAL] an event signal's prompt (its options and Ignore) and [BOON] a
+ * dimension's Blessing or Pact cards; none of the three is dealt until its lane opens it.
  */
-enum class ChoiceType { ITEM, TOTEM, WEAPON, RELIC, RELIC_BIND, ACTIVE_SLOT }
+enum class ChoiceType { ITEM, TOTEM, WEAPON, RELIC, RELIC_BIND, ACTIVE_SLOT, OMEN, SIGNAL, BOON }
 enum class TotemAction { AMPLIFY_CURRENT, CHANGE_WEAPON }
 enum class RelicChoiceAction { ACQUIRE, MELD, REPLACE, MELD_TARGET, DECLINE }
 enum class WeaponNodeType { GRAVITY_MINE }
@@ -37,8 +46,8 @@ enum class WeaponNodeType { GRAVITY_MINE }
  * rifts, Aegis shards, missiles, toll and pulse rings, tethers and solar beams.
  */
 enum class WeaponEntityKind { DISC, SENTRY, LENS, WELL, RIFT, SHARD, MISSILE, RING, TETHER, BEAM }
-/** World obstacles: an [ASTEROID] hurts at speed, a [BUMPER] throws the Core back, an [UNSTABLE] asteroid explodes. */
-enum class ObstacleKind { ASTEROID, BUMPER, UNSTABLE }
+/** Content owns the obstacle kinds; gameplay keeps this name so render and simulation code read unchanged. */
+typealias ObstacleKind = kinetickk.ball.content.api.ObstacleKind
 /** Structure capsule walls: a [SOLID] wall, a [DOOR_SEALED] door that blocks like a wall, a [DOOR_OPEN] door that lets the Core through. */
 enum class WallKind { SOLID, DOOR_SEALED, DOOR_OPEN }
 
@@ -80,6 +89,18 @@ data class ChoiceOption(
      * before the run's Matter gain (presentation shows this number; it never recomputes the salvage).
      */
     val salvageMatter: Int? = null,
+    /** An [ChoiceType.OMEN] card's omen (null on the No omen card). */
+    val omenId: OmenId? = null,
+    /** A [ChoiceType.SIGNAL] card's signal and option ([SignalOption.IGNORE] declines the prompt). */
+    val signalKind: SignalKind? = null,
+    val signalOption: SignalOption? = null,
+    /** What a [ChoiceType.SIGNAL] option costs and pays (Matter, integrity or rerolls, by option). */
+    val signalCost: Int = 0,
+    val signalPayout: Int = 0,
+    /** A card shown but not takeable (a [ChoiceType.SIGNAL] option the run cannot afford). */
+    val locked: Boolean = false,
+    /** A [ChoiceType.BOON] card's Blessing or Pact id. */
+    val boonId: Int? = null,
 )
 
 data class CharacterLatticePoint(val x: Float, val y: Float)
@@ -145,20 +166,6 @@ data class CharacterAbilityProjection(
     val secondGhostY: Float = 0f,
 )
 
-data class PointOfInterestProjection(
-    val kind: kinetickk.ball.content.api.SiteKind,
-    val name: String,
-    val x: Float,
-    val y: Float,
-    val active: Boolean,
-    val remaining: Float,
-    val nextBeacon: Int,
-    val progress: Float,
-    val defenderIds: ImmutableList<Int>,
-    val warningRemaining: Float,
-    val volleyAngle: Float,
-)
-
 data class EnemyProjection(
     val id: Int,
     val type: EnemyType,
@@ -194,6 +201,8 @@ data class EnemyProjection(
     val armored: Boolean = false,
     /** Control and mark state; decode with [EnemyControlBits]. */
     val controlBits: Int = 0,
+    /** Type-specific stored charges (shield arcs, brood pips); 0 for kinds without any. */
+    val charges: Int = 0,
 )
 
 /** Behavior steps published in [EnemyProjection.behavior]; meaning depends on the enemy type. */
@@ -209,6 +218,8 @@ object EnemyBehavior {
     const val PHASED: Int = 4
     /** Bomber about to explode. */
     const val PRIMED: Int = 5
+    /** A mounted turret anchored to its rock or wall. */
+    const val ANCHORED: Int = 6
 }
 
 data class ProjectileProjection(
@@ -251,7 +262,10 @@ data class VolatileBurstProjection(
     val detonatesAt: Float,
 )
 
-/** A static world obstacle; [id] is stable across rebases, [shapeSeed] picks its outline. */
+/**
+ * A static world obstacle; [id] is stable across rebases, [shapeSeed] picks its outline. [fuseAt] is when an armed
+ * mine detonates (0 while unarmed); [repels] marks a gravity knot that pushes instead of pulling.
+ */
 data class ObstacleProjection(
     val id: Long,
     val kind: ObstacleKind,
@@ -259,6 +273,8 @@ data class ObstacleProjection(
     val y: Float,
     val radius: Float,
     val shapeSeed: Int,
+    val fuseAt: Float = 0f,
+    val repels: Boolean = false,
 )
 
 /** A trail sample [age] seconds old that burns for [life] seconds (render fades it out after) at [scale] strength. */
@@ -418,7 +434,8 @@ class GameplayRenderModel(
     internal val itemStacks: ImmutableList<Int>,
     internal val discoveredItemIds: ImmutableSet<Int>,
     internal val relicRanks: ImmutableList<Int>,
-    val pointsOfInterest: ImmutableList<PointOfInterestProjection> = kinetickk.foundation.collections.immutableListOf(),
+    /** Window sites (offered or active), then the secret sigil if any. */
+    val sites: ImmutableList<SiteProjection> = immutableListOf(),
     val directedChoice: Boolean = false,
     val characterAbility: CharacterAbilityProjection = CharacterAbilityProjection(),
     val effectiveWeaponPower: Float = weaponPower,
@@ -474,6 +491,39 @@ class GameplayRenderModel(
     val combatFields: ImmutableList<CombatFieldProjection> = kinetickk.foundation.collections.immutableListOf(),
     /** Lingering reaction and skill states on the Core. */
     val coreState: CoreStateProjection = CoreStateProjection.NEUTRAL,
+    /** How long the heading has held near-straight, 0..1 (straight-line fatigue). */
+    val coreStraightness: Float = 0f,
+    /** The run was started in Easy mode (fixed for the whole run). */
+    val easyMode: Boolean = false,
+    /** Hash-placed caches and signals around the Core (never offered by a window). */
+    val ambientSites: ImmutableList<SiteProjection> = immutableListOf(),
+    /** The one HUD trial panel's facts: the active site, dungeon or dimension objective, or null. */
+    val trial: TrialProjection? = null,
+    /** Run secret flags (bit = flag ordinal) that presentation reads. */
+    val secretFlags: Int = 0,
+    /** The Golden Drifter's enemy id while it flies, or -1. */
+    val goldenDrifterId: Int = -1,
+    /** Structures, their walls and signals around the Core, and the dungeon in progress. */
+    val structures: StructureRenderProjection = StructureRenderProjection.EMPTY,
+    /** The world layer the Core is in and its visit. */
+    val dimension: DimensionProjection = DimensionProjection.REALSPACE,
+    /** Blessings and Pacts taken this run, in order. */
+    val runBoons: ImmutableList<Int> = immutableListOf(),
+    /** The omen chosen at the run start, or null. */
+    val runOmen: OmenId? = null,
+    /** Rebirth mutators a run modifier added on top of the tier's own (bit per mutator ordinal). */
+    val runMutatorMask: Int = 0,
+    /** The director personality rolled for this run, or null. */
+    val directorPersonality: DirectorPersonalityId? = null,
+    /** The SURGE theme's featured aspect (StatusElement ordinal), or -1. */
+    val featuredAspect: Int = -1,
+    /** The run's featured build tag and element (run resonance), or null. */
+    val keynoteTag: BuildTag? = null,
+    val keynoteElement: StatusElement? = null,
+    /** The ambient world event in progress (telegraph included), or null. */
+    val worldEvent: WorldEventProjection? = null,
+    /** Live event signals in the world. */
+    val eventSignals: ImmutableList<EventSignalProjection> = immutableListOf(),
 ) {
     val speed: Float get() = vectorLength(velocityX, velocityY)
     val runProgress: Float get() = content.tempo.progress(elapsed)
@@ -512,6 +562,8 @@ class GameplayRenderModel(
         get() = phase == GamePhase.CHOICE && !directedChoice && rerollsRemaining > 0 && when (choiceType) {
             ChoiceType.ITEM, ChoiceType.WEAPON, ChoiceType.RELIC -> true
             ChoiceType.TOTEM, ChoiceType.RELIC_BIND, ChoiceType.ACTIVE_SLOT -> false
+            // Omens and dimension boons are never rerolled; a signal prompt deals fixed options.
+            ChoiceType.OMEN, ChoiceType.SIGNAL, ChoiceType.BOON -> false
         }
     val itemStacksSnapshot: ImmutableList<Int> get() = itemStacks
 

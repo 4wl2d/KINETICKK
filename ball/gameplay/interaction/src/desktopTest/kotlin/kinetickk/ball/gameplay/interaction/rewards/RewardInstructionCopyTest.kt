@@ -114,7 +114,7 @@ class RewardInstructionCopyTest {
         .filter { it.rewardFocus != null || it.totemAction != null || it.relicAction in StepActions }
         .flatMap { listOf(it.description, it.description.localizedContent(language)) }.filter(String::isNotBlank).toSet()
 
-    /** The game's own choices, built with the nucleus strings (ProgressionSystem, PointOfInterestSystem). */
+    /** The game's own choices, built with the nucleus strings (ProgressionSystem, DirectedRewardSystem). */
     private fun scenes(language: AppLanguage, width: Float, height: Float): List<Pair<String, GameplayRenderModel>> {
         fun focus(type: ChoiceType, vararg focuses: RewardFocus) = focuses.map { focus ->
             ChoiceOption(type, focus.label, FocusDescription, "FOCUS", rewardFocus = focus)
@@ -165,5 +165,5 @@ class RewardInstructionCopyTest {
 
 private val StepActions = setOf(RelicChoiceAction.MELD, RelicChoiceAction.MELD_TARGET, RelicChoiceAction.REPLACE)
 
-/** The nucleus focus-step description (PointOfInterestSystem.openDirectedReward). */
+/** The nucleus focus-step description (DirectedRewardSystem.openDirectedReward). */
 private const val FocusDescription = "Choose a direction, then one of three matching offers."

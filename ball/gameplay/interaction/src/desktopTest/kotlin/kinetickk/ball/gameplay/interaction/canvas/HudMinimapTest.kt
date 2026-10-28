@@ -24,7 +24,7 @@ import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
@@ -58,7 +58,7 @@ class HudMinimapTest {
 
     @Test
     fun theMinimapOverlapsNoOtherHudBlockInAnyLayout() {
-        val orbit = PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
+        val orbit = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, -1, 0.4f,
             immutableListOf(), 0f, 0f)
         for ((dpWidth, dpHeight) in viewports) for (density in listOf(1f, 2.625f)) for (textScale in listOf(1f, 1.25f, 1.75f)) {
             // A slow Core, a high-tier three-digit speed and a top-tier four-digit one (the widest, most stretched number).
@@ -72,7 +72,7 @@ class HudMinimapTest {
                     "rebirthLevel" to 10,
                     "enemies" to (if (boss == null) emptyList() else listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f,
                         0f, 0f, 0f, 0f, 0f, 0f, false, affinityBits = bossAffinity(boss)))).toImmutableList(),
-                    "pointsOfInterest" to (if (trial) listOf(orbit) else emptyList()).toImmutableList(),
+                    "sites" to (if (trial) listOf(orbit) else emptyList()).toImmutableList(),
                     "velocityX" to speed, "velocityY" to 0f,
                 )
                 drawHud(model, width, height, density, textScale)

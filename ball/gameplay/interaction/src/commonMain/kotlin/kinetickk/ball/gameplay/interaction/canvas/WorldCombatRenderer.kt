@@ -95,9 +95,15 @@ private fun DrawScope.drawWorldLayer(
     // The crowd and the reaction effects setting pick every world look's level of detail this frame.
     val crowd = onScreenEnemyCount(engine, shakeX, shakeY, FxFrame.CROWD_SIG_ONLY + 1)
     FxFrame.begin(crowd, engine.settings.reactionEffects)
-    // Obstacles lie on the backdrop, under everything that moves.
+    // Structure floors and walls, then obstacles, lie on the backdrop, under everything that moves.
+    drawStructureFloors(engine, shakeX, shakeY, roles)
+    drawStructureWalls(engine, shakeX, shakeY, roles)
     drawObstacles(engine, shakeX, shakeY, roles)
-    drawPointsOfInterest(engine, shakeX, shakeY, textMeasurer)
+    drawSites(engine, shakeX, shakeY, textMeasurer)
+    drawAmbientSites(engine, shakeX, shakeY, textMeasurer)
+    drawDimensionWorld(engine, shakeX, shakeY, roles)
+    drawWorldEventAmbient(engine, shakeX, shakeY, roles)
+    drawEventSignals(engine, shakeX, shakeY, textMeasurer)
     // Lingering fields and skill zones are ground decals.
     drawCombatFields(engine, shakeX, shakeY, roles)
     drawSkillMarkers(engine, shakeX, shakeY, roles)
@@ -106,10 +112,12 @@ private fun DrawScope.drawWorldLayer(
     drawShockwaves(engine, visualFx, shakeX, shakeY, roles)
     drawMotionEchoes(engine, visualFx, shakeX, shakeY, roles)
     drawTrail(engine, shakeX, shakeY, roles)
+    drawCoreRibbon(engine, shakeX, shakeY, roles)
     drawWeaponNodes(engine, shakeX, shakeY, roles)
     drawWeaponEntities(engine, shakeX, shakeY, roles, airborne = false)
     drawPickups(engine, shakeX, shakeY, roles)
     drawVolatileBursts(engine, shakeX, shakeY, roles)
+    drawWorldEventStrikes(engine, shakeX, shakeY, roles)
     drawWeapon(engine, core, shakeX, shakeY, roles)
     drawWeaponEntities(engine, shakeX, shakeY, roles, airborne = true)
     drawWeaponArcs(engine, visualFx, shakeX, shakeY, roles)
@@ -133,10 +141,16 @@ private fun DrawScope.drawWorldLayer(
         drawCoreStates(engine, core, roles)
         drawApexActive(engine, core, shakeX, shakeY, roles)
     }
+    drawStructureScrim(engine, shakeX, shakeY)
     drawSingularity(pointer, engine.renderElapsed, engine.tetherDistance < 75f, roles)
-    // Decided in world units, like the marks they stand in for.
-    collectPointOfInterestEdgeMarkers(engine, textMeasurer, markers)
+    // Decided in world units, like the marks they stand in for; the collection order is the priority order (the
+    // batch keeps the first markers it receives).
+    collectSiteEdgeMarkers(engine, textMeasurer, markers)
     collectTotemEdgeMarker(engine, markers)
+    collectSignalEdgeMarker(engine, markers)
+    collectDimensionEdgeMarkers(engine, markers)
+    collectStructureEdgeMarkers(engine, markers)
+    collectAmbientSiteEdgeMarkers(engine, markers)
 }
 
 /**

@@ -72,7 +72,7 @@ import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.PickupProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupType
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.ProjectileProjection
 import kinetickk.ball.gameplay.nucleus.render.TotemProjection
 import kinetickk.ball.gameplay.nucleus.render.TrailPointProjection
@@ -221,7 +221,7 @@ class WorldHotPathAllocationTest {
     /** The larger of the two edge-marker distances (totem, sealed-anomaly offer) in [model]. */
     private fun edgeDistance(model: GameplayRenderModel): Float {
         val totem = requireNotNull(model.totem)
-        val offer = model.pointsOfInterest.last()
+        val offer = model.sites.last()
         return maxOf(
             kotlin.math.hypot(totem.x - model.coreX, totem.y - model.coreY),
             kotlin.math.hypot(offer.x - model.coreX, offer.y - model.coreY),
@@ -241,8 +241,8 @@ class WorldHotPathAllocationTest {
         val frames = List(HUD_FRAMES) { frame ->
             base.with(
                 "totem" to TotemProjection(base.coreX - 1_300f - frame * 11f, base.coreY + 90f, 1f),
-                "pointsOfInterest" to immutableListOf(PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit",
-                    base.coreX + 60f, base.coreY + 40f, true, 12f, 0, frame / HUD_FRAMES.toFloat(), immutableListOf(), 0f, 0f)),
+                "sites" to immutableListOf(SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit",
+                    base.coreX + 60f, base.coreY + 40f, true, 12f, -1, frame / HUD_FRAMES.toFloat(), immutableListOf(), 0f, 0f)),
             )
         }
         val measurer = CanvasTextMeasurer(
@@ -487,14 +487,14 @@ class WorldHotPathAllocationTest {
             weaponEntities = BusyWeaponEntities,
             choices = immutableListOf(), choiceType = ChoiceType.ITEM, pendingRelicChoiceCount = 0,
             itemStacks = immutableListOf(), discoveredItemIds = immutableSetOf(), relicRanks = immutableListOf(),
-            pointsOfInterest = immutableListOf(
+            sites = immutableListOf(
                 // The orbit's seconds in the ring change every frame (drawn from cached digits).
-                PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Orbit", CORE + 60f, CORE + 40f, true, 14f, 1,
+                SiteProjection(SiteKind.COLLAPSING_ORBIT, "Orbit", CORE + 60f, CORE + 40f, true, 14f, 0,
                     (drift % 80f) / 80f, immutableListOf(), 0.5f, 0.3f),
                 // An offer on screen: its name and timer under the mark.
-                PointOfInterestProjection(SiteKind.RESONANT_CIRCUIT, "Resonant circuit", CORE - 280f, CORE + 40f, false, 20f, 1, 0f,
+                SiteProjection(SiteKind.RESONANT_CIRCUIT, "Resonant circuit", CORE - 280f, CORE + 40f, false, 20f, 0, 0f,
                     immutableListOf(), 0f, 0f),
-                PointOfInterestProjection(SiteKind.SEALED_ANOMALY, "Sealed", CORE + 900f + drift, CORE - 300f, false, 20f, 1, 0f,
+                SiteProjection(SiteKind.SEALED_ANOMALY, "Sealed", CORE + 900f + drift, CORE - 300f, false, 20f, 0, 0f,
                     immutableListOf(), 0f, 0f),
             ),
             obstacles = BusyObstacles,

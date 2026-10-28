@@ -51,7 +51,7 @@ import kinetickk.ball.gameplay.nucleus.render.ApexProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.SkillBarProjection
 import kinetickk.ball.gameplay.nucleus.render.SkillSlotProjection
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
@@ -209,21 +209,21 @@ class RedesignShotsHudTest {
         val trial = shot == Shot.TRIAL || shot == Shot.TRIAL_INFO
         val points = when {
             trial -> listOf(
-                PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", coreX, coreY, true, 14.2f, 0, 0.65f,
+                SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", coreX, coreY, true, 14.2f, -1, 0.65f,
                     immutableListOf(), 0f, 0f),
             )
             // Offers far above, above-left and above-right of the view: their edge markers.
             shot == Shot.ELITE_MARKERS -> listOf(
-                PointOfInterestProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, -3_000f, false, 20f, 0, 0f,
+                SiteProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, -3_000f, false, 20f, -1, 0f,
                     immutableListOf(), 0f, 0f),
-                PointOfInterestProjection(SiteKind.RESONANT_CIRCUIT, "Resonant circuit", -1_400f, -2_600f, false, 20f, 0, 0f,
+                SiteProjection(SiteKind.RESONANT_CIRCUIT, "Resonant circuit", -1_400f, -2_600f, false, 20f, -1, 0f,
                     immutableListOf(), 0f, 0f),
-                PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 1_400f, -2_600f, false, 20f, 0, 0f,
+                SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 1_400f, -2_600f, false, 20f, -1, 0f,
                     immutableListOf(), 0f, 0f),
             )
             // An orbit whose ring center sits just under the top band: its timer must avoid the boss block.
             shot == Shot.ARCHITECT_TRIAL -> listOf(
-                PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", coreX, coreY - 120f, true, 14.2f, 0, 0.4f,
+                SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", coreX, coreY - 120f, true, 14.2f, -1, 0.4f,
                     immutableListOf(), 0f, 0f),
             )
             else -> emptyList()
@@ -247,7 +247,7 @@ class RedesignShotsHudTest {
             else listOf(EquippedRelic(RelicId.entries[0], 2), EquippedRelic(RelicId.entries[7], 1),
                 EquippedRelic(RelicId.entries[1], 1))).toImmutableList(),
             "enemies" to enemies.toImmutableList(),
-            "pointsOfInterest" to points.toImmutableList(),
+            "sites" to points.toImmutableList(),
             "message" to when (shot) {
                 Shot.FEED -> "ELITE SIGNAL"
                 Shot.FEED_ANOMALY -> "TWO ANOMALIES DETECTED // CHOOSE A COURSE"
