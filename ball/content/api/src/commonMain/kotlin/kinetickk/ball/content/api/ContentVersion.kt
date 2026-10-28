@@ -16,7 +16,7 @@ value class ContentVersion(val value: String) {
 }
 
 /** Canonical version published by the current Content implementation. */
-val KINETICKK_CONTENT_VERSION: ContentVersion = ContentVersion("kinetickk-content-3")
+val KINETICKK_CONTENT_VERSION: ContentVersion = ContentVersion("kinetickk-content-4")
 
 /** Bootstrap limits. Runtime decisions use the corresponding captured snapshot fields. */
 object ContentBounds {
