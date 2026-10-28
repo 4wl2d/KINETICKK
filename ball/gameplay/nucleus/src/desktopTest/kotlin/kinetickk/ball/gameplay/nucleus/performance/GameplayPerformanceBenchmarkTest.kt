@@ -311,6 +311,7 @@ class GameplayPerformanceBenchmarkTest {
             { signalsEngaged = 1 },
             { pendingSignalPrompts = immutableListOf(SignalPrompt(SignalKind.DERELICT, 0)) },
             { offerRarityFloor = ItemRarity.EPIC },
+            { activeRebirthProfile = activeRebirthProfile.copy(enemyHealthMultiplier = activeRebirthProfile.enemyHealthMultiplier * 1.2f) },
             { secretBossMask = 1L shl 34 },
             { encounters = immutableListOf(
                 EncounterState(encounterTag(EncounterOwner.SITE, 1L), 0f, 0f, 300f, 2_400f, 1, 0, -1, 0f),
