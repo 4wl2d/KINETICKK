@@ -107,10 +107,11 @@ class DimensionPilotGateTest {
      * The lane's calibration probe, not a gate: it returns at once unless `KK_DIMENSION_PROBE=first..last` names a
      * calibration window, then flies every arm (or those `KK_DIMENSION_ARMS` lists) on the seeds `i * 7_919 + 13` for i in
      * it and prints one line per run and a summary per arm with bootstrap standard errors. It never plays the gate
-     * population. `KK_DIMENSION_KNOBS=name=value,...` overrides the shipped dimension knobs (graceDrag, paceReach, scorch,
-     * rings, embers, emberLife, emberRadius, haloRadius, turnMin, turnMax, spacingMin, spacingMax, zenithBossShare,
-     * nadirBossShare). The outcome arms OC (no rift), OZ and ON (a Zenith or Nadir visit at 165 s with its rolled
-     * objective) play whole runs and print the win shares the outcome gate compares.
+     * population. `KK_DIMENSION_KNOBS=name=value,...` overrides the shipped dimension knobs (graceDrag, paceReach,
+     * paceCeiling, scorch, rings, embers, emberLife, emberRadius, haloRadius, turnMin, turnMax, spacingMin, spacingMax,
+     * zenithBossShare, nadirBossShare, and the Nadir's nadirSpawn, nadirCap and nadirVisit seconds). The outcome arms
+     * OC (no rift), OZ and ON (a Zenith or Nadir visit at 165 s with its rolled objective) play whole runs and print the
+     * win shares the outcome gate compares.
      */
     @Test fun probeTheCalibrationWindow() {
         val window = System.getenv("KK_DIMENSION_PROBE")?.takeIf { it.isNotBlank() } ?: return
@@ -239,6 +240,14 @@ class DimensionPilotGateTest {
                             if (d.layer == WorldLayer.NADIR) d.copy(physics = d.physics.copy(scorchSharePerSecond = value)) else d
                         }.toImmutableList())
                         "paceReach" -> copy(paceReach = value)
+                        "paceCeiling" -> copy(paceCeiling = value)
+                        "nadirSpawn", "nadirCap", "nadirVisit" -> copy(definitions = definitions.map { d ->
+                            if (d.layer != WorldLayer.NADIR) d else when (name) {
+                                "nadirSpawn" -> d.copy(spawnRateMultiplier = value)
+                                "nadirCap" -> d.copy(ordinaryCapMultiplier = value)
+                                else -> d.copy(visitSeconds = value)
+                            }
+                        }.toImmutableList())
                         "rings" -> copy(objectives = objectives.copy(ascentRings = value.toInt()))
                         "embers" -> copy(objectives = objectives.copy(harvestEmbers = value.toInt()))
                         "emberLife" -> copy(objectives = objectives.copy(emberLifeSeconds = value))

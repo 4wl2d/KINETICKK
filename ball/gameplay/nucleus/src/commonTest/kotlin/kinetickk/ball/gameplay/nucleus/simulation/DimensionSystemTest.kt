@@ -328,9 +328,11 @@ class DimensionSystemTest {
         val due = game()
         due.nextEliteAt = 205f
         due.enterDimensionForTesting(WorldLayer.NADIR)
+        val returnAt = checkNotNull(due.dimensionRun.visit).endsAt
+        assertEquals(200f + due.content.dimensions.definition(WorldLayer.NADIR).visitSeconds, returnAt)
         due.skipToVisitEndForTesting()
         due.updateDimension(MutableGameState.FIXED_STEP)
-        assertEquals(275f + EXIT_ELITE_DELAY_SECONDS, due.nextEliteAt)
+        assertEquals(returnAt + EXIT_ELITE_DELAY_SECONDS, due.nextEliteAt)
     }
 
     @Test

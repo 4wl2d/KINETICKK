@@ -261,7 +261,9 @@ fun defaultDimensionDefinitions(): ImmutableList<DimensionDefinition> = listOf(
     DimensionDefinition(
         WorldLayer.NADIR, "Nadir", "Nadir rift",
         "A layer of heat beneath realspace. Slow flight scorches, and Matter burns twice as bright. Pacts are offered at a price.",
-        visitSeconds = 75f,
+        // A shorter stay than the Zenith's: a fresh run's Pyre fight under the Herald's volleys turned deadly late in a
+        // 75 s visit, while a Harvest is done well inside 60 s.
+        visitSeconds = 60f,
         objectives = immutableListOf(
             DimensionObjectiveWeight(DimensionObjective.HARVEST, 1f), DimensionObjectiveWeight(DimensionObjective.PYRE, 1f),
         ),

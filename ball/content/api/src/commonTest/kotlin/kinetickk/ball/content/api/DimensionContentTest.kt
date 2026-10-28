@@ -22,7 +22,7 @@ class DimensionContentTest {
         val zenith = policy.definition(WorldLayer.ZENITH)
         val nadir = policy.definition(WorldLayer.NADIR)
         val archive = policy.definition(WorldLayer.ARCHIVE)
-        assertEquals(listOf(75f, 75f, 100f), listOf(zenith, nadir, archive).map { it.visitSeconds })
+        assertEquals(listOf(75f, 60f, 100f), listOf(zenith, nadir, archive).map { it.visitSeconds })
         assertEquals(listOf(DimensionObjective.ASCENT, DimensionObjective.JUDGEMENT), zenith.objectives.map { it.objective })
         assertEquals(listOf(DimensionObjective.HARVEST, DimensionObjective.PYRE), nadir.objectives.map { it.objective })
         assertEquals(listOf(DimensionObjective.ANTECEDENT), archive.objectives.map { it.objective })
@@ -85,9 +85,11 @@ class DimensionContentTest {
         assertFailsWith<IllegalArgumentException> { replacing(WorldLayer.ZENITH, zenith.copy(visitSeconds = policy.minimumVisitSeconds - 1f)) }
         DimensionPolicy(minimumVisitSeconds = 10f)
         assertFailsWith<IllegalArgumentException> { DimensionPolicy(minimumVisitSeconds = 9.9f) }
-        // The minimum may not exceed the shortest shipped visit (75 s).
-        DimensionPolicy(minimumVisitSeconds = 75f)
-        assertFailsWith<IllegalArgumentException> { DimensionPolicy(minimumVisitSeconds = 76f) }
+        // The minimum may not exceed the shortest shipped visit (the Nadir's 60 s).
+        val shortest = policy.definitions.filter { it.layer != WorldLayer.BASE }.minOf { it.visitSeconds }
+        assertEquals(60f, shortest)
+        DimensionPolicy(minimumVisitSeconds = shortest)
+        assertFailsWith<IllegalArgumentException> { DimensionPolicy(minimumVisitSeconds = shortest + 1f) }
     }
 
     @Test
