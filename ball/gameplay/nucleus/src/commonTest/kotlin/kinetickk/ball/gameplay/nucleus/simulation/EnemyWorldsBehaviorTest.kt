@@ -13,6 +13,7 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.test.Test
@@ -21,7 +22,10 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
-/** The space and structure kinds of 0.6.0: Comet, Pylon, Sentry and Crawler, and the shared flock. */
+/**
+ * The 0.6.0 kinds: Comet, Pylon, Sentry and Crawler (space and structures), Seraph, Choir, Imp, Hound, Cipher and Mirror
+ * (dimensions), the shared flock and the ember queue.
+ */
 class EnemyWorldsBehaviorTest {
     @Test
     fun aCometMarksALanePastTheCoresLeadPointStreaksAlongItRecoversAndCoolsDown() {
@@ -430,11 +434,410 @@ class EnemyWorldsBehaviorTest {
             state.spawn(EnemyType.PYLON, 300f, -380f)
             state.spawn(EnemyType.SENTRY, -700f, 0f, ownerTag = 0L)
             repeat(4) { state.spawn(EnemyType.CRAWLER, 380f + it * 20f, -60f) }
+            state.spawn(EnemyType.SERAPH, -420f, 300f)
+            state.spawn(EnemyType.CHOIR, 0f, 520f)
+            state.spawn(EnemyType.IMP, -500f, -200f)
+            repeat(3) { state.spawn(EnemyType.HOUND, 200f - it * 30f, 420f) }
+            state.spawn(EnemyType.CIPHER, -300f, -380f)
+            state.spawn(EnemyType.MIRROR, 600f, 300f)
             state.runEnemiesFor(4f)
             return state.enemies.flatMap { listOf(it.x.toRawBits(), it.y.toRawBits(), it.mode) }
         }
         assertEquals(trace(), trace())
         assertNotEquals(0, trace().size)
+    }
+
+    @Test
+    fun aSeraphMendsItsTwoNearestAlliesAndShieldsThemAgainstAllButImpacts() {
+        val state = quietState()
+        val seraph = state.spawn(EnemyType.SERAPH, 450f, 0f).apply { actionTimer = 0f }
+        fun hurt(type: EnemyType, x: Float, y: Float, share: Float = 0.5f) = state.spawn(type, x, y).apply { hp = maxHp * share }
+        // Nearer than both mended allies, but never mended: another Seraph, a shifting enemy, a mini-boss and a secret boss.
+        val kin = hurt(EnemyType.SERAPH, 450f, 30f)
+        val shifting = hurt(EnemyType.DRIFTER, 470f, -20f).apply { shiftUntil = Float.MAX_VALUE }
+        val prime = hurt(EnemyType.WARDEN_PRIME, 420f, 40f)
+        val cartographer = hurt(EnemyType.CARTOGRAPHER, 400f, -40f)
+        val near = hurt(EnemyType.DRIFTER, 450f, 60f)
+        val next = hurt(EnemyType.SHOOTER, 450f, -120f, share = 0.97f)
+        val third = hurt(EnemyType.CHARGER, 450f, 200f)
+        val far = hurt(EnemyType.DRIFTER, 450f + SERAPH_LINK_RANGE + 40f, 0f)
+        val untouched = listOf(kin, shifting, prime, cartographer, third, far).map { it to it.hp }
+
+        state.updateSeraph(seraph, state.coreX - seraph.x, state.coreY - seraph.y, state.distanceToCore(seraph), FIXED, FIXED)
+        assertEquals(near.maxHp * (0.5f + SERAPH_HEAL_SHARE), near.hp, 1e-3f, "it mends 6 % of the ally's integrity")
+        assertEquals(next.maxHp, next.hp, "never past full integrity")
+        for ((ally, hp) in untouched) {
+            assertEquals(hp, ally.hp, "${ally.type} at ${ally.x - seraph.x}, ${ally.y - seraph.y} is not mended")
+            assertFalse(state.shielded(ally), "${ally.type} is not shielded")
+        }
+        for (shielded in listOf(near, next, seraph)) {
+            assertEquals(state.elapsed + SERAPH_SHIELD_SECONDS, shielded.shieldUntil, 1e-4f, "${shielded.type} is shielded")
+        }
+        assertEquals(SERAPH_PULSE_SECONDS, seraph.actionTimer)
+
+        // The shield stops a weapon and is spent by an impact, which lands.
+        val mended = near.hp
+        assertEquals(0f, state.dealHit(near, 20f, HitSource.WEAPON, canCrit = false).amount)
+        assertEquals(mended, near.hp)
+        assertTrue(state.shielded(near))
+        assertTrue(state.dealHit(near, 20f, HitSource.IMPACT, canCrit = false).amount > 0f)
+        assertTrue(near.hp < mended)
+        assertFalse(state.shielded(near), "an impact breaks it")
+
+        // A silenced Seraph's pulse passes without a mend.
+        val silent = quietState()
+        val quiet = silent.spawn(EnemyType.SERAPH, 450f, 0f).apply { actionTimer = 0f; silencedUntil = Float.MAX_VALUE }
+        val ally = silent.spawn(EnemyType.DRIFTER, 450f, 40f).apply { hp = maxHp * 0.5f }
+        silent.updateSeraph(quiet, silent.coreX - quiet.x, silent.coreY - quiet.y, silent.distanceToCore(quiet), FIXED, FIXED)
+        assertEquals(ally.maxHp * 0.5f, ally.hp)
+        assertFalse(silent.shielded(quiet) || silent.shielded(ally))
+        assertEquals(SERAPH_PULSE_SECONDS, quiet.actionTimer, "its cadence restarts")
+
+        // It weaves in from afar and keeps to mid range.
+        val roaming = quietState()
+        val weaver = roaming.spawn(EnemyType.SERAPH, 650f, 0f)
+        roaming.runEnemiesFor(5f)
+        assertTrue(roaming.distanceToCore(weaver) in 340f..560f, "it holds mid range: ${roaming.distanceToCore(weaver)}")
+    }
+
+    @Test
+    fun aChoirPulseFiresARingOfBoltsAndShovesOnlyACoreInsideItsWave() {
+        /** One pulse from a Choir [at] u east of the Core: (bolts fired, the Core's velocity change along and across the shove line). */
+        fun pulse(at: Float, dashing: Boolean = false, silenced: Boolean = false): Pair<Int, Pair<Float, Float>> {
+            val state = quietState()
+            state.setVelocityForTesting(40f, -30f)
+            if (dashing) state.dashPhaseTime = 10f
+            val choir = state.spawn(EnemyType.CHOIR, at, 0f).apply { actionTimer = 0f }
+            state.runEnemiesFor(FIXED)
+            assertEquals(EnemyBehavior.TELEGRAPH, choir.mode, "it sings before the pulse")
+            assertEquals(CHOIR_TELEGRAPH_SECONDS, state.behaviorRemaining(choir), 0.02f)
+            if (silenced) choir.silencedUntil = Float.MAX_VALUE
+            val before = state.projectiles.size
+            val start = state.elapsed
+            state.runUntil { choir.mode == EnemyBehavior.IDLE }
+            assertEquals(CHOIR_TELEGRAPH_SECONDS, state.elapsed - start, 0.02f)
+            val fired = state.projectiles.size - before
+            if (fired > 0) {
+                val bolt = state.projectiles.last()
+                assertEquals(CHOIR_SHOT_SPEED * state.rebirthProfile.enemySpeedMultiplier, sqrt(bolt.vx * bolt.vx + bolt.vy * bolt.vy), 0.01f)
+            }
+            // The pulse resolved from where the Choir stood when its last step began.
+            val awayX = state.coreX - choir.previousX
+            val awayY = state.coreY - choir.previousY
+            val away = sqrt(awayX * awayX + awayY * awayY)
+            val changeX = state.velocityX - 40f
+            val changeY = state.velocityY + 30f
+            return fired to ((changeX * awayX + changeY * awayY) / away to (changeY * awayX - changeX * awayY) / away)
+        }
+        val (closeBolts, shoved) = pulse(200f)
+        assertEquals(CHOIR_VOLLEY, closeBolts)
+        assertEquals(CHOIR_WAVE_PUSH, shoved.first, 1e-2f, "a Core inside the wave is shoved straight away from the Choir")
+        assertEquals(0f, shoved.second, 1e-2f)
+        for ((case, outcome) in listOf(
+            "outside the wave only the bolts reach out" to pulse(CHOIR_WAVE_RADIUS + 140f),
+            "a dash phase slips the shove" to pulse(200f, dashing = true),
+            "a silenced pulse does nothing" to pulse(200f, silenced = true),
+        )) {
+            assertEquals(if (case.startsWith("a silenced")) 0 else CHOIR_VOLLEY, outcome.first, case)
+            assertEquals(0f, abs(outcome.second.first) + abs(outcome.second.second), case)
+        }
+    }
+
+    @Test
+    fun anImpPrimesBurstsWithoutAKillAndLeavesThreeEmbersAcrossItsHeading() {
+        val state = quietState()
+        val imp = state.spawn(EnemyType.IMP, 80f, 0f)
+        state.runEnemiesFor(FIXED)
+        assertEquals(EnemyBehavior.PRIMED, imp.mode)
+        val kills = state.kills
+        val blast = state.hostileDamage(imp, IMP_BLAST_DAMAGE)
+        val primedAt = state.elapsed
+        state.runUntil { imp !in state.enemies }
+        assertEquals(IMP_PRIME_SECONDS, state.elapsed - primedAt, 0.02f)
+        assertTrue(imp.dead)
+        assertEquals(kills, state.kills, "a burst is not a kill")
+        assertEquals(state.maxHp - blast, state.hp, 0.05f, "the burst hurts a Core within its reach")
+
+        val embers = state.volatileBursts
+        assertEquals(3, embers.size)
+        val (centre, left, right) = embers
+        assertEquals(imp.x, centre.x, 0.5f)
+        assertEquals(imp.y, centre.y, 0.5f)
+        for ((ember, delay) in embers.zip(listOf(IMP_EMBER_SECONDS, IMP_LEFT_EMBER_SECONDS, IMP_RIGHT_EMBER_SECONDS))) {
+            assertEquals(state.elapsed + delay, ember.detonatesAt, 1e-4f)
+        }
+        assertTrue(embers.all { it.radius == VOLATILE_BURST_RADIUS && it.armedAt == state.elapsed })
+        // The side embers sit on either side of the centre one, across the line to the Core.
+        assertEquals(centre.x, (left.x + right.x) * 0.5f, 1e-3f)
+        assertEquals(centre.y, (left.y + right.y) * 0.5f, 1e-3f)
+        assertEquals(IMP_EMBER_SPREAD * 2f, sqrt((left.x - right.x) * (left.x - right.x) + (left.y - right.y) * (left.y - right.y)), 1e-2f)
+        val across = (left.x - right.x) * (state.coreX - centre.x) + (left.y - right.y) * (state.coreY - centre.y)
+        assertEquals(0f, across, 1f, "the embers spread across its heading")
+
+        // A killed Imp, whoever owns it, leaves one ember where it fell; other kinds leave none.
+        val killing = quietState()
+        val victim = killing.spawn(EnemyType.IMP, 400f, 0f, ownerTag = 7L)
+        val drifter = killing.spawn(EnemyType.DRIFTER, -400f, 0f)
+        killing.dealHit(drifter, 10_000f, HitSource.WEAPON, canCrit = false)
+        killing.sweepKills()
+        assertTrue(drifter.dead)
+        assertTrue(killing.volatileBursts.isEmpty())
+        val killedAt = victim.x to victim.y
+        killing.dealHit(victim, 10_000f, HitSource.WEAPON, canCrit = false)
+        killing.sweepKills()
+        assertTrue(victim.dead)
+        val ember = killing.volatileBursts.single()
+        assertEquals(killedAt, ember.x to ember.y)
+        assertEquals(killing.elapsed + IMP_KILL_EMBER_SECONDS, ember.detonatesAt, 1e-4f)
+
+        // A silenced fuse fizzles.
+        val silent = quietState()
+        val fizzling = silent.spawn(EnemyType.IMP, 80f, 0f)
+        silent.runEnemiesFor(FIXED)
+        fizzling.silencedUntil = Float.MAX_VALUE
+        silent.runEnemiesFor(IMP_PRIME_SECONDS + 0.05f)
+        assertTrue(fizzling in silent.enemies)
+        assertEquals(EnemyBehavior.IDLE, fizzling.mode)
+        assertTrue(silent.volatileBursts.isEmpty())
+        assertEquals(silent.maxHp, silent.hp)
+    }
+
+    @Test
+    fun anEmberBurnsASlowCoreWithoutTheRebirthMutatorAndQueuesOnlyBelowTheSharedCap() {
+        for (fast in listOf(false, true)) {
+            val state = quietState()
+            if (fast) state.setVelocityForTesting(VOLATILE_ESCAPE_SPEED + 20f, 0f)
+            state.queueEmber(state.coreX + 30f, state.coreY, 0.2f)
+            state.elapsed += 0.1f
+            state.updateVolatileRemains()
+            assertEquals(1, state.volatileBursts.size, "it waits for its delay")
+            assertEquals(state.maxHp, state.hp)
+            state.elapsed += 0.11f
+            val burn = state.hostileDamage(null, VOLATILE_BURST_DAMAGE)
+            state.updateVolatileRemains()
+            assertTrue(state.volatileBursts.isEmpty())
+            assertEquals(if (fast) state.maxHp else state.maxHp - burn, state.hp, 1e-3f, if (fast) "a fast Core escapes" else "a slow Core burns")
+        }
+
+        val capped = quietState()
+        repeat(MutableGameState.MAX_VOLATILE_BURSTS - 1) { capped.queueEmber(capped.coreX + 900f, capped.coreY, 5f) }
+        assertEquals(MutableGameState.MAX_VOLATILE_BURSTS - 1, capped.volatileBursts.size)
+        capped.queueEmber(capped.coreX + 900f, capped.coreY, 5f)
+        assertEquals(MutableGameState.MAX_VOLATILE_BURSTS, capped.volatileBursts.size, "the last free slot takes an ember")
+        val full = capped.volatileBursts
+        capped.queueEmber(capped.coreX + 900f, capped.coreY, 5f)
+        assertTrue(full === capped.volatileBursts, "a full list takes none")
+    }
+
+    @Test
+    fun aHoundWindsUpDashesAtTheCoreAndItsStrikeHurtsAtAnySpeed() {
+        val state = quietState()
+        val hound = state.spawn(EnemyType.HOUND, 300f, 0f).apply { actionTimer = FIXED * 0.5f }
+        state.runEnemiesFor(FIXED)
+        assertTrue(hound.actionTimer < 0f && hound.mode == EnemyBehavior.IDLE, "it winds up")
+        assertEquals(0f, state.strikeDamage(hound))
+        val windupAt = state.elapsed
+        state.runUntil { hound.mode == EnemyBehavior.STRIKE }
+        assertEquals(HOUND_WINDUP / state.hostileAttackRate(), state.elapsed - windupAt, 0.02f)
+        val dash = HOUND_DASH_SPEED * state.rebirthProfile.enemySpeedMultiplier
+        assertEquals(dash, sqrt(hound.vx * hound.vx + hound.vy * hound.vy), 0.01f)
+        assertEquals(atan2(state.coreY - hound.previousY, state.coreX - hound.previousX), atan2(hound.vy, hound.vx), 1e-4f, "at the Core")
+        assertEquals(atan2(hound.vy, hound.vx), hound.facing, 1e-5f, "it faces its dash")
+        assertEquals(state.contactDamage(hound), state.strikeDamage(hound))
+        assertEquals(HOUND_DASH_CADENCE, hound.actionTimer, FIXED)
+        val struckAt = state.elapsed
+        state.runUntil { hound.mode == EnemyBehavior.IDLE }
+        assertEquals(HOUND_STRIKE_SECONDS, state.elapsed - struckAt, 0.02f)
+        assertEquals(0f, state.strikeDamage(hound), "the strike ends with its window")
+
+        // A fast Core meeting a striking Hound is hurt; outside the strike it rams it freely.
+        for (striking in listOf(true, false)) {
+            val probe = quietState()
+            val target = probe.spawn(EnemyType.HOUND, 30f, 0f).apply { hp = 10_000f }
+            if (striking) {
+                target.mode = EnemyBehavior.STRIKE
+                target.modeUntil = probe.elapsed + 0.3f
+            }
+            probe.previousCoreX = probe.coreX - 10f
+            probe.setVelocityForTesting(900f, 0f)
+            probe.resolveEnemyCoreCollisions()
+            assertEquals(if (striking) probe.maxHp - probe.contactDamage(target) else probe.maxHp, probe.hp, 1e-3f, "striking $striking")
+        }
+
+        // A silenced Hound's wind-up passes without a dash.
+        val silent = quietState()
+        val leashed = silent.spawn(EnemyType.HOUND, 300f, 0f).apply { actionTimer = -HOUND_WINDUP + FIXED * 0.5f; silencedUntil = Float.MAX_VALUE }
+        silent.runEnemiesFor(FIXED)
+        assertEquals(EnemyBehavior.IDLE, leashed.mode)
+        assertEquals(HOUND_DASH_CADENCE, leashed.actionTimer, FIXED)
+    }
+
+    @Test
+    fun houndsFlockOnlyWithHounds() {
+        fun velocityBeside(type: EnemyType?): Pair<Float, Float> {
+            val open = quietState()
+            val lone = open.spawn(EnemyType.HOUND, 600f, 0f).apply { actionTimer = 2f }
+            if (type != null) open.spawn(type, 600f, 20f)
+            open.updateHound(lone, open.coreX - lone.x, open.coreY - lone.y, open.distanceToCore(lone), FIXED, FIXED)
+            return lone.vx to lone.vy
+        }
+        val alone = velocityBeside(null)
+        assertEquals(alone.first.toRawBits(), velocityBeside(EnemyType.IMP).first.toRawBits())
+        assertEquals(alone.second.toRawBits(), velocityBeside(EnemyType.IMP).second.toRawBits())
+        assertTrue(velocityBeside(EnemyType.HOUND).second < alone.second, "its pack pushes it apart")
+    }
+
+    @Test
+    fun aCipherGlitchesOutOfReachAndReappearsAtAHashedTurnAroundTheCore() {
+        for (start in listOf(100f, 380f, 800f)) {
+            val state = quietState()
+            val cipher = state.spawn(EnemyType.CIPHER, start, 0f)
+            assertEquals(state.elapsed + 2f, cipher.abilityAt, 1e-4f, "its first glitch waits two seconds")
+            cipher.abilityAt = 0f
+            state.runEnemiesFor(FIXED)
+            assertEquals(EnemyBehavior.PHASED, cipher.mode)
+            assertEquals(cipher.modeUntil, cipher.shiftUntil, "out of phase it shifts")
+            assertEquals(state.elapsed + CIPHER_PHASE_SECONDS, cipher.modeUntil, 1e-4f)
+            assertTrue(state.isPhasedPhantom(cipher), "its profile phases out")
+            val fromX = cipher.x - state.coreX
+            val fromY = cipher.y - state.coreY
+            while (cipher.mode == EnemyBehavior.PHASED) {
+                assertEquals(0f, cipher.vx)
+                assertEquals(0f, cipher.vy)
+                state.runEnemiesFor(FIXED)
+            }
+            // The spec's hash of the run seed, its id and the run clock picks a 0.9-1.4 rad turn, either way.
+            val hash = splitMix64(splitMix64(state.runSeed.toLong() xor 0x0C1F_E55E_ED00_0013L) xor
+                (cipher.id.toLong() shl 20) xor (state.elapsed * 120f).toLong())
+            val turn = (0.9f + 0.5f * (hash ushr 40).toFloat() / (1 shl 24)) * if (hash and 1L == 1L) 1f else -1f
+            val reach = sqrt(fromX * fromX + fromY * fromY).coerceIn(CIPHER_NEAREST, CIPHER_FARTHEST)
+            assertEquals(reach, state.distanceToCore(cipher), 0.05f, "from $start it reappears $reach u out")
+            var turned = atan2(cipher.y - state.coreY, cipher.x - state.coreX) - atan2(fromY, fromX)
+            while (turned > PI) turned -= (2 * PI).toFloat()
+            while (turned < -PI) turned += (2 * PI).toFloat()
+            assertEquals(turn, turned, 1e-3f, "from $start it turns around the Core by the hashed angle")
+            assertEquals(cipher.x, cipher.previousX, "a teleport, not a sweep")
+            assertEquals(cipher.y, cipher.previousY)
+            assertEquals(EnemyBehavior.TELEGRAPH, cipher.mode)
+            assertEquals(CIPHER_AIM_SECONDS, state.behaviorRemaining(cipher), 0.02f)
+            assertEquals(atan2(state.coreY - cipher.y, state.coreX - cipher.x), cipher.facing, 1e-4f)
+            val before = state.projectiles.size
+            state.runUntil { cipher.mode == EnemyBehavior.IDLE }
+            assertEquals(CIPHER_VOLLEY, state.projectiles.size - before, "it fires a fan once it has aimed")
+            val middle = state.projectiles[before + 1]
+            assertEquals(atan2(state.coreY - cipher.y, state.coreX - cipher.x), atan2(middle.vy, middle.vx), 1e-2f)
+            assertEquals(state.elapsed + CIPHER_GLITCH_SECONDS / state.hostileAttackRate(), cipher.abilityAt, 1e-3f)
+        }
+    }
+
+    @Test
+    fun aGlitchedCipherIsIntangibleAndReappearsClearOfObstacles() {
+        // Out of phase, a slow Core passes through it: no contact either way, and weapons find nothing.
+        for (phased in listOf(true, false)) {
+            val state = quietState()
+            val cipher = state.spawn(EnemyType.CIPHER, 25f, 0f)
+            if (phased) {
+                cipher.abilityAt = 0f
+                state.runEnemiesFor(FIXED)
+                assertEquals(EnemyBehavior.PHASED, cipher.mode)
+            }
+            val integrity = cipher.hp
+            state.previousCoreX = state.coreX - 10f
+            state.setVelocityForTesting(60f, 0f)
+            state.resolveEnemyCoreCollisions()
+            if (phased) {
+                assertEquals(state.maxHp, state.hp, "a phased Cipher has no contact")
+                assertEquals(integrity, cipher.hp)
+                assertEquals(0f, state.dealHit(cipher, 30f, HitSource.WEAPON, canCrit = false).amount)
+            } else {
+                assertTrue(state.hp < state.maxHp, "a solid Cipher hurts a slow Core")
+            }
+        }
+
+        // An obstacle on its landing point pushes the landing outward along the same bearing.
+        fun landing(rock: Boolean): Pair<Float, Float> {
+            val state = quietState()
+            val cipher = state.spawn(EnemyType.CIPHER, 380f, 0f).apply { abilityAt = 0f }
+            if (rock) {
+                val clear = landing(rock = false)
+                state.placeObstaclesForTesting(testObstacle(state.coreX + clear.first, state.coreY + clear.second, radius = 50f))
+            }
+            state.runEnemiesFor(FIXED)
+            while (cipher.mode == EnemyBehavior.PHASED) state.runEnemiesFor(FIXED)
+            assertFalse(rock && state.isSpawnPointBlocked(cipher.x, cipher.y, cipher.radius), "it lands clear of the rock")
+            return (cipher.x - state.coreX) to (cipher.y - state.coreY)
+        }
+        val clear = landing(rock = false)
+        val nudged = landing(rock = true)
+        val clearReach = sqrt(clear.first * clear.first + clear.second * clear.second)
+        val nudgedReach = sqrt(nudged.first * nudged.first + nudged.second * nudged.second)
+        assertEquals(atan2(clear.second, clear.first), atan2(nudged.second, nudged.first), 1e-4f)
+        val steps = (nudgedReach - clearReach) / 50f
+        assertTrue(steps in 0.99f..4.01f && abs(steps - steps.roundToInt()) < 1e-3f, "nudged out in 50 u steps: $steps")
+    }
+
+    @Test
+    fun cipherGlitchesDrawNothingFromTheSpawnStream() {
+        val state = quietState()
+        state.placeObstaclesForTesting(testObstacle(state.coreX - 200f, state.coreY + 340f, radius = 80f))
+        val ciphers = List(3) { state.spawn(EnemyType.CIPHER, 300f + it * 120f, it * 90f - 90f).apply { abilityAt = 0f } }
+        val spawn = state.spawnRandom.snapshot()
+        val gameplay = state.gameplayRandom.snapshot()
+        val reward = state.rewardRandom.snapshot()
+        var glitches = 0
+        var seconds = 0f
+        val modes = IntArray(ciphers.size) { ciphers[it].mode }
+        while (seconds < 9f) {
+            state.runEnemiesFor(FIXED)
+            seconds += FIXED
+            for (index in ciphers.indices) {
+                if (modes[index] == EnemyBehavior.PHASED && ciphers[index].mode != EnemyBehavior.PHASED) glitches++
+                modes[index] = ciphers[index].mode
+            }
+        }
+        assertTrue(glitches >= 6, "each Cipher glitched at least twice: $glitches")
+        assertEquals(spawn, state.spawnRandom.snapshot())
+        assertEquals(gameplay, state.gameplayRandom.snapshot())
+        assertEquals(reward, state.rewardRandom.snapshot())
+
+        // The same check sees the Phantom's reappearance, which does draw from the spawn stream.
+        val phantom = quietState()
+        phantom.spawn(EnemyType.PHANTOM, 400f, 0f).apply { abilityAt = 0f }
+        val before = phantom.spawnRandom.snapshot()
+        phantom.runEnemiesFor(PHANTOM_PHASE_SECONDS + 0.1f)
+        assertNotEquals(before, phantom.spawnRandom.snapshot())
+    }
+
+    @Test
+    fun aMirrorSteersForTheCoresImageThroughTheSingularityAndFiresATwoBoltFan() {
+        val state = quietState()
+        state.updatePointer(state.screenWidth * 0.5f + 160f, state.screenHeight * 0.5f - 90f)
+        val singularityX = state.cameraX + state.pointerX - state.screenWidth * 0.5f
+        val singularityY = state.cameraY + state.pointerY - state.screenHeight * 0.5f
+        val targetX = 2f * singularityX - state.coreX
+        val targetY = 2f * singularityY - state.coreY
+        val mirror = state.spawn(EnemyType.MIRROR, -300f, 220f)
+        val startX = mirror.x
+        val startY = mirror.y
+        state.runEnemiesFor(FIXED)
+        assertEquals(atan2(targetY - startY, targetX - startX), atan2(mirror.vy, mirror.vx), 1e-4f, "it heads for 2S - core")
+        state.runEnemiesFor(0.6f)
+        assertTrue(sqrt(mirror.vx * mirror.vx + mirror.vy * mirror.vy) <= MIRROR_MAX_SPEED * state.rebirthProfile.enemySpeedMultiplier + 0.01f)
+        state.runEnemiesFor(3.4f)
+        val miss = sqrt((mirror.x - targetX) * (mirror.x - targetX) + (mirror.y - targetY) * (mirror.y - targetY))
+        assertTrue(miss < 15f, "it waits on the Core's image beyond the cursor: $miss u off")
+        val bolts = state.projectiles.size
+        assertTrue(bolts in MIRROR_VOLLEY..MIRROR_VOLLEY * 2 && bolts % MIRROR_VOLLEY == 0, "two-bolt fans every three seconds: $bolts")
+        val first = state.projectiles[0]
+        val second = state.projectiles[1]
+        assertEquals(MIRROR_VOLLEY_SPACING, angleBetween(atan2(second.vy, second.vx), atan2(first.vy, first.vx)), 1e-4f)
+
+        // It follows the cursor: a new pointer moves its mirror point.
+        state.updatePointer(state.screenWidth * 0.5f - 200f, state.screenHeight * 0.5f + 60f)
+        val movedX = 2f * (state.cameraX + state.pointerX - state.screenWidth * 0.5f) - state.coreX
+        val movedY = 2f * (state.cameraY + state.pointerY - state.screenHeight * 0.5f) - state.coreY
+        state.runEnemiesFor(4f)
+        assertTrue(sqrt((mirror.x - movedX) * (mirror.x - movedX) + (mirror.y - movedY) * (mirror.y - movedY)) < 15f)
     }
 
     /** Swarmlings in a tight knot (some coincident) among other kinds, for the released-formula comparison. */

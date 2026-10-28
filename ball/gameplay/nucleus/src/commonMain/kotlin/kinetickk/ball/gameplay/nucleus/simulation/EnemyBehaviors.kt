@@ -88,6 +88,7 @@ internal fun MutableGameState.strikeDamage(enemy: Enemy): Float {
         EnemyType.LANCER -> if (striking) hostileDamage(enemy, LANCER_DAMAGE) else 0f
         EnemyType.PHANTOM -> if (striking) hostileDamage(enemy, PHANTOM_STRIKE_DAMAGE) else 0f
         EnemyType.HERALD -> contactDamage(enemy)
+        EnemyType.HOUND -> if (striking) contactDamage(enemy) else 0f
         else -> 0f
     }
 }
@@ -601,7 +602,7 @@ internal fun MutableGameState.initializeBehavior(enemy: Enemy) {
         EnemyType.SNIPER -> enemy.abilityAt = elapsed + 1.5f
         EnemyType.PHANTOM -> enemy.abilityAt = elapsed + 2f
         EnemyType.HERALD -> enemy.abilityAt = elapsed + HERALD_FIRST_SHIELD_SECONDS
-        EnemyType.COMET, EnemyType.PYLON, EnemyType.SENTRY -> initializeWorldsBehavior(enemy)
+        EnemyType.COMET, EnemyType.PYLON, EnemyType.SENTRY, EnemyType.CIPHER -> initializeWorldsBehavior(enemy)
         else -> Unit
     }
 }

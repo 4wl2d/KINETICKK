@@ -60,8 +60,13 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
             EnemyType.PYLON -> updatePylon(enemy, dx, dy, distance)
             EnemyType.SENTRY -> updateSentry(enemy, dx, dy, distance, delta)
             EnemyType.CRAWLER -> updateCrawler(enemy, dx, dy, distance, delta)
-            EnemyType.SERAPH, EnemyType.CHOIR,
-            EnemyType.IMP, EnemyType.HOUND, EnemyType.CIPHER, EnemyType.MIRROR, EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN,
+            EnemyType.SERAPH -> updateSeraph(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.CHOIR -> updateChoir(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.IMP -> updateImp(enemy, dx, dy, distance, delta)
+            EnemyType.HOUND -> updateHound(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.CIPHER -> updateCipher(enemy, dx, dy, distance, delta)
+            EnemyType.MIRROR -> updateMirror(enemy, dx, dy, cadence, delta)
+            EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN,
             EnemyType.THRONE, EnemyType.PYRE_HERALD, EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT,
             -> updatePendingKind(enemy, dx, dy, distance, delta)
             EnemyType.SHOOTER -> {
