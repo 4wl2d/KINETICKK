@@ -207,19 +207,19 @@ data class RacePolicy(
 }
 
 data class ChallengePolicy(
-    val brakelessRequired: Float = 12f,
+    val brakelessRequired: Float = 14f,
     val brakelessDuration: Float = 20f,
     val brakelessStartRadius: Float = 900f,
     val brakelessEndRadius: Float = 450f,
     val brakelessMinSpeed: Float = 500f,
     val brakelessGrace: Float = 0.5f,
     val ramFoes: Int = 8,
-    val ramRequired: Int = 6,
+    val ramRequired: Int = 2,
     val ramDuration: Float = 20f,
-    val ramFoeHealthShare: Float = 0.6f,
+    val ramFoeHealthShare: Float = 1.0f,
     val ramRingRadius: Float = 320f,
     val ramClamp: Float = 650f,
-    val untouchedRequired: Float = 12f,
+    val untouchedRequired: Float = 10f,
     val untouchedDuration: Float = 22f,
     val untouchedRadius: Float = 650f,
     val untouchedVolleyInterval: Float = 1.6f,
@@ -480,15 +480,15 @@ fun defaultSiteDefinitions(): ImmutableList<SiteDefinition> = immutableListOf(
     ),
     SiteDefinition(
         SiteKind.BRAKELESS_TRIAL, "Brakeless run",
-        "Keep moving inside the shrinking ring for twelve seconds. Braking fails the trial.",
+        "Keep moving inside the shrinking ring for fourteen seconds. Braking fails the trial.",
         SiteReward(directed = DirectedReward.ITEM_AND_REPAIR), windowWeight = CHALLENGE_WINDOW_WEIGHT, duration = 20f,
     ),
     SiteDefinition(
-        SiteKind.RAM_TRIAL, "Ram rite", "Destroy six marked drifters with Dash impacts.",
+        SiteKind.RAM_TRIAL, "Ram rite", "Destroy two marked drifters with Dash impacts.",
         SiteReward(directed = DirectedReward.WEAPON), windowWeight = CHALLENGE_WINDOW_WEIGHT, duration = 20f,
     ),
     SiteDefinition(
-        SiteKind.UNTOUCHED_TRIAL, "Untouched", "Stay inside the ring for twelve seconds without taking damage.",
+        SiteKind.UNTOUCHED_TRIAL, "Untouched", "Stay inside the ring for ten seconds without taking damage.",
         SiteReward(directed = DirectedReward.RELIC), windowWeight = CHALLENGE_WINDOW_WEIGHT, duration = 22f,
     ),
     SiteDefinition(
