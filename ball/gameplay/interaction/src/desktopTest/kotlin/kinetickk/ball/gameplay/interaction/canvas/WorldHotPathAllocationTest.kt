@@ -208,6 +208,33 @@ class WorldHotPathAllocationTest {
         }
     }
 
+    @Test
+    fun babyModeWorldFrameDrawsWithoutAllocating() {
+        // The busy frame of a Baby mode run: the soft cursor with its pacifier wings on screen, the diapered Core, the
+        // pastel halftone and the pastel ribbon in a Dash.
+        for (roles in listOf(KkRolePalette.Default, KkRolePalette.Mono)) {
+            assertFrameIsAllocationFree(roles, WeaponId.MORNINGSTAR, warmFrames = WARM_MODELS, measuredFrames = 20, dash = 0.12f, easy = true)
+        }
+    }
+
+    @Test
+    fun babyModeCursorUsesTheSoftRoleAndNoThreat() {
+        // A quiet frame (no enemies, shots, fields, sites or marks) with the cursor 140 u from the Core: Baby mode's
+        // cursor is the soft role and nothing in the world is threat; the standard cursor on the same frame is threat.
+        listOf(KkRolePalette.Default, KkRolePalette.Protan).forEach { roles ->
+            fun IntArray.count(color: androidx.compose.ui.graphics.Color): Int {
+                val target = color.toArgb()
+                return count { it == target }
+            }
+            val easy = render(quietModel(easy = true), VisualFxProjection.EMPTY, roles)
+            val standard = render(quietModel(easy = false), VisualFxProjection.EMPTY, roles)
+            assertTrue(easy.count(roles.soft) > 60, "$roles: the Baby mode cursor is soft (${easy.count(roles.soft)} px)")
+            assertTrue(easy.count(roles.threat) < 20, "$roles: no threat in a quiet Baby mode world (${easy.count(roles.threat)} px)")
+            assertTrue(standard.count(roles.threat) > 60, "$roles: the standard cursor is threat (${standard.count(roles.threat)} px)")
+            assertTrue(standard.count(roles.soft) < 20, "$roles: the soft role is Baby mode's alone (${standard.count(roles.soft)} px)")
+        }
+    }
+
     private fun assertFrameIsAllocationFree(
         roles: KkRolePalette,
         weapon: WeaponId,
@@ -218,6 +245,7 @@ class WorldHotPathAllocationTest {
         fx: VisualFxProjection = busyFx(),
         decorate: (GameplayRenderModel) -> GameplayRenderModel = { it },
         dash: Float = 0f,
+        easy: Boolean = false,
     ) {
         // The off-screen totem and sealed-anomaly offer move every frame, so their edge-marker
         // distances change every frame: they must be drawn from cached digit layouts, never
@@ -225,10 +253,10 @@ class WorldHotPathAllocationTest {
         // use, and every measured frame draws two distances no earlier frame drew (a measuring
         // pass never repeats an earlier pass's), so measuring a distance string would allocate.
         val warm = Array(WARM_MODELS) { frame ->
-            decorate(busyModel(weapon, drift = WARM_DRIFT + frame * 23f, shape = shape, level = level, dash = dash))
+            decorate(busyModel(weapon, drift = WARM_DRIFT + frame * 23f, shape = shape, level = level, dash = dash, easy = easy))
         }
         fun measured(pass: Int) = Array(measuredFrames) { frame ->
-            decorate(busyModel(weapon, drift = (pass * measuredFrames + frame) * 20f, shape = shape, level = level, dash = dash))
+            decorate(busyModel(weapon, drift = (pass * measuredFrames + frame) * 20f, shape = shape, level = level, dash = dash, easy = easy))
         }.also { measured ->
             check(measured.map { roundedDistance(edgeDistance(it)) }.toSet().size == measuredFrames)
             check(measured.maxOf(::edgeDistance) < warm.minOf(::edgeDistance))
@@ -505,6 +533,7 @@ class WorldHotPathAllocationTest {
         shape: CoreShape = CoreShape.TESSERACT,
         level: Int = 3,
         dash: Float = 0f,
+        easy: Boolean = false,
     ): GameplayRenderModel {
         val enemies = EnemyType.entries.mapIndexed { index, type ->
             val angle = index * 0.7f
@@ -611,8 +640,19 @@ class WorldHotPathAllocationTest {
             // The running orbit's panel, so the world keeps clear of it.
             trial = siteTrial(SiteProjection(SiteKind.COLLAPSING_ORBIT, "Orbit", CORE + 60f, CORE + 40f, true, 14f, 0,
                 (drift % 80f) / 80f, immutableListOf(), 0.5f, 0.3f)),
+            easyMode = easy,
         )
     }
+
+    /** [busyModel] emptied of everything but the Core, its weapon and the cursor, 140 u to the Core's right. */
+    private fun quietModel(easy: Boolean): GameplayRenderModel = busyModel(WeaponId.MORNINGSTAR, easy = easy).with(
+        "enemies" to immutableListOf<EnemyProjection>(), "projectiles" to immutableListOf<ProjectileProjection>(),
+        "pickups" to immutableListOf<PickupProjection>(), "weaponNodes" to immutableListOf<WeaponNodeProjection>(),
+        "weaponEntities" to immutableListOf<WeaponEntityProjection>(), "obstacles" to immutableListOf<ObstacleProjection>(),
+        "volatileBursts" to immutableListOf<kinetickk.ball.gameplay.nucleus.render.VolatileBurstProjection>(),
+        "sites" to immutableListOf<SiteProjection>(), "trial" to null, "totem" to null, "characterAbility" to CharacterAbilityProjection(),
+        "damageFlash" to 0f, "lastImpactTime" to 0f, "pointerX" to WIDTH * 0.5f + 140f, "pointerY" to HEIGHT * 0.5f,
+    )
 
     /**
      * The busy frame with an offer of every window family in view (race, a challenge, the bounty, a rift) and the

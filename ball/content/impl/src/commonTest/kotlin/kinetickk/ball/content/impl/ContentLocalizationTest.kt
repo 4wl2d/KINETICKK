@@ -252,6 +252,7 @@ class ContentLocalizationTest {
             "RELIC RESONANCE", "TOTEM DETECTED", "ELITE SIGNAL", "HERALD APPROACHES",
             "TWO ANOMALIES DETECTED // CHOOSE A COURSE", "ANOMALY LOST", "ANOMALY RESOLVED",
             "SECOND WIND", "OBSTACLE COLLISION", "APEX ONLINE",
+            "BOOP",
         ).forEach(::assertFullyLocalized)
     }
 

@@ -31,6 +31,7 @@ import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.interaction.canvas.drawGameplay
+import kinetickk.ball.gameplay.interaction.canvas.with
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
@@ -364,6 +365,17 @@ class RedesignShotsOverlaysTest {
             Scene("report-defeat") { w, h, l ->
                 TerminalShot(rewardFixtureModel(phase = GamePhase.GAME_OVER, relics = relics4, language = l, width = w, height = h, textScale = textScale,
                     message = "SINGULARITY CONTACT", runMatter = 640L, totalMatter = 1_284L, kills = 901, elapsed = 554f, level = 16, weaponLevel = 8))
+            },
+            // Baby mode counts nothing: the soft Not counted stamp, the matter not banked, no bank or Rebirth lines.
+            Scene("report-victory-easy") { w, h, l ->
+                TerminalShot(rewardFixtureModel(phase = GamePhase.VICTORY, relics = relics4, language = l, width = w, height = h, textScale = textScale,
+                    message = "ARCHITECT DISMANTLED", runMatter = 640L, totalMatter = 1_924L, kills = 1_412, elapsed = 846f, level = 22, weaponLevel = 10)
+                    .with("easyMode" to true))
+            },
+            Scene("report-defeat-easy") { w, h, l ->
+                TerminalShot(rewardFixtureModel(phase = GamePhase.GAME_OVER, relics = relics4, language = l, width = w, height = h, textScale = textScale,
+                    message = "CORE FRACTURED", runMatter = 640L, totalMatter = 1_284L, kills = 901, elapsed = 554f, level = 16, weaponLevel = 8)
+                    .with("easyMode" to true))
             },
         )
     }
