@@ -33,12 +33,15 @@ internal fun MutableGameState.grantSiteReward(reward: SiteReward, x: Float, y: F
     rerollsRemaining += reward.rerolls
 }
 
+/** Scatter seeds of site rewards: `worldHash(runSeed, offerId, side, REWARD_SCATTER_SALT)` (registered SITES salt). */
+internal const val REWARD_SCATTER_SALT: Long = 0x517E_C0A5_0000_0022L
+
 /**
- * The only writer of pendingDirectedRewards. Until the window sites draw kinds by weight the queue keeps its 0.5.0
- * contract: at most six scheduled rewards per run, so a seventh is a broken invariant, never a salvage.
+ * The only writer of pendingDirectedRewards; false (nothing queued) when the queue already holds the site policy's
+ * bound, and the caller salvages instead.
  */
 internal fun MutableGameState.enqueueDirectedReward(reward: DirectedReward): Boolean {
-    check(pendingDirectedRewards.size < 6) { "At most six scheduled POI rewards per run" }
+    if (pendingDirectedRewards.size >= content.sites.maxPendingDirectedRewards) return false
     pendingDirectedRewards = pendingDirectedRewards + reward
     return true
 }

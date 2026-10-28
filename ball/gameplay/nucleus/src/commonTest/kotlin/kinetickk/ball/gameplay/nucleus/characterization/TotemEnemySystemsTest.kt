@@ -274,12 +274,14 @@ class TotemEnemySystemsTest {
             EnemyType.SHOOTER to 38f,
             EnemyType.SWARMLING to 75f,
             EnemyType.INTERCEPTOR to 90f,
+            EnemyType.COMET to 120f,
             EnemyType.CHARGER to 150f,
             EnemyType.WEAVER to 150f,
             EnemyType.BOMBER to 200f,
             EnemyType.SPLITTER to 240f,
             EnemyType.WARDEN to 240f,
             EnemyType.LANCER to 240f,
+            EnemyType.PYLON to 270f,
             EnemyType.SNIPER to 330f,
             EnemyType.AEGIS to 390f,
             EnemyType.MINELAYER to 450f,
@@ -295,6 +297,12 @@ class TotemEnemySystemsTest {
         // Rebirth-gated kinds never appear at tier 0, however late; scheduled kinds never take ordinary weight.
         listOf(EnemyType.PHANTOM, EnemyType.BROODMOTHER, EnemyType.REFLECTOR, EnemyType.ELITE, EnemyType.HERALD, EnemyType.ARCHITECT)
             .forEach { type -> assertEquals(0f, engine.weightAt(700f, type), "$type at tier 0") }
+        // Habitat-only kinds take no open-space weight, and owner-spawned mini and secret bosses no ordinary weight.
+        listOf(
+            EnemyType.SENTRY, EnemyType.CRAWLER, EnemyType.SERAPH, EnemyType.CHOIR, EnemyType.IMP, EnemyType.HOUND,
+            EnemyType.CIPHER, EnemyType.MIRROR, EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN, EnemyType.THRONE,
+            EnemyType.PYRE_HERALD, EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT,
+        ).forEach { type -> assertEquals(0f, engine.weightAt(700f, type), "$type in open space") }
     }
 
     @Test
@@ -308,6 +316,7 @@ class TotemEnemySystemsTest {
         val tierZero = picks(seed = 11, tier = 0).toSet()
         assertTrue(EnemyType.PHANTOM !in tierZero && EnemyType.BROODMOTHER !in tierZero && EnemyType.REFLECTOR !in tierZero)
         assertTrue(tierZero.containsAll(listOf(EnemyType.DRIFTER, EnemyType.SWARMLING, EnemyType.SNIPER, EnemyType.MINELAYER)))
+        assertTrue(tierZero.containsAll(listOf(EnemyType.COMET, EnemyType.PYLON)), "the open-space newcomers join tier 0: $tierZero")
         val tierFour = picks(seed = 11, tier = 4).toSet()
         assertTrue(tierFour.containsAll(listOf(EnemyType.PHANTOM, EnemyType.BROODMOTHER, EnemyType.REFLECTOR)))
         assertTrue(EnemyType.HERALD !in tierFour && EnemyType.ELITE !in tierFour)

@@ -402,7 +402,8 @@ internal class MutableGameState(
     /** [RunSecretFlag] bits of this run. */
     internal var runSecretFlags: Int = reductionSource?.runSecretFlags ?: 0
     /** World discoveries known at start plus this run's; the pending mask holds the ones not yet published. */
-    internal var worldDiscoveryMask: Int = reductionSource?.worldDiscoveryMask ?: 0
+    internal var worldDiscoveryMask: Int = reductionSource?.worldDiscoveryMask
+        ?: bootstrapProgress?.collection?.discoveredWorldEntries?.fold(0) { mask, id -> mask or id.bit } ?: 0
     internal var pendingWorldDiscoveryMask: Int = reductionSource?.pendingWorldDiscoveryMask ?: 0
     /** Rarity-floor item offers waiting, at most the site policy's bound. */
     internal var pendingFloorOffers: List<ItemRarity> = reductionSource?.pendingFloorOffers ?: emptyList()

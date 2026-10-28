@@ -19,6 +19,7 @@ import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.content.api.lifetimeMatterOfferLevel
 
 import kinetickk.ball.gameplay.api.*
@@ -613,6 +614,7 @@ internal fun MutableGameState.takeProgressUpdate(): GameplayProgressUpdate? {
         ricochets = pendingRicochets,
         dataPickups = pendingDataPickups,
         acquiredItemIds = pendingAcquiredItemIds.toImmutableList(),
+        discoveredWorldEntries = WorldDiscovery.entries.filter { pendingWorldDiscoveryMask and it.bit != 0 }.toImmutableSet(),
     )
     clearPendingProgress()
     return update
@@ -636,6 +638,7 @@ internal fun MutableGameState.clearPendingProgress() {
     pendingRicochets = 0
     pendingDataPickups = 0
     pendingAcquiredItemIds = emptyList()
+    pendingWorldDiscoveryMask = 0
 }
 
 /** Progress that is published by the next reduction. */
@@ -645,7 +648,7 @@ internal fun MutableGameState.hasUrgentProgress(): Boolean =
         pendingDiscoveredReactionMask != 0 || pendingDiscoveredPairingMask != 0 ||
         pendingVictoryRelics != null || pendingHeirloomResolved ||
         pendingClearedRebirthLevel != null || pendingEliteKills != 0 || pendingDashHits != 0 ||
-        pendingCompletedOrbits != 0 || pendingArchitectDefeatedWith != null
+        pendingCompletedOrbits != 0 || pendingArchitectDefeatedWith != null || pendingWorldDiscoveryMask != 0
 
 /** Non-urgent progress: counters and first acquisitions ride along with the next update or the run-end flush. */
 internal fun MutableGameState.hasPendingAchievementCounters(): Boolean =

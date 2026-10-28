@@ -5,23 +5,25 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.DirectedReward
+import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.content.api.SiteNotice
 import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class RunFeatureBoundsTest {
-    private fun game() = MutableGameState(canonicalGameplayContent).apply {
+    private fun game(content: GameplayContentSnapshot = canonicalGameplayContent) = MutableGameState(content).apply {
         startRun()
         enemies.clear()
     }
 
     @Test
     fun activationClosesAlternativeAndNeverRetainsTwoActiveTrials() {
-        val state = game()
+        // Anomaly windows only, so whichever kind the site stream draws can start its trial.
+        val state = game(canonicalGameplayContent.withAnomalyWindowsOnly())
         state.elapsed = 45f
         state.updateSites(0.01f)
         val offered = state.sites
@@ -33,25 +35,90 @@ class RunFeatureBoundsTest {
     }
 
     @Test
-    fun sixthRewardFitsAndSeventhCannotPublishIntoSourceSnapshot() {
+    fun aRaceActivationClosesItsAlternativeAndIsTheOnlyTrial() {
+        // A race and an anomaly share every window, so either side starts its own trial.
+        val content = canonicalGameplayContent.withWindowWeights(mapOf(SiteKind.GATE_RACE to 1f, SiteKind.RESONANT_CIRCUIT to 1f))
+        val state = game(content)
+        state.elapsed = 45f
+        state.updateSites(0.01f)
+        val offered = state.sites
+        assertEquals(setOf(SiteKind.GATE_RACE, SiteKind.RESONANT_CIRCUIT), offered.map { it.kind }.toSet())
+        val race = offered.single { it.kind == SiteKind.GATE_RACE }
+        val other = offered.single { it.kind != SiteKind.GATE_RACE }
+        state.activateWindowSite(race)
+        assertEquals(race.id, state.sites.single().id)
+        assertTrue(state.sites.single().active)
+
+        // Flying through the closed alternative never starts it: only the race (if still on course) remains.
+        state.previousCoreX = other.x - 50f
+        state.previousCoreY = other.y
+        state.coreX = other.x
+        state.coreY = other.y
+        state.updateSites(0.01f)
+        assertTrue(state.sites.all { it.id == race.id && it.active })
+    }
+
+    @Test
+    fun aChallengeActivationClosesItsAlternativeAndIsTheOnlyTrial() {
+        // A Ram rite and an anomaly share every window; the rite owns its eight foes and nothing else starts.
+        val content = canonicalGameplayContent.withWindowWeights(mapOf(SiteKind.RAM_TRIAL to 1f, SiteKind.RESONANT_CIRCUIT to 1f))
+        val state = game(content)
+        state.elapsed = 45f
+        state.updateSites(0.01f)
+        val offered = state.sites
+        assertEquals(setOf(SiteKind.RAM_TRIAL, SiteKind.RESONANT_CIRCUIT), offered.map { it.kind }.toSet())
+        val rite = offered.single { it.kind == SiteKind.RAM_TRIAL }
+        val other = offered.single { it.kind != SiteKind.RAM_TRIAL }
+        state.activateWindowSite(rite)
+        assertEquals(rite.id, state.sites.single().id)
+        assertTrue(state.sites.single().active)
+        assertEquals(state.enemies.map { it.id }, state.engagementFoeIds())
+
+        state.previousCoreX = other.x - 50f
+        state.previousCoreY = other.y
+        state.coreX = other.x
+        state.coreY = other.y
+        state.updateSites(0.01f)
+        assertTrue(state.sites.all { it.id == rite.id && it.active })
+    }
+
+    @Test
+    fun tenthDirectedRewardFitsAndEleventhSalvagesWithoutTouchingSource() {
         val source = game()
-        source.pendingDirectedRewards = List(5) { DirectedReward.WEAPON }
-        source.sites = listOf(SiteState(
+        val bound = source.content.sites.maxPendingDirectedRewards
+        assertEquals(10, bound)
+        fun completingCircuit() = listOf(SiteState(
             0L, SiteKind.RESONANT_CIRCUIT, source.coreX, source.coreY, 85f,
             active = true, step = 2,
         ))
+        source.pendingDirectedRewards = List(bound - 1) { DirectedReward.WEAPON }
+        source.sites = completingCircuit()
         source.previousCoreX = source.coreX
         source.previousCoreY = source.coreY
         source.updateSites(0.01f)
-        assertEquals(6, source.pendingDirectedRewards.size)
+        assertEquals(bound, source.pendingDirectedRewards.size)
+        assertEquals(DirectedReward.WEAPON, source.pendingDirectedRewards.last())
+        assertEquals(SiteNotice.ANOMALY_RESOLVED.english, source.message)
+        val sourceMatter = source.runMatter + source.matterFraction.toDouble()
+
+        // The eleventh completion refuses the queue and salvages 8 Matter (after the run's gain) instead of crashing.
         val candidate = source.copyForReduction()
-        candidate.sites = listOf(SiteState(
-            0L, SiteKind.RESONANT_CIRCUIT, source.coreX, source.coreY, 85f,
-            active = true, step = 2,
-        ))
-        assertFailsWith<IllegalStateException> { candidate.updateSites(0.01f) }
-        assertEquals(6, source.pendingDirectedRewards.size)
+        candidate.sites = completingCircuit()
+        candidate.updateSites(0.01f)
+        assertEquals(bound, candidate.pendingDirectedRewards.size)
+        assertTrue(candidate.sites.isEmpty())
+        assertEquals(SiteNotice.REWARD_SALVAGED.english, candidate.message)
+        assertEquals(
+            sourceMatter + 8.0 * candidate.matterGain,
+            candidate.runMatter + candidate.matterFraction.toDouble(),
+            1e-3,
+        )
+
+        // The candidate's salvage never reaches the source snapshot.
+        assertEquals(bound, source.pendingDirectedRewards.size)
         assertTrue(source.sites.isEmpty())
+        assertEquals(sourceMatter, source.runMatter + source.matterFraction.toDouble())
+        assertEquals(SiteNotice.ANOMALY_RESOLVED.english, source.message)
     }
 
     @Test

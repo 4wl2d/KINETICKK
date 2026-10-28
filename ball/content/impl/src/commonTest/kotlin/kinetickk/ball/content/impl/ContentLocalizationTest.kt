@@ -22,6 +22,10 @@ import kinetickk.ball.content.api.RuleTextContext
 import kinetickk.ball.content.api.RunVarietyNotices
 import kinetickk.ball.content.api.SiteNotice
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.StructureNotice
+import kinetickk.ball.content.api.StructureReward
+import kinetickk.ball.content.api.StructureRewardKind
+import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.content.api.WorldDiscoveryKind
 import kinetickk.ball.content.api.liabilityText
 import kinetickk.ball.content.api.localizedContent
@@ -328,6 +332,27 @@ class ContentLocalizationTest {
         )
         rifts.forEach { listOf(it.name, it.instruction).forEach(::assertFullyLocalized) }
         assertDistinctInRussian(gameplay.boons.map { it.description })
+    }
+
+    @Test
+    fun everyStructureNameRewardAndNoticeIsLocalized() {
+        val structures = createContentCatalog().gameplayContent().structures
+        structures.templates.forEach { template ->
+            assertFullyLocalized(template.name)
+            template.rewards.forEach { assertFullyLocalized(it.label) }
+        }
+        val offerFloors = listOf(ItemRarity.UNCOMMON, ItemRarity.RARE, ItemRarity.EPIC)
+        StructureRewardKind.entries.flatMap { kind ->
+            if (kind == StructureRewardKind.ITEM_OFFER) offerFloors.map { StructureReward(kind, 1, it) } else listOf(StructureReward(kind))
+        }.forEach { assertFullyLocalized(it.label) }
+        StructureNotice.entries.forEach { assertFullyLocalized(it.key) }
+        assertDistinctInRussian(structures.templates.map { it.name })
+        // Every template's world discovery reuses the template name as its key, so the Codex and the world agree.
+        structures.templates.forEach { template ->
+            val discovery = content.worldDiscoveries.single { it.id == WorldDiscovery.valueOf(template.id.name) }
+            assertEquals(template.name, discovery.name)
+        }
+        assertEquals("ЗАБРОШЕННАЯ СТАНЦИЯ", "DERELICT STATION".localizedContent(AppLanguage.Russian))
     }
 
     private fun assertFullyLocalized(source: String) {

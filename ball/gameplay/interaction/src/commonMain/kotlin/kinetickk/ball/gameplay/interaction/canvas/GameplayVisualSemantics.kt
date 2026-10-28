@@ -23,7 +23,7 @@ import kotlin.math.sin
  * Presentation meaning of a nucleus visual color index: 0 dash/Core, 1 kill or pickup, 2 weapon
  * and relic procs, 3 ram impact, elite kill and key pickups, 4 damage taken (the only threat one),
  * 8..14 an element's ring (Breaks and reactions), 15 the Apex gold, 16..22 an element's jagged
- * quake ring ([isQuakeColor]).
+ * quake ring ([isQuakeColor]), 23 Baby mode's soft rings and sparks ([SOFT_RING_COLOR]).
  */
 internal fun fxColor(colorIndex: Int, roles: KkRolePalette): Color = when (colorIndex) {
     0, 3 -> roles.you
@@ -32,6 +32,7 @@ internal fun fxColor(colorIndex: Int, roles: KkRolePalette): Color = when (color
     in ELEMENT_RING_COLORS -> roles.element(colorIndex - ELEMENT_RING_COLORS.first)
     APEX_GOLD_COLOR -> roles.gold.base
     in QUAKE_RING_COLORS -> roles.element(colorIndex - QUAKE_RING_COLORS.first)
+    SOFT_RING_COLOR -> roles.soft
     else -> Kk.Bone
 }
 
@@ -39,6 +40,9 @@ internal fun fxColor(colorIndex: Int, roles: KkRolePalette): Color = when (color
 internal val ELEMENT_RING_COLORS = 8..14
 internal const val APEX_GOLD_COLOR = 15
 internal val QUAKE_RING_COLORS = 16..22
+
+/** Baby mode's soft rings and sparks (nucleus EASY_SOFT_COLOR_INDEX). */
+internal const val SOFT_RING_COLOR = 23
 
 /** Shockwaves of these colour indices draw as a jagged quake ring. */
 internal fun isQuakeColor(colorIndex: Int): Boolean = colorIndex in QUAKE_RING_COLORS

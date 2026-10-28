@@ -9,6 +9,7 @@ import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WorldDiscovery
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -109,24 +110,28 @@ class ProfileApiContractTest {
         val reactions = mutableSetOf(ReactionId.FUSION)
         val pairings = mutableSetOf(RelicPairingId.MELTDOWN)
         val victory = mutableListOf(RelicId.GLASS_COMET, RelicId.BLINK_DRIVE)
+        val world = mutableSetOf(WorldDiscovery.GATE_RACE)
         val progress = GameplayProgressUpdate(
             discoveredItemIds = discoveries,
             clearedRebirthLevel = 0,
             discoveredReactionIds = reactions,
             discoveredPairingIds = pairings,
             victoryRelicIds = victory,
+            discoveredWorldEntries = world,
         )
         val collection = PlayerCollection(
             discoveries,
             discoveredReactionIds = reactions,
             discoveredPairingIds = pairings,
             heirloomRelicIds = victory,
+            discoveredWorldEntries = world,
         )
 
         discoveries += 3
         reactions += ReactionId.WILDFIRE
         pairings += RelicPairingId.FIRESTORM
         victory.reverse()
+        world += WorldDiscovery.QUIET_SIGNAL
 
         assertEquals(setOf(1, 2), progress.discoveredItemIds)
         assertEquals(setOf(1, 2), collection.discoveredItemIds)
@@ -136,6 +141,8 @@ class ProfileApiContractTest {
         assertEquals(setOf(RelicPairingId.MELTDOWN), collection.discoveredPairingIds)
         assertEquals<List<RelicId>?>(listOf(RelicId.GLASS_COMET, RelicId.BLINK_DRIVE), progress.victoryRelicIds)
         assertEquals(listOf(RelicId.GLASS_COMET, RelicId.BLINK_DRIVE), collection.heirloomRelicIds)
+        assertEquals(setOf(WorldDiscovery.GATE_RACE), progress.discoveredWorldEntries)
+        assertEquals(setOf(WorldDiscovery.GATE_RACE), collection.discoveredWorldEntries)
     }
 
     @Test
@@ -144,6 +151,7 @@ class ProfileApiContractTest {
         assertTrue(collection.discoveredReactionIds.isEmpty())
         assertTrue(collection.discoveredPairingIds.isEmpty())
         assertTrue(collection.heirloomRelicIds.isEmpty())
+        assertTrue(collection.discoveredWorldEntries.isEmpty())
         assertEquals(PlayerCollection(), PlayerProfile().collection)
 
         val legacyUpdate = GameplayProgressUpdate(bankedMatter = 3L, discoveredItemIds = setOf(1))
@@ -172,6 +180,7 @@ class ProfileApiContractTest {
             GameplayProgressUpdate(totalKills = 1),
             GameplayProgressUpdate(ricochets = 1),
             GameplayProgressUpdate(dataPickups = 1),
+            GameplayProgressUpdate(discoveredItemIds = emptySet(), discoveredWorldEntries = setOf(WorldDiscovery.SPIN_CYCLE)),
         )
         carriers.forEach { update -> assertFalse(update.isEmpty, update.toString()) }
     }

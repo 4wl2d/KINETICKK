@@ -8,8 +8,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.TextLayoutResult
-import kinetickk.ball.content.api.DirectedReward
-import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.content.api.SiteFamily
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_HUD_TOP_DP
@@ -23,26 +22,26 @@ import kinetickk.ball.gameplay.interaction.layout.regularHudUnit
 import kinetickk.ball.gameplay.interaction.layout.runningHudMargin
 import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
-import kinetickk.ball.gameplay.nucleus.render.SiteProjection
+import kinetickk.ball.gameplay.nucleus.render.TrialClock
+import kinetickk.ball.gameplay.nucleus.render.TrialProjection
+import kinetickk.ball.gameplay.nucleus.render.TrialReward
+import kinetickk.ball.gameplay.nucleus.render.TrialSource
+import kinetickk.ball.gameplay.nucleus.render.TrialValue
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
 import kotlin.math.abs
-import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** The active point-of-interest trial, if any (the game runs at most one at a time). */
-internal fun GameplayRenderModel.activeTrial(): SiteProjection? {
-    val points = sites
-    for (index in points.indices) if (points[index].active) return points[index]
-    return null
-}
+/** The engagement the trial panel shows, if any (the game runs at most one at a time). */
+internal fun GameplayRenderModel.activeTrial(): TrialProjection? = trial
 
 /** The trial's rules for its (!) info button: the content instruction in the player's language. */
-internal fun GameplayRenderModel.trialRules(point: SiteProjection, language: AppLanguage): String =
-    content.sites.definition(point.kind).instruction.localizedContent(language)
+@Suppress("UnusedReceiverParameter")
+internal fun GameplayRenderModel.trialRules(trial: TrialProjection, language: AppLanguage): String =
+    trial.rules.localizedContent(language)
 
 /**
  * Geometry of the top-left trial panel (`Anomaly` board), shared by the renderer, the focusable
@@ -165,17 +164,22 @@ private object TrialScratch {
     val progress = HudKeyedText()
     val reward = HudKeyedText()
     val rules = HudKeyedText()
-    val orbitTail = HudKeyedText()
+    val secondsTail = HudKeyedText()
+    val raceTail = HudKeyedText()
 }
 
-/** Top-left trial panel: label, clock, name + (!), segmented progress, value and reward. */
+/**
+ * Top-left trial panel: the family's glyph and label with the clock (a countdown, a race's tenths or none), the title
+ * with its (!), the segmented progress, the value (count, seconds or none) and the reward (a race's medal with its
+ * pips). Every text is cached per input, so a steady panel draws without allocating.
+ */
 internal fun DrawScope.drawTrialPanel(
     engine: GameplayRenderModel,
     measurer: TextMeasurer,
     renderTime: Float,
     infoOpen: Boolean,
 ) {
-    val point = engine.activeTrial() ?: return
+    val trial = engine.activeTrial() ?: return
     val roles = measurer.roles
     val language = measurer.language
     val layout = TrialScratch.layout.update(size.width, size.height, density, measurer.scale)
@@ -189,23 +193,33 @@ internal fun DrawScope.drawTrialPanel(
 
     val innerLeft = panel.left + layout.padding
     val innerRight = panel.right - layout.padding
-    // Row 1: anomaly glyph + label, remaining clock.
+    // Row 1: family glyph + label, clock.
     val iconSize = (if (layout.compact) 13f else 16f) * unit
-    drawKkIcon(KkIcon.SYSTEM_ANOMALY, Offset(innerLeft + iconSize * 0.5f, layout.rowLabelCenter), iconSize, roles.you)
-    val labelText = TrialScratch.label.of(language, 0L) { language.text(HudRedesignText.AnomalyTrial) }
-    // The remaining time as m:ss, the same string as the ring and point timers in the world.
-    val clockLayout = HudDrawCache.layout(HudText.TRIAL_CLOCK, text, trialClockText(point),
-        measurer.typography.monoStyle(layout.monoSize))
-    drawKkText(clockLayout, innerRight, layout.rowLabelCenter, Kk.Bone, KkAlign.END, KkVAlign.CENTER)
-    recordLine(HudBlock.TRIAL_CLOCK, innerRight - clockLayout.size.width, layout.rowLabelCenter, clockLayout)
+    drawSiteGlyph(trialGlyph(trial), Offset(innerLeft + iconSize * 0.5f, layout.rowLabelCenter), iconSize, roles.you)
+    val label = trialLabel(trial)
+    val labelText = TrialScratch.label.of(language, label.ordinal.toLong()) { language.text(label) }
+    val clockWidth = when (trial.clock) {
+        TrialClock.COUNTDOWN -> {
+            // The remaining time as m:ss, the same string as the ring and point timers in the world.
+            val clockLayout = HudDrawCache.layout(HudText.TRIAL_CLOCK, text, trialClockText(trial),
+                measurer.typography.monoStyle(layout.monoSize))
+            drawKkText(clockLayout, innerRight, layout.rowLabelCenter, Kk.Bone, KkAlign.END, KkVAlign.CENTER)
+            recordLine(HudBlock.TRIAL_CLOCK, innerRight - clockLayout.size.width, layout.rowLabelCenter, clockLayout)
+            clockLayout.size.width.toFloat()
+        }
+        TrialClock.ELAPSED_TENTHS -> drawRaceClock(trial, text, innerRight, layout.rowLabelCenter, layout.monoSize)
+        TrialClock.NONE -> 0f
+    }
     val labelLeft = innerLeft + iconSize + 8f * unit
-    val labelLayout = HudDrawCache.fitted(HudText.TRIAL_LABEL, text, labelText, layout.labelSize,
-        innerRight - clockLayout.size.width - 8f * unit - labelLeft, uppercase = true) { size -> measurer.typography.labelStyle(size) }
+    val labelRoom = innerRight - (if (clockWidth > 0f) clockWidth + 8f * unit else 0f) - labelLeft
+    val labelLayout = HudDrawCache.fitted(HudText.TRIAL_LABEL, text, labelText, layout.labelSize, labelRoom, uppercase = true) { size ->
+        measurer.typography.labelStyle(size)
+    }
     drawKkText(labelLayout, labelLeft, layout.rowLabelCenter, roles.you, valign = KkVAlign.CENTER)
     recordLine(HudBlock.TRIAL_LABEL, labelLeft, layout.rowLabelCenter, labelLayout)
 
     // Row 2: trial name + (!) info. Long (Russian) names shrink to fit.
-    val nameText = TrialScratch.name.of(language, point.kind.ordinal.toLong()) { point.name.localizedContent(language) }
+    val nameText = TrialScratch.name.of(trial.title, language.ordinal.toLong()) { trial.title.localizedContent(language) }
     val nameLayout = HudDrawCache.fitted(HudText.TRIAL_NAME, text, nameText, layout.nameSize, layout.infoLeft - 10f * unit - innerLeft,
         uppercase = true, minSize = layout.nameSize * 0.4f) { size -> measurer.typography.condStyle(size) }
     drawKkText(nameLayout, innerLeft, layout.rowNameCenter, Kk.Bone, valign = KkVAlign.CENTER)
@@ -216,37 +230,89 @@ internal fun DrawScope.drawTrialPanel(
     HudLayoutProbe.record(HudBlock.TRIAL_PANEL, panel.left, panel.top, panel.right, panel.bottom)
 
     // Row 3: segmented progress.
-    val segments = trialSegments(engine, point)
     val meter = HudDrawCache.rect(HudRect.TRIAL_METER, innerLeft, layout.meterTop, innerRight, layout.meterTop + layout.meterHeight)
-    drawKkMeter(meter, point.progress, roles.you, roles, segments = segments)
+    drawKkMeter(meter, trial.progress, roles.you, roles, segments = trial.segments)
 
-    // Row 4: progress value, reward. The orbit's seconds change every frame while orbiting, so they
-    // are drawn from cached digit layouts; counted goals change rarely and use one cached line.
-    val progressWidth = if (point.kind == SiteKind.COLLAPSING_ORBIT) {
-        drawOrbitProgress(engine, point, text, innerLeft, layout.rowValueCenter, layout.monoSize)
-    } else {
-        val progressLayout = HudDrawCache.layout(HudText.TRIAL_PROGRESS, text, trialProgressText(engine, point, language),
-            measurer.typography.monoStyle(layout.monoSize), uppercase = true)
-        drawKkText(progressLayout, innerLeft, layout.rowValueCenter, Kk.Bone, valign = KkVAlign.CENTER)
-        progressLayout.size.width.toFloat()
+    // Row 4: progress value, reward. Seconds change every frame while earned, so they are drawn from cached digit
+    // layouts; counted goals change rarely and use one cached line; a duel shows no value.
+    val progressWidth = when (trial.value) {
+        TrialValue.SECONDS -> drawSecondsProgress(trial, text, innerLeft, layout.rowValueCenter, layout.monoSize)
+        TrialValue.COUNT -> {
+            val progressLayout = HudDrawCache.layout(HudText.TRIAL_PROGRESS, text, trialProgressText(trial, language),
+                measurer.typography.monoStyle(layout.monoSize), uppercase = true)
+            drawKkText(progressLayout, innerLeft, layout.rowValueCenter, Kk.Bone, valign = KkVAlign.CENTER)
+            progressLayout.size.width.toFloat()
+        }
+        TrialValue.NONE -> 0f
     }
-    val valueHalf = layout.monoSize * 1.35f * text.scale * density * 0.5f
-    HudLayoutProbe.record(HudBlock.TRIAL_PROGRESS, innerLeft, layout.rowValueCenter - valueHalf, innerLeft + progressWidth,
-        layout.rowValueCenter + valueHalf)
-    val rewardText = TrialScratch.reward.of(language, point.kind.ordinal.toLong()) {
-        language.text(rewardText(engine.content.sites.definition(point.kind).reward.directed))
+    if (trial.value != TrialValue.NONE) {
+        val valueHalf = layout.monoSize * 1.35f * text.scale * density * 0.5f
+        HudLayoutProbe.record(HudBlock.TRIAL_PROGRESS, innerLeft, layout.rowValueCenter - valueHalf, innerLeft + progressWidth,
+            layout.rowValueCenter + valueHalf)
     }
+    val reward = trialRewardText(trial)
+    val rewardText = TrialScratch.reward.of(language, reward.ordinal.toLong()) { language.text(reward) }
+    // A race's medal pips sit left of its medal label.
+    val pipSize = (if (layout.compact) 6f else 7f) * unit
+    val pipGap = 3f * unit
+    val pipsWidth = if (trial.reward == TrialReward.MEDAL) MEDAL_PIPS * pipSize + (MEDAL_PIPS - 1) * pipGap + 8f * unit else 0f
     // Beside the value at the board's sizes; on its own row when the text is larger.
-    val rewardRoom = if (layout.rewardRow) innerRight - innerLeft else innerRight - innerLeft - progressWidth - 12f * unit
+    val rewardRoom = (if (layout.rewardRow || progressWidth <= 0f) innerRight - innerLeft else innerRight - innerLeft - progressWidth - 12f * unit) -
+        pipsWidth
     val rewardLayout = HudDrawCache.fitted(HudText.TRIAL_REWARD, text, rewardText, layout.monoSize, rewardRoom, uppercase = true) { size ->
         measurer.typography.monoStyle(size)
     }
     drawKkText(rewardLayout, innerRight, layout.rowRewardCenter, roles.you, KkAlign.END, KkVAlign.CENTER)
     recordLine(HudBlock.TRIAL_REWARD, innerRight - rewardLayout.size.width, layout.rowRewardCenter, rewardLayout)
+    if (pipsWidth > 0f) {
+        val pipsLeft = innerRight - rewardLayout.size.width - pipsWidth
+        drawKkPips(Offset(pipsLeft, layout.rowRewardCenter - pipSize * 0.5f), MEDAL_PIPS, trial.medal.coerceIn(0, MEDAL_PIPS), roles.you,
+            sizeDp = pipSize / density, gapDp = pipGap / density, emptyOutlined = true, emptyColor = roles.you)
+    }
+}
+
+/** A race's medal pips: gold, silver and bronze as three, two and one filled. */
+private const val MEDAL_PIPS = 3
+
+/** The panel's first-row glyph: a dungeon or a dimension objective by its source, a site by its family. */
+internal fun trialGlyph(trial: TrialProjection): SiteGlyph = when (trial.source) {
+    TrialSource.SITE -> siteFamilyGlyph(trial.family)
+    TrialSource.STRUCTURE -> SiteGlyph.STRUCTURE
+    TrialSource.DIMENSION -> SiteGlyph.DIMENSION
+}
+
+/** The panel's family label. */
+internal fun trialLabel(trial: TrialProjection): HudRedesignText = when (trial.family) {
+    SiteFamily.ANOMALY -> HudRedesignText.AnomalyTrial
+    SiteFamily.RACE -> HudRedesignText.RaceTrial
+    SiteFamily.CHALLENGE -> HudRedesignText.ChallengeTrial
+    SiteFamily.BOUNTY -> HudRedesignText.BountyTrial
+    SiteFamily.SECRET -> HudRedesignText.SigilTrial
+    // No site of these families runs a trial; a dungeon or a dimension objective names itself by its source.
+    SiteFamily.CACHE, SiteFamily.PORTAL, SiteFamily.SIGNAL -> HudRedesignText.AnomalyTrial
+}
+
+/** The reward label; a race names the medal its clock still allows. */
+internal fun trialRewardText(trial: TrialProjection): HudRedesignText = when (trial.reward) {
+    TrialReward.WEAPON -> HudRedesignText.RewardWeapon
+    TrialReward.RELIC -> HudRedesignText.RewardRelic
+    TrialReward.ITEM_AND_REPAIR -> HudRedesignText.RewardItemAndRepair
+    TrialReward.ITEM -> HudRedesignText.RewardItem
+    TrialReward.KEY_AND_RELIC -> HudRedesignText.RewardKeyAndRelic
+    TrialReward.MATTER -> HudRedesignText.RewardMatter
+    TrialReward.MEDAL -> when (trial.medal) {
+        3 -> HudRedesignText.RewardGold
+        2 -> HudRedesignText.RewardSilver
+        1 -> HudRedesignText.RewardBronze
+        else -> HudRedesignText.RewardNoMedal
+    }
+    // The dungeon and dimension rewards are labelled by their lanes' sources.
+    TrialReward.UNKNOWN, TrialReward.STRUCTURE_REWARDS, TrialReward.BLESSING, TrialReward.PACT, TrialReward.TROVE ->
+        HudRedesignText.RewardUnknown
 }
 
 /** The trial's remaining time as `m:ss` ("0:15"), shared with the world's ring and point timers. */
-internal fun trialClockText(point: SiteProjection): String = WorldStrings.timer(point.remaining)
+internal fun trialClockText(trial: TrialProjection): String = WorldStrings.timer(trial.seconds)
 
 /** Records a vertically centered one-line [layout] starting at [left] (layout tests). */
 private fun recordLine(block: HudBlock, left: Float, centerY: Float, layout: androidx.compose.ui.text.TextLayoutResult) {
@@ -261,11 +327,11 @@ private fun recordLine(block: HudBlock, left: Float, centerY: Float, layout: and
  */
 internal fun DrawScope.drawTrialTooltip(engine: GameplayRenderModel, measurer: TextMeasurer, open: Boolean) {
     if (!open) return
-    val point = engine.activeTrial() ?: return
+    val trial = engine.activeTrial() ?: return
     val language = measurer.language
     val layout = TrialScratch.layout.update(size.width, size.height, density, measurer.scale)
     val panel = HudDrawCache.rect(HudRect.TRIAL_ANCHOR, layout.left, layout.top, layout.right, layout.bottom)
-    val rules = TrialScratch.rules.of(language, point.kind.ordinal.toLong()) { engine.trialRules(point, language) }
+    val rules = TrialScratch.rules.of(trial.rules, language.ordinal.toLong()) { engine.trialRules(trial, language) }
     val place = TrialRulesPlacement.update(measurer, rules, panel, size.width, size.height, density)
     val slip = HudDrawCache.rect(HudRect.TRIAL_TOOLTIP, place.left, place.top, place.right, place.bottom)
     drawKkSlip(slip, cutDp = 10f)
@@ -409,24 +475,22 @@ internal object TrialRulesPlacement {
 /** Widest trial-rules slip, for large text on short screens (dp). */
 private const val TOOLTIP_WIDE_DP = 380f
 
-/** Draws "5.2 / 8.0 s" at ([x], [centerY]) from cached digits; returns its width. */
-private fun DrawScope.drawOrbitProgress(
-    engine: GameplayRenderModel,
-    point: SiteProjection,
+/** Draws "5.2 / 8.0 s" (seconds earned of the required) at ([x], [centerY]) from cached digits; returns its width. */
+private fun DrawScope.drawSecondsProgress(
+    trial: TrialProjection,
     measurer: TextMeasurer,
     x: Float,
     centerY: Float,
     monoSize: Float,
 ): Float {
     val language = measurer.language
-    val required = engine.content.sites.windows.orbitRequiredSeconds
-    val requiredTenths = (required * 10f).roundToInt()
-    val tenths = (point.progress.coerceIn(0f, 1f) * required * 10f).roundToInt().toLong()
+    val requiredTenths = (trial.required * 10f).roundToInt()
+    val tenths = (trial.progress.coerceIn(0f, 1f) * trial.required * 10f).roundToInt().toLong()
     val separator = if (language == AppLanguage.Russian) "," else "."
     // A line height of its own: these Bone digits never share a paragraph with other numbers drawn
     // digit by digit in another color (edge-marker distances), which would reshape them every frame.
     val style = measurer.typography.monoStyle(monoSize, lineHeightEm = TRIAL_DIGIT_LINE_HEIGHT_EM)
-    val tail = TrialScratch.orbitTail.of(language, requiredTenths.toLong()) {
+    val tail = TrialScratch.secondsTail.of(language, requiredTenths.toLong()) {
         language.text(HudRedesignText.TrialSeconds, "", tenthsText(requiredTenths, language)).uppercase()
     }
     var width = drawKkTabularNumber(measurer, tenths / 10L, style, x, centerY, Kk.Bone, valign = KkVAlign.CENTER, suffix = separator)
@@ -434,52 +498,61 @@ private fun DrawScope.drawOrbitProgress(
     return width
 }
 
-/** Line height of the orbit progress digits (mono's own 1.35 is left to the other mono numbers). */
-private const val TRIAL_DIGIT_LINE_HEIGHT_EM = 1.345f
-
-/** Progress cells: one per orbit second, per defender or per beacon of the circuit. */
-internal fun trialSegments(engine: GameplayRenderModel, point: SiteProjection): Int = when (point.kind) {
-    SiteKind.COLLAPSING_ORBIT -> ceil(engine.content.sites.windows.orbitRequiredSeconds).toInt().coerceIn(1, 24)
-    SiteKind.SEALED_ANOMALY -> point.foeIds.size.coerceIn(1, 12)
-    SiteKind.RESONANT_CIRCUIT -> RESONANT_CIRCUIT_BEACONS
-    // Only the anomalies are offered until the site lane draws kinds by weight.
-    SiteKind.GATE_RACE, SiteKind.BRAKELESS_TRIAL, SiteKind.RAM_TRIAL, SiteKind.UNTOUCHED_TRIAL,
-    SiteKind.VELOCITY_TRIAL, SiteKind.SLALOM_TRIAL, SiteKind.BOUNTY_ARENA, SiteKind.DRIFT_CACHE, SiteKind.LOST_CURSOR,
-    SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL, SiteKind.FAR_SIGIL, SiteKind.ZENITH_RIFT, SiteKind.NADIR_RIFT,
-    -> 1
+/**
+ * Draws a race's clock ("5.2 S", tenths since the start) ending at [right] from cached digits, like the seconds
+ * value; returns its width.
+ */
+private fun DrawScope.drawRaceClock(
+    trial: TrialProjection,
+    measurer: TextMeasurer,
+    right: Float,
+    centerY: Float,
+    monoSize: Float,
+): Float {
+    val language = measurer.language
+    val tenths = (trial.seconds.coerceAtLeast(0f) * 10f).toLong().coerceAtMost(MAX_RACE_TENTHS)
+    val separator = if (language == AppLanguage.Russian) "," else "."
+    val style = measurer.typography.monoStyle(monoSize, lineHeightEm = TRIAL_DIGIT_LINE_HEIGHT_EM)
+    val tail = TrialScratch.raceTail.of(language, 0L) { language.text(HudRedesignText.RaceSeconds, "").uppercase() }
+    val wholeWidth = kkTabularNumberWidth(measurer, tenths / 10L, style, suffix = separator)
+    val width = wholeWidth + kkTabularNumberWidth(measurer, tenths % 10L, style, suffix = tail)
+    val left = right - width
+    drawKkTabularNumber(measurer, tenths / 10L, style, left, centerY, Kk.Bone, valign = KkVAlign.CENTER, suffix = separator)
+    drawKkTabularNumber(measurer, tenths % 10L, style, left + wholeWidth, centerY, Kk.Bone, valign = KkVAlign.CENTER, suffix = tail)
+    val half = monoSize * TRIAL_DIGIT_LINE_HEIGHT_EM * measurer.scale * density * 0.5f
+    HudLayoutProbe.record(HudBlock.TRIAL_CLOCK, left, centerY - half, right, centerY + half)
+    return width
 }
 
-/** Beacons in a resonant circuit (the projection reports progress as visited beacons over three). */
-private const val RESONANT_CIRCUIT_BEACONS = 3
+/** A race clock never shows more than 999.9 s (a race lasts at most the 25 s trial). */
+private const val MAX_RACE_TENTHS = 9_999L
 
-/** The trial's progress as values: "5.2 / 8.0 s" for the orbit, "2 / 3" for counted goals. */
-internal fun trialProgressText(engine: GameplayRenderModel, point: SiteProjection, language: AppLanguage): String {
-    val progress = point.progress.coerceIn(0f, 1f)
-    return when (point.kind) {
-        SiteKind.COLLAPSING_ORBIT -> {
-            val required = engine.content.sites.windows.orbitRequiredSeconds
-            val tenths = (progress * required * 10f).roundToInt()
-            TrialScratch.progress.of(language, tenths.toLong() * 1_000L + (required * 10f).roundToInt()) {
-                language.text(HudRedesignText.TrialSeconds, tenthsText(tenths, language), tenthsText((required * 10f).roundToInt(), language))
+/** Line height of the trial's own digits (mono's own 1.35 is left to the other mono numbers). */
+private const val TRIAL_DIGIT_LINE_HEIGHT_EM = 1.345f
+
+/** The trial's progress as values: "5.2 / 8.0 s" for earned seconds, "2 / 3" for counted goals, empty for a duel. */
+internal fun trialProgressText(trial: TrialProjection, language: AppLanguage): String {
+    val progress = trial.progress.coerceIn(0f, 1f)
+    return when (trial.value) {
+        TrialValue.SECONDS -> {
+            val requiredTenths = (trial.required * 10f).roundToInt()
+            val tenths = (progress * trial.required * 10f).roundToInt()
+            TrialScratch.progress.of(language, tenths.toLong() * 1_000L + requiredTenths) {
+                language.text(HudRedesignText.TrialSeconds, tenthsText(tenths, language), tenthsText(requiredTenths, language))
             }
         }
-        else -> {
-            val total = trialSegments(engine, point)
-            val done = (progress * total).roundToInt()
-            TrialScratch.progress.of(language, -(done.toLong() * 1_000L + total) - 1L) { "$done / $total" }
+        TrialValue.COUNT -> {
+            val done = trial.done.roundToInt()
+            val required = trial.required.roundToInt()
+            TrialScratch.progress.of(language, -(done.toLong() * 1_000L + required) - 1L) {
+                language.text(HudRedesignText.TrialCount, done, required)
+            }
         }
+        TrialValue.NONE -> ""
     }
 }
 
 private fun tenthsText(tenths: Int, language: AppLanguage): String {
     val separator = if (language == AppLanguage.Russian) ',' else '.'
     return "${tenths / 10}$separator${abs(tenths % 10)}"
-}
-
-private fun rewardText(reward: DirectedReward?): HudRedesignText = when (reward) {
-    DirectedReward.WEAPON -> HudRedesignText.RewardWeapon
-    DirectedReward.RELIC -> HudRedesignText.RewardRelic
-    DirectedReward.ITEM_AND_REPAIR -> HudRedesignText.RewardItemAndRepair
-    // Every anomaly names a directed reward; the other kinds are not offered until the site lane draws kinds.
-    null -> HudRedesignText.RewardItemAndRepair
 }

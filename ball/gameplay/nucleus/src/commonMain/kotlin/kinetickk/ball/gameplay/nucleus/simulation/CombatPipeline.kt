@@ -210,7 +210,7 @@ internal fun MutableGameState.holds(
         null -> totalStacks(target) >= condition.stacks
         else -> stacks(target, element) >= condition.stacks
     }
-    EffectCondition.TargetElite -> target != null && (target.isElite || target.isBoss || target.isMiniBoss)
+    EffectCondition.TargetElite -> target != null && target.isEliteClass
     EffectCondition.TargetFrozen -> target != null && (isFrozen(target) || target.id == shatteringEnemyId)
     is EffectCondition.TargetBelow -> target != null && target.hp < target.maxHp * condition.fraction
     EffectCondition.SourceImpact -> source == HitSource.IMPACT || source == HitSource.DASH
@@ -370,7 +370,8 @@ private fun MutableGameState.resolveCrit(
     if (build.pairing(RelicPairingId.COLD_VERDICT) && stacks(enemy, StatusElement.CRYO) >= 4) forced = true
     if (build.guaranteedCritAfter > 0 && critMissStreak >= build.guaranteedCritAfter) forced = true
     val critical = if (executioner) {
-        forced || belowExecutionLine(enemy, 0.35f, architectFinalPhase()) || isFrozen(enemy) || enemy.status[StatusCell.BRITTLE] > 0f ||
+        forced || belowExecutionLine(enemy, 0.35f, bossFinalPhaseOf(enemy), phased = encounterSpec(enemy) != null) ||
+            isFrozen(enemy) || enemy.status[StatusCell.BRITTLE] > 0f ||
             statusNearBreak(enemy, 0.75f)
     } else {
         val effectiveChance = if (build.critConversionRate > 0f) min(chance, 0.3f) else chance
@@ -646,8 +647,8 @@ internal fun MutableGameState.basisAmount(basis: DamageBasis, hit: Float, victim
 internal fun victimFactor(enemy: Enemy): Float = enemy.type.profile.victimFactor
 
 /**
- * The low-level applicator and the single enemy-integrity writer: gates the Architect, records damage,
- * flashes and publishes a bounded damage number. [unmitigated] is reported back for clause bases.
+ * The low-level applicator and the single enemy-integrity writer: gates every boss with an encounter spec, records
+ * damage, flashes and publishes a bounded damage number. [unmitigated] is reported back for clause bases.
  */
 internal fun MutableGameState.damageEnemy(
     enemy: Enemy,
@@ -663,8 +664,9 @@ internal fun MutableGameState.damageEnemy(
     if (amount <= 0f || !enemy.alive) return DamageResult(0f, false)
     // Herald shields and Aegis tethers guard the receiver; a phased Phantom takes nothing at all.
     val guarded = guardedDamage(enemy, amount, source, execute)
+    val spec = encounterSpec(enemy)
     val applied = when {
-        enemy.isBoss -> gateArchitectDamage(enemy, guarded)
+        spec != null -> gateBossDamage(enemy, spec, guarded)
         isShifting(enemy) -> 0f
         else -> guarded
     }
@@ -675,9 +677,9 @@ internal fun MutableGameState.damageEnemy(
     rememberHollowDamage(enemy, applied)
     enemy.hp -= applied
     crackArmor(enemy, source)
-    if (enemy.isBoss) {
+    if (spec != null) {
         enemy.lastDamagedAt = elapsed
-        onArchitectDamaged(enemy)
+        onBossDamaged(enemy, spec)
     }
     if (enemy.hp <= 0f) {
         // Kill rules read the source of the killing blow, never an earlier hit.

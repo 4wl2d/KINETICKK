@@ -38,6 +38,7 @@ import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
+import kinetickk.ball.gameplay.interaction.fx.CoreRibbonProjection
 import kinetickk.ball.gameplay.interaction.fx.DamageNumberProjection
 import kinetickk.ball.gameplay.interaction.fx.InteractionFxLimits
 import kinetickk.ball.gameplay.interaction.fx.MotionEchoProjection
@@ -52,6 +53,7 @@ import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.PickupProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupType
+import kinetickk.ball.gameplay.nucleus.render.SiteMarkProjection
 import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.ProjectileProjection
 import kinetickk.ball.gameplay.nucleus.render.TotemProjection
@@ -72,6 +74,7 @@ import kinetickk.foundation.design.KkRolePalette
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
+import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.test.Test
@@ -417,6 +420,105 @@ class RedesignShotsWorldTest {
         listOf(0, 5, 10).forEach { tier ->
             add(Scene("tier$tier", model = { w, h -> cruise(w, h, rebirthLevel = tier) }, fx = ::cruiseFx))
         }
+        // The Core ribbon follows the recorded path: a carved curve, a Dash with its ghosts, Overdrive, a blink's break.
+        add(Scene("ribbon-curve", model = { w, h -> ribbonRun(w, h, 1_400f, 520f) }, fx = { ribbonFx(it, 520f) }))
+        add(Scene("ribbon-dash", model = { w, h -> ribbonRun(w, h, 1_800f, 900f, dash = 0.18f) }, fx = { ribbonFx(it, 900f, dashNewest = 10) }))
+        add(Scene("ribbon-overdrive", model = { w, h -> ribbonRun(w, h, 2_400f, 700f, overdrive = 3f) }, fx = { ribbonFx(it, 700f) }))
+        add(Scene("ribbon-break", model = { w, h -> ribbonRun(w, h, 1_200f, 600f) }, fx = ::ribbonBreakFx))
+        // A running gate race: two gates passed, the next in volt, later gates mute, the doubled finish; then the same
+        // course with the next gate far off screen (its edge marker) under the HUD's trial panel.
+        add(Scene("site-race", model = { w, h -> model(w, h, points = listOf(race(step = 2))) }))
+        add(Scene("site-race-hud", hud = true, model = { w, h -> model(w, h, points = listOf(race(step = 2))) }))
+        add(Scene("site-race-far-hud", hud = true, model = { w, h -> model(w, h, points = listOf(race(step = 5, far = true))) }))
+        // The five challenges: a slalom with one pole passed and the next in volt (then under the HUD), the brakeless
+        // run's shrinking ring, the Ram rite's ring with its bracketed drifters (two already destroyed), the untouched
+        // trial's ring with a telegraphed volley, and the velocity hold's wide zone with its progress at the center.
+        add(Scene("site-slalom", model = { w, h -> model(w, h, points = listOf(slalom())) }))
+        add(Scene("site-slalom-hud", hud = true, model = { w, h -> model(w, h, points = listOf(slalom())) }))
+        add(Scene("site-brakeless", hud = true, model = { w, h -> model(w, h, points = listOf(ringChallenge(SiteKind.BRAKELESS_TRIAL, -200f, 150f, 765f, 0.45f))) }))
+        add(Scene("site-ram", hud = true, model = { w, h -> ram(w, h) }))
+        add(Scene("site-untouched", hud = true, model = { w, h ->
+            model(w, h, points = listOf(ringChallenge(SiteKind.UNTOUCHED_TRIAL, -150f, 100f, 650f, 0.3f, warning = 0.5f)))
+        }))
+        add(Scene("site-velocity", hud = true, model = { w, h -> model(w, h, points = listOf(ringChallenge(SiteKind.VELOCITY_TRIAL, 300f, 200f, 1_800f, 0.6f))) }))
+    }
+
+    /**
+     * A cruise moving +x at [speed] whose path bends up behind the Core on a circle of [radius] (centre straight above it),
+     * the nucleus trail on the same circle.
+     */
+    private fun ribbonRun(w: Float, h: Float, speed: Float, radius: Float, dash: Float = 0f, overdrive: Float = 0f): GameplayRenderModel {
+        val step = speed / 120f / radius
+        val trail = (0 until 24).map { index ->
+            val angle = (PI / 2).toFloat() + (index * 6 + 1) * step
+            TrailPointProjection(1_000f + cos(angle) * radius, 1_000f - radius + sin(angle) * radius, index * 0.05f)
+        }
+        return cruise(w, h).with("velocityX" to speed, "velocityY" to 0f, "dashPhaseTime" to dash, "overdriveTime" to overdrive,
+            "trail" to trail.toImmutableList())
+    }
+
+    /** One sample per fixed step on [ribbonRun]'s circle for the model's speed, newest one step behind the Core. */
+    private fun ribbonFx(model: GameplayRenderModel, radius: Float, dashNewest: Int = 0): VisualFxProjection {
+        val step = model.speed / 120f / radius
+        return cruiseFx(model).copy(coreRibbon = curvedRibbon(model.coreX, model.coreY - radius, radius,
+            (PI / 2).toFloat() + step, 47 * step, 48, dashNewest, oldestAge = 0.39f))
+    }
+
+    /** A blink 300 u back: six samples since it, then the older path, which no segment joins. */
+    private fun ribbonBreakFx(model: GameplayRenderModel): VisualFxProjection {
+        val step = model.speed / 120f
+        val since = (1..6).map { model.coreX - it * step to model.coreY }
+        val before = (0 until 30).map { model.coreX - 300f - it * step * cos(it * 0.03f) to model.coreY - 170f - it * step * sin(it * 0.03f) }
+        val points = since + before
+        val ribbon = CoreRibbonProjection.of(
+            FloatArray(points.size * 2) { if (it % 2 == 0) points[it / 2].first else points[it / 2].second },
+            FloatArray(points.size) { it / 120f },
+            IntArray(points.size) {
+                if (it == since.lastIndex || it == points.lastIndex) CoreRibbonProjection.START else 0
+            },
+        )
+        return cruiseFx(model).copy(coreRibbon = ribbon)
+    }
+
+    /** A six-pole slalom from just behind the Core, its axis turned 0.2 rad, pole 0 passed and pole 1 next. */
+    private fun slalom(): SiteProjection {
+        val axis = 0.2f
+        val course = List(6) { index ->
+            val along = 360f + 340f * index
+            val lateral = if (index % 2 == 0) 150f else -150f
+            SiteMarkProjection(cos(axis) * along - sin(axis) * lateral, sin(axis) * along + cos(axis) * lateral)
+        }.toImmutableList()
+        return SiteProjection(SiteKind.SLALOM_TRIAL, "Slalom", 1_000f - 300f, 1_000f - 40f, true, 12.4f, 1, 1f / 6f,
+            immutableListOf(), 0f, 0f, course = course, sides = 0b010101)
+    }
+
+    /** A running ring challenge centred ([dx], [dy]) from the Core; the untouched trial aims its volley at the Core. */
+    private fun ringChallenge(kind: SiteKind, dx: Float, dy: Float, radius: Float, progress: Float, warning: Float = 0f) =
+        SiteProjection(kind, kind.name, 1_000f + dx, 1_000f + dy, true, 13.2f, 0, progress, immutableListOf(), warning,
+            kotlin.math.atan2(-dy, -dx), radius = radius, aimDx = -dx, aimDy = -dy)
+
+    /** The Ram rite with its eight drifters on their ring, two of them already destroyed (gone) and counted. */
+    private fun ram(w: Float, h: Float): GameplayRenderModel {
+        val centerX = 150f
+        val centerY = -80f
+        val foes = (2 until 8).map { index ->
+            val angle = index * 2f * kotlin.math.PI.toFloat() / 8f
+            enemy(index + 1, EnemyType.DRIFTER, centerX + cos(angle) * 320f, centerY + sin(angle) * 320f, 17f)
+        }
+        val rite = SiteProjection(SiteKind.RAM_TRIAL, "Ram rite", 1_000f + centerX, 1_000f + centerY, true, 14.6f, 0, 2f / 6f,
+            (1..8).toList().toImmutableList(), 0f, 0f, radius = 650f)
+        return model(w, h, enemies = foes, points = listOf(rite))
+    }
+
+    /** A seven-gate race around the Core: a loop of 330 (the far course 1,300, past every edge). */
+    private fun race(step: Int, far: Boolean = false): SiteProjection {
+        val radius = if (far) 1_300f else 330f
+        val course = List(7) { index ->
+            val angle = -2.4f + index * 0.76f
+            SiteMarkProjection(cos(angle) * radius, sin(angle) * radius)
+        }.toImmutableList()
+        return SiteProjection(SiteKind.GATE_RACE, "Gate race", 1_000f + 40f, 1_000f + 20f, true, 9.3f, step, step / 7f,
+            immutableListOf(), 0f, 0f, course = course, clock = 5.7f, medal = 2)
     }
 
     // Board HUD.png positions (1440 x 810) are converted to world offsets from the Core so every
@@ -647,6 +749,8 @@ class RedesignShotsWorldTest {
             choices = immutableListOf(), choiceType = ChoiceType.ITEM, pendingRelicChoiceCount = 0,
             itemStacks = immutableListOf(), discoveredItemIds = immutableSetOf(), relicRanks = immutableListOf(),
             sites = points.toImmutableList(),
+            // A running site's panel, as Gameplay publishes it with the site.
+            trial = points.firstOrNull { it.active }?.let { siteTrial(it) },
         )
     }
 

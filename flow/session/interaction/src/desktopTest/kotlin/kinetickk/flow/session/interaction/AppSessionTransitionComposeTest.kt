@@ -16,6 +16,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.gameplay.interaction.GameplayPresentation
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthFeature
@@ -94,7 +95,7 @@ private fun TransitionShell(port: AppSessionPort) {
             @Composable override fun Content(inputEnabled: Boolean, onOutput: (GameplayInteractionOutput) -> Unit) = Unit
         },
         homeFeature = object : HomeFeature {
-            @Composable override fun Content(inputEnabled: Boolean, onOutput: (HomeOutput) -> Unit) {
+            @Composable override fun Content(inputEnabled: Boolean, runMode: RunMode, onOutput: (HomeOutput) -> Unit) {
                 BasicText("open", Modifier.testTag("transition-open").clickable(enabled = inputEnabled) { onOutput(HomeOutput.OpenCodex) })
             }
         },

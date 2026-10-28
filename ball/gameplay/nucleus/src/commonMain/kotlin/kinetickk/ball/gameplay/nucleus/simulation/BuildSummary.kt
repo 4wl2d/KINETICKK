@@ -194,6 +194,10 @@ internal fun MutableGameState.buildStats(includeTemporary: Boolean = true): Immu
     stat("Combo window", effectiveComboWindow(), 2.8f, relics = effectiveComboWindow() - comboWindow, unit = "s")
     stat("Overdrive gain", overdriveGainFactor(), 1f, matrixShare(ItemEffect.OVERDRIVE_GAIN, 1f),
         relics = overdriveGainFactor() - overdriveGain, unit = "×")
+    // The flight law clamps the steering stats to the content bound; the rows show what it reads.
+    val steeringBound = content.tempo.steering.maximumStatMultiplier
+    stat("Grip", gripStrength.coerceIn(0f, steeringBound), 1f, matrixShare(ItemEffect.GRIP, 1f), unit = "×")
+    stat("Sling", slingStrength.coerceIn(0f, steeringBound), 1f, matrixShare(ItemEffect.SLING, 1f), unit = "×")
     return rows.toImmutableList()
 }
 

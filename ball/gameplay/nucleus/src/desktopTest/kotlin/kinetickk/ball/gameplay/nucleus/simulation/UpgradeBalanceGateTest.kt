@@ -249,7 +249,9 @@ class UpgradeBalanceGateTest {
             }
             val aim = game.steeringAimFor(accelerationX, accelerationY)
             val desiredHeading = aim.heading
-            heading += atan2(sin(desiredHeading - heading), cos(desiredHeading - heading)).coerceIn(-0.08f, 0.08f)
+            // Braking now needs the pointer behind the screen centre, so the heading must be able to swing back quickly:
+            // at 0.15 rad a frame the orbit keeps the tracking error it had under the 0.5.0 law.
+            heading += atan2(sin(desiredHeading - heading), cos(desiredHeading - heading)).coerceIn(-0.15f, 0.15f)
             val distance = aim.distance.coerceIn(65f, 480f)
             val edgeMargin = (1f - game.content.tempo.fatigue.edgeStrainStart) * 0.5f
             game.updatePointer(

@@ -887,7 +887,9 @@ class PerceptibleItemImpactTest {
         val accelerationY = (desiredY - game.coreY) * 5f + (desiredVy - game.velocityY) * 3f + feedY
         val aim = game.steeringAimFor(accelerationX, accelerationY)
         val desiredHeading = aim.heading
-        val next = heading + atan2(sin(desiredHeading - heading), cos(desiredHeading - heading)).coerceIn(-0.12f, 0.12f)
+        // Braking now needs the pointer behind the screen centre, so the heading must be able to swing back quickly:
+        // at 0.3 rad a frame the scripted paths keep the tracking error they had under the 0.5.0 law.
+        val next = heading + atan2(sin(desiredHeading - heading), cos(desiredHeading - heading)).coerceIn(-0.3f, 0.3f)
         // Never closer than 65: the singularity ends the run on contact.
         val distance = aim.distance.coerceIn(65f, 480f)
         point(game, next, distance)

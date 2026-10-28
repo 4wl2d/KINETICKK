@@ -37,7 +37,7 @@ internal data class PlacedStructure(
     fun shifted(shiftX: Float, shiftY: Float): PlacedStructure = copy(x = x - shiftX, y = y - shiftY)
 }
 
-/** A structure announced to the HUD before its walls are in the window: its entrance and centre, run-local. */
+/** An unspent structure within signal range, announced to the HUD: its entrance and centre, run-local. */
 internal data class StructureSignal(
     val id: Long,
     val template: StructureTemplateId,

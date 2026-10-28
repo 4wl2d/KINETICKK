@@ -11,6 +11,7 @@ import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.CharacterAchievementProgress
 import kinetickk.ball.profile.api.ColorVision
@@ -380,6 +381,7 @@ internal fun maximumBusinessSnapshot(): ProfileSnapshot = ProfileSnapshot(
             discoveredPairingIds = RelicPairingId.entries.reversed().toSet(),
             heirloomRelicIds = RelicId.entries.reversed().take(MAX_HEIRLOOM_RELICS),
             recentItemIds = List(MAX_RECENT_ITEM_IDS) { index -> ContentBounds.MAX_ITEMS - 1 - index },
+            discoveredWorldEntries = WorldDiscovery.entries.reversed().toSet(),
         ),
         rebirthProgress = RebirthProgress(
             level = ContentBounds.MAX_REBIRTH_LEVEL,
@@ -436,6 +438,7 @@ private fun payloadMetadata(
     "newRelics" to snapshot.profile.collection.newRelicIds.size.toString(),
     "reactionDiscoveries" to snapshot.profile.collection.discoveredReactionIds.size.toString(),
     "pairingDiscoveries" to snapshot.profile.collection.discoveredPairingIds.size.toString(),
+    "worldDiscoveries" to snapshot.profile.collection.discoveredWorldEntries.size.toString(),
     "heirlooms" to snapshot.profile.collection.heirloomRelicIds.joinToString(",") { it.name },
     "language" to snapshot.profile.preferences.language.code,
     "victoriousCharacters" to snapshot.profile.characterAchievements.victoriousCharacters.size.toString(),
@@ -524,6 +527,7 @@ internal fun snapshotSignature(snapshot: ProfileSnapshot): Long {
     result = result * 31L + collection.newRelicIds.sumOf { 1L shl it.ordinal }
     result = result * 31L + collection.discoveredReactionIds.sumOf { 1L shl it.ordinal }
     result = result * 31L + collection.discoveredPairingIds.sumOf { 1L shl it.ordinal }
+    result = result * 31L + collection.discoveredWorldEntries.sumOf { 1L shl it.ordinal }
     collection.heirloomRelicIds.forEach { relic -> result = result * 31L + relic.ordinal + 1L }
     result = result * 31L + profile.economy.matter
     result = result * 31L + profile.economy.lifetimeMatter

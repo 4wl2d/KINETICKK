@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.math.min
@@ -14,10 +15,11 @@ import kotlin.test.fail
 
 /**
  * Calibrates the collision bands against real flight (dp units) on a 1280×800 desktop and a 412×915
- * phone: holding the cursor at reach 0.35 of the long axis stays below the damage-start speed, 0.6 lands
- * in the damage band and 0.79 (just inside the edge strain) is lethal. The bands do not depend on the
- * heading, so the shorter axis is only ever slower, a turn never moves them and a Dash from a gentle
- * cruise can hurt but never kills.
+ * phone: holding the cursor at the dash-safe reach (0.30) of the long axis stays below the damage-start
+ * speed, 0.6 lands in the damage band and 0.79 (just inside the edge strain) is lethal for every Matrix
+ * state. The bands are fixed speeds from the straight steady model: they do not depend on the heading, so
+ * the shorter axis is only ever slower, a turn never moves them, and speed carved in a curve counts like
+ * any speed. A Dash from a gentle cruise can hurt but never kills.
  */
 class ObstacleCalibrationTest {
     private val step = MutableGameState.FIXED_STEP
@@ -28,9 +30,15 @@ class ObstacleCalibrationTest {
     )
     private val viewports = listOf(1_280f to 800f, 412f to 915f)
 
+    /** The cruise below the damage start from which a Dash may hurt but never kills. */
+    private val gentleReach = emptyWorld.obstacles.dashSafeReach
+
     private class Measured(val speed: Float, val start: Float, val lethal: Float)
 
-    /** A quiet run of [shape] with the cursor held at [reach] toward +x ([horizontal]) or +y. */
+    /**
+     * A quiet run of [shape] owning the Matrix [ranks], with the cursor held at [reach] toward +x ([horizontal])
+     * or +y.
+     */
     private fun cruise(
         width: Float,
         height: Float,
@@ -38,9 +46,11 @@ class ObstacleCalibrationTest {
         horizontal: Boolean,
         tier: Int,
         shape: CoreShape = CoreShape.ORB,
+        ranks: Map<MatrixNodeId, Int> = emptyMap(),
     ): MutableGameState =
         buildTestState(content = emptyWorld, rebirth = tier, shape = shape).apply {
             resize(width, height)
+            ranks.forEach { (node, rank) -> matrixRanks[content.matrixNodes.indexOfFirst { it.id == node }] = rank }
             startRun()
             enemies.clear()
             spawnClock = Float.MAX_VALUE
@@ -106,16 +116,16 @@ class ObstacleCalibrationTest {
     fun cursorReachAlongTheLongAxisDecidesTheCollisionBandOnDesktopAndPhone() {
         for ((width, height) in viewports) for (tier in listOf(0, 3)) {
             val longIsHorizontal = width >= height
-            val reaches = listOf(0.35f, 0.6f, 0.79f)
+            val reaches = listOf(gentleReach, 0.6f, 0.79f)
             val along = reaches.map { measure(width, height, it, longIsHorizontal, tier) }
             val across = reaches.map { measure(width, height, it, !longIsHorizontal, tier) }
             val (gentle, brisk, edge) = along
             val label = "${width.toInt()}x${height.toInt()} tier $tier"
             println(
-                "OBSTACLE CALIBRATION $label: reach 0.35=${gentle.speed} 0.6=${brisk.speed} 0.79=${edge.speed} " +
+                "OBSTACLE CALIBRATION $label: reach $gentleReach=${gentle.speed} 0.6=${brisk.speed} 0.79=${edge.speed} " +
                     "start=${brisk.start} lethal=${brisk.lethal} short axis=${across.map { it.speed }}",
             )
-            assertTrue(gentle.speed < gentle.start, "$label: reach 0.35 (${gentle.speed}) below ${gentle.start}")
+            assertTrue(gentle.speed < gentle.start, "$label: reach $gentleReach (${gentle.speed}) below ${gentle.start}")
             assertTrue(brisk.speed >= brisk.start && brisk.speed < brisk.lethal,
                 "$label: reach 0.6 (${brisk.speed}) inside ${brisk.start}..${brisk.lethal}")
             assertTrue(edge.speed >= edge.lethal, "$label: reach 0.79 (${edge.speed}) at least ${edge.lethal}")
@@ -131,11 +141,17 @@ class ObstacleCalibrationTest {
     @Test
     fun theSteadySpeedModelMatchesMeasuredFlight() {
         for ((width, height) in viewports) for (reach in listOf(0.35f, 0.6f, 0.79f)) {
-            val model = buildTestState(content = emptyWorld).apply { resize(width, height) }.steadyCursorSpeed(reach)
+            val viewport = buildTestState(content = emptyWorld).apply { resize(width, height) }
+            val model = viewport.steadyCursorSpeed(reach)
             val measured = measure(width, height, reach, horizontal = width >= height, tier = 3)
-            assertEquals(model, measured.speed, model * 0.03f, "steady model at ${width.toInt()} reach $reach")
-            val shortModel = steadyCursorSpeedAtOffset(reach * min(width, height) * 0.5f)
+            val shortModel = viewport.steadyCursorSpeedAtOffset(reach * min(width, height) * 0.5f)
             val shortMeasured = measure(width, height, reach, horizontal = width < height, tier = 3)
+            println(
+                "STEADY MODEL ${width.toInt()}x${height.toInt()} reach $reach: long model=$model measured=${measured.speed} " +
+                    "error=${(measured.speed - model) / model}; short model=$shortModel measured=${shortMeasured.speed} " +
+                    "error=${(shortMeasured.speed - shortModel) / shortModel}",
+            )
+            assertEquals(model, measured.speed, model * 0.03f, "steady model at ${width.toInt()} reach $reach")
             assertEquals(shortModel, shortMeasured.speed, shortModel * 0.03f, "short-axis model at ${width.toInt()} reach $reach")
         }
     }
@@ -147,13 +163,13 @@ class ObstacleCalibrationTest {
     }
 
     /**
-     * Dashes from a cruise at reach 0.35 into an asteroid on each of [sizes], both axes, tiers 0 and 3: the
-     * Dash hurts along the long axis but never kills. With [onBeat] the Dash leaves on a Pentagon beat.
+     * Dashes from a cruise at the dash-safe reach into an asteroid on each of [sizes], both axes, tiers 0 and 3:
+     * the Dash hurts along the long axis but never kills. With [onBeat] the Dash leaves on a Pentagon beat.
      */
     private fun assertAGentleDashNeverKills(sizes: List<Pair<Float, Float>>, shape: CoreShape, onBeat: Boolean) {
         for ((width, height) in sizes) for (horizontal in listOf(true, false)) for (tier in listOf(0, 3)) {
             val label = "$shape ${width.toInt()}x${height.toInt()} ${if (horizontal) "x" else "y"} tier $tier"
-            val state = cruise(width, height, 0.35f, horizontal, tier, shape)
+            val state = cruise(width, height, gentleReach, horizontal, tier, shape)
             state.fly(20f)
             // The Dash leaves in the next fixed step: wait until that step lands on a beat.
             if (onBeat) while (!onBeatAt(state.elapsed + step)) state.fly(step)
@@ -166,7 +182,7 @@ class ObstacleCalibrationTest {
             assertEquals(onBeat, state.characterRuntime.dashOnBeat, "$label: the Dash left on a beat: $onBeat")
             val impact = state.flyIntoTheAsteroid()
             assertTrue(impact > cruiseSpeed + state.effectiveDashImpulse() * 0.5f, "$label: the Dash landed ($cruiseSpeed -> $impact)")
-            assertEquals(GamePhase.RUNNING, state.phase, "$label: a Dash from reach 0.35 at $impact must not kill")
+            assertEquals(GamePhase.RUNNING, state.phase, "$label: a Dash from reach $gentleReach at $impact must not kill")
             assertTrue(impact < state.obstacleLethalSpeed(), "$label: $impact below ${state.obstacleLethalSpeed()}")
             if (horizontal == width >= height) assertTrue(state.hp < state.maxHp, "$label: along the long axis it hurts ($impact)")
         }
@@ -203,6 +219,51 @@ class ObstacleCalibrationTest {
             assertTrue(state.pendingRicochets > 0, "$label: the band hit landed at $impact")
             assertEquals(GamePhase.RUNNING, state.phase, "$label: a band hit at $impact after a turn must not kill")
             assertTrue(state.hp < state.maxHp, "$label: it still hurts")
+        }
+    }
+
+    /** A Matrix state of the edge-pin case: owned node ranks on a Core [shape]. */
+    private class MatrixState(val label: String, val ranks: Map<MatrixNodeId, Int>, val shape: CoreShape = CoreShape.ORB)
+
+    /**
+     * Holding the cursor at reach 0.79 along the long axis flies at least the lethal collision speed whatever the
+     * Matrix owns: the lethal-speed bonuses of Impact Dampers and Gravity Surfer stop at the build's own ceiling,
+     * the stronger Dash of Vector Thrusters lifts only the gentle-Dash floor, and a heavier or lighter build moves
+     * its ceiling with its own speed.
+     */
+    @Test
+    fun edgePinningStaysLethalForEveryMatrixState() {
+        val guard = mapOf(MatrixNodeId.IMPACT_DAMPERS to 2, MatrixNodeId.GRAVITY_SURFER to 1, MatrixNodeId.VECTOR_THRUSTERS to 2)
+        val guarded = MatrixState("Impact Dampers 2 + Gravity Surfer + Vector Thrusters 2", guard)
+        val states = listOf(
+            MatrixState("none", emptyMap()),
+            guarded,
+            MatrixState("Juggernaut", mapOf(MatrixNodeId.JUGGERNAUT to 1)),
+            MatrixState("Prism + Juggernaut", mapOf(MatrixNodeId.JUGGERNAUT to 1), CoreShape.PRISM),
+            // The slowest build with the full bonus: its ceiling leaves the least room under its own pin speed.
+            MatrixState("Prism + Juggernaut + guard", guard + (MatrixNodeId.JUGGERNAUT to 1), CoreShape.PRISM),
+            MatrixState("Perpetual Drift", mapOf(MatrixNodeId.PERPETUAL_DRIFT to 1)),
+        )
+        for ((width, height) in viewports) for (tier in listOf(3, 10)) {
+            val lethalByState = states.associateWith { matrixState ->
+                val label = "${width.toInt()}x${height.toInt()} tier $tier ${matrixState.label}"
+                val state = cruise(width, height, 0.79f, width >= height, tier, matrixState.shape, matrixState.ranks)
+                state.fly(20f)
+                assertEquals(GamePhase.RUNNING, state.phase, "$label: the pin flies on an empty field")
+                val lethal = state.obstacleLethalSpeed()
+                val ceiling = state.buildSteadyCursorSpeed(emptyWorld.obstacles.lethalCeilingReach)
+                println(
+                    "EDGE PIN $label: reach 0.79=${state.speed} lethal=$lethal " +
+                        "bonus=${state.obstacleLethalSpeedBonus()} ceiling=$ceiling",
+                )
+                assertTrue(state.speed >= lethal, "$label: reach 0.79 (${state.speed}) at least $lethal")
+                lethal
+            }
+            val plain = lethalByState.getValue(states.first())
+            assertTrue(
+                lethalByState.getValue(guarded) > plain,
+                "${width.toInt()}x${height.toInt()} tier $tier: the guard still raises the lethal speed over $plain",
+            )
         }
     }
 

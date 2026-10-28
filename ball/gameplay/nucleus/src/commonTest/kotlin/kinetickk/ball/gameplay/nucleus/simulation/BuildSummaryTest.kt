@@ -149,4 +149,45 @@ class BuildSummaryTest {
         val notice = game.takeVisualFxCues().filterIsInstance<VisualFxCue.BuildChanged>().single()
         assertTrue(notice.details.contains("Weapon power +${(delta * 100f).toInt() / 100f}×"))
     }
+
+    @Test
+    fun gripAndSlingRowsShowTheBoundedStatsTheFlightLawReadsAndTheirMatrixShare() {
+        // Two Matrix ranks of +0.5 grip and +0.25 sling (no shipped node carries the steering stats yet).
+        val content = canonicalGameplayContent.copy(matrixNodes = canonicalGameplayContent.matrixNodes.map { node ->
+            if (node.id != MatrixNodeId.IMPACT_DRIVER) node else node.copy(effects = listOf(
+                MatrixEffect.Stat(StatDelta(ItemEffect.GRIP, 0.5f)),
+                MatrixEffect.Stat(StatDelta(ItemEffect.SLING, 0.25f)),
+            ).toImmutableList())
+        }.toImmutableList())
+        val game = MutableGameState(content, seed = 19).apply {
+            matrixRanks[content.matrixNodes.indexOfFirst { it.id == MatrixNodeId.IMPACT_DRIVER }] = 2
+            startRun()
+        }
+        fun row(name: String): BuildStatSummary = game.buildStats().single { it.name == name }
+        fun BuildStatSummary.share(source: BuildStatSource): Float =
+            contributions.singleOrNull { it.source == source }?.amount ?: 0f
+
+        for ((name, total) in listOf("Grip" to 2f, "Sling" to 1.5f)) {
+            val stat = row(name)
+            assertEquals(total, stat.value, 1e-6f, name)
+            assertEquals("×", stat.unit, name)
+            assertEquals(1f, stat.share(BuildStatSource.CHARACTER), name)
+            assertEquals(total - 1f, stat.share(BuildStatSource.LAB), 1e-6f, "$name: the Matrix share")
+            assertEquals(0f, stat.share(BuildStatSource.ITEMS), 1e-6f, name)
+        }
+
+        // Past the content bound the rows read what the law reads; items carry the rest of the sum.
+        val bound = content.tempo.steering.maximumStatMultiplier
+        game.gripStrength = bound + 0.6f
+        game.slingStrength = -0.4f
+        val grip = row("Grip")
+        val sling = row("Sling")
+        assertEquals(bound, grip.value)
+        assertEquals(0f, sling.value)
+        assertEquals(bound - 2f, grip.share(BuildStatSource.ITEMS), 1e-6f)
+        assertEquals(-1.5f, sling.share(BuildStatSource.ITEMS), 1e-6f)
+        for (stat in listOf(grip, sling)) {
+            assertEquals(stat.value, stat.contributions.sumOf { it.amount.toDouble() }.toFloat(), 1e-5f, stat.name)
+        }
+    }
 }

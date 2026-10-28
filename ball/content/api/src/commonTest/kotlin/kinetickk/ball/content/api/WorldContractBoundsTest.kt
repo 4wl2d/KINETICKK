@@ -19,7 +19,7 @@ import kotlin.test.assertTrue
  */
 class WorldContractBoundsTest {
     @Test
-    fun onlyTheThreeAnomaliesTakeWindowWeightAndTheyLeadTheSiteKinds() {
+    fun theAnomaliesTheGateRaceAndTheChallengesTakeWindowWeightAndTheAnomaliesLeadTheSiteKinds() {
         val sites = SitePolicy()
         assertEquals(SiteKind.entries, sites.definitions.map { it.kind })
         assertEquals(3, ANOMALY_KIND_COUNT)
@@ -29,7 +29,11 @@ class WorldContractBoundsTest {
         )
         assertTrue(SiteKind.entries.take(ANOMALY_KIND_COUNT).all { it.family == SiteFamily.ANOMALY })
         assertTrue(SiteKind.entries.drop(ANOMALY_KIND_COUNT).none { it.family == SiteFamily.ANOMALY })
-        assertEquals(SiteKind.entries.take(ANOMALY_KIND_COUNT), sites.definitions.filter { it.windowWeight > 0f }.map { it.kind })
+        assertEquals(
+            SiteKind.entries.take(ANOMALY_KIND_COUNT).associateWith { 1f } + (SiteKind.GATE_RACE to 1.4f) +
+                SiteKind.entries.filter { it.family == SiteFamily.CHALLENGE }.associateWith { 0.36f },
+            sites.definitions.filter { it.windowWeight > 0f }.associate { it.kind to it.windowWeight },
+        )
         assertTrue(sites.definitions.all { it.activationRadius == 65f || it.windowWeight == 0f })
         assertEquals(DirectedReward.WEAPON, sites.definition(SiteKind.RESONANT_CIRCUIT).reward.directed)
         assertEquals(DirectedReward.RELIC, sites.definition(SiteKind.SEALED_ANOMALY).reward.directed)
@@ -55,6 +59,15 @@ class WorldContractBoundsTest {
         ChallengePolicy(ramFoes = ContentBounds.MAX_SITE_FOES)
         assertFailsWith<IllegalArgumentException> { ChallengePolicy(ramFoes = ContentBounds.MAX_SITE_FOES + 1) }
         assertFailsWith<IllegalArgumentException> { ChallengePolicy(ramFoes = 5, ramRequired = 6) }
+        // The Ram rite's foes are an encounter: its integrity share, area and ring stay within the encounter's bounds.
+        ChallengePolicy(ramFoeHealthShare = 0.1f)
+        assertFailsWith<IllegalArgumentException> { ChallengePolicy(ramFoeHealthShare = 0.099f) }
+        ChallengePolicy(ramClamp = 2_400f)
+        assertFailsWith<IllegalArgumentException> { ChallengePolicy(ramClamp = 2_401f) }
+        ChallengePolicy(ramClamp = 320f, ramRingRadius = 320f)
+        assertFailsWith<IllegalArgumentException> { ChallengePolicy(ramClamp = 320f, ramRingRadius = 321f) }
+        ChallengePolicy(ramClamp = 120f, ramRingRadius = 100f)
+        assertFailsWith<IllegalArgumentException> { ChallengePolicy(ramClamp = 119f, ramRingRadius = 100f) }
         SecretPolicy(spinBuckets = ContentBounds.MAX_SPIN_BUCKETS)
         assertFailsWith<IllegalArgumentException> { SecretPolicy(spinBuckets = ContentBounds.MAX_SPIN_BUCKETS + 1) }
         assertFailsWith<IllegalArgumentException> { SiteReward(matter = 121) }
@@ -63,9 +76,18 @@ class WorldContractBoundsTest {
         assertFailsWith<IllegalArgumentException> { SiteDefinition(SiteKind.DRIFT_CACHE, "Cache", "Open.", SiteReward.NONE, windowWeight = 1f, duration = 0f) }
         assertFailsWith<IllegalArgumentException> { SiteDefinition(SiteKind.GATE_RACE, "Race", "Fly.", SiteReward.NONE, duration = 0f) }
         // Every window must still be able to draw a pair.
-        val oneAnomaly = SitePolicy().definitions.map { if (it.kind == SiteKind.SEALED_ANOMALY || it.kind == SiteKind.COLLAPSING_ORBIT) it.copy(windowWeight = 0f) else it }
-        assertFailsWith<IllegalArgumentException> { SitePolicy(definitions = oneAnomaly.toImmutableList()) }
+        fun weighted(vararg kinds: SiteKind) = SitePolicy().definitions
+            .map { it.copy(windowWeight = if (it.kind in kinds) 1f else 0f) }.toImmutableList()
+        SitePolicy(definitions = weighted(SiteKind.RESONANT_CIRCUIT, SiteKind.GATE_RACE))
+        assertFailsWith<IllegalArgumentException> { SitePolicy(definitions = weighted(SiteKind.RESONANT_CIRCUIT)) }
         assertFailsWith<IllegalArgumentException> { SitePolicy(definitions = SitePolicy().definitions.reversed().toImmutableList()) }
+        // A second draw always finds a kind: a zero same-family weight needs unconditional kinds of two families.
+        val anomalies = weighted(SiteKind.RESONANT_CIRCUIT, SiteKind.SEALED_ANOMALY, SiteKind.COLLAPSING_ORBIT)
+        SitePolicy(sameFamilyWeight = Float.MIN_VALUE, definitions = anomalies)
+        assertFailsWith<IllegalArgumentException> { SitePolicy(sameFamilyWeight = 0f, definitions = anomalies) }
+        SitePolicy(sameFamilyWeight = 0f, definitions = weighted(SiteKind.RESONANT_CIRCUIT, SiteKind.GATE_RACE))
+        SitePolicy(sameFamilyWeight = 1f, definitions = anomalies)
+        assertFailsWith<IllegalArgumentException> { SitePolicy(sameFamilyWeight = 1.0001f, definitions = anomalies) }
     }
 
     @Test

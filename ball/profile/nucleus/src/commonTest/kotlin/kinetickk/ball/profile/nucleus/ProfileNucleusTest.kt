@@ -9,6 +9,7 @@ import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.profile.api.CollectionProjection
 import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.DamageNumberFormat
@@ -521,6 +522,45 @@ class ProfileNucleusTest {
         )).acceptedFrame().nextState.profile.collection
         assertEquals(ReactionId.entries.toSet(), everything.discoveredReactionIds)
         assertEquals(RelicPairingId.entries.toSet(), everything.discoveredPairingIds)
+    }
+
+    @Test
+    fun worldDiscoveriesUnion() {
+        val state = readyState()
+        val first = applyGameplayProgress(state, GameplayProgressUpdate(
+            discoveredItemIds = emptySet(),
+            discoveredWorldEntries = setOf(WorldDiscovery.GATE_RACE, WorldDiscovery.LOST_CURSOR),
+        )).acceptedFrame()
+        // The accepted frame persists the union with the rest of the profile.
+        assertEquals(first.nextState.profile, assertIs<ProfileOutput.PersistSnapshot>(first.outputs.first()).snapshot.profile)
+        val second = applyGameplayProgress(first.persisted(), GameplayProgressUpdate(
+            discoveredItemIds = emptySet(),
+            discoveredWorldEntries = setOf(WorldDiscovery.LOST_CURSOR, WorldDiscovery.ZENITH),
+        )).acceptedFrame()
+        val collection = second.nextState.profile.collection
+        assertEquals(setOf(WorldDiscovery.GATE_RACE, WorldDiscovery.LOST_CURSOR, WorldDiscovery.ZENITH), collection.discoveredWorldEntries)
+        // Nothing else moves: no item, relic or counter is touched by a discovery.
+        assertEquals(
+            state.profile.copy(collection = state.profile.collection.copy(discoveredWorldEntries = collection.discoveredWorldEntries)),
+            second.nextState.profile,
+        )
+        // A known discovery is no change, so nothing is written again.
+        assertEquals(
+            ProfileRejection.NoChange,
+            applyGameplayProgress(second.persisted(), GameplayProgressUpdate(
+                discoveredItemIds = emptySet(),
+                discoveredWorldEntries = setOf(WorldDiscovery.GATE_RACE),
+            )).rejection(),
+        )
+        // Every discovery, the secret bosses included, fits one profile.
+        val everything = applyGameplayProgress(state, GameplayProgressUpdate(
+            discoveredItemIds = emptySet(),
+            discoveredWorldEntries = WorldDiscovery.entries.toSet(),
+        )).acceptedFrame().nextState.profile.collection
+        assertEquals(WorldDiscovery.entries.toSet(), everything.discoveredWorldEntries)
+        // A run that ends with nothing but counters keeps every discovery.
+        val counted = applyGameplayProgress(second.persisted(), GameplayProgressUpdate(totalKills = 3)).acceptedFrame()
+        assertEquals(collection.discoveredWorldEntries, counted.nextState.profile.collection.discoveredWorldEntries)
     }
 
     @Test

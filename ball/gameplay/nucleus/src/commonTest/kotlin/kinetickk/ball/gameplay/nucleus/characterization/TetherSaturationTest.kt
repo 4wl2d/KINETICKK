@@ -3,7 +3,11 @@
 
 package kinetickk.ball.gameplay.nucleus.characterization
 
+import kinetickk.ball.content.api.GameplayContentSnapshot
+import kinetickk.ball.content.api.SteeringTuning
 import kinetickk.ball.gameplay.nucleus.simulation.*
+import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
+import kotlin.math.exp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -126,6 +130,46 @@ class TetherSaturationTest {
         val beforeDash = momentum.speed
         momentum.performDash()
         assertTrue(momentum.speed > beforeDash + 580f)
+    }
+
+    @Test
+    fun exhaustionAlsoSuppressesTheSlingAndTheLaunchAssist() {
+        // Sideways the only forward source is the sling; ahead, the pull and the launch assist.
+        val pointers = listOf("sideways" to (0.5f to 1f), "ahead" to (0.9f to 0.5f))
+        for ((label, pointer) in pointers) {
+            val (pointerX, pointerY) = pointer
+            fun stepAt(stability: Float): GameScenario = runningEngine().apply {
+                polarityStability = stability
+                updatePointer(screenWidth * pointerX, screenHeight * pointerY)
+                updateCore(STEP)
+            }
+            assertTrue(stepAt(1f).velocityX > 700f, "$label: a rested Core gains forward speed")
+            assertTrue(stepAt(0f).velocityX < 700f, "$label: an exhausted Core gains no forward speed from any source")
+        }
+    }
+
+    @Test
+    fun aSidewaysPointerNoLongerBrakesTheCore() {
+        fun sideways(content: GameplayContentSnapshot): GameScenario =
+            MutableGameState(content, seed = 731_991, initialMatter = 0).apply {
+                startRun()
+                runGrace = 100f
+                polarityStability = 1f
+                velocityX = 1_500f
+                // Steady flight: the camera trails the Core by the step-exact lag of its speed.
+                cameraX = coreX - CAMERA_LAG_SECONDS * velocityX
+                cameraY = coreY
+                updatePointer(screenWidth * 0.5f, screenHeight * 0.9f)
+            }
+        val piloting = sideways(canonicalGameplayContent)
+        val coast = 1_500f * exp(-piloting.steeringDrag() * STEP)
+        piloting.updateCore(STEP)
+        assertTrue(piloting.velocityX >= coast, "camera lag must not brake a sideways pointer (${piloting.velocityX} < $coast)")
+        val released = sideways(
+            canonicalGameplayContent.copy(tempo = canonicalGameplayContent.tempo.copy(steering = SteeringTuning.LEGACY)),
+        )
+        released.updateCore(STEP)
+        assertTrue(released.velocityX < coast, "the released law braked it (${released.velocityX})")
     }
 
     @Test

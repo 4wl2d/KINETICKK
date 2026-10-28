@@ -351,7 +351,14 @@ internal class FactRun(val seed: Int, private val seconds: Float = 240f) {
             when (output) {
                 is GameplayOutput.EmitVisualFx -> {
                     record(output.cues)
-                    reducer.apply(output.cues)
+                    // Cue by cue, as apply walks a batch: a later flash of the same kind inside the merge distance
+                    // joins an earlier one and its flags win, so each reaction cue's flags are read as it lands.
+                    for (cue in output.cues) {
+                        reducer.apply(listOf(cue))
+                        if (cue is VisualFxCue.ReactionTriggered) {
+                            for (burst in reducer.snapshot().elementBursts) projectedReactionFlags = projectedReactionFlags or burst.flags
+                        }
+                    }
                 }
                 is GameplayOutput.SendProfileCommand -> progress = true
                 else -> Unit
@@ -496,7 +503,8 @@ internal class FactRun(val seed: Int, private val seconds: Float = 240f) {
         for (arc in fx.weaponArcs) projectedLinkStyles += arc.style
         for (wave in fx.shockwaves) projectedShockwaveColors += wave.colorIndex
         if (fx.skillBursts.isNotEmpty()) samples.getOrPut("skill-burst") { model to fx }
-        if (fx.elementBursts.count { it.reaction >= 0 } >= 3) samples.getOrPut("reactions") { model to fx }
+        // Drawn samples keep their fact inside the viewport: the renderer culls flashes and glyphs off screen.
+        if (fx.elementBursts.count { it.reaction >= 0 && model.shows(it.x, it.y) } >= 3) samples.getOrPut("reactions") { model to fx }
         if (fx.weaponArcs.any { it.style != LinkStyleCode.WEAPON }) samples.getOrPut("styled-link") { model to fx }
 
         val slots = model.skillBar.slots
@@ -527,8 +535,12 @@ internal class FactRun(val seed: Int, private val seconds: Float = 240f) {
         for (field in model.combatFields) fieldSources += field.source
         if (model.combatFields.isNotEmpty()) samples.getOrPut("fields") { model to fx }
         var bits = 0
-        for (enemy in model.enemies) bits = bits or enemy.controlBits
-        if (bits != 0) samples.getOrPut("control-bits") { model to fx }
+        var shownBits = 0
+        for (enemy in model.enemies) {
+            bits = bits or enemy.controlBits
+            if (!enemy.dead && model.shows(enemy.x, enemy.y)) shownBits = shownBits or enemy.controlBits
+        }
+        if (shownBits != 0) samples.getOrPut("control-bits") { model to fx }
         if (bits and EnemyControlBits.APEX_STRIKE_TARGET != 0) samples.getOrPut("apex-strike-target") { model to fx }
         controlBits = controlBits or bits
         if (model.coreState !== CoreStateProjection.NEUTRAL) {
@@ -536,6 +548,10 @@ internal class FactRun(val seed: Int, private val seconds: Float = 240f) {
             samples.getOrPut("core-state") { model to fx }
         }
     }
+
+    /** True when the world point ([x], [y]) lies inside this frame's viewport. */
+    private fun GameplayRenderModel.shows(x: Float, y: Float): Boolean =
+        abs(x - cameraX) < screenWidth * 0.5f && abs(y - cameraY) < screenHeight * 0.5f
 
     fun report(): String = buildString {
         append("level=$maxLevelSeen/$modelMaxLevel skills=$maxSkillsOwned casts=${skillCasts.sortedBy { it.first }} ")

@@ -23,10 +23,6 @@ internal fun MutableGameState.structureInteriorActive(): Boolean = false
 @Suppress("UNUSED_PARAMETER")
 internal fun MutableGameState.appendStructureMarks(out: FloatArray, count: Int): Int = count
 
-/** True when a structure footprint inflated by [margin] contains the absolute point. */
-@Suppress("UNUSED_PARAMETER")
-internal fun MutableGameState.structureFootprintContains(absoluteX: Double, absoluteY: Double, margin: Float): Boolean = false
-
 /** The trial panel of an engaged dungeon, or null. */
 internal fun MutableGameState.structureTrialProjection(): TrialProjection? = null
 

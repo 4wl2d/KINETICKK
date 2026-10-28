@@ -395,7 +395,10 @@ internal fun MutableGameState.updateObstacles() {
 private const val MAX_CORE_BOUNCES: Int = 3
 private const val CONTACT_SEPARATION: Float = 0.05f
 
-/** Returns true when the Core touched an obstacle this step. */
+/**
+ * Returns true when the Core touched an obstacle this step. At most [MAX_CORE_BOUNCES] contacts resolve per step;
+ * the last one ends the step's motion at its rest point.
+ */
 private fun MutableGameState.resolveCoreObstacleCollisions(): Boolean {
     if (obstacleField.size == 0 && structureField.structures.isEmpty()) return false
     var startX = previousCoreX
@@ -467,9 +470,16 @@ private fun MutableGameState.resolveCoreObstacleCollisions(): Boolean {
                 startY = restY
             }
         }
-        val remaining = (1f - hitT) * delta
-        endX = startX + velocityX * remaining
-        endY = startY + velocityY * remaining
+        if (bounce == MAX_CORE_BOUNCES - 1) {
+            // The last allowed contact ends the step's motion at its rest point: the remainder is never moved
+            // un-swept into whatever lies behind it.
+            endX = startX
+            endY = startY
+        } else {
+            val remaining = (1f - hitT) * delta
+            endX = startX + velocityX * remaining
+            endY = startY + velocityY * remaining
+        }
         if (phase != GamePhase.RUNNING) break
     }
     coreX = endX
@@ -481,9 +491,18 @@ private fun MutableGameState.resolveCoreObstacleCollisions(): Boolean {
     return collided
 }
 
-/** Last guard after the bounces: the Core never rests inside an obstacle. */
-private fun MutableGameState.pushCoreOutOfObstacles() {
-    forEachObstacleNear(coreX, coreY, coreRadius) { _, obstacle ->
+/**
+ * Last guard after the bounces: the Core never rests inside an obstacle. It is pushed out of every obstacle it
+ * overlaps. Inward speed below the damage-start impact speed is removed silently; the first contact at that speed or
+ * faster keeps it and, once the walk is done (the field does not change during it), responds like a swept contact:
+ * it bounces, hurts, kills or ricochets.
+ */
+internal fun MutableGameState.pushCoreOutOfObstacles() {
+    var hitIndex = -1
+    var hitObstacle: Obstacle? = null
+    var hitNormalX = 0f
+    var hitNormalY = 0f
+    forEachObstacleNear(coreX, coreY, coreRadius) { index, obstacle ->
         val combined = obstacle.radius + coreRadius
         val dx = coreX - obstacle.x
         val dy = coreY - obstacle.y
@@ -495,17 +514,28 @@ private fun MutableGameState.pushCoreOutOfObstacles() {
             coreY = obstacle.y + ny * (combined + CONTACT_SEPARATION)
             val inward = -(velocityX * nx + velocityY * ny)
             if (inward > 0f) {
-                velocityX += inward * nx
-                velocityY += inward * ny
+                val sliding = length(velocityX + inward * nx, velocityY + inward * ny)
+                if (hitObstacle == null && obstacleImpactSpeed(inward, sliding) >= obstacleDamageStartSpeed()) {
+                    hitIndex = index
+                    hitObstacle = obstacle
+                    hitNormalX = nx
+                    hitNormalY = ny
+                } else {
+                    velocityX += inward * nx
+                    velocityY += inward * ny
+                }
             }
         }
     }
+    val hit = hitObstacle ?: return
+    respondToObstacle(hitIndex, hit, hitNormalX, hitNormalY, coreX, coreY)
 }
 
 /**
  * Velocity response, damage and triggers of the Core meeting [obstacle] along the outward normal
- * ([nx], [ny]) at ([contactX], [contactY]). Returns true when the obstacle shattered and the Core
- * passes on without bouncing.
+ * ([nx], [ny]) at ([contactX], [contactY]), dispatched by kind: bumpers throw, an unstable asteroid hit at
+ * the damage-start impact speed bursts, every other obstacle is a solid surface. Returns true when the
+ * obstacle shattered and the Core passes on without bouncing.
  */
 private fun MutableGameState.respondToObstacle(
     index: Int,
@@ -521,10 +551,12 @@ private fun MutableGameState.respondToObstacle(
         bounceOffBumper(index, obstacle, nx, ny, normalSpeed, contactX, contactY)
         return false
     }
-    val start = obstacleDamageStartSpeed()
-    if (obstacle.kind == ObstacleKind.UNSTABLE && normalSpeed >= start) {
-        explodeUnstable(index, obstacle, normalSpeed)
-        return true
+    if (obstacle.kind == ObstacleKind.UNSTABLE) {
+        val impact = obstacleImpactSpeed(normalSpeed, length(velocityX + normalSpeed * nx, velocityY + normalSpeed * ny))
+        if (impact >= obstacleDamageStartSpeed()) {
+            explodeUnstable(index, obstacle, impact)
+            return true
+        }
     }
     resolveSolidImpact(obstacle.id, nx, ny, contactX, contactY)
     return false
@@ -541,7 +573,7 @@ internal fun MutableGameState.onRicochet(x: Float, y: Float, normalSpeed: Float)
 /**
  * Elastic throw: the Core leaves at 1.05 × its speed, held to the bumper band and below the lethal
  * collision speed (on a small viewport that speed can lie inside the band); never hurts. Like an asteroid
- * bounce it is a ricochet only at the damage-start speed or faster, at most once per cooldown per bumper.
+ * bounce it is a ricochet only at the ricochet speed or faster, at most once per cooldown per bumper.
  */
 private fun MutableGameState.bounceOffBumper(
     index: Int,
@@ -572,15 +604,18 @@ private fun MutableGameState.bounceOffBumper(
     onRicochet(contactX - nx * coreRadius, contactY - ny * coreRadius, normalSpeed)
 }
 
-/** An unstable asteroid hit at damage speed bursts: it hurts the Core a little and enemies around it. */
-private fun MutableGameState.explodeUnstable(index: Int, obstacle: Obstacle, normalSpeed: Float) {
+/**
+ * An unstable asteroid hit at the damage-start impact speed bursts: it hurts the Core a little and enemies around
+ * it, as hard as the [impact] speed.
+ */
+private fun MutableGameState.explodeUnstable(index: Int, obstacle: Obstacle, impact: Float) {
     val tuning = content.obstacles
     obstacleField = obstacleField.removed(index)
     val destroyed = destroyedObstacleIds + obstacle.id
     destroyedObstacleIds = if (destroyed.size > ContentBounds.MAX_DESTROYED_OBSTACLES) {
         destroyed.subList(destroyed.size - ContentBounds.MAX_DESTROYED_OBSTACLES, destroyed.size).toList()
     } else destroyed
-    areaDamage(obstacle.x, obstacle.y, tuning.unstableBlastRadius, impactPower(normalSpeed))
+    areaDamage(obstacle.x, obstacle.y, tuning.unstableBlastRadius, impactPower(impact))
     burst(obstacle.x, obstacle.y, 24, 4)
     screenShake = max(screenShake, 12f)
     emitSound(GameplayAudioCue.IMPACT)

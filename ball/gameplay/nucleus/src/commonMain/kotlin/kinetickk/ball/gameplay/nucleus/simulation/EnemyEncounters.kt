@@ -12,6 +12,7 @@ import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.model.profile
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.ball.gameplay.nucleus.render.VolatileBurstProjection
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.cos
@@ -33,6 +34,8 @@ internal const val DEFAULT_ENCOUNTER_ABANDON_DISTANCE: Float = 2_400f
 /** No secret boss is summoned later than this before the Architect. */
 internal const val SECRET_BOSS_LAST_SUMMON_LEAD: Float = 90f
 internal const val MAX_BOSS_ADDS_LIVE: Int = 4
+/** An ember bursts as wide as a Volatile Remains burst. */
+internal const val EMBER_RADIUS: Float = VOLATILE_BURST_RADIUS
 
 private const val ENCOUNTER_NUDGE_ATTEMPTS: Int = 6
 private const val ENCOUNTER_NUDGE_TURN: Float = 0.35f
@@ -296,8 +299,9 @@ internal fun MutableGameState.updateEncounters() {
     }
 }
 
-/** Kill hook of onEnemyKilled: a tagged kill counts once toward its encounter. */
+/** Kill hook of onEnemyKilled: a killed Imp (any owner) leaves an ember; a tagged kill counts once toward its encounter. */
 internal fun MutableGameState.onEncounterEnemyKilled(enemy: Enemy) {
+    if (enemy.type == EnemyType.IMP) queueEmber(enemy.x, enemy.y, IMP_KILL_EMBER_SECONDS)
     if (enemy.ownerTag == 0L) return
     val index = encounterIndex(enemy.ownerTag)
     if (index < 0) return
@@ -352,6 +356,22 @@ internal fun MutableGameState.spawnBossAdds(boss: Enemy, type: EnemyType, count:
         }
     }
     return allowed
+}
+
+/**
+ * An ember: a delayed Volatile-Remains-style burst at ([x], [y]) after [delay] seconds (radius [EMBER_RADIUS], base
+ * damage 6, a Core at 400 u/s or faster escapes), detonated by updateVolatileRemains with or without the R4 mutator.
+ * None is queued while [MutableGameState.MAX_VOLATILE_BURSTS] bursts wait. Draws nothing.
+ */
+internal fun MutableGameState.queueEmber(x: Float, y: Float, delay: Float) {
+    if (volatileBursts.size >= MutableGameState.MAX_VOLATILE_BURSTS) return
+    volatileBursts = (volatileBursts + VolatileBurstProjection(
+        x = x,
+        y = y,
+        radius = EMBER_RADIUS,
+        armedAt = elapsed,
+        detonatesAt = elapsed + delay,
+    )).toImmutableList()
 }
 
 /**

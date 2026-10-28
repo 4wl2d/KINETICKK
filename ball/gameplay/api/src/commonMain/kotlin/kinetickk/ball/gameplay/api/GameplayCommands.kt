@@ -20,7 +20,8 @@ data class GameplaySettingsApplied(
 )
 
 interface GameplayLifecycle {
-    fun startRun(reply: InlineReply<GameplayRunStarted, GameplayRefusal>)
+    /** Starts the run under [mode], which the run then keeps until it ends. */
+    fun startRun(mode: RunMode, reply: InlineReply<GameplayRunStarted, GameplayRefusal>)
     fun pauseForOverlay(reply: InlineReply<GameplayOverlayPaused, GameplayRefusal>)
     fun exitRun(reply: InlineReply<GameplayRunExited, GameplayRefusal>)
 }

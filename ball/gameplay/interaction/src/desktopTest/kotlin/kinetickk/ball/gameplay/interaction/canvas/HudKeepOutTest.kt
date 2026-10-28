@@ -57,6 +57,7 @@ class HudKeepOutTest {
                         affinityBits = bossAffinity(boss)))
                         .toImmutableList(),
                     "sites" to (if (trial) listOf(orbit) else emptyList()).toImmutableList(),
+                    "trial" to (if (trial) siteTrial(orbit) else null),
                 )
                 drawHudAt(width, height, density, language, textScale) { measurer -> drawHud(model, measurer, 1f) }
                 val keepOut = WorldHudKeepOut().update(width, height, density, textScale, trial, bossPresent = true)

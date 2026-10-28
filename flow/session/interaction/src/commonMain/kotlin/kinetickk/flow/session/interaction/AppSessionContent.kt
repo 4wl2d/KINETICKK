@@ -169,6 +169,7 @@ fun AppSessionContent(
     }
 
     fun dispatchKey(key: Key): Boolean {
+        if (key.isRunModeKey(shellValue.base)) return dispatch(SessionInteractionPulse.SelectRunModeRequested(shellValue.runMode.toggled()))
         key.toSessionShortcut()?.let { return dispatch(SessionInteractionPulse.ShortcutObserved(it)) }
         return key.toWorkshopAlias(shellValue.base)?.let(::openWorkshop) ?: false
     }
@@ -279,6 +280,7 @@ fun AppSessionContent(
             when (shellValue.base) {
                 AppDestination.Home -> homeFeature.Content(
                     inputEnabled = normalInputEnabled && shellValue.overlay == null,
+                    runMode = shellValue.runMode,
                     onOutput = { output -> if (output == HomeOutput.Quit) onQuit() else output.toSessionPulse()?.let { dispatch(it) } },
                 )
                 // The run keeps the raw density: the interface scale never changes the visible arena.

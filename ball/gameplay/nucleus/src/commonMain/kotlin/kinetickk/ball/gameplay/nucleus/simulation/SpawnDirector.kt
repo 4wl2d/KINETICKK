@@ -654,7 +654,7 @@ internal fun MutableGameState.spawnPendingEscorts() {
 }
 
 /**
- * The [index]th eligible ordinary type sharing [aspect] without immunity, in roster order. An aspect no
+ * The [index]th eligible escortable ordinary type sharing [aspect] without immunity, in roster order. An aspect no
  * ordinary type carries takes its eligible [aspectStandIn]; Drifters otherwise.
  */
 internal fun MutableGameState.aspectEscortType(aspect: Int, index: Int): EnemyType {
@@ -663,7 +663,7 @@ internal fun MutableGameState.aspectEscortType(aspect: Int, index: Int): EnemyTy
     for (rosterIndex in roster.indices) {
         val definition = roster[rosterIndex]
         val profile = definition.type.profile
-        if (profile.aspect != aspect || aspect < 0 || profile.aspectImmune) continue
+        if (profile.aspect != aspect || aspect < 0 || profile.aspectImmune || !profile.escortable) continue
         if (typeWeight(definition, weakOnly = false, recency = false) > 0f) matches++
     }
     if (matches == 0) {
@@ -674,7 +674,7 @@ internal fun MutableGameState.aspectEscortType(aspect: Int, index: Int): EnemyTy
     for (rosterIndex in roster.indices) {
         val definition = roster[rosterIndex]
         val profile = definition.type.profile
-        if (profile.aspect != aspect || profile.aspectImmune) continue
+        if (profile.aspect != aspect || profile.aspectImmune || !profile.escortable) continue
         if (typeWeight(definition, weakOnly = false, recency = false) <= 0f) continue
         if (target == 0) return definition.type
         target--
@@ -718,6 +718,7 @@ internal fun MutableGameState.relocateLeashedEnemy(enemy: Enemy) {
     enemy.previousY = y
     enemy.vx = 0f
     enemy.vy = 0f
+    onLeashedEnemyRelocated(enemy)
 }
 
 /** True when [enemy] stays wherever it is: scheduled leaders, the boss class and place-bound enemies. */

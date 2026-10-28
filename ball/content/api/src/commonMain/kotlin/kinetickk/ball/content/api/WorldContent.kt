@@ -8,8 +8,9 @@ package kinetickk.ball.content.api
  * world units and speeds dp per second.
  *
  * The collision bands are expressed as cursor reach, the same normalized center-to-edge measure as
- * [FatigueTuning.edgeStrainStart]: a Core speed is compared with the steady speed that holding the
- * cursor at that reach along the viewport's long axis sustains. Steady speed grows with the viewport, so
+ * [FatigueTuning.edgeStrainStart]: a collision's impact speed (normal speed plus [scrapeShare] of the
+ * sliding speed) is compared with the straight steady speed that holding the cursor at that reach along
+ * the viewport's long axis sustains. Steady speed grows with the viewport, so
  * fixed speeds would make a wide window lethal at a gentle reach and a phone safe at the edge; the long
  * axis keeps the bands the same for every heading.
  */
@@ -35,30 +36,37 @@ data class ObstacleTuning(
     val safeRadius: Float = 900f,
     /** Least clear space between two obstacles. */
     val minimumGap: Float = 90f,
-    /** Cursor reach whose steady speed starts collision damage (tier 3 and above). */
-    val damageStartReach: Float = 0.45f,
-    /** Cursor reach whose steady speed makes a collision lethal. */
-    val lethalReach: Float = 0.72f,
+    /**
+     * Cursor reach whose steady speed an impact needs to hurt (tier 3 and above); every hurting hit costs at least
+     * [minimumDamageShare].
+     */
+    val damageStartReach: Float = 0.32f,
+    /** Cursor reach whose steady speed makes an impact lethal before Matrix and item bonuses (reach 0.6 hurts). */
+    val lethalReach: Float = 0.67f,
     /**
      * A Dash from a cruise at this reach is never lethal: the lethal speed stays at least
      * [dashLethalMargin] above that cruise speed plus the Dash impulse.
      */
-    val dashSafeReach: Float = 0.35f,
+    val dashSafeReach: Float = 0.30f,
     val dashLethalMargin: Float = 60f,
     /** At tier 0 collisions start hurting this much faster, shrinking linearly to 0 at [forgivingTiers]. */
-    val forgivingStartBonus: Float = 80f,
+    val forgivingStartBonus: Float = 40f,
     /** At tier 0 collision damage is multiplied by this, rising linearly to 1 at [forgivingTiers]. */
     val forgivingDamageScale: Float = 0.7f,
     val forgivingTiers: Int = 3,
-    /** Collision damage at the lethal speed as a share of maximum integrity. */
-    val damageShare: Float = 0.5f,
-    val damageExponent: Float = 1.3f,
+    /** Collision damage at the lethal end of the band as a share of maximum integrity. */
+    val damageShare: Float = 0.55f,
+    /** Shape of the band from [minimumDamageShare] to [damageShare]: 1 is linear. */
+    val damageExponent: Float = 1.0f,
     /** Collision damage grows by this per Rebirth tier (it replaces the Rebirth incoming-damage multiplier). */
     val damagePerTier: Float = 0.04f,
     val restitution: Float = 0.6f,
     /** A Core bounce below this normal speed slides along the surface instead of bouncing. */
     val slideSpeed: Float = 120f,
-    /** Collision damage and ricochets land at most once per this many seconds. */
+    /**
+     * Collision damage and ricochets of one surface land at most once per this many seconds; another surface, or a
+     * lethal hit, lands at once.
+     */
     val hitCooldownSeconds: Float = 0.25f,
     val bumperMinimumExitSpeed: Float = 700f,
     val bumperMaximumExitSpeed: Float = 1_400f,

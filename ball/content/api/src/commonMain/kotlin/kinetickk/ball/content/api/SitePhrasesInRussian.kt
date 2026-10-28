@@ -34,7 +34,15 @@ internal val SitePhrasesInRussian: List<Pair<String, String>> = listOf(
     "Far sigil" to "Дальняя печать",
     "Touch the sigil to summon whoever drew this map." to "Коснитесь печати, чтобы призвать того, кто начертил эту карту.",
 
+    "TWO SITES DETECTED // CHOOSE A COURSE" to "ОБНАРУЖЕНЫ ДВЕ ЛОКАЦИИ // ВЫБЕРИТЕ ПУТЬ",
     "REWARD SALVAGED" to "НАГРАДА ПЕРЕРАБОТАНА",
+    "RACE FINISHED // GOLD" to "ГОНКА ЗАВЕРШЕНА // ЗОЛОТО",
+    "RACE FINISHED // SILVER" to "ГОНКА ЗАВЕРШЕНА // СЕРЕБРО",
+    "RACE FINISHED // BRONZE" to "ГОНКА ЗАВЕРШЕНА // БРОНЗА",
+    "RACE FINISHED" to "ГОНКА ЗАВЕРШЕНА",
+    "RACE LOST" to "ГОНКА ПРОИГРАНА",
+    "CHALLENGE COMPLETE" to "ВЫЗОВ ПРОЙДЕН",
+    "CHALLENGE FAILED" to "ВЫЗОВ ПРОВАЛЕН",
 
     "Trials" to "Вызовы",
     "The Lost Cursor" to "Потерянный курсор",

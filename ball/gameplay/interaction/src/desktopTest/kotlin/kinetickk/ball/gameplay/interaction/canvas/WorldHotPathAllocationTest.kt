@@ -47,6 +47,7 @@ import kinetickk.ball.gameplay.interaction.fx.ApexBurstProjection
 import kinetickk.ball.gameplay.interaction.fx.InteractionFxLimits
 import kinetickk.ball.gameplay.interaction.fx.ReactionFxSpecs
 import kinetickk.ball.gameplay.interaction.fx.SkillBurstProjection
+import kinetickk.ball.gameplay.interaction.fx.ribbonLength
 import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
 import kinetickk.ball.gameplay.nucleus.protocol.ReactionCueFlags
 import kinetickk.ball.gameplay.nucleus.render.ApexProjection
@@ -66,12 +67,14 @@ import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
 import kinetickk.ball.gameplay.nucleus.render.ProjectileKind
+import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
 import kinetickk.ball.gameplay.nucleus.render.EnemyBehavior
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.PickupProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupType
+import kinetickk.ball.gameplay.nucleus.render.SiteMarkProjection
 import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.ProjectileProjection
 import kinetickk.ball.gameplay.nucleus.render.TotemProjection
@@ -82,6 +85,7 @@ import kinetickk.ball.gameplay.nucleus.render.WeaponNodeProjection
 import kinetickk.ball.gameplay.nucleus.render.WeaponOrbitalProjection
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
 import kinetickk.ball.profile.api.PlayerPreferences
+import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableSetOf
 import kinetickk.foundation.collections.toImmutableList
@@ -148,6 +152,44 @@ class WorldHotPathAllocationTest {
     }
 
     @Test
+    fun coreRibbonWithDashGhostsDrawsWithoutAllocating() {
+        // busyFx's curved ribbon in a Dash: tapered segments, rails over the curve and the three ghosts on the path.
+        check(ribbonLength(busyModel(WeaponId.MORNINGSTAR, dash = 0.12f).speed) > 132f) { "the busy speed draws every ghost" }
+        for (roles in listOf(KkRolePalette.Default, KkRolePalette.Mono)) {
+            assertFrameIsAllocationFree(roles, WeaponId.MORNINGSTAR, warmFrames = WARM_MODELS, measuredFrames = 20, dash = 0.12f)
+        }
+    }
+
+    @Test
+    fun siteMarksGlyphsAndMarkersOfEveryFamilyDrawWithoutAllocating() {
+        assertFrameIsAllocationFree(KkRolePalette.Default, WeaponId.MORNINGSTAR, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = ::withSitesOfEveryFamily)
+        assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = ::withSitesOfEveryFamily)
+    }
+
+    @Test
+    fun aRunningRaceCourseDrawsWithoutAllocating() {
+        // Seven gates (passed, next with its pulsing bar, later, the doubled finish) with their order pips, and the
+        // same race with its next gate past the edge (its marker instead).
+        assertFrameIsAllocationFree(KkRolePalette.Default, WeaponId.MORNINGSTAR, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = { withRunningRace(it, step = 2) })
+        assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = { withRunningRace(it, step = 6) })
+    }
+
+    @Test
+    fun runningChallengesDrawWithoutAllocating() {
+        // Every challenge's ring or course at once (the brakeless ring and arc, the Ram rite's ring and bracketed foes,
+        // the untouched ring with a telegraphed volley, the velocity zone and its progress ring, the slalom's flagged
+        // poles), with the slalom's next pole on screen and then past the edge (its marker instead).
+        assertFrameIsAllocationFree(KkRolePalette.Default, WeaponId.MORNINGSTAR, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = { withRunningChallenges(it, slalomStep = 1) })
+        assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = { withRunningChallenges(it, slalomStep = 5) })
+    }
+
+    @Test
     fun worldColorsFollowTheRolePalette() {
         val model = busyModel(WeaponId.ARC_COIL)
         val fx = busyFx()
@@ -175,15 +217,18 @@ class WorldHotPathAllocationTest {
         level: Int = 3,
         fx: VisualFxProjection = busyFx(),
         decorate: (GameplayRenderModel) -> GameplayRenderModel = { it },
+        dash: Float = 0f,
     ) {
         // The off-screen totem and sealed-anomaly offer move every frame, so their edge-marker
         // distances change every frame: they must be drawn from cached digit layouts, never
         // measured as text. Warm-up frames draw distances from a range the measured frames never
         // use, and every measured frame draws two distances no earlier frame drew (a measuring
         // pass never repeats an earlier pass's), so measuring a distance string would allocate.
-        val warm = Array(WARM_MODELS) { frame -> decorate(busyModel(weapon, drift = WARM_DRIFT + frame * 23f, shape = shape, level = level)) }
+        val warm = Array(WARM_MODELS) { frame ->
+            decorate(busyModel(weapon, drift = WARM_DRIFT + frame * 23f, shape = shape, level = level, dash = dash))
+        }
         fun measured(pass: Int) = Array(measuredFrames) { frame ->
-            decorate(busyModel(weapon, drift = (pass * measuredFrames + frame) * 20f, shape = shape, level = level))
+            decorate(busyModel(weapon, drift = (pass * measuredFrames + frame) * 20f, shape = shape, level = level, dash = dash))
         }.also { measured ->
             check(measured.map { roundedDistance(edgeDistance(it)) }.toSet().size == measuredFrames)
             check(measured.maxOf(::edgeDistance) < warm.minOf(::edgeDistance))
@@ -239,11 +284,9 @@ class WorldHotPathAllocationTest {
         val height = 810
         val base = hudTestModel(width.toFloat(), height.toFloat())
         val frames = List(HUD_FRAMES) { frame ->
-            base.with(
-                "totem" to TotemProjection(base.coreX - 1_300f - frame * 11f, base.coreY + 90f, 1f),
-                "sites" to immutableListOf(SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit",
-                    base.coreX + 60f, base.coreY + 40f, true, 12f, -1, frame / HUD_FRAMES.toFloat(), immutableListOf(), 0f, 0f)),
-            )
+            base.with("totem" to TotemProjection(base.coreX - 1_300f - frame * 11f, base.coreY + 90f, 1f))
+                .withSites(SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit",
+                    base.coreX + 60f, base.coreY + 40f, true, 12f, -1, frame / HUD_FRAMES.toFloat(), immutableListOf(), 0f, 0f))
         }
         val measurer = CanvasTextMeasurer(
             ComposeTextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64),
@@ -287,6 +330,31 @@ class WorldHotPathAllocationTest {
         }
     }
 
+    @Test
+    fun everyEdgeMarkerColorHasItsOwnDigitParagraphs() {
+        // The site families add colors (race volt, bounty threat, ambient mute, sigil void): markers of one color share
+        // their digit style, markers of two colors never share a paragraph, and none shares the HUD's mono digits.
+        val typography = HudTestFonts.typography
+        for (roles in listOf(KkRolePalette.Default, KkRolePalette.Mono)) {
+            val icons = EdgeMarkerIcon.entries
+            icons.forEach { icon ->
+                val style = edgeMarkerStyle(typography, icon, roles)
+                assertFalse(style.hasSameLayoutAffectingAttributes(typography.monoStyle(style.fontSize.value)), "$icon vs the HUD's mono digits")
+                icons.forEach { other ->
+                    val otherStyle = edgeMarkerStyle(typography, other, roles)
+                    if (edgeMarkerColorGroup(icon) == edgeMarkerColorGroup(other)) {
+                        assertTrue(edgeMarkerColor(icon, roles) == edgeMarkerColor(other, roles), "$icon and $other share a group, not a color")
+                    } else {
+                        assertFalse(style.hasSameLayoutAffectingAttributes(otherStyle), "$icon and $other share digit paragraphs")
+                    }
+                }
+            }
+        }
+        assertTrue(edgeMarkerColor(EdgeMarkerIcon.RACE, KkRolePalette.Default) == KkRolePalette.Default.you, "the race is the player's course")
+        assertTrue(edgeMarkerColor(EdgeMarkerIcon.BOUNTY, KkRolePalette.Default) == KkRolePalette.Default.threat, "a bounty is a threat")
+        assertFalse(edgeMarkerColor(EdgeMarkerIcon.CHALLENGE, KkRolePalette.Default) == KkRolePalette.Default.threat, "a rule is no threat")
+    }
+
     private fun render(model: GameplayRenderModel, fx: VisualFxProjection, roles: KkRolePalette): IntArray {
         val bitmap = ImageBitmap(WIDTH, HEIGHT)
         CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(WIDTH.toFloat(), HEIGHT.toFloat())) {
@@ -327,6 +395,8 @@ class WorldHotPathAllocationTest {
             ElementBurstProjection(CORE - 160f, CORE - 160f, 2, 4, 8, 120f, 0.2f, 0.7f, 1),
         )).toImmutableList(),
         reactionStamps = immutableListOf(ReactionStampProjection(CORE + 40f, CORE - 40f, 0, 0.5f, 0.9f)),
+        // A 48-sample ribbon on a 520 u arc ending at the Core, 14 u apart, aged 0 to 0.4 s, the newest 8 from a Dash.
+        coreRibbon = curvedRibbon(CORE, CORE - 520f, 520f, (kotlin.math.PI / 2).toFloat(), 47 * 14f / 520f, 48, dashNewest = 8),
     )
 
     /** [busyFx] plus every reaction's look, three skill looks, an Apex activation and 40 styled links. */
@@ -421,27 +491,53 @@ class WorldHotPathAllocationTest {
         previousGhostX = CORE - 165f + drift * 0.01f, previousGhostY = CORE + 28f,
     )
 
-    private fun busyModel(weapon: WeaponId, drift: Float = 0f, shape: CoreShape = CoreShape.TESSERACT, level: Int = 3): GameplayRenderModel {
+    /** The shifting bit alone, for the glitched Cipher of the busy frame. */
+    private val ShiftingCipher = shiftingAffinity(true) xor shiftingAffinity(false)
+
+    private fun shiftingAffinity(shifting: Boolean): Int = EnemyAffinity.encode(
+        aspect = EnemyAffinity.NONE, immune = false, weakness = EnemyAffinity.NONE, armored = false, fragile = false,
+        shifting = shifting, phase = 0,
+    )
+
+    private fun busyModel(
+        weapon: WeaponId,
+        drift: Float = 0f,
+        shape: CoreShape = CoreShape.TESSERACT,
+        level: Int = 3,
+        dash: Float = 0f,
+    ): GameplayRenderModel {
         val enemies = EnemyType.entries.mapIndexed { index, type ->
             val angle = index * 0.7f
             val distance = if (type == EnemyType.ARCHITECT) 260f else 180f + index * 12f
             EnemyProjection(index + 1, type, CORE + kotlin.math.cos(angle) * distance, CORE + kotlin.math.sin(angle) * distance, 0f, 0f,
-                50f, 100f, if (type == EnemyType.ARCHITECT) 74f else 20f, 0.2f, if (index == 2) 1f else 0f, 0f, 0f, CORE, CORE, false,
+                50f, 100f, if (type == EnemyType.ARCHITECT) 74f else 20f, if (type == EnemyType.HOUND) -0.2f else 0.2f,
+                if (index == 2) 1f else 0f, 0f, 0f, CORE, CORE, false,
                 statusBits = BusyStatuses[index % BusyStatuses.size],
-                // Every type's aspect, weakness and frame, an immune Gravitic elite and a shifting Thermal Architect.
+                // Every type's aspect, weakness and frame, an immune Gravitic elite, a shifting Thermal Architect and a
+                // Cipher glitched out of phase.
                 affinityBits = runAffinity(type, eliteAspect = StatusElement.GRAVITIC, architectAspect = StatusElement.THERMAL,
-                    architectPhase = 1, shifting = true),
+                    architectPhase = 1, shifting = true) or if (type == EnemyType.CIPHER) ShiftingCipher else 0,
                 // The 0.4.0 telegraphs: a showing lane, a locked sight line, a burning fuse, a wind-up, a raised
-                // shield, a turned front, and a Drifter tethered to the Aegis.
+                // shield, a turned front, and a Drifter tethered to the Aegis. The 0.6.0 ones: a Comet marking its lane
+                // or streaking it (alternate frames), a Pylon's locked sight line and a Sentry's bolt line on their mounts;
+                // a Seraph about to mend, a Choir singing, an Imp's fuse, a Hound winding up (its timer below zero), a
+                // glitched Cipher, a Mirror's line to the cursor and a Drifter in a Seraph's impact-only shield.
                 behavior = when (type) {
                     EnemyType.LANCER, EnemyType.SNIPER, EnemyType.PHANTOM -> EnemyBehavior.TELEGRAPH
-                    EnemyType.BOMBER -> EnemyBehavior.PRIMED
+                    EnemyType.BOMBER, EnemyType.IMP -> EnemyBehavior.PRIMED
+                    EnemyType.COMET -> if ((drift / 20f).toInt() % 2 == 0) EnemyBehavior.STRIKE else EnemyBehavior.TELEGRAPH
+                    EnemyType.PYLON, EnemyType.SENTRY, EnemyType.CHOIR -> EnemyBehavior.TELEGRAPH
+                    EnemyType.CIPHER -> EnemyBehavior.PHASED
                     else -> EnemyBehavior.IDLE
                 },
-                behaviorRemaining = if (type == EnemyType.SNIPER) 0.2f else 0.3f,
+                behaviorRemaining = when (type) {
+                    EnemyType.SNIPER -> 0.2f
+                    EnemyType.PYLON -> 0.15f
+                    else -> 0.3f
+                },
                 facing = index * 0.4f,
                 linkedTo = if (type == EnemyType.DRIFTER) EnemyType.AEGIS.ordinal + 1 else -1,
-                shielded = type == EnemyType.HERALD,
+                shielded = type == EnemyType.HERALD || type == EnemyType.DRIFTER,
                 // Rebirth R8: an Armored Vanguard plate on every third ordinary enemy.
                 armored = index % 3 == 0 && type != EnemyType.ARCHITECT,
             )
@@ -451,7 +547,7 @@ class WorldHotPathAllocationTest {
             screenWidth = WIDTH.toFloat(), screenHeight = HEIGHT.toFloat(), uiScale = 1f, coreX = CORE, coreY = CORE,
             velocityX = 420f, velocityY = -160f, cameraX = CORE, cameraY = CORE, pointerX = WIDTH * 0.5f + 180f,
             pointerY = HEIGHT * 0.5f - 120f, pointerActive = true, braking = true, elapsed = 3f, heat = 20f, overheated = false,
-            dashPhaseTime = 0f, hp = 100f, maxHp = 180f, shield = 1f, maxShield = 3f, level = 5, data = 1, nextLevelData = 5,
+            dashPhaseTime = dash, hp = 100f, maxHp = 180f, shield = 1f, maxShield = 3f, level = 5, data = 1, nextLevelData = 5,
             keys = 1, kills = 3, combo = 3, comboTime = 1f, runMatter = 10L, totalMatter = 10L, lastImpact = 20f, lastImpactTime = 0.3f,
             damageFlash = 0.6f, runGrace = 0f, screenShake = 0f, message = "", messageTime = 0f, mass = 1f, damageMultiplier = 1f,
             weaponPower = 1f, coolingRate = 1f, magnetStrength = 1f, dashImpulse = 1f, dashHeatCost = 20f, regenPerSecond = 0f,
@@ -504,7 +600,78 @@ class WorldHotPathAllocationTest {
                 kinetickk.ball.gameplay.nucleus.render.VolatileBurstProjection(CORE + 90f, CORE + 70f, 70f, 2.8f, 3.15f),
                 kinetickk.ball.gameplay.nucleus.render.VolatileBurstProjection(CORE - 120f, CORE + 30f, 70f, 2.9f, 3.25f),
             ),
+            // The running orbit's panel, so the world keeps clear of it.
+            trial = siteTrial(SiteProjection(SiteKind.COLLAPSING_ORBIT, "Orbit", CORE + 60f, CORE + 40f, true, 14f, 0,
+                (drift % 80f) / 80f, immutableListOf(), 0.5f, 0.3f)),
         )
+    }
+
+    /**
+     * The busy frame with an offer of every window family in view (race, a challenge, the bounty, a rift) and the
+     * sigil, a slalom offer and the sigil past the edge (their edge markers), and a cache and the quiet signal off
+     * screen within their reveal distance: the marks, glyphs and markers draw without allocating.
+     */
+    private fun withSitesOfEveryFamily(model: GameplayRenderModel): GameplayRenderModel {
+        fun offer(kind: SiteKind, x: Float, y: Float) = SiteProjection(kind, kind.name, x, y, false, 20f, -1, 0f, immutableListOf(), 0f, 0f)
+        fun ambient(kind: SiteKind, x: Float, y: Float, reveal: Float) =
+            SiteProjection(kind, kind.name, x, y, false, 0f, -1, 0f, immutableListOf(), 0f, 0f, reveal = reveal)
+        return model.with(
+            // The moving sealed offer stays last: its distance drives the measured frames.
+            "sites" to (listOf(
+                offer(SiteKind.GATE_RACE, CORE - 300f, CORE - 180f),
+                offer(SiteKind.UNTOUCHED_TRIAL, CORE + 260f, CORE - 200f),
+                offer(SiteKind.BOUNTY_ARENA, CORE + 300f, CORE + 160f),
+                offer(SiteKind.ZENITH_RIFT, CORE - 340f, CORE + 200f),
+                offer(SiteKind.FAR_SIGIL, CORE + 40f, CORE - 230f),
+                offer(SiteKind.SLALOM_TRIAL, CORE - 2_200f, CORE - 900f),
+            ) + model.sites).toImmutableList(),
+            "ambientSites" to immutableListOf(
+                ambient(SiteKind.DRIFT_CACHE, CORE + 1_200f, CORE + 900f, 1_800f),
+                ambient(SiteKind.QUIET_SIGNAL, CORE - 1_500f, CORE + 1_900f, 3_000f),
+                // Easter eggs are never drawn off screen.
+                ambient(SiteKind.LOST_CURSOR, CORE + 1_000f, CORE - 1_200f, 0f),
+            ),
+        )
+    }
+
+    /**
+     * The busy frame with a running seven-gate race around the Core: gates 0..4 on screen on a loop of 340, gates 5 and 6
+     * past the edge; [step] picks the next gate (on screen at 2, past the edge at 6), and the race's trial joins the HUD.
+     */
+    private fun withRunningRace(model: GameplayRenderModel, step: Int): GameplayRenderModel {
+        val course = List(7) { index ->
+            val radius = if (index < 5) 340f else 1_400f
+            val angle = index * 0.76f
+            SiteMarkProjection(kotlin.math.cos(angle) * radius, kotlin.math.sin(angle) * radius)
+        }.toImmutableList()
+        val race = SiteProjection(SiteKind.GATE_RACE, "Gate race", CORE + 40f, CORE - 30f, true, 11f, step, step / 7f,
+            immutableListOf(), 0f, 0f, course = course, clock = 4.2f, medal = 2)
+        return model.with("sites" to (listOf(race) + model.sites).toImmutableList(), "trial" to siteTrial(race, model.content.sites))
+    }
+
+    /**
+     * The busy frame with all five challenges running around the Core (one runs at a time in play; together they draw
+     * every challenge branch): the slalom's poles 0..3 on screen and 4..5 past the edge, [slalomStep] its next pole; the
+     * Ram rite marks four of the busy frame's enemies, and the first challenge's trial joins the HUD.
+     */
+    private fun withRunningChallenges(model: GameplayRenderModel, slalomStep: Int): GameplayRenderModel {
+        fun challenge(kind: SiteKind, x: Float, y: Float, radius: Float, progress: Float, foes: ImmutableList<Int> = immutableListOf(),
+            warning: Float = 0f) = SiteProjection(kind, kind.name, CORE + x, CORE + y, true, 11f, 0, progress, foes, warning, 0.6f,
+            radius = radius, aimDx = 240f, aimDy = 160f)
+        val poles = List(6) { index ->
+            val along = if (index < 4) 120f + 150f * index else 1_500f + 300f * index
+            SiteMarkProjection(along, if (index % 2 == 0) 120f else -120f)
+        }.toImmutableList()
+        val slalom = SiteProjection(SiteKind.SLALOM_TRIAL, "Slalom", CORE - 260f, CORE + 60f, true, 9f, slalomStep, slalomStep / 6f,
+            immutableListOf(), 0f, 0f, course = poles, sides = 0b010101)
+        val running = listOf(
+            challenge(SiteKind.BRAKELESS_TRIAL, -40f, 30f, 520f, 0.4f),
+            challenge(SiteKind.RAM_TRIAL, 60f, -20f, 650f, 0.3f, foes = immutableListOf(1, 2, 3, 4)),
+            challenge(SiteKind.UNTOUCHED_TRIAL, 20f, 40f, 650f, 0.55f, warning = 0.5f),
+            challenge(SiteKind.VELOCITY_TRIAL, -80f, -60f, 1_800f, 0.7f),
+            slalom,
+        )
+        return model.with("sites" to (running + model.sites).toImmutableList(), "trial" to siteTrial(running.first(), model.content.sites))
     }
 
     private companion object {

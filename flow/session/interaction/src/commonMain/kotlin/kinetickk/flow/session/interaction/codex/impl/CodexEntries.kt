@@ -28,6 +28,7 @@ import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.ball.content.api.WeaponCadence
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.content.api.defaultSkillDefinitions
 import kinetickk.ball.content.api.lifetimeMatterOfferLevel
 import kinetickk.ball.content.api.liabilityText
@@ -74,6 +75,8 @@ internal sealed interface CodexIcon {
     data class Tag(val tag: BuildTag, val points: Int?, val tier: Int) : CodexIcon
     data class Affinity(val element: StatusElement, val affinity: Int?, val tier: Int, val dominant: Boolean) : CodexIcon
     data class Key(val key: RelicKey) : CodexIcon
+    /** A world place or secret: its glyph in Bone once [discovered], muted over a hatch before. */
+    data class World(val id: WorldDiscovery, val discovered: Boolean) : CodexIcon
     data object Unknown : CodexIcon
     data object Empty : CodexIcon
 }
@@ -541,12 +544,17 @@ internal fun codexCatalogEntries(
         }
         3 -> catalog.coreShapes.map { codexShapeEntry(it, model, progress, language) }.filter { search.isBlank() || it.discovered && it.title.contains(search, ignoreCase = true) }
         // Enemies are always listed by name; a Rebirth gate only gives them the locked look.
-        else -> catalog.enemies.map { codexEnemyEntry(it, progress, language) }.filter { search.isBlank() || it.title.contains(search, ignoreCase = true) }
+        CODEX_ENEMIES_CATEGORY -> catalog.enemies.map { codexEnemyEntry(it, progress, language) }.filter { search.isBlank() || it.title.contains(search, ignoreCase = true) }
+        CODEX_WORLD_CATEGORY -> codexWorldEntries(search, model, catalog, language)
+        else -> error("No Codex catalog category $category")
     }
 }
 
 /** Catalog category of the enemy roster (after Items, Weapons, Relics and Forms). */
 internal const val CODEX_ENEMIES_CATEGORY = 4
+
+/** Catalog category of the world's places and secrets (after the enemies). */
+internal const val CODEX_WORLD_CATEGORY = 5
 
 /**
  * The Build tab of a run: character, weapon, every relic slot (empty ones as placeholders, never

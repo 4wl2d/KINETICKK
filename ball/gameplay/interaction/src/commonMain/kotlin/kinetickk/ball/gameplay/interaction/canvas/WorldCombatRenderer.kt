@@ -112,7 +112,7 @@ private fun DrawScope.drawWorldLayer(
     drawShockwaves(engine, visualFx, shakeX, shakeY, roles)
     drawMotionEchoes(engine, visualFx, shakeX, shakeY, roles)
     drawTrail(engine, shakeX, shakeY, roles)
-    drawCoreRibbon(engine, shakeX, shakeY, roles)
+    drawCoreRibbon(engine, visualFx.coreRibbon, shakeX, shakeY, roles)
     drawWeaponNodes(engine, shakeX, shakeY, roles)
     drawWeaponEntities(engine, shakeX, shakeY, roles, airborne = false)
     drawPickups(engine, shakeX, shakeY, roles)
@@ -314,8 +314,8 @@ private fun DrawScope.drawImpactMarks(engine: GameplayRenderModel, visualFx: Vis
 }
 
 /**
- * The Core's path history in the you color (a wider band where Flux Wake cuts), plus the speed
- * tail that trails the Core (`HUD.dc.html`: a fading wedge with two bone lines).
+ * The Core's path history in the you color (a wider band where Flux Wake cuts). The ribbon that
+ * trails the Core is [drawCoreRibbon]'s.
  */
 internal fun DrawScope.drawTrail(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, roles: KkRolePalette) {
     val you = roles.you
@@ -345,23 +345,6 @@ internal fun DrawScope.drawTrail(engine: GameplayRenderModel, shakeX: Float, sha
         hasPrevious = true
         previous = location
         previousLife = life
-    }
-    if (engine.phase == GamePhase.GAME_OVER || engine.speed <= 25f) return
-    val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
-    val ratio = min(1f, engine.speed / 920f)
-    val bright = engine.overdriveTime > 0f || engine.dashPhaseTime > 0f
-    val degrees = atan2(-engine.velocityY, -engine.velocityX) * RADIANS_TO_DEGREES
-    withTransform({
-        translate(core.x, core.y)
-        rotate(degrees, Offset.Zero)
-    }) {
-        scale(80f + ratio * 260f, 16f, Offset.Zero) {
-            drawPath(WorldUnitShapes.tail, WorldBrushes.fade(you.copy(alpha = if (bright) 0.85f else 0.55f)))
-        }
-        scale(60f + ratio * 180f, 1f, Offset.Zero) {
-            drawRect(WorldBrushes.fade(Kk.Bone.copy(alpha = 0.5f)), Offset(0f, -14f), Size(1f, 2f))
-            drawRect(WorldBrushes.fade(Kk.Bone.copy(alpha = 0.35f)), Offset(0f, 12f), Size(1f, 2f))
-        }
     }
 }
 

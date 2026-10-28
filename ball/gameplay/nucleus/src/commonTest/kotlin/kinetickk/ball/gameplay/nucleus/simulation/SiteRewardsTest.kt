@@ -13,7 +13,6 @@ import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -56,11 +55,22 @@ class SiteRewardsTest {
     }
 
     @Test
-    fun directedRewardsKeepTheirSixPerRunContract() {
+    fun theDirectedQueueAcceptsItsBoundAndRefusesTheNext() {
         val game = game()
-        repeat(6) { assertTrue(game.enqueueDirectedReward(DirectedReward.RELIC)) }
-        assertFailsWith<IllegalStateException> { game.enqueueDirectedReward(DirectedReward.RELIC) }
-        assertEquals(6, game.pendingDirectedRewards.size)
+        val bound = game.content.sites.maxPendingDirectedRewards
+        repeat(bound) { assertTrue(game.enqueueDirectedReward(DirectedReward.RELIC)) }
+        val matter = game.runMatter + game.matterFraction.toDouble()
+        assertFalse(game.enqueueDirectedReward(DirectedReward.WEAPON))
+        assertEquals(List(bound) { DirectedReward.RELIC }, game.pendingDirectedRewards)
+        assertEquals(matter, game.runMatter + game.matterFraction.toDouble(), "the queue only refuses; its caller salvages")
+
+        // A smaller policy bound holds the same way.
+        val six = MutableGameState(
+            canonicalGameplayContent.copy(sites = canonicalGameplayContent.sites.copy(maxPendingDirectedRewards = 6)),
+        ).apply { startRun() }
+        repeat(6) { assertTrue(six.enqueueDirectedReward(DirectedReward.RELIC)) }
+        assertFalse(six.enqueueDirectedReward(DirectedReward.RELIC))
+        assertEquals(6, six.pendingDirectedRewards.size)
     }
 
     @Test
