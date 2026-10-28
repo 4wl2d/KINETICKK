@@ -16,6 +16,7 @@ import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.PickupType
+import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.sin
@@ -84,6 +85,47 @@ class ApexFormsTest {
         assertEquals(5f, state.skillRuntime.apex(ApexCell.HELD))
         state.stepFor(0.2f)
         assertTrue(state.apexShots().isNotEmpty(), "the release starts once the shift is half a second over")
+    }
+
+    @Test
+    fun perihelionKeepsTheBaseOrbitCadenceAgainstABoss() {
+        // A steady carve at 300 u/s turning 0.012 rad per step.
+        val state = arena(CoreShape.ORB)
+        state.unlockNow()
+        state.castNow()
+        val boss = state.testArchitect()
+        var step = 0
+        fun carveUntil(limit: Int, done: () -> Boolean): Int {
+            var steps = 0
+            while (!done() && steps < limit) {
+                val angle = step++ * 0.012f
+                state.moveAt(cos(angle) * 300f, sin(angle) * 300f)
+                steps++
+            }
+            return steps
+        }
+        fun hitBoss(): Float {
+            boss.x = state.coreX + 100f
+            boss.y = state.coreY
+            val before = boss.hp
+            state.onCharacterPrimaryHit(boss)
+            return before - boss.hp
+        }
+
+        // Perihelion's half arc charges Orbit first: that release skips the boss and leaves the base charge running.
+        carveUntil(1_000) { state.orbitCharged }
+        val baseCharge = state.skillRuntime.apex(ApexCell.AUX)
+        assertTrue(baseCharge in 0.5f..0.99f, "the base rules have not charged Orbit yet: $baseCharge")
+        assertEquals(0f, hitBoss(), "a release on Perihelion's own charge skips the boss")
+        assertEquals(baseCharge, state.skillRuntime.apex(ApexCell.AUX), "the skipped boss leaves the base charge")
+
+        // The rest of the base arc charges Orbit again (Perihelion's own charge alone would need a half arc and π more),
+        // and that release reaches the boss where a base release would, spending the base charge.
+        val steps = carveUntil(1_000) { state.orbitCharged }
+        assertTrue(steps * 0.012f <= (1f - baseCharge) * PI.toFloat() + 0.02f, "charged after ${steps * 0.012f} rad")
+        assertEquals(1f, state.skillRuntime.apex(ApexCell.AUX))
+        assertTrue(hitBoss() > 0f, "the base-cadence release reaches the boss")
+        assertEquals(0f, state.skillRuntime.apex(ApexCell.AUX))
     }
 
     @Test

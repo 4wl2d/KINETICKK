@@ -179,10 +179,15 @@ private fun MutableGameState.releaseOrbit(x: Float, y: Float, struck: Enemy?) {
     ability.turnDistance = 0f
     val damage = ORBIT_DAMAGE * abilityPower()
     val dominant = build.dominant
-    // During Perihelion a release reaches boss-class enemies only when the base rules would have charged it too.
+    // During Perihelion a release reaches boss-class enemies only when the base rules would have charged it too, and
+    // only such a release spends the base rules' charge (their arc and distance start again, as a base release's do).
     val perihelion = apexActive()
     val reachesBosses = !perihelion || skillRuntime.apex(ApexCell.AUX) >= 1f
-    if (perihelion && reachesBosses) skillRuntime.setApex(ApexCell.AUX, 0f)
+    if (perihelion && reachesBosses) {
+        skillRuntime.setApex(ApexCell.AUX, 0f)
+        skillRuntime.setApex(ApexCell.BASE_ARC, 0f)
+        skillRuntime.setApex(ApexCell.BASE_DISTANCE, 0f)
+    }
     for (index in enemies.indices) {
         val target = enemies[index]
         if (!target.alive || distanceSquared(x, y, target.x, target.y) > square(ORBIT_RADIUS + target.radius)) continue
@@ -769,23 +774,43 @@ private fun MutableGameState.updateOrbit(ability: CharacterRuntime, turn: Float,
         val sameDirection = ability.turnArc == 0f || turn * ability.turnArc >= 0f
         val arc = if (sameDirection) ability.turnArc + turn else turn
         val distance = if (sameDirection) ability.turnDistance + moved else moved
-        val baseArc = orbitArc()
-        val requiredArc = if (perihelion) apexValue(PERIHELION_ARC) else baseArc
+        val requiredArc = if (perihelion) apexValue(PERIHELION_ARC) else orbitArc()
         val requiredDistance = if (perihelion) PERIHELION_MIN_DISTANCE else ORBIT_MIN_DISTANCE
         val earned = if (abs(arc) >= requiredArc && distance >= requiredDistance) abs(turn) / PI.toFloat() else 0f
-        if (perihelion) {
-            // The charge the base rules would have earned: only a release it completes reaches boss-class enemies.
-            val baseEarned = if (currentSpeed >= ORBIT_MIN_SPEED && ability.previousSpeed >= ORBIT_MIN_SPEED &&
-                abs(arc) >= baseArc && distance >= ORBIT_MIN_DISTANCE
-            ) abs(turn) / PI.toFloat() else 0f
-            skillRuntime.setApex(ApexCell.AUX, min(1f, skillRuntime.apex(ApexCell.AUX) + baseEarned))
-        }
         ability.turnArc = arc.coerceIn(-TAU, TAU)
         ability.turnDistance = min(2_000f, distance)
         ability.charge = min(1f, ability.charge + earned)
     } else {
         ability.turnArc = 0f
         ability.turnDistance = 0f
+    }
+    if (perihelion) {
+        updateBaseOrbitCharge(ability, turn, moved, currentSpeed)
+        // Against boss-class enemies Perihelion keeps the base cadence: once the base rules would have charged Orbit,
+        // it is charged, so the next hit releases it where a base release would land.
+        if (skillRuntime.apex(ApexCell.AUX) >= 1f) ability.charge = 1f
+    }
+}
+
+/**
+ * During Perihelion, the charge the base rules would have earned ([ApexCell.AUX]; only a release it completes reaches
+ * boss-class enemies), on the base arc, distance and speed and on its own arc ([ApexCell.BASE_ARC],
+ * [ApexCell.BASE_DISTANCE]): a release that skips bosses leaves it running, as no base release happened.
+ */
+private fun MutableGameState.updateBaseOrbitCharge(ability: CharacterRuntime, turn: Float, moved: Float, currentSpeed: Float) {
+    val runtime = skillRuntime
+    if (!braking && currentSpeed >= ORBIT_MIN_SPEED && ability.previousSpeed >= ORBIT_MIN_SPEED && moved > 0f) {
+        val previousArc = runtime.apex(ApexCell.BASE_ARC)
+        val sameDirection = previousArc == 0f || turn * previousArc >= 0f
+        val arc = if (sameDirection) previousArc + turn else turn
+        val distance = if (sameDirection) runtime.apex(ApexCell.BASE_DISTANCE) + moved else moved
+        val earned = if (abs(arc) >= orbitArc() && distance >= ORBIT_MIN_DISTANCE) abs(turn) / PI.toFloat() else 0f
+        runtime.setApex(ApexCell.AUX, min(1f, runtime.apex(ApexCell.AUX) + earned))
+        runtime.setApex(ApexCell.BASE_ARC, arc.coerceIn(-TAU, TAU))
+        runtime.setApex(ApexCell.BASE_DISTANCE, min(2_000f, distance))
+    } else {
+        runtime.setApex(ApexCell.BASE_ARC, 0f)
+        runtime.setApex(ApexCell.BASE_DISTANCE, 0f)
     }
 }
 
@@ -1489,8 +1514,12 @@ internal fun MutableGameState.beginApexForm() {
     val ability = characterRuntime
     val runtime = skillRuntime
     when (coreShape) {
-        // The base rules' Orbit charge carries into the activation.
-        CoreShape.ORB -> runtime.setApex(ApexCell.AUX, ability.charge)
+        // The base rules' Orbit charge, arc and distance carry into the activation.
+        CoreShape.ORB -> {
+            runtime.setApex(ApexCell.AUX, ability.charge)
+            runtime.setApex(ApexCell.BASE_ARC, ability.turnArc)
+            runtime.setApex(ApexCell.BASE_DISTANCE, ability.turnDistance)
+        }
         CoreShape.PRISM -> {
             ability.facets = CharacterRuntime.MAX_FACETS
             ability.facetTimer = 0f

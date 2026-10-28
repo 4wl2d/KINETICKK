@@ -77,7 +77,10 @@ internal object ApexCell {
     const val BOSS_BASE_READY_AT = 9
     const val CAST_COUNT = 10
     const val AUX = 11
-    const val STRIDE = 12
+    /** Perihelion: the arc and distance of the base rules' Orbit charge, which only a boss-reaching release resets. */
+    const val BASE_ARC = 12
+    const val BASE_DISTANCE = 13
+    const val STRIDE = 14
 }
 
 /**
