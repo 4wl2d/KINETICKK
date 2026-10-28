@@ -1101,3 +1101,147 @@ bounds.
   `skillTagPoints` 0 also broke D and H. The history does what it is for:
   consecutive runs share 0.03 to 0.07 of their items, against 0.11 to 0.13 for
   two runs with every item dealt on the 0.4.0 lanes.
+
+## Release 0.6.0
+
+Release 0.6.0 answers eight owner requests:
+
+1. Replayability: run omens, six director personalities, ONSLAUGHT themes,
+   Elite affixes, champions, ambient world events, event signals and a run
+   Keynote (one featured tag and element) make each run read differently.
+2. Points of interest: sites in eight families (anomaly, race, challenge,
+   bounty, cache, secret, portal, signal), four mini-bosses, two secret bosses
+   and five easter eggs.
+3. Structures and dungeons: seven capsule-wall templates placed from 4,000 u
+   out, with sealed rooms, garrisons and a boss or treasure room.
+4. Dimensions: Zenith (Heaven), Nadir (Hell) and the secret Archive, each with
+   its own law, roster, objective and reward cards.
+5. Easy Mode: a joke Baby mode whose green cursor does not kill; nothing in it
+   counts toward any progress.
+6. Obstacles: six new kinds with items built around them, and a fast hit
+   always hurts: impact speed counts the scrape and damage keeps a floor.
+7. Physics: piloting flight, where turning builds speed, straight flight tires
+   and spool-up is quicker.
+8. Trail: the Core's ribbon follows its path instead of the velocity vector.
+
+Balance decisions and accepted trade-offs:
+
+- Involuntary systems are part of every run and every gate: the flight law,
+  the impact rework, the realspace obstacle-kind mix, Comets and Pylons,
+  director personalities, ONSLAUGHT themes, Elite affixes, champions, ambient
+  world events, the Keynote and the seeded site kinds. Opt-in systems (every
+  site, cache, egg, sigil, event signal, structure, rift and omen) are skipped
+  by the reference bot through one optional-site list, with "No omen" pinned;
+  each has a design gate of its own with a scripted pilot.
+- The reference bot flies a human Dash cadence: no new Dash while its previous
+  Dash runs, and no threat-dodge or Apex Dash when the predicted post-Dash
+  speed reaches the build's lethal obstacle speed with a solid body on the
+  path within 0.3 s. The old bot re-requested its Dash every 0.02 s frame and
+  dashed into rocks, which the harsher impacts made lethal; the impacts stayed.
+  The bot also never swings a Slingshot, or flies a Blink or Arc Hook line,
+  into a skipped optional site.
+- Scripted harnesses whose subject is not terrain (abilities, weapons,
+  reactions, skills) fly an obstacle-free arena; those that need obstacles
+  clamp their pilot below the dash-safe speed near rocks.
+- Balance that the flight law and the impacts moved was restored in content,
+  never by a threshold: the weapon, character, skill, item and Apex retunes,
+  Glass Harvest at Reborn 1 (the rank-0 Data ladder keeps its 13 items), the
+  Keynote element share 0.8 -> 0.7 (a Keynote deck grows by at most nine
+  items), the Shard's mass x0.8, Mirror Stance's single parry, a 60 s Nadir
+  visit, the dimension objective bosses' integrity share and Still Water's
+  -15 % weapon power.
+- Accepted as shipped: a far sigil spawn counts as engagement; bounty guards
+  stay as ordinary enemies after a claim; the Sigil panel's reward reads
+  UNKNOWN; an objective boss abandoned past 6,000 u ends that visit's
+  objective; a fresh run spends 60 % more seconds at ambush speed; Grace
+  lowers drag by 15.61 % (band top 16 %); structure walls collapse at the
+  Architect and an abandoned dungeon is spent; omens are offered in Easy runs.
+- The strong tier-10 ricochet pace is far below 0.5.0's (0.034 against 0.58
+  per minute on i = 2,501..2,800): the old pace came from the old bot's
+  Dash-chain slams, and `ricochetReach` stays 0.45.
+
+Re-pinned goldens (old -> new): items `0..172` with every item effect
+`68d4572118b9586d` -> `25c0be545c5a2647` (the GRIP and SLING effects); items
+`173..268` `6ae3869a3317ee94` -> `17777e466f80fc29` (six items back over the
+5 % floor under the flight law) -> `bfc80fdf55b64617` (Empty Chamber 20 ->
+25 %) -> `ef1306c885aae256` (Loader Sigil 0.5 -> 0.6 s); build tuning
+`90af4a2ca532d113` -> `c5ea14c28212923a` (Orbit, Supernova, Repel and
+Attractor retuned to the flight law); weapon and Matrix economy
+`6e61ebea0bcb73f7` -> `120fe0d55a06ce89` (Impact Dampers and Gravity Surfer
+capped); active effects, Apex, upgrades and tempo `443334dcc0d91f0d` ->
+`3301c1592ee84a8c` (four skills retuned to the flight speeds) ->
+`e73bd70a41ae42f0` (Mirror Stance's single parry). New slices: the terrain
+items `287..301` `ebcd1818d76810e4` -> `7199c257d9d5f681` (Glass Harvest at
+Reborn 1); run variety `0ee882129c87121f` -> `24a8c347d62bc2dd` (Keynote
+element share) -> `bb958301a03293ab` (four omens become trades) ->
+`c40c7ebecf2f1d41` (Still Water); the compiled structure walls
+`2_595_552_187_804_222_925`. The actives (`a73030c02a213d44`), Rebirth
+(`461252b1f47728a5`) and Relics (`c8c02a43bec87968`) are unchanged. The
+seeded intent trace was re-recorded for the flight law (f4aeba0f) and for the
+omen offer the production start opens after its first fixed step, which the
+trace declines (c92f9426); both meet in the run-variety merge (29d41caa).
+
+The gate base is the 0.6.0 tree 15b23096 (policy, balance gate populations).
+Population gates over `PopulationSeeds` (n 300 unless named; SE binomial for
+shares, bootstrap for medians and ratios):
+
+| Gate | 0.6.0 base (SE) | Threshold |
+|---|---|---|
+| A, fresh tier-0 wins | 0.687 (0.027) | 0.62, unchanged (design) |
+| I, median clear with / without actives | 0.904 (0.035) | 0.80, unchanged |
+| D, strong tier-10 median survival | 704.23 s (72.06); window M 877.85 s (75.28) | 427.87 -> 480 s |
+| H, strong + Data tier-10 median survival | 900.01 s (1.34); window M 900.01 s (39.92) | 431.46 -> 480 s |
+| NoPoi, wins as the reference | 0.620 (0.028) | 0.46 -> 0.56 |
+| NoPoi, POI-free wins | 0.640 (0.028) | 0.47 -> 0.50 |
+| fresh tier-0 alive at 720 s | 0.710 (0.026) | 0.66 -> 0.65 |
+| alive runs outside level 22-30 (n 213) | 0.066 (0.017) | 0.06 -> 0.10 |
+| Singularity Slingshot contact ratio | 1.328 (0.089) | 1.29 -> 1.51 |
+| Singularity Spin Turbine | 1.189 (0.081) | 1.24 -> 1.36 |
+| Singularity Gravity Assist | 1.029 (0.071) | 1.15 -> 1.18 |
+| Singularity Crest Rider | 1.026 (0.068) | 1.18 -> 1.17 |
+| Singularity Recoil Spring | 1.010 (0.066) | 1.18 -> 1.15 |
+| Singularity, the other ten arms | 0.836 to 1.001 | 1.15, unchanged |
+| added singularity contacts, every arm | 0 of 300 | Slingshot 0.02 -> 0 |
+| active share, median (211 judged runs) | 0.090 (0.0061) | [0.08, 0.20] -> [0.07, 0.20] |
+| active share, owned by 360 s / spread top | 0.963 (0.011) / Storm Coil 0.193 (0.026) | 0.25 / 0.30, unchanged |
+| V2 Orb / Prism / Star / Hexagon | 0.720 / 0.735 / 0.743 / 0.768 (0.018-0.021) | 0.78 / 0.79 / 0.79 / 0.81 -> 0.76 / 0.78 / 0.79 / 0.81 |
+| Matter P1, 55 / fresh median 2,325 | 0.024 (0.0003) | 0.03, unchanged |
+| Matter P2, Refit 10 / Honing 10 of 23,238 | 1.212 (0.014) / 0.881 (0.010) | [1, 1.5] / [0.7, 1], unchanged |
+| J1, maxed strong median survival | 900.01 s (0.00) | 480 s, unchanged |
+| Apex casts (312 fights) | 1.000 (0) | 0.99 -> 1.00 |
+| Apex offence median / per character | 0.850 (0.005) / 0.87 to 1.39 of the median benefit | design bands, unchanged |
+| Apex defence Prism / Diamond | 0.684 (0.052) / 0.695 (0.035) | [0.55, 0.85], unchanged |
+
+The window runs i = 2,801..3,400, never tuned on, are bimodal: 164 of 600
+end before 420 s in each arm and about half reach the 900 s cap (means
+655.30 s for D and 656.93 s for H), so M − 2 SE (727.30 s and 820.17 s) puts
+both floors at the design's 480 s, far from the 420 s stop. Every seeded
+reward-stream gate passes its own seeds with probability at least 0.94 on the
+0.6.0 tree: the Data-seeking arms at tiers 3 and 6 read 0.94, at tier 0 0.97,
+the Data-avoiding arms at tiers 3 and 6 0.98, Matter P3 0.996, and Rebirth
+B, C, E, F, G, the D and H win bounds, J1's win bound, J2-J4, V1, V3, V4 and
+the Apex contract 0.998 or more. Active frequency keeps its design thresholds
+(fresh highest early level 0.159, SE 0.010). The restatement loosened the
+fresh level band (0.06 -> 0.10), fresh survival (0.66 -> 0.65), the
+Slingshot, Spin Turbine and Gravity Assist ceilings and the active share's
+floor (0.08 -> 0.07; the 0.6.0 median sits 1.6 SE above 0.08). It tightened
+D and H (to 480 s), the no-POI shares, V2 for the Orb and the Prism, Crest
+Rider and Recoil Spring, the Apex cast (every one of the 312 fights) and
+added singularity contacts (none in any arm). Thin margins: the Apex
+character band (Crescent 1.39 against 1.40, 0.13 SE; Crescent and Shard
+reach 1.56 at base + 2 SE, and a design band never widens), the Still Water
+omen (+0.093, SE 0.032, against 0.12) and Hungry Dark (+0.080, SE 0.035).
+
+The 0.6.0 design gates hold design bands met by content and are not restated:
+Zenith completion 0.80 (Ascent 0.754, Judgement 0.848), Nadir 0.75 (Harvest
+0.877, Pyre 0.627), the dimension outcome shift +0.008 for both layers,
+fresh dungeon clear 0.650, bounty clear 0.836 fresh and 0.831 veteran, the
+omen arms within their bands, run skeleton variety 0.881, event-signal reach
+0.994 and every personality within the director budget.
+
+Flagged for the owner's playtest: the coast when easing the pointer to the
+centre (designed as half speed in 1.84 s instead of 0.69 s); `scrapeShare` 0.3; the
+Golden Drifter's gold glint, an easter-egg exception to gold meaning Rebirth;
+the Baby mode look; the dimension themes; the Core ribbon; the Dipole's
+unlock pace at 40 ricochets now that every ricochet hurts; Mirror Stance's
+single parry; the 1.25 s ember life of the Harvest; the 60 s Nadir visit.
