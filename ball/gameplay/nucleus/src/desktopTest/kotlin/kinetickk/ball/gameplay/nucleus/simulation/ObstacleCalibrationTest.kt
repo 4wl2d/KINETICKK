@@ -131,11 +131,17 @@ class ObstacleCalibrationTest {
     @Test
     fun theSteadySpeedModelMatchesMeasuredFlight() {
         for ((width, height) in viewports) for (reach in listOf(0.35f, 0.6f, 0.79f)) {
-            val model = buildTestState(content = emptyWorld).apply { resize(width, height) }.steadyCursorSpeed(reach)
+            val viewport = buildTestState(content = emptyWorld).apply { resize(width, height) }
+            val model = viewport.steadyCursorSpeed(reach)
             val measured = measure(width, height, reach, horizontal = width >= height, tier = 3)
-            assertEquals(model, measured.speed, model * 0.03f, "steady model at ${width.toInt()} reach $reach")
-            val shortModel = steadyCursorSpeedAtOffset(reach * min(width, height) * 0.5f)
+            val shortModel = viewport.steadyCursorSpeedAtOffset(reach * min(width, height) * 0.5f)
             val shortMeasured = measure(width, height, reach, horizontal = width < height, tier = 3)
+            println(
+                "STEADY MODEL ${width.toInt()}x${height.toInt()} reach $reach: long model=$model measured=${measured.speed} " +
+                    "error=${(measured.speed - model) / model}; short model=$shortModel measured=${shortMeasured.speed} " +
+                    "error=${(shortMeasured.speed - shortModel) / shortModel}",
+            )
+            assertEquals(model, measured.speed, model * 0.03f, "steady model at ${width.toInt()} reach $reach")
             assertEquals(shortModel, shortMeasured.speed, shortModel * 0.03f, "short-axis model at ${width.toInt()} reach $reach")
         }
     }
