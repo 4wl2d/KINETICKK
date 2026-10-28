@@ -11,8 +11,9 @@ import kotlin.test.assertTrue
 
 /**
  * The 0.6.0 kinds' steps allocate nothing per step: Comet, Pylon, Sentry and Crawler (seek, mount, aim, lane, hug,
- * flock), Seraph, Choir, Imp, Hound, Cipher and Mirror (weave, sing, fuse, wind-up and dash, glitch, mirror) and the
- * mini-bosses (well cycle, turning arcs and their guard, judgement telegraph, attack clocks).
+ * flock), Seraph, Choir, Imp, Hound, Cipher and Mirror (weave, sing, fuse, wind-up and dash, glitch, mirror), the
+ * mini-bosses (well cycle, turning arcs and their guard, judgement telegraph, attack clocks) and the secret bosses
+ * (orbit, Survey marks, rock jumps and their search, turning arcs and their guard, attack clocks).
  */
 class EnemyWorldsAllocationTest {
     private val threads = ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
@@ -54,6 +55,19 @@ class EnemyWorldsAllocationTest {
         assertEquals(drifterBytes, bossBytes, "$STEPS steps of the mini-bosses allocated beyond as many Drifters")
     }
 
+    @Test
+    fun sixHundredStepsOfTheSecretBossesAllocateNothingBeyondAsManyDrifters() {
+        val bosses = arena(worldsKinds = true, kinds = SECRET_BOSS_KINDS)
+        val drifters = arena(worldsKinds = false, kinds = SECRET_BOSS_KINDS)
+        val bossBytes = bytesPerRound(bosses)
+        val drifterBytes = bytesPerRound(drifters)
+        println("ENEMY-SECRET-BOSS-ALLOCATION bosses=$bossBytes drifters=$drifterBytes steps=$STEPS")
+        val modes = bosses.enemies.map { it.mode }.toSet()
+        assertTrue(EnemyBehavior.TELEGRAPH in modes || EnemyBehavior.PHASED in modes, "marking or jumping Cartographers: $modes")
+        assertEquals(SECRET_BOSS_KINDS.toSet(), bosses.enemies.map { it.type }.toSet(), "every secret boss stays in the measured crowd")
+        assertEquals(drifterBytes, bossBytes, "$STEPS steps of the secret bosses allocated beyond as many Drifters")
+    }
+
     /**
      * Rocks around the Core; Comets cycling their lanes, Pylons seeking and mounting, Sentries turning and aiming
      * (silenced, so no shot is ever allocated) and Crawlers hugging rocks, flocking and lunging, or as many Drifters.
@@ -62,7 +76,9 @@ class EnemyWorldsAllocationTest {
      * and glitches that a silenced kind lets fizzle), and Hounds flocking, winding up and dashing. With [MINI_BOSS_KINDS]
      * (silenced, gated so no hit lands, the Pyre Herald's shield held off): Warden Prime cycling its well in its second
      * phase, Thrones turning their arcs (and judging in their final phase) and Brood Queens and Pyre Heralds running
-     * their clocks.
+     * their clocks. With [SECRET_BOSS_KINDS] (silenced, the Antecedent's shield held off): Cartographers orbiting and
+     * marking lanes in their first phases and jumping between the rocks in their final one, and Antecedents in each of
+     * their four phases, turning their arcs in the third.
      */
     private fun arena(worldsKinds: Boolean, kinds: List<EnemyType> = WORLD_KINDS): MutableGameState = buildTestState().apply {
         updatePointer(640f, 360f)
@@ -87,6 +103,13 @@ class EnemyWorldsAllocationTest {
                 EnemyType.WARDEN_PRIME -> enemy.phase = 1
                 EnemyType.THRONE -> enemy.phase = index % 3
                 EnemyType.PYRE_HERALD -> enemy.abilityAt = Float.MAX_VALUE
+                EnemyType.CARTOGRAPHER -> enemy.phase = index % 3
+                EnemyType.ANTECEDENT -> {
+                    enemy.phase = index % 4
+                    enemy.charges = if (enemy.phase == 2) ANTECEDENT_ARCS else 0
+                    enemy.phaseStartPending = false
+                    enemy.abilityAt = Float.MAX_VALUE
+                }
                 else -> Unit
             }
             enemies += enemy
@@ -122,6 +145,12 @@ class EnemyWorldsAllocationTest {
                             enemy.mode = EnemyBehavior.TELEGRAPH
                             enemy.modeUntil = state.elapsed + 0.3f
                         }
+                        // Lanes are marked in the first phases and a silenced jump still finds its rock and aims.
+                        EnemyType.CARTOGRAPHER -> if (enemy.mode == EnemyBehavior.IDLE) {
+                            enemy.mode = if (enemy.phase == 2) EnemyBehavior.PHASED else EnemyBehavior.TELEGRAPH
+                            enemy.modeUntil = state.elapsed + 0.3f
+                            if (enemy.phase == 2) enemy.shiftUntil = enemy.modeUntil
+                        }
                         else -> Unit
                     }
                 }
@@ -147,5 +176,6 @@ class EnemyWorldsAllocationTest {
         val DIMENSION_KINDS = listOf(EnemyType.SERAPH, EnemyType.CHOIR, EnemyType.IMP, EnemyType.HOUND, EnemyType.HOUND,
             EnemyType.CIPHER, EnemyType.MIRROR)
         val MINI_BOSS_KINDS = listOf(EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN, EnemyType.THRONE, EnemyType.PYRE_HERALD)
+        val SECRET_BOSS_KINDS = listOf(EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT)
     }
 }
