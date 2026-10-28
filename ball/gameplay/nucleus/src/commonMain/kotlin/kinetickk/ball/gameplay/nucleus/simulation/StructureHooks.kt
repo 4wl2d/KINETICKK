@@ -3,12 +3,12 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.gameplay.nucleus.model.StructureField
 import kinetickk.ball.gameplay.nucleus.model.Wall
 
 /*
- * Structure walls in the shared world passes (the structures lane replaces this file). Inert until the lane lands:
- * the structure field stays empty, so no wall blocks, hits or ejects anything.
+ * Structure walls in the shared world passes. The window itself lives in StructureFieldSystem.kt, placement and
+ * obstacle suppression in StructurePlacement.kt, the capsule geometry in StructureQueries.kt. The collision answers
+ * below stay inert until the collision step lands: no wall blocks, hits or ejects anything yet.
  */
 
 /**
@@ -39,15 +39,6 @@ internal fun MutableGameState.wallBlocksPoint(x: Float, y: Float, radius: Float)
 @Suppress("UNUSED_PARAMETER")
 internal fun MutableGameState.wallBlocksSegment(x0: Float, y0: Float, x1: Float, y1: Float, radius: Float): Boolean = false
 
-/** Rebuilds the structure window around the absolute chunk when it is not current. */
-@Suppress("UNUSED_PARAMETER")
-internal fun MutableGameState.refreshStructureField(chunkX: Int, chunkY: Int) = Unit
-
-/** True when a structure footprint suppresses an obstacle candidate of the chunk (after yielding). */
-@Suppress("UNUSED_PARAMETER")
-internal fun MutableGameState.structureSuppresses(chunkX: Int, chunkY: Int, offsetX: Float, offsetY: Float, radius: Float): Boolean =
-    false
-
 /** A circle of [radius] at ([x], [y]) moved out of any structure footprint it would land in. */
 @Suppress("UNUSED_PARAMETER")
 internal fun MutableGameState.structureEjected(x: Float, y: Float, radius: Float): SteeringVector = steeringVector(x, y)
@@ -63,19 +54,8 @@ internal fun MutableGameState.wallOnPath(x0: Float, y0: Float, x1: Float, y1: Fl
 @Suppress("UNUSED_PARAMETER")
 internal fun MutableGameState.wallsClearOf(x: Float, y: Float, clearance: Float): Boolean = true
 
+/** The step after the Architect arrives, the structure window collapses (its key follows the boss flag). */
 @Suppress("UNUSED_PARAMETER")
-internal fun MutableGameState.updateStructures(delta: Float) = Unit
-
-/** A new run: no structure window, no dungeon, nothing spent. */
-internal fun MutableGameState.resetStructures() {
-    structureField = StructureField.EMPTY
-    dungeon = null
-    spentStructureIds = emptyList()
-    lastAnnouncedStructureId = 0L
-}
-
-/** Positions follow a rebase; ids and absolute cells stay. */
-internal fun MutableGameState.rebaseStructures(dx: Float, dy: Float) {
-    structureField = structureField.shifted(dx, dy)
-    dungeon = dungeon?.shifted(dx, dy)
+internal fun MutableGameState.updateStructures(delta: Float) {
+    if (bossSpawned && !structureField.bossCollapsed) refreshStructureField(obstacleField.centerChunkX, obstacleField.centerChunkY)
 }
