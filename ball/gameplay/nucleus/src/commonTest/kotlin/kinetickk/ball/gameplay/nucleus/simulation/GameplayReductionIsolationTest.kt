@@ -865,10 +865,14 @@ class GameplayReductionIsolationTest {
         ).state.model
         assertEquals(WorldLayer.BASE, candidate.worldLayer)
         assertNull(candidate.dimensionRun.visit)
-        assertEquals(1, candidate.dimensionRun.pendingRewards.size)
+        // The queued Blessing reward opens on the same frame.
+        assertTrue(candidate.dimensionRun.pendingRewards.isEmpty())
+        assertEquals(kinetickk.ball.gameplay.nucleus.render.GamePhase.CHOICE, candidate.phase)
+        assertEquals(WorldLayer.ZENITH, candidate.dimensionRewardLayer)
         assertEquals(committedFingerprint, source.exactSimulationFingerprint(), "the return left the committed visit alone")
         assertSame(committedRun, source.dimensionRun)
         assertEquals(WorldLayer.ZENITH, source.worldLayer)
+        assertNull(source.dimensionRewardLayer)
     }
 
     @Test
@@ -900,6 +904,36 @@ class GameplayReductionIsolationTest {
         assertSame(committedRun, source.dimensionRun)
         assertEquals(listOf(7), checkNotNull(source.dimensionRun.visit).halos.map { it.id })
         assertEquals(committedHp, source.hp)
+    }
+
+    @Test
+    fun boonCardsTakenAndPreviewedInAForkNeverChangeTheCommittedOffer() {
+        val source = MutableGameState(canonicalGameplayContent, seed = 6_061, initialMatter = 0).apply {
+            startRun()
+            enemies.clear()
+            elapsed = 200f
+            dimensionRun = dimensionRun.copy(pendingRewards = immutableListOf(DimensionRewardGrant(WorldLayer.NADIR, completed = true)))
+            openNextPendingChoice()
+            drainReferenceOutputs()
+        }
+        assertEquals(kinetickk.ball.gameplay.nucleus.render.ChoiceType.BOON, source.choiceType)
+        val retained = source.exactSimulationFingerprint()
+        val committedProfile = source.activeRebirthProfile
+        val reducer = GameReducer()
+        source.choices.indices.forEach { index ->
+            val reduced = assertIs<GameReductionResult.Accepted>(
+                reducer.reduce(EngineState(source), GameplayInteractionPulse.ChoiceSelected.fromValidated(index)),
+            ).state.model
+            assertEquals(retained, source.exactSimulationFingerprint(), "card $index changed the committed state")
+            assertEquals(listOfNotNull(source.choices[index].boonId), reduced.runBoons.toList())
+            assertNull(reduced.dimensionRewardLayer)
+            assertEquals(kinetickk.ball.gameplay.nucleus.render.GamePhase.RUNNING, reduced.phase)
+        }
+        source.rewardPreviews()
+        assertEquals(retained, source.exactSimulationFingerprint(), "the previews changed the committed state")
+        assertTrue(source.runBoons.isEmpty())
+        assertEquals(committedProfile, source.activeRebirthProfile)
+        assertEquals(WorldLayer.NADIR, source.dimensionRewardLayer)
     }
 
     // ---- 0.6.0 VARIETY ----

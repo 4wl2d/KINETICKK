@@ -17,6 +17,7 @@ import androidx.compose.ui.text.platform.Font
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.content.api.SiteNotice
 import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
@@ -593,6 +594,46 @@ class HudLayoutFixesTest {
                 } else {
                     assertTrue(strip.width >= strip.height * 2f, "$where: the tier plate follows the pacifier ($strip)")
                 }
+            }
+        }
+    }
+
+    /**
+     * A dimension visit: in every layout, language and text size the plate's timer and every line of the objective's
+     * panel stay whole (never cut), the panel's lines stay inside it with no clock row, a counted objective's value clear
+     * of its reward, and the plate clear of the panel.
+     */
+    @Test
+    fun aDimensionVisitsPlateAndObjectivePanelStayWholeAtEveryTextSize() {
+        for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
+            for (textScale in textScales) for (layer in listOf(WorldLayer.ZENITH, WorldLayer.NADIR, WorldLayer.ARCHIVE)) {
+                val base = hudTestModel(w.toFloat(), h.toFloat()).with("keys" to 12, "runMatter" to 9_876_543L, *levelOverrides(41))
+                val model = base.inVisit(dimensionVisit(layer, base.coreX, base.coreY, progress = 3))
+                HudDrawCache.forgetLayouts()
+                draw(w, h, language, textScale) { measurer -> drawHud(model, measurer, 1f) }
+                val where = "$language $w x $h x$textScale $layer"
+                val layout = HudTrialPanelLayout().update(w.toFloat(), h.toFloat(), 1f, textScale)
+                listOf(HudText.DIMENSION_TIMER, HudText.TRIAL_LABEL, HudText.TRIAL_NAME, HudText.TRIAL_REWARD).forEach { slot ->
+                    assertFalse(assertNotNull(HudDrawCache.peekLayout(slot), "$where: $slot").isCut(), "$where: $slot is cut")
+                }
+                assertNull(HudDrawCache.peekLayout(HudText.TRIAL_CLOCK), "$where: the plate carries the clock")
+                val counted = layer != WorldLayer.ARCHIVE
+                val blocks = listOf(HudBlock.TRIAL_LABEL, HudBlock.TRIAL_NAME, HudBlock.TRIAL_REWARD) +
+                    if (counted) listOf(HudBlock.TRIAL_PROGRESS) else emptyList()
+                blocks.forEach { block ->
+                    val line = assertNotNull(HudLayoutProbe.rect(block), "$where: $block")
+                    assertTrue(line.left >= layout.left + layout.padding - 0.5f && line.right <= layout.right - layout.padding + 0.5f &&
+                        line.top >= layout.top && line.bottom <= layout.bottom, "$where: $block $line outside the panel")
+                }
+                assertNull(HudLayoutProbe.rect(HudBlock.TRIAL_CLOCK), "$where: no clock row")
+                if (counted) {
+                    assertFalse(assertNotNull(HudLayoutProbe.rect(HudBlock.TRIAL_PROGRESS)).overlaps(assertNotNull(HudLayoutProbe.rect(HudBlock.TRIAL_REWARD))),
+                        "$where: the count meets the reward")
+                } else {
+                    assertNull(HudLayoutProbe.rect(HudBlock.TRIAL_PROGRESS), "$where: a boss objective shows no count")
+                }
+                val plate = assertNotNull(HudLayoutProbe.rect(HudBlock.REBIRTH), "$where: no plate")
+                assertFalse(plate.overlaps(assertNotNull(HudLayoutProbe.rect(HudBlock.TRIAL_PANEL))), "$where: the plate meets the panel")
             }
         }
     }

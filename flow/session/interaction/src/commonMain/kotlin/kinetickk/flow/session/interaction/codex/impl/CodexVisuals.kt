@@ -29,10 +29,9 @@ import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.ball.gameplay.interaction.canvas.EnemySilhouette
 import kinetickk.ball.gameplay.interaction.canvas.drawActiveItemMark
-import kinetickk.ball.gameplay.interaction.canvas.drawSiteGlyph
+import kinetickk.ball.gameplay.interaction.canvas.drawWorldDiscoveryMark
 import kinetickk.ball.gameplay.interaction.canvas.enemySilhouette
 import kinetickk.ball.gameplay.interaction.canvas.skillGlyph
-import kinetickk.ball.gameplay.interaction.canvas.worldDiscoveryGlyph
 import kinetickk.flow.session.interaction.home.impl.formIndex
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.Kk
@@ -255,7 +254,7 @@ internal fun DrawScope.drawCodexCell(entry: CodexEntry, catalog: UiCatalogSnapsh
             drawRect(if (hovered) Kk.Ink3 else Kk.Ink2)
             if (!icon.discovered) drawKkHatch(rect)
             drawRect(Kk.Line2, style = kkStroke(1.dp.toPx()))
-            drawSiteGlyph(worldDiscoveryGlyph(icon.id), center, radius * 1.1f, if (icon.discovered) Kk.Bone else Kk.Mute)
+            drawWorldDiscoveryMark(icon.id, center, radius * 1.1f, if (icon.discovered) Kk.Bone else Kk.Mute)
         }
         is CodexIcon.Locked -> {
             drawRect(Kk.Ink3)

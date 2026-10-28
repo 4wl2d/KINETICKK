@@ -46,6 +46,13 @@ data class DimensionProjection(
     val glitchPortal: PortalProjection? = null,
     val halos: ImmutableList<HaloProjection> = immutableListOf(),
     val embers: ImmutableList<EmberProjection> = immutableListOf(),
+    /**
+     * [WorldLayer.bit] of every dimension whose rift in realspace (a window rift or the glitch rift) the Core could not
+     * enter now: another engagement runs or the entry rules refuse it (drawn locked).
+     */
+    val lockedRifts: Int = 0,
+    /** The layer whose reward choice is open (its Blessings, its Pacts or the Archive's trove); null otherwise. */
+    val rewardLayer: WorldLayer? = null,
 ) {
     companion object {
         val REALSPACE: DimensionProjection = DimensionProjection()

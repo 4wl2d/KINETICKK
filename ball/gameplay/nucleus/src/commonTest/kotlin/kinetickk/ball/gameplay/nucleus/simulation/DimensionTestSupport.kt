@@ -59,17 +59,12 @@ internal fun MutableGameState.enterDimensionForTesting(target: WorldLayer, objec
     dimensionRun = dimensionRun.copy(visit = newVisit(target, objective, visit.serial, visit.endsAt))
 }
 
-/** Completes the visit's objective and opens its exit rift [distance] u along +x from the Core. */
+/** Completes the visit's objective as the game does and moves its exit rift to [distance] u along +x from the Core. */
 internal fun MutableGameState.completeObjectiveForTesting(distance: Float = 520f) {
+    completeObjective()
     val visit = checkNotNull(dimensionRun.visit)
-    dimensionRun = dimensionRun.copy(
-        visit = visit.copy(
-            progress = visit.goal,
-            completed = true,
-            exitPortal = DimensionPortal(dimensionRun.nextPortalId, coreX + distance, coreY, WorldLayer.BASE, visit.endsAt),
-        ),
-        nextPortalId = dimensionRun.nextPortalId + 1,
-    )
+    val exit = checkNotNull(visit.exitPortal)
+    dimensionRun = dimensionRun.copy(visit = visit.copy(exitPortal = exit.copy(x = coreX + distance, y = coreY)))
 }
 
 /** Moves the clock to the visit's end, so the next dimension update pulls the Core back. */

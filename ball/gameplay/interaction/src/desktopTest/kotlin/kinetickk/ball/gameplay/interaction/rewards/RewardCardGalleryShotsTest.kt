@@ -57,7 +57,9 @@ import kotlin.test.Test
  *   rank III, an epic, a touch slot) and the slot prompt's replace and keep cards, board and phone, English and Russian;
  * - a six-frame strip (t = 0..5 s) of each legendary;
  * - the run-variety decks: every omen and No omen, and every signal card with Ignore (the unaffordable ones locked), board
- *   and phone, English and Russian.
+ *   and phone, English and Russian;
+ * - the dimension rewards: every Blessing, every Pact and the Refuse card, board and phone, English and Russian, the
+ *   Blessings and Pacts also on the board in Protan and Mono.
  *
  * `KK_GALLERY_ONLY` (comma-separated canonical item names) renders only those items: their sheets
  * in every palette, the Russian sheet and their legendary strips.
@@ -115,6 +117,14 @@ class RewardCardGalleryShotsTest {
                     render(File(folder, "signals-board-default-${"%02d".format(sheet + 1)}$suffix.png"), chunk, Board, KkRolePalette.Default, language)
                     render(File(folder, "signals-phone-default-${"%02d".format(sheet + 1)}$suffix.png"), chunk, Phone, KkRolePalette.Default, language)
                 }
+                boonCards(language).chunked(8).forEachIndexed { sheet, chunk ->
+                    render(File(folder, "boons-board-default-${"%02d".format(sheet + 1)}$suffix.png"), chunk, Board, KkRolePalette.Default, language)
+                    render(File(folder, "boons-phone-default-${"%02d".format(sheet + 1)}$suffix.png"), chunk, Phone, KkRolePalette.Default, language)
+                    if (language == AppLanguage.English) {
+                        render(File(folder, "boons-board-protan-${"%02d".format(sheet + 1)}.png"), chunk, Board, KkRolePalette.Protan, language)
+                        render(File(folder, "boons-board-mono-${"%02d".format(sheet + 1)}.png"), chunk, Board, KkRolePalette.Mono, language)
+                    }
+                }
             }
         }
         items.filter { it.rarity == ItemRarity.LEGENDARY }.forEach { item ->
@@ -131,6 +141,21 @@ class RewardCardGalleryShotsTest {
         render(null, systemCards().take(8), Phone, KkRolePalette.Default)
         render(null, activeCards(AppLanguage.English), Phone, KkRolePalette.Default)
         render(null, omenCards(AppLanguage.Russian).take(4) + signalCards(AppLanguage.Russian).take(4), Board, KkRolePalette.Default, AppLanguage.Russian)
+        render(null, boonCards(AppLanguage.Russian).let { it.take(2) + it.takeLast(2) }, Board, KkRolePalette.Default, AppLanguage.Russian)
+    }
+
+    /** Every Blessing, then every Pact and the Refuse card, as the dimension rewards deal them (each in its own offer). */
+    private fun boonCards(language: AppLanguage): List<RewardCardPresentation> {
+        fun card(boon: kinetickk.ball.content.api.RunBoonDefinition) =
+            ChoiceOption(ChoiceType.BOON, boon.name, boon.description, boon.kind.name, boonId = boon.id)
+        fun offer(layer: kinetickk.ball.content.api.WorldLayer, choices: List<ChoiceOption>) =
+            rewardFixtureModel(content = content, choiceType = ChoiceType.BOON, choices = choices, language = language, directedChoice = true)
+                .with("dimension" to kinetickk.ball.gameplay.nucleus.render.DimensionProjection(rewardLayer = layer))
+                .let { model -> choices.mapIndexed { index, choice -> model.rewardCardPresentation(choice, index, language) } }
+        val blessings = content.boons.filter { it.kind == kinetickk.ball.content.api.RunBoonKind.BLESSING }.map(::card)
+        val pacts = content.boons.filter { it.kind == kinetickk.ball.content.api.RunBoonKind.PACT }.map(::card) +
+            ChoiceOption(ChoiceType.BOON, "Refuse the pact", "Keep the run as it is and salvage 10 Kinetic Matter.", "DECLINE", salvageMatter = 10)
+        return offer(kinetickk.ball.content.api.WorldLayer.ZENITH, blessings) + offer(kinetickk.ball.content.api.WorldLayer.NADIR, pacts)
     }
 
     /** Every omen as the offer deals it (in a Ram-keyed run), then No omen. */

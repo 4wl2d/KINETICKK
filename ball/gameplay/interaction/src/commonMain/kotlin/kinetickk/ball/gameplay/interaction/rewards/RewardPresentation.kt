@@ -23,6 +23,7 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicKey
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.RelicPolicy
+import kinetickk.ball.content.api.RunBoonKind
 import kinetickk.ball.content.api.RebirthMutator
 import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.api.RuleLineKind
@@ -125,7 +126,8 @@ internal fun GameplayRenderModel.rewardPresentation(language: AppLanguage = AppL
     val incoming = choices.firstOrNull { it.relicAction == RelicChoiceAction.REPLACE }?.relicId?.let(content::relic)
     return RewardPresentation(
         heading = if (choices.any { it.heirloom && it.relicId != null }) language.text(OverlayRedesignText.Heirloom)
-            else rewardRunVarietyHeading(language) ?: rewardHeading(choiceType, choices.firstOrNull()?.relicAction, language),
+            else rewardRunVarietyHeading(language) ?: rewardDimensionHeading(language)
+                ?: rewardHeading(choiceType, choices.firstOrNull()?.relicAction, language),
         subtitle = "",
         cards = choices.mapIndexed { index, choice -> rewardCardPresentation(choice, index, language, touch) },
         titleAccent = Kk.Bone,
@@ -474,13 +476,16 @@ internal data class RewardCardPresentation(
     val rebirthTier: Int = 0,
     /** A signal card the run cannot take now (HATCH = locked): it cannot be picked or focused. */
     val locked: Boolean = false,
+    /** A Blessing or a Pact card: the kind gives its hue and face ([rewardBoonCardLook]). */
+    val boonKind: RunBoonKind? = null,
 ) {
     /**
-     * A relic decline, the active slot prompt's keep card, No omen or a signal's Ignore: each reads as declining the
-     * offer.
+     * A relic decline, the active slot prompt's keep card, No omen, a signal's Ignore or the Pact offer's Refuse card:
+     * each reads as declining the offer.
      */
     val decline: Boolean get() = choice.relicAction == RelicChoiceAction.DECLINE || choice.keepsActiveLoadout ||
-        choice.type == ChoiceType.OMEN && choice.omenId == null || choice.signalOption == SignalOption.IGNORE
+        choice.type == ChoiceType.OMEN && choice.omenId == null || choice.signalOption == SignalOption.IGNORE ||
+        choice.type == ChoiceType.BOON && choice.boonId == null
     val reborn: Boolean get() = choice.reborn && item != null
     val heirloom: Boolean get() = choice.heirloom && relic != null
 
@@ -491,6 +496,7 @@ internal data class RewardCardPresentation(
      */
     fun accentColor(roles: KkRolePalette): Color {
         relic?.let { return it.aspect.overlayColor(roles) }
+        boonKind?.let { return it.hue(roles) }
         choice.rewardFocus?.let { focus -> return focus.relicAspect()?.overlayColor(roles) ?: roles.kinetic }
         if (choice.relicAction == RelicChoiceAction.MELD) return roles.kinetic
         return tone.color(roles, accent)
@@ -536,6 +542,7 @@ internal fun GameplayRenderModel.rewardCardPresentation(
     if (choice.type == ChoiceType.ACTIVE_SLOT) return rewardActiveSlotCard(choice, index, language, touch)
     if (choice.type == ChoiceType.OMEN) return rewardOmenCard(choice, index, language)
     if (choice.type == ChoiceType.SIGNAL) return rewardSignalCard(choice, index, language)
+    if (choice.type == ChoiceType.BOON) return rewardBoonCard(choice, index, language)
     val item = choice.itemId?.let(content::item)
     val weapon = choice.weaponId?.let(content::weapon)
     val slotRelic = choice.relicSlot?.let(equippedRelics::getOrNull)
@@ -1440,6 +1447,6 @@ internal fun rewardHeading(
     ChoiceType.RELIC_BIND -> if (action == RelicChoiceAction.MELD_TARGET) language.text(GameplayText.RelicMeld) else language.text(GameplayText.RelicRebind)
     ChoiceType.ACTIVE_SLOT -> language.text(GameplayText.ChooseActiveSlot)
     ChoiceType.OMEN -> language.text(RunVarietyText.ChooseOmen)
-    // A signal prompt is headed by its kind (rewardRunVarietyHeading); the generic card heading until boons get their own.
+    // A signal prompt is headed by its kind (rewardRunVarietyHeading) and a boon offer by its layer (rewardDimensionHeading).
     ChoiceType.SIGNAL, ChoiceType.BOON -> language.text(GameplayText.ChooseArtifact)
 }

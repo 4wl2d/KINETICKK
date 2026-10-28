@@ -472,6 +472,57 @@ class GameplayHudSemanticsTest {
         repeat(3) { compose.mainClock.advanceTimeByFrame() }
         compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG).assertDoesNotExist()
     }
+
+    /**
+     * A dimension objective's panel keeps the objective's instruction behind the same focusable (!) node over the panel's
+     * (!) target, described in the player's language, and the node leaves with the visit.
+     */
+    @Test
+    fun aDimensionObjectiveKeepsItsInstructionBehindTheInfoNode() {
+        val snapshot = hudTestSnapshot()
+        val base = requireNotNull(snapshot.renderModel)
+        val visit = dimensionVisit(kinetickk.ball.content.api.WorldLayer.NADIR, base.coreX, base.coreY, progress = 4)
+        var current = snapshot.withModel(base.inVisit(visit))
+        var next: GameplayRenderSnapshot? = null
+        val port = object : GameplayInteractionPort {
+            override val instanceId get() = current.instanceId
+            override fun renderSnapshot() = current
+            override fun visualFxSnapshot() = VisualFxProjection.EMPTY
+            override fun accept(pulse: GameplayInteractionPulse): GameplayAcceptance {
+                val switched = next
+                if (switched != null && pulse is GameplayInteractionPulse.FrameElapsed) {
+                    current = switched
+                    next = null
+                    return GameplayAcceptance.Accepted(current.instanceId, current.revision)
+                }
+                return GameplayAcceptance.Rejected(current.instanceId, current.revision, GameplayRejection.RunExited)
+            }
+        }
+        var language by androidx.compose.runtime.mutableStateOf(AppLanguage.English)
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides language) {
+                Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
+            }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        val host = compose.onNodeWithTag(HOST_TAG).getUnclippedBoundsInRoot()
+        val target = HudTrialPanelLayout().update(1_440f, 810f, 1f, base.settings.textScale).infoTarget(1f)
+        val instruction = checkNotNull(visit.objective).instruction
+        listOf(AppLanguage.English, AppLanguage.Russian).forEach { shown ->
+            compose.runOnIdle { language = shown }
+            repeat(3) { compose.mainClock.advanceTimeByFrame() }
+            val info = compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG)
+            info.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription,
+                listOf(instruction.localizedContent(shown))))
+            val bounds = info.getUnclippedBoundsInRoot()
+            assertRect(target, Rect(bounds.left.value - host.left.value, bounds.top.value - host.top.value,
+                bounds.right.value - host.left.value, bounds.bottom.value - host.top.value))
+        }
+        next = snapshot.withModel(base)
+        repeat(3) { compose.mainClock.advanceTimeByFrame() }
+        compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG).assertDoesNotExist()
+    }
 }
 
 private const val HOST_TAG = "hud-host"

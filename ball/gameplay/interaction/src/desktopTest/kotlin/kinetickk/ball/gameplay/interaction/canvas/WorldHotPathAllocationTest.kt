@@ -26,6 +26,7 @@ import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.SignalKind
 import kinetickk.ball.content.api.EliteAffix
 import kinetickk.ball.content.api.WorldEventKind
+import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicId
@@ -86,6 +87,7 @@ import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.PickupProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupType
+import kinetickk.ball.gameplay.nucleus.render.PortalProjection
 import kinetickk.ball.gameplay.nucleus.render.SiteMarkProjection
 import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.ProjectileProjection
@@ -303,6 +305,20 @@ class WorldHotPathAllocationTest {
             decorate = { withRunningBounty(it, centerDx = -1_150f) })
     }
 
+    @Test
+    fun everyDimensionLayerDrawsWithoutAllocating() {
+        // Each layer's ground, grid, halftone and motes (the Zenith's light wedges, the Nadir's cracks, the Archive's
+        // blinking squares and scanline) under its marks: eight rings (the next one at pace, then below it on the mono
+        // palette, and the one after it), twenty-four embers, the exit rift, a glitch rift off screen (its marker) and an
+        // open and a locked window rift.
+        for (layer in listOf(WorldLayer.ZENITH, WorldLayer.NADIR, WorldLayer.ARCHIVE)) {
+            assertFrameIsAllocationFree(KkRolePalette.Default, WeaponId.MORNINGSTAR, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+                decorate = { inDimension(it, layer, slow = false) })
+            assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+                decorate = { inDimension(it, layer, slow = true) })
+        }
+    }
+
     private fun assertFrameIsAllocationFree(
         roles: KkRolePalette,
         weapon: WeaponId,
@@ -357,6 +373,34 @@ class WorldHotPathAllocationTest {
             drawScreenFx(model, 2f, roles)
         }) { it - baseline < 96 }
         assertTrue(world - baseline < 96, "A busy $shape world frame allocates ${world - baseline} bytes above the $baseline byte baseline")
+    }
+
+    /**
+     * The busy frame inside [layer]: the next course ring and the one after it on screen, six ambient rings (one far off),
+     * twenty-four embers around the Core, the exit rift on screen, the glitch rift off screen, and an open and a locked
+     * window rift ahead of the busy frame's sites; [slow] puts the layer's pace above the Core's speed.
+     */
+    private fun inDimension(model: GameplayRenderModel, layer: WorldLayer, slow: Boolean): GameplayRenderModel {
+        val embers = List(24) { index ->
+            val angle = index * 0.26f
+            val reach = 150f + (index % 4) * 40f
+            (reach * cos(angle)) to (reach * sin(angle))
+        }
+        val visit = dimensionVisit(layer, CORE, CORE, course = listOf(260f to -60f, -240f to 200f),
+            ambient = listOf(-380f to -180f, 400f to 230f, 60f to 250f, -60f to -260f, 330f to -230f, 2_400f to 900f), embers = embers,
+            pace = if (slow) 10_000f else 1f, completed = false, localClock = 4.2f)
+        val dimension = visit.copy(
+            exitPortal = PortalProjection(1, CORE + 300f, CORE + 160f, WorldLayer.BASE, locked = false, glitch = false, remaining = 30f),
+            glitchPortal = PortalProjection(2, CORE - 2_100f, CORE + 500f, WorldLayer.ARCHIVE, locked = false, glitch = true, remaining = 30f),
+            lockedRifts = WorldLayer.NADIR.bit,
+        )
+        fun rift(kind: SiteKind, x: Float, y: Float) = SiteProjection(kind, kind.name, x, y, false, 20f, -1, 0f, immutableListOf(), 0f, 0f)
+        return model.with(
+            "dimension" to dimension,
+            // The moving sealed offer stays last: its distance drives the measured frames.
+            "sites" to (listOf(rift(SiteKind.ZENITH_RIFT, CORE - 330f, CORE - 170f), rift(SiteKind.NADIR_RIFT, CORE + 380f, CORE + 220f)) +
+                model.sites).toImmutableList(),
+        )
     }
 
     /** The larger of the two edge-marker distances (totem, sealed-anomaly offer) in [model]. */

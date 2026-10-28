@@ -364,7 +364,7 @@ internal fun MutableGameState.choose(index: Int) {
             val itemId = option.itemId ?: return
             val item = content.item(itemId) ?: return
             // The offer resolves when its card is taken, even when the active item still needs a slot.
-            if (directedReward == null) resolveItemOfferPity(item)
+            if (directedReward == null && !dimensionRewardOpen()) resolveItemOfferPity(item)
             if (needsActiveSlot(item)) {
                 pendingActiveItemId = itemId
                 pendingActiveReborn = option.reborn
@@ -446,8 +446,8 @@ internal fun MutableGameState.choose(index: Int) {
         }
         // A signal card pays through its channel; a locked card or a chained item offer leaves without finishing here.
         ChoiceType.SIGNAL -> resolveSignalOption(option, before) ?: return
-        // Dimension boons are dealt only once their lane opens them.
-        ChoiceType.BOON -> return
+        // A boon card takes its Blessing or Pact; the Refuse card salvages.
+        ChoiceType.BOON -> takeBoonCard(option)
         ChoiceType.RELIC_BIND -> {
             val slot = option.relicSlot ?: return
             when (option.relicAction ?: return) {
@@ -471,6 +471,7 @@ internal fun MutableGameState.finishChoice(sound: GameplayAudioCue) {
     directedReward = null
     selectedRewardFocus = null
     offerRarityFloor = null
+    dimensionRewardLayer = null
     choices = emptyList()
     phase = GamePhase.RUNNING
     interpolationPrimed = false
