@@ -9,6 +9,7 @@ import kinetickk.ball.gameplay.api.GameplayAcceptance
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.impl.GameComponent
 import kinetickk.ball.gameplay.impl.GameplayCommandTestCaller
 import kinetickk.ball.gameplay.api.GameplayRunStarted
@@ -245,7 +246,7 @@ private fun newPreparedPipeline(seed: Int, pauseBeforeProbe: Boolean): PreparedP
         seed = seed,
     )
     val start = GameplayCommandTestCaller<GameplayRunStarted>()
-    start.call(component::startRun)
+    start.call { reply -> component.startRun(RunMode.STANDARD, reply) }
     check(start.applied.single().runId == BENCHMARK_RUN_ID && start.refused.isEmpty()) {
         "Benchmark GameComponent fixture could not start"
     }

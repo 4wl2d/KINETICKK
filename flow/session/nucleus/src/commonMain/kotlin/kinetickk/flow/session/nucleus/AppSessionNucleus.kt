@@ -7,6 +7,7 @@ import kinetickk.ball.gameplay.api.GameplayRunExited
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.profile.api.ProfileRunBootstrapResult
 import kinetickk.ball.profile.api.ProfileSettingsChanged
 import kinetickk.ball.profile.api.ProfileRebirthTierSelected
@@ -78,7 +79,16 @@ object AppSessionNucleus {
             SessionInteractionPulse.ToggleMuteRequested -> toggleMute(state)
             is SessionInteractionPulse.SelectCoreShapeRequested -> selectCoreShape(state, intent.shape)
             is SessionInteractionPulse.RebirthRequested -> rebirth(state, intent.tier, context)
+            is SessionInteractionPulse.SelectRunModeRequested -> selectRunMode(state, intent.mode)
         }
+    }
+
+    /** Baby mode is chosen between runs, on the bare Home only; the mode then rides every start until changed. */
+    private fun selectRunMode(state: AppSessionState, mode: RunMode): AppSessionDecision {
+        if (state.base != AppDestination.Home || state.overlay != null) {
+            return rejected(SessionRejection.RunModeSelectionUnavailable)
+        }
+        return accepted(state.copy(revision = state.nextRevision(), runMode = mode, lastFailure = null))
     }
 
     private fun startRun(
@@ -128,12 +138,13 @@ object AppSessionNucleus {
             pendingWorkflow = PendingWorkflow.StartingRun(
                 reason = reason,
                 runId = reservation.runId,
+                mode = state.runMode,
             ),
             rebirthConfirmation = RebirthConfirmation.Disarmed,
             lastFailure = null,
             nextRunId = reservation.nextRunId,
         )
-        val send = AppSessionOutput.StartRun(reservation.runId)
+        val send = AppSessionOutput.StartRun(reservation.runId, state.runMode)
         return accepted(
             next,
             if (reservation.ensure) {
@@ -483,12 +494,13 @@ object AppSessionNucleus {
             gameplayPhase = GameplayRunPhase.CREATED,
             pendingWorkflow = PendingWorkflow.StartingRebirthRun(
                 reservation.runId,
+                state.runMode,
             ),
             rebirthConfirmation = RebirthConfirmation.Disarmed,
             lastFailure = null,
             nextRunId = reservation.nextRunId,
         )
-        val send = AppSessionOutput.StartRun(reservation.runId)
+        val send = AppSessionOutput.StartRun(reservation.runId, state.runMode)
         return accepted(
             next,
             if (reservation.ensure) {
@@ -749,6 +761,7 @@ private fun AppSessionState.toShellProjection(): AppShellProjection = AppShellPr
     lifecycle = lifecycle,
     rebirthConfirmationArmed = rebirthConfirmation is RebirthConfirmation.Armed,
     workflowFailure = lastFailure,
+    runMode = runMode,
 )
 
 private fun PendingWorkflow.toProjection(): SessionWorkflowPhase = when (this) {

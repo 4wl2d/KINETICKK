@@ -4,6 +4,7 @@
 package kinetickk.flow.session.api
 
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 
@@ -23,6 +24,8 @@ data class AppShellProjection(
     val lifecycle: SessionLifecycle,
     val rebirthConfirmationArmed: Boolean,
     val workflowFailure: SessionWorkflowFailureCode?,
+    /** The mode every next start carries; chosen on the bare Home, STANDARD at every launch. */
+    val runMode: RunMode = RunMode.STANDARD,
 ) {
     init {
         require(base.isBaseDestination()) { "Only Home and Gameplay may be base destinations" }

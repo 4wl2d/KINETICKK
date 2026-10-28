@@ -5,6 +5,7 @@ package kinetickk.flow.session.api
 
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.gameplay.api.RunMode
 
 /** Closed Interaction intent inventory of the singleton AppSession Flow. */
 sealed interface SessionInteractionPulse {
@@ -29,6 +30,9 @@ sealed interface SessionInteractionPulse {
             }
         }
     }
+
+    /** Selects the next runs' mode; accepted only over a bare Home (no overlay, no pending workflow). */
+    data class SelectRunModeRequested(val mode: RunMode) : SessionInteractionPulse
 }
 
 sealed interface SessionRejection {
@@ -42,6 +46,7 @@ sealed interface SessionRejection {
     data object ShortcutUnavailable : SessionRejection
     data object CoreShapeSelectionUnavailable : SessionRejection
     data object RebirthUnavailable : SessionRejection
+    data object RunModeSelectionUnavailable : SessionRejection
 
     data class OverlayUnavailable(
         val destination: AppDestination,

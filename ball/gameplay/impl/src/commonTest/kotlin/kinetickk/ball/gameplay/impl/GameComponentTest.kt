@@ -20,6 +20,7 @@ import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.ball.gameplay.api.GameplayRevision
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.api.GameplayRefusal
 import kinetickk.ball.gameplay.api.GameplaySettingsApplied
 import kinetickk.ball.gameplay.api.GameplayRunStarted
@@ -269,7 +270,7 @@ class GameComponentTest {
         val component = component(profile)
         val caller = GameplayCommandTestCaller<GameplayRunStarted>()
         caller.call { reply ->
-            component.startRun(reply)
+            component.startRun(RunMode.STANDARD, reply)
             assertEquals(GameplayRunPhase.RUNNING, component.query(GameplayQuery.GetRunStatus).phase)
             assertSame(SyntheticGameplayContent, component.renderSnapshot().renderModel!!.content)
             assertTrue(caller.applied.isEmpty())
@@ -282,12 +283,31 @@ class GameComponentTest {
     }
 
     @Test
+    fun theStartCommandCarriesItsRunModeIntoTheRunForGood() {
+        val standard = component().apply { start(RunMode.STANDARD) }
+        val profile = TestProfilePort()
+        val easy = component(profile).apply { start(RunMode.EASY) }
+
+        assertFalse(checkNotNull(standard.renderSnapshot().renderModel).easyMode)
+        assertTrue(checkNotNull(easy.renderSnapshot().renderModel).easyMode)
+        assertEquals(GameplayRunPhase.RUNNING, easy.query(GameplayQuery.GetRunStatus).phase)
+        assertEquals(1, profile.bootstrapReadCount)
+        // The mode belongs to the start, not to a frame: the running run keeps it.
+        repeat(5) {
+            assertIs<GameplayAcceptance.Accepted>(easy.accept(GameplayInteractionPulse.FrameElapsed.fromValidated(0.1f)))
+        }
+        assertTrue(checkNotNull(easy.renderSnapshot().renderModel).easyMode)
+        assertFalse(checkNotNull(standard.renderSnapshot().renderModel).easyMode)
+    }
+
+    @Test
     fun wrongTargetAndUnavailableBootstrapRefuseBeforePublication() {
         val closed = GameplayCommandTestCaller<GameplayRunStarted>()
-        closed.call(component()::startRun)
+        val closedComponent = component()
+        closed.call { reply -> closedComponent.startRun(RunMode.STANDARD, reply) }
         val profile = TestProfilePort()
         val component = component(profile)
-        assertFailsWith<IllegalStateException> { component.startRun(checkNotNull(closed.lastReply)) }
+        assertFailsWith<IllegalStateException> { component.startRun(RunMode.STANDARD, checkNotNull(closed.lastReply)) }
         assertEquals(GameplayRevision.ZERO, component.stateSnapshot().revision)
         assertEquals(0, profile.bootstrapReadCount)
         profile.bootstrapResult = ProfileRunBootstrapResult.Unavailable(
@@ -296,7 +316,7 @@ class GameComponentTest {
             )),
         )
         val caller = GameplayCommandTestCaller<GameplayRunStarted>()
-        caller.call(component::startRun)
+        caller.call { reply -> component.startRun(RunMode.STANDARD, reply) }
         val decision = assertIs<GameplayRefusal.DecisionRejected>(caller.refused.single())
         assertEquals(kinetickk.ball.gameplay.api.GameplayRejection.ProfileBootstrapUnavailable, decision.reason)
         assertEquals(GameplayRevision.ZERO, component.stateSnapshot().revision)
@@ -313,7 +333,7 @@ class GameComponentTest {
         val component = component(profile)
 
         val caller = GameplayCommandTestCaller<GameplayRunStarted>()
-        caller.call(component::startRun)
+        caller.call { reply -> component.startRun(RunMode.STANDARD, reply) }
         val decision = assertIs<GameplayRefusal.DecisionRejected>(caller.refused.single())
         assertIs<kinetickk.ball.gameplay.api.GameplayRejection.InvalidStartConfiguration>(
             decision.reason,
@@ -734,8 +754,10 @@ private fun component(
 private fun GameComponent.exit(): GameplayRunExited =
     GameplayCommandTestCaller<GameplayRunExited>().also { it.call(this::exitRun) }.applied.single()
 
-private fun GameComponent.start(): GameplayRunStarted =
-    GameplayCommandTestCaller<GameplayRunStarted>().also { it.call(this::startRun) }.applied.single()
+private fun GameComponent.start(mode: RunMode = RunMode.STANDARD): GameplayRunStarted =
+    GameplayCommandTestCaller<GameplayRunStarted>().also { caller ->
+        caller.call { reply -> startRun(mode, reply) }
+    }.applied.single()
 
 private fun GameComponent.advanceUntilMatter() {
     repeat(1_200) { frameIndex ->
