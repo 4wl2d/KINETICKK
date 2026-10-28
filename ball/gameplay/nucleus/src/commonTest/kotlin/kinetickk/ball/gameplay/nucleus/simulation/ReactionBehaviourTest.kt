@@ -206,7 +206,7 @@ class ReactionBehaviourTest {
     }
 
     @Test
-    fun attractorFollowsItsAnchorAndBendsPlayerShotsAtFourRadiansPerSecondKeepingTheirSpeed() {
+    fun attractorFollowsItsAnchorAndBendsPlayerShotsAtFiveRadiansPerSecondKeepingTheirSpeed() {
         val state = buildTestState()
         val target = state.dummy(x = 400f)
         state.setOff(ReactionId.MAGNETIZE, target)
@@ -224,7 +224,7 @@ class ReactionBehaviourTest {
         state.projectiles += shot
         state.updateCombatFields(step)
         assertEquals(450f, state.fieldRecords.single().x, "The field rides on its anchor")
-        assertEquals(-4f * step, atan2(shot.vy, shot.vx), 1e-5f)
+        assertEquals(-5f * step, atan2(shot.vy, shot.vx), 1e-5f)
         assertEquals(600f, length(shot.vx, shot.vy), 1e-3f)
         assertEquals(0f, bolt.vy, "Hostile shots are not bent")
 

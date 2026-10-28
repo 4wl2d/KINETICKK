@@ -1946,14 +1946,16 @@ private const val REFIT_SIGNATURE_FLOOR_SHARE: Float = 0.5f
 
 // Ability damage is calibrated by CharacterBalanceTest: averaged over its seeded 90 s fights (packs at
 // random bearings, content bolt damage, exact and jittered timing) every offensive character's ability
-// output stays within 40 % of their median (Orbit 70, Puncture 180, Halo 12/s and 16, Lattice 7 + 3.5
-// per node, slams 120 + 0.25 per u/s from 100 u/s, Pulse burst 40, scars 45, drones 9).
+// output stays within 40 % of their median (Orbit 42, Puncture 180, Halo 12/s and 16, Lattice 7 + 3.5
+// per node, slams 120 + 0.25 per u/s from 100 u/s, Pulse burst 40, scars 45, drones 9). The 0.6.0 flight law
+// (grip carves tighter, faster arcs) lifted Orbit and cost the Star and the Dipole their pack meetings: Orbit
+// 70 -> 42, the early Supernova from 12 -> 6 Stellar Mass, Repel 420 -> 700 with throws of 0.6 -> 1.5 s.
 
 private const val ORBIT_ARC: Float = 0.698f
 private const val ORBIT_MIN_DISTANCE: Float = 100f
 private const val ORBIT_MIN_SPEED: Float = 200f
 internal const val ORBIT_RADIUS: Float = 210f
-internal const val ORBIT_DAMAGE: Float = 70f
+internal const val ORBIT_DAMAGE: Float = 42f
 private const val ORBIT_STACKS: Int = 2
 
 internal const val FACET_REGEN_SECONDS: Float = 6f
@@ -2001,7 +2003,7 @@ internal const val LATTICE_INSIDE_MULTIPLIER: Float = 1.5f
 private const val STAR_IMPACT_PER_STACK: Float = 0.03f
 private const val STAR_RADIUS_PER_STACK: Float = 0.015f
 private const val STAR_MASS_PER_STACK: Float = 0.02f
-private const val SUPERNOVA_EARLY_STACKS: Int = 12
+private const val SUPERNOVA_EARLY_STACKS: Int = 6
 private const val SUPERNOVA_RADIUS: Float = 160f
 private const val SUPERNOVA_RADIUS_PER_STACK: Float = 8f
 internal const val SUPERNOVA_DAMAGE: Float = 20f
@@ -2018,8 +2020,8 @@ private const val POLARITY_FLIP_INTERVAL: Float = 2f
 internal const val ATTRACT_RADIUS: Float = 300f
 private const val ATTRACT_ACCELERATION: Float = 260f
 internal const val REPEL_RADIUS: Float = 220f
-private const val REPEL_ACCELERATION: Float = 420f
-internal const val THROW_SECONDS: Float = 0.6f
+private const val REPEL_ACCELERATION: Float = 700f
+internal const val THROW_SECONDS: Float = 1.5f
 private const val REPEL_THROW_SHARE: Float = 1f
 internal const val SLAM_MIN_SPEED: Float = 100f
 /** A struck enemy that gains this speed from a slam is thrown on (as fast as a slam needs). */

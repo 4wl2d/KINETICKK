@@ -149,7 +149,7 @@ class SkillApexUpgradeContentTest {
                 ReactionId.SUPERCONDUCT to listOf(0.25f, 2.5f, 12f),
                 ReactionId.GLACIER_CRUSH to listOf(25f, 300f),
                 ReactionId.EMBRITTLE to listOf(500f),
-                ReactionId.MAGNETIZE to listOf(3f, 260f, 220f, 4f),
+                ReactionId.MAGNETIZE to listOf(3f, 260f, 220f, 5f),
                 ReactionId.FEEDBACK to listOf(0.35f, 1f),
                 ReactionId.ROT_WELL to listOf(2f, 20f, 0.5f, 3f),
                 ReactionId.THUNDERCLAP to listOf(260f, 0.6f, 1.6f),

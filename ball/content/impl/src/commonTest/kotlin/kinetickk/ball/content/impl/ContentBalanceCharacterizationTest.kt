@@ -104,7 +104,7 @@ class ContentBalanceCharacterizationTest {
         val build = ui.build
 
         assertEquals(
-            "90af4a2ca532d113",
+            "c5ea14c28212923a",
             goldenFingerprint {
                 build.elements.forEach { element ->
                     add(element.element.name)
