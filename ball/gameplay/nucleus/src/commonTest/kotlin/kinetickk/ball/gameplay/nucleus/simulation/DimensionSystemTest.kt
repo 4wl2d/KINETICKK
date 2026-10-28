@@ -13,6 +13,7 @@ import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.model.DimensionRewardGrant
+import kinetickk.ball.gameplay.nucleus.model.DimensionRunState
 import kinetickk.ball.gameplay.nucleus.model.Ember
 import kinetickk.ball.gameplay.nucleus.model.HaloRing
 import kinetickk.ball.gameplay.nucleus.model.Pickup
@@ -24,7 +25,6 @@ import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
 import kotlin.math.hypot
-import kotlin.math.nextUp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -104,7 +104,7 @@ class DimensionSystemTest {
         val latest = returnBy - policy.longestWindowVisitSeconds - canonicalGameplayContent.sites.windows.offerLifetime
         assertEquals(545f, latest)
         assertNotNull(claim(4, latest))
-        assertNull(claim(4, latest.nextUp()))
+        assertNull(claim(4, latest.nextAbove()))
         assertNull(claim(5, 645f))
 
         // Only in realspace, only while enabled, and at most three per run.
@@ -236,7 +236,7 @@ class DimensionSystemTest {
         val latestEntry = returnBy - policy.minimumVisitSeconds
         game.elapsed = latestEntry
         assertTrue(game.canEnterDimension(WorldLayer.NADIR))
-        game.elapsed = latestEntry.nextUp()
+        game.elapsed = latestEntry.nextAbove()
         assertFalse(game.canEnterDimension(WorldLayer.NADIR))
         assertFalse(game.enterDimension(WorldLayer.NADIR))
         assertEquals(WorldLayer.BASE, game.worldLayer)
@@ -372,7 +372,7 @@ class DimensionSystemTest {
         assertEquals(latest + 30f, glitch.expiresAt)
         assertTrue(hypot(glitch.x - opened.coreX, glitch.y - opened.coreY) >= 700f - 0.01f, "700 u ahead or nudged further")
         assertEquals(DimensionNotices.ARCHIVE_STIRS, opened.message)
-        assertNull(completedBoth(latest.nextUp()).dimensionRun.glitchPortal)
+        assertNull(completedBoth(latest.nextAbove()).dimensionRun.glitchPortal)
 
         // A failed objective is no completion.
         val failed = game().apply {
@@ -423,12 +423,31 @@ class DimensionSystemTest {
 
         val latest = policy.latestGlitchRiftAt(bossAt)
         assertTrue(game().apply { elapsed = latest }.openArchiveRiftAt(500f, 0f))
-        assertFalse(game().apply { elapsed = latest.nextUp() }.openArchiveRiftAt(500f, 0f))
+        assertFalse(game().apply { elapsed = latest.nextAbove() }.openArchiveRiftAt(500f, 0f))
         val inside = game().apply { enterDimensionForTesting(WorldLayer.ZENITH) }
         assertFalse(inside.openArchiveRiftAt(500f, 0f), "only in realspace")
         val visited = game().apply { dimensionRun = dimensionRun.copy(visitedMask = WorldLayer.ARCHIVE.bit) }
         assertFalse(visited.openArchiveRiftAt(500f, 0f))
         assertFalse(game(canonicalGameplayContent.withDimensions { copy(enabled = false) }).openArchiveRiftAt(500f, 0f))
+    }
+
+    @Test
+    fun aQuietArenaClosesTheOpenRiftAndForgetsTheRunsDimensions() {
+        val game = game()
+        game.elapsed = 300f
+        assertTrue(game.openArchiveRiftAt(game.coreX + 300f, game.coreY))
+        val glitch = assertNotNull(game.dimensionRun.glitchPortal)
+        game.dimensionRun = game.dimensionRun.copy(
+            visitedMask = WorldLayer.ZENITH.bit,
+            pendingRewards = immutableListOf(DimensionRewardGrant(WorldLayer.ZENITH, completed = true)),
+        )
+
+        game.quietArenaForTesting()
+        assertSame(DimensionRunState.EMPTY, game.dimensionRun)
+        game.flyThroughForTesting(glitch.x, glitch.y)
+        game.updateDimension(MutableGameState.FIXED_STEP)
+        assertEquals(WorldLayer.BASE, game.worldLayer, "an isolated encounter never falls into the Archive")
+        assertNull(game.dimensionRun.visit)
     }
 
     @Test

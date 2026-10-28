@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.model.AmbientSiteWindow
+import kinetickk.ball.gameplay.nucleus.model.DimensionRunState
 import kinetickk.ball.gameplay.nucleus.model.RunSecretFlag
 import kinetickk.foundation.collections.immutableListOf
 
@@ -26,6 +27,8 @@ internal fun MutableGameState.quietArenaForTesting() {
     eventSignals = immutableListOf()
     nextSignalSlot = Int.MAX_VALUE / 2
     pendingSignalPrompts = immutableListOf()
+    // No open rift (window or glitch), visit history or pending dimension reward follows the encounter.
+    dimensionRun = DimensionRunState.EMPTY
     endAllEncounters(despawn = true)
     check(worldLayer == WorldLayer.BASE) { "quiet arenas run in realspace" }
 }

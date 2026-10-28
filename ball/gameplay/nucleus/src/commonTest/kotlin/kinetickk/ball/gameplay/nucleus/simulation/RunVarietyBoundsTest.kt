@@ -22,7 +22,6 @@ import kinetickk.ball.gameplay.nucleus.render.EventStrikeProjection
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
-import kotlin.math.nextUp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -92,7 +91,7 @@ class RunVarietyBoundsTest {
     @Test
     fun championChanceAboveTenPercentIsRejected() {
         val bound = ChampionPolicy(baseChance = 0.1f, chancePerTier = 0f)
-        assertFailsWith<IllegalArgumentException> { ChampionPolicy(baseChance = 0.1f.nextUp(), chancePerTier = 0f) }
+        assertFailsWith<IllegalArgumentException> { ChampionPolicy(baseChance = 0.1f.nextAbove(), chancePerTier = 0f) }
         assertFailsWith<IllegalArgumentException> { ChampionPolicy(baseChance = 0.04f, chancePerTier = 0.0061f) }
         // A run at the bound sees one champion in ten eligible spawns at the top tier, and no more.
         val state = arena(content.copy(variety = content.variety.copy(champions = bound)), rebirth = 10)

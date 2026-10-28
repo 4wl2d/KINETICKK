@@ -421,6 +421,22 @@ class DimensionRewardsTest {
     }
 
     @Test
+    fun theRefuseCardNamesTheMatterItSalvages() {
+        for (declineMatter in listOf(10, 25)) {
+            val content = canonicalGameplayContent.withDimensions {
+                copy(definitions = definitions.map {
+                    if (it.layer == WorldLayer.NADIR) it.copy(reward = it.reward.copy(declineMatter = declineMatter)) else it
+                }.toImmutableList())
+            }
+            val state = game(content).apply { queue(DimensionRewardGrant(WorldLayer.NADIR, completed = true)) }
+            state.openPendingDimensionReward()
+            val refuse = state.choices.last()
+            assertEquals(declineMatter, refuse.salvageMatter)
+            assertEquals("Keep the run as it is and salvage $declineMatter Kinetic Matter.", refuse.description)
+        }
+    }
+
+    @Test
     fun aPactOfferAddsTheRefuseCardWithinTheChoiceBound() {
         val state = game().apply { queue(DimensionRewardGrant(WorldLayer.NADIR, completed = true)) }
         state.openPendingDimensionReward()
@@ -432,6 +448,7 @@ class DimensionRewardsTest {
         assertEquals("DECLINE", refuse.tag)
         assertEquals(PACT_DECLINE_TITLE, refuse.title)
         assertEquals(policy.definition(WorldLayer.NADIR).reward.declineMatter, refuse.salvageMatter)
+        assertEquals(pactDeclineDescription(checkNotNull(refuse.salvageMatter)), refuse.description)
 
         // The last card is a valid selection through the reducer: Refuse salvages its Matter and changes nothing else.
         state.takeSoundCues()

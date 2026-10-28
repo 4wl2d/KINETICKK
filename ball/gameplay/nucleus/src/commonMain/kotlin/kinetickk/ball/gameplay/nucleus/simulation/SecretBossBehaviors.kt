@@ -489,6 +489,9 @@ private fun MutableGameState.antecedentSpiral(enemy: Enemy, bolts: Int) {
     }
 }
 
-/** A secret boss fires only while it can attack and the screen holds fewer than the Architect's volley budget of shots. */
-private fun MutableGameState.canVolley(enemy: Enemy): Boolean =
+/**
+ * A mini- or secret boss fires a volley only while it can attack and the screen holds fewer than the Architect's volley
+ * budget of shots; a skipped volley's turn passes like a fired one.
+ */
+internal fun MutableGameState.canVolley(enemy: Enemy): Boolean =
     projectiles.size < ARCHITECT_VOLLEY_PROJECTILE_BUDGET && canAttack(enemy)

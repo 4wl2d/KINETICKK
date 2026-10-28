@@ -100,6 +100,11 @@ class CodexEnemyEntriesTest {
         assertEquals(CodexIcon.Enemy(EnemyType.CARTOGRAPHER, locked = false), cartographer.icon)
         assertTrue(cartographer.discovered)
         assertTrue(cartographer.facts.any { it.label == "Found in" && it.value == "Open space" }, "${cartographer.facts}")
+        // Its sigil summons it: no clock brings it, so the Codex names the sigil instead of an arrival time.
+        assertEquals(listOf("When its far sigil is touched"), cartographer.facts.filter { it.label == "Appears" }.map { it.value })
+        val russianCartographer = codexCatalogEntries(CODEX_ENEMIES_CATEGORY, "", CodexItemFilter.ALL, found, catalog, codexTestProgress(),
+            AppLanguage.Russian).single { it.key == "enemy/CARTOGRAPHER" }
+        assertEquals(listOf("Когда касаются его дальней печати"), russianCartographer.facts.filter { it.label == "Появляется" }.map { it.value })
         // The Antecedent's discovery is its own: it stays hidden.
         assertTrue((entries.single { it.key == "enemy/ANTECEDENT" }.icon as CodexIcon.Enemy).hidden)
         val antecedent = codexCatalogEntries(CODEX_ENEMIES_CATEGORY, "", CodexItemFilter.ALL,

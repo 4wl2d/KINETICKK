@@ -375,7 +375,4 @@ class RaceSiteTest {
     }
 }
 
-/** The next float above this positive finite value (portable: Float.nextUp is not common on every target). */
-private fun Float.nextAbove(): Float = Float.fromBits(toRawBits() + 1)
-
 private fun GameplayContentSnapshot.withRace(race: RacePolicy): GameplayContentSnapshot = copy(sites = sites.copy(race = race))

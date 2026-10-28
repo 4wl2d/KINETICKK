@@ -159,6 +159,11 @@ data class EnemyDefinition(
     val encounter: BossEncounterSpec? = null,
     /** The persisted discovery that reveals a secret boss in the Codex. */
     val revealedBy: WorldDiscovery? = null,
+    /**
+     * How a summoned kind arrives (an English content phrase), stated by the Codex in place of the [timeGateSeconds]
+     * arrival time; null for a kind the run brings by its clock.
+     */
+    val arrival: String? = null,
 ) {
     init {
         require(name.isNotBlank()) { "Enemy name must not be blank" }
@@ -183,6 +188,7 @@ data class EnemyDefinition(
         require((revealedBy != null) == (rank == EnemyRank.SECRET_BOSS)) {
             "Exactly the secret bosses name the discovery that reveals them"
         }
+        require(arrival == null || arrival.isNotBlank()) { "An enemy's arrival must not be blank" }
     }
 
     /** The scheduled Elite. */
@@ -422,6 +428,7 @@ fun defaultEnemyDefinitions(): ImmutableList<EnemyDefinition> = listOf(
             enrageAttackRate = 1.35f, enrageAfterSeconds = 120f,
         ),
         revealedBy = WorldDiscovery.CARTOGRAPHER,
+        arrival = "When its far sigil is touched",
     ),
     EnemyDefinition(
         EnemyType.ANTECEDENT, "Antecedent",

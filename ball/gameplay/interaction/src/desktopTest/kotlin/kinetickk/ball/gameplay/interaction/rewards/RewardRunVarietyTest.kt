@@ -200,6 +200,13 @@ class RewardRunVarietyTest {
         assertEquals(listOf(RunVarietyText.CacheCrateCurse.english), crate.liabilities, "A cache's cost is its curse")
         assertTrue(crate.chips.isEmpty())
         assertEquals(listOf(RunVarietyText.OfferLegendary.english), card(SignalOption.CACHE_RELIQUARY).descriptions)
+        // At a Rebirth rank with no Legendary item unlocked the reliquary names the Epic offer it deals.
+        val epicReliquary = signal(SignalOption.CACHE_RELIQUARY, SignalKind.CURSED_CACHE).copy(signalRarity = ItemRarity.EPIC)
+        for (language in AppLanguage.entries) {
+            val shown = rewardFixtureModel(choiceType = ChoiceType.SIGNAL, choices = listOf(epicReliquary), language = language)
+                .rewardCardPresentation(epicReliquary, 0, language)
+            assertEquals(listOf(language.text(RunVarietyText.OfferAtLeast, ItemRarity.EPIC.displayLabel.localizedContent(language))), shown.descriptions)
+        }
         val repair = card(SignalOption.DERELICT_REPAIR, payout = 72)
         assertEquals(listOf("Restore 72 integrity"), repair.descriptions)
         assertTrue(repair.liabilities.isEmpty() && repair.chips.isEmpty(), "Salvage costs nothing")

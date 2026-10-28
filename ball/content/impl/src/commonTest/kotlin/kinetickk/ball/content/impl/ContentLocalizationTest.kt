@@ -221,6 +221,8 @@ class ContentLocalizationTest {
                 "Collapse this offering into one of the four bound Relics and raise its rank.",
                 "Collapse the offering into slot 4 and advance rank 2 to 3.",
                 "Slot 4 is already rank 3; salvage the excess resonance.",
+                "Keep the run as it is and salvage 10 Kinetic Matter.",
+                "Keep the run as it is and salvage 25 Kinetic Matter.",
                 "SLOT 4 // REPLACE", "SLOT 4 // RANK 3", "LEVEL 20",
                 "Impact power +0.05×", "Cooling +1.5/s", "Combo window +0.08s",
                 "+4.5% Impact damage  //  +0.2/s Integrity regeneration",
@@ -352,12 +354,26 @@ class ContentLocalizationTest {
     }
 
     @Test
+    fun everyItemFlavorAddressesThePlayerAsVyInRussian() {
+        // The catalog's voice is the polite «вы»: no item's Russian flavor uses «ты» or one of its forms.
+        val informal = setOf("ты", "тебя", "тебе", "тобой", "тобою", "твой", "твоя", "твоё", "твое", "твои", "твоего", "твоей", "твоим",
+            "твоих", "твоему", "твою")
+        val wordBreak = Regex("[^А-Яа-яЁё]+")
+        content.items.forEach { item ->
+            val russian = item.description.localizedContent(AppLanguage.Russian)
+            val words = russian.split(wordBreak).map { it.lowercase() }
+            assertTrue(words.none { it in informal }, "${item.name} speaks informally: $russian")
+        }
+    }
+
+    @Test
     fun everyEnemyNameAndDescriptionIsLocalizedAndDistinct() {
         val roster = createContentCatalog().uiCatalog().enemies
         assertEquals(EnemyType.entries.toList(), roster.map { it.type })
         roster.forEach { enemy ->
             assertFullyLocalized(enemy.name)
             assertFullyLocalized(enemy.description)
+            enemy.arrival?.let(::assertFullyLocalized)
         }
         assertDistinctInRussian(roster.map { it.name })
         assertDistinctInRussian(roster.map { it.description })

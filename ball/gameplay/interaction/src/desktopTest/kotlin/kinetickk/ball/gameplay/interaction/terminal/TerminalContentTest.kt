@@ -315,6 +315,23 @@ class TerminalContentTest {
         compose.runOnIdle { assertEquals(listOf<GameplayInput>(GameplayInput.OpenRebirth), actions) }
     }
 
+    @Test
+    fun aBabyModeVictoryLeadsWithReenterBecauseItsClearCountedNothing() {
+        val actions = mutableListOf<GameplayInput>()
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides AppLanguage.English) {
+                Box(Modifier.requiredSize(1000.dp, 720.dp)) {
+                    TerminalContent(report().copy(victory = true, easy = true), 1f, false, 3f, true, actions::add)
+                }
+            }
+        }
+        compose.onNodeWithTag("kinetickk.gameplay.rebirth").assertDoesNotExist()
+        compose.onNodeWithTag("kinetickk.gameplay.restart").assertIsDisplayed()
+        compose.onNodeWithText(AppLanguage.English.text(GameplayText.RebirthNext), ignoreCase = true, useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("kinetickk.gameplay.restart").performClick()
+        compose.runOnIdle { assertEquals(listOf<GameplayInput>(GameplayInput.RestartRun), actions) }
+    }
+
     private fun assertPanelOrder(statisticsOnLeft: Boolean) {
         val summary = compose.onNodeWithTag("kinetickk.gameplay.results.summary").fetchSemanticsNode().boundsInRoot
         val stats = compose.onNodeWithTag("kinetickk.gameplay.results.statistics").fetchSemanticsNode().boundsInRoot

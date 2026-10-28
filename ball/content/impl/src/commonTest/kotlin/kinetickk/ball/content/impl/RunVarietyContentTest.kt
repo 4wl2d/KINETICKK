@@ -36,8 +36,6 @@ import kinetickk.ball.content.api.WorldEventPolicy
 import kinetickk.ball.content.api.defaultOmenDefinitions
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
-import kotlin.math.nextDown
-import kotlin.math.nextUp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -105,7 +103,7 @@ class RunVarietyContentTest {
         RunModifierEffect.KeynoteFloor(Float.MIN_VALUE)
         RunModifierEffect.KeynoteFloor(1f)
         rejects { RunModifierEffect.KeynoteFloor(0f) }
-        rejects { RunModifierEffect.KeynoteFloor(1f.nextUp()) }
+        rejects { RunModifierEffect.KeynoteFloor(1f.nextAbove()) }
     }
 
     @Test
@@ -210,9 +208,9 @@ class RunVarietyContentTest {
         rejects { DirectorPolicy(surgeThemeMinimumKinds = 0) }
         rejects { DirectorPolicy(surgeThemeMinimumKinds = 9) }
         DirectorPolicy(announceAtSeconds = 0f, keynoteAnnounceAtSeconds = 0f)
-        rejects { DirectorPolicy(announceAtSeconds = 0f.nextDown()) }
+        rejects { DirectorPolicy(announceAtSeconds = 0f.nextBelow()) }
         DirectorPolicy(announceAtSeconds = 3f, keynoteAnnounceAtSeconds = 3f)
-        rejects { DirectorPolicy(announceAtSeconds = 3f, keynoteAnnounceAtSeconds = 3f.nextDown()) }
+        rejects { DirectorPolicy(announceAtSeconds = 3f, keynoteAnnounceAtSeconds = 3f.nextBelow()) }
         rejects { DirectorPolicy(keynoteAnnounceAtSeconds = Float.POSITIVE_INFINITY) }
     }
 
@@ -225,7 +223,7 @@ class RunVarietyContentTest {
         EliteAffixPolicy(burstRadius = Float.MIN_VALUE)
         EliteAffixPolicy(burstRadius = ContentBounds.MAX_EFFECT_RADIUS)
         rejects { EliteAffixPolicy(burstRadius = 0f) }
-        rejects { EliteAffixPolicy(burstRadius = ContentBounds.MAX_EFFECT_RADIUS.nextUp()) }
+        rejects { EliteAffixPolicy(burstRadius = ContentBounds.MAX_EFFECT_RADIUS.nextAbove()) }
         floatRange(0f, 1f) { EliteAffixPolicy(baseChance = it) }
         floatRange(0f, 1f) { EliteAffixPolicy(chancePerTier = it) }
         listOf<(Float) -> Unit>(
@@ -234,20 +232,20 @@ class RunVarietyContentTest {
             { EliteAffixPolicy(wellStrength = it) }, { EliteAffixPolicy(burstDelaySeconds = it) },
         ).forEach(::nonNegative)
         EliteAffixPolicy(hasteSpeed = 1f, hasteCadence = 1f)
-        rejects { EliteAffixPolicy(hasteSpeed = 1f.nextDown()) }
-        rejects { EliteAffixPolicy(hasteCadence = 1f.nextDown()) }
+        rejects { EliteAffixPolicy(hasteSpeed = 1f.nextBelow()) }
+        rejects { EliteAffixPolicy(hasteCadence = 1f.nextBelow()) }
 
         // chance(top tier) = base + perTier × 10 stays at most one in ten.
         ChampionPolicy(baseChance = 0.1f, chancePerTier = 0f)
-        rejects { ChampionPolicy(baseChance = 0.1f.nextUp(), chancePerTier = 0f) }
+        rejects { ChampionPolicy(baseChance = 0.1f.nextAbove(), chancePerTier = 0f) }
         ChampionPolicy(baseChance = 0f, chancePerTier = 0.005f)
         rejects { ChampionPolicy(baseChance = 0.05f, chancePerTier = 0.0051f) }
-        rejects { ChampionPolicy(baseChance = 0f.nextDown()) }
-        rejects { ChampionPolicy(baseChance = 0f, chancePerTier = 0f.nextDown()) }
+        rejects { ChampionPolicy(baseChance = 0f.nextBelow()) }
+        rejects { ChampionPolicy(baseChance = 0f, chancePerTier = 0f.nextBelow()) }
         nonNegative { ChampionPolicy(fromThreatSeconds = it) }
         ChampionPolicy(integrityScale = 1f, matterScale = 1f, bonusData = 0)
-        rejects { ChampionPolicy(integrityScale = 1f.nextDown()) }
-        rejects { ChampionPolicy(matterScale = 1f.nextDown()) }
+        rejects { ChampionPolicy(integrityScale = 1f.nextBelow()) }
+        rejects { ChampionPolicy(matterScale = 1f.nextBelow()) }
         rejects { ChampionPolicy(bonusData = -1) }
 
         listOf<(Float) -> Unit>(
@@ -277,16 +275,16 @@ class RunVarietyContentTest {
             { IonStormTuning(enemyDamageScale = it) }, { IonStormTuning(coreRadius = it) }, { IonStormTuning(coreDamage = it) },
         ).forEach(::nonNegative)
         DataStormTuning(minDistance = 0f, maxDistance = 0f, angleSpread = 0f, killBonusData = 0)
-        rejects { DataStormTuning(minDistance = 0f.nextDown()) }
-        rejects { DataStormTuning(minDistance = 300f, maxDistance = 300f.nextDown()) }
-        rejects { DataStormTuning(angleSpread = 0f.nextDown()) }
+        rejects { DataStormTuning(minDistance = 0f.nextBelow()) }
+        rejects { DataStormTuning(minDistance = 300f, maxDistance = 300f.nextBelow()) }
+        rejects { DataStormTuning(angleSpread = 0f.nextBelow()) }
         rejects { DataStormTuning(killBonusData = -1) }
         // Both ramps fit inside the storm.
         GravityStormTuning(durationSeconds = 30f, rampSeconds = 15f)
-        rejects { GravityStormTuning(durationSeconds = 30f, rampSeconds = 15f.nextUp()) }
+        rejects { GravityStormTuning(durationSeconds = 30f, rampSeconds = 15f.nextAbove()) }
         IonStormTuning(minDistance = 200f, maxDistance = 200f)
-        rejects { IonStormTuning(minDistance = 200f, maxDistance = 200f.nextDown()) }
-        rejects { IonStormTuning(minDistance = 0f.nextDown()) }
+        rejects { IonStormTuning(minDistance = 200f, maxDistance = 200f.nextBelow()) }
+        rejects { IonStormTuning(minDistance = 0f.nextBelow()) }
         IonStormTuning(ionStacks = 1)
         IonStormTuning(ionStacks = ContentBounds.MAX_STATUS_THRESHOLD)
         rejects { IonStormTuning(ionStacks = 0) }
@@ -307,21 +305,21 @@ class RunVarietyContentTest {
         floatRange(0f, 1f) { WorldEventPolicy(extraEventChance = it) }
         rejects { WorldEventPolicy(weights = immutableListOf(1f, 1f, 1f, 1f)) }
         rejects { WorldEventPolicy(weights = immutableListOf(1f, 1f, 1f, 1f, 1f, 1f)) }
-        rejects { WorldEventPolicy(weights = immutableListOf(1f, 1f, 1f, 1f, 0f.nextDown())) }
+        rejects { WorldEventPolicy(weights = immutableListOf(1f, 1f, 1f, 1f, 0f.nextBelow())) }
         rejects { WorldEventPolicy(weights = immutableListOf(1f, 1f, 1f, 1f, Float.NaN)) }
         // Without repeats, a run of three events needs three weighted kinds.
         WorldEventPolicy(weights = immutableListOf(0f, 1f, 0f, 1f, 1f))
         rejects { WorldEventPolicy(weights = immutableListOf(0f, 1f, 0f, 0f, 1f)) }
         WorldEventPolicy(minPerRun = 2, maxPerRun = 2, weights = immutableListOf(0f, 1f, 0f, 0f, 1f))
         WorldEventPolicy(telegraphSeconds = 0f, gapSeconds = 0f, firstAtSeconds = 0f)
-        rejects { WorldEventPolicy(telegraphSeconds = 0f.nextDown()) }
-        rejects { WorldEventPolicy(gapSeconds = 0f.nextDown()) }
-        rejects { WorldEventPolicy(firstAtSeconds = 0f.nextDown()) }
+        rejects { WorldEventPolicy(telegraphSeconds = 0f.nextBelow()) }
+        rejects { WorldEventPolicy(gapSeconds = 0f.nextBelow()) }
+        rejects { WorldEventPolicy(firstAtSeconds = 0f.nextBelow()) }
         rejects { WorldEventPolicy(firstAtSeconds = 660f, lastEndSeconds = 660f) }
         // (660 − 60) / 3 = 200 s per event: a 3 s telegraph, the longest event and a 10 s gap.
         WorldEventPolicy(meteor = MeteorShowerTuning(durationSeconds = 187f))
-        rejects { WorldEventPolicy(meteor = MeteorShowerTuning(durationSeconds = 187f.nextUp())) }
-        rejects { WorldEventPolicy(solar = SolarFlareTuning(durationSeconds = 187f.nextUp())) }
+        rejects { WorldEventPolicy(meteor = MeteorShowerTuning(durationSeconds = 187f.nextAbove())) }
+        rejects { WorldEventPolicy(solar = SolarFlareTuning(durationSeconds = 187f.nextAbove())) }
         assertEquals(187f, WorldEventPolicy(ion = IonStormTuning(durationSeconds = 187f)).longestDuration)
     }
 
@@ -359,7 +357,7 @@ class RunVarietyContentTest {
         rejects { SignalPolicy(slots = ContentBounds.MAX_SIGNAL_SLOTS + 1) }
         assertTrue(ContentBounds.MAX_SIGNAL_SLOTS <= SignalKind.entries.size)
         rejects { SignalPolicy(weights = immutableListOf(1f, 1f, 1f, 1f)) }
-        rejects { SignalPolicy(weights = immutableListOf(1f, 1f, 1f, 1f, 0f.nextDown())) }
+        rejects { SignalPolicy(weights = immutableListOf(1f, 1f, 1f, 1f, 0f.nextBelow())) }
         // Three distinct signals a run need three weighted kinds.
         SignalPolicy(weights = immutableListOf(1f, 0f, 1f, 0f, 1f))
         rejects { SignalPolicy(weights = immutableListOf(1f, 0f, 0f, 0f, 1f)) }
@@ -382,16 +380,16 @@ class RunVarietyContentTest {
             ),
         )
         assertEquals(120f, data.sites.windows.offerInterval)
-        rejected(withSignals(SignalPolicy(intervalSeconds = 120f.nextUp())), "repeat with the site windows")
-        rejected(withSignals(SignalPolicy(intervalSeconds = 120f.nextDown())), "repeat with the site windows")
+        rejected(withSignals(SignalPolicy(intervalSeconds = 120f.nextAbove())), "repeat with the site windows")
+        rejected(withSignals(SignalPolicy(intervalSeconds = 120f.nextBelow())), "repeat with the site windows")
         accepted(withSignals(SignalPolicy(firstAtSeconds = 110f)))
-        rejected(withSignals(SignalPolicy(firstAtSeconds = 110f.nextDown())), "wait for the first site trial")
+        rejected(withSignals(SignalPolicy(firstAtSeconds = 110f.nextBelow())), "wait for the first site trial")
         accepted(withSignals(SignalPolicy(lifetimeSeconds = 50f)))
         rejected(withSignals(SignalPolicy(lifetimeSeconds = 50.01f)), "before the next site window")
         // The fifth slot fades at 115 + 4 × 120 + 30 = 625 s.
-        accepted(withSignals(SignalPolicy(), RunTempoProfile(bossAtSeconds = 625f.nextUp()), events = false))
+        accepted(withSignals(SignalPolicy(), RunTempoProfile(bossAtSeconds = 625f.nextAbove()), events = false))
         rejected(withSignals(SignalPolicy(), RunTempoProfile(bossAtSeconds = 625f), events = false), "last signal must fade")
-        accepted(withSignals(SignalPolicy(slots = 4, perRun = 3), RunTempoProfile(bossAtSeconds = 505f.nextUp()), events = false))
+        accepted(withSignals(SignalPolicy(slots = 4, perRun = 3), RunTempoProfile(bossAtSeconds = 505f.nextAbove()), events = false))
         // A switched-off system has no schedule to fit.
         accepted(withSignals(SignalPolicy(enabled = false, intervalSeconds = 121f, firstAtSeconds = 1f)))
     }
@@ -400,9 +398,9 @@ class RunVarietyContentTest {
     fun bootstrapEndsWorldEventsBeforeTheArchitect() {
         fun withEvents(events: WorldEventPolicy, tempo: RunTempoProfile = data.tempo) =
             data.copy(tempo = tempo, variety = data.variety.copy(worldEvents = events))
-        accepted(withEvents(WorldEventPolicy(lastEndSeconds = 720f.nextDown())))
+        accepted(withEvents(WorldEventPolicy(lastEndSeconds = 720f.nextBelow())))
         rejected(withEvents(WorldEventPolicy(lastEndSeconds = 720f)), "end before the Architect")
-        accepted(withEvents(WorldEventPolicy(), RunTempoProfile(bossAtSeconds = 660f.nextUp())))
+        accepted(withEvents(WorldEventPolicy(), RunTempoProfile(bossAtSeconds = 660f.nextAbove())))
         rejected(withEvents(WorldEventPolicy(), RunTempoProfile(bossAtSeconds = 660f)), "end before the Architect")
         accepted(withEvents(WorldEventPolicy(enabled = false, lastEndSeconds = 900f)))
     }
@@ -445,14 +443,14 @@ class RunVarietyContentTest {
     private fun floatRange(low: Float, high: Float, build: (Float) -> Unit) {
         build(low)
         build(high)
-        rejects { build(low.nextDown()) }
-        rejects { build(high.nextUp()) }
+        rejects { build(low.nextBelow()) }
+        rejects { build(high.nextAbove()) }
     }
 
     /** Accepts zero and rejects the first negative and an infinite value. */
     private fun nonNegative(build: (Float) -> Unit) {
         build(0f)
-        rejects { build(0f.nextDown()) }
+        rejects { build(0f.nextBelow()) }
         rejects { build(Float.POSITIVE_INFINITY) }
     }
 

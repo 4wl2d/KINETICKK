@@ -300,6 +300,35 @@ class DirectorPersonalityTest {
     }
 
     @Test
+    fun theArchitectsFightHasNoOnslaughtThemeOrBanner() {
+        // A surge of the fight counts itself but features no kind and announces nothing.
+        val fight = forced(seed = 61, id = null).apply {
+            elapsed = 600f
+            bossSpawned = true
+            message = ""
+        }
+        repeat(6) { fight.onDirectorPhaseStarted(SpawnDirectorPhase.SURGE) }
+        assertEquals(-1, fight.surgeThemeType)
+        assertEquals("", fight.message)
+        assertEquals(6, fight.surgeIndex)
+        // A theme the surge picked before the Architect arrived weighs nothing once the fight starts.
+        val before = forced(seed = 61, id = null).apply { elapsed = 600f }
+        before.onDirectorPhaseStarted(SpawnDirectorPhase.SURGE)
+        val theme = content.enemies.single { it.type.ordinal == before.surgeThemeType }
+        assertTrue(before.typeWeight(theme, weakOnly = false, recency = false) > before.plainWeight(theme))
+        before.bossSpawned = true
+        assertEquals(before.plainWeight(theme), before.typeWeight(theme, weakOnly = false, recency = false))
+        // Outside the fight the same surges are themed and announced.
+        val plain = forced(seed = 61, id = null).apply {
+            elapsed = 600f
+            message = ""
+        }
+        plain.onDirectorPhaseStarted(SpawnDirectorPhase.SURGE)
+        assertTrue(plain.surgeThemeType >= 0)
+        assertTrue(plain.message.startsWith("ONSLAUGHT // "))
+    }
+
+    @Test
     fun themesAreAStatelessHashOfTheSurgeIndexOverTheEligibleKinds() {
         fun themes(seed: Int, id: DirectorPersonalityId?): List<Int> {
             val state = forced(seed, id).apply { elapsed = 600f }

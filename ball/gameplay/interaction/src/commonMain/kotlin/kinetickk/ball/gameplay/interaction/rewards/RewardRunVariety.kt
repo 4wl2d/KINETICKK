@@ -160,7 +160,7 @@ private class SignalCardCopy(val title: RunVarietyText, val effect: String, val 
 internal fun GameplayRenderModel.rewardSignalCard(choice: ChoiceOption, index: Int, language: AppLanguage): RewardCardPresentation {
     val option = choice.signalOption ?: SignalOption.IGNORE
     val kind = (choice.signalKind ?: option.kind)?.displayName?.localizedContent(language).orEmpty()
-    val copy = signalCardCopy(option, choice.signalCost, choice.signalPayout, language)
+    val copy = signalCardCopy(option, choice.signalCost, choice.signalPayout, choice.signalRarity, language)
     if (option == SignalOption.IGNORE) {
         return RewardCardPresentation(
             choice = choice,
@@ -191,8 +191,11 @@ internal fun GameplayRenderModel.rewardSignalCard(choice: ChoiceOption, index: I
     )
 }
 
-/** The copy of [option] with the nucleus [cost] and [payout] (their meaning is the option's, see the signal system). */
-private fun signalCardCopy(option: SignalOption, cost: Int, payout: Int, language: AppLanguage): SignalCardCopy {
+/**
+ * The copy of [option] with the nucleus [cost] and [payout] (their meaning is the option's, see the signal system) and the
+ * [rarity] an item-offer card deals at the profile's Rebirth rank (null: the option's own floor).
+ */
+private fun signalCardCopy(option: SignalOption, cost: Int, payout: Int, rarity: ItemRarity?, language: AppLanguage): SignalCardCopy {
     fun text(resource: RunVarietyText, vararg arguments: Any) = language.text(resource, *arguments)
     fun offer(rarity: ItemRarity) = text(RunVarietyText.OfferAtLeast, rarity.displayLabel.localizedContent(language))
     val matter = overlayGrouped(cost.toLong(), language)
@@ -218,8 +221,9 @@ private fun signalCardCopy(option: SignalOption, cost: Int, payout: Int, languag
         SignalOption.GAMBLE_INTEGRITY -> SignalCardCopy(RunVarietyText.GambleIntegrityTitle, text(RunVarietyText.GambleIntegrityText),
             text(RunVarietyText.GambleIntegrityStake, cost), integrityChip)
         SignalOption.CACHE_CRATE -> SignalCardCopy(RunVarietyText.CacheCrateTitle, offer(ItemRarity.EPIC), text(RunVarietyText.CacheCrateCurse), null)
-        SignalOption.CACHE_RELIQUARY ->
-            SignalCardCopy(RunVarietyText.CacheReliquaryTitle, text(RunVarietyText.OfferLegendary), text(RunVarietyText.CacheReliquaryCurse), null)
+        SignalOption.CACHE_RELIQUARY -> SignalCardCopy(RunVarietyText.CacheReliquaryTitle,
+            if ((rarity ?: ItemRarity.LEGENDARY) == ItemRarity.LEGENDARY) text(RunVarietyText.OfferLegendary) else offer(checkNotNull(rarity)),
+            text(RunVarietyText.CacheReliquaryCurse), null)
         SignalOption.CACHE_IDOL -> SignalCardCopy(RunVarietyText.CacheIdolTitle, text(RunVarietyText.RelicOffer), text(RunVarietyText.CacheIdolCurse), null)
         SignalOption.DERELICT_REPAIR -> SignalCardCopy(RunVarietyText.DerelictRepairTitle, text(RunVarietyText.DerelictRepairText, payout), null, null)
         SignalOption.DERELICT_CARGO ->

@@ -1015,7 +1015,8 @@ private class ReportAction(
 )
 
 /**
- * Victory: Rebirth (primary) + Re-enter; defeat: Re-enter. The game has no Lab action here. On a
+ * Victory: Rebirth (primary) + Re-enter; defeat, and a Baby mode victory (its clear counted nothing, so it opens no next
+ * cycle): Re-enter. The game has no Lab action here. On a
  * phone in landscape Menu shares the row ([withMenu]). The row is sized as a whole
  * ([overlayRowWidths]): every label keeps its board size while the row has room, and when it has
  * not, all labels shrink by one factor, so the primary label stays the largest and a larger text
@@ -1036,9 +1037,10 @@ private fun ReportActions(
     val big = primaryHeight >= 64f
     val fontScale = if (big) frame.scale else 1f
     val primarySize = if (big) KkButtonSize.LG else KkButtonSize.MD
-    val actions = remember(language, scene.presentation.victory, withMenu, height, primarySize, fontScale, primaryFont, ghostFont) {
+    val rebirthNext = scene.presentation.victory && !scene.presentation.easy
+    val actions = remember(language, rebirthNext, withMenu, height, primarySize, fontScale, primaryFont, ghostFont) {
         buildList {
-            if (scene.presentation.victory) {
+            if (rebirthNext) {
                 add(ReportAction(language.text(GameplayText.RebirthNext), GameplayInput.OpenRebirth, "kinetickk.gameplay.rebirth",
                     KkButtonVariant.PRIMARY, primarySize, primaryFont * fontScale, 1f, height, 0.6f))
                 add(ReportAction(language.text(GameplayText.Reenter), GameplayInput.RestartRun, "kinetickk.gameplay.restart",

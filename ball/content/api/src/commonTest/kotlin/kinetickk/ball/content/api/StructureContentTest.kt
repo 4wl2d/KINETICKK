@@ -9,8 +9,6 @@ import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.hypot
-import kotlin.math.nextDown
-import kotlin.math.nextUp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -245,8 +243,8 @@ class StructureContentTest {
         // Door widths stay within 160..400.
         StructureDoor(VERTICAL, 0f, 0f, 160f, 0, 1)
         StructureDoor(VERTICAL, 0f, 0f, 400f, 0, 1)
-        assertFailsWith<IllegalArgumentException> { StructureDoor(VERTICAL, 0f, 0f, 160f.nextDown(), 0, 1) }
-        assertFailsWith<IllegalArgumentException> { StructureDoor(VERTICAL, 0f, 0f, 400f.nextUp(), 0, 1) }
+        assertFailsWith<IllegalArgumentException> { StructureDoor(VERTICAL, 0f, 0f, 160f.nextBelow(), 0, 1) }
+        assertFailsWith<IllegalArgumentException> { StructureDoor(VERTICAL, 0f, 0f, 400f.nextAbove(), 0, 1) }
     }
 
     @Test
@@ -283,17 +281,17 @@ class StructureContentTest {
         }
         // Rooms, names and wall thicknesses.
         StructureRoom(0f, 0f, 400f, 400f)
-        assertFailsWith<IllegalArgumentException> { StructureRoom(0f, 0f, 400f.nextDown(), 400f) }
+        assertFailsWith<IllegalArgumentException> { StructureRoom(0f, 0f, 400f.nextBelow(), 400f) }
         pair().copy(name = "N".repeat(32))
         assertRejected("1..32 characters") { pair().copy(name = "N".repeat(33)) }
         assertRejected("1..32 characters") { pair().copy(name = " ") }
         pair().copy(wallHalfThickness = 12f)
         pair().copy(wallHalfThickness = 60f)
-        assertRejected("half thickness") { pair().copy(wallHalfThickness = 60f.nextUp()) }
-        assertRejected("half thickness") { pair().copy(wallHalfThickness = 12f.nextDown()) }
+        assertRejected("half thickness") { pair().copy(wallHalfThickness = 60f.nextAbove()) }
+        assertRejected("half thickness") { pair().copy(wallHalfThickness = 12f.nextBelow()) }
         StructureCapsule(0f, 0f, 0f, 0f, 80f)
-        assertFailsWith<IllegalArgumentException> { StructureCapsule(0f, 0f, 0f, 0f, 80f.nextUp()) }
-        assertFailsWith<IllegalArgumentException> { StructureCapsule(0f, 0f, 0f, 0f, 12f.nextDown()) }
+        assertFailsWith<IllegalArgumentException> { StructureCapsule(0f, 0f, 0f, 0f, 80f.nextAbove()) }
+        assertFailsWith<IllegalArgumentException> { StructureCapsule(0f, 0f, 0f, 0f, 12f.nextBelow()) }
     }
 
     @Test
@@ -349,43 +347,43 @@ class StructureContentTest {
         assertEquals(true, policy.enabled, "structures ship on")
         // Signals reach at most two cells and the four-digit marker readout.
         StructurePolicy(signalRange = 9_600f)
-        assertRejected("two cells") { StructurePolicy(signalRange = 9_600f.nextUp()) }
+        assertRejected("two cells") { StructurePolicy(signalRange = 9_600f.nextAbove()) }
         StructurePolicy(cellSize = 6_000f, signalRange = 9_990f)
-        assertRejected("two cells") { StructurePolicy(cellSize = 6_000f, signalRange = 9_990f.nextUp()) }
+        assertRejected("two cells") { StructurePolicy(cellSize = 6_000f, signalRange = 9_990f.nextAbove()) }
         // A cell holds the largest footprint (2,400) inside its two margins (300).
         StructurePolicy(cellSize = 3_000f, signalRange = 5_000f)
-        assertRejected("largest footprint") { StructurePolicy(cellSize = 3_000f.nextDown(), signalRange = 5_000f) }
+        assertRejected("largest footprint") { StructurePolicy(cellSize = 3_000f.nextBelow(), signalRange = 5_000f) }
         StructurePolicy(cellSize = 3_200f, cellMargin = 400f, signalRange = 5_000f)
         assertRejected("largest footprint") { StructurePolicy(cellSize = 3_200f, cellMargin = 400.25f, signalRange = 5_000f) }
         // Leaving means 300 u past the Reliquary's circumradius.
         val leave = policy.templates.maxOf { it.circumradius } + 300f
         StructurePolicy(leaveRadius = leave)
-        assertRejected("leave radius") { StructurePolicy(leaveRadius = leave.nextDown()) }
+        assertRejected("leave radius") { StructurePolicy(leaveRadius = leave.nextBelow()) }
         // Every other knob at its bounds and just past them.
         StructurePolicy(entryInset = 48f)
         StructurePolicy(entryInset = 200f)
-        assertRejected("entry inset") { StructurePolicy(entryInset = 48f.nextDown()) }
-        assertRejected("entry inset") { StructurePolicy(entryInset = 200f.nextUp()) }
+        assertRejected("entry inset") { StructurePolicy(entryInset = 48f.nextBelow()) }
+        assertRejected("entry inset") { StructurePolicy(entryInset = 200f.nextAbove()) }
         StructurePolicy(engageCutoffSeconds = 120f, garrisonGateLeadSeconds = 300f, obstacleClearance = 600f)
-        assertRejected("engage cutoff") { StructurePolicy(engageCutoffSeconds = 120f.nextUp()) }
-        assertRejected("gate lead") { StructurePolicy(garrisonGateLeadSeconds = 300f.nextUp()) }
-        assertRejected("obstacle clearance") { StructurePolicy(obstacleClearance = 600f.nextUp()) }
+        assertRejected("engage cutoff") { StructurePolicy(engageCutoffSeconds = 120f.nextAbove()) }
+        assertRejected("gate lead") { StructurePolicy(garrisonGateLeadSeconds = 300f.nextAbove()) }
+        assertRejected("obstacle clearance") { StructurePolicy(obstacleClearance = 600f.nextAbove()) }
         StructurePolicy(garrisonExtraPerTiers = 1)
         assertRejected("at least one tier") { StructurePolicy(garrisonExtraPerTiers = 0) }
         StructurePolicy(garrisonScale = 0.25f)
         StructurePolicy(garrisonScale = 3f)
-        assertRejected("Garrison scale") { StructurePolicy(garrisonScale = 0.25f.nextDown()) }
-        assertRejected("Garrison scale") { StructurePolicy(garrisonScale = 3f.nextUp()) }
+        assertRejected("Garrison scale") { StructurePolicy(garrisonScale = 0.25f.nextBelow()) }
+        assertRejected("Garrison scale") { StructurePolicy(garrisonScale = 3f.nextAbove()) }
         StructurePolicy(directorRateWhileSealed = 1f, wallDamageScale = 2f, maximumChance = 1f)
-        assertRejected("director rate") { StructurePolicy(directorRateWhileSealed = 1f.nextUp()) }
-        assertRejected("Wall damage") { StructurePolicy(wallDamageScale = 2f.nextUp()) }
-        assertRejected("maximum chance") { StructurePolicy(maximumChance = 1f.nextUp()) }
+        assertRejected("director rate") { StructurePolicy(directorRateWhileSealed = 1f.nextAbove()) }
+        assertRejected("Wall damage") { StructurePolicy(wallDamageScale = 2f.nextAbove()) }
+        assertRejected("maximum chance") { StructurePolicy(maximumChance = 1f.nextAbove()) }
         assertRejected("distances") { StructurePolicy(minimumDistance = 10_000f) }
         assertRejected("distances") { StructurePolicy(minimumDistance = -1f) }
         // One chance per world layer.
         StructurePolicy(layerChance = immutableListOf(1f, 1f, 1f, 1f))
         assertRejected("every layer") { StructurePolicy(layerChance = immutableListOf(1f, 0f, 0f)) }
-        assertRejected("every layer") { StructurePolicy(layerChance = immutableListOf(1f, 0f, 0f, 1f.nextUp())) }
+        assertRejected("every layer") { StructurePolicy(layerChance = immutableListOf(1f, 0f, 0f, 1f.nextAbove())) }
         // Templates follow their ids, and one weighted template is placeable within a cell of the minimum distance.
         assertRejected("StructureTemplateId order") { StructurePolicy(templates = policy.templates.reversed().toImmutableList()) }
         val doodleOnly = policy.templates.map { if (it.secret) it else it.copy(weight = 0f) }.toImmutableList()

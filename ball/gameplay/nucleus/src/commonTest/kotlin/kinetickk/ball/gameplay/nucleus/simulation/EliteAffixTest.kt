@@ -14,7 +14,6 @@ import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.min
-import kotlin.math.nextDown
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -64,7 +63,7 @@ class EliteAffixTest {
     fun noEliteRollsAnAffixBeforeTheAffixThreatTime() {
         val start = affixes.fromThreatSeconds
         // Tier 0 at the last instant before the threat time and at it, then tiers whose threat offset moves the start.
-        for ((tier, elapsed) in listOf(0 to start.nextDown(), 0 to start, 5 to 59.99f, 5 to 60f, 10 to 0f)) {
+        for ((tier, elapsed) in listOf(0 to start.nextBelow(), 0 to start, 5 to 59.99f, 5 to 60f, 10 to 0f)) {
             val state = arena(elapsed, rebirth = tier, content = alwaysAffixed)
             val affixed = state.threatElapsed >= start
             repeat(6) {
@@ -351,7 +350,7 @@ class EliteAffixTest {
             val type = ordinaryKinds[index % ordinaryKinds.size]
             assertTrue(!state.spawnedEnemy(type, 0f, 0f, ownerTag = 0x0100_0000_0000_0001L).champion, "Encounter $type")
         }
-        val early = arena(start.nextDown())
+        val early = arena(start.nextBelow())
         repeat(2_000) { index -> assertTrue(!early.spawnedEnemy(ordinaryKinds[index % ordinaryKinds.size], 0f, 0f).champion, "Before $start s") }
         val off = arena(start + 10f, content = withoutAffixesOrChampions)
         repeat(2_000) { index -> assertTrue(!off.spawnedEnemy(ordinaryKinds[index % ordinaryKinds.size], 0f, 0f).champion, "Switched off") }

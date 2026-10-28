@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.interaction.canvas
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
@@ -310,12 +311,26 @@ class WorldDimensionRenderingTest {
             halos = immutableListOf(HaloProjection(4, CORE + 400f, CORE + 1_300f, 0), HaloProjection(5, CORE + 100f, CORE + 50f, 1)),
         )
         val model = base().with("sites" to offers.toImmutableList()).withDimension(dimension)
-        render { drawWorld(model, VisualFxProjection.EMPTY, 0f, 0f, measurer()) }
+        val pixels = render { drawWorld(model, VisualFxProjection.EMPTY, 0f, 0f, measurer()) }
         val batch = WorldOverlayScratch.markers
         assertEquals(EdgeMarkerBatch.CAPACITY, batch.count)
         assertEquals(List(5) { EdgeMarkerIcon.RACE } + listOf(EdgeMarkerIcon.PORTAL, EdgeMarkerIcon.PORTAL, EdgeMarkerIcon.HALO),
             (0 until batch.count).map { batch.icon[it] })
-        assertEquals(EdgeMarkerBatch.CAPACITY, WorldDrawProbe.rects(WorldDrawn.EDGE_MARKER).size, "every marker is drawn")
+        val markers = WorldDrawProbe.rects(WorldDrawn.EDGE_MARKER)
+        assertEquals(EdgeMarkerBatch.CAPACITY, markers.size, "every marker is drawn")
+        // The next ring's marker is the player's course, volt like the ring's dashes at pace; the rifts' markers are bone.
+        val you = KkRolePalette.Default.you.toArgb()
+        fun volt(box: Rect): Int {
+            var count = 0
+            for (y in box.top.toInt().coerceAtLeast(0) until box.bottom.toInt().coerceAtMost(height)) {
+                for (x in box.left.toInt().coerceAtLeast(0) until box.right.toInt().coerceAtMost(width)) {
+                    if (near(pixels[y * width + x], you, 24)) count++
+                }
+            }
+            return count
+        }
+        assertTrue(volt(markers[7]) > 20, "the halo marker is volt (${volt(markers[7])} volt pixels)")
+        assertEquals(0, volt(markers[5]) + volt(markers[6]), "the rift markers are not")
         // Seen on screen, a rift or ring needs no marker; a ring that is not next never gets one.
         val near = base().withDimension(dimension.copy(
             exitPortal = checkNotNull(dimension.exitPortal).copy(x = CORE + 300f, y = CORE),

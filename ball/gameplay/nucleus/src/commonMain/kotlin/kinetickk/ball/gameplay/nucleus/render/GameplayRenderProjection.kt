@@ -35,7 +35,7 @@ enum class ProjectileKind { BOLT, MINE }
  * What an offer deals. [ACTIVE_SLOT] asks which active item an incoming active item replaces when every slot holds one:
  * a card per held active plus a card that keeps the loadout and salvages the incoming item. [OMEN] is the run-start
  * omen offer (three omens and No omen), [SIGNAL] an event signal's prompt (its options and Ignore) and [BOON] a
- * dimension's Blessing or Pact cards; none of the three is dealt until its lane opens it.
+ * dimension reward's Blessing or Pact cards (a Pact offer adds the Refuse card); the Archive's trove deals [ITEM] cards.
  */
 enum class ChoiceType { ITEM, TOTEM, WEAPON, RELIC, RELIC_BIND, ACTIVE_SLOT, OMEN, SIGNAL, BOON }
 enum class TotemAction { AMPLIFY_CURRENT, CHANGE_WEAPON }
@@ -101,6 +101,11 @@ data class ChoiceOption(
     val locked: Boolean = false,
     /** A [ChoiceType.BOON] card's Blessing or Pact id. */
     val boonId: Int? = null,
+    /**
+     * A [ChoiceType.SIGNAL] item-offer card's rarity floor as it deals at the profile's Rebirth rank: the Black reliquary's
+     * Legendary floor deals Epic while no Legendary item is unlocked. Null on every other card.
+     */
+    val signalRarity: kinetickk.ball.content.api.ItemRarity? = null,
 )
 
 data class CharacterLatticePoint(val x: Float, val y: Float)

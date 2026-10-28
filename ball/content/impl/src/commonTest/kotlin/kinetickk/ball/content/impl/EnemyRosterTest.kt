@@ -180,6 +180,8 @@ class EnemyRosterTest {
         assertEquals(WorldDiscovery.CARTOGRAPHER, byType.getValue(EnemyType.CARTOGRAPHER).revealedBy)
         assertEquals(WorldDiscovery.ANTECEDENT, byType.getValue(EnemyType.ANTECEDENT).revealedBy)
         assertTrue(roster.filterNot { it.isSecretBoss }.all { it.revealedBy == null })
+        // Only the far sigil summons its boss; the Antecedent waits as the Archive's objective, found there (its habitat).
+        assertEquals(listOf(EnemyType.CARTOGRAPHER), roster.filter { it.arrival != null }.map { it.type })
     }
 
     @Test
@@ -234,6 +236,7 @@ class EnemyRosterTest {
         assertFailsWith<IllegalArgumentException> { drifter.copy(habitats = 0) }
         assertFailsWith<IllegalArgumentException> { drifter.copy(habitats = EnemyHabitat.ALL + 1) }
         assertFailsWith<IllegalArgumentException> { HabitatWeights(zenith = -1f) }
+        assertFailsWith<IllegalArgumentException> { drifter.copy(arrival = " ") }
         EnemyDefinition(EnemyType.DRIFTER, "Edge", "Bound check.", threat = 5, timeGateSeconds = 0f, minimumRebirth = 10, weight = 1f)
     }
 

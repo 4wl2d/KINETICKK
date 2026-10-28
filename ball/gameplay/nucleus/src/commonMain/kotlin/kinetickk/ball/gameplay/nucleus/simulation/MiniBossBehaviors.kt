@@ -22,7 +22,8 @@ import kotlin.math.sin
  * The mini-bosses of 0.6.0: Warden Prime, Brood Queen, Throne and Pyre Herald. Each is gated by its content encounter
  * spec (thirds, a 6 % hit cap, a shift at each gate) and runs its phase start once per step outside the damage
  * pipeline (startMiniBossPhase). While a mini-boss shifts it attacks nothing: each update holds its attack clocks.
- * Attack cadence runs faster while the boss is enraged (bossAttackScale). Nothing here draws from a run stream.
+ * Attack cadence runs faster while the boss is enraged (bossAttackScale). Every volley honours the projectile budget
+ * (canVolley): a turn that meets a full screen passes without its bolts. Nothing here draws from a run stream.
  */
 
 /** A gate drops this many repairs at the mini-boss (the Architect drops four). */
@@ -183,7 +184,7 @@ internal fun MutableGameState.onEnemyCoreImpact(enemy: Enemy, coreImpactSpeed: F
                 shockwave(enemy.x, enemy.y, 0.3f, enemy.radius * 1.6f, MINI_BOSS_MARK_COLOR)
             }
         EnemyType.THRONE ->
-            if (enemy.guarded && elapsed >= enemy.abilityAt && canAttack(enemy) && !isShifting(enemy)) {
+            if (enemy.guarded && elapsed >= enemy.abilityAt && canVolley(enemy) && !isShifting(enemy)) {
                 enemy.abilityAt = elapsed + THRONE_PUNISH_COOLDOWN
                 fireRadial(enemy.x, enemy.y, THRONE_PUNISH_RING, THRONE_PUNISH_SPEED, enemy.facing, shotDamage(enemy))
             }
@@ -262,7 +263,7 @@ internal fun primeVolleyBolts(phase: Int): Int = when (phase) {
 }
 
 private fun MutableGameState.primeVolley(enemy: Enemy, dx: Float, dy: Float, fan: Boolean) {
-    if (!canAttack(enemy)) return
+    if (!canVolley(enemy)) return
     val damage = shotDamage(enemy)
     fireRadial(enemy.x, enemy.y, primeVolleyBolts(enemy.phase), PRIME_SHOT_SPEED, elapsed * PRIME_VOLLEY_SPIN, damage)
     if (fan) fireSpread(enemy.x, enemy.y, atan2(dy, dx), PRIME_FAN, PRIME_FAN_SPACING, PRIME_FAN_SPEED, damage)
@@ -288,7 +289,7 @@ internal fun MutableGameState.updateBroodQueen(enemy: Enemy, dx: Float, dy: Floa
     }
     if (enemy.phase >= 1 && elapsed >= enemy.modeUntil) {
         enemy.modeUntil = elapsed + bossClockSeconds(enemy, QUEEN_SPIRAL_SECONDS)
-        if (canAttack(enemy)) {
+        if (canVolley(enemy)) {
             val bolts = if (enemy.phase >= 2) QUEEN_FINAL_SPIRAL else QUEEN_SPIRAL
             fireRadial(enemy.x, enemy.y, bolts, QUEEN_SPIRAL_SPEED, elapsed * QUEEN_SPIRAL_SPIN, shotDamage(enemy))
         }
@@ -354,12 +355,12 @@ internal fun MutableGameState.updateThrone(enemy: Enemy, dx: Float, dy: Float, d
             if (enemy.actionTimer <= 0f) {
                 enemy.actionTimer = THRONE_VOLLEY_SECONDS * 2f
                 throneFan(enemy, dx, dy)
-                if (canAttack(enemy)) fireRadial(enemy.x, enemy.y, THRONE_RING, THRONE_RING_SPEED, elapsed, shotDamage(enemy))
+                if (canVolley(enemy)) fireRadial(enemy.x, enemy.y, THRONE_RING, THRONE_RING_SPEED, elapsed, shotDamage(enemy))
             }
         }
         else -> {
             if (enemy.mode == EnemyBehavior.TELEGRAPH && elapsed >= enemy.modeUntil) {
-                if (canAttack(enemy)) passJudgement(enemy)
+                if (canVolley(enemy)) passJudgement(enemy)
                 enemy.mode = EnemyBehavior.IDLE
             }
             enemy.actionTimer -= step
@@ -382,7 +383,7 @@ internal fun throneSpin(phase: Int): Float = when (phase) {
 }
 
 private fun MutableGameState.throneFan(enemy: Enemy, dx: Float, dy: Float) {
-    if (canAttack(enemy)) fireSpread(enemy.x, enemy.y, atan2(dy, dx), THRONE_FAN, THRONE_FAN_SPACING, THRONE_FAN_SPEED, shotDamage(enemy))
+    if (canVolley(enemy)) fireSpread(enemy.x, enemy.y, atan2(dy, dx), THRONE_FAN, THRONE_FAN_SPACING, THRONE_FAN_SPEED, shotDamage(enemy))
 }
 
 /** Four bolt trains down the diagonals between the arcs' rest, each starting at the Throne's rim and running out. */
@@ -412,7 +413,7 @@ internal fun MutableGameState.updatePyreHerald(enemy: Enemy, dx: Float, dy: Floa
         enemy.actionTimer -= cadence * bossAttackScale(enemy)
         if (enemy.actionTimer <= 0f) {
             enemy.actionTimer = PYRE_VOLLEY_SECONDS
-            if (canAttack(enemy)) {
+            if (canVolley(enemy)) {
                 fireRadial(enemy.x, enemy.y, 6 + 2 * enemy.phase, PYRE_SHOT_SPEED, elapsed * PYRE_VOLLEY_SPIN, shotDamage(enemy),
                     life = PYRE_SHOT_LIFE)
             }

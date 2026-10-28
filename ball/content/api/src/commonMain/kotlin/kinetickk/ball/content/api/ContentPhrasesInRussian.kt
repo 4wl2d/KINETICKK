@@ -94,6 +94,7 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
         "Мини-босс со спиральными залпами, следом из углей и щитом, который пробивают только столкновения.",
     "A secret boss that draws lanes of fire and lines of mines, then jumps between obstacles." to
         "Тайный босс: чертит огненные полосы и линии мин, а затем прыгает между препятствиями.",
+    "When its far sigil is touched" to "Когда касаются его дальней печати",
     "A secret boss, the Architect's forerunner. It alternates Zenith and Nadir phases and hardens against your build." to
         "Тайный босс, предшественник Архитектора. Чередует фазы Зенита и Надира и закаляется против вашей сборки.",
     "Overdrive" to "Перегрузка",

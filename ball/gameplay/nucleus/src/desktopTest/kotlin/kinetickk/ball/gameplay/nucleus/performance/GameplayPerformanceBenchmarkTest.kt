@@ -79,7 +79,8 @@ class GameplayPerformanceBenchmarkTest {
         assertEquals("gameplay-core-v4", GAMEPLAY_BENCHMARK_SUITE_VERSION)
         val first = gameplayBenchmarkScenarios()
         val second = gameplayBenchmarkScenarios()
-        assertEquals(26, first.size)
+        assertEquals(27, first.size)
+        assertTrue(first.any { it.name == "terrain_window" })
         assertEquals(first.map { it.name }.toSet().size, first.size)
         assertEquals(first.map { it.metadata }, second.map { it.metadata })
         first.forEach { validateBenchmarkScenario(it) }
@@ -348,6 +349,24 @@ class GameplayPerformanceBenchmarkTest {
         assertNotEquals(original, canonicalStateFingerprint(easy))
         assertTrue(easy.copyForReduction().easyMode)
         assertTrue(easy.copyForScalarInputReduction().easyMode)
+    }
+
+    @Test
+    fun terrainWindowStepsThroughEveryObstacleKindWithSixtyEnemiesWithoutMutatingTheSource() {
+        val source = terrainWindowState(seed = 732_011)
+        val original = canonicalStateFingerprint(source)
+        val kinds = source.obstacleField.obstacles.map { it.kind }.toSet()
+        assertEquals(ObstacleKind.entries.toSet(), kinds, "every obstacle kind is in the window")
+        assertEquals(60, source.enemies.size)
+        val candidate = source.copyForReduction()
+        candidate.simulateStep(MutableGameState.FIXED_STEP)
+        assertEquals(GamePhase.RUNNING, candidate.phase)
+        assertEquals(source.obstacleField.centerChunkX, candidate.obstacleField.centerChunkX, "the step keeps the window")
+        assertEquals(source.obstacleField.centerChunkY, candidate.obstacleField.centerChunkY)
+        assertEquals(kinds, candidate.obstacleField.obstacles.map { it.kind }.toSet())
+        assertEquals(60, candidate.enemies.size)
+        assertNotEquals(original, canonicalStateFingerprint(candidate))
+        assertEquals(original, canonicalStateFingerprint(source), "the measured copy leaves its source alone")
     }
 
     /**
