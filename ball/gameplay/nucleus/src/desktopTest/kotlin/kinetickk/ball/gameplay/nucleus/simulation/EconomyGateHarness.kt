@@ -32,17 +32,18 @@ import java.util.concurrent.Executors
 internal val EconomyGateSeeds: List<Int> = (6..10).map { it * 7_919 + 13 }
 
 /**
- * The population of the seeded gates restated for active items (0.5.0; policy.md, "Balance gate populations"): the
- * NoPoi probe sequence `i * 7_919 + 13` for i = 1,001..1,300. On the 05885fa9 base or with the active items those
- * gates' own fixed seeds passed with a probability below 0.90 (where these runs and the calibration windows
- * disagreed, as for the Apex Prism, both pooled decided), so a change to the reward stream re-rolled them; each now
- * states its rule over these 300 runs. They are disjoint from every fixed gate seed set (i ≤ 205, and 2026) and from
- * the windows the active-item calibration tunes on (i ≤ 900, and 1,301 onward). A restated threshold follows the
- * population threshold rule: a floor is the lower of the seeded gate's own threshold on the same statement (k of n read
- * as k / n, a median or ratio bound as is) and the 05885fa9 base value on these seeds minus two standard errors; a
- * ceiling is the higher of that threshold and the base plus two standard errors; both rounded outward to 0.01. A 0.5.0
- * accepted trade-off bounds a gate more strictly only where the base itself meets it (ItemVariety V2's 0.81 does; the
- * tier-0 fresh survival 0.73 did not and is dropped). Each test's KDoc records its base value, SE and threshold.
+ * The population of the seeded gates restated as population gates (policy.md, "Balance gate populations"): the NoPoi
+ * probe sequence `i * 7_919 + 13` for i = 1,001..1,300. 0.5.0 moved here every gate whose own fixed seeds passed with a
+ * probability below 0.90 on the 05885fa9 tree or with the active items (where these runs and the calibration windows
+ * disagreed, as for the Apex Prism, both pooled decided), since a change to the reward stream re-rolled them; each
+ * states its rule over these 300 runs. They are disjoint from every fixed gate seed set (i ≤ 205, and 2026), from the
+ * calibration windows (i ≤ 900 and 1,301..2,800) and from the window of the D and H floors (2,801..3,400). The
+ * thresholds follow the population threshold rule on the 0.6.0 base (tree 15b23096): a floor is the lower of the
+ * gate's design or seeded threshold on the same statement (k of n read as k / n, a median or ratio bound as is) and the
+ * base value on these seeds minus two standard errors; a ceiling is the higher of that threshold and the base plus two
+ * standard errors; both rounded outward to 0.01, and a design target never weakens. A 0.5.0 accepted trade-off bounds
+ * a gate more strictly only where the base itself meets it (ItemVariety V2's 0.81 does). Each test's KDoc records its
+ * base value, SE and threshold.
  */
 internal val PopulationSeeds: List<Int> = (1_001..1_300).map { it * 7_919 + 13 }
 
