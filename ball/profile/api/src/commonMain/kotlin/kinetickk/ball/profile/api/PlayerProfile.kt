@@ -16,6 +16,7 @@ import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.foundation.common.localization.AppLanguage
 
 /** Persistent ordinal order; append-only changes require an explicit save-format decision. */
@@ -180,6 +181,8 @@ data class PlayerCollection(
      * [MAX_RECENT_ITEM_IDS]; offers down-weight recently taken items.
      */
     val recentItemIds: ImmutableList<Int> = immutableListOf(),
+    /** World places and secrets found in any run; the Codex World category reveals only these. */
+    val discoveredWorldEntries: ImmutableSet<WorldDiscovery> = immutableSetOf(),
 ) {
     constructor(
         discoveredItemIds: Set<Int>,
@@ -190,11 +193,12 @@ data class PlayerCollection(
         discoveredPairingIds: Set<RelicPairingId> = emptySet(),
         heirloomRelicIds: List<RelicId> = emptyList(),
         recentItemIds: List<Int> = emptyList(),
+        discoveredWorldEntries: Set<WorldDiscovery> = emptySet(),
     ) : this(
         discoveredItemIds.toImmutableSet(), newItemIds.toImmutableSet(),
         discoveredRelicIds.toImmutableSet(), newRelicIds.toImmutableSet(),
         discoveredReactionIds.toImmutableSet(), discoveredPairingIds.toImmutableSet(),
-        heirloomRelicIds.toImmutableList(), recentItemIds.toImmutableList(),
+        heirloomRelicIds.toImmutableList(), recentItemIds.toImmutableList(), discoveredWorldEntries.toImmutableSet(),
     )
 }
 

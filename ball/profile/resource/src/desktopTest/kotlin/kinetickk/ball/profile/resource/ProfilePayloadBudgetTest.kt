@@ -10,6 +10,7 @@ import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.profile.api.CharacterAchievementProgress
 import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
@@ -72,6 +73,8 @@ class ProfilePayloadBudgetTest {
         assertEquals(MAX_RECENT_ITEM_IDS, profile.collection.recentItemIds.size)
         assertEquals(MAX_HEIRLOOM_RELICS, profile.collection.heirloomRelicIds.size)
         assertEquals(RelicId.entries.size, profile.collection.discoveredRelicIds.size)
+        // Every world discovery: the mask at its widest decimal form.
+        assertEquals(WorldDiscovery.entries.toSet(), profile.collection.discoveredWorldEntries)
         assertEquals(MatrixNodeId.entries.size, profile.matrix.ownedNodeCount)
         assertTrue((profile.upgrades.characterLevels + profile.upgrades.weaponLevels).all { it == ContentBounds.MAX_UPGRADE_LEVEL })
         assertTrue(GameAction.entries.none { profile.preferences.keyBindings.key(it) == KeyBindings.DEFAULT.key(it) })
@@ -83,6 +86,7 @@ class ProfilePayloadBudgetTest {
             "colorVisionId", "minimapEnabled", "windowModeId", "windowSizeId", "vsyncEnabled", "frameRateCap",
             "refreshRateHz", "immersiveEnabled", "interfaceScalePercent", "showFps", "pauseOnFocusLoss",
             "reactionEffectsId", "keyBindings", "recentItemIds", "ascendedCharacterIds", "characterClears", "upgrades",
+            "worldDiscoveryMask",
         ).forEach { field -> assertTrue(payload.contains("\"$field\":"), field) }
     }
 }
@@ -143,6 +147,7 @@ private fun worstCaseSnapshot(): ProfileSnapshot {
                 discoveredPairingIds = RelicPairingId.entries.toSet(),
                 heirloomRelicIds = RelicId.entries.sortedByDescending { it.name.length }.take(MAX_HEIRLOOM_RELICS),
                 recentItemIds = List(MAX_RECENT_ITEM_IDS) { ContentBounds.MAX_ITEMS - 1 },
+                discoveredWorldEntries = WorldDiscovery.entries.toSet(),
             ),
             rebirthProgress = RebirthProgress(
                 level = ContentBounds.MAX_REBIRTH_LEVEL,

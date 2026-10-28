@@ -9,6 +9,7 @@ import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.ImmutableSet
 import kinetickk.foundation.collections.immutableListOf
@@ -110,6 +111,8 @@ data class GameplayProgressUpdate(
     val dataPickups: Int = 0,
     /** Items first acquired in the run since the last update, in acquisition order. */
     val acquiredItemIds: ImmutableList<Int> = immutableListOf(),
+    /** World places and secrets first found since the last update; Profile keeps their union. */
+    val discoveredWorldEntries: ImmutableSet<WorldDiscovery> = immutableSetOf(),
 ) {
     constructor(
         bankedMatter: Long = 0L,
@@ -128,12 +131,13 @@ data class GameplayProgressUpdate(
         ricochets: Int = 0,
         dataPickups: Int = 0,
         acquiredItemIds: List<Int> = emptyList(),
+        discoveredWorldEntries: Set<WorldDiscovery> = emptySet(),
     ) : this(
         bankedMatter, discoveredItemIds.toImmutableSet(), clearedRebirthLevel,
         eliteKills, dashHits, completedOrbits, architectDefeatedWith, discoveredRelicIds.toImmutableSet(),
         discoveredReactionIds.toImmutableSet(), discoveredPairingIds.toImmutableSet(),
         victoryRelicIds?.toImmutableList(), heirloomResolved, totalKills, ricochets, dataPickups,
-        acquiredItemIds.toImmutableList(),
+        acquiredItemIds.toImmutableList(), discoveredWorldEntries.toImmutableSet(),
     )
 
     /** True when the update carries no fact for Profile to apply, so no command needs to be sent. */
@@ -142,7 +146,7 @@ data class GameplayProgressUpdate(
             eliteKills == 0 && dashHits == 0 && completedOrbits == 0 && architectDefeatedWith == null &&
             discoveredRelicIds.isEmpty() && discoveredReactionIds.isEmpty() && discoveredPairingIds.isEmpty() &&
             victoryRelicIds == null && !heirloomResolved && totalKills == 0 && ricochets == 0 && dataPickups == 0 &&
-            acquiredItemIds.isEmpty()
+            acquiredItemIds.isEmpty() && discoveredWorldEntries.isEmpty()
 }
 
 sealed interface CollectionEntry {
