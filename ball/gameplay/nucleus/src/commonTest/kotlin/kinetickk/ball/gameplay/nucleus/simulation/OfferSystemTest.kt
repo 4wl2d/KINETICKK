@@ -116,7 +116,10 @@ class OfferSystemTest {
         for (rebirth in 1..10) assertEquals(gatedUpTo(rebirth), gatedItems(rebirth), "Reborn $rebirth")
         assertTrue("Glacial Heart" in gatedItems(2) && "Resonance Fork" !in gatedItems(3) && "Resonance Fork" in gatedItems(4))
         assertTrue("Last Word" !in gatedItems(9) && "Last Word" in gatedItems(10))
-        assertEquals(43 + 23, gatedItems(10).size, "Three original legendaries, forty gated 0.4.0 items and the gated 0.5.0 items")
+        assertEquals(
+            43 + 23 + 1, gatedItems(10).size,
+            "Three original legendaries, forty gated 0.4.0 items, the gated 0.5.0 items and Glass Harvest (Reborn 1)",
+        )
 
         fun sovereigns(rebirth: Int): Set<RelicId> = buildTestState(rebirth = rebirth).offerableRelics()
             .filter { it.minimumRebirth > 0 }.map { it.id }.toSet()

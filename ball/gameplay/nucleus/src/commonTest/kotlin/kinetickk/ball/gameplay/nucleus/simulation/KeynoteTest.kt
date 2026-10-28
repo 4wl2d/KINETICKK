@@ -120,7 +120,7 @@ class KeynoteTest {
         assertShareHolds(state.itemDeck, tagItems, share, "$tag")
         assertShareHolds(state.itemDeck, elementItems, share, "$element")
         val added = state.itemDeck.dealtIds() - dealtBefore.toSet()
-        assertTrue(added.isNotEmpty(), "The 0.95 share deals more than the 0.8 deal")
+        assertTrue(added.isNotEmpty(), "The 0.95 share deals more than the shipped shares")
         assertTrue(added.size <= wanted(tagItems) + wanted(elementItems), "Only what the shares need: $added")
         added.forEach { id -> assertTrue(state.content.items[id].let { it.featuresTag(tag) || it.featuresElement(element) }) }
         // Deal priority: the tag floor takes the reserve's first tag passives, and the reserve keeps its order.

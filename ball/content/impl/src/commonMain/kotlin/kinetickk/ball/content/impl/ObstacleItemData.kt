@@ -44,12 +44,14 @@ private fun about(kind: ObstacleKind): List<EffectCondition> = listOf(EffectCond
 
 /**
  * Items built around the obstacle kinds, appended after the active items (ids 287..301): two for each kind the 0.6.0
- * field adds, one for bumpers, one for asteroids and one guard against collisions, on existing tags only.
+ * field adds, one for bumpers, one for asteroids and one guard against collisions, on existing tags only. Glass Harvest
+ * waits for Reborn 1 so the rank-0 Data ladder (the deck's Data floor plus the Data Archive's stratum) stays its 13 items.
  */
 internal val ObstacleDrafts: List<ItemDraft> = listOf(
     // Crystals: what a broken one leaves behind.
     ItemDraft("Glass Harvest", "Every crystal you break was full of Data.", COMMON, listOf(FORTUNE, RAM),
-        clauses = listOf(on(EffectTrigger.SHATTER, EffectAction.GainData(3f), given = about(ObstacleKind.CRYSTAL))), unlock = 3),
+        clauses = listOf(on(EffectTrigger.SHATTER, EffectAction.GainData(3f), given = about(ObstacleKind.CRYSTAL))), unlock = 3,
+        rebirth = 1),
     ItemDraft("Rime Splinters", "A crystal breaks into a hundred cold knives.", UNCOMMON, listOf(CHAIN), listOf(StatusElement.CRYO),
         clauses = listOf(on(EffectTrigger.SHATTER, EffectAction.Shards(4, DamageBasis.FLAT, 16f, ElementPick.CRYO),
             given = about(ObstacleKind.CRYSTAL), cooldown = 0.5f)), unlock = 5),

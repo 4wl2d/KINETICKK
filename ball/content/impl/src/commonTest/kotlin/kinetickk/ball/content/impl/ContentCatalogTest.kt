@@ -478,10 +478,12 @@ class ContentCatalogTest {
         assertTrue(gameplay.items.take(ACTIVES_END).none { item ->
             item.rules.any { it is ItemRule.ObstacleTuning } || item.clauses.any { clause -> clause.conditions.any { it is EffectCondition.ObstacleIs } }
         })
-        // Existing tags only (no Arsenal), ungated, without wagers, at their rarity's stacks; one new Data-economy item.
+        // Existing tags only (no Arsenal), without wagers, at their rarity's stacks; one new Data-economy item, which waits
+        // for Reborn 1 so the rank-0 Data ladder keeps its 13 items; every other terrain item is ungated.
         assertEquals(9, BuildTag.entries.size)
         assertTrue(terrain.all { item -> item.tags.isNotEmpty() && BuildTag.ARSENAL !in item.tags }, "terrain items carry existing archetypes")
-        assertTrue(terrain.all { it.minimumRebirth == 0 && !it.risk && !it.isActive })
+        assertTrue(terrain.all { !it.risk && !it.isActive })
+        assertEquals(mapOf("Glass Harvest" to 1), terrain.filter { it.minimumRebirth > 0 }.associate { it.name to it.minimumRebirth })
         assertEquals(
             mapOf(ItemRarity.COMMON to 2, ItemRarity.UNCOMMON to 6, ItemRarity.RARE to 5, ItemRarity.EPIC to 2, ItemRarity.LEGENDARY to 0),
             ItemRarity.entries.associateWith { rarity -> terrain.count { it.rarity == rarity } },
