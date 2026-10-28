@@ -20,8 +20,8 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * The world layer and its visit as presentation draws them. Realspace with no open glitch rift and no locked window
- * rift publishes the shared [DimensionProjection.REALSPACE]. A visit publishes its layer, objective, clock, pace and
+ * The world layer and its visit as presentation draws them. Realspace with no open glitch rift, no locked window rift
+ * and no open dimension reward publishes the shared [DimensionProjection.REALSPACE]. A visit publishes its layer, objective, clock, pace and
  * heat, the ring to fly through next, the exit rift, its halo rings and embers. An equal projection keeps [previous];
  * the halo list keeps its previous instance when the [identitySource] held the same rings, and otherwise each list
  * whose content matches (raw float bits) keeps its previous instance. A pure read: nothing here writes state.
@@ -39,12 +39,14 @@ internal fun MutableGameState.dimensionProjection(
 private fun MutableGameState.realspaceProjection(run: DimensionRunState, previous: DimensionProjection?): DimensionProjection {
     val glitch = run.glitchPortal
     val locked = lockedRiftMask(glitch)
-    if (glitch == null && locked == 0) return DimensionProjection.REALSPACE
+    val reward = dimensionRewardLayer
+    if (glitch == null && locked == 0 && reward == null) return DimensionProjection.REALSPACE
     return DimensionProjection(
         glitchPortal = glitch?.let {
             portalProjection(it, locked = locked and WorldLayer.ARCHIVE.bit != 0, glitch = true, previous?.glitchPortal)
         },
         lockedRifts = locked,
+        rewardLayer = reward,
     )
 }
 
@@ -76,6 +78,7 @@ private fun MutableGameState.visitProjection(
             haloProjections(visit.halos, previous?.halos)
         },
         embers = emberProjections(visit.embers, previous?.embers),
+        rewardLayer = dimensionRewardLayer,
     )
 }
 

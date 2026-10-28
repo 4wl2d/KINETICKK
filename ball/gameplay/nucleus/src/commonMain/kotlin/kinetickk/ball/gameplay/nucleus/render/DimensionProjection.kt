@@ -51,6 +51,8 @@ data class DimensionProjection(
      * enter now: another engagement runs or the entry rules refuse it (drawn locked).
      */
     val lockedRifts: Int = 0,
+    /** The layer whose reward choice is open (its Blessings, its Pacts or the Archive's trove); null otherwise. */
+    val rewardLayer: WorldLayer? = null,
 ) {
     companion object {
         val REALSPACE: DimensionProjection = DimensionProjection()

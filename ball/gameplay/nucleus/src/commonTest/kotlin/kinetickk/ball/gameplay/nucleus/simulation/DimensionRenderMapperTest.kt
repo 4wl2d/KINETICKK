@@ -8,6 +8,7 @@ import kinetickk.ball.content.api.EnemyType
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
+import kinetickk.ball.gameplay.nucleus.model.DimensionRewardGrant
 import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
@@ -17,7 +18,12 @@ import kinetickk.ball.gameplay.nucleus.render.EmberProjection
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.HaloProjection
 import kinetickk.ball.gameplay.nucleus.render.PortalProjection
+import kinetickk.ball.gameplay.nucleus.render.TrialClock
+import kinetickk.ball.gameplay.nucleus.render.TrialReward
+import kinetickk.ball.gameplay.nucleus.render.TrialSource
+import kinetickk.ball.gameplay.nucleus.render.TrialValue
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
+import kinetickk.foundation.collections.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -194,6 +200,107 @@ class DimensionRenderMapperTest {
             }
             if (layer == WorldLayer.ZENITH) assertTrue(reusedHalos > 0, "unchanged rings keep their projected list")
             assertNotNull(projection.dimension.objective)
+        }
+    }
+
+    /**
+     * A counted objective's panel: its name and instruction, no clock, one cell per ring or ember with the count as its
+     * value and the layer's reward; the mapper publishes it (no site or dungeon runs in a visit), a completed objective
+     * stays full until the visit ends, and realspace shows none.
+     */
+    @Test
+    fun aCountedObjectivesTrialPanelShowsItsCellsCountAndReward() {
+        val cases = listOf(
+            Triple(WorldLayer.ZENITH, DimensionObjective.ASCENT, TrialReward.BLESSING),
+            Triple(WorldLayer.NADIR, DimensionObjective.HARVEST, TrialReward.PACT),
+        )
+        for ((layer, objective, reward) in cases) {
+            val game = game()
+            assertNull(game.dimensionTrialProjection(), "realspace has no dimension panel")
+            game.enterDimensionForTesting(layer, objective)
+            val goal = checkNotNull(game.dimensionRun.visit).goal
+            val trial = checkNotNull(game.dimensionTrialProjection())
+            assertEquals(TrialSource.DIMENSION, trial.source)
+            assertEquals(layer, trial.dimension)
+            assertNull(trial.kind)
+            assertEquals(objective.label, trial.title)
+            assertEquals(objective.instruction, trial.rules)
+            assertEquals(TrialClock.NONE, trial.clock, "$objective: the plate carries the visit timer")
+            assertEquals(goal, trial.segments)
+            assertEquals(TrialValue.COUNT, trial.value)
+            assertEquals(0f, trial.done)
+            assertEquals(goal.toFloat(), trial.required)
+            assertEquals(0f, trial.progress)
+            assertEquals(reward, trial.reward)
+            assertEquals(trial, game.toRenderModel().trial, "$objective: the mapper publishes the dimension panel")
+
+            game.dimensionRun = game.dimensionRun.copy(visit = checkNotNull(game.dimensionRun.visit).copy(progress = 3))
+            val counted = checkNotNull(game.dimensionTrialProjection())
+            assertEquals(3f, counted.done)
+            assertEquals(3f / goal, counted.progress, 1e-6f)
+
+            game.completeObjectiveForTesting()
+            val completed = checkNotNull(game.dimensionTrialProjection())
+            assertEquals(1f, completed.progress, "$objective: complete stays full")
+            assertEquals(goal.toFloat(), completed.done)
+            game.skipToVisitEndForTesting()
+            game.updateDimension(MutableGameState.FIXED_STEP)
+            assertNull(game.dimensionTrialProjection(), "$objective: the panel leaves with the visit")
+            assertNull(game.toRenderModel().trial)
+        }
+    }
+
+    /**
+     * A boss objective's panel is one cell without a value: empty until the boss arrives, filling with the integrity it
+     * has lost, full once its fall completes the objective; the Archive pays its trove.
+     */
+    @Test
+    fun aBossObjectivesTrialPanelFillsWithTheIntegrityItsBossLost() {
+        val cases = listOf(
+            Triple(WorldLayer.ZENITH, DimensionObjective.JUDGEMENT, TrialReward.BLESSING),
+            Triple(WorldLayer.NADIR, DimensionObjective.PYRE, TrialReward.PACT),
+            Triple(WorldLayer.ARCHIVE, DimensionObjective.ANTECEDENT, TrialReward.TROVE),
+        )
+        for ((layer, objective, reward) in cases) {
+            val game = game()
+            game.enterDimensionForTesting(layer, objective)
+            val waiting = checkNotNull(game.dimensionTrialProjection())
+            assertEquals(1, waiting.segments)
+            assertEquals(TrialValue.NONE, waiting.value)
+            assertEquals(0f, waiting.progress, "$objective: nothing before its boss arrives")
+            assertEquals(reward, waiting.reward)
+            assertEquals(objective.label, waiting.title)
+
+            val boss = game.addEnemyForTesting(game.coreX + 900f, game.coreY, hp = 1_000f, type = checkNotNull(objective.boss))
+            boss.hp = boss.maxHp * 0.35f
+            game.dimensionRun = game.dimensionRun.copy(visit = checkNotNull(game.dimensionRun.visit).copy(bossId = boss.id))
+            assertEquals(0.65f, checkNotNull(game.dimensionTrialProjection()).progress, 1e-5f, "$objective: integrity lost")
+
+            game.completeObjectiveForTesting()
+            assertEquals(1f, checkNotNull(game.dimensionTrialProjection()).progress, "$objective: its fall fills the cell")
+        }
+    }
+
+    /**
+     * An open dimension reward publishes its layer (the overlay heads it by the layer's reward), in realspace after the
+     * visit; finishing the choice returns the shared default.
+     */
+    @Test
+    fun anOpenDimensionRewardPublishesItsLayerUntilTheChoiceFinishes() {
+        listOf(WorldLayer.ZENITH, WorldLayer.NADIR, WorldLayer.ARCHIVE).forEach { layer ->
+            // Every Legendary waits for a Rebirth rank: the Archive's trove is met at tier 10.
+            val game = if (layer == WorldLayer.ARCHIVE) buildTestState(seed = 80_801, rebirth = 10).apply { elapsed = 200f; level = 60 }
+                else game(seed = 80_811)
+            game.dimensionRun = game.dimensionRun.copy(pendingRewards = listOf(DimensionRewardGrant(layer, completed = true)).toImmutableList())
+            game.openPendingDimensionReward()
+            assertEquals(GamePhase.CHOICE, game.phase, "$layer deals a hand")
+            val open = game.dimensionProjection(null, null)
+            assertEquals(layer, open.rewardLayer)
+            assertEquals(WorldLayer.BASE, open.layer)
+            assertEquals(open, game.toRenderModel().dimension)
+            game.choose(0)
+            assertNull(game.dimensionRewardLayer)
+            assertSame(DimensionProjection.REALSPACE, game.dimensionProjection(open, null), "$layer: the choice finished")
         }
     }
 }
