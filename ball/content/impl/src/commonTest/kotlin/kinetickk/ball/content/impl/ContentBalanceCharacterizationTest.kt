@@ -29,7 +29,7 @@ class ContentBalanceCharacterizationTest {
     fun itemCatalogCardinalityOrderingAndContentAreGolden() {
         val items = ui.items
 
-        assertEquals(ACTIVES_END, items.size)
+        assertEquals(TERRAIN_060_END, items.size)
         assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
         // The items shipped through 0.4.0 keep their own pin: a release only appends to the catalog. The pin also hashes
         // every ItemEffect, so it moved once when 0.6.0 appended GRIP and SLING (68d4572118b9586d -> 25c0be545c5a2647).
@@ -85,6 +85,16 @@ class ContentBalanceCharacterizationTest {
                     add(shape.id.name)
                     shape.activeLane.forEach { add(it.name) }
                 }
+            },
+        )
+        // The 0.6.0 terrain items, appended after the actives and pinned on their own: always exactly ids 287..301.
+        val terrain = items.subList(ACTIVES_END, TERRAIN_060_END)
+        assertEquals(
+            "ebcd1818d76810e4",
+            goldenFingerprint {
+                add("items-0.6.0-terrain")
+                add(terrain.size)
+                terrain.forEach(::addItem)
             },
         )
     }
@@ -558,8 +568,11 @@ private const val ITEMS_THROUGH_040 = 173
 /** One past the 0.5.0 expansion (ids 173..268); the active items start here. */
 private const val EXPANSION_050_END = 269
 
-/** One past the active items (ids 269..286). */
+/** One past the active items (ids 269..286); the 0.6.0 terrain items start here. */
 private const val ACTIVES_END = 287
+
+/** One past the 0.6.0 terrain items (ids 287..301). */
+private const val TERRAIN_060_END = 302
 
 /** Every Matrix effect kind with its numbers; floats enter by bits, so JVM and Wasm agree. */
 private fun GoldenFingerprint.addMatrixEffect(effect: MatrixEffect) {
