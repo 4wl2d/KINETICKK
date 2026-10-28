@@ -452,18 +452,39 @@ class WeaponBalanceTest {
         const val ORBIT_RADIUS = 125f
         const val ORBIT_SPEED = 650f
 
-        /** Steers around the origin at radius [radius] and [cruise] u/s (the proc arena). */
+        /**
+         * Steers around the origin at radius [radius] and [cruise] u/s (the proc arena). The 0.6.0 law cannot hold that
+         * circle at that speed inside the screen (at 760 u/s a circle of 150 needs a tether of about 640 dp, the calm area
+         * gives 432 vertically), so the pilot leads with the velocity error and lets the radius give, as the Core did under
+         * the 0.5.0 law: it crosses the crowd at the arena's speed instead of crawling round the circle while forty
+         * chasing targets close on it.
+         */
         fun orbit(game: MutableGameState, t: Float, radius: Float, cruise: Float) {
             val omega = cruise / radius
-            steer(game, cos(omega * t) * radius, sin(omega * t) * radius, -sin(omega * t) * radius * omega, cos(omega * t) * radius * omega)
+            steer(game, cos(omega * t) * radius, sin(omega * t) * radius, -sin(omega * t) * radius * omega, cos(omega * t) * radius * omega,
+                positionGain = ORBIT_POSITION_GAIN, velocityGain = ORBIT_VELOCITY_GAIN, maximumTether = ORBIT_MAXIMUM_TETHER)
         }
 
-        fun steer(game: MutableGameState, x: Float, y: Float, vx: Float, vy: Float) {
-            val ax = (x - game.coreX) * 6f + (vx - game.velocityX) * 4f
-            val ay = (y - game.coreY) * 6f + (vy - game.velocityY) * 4f
+        /** The proc arena pilot's gains and tether clamp ([orbit]); the shuttle keeps [steer]'s defaults. */
+        const val ORBIT_POSITION_GAIN = 1f
+        const val ORBIT_VELOCITY_GAIN = 8f
+        const val ORBIT_MAXIMUM_TETHER = 1_000f
+
+        fun steer(
+            game: MutableGameState,
+            x: Float,
+            y: Float,
+            vx: Float,
+            vy: Float,
+            positionGain: Float = 6f,
+            velocityGain: Float = 4f,
+            maximumTether: Float = 380f,
+        ) {
+            val ax = (x - game.coreX) * positionGain + (vx - game.velocityX) * velocityGain
+            val ay = (y - game.coreY) * positionGain + (vy - game.velocityY) * velocityGain
             val aim = game.steeringAimFor(ax, ay)
             val heading = aim.heading
-            val distance = aim.distance.coerceIn(65f, 380f)
+            val distance = aim.distance.coerceIn(65f, maximumTether)
             val edge = (1f - game.content.tempo.fatigue.edgeStrainStart) * 0.5f
             game.updatePointer(
                 (game.coreX + cos(heading) * distance - game.cameraX + game.screenWidth / 2f)
