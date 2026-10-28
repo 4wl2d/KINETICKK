@@ -984,7 +984,7 @@ private val StateMessages = hashSetOf("OVERHEAT", "POLARITY FIELD STRAIN", "DASH
 /** Whether the current run message appears in the feed (see [drawHudFeed]). */
 internal fun GameplayRenderModel.showsMessage(): Boolean {
     if (messageTime <= 0f || message.isBlank() || message in StateMessages) return false
-    val definitions = content.pointsOfInterest.definitions
+    val definitions = content.sites.definitions
     for (index in definitions.indices) if (definitions[index].instruction == message) return false
     return true
 }

@@ -275,6 +275,11 @@ fun enemySilhouette(type: EnemyType): EnemySilhouette = when (type) {
     EnemyType.BROODMOTHER -> EnemySilhouette.DECAGON
     EnemyType.REFLECTOR -> EnemySilhouette.SHIELD
     EnemyType.HERALD -> EnemySilhouette.HEXAGRAM
+    // 0.6.0 kinds read as Drifters until their own outlines land; no run spawns them yet.
+    EnemyType.COMET, EnemyType.PYLON, EnemyType.SENTRY, EnemyType.CRAWLER, EnemyType.SERAPH, EnemyType.CHOIR,
+    EnemyType.IMP, EnemyType.HOUND, EnemyType.CIPHER, EnemyType.MIRROR, EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN,
+    EnemyType.THRONE, EnemyType.PYRE_HERALD, EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT,
+    -> EnemySilhouette.TRIANGLE
 }
 
 /**
@@ -335,6 +340,11 @@ internal fun enemyRotation(type: EnemyType, elapsed: Float, id: Int): Float {
         EnemyType.HERALD -> 360f / 18f
         EnemyType.SHOOTER, EnemyType.INTERCEPTOR, EnemyType.ARCHITECT -> 0f // held above; the Architect turns its own frames
         EnemyType.LANCER, EnemyType.SNIPER, EnemyType.REFLECTOR -> 0f // they point along their aim (aimDegrees)
+        // 0.6.0 kinds turn like Drifters until their own outlines land.
+        EnemyType.COMET, EnemyType.PYLON, EnemyType.SENTRY, EnemyType.CRAWLER, EnemyType.SERAPH, EnemyType.CHOIR,
+        EnemyType.IMP, EnemyType.HOUND, EnemyType.CIPHER, EnemyType.MIRROR, EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN,
+        EnemyType.THRONE, EnemyType.PYRE_HERALD, EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT,
+        -> 11f
     }
     return elapsed * degreesPerSecond + (id * 37 % 360)
 }

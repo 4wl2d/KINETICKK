@@ -22,7 +22,7 @@ import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicId
@@ -241,7 +241,7 @@ class WorldHotPathAllocationTest {
         val frames = List(HUD_FRAMES) { frame ->
             base.with(
                 "totem" to TotemProjection(base.coreX - 1_300f - frame * 11f, base.coreY + 90f, 1f),
-                "pointsOfInterest" to immutableListOf(PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit",
+                "pointsOfInterest" to immutableListOf(PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit",
                     base.coreX + 60f, base.coreY + 40f, true, 12f, 0, frame / HUD_FRAMES.toFloat(), immutableListOf(), 0f, 0f)),
             )
         }
@@ -489,12 +489,12 @@ class WorldHotPathAllocationTest {
             itemStacks = immutableListOf(), discoveredItemIds = immutableSetOf(), relicRanks = immutableListOf(),
             pointsOfInterest = immutableListOf(
                 // The orbit's seconds in the ring change every frame (drawn from cached digits).
-                PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Orbit", CORE + 60f, CORE + 40f, true, 14f, 1,
+                PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Orbit", CORE + 60f, CORE + 40f, true, 14f, 1,
                     (drift % 80f) / 80f, immutableListOf(), 0.5f, 0.3f),
                 // An offer on screen: its name and timer under the mark.
-                PointOfInterestProjection(PointOfInterestKind.RESONANT_CIRCUIT, "Resonant circuit", CORE - 280f, CORE + 40f, false, 20f, 1, 0f,
+                PointOfInterestProjection(SiteKind.RESONANT_CIRCUIT, "Resonant circuit", CORE - 280f, CORE + 40f, false, 20f, 1, 0f,
                     immutableListOf(), 0f, 0f),
-                PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed", CORE + 900f + drift, CORE - 300f, false, 20f, 1, 0f,
+                PointOfInterestProjection(SiteKind.SEALED_ANOMALY, "Sealed", CORE + 900f + drift, CORE - 300f, false, 20f, 1, 0f,
                     immutableListOf(), 0f, 0f),
             ),
             obstacles = BusyObstacles,

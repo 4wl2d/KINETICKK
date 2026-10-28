@@ -52,7 +52,11 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
         val distance = max(1f, length(dx, dy))
         val cadence = delta * motion * attackRate
         when (enemy.type) {
-            EnemyType.DRIFTER -> steerEnemy(enemy, dx / distance * 78f, dy / distance * 78f, 2.1f, delta)
+            // 0.6.0 kinds fly as Drifters until their own behaviours land; no run spawns them yet.
+            EnemyType.DRIFTER, EnemyType.COMET, EnemyType.PYLON, EnemyType.SENTRY, EnemyType.CRAWLER, EnemyType.SERAPH,
+            EnemyType.CHOIR, EnemyType.IMP, EnemyType.HOUND, EnemyType.CIPHER, EnemyType.MIRROR, EnemyType.WARDEN_PRIME,
+            EnemyType.BROOD_QUEEN, EnemyType.THRONE, EnemyType.PYRE_HERALD, EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT,
+            -> steerEnemy(enemy, dx / distance * 78f, dy / distance * 78f, 2.1f, delta)
             EnemyType.SHOOTER -> {
                 val desired = if (distance > 340f) 78f else if (distance < 250f) -72f else 0f
                 val tangent = if (enemy.id % 2 == 0) 1f else -1f

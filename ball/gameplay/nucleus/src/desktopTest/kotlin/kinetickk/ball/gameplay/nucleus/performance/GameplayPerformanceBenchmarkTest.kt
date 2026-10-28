@@ -5,7 +5,7 @@ package kinetickk.ball.gameplay.nucleus.performance
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.DirectedReward
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.BuffStat
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
@@ -123,7 +123,7 @@ class GameplayPerformanceBenchmarkTest {
             { matrix = matrix.copy(eliteBounty = true) },
             { pendingDirectedRewards = listOf(DirectedReward.RELIC) },
             { pointsOfInterest = listOf(PointOfInterestState(
-                0, PointOfInterestKind.RESONANT_CIRCUIT, 10f, 20f, 40f,
+                0, SiteKind.RESONANT_CIRCUIT, 10f, 20f, 40f,
             )) },
             { rebornItems[0] = 1 },
             { clauseReadyAt[0] = 1f },

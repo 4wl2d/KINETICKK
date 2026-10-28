@@ -3,7 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.nucleus.model.Pickup
@@ -35,7 +35,7 @@ class FramePacingTest {
             pointsOfInterest = listOf(
                 PointOfInterestState(
                     offerId = 0,
-                    kind = PointOfInterestKind.SEALED_ANOMALY,
+                    kind = SiteKind.SEALED_ANOMALY,
                     x = 400f,
                     y = 0f,
                     expiresAt = 30f,

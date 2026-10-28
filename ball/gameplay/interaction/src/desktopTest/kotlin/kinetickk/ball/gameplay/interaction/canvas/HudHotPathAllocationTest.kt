@@ -13,7 +13,7 @@ import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.EquippedRelic
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.gameplay.interaction.fx.BuildNoticeKind
@@ -68,7 +68,7 @@ class HudHotPathAllocationTest {
                     EnemyProjection(6, EnemyType.DRIFTER, 700f, 900f, 0f, 0f, 40f, 40f, 17f, 0f, 0f, 0f, 0f, 700f, 900f, false),
                     EnemyProjection(7, EnemyType.SWARMLING, -50f, 1_900f, 0f, 0f, 9f, 9f, 10f, 0f, 0f, 0f, 0f, -50f, 1_900f, false))
                     .toImmutableList(),
-                "pointsOfInterest" to listOf(PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,
+                "pointsOfInterest" to listOf(PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,
                     true, 12f, 0, 0.4f, immutableListOf(), 0f, 0f)).toImmutableList(),
                 // The minimap: every obstacle kind, a Key and a Relic past its rim, the totem, an Elite and ordinary enemies.
                 "obstacles" to immutableListOf(
@@ -104,7 +104,7 @@ class HudHotPathAllocationTest {
                     "elapsed" to frame * GameplayRenderModel.FIXED_STEP,
                     "hp" to 36f - frame * 0.05f,
                     "combo" to 14 + frame,
-                    "pointsOfInterest" to listOf(PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,
+                    "pointsOfInterest" to listOf(PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,
                         true, 12f, 0, frame / FRAMES.toFloat(), immutableListOf(), 0f, 0f)).toImmutableList(),
                 )
             }

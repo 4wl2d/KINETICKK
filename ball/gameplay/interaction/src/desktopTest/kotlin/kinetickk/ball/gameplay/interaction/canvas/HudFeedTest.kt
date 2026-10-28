@@ -13,7 +13,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.layout.runningControlBounds
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
@@ -94,7 +94,7 @@ class HudFeedTest {
         val swapped = notice("Replace Ghost Vector", "Impact damage +0.05", "Weapon power +0.04", "Dash power +12",
             "\u2212 Vector maneuver", "+ Gravitic grouping")
         // With and without an active trial (its panel pushes the portrait feed down).
-        val trial = PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, 0, 1f / 3f,
+        val trial = PointOfInterestProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, 0, 1f / 3f,
             immutableListOf(1, 2, 3), 0f, 0f)
         for (language in AppLanguage.entries) listOf(844 to 390, 390 to 844).forEach { (w, h) ->
             for (textScale in TEXT_SCALES) for (message in listOf("", "ELITE SIGNAL")) for (toast in listOf(switched, swapped)) for (trials in 0..1) {
@@ -159,7 +159,7 @@ class HudFeedTest {
         toasts: List<BuildNotificationProjection>,
         check: (context: String, language: AppLanguage, toast: BuildNotificationProjection, drawn: List<String>) -> Unit,
     ) {
-        val trial = PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, 0, 1f / 3f,
+        val trial = PointOfInterestProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, 0, 1f / 3f,
             immutableListOf(1, 2, 3), 0f, 0f)
         val messages = listOf("", "ELITE SIGNAL", "TWO ANOMALIES DETECTED // CHOOSE A COURSE")
         for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
@@ -408,7 +408,7 @@ class HudFeedTest {
     fun toastsOnASmallerTextStepAllocateNothingPerFrame() {
         // At the largest text size these toasts only fit a few steps down (and, in portrait, below
         // the Core): every frame searches the steps again through the per-step layout banks.
-        val trial = PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, 0, 1f / 3f,
+        val trial = PointOfInterestProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, 0, 1f / 3f,
             immutableListOf(1, 2, 3), 0f, 0f)
         listOf(
             Triple(390 to 844, AppLanguage.Russian, notice("Replace Ghost Vector", "Impact damage +0.05", *FOUR_SYNERGIES)),
@@ -459,7 +459,7 @@ class HudFeedTest {
         const val FRAMES = 240
         val TEXT_SCALES = listOf(1f, 1.25f, 1.75f)
         val FOUR_SYNERGIES = arrayOf("+ Gravitic grouping", "+ Brake compression", "\u2212 Vector maneuver", "\u2212 Ghost mirror")
-        val TRIAL = PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, 0, 1f / 3f,
+        val TRIAL = PointOfInterestProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, 0, 1f / 3f,
             immutableListOf(1, 2, 3), 0f, 0f)
         val ELITE = EnemyProjection(4, EnemyType.ELITE, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f, 0f, 0f, 0f, 0f, 0f, 0f, false)
         const val SHOWN_AT = 20f

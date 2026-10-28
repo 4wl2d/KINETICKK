@@ -88,6 +88,23 @@ data class ObstacleTuning(
     val minimapViewportFactor: Float = 1.4f,
     /** Blackout multiplies the minimap range by this. */
     val blackoutMinimapScale: Float = 0.5f,
+    /** Share of the sliding (tangential) speed a collision adds to its normal speed: a fast glance hurts. */
+    val scrapeShare: Float = 0.3f,
+    /**
+     * Cursor reach whose straight steady speed (plus the tier-0 start bonus) a bounce's normal speed needs to count as a
+     * ricochet: RICOCHET clauses, Ricochet Rig, Gravity Surfer, the Dipole counter and the ambush pace.
+     */
+    val ricochetReach: Float = 0.45f,
+    /** Matrix and item bonuses never lift the lethal speed past the build's straight steady speed at this reach. */
+    val lethalCeilingReach: Float = 0.77f,
+    /** Damage of a hit at the damage-start speed, as a share of maximum integrity. */
+    val minimumDamageShare: Float = 0.06f,
+    /** Share of collision damage that passes through shields (Glass Comet still lets all of it through). */
+    val shieldBleed: Float = 0.4f,
+    /** A hurting hit keeps 1 − scrapeFriction × severity of its sliding speed; severity is 1 at the lethal speed. */
+    val scrapeFriction: Float = 0.35f,
+    /** The obstacle kinds: per-layer mixes and every new kind's mechanics. */
+    val kinds: ObstacleKindTuning = ObstacleKindTuning(),
 ) {
     init {
         require(chunkSize.isFinite() && chunkSize >= 400f) { "Obstacle chunks must be at least 400 u" }
@@ -127,6 +144,17 @@ data class ObstacleTuning(
         require(thrownSeconds.isFinite() && thrownSeconds >= 0f && slamCooldownSeconds.isFinite() && slamCooldownSeconds >= 0f)
         require(minimapRange.isFinite() && minimapRange > 0f && minimapViewportFactor.isFinite() && minimapViewportFactor > 0f)
         require(blackoutMinimapScale.isFinite() && blackoutMinimapScale > 0f && blackoutMinimapScale <= 1f)
+        require(scrapeShare in 0f..1f) { "Scrape share must be in 0..1" }
+        require(ricochetReach >= damageStartReach && ricochetReach < 1f) { "A ricochet is always a hurting hit" }
+        require(lethalCeilingReach > lethalReach && lethalCeilingReach < 1f) { "The lethal ceiling must lie past the lethal reach" }
+        require(minimumDamageShare >= 0f && minimumDamageShare < damageShare) { "The damage floor must stay below the lethal share" }
+        require(shieldBleed in 0f..1f && scrapeFriction in 0f..1f) { "Shield bleed and scrape friction must be in 0..1" }
+        require(
+            kinds.gateMaximumRadius <= asteroidMaximumRadius && kinds.mineClusterMaximumRadius <= asteroidMaximumRadius &&
+                kinds.ventMaximumRadius <= asteroidMaximumRadius && kinds.wellCoreRadius <= asteroidMaximumRadius,
+        ) { "Every obstacle kind body must fit the largest asteroid" }
+        require(kinds.wellCoreRadius >= bumperRadius) { "A gravity knot is at least bumper sized" }
+        require(kinds.crystalMaximumCandidate >= asteroidMinimumRadius) { "Crystals must be able to replace the smallest asteroid" }
     }
 }
 

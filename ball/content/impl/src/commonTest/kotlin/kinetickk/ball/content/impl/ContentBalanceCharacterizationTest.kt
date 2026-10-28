@@ -30,10 +30,11 @@ class ContentBalanceCharacterizationTest {
 
         assertEquals(ACTIVES_END, items.size)
         assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
-        // The items shipped through 0.4.0 keep their own pin: a release only appends to the catalog.
+        // The items shipped through 0.4.0 keep their own pin: a release only appends to the catalog. The pin also hashes
+        // every ItemEffect, so it moved once when 0.6.0 appended GRIP and SLING (68d4572118b9586d -> 25c0be545c5a2647).
         val shipped = items.subList(0, ITEMS_THROUGH_040)
         assertEquals(
-            "68d4572118b9586d",
+            "25c0be545c5a2647",
             goldenFingerprint {
                 add("item-effects")
                 ItemEffect.entries.forEach { effect ->
@@ -505,6 +506,8 @@ private fun GoldenFingerprint.addCondition(condition: EffectCondition) {
         EffectCondition.ApexActive -> add("apex-active")
         is EffectCondition.SkillsCharging -> { add("skills-charging"); add(condition.count) }
         is EffectCondition.WeaponFamilyIs -> { add("weapon-family-is"); add(condition.family.name) }
+        is EffectCondition.ObstacleIs -> { add("obstacle-is"); add(condition.kind.name) }
+        is EffectCondition.NearObstacle -> { add("near-obstacle"); add(condition.distance) }
     }
 }
 
@@ -576,6 +579,7 @@ private fun GoldenFingerprint.addRule(rule: ItemRule) {
         is ItemRule.CatalysisRate -> { add("catalysis-rate"); add(rule.amount) }
         is ItemRule.ApexCooldown -> { add("apex-cooldown"); add(rule.amount) }
         is ItemRule.CoreLinkRadius -> { add("core-link-radius"); add(rule.bonus) }
+        is ItemRule.ObstacleTuning -> { add("obstacle-tuning"); add(rule.aspect.name); add(rule.amount) }
     }
 }
 

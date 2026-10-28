@@ -25,7 +25,8 @@ import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.ANOMALY_KIND_COUNT
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicAspect
@@ -134,8 +135,8 @@ class RedesignShotsWorldTest {
                     (1_000f + 3_000f * cos(radians).toFloat()) to (1_000f + 3_000f * sin(radians).toFloat())
                 }
                 val model = model(width.toFloat(), height.toFloat(), points = listOf(
-                    PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed anomaly", targets[0].first, targets[0].second, false, 31f, 1, 0f, immutableListOf(), 0f, 0f),
-                    PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", targets[1].first, targets[1].second, false, 31f, 1, 0f, immutableListOf(), 0f, 0f)),
+                    PointOfInterestProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", targets[0].first, targets[0].second, false, 31f, 1, 0f, immutableListOf(), 0f, 0f),
+                    PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", targets[1].first, targets[1].second, false, 31f, 1, 0f, immutableListOf(), 0f, 0f)),
                     totem = TotemProjection(targets[2].first, targets[2].second, 1f))
                 val bitmap = ImageBitmap(width, height)
                 CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(width.toFloat(), height.toFloat())) {
@@ -169,7 +170,7 @@ class RedesignShotsWorldTest {
     @Test
     fun rendersMarkerFlightStrips() {
         val offers = listOf(-1f, 1f).map { side -> 560f * cos(side) to 560f * sin(side) }
-        fun point(kind: PointOfInterestKind, at: Pair<Float, Float>) =
+        fun point(kind: SiteKind, at: Pair<Float, Float>) =
             PointOfInterestProjection(kind, kind.name, at.first, at.second, false, 31f, 1, 0f, immutableListOf(), 0f, 0f)
         fun measurer(language: AppLanguage) = CanvasTextMeasurer(
             ComposeTextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr),
@@ -202,15 +203,15 @@ class RedesignShotsWorldTest {
             strip(1440, 810, AppLanguage.Russian, kept.last + 1, kept, intArrayOf(420, 20, 1020, 180),
                 "world-fix3-flight-$course-1440x810-ru.png") { frame ->
                 val core = 6f * frame
-                val model = model(1440f, 810f, points = listOf(point(PointOfInterestKind.entries[0], offers[0]), point(PointOfInterestKind.entries[1], offers[1])))
+                val model = model(1440f, 810f, points = listOf(point(SiteKind.entries[0], offers[0]), point(SiteKind.entries[1], offers[1])))
                     .with("coreX" to core * cos(radians), "coreY" to core * sin(radians), "cameraX" to core * cos(radians), "cameraY" to core * sin(radians))
                 Triple(model, 0f, 0f)
             }
         }
         if (fullShots) strip(844, 390, AppLanguage.English, 2_484, 2_474..2_483, intArrayOf(0, 0, 844, 140), "world-fix3-flyby-844x390-en.png") { frame ->
             val x = -4_000f + 3f * frame
-            val model = model(844f, 390f, points = listOf(point(PointOfInterestKind.SEALED_ANOMALY, -150f to -1_400f),
-                point(PointOfInterestKind.COLLAPSING_ORBIT, 0f to -1_450f)), totem = TotemProjection(150f, -1_400f, 1f))
+            val model = model(844f, 390f, points = listOf(point(SiteKind.SEALED_ANOMALY, -150f to -1_400f),
+                point(SiteKind.COLLAPSING_ORBIT, 0f to -1_450f)), totem = TotemProjection(150f, -1_400f, 1f))
                 .with("coreX" to x, "coreY" to 0f, "cameraX" to x, "cameraY" to 0f)
             Triple(model, 0f, 0f)
         }
@@ -229,7 +230,7 @@ class RedesignShotsWorldTest {
         ).matrix()) {
             val points = List(2) { side ->
                 val angle = flight.heading + if (side == 0) -1f else 1f
-                point(PointOfInterestKind.entries[(flight.course + side) % PointOfInterestKind.entries.size], 560f * cos(angle) to 560f * sin(angle))
+                point(SiteKind.entries[(flight.course + side) % ANOMALY_KIND_COUNT], 560f * cos(angle) to 560f * sin(angle))
             }
             val course = flight.heading + Math.toRadians(flight.course * 10.0 + 5.0).toFloat()
             strip(flight.w, flight.h, flight.language, flight.kept.last + 1, flight.kept, flight.crop, "world-fix3-${flight.name}.png") { frame ->
@@ -246,7 +247,7 @@ class RedesignShotsWorldTest {
             val heading = 7 * 45f * Math.PI.toFloat() / 180f + 0.2f
             val points = List(2) { side ->
                 val angle = heading + if (side == 0) -1f else 1f
-                point(PointOfInterestKind.entries[(7 + side) % PointOfInterestKind.entries.size], 560f * cos(angle) to 560f * sin(angle))
+                point(SiteKind.entries[(7 + side) % ANOMALY_KIND_COUNT], 560f * cos(angle) to 560f * sin(angle))
             }
             val side = heading - Math.PI.toFloat() / 2f
             val centerX = 300f * cos(side)
@@ -279,8 +280,8 @@ class RedesignShotsWorldTest {
                 else -> intArrayOf(0, 0, 390, 300)
             }
             strip(width, height, language, 18, 6..17, crop, "world-fix3-gameshake-${width}x$height-${if (language == AppLanguage.English) "en" else "ru"}.png") { frame ->
-                val model = model(width.toFloat(), height.toFloat(), points = listOf(point(PointOfInterestKind.SEALED_ANOMALY, targets[0]),
-                    point(PointOfInterestKind.COLLAPSING_ORBIT, targets[1])), totem = TotemProjection(targets[2].first, targets[2].second, 1f))
+                val model = model(width.toFloat(), height.toFloat(), points = listOf(point(SiteKind.SEALED_ANOMALY, targets[0]),
+                    point(SiteKind.COLLAPSING_ORBIT, targets[1])), totem = TotemProjection(targets[2].first, targets[2].second, 1f))
                 val time = 3f + frame / 60f
                 if (frame < 6) Triple(model, 0f, 0f) else Triple(model, sin(time * 91f) * 6f, cos(time * 77f) * 6f)
             }
@@ -349,17 +350,17 @@ class RedesignShotsWorldTest {
         add(Scene("overdrive", model = { w, h -> model(w, h, overdriveTime = 3f, weapon = WeaponId.ION_SWARM, orbitals = true) }))
         add(Scene("overheat", model = { w, h -> model(w, h, overheated = true, weapon = WeaponId.MORNINGSTAR) }))
         add(Scene("poi-offer", model = { w, h -> model(w, h, points = offers(), totem = TotemProjection(-900f, 120f, 1f)) }))
-        add(Scene("poi-orbit", model = { w, h -> model(w, h, points = listOf(active(PointOfInterestKind.COLLAPSING_ORBIT, 60f, 30f, 0.65f, warning = 0.5f))) }))
+        add(Scene("poi-orbit", model = { w, h -> model(w, h, points = listOf(active(SiteKind.COLLAPSING_ORBIT, 60f, 30f, 0.65f, warning = 0.5f))) }))
         add(Scene("poi-sealed", model = { w, h -> sealed(w, h) }))
-        add(Scene("poi-circuit", model = { w, h -> model(w, h, points = listOf(active(PointOfInterestKind.RESONANT_CIRCUIT, -60f, -170f, 0.33f, nextBeacon = 2))) }))
+        add(Scene("poi-circuit", model = { w, h -> model(w, h, points = listOf(active(SiteKind.RESONANT_CIRCUIT, -60f, -170f, 0.33f, nextBeacon = 2))) }))
         // Review-fix states: the HUD drawn over the world to check labels and edge markers clear it.
         add(Scene("poi-offer-hud", hud = true, model = { w, h -> model(w, h, points = offers(), totem = TotemProjection(-900f, 120f, 1f)) }))
-        add(Scene("poi-orbit-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(PointOfInterestKind.COLLAPSING_ORBIT, 60f, 30f, 0.65f, warning = 0.5f))) }))
-        add(Scene("poi-orbit-high-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(PointOfInterestKind.COLLAPSING_ORBIT, 40f, -(h * 0.5f + 150f), 0.4f))) }))
-        add(Scene("poi-orbit-low-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(PointOfInterestKind.COLLAPSING_ORBIT, -60f, h * 0.5f - 120f, 0.8f))) }))
+        add(Scene("poi-orbit-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(SiteKind.COLLAPSING_ORBIT, 60f, 30f, 0.65f, warning = 0.5f))) }))
+        add(Scene("poi-orbit-high-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(SiteKind.COLLAPSING_ORBIT, 40f, -(h * 0.5f + 150f), 0.4f))) }))
+        add(Scene("poi-orbit-low-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(SiteKind.COLLAPSING_ORBIT, -60f, h * 0.5f - 120f, 0.8f))) }))
         add(Scene("poi-sealed-hud", hud = true, model = { w, h -> sealed(w, h) }))
-        add(Scene("poi-circuit-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(PointOfInterestKind.RESONANT_CIRCUIT, -60f, -170f, 0.33f, nextBeacon = 2))) }))
-        add(Scene("poi-circuit-far-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(PointOfInterestKind.RESONANT_CIRCUIT, -900f, -700f, 0.66f, nextBeacon = 3))) }))
+        add(Scene("poi-circuit-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(SiteKind.RESONANT_CIRCUIT, -60f, -170f, 0.33f, nextBeacon = 2))) }))
+        add(Scene("poi-circuit-far-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(SiteKind.RESONANT_CIRCUIT, -900f, -700f, 0.66f, nextBeacon = 3))) }))
         add(Scene("numbers-edge", model = { w, h -> model(w, h) }, fx = ::edgeNumbersFx))
         // Second review-fix states (world): timers and marks near the HUD, markers above/below.
         val fixScenes = listOf<Pair<String, (Float, Float) -> GameplayRenderModel>>(
@@ -368,17 +369,17 @@ class RedesignShotsWorldTest {
             // Target beacon cut by the left edge: only its edge marker draws.
             "poi-beacon-edge-hud" to { w, h -> model(w, h, points = listOf(beaconAt(w, h, 30f, 0.5f * h))) },
             // Active vault under the relic row (phone) or the chain (desktop).
-            "poi-vault-relic-hud" to { w, h -> model(w, h, points = listOf(activeAt(PointOfInterestKind.SEALED_ANOMALY, w, h, 0.74f * w, 0.23f * h))) },
+            "poi-vault-relic-hud" to { w, h -> model(w, h, points = listOf(activeAt(SiteKind.SEALED_ANOMALY, w, h, 0.74f * w, 0.23f * h))) },
             // An offer low on the left, next to the integrity cluster.
             "poi-offer-low-hud" to { w, h -> model(w, h, points = listOf(offerAt(w, h, 0.2f * w, 0.62f * h))) },
             // Orbit far above and far below the view.
-            "poi-orbit-high-hud" to { w, h -> model(w, h, points = listOf(active(PointOfInterestKind.COLLAPSING_ORBIT, 40f, -(h * 0.5f + 700f), 0.4f))) },
-            "poi-orbit-below-hud" to { w, h -> model(w, h, points = listOf(active(PointOfInterestKind.COLLAPSING_ORBIT, 40f, h * 0.5f + 700f, 0.4f))) },
+            "poi-orbit-high-hud" to { w, h -> model(w, h, points = listOf(active(SiteKind.COLLAPSING_ORBIT, 40f, -(h * 0.5f + 700f), 0.4f))) },
+            "poi-orbit-below-hud" to { w, h -> model(w, h, points = listOf(active(SiteKind.COLLAPSING_ORBIT, 40f, h * 0.5f + 700f, 0.4f))) },
             // An elite alive and the totem overhead (portrait boss row + marker).
             "poi-boss-marker-hud" to { w, h -> model(w, h, enemies = listOf(enemy(1, EnemyType.ELITE, 150f, 120f, 38f)), totem = TotemProjection(1_040f, 1_000f - h * 0.5f - 900f, 1f)) },
             // Third pass: a boss and a trial at once, the orbit far up-left (markers past the stacked top bands).
             "poi-boss-trial-marker-hud" to { w, h -> model(w, h, enemies = listOf(enemy(1, EnemyType.ELITE, 150f, 120f, 38f)),
-                points = listOf(active(PointOfInterestKind.COLLAPSING_ORBIT, -0.41f * (h * 0.5f + 900f), -(h * 0.5f + 900f), 0.4f)),
+                points = listOf(active(SiteKind.COLLAPSING_ORBIT, -0.41f * (h * 0.5f + 900f), -(h * 0.5f + 900f), 0.4f)),
                 totem = TotemProjection(1_000f + 0.3f * (h * 0.5f + 900f), 1_000f + h * 0.5f + 900f, 1f)) },
             // Target beacon low in a HUD-free bottom gap: whole, place pips included, on screen.
             "poi-beacon-bottom-hud" to { w, h -> model(w, h, points = listOf(beaconAt(w, h, 0.31f * w, h - 67f))) },
@@ -396,14 +397,14 @@ class RedesignShotsWorldTest {
             // The game's pair of offers (560 from the Core at +-1 rad, about 940 apart): a circuit
             // up-left and an orbit down-right of the Core (the second leaves narrow screens).
             "poi-offers-hud" to { w, h -> model(w, h, points = listOf(
-                offerAt(w, h, 0.5f * w - 300f, 0.5f * h - 100f, PointOfInterestKind.RESONANT_CIRCUIT),
-                offerAt(w, h, 0.5f * w + 620f, 0.5f * h + 110f, PointOfInterestKind.COLLAPSING_ORBIT))) },
+                offerAt(w, h, 0.5f * w - 300f, 0.5f * h - 100f, SiteKind.RESONANT_CIRCUIT),
+                offerAt(w, h, 0.5f * w + 620f, 0.5f * h + 110f, SiteKind.COLLAPSING_ORBIT))) },
             // An offer hard against the left edge: its name and timer stay on screen.
             "poi-offer-edge-hud" to { w, h -> model(w, h, points = listOf(offerAt(w, h, 50f, 0.45f * h))) },
             // Two offers and the totem off screen in nearly one direction (above right).
             "poi-markers-crowded-hud" to { w, h -> model(w, h, points = listOf(
-                PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed anomaly", 1_000f + 900f, 1_000f - 2_600f, false, 31f, 1, 0f, immutableListOf(), 0f, 0f),
-                PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 1_000f + 1_150f, 1_000f - 2_500f, false, 31f, 1, 0f, immutableListOf(), 0f, 0f)),
+                PointOfInterestProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 1_000f + 900f, 1_000f - 2_600f, false, 31f, 1, 0f, immutableListOf(), 0f, 0f),
+                PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 1_000f + 1_150f, 1_000f - 2_500f, false, 31f, 1, 0f, immutableListOf(), 0f, 0f)),
                 totem = TotemProjection(1_000f + 1_300f, 1_000f - 2_300f, 1f)) },
         )
         fix3Scenes.forEach { (name, build) ->
@@ -546,7 +547,7 @@ class RedesignShotsWorldTest {
         enemies = listOf(enemy(1, EnemyType.INTERCEPTOR, 175f, -26f, 18f, flash = 1f)))
 
     private fun sealed(w: Float, h: Float): GameplayRenderModel {
-        val point = active(PointOfInterestKind.SEALED_ANOMALY, 200f, -120f, 1f / 3f, defenders = listOf(21, 22, 23))
+        val point = active(SiteKind.SEALED_ANOMALY, 200f, -120f, 1f / 3f, defenders = listOf(21, 22, 23))
         val enemies = listOf(
             enemy(21, EnemyType.WARDEN, 330f, -120f, 26f),
             enemy(22, EnemyType.WARDEN, 135f, -7f, 26f),
@@ -560,22 +561,22 @@ class RedesignShotsWorldTest {
     private fun worldY(h: Float, y: Float) = 1_000f + y - h * 0.5f
 
     /** An active circuit whose target beacon (order 2: 230 right, 200 below the center) sits at screen ([x], [y]). */
-    private fun beaconAt(w: Float, h: Float, x: Float, y: Float) = PointOfInterestProjection(PointOfInterestKind.RESONANT_CIRCUIT, "Resonant circuit",
+    private fun beaconAt(w: Float, h: Float, x: Float, y: Float) = PointOfInterestProjection(SiteKind.RESONANT_CIRCUIT, "Resonant circuit",
         worldX(w, x) - 230f, worldY(h, y) - 200f, true, 14f, 1, 0.33f, immutableListOf(), 0f, 0f)
 
-    private fun activeAt(kind: PointOfInterestKind, w: Float, h: Float, x: Float, y: Float) = PointOfInterestProjection(kind, "Sealed anomaly",
+    private fun activeAt(kind: SiteKind, w: Float, h: Float, x: Float, y: Float) = PointOfInterestProjection(kind, "Sealed anomaly",
         worldX(w, x), worldY(h, y), true, 14f, 1, 0.33f, immutableListOf(), 0f, 0f)
 
-    private fun offerAt(w: Float, h: Float, x: Float, y: Float, kind: PointOfInterestKind = PointOfInterestKind.SEALED_ANOMALY) =
+    private fun offerAt(w: Float, h: Float, x: Float, y: Float, kind: SiteKind = SiteKind.SEALED_ANOMALY) =
         PointOfInterestProjection(kind, kind.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() },
             worldX(w, x), worldY(h, y), false, 31f, 1, 0f, immutableListOf(), 0f, 0f)
 
     private fun offers() = listOf(
-        PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed anomaly", 1_000f + 330f, 1_000f - 150f, false, 31f, 1, 0f, immutableListOf(), 0f, 0f),
-        PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 1_000f + 1_300f, 1_000f + 500f, false, 31f, 1, 0f, immutableListOf(), 0f, 0f),
+        PointOfInterestProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 1_000f + 330f, 1_000f - 150f, false, 31f, 1, 0f, immutableListOf(), 0f, 0f),
+        PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 1_000f + 1_300f, 1_000f + 500f, false, 31f, 1, 0f, immutableListOf(), 0f, 0f),
     )
 
-    private fun active(kind: PointOfInterestKind, dx: Float, dy: Float, progress: Float, nextBeacon: Int = 1, warning: Float = 0f, defenders: List<Int> = emptyList()) =
+    private fun active(kind: SiteKind, dx: Float, dy: Float, progress: Float, nextBeacon: Int = 1, warning: Float = 0f, defenders: List<Int> = emptyList()) =
         PointOfInterestProjection(kind, kind.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }, 1_000f + dx, 1_000f + dy, true, 14f, nextBeacon, progress,
             defenders.toImmutableList(), warning, -0.3f)
 

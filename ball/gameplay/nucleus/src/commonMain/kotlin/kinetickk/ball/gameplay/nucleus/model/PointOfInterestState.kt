@@ -3,7 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus.model
 
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 
@@ -12,7 +12,7 @@ internal data class WorldPoint(val x: Float, val y: Float)
 /** Value-only runtime; reducers may safely retain prior snapshots. */
 internal data class PointOfInterestState(
     val offerId: Int,
-    val kind: PointOfInterestKind,
+    val kind: SiteKind,
     val x: Float,
     val y: Float,
     val expiresAt: Float,

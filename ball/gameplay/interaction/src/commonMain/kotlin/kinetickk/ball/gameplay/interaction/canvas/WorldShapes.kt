@@ -9,7 +9,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.localization.WorldRedesignText
 import kinetickk.foundation.common.localization.AppLanguage
@@ -228,8 +228,8 @@ internal object WorldStrings {
     private val distanceSuffixes = arrayOfNulls<String>(AppLanguage.entries.size)
     private val crit = arrayOfNulls<String>(AppLanguage.entries.size)
     private val secondsSuffixes = arrayOfNulls<String>(AppLanguage.entries.size)
-    private val pointNameSources = arrayOfNulls<String>(PointOfInterestKind.entries.size * AppLanguage.entries.size)
-    private val pointNames = arrayOfNulls<String>(PointOfInterestKind.entries.size * AppLanguage.entries.size)
+    private val pointNameSources = arrayOfNulls<String>(SiteKind.entries.size * AppLanguage.entries.size)
+    private val pointNames = arrayOfNulls<String>(SiteKind.entries.size * AppLanguage.entries.size)
     /** One slot per reaction (declared before the arrays it sizes). */
     private val REACTION_SLOTS = kinetickk.ball.content.api.ReactionId.entries.size
     private val reactionSources = arrayOfNulls<String>(REACTION_SLOTS * AppLanguage.entries.size)
@@ -259,7 +259,7 @@ internal object WorldStrings {
     fun decimalSeparator(language: AppLanguage): String = if (language == AppLanguage.Russian) "," else "."
 
     /** A point's content [name] in [language], resolved once per kind, language and name. */
-    fun pointName(kind: PointOfInterestKind, name: String, language: AppLanguage): String {
+    fun pointName(kind: SiteKind, name: String, language: AppLanguage): String {
         val slot = kind.ordinal * AppLanguage.entries.size + language.ordinal
         val cached = pointNames[slot]
         if (cached != null && pointNameSources[slot] == name) return cached

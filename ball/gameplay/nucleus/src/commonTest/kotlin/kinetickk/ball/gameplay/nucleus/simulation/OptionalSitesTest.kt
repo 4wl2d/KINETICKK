@@ -4,7 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.DirectedReward
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.nucleus.model.PointOfInterestState
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.test.Test
@@ -59,7 +59,7 @@ class OptionalSitesTest {
         val game = game()
         val marks = FloatArray(MAX_OPTIONAL_SITE_MARKS * 3)
         fun points(count: Int) = List(count) { index ->
-            PointOfInterestState(index, PointOfInterestKind.RESONANT_CIRCUIT, index * 10f, 0f, 85f)
+            PointOfInterestState(index, SiteKind.RESONANT_CIRCUIT, index * 10f, 0f, 85f)
         }
 
         game.pointsOfInterest = points(MAX_OPTIONAL_SITE_MARKS)

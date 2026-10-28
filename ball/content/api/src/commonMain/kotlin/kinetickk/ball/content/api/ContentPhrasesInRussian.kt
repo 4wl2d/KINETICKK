@@ -24,6 +24,22 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Broodmother" to "Матка роя",
     "Reflector" to "Отражатель",
     "Herald" to "Глашатай",
+    "Comet" to "Комета",
+    "Pylon" to "Пилон",
+    "Sentry" to "Часовой",
+    "Crawler" to "Ползун",
+    "Seraph" to "Серафим",
+    "Choir" to "Хор",
+    "Imp" to "Бесёнок",
+    "Hound" to "Гончая",
+    "Cipher" to "Шифр",
+    "Mirror" to "Зеркало",
+    "Warden Prime" to "Верховный страж",
+    "Brood Queen" to "Королева роя",
+    "Throne" to "Престол",
+    "Pyre Herald" to "Огненный глашатай",
+    "Cartographer" to "Картограф",
+    "Antecedent" to "Предтеча",
     "Drifts straight at the Core. Weak alone, dangerous in numbers." to "Дрейфует прямо к ядру. Слаб в одиночку, опасен толпой.",
     "Holds its distance and fires aimed bolts." to "Держит дистанцию и стреляет прицельными зарядами.",
     "Creeps closer, winds up and dashes through the Core." to "Подкрадывается, замахивается и проносится сквозь ядро.",
@@ -51,6 +67,35 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
         "Передний щит смягчает столкновения и отражает выстрелы. Бейте его сзади.",
     "A mini-boss with spiral volleys, aspect escorts and a shield only impacts can break." to
         "Мини-босс со спиральными залпами, эскортом своего аспекта и щитом, который пробивают только столкновения.",
+    "Marks a lane and streaks along it. A fast impact shatters it, and so does an obstacle in its path." to
+        "Отмечает полосу и проносится по ней. Её раскалывает быстрое столкновение или препятствие на пути.",
+    "Docks on an obstacle and fires aimed volleys. Weapons barely scratch it; impacts and slammed enemies break it." to
+        "Крепится к препятствию и стреляет прицельными залпами. Оружие едва царапает его, а разбивают столкновения и впечатанные в него враги.",
+    "Mounts in place, tracks the Core and fires bolt trains down corridors." to
+        "Закрепляется на месте, следит за ядром и пускает по коридорам цепочки зарядов.",
+    "Creeps along walls and obstacles in packs, then lunges at the Core." to "Стаей ползёт вдоль стен и препятствий, а затем бросается на ядро.",
+    "Weaves at mid range, mends nearby allies and wraps them in shields only impacts can break." to
+        "Петляет на средней дистанции, чинит союзников рядом и окутывает их щитами, которые пробивают только столкновения.",
+    "Keeps its range and sings radial pulses that fire bolts and shove the Core away." to
+        "Держит дистанцию и поёт кольцевые импульсы: они выпускают заряды и отталкивают ядро.",
+    "Jinks at the Core and bursts, scattering embers that burn a slow Core." to
+        "Петляя, летит к ядру и взрывается, разбрасывая угли, которые жгут медленное ядро.",
+    "Hunts in packs, circles the Core and dashes through it." to "Охотится стаей, кружит у ядра и проносится сквозь него.",
+    "Glitches out of reach, reappears elsewhere around the Core and fires." to
+        "Сбоит и пропадает из досягаемости, появляется в другом месте вокруг ядра и стреляет.",
+    "Mirrors the Core through the singularity and meets it there." to "Отражает ядро относительно сингулярности и встречает его там.",
+    "A mini-boss whose well pulls, then pushes, with radial bursts and Warden guards." to
+        "Мини-босс, чей колодец то притягивает, то отталкивает; стреляет кольцевыми залпами и зовёт стражей.",
+    "A mini-boss that births Swarmling spirals from egg sacs. Fast impacts burst the sacs." to
+        "Мини-босс, рождающий спирали роевиков из яйцевых мешков. Быстрые столкновения лопают мешки.",
+    "A mini-boss behind rotating shield arcs. Only hits through the gaps land in full." to
+        "Мини-босс за вращающимися дугами щита. В полную силу проходят только удары сквозь просветы.",
+    "A mini-boss with spiral volleys, a trail of embers and a shield only impacts can break." to
+        "Мини-босс со спиральными залпами, следом из углей и щитом, который пробивают только столкновения.",
+    "A secret boss that draws lanes of fire and lines of mines, then jumps between obstacles." to
+        "Тайный босс: чертит огненные полосы и линии мин, а затем прыгает между препятствиями.",
+    "A secret boss, the Architect's forerunner. It alternates Zenith and Nadir phases and hardens against your build." to
+        "Тайный босс, предшественник Архитектора. Чередует фазы Зенита и Надира и закаляется против вашей сборки.",
     "Overdrive" to "Перегрузка",
     "Transcendent" to "Запредельная скорость",
     "Impact damage" to "Урон от столкновений",
@@ -73,6 +118,8 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Damage reduction" to "Снижение урона",
     "Combo window" to "Окно комбо",
     "Overdrive gain" to "Накопление перегрузки",
+    "Grip" to "Сцепление",
+    "Sling" to "Раскрутка",
     "Common" to "Обычный",
     "Uncommon" to "Необычный",
     "Rare" to "Редкий",
@@ -310,6 +357,11 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "TWO ANOMALIES DETECTED // CHOOSE A COURSE" to "ОБНАРУЖЕНЫ ДВЕ АНОМАЛИИ // ВЫБЕРИТЕ ПУТЬ",
     "ANOMALY LOST" to "АНОМАЛИЯ УТРАЧЕНА",
     "ANOMALY RESOLVED" to "АНОМАЛИЯ ЗАВЕРШЕНА",
+    "SECRET SIGNAL" to "ТАЙНЫЙ СИГНАЛ",
+    "SECRET SIGNAL LOST" to "ТАЙНЫЙ СИГНАЛ ПОТЕРЯН",
+    "SECRET BOSS DEFEATED" to "ТАЙНЫЙ БОСС ПОВЕРЖЕН",
+    "THE CARTOGRAPHER ENRAGES" to "КАРТОГРАФ В ЯРОСТИ",
+    "THE ANTECEDENT ENRAGES" to "ПРЕДТЕЧА В ЯРОСТИ",
     "Change weapon" to "Сменить оружие",
     "Recalibrate the Totem, then choose another weapon system you own." to "Перенастройте Тотем и выберите другую свою оружейную систему.",
     "RECALIBRATE" to "ПЕРЕНАСТРОЙКА",

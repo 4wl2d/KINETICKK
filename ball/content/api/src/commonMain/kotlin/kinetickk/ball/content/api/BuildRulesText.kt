@@ -84,6 +84,9 @@ enum class BuildRulesText(override val english: String, override val russian: St
     OnFieldEnter("On entering a field", "При входе в поле"),
     OnShotErased("On erasing a shot", "При стирании снаряда"),
     OnMarkConsumed("On cashing a mark", "При срабатывании метки"),
+    OnShatter("On breaking an obstacle", "При разрушении препятствия"),
+    OnBoost("On boost", "При разгоне"),
+    OnGraze("On graze", "При пролёте впритирку"),
 
     EveryImpact("Every {0} impact", "Каждое {0}-е столкновение"),
     EveryWeaponHit("Every {0} weapon hit", "Каждое {0}-е попадание оружия"),
@@ -109,6 +112,9 @@ enum class BuildRulesText(override val english: String, override val russian: St
     EveryFieldEnter("Every {0} field entry", "Каждый {0}-й вход в поле"),
     EveryShotErased("Every {0} erased shot", "Каждый {0}-й стёртый снаряд"),
     EveryMarkConsumed("Every {0} cashed mark", "Каждая {0}-я сработавшая метка"),
+    EveryShatter("Every {0} obstacle broken", "Каждое {0}-е разрушенное препятствие"),
+    EveryBoost("Every {0} boost", "Каждый {0}-й разгон"),
+    EveryGraze("Every {0} graze", "Каждый {0}-й пролёт впритирку"),
 
     OnElementBreak("On {0} break", "При пробое {0}"),
     EveryElementBreak("Every {0} {1} break", "Каждый {0}-й пробой {1}"),
@@ -167,6 +173,17 @@ enum class BuildRulesText(override val english: String, override val russian: St
     ConditionSkillCharging("while an active recharges", "пока перезаряжается активный эффект"),
     ConditionSkillsCharging("while {0} actives recharge", "пока перезаряжаются активные эффекты: {0}"),
     ConditionWeaponFamily("with {0} weapons", "с оружием типа «{0}»"),
+    ConditionObstacleIs("({0})", "({0})"),
+    ConditionNearObstacle("within {0} of an obstacle", "не дальше {0} от препятствия"),
+    ObstacleAsteroid("asteroid", "астероид"),
+    ObstacleBumper("bumper", "отбойник"),
+    ObstacleUnstable("unstable asteroid", "нестабильный астероид"),
+    ObstacleGravityWell("gravity knot", "гравиузел"),
+    ObstacleAccelGate("accelerator gate", "ворота-ускоритель"),
+    ObstacleCrystal("crystal", "кристалл"),
+    ObstacleDerelictMine("derelict mine", "брошенная мина"),
+    ObstaclePhaseShard("phase shard", "фазовый осколок"),
+    ObstacleThermalVent("thermal vent", "термальный гейзер"),
 
     PickDominant("your dominant element", "вашей основной стихии"),
     PickSecondary("your second element", "вашей второй стихии"),
@@ -313,6 +330,11 @@ enum class BuildRulesText(override val english: String, override val russian: St
     RuleCatalysisRate("Reactions recharge actives {0} more", "Реакции ускоряют активные эффекты на {0} сильнее"),
     RuleApexCooldown("The Apex recharges {0} faster", "Апекс перезаряжается на {0} быстрее"),
     RuleCoreLinkRadius("Reactions empower the Core from {0} farther", "Реакции усиливают Ядро на {0} дальше"),
+    RuleObstacleRestitution("Obstacle bounces keep {0} more speed", "Отскоки от препятствий сохраняют на {0} больше скорости"),
+    RuleObstacleDamage("{0} damage from obstacles", "{0} к урону от препятствий"),
+    RuleObstacleLethal("Collisions turn lethal {0} later", "Столкновения становятся смертельными на {0} позже"),
+    RuleBoostPower("Boosts are {0} stronger", "Разгоны сильнее на {0}"),
+    RuleWellPull("Gravity knots pull and push enemies {0} harder", "Гравиузлы притягивают и отталкивают врагов на {0} сильнее"),
     RuleDashHeatToSkills("Every 10 dash heat recharges actives by {0}", "Каждые 10 жара рывков ускоряют активные эффекты на {0}"),
     RuleCoolSlower("You cool {0} slower", "Вы остываете на {0} медленнее"),
     RuleDataToSkills("Each Data pickup recharges actives by {0}", "Каждые подобранные Данные ускоряют активные эффекты на {0}"),
@@ -344,6 +366,8 @@ enum class BuildRulesText(override val english: String, override val russian: St
     StatDamageReduction("{0} damage reduction", "{0} к снижению урона"),
     StatComboWindow("{0} combo window", "{0} к окну комбо"),
     StatOverdriveGain("{0} Overdrive gain", "{0} к накоплению перегрузки"),
+    StatGrip("{0} grip", "{0} к сцеплению"),
+    StatSling("{0} sling", "{0} к раскрутке"),
 
     BuffDamage("{0} damage", "{0} к урону"),
     BuffImpact("{0} impact damage", "{0} к урону от столкновений"),
@@ -660,6 +684,18 @@ private class RuleWriter(private val language: AppLanguage, private val context:
         is ItemRule.CoreLinkRadius -> listOf(
             RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleCoreLinkRadius, language.number(rule.bonus * gain, 0))),
         )
+        is ItemRule.ObstacleTuning -> listOf(
+            RuleLine(
+                RuleLineKind.RULE,
+                when (rule.aspect) {
+                    ObstacleAspect.RESTITUTION -> text(BuildRulesText.RuleObstacleRestitution, percent(rule.amount * gain))
+                    ObstacleAspect.COLLISION_DAMAGE -> text(BuildRulesText.RuleObstacleDamage, signedPercent(-rule.amount * gain))
+                    ObstacleAspect.LETHAL_SPEED -> text(BuildRulesText.RuleObstacleLethal, speed((rule.amount * gain).toFloat()))
+                    ObstacleAspect.BOOST_POWER -> text(BuildRulesText.RuleBoostPower, percent(rule.amount * gain))
+                    ObstacleAspect.WELL_PULL -> text(BuildRulesText.RuleWellPull, percent(rule.amount * gain))
+                },
+            ),
+        )
     }
 
     private fun conversion(rule: ItemRule.Convert): List<RuleLine> = when (rule.kind) {
@@ -868,6 +904,8 @@ private class RuleWriter(private val language: AppLanguage, private val context:
             if (condition.count == 1) text(BuildRulesText.ConditionSkillCharging)
             else text(BuildRulesText.ConditionSkillsCharging, condition.count)
         is EffectCondition.WeaponFamilyIs -> text(BuildRulesText.ConditionWeaponFamily, localized(condition.family.displayLabel))
+        is EffectCondition.ObstacleIs -> text(BuildRulesText.ConditionObstacleIs, text(condition.kind.ruleName))
+        is EffectCondition.NearObstacle -> text(BuildRulesText.ConditionNearObstacle, language.number(condition.distance.toDouble(), 0))
     }
 
     /** %-of-maximum-integrity terms ignore stack multipliers and the bonus; every other basis scales with them. */
@@ -1080,6 +1118,8 @@ private val ItemEffect.phrase: BuildRulesText
         ItemEffect.DAMAGE_REDUCTION -> BuildRulesText.StatDamageReduction
         ItemEffect.COMBO_WINDOW -> BuildRulesText.StatComboWindow
         ItemEffect.OVERDRIVE_GAIN -> BuildRulesText.StatOverdriveGain
+        ItemEffect.GRIP -> BuildRulesText.StatGrip
+        ItemEffect.SLING -> BuildRulesText.StatSling
     }
 
 private val BuffStat.phrase: BuildRulesText
@@ -1166,6 +1206,9 @@ val EffectTrigger.onPhrase: BuildRulesText
         EffectTrigger.FIELD_ENTER -> BuildRulesText.OnFieldEnter
         EffectTrigger.SHOT_ERASED -> BuildRulesText.OnShotErased
         EffectTrigger.MARK_CONSUMED -> BuildRulesText.OnMarkConsumed
+        EffectTrigger.SHATTER -> BuildRulesText.OnShatter
+        EffectTrigger.BOOST -> BuildRulesText.OnBoost
+        EffectTrigger.GRAZE -> BuildRulesText.OnGraze
     }
 
 private val EffectTrigger.everyPhrase: BuildRulesText
@@ -1194,4 +1237,21 @@ private val EffectTrigger.everyPhrase: BuildRulesText
         EffectTrigger.FIELD_ENTER -> BuildRulesText.EveryFieldEnter
         EffectTrigger.SHOT_ERASED -> BuildRulesText.EveryShotErased
         EffectTrigger.MARK_CONSUMED -> BuildRulesText.EveryMarkConsumed
+        EffectTrigger.SHATTER -> BuildRulesText.EveryShatter
+        EffectTrigger.BOOST -> BuildRulesText.EveryBoost
+        EffectTrigger.GRAZE -> BuildRulesText.EveryGraze
+    }
+
+/** How rule text names an obstacle kind ("On boost (gravity knot)"). */
+val ObstacleKind.ruleName: BuildRulesText
+    get() = when (this) {
+        ObstacleKind.ASTEROID -> BuildRulesText.ObstacleAsteroid
+        ObstacleKind.BUMPER -> BuildRulesText.ObstacleBumper
+        ObstacleKind.UNSTABLE -> BuildRulesText.ObstacleUnstable
+        ObstacleKind.GRAVITY_WELL -> BuildRulesText.ObstacleGravityWell
+        ObstacleKind.ACCEL_GATE -> BuildRulesText.ObstacleAccelGate
+        ObstacleKind.CRYSTAL -> BuildRulesText.ObstacleCrystal
+        ObstacleKind.DERELICT_MINE -> BuildRulesText.ObstacleDerelictMine
+        ObstacleKind.PHASE_SHARD -> BuildRulesText.ObstaclePhaseShard
+        ObstacleKind.THERMAL_VENT -> BuildRulesText.ObstacleThermalVent
     }

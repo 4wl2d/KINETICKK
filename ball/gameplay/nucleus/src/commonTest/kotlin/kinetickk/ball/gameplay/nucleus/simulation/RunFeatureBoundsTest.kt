@@ -5,7 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.DirectedReward
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.nucleus.model.PointOfInterestState
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.test.Test
@@ -37,7 +37,7 @@ class RunFeatureBoundsTest {
         val source = game()
         source.pendingDirectedRewards = List(5) { DirectedReward.WEAPON }
         source.pointsOfInterest = listOf(PointOfInterestState(
-            0, PointOfInterestKind.RESONANT_CIRCUIT, source.coreX, source.coreY, 85f,
+            0, SiteKind.RESONANT_CIRCUIT, source.coreX, source.coreY, 85f,
             active = true, nextBeacon = 3,
         ))
         source.previousCoreX = source.coreX
@@ -46,7 +46,7 @@ class RunFeatureBoundsTest {
         assertEquals(6, source.pendingDirectedRewards.size)
         val candidate = source.copyForReduction()
         candidate.pointsOfInterest = listOf(PointOfInterestState(
-            0, PointOfInterestKind.RESONANT_CIRCUIT, source.coreX, source.coreY, 85f,
+            0, SiteKind.RESONANT_CIRCUIT, source.coreX, source.coreY, 85f,
             active = true, nextBeacon = 3,
         ))
         assertFailsWith<IllegalStateException> { candidate.updatePointsOfInterest(0.01f) }

@@ -3,16 +3,21 @@
 
 package kinetickk.ball.content.impl
 
+import kinetickk.ball.content.api.BountyPolicy
 import kinetickk.ball.content.api.BuffStat
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.ContentVersion
 import kinetickk.ball.content.api.DamageBasis
+import kinetickk.ball.content.api.DirectorPersonalityId
+import kinetickk.ball.content.api.EasyModeTuning
 import kinetickk.ball.content.api.EffectAction
 import kinetickk.ball.content.api.EffectClause
 import kinetickk.ball.content.api.EffectCondition
 import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.ElementPick
+import kinetickk.ball.content.api.EnemyType
+import kinetickk.ball.content.api.EnemyWeightBias
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
@@ -29,8 +34,10 @@ import kinetickk.ball.content.api.RunTempoProfile
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.StructurePolicy
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
@@ -528,6 +535,40 @@ class ContentBootstrapValidationTest {
         tags = immutableListOf(), elements = immutableListOf(element),
         rules = immutableListOf(ItemRule.BreakThreshold(element, reduction)), maxStacks = 2, unlockLevel = 1,
     )
+
+    @Test
+    fun worldContractsArePublishedAndCrossCheckedAgainstTheRoster() {
+        val data = defaultContentBootstrapData()
+        val catalog = createContentCatalogForTesting(data)
+        val gameplay = catalog.gameplayContent()
+        assertEquals(data.sites, gameplay.sites)
+        assertEquals(data.sites, catalog.uiCatalog().sites)
+        assertEquals(data.variety, gameplay.variety)
+        assertEquals(data.dimensions, gameplay.dimensions)
+        assertEquals(data.boons, gameplay.boons)
+        assertEquals(StructurePolicy(), gameplay.structures)
+        assertEquals(EasyModeTuning(), gameplay.easyMode)
+        assertEquals(WorldDiscovery.entries, catalog.uiCatalog().worldDiscoveries.map { it.id })
+        assertEquals(data.boons.first(), gameplay.boon(32))
+        assertEquals(null, gameplay.boon(42))
+
+        // The bounty duel needs a mini-boss.
+        createContentCatalogForTesting(data.copy(sites = data.sites.copy(bounty = BountyPolicy(bossType = EnemyType.HERALD))))
+        assertRejected(data.copy(sites = data.sites.copy(bounty = BountyPolicy(bossType = EnemyType.WARDEN))), "must be a mini-boss")
+        assertRejected(data.copy(sites = data.sites.copy(bounty = BountyPolicy(bossType = EnemyType.CARTOGRAPHER))), "must be a mini-boss")
+        // A personality biases ordinary kinds only.
+        val director = data.variety.director
+        val herald = director.personalities.map {
+            if (it.id == DirectorPersonalityId.SIEGE) it.copy(typeBias = immutableListOf(EnemyWeightBias(EnemyType.HERALD, 1.5f))) else it
+        }.toImmutableList()
+        assertRejected(data.copy(variety = data.variety.copy(director = director.copy(personalities = herald))), "only ordinary kinds")
+        // Boon ids are unique and the catalog holds at most the bound.
+        assertRejected(data.copy(boons = data.boons + data.boons.first()), "Boon ids must be unique")
+        val blessings = (32..47).map { data.boons.first().copy(id = it) } + (48..63).map { data.boons.last().copy(id = it) }
+        createContentCatalogForTesting(data.copy(boons = blessings))
+        assertEquals(ContentBounds.MAX_BOON_DEFINITIONS, blessings.size)
+        assertRejected(data.copy(boons = blessings + blessings.first()), "exceeds bootstrap bound")
+    }
 
     private fun assertRejected(data: ContentBootstrapData, expectedMessage: String) {
         val failure = assertFailsWith<IllegalArgumentException> {

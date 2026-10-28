@@ -512,6 +512,8 @@ internal fun MutableGameState.applyStatDelta(effect: ItemEffect, amount: Float) 
         ItemEffect.DAMAGE_REDUCTION -> damageReduction = (damageReduction + amount * (1f - damageReduction / 0.65f)).coerceIn(0f, 0.65f)
         ItemEffect.COMBO_WINDOW -> comboWindow = max(0.5f, comboWindow + amount)
         ItemEffect.OVERDRIVE_GAIN -> overdriveGain = max(0.1f, overdriveGain + amount)
+        // The flight law's grip and sling stats; no shipped item or node carries them yet.
+        ItemEffect.GRIP, ItemEffect.SLING -> Unit
     }
 }
 

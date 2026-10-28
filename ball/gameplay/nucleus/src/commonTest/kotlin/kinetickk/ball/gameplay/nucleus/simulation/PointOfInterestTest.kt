@@ -35,7 +35,7 @@ class PointOfInterestTest {
 
     @Test fun circuitRequiresThreeSeparatedBeaconsAndReturnAndRewardsExactlyOnce() {
         val game = game()
-        game.activatePointOfInterest(PointOfInterestState(0, PointOfInterestKind.RESONANT_CIRCUIT, 0f, 0f, 85f))
+        game.activatePointOfInterest(PointOfInterestState(0, SiteKind.RESONANT_CIRCUIT, 0f, 0f, 85f))
         game.previousCoreX = -1_000f; game.previousCoreY = 0f; game.coreX = 1_000f; game.coreY = 0f
         game.updatePointsOfInterest(0.01f)
         assertEquals(1, game.pointsOfInterest.single().nextBeacon)
@@ -53,7 +53,7 @@ class PointOfInterestTest {
 
     @Test fun orbitNeedsEightSecondsOfActualMovementAndPausesDoNotAdvanceIt() {
         val game = game()
-        game.activatePointOfInterest(PointOfInterestState(0, PointOfInterestKind.COLLAPSING_ORBIT, 0f, 0f, 85f))
+        game.activatePointOfInterest(PointOfInterestState(0, SiteKind.COLLAPSING_ORBIT, 0f, 0f, 85f))
         game.coreX = 155f; game.previousCoreX = 155f
         repeat(100) { game.updatePointsOfInterest(0.01f) }
         assertEquals(0f, game.pointsOfInterest.single().orbitSeconds)
@@ -74,7 +74,7 @@ class PointOfInterestTest {
     @Test fun defendersReserveThreeExistingEnemySlotsAndRequireTheirDeaths() {
         val game = game()
         repeat(game.content.rebirth.maxActiveEnemies - 2) { game.addEnemyForTesting(1_000f, 1_000f) }
-        val offer = PointOfInterestState(0, PointOfInterestKind.SEALED_ANOMALY, 0f, 0f, 85f)
+        val offer = PointOfInterestState(0, SiteKind.SEALED_ANOMALY, 0f, 0f, 85f)
         game.activatePointOfInterest(offer)
         assertTrue(game.pointsOfInterest.isEmpty())
         game.enemies.removeAt(0)
@@ -89,7 +89,7 @@ class PointOfInterestTest {
 
     @Test fun timeoutEscapeRebaseAndBossBoundaryCannotDuplicateRewards() {
         val game = game()
-        game.activatePointOfInterest(PointOfInterestState(0, PointOfInterestKind.RESONANT_CIRCUIT, 300_000f, 20f, 85f))
+        game.activatePointOfInterest(PointOfInterestState(0, SiteKind.RESONANT_CIRCUIT, 300_000f, 20f, 85f))
         game.coreX = 300_000f
         game.rebaseWorldIfNeeded()
         assertEquals(0f, game.pointsOfInterest.single().x)

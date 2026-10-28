@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.TextStyle
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
@@ -180,7 +180,7 @@ internal fun DrawScope.collectPointOfInterestEdgeMarkers(
         // An active circuit leads to its next beacon; every other point to its center.
         val targetX: Float
         val targetY: Float
-        if (point.active && point.kind == PointOfInterestKind.RESONANT_CIRCUIT) {
+        if (point.active && point.kind == SiteKind.RESONANT_CIRCUIT) {
             val beacon = point.nextBeacon % 3
             targetX = point.x + beaconDx(beacon)
             targetY = point.y + beaconDy(beacon)
@@ -198,8 +198,8 @@ internal fun DrawScope.collectPointOfInterestEdgeMarkers(
 
 private fun markHalf(point: PointOfInterestProjection): Float = when {
     !point.active -> OFFER_MARK_HALF
-    point.kind == PointOfInterestKind.SEALED_ANOMALY -> VAULT_MARK_HALF
-    point.kind == PointOfInterestKind.RESONANT_CIRCUIT -> BEACON_MARK_HALF
+    point.kind == SiteKind.SEALED_ANOMALY -> VAULT_MARK_HALF
+    point.kind == SiteKind.RESONANT_CIRCUIT -> BEACON_MARK_HALF
     else -> 0f // the collapsing orbit's ring reaches well past its center
 }
 
@@ -223,10 +223,12 @@ internal fun DrawScope.markShown(center: Offset, half: Float, keepOut: WorldHudK
  */
 internal fun steady(center: Offset, shakeX: Float, shakeY: Float): Offset = Offset(center.x - shakeX, center.y - shakeY)
 
-private fun PointOfInterestKind.edgeIcon(): EdgeMarkerIcon = when (this) {
-    PointOfInterestKind.RESONANT_CIRCUIT -> EdgeMarkerIcon.RESONANT_CIRCUIT
-    PointOfInterestKind.SEALED_ANOMALY -> EdgeMarkerIcon.SEALED_ANOMALY
-    PointOfInterestKind.COLLAPSING_ORBIT -> EdgeMarkerIcon.COLLAPSING_ORBIT
+private fun SiteKind.edgeIcon(): EdgeMarkerIcon = when (this) {
+    SiteKind.RESONANT_CIRCUIT -> EdgeMarkerIcon.RESONANT_CIRCUIT
+    SiteKind.SEALED_ANOMALY -> EdgeMarkerIcon.SEALED_ANOMALY
+    SiteKind.COLLAPSING_ORBIT -> EdgeMarkerIcon.COLLAPSING_ORBIT
+    // Only the anomalies are offered until the site lane draws kinds by weight.
+    else -> EdgeMarkerIcon.SEALED_ANOMALY
 }
 
 /**
@@ -253,16 +255,18 @@ private fun DrawScope.drawOfferedPoint(
     if (!markShown(steady(center, shakeX, shakeY), OFFER_MARK_HALF, keepOut, scale)) return
     recordMark(center, OFFER_MARK_HALF)
     when (point.kind) {
-        PointOfInterestKind.SEALED_ANOMALY -> {
+        SiteKind.SEALED_ANOMALY -> {
             drawKkIcon(KkIcon.SYSTEM_ANOMALY, center, 52f, Kk.AGravitic, alpha = 0.75f + pulse * 0.25f, strokeWidth = 1.8f)
             drawCornerBrackets(center, 40f, roles.threat)
         }
-        PointOfInterestKind.COLLAPSING_ORBIT -> {
+        SiteKind.COLLAPSING_ORBIT -> {
             drawCircle(Kk.Bone.copy(alpha = 0.06f), 34f, center)
             drawCircle(Kk.Bone.copy(alpha = 0.55f), 34f, center, style = kkStroke(2f))
             drawCircle(roles.you.copy(alpha = 0.18f), 40f, center, style = kkStroke(4f))
         }
-        PointOfInterestKind.RESONANT_CIRCUIT -> drawTotemPlates(center, 1.2f, roles.you, keyBlock = true, keyIcon = true)
+        SiteKind.RESONANT_CIRCUIT -> drawTotemPlates(center, 1.2f, roles.you, keyBlock = true, keyIcon = true)
+        // Only the anomalies are offered until the site lane draws kinds by weight.
+        else -> Unit
     }
     inScreenUnits(scale) {
         drawOfferLabels(point, Offset(center.x * scale, center.y * scale), (OFFER_RADIUS + 8f) * scale, textMeasurer, keepOut)
@@ -282,7 +286,7 @@ private fun DrawScope.drawActivePoint(
     val roles = textMeasurer.roles
     val time = engine.renderElapsed
     when (point.kind) {
-        PointOfInterestKind.RESONANT_CIRCUIT -> {
+        SiteKind.RESONANT_CIRCUIT -> {
             // Beacon order 1 is the center; the circuit visits 2, 3 and returns to 1 (nextBeacon 1..3).
             val targetIndex = point.nextBeacon % 3
             for (index in 0 until 3) {
@@ -311,7 +315,7 @@ private fun DrawScope.drawActivePoint(
                 }
             }
         }
-        PointOfInterestKind.SEALED_ANOMALY -> {
+        SiteKind.SEALED_ANOMALY -> {
             if (isOnScreen(center, 300f)) {
                 drawCircle(Kk.AGravitic.copy(alpha = 0.025f), 290f, center)
                 drawCircle(Kk.AGravitic.copy(alpha = 0.3f), 290f, center, style = WorldStrokes.dashedHair)
@@ -337,7 +341,7 @@ private fun DrawScope.drawActivePoint(
                 drawCornerBrackets(defender, enemy.radius + 12f, roles.threat)
             }
         }
-        PointOfInterestKind.COLLAPSING_ORBIT -> {
+        SiteKind.COLLAPSING_ORBIT -> {
             if (point.warningRemaining > 0f) {
                 val cosine = cos(point.volleyAngle)
                 val sine = sin(point.volleyAngle)
@@ -370,6 +374,8 @@ private fun DrawScope.drawActivePoint(
                 drawOrbitLabel(engine, point, Offset(center.x * scale, center.y * scale), textMeasurer, keepOut, ORBIT_LABEL_OFFSET * scale)
             }
         }
+        // Only the anomalies are offered until the site lane draws kinds by weight.
+        else -> Unit
     }
 }
 
@@ -389,7 +395,7 @@ private fun DrawScope.drawOrbitLabel(
 ) {
     val language = textMeasurer.language
     val style = textMeasurer.typography.condStyle(ORBIT_LABEL_SP, tabular = true, color = Kk.Bone)
-    val tenths = orbitRingTenths(point.progress, engine.content.pointsOfInterest.orbitRequiredSeconds)
+    val tenths = orbitRingTenths(point.progress, engine.content.sites.windows.orbitRequiredSeconds)
     val separator = WorldStrings.decimalSeparator(language)
     val unit = WorldStrings.secondsSuffix(language)
     val wholeWidth = kkTabularNumberWidth(textMeasurer, tenths / 10L, style, suffix = separator)

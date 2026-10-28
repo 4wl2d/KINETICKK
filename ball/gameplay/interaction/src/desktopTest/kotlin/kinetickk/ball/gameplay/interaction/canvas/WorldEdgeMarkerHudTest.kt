@@ -12,7 +12,7 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.interaction.layout.RunningControlMask
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
@@ -97,7 +97,7 @@ class WorldEdgeMarkerHudTest {
         }
     }
 
-    private fun orbit(x: Float, y: Float) = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", x, y, true,
+    private fun orbit(x: Float, y: Float) = PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", x, y, true,
         12f, 0, 0.4f, immutableListOf(), 0f, 0f)
 
     // The size passed to draw sets the screen; a 1 px bitmap keeps the sweep fast.

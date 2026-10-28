@@ -3,6 +3,8 @@
 
 package kinetickk.ball.content.impl
 
+import kinetickk.ball.content.api.DimensionNotices
+import kinetickk.ball.content.api.EnemyNotices
 import kinetickk.ball.content.api.EnemyType
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.BuffStat
@@ -17,7 +19,10 @@ import kinetickk.ball.content.api.RelicKey
 import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.api.RuleLineKind
 import kinetickk.ball.content.api.RuleTextContext
+import kinetickk.ball.content.api.RunVarietyNotices
+import kinetickk.ball.content.api.SiteNotice
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.WorldDiscoveryKind
 import kinetickk.ball.content.api.liabilityText
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.content.api.ruleLines
@@ -52,7 +57,7 @@ class ContentLocalizationTest {
             }
             content.skills.forEach { addAll(listOf(it.name, it.summary, it.rankThree)) }
             addAll(kinetickk.ball.content.api.CharacterTriggerKind.entries.map { it.displayLabel })
-            content.pointsOfInterest.definitions.forEach { addAll(listOf(it.name, it.instruction)) }
+            content.sites.definitions.forEach { addAll(listOf(it.name, it.instruction)) }
             content.rebirth.profiles.forEach { add(it.displayName) }
             RebirthMutator.entries.forEach { addAll(listOf(it.displayName, it.description)) }
             build.elements.forEach { addAll(listOf(it.statusDescription, it.breakDescription)) }
@@ -235,6 +240,8 @@ class ContentLocalizationTest {
             "DRIFT", "SURGE", "HYPER", "OVERDRIVE", "TRANSCENDENT", "Overdrive",
             "DRIFTER", "SHOOTER", "CHARGER", "INTERCEPTOR", "WEAVER", "WARDEN", "SPLITTER", "ELITE", "ARCHITECT",
             "SWARMLING", "BOMBER", "LANCER", "SNIPER", "AEGIS", "MINELAYER", "PHANTOM", "BROODMOTHER", "REFLECTOR", "HERALD",
+            "COMET", "PYLON", "SENTRY", "CRAWLER", "SERAPH", "CHOIR", "IMP", "HOUND", "CIPHER", "MIRROR",
+            "WARDEN PRIME", "BROOD QUEEN", "THRONE", "PYRE HERALD", "CARTOGRAPHER", "ANTECEDENT",
             "DRIFT PHASE", "THE ARCHITECT", "THE ARCHITECT ENRAGES", "KINETIC OVERDRIVE", "DASH ONLINE", "OVERHEAT",
             "SINGULARITY CONTACT", "POLARITY FIELD STRAIN", "ARCHITECT DISMANTLED",
             "CATALOG COMPLETE // MATTER SALVAGED", "CORE FRACTURED", "ELITE KEY ACQUIRED",
@@ -242,6 +249,53 @@ class ContentLocalizationTest {
             "TWO ANOMALIES DETECTED // CHOOSE A COURSE", "ANOMALY LOST", "ANOMALY RESOLVED",
             "SECOND WIND", "OBSTACLE COLLISION", "APEX ONLINE",
         ).forEach(::assertFullyLocalized)
+    }
+
+    @Test
+    fun everyEnemyNoticeAndComposedSecretSignalIsLocalized() {
+        EnemyNotices.all.forEach(::assertFullyLocalized)
+        listOf("SECRET SIGNAL // CARTOGRAPHER", "SECRET SIGNAL // ANTECEDENT").forEach(::assertFullyLocalized)
+        assertEquals("ТАЙНЫЙ СИГНАЛ // КАРТОГРАФ", "SECRET SIGNAL // CARTOGRAPHER".localizedContent(AppLanguage.Russian))
+    }
+
+    @Test
+    fun everySiteNoticeIsLocalized() {
+        SiteNotice.entries.forEach { assertFullyLocalized(it.english) }
+    }
+
+    @Test
+    fun everyRunVarietyNoticeIsLocalized() {
+        RunVarietyNotices.forEach(::assertFullyLocalized)
+    }
+
+    @Test
+    fun everyDimensionNoticeIsLocalized() {
+        DimensionNotices.all.forEach(::assertFullyLocalized)
+        assertEquals("ЗЕНИТ // ВОСХОЖДЕНИЕ", DimensionNotices.all.first().localizedContent(AppLanguage.Russian))
+    }
+
+    @Test
+    fun everyDimensionNameRiftObjectiveAndBoonIsLocalizedAndDistinct() {
+        val dimensions = createContentCatalog().gameplayContent().dimensions
+        val boons = createContentCatalog().gameplayContent().boons
+        dimensions.definitions.forEach { definition ->
+            listOf(definition.name, definition.riftName, definition.description).forEach(::assertFullyLocalized)
+        }
+        kinetickk.ball.content.api.DimensionObjective.entries.forEach { listOf(it.label, it.instruction).forEach(::assertFullyLocalized) }
+        boons.forEach { listOf(it.name, it.description).forEach(::assertFullyLocalized) }
+        assertDistinctInRussian(dimensions.definitions.map { it.name })
+        assertDistinctInRussian(dimensions.definitions.map { it.riftName })
+        assertDistinctInRussian(boons.map { it.name })
+    }
+
+    @Test
+    fun everyWorldDiscoveryTextOutsideTheStructureTemplatesIsLocalized() {
+        // Structure template names are keys of the structures lane's phrase list, which ships empty until its templates do.
+        content.worldDiscoveries.forEach { discovery ->
+            assertFullyLocalized(discovery.description)
+            assertFullyLocalized(discovery.hint)
+            if (discovery.id.kind != WorldDiscoveryKind.STRUCTURE) assertFullyLocalized(discovery.name)
+        }
     }
 
     @Test

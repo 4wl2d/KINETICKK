@@ -490,7 +490,11 @@ private fun DrawScope.drawEnemyTelegraph(
             drawCircle(threat.copy(alpha = 0.45f), enemy.radius + 10f + enemy.actionTimer * 30f, center, style = WorldStrokes.dashedThin)
         }
         EnemyType.DRIFTER, EnemyType.SPLITTER, EnemyType.ARCHITECT, EnemyType.SWARMLING, EnemyType.AEGIS,
-        EnemyType.MINELAYER, EnemyType.REFLECTOR -> Unit
+        EnemyType.MINELAYER, EnemyType.REFLECTOR,
+        EnemyType.COMET, EnemyType.PYLON, EnemyType.SENTRY, EnemyType.CRAWLER, EnemyType.SERAPH, EnemyType.CHOIR,
+        EnemyType.IMP, EnemyType.HOUND, EnemyType.CIPHER, EnemyType.MIRROR, EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN,
+        EnemyType.THRONE, EnemyType.PYRE_HERALD, EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT,
+        -> Unit
     }
     if (enemy.linkedTo >= 0) drawAegisTether(engine, enemy, center, shakeX, shakeY)
 }

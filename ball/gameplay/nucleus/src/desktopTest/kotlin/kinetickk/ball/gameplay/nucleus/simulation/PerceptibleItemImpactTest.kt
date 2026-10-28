@@ -940,6 +940,7 @@ class PerceptibleItemImpactTest {
                 EffectTrigger.FIELD_ENTER -> listOf(Arena.FIELDS)
                 EffectTrigger.SHOT_ERASED -> listOf(Arena.SHOTS, Arena.FIELDS)
                 EffectTrigger.MARK_CONSUMED -> listOf(Arena.MARKS)
+                EffectTrigger.SHATTER, EffectTrigger.BOOST, EffectTrigger.GRAZE -> listOf(Arena.OBSTACLE, Arena.SHELTER)
             }
             clause.actions.forEach { action -> arenas += actionArenas(action) }
         }
@@ -955,6 +956,8 @@ class PerceptibleItemImpactTest {
                 ItemEffect.COMBO_WINDOW -> listOf(Arena.COMBO, Arena.SPARSE)
                 ItemEffect.LUCK -> listOf(Arena.OFFERS, Arena.CROWD)
                 ItemEffect.OVERDRIVE_GAIN -> listOf(Arena.CROWD, Arena.OBSTACLE)
+                // The impact arena orbits a ring: grip and sling change its speed.
+                ItemEffect.GRIP, ItemEffect.SLING -> listOf(Arena.IMPACT, Arena.FAST)
             }
         }
         item.rules.forEach { rule ->
@@ -990,6 +993,7 @@ class PerceptibleItemImpactTest {
                 is ItemRule.SkillCooldown, is ItemRule.SkillPower, ItemRule.SkillCharges, is ItemRule.SkillAttunement,
                 is ItemRule.CatalysisRate -> listOf(Arena.SKILLS)
                 is ItemRule.ApexCooldown -> listOf(Arena.APEX)
+                is ItemRule.ObstacleTuning -> listOf(Arena.OBSTACLE, Arena.SHELTER)
             }
         }
         conditions.forEach { arenas += conditionArenas(it) }
@@ -1088,6 +1092,7 @@ class PerceptibleItemImpactTest {
         EffectCondition.TargetControlled -> listOf(Arena.WEAPON, Arena.SIEGE)
         EffectCondition.ApexActive -> listOf(Arena.APEX)
         is EffectCondition.WeaponFamilyIs -> listOf(Arena.WEAPON, Arena.STATUS)
+        is EffectCondition.ObstacleIs, is EffectCondition.NearObstacle -> listOf(Arena.OBSTACLE, Arena.SHELTER)
         else -> emptyList()
     }
 

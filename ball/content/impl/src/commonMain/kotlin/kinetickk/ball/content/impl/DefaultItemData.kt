@@ -64,7 +64,7 @@ private fun apply(element: StatusElement, stacks: Int, radius: Float = 0f) =
 private fun applyPick(pick: ElementPick, stacks: Int, radius: Float = 0f) =
     EffectAction.ApplyStatus(pick, stacks, radius)
 
-private class ItemDraft(
+internal class ItemDraft(
     val name: String,
     val flavor: String,
     val rarity: ItemRarity,
@@ -1084,7 +1084,7 @@ private fun pair(first: StatusElement, second: StatusElement): List<EffectCondit
     listOf(EffectCondition.ElementIs(first), EffectCondition.ElementIs(second))
 
 internal fun defaultItems(): ImmutableList<ItemDefinition> =
-    (Drafts + ActiveDrafts).mapIndexed { index, draft ->
+    (Drafts + ActiveDrafts + ObstacleDrafts).mapIndexed { index, draft ->
         ItemDefinition(
             id = index,
             name = draft.name,

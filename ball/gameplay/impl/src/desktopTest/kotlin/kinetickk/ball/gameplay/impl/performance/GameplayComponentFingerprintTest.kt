@@ -6,7 +6,7 @@ package kinetickk.ball.gameplay.impl.performance
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
@@ -141,13 +141,13 @@ class GameplayComponentFingerprintTest {
     @Test
     fun pointWitnessRetainsOfferTrialDefendersAndVolleyTelegraph() {
         val point = PointOfInterestProjection(
-            PointOfInterestKind.SEALED_ANOMALY, "Vault", 10f, 20f, true, 24f,
+            SiteKind.SEALED_ANOMALY, "Vault", 10f, 20f, true, 24f,
             1, 0.3f, immutableListOf(11, 12, 13), 0.8f, 1.2f,
         )
         val expected = canonicalPointOfInterestFingerprint(point)
         assertEquals(expected, canonicalPointOfInterestFingerprint(point.copy(defenderIds = immutableListOf(11, 12, 13))))
         listOf(
-            point.copy(kind = PointOfInterestKind.COLLAPSING_ORBIT),
+            point.copy(kind = SiteKind.COLLAPSING_ORBIT),
             point.copy(name = "Orbit"),
             point.copy(x = 11f),
             point.copy(y = 21f),

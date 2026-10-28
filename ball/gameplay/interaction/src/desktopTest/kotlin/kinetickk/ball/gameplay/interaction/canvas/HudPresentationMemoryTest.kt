@@ -11,7 +11,7 @@ import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicPolicy
@@ -349,7 +349,7 @@ class HudPresentationMemoryTest {
         assertFalse(base.with("message" to "OVERHEAT", "messageTime" to 1f).showsMessage())
         assertFalse(base.with("message" to "POLARITY FIELD STRAIN", "messageTime" to 1f).showsMessage())
         assertFalse(base.with("message" to "KINETIC OVERDRIVE", "messageTime" to 1f).showsMessage())
-        val rules = base.content.pointsOfInterest.definition(PointOfInterestKind.SEALED_ANOMALY).instruction
+        val rules = base.content.sites.definition(SiteKind.SEALED_ANOMALY).instruction
         assertFalse(base.with("message" to rules, "messageTime" to 4f).showsMessage())
         assertTrue(base.with("message" to "ELITE SIGNAL", "messageTime" to 1f).showsMessage())
         assertFalse(base.with("message" to "ELITE SIGNAL", "messageTime" to 0f).showsMessage())
@@ -357,17 +357,17 @@ class HudPresentationMemoryTest {
 
     @Test
     fun trialProgressReadsAsValuesWithoutRuleText() {
-        val orbit = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.65f,
+        val orbit = PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.65f,
             immutableListOf(), 0f, 0f)
         val model = base.with("pointsOfInterest" to listOf(orbit).toImmutableList())
         assertEquals(orbit, model.activeTrial())
         assertEquals("5.2 / 8.0 s", trialProgressText(model, orbit, AppLanguage.English))
         assertEquals("5,2 / 8,0 с", trialProgressText(model, orbit, AppLanguage.Russian))
         assertEquals(8, trialSegments(model, orbit))
-        val sealed = PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, 0, 2f / 3f,
+        val sealed = PointOfInterestProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, 0, 2f / 3f,
             immutableListOf(1, 2, 3), 0f, 0f)
         assertEquals("2 / 3", trialProgressText(model, sealed, AppLanguage.English))
-        assertEquals(base.content.pointsOfInterest.definition(PointOfInterestKind.SEALED_ANOMALY).instruction,
+        assertEquals(base.content.sites.definition(SiteKind.SEALED_ANOMALY).instruction,
             model.trialRules(sealed, AppLanguage.English))
         val inactive = orbit.copy(active = false)
         assertEquals(null, base.with("pointsOfInterest" to listOf(inactive).toImmutableList()).activeTrial())

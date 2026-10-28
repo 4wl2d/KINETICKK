@@ -13,7 +13,7 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.interaction.layout.runningControlBounds
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
@@ -43,7 +43,7 @@ class HudKeepOutTest {
 
     @Test
     fun everyTopBlockTheHudDrawsLiesInsideTheWorldKeepOut() {
-        val orbit = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
+        val orbit = PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
             immutableListOf(), 0f, 0f)
         for ((dpWidth, dpHeight) in viewports) for (density in listOf(1f, 3f)) for (language in AppLanguage.entries) {
             val width = dpWidth * density

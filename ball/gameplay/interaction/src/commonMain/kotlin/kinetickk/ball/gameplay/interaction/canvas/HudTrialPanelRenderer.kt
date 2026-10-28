@@ -9,7 +9,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.TextLayoutResult
 import kinetickk.ball.content.api.DirectedReward
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_HUD_TOP_DP
@@ -42,7 +42,7 @@ internal fun GameplayRenderModel.activeTrial(): PointOfInterestProjection? {
 
 /** The trial's rules for its (!) info button: the content instruction in the player's language. */
 internal fun GameplayRenderModel.trialRules(point: PointOfInterestProjection, language: AppLanguage): String =
-    content.pointsOfInterest.definition(point.kind).instruction.localizedContent(language)
+    content.sites.definition(point.kind).instruction.localizedContent(language)
 
 /**
  * Geometry of the top-left trial panel (`Anomaly` board), shared by the renderer, the focusable
@@ -222,7 +222,7 @@ internal fun DrawScope.drawTrialPanel(
 
     // Row 4: progress value, reward. The orbit's seconds change every frame while orbiting, so they
     // are drawn from cached digit layouts; counted goals change rarely and use one cached line.
-    val progressWidth = if (point.kind == PointOfInterestKind.COLLAPSING_ORBIT) {
+    val progressWidth = if (point.kind == SiteKind.COLLAPSING_ORBIT) {
         drawOrbitProgress(engine, point, text, innerLeft, layout.rowValueCenter, layout.monoSize)
     } else {
         val progressLayout = HudDrawCache.layout(HudText.TRIAL_PROGRESS, text, trialProgressText(engine, point, language),
@@ -234,7 +234,7 @@ internal fun DrawScope.drawTrialPanel(
     HudLayoutProbe.record(HudBlock.TRIAL_PROGRESS, innerLeft, layout.rowValueCenter - valueHalf, innerLeft + progressWidth,
         layout.rowValueCenter + valueHalf)
     val rewardText = TrialScratch.reward.of(language, point.kind.ordinal.toLong()) {
-        language.text(rewardText(engine.content.pointsOfInterest.definition(point.kind).reward))
+        language.text(rewardText(engine.content.sites.definition(point.kind).reward.directed))
     }
     // Beside the value at the board's sizes; on its own row when the text is larger.
     val rewardRoom = if (layout.rewardRow) innerRight - innerLeft else innerRight - innerLeft - progressWidth - 12f * unit
@@ -419,7 +419,7 @@ private fun DrawScope.drawOrbitProgress(
     monoSize: Float,
 ): Float {
     val language = measurer.language
-    val required = engine.content.pointsOfInterest.orbitRequiredSeconds
+    val required = engine.content.sites.windows.orbitRequiredSeconds
     val requiredTenths = (required * 10f).roundToInt()
     val tenths = (point.progress.coerceIn(0f, 1f) * required * 10f).roundToInt().toLong()
     val separator = if (language == AppLanguage.Russian) "," else "."
@@ -439,9 +439,11 @@ private const val TRIAL_DIGIT_LINE_HEIGHT_EM = 1.345f
 
 /** Progress cells: one per orbit second, per defender or per beacon of the circuit. */
 internal fun trialSegments(engine: GameplayRenderModel, point: PointOfInterestProjection): Int = when (point.kind) {
-    PointOfInterestKind.COLLAPSING_ORBIT -> ceil(engine.content.pointsOfInterest.orbitRequiredSeconds).toInt().coerceIn(1, 24)
-    PointOfInterestKind.SEALED_ANOMALY -> point.defenderIds.size.coerceIn(1, 12)
-    PointOfInterestKind.RESONANT_CIRCUIT -> RESONANT_CIRCUIT_BEACONS
+    SiteKind.COLLAPSING_ORBIT -> ceil(engine.content.sites.windows.orbitRequiredSeconds).toInt().coerceIn(1, 24)
+    SiteKind.SEALED_ANOMALY -> point.defenderIds.size.coerceIn(1, 12)
+    SiteKind.RESONANT_CIRCUIT -> RESONANT_CIRCUIT_BEACONS
+    // Only the anomalies are offered until the site lane draws kinds by weight.
+    else -> 1
 }
 
 /** Beacons in a resonant circuit (the projection reports progress as visited beacons over three). */
@@ -451,8 +453,8 @@ private const val RESONANT_CIRCUIT_BEACONS = 3
 internal fun trialProgressText(engine: GameplayRenderModel, point: PointOfInterestProjection, language: AppLanguage): String {
     val progress = point.progress.coerceIn(0f, 1f)
     return when (point.kind) {
-        PointOfInterestKind.COLLAPSING_ORBIT -> {
-            val required = engine.content.pointsOfInterest.orbitRequiredSeconds
+        SiteKind.COLLAPSING_ORBIT -> {
+            val required = engine.content.sites.windows.orbitRequiredSeconds
             val tenths = (progress * required * 10f).roundToInt()
             TrialScratch.progress.of(language, tenths.toLong() * 1_000L + (required * 10f).roundToInt()) {
                 language.text(HudRedesignText.TrialSeconds, tenthsText(tenths, language), tenthsText((required * 10f).roundToInt(), language))
@@ -471,8 +473,10 @@ private fun tenthsText(tenths: Int, language: AppLanguage): String {
     return "${tenths / 10}$separator${abs(tenths % 10)}"
 }
 
-private fun rewardText(reward: DirectedReward): HudRedesignText = when (reward) {
+private fun rewardText(reward: DirectedReward?): HudRedesignText = when (reward) {
     DirectedReward.WEAPON -> HudRedesignText.RewardWeapon
     DirectedReward.RELIC -> HudRedesignText.RewardRelic
     DirectedReward.ITEM_AND_REPAIR -> HudRedesignText.RewardItemAndRepair
+    // Every anomaly names a directed reward; the other kinds are not offered until the site lane draws kinds.
+    null -> HudRedesignText.RewardItemAndRepair
 }

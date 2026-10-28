@@ -77,6 +77,11 @@ internal val EnemyType.profile: EnemyProfile
         EnemyType.BROODMOTHER -> BROODMOTHER_PROFILE
         EnemyType.REFLECTOR -> REFLECTOR_PROFILE
         EnemyType.HERALD -> HERALD_PROFILE
+        // 0.6.0 kinds: Drifter stand-ins until their own profiles land; no run spawns them yet.
+        EnemyType.COMET, EnemyType.PYLON, EnemyType.SENTRY, EnemyType.CRAWLER, EnemyType.SERAPH, EnemyType.CHOIR,
+        EnemyType.IMP, EnemyType.HOUND, EnemyType.CIPHER, EnemyType.MIRROR, EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN,
+        EnemyType.THRONE, EnemyType.PYRE_HERALD, EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT,
+        -> DRIFTER_PROFILE
     }
 
 /** Splitter fragments are Drifters with their own base integrity and radius. */

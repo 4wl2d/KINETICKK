@@ -4,7 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.EquippedRelic
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.StatusElement
@@ -63,7 +63,7 @@ class GameplayRenderModelMapperTest {
             pointsOfInterest = listOf(
                 PointOfInterestState(
                     offerId = 1,
-                    kind = PointOfInterestKind.COLLAPSING_ORBIT,
+                    kind = SiteKind.COLLAPSING_ORBIT,
                     x = 300f,
                     y = 400f,
                     expiresAt = 90f,

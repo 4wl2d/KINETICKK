@@ -144,7 +144,7 @@ data class CharacterAbilityProjection(
 )
 
 data class PointOfInterestProjection(
-    val kind: kinetickk.ball.content.api.PointOfInterestKind,
+    val kind: kinetickk.ball.content.api.SiteKind,
     val name: String,
     val x: Float,
     val y: Float,

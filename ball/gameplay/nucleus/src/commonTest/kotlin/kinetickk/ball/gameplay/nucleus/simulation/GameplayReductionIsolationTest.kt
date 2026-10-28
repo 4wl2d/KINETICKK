@@ -5,7 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.DirectedReward
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.api.BuffStat
@@ -866,7 +866,7 @@ class GameplayReductionIsolationTest {
         pointsOfInterest = listOf(
             PointOfInterestState(
                 offerId = 1,
-                kind = PointOfInterestKind.SEALED_ANOMALY,
+                kind = SiteKind.SEALED_ANOMALY,
                 x = 400f,
                 y = 300f,
                 expiresAt = 100f,

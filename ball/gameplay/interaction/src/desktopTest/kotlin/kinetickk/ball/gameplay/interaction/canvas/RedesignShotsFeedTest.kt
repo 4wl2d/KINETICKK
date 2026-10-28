@@ -25,7 +25,7 @@ import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicAspect
@@ -154,7 +154,7 @@ class RedesignShotsFeedTest {
         }
         val trial = shot == Shot.FEED_TRIAL || shot == Shot.FEED_SYNERGY4_TRIAL
         val points = if (trial) listOf(
-            PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", coreX, coreY, true, 14.2f, 0, 0.65f,
+            PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", coreX, coreY, true, 14.2f, 0, 0.65f,
                 immutableListOf(), 0f, 0f),
         ) else emptyList()
         val model = base.with(

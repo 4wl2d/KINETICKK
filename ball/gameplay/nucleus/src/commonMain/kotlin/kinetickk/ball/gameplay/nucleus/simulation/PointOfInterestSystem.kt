@@ -3,7 +3,8 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.ANOMALY_KIND_COUNT
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.DirectedReward
 import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.api.RelicAspect
@@ -25,7 +26,7 @@ internal fun MutableGameState.resetPointsOfInterest() {
 
 internal fun MutableGameState.updatePointsOfInterest(delta: Float) {
     if (phase != GamePhase.RUNNING) return
-    val policy = content.pointsOfInterest
+    val policy = content.sites.windows
     val bossAt = content.tempo.bossAtSeconds
     if (bossSpawned || elapsed >= bossAt) {
         pointsOfInterest = emptyList()
@@ -44,7 +45,7 @@ internal fun MutableGameState.updatePointsOfInterest(delta: Float) {
                 // Anomalies move out from under obstacles, so their ring and beacons stay reachable.
                 val (pointX, pointY) = clearPointOfInterestSite(coreX + cos(angle) * 560f, coreY + sin(angle) * 560f)
                 PointOfInterestState(
-                    offerId, PointOfInterestKind.entries[(offerId + side) % PointOfInterestKind.entries.size],
+                    offerId, SiteKind.entries[(offerId + side) % ANOMALY_KIND_COUNT],
                     pointX, pointY,
                     scheduledAt + policy.offerLifetime,
                 )
@@ -71,14 +72,14 @@ internal fun MutableGameState.updatePointsOfInterest(delta: Float) {
     }
     var completed = false
     when (trial.kind) {
-        PointOfInterestKind.RESONANT_CIRCUIT -> {
+        SiteKind.RESONANT_CIRCUIT -> {
             val beacon = trial.beacon(trial.nextBeacon)
             if (segmentCircleIntersects(previousCoreX, previousCoreY, coreX, coreY, beacon.x, beacon.y, 55f)) {
                 trial = trial.copy(nextBeacon = trial.nextBeacon + 1)
                 completed = trial.nextBeacon == 4
             }
         }
-        PointOfInterestKind.SEALED_ANOMALY -> {
+        SiteKind.SEALED_ANOMALY -> {
             completed = trial.defeatedDefenders == 3
             // Defenders remain around their vault, rather than following a fleeing player forever.
             for (enemy in enemies) if (enemy.id in trial.defenderIds && !enemy.dead) {
@@ -93,7 +94,7 @@ internal fun MutableGameState.updatePointsOfInterest(delta: Float) {
                 }
             }
         }
-        PointOfInterestKind.COLLAPSING_ORBIT -> {
+        SiteKind.COLLAPSING_ORBIT -> {
             val distance = length(coreX - trial.x, coreY - trial.y)
             val moved = length(coreX - previousCoreX, coreY - previousCoreY)
             val earned = if (distance in 120f..190f && moved >= 80f * delta) delta else 0f
@@ -111,11 +112,14 @@ internal fun MutableGameState.updatePointsOfInterest(delta: Float) {
                 }
             }
         }
+        // Only the anomalies are offered until the site lane draws kinds by weight.
+        else -> Unit
     }
     if (completed) {
         check(pendingDirectedRewards.size < 6) { "At most six scheduled POI rewards per run" }
-        pendingDirectedRewards = pendingDirectedRewards + policy.definition(trial.kind).reward
-        if (trial.kind == PointOfInterestKind.COLLAPSING_ORBIT) pendingCompletedOrbits++
+        pendingDirectedRewards = pendingDirectedRewards +
+            checkNotNull(content.sites.definition(trial.kind).reward.directed) { "An anomaly grants a directed reward" }
+        if (trial.kind == SiteKind.COLLAPSING_ORBIT) pendingCompletedOrbits++
         pointsOfInterest = emptyList() // consume before any choice can open
         message = "ANOMALY RESOLVED"
         messageTime = 2f
@@ -123,9 +127,9 @@ internal fun MutableGameState.updatePointsOfInterest(delta: Float) {
 }
 
 internal fun MutableGameState.activatePointOfInterest(point: PointOfInterestState) {
-    if (point.kind == PointOfInterestKind.SEALED_ANOMALY && enemies.size + 3 > content.rebirth.maxActiveEnemies) return
+    if (point.kind == SiteKind.SEALED_ANOMALY && enemies.size + 3 > content.rebirth.maxActiveEnemies) return
     val ids = mutableListOf<Int>()
-    if (point.kind == PointOfInterestKind.SEALED_ANOMALY) repeat(3) { index ->
+    if (point.kind == SiteKind.SEALED_ANOMALY) repeat(3) { index ->
         val angle = TAU * index / 3f
         val integrity = spawnIntegrity(EnemyType.WARDEN) * POINT_DEFENDER_HEALTH_SHARE
         val enemy = Enemy(
@@ -136,9 +140,9 @@ internal fun MutableGameState.activatePointOfInterest(point: PointOfInterestStat
         enemies += enemy
         ids += enemy.id
     }
-    pointsOfInterest = listOf(point.copy(active = true, remaining = content.pointsOfInterest.trialDuration,
+    pointsOfInterest = listOf(point.copy(active = true, remaining = content.sites.windows.trialDuration,
         defenderIds = ids.toImmutableList()))
-    message = content.pointsOfInterest.definition(point.kind).instruction
+    message = content.sites.definition(point.kind).instruction
     messageTime = 4f
 }
 

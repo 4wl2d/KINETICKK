@@ -25,7 +25,7 @@ import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicDefinition
@@ -209,21 +209,21 @@ class RedesignShotsHudTest {
         val trial = shot == Shot.TRIAL || shot == Shot.TRIAL_INFO
         val points = when {
             trial -> listOf(
-                PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", coreX, coreY, true, 14.2f, 0, 0.65f,
+                PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", coreX, coreY, true, 14.2f, 0, 0.65f,
                     immutableListOf(), 0f, 0f),
             )
             // Offers far above, above-left and above-right of the view: their edge markers.
             shot == Shot.ELITE_MARKERS -> listOf(
-                PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed anomaly", 0f, -3_000f, false, 20f, 0, 0f,
+                PointOfInterestProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, -3_000f, false, 20f, 0, 0f,
                     immutableListOf(), 0f, 0f),
-                PointOfInterestProjection(PointOfInterestKind.RESONANT_CIRCUIT, "Resonant circuit", -1_400f, -2_600f, false, 20f, 0, 0f,
+                PointOfInterestProjection(SiteKind.RESONANT_CIRCUIT, "Resonant circuit", -1_400f, -2_600f, false, 20f, 0, 0f,
                     immutableListOf(), 0f, 0f),
-                PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 1_400f, -2_600f, false, 20f, 0, 0f,
+                PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 1_400f, -2_600f, false, 20f, 0, 0f,
                     immutableListOf(), 0f, 0f),
             )
             // An orbit whose ring center sits just under the top band: its timer must avoid the boss block.
             shot == Shot.ARCHITECT_TRIAL -> listOf(
-                PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", coreX, coreY - 120f, true, 14.2f, 0, 0.4f,
+                PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", coreX, coreY - 120f, true, 14.2f, 0, 0.4f,
                     immutableListOf(), 0f, 0f),
             )
             else -> emptyList()

@@ -702,6 +702,7 @@ class ContentCatalogTest {
         val percentEffects = setOf(
             ItemEffect.IMPACT_DAMAGE, ItemEffect.WEAPON_POWER, ItemEffect.COOLING, ItemEffect.DASH_POWER,
             ItemEffect.ATTACK_SPEED, ItemEffect.DATA_GAIN, ItemEffect.MATTER_GAIN, ItemEffect.OVERDRIVE_GAIN,
+            ItemEffect.GRIP, ItemEffect.SLING,
         )
         profile.matrixNodes.forEach { node ->
             val stats = node.effects.filterIsInstance<MatrixEffect.Stat>().map { it.delta }

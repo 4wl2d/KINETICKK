@@ -266,7 +266,7 @@ class SpawnDirectorTest {
     fun aHeraldAtTheHardCapEvictsTheOldestOrdinaryEnemyButNeverAnActiveDefender() {
         val state = directorState(seed = 33)
         val offer = kinetickk.ball.gameplay.nucleus.model.PointOfInterestState(
-            0, kinetickk.ball.content.api.PointOfInterestKind.SEALED_ANOMALY, 0f, 0f, 85f,
+            0, kinetickk.ball.content.api.SiteKind.SEALED_ANOMALY, 0f, 0f, 85f,
         )
         state.activatePointOfInterest(offer)
         val defenders = state.pointsOfInterest.single().defenderIds

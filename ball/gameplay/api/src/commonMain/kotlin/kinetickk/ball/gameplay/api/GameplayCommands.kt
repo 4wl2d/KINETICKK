@@ -25,6 +25,13 @@ interface GameplayLifecycle {
     fun exitRun(reply: InlineReply<GameplayRunExited, GameplayRefusal>)
 }
 
+/**
+ * The rules of one run, chosen by the AppSession before the start and fixed for the run. [STANDARD] counts toward the
+ * Profile. [EASY] (Baby mode) never ends on the singularity, halves incoming damage, never dies to a rock, offers no
+ * Heirlooms and publishes no Profile progress at all.
+ */
+enum class RunMode { STANDARD, EASY }
+
 data class GameplayRunStarted(val runId: RunId, val revision: GameplayRevision)
 data class GameplayOverlayPaused(val runId: RunId, val revision: GameplayRevision)
 data class GameplayRunExited(

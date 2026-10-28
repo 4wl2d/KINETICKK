@@ -929,7 +929,7 @@ private fun MutableGameState.pointsOfInterestProjection(
         }
     }
     return pointsOfInterest.mapToImmutableList { point ->
-        PointOfInterestProjection(point.kind, content.pointsOfInterest.definition(point.kind).name,
+        PointOfInterestProjection(point.kind, content.sites.definition(point.kind).name,
             point.x, point.y, point.active, pointRemaining(point), point.nextBeacon, pointProgress(point),
             point.defenderIds, point.warningRemaining, point.volleyAngle)
     }
@@ -939,10 +939,12 @@ private fun MutableGameState.pointRemaining(point: PointOfInterestState): Float 
     if (point.active) point.remaining else (point.expiresAt - elapsed).coerceAtLeast(0f)
 
 private fun MutableGameState.pointProgress(point: PointOfInterestState): Float = when (point.kind) {
-    kinetickk.ball.content.api.PointOfInterestKind.RESONANT_CIRCUIT -> (point.nextBeacon - 1) / 3f
-    kinetickk.ball.content.api.PointOfInterestKind.SEALED_ANOMALY -> point.defeatedDefenders / 3f
-    kinetickk.ball.content.api.PointOfInterestKind.COLLAPSING_ORBIT ->
-        point.orbitSeconds / content.pointsOfInterest.orbitRequiredSeconds
+    kinetickk.ball.content.api.SiteKind.RESONANT_CIRCUIT -> (point.nextBeacon - 1) / 3f
+    kinetickk.ball.content.api.SiteKind.SEALED_ANOMALY -> point.defeatedDefenders / 3f
+    kinetickk.ball.content.api.SiteKind.COLLAPSING_ORBIT ->
+        point.orbitSeconds / content.sites.windows.orbitRequiredSeconds
+    // Only the anomalies are offered until the site lane draws kinds by weight.
+    else -> 0f
 }
 
 private fun MutableGameState.pointProjectionMatches(

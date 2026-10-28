@@ -47,6 +47,45 @@ class WorldContentTest {
     }
 
     @Test
+    fun obstacleImpactTuningRejectsSharesOutsideTheirBounds() {
+        val shipped = ObstacleTuning()
+        assertEquals(0.3f, shipped.scrapeShare)
+        assertEquals(0.45f, shipped.ricochetReach)
+        assertEquals(0.77f, shipped.lethalCeilingReach)
+        assertEquals(0.06f, shipped.minimumDamageShare)
+        assertEquals(0.4f, shipped.shieldBleed)
+        assertEquals(0.35f, shipped.scrapeFriction)
+        // The impact knobs ship unread: the 0.5.0 band defaults stay.
+        assertEquals(0.45f, shipped.damageStartReach)
+        assertEquals(0.72f, shipped.lethalReach)
+        assertEquals(0.5f, shipped.damageShare)
+
+        ObstacleTuning(scrapeShare = 0f)
+        ObstacleTuning(scrapeShare = 1f)
+        assertFailsWith<IllegalArgumentException> { ObstacleTuning(scrapeShare = 1.01f) }
+        assertFailsWith<IllegalArgumentException> { ObstacleTuning(scrapeShare = -0.01f) }
+        ObstacleTuning(shieldBleed = 0f)
+        ObstacleTuning(shieldBleed = 1f)
+        assertFailsWith<IllegalArgumentException> { ObstacleTuning(shieldBleed = 1.01f) }
+        ObstacleTuning(scrapeFriction = 0f)
+        ObstacleTuning(scrapeFriction = 1f)
+        assertFailsWith<IllegalArgumentException> { ObstacleTuning(scrapeFriction = -0.01f) }
+        // The damage floor stays below the lethal share.
+        ObstacleTuning(damageShare = 0.5f, minimumDamageShare = 0.49f)
+        assertFailsWith<IllegalArgumentException> { ObstacleTuning(damageShare = 0.5f, minimumDamageShare = 0.5f) }
+        assertFailsWith<IllegalArgumentException> { ObstacleTuning(minimumDamageShare = -0.01f) }
+        // A ricochet is always a hurting hit.
+        ObstacleTuning(ricochetReach = 0.45f)
+        assertFailsWith<IllegalArgumentException> { ObstacleTuning(ricochetReach = 0.44f) }
+        assertFailsWith<IllegalArgumentException> { ObstacleTuning(ricochetReach = 1f) }
+        // The lethal ceiling lies past the lethal reach and inside the viewport.
+        ObstacleTuning(lethalCeilingReach = 0.73f)
+        assertFailsWith<IllegalArgumentException> { ObstacleTuning(lethalCeilingReach = 0.72f) }
+        ObstacleTuning(lethalCeilingReach = 0.99f)
+        assertFailsWith<IllegalArgumentException> { ObstacleTuning(lethalCeilingReach = 1f) }
+    }
+
+    @Test
     fun pickupTuningShipsTheWiderMagnetAndRejectsAVacuumSlowerThanTheCore() {
         val tuning = PickupTuning()
         assertEquals(320f, tuning.magnetRadius)

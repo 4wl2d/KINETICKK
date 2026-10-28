@@ -33,7 +33,7 @@ import androidx.compose.ui.test.click
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.gameplay.nucleus.render.SkillSlotProjection
 import kinetickk.ball.gameplay.nucleus.render.SkillBarProjection
@@ -88,7 +88,7 @@ class GameplayHudSemanticsTest {
 
     private fun startTrial(pulses: MutableList<GameplayInteractionPulse>) {
         val snapshot = hudTestSnapshot()
-        val orbit = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
+        val orbit = PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
             immutableListOf(), 0f, 0f)
         trialModel = requireNotNull(snapshot.renderModel).with("pointsOfInterest" to listOf(orbit).toImmutableList())
         val running = snapshot.withModel(trialModel)
@@ -159,7 +159,7 @@ class GameplayHudSemanticsTest {
     @Test
     fun keyboardFocusReturnsToTheGameWhenTheTrialEndsWhileItsInfoIsFocused() {
         val snapshot = hudTestSnapshot()
-        val orbit = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
+        val orbit = PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
             immutableListOf(), 0f, 0f)
         val base = requireNotNull(snapshot.renderModel)
         val withTrial = snapshot.withModel(base.with("pointsOfInterest" to listOf(orbit).toImmutableList()))
@@ -208,7 +208,7 @@ class GameplayHudSemanticsTest {
     @Test
     fun trialRulesSitBehindAFocusableInfoNodeAndDesktopPauseAndBuildAreHeaderButtons() {
         val snapshot = hudTestSnapshot()
-        val orbit = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
+        val orbit = PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
             immutableListOf(), 0f, 0f)
         val model = requireNotNull(snapshot.renderModel).with("pointsOfInterest" to listOf(orbit).toImmutableList())
         trialModel = model
@@ -230,7 +230,7 @@ class GameplayHudSemanticsTest {
                 Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
             }
         }
-        val rules = model.content.pointsOfInterest.definition(PointOfInterestKind.COLLAPSING_ORBIT).instruction
+        val rules = model.content.sites.definition(SiteKind.COLLAPSING_ORBIT).instruction
         val info = compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG)
         info.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf(rules)))
         compose.mainClock.advanceTimeByFrame()

@@ -12,7 +12,8 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.ANOMALY_KIND_COUNT
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
@@ -49,13 +50,13 @@ class WorldPointLabelsTest {
     fun pointTimersNeverTouchTheHud() {
         val scenes = listOf(
             // The circuit's target beacon (nextBeacon 1 leads to beacon order 2, right of center).
-            "beacon" to listOf(point(PointOfInterestKind.RESONANT_CIRCUIT, -BEACON_DX, -BEACON_DY, active = true)),
-            "vault" to listOf(point(PointOfInterestKind.SEALED_ANOMALY, 0f, 0f, active = true)),
-            "offer" to listOf(point(PointOfInterestKind.RESONANT_CIRCUIT, 0f, 0f, active = false)),
+            "beacon" to listOf(point(SiteKind.RESONANT_CIRCUIT, -BEACON_DX, -BEACON_DY, active = true)),
+            "vault" to listOf(point(SiteKind.SEALED_ANOMALY, 0f, 0f, active = true)),
+            "offer" to listOf(point(SiteKind.RESONANT_CIRCUIT, 0f, 0f, active = false)),
             // An offer while another point's trial runs (its panel joins the HUD).
             "offer-trial" to listOf(
-                point(PointOfInterestKind.SEALED_ANOMALY, 0f, 0f, active = false),
-                point(PointOfInterestKind.COLLAPSING_ORBIT, -9_000f, -9_000f, active = true),
+                point(SiteKind.SEALED_ANOMALY, 0f, 0f, active = false),
+                point(SiteKind.COLLAPSING_ORBIT, -9_000f, -9_000f, active = true),
             ),
         )
         for ((width, height) in sizes) for (textScale in textScales) for ((name, points) in scenes) {
@@ -82,7 +83,7 @@ class WorldPointLabelsTest {
 
     @Test
     fun targetBeaconAndItsEdgeMarkerNeverDrawTogether() {
-        val points = listOf(point(PointOfInterestKind.RESONANT_CIRCUIT, -BEACON_DX, -BEACON_DY, active = true))
+        val points = listOf(point(SiteKind.RESONANT_CIRCUIT, -BEACON_DX, -BEACON_DY, active = true))
         for ((width, height) in sizes) for (textScale in listOf(1f, 1.75f)) {
             val model = model(width, height, points)
             var marks = 0
@@ -123,9 +124,9 @@ class WorldPointLabelsTest {
         for ((width, height) in sizes) for (language in AppLanguage.entries) for (textScale in textScales) {
             val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64),
                 textScale, language, HudTestFonts.typography.copy(localeList = language.localeList()))
-            for (kind in PointOfInterestKind.entries) {
+            for (kind in SiteKind.entries.take(ANOMALY_KIND_COUNT)) {
                 val base = model(width, height, emptyList())
-                val name = base.content.pointsOfInterest.definition(kind).name
+                val name = base.content.sites.definition(kind).name
                 val model = base.with("pointsOfInterest" to immutableListOf(
                     PointOfInterestProjection(kind, name, 0f, 0f, false, 31f, 0, 0f, immutableListOf(), 0f, 0f)))
                 val full = measureKkText(measurer, name.localizedContent(language), measurer.typography.labelStyle(worldLabelSp(15f)),
@@ -158,11 +159,11 @@ class WorldPointLabelsTest {
             }
         }
         // The name is drawn in the kind's color: gravitic for the sealed anomaly, you for the circuit.
-        listOf(PointOfInterestKind.SEALED_ANOMALY to Kk.AGravitic, PointOfInterestKind.RESONANT_CIRCUIT to KkRolePalette.Default.you)
+        listOf(SiteKind.SEALED_ANOMALY to Kk.AGravitic, SiteKind.RESONANT_CIRCUIT to KkRolePalette.Default.you)
             .forEach { (kind, color) ->
                 val base = model(1_440, 810, emptyList())
                 val model = base.with("pointsOfInterest" to immutableListOf(PointOfInterestProjection(kind,
-                    base.content.pointsOfInterest.definition(kind).name, 0f, 0f, false, 31f, 0, 0f, immutableListOf(), 0f, 0f)))
+                    base.content.sites.definition(kind).name, 0f, 0f, false, 31f, 0, 0f, immutableListOf(), 0f, 0f)))
                 val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64),
                     1.25f, AppLanguage.Russian, HudTestFonts.typography.copy(localeList = AppLanguage.Russian.localeList()))
                 val bitmap = ImageBitmap(1_440, 810)
@@ -182,7 +183,7 @@ class WorldPointLabelsTest {
     fun orbitLabelShowsTheSecondsInTheRing() {
         // Anomaly.png: "5.2s" over the ring, the panel's "5.2 / 8.0 s" value, not the trial clock.
         val base = model(1_440, 810, emptyList())
-        val required = base.content.pointsOfInterest.orbitRequiredSeconds
+        val required = base.content.sites.windows.orbitRequiredSeconds
         listOf(0f, 0.3f, 0.65f, 0.99f, 1f, 1.3f).forEach { progress ->
             val tenths = orbitRingTenths(progress, required)
             val point = orbit(progress, remaining = 14.2f)
@@ -212,7 +213,7 @@ class WorldPointLabelsTest {
         assertFalse(early.contentEquals(label(0.3f, remaining = 14.2f, box).second), "the label shows the time in the ring")
     }
 
-    private fun orbit(progress: Float, remaining: Float) = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT,
+    private fun orbit(progress: Float, remaining: Float) = PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT,
         "Collapsing orbit", 0f, 0f, true, remaining, 0, progress, immutableListOf(), 0f, 0f)
 
     private fun sweep(width: Int, height: Int, textScale: Float, model: GameplayRenderModel, step: Int, check: (Float, Float) -> Unit) {
@@ -252,7 +253,7 @@ class WorldPointLabelsTest {
             "enemies" to immutableListOf<EnemyProjection>(), "pointsOfInterest" to points.toImmutableList(),
         )
 
-    private fun point(kind: PointOfInterestKind, x: Float, y: Float, active: Boolean) =
+    private fun point(kind: SiteKind, x: Float, y: Float, active: Boolean) =
         PointOfInterestProjection(kind, kind.name, x, y, active, 14f, 1, 0.4f, immutableListOf(), 0f, 0f)
 
     private fun Rect.onScreen(width: Int, height: Int) = left >= 0f && top >= 0f && right <= width && bottom <= height

@@ -153,6 +153,51 @@ class RuleVocabularyTest {
     }
 
     @Test
+    fun theObstacleVocabularyHoldsOnObstacleTriggersAndRulesKeepTheirBounds() {
+        val carriers = setOf(
+            EffectTrigger.RICOCHET, EffectTrigger.SLAM, EffectTrigger.HURT, EffectTrigger.SHATTER, EffectTrigger.BOOST, EffectTrigger.GRAZE,
+        )
+        assertEquals(carriers, ObstacleTriggers)
+        for (trigger in EffectTrigger.entries) {
+            assertEquals(trigger in carriers, EffectCondition.ObstacleIs(ObstacleKind.CRYSTAL).validOn(trigger), "ObstacleIs on $trigger")
+            assertTrue(EffectCondition.NearObstacle(180f).validOn(trigger), "NearObstacle on $trigger")
+        }
+        // The three obstacle triggers carry no enemy target.
+        assertTrue(listOf(EffectTrigger.SHATTER, EffectTrigger.BOOST, EffectTrigger.GRAZE).none { it in TargetedTriggers })
+
+        val burst = EffectAction.Burst(80f, DamageBasis.FLAT, 1f)
+        clause(EffectTrigger.BOOST, burst, conditions = listOf(EffectCondition.ObstacleIs(ObstacleKind.GRAVITY_WELL)))
+        assertFailsWith<IllegalArgumentException> {
+            clause(EffectTrigger.KILL, burst, conditions = listOf(EffectCondition.ObstacleIs(ObstacleKind.GRAVITY_WELL)))
+        }
+        // The obstacle a trigger is about is a dispatch fact; the Core's distance to rocks holds anywhere, rules included.
+        assertTrue(EffectCondition.ObstacleIs(ObstacleKind.BUMPER).needsDispatch)
+        assertFalse(EffectCondition.NearObstacle(40f).needsDispatch)
+        assertFailsWith<IllegalArgumentException> { ItemRule.WhileModifier(EffectCondition.ObstacleIs(ObstacleKind.ASTEROID), BuffStat.DAMAGE, 0.12f) }
+        ItemRule.WhileModifier(EffectCondition.NearObstacle(180f), BuffStat.DAMAGE, 0.12f)
+
+        EffectCondition.NearObstacle(40f)
+        EffectCondition.NearObstacle(NEAR_OBSTACLE_MAX_DISTANCE)
+        assertFailsWith<IllegalArgumentException> { EffectCondition.NearObstacle(39.99f) }
+        assertFailsWith<IllegalArgumentException> { EffectCondition.NearObstacle(320.01f) }
+        assertFailsWith<IllegalArgumentException> { EffectCondition.NearObstacle(Float.NaN) }
+
+        // aspect to (lowest, highest, first value below, first value above)
+        mapOf(
+            ObstacleAspect.RESTITUTION to listOf(0.05f, 0.3f, 0.049f, 0.301f),
+            ObstacleAspect.COLLISION_DAMAGE to listOf(0.1f, 0.5f, 0.099f, 0.501f),
+            ObstacleAspect.LETHAL_SPEED to listOf(50f, 300f, 49.9f, 300.1f),
+            ObstacleAspect.BOOST_POWER to listOf(0.1f, 0.6f, 0.099f, 0.601f),
+            ObstacleAspect.WELL_PULL to listOf(0.1f, 0.6f, 0.099f, 0.601f),
+        ).forEach { (aspect, values) ->
+            ItemRule.ObstacleTuning(aspect, values[0])
+            ItemRule.ObstacleTuning(aspect, values[1])
+            assertFailsWith<IllegalArgumentException>("$aspect below") { ItemRule.ObstacleTuning(aspect, values[2]) }
+            assertFailsWith<IllegalArgumentException>("$aspect above") { ItemRule.ObstacleTuning(aspect, values[3]) }
+        }
+    }
+
+    @Test
     fun marksAndThrowsNeedATargetedTrigger() {
         for (trigger in EffectTrigger.entries) {
             val mark = runCatching { clause(trigger, EffectAction.ApplyMark(MarkPick.CRACKED, 2f), cooldown = 1f) }
@@ -165,7 +210,10 @@ class RuleVocabularyTest {
     @Test
     fun frequentTriggersRateLimitTheNewActions() {
         assertEquals(
-            setOf(EffectTrigger.SKILL_HIT, EffectTrigger.FIELD_ENTER, EffectTrigger.SHOT_ERASED, EffectTrigger.MARK_CONSUMED),
+            setOf(
+                EffectTrigger.SKILL_HIT, EffectTrigger.FIELD_ENTER, EffectTrigger.SHOT_ERASED, EffectTrigger.MARK_CONSUMED,
+                EffectTrigger.SHATTER, EffectTrigger.BOOST, EffectTrigger.GRAZE,
+            ),
             EffectClause.FrequentTriggers - setOf(
                 EffectTrigger.IMPACT, EffectTrigger.WEAPON_HIT, EffectTrigger.CRIT, EffectTrigger.KILL, EffectTrigger.DASH_HIT,
                 EffectTrigger.BREAK, EffectTrigger.REACTION, EffectTrigger.PICKUP, EffectTrigger.HURT, EffectTrigger.RICOCHET,

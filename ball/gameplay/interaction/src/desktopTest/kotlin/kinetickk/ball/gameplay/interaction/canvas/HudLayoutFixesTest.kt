@@ -16,7 +16,8 @@ import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.text.platform.Font
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.ANOMALY_KIND_COUNT
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.content.api.EquippedRelic
@@ -109,7 +110,7 @@ class HudLayoutFixesTest {
      */
     @Test
     fun hudBlocksStayApartAndUncutAtEveryTextSize() {
-        val orbit = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
+        val orbit = PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
             immutableListOf(), 0f, 0f)
         val fx = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(
             BuildNotificationProjection("Neon Ram", immutableListOf("Impact damage +0.05", "Weapon power +0.04"), 5f),
@@ -216,7 +217,7 @@ class HudLayoutFixesTest {
      */
     @Test
     fun skillRowAndKeyCapsStayClearOfTheHudAtEveryTextSize() {
-        val orbit = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
+        val orbit = PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
             immutableListOf(), 0f, 0f)
         val fx = VisualFxProjection.EMPTY.copy(buildNotifications = immutableListOf(
             BuildNotificationProjection("Neon Ram", immutableListOf("Impact damage +0.05", "Weapon power +0.04"), 5f),
@@ -311,7 +312,7 @@ class HudLayoutFixesTest {
     @Test
     fun trialPanelLinesAreNeverCutForAnyTrial() {
         for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
-            for (textScale in textScales) for (kind in PointOfInterestKind.entries) {
+            for (textScale in textScales) for (kind in SiteKind.entries.take(ANOMALY_KIND_COUNT)) {
                 val point = PointOfInterestProjection(kind, kind.name, 0f, 0f, true, 12f, 1, 0.4f, immutableListOf(1, 2, 3), 0f, 0f)
                 val model = hudTestModel(w.toFloat(), h.toFloat()).with("pointsOfInterest" to listOf(point).toImmutableList())
                 HudDrawCache.forgetLayouts()
@@ -409,10 +410,10 @@ class HudLayoutFixesTest {
 
     @Test
     fun trialRulesOpenBelowThePanelWithoutCoveringIt() {
-        val orbit = PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, 0, 1f / 3f,
+        val orbit = PointOfInterestProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, 0, 1f / 3f,
             immutableListOf(1, 2, 3), 0f, 0f)
         for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
-            for (textScale in textScales) for (kind in PointOfInterestKind.entries) {
+            for (textScale in textScales) for (kind in SiteKind.entries.take(ANOMALY_KIND_COUNT)) {
                 val trial = orbit.copy(kind = kind)
                 val model = hudTestModel(w.toFloat(), h.toFloat()).with("pointsOfInterest" to listOf(trial).toImmutableList())
                 draw(w, h, language, textScale) { measurer ->
@@ -450,7 +451,7 @@ class HudLayoutFixesTest {
     fun trialRulesKeepTheCoreClearOnPhones() {
         val phones = listOf(844 to 390, 780 to 360, 667 to 375, 640 to 360, 390 to 844, 360 to 780, 375 to 667, 360 to 640)
         for (language in AppLanguage.entries) phones.forEach { (w, h) ->
-            for (textScale in textScales) for (kind in PointOfInterestKind.entries) {
+            for (textScale in textScales) for (kind in SiteKind.entries.take(ANOMALY_KIND_COUNT)) {
                 val trial = PointOfInterestProjection(kind, kind.name, 0f, 0f, true, 12f, 0, 0.4f, immutableListOf(1, 2, 3), 0f, 0f)
                 val model = hudTestModel(w.toFloat(), h.toFloat()).with("pointsOfInterest" to listOf(trial).toImmutableList())
                 draw(w, h, language, textScale) { measurer ->
@@ -502,7 +503,7 @@ class HudLayoutFixesTest {
     fun trialClockReadsLikeTheWorldTimers() {
         for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
             for ((remaining, expected) in listOf(14.2f to "0:15", 75.3f to "1:16", 0.4f to "0:01")) {
-                val point = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, remaining, 0, 0.4f,
+                val point = PointOfInterestProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, remaining, 0, 0.4f,
                     immutableListOf(), 0f, 0f)
                 val model = hudTestModel(w.toFloat(), h.toFloat()).with("pointsOfInterest" to listOf(point).toImmutableList())
                 HudDrawCache.forgetLayouts()

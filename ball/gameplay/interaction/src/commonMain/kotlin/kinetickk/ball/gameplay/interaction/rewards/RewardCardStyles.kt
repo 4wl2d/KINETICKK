@@ -14,6 +14,7 @@ import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRule
+import kinetickk.ball.content.api.ObstacleAspect
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.SkillId
@@ -370,8 +371,9 @@ private fun EffectClause.watermarkIcon(): KkIcon = when (val action = actions.fi
         EffectTrigger.OVERDRIVE -> KkIcon.WEAPONS_SINGULARITY_SPEAR
         else -> trigger.watermarkIcon()
     }
-    // Shards are a prism's splinters; a slam's are the wreckage it breaks off.
-    is EffectAction.Shards -> if (trigger == EffectTrigger.SLAM) trigger.watermarkIcon() else KkIcon.WEAPONS_PRISM_RELAY
+    // Shards are a prism's splinters; a slam's or a broken obstacle's are the wreckage it breaks off.
+    is EffectAction.Shards ->
+        if (trigger == EffectTrigger.SLAM || trigger == EffectTrigger.SHATTER) trigger.watermarkIcon() else KkIcon.WEAPONS_PRISM_RELAY
     is EffectAction.Strike -> when (trigger) {
         EffectTrigger.WEAPON_HIT -> KkIcon.WEAPONS_MORNINGSTAR
         // A follow-up on a critical hit is a lance into the opened seam.
@@ -434,6 +436,9 @@ private fun EffectTrigger.watermarkIcon(): KkIcon = when (this) {
     EffectTrigger.FIELD_ENTER -> KkIcon.WEAPONS_GRAVITY_MINES
     EffectTrigger.SHOT_ERASED -> KkIcon.WEAPONS_AEGIS_SHARDS
     EffectTrigger.MARK_CONSUMED -> KkIcon.WEAPONS_NULL_LANCE
+    EffectTrigger.SHATTER -> KkIcon.FORMS_HEXAGON
+    EffectTrigger.BOOST -> KkIcon.WEAPONS_GYRE_DISC
+    EffectTrigger.GRAZE -> KkIcon.FORMS_CRESCENT
 }
 
 private fun ItemEffect.watermarkIcon(): KkIcon = when (this) {
@@ -458,6 +463,10 @@ private fun ItemEffect.watermarkIcon(): KkIcon = when (this) {
     ItemEffect.SHIELD_CAPACITY, ItemEffect.DAMAGE_REDUCTION -> KkIcon.SYSTEM_SHIELD
     ItemEffect.COMBO_WINDOW -> KkIcon.SYSTEM_CYCLE_CLOCK
     ItemEffect.OVERDRIVE_GAIN -> KkIcon.SYSTEM_OVERDRIVE
+    // The tether's turning authority.
+    ItemEffect.GRIP -> KkIcon.SYSTEM_POLARITY
+    // Curves wind speed up.
+    ItemEffect.SLING -> KkIcon.FORMS_SPIRAL
 }
 
 private fun ItemRule.watermarkIcon(): KkIcon? = when (this) {
@@ -470,6 +479,7 @@ private fun ItemRule.watermarkIcon(): KkIcon? = when (this) {
         EffectCondition.ApexActive -> KkIcon.SYSTEM_ELITE
         is EffectCondition.SkillsCharging -> KkIcon.SYSTEM_CYCLE_CLOCK
         is EffectCondition.WeaponFamilyIs -> condition.family.watermarkIcon()
+        is EffectCondition.NearObstacle -> KkIcon.FORMS_SQUARE
         else -> KkIcon.SYSTEM_ANOMALY
     }
     is ItemRule.ElementPotency -> KkIcon.FORMS_TESSERACT
@@ -492,6 +502,13 @@ private fun ItemRule.watermarkIcon(): KkIcon? = when (this) {
     is ItemRule.CatalysisRate -> KkIcon.WEAPONS_ARC_COIL
     is ItemRule.ApexCooldown -> KkIcon.SYSTEM_ELITE
     is ItemRule.CoreLinkRadius -> KkIcon.SYSTEM_POLARITY
+    is ItemRule.ObstacleTuning -> when (aspect) {
+        ObstacleAspect.RESTITUTION -> KkIcon.FORMS_DIPOLE
+        ObstacleAspect.COLLISION_DAMAGE -> KkIcon.SYSTEM_SHIELD
+        ObstacleAspect.LETHAL_SPEED -> KkIcon.SYSTEM_INTEGRITY
+        ObstacleAspect.BOOST_POWER -> KkIcon.WEAPONS_GYRE_DISC
+        ObstacleAspect.WELL_PULL -> KkIcon.FORMS_SPIRAL
+    }
 }
 
 /** A weapon family's mark (a family-gated "while" rule names the family by its emblem weapon or form). */

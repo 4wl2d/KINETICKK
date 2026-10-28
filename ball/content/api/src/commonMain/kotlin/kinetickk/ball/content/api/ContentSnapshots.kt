@@ -68,7 +68,8 @@ data class GameplayContentSnapshot(
     val relics: ImmutableList<RelicDefinition>,
     val rebirth: RebirthPolicySnapshot,
     val relicPolicy: RelicPolicy,
-    val pointsOfInterest: PointOfInterestPolicy = PointOfInterestPolicy(),
+    /** Every site: POI windows, races, challenges, bounties, caches, eggs and sigils. */
+    val sites: SitePolicy = SitePolicy(),
     val tempo: RunTempoProfile = RunTempoProfile(),
     val build: BuildCatalog = defaultBuildCatalog(),
     val coreShapes: ImmutableList<CoreShapeDefinition> = defaultCoreShapeDefinitions(),
@@ -84,6 +85,16 @@ data class GameplayContentSnapshot(
     val skills: ImmutableList<SkillDefinition> = defaultSkillDefinitions(),
     /** Refit and Honing effects a run applies from the profile's upgrade levels. */
     val upgrades: UpgradePolicy = UpgradePolicy(),
+    /** Structures and dungeons far from the start. */
+    val structures: StructurePolicy = StructurePolicy(),
+    /** World layers, rifts and their visits. */
+    val dimensions: DimensionPolicy = DimensionPolicy(),
+    /** Blessing and Pact cards the dimensions offer. */
+    val boons: ImmutableList<RunBoonDefinition> = defaultRunBoons(),
+    /** Omens, director personalities, elite affixes, champions, Keynote, world events and signals. */
+    val variety: RunVarietyContent = RunVarietyContent(),
+    /** Baby mode rules; STANDARD runs never read them. */
+    val easyMode: EasyModeTuning = EasyModeTuning(),
 ) {
     init {
         require(enemies.size == EnemyType.entries.size && enemies.withIndex().all { (index, enemy) -> enemy.type.ordinal == index }) {
@@ -95,6 +106,9 @@ data class GameplayContentSnapshot(
     fun enemy(type: EnemyType): EnemyDefinition = enemies[type.ordinal]
 
     fun skill(id: SkillId): SkillDefinition = skills[id.ordinal]
+
+    /** The Blessing or Pact with [id], or null when the catalog has none. */
+    fun boon(id: Int): RunBoonDefinition? = boons.firstOrNull { it.id == id }
 
     /** Global clause index of each item's first clause; derived once per immutable snapshot. */
     val clauseOffsets: ImmutableList<Int> = items.runningFold(0) { offset, item -> offset + item.clauses.size }
@@ -144,7 +158,7 @@ data class UiCatalogSnapshot(
     val coreShapes: ImmutableList<CoreShapeDefinition>,
     val rebirth: RebirthPolicySnapshot,
     val relicPolicy: RelicPolicy,
-    val pointsOfInterest: PointOfInterestPolicy = PointOfInterestPolicy(),
+    val sites: SitePolicy = SitePolicy(),
     val tempo: RunTempoProfile = RunTempoProfile(),
     val build: BuildCatalog = defaultBuildCatalog(),
     /** Enemy roster in [EnemyType] order, for the Codex. */
@@ -155,9 +169,12 @@ data class UiCatalogSnapshot(
     val skills: ImmutableList<SkillDefinition> = defaultSkillDefinitions(),
     /** Refit and Honing prices and effects, for the Workshop. */
     val upgrades: UpgradePolicy = UpgradePolicy(),
+    /** Codex texts of the persisted world discoveries, in [WorldDiscovery] order. */
+    val worldDiscoveries: ImmutableList<WorldDiscoveryDefinition> = defaultWorldDiscoveryDefinitions(),
 ) {
     init {
         require(skills.hasOneDefinitionPerSkillIdInOrder()) { "Skill definitions must follow the SkillId order" }
+        require(worldDiscoveries.map { it.id } == WorldDiscovery.entries) { "World discoveries must follow the WorldDiscovery order" }
     }
 
     fun item(id: Int): ItemDefinition? = items.getOrNull(id)?.takeIf { item -> item.id == id }

@@ -5,7 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.DirectedReward
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.nucleus.model.CharacterRuntime
 import kinetickk.ball.gameplay.nucleus.model.PointOfInterestState
 import kinetickk.ball.gameplay.nucleus.model.Projectile
@@ -54,7 +54,7 @@ class CharacterPoiRegressionTest {
     @Test
     fun activeVaultDefendersRemainAvailableInsideTheTrialEscapeDistance() {
         val game = game()
-        game.activatePointOfInterest(PointOfInterestState(0, PointOfInterestKind.SEALED_ANOMALY, 0f, 0f, 85f))
+        game.activatePointOfInterest(PointOfInterestState(0, SiteKind.SEALED_ANOMALY, 0f, 0f, 85f))
         val defenderIds = game.pointsOfInterest.single().defenderIds
         game.coreX = 2_000f
         game.previousCoreX = game.coreX

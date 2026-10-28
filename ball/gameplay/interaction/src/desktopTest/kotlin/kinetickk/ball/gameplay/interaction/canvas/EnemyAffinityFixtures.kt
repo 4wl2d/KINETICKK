@@ -35,6 +35,11 @@ internal fun runAffinity(
         EnemyType.SNIPER -> StatusElement.CRYO
         EnemyType.AEGIS, EnemyType.BROODMOTHER -> StatusElement.GRAVITIC
         EnemyType.MINELAYER -> StatusElement.ENTROPY
+        // The 0.6.0 kinds carry the Drifter's neutral profile until their own profiles land.
+        EnemyType.COMET, EnemyType.PYLON, EnemyType.SENTRY, EnemyType.CRAWLER, EnemyType.SERAPH, EnemyType.CHOIR,
+        EnemyType.IMP, EnemyType.HOUND, EnemyType.CIPHER, EnemyType.MIRROR, EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN,
+        EnemyType.THRONE, EnemyType.PYRE_HERALD, EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT,
+        -> null
     }
     val armored = type in setOf(
         EnemyType.CHARGER, EnemyType.WARDEN, EnemyType.SPLITTER, EnemyType.ELITE, EnemyType.ARCHITECT,

@@ -374,6 +374,8 @@ internal class CompiledBuild private constructor(
                         is ItemRule.CatalysisRate -> catalysis += rule.amount * scale
                         is ItemRule.ApexCooldown -> apexCut += rule.amount * scale
                         is ItemRule.CoreLinkRadius -> linkBonus += rule.bonus * scale
+                        // Compiled by the terrain lane; no shipped item carries it yet.
+                        is ItemRule.ObstacleTuning -> Unit
                     }
                 }
             }

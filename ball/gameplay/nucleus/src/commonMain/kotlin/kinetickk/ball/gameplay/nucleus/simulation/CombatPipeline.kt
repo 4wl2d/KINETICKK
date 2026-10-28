@@ -228,6 +228,9 @@ internal fun MutableGameState.holds(
     EffectCondition.ApexActive -> apexActive()
     is EffectCondition.SkillsCharging -> skillsCharging() >= condition.count
     is EffectCondition.WeaponFamilyIs -> currentWeaponDefinition.family == condition.family
+    // No dispatch carries an obstacle and no obstacle gap is measured yet; no shipped item names either condition.
+    is EffectCondition.ObstacleIs -> false
+    is EffectCondition.NearObstacle -> false
 }
 
 /** A live mark, Blackfire or Embrittle on [target], or [target] is the Void Anchor. */
