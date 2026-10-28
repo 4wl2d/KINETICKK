@@ -503,8 +503,9 @@ private fun MutableGameState.pushCoreOutOfObstacles() {
 
 /**
  * Velocity response, damage and triggers of the Core meeting [obstacle] along the outward normal
- * ([nx], [ny]) at ([contactX], [contactY]). Returns true when the obstacle shattered and the Core
- * passes on without bouncing.
+ * ([nx], [ny]) at ([contactX], [contactY]), dispatched by kind: bumpers throw, an unstable asteroid hit at
+ * the damage-start impact speed bursts, every other obstacle is a solid surface. Returns true when the
+ * obstacle shattered and the Core passes on without bouncing.
  */
 private fun MutableGameState.respondToObstacle(
     index: Int,
@@ -520,10 +521,12 @@ private fun MutableGameState.respondToObstacle(
         bounceOffBumper(index, obstacle, nx, ny, normalSpeed, contactX, contactY)
         return false
     }
-    val start = obstacleDamageStartSpeed()
-    if (obstacle.kind == ObstacleKind.UNSTABLE && normalSpeed >= start) {
-        explodeUnstable(index, obstacle, normalSpeed)
-        return true
+    if (obstacle.kind == ObstacleKind.UNSTABLE) {
+        val impact = obstacleImpactSpeed(normalSpeed, length(velocityX + normalSpeed * nx, velocityY + normalSpeed * ny))
+        if (impact >= obstacleDamageStartSpeed()) {
+            explodeUnstable(index, obstacle, impact)
+            return true
+        }
     }
     resolveSolidImpact(obstacle.id, nx, ny, contactX, contactY)
     return false
@@ -540,7 +543,7 @@ internal fun MutableGameState.onRicochet(x: Float, y: Float, normalSpeed: Float)
 /**
  * Elastic throw: the Core leaves at 1.05 × its speed, held to the bumper band and below the lethal
  * collision speed (on a small viewport that speed can lie inside the band); never hurts. Like an asteroid
- * bounce it is a ricochet only at the damage-start speed or faster, at most once per cooldown per bumper.
+ * bounce it is a ricochet only at the ricochet speed or faster, at most once per cooldown per bumper.
  */
 private fun MutableGameState.bounceOffBumper(
     index: Int,
@@ -571,15 +574,18 @@ private fun MutableGameState.bounceOffBumper(
     onRicochet(contactX - nx * coreRadius, contactY - ny * coreRadius, normalSpeed)
 }
 
-/** An unstable asteroid hit at damage speed bursts: it hurts the Core a little and enemies around it. */
-private fun MutableGameState.explodeUnstable(index: Int, obstacle: Obstacle, normalSpeed: Float) {
+/**
+ * An unstable asteroid hit at the damage-start impact speed bursts: it hurts the Core a little and enemies around
+ * it, as hard as the [impact] speed.
+ */
+private fun MutableGameState.explodeUnstable(index: Int, obstacle: Obstacle, impact: Float) {
     val tuning = content.obstacles
     obstacleField = obstacleField.removed(index)
     val destroyed = destroyedObstacleIds + obstacle.id
     destroyedObstacleIds = if (destroyed.size > ContentBounds.MAX_DESTROYED_OBSTACLES) {
         destroyed.subList(destroyed.size - ContentBounds.MAX_DESTROYED_OBSTACLES, destroyed.size).toList()
     } else destroyed
-    areaDamage(obstacle.x, obstacle.y, tuning.unstableBlastRadius, impactPower(normalSpeed))
+    areaDamage(obstacle.x, obstacle.y, tuning.unstableBlastRadius, impactPower(impact))
     burst(obstacle.x, obstacle.y, 24, 4)
     screenShake = max(screenShake, 12f)
     emitSound(GameplayAudioCue.IMPACT)
