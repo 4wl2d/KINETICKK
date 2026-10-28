@@ -500,7 +500,10 @@ internal fun MutableGameState.updateCore(delta: Float) {
         velocityX = 0f
         velocityY = 0f
     }
+    val smoothedBeforeX = smoothedVelocityX
+    val smoothedBeforeY = smoothedVelocityY
     updatePolarityStability(delta)
+    updateStraightness(delta, smoothedBeforeX, smoothedBeforeY)
     if (braking && speed < currentSpeed) brakeShedSpeed = min(3_000f, brakeShedSpeed + (currentSpeed - speed))
 
     if (runGrace <= 0f && segmentCircleIntersects(
@@ -592,9 +595,6 @@ internal fun MutableGameState.fireTurnEdge() {
     onCharacterTurn()
     onTurnForReactions()
 }
-
-/** Thrust toward the singularity that does not depend on its distance. */
-internal const val CORE_BASE_PULL: Float = 92f
 
 /** The camera closes this share of its gap to the Core per second (exponentially). */
 internal const val CAMERA_FOLLOW_RATE: Float = 7.5f

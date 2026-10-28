@@ -302,9 +302,12 @@ private fun runEncounter(
         }
         val aim = game.steeringAimFor(accelerationX, accelerationY)
         val desiredHeading = aim.heading
-        heading += atan2(sin(desiredHeading - heading), cos(desiredHeading - heading)).coerceIn(-0.08f, 0.08f)
-        // Full polarity needs a shorter tether for tight orbits than the old fatigued thrust did.
-        val distance = (aim.distance / (if (game.overdriveTime > 0f) 1.3f else 1f)).coerceIn(65f, 480f)
+        // Braking now needs the pointer behind the screen centre, so the heading must be able to swing back quickly:
+        // at 0.15 rad a frame the orbit keeps the tracking error it had under the 0.5.0 law.
+        heading += atan2(sin(desiredHeading - heading), cos(desiredHeading - heading)).coerceIn(-0.15f, 0.15f)
+        // Full polarity needs a shorter tether for tight orbits than the old fatigued thrust did. The aim already
+        // divides the pull by Overdrive's factor.
+        val distance = aim.distance.coerceIn(65f, 480f)
         // Use the ordinary recovery area instead of straining the field at screen edges.
         val edgeMargin = (1f - game.content.tempo.fatigue.edgeStrainStart) * 0.5f
         game.updatePointer(
