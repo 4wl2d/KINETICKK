@@ -280,10 +280,15 @@ data class ChampionPolicy(
     }
 }
 
+/**
+ * The run's Keynote: the deck deals at least [tagShare] of the rank's passives (at most Rare) with its tag and
+ * [elementShare] of those with its element. The element share is 0.7 so its floor deals about two items, as the tag's
+ * 0.8 deals about six, and the 302-item catalog's Keynote decks grow by at most nine items on average.
+ */
 data class KeynotePolicy(
     val enabled: Boolean = true,
     val tagShare: Float = 0.8f,
-    val elementShare: Float = 0.8f,
+    val elementShare: Float = 0.7f,
     val eliteAspectBias: Float = 0.35f,
     val stormEliteAspectBias: Float = 0.5f,
 ) {

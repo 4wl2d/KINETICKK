@@ -105,8 +105,8 @@ class DraftDeckSweepTest {
             println("KEYNOTE-DECK reborn $rebirth adds ${addedAtRank / 500.0} items per deck")
             added += addedAtRank
         }
-        // The 0.8 shares grow the deck by a few items, about six of the tag and two or three of the element; more at
-        // higher ranks, whose universe holds more of them.
+        // The shares (tag 0.8, element 0.7) grow the deck by a few items, about six of the tag and two of the element;
+        // more at higher ranks, whose universe holds more of them.
         assertTrue(added / 1_500.0 <= 9.0, "Keynote floors add ${added / 1_500.0} items per deck")
     }
 

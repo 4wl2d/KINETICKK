@@ -415,10 +415,10 @@ class ContentBalanceCharacterizationTest {
     @Test
     fun runVarietyContentIsGolden() {
         // Slice variety-0.6.0: every run-variety identity, definition, policy number and notice (pinned when 0.6.0
-        // shipped the run-variety content).
+        // shipped the run-variety content; re-pinned when the Keynote element share moved 0.8 -> 0.7).
         val variety = catalog.gameplayContent().variety
         assertEquals(
-            "0ee882129c87121f",
+            "24a8c347d62bc2dd",
             goldenFingerprint {
                 add("variety-0.6.0")
                 kinetickk.ball.content.api.EliteAffix.entries.forEach { add(it.name); add(it.displayName); add(it.signalNotice) }
