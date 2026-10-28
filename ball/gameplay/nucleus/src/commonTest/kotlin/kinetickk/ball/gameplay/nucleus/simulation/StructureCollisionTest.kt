@@ -15,6 +15,7 @@ import kinetickk.ball.gameplay.nucleus.model.DungeonState
 import kinetickk.ball.gameplay.nucleus.model.ObstacleField
 import kinetickk.ball.gameplay.nucleus.model.PlacedStructure
 import kinetickk.ball.gameplay.nucleus.model.Projectile
+import kinetickk.ball.gameplay.nucleus.model.StructureField
 import kinetickk.ball.gameplay.nucleus.model.WeaponEntity
 import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.render.EnemyBehavior
@@ -156,10 +157,7 @@ class StructureCollisionTest {
         val afterFirst = state.hp
         assertTrue(afterFirst < state.maxHp)
         assertEquals(1, state.pendingRicochets)
-        assertTrue(
-            state.obstacleHitSurfaceId == NO_SURFACE_ID || state.obstacleHitSurfaceId == structureSurfaceId(structure.id),
-            "the hit is keyed by the structure, not the wall",
-        )
+        assertEquals(structureSurfaceId(structure.id), state.obstacleHitSurfaceId, "the hit is keyed by the structure, not the wall")
 
         // Its other wall, inside the cooldown, bounces the Core without hurting it.
         state.flyIntoObstaclesForTesting(700f - 40f + speed / 240f, 0f, speed, 0f)
@@ -181,6 +179,34 @@ class StructureCollisionTest {
         assertNotEquals(NO_SURFACE_ID, structureSurfaceId(origin))
         assertNotEquals(structureSurfaceId(origin), structureSurfaceId(structureId(WorldLayer.BASE, 0, 1)))
         for (index in 0 until 48) assertNotEquals(structureSurfaceId(origin), origin or index.toLong())
+    }
+
+    @Test
+    fun aSecondStructureInsideTheCooldownHurts() {
+        val state = quiet()
+        val speed = state.bandSpeed(0.4f)
+        val (first, second) = state.placeWallsForTesting(
+            listOf(testWall(300f, -200f, 300f, 200f)),
+            listOf(testWall(700f, -200f, 700f, 200f)),
+        )
+        state.flyIntoObstaclesForTesting(contactX + speed / 240f, 0f, speed, 0f)
+        val afterFirst = state.hp
+        assertTrue(afterFirst < state.maxHp)
+        assertEquals(structureSurfaceId(first.id), state.obstacleHitSurfaceId)
+
+        // Another structure is another surface: inside the first one's cooldown it still hurts and takes the cooldown.
+        state.flyIntoObstaclesForTesting(700f - 40f + speed / 240f, 0f, speed, 0f)
+        assertTrue(state.hp < afterFirst, "a second structure is a second surface")
+        assertEquals(structureSurfaceId(second.id), state.obstacleHitSurfaceId)
+        assertEquals(2, state.pendingRicochets)
+        val afterSecond = state.hp
+
+        // An asteroid is a surface of its own as well.
+        state.structureField = StructureField.EMPTY
+        state.placeObstaclesForTesting(testObstacle(300f, 0f))
+        state.flyIntoObstaclesForTesting(300f - 80f - MutableGameState.CORE_RADIUS + speed / 240f, 0f, speed, 0f)
+        assertTrue(state.hp < afterSecond, "a rock inside a structure's cooldown hurts")
+        assertNotEquals(structureSurfaceId(second.id), state.obstacleHitSurfaceId)
     }
 
     @Test
