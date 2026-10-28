@@ -3,14 +3,18 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.ContentBounds
+import kinetickk.ball.content.api.DimensionNotices
 import kinetickk.ball.content.api.DimensionObjective
 import kinetickk.ball.content.api.DimensionPhysics
 import kinetickk.ball.content.api.EnemyType
 import kinetickk.ball.content.api.GameplayContentSnapshot
+import kinetickk.ball.content.api.MatrixEffect
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.api.RunMode
+import kinetickk.ball.gameplay.nucleus.model.HaloRing
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
@@ -19,15 +23,23 @@ import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.hypot
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
-/** What each layer does to the run: pace, Grace, Desync, Matter and the director. */
+/** What each layer does to the run: pace, Grace and its halos, Heat, Desync, Matter and the director. */
 class DimensionMechanicsTest {
     private val step = MutableGameState.FIXED_STEP
     private val zenith = canonicalGameplayContent.dimensions.definition(WorldLayer.ZENITH)
@@ -56,6 +68,19 @@ class DimensionMechanicsTest {
 
     private fun MutableGameState.streams() =
         listOf(gameplayRandom.snapshot(), rewardRandom.snapshot(), spawnRandom.snapshot(), siteRandom.snapshot())
+
+    private fun MutableGameState.halos() = checkNotNull(dimensionRun.visit).halos
+
+    private fun MutableGameState.setHalos(vararg rings: HaloRing) {
+        dimensionRun = dimensionRun.copy(visit = checkNotNull(dimensionRun.visit).copy(halos = rings.toList().toImmutableList()))
+    }
+
+    private fun MutableGameState.dimensionStepsFor(seconds: Float, each: () -> Unit = {}) {
+        repeat((seconds / step).roundToInt()) {
+            updateDimension(step)
+            each()
+        }
+    }
 
     private fun GameplayContentSnapshot.withPhysics(layer: WorldLayer, change: DimensionPhysics.() -> DimensionPhysics) =
         withDimensions {
@@ -151,6 +176,220 @@ class DimensionMechanicsTest {
             state.projectiles.clear()
         }
         return state.speed
+    }
+
+    // ---- Zenith: halo rings ----
+
+    @Test
+    fun aHaloPassedAtPaceMendsAndChargesOverdriveOnce() {
+        val game = visiting(WorldLayer.ZENITH)
+        game.hp = game.maxHp * 0.5f
+        val ring = HaloRing(7, game.coreX + 300f, game.coreY, courseIndex = -1)
+        game.setHalos(ring)
+        game.setVelocityForTesting(game.dimensionPace(), 0f)
+        game.flyThroughForTesting(ring.x, ring.y)
+        val overdrive = game.overdriveCharge
+        val streams = game.streams()
+
+        game.updateDimension(step)
+
+        assertEquals(game.maxHp * (0.5f + zenith.physics.haloRepairShare), game.hp, 1e-3f)
+        assertEquals(overdrive + zenith.physics.haloOverdrive * game.overdriveGainFactor(), game.overdriveCharge, 1e-4f)
+        assertTrue(game.halos().none { it.id == ring.id }, "a passed ring leaves")
+        assertEquals(streams, game.streams())
+        val hp = game.hp
+        val charge = game.overdriveCharge
+        game.updateDimension(step)
+        assertEquals(hp, game.hp, "a ring mends once")
+        assertEquals(charge, game.overdriveCharge)
+    }
+
+    @Test
+    fun aHaloPassedBelowPaceGivesNothingAndStays() {
+        val game = visiting(WorldLayer.ZENITH)
+        game.hp = game.maxHp * 0.5f
+        val ring = HaloRing(7, game.coreX + 300f, game.coreY, courseIndex = -1)
+        game.setHalos(ring)
+        game.setVelocityForTesting(game.dimensionPace() * 0.98f, 0f)
+        game.flyThroughForTesting(ring.x, ring.y)
+        val overdrive = game.overdriveCharge
+
+        game.updateDimension(step)
+
+        assertEquals(game.maxHp * 0.5f, game.hp)
+        assertEquals(overdrive, game.overdriveCharge)
+        assertTrue(ring in game.halos(), "a slow pass leaves the ring standing")
+    }
+
+    @Test
+    fun ambientHalosAppearOneAStepAheadOfTheCoreUpToTheirCount() {
+        fun placed(seed: Int): List<HaloRing> {
+            val game = visiting(WorldLayer.ZENITH, seed = seed)
+            game.setVelocityForTesting(400f, 0f)
+            game.previousCoreX = game.coreX
+            game.previousCoreY = game.coreY
+            val streams = game.streams()
+            repeat(zenith.physics.ambientHalos + 3) { index ->
+                game.updateDimension(step)
+                assertEquals(minOf(index + 1, zenith.physics.ambientHalos), game.halos().size, "seed $seed after ${index + 1} steps")
+            }
+            assertEquals(streams, game.streams(), "ambient rings draw from no run stream")
+            for (ring in game.halos()) {
+                assertEquals(-1, ring.courseIndex)
+                val distance = hypot(ring.x - game.coreX, ring.y - game.coreY)
+                // Nudging moves a ring straight away from the Core, at most ten 80 u moves.
+                assertTrue(distance >= 900f - 0.01f && distance <= 1_800f + 800f + 0.01f, "ring ${ring.id} at $distance u")
+                val bearing = atan2(ring.y - game.coreY, ring.x - game.coreX)
+                assertTrue(abs(bearing) <= 70f * PI.toFloat() / 180f + 1e-3f, "ring ${ring.id} at $bearing rad off the heading")
+            }
+            return game.halos()
+        }
+        val first = placed(70_701)
+        assertEquals((100 until 106).toList(), first.map { it.id })
+        assertEquals(first, placed(70_701), "the same run and visit place the same rings")
+        assertNotEquals(first.map { it.x to it.y }, placed(70_702).map { it.x to it.y })
+        // No other layer places rings.
+        for (layer in listOf(WorldLayer.NADIR, WorldLayer.ARCHIVE)) {
+            val other = visiting(layer)
+            other.dimensionStepsFor(0.5f)
+            assertTrue(other.halos().isEmpty(), "$layer has no halo rings")
+        }
+    }
+
+    @Test
+    fun ambientHalosLeftFarBehindAreReplacedAndCourseRingsStay() {
+        val game = visiting(WorldLayer.ZENITH)
+        game.setVelocityForTesting(400f, 0f)
+        val course = HaloRing(0, game.coreX - 9_000f, game.coreY, courseIndex = 0)
+        game.setHalos(course)
+        game.dimensionStepsFor(zenith.physics.ambientHalos * step)
+        assertEquals(zenith.physics.ambientHalos + 1, game.halos().size)
+
+        // 4,000 u back along the heading every ambient ring is past the 3,000 u range.
+        game.coreX -= 4_000f
+        game.previousCoreX = game.coreX
+        game.updateDimension(step)
+
+        assertEquals(listOf(course.id, 100 + zenith.physics.ambientHalos), game.halos().map { it.id })
+    }
+
+    @Test
+    fun haloRingsStayWithinTheirBound() {
+        val crowded = canonicalGameplayContent.withPhysics(WorldLayer.ZENITH) { copy(ambientHalos = ContentBounds.MAX_HALO_RINGS - 2) }
+        val game = visiting(WorldLayer.ZENITH, crowded)
+        game.setHalos(
+            HaloRing(0, game.coreX - 2_000f, game.coreY, courseIndex = 0),
+            HaloRing(1, game.coreX - 2_600f, game.coreY, courseIndex = 1),
+        )
+        game.dimensionStepsFor(0.5f)
+        assertEquals(ContentBounds.MAX_HALO_RINGS, game.halos().size, "the course and the most ambient rings fill the bound")
+
+        // A thirteenth ring is refused before anything changes.
+        game.setHalos(*Array(ContentBounds.MAX_HALO_RINGS) { index -> HaloRing(index, game.coreX - 2_000f - index * 100f, game.coreY, index) })
+        val before = game.dimensionRun
+        assertFailsWith<IllegalStateException> { game.updateDimension(step) }
+        assertSame(before, game.dimensionRun)
+        assertFailsWith<IllegalStateException> { withHaloRing(game.halos(), HaloRing(99, 0f, 0f, -1)) }
+    }
+
+    // ---- Nadir: Heat ----
+
+    @Test
+    fun scorchWaitsOutItsGraceThenBurnsAShareOfMaxIntegrityEachTick() {
+        val game = visiting(WorldLayer.NADIR)
+        val physics = nadir.physics
+        val tick = game.maxHp * physics.scorchSharePerSecond * physics.scorchTickSeconds
+        val ticks = mutableListOf<Int>()
+        var stepIndex = 0
+        var hp = game.hp
+        game.dimensionStepsFor(3f) {
+            stepIndex++
+            if (game.hp < hp) {
+                assertEquals(tick, hp - game.hp, 1e-3f, "one tick at step $stepIndex")
+                ticks += stepIndex
+            }
+            hp = game.hp
+        }
+        val stepsPerTick = (physics.scorchTickSeconds / step).roundToInt()
+        val firstTick = ((physics.scorchGraceSeconds + physics.scorchTickSeconds) / step).roundToInt()
+        assertEquals(4, ticks.size, "ticks at steps $ticks")
+        assertTrue(abs(ticks.first() - firstTick) <= 1, "the first tick at step ${ticks.first()}, expected $firstTick")
+        ticks.zipWithNext { a, b -> assertTrue(abs(b - a - stepsPerTick) <= 1, "ticks $a and $b") }
+        assertEquals(0f, game.hurtCooldown, "a self hit uses no hit i-frames")
+        assertTrue(game.phase == GamePhase.RUNNING)
+    }
+
+    @Test
+    fun flyingAtPaceResetsTheScorch() {
+        val game = visiting(WorldLayer.NADIR)
+        val full = game.hp
+        game.dimensionStepsFor(1.1f)
+        assertEquals(full, game.hp, "no tick yet")
+        game.setVelocityForTesting(game.dimensionPace(), 0f)
+        game.updateDimension(step)
+        assertEquals(0f, game.dimensionSlowSeconds)
+        assertEquals(0f, game.dimensionScorchClock)
+        game.setVelocityForTesting(0f, 0f)
+        // Without the reset the next tick would land within 0.15 s.
+        game.dimensionStepsFor(1.2f)
+        assertEquals(full, game.hp, "the grace starts over")
+    }
+
+    @Test
+    fun shieldsAbsorbTheScorchAndDamageReductionDoesNotSoftenIt() {
+        val game = visiting(WorldLayer.NADIR)
+        val tick = game.maxHp * nadir.physics.scorchSharePerSecond * nadir.physics.scorchTickSeconds
+        game.shield = 10f
+        game.damageReduction = 0.5f
+        val hp = game.hp
+        game.dimensionStepsFor(nadir.physics.scorchGraceSeconds + nadir.physics.scorchTickSeconds + 2f * step)
+        assertEquals(hp, game.hp, "the shield took the tick")
+        assertEquals(10f - tick, game.shield, 1e-4f, "the whole tick, unreduced")
+    }
+
+    @Test
+    fun aLethalScorchTickEndsTheRunAsScorchedUnlessARevivalAnswers() {
+        fun dueToScorch(game: MutableGameState) = game.apply {
+            hp = 0.5f
+            dimensionSlowSeconds = 2f
+            dimensionScorchClock = nadir.physics.scorchTickSeconds - step * 0.5f
+            setVelocityForTesting(0f, 0f)
+        }
+        val dead = dueToScorch(visiting(WorldLayer.NADIR))
+        dead.simulateStep(step)
+        assertEquals(GamePhase.GAME_OVER, dead.phase)
+        assertEquals(DimensionNotices.SCORCHED, dead.message)
+
+        val windy = dueToScorch(visiting(WorldLayer.NADIR))
+        windy.matrix = windy.matrix.copy(secondWind = MatrixEffect.SecondWind(0.3f, 2f))
+        windy.simulateStep(step)
+        assertEquals(GamePhase.RUNNING, windy.phase)
+        assertTrue(windy.secondWindSpent)
+        assertEquals(windy.maxHp * 0.3f, windy.hp, 0.01f)
+    }
+
+    @Test
+    fun babyModeHalvesTheScorch() {
+        val standard = visiting(WorldLayer.NADIR)
+        val baby = visiting(WorldLayer.NADIR, mode = RunMode.EASY)
+        val seconds = nadir.physics.scorchGraceSeconds + nadir.physics.scorchTickSeconds + 2f * step
+        standard.dimensionStepsFor(seconds)
+        baby.dimensionStepsFor(seconds)
+        val standardLoss = standard.maxHp - standard.hp
+        val babyLoss = baby.maxHp - baby.hp
+        assertTrue(standardLoss > 0f)
+        assertEquals(standardLoss * canonicalGameplayContent.easyMode.incomingDamageMultiplier, babyLoss, 1e-4f)
+    }
+
+    @Test
+    fun onlyTheNadirScorches() {
+        for (layer in listOf(WorldLayer.ZENITH, WorldLayer.ARCHIVE)) {
+            val game = visiting(layer)
+            game.hp = game.maxHp * 0.5f
+            game.dimensionStepsFor(3f)
+            assertEquals(game.maxHp * 0.5f, game.hp, "$layer")
+            assertEquals(0f, game.dimensionSlowSeconds, "$layer")
+        }
     }
 
     // ---- Archive: Desync ----

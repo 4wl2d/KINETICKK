@@ -871,6 +871,37 @@ class GameplayReductionIsolationTest {
         assertEquals(WorldLayer.ZENITH, source.worldLayer)
     }
 
+    @Test
+    fun aHaloPassedInACandidateLeavesTheCommittedVisitAlone() {
+        val source = MutableGameState(canonicalGameplayContent, seed = 6_061, initialMatter = 0).apply {
+            startRun()
+            enemies.clear()
+            elapsed = 200f
+            enterDimensionForTesting(WorldLayer.ZENITH, DimensionObjective.JUDGEMENT)
+            hp = maxHp * 0.5f
+            velocityX = dimensionPace() * 1.5f
+            velocityY = 0f
+            // The Core starts inside the ring and is fast: the candidate's first step passes it.
+            val visit = checkNotNull(dimensionRun.visit)
+            dimensionRun = dimensionRun.copy(visit = visit.copy(halos = immutableListOf(HaloRing(7, coreX + 10f, coreY, -1))))
+            drainReferenceOutputs()
+        }
+        val committedFingerprint = source.exactSimulationFingerprint()
+        val committedRun = source.dimensionRun
+        val committedHp = source.hp
+
+        val candidate = assertIs<GameReductionResult.Accepted>(
+            GameReducer().reduce(EngineState(source), GameplayInteractionPulse.FrameElapsed.fromValidated(MutableGameState.FIXED_STEP)),
+        ).state.model
+        assertTrue(checkNotNull(candidate.dimensionRun.visit).halos.none { it.id == 7 }, "the candidate passed the ring")
+        assertTrue(candidate.hp > committedHp, "the ring mended the candidate")
+
+        assertEquals(committedFingerprint, source.exactSimulationFingerprint(), "the pass left the committed visit alone")
+        assertSame(committedRun, source.dimensionRun)
+        assertEquals(listOf(7), checkNotNull(source.dimensionRun.visit).halos.map { it.id })
+        assertEquals(committedHp, source.hp)
+    }
+
     // ---- 0.6.0 VARIETY ----
     @Test
     fun omenAcceptanceAndPreviewsInAForkNeverChangeTheCommittedState() {

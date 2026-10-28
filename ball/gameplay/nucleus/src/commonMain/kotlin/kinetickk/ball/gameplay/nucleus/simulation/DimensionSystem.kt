@@ -237,7 +237,7 @@ internal fun MutableGameState.newVisit(layer: WorldLayer, objective: DimensionOb
 }
 
 /** The way the Core is going: its velocity when it moves, else its last aim (the window sites' heading). */
-private fun MutableGameState.travelHeading(): Float =
+internal fun MutableGameState.travelHeading(): Float =
     if (speed >= 80f) atan2(velocityY, velocityX) else atan2(lastAimDirectionY, lastAimDirectionX)
 
 private fun WorldLayer.discovery(): WorldDiscovery = when (this) {
@@ -304,7 +304,7 @@ private fun MutableGameState.updateGlitchPortal() {
 
 /**
  * One step of the dimension system (after the sites): the glitch rift in realspace; in a dimension the visit clock,
- * the timer's pull back and the exit rift.
+ * the timer's pull back, the layer's physics and the exit rift.
  */
 internal fun MutableGameState.updateDimension(delta: Float) {
     if (phase != GamePhase.RUNNING) return
@@ -318,7 +318,10 @@ internal fun MutableGameState.updateDimension(delta: Float) {
         exitDimension(DimensionExit.TIMER)
         return
     }
-    val exit = visit.exitPortal ?: return
+    updateLayerMechanics(delta)
+    // A lethal scorch tick ends the run.
+    if (phase != GamePhase.RUNNING) return
+    val exit = dimensionRun.visit?.exitPortal ?: return
     if (segmentCircleIntersects(previousCoreX, previousCoreY, coreX, coreY, exit.x, exit.y, content.dimensions.portalRadius)) {
         exitDimension(DimensionExit.PORTAL)
     }
