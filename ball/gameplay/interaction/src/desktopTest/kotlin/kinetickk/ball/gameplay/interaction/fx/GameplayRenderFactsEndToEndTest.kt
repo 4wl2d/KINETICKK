@@ -210,13 +210,15 @@ internal object FactRuns {
 
 /**
  * The shipped catalog with a short level curve and active items offered from the first offer (unlocked at level 1, the
- * whole catalog dealt, a high active weight), so a minute of play fills three slots and unlocks the Apex.
+ * whole catalog dealt, a high active weight), so a minute of play fills three slots and unlocks the Apex. The bot's
+ * four-minute flights chase enemies far from the origin and know nothing of walls, so its world has no structures.
  */
 internal fun shortCurveContent(): GameplayContentSnapshot {
     val shipped = createContentCatalog().gameplayContent()
     val maximum = SHORT_MAXIMUM_LEVEL
     val policy = shipped.build.policy
     return shipped.copy(
+        structures = shipped.structures.copy(enabled = false),
         items = shipped.items.map { if (it.isActive) it.copy(unlockLevel = 1) else it }.toImmutableList(),
         build = shipped.build.copy(
             policy = policy.copy(
