@@ -50,10 +50,7 @@ enum class SiteKind(val family: SiteFamily) {
     NADIR_RIFT(SiteFamily.PORTAL),
 }
 
-/**
- * The anomaly kinds lead [SiteKind] in this count; a POI window rotates through them only, so a run never offers a
- * newer kind before its lane draws kinds by weight.
- */
+/** The anomaly kinds lead [SiteKind] in this count (the 0.5.0 window kinds). */
 const val ANOMALY_KIND_COUNT: Int = 3
 
 /**
@@ -397,12 +394,14 @@ data class SitePolicy(
         require(maxPendingFloorOffers in 1..ContentBounds.MAX_FLOOR_OFFERS) {
             "Floor offer queue must be in 1..${ContentBounds.MAX_FLOOR_OFFERS}"
         }
-        require(
-            definitions.count {
-                it.windowWeight > 0f && it.kind.family != SiteFamily.PORTAL && it.minimumOfferAt <= windows.firstOfferAt &&
-                    it.minimumRebirth == 0 && it.reserveSeconds <= windows.trialDuration
-            } >= 2,
-        ) { "At least two unconditional window kinds must exist so every window can draw a pair" }
+        val unconditional = definitions.filter {
+            it.windowWeight > 0f && it.kind.family != SiteFamily.PORTAL && it.minimumOfferAt <= windows.firstOfferAt &&
+                it.minimumRebirth == 0 && it.reserveSeconds <= windows.trialDuration
+        }
+        require(unconditional.size >= 2) { "At least two unconditional window kinds must exist so every window can draw a pair" }
+        require(sameFamilyWeight > 0f || unconditional.map { it.kind.family }.toSet().size >= 2) {
+            "A zero same-family weight needs unconditional window kinds of two families, so the second draw always has a kind"
+        }
         require(definitions.all { it.windowWeight == 0f || it.duration <= windows.trialDuration }) {
             "A window site never lasts longer than the trial"
         }

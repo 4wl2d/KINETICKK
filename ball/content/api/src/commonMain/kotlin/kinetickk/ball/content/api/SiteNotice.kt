@@ -9,6 +9,8 @@ package kinetickk.ball.content.api
  */
 enum class SiteNotice(val english: String) {
     TWO_ANOMALIES("TWO ANOMALIES DETECTED // CHOOSE A COURSE"),
+    /** A window pair with a kind outside the anomalies (a pair with a rift says DimensionNotices.RIFT_DETECTED). */
+    TWO_SITES("TWO SITES DETECTED // CHOOSE A COURSE"),
     ANOMALY_LOST("ANOMALY LOST"),
     ANOMALY_RESOLVED("ANOMALY RESOLVED"),
     REWARD_SALVAGED("REWARD SALVAGED"),

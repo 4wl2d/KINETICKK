@@ -3,10 +3,11 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.ANOMALY_KIND_COUNT
+import kinetickk.ball.content.api.DimensionNotices
 import kinetickk.ball.content.api.SiteFamily
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.SiteNotice
+import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.foundation.collections.toImmutableList
@@ -43,41 +44,28 @@ internal fun MutableGameState.clearSitesForLayerChange() {
 
 internal fun MutableGameState.updateSites(delta: Float) {
     if (phase != GamePhase.RUNNING) return
+    if (!content.sites.enabled) {
+        sites = emptyList()
+        ambientSites = AmbientSiteWindow.EMPTY
+        secretSigil = null
+        return
+    }
     val policy = content.sites.windows
-    val bossAt = content.tempo.bossAtSeconds
-    if (bossSpawned || elapsed >= bossAt) {
+    if (bossSpawned || elapsed >= content.tempo.bossAtSeconds) {
         sites = emptyList()
         return
     }
-    // A missed scheduled window is consumed; leaving a point never rolls another offer.
-    val scheduledAt = policy.firstOfferAt + nextSiteWindowIndex * policy.offerInterval
-    if (scheduledAt <= policy.lastOfferAt && elapsed >= scheduledAt) {
-        val offerId = nextSiteWindowIndex++
-        if (sites.isEmpty() && elapsed < scheduledAt + policy.offerLifetime &&
-            scheduledAt + policy.offerLifetime + policy.trialDuration < bossAt
-        ) {
-            val heading = if (speed >= 80f) atan2(velocityY, velocityX) else atan2(lastAimDirectionY, lastAimDirectionX)
-            sites = List(2) { side ->
-                val angle = heading + if (side == 0) -1.0f else 1.0f
-                // Anomalies move out from under obstacles, so their ring and beacons stay reachable.
-                val (pointX, pointY) = clearPointOfInterestSite(coreX + cos(angle) * 560f, coreY + sin(angle) * 560f)
-                SiteState(
-                    windowSiteId(offerId, side), SiteKind.entries[(offerId + side) % ANOMALY_KIND_COUNT],
-                    pointX, pointY,
-                    scheduledAt + policy.offerLifetime,
-                )
-            }
-            message = SiteNotice.TWO_ANOMALIES.english
-            messageTime = 2.5f
-        }
-    }
-    val active = sites.firstOrNull { it.active }
+    offerDueWindow()
+    val active = activeWindowSite()
     if (active == null) {
-        sites = sites.filter { elapsed < it.expiresAt }
+        if (sites.anyExpired(elapsed)) sites = sites.filter { elapsed < it.expiresAt }
         val selected = sites.firstOrNull {
-            segmentCircleIntersects(previousCoreX, previousCoreY, coreX, coreY, it.x, it.y, 65f)
+            segmentCircleIntersects(
+                previousCoreX, previousCoreY, coreX, coreY, it.x, it.y, content.sites.definition(it.kind).activationRadius,
+            )
         } ?: return
-        activateWindowSite(selected)
+        // One engagement at a time: a refused activation leaves the pair offered.
+        if (!engagementActive()) activateWindowSite(selected)
         return
     }
     var trial = active.copy(remaining = max(0f, active.remaining - delta))
@@ -141,6 +129,114 @@ internal fun MutableGameState.updateSites(delta: Float) {
         message = SiteNotice.ANOMALY_RESOLVED.english
         messageTime = 2f
     } else sites = listOf(trial)
+}
+
+/**
+ * Offers the due window, if any: a missed window is consumed and leaving a site never rolls another offer. The kinds
+ * always take exactly two site-stream draws, then a rift may claim one side, so the stream never depends on rifts.
+ */
+private fun MutableGameState.offerDueWindow() {
+    val policy = content.sites.windows
+    val scheduledAt = policy.firstOfferAt + nextSiteWindowIndex * policy.offerInterval
+    if (scheduledAt > policy.lastOfferAt || elapsed < scheduledAt) return
+    val offerId = nextSiteWindowIndex++
+    if (!layerFeatures().sites || sites.isNotEmpty() || elapsed >= scheduledAt + policy.offerLifetime ||
+        scheduledAt + policy.offerLifetime + policy.trialDuration >= content.tempo.bossAtSeconds
+    ) return
+    val (first, second) = rollWindowKinds(scheduledAt)
+    offerWindowPair(offerId, scheduledAt, first, second, claimPortalForWindow(offerId, scheduledAt))
+}
+
+/**
+ * Places a window's pair at the 0.5.0 positions (heading ∓ 1 rad at 560 u, moved clear of obstacles); a [claim] turns
+ * its side into the rift of its target and names the rift in the notice.
+ */
+internal fun MutableGameState.offerWindowPair(
+    offerId: Int,
+    scheduledAt: Float,
+    first: SiteKind,
+    second: SiteKind,
+    claim: PortalClaim?,
+) {
+    val rift = claim?.let { riftKind(it.target) }
+    val riftSide = claim?.side ?: -1
+    check(claim == null || riftSide == 0 || riftSide == 1) { "A rift claims side 0 or 1 of a window" }
+    val heading = if (speed >= 80f) atan2(velocityY, velocityX) else atan2(lastAimDirectionY, lastAimDirectionX)
+    sites = List(2) { side ->
+        val angle = heading + if (side == 0) -1.0f else 1.0f
+        // Window sites move out from under obstacles, so their rings and beacons stay reachable.
+        val (pointX, pointY) = clearPointOfInterestSite(coreX + cos(angle) * 560f, coreY + sin(angle) * 560f)
+        val kind = if (rift != null && side == riftSide) rift else if (side == 0) first else second
+        SiteState(windowSiteId(offerId, side), kind, pointX, pointY, scheduledAt + content.sites.windows.offerLifetime)
+    }
+    message = when {
+        rift != null -> DimensionNotices.RIFT_DETECTED
+        first.family == SiteFamily.ANOMALY && second.family == SiteFamily.ANOMALY -> SiteNotice.TWO_ANOMALIES.english
+        else -> SiteNotice.TWO_SITES.english
+    }
+    messageTime = 2.5f
+}
+
+/** The window site kind of a rift's target; realspace and the Archive's glitch rift are never window sites. */
+private fun riftKind(target: WorldLayer): SiteKind? = when (target) {
+    WorldLayer.ZENITH -> SiteKind.ZENITH_RIFT
+    WorldLayer.NADIR -> SiteKind.NADIR_RIFT
+    WorldLayer.BASE, WorldLayer.ARCHIVE -> null
+}
+
+/**
+ * The two kinds of a window, from exactly two site-stream draws: the first by window weight among the eligible kinds,
+ * the second among the rest with the first kind's family down-weighted by the policy's same-family weight. Site
+ * policy validation guarantees both draws a positive weight.
+ */
+internal fun MutableGameState.rollWindowKinds(scheduledAt: Float): Pair<SiteKind, SiteKind> {
+    val weights = FloatArray(SiteKind.entries.size) // one small array per offered window (at most six per run)
+    var total = 0f
+    for (kind in SiteKind.entries) {
+        val weight = if (windowEligible(kind, scheduledAt)) content.sites.definition(kind).windowWeight else 0f
+        weights[kind.ordinal] = weight
+        total += weight
+    }
+    val first = weightedSite(weights, total, siteRandom.nextFloat())
+    weights[first.ordinal] = 0f
+    total = 0f
+    for (kind in SiteKind.entries) {
+        if (kind.family == first.family) weights[kind.ordinal] *= content.sites.sameFamilyWeight
+        total += weights[kind.ordinal]
+    }
+    return first to weightedSite(weights, total, siteRandom.nextFloat())
+}
+
+/**
+ * True when a window scheduled at [scheduledAt] may draw [kind]: it has window weight, its earliest window and Rebirth
+ * tier are reached, and its reserve still ends before the Architect. Rifts are never drawn; a rift claims its side.
+ */
+internal fun MutableGameState.windowEligible(kind: SiteKind, scheduledAt: Float): Boolean {
+    val definition = content.sites.definition(kind)
+    return kind.family != SiteFamily.PORTAL && definition.windowWeight > 0f && scheduledAt >= definition.minimumOfferAt &&
+        rebirthLevel >= definition.minimumRebirth &&
+        scheduledAt + content.sites.windows.offerLifetime + definition.reserveSeconds < content.tempo.bossAtSeconds
+}
+
+/** Linear scan of [weights] at `roll × total`; float rounding falls back to the last positive weight. */
+private fun weightedSite(weights: FloatArray, total: Float, roll: Float): SiteKind {
+    check(total > 0f) { "A window draw needs a positive weight" }
+    var remaining = roll * total
+    var last = -1
+    for (index in weights.indices) {
+        val weight = weights[index]
+        if (weight <= 0f) continue
+        last = index
+        if (remaining < weight) return SiteKind.entries[index]
+        remaining -= weight
+    }
+    return SiteKind.entries[last]
+}
+
+/** True when an offer closed; the pair is rebuilt only then. */
+private fun List<SiteState>.anyExpired(elapsed: Float): Boolean {
+    for (index in indices) if (elapsed >= this[index].expiresAt) return true
+    return false
 }
 
 /** The Core entered an offered window site: its family's rules start it. */

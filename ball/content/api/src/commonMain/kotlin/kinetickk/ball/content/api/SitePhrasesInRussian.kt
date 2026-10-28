@@ -34,6 +34,7 @@ internal val SitePhrasesInRussian: List<Pair<String, String>> = listOf(
     "Far sigil" to "Дальняя печать",
     "Touch the sigil to summon whoever drew this map." to "Коснитесь печати, чтобы призвать того, кто начертил эту карту.",
 
+    "TWO SITES DETECTED // CHOOSE A COURSE" to "ОБНАРУЖЕНЫ ДВЕ ЛОКАЦИИ // ВЫБЕРИТЕ ПУТЬ",
     "REWARD SALVAGED" to "НАГРАДА ПЕРЕРАБОТАНА",
 
     "Trials" to "Вызовы",

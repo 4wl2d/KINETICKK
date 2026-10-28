@@ -404,6 +404,8 @@ class HudLayoutFixesTest {
     fun instructionTailsStayOutOfTheFeedWhileEventTailsRemain() {
         assertEquals("TWO ANOMALIES DETECTED" to null, feedMessageParts("TWO ANOMALIES DETECTED // CHOOSE A COURSE", AppLanguage.English))
         assertEquals("ОБНАРУЖЕНЫ ДВЕ АНОМАЛИИ" to null, feedMessageParts("TWO ANOMALIES DETECTED // CHOOSE A COURSE", AppLanguage.Russian))
+        assertEquals("TWO SITES DETECTED" to null, feedMessageParts("TWO SITES DETECTED // CHOOSE A COURSE", AppLanguage.English))
+        assertEquals("ОБНАРУЖЕНЫ ДВЕ ЛОКАЦИИ" to null, feedMessageParts("TWO SITES DETECTED // CHOOSE A COURSE", AppLanguage.Russian))
         assertEquals("CATALOG COMPLETE" to "MATTER SALVAGED", feedMessageParts("CATALOG COMPLETE // MATTER SALVAGED", AppLanguage.English))
         assertEquals("ELITE SIGNAL" to null, feedMessageParts("ELITE SIGNAL", AppLanguage.English))
     }

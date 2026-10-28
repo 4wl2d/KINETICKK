@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.DirectedReward
+import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
@@ -14,14 +15,15 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class RunFeatureBoundsTest {
-    private fun game() = MutableGameState(canonicalGameplayContent).apply {
+    private fun game(content: GameplayContentSnapshot = canonicalGameplayContent) = MutableGameState(content).apply {
         startRun()
         enemies.clear()
     }
 
     @Test
     fun activationClosesAlternativeAndNeverRetainsTwoActiveTrials() {
-        val state = game()
+        // Anomaly windows only, so whichever kind the site stream draws can start its trial.
+        val state = game(canonicalGameplayContent.withAnomalyWindowsOnly())
         state.elapsed = 45f
         state.updateSites(0.01f)
         val offered = state.sites

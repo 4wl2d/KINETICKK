@@ -66,6 +66,15 @@ class WorldContractBoundsTest {
         val oneAnomaly = SitePolicy().definitions.map { if (it.kind == SiteKind.SEALED_ANOMALY || it.kind == SiteKind.COLLAPSING_ORBIT) it.copy(windowWeight = 0f) else it }
         assertFailsWith<IllegalArgumentException> { SitePolicy(definitions = oneAnomaly.toImmutableList()) }
         assertFailsWith<IllegalArgumentException> { SitePolicy(definitions = SitePolicy().definitions.reversed().toImmutableList()) }
+        // A second draw always finds a kind: a zero same-family weight needs unconditional kinds of two families.
+        fun weighted(vararg kinds: SiteKind) = SitePolicy().definitions
+            .map { it.copy(windowWeight = if (it.kind in kinds) 1f else 0f) }.toImmutableList()
+        val anomalies = weighted(SiteKind.RESONANT_CIRCUIT, SiteKind.SEALED_ANOMALY, SiteKind.COLLAPSING_ORBIT)
+        SitePolicy(sameFamilyWeight = Float.MIN_VALUE, definitions = anomalies)
+        assertFailsWith<IllegalArgumentException> { SitePolicy(sameFamilyWeight = 0f, definitions = anomalies) }
+        SitePolicy(sameFamilyWeight = 0f, definitions = weighted(SiteKind.RESONANT_CIRCUIT, SiteKind.GATE_RACE))
+        SitePolicy(sameFamilyWeight = 1f, definitions = anomalies)
+        assertFailsWith<IllegalArgumentException> { SitePolicy(sameFamilyWeight = 1.0001f, definitions = anomalies) }
     }
 
     @Test
