@@ -504,7 +504,8 @@ class DimensionSystemTest {
         game.previousCoreY = game.coreY
         fun MutableGameState.absolute(): List<Pair<Double, Double>> {
             val visit = checkNotNull(dimensionRun.visit)
-            val points = listOf(visit.courseX to visit.courseY, visit.exitPortal!!.x to visit.exitPortal!!.y) +
+            val exit = checkNotNull(visit.exitPortal)
+            val points = listOf(visit.courseX to visit.courseY, exit.x to exit.y) +
                 visit.halos.map { it.x to it.y } + visit.embers.map { it.x to it.y }
             return points.map { (x, y) -> worldOriginX + x to worldOriginY + y }
         }
