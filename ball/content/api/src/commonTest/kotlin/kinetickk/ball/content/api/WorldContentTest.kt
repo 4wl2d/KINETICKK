@@ -25,6 +25,20 @@ class WorldContentTest {
         assertEquals(900f, tuning.safeRadius)
         assertEquals(90f, tuning.minimumGap)
         assertEquals(0.6f, tuning.restitution)
+        // The 0.6.0 impact band: impacts count the scrape, start lower, keep a floor and cap the lethal bonuses.
+        assertEquals(0.32f, tuning.damageStartReach)
+        assertEquals(0.67f, tuning.lethalReach)
+        assertEquals(0.30f, tuning.dashSafeReach)
+        assertEquals(40f, tuning.forgivingStartBonus)
+        assertEquals(0.55f, tuning.damageShare)
+        assertEquals(1.0f, tuning.damageExponent)
+        assertEquals(0.25f, tuning.hitCooldownSeconds)
+        assertEquals(0.3f, tuning.scrapeShare)
+        assertEquals(0.45f, tuning.ricochetReach)
+        assertEquals(0.77f, tuning.lethalCeilingReach)
+        assertEquals(0.06f, tuning.minimumDamageShare)
+        assertEquals(0.4f, tuning.shieldBleed)
+        assertEquals(0.35f, tuning.scrapeFriction)
         assertEquals(2_200f, tuning.minimapRange)
         assertEquals(1.4f, tuning.minimapViewportFactor)
         assertEquals(0.5f, tuning.blackoutMinimapScale)
@@ -37,8 +51,8 @@ class WorldContentTest {
         assertFailsWith<IllegalArgumentException> { ObstacleTuning(maximumPerChunk = 6) }
         assertFailsWith<IllegalArgumentException> { ObstacleTuning(windowChunks = 4) }
         assertFailsWith<IllegalArgumentException> { ObstacleTuning(damageStartReach = 0.8f, lethalReach = 0.7f) }
-        assertEquals(0.45f, ObstacleTuning(dashSafeReach = 0.45f).dashSafeReach)
-        assertFailsWith<IllegalArgumentException> { ObstacleTuning(dashSafeReach = 0.46f) }
+        assertEquals(0.32f, ObstacleTuning(dashSafeReach = 0.32f).dashSafeReach)
+        assertFailsWith<IllegalArgumentException> { ObstacleTuning(dashSafeReach = 0.33f) }
         assertFailsWith<IllegalArgumentException> { ObstacleTuning(dashLethalMargin = -1f) }
         assertFailsWith<IllegalArgumentException> { ObstacleTuning(restitution = 1.01f) }
         assertEquals(1f, ObstacleTuning(restitution = 1f).restitution)
@@ -49,17 +63,6 @@ class WorldContentTest {
     @Test
     fun obstacleImpactTuningRejectsSharesOutsideTheirBounds() {
         val shipped = ObstacleTuning()
-        assertEquals(0.3f, shipped.scrapeShare)
-        assertEquals(0.45f, shipped.ricochetReach)
-        assertEquals(0.77f, shipped.lethalCeilingReach)
-        assertEquals(0.06f, shipped.minimumDamageShare)
-        assertEquals(0.4f, shipped.shieldBleed)
-        assertEquals(0.35f, shipped.scrapeFriction)
-        // The impact knobs ship unread: the 0.5.0 band defaults stay.
-        assertEquals(0.45f, shipped.damageStartReach)
-        assertEquals(0.72f, shipped.lethalReach)
-        assertEquals(0.5f, shipped.damageShare)
-
         ObstacleTuning(scrapeShare = 0f)
         ObstacleTuning(scrapeShare = 1f)
         assertFailsWith<IllegalArgumentException> { ObstacleTuning(scrapeShare = 1.01f) }
@@ -74,13 +77,13 @@ class WorldContentTest {
         ObstacleTuning(damageShare = 0.5f, minimumDamageShare = 0.49f)
         assertFailsWith<IllegalArgumentException> { ObstacleTuning(damageShare = 0.5f, minimumDamageShare = 0.5f) }
         assertFailsWith<IllegalArgumentException> { ObstacleTuning(minimumDamageShare = -0.01f) }
-        // A ricochet is always a hurting hit.
-        ObstacleTuning(ricochetReach = 0.45f)
-        assertFailsWith<IllegalArgumentException> { ObstacleTuning(ricochetReach = 0.44f) }
+        // A ricochet is always a hurting hit: its reach may equal the damage start, never lie below it.
+        ObstacleTuning(ricochetReach = shipped.damageStartReach)
+        assertFailsWith<IllegalArgumentException> { ObstacleTuning(ricochetReach = shipped.damageStartReach - 0.01f) }
         assertFailsWith<IllegalArgumentException> { ObstacleTuning(ricochetReach = 1f) }
         // The lethal ceiling lies past the lethal reach and inside the viewport.
-        ObstacleTuning(lethalCeilingReach = 0.73f)
-        assertFailsWith<IllegalArgumentException> { ObstacleTuning(lethalCeilingReach = 0.72f) }
+        ObstacleTuning(lethalCeilingReach = shipped.lethalReach + 0.01f)
+        assertFailsWith<IllegalArgumentException> { ObstacleTuning(lethalCeilingReach = shipped.lethalReach) }
         ObstacleTuning(lethalCeilingReach = 0.99f)
         assertFailsWith<IllegalArgumentException> { ObstacleTuning(lethalCeilingReach = 1f) }
     }

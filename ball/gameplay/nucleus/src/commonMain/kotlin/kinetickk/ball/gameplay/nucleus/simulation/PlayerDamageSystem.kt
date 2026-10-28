@@ -19,8 +19,9 @@ import kotlin.math.min
  * neither uses nor grants hit i-frames, HURT clauses or shield-break rewards.
  *
  * [OBSTACLE] is an asteroid collision or blast: it scales with `1 + damagePerTier × tier` instead of the
- * Rebirth incoming-damage multiplier, ignores damage reduction and damage-taken modifiers, is absorbed
- * by shields, and neither uses nor grants the hit i-frames (collisions have their own cooldown).
+ * Rebirth incoming-damage multiplier, ignores damage reduction and damage-taken modifiers, shields absorb
+ * all but `shieldBleed` of it, and it neither uses nor grants the hit i-frames (collisions have their own
+ * per-surface cooldown).
  * [cancellableByFacets] is false for it: Prism facets cancel it only while Monolith runs (the Prism's Apex).
  */
 internal enum class IncomingDamage(
@@ -153,7 +154,7 @@ private fun MutableGameState.takeObstacleDamage(rawAmount: Float, obstacle: kine
     }
     val shieldBefore = shield
     if (shield > 0f && !glass) {
-        val absorbed = min(shield, amount)
+        val absorbed = min(shield, amount * (1f - content.obstacles.shieldBleed))
         absorbShield(absorbed, incoming = true)
         amount -= absorbed
     }

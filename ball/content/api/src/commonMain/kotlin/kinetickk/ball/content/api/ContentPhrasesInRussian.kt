@@ -279,8 +279,8 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "All damage +35%. Maximum integrity −30." to "Весь урон +35%. Максимальная прочность −30.",
     "+25 maximum integrity per rank." to "+25 к максимальной прочности за ранг.",
     "+20 shield capacity per rank." to "+20 к ёмкости щита за ранг.",
-    "Obstacle collisions deal 25% less damage per rank, and the lethal collision speed rises by 150 per rank." to
-        "Столкновения с препятствиями наносят на 25% меньше урона за ранг, а смертельная скорость столкновения растёт на 150 за ранг.",
+    "Obstacle collisions deal 25% less damage per rank, and the lethal collision speed rises by 150 per rank, up to a cap." to
+        "Столкновения с препятствиями наносят на 25% меньше урона за ранг, а смертельная скорость столкновения растёт на 150 за ранг, но не выше предела.",
     "Once per run, lethal damage leaves you at 30% integrity with 2 seconds of invulnerability." to
         "Раз за забег смертельный урон оставляет 30% прочности и 2 секунды неуязвимости.",
     "+0.8 integrity regeneration per second per rank." to "+0,8 к восстановлению прочности в секунду за ранг.",
@@ -296,8 +296,8 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Asteroid bounces keep 75% of your speed instead of 60%, and each ricochet bursts for impact damage within 140." to
         "Отскок от астероида сохраняет 75% скорости вместо 60%, а каждый рикошет взрывается уроном от столкновения в радиусе 140.",
     "+12% attack speed per rank." to "+12% к скорости атаки за ранг.",
-    "Ricochets grant 0.4 seconds of Dash phase, and the lethal collision speed rises by 250." to
-        "Рикошеты дают 0,4 секунды фазы рывка, а смертельная скорость столкновения растёт на 250.",
+    "Ricochets grant 0.4 seconds of Dash phase, and the lethal collision speed rises by 250, up to a cap." to
+        "Рикошеты дают 0,4 секунды фазы рывка, а смертельная скорость столкновения растёт на 250, но не выше предела.",
     "Drag −40% and magnetism −10%. One Dash every 6 seconds costs no heat." to
         "Сопротивление −40%, магнетизм −10%. Один рывок раз в 6 секунд не нагревает Ядро.",
     "+15% Matter per rank." to "+15% материи за ранг.",
