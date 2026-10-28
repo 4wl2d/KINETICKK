@@ -190,6 +190,16 @@ class WorldHotPathAllocationTest {
     }
 
     @Test
+    fun ambientCachesDrawWithoutAllocating() {
+        // Drift caches bobbing in view, one past the edge within its reveal distance (its marker instead) and one past
+        // the edge beyond it (nothing).
+        assertFrameIsAllocationFree(KkRolePalette.Default, WeaponId.MORNINGSTAR, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = ::withAmbientCaches)
+        assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+            decorate = ::withAmbientCaches)
+    }
+
+    @Test
     fun worldColorsFollowTheRolePalette() {
         val model = busyModel(WeaponId.ARC_COIL)
         val fx = busyFx()
@@ -672,6 +682,15 @@ class WorldHotPathAllocationTest {
             slalom,
         )
         return model.with("sites" to (running + model.sites).toImmutableList(), "trial" to siteTrial(running.first(), model.content.sites))
+    }
+
+    /** The busy frame with drift caches: two in view, one past the edge within its reveal distance, one beyond it. */
+    private fun withAmbientCaches(model: GameplayRenderModel): GameplayRenderModel {
+        fun cache(x: Float, y: Float) = SiteProjection(SiteKind.DRIFT_CACHE, "Drift cache", CORE + x, CORE + y, false, 0f, -1, 0f,
+            immutableListOf(), 0f, 0f, activationRadius = 70f, reveal = 1_800f)
+        return model.with(
+            "ambientSites" to immutableListOf(cache(220f, -140f), cache(-280f, 120f), cache(1_300f, -900f), cache(2_600f, 1_400f)),
+        )
     }
 
     private companion object {

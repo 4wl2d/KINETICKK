@@ -441,6 +441,10 @@ class RedesignShotsWorldTest {
             model(w, h, points = listOf(ringChallenge(SiteKind.UNTOUCHED_TRIAL, -150f, 100f, 650f, 0.3f, warning = 0.5f)))
         }))
         add(Scene("site-velocity", hud = true, model = { w, h -> model(w, h, points = listOf(ringChallenge(SiteKind.VELOCITY_TRIAL, 300f, 200f, 1_800f, 0.6f))) }))
+        // Drift caches: two bone crates in view, a third past the edge within its reveal distance (its edge marker and
+        // minimap mark).
+        add(Scene("site-cache", model = { w, h -> caches(w, h) }))
+        add(Scene("site-cache-hud", hud = true, model = { w, h -> caches(w, h) }))
     }
 
     /**
@@ -519,6 +523,13 @@ class RedesignShotsWorldTest {
         }.toImmutableList()
         return SiteProjection(SiteKind.GATE_RACE, "Gate race", 1_000f + 40f, 1_000f + 20f, true, 9.3f, step, step / 7f,
             immutableListOf(), 0f, 0f, course = course, clock = 5.7f, medal = 2)
+    }
+
+    /** Drift caches around the Core: two in view, one 1,500 u up and to the right (inside its 1,800 u reveal distance). */
+    private fun caches(w: Float, h: Float): GameplayRenderModel {
+        fun cache(dx: Float, dy: Float) = SiteProjection(SiteKind.DRIFT_CACHE, "Drift cache", 1_000f + dx, 1_000f + dy, false, 0f, -1,
+            0f, immutableListOf(), 0f, 0f, activationRadius = 70f, reveal = 1_800f)
+        return model(w, h).with("ambientSites" to immutableListOf(cache(-260f, -150f), cache(210f, 170f), cache(1_200f, -900f)))
     }
 
     // Board HUD.png positions (1440 x 810) are converted to world offsets from the Core so every
