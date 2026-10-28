@@ -44,7 +44,7 @@ class ProfilePerformanceBenchmarkTest {
     @Test
     fun suiteIdentityVersionsTheWorkloadWithoutVersioningTheSaveSchema() {
         assertEquals(
-            "profile-persistence-current-schema-v5",
+            "profile-persistence-current-schema-v6",
             PROFILE_PERSISTENCE_BENCHMARK_SUITE_VERSION,
         )
     }

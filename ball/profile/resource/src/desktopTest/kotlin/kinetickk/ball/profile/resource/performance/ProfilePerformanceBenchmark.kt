@@ -61,7 +61,7 @@ import kinetickk.foundation.common.input.BindableKey
 import kinetickk.foundation.common.localization.AppLanguage
 
 internal const val PROFILE_PERSISTENCE_BENCHMARK_SUITE_VERSION =
-    "profile-persistence-current-schema-v5"
+    "profile-persistence-current-schema-v6"
 
 fun main() {
     runBenchmarkSuite(

@@ -52,11 +52,11 @@ bash tools/performance/scripts/compare-pr-base.sh --base FULL_BASE_SHA --profile
 
 The runner uses separate base worktrees and fresh JVMs in A-B-B-A order.
 It requires matching harness, semantic workloads, fingerprints, and environment.
-Release 0.5.0 uses `gameplay-core-v4` and
-`profile-persistence-current-schema-v5`; older workloads are not comparable.
-The gameplay reaction workload fills the 0.5.0 combat field table, and the
-profile business maximum adds Refit and Honing levels, the 64-entry recent item
-history, every display and control preference and all Ascendant characters.
+Release 0.6.0 uses `gameplay-core-v5` and
+`profile-persistence-current-schema-v6`; older workloads are not comparable.
+The gameplay workloads run on the 0.6.0 flight law and world, the suite adds
+the `terrain_window`, `structure_dungeon` and `dimension_visit` scenarios, and
+the profile business maximum adds every world discovery.
 CI produces candidate-only results when the base lacks the current contract,
 then resumes comparisons once both sides support it. Candidate-only results
 carry no claim about improvement or regression against the base.
