@@ -74,6 +74,13 @@ private const val HAZARD_CLEARANCE_MARGIN = 40f
 private const val DASH_LOOKAHEAD_SECONDS = 0.3f
 
 /**
+ * The NoPoi bot's Blink rule: with Blink Drive a Dash may teleport up to [BLINK_LANDING_REACH] along the pointer, so it
+ * is kept only when that line passes at least [SITE_GUARD_MARGIN] outside every skipped optional site's radius.
+ */
+private const val BLINK_LANDING_REACH = 320f
+private const val SITE_GUARD_MARGIN = 85f
+
+/**
  * Flies a run with [bot] and, while [target]'s rift is offered and once inside it, the visit. [takeRefuse] takes the
  * Refuse card of a Pact offer instead of the first card.
  */
@@ -137,7 +144,9 @@ internal class DimensionPilot(
         cursorAngle += turn.coerceIn(-CURSOR_TURN, CURSOR_TURN)
         val tether = length(tetherX, tetherY).coerceAtLeast(MIN_TETHER)
         s.updatePointer(s.screenWidth * 0.5f + offsetX + cos(cursorAngle) * tether, s.screenHeight * 0.5f + offsetY + sin(cursorAngle) * tether)
-        if (s.dashBufferTime > dashBefore && !dashLineClear(s, cos(cursorAngle), sin(cursorAngle))) s.dashBufferTime = dashBefore
+        if (s.dashBufferTime > dashBefore && !dashAllowed(s, cos(cursorAngle), sin(cursorAngle), skipGoalRift = false)) {
+            s.dashBufferTime = dashBefore
+        }
     }
 
     /** Sets the goal of this input; false leaves the bot's input standing. */
@@ -310,8 +319,30 @@ internal class DimensionPilot(
         val availableY = if (uy > 0f) (halfHeight - offsetY) / uy else if (uy < 0f) (-halfHeight - offsetY) / uy else 10_000f
         val tether = min(aim.distance.coerceIn(MIN_TETHER, MAX_TETHER), min(availableX, availableY)).coerceAtLeast(MIN_TETHER)
         s.updatePointer(s.screenWidth * 0.5f + offsetX + ux * tether, s.screenHeight * 0.5f + offsetY + uy * tether)
-        // A threat Dash the bot asked for now flies along this pointer: dropped when it would ram a solid body at speed.
-        if (s.dashBufferTime > dashBefore && !dashLineClear(s, ux, uy)) s.dashBufferTime = dashBefore
+        // A threat Dash the bot asked for now flies along this pointer: dropped when it would ram a solid body at speed or
+        // Blink onto a skipped site.
+        if (s.dashBufferTime > dashBefore && !dashAllowed(s, ux, uy, skipGoalRift = goalIsRift)) s.dashBufferTime = dashBefore
+    }
+
+    /**
+     * The bot's two Dash rules applied along the pilot's pointer (ux, uy): no solid body on the Dash line at the lethal
+     * speed, and with Blink Drive no Blink landing on a skipped optional site (the rift the pilot flies to is no skipped
+     * site when [skipGoalRift]). The bot checks both along its own cursor, which the pilot has replaced.
+     */
+    private fun dashAllowed(s: MutableGameState, ux: Float, uy: Float, skipGoalRift: Boolean): Boolean {
+        if (!dashLineClear(s, ux, uy)) return false
+        if (s.relicRank(RelicId.BLINK_DRIVE) <= 0) return true
+        val endX = s.coreX + ux * BLINK_LANDING_REACH
+        val endY = s.coreY + uy * BLINK_LANDING_REACH
+        val count = s.optionalSiteMarks(marks)
+        for (mark in 0 until count) {
+            val base = mark * 3
+            if (skipGoalRift && marks[base] == goalX && marks[base + 1] == goalY) continue
+            if (segmentCircleIntersects(s.coreX, s.coreY, endX, endY, marks[base], marks[base + 1], marks[base + 2] + SITE_GUARD_MARGIN)) {
+                return false
+            }
+        }
+        return true
     }
 
     /** False when a Dash along (ux, uy) reaches the lethal obstacle speed with a solid body on its line. */
