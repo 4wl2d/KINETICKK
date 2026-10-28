@@ -318,7 +318,7 @@ class WorldDimensionRenderingTest {
         assertEquals(EdgeMarkerBatch.CAPACITY, WorldDrawProbe.rects(WorldDrawn.EDGE_MARKER).size, "every marker is drawn")
         // Seen on screen, a rift or ring needs no marker; a ring that is not next never gets one.
         val near = base().withDimension(dimension.copy(
-            exitPortal = dimension.exitPortal!!.copy(x = CORE + 300f, y = CORE),
+            exitPortal = checkNotNull(dimension.exitPortal).copy(x = CORE + 300f, y = CORE),
             glitchPortal = null,
             nextHaloId = 5,
         ))
