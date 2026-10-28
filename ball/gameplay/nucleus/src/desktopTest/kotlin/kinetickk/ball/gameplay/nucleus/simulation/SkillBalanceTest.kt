@@ -35,6 +35,10 @@ import kotlin.test.assertTrue
  * frozen. One skill sits in slot Z and is requested every frame, so it casts whenever it can. Each skill and rank is
  * the mean of 96 seeded 60 s fights; a no-skill fight on each seed is the baseline.
  *
+ * The fight flies an empty field, without obstacles or structures: a skill is not terrain, and the figure eight
+ * covers thousands of units a minute, so a real field would add rock and wall hits no skill answers to every
+ * family's metric. A fight that strikes a solid surface fails.
+ *
  * A skill whose rule needs a status already on its targets meets packs that arrive carrying it, and so does its
  * baseline: Frost Snap's shatter needs Frozen or Brittle enemies (the packs arrive as a Cryo Break leaves them),
  * Entropic Tide consumes Decay (they arrive with [SETUP_STACKS] Decay), Catalyze reacts enemies that carry two
@@ -128,7 +132,11 @@ class SkillBalanceTest {
         const val FAST_SPEED = 700f
         /** Stacks a setup pack arrives with (the older element of a reaction needs two). */
         const val SETUP_STACKS = 3
-        val content = canonicalGameplayContent.copy(tempo = canonicalGameplayContent.tempo.copy(bossAtSeconds = 1_000_000f))
+        val content = canonicalGameplayContent.copy(
+            tempo = canonicalGameplayContent.tempo.copy(bossAtSeconds = 1_000_000f),
+            obstacles = canonicalGameplayContent.obstacles.copy(meanPerChunk = 0f),
+            structures = canonicalGameplayContent.structures.copy(enabled = false),
+        )
         val metrics = HashMap<Pair<SkillId, Int>, Double>()
         val baselines = HashMap<Setup, Map<Int, Fight>>()
 
@@ -207,6 +215,7 @@ class SkillBalanceTest {
                 state.takeProgressUpdate()
                 frame++
             }
+            check(state.obstacleHitSurfaceId == NO_SURFACE_ID) { "seed $seed ($skill) struck a solid surface in the empty field" }
             return Fight(
                 damage = if (skill != null) runtime[0, SkillCell.DAMAGE].toDouble() else 0.0,
                 casts = if (skill != null) runtime[0, SkillCell.CAST_COUNT].toInt() else 0,
