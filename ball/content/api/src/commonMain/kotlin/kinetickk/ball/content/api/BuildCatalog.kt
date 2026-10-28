@@ -144,7 +144,7 @@ private val DefaultBuildCatalog = BuildCatalog(
             "The target turns magnetic: it yanks nearby enemies together and keeps pulling them and your shots for " +
                 "three seconds.",
             power = 4f, radius = 200f, residue = StatusElement.GRAVITIC, residueStacks = 1,
-            values = immutableListOf(3f, 260f, 220f, 4f),
+            values = immutableListOf(3f, 260f, 220f, 5f),
             verb = "Attractor", cue = "Shots home in", keystone = "Repulsor",
             keystoneDescription = "No yank, no attractor; the target is hurled away from the Core at 900 × knockback and each enemy it slams takes 1 Charge."),
         ReactionDefinition(ReactionId.FEEDBACK, "Feedback",

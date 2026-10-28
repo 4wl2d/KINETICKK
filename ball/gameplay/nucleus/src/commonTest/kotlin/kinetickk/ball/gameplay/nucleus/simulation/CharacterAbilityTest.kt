@@ -103,6 +103,9 @@ class CharacterAbilityTest {
         repeat(CharacterRuntime.GHOST_SAMPLES) { game.simulateStep(MutableGameState.FIXED_STEP) }
         assertTrue(game.ghostActive)
         val fromX = game.coreX
+        // The Blink stops 60 short of the singularity, and the camera trails the fast Core by about 200: aim the
+        // Blink 400 ahead of the Core itself, not of the screen centre.
+        game.updatePointer(game.screenWidth * 0.5f + (game.coreX - game.cameraX) + 400f, game.screenHeight * 0.5f)
         game.dashBufferTime = MutableGameState.DASH_INPUT_BUFFER_SECONDS
         game.simulateStep(MutableGameState.FIXED_STEP)
         val toX = game.coreX

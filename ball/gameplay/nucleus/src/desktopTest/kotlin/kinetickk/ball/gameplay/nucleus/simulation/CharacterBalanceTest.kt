@@ -18,8 +18,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Long scripted character scenarios at ability power 1. The balance script is one fixed 90 s fight
- * for every character: the pointer traces a figure eight and a Dash fires every 1.5 s (two Pentagon
+ * Long scripted character scenarios at ability power 1, in a field without obstacles or structures. The balance
+ * script is one fixed 90 s fight for every character: the pointer traces a figure eight and a Dash fires every 1.5 s (two Pentagon
  * beats) while a pack of three Drifters (two 60-integrity flankers and a 240-integrity middle one)
  * appears at a random bearing within a radian of the aim, 140 to 280 ahead, so the Dash meets a pack
  * only part of the time; at most twelve enemies stay. Every 3.75 s a Sniper bolt with the content's
@@ -177,7 +177,15 @@ class CharacterBalanceTest {
     }
 
     private companion object {
-        val content = canonicalGameplayContent.copy(tempo = canonicalGameplayContent.tempo.copy(bossAtSeconds = 1_000_000f))
+        /**
+         * The fights measure abilities, not terrain, so they fly a field without generated obstacles or structures:
+         * an on-beat Dash from a brisk cruise into a rock is lethal by the obstacle rules and would end a fight.
+         */
+        val content = canonicalGameplayContent.copy(
+            tempo = canonicalGameplayContent.tempo.copy(bossAtSeconds = 1_000_000f),
+            obstacles = canonicalGameplayContent.obstacles.copy(meanPerChunk = 0f),
+            structures = canonicalGameplayContent.structures.copy(enabled = false),
+        )
         /** The defensive characters: outside the ability-output band, accepted by their loss share of the Orb's. */
         val DEFENSIVE = listOf(CoreShape.PRISM, CoreShape.DIAMOND)
         val OFFENSIVE = CoreShape.entries - DEFENSIVE.toSet()
