@@ -253,6 +253,7 @@ internal fun buildRewardCardLook(presentation: RewardCardPresentation, roles: Kk
             )
             RewardCardLook(style, null, hue, hue)
         }
+        presentation.boonKind != null -> rewardBoonCardLook(presentation, roles)
         else -> {
             // Any other card: the material of its rank in its own hue, nothing behind the text.
             val hue = presentation.accentColor(roles)
