@@ -263,7 +263,10 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
         2 -> catalog.relics.count { model.isRelicDiscovered(it.id) } to catalog.relics.size
         3 -> progress.unlockedCoreShapes.size to catalog.coreShapes.size
         // Enemies the current Rebirth rank lets into runs, out of the whole roster.
-        else -> catalog.enemies.count { it.minimumRebirth <= progress.rebirthProgress.rank } to catalog.enemies.size
+        CODEX_ENEMIES_CATEGORY -> catalog.enemies.count { it.minimumRebirth <= progress.rebirthProgress.rank } to catalog.enemies.size
+        // Places and secrets found, out of every one the World lists.
+        CODEX_WORLD_CATEGORY -> codexWorldCounts(model, catalog)
+        else -> error("No Codex catalog category $index")
     }
     val (collectionDiscovered, collectionTotal) = categoryCounts(category)
     // Rebirth locks alone leave the collection empty: the notice shows above them (and above the Items matrix's hatches).
@@ -306,7 +309,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
     }
     LaunchedEffect(Unit) { listFocus.requestFocus() }
     val categoryTitles = listOf(SessionText.ITEMS_TITLE, SessionText.WEAPONS_TITLE, SessionText.RELICS_TITLE, SessionText.FORMS_TITLE)
-        .map { language.text(it) } + language.text(CodexText.ENEMIES_TITLE)
+        .map { language.text(it) } + language.text(CodexText.ENEMIES_TITLE) + language.text(CodexText.WORLD_TITLE)
     val filterTitles = listOf(0 to SessionText.FILTER_ALL, 2 to SessionText.FILTER_BUILD, 3 to SessionText.FILTER_ACTIVE)
     val policy = catalog.build.policy
     val onSelection: ((CodexSelection) -> CodexSelection) -> Unit = { change ->
@@ -1208,8 +1211,8 @@ private fun CodexNavigationTabs(tab: CodexTab, controlScale: Float, compact: Boo
 }
 
 /**
- * Smallest scale tabs shrink to before their row scrolls instead: the five Russian categories at
- * 175 % still fit a 360 dp phone beside the filters (their labels stay near 14 px).
+ * Smallest scale tabs shrink to before their row scrolls instead (their labels stay near 14 px): the six
+ * categories fit every phone up to 150 %; at 175 % a 360 or 390 dp phone scrolls them (English fits 390 dp).
  */
 internal const val CODEX_TAB_MIN_SCALE = 0.45f
 
@@ -1320,7 +1323,8 @@ internal fun codexNavTitleSize(measurer: CanvasTextMeasurer, titles: List<String
 
 /**
  * Section row height (dp) for the [controlScale]: 46 dp at the design size, growing far more slowly
- * than the text so the whole nav (five rows, search, filters, legend) fits a 810 dp tall window at 175 %.
+ * than the text so the whole nav (six rows, search, filters, legend) fits a 810 dp tall window up to
+ * 150 %; at 175 % it runs less than one row past and scrolls with its cue.
  */
 internal fun codexNavRowHeight(controlScale: Float): Float = 46f + 2f * (controlScale - 1f)
 

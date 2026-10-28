@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import kinetickk.ball.content.api.SiteFamily
 import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.foundation.design.KK_ICON_GRID
 import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.drawKkIcon
@@ -164,6 +165,26 @@ fun siteFamilyGlyph(family: SiteFamily): SiteGlyph = when (family) {
     SiteFamily.SECRET -> SiteGlyph.SIGIL
     SiteFamily.PORTAL -> SiteGlyph.PORTAL
     SiteFamily.SIGNAL -> SiteGlyph.SIGNAL
+}
+
+/**
+ * The glyph of a world discovery (the Codex World category): a site family's own glyph, the dimension's horizon for the
+ * three layers, a floor plan for the structure templates and each secret's own mark.
+ */
+fun worldDiscoveryGlyph(id: WorldDiscovery): SiteGlyph = when (id) {
+    WorldDiscovery.GATE_RACE -> SiteGlyph.RACE
+    WorldDiscovery.TRIALS -> SiteGlyph.CHALLENGE
+    WorldDiscovery.BOUNTY -> SiteGlyph.BOUNTY
+    WorldDiscovery.DRIFT_CACHE -> SiteGlyph.CACHE
+    WorldDiscovery.ZENITH, WorldDiscovery.NADIR, WorldDiscovery.ARCHIVE -> SiteGlyph.DIMENSION
+    WorldDiscovery.DERELICT_STATION, WorldDiscovery.VAULT, WorldDiscovery.SPIRE, WorldDiscovery.LABYRINTH,
+    WorldDiscovery.FOUNDRY, WorldDiscovery.RELIQUARY -> SiteGlyph.STRUCTURE
+    WorldDiscovery.LOST_CURSOR -> SiteGlyph.LOST_CURSOR
+    WorldDiscovery.GOLDEN_DRIFTER -> SiteGlyph.GOLDEN
+    WorldDiscovery.SPIN_CYCLE -> SiteGlyph.SPIN
+    WorldDiscovery.ARCHITECTS_DOODLE -> SiteGlyph.DOODLE
+    WorldDiscovery.QUIET_SIGNAL -> SiteGlyph.QUIET
+    WorldDiscovery.CARTOGRAPHER, WorldDiscovery.ANTECEDENT -> SiteGlyph.SIGIL
 }
 
 /**

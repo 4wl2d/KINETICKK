@@ -268,6 +268,11 @@ class RedesignShotsSessionTest {
                 shotCodex(state, w, h, language, run = true) { codexState(state) }
                 shotCodex("$state-text175", w, h, language, run = true, scale = 1.75f) { codexState(state) }
             }
+            // The World: a found place (the Gate race) and one not found yet (a structure under its hint).
+            for (state in listOf("world", "world-hidden")) {
+                shotCodex(state, w, h, language) { codexState(state) }
+                shotCodex("$state-text175", w, h, language, scale = 1.75f) { codexState(state) }
+            }
         }
         // Text size 100 % and a shorter desktop window (the nav scrolls there, with its cue).
         for (language in AppLanguage.entries) {
@@ -385,6 +390,14 @@ class RedesignShotsSessionTest {
                 onNodeWithTag("codex-tab-1").performSemanticsAction(SemanticsActions.OnClick)
                 mainClock.advanceTimeBy(100)
                 onNodeWithTag(if (forms) "codex-category-3" else "codex-category-4").performSemanticsAction(SemanticsActions.OnClick)
+                mainClock.advanceTimeBy(100)
+                onNodeWithTag("codex-grid").performScrollToKey(key)
+                mainClock.advanceTimeBy(100)
+                onNodeWithTag("codex-slot-$key").performSemanticsAction(SemanticsActions.OnClick)
+            }
+            "world", "world-hidden" -> {
+                val key = if (state == "world") "world/GATE_RACE" else "world/SPIRE"
+                onNodeWithTag("codex-category-5").performSemanticsAction(SemanticsActions.OnClick)
                 mainClock.advanceTimeBy(100)
                 onNodeWithTag("codex-grid").performScrollToKey(key)
                 mainClock.advanceTimeBy(100)
@@ -530,6 +543,8 @@ internal fun ShotCodexModel(run: Boolean = false): CodexRenderModel = CodexRende
     newItemIds = immutableSetOf(10), discoveredRelicIds = RelicId.entries.take(23).toImmutableSet(),
     discoveredReactionIds = immutableSetOf(ReactionId.THERMAL_SHOCK, ReactionId.PLASMA_BURST, ReactionId.SUPERCONDUCT, ReactionId.ROT_WELL),
     discoveredPairingIds = immutableSetOf(RelicPairingId.MELTDOWN, RelicPairingId.THERMAL_PARADOX),
+    discoveredWorldEntries = immutableSetOf(WorldDiscovery.GATE_RACE, WorldDiscovery.TRIALS, WorldDiscovery.DRIFT_CACHE,
+        WorldDiscovery.ZENITH, WorldDiscovery.LOST_CURSOR, WorldDiscovery.SPIN_CYCLE),
 )
 
 private val ShotRun: CodexRunStacks by lazy {
