@@ -16,8 +16,11 @@ import kinetickk.ball.content.api.EffectClause
 import kinetickk.ball.content.api.EffectCondition
 import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.ElementPick
+import kinetickk.ball.content.api.EnemyHabitat
 import kinetickk.ball.content.api.EnemyType
 import kinetickk.ball.content.api.EnemyWeightBias
+import kinetickk.ball.content.api.GarrisonEntry
+import kinetickk.ball.content.api.GarrisonSelector
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
@@ -35,15 +38,18 @@ import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.StructurePolicy
+import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WorldDiscovery
+import kinetickk.ball.content.api.validateStructurePolicy
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ContentBootstrapValidationTest {
@@ -568,6 +574,57 @@ class ContentBootstrapValidationTest {
         createContentCatalogForTesting(data.copy(boons = blessings))
         assertEquals(ContentBounds.MAX_BOON_DEFINITIONS, blessings.size)
         assertRejected(data.copy(boons = blessings + blessings.first()), "exceeds bootstrap bound")
+    }
+
+    @Test
+    fun structurePolicyIsCrossCheckedAgainstTheRosterAndTheObstacleWindow() {
+        val gameplay = createContentCatalogForTesting(defaultContentBootstrapData()).gameplayContent()
+        val roster = gameplay.enemies
+        val policy = gameplay.structures
+        val obstacles = gameplay.obstacles
+        validateStructurePolicy(policy, roster, obstacles)
+
+        // A fixed garrison kind is ordinary (the Foundry's Wardens live only in open space) or a mini-boss, never a boss.
+        assertFalse(roster[EnemyType.WARDEN.ordinal].livesIn(EnemyHabitat.STRUCTURE))
+        validateStructurePolicy(policy.withFurnaceGuard(EnemyType.WARDEN), roster, obstacles)
+        validateStructurePolicy(policy.withFurnaceGuard(EnemyType.THRONE), roster, obstacles)
+        listOf(EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT).forEach { type ->
+            assertStructureRejected("ordinary or a mini-boss") { validateStructurePolicy(policy.withFurnaceGuard(type), roster, obstacles) }
+        }
+        assertStructureRejected("does not define") {
+            validateStructurePolicy(policy, roster.filter { it.type != EnemyType.SENTRY }, obstacles)
+        }
+
+        // An ordinary STRUCTURE kind opens at tier 0 from the first second (today Drifter, Sentry and Crawler).
+        val openers = roster.filter { it.livesIn(EnemyHabitat.STRUCTURE) && it.timeGateSeconds == 0f && it.minimumRebirth == 0 }
+        assertEquals(listOf(EnemyType.DRIFTER, EnemyType.SENTRY, EnemyType.CRAWLER), openers.map { it.type })
+        val late = roster.map { if (it in openers) it.copy(timeGateSeconds = 1f) else it }
+        assertStructureRejected("open at tier 0") { validateStructurePolicy(policy, late, obstacles) }
+        val ranked = roster.map { if (it in openers) it.copy(minimumRebirth = 1) else it }
+        assertStructureRejected("open at tier 0") { validateStructurePolicy(policy, ranked, obstacles) }
+        validateStructurePolicy(policy, roster.map { if (it in openers.drop(1)) it.copy(timeGateSeconds = 1f) else it }, obstacles)
+
+        // The obstacle window spans at most three cells per axis (nine structures) and holds the dungeon's structure.
+        validateStructurePolicy(policy, roster, obstacles.copy(chunkSize = 1_920f))
+        assertStructureRejected("three structure cells") { validateStructurePolicy(policy, roster, obstacles.copy(chunkSize = 1_920.5f)) }
+        validateStructurePolicy(policy, roster, obstacles.copy(chunkSize = 1_200f))
+        assertStructureRejected("leave radius") { validateStructurePolicy(policy, roster, obstacles.copy(chunkSize = 1_199.5f)) }
+    }
+
+    /** The Foundry's furnace guarded by one [type] instead of its Wardens and habitat picks. */
+    private fun StructurePolicy.withFurnaceGuard(type: EnemyType): StructurePolicy = copy(
+        templates = templates.map { template ->
+            if (template.id != StructureTemplateId.FOUNDRY) return@map template
+            val rooms = template.rooms.mapIndexed { index, room ->
+                if (index == template.finalRoom) room.copy(garrison = immutableListOf(GarrisonEntry(GarrisonSelector.FIXED, 1, type))) else room
+            }
+            template.copy(rooms = rooms.toImmutableList())
+        }.toImmutableList(),
+    )
+
+    private fun assertStructureRejected(expectedMessage: String, check: () -> Unit) {
+        val failure = assertFailsWith<IllegalArgumentException> { check() }
+        assertTrue(failure.message.orEmpty().contains(expectedMessage), "Expected '$expectedMessage' in '${failure.message}'")
     }
 
     private fun assertRejected(data: ContentBootstrapData, expectedMessage: String) {
