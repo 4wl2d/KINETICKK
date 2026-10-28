@@ -269,6 +269,15 @@ class StructureRenderMapperTest {
         run.sites = emptyList()
         assertEquals(cleared, run.toRenderModel().trial)
 
+        // Only rooms that count make segments: the Reliquary's empty passages (its odd rooms) never fill one.
+        val reliquary = run.content.structures.template(StructureTemplateId.RELIQUARY)
+        check(reliquary.roomsToClearMask.countOneBits() < reliquary.rooms.size) { "precondition: the Reliquary has passages" }
+        run.dungeon = dungeon.copy(template = StructureTemplateId.RELIQUARY, clearedRooms = 0b0110)
+        val nave = assertNotNull(run.toRenderModel().trial)
+        assertEquals(reliquary.roomsToClearMask.countOneBits(), nave.segments)
+        assertEquals(1f to reliquary.roomsToClearMask.countOneBits().toFloat(), nave.done to nave.required)
+        assertEquals(reliquary.name, nave.title)
+
         // A secret template held the same way shows no panel (the Doodle is found, not fought).
         run.dungeon = dungeon.copy(template = StructureTemplateId.ARCHITECTS_DOODLE)
         assertNull(run.toRenderModel().trial)
