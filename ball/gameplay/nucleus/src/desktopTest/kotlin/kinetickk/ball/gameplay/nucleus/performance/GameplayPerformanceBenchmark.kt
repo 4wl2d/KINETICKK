@@ -21,6 +21,9 @@ import kinetickk.ball.gameplay.nucleus.GameplayNucleus
 import kinetickk.ball.gameplay.nucleus.GameplayNucleusPulse
 import kinetickk.ball.gameplay.nucleus.GameplayOutput
 import kinetickk.ball.gameplay.nucleus.GameplayState
+import kinetickk.ball.content.api.ContentBounds
+import kinetickk.ball.content.api.DimensionObjective
+import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.characterization.gameScenario
 import kinetickk.ball.gameplay.nucleus.model.Obstacle
 import kinetickk.ball.gameplay.nucleus.model.CombatField
@@ -58,6 +61,8 @@ import kinetickk.ball.gameplay.nucleus.simulation.own
 import kinetickk.ball.gameplay.nucleus.simulation.runScale
 import kinetickk.ball.gameplay.nucleus.simulation.takeProgressUpdate
 import kinetickk.ball.gameplay.nucleus.simulation.addEnemyForTesting
+import kinetickk.ball.gameplay.nucleus.simulation.dropEmber
+import kinetickk.ball.gameplay.nucleus.simulation.enterDimensionForTesting
 import kinetickk.ball.gameplay.nucleus.simulation.consumeFixedStepBudget
 import kinetickk.ball.gameplay.nucleus.simulation.copyForReduction
 import kinetickk.ball.gameplay.nucleus.simulation.simulateStep
@@ -73,6 +78,9 @@ import kinetickk.performance.BenchmarkValidation
 import kinetickk.performance.BenchmarkValidationContext
 import kinetickk.performance.runBenchmarkSuite
 import java.lang.reflect.Modifier
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 internal const val GAMEPLAY_BENCHMARK_SUITE_VERSION = "gameplay-core-v4"
 private const val DEFAULT_SEED = 731_991
@@ -130,6 +138,7 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
     private var controlCounter = 1L
     private val traceFingerprint = deterministicTraceFingerprint(seed + 9)
     private val structureDungeon = structureDungeonState(seed + 11)
+    private val dimensionVisit = dimensionVisitState(seed + 12)
 
     fun scenarios(): List<BenchmarkScenario> = listOf(
         BenchmarkScenario(
@@ -412,6 +421,18 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
             validation.observeOutcome { canonicalStateFingerprint(candidate) }
             stateSignature(candidate)
         },
+        BenchmarkScenario(
+            name = "dimension_visit",
+            category = "simulation",
+            description = "Copy and execute one fixed step of a Nadir Harvest visit: 24 embers, 40 natives and the scorch ticking.",
+            metadata = stateCardinality(dimensionVisit, seed) + baseMetadata(seed, "layer" to "NADIR", "embers" to "24"),
+            maximumOperations = 10_000,
+        ) { validation ->
+            val candidate = dimensionVisit.copyForReduction()
+            candidate.simulateStep(MutableGameState.FIXED_STEP)
+            validation.observeOutcome { canonicalStateFingerprint(candidate) }
+            stateSignature(candidate)
+        },
     ).map { scenario ->
         val expectedOutcomeWitness = outcomeFingerprint(scenario.name)
         scenario.copy(
@@ -464,6 +485,7 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
             authorityOutcomeFingerprint(pausedAuthority, frame60)
         "trace_2s_60hz" -> traceFingerprint
         "structure_dungeon" -> fixedStepOutcomeFingerprint(structureDungeon)
+        "dimension_visit" -> fixedStepOutcomeFingerprint(dimensionVisit)
         else -> error("Missing semantic outcome fingerprint for benchmark scenario: $name")
     }
 
@@ -511,6 +533,10 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
             publishedReactionSignature(fastReactionsAuthority, fastReactionsSnapshot, frame100Millis)
         "trace_2s_60hz" -> deterministicTraceFingerprint(seed + 9)
         "structure_dungeon" -> structureDungeon.copyForReduction().run {
+            simulateStep(MutableGameState.FIXED_STEP)
+            stateSignature(this)
+        }
+        "dimension_visit" -> dimensionVisit.copyForReduction().run {
             simulateStep(MutableGameState.FIXED_STEP)
             stateSignature(this)
         }
@@ -925,6 +951,34 @@ private fun MutableGameState.reliquaryNearTheOrigin(): StructurePlacement {
 }
 
 private const val STRUCTURE_SCAN_RINGS = 24
+
+// ---- 0.6.0 DIMENSIONS ----
+
+/** Natives closing in on the Core in the dimension visit workload. */
+private const val DIMENSION_VISIT_ENEMIES = 40
+
+/**
+ * A Nadir Harvest visit at its busiest: every ember slot filled in a ring around the Core, Imps and Hounds closing in
+ * and the Core at rest past the scorch's grace, so a step sweeps the embers, ticks the scorch and runs the layer's
+ * director and Desync-free enemy step.
+ */
+internal fun dimensionVisitState(seed: Int): MutableGameState = newRunningState(seed).apply {
+    enemies.clear()
+    elapsed = 200f
+    enterDimensionForTesting(WorldLayer.NADIR, DimensionObjective.HARVEST)
+    repeat(ContentBounds.MAX_EMBERS) { index ->
+        val angle = index * 2f * PI.toFloat() / ContentBounds.MAX_EMBERS
+        dropEmber(coreX + cos(angle) * 640f, coreY + sin(angle) * 640f)
+    }
+    repeat(DIMENSION_VISIT_ENEMIES) { index ->
+        val angle = index * 2f * PI.toFloat() / DIMENSION_VISIT_ENEMIES
+        val type = if (index % 2 == 0) EnemyType.IMP else EnemyType.HOUND
+        addEnemyForTesting(coreX + cos(angle) * 420f, coreY + sin(angle) * 420f, hp = 1_000_000f, type = type)
+    }
+    dimensionSlowSeconds = 2f
+    takeSoundCues()
+    takeVisualFxCues()
+}
 
 internal fun authorityState(model: MutableGameState): GameplayState = GameplayState(
     instanceId = GameplayInstanceId(RunId(1L)),
