@@ -108,7 +108,7 @@ internal fun HangarProjection.toRenderModel(
     fun bar(values: List<Float>, index: Int): Float {
         val low = values.min()
         val span = values.max() - low
-        return if (span <= 0f) 1f else (HANGAR_BAR_FLOOR + (1f - HANGAR_BAR_FLOOR) * (values[index] - low) / span).coerceIn(0f, 1f)
+        return if (span <= 0f) 1f else (HANGAR_BAR_FLOOR + (1f - HANGAR_BAR_FLOOR) * ((values[index] - low) / span)).coerceIn(0f, 1f)
     }
     return HangarRenderModel(
         shapes = definitions.mapIndexed { index, definition ->
