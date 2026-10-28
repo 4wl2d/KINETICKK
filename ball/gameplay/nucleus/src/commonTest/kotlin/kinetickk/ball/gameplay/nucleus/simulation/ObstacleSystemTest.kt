@@ -216,9 +216,10 @@ class ObstacleSystemTest {
 
     /**
      * Every obstacle [layer] generates at tier 0 with [content] in the 900 chunks east of the origin, for each of three
-     * runs (about 5,800 obstacles, so a share near 0.45 reads within ±0.7 pp at one standard error).
+     * runs (about 5,800 obstacles, so a share near 0.45 reads within ±0.7 pp at one standard error). Far from the origin:
+     * a world without structures, whose realspace footprints would clear part of the census.
      */
-    private fun census(layer: WorldLayer, content: GameplayContentSnapshot = canonicalGameplayContent): List<Obstacle> = buildList {
+    private fun census(layer: WorldLayer, content: GameplayContentSnapshot = structuresDisabledContent): List<Obstacle> = buildList {
         for (seed in 31..33) {
             val state = buildTestState(seed = seed, content = content).apply { worldLayer = layer }
             for (chunkX in 10 until 40) for (chunkY in -15 until 15) addAll(state.generateChunk(chunkX, chunkY))
