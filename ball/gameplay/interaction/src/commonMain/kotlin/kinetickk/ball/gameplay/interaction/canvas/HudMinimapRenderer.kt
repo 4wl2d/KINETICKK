@@ -163,8 +163,9 @@ internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMe
             if (x < left - radius || x > left + side + radius || y < top - radius || y > top + side + radius) continue
             when (obstacle.kind) {
                 ObstacleKind.ASTEROID -> drawCircle(Kk.Bone.copy(alpha = 0.32f), radius, Offset(x, y))
+                ObstacleKind.GRAVITY_WELL -> drawMinimapGravityWell(obstacle, Offset(x, y), scale, dot, engine.content.obstacles.kinds, roles)
                 // The 0.6.0 kinds show as bone dots until their own marks land; no run generates them yet.
-                ObstacleKind.GRAVITY_WELL, ObstacleKind.ACCEL_GATE, ObstacleKind.CRYSTAL, ObstacleKind.DERELICT_MINE,
+                ObstacleKind.ACCEL_GATE, ObstacleKind.CRYSTAL, ObstacleKind.DERELICT_MINE,
                 ObstacleKind.PHASE_SHARD, ObstacleKind.THERMAL_VENT,
                 -> drawCircle(Kk.Bone.copy(alpha = 0.32f), radius, Offset(x, y))
                 ObstacleKind.UNSTABLE -> drawCircle(roles.heat.copy(alpha = 0.7f), radius, Offset(x, y))

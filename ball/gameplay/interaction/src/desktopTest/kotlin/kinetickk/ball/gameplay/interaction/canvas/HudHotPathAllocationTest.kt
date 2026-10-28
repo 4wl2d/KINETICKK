@@ -76,6 +76,8 @@ class HudHotPathAllocationTest {
                     ObstacleProjection(2L, ObstacleKind.UNSTABLE, -900f, 400f, 90f, 8),
                     ObstacleProjection(3L, ObstacleKind.BUMPER, 200f, -700f, 34f, 1),
                     ObstacleProjection(4L, ObstacleKind.ASTEROID, 9_000f, 0f, 120f, 5),
+                    ObstacleProjection(5L, ObstacleKind.GRAVITY_WELL, -300f, -400f, 34f, 6),
+                    ObstacleProjection(6L, ObstacleKind.GRAVITY_WELL, 700f, -200f, 34f, 9, repels = true),
                 ),
                 "pickups" to immutableListOf(
                     PickupProjection(PickupType.KEY, 300f, 300f, 0f, 0f, 20f, 300f, 300f),

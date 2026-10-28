@@ -561,6 +561,9 @@ class WorldHotPathAllocationTest {
                 ObstacleProjection(3L, ObstacleKind.UNSTABLE, CORE + 330f, CORE - 230f, 80f, 27),
                 ObstacleProjection(4L, ObstacleKind.BUMPER, CORE - 120f, CORE + 220f, 34f, 0),
                 ObstacleProjection(5L, ObstacleKind.ASTEROID, CORE + 2_400f, CORE, 140f, 9),
+                // A Mass Knot and a Repulsor, their rings drifting every frame.
+                ObstacleProjection(6L, ObstacleKind.GRAVITY_WELL, CORE - 520f, CORE + 60f, 34f, 13),
+                ObstacleProjection(7L, ObstacleKind.GRAVITY_WELL, CORE + 560f, CORE + 300f, 34f, 17, repels = true),
             ) + List(30) { index ->
                 ObstacleProjection(100L + index, if (index % 5 == 0) ObstacleKind.UNSTABLE else ObstacleKind.ASTEROID,
                     CORE - 450f + (index % 6) * 180f, CORE - 260f + (index / 6) * 130f, 46f + index * 3.47f, 200 + index * 13)

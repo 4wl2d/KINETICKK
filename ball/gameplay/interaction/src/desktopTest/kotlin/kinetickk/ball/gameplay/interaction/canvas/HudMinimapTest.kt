@@ -133,6 +133,28 @@ class HudMinimapTest {
         assertFalse(tinted(shorter.at(center.x + half * 0.5f, center.y), roles.heat), "a rock past the range is not drawn")
     }
 
+    @Test
+    fun gravityKnotsMarkTheMinimapInGraviticWithTheirField() {
+        val gravitic = KkRolePalette.Default.element(3)
+        val base = hudTestModel().with("velocityX" to 0f, "velocityY" to 0f)
+        // A short range, so the knot's dot is several pixels wide and its field a ring well clear of it.
+        val range = base.minimapRange * 0.25f
+        val kinds = base.content.obstacles.kinds
+        val knot = ObstacleProjection(1L, ObstacleKind.GRAVITY_WELL, base.coreX + range * 0.5f, base.coreY, kinds.wellCoreRadius, 3)
+        val empty = render(base.with("minimapRange" to range, "obstacles" to immutableListOf<ObstacleProjection>()), 1_440, 810)
+        val pixels = render(base.with("minimapRange" to range, "obstacles" to immutableListOf(knot)), 1_440, 810)
+        val minimap = assertNotNull(HudLayoutProbe.rect(HudBlock.MINIMAP))
+        val half = minimap.width * 0.5f
+        val scale = half / range
+        val dotX = minimap.center.x + half * 0.5f
+        val dotY = minimap.center.y
+        assertTrue(tinted(pixels.at(dotX, dotY), gravitic), "a knot is a Gravitic dot")
+        val field = kinds.wellInfluence * scale
+        assertTrue(field < half * 0.5f, "the field ring stays on the map: $field")
+        assertTrue(pixels.at(dotX, dotY - field) != empty.at(dotX, dotY - field), "its field's edge is a ring around it")
+        assertEquals(empty.at(dotX, dotY - field * 0.6f), pixels.at(dotX, dotY - field * 0.6f), "open between the dot and the ring")
+    }
+
     private fun drawHud(model: GameplayRenderModel, width: Float, height: Float, density: Float, textScale: Float) {
         val measurer = measurer(density, textScale)
         CanvasDrawScope().draw(Density(density), LayoutDirection.Ltr, Canvas(ImageBitmap(64, 64)), Size(width, height)) {

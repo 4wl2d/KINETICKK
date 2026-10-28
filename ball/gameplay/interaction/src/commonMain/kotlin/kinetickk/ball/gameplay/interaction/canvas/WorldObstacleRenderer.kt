@@ -23,7 +23,8 @@ import kotlin.math.sqrt
 /**
  * World obstacles, drawn over the backdrop and under everything else: an asteroid is an irregular ink
  * polygon (8 to 12 corners from its shape seed) with a bone rim whose edges hug its collision circle, an
- * unstable asteroid adds heat cracks and a pulsing core, and a bumper is a glowing polarity ring.
+ * unstable asteroid adds heat cracks and a pulsing core, a bumper is a glowing polarity ring, and the 0.6.0
+ * kinds draw their own looks (WorldObstacleKindsRenderer).
  * Outlines are cached per shape and radius and drawn translated; obstacles off the view are skipped.
  * Allocation-free per frame.
  */
@@ -31,15 +32,17 @@ internal fun DrawScope.drawObstacles(engine: GameplayRenderModel, shakeX: Float,
     val obstacles = engine.obstacles
     if (obstacles.isEmpty()) return
     val time = engine.renderElapsed
+    val kinds = engine.content.obstacles.kinds
     for (index in obstacles.indices) {
         val obstacle = obstacles[index]
         val center = world(engine, obstacle.x, obstacle.y, shakeX, shakeY)
-        if (!isOnScreen(center, obstacle.radius * ObstaclePaths.OUTLINE_MAX_REACH + 8f)) continue
+        if (!isOnScreen(center, obstacleVisualReach(obstacle, kinds) + 8f)) continue
         when (obstacle.kind) {
             ObstacleKind.BUMPER -> drawBumper(center, obstacle.radius, time, roles)
             ObstacleKind.ASTEROID, ObstacleKind.UNSTABLE -> drawAsteroid(obstacle, center, time, roles)
+            ObstacleKind.GRAVITY_WELL -> drawGravityWell(obstacle, center, time, kinds, roles)
             // The 0.6.0 kinds read as asteroids until their own looks land; no run generates them yet.
-            ObstacleKind.GRAVITY_WELL, ObstacleKind.ACCEL_GATE, ObstacleKind.CRYSTAL, ObstacleKind.DERELICT_MINE,
+            ObstacleKind.ACCEL_GATE, ObstacleKind.CRYSTAL, ObstacleKind.DERELICT_MINE,
             ObstacleKind.PHASE_SHARD, ObstacleKind.THERMAL_VENT,
             -> drawAsteroid(obstacle, center, time, roles)
         }

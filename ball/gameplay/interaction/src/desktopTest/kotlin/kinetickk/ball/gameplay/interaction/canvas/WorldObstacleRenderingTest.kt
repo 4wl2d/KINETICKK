@@ -29,7 +29,10 @@ import kotlin.test.assertEquals
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
-/** Obstacles draw in the world layer: asteroids as ink rocks with bone rims, bumpers as polarity rings, unstable rocks hot. */
+/**
+ * Obstacles draw in the world layer: asteroids as ink rocks with bone rims, bumpers as polarity rings, unstable rocks hot,
+ * gravity knots as Gravitic fields around an ink knot.
+ */
 class WorldObstacleRenderingTest {
     @Test
     fun outlinesAreCachedPerShapeAndHaveEightToTwelveCorners() {
@@ -89,6 +92,83 @@ class WorldObstacleRenderingTest {
             // The bumper's ring is polarity at its radius.
             assertTrue(towards(pixels.at(centerX, centerY + (-200f + 34f) * density), roles.pol), "bumper ring @$density")
         }
+    }
+
+    /**
+     * A gravity knot: a Gravitic rim around an ink disc, a filled Gravitic core for a Mass Knot and an open ring around a
+     * bone point for a Repulsor, at density 1 and 2; nothing it draws reaches past its field's edge, the edge itself is
+     * drawn, and its rings contract onto a Mass Knot and spread from a Repulsor.
+     */
+    @Test
+    fun gravityKnotsDrawGraviticInsideTheirFieldWithRingsDriftingByPolarity() {
+        val gravitic = KkRolePalette.Default.element(3)
+        for (density in listOf(1f, 2f)) {
+            val base = hudTestModel(960f, 600f).with("viewportDensity" to density, "uiScale" to density)
+            val influence = base.content.obstacles.kinds.wellInfluence
+            val body = base.content.obstacles.kinds.wellCoreRadius
+            // 180 dp left of the camera, so the whole field fits the view and the Core sits east of the knot.
+            val centerX = (480f - 180f) * density
+            val centerY = 300f * density
+            for (repels in listOf(false, true)) {
+                val knot = ObstacleProjection(7L, ObstacleKind.GRAVITY_WELL, base.cameraX - 180f, base.cameraY, body, 5, repels = repels)
+                fun frame(time: Float): Pair<PixelMap, PixelMap> {
+                    val timed = base.with("elapsed" to time)
+                    return renderWorld(timed.with("obstacles" to immutableListOf<ObstacleProjection>()), density) to
+                        renderWorld(timed.with("obstacles" to immutableListOf(knot)), density)
+                }
+                val label = "${if (repels) "Repulsor" else "Mass Knot"} @$density"
+                for (time in listOf(0f, 1.3f, 2.9f)) {
+                    val (empty, drawn) = frame(time)
+                    var farthest = 0f
+                    for (y in 0 until empty.height) {
+                        for (x in 0 until empty.width) {
+                            if (empty[x, y] == drawn[x, y]) continue
+                            farthest = maxOf(farthest, kotlin.math.hypot(x + 0.5f - centerX, y + 0.5f - centerY))
+                        }
+                    }
+                    assertTrue(farthest <= (influence + 2f) * density, "$label at $time reaches $farthest past its field")
+                    assertTrue(farthest >= (influence - 2f) * density, "$label at $time draws its field's edge: $farthest")
+                    assertTrue(towards(drawn.at(centerX + body * density, centerY), gravitic), "$label rim")
+                    assertTrue(near(drawn.at(centerX - body * 0.7f * density, centerY), Kk.Ink2), "$label ink body")
+                    if (repels) {
+                        assertTrue(towards(drawn.at(centerX, centerY), Kk.Bone), "$label bone point")
+                        assertTrue(near(drawn.at(centerX - body * 0.3f * density, centerY), Kk.Ink2), "$label open ring, no fill")
+                    } else {
+                        assertTrue(towards(drawn.at(centerX - body * 0.2f * density, centerY), gravitic), "$label filled core")
+                    }
+                }
+                // A tenth of a second later every ring west of the knot sits further in (Mass Knot) or out (Repulsor).
+                val (emptyBefore, before) = frame(0.4f)
+                val (emptyAfter, after) = frame(0.5f)
+                val earlier = ringsWest(emptyBefore, before, centerX, centerY, density, body + 4f, influence - 4f)
+                val later = ringsWest(emptyAfter, after, centerX, centerY, density, body + 4f, influence - 4f)
+                assertEquals(3, earlier.size, "$label rings at 0.4 s: $earlier")
+                assertEquals(3, later.size, "$label rings at 0.5 s: $later")
+                for (ring in earlier) {
+                    val moved = later.minBy { kotlin.math.abs(it - ring) } - ring
+                    assertTrue(if (repels) moved > 1f else moved < -1f, "$label ring at $ring moved by $moved")
+                }
+            }
+        }
+    }
+
+    /** Midpoints (dp from the knot's centre) of the runs of pixels the knot changed along the ray west of it. */
+    private fun ringsWest(empty: PixelMap, drawn: PixelMap, centerX: Float, centerY: Float, density: Float, from: Float, to: Float): List<Float> {
+        val rings = mutableListOf<Float>()
+        val y = centerY.toInt()
+        var runStart = -1
+        val first = kotlin.math.ceil(from * density).toInt()
+        val last = (to * density).toInt()
+        for (offset in first..last + 1) {
+            val x = centerX.toInt() - offset
+            val changed = offset <= last && empty[x, y] != drawn[x, y]
+            if (changed && runStart < 0) runStart = offset
+            if (!changed && runStart >= 0) {
+                rings += (runStart + offset - 1) * 0.5f / density
+                runStart = -1
+            }
+        }
+        return rings
     }
 
     private fun renderWorld(model: GameplayRenderModel, density: Float): PixelMap {
