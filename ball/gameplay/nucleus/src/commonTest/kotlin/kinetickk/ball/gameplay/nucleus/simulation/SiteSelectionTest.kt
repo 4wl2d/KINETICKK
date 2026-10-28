@@ -105,17 +105,29 @@ class SiteSelectionTest {
         }
     }
 
+    /**
+     * The drawn pair of every window for run seeds 0 until [seeds] (the draw alone: a rift claim may replace a side
+     * of the offered pair afterwards).
+     */
+    private fun drawnPairs(content: GameplayContentSnapshot, seeds: Int, rebirthLevel: Int = 0): List<List<Pair<SiteKind, SiteKind>>> {
+        val game = game(content).apply { this.rebirthLevel = rebirthLevel }
+        val windows = content.sites.windows
+        return List(6) { index ->
+            val scheduledAt = windows.firstOfferAt + index * windows.offerInterval
+            List(seeds) { seed ->
+                game.siteRandom = CloneableXorWowRandom(seed xor MutableGameState.SITE_SEED_SALT)
+                game.rollWindowKinds(scheduledAt)
+            }
+        }
+    }
+
     @Test
     fun theSecondDrawDownWeightsTheFirstKindsFamily() {
         val weights = SiteKind.entries.filter { it.family == SiteFamily.ANOMALY }.associateWith { 1f } +
             (SiteKind.GATE_RACE to 1f)
         fun pairs(sameFamilyWeight: Float): List<Pair<SiteKind, SiteKind>> {
             val base = canonicalGameplayContent.withWindowWeights(weights)
-            val content = base.copy(sites = base.sites.copy(sameFamilyWeight = sameFamilyWeight))
-            return (0 until 100).flatMap { seed ->
-                val game = game(content, seed)
-                List(6) { index -> game.offerWindowForTesting(index).let { it[0].kind to it[1].kind } }
-            }
+            return drawnPairs(base.copy(sites = base.sites.copy(sameFamilyWeight = sameFamilyWeight)), 100).flatten()
         }
         // Weight 0: a pair is always one anomaly and the race, whichever comes first.
         val apart = pairs(0f)
@@ -135,21 +147,17 @@ class SiteSelectionTest {
             }
         }
         val content = design.copy(sites = design.sites.copy(definitions = definitions.toImmutableList()))
-        val offered = Array(6) { mutableSetOf<SiteKind>() }
-        val tierThree = mutableSetOf<SiteKind>()
-        for (seed in 0 until 300) {
-            val game = game(content, seed)
-            repeat(6) { index -> game.offerWindowForTesting(index).mapTo(offered[index]) { it.kind } }
-            val promoted = game(content, seed).apply { rebirthLevel = 3 }
-            repeat(6) { index -> promoted.offerWindowForTesting(index).mapTo(tierThree) { it.kind } }
-        }
-        val all = offered.flatMap { it }.toSet()
+        val drawn = drawnPairs(content, 300).map { window -> window.flatMap { listOf(it.first, it.second) }.toSet() }
+        val all = drawn.flatten().toSet()
         assertTrue(all.none { it.family == SiteFamily.PORTAL }, "a rift is never drawn, only claimed")
         assertTrue(SiteKind.SLALOM_TRIAL !in all, "a kind above the run's Rebirth tier is never drawn")
-        assertTrue(SiteKind.SLALOM_TRIAL in tierThree)
+        assertTrue(drawnPairs(content, 300, rebirthLevel = 3).flatten().any { SiteKind.SLALOM_TRIAL in it.toList() })
         // The bounty starts at 160 s and keeps a 90 s reserve before the Architect: windows 165..525 s only.
-        assertTrue(SiteKind.BOUNTY_ARENA !in offered[0] && SiteKind.BOUNTY_ARENA !in offered[5])
-        assertTrue((1..4).all { SiteKind.BOUNTY_ARENA in offered[it] })
+        assertTrue(SiteKind.BOUNTY_ARENA !in drawn[0] && SiteKind.BOUNTY_ARENA !in drawn[5])
+        assertTrue((1..4).all { SiteKind.BOUNTY_ARENA in drawn[it] })
+        // The production offer follows the same rule.
+        val offered = game(content, seed = 2_026)
+        repeat(6) { index -> assertTrue(offered.offerWindowForTesting(index).none { it.kind == SiteKind.SLALOM_TRIAL }) }
     }
 
     @Test
