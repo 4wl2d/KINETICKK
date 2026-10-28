@@ -121,13 +121,15 @@ internal fun MutableGameState.updateSites(delta: Float) {
         else -> Unit
     }
     if (completed) {
-        enqueueDirectedReward(
-            checkNotNull(content.sites.definition(trial.kind).reward.directed) { "An anomaly grants a directed reward" },
-        )
         if (trial.kind == SiteKind.COLLAPSING_ORBIT) pendingCompletedOrbits++
         sites = emptyList() // consume before any choice can open
         message = SiteNotice.ANOMALY_RESOLVED.english
         messageTime = 2f
+        // Granted after the notice, so a full directed queue's REWARD SALVAGED is the one shown.
+        grantSiteReward(
+            content.sites.definition(trial.kind).reward, trial.x, trial.y,
+            worldHash(runSeed, trial.offerId, trial.side, REWARD_SCATTER_SALT),
+        )
     } else sites = listOf(trial)
 }
 
