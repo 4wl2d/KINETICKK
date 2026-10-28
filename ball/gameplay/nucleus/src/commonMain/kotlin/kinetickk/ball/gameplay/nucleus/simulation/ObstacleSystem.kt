@@ -579,16 +579,19 @@ private fun MutableGameState.respondToObstacle(
         ObstacleKind.ACCEL_GATE, ObstacleKind.DERELICT_MINE, ObstacleKind.THERMAL_VENT -> return false
         ObstacleKind.ASTEROID, ObstacleKind.GRAVITY_WELL, ObstacleKind.PHASE_SHARD -> Unit
     }
-    resolveSolidImpact(obstacle.id, nx, ny, contactX, contactY)
+    resolveSolidImpact(obstacle.id, nx, ny, contactX, contactY, obstacle = obstacle.kind)
     return false
 }
 
-/** Ricochet payoffs: Ricochet Rig's burst, Gravity Surfer's dash phase and RICOCHET clauses. */
-internal fun MutableGameState.onRicochet(x: Float, y: Float, normalSpeed: Float) {
+/**
+ * Ricochet payoffs: Ricochet Rig's burst, Gravity Surfer's dash phase and RICOCHET clauses, which carry the [obstacle]
+ * kind bounced off (none for a structure wall).
+ */
+internal fun MutableGameState.onRicochet(x: Float, y: Float, normalSpeed: Float, obstacle: ObstacleKind? = null) {
     val impact = impactPower(normalSpeed)
     matrix.ricochetRig?.let { rig -> if (rig.burstRadius > 0f) areaDamage(x, y, rig.burstRadius, impact) }
     if (matrix.ricochetPhaseSeconds > 0f) dashPhaseTime = max(dashPhaseTime, matrix.ricochetPhaseSeconds)
-    fireClauses(EffectTrigger.RICOCHET, null, impact)
+    fireClauses(EffectTrigger.RICOCHET, null, impact, obstacle = obstacle)
 }
 
 /**
@@ -622,7 +625,7 @@ private fun MutableGameState.bounceOffBumper(
     if (normalSpeed < obstacleRicochetSpeed() || obstacle.ricochetReadyAt > elapsed) return
     obstacleField = obstacleField.replaced(index, obstacle.copy(ricochetReadyAt = elapsed + tuning.bumperRicochetCooldownSeconds))
     pendingRicochets++
-    onRicochet(contactX - nx * coreRadius, contactY - ny * coreRadius, normalSpeed)
+    onRicochet(contactX - nx * coreRadius, contactY - ny * coreRadius, normalSpeed, ObstacleKind.BUMPER)
 }
 
 /**
@@ -699,7 +702,7 @@ private fun MutableGameState.resolveEnemyObstacle(enemy: Enemy, obstacle: Obstac
         if (inward > 0f) {
             enemy.vx += inward * nx
             enemy.vy += inward * ny
-            if (!obstacle.kind.phased && applySlamDamage(enemy, inward)) {
+            if (!obstacle.kind.phased && applySlamDamage(enemy, inward, obstacle = obstacle.kind)) {
                 endPolarityThrow(enemy)
                 return inward
             }

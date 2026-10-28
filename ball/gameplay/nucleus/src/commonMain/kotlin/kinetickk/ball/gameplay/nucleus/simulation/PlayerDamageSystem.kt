@@ -174,9 +174,10 @@ private fun MutableGameState.takeObstacleDamage(rawAmount: Float, obstacle: kine
  * or the Ouroboros Seal may answer it. Only the invulnerability a revive granted protects (the Core may
  * still be flying into the same rock); Glass Comet's and Bulwark's windows do not.
  * In Baby mode it is an obstacle hit of `lethalObstacleDamageShare` of max integrity instead, which never breaks the Core.
+ * [obstacle] is the kind struck, for that hit's HURT clauses.
  */
-internal fun MutableGameState.takeLethalObstacleHit() {
-    if (easyMode) { takeObstacleDamage(maxHp * content.easyMode.lethalObstacleDamageShare); return }
+internal fun MutableGameState.takeLethalObstacleHit(obstacle: kinetickk.ball.content.api.ObstacleKind? = null) {
+    if (easyMode) { takeObstacleDamage(maxHp * content.easyMode.lethalObstacleDamageShare, obstacle); return }
     if (reviveInvulnerableUntil > elapsed) return
     damageTaken += hp.coerceAtLeast(0f).toDouble()
     hp = 0f

@@ -41,7 +41,7 @@ import kotlin.math.sqrt
  * Obstacle kinds. The content owns each kind's properties; every obstacle query here and in ObstacleSystem reads them
  * instead of naming kinds. Generation rolls the newer kinds on asteroid candidates from a stream of their own, so the
  * layout (positions, ids, candidate radii, gaps) never moves. After the Core's collisions a per-step pass measures
- * the Core's proximity to solid obstacles (NearObstacle, Matrix Near Miss), applies the field kinds to the Core
+ * the Core's proximity to solid obstacles (NearObstacle, Matrix Near Miss, GRAZE), applies the field kinds to the Core
  * (gravity knots pull or push it, and leaving a knot after a hard turn slings it on; crossing an accelerator gate
  * boosts it; riding an erupting thermal vent heats and lifts it; coming near a derelict mine arms it), then to nearby
  * enemies (knots pull them, plumes scorch them, thrown ones set mines off), and finally detonates the mines whose fuse
@@ -156,11 +156,13 @@ internal const val ENEMY_FIELD_ACTIVITY_RANGE: Float = 2_400f
 
 /**
  * Runs after the Core's collisions in every running step: measures the gap NearObstacle reads and grants Matrix Near
- * Miss when the Core did not touch anything ([collided] false), applies the field kinds to the Core, settles the
- * gravity-knot sling, applies the field kinds to enemies, then detonates the mines whose fuse ran out.
+ * Miss and GRAZE when the Core did not touch anything ([collided] false), applies the field kinds to the Core, settles
+ * the gravity-knot sling, applies the field kinds to enemies, then detonates the mines whose fuse ran out.
  */
 internal fun MutableGameState.updateObstacleKinds(collided: Boolean) {
     updateObstacleProximity(collided)
+    // A GRAZE clause can level up and open a choice: nothing else acts once it is open.
+    if (phase != GamePhase.RUNNING) return
     val heldBy = updateCoreObstacleFields()
     updateSling(heldBy)
     // A BOOST clause can level up and open a choice: nothing else acts once it is open.
@@ -171,28 +173,49 @@ internal fun MutableGameState.updateObstacleKinds(collided: Boolean) {
 
 /**
  * One lookup around the Core: [MutableGameState.coreObstacleGap] is the gap to the nearest solid surface within
- * [NEAR_OBSTACLE_MAX_DISTANCE] (0 while touching, +∞ when none), and Near Miss fires when the Core skims a grazeable
- * solid surface fast without touching it.
+ * [NEAR_OBSTACLE_MAX_DISTANCE] (0 while touching, +∞ when none). When the Core skims the nearest grazeable solid
+ * surface fast without touching anything, Matrix Near Miss fires by its own numbers, and GRAZE (with that obstacle's
+ * kind) fires within [ObstacleKindTuning.grazeDistance] at [ObstacleKindTuning.grazeMinimumSpeed] or faster, at most
+ * once per [ObstacleKindTuning.grazeCooldownSeconds], throwing sparks off the surface toward the Core.
  */
 private fun MutableGameState.updateObstacleProximity(collided: Boolean) {
     val kinds = content.obstacles.kinds
     val nearMiss = matrix.nearMiss
     var solidGap = Float.POSITIVE_INFINITY
     var grazeGap = Float.POSITIVE_INFINITY
+    var grazed: Obstacle? = null
     val reach = max(NEAR_OBSTACLE_MAX_DISTANCE, nearMiss?.distance ?: 0f) + coreRadius
     forEachObstacleNear(coreX, coreY, reach) { _, obstacle ->
         if (!obstacle.solidAt(elapsed, kinds)) return@forEachObstacleNear
         val gap = length(coreX - obstacle.x, coreY - obstacle.y) - obstacle.radius - coreRadius
         if (gap < solidGap) solidGap = gap
-        if (obstacle.kind.grazeable && gap > 0f && gap < grazeGap) grazeGap = gap
+        if (obstacle.kind.grazeable && gap > 0f && gap < grazeGap) {
+            grazeGap = gap
+            grazed = obstacle
+        }
     }
     coreObstacleGap = if (solidGap <= NEAR_OBSTACLE_MAX_DISTANCE) max(0f, solidGap) else Float.POSITIVE_INFINITY
-    if (collided || nearMiss == null) return
-    if (speed >= nearMiss.minSpeed && nearMissReadyAt <= elapsed && grazeGap <= nearMiss.distance) {
+    if (collided) return
+    if (nearMiss != null && speed >= nearMiss.minSpeed && nearMissReadyAt <= elapsed && grazeGap <= nearMiss.distance) {
         nearMissReadyAt = elapsed + nearMiss.cooldown
         gainOverdrive(nearMiss.overdrive)
     }
+    val surface = grazed ?: return
+    if (speed < kinds.grazeMinimumSpeed || grazeReadyAt > elapsed || grazeGap > kinds.grazeDistance) return
+    grazeReadyAt = elapsed + kinds.grazeCooldownSeconds
+    // The spark point: the obstacle's surface on the line to the Core.
+    val toCore = grazeGap + surface.radius + coreRadius
+    burst(
+        surface.x + (coreX - surface.x) / toCore * surface.radius,
+        surface.y + (coreY - surface.y) / toCore * surface.radius,
+        GRAZE_SPARKS,
+        GRAZE_TONE,
+    )
+    fireClauses(EffectTrigger.GRAZE, null, impactPower(speed), obstacle = surface.kind)
 }
+
+private const val GRAZE_SPARKS: Int = 4
+private const val GRAZE_TONE: Int = 2
 
 /**
  * One lookup around the Core for the field kinds within [ObstacleKindTuning.maximumInfluence]: every gravity knot

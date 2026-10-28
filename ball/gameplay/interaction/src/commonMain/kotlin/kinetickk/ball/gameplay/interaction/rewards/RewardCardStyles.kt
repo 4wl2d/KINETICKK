@@ -355,7 +355,8 @@ private fun EffectClause.watermarkIcon(): KkIcon = when (val action = actions.fi
     is EffectAction.Pull -> if (trigger == EffectTrigger.TURN) KkIcon.WEAPONS_FLUX_WAKE else KkIcon.SYSTEM_POLARITY
     is EffectAction.Vent -> KkIcon.SYSTEM_HEAT
     is EffectAction.Overdrive -> KkIcon.SYSTEM_OVERDRIVE
-    is EffectAction.GainData -> KkIcon.SYSTEM_DATA
+    // Data broken out of an obstacle is the crystal's prism; any other Data is the archive's mark.
+    is EffectAction.GainData -> if (trigger == EffectTrigger.SHATTER) KkIcon.WEAPONS_PRISM_RELAY else KkIcon.SYSTEM_DATA
     is EffectAction.RefreshWeapon -> KkIcon.WEAPONS_QUASAR_CANNON
     is EffectAction.Shield -> KkIcon.SYSTEM_SHIELD
     is EffectAction.Heal -> KkIcon.SYSTEM_INTEGRITY
@@ -369,6 +370,8 @@ private fun EffectClause.watermarkIcon(): KkIcon = when (val action = actions.fi
     is EffectAction.Burst -> when (trigger) {
         EffectTrigger.DASH -> KkIcon.WEAPONS_NULL_LANCE
         EffectTrigger.OVERDRIVE -> KkIcon.WEAPONS_SINGULARITY_SPEAR
+        // A blast set off by a broken obstacle blooms out of the wreck (the broken hexagon reads as the shield's outline).
+        EffectTrigger.SHATTER -> KkIcon.WEAPONS_SCATTER_BLOOM
         else -> trigger.watermarkIcon()
     }
     // Shards are a prism's splinters; a slam's or a broken obstacle's are the wreckage it breaks off.
@@ -505,7 +508,8 @@ private fun ItemRule.watermarkIcon(): KkIcon? = when (this) {
     is ItemRule.ObstacleTuning -> when (aspect) {
         ObstacleAspect.RESTITUTION -> KkIcon.FORMS_DIPOLE
         ObstacleAspect.COLLISION_DAMAGE -> KkIcon.SYSTEM_SHIELD
-        ObstacleAspect.LETHAL_SPEED -> KkIcon.SYSTEM_INTEGRITY
+        // A roll cage round the Core: integrity's hexagon would repeat the shield's on the same face.
+        ObstacleAspect.LETHAL_SPEED -> KkIcon.WEAPONS_SENTRY_GRID
         ObstacleAspect.BOOST_POWER -> KkIcon.WEAPONS_GYRE_DISC
         ObstacleAspect.WELL_PULL -> KkIcon.FORMS_SPIRAL
     }

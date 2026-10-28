@@ -4,7 +4,10 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.ItemDefinition
+import kinetickk.ball.content.api.ItemRule
 import kinetickk.ball.content.api.MatrixNodeId
+import kinetickk.ball.content.api.ObstacleAspect
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.math.min
@@ -17,7 +20,7 @@ import kotlin.test.fail
  * Calibrates the collision bands against real flight (dp units) on a 1280×800 desktop and a 412×915
  * phone: holding the cursor at the dash-safe reach (0.30) of the long axis stays below the damage-start
  * speed, 0.6 lands in the damage band and 0.79 (just inside the edge strain) is lethal for every Matrix
- * state. The bands are fixed speeds from the straight steady model: they do not depend on the heading, so
+ * and obstacle-tuning state. The bands are fixed speeds from the straight steady model: they do not depend on the heading, so
  * the shorter axis is only ever slower, a turn never moves them, and speed carved in a curve counts like
  * any speed. A Dash from a gentle cruise can hurt but never kills.
  */
@@ -37,8 +40,8 @@ class ObstacleCalibrationTest {
     private class Measured(val speed: Float, val start: Float, val lethal: Float)
 
     /**
-     * A quiet run of [shape] owning the Matrix [ranks], with the cursor held at [reach] toward +x ([horizontal])
-     * or +y.
+     * A quiet run of [shape] owning the Matrix [ranks] and the [items] (appended to the catalog), with the cursor held at
+     * [reach] toward +x ([horizontal]) or +y.
      */
     private fun cruise(
         width: Float,
@@ -48,11 +51,13 @@ class ObstacleCalibrationTest {
         tier: Int,
         shape: CoreShape = CoreShape.ORB,
         ranks: Map<MatrixNodeId, Int> = emptyMap(),
+        items: List<ItemDefinition> = emptyList(),
     ): MutableGameState =
-        buildTestState(content = emptyWorld, rebirth = tier, shape = shape).apply {
+        buildTestState(content = emptyWorld.withProbes(*items.toTypedArray()), rebirth = tier, shape = shape).apply {
             resize(width, height)
             ranks.forEach { (node, rank) -> matrixRanks[content.matrixNodes.indexOfFirst { it.id == node }] = rank }
             startRun()
+            items.forEach { own(it.name) }
             enemies.clear()
             spawnClock = Float.MAX_VALUE
             nextEliteAt = Float.MAX_VALUE
@@ -223,19 +228,38 @@ class ObstacleCalibrationTest {
         }
     }
 
-    /** A Matrix state of the edge-pin case: owned node ranks on a Core [shape]. */
-    private class MatrixState(val label: String, val ranks: Map<MatrixNodeId, Int>, val shape: CoreShape = CoreShape.ORB)
+    /** A Matrix and item state of the edge-pin case: owned node ranks and items on a Core [shape]. */
+    private class MatrixState(
+        val label: String,
+        val ranks: Map<MatrixNodeId, Int>,
+        val shape: CoreShape = CoreShape.ORB,
+        val items: List<ItemDefinition> = emptyList(),
+    )
+
+    /**
+     * [count] copies of a roll-cage item: obstacle tuning with 150 u/s of lethal speed, a 35 % damage cut and 15 % more
+     * bounce. Two of them add 300 u/s; four reach the item cap.
+     */
+    private fun cages(count: Int): List<ItemDefinition> = List(count) { index ->
+        obstacleProbe(
+            "Test Roll Cage $index",
+            ItemRule.ObstacleTuning(ObstacleAspect.LETHAL_SPEED, 150f),
+            ItemRule.ObstacleTuning(ObstacleAspect.COLLISION_DAMAGE, 0.35f),
+            ItemRule.ObstacleTuning(ObstacleAspect.RESTITUTION, 0.15f),
+        )
+    }
 
     /**
      * Holding the cursor at reach 0.79 along the long axis flies at least the lethal collision speed whatever the
-     * Matrix owns: the lethal-speed bonuses of Impact Dampers and Gravity Surfer stop at the build's own ceiling,
-     * the stronger Dash of Vector Thrusters lifts only the gentle-Dash floor, and a heavier or lighter build moves
-     * its ceiling with its own speed.
+     * Matrix owns and whatever obstacle tuning the items add: the lethal-speed bonuses of Impact Dampers, Gravity Surfer
+     * and the items stop together at the build's own ceiling, the stronger Dash of Vector Thrusters lifts only the
+     * gentle-Dash floor, and a heavier or lighter build moves its ceiling with its own speed.
      */
     @Test
     fun edgePinningStaysLethalForEveryMatrixState() {
         val guard = mapOf(MatrixNodeId.IMPACT_DAMPERS to 2, MatrixNodeId.GRAVITY_SURFER to 1, MatrixNodeId.VECTOR_THRUSTERS to 2)
         val guarded = MatrixState("Impact Dampers 2 + Gravity Surfer + Vector Thrusters 2", guard)
+        val caged = MatrixState("two roll cages", emptyMap(), items = cages(2))
         val states = listOf(
             MatrixState("none", emptyMap()),
             guarded,
@@ -244,11 +268,16 @@ class ObstacleCalibrationTest {
             // The slowest build with the full bonus: its ceiling leaves the least room under its own pin speed.
             MatrixState("Prism + Juggernaut + guard", guard + (MatrixNodeId.JUGGERNAUT to 1), CoreShape.PRISM),
             MatrixState("Perpetual Drift", mapOf(MatrixNodeId.PERPETUAL_DRIFT to 1)),
+            caged,
+            MatrixState("guard + two roll cages", guard, items = cages(2)),
+            // Every lethal-speed bonus at once: the Matrix guard and the items at their cap on the slowest build.
+            MatrixState("Prism + Juggernaut + guard + four roll cages", guard + (MatrixNodeId.JUGGERNAUT to 1), CoreShape.PRISM,
+                cages(4)),
         )
         for ((width, height) in viewports) for (tier in listOf(3, 10)) {
             val lethalByState = states.associateWith { matrixState ->
                 val label = "${width.toInt()}x${height.toInt()} tier $tier ${matrixState.label}"
-                val state = cruise(width, height, 0.79f, width >= height, tier, matrixState.shape, matrixState.ranks)
+                val state = cruise(width, height, 0.79f, width >= height, tier, matrixState.shape, matrixState.ranks, matrixState.items)
                 state.fly(20f)
                 assertEquals(GamePhase.RUNNING, state.phase, "$label: the pin flies on an empty field")
                 val lethal = state.obstacleLethalSpeed()
@@ -264,6 +293,10 @@ class ObstacleCalibrationTest {
             assertTrue(
                 lethalByState.getValue(guarded) > plain,
                 "${width.toInt()}x${height.toInt()} tier $tier: the guard still raises the lethal speed over $plain",
+            )
+            assertTrue(
+                lethalByState.getValue(caged) > plain,
+                "${width.toInt()}x${height.toInt()} tier $tier: the cages still raise the lethal speed over $plain",
             )
         }
     }

@@ -115,6 +115,9 @@ private val FamilyArtByName: Map<String, RewardCardArt> = mapOf(
     "Entropic Tide" to RewardCardArt.DARK_STAR,
     "Catalyze" to RewardCardArt.STORM_LATTICE,
     "Dual Infusion" to RewardCardArt.VOLATILE_COMPOUND,
+    // The terrain epics: a piece of a gravity knot trailing the Core out, a vent's plume banked in a coil.
+    "Horizon Surfer" to RewardCardArt.DARK_STAR,
+    "Updraft Kiln" to RewardCardArt.PHOENIX_COIL,
 )
 
 /**

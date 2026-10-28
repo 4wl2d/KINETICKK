@@ -251,7 +251,7 @@ class RewardCardStylesTest {
      * a diamond, a ring) look alike that faint; every other glyph is its own.
      */
     private fun glyphOutline(icon: KkIcon): String = when (icon) {
-        KkIcon.SYSTEM_INTEGRITY, KkIcon.SYSTEM_SHIELD, KkIcon.SYSTEM_MATTER, KkIcon.SYSTEM_ELITE -> "hexagon"
+        KkIcon.SYSTEM_INTEGRITY, KkIcon.SYSTEM_SHIELD, KkIcon.SYSTEM_MATTER, KkIcon.SYSTEM_ELITE, KkIcon.FORMS_HEXAGON -> "hexagon"
         KkIcon.FORMS_DIAMOND, KkIcon.SYSTEM_DATA, KkIcon.SYSTEM_DISMANTLED, KkIcon.SYSTEM_ANOMALY, KkIcon.WEAPONS_PHASE_LATTICE -> "diamond"
         KkIcon.FORMS_CIRCLE, KkIcon.FORMS_RING, KkIcon.WEAPONS_GRAVITY_MINES, KkIcon.WEAPONS_ENTROPY_FIELD, KkIcon.SYSTEM_CYCLE_CLOCK -> "ring"
         else -> icon.name
