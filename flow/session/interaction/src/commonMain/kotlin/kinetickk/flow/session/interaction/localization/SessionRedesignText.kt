@@ -46,7 +46,7 @@ internal enum class SessionRedesignText(
         "Параметры игры, звука, графики и интерфейса. Изменения применяются сразу.",
     ),
 
-    VERSION("v0.5.0", "v0.5.0"),
+    VERSION("v0.6.0", "v0.6.0"),
     QUIT("Quit", "Выход"),
     QUIT_DESCRIPTION("Quit the game", "Выйти из игры"),
 
