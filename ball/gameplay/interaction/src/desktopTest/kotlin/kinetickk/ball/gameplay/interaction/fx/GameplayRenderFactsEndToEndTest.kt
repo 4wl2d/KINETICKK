@@ -413,6 +413,8 @@ internal class FactRun(val seed: Int, private val seconds: Float = 240f) {
 
     private fun choose(model: GameplayRenderModel): Int {
         val choices = model.choices
+        // The run starts with No omen.
+        if (model.choiceType == ChoiceType.OMEN) return choices.indexOfFirst { it.omenId == null }.coerceAtLeast(0)
         // The run never replaces an active: the slot prompt keeps the loadout.
         if (model.choiceType == ChoiceType.ACTIVE_SLOT) return choices.indexOfFirst { it.activeSlot == null }.coerceAtLeast(0)
         // A focus card only narrows the offer; take a card that resolves it.
