@@ -26,8 +26,6 @@ import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
 import kotlin.math.abs
 import kotlin.math.atan2
-import kotlin.math.nextDown
-import kotlin.math.nextUp
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import kotlin.test.Test
@@ -156,7 +154,7 @@ class EventSignalTest {
         val slot = plannedSignalSlots(seed, policy).first()
         val kind = plannedSignalKinds(seed, policy).first()
         state.setVelocityForTesting(0f, 300f)
-        state.signalStepAt(policy.slotAt(slot).nextDown())
+        state.signalStepAt(policy.slotAt(slot).nextBelow())
         assertTrue(state.eventSignals.isEmpty(), "Nothing before the slot opens")
         val id = state.nextEntityId
         state.signalStepAt(policy.slotAt(slot))
@@ -204,7 +202,7 @@ class EventSignalTest {
         val state = arena()
         state.elapsed = 200f
         state.liveSignal(SignalKind.MERCHANT, 900f, 0f, expiresAt = 210f)
-        state.signalStepAt(210f.nextDown())
+        state.signalStepAt(210f.nextBelow())
         assertEquals(1, state.eventSignals.size)
         state.message = ""
         state.signalStepAt(210f)
@@ -432,13 +430,13 @@ class EventSignalTest {
         )) {
             val last = share * 100f + 1f
             assertTrue(locked(last, option), "$option at $last")
-            assertFalse(locked(last.nextUp(), option), "$option above $last")
+            assertFalse(locked(last.nextAbove(), option), "$option above $last")
         }
         // The ward needs more than 40 maximum integrity.
         fun wardLocked(maxHp: Float) =
             arena().apply { this.maxHp = maxHp }.openPrompt(SignalKind.SHRINE).card(SignalOption.SHRINE_WARD).locked
         assertTrue(wardLocked(40f))
-        assertFalse(wardLocked(40f.nextUp()))
+        assertFalse(wardLocked(40f.nextAbove()))
     }
 
     @Test
@@ -699,7 +697,7 @@ class EventSignalTest {
 
         val skipped = arena(seed)
         skipped.sites = listOf(trial)
-        skipped.signalStepAt(opens + policy.trialDelaySeconds.nextDown() - 0.01f)
+        skipped.signalStepAt(opens + policy.trialDelaySeconds.nextBelow() - 0.01f)
         assertEquals(slot, skipped.nextSignalSlot)
         skipped.signalStepAt(opens + policy.trialDelaySeconds)
         assertEquals(slot + 1, skipped.nextSignalSlot, "The slot is skipped once the trial delay passes")

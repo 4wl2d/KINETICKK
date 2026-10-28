@@ -23,7 +23,6 @@ import kinetickk.foundation.collections.immutableListOf
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
-import kotlin.math.nextDown
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.test.Test
@@ -157,7 +156,7 @@ class WorldEventTest {
             val state = arena()
             val plan = state.planOnly(kind)
             state.message = "BEFORE"
-            state.eventStepAt(plan.telegraphAt.nextDown())
+            state.eventStepAt(plan.telegraphAt.nextBelow())
             assertNull(state.worldEvent, "$kind waits for its telegraph")
             assertEquals("BEFORE", state.message)
 
@@ -172,7 +171,7 @@ class WorldEventTest {
             assertTrue(state.message in RunVarietyNotices, "$kind banner is a localized notice")
             assertEquals(WORLD_EVENT_BANNER_SECONDS, state.messageTime)
 
-            state.eventStepAt(plan.endsAt.nextDown())
+            state.eventStepAt(plan.endsAt.nextBelow())
             assertNotNull(state.worldEvent, "$kind still runs just before its end")
             state.eventStepAt(plan.endsAt)
             assertNull(state.worldEvent, "$kind ends")
@@ -328,7 +327,7 @@ class WorldEventTest {
         }
         val plain = killData(20f, storm = false)
         assertEquals(plain + storm.killBonusData, killData(20f), "A kill during the storm")
-        assertEquals(plain, killData(plan.startsAt.nextDown()), "Not during its telegraph")
+        assertEquals(plain, killData(plan.startsAt.nextBelow()), "Not during its telegraph")
         assertEquals(plain, killData(plan.endsAt), "Not once it is over")
     }
 

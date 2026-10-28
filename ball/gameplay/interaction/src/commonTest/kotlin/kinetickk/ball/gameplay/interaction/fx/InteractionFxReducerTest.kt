@@ -12,7 +12,6 @@ import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
 import kinetickk.ball.gameplay.nucleus.protocol.ReactionCueFlags
 import kinetickk.ball.gameplay.nucleus.protocol.SkillCueCodes
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
-import kotlin.math.nextUp
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
@@ -543,7 +542,7 @@ class InteractionFxReducerTest {
         assertSame(empty, reducer.snapshot(), "a Core at or below the speed floor changes nothing")
         // The first speed above the floor stores a sample.
         val moving = InteractionFxReducer(seed = 84)
-        moving.apply(listOf(ribbonSample(0f, speed = RIBBON_MIN_SPEED.nextUp())))
+        moving.apply(listOf(ribbonSample(0f, speed = RIBBON_MIN_SPEED.nextAbove())))
         assertEquals(1, moving.snapshot().coreRibbon.size)
         // A Dash stores even a still Core.
         reducer.apply(listOf(ribbonSample(20f, speed = 0f, dash = 0.1f)))
