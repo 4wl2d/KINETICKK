@@ -200,7 +200,7 @@ class RebirthRankUnlocksTest {
         val expected = mapOf(
             1 to Ladder(weapons = listOf("Glacier Bell"), characters = listOf("Spiral"), relics = listOf("Agony Scepter"),
                 items = listOf("Hyperfeed Rails", "Dead Stop", "Redline Rush", "Fortress Protocol", "Twin Chamber", "Choir Prism",
-                    "Anchor Lanyard"),
+                    "Anchor Lanyard", "Glass Harvest"),
                 matrix = listOf("Overdrive Coil", "Second Wind", "Ricochet Rig")),
             2 to Ladder(weapons = listOf("Tether Arc"),
                 items = listOf("Solar Choir", "Glacial Heart", "Shatter Coil", "Unmaking Engine", "Kinetic Recapture", "Phantom Wake",

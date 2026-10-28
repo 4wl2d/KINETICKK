@@ -87,10 +87,11 @@ class ContentBalanceCharacterizationTest {
                 }
             },
         )
-        // The 0.6.0 terrain items, appended after the actives and pinned on their own: always exactly ids 287..301.
+        // The 0.6.0 terrain items, appended after the actives and pinned on their own: always exactly ids 287..301
+        // (re-pinned when Glass Harvest moved to Reborn 1, off the rank-0 Data ladder).
         val terrain = items.subList(ACTIVES_END, TERRAIN_060_END)
         assertEquals(
-            "ebcd1818d76810e4",
+            "7199c257d9d5f681",
             goldenFingerprint {
                 add("items-0.6.0-terrain")
                 add(terrain.size)
