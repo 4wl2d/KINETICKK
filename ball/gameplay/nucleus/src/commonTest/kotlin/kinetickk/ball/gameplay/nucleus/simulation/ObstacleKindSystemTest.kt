@@ -3,7 +3,10 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.EffectAction
+import kinetickk.ball.content.api.EffectClause
 import kinetickk.ball.content.api.EffectCondition
+import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.MatrixEffect
 import kinetickk.ball.content.api.NEAR_OBSTACLE_MAX_DISTANCE
 import kinetickk.ball.content.api.ObstacleKind
@@ -14,10 +17,19 @@ import kinetickk.ball.content.api.phaseShardSolid
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.WeaponEntity
 import kinetickk.ball.gameplay.nucleus.protocol.FxColorCode
+import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
+import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
+import kinetickk.foundation.collections.immutableListOf
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.sin
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -252,5 +264,221 @@ class ObstacleKindSystemTest {
         assertEquals(0, echoes(ObstacleKind.THERMAL_VENT))
         assertEquals(3, echoes(ObstacleKind.BUMPER, ObstacleKind.CRYSTAL, ObstacleKind.GRAVITY_WELL, ObstacleKind.UNSTABLE),
             "bumpers, crystals, knots and unstable rocks echo (at most three)")
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Gravity knots.
+
+    private val knotRadius = kinds.wellCoreRadius
+
+    /** The acceleration a body of [bodyRadius] feels [distance] from a knot's centre: linear from the core to the field's edge. */
+    private fun expectedPull(surfacePull: Float, distance: Float, bodyRadius: Float): Float =
+        surfacePull * ((kinds.wellInfluence - distance) / (kinds.wellInfluence - knotRadius - bodyRadius)).coerceIn(0f, 1f)
+
+    private fun knot(x: Float, y: Float, repels: Boolean = false, id: Long = 41L) =
+        testObstacle(x, y, radius = knotRadius, kind = ObstacleKind.GRAVITY_WELL, id = id, repels = repels)
+
+    @Test
+    fun aKnotPullsTheCoreTowardItsCentreAndARepulsorPushesItAway() {
+        val step = MutableGameState.FIXED_STEP
+        for (repels in listOf(false, true)) {
+            val sign = if (repels) -1f else 1f
+            fun restAt(distance: Float): MutableGameState = buildTestState().apply {
+                placeObstaclesForTesting(knot(600f, 0f, repels))
+                flyIntoObstaclesForTesting(600f - distance, 0f, 0f, 0f)
+            }
+            for (distance in listOf(60f, 150f, kinds.wellInfluence - 1f)) {
+                val state = restAt(distance)
+                assertEquals(sign * expectedPull(kinds.wellCorePull, distance, core) * step, state.velocityX, 0.0005f,
+                    "repels $repels at $distance")
+                assertEquals(0f, state.velocityY)
+            }
+            assertTrue(restAt(60f).velocityX * sign > restAt(150f).velocityX * sign, "strongest near the core")
+            assertEquals(0f, restAt(kinds.wellInfluence).velocityX, "nothing at the field's edge")
+            assertEquals(0f, restAt(kinds.wellInfluence + 40f).velocityX, "nothing outside")
+        }
+        // The pull adds to the Core's travel along the line to the knot's centre.
+        val state = buildTestState()
+        state.placeObstaclesForTesting(knot(0f, 400f))
+        state.flyIntoObstaclesForTesting(0f, 250f, 300f, 0f)
+        assertEquals(300f, state.velocityX)
+        assertEquals(expectedPull(kinds.wellCorePull, 150f, core) * step, state.velocityY, 0.0005f)
+    }
+
+    @Test
+    fun aKnotPullsEnemiesByTheirKnockbackIntakeAndLeavesImmovableFramesAlone() {
+        val step = MutableGameState.FIXED_STEP
+        for (repels in listOf(false, true)) {
+            val sign = if (repels) -1f else 1f
+            val state = buildTestState()
+            state.placeObstaclesForTesting(knot(600f, 0f, repels))
+            val drifter = state.dummy(x = 450f, y = 0f)
+            val elite = state.dummy(x = 750f, y = 0f, type = EnemyType.ELITE)
+            val charger = state.dummy(x = 600f, y = 150f, type = EnemyType.CHARGER)
+            val outside = state.dummy(x = 600f, y = -(kinds.wellInfluence + 1f))
+            // The Core rests far outside the field.
+            state.flyIntoObstaclesForTesting(0f, 0f, 0f, 0f)
+            assertEquals(0f, state.velocityX)
+            val drifterPull = expectedPull(kinds.wellEnemyPull, 150f, drifter.radius) * state.knockbackTaken(drifter) * step
+            assertEquals(sign * drifterPull, drifter.vx, 0.001f, "repels $repels")
+            assertEquals(0f, drifter.vy)
+            val elitePull = expectedPull(kinds.wellEnemyPull, 150f, elite.radius) * state.knockbackTaken(elite) * step
+            assertEquals(-sign * elitePull, elite.vx, 0.001f)
+            assertTrue(abs(elite.vx) < 0.5f * abs(drifter.vx), "an Elite is dragged far less: ${elite.vx} / ${drifter.vx}")
+            assertEquals(0f, charger.vx)
+            assertEquals(0f, charger.vy, "a frame that never moves stays put")
+            assertEquals(0f, outside.vy, "nothing outside the field")
+        }
+    }
+
+    @Test
+    fun onlyKnotsWithinTheActivityRangeOfTheCoreMoveEnemies() {
+        for ((offset, moves) in listOf(ENEMY_FIELD_ACTIVITY_RANGE - 1f to true, ENEMY_FIELD_ACTIVITY_RANGE + 1f to false)) {
+            val state = buildTestState()
+            state.placeObstaclesForTesting(knot(offset, 0f))
+            val enemy = state.dummy(x = offset - 150f, y = 0f)
+            state.flyIntoObstaclesForTesting(0f, 0f, 0f, 0f)
+            assertEquals(moves, enemy.vx > 0f, "a knot $offset from the Core")
+        }
+    }
+
+    /** Calibrated Coil gains Overdrive on BOOST from a knot and vents heat on BOOST from a gate. */
+    private val boostContent = contentWithClauses(
+        "Calibrated Coil",
+        EffectClause(EffectTrigger.BOOST, immutableListOf(EffectCondition.ObstacleIs(ObstacleKind.GRAVITY_WELL)),
+            immutableListOf(EffectAction.Overdrive(10f)), cooldownSeconds = 0.5f),
+        EffectClause(EffectTrigger.BOOST, immutableListOf(EffectCondition.ObstacleIs(ObstacleKind.ACCEL_GATE)),
+            immutableListOf(EffectAction.Vent(20f)), cooldownSeconds = 0.5f),
+    )
+
+    /** A run with the BOOST clauses and one attracting knot (id 41) at (0, 300). */
+    private fun slingState(): MutableGameState = buildTestState(content = boostContent).apply {
+        own("Calibrated Coil")
+        heat = 50f
+        placeObstaclesForTesting(knot(0f, 300f))
+    }
+
+    private fun radians(degrees: Float): Float = degrees * PI.toFloat() / 180f
+
+    /** Enters the knot's field heading east at [speed], then leaves it [turnDegrees] off that heading at the same speed. */
+    private fun MutableGameState.slingThrough(turnDegrees: Float, speed: Float) {
+        flyIntoObstaclesForTesting(-100f, 100f, speed, 0f)
+        assertEquals(41L, slingWellId, "the knot's field holds the Core")
+        val turn = radians(turnDegrees)
+        flyIntoObstaclesForTesting(400f, 100f, cos(turn) * speed, sin(turn) * speed)
+    }
+
+    @Test
+    fun leavingAKnotAfterAHardTurnAtSpeedSlingsTheCoreOnce() {
+        val state = slingState()
+        val cap = state.obstacleLethalSpeed() * kinds.boostLethalShare
+        assertTrue(800f + kinds.slingImpulse < cap, "the test sling stays under the boost cap: $cap")
+        state.takeSoundCues()
+        state.takeVisualFxCues()
+        state.slingThrough(100f, 800f)
+        assertEquals(800f + kinds.slingImpulse, state.speed, 0.01f)
+        assertEquals(radians(100f), atan2(state.velocityY, state.velocityX), 0.0001f, "thrown on along its travel")
+        assertTrue(state.overdriveCharge > 0f, "BOOST fired with the knot's kind")
+        assertEquals(50f, state.heat, "a gate's BOOST clause stays quiet")
+        assertEquals(1, state.takeSoundCues().count { it == GameplayAudioCue.DASH })
+        assertEquals(1, state.takeVisualFxCues().filterIsInstance<VisualFxCue.ShockwaveAdded>()
+            .count { it.colorIndex == FxColorCode.elementTone(StatusElement.GRAVITIC) })
+        assertEquals(NO_OBSTACLE_ID, state.slingWellId)
+        // Out in open space nothing more happens.
+        val charge = state.overdriveCharge
+        state.elapsed += 1f
+        state.flyIntoObstaclesForTesting(400f, 100f, state.velocityX, state.velocityY)
+        assertEquals(charge, state.overdriveCharge)
+        assertEquals(800f + kinds.slingImpulse, state.speed, 0.01f)
+        assertTrue(state.takeSoundCues().none { it == GameplayAudioCue.DASH })
+    }
+
+    @Test
+    fun aGentleTurnOrASlowExitSlingsNothing() {
+        // The turn and speed thresholds, each just met and just missed (the knot's pull tilts the entry heading by
+        // well under a degree).
+        for ((turn, speed, slings) in listOf(
+            Triple(92f, 800f, true), Triple(88f, 800f, false), Triple(60f, 800f, false),
+            Triple(100f, kinds.slingMinimumSpeed + 1f, true), Triple(100f, kinds.slingMinimumSpeed - 1f, false),
+            Triple(100f, 500f, false),
+        )) {
+            val state = slingState()
+            state.slingThrough(turn, speed)
+            assertEquals(if (slings) speed + kinds.slingImpulse else speed, state.speed, 0.01f, "$turn deg at $speed")
+            assertEquals(slings, state.overdriveCharge > 0f, "BOOST at $turn deg and $speed")
+            assertEquals(NO_OBSTACLE_ID, state.slingWellId)
+        }
+    }
+
+    @Test
+    fun aKnotThatLeavesTheWindowWhileHoldingTheCoreSlingsNothing() {
+        val state = slingState()
+        state.flyIntoObstaclesForTesting(-100f, 100f, 800f, 0f)
+        assertEquals(41L, state.slingWellId)
+        state.clearObstaclesForTesting()
+        val turn = radians(100f)
+        state.flyIntoObstaclesForTesting(400f, 100f, cos(turn) * 800f, sin(turn) * 800f)
+        assertEquals(800f, state.speed, 0.01f)
+        assertEquals(0f, state.overdriveCharge)
+        assertEquals(NO_OBSTACLE_ID, state.slingWellId)
+        assertEquals(0f, state.slingEntryHeading)
+    }
+
+    @Test
+    fun passingFromOneKnotsFieldIntoAnothersSettlesTheFirstAndHoldsTheSecond() {
+        val state = slingState()
+        state.placeObstaclesForTesting(knot(0f, 300f), knot(0f, -300f, id = 42L))
+        state.flyIntoObstaclesForTesting(-100f, 100f, 800f, 0f)
+        assertEquals(41L, state.slingWellId)
+        // Into the second knot's field only, 100 degrees off the entry heading.
+        val turn = radians(100f)
+        state.flyIntoObstaclesForTesting(150f, -150f, cos(turn) * 800f, sin(turn) * 800f)
+        assertEquals(800f + kinds.slingImpulse, state.speed, 1.5f, "the first knot slings (the second pulls a little)")
+        assertTrue(state.overdriveCharge > 0f)
+        assertEquals(42L, state.slingWellId, "the second knot holds the Core now")
+        assertEquals(atan2(state.velocityY, state.velocityX), state.slingEntryHeading, "from its new heading")
+    }
+
+    @Test
+    fun theNearestKnotWhoseFieldHoldsTheCoreOwnsTheSling() {
+        // Two overlapping fields: whichever centre lies nearer holds the Core, wherever the lookup meets it.
+        for ((y, holder) in listOf(30f to 41L, -30f to 42L)) {
+            val state = slingState()
+            state.placeObstaclesForTesting(knot(0f, 200f), knot(0f, -200f, id = 42L))
+            state.flyIntoObstaclesForTesting(-100f, y, 800f, 0f)
+            assertEquals(holder, state.slingWellId, "at y = $y")
+        }
+    }
+
+    @Test
+    fun everyObstacleBoostLeavesTheCoreAtMostNineTenthsOfTheLethalSpeedAndNeverSlowsIt() {
+        val state = buildTestState(content = boostContent).apply { own("Calibrated Coil") }
+        val lethal = state.obstacleLethalSpeed()
+        val cap = lethal * kinds.boostLethalShare
+        val impulses = listOf(kinds.slingImpulse, kinds.gateImpulse, kinds.ventImpulse, 2f * kinds.gateImpulse, 10_000f)
+        var speed = 0f
+        while (speed <= lethal * 1.2f) {
+            for (impulse in impulses) {
+                state.elapsed += 1f
+                state.overdriveCharge = 0f
+                state.setVelocityForTesting(speed * 0.6f, -speed * 0.8f)
+                state.applyObstacleBoost(impulse, ObstacleKind.GRAVITY_WELL)
+                val after = state.speed
+                assertTrue(after <= max(speed, cap) + 0.01f, "$impulse at $speed left at $after (cap $cap)")
+                assertTrue(after >= speed - 0.01f, "$impulse at $speed slowed to $after")
+                if (speed + impulse <= cap) assertEquals(speed + impulse, after, 0.05f, "$impulse at $speed")
+                if (speed > 1f) {
+                    assertEquals(0.6f, state.velocityX / after, 0.0001f, "along its travel")
+                    assertEquals(-0.8f, state.velocityY / after, 0.0001f)
+                }
+                assertTrue(state.overdriveCharge > 0f, "BOOST fires even when the cap absorbs the impulse ($impulse at $speed)")
+            }
+            speed += 37f
+        }
+        // At rest the boost follows the aim.
+        state.setVelocityForTesting(0f, 0f)
+        state.applyObstacleBoost(kinds.slingImpulse, ObstacleKind.GRAVITY_WELL)
+        assertEquals(kinds.slingImpulse * state.lastAimDirectionX, state.velocityX, 0.01f)
+        assertEquals(kinds.slingImpulse * state.lastAimDirectionY, state.velocityY, 0.01f)
     }
 }

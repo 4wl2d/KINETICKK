@@ -3,10 +3,12 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.NEAR_OBSTACLE_MAX_DISTANCE
 import kinetickk.ball.content.api.ObstacleKind
 import kinetickk.ball.content.api.ObstacleKindTuning
 import kinetickk.ball.content.api.ObstacleMix
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.content.api.bodyRadius
 import kinetickk.ball.content.api.phaseShardSolid
@@ -14,13 +16,19 @@ import kinetickk.ball.content.api.pick
 import kinetickk.ball.gameplay.nucleus.model.Obstacle
 import kinetickk.ball.gameplay.nucleus.model.distanceSquared
 import kinetickk.ball.gameplay.nucleus.model.length
+import kinetickk.ball.gameplay.nucleus.protocol.FxColorCode
+import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
+import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kotlin.math.atan2
 import kotlin.math.max
+import kotlin.math.min
 
 /*
  * Obstacle kinds. The content owns each kind's properties; every obstacle query here and in ObstacleSystem reads them
  * instead of naming kinds. Generation rolls the newer kinds on asteroid candidates from a stream of their own, so the
  * layout (positions, ids, candidate radii, gaps) never moves. After the Core's collisions a per-step pass measures
- * the Core's proximity to solid obstacles (NearObstacle, Matrix Near Miss).
+ * the Core's proximity to solid obstacles (NearObstacle, Matrix Near Miss), applies the field kinds to the Core
+ * (gravity knots pull or push it, and leaving a knot after a hard turn slings it on) and then to nearby enemies.
  */
 
 // ---------------------------------------------------------------------------------------------
@@ -125,12 +133,21 @@ internal fun ObstacleKindTuning.hazardMargin(): Float = max(mineArmMargin, ventP
 // ---------------------------------------------------------------------------------------------
 // The step.
 
+/** Field obstacles farther than this from the Core move no enemy (bounds the enemy field pass). */
+internal const val ENEMY_FIELD_ACTIVITY_RANGE: Float = 2_400f
+
 /**
  * Runs after the Core's collisions in every running step: measures the gap NearObstacle reads and grants Matrix Near
- * Miss when the Core did not touch anything ([collided] false).
+ * Miss when the Core did not touch anything ([collided] false), applies the field kinds to the Core, settles the
+ * gravity-knot sling, then applies the field kinds to enemies.
  */
 internal fun MutableGameState.updateObstacleKinds(collided: Boolean) {
     updateObstacleProximity(collided)
+    val heldBy = updateCoreObstacleFields()
+    updateSling(heldBy)
+    // A BOOST clause can level up and open a choice: nothing else acts once it is open.
+    if (phase != GamePhase.RUNNING) return
+    updateEnemyObstacleFields()
 }
 
 /**
@@ -155,5 +172,152 @@ private fun MutableGameState.updateObstacleProximity(collided: Boolean) {
     if (speed >= nearMiss.minSpeed && nearMissReadyAt <= elapsed && grazeGap <= nearMiss.distance) {
         nearMissReadyAt = elapsed + nearMiss.cooldown
         gainOverdrive(nearMiss.overdrive)
+    }
+}
+
+/**
+ * One lookup around the Core for the field kinds within [ObstacleKindTuning.maximumInfluence]: every gravity knot
+ * whose field holds the Core pulls it toward its centre (a Repulsor pushes it away), strongest at the knot's surface
+ * and fading linearly to nothing at the field's edge. Returns the id of the nearest knot whose field holds the Core,
+ * or [NO_OBSTACLE_ID].
+ */
+private fun MutableGameState.updateCoreObstacleFields(): Long {
+    val kinds = content.obstacles.kinds
+    var heldBy = NO_OBSTACLE_ID
+    var heldDistanceSquared = Float.POSITIVE_INFINITY
+    forEachObstacleNear(coreX, coreY, kinds.maximumInfluence + coreRadius) { _, obstacle ->
+        when (obstacle.kind) {
+            ObstacleKind.GRAVITY_WELL -> {
+                val centreDistanceSquared = distanceSquared(coreX, coreY, obstacle.x, obstacle.y)
+                if (centreDistanceSquared >= kinds.wellInfluence * kinds.wellInfluence) return@forEachObstacleNear
+                if (centreDistanceSquared < heldDistanceSquared) {
+                    heldDistanceSquared = centreDistanceSquared
+                    heldBy = obstacle.id
+                }
+                val acceleration = wellPullAt(obstacle, coreX, coreY, coreRadius, kinds.wellCorePull, kinds)
+                velocityX += acceleration.x * MutableGameState.FIXED_STEP
+                velocityY += acceleration.y * MutableGameState.FIXED_STEP
+            }
+            // Accelerator gates, vents and mines act on the Core with their own steps.
+            ObstacleKind.ACCEL_GATE, ObstacleKind.THERMAL_VENT, ObstacleKind.DERELICT_MINE,
+            ObstacleKind.ASTEROID, ObstacleKind.BUMPER, ObstacleKind.UNSTABLE, ObstacleKind.CRYSTAL, ObstacleKind.PHASE_SHARD,
+            -> Unit
+        }
+    }
+    return heldBy
+}
+
+/**
+ * The acceleration a gravity knot's field gives a body of [bodyRadius] at ([x], [y]): [surfacePull] toward the knot
+ * where the body touches its core, falling linearly to 0 at [ObstacleKindTuning.wellInfluence] from its centre; away
+ * from the knot for a Repulsor. Zero outside the field and at the knot's exact centre.
+ */
+private fun wellPullAt(
+    knot: Obstacle,
+    x: Float,
+    y: Float,
+    bodyRadius: Float,
+    surfacePull: Float,
+    kinds: ObstacleKindTuning,
+): SteeringVector {
+    val dx = knot.x - x
+    val dy = knot.y - y
+    val distance = length(dx, dy)
+    if (distance >= kinds.wellInfluence || distance <= 0.001f) return steeringVector(0f, 0f)
+    val surface = knot.radius + bodyRadius
+    val falloff = ((kinds.wellInfluence - distance) / max(1f, kinds.wellInfluence - surface)).coerceIn(0f, 1f)
+    val pull = surfacePull * falloff * (if (knot.repels) -1f else 1f) / distance
+    return steeringVector(dx * pull, dy * pull)
+}
+
+/**
+ * The gravity-knot sling. Entering a knot's field ([heldBy]) records the Core's heading; leaving it (or passing into
+ * another knot's field) after a net heading change of at least [ObstacleKindTuning.slingTurnRadians] at
+ * [ObstacleKindTuning.slingMinimumSpeed] or faster throws the Core on by [ObstacleKindTuning.slingImpulse] (BOOST
+ * with the knot's kind). A knot that left the window meanwhile settles nothing.
+ */
+private fun MutableGameState.updateSling(heldBy: Long) {
+    val previous = slingWellId
+    if (previous == heldBy) return
+    if (previous != NO_OBSTACLE_ID && obstacleInWindow(previous)) {
+        val kinds = content.obstacles.kinds
+        val current = speed
+        if (current >= kinds.slingMinimumSpeed && angleBetween(coreHeading(), slingEntryHeading) >= kinds.slingTurnRadians) {
+            applyObstacleBoost(kinds.slingImpulse, ObstacleKind.GRAVITY_WELL)
+            shockwave(coreX, coreY, SLING_RING_SECONDS, SLING_RING_RADIUS, FxColorCode.elementTone(StatusElement.GRAVITIC))
+            emitSound(GameplayAudioCue.DASH)
+        }
+    }
+    slingWellId = heldBy
+    slingEntryHeading = if (heldBy == NO_OBSTACLE_ID) 0f else coreHeading()
+}
+
+private const val SLING_RING_SECONDS: Float = 0.3f
+private const val SLING_RING_RADIUS: Float = 140f
+
+/** The Core's travel heading; 0 while it barely moves. */
+private fun MutableGameState.coreHeading(): Float = if (speed < 1f) 0f else atan2(velocityY, velocityX)
+
+/** True while an obstacle with [id] is in the current window. */
+private fun MutableGameState.obstacleInWindow(id: Long): Boolean {
+    val obstacles = obstacleField.obstacles
+    for (index in obstacles.indices) if (obstacles[index].id == id) return true
+    return false
+}
+
+/**
+ * Speeds the Core along its travel (along its aim while it rests) by [impulse] (times the build's boost power), never
+ * past [ObstacleKindTuning.boostLethalShare] of the lethal collision speed and never slowing it, then fires BOOST with
+ * [kind]. BOOST fires even when the cap absorbs the whole impulse, so builds stay consistent at speed. Gates, slings
+ * and vents share it.
+ */
+internal fun MutableGameState.applyObstacleBoost(impulse: Float, kind: ObstacleKind) {
+    val cap = obstacleLethalSpeed() * content.obstacles.kinds.boostLethalShare
+    val current = speed
+    val target = max(current, min(current + impulse * build.boostPowerScale, cap))
+    if (target > current) {
+        val directionX = if (current > 1f) velocityX / current else lastAimDirectionX
+        val directionY = if (current > 1f) velocityY / current else lastAimDirectionY
+        velocityX = directionX * target
+        velocityY = directionY * target
+    }
+    fireClauses(EffectTrigger.BOOST, null, impactPower(target), obstacle = kind)
+}
+
+/**
+ * The field kinds' effect on enemies: every field obstacle (gates aside) within [ENEMY_FIELD_ACTIVITY_RANGE] of the
+ * Core acts on the live, tangible enemies inside its reach. A gravity knot pulls them toward its core (a Repulsor
+ * pushes) by [ObstacleKindTuning.wellEnemyPull] times their knockback intake and the build's knot pull; the obstacle
+ * pass then slams those it drags in hard enough.
+ */
+private fun MutableGameState.updateEnemyObstacleFields() {
+    val obstacles = obstacleField.obstacles
+    if (obstacles.isEmpty() || enemies.isEmpty()) return
+    val kinds = content.obstacles.kinds
+    val range = ENEMY_FIELD_ACTIVITY_RANGE * ENEMY_FIELD_ACTIVITY_RANGE
+    for (index in obstacles.indices) {
+        val obstacle = obstacles[index]
+        if (!obstacle.kind.field || distanceSquared(coreX, coreY, obstacle.x, obstacle.y) > range) continue
+        when (obstacle.kind) {
+            ObstacleKind.GRAVITY_WELL -> pullEnemiesIntoKnot(obstacle, kinds)
+            // Gates never touch enemies; vents and mines act on them with their own steps.
+            ObstacleKind.ACCEL_GATE, ObstacleKind.THERMAL_VENT, ObstacleKind.DERELICT_MINE,
+            ObstacleKind.ASTEROID, ObstacleKind.BUMPER, ObstacleKind.UNSTABLE, ObstacleKind.CRYSTAL, ObstacleKind.PHASE_SHARD,
+            -> Unit
+        }
+    }
+}
+
+private fun MutableGameState.pullEnemiesIntoKnot(knot: Obstacle, kinds: ObstacleKindTuning) {
+    val reach = kinds.wellInfluence * kinds.wellInfluence
+    val surfacePull = kinds.wellEnemyPull * build.wellPullScale
+    for (enemyIndex in enemies.indices) {
+        val enemy = enemies[enemyIndex]
+        if (!enemy.alive || isPhasedPhantom(enemy) || distanceSquared(enemy.x, enemy.y, knot.x, knot.y) >= reach) continue
+        val intake = knockbackTaken(enemy)
+        if (intake <= 0f) continue
+        val acceleration = wellPullAt(knot, enemy.x, enemy.y, enemy.radius, surfacePull * intake, kinds)
+        enemy.vx += acceleration.x * MutableGameState.FIXED_STEP
+        enemy.vy += acceleration.y * MutableGameState.FIXED_STEP
     }
 }

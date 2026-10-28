@@ -36,7 +36,8 @@ internal fun testObstacle(
     kind: ObstacleKind = ObstacleKind.ASTEROID,
     id: Long = (x.toRawBits().toLong() shl 32) xor (y.toRawBits().toLong() and 0xFFFF_FFFFL),
     shapeSeed: Int = 7,
-): Obstacle = Obstacle(id = id, kind = kind, x = x, y = y, radius = radius, shapeSeed = shapeSeed)
+    repels: Boolean = false,
+): Obstacle = Obstacle(id = id, kind = kind, x = x, y = y, radius = radius, shapeSeed = shapeSeed, repels = repels)
 
 /** The canonical content with [mix] as the realspace obstacle kind mix. */
 internal fun contentWithObstacleMix(mix: ObstacleMix): GameplayContentSnapshot {
