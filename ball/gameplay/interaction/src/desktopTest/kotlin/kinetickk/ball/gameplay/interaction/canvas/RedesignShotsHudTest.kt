@@ -159,6 +159,9 @@ class RedesignShotsHudTest {
         // Baby mode: the soft tether and cursor arc with the pacifier plate alone at tier 0, then before the tier plate
         // and its sigils at tier 3.
         EASY, EASY_TIER,
+        // A mini-boss's narrow block (the Throne in its second phase, three parts) and a secret boss's wide one (the
+        // Antecedent in its third phase, four parts, hardened against Cryo so its weakness fills the icon slot).
+        MINIBOSS, SECRET_BOSS,
     }
 
     private fun level(shot: Shot, values: Values): Int = when (shot) {
@@ -210,6 +213,7 @@ class RedesignShotsHudTest {
         val enemies = when (shot) {
             Shot.ELITE, Shot.ELITE_MARKERS -> listOf(enemy(1, EnemyType.ELITE, 975f * sx - width * 0.5f, 325f * sy - height * 0.5f, 0.64f, 38f))
             Shot.ARCHITECT, Shot.ARCHITECT_TRIAL -> listOf(enemy(2, EnemyType.ARCHITECT, 710f * sx - width * 0.5f, 290f * sy - height * 0.5f, 0.53f, 74f))
+            Shot.MINIBOSS, Shot.SECRET_BOSS -> listOf(rankBoss(shot, 975f * sx - width * 0.5f, 325f * sy - height * 0.5f, if (shot == Shot.MINIBOSS) 0.48f else 0.41f))
             else -> emptyList()
         }
         val trial = shot == Shot.TRIAL || shot == Shot.TRIAL_INFO
@@ -299,6 +303,7 @@ class RedesignShotsHudTest {
             Shot.CRUISE -> model.with("hp" to 151f)
             Shot.ELITE, Shot.ELITE_MARKERS -> model.with("enemies" to listOf(enemy(1, EnemyType.ELITE, 0f, 0f, 0.7f, 38f)).toImmutableList())
             Shot.ARCHITECT, Shot.ARCHITECT_TRIAL -> model.with("enemies" to listOf(enemy(2, EnemyType.ARCHITECT, 0f, 0f, 0.62f, 74f)).toImmutableList())
+            Shot.MINIBOSS, Shot.SECRET_BOSS -> model.with("enemies" to listOf(rankBoss(shot, 0f, 0f, 0.55f)).toImmutableList())
             // Before the drawn frame X had no refund: the frame plays its refund flash.
             Shot.SKILLS_MIXED -> model.with("skillBar" to MIXED_SKILL_BAR)
             else -> model
@@ -335,6 +340,17 @@ class RedesignShotsHudTest {
 
     private fun enemy(id: Int, type: EnemyType, x: Float, y: Float, integrity: Float, radius: Float) =
         EnemyProjection(id, type, x, y, 0f, 0f, 1000f * integrity, 1000f, radius, 0f, 0f, 0f, 0f, x, y, false)
+
+    /** [Shot.MINIBOSS]'s Throne (second phase, two arcs) or [Shot.SECRET_BOSS]'s Antecedent (third phase, two arcs). */
+    private fun rankBoss(shot: Shot, x: Float, y: Float, integrity: Float): EnemyProjection {
+        val mini = shot == Shot.MINIBOSS
+        val aspect = if (mini) kinetickk.ball.content.api.StatusElement.VOID else kinetickk.ball.content.api.StatusElement.CRYO
+        val weakness = if (mini) kinetickk.ball.content.api.StatusElement.SONIC else kinetickk.ball.content.api.StatusElement.THERMAL
+        val affinity = kinetickk.ball.gameplay.nucleus.render.EnemyAffinity.encode(aspect.ordinal, mini, weakness.ordinal, armored = true,
+            fragile = false, shifting = false, phase = if (mini) 1 else 2)
+        return enemy(3, if (mini) EnemyType.THRONE else EnemyType.ANTECEDENT, x, y, integrity, if (mini) 48f else 58f)
+            .copy(affinityBits = affinity, charges = 2, facing = 0.5f)
+    }
 
     private fun GameplayRenderModel.with(vararg overrides: Pair<String, Any?>): GameplayRenderModel {
         val map = overrides.toMap()

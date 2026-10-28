@@ -235,7 +235,13 @@ internal fun DrawScope.drawCodexCell(entry: CodexEntry, catalog: UiCatalogSnapsh
             drawCodexForm(icon.id, center, radius * CODEX_FORM_SCALE, if (entry.discovered) Kk.Bone else Kk.Mute)
             if (!entry.discovered) drawKkIcon(KkIcon.SYSTEM_LOCKED, Offset(size.width - 11.dp.toPx(), 11.dp.toPx()), 11.dp.toPx(), Kk.Mute)
         }
-        is CodexIcon.Enemy -> {
+        is CodexIcon.Enemy -> if (icon.hidden) {
+            // A secret boss not discovered yet: the anomaly glyph muted over a hatch, never its shape.
+            drawRect(if (hovered) Kk.Ink3 else Kk.Ink2)
+            drawKkHatch(rect)
+            drawRect(Kk.Line2, style = kkStroke(1.dp.toPx()))
+            drawKkIcon(KkIcon.SYSTEM_ANOMALY, center, radius * 1.1f, Kk.Mute)
+        } else {
             // The world silhouette in the threat hue; a Rebirth-locked enemy is muted, hatched and padlocked.
             drawRect(if (hovered) Kk.Ink3 else Kk.Ink2)
             if (icon.locked) drawKkHatch(rect)
