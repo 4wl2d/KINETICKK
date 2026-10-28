@@ -48,14 +48,26 @@ class CoreRibbonProjection private constructor(
          */
         internal fun of(positions: FloatArray, ages: FloatArray, flags: IntArray): CoreRibbonProjection {
             val size = ages.size
-            require(size <= InteractionFxLimits.MAX_CORE_RIBBON_SAMPLES) {
-                "a Core ribbon holds at most ${InteractionFxLimits.MAX_CORE_RIBBON_SAMPLES} samples, not $size"
-            }
             require(positions.size == size * 2 && flags.size == size) {
                 "a Core ribbon of $size samples needs ${size * 2} coordinates and $size flags, not ${positions.size} and ${flags.size}"
             }
+            return of(positions, ages, flags, size)
+        }
+
+        /**
+         * Copies the first [size] samples (newest first) of arrays that may be longer, such as a reducer's reused staging
+         * arrays; at most [InteractionFxLimits.MAX_CORE_RIBBON_SAMPLES]. No samples give [EMPTY].
+         */
+        internal fun of(positions: FloatArray, ages: FloatArray, flags: IntArray, size: Int): CoreRibbonProjection {
+            require(size <= InteractionFxLimits.MAX_CORE_RIBBON_SAMPLES) {
+                "a Core ribbon holds at most ${InteractionFxLimits.MAX_CORE_RIBBON_SAMPLES} samples, not $size"
+            }
+            require(size >= 0 && positions.size >= size * 2 && ages.size >= size && flags.size >= size) {
+                "$size Core ribbon samples need ${size * 2} coordinates and $size ages and flags, not ${positions.size}, " +
+                    "${ages.size} and ${flags.size}"
+            }
             if (size == 0) return EMPTY
-            return CoreRibbonProjection(positions.copyOf(), ages.copyOf(), flags.copyOf())
+            return CoreRibbonProjection(positions.copyOf(size * 2), ages.copyOf(size), flags.copyOf(size))
         }
     }
 }

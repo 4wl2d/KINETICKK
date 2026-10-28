@@ -50,6 +50,25 @@ class CoreRibbonProjectionTest {
     }
 
     @Test
+    fun aRibbonCopiedFromLongerStagingTakesOnlyItsSamples() {
+        val limit = InteractionFxLimits.MAX_CORE_RIBBON_SAMPLES
+        val positions = FloatArray((limit + 1) * 2) { it.toFloat() }
+        val ages = FloatArray(limit + 1) { it * 0.01f }
+        val flags = IntArray(limit + 1) { if (it == 1) CoreRibbonProjection.START else 0 }
+        val two = CoreRibbonProjection.of(positions, ages, flags, 2)
+        val expected =
+            CoreRibbonProjection.of(floatArrayOf(0f, 1f, 2f, 3f), floatArrayOf(0f, 0.01f), intArrayOf(0, CoreRibbonProjection.START))
+        positions.fill(-1f)
+        assertEquals(expected, two, "the first two samples, copied")
+        assertEquals(limit, CoreRibbonProjection.of(positions, ages, flags, limit).size)
+        assertFailsWith<IllegalArgumentException> { CoreRibbonProjection.of(positions, ages, flags, limit + 1) }
+        assertFailsWith<IllegalArgumentException> { CoreRibbonProjection.of(positions, ages, flags, -1) }
+        assertFailsWith<IllegalArgumentException> { CoreRibbonProjection.of(FloatArray(3), FloatArray(2), IntArray(2), 2) }
+        assertFailsWith<IllegalArgumentException> { CoreRibbonProjection.of(FloatArray(4), FloatArray(1), IntArray(2), 2) }
+        assertSame(CoreRibbonProjection.EMPTY, CoreRibbonProjection.of(positions, ages, flags, 0))
+    }
+
+    @Test
     fun theRibbonKeepsTheWedgeLengthUpToItsSpeedAndCapsBeyondIt() {
         assertEquals(80f, ribbonLength(0f))
         assertEquals(340f, ribbonLength(920f), 0.001f)
