@@ -3,8 +3,6 @@
 
 package kinetickk.gradle
 
-import kinetickk.gradle.pokeball.ProjectEdge
-import kinetickk.gradle.pokeball.expectedLeafProjects
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.file.ConfigurableFileCollection

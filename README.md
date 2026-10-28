@@ -186,18 +186,11 @@ layout sweeps. `KK_SHOTS=1` renders the full size and language matrix of the
 `KK_SHOTS_OUT` names a folder, and the before/after captures only into `KK_BA_DIR`.
 `KK_FULL_SWEEPS=1` runs every sweep in full.
 
-Architecture checks require a clean Pokeball checkout at
-`b4a8219ecb70ae5e81214edd6b509b61d9db0637`:
-
-```bash
-./gradlew verifyArchitecture verifyPokeballArchitecture verifyPokeballConformance -PpokeballSnapshotDir=/path/to/pinned/Pokeball
-```
+`./gradlew verifyArchitecture` checks the module dependency graph.
 
 [CI](.github/workflows/ci.yml) defines the complete platform checks.
 [Performance tools](tools/performance/README.md) cover benchmark comparisons.
-Project-specific architecture inputs live in
-[docs/architecture/pokeball](docs/architecture/pokeball/README.md);
-agent instructions are in [AGENTS.md](AGENTS.md).
+Agent instructions are in [AGENTS.md](AGENTS.md).
 
 ### Crash reports
 

@@ -1,39 +1,17 @@
 <!-- SPDX-FileCopyrightText: 2026 Vladislav Tomilov -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# Migration baseline
+# Product and balance baseline
 
-## Immutable inputs
+This record holds the product behavior the game keeps, the intentional changes
+release by release, and the balance trade-offs the owner accepted. The
+Gameplay balance tests cite it as `baseline.md`; the rules that choose their
+seeds, thresholds and calibration windows are in [`policy.md`](policy.md).
 
-The migration starts from these exact inputs:
+## Product behavior
 
-- KINETICKK base: `origin/main@a0762dd40df50a06f48f31f2916960ea04992dc2`.
-- Profile/Lab pilot commit:
-  `d1f519954ea4f3dd2f871adc3cc2e93f7648b42b`.
-- Simplification source: the complete dirty KINETICKK tree captured as
-  `1c440d59d99161585227c2a32b3e3eeb9a2b6656`, preserving the user's index and files.
-- Pokeball repository: `git@github.com:4wl2d/Pokeball.git` at
-  `b4a8219ecb70ae5e81214edd6b509b61d9db0637`.
-- Core entrypoint: `spec/pokeball-architecture-core.md`, declared version
-  `1.5.0-draft`, status `canonical draft`.
-- Ordered Core set: 25 files, 733764 exact bytes, SHA-256
-  `2ac605e4ff4db406b661356ea9c15a1b2d1683f68e515cd7cfc136c41c28daad`.
-- Agent Pack: revision 15, 25 Markdown files including `BASELINE.md`; its
-  digest covers the other 24 files and is SHA-256
-  `736220908debbb93a84dd971ce5943efb79b957cb3c6d7c04ad6eba97ae1aa97`.
-
-The Core pin is the published `feature/local-composition` snapshot from
-[Pokeball PR #7](https://github.com/4wl2d/Pokeball/pull/7), verified against its
-remote branch. The specification remains a canonical draft. Verification uses
-a clean checkout of that exact commit supplied through `-PpokeballSnapshotDir`.
-Recheck the commit, manifest order, byte counts and both digests; matching bytes
-establish input identity, not application conformance. The earlier Core pin was
-`de9ef7384795680c836d5e6c2c9b394286058670`; its evidence does not certify this migration.
-
-## Frozen product behavior
-
-The migration preserves the following externally observable behavior unless an
-item appears under **Intentional delta**.
+The game keeps the following externally observable behavior unless an item
+appears under **Intentional delta**.
 
 ### Routes and workflow
 
@@ -59,12 +37,12 @@ publish their complete next value before persistence is attempted. Persistence
 failure or uncertainty never rolls an accepted value back and does not cause an
 automatic new write. Rejections change neither state nor persistence.
 
-The frozen mutation matrix covers preference normalization, sound/music mute,
+The Profile mutation matrix covers preference normalization, sound/music mute,
 Matrix purchases and reset, core-shape selection, weapon purchase/equip, Refit and
 Honing purchases, key bindings and display preferences, Rebirth advance,
 gameplay-progress merge, bootstrap, and the test-only replacement seam.
-The target removes production arbitrary replacement but preserves validated
-bootstrap semantics.
+Production code has no arbitrary replacement; bootstrap semantics stay
+validated.
 
 ### Gameplay and content
 
@@ -83,9 +61,9 @@ The catalog has 287 hand-authored items (the 18 active items at ids `269..286`,
 each carrying one of the 18 active effects), 24 weapons, 32 Core Matrix nodes,
 22 Relics, 19 enemy types, twelve characters, twelve Apex abilities and Rebirth
 levels `0..10` (see the build-system, 0.4.0 and 0.5.0 intentional deltas
-below). Existing stable declaration order is captured as explicit stable IDs
-during the migration; consumers receive immutable versioned snapshots instead of
-reaching global catalog objects.
+below). Stable declaration order is captured as explicit stable IDs;
+consumers receive immutable versioned snapshots instead of reaching global
+catalog objects.
 
 ### Audio
 
@@ -546,7 +524,7 @@ The Resource and platform capability expose only `readSnapshot` and
 `writeSnapshot`; there is no reset, import, quarantine,
 purge, or bulk-clear operation.
 
-Platform composition owns the only physical storage authority. Android uses
+Platform composition owns the only physical storage. Android uses
 SharedPreferences `kinetickk.profile.v2` key `snapshot`; Desktop uses Preferences
 node `kinetickk/profile-v2` key `snapshot`; Web uses local-storage key
 `kinetickk_profile_v2`. All other keys are outside the application contract: they
@@ -562,13 +540,12 @@ platform, and programming faults are no longer swallowed by best-effort
 wrappers: they remain runtime faults and propagate after any already accepted
 frame and output batch drains. Detached Desktop synthesis faults escape the
 worker task to runtime. Web native `resume()` and `close()` Promise rejections
-alone are observed and consumed as non-semantic post-acceptance projection
-loss. No typed Audio Fact, result, or status is fabricated.
+alone are observed and consumed without changing any accepted outcome. No
+typed Audio result or status is fabricated.
 
-The migration may change internal ordering only where Pokeball acceptance
-semantics require it, such as pause acceptance before overlay publication and
-accepted Profile progress before returning Home. The rendered UX and final
-business outcomes remain the same.
+Internal ordering changed only where it had to, such as pause acceptance before
+overlay publication and accepted Profile progress before returning Home. The
+rendered UX and final business outcomes remain the same.
 
 ### Release 0.5.0
 
@@ -853,13 +830,7 @@ bounds, so its rank III text names the wider area and the ten reactions at
 130 % it shares with rank II), Resonator's rank III text (it replays at 84 %)
 and Null Shroud's base bolts and 12.35 s rank II cooldown; the actives golden
 (first `aea321347af3e7dc`) for the calibrated passives, the Epic unlock at 10
-and the lane factors 3 and 8. The
-behavior evidence that pinned `SkillOfferTest`'s draft and rank-up methods now
-pins four `ActiveItemOfferTest` methods
-(`anActiveCardBindsTheLowestEmptySlotAndASecondStackRanksItReadyAtOnce`,
-`activeRulesFilterAndWeightOffersWithoutAnExtraRewardDraw`,
-`aFourthActiveAsksWhichSlotToReplaceAndTheKeepCardSalvagesIt` and
-`theIncomingActiveIsCandidateState`), with the resolved manifest regenerated.
+and the lane factors 3 and 8.
 
 Each knob was chosen on population seeds disjoint from every fixed gate list
 and then confirmed on the gate seeds. On the final tree the desktop suite runs
@@ -1130,25 +1101,3 @@ bounds.
   `skillTagPoints` 0 also broke D and H. The history does what it is for:
   consecutive runs share 0.03 to 0.07 of their items, against 0.11 to 0.13 for
   two runs with every item dealt on the 0.4.0 lanes.
-
-## Baseline evidence
-
-Before the pilot commit, these commands passed:
-
-```text
-./gradlew :core:profile:data:desktopTest :feature:lab:impl:desktopTest --rerun-tasks
-./gradlew verifyArchitecture desktopTest compileTestKotlinWasmJs wasmJsBrowserDistribution --rerun-tasks
-git diff --check
-```
-
-The full gate executed 527 Gradle tasks successfully. Phase-two
-characterization adds explicit Profile mutation, seeded gameplay, workflow,
-audio-map, and content/balance coverage before any physical module move.
-
-## Non-claims at baseline
-
-This baseline makes no Pokeball conformance, certification, durability,
-exactly-once, eventual-delivery, crash-atomic persistence, cross-device storage,
-security-isolation, zero-overhead, or external-provider behavior claim. The
-later bounded claim is a project self-attestation for one immutable
-implementation commit only.

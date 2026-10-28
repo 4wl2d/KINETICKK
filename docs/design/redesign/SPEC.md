@@ -371,8 +371,6 @@ localization.
 
 ## 11. Architecture & repo rules
 
-- Follow `AGENTS.md`: read and use the installed `pokeball` skill (and `pokeball-composition`,
-  `pokeball-review` as relevant) before implementation and for review.
 - `foundation:design` must not depend on game modules. Screen code stays in its
   `interaction` module. Do not move logic between modules.
 - New files: SPDX header `// SPDX-FileCopyrightText: 2026 Vladislav Tomilov` +
@@ -390,7 +388,7 @@ localization.
 ./gradlew desktopTest
 ./gradlew :app:android:assembleDebug :app:android:assembleDebugAndroidTest :app:shared:assembleAndroidDeviceTest
 CHROME_BIN=/path/to/chrome ./gradlew wasmJsBrowserTest wasmJsBrowserDistribution --max-workers=1
-./gradlew verifyArchitecture verifyPokeballArchitecture verifyPokeballConformance -PpokeballSnapshotDir=/path/to/pinned/Pokeball   # if the pinned checkout is available
+./gradlew verifyArchitecture
 ```
 - Update rendering tests (`GameplayLocalizedRenderingTest`, `InventoryIconParityTest`,
   `TesseractRenderingTest`, `RewardContentTest`, `TerminalContentTest`,

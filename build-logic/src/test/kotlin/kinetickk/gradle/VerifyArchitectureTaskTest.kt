@@ -3,7 +3,6 @@
 
 package kinetickk.gradle
 
-import kinetickk.gradle.pokeball.ProjectEdge
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
