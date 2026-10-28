@@ -491,6 +491,7 @@ class WorldHotPathAllocationTest {
             }
         }
         assertTrue(edgeMarkerColor(EdgeMarkerIcon.RACE, KkRolePalette.Default) == KkRolePalette.Default.you, "the race is the player's course")
+        assertTrue(edgeMarkerColor(EdgeMarkerIcon.HALO, KkRolePalette.Default) == KkRolePalette.Default.you, "the next halo ring is the player's course")
         assertTrue(edgeMarkerColor(EdgeMarkerIcon.BOUNTY, KkRolePalette.Default) == KkRolePalette.Default.threat, "a bounty is a threat")
         assertFalse(edgeMarkerColor(EdgeMarkerIcon.CHALLENGE, KkRolePalette.Default) == KkRolePalette.Default.threat, "a rule is no threat")
     }
