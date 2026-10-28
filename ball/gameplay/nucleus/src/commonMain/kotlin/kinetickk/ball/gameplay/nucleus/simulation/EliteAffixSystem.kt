@@ -125,7 +125,8 @@ internal fun MutableGameState.updateEliteAffix(enemy: Enemy, dx: Float, dy: Floa
 
 /**
  * The run-variety part of a kill, after its ordinary rewards: a Splitting Elite breaks into fragments, a Volatile Elite
- * arms a burst, and a champion pays its bonus Data and Matter. Nothing here draws from a stream.
+ * arms a burst, a champion pays its bonus Data and Matter, and a kill during a data storm leaves the storm's bonus Data.
+ * Nothing here draws from a stream.
  */
 internal fun MutableGameState.onAffixedEnemyKilled(enemy: Enemy) {
     when (enemy.affix) {
@@ -134,6 +135,7 @@ internal fun MutableGameState.onAffixedEnemyKilled(enemy: Enemy) {
         else -> Unit
     }
     if (enemy.champion) payChampion(enemy)
+    dropDataStormBonus(enemy)
 }
 
 /**

@@ -20,6 +20,10 @@ import kotlin.test.assertIs
 /** The content with every run-variety system switched off: the run plays as it did before them. */
 internal fun GameplayContentSnapshot.withoutRunVariety(): GameplayContentSnapshot = copy(variety = RunVarietyContent.DISABLED)
 
+/** The content with ambient world events switched off: a run plans none. */
+internal fun GameplayContentSnapshot.withoutWorldEvents(): GameplayContentSnapshot =
+    copy(variety = variety.copy(worldEvents = variety.worldEvents.copy(enabled = false)))
+
 /**
  * The content with the director's variety switched off: no personality, no onslaught themes, no Elite affixes and no
  * champions, so the director paces and spawns as it did before them.

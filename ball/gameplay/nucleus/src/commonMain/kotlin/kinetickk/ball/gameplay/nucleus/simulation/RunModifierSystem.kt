@@ -70,7 +70,7 @@ internal fun MutableGameState.resetRunVariety() {
 internal fun MutableGameState.startRunVariety() {
     applyDirectorPersonality(directorPersonalityFor(runSeed, content.variety.director))
     varietyAnnouncement = 0
-    worldEventPlans = immutableListOf()
+    worldEventPlans = planWorldEvents(runSeed, content.variety.worldEvents)
     nextWorldEvent = 0
 }
 

@@ -6,14 +6,22 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.content.api.ChampionPolicy
 import kinetickk.ball.content.api.EliteAffix
 import kinetickk.ball.content.api.EliteAffixPolicy
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.GameplayContentSnapshot
+import kinetickk.ball.content.api.WorldEventKind
+import kinetickk.ball.content.api.WorldEventPolicy
 import kinetickk.ball.gameplay.nucleus.model.Enemy
+import kinetickk.ball.gameplay.nucleus.model.WorldEventPlan
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kinetickk.ball.gameplay.nucleus.render.EventStrikeProjection
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
+import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.nextUp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 /**
  * The run-variety bounds at their last accepted and first rejected value (variety.md §11.6): what content accepts and
@@ -87,6 +95,44 @@ class RunVarietyBoundsTest {
         repeat(SAMPLE) { if (state.spawnedEnemy(EnemyType.SHOOTER, 0f, 0f).champion) champions++ }
         assertEquals(0.1f, state.championChance())
         assertEquals(0.1f, champions / SAMPLE.toFloat(), 0.01f)
+    }
+
+    @Test
+    fun worldEventPlansAcceptThreeAndRejectFour() {
+        val three = WorldEventPolicy(minPerRun = ContentBounds.MAX_WORLD_EVENTS_PER_RUN, maxPerRun = ContentBounds.MAX_WORLD_EVENTS_PER_RUN)
+        assertFailsWith<IllegalArgumentException> { WorldEventPolicy(maxPerRun = ContentBounds.MAX_WORLD_EVENTS_PER_RUN + 1) }
+        assertFailsWith<IllegalArgumentException> {
+            WorldEventPolicy(minPerRun = ContentBounds.MAX_WORLD_EVENTS_PER_RUN + 1, maxPerRun = ContentBounds.MAX_WORLD_EVENTS_PER_RUN + 1)
+        }
+        // At the bound every run plans exactly three events, one after another.
+        for (seed in 1..200) {
+            val plans = planWorldEvents(seed, three)
+            assertEquals(ContentBounds.MAX_WORLD_EVENTS_PER_RUN, plans.size, "Seed $seed")
+            for (index in 1 until plans.size) assertTrue(plans[index - 1].endsAt < plans[index].telegraphAt)
+        }
+        // The shipped policy plans the minimum or one more, never beyond its maximum.
+        val shipped = content.variety.worldEvents
+        assertEquals(setOf(shipped.minPerRun, shipped.maxPerRun), (1..200).map { planWorldEvents(it, shipped).size }.toSet())
+    }
+
+    @Test
+    fun eventStrikesHoldFourAndSkipTheFifth() {
+        /** The strikes armed after one meteor pulse that finds [armed] strikes already waiting. */
+        fun strikesAfterAPulse(armed: Int): Int {
+            val state = arena()
+            val telegraphAt = 10f
+            val startsAt = telegraphAt + content.variety.worldEvents.telegraphSeconds
+            state.worldEventPlans = immutableListOf(WorldEventPlan(WorldEventKind.METEOR_SHOWER, telegraphAt, startsAt, startsAt + 30f))
+            state.elapsed = startsAt + 5f
+            state.updateWorldEvents(MutableGameState.FIXED_STEP)
+            val waiting = List(armed) { index -> EventStrikeProjection(100f * index, 0f, 95f, state.elapsed, state.elapsed + 1f) }
+            state.worldEvent = checkNotNull(state.worldEvent).copy(strikes = waiting.toImmutableList())
+            state.worldEventNextPulseAt = state.elapsed
+            state.updateWorldEvents(MutableGameState.FIXED_STEP)
+            return checkNotNull(state.worldEvent).strikes.size
+        }
+        assertEquals(ContentBounds.MAX_EVENT_STRIKES, strikesAfterAPulse(ContentBounds.MAX_EVENT_STRIKES - 1), "The fourth is armed")
+        assertEquals(ContentBounds.MAX_EVENT_STRIKES, strikesAfterAPulse(ContentBounds.MAX_EVENT_STRIKES), "The fifth is skipped")
     }
 
     private companion object {
