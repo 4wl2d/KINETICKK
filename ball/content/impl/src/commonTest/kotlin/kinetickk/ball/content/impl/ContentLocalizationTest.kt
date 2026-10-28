@@ -354,6 +354,19 @@ class ContentLocalizationTest {
     }
 
     @Test
+    fun everyItemFlavorAddressesThePlayerAsVyInRussian() {
+        // The catalog's voice is the polite «вы»: no item's Russian flavor uses «ты» or one of its forms.
+        val informal = setOf("ты", "тебя", "тебе", "тобой", "тобою", "твой", "твоя", "твоё", "твое", "твои", "твоего", "твоей", "твоим",
+            "твоих", "твоему", "твою")
+        val wordBreak = Regex("[^А-Яа-яЁё]+")
+        content.items.forEach { item ->
+            val russian = item.description.localizedContent(AppLanguage.Russian)
+            val words = russian.split(wordBreak).map { it.lowercase() }
+            assertTrue(words.none { it in informal }, "${item.name} speaks informally: $russian")
+        }
+    }
+
+    @Test
     fun everyEnemyNameAndDescriptionIsLocalizedAndDistinct() {
         val roster = createContentCatalog().uiCatalog().enemies
         assertEquals(EnemyType.entries.toList(), roster.map { it.type })
