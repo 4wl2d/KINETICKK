@@ -102,6 +102,7 @@ class WorldContractBoundsTest {
         assertFailsWith<IllegalArgumentException> { AmbientSitePolicy(rules = (full + rule(SiteKind.QUIET_SIGNAL, 8_000f)).toImmutableList()) }
         assertFailsWith<IllegalArgumentException> { AmbientSitePolicy(rules = immutableListOf(rule(SiteKind.LOST_CURSOR, 3_000f), rule(SiteKind.LOST_CURSOR, 6_000f))) }
         assertFailsWith<IllegalArgumentException> { rule(SiteKind.GATE_RACE, 3_000f) }
+        assertFailsWith<IllegalArgumentException> { rule(SiteKind.FAR_SIGIL, 3_000f) }
         assertFailsWith<IllegalArgumentException> {
             AmbientSiteRule(SiteKind.DRIFT_CACHE, cellSize = 3_000f, minDistance = 5_999f, fullDistance = 12_000f, maxChance = 0.1f)
         }

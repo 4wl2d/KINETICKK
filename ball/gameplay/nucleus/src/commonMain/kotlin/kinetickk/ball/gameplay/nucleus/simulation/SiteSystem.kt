@@ -53,9 +53,20 @@ internal fun MutableGameState.updateSites(delta: Float) {
     if (bossSpawned || elapsed >= content.tempo.bossAtSeconds) {
         for (index in sites.indices) releaseSiteFoes(sites[index])
         sites = emptyList()
+        // Nothing opens once the Architect arrives, so nothing ambient stays in view.
+        ambientSites = AmbientSiteWindow.EMPTY
         return
     }
     offerDueWindow()
+    advanceWindowSites(delta)
+    updateAmbientSites()
+}
+
+/**
+ * The window sites' step: with none running, closed offers leave and the first offer the Core flew through starts
+ * (refused while another engagement runs); a running site advances by its family's rules.
+ */
+private fun MutableGameState.advanceWindowSites(delta: Float) {
     val active = activeWindowSite()
     if (active == null) {
         if (sites.anyExpired(elapsed)) sites = sites.filter { elapsed < it.expiresAt }

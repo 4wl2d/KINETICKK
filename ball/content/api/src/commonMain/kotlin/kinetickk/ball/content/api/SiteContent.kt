@@ -132,6 +132,10 @@ internal val WindowFamilies: Set<SiteFamily> =
 internal val UntimedFamilies: Set<SiteFamily> =
     setOf(SiteFamily.BOUNTY, SiteFamily.CACHE, SiteFamily.SECRET, SiteFamily.PORTAL, SiteFamily.SIGNAL)
 
+/** Kinds an ambient rule may place by hash (sigils are placed where their condition is met, never by a cell). */
+internal val AmbientSiteKinds: Set<SiteKind> =
+    setOf(SiteKind.DRIFT_CACHE, SiteKind.LOST_CURSOR, SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL)
+
 /** The six-window schedule; all clocks use active simulation seconds. */
 data class SiteWindowPolicy(
     val firstOfferAt: Float = 45f,
@@ -272,7 +276,7 @@ data class BountyPolicy(
 }
 
 data class AmbientSiteRule(
-    /** A cache or secret kind. */
+    /** A drift cache or a hash-placed secret (Lost Cursor, Golden Drifter, Quiet Signal). */
     val kind: SiteKind,
     val enabled: Boolean = true,
     val cellSize: Float,
@@ -286,7 +290,7 @@ data class AmbientSiteRule(
     val triggerRadius: Float = 0f,
 ) {
     init {
-        require(kind.family == SiteFamily.CACHE || kind.family == SiteFamily.SECRET) { "Ambient sites are caches or secrets" }
+        require(kind in AmbientSiteKinds) { "Ambient sites are drift caches or the hash-placed secrets" }
         require(minDistance >= 6_000f && fullDistance > minDistance) { "Ambient sites start at least 6000 u from the origin" }
         require(maxChance in 0f..0.5f) { "Ambient site chance must be in 0..0.5" }
         require(cellSize in 2_400f..12_000f) { "Ambient site cells must be in 2400..12000" }

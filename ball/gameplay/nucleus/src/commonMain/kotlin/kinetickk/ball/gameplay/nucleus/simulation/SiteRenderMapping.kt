@@ -19,6 +19,7 @@ import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableListOfSize
 import kinetickk.foundation.collections.mapToImmutableList
+import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.ceil
 import kotlin.math.min
 
@@ -61,6 +62,75 @@ internal fun MutableGameState.siteProjections(
     return immutableListOfSize(count) { index ->
         siteProjection(projectedSite(index), reusable?.getOrNull(index)?.course)
     }
+}
+
+/**
+ * The settled ambient sites (only those are near enough to see or touch), each with its kind's activation radius and
+ * its rule's reveal distance. The window changes only on a refresh, a settle or an opening: the same window, or
+ * projections that already match it, keep the previous immutable list.
+ */
+internal fun MutableGameState.ambientSiteProjections(
+    reusable: ImmutableList<SiteProjection>?,
+    identitySource: MutableGameState?,
+): ImmutableList<SiteProjection> {
+    val window = ambientSites
+    if (reusable != null && window === identitySource?.ambientSites) return reusable
+    val sites = window.sites
+    var count = 0
+    for (index in sites.indices) if (sites[index].settled) count++
+    if (count == 0) return reusable?.takeIf { it.isEmpty() } ?: immutableListOf()
+    if (reusable != null && reusable.size == count) {
+        var projected = 0
+        var same = true
+        for (index in sites.indices) {
+            val site = sites[index]
+            if (!site.settled) continue
+            if (!ambientProjectionMatches(reusable[projected++], site)) {
+                same = false
+                break
+            }
+        }
+        if (same) return reusable
+    }
+    val settled = ArrayList<SiteProjection>(count)
+    for (index in sites.indices) if (sites[index].settled) settled += ambientSiteProjection(sites[index])
+    return settled.toImmutableList()
+}
+
+private fun MutableGameState.ambientSiteProjection(site: SiteState): SiteProjection {
+    val definition = content.sites.definition(site.kind)
+    return SiteProjection(
+        kind = site.kind,
+        name = definition.name,
+        x = site.x,
+        y = site.y,
+        active = false,
+        remaining = 0f,
+        step = -1,
+        progress = 0f,
+        foeIds = site.foeIds,
+        warningRemaining = 0f,
+        volleyAngle = 0f,
+        activationRadius = definition.activationRadius,
+        reveal = ambientReveal(site.kind),
+    )
+}
+
+private fun MutableGameState.ambientProjectionMatches(projection: SiteProjection, site: SiteState): Boolean {
+    val definition = content.sites.definition(site.kind)
+    return projection.kind == site.kind &&
+        projection.name == definition.name &&
+        projection.x.sameBitsAs(site.x) &&
+        projection.y.sameBitsAs(site.y) &&
+        projection.activationRadius.sameBitsAs(definition.activationRadius) &&
+        projection.reveal.sameBitsAs(ambientReveal(site.kind))
+}
+
+/** An ambient kind's off-screen reveal distance from its rule (0, never shown off-screen, without one). */
+private fun MutableGameState.ambientReveal(kind: SiteKind): Float {
+    val rules = content.sites.ambient.rules
+    for (index in rules.indices) if (rules[index].kind == kind) return rules[index].revealDistance
+    return 0f
 }
 
 /**

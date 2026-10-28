@@ -26,4 +26,6 @@ enum class SiteNotice(val english: String) {
     CHALLENGE_COMPLETE("CHALLENGE COMPLETE"),
     /** A challenge's rule was broken, its time ran out or the Core left it: nothing is granted. */
     CHALLENGE_FAILED("CHALLENGE FAILED"),
+    /** The Core flew through a drift cache: its contents are granted. */
+    CACHE_OPENED("CACHE OPENED"),
 }
