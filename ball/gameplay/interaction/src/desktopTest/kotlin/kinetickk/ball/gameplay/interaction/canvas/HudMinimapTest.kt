@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.content.api.ventErupting
 import kinetickk.ball.gameplay.interaction.fx.BuildNoticeKind
 import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
@@ -155,6 +156,47 @@ class HudMinimapTest {
         assertEquals(empty.at(dotX, dotY - field * 0.6f), pixels.at(dotX, dotY - field * 0.6f), "open between the dot and the ring")
     }
 
+    @Test
+    fun acceleratorGatesAreVoltLinesAndThermalVentsHeatRingsThatFillWhileErupting() {
+        val roles = KkRolePalette.Default
+        val base = hudTestModel().with("velocityX" to 0f, "velocityY" to 0f)
+        val range = base.minimapRange * 0.25f
+        val kinds = base.content.obstacles.kinds
+        // A gate facing east (its posts north and south) half the range east of the Core, a vent half the range west.
+        val gate = ObstacleProjection(1L, ObstacleKind.ACCEL_GATE, base.coreX + range * 0.5f, base.coreY, 100f, 0)
+        val seed = 23
+        val vent = ObstacleProjection(2L, ObstacleKind.THERMAL_VENT, base.coreX - range * 0.5f, base.coreY, 100f, seed)
+        val quietTime = (0 until 960).map { 0.5f + it / 120f }.first { !kinds.ventErupting(it, seed) }
+        val eruptingTime = (0 until 960).map { 0.5f + it / 120f }.first { kinds.ventErupting(it, seed) }
+        fun frame(time: Float, vararg obstacles: ObstacleProjection) =
+            render(base.with("minimapRange" to range, "elapsed" to time, "obstacles" to immutableListOf(*obstacles)), 1_440, 810)
+        val empty = frame(quietTime)
+        val quiet = frame(quietTime, gate, vent)
+        val erupting = frame(eruptingTime, gate, vent)
+        val minimap = assertNotNull(HudLayoutProbe.rect(HudBlock.MINIMAP))
+        val half = minimap.width * 0.5f
+        val scale = half / range
+        val gateX = minimap.center.x + half * 0.5f
+        val ventX = minimap.center.x - half * 0.5f
+        val y = minimap.center.y
+        val postReach = (100f - kinds.gatePostRadius) * scale
+        assertTrue(postReach > 6f, "the gate's line is several pixels long: $postReach")
+        // The line runs north and south through the gate, in volt; nothing east or west of it.
+        for (offset in listOf(-0.6f, 0.6f)) {
+            // Volt, not bone (bone also projects onto volt, but volt holds little blue).
+            assertTrue((-1..1).any { dx ->
+                val color = quiet.at(gateX + dx, y + postReach * offset)
+                share(color, roles.you) > 0.3f && color.green - color.blue > 0.15f
+            }, "a volt line from post to post at $offset")
+        }
+        assertEquals(empty.at(gateX + postReach * 0.6f, y), quiet.at(gateX + postReach * 0.6f, y), "nothing beside the gate's line")
+        // The vent is a heat ring; its middle stays open while quiet and fills while it erupts.
+        val ring = 100f * scale
+        assertTrue((-1..1).any { dy -> share(quiet.at(ventX, y - ring + dy), roles.heat) > 0.3f }, "a heat ring")
+        assertEquals(empty.at(ventX, y), quiet.at(ventX, y), "open while quiet")
+        assertTrue(share(erupting.at(ventX, y), roles.heat) > 0.35f, "filled in heat while erupting")
+    }
+
     private fun drawHud(model: GameplayRenderModel, width: Float, height: Float, density: Float, textScale: Float) {
         val measurer = measurer(density, textScale)
         CanvasDrawScope().draw(Density(density), LayoutDirection.Ltr, Canvas(ImageBitmap(64, 64)), Size(width, height)) {
@@ -176,14 +218,17 @@ class HudMinimapTest {
     private fun androidx.compose.ui.graphics.PixelMap.at(x: Float, y: Float) = this[x.toInt(), y.toInt()]
 
     /** Whether [actual] lies more than half way from the ink background toward [expected]. */
-    private fun tinted(actual: androidx.compose.ui.graphics.Color, expected: androidx.compose.ui.graphics.Color): Boolean {
+    private fun tinted(actual: androidx.compose.ui.graphics.Color, expected: androidx.compose.ui.graphics.Color): Boolean =
+        share(actual, expected) > 0.5f
+
+    /** How far [actual] lies from the ink background toward [expected] (0 = background, 1 = the colour). */
+    private fun share(actual: androidx.compose.ui.graphics.Color, expected: androidx.compose.ui.graphics.Color): Float {
         val base = Kk.Ink
         val ex = expected.red - base.red
         val ey = expected.green - base.green
         val ez = expected.blue - base.blue
-        val along = ((actual.red - base.red) * ex + (actual.green - base.green) * ey + (actual.blue - base.blue) * ez) /
+        return ((actual.red - base.red) * ex + (actual.green - base.green) * ey + (actual.blue - base.blue) * ez) /
             (ex * ex + ey * ey + ez * ez)
-        return along > 0.5f
     }
 
     private fun measurer(density: Float, textScale: Float) = CanvasTextMeasurer(

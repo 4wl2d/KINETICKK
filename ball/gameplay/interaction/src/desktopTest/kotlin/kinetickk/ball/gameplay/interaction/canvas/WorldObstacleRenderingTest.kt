@@ -15,6 +15,10 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import kinetickk.ball.content.api.ObstacleKindTuning
+import kinetickk.ball.content.api.ventErupting
+import kinetickk.ball.content.api.ventEruptionEnd
+import kinetickk.ball.content.api.ventSecondsToEruption
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
@@ -31,7 +35,8 @@ import kotlin.test.assertTrue
 
 /**
  * Obstacles draw in the world layer: asteroids as ink rocks with bone rims, bumpers as polarity rings, unstable rocks hot,
- * gravity knots as Gravitic fields around an ink knot.
+ * gravity knots as Gravitic fields around an ink knot, accelerator gates as two posts with volt bars between them and
+ * thermal vents as dark heat discs whose plume flares while they erupt.
  */
 class WorldObstacleRenderingTest {
     @Test
@@ -152,6 +157,143 @@ class WorldObstacleRenderingTest {
         }
     }
 
+    /**
+     * An accelerator gate: two ink posts with a bone rim around a volt point, a faint line between them and volt bars
+     * across it, all inside its body circle; the look is the same mirrored across the gate's line and through its centre,
+     * so nothing in it points one way (a gate works both ways). At density 1 and 2, for a gate facing east and one facing
+     * south.
+     */
+    @Test
+    fun acceleratorGatesDrawSymmetricVoltBarsBetweenTwoPostsInsideTheirBody() {
+        val you = KkRolePalette.Default.you
+        // Volt, not bone: bone also lies more than half way toward volt from the ink, but volt holds little blue.
+        fun volt(color: Color) = towards(color, you) && color.green - color.blue > 0.3f
+        for (density in listOf(1f, 2f)) {
+            val base = hudTestModel(960f, 600f).with("viewportDensity" to density, "uiScale" to density)
+            val kinds = base.content.obstacles.kinds
+            val radius = 100f
+            val halfSpan = radius - kinds.gatePostRadius
+            val centerX = (480f - 180f) * density
+            val centerY = 300f * density
+            // Seed 0 faces east (posts north and south of the centre), seed 16 384 faces south (posts west and east).
+            for ((seed, postsAlongY) in listOf(0 to true, 16_384 to false)) {
+                val gate = ObstacleProjection(9L, ObstacleKind.ACCEL_GATE, base.cameraX - 180f, base.cameraY, radius, seed)
+                // At the top of the bars' pulse (its phase is offset by the seed's remainder of 5).
+                val twoPi = 2f * kotlin.math.PI.toFloat()
+                val peak = ((kotlin.math.PI.toFloat() / 2f - seed % 5) % twoPi + twoPi) % twoPi / 2.4f
+                val timed = base.with("elapsed" to peak)
+                val empty = renderWorld(timed.with("obstacles" to immutableListOf<ObstacleProjection>()), density)
+                val drawn = renderWorld(timed.with("obstacles" to immutableListOf(gate)), density)
+                val label = "gate seed $seed @$density"
+                var farthest = 0f
+                for (y in 0 until empty.height) {
+                    for (x in 0 until empty.width) {
+                        if (empty[x, y] != drawn[x, y]) farthest = maxOf(farthest, kotlin.math.hypot(x + 0.5f - centerX, y + 0.5f - centerY))
+                    }
+                }
+                assertTrue(farthest <= (radius + 2f) * density, "$label reaches $farthest past its body")
+                fun post(sign: Float, offset: Float = 0f): Pair<Float, Float> =
+                    if (postsAlongY) centerX + offset * density to centerY + sign * halfSpan * density
+                    else centerX + sign * halfSpan * density to centerY + offset * density
+                for (sign in listOf(-1f, 1f)) {
+                    val (px, py) = post(sign)
+                    assertTrue(volt(drawn.at(px, py)), "$label post point in volt")
+                    val (ix, iy) = post(sign, 7f)
+                    assertTrue(near(drawn.at(ix, iy), Kk.Ink2), "$label post body in ink")
+                }
+                // A bar 0.6 of the half-span out from the centre, across the line.
+                val (barX, barY) = if (postsAlongY) centerX to centerY + 0.6f * halfSpan * density else centerX + 0.6f * halfSpan * density to centerY
+                assertTrue(volt(drawn.at(barX, barY)), "$label bar in volt")
+                // Between two bars and off the line: nothing.
+                val (openX, openY) = if (postsAlongY) centerX + 10f * density to centerY + 0.4f * halfSpan * density
+                else centerX + 0.4f * halfSpan * density to centerY + 10f * density
+                assertEquals(empty.at(openX, openY), drawn.at(openX, openY), "$label open between the bars")
+                // Mirrored across the gate's line and through its centre, every mark the gate makes has its counterpart.
+                val span = ((radius + 2f) * density).toInt()
+                val cx = centerX.toInt()
+                val cy = centerY.toInt()
+                for (dy in -span until span) {
+                    for (dx in -span until span) {
+                        if (change(empty[cx + dx, cy + dy], drawn[cx + dx, cy + dy]) < 0.25f) continue
+                        val (ax, ay) = if (postsAlongY) cx - 1 - dx to cy + dy else cx + dx to cy - 1 - dy
+                        assertTrue(markedNear(empty, drawn, ax, ay), "$label is mirrored across its line at ($dx, $dy)")
+                        assertTrue(markedNear(empty, drawn, cx - 1 - dx, cy - 1 - dy), "$label is mirrored through its centre at ($dx, $dy)")
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * A thermal vent: a dark ink disc with a heat rim that stays within its body while quiet, swells a heat glow at its
+     * centre before it erupts, and while it erupts flares a heat plume out to its plume's edge (beyond its body, which
+     * stays a dark disc).
+     */
+    @Test
+    fun thermalVentsGlowBeforeTheyEruptAndFlareTheirPlumeBeyondTheirBodyWhileErupting() {
+        val heat = KkRolePalette.Default.heat
+        for (density in listOf(1f, 2f)) {
+            val base = hudTestModel(960f, 600f).with("viewportDensity" to density, "uiScale" to density)
+            val kinds = base.content.obstacles.kinds
+            val radius = 80f
+            val seed = 23
+            val plume = radius + kinds.ventPlumeMargin
+            val centerX = (480f - 180f) * density
+            val centerY = 300f * density
+            val vent = ObstacleProjection(11L, ObstacleKind.THERMAL_VENT, base.cameraX - 180f, base.cameraY, radius, seed)
+            fun frames(time: Float): Pair<PixelMap, PixelMap> {
+                val timed = base.with("elapsed" to time)
+                return renderWorld(timed.with("obstacles" to immutableListOf<ObstacleProjection>()), density) to
+                    renderWorld(timed.with("obstacles" to immutableListOf(vent)), density)
+            }
+            fun farthest(empty: PixelMap, drawn: PixelMap): Float {
+                var farthest = 0f
+                for (y in 0 until empty.height) {
+                    for (x in 0 until empty.width) {
+                        if (empty[x, y] != drawn[x, y]) farthest = maxOf(farthest, kotlin.math.hypot(x + 0.5f - centerX, y + 0.5f - centerY))
+                    }
+                }
+                return farthest
+            }
+            val label = "vent @$density"
+            val (quietEmpty, quiet) = frames(ventTime(kinds, seed) { kinds.ventSecondsToEruption(it, seed) > kinds.ventTelegraphSeconds + 0.3f })
+            assertTrue(farthest(quietEmpty, quiet) <= (radius + 2f) * density, "$label stays within its body while quiet")
+            assertTrue(near(quiet.at(centerX - radius * 0.9f * density, centerY), Kk.Ink1, 0.006f), "$label ground disc in ink 1")
+            assertTrue(leans(quiet.at(centerX - radius * density, centerY), heat, 0.3f), "$label heat rim")
+            val (_, telegraph) = frames(ventTime(kinds, seed) { kinds.ventSecondsToEruption(it, seed) in 0.05f..0.2f })
+            assertTrue(telegraph.at(centerX, centerY).red > quiet.at(centerX, centerY).red + 0.05f, "$label glows before it erupts")
+            // Early, midway and late in an eruption: the plume and its rising rings stay within the plume's edge.
+            for (left in listOf(0.8f, 0.5f, 0.1f)) {
+                val (eruptingEmpty, erupting) = frames(ventTime(kinds, seed) {
+                    kinds.ventErupting(it, seed) && kinds.ventEruptionEnd(it, seed) - it in (left - 0.05f)..(left + 0.05f)
+                })
+                val reach = farthest(eruptingEmpty, erupting)
+                assertTrue(reach <= (plume + 2f) * density, "$label erupting ($left s left) reaches $reach past its plume")
+                assertTrue(reach >= (plume - 2f) * density, "$label erupting ($left s left) draws out to its plume's edge: $reach")
+            }
+            val (_, erupting) = frames(ventTime(kinds, seed) { kinds.ventErupting(it, seed) && kinds.ventErupting(it - 0.2f, seed) })
+            assertTrue(leans(erupting.at(centerX, centerY - (radius + 0.5f * kinds.ventPlumeMargin) * density), heat, 0.12f),
+                "$label plume beyond its body")
+            assertTrue(near(erupting.at(centerX - radius * 0.9f * density, centerY), Kk.Ink1, 0.006f), "$label body stays a dark disc")
+            // A vent just off the left edge, its body out of view: its erupting plume still reaches into the view.
+            val offscreen = vent.copy(x = base.cameraX - 480f - radius - 30f)
+            val eruptingTime = ventTime(kinds, seed) { kinds.ventErupting(it, seed) && kinds.ventErupting(it - 0.2f, seed) }
+            val edgeEmpty = renderWorld(base.with("elapsed" to eruptingTime, "obstacles" to immutableListOf<ObstacleProjection>()), density)
+            val edge = renderWorld(base.with("elapsed" to eruptingTime, "obstacles" to immutableListOf(offscreen)), density)
+            assertTrue(leans(edge.at(2f * density, centerY), heat, 0.12f) && edge.at(2f * density, centerY) != edgeEmpty.at(2f * density, centerY),
+                "$label plume reaches in from off screen")
+        }
+    }
+
+    /** The first run time in 0..8 s, on a 1/120 s grid, that [accept] takes. */
+    private fun ventTime(kinds: ObstacleKindTuning, seed: Int, accept: (Float) -> Boolean): Float {
+        for (step in 0 until 960) {
+            val time = 0.5f + step / 120f
+            if (accept(time)) return time
+        }
+        error("no vent time for seed $seed in ${kinds.ventPeriodSeconds} s")
+    }
+
     /** Midpoints (dp from the knot's centre) of the runs of pixels the knot changed along the ray west of it. */
     private fun ringsWest(empty: PixelMap, drawn: PixelMap, centerX: Float, centerY: Float, density: Float, from: Float, to: Float): List<Float> {
         val rings = mutableListOf<Float>()
@@ -186,9 +328,31 @@ class WorldObstacleRenderingTest {
 
     private fun PixelMap.at(x: Float, y: Float): Color = this[x.toInt(), y.toInt()]
 
-    private fun near(actual: Color, expected: Color): Boolean =
-        kotlin.math.abs(actual.red - expected.red) < 0.03f && kotlin.math.abs(actual.green - expected.green) < 0.03f &&
-            kotlin.math.abs(actual.blue - expected.blue) < 0.03f
+    private fun near(actual: Color, expected: Color, tolerance: Float = 0.03f): Boolean =
+        kotlin.math.abs(actual.red - expected.red) < tolerance && kotlin.math.abs(actual.green - expected.green) < tolerance &&
+            kotlin.math.abs(actual.blue - expected.blue) < tolerance
+
+    /** The largest channel change from [before] to [after]. */
+    private fun change(before: Color, after: Color): Float = maxOf(
+        kotlin.math.abs(after.red - before.red), kotlin.math.abs(after.green - before.green), kotlin.math.abs(after.blue - before.blue),
+    )
+
+    /**
+     * Whether the look changed a pixel within one of ([x], [y]): antialiasing rasterises mirrored edges a little
+     * differently, so a mirrored mark is looked for in the pixel's neighbourhood.
+     */
+    private fun markedNear(empty: PixelMap, drawn: PixelMap, x: Int, y: Int): Boolean =
+        (-1..1).any { dy -> (-1..1).any { dx -> change(empty[x + dx, y + dy], drawn[x + dx, y + dy]) >= 0.1f } }
+
+    /** At least [share] of the way from the ink background toward [expected]. */
+    private fun leans(actual: Color, expected: Color, share: Float): Boolean {
+        val base = Kk.Ink
+        val ex = expected.red - base.red
+        val ey = expected.green - base.green
+        val ez = expected.blue - base.blue
+        return ((actual.red - base.red) * ex + (actual.green - base.green) * ey + (actual.blue - base.blue) * ez) /
+            (ex * ex + ey * ey + ez * ez) >= share
+    }
 
     /** More than half way from the ink background toward [expected]. */
     private fun towards(actual: Color, expected: Color): Boolean {

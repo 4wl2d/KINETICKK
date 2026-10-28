@@ -78,6 +78,10 @@ class HudHotPathAllocationTest {
                     ObstacleProjection(4L, ObstacleKind.ASTEROID, 9_000f, 0f, 120f, 5),
                     ObstacleProjection(5L, ObstacleKind.GRAVITY_WELL, -300f, -400f, 34f, 6),
                     ObstacleProjection(6L, ObstacleKind.GRAVITY_WELL, 700f, -200f, 34f, 9, repels = true),
+                    // A gate and two vents whose eruptions come and go over the measured frames.
+                    ObstacleProjection(7L, ObstacleKind.ACCEL_GATE, -600f, -100f, 100f, 9_000),
+                    ObstacleProjection(8L, ObstacleKind.THERMAL_VENT, 400f, 600f, 90f, 4),
+                    ObstacleProjection(9L, ObstacleKind.THERMAL_VENT, -200f, 900f, 70f, 12),
                 ),
                 "pickups" to immutableListOf(
                     PickupProjection(PickupType.KEY, 300f, 300f, 0f, 0f, 20f, 300f, 300f),

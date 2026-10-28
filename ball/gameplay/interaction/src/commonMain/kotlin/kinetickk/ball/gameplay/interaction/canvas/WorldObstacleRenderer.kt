@@ -41,9 +41,10 @@ internal fun DrawScope.drawObstacles(engine: GameplayRenderModel, shakeX: Float,
             ObstacleKind.BUMPER -> drawBumper(center, obstacle.radius, time, roles)
             ObstacleKind.ASTEROID, ObstacleKind.UNSTABLE -> drawAsteroid(obstacle, center, time, roles)
             ObstacleKind.GRAVITY_WELL -> drawGravityWell(obstacle, center, time, kinds, roles)
+            ObstacleKind.ACCEL_GATE -> drawAccelGate(obstacle, center, time, kinds, roles)
+            ObstacleKind.THERMAL_VENT -> drawThermalVent(obstacle, center, time, kinds, roles)
             // The 0.6.0 kinds read as asteroids until their own looks land; no run generates them yet.
-            ObstacleKind.ACCEL_GATE, ObstacleKind.CRYSTAL, ObstacleKind.DERELICT_MINE,
-            ObstacleKind.PHASE_SHARD, ObstacleKind.THERMAL_VENT,
+            ObstacleKind.CRYSTAL, ObstacleKind.DERELICT_MINE, ObstacleKind.PHASE_SHARD,
             -> drawAsteroid(obstacle, center, time, roles)
         }
     }
@@ -85,9 +86,10 @@ private fun DrawScope.drawBumper(center: Offset, radius: Float, time: Float, rol
  * draw-thread confined.
  */
 internal object ObstaclePaths {
-    private const val CAPACITY = 96
+    private const val CAPACITY = 128
     private const val OUTLINE = 0
     private const val CRACKS = 1
+    private const val GATE_BARS = 8
     private val seeds = IntArray(CAPACITY)
     private val radii = FloatArray(CAPACITY) { -1f }
     private val kinds = IntArray(CAPACITY) { -1 }
@@ -100,6 +102,9 @@ internal object ObstaclePaths {
     /** Three cracks from the centre of an unstable asteroid toward its rim. */
     fun cracks(seed: Int, radius: Float): Path = get(CRACKS, seed, radius)
 
+    /** The four bars across an accelerator gate with shape [seed] and [halfSpan] (keyed by the half-span). */
+    fun gateBars(seed: Int, halfSpan: Float): Path = get(GATE_BARS, seed, halfSpan)
+
     /** Corner count of an outline: 8..12 from the seed. */
     fun corners(seed: Int): Int = 8 + ((seed % 5) + 5) % 5
 
@@ -108,7 +113,11 @@ internal object ObstaclePaths {
             if (kinds[index] == kind && seeds[index] == seed && radii[index] == radius) return paths[index]!!
         }
         val path = paths[next]?.also { it.rewind() } ?: Path()
-        if (kind == OUTLINE) buildOutline(path, seed, radius) else buildCracks(path, seed, radius)
+        when (kind) {
+            OUTLINE -> buildOutline(path, seed, radius)
+            CRACKS -> buildCracks(path, seed, radius)
+            else -> buildGateBars(path, seed, radius)
+        }
         kinds[next] = kind
         seeds[next] = seed
         radii[next] = radius

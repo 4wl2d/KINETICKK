@@ -261,6 +261,29 @@ class CosmicPresentationTest {
             val offset = ((shardTumble(heading, index, 1f) - facing) % 180f + 180f) % 180f
             assertTrue(offset > 20f && offset < 160f, "shard $index is not aligned with its travel ($offset)")
         }
+        // Accelerator gates work both ways, so their bars point nowhere: straight blunt ticks parallel to the gate normal
+        // between the posts, the same set mirrored through the gate's centre and across its line (no chevron, no arrow).
+        for (angle in listOf(0f, 0.7f, 2.3f, 4.4f)) {
+            val halfSpan = 88f
+            val normalX = cos(angle)
+            val normalY = sin(angle)
+            val bars = mutableListOf<FloatArray>()
+            forEachGateBar(angle, halfSpan) { x0, y0, x1, y1 -> bars += floatArrayOf(x0, y0, x1, y1) }
+            assertEquals(4, bars.size)
+            fun hasBar(x0: Float, y0: Float, x1: Float, y1: Float) = bars.any { (ax, ay, bx, by) ->
+                val same = kotlin.math.abs(ax - x0) + kotlin.math.abs(ay - y0) + kotlin.math.abs(bx - x1) + kotlin.math.abs(by - y1)
+                val swapped = kotlin.math.abs(ax - x1) + kotlin.math.abs(ay - y1) + kotlin.math.abs(bx - x0) + kotlin.math.abs(by - y0)
+                minOf(same, swapped) < 1e-3f
+            }
+            fun acrossX(x: Float, y: Float) = x - 2f * (x * normalX + y * normalY) * normalX
+            fun acrossY(x: Float, y: Float) = y - 2f * (x * normalX + y * normalY) * normalY
+            bars.forEach { (x0, y0, x1, y1) ->
+                assertEquals(0f, (x1 - x0) * normalY - (y1 - y0) * normalX, 1e-3f, "a bar runs along the normal at $angle")
+                assertTrue(kotlin.math.abs(-x0 * normalY + y0 * normalX) < halfSpan, "a bar lies between the posts at $angle")
+                assertTrue(hasBar(-x0, -y0, -x1, -y1), "mirrored through the centre at $angle")
+                assertTrue(hasBar(acrossX(x0, y0), acrossY(x0, y0), acrossX(x1, y1), acrossY(x1, y1)), "mirrored across the line at $angle")
+            }
+        }
         assertEquals(340L, roundedDistance(344f))
         assertEquals(350L, roundedDistance(345f))
         assertEquals(9_990L, roundedDistance(1e9f))
