@@ -497,9 +497,9 @@ private fun MutableGameState.resolveCoreObstacleCollisions(): Boolean {
 
 /**
  * Last guard after the bounces: the Core never rests inside a solid obstacle. It is pushed out of every steady solid
- * obstacle it overlaps (a phase shard that materialised around it lets it drift out instead). Inward speed below the damage-start impact speed is removed silently; the first contact at that speed or
- * faster keeps it and, once the walk is done (the field does not change during it), responds like a swept contact:
- * it bounces, hurts, kills or ricochets.
+ * obstacle it overlaps (a phase shard that materialised around it lets it drift out instead). Inward speed below the
+ * damage-start impact speed is removed silently; the first contact at that speed or faster keeps it and, once the walk
+ * is done (the field does not change during it), responds like a swept contact: it bounces, hurts, kills or ricochets.
  */
 internal fun MutableGameState.pushCoreOutOfObstacles() {
     var hitIndex = -1
