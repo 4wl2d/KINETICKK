@@ -315,13 +315,13 @@ internal class NoPoiBot(
         val desiredAngle = aim.heading
         val difference = atan2(sin(desiredAngle - cursorAngle), cos(desiredAngle - cursorAngle))
         val goalAngle = cursorAngle + difference.coerceIn(-0.30f, 0.30f)
-        val force = length(ax, ay).coerceIn(395f, 1700f)
+        val neededTether = aim.distance.coerceIn(65f, 400f)
         var bestAngle = goalAngle
         var bestScore = Float.POSITIVE_INFINITY
         val nearbyShots = s.projectiles.filter { it.hostile && distanceSquared(it.x, it.y, s.coreX, s.coreY) < 450f * 450f }
         for (offset in listOf(0f, -0.3f, 0.3f, -0.6f, 0.6f, -1f, 1f)) {
             val option = goalAngle + offset
-            val score = steeringScore(s, option, force, desiredX, desiredY, nearbyShots)
+            val score = steeringScore(s, option, neededTether, desiredX, desiredY, nearbyShots)
             if (score < bestScore) { bestScore = score; bestAngle = option }
         }
         val selectedDifference = atan2(sin(bestAngle - cursorAngle), cos(bestAngle - cursorAngle))
@@ -335,7 +335,6 @@ internal class NoPoiBot(
         val normalHalfHeight = s.screenHeight * 0.5f * s.content.tempo.fatigue.edgeStrainStart - 10f
         val availableX = if (ux > 0f) (normalHalfWidth - offsetX) / ux else if (ux < 0f) (-normalHalfWidth - offsetX) / ux else 10_000f
         val availableY = if (uy > 0f) (normalHalfHeight - offsetY) / uy else if (uy < 0f) (-normalHalfHeight - offsetY) / uy else 10_000f
-        val neededTether = aim.distance.coerceIn(65f, 400f)
         val tether = min(neededTether, min(availableX, availableY)).coerceAtLeast(65f)
         s.updatePointer(s.screenWidth * 0.5f + offsetX + ux * tether, s.screenHeight * 0.5f + offsetY + uy * tether)
         if (s.speed > 900f) braking = true
@@ -480,21 +479,26 @@ internal class NoPoiBot(
         return false
     }
 
-    private fun steeringScore(s: MutableGameState, angle: Float, force: Float, desiredX: Float, desiredY: Float, shots: List<Projectile>): Float {
+    /**
+     * Predicts 0.3 s of flight with the singularity held [tether] dp from the Core along [angle] through the production
+     * law (the camera lag frozen at its current value) and scores how close it ends to the desired velocity and how
+     * near it passes the [shots].
+     */
+    private fun steeringScore(s: MutableGameState, angle: Float, tether: Float, desiredX: Float, desiredY: Float, shots: List<Projectile>): Float {
         var x = s.coreX
         var y = s.coreY
         var vx = s.velocityX
         var vy = s.velocityY
         var penalty = 0f
-        val ux = cos(angle)
-        val uy = sin(angle)
+        val tetherX = cos(angle) * tether
+        val tetherY = sin(angle) * tether
+        val offsetX = s.coreX - s.cameraX + tetherX
+        val offsetY = s.coreY - s.cameraY + tetherY
+        val retained = exp(-s.steeringDrag() * 0.05f)
         repeat(6) { sample ->
-            val speed = max(1f, length(vx, vy))
-            val forward = max(0f, (ux * vx + uy * vy) / speed * force) * (1f - s.tetherAuthority)
-            vx += (ux * force - vx / speed * forward) * 0.05f
-            vy += (uy * force - vy / speed * forward) * 0.05f
-            vx *= exp(-s.dragCoefficient * 0.05f)
-            vy *= exp(-s.dragCoefficient * 0.05f)
+            val acceleration = s.steeringAcceleration(tetherX, tetherY, offsetX, offsetY, vx, vy)
+            vx = (vx + acceleration.x * 0.05f) * retained
+            vy = (vy + acceleration.y * 0.05f) * retained
             x += vx * 0.05f
             y += vy * 0.05f
             val time = (sample + 1) * 0.05f
