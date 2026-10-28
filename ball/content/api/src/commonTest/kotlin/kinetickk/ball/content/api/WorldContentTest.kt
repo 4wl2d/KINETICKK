@@ -45,6 +45,50 @@ class WorldContentTest {
     }
 
     @Test
+    fun shippedObstacleKindsMatchTheSpecifiedMixesAndMechanics() {
+        val tuning = ObstacleTuning()
+        val specified = ObstacleKindTuning(
+            space = ObstacleMix(gravityWell = 0.09f, accelGate = 0.09f, crystal = 0.11f, derelictMine = 0.05f, phaseShard = 0.06f, thermalVent = 0.05f),
+            zenith = ObstacleMix(gravityWell = 0.06f, accelGate = 0.22f, crystal = 0.22f, phaseShard = 0.10f, repelShare = 0.7f, densityScale = 0.9f, bumperScale = 1.3f),
+            nadir = ObstacleMix(
+                gravityWell = 0.10f, accelGate = 0.04f, crystal = 0.04f, derelictMine = 0.14f, phaseShard = 0.04f, thermalVent = 0.24f,
+                repelShare = 0.25f, densityScale = 1.15f, bumperScale = 0.6f,
+            ),
+            archive = ObstacleMix(gravityWell = 0.10f, accelGate = 0.08f, crystal = 0.08f, derelictMine = 0.06f, phaseShard = 0.24f, thermalVent = 0.04f, bumperScale = 0.8f),
+            wellMinimumCandidate = 70f, gateMinimumCandidate = 70f, crystalMaximumCandidate = 110f, ventMinimumCandidate = 60f,
+            wellCoreRadius = 34f, wellInfluence = 260f, wellCorePull = 900f, wellEnemyPull = 1_200f,
+            slingTurnRadians = 1.5708f, slingMinimumSpeed = 600f, slingImpulse = 220f,
+            gateMaximumRadius = 130f, gatePostRadius = 12f, gateImpulse = 380f, gateAlignment = 0.5f, gateCooldownSeconds = 0.8f,
+            boostLethalShare = 0.9f,
+            crystalSpeedRetention = 0.88f, crystalShards = 6, crystalShardDamage = 14f, crystalData = 2,
+            mineClusterMaximumRadius = 64f, mineArmMargin = 110f, mineFuseSeconds = 0.6f, mineQuickFuseSeconds = 0.1f,
+            mineBlastRadius = 160f, mineBlastShare = 0.10f, mineBlastEnemyDamage = 60f, maximumMineDetonationsPerStep = 4,
+            phasePeriodSeconds = 3.2f, phaseSolidShare = 0.6f, phaseTelegraphSeconds = 0.45f,
+            ventPeriodSeconds = 4f, ventEruptSeconds = 1f, ventTelegraphSeconds = 0.6f, ventMaximumRadius = 110f,
+            ventPlumeMargin = 40f, ventHeat = 30f, ventImpulse = 160f, ventStatusInterval = 0.25f,
+            grazeDistance = 40f, grazeMinimumSpeed = 900f, grazeCooldownSeconds = 0.5f,
+            maximumInfluence = 320f,
+        )
+        assertEquals(specified, tuning.kinds)
+        // Cross-checks with the field: every kind a layer names can take some asteroid candidate, and every body it can
+        // take stays in [bumper, largest asteroid], so the gaps, the safe radius and the 128 window bound all still hold.
+        val kinds = tuning.kinds
+        val radii = (0..104).map { tuning.asteroidMinimumRadius + (tuning.asteroidMaximumRadius - tuning.asteroidMinimumRadius) * it / 104f }
+        for ((layer, mix) in listOf("space" to kinds.space, "zenith" to kinds.zenith, "nadir" to kinds.nadir, "archive" to kinds.archive)) {
+            ObstacleKind.entries.filter { mix.share(it) > 0f }.forEach { kind ->
+                val eligible = radii.filter { kinds.eligible(kind, it) }
+                assertTrue(eligible.isNotEmpty(), "$layer: $kind can take an asteroid candidate")
+                eligible.forEach { radius ->
+                    assertTrue(kinds.bodyRadius(kind, radius) in tuning.bumperRadius..radius, "$layer: $kind body at candidate $radius")
+                }
+            }
+            assertTrue(tuning.bumperShare * mix.bumperScale <= 1f, "$layer: bumper share")
+            assertTrue(tuning.meanPerChunk * mix.densityScale <= tuning.maximumPerChunk, "$layer: the mean fits the chunk's slots")
+        }
+        assertTrue(tuning.windowChunks * tuning.windowChunks * tuning.maximumPerChunk <= ContentBounds.MAX_OBSTACLES)
+    }
+
+    @Test
     fun obstacleTuningRejectsAWindowPastTheBoundAndInvertedReaches() {
         // 5 × 5 × 5 = 125 fits; a sixth slot per chunk (150) does not.
         assertEquals(5, ObstacleTuning(maximumPerChunk = 5).maximumPerChunk)

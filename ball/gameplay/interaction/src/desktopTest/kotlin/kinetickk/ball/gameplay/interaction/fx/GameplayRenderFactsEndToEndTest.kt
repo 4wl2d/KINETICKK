@@ -234,6 +234,8 @@ internal fun shortCurveContent(): GameplayContentSnapshot {
             // The Architect (boss-class: the Apex strikes it) arrives while the Apex is in play.
             bossAtSeconds = ARCHITECT_AT_SECONDS,
         ),
+        // Seeded frames sample skill and reaction facts: realspace keeps the asteroid field without the obstacle kind mix.
+        obstacles = shipped.obstacles.copy(kinds = shipped.obstacles.kinds.copy(space = kinetickk.ball.content.api.ObstacleMix())),
     )
 }
 

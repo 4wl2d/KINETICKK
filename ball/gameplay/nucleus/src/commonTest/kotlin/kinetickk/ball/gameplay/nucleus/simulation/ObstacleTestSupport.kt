@@ -58,6 +58,17 @@ internal fun contentWithObstacleMix(mix: ObstacleMix): GameplayContentSnapshot {
     return canonicalGameplayContent.copy(obstacles = obstacles.copy(kinds = obstacles.kinds.copy(space = mix)))
 }
 
+/**
+ * This content (the canonical content by default) with every world layer's mix empty: the 0.5.0 field of asteroids and
+ * bumpers on the same layout, each obstacle at its candidate's radius.
+ */
+internal fun GameplayContentSnapshot.withoutObstacleVariants(): GameplayContentSnapshot {
+    val empty = ObstacleMix()
+    return copy(obstacles = obstacles.copy(kinds = obstacles.kinds.copy(space = empty, zenith = empty, nadir = empty, archive = empty)))
+}
+
+internal fun withoutObstacleVariants(): GameplayContentSnapshot = canonicalGameplayContent.withoutObstacleVariants()
+
 /** A quiet run with no generated obstacles at all (the window is empty but current). */
 internal fun MutableGameState.clearObstaclesForTesting() = placeObstaclesForTesting()
 
