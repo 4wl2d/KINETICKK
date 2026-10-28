@@ -36,7 +36,7 @@ dependencies {
 
 val verifyArchitectureTask = tasks.register<VerifyArchitectureTask>("verifyArchitecture") {
     group = "verification"
-    description = "Verifies the declared Pokeball role graph without resolving classpaths."
+    description = "Verifies the declared module dependency graph without resolving classpaths."
     leafProjectPaths.set(leafProjectPathValues)
     architectureEdgeReportFiles.from(architectureEdgeReports)
     rootSourceFiles.from(rootProject.fileTree("src"))
