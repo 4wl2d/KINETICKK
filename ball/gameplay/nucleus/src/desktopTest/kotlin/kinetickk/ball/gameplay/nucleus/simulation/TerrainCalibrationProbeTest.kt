@@ -16,38 +16,59 @@ import kotlin.test.Test
 
 /**
  * The terrain lane's calibration probe, not a gate: it returns at once unless `KK_TERRAIN_PROBE=first..last` names a
- * calibration window, then plays the seeds `i * 7_919 + 13` for i in it and prints one line per run and a summary
- * per arm. It never plays the gate population (i = 1,001..1,300). `KK_TERRAIN_STEERING=name=value,...` overrides the
- * shipped flight-law knobs and `KK_TERRAIN_OBSTACLES=name=value,...` the obstacle impact knobs for the probed arms.
+ * calibration window (or several, comma-separated, e.g. `601..900,1901..2200`), then plays the seeds `i * 7_919 + 13`
+ * for i in them and prints one line per run and a summary per arm (per window and pooled when there are several). It
+ * never plays the gate population (i = 1,001..1,300). `KK_TERRAIN_STEERING=name=value,...` overrides the shipped
+ * flight-law knobs and `KK_TERRAIN_OBSTACLES=name=value,...` the obstacle impact knobs for the probed arms;
+ * `KK_TERRAIN_DASH=legacy` flies the bot's old Dash rule ([DashRule.LEGACY]) instead of the human one (`human`, the
+ * default).
  *
  * The arms are Gate A's fresh tier-0 run (the default NoPoi bot, the Orb and the starter weapon) and Gate D's strong
  * build at tier 10, both played by [playGateRun] for up to 900 s. Per run: outcome, survival, obstacle contacts (the
- * frame the Core first touches a rock or bumper, sampled every 0.02 s input frame, as in SingularityContactGateTest),
- * hurting obstacle hits (the frames in which a hit restarts the collision cooldown: with one cooldown per surface,
- * every landed hit, a lethal one included), ricochets, ambushes planned, Overdrive activations, Matter, whether a
- * singularity contact or an obstacle collision ended it (and whether that collision was a lethal-speed hit, which
- * leaves integrity at exactly zero), and the Core's ambush-speed holds (the times it kept the ambush speed for the
- * ambush hold, planned or not) with the seconds it spent at that speed: the NoPoi bot rarely holds it, so the ambush
- * pace is read from the holds as well as the plans. Summaries carry bootstrap standard errors (20,000 resamples of the
- * runs, RNG seed 20261027).
+ * frame the Core first touches a solid body, a materialised phase shard included, sampled every 0.02 s input frame, as
+ * in SingularityContactGateTest), hurting obstacle hits (the frames in which a hit restarts the collision cooldown:
+ * with one cooldown per surface, every landed hit, a lethal one included), ricochets, ambushes planned, Overdrive
+ * activations, Matter, whether a singularity contact or an obstacle collision ended it (and whether that collision was
+ * a lethal-speed hit, which leaves integrity at exactly zero), the Core's ambush-speed holds (the times it kept the
+ * ambush speed for the ambush hold, planned or not) with the seconds it spent at that speed (the NoPoi bot rarely holds
+ * it, so the ambush pace is read from the holds as well as the plans), the Dashes made and the message that ended a
+ * lost run. Summaries carry bootstrap standard errors (20,000 resamples of the runs, RNG seed 20261027).
  */
 class TerrainCalibrationProbeTest {
     @Test
     fun probeTheCalibrationWindow() {
-        val window = System.getenv("KK_TERRAIN_PROBE")?.takeIf { it.isNotBlank() } ?: return
-        val (first, last) = window.split("..").map { it.trim().toInt() }
-        require(first in 1..last) { "KK_TERRAIN_PROBE must be first..last, got $window" }
-        require(last < GATE_FIRST || first > GATE_LAST) { "the gate population ($GATE_FIRST..$GATE_LAST) is never probed" }
-        val seeds = (first..last).map { it * 7_919 + 13 }
+        val probe = System.getenv("KK_TERRAIN_PROBE")?.takeIf { it.isNotBlank() } ?: return
+        val windows = probe.split(',').map { window ->
+            val (first, last) = window.split("..").map { it.trim().toInt() }
+            require(first in 1..last) { "KK_TERRAIN_PROBE must be first..last[,first..last...], got $probe" }
+            require(last < GATE_FIRST || first > GATE_LAST) { "the gate population ($GATE_FIRST..$GATE_LAST) is never probed" }
+            first..last
+        }
+        require(windows.flatten().toSet().size == windows.sumOf { it.count() }) { "KK_TERRAIN_PROBE windows overlap: $probe" }
+        val seeds = windows.flatMap { window -> window.map { it * 7_919 + 13 } }
+        val label = windows.joinToString(",") { "${it.first}..${it.last}" }
         val content = probedContent(
             System.getenv("KK_TERRAIN_STEERING").orEmpty(),
             System.getenv("KK_TERRAIN_OBSTACLES").orEmpty(),
         )
-        println("TERRAIN PROBE window $first..$last steering ${content.tempo.steering}")
-        println("TERRAIN PROBE window $first..$last obstacles ${content.obstacles.impactKnobs()}")
+        val dashRule = when (System.getenv("KK_TERRAIN_DASH")?.trim().orEmpty().lowercase()) {
+            "", "human" -> DashRule.HUMAN
+            "legacy" -> DashRule.LEGACY
+            else -> error("KK_TERRAIN_DASH must be human or legacy, got ${System.getenv("KK_TERRAIN_DASH")}")
+        }
+        println("TERRAIN PROBE window $label steering ${content.tempo.steering}")
+        println("TERRAIN PROBE window $label obstacles ${content.obstacles.impactKnobs()}")
+        println("TERRAIN PROBE window $label dash $dashRule")
         for (arm in Arm.entries) {
-            val runs = populationOf(seeds) { seed -> play(seed, arm, content) }
+            val runs = populationOf(seeds) { seed -> play(seed, arm, content, dashRule) }
             runs.forEach { println("TERRAIN PROBE ${arm.label} $it") }
+            if (windows.size > 1) {
+                windows.forEach { window ->
+                    val inWindow = window.map { it * 7_919 + 13 }.toSet()
+                    println("TERRAIN PROBE SUMMARY ${arm.label} window ${window.first}..${window.last} " +
+                        summary(runs.filter { it.seed in inWindow }))
+                }
+            }
             println("TERRAIN PROBE SUMMARY ${arm.label} ${summary(runs)}")
         }
     }
@@ -69,6 +90,8 @@ class TerrainCalibrationProbeTest {
         val matter: Long,
         val ambushHolds: Int,
         val ambushSeconds: Float,
+        val dashes: Int,
+        val end: String,
     ) {
         val won: Boolean get() = outcome == "WIN"
 
@@ -76,10 +99,10 @@ class TerrainCalibrationProbeTest {
             "seed=$seed outcome=$outcome seconds=$seconds singularity=${if (singularity) "y" else "n"} contacts=$contacts " +
                 "hurts=$hurts ricochets=$ricochets ambushes=$ambushes overdrives=$overdrives matter=$matter " +
                 "obstacleKill=${if (obstacleKill) "y" else "n"} lethalKill=${if (lethalKill) "y" else "n"} " +
-                "ambushHolds=$ambushHolds ambushSeconds=$ambushSeconds"
+                "ambushHolds=$ambushHolds ambushSeconds=$ambushSeconds dashes=$dashes end=$end"
     }
 
-    private fun play(seed: Int, arm: Arm, content: GameplayContentSnapshot): Run {
+    private fun play(seed: Int, arm: Arm, content: GameplayContentSnapshot, dashRule: DashRule): Run {
         var contacts = 0
         var touching = false
         var hurts = 0
@@ -95,6 +118,7 @@ class TerrainCalibrationProbeTest {
         var heldBefore = 0f
         val observe = { state: MutableGameState ->
             val touches = state.obstacleField.obstacles.any { obstacle ->
+                if (!obstacle.solidAt(state.elapsed, state.content.obstacles.kinds)) return@any false
                 val reach = obstacle.radius + state.coreRadius + CONTACT_SLACK
                 (obstacle.x - state.coreX) * (obstacle.x - state.coreX) +
                     (obstacle.y - state.coreY) * (obstacle.y - state.coreY) <= reach * reach
@@ -115,14 +139,16 @@ class TerrainCalibrationProbeTest {
             heldBefore = held
         }
         val state = when (arm) {
-            Arm.FRESH_TIER_0 -> playGateRun(seed, gateProfile(GateMatrix.NONE, tier = 0, content = content), NoPoiBot(),
-                content = content, observe = observe)
+            Arm.FRESH_TIER_0 -> playGateRun(
+                seed, gateProfile(GateMatrix.NONE, tier = 0, content = content), NoPoiBot(dashRule = dashRule),
+                content = content, observe = observe,
+            )
             Arm.STRONG_TIER_10 -> playGateRun(
                 seed,
                 gateProfile(
                     GateMatrix.FULL, tier = 10, shape = CoreShape.PENTAGON, weapon = WeaponId.ARC_COIL, content = content,
                 ),
-                NoPoiBot(),
+                NoPoiBot(dashRule = dashRule),
                 relics = StrongRelics,
                 content = content,
                 observe = observe,
@@ -139,7 +165,8 @@ class TerrainCalibrationProbeTest {
             // A lethal-speed hit sets integrity to exactly zero; band damage leaves it below.
             seed, outcome, state.elapsed, ended && state.message == SINGULARITY_CONTACT, obstacleKill,
             obstacleKill && state.hp == 0f, contacts, hurts, ricochets, ambushes, overdrives, state.runMatter,
-            ambushHolds, ambushSeconds,
+            ambushHolds, ambushSeconds, state.characterRuntime.dashSequence,
+            if (ended) state.message.replace(' ', '_') else "-",
         )
     }
 
@@ -161,6 +188,8 @@ class TerrainCalibrationProbeTest {
             "ambushSecondsPerMinute" to { sample ->
                 sample.sumOf { it.ambushSeconds.toDouble() } * 60.0 / sample.sumOf { it.seconds.toDouble() }
             },
+            "meanSurvival" to { sample -> sample.sumOf { it.seconds.toDouble() } / sample.size },
+            "dashesPerMinute" to { sample -> sample.sumOf { it.dashes } * 60.0 / sample.sumOf { it.seconds.toDouble() } },
         )
         val random = Random(BOOTSTRAP_SEED)
         val resampled = List(metrics.size) { DoubleArray(BOOTSTRAP_RESAMPLES) }

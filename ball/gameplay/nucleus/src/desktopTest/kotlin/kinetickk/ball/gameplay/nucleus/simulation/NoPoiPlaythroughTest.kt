@@ -188,6 +188,24 @@ private const val APEX_GATE_MARGIN_STRIKES = 2
 private const val MIRROR_SHOT_REACH = 160f
 private const val MIRROR_CONTACT_REACH = 120f
 
+/** How far ahead (seconds of straight travel at the predicted post-Dash velocity) the Dash hazard check looks. */
+private const val DASH_HAZARD_SECONDS = 0.3f
+
+/** The share of a backward velocity part a Dash cancels before its impulse (performDash's reverse assist). */
+private const val DASH_REVERSE_ASSIST = 0.72f
+
+/** Blink Drive: the Blink stops this far short of the singularity and falls back to a pushed Dash below this range. */
+private const val BLINK_DRIVE_SINGULARITY_GAP = 60f
+private const val BLINK_DRIVE_MINIMUM_RANGE = 30f
+
+/**
+ * How the bot presses Dash. [HUMAN] is the reference pilot (decisions Addendum B1): at most one press per Dash phase,
+ * and no threat-dodge or Apex Dash that would carry the Core into a solid body at the build's lethal obstacle speed.
+ * [LEGACY] is the bot before B1, which re-pressed Dash on every 0.02 s input frame while a shot kept closing and never
+ * looked at rocks; only the terrain calibration probe flies it, as the old-bot arm.
+ */
+internal enum class DashRule { HUMAN, LEGACY }
+
 internal class NoPoiBot(
     private val archetypeTag: BuildTag = BuildTag.RAM,
     private val element: StatusElement? = StatusElement.ENTROPY,
@@ -213,6 +231,8 @@ internal class NoPoiBot(
      * the equipped weapon's key. Off, the bot plays exactly as the reference bot.
      */
     private val avoidWeaponHarmony: Boolean = false,
+    /** How the bot presses Dash; [DashRule.HUMAN] unless a probe flies the old bot. */
+    private val dashRule: DashRule = DashRule.HUMAN,
 ) {
     private var cursorAngle = 0f
     private var braking = false
@@ -222,7 +242,7 @@ internal class NoPoiBot(
     private var nextSkillCheckAt = 0f
 
     /** An independent bot in this bot's current state (a forked run continues with it). */
-    fun copy(): NoPoiBot = NoPoiBot(archetypeTag, element, weaponOrder, relicTaste, dataPolicy, avoidWeaponHarmony).also { copy ->
+    fun copy(): NoPoiBot = NoPoiBot(archetypeTag, element, weaponOrder, relicTaste, dataPolicy, avoidWeaponHarmony, dashRule).also { copy ->
         copy.cursorAngle = cursorAngle
         copy.braking = braking
         copy.decisions = decisions
@@ -364,8 +384,64 @@ internal class NoPoiBot(
             crossesOptionalSite(s, s.coreX, s.coreY, s.coreX + ux * 320f, s.coreY + uy * 320f)
         // Vivisect's free Dashes and Total Eclipse's fast Blinks are those Apexes: while one runs, the bot Dashes when it can.
         val apexDashes = s.apexActive() && (s.coreShape == CoreShape.SHARD || s.coreShape == CoreShape.CRESCENT)
-        if ((threat || apexDashes) && s.dashReady && s.heat < 60f && !blinkLandsOnPoi) s.requestDash()
+        if ((threat || apexDashes) && s.dashReady && s.heat < 60f && !blinkLandsOnPoi &&
+            (dashRule == DashRule.LEGACY || humanDashAllowed(s))
+        ) s.requestDash()
         castSkills(s)
+    }
+
+    /**
+     * The human Dash rule ([DashRule.HUMAN]):
+     * - **Cadence.** No new press while the previous Dash phase runs, read from the game's own
+     *   [MutableGameState.dashPhaseTime] (a Matrix ricochet phase, which the game runs as a Dash phase, holds it too).
+     *   The phase lasts 0.24 s in 1/120 s steps, so with a 0.02 s input frame two presses land at least 13 frames
+     *   (0.26 s; 31 or 32 steps between the Dashes) apart, where the old bot pressed on consecutive frames and stacked
+     *   one impulse per frame.
+     * - **Hazard.** No press when the Dash would carry the Core into a solid body at its lethal speed: the post-Dash
+     *   velocity predicted as the game's Dash makes it (the reverse assist, then the build's impulse at the
+     *   character's strongest multiplier, the one the lethal speed's own Dash floor uses) reaches the build's
+     *   [obstacleLethalSpeed], and the Blink's own [obstacleBlocksSegment] (solid obstacles of every kind, a
+     *   materialised phase shard, structure walls and sealed doors) finds a body along the straight post-Dash path
+     *   within [DASH_HAZARD_SECONDS]. A Blink adds no speed (it keeps a share and stops short of every body), so the
+     *   check reads only a pushed Dash.
+     * Production reads only, no allocation.
+     */
+    private fun humanDashAllowed(s: MutableGameState): Boolean {
+        if (s.dashPhaseTime > 0f) return false
+        val targetX = s.cameraX + s.pointerX - s.screenWidth * 0.5f
+        val targetY = s.cameraY + s.pointerY - s.screenHeight * 0.5f
+        val toTarget = length(targetX - s.coreX, targetY - s.coreY)
+        val directionX = if (toTarget > 24f) (targetX - s.coreX) / toTarget else s.lastAimDirectionX
+        val directionY = if (toTarget > 24f) (targetY - s.coreY) / toTarget else s.lastAimDirectionY
+        if (dashBlinks(s, directionX, directionY, targetX, targetY)) return true
+        var vx = s.velocityX
+        var vy = s.velocityY
+        val forward = vx * directionX + vy * directionY
+        if (forward < 0f) {
+            vx -= directionX * forward * DASH_REVERSE_ASSIST
+            vy -= directionY * forward * DASH_REVERSE_ASSIST
+        }
+        val impulse = s.effectiveDashImpulse() * s.maxCharacterDashImpulseMultiplier()
+        vx += directionX * impulse
+        vy += directionY * impulse
+        if (length(vx, vy) < s.obstacleLethalSpeed()) return true
+        return !s.obstacleBlocksSegment(
+            s.coreX, s.coreY, s.coreX + vx * DASH_HAZARD_SECONDS, s.coreY + vy * DASH_HAZARD_SECONDS, s.coreRadius,
+        )
+    }
+
+    /**
+     * True when the Dash along ([directionX], [directionY]) becomes a Blink: always for the Crescent; with Blink Drive
+     * when the Blink has its minimum range, short of the singularity at ([targetX], [targetY]) and clear of bodies.
+     */
+    private fun dashBlinks(s: MutableGameState, directionX: Float, directionY: Float, targetX: Float, targetY: Float): Boolean {
+        if (s.coreShape == CoreShape.CRESCENT) return true
+        if (!s.build.upside(RelicId.BLINK_DRIVE)) return false
+        var range = s.relicValue(RelicId.BLINK_DRIVE, 1) * if (s.build.pairing(RelicPairingId.HEAVY_BLINK)) 0.65f else 1f
+        if ((targetX - s.coreX) * directionX + (targetY - s.coreY) * directionY > 0f) {
+            range = min(range, max(0f, length(targetX - s.coreX, targetY - s.coreY) - BLINK_DRIVE_SINGULARITY_GAP))
+        }
+        return s.blinkRangeClearOfObstacles(directionX, directionY, range) >= BLINK_DRIVE_MINIMUM_RANGE
     }
 
     /**
