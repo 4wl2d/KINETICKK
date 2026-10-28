@@ -8,6 +8,7 @@ import kinetickk.ball.gameplay.api.GameplayAcceptance
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.ball.gameplay.api.GameplayRunPhase
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.impl.DefaultGameplayFeature
 import kinetickk.ball.gameplay.interaction.GameplayInteractionPort
 import kinetickk.ball.profile.api.PlayerPreferences
@@ -117,6 +118,24 @@ class InlineSessionLifecycleTest {
         fixture.persistence.failure = null
         fixture.start()
         fixture.assertReady(AppDestination.Gameplay)
+    }
+
+    @Test
+    fun anEasyRunLeavesTheProfileUntouchedAndReturnsHome() {
+        val fixture = LifecycleFixture()
+        fixture.accept(SessionInteractionPulse.SelectRunModeRequested(RunMode.EASY))
+        val before = fixture.profile.query(ProfileQuery.GetHomeProgress)
+        fixture.start()
+        assertTrue(fixture.runView().renderSnapshot().renderModel!!.easyMode)
+        assertTrue(fixture.earnProgress() > 0L)
+
+        fixture.accept(SessionInteractionPulse.ExitRunRequested)
+
+        fixture.assertReady(AppDestination.Home)
+        assertEquals(RunMode.EASY, fixture.shell().runMode, "the mode stays selected for the next start")
+        assertEquals(GameplayRunPhase.EXITED, fixture.runStatus().phase)
+        assertTrue(!fixture.runStatus().progressPending)
+        assertEquals(before, fixture.profile.query(ProfileQuery.GetHomeProgress), "the Profile saw nothing of the run")
     }
 
     @Test

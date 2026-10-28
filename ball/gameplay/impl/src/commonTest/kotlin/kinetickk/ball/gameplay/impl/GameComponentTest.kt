@@ -301,6 +301,32 @@ class GameComponentTest {
     }
 
     @Test
+    fun anEasyRunNeverCallsTheProfileProgressCommand() {
+        val standardProfile = TestProfilePort()
+        val standard = component(standardProfile)
+        standard.start(RunMode.STANDARD)
+        standard.advanceUntilMatter()
+        assertEquals(GameplayExitProgressResult.Applied, standard.exit().progress)
+        assertEquals(1, standardProfile.calls.size)
+
+        val profile = TestProfilePort()
+        val component = component(profile)
+        component.start(RunMode.EASY)
+        component.advanceUntilMatter()
+        assertTrue(profile.calls.isEmpty(), "a Baby mode run publishes nothing while it runs")
+        val result = component.exit()
+
+        assertEquals(GameplayExitProgressResult.NoProgress, result.progress)
+        assertTrue(profile.calls.isEmpty())
+        assertTrue(profile.replies.isEmpty())
+        assertEquals(GameplayRunPhase.EXITED, component.query(GameplayQuery.GetRunStatus).phase)
+        assertFalse(component.query(GameplayQuery.GetRunStatus).progressPending)
+        val render = checkNotNull(component.renderSnapshot().renderModel)
+        assertTrue(render.easyMode)
+        assertTrue(render.runMatter > 0L, "the run still shows the Matter it earned")
+    }
+
+    @Test
     fun wrongTargetAndUnavailableBootstrapRefuseBeforePublication() {
         val closed = GameplayCommandTestCaller<GameplayRunStarted>()
         val closedComponent = component()

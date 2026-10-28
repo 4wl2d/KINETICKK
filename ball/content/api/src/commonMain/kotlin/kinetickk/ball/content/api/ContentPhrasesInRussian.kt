@@ -344,6 +344,7 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "APEX ONLINE" to "АПЕКС В СЕТИ",
     "OVERHEAT" to "ПЕРЕГРЕВ",
     "SINGULARITY CONTACT" to "КОНТАКТ С СИНГУЛЯРНОСТЬЮ",
+    "BOOP" to "БУП",
     "POLARITY FIELD STRAIN" to "ПОЛЕ ПОЛЯРНОСТИ ПЕРЕНАПРЯЖЕНО",
     "ARCHITECT DISMANTLED" to "АРХИТЕКТОР РАЗОБРАН",
     "CATALOG COMPLETE // MATTER SALVAGED" to "КАТАЛОГ ЗАВЕРШЁН // МАТЕРИЯ ИЗВЛЕЧЕНА",

@@ -516,7 +516,7 @@ internal fun MutableGameState.updateCore(delta: Float) {
             MutableGameState.CURSOR_KILL_RADIUS,
         )
     ) {
-        endRun("SINGULARITY CONTACT")
+        if (easyMode) boopOffSingularity(targetX, targetY) else endRun("SINGULARITY CONTACT")
     }
     previousSingularityX = targetX
     previousSingularityY = targetY

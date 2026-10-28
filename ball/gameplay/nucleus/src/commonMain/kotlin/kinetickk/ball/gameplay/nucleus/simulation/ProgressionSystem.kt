@@ -590,12 +590,14 @@ internal fun MutableGameState.bankRunMatter() {
     val fresh = runMatter - bankedRunMatter
     if (fresh <= 0L) return
     bankedRunMatter = runMatter
+    if (easyMode) return
     totalMatter = saturatedAdd(totalMatter, fresh)
     lifetimeMatter = saturatedAdd(lifetimeMatter, fresh)
     pendingBankedMatter = saturatedAdd(pendingBankedMatter, fresh)
 }
 
 internal fun MutableGameState.takeProgressUpdate(): GameplayProgressUpdate? {
+    if (easyMode) { achievementFlushDue = false; clearPendingProgress(); return null }
     val flushCounters = achievementFlushDue
     achievementFlushDue = false
     if (!hasUrgentProgress() && !(flushCounters && hasPendingAchievementCounters())) return null
@@ -656,7 +658,7 @@ internal fun MutableGameState.hasPendingAchievementCounters(): Boolean =
 
 /** True when [takeProgressUpdate] would publish an update now. */
 internal fun MutableGameState.hasPublishableProgress(): Boolean =
-    hasUrgentProgress() || achievementFlushDue && hasPendingAchievementCounters()
+    !easyMode && (hasUrgentProgress() || achievementFlushDue && hasPendingAchievementCounters())
 
 internal fun MutableGameState.takeSoundCues(): ImmutableList<GameplayAudioCue> {
     if (soundCues.isEmpty()) return immutableListOf()
