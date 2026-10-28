@@ -77,8 +77,9 @@ internal fun DrawScope.drawEnemy(
     if (center.x < -renderMargin || center.y < -renderMargin || center.x > size.width + renderMargin || center.y > size.height + renderMargin) return
     val threat = roles.threat
     drawEnemyTelegraph(engine, enemy, center, shakeX, shakeY, threat)
-    if (enemy.type == EnemyType.PHANTOM && enemy.behavior == EnemyBehavior.PHASED && EnemyAffinity.shifting(enemy.affinityBits)) {
-        // Out of phase (and untargetable): only a faint, turning outline marks where it went.
+    val phasedOut = enemy.type == EnemyType.PHANTOM || enemy.type == EnemyType.CARTOGRAPHER
+    if (phasedOut && enemy.behavior == EnemyBehavior.PHASED && EnemyAffinity.shifting(enemy.affinityBits)) {
+        // Out of phase (and untargetable): only a faint, turning outline marks where it went (a Cartographer between rocks).
         rotate(engine.renderElapsed * spin(2f), center) {
             drawCircle(threat.copy(alpha = 0.32f), enemy.radius * 1.2f, center, style = WorldStrokes.dashedThin)
         }
@@ -186,12 +187,13 @@ internal fun DrawScope.drawEnemy(
         }
         EnemyType.THRONE -> {
             drawKkIcon(KkIcon.SYSTEM_ELITE, center, enemy.radius * 0.8f, threat)
-            val arc = enemy.radius + THRONE_ARC_GAP
-            repeat(enemy.charges) { index ->
-                val start = (enemy.facing + index * THRONE_ARC_SPACING) * RAD_TO_DEG - THRONE_ARC_DEGREES * 0.5f
-                drawArc(Kk.Bone, start, THRONE_ARC_DEGREES, false, Offset(center.x - arc, center.y - arc), Size(arc * 2f, arc * 2f),
-                    style = kkStroke(3f))
-            }
+            drawShieldArcs(enemy, center)
+        }
+        // Secret bosses carry the anomaly glyph inside a slowly turning bone ring; the Antecedent's arcs ring it too.
+        EnemyType.CARTOGRAPHER -> drawSecretBossMark(engine, enemy, center, threat)
+        EnemyType.ANTECEDENT -> {
+            drawSecretBossMark(engine, enemy, center, threat)
+            drawShieldArcs(enemy, center)
         }
         else -> Unit
     }
@@ -218,7 +220,8 @@ private fun enemyRenderMargin(enemy: EnemyProjection): Float = when (enemy.type)
     EnemyType.CHOIR -> CHOIR_WAVE_REACH + 20f
     EnemyType.WARDEN_PRIME -> PRIME_WELL_REACH + 20f
     EnemyType.THRONE -> if (enemy.behavior == EnemyBehavior.TELEGRAPH) THRONE_LANE_REACH + 20f else MINI_BOSS_MARGIN
-    EnemyType.BROOD_QUEEN, EnemyType.PYRE_HERALD -> MINI_BOSS_MARGIN
+    EnemyType.BROOD_QUEEN, EnemyType.PYRE_HERALD, EnemyType.ANTECEDENT -> MINI_BOSS_MARGIN
+    EnemyType.CARTOGRAPHER -> if (enemy.behavior == EnemyBehavior.TELEGRAPH) CARTO_LANE_REACH + 20f else MINI_BOSS_MARGIN
     else -> if (enemy.linkedTo >= 0) AEGIS_TETHER_REACH else 120f
 }
 
@@ -286,6 +289,18 @@ private const val THRONE_ARC_GAP = 9f
 private const val THRONE_LANE_REACH = 900f
 private const val THRONE_JUDGEMENT_SECONDS = 1f
 private const val HERALD_VOLLEY_LEAD = 0.3f
+
+/**
+ * Presentation copies of the secret bosses' marks and reaches: the anomaly glyph and its turning bone ring (24 s per
+ * turn), and the Cartographer's three Survey lanes, their spacing and how long they are marked.
+ */
+private const val SECRET_GLYPH = 0.75f
+private const val SECRET_RING = 1.7f
+private const val SECRET_RING_ALPHA = 0.55f
+private const val SECRET_RING_DEGREES_PER_SECOND = 15f
+private const val CARTO_LANE_REACH = 1_400f
+private const val CARTO_LANE_OFFSET = 60f
+private const val CARTO_MARK_SECONDS = 1f
 
 /** Distance of the status ring outside an enemy's silhouette (world units). */
 private const val STATUS_RING_GAP = 4f
@@ -688,15 +703,50 @@ private fun DrawScope.drawEnemyTelegraph(
             }
         }
         // The Herald's volley ring.
-        EnemyType.PYRE_HERALD -> if (enemy.actionTimer in 0f..HERALD_VOLLEY_LEAD) {
+        EnemyType.PYRE_HERALD, EnemyType.ANTECEDENT -> if (enemy.actionTimer in 0f..HERALD_VOLLEY_LEAD) {
             drawCircle(threat.copy(alpha = 0.5f), enemy.radius + 22f + enemy.actionTimer * 40f, center, style = kkStroke(2f))
+        }
+        // Survey: the three parallel lanes its bolt trains will run down, firming while it holds the aim (its final
+        // phase's short aim after a jump marks none).
+        EnemyType.CARTOGRAPHER -> if (enemy.behavior == EnemyBehavior.TELEGRAPH && EnemyAffinity.phase(enemy.affinityBits) < 2) {
+            val charge = (1f - enemy.behaviorRemaining / CARTO_MARK_SECONDS).coerceIn(0f, 1f)
+            val lane = threat.copy(alpha = 0.2f + charge * 0.6f)
+            val sideX = -sin(enemy.facing) * CARTO_LANE_OFFSET
+            val sideY = cos(enemy.facing) * CARTO_LANE_OFFSET
+            for (index in -1..1) {
+                val start = Offset(center.x + sideX * index, center.y + sideY * index)
+                drawLine(lane, start, polar(start, CARTO_LANE_REACH, enemy.facing), 1.5f, pathEffect = WorldStrokes.dashEffect)
+            }
         }
         EnemyType.DRIFTER, EnemyType.SPLITTER, EnemyType.ARCHITECT, EnemyType.SWARMLING, EnemyType.AEGIS,
         EnemyType.MINELAYER, EnemyType.REFLECTOR,
-        EnemyType.CRAWLER, EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT,
+        EnemyType.CRAWLER,
         -> Unit
     }
     if (enemy.linkedTo >= 0) drawAegisTether(engine, enemy, center, shakeX, shakeY)
+}
+
+/** The shield arcs of a Throne or the Antecedent: [EnemyProjection.charges] bone arcs of 80° spaced 120° from its facing. */
+private fun DrawScope.drawShieldArcs(enemy: EnemyProjection, center: Offset) {
+    val arc = enemy.radius + THRONE_ARC_GAP
+    repeat(enemy.charges) { index ->
+        val start = (enemy.facing + index * THRONE_ARC_SPACING) * RAD_TO_DEG - THRONE_ARC_DEGREES * 0.5f
+        drawArc(Kk.Bone, start, THRONE_ARC_DEGREES, false, Offset(center.x - arc, center.y - arc), Size(arc * 2f, arc * 2f),
+            style = kkStroke(3f))
+    }
+}
+
+/** A secret boss's identity: the anomaly glyph at its centre and a dashed bone ring turning 15° a second around it. */
+private fun DrawScope.drawSecretBossMark(
+    engine: GameplayRenderModel,
+    enemy: EnemyProjection,
+    center: Offset,
+    threat: androidx.compose.ui.graphics.Color,
+) {
+    drawKkIcon(KkIcon.SYSTEM_ANOMALY, center, enemy.radius * SECRET_GLYPH, threat)
+    rotate(engine.renderElapsed * SECRET_RING_DEGREES_PER_SECOND, center) {
+        drawCircle(Kk.Bone, enemy.radius * SECRET_RING, center, alpha = SECRET_RING_ALPHA, style = WorldStrokes.dashedThin)
+    }
 }
 
 /** A tethered ally: a dashed bone line back to its Aegis and a small shield pip on the ally. */
