@@ -156,6 +156,13 @@ internal fun DrawScope.drawEnemy(
         }
         EnemyType.AEGIS -> drawCircle(Kk.Bone, enemy.radius * 0.18f, center)
         EnemyType.BROODMOTHER -> drawCircle(threat, enemy.radius * 0.3f, center, style = kkStroke(2f))
+        EnemyType.PYLON, EnemyType.SENTRY -> if (enemy.behavior == EnemyBehavior.ANCHORED || enemy.behavior == EnemyBehavior.TELEGRAPH) {
+            // The mount: a bone arc behind it, opposite its aim.
+            val arc = enemy.radius + MOUNT_ARC_GAP
+            val start = (enemy.facing + PI.toFloat()) * RAD_TO_DEG - MOUNT_ARC_DEGREES * 0.5f
+            drawArc(Kk.Bone, start, MOUNT_ARC_DEGREES, false, Offset(center.x - arc, center.y - arc), Size(arc * 2f, arc * 2f),
+                style = kkStroke(3f))
+        }
         else -> Unit
     }
     drawArmorPlates(enemy, center)
@@ -173,7 +180,18 @@ private fun enemyRenderMargin(enemy: EnemyProjection): Float = when (enemy.type)
     EnemyType.BOMBER -> BOMBER_BLAST_REACH + 20f
     EnemyType.LANCER, EnemyType.SNIPER ->
         if (enemy.behavior == EnemyBehavior.TELEGRAPH || enemy.behavior == EnemyBehavior.STRIKE) LANCE_LANE_LENGTH + 20f else 120f
+    EnemyType.COMET, EnemyType.PYLON, EnemyType.SENTRY ->
+        max(worldsTelegraphReach(enemy), if (enemy.linkedTo >= 0) AEGIS_TETHER_REACH else 120f)
     else -> if (enemy.linkedTo >= 0) AEGIS_TETHER_REACH else 120f
+}
+
+/** How far a Comet's lane and streak, a Pylon's sight line or a Sentry's bolt line reach while they show; 0 otherwise. */
+private fun worldsTelegraphReach(enemy: EnemyProjection): Float = when (enemy.type) {
+    EnemyType.COMET ->
+        if (enemy.behavior == EnemyBehavior.TELEGRAPH || enemy.behavior == EnemyBehavior.STRIKE) COMET_LANE_REACH + 20f else 0f
+    EnemyType.PYLON -> if (enemy.behavior == EnemyBehavior.TELEGRAPH) PYLON_SIGHT_REACH + 20f else 0f
+    EnemyType.SENTRY -> if (enemy.behavior == EnemyBehavior.TELEGRAPH) SENTRY_LINE_REACH + 20f else 0f
+    else -> 0f
 }
 
 /** Presentation copies of gameplay reaches: the Bomber's blast, the Lancer's lane, an Aegis tether, a mine's trigger. */
@@ -183,6 +201,17 @@ private const val AEGIS_TETHER_REACH = 240f
 private const val MINE_TRIGGER_REACH = 60f
 private const val MINE_ARMED_LIFE = 7.2f
 private const val REFLECTOR_ARC_DEGREES = 120f
+
+/** Presentation copies of the 0.6.0 lanes, sight lines and their timings (Comet, Pylon, Sentry), and the mount arc. */
+private const val COMET_LANE_REACH = 1_500f
+private const val COMET_MARK_SECONDS = 0.6f
+private const val PYLON_SIGHT_REACH = 900f
+private const val PYLON_AIM_SECONDS = 0.8f
+private const val PYLON_LOCK_SECONDS = 0.2f
+private const val SENTRY_LINE_REACH = 760f
+private const val SENTRY_AIM_SECONDS = 0.45f
+private const val MOUNT_ARC_DEGREES = 120f
+private const val MOUNT_ARC_GAP = 5f
 
 /** Distance of the status ring outside an enemy's silhouette (world units). */
 private const val STATUS_RING_GAP = 4f
@@ -489,9 +518,39 @@ private fun DrawScope.drawEnemyTelegraph(
         EnemyType.BROODMOTHER -> if (enemy.actionTimer in 0f..0.6f) {
             drawCircle(threat.copy(alpha = 0.45f), enemy.radius + 10f + enemy.actionTimer * 30f, center, style = WorldStrokes.dashedThin)
         }
+        EnemyType.COMET -> when (enemy.behavior) {
+            EnemyBehavior.TELEGRAPH -> {
+                // The lane it is about to streak, firming as the mark runs out.
+                val charge = (1f - enemy.behaviorRemaining / COMET_MARK_SECONDS).coerceIn(0f, 1f)
+                drawLine(threat.copy(alpha = 0.25f + charge * 0.5f), center, polar(center, COMET_LANE_REACH, enemy.facing), 1.5f,
+                    pathEffect = WorldStrokes.dashEffect)
+            }
+            EnemyBehavior.STRIKE -> {
+                val back = enemy.facing + PI.toFloat()
+                drawLine(Kk.Bone.copy(alpha = 0.55f), center, polar(center, enemy.radius * 7f, back), enemy.radius * 0.9f)
+                drawLine(threat, center, polar(center, enemy.radius * 4f, back), 1f)
+            }
+            else -> Unit
+        }
+        // The Sniper's sight line: dashed while it tracks the Core, solid once locked, with a closing muzzle ring.
+        EnemyType.PYLON -> if (enemy.behavior == EnemyBehavior.TELEGRAPH) {
+            val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
+            val reach = sqrt((core.x - center.x) * (core.x - center.x) + (core.y - center.y) * (core.y - center.y)) + 120f
+            val locked = enemy.behaviorRemaining <= PYLON_LOCK_SECONDS
+            val charge = (1f - enemy.behaviorRemaining / PYLON_AIM_SECONDS).coerceIn(0f, 1f)
+            val end = polar(center, reach, enemy.facing)
+            if (locked) drawLine(threat.copy(alpha = 0.95f), center, end, 2.5f)
+            else drawLine(threat.copy(alpha = 0.25f + charge * 0.45f), center, end, 1.2f, pathEffect = WorldStrokes.dashEffect)
+            drawCircle(threat.copy(alpha = 0.6f), enemy.radius + 10f * (1f - charge), center, style = kkStroke(1.5f))
+        }
+        // The corridor its bolt train will run down, thickening as the aim holds.
+        EnemyType.SENTRY -> if (enemy.behavior == EnemyBehavior.TELEGRAPH) {
+            val charge = (1f - enemy.behaviorRemaining / SENTRY_AIM_SECONDS).coerceIn(0f, 1f)
+            drawLine(threat.copy(alpha = 0.3f + charge * 0.5f), center, polar(center, SENTRY_LINE_REACH, enemy.facing), 1f + charge * 2f)
+        }
         EnemyType.DRIFTER, EnemyType.SPLITTER, EnemyType.ARCHITECT, EnemyType.SWARMLING, EnemyType.AEGIS,
         EnemyType.MINELAYER, EnemyType.REFLECTOR,
-        EnemyType.COMET, EnemyType.PYLON, EnemyType.SENTRY, EnemyType.CRAWLER, EnemyType.SERAPH, EnemyType.CHOIR,
+        EnemyType.CRAWLER, EnemyType.SERAPH, EnemyType.CHOIR,
         EnemyType.IMP, EnemyType.HOUND, EnemyType.CIPHER, EnemyType.MIRROR, EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN,
         EnemyType.THRONE, EnemyType.PYRE_HERALD, EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT,
         -> Unit

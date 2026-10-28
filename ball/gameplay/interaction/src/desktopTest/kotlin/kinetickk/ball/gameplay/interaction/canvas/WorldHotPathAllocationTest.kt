@@ -432,13 +432,20 @@ class WorldHotPathAllocationTest {
                 affinityBits = runAffinity(type, eliteAspect = StatusElement.GRAVITIC, architectAspect = StatusElement.THERMAL,
                     architectPhase = 1, shifting = true),
                 // The 0.4.0 telegraphs: a showing lane, a locked sight line, a burning fuse, a wind-up, a raised
-                // shield, a turned front, and a Drifter tethered to the Aegis.
+                // shield, a turned front, and a Drifter tethered to the Aegis. The 0.6.0 ones: a Comet marking its lane
+                // or streaking it (alternate frames), a Pylon's locked sight line and a Sentry's bolt line on their mounts.
                 behavior = when (type) {
                     EnemyType.LANCER, EnemyType.SNIPER, EnemyType.PHANTOM -> EnemyBehavior.TELEGRAPH
                     EnemyType.BOMBER -> EnemyBehavior.PRIMED
+                    EnemyType.COMET -> if ((drift / 20f).toInt() % 2 == 0) EnemyBehavior.STRIKE else EnemyBehavior.TELEGRAPH
+                    EnemyType.PYLON, EnemyType.SENTRY -> EnemyBehavior.TELEGRAPH
                     else -> EnemyBehavior.IDLE
                 },
-                behaviorRemaining = if (type == EnemyType.SNIPER) 0.2f else 0.3f,
+                behaviorRemaining = when (type) {
+                    EnemyType.SNIPER -> 0.2f
+                    EnemyType.PYLON -> 0.15f
+                    else -> 0.3f
+                },
                 facing = index * 0.4f,
                 linkedTo = if (type == EnemyType.DRIFTER) EnemyType.AEGIS.ordinal + 1 else -1,
                 shielded = type == EnemyType.HERALD,
