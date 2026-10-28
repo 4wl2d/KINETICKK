@@ -419,11 +419,12 @@ class ContentBalanceCharacterizationTest {
     @Test
     fun runVarietyContentIsGolden() {
         // Slice variety-0.6.0: every run-variety identity, definition, policy number and notice (pinned when 0.6.0
-        // shipped the run-variety content; re-pinned when the Keynote element share moved 0.8 -> 0.7, and when the omen
-        // arms calibration moved Iron Tide, Hungry Dark, Volatile Pact and Still Water).
+        // shipped the run-variety content; re-pinned when the Keynote element share moved 0.8 -> 0.7, when the omen
+        // arms calibration moved Iron Tide, Hungry Dark, Volatile Pact and Still Water, and when Still Water's weapon
+        // power cost moved -10 % -> -15 %).
         val variety = catalog.gameplayContent().variety
         assertEquals(
-            "bb958301a03293ab",
+            "c40c7ebecf2f1d41",
             goldenFingerprint {
                 add("variety-0.6.0")
                 kinetickk.ball.content.api.EliteAffix.entries.forEach { add(it.name); add(it.displayName); add(it.signalNotice) }

@@ -17,10 +17,11 @@ import kotlin.math.abs
  * trap nor an upgrade, so its win share lies within [MAX_WIN_SHIFT] of the base's; Rich Veins banks at least
  * [RICH_VEINS_MATTER] times the base's median Matter, Iron Tide [IRON_TIDE_MATTER] times, Ascetic Path at most
  * [ASCETIC_PATH_MATTER] times; Hungry Dark's Data reaches at least the base's level at 600 s. Magnitudes are calibrated
- * on the VARIETY window (i = 1,601..1,900) only, where every shift lay within -0.077..+0.060. Measured on these seeds
- * with the lane tree: the base wins 0.693 (SE 0.027) and banks a median 2,334 Matter; the shifts lie within -0.077
- * (Rich Veins) and +0.117 (Still Water, SE 0.030, the arm closest to its bound); Rich Veins banks 1.43, Iron Tide 1.26
- * and Ascetic Path 0.62 times the base, and Hungry Dark gains 1.85 levels at 600 s.
+ * on the VARIETY window (i = 1,601..1,900) only, where every shift lay within -0.077..+0.060 (Still Water's weapon
+ * power cost -10 % -> -15 % then moved its own +0.057 to +0.013). Measured on these seeds after that retune: the base
+ * wins 0.687 (SE 0.027) and banks a median 2,325 Matter; the shifts lie within -0.053 (Rich Veins) and +0.093 (Still
+ * Water, SE 0.032, the arm closest to its bound); Rich Veins banks 1.45, Iron Tide 1.26 and Ascetic Path 0.61 times the
+ * base, and Hungry Dark gains 2.00 levels at 600 s.
  */
 
 /** An omen's win share differs from No omen's by at most this much (spec §11.3). */

@@ -255,6 +255,7 @@ class RunOmenTest {
             assertEquals(base.maxShield + 5f, it.maxShield)
             assertEquals(base.shield + 5f, it.shield)
             assertEquals(base.damageMultiplier - 0.15f, it.damageMultiplier, 1e-6f)
+            assertEquals(base.weaponPower - 0.15f, it.weaponPower, 1e-6f)
         }
         // Crowned Quarry's Hardened Elites also bring the 6:00 Herald at tier 0 (the mutator's full meaning).
         accepted(OmenId.CROWNED_QUARRY).let {

@@ -68,7 +68,7 @@ internal val RunVarietyPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Elites arrive 30% more often, each with a Key and a Relic." to
         "Элитные враги появляются на 30% чаще, и каждый несёт ключ и реликвию.",
     "+5 shield capacity and +6% damage reduction." to "+5 к ёмкости щита и +6% к снижению урона.",
-    "−15% impact damage and −10% weapon power." to "−15% урона от столкновений и −10% силы оружия.",
+    "−15% impact damage and −15% weapon power." to "−15% урона от столкновений и −15% силы оружия.",
 
     "Shielded" to "Защищённый",
     "Splitting" to "Делящийся",

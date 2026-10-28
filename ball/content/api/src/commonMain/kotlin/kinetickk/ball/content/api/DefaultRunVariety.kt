@@ -73,9 +73,9 @@ fun defaultOmenDefinitions(): ImmutableList<OmenDefinition> = listOf(
     ),
     OmenDefinition(
         OmenId.STILL_WATER, "Still Water", "+5 shield capacity and +6% damage reduction.",
-        "−15% impact damage and −10% weapon power.",
+        "−15% impact damage and −15% weapon power.",
         gains = immutableListOf(RunModifierEffect.Stat(ItemEffect.SHIELD_CAPACITY, 5f), RunModifierEffect.Stat(ItemEffect.DAMAGE_REDUCTION, 0.06f)),
-        costs = immutableListOf(RunModifierEffect.Stat(ItemEffect.IMPACT_DAMAGE, -0.15f), RunModifierEffect.Stat(ItemEffect.WEAPON_POWER, -0.10f)),
+        costs = immutableListOf(RunModifierEffect.Stat(ItemEffect.IMPACT_DAMAGE, -0.15f), RunModifierEffect.Stat(ItemEffect.WEAPON_POWER, -0.15f)),
     ),
 ).toImmutableList()
 
