@@ -13,6 +13,7 @@ import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.model.DimensionRewardGrant
+import kinetickk.ball.gameplay.nucleus.model.DimensionRunState
 import kinetickk.ball.gameplay.nucleus.model.Ember
 import kinetickk.ball.gameplay.nucleus.model.HaloRing
 import kinetickk.ball.gameplay.nucleus.model.Pickup
@@ -428,6 +429,25 @@ class DimensionSystemTest {
         val visited = game().apply { dimensionRun = dimensionRun.copy(visitedMask = WorldLayer.ARCHIVE.bit) }
         assertFalse(visited.openArchiveRiftAt(500f, 0f))
         assertFalse(game(canonicalGameplayContent.withDimensions { copy(enabled = false) }).openArchiveRiftAt(500f, 0f))
+    }
+
+    @Test
+    fun aQuietArenaClosesTheOpenRiftAndForgetsTheRunsDimensions() {
+        val game = game()
+        game.elapsed = 300f
+        assertTrue(game.openArchiveRiftAt(game.coreX + 300f, game.coreY))
+        val glitch = assertNotNull(game.dimensionRun.glitchPortal)
+        game.dimensionRun = game.dimensionRun.copy(
+            visitedMask = WorldLayer.ZENITH.bit,
+            pendingRewards = immutableListOf(DimensionRewardGrant(WorldLayer.ZENITH, completed = true)),
+        )
+
+        game.quietArenaForTesting()
+        assertSame(DimensionRunState.EMPTY, game.dimensionRun)
+        game.flyThroughForTesting(glitch.x, glitch.y)
+        game.updateDimension(MutableGameState.FIXED_STEP)
+        assertEquals(WorldLayer.BASE, game.worldLayer, "an isolated encounter never falls into the Archive")
+        assertNull(game.dimensionRun.visit)
     }
 
     @Test
