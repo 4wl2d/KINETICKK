@@ -77,7 +77,7 @@ fun defaultWorldDiscoveryDefinitions(): ImmutableList<WorldDiscoveryDefinition> 
         "Finish both realms in one run, or listen far away.",
     ),
     WorldDiscoveryDefinition(
-        WorldDiscovery.DERELICT_STATION, "Derelict station", "A gutted station still guarded by its crew of machines.",
+        WorldDiscovery.DERELICT_STATION, "Derelict Station", "A gutted station still guarded by its crew of machines.",
         "Ruins stand far from the start.",
     ),
     WorldDiscoveryDefinition(WorldDiscovery.VAULT, "Vault", "Sealed rooms around one guarded treasure.", "Some ruins are locked."),
