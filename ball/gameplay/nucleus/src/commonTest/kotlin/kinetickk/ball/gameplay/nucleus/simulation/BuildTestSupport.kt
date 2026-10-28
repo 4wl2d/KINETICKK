@@ -198,8 +198,12 @@ internal fun MutableGameState.aimAt(x: Float, y: Float) {
 }
 
 /** A started run whose Profile remembers [recent] (oldest first). */
-internal fun startedWithHistory(seed: Int, recent: List<Int>): MutableGameState = MutableGameState(
-    canonicalGameplayContent,
+internal fun startedWithHistory(
+    seed: Int,
+    recent: List<Int>,
+    content: GameplayContentSnapshot = canonicalGameplayContent,
+): MutableGameState = MutableGameState(
+    content,
     seed = seed,
     bootstrapProgress = kinetickk.ball.profile.api.GameplayProfileSnapshot(
         preferences = kinetickk.ball.profile.api.PlayerPreferences(),

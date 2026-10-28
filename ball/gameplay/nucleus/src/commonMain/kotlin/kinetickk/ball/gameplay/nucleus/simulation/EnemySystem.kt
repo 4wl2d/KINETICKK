@@ -55,7 +55,7 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
         if (updateSiteOwnedEnemy(enemy, delta)) continue
         when (enemy.type) {
             EnemyType.DRIFTER -> steerEnemy(enemy, dx / distance * 78f, dy / distance * 78f, 2.1f, delta)
-            // 0.6.0 kinds: one dispatch each; a kind whose behaviour has not landed yet steers like a Drifter.
+            // 0.6.0 kinds: one dispatch each.
             EnemyType.COMET -> updateComet(enemy, dx, dy, distance, delta)
             EnemyType.PYLON -> updatePylon(enemy, dx, dy, distance)
             EnemyType.SENTRY -> updateSentry(enemy, dx, dy, distance, delta)
@@ -66,9 +66,12 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
             EnemyType.HOUND -> updateHound(enemy, dx, dy, distance, cadence, delta)
             EnemyType.CIPHER -> updateCipher(enemy, dx, dy, distance, delta)
             EnemyType.MIRROR -> updateMirror(enemy, dx, dy, cadence, delta)
-            EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN,
-            EnemyType.THRONE, EnemyType.PYRE_HERALD, EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT,
-            -> updatePendingKind(enemy, dx, dy, distance, delta)
+            EnemyType.WARDEN_PRIME -> updateWardenPrime(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.BROOD_QUEEN -> updateBroodQueen(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.THRONE -> updateThrone(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.PYRE_HERALD -> updatePyreHerald(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.CARTOGRAPHER -> updateCartographer(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.ANTECEDENT -> updateAntecedent(enemy, dx, dy, distance, cadence, delta)
             EnemyType.SHOOTER -> {
                 val desired = if (distance > 340f) 78f else if (distance < 250f) -72f else 0f
                 val tangent = if (enemy.id % 2 == 0) 1f else -1f
@@ -151,13 +154,7 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
                     1.55f,
                     delta,
                 )
-                if (distance < 440f && dashPhaseTime <= 0f && canAttack(enemy)) {
-                    // Ion charge disrupts the well.
-                    val disruption = max(0.2f, 1f - 0.12f * stacks(enemy, StatusElement.ION))
-                    val gravity = (38f + (1f - distance / 440f) * 270f) * disruption
-                    velocityX -= dx / distance * gravity * delta
-                    velocityY -= dy / distance * gravity * delta
-                }
+                applyGravityWell(enemy, dx, dy, distance, delta, strength = 1f)
                 enemy.actionTimer -= cadence
                 if (enemy.actionTimer <= 0f && distance < 780f) {
                     enemy.actionTimer = 2.65f
@@ -175,6 +172,7 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
                 )
             }
             EnemyType.ELITE -> {
+                updateEliteAffix(enemy, dx, dy, distance, delta)
                 val tangent = if (enemy.id % 2 == 0) 1f else -1f
                 steerEnemy(enemy, dx / distance * 52f - dy / distance * 45f * tangent, dy / distance * 52f + dx / distance * 45f * tangent, 1.3f, delta)
                 enemy.actionTimer -= cadence
@@ -226,6 +224,28 @@ internal fun MutableGameState.steerEnemy(enemy: Enemy, desiredX: Float, desiredY
     val factor = 1f - exp(-agility * delta)
     enemy.vx = lerp(enemy.vx, desiredX * rebirthProfile.enemySpeedMultiplier * affixSpeedFactor(enemy), factor)
     enemy.vy = lerp(enemy.vy, desiredY * rebirthProfile.enemySpeedMultiplier * affixSpeedFactor(enemy), factor)
+}
+
+/**
+ * The Warden's gravity well ([strength] 1): while [enemy] can attack, the Core is outside a Dash phase and within 440 u,
+ * the well pulls the Core toward it, harder near its centre; Ion charge on [enemy] disrupts it. A Magnetic Elite runs
+ * the same well at its affix strength.
+ */
+internal fun MutableGameState.applyGravityWell(
+    enemy: Enemy,
+    dx: Float,
+    dy: Float,
+    distance: Float,
+    delta: Float,
+    strength: Float,
+) {
+    if (distance < 440f && dashPhaseTime <= 0f && canAttack(enemy)) {
+        // Ion charge disrupts the well.
+        val disruption = max(0.2f, 1f - 0.12f * stacks(enemy, StatusElement.ION))
+        val gravity = (38f + (1f - distance / 440f) * 270f) * disruption * strength
+        velocityX -= dx / distance * gravity * delta
+        velocityY -= dy / distance * gravity * delta
+    }
 }
 
 internal fun MutableGameState.updateProjectiles(delta: Float) {
@@ -393,6 +413,7 @@ internal fun MutableGameState.spawnedEnemy(
     val hardened = type == EnemyType.ELITE && runMutatorActive(RebirthMutator.HARDENED_ELITES)
     if (hardened) integrity *= HARDENED_ELITE_INTEGRITY
     integrity *= integrityShare
+    integrity *= championIntegrityScale(type, nextEntityId, ownerTag)
     val enemy = Enemy(
         id = nextEntityId++,
         type = type,
