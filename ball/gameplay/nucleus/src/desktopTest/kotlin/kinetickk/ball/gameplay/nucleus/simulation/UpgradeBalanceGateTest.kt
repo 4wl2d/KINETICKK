@@ -30,7 +30,8 @@ import kotlin.test.assertTrue
  * - J4 (upgrades are not progression): tier 6, no Matrix, Orb Refit 10 + Honing 10 on every owned weapon: no win.
  * - J5 (perceptible): Orb/Flux Wake and Pentagon/Arc Coil, maxed against 0, in a 25 s crowd and a 180 s Architect
  *   fight on four fixed seeds: weapon-side damage per engaged second +12 %, character-ability damage per engaged
- *   second +8 %, and no more integrity lost (as a share of maximum integrity).
+ *   second +8 %, and no more integrity lost (as a share of maximum integrity; in the Architect fight a Core below half
+ *   its integrity is repaired, the loss counted, so both flights meet the whole fight).
  *
  * Knob order if a gate fails (economy §4.6): weaponPowerPerLevel 0.03 → 0.025, characterPowerPerLevel
  * 0.02 → 0.015, characterIntegrityPerLevel 2 → 1.5, then the signature step that breaks a band.
@@ -148,7 +149,8 @@ class UpgradeBalanceGateTest {
      * arrival for 180 s. The Core orbits the targets close enough for impacts and dodges shots like that harness.
      * The crowd's Drifters (WeaponBalanceTest's arena targets) hold [CROWD_INTEGRITY] and are topped up below a quarter,
      * so no kill ends or quantizes the measurement and both flights meet the same crowd for all 25 s; the
-     * Architect fight is measured until the Victory or 180 s.
+     * Architect fight is measured until the Victory or 180 s, and a Core that falls below half its integrity there is
+     * repaired to full (its loss counted), so no fall ends it early.
      */
     private fun encounter(shape: CoreShape, weapon: WeaponId, level: Int, boss: Boolean, seed: Int): EncounterMeasure {
         val game = MutableGameState(canonicalGameplayContent, seed = seed).apply {
@@ -264,6 +266,14 @@ class UpgradeBalanceGateTest {
             game.setBrake(brake)
             if (urgent && !brake && game.heat < 45f) game.requestDash()
             val before = targets.sumOf { it.hp.toDouble() }
+            // A fall never ends the Architect fight: below half its integrity the Core is repaired to full (the loss stays
+            // counted), so both flights meet the fight until the Victory or 180 s. The scripted orbit falls to the Architect
+            // under either flight law and any pilot slew, and a fall caps the loss at one integrity plus what was healed, so
+            // the flight that lives longer would read as the one that lost more.
+            if (boss && game.hp < game.maxHp * REPAIR_BELOW) {
+                game.hp = game.maxHp
+                previousIntegrity = game.hp
+            }
             game.update(1f / 60f)
             crowdDamage += before - targets.sumOf { it.hp.toDouble() }
             game.takeVisualFxCues()
@@ -285,6 +295,9 @@ class UpgradeBalanceGateTest {
          * threshold rule).
          */
         const val J1_MIN_MEDIAN_SURVIVAL = 480f
+
+        /** In the Architect fight a Core below this share of its integrity is repaired to full before the next step. */
+        const val REPAIR_BELOW = 0.5f
 
         /** The crowd Drifters' integrity pool (WeaponBalanceTest's crowd arena). */
         const val CROWD_INTEGRITY = 900f

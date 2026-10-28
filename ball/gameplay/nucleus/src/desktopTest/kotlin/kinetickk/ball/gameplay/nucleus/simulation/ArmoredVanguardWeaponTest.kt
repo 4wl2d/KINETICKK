@@ -111,7 +111,13 @@ class ArmoredVanguardWeaponTest {
     }
 
     private companion object {
-        const val PHASE_SECONDS = 8f
+        /**
+         * Each phase's length: long enough that every weapon's damage path lands well past [MINIMUM_DAMAGE] against the
+         * anchored crowd. Under the 0.6.0 flight law the pilot's passes lay the trap weapons' mines and rifts across the
+         * anchored targets less often in the first 8 s (Gravity Mines dealt 44, Hollow Rift 20); over 16 s every weapon
+         * deals at least about twice the floor.
+         */
+        const val PHASE_SECONDS = 16f
         const val CROWD_SIZE = 8
         const val CROWD_RING = 150f
         const val INTEGRITY = 2_000f

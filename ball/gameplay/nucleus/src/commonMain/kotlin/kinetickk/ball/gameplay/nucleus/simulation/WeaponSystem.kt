@@ -525,7 +525,7 @@ internal fun MutableGameState.arcCoilHopRange(): Float = ARC_COIL_HOP_RANGE + if
 
 /** Upper bound of [arcCoilTargetCount]: four, plus two on a Pentagon's beat. */
 internal const val MAX_ARC_COIL_TARGETS: Int = 6
-internal const val ARC_COIL_FIRST_RANGE: Float = 380f
+internal const val ARC_COIL_FIRST_RANGE: Float = 420f
 internal const val ARC_COIL_HOP_RANGE: Float = 220f
 internal const val ARC_COIL_FALLOFF: Float = 0.9f
 
@@ -1160,7 +1160,7 @@ internal const val ION_SWARM_DAMAGE: Float = 4.5f
 internal const val ION_SWARM_COOLDOWN: Float = 0.72f
 internal const val ION_SWARM_PIERCE: Int = 1
 internal const val ION_SWARM_FIRE_RATE_FORM: Float = 1.25f
-internal const val ARC_COIL_DAMAGE: Float = 16f
+internal const val ARC_COIL_DAMAGE: Float = 15f
 internal const val ARC_COIL_COOLDOWN: Float = 1.15f
 internal const val ARC_COIL_CHARGE: Int = 1
 internal const val QUASAR_DAMAGE: Float = 87f
@@ -1198,7 +1198,7 @@ internal const val GYRE_ORBIT_BONUS: Float = 1.25f
 internal const val GYRE_RETURN_BONUS: Float = 1.5f
 internal const val GYRE_EXTRA_SHARE: Float = 0.6f
 
-internal const val SCATTER_DAMAGE: Float = 10f
+internal const val SCATTER_DAMAGE: Float = 8.4f
 internal const val SCATTER_PIERCE: Int = 2
 internal const val SCATTER_PELLETS: Int = 7
 internal const val SCATTER_PASSIVE_PELLETS: Int = 7
@@ -1230,7 +1230,7 @@ internal const val SENTRY_FOLDED: Int = 1
 internal const val SENTRY_BLAST_RADIUS: Float = 120f
 internal const val SENTRY_BLAST_DAMAGE: Float = 40f
 
-internal const val HUNTER_DAMAGE: Float = 9f
+internal const val HUNTER_DAMAGE: Float = 9.5f
 internal const val HUNTER_DECAY_EVERY: Int = 2
 internal const val HUNTER_COOLDOWN: Float = 2.2f
 internal const val HUNTER_MISSILES: Int = 3
