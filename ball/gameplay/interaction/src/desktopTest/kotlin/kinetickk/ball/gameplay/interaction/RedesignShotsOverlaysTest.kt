@@ -24,7 +24,14 @@ import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.DirectorPersonalityId
+import kinetickk.ball.content.api.OmenId
+import kinetickk.ball.content.api.SignalKind
+import kinetickk.ball.content.api.SignalOption
+import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.gameplay.interaction.canvas.with
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RewardFocus
@@ -364,6 +371,53 @@ class RedesignShotsOverlaysTest {
             Scene("report-defeat") { w, h, l ->
                 TerminalShot(rewardFixtureModel(phase = GamePhase.GAME_OVER, relics = relics4, language = l, width = w, height = h, textScale = textScale,
                     message = "SINGULARITY CONTACT", runMatter = 640L, totalMatter = 1_284L, kills = 901, elapsed = 554f, level = 16, weaponLevel = 8))
+            },
+            // The production start's omen offer: three omens (a mutator one among them) and No omen, the run's pattern and
+            // Keynote under the heading.
+            Scene("reward-omen") { w, h, l ->
+                RewardShot(model {
+                    val omens = rewardFixtureContent.variety.omens.definitions
+                    rewardFixtureModel(
+                        choiceType = ChoiceType.OMEN, language = l, width = w, height = h, textScale = textScale, elapsed = 0.02f, level = 1,
+                        choices = listOf(OmenId.GLASS_SUN, OmenId.CROWNED_QUARRY, OmenId.AMPLIFIED_KEYNOTE).map { id ->
+                            ChoiceOption(ChoiceType.OMEN, omens[id.ordinal].name, omens[id.ordinal].upside, "OMEN", omenId = id)
+                        } + ChoiceOption(ChoiceType.OMEN, "No omen", "Start the run as it is.", "DECLINE"),
+                        previews = listOf(RewardPreview(immutableListOf(RewardStatChange("Impact power", 1f, 1.25f, "×"),
+                            RewardStatChange("Weapon power", 1f, 1.2f, "×")))),
+                    ).with("directorPersonality" to DirectorPersonalityId.HUNTER_CELL, "keynoteTag" to BuildTag.DRIVE,
+                        "keynoteElement" to StatusElement.ION)
+                })
+            },
+            // A Merchant signal mid-run: the offers out of reach (locked), the bundle open, Ignore.
+            Scene("reward-signal") { w, h, l ->
+                RewardShot(model {
+                    rewardFixtureModel(
+                        choiceType = ChoiceType.SIGNAL, language = l, width = w, height = h, textScale = textScale,
+                        choices = listOf(SignalOption.MERCHANT_RARE_OFFER to Triple(85, 0, true), SignalOption.MERCHANT_EPIC_OFFER to Triple(210, 0, true),
+                            SignalOption.MERCHANT_REROLLS to Triple(40, 2, false), SignalOption.IGNORE to Triple(0, 0, false)).map { (option, terms) ->
+                            ChoiceOption(ChoiceType.SIGNAL, option.title, "", if (option == SignalOption.IGNORE) "DECLINE" else "MERCHANT",
+                                signalKind = SignalKind.MERCHANT, signalOption = option, signalCost = terms.first, signalPayout = terms.second,
+                                locked = terms.third)
+                        },
+                    )
+                })
+            },
+            // A Shrine signal: the blessings preview the stats they leave.
+            Scene("reward-signal-shrine") { w, h, l ->
+                RewardShot(model {
+                    rewardFixtureModel(
+                        choiceType = ChoiceType.SIGNAL, language = l, width = w, height = h, textScale = textScale,
+                        choices = listOf(SignalOption.SHRINE_BLOOD to 54, SignalOption.SHRINE_WARD to 20, SignalOption.SHRINE_RELIC to 72,
+                            SignalOption.IGNORE to 0).map { (option, cost) ->
+                            ChoiceOption(ChoiceType.SIGNAL, option.title, "", if (option == SignalOption.IGNORE) "DECLINE" else "SHRINE",
+                                signalKind = SignalKind.SHRINE, signalOption = option, signalCost = cost, signalPayout = if (option == SignalOption.SHRINE_WARD) 25 else 0)
+                        },
+                        previews = listOf(
+                            RewardPreview(immutableListOf(RewardStatChange("Impact power", 1.64f, 1.74f, "×"), RewardStatChange("Weapon power", 1.36f, 1.46f, "×"))),
+                            RewardPreview(immutableListOf(RewardStatChange("Shield", 0f, 25f, ""), RewardStatChange("Damage reduction", 0f, 4f, "%"))),
+                        ),
+                    )
+                })
             },
         )
     }
