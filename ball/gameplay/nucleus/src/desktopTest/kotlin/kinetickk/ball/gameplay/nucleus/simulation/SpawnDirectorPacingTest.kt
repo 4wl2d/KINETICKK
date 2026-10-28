@@ -82,12 +82,17 @@ class SpawnDirectorPacingTest {
     fun aTierZeroRunNeverSpawnsRebirthGatedKinds() {
         for (seed in listOf(11, 22, 33)) {
             val state = runningState(seed, tier = 0)
-            val types = mutableSetOf<EnemyType>()
-            state.drive(600f) { state.enemies.forEach { types += it.type } }
+            val firstSeen = mutableMapOf<EnemyType, Float>()
+            state.drive(600f) { state.enemies.forEach { firstSeen.getOrPut(it.type) { state.elapsed } } }
+            val types = firstSeen.keys
             assertTrue(types.none { it == EnemyType.PHANTOM || it == EnemyType.BROODMOTHER || it == EnemyType.REFLECTOR }, "seed=$seed $types")
             assertTrue(EnemyType.HERALD !in types, "seed=$seed: no Herald below tier 2")
             assertTrue(types.none { it in HABITAT_ONLY_OR_OWNER_SPAWNED }, "seed=$seed: realspace keeps to its roster: $types")
             assertTrue(types.containsAll(listOf(EnemyType.SWARMLING, EnemyType.LANCER, EnemyType.SNIPER)), "seed=$seed $types")
+            // The Comet joins at two minutes and the Pylon at four and a half, never before their gates.
+            assertTrue(types.containsAll(listOf(EnemyType.COMET, EnemyType.PYLON)), "seed=$seed: Comet and Pylon appear: $types")
+            assertTrue(firstSeen.getValue(EnemyType.COMET) >= 120f, "seed=$seed: first Comet at ${firstSeen[EnemyType.COMET]}")
+            assertTrue(firstSeen.getValue(EnemyType.PYLON) >= 270f, "seed=$seed: first Pylon at ${firstSeen[EnemyType.PYLON]}")
         }
     }
 

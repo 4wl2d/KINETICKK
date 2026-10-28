@@ -3,7 +3,6 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.DISABLED_ENEMY_GATE_SECONDS
 import kinetickk.ball.content.api.EnemyHabitat
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.RebirthMutator
@@ -92,10 +91,9 @@ class HabitatDirectorTest {
                     }
                 }
             }
-            // Once every gate is open the whole roster is in play; a kind behind a disabled gate waits for its step.
+            // Once every gate is open the whole roster is in play.
             val late = directorState(tier = 10).apply { elapsed = 700f }
-            val open = roster.filter { late.content.enemy(it).timeGateSeconds < DISABLED_ENEMY_GATE_SECONDS }.toSet()
-            assertEquals(open, late.weightedKinds(habitat), "$habitat at tier 10, 700 s")
+            assertEquals(roster.toSet(), late.weightedKinds(habitat), "$habitat at tier 10, 700 s")
         }
     }
 

@@ -274,12 +274,14 @@ class TotemEnemySystemsTest {
             EnemyType.SHOOTER to 38f,
             EnemyType.SWARMLING to 75f,
             EnemyType.INTERCEPTOR to 90f,
+            EnemyType.COMET to 120f,
             EnemyType.CHARGER to 150f,
             EnemyType.WEAVER to 150f,
             EnemyType.BOMBER to 200f,
             EnemyType.SPLITTER to 240f,
             EnemyType.WARDEN to 240f,
             EnemyType.LANCER to 240f,
+            EnemyType.PYLON to 270f,
             EnemyType.SNIPER to 330f,
             EnemyType.AEGIS to 390f,
             EnemyType.MINELAYER to 450f,
@@ -314,6 +316,7 @@ class TotemEnemySystemsTest {
         val tierZero = picks(seed = 11, tier = 0).toSet()
         assertTrue(EnemyType.PHANTOM !in tierZero && EnemyType.BROODMOTHER !in tierZero && EnemyType.REFLECTOR !in tierZero)
         assertTrue(tierZero.containsAll(listOf(EnemyType.DRIFTER, EnemyType.SWARMLING, EnemyType.SNIPER, EnemyType.MINELAYER)))
+        assertTrue(tierZero.containsAll(listOf(EnemyType.COMET, EnemyType.PYLON)), "the open-space newcomers join tier 0: $tierZero")
         val tierFour = picks(seed = 11, tier = 4).toSet()
         assertTrue(tierFour.containsAll(listOf(EnemyType.PHANTOM, EnemyType.BROODMOTHER, EnemyType.REFLECTOR)))
         assertTrue(EnemyType.HERALD !in tierFour && EnemyType.ELITE !in tierFour)

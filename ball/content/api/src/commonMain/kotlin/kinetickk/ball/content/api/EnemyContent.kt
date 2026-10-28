@@ -233,9 +233,6 @@ object EnemyNotices {
 const val MIN_ENEMY_THREAT: Int = 1
 const val MAX_ENEMY_THREAT: Int = 5
 
-/** A time gate no run reaches: the kind is shipped but never picked until its lane enables it. */
-const val DISABLED_ENEMY_GATE_SECONDS: Float = 100_000f
-
 /** The shipped roster in [EnemyType] order. */
 fun defaultEnemyDefinitions(): ImmutableList<EnemyDefinition> = listOf(
     EnemyDefinition(
@@ -345,14 +342,12 @@ fun defaultEnemyDefinitions(): ImmutableList<EnemyDefinition> = listOf(
     ),
     EnemyDefinition(
         EnemyType.COMET, "Comet", "Marks a lane and streaks along it. A fast impact shatters it, and so does an obstacle in its path.",
-        // Gated out of every run until the ENEMIES lane enables it at 120 s.
-        threat = 2, timeGateSeconds = DISABLED_ENEMY_GATE_SECONDS, minimumRebirth = 0, weight = 7f,
+        threat = 2, timeGateSeconds = 120f, minimumRebirth = 0, weight = 7f,
     ),
     EnemyDefinition(
         EnemyType.PYLON, "Pylon",
         "Docks on an obstacle and fires aimed volleys. Weapons barely scratch it; impacts and slammed enemies break it.",
-        // Gated out of every run until the ENEMIES lane enables it at 270 s.
-        threat = 3, timeGateSeconds = DISABLED_ENEMY_GATE_SECONDS, minimumRebirth = 0, weight = 4f,
+        threat = 3, timeGateSeconds = 270f, minimumRebirth = 0, weight = 4f,
         habitats = EnemyHabitat.SPACE.bit or EnemyHabitat.STRUCTURE.bit,
         habitatWeights = HabitatWeights(structure = 6f),
     ),
