@@ -14,7 +14,6 @@ dependencies {
 }
 
 val buildInfo = tasks.register<WriteDesktopBuildInfoTask>("writeDesktopBuildInfo") {
-    mustRunAfter(":updatePokeballResolvedManifest")
     gameVersion.set(project.version.toString())
     kotlinVersion.set(libs.versions.kotlin)
     composeVersion.set(libs.versions.compose)

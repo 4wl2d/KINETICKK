@@ -21,8 +21,6 @@ jobs:
     name: Desktop and architecture
     runs-on: ubuntu-24.04
     timeout-minutes: 45
-    env:
-      POKEBALL_SNAPSHOT_DIR: ${{ github.workspace }}/pokeball
     defaults:
       run:
         shell: bash
@@ -35,14 +33,6 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           path: kinetickk
-          persist-credentials: false
-
-      - name: Check out pinned Pokeball Core
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          repository: 4wl2d/Pokeball
-          ref: b4a8219ecb70ae5e81214edd6b509b61d9db0637
-          path: pokeball
           persist-credentials: false
 
       - name: Set up JDK 17
@@ -65,10 +55,8 @@ jobs:
           set -o pipefail
           mkdir -p build/ci
           ./gradlew \
-            -PpokeballSnapshotDir="$POKEBALL_SNAPSHOT_DIR" \
+            :build-logic:test \
             verifyArchitecture \
-            verifyPokeballArchitecture \
-            verifyPokeballConformance \
             desktopTest \
             -Pkinetickk.gradle.isolatedProfile=true \
             --isolated-projects \
