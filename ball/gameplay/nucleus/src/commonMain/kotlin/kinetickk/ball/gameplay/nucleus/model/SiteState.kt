@@ -71,9 +71,12 @@ internal enum class RunSecretFlag {
     FAR_TRAVEL, FAR_SIGIL_SPAWNED, CARTOGRAPHER_SUMMONED, CARTOGRAPHER_DEFEATED,
 }
 
-/** Flags that only exist because the player opted into something (FAR_TRAVEL is not one). */
+/**
+ * Flags that only exist because the player opted into something. FAR_TRAVEL is not one, and neither is SPIN_CYCLE:
+ * Spin Cycle is tracked in every run and pays nothing that acts in the run, so it never counts as engagement.
+ */
 internal val EngagementSecretMask: Int = RunSecretFlag.entries
-    .filter { it != RunSecretFlag.FAR_TRAVEL }
+    .filter { it != RunSecretFlag.FAR_TRAVEL && it != RunSecretFlag.SPIN_CYCLE }
     .fold(0) { mask, flag -> mask or (1 shl flag.ordinal) }
 
 /**

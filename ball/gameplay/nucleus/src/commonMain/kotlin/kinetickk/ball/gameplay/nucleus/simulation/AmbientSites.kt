@@ -24,8 +24,9 @@ import kotlin.math.sqrt
 /*
  * Ambient sites: drift caches and easter eggs placed by a stateless hash of the run seed and an absolute cell, only far
  * from the run's spawn. The window around the Core is rebuilt when the Core changes obstacle chunk, a site is moved
- * clear of obstacles once the Core comes near it, and a cache opens when the Core flies through it. None of it draws
- * from a run stream.
+ * clear of obstacles once the Core comes near it, a cache, the Lost Cursor or the Quiet Signal opens when the Core flies
+ * through it, and the Golden Drifter's hidden trigger releases it when the Core comes near. None of it draws from a run
+ * stream.
  */
 
 /** Placement seeds per ambient kind: `worldHash(runSeed, cellX, cellY, salt)` (registered SITES salts). */
@@ -70,7 +71,7 @@ internal data class AmbientCandidate(val absoluteX: Double, val absoluteY: Doubl
 
 /**
  * The ambient step after the window sites: realspace only, the window rebuilt on an obstacle-chunk change, nearby sites
- * settled, then the caches the Core flew through opened (during any engagement too). An [AmbientSiteWindow.EMPTY]
+ * settled, then the sites the Core flew through or came near opened (during any engagement too). An [AmbientSiteWindow.EMPTY]
  * window stays empty: nothing ambient is placed while the policy is off, after the Architect arrives or in a quiet
  * arena.
  */
@@ -135,10 +136,11 @@ private fun MutableGameState.generateAmbientWindow(
     return AmbientSiteWindow(chunkX, chunkY, placed.toImmutableList())
 }
 
-/** A found Lost Cursor or Quiet Signal is never placed again this run. */
+/** A found Lost Cursor or Quiet Signal, or a caught Golden Drifter, is never placed again this run. */
 private fun MutableGameState.eggFound(kind: SiteKind): Boolean =
     kind == SiteKind.LOST_CURSOR && hasSecret(RunSecretFlag.LOST_CURSOR_FOUND) ||
-        kind == SiteKind.QUIET_SIGNAL && hasSecret(RunSecretFlag.QUIET_SIGNAL_FOUND)
+        kind == SiteKind.QUIET_SIGNAL && hasSecret(RunSecretFlag.QUIET_SIGNAL_FOUND) ||
+        kind == SiteKind.GOLDEN_DRIFTER && hasSecret(RunSecretFlag.GOLDEN_DRIFTER_CAUGHT)
 
 /**
  * The site [rule] places in absolute cell ([cellX], [cellY]), or null: the chance is 0 while the cell's centre lies
@@ -199,31 +201,63 @@ private fun MutableGameState.settleNearbyAmbientSites() {
     settled?.let { ambientSites = window.copy(sites = it.toImmutableList()) }
 }
 
-/** Opens every settled cache the Core's swept step crossed this step. */
+/**
+ * Opens every settled site the Core touched this step: its swept step crossed a fly-through site's activation circle,
+ * or it stands within a proximity trigger's radius (the Golden Drifter's). A secret found earlier in the same step is
+ * not found again.
+ */
 private fun MutableGameState.touchAmbientSites() {
     val sites = ambientSites.sites
     for (index in sites.indices) {
         val site = sites[index]
-        if (!site.settled || !opensOnFlyThrough(site.kind)) continue
-        val radius = content.sites.definition(site.kind).activationRadius
-        if (segmentCircleIntersects(previousCoreX, previousCoreY, coreX, coreY, site.x, site.y, radius)) openAmbientSite(site)
+        if (!site.settled || eggFound(site.kind)) continue
+        val trigger = ambientTriggerRadius(site.kind)
+        val touched = if (trigger > 0f) {
+            distanceSquared(coreX, coreY, site.x, site.y) <= trigger * trigger
+        } else {
+            val radius = content.sites.definition(site.kind).activationRadius
+            segmentCircleIntersects(previousCoreX, previousCoreY, coreX, coreY, site.x, site.y, radius)
+        }
+        if (touched) openAmbientSite(site)
     }
 }
 
 /**
- * Whether flying through a site of [kind] opens it here: drift caches. The easter eggs are found by their own rules
- * (the Golden Drifter's trigger is its proximity, never a fly-through) and stay in place until then.
- */
-private fun opensOnFlyThrough(kind: SiteKind): Boolean = kind == SiteKind.DRIFT_CACHE
-
-/**
- * Opens [site]: its id joins the opened-site FIFO (the oldest of more than [ContentBounds.MAX_OPENED_SITES] drops
- * out), it leaves the window, and a cache grants its contents.
+ * Opens [site]: a cache, the Lost Cursor or the Quiet Signal is consumed and then grants its contents or is found; the
+ * Golden Drifter's trigger releases the drifter (and is consumed only when it flies).
  */
 private fun MutableGameState.openAmbientSite(site: SiteState) {
+    when (site.kind) {
+        SiteKind.GOLDEN_DRIFTER -> releaseGoldenDrifter(site)
+        SiteKind.DRIFT_CACHE -> {
+            consumeAmbientSite(site)
+            openDriftCache(site)
+        }
+        SiteKind.LOST_CURSOR -> {
+            consumeAmbientSite(site)
+            findLostCursor(site)
+        }
+        SiteKind.QUIET_SIGNAL -> {
+            consumeAmbientSite(site)
+            hearQuietSignal(site)
+        }
+        else -> error("${site.kind} is never an ambient site")
+    }
+}
+
+/**
+ * [site] is spent: its id joins the opened-site FIFO (the oldest of more than [ContentBounds.MAX_OPENED_SITES] drops
+ * out), so it is never placed again, and it leaves the window.
+ */
+internal fun MutableGameState.consumeAmbientSite(site: SiteState) {
     openedSiteIds = (openedSiteIds + site.id).takeLast(ContentBounds.MAX_OPENED_SITES)
     ambientSites = ambientSites.copy(sites = ambientSites.sites.filter { it.id != site.id }.toImmutableList())
-    openDriftCache(site)
+}
+
+/** Every site of [kind] leaves the current window (a found egg; generation skips it from now on). */
+internal fun MutableGameState.removeAmbientSitesOf(kind: SiteKind) {
+    if (ambientSites.sites.none { it.kind == kind }) return
+    ambientSites = ambientSites.copy(sites = ambientSites.sites.filter { it.kind != kind }.toImmutableList())
 }
 
 /**
@@ -270,10 +304,16 @@ internal fun MutableGameState.appendAmbientSiteMarks(out: FloatArray, count: Int
 
 /** The circle a pilot must keep out of: a proximity trigger's radius, else the fly-through activation radius. */
 private fun MutableGameState.ambientMarkRadius(kind: SiteKind): Float {
+    val trigger = ambientTriggerRadius(kind)
+    return if (trigger > 0f) trigger else content.sites.definition(kind).activationRadius
+}
+
+/** The proximity trigger radius of [kind]'s rule, or 0 for a fly-through site. */
+private fun MutableGameState.ambientTriggerRadius(kind: SiteKind): Float {
     val rules = content.sites.ambient.rules
     for (index in rules.indices) {
         val rule = rules[index]
-        if (rule.kind == kind && rule.triggerRadius > 0f) return rule.triggerRadius
+        if (rule.kind == kind) return rule.triggerRadius
     }
-    return content.sites.definition(kind).activationRadius
+    return 0f
 }

@@ -70,6 +70,13 @@ class WorldContractBoundsTest {
         assertFailsWith<IllegalArgumentException> { ChallengePolicy(ramClamp = 119f, ramRingRadius = 100f) }
         SecretPolicy(spinBuckets = ContentBounds.MAX_SPIN_BUCKETS)
         assertFailsWith<IllegalArgumentException> { SecretPolicy(spinBuckets = ContentBounds.MAX_SPIN_BUCKETS + 1) }
+        // Spin Cycle runs in every run: at most five Matter and nothing that acts in the run.
+        SecretPolicy(spinReward = SiteReward(matter = SPIN_REWARD_MAX_MATTER))
+        assertFailsWith<IllegalArgumentException> { SecretPolicy(spinReward = SiteReward(matter = SPIN_REWARD_MAX_MATTER + 1)) }
+        assertFailsWith<IllegalArgumentException> { SecretPolicy(spinReward = SiteReward(overdrive = 1f)) }
+        // A released Golden Drifter must not count as escaped at once.
+        SitePolicy(secrets = SecretPolicy(goldenEscapeDistance = 1_300.001f))
+        assertFailsWith<IllegalArgumentException> { SitePolicy(secrets = SecretPolicy(goldenEscapeDistance = 1_300f)) }
         assertFailsWith<IllegalArgumentException> { SiteReward(matter = 121) }
         assertFailsWith<IllegalArgumentException> { SiteReward(relics = 2) }
         // Only window families take window weight; only untimed families last 0 s.

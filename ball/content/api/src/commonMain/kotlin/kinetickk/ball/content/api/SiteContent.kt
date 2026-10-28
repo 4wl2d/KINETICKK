@@ -53,6 +53,9 @@ enum class SiteKind(val family: SiteFamily) {
 /** The anomaly kinds lead [SiteKind] in this count (the 0.5.0 window kinds). */
 const val ANOMALY_KIND_COUNT: Int = 3
 
+/** Spin Cycle's reward never exceeds this much Matter (it runs in every run, so it must not bias a run). */
+const val SPIN_REWARD_MAX_MATTER: Int = 5
+
 /**
  * One reward bundle, every part optional; Gameplay grants all parts at once. Bounds keep any single site inside the
  * existing channels: at most one directed reward, two plain offers and one floor offer.
@@ -362,13 +365,27 @@ data class SecretPolicy(
     val goldenMaxSpeed: Float = 1_050f,
     val goldenLifetime: Float = 18f,
     val goldenEscapeDistance: Float = 2_800f,
-    val spinReward: SiteReward = SiteReward(overdrive = 100f, matter = 10),
+    /**
+     * Spin Cycle runs in every run, so it pays the discovery, a flourish and at most [SPIN_REWARD_MAX_MATTER] Matter,
+     * nothing that acts in the run.
+     */
+    val spinReward: SiteReward = SiteReward(matter = SPIN_REWARD_MAX_MATTER),
     val quietReward: SiteReward = SiteReward(matter = 20),
     val doodleReward: SiteReward = SiteReward(matter = 30),
 ) {
     init {
         require(spinBuckets in 1..ContentBounds.MAX_SPIN_BUCKETS) { "Spin buckets must be in 1..${ContentBounds.MAX_SPIN_BUCKETS}" }
         require(spinTurns in 1f..20f) { "Spin turns must be in 1..20" }
+        require(spinMinDistance.isFinite() && spinMinDistance >= 0f && spinMaxDistance.isFinite() && spinMinDistance < spinMaxDistance) {
+            "Spin Cycle counts inside a band around the singularity"
+        }
+        require(spinReward == SiteReward(matter = spinReward.matter) && spinReward.matter <= SPIN_REWARD_MAX_MATTER) {
+            "Spin Cycle pays at most $SPIN_REWARD_MAX_MATTER Matter and nothing that acts in the run"
+        }
+        require(goldenBaseSpeed.isFinite() && goldenBaseSpeed > 0f && goldenMaxSpeed.isFinite() && goldenBaseSpeed <= goldenMaxSpeed &&
+            goldenSpeedRamp.isFinite() && goldenSpeedRamp >= 0f) { "The Golden Drifter's speeds must be positive and ordered" }
+        require(goldenLifetime in 1f..60f) { "The Golden Drifter flies 1..60 s" }
+        require(goldenEscapeDistance.isFinite() && goldenEscapeDistance > 0f) { "The Golden Drifter's escape distance must be positive" }
         require(farTravelDistance >= 6_000f) { "Far travel starts at least 6000 u from the origin" }
         require(sigilCutoff in 30f..300f) { "Sigil cutoff must be in 30..300 s" }
     }
@@ -412,6 +429,10 @@ data class SitePolicy(
         }
         require(definitions.all { it.windowWeight == 0f || it.duration <= windows.trialDuration }) {
             "A window site never lasts longer than the trial"
+        }
+        // A Golden Drifter released within its trigger radius must not count as escaped at once.
+        require(ambient.rules.none { it.kind == SiteKind.GOLDEN_DRIFTER && it.triggerRadius >= secrets.goldenEscapeDistance }) {
+            "The Golden Drifter escapes farther away than its trigger reaches"
         }
     }
 

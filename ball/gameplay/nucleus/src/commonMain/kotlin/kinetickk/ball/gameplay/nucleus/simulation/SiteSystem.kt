@@ -56,13 +56,15 @@ internal fun MutableGameState.updateSites(delta: Float) {
     if (bossSpawned || elapsed >= content.tempo.bossAtSeconds) {
         for (index in sites.indices) releaseSiteFoes(sites[index])
         sites = emptyList()
-        // Nothing opens once the Architect arrives, so nothing ambient stays in view.
+        // Nothing opens once the Architect arrives, so nothing ambient stays in view, and a Golden Drifter leaves.
         ambientSites = AmbientSiteWindow.EMPTY
+        releaseGoldenDrifterWithoutKill()
         return
     }
     offerDueWindow()
     advanceWindowSites(delta)
     updateAmbientSites()
+    updateSecretTrackers(delta)
 }
 
 /**
@@ -309,10 +311,14 @@ private fun MutableGameState.activateAnomalySite(point: SiteState) {
 }
 
 /**
- * Kill hook of [onEnemyKilled]: a defeated foe of the active window site counts toward its trial (a Ram rite's foe
- * only when a Dash killed it; any other kill shows as one foe fewer).
+ * Kill hook of [onEnemyKilled]: the Golden Drifter is caught; a defeated foe of the active window site counts toward
+ * its trial (a Ram rite's foe only when a Dash killed it; any other kill shows as one foe fewer).
  */
 internal fun MutableGameState.recordSiteKill(enemy: Enemy) {
+    if (enemy.id == goldenDrifterId) {
+        catchGoldenDrifter(enemy)
+        return
+    }
     val trial = sites.singleOrNull()?.takeIf { it.active && enemy.id in it.foeIds } ?: return
     // Called once by onEnemyKilled, whose dead guard also protects this counter.
     val count = when (trial.kind) {

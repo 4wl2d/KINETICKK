@@ -44,6 +44,11 @@ internal val SitePhrasesInRussian: List<Pair<String, String>> = listOf(
     "CHALLENGE COMPLETE" to "ВЫЗОВ ПРОЙДЕН",
     "CHALLENGE FAILED" to "ВЫЗОВ ПРОВАЛЕН",
     "CACHE OPENED" to "ТАЙНИК ВСКРЫТ",
+    // GOLDEN DRIFTER, SPIN CYCLE and THE ARCHITECT'S DOODLE read through the uppercase forms of their names below.
+    "LOST CURSOR FOUND" to "ПОТЕРЯННЫЙ КУРСОР НАЙДЕН",
+    "GOLDEN DRIFTER CAUGHT" to "ЗОЛОТОЙ ДРЕЙФЕР ПОЙМАН",
+    "IT GOT AWAY" to "УСКОЛЬЗНУЛ",
+    "QUIET SIGNAL // THE ARCHITECT WAS NOT THE FIRST" to "ТИХИЙ СИГНАЛ // АРХИТЕКТОР БЫЛ НЕ ПЕРВЫМ",
 
     "Trials" to "Вызовы",
     "The Lost Cursor" to "Потерянный курсор",

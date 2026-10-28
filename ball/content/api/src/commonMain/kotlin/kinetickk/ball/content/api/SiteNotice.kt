@@ -28,4 +28,16 @@ enum class SiteNotice(val english: String) {
     CHALLENGE_FAILED("CHALLENGE FAILED"),
     /** The Core flew through a drift cache: its contents are granted. */
     CACHE_OPENED("CACHE OPENED"),
+    /** The Core flew through the Lost Cursor: it follows the Core for the rest of the run. */
+    LOST_CURSOR_FOUND("LOST CURSOR FOUND"),
+    /** The Golden Drifter was released and flees. */
+    GOLDEN_SIGHTED("GOLDEN DRIFTER"),
+    GOLDEN_CAUGHT("GOLDEN DRIFTER CAUGHT"),
+    /** The Golden Drifter outran its time or the Core: it leaves without a kill. */
+    GOLDEN_ESCAPED("IT GOT AWAY"),
+    SPIN_CYCLE("SPIN CYCLE"),
+    /** STRUCTURES' Doodle reached (`discoverDoodle`). */
+    DOODLE("THE ARCHITECT'S DOODLE"),
+    /** The Quiet Signal heard (the tail is shown in the feed). */
+    QUIET_SIGNAL("QUIET SIGNAL // THE ARCHITECT WAS NOT THE FIRST"),
 }
