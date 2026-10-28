@@ -212,5 +212,14 @@ class StructureRenderMapperTest {
         assertSame(sealed.structures, fallen.structures)
         assertSame(sealed.signals, fallen.signals)
         assertEquals(sealed.dungeon!!.garrisonAlive - 1, fallen.dungeon?.garrisonAlive)
+
+        // Another structure spent while the window and the dungeon stay the same: its entrance stops signalling.
+        val other = assertNotNull(source.structureField.signals.firstOrNull { it.id != site.placement.id }).id
+        val unchanged = source.copyForReduction()
+        val retainedFallen = source.toRenderModel(retainedSealed, identity)
+        source.markSpent(other, SPENT_FLAG)
+        val dropped = source.toRenderModel(retainedFallen, unchanged).structures
+        assertFalse(dropped.signals.any { it.id == other })
+        assertSame(retainedFallen.structures.walls, dropped.walls)
     }
 }
