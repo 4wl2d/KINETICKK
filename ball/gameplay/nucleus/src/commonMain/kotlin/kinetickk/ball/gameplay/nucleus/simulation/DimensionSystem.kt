@@ -290,10 +290,11 @@ private fun MutableGameState.spawnObjectiveBossIfDue() {
 
 /**
  * Completes the visit's objective: the exit rift opens [DimensionPolicy.exitPortalDistance] ahead of the Core (moved
- * clear of obstacles) until the visit's end, with the completion banner. A completed visit pays the full reward
- * whether the Core leaves through the rift or the timer pulls it back.
+ * clear of obstacles) until the visit's end, with the completion banner unless [announce] is false (a secret boss's
+ * fall keeps its own defeat notice). A completed visit pays the full reward whether the Core leaves through the rift
+ * or the timer pulls it back.
  */
-internal fun MutableGameState.completeObjective() {
+internal fun MutableGameState.completeObjective(announce: Boolean = true) {
     val visit = dimensionRun.visit ?: return
     if (visit.completed) return
     val policy = content.dimensions
@@ -310,8 +311,10 @@ internal fun MutableGameState.completeObjective() {
         ),
         nextPortalId = dimensionRun.nextPortalId + 1,
     )
-    message = DimensionNotices.completed(visit.objective)
-    messageTime = 2f
+    if (announce) {
+        message = DimensionNotices.completed(visit.objective)
+        messageTime = 2f
+    }
     emitSound(GameplayAudioCue.LEVEL_UP)
 }
 

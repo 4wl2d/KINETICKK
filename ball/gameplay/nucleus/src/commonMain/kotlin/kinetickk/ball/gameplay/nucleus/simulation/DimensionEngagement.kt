@@ -29,14 +29,14 @@ internal fun MutableGameState.dimensionTrialProjection(): TrialProjection? = nul
 
 /**
  * Kill hook of onEnemyKilled during a visit whose objective is still open: the objective boss's fall completes it and
- * ends its encounter (its adds stay as ordinary enemies); a burning enemy (a Nadir native or one carrying Thermal)
- * leaves an ember during a Harvest. Draws nothing.
+ * ends its encounter (its adds stay as ordinary enemies; a secret boss keeps its defeat notice); a burning enemy (a
+ * Nadir native or one carrying Thermal) leaves an ember during a Harvest. Draws nothing.
  */
 internal fun MutableGameState.onDimensionEnemyKilled(enemy: Enemy) {
     val visit = dimensionRun.visit ?: return
     if (visit.completed) return
     if (visit.bossId >= 0 && enemy.id == visit.bossId) {
-        completeObjective()
+        completeObjective(announce = !enemy.isSecretBoss)
         endEncounter(dimensionEncounterTag(visit), despawn = false)
         return
     }

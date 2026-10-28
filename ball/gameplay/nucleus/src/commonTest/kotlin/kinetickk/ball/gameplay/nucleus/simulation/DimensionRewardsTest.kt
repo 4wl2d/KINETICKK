@@ -6,6 +6,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.DimensionNotices
 import kinetickk.ball.content.api.DimensionObjective
+import kinetickk.ball.content.api.EnemyNotices
 import kinetickk.ball.content.api.EnemyType
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemRarity
@@ -254,6 +255,15 @@ class DimensionRewardsTest {
         assertNotNull(state.visit().exitPortal)
         assertEquals(DimensionNotices.completed(DimensionObjective.JUDGEMENT), state.message)
         assertNull(state.encounter(tag), "the duel's encounter ends with its boss")
+
+        // The Antecedent's fall completes the Archive and keeps the secret boss's own defeat notice.
+        val archive = game(openWorld).apply { enterDimensionForTesting(WorldLayer.ARCHIVE, DimensionObjective.ANTECEDENT) }
+        archive.elapsed = 200f + tuning.antecedentDelaySeconds
+        archive.updateDimension(step)
+        archive.onEnemyKilled(archive.enemies.single { it.type == EnemyType.ANTECEDENT })
+        assertTrue(archive.visit().completed)
+        assertNotNull(archive.visit().exitPortal)
+        assertTrue(archive.message.startsWith(EnemyNotices.SECRET_BOSS_DEFEATED), archive.message)
 
         // A boss still alive when the visit ends stays behind: no kill, no completion, the smaller reward.
         val fled = game(openWorld).apply { enterDimensionForTesting(WorldLayer.NADIR, DimensionObjective.PYRE) }
