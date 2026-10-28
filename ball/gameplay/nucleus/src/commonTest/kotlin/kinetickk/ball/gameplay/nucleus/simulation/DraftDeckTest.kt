@@ -52,7 +52,8 @@ class DraftDeckTest {
 
     @Test
     fun theRankZeroDeckDealsAboutSixtyPercentOfEveryTier() {
-        val deck = buildTestState(seed = 7).itemDeck
+        // The deck's own deal and floors; the Keynote's floors (KeynoteTest) add its tag's and element's passives on top.
+        val deck = buildTestState(seed = 7, content = canonicalGameplayContent.withoutKeynote()).itemDeck
         val universe = canonicalGameplayContent.items.filter { it.minimumRebirth == 0 }
         assertEquals(221, universe.size)
         // Base deals 32 / 41 / 31 / 25 of 58 / 74 / 51 / 38 (the 18 actives among them, no rank-0 Legendary); floors,

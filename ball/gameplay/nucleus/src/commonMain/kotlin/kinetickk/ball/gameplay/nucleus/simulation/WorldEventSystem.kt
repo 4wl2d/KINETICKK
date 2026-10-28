@@ -4,12 +4,14 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 /*
- * Ambient world events and event signals per step (the run variety lane replaces this file). Inert until the lane
- * lands.
+ * The run variety's step (the run variety lane fills this file): the run-start announcements, then ambient world
+ * events and event signals (inert until they land).
  */
 
 @Suppress("UNUSED_PARAMETER")
-internal fun MutableGameState.updateRunVariety(delta: Float) = Unit
+internal fun MutableGameState.updateRunVariety(delta: Float) {
+    announceKeynote()
+}
 
 /** A world layer switch ends the event in progress silently. */
 internal fun MutableGameState.endWorldEventForLayerChange() = Unit
