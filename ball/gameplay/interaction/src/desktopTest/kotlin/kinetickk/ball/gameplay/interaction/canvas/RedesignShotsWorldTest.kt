@@ -441,6 +441,11 @@ class RedesignShotsWorldTest {
             model(w, h, points = listOf(ringChallenge(SiteKind.UNTOUCHED_TRIAL, -150f, 100f, 650f, 0.3f, warning = 0.5f)))
         }))
         add(Scene("site-velocity", hud = true, model = { w, h -> model(w, h, points = listOf(ringChallenge(SiteKind.VELOCITY_TRIAL, 300f, 200f, 1_800f, 0.6f))) }))
+        // Baby mode: the soft cursor with its pacifier wings, the diapered Core, the pastel halftone and ribbon; then under
+        // the HUD (the soft tether and the pacifier plate before the tier plate at tier 3).
+        add(Scene("easy-cruise", model = { w, h -> ribbonRun(w, h, 1_400f, 520f).with("easyMode" to true) }, fx = { ribbonFx(it, 520f) }))
+        add(Scene("easy-cruise-hud", hud = true, model = { w, h -> ribbonRun(w, h, 1_400f, 520f).with("easyMode" to true, "rebirthLevel" to 3) },
+            fx = { ribbonFx(it, 520f) }))
     }
 
     /**

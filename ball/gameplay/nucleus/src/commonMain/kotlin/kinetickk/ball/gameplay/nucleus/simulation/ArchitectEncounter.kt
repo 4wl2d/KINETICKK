@@ -79,7 +79,7 @@ internal fun MutableGameState.startArchitectPhaseEffects(enemy: Enemy) {
 }
 
 /** "It hardens against what you rely on": the dominant, then the secondary element, once they reach a tier. */
-private fun MutableGameState.adaptiveArchitectAspect(phase: Int): Int {
+internal fun MutableGameState.adaptiveArchitectAspect(phase: Int): Int {
     if (phase <= 0) return -1
     val dominant = build.dominant?.takeIf { affinityTier(it) >= 1 }
     if (phase == 1) return dominant?.ordinal ?: -1

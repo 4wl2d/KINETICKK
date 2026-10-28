@@ -18,13 +18,16 @@ enum class WorldLayer(val habitat: EnemyHabitat) {
     val bit: Int get() = 1 shl ordinal
 }
 
-/** One objective per visit; [layer] is the only layer that may roll it. */
-enum class DimensionObjective(val layer: WorldLayer, val label: String, val instruction: String) {
+/**
+ * One objective per visit; [layer] is the only layer that may roll it. [boss] is the kind a boss objective spawns
+ * and must defeat (null for a course or a collection); the bootstrap checks its rank and habitat against the roster.
+ */
+enum class DimensionObjective(val layer: WorldLayer, val label: String, val instruction: String, val boss: EnemyType? = null) {
     ASCENT(WorldLayer.ZENITH, "Ascent", "Fly through the halo gates in order, faster than cruising."),
-    JUDGEMENT(WorldLayer.ZENITH, "Judgement", "Defeat the Throne."),
+    JUDGEMENT(WorldLayer.ZENITH, "Judgement", "Defeat the Throne.", EnemyType.THRONE),
     HARVEST(WorldLayer.NADIR, "Harvest", "Collect twelve embers from burning enemies. Keep moving: slow flight scorches the Core."),
-    PYRE(WorldLayer.NADIR, "Pyre", "Defeat the Pyre Herald. Keep moving: slow flight scorches the Core."),
-    ANTECEDENT(WorldLayer.ARCHIVE, "Antecedent", "Defeat the Antecedent. Time moves only when you move."),
+    PYRE(WorldLayer.NADIR, "Pyre", "Defeat the Pyre Herald. Keep moving: slow flight scorches the Core.", EnemyType.PYRE_HERALD),
+    ANTECEDENT(WorldLayer.ARCHIVE, "Antecedent", "Defeat the Antecedent. Time moves only when you move.", EnemyType.ANTECEDENT),
 }
 
 enum class DimensionRewardKind { NONE, BLESSING_OFFER, PACT_OFFER, ARCHIVE_TROVE }
@@ -101,8 +104,9 @@ data class DimensionDefinition(
 ) {
     init {
         require(name.isNotBlank() && riftName.isNotBlank() && description.isNotBlank()) { "Dimension texts must not be blank" }
-        require(spawnRateMultiplier.isFinite() && spawnRateMultiplier > 0f && ordinaryCapMultiplier.isFinite() && ordinaryCapMultiplier > 0f) {
-            "Dimension spawn and cap multipliers must be positive"
+        // The hostile-scale range of run modifiers.
+        require(spawnRateMultiplier in 0.5f..1.5f && ordinaryCapMultiplier in 0.5f..1.5f) {
+            "Dimension spawn and cap multipliers must be in 0.5..1.5"
         }
     }
 }
@@ -131,7 +135,10 @@ data class DimensionObjectiveTuning(
         require(ascentMinimumSpacing <= ascentMaximumSpacing && ascentMinimumTurnDegrees <= ascentMaximumTurnDegrees) {
             "Ascent spacing and turn bounds must be ordered"
         }
-        require(bossDelaySeconds >= 0f && antecedentDelaySeconds >= 0f) { "Boss delays must be non-negative" }
+        require(ascentMinimumTurnDegrees >= 0f && ascentMaximumTurnDegrees <= 180f) { "Ascent turns must be in 0..180 degrees" }
+        require(bossDelaySeconds.isFinite() && bossDelaySeconds >= 0f && antecedentDelaySeconds.isFinite() && antecedentDelaySeconds >= 0f) {
+            "Boss delays must be non-negative"
+        }
     }
 }
 
@@ -166,13 +173,16 @@ data class DimensionPolicy(
         require(glitchPortalLifetimeSeconds in 10f..40f) { "Glitch portal lifetime must be in 10..40 s" }
         require(paceReach in 0.2f..0.8f) { "Pace reach must be in 0.2..0.8" }
         require(paceCeiling in 300f..2_000f) { "Pace ceiling must be in 300..2000" }
-        require(portalRadius > 0f && exitPortalDistance > 0f && glitchPortalDistance > 0f) { "Portal distances must be positive" }
+        require(listOf(portalRadius, exitPortalDistance, glitchPortalDistance).all { it.isFinite() && it > 0f }) {
+            "Portal distances must be positive"
+        }
         require(minimumVisitSeconds >= 10f) { "A visit lasts at least 10 s" }
         val base = definitions[WorldLayer.BASE.ordinal]
         require(
             base.visitSeconds == 0f && base.objectives.isEmpty() && base.features == LayerFeatures.REALSPACE &&
-                base.physics == DimensionPhysics() && base.reward.kind == DimensionRewardKind.NONE,
-        ) { "Realspace has no visit, objectives, physics or reward" }
+                base.physics == DimensionPhysics() && base.reward == DimensionReward(DimensionRewardKind.NONE) &&
+                base.spawnRateMultiplier == 1f && base.ordinaryCapMultiplier == 1f,
+        ) { "Realspace has no visit, objectives, physics, director change or reward" }
         definitions.filter { it.layer != WorldLayer.BASE }.forEach { definition ->
             require(definition.visitSeconds in minimumVisitSeconds..120f) { "A dimension visit must be in $minimumVisitSeconds..120 s" }
             require(definition.objectives.isNotEmpty() && definition.objectives.all { it.objective.layer == definition.layer }) {
@@ -180,10 +190,13 @@ data class DimensionPolicy(
             }
             val physics = definition.physics
             require(physics.dragMultiplier > 0.3f && physics.dragMultiplier <= 1f) { "Dimension drag multiplier must be in (0.3, 1]" }
-            require(physics.dragFloor >= 0f) { "Dimension drag floor must be non-negative" }
+            require(physics.dragFloor.isFinite() && physics.dragFloor >= 0f) { "Dimension drag floor must be non-negative" }
             require(physics.haloRepairShare in 0f..0.2f && physics.haloOverdrive in 0f..50f) { "Halo rewards are outside their bounds" }
             require(physics.ambientHalos in 0..(ContentBounds.MAX_HALO_RINGS - 2)) { "Ambient halos must leave room for the course" }
-            require(physics.scorchSharePerSecond in 0f..0.1f && physics.scorchGraceSeconds >= 0f && physics.scorchTickSeconds > 0f) {
+            require(
+                physics.scorchSharePerSecond in 0f..0.1f && physics.scorchGraceSeconds.isFinite() && physics.scorchGraceSeconds >= 0f &&
+                    physics.scorchTickSeconds.isFinite() && physics.scorchTickSeconds > 0f,
+            ) {
                 "Scorch must be in 0..0.1 per second with a positive tick"
             }
             require(
@@ -194,13 +207,33 @@ data class DimensionPolicy(
             val reward = definition.reward
             require(reward.cardsOnSuccess in 0..3 && reward.cardsOnFailure in 0..3) { "Dimension reward cards must be in 0..3" }
             require(reward.declineMatter == 0 || reward.kind == DimensionRewardKind.PACT_OFFER) { "Only a Pact offer has a decline card" }
-            require(reward.declineMatter >= 0 && reward.matterOnSuccess >= 0f && reward.matterOnFailure >= 0f) {
+            require(
+                reward.declineMatter >= 0 && reward.matterOnSuccess.isFinite() && reward.matterOnSuccess >= 0f &&
+                    reward.matterOnFailure.isFinite() && reward.matterOnFailure >= 0f,
+            ) {
                 "Dimension reward Matter must be non-negative"
             }
         }
     }
 
     fun definition(layer: WorldLayer): DimensionDefinition = definitions[layer.ordinal]
+
+    /** The longest visit a window rift can open: window rifts lead only into the Zenith or the Nadir. */
+    val longestWindowVisitSeconds: Float
+        get() = maxOf(definition(WorldLayer.ZENITH).visitSeconds, definition(WorldLayer.NADIR).visitSeconds)
+
+    /**
+     * True when the POI window [windowIndex], scheduled at [scheduledAt] and offered for [offerLifetime] seconds, may
+     * host a rift: it is not before [firstPortalWindow], and even a visit entered as the offer closes ends
+     * [exitMarginSeconds] before the boss at [bossAtSeconds].
+     */
+    fun windowMayHostRift(windowIndex: Int, scheduledAt: Float, offerLifetime: Float, bossAtSeconds: Float): Boolean =
+        windowIndex >= firstPortalWindow &&
+            scheduledAt + offerLifetime <= bossAtSeconds - longestWindowVisitSeconds - exitMarginSeconds
+
+    /** The latest run time the glitch rift into the Archive may appear so its visit still ends [exitMarginSeconds] before the boss. */
+    fun latestGlitchRiftAt(bossAtSeconds: Float): Float =
+        bossAtSeconds - exitMarginSeconds - definition(WorldLayer.ARCHIVE).visitSeconds - glitchPortalLifetimeSeconds
 }
 
 /** The shipped layers in [WorldLayer] order. */

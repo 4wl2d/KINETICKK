@@ -87,13 +87,15 @@ private fun DrawScope.drawTether(
     val close = engine.tetherDistance < CLOSE_CONTACT_DISTANCE
     val weight = (distance / 120f * engine.tetherAuthority.coerceIn(0.35f, 1f)).coerceIn(1f, 3f)
     val pulse = 0.55f + 0.45f * kkPulse(renderTime, 1.2f, KkEase.Out)
+    // Baby mode's cursor is harmless: its tether never turns threat.
+    val danger = if (engine.easyMode) roles.soft else roles.threat
     when {
-        close -> drawLine(roles.threat.copy(alpha = 0.9f), start, end, weight + 1f, StrokeCap.Butt)
+        close -> drawLine(danger.copy(alpha = 0.9f), start, end, weight + 1f, StrokeCap.Butt)
         else -> {
             val color = when {
-                critical -> roles.threat.copy(alpha = 0.9f * pulse)
+                critical -> danger.copy(alpha = 0.9f * pulse)
                 draining -> roles.pol.copy(alpha = 0.55f * pulse)
-                else -> roles.threat.copy(alpha = 0.45f * pulse)
+                else -> danger.copy(alpha = 0.45f * pulse)
             }
             drawLine(color, start, end, weight, StrokeCap.Butt, HudDrawCache.lineDash(6f, 5f))
         }
@@ -145,7 +147,7 @@ private fun DrawScope.drawCursorHaloArc(
     val stroke = kkStroke(3f)
     drawArc(roles.pol.copy(alpha = 0.18f), 120f, CURSOR_ARC_DEGREES, false, topLeft, arcSize, style = stroke)
     if (stability > 0f) {
-        drawArc(if (low) roles.threat else roles.pol, 120f, CURSOR_ARC_DEGREES * stability, false, topLeft, arcSize,
+        drawArc(if (low && !engine.easyMode) roles.threat else roles.pol, 120f, CURSOR_ARC_DEGREES * stability, false, topLeft, arcSize,
             alpha = alpha, style = stroke)
     }
 }

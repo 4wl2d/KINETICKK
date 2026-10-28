@@ -3,8 +3,16 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.ContentBounds
+import kinetickk.ball.content.api.GameplayContentSnapshot
+import kinetickk.ball.content.api.ObstacleKind
+import kinetickk.ball.content.api.ObstacleKindTuning
+import kinetickk.ball.content.api.ObstacleMix
+import kinetickk.ball.content.api.RebirthMutator
 import kinetickk.ball.content.api.WorldLayer
+import kinetickk.ball.gameplay.nucleus.model.Obstacle
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
+import kotlin.math.sqrt
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -92,6 +100,200 @@ class WorldLayerGenerationTest {
         }
     }
 
+    @Test
+    fun everyLayerTagsItsIdsAndDrawsItsOwnField() {
+        val state = farState(seed = 731)
+        val fields = WorldLayer.entries.associateWith { layer ->
+            state.switchLayer(layer)
+            state.obstacleField.obstacles
+        }
+        for ((layer, obstacles) in fields) {
+            assertTrue(obstacles.isNotEmpty(), "$layer has a field")
+            for (obstacle in obstacles) {
+                assertEquals(layer.ordinal.toLong(), (obstacle.id ushr 60) and 7, "$layer tags its ids")
+                // The low bits are the obstacle's own absolute chunk and slot, as in realspace.
+                val chunkX = state.absoluteChunk(obstacle.x + state.worldOriginX)
+                val chunkY = state.absoluteChunk(obstacle.y + state.worldOriginY)
+                assertEquals(obstacleId(chunkX, chunkY, (obstacle.id and 0xF).toInt(), layer), obstacle.id)
+            }
+        }
+        val ids = fields.values.map { obstacles -> obstacles.map { it.id }.toSet() }
+        for (first in ids.indices) for (second in first + 1 until ids.size) {
+            assertTrue(ids[first].intersect(ids[second]).isEmpty(), "layers never share an id")
+        }
+        val placements = fields.values.map { obstacles -> obstacles.map { it.x to it.y }.toSet() }
+        assertEquals(placements.size, placements.toSet().size, "every layer draws its own placements")
+        // Back in realspace the window is the run's original one.
+        state.switchLayer(WorldLayer.BASE)
+        assertEquals(farState(seed = 731).obstacleField.obstacles, state.obstacleField.obstacles)
+    }
+
+    @Test
+    fun layerFieldsAreDeterministicAndOrderIndependent() {
+        for (layer in WorldLayer.entries) {
+            val direct = farState(seed = 58).apply { switchLayer(layer) }.obstacleField.obstacles
+            val again = farState(seed = 58).apply { switchLayer(layer) }.obstacleField.obstacles
+            assertEquals(direct, again, "$layer draws the same window twice")
+            // Visit another region of the layer first, then come back.
+            val detour = farState(seed = 58).apply {
+                coreX = FAR_X + 41_000f
+                coreY = FAR_Y - 23_000f
+                switchLayer(layer)
+                coreX = FAR_X
+                coreY = FAR_Y
+                refreshObstacleWindow()
+            }.obstacleField.obstacles
+            assertEquals(direct.sortedBy { it.id }, detour.sortedBy { it.id }, "$layer does not depend on the visit order")
+            // Chunks drawn in reverse order are the same chunks.
+            val state = farState(seed = 58).apply { worldLayer = layer }
+            val chunks = (-3..3).flatMap { x -> (-3..3).map { y -> x + 6 to y - 3 } }
+            val forward = chunks.associateWith { (x, y) -> state.generateChunk(x, y) }
+            val backward = chunks.reversed().associateWith { (x, y) -> state.generateChunk(x, y) }
+            assertEquals(forward, backward)
+        }
+    }
+
+    @Test
+    fun keepOutSuppressesOnlyInsideItsRadiusAndMovesNothingElse() {
+        for (layer in WorldLayer.entries) {
+            val state = farState(seed = 4_242)
+            state.switchLayer(layer)
+            val open = state.obstacleField.obstacles
+            state.switchLayer(layer, keepOutRadius = ARRIVAL_CLEAR)
+            val cleared = state.obstacleField.obstacles
+            val centreX = state.worldOriginX + FAR_X
+            val centreY = state.worldOriginY + FAR_Y
+            val inside = open.filter { state.distanceFrom(it, centreX, centreY) < ARRIVAL_CLEAR + it.radius }
+            assertTrue(inside.isNotEmpty(), "$layer: the keep-out covers part of the window")
+            assertEquals(open - inside.toSet(), cleared, "$layer: everything else keeps its id, place and size")
+            // Another layer's keep-out changes nothing here.
+            val other = WorldLayer.entries[(layer.ordinal + 1) % WorldLayer.entries.size]
+            state.worldKeepOut = WorldKeepOut(other, centreX, centreY, ARRIVAL_CLEAR)
+            state.switchWorldWindow()
+            assertEquals(open, state.obstacleField.obstacles, "$layer ignores a keep-out of $other")
+        }
+    }
+
+    @Test
+    fun aKeepOutClearsTheWidestFieldReachWhileTheMixMayPlaceFieldKinds() {
+        val kinds = ObstacleKindTuning(
+            zenith = ObstacleMix(gravityWell = 0.3f, crystal = 0.2f),
+            nadir = ObstacleMix(crystal = 0.5f),
+        )
+        val content = canonicalGameplayContent.copy(obstacles = canonicalGameplayContent.obstacles.copy(kinds = kinds))
+        val influence = kinds.maximumInfluence
+        /** The obstacles the keep-out removed and how many its circle alone would have removed. */
+        fun clearedBy(layer: WorldLayer): Pair<Int, Int> {
+            val state = farState(seed = 4_242, content = content)
+            state.switchLayer(layer)
+            val open = state.obstacleField.obstacles
+            state.switchLayer(layer, keepOutRadius = ARRIVAL_CLEAR)
+            val removed = open - state.obstacleField.obstacles.toSet()
+            assertEquals(open.size - removed.size, state.obstacleField.size, "$layer only removes")
+            val reach = { obstacle: Obstacle ->
+                if (layer == WorldLayer.ZENITH && obstacle.kind == ObstacleKind.ASTEROID) influence else obstacle.radius
+            }
+            val expected = open.filter {
+                state.distanceFrom(it, state.worldOriginX + FAR_X, state.worldOriginY + FAR_Y) < ARRIVAL_CLEAR + reach(it)
+            }
+            assertEquals(expected, removed, "$layer clears each candidate by its reach")
+            val centreX = state.worldOriginX + FAR_X
+            val centreY = state.worldOriginY + FAR_Y
+            return removed.size to open.count { state.distanceFrom(it, centreX, centreY) < ARRIVAL_CLEAR + it.radius }
+        }
+        // Zenith's mix turns asteroids into gravity knots, so asteroids keep their widest pull outside the keep-out;
+        // bumpers never convert and keep their own circle.
+        val (zenithRemoved, zenithNarrow) = clearedBy(WorldLayer.ZENITH)
+        assertTrue(zenithRemoved > zenithNarrow, "the field reach widens the clearing: $zenithRemoved vs $zenithNarrow")
+        // Nadir's mix only places crystals (no field), so its asteroids are cleared by their circle alone.
+        val (nadirRemoved, nadirNarrow) = clearedBy(WorldLayer.NADIR)
+        assertEquals(nadirNarrow, nadirRemoved)
+    }
+
+    @Test
+    fun everyDimensionWindowStaysWithinTheObstacleBound() {
+        val dense = ObstacleMix(densityScale = 2f)
+        val kinds = ObstacleKindTuning(space = dense, zenith = dense, nadir = dense, archive = dense)
+        val content = canonicalGameplayContent.copy(obstacles = canonicalGameplayContent.obstacles.copy(kinds = kinds))
+        val tuning = content.obstacles
+        val state = buildTestState(seed = 99, rebirth = 10, content = content).apply {
+            runMutatorMask = runMutatorMask or (1 shl RebirthMutator.FRACTURED_SPACE.ordinal)
+        }
+        assertTrue(tuning.windowChunks * tuning.windowChunks * tuning.maximumPerChunk <= ContentBounds.MAX_OBSTACLES)
+        var busiest = 0
+        for (layer in WorldLayer.entries) for (step in 0 until 4) {
+            state.coreX = FAR_X + step * 9_700f
+            state.coreY = FAR_Y - step * 6_100f
+            state.switchLayer(layer)
+            val field = state.obstacleField
+            assertTrue(field.size <= ContentBounds.MAX_OBSTACLES, "$layer window ${field.size}")
+            val perChunk = field.obstacles.groupBy { it.id ushr 4 }.values.maxOf { it.size }
+            assertTrue(perChunk <= tuning.maximumPerChunk, "$layer chunk $perChunk")
+            busiest = maxOf(busiest, perChunk)
+        }
+        assertEquals(tuning.maximumPerChunk, busiest, "the densest layers fill a chunk's every slot")
+    }
+
+    @Test
+    fun returningToRealspaceRegeneratesTheSameFieldExceptTheKeepOut() {
+        val state = farState(seed = 2_026)
+        val realspace = state.obstacleField.obstacles
+        state.switchLayer(WorldLayer.NADIR, keepOutRadius = ARRIVAL_CLEAR)
+        assertTrue(state.obstacleField.obstacles.all { (it.id ushr 60) == WorldLayer.NADIR.ordinal.toLong() })
+        state.coreX += 300f
+        state.switchLayer(WorldLayer.BASE, keepOutRadius = ARRIVAL_CLEAR)
+        val centreX = state.worldOriginX + state.coreX
+        val centreY = state.worldOriginY + state.coreY
+        val back = state.obstacleField.obstacles
+        val expected = realspace.filter { state.distanceFrom(it, centreX, centreY) >= ARRIVAL_CLEAR + it.radius }
+        assertTrue(expected.size < realspace.size, "the exit point is cleared")
+        assertEquals(expected, back)
+        // Leaving the region and coming back draws the same field, keep-out included.
+        state.coreX += 30_000f
+        state.refreshObstacleWindow()
+        state.coreX -= 30_000f
+        state.refreshObstacleWindow()
+        assertEquals(back.sortedBy { it.id }, state.obstacleField.obstacles.sortedBy { it.id })
+    }
+
+    @Test
+    fun destroyedObstaclesStayGoneInTheirOwnLayerOnly() {
+        val state = farState(seed = 313)
+        val realspace = state.obstacleField.obstacles
+        val gone = realspace.first()
+        state.destroyedObstacleIds = listOf(gone.id)
+        state.switchLayer(WorldLayer.ZENITH)
+        val zenith = state.obstacleField.obstacles
+        assertEquals(farState(seed = 313).apply { switchLayer(WorldLayer.ZENITH) }.obstacleField.obstacles, zenith)
+        // The same chunk and slot in Zenith is another obstacle; destroying it leaves realspace alone.
+        val zenithTwin = obstacleId(0, 0, 0, WorldLayer.ZENITH) or (gone.id and ((1L shl 60) - 1))
+        state.destroyedObstacleIds = listOf(gone.id, zenith.first().id, zenithTwin)
+        state.switchWorldWindow()
+        assertEquals(zenith.filter { it.id != zenith.first().id && it.id != zenithTwin }, state.obstacleField.obstacles)
+        state.switchLayer(WorldLayer.BASE)
+        assertEquals(realspace - gone, state.obstacleField.obstacles)
+    }
+
+    private fun farState(seed: Int, content: GameplayContentSnapshot = canonicalGameplayContent) =
+        buildTestState(seed = seed, content = content).apply {
+            coreX = FAR_X
+            coreY = FAR_Y
+            refreshObstacleWindow()
+        }
+
+    /** What a layer switch does to generation: the new layer, a keep-out at the Core (or none) and a fresh window. */
+    private fun MutableGameState.switchLayer(layer: WorldLayer, keepOutRadius: Float? = null) {
+        worldLayer = layer
+        worldKeepOut = keepOutRadius?.let { WorldKeepOut(layer, worldOriginX + coreX, worldOriginY + coreY, it) }
+        switchWorldWindow()
+    }
+
+    private fun MutableGameState.distanceFrom(obstacle: Obstacle, absoluteX: Double, absoluteY: Double): Double {
+        val dx = obstacle.x + worldOriginX - absoluteX
+        val dy = obstacle.y + worldOriginY - absoluteY
+        return sqrt(dx * dx + dy * dy)
+    }
+
     private fun releasedChunkSeed(runSeed: Int, chunkX: Int, chunkY: Int): Long {
         var mixed = releasedSplitMix(runSeed.toLong() xor RELEASED_OBSTACLE_SALT)
         mixed = releasedSplitMix(mixed xor chunkX.toLong())
@@ -110,5 +312,12 @@ class WorldLayerGenerationTest {
 
     private companion object {
         const val RELEASED_OBSTACLE_SALT: Long = 0x0B57_AC1E_5EED_0001L
+
+        /** Far from the run origin, whose own safe radius would hide the keep-out. */
+        const val FAR_X: Float = 7_300f
+        const val FAR_Y: Float = -4_100f
+
+        /** The shipped arrival clear radius. */
+        const val ARRIVAL_CLEAR: Float = 900f
     }
 }

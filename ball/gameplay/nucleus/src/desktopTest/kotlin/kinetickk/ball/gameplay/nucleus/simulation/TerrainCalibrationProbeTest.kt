@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.GameplayContentSnapshot
+import kinetickk.ball.content.api.ObstacleTuning
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.SteeringTuning
 import kinetickk.ball.content.api.WeaponId
@@ -17,14 +18,18 @@ import kotlin.test.Test
  * The terrain lane's calibration probe, not a gate: it returns at once unless `KK_TERRAIN_PROBE=first..last` names a
  * calibration window, then plays the seeds `i * 7_919 + 13` for i in it and prints one line per run and a summary
  * per arm. It never plays the gate population (i = 1,001..1,300). `KK_TERRAIN_STEERING=name=value,...` overrides the
- * shipped flight-law knobs for the probed arms.
+ * shipped flight-law knobs and `KK_TERRAIN_OBSTACLES=name=value,...` the obstacle impact knobs for the probed arms.
  *
  * The arms are Gate A's fresh tier-0 run (the default NoPoi bot, the Orb and the starter weapon) and Gate D's strong
  * build at tier 10, both played by [playGateRun] for up to 900 s. Per run: outcome, survival, obstacle contacts (the
  * frame the Core first touches a rock or bumper, sampled every 0.02 s input frame, as in SingularityContactGateTest),
- * hurting obstacle hits (the collision cooldown restarts), ricochets, ambushes planned, Overdrive activations, Matter
- * and whether a singularity contact ended it. Summaries carry bootstrap standard errors (20,000 resamples of the runs,
- * RNG seed 20261027).
+ * hurting obstacle hits (the frames in which a hit restarts the collision cooldown: with one cooldown per surface,
+ * every landed hit, a lethal one included), ricochets, ambushes planned, Overdrive activations, Matter, whether a
+ * singularity contact or an obstacle collision ended it (and whether that collision was a lethal-speed hit, which
+ * leaves integrity at exactly zero), and the Core's ambush-speed holds (the times it kept the ambush speed for the
+ * ambush hold, planned or not) with the seconds it spent at that speed: the NoPoi bot rarely holds it, so the ambush
+ * pace is read from the holds as well as the plans. Summaries carry bootstrap standard errors (20,000 resamples of the
+ * runs, RNG seed 20261027).
  */
 class TerrainCalibrationProbeTest {
     @Test
@@ -34,8 +39,12 @@ class TerrainCalibrationProbeTest {
         require(first in 1..last) { "KK_TERRAIN_PROBE must be first..last, got $window" }
         require(last < GATE_FIRST || first > GATE_LAST) { "the gate population ($GATE_FIRST..$GATE_LAST) is never probed" }
         val seeds = (first..last).map { it * 7_919 + 13 }
-        val content = probedContent(System.getenv("KK_TERRAIN_STEERING").orEmpty())
+        val content = probedContent(
+            System.getenv("KK_TERRAIN_STEERING").orEmpty(),
+            System.getenv("KK_TERRAIN_OBSTACLES").orEmpty(),
+        )
         println("TERRAIN PROBE window $first..$last steering ${content.tempo.steering}")
+        println("TERRAIN PROBE window $first..$last obstacles ${content.obstacles.impactKnobs()}")
         for (arm in Arm.entries) {
             val runs = populationOf(seeds) { seed -> play(seed, arm, content) }
             runs.forEach { println("TERRAIN PROBE ${arm.label} $it") }
@@ -50,18 +59,24 @@ class TerrainCalibrationProbeTest {
         val outcome: String,
         val seconds: Float,
         val singularity: Boolean,
+        val obstacleKill: Boolean,
+        val lethalKill: Boolean,
         val contacts: Int,
         val hurts: Int,
         val ricochets: Int,
         val ambushes: Int,
         val overdrives: Int,
         val matter: Long,
+        val ambushHolds: Int,
+        val ambushSeconds: Float,
     ) {
         val won: Boolean get() = outcome == "WIN"
 
         override fun toString(): String =
             "seed=$seed outcome=$outcome seconds=$seconds singularity=${if (singularity) "y" else "n"} contacts=$contacts " +
-                "hurts=$hurts ricochets=$ricochets ambushes=$ambushes overdrives=$overdrives matter=$matter"
+                "hurts=$hurts ricochets=$ricochets ambushes=$ambushes overdrives=$overdrives matter=$matter " +
+                "obstacleKill=${if (obstacleKill) "y" else "n"} lethalKill=${if (lethalKill) "y" else "n"} " +
+                "ambushHolds=$ambushHolds ambushSeconds=$ambushSeconds"
     }
 
     private fun play(seed: Int, arm: Arm, content: GameplayContentSnapshot): Run {
@@ -75,6 +90,9 @@ class TerrainCalibrationProbeTest {
         var ambushReadyAt = Float.NaN
         var overdrives = 0
         var overdriveBefore = 0f
+        var ambushHolds = 0
+        var ambushSeconds = 0f
+        var heldBefore = 0f
         val observe = { state: MutableGameState ->
             val touches = state.obstacleField.obstacles.any { obstacle ->
                 val reach = obstacle.radius + state.coreRadius + CONTACT_SLACK
@@ -91,6 +109,10 @@ class TerrainCalibrationProbeTest {
             ambushReadyAt = state.ambushReadyAt
             if (overdriveBefore <= 0f && state.overdriveTime > 0f) overdrives++
             overdriveBefore = state.overdriveTime
+            val held = state.ambushSpeedSeconds
+            ambushSeconds += if (held >= heldBefore) held - heldBefore else held
+            if (held >= AMBUSH_HOLD_SECONDS && heldBefore < AMBUSH_HOLD_SECONDS) ambushHolds++
+            heldBefore = held
         }
         val state = when (arm) {
             Arm.FRESH_TIER_0 -> playGateRun(seed, gateProfile(GateMatrix.NONE, tier = 0, content = content), NoPoiBot(),
@@ -111,8 +133,14 @@ class TerrainCalibrationProbeTest {
             GamePhase.GAME_OVER -> "LOSS"
             else -> "TIMEOUT"
         }
-        return Run(seed, outcome, state.elapsed, state.phase == GamePhase.GAME_OVER && state.message == SINGULARITY_CONTACT,
-            contacts, hurts, ricochets, ambushes, overdrives, state.runMatter)
+        val ended = state.phase == GamePhase.GAME_OVER
+        val obstacleKill = ended && state.message == OBSTACLE_COLLISION
+        return Run(
+            // A lethal-speed hit sets integrity to exactly zero; band damage leaves it below.
+            seed, outcome, state.elapsed, ended && state.message == SINGULARITY_CONTACT, obstacleKill,
+            obstacleKill && state.hp == 0f, contacts, hurts, ricochets, ambushes, overdrives, state.runMatter,
+            ambushHolds, ambushSeconds,
+        )
     }
 
     /** Point values of the arm's metrics with bootstrap standard errors over its runs. */
@@ -121,12 +149,18 @@ class TerrainCalibrationProbeTest {
             "winShare" to { sample -> sample.count { it.won }.toDouble() / sample.size },
             "medianSurvival" to { sample -> sample.map { it.seconds }.gateMedian().toDouble() },
             "singularityShare" to { sample -> sample.count { it.singularity }.toDouble() / sample.size },
+            "obstacleKillShare" to { sample -> sample.count { it.obstacleKill }.toDouble() / sample.size },
+            "lethalKillShare" to { sample -> sample.count { it.lethalKill }.toDouble() / sample.size },
             "contactsPerSecond" to { sample -> sample.sumOf { it.contacts }.toDouble() / sample.sumOf { it.seconds.toDouble() } },
             "hurtsPerMinute" to { sample -> sample.sumOf { it.hurts } * 60.0 / sample.sumOf { it.seconds.toDouble() } },
             "ricochetsPerMinute" to { sample -> sample.sumOf { it.ricochets } * 60.0 / sample.sumOf { it.seconds.toDouble() } },
             "ambushesPerRun" to { sample -> sample.sumOf { it.ambushes }.toDouble() / sample.size },
             "overdrivesPerRun" to { sample -> sample.sumOf { it.overdrives }.toDouble() / sample.size },
             "meanMatter" to { sample -> sample.sumOf { it.matter }.toDouble() / sample.size },
+            "ambushHoldsPerRun" to { sample -> sample.sumOf { it.ambushHolds }.toDouble() / sample.size },
+            "ambushSecondsPerMinute" to { sample ->
+                sample.sumOf { it.ambushSeconds.toDouble() } * 60.0 / sample.sumOf { it.seconds.toDouble() }
+            },
         )
         val random = Random(BOOTSTRAP_SEED)
         val resampled = List(metrics.size) { DoubleArray(BOOTSTRAP_RESAMPLES) }
@@ -142,15 +176,44 @@ class TerrainCalibrationProbeTest {
         }.joinToString(" ")
     }
 
-    /** The shipped content with the flight-law knobs of [overrides] (`name=value`, comma-separated). */
-    private fun probedContent(overrides: String): GameplayContentSnapshot {
+    /**
+     * The shipped content with the flight-law knobs of [steeringOverrides] and the obstacle impact knobs of
+     * [obstacleOverrides] (each `name=value`, comma-separated).
+     */
+    private fun probedContent(steeringOverrides: String, obstacleOverrides: String): GameplayContentSnapshot {
         var steering = canonicalGameplayContent.tempo.steering
-        overrides.split(',').map { it.trim() }.filter { it.isNotEmpty() }.forEach { entry ->
-            val (name, text) = entry.split('=').map { it.trim() }
-            steering = steering.with(name, text.toFloat())
-        }
-        return canonicalGameplayContent.copy(tempo = canonicalGameplayContent.tempo.copy(steering = steering))
+        overrides(steeringOverrides).forEach { (name, value) -> steering = steering.with(name, value) }
+        var obstacles = canonicalGameplayContent.obstacles
+        overrides(obstacleOverrides).forEach { (name, value) -> obstacles = obstacles.with(name, value) }
+        return canonicalGameplayContent.copy(
+            tempo = canonicalGameplayContent.tempo.copy(steering = steering),
+            obstacles = obstacles,
+        )
     }
+
+    private fun overrides(text: String): List<Pair<String, Float>> =
+        text.split(',').map { it.trim() }.filter { it.isNotEmpty() }.map { entry ->
+            val (name, value) = entry.split('=').map { it.trim() }
+            name to value.toFloat()
+        }
+
+    /** The obstacle knobs the terrain calibration may move (spec §7 rules 3 and 4). */
+    private fun ObstacleTuning.with(name: String, value: Float): ObstacleTuning = when (name) {
+        "minimumDamageShare" -> copy(minimumDamageShare = value)
+        "damageShare" -> copy(damageShare = value)
+        "scrapeShare" -> copy(scrapeShare = value)
+        "shieldBleed" -> copy(shieldBleed = value)
+        "scrapeFriction" -> copy(scrapeFriction = value)
+        "damageStartReach" -> copy(damageStartReach = value)
+        "lethalReach" -> copy(lethalReach = value)
+        "ricochetReach" -> copy(ricochetReach = value)
+        else -> error("unknown obstacle knob $name")
+    }
+
+    private fun ObstacleTuning.impactKnobs(): String =
+        "minimumDamageShare=$minimumDamageShare damageShare=$damageShare scrapeShare=$scrapeShare " +
+            "shieldBleed=$shieldBleed scrapeFriction=$scrapeFriction damageStartReach=$damageStartReach " +
+            "lethalReach=$lethalReach ricochetReach=$ricochetReach"
 
     private fun SteeringTuning.with(name: String, value: Float): SteeringTuning = when (name) {
         "basePull" -> copy(basePull = value)
@@ -178,6 +241,7 @@ class TerrainCalibrationProbeTest {
         const val GATE_LAST = 1_300
         const val CONTACT_SLACK = 2f
         const val SINGULARITY_CONTACT = "SINGULARITY CONTACT"
+        const val OBSTACLE_COLLISION = "OBSTACLE COLLISION"
         const val BOOTSTRAP_RESAMPLES = 20_000
         const val BOOTSTRAP_SEED = 20_261_027
     }

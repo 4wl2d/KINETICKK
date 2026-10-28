@@ -156,6 +156,9 @@ class RedesignShotsHudTest {
         // The trial panel of the other families: a gate race on its clock (silver still in reach), the brakeless
         // challenge, the bounty duel and the summoned sigil; each with its edge markers, the race's next gate off screen.
         TRIAL_RACE, TRIAL_CHALLENGE, TRIAL_BOUNTY, TRIAL_SIGIL,
+        // Baby mode: the soft tether and cursor arc with the pacifier plate alone at tier 0, then before the tier plate
+        // and its sigils at tier 3.
+        EASY, EASY_TIER,
     }
 
     private fun level(shot: Shot, values: Values): Int = when (shot) {
@@ -281,8 +284,10 @@ class RedesignShotsHudTest {
             "rebirthLevel" to when (shot) {
                 Shot.REBIRTH_5 -> 5
                 Shot.REBIRTH_10 -> 10
+                Shot.EASY_TIER -> 3
                 else -> 0
             },
+            "easyMode" to (shot == Shot.EASY || shot == Shot.EASY_TIER),
         )
         val time = 3.37f
         val memory = HudPresentationMemory()
