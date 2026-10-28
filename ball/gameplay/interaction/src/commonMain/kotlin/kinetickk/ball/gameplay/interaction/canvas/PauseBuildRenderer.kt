@@ -26,6 +26,7 @@ import kinetickk.ball.gameplay.interaction.layout.PauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
 import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
+import kinetickk.ball.gameplay.interaction.localization.RunVarietyText
 import kinetickk.ball.gameplay.interaction.rewards.activeSlotKey
 import kinetickk.ball.gameplay.interaction.rewards.overlayUiTextScale
 import kinetickk.ball.gameplay.nucleus.model.formatRunTime
@@ -76,11 +77,21 @@ internal class PauseBracket(
 /** One line of the always-visible cost list; [lingering] is a replaced relic's cost that still applies. */
 internal class PauseCostLine(val definition: RelicDefinition, val text: String, val lingering: Boolean)
 
-/** A tag with at least one point: its ladder notched at the resonance thresholds. */
-internal class PauseTagEntry(val tag: BuildTag, val label: String, val points: Int, val tier: Int)
+/**
+ * A tag with at least one point, or the run's Keynote tag ([keynote], bone corner brackets; listed even at 0 points, a
+ * muted ghost): its ladder notched at the resonance thresholds.
+ */
+internal class PauseTagEntry(val tag: BuildTag, val label: String, val points: Int, val tier: Int, val keynote: Boolean = false)
 
-/** An element meter notched at the affinity thresholds; [dominant] gets the ring. */
-internal class PauseElementEntry(val element: Int, val label: String, val affinity: Int, val tier: Int, val dominant: Boolean)
+/** An element meter notched at the affinity thresholds; [dominant] gets the ring, the run's Keynote element [keynote] brackets. */
+internal class PauseElementEntry(
+    val element: Int,
+    val label: String,
+    val affinity: Int,
+    val tier: Int,
+    val dominant: Boolean,
+    val keynote: Boolean = false,
+)
 
 /** A reaction both of whose elements the build sources: its name once met, "?" before. */
 internal class PauseReactionEntry(val id: ReactionId, val name: String, val discovered: Boolean)
@@ -155,6 +166,9 @@ internal class PauseBuildOverview(
     val levelCap: Int = Int.MAX_VALUE,
     val apex: KkApexState = KkApexState.NONE,
     val apexActive: Float = 0f,
+    /** The run's Conditions: the omen taken, the director pattern, the Keynote, the world event in progress. */
+    val conditionsLabel: String = "",
+    val conditions: List<PauseConditionEntry> = emptyList(),
 ) {
     /** The names the brackets carry, in bracket order. */
     val synergyNames: List<String> = brackets.map { it.name }
@@ -191,11 +205,12 @@ internal fun GameplayRenderModel.pauseBuildOverview(language: AppLanguage, touch
         val definition = content.relic(it.id)
         PauseCostLine(definition, definition.liabilityText(language).keepUnitsWithNumbers(), lingering = true)
     }
-    val tags = BuildTag.entries.filter { build.tagPoints(it) > 0 }
+    val tags = BuildTag.entries.filter { build.tagPoints(it) > 0 || it == keynoteTag }
         .sortedWith(compareByDescending<BuildTag> { build.tagPoints(it) }.thenBy { it.ordinal })
-        .map { PauseTagEntry(it, it.displayLabel.localizedContent(language), build.tagPoints(it), build.tagTier(it)) }
+        .map { PauseTagEntry(it, it.displayLabel.localizedContent(language), build.tagPoints(it), build.tagTier(it), it == keynoteTag) }
     val elements = StatusElement.entries.map {
-        PauseElementEntry(it.ordinal, it.displayLabel.localizedContent(language), build.affinity(it), build.affinityTier(it), build.dominant == it)
+        PauseElementEntry(it.ordinal, it.displayLabel.localizedContent(language), build.affinity(it), build.affinityTier(it), build.dominant == it,
+            it == keynoteElement)
     }
     val reactions = build.reachableReactions.map { id ->
         val discovered = isReactionDiscovered(id)
@@ -260,6 +275,8 @@ internal fun GameplayRenderModel.pauseBuildOverview(language: AppLanguage, touch
         noSynergy = language.text(HudRedesignText.NoSynergy),
         synergyElement = synergy.infusionElement,
         synergyRelic = synergy.harmonizingRelic?.let { content.relic(it) },
+        conditionsLabel = language.text(RunVarietyText.Conditions),
+        conditions = pauseConditions(language),
     )
 }
 
@@ -371,7 +388,9 @@ private object PauseBuildMemo {
             damageMultiplier == other.damageMultiplier && effectiveWeaponPower == other.effectiveWeaponPower &&
             critChance == other.critChance && maxShield == other.maxShield && itemStacksSnapshot == other.itemStacksSnapshot &&
             weaponSynergy == other.weaponSynergy && sameSlots(other) && settings.keyBindings == other.settings.keyBindings &&
-            reactionDiscoveries() == other.reactionDiscoveries() && pairingDiscoveries() == other.pairingDiscoveries()
+            reactionDiscoveries() == other.reactionDiscoveries() && pairingDiscoveries() == other.pairingDiscoveries() &&
+            runOmen == other.runOmen && directorPersonality == other.directorPersonality && keynoteTag == other.keynoteTag &&
+            keynoteElement == other.keynoteElement && worldEvent?.kind == other.worldEvent?.kind
 
     /** The same effect in every Z/X/C slot (the active items' keys). */
     private fun GameplayRenderModel.sameSlots(other: GameplayRenderModel): Boolean {
@@ -442,6 +461,8 @@ internal object PauseMeasurers {
 internal enum class PauseTextKind {
     TITLE, TIMER, HEADING, TAG, LABEL, SYNERGY_NAME, MULTIPLIER, COST, TAG_NAME, ELEMENT_NAME, REACTION, EMPTY,
     STAT_LABEL, STAT_VALUE, RUN_LABEL, RUN_VALUE, MORE, SYNERGY, KEY,
+    /** The run Conditions: an entry's caption, its name, what it does or costs. */
+    CONDITION_LABEL, CONDITION, CONDITION_TEXT,
 }
 
 /** One laid-out pause text: where it was drawn ([rect], px) and the width it had to fit ([box]). */
@@ -515,9 +536,13 @@ private fun DrawScope.drawRegularBuild(
     var top = drawPauseLabel(overview.relicsLabel, ui, 15f * k, x(0f), y(58f), column * unit) + 4f * unit
     top = drawPauseRelics(overview, ui, x(0f), top + 4f * unit, column * unit, 56f * unit, 88f * unit, 22f * unit, k, names = true, time = time) + gap
     top = drawPauseLabel(overview.costLabel, ui, 15f * k, x(0f), top, column * unit) + 6f * unit
-    // The costs take what they need of the column, keeping two rows of reaction chips under them.
+    // The costs take what they need of the column, keeping two rows of reaction chips under them and, in a run with
+    // conditions, a row of their chips (after their label) at the column's foot.
     val reactionsHeight = pauseLabelHeight(overview.reactionsLabel, ui, 15f * k, column * unit) + 6f * unit + 26f * unit * 2f + 6f * unit
-    val costBottom = drawPauseCosts(overview, ui, x(0f), top, column * unit, columnBottom - gap - reactionsHeight, 12f * k, k)
+    val conditionChip = 24f * unit * maxOf(1f, ui.scale * 0.85f)
+    val conditionsRow = pauseConditionsRow(overview, conditionChip)
+    val leftBottom = columnBottom - if (conditionsRow > 0f) gap + conditionsRow else 0f
+    val costBottom = drawPauseCosts(overview, ui, x(0f), top, column * unit, leftBottom - gap - reactionsHeight, 12f * k, k)
     top = drawPauseLabel(overview.reactionsLabel, ui, 15f * k, x(0f), costBottom + gap, column * unit) + 6f * unit
     val reactionsTop = top
     // Right column: resonance and element meters, the four derived stats at the foot, the items between.
@@ -534,22 +559,28 @@ private fun DrawScope.drawRegularBuild(
     val itemsNeed = pauseLabelHeight(overview.itemsLabel, ui, 15f * k, rightWidth * unit) + 6f * unit + 44f * unit * 0.6f
     val synergyRoom = statsTop - gap - itemsNeed - gap - top - synergyLabel
     val synergyRows = floor((synergyRoom + 6f * unit) / (synergyChip + 6f * unit) + 0.001f).toInt().coerceIn(0, 2)
-    var reactionsBottom = columnBottom
+    var reactionsBottom = leftBottom
+    // Where the left column's last section ends: the Conditions take the room under it.
+    var leftEnd = -1f
     if (synergyRows > 0) {
         top = drawPauseLabel(overview.synergyLabel, ui, 15f * k, x(right), top, rightWidth * unit) + 6f * unit
         val bottom = top + synergyRows * synergyChip + (synergyRows - 1) * 6f * unit
         top = drawPauseSynergies(overview, ui, x(right), top, rightWidth * unit, bottom, synergyChip, 13f * k, k) + gap
     } else {
-        val needed = pauseReactionsBottom(overview, ui, x(0f), reactionsTop, column * unit, columnBottom, 26f * unit, 13f * k, k)
+        val needed = pauseReactionsBottom(overview, ui, x(0f), reactionsTop, column * unit, leftBottom, 26f * unit, 13f * k, k)
         val leftChip = 24f * unit
         val leftLabel = pauseLabelHeight(overview.synergyLabel, ui, 15f * k, column * unit) + 6f * unit
+        // The weapon's synergies come before the conditions: they may take the conditions' row (which then shows where
+        // room is left, if any).
         if (needed + gap + leftLabel + leftChip <= columnBottom + 0.5f) {
             reactionsBottom = needed
             val chipsTop = drawPauseLabel(overview.synergyLabel, ui, 15f * k, x(0f), needed + gap, column * unit) + 6f * unit
-            drawPauseSynergies(overview, ui, x(0f), chipsTop, column * unit, chipsTop + leftChip, leftChip, 13f * k, k)
+            leftEnd = drawPauseSynergies(overview, ui, x(0f), chipsTop, column * unit, chipsTop + leftChip, leftChip, 13f * k, k)
         }
     }
+    if (leftEnd < 0f) leftEnd = pauseReactionsBottom(overview, ui, x(0f), reactionsTop, column * unit, reactionsBottom, 26f * unit, 13f * k, k)
     drawPauseReactions(overview, ui, x(0f), reactionsTop, column * unit, reactionsBottom, 26f * unit, 13f * k, k)
+    drawPauseConditions(overview, ui, x(0f), leftEnd + gap, column * unit, columnBottom, 15f * k, conditionChip, 13f * k, k, detailed = true)
     top = drawPauseLabel(overview.itemsLabel, ui, 15f * k, x(right), top, rightWidth * unit) + 6f * unit
     drawPauseItems(overview, ui, x(right), top, rightWidth * unit, statsTop - gap - top, 44f * unit, k)
     val rowsTop = drawPauseLabel(overview.statsLabel, ui, 15f * k, x(right), statsTop, rightWidth * unit)
@@ -639,9 +670,14 @@ private fun DrawScope.drawCompactBuild(
         val resonanceBottom = maxOf(tagsBottom, meterTop + elementRows * elementRow)
         val synergyLimit = if (showStats) statsTop - gap else area.bottom
         val lowerTop = resonanceBottom + gap
+        var conditionsTop = lowerTop
         if (!synergyFits && lowerTop + synergyChip <= synergyLimit + 0.5f) {
             drawPauseSynergyRow(overview, ui, x(0f), lowerTop, width * unit, synergyChip, unit, k)
+            conditionsTop = lowerTop + synergyChip + gap
         }
+        // The run's Conditions as one row of chips where the rest leaves it (they never push a section out).
+        drawPauseConditions(overview, ui, x(0f), conditionsTop, width * unit, synergyLimit, 11f * k, synergyChip, 10.5f * k, k, detailed = false,
+            inlineLabel = true)
         if (showStats) {
             drawStatRows(overview.stats, ui, display, area, unit, 0f, (statsTop - area.top) / unit, statRow / unit, 2, (width - 20f) / 2f, 8f,
                 15f * k, 12f * k)
@@ -678,12 +714,16 @@ private fun DrawScope.drawCompactBuild(
     val synergyBeside = !synergyFits && synergyTop + synergyChip <= area.bottom + 0.5f
     drawPauseReactions(overview, ui, x(0f), top, width * unit, if (synergyFits || synergyBeside) reactionsBottom else area.bottom, 20f * unit,
         10.5f * k, k)
-    if (synergyFits) {
+    val synergyBottom = if (synergyFits) {
         val chipsTop = drawPauseLabel(overview.synergyLabel, ui, 11f * k, x(0f), synergyTop, width * unit) + 4f * unit
         drawPauseSynergies(overview, ui, x(0f), chipsTop, width * unit, chipsTop + synergyChip, synergyChip, 10.5f * k, k)
     } else if (synergyBeside) {
         drawPauseSynergyRow(overview, ui, x(0f), synergyTop, width * unit, synergyChip, unit, k)
-    }
+        synergyTop + synergyChip
+    } else area.bottom
+    // The run's Conditions as one row of chips where the rest leaves it (they never push a section out).
+    drawPauseConditions(overview, ui, x(0f), synergyBottom + gap, width * unit, area.bottom, 11f * k, synergyChip, 10.5f * k, k, detailed = false,
+        inlineLabel = true)
 }
 
 /** The synergy section in one row of [chip] height from ([left], [top]): its label in the first 40 % of [width], then the chips that fit. */
@@ -972,8 +1012,14 @@ private fun DrawScope.drawPauseTags(
         val middle = y + row * 0.5f
         drawKkIcon(KkIcon.Tags[tag.tag.ordinal], Offset(x + glyph * 0.5f, middle), glyph, if (tag.tier > 0) Kk.Bone else Kk.Mute)
         val name = fitOverlayText(ui, tag.label, KkTextRole.COND, size, nameBox, uppercase = true)
-        drawPauseText(PauseTextKind.TAG_NAME, name, x + glyph + 6f * k * density, middle, if (tag.tier > 0) Kk.Bone else Kk.Bone2, nameBox,
-            valign = KkVAlign.CENTER)
+        // The Keynote tag is listed without points as a muted ghost; it is bracketed at any count.
+        drawPauseText(PauseTextKind.TAG_NAME, name, x + glyph + 6f * k * density, middle, when {
+            tag.tier > 0 -> Kk.Bone
+            tag.points > 0 -> Kk.Bone2
+            else -> Kk.Mute
+        }, nameBox, valign = KkVAlign.CENTER)
+        if (tag.keynote) drawPauseKeynoteBrackets(Rect(x - 3f * k * density, y + 1f * k * density, x + cell + 3f * k * density, y + row - 1f * k * density),
+            5f * k * density, 1.5f * k * density)
         val ladderLeft = x + cell - ladder
         val pipTop = middle - pipHeightPx * 0.5f
         drawKkPips(Offset(ladderLeft, pipTop), ticks, tag.points.coerceAtMost(ticks), Kk.Bone, sizeDp = pipHeightPx / density,
@@ -1024,6 +1070,7 @@ private fun DrawScope.drawPauseElements(
         val shown = element.affinity > 0
         drawKkIcon(elementIcon(element.element), glyphCenter, glyph, if (shown) color else Kk.Ink4)
         if (element.dominant) drawCircle(color, ring, glyphCenter, style = kkStroke(ringStroke))
+        if (element.keynote) drawPauseKeynoteBrackets(Rect(cellLeft, top, cellLeft + box, top + height), 5f * k * density, 1.5f * k * density)
         if (names) {
             val nameTop = glyphCenter.y + ring + ringStroke + 3f * k * density
             val name = fitOverlayText(ui, element.label, KkTextRole.COND, nameSize, box, uppercase = true)
@@ -1074,6 +1121,8 @@ private fun DrawScope.drawPauseElementRows(
         val center = Offset(columnLeft + glyph * 0.6f, middle)
         drawKkIcon(elementIcon(element.element), center, glyph, if (element.affinity > 0) color else Kk.Ink4)
         if (element.dominant) drawCircle(color, glyph * DOMINANT_RING, center, style = kkStroke(1.2f * k * density))
+        if (element.keynote) drawPauseKeynoteBrackets(Rect(columnLeft, middle - row * 0.5f, columnLeft + columnWidth, middle + row * 0.5f),
+            4f * k * density, 1.2f * k * density)
         drawElementMeter(overview, element, color, columnLeft + glyph * 1.6f, middle - 2.5f * k * density, columnWidth - glyph * 1.6f, k)
     }
 }
