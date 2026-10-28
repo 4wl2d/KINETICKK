@@ -15,13 +15,13 @@ fun defaultOmenDefinitions(): ImmutableList<OmenDefinition> = listOf(
         costs = immutableListOf(RunModifierEffect.Stat(ItemEffect.MAX_INTEGRITY, -30f)),
     ),
     OmenDefinition(
-        OmenId.IRON_TIDE, "Iron Tide", "+30% Matter gain and one more reroll.", "Enemies carry 20% more integrity.",
+        OmenId.IRON_TIDE, "Iron Tide", "+30% Matter gain and one more reroll.", "Enemies carry 12% more integrity.",
         gains = immutableListOf(RunModifierEffect.MatterGainScale(1.30f), RunModifierEffect.Rerolls(1)),
-        costs = immutableListOf(RunModifierEffect.HostileScale(health = 1.20f)),
+        costs = immutableListOf(RunModifierEffect.HostileScale(health = 1.12f)),
     ),
     OmenDefinition(
-        OmenId.HUNGRY_DARK, "Hungry Dark", "+30% Data gain.", RebirthMutator.BLACKOUT.description,
-        gains = immutableListOf(RunModifierEffect.Stat(ItemEffect.DATA_GAIN, 0.30f)),
+        OmenId.HUNGRY_DARK, "Hungry Dark", "+20% Data gain.", RebirthMutator.BLACKOUT.description,
+        gains = immutableListOf(RunModifierEffect.Stat(ItemEffect.DATA_GAIN, 0.20f)),
         costs = immutableListOf(RunModifierEffect.Mutator(RebirthMutator.BLACKOUT)),
     ),
     OmenDefinition(
@@ -47,9 +47,12 @@ fun defaultOmenDefinitions(): ImmutableList<OmenDefinition> = listOf(
         costs = immutableListOf(RunModifierEffect.Rerolls(-1), RunModifierEffect.HostileScale(eliteRate = 1.15f)),
     ),
     OmenDefinition(
-        OmenId.VOLATILE_PACT, "Volatile Pact", "+8% critical chance and +40% critical damage.",
+        OmenId.VOLATILE_PACT, "Volatile Pact", "+8% critical chance, +40% critical damage and +15 shield capacity.",
         RebirthMutator.VOLATILE_REMAINS.description,
-        gains = immutableListOf(RunModifierEffect.Stat(ItemEffect.CRIT_CHANCE, 0.08f), RunModifierEffect.Stat(ItemEffect.CRIT_DAMAGE, 0.40f)),
+        gains = immutableListOf(
+            RunModifierEffect.Stat(ItemEffect.CRIT_CHANCE, 0.08f), RunModifierEffect.Stat(ItemEffect.CRIT_DAMAGE, 0.40f),
+            RunModifierEffect.Stat(ItemEffect.SHIELD_CAPACITY, 15f),
+        ),
         costs = immutableListOf(RunModifierEffect.Mutator(RebirthMutator.VOLATILE_REMAINS)),
     ),
     OmenDefinition(
@@ -69,9 +72,9 @@ fun defaultOmenDefinitions(): ImmutableList<OmenDefinition> = listOf(
         costs = immutableListOf(RunModifierEffect.Mutator(RebirthMutator.HARDENED_ELITES)),
     ),
     OmenDefinition(
-        OmenId.STILL_WATER, "Still Water", "+25 shield capacity and +6% damage reduction.",
+        OmenId.STILL_WATER, "Still Water", "+5 shield capacity and +6% damage reduction.",
         "−15% impact damage and −10% weapon power.",
-        gains = immutableListOf(RunModifierEffect.Stat(ItemEffect.SHIELD_CAPACITY, 25f), RunModifierEffect.Stat(ItemEffect.DAMAGE_REDUCTION, 0.06f)),
+        gains = immutableListOf(RunModifierEffect.Stat(ItemEffect.SHIELD_CAPACITY, 5f), RunModifierEffect.Stat(ItemEffect.DAMAGE_REDUCTION, 0.06f)),
         costs = immutableListOf(RunModifierEffect.Stat(ItemEffect.IMPACT_DAMAGE, -0.15f), RunModifierEffect.Stat(ItemEffect.WEAPON_POWER, -0.10f)),
     ),
 ).toImmutableList()
