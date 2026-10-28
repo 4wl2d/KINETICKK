@@ -19,7 +19,7 @@ import kotlin.test.assertTrue
  */
 class WorldContractBoundsTest {
     @Test
-    fun theAnomaliesAndTheGateRaceTakeWindowWeightAndTheAnomaliesLeadTheSiteKinds() {
+    fun theAnomaliesTheGateRaceAndTheChallengesTakeWindowWeightAndTheAnomaliesLeadTheSiteKinds() {
         val sites = SitePolicy()
         assertEquals(SiteKind.entries, sites.definitions.map { it.kind })
         assertEquals(3, ANOMALY_KIND_COUNT)
@@ -30,7 +30,8 @@ class WorldContractBoundsTest {
         assertTrue(SiteKind.entries.take(ANOMALY_KIND_COUNT).all { it.family == SiteFamily.ANOMALY })
         assertTrue(SiteKind.entries.drop(ANOMALY_KIND_COUNT).none { it.family == SiteFamily.ANOMALY })
         assertEquals(
-            SiteKind.entries.take(ANOMALY_KIND_COUNT).associateWith { 1f } + (SiteKind.GATE_RACE to 1.4f),
+            SiteKind.entries.take(ANOMALY_KIND_COUNT).associateWith { 1f } + (SiteKind.GATE_RACE to 1.4f) +
+                SiteKind.entries.filter { it.family == SiteFamily.CHALLENGE }.associateWith { 0.36f },
             sites.definitions.filter { it.windowWeight > 0f }.associate { it.kind to it.windowWeight },
         )
         assertTrue(sites.definitions.all { it.activationRadius == 65f || it.windowWeight == 0f })
@@ -58,6 +59,15 @@ class WorldContractBoundsTest {
         ChallengePolicy(ramFoes = ContentBounds.MAX_SITE_FOES)
         assertFailsWith<IllegalArgumentException> { ChallengePolicy(ramFoes = ContentBounds.MAX_SITE_FOES + 1) }
         assertFailsWith<IllegalArgumentException> { ChallengePolicy(ramFoes = 5, ramRequired = 6) }
+        // The Ram rite's foes are an encounter: its integrity share, area and ring stay within the encounter's bounds.
+        ChallengePolicy(ramFoeHealthShare = 0.1f)
+        assertFailsWith<IllegalArgumentException> { ChallengePolicy(ramFoeHealthShare = 0.099f) }
+        ChallengePolicy(ramClamp = 2_400f)
+        assertFailsWith<IllegalArgumentException> { ChallengePolicy(ramClamp = 2_401f) }
+        ChallengePolicy(ramClamp = 320f, ramRingRadius = 320f)
+        assertFailsWith<IllegalArgumentException> { ChallengePolicy(ramClamp = 320f, ramRingRadius = 321f) }
+        ChallengePolicy(ramClamp = 120f, ramRingRadius = 100f)
+        assertFailsWith<IllegalArgumentException> { ChallengePolicy(ramClamp = 119f, ramRingRadius = 100f) }
         SecretPolicy(spinBuckets = ContentBounds.MAX_SPIN_BUCKETS)
         assertFailsWith<IllegalArgumentException> { SecretPolicy(spinBuckets = ContentBounds.MAX_SPIN_BUCKETS + 1) }
         assertFailsWith<IllegalArgumentException> { SiteReward(matter = 121) }

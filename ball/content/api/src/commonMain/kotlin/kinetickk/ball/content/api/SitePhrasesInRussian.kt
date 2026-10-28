@@ -41,6 +41,8 @@ internal val SitePhrasesInRussian: List<Pair<String, String>> = listOf(
     "RACE FINISHED // BRONZE" to "ГОНКА ЗАВЕРШЕНА // БРОНЗА",
     "RACE FINISHED" to "ГОНКА ЗАВЕРШЕНА",
     "RACE LOST" to "ГОНКА ПРОИГРАНА",
+    "CHALLENGE COMPLETE" to "ВЫЗОВ ПРОЙДЕН",
+    "CHALLENGE FAILED" to "ВЫЗОВ ПРОВАЛЕН",
 
     "Trials" to "Вызовы",
     "The Lost Cursor" to "Потерянный курсор",

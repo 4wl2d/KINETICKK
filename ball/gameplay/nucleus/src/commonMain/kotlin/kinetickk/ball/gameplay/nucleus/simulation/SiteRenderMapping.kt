@@ -253,8 +253,7 @@ private fun MutableGameState.siteRadius(site: SiteState): Float {
     if (!site.active) return 0f
     val challenges = content.sites.challenges
     return when (site.kind) {
-        SiteKind.BRAKELESS_TRIAL -> challenges.brakelessStartRadius +
-            (challenges.brakelessEndRadius - challenges.brakelessStartRadius) * min(1f, site.clock / challenges.brakelessDuration)
+        SiteKind.BRAKELESS_TRIAL -> challenges.brakelessRing(site.clock)
         SiteKind.RAM_TRIAL -> challenges.ramClamp
         SiteKind.UNTOUCHED_TRIAL -> challenges.untouchedRadius
         SiteKind.VELOCITY_TRIAL -> challenges.velocityZoneRadius

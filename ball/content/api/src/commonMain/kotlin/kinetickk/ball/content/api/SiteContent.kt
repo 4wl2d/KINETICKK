@@ -245,7 +245,11 @@ data class ChallengePolicy(
             brakelessStartRadius, brakelessEndRadius, ramRingRadius, ramClamp, untouchedRadius, velocityZoneRadius,
             slalomSpacing, slalomPoleOffset, slalomMaxLateral, slalomPoleClearance,
         ).forEach { require(it.isFinite() && it > 0f) { "Challenge radii must be positive" } }
-        require(ramFoeHealthShare > 0f && ramFoeHealthShare <= 1f) { "Ram foe integrity share must be in (0, 1]" }
+        // The Ram rite's foes are an encounter: its area, ring and integrity bounds hold for them.
+        require(ramFoeHealthShare in 0.1f..1f) { "Ram foe integrity share must be in 0.1..1" }
+        require(ramClamp in 120f..2_400f && ramRingRadius <= ramClamp) {
+            "The Ram rite's area must be in 120..2400 and hold its ring"
+        }
         require(slalomPoles in 2..7) { "Slalom poles must be in 2..7" }
         require(slalomFirstAlong + (slalomPoles - 1) * slalomSpacing <= 2_300f) { "A slalom must stay inside the obstacle window" }
     }
@@ -410,11 +414,14 @@ data class SitePolicy(
     fun definition(kind: SiteKind): SiteDefinition = definitions[kind.ordinal]
 }
 
+/** Window weight of each of the five challenges (together 1.8, one family's share of a window's draw). */
+private const val CHALLENGE_WINDOW_WEIGHT = 0.36f
+
 private const val RIFT_INSTRUCTION = "Fly through to cross over. The layer releases you before the Architect arrives."
 
 /**
- * The shipped sites in [SiteKind] order. The anomalies and the gate race take window weight; challenges, the bounty and
- * rifts stay at 0 until their lanes enable them.
+ * The shipped sites in [SiteKind] order. The anomalies, the gate race and the five challenges take window weight; the
+ * bounty and rifts stay at 0 until their lanes enable them.
  */
 fun defaultSiteDefinitions(): ImmutableList<SiteDefinition> = immutableListOf(
     SiteDefinition(
@@ -437,23 +444,23 @@ fun defaultSiteDefinitions(): ImmutableList<SiteDefinition> = immutableListOf(
     SiteDefinition(
         SiteKind.BRAKELESS_TRIAL, "Brakeless run",
         "Keep moving inside the shrinking ring for twelve seconds. Braking fails the trial.",
-        SiteReward(directed = DirectedReward.ITEM_AND_REPAIR), duration = 20f,
+        SiteReward(directed = DirectedReward.ITEM_AND_REPAIR), windowWeight = CHALLENGE_WINDOW_WEIGHT, duration = 20f,
     ),
     SiteDefinition(
         SiteKind.RAM_TRIAL, "Ram rite", "Destroy six marked drifters with Dash impacts.",
-        SiteReward(directed = DirectedReward.WEAPON), duration = 20f,
+        SiteReward(directed = DirectedReward.WEAPON), windowWeight = CHALLENGE_WINDOW_WEIGHT, duration = 20f,
     ),
     SiteDefinition(
         SiteKind.UNTOUCHED_TRIAL, "Untouched", "Stay inside the ring for twelve seconds without taking damage.",
-        SiteReward(directed = DirectedReward.RELIC), duration = 22f,
+        SiteReward(directed = DirectedReward.RELIC), windowWeight = CHALLENGE_WINDOW_WEIGHT, duration = 22f,
     ),
     SiteDefinition(
         SiteKind.VELOCITY_TRIAL, "Velocity hold", "Hold Overdrive velocity for six seconds within the zone.",
-        SiteReward(directed = DirectedReward.ITEM_AND_REPAIR),
+        SiteReward(directed = DirectedReward.ITEM_AND_REPAIR), windowWeight = CHALLENGE_WINDOW_WEIGHT,
     ),
     SiteDefinition(
         SiteKind.SLALOM_TRIAL, "Slalom", "Pass each pole on its flagged side, in order.",
-        SiteReward(directed = DirectedReward.WEAPON), duration = 18f,
+        SiteReward(directed = DirectedReward.WEAPON), windowWeight = CHALLENGE_WINDOW_WEIGHT, duration = 18f,
     ),
     SiteDefinition(
         SiteKind.BOUNTY_ARENA, "Bounty", "Defeat the marked target. Leaving the arena forfeits the bounty.",

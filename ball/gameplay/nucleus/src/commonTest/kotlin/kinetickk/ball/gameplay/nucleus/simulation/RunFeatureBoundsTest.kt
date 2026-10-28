@@ -59,6 +59,30 @@ class RunFeatureBoundsTest {
     }
 
     @Test
+    fun aChallengeActivationClosesItsAlternativeAndIsTheOnlyTrial() {
+        // A Ram rite and an anomaly share every window; the rite owns its eight foes and nothing else starts.
+        val content = canonicalGameplayContent.withWindowWeights(mapOf(SiteKind.RAM_TRIAL to 1f, SiteKind.RESONANT_CIRCUIT to 1f))
+        val state = game(content)
+        state.elapsed = 45f
+        state.updateSites(0.01f)
+        val offered = state.sites
+        assertEquals(setOf(SiteKind.RAM_TRIAL, SiteKind.RESONANT_CIRCUIT), offered.map { it.kind }.toSet())
+        val rite = offered.single { it.kind == SiteKind.RAM_TRIAL }
+        val other = offered.single { it.kind != SiteKind.RAM_TRIAL }
+        state.activateWindowSite(rite)
+        assertEquals(rite.id, state.sites.single().id)
+        assertTrue(state.sites.single().active)
+        assertEquals(state.enemies.map { it.id }, state.engagementFoeIds())
+
+        state.previousCoreX = other.x - 50f
+        state.previousCoreY = other.y
+        state.coreX = other.x
+        state.coreY = other.y
+        state.updateSites(0.01f)
+        assertTrue(state.sites.all { it.id == rite.id && it.active })
+    }
+
+    @Test
     fun tenthDirectedRewardFitsAndEleventhSalvagesWithoutTouchingSource() {
         val source = game()
         val bound = source.content.sites.maxPendingDirectedRewards
