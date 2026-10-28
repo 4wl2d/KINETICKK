@@ -61,9 +61,16 @@ internal enum class DimensionExit { PORTAL, TIMER, FORCED }
  * Architect, [target] is a dimension not entered this run, at least the minimum visit fits before the exit margin,
  * and no boss-class enemy lives (entering would delete it and its reward).
  */
-internal fun MutableGameState.canEnterDimension(target: WorldLayer): Boolean {
+internal fun MutableGameState.canEnterDimension(target: WorldLayer): Boolean =
+    phase == GamePhase.RUNNING && dimensionEntryOpen(target)
+
+/**
+ * The entry rules of [canEnterDimension] apart from the phase, so a rift's locked look holds while the run is paused
+ * or a choice is open.
+ */
+internal fun MutableGameState.dimensionEntryOpen(target: WorldLayer): Boolean {
     val policy = content.dimensions
-    if (!policy.enabled || phase != GamePhase.RUNNING || worldLayer != WorldLayer.BASE || bossSpawned) return false
+    if (!policy.enabled || worldLayer != WorldLayer.BASE || bossSpawned) return false
     if (target == WorldLayer.BASE || dimensionRun.visitedMask and target.bit != 0) return false
     if (content.tempo.bossAtSeconds - policy.exitMarginSeconds - elapsed < policy.minimumVisitSeconds) return false
     for (index in enemies.indices) {
