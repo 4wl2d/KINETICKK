@@ -192,8 +192,18 @@ private fun MutableGameState.signalCard(option: SignalOption, kind: SignalKind):
         signalCost = terms.cost,
         signalPayout = terms.payout,
         locked = terms.locked,
+        signalRarity = if (option == SignalOption.CACHE_RELIQUARY) unlockedRarityFloor(ItemRarity.LEGENDARY) else null,
     )
 }
+
+/**
+ * The rarest tier at most [floor] that holds an item unlocked at the profile's Rebirth rank: an offer with [floor] deals
+ * it, since a floor no item meets falls to the nearest tier below (the reliquary's Legendary floor deals Epic at
+ * Rebirth 0 and 1).
+ */
+private fun MutableGameState.unlockedRarityFloor(floor: ItemRarity): ItemRarity =
+    ItemRarity.entries.filter { it.rank <= floor.rank }.sortedByDescending { it.rank }
+        .firstOrNull { tier -> content.items.any { it.rarity == tier && it.minimumRebirth <= rebirthRank } } ?: floor
 
 /** What a card costs and pays now (Matter, integrity, rerolls or a stake, by option), and whether the run can take it. */
 private class SignalTerms(val cost: Int, val payout: Int, val locked: Boolean)

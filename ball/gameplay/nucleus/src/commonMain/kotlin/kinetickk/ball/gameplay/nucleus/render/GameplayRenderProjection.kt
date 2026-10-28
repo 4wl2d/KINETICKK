@@ -101,6 +101,11 @@ data class ChoiceOption(
     val locked: Boolean = false,
     /** A [ChoiceType.BOON] card's Blessing or Pact id. */
     val boonId: Int? = null,
+    /**
+     * A [ChoiceType.SIGNAL] item-offer card's rarity floor as it deals at the profile's Rebirth rank: the Black reliquary's
+     * Legendary floor deals Epic while no Legendary item is unlocked. Null on every other card.
+     */
+    val signalRarity: kinetickk.ball.content.api.ItemRarity? = null,
 )
 
 data class CharacterLatticePoint(val x: Float, val y: Float)

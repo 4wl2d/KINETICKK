@@ -386,6 +386,12 @@ class EventSignalTest {
         // A floor no remaining item meets deals the rarest that remains: tier 0 offers no Legendary item, tier 2 two.
         assertEquals(List(3) { ItemRarity.EPIC }, dealt(SignalOption.CACHE_RELIQUARY))
         assertEquals(listOf(ItemRarity.EPIC, ItemRarity.LEGENDARY, ItemRarity.LEGENDARY), dealt(SignalOption.CACHE_RELIQUARY, rebirth = 2))
+        // The reliquary's card names the tier its floor deals at the profile's Rebirth rank; no other card carries one.
+        for ((rebirth, named) in listOf(0 to ItemRarity.EPIC, 1 to ItemRarity.EPIC, 2 to ItemRarity.LEGENDARY, 10 to ItemRarity.LEGENDARY)) {
+            val prompt = arena(seed = 41, rebirth = rebirth).openPrompt(SignalKind.CURSED_CACHE)
+            assertEquals(named, prompt.card(SignalOption.CACHE_RELIQUARY).signalRarity, "Rebirth $rebirth")
+            assertTrue(prompt.choices.filter { it.signalOption != SignalOption.CACHE_RELIQUARY }.all { it.signalRarity == null })
+        }
     }
 
     @Test
