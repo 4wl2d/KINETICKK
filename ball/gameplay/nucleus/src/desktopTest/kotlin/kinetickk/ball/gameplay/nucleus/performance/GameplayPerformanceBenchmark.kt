@@ -8,6 +8,9 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.StructureTemplateId
+import kinetickk.ball.content.api.rotateQuarterX
+import kinetickk.ball.content.api.rotateQuarterY
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.api.GameplayRevision
@@ -39,6 +42,10 @@ import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
+import kinetickk.ball.gameplay.nucleus.simulation.StructurePlacement
+import kinetickk.ball.gameplay.nucleus.simulation.structurePlacement
+import kinetickk.ball.gameplay.nucleus.simulation.teleportCoreForTesting
+import kinetickk.ball.gameplay.nucleus.simulation.updateStructures
 import kinetickk.ball.gameplay.nucleus.simulation.ION_SWARM_DAMAGE
 import kinetickk.ball.gameplay.nucleus.simulation.ION_SWARM_PIERCE
 import kinetickk.ball.gameplay.nucleus.simulation.addField
@@ -122,6 +129,7 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
     private val fastReactionsSnapshot = GameplayNucleus.renderSnapshot(fastReactionsAuthority)
     private var controlCounter = 1L
     private val traceFingerprint = deterministicTraceFingerprint(seed + 9)
+    private val structureDungeon = structureDungeonState(seed + 11)
 
     fun scenarios(): List<BenchmarkScenario> = listOf(
         BenchmarkScenario(
@@ -391,6 +399,19 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
             validation.observeOutcome { result }
             result
         },
+        BenchmarkScenario(
+            name = "structure_dungeon",
+            category = "simulation",
+            description = "Copy and execute one fixed step sealed in a Reliquary chapel with 60 enemies and 300 shots across its walls.",
+            metadata = stateCardinality(structureDungeon, seed) +
+                baseMetadata(seed, "structure" to "RELIQUARY", "walls" to structureDungeon.structureField.walls.size.toString()),
+            maximumOperations = 10_000,
+        ) { validation ->
+            val candidate = structureDungeon.copyForReduction()
+            candidate.simulateStep(MutableGameState.FIXED_STEP)
+            validation.observeOutcome { canonicalStateFingerprint(candidate) }
+            stateSignature(candidate)
+        },
     ).map { scenario ->
         val expectedOutcomeWitness = outcomeFingerprint(scenario.name)
         scenario.copy(
@@ -442,6 +463,7 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
         "nucleus_frame_paused", "published_frame_paused" ->
             authorityOutcomeFingerprint(pausedAuthority, frame60)
         "trace_2s_60hz" -> traceFingerprint
+        "structure_dungeon" -> fixedStepOutcomeFingerprint(structureDungeon)
         else -> error("Missing semantic outcome fingerprint for benchmark scenario: $name")
     }
 
@@ -488,6 +510,10 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
         "published_reaction_burst_100ms_2x" ->
             publishedReactionSignature(fastReactionsAuthority, fastReactionsSnapshot, frame100Millis)
         "trace_2s_60hz" -> deterministicTraceFingerprint(seed + 9)
+        "structure_dungeon" -> structureDungeon.copyForReduction().run {
+            simulateStep(MutableGameState.FIXED_STEP)
+            stateSignature(this)
+        }
         else -> error("Missing expected timed result for benchmark scenario: $name")
     }
 
@@ -802,6 +828,103 @@ private fun collisionState(seed: Int, hit: Boolean): MutableGameState = newRunni
     }
     repeat(MAX_TRAIL) { index -> trail += TrailPoint(-1_300f + index, -700f, 0.5f) }
 }
+
+/** The Reliquary chapel the `structure_dungeon` workload seals the Core in (the south-west chapel). */
+internal const val STRUCTURE_WORKLOAD_CHAPEL = 6
+
+/** Enemies of the `structure_dungeon` workload: the chapel's garrison and ordinary enemies in and around the chapel. */
+internal const val STRUCTURE_WORKLOAD_ENEMIES = 60
+
+/** Shots of the `structure_dungeon` workload, half the Core's inside the chapel and half hostile outside it. */
+internal const val STRUCTURE_WORKLOAD_PROJECTILES = 300
+
+/**
+ * The `structure_dungeon` workload: the shipped content's Reliquary nearest the run's origin (cells scanned ring by ring
+ * from the origin), the Core teleported into its south-west chapel and sealed there around the chapel's garrison by two
+ * dungeon steps, then ordinary enemies up to [STRUCTURE_WORKLOAD_ENEMIES] spread over the chapel and in a ring around
+ * it, and [STRUCTURE_WORKLOAD_PROJECTILES] shots at the chapel's walls. One fixed step then runs the capsule sweeps,
+ * the wall push-out of the Core and every enemy, the garrison clamp, the shots stopped at the walls and the dungeon
+ * upkeep.
+ */
+internal fun structureDungeonState(seed: Int): MutableGameState = newRunningState(seed).apply {
+    val placement = reliquaryNearTheOrigin()
+    val template = content.structures.template(StructureTemplateId.RELIQUARY)
+    val chapel = template.rooms[STRUCTURE_WORKLOAD_CHAPEL]
+    val chapelLocalX = (chapel.minX + chapel.maxX) * 0.5f
+    val chapelLocalY = (chapel.minY + chapel.maxY) * 0.5f
+    teleportCoreForTesting(
+        placement.absoluteX + rotateQuarterX(chapelLocalX, chapelLocalY, placement.rotation),
+        placement.absoluteY + rotateQuarterY(chapelLocalX, chapelLocalY, placement.rotation),
+    )
+    enemies.clear()
+    projectiles.clear()
+    pickups.clear()
+    trail.clear()
+    updateStructures(MutableGameState.FIXED_STEP)
+    updateStructures(MutableGameState.FIXED_STEP)
+    check(dungeon?.engagedRoom == STRUCTURE_WORKLOAD_CHAPEL) { "The structure workload must seal its chapel" }
+    // Ordinary enemies: a lattice over the chapel (clear of the Core), the rest in a ring outside the chapel's walls.
+    var inside = (STRUCTURE_WORKLOAD_ENEMIES - enemies.size) / 2
+    val halfSide = (chapel.maxX - chapel.minX) * 0.5f - 90f
+    for (slot in 0 until 36) {
+        if (inside == 0) break
+        val localX = -halfSide + (slot % 6) * (2f * halfSide / 5f)
+        val localY = -halfSide + (slot / 6) * (2f * halfSide / 5f)
+        if (localX * localX + localY * localY < 150f * 150f) continue
+        addEnemyForTesting(coreX + localX, coreY + localY, hp = 1_000_000f, radius = 14f)
+        inside--
+    }
+    val around = STRUCTURE_WORKLOAD_ENEMIES - enemies.size
+    repeat(around) { index ->
+        val angle = index * (2f * kotlin.math.PI.toFloat() / around)
+        val reach = (chapel.maxX - chapel.minX) * 0.5f + 140f
+        addEnemyForTesting(coreX + kotlin.math.cos(angle) * reach, coreY + kotlin.math.sin(angle) * reach, hp = 1_000_000f, radius = 14f)
+    }
+    // Shots on all four sides of the chapel (outer walls, inner walls and sealed doors alike): a quarter of them
+    // hostile just outside a wall and a quarter the Core's just inside one, both stopped there this step; the other
+    // half in flight, the Core's from the middle of the chapel and hostile ones from farther out.
+    val wallLine = (chapel.maxX - chapel.minX) * 0.5f
+    repeat(STRUCTURE_WORKLOAD_PROJECTILES) { index ->
+        val side = (index / 4) % 4
+        val normalX = if (side == 0) 1f else if (side == 2) -1f else 0f
+        val normalY = if (side == 1) 1f else if (side == 3) -1f else 0f
+        val along = -300f + ((index / 16) % 16) * 40f
+        val (offset, outward) = when (index % 4) {
+            0 -> wallLine + 30f to false
+            1 -> wallLine - 30f to true
+            2 -> 120f to true
+            else -> wallLine + 200f to false
+        }
+        val speed = if (outward) 900f else -900f
+        projectiles += Projectile(
+            x = coreX + normalX * offset - normalY * along,
+            y = coreY + normalY * offset + normalX * along,
+            vx = normalX * speed,
+            vy = normalY * speed,
+            radius = 4f,
+            life = 20f,
+            hostile = !outward,
+            damage = 1f,
+            pierce = 2,
+        )
+    }
+    takeSoundCues()
+    takeVisualFxCues()
+}
+
+/** The Reliquary the shipped placement puts nearest the run's origin, scanning cells ring by ring. */
+private fun MutableGameState.reliquaryNearTheOrigin(): StructurePlacement {
+    for (ring in 0..STRUCTURE_SCAN_RINGS) {
+        for (cellY in -ring..ring) for (cellX in -ring..ring) {
+            if (maxOf(kotlin.math.abs(cellX), kotlin.math.abs(cellY)) != ring) continue
+            val placement = structurePlacement(cellX, cellY) ?: continue
+            if (placement.template == StructureTemplateId.RELIQUARY) return placement
+        }
+    }
+    error("No Reliquary within $STRUCTURE_SCAN_RINGS structure cells of the origin")
+}
+
+private const val STRUCTURE_SCAN_RINGS = 24
 
 internal fun authorityState(model: MutableGameState): GameplayState = GameplayState(
     instanceId = GameplayInstanceId(RunId(1L)),
