@@ -31,6 +31,8 @@ import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.SignalKind
 import kinetickk.ball.content.api.EliteAffix
 import kinetickk.ball.content.api.WorldEventKind
+import kinetickk.ball.content.api.WorldLayer
+import kinetickk.ball.gameplay.nucleus.render.DimensionProjection
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicAspect
@@ -524,6 +526,48 @@ class RedesignShotsWorldTest {
         add(Scene("terrain-hud", hud = true, model = { w, h -> terrain(w, h) }))
         add(Scene("terrain-mono", roles = KkRolePalette.Mono, model = { w, h -> terrain(w, h) }))
         add(Scene("terrain-protan", roles = KkRolePalette.Protan, model = { w, h -> terrain(w, h) }))
+        // Dimensions: each layer's ground and marks (the Zenith's course with an ambient ring, the Nadir's embers, the
+        // Archive's exit rift) and, in realspace, a window rift offered, the same rift locked, and the glitch rift; in each
+        // palette. The slow Zenith shows the next ring's grey hatched dashes below the pace.
+        for ((suffix, roles) in listOf("" to KkRolePalette.Default, "-mono" to KkRolePalette.Mono, "-protan" to KkRolePalette.Protan)) {
+            for (layer in listOf(WorldLayer.ZENITH, WorldLayer.NADIR, WorldLayer.ARCHIVE)) {
+                add(Scene("dimension-${layer.name.lowercase()}$suffix", roles = roles, model = { w, h -> dimensionScene(w, h, layer) }))
+            }
+            add(Scene("rift-zenith$suffix", roles = roles, model = { w, h -> riftScene(w, h, locked = false) }))
+            add(Scene("rift-locked$suffix", roles = roles, model = { w, h -> riftScene(w, h, locked = true) }))
+            add(Scene("rift-glitch$suffix", roles = roles, model = { w, h -> model(w, h).withDimension(glitchRift(1_000f, 1_000f, 300f, 120f)) }))
+        }
+        add(Scene("dimension-zenith-slow", model = { w, h -> dimensionScene(w, h, WorldLayer.ZENITH, pace = 2_000f) }))
+    }
+
+    /** A visit of [layer] around the Core with two of its natives; [pace] above the Core's speed shows the too-slow look. */
+    private fun dimensionScene(w: Float, h: Float, layer: WorldLayer, pace: Float = 300f): GameplayRenderModel {
+        val (first, second) = when (layer) {
+            WorldLayer.ZENITH -> EnemyType.SERAPH to EnemyType.CHOIR
+            WorldLayer.NADIR -> EnemyType.IMP to EnemyType.HOUND
+            WorldLayer.ARCHIVE, WorldLayer.BASE -> EnemyType.CIPHER to EnemyType.MIRROR
+        }
+        val enemies = listOf(enemy(1, first, -330f, -150f, 18f), enemy(2, second, 420f, 210f, 20f))
+        val visit = when (layer) {
+            WorldLayer.ZENITH -> dimensionVisit(layer, 1_000f, 1_000f, course = listOf(300f to 130f, -60f to 330f), ambient = listOf(-420f to 170f),
+                pace = pace, progress = 3)
+            WorldLayer.NADIR -> dimensionVisit(layer, 1_000f, 1_000f, embers = List(7) { index ->
+                val angle = index * 0.9f + 0.4f
+                (230f * cos(angle)) to (150f * sin(angle))
+            } + (-150f to -40f), emberLife = 6f, pace = pace)
+            WorldLayer.ARCHIVE, WorldLayer.BASE -> dimensionVisit(layer, 1_000f, 1_000f, exit = 300f to 120f, pace = pace, localClock = 7.3f)
+        }
+        return model(w, h, enemies = enemies).withDimension(visit)
+    }
+
+    /** Realspace with a Zenith rift offered at the Core's lower right and a Nadir rift farther left, both [locked] or open. */
+    private fun riftScene(w: Float, h: Float, locked: Boolean): GameplayRenderModel {
+        fun rift(kind: SiteKind, dx: Float, dy: Float) =
+            SiteProjection(kind, if (kind == SiteKind.ZENITH_RIFT) "Zenith rift" else "Nadir rift", 1_000f + dx, 1_000f + dy, false, 34f, 0, 0f,
+                immutableListOf(), 0f, 0f)
+        val sites = listOf(rift(SiteKind.ZENITH_RIFT, 300f, 120f), rift(SiteKind.NADIR_RIFT, -360f, -60f))
+        val dimension = if (locked) DimensionProjection(lockedRifts = WorldLayer.ZENITH.bit or WorldLayer.NADIR.bit) else DimensionProjection.REALSPACE
+        return model(w, h, points = sites).withDimension(dimension)
     }
 
     /** A structure of the shots' content centred ([dx], [dy]) from the Core. */
