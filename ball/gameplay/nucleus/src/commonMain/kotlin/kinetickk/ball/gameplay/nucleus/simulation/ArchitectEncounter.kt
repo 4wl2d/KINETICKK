@@ -23,7 +23,7 @@ internal const val ARCHITECT_FINAL_PHASE: Int = 2
 internal const val ARCHITECT_SHIFT_SECONDS: Float = 8f
 internal const val ARCHITECT_SHIFT_RING: Int = 16
 internal const val ARCHITECT_SHIFT_REPAIRS: Int = 4
-/** The Architect skips a volley while this many projectiles are live, so player shots never starve. */
+/** The Architect, the mini-bosses and the secret bosses skip a volley while this many projectiles are live, so player shots never starve. */
 internal const val ARCHITECT_VOLLEY_PROJECTILE_BUDGET: Int = 450
 /** Ordinary enemies keep arriving during the fight at this share of the cap and a slower rate. */
 internal const val ARCHITECT_ADD_CAP_SHARE: Float = 0.6f

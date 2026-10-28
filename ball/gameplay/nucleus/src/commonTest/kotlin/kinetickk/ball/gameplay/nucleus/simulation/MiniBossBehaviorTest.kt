@@ -505,6 +505,76 @@ class MiniBossBehaviorTest {
     }
 
     @Test
+    fun miniBossVolleysSkipWhileTheScreenHoldsTheProjectileBudget() {
+        // Each volley, armed to fire on the next step: one shot under the budget it fires; at the budget its turn passes
+        // without a bolt, as the Architect's and the secret bosses' do, so player shots never starve.
+        val volleys: List<Pair<String, MutableGameState.() -> Unit>> = listOf(
+            "Warden Prime's ring" to {
+                val prime = spawn(EnemyType.WARDEN_PRIME, 300f, 0f)
+                runFor(FIXED)
+                prime.actionTimer = FIXED * 0.5f
+            },
+            "the Brood Queen's spiral" to {
+                val queen = spawn(EnemyType.BROOD_QUEEN, 300f, 0f)
+                runFor(FIXED)
+                queen.phase = 1
+                queen.actionTimer = 100f
+                queen.modeUntil = elapsed
+            },
+            "the Throne's fan" to {
+                val throne = spawn(EnemyType.THRONE, 400f, 0f)
+                runFor(FIXED)
+                throne.actionTimer = FIXED * 0.5f
+            },
+            "the Throne's fan and ring" to {
+                val throne = spawn(EnemyType.THRONE, 400f, 0f)
+                runFor(FIXED)
+                throne.phase = 1
+                throne.actionTimer = FIXED * 0.5f
+            },
+            "the Throne's judgement" to {
+                val throne = spawn(EnemyType.THRONE, 400f, 0f)
+                runFor(FIXED)
+                throne.phase = 2
+                throne.charges = 1
+                throne.actionTimer = FIXED * 0.5f
+                runFor(FIXED)
+                assertEquals(EnemyBehavior.TELEGRAPH, throne.mode)
+                throne.modeUntil = elapsed
+            },
+            "the Pyre Herald's spiral" to {
+                val pyre = spawn(EnemyType.PYRE_HERALD, 300f, 0f)
+                runFor(FIXED)
+                pyre.actionTimer = FIXED * 0.5f
+            },
+        )
+        for ((name, arm) in volleys) {
+            for (live in listOf(ARCHITECT_VOLLEY_PROJECTILE_BUDGET - 1, ARCHITECT_VOLLEY_PROJECTILE_BUDGET)) {
+                val state = quietState()
+                state.arm()
+                state.fillProjectiles(live)
+                state.runFor(FIXED)
+                val fired = state.projectiles.count { it.hostile }
+                if (live < ARCHITECT_VOLLEY_PROJECTILE_BUDGET) assertTrue(fired > 0, "$name fires with $live shots live")
+                else assertEquals(0, fired, "$name waits with $live shots live")
+            }
+        }
+        // A ram into a Throne's arc is punished below the budget and not at it.
+        for (live in listOf(ARCHITECT_VOLLEY_PROJECTILE_BUDGET - 1, ARCHITECT_VOLLEY_PROJECTILE_BUDGET)) {
+            val state = quietState()
+            val throne = state.spawnTouching(EnemyType.THRONE)
+            state.runFor(FIXED)
+            throne.facing = PI.toFloat() - throneSpin(0) * FIXED
+            state.runFor(FIXED)
+            assertTrue(throne.guarded)
+            state.fillProjectiles(live)
+            state.ram(throne, 420f)
+            assertEquals(if (live < ARCHITECT_VOLLEY_PROJECTILE_BUDGET) THRONE_PUNISH_RING else 0, state.projectiles.count { it.hostile },
+                "the punish ring with $live shots live")
+        }
+    }
+
+    @Test
     fun miniBossAddsAndAttacksDrawNothingFromTheRunStreams() {
         val state = quietState()
         val prime = state.spawn(EnemyType.WARDEN_PRIME, 400f, 0f)
@@ -555,6 +625,12 @@ class MiniBossBehaviorTest {
         boss.hp = gate + 5f
         damageEnemy(boss, 20f)
         assertTrue(isShifting(boss), "${boss.type} reached its gate")
+    }
+
+    /** Replaces the live projectiles with [count] still player shots far from every boss. */
+    private fun MutableGameState.fillProjectiles(count: Int) {
+        projectiles.clear()
+        repeat(count) { projectiles += Projectile(coreX - 4_000f, coreY - 4_000f, 0f, 0f, 2f, 60f, hostile = false) }
     }
 
     /** A Core touching [enemy] from its west, moving at [speed] straight into it, resolved as one contact. */
