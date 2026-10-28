@@ -90,6 +90,7 @@ class SingularityContactGateTest {
             state.takeSoundCues()
             state.takeVisualFxCues()
             val touches = state.obstacleField.obstacles.any { obstacle ->
+                if (!obstacle.solidAt(state.elapsed, state.content.obstacles.kinds)) return@any false
                 val reach = obstacle.radius + state.coreRadius + CONTACT_SLACK
                 (obstacle.x - state.coreX) * (obstacle.x - state.coreX) + (obstacle.y - state.coreY) * (obstacle.y - state.coreY) <= reach * reach
             }
