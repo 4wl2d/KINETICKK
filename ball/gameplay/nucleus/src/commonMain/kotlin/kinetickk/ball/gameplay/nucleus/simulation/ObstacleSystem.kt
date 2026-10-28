@@ -247,6 +247,7 @@ internal fun MutableGameState.generateChunk(chunkX: Int, chunkY: Int): List<Obst
         if (yieldsToEarlierNeighbour(neighbours, candidate)) continue
         val id = obstacleId(chunkX, chunkY, candidate.slot, worldLayer)
         if (id in destroyedObstacleIds) continue
+        if (keepOutCovers(chunkX, chunkY, candidate.offsetX, candidate.offsetY, candidate.kind, candidate.radius)) continue
         if (structureSuppresses(chunkX, chunkY, candidate.offsetX, candidate.offsetY, candidate.radius)) continue
         result += Obstacle(
             id = id,
