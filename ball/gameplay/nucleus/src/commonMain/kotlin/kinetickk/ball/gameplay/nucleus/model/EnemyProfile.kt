@@ -112,20 +112,20 @@ private val MIRROR_PROFILE = EnemyProfile(
     85f, 20f, 1.0f, 1f, 1f, -1, false, false, 0.7f, 0.8f, shotDamage = 10f, dataDrops = 4, matterReward = 1.5f,
 )
 private val WARDEN_PRIME_PROFILE = EnemyProfile(
-    1_800f, 44f, 1.0f, 0.8f, 0.85f, StatusElement.GRAVITIC.ordinal, true, false, 0.15f, 0.15f, shotDamage = 11f,
+    2_500f, 44f, 1.0f, 0.8f, 0.85f, StatusElement.GRAVITIC.ordinal, true, false, 0.15f, 0.15f, shotDamage = 11f,
     dataDrops = 18, matterReward = 10f, rank = EnemyRank.MINI_BOSS,
 )
 private val BROOD_QUEEN_PROFILE = EnemyProfile(
-    2_000f, 46f, 1.5f, 0.9f, 0.9f, StatusElement.ENTROPY.ordinal, true, false, 0.2f, 0.15f, shotDamage = 10f,
+    2_400f, 46f, 1.5f, 0.9f, 0.9f, StatusElement.ENTROPY.ordinal, true, false, 0.2f, 0.15f, shotDamage = 10f,
     dataDrops = 18, matterReward = 10f, rank = EnemyRank.MINI_BOSS,
 )
 private val THRONE_PROFILE = EnemyProfile(
-    2_200f, 48f, 1.2f, 0.9f, 0.6f, StatusElement.VOID.ordinal, true, false, 0f, 0.15f, shotDamage = 12f,
+    1_900f, 48f, 1.2f, 0.9f, 0.6f, StatusElement.VOID.ordinal, true, false, 0f, 0.15f, shotDamage = 12f,
     dataDrops = 18, matterReward = 10f, guardedImpactTaken = 0.1f, guardedWeaponTaken = 0.15f,
     rank = EnemyRank.MINI_BOSS, directionalGuard = true,
 )
 private val PYRE_HERALD_PROFILE = EnemyProfile(
-    2_100f, 50f, 1.0f, 0.85f, 0.85f, StatusElement.THERMAL.ordinal, true, false, 0.2f, 0.15f, shotDamage = 12f,
+    2_400f, 50f, 1.0f, 0.85f, 0.85f, StatusElement.THERMAL.ordinal, true, false, 0.2f, 0.15f, shotDamage = 12f,
     dataDrops = 18, matterReward = 10f, rank = EnemyRank.MINI_BOSS,
 )
 private val CARTOGRAPHER_PROFILE = EnemyProfile(

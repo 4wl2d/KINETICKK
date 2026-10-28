@@ -119,41 +119,41 @@ class BossEncounterTest {
     }
 
     @Test
-    fun aMiniBossCapsEveryDealerAtThreePercentOfItsTierZeroIntegrity() {
+    fun aMiniBossCapsEveryDealerAtSixPercentOfItsTierZeroIntegrity() {
         val state = buildTestState()
-        // Past its last gate (thirds: phase 2 is final), so only the cap holds a hit: 3 % of 3,000.
+        // Past its last gate (thirds: phase 2 is final), so only the cap holds a hit: 6 % of 3,000.
         val boss = state.addEnemyForTesting(400f, 0f, hp = 3_000f, radius = 44f, type = EnemyType.WARDEN_PRIME)
             .apply { phase = 2 }
         val dealt = state.damageDealt
 
-        assertEquals(90f, state.dealHit(boss, 10_000f, HitSource.ECHO).amount, 0.01f)
-        assertEquals(90f, state.dealCharacterDamage(boss, 10_000f).amount, 0.01f)
-        assertEquals(90f, state.dealHit(boss, 10_000f, HitSource.WEAPON, canCrit = false).amount, 0.01f)
-        assertEquals(90f, state.dealStatusDamage(boss, 10_000f, StatusElement.THERMAL).amount, 0.01f)
-        assertEquals(90f, state.dealProcDamage(boss, 10_000f, rescale = false).amount, 0.01f)
-        assertEquals(90f, state.dealSkillDamage(boss, 10_000f, element = null).amount, 0.01f)
+        assertEquals(180f, state.dealHit(boss, 10_000f, HitSource.ECHO).amount, 0.01f)
+        assertEquals(180f, state.dealCharacterDamage(boss, 10_000f).amount, 0.01f)
+        assertEquals(180f, state.dealHit(boss, 10_000f, HitSource.WEAPON, canCrit = false).amount, 0.01f)
+        assertEquals(180f, state.dealStatusDamage(boss, 10_000f, StatusElement.THERMAL).amount, 0.01f)
+        assertEquals(180f, state.dealProcDamage(boss, 10_000f, rescale = false).amount, 0.01f)
+        assertEquals(180f, state.dealSkillDamage(boss, 10_000f, element = null).amount, 0.01f)
         state.unlockNow()
         state.castNow()
-        assertEquals(90f, state.apexStrike(boss), 0.01f)
+        assertEquals(180f, state.apexStrike(boss), 0.01f)
         state.apexShot(boss, 10_000f)
         state.resolveProjectileHits()
 
-        assertEquals(3_000f - 8 * 90f, boss.hp, 0.01f)
-        assertEquals(720.0, state.damageDealt - dealt, 0.01)
+        assertEquals(3_000f - 8 * 180f, boss.hp, 0.01f)
+        assertEquals(1_440.0, state.damageDealt - dealt, 0.01)
 
         // The tier shrink and the integrity multiplier apply as they do to the Architect.
         val hard = buildTestState(rebirth = 10)
         val scale = hard.rebirthProfile.enemyHealthMultiplier
         val strong = hard.addEnemyForTesting(400f, 0f, hp = 3_000f * scale, radius = 44f, type = EnemyType.WARDEN_PRIME)
             .apply { phase = 2 }
-        assertEquals(72f, hard.damageEnemy(strong, 100_000f).amount, 0.05f)
+        assertEquals(144f, hard.damageEnemy(strong, 100_000f).amount, 0.05f)
     }
 
     @Test
     fun miniBossGatesStopAtThirdsShiftTwoSecondsAndRunTheirPhaseStartOnceOutsideTheDamagePipeline() {
         val state = buildTestState()
         val boss = state.addEnemyForTesting(400f, 0f, hp = 3_000f, radius = 44f, type = EnemyType.WARDEN_PRIME)
-        assertEquals(90f, state.damageEnemy(boss, 10_000f).amount, 0.01f)
+        assertEquals(180f, state.damageEnemy(boss, 10_000f).amount, 0.01f)
         assertEquals(0, boss.phase)
 
         boss.hp = 2_030f
@@ -345,8 +345,8 @@ class BossEncounterTest {
         val herald = state.addEnemyForTesting(state.coreX - 300f, state.coreY, hp = 3_000f, radius = 52f, type = EnemyType.HERALD)
         state.unlockNow()
         state.castNow()
-        assertEquals(90f, state.apexStrike(boss), 0.01f)
-        assertEquals(3_000f - 90f, boss.hp, 0.01f)
+        assertEquals(180f, state.apexStrike(boss), 0.01f)
+        assertEquals(3_000f - 180f, boss.hp, 0.01f)
         // The Herald has no spec and takes the Architect's share, as in 0.5.0.
         assertEquals(state.architectHitCap(herald), state.apexStrike(herald), 0.01f)
         assertEquals(45f, 3_000f - herald.hp, 0.01f)

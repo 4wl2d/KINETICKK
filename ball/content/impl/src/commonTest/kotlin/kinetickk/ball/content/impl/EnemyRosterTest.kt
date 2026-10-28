@@ -165,7 +165,7 @@ class EnemyRosterTest {
         assertSame(ARCHITECT_ENCOUNTER, byType.getValue(EnemyType.ARCHITECT).encounter)
         assertNull(byType.getValue(EnemyType.HERALD).encounter, "The Herald keeps its own schedule")
         val mini = byType.getValue(EnemyType.WARDEN_PRIME).encounter
-        assertEquals(BossEncounterSpec(3, 0.03f, 0.02f, 0.5f, 2f, enrageAttackRate = 1.3f, enrageAfterSeconds = 75f), mini)
+        assertEquals(BossEncounterSpec(3, 0.06f, 0.02f, 0.5f, 2f, enrageAttackRate = 1.3f, enrageAfterSeconds = 75f), mini)
         assertEquals(mini, byType.getValue(EnemyType.BROOD_QUEEN).encounter)
         assertEquals(mini, byType.getValue(EnemyType.PYRE_HERALD).encounter)
         assertEquals(mini?.copy(shiftSeconds = 2.5f), byType.getValue(EnemyType.THRONE).encounter)

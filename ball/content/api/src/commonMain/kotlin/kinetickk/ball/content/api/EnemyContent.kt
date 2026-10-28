@@ -127,8 +127,9 @@ val ARCHITECT_ENCOUNTER: BossEncounterSpec = BossEncounterSpec(
     enragePhases = 1, enrageMutator = RebirthMutator.SINGULARITY, enrageAttackRate = 1.45f,
 )
 
+/** Hit-cap share calibrated by the mini-boss duels (a strong tier-10 build's median kill within 20-120 s). */
 private val MINI_BOSS_ENCOUNTER = BossEncounterSpec(
-    phases = 3, hitCapShare = 0.03f, hitCapTierShrink = 0.02f, hitCapMinimumScale = 0.5f, shiftSeconds = 2f,
+    phases = 3, hitCapShare = 0.06f, hitCapTierShrink = 0.02f, hitCapMinimumScale = 0.5f, shiftSeconds = 2f,
     enrageAttackRate = 1.3f, enrageAfterSeconds = 75f,
 )
 
