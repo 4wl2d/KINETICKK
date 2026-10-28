@@ -240,7 +240,7 @@ internal fun DrawScope.drawCodexCell(entry: CodexEntry, catalog: UiCatalogSnapsh
             drawRect(if (hovered) Kk.Ink3 else Kk.Ink2)
             drawKkHatch(rect)
             drawRect(Kk.Line2, style = kkStroke(1.dp.toPx()))
-            drawKkIcon(KkIcon.SYSTEM_ANOMALY, center, radius * 0.9f, Kk.Mute)
+            drawKkIcon(KkIcon.SYSTEM_ANOMALY, center, radius * 1.1f, Kk.Mute)
         } else {
             // The world silhouette in the threat hue; a Rebirth-locked enemy is muted, hatched and padlocked.
             drawRect(if (hovered) Kk.Ink3 else Kk.Ink2)
