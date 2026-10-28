@@ -153,10 +153,14 @@ class WorldLayerGenerationTest {
         }
     }
 
+    /**
+     * The layout arm (every layer's kind mix empty), where each body reaches its own circle; how a mix widens the clearing
+     * is [aKeepOutClearsTheWidestFieldReachWhileTheMixMayPlaceFieldKinds]'s.
+     */
     @Test
     fun keepOutSuppressesOnlyInsideItsRadiusAndMovesNothingElse() {
         for (layer in WorldLayer.entries) {
-            val state = farState(seed = 4_242)
+            val state = farState(seed = 4_242, content = withoutObstacleVariants())
             state.switchLayer(layer)
             val open = state.obstacleField.obstacles
             state.switchLayer(layer, keepOutRadius = ARRIVAL_CLEAR)
@@ -190,8 +194,14 @@ class WorldLayerGenerationTest {
             state.switchLayer(layer, keepOutRadius = ARRIVAL_CLEAR)
             val removed = open - state.obstacleField.obstacles.toSet()
             assertEquals(open.size - removed.size, state.obstacleField.size, "$layer only removes")
+            // The keep-out reads each layout candidate, before the mix rolls its kind and body: the same window without
+            // the mix holds every candidate under the same id.
+            val candidates = farState(seed = 4_242, content = content.withoutObstacleVariants()).apply { switchLayer(layer) }
+                .obstacleField.obstacles.associateBy { it.id }
+            val candidate = { obstacle: Obstacle -> candidates.getValue(obstacle.id) }
             val reach = { obstacle: Obstacle ->
-                if (layer == WorldLayer.ZENITH && obstacle.kind == ObstacleKind.ASTEROID) influence else obstacle.radius
+                val laid = candidate(obstacle)
+                if (layer == WorldLayer.ZENITH && laid.kind == ObstacleKind.ASTEROID) influence else laid.radius
             }
             val expected = open.filter {
                 state.distanceFrom(it, state.worldOriginX + FAR_X, state.worldOriginY + FAR_Y) < ARRIVAL_CLEAR + reach(it)
@@ -199,7 +209,7 @@ class WorldLayerGenerationTest {
             assertEquals(expected, removed, "$layer clears each candidate by its reach")
             val centreX = state.worldOriginX + FAR_X
             val centreY = state.worldOriginY + FAR_Y
-            return removed.size to open.count { state.distanceFrom(it, centreX, centreY) < ARRIVAL_CLEAR + it.radius }
+            return removed.size to open.count { state.distanceFrom(it, centreX, centreY) < ARRIVAL_CLEAR + candidate(it).radius }
         }
         // Zenith's mix turns asteroids into gravity knots, so asteroids keep their widest pull outside the keep-out;
         // bumpers never convert and keep their own circle.
@@ -234,9 +244,10 @@ class WorldLayerGenerationTest {
         assertEquals(tuning.maximumPerChunk, busiest, "the densest layers fill a chunk's every slot")
     }
 
+    /** The layout arm, as [keepOutSuppressesOnlyInsideItsRadiusAndMovesNothingElse]. */
     @Test
     fun returningToRealspaceRegeneratesTheSameFieldExceptTheKeepOut() {
-        val state = farState(seed = 2_026)
+        val state = farState(seed = 2_026, content = withoutObstacleVariants())
         val realspace = state.obstacleField.obstacles
         state.switchLayer(WorldLayer.NADIR, keepOutRadius = ARRIVAL_CLEAR)
         assertTrue(state.obstacleField.obstacles.all { (it.id ushr 60) == WorldLayer.NADIR.ordinal.toLong() })
