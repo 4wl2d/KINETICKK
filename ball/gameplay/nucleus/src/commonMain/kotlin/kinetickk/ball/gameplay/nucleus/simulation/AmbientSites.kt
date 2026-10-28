@@ -70,13 +70,21 @@ internal data class AmbientCandidate(val absoluteX: Double, val absoluteY: Doubl
 
 /**
  * The ambient step after the window sites: realspace only, the window rebuilt on an obstacle-chunk change, nearby sites
- * settled, then the caches the Core flew through opened (during any engagement too).
+ * settled, then the caches the Core flew through opened (during any engagement too). An [AmbientSiteWindow.EMPTY]
+ * window stays empty: nothing ambient is placed while the policy is off, after the Architect arrives or in a quiet
+ * arena.
  */
 internal fun MutableGameState.updateAmbientSites() {
-    if (!content.sites.ambient.enabled || !inBaseLayer()) {
-        if (ambientSites !== AmbientSiteWindow.EMPTY) ambientSites = AmbientSiteWindow.EMPTY
+    if (!content.sites.ambient.enabled) {
+        ambientSites = AmbientSiteWindow.EMPTY
         return
     }
+    if (!inBaseLayer()) {
+        // Outside realspace nothing ambient exists; the window is built again on the way back.
+        ambientSites = AmbientSiteWindow.UNBUILT
+        return
+    }
+    if (ambientSites == AmbientSiteWindow.EMPTY) return
     val absoluteX = worldOriginX + coreX
     val absoluteY = worldOriginY + coreY
     val chunkX = absoluteChunk(absoluteX)

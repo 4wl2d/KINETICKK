@@ -412,16 +412,39 @@ class AmbientSiteTest {
 
         val zenith = game()
         zenith.restAt(24_000f, 18_000f)
-        assertTrue(zenith.ambientSites.sites.isNotEmpty())
+        val realspace = zenith.ambientSites
+        assertTrue(realspace.sites.isNotEmpty())
         zenith.worldLayer = WorldLayer.ZENITH
         zenith.updateSites(0f)
-        assertSame(AmbientSiteWindow.EMPTY, zenith.ambientSites, "ambient sites lie only in realspace")
+        assertTrue(zenith.ambientSites.sites.isEmpty(), "ambient sites lie only in realspace")
+        zenith.worldLayer = WorldLayer.BASE
+        zenith.updateSites(0f)
+        assertEquals(realspace.sites.map { it.id }, zenith.ambientSites.sites.map { it.id }, "back in realspace the same sites return")
 
         val boss = game()
         boss.restAt(24_000f, 18_000f)
         boss.elapsed = boss.content.tempo.bossAtSeconds
         boss.updateSites(0f)
         assertSame(AmbientSiteWindow.EMPTY, boss.ambientSites, "nothing ambient stays once the Architect arrives")
+    }
+
+    @Test
+    fun aNewRunBuildsItsWindowAtItsFirstStepAndAQuietArenaStaysQuiet() {
+        val game = game()
+        game.clearObstaclesForTesting()
+        game.standAt(24_000f, 18_000f)
+        assertTrue(game.ambientSites.sites.isNotEmpty(), "a far point holds ambient sites from the first step")
+
+        game.quietArenaForTesting()
+        game.standAt(30_000f, 18_000f)
+        game.flyStep(30_000f, 18_000f, 36_000f, 24_000f)
+        assertSame(AmbientSiteWindow.EMPTY, game.ambientSites, "a quiet arena's emptied window stays empty")
+        assertTrue(game.openedSiteIds.isEmpty())
+
+        game.startRun()
+        game.clearObstaclesForTesting()
+        game.standAt(24_000f, 18_000f)
+        assertTrue(game.ambientSites.sites.isNotEmpty(), "the next run builds its window again")
     }
 
     @Test

@@ -20,7 +20,7 @@ internal fun MutableGameState.resetSites() {
     pendingDirectedRewards = emptyList()
     directedReward = null
     selectedRewardFocus = null
-    ambientSites = AmbientSiteWindow.EMPTY
+    ambientSites = AmbientSiteWindow.UNBUILT
     secretSigil = null
     openedSiteIds = emptyList()
     runSecretFlags = 0
@@ -34,10 +34,13 @@ internal fun MutableGameState.resetSites() {
     spinPrimed = false
 }
 
-/** A world layer switch: every placed site of the old layer is gone (the Golden Drifter with them). */
+/**
+ * A world layer switch: every placed site of the old layer is gone (the Golden Drifter with them); realspace builds its
+ * ambient window again once the Core is back.
+ */
 internal fun MutableGameState.clearSitesForLayerChange() {
     sites = emptyList()
-    ambientSites = AmbientSiteWindow.EMPTY
+    ambientSites = AmbientSiteWindow.UNBUILT
     secretSigil = null
     goldenDrifterId = -1
 }
