@@ -188,12 +188,6 @@ internal const val MIRROR_VOLLEY: Int = 2
 internal const val MIRROR_VOLLEY_SPACING: Float = 0.2f
 internal const val MIRROR_SHOT_SPEED: Float = 230f
 
-/** A 0.6.0 kind whose behaviour has not landed: it steers like a Drifter. */
-@Suppress("UNUSED_PARAMETER")
-internal fun MutableGameState.updatePendingKind(enemy: Enemy, dx: Float, dy: Float, distance: Float, delta: Float) {
-    steerEnemy(enemy, dx / distance * 78f, dy / distance * 78f, 2.1f, delta)
-}
-
 /** Initial modes and timers of the 0.6.0 kinds (facing already points at the Core). */
 internal fun MutableGameState.initializeWorldsBehavior(enemy: Enemy) {
     when (enemy.type) {

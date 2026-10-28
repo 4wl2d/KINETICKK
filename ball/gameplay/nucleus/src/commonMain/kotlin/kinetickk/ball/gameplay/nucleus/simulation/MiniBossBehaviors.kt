@@ -30,9 +30,9 @@ internal const val MINI_BOSS_SHIFT_REPAIRS: Int = 2
 /** The shift's shockwave reaches this many radii. */
 internal const val MINI_BOSS_SHIFT_RING: Float = 2.4f
 private const val MINI_BOSS_RADIAL_GAIN: Float = 0.4f
-private const val MINI_BOSS_RADIAL_LIMIT: Float = 60f
+internal const val MINI_BOSS_RADIAL_LIMIT: Float = 60f
 /** Bone-family effects (shift rings, burst sacs, shattered arcs). */
-private const val MINI_BOSS_MARK_COLOR: Int = 2
+internal const val MINI_BOSS_MARK_COLOR: Int = 2
 
 internal const val PRIME_WELL_RADIUS: Float = 560f
 internal const val PRIME_WELL_BASE_PULL: Float = 60f
@@ -432,7 +432,7 @@ internal fun MutableGameState.updatePyreHerald(enemy: Enemy, dx: Float, dy: Floa
 }
 
 /** Holds [range] from the Core (radial speed `(d − range) × 0.4` within ±[limit]) and circles at [orbitSpeed]. */
-private fun MutableGameState.holdRange(
+internal fun MutableGameState.holdRange(
     enemy: Enemy,
     dx: Float,
     dy: Float,
@@ -455,5 +455,5 @@ private fun MutableGameState.holdRange(
 }
 
 /** Run seconds of a boss attack on its own clock: [seconds] at the run's hostile attack rate, faster while enraged. */
-private fun MutableGameState.bossClockSeconds(enemy: Enemy, seconds: Float): Float =
+internal fun MutableGameState.bossClockSeconds(enemy: Enemy, seconds: Float): Float =
     seconds / (hostileAttackRate() * bossAttackScale(enemy))

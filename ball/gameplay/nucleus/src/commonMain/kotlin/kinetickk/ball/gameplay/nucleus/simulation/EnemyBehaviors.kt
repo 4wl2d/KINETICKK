@@ -90,6 +90,7 @@ internal fun MutableGameState.strikeDamage(enemy: Enemy): Float {
         EnemyType.HERALD -> contactDamage(enemy)
         EnemyType.HOUND -> if (striking) contactDamage(enemy) else 0f
         EnemyType.PYRE_HERALD -> contactDamage(enemy)
+        EnemyType.ANTECEDENT -> if (enemy.phase % 2 == 1) contactDamage(enemy) else 0f
         else -> 0f
     }
 }
@@ -370,7 +371,7 @@ internal fun MutableGameState.updateMinelayer(enemy: Enemy, dx: Float, dy: Float
     }
 }
 
-private fun MutableGameState.liveMines(): Int {
+internal fun MutableGameState.liveMines(): Int {
     var count = 0
     for (index in projectiles.indices) if (projectiles[index].kind == ProjectileKind.MINE) count++
     return count
