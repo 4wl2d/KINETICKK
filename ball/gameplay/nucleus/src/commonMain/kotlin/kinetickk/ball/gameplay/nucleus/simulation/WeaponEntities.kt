@@ -398,13 +398,13 @@ private fun MutableGameState.sweptContact(entity: WeaponEntity, enemy: Enemy): B
     )
 
 /**
- * A Reflector's front shield meets an entity's hit by where the hit comes from ([fromX], [fromY]), as it meets
- * a shot, not by where the Core is; its Core-facing shield holds again after the hit.
+ * A directional guard (a Reflector's front, a Throne's arcs) meets an entity's hit by where the hit comes from
+ * ([fromX], [fromY]), as it meets a shot, not by where the Core is; its Core-facing guard holds again after the hit.
  */
 private inline fun <T> hitFrom(enemy: Enemy, fromX: Float, fromY: Float, hit: () -> T): T {
-    if (enemy.type != EnemyType.REFLECTOR) return hit()
+    if (!enemy.type.profile.directionalGuard) return hit()
     val shieldBefore = enemy.guarded
-    enemy.guarded = reflectorShieldFaces(enemy, fromX, fromY)
+    enemy.guarded = shieldFaces(enemy, fromX, fromY)
     try {
         return hit()
     } finally {

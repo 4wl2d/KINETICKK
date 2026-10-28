@@ -521,10 +521,13 @@ class WorldHotPathAllocationTest {
                 // shield, a turned front, and a Drifter tethered to the Aegis. The 0.6.0 ones: a Comet marking its lane
                 // or streaking it (alternate frames), a Pylon's locked sight line and a Sentry's bolt line on their mounts;
                 // a Seraph about to mend, a Choir singing, an Imp's fuse, a Hound winding up (its timer below zero), a
-                // glitched Cipher, a Mirror's line to the cursor and a Drifter in a Seraph's impact-only shield.
+                // glitched Cipher, a Mirror's line to the cursor and a Drifter in a Seraph's impact-only shield; Warden
+                // Prime's well pushing, a Throne judging behind its three arcs and a Brood Queen with three egg sacs; the
+                // Cartographer marking its three lanes and the Antecedent shielded behind two arcs.
                 behavior = when (type) {
-                    EnemyType.LANCER, EnemyType.SNIPER, EnemyType.PHANTOM -> EnemyBehavior.TELEGRAPH
-                    EnemyType.BOMBER, EnemyType.IMP -> EnemyBehavior.PRIMED
+                    EnemyType.LANCER, EnemyType.SNIPER, EnemyType.PHANTOM, EnemyType.THRONE, EnemyType.CARTOGRAPHER ->
+                        EnemyBehavior.TELEGRAPH
+                    EnemyType.BOMBER, EnemyType.IMP, EnemyType.WARDEN_PRIME -> EnemyBehavior.PRIMED
                     EnemyType.COMET -> if ((drift / 20f).toInt() % 2 == 0) EnemyBehavior.STRIKE else EnemyBehavior.TELEGRAPH
                     EnemyType.PYLON, EnemyType.SENTRY, EnemyType.CHOIR -> EnemyBehavior.TELEGRAPH
                     EnemyType.CIPHER -> EnemyBehavior.PHASED
@@ -537,9 +540,14 @@ class WorldHotPathAllocationTest {
                 },
                 facing = index * 0.4f,
                 linkedTo = if (type == EnemyType.DRIFTER) EnemyType.AEGIS.ordinal + 1 else -1,
-                shielded = type == EnemyType.HERALD || type == EnemyType.DRIFTER,
+                shielded = type == EnemyType.HERALD || type == EnemyType.DRIFTER || type == EnemyType.ANTECEDENT,
                 // Rebirth R8: an Armored Vanguard plate on every third ordinary enemy.
                 armored = index % 3 == 0 && type != EnemyType.ARCHITECT,
+                charges = when (type) {
+                    EnemyType.THRONE, EnemyType.BROOD_QUEEN -> 3
+                    EnemyType.ANTECEDENT -> 2
+                    else -> 0
+                },
             )
         }
         return GameplayRenderModel(

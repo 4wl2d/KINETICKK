@@ -102,17 +102,25 @@ internal fun MutableGameState.bossAttackScale(enemy: Enemy): Float {
 
 /**
  * Runs the phase starts the damage pipeline left pending, once per step after enemy movement and outside every enemy
- * loop, so a Frozen boss still starts its phase and nothing spawns inside the damage pipeline.
+ * loop, so a Frozen boss still starts its phase and nothing spawns inside the damage pipeline. A secret boss's enrage
+ * notice comes from the same step.
  */
 internal fun MutableGameState.updateBossPhaseStarts() {
     for (index in enemies.indices) {
         val enemy = enemies[index]
-        if (!enemy.phaseStartPending || !enemy.alive) continue
+        if (!enemy.alive) continue
+        if (enemy.isSecretBoss) announceSecretBossEnrage(enemy)
+        if (!enemy.phaseStartPending) continue
         enemy.phaseStartPending = false
         startMiniOrSecretPhase(enemy)
     }
 }
 
-/** The phase-start effects of the mini and secret bosses; each kind adds its branch with its behaviour. */
-@Suppress("UNUSED_PARAMETER", "UnusedReceiverParameter")
-private fun MutableGameState.startMiniOrSecretPhase(enemy: Enemy) = Unit
+/** The phase-start effects of the mini and secret bosses; a kind without its own runs none. */
+private fun MutableGameState.startMiniOrSecretPhase(enemy: Enemy) {
+    when (enemy.type) {
+        EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN, EnemyType.THRONE, EnemyType.PYRE_HERALD -> startMiniBossPhase(enemy)
+        EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT -> startSecretBossPhase(enemy)
+        else -> Unit
+    }
+}

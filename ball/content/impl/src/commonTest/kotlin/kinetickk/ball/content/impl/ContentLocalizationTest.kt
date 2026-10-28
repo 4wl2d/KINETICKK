@@ -263,6 +263,12 @@ class ContentLocalizationTest {
     }
 
     @Test
+    fun everyComposedSecretBossDefeatIsLocalized() {
+        listOf("SECRET BOSS DEFEATED // CARTOGRAPHER", "SECRET BOSS DEFEATED // ANTECEDENT").forEach(::assertFullyLocalized)
+        assertEquals("ТАЙНЫЙ БОСС ПОВЕРЖЕН // ПРЕДТЕЧА", "SECRET BOSS DEFEATED // ANTECEDENT".localizedContent(AppLanguage.Russian))
+    }
+
+    @Test
     fun everySiteNoticeIsLocalized() {
         SiteNotice.entries.forEach { assertFullyLocalized(it.english) }
     }

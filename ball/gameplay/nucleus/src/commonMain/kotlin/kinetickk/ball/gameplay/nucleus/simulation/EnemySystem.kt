@@ -55,7 +55,7 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
         if (updateSiteOwnedEnemy(enemy, delta)) continue
         when (enemy.type) {
             EnemyType.DRIFTER -> steerEnemy(enemy, dx / distance * 78f, dy / distance * 78f, 2.1f, delta)
-            // 0.6.0 kinds: one dispatch each; a kind whose behaviour has not landed yet steers like a Drifter.
+            // 0.6.0 kinds: one dispatch each.
             EnemyType.COMET -> updateComet(enemy, dx, dy, distance, delta)
             EnemyType.PYLON -> updatePylon(enemy, dx, dy, distance)
             EnemyType.SENTRY -> updateSentry(enemy, dx, dy, distance, delta)
@@ -66,9 +66,12 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
             EnemyType.HOUND -> updateHound(enemy, dx, dy, distance, cadence, delta)
             EnemyType.CIPHER -> updateCipher(enemy, dx, dy, distance, delta)
             EnemyType.MIRROR -> updateMirror(enemy, dx, dy, cadence, delta)
-            EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN,
-            EnemyType.THRONE, EnemyType.PYRE_HERALD, EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT,
-            -> updatePendingKind(enemy, dx, dy, distance, delta)
+            EnemyType.WARDEN_PRIME -> updateWardenPrime(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.BROOD_QUEEN -> updateBroodQueen(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.THRONE -> updateThrone(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.PYRE_HERALD -> updatePyreHerald(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.CARTOGRAPHER -> updateCartographer(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.ANTECEDENT -> updateAntecedent(enemy, dx, dy, distance, cadence, delta)
             EnemyType.SHOOTER -> {
                 val desired = if (distance > 340f) 78f else if (distance < 250f) -72f else 0f
                 val tangent = if (enemy.id % 2 == 0) 1f else -1f
