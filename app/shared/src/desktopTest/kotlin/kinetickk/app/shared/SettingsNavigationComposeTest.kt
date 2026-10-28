@@ -27,6 +27,7 @@ import kinetickk.ball.content.impl.createContentCatalog
 import kinetickk.ball.gameplay.api.GameplayQuery
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.impl.DefaultGameplayFeature
+import kinetickk.ball.gameplay.interaction.GameplayInteractionPort
 import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.GameAction
 import kinetickk.ball.profile.api.KeyBindings
@@ -544,6 +545,9 @@ class SettingsNavigationComposeTest {
 
                 onNodeWithTag("kinetickk.home.start").performSemanticsAction(SemanticsActions.RequestFocus) { assertTrue(it()) }
                 key(Key.Enter, AppDestination.Gameplay)
+                // The run takes No omen; the frames that follow show the running run before P.
+                (gameplay.activeRun() as GameplayInteractionPort).declineOmenIfOffered()
+                render(AppDestination.Gameplay)
                 key(Key.P, AppDestination.Gameplay)
                 assertEquals(GameplayRunPhase.PAUSED, gameplay.activeRun()?.query(GameplayQuery.GetRunStatus)?.phase)
                 onNodeWithTag("kinetickk.gameplay.settings").performClick()

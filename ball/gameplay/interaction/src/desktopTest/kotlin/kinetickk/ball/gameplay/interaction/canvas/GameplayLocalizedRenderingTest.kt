@@ -221,6 +221,10 @@ class GameplayLocalizedRenderingTest {
         }
         repeat(100) {
             val current = requireNotNull(port.renderSnapshot().renderModel)
+            // The production start offers the omen after the first fixed step; the run takes No omen.
+            if (current.phase == GamePhase.CHOICE && current.choiceType == ChoiceType.OMEN) {
+                port.accept(GameplayInteractionPulse.ChoiceSelected.fromValidated(current.choices.indexOfFirst { it.omenId == null }))
+            }
             if (current.phase == GamePhase.RUNNING) {
                 port.accept(GameplayInteractionPulse.PointerMoved.fromValidated(
                     current.screenWidth * 0.5f + current.coreX - current.cameraX,

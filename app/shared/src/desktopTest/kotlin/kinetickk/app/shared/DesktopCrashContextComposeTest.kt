@@ -16,6 +16,7 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.impl.createContentCatalog
 import kinetickk.ball.gameplay.impl.DefaultGameplayFeature
+import kinetickk.ball.gameplay.interaction.GameplayInteractionPort
 import kinetickk.ball.profile.api.PreferenceAdjustmentDirection
 import kinetickk.ball.profile.api.ProfilePreferenceAdjustment
 import kinetickk.ball.profile.api.ProfilePulse
@@ -75,6 +76,10 @@ class DesktopCrashContextComposeTest {
                     waitForIdle()
                     onRoot().performKeyInput { pressKey(Key.Enter) }
                     repeat(12) { mainClock.advanceTimeByFrame() }
+                    waitForIdle()
+                    // The run takes No omen; the frames that follow show the running run before Space.
+                    (gameplay.activeRun() as GameplayInteractionPort).declineOmenIfOffered()
+                    repeat(3) { mainClock.advanceTimeByFrame() }
                     waitForIdle()
                     onRoot().performKeyInput { pressKey(Key.Spacebar) }
                     repeat(3) { mainClock.advanceTimeByFrame() }

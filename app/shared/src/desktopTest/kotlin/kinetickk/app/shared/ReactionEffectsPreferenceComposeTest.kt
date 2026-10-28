@@ -110,6 +110,9 @@ class ReactionEffectsPreferenceComposeTest {
                 key(Key.Enter)
                 assertEquals(AppDestination.Gameplay, shell().active)
                 assertEquals(ReactionEffectsLevel.MINIMAL, runLevel())
+                // The run takes No omen; the frames that follow show the running run before P.
+                (gameplay.activeRun() as GameplayInteractionPort).declineOmenIfOffered()
+                settle()
 
                 // A change from the paused run reaches it when Settings closes; the default is written as no field.
                 key(Key.P)

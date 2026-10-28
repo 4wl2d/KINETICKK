@@ -233,6 +233,7 @@ internal fun MutableGameState.resetRunStats() {
     applyMatrixStats()
     maxHp += content.upgrades.characterIntegrityPerLevel * characterUpgradeLevel
     matterGain *= rebirthProfile.matterGainMultiplier
+    applyOmenStats()
     dashHeatCost *= matrix.dashHeatMultiplier
     dragCoefficient *= matrix.dragMultiplier
     hp = maxHp
@@ -438,8 +439,13 @@ internal fun MutableGameState.choose(index: Int) {
             finishChoice(if (slot != null) GameplayAudioCue.LEVEL_UP else GameplayAudioCue.UI_CLICK)
             return
         }
-        // Omens, signal prompts and dimension boons are dealt only once their lanes open them.
-        ChoiceType.OMEN, ChoiceType.SIGNAL, ChoiceType.BOON -> return
+        // An omen card accepts its omen; No omen changes nothing.
+        ChoiceType.OMEN -> {
+            option.omenId?.let { acceptRunOmen(it) }
+            GameplayAudioCue.UI_CLICK
+        }
+        // Signal prompts and dimension boons are dealt only once their lanes open them.
+        ChoiceType.SIGNAL, ChoiceType.BOON -> return
         ChoiceType.RELIC_BIND -> {
             val slot = option.relicSlot ?: return
             when (option.relicAction ?: return) {
