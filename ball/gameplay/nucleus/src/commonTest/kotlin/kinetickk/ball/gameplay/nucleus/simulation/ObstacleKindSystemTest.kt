@@ -33,6 +33,7 @@ import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -198,6 +199,46 @@ class ObstacleKindSystemTest {
         state.resolveEnemyObstacles()
         assertEquals(460f, inside.x, "a ghost shard holds nobody")
         assertEquals(300f, inside.vx)
+    }
+
+    /**
+     * At every fixed step of a whole cycle, both turns included, the Core bounces off a phase shard, an enemy inside it is
+     * pushed out, a shot through it is spent and sight across it is blocked exactly when the content's cycle reads it
+     * solid at that step's time. The renderer draws its fill from the same cycle at the same time.
+     */
+    @Test
+    fun theCoreEnemiesShotsAndSightMeetAPhaseShardAtExactlyTheStepsItsCycleIsSolid() {
+        val seed = 11
+        val shard = testObstacle(300f, 0f, radius = 80f, kind = ObstacleKind.PHASE_SHARD, shapeSeed = seed)
+        val steps = (kinds.phasePeriodSeconds / MutableGameState.FIXED_STEP).roundToInt()
+        var solidSteps = 0
+        var turns = 0
+        var before = kinds.phaseShardSolid(1f - MutableGameState.FIXED_STEP, seed)
+        for (step in 0..steps) {
+            val time = 1f + step * MutableGameState.FIXED_STEP
+            val solid = kinds.phaseShardSolid(time, seed)
+            if (solid) solidSteps++
+            if (solid != before) turns++
+            before = solid
+            val label = "step $step at $time (solid $solid)"
+            val state = buildTestState().apply { elapsed = time }
+            state.placeObstaclesForTesting(shard)
+            assertEquals(solid, state.obstacleBlocksSegment(0f, 0f, 600f, 0f, 7f), "$label: sight")
+            val shot = state.friendlyShotThrough(300f)
+            state.blockProjectilesAtObstacles()
+            assertEquals(solid, shot.spent, "$label: shot")
+            val enemy = state.dummy(x = 300f, y = 60f, hp = 10_000f)
+            state.resolveEnemyObstacles()
+            assertEquals(if (solid) 80f + enemy.radius else 60f, enemy.y, 0.01f, "$label: enemy")
+            val speed = state.obstacleDamageStartSpeed() - 10f
+            val contactX = 300f - 80f - core
+            state.flyIntoObstaclesForTesting(contactX + speed / 240f, 0f, speed, 0f)
+            if (solid) assertTrue(state.velocityX < 0f, "$label: the Core bounces") else assertEquals(speed, state.velocityX, "$label: the Core passes")
+            assertEquals(state.maxHp, state.hp, label)
+        }
+        assertTrue(turns >= 2, "the sweep crosses both turns: $turns")
+        val share = solidSteps / (steps + 1f)
+        assertTrue(abs(share - kinds.phaseSolidShare) <= 2f / steps, "solid for its share of the cycle: $share")
     }
 
     @Test
