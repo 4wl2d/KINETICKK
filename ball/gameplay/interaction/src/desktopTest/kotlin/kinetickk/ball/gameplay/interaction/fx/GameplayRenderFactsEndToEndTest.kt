@@ -351,7 +351,14 @@ internal class FactRun(val seed: Int, private val seconds: Float = 240f) {
             when (output) {
                 is GameplayOutput.EmitVisualFx -> {
                     record(output.cues)
-                    reducer.apply(output.cues)
+                    // Cue by cue, as apply walks a batch: a later flash of the same kind inside the merge distance
+                    // joins an earlier one and its flags win, so each reaction cue's flags are read as it lands.
+                    for (cue in output.cues) {
+                        reducer.apply(listOf(cue))
+                        if (cue is VisualFxCue.ReactionTriggered) {
+                            for (burst in reducer.snapshot().elementBursts) projectedReactionFlags = projectedReactionFlags or burst.flags
+                        }
+                    }
                 }
                 is GameplayOutput.SendProfileCommand -> progress = true
                 else -> Unit

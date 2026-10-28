@@ -25,7 +25,6 @@ import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
 import kotlin.math.max
-import kotlin.math.pow
 import kotlin.math.sqrt
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -209,15 +208,15 @@ class ObstacleSystemTest {
     }
 
     @Test
-    fun theDamageBandScalesWithSpeedIgnoresReductionAndIsAbsorbedByShields() {
+    fun theDamageBandScalesWithSpeedIgnoresReductionAndBleedsThroughShields() {
         val state = buildTestState()
         val start = state.obstacleDamageStartSpeed()
         val lethal = state.obstacleLethalSpeed()
         val speed = state.bandSpeed(0.5f)
         state.damageReduction = 0.5f
         state.ramAsteroid(speed)
-        // Tier 0: forgiving ×0.7, collision tier factor 1 + 0.04 × 0.
-        val expected = state.maxHp * 0.5f * ((speed - start) / (lethal - start)).pow(1.3f) * 0.7f
+        // Tier 0: forgiving ×0.7, collision tier factor 1 + 0.04 × 0; the band runs linearly from the 6 % floor to 55 %.
+        val expected = state.maxHp * (0.06f + 0.49f * (speed - start) / (lethal - start)) * 0.7f
         assertEquals(state.maxHp - expected, state.hp, 0.05f)
         assertEquals(1, state.pendingRicochets)
         assertTrue(state.velocityX < 0f)
@@ -228,8 +227,8 @@ class ObstacleSystemTest {
         shielded.maxShield = 200f
         shielded.shield = 200f
         shielded.ramAsteroid(speed)
-        assertEquals(shielded.maxHp, shielded.hp, "the shield takes the hit")
-        assertEquals(200f - expected, shielded.shield, 0.05f)
+        assertEquals(shielded.maxHp - expected * 0.4f, shielded.hp, 0.05f, "40 % bleeds through the shield")
+        assertEquals(200f - expected * 0.6f, shielded.shield, 0.05f, "the shield takes the rest")
     }
 
     @Test
@@ -241,7 +240,7 @@ class ObstacleSystemTest {
         state.ramAsteroid(speed)
         val start = state.obstacleDamageStartSpeed()
         val lethal = state.obstacleLethalSpeed()
-        val expected = state.maxHp * 0.5f * ((speed - start) / (lethal - start)).pow(1.3f) * (1f + 0.04f * tier)
+        val expected = state.maxHp * (0.06f + 0.49f * (speed - start) / (lethal - start)) * (1f + 0.04f * tier)
         assertEquals(state.maxHp - expected, state.hp, 0.05f)
     }
 
@@ -250,7 +249,11 @@ class ObstacleSystemTest {
         val zero = buildTestState(rebirth = 0)
         val three = buildTestState(rebirth = 3)
         val five = buildTestState(rebirth = 5)
-        assertEquals(three.obstacleDamageStartSpeed() + 80f, zero.obstacleDamageStartSpeed(), 0.01f)
+        assertEquals(
+            three.obstacleDamageStartSpeed() + zero.content.obstacles.forgivingStartBonus,
+            zero.obstacleDamageStartSpeed(),
+            0.01f,
+        )
         assertEquals(three.obstacleDamageStartSpeed(), five.obstacleDamageStartSpeed(), 0.01f)
         assertEquals(three.obstacleLethalSpeed(), zero.obstacleLethalSpeed(), 0.01f)
         val band = 0.6f
@@ -344,7 +347,7 @@ class ObstacleSystemTest {
     @Test
     fun collisionsHurtAtMostOncePerCooldown() {
         val state = buildTestState()
-        val speed = state.bandSpeed(0.4f)
+        val speed = state.obstacleRicochetSpeed() + 20f
         state.ramAsteroid(speed)
         val afterFirst = state.hp
         state.flyIntoObstaclesForTesting(contactX + speed / 240f, 0f, speed, 0f)
@@ -362,16 +365,16 @@ class ObstacleSystemTest {
         val state = buildTestState(content = content)
         state.own("Calibrated Coil")
         val charge = state.overdriveCharge
-        state.ramAsteroid(state.bandSpeed(0.2f))
+        state.ramAsteroid(state.obstacleRicochetSpeed() + 20f)
         assertTrue(state.overdriveCharge >= charge + 20f, "the RICOCHET clause fired")
     }
 
     @Test
     fun ricochetsReachTheRunsProgressUpdate() {
         val state = buildTestState()
-        state.ramAsteroid(state.bandSpeed(0.1f))
+        state.ramAsteroid(state.obstacleRicochetSpeed() + 20f)
         state.placeObstaclesForTesting(testObstacle(300f, 0f, radius = 34f, kind = ObstacleKind.BUMPER))
-        val fast = state.obstacleDamageStartSpeed() + 20f
+        val fast = state.obstacleRicochetSpeed() + 20f
         state.flyIntoObstaclesForTesting(300f - 34f - MutableGameState.CORE_RADIUS + fast / 240f, 0f, fast, 0f)
         assertEquals(2, state.pendingRicochets)
         state.exitRun()
@@ -385,7 +388,7 @@ class ObstacleSystemTest {
         val state = buildTestState()
         state.own("Heat Shunt")
         state.heat = 50f
-        state.ramAsteroid(state.bandSpeed(0.2f))
+        state.ramAsteroid(state.obstacleRicochetSpeed() + 20f)
         assertEquals(1, state.pendingRicochets)
         assertEquals(30f, state.heat, 0.01f, "the shipped RICOCHET clause vented")
         // A slow bounce is no ricochet and vents nothing.
@@ -423,7 +426,7 @@ class ObstacleSystemTest {
         val dipole = state.content.coreShape(CoreShape.DIPOLE)
         assertEquals(CharacterUnlockRequirement.RICOCHETS, dipole.unlockRequirement)
         repeat(dipole.unlockTarget) {
-            state.ramAsteroid(state.bandSpeed(0.05f))
+            state.ramAsteroid(state.obstacleRicochetSpeed() + 20f)
             state.hp = state.maxHp
             state.elapsed += 0.3f
         }
@@ -433,24 +436,24 @@ class ObstacleSystemTest {
     }
 
     @Test
-    fun bumpersThrowTheCoreBackWithinTheirBandAndRicochetOnlyAtDamageSpeedOncePerCooldown() {
+    fun bumpersThrowTheCoreBackWithinTheirBandAndRicochetOnlyAtRicochetSpeedOncePerCooldown() {
         val state = buildTestState()
         state.placeObstaclesForTesting(testObstacle(300f, 0f, radius = 34f, kind = ObstacleKind.BUMPER))
         val bumperContact = 300f - 34f - MutableGameState.CORE_RADIUS
-        val start = state.obstacleDamageStartSpeed()
-        assertTrue(start > 1_260f, "the bounces below stay under the damage start ($start)")
+        val ricochet = state.obstacleRicochetSpeed()
+        assertTrue(ricochet > 1_260f, "the bounces below stay under the ricochet speed ($ricochet)")
         state.flyIntoObstaclesForTesting(bumperContact + 1f, 0f, 400f, 0f)
         assertEquals(700f, state.speed, 0.5f, "a slow Core leaves at the bumper's minimum")
         assertTrue(state.velocityX < 0f)
         assertEquals(state.maxHp, state.hp, "bumpers never hurt")
-        assertEquals(0, state.pendingRicochets, "a bounce below the damage start is no ricochet")
+        assertEquals(0, state.pendingRicochets, "a bounce below the ricochet speed is no ricochet")
 
         state.flyIntoObstaclesForTesting(bumperContact + 4f, 0f, 1_200f, 0f)
         assertEquals(1_260f, state.speed, 0.5f, "1.05 × the incoming speed")
         assertEquals(0, state.pendingRicochets, "holding still behind a bumper farms nothing")
 
-        state.flyIntoObstaclesForTesting(bumperContact + start / 240f, 0f, start, 0f)
-        assertEquals(1, state.pendingRicochets, "the damage start makes it a ricochet")
+        state.flyIntoObstaclesForTesting(bumperContact + ricochet / 240f, 0f, ricochet, 0f)
+        assertEquals(1, state.pendingRicochets, "the ricochet speed makes it a ricochet")
         state.flyIntoObstaclesForTesting(bumperContact + 10f, 0f, 3_000f, 0f)
         assertEquals(1_400f, state.speed, 0.5f, "never faster than the bumper's maximum")
         assertEquals(1, state.pendingRicochets, "one ricochet per bumper per 1.5 s")
@@ -540,25 +543,30 @@ class ObstacleSystemTest {
     fun obstacleGuardCutsDamageAndRaisesTheLethalSpeed() {
         val plain = buildTestState()
         val guarded = buildTestState().apply {
-            matrix = matrix.copy(obstacleDamageMultiplier = 0.5f, obstacleLethalSpeedBonus = 300f)
+            matrix = matrix.copy(obstacleDamageMultiplier = 0.5f, obstacleLethalSpeedBonus = 150f)
         }
-        assertEquals(plain.obstacleLethalSpeed() + 300f, guarded.obstacleLethalSpeed(), 0.01f)
+        assertEquals(plain.obstacleLethalSpeed() + 150f, guarded.obstacleLethalSpeed(), 0.01f, "a bonus under the cap adds")
         val speed = plain.bandSpeed(0.6f)
         plain.ramAsteroid(speed)
         guarded.ramAsteroid(speed)
         val plainLoss = plain.maxHp - plain.hp
         val guardedLoss = guarded.maxHp - guarded.hp
         assertTrue(guardedLoss < plainLoss * 0.5f, "guard halves the damage and the wider band lowers it: $guardedLoss vs $plainLoss")
-        val survivor = buildTestState().apply { matrix = matrix.copy(obstacleLethalSpeedBonus = 300f) }
+        val survivor = buildTestState().apply { matrix = matrix.copy(obstacleLethalSpeedBonus = 150f) }
         survivor.ramAsteroid(plain.obstacleLethalSpeed() + 50f)
         assertEquals(GamePhase.RUNNING, survivor.phase, "the lethal speed moved past this collision")
+        // Stacked bonuses stop at the build's straight steady speed at the ceiling reach.
+        val stacked = buildTestState().apply { matrix = matrix.copy(obstacleLethalSpeedBonus = 5_000f) }
+        val ceiling = stacked.buildSteadyCursorSpeed(stacked.content.obstacles.lethalCeilingReach)
+        assertTrue(ceiling < plain.obstacleLethalSpeed() + 5_000f)
+        assertEquals(ceiling, stacked.obstacleLethalSpeed(), 0.01f, "the cap holds the lethal speed")
     }
 
     @Test
     fun ricochetRigBouncesHarderAndBursts() {
         val state = buildTestState().apply { matrix = matrix.copy(ricochetRig = MatrixEffect.RicochetRig(0.75f, 140f)) }
         val near = state.dummy(x = contactX - 40f, y = 60f)
-        val speed = state.bandSpeed(0.2f)
+        val speed = state.obstacleRicochetSpeed() + 20f
         state.ramAsteroid(speed)
         assertEquals(speed * 0.75f, -state.velocityX, 1f)
         assertTrue(near.hp < near.maxHp, "the ricochet bursts for impact damage")
@@ -567,7 +575,7 @@ class ObstacleSystemTest {
     @Test
     fun gravitySurferGrantsDashPhaseOnRicochet() {
         val state = buildTestState().apply { matrix = matrix.copy(ricochetPhaseSeconds = 0.4f) }
-        state.ramAsteroid(state.bandSpeed(0.2f))
+        state.ramAsteroid(state.obstacleRicochetSpeed() + 20f)
         assertEquals(0.4f, state.dashPhaseTime, 0.001f)
         val slow = buildTestState().apply { matrix = matrix.copy(ricochetPhaseSeconds = 0.4f) }
         slow.ramAsteroid(slow.obstacleDamageStartSpeed() - 100f)
@@ -840,7 +848,7 @@ class ObstacleSystemTest {
         while (state.dashPhaseTime > 0f) state.simulateStep(MutableGameState.FIXED_STEP)
         assertEquals(0, state.latticeNodeCount)
         // Far from that origin, a ricochet's dash phase is no Dash: the old origin never becomes a node.
-        state.ramAsteroid(state.bandSpeed(0.2f))
+        state.ramAsteroid(state.obstacleRicochetSpeed() + 20f)
         assertEquals(0.4f, state.dashPhaseTime, 0.001f)
         state.updateCharacterRuntime(MutableGameState.FIXED_STEP)
         assertEquals(0, state.latticeNodeCount, "the ricochet phase recorded no node")
