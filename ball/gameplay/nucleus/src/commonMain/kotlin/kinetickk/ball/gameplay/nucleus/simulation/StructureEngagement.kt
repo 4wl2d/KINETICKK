@@ -3,7 +3,12 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.SiteFamily
+import kinetickk.ball.gameplay.nucleus.render.TrialClock
 import kinetickk.ball.gameplay.nucleus.render.TrialProjection
+import kinetickk.ball.gameplay.nucleus.render.TrialReward
+import kinetickk.ball.gameplay.nucleus.render.TrialSource
+import kinetickk.ball.gameplay.nucleus.render.TrialValue
 import kotlin.math.hypot
 
 /*
@@ -39,8 +44,37 @@ internal fun MutableGameState.appendStructureMarks(out: FloatArray, count: Int):
     return written
 }
 
-/** The trial panel of an engaged dungeon, or null. */
-internal fun MutableGameState.structureTrialProjection(): TrialProjection? = null
+/**
+ * The trial panel of the dungeon the Core holds, or null without one or for a secret template (the Doodle shows no
+ * panel): the template's name, one segment per room that counts (garrisoned rooms and the final room) with the cleared
+ * ones filled and counted, no clock and the template's rewards. A dungeon is no site: its family is a placeholder the
+ * panel never reads (it names, draws and explains a dungeon by its source), so no content instruction is carried
+ * either — the panel's rules for a dungeon are UI text.
+ */
+internal fun MutableGameState.structureTrialProjection(): TrialProjection? {
+    val held = dungeon ?: return null
+    val template = content.structures.template(held.template)
+    if (template.secret) return null
+    val counted = template.roomsToClearMask
+    val rooms = counted.countOneBits()
+    val cleared = (held.clearedRooms and counted).countOneBits()
+    return TrialProjection(
+        family = SiteFamily.CACHE,
+        kind = null,
+        title = template.name,
+        rules = "",
+        clock = TrialClock.NONE,
+        seconds = 0f,
+        segments = rooms,
+        progress = cleared.toFloat() / rooms,
+        value = TrialValue.COUNT,
+        done = cleared.toFloat(),
+        required = rooms.toFloat(),
+        reward = TrialReward.STRUCTURE_REWARDS,
+        source = TrialSource.STRUCTURE,
+        structure = held.template,
+    )
+}
 
 /** A world layer switch collapses the dungeon silently. */
 internal fun MutableGameState.onStructureLayerChanged() = collapseDungeonForLayerChange()

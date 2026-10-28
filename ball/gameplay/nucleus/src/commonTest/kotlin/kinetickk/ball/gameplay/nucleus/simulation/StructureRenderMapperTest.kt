@@ -3,11 +3,17 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.WallAxis
 import kinetickk.ball.content.api.rotateQuarterX
 import kinetickk.ball.content.api.rotateQuarterY
+import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.render.StructureRenderProjection
+import kinetickk.ball.gameplay.nucleus.render.TrialClock
+import kinetickk.ball.gameplay.nucleus.render.TrialReward
+import kinetickk.ball.gameplay.nucleus.render.TrialSource
+import kinetickk.ball.gameplay.nucleus.render.TrialValue
 import kinetickk.ball.gameplay.nucleus.render.WallKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -221,5 +227,51 @@ class StructureRenderMapperTest {
         val dropped = source.toRenderModel(retainedFallen, unchanged).structures
         assertFalse(dropped.signals.any { it.id == other })
         assertSame(retainedFallen.structures.walls, dropped.walls)
+    }
+
+    /**
+     * The dungeon's trial panel: its template's name, one segment per room that counts with the cleared ones filled and
+     * counted, no clock and the template's rewards; it follows the rooms as they clear, keeps its instance while nothing
+     * changed, gives way to a running site's trial and shows nothing outside a structure or for a secret template.
+     */
+    @Test
+    fun aHeldDungeonPublishesItsTrialPanelUntilASiteRunsOrTheTemplateIsSecret() {
+        val site = Site(StructureTemplateId.DERELICT_STATION)
+        val run = site.run
+        assertNull(run.toRenderModel().trial, "no structure entered yet")
+
+        site.enterRoom(1)
+        val sealed = assertNotNull(run.toRenderModel().trial)
+        assertEquals(TrialSource.STRUCTURE, sealed.source)
+        assertEquals(StructureTemplateId.DERELICT_STATION, sealed.structure)
+        assertNull(sealed.kind)
+        assertEquals(site.template.name, sealed.title)
+        assertEquals(TrialClock.NONE to 0f, sealed.clock to sealed.seconds)
+        assertEquals(TrialReward.STRUCTURE_REWARDS, sealed.reward)
+        // Four rooms count (each holds a garrison); a sealed room clears nothing by itself.
+        assertEquals(4, sealed.segments)
+        assertEquals(TrialValue.COUNT to (0f to 4f), sealed.value to (sealed.done to sealed.required))
+        assertEquals(0f, sealed.progress)
+        assertSame(sealed, run.trialProjection(sealed), "an equal panel keeps its instance")
+
+        site.clear(1)
+        site.clear(0)
+        val cleared = assertNotNull(run.toRenderModel().trial)
+        assertEquals(2f to 4f, cleared.done to cleared.required)
+        assertEquals(0.5f, cleared.progress)
+        assertEquals(4, cleared.segments)
+
+        // A running site's trial takes the panel; the dungeon's returns when it ends.
+        val dungeon = assertNotNull(run.dungeon)
+        run.sites = listOf(SiteState(id = 6L, kind = SiteKind.VELOCITY_TRIAL, x = 300f, y = -200f, expiresAt = run.elapsed + 60f,
+            active = true, remaining = 14f))
+        assertEquals(TrialSource.SITE, run.toRenderModel().trial?.source)
+        run.sites = emptyList()
+        assertEquals(cleared, run.toRenderModel().trial)
+
+        // A secret template held the same way shows no panel (the Doodle is found, not fought).
+        run.dungeon = dungeon.copy(template = StructureTemplateId.ARCHITECTS_DOODLE)
+        assertNull(run.toRenderModel().trial)
+        assertNull(run.structureTrialProjection())
     }
 }
