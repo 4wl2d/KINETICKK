@@ -130,7 +130,7 @@ internal fun MutableGameState.spawnWave(delta: Float) {
     if (layerFeatures().elites && elapsed >= nextEliteAt) {
         nextEliteAt += rebirthProfile.eliteInterval(content.tempo.eliteIntervalSeconds(elapsed)) * jitter(0.75f, 1.25f)
         if (spawnScheduled(EnemyType.ELITE)) {
-            message = "ELITE SIGNAL"
+            message = eliteSignalNotice()
             messageTime = 1.4f
         }
     }

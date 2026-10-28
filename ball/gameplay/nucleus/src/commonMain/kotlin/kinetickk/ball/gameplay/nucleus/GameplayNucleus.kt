@@ -216,7 +216,7 @@ object GameplayNucleus {
             seed = startInputs.seed,
             bootstrapProgress = startInputs.profile,
             runMode = startInputs.mode,
-            offerRunOmen = false,
+            offerRunOmen = true,
         )
         engine.model.startRun()
         engine.model.takeSoundCues()

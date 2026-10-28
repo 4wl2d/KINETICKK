@@ -43,15 +43,14 @@ internal fun MutableGameState.applyRunModifier(effect: RunModifierEffect, previe
 
 /**
  * A new run: no omen, no added mutators, no world event, signal or rarity floor. The rolls made at run start
- * ([startRunVariety]) and the omen flag set beside the Heirloom are not touched.
+ * ([startRunVariety]), the Keynote drawn with the deal ([drawItemDeck]) and the omen flag set beside the Heirloom are
+ * not touched.
  */
 internal fun MutableGameState.resetRunVariety() {
     runOmen = null
     runMutatorMask = 0
     surgeIndex = 0
     surgeThemeType = -1
-    keynoteTag = null
-    keynoteElement = null
     worldEvent = null
     worldEventPulse = 0
     worldEventNextPulseAt = 0f
@@ -63,12 +62,15 @@ internal fun MutableGameState.resetRunVariety() {
     offerRarityFloor = null
 }
 
-/** Run-start rolls: the director personality, the featured aspect and the world event plan (none until they land). */
+/**
+ * Run-start rolls, after the deal drew the Keynote and before the director's reset reads the opening calm's length: the
+ * director personality, the featured aspect (the one weak to the Keynote element, or the Elemental Storm's) and the world
+ * event plan.
+ */
 internal fun MutableGameState.startRunVariety() {
-    directorPersonality = null
-    featuredAspect = -1
+    applyDirectorPersonality(directorPersonalityFor(runSeed, content.variety.director))
     varietyAnnouncement = 0
-    worldEventPlans = immutableListOf()
+    worldEventPlans = planWorldEvents(runSeed, content.variety.worldEvents)
     nextWorldEvent = 0
 }
 

@@ -301,7 +301,15 @@ internal fun MutableGameState.updateAegis(enemy: Enemy, dx: Float, dy: Float, di
         1.5f,
         delta,
     )
-    // Tether the three nearest allies in range; boss-class kinds and other Aegises are never linked.
+    tetherNearestAllies(enemy, AEGIS_MAX_LINKS)
+}
+
+/**
+ * Tethers the [links] (1..3) nearest live allies within [AEGIS_LINK_RANGE] of [enemy], nearest first, for
+ * [AEGIS_LINK_HOLD_SECONDS]. The Aegis tethers three ([AEGIS_MAX_LINKS]); a Linked Elite tethers its affix's count.
+ */
+internal fun MutableGameState.tetherNearestAllies(enemy: Enemy, links: Int) {
+    // The three nearest allies in range; boss-class kinds and other Aegises are never linked.
     var firstIndex = -1
     var secondIndex = -1
     var thirdIndex = -1
@@ -325,9 +333,9 @@ internal fun MutableGameState.updateAegis(enemy: Enemy, dx: Float, dy: Float, di
             thirdIndex = index; third = squared
         }
     }
-    if (firstIndex >= 0) link(enemies[firstIndex], enemy)
-    if (secondIndex >= 0) link(enemies[secondIndex], enemy)
-    if (thirdIndex >= 0) link(enemies[thirdIndex], enemy)
+    if (firstIndex >= 0 && links >= 1) link(enemies[firstIndex], enemy)
+    if (secondIndex >= 0 && links >= 2) link(enemies[secondIndex], enemy)
+    if (thirdIndex >= 0 && links >= 3) link(enemies[thirdIndex], enemy)
 }
 
 private fun MutableGameState.link(ally: Enemy, aegis: Enemy) {

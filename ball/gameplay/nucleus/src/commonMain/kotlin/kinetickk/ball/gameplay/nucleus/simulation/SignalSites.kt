@@ -4,12 +4,25 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 /*
- * Event signals as optional sites (the run variety lane replaces this file). Inert until the lane lands.
+ * Event signals as optional sites: pilots that must not opt in steer around live signals, and a run that touched one
+ * counts as engaged with optional content.
  */
 
-/** Appends optional-site marks of live event signals; returns the new mark count. */
-@Suppress("UNUSED_PARAMETER")
-internal fun MutableGameState.appendEventSignalMarks(out: FloatArray, count: Int): Int = count
+/** Appends the live signal's mark (its centre and touch radius); returns the new mark count. Allocation-free. */
+internal fun MutableGameState.appendEventSignalMarks(out: FloatArray, count: Int): Int {
+    var written = count
+    val radius = content.variety.signals.touchRadius
+    for (index in eventSignals.indices) {
+        if (written >= MAX_OPTIONAL_SITE_MARKS) return written
+        val signal = eventSignals[index]
+        val base = written * 3
+        out[base] = signal.x
+        out[base + 1] = signal.y
+        out[base + 2] = radius
+        written++
+    }
+    return written
+}
 
-/** True once the run engaged an event signal (or a prompt waits). */
-internal fun MutableGameState.eventSignalTouched(): Boolean = false
+/** True once the run touched an event signal or a signal prompt waits. */
+internal fun MutableGameState.eventSignalTouched(): Boolean = signalsEngaged > 0 || pendingSignalPrompts.isNotEmpty()
