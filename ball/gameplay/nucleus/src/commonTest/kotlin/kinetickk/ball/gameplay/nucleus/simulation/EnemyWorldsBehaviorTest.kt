@@ -20,6 +20,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -573,6 +574,16 @@ class EnemyWorldsBehaviorTest {
         assertEquals(IMP_EMBER_SPREAD * 2f, sqrt((left.x - right.x) * (left.x - right.x) + (left.y - right.y) * (left.y - right.y)), 1e-2f)
         val across = (left.x - right.x) * (state.coreX - centre.x) + (left.y - right.y) * (state.coreY - centre.y)
         assertEquals(0f, across, 1f, "the embers spread across its heading")
+
+        // An encounter's Imp that bursts is no kill of its encounter either.
+        val owned = quietState()
+        val tag = encounterTag(EncounterOwner.DIMENSION, 3)
+        assertTrue(owned.spawnEncounter(EncounterRequest(tag, owned.coreX, owned.coreY, 400f, listOf(EnemyType.IMP),
+            positions = floatArrayOf(owned.coreX + 80f, owned.coreY))))
+        val ownedImp = owned.enemies.single()
+        owned.runUntil { ownedImp !in owned.enemies }
+        assertEquals(0, assertNotNull(owned.encounter(tag)).killed)
+        assertEquals(3, owned.volatileBursts.size)
 
         // A killed Imp, whoever owns it, leaves one ember where it fell; other kinds leave none.
         val killing = quietState()
