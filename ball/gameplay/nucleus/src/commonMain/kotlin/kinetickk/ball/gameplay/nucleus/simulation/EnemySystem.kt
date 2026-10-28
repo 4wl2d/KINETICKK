@@ -55,9 +55,18 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
         if (updateSiteOwnedEnemy(enemy, delta)) continue
         when (enemy.type) {
             EnemyType.DRIFTER -> steerEnemy(enemy, dx / distance * 78f, dy / distance * 78f, 2.1f, delta)
-            // 0.6.0 kinds: one dispatch each, replaced per kind as their behaviours land; no run spawns them yet.
-            EnemyType.COMET, EnemyType.PYLON, EnemyType.SENTRY, EnemyType.CRAWLER, EnemyType.SERAPH, EnemyType.CHOIR,
-            EnemyType.IMP, EnemyType.HOUND, EnemyType.CIPHER, EnemyType.MIRROR, EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN,
+            // 0.6.0 kinds: one dispatch each; a kind whose behaviour has not landed yet steers like a Drifter.
+            EnemyType.COMET -> updateComet(enemy, dx, dy, distance, delta)
+            EnemyType.PYLON -> updatePylon(enemy, dx, dy, distance)
+            EnemyType.SENTRY -> updateSentry(enemy, dx, dy, distance, delta)
+            EnemyType.CRAWLER -> updateCrawler(enemy, dx, dy, distance, delta)
+            EnemyType.SERAPH -> updateSeraph(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.CHOIR -> updateChoir(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.IMP -> updateImp(enemy, dx, dy, distance, delta)
+            EnemyType.HOUND -> updateHound(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.CIPHER -> updateCipher(enemy, dx, dy, distance, delta)
+            EnemyType.MIRROR -> updateMirror(enemy, dx, dy, cadence, delta)
+            EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN,
             EnemyType.THRONE, EnemyType.PYRE_HERALD, EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT,
             -> updatePendingKind(enemy, dx, dy, distance, delta)
             EnemyType.SHOOTER -> {

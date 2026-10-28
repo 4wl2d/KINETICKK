@@ -6,7 +6,6 @@ package kinetickk.ball.content.impl
 import kinetickk.ball.content.api.ARCHITECT_ENCOUNTER
 import kinetickk.ball.content.api.BossEncounterSpec
 import kinetickk.ball.content.api.ContentBounds
-import kinetickk.ball.content.api.DISABLED_ENEMY_GATE_SECONDS
 import kinetickk.ball.content.api.EnemyDefinition
 import kinetickk.ball.content.api.EnemyHabitat
 import kinetickk.ball.content.api.EnemyRank
@@ -38,7 +37,6 @@ class EnemyRosterTest {
     @Test
     fun gatesWeightsAndThreatMatchTheRosterTable() {
         val roster = createContentCatalog().gameplayContent().enemies.associateBy { it.type }
-        val off = DISABLED_ENEMY_GATE_SECONDS
         // type to (gate seconds, minimum Rebirth, SPACE weight, threat)
         val expected = mapOf(
             EnemyType.DRIFTER to Row(0f, 0, 22f, 1),
@@ -60,9 +58,9 @@ class EnemyRosterTest {
             EnemyType.BROODMOTHER to Row(420f, 3, 3f, 4),
             EnemyType.REFLECTOR to Row(360f, 4, 5f, 4),
             EnemyType.HERALD to Row(360f, 2, 0f, 5),
-            // The two new open-space kinds ship gated out of every run until the enemy lane enables them.
-            EnemyType.COMET to Row(off, 0, 7f, 2),
-            EnemyType.PYLON to Row(off, 0, 4f, 3),
+            // The two new open-space kinds join the run at two and four and a half minutes.
+            EnemyType.COMET to Row(120f, 0, 7f, 2),
+            EnemyType.PYLON to Row(270f, 0, 4f, 3),
             EnemyType.SENTRY to Row(0f, 0, 0f, 3),
             EnemyType.CRAWLER to Row(0f, 0, 0f, 1),
             EnemyType.SERAPH to Row(0f, 0, 0f, 3),

@@ -67,6 +67,7 @@ import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
 import kinetickk.ball.gameplay.nucleus.render.ProjectileKind
+import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
 import kinetickk.ball.gameplay.nucleus.render.EnemyBehavior
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
@@ -436,6 +437,14 @@ class WorldHotPathAllocationTest {
         previousGhostX = CORE - 165f + drift * 0.01f, previousGhostY = CORE + 28f,
     )
 
+    /** The shifting bit alone, for the glitched Cipher of the busy frame. */
+    private val ShiftingCipher = shiftingAffinity(true) xor shiftingAffinity(false)
+
+    private fun shiftingAffinity(shifting: Boolean): Int = EnemyAffinity.encode(
+        aspect = EnemyAffinity.NONE, immune = false, weakness = EnemyAffinity.NONE, armored = false, fragile = false,
+        shifting = shifting, phase = 0,
+    )
+
     private fun busyModel(
         weapon: WeaponId,
         drift: Float = 0f,
@@ -447,22 +456,34 @@ class WorldHotPathAllocationTest {
             val angle = index * 0.7f
             val distance = if (type == EnemyType.ARCHITECT) 260f else 180f + index * 12f
             EnemyProjection(index + 1, type, CORE + kotlin.math.cos(angle) * distance, CORE + kotlin.math.sin(angle) * distance, 0f, 0f,
-                50f, 100f, if (type == EnemyType.ARCHITECT) 74f else 20f, 0.2f, if (index == 2) 1f else 0f, 0f, 0f, CORE, CORE, false,
+                50f, 100f, if (type == EnemyType.ARCHITECT) 74f else 20f, if (type == EnemyType.HOUND) -0.2f else 0.2f,
+                if (index == 2) 1f else 0f, 0f, 0f, CORE, CORE, false,
                 statusBits = BusyStatuses[index % BusyStatuses.size],
-                // Every type's aspect, weakness and frame, an immune Gravitic elite and a shifting Thermal Architect.
+                // Every type's aspect, weakness and frame, an immune Gravitic elite, a shifting Thermal Architect and a
+                // Cipher glitched out of phase.
                 affinityBits = runAffinity(type, eliteAspect = StatusElement.GRAVITIC, architectAspect = StatusElement.THERMAL,
-                    architectPhase = 1, shifting = true),
+                    architectPhase = 1, shifting = true) or if (type == EnemyType.CIPHER) ShiftingCipher else 0,
                 // The 0.4.0 telegraphs: a showing lane, a locked sight line, a burning fuse, a wind-up, a raised
-                // shield, a turned front, and a Drifter tethered to the Aegis.
+                // shield, a turned front, and a Drifter tethered to the Aegis. The 0.6.0 ones: a Comet marking its lane
+                // or streaking it (alternate frames), a Pylon's locked sight line and a Sentry's bolt line on their mounts;
+                // a Seraph about to mend, a Choir singing, an Imp's fuse, a Hound winding up (its timer below zero), a
+                // glitched Cipher, a Mirror's line to the cursor and a Drifter in a Seraph's impact-only shield.
                 behavior = when (type) {
                     EnemyType.LANCER, EnemyType.SNIPER, EnemyType.PHANTOM -> EnemyBehavior.TELEGRAPH
-                    EnemyType.BOMBER -> EnemyBehavior.PRIMED
+                    EnemyType.BOMBER, EnemyType.IMP -> EnemyBehavior.PRIMED
+                    EnemyType.COMET -> if ((drift / 20f).toInt() % 2 == 0) EnemyBehavior.STRIKE else EnemyBehavior.TELEGRAPH
+                    EnemyType.PYLON, EnemyType.SENTRY, EnemyType.CHOIR -> EnemyBehavior.TELEGRAPH
+                    EnemyType.CIPHER -> EnemyBehavior.PHASED
                     else -> EnemyBehavior.IDLE
                 },
-                behaviorRemaining = if (type == EnemyType.SNIPER) 0.2f else 0.3f,
+                behaviorRemaining = when (type) {
+                    EnemyType.SNIPER -> 0.2f
+                    EnemyType.PYLON -> 0.15f
+                    else -> 0.3f
+                },
                 facing = index * 0.4f,
                 linkedTo = if (type == EnemyType.DRIFTER) EnemyType.AEGIS.ordinal + 1 else -1,
-                shielded = type == EnemyType.HERALD,
+                shielded = type == EnemyType.HERALD || type == EnemyType.DRIFTER,
                 // Rebirth R8: an Armored Vanguard plate on every third ordinary enemy.
                 armored = index % 3 == 0 && type != EnemyType.ARCHITECT,
             )
