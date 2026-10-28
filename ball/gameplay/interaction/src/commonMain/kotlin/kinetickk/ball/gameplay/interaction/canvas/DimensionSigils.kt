@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
+import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.content.api.WorldLayer
 import kotlin.math.PI
 import kotlin.math.cos
@@ -60,6 +61,27 @@ internal fun DrawScope.drawDimensionSigil(layer: WorldLayer, center: Offset, rad
     val path = DimensionSigilPaths.get(layer, radius)
     translate(center.x, center.y) { drawPath(path, color, alpha = alpha) }
 }
+
+/**
+ * A world discovery's mark, [size] px across (the Codex World category): a dimension's own sigil for the three layers,
+ * else the discovery's site glyph ([worldDiscoveryGlyph]). Allocation-free once cached.
+ */
+fun DrawScope.drawWorldDiscoveryMark(id: WorldDiscovery, center: Offset, size: Float, color: Color) {
+    val layer = worldDiscoveryLayer(id)
+    if (layer != null) drawDimensionSigil(layer, center, size * DISCOVERY_SIGIL_SHARE, color)
+    else drawSiteGlyph(worldDiscoveryGlyph(id), center, size, color)
+}
+
+/** The dimension a world discovery names, or null for every other discovery. */
+fun worldDiscoveryLayer(id: WorldDiscovery): WorldLayer? = when (id) {
+    WorldDiscovery.ZENITH -> WorldLayer.ZENITH
+    WorldDiscovery.NADIR -> WorldLayer.NADIR
+    WorldDiscovery.ARCHIVE -> WorldLayer.ARCHIVE
+    else -> null
+}
+
+/** A discovery's sigil fills this share of the mark's size as its radius (the site glyphs' rings reach about as far). */
+private const val DISCOVERY_SIGIL_SHARE = 0.42f
 
 /** Sigil paths centred on the origin, kept per layer and radius (a rift, the HUD plate, the Codex: a few radii each). */
 private object DimensionSigilPaths {
