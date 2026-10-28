@@ -13,6 +13,7 @@ import kinetickk.ball.gameplay.nucleus.model.DimensionPortal
 import kinetickk.ball.gameplay.nucleus.model.DimensionRewardGrant
 import kinetickk.ball.gameplay.nucleus.model.DimensionRunState
 import kinetickk.ball.gameplay.nucleus.model.DimensionVisit
+import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.model.profile
 import kinetickk.ball.gameplay.nucleus.model.segmentCircleIntersects
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
@@ -298,6 +299,22 @@ private fun MutableGameState.spawnObjectiveBossIfDue() {
 }
 
 /**
+ * The integrity share [enemy] arrived with as the visit's objective boss (its layer's bossIntegrityShare), else 1. The
+ * boss hit cap is divided by it, so the share shortens the fight in capped hits as well as in integrity: the cap is a
+ * share of the boss's own integrity, which alone would leave a tier-10 boss as many capped hits at any share.
+ */
+internal fun MutableGameState.objectiveBossIntegrityShare(enemy: Enemy): Float {
+    val visit = dimensionRun.visit ?: return 1f
+    return if (enemy.id == visit.bossId) content.dimensions.definition(visit.layer).bossIntegrityShare else 1f
+}
+
+/** The share of its damage [enemy] deals as the visit's objective boss (its layer's bossDamageShare), else 1. */
+internal fun MutableGameState.objectiveBossDamageShare(enemy: Enemy?): Float {
+    val visit = dimensionRun.visit ?: return 1f
+    return if (enemy != null && enemy.id == visit.bossId) content.dimensions.definition(visit.layer).bossDamageShare else 1f
+}
+
+/**
  * Completes the visit's objective: the exit rift opens [DimensionPolicy.exitPortalDistance] ahead of the Core (moved
  * clear of obstacles) until the visit's end, with the completion banner unless [announce] is false (a secret boss's
  * fall keeps its own defeat notice). A completed visit pays the full reward whether the Core leaves through the rift
@@ -316,6 +333,8 @@ internal fun MutableGameState.completeObjective(announce: Boolean = true) {
         visit = visit.copy(
             progress = visit.goal,
             completed = true,
+            splitEndsAt = Float.POSITIVE_INFINITY,
+            splitSeconds = 0f,
             exitPortal = DimensionPortal(dimensionRun.nextPortalId, x, y, WorldLayer.BASE, visit.endsAt),
         ),
         nextPortalId = dimensionRun.nextPortalId + 1,

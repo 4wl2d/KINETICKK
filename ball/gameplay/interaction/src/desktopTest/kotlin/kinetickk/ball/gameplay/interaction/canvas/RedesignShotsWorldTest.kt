@@ -526,9 +526,10 @@ class RedesignShotsWorldTest {
         add(Scene("terrain-hud", hud = true, model = { w, h -> terrain(w, h) }))
         add(Scene("terrain-mono", roles = KkRolePalette.Mono, model = { w, h -> terrain(w, h) }))
         add(Scene("terrain-protan", roles = KkRolePalette.Protan, model = { w, h -> terrain(w, h) }))
-        // Dimensions: each layer's ground and marks (the Zenith's course with an ambient ring, the Nadir's embers, the
-        // Archive's exit rift) and, in realspace, a window rift offered, the same rift locked, and the glitch rift; in each
-        // palette. The slow Zenith shows the next ring's grey hatched dashes below the pace.
+        // Dimensions: each layer's ground and marks (the Zenith's course with an ambient ring, its next ring's arc 60 % into
+        // the split, the Nadir's embers, two of them just thrown from their kills, the Archive's exit rift) and, in
+        // realspace, a window rift offered, the same rift locked, and the glitch rift; in each palette. The slow Zenith
+        // shows the next ring's grey hatched dashes below the pace.
         for ((suffix, roles) in listOf("" to KkRolePalette.Default, "-mono" to KkRolePalette.Mono, "-protan" to KkRolePalette.Protan)) {
             for (layer in listOf(WorldLayer.ZENITH, WorldLayer.NADIR, WorldLayer.ARCHIVE)) {
                 add(Scene("dimension-${layer.name.lowercase()}$suffix", roles = roles, model = { w, h -> dimensionScene(w, h, layer) }))
@@ -550,11 +551,11 @@ class RedesignShotsWorldTest {
         val enemies = listOf(enemy(1, first, -330f, -150f, 18f), enemy(2, second, 420f, 210f, 20f))
         val visit = when (layer) {
             WorldLayer.ZENITH -> dimensionVisit(layer, 1_000f, 1_000f, course = listOf(300f to 130f, -60f to 330f), ambient = listOf(-420f to 170f),
-                pace = pace, progress = 3)
+                pace = pace, progress = 3, splitRemaining = 1.12f, splitDuration = 2.8f)
             WorldLayer.NADIR -> dimensionVisit(layer, 1_000f, 1_000f, embers = List(7) { index ->
                 val angle = index * 0.9f + 0.4f
                 (230f * cos(angle)) to (150f * sin(angle))
-            } + (-150f to -40f), emberLife = 6f, pace = pace)
+            } + (-150f to -40f), emberLife = 6f, pace = pace, thrownFrom = listOf(-60f to -230f, 380f to 40f), emberAge = 0.12f)
             WorldLayer.ARCHIVE, WorldLayer.BASE -> dimensionVisit(layer, 1_000f, 1_000f, exit = 300f to 120f, pace = pace, localClock = 7.3f)
         }
         return model(w, h, enemies = enemies).withDimension(visit)

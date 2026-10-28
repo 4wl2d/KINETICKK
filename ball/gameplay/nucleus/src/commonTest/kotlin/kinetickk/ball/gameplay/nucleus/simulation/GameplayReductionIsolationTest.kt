@@ -84,6 +84,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotSame
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -904,6 +905,43 @@ class GameplayReductionIsolationTest {
         assertSame(committedRun, source.dimensionRun)
         assertEquals(listOf(7), checkNotNull(source.dimensionRun.visit).halos.map { it.id })
         assertEquals(committedHp, source.hp)
+    }
+
+    @Test
+    fun aCourseBrokenInACandidateLeavesTheCommittedVisitAloneAndEveryNewVisitFactReachesTheFingerprint() {
+        val source = MutableGameState(canonicalGameplayContent, seed = 6_061, initialMatter = 0).apply {
+            startRun()
+            enemies.clear()
+            elapsed = 200f
+            enterDimensionForTesting(WorldLayer.ZENITH, DimensionObjective.ASCENT)
+            // The split to the next ring already ran out: the candidate's first step breaks the course.
+            dimensionRun = dimensionRun.copy(visit = checkNotNull(dimensionRun.visit).copy(splitEndsAt = 199f, splitSeconds = 2f))
+            drainReferenceOutputs()
+        }
+        val committedFingerprint = source.exactSimulationFingerprint()
+        val committedRun = source.dimensionRun
+        val candidate = assertIs<GameReductionResult.Accepted>(
+            GameReducer().reduce(EngineState(source), GameplayInteractionPulse.FrameElapsed.fromValidated(MutableGameState.FIXED_STEP)),
+        ).state.model
+        assertTrue(checkNotNull(candidate.dimensionRun.visit).failed, "the candidate broke the course")
+        assertEquals(committedFingerprint, source.exactSimulationFingerprint(), "the break left the committed visit alone")
+        assertSame(committedRun, source.dimensionRun)
+        assertFalse(checkNotNull(source.dimensionRun.visit).failed)
+
+        // The split clock, the failed objective and an ember's throw origin are retained facts of the exact fingerprint.
+        val withEmber = source.copyForReduction().apply {
+            dimensionRun = dimensionRun.copy(visit = checkNotNull(dimensionRun.visit).copy(embers = immutableListOf(Ember(1f, 2f, 230f))))
+        }
+        val base = withEmber.exactSimulationFingerprint()
+        listOf<(DimensionVisit) -> DimensionVisit>(
+            { it.copy(splitEndsAt = 230f) }, { it.copy(splitSeconds = 3f) }, { it.copy(failed = true) },
+            { it.copy(embers = immutableListOf(Ember(1f, 2f, 230f, fromX = 4f, fromY = 2f))) },
+            { it.copy(embers = immutableListOf(Ember(1f, 2f, 230f, fromX = 1f, fromY = 5f))) },
+        ).forEachIndexed { index, change ->
+            val changed = withEmber.copyForReduction().apply { dimensionRun = dimensionRun.copy(visit = change(checkNotNull(dimensionRun.visit))) }
+            assertNotEquals(base, changed.exactSimulationFingerprint(), "change $index")
+            assertEquals(changed.exactSimulationFingerprint(), changed.copyForReduction().exactSimulationFingerprint())
+        }
     }
 
     @Test

@@ -18,6 +18,7 @@ internal val DimensionPhrasesInRussian: List<Pair<String, String>> = listOf(
     "PULLED BACK TO REALSPACE" to "ВЫБРОС В ЯВЬ",
     "THE ARCHIVE STIRS" to "АРХИВ ПРОБУЖДАЕТСЯ",
     "SCORCHED" to "ЯДРО ОБОЖЖЕНО",
+    "Course broken" to "Маршрут сорван",
     "Rift detected" to "Обнаружен разлом",
     "Choose a course" to "Выберите путь",
     "Zenith rift" to "Разлом в Зенит",
@@ -26,11 +27,11 @@ internal val DimensionPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Exit rift" to "Разлом в явь",
     "Fly through to cross over. The layer releases you before the Architect arrives." to
         "Пролетите насквозь, чтобы перейти. Слой отпустит вас до прибытия Архитектора.",
-    "Fly through the halo gates in order, faster than cruising." to
-        "Пролетите сквозь кольца нимба по порядку, быстрее крейсерской скорости.",
+    "Fly through the halo gates in order, faster than cruising. Reach each gate before its time runs out." to
+        "Пролетите сквозь кольца нимба по порядку, быстрее крейсерской скорости. Успейте к каждому кольцу, пока не истекло его время.",
     "Defeat the Throne." to "Победите Престол.",
-    "Collect twelve embers from burning enemies. Keep moving: slow flight scorches the Core." to
-        "Соберите двенадцать угольков с горящих врагов. Не останавливайтесь: медленный полёт обжигает Ядро.",
+    "Collect twenty embers thrown from burning enemies. Keep moving: slow flight scorches the Core." to
+        "Соберите двадцать угольков, выброшенных горящими врагами. Не останавливайтесь: медленный полёт обжигает Ядро.",
     "Defeat the Pyre Herald. Keep moving: slow flight scorches the Core." to
         "Победите Огненного глашатая. Не останавливайтесь: медленный полёт обжигает Ядро.",
     "Defeat the Antecedent. Time moves only when you move." to "Победите Предтечу. Время идёт, только когда движетесь вы.",

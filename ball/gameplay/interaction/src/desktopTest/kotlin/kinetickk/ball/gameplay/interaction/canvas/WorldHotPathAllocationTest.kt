@@ -319,6 +319,27 @@ class WorldHotPathAllocationTest {
         }
     }
 
+    @Test
+    fun theAscentSplitAndThrownEmbersDrawWithoutAllocating() {
+        // The next ring as an arc over a running split (at pace, then below it on the mono palette) and all twenty-four
+        // embers mid-throw, each with its streak in from its kill.
+        for (layer in listOf(WorldLayer.ZENITH, WorldLayer.NADIR)) {
+            assertFrameIsAllocationFree(KkRolePalette.Default, WeaponId.MORNINGSTAR, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+                decorate = { withSplitAndThrows(inDimension(it, layer, slow = false)) })
+            assertFrameIsAllocationFree(KkRolePalette.Mono, WeaponId.ARC_COIL, warmFrames = WARM_MODELS * 2, measuredFrames = 20,
+                decorate = { withSplitAndThrows(inDimension(it, layer, slow = true)) })
+        }
+    }
+
+    /** [model]'s visit with two fifths of a split to the next ring left and every ember thrown 0.15 s ago from 200 u off. */
+    private fun withSplitAndThrows(model: GameplayRenderModel): GameplayRenderModel {
+        val dimension = model.dimension
+        val embers = dimension.embers.mapIndexed { index, ember ->
+            ember.copy(fromX = ember.x - 180f + index * 7f, fromY = ember.y + 90f - index * 5f, age = 0.15f)
+        }
+        return model.with("dimension" to dimension.copy(splitRemaining = 1.04f, splitDuration = 2.6f, embers = embers.toImmutableList()))
+    }
+
     private fun assertFrameIsAllocationFree(
         roles: KkRolePalette,
         weapon: WeaponId,

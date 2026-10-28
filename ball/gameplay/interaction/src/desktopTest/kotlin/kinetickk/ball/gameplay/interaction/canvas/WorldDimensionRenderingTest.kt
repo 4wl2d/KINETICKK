@@ -286,7 +286,7 @@ class WorldDimensionRenderingTest {
         assertEquals(0, following.count { near(it, shield, 60) || near(it, you, 60) }, "the following ring is grey only")
         assertTrue(following.count { luminance(it) > 50f } > 100, "the following ring is drawn")
 
-        // An ember fades over its last 1.5 s.
+        // An ember fades over its last half second.
         fun ember(life: Float) = render {
             drawDimensionWorld(base().withDimension(dimensionVisit(WorldLayer.NADIR, CORE, CORE, embers = listOf(0f to 0f), emberLife = life)), 0f, 0f, roles)
         }
@@ -294,6 +294,60 @@ class WorldDimensionRenderingTest {
         fun brightness(pixels: IntArray) = around(pixels, 0f, 0f, 4f).maxOf { luminance(it) }
         assertTrue(brightness(ember(0.3f)) < brightness(ember(5f)), "a dying ember is dimmer")
         assertTrue(around(ember(5f), 0f, 0f, 3f).any { near(it, heat.toArgb(), 8) }, "an ember is heat")
+    }
+
+    @Test
+    fun theNextRingEmptiesClockwiseFromTheTopOverItsSplitAndAThrownEmberStreaksInFromItsKill() {
+        val roles = KkRolePalette.Default
+        val you = roles.you.toArgb()
+        val speed = base().speed
+        // The next ring 300 u right of the Core, flown at pace; [left] of a [duration]-second split remains.
+        fun ring(left: Float, duration: Float = 2f) = render {
+            drawDimensionWorld(
+                base().withDimension(dimensionVisit(WorldLayer.ZENITH, CORE, CORE, course = listOf(300f to 0f), pace = speed * 0.5f,
+                    splitRemaining = left, splitDuration = duration)),
+                0f, 0f, roles,
+            )
+        }
+        val centerX = width * 0.5f + 300f
+        val centerY = height * 0.5f
+        // The player's-colour dashes of the next ring's dashed ring in one quadrant (right/left of, above/below its centre).
+        fun dashes(pixels: IntArray, right: Boolean, above: Boolean) = pixels.indices.count { index ->
+            val dx = index % width + 0.5f - centerX
+            val dy = index / width + 0.5f - centerY
+            hypot(dx, dy) in 82f..86f && (dx > 4f) == right && (dx < -4f) == !right && (dy < -4f) == above && (dy > 4f) == !above &&
+                near(pixels[index], you, 40)
+        }
+        fun quadrants(pixels: IntArray) = listOf(true to true, true to false, false to false, false to true).map { (r, a) -> dashes(pixels, r, a) }
+        val whole = quadrants(ring(left = 0f, duration = 0f))
+        assertTrue(whole.all { it > 15 }, "with no split running the dashed ring is whole: $whole")
+        val half = quadrants(ring(left = 1f))
+        assertTrue(half[0] > 15 && half[1] > 15, "half the split left keeps the right half, from the top clockwise: $half")
+        assertEquals(0, half[2] + half[3], "and the left half has run out: $half")
+        val quarter = quadrants(ring(left = 0.5f))
+        assertTrue(quarter[0] > 15 && quarter[1] + quarter[2] + quarter[3] == 0, "a quarter left is the top-right arc only: $quarter")
+        assertEquals(0, quadrants(ring(left = 0f)).sum(), "a split run out leaves no arc")
+
+        // A thrown ember: a heat streak from its kill 200 u to its left whose tail catches up with it, gone once landed.
+        fun ember(age: Float, thrown: Boolean = true) = render {
+            drawDimensionWorld(
+                base().withDimension(dimensionVisit(WorldLayer.NADIR, CORE, CORE, embers = listOf(0f to 0f),
+                    thrownFrom = if (thrown) listOf(-200f to 0f) else emptyList(), emberAge = age)),
+                0f, 0f, roles,
+            )
+        }
+        fun streak(pixels: IntArray, fromX: Float, toX: Float) = pixels.indices.count { index ->
+            val x = index % width + 0.5f - width * 0.5f
+            val y = index / width + 0.5f - height * 0.5f
+            x in fromX..toX && abs(y) <= 2f && channel(pixels[index], 16) > channel(Kk.Ink.toArgb(), 16) + 20 &&
+                leaning(pixels[index], roles.heat) > 0.9f
+        }
+        assertTrue(streak(ember(age = 0.05f), -180f, -30f) > 100, "just thrown, the streak reaches back toward the kill")
+        val later = ember(age = 0.3f)
+        assertEquals(0, streak(later, -180f, -90f), "its tail has caught up past the kill's side")
+        assertTrue(streak(later, -60f, -20f) > 20, "and still trails the ember")
+        assertEquals(0, streak(ember(age = 0.6f), -190f, -20f), "a landed ember trails nothing")
+        assertEquals(0, streak(ember(age = 0.05f, thrown = false), -190f, -20f), "a placed ember never had a throw")
     }
 
     @Test

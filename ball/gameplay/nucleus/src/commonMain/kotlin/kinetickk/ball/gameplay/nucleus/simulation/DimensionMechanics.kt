@@ -12,6 +12,7 @@ import kinetickk.ball.gameplay.nucleus.model.Ember
 import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.model.HaloRing
 import kinetickk.ball.gameplay.nucleus.model.distanceSquared
+import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.model.segmentCircleIntersects
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.foundation.collections.ImmutableList
@@ -27,15 +28,17 @@ import kotlin.math.sin
  * What a layer does to the run while the Core is in it: the pace a dimension measures flight against, the Zenith's
  * Grace (lighter drag and mending halo rings), the Nadir's Heat (slow flight scorches the Core, Matter burns twice as
  * bright), the Archive's Desync (hostile time follows the Core's speed) and the director's rate and cap; and the marks
- * of a visit's objective: the Ascent's course of halo rings and the Harvest's embers. Every value comes from the
- * current layer's content definition; realspace's definition changes nothing, so every function here is the identity
- * there. Nothing draws from a run stream: rings come from stateless hashes and embers drop where burning enemies die.
+ * of a visit's objective: the Ascent's course of halo rings against its split clock and the Harvest's embers. Every
+ * value comes from the current layer's content definition; realspace's definition changes nothing, so every function
+ * here is the identity there. Nothing draws from a run stream: rings and ember throws come from stateless hashes.
  */
 
 /** Salt of the ambient halo ring placement (registered in the lane notes). */
 internal const val HALO_SALT: Long = 0x0D13_E5A1_0000_0003L
 /** Salt of the Ascent course ring placement (registered in the lane notes). */
 internal const val COURSE_SALT: Long = 0x0D13_E5A1_0000_0004L
+/** Salt of the Harvest's ember throws (registered in the lane notes). */
+internal const val EMBER_SALT: Long = 0x0D13_E5A1_0000_0006L
 
 /** An Ascent shows the ring to fly through next and the one after it. */
 internal const val ASCENT_RINGS_AHEAD: Int = 2
@@ -55,6 +58,9 @@ private const val AMBIENT_HALO_FIRST_ID: Int = 100
 private const val HALO_CLEARANCE: Float = 30f
 /** Spark colour of a mending ring (the repair burst's). */
 private const val HALO_BURST_COLOR: Int = 2
+/** Room kept between a thrown ember and any obstacle. */
+private const val EMBER_CLEARANCE: Float = 40f
+private const val TWO_PI: Float = (2.0 * PI).toFloat()
 
 /**
  * The speed a dimension measures flight against: the steady speed of the pace reach along the viewport's long axis
@@ -101,24 +107,27 @@ internal fun MutableGameState.layerMatterMultiplier(): Float =
     content.dimensions.definition(worldLayer).physics.matterMultiplier
 
 /**
- * One step of the current layer's physics and the visit's objective marks: halo rings where the layer has them (or
- * the course placed some), embers while any wait, then the scorch where slow flight burns. A lethal scorch tick can
- * end the run; the caller checks the phase.
+ * One step of the current layer's physics and the visit's objective marks: the Ascent's split clock (a split that ran
+ * out breaks the course before this step's pass could count), halo rings where the layer has them (or the course
+ * placed some), embers while any wait, then the scorch where slow flight burns. A lethal scorch tick can end the run;
+ * the caller checks the phase.
  */
 internal fun MutableGameState.updateLayerMechanics(delta: Float) {
     val visit = dimensionRun.visit ?: return
     val physics = content.dimensions.definition(worldLayer).physics
-    if (physics.ambientHalos > 0 || visit.halos.isNotEmpty()) updateHalos(visit, physics)
+    if (elapsed > visit.splitEndsAt) breakCourse(visit)
+    dimensionRun.visit?.let { current -> if (physics.ambientHalos > 0 || current.halos.isNotEmpty()) updateHalos(current, physics) }
     dimensionRun.visit?.let { current -> if (current.embers.isNotEmpty()) updateEmbers(current) }
     if (physics.scorchSharePerSecond > 0f) updateScorch(delta, physics)
 }
 
 /**
  * Halo rings: a ring the Core flies through at pace or faster mends it, charges Overdrive and leaves (once per ring;
- * a slower pass leaves it standing). A course ring counts only in its turn: passing the next one advances the Ascent
- * and places the ring after the one still ahead, and passing the last one completes it; a course ring flown through
- * out of turn stays. Ambient rings left far behind go, and while fewer than the layer's ambient count remain one new
- * ring appears ahead of the Core per step. The ring list is rebuilt only on such an event.
+ * a slower pass leaves it standing). A course ring counts only in its turn: passing the next one advances the Ascent,
+ * places the ring after the one still ahead and starts the split to the next ring, and passing the last one completes
+ * it; a course ring flown through out of turn stays. Ambient rings left far behind go, and while fewer than the
+ * layer's ambient count remain one new ring appears ahead of the Core per step. The ring list is rebuilt only on such
+ * an event.
  */
 private fun MutableGameState.updateHalos(visit: DimensionVisit, physics: DimensionPhysics) {
     val radius = content.dimensions.objectives.haloRadius
@@ -127,9 +136,11 @@ private fun MutableGameState.updateHalos(visit: DimensionVisit, physics: Dimensi
     var kept: ArrayList<HaloRing>? = null
     var ambient = 0
     var progress = visit.progress
+    var passedX = 0f
+    var passedY = 0f
     for (index in halos.indices) {
         val ring = halos[index]
-        val inTurn = ring.courseIndex < 0 || ring.courseIndex == progress && !visit.completed
+        val inTurn = ring.courseIndex < 0 || ring.courseIndex == progress && !visit.completed && !visit.failed
         val passed = fast && inTurn && segmentCircleIntersects(previousCoreX, previousCoreY, coreX, coreY, ring.x, ring.y, radius)
         val behind = !passed && ring.courseIndex < 0 &&
             distanceSquared(ring.x, ring.y, coreX, coreY) > AMBIENT_HALO_RANGE * AMBIENT_HALO_RANGE
@@ -140,7 +151,11 @@ private fun MutableGameState.updateHalos(visit: DimensionVisit, physics: Dimensi
             }
             if (passed) {
                 mendAtHalo(ring, physics)
-                if (ring.courseIndex >= 0) progress++
+                if (ring.courseIndex >= 0) {
+                    progress++
+                    passedX = ring.x
+                    passedY = ring.y
+                }
             }
             continue
         }
@@ -160,8 +175,39 @@ private fun MutableGameState.updateHalos(visit: DimensionVisit, physics: Dimensi
         val upcoming = passed + ASCENT_RINGS_AHEAD
         if (upcoming < updated.goal) updated = withCourseRing(updated, upcoming)
     }
+    if (progress > visit.progress && progress < updated.goal) updated = withSplit(updated, passedX, passedY)
     dimensionRun = dimensionRun.copy(visit = updated)
     if (progress > visit.progress && progress >= updated.goal) completeObjective()
+}
+
+/**
+ * [visit] with the split to its next course ring started now: the cruise time from the ring just passed at
+ * ([fromX], [fromY]) to the next ring (their distance over the pace) times the tuning's split factor.
+ */
+private fun MutableGameState.withSplit(visit: DimensionVisit, fromX: Float, fromY: Float): DimensionVisit {
+    val halos = visit.halos
+    for (index in halos.indices) {
+        val ring = halos[index]
+        if (ring.courseIndex != visit.progress) continue
+        val seconds = length(ring.x - fromX, ring.y - fromY) / dimensionPace() * content.dimensions.objectives.ascentSplitFactor
+        return visit.copy(splitEndsAt = elapsed + seconds, splitSeconds = seconds)
+    }
+    return visit
+}
+
+/**
+ * The split ran out before the next course ring was passed: the course breaks. Its rings leave (ambient rings stay),
+ * the objective has failed (the visit runs on to its timer and pays the smaller reward) and a banner says so.
+ */
+private fun MutableGameState.breakCourse(visit: DimensionVisit) {
+    val halos = visit.halos
+    val kept = ArrayList<HaloRing>(halos.size)
+    for (index in halos.indices) if (halos[index].courseIndex < 0) kept += halos[index]
+    dimensionRun = dimensionRun.copy(
+        visit = visit.copy(halos = kept.toImmutableList(), failed = true, splitEndsAt = Float.POSITIVE_INFINITY, splitSeconds = 0f),
+    )
+    message = DimensionNotices.broken(visit.objective)
+    messageTime = 2f
 }
 
 /**
@@ -222,12 +268,27 @@ private fun MutableGameState.updateEmbers(visit: DimensionVisit) {
 }
 
 /**
- * A burning enemy died during an open Harvest: an ember waits where it fell for the tuning's life. At most
+ * A burning [enemy] died during an open Harvest: its ember is thrown from where it fell, in a direction and to a
+ * distance within the tuning's throw range from a stateless hash of the run, the visit and the enemy, moved clear of
+ * obstacles. Draws nothing.
+ */
+internal fun MutableGameState.throwEmber(enemy: Enemy) {
+    val visit = dimensionRun.visit ?: return
+    val tuning = content.dimensions.objectives
+    val random = HashRandom(worldHash(runSeed, visit.layer, visit.serial, enemy.id, EMBER_SALT))
+    val angle = random.nextFloat() * TWO_PI
+    val distance = tuning.emberThrowMinimum + random.nextFloat() * (tuning.emberThrowMaximum - tuning.emberThrowMinimum)
+    val (x, y) = nudgedClearOfObstacles(enemy.x + cos(angle) * distance, enemy.y + sin(angle) * distance, EMBER_CLEARANCE)
+    dropEmber(x, y, enemy.x, enemy.y)
+}
+
+/**
+ * An ember waits at ([x], [y]) for the tuning's life, thrown there from ([fromX], [fromY]). At most
  * [ContentBounds.MAX_EMBERS] wait; one more puts out the oldest. Draws nothing.
  */
-internal fun MutableGameState.dropEmber(x: Float, y: Float) {
+internal fun MutableGameState.dropEmber(x: Float, y: Float, fromX: Float = x, fromY: Float = y) {
     val visit = dimensionRun.visit ?: return
-    val ember = Ember(x, y, elapsed + content.dimensions.objectives.emberLifeSeconds)
+    val ember = Ember(x, y, elapsed + content.dimensions.objectives.emberLifeSeconds, fromX, fromY)
     val embers = visit.embers
     val next = if (embers.size < ContentBounds.MAX_EMBERS) {
         embers.toImmutableListAppending(ember)

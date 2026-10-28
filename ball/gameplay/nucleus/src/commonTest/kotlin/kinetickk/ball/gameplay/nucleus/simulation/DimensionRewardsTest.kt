@@ -206,7 +206,100 @@ class DimensionRewardsTest {
         assertEquals(3, state.choices.size)
     }
 
+    @Test
+    fun aCountedRingStartsTheSplitToTheNextAndTheFirstStepPastItsEndBreaksTheCourse() {
+        val state = game(courseWorld).apply { enterDimensionForTesting(WorldLayer.ZENITH, DimensionObjective.ASCENT) }
+        val streams = state.streams()
+        assertEquals(Float.POSITIVE_INFINITY, state.visit().splitEndsAt, "no split runs before the first ring counts")
+        val first = checkNotNull(state.courseRing(0))
+        val second = checkNotNull(state.courseRing(1))
+        fun split(from: HaloRing, to: HaloRing) = hypot(to.x - from.x, to.y - from.y) / state.dimensionPace() * tuning.ascentSplitFactor
+
+        // The first ring starts the split to the second: its cruise time at the pace times the split factor.
+        state.flyThrough(first.x, first.y)
+        assertEquals(split(first, second), state.visit().splitSeconds, 1e-3f)
+        assertEquals(state.elapsed + state.visit().splitSeconds, state.visit().splitEndsAt)
+        // Passed at the split's last moment, the second ring still counts and starts the split to the third.
+        val third = checkNotNull(state.courseRing(2))
+        state.elapsed = state.visit().splitEndsAt
+        state.flyThrough(second.x, second.y)
+        assertEquals(2, state.visit().progress)
+        assertFalse(state.visit().failed)
+        assertEquals(split(second, third), state.visit().splitSeconds, 1e-3f)
+
+        // The first moment past the split's end breaks the course: its rings leave and the objective has failed.
+        state.elapsed = state.visit().splitEndsAt
+        state.updateDimension(step)
+        assertFalse(state.visit().failed, "the split's last moment still holds")
+        state.elapsed = Float.fromBits(state.visit().splitEndsAt.toRawBits() + 1)
+        state.updateDimension(step)
+        val broken = state.visit()
+        assertTrue(broken.failed)
+        assertFalse(broken.completed)
+        assertTrue(broken.halos.none { it.courseIndex >= 0 }, "the course rings leave")
+        assertEquals(Float.POSITIVE_INFINITY, broken.splitEndsAt)
+        assertEquals(DimensionNotices.broken(DimensionObjective.ASCENT), state.message)
+        assertEquals(-1, state.dimensionProjection(null, null).nextHaloId, "no ring to fly through next")
+        assertTrue(state.dimensionProjection(null, null).failed)
+        // A broken course counts nothing more, the visit runs on to its timer and pays the smaller reward.
+        state.flyThrough(third.x, third.y)
+        assertEquals(2, state.visit().progress)
+        assertNull(state.visit().exitPortal)
+        state.skipToVisitEndForTesting()
+        state.updateDimension(step)
+        assertEquals(WorldLayer.BASE, state.worldLayer)
+        assertEquals(immutableListOf(DimensionRewardGrant(WorldLayer.ZENITH, completed = false)), state.dimensionRun.pendingRewards)
+        state.openNextPendingChoice()
+        assertEquals(policy.definition(WorldLayer.ZENITH).reward.cardsOnFailure, state.choices.size)
+        assertEquals(streams, state.streams(), "the split draws nothing from the run streams")
+    }
+
+    @Test
+    fun aBrokenCourseKeepsTheAmbientRingsAndACompletedCourseStopsItsSplit() {
+        val state = game(courseWorld).apply { enterDimensionForTesting(WorldLayer.ZENITH, DimensionObjective.ASCENT) }
+        val ambient = HaloRing(100, state.coreX - 2_000f, state.coreY + 1_500f, courseIndex = -1)
+        state.dimensionRun = state.dimensionRun.copy(
+            visit = state.visit().copy(halos = withHaloRing(state.visit().halos, ambient), splitEndsAt = state.elapsed - 0.5f, splitSeconds = 2f),
+        )
+        state.updateDimension(step)
+        assertTrue(state.visit().failed)
+        assertEquals(listOf(ambient), state.visit().halos.toList())
+
+        // The last ring completes the course and leaves no split running.
+        val complete = game(courseWorld).apply { enterDimensionForTesting(WorldLayer.ZENITH, DimensionObjective.ASCENT) }
+        for (index in 0 until tuning.ascentRings) {
+            val ring = checkNotNull(complete.courseRing(index))
+            complete.flyThrough(ring.x, ring.y)
+        }
+        assertTrue(complete.visit().completed)
+        assertEquals(Float.POSITIVE_INFINITY, complete.visit().splitEndsAt)
+        assertEquals(0f, complete.visit().splitSeconds)
+    }
+
     // ---- Boss objectives ----
+
+    @Test
+    fun anObjectiveBossTakesCappedHitsAndDealsDamageByItsLayersShares() {
+        for (objective in listOf(DimensionObjective.JUDGEMENT, DimensionObjective.PYRE)) {
+            val definition = policy.definition(objective.layer)
+            val state = buildTestState(seed = 80_801, rebirth = 10).apply {
+                resize(1_280f, 800f)
+                enemies.clear()
+                elapsed = 200f
+                enterDimensionForTesting(objective.layer, objective)
+                elapsed = 200f + tuning.bossDelaySeconds
+                updateDimension(step)
+            }
+            val visit = state.visit()
+            val boss = state.enemies.single { it.id == visit.bossId }
+            val cap = state.bossHitCap(boss)
+            val shot = state.shotDamage(boss)
+            // The same boss outside the visit's objective: the plain cap and damage.
+            state.dimensionRun = state.dimensionRun.copy(visit = visit.copy(bossId = -1))
+            assertEquals(state.bossHitCap(boss) / definition.bossIntegrityShare, cap, cap * 1e-5f, "$objective: the share shortens its capped hits too")
+            assertEquals(state.shotDamage(boss) * definition.bossDamageShare, shot, shot * 1e-5f, "$objective deals its layer's damage share")
+        }
+    }
 
     @Test
     fun anObjectiveBossArrivesWithItsLayersIntegrityShare() {
@@ -331,8 +424,10 @@ class DimensionRewardsTest {
         state.killEnemyForTesting(EnemyType.IMP, x = 300f, y = 40f)
         assertEquals(1, state.visit().embers.size, "a Nadir native burns")
         val ember = state.visit().embers.single()
-        assertEquals(300f, ember.x)
-        assertEquals(40f, ember.y)
+        // Thrown from where the Imp fell, within the throw range (nothing in the open world nudges it).
+        assertEquals(300f to 40f, ember.fromX to ember.fromY)
+        val thrown = hypot(ember.x - 300f, ember.y - 40f)
+        assertTrue(thrown in tuning.emberThrowMinimum - 0.01f..tuning.emberThrowMaximum + 0.01f, "thrown $thrown u")
         assertEquals(200f + tuning.emberLifeSeconds, ember.expiresAt)
         state.killEnemyForTesting(EnemyType.DRIFTER, x = 500f, y = 0f)
         assertEquals(1, state.visit().embers.size, "a Drifter without Thermal leaves nothing")
@@ -348,6 +443,35 @@ class DimensionRewardsTest {
         state.completeObjective()
         state.killEnemyForTesting(EnemyType.IMP)
         assertEquals(2, state.visit().embers.size)
+    }
+
+    @Test
+    fun aBurningKillThrowsItsEmberByAStatelessHashOfTheRunTheVisitAndTheEnemy() {
+        // [count] burning enemies in turn (each with the next entity id) at the same spot throw their embers.
+        fun throws(seed: Int, count: Int): List<Pair<Float, Float>> {
+            val state = game(openWorld, seed).apply { enterDimensionForTesting(WorldLayer.NADIR, DimensionObjective.HARVEST) }
+            val streams = state.streams()
+            val thrown = List(count) {
+                state.dimensionRun = state.dimensionRun.copy(visit = state.visit().copy(embers = immutableListOf()))
+                val enemy = state.addEnemyForTesting(500f, -200f, hp = 1f)
+                state.throwEmber(enemy)
+                state.enemies.remove(enemy)
+                val ember = state.visit().embers.single()
+                assertEquals(500f to -200f, ember.fromX to ember.fromY)
+                (ember.x - 500f) to (ember.y + 200f)
+            }
+            assertEquals(streams, state.streams(), "a throw draws nothing from the run streams")
+            return thrown
+        }
+        val offsets = throws(80_801, 200)
+        assertEquals(offsets, throws(80_801, 200), "the same run, visit and enemies throw alike")
+        assertNotEquals(offsets.take(20), throws(80_802, 20), "another run throws elsewhere")
+        assertEquals(200, offsets.toSet().size, "each enemy throws its own way")
+        val distances = offsets.map { (dx, dy) -> hypot(dx, dy) }
+        assertTrue(distances.all { it in tuning.emberThrowMinimum - 0.01f..tuning.emberThrowMaximum + 0.01f })
+        assertTrue(distances.min() < tuning.emberThrowMinimum + 20f && distances.max() > tuning.emberThrowMaximum - 20f, "the range is used")
+        // Every way out of the kill: each quadrant takes some.
+        assertEquals(4, offsets.map { (dx, dy) -> (if (dx >= 0f) 1 else 0) + (if (dy >= 0f) 2 else 0) }.toSet().size)
     }
 
     @Test

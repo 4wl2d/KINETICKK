@@ -28,6 +28,7 @@ import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.nucleus.model.AmbientSiteWindow
 import kinetickk.ball.gameplay.nucleus.model.DimensionRunState
+import kinetickk.ball.gameplay.nucleus.model.DimensionVisit
 import kinetickk.ball.gameplay.nucleus.model.DungeonState
 import kinetickk.ball.gameplay.nucleus.model.PlacedStructure
 import kinetickk.ball.gameplay.nucleus.model.SignalPrompt
@@ -44,6 +45,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.WorldKeepOut
 import kinetickk.ball.gameplay.nucleus.simulation.copyForScalarInputReduction
 import kinetickk.ball.gameplay.nucleus.simulation.encounterTag
 import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.mapToImmutableList
 import kinetickk.ball.gameplay.nucleus.model.ActiveBuff
 import kinetickk.ball.gameplay.nucleus.model.CombatFieldKind
 import kinetickk.ball.gameplay.nucleus.model.FieldCell
@@ -448,6 +450,23 @@ class GameplayPerformanceBenchmarkTest {
         assertTrue(candidate.dimensionSlowSeconds > source.dimensionSlowSeconds, "a Core below the pace keeps its slow clock")
         assertTrue(candidate.dimensionScorchClock > source.dimensionScorchClock, "past the grace the scorch clock runs")
         assertEquals(ContentBounds.MAX_EMBERS, checkNotNull(candidate.dimensionRun.visit).embers.size, "no ember is in reach")
+        assertEquals(original, canonicalStateFingerprint(source))
+    }
+
+    /** The Ascent's split clock, a failed objective and the embers' throw origins are canonical facts that survive the copy. */
+    @Test
+    fun theSplitAFailedObjectiveAndTheEmbersThrowsReachTheCanonicalFingerprint() {
+        val source = dimensionVisitState(seed = 732_004)
+        val original = canonicalStateFingerprint(source)
+        listOf<(DimensionVisit) -> DimensionVisit>(
+            { it.copy(splitEndsAt = 210f) }, { it.copy(splitSeconds = 2.5f) }, { it.copy(failed = true) },
+            { visit -> visit.copy(embers = visit.embers.mapToImmutableList { it.copy(fromX = it.fromX + 1f) }) },
+            { visit -> visit.copy(embers = visit.embers.mapToImmutableList { it.copy(fromY = it.fromY - 1f) }) },
+        ).forEachIndexed { index, change ->
+            val changed = source.copyForReduction().apply { dimensionRun = dimensionRun.copy(visit = change(checkNotNull(dimensionRun.visit))) }
+            assertNotEquals(original, canonicalStateFingerprint(changed), "change $index")
+            assertEquals(canonicalStateFingerprint(changed), canonicalStateFingerprint(changed.copyForReduction()))
+        }
         assertEquals(original, canonicalStateFingerprint(source))
     }
 }
