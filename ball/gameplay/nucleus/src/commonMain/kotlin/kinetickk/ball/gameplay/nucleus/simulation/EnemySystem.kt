@@ -160,6 +160,7 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
                 )
             }
             EnemyType.ELITE -> {
+                updateEliteAffix(enemy, dx, dy, distance, delta)
                 val tangent = if (enemy.id % 2 == 0) 1f else -1f
                 steerEnemy(enemy, dx / distance * 52f - dy / distance * 45f * tangent, dy / distance * 52f + dx / distance * 45f * tangent, 1.3f, delta)
                 enemy.actionTimer -= cadence
@@ -400,6 +401,7 @@ internal fun MutableGameState.spawnedEnemy(
     val hardened = type == EnemyType.ELITE && runMutatorActive(RebirthMutator.HARDENED_ELITES)
     if (hardened) integrity *= HARDENED_ELITE_INTEGRITY
     integrity *= integrityShare
+    integrity *= championIntegrityScale(type, nextEntityId, ownerTag)
     val enemy = Enemy(
         id = nextEntityId++,
         type = type,
