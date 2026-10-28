@@ -153,6 +153,7 @@ internal fun MutableGameState.simulateStep(delta: Float) {
     updateSites(delta)
     updateStructures(delta)
     updateDimension(delta)
+    if (phase != GamePhase.RUNNING) return
     updateRunVariety(delta)
     updateWeapons(delta)
     updateEnemies(delta)

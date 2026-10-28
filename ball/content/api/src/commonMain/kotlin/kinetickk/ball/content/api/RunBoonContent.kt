@@ -39,12 +39,27 @@ data class RunBoonDefinition(
                 "A Pact costs 1..${ContentBounds.MAX_RUN_MODIFIER_EFFECTS} effects"
             }
         }
+        require(gains.all { it is RunModifierEffect.Stat && it.amount > 0f }) { "A boon gains only stat increases" }
+        require(costs.all(::isBoonPrice)) { "A Pact's price is a stat decrease or a tougher, faster or harder-hitting enemy" }
     }
 
     companion object {
         val BLESSING_IDS: IntRange = 32..47
         val PACT_IDS: IntRange = 48..63
     }
+}
+
+/**
+ * A lasting price taken mid-run: a stat decrease, or hostile integrity, speed or incoming damage raised (never
+ * lowered) without touching the spawn or Elite rates. Rerolls, Matter scales, mutators and Keynote floors stay with
+ * omens and signals: a mutator such as Fractured Space rebuilds the obstacle field, which a dimension reward must not do.
+ */
+private fun isBoonPrice(effect: RunModifierEffect): Boolean = when (effect) {
+    is RunModifierEffect.Stat -> effect.amount < 0f
+    is RunModifierEffect.HostileScale -> effect.spawnRate == 1f && effect.eliteRate == 1f &&
+        effect.health >= 1f && effect.speed >= 1f && effect.incomingDamage >= 1f &&
+        maxOf(effect.health, effect.speed, effect.incomingDamage) > 1f
+    else -> false
 }
 
 private fun stat(effect: ItemEffect, amount: Float): RunModifierEffect = RunModifierEffect.Stat(effect, amount)

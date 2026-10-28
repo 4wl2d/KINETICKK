@@ -372,6 +372,7 @@ internal inline fun <Element> MutableList<Element>.removeMatchingStable(
 
 internal fun MutableGameState.updateTotem(delta: Float) {
     if (phase != GamePhase.RUNNING) return
+    if (!layerFeatures().totem) return
     val activeTotem = totem
     if (activeTotem != null) {
         activeTotem.pulse = (activeTotem.pulse + delta * 2.5f) % TAU
