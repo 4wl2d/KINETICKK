@@ -269,6 +269,38 @@ class RunOmenTest {
     }
 
     @Test
+    fun crowdedSkysPackHuntersBringLargerPacksAsWellAsMoreOfThem() {
+        // Planned packs over the same calm rolls: their size range and their share of the events.
+        fun packs(rebirth: Int, omen: OmenId?): Pair<IntRange, Float> {
+            val state = startedRun(seed = 12, rebirth = rebirth, armed = false).apply {
+                forcePersonalityForTesting(null)
+                omen?.let { acceptRunOmen(it) }
+                elapsed = 120f
+            }
+            var smallest = Int.MAX_VALUE
+            var largest = 0
+            var count = 0
+            repeat(2_000) {
+                state.directorPhase = SpawnDirectorPhase.CALM.ordinal
+                state.planSpawnEvent()
+                if (state.pendingEventKind == SpawnEventKind.PACK.ordinal) {
+                    smallest = minOf(smallest, state.pendingEventSize)
+                    largest = maxOf(largest, state.pendingEventSize)
+                    count++
+                }
+            }
+            return (smallest..largest) to count / 2_000f
+        }
+        val plain = packs(rebirth = 0, omen = null)
+        val crowded = packs(rebirth = 0, omen = OmenId.CROWDED_SKY)
+        val packTier = packs(rebirth = 1, omen = null)
+        assertEquals(3..6, plain.first)
+        assertEquals(packTier.first, crowded.first, "Crowded Sky's packs are as large as the Pack Hunters tier's")
+        assertEquals(4..7, crowded.first)
+        assertTrue(crowded.second > plain.second, "and arrive more often: ${crowded.second} against ${plain.second}")
+    }
+
+    @Test
     fun theKeynoteOmenFillsTheKeynoteAndNeedsOne() {
         val state = startedRun(seed = 23, armed = false)
         val tag = assertNotNull(state.keynoteTag)

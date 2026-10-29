@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.EnemyDefinition
 import kinetickk.ball.content.api.EnemyHabitat
+import kinetickk.ball.content.api.PACK_HUNTERS_PACK_SIZE_BONUS
 import kinetickk.ball.content.api.RebirthMutator
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.model.Enemy
@@ -217,6 +218,14 @@ internal fun MutableGameState.keepPendingEventInHabitat() {
 }
 
 /**
+ * The tier's extra pack members, raised to Pack Hunters' when the run carries that mutator without the tier (an omen
+ * adds it), so the mutator's larger packs come with its more frequent ones ([rollEventKind]).
+ */
+private fun MutableGameState.rebirthPackBonus(): Int =
+    if (runMutatorActive(RebirthMutator.PACK_HUNTERS)) max(rebirthProfile.packSizeBonus, PACK_HUNTERS_PACK_SIZE_BONUS)
+    else rebirthProfile.packSizeBonus
+
+/**
  * Chooses the next event's kind and size; SINGLE and PACK also fix their type, promoting Swarmlings to a
  * SWARM. Every other kind leaves Swarmlings out, so an event's budget and cap unit always match its members.
  */
@@ -225,7 +234,7 @@ internal fun MutableGameState.planSpawnEvent() {
     var type = -1
     var size = when (kind) {
         SpawnEventKind.SINGLE -> 1
-        SpawnEventKind.PACK -> rangeInclusive(3, 6) + rebirthProfile.packSizeBonus + personalityPackBonus()
+        SpawnEventKind.PACK -> rangeInclusive(3, 6) + rebirthPackBonus() + personalityPackBonus()
         SpawnEventKind.FLANK -> 2 * rangeInclusive(2, 3)
         SpawnEventKind.SWARM -> rangeInclusive(6, 10)
         SpawnEventKind.WALL -> rangeInclusive(5, 7)
