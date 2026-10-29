@@ -1016,21 +1016,52 @@ private fun CodexIcon.interferes(): Boolean = when (this) {
 
 /**
  * A fact row: mono label (mute) on the left, cond value right-aligned after it, then its (!) if
- * any. A long value (two relic names) wraps between words instead of running out of the row.
+ * any. A long value (two relic names) wraps between words instead of running out of the row; a
+ * number keeps the word before it. When a word of the value would not fit beside the label, the
+ * value goes under the label (right-aligned), so no word is ever broken.
  */
 @Composable
 private fun CodexFactRow(fact: CodexFact, ui: Float) {
     val typography = codexMeasurer().typography
-    Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { }.testTag("codex-fact"), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        BasicText(fact.label.uppercase(), Modifier.alignByBaseline(), style = typography.monoStyle(11f * ui, color = Kk.Mute),
-            softWrap = false, maxLines = 1)
-        BasicText(fact.value.uppercase(), Modifier.weight(1f).alignByBaseline(),
-            style = typography.condStyle(21f * ui, tabular = true, lineHeightEm = 1f, color = Kk.Bone)
-                .copy(textAlign = androidx.compose.ui.text.style.TextAlign.End))
-        fact.info?.let { KkInfoButton(it, placement = KkTooltipPlacement.BELOW, textScale = ui) }
+    val label = fact.label.uppercase()
+    val value = codexGlueNumbers(fact.value.uppercase())
+    val labelStyle = typography.monoStyle(11f * ui, color = Kk.Mute)
+    val valueStyle = typography.condStyle(21f * ui, tabular = true, lineHeightEm = 1f, color = Kk.Bone)
+        .copy(textAlign = androidx.compose.ui.text.style.TextAlign.End)
+    BoxWithConstraints(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { }.testTag("codex-fact")) {
+        val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer(8)
+        val density = LocalDensity.current
+        val gap = 10.dp
+        val info = if (fact.info != null) CODEX_FACT_INFO_DP.dp + gap else 0.dp
+        val stacked = remember(label, value, labelStyle, valueStyle, maxWidth, info, density) {
+            with(density) {
+                val labelWidth = textMeasurer.measure(label, labelStyle, softWrap = false).size.width
+                val longestWord = value.split(' ').filter { it.isNotEmpty() }
+                    .maxOfOrNull { textMeasurer.measure(it, valueStyle, softWrap = false).size.width } ?: 0
+                labelWidth + gap.toPx() + longestWord + info.toPx() > maxWidth.toPx()
+            }
+        }
+        if (stacked) Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(gap)) {
+                BasicText(label, Modifier.weight(1f), style = labelStyle)
+                fact.info?.let { KkInfoButton(it, placement = KkTooltipPlacement.BELOW, textScale = ui) }
+            }
+            BasicText(value, Modifier.fillMaxWidth(), style = valueStyle)
+        } else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(gap)) {
+            BasicText(label, Modifier.alignByBaseline(), style = labelStyle, softWrap = false, maxLines = 1)
+            BasicText(value, Modifier.weight(1f).alignByBaseline(), style = valueStyle)
+            fact.info?.let { KkInfoButton(it, placement = KkTooltipPlacement.BELOW, textScale = ui) }
+        }
     }
 }
+
+/** The (!) button's width beside a fact (KkInfoButton). */
+private const val CODEX_FACT_INFO_DP = 24f
+
+/** [text] with each number bound to the word before it (a no-break space), so a line never starts with a lone number. */
+internal fun codexGlueNumbers(text: String): String = CodexNumberAfterWord.replace(text) { match -> match.groupValues[1] + "\u00A0" }
+
+private val CodexNumberAfterWord = Regex("(\\S) (?=[0-9])")
 
 /** Wide detail title: shrinks (30 to 18 px) until its longest word fits, never breaking a word. */
 @Composable

@@ -131,6 +131,42 @@ class CodexFitComposeTest {
      * signature line, twist, harmony and resonance texts wrap only between words in the side panel
      * and the phone sheet, in both languages at every text size.
      */
+    /**
+     * A locked enemy's facts (where it is found, the Rebirth that opens it) never break a word, whatever the label's
+     * length, and a number stays with the word before it, at every layout in both languages and every text size.
+     */
+    @Test fun factValuesKeepEveryWordWholeAndANumberWithItsWord() {
+        for ((width, height) in sizes) for (language in AppLanguage.entries) for (scale in listOf(1.25f, 1.75f)) {
+            codex(width, height, language, scale) {
+                val where = "${width}x$height ${language.code} @$scale"
+                onNodeWithTag("codex-tab-1").performSemanticsAction(SemanticsActions.OnClick)
+                waitForIdle()
+                onNodeWithTag("codex-category-4").performSemanticsAction(SemanticsActions.OnClick)
+                waitForIdle()
+                onNodeWithTag("codex-grid").performScrollToKey("enemy/REFLECTOR")
+                waitForIdle()
+                onNodeWithTag("codex-slot-enemy/REFLECTOR").performSemanticsAction(SemanticsActions.OnClick)
+                waitForIdle()
+                val texts = onAllNodes(hasAnyAncestor(hasTestTag("codex-fact")), useUnmergedTree = true).fetchSemanticsNodes()
+                    .filter { SemanticsActions.GetTextLayoutResult in it.config }
+                assertTrue(texts.size >= 4, "the locked Reflector's facts are shown ($where)")
+                texts.forEach { node ->
+                    val layouts = mutableListOf<TextLayoutResult>()
+                    node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(layouts)
+                    val layout = layouts.single()
+                    val shown = layout.layoutInput.text.text
+                    for (line in 0 until layout.lineCount - 1) {
+                        val end = layout.getLineEnd(line)
+                        assertFalse(end in 1 until shown.length && shown[end - 1].isLetterOrDigit() && shown[end].isLetterOrDigit(),
+                            "'$shown' breaks inside a word after '${shown.substring(0, end)}' ($where)")
+                        val next = shown.substring(layout.getLineStart(line + 1)).trimStart()
+                        assertFalse(next.firstOrNull()?.isDigit() == true, "'$shown' starts a line with a lone number ($where)")
+                    }
+                }
+            }
+        }
+    }
+
     @Test fun weaponSheetsWrapOnlyBetweenWords() {
         val shipped = kinetickk.ball.content.impl.createContentCatalog().uiCatalog()
         val model = CodexRenderModel(immutableSetOf(), CodexRunStacks(), shipped.items)
