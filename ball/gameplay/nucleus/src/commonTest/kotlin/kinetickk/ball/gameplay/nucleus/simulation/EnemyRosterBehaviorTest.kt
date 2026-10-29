@@ -498,14 +498,28 @@ class EnemyRosterBehaviorTest {
     }
 
     @Test
-    fun theHeraldPaysOutLikeAnEliteAndStaysPutPastTheLeash() {
+    fun theHeraldReturnsFromFarTravelIntactAndPaysOutLikeAnElite() {
         val state = quietState()
         val herald = state.spawn(EnemyType.HERALD, 9_000f, 0f)
+        herald.hp = herald.maxHp * 0.5f
+        val integrity = herald.hp
+        val kills = state.eliteKills
+        val matter = state.runMatter
         state.updateEnemies(FIXED)
         assertTrue(herald in state.enemies)
-        assertEquals(9_000f, herald.x, 50f, "The Herald is never relocated")
+        assertTrue(state.enemies.single() === herald, "The live Herald returns without being replaced")
+        val dx = herald.x - state.coreX
+        val dy = herald.y - state.coreY
+        val leash = maxOf(state.screenWidth, state.screenHeight) * 1.15f + 360f
+        assertTrue(sqrt(dx * dx + dy * dy) < leash, "The Herald returns to spawn distance")
+        assertTrue(abs(dx) > state.screenWidth * 0.5f || abs(dy) > state.screenHeight * 0.5f, "The Herald returns outside the viewport")
+        assertEquals(integrity, herald.hp, "Returning neither heals nor damages the Herald")
+        assertEquals(herald.x, herald.previousX, "The teleport must not sweep across the world")
+        assertEquals(herald.y, herald.previousY)
+        assertEquals(kills, state.eliteKills, "Returning a live Herald does not count as a kill")
+        assertEquals(matter, state.runMatter)
+        assertTrue(state.pickups.isEmpty(), "The reward still requires a kill")
 
-        val kills = state.eliteKills
         state.onEnemyKilled(herald)
         assertEquals(kills + 1, state.eliteKills)
         assertTrue(state.pickups.any { it.type == PickupType.KEY })
