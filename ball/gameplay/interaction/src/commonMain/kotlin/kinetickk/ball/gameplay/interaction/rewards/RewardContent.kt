@@ -60,6 +60,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.isUnspecified
@@ -1006,6 +1007,15 @@ private fun RewardRuleLineText(
  */
 internal fun rewardTextTone(color: Color): Color = kkLiftContrast(color, Kk.Ink3, KK_CARD_LABEL_CONTRAST)
 
+/**
+ * A card's headline value hue: the card's [accent], or bone when the accent is a grey dimmer than bone (Mono's shield
+ * and heat). A grey carries no type, only emphasis, and the headline never reads dimmer than the bone lines under it.
+ */
+internal fun rewardValueTone(accent: Color): Color {
+    val grey = maxOf(accent.red, accent.green, accent.blue) - minOf(accent.red, accent.green, accent.blue) < 0.03f
+    return if (grey && accent.luminance() < Kk.Bone.luminance()) Kk.Bone else accent
+}
+
 /** Test tag of a card's cost block (its threat stripe is drawn on purpose beside the text). */
 internal const val RewardCostTag = "kinetickk.gameplay.reward-cost"
 
@@ -1176,7 +1186,7 @@ private fun RewardStatLine(
     val afterColor = when {
         struck -> roles.threat.copy(alpha = 0.8f)
         !change.improved -> roles.threat
-        change.before.isNotEmpty() || first -> accent
+        change.before.isNotEmpty() || first -> rewardValueTone(accent)
         else -> Kk.Bone
     }
     val strike: (TextStyle) -> TextStyle = { if (struck) it.copy(textDecoration = TextDecoration.LineThrough) else it }

@@ -15,9 +15,11 @@ import kinetickk.ball.gameplay.nucleus.render.DimensionProjection
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.RewardPreview
 import kinetickk.ball.gameplay.nucleus.render.RewardStatChange
+import androidx.compose.ui.graphics.luminance
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
+import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkCardMaterial
 import kinetickk.foundation.design.KkCardOrnament
 import kinetickk.foundation.design.KkFillKind
@@ -148,6 +150,22 @@ class RewardDimensionTest {
         val card = offer(WorldLayer.NADIR, ChoiceType.BOON, listOf(cinder), previews = listOf(preview)).rewardPresentation().cards.single()
         assertEquals(listOf(preview.changes[0].presentation(AppLanguage.English)), card.changes)
         assertEquals(listOf("Maximum integrity −20"), card.liabilities)
+    }
+
+    /**
+     * A boon card's headline value keeps the kind's hue where the palette has one; on Mono, whose shield and heat are mid
+     * greys, it reads in bone, never dimmer than the secondary value lines (bone) under it.
+     */
+    @Test
+    fun aBoonsHeadlineValueIsNeverDimmerThanItsSecondaryLines() {
+        for (kind in RunBoonKind.entries) {
+            val mono = rewardValueTone(rewardTextTone(kind.hue(KkRolePalette.Mono)))
+            assertTrue(mono.luminance() >= Kk.Bone.luminance() - 1e-4f, "$kind's Mono headline $mono is dimmer than bone")
+            val default = rewardTextTone(kind.hue(KkRolePalette.Default))
+            assertEquals(default, rewardValueTone(default), "$kind keeps its hue on the default palette")
+        }
+        // A grey brighter than bone (Mono's white volt) stays itself.
+        assertEquals(KkRolePalette.Mono.you, rewardValueTone(KkRolePalette.Mono.you))
     }
 
     @Test
