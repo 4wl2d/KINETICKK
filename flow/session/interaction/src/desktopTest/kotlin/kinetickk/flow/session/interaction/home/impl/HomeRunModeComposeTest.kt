@@ -11,6 +11,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PixelMap
 import androidx.compose.ui.graphics.toPixelMap
@@ -33,6 +34,7 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.v2.runComposeUiTest
+import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.flow.session.interaction.ShotCatalog
@@ -49,6 +51,7 @@ import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.test.fail
 
 /** The Baby mode toggle on the real Home: an announced switch that asks Session for the other mode and shows the mode. */
 @OptIn(ExperimentalTestApi::class)
@@ -138,6 +141,74 @@ class HomeRunModeComposeTest {
     }
 
     @Test
+    fun aTapOnTheOpenTooltipOverTheMenuOnALandscapePhoneOnlyClosesIt() =
+        assertATapOnTheOpenTooltipPressesNoRowUnderIt(844, 390, AppLanguage.Russian)
+
+    @Test
+    fun aTapOnTheOpenTooltipOverTheMenuOnADesktopOnlyClosesIt() =
+        assertATapOnTheOpenTooltipPressesNoRowUnderIt(1440, 810, AppLanguage.English)
+
+    /**
+     * The tapped toggle's slip opens below it, over the right part of the menu rows. A tap on the slip closes it and
+     * presses nothing hidden under it; with the slip gone, a tap on the same point presses that row.
+     */
+    private fun assertATapOnTheOpenTooltipPressesNoRowUnderIt(widthDp: Int, heightDp: Int, language: AppLanguage) =
+        runDesktopComposeUiTest(widthDp, heightDp) {
+            mainClock.autoAdvance = false
+            var runMode by mutableStateOf(RunMode.STANDARD)
+            val outputs = mutableListOf<HomeOutput>()
+            val feature = DefaultHomeFeature(ShotProfile(), ShotCatalog, RunModeSilentAudio)
+            setContent {
+                CompositionLocalProvider(LocalAppLanguage provides language) {
+                    Box(Modifier.requiredSize(widthDp.dp, heightDp.dp)) {
+                        feature.Content(inputEnabled = true, runMode = runMode) { output ->
+                            outputs += output
+                            if (output is HomeOutput.SelectRunMode) runMode = output.mode
+                        }
+                    }
+                }
+            }
+            mainClock.advanceTimeBy(300)
+            val where = "${widthDp}x$heightDp $language"
+            val d = density.density
+            val layout = homeLayoutGeometry(widthDp * d, heightDp * d, d)
+            val home = onNodeWithTag(HOME_TAG)
+            fun frame(): PixelMap {
+                mainClock.advanceTimeByFrame()
+                return home.captureToImage().toPixelMap()
+            }
+            // Settings, the bottom row and clear of the slip, is the selected one: the rows under the slip hold still.
+            onRoot().performKeyInput { pressKey(Key.DirectionUp) }
+            mainClock.advanceTimeBy(1000)
+            val closed = frame()
+            onNodeWithTag(HOME_RUN_MODE_TAG).performTouchInput { click(center) }
+            mainClock.advanceTimeByFrame()
+            val open = frame()
+            assertEquals(listOf<HomeOutput>(HomeOutput.SelectRunMode(RunMode.EASY)), outputs, where)
+            // A point of a menu row that the slip covers: bone around it only once the tooltip is open.
+            val (row, point) = layout.actions
+                .filter { it.target != HomeLayoutTarget.SETTINGS }
+                .firstNotNullOfOrNull { action -> slipPatch(closed, open, action.bounds)?.let { action.target to it } }
+                ?: fail("$where: the open tooltip covers no menu row")
+
+            home.performTouchInput { click(point) }
+            mainClock.advanceTimeByFrame()
+            assertEquals(listOf<HomeOutput>(HomeOutput.SelectRunMode(RunMode.EASY)), outputs, "$where: the tap on the slip over $row")
+            assertTrue(!frame().patchNear(point, Kk.Bone), "$where: the tap on the slip closes the tooltip")
+
+            home.performTouchInput { click(point) }
+            mainClock.advanceTimeByFrame()
+            val pressed = when (row) {
+                HomeLayoutTarget.START -> HomeOutput.StartRun
+                HomeLayoutTarget.WORKSHOP -> HomeOutput.OpenWorkshop
+                HomeLayoutTarget.REBIRTH -> HomeOutput.OpenRebirth
+                HomeLayoutTarget.CODEX -> HomeOutput.OpenCodex
+                HomeLayoutTarget.SETTINGS -> HomeOutput.OpenSettings
+            }
+            assertEquals(listOf(HomeOutput.SelectRunMode(RunMode.EASY), pressed), outputs, "$where: with the slip gone, $row is pressed")
+        }
+
+    @Test
     fun aHomeWithoutInputOffersNoToggle() = runComposeUiTest {
         mainClock.autoAdvance = false
         val outputs = mutableListOf<HomeOutput>()
@@ -165,6 +236,22 @@ private fun PixelMap.near(at: Offset, color: Color, tolerance: Float = 3f / 255f
 }
 
 private operator fun PixelMap.get(at: Offset): Color = this[at.x.toInt(), at.y.toInt()]
+
+/** Every pixel of the 7x7 patch around [at] is [color]. */
+private fun PixelMap.patchNear(at: Offset, color: Color): Boolean =
+    (-3..3).all { dx -> (-3..3).all { dy -> near(Offset(at.x + dx, at.y + dy), color) } }
+
+/** The first patch inside [bounds] (4 px in) where no pixel is bone in [before] and every pixel is in [after]. */
+private fun slipPatch(before: PixelMap, after: PixelMap, bounds: Rect): Offset? {
+    for (y in bounds.top.toInt() + 4 until bounds.bottom.toInt() - 4 step 2) {
+        for (x in bounds.left.toInt() + 4 until bounds.right.toInt() - 4 step 2) {
+            val at = Offset(x.toFloat(), y.toFloat())
+            val untouched = (-3..3).all { dx -> (-3..3).all { dy -> !before.near(Offset(at.x + dx, at.y + dy), Kk.Bone) } }
+            if (untouched && after.patchNear(at, Kk.Bone)) return at
+        }
+    }
+    return null
+}
 
 /** Pixels of [color] inside the square of [radius] around [center]. */
 private fun PixelMap.count(center: Offset, radius: Float, color: Color): Int {

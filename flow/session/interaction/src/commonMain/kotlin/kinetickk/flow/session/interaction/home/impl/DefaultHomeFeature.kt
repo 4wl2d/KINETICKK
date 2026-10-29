@@ -146,17 +146,31 @@ class DefaultHomeFeature(
             }
         }
 
+        val layout = remember(viewportValue) {
+            homeLayoutGeometry(
+                viewportValue.width,
+                viewportValue.height,
+                viewportValue.density,
+                viewportValue.quitAvailable,
+            )
+        }
+
         val currentTapHandlerValue by rememberUpdatedState<(Offset) -> Unit> { position ->
             if (inputEnabled) {
                 // A tap on the toggle asks Session for the other mode and leaves its tooltip open; any other tap closes it.
                 val toggle = resolveHomeRunModePress(viewportValue, position.x, position.y)
+                // The slip covers menu rows: a tap on it only closes it and presses nothing hidden under it.
+                val onTip = !toggle &&
+                    homeShowsRunModeTip(layout, openInfoValue, activeInfoValue, runModeActiveValue, runModeTipValue) &&
+                    position in homeRunModeTipRect(textMeasurer, layout, viewportValue)
                 runModeTipValue = toggle
-                val info = if (toggle) null else resolveHomeInfoPress(viewportValue, position.x, position.y)
+                val info = if (toggle || onTip) null else resolveHomeInfoPress(viewportValue, position.x, position.y)
                 when {
                     toggle -> {
                         openInfoValue = null
                         dispatch(HomeAction.SelectRunMode(runMode.toggled()))
                     }
+                    onTip -> Unit
                     info != null -> openInfoValue = if (openInfoValue == info) null else info
                     else -> {
                         openInfoValue = null
@@ -181,14 +195,6 @@ class DefaultHomeFeature(
             }
         }
 
-        val layout = remember(viewportValue) {
-            homeLayoutGeometry(
-                viewportValue.width,
-                viewportValue.height,
-                viewportValue.density,
-                viewportValue.quitAvailable,
-            )
-        }
         Box(
             modifier = Modifier
                 .fillMaxSize()

@@ -64,8 +64,10 @@ import kinetickk.foundation.design.kkLerp
 import kinetickk.foundation.design.kkMix
 import kinetickk.foundation.design.kkStampSize
 import kinetickk.foundation.design.kkStroke
+import kinetickk.foundation.design.kkTooltipRect
 import kinetickk.foundation.design.labelStyle
 import kinetickk.foundation.design.measureKkText
+import kinetickk.foundation.design.measureKkTooltip
 import kinetickk.foundation.design.monoStyle
 import kinetickk.foundation.design.wideStyle
 import kotlin.math.PI
@@ -704,9 +706,25 @@ internal fun DrawScope.drawHome(
         }
         val placement = if (layout.mode == HomeLayoutMode.COMPACT_PORTRAIT) KkTooltipPlacement.ABOVE else KkTooltipPlacement.ABOVE_END
         drawKkTooltip(text, info.bounds, content, placement)
-    } else if (state.runModeActive || state.runModeTip) {
+    } else if (homeShowsRunModeTip(layout, state.openInfo, state.activeInfo, state.runModeActive, state.runModeTip)) {
         drawKkTooltip(text, layout.runModeToggle.bounds, language.text(SessionRedesignText.BABY_MODE_INFO), KkTooltipPlacement.BELOW)
     }
+}
+
+/** Baby mode's tooltip shows while its toggle is hovered, focused or was just tapped, unless a (!) tooltip is drawn. */
+internal fun homeShowsRunModeTip(
+    layout: HomeLayoutGeometry,
+    openInfo: HomeInfoTarget?,
+    activeInfo: HomeInfoTarget?,
+    runModeActive: Boolean,
+    runModeTip: Boolean,
+): Boolean = (runModeActive || runModeTip) && (openInfo ?: activeInfo)?.let(layout::info) == null
+
+/** The rect [drawHome] draws Baby mode's tooltip slip in: below the toggle, clamped into the [viewport]. */
+internal fun homeRunModeTipRect(text: CanvasTextMeasurer, layout: HomeLayoutGeometry, viewport: HomeViewport): Rect {
+    val body = measureKkTooltip(text, text.language.text(SessionRedesignText.BABY_MODE_INFO), viewport.density)
+    val within = Rect(0f, 0f, viewport.width, viewport.height)
+    return kkTooltipRect(layout.runModeToggle.bounds, body.kkBoxHeight, viewport.density, within, KkTooltipPlacement.BELOW)
 }
 
 private fun DrawScope.displaySize(text: CanvasTextMeasurer, px: Float): Float = max(1f, px / density / text.scale)
