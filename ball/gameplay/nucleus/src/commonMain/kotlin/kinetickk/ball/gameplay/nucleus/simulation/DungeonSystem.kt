@@ -60,6 +60,9 @@ internal fun MutableGameState.updateStructures(delta: Float) {
     val policy = content.structures
     if (!policy.enabled || phase != GamePhase.RUNNING) return
     if (bossSpawned) {
+        // The dungeon collapses on its own condition: a window that moved to another chunk earlier in this step has
+        // already rebuilt itself empty, so its flag no longer says whether the collapse ran.
+        dungeon?.let { dropDungeon(it, announce = false) }
         if (!structureField.bossCollapsed) collapseStructuresForArchitect()
         return
     }
@@ -95,11 +98,10 @@ internal fun MutableGameState.collapseDungeonForLayerChange() {
 }
 
 /**
- * The step after the Architect arrives: the dungeon collapses silently, every structure of the window bursts at its
- * centre and the window empties (the footprints stay clearings).
+ * The step after the Architect arrives, once the dungeon collapsed silently: every structure of the window bursts at
+ * its centre and the window empties (the footprints stay clearings).
  */
 private fun MutableGameState.collapseStructuresForArchitect() {
-    dungeon?.let { dropDungeon(it, announce = false) }
     val structures = structureField.structures
     for (index in structures.indices) {
         val structure = structures[index]

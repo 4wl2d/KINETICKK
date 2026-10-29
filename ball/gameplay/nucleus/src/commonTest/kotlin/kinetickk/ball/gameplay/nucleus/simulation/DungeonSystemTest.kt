@@ -24,6 +24,7 @@ import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.render.WallKind
 import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -512,6 +513,50 @@ class DungeonSystemTest {
         run.updateStructures(step)
         assertNull(run.dungeon)
         assertTrue(run.enemies.isEmpty())
+    }
+
+    @Test
+    fun theArchitectCollapsesTheDungeonWhenTheWindowMovesInTheStepAfterItArrives() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        run.quietArenaForTesting()
+        dungeon.enterRoom(1)
+        assertEquals(1, run.dungeon?.engagedRoom)
+        // The Core rests half a unit before a chunk border that crosses the hall, clear of its walls.
+        val hall = dungeon.template.rooms[1]
+        val (ax, ay) = dungeon.world(hall.minX + 100f, hall.minY + 100f)
+        val (bx, by) = dungeon.world(hall.maxX - 100f, hall.maxY - 100f)
+        val chunk = run.content.obstacles.chunkSize.toDouble()
+        fun nextBorder(low: Float, origin: Double) = ((floor((origin + low) / chunk) + 1.0) * chunk - origin).toFloat()
+        val borderX = nextBorder(minOf(ax, bx), run.worldOriginX)
+        val borderY = nextBorder(minOf(ay, by), run.worldOriginY)
+        val acrossX = borderX < maxOf(ax, bx)
+        require(acrossX || borderY < maxOf(ay, by)) { "a chunk border crosses the hall" }
+        dungeon.moveCore(if (acrossX) (borderX - 0.5f) to (ay + by) / 2f else (ax + bx) / 2f to (borderY - 0.5f))
+        run.setVelocityForTesting(0f, 0f)
+        run.updateObstacles()
+        val window = run.obstacleField.centerChunkX to run.obstacleField.centerChunkY
+        val placed = dungeon.structure
+
+        // The Architect arrives at the end of a step; in the next one the Core crosses the border, so the window
+        // refresh runs before the dungeon step.
+        run.elapsed = run.content.tempo.bossAtSeconds - step * 0.5f
+        run.simulateStep(step)
+        assertTrue(run.bossSpawned)
+        if (acrossX) run.setVelocityForTesting(240f, 0f) else run.setVelocityForTesting(0f, 240f)
+        run.simulateStep(step)
+        assertTrue(window != run.obstacleField.centerChunkX to run.obstacleField.centerChunkY, "the window moved")
+        assertEquals(1, roomAt(dungeon.template, placed.rotation, placed.x, placed.y, run.coreX, run.coreY, 0f), "the Core is still in the hall")
+
+        assertNull(run.dungeon, "the dungeon collapses")
+        assertTrue(run.isSpent(dungeon.placement.id), "the fought structure is spent")
+        assertFalse(run.structureEngagementActive())
+        assertNull(run.structureTrialProjection(), "no dungeon panel during the Architect")
+        assertTrue(run.structureField.bossCollapsed && run.structureField.structures.isEmpty())
+        repeat(120) { run.simulateStep(step) }
+        assertNull(run.dungeon)
+        assertFalse(run.engagementActive(), "nothing holds an engagement into the Architect's fight")
+        assertNull(run.trialProjection(null))
     }
 
     @Test
