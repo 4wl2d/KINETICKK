@@ -50,6 +50,7 @@ import kinetickk.foundation.design.drawKkIcon
 import kinetickk.foundation.design.drawKkPips
 import kinetickk.foundation.design.drawKkText
 import kinetickk.foundation.design.drawKkThreatHatch
+import kinetickk.foundation.design.kkBoxHeight
 import kinetickk.foundation.design.kkKeyCapStyle
 import kinetickk.foundation.design.kkStroke
 import kinetickk.foundation.design.labelStyle
@@ -104,12 +105,26 @@ private fun chipGap(height: Float) = height * 0.22f
 private fun pipWidth(height: Float) = height * 0.3f
 private fun ringPitch(height: Float) = height * 0.34f
 
-/** Width in px of [chip] at [style]. */
-internal fun rewardChipWidth(measurer: CanvasTextMeasurer, chip: RewardChip, style: RewardChipStyle, density: Float): Float {
+/**
+ * Extra room after the label: the plate's right edge slants in toward its bottom (by [chipCut]), and a large label's
+ * last letter reaches low enough to meet it.
+ */
+private fun chipSlantRoom(height: Float) = height * 0.12f
+
+/** The plate's slant: its top edge starts this far in from the left, its bottom edge ends this far in from the right. */
+private fun chipCut(height: Float) = height * 0.27f
+
+/**
+ * Width in px of [chip] at [style]; with [lines] 2, of its label broken at its middle space ([chipLabelLines]) into two
+ * lines (a first chip too wide for its row, [RewardChipFlow]).
+ */
+internal fun rewardChipWidth(measurer: CanvasTextMeasurer, chip: RewardChip, style: RewardChipStyle, density: Float, lines: Int = 1): Float {
     val height = style.heightDp * density
-    val label = measureKkText(measurer, chip.label, chipLabelStyle(measurer, style), uppercase = true)
+    val labelWidth = if (lines == 2) chipLabelLines(chip.label).maxOf { line ->
+        measureKkText(measurer, line, chipLabelStyle(measurer, style), uppercase = true).size.width
+    } else measureKkText(measurer, chip.label, chipLabelStyle(measurer, style), uppercase = true).size.width
     val glyphs = chip.glyphCount()
-    var width = chipPad(height) * 2f + label.size.width
+    var width = chipPad(height) * 2f + chipSlantRoom(height) + labelWidth
     if (glyphs > 0) width += glyphs * chipGlyph(height) + (glyphs - 1) * height * 0.04f + chipGap(height)
     val marks = chip.trailingMarks()
     if (marks > 0) {
@@ -121,6 +136,16 @@ internal fun rewardChipWidth(measurer: CanvasTextMeasurer, chip: RewardChip, sty
     chip.keyCap?.let { key -> width += chipGap(height) + keyCapWidth(measureKeyCap(measurer, key, style), height) - chipPad(height) * 0.5f }
     return width
 }
+
+/** [label] broken at the space nearest its middle into two lines; one line when it has no space. */
+internal fun chipLabelLines(label: String): List<String> {
+    val middle = label.length / 2
+    val split = label.indices.filter { label[it] == ' ' }.minByOrNull { kotlin.math.abs(it - middle) } ?: return listOf(label)
+    return listOf(label.substring(0, split), label.substring(split + 1))
+}
+
+/** Whether [chip] may break its label into two lines when it is too wide for its row: a label with a space and no marks after it. */
+internal fun RewardChip.wraps(): Boolean = ' ' in label && trailingMarks() == 0 && keyCap == null
 
 /** An ACTIVE chip's key cap label: the HUD key cap's mono face at the chip's size. */
 private fun measureKeyCap(measurer: CanvasTextMeasurer, key: String, style: RewardChipStyle) =
@@ -203,11 +228,15 @@ internal fun DrawScope.drawRewardChip(
     width: Float,
     style: RewardChipStyle,
     paths: KkPathCache,
+    lines: Int = 1,
+    rowGap: Float = 0f,
 ) {
     val roles = measurer.roles
-    val height = style.heightDp * density
+    val row = style.heightDp * density
+    // A two-line chip spans two rows and the gap between them; its padding and marks keep the one-row sizes.
+    val height = if (lines == 2) row * 2f + rowGap else row
     val rect = Rect(topLeft, Size(width, height))
-    val plate = paths.slab(0, rect, height * 0.27f)
+    val plate = paths.slab(0, rect, chipCut(row))
     val ink = chip.ink(roles)
     if (ink.face.alpha > 0f) drawPath(plate, ink.face)
     if (chip.kind == RewardChipKind.REACTION && chip.elements.size == 2) {
@@ -224,13 +253,13 @@ internal fun DrawScope.drawRewardChip(
     if (chip.kind == RewardChipKind.RISK && roles.hatchThreats) drawKkThreatHatch(plate, roles, Kk.Ink)
     if (ink.border.alpha > 0f) {
         val inset = density * 0.75f
-        val outline = paths.slab(1, rect.left + inset, rect.top + inset, rect.right - inset, rect.bottom - inset, height * 0.27f)
+        val outline = paths.slab(1, rect.left + inset, rect.top + inset, rect.right - inset, rect.bottom - inset, chipCut(row))
         val stroke = if (chip.kind == RewardChipKind.CONCORD && !chip.discovered) ChipStrokes.dashed(1.5f * density, density) else kkStroke(1.5f * density)
         drawPath(outline, ink.border, style = stroke)
     }
     val cy = rect.center.y
-    var x = rect.left + chipPad(height)
-    val glyph = chipGlyph(height)
+    var x = rect.left + chipPad(row)
+    val glyph = chipGlyph(row)
     repeat(chip.glyphCount()) { index ->
         val center = Offset(x + glyph * 0.5f, cy)
         val rune = chip.rune
@@ -262,9 +291,20 @@ internal fun DrawScope.drawRewardChip(
                 drawKkIcon(icon, center, glyph, color)
             }
         }
-        x += glyph + height * 0.04f
+        x += glyph + row * 0.04f
     }
-    if (chip.glyphCount() > 0) x += chipGap(height) - height * 0.04f
+    if (chip.glyphCount() > 0) x += chipGap(row) - row * 0.04f
+    if (lines == 2) {
+        // Two lines centred on the chip, each from the same start.
+        val labelStyle = chipLabelStyle(measurer, style)
+        val parts = chipLabelLines(chip.label)
+        val first = measureKkText(measurer, parts[0], labelStyle, uppercase = true)
+        val second = measureKkText(measurer, parts.getOrElse(1) { "" }, labelStyle, uppercase = true)
+        val lead = (first.kkBoxHeight + second.kkBoxHeight) * 0.5f
+        drawKkText(first, x, cy - lead, ink.text, KkAlign.START, KkVAlign.TOP)
+        drawKkText(second, x, cy - lead + first.kkBoxHeight, ink.text, KkAlign.START, KkVAlign.TOP)
+        return
+    }
     val label = measureKkText(measurer, chip.label, chipLabelStyle(measurer, style), uppercase = true)
     drawKkText(label, x, cy, ink.text, KkAlign.START, KkVAlign.CENTER)
     x += label.size.width
@@ -307,8 +347,10 @@ internal fun DrawScope.drawRewardChip(
 /**
  * Chips laid out left to right in up to [maxRows] rows of the available width: a chip that does
  * not fit is left out and the next one tried, so earlier chips (the more important) always show.
- * The first chip (an active's slot, a relic's Risk) is never left out: wider than the whole row
- * (a long key or a large text size), it is drawn scaled down to the row's width.
+ * The first chip (an active's slot, a relic's Risk, an omen's mutator) is never left out: wider than
+ * the whole row (a long name, a long key or a large text size), it breaks its label into two lines
+ * over two rows where it may ([wraps]) and the flow has them, and is drawn scaled down to the row's
+ * width only as far as it still needs.
  */
 @Composable
 internal fun RewardChipFlow(
@@ -328,6 +370,11 @@ internal fun RewardChipFlow(
     val widths = remember(chips, measurer, density, style, roles) {
         FloatArray(chips.size) { rewardChipWidth(measurer, chips[it], style, density) }
     }
+    // The first chip's width with its label on two lines (0 when it cannot break).
+    val wrapped = remember(chips, measurer, density, style, roles) {
+        if (chips.first().wraps()) rewardChipWidth(measurer, chips.first(), style, density, lines = 2) else 0f
+    }
+    val rowGap = gapDp * density
     Layout(
         content = {
             chips.forEachIndexed { index, chip -> key(index, chip) {
@@ -342,10 +389,16 @@ internal fun RewardChipFlow(
                             }
                         }
                         .drawBehind {
-                            val natural = widths[index]
+                            // A first chip laid out over two rows (taller for its width than one row) draws its label on two lines.
+                            val oneRow = style.heightDp * density / widths[index]
+                            val lines = if (index == 0 && wrapped > 0f && size.height / size.width > oneRow * 1.4f) 2 else 1
+                            val natural = if (lines == 2) wrapped else widths[index]
                             val fit = size.width / natural
-                            if (fit < 0.999f) scale(fit, Offset.Zero) { drawRewardChip(measurer, chip, Offset.Zero, natural, style, paths) }
-                            else drawRewardChip(measurer, chip, Offset.Zero, size.width, style, paths)
+                            if (fit < 0.999f) {
+                                scale(fit, Offset.Zero) { drawRewardChip(measurer, chip, Offset.Zero, natural, style, paths, lines, rowGap) }
+                            } else {
+                                drawRewardChip(measurer, chip, Offset.Zero, size.width, style, paths, lines, rowGap)
+                            }
                         },
                 )
             } }
@@ -354,6 +407,21 @@ internal fun RewardChipFlow(
     ) { measurables, constraints ->
         val gap = (gapDp * density).toInt()
         val maxWidth = if (constraints.hasBoundedWidth) constraints.maxWidth else Int.MAX_VALUE
+        val rowPx = (style.heightDp * density).roundToInt()
+        val rowsGiven = if (constraints.hasBoundedHeight) min(maxRows, ((constraints.maxHeight + gap) / (rowPx + gap)).coerceAtLeast(1)) else maxRows
+        // Too wide for its row, a first chip that can break takes two rows (and the flow to itself) when it has them.
+        if (wrapped > 0f && widths[0].roundToInt() > maxWidth && rowsGiven >= 2) {
+            val tall = rowPx * 2 + gap
+            val fitted = wrapped.roundToInt() > maxWidth
+            // Fixed size: the chip's own (one-row) size must not hold it to one row's height.
+            val first = measurables[0].measure(
+                if (fitted) androidx.compose.ui.unit.Constraints.fixed(maxWidth, (tall * maxWidth / wrapped).toInt())
+                else androidx.compose.ui.unit.Constraints.fixed(wrapped.roundToInt(), tall),
+            )
+            return@Layout layout(first.width.coerceAtLeast(constraints.minWidth), first.height.coerceIn(constraints.minHeight, constraints.maxHeight)) {
+                first.place(0, 0)
+            }
+        }
         val placeables = measurables.mapIndexed { index, measurable ->
             val natural = widths[index]
             if (index == 0 && natural.roundToInt() > maxWidth) {

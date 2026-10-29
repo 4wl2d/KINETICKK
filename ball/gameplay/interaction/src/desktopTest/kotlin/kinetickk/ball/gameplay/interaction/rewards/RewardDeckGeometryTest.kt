@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.interaction.rewards
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
@@ -15,22 +16,26 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
+import kinetickk.ball.content.api.OmenId
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
  * Where reward cards sit: a decline card's plate and text start clear of its slanted dashed outline at every card size,
- * and no card of a deal, resting or lifted, rides over a card of another row.
+ * a mutator chip too wide for its row breaks into two lines, and no card of a deal, resting or lifted, rides over a card
+ * of another row.
  */
 @OptIn(ExperimentalTestApi::class)
 class RewardDeckGeometryTest {
@@ -68,6 +73,42 @@ class RewardDeckGeometryTest {
                 assertTrue(texts.size >= 2, "the decline's title and line are shown ($where)")
                 texts.forEach { node -> clear(node.boundsInRoot, "'${node.config[SemanticsProperties.Text].joinToString()}'") }
             }
+        }
+    }
+
+    /**
+     * A phone omen card's mutator chip too wide for the column beside the plate breaks its name into two lines over the
+     * column's two rows instead of shrinking to an unreadable size, at the default and the largest text size.
+     */
+    @Test
+    fun aMutatorChipTooWideForItsRowBreaksIntoTwoLinesInsteadOfShrinking() {
+        val language = AppLanguage.Russian
+        val omen = rewardFixtureContent.variety.omens.definitions[OmenId.FAULT_LINE.ordinal]
+        val card = rewardFixtureModel(choiceType = ChoiceType.OMEN,
+            choices = listOf(ChoiceOption(ChoiceType.OMEN, omen.name, omen.upside, "OMEN", omenId = OmenId.FAULT_LINE)), language = language)
+            .rewardPresentation(language).cards.single()
+        val chip = card.chips.first { it.kind == RewardChipKind.MUTATOR }
+        assertEquals("Расколотое пространство", chip.label)
+        val style = RewardChipCompact
+        val gap = 4f
+        // The phone gallery card's column beside its plate: 105 dp wide, the plate's 46 u + 6 dp tall.
+        val column = 105
+        val height = (style.heightDp * 2f + gap + 6f).toInt()
+        for (textScale in listOf(1.25f, 1.75f)) runDesktopComposeUiTest(200, 100) {
+            setContent {
+                CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides language) {
+                    Box(Modifier.requiredSize(column.dp, height.dp)) {
+                        RewardChipFlow(listOf(chip), style, overlayUiTextScale(textScale), Modifier.fillMaxWidth(), maxRows = 2, gapDp = gap)
+                    }
+                }
+            }
+            waitForIdle()
+            val drawn = onNode(SemanticsMatcher.expectValue(SemanticsProperties.Text, listOf(AnnotatedString(chip.spoken))), useUnmergedTree = true)
+                .fetchSemanticsNode().boundsInRoot
+            // Two rows tall at a scale the name still reads at; one row scaled down to the column would be far smaller.
+            val scale = drawn.height / (style.heightDp * 2f + gap)
+            assertTrue(scale >= 0.7f, "the chip spans two rows at $scale of its size (x$textScale)")
+            assertTrue(drawn.width <= column + 0.5f, "the chip stays in its column (x$textScale)")
         }
     }
 
