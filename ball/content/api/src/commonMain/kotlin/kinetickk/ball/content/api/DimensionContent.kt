@@ -109,7 +109,10 @@ data class DimensionDefinition(
     val features: LayerFeatures = LayerFeatures.DIMENSION,
     /** The share of its spawn integrity this layer's objective boss arrives with. */
     val bossIntegrityShare: Float = 1f,
-    /** The share of its damage (shots, contact and blasts) this layer's objective boss deals. */
+    /**
+     * The share of its shot and contact damage this layer's objective boss deals. The ember bursts it queues are
+     * not scaled: they detonate at full damage, as the share was tuned.
+     */
     val bossDamageShare: Float = 1f,
 ) {
     init {

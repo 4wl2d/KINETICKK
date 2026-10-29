@@ -279,7 +279,7 @@ class DimensionRewardsTest {
     // ---- Boss objectives ----
 
     @Test
-    fun anObjectiveBossTakesCappedHitsAndDealsDamageByItsLayersShares() {
+    fun anObjectiveBossTakesCappedHitsAndDealsShotAndContactDamageByItsLayersShares() {
         for (objective in listOf(DimensionObjective.JUDGEMENT, DimensionObjective.PYRE)) {
             val definition = policy.definition(objective.layer)
             val state = buildTestState(seed = 80_801, rebirth = 10).apply {
@@ -294,10 +294,12 @@ class DimensionRewardsTest {
             val boss = state.enemies.single { it.id == visit.bossId }
             val cap = state.bossHitCap(boss)
             val shot = state.shotDamage(boss)
+            val contact = state.contactDamage(boss)
             // The same boss outside the visit's objective: the plain cap and damage.
             state.dimensionRun = state.dimensionRun.copy(visit = visit.copy(bossId = -1))
             assertEquals(state.bossHitCap(boss) / definition.bossIntegrityShare, cap, cap * 1e-5f, "$objective: the share shortens its capped hits too")
             assertEquals(state.shotDamage(boss) * definition.bossDamageShare, shot, shot * 1e-5f, "$objective deals its layer's damage share")
+            assertEquals(state.contactDamage(boss) * definition.bossDamageShare, contact, contact * 1e-5f, "$objective: its contact carries the share too")
         }
     }
 
