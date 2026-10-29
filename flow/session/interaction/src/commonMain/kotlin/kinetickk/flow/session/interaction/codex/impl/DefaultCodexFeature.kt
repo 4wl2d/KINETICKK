@@ -821,8 +821,8 @@ private fun CodexEntry.cellBadge(): String? = when (val icon = icon) {
     is CodexIcon.Item -> quantity.takeIf { icon.stack > 0 }
     is CodexIcon.Relic -> quantity.takeIf { icon.rank != null }
     is CodexIcon.Weapon -> quantity.takeIf { it != CODEX_NONE }
-    // An enemy's threat out of five.
-    is CodexIcon.Enemy -> quantity
+    // An enemy's threat out of five; a Rebirth-locked one shows its padlock in that corner instead (the threat is in its facts).
+    is CodexIcon.Enemy -> quantity.takeUnless { icon.locked }
     else -> null
 }
 

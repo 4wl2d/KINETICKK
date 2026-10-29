@@ -469,6 +469,31 @@ class CodexComposeTest {
         }
     }
 
+    /** A Rebirth-locked enemy's tile shows its padlock in the top corner, never the threat badge over it; an open one its threat. */
+    @Test fun aLockedEnemyTileShowsItsPadlockNotTheThreatBadge() {
+        for ((width, height) in listOf(1440 to 810, 390 to 844)) androidx.compose.ui.test.v2.runDesktopComposeUiTest(width, height) {
+            setContent {
+                CompositionLocalProvider(LocalAppLanguage provides AppLanguage.English, androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(1f, 1f)) {
+                    Box(Modifier.requiredSize(width.dp, height.dp)) {
+                        CodexContent(codexTestCatalog(), CodexRenderModel(immutableSetOf(), CodexRunStacks(), codexTestCatalog().items), codexTestProgress(), 1.25f) { }
+                    }
+                }
+            }
+            onNodeWithTag("codex-tab-1").performSemanticsAction(SemanticsActions.OnClick)
+            waitForIdle()
+            onNodeWithTag("codex-category-4").performSemanticsAction(SemanticsActions.OnClick)
+            waitForIdle()
+            // The Reflector opens at Rebirth 4 (the test profile has none); the Drifter is open from the start.
+            onNodeWithTag("codex-grid").performScrollToKey("enemy/REFLECTOR")
+            waitForIdle()
+            assertTrue(onAllNodesWithTag("codex-badge-enemy/REFLECTOR", useUnmergedTree = true).fetchSemanticsNodes().isEmpty(),
+                "the locked Reflector has no threat badge over its padlock (${width}x$height)")
+            onNodeWithTag("codex-grid").performScrollToKey("enemy/DRIFTER")
+            waitForIdle()
+            onNodeWithTag("codex-badge-enemy/DRIFTER", useUnmergedTree = true).assertExists()
+        }
+    }
+
     @Test fun buildTabBadgesAndNewStampsLeaveTheCellGlyphClear() {
         val catalog = codexTestCatalog()
         val stacks = List(80) { if (it == 0 || it == 1) 1 else 0 }.toImmutableList()
