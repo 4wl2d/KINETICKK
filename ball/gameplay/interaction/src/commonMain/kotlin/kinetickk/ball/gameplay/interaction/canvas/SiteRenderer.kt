@@ -23,6 +23,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
+import kotlin.math.hypot
 
 /** Half extent of an offer's mark (anomaly diamond with its corner brackets, a site glyph in its brackets). */
 private const val OFFER_MARK_HALF = 46f
@@ -180,8 +181,14 @@ internal fun DrawScope.collectSiteEdgeMarkers(
     for (index in engine.sites.indices) if (!engine.sites[index].active) collectSiteEdgeMarker(engine, engine.sites[index], batch)
 }
 
-/** One site's marker: an active course leads to its next mark (beacon, gate, pole), every other site to its center. */
+/**
+ * One site's marker: an active course leads to its next mark (beacon, gate, pole), every other site to its center. A
+ * running zone challenge (the brakeless, untouched and velocity rings) whose ring holds the Core has none: the trial runs
+ * where the Core already is, and nothing at the ring's centre is a place to fly to.
+ */
 private fun DrawScope.collectSiteEdgeMarker(engine: GameplayRenderModel, point: SiteProjection, batch: EdgeMarkerBatch) {
+    if (point.active && point.kind.zoneChallenge() &&
+        hypot(engine.coreX - point.x, engine.coreY - point.y) < point.radius) return
     var targetX = point.x
     var targetY = point.y
     if (point.active) when (point.kind) {
@@ -329,6 +336,10 @@ internal fun DrawScope.markShown(center: Offset, half: Float, keepOut: WorldHudK
  * view: marks and edge markers are decided there, so shake cannot trade one for the other.
  */
 internal fun steady(center: Offset, shakeX: Float, shakeY: Float): Offset = Offset(center.x - shakeX, center.y - shakeY)
+
+/** A challenge whose ring is the zone its trial must stay in. */
+private fun SiteKind.zoneChallenge(): Boolean =
+    this == SiteKind.BRAKELESS_TRIAL || this == SiteKind.UNTOUCHED_TRIAL || this == SiteKind.VELOCITY_TRIAL
 
 internal fun SiteKind.edgeIcon(): EdgeMarkerIcon = when (this) {
     SiteKind.RESONANT_CIRCUIT -> EdgeMarkerIcon.RESONANT_CIRCUIT

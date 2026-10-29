@@ -169,6 +169,33 @@ class WorldEdgeMarkerHudTest {
     }
 
     /**
+     * A running zone challenge (brakeless, untouched, velocity) whose ring holds the Core gets no marker: its centre is
+     * empty and the trial runs where the Core is. Once the Core is outside its ring, the marker leads back to it.
+     */
+    @Test
+    fun aZoneChallengeHoldingTheCoreLeadsNowhere() {
+        val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64),
+            1.25f, AppLanguage.Russian, HudTestFonts.typography)
+        for ((width, height) in listOf(1_440f to 810f, 844f to 390f, 390f to 844f)) {
+            for (kind in listOf(SiteKind.BRAKELESS_TRIAL, SiteKind.UNTOUCHED_TRIAL, SiteKind.VELOCITY_TRIAL)) {
+                fun collect(centerX: Float, radius: Float): List<EdgeMarkerIcon?> {
+                    val zone = SiteProjection(kind, kind.name, centerX, 0f, true, 12f, 0, 0.45f, immutableListOf(), 0f, 0f, radius = radius)
+                    CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, canvas, Size(width, height)) {
+                        drawWorld(familyModel(width, height).withSites(zone), VisualFxProjection.EMPTY, 0f, 0f, measurer)
+                    }
+                    val batch = WorldOverlayScratch.markers
+                    return (0 until batch.count).map { batch.icon[it] }
+                }
+                val where = "$kind at $width x $height"
+                // The ring's centre 1,000 u to the left, off screen: inside a 1,200 u ring nothing is marked.
+                assertEquals(emptyList(), collect(-1_000f, 1_200f), "inside its ring: $where")
+                // The same centre with an 800 u ring: the Core is outside it, and the marker leads back.
+                assertEquals(listOf(EdgeMarkerIcon.CHALLENGE), collect(-1_000f, 800f), "outside its ring: $where")
+            }
+        }
+    }
+
+    /**
      * Structure entrances off screen: the two nearest get markers (never the dungeon the Core is in, never an entrance on
      * screen), after the totem and before the ambient caches, apart from each other and clear of the HUD in every layout
      * and language.
