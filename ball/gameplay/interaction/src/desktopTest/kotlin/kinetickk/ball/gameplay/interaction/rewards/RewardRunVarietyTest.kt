@@ -56,6 +56,7 @@ import org.junit.Rule
 import org.junit.Test
 import kotlin.math.roundToInt
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -165,6 +166,8 @@ class RewardRunVarietyTest {
                     assertEquals(option.title.localizedContent(language), card.title, "$language $option")
                     assertEquals(kind.displayName.localizedContent(language), card.bandStart)
                     assertEquals(option.icon(), card.icon)
+                    // The padlock means a locked card (hatch + lock): a card that can be taken never wears it.
+                    assertNotEquals(KkIcon.SYSTEM_LOCKED, card.icon, "$option is takeable but shows a padlock")
                     assertTrue(card.descriptions.single().isNotBlank())
                     assertEquals(option == SignalOption.IGNORE, card.decline, "$option decline")
                     if (language == AppLanguage.Russian) (listOf(card.title) + card.descriptions + card.liabilities).forEach {

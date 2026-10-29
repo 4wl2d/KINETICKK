@@ -243,7 +243,8 @@ internal fun SignalOption.icon(): KkIcon = when (this) {
     SignalOption.GAMBLE_REROLL -> KkIcon.SYSTEM_REROLL
     SignalOption.GAMBLE_MATTER -> KkIcon.SYSTEM_MATTER
     SignalOption.GAMBLE_INTEGRITY -> KkIcon.SYSTEM_INTEGRITY
-    SignalOption.CACHE_CRATE, SignalOption.CACHE_RELIQUARY, SignalOption.CACHE_IDOL -> KkIcon.SYSTEM_LOCKED
+    // A cursed offer can be taken: the warning diamond marks its curse (the padlock means a locked card).
+    SignalOption.CACHE_CRATE, SignalOption.CACHE_RELIQUARY, SignalOption.CACHE_IDOL -> KkIcon.SYSTEM_ANOMALY
     SignalOption.DERELICT_REPAIR -> KkIcon.SYSTEM_INTEGRITY
     SignalOption.DERELICT_CARGO -> KkIcon.SYSTEM_MATTER
     SignalOption.DERELICT_VAULT -> KkIcon.SYSTEM_KEY
