@@ -71,9 +71,9 @@ internal data class AmbientCandidate(val absoluteX: Double, val absoluteY: Doubl
 
 /**
  * The ambient step after the window sites: realspace only, the window rebuilt on an obstacle-chunk change, nearby sites
- * settled, then the sites the Core flew through or came near opened (during any engagement too). An [AmbientSiteWindow.EMPTY]
- * window stays empty: nothing ambient is placed while the policy is off, after the Architect arrives or in a quiet
- * arena.
+ * settled, then the sites the Core flew through or came near opened. Other sites open during engagements too; the
+ * Quiet Signal waits until its rift could be entered. An [AmbientSiteWindow.EMPTY] window stays empty: nothing ambient
+ * is placed while the policy is off, after the Architect arrives or in a quiet arena.
  */
 internal fun MutableGameState.updateAmbientSites() {
     if (!content.sites.ambient.enabled) {
@@ -237,10 +237,7 @@ private fun MutableGameState.openAmbientSite(site: SiteState) {
             consumeAmbientSite(site)
             findLostCursor(site)
         }
-        SiteKind.QUIET_SIGNAL -> {
-            consumeAmbientSite(site)
-            hearQuietSignal(site)
-        }
+        SiteKind.QUIET_SIGNAL -> hearQuietSignal(site)
         else -> error("${site.kind} is never an ambient site")
     }
 }

@@ -296,9 +296,12 @@ internal fun MutableGameState.findLostCursor(site: SiteState) {
  * The Core flew through the Quiet Signal: heard once per run (every other Quiet Signal leaves the window), its reward
  * granted, and the Archive's glitch rift asked to open where DIMENSIONS opens its own, ahead of the Core, so the pass
  * through the signal never carries the Core into the Archive by itself. The signal's words stay in the feed for six
- * seconds over the rift's own notice.
+ * seconds over the rift's own notice. During an engagement it stays unheard, so that fight cannot consume the rift's
+ * short entry window.
  */
 internal fun MutableGameState.hearQuietSignal(site: SiteState) {
+    if (engagementActive()) return
+    consumeAmbientSite(site)
     setSecret(RunSecretFlag.QUIET_SIGNAL_FOUND)
     removeAmbientSitesOf(SiteKind.QUIET_SIGNAL)
     discoverWorld(WorldDiscovery.QUIET_SIGNAL)

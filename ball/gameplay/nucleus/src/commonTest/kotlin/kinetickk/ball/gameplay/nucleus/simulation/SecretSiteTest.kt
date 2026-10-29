@@ -439,6 +439,38 @@ class SecretSiteTest {
     }
 
     @Test
+    fun theQuietSignalStaysUnheardWhileAnotherEngagementRunsSoItsRiftCanBeEntered() {
+        val game = game()
+        game.velocityX = 900f
+        game.velocityY = 0f
+        val signal = egg(SiteKind.QUIET_SIGNAL, 1, FAR_X + 200f, FAR_Y)
+        game.holdWindow(signal)
+        val matter = game.matter()
+        // An anomaly trial runs (a bounty or a duel reads the same): its rift would refuse entry until the trial ends.
+        game.sites = listOf(
+            SiteState(windowSiteId(3, 0), SiteKind.RESONANT_CIRCUIT, FAR_X + 600f, FAR_Y, 400f, active = true, remaining = 1_000f),
+        )
+        game.flyStep(FAR_X + 100f, FAR_Y, FAR_X + 300f, FAR_Y)
+        assertTrue(game.engagementActive())
+        assertFalse(game.hasSecret(RunSecretFlag.QUIET_SIGNAL_FOUND), "the signal is not heard during an engagement")
+        assertFalse(game.found(WorldDiscovery.QUIET_SIGNAL))
+        assertNull(game.dimensionRun.glitchPortal)
+        assertEquals(matter, game.matter(), 1e-3)
+        assertEquals(listOf(signal.id), game.ambientSites.sites.map { it.id }, "the signal waits to be flown through again")
+        assertTrue(game.openedSiteIds.isEmpty())
+
+        // Once the trial is over the next pass hears it, and its rift takes the Core into the Archive.
+        game.sites = emptyList()
+        game.flyStep(FAR_X + 100f, FAR_Y, FAR_X + 300f, FAR_Y)
+        assertTrue(game.hasSecret(RunSecretFlag.QUIET_SIGNAL_FOUND))
+        assertEquals(matter + 20.0 * game.matterGain, game.matter(), 1e-3)
+        val rift = assertNotNull(game.dimensionRun.glitchPortal)
+        game.flyThroughForTesting(rift.x, rift.y)
+        game.updateDimension(0.01f)
+        assertEquals(WorldLayer.ARCHIVE, game.worldLayer)
+    }
+
+    @Test
     fun theDoodleIsFoundOncePerRun() {
         val game = game()
         val matter = game.matter()
