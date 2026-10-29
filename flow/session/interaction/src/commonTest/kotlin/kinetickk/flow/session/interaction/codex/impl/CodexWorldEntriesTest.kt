@@ -137,6 +137,10 @@ class CodexWorldEntriesTest {
         }
     }
 
+    /** Every glyph a world discovery other than a structure wears. */
+    private fun secretsAndSites(): Set<SiteGlyph> =
+        WorldDiscovery.entries.filter { it.kind != WorldDiscoveryKind.STRUCTURE }.map(::worldDiscoveryGlyph).toSet()
+
     @Test
     fun eachPlaceWearsItsSitesGlyphAndEachSecretItsOwn() {
         assertEquals(SiteGlyph.RACE, worldDiscoveryGlyph(WorldDiscovery.GATE_RACE))
@@ -144,7 +148,11 @@ class CodexWorldEntriesTest {
         assertEquals(SiteGlyph.BOUNTY, worldDiscoveryGlyph(WorldDiscovery.BOUNTY))
         assertEquals(SiteGlyph.CACHE, worldDiscoveryGlyph(WorldDiscovery.DRIFT_CACHE))
         WorldDiscovery.entries.filter { it.kind == WorldDiscoveryKind.DIMENSION }.forEach { assertEquals(SiteGlyph.DIMENSION, worldDiscoveryGlyph(it)) }
-        WorldDiscovery.entries.filter { it.kind == WorldDiscoveryKind.STRUCTURE }.forEach { assertEquals(SiteGlyph.STRUCTURE, worldDiscoveryGlyph(it)) }
+        // Each structure template has its own floor plan, never the generic structure mark the HUD and edge markers use.
+        val structures = WorldDiscovery.entries.filter { it.kind == WorldDiscoveryKind.STRUCTURE }.map(::worldDiscoveryGlyph)
+        assertEquals(6, structures.size)
+        assertEquals(structures.distinct(), structures, "every structure has its own floor plan")
+        assertTrue(SiteGlyph.STRUCTURE !in structures && structures.none { it in secretsAndSites() }, "$structures")
         val secrets = WorldDiscovery.entries.filter { it.kind == WorldDiscoveryKind.SECRET }.map(::worldDiscoveryGlyph)
         assertEquals(secrets.distinct(), secrets, "every secret has its own mark")
         assertEquals(listOf(SiteGlyph.LOST_CURSOR, SiteGlyph.GOLDEN, SiteGlyph.SPIN, SiteGlyph.DOODLE, SiteGlyph.QUIET), secrets)

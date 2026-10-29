@@ -135,6 +135,49 @@ enum class SiteGlyph(internal val icon: KkIcon?, internal vararg val parts: Site
     ),
     /** A world crossed by its horizon. */
     DIMENSION(null, GlyphArc(12f, 12f, 9f), GlyphLine(1f, 12f, 23f, 12f)),
+
+    // Each structure template's own floor plan (the Codex World entries tell them apart).
+
+    /** The Derelict Station: a hull breached in its top wall, a bulkhead half across it. */
+    STATION(
+        null,
+        GlyphLine(14f, 3f, 21f, 3f, 21f, 21f, 3f, 21f, 3f, 3f, 9f, 3f),
+        GlyphLine(3f, 13f, 13f, 13f),
+    ),
+    /** The Vault: a sealed room inside a room. */
+    VAULT(
+        null,
+        GlyphLine(3f, 3f, 21f, 3f, 21f, 21f, 3f, 21f, closed = true),
+        GlyphLine(8f, 8f, 16f, 8f, 16f, 16f, 8f, 16f, closed = true, fill = true),
+    ),
+    /** The Spire: a narrow tower of three floors. */
+    SPIRE(
+        null,
+        GlyphLine(8f, 2f, 16f, 2f, 16f, 22f, 8f, 22f, closed = true),
+        GlyphLine(8f, 9f, 16f, 9f),
+        GlyphLine(8f, 15f, 16f, 15f),
+    ),
+    /** The Labyrinth: a room with two staggered walls. */
+    LABYRINTH(
+        null,
+        GlyphLine(3f, 3f, 21f, 3f, 21f, 21f, 3f, 21f, closed = true),
+        GlyphLine(3f, 9f, 15f, 9f),
+        GlyphLine(9f, 15f, 21f, 15f),
+    ),
+    /** The Foundry: a hall round its furnace. */
+    FOUNDRY(
+        null,
+        GlyphLine(3f, 3f, 21f, 3f, 21f, 21f, 3f, 21f, closed = true),
+        GlyphArc(12f, 12f, 4.5f),
+        GlyphArc(12f, 12f, 1.75f, fill = true),
+    ),
+    /** The Reliquary: a nave under its apse with the relic inside. */
+    RELIQUARY(
+        null,
+        GlyphLine(6f, 10f, 6f, 22f, 18f, 22f, 18f, 10f),
+        GlyphArc(12f, 10f, 6f, startDegrees = 180f, sweepDegrees = 180f),
+        GlyphArc(12f, 16f, 1.75f, fill = true),
+    ),
 }
 
 /** The glyph of one site kind (the trial panel's family glyph is [siteFamilyGlyph]). */
@@ -169,7 +212,7 @@ fun siteFamilyGlyph(family: SiteFamily): SiteGlyph = when (family) {
 
 /**
  * The glyph of a world discovery (the Codex World category): a site family's own glyph, the dimension's horizon for the
- * three layers, a floor plan for the structure templates and each secret's own mark.
+ * three layers, each structure template's own floor plan and each secret's own mark.
  */
 fun worldDiscoveryGlyph(id: WorldDiscovery): SiteGlyph = when (id) {
     WorldDiscovery.GATE_RACE -> SiteGlyph.RACE
@@ -177,8 +220,12 @@ fun worldDiscoveryGlyph(id: WorldDiscovery): SiteGlyph = when (id) {
     WorldDiscovery.BOUNTY -> SiteGlyph.BOUNTY
     WorldDiscovery.DRIFT_CACHE -> SiteGlyph.CACHE
     WorldDiscovery.ZENITH, WorldDiscovery.NADIR, WorldDiscovery.ARCHIVE -> SiteGlyph.DIMENSION
-    WorldDiscovery.DERELICT_STATION, WorldDiscovery.VAULT, WorldDiscovery.SPIRE, WorldDiscovery.LABYRINTH,
-    WorldDiscovery.FOUNDRY, WorldDiscovery.RELIQUARY -> SiteGlyph.STRUCTURE
+    WorldDiscovery.DERELICT_STATION -> SiteGlyph.STATION
+    WorldDiscovery.VAULT -> SiteGlyph.VAULT
+    WorldDiscovery.SPIRE -> SiteGlyph.SPIRE
+    WorldDiscovery.LABYRINTH -> SiteGlyph.LABYRINTH
+    WorldDiscovery.FOUNDRY -> SiteGlyph.FOUNDRY
+    WorldDiscovery.RELIQUARY -> SiteGlyph.RELIQUARY
     WorldDiscovery.LOST_CURSOR -> SiteGlyph.LOST_CURSOR
     WorldDiscovery.GOLDEN_DRIFTER -> SiteGlyph.GOLDEN
     WorldDiscovery.SPIN_CYCLE -> SiteGlyph.SPIN
