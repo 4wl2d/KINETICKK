@@ -443,6 +443,14 @@ class RedesignShotsWorldTest {
         add(Scene("ribbon-dash", model = { w, h -> ribbonRun(w, h, 1_800f, 900f, dash = 0.18f) }, fx = { ribbonFx(it, 900f, dashNewest = 10) }))
         add(Scene("ribbon-overdrive", model = { w, h -> ribbonRun(w, h, 2_400f, 700f, overdrive = 3f) }, fx = { ribbonFx(it, 700f) }))
         add(Scene("ribbon-break", model = { w, h -> ribbonRun(w, h, 1_200f, 600f) }, fx = ::ribbonBreakFx))
+        // The new window sites as offers, before any runs, each with its mark, entry ring, name and time left: a gate race,
+        // a bounty and a Zenith rift; then three challenges (a slalom, a brakeless run, a Ram rite); each also under the HUD.
+        val mixed = listOf(SiteKind.GATE_RACE, SiteKind.BOUNTY_ARENA, SiteKind.ZENITH_RIFT)
+        val challenges = listOf(SiteKind.SLALOM_TRIAL, SiteKind.BRAKELESS_TRIAL, SiteKind.RAM_TRIAL)
+        add(Scene("site-offers-mixed", model = { w, h -> offers(w, h, mixed) }))
+        add(Scene("site-offers-mixed-hud", hud = true, model = { w, h -> offers(w, h, mixed) }))
+        add(Scene("site-offers-challenges", model = { w, h -> offers(w, h, challenges) }))
+        add(Scene("site-offers-challenges-hud", hud = true, model = { w, h -> offers(w, h, challenges) }))
         // A running gate race: two gates passed, the next in volt, later gates mute, the doubled finish; then the same
         // course with the next gate far off screen (its edge marker) under the HUD's trial panel.
         add(Scene("site-race", model = { w, h -> model(w, h, points = listOf(race(step = 2))) }))
@@ -818,6 +826,21 @@ class RedesignShotsWorldTest {
         val rite = SiteProjection(SiteKind.RAM_TRIAL, "Ram rite", 1_000f + centerX, 1_000f + centerY, true, 14.6f, 0, 2f / 6f,
             (1..8).toList().toImmutableList(), 0f, 0f, radius = 650f)
         return model(w, h, enemies = foes, points = listOf(rite))
+    }
+
+    /**
+     * Three window offers of [kinds] around the Core, placed by screen fractions clear of the HUD's blocks and of the
+     * pointer's reticle (landscape: left low, right high, up and left of the Core; portrait: upper left, right, lower left), each
+     * with time left on its offer.
+     */
+    private fun offers(w: Float, h: Float, kinds: List<SiteKind>): GameplayRenderModel {
+        val spots = if (w > h) listOf(-0.33f to 0.14f, 0.28f to -0.12f, -0.12f to -0.22f) else listOf(-0.25f to -0.20f, 0.25f to -0.03f, -0.25f to 0.16f)
+        val points = kinds.mapIndexed { index, kind ->
+            val (fx, fy) = spots[index]
+            SiteProjection(kind, Content.sites.definition(kind).name, 1_000f + fx * w, 1_000f + fy * h, false, 24f + index * 9f, 0, 0f,
+                immutableListOf(), 0f, 0f)
+        }
+        return model(w, h, points = points)
     }
 
     /** A seven-gate race around the Core: a loop of 330 (the far course 1,300, past every edge). */
