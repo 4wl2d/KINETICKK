@@ -142,7 +142,7 @@ internal data class Enemy private constructor(
     /** The run's final boss only (the Architect): hit cap, encounter lookup and victory. */
     val isBoss: Boolean get() = type.profile.rank == EnemyRank.BOSS
     val isElite: Boolean get() = type.profile.rank == EnemyRank.ELITE
-    /** Mini-bosses (the Herald first): Elite victim factor, freeze and stop immunity, leash exemption, outside the ordinary cap. */
+    /** Mini-bosses: Elite victim factor, freeze and stop immunity, outside the ordinary cap; only the roaming Herald is leashed. */
     val isMiniBoss: Boolean get() = type.profile.rank == EnemyRank.MINI_BOSS
     /** Secret bosses: boss-class rules, but they never end the run. */
     val isSecretBoss: Boolean get() = type.profile.rank == EnemyRank.SECRET_BOSS

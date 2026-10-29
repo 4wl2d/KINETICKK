@@ -725,12 +725,33 @@ internal fun aspectStandIn(aspect: Int): EnemyType? = when (aspect) {
 internal fun MutableGameState.rollAspect(): Int = spawnRandom.nextInt(StatusElement.entries.size)
 
 /**
- * A leashed ordinary enemy is moved, integrity intact, back to spawn distance ahead or on a flank; the
- * move is a teleport, so its previous position follows.
+ * Leaders may be left several screens behind during an ordinary retreat. Six thousand units is far travel to the
+ * distant sites and structures: beyond it, their slow steering cannot bring them back into the fight in useful time.
+ * Their leash also stays at least as far away as the ordinary viewport-scaled leash.
+ */
+internal const val FAR_LEADER_LEASH_DISTANCE: Float = 6_000f
+
+/** Stateless leader relocation: returning a leader never shifts the ordinary director's spawn stream. */
+private const val LEADER_LEASH_SALT: Long = 0x4C45_4144_4C45_4153L
+
+/**
+ * A leashed enemy is moved, integrity intact, back to spawn distance ahead or on a flank; the move is a teleport, so
+ * its previous position follows. Roaming Elites and Heralds use a stable per-enemy hash; ordinary enemies keep their
+ * existing spawn draws.
  */
 internal fun MutableGameState.relocateLeashedEnemy(enemy: Enemy) {
-    val rolled = movementAngle() + sectorOffset(allowBehind = false)
-    val distance = viewportEdgeDistance(rolled) + 80f + spawnRandom.nextFloat() * 180f
+    val leader = enemy.type == EnemyType.ELITE || enemy.type == EnemyType.HERALD
+    val hash = if (leader) runHash(runSeed, LEADER_LEASH_SALT, enemy.id.toLong()) else 0L
+    val offset = if (leader) {
+        val side = if (hash and 1L == 0L) 1f else -1f
+        side * (AHEAD_HALF_ANGLE + hashUnit(hash) * (FLANK_OUTER_ANGLE - AHEAD_HALF_ANGLE))
+    } else sectorOffset(allowBehind = false)
+    val rolled = movementAngle() + offset
+    val overscanRoll = if (leader) hashUnit(splitMix64(hash)) else spawnRandom.nextFloat()
+    // An offered site may turn the chosen angle. The diagonal keeps a leader outside the viewport at every angle,
+    // while clearOfAnomalies checks the same distance that placement uses.
+    val viewDistance = if (leader) length(screenWidth, screenHeight) * 0.5f else viewportEdgeDistance(rolled)
+    val distance = viewDistance + 80f + overscanRoll * 180f
     val angle = clearOfAnomalies(rolled, distance)
     val ejected = structureEjected(coreX + cos(angle) * distance, coreY + sin(angle) * distance, enemy.radius)
     var x = ejected.x
@@ -741,6 +762,12 @@ internal fun MutableGameState.relocateLeashedEnemy(enemy: Enemy) {
         y += sin(angle) * SPAWN_NUDGE_DISTANCE
         attempts++
     }
+    if (leader) {
+        // A rock nudge must not return a roaming leader to the sealed room it was ejected from.
+        val outside = structureEjected(x, y, enemy.radius)
+        x = outside.x
+        y = outside.y
+    }
     enemy.x = x
     enemy.y = y
     enemy.previousX = x
@@ -750,6 +777,6 @@ internal fun MutableGameState.relocateLeashedEnemy(enemy: Enemy) {
     onLeashedEnemyRelocated(enemy)
 }
 
-/** True when [enemy] stays wherever it is: scheduled leaders, the boss class and place-bound enemies. */
+/** Place-bound enemies and bosses stay; the roaming Elite and Herald instead have a far-travel leash. */
 internal fun MutableGameState.leashExempt(enemy: Enemy): Boolean =
-    enemy.isEliteClass || isPlaceBound(enemy)
+    (enemy.isEliteClass && enemy.type != EnemyType.ELITE && enemy.type != EnemyType.HERALD) || isPlaceBound(enemy)

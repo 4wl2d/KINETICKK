@@ -201,10 +201,13 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
     enemies.removeMatchingStable { enemy -> enemy.dead }
     val leashDistance = max(screenWidth, screenHeight) * 1.15f + 360f
     val leashSquared = leashDistance * leashDistance
+    val leaderLeashDistance = max(FAR_LEADER_LEASH_DISTANCE, leashDistance)
+    val leaderLeashSquared = leaderLeashDistance * leaderLeashDistance
     for (index in enemies.indices) {
         val enemy = enemies[index]
         if (leashExempt(enemy)) continue
-        if (distanceSquared(enemy.x, enemy.y, coreX, coreY) > leashSquared) relocateLeashedEnemy(enemy)
+        val limit = if (enemy.type == EnemyType.ELITE || enemy.type == EnemyType.HERALD) leaderLeashSquared else leashSquared
+        if (distanceSquared(enemy.x, enemy.y, coreX, coreY) > limit) relocateLeashedEnemy(enemy)
     }
     updateEncounters()
 }
