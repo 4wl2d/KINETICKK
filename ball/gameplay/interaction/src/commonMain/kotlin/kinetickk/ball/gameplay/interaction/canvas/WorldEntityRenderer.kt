@@ -357,6 +357,9 @@ private const val WEAKNESS_TAB_ANGLE = (3.0 * PI / 4.0).toFloat()
 
 /** The tab's ink disc and glyph (the glyph's default stroke stays above a pixel), and the crowd dot. */
 private const val WEAKNESS_TAB_RADIUS = 7f
+
+/** How far past an enemy's radius its weakness tab's disc reaches. */
+internal const val WEAKNESS_TAB_REACH = STATUS_RING_GAP + WEAKNESS_TAB_GAP + WEAKNESS_TAB_RADIUS
 private const val WEAKNESS_GLYPH = 12f
 private const val WEAKNESS_DOT_RADIUS = 3f
 

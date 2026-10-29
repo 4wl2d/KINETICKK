@@ -285,11 +285,20 @@ class RunVarietyRenderingTest {
             val crowded = enemyDrawn(EnemyType.ELITE, affinity(affix = affix.ordinal), detail = false)
             assertTrue(crowded.count(glyphAt, 0f, AFFIX_GLYPH_SIZE * 0.5f) { sameHue(it, Kk.Bone) } > 4, "$affix stays in a crowd")
         }
-        val aura = RADIUS * CHAMPION_AURA
+        val aura = championAuraRadius(RADIUS)
         val plain = enemyDrawn(EnemyType.DRIFTER, affinity(), detail = true)
         val champion = enemyDrawn(EnemyType.DRIFTER, affinity(champion = true), detail = true)
         assertEquals(0, plain.count(CENTER, aura - 2f, aura + 2f) { sameHue(it, Kk.Bone) }, "an ordinary enemy has no aura")
         assertTrue(champion.count(CENTER, aura - 2f, aura + 2f) { sameHue(it, Kk.Bone) } > 60, "a champion wears a dashed bone aura")
+        // The aura surrounds the enemy: no kind's outline reaches it, and a weakness tab sits inside it, never on it.
+        val cryo = StatusElement.CRYO
+        for (type in listOf(EnemyType.DRIFTER, EnemyType.CHARGER, EnemyType.SHOOTER, EnemyType.SWARMLING, EnemyType.MINELAYER)) {
+            val weak = enemyDrawn(type, affinity(champion = true, weakness = cryo.ordinal), detail = true)
+            val bare = enemyDrawn(type, affinity(weakness = cryo.ordinal), detail = true)
+            assertEquals(0, bare.count(CENTER, aura - 3f, aura + 3f) { it != Kk.Ink }, "$type and its weakness tab stay inside the aura")
+            assertEquals(0, weak.count(CENTER, aura - 3f, aura + 3f) { pixel -> visible(pixel) && !sameHue(pixel, Kk.Bone, 0.02f) },
+                "$type's aura band holds only the bone aura")
+        }
         assertEquals(0, enemyDrawn(EnemyType.DRIFTER, affinity(champion = true), detail = false)
             .count(CENTER, aura - 2f, aura + 2f) { sameHue(it, Kk.Bone) }, "a crowd drops the aura like status patterns")
         val plainOutline = plain.count(CENTER, 0f, RADIUS + 3f) { sameHue(it, roles.threat, 0.6f) }
@@ -297,8 +306,8 @@ class RunVarietyRenderingTest {
         assertTrue(championOutline > plainOutline, "the champion's threat outline is heavier ($championOutline vs $plainOutline px)")
     }
 
-    private fun affinity(affix: Int = EnemyAffinity.NONE, champion: Boolean = false): Int = EnemyAffinity.encode(
-        aspect = EnemyAffinity.NONE, immune = false, weakness = EnemyAffinity.NONE, armored = false, fragile = false, shifting = false,
+    private fun affinity(affix: Int = EnemyAffinity.NONE, champion: Boolean = false, weakness: Int = EnemyAffinity.NONE): Int = EnemyAffinity.encode(
+        aspect = EnemyAffinity.NONE, immune = false, weakness = weakness, armored = false, fragile = false, shifting = false,
         phase = 0, affix = affix, champion = champion,
     )
 
@@ -357,6 +366,10 @@ class RunVarietyRenderingTest {
         if (strength < minStrength) return false
         return abs(dr - tr * strength) < 0.06f && abs(dg - tg * strength) < 0.06f && abs(db - tb * strength) < 0.06f
     }
+
+    /** A pixel visibly off the ink (an antialiased fringe a level or two off it is not). */
+    private fun visible(pixel: Color): Boolean =
+        abs(pixel.red - Kk.Ink.red) + abs(pixel.green - Kk.Ink.green) + abs(pixel.blue - Kk.Ink.blue) > 0.06f
 
     private fun Rect.inside(width: Int, height: Int) = left >= -0.5f && top >= -0.5f && right <= width + 0.5f && bottom <= height + 0.5f
 

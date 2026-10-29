@@ -18,6 +18,7 @@ import kinetickk.foundation.design.KkRolePalette
 import kotlin.math.max
 import kotlin.math.PI
 import kotlin.math.sin
+import kotlin.math.hypot
 
 /**
  * Presentation meaning of a nucleus visual color index: 0 dash/Core, 1 kill or pickup, 2 weapon
@@ -288,6 +289,13 @@ enum class EnemySilhouette(vararg contours: FloatArray) {
 
     /** Closed polygons as x, y pairs on the 24 grid, centered at (12, 12). */
     val contours: List<FloatArray> = contours.toList()
+}
+
+/** The farthest corner of any silhouette from its centre, in enemy radii (the grid's half extent, 10 units, is one radius). */
+internal val EnemySilhouetteReach: Float by lazy {
+    EnemySilhouette.entries.maxOf { shape ->
+        shape.contours.maxOf { points -> (points.indices step 2).maxOf { hypot(points[it] - 12f, points[it + 1] - 12f) } }
+    } / 10f
 }
 
 /** How each enemy type reads in the world; the Architect has its own frame (see drawEnemy). */

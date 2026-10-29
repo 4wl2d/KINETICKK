@@ -17,6 +17,7 @@ import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.foundation.design.*
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.max
 import kotlin.math.sin
 
 /** Side of an affix glyph (world units) and the ink seam around its bone fill. */
@@ -26,8 +27,17 @@ private const val AFFIX_SEAM = 2f
 /** The affix glyph sits on top of the Elite halo, this many radii above the centre. */
 internal const val AFFIX_GLYPH_LIFT = 1.45f
 
-/** A champion's dashed bone aura: its radius in enemy radii, alpha, a turn every 24 s; its outline is 0.5 dp heavier. */
-internal const val CHAMPION_AURA = 1.35f
+/**
+ * A champion's dashed bone aura round an enemy of [radius]: clear of every silhouette's corners and its outline, and
+ * outside the weakness tab, so nothing of the enemy cuts into it.
+ */
+internal fun championAuraRadius(radius: Float): Float =
+    max(radius * EnemySilhouetteReach + CHAMPION_AURA_GAP, radius + WEAKNESS_TAB_REACH + CHAMPION_AURA_GAP)
+
+/** The aura's gap past the silhouette's corners and past the weakness tab's disc. */
+private const val CHAMPION_AURA_GAP = 4f
+
+/** The aura's alpha, a turn every 24 s; a champion's outline is 0.5 dp heavier. */
 private const val CHAMPION_AURA_ALPHA = 0.55f
 private const val CHAMPION_TURN_DEGREES_PER_SECOND = 360f * 1_000f / KkTime.AmbientMin
 private const val CHAMPION_OUTLINE_BONUS = 0.5f
@@ -35,16 +45,16 @@ private const val CHAMPION_OUTLINE_BONUS = 0.5f
 /**
  * An Elite's affix and a champion's aura, after the Elite halo ([drawEnemy]): the affix as one 9-unit bone glyph with an
  * ink seam on top of the halo, upright (a blunt shield plate, three dots, two concentric arcs, two interlocked rings, a
- * blunt burst, two sheared bars; never an arrow), and a champion as a dashed bone ring at 1.35 radii turning once in
- * 24 s. Like status patterns, [detail] false (a crowd above the status-pattern limit) drops them on ordinary enemies;
- * Elites keep their detail, so the affix stays. A Shielded Elite's live shield is the impact-shield ring ([drawEnemy]).
+ * blunt burst, two sheared bars; never an arrow), and a champion as a dashed bone ring clear of its silhouette and its
+ * weakness tab ([championAuraRadius]) turning once in 24 s. Like status patterns, [detail] false (a crowd above the
+ * status-pattern limit) drops them on ordinary enemies; Elites keep their detail, so the affix stays. A Shielded Elite's live shield is the impact-shield ring ([drawEnemy]).
  */
 internal fun DrawScope.drawEliteVariety(engine: GameplayRenderModel, enemy: EnemyProjection, center: Offset, detail: Boolean) {
     if (!detail) return
     val bits = enemy.affinityBits
     if (EnemyAffinity.champion(bits)) {
         rotate(engine.renderElapsed * CHAMPION_TURN_DEGREES_PER_SECOND, center) {
-            drawCircle(Kk.Bone.copy(alpha = CHAMPION_AURA_ALPHA), enemy.radius * CHAMPION_AURA, center, style = WorldStrokes.dashedMedium)
+            drawCircle(Kk.Bone.copy(alpha = CHAMPION_AURA_ALPHA), championAuraRadius(enemy.radius), center, style = WorldStrokes.dashedMedium)
         }
     }
     val affix = EnemyAffinity.affix(bits)
