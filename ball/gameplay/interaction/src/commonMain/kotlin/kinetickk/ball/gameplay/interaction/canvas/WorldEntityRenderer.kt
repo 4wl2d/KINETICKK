@@ -194,9 +194,9 @@ internal fun DrawScope.drawEnemy(
             drawShieldArcs(enemy, center)
         }
         // Secret bosses carry the anomaly glyph inside a slowly turning bone ring; the Antecedent's arcs ring it too.
-        EnemyType.CARTOGRAPHER -> drawSecretBossMark(engine, enemy, center, threat)
+        EnemyType.CARTOGRAPHER -> drawSecretBossMark(engine, enemy, center, threat, roles)
         EnemyType.ANTECEDENT -> {
-            drawSecretBossMark(engine, enemy, center, threat)
+            drawSecretBossMark(engine, enemy, center, threat, roles)
             drawShieldArcs(enemy, center)
         }
         else -> Unit
@@ -299,6 +299,9 @@ private const val HERALD_VOLLEY_LEAD = 0.3f
  * turn), and the Cartographer's three Survey lanes, their spacing and how long they are marked.
  */
 private const val SECRET_GLYPH = 0.75f
+
+/** Half side of the Mono ink plate under the secret boss glyph, in glyph sizes: its diamond's 10/24 half diagonal. */
+private const val SECRET_GLYPH_PLATE = (10.0 / 24.0 / 1.4142135623730951).toFloat()
 private const val SECRET_RING = 1.7f
 private const val SECRET_RING_ALPHA = 0.55f
 private const val SECRET_RING_DEGREES_PER_SECOND = 15f
@@ -740,14 +743,25 @@ private fun DrawScope.drawShieldArcs(enemy: EnemyProjection, center: Offset) {
     }
 }
 
-/** A secret boss's identity: the anomaly glyph at its centre and a dashed bone ring turning 15° a second around it. */
+/**
+ * A secret boss's identity: the anomaly glyph at its centre and a dashed bone ring turning 15° a second around it. Where
+ * threats are hatched (Mono) the glyph sits on an ink plate of its own diamond, so its threat strokes never merge into the
+ * body's threat hatch.
+ */
 private fun DrawScope.drawSecretBossMark(
     engine: GameplayRenderModel,
     enemy: EnemyProjection,
     center: Offset,
     threat: androidx.compose.ui.graphics.Color,
+    roles: KkRolePalette,
 ) {
-    drawKkIcon(KkIcon.SYSTEM_ANOMALY, center, enemy.radius * SECRET_GLYPH, threat)
+    val glyph = enemy.radius * SECRET_GLYPH
+    if (roles.hatchThreats) {
+        // The glyph's diamond (24-grid half extent 10) as a square turned 45°.
+        val half = glyph * SECRET_GLYPH_PLATE
+        rotate(45f, center) { drawRect(Kk.Ink, Offset(center.x - half, center.y - half), Size(half * 2f, half * 2f)) }
+    }
+    drawKkIcon(KkIcon.SYSTEM_ANOMALY, center, glyph, threat)
     rotate(engine.renderElapsed * SECRET_RING_DEGREES_PER_SECOND, center) {
         drawCircle(Kk.Bone, enemy.radius * SECRET_RING, center, alpha = SECRET_RING_ALPHA, style = WorldStrokes.dashedThin)
     }
