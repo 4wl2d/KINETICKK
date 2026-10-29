@@ -636,21 +636,27 @@ internal fun MutableGameState.fuseMineCrossedByShot(
 
 /**
  * Detonates the mines whose fuse ran out, at most [ObstacleKindTuning.maximumMineDetonationsPerStep] per step (the
- * rest wait for the next step). The window is walked from its last index down, so a removal only shifts indices
- * already visited.
+ * rest wait for the next step). The window's field obstacles (mines among them) are walked from the last down, so a
+ * removal only shifts indices already visited.
  */
 private fun MutableGameState.detonateDueMines() {
     val kinds = content.obstacles.kinds
     var detonations = 0
-    var index = obstacleField.size - 1
-    while (index >= 0) {
+    var field = obstacleField
+    var n = field.fieldCount - 1
+    while (n >= 0) {
         if (detonations >= kinds.maximumMineDetonationsPerStep || phase != GamePhase.RUNNING) return
-        val obstacle = obstacleField.obstacles[index]
+        val index = field.fieldIndex(n)
+        val obstacle = field.obstacles[index]
         if (obstacle.kind == ObstacleKind.DERELICT_MINE && obstacle.fuseAt > 0f && obstacle.fuseAt <= elapsed) {
             detonateMine(index, obstacle, kinds)
             detonations++
+            // The blast changed the window (and may have fused the mines it reached): go on below [index] in it.
+            field = obstacleField
+            n = field.fieldCount
+            while (n > 0 && field.fieldIndex(n - 1) >= index) n--
         }
-        index--
+        n--
     }
 }
 
