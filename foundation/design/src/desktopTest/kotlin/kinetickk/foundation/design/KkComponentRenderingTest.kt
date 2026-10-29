@@ -393,6 +393,15 @@ class KkComponentRenderingTest {
         var flipped = Rect.Zero
         image(400, 300) { flipped = drawKkTooltip(measurer, Rect(188f, 8f, 212f, 32f), "Short text") }
         assertTrue(flipped.top >= 44f, "flipped below: $flipped")
+        // Over a bone slab (Home's selected row) the slip keeps an ink edge, so the two never read as one shape.
+        var over = Rect.Zero
+        val onBone = kkRender(400, 300, background = Kk.Bone) { over = drawKkTooltip(measurer, Rect(188f, 8f, 212f, 32f), "Short text") }
+        val left = over.left.toInt()
+        val rows = (over.bottom - over.top).toInt() - 8
+        assertTrue(onBone.regionCountNear(Kk.Ink, left - 1, over.top.toInt() + 4, left + 1, over.bottom.toInt() - 4, 40) >= rows,
+            "the slip's left edge is ink over bone: $over")
+        assertTrue(onBone.regionCountNear(Kk.Ink, left + 2, over.top.toInt() + 4, left + 6, over.top.toInt() + 8, 40) == 0,
+            "the edge stays a thin line: $over")
         val info = image(60, 60) { drawKkInfoButton(measurer, Rect(18f, 18f, 42f, 42f), active = true) }
         assertTrue(info.countNear(Kk.Volt, 30) > 40)
         assertEquals(0, image(60, 60) { drawKkInfoButton(measurer, Rect(18f, 18f, 42f, 42f)) }.countNear(Kk.Volt, 30))

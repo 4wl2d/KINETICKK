@@ -747,9 +747,10 @@ fun kkTooltipRect(
 }
 
 /**
- * Tooltip slip (`.info .tipbox`): bone slip with a 10 dp top-right cut, ink body text 14 px,
- * 270 dp wide, placed around [anchor] (see [kkTooltipRect]). Returns the slip rect. Allocates
- * its rects per call: fine for menus; in-run screens cache the placement and draw the slip.
+ * Tooltip slip (`.info .tipbox`): bone slip with a 10 dp top-right cut and a 2 dp ink edge (so it
+ * stays a separate layer over a bone slab under it), ink body text 14 px, 270 dp wide, placed around
+ * [anchor] (see [kkTooltipRect]). Returns the slip rect. Allocates its rects per call: fine for
+ * menus; in-run screens cache the placement and draw the slip.
  */
 fun DrawScope.drawKkTooltip(
     measurer: CanvasTextMeasurer,
@@ -762,10 +763,15 @@ fun DrawScope.drawKkTooltip(
 ): Rect {
     val body = measureKkTooltip(measurer, text, density, widthDp)
     val rect = kkTooltipRect(anchor, body.kkBoxHeight, density, within, placement, widthDp)
-    drawPath(KkPathMemo.chamferTopRight(rect, d(10f)), Kk.Bone, alpha)
+    val slip = KkPathMemo.chamferTopRight(rect, d(10f))
+    drawPath(slip, Kk.Bone, alpha)
+    drawPath(slip, Kk.Ink, alpha, style = kkStroke(d(KK_TOOLTIP_EDGE_DP)))
     drawKkText(body, rect.left + d(13f), rect.top + d(11f), Kk.Ink, alpha = alpha)
     return rect
 }
+
+/** Width of a tooltip slip's ink edge: half over the slip's rim, half outside it. */
+private const val KK_TOOLTIP_EDGE_DP = 2f
 
 /** Bone slip panel (`.tip`, stat-compare tooltip): top-right corner cut [cutDp]. */
 fun DrawScope.drawKkSlip(bounds: Rect, cutDp: Float = 12f, color: Color = Kk.Bone) {
