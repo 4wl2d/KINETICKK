@@ -82,13 +82,14 @@ class HudColorVisionTest {
         val shifting = draw(runAffinity(EnemyType.ARCHITECT, architectAspect = StatusElement.THERMAL, architectPhase = 1, shifting = true))
         val active = assertNotNull(HudDrawCache.peekRect(HudRect.BOSS_1))
         val drained = assertNotNull(HudDrawCache.peekRect(HudRect.BOSS_0))
-        // At 55 % the middle third is 65 % full: its empty end shows the track.
+        // At 55 % the middle third is 65 % full: a part empties from the left like the bar, so its empty left end shows
+        // the track.
         val inset = active.height * 0.3f
-        val track = Rect(active.right - active.width * 0.25f, active.top + inset, active.right - active.height, active.bottom - inset)
+        val track = Rect(active.left + active.height, active.top + inset, active.left + active.width * 0.25f, active.bottom - inset)
         // Faint tracks (threat at 18 %, Thermal at 22 %) differ by less than a hatch mark.
         assertTrue(differing(neutral, aspected, track, threshold = 0.1f) > 20, "the aspect tints the active track")
         assertEquals(0, differing(neutral, aspected, filledPart(drained), threshold = 0.1f), "a drained third keeps the threat track")
-        assertTrue(differing(aspected, shifting, filledPart(active)) >= 6, "the shift stripes the active third")
+        assertTrue(differing(aspected, shifting, filledEnd(active)) >= 6, "the shift stripes the active third")
         // The weakness (Cryo, against Thermal) in the name row above the bar; none without an aspect.
         val row = Rect(active.left - active.width, active.top - active.height * 6f, active.right + active.width, active.top)
         val cryo = roles.element(StatusElement.CRYO.ordinal)
@@ -219,6 +220,12 @@ class HudColorVisionTest {
     }
 
     /** The left, filled part of a meter (the boss at 60 %, integrity at 10 %), inside its lean. */
+    /** The right end of a boss bar part, where its health sits (a part empties from the left). */
+    private fun filledEnd(rect: Rect): Rect {
+        val inset = rect.height * 0.3f
+        return Rect(rect.right - rect.width * 0.08f - rect.height, rect.top + inset, rect.right - rect.height, rect.bottom - inset)
+    }
+
     private fun filledPart(rect: Rect): Rect {
         val inset = rect.height * 0.3f
         return Rect(rect.left + rect.height, rect.top + inset, rect.left + rect.width * 0.08f + rect.height, rect.bottom - inset)

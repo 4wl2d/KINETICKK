@@ -49,6 +49,8 @@ enum class KkMeterStripes { NONE, THREAT, YOU, GOLD }
  *   the meter's left edge; [fillAlpha] fades a plain or brush fill.
  * - [edge] draws the 3 dp value edge in [edgeColor].
  * - [threat] marks the fill as a threat so MONO adds the hatch.
+ * - [fromEnd] anchors the fill at the meter's right edge (a bar that drains from the left): the
+ *   value spans the right [value] share and the ghost sits just left of it.
  *
  * Allocation-free (cached stripe tiles, no paths).
  */
@@ -68,24 +70,28 @@ fun DrawScope.drawKkMeter(
     fillBrush: Brush? = null,
     edgeColor: Color = Kk.Bone,
     fillAlpha: Float = 1f,
+    fromEnd: Boolean = false,
 ) {
     val v = value.coerceIn(0f, 1f)
-    val valueX = bounds.left + bounds.width * v
-    val ghostX = bounds.left + bounds.width * (v + ghost.coerceAtLeast(0f)).coerceAtMost(1f)
+    val reach = (v + ghost.coerceAtLeast(0f)).coerceAtMost(1f)
+    // From the left: the fill ends at valueX and the ghost runs on to ghostX. From the end: the fill starts at valueX and
+    // the ghost runs back to ghostX, left of it.
+    val valueX = if (fromEnd) bounds.right - bounds.width * v else bounds.left + bounds.width * v
+    val ghostX = if (fromEnd) bounds.right - bounds.width * reach else bounds.left + bounds.width * reach
     withTransform({ kkShear(bounds.center.y) }) {
         if (segments <= 0) {
             drawMeterSpan(bounds, bounds.left, bounds.right, valueX, ghostX, color, background, ghostColor, stripes, roles, time, threat,
-                fillBrush, fillAlpha)
+                fillBrush, fillAlpha, fromEnd)
         } else {
             val pitch = bounds.width / segments
             val gap = d(3f).coerceAtMost(pitch * 0.5f)
             for (index in 0 until segments) {
                 val left = bounds.left + index * pitch
                 drawMeterSpan(bounds, left, left + pitch - gap, valueX, ghostX, color, background, ghostColor, stripes, roles, time, threat,
-                    fillBrush, fillAlpha)
+                    fillBrush, fillAlpha, fromEnd)
             }
         }
-        if (edge && v > 0f) drawRect(edgeColor, Offset(valueX - d(3f), bounds.top), Size(d(3f), bounds.height))
+        if (edge && v > 0f) drawRect(edgeColor, Offset(if (fromEnd) valueX else valueX - d(3f), bounds.top), Size(d(3f), bounds.height))
     }
 }
 
@@ -104,32 +110,34 @@ private fun DrawScope.drawMeterSpan(
     threat: Boolean,
     fillBrush: Brush?,
     fillAlpha: Float,
+    fromEnd: Boolean = false,
 ) {
     if (right <= left) return
     val height = bounds.height
     if (background.alpha > 0f) drawRect(background, Offset(left, bounds.top), Size(right - left, height))
-    val fillRight = min(right, valueX)
-    if (fillRight > left) {
+    val fillLeft = if (fromEnd) max(left, valueX) else left
+    val fillRight = if (fromEnd) right else min(right, valueX)
+    if (fillRight > fillLeft) {
         when (stripes) {
             KkMeterStripes.NONE -> if (fillBrush != null) {
                 // Anchored at the meter's left edge, so the brush does not depend on where the meter sits.
                 translate(bounds.left, 0f) {
-                    drawRect(fillBrush, Offset(left - bounds.left, bounds.top), Size(fillRight - left, height), fillAlpha)
+                    drawRect(fillBrush, Offset(fillLeft - bounds.left, bounds.top), Size(fillRight - fillLeft, height), fillAlpha)
                 }
             } else {
-                drawRect(color, Offset(left, bounds.top), Size(fillRight - left, height), fillAlpha)
+                drawRect(color, Offset(fillLeft, bounds.top), Size(fillRight - fillLeft, height), fillAlpha)
             }
             KkMeterStripes.THREAT, KkMeterStripes.YOU, KkMeterStripes.GOLD -> kkDrawStripes(
-                left, bounds.top, fillRight, bounds.bottom, meterStripeColor(stripes, roles), meterStripeBackground(stripes, roles),
+                fillLeft, bounds.top, fillRight, bounds.bottom, meterStripeColor(stripes, roles), meterStripeBackground(stripes, roles),
                 time, KkFillKind.METER_STRIPES,
             )
         }
         if (threat && roles.hatchThreats) {
-            drawRect(kkFillBrush(KkFillKind.THREAT_HATCH, Kk.Ink), Offset(left, bounds.top), Size(fillRight - left, height))
+            drawRect(kkFillBrush(KkFillKind.THREAT_HATCH, Kk.Ink), Offset(fillLeft, bounds.top), Size(fillRight - fillLeft, height))
         }
     }
-    val ghostLeft = max(left, valueX)
-    val ghostRight = min(right, ghostX)
+    val ghostLeft = if (fromEnd) max(left, ghostX) else max(left, valueX)
+    val ghostRight = if (fromEnd) min(right, valueX) else min(right, ghostX)
     if (ghostRight > ghostLeft) drawRect(ghostColor, Offset(ghostLeft, bounds.top), Size(ghostRight - ghostLeft, height))
 }
 

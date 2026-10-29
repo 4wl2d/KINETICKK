@@ -780,8 +780,9 @@ private fun DrawScope.drawBossBar(
         return
     }
     // A boss with a spec: equal parts that empty from the left, one per phase (the Architect three, four at the
-    // Singularity tier; a mini-boss three; the Antecedent four). The active part's track takes the hue of the aspect it
-    // hardened into, and it stripes while the boss shifts.
+    // Singularity tier; a mini-boss three; the Antecedent four). Each part's fill sits at its right end, so a part empties
+    // from the left like the bar and a hit's ghost reads as one block across a part boundary. The active part's track
+    // takes the hue of the aspect it hardened into, and it stripes while the boss shifts.
     val height = barHeight
     val partGap = frame.u(6f)
     val partWidth = (width - partGap * (parts - 1)) / parts
@@ -802,7 +803,8 @@ private fun DrawScope.drawBossBar(
         val track = if (part == active && aspect >= 0) roles.element(aspect).copy(alpha = 0.22f) else roles.threat.copy(alpha = 0.18f)
         val stripes = part == active && shifting
         drawKkMeter(bar, fill, roles.threat, roles, background = track, ghost = partGhost, ghostColor = Kk.Bone,
-            stripes = if (stripes) KkMeterStripes.THREAT else KkMeterStripes.NONE, time = engine.renderElapsed, edge = stripes, threat = true)
+            stripes = if (stripes) KkMeterStripes.THREAT else KkMeterStripes.NONE, time = engine.renderElapsed, edge = stripes, threat = true,
+            fromEnd = true)
     }
 }
 

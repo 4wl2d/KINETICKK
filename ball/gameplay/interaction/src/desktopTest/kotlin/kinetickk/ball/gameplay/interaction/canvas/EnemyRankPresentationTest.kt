@@ -123,6 +123,14 @@ class EnemyRankPresentationTest {
             val gap = assertNotNull(HudDrawCache.peekRect(HudRect.BOSS_1)).left - first.right
             return ((barWidth + gap) / (first.width + gap)).roundToInt()
         }
+        // The parts empty from the left, and so does each part: at 60 % integrity the Antecedent's second part holds
+        // 0.4 of its health at its right end (a hit's ghost then runs on from the next part's empty end, as one block).
+        val bar = render(base.with("enemies" to immutableListOf(enemy(4, EnemyType.ANTECEDENT, phase = 1))), width, height)
+        val second = assertNotNull(HudDrawCache.peekRect(HudRect.BOSS_1))
+        val row = second.center.y.toInt()
+        fun threat(fraction: Float) = pixelNear(bar, second.left + second.width * fraction, row.toFloat(), KkRolePalette.Default.threat)
+        assertTrue(threat(0.8f) && threat(0.7f), "the second part's health sits at its right end")
+        assertFalse(threat(0.2f) || threat(0.4f), "the second part's left end has emptied")
         assertEquals(3, drawnParts(EnemyType.THRONE))
         assertEquals(4, drawnParts(EnemyType.ANTECEDENT))
         assertEquals(1, drawnParts(EnemyType.HERALD), "the Herald keeps its segmented meter")
