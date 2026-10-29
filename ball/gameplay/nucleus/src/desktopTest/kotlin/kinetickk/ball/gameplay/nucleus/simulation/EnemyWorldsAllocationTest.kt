@@ -158,6 +158,11 @@ class EnemyWorldsAllocationTest {
         }
     }
 
+    /**
+     * The warm-up outlasts the background JIT: when a stepped method's final tier is installed, the JVM allocates a few
+     * hundred bytes of strings on this thread once (not a per-step allocation), and with ten rounds that install could
+     * still land inside the measured rounds.
+     */
     private fun bytesPerRound(state: MutableGameState): Long {
         repeat(WARMUP_ROUNDS) { steps(state) }
         val thread = Thread.currentThread().id
@@ -170,7 +175,7 @@ class EnemyWorldsAllocationTest {
         const val CROWD = 60
         const val STEPS = 600
         const val RESTART_EVERY = 90
-        const val WARMUP_ROUNDS = 10
+        const val WARMUP_ROUNDS = 60
         const val ROUNDS = 5
         val WORLD_KINDS = listOf(EnemyType.COMET, EnemyType.PYLON, EnemyType.SENTRY, EnemyType.CRAWLER, EnemyType.CRAWLER)
         val DIMENSION_KINDS = listOf(EnemyType.SERAPH, EnemyType.CHOIR, EnemyType.IMP, EnemyType.HOUND, EnemyType.HOUND,
