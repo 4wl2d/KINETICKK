@@ -8,6 +8,12 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.font.createFontFamilyResolver
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
+import kinetickk.foundation.common.localization.AppLanguage
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -390,6 +396,31 @@ class KkComponentRenderingTest {
         val info = image(60, 60) { drawKkInfoButton(measurer, Rect(18f, 18f, 42f, 42f), active = true) }
         assertTrue(info.countNear(Kk.Volt, 30) > 40)
         assertEquals(0, image(60, 60) { drawKkInfoButton(measurer, Rect(18f, 18f, 42f, 42f)) }.countNear(Kk.Volt, 30))
+    }
+
+    /**
+     * A narrow card's band has no trailing label: its leading label runs whole to where that label would end (the
+     * Russian Derelict kind on a 195 dp phone card), and a label too long even for that shrinks rather than being cut.
+     */
+    @Test
+    fun aBandLabelWithoutATrailingLabelUsesTheBandsRoomBeforeShrinking() {
+        val russian = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f, AppLanguage.Russian,
+            KkTestFonts.typography)
+        val band = 195f - 18f
+        lateinit var derelict: TextLayoutResult
+        lateinit var beside: TextLayoutResult
+        lateinit var long: TextLayoutResult
+        image(240, 60) {
+            derelict = kkCardBandStartLabel(russian, "Заброшенный остов", Kk.Bone, band, hasEnd = false)
+            beside = kkCardBandStartLabel(russian, "Заброшенный остов", Kk.Bone, band, hasEnd = true)
+            long = kkCardBandStartLabel(russian, "Заброшенный остов далеко за краем", Kk.Bone, band, hasEnd = false)
+        }
+        fun whole(layout: TextLayoutResult) = !layout.didOverflowWidth && layout.getLineEnd(0, visibleEnd = true) == layout.layoutInput.text.length &&
+            !layout.layoutInput.text.text.contains('…')
+        assertTrue(whole(derelict) && derelict.size.width <= band - 36f, "the Derelict kind fits whole: ${derelict.size.width} px")
+        assertEquals(12f, derelict.layoutInput.style.fontSize.value, 0.01f, "at its own size")
+        assertTrue(beside.size.width <= band * 0.6f + 0.5f, "beside a trailing label it keeps to 0.6 of the band")
+        assertTrue(long.layoutInput.style.fontSize.value < 12f && long.size.width <= band - 36f + 0.5f, "a longer label shrinks to the room")
     }
 
     @Test
