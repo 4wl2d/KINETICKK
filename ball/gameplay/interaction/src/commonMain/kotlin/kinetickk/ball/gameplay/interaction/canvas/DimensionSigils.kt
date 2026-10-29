@@ -68,7 +68,7 @@ internal fun DrawScope.drawDimensionSigil(layer: WorldLayer, center: Offset, rad
  */
 fun DrawScope.drawWorldDiscoveryMark(id: WorldDiscovery, center: Offset, size: Float, color: Color) {
     val layer = worldDiscoveryLayer(id)
-    if (layer != null) drawDimensionSigil(layer, center, size * DISCOVERY_SIGIL_SHARE, color)
+    if (layer != null) drawDimensionSigil(layer, center, size * DiscoverySigilShare[layer.ordinal], color)
     else drawSiteGlyph(worldDiscoveryGlyph(id), center, size, color)
 }
 
@@ -80,8 +80,29 @@ fun worldDiscoveryLayer(id: WorldDiscovery): WorldLayer? = when (id) {
     else -> null
 }
 
-/** A discovery's sigil fills this share of the mark's size as its radius (the site glyphs' rings reach about as far). */
-private const val DISCOVERY_SIGIL_SHARE = 0.42f
+/**
+ * Each layer's sigil radius as a share of the mark's size: the sigil's own bounding box spans [DISCOVERY_SIGIL_SPAN] of
+ * the mark, as far as the site glyphs' widest marks reach, so a sigil reads as large as the glyphs beside it.
+ */
+private val DiscoverySigilShare: FloatArray by lazy {
+    FloatArray(WorldLayer.entries.size) { ordinal ->
+        val polygons = dimensionSigilPolygons(WorldLayer.entries[ordinal], 1f)
+        var minX = Float.MAX_VALUE
+        var maxX = -Float.MAX_VALUE
+        var minY = Float.MAX_VALUE
+        var maxY = -Float.MAX_VALUE
+        polygons.forEach { points ->
+            for (index in points.indices step 2) {
+                minX = minOf(minX, points[index]); maxX = maxOf(maxX, points[index])
+                minY = minOf(minY, points[index + 1]); maxY = maxOf(maxY, points[index + 1])
+            }
+        }
+        DISCOVERY_SIGIL_SPAN / maxOf(maxX - minX, maxY - minY)
+    }
+}
+
+/** A discovery sigil's span in mark sizes: the site glyphs' widest marks (the cache's 20 of 24 units). */
+private const val DISCOVERY_SIGIL_SPAN = 0.8f
 
 /** Sigil paths centred on the origin, kept per layer and radius (a rift, the HUD plate, the Codex: a few radii each). */
 private object DimensionSigilPaths {

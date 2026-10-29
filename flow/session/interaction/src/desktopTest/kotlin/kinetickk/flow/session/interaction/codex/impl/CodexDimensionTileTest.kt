@@ -98,6 +98,31 @@ class CodexDimensionTileTest {
         }
     }
 
+    /** Each sigil spans about as much of its mark as the site glyphs beside it: never the smallest mark on the grid. */
+    @Test
+    fun eachSigilReadsAsLargeAsTheSiteGlyphsBesideIt() {
+        fun span(map: PixelMap): Int {
+            var left = SIDE
+            var right = -1
+            var top = SIDE
+            var bottom = -1
+            for (y in 0 until SIDE) for (x in 0 until SIDE) {
+                val p = map[x, y]
+                if (abs(p.red - Kk.Ink.red) + abs(p.green - Kk.Ink.green) + abs(p.blue - Kk.Ink.blue) < 0.2f) continue
+                left = minOf(left, x); right = maxOf(right, x); top = minOf(top, y); bottom = maxOf(bottom, y)
+            }
+            return maxOf(right - left, bottom - top) + 1
+        }
+        val size = SIDE * 0.5f
+        val glyphs = WorldDiscovery.entries.filter { it.kind != WorldDiscoveryKind.DIMENSION }
+            .map { id -> span(mark { drawWorldDiscoveryMark(id, it, size, Kk.Bone) }) }
+        dimensions.forEach { id ->
+            val sigil = span(mark { drawWorldDiscoveryMark(id, it, size, Kk.Bone) })
+            assertTrue(sigil >= glyphs.average() * 0.95, "$id spans $sigil px against the site glyphs' ${glyphs.average()} px")
+            assertTrue(sigil <= glyphs.max() * 1.05, "$id spans $sigil px, past the widest site glyph's ${glyphs.max()} px")
+        }
+    }
+
     private fun entry(id: WorldDiscovery, model: CodexRenderModel, language: AppLanguage = AppLanguage.English): CodexEntry =
         codexCatalogEntries(CODEX_WORLD_CATEGORY, "", CodexItemFilter.ALL, model, catalog, progress, language).single { it.key == "world/$id" }
 
