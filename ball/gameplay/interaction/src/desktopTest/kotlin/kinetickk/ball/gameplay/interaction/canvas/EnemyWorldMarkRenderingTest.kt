@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import kinetickk.ball.gameplay.nucleus.render.EnemyBehavior
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.foundation.collections.immutableListOf
@@ -23,7 +24,7 @@ import kotlin.test.assertTrue
 
 /**
  * Enemy marks drawn by the real world renderer: a secret boss keeps its anomaly glyph readable where threats are hatched
- * (Mono).
+ * (Mono), and a streaking Comet's tail tapers and fades along its length instead of ending as a flat bar.
  */
 class EnemyWorldMarkRenderingTest {
     @Test
@@ -50,6 +51,33 @@ class EnemyWorldMarkRenderingTest {
             assertTrue(inside > 200, "$type: the sampled plate is the glyph's inside ($inside px)")
             assertEquals(0, lit, "$type: the Mono hatch shows through the glyph's diamond at $lit of $inside px")
         }
+    }
+
+    @Test
+    fun aStreakingCometsTailTapersAndFadesAlongItsLength() {
+        val radius = 20f
+        // Facing +x: the tail runs to the left of the body, 7 radii long.
+        val comet = EnemyProjection(2, EnemyType.COMET, 0f, 0f, 0f, 0f, 40f, 40f, radius, 0f, 0f, 0f, 0f, 0f, 0f, false,
+            behavior = EnemyBehavior.STRIKE, facing = 0f)
+        val pixels = drawn(comet, KkRolePalette.Default)
+        fun column(distance: Float): Pair<Int, Float> {
+            val x = CENTER_X - distance.toInt()
+            var width = 0
+            var brightest = 0f
+            for (y in CENTER_Y - 40..CENTER_Y + 40) {
+                val pixel = pixels[x, y]
+                val gain = (pixel.red - Kk.Ink.red) + (pixel.green - Kk.Ink.green) + (pixel.blue - Kk.Ink.blue)
+                if (gain > 0.04f) width++
+                brightest = maxOf(brightest, gain)
+            }
+            return width to brightest
+        }
+        val (nearWidth, nearBright) = column(radius * 2f)
+        val (farWidth, farBright) = column(radius * 6.3f)
+        assertTrue(nearWidth >= radius * 0.5f, "the tail is wide near the body ($nearWidth px)")
+        assertTrue(farWidth in 1..(nearWidth / 2), "the tail tapers toward its end ($farWidth px against $nearWidth px)")
+        assertTrue(farBright < nearBright * 0.75f, "the tail fades toward its end ($farBright against $nearBright)")
+        assertEquals(0, column(radius * 7.6f).first, "nothing past the tail's end")
     }
 
     private fun drawn(enemy: EnemyProjection, roles: KkRolePalette): PixelMap {

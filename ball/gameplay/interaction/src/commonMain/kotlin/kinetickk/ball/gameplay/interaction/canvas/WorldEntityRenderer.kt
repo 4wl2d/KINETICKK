@@ -300,6 +300,11 @@ private const val HERALD_VOLLEY_LEAD = 0.3f
  */
 private const val SECRET_GLYPH = 0.75f
 
+/** A streaking Comet's tail: its length in radii, the full streak's alpha and its brighter core's (together 0.55 at the body). */
+private const val COMET_TAIL_LENGTH = 7f
+private const val COMET_TAIL_ALPHA = 0.3f
+private const val COMET_TAIL_CORE_ALPHA = 0.36f
+
 /** Half side of the Mono ink plate under the secret boss glyph, in glyph sizes: its diamond's 10/24 half diagonal. */
 private const val SECRET_GLYPH_PLATE = (10.0 / 24.0 / 1.4142135623730951).toFloat()
 private const val SECRET_RING = 1.7f
@@ -622,8 +627,17 @@ private fun DrawScope.drawEnemyTelegraph(
                     pathEffect = WorldStrokes.dashEffect)
             }
             EnemyBehavior.STRIKE -> {
+                // The streak: 7 radii long and 0.9 radii wide at the body, tapering to a blunt tip, its bone fading
+                // along it (a shorter, brighter core over the full-length streak).
                 val back = enemy.facing + PI.toFloat()
-                drawLine(Kk.Bone.copy(alpha = 0.55f), center, polar(center, enemy.radius * 7f, back), enemy.radius * 0.9f)
+                withTransform({
+                    translate(center.x, center.y)
+                    rotate(back * RAD_TO_DEG, Offset.Zero)
+                    scale(enemy.radius * COMET_TAIL_LENGTH, enemy.radius, Offset.Zero)
+                }) {
+                    drawPath(WorldUnitShapes.cometTail, Kk.Bone.copy(alpha = COMET_TAIL_ALPHA))
+                    drawPath(WorldUnitShapes.cometTailCore, Kk.Bone.copy(alpha = COMET_TAIL_CORE_ALPHA))
+                }
                 drawLine(threat, center, polar(center, enemy.radius * 4f, back), 1f)
             }
             else -> Unit

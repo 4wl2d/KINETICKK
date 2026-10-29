@@ -128,6 +128,31 @@ internal object WorldUnitShapes {
         }
     }
 
+    /**
+     * A Comet's streak on a unit length: 0.9 wide at its body (x = 0) tapering to a blunt 0.12-wide tip at x = 1, drawn
+     * scaled by the tail's length along x and the Comet's radius across. The flat tip keeps it a streak, never an arrowhead.
+     */
+    val cometTail: Path by lazy {
+        Path().apply {
+            moveTo(0f, -0.45f)
+            lineTo(1f, -0.06f)
+            lineTo(1f, 0.06f)
+            lineTo(0f, 0.45f)
+            close()
+        }
+    }
+
+    /** The streak's brighter core: the first 55 % of the tail, 0.6 wide at the body, tapering the same way. */
+    val cometTailCore: Path by lazy {
+        Path().apply {
+            moveTo(0f, -0.3f)
+            lineTo(0.55f, -0.06f)
+            lineTo(0.55f, 0.06f)
+            lineTo(0f, 0.3f)
+            close()
+        }
+    }
+
     /** A sheared (−12°) bar 1 × 0.22 centred on the origin (Silence's mute bars). */
     val bar: Path by lazy {
         val lean = 0.11f * 0.2126f
