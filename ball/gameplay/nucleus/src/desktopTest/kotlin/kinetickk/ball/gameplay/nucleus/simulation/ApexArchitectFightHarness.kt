@@ -29,9 +29,10 @@ import kotlin.math.sin
 
 /**
  * The fights of the Apex against the Architect (combat-final §5.2, §10 "Apex"), shared by [ApexArchitectFightTest]
- * (the contract), [ApexArchitectCastTest] (the cast rule) and [ApexArchitectBenefitTest] (the benefit bands). The
- * three are separate classes only so that test forks and CI shards can run them side by side; each computes its own
- * fights, as the methods of the one class did.
+ * (the contract), [ApexArchitectCastTest] (the cast rule), [ApexArchitectOffenceTest] (the offence band) and
+ * [ApexArchitectPrismDefenceTest] and [ApexArchitectDiamondDefenceTest] (the defensive bands). They are separate
+ * classes only so that test forks and CI shards can run them side by side; each computes its own fights, as the
+ * methods of the one class did.
  *
  * Fights: per character, tier (0 fresh; 10 with the strong build's Matrix, Arc Coil and Relics) and seed, the
  * no-POI bot plays the run to the Architect's arrival (the Core cannot be hurt on the way; a singularity contact can
@@ -167,6 +168,32 @@ internal object ApexArchitectFightHarness {
                 BenefitPair(plain.killSeconds, apex.killSeconds, apex.windowDamage, plain.windowDamage)
             }
         }.flatMap { it.second }
+    }
+
+    /**
+     * The defensive band of [shape] (the Prism or the Diamond): tier 10, where the Architect's fire and the arena put
+     * real damage on them (at tier 0 their facets and parries leave almost nothing to defend), the first
+     * [DEFENSIVE_RUNS] runs along [PopulationSeeds], each forked into [FORKS] pairs: the damage taken during the Apex
+     * arm's windows, summed over the pairs, is [0.55, 0.85] of what the no-Apex arm takes in the same windows. Prints
+     * the pairs and returns the breach, or null.
+     *
+     * Both bands are population rules (0.5.0 active items; policy.md, "Balance gate populations"). Their populations
+     * are the ones the base was measured on, 128 runs per character with four forks each: fewer than 300 runs, since
+     * these fights already set the suite's runtime. By the population threshold rule (the wider of the design's band
+     * and the base ± two standard errors, rounded outward) both bands stay the design's, [0.55, 0.85].
+     *
+     * In 0.5.0, 128 runs did not settle the defensive bands either: a fresh 128-run draw (four forks each) from the 256
+     * calibration-window runs landed in [0.55, 0.85] with probability about 0.82 for the Prism (window ratio 0.814) and
+     * 0.84 for the Diamond (0.589); 0.6.0's single Mirror Stance parry moved the Diamond's pooled window reading to
+     * 0.701. baseline.md records this as a trade-off for the owner, not a reason to restate again.
+     */
+    fun defensiveBandBreach(shape: CoreShape): String? {
+        val list = benefitPairs(shape, DEFENSIVE_TIER)
+        val taken = list.sumOf { it.apexWindowDamage }
+        val without = list.sumOf { it.plainWindowDamage }
+        println("APEX-DEFENSE $shape tier=$DEFENSIVE_TIER pairs=${list.size} taken=${"%.0f".format(taken)} " +
+            "without=${"%.0f".format(without)} ratio=${"%.3f".format(taken / without)}")
+        return if (!(without > 0.0) || (taken / without).toFloat() !in 0.55f..0.85f) "$shape took $taken against $without" else null
     }
 
     /** An independent copy of the run at the Architect's arrival, its Core moved by [fork] × [FORK_OFFSET]. */

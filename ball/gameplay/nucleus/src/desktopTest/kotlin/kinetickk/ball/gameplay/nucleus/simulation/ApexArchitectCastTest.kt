@@ -11,7 +11,8 @@ import kotlin.test.assertTrue
 /**
  * The Apex against the Architect (combat-final §5.2, §10 "Apex"): the bot casts its Apex in every one of 312
  * population fights, a population rule over [PopulationSeeds]. The fights are [ApexArchitectFightHarness]'s; the
- * contract is [ApexArchitectFightTest]'s and the benefit bands [ApexArchitectBenefitTest]'s.
+ * contract is [ApexArchitectFightTest]'s and the benefit bands are [ApexArchitectOffenceTest]'s,
+ * [ApexArchitectPrismDefenceTest]'s and [ApexArchitectDiamondDefenceTest]'s.
  */
 class ApexArchitectCastTest {
     /**

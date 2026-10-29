@@ -13,8 +13,9 @@ import kotlin.test.assertTrue
 
 /**
  * The Apex against the Architect (combat-final §5.2, §10 "Apex"): the owner asked that the level-42 ability strongly
- * affect the final fight. This class holds its contract; [ApexArchitectCastTest] holds the cast rule and
- * [ApexArchitectBenefitTest] the benefit bands, and [ApexArchitectFightHarness] plays the fights of all three.
+ * affect the final fight. This class holds its contract; [ApexArchitectCastTest] holds the cast rule,
+ * [ApexArchitectOffenceTest], [ApexArchitectPrismDefenceTest] and [ApexArchitectDiamondDefenceTest] the benefit bands,
+ * and [ApexArchitectFightHarness] plays the fights of all of them.
  *
  * The contract holds in every Apex arm of the first three runs per case: each strike stays within the boss's hit cap,
  * an activation spends at most its strikes and its bolt budget, the boss's integrity never moves while it shifts,
