@@ -280,6 +280,11 @@ class WorldDimensionRenderingTest {
         assertTrue(around(fast, 300f, 82f, 86f).count { it == you } > 60, "at pace the next ring's dashes are the player's colour")
         assertEquals(0, around(slow, 300f, 82f, 86f).count { near(it, you, 40) }, "below the pace they are not")
         assertTrue(around(slow, 300f, 80f, 88f).count { spread(it) <= 12 && luminance(it) > 50f } > 60, "below the pace they are grey")
+        // Each hatched dash is a filled grey block under its stripes (14 on, 10 off round the ring): most of the band
+        // between the dashes' edges is lit, where loose stripe fragments alone would light about a quarter of it.
+        val band = around(slow, 300f, 81f, 87f)
+        val lit = band.count { spread(it) <= 12 && luminance(it) > 40f }
+        assertTrue(lit > band.size * 0.45f, "below the pace each dash is a solid hatched block ($lit of ${band.size} px lit)")
         assertTrue(around(fast, 300f, 68f, 72f).count { near(it, shield, 30) } > 100, "the next ring keeps its Grace ring")
         // The ring after the next waits as a grey stroke: no shield and no player's colour.
         val following = around(fast, -300f, 64f, 90f)

@@ -422,6 +422,9 @@ private fun DrawScope.drawHalo(center: Offset, roles: KkRolePalette) {
     }
 }
 
+/** Alpha of the grey block under each hatched dash of a too-slow ring. */
+private const val HATCHED_DASH_BASE_ALPHA = 0.35f
+
 private const val HALO_TICKS = 8
 private val HaloTickDirections = FloatArray(HALO_TICKS * 2) { index ->
     val angle = (index / 2) * TWO_PI / HALO_TICKS
@@ -430,8 +433,11 @@ private val HaloTickDirections = FloatArray(HALO_TICKS * 2) { index ->
 
 /**
  * The ring to fly through next: a dashed ring in the player's colour turning at 15° per second, grey with hatched dashes
- * while the Core flies below the layer's pace (a slow pass would not count). While the split to it runs, the ring is
- * an arc from the top over the [split] share still left, emptying clockwise as the split runs out.
+ * while the Core flies below the layer's pace (a slow pass would not count). Each hatched dash is a wide grey block
+ * under its stripes with no line across it, so a dash reads as one hatched block, never as loose stripe fragments or
+ * crossed strokes that look like characters.
+ * While the split to it runs, the ring is an arc from the top over the [split] share still left, emptying clockwise as
+ * the split runs out.
  */
 private fun DrawScope.drawNextHaloRing(center: Offset, time: Float, slow: Boolean, split: Float, roles: KkRolePalette) {
     if (split < 1f) {
@@ -439,9 +445,10 @@ private fun DrawScope.drawNextHaloRing(center: Offset, time: Float, slow: Boolea
         val topLeft = Offset(center.x - HALO_NEXT_RADIUS, center.y - HALO_NEXT_RADIUS)
         val size = Size(HALO_NEXT_RADIUS * 2f, HALO_NEXT_RADIUS * 2f)
         if (slow) {
+            drawArc(Kk.Mute.copy(alpha = HATCHED_DASH_BASE_ALPHA), -90f, sweep, useCenter = false, topLeft = topLeft, size = size,
+                style = DimensionStrokes.hatchedRing)
             drawArc(kkFillBrush(KkFillKind.HATCH, Kk.Mute), -90f, sweep, useCenter = false, topLeft = topLeft, size = size,
                 style = DimensionStrokes.hatchedRing)
-            drawArc(Kk.Mute, -90f, sweep, useCenter = false, topLeft = topLeft, size = size, style = DimensionStrokes.ring)
         } else {
             drawArc(roles.you, -90f, sweep, useCenter = false, topLeft = topLeft, size = size, style = DimensionStrokes.ring)
         }
@@ -449,8 +456,8 @@ private fun DrawScope.drawNextHaloRing(center: Offset, time: Float, slow: Boolea
     }
     rotate(time * 15f, center) {
         if (slow) {
+            drawCircle(Kk.Mute.copy(alpha = HATCHED_DASH_BASE_ALPHA), HALO_NEXT_RADIUS, center, style = DimensionStrokes.hatchedRing)
             drawCircle(kkFillBrush(KkFillKind.HATCH, Kk.Mute), HALO_NEXT_RADIUS, center, style = DimensionStrokes.hatchedRing)
-            drawCircle(Kk.Mute, HALO_NEXT_RADIUS, center, style = DimensionStrokes.ring)
         } else {
             drawCircle(roles.you, HALO_NEXT_RADIUS, center, style = DimensionStrokes.ring)
         }
@@ -602,7 +609,7 @@ internal fun dimensionUnit(hash: Int, salt: Int): Float {
 /** Dashed strokes of the rift rings and the next halo's ring (created once). */
 private object DimensionStrokes {
     val ring: Stroke by lazy { Stroke(2.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f))) }
-    val hatchedRing: Stroke by lazy { Stroke(7f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f))) }
+    val hatchedRing: Stroke by lazy { Stroke(11f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(24f, 12f))) }
 }
 
 /** Half the opening of a Zenith light wedge: narrow enough that ink keeps its share of the screen. */
