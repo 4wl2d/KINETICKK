@@ -66,8 +66,9 @@ internal fun MutableGameState.sweepKills() {
     // The Architect resolves first, so a self-inflicted death later in the same sweep cannot undo a victory.
     for (index in killed.indices) if (checkNotNull(killed[index]).type == EnemyType.ARCHITECT) onEnemyKilled(checkNotNull(killed[index]))
     for (index in killed.indices) if (checkNotNull(killed[index]).type != EnemyType.ARCHITECT) onEnemyKilled(checkNotNull(killed[index]))
-    // Matter granted by kills resolved after the terminal bank in this sweep still counts.
-    if (phase != GamePhase.RUNNING) bankRunMatter()
+    // Matter granted by kills resolved after the terminal bank in this sweep still counts. A choice a kill opened is not
+    // the run's end: banking then would leave signals pricing only the Matter earned after it.
+    if (phase == GamePhase.GAME_OVER || phase == GamePhase.VICTORY) bankRunMatter()
     var retainedCount = 0
     for (index in enemies.indices) {
         val enemy = enemies[index]

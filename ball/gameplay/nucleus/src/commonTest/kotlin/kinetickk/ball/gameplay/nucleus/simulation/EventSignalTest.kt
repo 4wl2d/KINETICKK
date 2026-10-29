@@ -18,6 +18,7 @@ import kinetickk.ball.gameplay.nucleus.model.SignalPrompt
 import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.model.distanceSquared
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
+import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.EventSignalProjection
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.PickupType
@@ -358,6 +359,33 @@ class EventSignalTest {
             bankedRunMatter = 41L
         }.openPrompt(SignalKind.MERCHANT)
         assertFalse(enough.card(SignalOption.MERCHANT_RARE_OFFER).locked)
+    }
+
+    @Test
+    fun aLevelOfferAKillOpensInTheKillSweepBanksNothingSoTheMerchantPricesAllTheRunsMatter() {
+        // Data Siphon pays Data for an Elite kill; one Data short of a level, that reward opens the level offer inside the
+        // kill sweep. A choice is not the run's end, so the sweep banks none of the run's Matter.
+        val state = arena().apply {
+            own("Data Siphon")
+            elapsed = 240f
+            runMatter = 300L
+            data = nextLevelData - 1
+        }
+        val elite = state.dummy(hp = 1_000f, type = EnemyType.ELITE).apply { hp = 1f }
+        state.dealHit(elite, 1_000f, HitSource.WEAPON, canCrit = false)
+        state.sweepKills()
+        assertEquals(GamePhase.CHOICE, state.phase, "The kill's Data reward opens the level offer")
+        assertEquals(ChoiceType.ITEM, state.activeChoiceType)
+        assertTrue(state.runMatter >= 300L)
+        assertEquals(0L, state.bankedRunMatter, "A choice opened in the sweep banks nothing")
+        assertEquals(0L, state.pendingBankedMatter)
+        assertEquals(0L, state.totalMatter)
+
+        state.openPrompt(SignalKind.MERCHANT)
+        // At 240 s the cards cost 60, 150 and 30: all affordable from the run's whole Matter, as the HUD shows it.
+        listOf(SignalOption.MERCHANT_RARE_OFFER, SignalOption.MERCHANT_EPIC_OFFER, SignalOption.MERCHANT_REROLLS).forEach { option ->
+            assertFalse(state.card(option).locked, "$option")
+        }
     }
 
     @Test
