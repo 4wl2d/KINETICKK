@@ -626,7 +626,7 @@ internal fun MutableGameState.spawnScheduled(type: EnemyType): Boolean {
 internal fun MutableGameState.evictOldestOrdinaryEnemy() {
     for (index in enemies.indices) {
         val enemy = enemies[index]
-        if (enemy.isBossClass || enemy.isElite || isPlaceBound(enemy)) continue
+        if (enemy.isEliteClass || isPlaceBound(enemy)) continue
         enemies.removeAt(index)
         return
     }
@@ -723,4 +723,4 @@ internal fun MutableGameState.relocateLeashedEnemy(enemy: Enemy) {
 
 /** True when [enemy] stays wherever it is: scheduled leaders, the boss class and place-bound enemies. */
 internal fun MutableGameState.leashExempt(enemy: Enemy): Boolean =
-    enemy.isElite || enemy.isBossClass || isPlaceBound(enemy)
+    enemy.isEliteClass || isPlaceBound(enemy)
