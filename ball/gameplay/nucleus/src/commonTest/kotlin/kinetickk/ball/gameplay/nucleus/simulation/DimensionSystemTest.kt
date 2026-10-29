@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.DimensionNotices
 import kinetickk.ball.content.api.DimensionObjective
+import kinetickk.ball.content.api.EnemyDefinition
 import kinetickk.ball.content.api.EnemyType
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.RebirthMutator
@@ -25,6 +26,7 @@ import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
 import kotlin.math.hypot
+import kotlin.math.max
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -288,6 +290,51 @@ class DimensionSystemTest {
         assertEquals(500f, game.nextEliteAt, "a later Elite keeps its schedule")
         assertFalse(game.dimensionVisitActive())
         assertTrue(game.dimensionTouched())
+    }
+
+    @Test
+    fun aSurgesThemeEndsWithTheLayerItWasPickedIn() {
+        var arrivals = 0
+        var returns = 0
+        for (layer in listOf(WorldLayer.ZENITH, WorldLayer.NADIR)) for (seed in listOf(60_601, 11, 23, 37, 41, 59)) {
+            // A realspace surge's theme ends with the arrival: the arrival build weighs that kind as unthemed.
+            val game = game(seed = seed)
+            game.startSurge()
+            val outer = game.surgeTheme() ?: continue
+            game.enterDimensionForTesting(layer)
+            assertEquals(SpawnDirectorPhase.BUILD.ordinal, game.directorPhase)
+            assertEquals(-1, game.surgeThemeType, "$layer seed $seed: the arrival build has no theme")
+            if (game.weighsUnthemed(outer, "$layer seed $seed arrival")) arrivals++
+
+            // A surge inside picks its own theme, which ends with the return breather.
+            game.elapsed += 20f
+            game.startSurge()
+            val inner = game.surgeTheme() ?: continue
+            game.skipToVisitEndForTesting()
+            game.updateDimension(MutableGameState.FIXED_STEP)
+            assertEquals(WorldLayer.BASE, game.worldLayer)
+            assertEquals(SpawnDirectorPhase.BREATHER.ordinal, game.directorPhase)
+            assertEquals(-1, game.surgeThemeType, "$layer seed $seed: the return breather has no theme")
+            if (game.weighsUnthemed(inner, "$layer seed $seed return")) returns++
+        }
+        assertTrue(arrivals > 0 && returns > 0, "the theme lived in the new habitat on $arrivals arrivals and $returns returns")
+    }
+
+    private fun MutableGameState.startSurge() {
+        directorPhase = SpawnDirectorPhase.SURGE.ordinal
+        directorPhaseUntil = elapsed + 30f
+        onDirectorPhaseStarted(SpawnDirectorPhase.SURGE)
+    }
+
+    private fun MutableGameState.surgeTheme(): EnemyDefinition? =
+        canonicalGameplayContent.enemies.singleOrNull { it.type.ordinal == surgeThemeType }
+
+    /** [definition] weighs what it would with no theme; true when it lives in the habitat now, so the check bites. */
+    private fun MutableGameState.weighsUnthemed(definition: EnemyDefinition, label: String): Boolean {
+        val unthemed = typeWeight(definition, weakOnly = false, recency = false, personality = false) *
+            personalityTypeMultiplier(definition.type)
+        assertEquals(unthemed, typeWeight(definition, weakOnly = false, recency = false), 1e-5f * max(1f, unthemed), label)
+        return unthemed > 0f
     }
 
     @Test

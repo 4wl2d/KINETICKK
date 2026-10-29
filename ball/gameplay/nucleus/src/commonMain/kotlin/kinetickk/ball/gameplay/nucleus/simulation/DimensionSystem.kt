@@ -200,7 +200,8 @@ internal fun MutableGameState.drawPickupsIn() {
 
 /**
  * Sets the director's phase for the arrival (a short build with a small banked budget) or the return (a short
- * breather with little budget) and forgets the planned event. Fixed durations: no spawn-stream draw.
+ * breather with little budget) and forgets the planned event and the surge's theme, as a phase started by the director
+ * would ([onDirectorPhaseStarted]). Fixed durations: no spawn-stream draw.
  */
 internal fun MutableGameState.resetDirectorForLayer(entering: Boolean) {
     if (entering) {
@@ -212,6 +213,7 @@ internal fun MutableGameState.resetDirectorForLayer(entering: Boolean) {
         directorPhaseUntil = elapsed + RETURN_BREATHER_SECONDS
         spawnBudget = min(spawnBudget, RETURN_SPAWN_BUDGET)
     }
+    surgeThemeType = -1
     pendingEventKind = -1
     pendingEventSize = 0
     pendingEventType = -1
