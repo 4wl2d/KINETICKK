@@ -1232,12 +1232,69 @@ character band (Crescent 1.39 against 1.40, 0.13 SE; Crescent and Shard
 reach 1.56 at base + 2 SE, and a design band never widens), the Still Water
 omen (+0.093, SE 0.032, against 0.12) and Hungry Dark (+0.080, SE 0.035).
 
-The 0.6.0 design gates hold design bands met by content and are not restated:
-Zenith completion 0.80 (Ascent 0.754, Judgement 0.848), Nadir 0.75 (Harvest
-0.877, Pyre 0.627), the dimension outcome shift +0.008 for both layers,
-fresh dungeon clear 0.650, bounty clear 0.836 fresh and 0.831 veteran, the
-omen arms within their bands, run skeleton variety 0.881, event-signal reach
-0.994 and every personality within the director budget.
+### Final verification 2f7d649a
+
+The affected gates were measured again on `2f7d649a`: 19 classes and 60 tests
+passed, with no failures, errors or skipped tests. This is the targeted gate
+measurement; the full local CI is recorded separately. The threshold base
+`15b23096`, its SEs above and every existing threshold remain unchanged.
+The values below are current observations, not a replacement threshold base.
+SE is included only where this run printed it; an unprinted SE is not inherited
+from the historical measurement.
+
+| Gate | Measured on 2f7d649a | Unchanged threshold |
+|---|---|---|
+| A, fresh tier-0 wins | 207/300 = 0.690 | >= 0.62 |
+| I, median clear with / without actives | 82.5562 / 90.8428 s = 0.9088 | >= 0.80 |
+| D, strong tier-10 median survival | 878.37 s | >= 480 s |
+| H, strong + Data tier-10 median survival | 900.0104 s | >= 480 s |
+| NoPoi, wins as the reference / POI-free wins | 187/300 = 0.6233 / 193/300 = 0.6433 | >= 0.56 / >= 0.50 |
+| Fresh tier-0 alive at 720 s / alive runs outside level 22-30 | 213/300 = 0.710 / 14/213 = 0.0657 | >= 0.65 / <= 0.10 |
+| Singularity Slingshot / Spin Turbine / Gravity Assist ratios | 1.325 / 1.186 / 1.026 | <= 1.51 / <= 1.36 / <= 1.18 |
+| Singularity Crest Rider / Recoil Spring / other ten arms | 1.023 / 1.007 / 0.833 to 0.998 | <= 1.17 / <= 1.15 / <= 1.15 |
+| Added singularity contacts, every arm | 0/300 | 0 |
+| Active share median / owned by 360 s / spread top | 0.090 (211 judged) / 289/300 = 0.9633 / Storm Coil 0.193 | [0.07, 0.20] / >= 0.25 / <= 0.30 |
+| V2 Orb / Prism / Star / Hexagon | 0.720 / 0.735 / 0.743 / 0.768 | <= 0.76 / <= 0.78 / <= 0.79 / <= 0.81 |
+| Matter P1, first upgrade / fresh median | 55/2,328 = 0.0236 | <= 0.03 |
+| Matter P2, Refit 10 / Honing 10 of median 23,239 | 1.2118 / 0.8813 | [1, 1.5] / [0.7, 1] |
+| J1, maxed strong median survival | 900.0104 s | >= 480 s |
+| Active frequency, unowned cards fresh / veteran | 0.058 / 0.050 | [0.04, 0.10] each |
+| Active frequency, highest level-2-to-10 share fresh / veteran | 0.159 / 0.068 | <= 0.20 each |
+| Active frequency, shown by level 10 fresh / 16 veteran | 246/266 = 0.9248 / 286/300 = 0.9533 | >= 0.80 each |
+| Active frequency, median held at 720 s / highest POI reward share | 3 in both arms / 0.118 | [1, 3] / <= 0.20 |
+| Dungeon fresh clear / died inside (120 attempts) | 0.6750 (SE 0.0423) / 0.2750 (SE 0.0405) | [0.35, 0.85] / <= 0.30 |
+| Dungeon strong clear / clear gap / median clear | 1.0000 / 0.3250 / 28.3514 s (SE 1.3877) | >= 0.85 / >= 0.15 / <= 150 s |
+| Bounty fresh / veteran clear | 0.8366 (343/410) / 0.8293 (408/492) | [0.40, 0.85] / [0.40, 0.90] |
+| Bounty fresh / veteran median fight | 47.8883 / 45.1223 s | <= 75 s each |
+| Sigil summoning / duel clear | 125/150 = 0.8333 / 77/125 = 0.6160 | summoning >= 0.50; duel clear recorded only |
+| Zenith tier-0 Ascent / Judgement completion | 0.7544 / 0.8475 | [0.55, 0.92] / [0.45, 0.88] |
+| Nadir tier-0 Harvest / Pyre completion | 0.8772 / 0.6271 | [0.50, 0.90] / [0.40, 0.85] |
+| Zenith / Nadir tier-10 survival and completion | 0.9800 / 0.9300 survival; 0.6300 / 0.8000 completion | survival >= 0.75; completion >= 0.50 |
+| Archive tier-3 / tier-0 survival and defeat | 0.9917 / 0.9126 survival; 0.2667 / 0.0971 defeat | survival >= 0.65 / >= 0.45; defeat [0.20, 0.65] / <= 0.35 |
+| Dimension win shift, Zenith / Nadir | 0.0000 (SE 0.0389) / +0.0167 (SE 0.0457) | [-0.06, +0.15] each |
+| Event-signal reach / win shift / Matter ratio | 795/798 = 0.9962 / +0.0367 / 1.0060 | >= 0.85 / [-0.08, +0.12] / >= 0.80 |
+
+These measurements include the earlier run-Matter banking fix (`3cbb4ad6`)
+and the later world-interaction fixes together. Differences from the previous
+local CI at `f8415014` are not isolated effects of any single fix. Ambient
+spawns are now kept out of sealed rooms; `garrisonScale` changed from 1.0 to
+0.8 on the structures calibration window i = 2,301..2,400 (fresh clear 0.720,
+died 0.250), before confirming the unchanged gate bands. Untouched sigils
+survive dimension visits, Quiet Signals wait during engagements and site
+nudges finish outside structure footprints. Roaming Elites and Heralds now
+return after far travel beyond the greater of 6,000 u and the ordinary
+viewport-scaled leash, using a salted hash without new spawn-stream draws.
+
+The measured 0.6.0 design gates meet their unchanged content bands. On this
+verification, Zenith tier-0 completion is 0.8017 (Ascent 0.7544, Judgement
+0.8475), Nadir 0.7500 (Harvest 0.8772, Pyre 0.6271), and the corresponding
+win shifts are 0.0000 and +0.0167. Fresh dungeon clear is 0.6750 and bounty
+clear is 0.8366 fresh / 0.8293 veteran. The omen arms remain within their
+bands (Still Water win shift +0.0900, SE 0.0323; Hungry Dark +0.0700,
+SE 0.0345), run skeleton variety is 0.8807, and event-signal reach is 0.9962.
+The engaging-site win share is 0.7600 against its no-POI control's 0.7067.
+The Apex and director-budget values above remain historical measurements;
+those classes are checked in the full local CI rather than this targeted run.
 
 Flagged for the owner's playtest: the coast when easing the pointer to the
 centre (designed as half speed in 1.84 s instead of 0.69 s); `scrapeShare` 0.3; the
