@@ -28,7 +28,9 @@ internal data class Obstacle(
  * The generated obstacle window: [span] × [span] chunks centred on the absolute chunk
  * ([centerChunkX], [centerChunkY]). [obstacles] are grouped by window cell (row-major from the
  * lowest chunk), and [cellStart] gives each cell's first index, so a lookup walks only the cells a
- * query touches. Immutable value: changes build a new field, so reduction siblings may share it.
+ * query touches. [fieldCount] and [fieldIndex] list the obstacles whose kind has an area effect
+ * ([ObstacleKind.field]) in window order, so the per-step field passes skip the plain bodies.
+ * Immutable value: changes build a new field, so reduction siblings may share it.
  */
 internal class ObstacleField private constructor(
     val centerChunkX: Int,
@@ -36,10 +38,15 @@ internal class ObstacleField private constructor(
     val span: Int,
     val obstacles: List<Obstacle>,
     private val cellStart: IntArray,
+    private val fieldIndices: IntArray,
 ) {
     val size: Int get() = obstacles.size
     val minimumChunkX: Int get() = centerChunkX - span / 2
     val minimumChunkY: Int get() = centerChunkY - span / 2
+    val fieldCount: Int get() = fieldIndices.size
+
+    /** Window index of the [n]th field obstacle; ascending in [n]. */
+    fun fieldIndex(n: Int): Int = fieldIndices[n]
 
     /** First obstacle index of window cell [cell]; [cellEnd] is exclusive. */
     fun cellBegin(cell: Int): Int = cellStart[cell]
@@ -64,7 +71,8 @@ internal class ObstacleField private constructor(
     fun replaced(index: Int, obstacle: Obstacle): ObstacleField {
         val next = ArrayList(obstacles)
         next[index] = obstacle
-        return ObstacleField(centerChunkX, centerChunkY, span, next, cellStart)
+        val fields = if (obstacles[index].kind.field == obstacle.kind.field) fieldIndices else fieldIndicesOf(next)
+        return ObstacleField(centerChunkX, centerChunkY, span, next, cellStart, fields)
     }
 
     /** The same window without obstacle [index]. */
@@ -73,7 +81,7 @@ internal class ObstacleField private constructor(
         next.removeAt(index)
         val starts = cellStart.copyOf()
         for (cell in starts.indices) if (starts[cell] > index) starts[cell]--
-        return ObstacleField(centerChunkX, centerChunkY, span, next, starts)
+        return ObstacleField(centerChunkX, centerChunkY, span, next, starts, fieldIndicesOf(next))
     }
 
     /** Every obstacle moved by (−[shiftX], −[shiftY]); the absolute window is unchanged. */
@@ -84,12 +92,12 @@ internal class ObstacleField private constructor(
             val obstacle = obstacles[index]
             next += obstacle.copy(x = obstacle.x - shiftX, y = obstacle.y - shiftY)
         }
-        return ObstacleField(centerChunkX, centerChunkY, span, next, cellStart)
+        return ObstacleField(centerChunkX, centerChunkY, span, next, cellStart, fieldIndices)
     }
 
     companion object {
         /** No window yet: the first query after a run starts generates one. */
-        val EMPTY: ObstacleField = ObstacleField(Int.MIN_VALUE, Int.MIN_VALUE, 0, emptyList(), IntArray(1))
+        val EMPTY: ObstacleField = ObstacleField(Int.MIN_VALUE, Int.MIN_VALUE, 0, emptyList(), IntArray(1), IntArray(0))
 
         /** Builds a window from per-cell obstacle lists in row-major cell order. */
         fun of(centerChunkX: Int, centerChunkY: Int, span: Int, cells: List<List<Obstacle>>): ObstacleField {
@@ -101,7 +109,16 @@ internal class ObstacleField private constructor(
                 all.addAll(cells[cell])
             }
             starts[cells.size] = all.size
-            return ObstacleField(centerChunkX, centerChunkY, span, all, starts)
+            return ObstacleField(centerChunkX, centerChunkY, span, all, starts, fieldIndicesOf(all))
+        }
+
+        private fun fieldIndicesOf(obstacles: List<Obstacle>): IntArray {
+            var count = 0
+            for (index in obstacles.indices) if (obstacles[index].kind.field) count++
+            val indices = IntArray(count)
+            var next = 0
+            for (index in obstacles.indices) if (obstacles[index].kind.field) indices[next++] = index
+            return indices
         }
     }
 }

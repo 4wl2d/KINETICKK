@@ -739,12 +739,13 @@ private fun MutableGameState.resolveThrownEnemySlams() {
         for (otherIndex in enemies.indices) {
             if (otherIndex == thrownIndex) continue
             val other = enemies[otherIndex]
-            if (!other.alive || isPhasedPhantom(other)) continue
+            if (!other.alive) continue
             val dx = thrown.x - other.x
             val dy = thrown.y - other.y
             val combined = thrown.radius + other.radius
             val distanceSquared = dx * dx + dy * dy
-            if (distanceSquared >= combined * combined) continue
+            // The overlap test rejects almost every pair, so it runs before the phase lookup.
+            if (distanceSquared >= combined * combined || isPhasedPhantom(other)) continue
             val distance = sqrt(distanceSquared)
             val nx = if (distance > 0.001f) dx / distance else 1f
             val ny = if (distance > 0.001f) dy / distance else 0f
