@@ -19,6 +19,7 @@ import kinetickk.ball.content.api.phaseShardSolid
 import kinetickk.ball.content.api.pick
 import kinetickk.ball.content.api.ventErupting
 import kinetickk.ball.content.api.ventEruptionEnd
+import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.model.Obstacle
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.TAU
@@ -435,23 +436,38 @@ internal fun MutableGameState.applyObstacleBoost(
  * pushes) by [ObstacleKindTuning.wellEnemyPull] times their knockback intake and the build's knot pull; the obstacle
  * pass then slams those it drags in hard enough. An erupting vent's plume gives each enemy it touches one Thermal
  * stack every [ObstacleKindTuning.ventStatusInterval]. A thrown enemy touching a derelict mine's body sets it off on
- * the quick fuse.
+ * the quick fuse. Only the window's field obstacles are walked, and the mines only while some live enemy is thrown.
  */
 private fun MutableGameState.updateEnemyObstacleFields() {
-    val obstacles = obstacleField.obstacles
-    if (obstacles.isEmpty() || enemies.isEmpty()) return
+    val field = obstacleField
+    if (field.fieldCount == 0 || enemies.isEmpty()) return
+    val obstacles = field.obstacles
     val kinds = content.obstacles.kinds
     val range = ENEMY_FIELD_ACTIVITY_RANGE * ENEMY_FIELD_ACTIVITY_RANGE
     // Plumes scorch on the steps that start a new status interval (one tick per interval for every plume).
     val interval = kinds.ventStatusInterval
     val statusTick = floor(elapsed / interval) != floor((elapsed - MutableGameState.FIXED_STEP) / interval)
-    for (index in obstacles.indices) {
+    // Asked at the first mine in range, and again after a plume scorched (a status can throw or kill); a knot only
+    // changes velocities and a fuse only the window, so the answer holds between them.
+    var thrownKnown = false
+    var anyThrown = false
+    for (n in 0 until field.fieldCount) {
+        val index = field.fieldIndex(n)
         val obstacle = obstacles[index]
-        if (!obstacle.kind.field || distanceSquared(coreX, coreY, obstacle.x, obstacle.y) > range) continue
+        if (distanceSquared(coreX, coreY, obstacle.x, obstacle.y) > range) continue
         when (obstacle.kind) {
             ObstacleKind.GRAVITY_WELL -> pullEnemiesIntoKnot(obstacle, kinds)
-            ObstacleKind.THERMAL_VENT -> if (statusTick) scorchEnemiesInPlume(obstacle, kinds)
-            ObstacleKind.DERELICT_MINE -> fuseMineUnderThrownEnemies(index, obstacle)
+            ObstacleKind.THERMAL_VENT -> if (statusTick) {
+                scorchEnemiesInPlume(obstacle, kinds)
+                thrownKnown = false
+            }
+            ObstacleKind.DERELICT_MINE -> {
+                if (!thrownKnown) {
+                    anyThrown = anyLiveThrownEnemy()
+                    thrownKnown = true
+                }
+                if (anyThrown) fuseMineUnderThrownEnemies(index, obstacle)
+            }
             // Gates never touch enemies.
             ObstacleKind.ACCEL_GATE,
             ObstacleKind.ASTEROID, ObstacleKind.BUMPER, ObstacleKind.UNSTABLE, ObstacleKind.CRYSTAL, ObstacleKind.PHASE_SHARD,
@@ -465,7 +481,7 @@ private fun MutableGameState.pullEnemiesIntoKnot(knot: Obstacle, kinds: Obstacle
     val surfacePull = kinds.wellEnemyPull * build.wellPullScale
     for (enemyIndex in enemies.indices) {
         val enemy = enemies[enemyIndex]
-        if (!enemy.alive || isPhasedPhantom(enemy) || distanceSquared(enemy.x, enemy.y, knot.x, knot.y) >= reach) continue
+        if (!enemy.alive || distanceSquared(enemy.x, enemy.y, knot.x, knot.y) >= reach || isPhasedPhantom(enemy)) continue
         val intake = knockbackTaken(enemy)
         if (intake <= 0f) continue
         val acceleration = wellPullAt(knot, enemy.x, enemy.y, enemy.radius, surfacePull * intake, kinds)
@@ -479,20 +495,31 @@ private fun MutableGameState.scorchEnemiesInPlume(vent: Obstacle, kinds: Obstacl
     val plume = vent.radius + kinds.ventPlumeMargin
     for (enemyIndex in enemies.indices) {
         val enemy = enemies[enemyIndex]
-        if (!enemy.alive || isPhasedPhantom(enemy)) continue
+        if (!enemy.alive) continue
         val reach = plume + enemy.radius
-        if (distanceSquared(enemy.x, enemy.y, vent.x, vent.y) >= reach * reach) continue
+        if (distanceSquared(enemy.x, enemy.y, vent.x, vent.y) >= reach * reach || isPhasedPhantom(enemy)) continue
         applyStatus(enemy, StatusElement.THERMAL, 1, generation = 0)
     }
+}
+
+/** Thrown by an impact, or by the Dipole's polarity. */
+private fun MutableGameState.isThrownEnemy(enemy: Enemy): Boolean =
+    !(enemy.thrownUntil <= elapsed && !isThrownByPolarity(enemy))
+
+private fun MutableGameState.anyLiveThrownEnemy(): Boolean {
+    for (enemyIndex in enemies.indices) {
+        val enemy = enemies[enemyIndex]
+        if (enemy.alive && isThrownEnemy(enemy)) return true
+    }
+    return false
 }
 
 private fun MutableGameState.fuseMineUnderThrownEnemies(index: Int, mine: Obstacle) {
     for (enemyIndex in enemies.indices) {
         val enemy = enemies[enemyIndex]
-        if (!enemy.alive || isPhasedPhantom(enemy)) continue
-        if (enemy.thrownUntil <= elapsed && !isThrownByPolarity(enemy)) continue
+        if (!enemy.alive || !isThrownEnemy(enemy)) continue
         val reach = mine.radius + enemy.radius
-        if (distanceSquared(enemy.x, enemy.y, mine.x, mine.y) >= reach * reach) continue
+        if (distanceSquared(enemy.x, enemy.y, mine.x, mine.y) >= reach * reach || isPhasedPhantom(enemy)) continue
         quickFuseMine(index)
         return
     }
@@ -609,21 +636,27 @@ internal fun MutableGameState.fuseMineCrossedByShot(
 
 /**
  * Detonates the mines whose fuse ran out, at most [ObstacleKindTuning.maximumMineDetonationsPerStep] per step (the
- * rest wait for the next step). The window is walked from its last index down, so a removal only shifts indices
- * already visited.
+ * rest wait for the next step). The window's field obstacles (mines among them) are walked from the last down, so a
+ * removal only shifts indices already visited.
  */
 private fun MutableGameState.detonateDueMines() {
     val kinds = content.obstacles.kinds
     var detonations = 0
-    var index = obstacleField.size - 1
-    while (index >= 0) {
+    var field = obstacleField
+    var n = field.fieldCount - 1
+    while (n >= 0) {
         if (detonations >= kinds.maximumMineDetonationsPerStep || phase != GamePhase.RUNNING) return
-        val obstacle = obstacleField.obstacles[index]
+        val index = field.fieldIndex(n)
+        val obstacle = field.obstacles[index]
         if (obstacle.kind == ObstacleKind.DERELICT_MINE && obstacle.fuseAt > 0f && obstacle.fuseAt <= elapsed) {
             detonateMine(index, obstacle, kinds)
             detonations++
+            // The blast changed the window (and may have fused the mines it reached): go on below [index] in it.
+            field = obstacleField
+            n = field.fieldCount
+            while (n > 0 && field.fieldIndex(n - 1) >= index) n--
         }
-        index--
+        n--
     }
 }
 

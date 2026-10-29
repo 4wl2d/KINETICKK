@@ -154,12 +154,14 @@ internal fun MutableGameState.updateCombatFields(delta: Float) {
         if (pull != 0f) {
             for (enemyIndex in enemies.indices) {
                 val target = enemies[enemyIndex]
-                val knockback = knockbackTaken(target)
-                if (!target.alive || knockback <= 0f) continue
+                if (!target.alive) continue
                 val dx = fieldX - target.x
                 val dy = fieldY - target.y
                 val distance = length(dx, dy)
                 if (distance > radius + target.radius || distance < 1f) continue
+                // The intake reads the status cells and the build, so only targets inside the field pay for it.
+                val knockback = knockbackTaken(target)
+                if (knockback <= 0f) continue
                 target.vx += dx / distance * pull * delta * knockback
                 target.vy += dy / distance * pull * delta * knockback
             }

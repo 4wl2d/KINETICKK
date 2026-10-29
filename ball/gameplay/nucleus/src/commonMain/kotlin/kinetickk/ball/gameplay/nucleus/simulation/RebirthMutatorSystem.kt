@@ -6,6 +6,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.content.api.RebirthMutator
 import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.model.distanceSquared
+import kinetickk.ball.gameplay.nucleus.model.profile
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
@@ -43,7 +44,7 @@ internal const val BLACKOUT_DATA_LIFE_SECONDS: Float = 10f
 internal const val ARCHITECT_ENRAGE_ATTACK_RATE: Float = 1.45f
 
 /** Ordinary enemies are neither Elites nor boss class (the Architect, mini-bosses such as the Herald, secret bosses). */
-internal val Enemy.isOrdinary: Boolean get() = !isElite && !isBossClass
+internal val Enemy.isOrdinary: Boolean get() = !type.profile.eliteClass
 
 /** True while an Armored Vanguard plate still guards [this] against weapons. */
 internal val Enemy.armorIntact: Boolean get() = armored && !armorCracked

@@ -42,7 +42,13 @@ internal class EnemyProfile(
     val directionalGuard: Boolean = false,
     val frameStep: Float = 0f,
     val frameSteps: Int = 0,
-)
+) {
+    /** The Architect, the mini-bosses and the secret bosses ([kinetickk.ball.gameplay.nucleus.simulation.isBossClass]). */
+    val bossClass: Boolean = rank == EnemyRank.BOSS || rank == EnemyRank.MINI_BOSS || rank == EnemyRank.SECRET_BOSS
+
+    /** Elites and every boss class ([kinetickk.ball.gameplay.nucleus.simulation.isEliteClass]). */
+    val eliteClass: Boolean = rank == EnemyRank.ELITE || bossClass
+}
 
 private val DRIFTER_PROFILE = EnemyProfile(28f, 17f, 0.2f, 1f, 1f, -1, false, false, 1f, 1f, dataDrops = 1)
 private val SHOOTER_PROFILE = EnemyProfile(60f, 20f, 0.7f, 1f, 1f, StatusElement.ION.ordinal, false, false, 1f, 1f, shotDamage = 10f, dataDrops = 2)
@@ -139,8 +145,8 @@ private val ANTECEDENT_PROFILE = EnemyProfile(
     frameStep = 0.04f, frameSteps = 3,
 )
 
-internal val EnemyType.profile: EnemyProfile
-    get() = when (this) {
+private fun profileOf(type: EnemyType): EnemyProfile =
+    when (type) {
         EnemyType.DRIFTER -> DRIFTER_PROFILE
         EnemyType.SHOOTER -> SHOOTER_PROFILE
         EnemyType.CHARGER -> CHARGER_PROFILE
@@ -177,6 +183,12 @@ internal val EnemyType.profile: EnemyProfile
         EnemyType.CARTOGRAPHER -> CARTOGRAPHER_PROFILE
         EnemyType.ANTECEDENT -> ANTECEDENT_PROFILE
     }
+
+/** [profileOf] per [EnemyType] ordinal: the hot predicates read one array element instead of a 35-way switch. */
+private val ENEMY_PROFILES: Array<EnemyProfile> = Array(EnemyType.entries.size) { profileOf(EnemyType.entries[it]) }
+
+internal val EnemyType.profile: EnemyProfile
+    get() = ENEMY_PROFILES[ordinal]
 
 /** Splitter fragments are Drifters with their own base integrity and radius. */
 internal const val SPLITTER_FRAGMENT_HEALTH: Float = 21f

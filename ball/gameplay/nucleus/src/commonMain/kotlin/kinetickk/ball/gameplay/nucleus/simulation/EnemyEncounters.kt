@@ -451,7 +451,7 @@ private fun MutableGameState.evictableOrdinaryCount(): Int {
     var count = 0
     for (index in enemies.indices) {
         val enemy = enemies[index]
-        if (!enemy.isBossClass && !enemy.isElite && !isPlaceBound(enemy)) count++
+        if (!enemy.isEliteClass && !isPlaceBound(enemy)) count++
     }
     return count
 }

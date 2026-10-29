@@ -41,7 +41,7 @@ internal const val ARCHITECT_GATE_TOLERANCE: Float = 1e-5f
 internal fun MutableGameState.isShifting(enemy: Enemy): Boolean = enemy.shiftUntil > elapsed
 
 /** A kind that phases out (Phantom, Cipher, Cartographer) while it shifts: intangible, so neither the Core nor a slam meets it. */
-internal fun MutableGameState.isPhasedPhantom(enemy: Enemy): Boolean = enemy.type.profile.phasesOut && isShifting(enemy)
+internal fun MutableGameState.isPhasedPhantom(enemy: Enemy): Boolean = isShifting(enemy) && enemy.type.profile.phasesOut
 
 /** Integrity at which the current phase ends: the boss bar's thirds (quarters for the Singularity Architect). */
 internal fun MutableGameState.architectGate(enemy: Enemy): Float = bossGate(enemy, architectSpec())

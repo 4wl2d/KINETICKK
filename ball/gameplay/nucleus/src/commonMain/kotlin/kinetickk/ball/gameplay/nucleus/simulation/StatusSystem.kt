@@ -62,10 +62,10 @@ internal fun totalStacks(enemy: Enemy): Int {
  * The Architect, the mini-bosses and the secret bosses: immune to executes, stops and stuns, only briefly silenced,
  * and Unmake meets their weighted integrity. Every element rule and [canAct] ask this one question.
  */
-internal val Enemy.isBossClass: Boolean get() = isBoss || isMiniBoss || isSecretBoss
+internal val Enemy.isBossClass: Boolean get() = type.profile.bossClass
 
 /** Elites and the bosses; Null Covenant keeps Hollow on them. */
-internal val Enemy.isEliteClass: Boolean get() = isElite || isBossClass
+internal val Enemy.isEliteClass: Boolean get() = type.profile.eliteClass
 
 /**
  * Displacement [enemy] takes from anything the player causes: its frame's knockback, raised by each

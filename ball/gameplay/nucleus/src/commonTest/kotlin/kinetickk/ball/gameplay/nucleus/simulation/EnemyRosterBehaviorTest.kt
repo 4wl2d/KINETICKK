@@ -559,6 +559,10 @@ class EnemyRosterBehaviorTest {
             assertEquals(definition.isElite, enemy.isElite, "$type Elite")
             assertEquals(definition.isMiniBoss, enemy.isMiniBoss, "$type mini-boss")
             assertEquals(definition.isSecretBoss, enemy.isSecretBoss, "$type secret boss")
+            val bossClass = definition.isBoss || definition.isMiniBoss || definition.isSecretBoss
+            assertEquals(bossClass, enemy.isBossClass, "$type boss class")
+            assertEquals(definition.isElite || bossClass, enemy.isEliteClass, "$type Elite class")
+            assertEquals(!definition.isElite && !bossClass, enemy.isOrdinary, "$type ordinary")
         }
         assertEquals(listOf(EnemyType.ARCHITECT), EnemyType.entries.filter { Enemy(1, it, 0f, 0f, hp = 1f, maxHp = 1f, radius = 1f).isBoss })
         assertEquals(listOf(EnemyType.HERALD), EnemyType.entries.take(19).filter { Enemy(1, it, 0f, 0f, hp = 1f, maxHp = 1f, radius = 1f).isMiniBoss })

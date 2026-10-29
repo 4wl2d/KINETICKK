@@ -76,13 +76,22 @@ internal fun MutableGameState.drawItemDeck() {
     if (keynote.enabled) rollKeynote(random)
 
     // Floors guarantee passive coverage: an active item never counts toward one and is never promoted by one.
+    // One pass counts the qualifying passives and the dealt ones among them; the walk then deals in priority order.
     fun promote(floor: Int, qualifies: (ItemDefinition) -> Boolean) {
-        val passive: (ItemDefinition) -> Boolean = { !it.isActive && qualifies(it) }
-        val target = min(floor, universe.count(passive))
-        var missing = target - universe.count { dealt[it.id] && passive(it) }
+        var qualifying = 0
+        var dealtQualifying = 0
+        for (index in universe.indices) {
+            val item = universe[index]
+            if (item.isActive || !qualifies(item)) continue
+            qualifying++
+            if (dealt[item.id]) dealtQualifying++
+        }
+        var missing = min(floor, qualifying) - dealtQualifying
         for (id in order) {
             if (missing <= 0) return
-            if (dealt[id] || !passive(content.items[id])) continue
+            if (dealt[id]) continue
+            val item = content.items[id]
+            if (item.isActive || !qualifies(item)) continue
             dealt[id] = true
             missing--
         }

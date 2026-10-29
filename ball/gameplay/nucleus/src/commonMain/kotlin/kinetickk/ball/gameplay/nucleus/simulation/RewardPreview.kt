@@ -7,80 +7,96 @@ import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.gameplay.api.BuildStatSummary
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.abs
 
-/** Reads never choose an offer, draw randomness, dispatch outputs or publish the scratch state. */
+/**
+ * Reads never choose an offer, draw randomness, dispatch outputs or publish the scratch state. A card that changes the
+ * build is applied to its own isolated candidate; a card that changes nothing (No omen, a decline or keep action) and a
+ * card answered without one read this state itself, so they cost no copy. The previews compare stat values only.
+ */
 internal fun MutableGameState.rewardPreviews(): ImmutableList<RewardPreview> {
     if (phase != GamePhase.CHOICE) return immutableListOf()
-    val beforeStats = buildStats()
-    return choices.map { option ->
-        if (option.rewardFocus != null) return@map RewardPreview()
-        val candidate = copyForReduction()
-        when (option.type) {
-            ChoiceType.ITEM -> option.itemId?.let { id ->
-                val item = content.item(id) ?: return@map RewardPreview()
-                // An active item that still needs a slot forecasts what it brings itself; which slot it replaces is asked next.
-                if (needsActiveSlot(item)) {
-                    candidate.stackItem(item, option.reborn)
-                    candidate.recompileBuild()
-                    return@map RewardPreview(forecasts = forecastsAgainst(candidate, option), requiresSlot = true)
-                }
-                candidate.acquireItem(id, option.reborn)
-            }
-            ChoiceType.TOTEM -> if (option.totemAction == TotemAction.AMPLIFY_CURRENT) candidate.amplifyCurrentWeapon()
-            // Weapon level and global bonuses are preserved when switching systems.
-            ChoiceType.WEAPON -> option.weaponId?.let {
-                candidate.weapon = it
+    val beforeStats = buildStats(withContributions = false)
+    val beforeCounts = rewardWeaponCounts()
+    return choices.map { option -> rewardPreview(option, beforeStats, beforeCounts) }.toImmutableList()
+}
+
+private fun MutableGameState.rewardPreview(
+    option: ChoiceOption,
+    beforeStats: ImmutableList<BuildStatSummary>,
+    beforeCounts: Map<String, Int>,
+): RewardPreview {
+    if (option.rewardFocus != null) return RewardPreview()
+    var copy: MutableGameState? = null
+    fun candidate(): MutableGameState = copy ?: copyForReduction().also { copy = it }
+    when (option.type) {
+        ChoiceType.ITEM -> option.itemId?.let { id ->
+            val item = content.item(id) ?: return RewardPreview()
+            // An active item that still needs a slot forecasts what it brings itself; which slot it replaces is asked next.
+            if (needsActiveSlot(item)) {
+                val candidate = candidate()
+                candidate.stackItem(item, option.reborn)
                 candidate.recompileBuild()
+                return RewardPreview(forecasts = forecastsAgainst(candidate, option), requiresSlot = true)
             }
-            ChoiceType.RELIC -> if (option.relicAction == RelicChoiceAction.ACQUIRE) {
-                val id = option.relicId ?: return@map RewardPreview()
-                if (relicRank(id) == 0 && equippedRelics.size >= content.relicPolicy.maxSlots) {
-                    return@map RewardPreview(forecasts = relicForecasts(id), requiresSlot = true)
-                }
-                candidate.acquireRelic(id)
+            candidate().acquireItem(id, option.reborn)
+        }
+        ChoiceType.TOTEM -> if (option.totemAction == TotemAction.AMPLIFY_CURRENT) candidate().amplifyCurrentWeapon()
+        // Weapon level and global bonuses are preserved when switching systems.
+        ChoiceType.WEAPON -> option.weaponId?.let {
+            val candidate = candidate()
+            candidate.weapon = it
+            candidate.recompileBuild()
+        }
+        ChoiceType.RELIC -> if (option.relicAction == RelicChoiceAction.ACQUIRE) {
+            val id = option.relicId ?: return RewardPreview()
+            if (relicRank(id) == 0 && equippedRelics.size >= content.relicPolicy.maxSlots) {
+                return RewardPreview(forecasts = relicForecasts(id), requiresSlot = true)
             }
-            // Replacing previews the whole replacement; keeping the loadout changes nothing to preview.
-            ChoiceType.ACTIVE_SLOT -> {
-                val slot = option.activeSlot ?: return@map RewardPreview()
-                val incoming = pendingActiveItemId ?: return@map RewardPreview()
-                candidate.replaceActiveItem(slot, incoming, pendingActiveReborn)
-            }
-            // An omen previews its run modifiers on the candidate (no world rebuilt); No omen changes nothing.
-            ChoiceType.OMEN -> option.omenId?.let { candidate.acceptRunOmen(it, preview = true) }
-            // A signal card previews only its deterministic stat part (the Shrine blessings).
-            ChoiceType.SIGNAL -> option.signalOption?.let { candidate.previewSignalOption(it) }
-            // A boon previews its run modifiers on the candidate; the Refuse card changes nothing.
-            ChoiceType.BOON -> option.boonId?.let { candidate.applyRunBoon(it, preview = true) } ?: return@map RewardPreview()
-            ChoiceType.RELIC_BIND -> option.relicSlot?.let { slot ->
-                when (option.relicAction) {
-                    RelicChoiceAction.REPLACE -> (option.relicId ?: pendingBindingRelic)?.let { candidate.replaceRelic(slot, it) }
-                    RelicChoiceAction.MELD_TARGET -> candidate.meldRelic(slot)
-                    else -> Unit
-                }
+            candidate().acquireRelic(id)
+        }
+        // Replacing previews the whole replacement; keeping the loadout changes nothing to preview.
+        ChoiceType.ACTIVE_SLOT -> {
+            val slot = option.activeSlot ?: return RewardPreview()
+            val incoming = pendingActiveItemId ?: return RewardPreview()
+            candidate().replaceActiveItem(slot, incoming, pendingActiveReborn)
+        }
+        // An omen previews its run modifiers on the candidate (no world rebuilt); No omen changes nothing.
+        ChoiceType.OMEN -> option.omenId?.let { candidate().acceptRunOmen(it, preview = true) }
+        // A signal card previews only its deterministic stat part (the Shrine blessings).
+        ChoiceType.SIGNAL -> option.signalOption?.let { candidate().previewSignalOption(it) }
+        // A boon previews its run modifiers on the candidate; the Refuse card changes nothing.
+        ChoiceType.BOON -> option.boonId?.let { candidate().applyRunBoon(it, preview = true) } ?: return RewardPreview()
+        ChoiceType.RELIC_BIND -> option.relicSlot?.let { slot ->
+            when (option.relicAction) {
+                RelicChoiceAction.REPLACE -> (option.relicId ?: pendingBindingRelic)?.let { candidate().replaceRelic(slot, it) }
+                RelicChoiceAction.MELD_TARGET -> candidate().meldRelic(slot)
+                else -> Unit
             }
         }
-        val changes = candidate.buildStats().mapIndexedNotNull { index, stat ->
-            val before = beforeStats.getOrNull(index)?.takeIf { it.name == stat.name }?.value ?: return@mapIndexedNotNull null
-            if (abs(stat.value - before) < 0.00001f) null
-            else RewardStatChange(stat.name, before, stat.value, stat.unit, stat.name == "Dash heat")
-        }.toMutableList()
-        val beforeCounts = rewardWeaponCounts()
-        val afterCounts = candidate.rewardWeaponCounts()
-        (beforeCounts.keys + afterCounts.keys).forEach { name ->
-            val before = beforeCounts[name] ?: 0
-            val after = afterCounts[name] ?: 0
-            if (before != after) changes += RewardStatChange(name, before.toFloat(), after.toFloat(), "")
-        }
-        RewardPreview(
-            changes = changes.toImmutableList(),
-            forecasts = forecastsAgainst(candidate, option),
-        )
-    }.toImmutableList()
+    }
+    // An unchanged candidate is this state: every read below is a read of it.
+    val candidate = copy ?: this
+    val changes = candidate.buildStats(withContributions = false).mapIndexedNotNull { index, stat ->
+        val before = beforeStats.getOrNull(index)?.takeIf { it.name == stat.name }?.value ?: return@mapIndexedNotNull null
+        if (abs(stat.value - before) < 0.00001f) null
+        else RewardStatChange(stat.name, before, stat.value, stat.unit, stat.name == "Dash heat")
+    }.toMutableList()
+    val afterCounts = candidate.rewardWeaponCounts()
+    (beforeCounts.keys + afterCounts.keys).forEach { name ->
+        val before = beforeCounts[name] ?: 0
+        val after = afterCounts[name] ?: 0
+        if (before != after) changes += RewardStatChange(name, before.toFloat(), after.toFloat(), "")
+    }
+    return RewardPreview(
+        changes = changes.toImmutableList(),
+        forecasts = forecastsAgainst(candidate, option),
+    )
 }
 
 /**
