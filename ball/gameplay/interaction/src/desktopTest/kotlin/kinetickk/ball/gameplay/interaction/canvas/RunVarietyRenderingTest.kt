@@ -46,6 +46,7 @@ import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -213,6 +214,39 @@ class RunVarietyRenderingTest {
         assertEquals(1f, signalLifeShare(signal, 30f, 100f))
         assertEquals(0.5f, signalLifeShare(signal, 30f, 115f), 1e-6f)
         assertEquals(0f, signalLifeShare(signal, 30f, 131f))
+    }
+
+    /**
+     * On a landscape phone a signal up and to the right of the Core has the HUD both under and over its mark (the action
+     * buttons, the relic row): its name goes beside the mark, on screen and clear of the HUD, in both languages and at
+     * the largest text size.
+     */
+    @Test
+    fun aSignalBetweenHudBlocksStillShowsItsNameBesideItsMark() {
+        val scope = CanvasDrawScope()
+        val canvas = Canvas(ImageBitmap(1, 1))
+        val (width, height) = 844 to 390
+        for (language in AppLanguage.entries) for (textScale in listOf(1.25f, 1.75f)) {
+            val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64),
+                textScale, language, HudTestFonts.typography)
+            val signal = EventSignalProjection(5, SignalKind.MERCHANT, width * 0.22f, -height * 0.12f, expiresAt = 21f)
+            val model = hudTestModel(width.toFloat(), height.toFloat()).with(
+                "coreX" to 0f, "coreY" to 0f, "cameraX" to 0f, "cameraY" to 0f, "totem" to null, "elapsed" to 3f,
+                "enemies" to immutableListOf<EnemyProjection>(), "sites" to immutableListOf<SiteProjection>(),
+                "ambientSites" to immutableListOf<SiteProjection>(), "trial" to null, "eventSignals" to immutableListOf(signal),
+            )
+            var keepOut: List<Rect> = emptyList()
+            scope.draw(Density(1f), LayoutDirection.Ltr, canvas, Size(width.toFloat(), height.toFloat())) {
+                drawWorld(model, VisualFxProjection.EMPTY, 0f, 0f, measurer)
+                keepOut = worldHudKeepOut(model, measurer).rects()
+            }
+            val where = "${language.name} x$textScale"
+            assertEquals(1, WorldDrawProbe.rects(WorldDrawn.POINT_MARK).size, "the mark shows: $where")
+            val name = WorldDrawProbe.rects(WorldDrawn.POINT_NAME).singleOrNull()
+            assertNotNull(name, "the signal's name shows: $where")
+            assertTrue(name.inside(width, height), "the name stays on screen: $where")
+            assertTrue(keepOut.none { it.overlaps(name) }, "the name keeps clear of the HUD: $where ($name)")
+        }
     }
 
     @Test

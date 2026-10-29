@@ -114,7 +114,8 @@ internal fun SignalKind.worldIcon(): KkIcon = when (this) {
 
 /**
  * The signal's name (`.t-label`, bone) [gap] below the mark at [center], or above it when the screen edge or the HUD is
- * in the way, skipped when neither side is clear; it moves inward to stay on screen and shrinks when wider than it.
+ * in the way, else beside it ([pointLabelSide], left first) at the same gap; skipped only when no slot is clear. It moves
+ * inward to stay on screen and shrinks when wider than it.
  */
 private fun DrawScope.drawSignalName(kind: SignalKind, center: Offset, gap: Float, textMeasurer: TextMeasurer, keepOut: WorldHudKeepOut) {
     val color = edgeMarkerColor(EdgeMarkerIcon.SIGNAL, textMeasurer.roles)
@@ -131,10 +132,16 @@ private fun DrawScope.drawSignalName(kind: SignalKind, center: Offset, gap: Floa
     val height = name.kkBoxHeight
     val half = width * 0.5f
     val x = if (room > width) center.x.coerceIn(edge + half, size.width - edge - half) else size.width * 0.5f
-    val top = pointTimerTop(x, center.y, gap, width, height, size.width, size.height, edge, keepOut)
-    if (top.isNaN()) return
-    drawKkText(name, x, top, color, KkAlign.CENTER, KkVAlign.TOP)
-    WorldDrawProbe.record(WorldDrawn.POINT_NAME, x - half, top, x + half, top + max(height, 1f))
+    var top = pointTimerTop(x, center.y, gap, width, height, size.width, size.height, edge, keepOut)
+    var nameX = x
+    if (top.isNaN()) {
+        // Both slots under and over the mark touch the HUD (a landscape phone's buttons and relic row): beside it instead.
+        nameX = pointLabelSide(center.x, center.y, gap, width, height, size.width, size.height, edge, keepOut)
+        if (nameX.isNaN()) return
+        top = center.y - height * 0.5f
+    }
+    drawKkText(name, nameX, top, color, KkAlign.CENTER, KkVAlign.TOP)
+    WorldDrawProbe.record(WorldDrawn.POINT_NAME, nameX - half, top, nameX + half, top + max(height, 1f))
 }
 
 /** Signal kind names per language, resolved once (draw-thread confined). */

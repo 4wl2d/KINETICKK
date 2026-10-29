@@ -731,6 +731,32 @@ internal fun pointTimerTop(
     return Float.NaN
 }
 
+/**
+ * Centre x of a [boxWidth] × [boxHeight] label (a signal's name) beside the mark at ([x], [y]), its near edge [gap] from
+ * the mark's centre and vertically centred on it: left of the mark, else right, the first that stays [edge] inside the
+ * screen and clear of the HUD ([keepOut]). NaN when neither does.
+ */
+internal fun pointLabelSide(
+    x: Float,
+    y: Float,
+    gap: Float,
+    boxWidth: Float,
+    boxHeight: Float,
+    width: Float,
+    height: Float,
+    edge: Float,
+    keepOut: WorldHudKeepOut,
+): Float {
+    val top = y - boxHeight * 0.5f
+    val bottom = top + boxHeight
+    if (top < edge || bottom > height - edge) return Float.NaN
+    val leftEdge = x - gap - boxWidth
+    if (leftEdge >= edge && !keepOut.intersects(leftEdge, top, x - gap, bottom)) return leftEdge + boxWidth * 0.5f
+    val rightEdge = x + gap + boxWidth
+    if (rightEdge <= width - edge && !keepOut.intersects(x + gap, top, rightEdge, bottom)) return rightEdge - boxWidth * 0.5f
+    return Float.NaN
+}
+
 /** Kinds of off-screen targets; each draws a small mark (no arrow shapes). */
 internal enum class EdgeMarkerIcon {
     TOTEM, SEALED_ANOMALY, COLLAPSING_ORBIT, RESONANT_CIRCUIT, RACE, CHALLENGE, BOUNTY, CACHE, QUIET, SIGIL, PORTAL, SIGNAL,
