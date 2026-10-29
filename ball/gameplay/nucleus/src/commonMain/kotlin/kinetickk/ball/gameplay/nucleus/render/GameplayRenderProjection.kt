@@ -86,7 +86,8 @@ data class ChoiceOption(
     val incomingItemId: Int? = null,
     /**
      * The [ChoiceType.ACTIVE_SLOT] keep card: the Matter the incoming item is salvaged for, as the salvage grants it
-     * before the run's Matter gain (presentation shows this number; it never recomputes the salvage).
+     * before the run's Matter gain. The Pact offer's Refuse card ([ChoiceType.BOON] without a boon): the Matter refusing
+     * grants, after the run's Matter gain (rounded). Presentation shows this number; it never recomputes the salvage.
      */
     val salvageMatter: Int? = null,
     /** An [ChoiceType.OMEN] card's omen (null on the No omen card). */

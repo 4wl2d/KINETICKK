@@ -11,6 +11,7 @@ import kinetickk.ball.content.api.EnemyType
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.RunBoonKind
+import kinetickk.ball.content.api.RunModifierEffect
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
@@ -584,6 +585,36 @@ class DimensionRewardsTest {
             val refuse = state.choices.last()
             assertEquals(declineMatter, refuse.salvageMatter)
             assertEquals("Keep the run as it is and salvage $declineMatter Kinetic Matter.", refuse.description)
+        }
+    }
+
+    /**
+     * The Refuse card names the Matter refusing actually grants: the salvage through the run's Matter gain (Rebirth tier,
+     * omens), rounded like the cargo card, never the bare decline amount.
+     */
+    @Test
+    fun theRefuseCardNamesTheMatterItGrantsThroughTheRunsMatterGain() {
+        // (Rebirth tier, omen Matter gain scale) -> the card's number: tier 5 with Rich Veins, Ascetic Path, Iron Tide at tier 1.
+        for ((setup, expected) in listOf((5 to 1.5f) to 30, (0 to 0.6f) to 6, (1 to 1.3f) to 16)) {
+            val (tier, scale) = setup
+            val state = buildTestState(rebirth = tier).apply {
+                applyRunModifier(RunModifierEffect.MatterGainScale(scale))
+                queue(DimensionRewardGrant(WorldLayer.NADIR, completed = true))
+                openPendingDimensionReward()
+            }
+            val where = "tier $tier, scale $scale"
+            val refuse = state.choices.last()
+            assertNull(refuse.boonId, where)
+            assertEquals(expected, refuse.salvageMatter, where)
+            assertEquals(pactDeclineDescription(expected), refuse.description, where)
+
+            val before = state.runMatter + state.matterFraction
+            val result = assertIs<GameReductionResult.Accepted>(
+                GameReducer().reduce(EngineState(state), GameplayInteractionPulse.ChoiceSelected.fromValidated(state.choices.lastIndex)),
+            ).state.model
+            val granted = result.runMatter + result.matterFraction - before
+            assertEquals(10f * state.matterGain, granted, 0.001f, "the grant still applies the gain to the decline Matter: $where")
+            assertEquals(expected.toFloat(), granted, 0.5f, "the card's number is what refusing grants: $where")
         }
     }
 

@@ -17,6 +17,7 @@ import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableListAppending
+import kotlin.math.roundToInt
 
 /*
  * Dimension rewards through the choice pipeline: a finished visit queues its grant, and the queue opens it after the
@@ -93,12 +94,15 @@ private fun MutableGameState.openBoonOffer(grant: DimensionRewardGrant, kind: Ru
         cards += ChoiceOption(type = ChoiceType.BOON, title = boon.name, description = boon.description, tag = tag, boonId = boon.id)
     }
     if (reward.kind == DimensionRewardKind.PACT_OFFER) {
+        // The card names the Matter refusing grants: the salvage through the run's Matter gain, rounded like the
+        // Derelict cargo card's payout (nothing changes the gain while the choice is open).
+        val salvage = (reward.declineMatter * matterGain * layerMatterMultiplier()).roundToInt()
         cards += ChoiceOption(
             type = ChoiceType.BOON,
             title = PACT_DECLINE_TITLE,
-            description = pactDeclineDescription(reward.declineMatter),
+            description = pactDeclineDescription(salvage),
             tag = DECLINE_TAG,
-            salvageMatter = reward.declineMatter,
+            salvageMatter = salvage,
         )
     }
     openDimensionChoice(grant, ChoiceType.BOON, cards)
@@ -146,13 +150,14 @@ private fun MutableGameState.openDimensionChoice(grant: DimensionRewardGrant, ty
 }
 
 /**
- * A taken boon card: the boon for the rest of the run, or the Refuse card's salvage. Returns the card's sound
- * (choose finishes the choice).
+ * A taken boon card: the boon for the rest of the run, or the Refuse card's salvage (the open offer's decline Matter
+ * through the run's Matter gain, the amount its card names). Returns the card's sound (choose finishes the choice).
  */
 internal fun MutableGameState.takeBoonCard(option: ChoiceOption): GameplayAudioCue {
     val boonId = option.boonId
     if (boonId == null) {
-        grantMatter((option.salvageMatter ?: 0).toFloat())
+        val layer = dimensionRewardLayer
+        if (layer != null) grantMatter(content.dimensions.definition(layer).reward.declineMatter.toFloat())
         return GameplayAudioCue.UI_CLICK
     }
     applyRunBoon(boonId)
