@@ -341,7 +341,7 @@ data class StructurePolicy(
     val engageCutoffSeconds: Float = 45f,
     val garrisonGateLeadSeconds: Float = 90f,
     val garrisonExtraPerTiers: Int = 4,
-    val garrisonScale: Float = 1f,
+    val garrisonScale: Float = 0.8f,
     val directorRateWhileSealed: Float = 0.35f,
     val wallDamageScale: Float = 1f,
     val templates: ImmutableList<StructureTemplate> = defaultStructureTemplates(),

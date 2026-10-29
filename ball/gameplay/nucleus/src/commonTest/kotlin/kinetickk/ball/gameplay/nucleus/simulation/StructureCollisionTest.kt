@@ -647,7 +647,7 @@ class StructureCollisionTest {
             assertTrue(outside(leashed.x, leashed.y, leashed.radius), "relocated inside a footprint")
         }
 
-        // A point inside the engaged room stays (escorts spawn in their room); another room's point is ejected.
+        // A sealed room is closed: a point inside the engaged room leaves the footprint like any other room's point.
         val template = run.content.structures.template(StructureTemplateId.DERELICT_STATION)
         fun roomCentre(room: Int): Pair<Float, Float> {
             val spec = template.rooms[room]
@@ -657,12 +657,63 @@ class StructureCollisionTest {
         }
         run.dungeon = DungeonState(placement.id, placement.template, placement.rotation, structure.x, structure.y, engagedRoom = 1, enteredAt = 0f)
         val (hallX, hallY) = roomCentre(1)
-        val kept = run.structureEjected(hallX, hallY, 17f)
-        assertEquals(hallX, kept.x)
-        assertEquals(hallY, kept.y)
+        val sealed = run.structureEjected(hallX, hallY, 17f)
+        assertTrue(outside(sealed.x, sealed.y, 17f + 64f), "the engaged room's point leaves the footprint")
         val (bayX, bayY) = roomCentre(3)
         val moved = run.structureEjected(bayX, bayY, 17f)
         assertTrue(outside(moved.x, moved.y, 17f + 64f), "another room's point leaves the footprint")
+    }
+
+    @Test
+    fun nothingTheDirectorPlacesLandsInsideASealedRoom() {
+        // The Vault's West gallery (700 x 2,200) sealed around the Core, which then flies along its long axis from the
+        // south end: spawn distance ahead (the viewport edge + 80..260 u) still lies inside the gallery.
+        val run = buildTestState(content = forcedStructureContent(StructureTemplateId.VAULT), seed = 44)
+        val placement = run.structureAtForTesting(12, -9)
+        run.teleportCoreForTesting(placement.absoluteX, placement.absoluteY)
+        run.enemies.clear()
+        run.pickups.clear()
+        run.elapsed = 150f
+        val structure = run.structureField.structures[run.structureField.indexOf(placement.id)]
+        val template = run.content.structures.template(StructureTemplateId.VAULT)
+        fun moveCore(localX: Float, localY: Float) {
+            run.coreX = structure.x + rotateQuarterX(localX, localY, structure.rotation)
+            run.coreY = structure.y + rotateQuarterY(localX, localY, structure.rotation)
+            run.previousCoreX = run.coreX
+            run.previousCoreY = run.coreY
+        }
+        fun outside(x: Float, y: Float, inflate: Float): Boolean =
+            abs(x - structure.x) >= structure.halfWidth + inflate || abs(y - structure.y) >= structure.halfHeight + inflate
+        val gallery = template.rooms[1]
+        moveCore((gallery.minX + gallery.maxX) / 2f, (gallery.minY + gallery.maxY) / 2f)
+        run.updateStructures(MutableGameState.FIXED_STEP)
+        run.updateStructures(MutableGameState.FIXED_STEP)
+        assertEquals(1, run.dungeon?.engagedRoom, "the West gallery is sealed")
+        moveCore(-750f, -950f)
+        run.setVelocityForTesting(rotateQuarterX(0f, 600f, structure.rotation), rotateQuarterY(0f, 600f, structure.rotation))
+
+        // Ambient enemies, Elites and Heralds from the director's spawn point, and a leashed enemy brought back.
+        for ((type, count) in listOf(EnemyType.DRIFTER to 160, EnemyType.ELITE to 24, EnemyType.HERALD to 24)) {
+            repeat(count) {
+                run.enemies.removeAll { it.ownerTag == 0L }
+                assertTrue(run.spawnScheduled(type))
+                val enemy = run.enemies.last()
+                assertTrue(outside(enemy.x, enemy.y, enemy.radius), "$type spawned in the sealed structure at (${enemy.x}, ${enemy.y})")
+            }
+        }
+        run.enemies.removeAll { it.ownerTag == 0L }
+        run.addEnemyForTesting(run.coreX + 3_000f, run.coreY)
+        val leashed = run.enemies.last()
+        repeat(80) {
+            run.relocateLeashedEnemy(leashed)
+            assertTrue(outside(leashed.x, leashed.y, leashed.radius), "relocated into the sealed structure at (${leashed.x}, ${leashed.y})")
+        }
+        // A Totem or a window site offered from a point in the sealed gallery is placed outside the structure too.
+        val (totemX, totemY) = run.nudgedClearOfObstacles(run.coreX, run.coreY + 400f, 70f)
+        assertTrue(outside(totemX, totemY, 70f), "the Totem lies in the sealed structure at ($totemX, $totemY)")
+        val (siteX, siteY) = run.clearPointOfInterestSite(run.coreX, run.coreY + 400f)
+        assertTrue(outside(siteX, siteY, 320f), "the site lies in the sealed structure at ($siteX, $siteY)")
+        assertEquals(1, run.dungeon?.engagedRoom, "the gallery stayed sealed")
     }
 
     @Test

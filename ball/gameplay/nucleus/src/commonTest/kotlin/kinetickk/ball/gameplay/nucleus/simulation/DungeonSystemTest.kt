@@ -150,15 +150,16 @@ class DungeonSystemTest {
         assertEquals(List(4) { open }, dungeon.doors())
         dungeon.enterRoom(1)
 
-        // The hall: four habitat picks and two Sentries on its walls; doors D1 (airlock) and D2 (bay) seal.
+        // The hall: its four habitat picks and two Sentries at the garrison scale 0.8 (three and two) on its walls; doors
+        // D1 (airlock) and D2 (bay) seal.
         val held = assertNotNull(run.dungeon)
         assertEquals(1, held.engagedRoom)
         assertTrue(held.engaged)
         assertEquals(listOf(open, sealed, sealed, open), dungeon.doors())
         val garrison = dungeon.garrison(1)
-        assertEquals(6, garrison.size)
+        assertEquals(5, garrison.size)
         assertEquals(garrison.map { it.id }, held.garrisonIds.toList())
-        assertEquals(6, held.garrisonTotal)
+        assertEquals(5, held.garrisonTotal)
         assertEquals(2, garrison.count { it.type == EnemyType.SENTRY })
         assertNotNull(run.encounter(dungeon.tag(1)))
         val s = dungeon.structure
@@ -174,7 +175,7 @@ class DungeonSystemTest {
 
         // While sealed nothing else engages and the room spawns nothing more.
         run.updateStructures(step)
-        assertEquals(6, run.enemies.count { it.ownerTag != 0L })
+        assertEquals(5, run.enemies.count { it.ownerTag != 0L })
     }
 
     @Test
@@ -182,8 +183,8 @@ class DungeonSystemTest {
         val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
         val cap = run.content.rebirth.maxActiveEnemies
-        // The hall garrisons six: with cap − 5 enemies alive it does not fit.
-        repeat(cap - 5) { run.addEnemyForTesting(dungeon.structure.x + 3_000f, dungeon.structure.y + it) }
+        // The hall garrisons five: with cap − 4 enemies alive it does not fit.
+        repeat(cap - 4) { run.addEnemyForTesting(dungeon.structure.x + 3_000f, dungeon.structure.y + it) }
         dungeon.moveCore(dungeon.roomCentre(1))
         run.updateStructures(step)
         val entered = assertNotNull(run.dungeon)
@@ -192,12 +193,12 @@ class DungeonSystemTest {
         repeat(3) { run.updateStructures(step) }
         assertEquals(entered, run.dungeon, "the room stays dormant")
         assertSame(field, run.structureField, "no door seals")
-        assertEquals(cap - 5, run.enemies.size)
+        assertEquals(cap - 4, run.enemies.size)
         assertTrue(run.encounters.isEmpty())
         assertEquals(message, run.message)
         assertFalse(run.structureEngagementActive())
 
-        // At cap − 6 the garrison fits exactly and the room seals on the next step.
+        // At cap − 5 the garrison fits exactly and the room seals on the next step.
         run.enemies.removeAt(run.enemies.lastIndex)
         run.updateStructures(step)
         assertEquals(1, run.dungeon?.engagedRoom)
@@ -726,9 +727,9 @@ class DungeonSystemTest {
         fresh.enterRoom(1)
         val veteran = Dungeon(StructureTemplateId.DERELICT_STATION, rebirth = 8)
         veteran.enterRoom(1)
-        // One extra per four tiers on the hall's habitat entry; the Sentries stay two.
-        assertEquals(6, fresh.garrison(1).size)
-        assertEquals(8, veteran.garrison(1).size)
+        // One extra per four tiers on the hall's habitat entry (three at the garrison scale 0.8); the Sentries stay two.
+        assertEquals(5, fresh.garrison(1).size)
+        assertEquals(7, veteran.garrison(1).size)
         assertEquals(2, veteran.garrison(1).count { it.type == EnemyType.SENTRY })
     }
 

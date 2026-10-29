@@ -6,7 +6,6 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.content.api.rotateQuarterX
 import kinetickk.ball.content.api.rotateQuarterY
 import kinetickk.ball.gameplay.nucleus.model.Enemy
-import kinetickk.ball.gameplay.nucleus.model.PlacedStructure
 import kinetickk.ball.gameplay.nucleus.model.Wall
 import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.render.EnemyBehavior
@@ -217,8 +216,9 @@ internal fun MutableGameState.wallBlocksSegment(x0: Float, y0: Float, x1: Float,
 
 /**
  * A circle of [radius] at ([x], [y]) moved just outside every structure footprint inflated by [radius] plus a margin,
- * along the nearest side; at most two passes (two inflated footprints may touch). A point inside the engaged room of
- * the dungeon stays where it is: escorts of a guarding mini-boss spawn in their room.
+ * along the nearest side; at most two passes (two inflated footprints may touch). A sealed room is no exception: a
+ * director spawn, a leash relocation or a placement aimed into it lands outside the structure (its garrison and a
+ * mini-boss's adds are placed without ejection).
  */
 internal fun MutableGameState.structureEjected(x: Float, y: Float, radius: Float): SteeringVector {
     val structures = structureField.structures
@@ -235,7 +235,6 @@ internal fun MutableGameState.structureEjected(x: Float, y: Float, radius: Float
             val reachX = structure.halfWidth + margin
             val reachY = structure.halfHeight + margin
             if (abs(dx) >= reachX || abs(dy) >= reachY) continue
-            if (insideEngagedRoom(structure, px, py)) continue
             if (reachX - abs(dx) <= reachY - abs(dy)) {
                 px = structure.x + if (dx >= 0f) reachX + EJECT_SEPARATION else -(reachX + EJECT_SEPARATION)
             } else {
@@ -322,14 +321,6 @@ private fun boxEntry(fromX: Float, fromY: Float, dx: Float, dy: Float, reachX: F
         leave = min(leave, max(a, b))
     }
     return if (enter < leave) enter else 1f
-}
-
-/** True when ([x], [y]) lies inside the engaged room of the dungeon held in [structure]. */
-private fun MutableGameState.insideEngagedRoom(structure: PlacedStructure, x: Float, y: Float): Boolean {
-    val dungeon = dungeon ?: return false
-    if (dungeon.structureId != structure.id || dungeon.engagedRoom < 0) return false
-    val template = content.structures.template(structure.template)
-    return roomAt(template, structure.rotation, structure.x, structure.y, x, y, 0f) == dungeon.engagedRoom
 }
 
 /** Shots whose step crosses a solid or sealed wall are spent where they meet it; mines never move. */

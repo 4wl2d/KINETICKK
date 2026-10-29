@@ -24,12 +24,10 @@ import kotlin.test.assertTrue
  * The thresholds are the structures design's bands (§11.2): a fresh build clears most of its dungeons without
  * trivialising them and rarely dies inside, a strong build clears nearly all of them, clearly more often and within
  * 150 s, every attempt ends within the pilot's 300 s, and the shipped templates turn up. The shipped knobs
- * (`garrisonScale` 1.0, `wallDamageScale` 1.0) meet every band on the structures calibration window i = 2,301..2,400
- * (`KK_DUNGEON_PROBE`; FRESH clear 0.697 SE 0.047, died 0.283 SE 0.045; STRONG clear 1.000, median clear 27.82 s).
- * Base on these gate seeds (bootstrap SE, 20,000 resamples, RNG seed 20261027): FRESH attempts 119 of 120, clear 0.698
- * (SE 0.043), died 0.277 (SE 0.041), abandoned 0.025 (SE 0.014), median clear 77.42 s (SE 9.23); STRONG attempts 120,
- * clear 1.000, median clear 26.79 s (SE 1.34). The 0.6.0 records step restates each band by the population rule
- * (floors min(design, base − 2 SE), ceilings max(design, base + 2 SE)) on the final tree's base.
+ * (`garrisonScale` 0.8, `wallDamageScale` 1.0) meet every band on the structures calibration window i = 2,301..2,400
+ * after excluding director spawns from sealed rooms (`KK_DUNGEON_PROBE`; FRESH clear 0.720 SE 0.045, died 0.250
+ * SE 0.043; STRONG clear 1.000, median clear 26.12 s). Scale 1.0 and 0.9 both gave a 0.310 fresh death share on
+ * that window. The gate population only confirms the chosen content; its design bands stay unchanged.
  */
 class DungeonPilotGateTest {
     /**
