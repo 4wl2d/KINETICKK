@@ -175,7 +175,7 @@ internal fun DrawScope.drawStructureWalls(engine: GameplayRenderModel, shakeX: F
     }
 }
 
-/** The ink scrim outside the dungeon's rooms while the Core is inside it, over the Core and under the singularity. */
+/** The ink scrim outside the dungeon's rooms while the Core is in one of them, over the Core and under the singularity. */
 internal fun DrawScope.drawStructureScrim(engine: GameplayRenderModel, shakeX: Float, shakeY: Float) {
     val amount = structureInteriorAmount(engine)
     if (amount <= 0.01f) return
@@ -188,18 +188,22 @@ internal fun DrawScope.drawStructureScrim(engine: GameplayRenderModel, shakeX: F
 }
 
 /**
- * How far the drawn Core is inside the dungeon (0..1): 0 without a dungeon or for a secret template (no scrim, no
- * vignette), else its depth inside the footprint over [INTERIOR_FADE], so the scrim fades in on the way in and out on
- * the way out without any presentation memory.
+ * How far the drawn Core is inside the dungeon (0..1): 0 without a dungeon, for a secret template or while the Core is
+ * in none of its rooms (no scrim, no vignette: a Core outside the walls in a notch of an L-shaped footprint is in open
+ * space), else its depth inside the footprint over [INTERIOR_FADE], so the scrim fades in on the way in and out on the
+ * way out without any presentation memory. Outer doors lie on the footprint's edge and rooms meet edge to edge, so the
+ * room test never cuts the fade short on a way the Core can fly.
  */
 internal fun structureInteriorAmount(engine: GameplayRenderModel): Float {
     val dungeon = engine.structures.dungeon ?: return 0f
     if (!dungeon.panel) return 0f
     val structure = dungeonStructure(engine.structures) ?: return 0f
-    val depth = min(
-        structure.halfWidth - abs(engine.renderCoreX - structure.x),
-        structure.halfHeight - abs(engine.renderCoreY - structure.y),
-    )
+    val dx = engine.renderCoreX - structure.x
+    val dy = engine.renderCoreY - structure.y
+    val depth = min(structure.halfWidth - abs(dx), structure.halfHeight - abs(dy))
+    if (depth <= 0f) return 0f
+    val template = engine.content.structures.template(structure.template)
+    if (roomAt(template, structure.rotation, dx, dy) == STRUCTURE_OUTSIDE) return 0f
     return (depth / INTERIOR_FADE).coerceIn(0f, 1f)
 }
 
@@ -355,7 +359,7 @@ internal fun DrawScope.drawSealedRoomSegment(engine: GameplayRenderModel, trial:
 /**
  * The HUD vignette while the Core is inside a dungeon: ink closing in from the screen's edges (clear out to
  * [VIGNETTE_CLEAR] of the corner radius, [VIGNETTE_ALPHA] at the corners), as deep as the world's scrim, so both fade in
- * on the way in and out on the way out. None for a secret template or outside a dungeon.
+ * on the way in and out on the way out. None for a secret template or outside the dungeon's rooms.
  */
 internal fun DrawScope.drawDungeonVignette(engine: GameplayRenderModel) {
     val amount = structureInteriorAmount(engine)

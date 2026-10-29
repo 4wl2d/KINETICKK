@@ -162,6 +162,30 @@ class WorldStructureRenderingTest {
         }
     }
 
+    /**
+     * The Derelict Station's airlock and hall leave a notch open to space north of the airlock, inside the footprint: a
+     * Core flying there is outside the walls, so neither the scrim nor the vignette covers it, in any rotation, while a
+     * Core in the hall at the same footprint depth is under the full scrim.
+     */
+    @Test
+    fun aCoreOutsideTheWallsInAFootprintNotchIsNeverScrimmed() {
+        val template = base.content.structures.template(StructureTemplateId.DERELICT_STATION)
+        for (rotation in 0..3) {
+            val station = StructureFixture(template, SX, SY, rotation = rotation)
+            val notch = notchScene(station, -700f, -450f)
+            assertEquals(0f, structureInteriorAmount(notch), "the notch north of the airlock @r$rotation")
+            assertEquals(1f, structureInteriorAmount(notchScene(station, -300f, -450f)), "the hall at the same depth @r$rotation")
+        }
+        val station = StructureFixture(template, SX, SY)
+        val notch = notchScene(station, -700f, -450f)
+        val held = requireNotNull(notch.structures.dungeon)
+        val plain = notch.with("structures" to notch.structures.copy(dungeon = held.copy(panel = false)))
+        for (density in listOf(1f, 2f)) {
+            val core = render(notch, density).screenCentre(density)
+            assertEquals(render(plain, density).screenCentre(density).toArgb(), core.toArgb(), "the Core in the notch is not inked @$density")
+        }
+    }
+
     @Test
     fun aWarmFrameBuildsNoPath() {
         val scene = sealedScene()
@@ -189,6 +213,16 @@ class WorldStructureRenderingTest {
     private fun onwardScene(): GameplayRenderModel {
         val spire = spire(clearedRooms = 0b0011, engagedRoom = -1)
         return base.with("structures" to structureProjection(spire, dungeon = spire))
+    }
+
+    /** [station] held as the dungeon, the Core and the view at its template point ([x], [y]). */
+    private fun notchScene(station: StructureFixture, x: Float, y: Float): GameplayRenderModel {
+        val (coreX, coreY) = station.at(x, y)
+        return base.with(
+            "structures" to structureProjection(station, dungeon = station),
+            "coreX" to coreX, "coreY" to coreY, "previousCoreX" to coreX, "previousCoreY" to coreY,
+            "cameraX" to coreX, "cameraY" to coreY, "previousCameraX" to coreX, "previousCameraY" to coreY,
+        )
     }
 
     /** One run's model (its content holds the templates the renderer caches its shapes by). */
@@ -220,6 +254,9 @@ class WorldStructureRenderingTest {
     /** The pixel of the Spire's template point ([x], [y]). */
     private fun PixelMap.at(x: Float, y: Float, density: Float): Color =
         this[((WIDTH * 0.5f + x) * density).toInt(), ((HEIGHT * 0.5f + y - 300f) * density).toInt()]
+
+    /** The pixel at the screen's centre (the Core when the view is centred on it). */
+    private fun PixelMap.screenCentre(density: Float): Color = this[(WIDTH * 0.5f * density).toInt(), (HEIGHT * 0.5f * density).toInt()]
 
     private fun near(actual: Color, expected: Color, tolerance: Float): Boolean =
         abs(actual.red - expected.red) < tolerance && abs(actual.green - expected.green) < tolerance &&
