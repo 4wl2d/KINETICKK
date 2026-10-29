@@ -1293,8 +1293,23 @@ clear is 0.8366 fresh / 0.8293 veteran. The omen arms remain within their
 bands (Still Water win shift +0.0900, SE 0.0323; Hungry Dark +0.0700,
 SE 0.0345), run skeleton variety is 0.8807, and event-signal reach is 0.9962.
 The engaging-site win share is 0.7600 against its no-POI control's 0.7067.
-The Apex and director-budget values above remain historical measurements;
-those classes are checked in the full local CI rather than this targeted run.
+The subsequent desktop shards 2-6 measured the Apex on `ae3ab60e`:
+
+| Gate | Measured on ae3ab60e | Unchanged threshold |
+|---|---|---|
+| Apex casts | 312/312 = 1.0000 | 1.0000 |
+| Apex offence median time-to-kill ratio (3,840 paired fights) | 0.848 | [0.75, 0.95] |
+| Apex offence benefit per character / median benefit | about 0.86 (Ring) to 1.38 (Crescent) | [0.60, 1.40] |
+| Apex defence Prism / Diamond (512 pairs each) | 0.675 / 0.679 | [0.55, 0.85] each |
+
+The relative benefits are derived from the rounded stdout ratios: Ring 0.869,
+Crescent 0.791 and the median 0.848. Crescent remains close to the upper band;
+the precise margin and new bootstrap SE were not printed. Against the previous
+local CI at `f8415014`, the offence median moved 0.850 -> 0.848, Prism defence
+0.681 -> 0.675 and Diamond defence 0.695 -> 0.679; all 312 fights still cast.
+The Apex fight contracts passed, and CharacterBalance and director-budget
+stdout were unchanged from that previous run. The historical threshold base
+and its SEs above remain unchanged.
 
 Flagged for the owner's playtest: the coast when easing the pointer to the
 centre (designed as half speed in 1.84 s instead of 0.69 s); `scrapeShare` 0.3; the
