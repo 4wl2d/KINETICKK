@@ -10,6 +10,7 @@ import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -23,7 +24,9 @@ import kotlin.test.assertTrue
  * - The wide fuzz runs only with `KK_FUZZ=first..last` (seed indices): full sessions of up to 900 s (every 25th seed
  *   twice, to show it ends identically) on a pool of
  *   `KK_FUZZ_THREADS` threads (default one per processor, at most eight), every result and break appended to
- *   `KK_FUZZ_REPORT` (default `kinetickk-fuzz-report.txt` in the temporary directory) as it lands. `KK_FUZZ_TRACE=from..to`
+ *   `KK_FUZZ_REPORT` (default `kinetickk-fuzz-report.txt` in the temporary directory) as it lands. For exact rechecks,
+ *   `KK_FUZZ_INDICES` selects comma-separated unique indices inside the window, excluding the gate population; without
+ *   it, the whole window runs. `KK_FUZZ_TRACE=from..to`
  *   prints every frame of that step range (with a single seed, to minimise a break), `KK_FUZZ_SCAN=n` scans every
  *   retained value for non-finite numbers every n frames instead of every frame. To minimise a break, `KK_FUZZ_JITTER`,
  *   `KK_FUZZ_RANDOM_CHOICES` replace the plan's jitter and random-choice share, `KK_FUZZ_NO_RESTART=1` drops its restart
@@ -78,7 +81,8 @@ class InvariantFuzzTest {
     @Test fun wideFuzzHoldsEveryInvariant() {
         val window = System.getenv("KK_FUZZ")?.takeIf { it.isNotBlank() } ?: return
         val (first, last) = window.split("..").map { it.trim().toInt() }
-        val indices = (first..last).filter { it !in POPULATION_INDICES }
+        val selection = System.getenv("KK_FUZZ_INDICES")
+        val indices = wideFuzzIndices(first, last, selection)
         val threads = System.getenv("KK_FUZZ_THREADS")?.toIntOrNull() ?: Runtime.getRuntime().availableProcessors().coerceIn(1, 8)
         val trace = System.getenv("KK_FUZZ_TRACE")?.takeIf { it.isNotBlank() }?.split("..")?.map { it.trim().toLong() }
         val options = FuzzOptions(
@@ -92,7 +96,7 @@ class InvariantFuzzTest {
         )
         val report = File(System.getenv("KK_FUZZ_REPORT") ?: File(System.getProperty("java.io.tmpdir"), "kinetickk-fuzz-report.txt").path)
         report.parentFile?.mkdirs()
-        report.writeText("FUZZ window=$first..$last seeds=${indices.size} threads=$threads\n")
+        report.writeText("FUZZ window=$first..$last seeds=${indices.size} threads=$threads selection=${if (selection == null) "range" else "explicit"}\n")
         val pool = Executors.newFixedThreadPool(threads) { task -> Thread(task, "fuzz").apply { isDaemon = true } }
         val started = System.nanoTime()
         val results = try {
@@ -133,6 +137,41 @@ class InvariantFuzzTest {
         synchronized(report) { report.appendText(summary + "\n") }
         println(summary)
         assertTrue(breaks.isEmpty(), "${breaks.size} invariant breaks (report ${report.path}):\n" + breaks.joinToString("\n") { it.line() })
+    }
+
+    @Test fun wideFuzzWithoutSelectionKeepsTheWholeWindowExceptTheGatePopulation() {
+        assertEquals((3_401..3_404).toList(), wideFuzzIndices(3_401, 3_404, null))
+        assertEquals(listOf(999, 1_000, 1_301, 1_302), wideFuzzIndices(999, 1_302, null))
+    }
+
+    @Test fun wideFuzzSelectionKeepsTheRequestedIndicesAndOrder() {
+        assertEquals(listOf(5_488, 3_416, 7_400), wideFuzzIndices(3_401, 7_400, "5488, 3416,7400"))
+    }
+
+    @Test fun wideFuzzSelectionRejectsMalformedDuplicateOutOfWindowAndGateIndices() {
+        for (selection in listOf("", " ", "3416,,5488", "3416,unknown", "3416,3416", "3400", "7401", "2147483648")) {
+            assertFailsWith<IllegalArgumentException>("selection '$selection' must be rejected") {
+                wideFuzzIndices(3_401, 7_400, selection)
+            }
+        }
+        for (selection in listOf("1001", "1300", "1000,1100,3401")) {
+            assertFailsWith<IllegalArgumentException>("gate selection '$selection' must be rejected") {
+                wideFuzzIndices(1_000, 3_401, selection)
+            }
+        }
+        assertFailsWith<IllegalArgumentException> { wideFuzzIndices(3_402, 3_401, null) }
+    }
+
+    private fun wideFuzzIndices(first: Int, last: Int, selection: String?): List<Int> {
+        require(first <= last) { "KK_FUZZ must be an ascending window" }
+        if (selection == null) return (first..last).filter { it !in POPULATION_INDICES }
+        val indices = selection.split(',').map { token ->
+            requireNotNull(token.trim().toIntOrNull()) { "KK_FUZZ_INDICES contains an invalid index: '$token'" }
+        }
+        require(indices.distinct().size == indices.size) { "KK_FUZZ_INDICES must not contain duplicates" }
+        require(indices.all { it in first..last }) { "KK_FUZZ_INDICES must stay inside KK_FUZZ=$first..$last" }
+        require(indices.none { it in POPULATION_INDICES }) { "KK_FUZZ_INDICES must not include the gate population" }
+        return indices
     }
 
     private companion object {
