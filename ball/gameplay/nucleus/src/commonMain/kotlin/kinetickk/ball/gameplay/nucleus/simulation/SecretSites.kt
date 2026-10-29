@@ -114,9 +114,11 @@ internal fun MutableGameState.spawnSecretSigil(x: Float, y: Float) {
  * The sigil's step before the secret trackers. Untouched, it fades at its cutoff, and the Core's swept step through its
  * circle summons the Cartographer unless another engagement runs or the encounter is refused (it stays to be touched
  * again). Summoned, the duel is the engagement: the boss's fall breaks the sigil at the next step, wherever the Core
- * is; the Core farther than the duel leash from the sigil, or a boss gone without a kill, fades it.
+ * is; the Core farther than the duel leash from the sigil, or a boss gone without a kill, fades it. A sigil waiting in
+ * realspace is neither touched nor faded during a visit to another layer.
  */
 internal fun MutableGameState.updateSecretSigil() {
+    if (!inBaseLayer()) return
     val sigil = secretSigil ?: return
     val policy = content.sites.secrets
     if (!sigil.active) {

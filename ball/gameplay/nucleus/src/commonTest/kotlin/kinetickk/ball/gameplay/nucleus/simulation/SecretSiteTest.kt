@@ -600,6 +600,58 @@ class SecretSiteTest {
     }
 
     @Test
+    fun anUntouchedSigilWaitsInRealspaceThroughARiftVisit() {
+        val game = placed()
+        val sigil = assertNotNull(game.secretSigil)
+        fun projected(): Boolean = game.siteProjections(null, null).any { it.kind == SiteKind.FAR_SIGIL }
+        fun marked(): Boolean {
+            val marks = FloatArray(MAX_OPTIONAL_SITE_MARKS * 3)
+            val count = game.optionalSiteMarks(marks)
+            return (0 until count).any { marks[it * 3] == sigil.x && marks[it * 3 + 1] == sigil.y }
+        }
+        assertTrue(projected() && marked())
+        val realspace = game.copyForReduction()
+        val realspaceProjections = game.siteProjections(null, null)
+
+        // A Zenith rift taken before the touch: inside, the sigil is neither shown, marked nor touchable.
+        game.enterDimensionForTesting(WorldLayer.ZENITH)
+        assertEquals(sigil, game.secretSigil, "the rift visit kept the sigil")
+        assertFalse(projected(), "no sigil is drawn inside a dimension")
+        val dimensionProjections = game.siteProjections(realspaceProjections, realspace)
+        assertTrue(dimensionProjections.none { it.kind == SiteKind.FAR_SIGIL }, "reused projections hide the sigil too")
+        assertFalse(marked(), "no sigil is marked inside a dimension")
+        game.touchSigil()
+        assertEquals(sigil, game.secretSigil, "nothing is summoned inside a dimension")
+        assertFalse(game.hasSecret(RunSecretFlag.CARTOGRAPHER_SUMMONED))
+        assertTrue(game.enemies.none { it.type == SIGIL_BOSS })
+
+        // Back in realspace it lies where it was and summons its duel at the touch.
+        val dimension = game.copyForReduction()
+        game.exitDimension(DimensionExit.PORTAL)
+        assertEquals(WorldLayer.BASE, game.worldLayer)
+        assertEquals(sigil, game.secretSigil, "the sigil waited where it lay")
+        assertTrue(projected() && marked())
+        assertTrue(
+            game.siteProjections(dimensionProjections, dimension).any { it.kind == SiteKind.FAR_SIGIL },
+            "reused projections show the sigil again after the visit",
+        )
+        game.touchSigil()
+        assertTrue(game.secretSigil!!.active, "the sigil summons after the visit")
+        assertTrue(game.hasSecret(RunSecretFlag.CARTOGRAPHER_SUMMONED))
+
+        // A visit that runs past the cutoff: the sigil fades with its notice once the Core is back.
+        val late = placed()
+        late.enterDimensionForTesting(WorldLayer.NADIR)
+        late.elapsed = sigilCutoff
+        late.standAt(late.coreX, late.coreY)
+        assertNotNull(late.secretSigil, "the cutoff is not checked out of realspace")
+        late.exitDimension(DimensionExit.PORTAL)
+        late.standAt(late.coreX, late.coreY)
+        assertNull(late.secretSigil)
+        assertEquals(SiteNotice.SIGIL_FADES.english, late.message)
+    }
+
+    @Test
     fun touchingTheSigilSummonsTheCartographerAboveItAsTheSigilsOwnEncounter() {
         val game = placed()
         val sigil = game.secretSigil!!

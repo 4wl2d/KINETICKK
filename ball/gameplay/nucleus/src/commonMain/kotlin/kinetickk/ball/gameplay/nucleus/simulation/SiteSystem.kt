@@ -35,13 +35,13 @@ internal fun MutableGameState.resetSites() {
 }
 
 /**
- * A world layer switch: every placed site of the old layer is gone (the Golden Drifter with them); realspace builds its
- * ambient window again once the Core is back.
+ * A world layer switch clears the old layer's window sites and Golden Drifter; realspace builds its ambient window
+ * again once the Core is back. An untouched sigil waits in realspace until the return, when its cutoff is checked.
  */
 internal fun MutableGameState.clearSitesForLayerChange() {
     sites = emptyList()
     ambientSites = AmbientSiteWindow.UNBUILT
-    secretSigil = null
+    if (secretSigil?.active == true) secretSigil = null
     goldenDrifterId = -1
 }
 

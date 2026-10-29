@@ -41,11 +41,12 @@ internal fun MutableGameState.siteProjections(
     reusable: ImmutableList<SiteProjection>?,
     identitySource: MutableGameState?,
 ): ImmutableList<SiteProjection> {
-    val sigil = secretSigil
+    val sigil = if (inBaseLayer()) secretSigil else null
     val count = sites.size + if (sigil != null) 1 else 0
     if (reusable != null) {
         // A duel's progress is its foe's integrity, which the site state does not hold.
-        if (sites === identitySource?.sites && sigil === identitySource.secretSigil &&
+        if (sites === identitySource?.sites && secretSigil === identitySource.secretSigil &&
+            inBaseLayer() == identitySource.inBaseLayer() &&
             elapsed.sameBitsAs(identitySource.elapsed) && !readsFoeIntegrity()
         ) return reusable
         if (reusable.size == count) {

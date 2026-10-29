@@ -21,7 +21,7 @@ internal fun MutableGameState.optionalSiteMarks(out: FloatArray): Int {
     require(out.size >= MAX_OPTIONAL_SITE_MARKS * 3) { "An optional-site buffer holds $MAX_OPTIONAL_SITE_MARKS marks" }
     var count = appendSiteMarks(out, 0, sites)
     count = appendAmbientSiteMarks(out, count)
-    secretSigil?.let { count = appendSiteMark(out, count, it) }
+    if (inBaseLayer()) secretSigil?.let { count = appendSiteMark(out, count, it) }
     count = appendEventSignalMarks(out, count).coerceAtMost(MAX_OPTIONAL_SITE_MARKS)
     count = appendStructureMarks(out, count).coerceAtMost(MAX_OPTIONAL_SITE_MARKS)
     count = appendDimensionMarks(out, count).coerceAtMost(MAX_OPTIONAL_SITE_MARKS)
