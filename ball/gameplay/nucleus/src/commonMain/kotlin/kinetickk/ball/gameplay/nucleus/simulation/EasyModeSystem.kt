@@ -12,8 +12,9 @@ import kotlin.math.sqrt
 /*
  * Baby mode (RunMode.EASY) rules of one run, read from the immutable [MutableGameState.easyMode] and the content's
  * EasyModeTuning. Shared systems call these through one-line hooks: the singularity contact in updateCore, the damage
- * factor and obstacle floor in PlayerDamageSystem, the Heirloom offer at the run start and the Profile outbox guards
- * in ProgressionSystem. A STANDARD run reads none of the tuning and multiplies by exactly 1.
+ * factor and obstacle floor in PlayerDamageSystem, the Heirloom offer at the run start, the Profile outbox guards
+ * in ProgressionSystem and the first-discovery announcements in ReactionSystem and RelicRules. A STANDARD run reads
+ * none of the tuning and multiplies by exactly 1.
  */
 
 /** Shockwave and spark colour of Baby mode's soft bounce (Interaction maps it to the soft role, SOFT_RING_COLOR). */
@@ -32,6 +33,13 @@ internal val MutableGameState.incomingDamageFactor: Float
 /** Obstacle damage after shields in Baby mode: never below the integrity floor. */
 internal fun MutableGameState.capEasyObstacleDamage(amount: Float): Float =
     if (!easyMode) amount else min(amount, max(0f, hp - content.easyMode.obstacleIntegrityFloor))
+
+/**
+ * Whether this run announces a first reaction or pairing discovery (the feed banner, the reaction stamp and the
+ * report's "new" mark). Baby mode drops every discovery before the Profile, so it claims none; its masks still dedupe.
+ */
+internal val MutableGameState.announcesDiscoveries: Boolean
+    get() = !easyMode
 
 /**
  * Baby mode: the singularity at ([targetX], [targetY]) bounces the Core off instead of ending the run. The Core is put

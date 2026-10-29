@@ -4,7 +4,9 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.api.RunMode
@@ -248,6 +250,26 @@ class EasyModeTest {
     }
 
     @Test
+    fun babyModeAnnouncesNoDiscoveryItNeverRecords() {
+        // A STANDARD run announces its first Fusion and its first named pairing.
+        val standard = quietRun(RunMode.STANDARD)
+        val standardCues = standard.discoverFusionAndThermalParadox()
+        assertEquals(listOf(true), standardCues.filterIsInstance<VisualFxCue.ReactionTriggered>().map { it.firstDiscovery })
+        assertEquals(DISCOVERY_BANNERS, standardCues.discoveryBanners())
+
+        // A Baby mode run records neither, so no feed banner, reaction stamp or report "new" mark claims them.
+        val easy = quietRun(RunMode.EASY)
+        val easyCues = easy.discoverFusionAndThermalParadox()
+        assertEquals(listOf(false), easyCues.filterIsInstance<VisualFxCue.ReactionTriggered>().map { it.firstDiscovery },
+            "the reaction plays without the first-discovery stamp that also marks it new on the report")
+        assertEquals(emptyList(), easyCues.discoveryBanners(), "no discovery banner")
+        // The run still knows what it met, so the masks dedupe as before, and the Profile hears of neither.
+        assertTrue(easy.discoveredReactionMask and (1 shl ReactionId.FUSION.ordinal) != 0)
+        assertTrue(easy.discoveredPairingMask and (1 shl RelicPairingId.THERMAL_PARADOX.ordinal) != 0)
+        assertNull(easy.takeProgressUpdate())
+    }
+
+    @Test
     fun babyModeSurvivesEveryReductionCopy() {
         val committed = cursorOnTheCore(RunMode.EASY).apply { repeat(12) { update(1f / 24f) } }
         assertTrue(committed.copyForReduction().easyMode)
@@ -341,6 +363,20 @@ class EasyModeTest {
         invulnerableUntil = 0f
     }
 
+    /** Sets off a first Fusion on a dummy and binds the Thermal Paradox pairing; returns the visual cues of both. */
+    private fun MutableGameState.discoverFusionAndThermalParadox(): List<VisualFxCue> {
+        takeVisualFxCues()
+        val target = dummy()
+        applyStatus(target, ReactionId.FUSION.first, 3, generation = 0)
+        applyStatus(target, ReactionId.FUSION.second, 1, generation = 0)
+        acquireRelic(RelicId.FURNACE_COVENANT)
+        acquireRelic(RelicId.ABSOLUTE_ZERO)
+        return takeVisualFxCues()
+    }
+
+    private fun List<VisualFxCue>.discoveryBanners(): List<String> =
+        filterIsInstance<VisualFxCue.BuildChanged>().map { it.title }.filter { it in DISCOVERY_BANNERS }
+
     private fun lossRatio(kind: IncomingDamage): Float {
         val standard = quietRun(RunMode.STANDARD)
         val easy = quietRun(RunMode.EASY)
@@ -416,3 +452,6 @@ class EasyModeTest {
         return trace
     }
 }
+
+/** The feed banners of a first reaction and a first named pairing, in the order the helper meets them. */
+private val DISCOVERY_BANNERS = listOf("REACTION DISCOVERED", "PAIRING DISCOVERED")

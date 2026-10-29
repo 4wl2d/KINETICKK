@@ -501,14 +501,17 @@ internal fun MutableGameState.resolveReaction(
     }
     val bit = 1 shl reaction.ordinal
     val first = !echo && discoveredReactionMask and bit == 0
+    val announced = first && announcesDiscoveries
     if (first) {
         discoveredReactionMask = discoveredReactionMask or bit
         pendingDiscoveredReactionMask = pendingDiscoveredReactionMask or bit
+    }
+    if (announced) {
         emitVisualFx(VisualFxCue.BuildChanged("REACTION DISCOVERED", kinetickk.foundation.collections.immutableListOf("+ " + definition.name)))
     }
     if (generation >= 1) flags = flags or ReactionCueFlags.CASCADE
     if (echo) flags = flags or ReactionCueFlags.ECHO
-    recordStatusCue(VisualFxCue.ReactionTriggered(x, y, reaction.ordinal, max(radius, enemy.radius * 2f), first,
+    recordStatusCue(VisualFxCue.ReactionTriggered(x, y, reaction.ordinal, max(radius, enemy.radius * 2f), announced,
         direction = direction, flags = flags))
     if (!echo) {
         onReaction(enemy, reaction)

@@ -142,7 +142,8 @@ sealed interface VisualFxCue {
     ) : VisualFxCue
 
     /**
-     * An elemental reaction at a world point; [firstDiscovery] marks the profile's first occurrence.
+     * An elemental reaction at a world point; [firstDiscovery] marks the profile's first occurrence (never in a Baby mode
+     * run, which records no discovery).
      * [direction] is a heading in radians for directional looks (NaN when unused); [flags] holds
      * [ReactionCueFlags] bits.
      */
