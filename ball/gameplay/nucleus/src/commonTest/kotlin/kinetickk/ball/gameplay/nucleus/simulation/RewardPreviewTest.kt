@@ -90,6 +90,28 @@ class RewardPreviewTest {
     }
 
     @Test
+    fun cardsThatChangeNothingPreviewNothingAndEveryCardReadsAsOnACopy() {
+        val rime = canonicalGameplayContent.items.single { it.name == "Rime Rounds" }
+        val state = engine().apply {
+            acquireItem(canonicalGameplayContent.items.single { it.name == "Igniter" }.id)
+            overdriveTime = 2f
+            choices = listOf(
+                ChoiceOption(ChoiceType.OMEN, NO_OMEN_TITLE, NO_OMEN_TEXT, "DECLINE"),
+                ChoiceOption(ChoiceType.TOTEM, "Change", "", "", totemAction = TotemAction.CHANGE_WEAPON),
+                ChoiceOption(ChoiceType.RELIC_BIND, "Keep", "", "", relicSlot = 0, relicAction = RelicChoiceAction.DECLINE),
+                ChoiceOption(ChoiceType.ITEM, rime.name, rime.description, "", itemId = rime.id),
+            )
+            activeChoiceType = ChoiceType.ITEM
+            phase = GamePhase.CHOICE
+        }
+        val previews = state.rewardPreviews()
+        previews.take(3).forEachIndexed { index, preview -> assertEquals(RewardPreview(), preview, state.choices[index].title) }
+        assertEquals(ForecastKind.REACTION, previews[3].forecasts.first().kind, "the item card still previews its build change")
+        // Every preview is what an isolated copy of the state previews, including the cards that copy nothing.
+        assertEquals(previews, state.copyForReduction().rewardPreviews())
+    }
+
+    @Test
     fun amplificationCrossesMasteryWithTheRealDamageAndActivationChanges() {
         val state = engine().apply {
             weaponLevel = 2
