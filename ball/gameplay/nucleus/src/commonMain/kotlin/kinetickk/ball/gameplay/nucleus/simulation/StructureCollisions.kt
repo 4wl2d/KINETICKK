@@ -161,8 +161,8 @@ private fun MutableGameState.resolveEnemyWall(enemy: Enemy, wall: Wall) {
 /**
  * Each live enemy the engaged room's encounter owns (the garrison, a mini-boss's adds and fragments, which hold the
  * clear) is held inside that room (template space, inset by its radius, the wall half thickness and a small gap), so
- * an add nudged through a wall at its spawn comes back where the Core can reach it. A clamped enemy's previous
- * position follows: the move is a teleport, not a step.
+ * none of them ends behind a wall out of the Core's reach. A clamped enemy's previous position follows: the move is a
+ * teleport, not a step.
  */
 private fun MutableGameState.clampGarrisonToRoom() {
     val dungeon = dungeon ?: return

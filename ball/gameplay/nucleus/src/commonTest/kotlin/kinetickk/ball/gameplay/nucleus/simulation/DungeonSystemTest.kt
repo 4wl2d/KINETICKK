@@ -17,6 +17,7 @@ import kinetickk.ball.content.api.rotateQuarterX
 import kinetickk.ball.content.api.rotateQuarterY
 import kinetickk.ball.gameplay.nucleus.model.PlacedStructure
 import kinetickk.ball.gameplay.nucleus.model.RunSecretFlag
+import kinetickk.ball.gameplay.nucleus.model.TAU
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.content.api.SiteKind
@@ -347,6 +348,50 @@ class DungeonSystemTest {
             run.updateEnemies(step)
             for (enemy in reliquary.garrison(4)) {
                 assertEquals(4, reliquary.roomOf(enemy.x, enemy.y), "seed $seed: a ${enemy.type} left the sanctum")
+            }
+        }
+    }
+
+    @Test
+    fun aBossHatchesItsAddsOnItsOwnSideOfTheWalls() {
+        // The Brood Queen held against each vault wall, a sealed door and a corner hatches broods aimed every way. Each
+        // Swarmling lands in the vault clear of the walls as it spawns, before a wall pass could pull it back, and none
+        // is dropped.
+        val vault = Dungeon(StructureTemplateId.VAULT)
+        val run = vault.run
+        vault.clear(1)
+        vault.clear(2)
+        vault.enterRoom(3)
+        val queen = vault.garrison(3).first { it.type == EnemyType.BROOD_QUEEN }
+        val room = vault.template.rooms[3]
+        val wall = vault.template.wallHalfThickness
+        val held = queen.radius + wall + 4f
+        val spots = listOf(
+            room.maxX - held to -400f, // east wall
+            room.minX + held to -700f, // west, on the sealed door to the West gallery
+            0f to room.minY + held, // south wall
+            0f to room.maxY - held, // north wall, against the antechamber
+            room.maxX - held to room.minY + held, // south-east corner
+        )
+        val brood = 4
+        for ((localX, localY) in spots) {
+            for (turn in 0 until 12) {
+                val (x, y) = vault.world(localX, localY)
+                queen.x = x
+                queen.y = y
+                run.elapsed = 200f + turn * TAU / brood / 12f
+                val before = run.enemies.size
+                assertEquals(brood, run.spawnBossAdds(queen, EnemyType.SWARMLING, brood, 1f, QUEEN_BROOD_LIVE))
+                val adds = run.enemies.subList(before, run.enemies.size).toList()
+                for (add in adds) {
+                    val s = vault.structure
+                    assertEquals(
+                        3,
+                        roomAt(vault.template, s.rotation, s.x, s.y, add.x, add.y, add.radius + wall - 0.5f),
+                        "Queen at ($localX, $localY), turn $turn: a Swarmling hatched behind a wall",
+                    )
+                }
+                run.enemies.removeAll(adds)
             }
         }
     }

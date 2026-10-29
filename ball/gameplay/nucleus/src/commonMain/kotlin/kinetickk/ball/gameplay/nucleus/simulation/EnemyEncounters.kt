@@ -315,9 +315,10 @@ internal fun MutableGameState.onEncounterEnemyKilled(enemy: Enemy) {
 
 /**
  * Spawns up to [count] adds of [type] around [boss] (ring at boss radius + type radius + 50, angle i·TAU/count + run
- * time, nudged). A tagged boss's adds take its tag (leash-exempt, clamped, despawned with the encounter, counted in
- * spawned), at most [maxLive] live adds of that type, within [MAX_ENCOUNTER_RESERVE]; an untagged boss's adds fit the
- * free ordinary room. Always within the hard cap. Returns how many spawned. Draws nothing.
+ * time, nudged, held on the boss's side of a wall). A tagged boss's adds take its tag (leash-exempt, clamped,
+ * despawned with the encounter, counted in spawned), at most [maxLive] live adds of that type, within
+ * [MAX_ENCOUNTER_RESERVE]; an untagged boss's adds fit the free ordinary room. Always within the hard cap. Returns how
+ * many spawned. Draws nothing.
  */
 internal fun MutableGameState.spawnBossAdds(boss: Enemy, type: EnemyType, count: Int, integrityShare: Float, maxLive: Int): Int {
     require(type.encounterRank == EnemyRank.ORDINARY) { "Boss adds are ordinary kinds" }
@@ -349,6 +350,13 @@ internal fun MutableGameState.spawnBossAdds(boss: Enemy, type: EnemyType, count:
             x += cos(angle) * ENCOUNTER_NUDGE_DISTANCE
             y += sin(angle) * ENCOUNTER_NUDGE_DISTANCE
             attempts++
+        }
+        // Neither the ring nor the nudge carries an add through a wall: it comes back along its line to the boss's side.
+        val wall = earliestWallEntry(boss.x, boss.y, x, y, radius, before = 2f)
+        if (wall >= 0L) {
+            val share = Float.fromBits(wall.toInt())
+            x = boss.x + (x - boss.x) * share
+            y = boss.y + (y - boss.y) * share
         }
         enemies += spawnedEnemy(type, x, y, ownerTag = tag, integrityShare = integrityShare)
     }
