@@ -806,7 +806,8 @@ internal fun MutableGameState.blockProjectilesAtObstacles() {
 
 /**
  * Moves a site at ([x], [y]) outward from the Core in [step]s until a circle of [radius] there is clear
- * of obstacles (at most [attempts] moves); returns the site. Used for rare placements only.
+ * of obstacles (at most [attempts] moves), then keeps it outside structure footprints. The bounded search may still
+ * meet an obstacle, but never places the site inside a room. Used for rare placements only.
  */
 internal fun MutableGameState.nudgedClearOfObstacles(
     x: Float,
@@ -827,7 +828,8 @@ internal fun MutableGameState.nudgedClearOfObstacles(
         siteY += dy / distance * step
         moves++
     }
-    return siteX to siteY
+    val final = structureEjected(siteX, siteY, radius)
+    return final.x to final.y
 }
 
 /** Room an anomaly needs: its orbit ring around the centre and the two circuit beacons. */
@@ -845,7 +847,7 @@ internal fun MutableGameState.pointSiteBlocked(x: Float, y: Float): Boolean =
 /** Room a structure keeps clear around an anomaly: its ring and both beacons. */
 private const val POINT_SITE_EJECT_RADIUS: Float = 320f
 
-/** Moves an anomaly outward from the Core until its site is clear (bounded). */
+/** Searches outward for obstacle clearance (bounded), then keeps the anomaly outside structure footprints. */
 internal fun MutableGameState.clearPointOfInterestSite(x: Float, y: Float): Pair<Float, Float> {
     val ejected = structureEjected(x, y, POINT_SITE_EJECT_RADIUS)
     var siteX = ejected.x
@@ -859,5 +861,6 @@ internal fun MutableGameState.clearPointOfInterestSite(x: Float, y: Float): Pair
         siteY += dy / distance * POINT_SITE_STEP
         moves++
     }
-    return siteX to siteY
+    val final = structureEjected(siteX, siteY, POINT_SITE_EJECT_RADIUS)
+    return final.x to final.y
 }

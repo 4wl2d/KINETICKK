@@ -717,6 +717,56 @@ class StructureCollisionTest {
     }
 
     @Test
+    fun sitesNudgedOffObstaclesNeverComeToRestInsideAStructure() {
+        // The Core a few hundred units outside a face of each template, offers 560 u ahead on either side of its heading
+        // (as a window lays them): an offer over the structure is ejected towards the Core, and the outward nudge off a
+        // rock there must not carry it back in, where it would rest in a room (garrisoned rooms seal, final rooms lock).
+        var overStructure = 0
+        val templates = listOf(
+            StructureTemplateId.VAULT, StructureTemplateId.FOUNDRY, StructureTemplateId.LABYRINTH,
+            StructureTemplateId.RELIQUARY, StructureTemplateId.DERELICT_STATION, StructureTemplateId.SPIRE,
+        )
+        for (template in templates) {
+            for (seed in 1..8) {
+                val run = buildTestState(content = forcedStructureContent(template), seed = seed)
+                val placement = run.structurePlacement(12, -9) ?: continue
+                run.teleportCoreForTesting(placement.absoluteX, placement.absoluteY)
+                val structure = run.structureField.structures[run.structureField.indexOf(placement.id)]
+                fun outside(x: Float, y: Float, inflate: Float): Boolean = run.structureField.structures.all { s ->
+                    abs(x - s.x) >= s.halfWidth + inflate || abs(y - s.y) >= s.halfHeight + inflate
+                }
+                val random = kotlin.random.Random(seed * 31 + template.ordinal)
+                repeat(60) {
+                    val gap = 380f + random.nextFloat() * 240f
+                    val along = random.nextFloat() * 2f - 1f
+                    val (coreX, coreY) = when (random.nextInt(4)) {
+                        0 -> structure.x + structure.halfWidth + gap to structure.y + along * structure.halfHeight
+                        1 -> structure.x - structure.halfWidth - gap to structure.y + along * structure.halfHeight
+                        2 -> structure.x + along * structure.halfWidth to structure.y + structure.halfHeight + gap
+                        else -> structure.x + along * structure.halfWidth to structure.y - structure.halfHeight - gap
+                    }
+                    run.coreX = coreX
+                    run.coreY = coreY
+                    run.previousCoreX = coreX
+                    run.previousCoreY = coreY
+                    val heading = random.nextFloat() * 2f * PI.toFloat()
+                    for (offset in floatArrayOf(-1f, 1f)) {
+                        val offerX = coreX + cos(heading + offset) * 560f
+                        val offerY = coreY + sin(heading + offset) * 560f
+                        if (abs(offerX - structure.x) >= structure.halfWidth || abs(offerY - structure.y) >= structure.halfHeight) continue
+                        overStructure++
+                        val (siteX, siteY) = run.clearPointOfInterestSite(offerX, offerY)
+                        assertTrue(outside(siteX, siteY, 320f), "$template seed $seed: the site rests in the structure at ($siteX, $siteY)")
+                        val (totemX, totemY) = run.nudgedClearOfObstacles(offerX, offerY, 70f)
+                        assertTrue(outside(totemX, totemY, 70f), "$template seed $seed: the Totem rests in the structure at ($totemX, $totemY)")
+                    }
+                }
+            }
+        }
+        assertTrue(overStructure > 300, "only $overStructure offers fell over a structure")
+    }
+
+    @Test
     fun sightLinesAreBlockedByWalls() {
         val state = quiet()
         state.placeWallsForTesting(listOf(
