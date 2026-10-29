@@ -94,6 +94,12 @@ class DungeonSystemTest {
 
         fun garrison(room: Int) = run.enemies.filter { it.ownerTag == tag(room) && it.alive }
 
+        /** The room holding the run-local point, or −1. */
+        fun roomOf(x: Float, y: Float): Int {
+            val s = structure
+            return roomAt(template, s.rotation, s.x, s.y, x, y, 0f)
+        }
+
         fun clear(room: Int) {
             enterRoom(room)
             check(run.dungeon?.engagedRoom == room) { "room $room did not seal" }
@@ -285,6 +291,63 @@ class DungeonSystemTest {
         run.resolveEnemyObstacles()
         val s = dungeon.structure
         assertEquals(1, roomAt(dungeon.template, s.rotation, s.x, s.y, member.x, member.y, 0f))
+    }
+
+    @Test
+    fun bossAddsSpawnedAgainstAWallStayInTheSealedRoomSoItStillClears() {
+        // The Brood Queen keeps her distance from a Core at the vault's centre, so she ends against a wall and hatches
+        // broods aimed through it. Every enemy the vault's encounter owns stays in the vault, and the kills clear it.
+        for (seed in 44..47) {
+            val vault = Dungeon(StructureTemplateId.VAULT, seed)
+            val run = vault.run
+            vault.clear(1)
+            vault.clear(2)
+            vault.enterRoom(3)
+            assertEquals(3, run.dungeon?.engagedRoom)
+            val centre = vault.roomCentre(3)
+            repeat((10f / step).toInt()) {
+                vault.moveCore(centre)
+                run.updateEnemies(step)
+                run.updateStructures(step)
+                run.elapsed += step
+                for (enemy in vault.garrison(3)) {
+                    assertEquals(3, vault.roomOf(enemy.x, enemy.y), "seed $seed: a ${enemy.type} left the vault at ${run.elapsed} s")
+                }
+            }
+            assertTrue(vault.garrison(3).any { it.type == EnemyType.SWARMLING }, "seed $seed: the Queen hatched")
+            vault.garrison(3).filter { vault.roomOf(it.x, it.y) == 3 }.forEach { run.onEnemyKilled(it); run.enemies.remove(it) }
+            run.pickups.clear()
+            run.updateStructures(step)
+            assertNull(run.dungeon, "seed $seed: the vault cleared")
+            assertEquals(1, run.pickups.count { it.type == PickupType.RELIC })
+            assertTrue(run.isSpent(vault.placement.id))
+        }
+
+        // Warden Prime's final-phase guards spawn beside her as she holds off near the sanctum walls.
+        for (seed in 44..45) {
+            val reliquary = Dungeon(StructureTemplateId.RELIQUARY, seed)
+            val run = reliquary.run
+            for (chapel in listOf(0, 2, 6, 8)) reliquary.clear(chapel)
+            reliquary.enterRoom(4)
+            assertEquals(4, run.dungeon?.engagedRoom)
+            val centre = reliquary.roomCentre(4)
+            repeat((3f / step).toInt()) {
+                reliquary.moveCore(centre)
+                run.updateEnemies(step)
+                run.updateStructures(step)
+                run.elapsed += step
+            }
+            val prime = reliquary.garrison(4).first { it.type == EnemyType.WARDEN_PRIME }
+            val wardens = reliquary.garrison(4).count { it.type == EnemyType.WARDEN }
+            prime.phase = 2
+            prime.phaseStartPending = true
+            run.updateBossPhaseStarts()
+            assertTrue(reliquary.garrison(4).count { it.type == EnemyType.WARDEN } > wardens, "seed $seed: the guards came")
+            run.updateEnemies(step)
+            for (enemy in reliquary.garrison(4)) {
+                assertEquals(4, reliquary.roomOf(enemy.x, enemy.y), "seed $seed: a ${enemy.type} left the sanctum")
+            }
+        }
     }
 
     // -----------------------------------------------------------------------------------------

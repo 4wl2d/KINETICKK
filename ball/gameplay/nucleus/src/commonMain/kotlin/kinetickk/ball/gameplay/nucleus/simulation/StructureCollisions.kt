@@ -99,8 +99,8 @@ internal fun MutableGameState.pushCoreOutOfWalls() {
 
 /**
  * After enemies move: pushes each live enemy out of any wall (its inward velocity is removed, and a hard contact
- * slams it), turns self-propelled enemies along a wall before they reach it, then holds a dungeon garrison inside its
- * engaged room. A phasing Phantom passes walls as it passes rocks.
+ * slams it), turns self-propelled enemies along a wall before they reach it, then holds every enemy a sealed room's
+ * encounter owns inside that room. A phasing Phantom passes walls as it passes rocks.
  */
 internal fun MutableGameState.resolveEnemyWalls() {
     if (structureField.structures.isEmpty()) return
@@ -159,22 +159,23 @@ private fun MutableGameState.resolveEnemyWall(enemy: Enemy, wall: Wall) {
 }
 
 /**
- * Each live garrison member of the dungeon's engaged room is held inside that room (template space, inset by its
- * radius, the wall half thickness and a small gap). A clamped member's previous position follows: the move is a
- * teleport, not a step.
+ * Each live enemy the engaged room's encounter owns (the garrison, a mini-boss's adds and fragments, which hold the
+ * clear) is held inside that room (template space, inset by its radius, the wall half thickness and a small gap), so
+ * an add nudged through a wall at its spawn comes back where the Core can reach it. A clamped enemy's previous
+ * position follows: the move is a teleport, not a step.
  */
 private fun MutableGameState.clampGarrisonToRoom() {
     val dungeon = dungeon ?: return
     val roomIndex = dungeon.engagedRoom
-    val garrison = dungeon.garrisonIds
-    if (roomIndex < 0 || garrison.isEmpty()) return
+    if (roomIndex < 0) return
     val template = content.structures.template(dungeon.template)
     if (roomIndex >= template.rooms.size) return
     val room = template.rooms[roomIndex]
+    val tag = roomEncounterTag(dungeon.structureId, roomIndex)
     val inverse = (4 - dungeon.rotation) and 3
     for (enemyIndex in enemies.indices) {
         val enemy = enemies[enemyIndex]
-        if (!enemy.alive || enemy.id !in garrison) continue
+        if (!enemy.alive || enemy.ownerTag != tag) continue
         val inset = enemy.radius + template.wallHalfThickness + GARRISON_WALL_GAP
         val dx = enemy.x - dungeon.x
         val dy = enemy.y - dungeon.y

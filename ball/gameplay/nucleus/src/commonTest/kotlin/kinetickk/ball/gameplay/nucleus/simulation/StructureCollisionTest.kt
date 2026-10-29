@@ -454,11 +454,14 @@ class StructureCollisionTest {
         fun world(localX: Float, localY: Float) =
             structure.x + rotateQuarterX(localX, localY, structure.rotation) to structure.y + rotateQuarterY(localX, localY, structure.rotation)
         val hall = template.rooms[1]
-        // A member pushed past the hall's east wall into the bay, and one outside its room; a stranger in the bay.
+        // A member pushed past the hall's east wall into the bay, and one inside its room; an add the hall's encounter
+        // owns outside the garrison list (spawned beside a mini-boss) in the bay; a stranger in the bay.
+        val tag = roomEncounterTag(placement.id, 1)
         val (memberX, memberY) = world(hall.maxX + 200f, 300f)
-        val member = run.dummy(x = memberX, y = memberY)
+        val member = run.dummy(x = memberX, y = memberY).apply { ownerTag = tag }
         val (insideX, insideY) = world((hall.minX + hall.maxX) / 2f, 0f)
-        val settled = run.dummy(x = insideX, y = insideY)
+        val settled = run.dummy(x = insideX, y = insideY).apply { ownerTag = tag }
+        val add = run.dummy(x = memberX, y = memberY).apply { ownerTag = tag }
         val stranger = run.dummy(x = memberX, y = memberY)
         run.dungeon = DungeonState(
             placement.id, placement.template, placement.rotation, structure.x, structure.y, engagedRoom = 1,
@@ -469,9 +472,10 @@ class StructureCollisionTest {
         assertEquals(1, roomAt(template, structure.rotation, structure.x, structure.y, member.x, member.y, inset - 0.01f), "clamped into the hall")
         assertEquals(member.x, member.previousX, "the clamp is a teleport")
         assertEquals(member.y, member.previousY)
+        assertEquals(1, roomAt(template, structure.rotation, structure.x, structure.y, add.x, add.y, inset - 0.01f), "the add is held too")
         assertEquals(insideX, settled.x, "a member inside its room stays put")
         assertEquals(insideY, settled.y)
-        assertEquals(memberX, stranger.x, "only the garrison is held")
+        assertEquals(memberX, stranger.x, "only enemies the encounter owns are held")
 
         // Without an engaged room nothing is held.
         val (awayX, awayY) = world(hall.maxX + 200f, 300f)

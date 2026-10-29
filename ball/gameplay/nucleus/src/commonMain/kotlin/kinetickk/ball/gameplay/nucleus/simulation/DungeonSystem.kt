@@ -162,9 +162,9 @@ private fun MutableGameState.dropDungeon(current: DungeonState, announce: Boolea
 }
 
 /**
- * The sealed room's garrison: members still alive are kept for the panel and the room clamp; the room clears once
- * no enemy its encounter owns is alive (adds and fragments included). An encounter ended by anyone else (it was
- * abandoned) abandons the dungeon.
+ * The sealed room's garrison: members still alive are kept for the panel; the room clears once no enemy its encounter
+ * owns is alive (adds and fragments included, all held in the room by the wall pass). An encounter ended by anyone
+ * else (it was abandoned) abandons the dungeon.
  */
 private fun MutableGameState.upkeepGarrison(current: DungeonState) {
     val tag = roomEncounterTag(current.structureId, current.engagedRoom)
