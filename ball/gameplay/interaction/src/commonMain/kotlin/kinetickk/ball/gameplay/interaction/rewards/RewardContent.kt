@@ -486,6 +486,35 @@ internal fun RewardFooter(state: RewardOverlayState, takeLabel: String, selected
     )
 }
 
+/** The decline card's dashed inner outline: its inset from the card's edges and its slant (the face's 22 dp cut less 6 dp). */
+private const val RewardDeclineInsetDp = 7f
+private const val RewardDeclineCutDp = 16f
+
+/** The clear gap between a decline card's outline and the plate and text inside it. */
+private const val RewardDeclineClearanceDp = 5f
+
+/**
+ * The x (dp from the card's left) of the decline outline's slanted left edge at [yDp] on a card [heightDp] tall whose
+ * band is [bandDp] tall: [RewardDeclineCutDp] in from the inset at the outline's top, at the inset at its bottom.
+ */
+internal fun rewardDeclineOutlineLeftDp(yDp: Float, heightDp: Float, bandDp: Float): Float {
+    val top = bandDp + RewardDeclineInsetDp
+    val bottom = heightDp - RewardDeclineInsetDp
+    val down = ((yDp - top) / (bottom - top).coerceAtLeast(1f)).coerceIn(0f, 1f)
+    return RewardDeclineInsetDp + RewardDeclineCutDp * (1f - down)
+}
+
+/**
+ * How far (dp) a decline card of [spec], [heightDp] tall, moves its plate and text right so both start
+ * [RewardDeclineClearanceDp] clear of the outline at their tops; 0 where they already do (the board card).
+ */
+private fun rewardDeclineShiftDp(spec: RewardCardSpec, heightDp: Float): Float {
+    val band = spec.bandHeight * spec.u
+    val plate = rewardDeclineOutlineLeftDp(spec.plateY * spec.u, heightDp, band) + RewardDeclineClearanceDp - spec.plateX * spec.u
+    val text = rewardDeclineOutlineLeftDp(spec.bodyTop * spec.u, heightDp, band) + RewardDeclineClearanceDp - spec.start * spec.u
+    return max(0f, max(plate, text))
+}
+
 /** Card content dimensions derived from the card's own size (board 300×450 or phone 220×256). */
 private class RewardCardSpec(val compact: Boolean, val u: Float, val font: Float) {
     fun dp(value: Float): Dp = (value * u).dp
@@ -519,9 +548,15 @@ internal fun rewardCardUsesCompactLayout(widthDp: Float, heightDp: Float, phoneD
 
 private fun rewardCardSpec(widthDp: Float, heightDp: Float, textScale: Float, phoneDeal: Boolean): RewardCardSpec {
     val compact = rewardCardUsesCompactLayout(widthDp, heightDp, phoneDeal)
-    val u = if (compact) min(widthDp / 220f, heightDp / 256f) else min(widthDp / 300f, heightDp / 450f)
-    val clamped = u.coerceIn(0.6f, 1.25f)
+    val clamped = rewardCardUnit(widthDp, heightDp, phoneDeal)
     return RewardCardSpec(compact, clamped, clamped.coerceIn(0.8f, 1.2f) * textScale)
+}
+
+/** The card layout's unit: its size against the phone (220 × 256) or board (300 × 450) card it was drawn for. */
+internal fun rewardCardUnit(widthDp: Float, heightDp: Float, phoneDeal: Boolean): Float {
+    val compact = rewardCardUsesCompactLayout(widthDp, heightDp, phoneDeal)
+    val u = if (compact) min(widthDp / 220f, heightDp / 256f) else min(widthDp / 300f, heightDp / 450f)
+    return u.coerceIn(0.6f, 1.25f)
 }
 
 /** Forecast chips a card shows at most: three on the board, two on phones. */
@@ -615,14 +650,16 @@ internal fun RewardCard(
             // The rarity frame last, over the plates, so it stays whole round the card.
             drawKkCardFrame(RewardFaceSpecs.bounds(size.width, size.height), clock.value, look.style, dealt)
         }
+        // A decline card's plate and text start clear of its slanted dashed outline (a tall phone card's slant reaches them).
+        val declineShift = if (presentation.decline) rewardDeclineShiftDp(spec, maxHeight.value).dp else 0.dp
         val plateSize = spec.dp(spec.plateSize)
         Box(
-            Modifier.offset(spec.dp(spec.plateX), spec.dp(spec.plateY)).size(plateSize)
+            Modifier.offset(spec.dp(spec.plateX) + declineShift, spec.dp(spec.plateY)).size(plateSize)
                 .testTag("kinetickk.gameplay.choice.${index + 1}.${if (spec.compact) "compact" else "expanded"}")
                 .drawBehind { drawRewardIcon(presentation, accent, iconColor, look.secondHue, look.plateTint, spec.compact, clock.value) },
         )
         // Identity beside the icon: a relic's keys, then an active's slot and lane, Risk, Reborn, Heirloom and tag chips.
-        val chipsLeft = spec.dp(spec.plateX + spec.plateSize + spec.chipsGap)
+        val chipsLeft = spec.dp(spec.plateX + spec.plateSize + spec.chipsGap) + declineShift
         val chipsWidth = (maxWidth - chipsLeft - spec.dp(spec.end)).coerceAtLeast(0.dp)
         val keys = presentation.keys
         // Phone relic cards keep the keys and the Heirloom mark; the attuned tags read on the board (and in the Codex).
@@ -647,7 +684,7 @@ internal fun RewardCard(
         val bodyTop = spec.dp(spec.bodyTop)
         val bodyBottom = spec.dp(spec.bodyBottom)
         val bodyHeight = (maxHeight - bodyTop - bodyBottom - footerHeight).coerceAtLeast(24.dp)
-        val start = spec.dp(spec.start)
+        val start = spec.dp(spec.start) + declineShift
         // The body takes the largest size step at which its content fits, measured before it is
         // shown; only text longer than the last step scrolls. Cards dealt together share the
         // smallest step any of them needs ([bodyFit]).
@@ -1231,9 +1268,9 @@ internal fun DrawScope.drawRewardCardFace(
     when {
         presentation.reborn || presentation.heirloom -> drawGoldRim(paths, bounds, presentation.rebirthTier, spec.compact, measurer.roles.gold.base)
         presentation.decline -> {
-            // A calm card: no effects, a dashed inner outline in the line color.
-            val inset = 7f * density
-            val outline = paths.slab(1, inset, bandHeight * density + inset, size.width - inset, size.height - inset, (RewardCardCutDp - 6f) * density)
+            // A calm card: no effects, a dashed inner outline in the line color ([rewardDeclineOutlineLeftDp]).
+            val inset = RewardDeclineInsetDp * density
+            val outline = paths.slab(1, inset, bandHeight * density + inset, size.width - inset, size.height - inset, RewardDeclineCutDp * density)
             drawPath(outline, Kk.Line2, style = RewardCardStrokes.dashed(1.5f * density, density))
         }
     }
