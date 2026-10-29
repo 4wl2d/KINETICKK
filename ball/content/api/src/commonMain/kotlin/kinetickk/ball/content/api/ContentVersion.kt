@@ -108,9 +108,9 @@ object ContentBounds {
     const val MAX_PORTAL_OFFERS: Int = 3
     /** Bits of an obstacle id that carry its world layer. */
     const val OBSTACLE_LAYER_BITS: Int = 3
-    /** Blessing and Pact definitions in the catalog. */
+    /** Blessing, Pact and dungeon Aspect definitions in the catalog. */
     const val MAX_BOON_DEFINITIONS: Int = 32
-    /** Blessings and Pacts one run holds. */
+    /** Blessings, Pacts and dungeon Aspects one run holds. */
     const val MAX_RUN_BOONS: Int = 8
 
     /** Discoveries persisted before this catalog generation belong to the retired 400-item catalog. */

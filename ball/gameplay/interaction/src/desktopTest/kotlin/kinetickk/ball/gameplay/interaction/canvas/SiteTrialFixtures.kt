@@ -51,6 +51,7 @@ internal fun siteTrial(site: SiteProjection, policy: SitePolicy = SitePolicy()):
         done = site.progress * required,
         required = required,
         reward = reward,
+        rewardMatter = if (site.kind.family == SiteFamily.CHALLENGE) definition.reward.matter else 0,
         medal = site.medal,
     )
     fun seconds(required: Float) = trial(TrialClock.COUNTDOWN, ceil(required).toInt(), TrialValue.SECONDS, required, directed)

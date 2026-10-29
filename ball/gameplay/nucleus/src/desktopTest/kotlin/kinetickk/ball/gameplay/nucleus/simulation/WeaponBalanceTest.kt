@@ -12,6 +12,7 @@ import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -119,6 +120,23 @@ class WeaponBalanceTest {
                 assertTrue(frame < seconds * FPS * 2f, "$weapon flight stalled in ${game.phase} (${game.message}, hp ${game.hp}/${game.maxHp}, t ${game.elapsed})")
                 hold(game, targets, Checkpoint.FRESH)
                 orbit(game, frame / FPS, 150f, 760f)
+                // Hollow Rift is a Dash weapon; a tight orbit need not cross its fast-flight passive threshold.
+                if (weapon == WeaponId.HOLLOW_RIFT && frame > 0 && frame % (4 * FPS).toInt() == 0) game.requestDash()
+                // This is a proc-cadence contract, so expose a target to a real armed rift instead of depending
+                // on a movement retune to align a delayed trap with the orbiting crowd by chance.
+                if (weapon == WeaponId.HOLLOW_RIFT) {
+                    game.weaponRuntime.entities.firstOrNull { it.kind == WeaponEntityKind.RIFT && it.phase == RIFT_ARMED }?.let { rift ->
+                        targets.first().apply {
+                            x = (rift.x + rift.endX) * 0.5f
+                            y = (rift.y + rift.endY) * 0.5f
+                            previousX = x
+                            previousY = y
+                            vx = 0f
+                            vy = 0f
+                            disabledUntil = Float.MAX_VALUE
+                        }
+                    }
+                }
                 game.update(1f / FPS)
                 drain(game)
                 frame++
@@ -253,10 +271,10 @@ class WeaponBalanceTest {
             // Each variant starts the pilot on another axis with another seed, so firing times meet the passes differently.
             for (variant in 0 until variants) {
                 val dealt = flight(weapon, arena, checkpoint, attackSpeedBonus, silenced = false, impacts = impacts, variant = variant, seconds = seconds, anchored = anchored,
-                    honing = honing)
+                    honing = honing, activationPhase = if (anchored) (variant + 0.5f) / variants else 0f)
                 total += dealt
                 if (impacts) total -= flight(weapon, arena, checkpoint, attackSpeedBonus, silenced = true, impacts = true, variant = variant, seconds = seconds, anchored = anchored,
-                    honing = honing)
+                    honing = honing, activationPhase = if (anchored) (variant + 0.5f) / variants else 0f)
             }
             return total / variants / seconds
         }
@@ -305,10 +323,14 @@ class WeaponBalanceTest {
             seconds: Float,
             anchored: Boolean,
             honing: Int = 0,
+            activationPhase: Float = 0f,
         ): Double {
             val game = arenaState(weapon, checkpoint, nonSignature(weapon), seed = 6_061 + variant, honing = honing)
             if (checkpoint == Checkpoint.ASCENDED) game.attackSpeed = 1.25f
             game.attackSpeed += attackSpeedBonus
+            // Sample a full firing cycle in paired attack-speed flights. Otherwise a faster clock can lock onto
+            // the same short part of the route on every variant and measure aim-window aliasing instead of rate.
+            game.weaponClock = game.cooldown(BaseCooldowns.getValue(weapon)) * activationPhase
             val targets = when (arena) {
                 // The single target is an Elite (its victim factor tempers %-integrity effects), without an aspect.
                 Arena.SINGLE -> listOf(game.addEnemyForTesting(0f, 0f, hp = SINGLE_INTEGRITY, radius = 22f, type = EnemyType.ELITE)

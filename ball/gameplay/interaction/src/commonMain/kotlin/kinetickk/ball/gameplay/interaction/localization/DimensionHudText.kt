@@ -26,6 +26,7 @@ internal enum class DimensionHudText(
     ArchiveHeading("Archive trove", "Сокровищница Архива"),
     BoonBlessing("Blessing", "Благословение"),
     BoonPact("Pact", "Сделка"),
+    BoonAspect("Dungeon aspect", "Аспект подземелья"),
     EnemyIntegrityUp("Enemy integrity +{0}%", "Прочность врагов +{0}%"),
     EnemySpeedUp("Enemy speed +{0}%", "Скорость врагов +{0}%"),
     DamageTakenUp("Damage taken +{0}%", "Получаемый урон +{0}%"),

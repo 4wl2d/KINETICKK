@@ -93,7 +93,7 @@ class EventSignalTest {
         listOf(rewardRandom.snapshot(), spawnRandom.snapshot(), gameplayRandom.snapshot(), siteRandom.snapshot())
 
     @Test
-    fun everyRunUsesThreeOfItsFiveSlotsAndMeetsThreeDistinctKinds() {
+    fun everyRunUsesOneOfThreeSlotsAndSignalKindsVaryAcrossRuns() {
         val slotRuns = IntArray(policy.slots)
         val kindRuns = IntArray(SignalKind.entries.size)
         val firstKinds = IntArray(SignalKind.entries.size)
@@ -113,12 +113,12 @@ class EventSignalTest {
             firstKinds[kinds.first().ordinal]++
             distinct.add(listOf(slots, kinds))
         }
-        // Three of five equal chances: each slot and each kind in about 60 % of runs, each kind first in about 20 %.
-        slotRuns.forEachIndexed { slot, runs -> assertEquals(0.6f, runs / SEEDS.toFloat(), 0.04f, "Slot $slot share") }
-        kindRuns.forEachIndexed { kind, runs -> assertEquals(0.6f, runs / SEEDS.toFloat(), 0.04f, "${SignalKind.entries[kind]} share") }
+        // One of three slots and one of five kinds, evenly distributed across the population.
+        slotRuns.forEachIndexed { slot, runs -> assertEquals(1f / 3f, runs / SEEDS.toFloat(), 0.04f, "Slot $slot share") }
+        kindRuns.forEachIndexed { kind, runs -> assertEquals(0.2f, runs / SEEDS.toFloat(), 0.04f, "${SignalKind.entries[kind]} share") }
         firstKinds.forEachIndexed { kind, runs -> assertEquals(0.2f, runs / SEEDS.toFloat(), 0.03f, "${SignalKind.entries[kind]} first") }
-        // 10 slot sets × 60 kind orders: 2,000 seeds fill most of the 600 skeletons.
-        assertTrue(distinct.size > 500, "Seeds differ: ${distinct.size} distinct plans")
+        // 3 slots × 5 kinds: every combination appears over 2,000 seeds.
+        assertEquals(15, distinct.size, "Seeds differ")
     }
 
     @Test
@@ -145,7 +145,7 @@ class EventSignalTest {
             assertTrue(closes <= nextWindow, "Slot $slot closes at $closes before the next window at $nextWindow")
             assertTrue(closes < content.tempo.bossAtSeconds)
         }
-        assertEquals(listOf(115f, 235f, 355f, 475f, 595f), (0 until policy.slots).map { policy.slotAt(it) })
+        assertEquals(listOf(115f, 295f, 475f), (0 until policy.slots).map { policy.slotAt(it) })
     }
 
     @Test

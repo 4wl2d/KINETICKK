@@ -67,6 +67,10 @@ private const val SIGIL_CLEARANCE: Float = 140f
 private const val SIGIL_APPEARS_NOTICE_SECONDS: Float = 2.5f
 private const val SIGIL_FADES_NOTICE_SECONDS: Float = 1.6f
 private const val SIGIL_BROKEN_NOTICE_SECONDS: Float = 2f
+internal const val FAR_SIGIL_AVAILABILITY_SALT: Long = 0x517E_C0A5_0000_0016L
+
+internal fun farSigilAvailable(runSeed: Int, chance: Float): Boolean =
+    hashUnit(runHash(runSeed, FAR_SIGIL_AVAILABILITY_SALT, 0L)) < chance
 
 /** The secret trackers after the sigil: far travel, Spin Cycle, then the Golden Drifter's escape. */
 internal fun MutableGameState.updateSecretTrackers(delta: Float) {
@@ -86,6 +90,7 @@ private fun MutableGameState.updateFarTravel() {
     val reach = policy.farTravelDistance.toDouble()
     if (absoluteDistanceSquared(coreX, coreY) < reach * reach) return
     setSecret(RunSecretFlag.FAR_TRAVEL)
+    if (!farSigilAvailable(runSeed, policy.farSigilRunChance)) return
     val heading = travelHeading()
     spawnSecretSigil(coreX + cos(heading) * policy.sigilAhead, coreY + sin(heading) * policy.sigilAhead)
 }

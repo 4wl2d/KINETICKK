@@ -7,12 +7,12 @@ import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 
-/** A Blessing is a clean upside (Zenith); a Pact pairs a big upside with a lasting price (Nadir). */
-enum class RunBoonKind { BLESSING, PACT }
+/** Blessings and Pacts come from dimensions; an Aspect is the unique lasting reward of a dungeon trial. */
+enum class RunBoonKind { BLESSING, PACT, ASPECT }
 
 /**
- * One dimension reward card. [gains] then [costs] fold through the run-modifier vocabulary for the rest of the run.
- * Ids are stable: Blessings take 32..47 and Pacts 48..63.
+ * One lasting run reward. [gains] then [costs] fold through the run-modifier vocabulary; [buildRules] join the build.
+ * Ids are stable: Blessings take 32..47, Pacts 48..63 and dungeon Aspects 64..69.
  */
 data class RunBoonDefinition(
     val id: Int,
@@ -23,29 +23,41 @@ data class RunBoonDefinition(
     val description: String,
     val gains: ImmutableList<RunModifierEffect>,
     val costs: ImmutableList<RunModifierEffect> = immutableListOf(),
+    /** Dungeon aspects use the same bounded elemental rules as items, without occupying an item slot. */
+    val buildRules: ImmutableList<ItemRule> = immutableListOf(),
 ) {
     init {
         require(name.isNotBlank() && description.isNotBlank()) { "Boon texts must not be blank" }
         when (kind) {
             RunBoonKind.BLESSING -> require(id in BLESSING_IDS) { "Blessing ids are 32..47" }
             RunBoonKind.PACT -> require(id in PACT_IDS) { "Pact ids are 48..63" }
+            RunBoonKind.ASPECT -> require(id in ASPECT_IDS) { "Dungeon aspect ids are 64..69" }
         }
         require(gains.size in 1..ContentBounds.MAX_RUN_MODIFIER_EFFECTS) {
             "A boon grants 1..${ContentBounds.MAX_RUN_MODIFIER_EFFECTS} effects"
         }
         when (kind) {
-            RunBoonKind.BLESSING -> require(costs.isEmpty()) { "A Blessing costs nothing" }
+            RunBoonKind.BLESSING, RunBoonKind.ASPECT -> require(costs.isEmpty()) { "A Blessing or dungeon aspect costs nothing" }
             RunBoonKind.PACT -> require(costs.size in 1..ContentBounds.MAX_RUN_MODIFIER_EFFECTS) {
                 "A Pact costs 1..${ContentBounds.MAX_RUN_MODIFIER_EFFECTS} effects"
             }
         }
         require(gains.all { it is RunModifierEffect.Stat && it.amount > 0f }) { "A boon gains only stat increases" }
         require(costs.all(::isBoonPrice)) { "A Pact's price is a stat decrease or a tougher, faster or harder-hitting enemy" }
+        require(if (kind == RunBoonKind.ASPECT) buildRules.size in 1..3 else buildRules.isEmpty()) {
+            "Only dungeon aspects carry one to three build rules"
+        }
+        require(buildRules.all { it is ItemRule.BreakSpread || it is ItemRule.StatusDuration ||
+            it is ItemRule.BreakThreshold || it is ItemRule.SkillCooldown || it is ItemRule.CoreLinkRadius ||
+            it is ItemRule.ReactionTuning || it is ItemRule.FieldTuning || it is ItemRule.ReactionKeystone }) {
+            "Dungeon aspects use supported elemental build rules"
+        }
     }
 
     companion object {
         val BLESSING_IDS: IntRange = 32..47
         val PACT_IDS: IntRange = 48..63
+        val ASPECT_IDS: IntRange = 64..69
     }
 }
 
@@ -64,7 +76,7 @@ private fun isBoonPrice(effect: RunModifierEffect): Boolean = when (effect) {
 
 private fun stat(effect: ItemEffect, amount: Float): RunModifierEffect = RunModifierEffect.Stat(effect, amount)
 
-/** The shipped Blessings (32..41) and Pacts (48..57). */
+/** The shipped Blessings (32..41), Pacts (48..57) and dungeon Aspects (64..69). */
 fun defaultRunBoons(): ImmutableList<RunBoonDefinition> = listOf(
     RunBoonDefinition(
         32, RunBoonKind.BLESSING, "Halo of Mending", "Light remembers your shape.",
@@ -156,4 +168,51 @@ fun defaultRunBoons(): ImmutableList<RunBoonDefinition> = listOf(
         immutableListOf(stat(ItemEffect.OVERDRIVE_GAIN, 0.60f), stat(ItemEffect.COOLING, 0.25f)),
         immutableListOf(stat(ItemEffect.DATA_GAIN, -0.15f)),
     ),
+    RunBoonDefinition(
+        64, RunBoonKind.ASPECT, dungeonAspectName(64),
+        "Attack speed +10%. Ion skill cooldowns are 20% shorter. Superconduct becomes Zero Resistance, chaining through frozen enemies.",
+        immutableListOf(stat(ItemEffect.ATTACK_SPEED, 0.10f)),
+        buildRules = immutableListOf(ItemRule.SkillCooldown(StatusElement.ION, 0.20f), ItemRule.ReactionKeystone(ReactionId.SUPERCONDUCT)),
+    ),
+    RunBoonDefinition(
+        65, RunBoonKind.ASPECT, dungeonAspectName(65),
+        "Shield capacity +20. Chill lasts 50% longer. Freeze spreads one Chill stack to nearby enemies within 180 u.",
+        immutableListOf(stat(ItemEffect.SHIELD_CAPACITY, 20f)),
+        buildRules = immutableListOf(ItemRule.StatusDuration(StatusElement.CRYO, 1.5f), ItemRule.BreakSpread(StatusElement.CRYO, 1, 180f)),
+    ),
+    RunBoonDefinition(
+        66, RunBoonKind.ASPECT, dungeonAspectName(66),
+        "Weapon power +10%. Reactions feed the Core from 160 u farther. Shatterpoint pushes enemies 30% harder.",
+        immutableListOf(stat(ItemEffect.WEAPON_POWER, 0.10f)),
+        buildRules = immutableListOf(ItemRule.CoreLinkRadius(160f), ItemRule.ReactionTuning(ReactionId.SHATTERPOINT, ReactionAspect.FORCE, 0.30f)),
+    ),
+    RunBoonDefinition(
+        67, RunBoonKind.ASPECT, dungeonAspectName(67),
+        "Pickup reach +60 u. Rupture needs one fewer Decay stack and spreads two Decay stacks within 220 u.",
+        immutableListOf(stat(ItemEffect.PICKUP_RADIUS, 60f)),
+        buildRules = immutableListOf(ItemRule.BreakThreshold(StatusElement.ENTROPY, 1), ItemRule.BreakSpread(StatusElement.ENTROPY, 2, 220f)),
+    ),
+    RunBoonDefinition(
+        68, RunBoonKind.ASPECT, dungeonAspectName(68),
+        "Cooling +20%. Ignite spreads one Scorch stack within 200 u. Wildfire becomes Firewalker, igniting rams from any range.",
+        immutableListOf(stat(ItemEffect.COOLING, 0.20f)),
+        buildRules = immutableListOf(ItemRule.BreakSpread(StatusElement.THERMAL, 1, 200f), ItemRule.ReactionKeystone(ReactionId.WILDFIRE)),
+    ),
+    RunBoonDefinition(
+        69, RunBoonKind.ASPECT, dungeonAspectName(69),
+        "Mass +10%. Your fields last 30% longer. Fusion becomes Dwarf Star, pulling harder and burning longer.",
+        immutableListOf(stat(ItemEffect.MASS, 0.10f)),
+        buildRules = immutableListOf(ItemRule.FieldTuning(FieldAspect.DURATION, 0.30f), ItemRule.ReactionKeystone(ReactionId.FUSION)),
+    ),
 ).toImmutableList()
+
+/** Stable content names shared by the reward preview and the owned boon. */
+fun dungeonAspectName(id: Int): String = when (id) {
+    64 -> "Induction Coil"
+    65 -> "Rime Heart"
+    66 -> "Harmonic Crown"
+    67 -> "Mycelial Compass"
+    68 -> "Furnace Heart"
+    69 -> "Singularity Seal"
+    else -> error("Unknown dungeon aspect $id")
+}

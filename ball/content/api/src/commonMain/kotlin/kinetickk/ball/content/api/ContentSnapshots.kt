@@ -89,7 +89,7 @@ data class GameplayContentSnapshot(
     val structures: StructurePolicy = StructurePolicy(),
     /** World layers, rifts and their visits. */
     val dimensions: DimensionPolicy = DimensionPolicy(),
-    /** Blessing and Pact cards the dimensions offer. */
+    /** Dimension Blessings and Pacts, plus the unique dungeon Aspects. */
     val boons: ImmutableList<RunBoonDefinition> = defaultRunBoons(),
     /** Omens, director personalities, elite affixes, champions, Keynote, world events and signals. */
     val variety: RunVarietyContent = RunVarietyContent(),
@@ -107,7 +107,7 @@ data class GameplayContentSnapshot(
 
     fun skill(id: SkillId): SkillDefinition = skills[id.ordinal]
 
-    /** The Blessing or Pact with [id], or null when the catalog has none. */
+    /** The Blessing, Pact or dungeon Aspect with [id], or null when the catalog has none. */
     fun boon(id: Int): RunBoonDefinition? = boons.firstOrNull { it.id == id }
 
     /** Global clause index of each item's first clause; derived once per immutable snapshot. */

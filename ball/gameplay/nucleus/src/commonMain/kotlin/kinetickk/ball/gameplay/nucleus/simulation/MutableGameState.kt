@@ -481,6 +481,9 @@ internal class MutableGameState(
     internal var lastSpawnEventSpawned: Int = reductionSource?.lastSpawnEventSpawned ?: 0
     /** Seed of this run; obstacle chunks hash it with their absolute chunk. */
     internal val runSeed: Int = reductionSource?.runSeed ?: seed
+    /** Content and seed are fixed for this state and all reduction siblings; rank the template pool only once. */
+    internal val structureTemplatePool: Int = reductionSource?.structureTemplatePool
+        ?: structureTemplateMask(content.structures, runSeed)
     /** Accumulated rebase shift: an absolute world position is the run-local position plus this origin. */
     internal var worldOriginX: Double = reductionSource?.worldOriginX ?: 0.0
     internal var worldOriginY: Double = reductionSource?.worldOriginY ?: 0.0

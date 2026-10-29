@@ -32,7 +32,7 @@ class DimensionContentTest {
             DimensionReward(DimensionRewardKind.ARCHIVE_TROVE, cardsOnSuccess = 3, matterOnSuccess = 120f, matterOnFailure = 60f),
             archive.reward,
         )
-        assertEquals(0.65f, zenith.physics.dragMultiplier)
+        assertEquals(0.82f, zenith.physics.dragMultiplier)
         assertEquals(6, zenith.physics.ambientHalos)
         assertEquals(0.035f, nadir.physics.scorchSharePerSecond)
         assertEquals(2f, nadir.physics.matterMultiplier)
@@ -260,7 +260,8 @@ class DimensionContentTest {
     @Test
     fun boonsGainStatIncreasesAndAPactPaysWithAStatDecreaseOrATougherEnemy() {
         val boons = defaultRunBoons()
-        assertEquals(20, boons.size)
+        assertEquals(26, boons.size)
+        assertEquals(20, boons.count { it.kind != RunBoonKind.ASPECT }, "dimension offer pools are unchanged")
         assertTrue(boons.all { boon -> boon.gains.all { it is RunModifierEffect.Stat && it.amount > 0f } })
         assertEquals(
             listOf(
@@ -306,6 +307,38 @@ class DimensionContentTest {
         assertTrue(DimensionNotices.broken(DimensionObjective.ASCENT) in DimensionNotices.all)
         assertTrue(DimensionObjective.entries.all { DimensionNotices.entry(it.layer, it) in DimensionNotices.all })
         assertTrue(DimensionObjective.entries.all { DimensionNotices.completed(it) in DimensionNotices.all })
+    }
+
+    @Test
+    fun dungeonAspectsAcceptOnlyTheirIdRangeAndSupportedBoundedRules() {
+        val gain = RunModifierEffect.Stat(ItemEffect.MASS, 0.1f)
+        fun aspect(id: Int = 64, rules: List<ItemRule>) = RunBoonDefinition(
+            id, RunBoonKind.ASPECT, "Probe aspect", "A lasting elemental reward.", immutableListOf(gain),
+            buildRules = rules.toImmutableList(),
+        )
+        val supported = listOf(
+            ItemRule.BreakSpread(StatusElement.CRYO, 1, 180f),
+            ItemRule.StatusDuration(StatusElement.CRYO, 1.5f),
+            ItemRule.BreakThreshold(StatusElement.ENTROPY, 1),
+            ItemRule.SkillCooldown(StatusElement.ION, 0.2f),
+            ItemRule.CoreLinkRadius(160f),
+            ItemRule.ReactionTuning(ReactionId.SHATTERPOINT, ReactionAspect.FORCE, 0.3f),
+            ItemRule.FieldTuning(FieldAspect.DURATION, 0.3f),
+            ItemRule.ReactionKeystone(ReactionId.FUSION),
+        )
+        supported.forEach { aspect(rules = listOf(it)) }
+        aspect(id = 69, rules = supported.take(3))
+        assertFailsWith<IllegalArgumentException> { aspect(id = 63, rules = supported.take(1)) }
+        assertFailsWith<IllegalArgumentException> { aspect(id = 70, rules = supported.take(1)) }
+        assertFailsWith<IllegalArgumentException> { aspect(rules = emptyList()) }
+        assertFailsWith<IllegalArgumentException> { aspect(rules = supported.take(4)) }
+        assertFailsWith<IllegalArgumentException> { aspect(rules = listOf(ItemRule.SkillCharges)) }
+        assertFailsWith<IllegalArgumentException> {
+            RunBoonDefinition(
+                32, RunBoonKind.BLESSING, "Probe blessing", "A stat-only reward.", immutableListOf(gain),
+                buildRules = immutableListOf(supported.first()),
+            )
+        }
     }
 
     private fun replacing(layer: WorldLayer, definition: DimensionDefinition): DimensionPolicy =

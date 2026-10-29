@@ -671,38 +671,51 @@ class InteractionFxReducer(seed: Int) {
             val value = buildNotifications[index]
             buildNotifications[index] = value.copy(life = value.life - delta, age = value.age + delta)
         }
-        removeExpired(buildNotifications) { it.life > 0f }
+        retainInPlace(buildNotifications) { it.life > 0f }
         val particleDamping = exp(-2.2f * delta)
-        for (index in particles.indices) {
-            val value = particles[index]
+        retainInPlace(particles) { value ->
             value.x += value.vx * delta
             value.y += value.vy * delta
             value.vx *= particleDamping
             value.vy *= particleDamping
             value.life -= delta
+            !(value.life <= 0f)
         }
-        removeExpired(particles) { value -> !(value.life <= 0f) }
-        for (index in motionEchoes.indices) motionEchoes[index].life -= delta
-        removeExpired(motionEchoes) { value -> !(value.life <= 0f) }
-        for (index in shockwaves.indices) shockwaves[index].life -= delta
-        removeExpired(shockwaves) { value -> !(value.life <= 0f) }
+        retainInPlace(motionEchoes) { value ->
+            value.life -= delta
+            !(value.life <= 0f)
+        }
+        retainInPlace(shockwaves) { value ->
+            value.life -= delta
+            !(value.life <= 0f)
+        }
         // Numbers keep their anchor; the renderer eases the drift from life (see DamageNumberProjection).
-        for (index in damageNumbers.indices) damageNumbers[index].life -= delta
-        removeExpired(damageNumbers) { value -> !(value.life <= 0f) }
+        retainInPlace(damageNumbers) { value ->
+            value.life -= delta
+            !(value.life <= 0f)
+        }
         if (particles.isNotEmpty() || cachedProjection.particles.isNotEmpty()) particlesDirty = true
         if (motionEchoes.isNotEmpty() || cachedProjection.motionEchoes.isNotEmpty()) motionEchoesDirty = true
         if (shockwaves.isNotEmpty() || cachedProjection.shockwaves.isNotEmpty()) shockwavesDirty = true
         if (damageNumbers.isNotEmpty() || cachedProjection.damageNumbers.isNotEmpty()) damageNumbersDirty = true
-        for (index in elementBursts.indices) elementBursts[index].life -= delta
-        removeExpired(elementBursts) { value -> !(value.life <= 0f) }
-        for (index in reactionStamps.indices) reactionStamps[index].life -= delta
-        removeExpired(reactionStamps) { value -> !(value.life <= 0f) }
+        retainInPlace(elementBursts) { value ->
+            value.life -= delta
+            !(value.life <= 0f)
+        }
+        retainInPlace(reactionStamps) { value ->
+            value.life -= delta
+            !(value.life <= 0f)
+        }
         if (elementBursts.isNotEmpty() || cachedProjection.elementBursts.isNotEmpty()) elementBurstsDirty = true
         if (reactionStamps.isNotEmpty() || cachedProjection.reactionStamps.isNotEmpty()) reactionStampsDirty = true
-        for (index in skillBursts.indices) skillBursts[index].life -= delta
-        removeExpired(skillBursts) { value -> !(value.life <= 0f) }
-        for (index in apexBursts.indices) apexBursts[index].life -= delta
-        removeExpired(apexBursts) { value -> !(value.life <= 0f) }
+        retainInPlace(skillBursts) { value ->
+            value.life -= delta
+            !(value.life <= 0f)
+        }
+        retainInPlace(apexBursts) { value ->
+            value.life -= delta
+            !(value.life <= 0f)
+        }
         if (skillBursts.isNotEmpty() || cachedProjection.skillBursts.isNotEmpty()) skillBurstsDirty = true
         if (apexBursts.isNotEmpty() || cachedProjection.apexBursts.isNotEmpty()) apexBurstsDirty = true
         return true
@@ -710,16 +723,18 @@ class InteractionFxReducer(seed: Int) {
 
     private fun advanceWeaponArcs(delta: Float): Boolean {
         if (weaponArcs.isEmpty()) return false
-        for (index in weaponArcs.indices) weaponArcs[index].life -= delta
-        removeExpired(weaponArcs) { value -> !(value.life <= 0f) }
+        retainInPlace(weaponArcs) { value ->
+            value.life -= delta
+            !(value.life <= 0f)
+        }
         weaponArcsDirty = true
         return true
     }
 
     private fun burst(cue: VisualFxCue.Burst): Boolean {
-        val sizeBefore = particles.size
-        repeat(particleCount(cue.requestedCount, cue.density)) { index ->
-            if (particles.size >= InteractionFxLimits.MAX_PARTICLES) return@repeat
+        val available = InteractionFxLimits.MAX_PARTICLES - particles.size
+        if (available == 0) return false
+        repeat(minOf(particleCount(cue.requestedCount, cue.density), available)) { index ->
             val angle = random.nextFloat() * TAU
             val speed = 35f + random.nextFloat() * 185f
             val life = 0.25f + random.nextFloat() * 0.55f
@@ -734,16 +749,15 @@ class InteractionFxReducer(seed: Int) {
                 particleSize(index, random.nextFloat()),
             )
         }
-        return (particles.size != sizeBefore).also { changed ->
-            if (changed) particlesDirty = true
-        }
+        particlesDirty = true
+        return true
     }
 
     private fun directionalBurst(cue: VisualFxCue.DirectionalBurst): Boolean {
-        val sizeBefore = particles.size
+        val available = InteractionFxLimits.MAX_PARTICLES - particles.size
+        if (available == 0) return false
         val baseAngle = atan2(cue.directionY, cue.directionX)
-        repeat(particleCount(cue.requestedCount, cue.density)) { index ->
-            if (particles.size >= InteractionFxLimits.MAX_PARTICLES) return@repeat
+        repeat(minOf(particleCount(cue.requestedCount, cue.density), available)) { index ->
             val angle = baseAngle + (random.nextFloat() - 0.5f) * 1.15f
             val speed = 90f + random.nextFloat() * 310f
             val life = 0.22f + random.nextFloat() * 0.42f
@@ -758,9 +772,8 @@ class InteractionFxReducer(seed: Int) {
                 particleSize(index, random.nextFloat()),
             )
         }
-        return (particles.size != sizeBefore).also { changed ->
-            if (changed) particlesDirty = true
-        }
+        particlesDirty = true
+        return true
     }
 
     /** The first [InteractionFxLimits.SHARDS_PER_BURST] particles are shards, the rest small sparks. */
@@ -780,8 +793,8 @@ class InteractionFxReducer(seed: Int) {
         while (values.size > maximum) values.removeAt(0)
     }
 
-    /** Stable in-place compaction avoids iterator allocation and repeated ArrayList shifts. */
-    private inline fun <Element> removeExpired(
+    /** Visits each value once, allowing its update and stable compaction in the same pass. */
+    private inline fun <Element> retainInPlace(
         values: MutableList<Element>,
         isAlive: (Element) -> Boolean,
     ) {

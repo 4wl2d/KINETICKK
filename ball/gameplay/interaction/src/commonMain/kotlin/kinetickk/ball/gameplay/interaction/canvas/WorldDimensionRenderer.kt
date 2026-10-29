@@ -21,8 +21,7 @@ import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkFillKind
 import kinetickk.foundation.design.KkRebirthTiers
 import kinetickk.foundation.design.KkRolePalette
-import kinetickk.foundation.design.drawKkHalftone
-import kinetickk.foundation.design.drawKkRadialFade
+import kinetickk.foundation.design.drawKkRadialHalftone
 import kinetickk.foundation.design.isOnScreen
 import kinetickk.foundation.design.kkFillBrush
 import kinetickk.foundation.design.kkMix
@@ -204,7 +203,7 @@ internal fun DrawScope.drawDimensionBackdrop(engine: GameplayRenderModel, shakeX
     if (layer == WorldLayer.NADIR) drawNadirCracks(engine, theme, shakeX, shakeY)
     val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
     translate(core.x, core.y) {
-        drawKkRadialFade(DimensionHalftoneRect) { drawKkHalftone(DimensionHalftoneRect, theme.halftone) }
+        drawKkRadialHalftone(DimensionHalftoneRect, theme.halftone)
     }
     drawDimensionMotes(engine, layer, theme, shakeX, shakeY)
     if (layer == WorldLayer.ARCHIVE) {

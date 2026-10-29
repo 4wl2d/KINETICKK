@@ -210,7 +210,7 @@ private fun DrawScope.drawDamageNumbers(
             rotate(tilt, Offset.Zero)
             scale(pop, pop, Offset.Zero)
         }) {
-            if (image != null) image.draw(this) else drawDamageNumberInk(face, shadow, color)
+            if (image != null) image.draw(this, pop) else drawDamageNumberInk(face, shadow, color)
             if (number.critical) {
                 drawKkStamp(
                     textMeasurer,

@@ -93,7 +93,8 @@ class RunSkeletonVarietyTest {
         const val MAX_DUPLICATE_SHARE = 0.01
         const val PERSONALITY_TOLERANCE = 0.05
         const val MIN_EVENT_KIND_SHARE = 0.30
-        const val MIN_SIGNAL_KIND_SHARE = 0.40
+        // One of five signal kinds per run: every kind should still appear across the population.
+        const val MIN_SIGNAL_KIND_SHARE = 0.10
         const val MIN_TAG_SHARE = 0.05
 
         val shipped: List<Skeleton> by lazy { populationOf(Seeds) { skeletonOf(it, canonicalGameplayContent) } }

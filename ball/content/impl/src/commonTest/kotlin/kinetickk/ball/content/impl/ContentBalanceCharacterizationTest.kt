@@ -246,8 +246,9 @@ class ContentBalanceCharacterizationTest {
             ),
             ui.matrixNodes.map { node -> node.id to node.costs.toList() },
         )
+        // Tether Arc's mastery description now matches the recalibrated sevenfold damage ramp.
         assertEquals(
-            "120fe0d55a06ce89",
+            "a7ad525faae809a3",
             goldenFingerprint {
                 add("weapons")
                 ui.weapons.forEach { weapon ->
@@ -421,10 +422,10 @@ class ContentBalanceCharacterizationTest {
         // Slice variety-0.6.0: every run-variety identity, definition, policy number and notice (pinned when 0.6.0
         // shipped the run-variety content; re-pinned when the Keynote element share moved 0.8 -> 0.7, when the omen
         // arms calibration moved Iron Tide, Hungry Dark, Volatile Pact and Still Water, and when Still Water's weapon
-        // power cost moved -10 % -> -15 %).
+        // power cost moved -10 % -> -15 %, and when exploration signals became one of three 180 s slots).
         val variety = catalog.gameplayContent().variety
         assertEquals(
-            "c40c7ebecf2f1d41",
+            "e65a37e3d810c03e",
             goldenFingerprint {
                 add("variety-0.6.0")
                 kinetickk.ball.content.api.EliteAffix.entries.forEach { add(it.name); add(it.displayName); add(it.signalNotice) }

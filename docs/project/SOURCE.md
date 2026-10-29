@@ -46,7 +46,7 @@ With JDK 17 or newer:
 ```
 
 The Android, desktop, and web build details are documented in
-[README.md](../../README.md); the implementation is organized into 23 leaf
+[Development](DEVELOPMENT.md); the implementation is organized into 23 leaf
 modules across Application Assembly, Foundation, Resource, Ball, and Flow
 roles.
 

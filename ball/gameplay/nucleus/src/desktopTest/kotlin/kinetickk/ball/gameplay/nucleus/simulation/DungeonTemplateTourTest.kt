@@ -211,6 +211,7 @@ class DungeonTemplateTourTest {
                 StructureRewardKind.REPAIR -> assertEquals(reward.amount, fresh.count { it.type == PickupType.REPAIR }, "$label repair")
                 StructureRewardKind.DATA -> assertEquals(reward.amount, fresh.count { it.type == PickupType.DATA }, "$label Data")
                 StructureRewardKind.MATTER -> matter += reward.amount
+                StructureRewardKind.ASPECT -> assertEquals(1, run.runBoons.count { it == reward.boonId }, "$label grants its unique aspect")
                 StructureRewardKind.ITEM_OFFER -> assertTrue(
                     reward.rarityFloor in run.pendingFloorOffers || run.offerRarityFloor == reward.rarityFloor,
                     "$label queues a ${reward.rarityFloor} item offer",

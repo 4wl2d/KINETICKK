@@ -4,18 +4,24 @@
 package kinetickk.ball.content.api
 
 import kinetickk.ball.content.api.EnemyType.BROOD_QUEEN
+import kinetickk.ball.content.api.EnemyType.AEGIS
+import kinetickk.ball.content.api.EnemyType.BOMBER
+import kinetickk.ball.content.api.EnemyType.CHOIR
 import kinetickk.ball.content.api.EnemyType.CRAWLER
+import kinetickk.ball.content.api.EnemyType.LANCER
+import kinetickk.ball.content.api.EnemyType.MINELAYER
 import kinetickk.ball.content.api.EnemyType.SENTRY
+import kinetickk.ball.content.api.EnemyType.SHOOTER
+import kinetickk.ball.content.api.EnemyType.SNIPER
 import kinetickk.ball.content.api.EnemyType.WARDEN
 import kinetickk.ball.content.api.EnemyType.WARDEN_PRIME
+import kinetickk.ball.content.api.EnemyType.WEAVER
 import kinetickk.ball.content.api.GarrisonPlacement.CENTER
 import kinetickk.ball.content.api.GarrisonPlacement.FLOOR
 import kinetickk.ball.content.api.GarrisonPlacement.WALL
 import kinetickk.ball.content.api.StructureRewardKind.DATA
 import kinetickk.ball.content.api.StructureRewardKind.ITEM_OFFER
-import kinetickk.ball.content.api.StructureRewardKind.KEY
 import kinetickk.ball.content.api.StructureRewardKind.MATTER
-import kinetickk.ball.content.api.StructureRewardKind.RELIC
 import kinetickk.ball.content.api.StructureRewardKind.REPAIR
 import kinetickk.ball.content.api.WallAxis.HORIZONTAL
 import kinetickk.ball.content.api.WallAxis.VERTICAL
@@ -37,6 +43,9 @@ private fun derelictStation() = StructureTemplate(
     name = "Derelict Station",
     weight = 30f,
     minimumDistance = 4_000f,
+    element = StatusElement.ION,
+    trialDescription = "Ion trial: shooters and lancers turn the station's long halls into firing lanes. Cross their aim to close the distance.",
+    garrisonTypes = immutableListOf(SHOOTER, LANCER),
     rooms = immutableListOf(
         room(-1100, -300, -500, 300, habitat(3)), // 0 Airlock (entrance)
         room(-500, -700, 400, 700, habitat(4), fixed(SENTRY, 2, WALL)), // 1 Hall
@@ -51,7 +60,7 @@ private fun derelictStation() = StructureTemplate(
     ),
     entranceRoom = 0,
     finalRoom = 2,
-    rewards = immutableListOf(reward(KEY), reward(MATTER, 60), reward(DATA, 8)),
+    rewards = immutableListOf(aspect(64), reward(DATA, 4)),
 )
 
 /**
@@ -63,6 +72,9 @@ private fun vault() = StructureTemplate(
     name = "Vault",
     weight = 22f,
     minimumDistance = 6_000f,
+    element = StatusElement.CRYO,
+    trialDescription = "Cryo trial: weavers and snipers cover the galleries. Clear both wings before confronting the brood guardian.",
+    garrisonTypes = immutableListOf(WEAVER, SNIPER),
     rooms = immutableListOf(
         room(-400, 300, 400, 1100, habitat(3)), // 0 Antechamber (entrance)
         room(-1100, -1100, -400, 1100, habitat(4), fixed(SENTRY, 2, WALL)), // 1 West gallery
@@ -78,7 +90,7 @@ private fun vault() = StructureTemplate(
     ),
     entranceRoom = 0,
     finalRoom = 3,
-    rewards = immutableListOf(reward(RELIC), reward(ITEM_OFFER, floor = ItemRarity.RARE)),
+    rewards = immutableListOf(aspect(65), reward(ITEM_OFFER, floor = ItemRarity.RARE)),
 )
 
 /** Four stacked halls with alternating doors and a fin in each middle hall; linear `0 -> 1 -> 2 -> 3`. */
@@ -87,11 +99,14 @@ private fun spire() = StructureTemplate(
     name = "Spire",
     weight = 16f,
     minimumDistance = 5_000f,
+    element = StatusElement.SONIC,
+    trialDescription = "Sonic trial: choirs fill narrow halls with radial pulses and pushback. Use the fins to break their lines of fire.",
+    garrisonTypes = immutableListOf(CHOIR),
     rooms = immutableListOf(
         room(-500, 600, 500, 1200, habitat(4)), // 0 Base (entrance)
-        room(-500, 0, 500, 600, fixed(SENTRY, 2, WALL), habitat(3)), // 1 Lower hall
-        room(-500, -600, 500, 0, fixed(SENTRY, 3, WALL), fixed(CRAWLER, 3)), // 2 Upper hall
-        room(-500, -1200, 500, -600, fixed(SENTRY, 4, WALL), habitat(3)), // 3 Crown (final)
+        room(-500, 0, 500, 600, fixed(CHOIR, 2, WALL), habitat(2)), // 1 Lower hall
+        room(-500, -600, 500, 0, fixed(CHOIR, 2, WALL), fixed(CRAWLER, 3)), // 2 Upper hall
+        room(-500, -1200, 500, -600, fixed(CHOIR, 3, WALL), habitat(2)), // 3 Crown (final)
     ),
     doors = immutableListOf(
         door(HORIZONTAL, 1200, 0, 0, OUTSIDE),
@@ -105,7 +120,7 @@ private fun spire() = StructureTemplate(
     ),
     entranceRoom = 0,
     finalRoom = 3,
-    rewards = immutableListOf(reward(ITEM_OFFER, floor = ItemRarity.UNCOMMON), reward(KEY), reward(DATA, 6)),
+    rewards = immutableListOf(aspect(66), reward(DATA, 4)),
 )
 
 /**
@@ -117,6 +132,9 @@ private fun labyrinth() = StructureTemplate(
     name = "Labyrinth",
     weight = 14f,
     minimumDistance = 7_000f,
+    element = StatusElement.ENTROPY,
+    trialDescription = "Entropy trial: crawlers pursue through the maze while minelayers deny corners. Leave room to turn before entering a side chamber.",
+    garrisonTypes = immutableListOf(CRAWLER, MINELAYER),
     rooms = immutableListOf(
         room(-1050, -1050, -350, -350, habitat(2), fixed(SENTRY, 1, WALL)), // 0 NW
         room(-350, -1050, 350, -350, fixed(CRAWLER, 4)), // 1 N
@@ -141,7 +159,7 @@ private fun labyrinth() = StructureTemplate(
     ),
     entranceRoom = 6,
     finalRoom = 2,
-    rewards = immutableListOf(reward(RELIC), reward(MATTER, 80)),
+    rewards = immutableListOf(aspect(67), reward(MATTER, 40)),
 )
 
 /** Two smelting halls (two doors between them, pillars, a conveyor fin) and a furnace: `out -D0- 0 -D1,D2- 1 -D3- 2`. */
@@ -150,6 +168,9 @@ private fun foundry() = StructureTemplate(
     name = "Foundry",
     weight = 12f,
     minimumDistance = 6_000f,
+    element = StatusElement.THERMAL,
+    trialDescription = "Thermal trial: sentry volleys and exploding bombers pressure the smelting halls. Pillars offer cover before the furnace fight.",
+    garrisonTypes = immutableListOf(SENTRY, BOMBER),
     rooms = immutableListOf(
         room(-1200, -800, -100, 800, habitat(6)), // 0 West hall (entrance)
         room(-100, -800, 700, 800, habitat(4), fixed(SENTRY, 2, WALL)), // 1 East hall
@@ -167,7 +188,7 @@ private fun foundry() = StructureTemplate(
     ),
     entranceRoom = 0,
     finalRoom = 2,
-    rewards = immutableListOf(reward(MATTER, 120), reward(REPAIR, 2), reward(KEY)),
+    rewards = immutableListOf(aspect(68), reward(REPAIR)),
 )
 
 /**
@@ -180,6 +201,9 @@ private fun reliquary() = StructureTemplate(
     name = "Reliquary",
     weight = 6f,
     minimumDistance = 9_000f,
+    element = StatusElement.GRAVITIC,
+    trialDescription = "Gravitic trial: aegis guards and wardens hold four chapels. Break their defensive formations to unlock Warden Prime's sanctum.",
+    garrisonTypes = immutableListOf(AEGIS, WARDEN),
     rooms = immutableListOf(
         room(-1200, -1200, -400, -400, habitat(3), fixed(SENTRY, 1, WALL)), // 0 NW chapel
         room(-400, -1200, 400, -400), // 1 North walk
@@ -208,7 +232,7 @@ private fun reliquary() = StructureTemplate(
     ),
     entranceRoom = 7,
     finalRoom = 4,
-    rewards = immutableListOf(reward(RELIC), reward(ITEM_OFFER, floor = ItemRarity.EPIC), reward(KEY)),
+    rewards = immutableListOf(aspect(69), reward(ITEM_OFFER, floor = ItemRarity.EPIC)),
 )
 
 /**
@@ -222,6 +246,7 @@ private fun architectsDoodle() = StructureTemplate(
     name = "The Architect's Doodle",
     weight = 3f,
     minimumDistance = 12_000f,
+    element = StatusElement.VOID,
     rooms = immutableListOf(room(-441, -441, 441, 441)),
     extraWalls = immutableListOf(
         chord(659.1f, 131.1f, 558.7f, 373.3f),
@@ -263,6 +288,8 @@ private fun door(axis: WallAxis, line: Int, center: Int, a: Int, b: Int, width: 
 
 private fun reward(kind: StructureRewardKind, amount: Int = 1, floor: ItemRarity? = null) =
     StructureReward(kind, amount, floor)
+
+private fun aspect(id: Int) = StructureReward(StructureRewardKind.ASPECT, boonId = id)
 
 private fun pillar(x: Int, y: Int) = StructureCapsule(x.toFloat(), y.toFloat(), x.toFloat(), y.toFloat(), 70f)
 

@@ -27,10 +27,12 @@ import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.RunBoonKind
 import kinetickk.ball.gameplay.nucleus.render.BuildProjection
 import kinetickk.ball.gameplay.nucleus.render.SeveredRelicProjection
 import kinetickk.ball.gameplay.nucleus.render.WeaponSynergyProjection
 import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
 import kinetickk.ball.content.api.SkillId
@@ -284,6 +286,37 @@ class PauseTextFitTest {
         }
     }
 
+    @Test
+    fun earnedDungeonAspectsRemainNamedAndUpdateOnPause() {
+        val aspects = rewardActiveFixtureContent.boons.filter { it.kind == RunBoonKind.ASPECT }
+        assertEquals(6, aspects.size)
+        for (language in AppLanguage.entries) {
+            val model = hudTestModel().with("content" to rewardActiveFixtureContent,
+                "runBoons" to aspects.map { it.id }.toImmutableList())
+            val entries = model.pauseConditions(language).filter { it.kind == PauseConditionKind.ASPECT }
+            assertEquals(aspects.map { it.name.localizedContent(language) }, entries.map { it.name })
+            assertEquals(aspects.map { it.description.localizedContent(language) }, entries.map { it.detail })
+            assertTrue(entries.all { it.element != null })
+            // The two frames otherwise share their build and clock; changing an earned aspect must invalidate the memo.
+            for (aspect in aspects.take(2)) {
+                val records = drawPause(1440, 810, language, 1.25f, boons = listOf(aspect.id))
+                assertTrue(records.any { it.kind == PauseTextKind.CONDITION &&
+                    it.layout.layoutInput.text.text.equals(aspect.name.localizedContent(language), ignoreCase = true) })
+            }
+            for ((width, height) in frames) for (scale in listOf(1f, 1.75f)) {
+                val records = drawPause(width, height, language, scale, conditions = true, boons = aspects.take(3).map { it.id })
+                val layout = pauseLayoutGeometry(width.toFloat(), height.toFloat(), 1f)
+                records.filter { it.kind in setOf(PauseTextKind.CONDITION, PauseTextKind.CONDITION_LABEL, PauseTextKind.CONDITION_TEXT) }
+                    .forEach { record ->
+                        val scene = "aspects ${width}x$height $language ${scale}x"
+                        assertWhole(record.layout, scene)
+                        assertTrue(record.rect.right <= layout.build.right + 1f && record.rect.bottom <= layout.build.bottom + 1f,
+                            "$scene: ${record.rect} exceeds ${layout.build}")
+                    }
+            }
+        }
+    }
+
     private fun drawPause(
         width: Int,
         height: Int,
@@ -293,6 +326,7 @@ class PauseTextFitTest {
         build: BuildProjection = this.build,
         touch: Boolean = false,
         conditions: Boolean = false,
+        boons: List<Int> = emptyList(),
     ): List<PauseTextRecord> {
         // A full build: two named brackets, tags and elements with points, two reactions (one met), and three active
         // items held in Z/X/C (Solar Flare I, Meteor II, Frost Line I) bound to the longest key names.
@@ -309,6 +343,7 @@ class PauseTextFitTest {
             keyBindings = KeyBindings.DEFAULT.with(GameAction.SKILL_1, BindableKey.SPACE).with(GameAction.SKILL_2, BindableKey.ARROW_RIGHT))
             .with("discoveredReactionMask" to (1 shl ReactionId.WILDFIRE.ordinal), "weaponSynergy" to FullSynergy)
             .let { if (conditions) it.with(*RunConditions) else it }
+            .with("runBoons" to boons.toImmutableList())
         val records = mutableListOf<PauseTextRecord>()
         PauseTextProbe.records = records
         try {

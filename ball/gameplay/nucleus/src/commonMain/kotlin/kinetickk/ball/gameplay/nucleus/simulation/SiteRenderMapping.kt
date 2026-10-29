@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.DirectedReward
+import kinetickk.ball.content.api.SiteFamily
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.SiteReward
 import kinetickk.ball.gameplay.nucleus.model.CircuitBeacons
@@ -208,6 +209,7 @@ private fun MutableGameState.siteTrial(
         required = required,
         reward = reward,
         medal = medal,
+        rewardMatter = if (site.kind.family == SiteFamily.CHALLENGE) definition.reward.matter else 0,
     )
 }
 

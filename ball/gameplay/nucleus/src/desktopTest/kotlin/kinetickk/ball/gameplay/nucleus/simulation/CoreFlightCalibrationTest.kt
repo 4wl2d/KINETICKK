@@ -18,30 +18,22 @@ import kotlin.test.assertTrue
 import kotlin.test.fail
 
 /**
- * The flight law's piloting targets (0.6.0), flown by the production fixed step (updateCore, then updateCamera) in a
- * quiet, empty world, each against the same flight under [SteeringTuning.LEGACY] (the 0.5.0 law). Every number is
+ * The flight law's control targets, flown by the production fixed step in a quiet, empty world. Cruise and launch
+ * compare with the pre-balance 0.6.0 tuning; handling also retains the original 0.5.0 reference. Every number is
  * printed. Held turns and orbits keep the pointer inside the calm area on both axes: reach 0.79 on a square 1280×1280
  * viewport, and 316 dp (reach 0.79 of the short axis) on the 1280×800 desktop.
  *
- * Measured with the shipped tuning (the 0.5.0 law in brackets):
- * - a held 90° turn keeps 0.994 (square) and 0.993 (desktop) of its speed (0.698, 0.692), a held 135° turn 0.860 and
- *   0.849 (0.377, 0.374);
- * - an orbit at ω = 1 averages 1.051 and 1.047 × straight cruise (0.696, 0.694);
- * - straight cruise at reach 0.79 is 2536 on the desktop (2741, ratio 0.925) and 1851 on the 412×915 phone (1989,
- *   0.931); the steady model reads 0.04 % high;
- * - rest to 1500 u/s at reach 0.8 takes 0.525 s on the desktop (0.817 s, ratio 0.643) and 0.925 s on the phone
- *   (1.417 s, 0.653);
- * - carving at reaches 0.3 to 0.65 peaks at 1.078 × the reach's straight steady speed; at reach 0.6 that is 2111
- *   against the lethal 2324;
- * - the worst low-drag stack (grip and sling at the bound, Overdrive throughout) peaks at 1.588 × its own straight
- *   cruise in an orbit at ω = 2 and reach 0.6 (mean over the last third 1.444 ×);
- * - pointing behind the screen centre halves the speed in 0.350 s (0.383 s); a sideways pointer keeps 0.853 of it
- *   after 0.5 s (0.660).
+ * These flights never use Dash or Brake. The targets cover gradual launch, lower cruise, useful turn authority,
+ * pointer-only deceleration, bounded build synergies and frame-rate independence. Test output is the measured
+ * evidence rather than a frozen transcript of one machine's run.
  */
 class CoreFlightCalibrationTest {
     private val step = MutableGameState.FIXED_STEP
     private val piloting = world(canonicalGameplayContent.tempo.steering)
     private val legacy = world(SteeringTuning.LEGACY)
+    private val beforeBalance = world(SteeringTuning(
+        forwardThrustScale = 1f, slingShare = 0.4f, spoolGain = 0.6f, straightDrag = 0.3f,
+    ))
 
     @Test
     fun aHeldNinetyDegreeTurnKeepsItsSpeed() {
@@ -64,7 +56,7 @@ class CoreFlightCalibrationTest {
     }
 
     @Test
-    fun anOrbitAtOneRadianPerSecondIsAtLeastAsFastAsStraight() {
+    fun anOrbitRemainsControllableWithoutBeingRequiredForFastTravel() {
         for ((viewport, offset) in TurnCases) {
             val straight = cruise(viewport, offset, piloting).speed
             val orbit = orbit(viewport, offset, omega = 1f, seconds = 30f, piloting)
@@ -75,37 +67,50 @@ class CoreFlightCalibrationTest {
                     "straight $straight (max ${orbit.maximum}); 0.5.0 ${released.lateMean} = " +
                     "${released.lateMean / releasedStraight} × straight $releasedStraight",
             )
-            assertTrue(orbit.lateMean >= straight,
-                "$viewport: an orbit at ω = 1 averages ${orbit.lateMean}, slower than straight cruise at $straight")
+            assertTrue(orbit.lateMean / straight in 0.65f..1.10f,
+                "$viewport: an orbit at ω = 1 averages ${orbit.lateMean}, outside the controlled range around $straight")
         }
     }
 
     @Test
-    fun straightCruiseIsFiveToFifteenPercentSlower() {
+    fun straightCruiseIsThirtyToFortyPercentSlowerThanBeforeBalance() {
         for (viewport in listOf(Desktop, Phone)) {
             val offset = 0.79f * viewport.longHalfAxis
             val cruise = cruise(viewport, offset, piloting)
-            val released = cruise(viewport, offset, legacy).speed
+            val released = cruise(viewport, offset, beforeBalance).speed
             val model = cruise.steadyCursorSpeed(0.79f)
             val ratio = cruise.speed / released
             println(
-                "CORE FLIGHT straight $viewport reach 0.79: ${cruise.speed} against 0.5.0 $released (ratio $ratio); " +
+                "CORE FLIGHT straight $viewport reach 0.79: ${cruise.speed} against pre-balance $released (ratio $ratio); " +
                     "model $model (error ${(cruise.speed - model) / model})",
             )
-            assertTrue(ratio in 0.85f..0.95f, "$viewport: straight cruise at reach 0.79 is $ratio of the 0.5.0 speed")
+            assertTrue(ratio in 0.60f..0.70f, "$viewport: straight cruise at reach 0.79 is $ratio of the pre-balance speed")
             assertEquals(model, cruise.speed, model * 0.03f, "$viewport: the steady model at reach 0.79")
         }
     }
 
     @Test
-    fun spoolUpIsQuicker() {
+    fun launchBuildsSpeedGraduallyWithoutDashOrBrake() {
         for (viewport in listOf(Desktop, Phone)) {
             val offset = 0.8f * viewport.longHalfAxis
-            val spool = secondsToReach(viewport, offset, SPOOL_SPEED, piloting)
-            val released = secondsToReach(viewport, offset, SPOOL_SPEED, legacy)
-            println("CORE FLIGHT spool-up $viewport reach 0.8: rest to $SPOOL_SPEED in $spool s against 0.5.0 $released s " +
+            val cruise = cruise(viewport, offset, piloting).speed
+            val beforeCruise = cruise(viewport, offset, beforeBalance).speed
+            val spool = secondsToReach(viewport, offset, cruise * 0.75f, piloting)
+            val released = secondsToReach(viewport, offset, beforeCruise * 0.75f, beforeBalance)
+            println("CORE FLIGHT spool-up $viewport reach 0.8: rest to 75% cruise in $spool s against pre-balance $released s " +
                 "(ratio ${spool / released})")
-            assertTrue(spool <= released * 0.7f, "$viewport: rest to $SPOOL_SPEED takes $spool s, not within 0.7 × $released s")
+            assertTrue(spool in 1.8f..3.5f, "$viewport: reaching 75% cruise should take a controllable 1.8–3.5 s, got $spool")
+            assertTrue(spool >= released * 1.8f, "$viewport: launch should be substantially more gradual than $released s")
+            val state = flight(viewport, piloting)
+            state.point(offset * cos(viewport.longAxisAngle), offset * sin(viewport.longAxisAngle))
+            state.fly(0.25f)
+            val quarterSecond = state.speed
+            state.fly(0.75f)
+            val oneSecond = state.speed
+            state.fly(1f)
+            assertTrue(quarterSecond in 0f..(cruise * 0.2f), "$viewport: launch jumps to $quarterSecond of $cruise")
+            assertTrue(oneSecond > quarterSecond && state.speed > oneSecond, "$viewport: ordinary launch must gain speed smoothly")
+            assertEquals(1f, state.polarityStability, "normal forward movement never requires recovery actions")
         }
     }
 
@@ -404,7 +409,6 @@ class CoreFlightCalibrationTest {
         const val CRUISE_SECONDS = 25f
         const val TURN_CRUISE_SECONDS = 12f
         const val TURN_HOLD_SECONDS = 4f
-        const val SPOOL_SPEED = 1_500f
         /** Base drag × 0.6 × Perpetual Vector's 0.15 × Frictionless 0.25. */
         const val LOW_STACK_DRAG = 0.29f * 0.6f * 0.15f * 0.25f
         const val LOW_STACK_MAGNETISM = 4.185f

@@ -88,6 +88,7 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
     for (index in enemies.indices) {
         val enemy = enemies[index]
         if (phase != GamePhase.RUNNING) return
+        if (!(enemy.contactCooldown <= 0f) || enemy.dead || !(enemy.hp > 0f)) continue
         // A Phantom out of phase is not there to hit.
         if (isPhasedPhantom(enemy)) continue
         val combined = coreRadius + enemy.radius
@@ -100,7 +101,7 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             0f,
             combined,
         )
-        if (enemy.contactCooldown <= 0f && sweptHit && !enemy.dead && enemy.hp > 0f) {
+        if (sweptHit) {
             val relativeX = velocityX - enemy.vx
             val relativeY = velocityY - enemy.vy
             val impactSpeed = length(relativeX, relativeY)
@@ -372,7 +373,7 @@ internal const val FLUX_WIDTH_FORM: Float = 2f
 internal const val FLUX_SCORCH_INTERVAL: Float = 2f
 /** Enemies the Flux Wake trail burns at full heat at once; a larger crowd in it shares that heat. */
 internal const val FLUX_FULL_HEAT_ENEMIES: Int = 6
-internal const val MORNINGSTAR_DAMAGE: Float = 13.8f
+internal const val MORNINGSTAR_DAMAGE: Float = 17f
 internal const val MORNINGSTAR_REACH: Float = 24f
 internal const val MORNINGSTAR_SPEED_SHARE: Float = 0.030f
 internal const val MORNINGSTAR_KNOCKBACK: Float = 160f
@@ -491,7 +492,7 @@ internal fun MutableGameState.resolveProjectileHits() {
         for (enemyIndex in enemies.indices) {
             val enemy = enemies[enemyIndex]
             // Shots pass through a shifting Architect without spending pierce.
-            if (enemy.dead || isShifting(enemy) || projectile.hasRecordedEnemyHit(enemy.id)) continue
+            if (enemy.dead || isShifting(enemy)) continue
             val hitRadius = projectile.radius + enemy.radius
             val hit = segmentCircleIntersects(
                 projectile.previousX - enemy.previousX,
@@ -502,7 +503,9 @@ internal fun MutableGameState.resolveProjectileHits() {
                 0f,
                 hitRadius,
             )
-            if (hit) {
+            // A hit history may span many enemies. Only geometrically overlapping pairs need
+            // its lookup; the broad phase rejects the far more numerous misses cheaply.
+            if (hit && !projectile.hasRecordedEnemyHit(enemy.id)) {
                 // An Apex shot with no strike left passes through boss-class enemies without spending itself.
                 if (projectile.procKey == WeaponRuntime.PROC_APEX && apexShotPassesThrough(enemy)) continue
                 if (!projectile.tryRecordEnemyHit(enemy.id)) continue

@@ -40,6 +40,8 @@ internal fun denseStructureContent(
         minimumDistance = 0f,
         fullChanceDistance = 1f,
         maximumChance = 1f,
+        templatesPerRun = StructureTemplateId.entries.size,
+        secretTemplateChance = 1f,
         templates = templates.map { if (it.minimumDistance == 0f) it else it.copy(minimumDistance = 0f) }.toImmutableList(),
     )
     return canonicalGameplayContent.copy(structures = configure(policy))

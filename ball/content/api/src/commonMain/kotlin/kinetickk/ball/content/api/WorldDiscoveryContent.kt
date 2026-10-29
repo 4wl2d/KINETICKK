@@ -87,7 +87,7 @@ fun defaultWorldDiscoveryDefinitions(): ImmutableList<WorldDiscoveryDefinition> 
         WorldDiscovery.FOUNDRY, "Foundry", "Hot halls where something is still being made.", "Some ruins are still warm.",
     ),
     WorldDiscoveryDefinition(
-        WorldDiscovery.RELIQUARY, "Reliquary", "A shrine that keeps one relic behind its doors.", "Some ruins keep relics.",
+        WorldDiscovery.RELIQUARY, "Reliquary", "A shrine whose guarded sanctum holds a Gravitic aspect.", "Some ruins bend gravity.",
     ),
     WorldDiscoveryDefinition(
         WorldDiscovery.LOST_CURSOR, "The Lost Cursor", "A tiny grey cursor adrift far from the start. Now it follows you.",

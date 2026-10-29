@@ -111,7 +111,7 @@ class SpawnDirectorPacingTest {
                 assertTrue(EnemyType.HERALD !in types, "$arm seed=$seed: no Herald below tier 2")
                 assertTrue(types.none { it in HABITAT_ONLY_OR_OWNER_SPAWNED },
                     "$arm seed=$seed: realspace keeps to its roster: $types")
-                val roster = listOf(EnemyType.SWARMLING, EnemyType.LANCER, EnemyType.SNIPER)
+                val roster = listOf(EnemyType.SWARMLING, EnemyType.LANCER)
                 assertTrue(types.containsAll(roster), "$arm seed=$seed $types")
                 // The Comet joins at two minutes and the Pylon at four and a half, never before their gates.
                 if (arm.personality == null) {
@@ -119,9 +119,12 @@ class SpawnDirectorPacingTest {
                 }
                 firstSeen[EnemyType.COMET]?.let { assertTrue(it >= 120f, "$arm seed=$seed: first Comet at $it") }
                 firstSeen[EnemyType.PYLON]?.let { assertTrue(it >= 270f, "$arm seed=$seed: first Pylon at $it") }
+                firstSeen[EnemyType.SNIPER]?.let { assertTrue(it >= 330f, "$arm seed=$seed: first Sniper at $it") }
             }
-            // A personality reweights the rare Pylon, so its three seeds share the appearance check.
+            // Rare late entrants need not appear in every weighted run. Share their appearance check across
+            // the arm's seeds, while checking each observed first spawn against its time gate above.
             assertTrue(armTypes.containsAll(gated), "$arm: Comet and Pylon appear over three seeds: $armTypes")
+            assertTrue(EnemyType.SNIPER in armTypes, "$arm: Sniper appears over three seeds: $armTypes")
         }
     }
 

@@ -19,9 +19,16 @@ internal class ResourceGameplayAudioExecutor(
     private val audioService: AudioService,
 ) : GameplayAudioExecutor {
     override fun advance(realDeltaSeconds: Float, cues: ImmutableList<GameplayAudioCue>) {
+        // Frames without a simulation step still advance music. The common empty/single-cue
+        // paths reuse immutable requests instead of sorting and allocating at the display rate.
+        val requests = when (cues.size) {
+            0 -> emptyList()
+            1 -> SINGLE_TONE_REQUESTS[cues[0].ordinal]
+            else -> cues.sortedByDescending(GameplayAudioCue::priority).map { TONE_REQUESTS[it.ordinal] }
+        }
         audioService.advance(
             realDeltaSeconds,
-            cues.sortedByDescending(GameplayAudioCue::priority).map(GameplayAudioCue::toToneRequest),
+            requests,
         )
     }
 
@@ -30,7 +37,10 @@ internal class ResourceGameplayAudioExecutor(
     }
 }
 
-private fun GameplayAudioCue.toToneRequest(): ToneRequest = when (this) {
+private val TONE_REQUESTS = GameplayAudioCue.entries.map(GameplayAudioCue::createToneRequest)
+private val SINGLE_TONE_REQUESTS = TONE_REQUESTS.map { listOf(it) }
+
+private fun GameplayAudioCue.createToneRequest(): ToneRequest = when (this) {
     GameplayAudioCue.UI_CLICK -> ToneRequest(520f, 0.035f, 0.11f, ToneWave.SINE)
     GameplayAudioCue.DASH -> ToneRequest(185f, 0.11f, 0.23f, ToneWave.SAW)
     GameplayAudioCue.WEAPON_LIGHT -> ToneRequest(420f, 0.055f, 0.1f, ToneWave.TRIANGLE)

@@ -432,6 +432,8 @@ class GameplayHudSemanticsTest {
         val base = requireNotNull(snapshot.renderModel)
         val station = StructureFixture(base.content.structures.template(kinetickk.ball.content.api.StructureTemplateId.DERELICT_STATION),
             base.coreX, base.coreY, clearedRooms = 0b0001, engagedRoom = 1)
+        val vault = StructureFixture(base.content.structures.template(kinetickk.ball.content.api.StructureTemplateId.VAULT),
+            base.coreX, base.coreY, clearedRooms = 0b0001, engagedRoom = 1)
         var current = snapshot.withModel(base.withDungeon(station))
         var next: GameplayRenderSnapshot? = null
         val port = object : GameplayInteractionPort {
@@ -460,13 +462,17 @@ class GameplayHudSemanticsTest {
         val target = HudTrialPanelLayout().update(1_440f, 810f, 1f, base.settings.textScale).infoTarget(1f)
         listOf(AppLanguage.English, AppLanguage.Russian).forEach { shown ->
             compose.runOnIdle { language = shown }
-            repeat(3) { compose.mainClock.advanceTimeByFrame() }
-            val info = compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG)
-            info.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription,
-                listOf(shown.text(kinetickk.ball.gameplay.interaction.localization.StructureHudText.Rules))))
-            val bounds = info.getUnclippedBoundsInRoot()
-            assertRect(target, Rect(bounds.left.value - host.left.value, bounds.top.value - host.top.value,
-                bounds.right.value - host.left.value, bounds.bottom.value - host.top.value))
+            for (fixture in listOf(station, vault, station)) {
+                val model = base.withDungeon(fixture)
+                next = snapshot.withModel(model)
+                repeat(3) { compose.mainClock.advanceTimeByFrame() }
+                val info = compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG)
+                val rules = model.trialRules(requireNotNull(model.activeTrial()), shown)
+                info.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf(rules)))
+                val bounds = info.getUnclippedBoundsInRoot()
+                assertRect(target, Rect(bounds.left.value - host.left.value, bounds.top.value - host.top.value,
+                    bounds.right.value - host.left.value, bounds.bottom.value - host.top.value))
+            }
         }
         next = snapshot.withModel(base)
         repeat(3) { compose.mainClock.advanceTimeByFrame() }

@@ -220,12 +220,14 @@ internal fun MutableGameState.refreshObstacleWindow() {
     val span = tuning.windowChunks
     val half = span / 2
     val cells = ArrayList<List<Obstacle>>(span * span)
+    val candidates = ChunkCandidateWindow(this, chunkX - half - 1, chunkY - half - 1, span)
     for (row in 0 until span) {
         for (column in 0 until span) {
             val cx = chunkX - half + column
             val cy = chunkY - half + row
             // Chunks still inside the window keep their obstacles (and any bumper cooldowns).
-            cells += field.chunkObstacles(cx, cy)?.toList() ?: generateChunk(cx, cy)
+            // ObstacleField.of copies every slice into its new backing list.
+            cells += field.chunkObstacles(cx, cy) ?: generateChunk(cx, cy, candidates)
         }
     }
     val next = ObstacleField.of(chunkX, chunkY, span, cells)
@@ -243,13 +245,22 @@ internal fun MutableGameState.refreshObstacleWindow() {
  * while every chunk still depends only on its own hash and its neighbours'. Destroyed unstable
  * asteroids stay gone; they still count as candidates, so the rest of the field never moves.
  */
-internal fun MutableGameState.generateChunk(chunkX: Int, chunkY: Int): List<Obstacle> {
-    val own = chunkCandidates(chunkX, chunkY)
+internal fun MutableGameState.generateChunk(chunkX: Int, chunkY: Int): List<Obstacle> =
+    generateChunk(chunkX, chunkY, null)
+
+private fun MutableGameState.generateChunk(
+    chunkX: Int,
+    chunkY: Int,
+    candidates: ChunkCandidateWindow?,
+): List<Obstacle> {
+    val own = candidates?.get(chunkX, chunkY) ?: chunkCandidates(chunkX, chunkY)
     if (own.isEmpty()) return emptyList()
     val tuning = content.obstacles
     val chunk = tuning.chunkSize
     val neighbours = Array(EARLIER_NEIGHBOURS.size / 2) { neighbour ->
-        chunkCandidates(chunkX + EARLIER_NEIGHBOURS[neighbour * 2], chunkY + EARLIER_NEIGHBOURS[neighbour * 2 + 1])
+        val x = chunkX + EARLIER_NEIGHBOURS[neighbour * 2]
+        val y = chunkY + EARLIER_NEIGHBOURS[neighbour * 2 + 1]
+        candidates?.get(x, y) ?: chunkCandidates(x, y)
     }
     val result = ArrayList<Obstacle>(own.size)
     for (index in own.indices) {
@@ -277,6 +288,26 @@ private class ObstacleCandidate(
     val offsetX: Float,
     val offsetY: Float,
 )
+
+/**
+ * One refresh visits overlapping neighbour chunks repeatedly. Cache their pure candidates only for this refresh,
+ * before destroyed ids, arrival keep-outs and structure suppression; nothing survives a layer or tuning change.
+ * The earlier-neighbour stencil extends one column on both sides and one row below the requested window.
+ */
+private class ChunkCandidateWindow(
+    private val state: MutableGameState,
+    private val minimumX: Int,
+    private val minimumY: Int,
+    span: Int,
+) {
+    private val columns = span + 2
+    private val cells = arrayOfNulls<List<ObstacleCandidate>>(columns * (span + 1))
+
+    fun get(chunkX: Int, chunkY: Int): List<ObstacleCandidate> {
+        val index = (chunkY - minimumY) * columns + chunkX - minimumX
+        return cells[index] ?: state.chunkCandidates(chunkX, chunkY).also { cells[index] = it }
+    }
+}
 
 /** [neighbours] holds the candidates of each [EARLIER_NEIGHBOURS] chunk, in that order. */
 private fun MutableGameState.yieldsToEarlierNeighbour(

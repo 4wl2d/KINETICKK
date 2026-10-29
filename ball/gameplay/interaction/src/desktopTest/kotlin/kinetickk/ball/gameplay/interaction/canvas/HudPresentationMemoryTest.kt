@@ -53,6 +53,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class HudPresentationMemoryTest {
@@ -419,6 +420,19 @@ class HudPresentationMemoryTest {
                 assertFalse(label.equals(name, ignoreCase = true), "${site.kind}'s label repeats its name \"$name\" in $language")
             }
         }
+    }
+
+    @Test
+    fun challengeRewardShowsItsMatterBonusAndRefreshesWhenTheAmountOrLanguageChanges() {
+        val trial = siteTrial(trialSites().single { it.kind == SiteKind.RAM_TRIAL }, base.content.sites)
+        assertEquals("Weapon + 15 Matter", siteTrialRewardLabel(trial, AppLanguage.English))
+        val english = siteTrialRewardLabel(trial, AppLanguage.English)
+        assertSame(english, siteTrialRewardLabel(trial, AppLanguage.English), "steady frames reuse their reward string")
+        assertEquals("Weapon + 20 Matter", siteTrialRewardLabel(trial.copy(rewardMatter = 20), AppLanguage.English))
+        assertEquals("Оружие + 15 Материя", siteTrialRewardLabel(trial, AppLanguage.Russian))
+        assertEquals("Weapon + 15 Matter", siteTrialRewardLabel(trial, AppLanguage.English))
+        val anomaly = siteTrial(trialSites().single { it.kind == SiteKind.RESONANT_CIRCUIT }, base.content.sites)
+        assertEquals("Weapon", siteTrialRewardLabel(anomaly, AppLanguage.English), "the bonus belongs only to its challenge")
     }
 
     private fun enemy(id: Int, type: EnemyType, integrity: Float) =

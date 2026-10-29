@@ -99,10 +99,10 @@ class DimensionCatalogValidationTest {
 
     @Test
     fun aRiftWindowMustEndItsVisitBeforeTheBossAndTheArchiveMustStayReachable() {
-        // Window 4 (525 s) closes at 565 s, 20 s before 720 - 75 - 60; window 5 (645 s) can never host a rift.
-        createContentCatalogForTesting(data.copy(dimensions = data.dimensions.copy(firstPortalWindow = 4)))
-        assertRejected(data.copy(dimensions = data.dimensions.copy(firstPortalWindow = 5)), "No POI window can host a rift")
-        // World events (until 660 s) and signals (until 625 s) must end before the boss too; switched off here, so the
+        // The final window (405 s) can host a full visit; no fourth window exists in this sparse schedule.
+        createContentCatalogForTesting(data.copy(dimensions = data.dimensions.copy(firstPortalWindow = 2)))
+        assertRejected(data.copy(dimensions = data.dimensions.copy(firstPortalWindow = 3)), "No POI window can host a rift")
+        // World events (until 660 s) and signals (until 505 s) must end before the boss too; switched off here, so the
         // rift schedule is the rule an earlier boss meets.
         val earlyBoss = data.copy(
             variety = data.variety.copy(
@@ -110,9 +110,9 @@ class DimensionCatalogValidationTest {
                 signals = data.variety.signals.copy(enabled = false),
             ),
         )
-        // An earlier boss: window 1 (165 s, closing 205 s) still fits at 340 s, not at 339 s.
-        createContentCatalogForTesting(earlyBoss.copy(tempo = RunTempoProfile(bossAtSeconds = 340f)))
-        assertRejected(earlyBoss.copy(tempo = RunTempoProfile(bossAtSeconds = 339f)), "No POI window can host a rift")
+        // An earlier boss: window 1 (225 s, closing 265 s) still fits at 400 s, not at 399 s.
+        createContentCatalogForTesting(earlyBoss.copy(tempo = RunTempoProfile(bossAtSeconds = 400f)))
+        assertRejected(earlyBoss.copy(tempo = RunTempoProfile(bossAtSeconds = 399f)), "No POI window can host a rift")
         // From window 0 the Archive binds first: its glitch rift (100 s visit, 30 s offer, 60 s margin) must fit after 45 s.
         val fromTheFirstWindow = data.dimensions.copy(firstPortalWindow = 0)
         createContentCatalogForTesting(earlyBoss.copy(dimensions = fromTheFirstWindow, tempo = RunTempoProfile(bossAtSeconds = 235f)))

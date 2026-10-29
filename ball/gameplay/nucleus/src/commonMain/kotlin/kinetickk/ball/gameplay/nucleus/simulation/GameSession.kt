@@ -183,13 +183,13 @@ internal fun MutableGameState.startRun() {
     characterUpgradeLevel = characterUpgradeLevels[coreShape.ordinal]
     characterUpgradePower = 1f + content.upgrades.characterPowerPerLevel * characterUpgradeLevel
     resetRunStats()
+    resetDimensions()
     recompileBuild()
     // A new run starts with a new character runtime (Dash count 0), so the weapon's input tracking starts over too.
     weaponRuntime = WeaponRuntime()
     resetWeaponRuntime()
     resetSites()
     resetRunVariety()
-    resetDimensions()
     resetStructures()
     resetObstacles()
     emitSound(GameplayAudioCue.UI_CLICK)

@@ -107,12 +107,14 @@ class SiteRenderMappingTest {
         assertEquals(ceil(challenges.brakelessRequired).toInt(), brakeless.segments, "one segment per required second")
         assertEquals(6f / challenges.brakelessRequired, brakeless.progress)
         assertEquals(TrialReward.ITEM_AND_REPAIR, brakeless.reward)
+        assertEquals(15, brakeless.rewardMatter)
         // The ring shrinks with the clock: half way through its 20 s, half way from 900 to 450.
         assertEquals(675f, game.toRenderModel().sites.single().radius)
 
         val untouched = game.running(active(SiteKind.UNTOUCHED_TRIAL).copy(meter = 3f, aimX = 420f, aimY = -260f))
         assertEquals(3f / challenges.untouchedRequired, untouched.progress)
         assertEquals(TrialReward.RELIC, untouched.reward)
+        assertEquals(15, untouched.rewardMatter)
         val aimed = game.toRenderModel().sites.single()
         assertEquals(120f to -60f, aimed.aimDx to aimed.aimDy, "the volley aims from the centre")
         assertEquals(challenges.untouchedRadius, aimed.radius)
@@ -121,16 +123,19 @@ class SiteRenderMappingTest {
         assertEquals(6, velocity.segments)
         assertEquals(TrialValue.SECONDS to (4.5f to 6f), velocity.value to (velocity.done to velocity.required))
         assertEquals(challenges.velocityZoneRadius, game.toRenderModel().sites.single().radius)
+        assertEquals(15, velocity.rewardMatter)
 
         val ram = game.running(active(SiteKind.RAM_TRIAL).copy(count = 1, foeIds = (20 until 28).toList().toImmutableList()))
         assertEquals(challenges.ramRequired, ram.segments, "one segment per required Dash kill")
         assertEquals(TrialValue.COUNT to (1f to challenges.ramRequired.toFloat()), ram.value to (ram.done to ram.required))
         assertEquals(TrialReward.WEAPON, ram.reward)
+        assertEquals(15, ram.rewardMatter)
 
         val slalom = game.running(active(SiteKind.SLALOM_TRIAL).copy(step = 4, sides = 0b101010))
         assertEquals(6, slalom.segments)
         assertEquals(TrialValue.COUNT to (4f to 6f), slalom.value to (slalom.done to slalom.required))
         assertEquals(0b101010, game.toRenderModel().sites.single().sides)
+        assertEquals(15, slalom.rewardMatter)
         // Only the untouched trial aims; an offer has no ring.
         game.sites = listOf(active(SiteKind.UNTOUCHED_TRIAL).copy(active = false, aimX = 1f, aimY = 1f))
         val offered = game.toRenderModel().sites.single()

@@ -81,9 +81,9 @@ class DimensionSystemTest {
                 assertEquals(plainPair.map { it.x to it.y }, pair.map { it.x to it.y }, "a rift keeps the window's positions")
                 if (pair.any { it.kind.family == SiteFamily.PORTAL }) riftWindows += index
             }
-            // Window 0 is before the first rift window; the cap of three ends the claims after windows 1..3.
-            assertEquals(listOf(1, 2, 3), riftWindows, "seed $seed")
-            assertEquals(policy.maxPortalOffersPerRun, claimed.dimensionRun.portalOffers)
+            // Window 0 is plain; both later windows still leave enough time for a complete dimension visit.
+            assertEquals(listOf(1, 2), riftWindows, "seed $seed")
+            assertEquals(2, claimed.dimensionRun.portalOffers)
             assertEquals(0, plain.dimensionRun.portalOffers)
         }
         // The claim alone: no run stream moves, whatever it answers.

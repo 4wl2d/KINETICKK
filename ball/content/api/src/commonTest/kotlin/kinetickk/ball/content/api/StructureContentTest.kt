@@ -150,12 +150,12 @@ class StructureContentTest {
         assertEquals(listOf(2, 3, 3, 2, 2, 4, 0), templates.map { it.finalRoom })
         assertEquals(
             listOf(
-                listOf("Key", "Matter", "Data"),
-                listOf("Relic", "Rare item"),
-                listOf("Uncommon item", "Key", "Data"),
-                listOf("Relic", "Matter"),
-                listOf("Matter", "Repair", "Key"),
-                listOf("Relic", "Epic item", "Key"),
+                listOf("Induction Coil", "Data"),
+                listOf("Rime Heart", "Rare item"),
+                listOf("Harmonic Crown", "Data"),
+                listOf("Mycelial Compass", "Matter"),
+                listOf("Furnace Heart", "Repair"),
+                listOf("Singularity Seal", "Epic item"),
                 listOf("Data"),
             ),
             templates.map { template -> template.rewards.map { it.label } },
@@ -339,6 +339,27 @@ class StructureContentTest {
             assertFailsWith<IllegalArgumentException> { StructureReward(StructureRewardKind.ITEM_OFFER, 1, floor) }
         }
         assertFailsWith<IllegalArgumentException> { StructureReward(StructureRewardKind.ITEM_OFFER, 2, ItemRarity.RARE) }
+        for (id in RunBoonDefinition.ASPECT_IDS) StructureReward(StructureRewardKind.ASPECT, boonId = id)
+        assertFailsWith<IllegalArgumentException> { StructureReward(StructureRewardKind.ASPECT) }
+        assertFailsWith<IllegalArgumentException> { StructureReward(StructureRewardKind.ASPECT, boonId = 63) }
+        assertFailsWith<IllegalArgumentException> { StructureReward(StructureRewardKind.ASPECT, boonId = 70) }
+        assertFailsWith<IllegalArgumentException> { StructureReward(StructureRewardKind.ASPECT, amount = 2, boonId = 64) }
+        assertFailsWith<IllegalArgumentException> { StructureReward(StructureRewardKind.DATA, boonId = 64) }
+    }
+
+    @Test
+    fun eachCombatDungeonHasItsOwnElementTrialAndLastingAspect() {
+        val combat = templates.filterNot { it.secret }
+        val boons = defaultRunBoons().associateBy { it.id }
+        assertEquals(combat.size, combat.map { it.element }.distinct().size)
+        assertTrue(combat.all { it.element != null && it.trialDescription.isNotBlank() && it.garrisonTypes.isNotEmpty() })
+        val aspects = combat.map { template -> template.rewards.single { it.kind == StructureRewardKind.ASPECT }.boonId }
+        assertEquals((64..69).toList(), aspects)
+        aspects.forEach { id ->
+            val boon = requireNotNull(boons[id])
+            assertEquals(RunBoonKind.ASPECT, boon.kind)
+            assertTrue(boon.buildRules.isNotEmpty())
+        }
     }
 
     @Test
@@ -374,11 +395,25 @@ class StructureContentTest {
         StructurePolicy(garrisonScale = 3f)
         assertRejected("Garrison scale") { StructurePolicy(garrisonScale = 0.25f.nextBelow()) }
         assertRejected("Garrison scale") { StructurePolicy(garrisonScale = 3f.nextAbove()) }
+        StructurePolicy(garrisonHealthMultiplier = 0.5f)
+        StructurePolicy(garrisonHealthMultiplier = 2f)
+        assertRejected("Garrison health") { StructurePolicy(garrisonHealthMultiplier = 0.5f.nextBelow()) }
+        assertRejected("Garrison health") { StructurePolicy(garrisonHealthMultiplier = 2f.nextAbove()) }
+        assertRejected("Garrison health") { StructurePolicy(garrisonHealthMultiplier = Float.NaN) }
+        StructurePolicy(garrisonDamageMultiplier = 0.5f)
+        StructurePolicy(garrisonDamageMultiplier = 1.5f)
+        assertRejected("Garrison damage") { StructurePolicy(garrisonDamageMultiplier = 0.5f.nextBelow()) }
+        assertRejected("Garrison damage") { StructurePolicy(garrisonDamageMultiplier = 1.5f.nextAbove()) }
+        assertRejected("Garrison damage") { StructurePolicy(garrisonDamageMultiplier = Float.NaN) }
         StructurePolicy(directorRateWhileSealed = 1f, wallDamageScale = 2f, maximumChance = 1f)
         assertRejected("director rate") { StructurePolicy(directorRateWhileSealed = 1f.nextAbove()) }
         assertRejected("Wall damage") { StructurePolicy(wallDamageScale = 2f.nextAbove()) }
         assertRejected("maximum chance") { StructurePolicy(maximumChance = 1f.nextAbove()) }
-        assertRejected("distances") { StructurePolicy(minimumDistance = 10_000f) }
+        assertRejected("distances") { StructurePolicy(minimumDistance = policy.fullChanceDistance) }
+        assertRejected("template pool") { StructurePolicy(templatesPerRun = 0) }
+        assertRejected("template pool") { StructurePolicy(templatesPerRun = ContentBounds.MAX_STRUCTURE_TEMPLATES + 1) }
+        assertRejected("Secret template chance") { StructurePolicy(secretTemplateChance = -0.1f) }
+        assertRejected("Secret template chance") { StructurePolicy(secretTemplateChance = Float.NaN) }
         assertRejected("distances") { StructurePolicy(minimumDistance = -1f) }
         // One chance per world layer.
         StructurePolicy(layerChance = immutableListOf(1f, 1f, 1f, 1f))

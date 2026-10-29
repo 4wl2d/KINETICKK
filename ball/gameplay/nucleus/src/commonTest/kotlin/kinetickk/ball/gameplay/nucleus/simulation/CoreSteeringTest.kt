@@ -107,6 +107,30 @@ class CoreSteeringTest {
     }
 
     @Test
+    fun gradualThrustKeepsFullTurningAndCounterSteeringAuthority() {
+        val gentle = steeringState(piloting.copy(spoolGain = 0f, slingShare = 0f))
+        val full = steeringState(piloting.copy(forwardThrustScale = 1f, spoolGain = 0f, slingShare = 0f))
+        val forward = gentle.steeringAcceleration(300f, 0f, 300f, 0f, 700f, 0f)
+        val unrestricted = full.steeringAcceleration(300f, 0f, 300f, 0f, 700f, 0f)
+        assertTrue(forward.x < unrestricted.x * 0.5f, "ordinary launch thrust is substantially gentler")
+        val lateral = gentle.steeringAcceleration(0f, 300f, 0f, 300f, 5_000f, 0f)
+        val unrestrictedLateral = full.steeringAcceleration(0f, 300f, 0f, 300f, 5_000f, 0f)
+        assertEquals(unrestrictedLateral.y, lateral.y, "full-grip turning authority is preserved")
+        val backwards = gentle.steeringAcceleration(-300f, 0f, -300f, 0f, 700f, 0f)
+        val unrestrictedBackwards = full.steeringAcceleration(-300f, 0f, -300f, 0f, 700f, 0f)
+        assertEquals(unrestrictedBackwards.x, backwards.x, "counter-steering still slows the Core without Brake")
+    }
+
+    @Test
+    fun ordinaryStraightTravelHasTheSameDragAsTurning() {
+        val state = steeringState()
+        state.coreStraightness = 0f
+        val turning = state.steeringDrag()
+        state.coreStraightness = 1f
+        assertEquals(turning, state.steeringDrag(), "straight travel must not force slaloming to avoid extra drag")
+    }
+
+    @Test
     fun pointingBehindTheScreenCentreKeepsFullCounterThrust() {
         val state = steeringState()
         val legacy = steeringState(SteeringTuning.LEGACY)
@@ -162,7 +186,7 @@ class CoreSteeringTest {
                 (piloting.basePull + magnetism * distance) / (SteeringTuning.LEGACY.basePull + magnetism * distance)
             return now.lateral(speed, 0f) / (released.lateral(speed, 0f) * pullRatio)
         }
-        assertEquals(1f, ratio(2f), 1e-3f, "slow handling keeps the released turning pull")
+        assertEquals(1f, ratio(full * 0.001f), 1e-3f, "slow handling keeps the released turning pull")
         assertEquals(1f + piloting.gripGain * 0.5f, ratio(full * 0.5f), 1e-3f, "grip grows linearly with speed")
         assertEquals(1f + piloting.gripGain, ratio(full), 1e-3f, "full grip at the full-grip reach's steady speed")
         assertEquals(1f + piloting.gripGain, ratio(full * 1.6f), 1e-3f, "grip stops growing above it")
@@ -185,10 +209,10 @@ class CoreSteeringTest {
         }
         for (speed in listOf(200f, soft * 0.4f, soft * 0.69f)) {
             val (sling, lateral) = slingAndLateral(speed)
-            assertEquals(piloting.slingShare * lateral, sling, lateral * 1e-4f, "full sling at $speed")
+            assertEquals(piloting.slingShare * piloting.forwardThrustScale * lateral, sling, lateral * 1e-4f, "full sling at $speed")
         }
         val (halfway, lateral) = slingAndLateral(soft * 0.85f)
-        assertEquals(piloting.slingShare * lateral * 0.5f, halfway, lateral * 1e-3f, "the sling fades linearly")
+        assertEquals(piloting.slingShare * piloting.forwardThrustScale * lateral * 0.5f, halfway, lateral * 1e-3f, "the sling fades linearly")
     }
 
     @Test
@@ -204,7 +228,7 @@ class CoreSteeringTest {
             val plain = withoutAssist.steeringAcceleration(tetherX, offsetY, offsetX, offsetY, speed, 0f)
             return now.x - plain.x
         }
-        val fullAssist = piloting.spoolGain * magnetism * throttle
+        val fullAssist = piloting.spoolGain * piloting.forwardThrustScale * magnetism * throttle
         assertEquals(fullAssist, assist(throttle, 0f, 0f), fullAssist * 1e-4f, "from rest the assist is whole")
         assertEquals(fullAssist * 0.5f, assist(throttle, 0f, steady * 0.5f), fullAssist * 1e-3f, "half the deficit, half the assist")
         assertEquals(0f, assist(throttle, 0f, steady), fullAssist * 1e-4f, "nothing at the forward offset's steady speed")
@@ -338,17 +362,19 @@ class CoreSteeringTest {
         for (reach in listOf(0.3f, 0.5f, 0.79f)) {
             val offset = reach * 640f
             val model = landscape.steadyCursorSpeed(reach)
-            val closedForm = (piloting.basePull + BASE_MAGNET_STRENGTH * offset) /
-                (BASE_DRAG_COEFFICIENT * (1f + piloting.straightDrag) + BASE_MAGNET_STRENGTH * CAMERA_LAG_SECONDS)
+            val closedForm = piloting.forwardThrustScale * (piloting.basePull + BASE_MAGNET_STRENGTH * offset) /
+                (BASE_DRAG_COEFFICIENT * (1f + piloting.straightDrag) +
+                    piloting.forwardThrustScale * BASE_MAGNET_STRENGTH * CAMERA_LAG_SECONDS)
             assertEquals(closedForm, model, model * 1e-5f, "reach $reach")
             assertEquals(model, portrait.steadyCursorSpeed(reach), "a turned viewport keeps the long axis")
             assertEquals(model, tuned.steadyCursorSpeed(reach), "the model uses the base stats")
             assertEquals(model, landscape.buildSteadyCursorSpeed(reach), model * 1e-5f, "a base build flies the model")
-            val tunedBuild = (piloting.basePull + 6f * offset) / (0.2f * (1f + piloting.straightDrag) + 6f * CAMERA_LAG_SECONDS)
+            val tunedBuild = piloting.forwardThrustScale * (piloting.basePull + 6f * offset) /
+                (0.2f * (1f + piloting.straightDrag) + piloting.forwardThrustScale * 6f * CAMERA_LAG_SECONDS)
             assertEquals(tunedBuild, tuned.buildSteadyCursorSpeed(reach), tunedBuild * 1e-5f, "the build model follows the stats")
-            val perpetualBuild = (piloting.basePull + perpetual.effectiveMagnetism() * offset) /
+            val perpetualBuild = piloting.forwardThrustScale * (piloting.basePull + perpetual.effectiveMagnetism() * offset) /
                 (perpetual.dragCoefficient * 0.15f * (1f + piloting.straightDrag) +
-                    perpetual.effectiveMagnetism() * CAMERA_LAG_SECONDS)
+                    piloting.forwardThrustScale * perpetual.effectiveMagnetism() * CAMERA_LAG_SECONDS)
             assertEquals(perpetualBuild, perpetual.buildSteadyCursorSpeed(reach), perpetualBuild * 1e-5f)
         }
     }

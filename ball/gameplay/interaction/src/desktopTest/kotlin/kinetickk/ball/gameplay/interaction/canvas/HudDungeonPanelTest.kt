@@ -16,9 +16,13 @@ import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.StructureTemplateId
+import kinetickk.ball.content.api.ContentBounds
+import kinetickk.ball.content.api.DUNGEON_ASPECT_SALVAGE_MATTER
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.localization.StructureHudText
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.CanvasTextMeasurer
@@ -59,15 +63,15 @@ class HudDungeonPanelTest {
         assertEquals("Заброшенная станция", trial.title.localizedContent(AppLanguage.Russian))
         assertEquals("2 / 4", trialProgressText(trial, AppLanguage.Russian))
         // The (!) explains the dungeon in the player's language: UI text, not a content instruction.
-        assertEquals(StructureHudText.Rules.english, model.trialRules(trial, AppLanguage.English))
-        assertEquals(StructureHudText.Rules.russian, model.trialRules(trial, AppLanguage.Russian))
+        assertTrue(model.trialRules(trial, AppLanguage.English).contains(StructureHudText.Rules.english))
+        assertTrue(model.trialRules(trial, AppLanguage.Russian).contains(StructureHudText.Rules.russian))
 
         // The reward row joins the template's reward labels, once per template and language.
         val vault = StructureFixture(templates.template(StructureTemplateId.VAULT), base.coreX, base.coreY)
         val vaultTrial = assertNotNull(structureTrial(vault))
-        assertEquals("Relic + Rare item", structureTrialRewards(model, vaultTrial, AppLanguage.English))
+        assertTrue(structureTrialRewards(model, vaultTrial, AppLanguage.English).contains("Rime Heart"))
         val russian = structureTrialRewards(model, vaultTrial, AppLanguage.Russian)
-        assertEquals("Реликвия + Редкий предмет", russian)
+        assertFalse(Regex("[A-Za-z]").containsMatchIn(russian), russian)
         assertSame(russian, structureTrialRewards(model, vaultTrial, AppLanguage.Russian), "a steady panel builds no string")
         templates.templates.filter { !it.secret }.forEach { template ->
             val held = assertNotNull(structureTrial(StructureFixture(template, base.coreX, base.coreY)))
@@ -123,7 +127,77 @@ class HudDungeonPanelTest {
             repeat(2) {
                 shows(site, raceLabel, raceName, raceReward, raceRules.localizedContent(language))
                 shows(dungeon, language.text(StructureHudText.Structure), "Derelict Station".localizedContent(language), stationRewards,
-                    language.text(StructureHudText.Rules))
+                    dungeon.trialRules(assertNotNull(dungeon.activeTrial()), language))
+            }
+        }
+    }
+
+    @Test
+    fun switchingDungeonsRefreshesElementalRulesAndExplainsTheAspectInBothLanguages() {
+        val templates = base.content.structures.templates.filter { !it.secret }
+        for (language in AppLanguage.entries) {
+            val renderedRules = mutableSetOf<String>()
+            // Repeat the sequence to exercise the shared tooltip cache after every template and language change.
+            repeat(2) {
+                for (template in templates) {
+                    val model = base.withDungeon(StructureFixture(template, base.coreX, base.coreY))
+                    val trial = assertNotNull(model.activeTrial())
+                    val rules = model.trialRules(trial, language)
+                    assertTrue(rules.contains(template.trialDescription.localizedContent(language)), template.name)
+                    val aspect = template.rewards.firstNotNullOf { it.boonId?.let(base.content::boon) }
+                    assertTrue(rules.contains(aspect.description.localizedContent(language)), "${template.name}: reward effect")
+                    if (language == AppLanguage.Russian) assertFalse(Regex("[A-Za-z]").containsMatchIn(rules), rules)
+                    CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(ImageBitmap(1_440, 810)), Size(1_440f, 810f)) {
+                        drawTrialPanel(model, measurer(language), 0f, infoOpen = true)
+                        drawTrialTooltip(model, measurer(language), open = true)
+                    }
+                    assertEquals(rules, TrialRulesPlacement.body.layoutInput.text.text, "${template.name}: no stale rules")
+                    renderedRules += rules
+                }
+            }
+            assertEquals(templates.size, renderedRules.size, "each dungeon explains a different challenge and aspect")
+        }
+    }
+
+    @Test
+    fun elementalRulesAndRewardsFitPortraitAndLandscapePhoneTooltips() {
+        for ((width, height) in listOf(390f to 844f, 844f to 390f)) {
+            for (language in AppLanguage.entries) for (template in templates.templates.filter { !it.secret }) {
+                val model = hudTestModel(width, height).withDungeon(StructureFixture(template, base.coreX, base.coreY))
+                val measurer = measurer(language)
+                CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(ImageBitmap(64, 64)), Size(width, height)) {
+                    drawTrialPanel(model, measurer, 0f, infoOpen = true)
+                    drawTrialTooltip(model, measurer, open = true)
+                }
+                val placement = TrialRulesPlacement
+                val label = "${template.name} $language $width x $height"
+                assertTrue(placement.bottom <= height && placement.right <= width && placement.left >= 0f, label)
+                assertFalse(placement.body.hasVisualOverflow, "$label: all rules and reward effects remain readable")
+            }
+        }
+    }
+
+    @Test
+    fun ownedFullAndMissingAspectsAdvertiseMatterAndInvalidateTheRewardAndRulesCaches() {
+        val available = base.withDungeon(station())
+        val trial = assertNotNull(available.activeTrial())
+        val aspect = templates.template(StructureTemplateId.DERELICT_STATION).rewards.firstNotNullOf { it.boonId }
+        val boon = assertNotNull(base.content.boon(aspect))
+        val owned = available.with("runBoons" to immutableListOf(aspect))
+        val full = available.with("runBoons" to base.content.boons.filter { it.id != aspect }
+            .take(ContentBounds.MAX_RUN_BOONS).map { it.id }.toImmutableList())
+        val missing = available.with("content" to base.content.copy(boons = base.content.boons.filter { it.id != aspect }.toImmutableList()))
+        for (language in AppLanguage.entries) {
+            // Switch both ways: availability can change without changing the dungeon or the language.
+            for (fallback in listOf(owned, full, missing)) {
+                assertTrue(structureTrialRewards(available, trial, language).contains(boon.name.localizedContent(language)))
+                assertTrue(available.trialRules(trial, language).contains(boon.description.localizedContent(language)))
+                val rewards = structureTrialRewards(fallback, trial, language)
+                assertFalse(rewards.contains(boon.name.localizedContent(language)), rewards)
+                assertTrue(rewards.contains("Matter".localizedContent(language)), rewards)
+                val rules = fallback.trialRules(trial, language)
+                assertFalse(rules.contains(boon.description.localizedContent(language)), rules)
+                assertTrue(rules.contains(language.text(StructureHudText.AspectFallback, DUNGEON_ASPECT_SALVAGE_MATTER)), rules)
             }
         }
     }

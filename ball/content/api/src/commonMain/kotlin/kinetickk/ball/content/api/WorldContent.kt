@@ -20,8 +20,8 @@ data class ObstacleTuning(
     /** Chunks per side of the generated window around the Core's chunk (odd). */
     val windowChunks: Int = 5,
     /** Mean obstacles per chunk before Rebirth density; a chunk holds at most [maximumPerChunk]. */
-    val meanPerChunk: Float = 2.2f,
-    val maximumPerChunk: Int = 5,
+    val meanPerChunk: Float = 0.85f,
+    val maximumPerChunk: Int = 3,
     /** Fractured Space multiplies the mean by this. */
     val fracturedDensityMultiplier: Float = 1.4f,
     val asteroidMinimumRadius: Float = 46f,
@@ -33,9 +33,9 @@ data class ObstacleTuning(
     /** Share of asteroids that are unstable, only under Fractured Space. */
     val fracturedUnstableShare: Float = 0.15f,
     /** No obstacle reaches inside this distance of the run origin. */
-    val safeRadius: Float = 900f,
-    /** Least clear space between two obstacles. */
-    val minimumGap: Float = 90f,
+    val safeRadius: Float = 1_200f,
+    /** Least clear space between two obstacle bodies, including across chunk borders. */
+    val minimumGap: Float = 300f,
     /**
      * Cursor reach whose steady speed an impact needs to hurt (tier 3 and above); every hurting hit costs at least
      * [minimumDamageShare].

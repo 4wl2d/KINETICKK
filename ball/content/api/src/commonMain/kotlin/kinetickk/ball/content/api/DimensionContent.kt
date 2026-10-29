@@ -278,7 +278,7 @@ fun defaultDimensionDefinitions(): ImmutableList<DimensionDefinition> = listOf(
             DimensionObjectiveWeight(DimensionObjective.ASCENT, 1f), DimensionObjectiveWeight(DimensionObjective.JUDGEMENT, 1f),
         ),
         spawnRateMultiplier = 0.9f, ordinaryCapMultiplier = 0.9f,
-        physics = DimensionPhysics(dragMultiplier = 0.65f, dragFloor = 0.035f, haloRepairShare = 0.05f, haloOverdrive = 15f, ambientHalos = 6),
+        physics = DimensionPhysics(dragMultiplier = 0.82f, dragFloor = 0.035f, haloRepairShare = 0.05f, haloOverdrive = 15f, ambientHalos = 6),
         reward = DimensionReward(DimensionRewardKind.BLESSING_OFFER, cardsOnSuccess = 3, cardsOnFailure = 2),
         // The Throne of a Judgement: a fresh run's visit at 165 s fells it in about four of five fights, a strong
         // tier-10 build's at 285 s in about two of three (the share shortens the fight in capped hits too).

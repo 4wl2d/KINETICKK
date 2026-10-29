@@ -44,7 +44,7 @@ import kotlin.test.assertTrue
  * ends; and the run secret flags.
  */
 class SecretSiteTest {
-    private fun game(content: GameplayContentSnapshot = canonicalGameplayContent) =
+    private fun game(content: GameplayContentSnapshot = ambientMechanicsContent) =
         MutableGameState(content, 40_417).apply {
             startRun()
             enemies.clear()
@@ -490,7 +490,7 @@ class SecretSiteTest {
      * window offers or ambient sites to meet, the Core resting at the run-local origin and flying east.
      */
     private fun sigilGame(content: GameplayContentSnapshot = canonicalGameplayContent, at: Float = 300f) =
-        MutableGameState(content, 40_417).apply {
+        MutableGameState(content.copy(sites = content.sites.copy(secrets = content.sites.secrets.copy(farSigilRunChance = 1f))), 40_417).apply {
             startRun()
             enemies.clear()
             pickups.clear()

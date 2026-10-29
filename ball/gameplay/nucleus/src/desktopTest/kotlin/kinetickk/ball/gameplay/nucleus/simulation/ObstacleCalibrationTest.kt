@@ -19,8 +19,9 @@ import kotlin.test.fail
 /**
  * Calibrates the collision bands against real flight (dp units) on a 1280×800 desktop and a 412×915
  * phone: holding the cursor at the dash-safe reach (0.30) of the long axis stays below the damage-start
- * speed, 0.6 lands in the damage band and 0.79 (just inside the edge strain) is lethal for every Matrix
- * and obstacle-tuning state. The bands are fixed speeds from the straight steady model: they do not depend on the heading, so
+ * speed, 0.6 lands in the damage band and 0.79 (just inside the edge strain) is lethal for an unmodified Core.
+ * Protective builds can survive fast cruising impacts while retaining collision damage. The bands are fixed speeds
+ * from the straight steady model: they do not depend on the heading, so
  * the shorter axis is only ever slower, a turn never moves them, and speed carved in a curve counts like
  * any speed. A Dash from a gentle cruise can hurt but never kills.
  */
@@ -250,13 +251,12 @@ class ObstacleCalibrationTest {
     }
 
     /**
-     * Holding the cursor at reach 0.79 along the long axis flies at least the lethal collision speed whatever the
-     * Matrix owns and whatever obstacle tuning the items add: the lethal-speed bonuses of Impact Dampers, Gravity Surfer
-     * and the items stop together at the build's own ceiling, the stronger Dash of Vector Thrusters lifts only the
-     * gentle-Dash floor, and a heavier or lighter build moves its ceiling with its own speed.
+     * A fast cruise still hurts on impact, while protective builds raise the lethal threshold. The stronger Dash of
+     * Vector Thrusters can put its safety floor above a heavy build's cruise speed; that protection must not be removed
+     * merely to make every straight flight lethal. The measured collision follows the resulting band in either case.
      */
     @Test
-    fun edgePinningStaysLethalForEveryMatrixState() {
+    fun fastCruiseRetainsCollisionRiskWhileProtectiveBuildsRaiseTheLethalThreshold() {
         val guard = mapOf(MatrixNodeId.IMPACT_DAMPERS to 2, MatrixNodeId.GRAVITY_SURFER to 1, MatrixNodeId.VECTOR_THRUSTERS to 2)
         val guarded = MatrixState("Impact Dampers 2 + Gravity Surfer + Vector Thrusters 2", guard)
         val caged = MatrixState("two roll cages", emptyMap(), items = cages(2))
@@ -286,7 +286,15 @@ class ObstacleCalibrationTest {
                     "EDGE PIN $label: reach 0.79=${state.speed} lethal=$lethal " +
                         "bonus=${state.obstacleLethalSpeedBonus()} ceiling=$ceiling",
                 )
-                assertTrue(state.speed >= lethal, "$label: reach 0.79 (${state.speed}) at least $lethal")
+                assertTrue(state.speed > state.obstacleDamageStartSpeed(), "$label: fast cruise retains impact risk")
+                state.placeAsteroidAhead(gap = 20f)
+                val impact = state.flyIntoTheAsteroid()
+                assertTrue(state.hp < state.maxHp, "$label: the fast cruising impact at $impact still hurts")
+                assertEquals(
+                    if (impact < lethal) GamePhase.RUNNING else GamePhase.GAME_OVER,
+                    state.phase,
+                    "$label: an impact at $impact respects the build's lethal threshold $lethal",
+                )
                 lethal
             }
             val plain = lethalByState.getValue(states.first())

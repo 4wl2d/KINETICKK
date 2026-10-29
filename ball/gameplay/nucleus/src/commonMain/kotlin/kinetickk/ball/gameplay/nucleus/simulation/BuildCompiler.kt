@@ -46,7 +46,7 @@ internal data class RelicLink(val first: RelicId, val second: RelicId, val kind:
 
 /**
  * The pure, immutable compilation of a build: owned items, their stacks and Reborn flags, the character,
- * bound and severed relics. Recompiled only when one of those inputs changes and shared by every
+ * bound and severed relics, and lasting dungeon aspects. Recompiled only when one of those inputs changes and shared by every
  * reduction sibling; nothing here is mutated after construction and nothing writes base stat fields.
  */
 internal class CompiledBuild private constructor(
@@ -198,6 +198,8 @@ internal class CompiledBuild private constructor(
             weaponKey: kinetickk.ball.content.api.RelicKey? = null,
             /** Reaction keystone forms switched on beyond the items' own (no item rule declares one yet). */
             keystoneMask: Int = 0,
+            /** Lasting dungeon rules, folded once without item stack or Reborn multipliers. */
+            boonRules: List<ItemRule> = emptyList(),
         ): CompiledBuild {
             val policy = content.build.policy
             val itemCount = content.items.size
@@ -327,79 +329,81 @@ internal class CompiledBuild private constructor(
             var boostPower = 0f
             var wellPull = 0f
 
-            for (id in order) {
-                val item = content.items[id]
-                item.clauses.forEachIndexed { index, clause -> clauseBuffers[clause.trigger.ordinal] += packClause(id, index) }
-                val scale = magnitudes[id] * bonuses[id]
-                item.rules.forEach { rule ->
-                    when (rule) {
-                        is ItemRule.WhileModifier -> whileModifiers += WhileModifier(rule.condition, rule.stat, rule.amount * scale)
-                        is ItemRule.ElementPotency -> potency[rule.element.ordinal] += rule.amount * scale
-                        is ItemRule.StatusDuration -> duration[rule.element.ordinal] *= 1f + (rule.multiplier - 1f) * magnitudes[id]
-                        is ItemRule.BreakThreshold -> cuts[rule.element.ordinal] += breakThresholdCut(rule.reduction, itemStacks[id])
-                        is ItemRule.BreakPower -> breakPower[rule.element.ordinal] += rule.amount * scale
-                        is ItemRule.BreakSpread -> {
-                            spreadStacks[rule.element.ordinal] = maxOf(spreadStacks[rule.element.ordinal], rule.stacks)
-                            spreadRadius[rule.element.ordinal] = maxOf(spreadRadius[rule.element.ordinal], rule.radius)
-                        }
-                        is ItemRule.ReactionPower -> reactionPower += rule.amount * scale
-                        is ItemRule.ReactionResidue -> residue = maxOf(residue, rule.stacks)
-                        is ItemRule.ReactionRecoil -> {
-                            recoil += rule.damage
-                            recoilRadius = maxOf(recoilRadius, rule.radius)
-                        }
-                        is ItemRule.AlwaysCrit -> alwaysCrit += rule.condition
-                        is ItemRule.CritDamageVersus -> critVersus += ConditionalAmount(rule.condition, rule.amount * scale)
-                        is ItemRule.DamageVersus -> damageVersus += ConditionalAmount(rule.condition, rule.amount * scale)
-                        is ItemRule.NonCriticalDamage -> nonCrit += rule.amount
-                        is ItemRule.ComboDamage -> {
-                            comboPer += rule.perCombo * scale
-                            comboCap = maxOf(comboCap, rule.cap * bonuses[id])
-                        }
-                        is ItemRule.BonusRerolls -> Unit
-                        is ItemRule.OfferCards -> offerCards += rule.count
-                        is ItemRule.Convert -> when (rule.kind) {
-                            ConversionKind.OVERHEAL_TO_SHIELD -> overfill = maxOf(overfill, overhealOverfill(rule.amount, itemStacks[id]))
-                            ConversionKind.REGENERATION_TO_DECAY -> regenDecay = maxOf(regenDecay, rule.amount)
-                            ConversionKind.CRIT_CHANCE_TO_DAMAGE -> critConversion = maxOf(critConversion, rule.amount * bonuses[id])
-                            ConversionKind.DASH_HEAT_TO_SKILLS -> dashHeatToSkills = maxOf(dashHeatToSkills, rule.amount)
-                            ConversionKind.DATA_TO_SKILLS -> dataToSkills = maxOf(dataToSkills, rule.amount)
-                            ConversionKind.SKILLS_COST_HEAT -> skillsCostHeat = maxOf(skillsCostHeat, rule.amount)
-                            // Several followers keep the largest radius share.
-                            ConversionKind.SKILL_FIELDS_FOLLOW -> skillFieldsFollow = maxOf(skillFieldsFollow, rule.amount)
-                            ConversionKind.KNOCKBACK_TO_DAMAGE -> knockbackToDamage = maxOf(knockbackToDamage, rule.amount)
-                        }
-                        is ItemRule.GuaranteedCritAfter -> critAfter = if (critAfter == 0) rule.misses else minOf(critAfter, rule.misses)
-                        is ItemRule.FreeDash -> {
-                            freeDashHeat = maxOf(freeDashHeat, rule.heat)
-                            freeDashCooldown = if (freeDashCooldown == 0f) rule.cooldownSeconds else minOf(freeDashCooldown, rule.cooldownSeconds)
-                        }
-                        is ItemRule.ReactionKeystone -> keystones = keystones or (1 shl rule.reaction.ordinal)
-                        is ItemRule.ReactionTuning -> when (val reaction = rule.reaction) {
-                            null -> sharedTuning[rule.aspect.ordinal] += rule.amount * scale
-                            else -> namedTuning[reaction.ordinal * ReactionAspect.entries.size + rule.aspect.ordinal] += rule.amount * scale
-                        }
-                        is ItemRule.FieldTuning -> when (rule.aspect) {
-                            FieldAspect.RADIUS -> fieldRadius += rule.amount * scale
-                            FieldAspect.DURATION -> fieldDuration += rule.amount * scale
-                        }
-                        is ItemRule.SkillCooldown -> skillCooldownCuts[rule.element?.ordinal ?: (SKILL_ELEMENT_CELLS - 1)] += rule.amount * scale
-                        is ItemRule.SkillPower -> skillPowerBonuses[rule.element?.ordinal ?: (SKILL_ELEMENT_CELLS - 1)] += rule.amount * scale
-                        ItemRule.SkillCharges -> skillCharges = true
-                        is ItemRule.SkillAttunement -> if (attunement == null) attunement = rule.pick
-                        is ItemRule.CatalysisRate -> catalysis += rule.amount * scale
-                        is ItemRule.ApexCooldown -> apexCut += rule.amount * scale
-                        is ItemRule.CoreLinkRadius -> linkBonus += rule.bonus * scale
-                        is ItemRule.ObstacleTuning -> when (rule.aspect) {
-                            ObstacleAspect.RESTITUTION -> obstacleRestitution += rule.amount * scale
-                            ObstacleAspect.COLLISION_DAMAGE -> obstacleDamageCut += rule.amount * scale
-                            ObstacleAspect.LETHAL_SPEED -> obstacleLethal += rule.amount * scale
-                            ObstacleAspect.BOOST_POWER -> boostPower += rule.amount * scale
-                            ObstacleAspect.WELL_PULL -> wellPull += rule.amount * scale
-                        }
+            fun applyRule(rule: ItemRule, magnitude: Float, bonus: Float, stacks: Int) {
+                val scale = magnitude * bonus
+                when (rule) {
+                    is ItemRule.WhileModifier -> whileModifiers += WhileModifier(rule.condition, rule.stat, rule.amount * scale)
+                    is ItemRule.ElementPotency -> potency[rule.element.ordinal] += rule.amount * scale
+                    is ItemRule.StatusDuration -> duration[rule.element.ordinal] *= 1f + (rule.multiplier - 1f) * magnitude
+                    is ItemRule.BreakThreshold -> cuts[rule.element.ordinal] += breakThresholdCut(rule.reduction, stacks)
+                    is ItemRule.BreakPower -> breakPower[rule.element.ordinal] += rule.amount * scale
+                    is ItemRule.BreakSpread -> {
+                        spreadStacks[rule.element.ordinal] = maxOf(spreadStacks[rule.element.ordinal], rule.stacks)
+                        spreadRadius[rule.element.ordinal] = maxOf(spreadRadius[rule.element.ordinal], rule.radius)
+                    }
+                    is ItemRule.ReactionPower -> reactionPower += rule.amount * scale
+                    is ItemRule.ReactionResidue -> residue = maxOf(residue, rule.stacks)
+                    is ItemRule.ReactionRecoil -> {
+                        recoil += rule.damage
+                        recoilRadius = maxOf(recoilRadius, rule.radius)
+                    }
+                    is ItemRule.AlwaysCrit -> alwaysCrit += rule.condition
+                    is ItemRule.CritDamageVersus -> critVersus += ConditionalAmount(rule.condition, rule.amount * scale)
+                    is ItemRule.DamageVersus -> damageVersus += ConditionalAmount(rule.condition, rule.amount * scale)
+                    is ItemRule.NonCriticalDamage -> nonCrit += rule.amount
+                    is ItemRule.ComboDamage -> {
+                        comboPer += rule.perCombo * scale
+                        comboCap = maxOf(comboCap, rule.cap * bonus)
+                    }
+                    is ItemRule.BonusRerolls -> Unit
+                    is ItemRule.OfferCards -> offerCards += rule.count
+                    is ItemRule.Convert -> when (rule.kind) {
+                        ConversionKind.OVERHEAL_TO_SHIELD -> overfill = maxOf(overfill, overhealOverfill(rule.amount, stacks))
+                        ConversionKind.REGENERATION_TO_DECAY -> regenDecay = maxOf(regenDecay, rule.amount)
+                        ConversionKind.CRIT_CHANCE_TO_DAMAGE -> critConversion = maxOf(critConversion, rule.amount * bonus)
+                        ConversionKind.DASH_HEAT_TO_SKILLS -> dashHeatToSkills = maxOf(dashHeatToSkills, rule.amount)
+                        ConversionKind.DATA_TO_SKILLS -> dataToSkills = maxOf(dataToSkills, rule.amount)
+                        ConversionKind.SKILLS_COST_HEAT -> skillsCostHeat = maxOf(skillsCostHeat, rule.amount)
+                        // Several followers keep the largest radius share.
+                        ConversionKind.SKILL_FIELDS_FOLLOW -> skillFieldsFollow = maxOf(skillFieldsFollow, rule.amount)
+                        ConversionKind.KNOCKBACK_TO_DAMAGE -> knockbackToDamage = maxOf(knockbackToDamage, rule.amount)
+                    }
+                    is ItemRule.GuaranteedCritAfter -> critAfter = if (critAfter == 0) rule.misses else minOf(critAfter, rule.misses)
+                    is ItemRule.FreeDash -> {
+                        freeDashHeat = maxOf(freeDashHeat, rule.heat)
+                        freeDashCooldown = if (freeDashCooldown == 0f) rule.cooldownSeconds else minOf(freeDashCooldown, rule.cooldownSeconds)
+                    }
+                    is ItemRule.ReactionKeystone -> keystones = keystones or (1 shl rule.reaction.ordinal)
+                    is ItemRule.ReactionTuning -> when (val reaction = rule.reaction) {
+                        null -> sharedTuning[rule.aspect.ordinal] += rule.amount * scale
+                        else -> namedTuning[reaction.ordinal * ReactionAspect.entries.size + rule.aspect.ordinal] += rule.amount * scale
+                    }
+                    is ItemRule.FieldTuning -> when (rule.aspect) {
+                        FieldAspect.RADIUS -> fieldRadius += rule.amount * scale
+                        FieldAspect.DURATION -> fieldDuration += rule.amount * scale
+                    }
+                    is ItemRule.SkillCooldown -> skillCooldownCuts[rule.element?.ordinal ?: (SKILL_ELEMENT_CELLS - 1)] += rule.amount * scale
+                    is ItemRule.SkillPower -> skillPowerBonuses[rule.element?.ordinal ?: (SKILL_ELEMENT_CELLS - 1)] += rule.amount * scale
+                    ItemRule.SkillCharges -> skillCharges = true
+                    is ItemRule.SkillAttunement -> if (attunement == null) attunement = rule.pick
+                    is ItemRule.CatalysisRate -> catalysis += rule.amount * scale
+                    is ItemRule.ApexCooldown -> apexCut += rule.amount * scale
+                    is ItemRule.CoreLinkRadius -> linkBonus += rule.bonus * scale
+                    is ItemRule.ObstacleTuning -> when (rule.aspect) {
+                        ObstacleAspect.RESTITUTION -> obstacleRestitution += rule.amount * scale
+                        ObstacleAspect.COLLISION_DAMAGE -> obstacleDamageCut += rule.amount * scale
+                        ObstacleAspect.LETHAL_SPEED -> obstacleLethal += rule.amount * scale
+                        ObstacleAspect.BOOST_POWER -> boostPower += rule.amount * scale
+                        ObstacleAspect.WELL_PULL -> wellPull += rule.amount * scale
                     }
                 }
             }
+            for (id in order) {
+                val item = content.items[id]
+                item.clauses.forEachIndexed { index, clause -> clauseBuffers[clause.trigger.ordinal] += packClause(id, index) }
+                item.rules.forEach { applyRule(it, magnitudes[id], bonuses[id], itemStacks[id]) }
+            }
+            boonRules.forEach { applyRule(it, magnitude = 1f, bonus = 1f, stacks = 1) }
             // Affinity tiers: potency, threshold, overflow (overflow is read directly by the status system).
             for (element in StatusElement.entries) {
                 val tier = policy.tier(affinity[element.ordinal], policy.affinityThresholds)
@@ -612,6 +616,7 @@ internal fun MutableGameState.compileBuild(keystoneMask: Int = 0): CompiledBuild
     reactionPowerBonus = matrix.reactionPowerBonus,
     weaponKey = currentWeaponDefinition.key,
     keystoneMask = keystoneMask,
+    boonRules = runBoons.flatMap { content.boon(it)?.buildRules.orEmpty() },
 )
 
 /**

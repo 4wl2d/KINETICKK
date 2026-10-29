@@ -12,6 +12,7 @@ import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
 import kinetickk.ball.gameplay.nucleus.protocol.ReactionCueFlags
 import kinetickk.ball.gameplay.nucleus.protocol.SkillCueCodes
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
+import kotlin.math.exp
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
@@ -163,6 +164,77 @@ class InteractionFxReducerTest {
 
         assertEquals(InteractionFxLimits.MAX_PARTICLES, accepted.size)
         assertEquals(accepted, reducer.snapshot().particles)
+    }
+
+    @Test
+    fun saturatedBurstsKeepTheAcceptedPrefixAndDoNotConsumeFutureRandomness() {
+        for (directional in listOf(false, true)) {
+            fun burst(count: Int): VisualFxCue = if (directional) {
+                VisualFxCue.DirectionalBurst(5f, -8f, count, 2, 1f, -1f, ParticleDensity.NORMAL)
+            } else {
+                VisualFxCue.Burst(5f, -8f, count, 2, ParticleDensity.NORMAL)
+            }
+            val overflowing = InteractionFxReducer(seed = 149)
+            val exactlyFull = InteractionFxReducer(seed = 149)
+            val fill = listOf(burst(InteractionFxLimits.MAX_PARTICLES - 3))
+            overflowing.apply(fill)
+            exactlyFull.apply(fill)
+            overflowing.apply(listOf(burst(5_000)))
+            exactlyFull.apply(listOf(burst(3)))
+            val retained = overflowing.snapshot()
+            assertEquals(exactlyFull.snapshot(), retained)
+            overflowing.apply(listOf(
+                VisualFxCue.Burst(10f, 20f, 500, 1, ParticleDensity.HIGH),
+                VisualFxCue.DirectionalBurst(10f, 20f, 500, 1, 0f, 1f, ParticleDensity.HIGH),
+            ))
+            assertSame(retained, overflowing.snapshot())
+            val next = listOf(VisualFxCue.EffectsAdvanced(2f), burst(9))
+            overflowing.apply(next)
+            exactlyFull.apply(next)
+            assertEquals(exactlyFull.snapshot(), overflowing.snapshot())
+            assertEquals(InteractionFxLimits.MAX_PARTICLES, retained.particles.size)
+        }
+    }
+
+    @Test
+    fun advancingMixedLifetimesKeepsSurvivorOrderAndDetachedSnapshots() {
+        val reducer = InteractionFxReducer(seed = 150)
+        val lives = listOf(0.1f, 0.5f, 0.2f, 0.8f, 0.25f)
+        for ((index, life) in lives.withIndex()) {
+            reducer.apply(listOf(
+                VisualFxCue.ShockwaveAdded(index.toFloat(), 0f, life, 10f, 1),
+                VisualFxCue.WeaponArcAdded(0f, 0f, index.toFloat(), 0f, life),
+            ))
+        }
+        reducer.apply(listOf(VisualFxCue.Burst(31f, -17f, 120, 2, ParticleDensity.NORMAL)))
+        val before = reducer.snapshot()
+        val frozen = before.particles.toList()
+        val delta = 0.45f
+        val damping = exp(-2.2f * delta)
+        val expectedParticles = frozen.map { value ->
+            value.copy(
+                x = value.x + value.vx * delta,
+                y = value.y + value.vy * delta,
+                vx = value.vx * damping,
+                vy = value.vy * damping,
+                life = value.life - delta,
+            )
+        }.filter { !(it.life <= 0f) }
+        assertTrue(expectedParticles.size in 1 until frozen.size, "The fixture must expire interleaved particles")
+        reducer.apply(listOf(VisualFxCue.EffectsAdvanced(delta), VisualFxCue.WeaponArcsAdvanced(delta)))
+        val after = reducer.snapshot()
+        assertEquals(expectedParticles, after.particles.toList())
+        assertEquals(listOf(1f, 3f), after.shockwaves.map { it.x })
+        assertEquals(listOf(1f, 3f), after.weaponArcs.map { it.toX })
+        assertEquals(lives, before.shockwaves.map { it.life })
+        assertEquals(lives, before.weaponArcs.map { it.life })
+        assertEquals(frozen, before.particles.toList())
+
+        reducer.apply(listOf(VisualFxCue.EffectsAdvanced(0.1f), VisualFxCue.WeaponArcsAdvanced(0.1f)))
+        assertEquals(listOf(3f), reducer.snapshot().shockwaves.map { it.x })
+        assertEquals(listOf(3f), reducer.snapshot().weaponArcs.map { it.toX })
+        assertEquals(listOf(1f, 3f), after.shockwaves.map { it.x })
+        assertEquals(listOf(1f, 3f), after.weaponArcs.map { it.toX })
     }
 
     @Test

@@ -20,6 +20,7 @@ import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.api.RuleLineKind
 import kinetickk.ball.content.api.RuleTextContext
 import kinetickk.ball.content.api.RunVarietyNotices
+import kinetickk.ball.content.api.RunBoonKind
 import kinetickk.ball.content.api.SiteNotice
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.StructureNotice
@@ -401,15 +402,28 @@ class ContentLocalizationTest {
 
     @Test
     fun everyStructureNameRewardAndNoticeIsLocalized() {
-        val structures = createContentCatalog().gameplayContent().structures
+        val gameplay = createContentCatalog().gameplayContent()
+        val structures = gameplay.structures
         structures.templates.forEach { template ->
             assertFullyLocalized(template.name)
             template.rewards.forEach { assertFullyLocalized(it.label) }
         }
         val offerFloors = listOf(ItemRarity.UNCOMMON, ItemRarity.RARE, ItemRarity.EPIC)
+        val aspects = gameplay.boons.filter { it.kind == RunBoonKind.ASPECT }
         StructureRewardKind.entries.flatMap { kind ->
-            if (kind == StructureRewardKind.ITEM_OFFER) offerFloors.map { StructureReward(kind, 1, it) } else listOf(StructureReward(kind))
+            when (kind) {
+                StructureRewardKind.ITEM_OFFER -> offerFloors.map { StructureReward(kind, 1, it) }
+                StructureRewardKind.ASPECT -> aspects.map { StructureReward(kind, boonId = it.id) }
+                else -> listOf(StructureReward(kind))
+            }
         }.forEach { assertFullyLocalized(it.label) }
+        aspects.forEach { aspect ->
+            assertFullyLocalized(aspect.name)
+            assertFullyLocalized(aspect.description)
+        }
+        assertDistinctInRussian(aspects.map { it.name })
+        assertDistinctInRussian(aspects.map { it.description })
+        gameplay.structures.templates.filterNot { it.secret }.forEach { assertFullyLocalized(it.trialDescription) }
         StructureNotice.entries.forEach { assertFullyLocalized(it.key) }
         assertDistinctInRussian(structures.templates.map { it.name })
         // Every template's world discovery reuses the template name as its key, so the Codex and the world agree.

@@ -880,12 +880,13 @@ internal fun MutableGameState.fireRelicProjectile(x: Float, y: Float, target: En
 internal fun MutableGameState.pushEnemies(x: Float, y: Float, radius: Float, strength: Float, inward: Boolean) {
     for (index in enemies.indices) {
         val target = enemies[index]
-        val knockback = knockbackTaken(target)
-        if (!target.alive || knockback <= 0f && build.knockbackToDamage <= 0f) continue
+        if (!target.alive) continue
         val dx = target.x - x
         val dy = target.y - y
         val distance = max(1f, length(dx, dy))
         if (distance > radius + target.radius) continue
+        val knockback = knockbackTaken(target)
+        if (knockback <= 0f && build.knockbackToDamage <= 0f) continue
         if (knockbackAsDamage(target, knockback, strength) || knockback <= 0f) continue
         val falloff = 1f - (distance / (radius + target.radius)) * 0.5f
         val sign = if (inward) -1f else 1f

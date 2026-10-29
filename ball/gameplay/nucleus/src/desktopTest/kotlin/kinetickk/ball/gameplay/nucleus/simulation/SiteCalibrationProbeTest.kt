@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
+import kinetickk.foundation.collections.toImmutableList
 import kotlin.test.Test
 
 /**
@@ -111,7 +112,12 @@ class SiteCalibrationProbeTest {
                 "untouchedRequired" -> sites.copy(challenges = sites.challenges.copy(untouchedRequired = value))
                 "velocityRequired" -> sites.copy(challenges = sites.challenges.copy(velocityRequired = value))
                 "velocityMinSpeed" -> sites.copy(challenges = sites.challenges.copy(velocityMinSpeed = value))
-                "slalomDuration" -> sites.copy(challenges = sites.challenges.copy(slalomDuration = value))
+                "slalomDuration" -> sites.copy(
+                    challenges = sites.challenges.copy(slalomDuration = value),
+                    definitions = sites.definitions.map {
+                        if (it.kind == SiteKind.SLALOM_TRIAL) it.copy(duration = value) else it
+                    }.toImmutableList(),
+                )
                 "bossIntegrityShare" -> sites.copy(bounty = sites.bounty.copy(bossIntegrityShare = value))
                 else -> error("unknown site knob $name")
             }

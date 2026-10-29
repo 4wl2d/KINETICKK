@@ -169,8 +169,8 @@ class ObstacleSystemTest {
         assertEquals(0.08f, fracturedBumpers, 0.03f)
         val asteroids = fracturedTotal - (fractured[ObstacleKind.BUMPER] ?: 0)
         assertEquals(0.15f, (fractured[ObstacleKind.UNSTABLE] ?: 0).toFloat() / asteroids, 0.04f)
-        // Mean per chunk: 2.2 × the tier-4 density (1.2).
-        assertEquals(2.2f * 1.2f, calmTotal / 900f, 0.25f)
+        // Candidate mean scales by the tier-4 density (1.2), before spacing removes overlaps.
+        assertEquals(canonicalGameplayContent.obstacles.meanPerChunk * 1.2f, calmTotal / 900f, 0.25f)
     }
 
     @Test
@@ -216,7 +216,7 @@ class ObstacleSystemTest {
 
     /**
      * Every obstacle [layer] generates at tier 0 with [content] in the 900 chunks east of the origin, for each of three
-     * runs (about 5,800 obstacles, so a share near 0.45 reads within ±0.7 pp at one standard error). Far from the origin:
+     * runs (more than 1,800 obstacles, enough to compare kind shares across the sparser field). Far from the origin:
      * a world without structures, whose realspace footprints would clear part of the census.
      */
     private fun census(layer: WorldLayer, content: GameplayContentSnapshot = structuresDisabledContent): List<Obstacle> = buildList {
@@ -247,7 +247,7 @@ class ObstacleSystemTest {
         val field = census(WorldLayer.BASE)
         val counts = field.groupingBy { it.kind }.eachCount()
         val total = field.size.toFloat()
-        assertTrue(total > 5_000f, "2,700 chunks hold about 5,900 obstacles: $total")
+        assertTrue(total > 1_800f, "2,700 chunks still supply a representative obstacle sample: $total")
         val newKinds = ObstacleKind.entries.filter { kinds.space.share(it) > 0f }
         assertEquals(6, newKinds.size, "realspace ships every newer kind")
         newKinds.forEach { kind ->
@@ -653,21 +653,22 @@ class ObstacleSystemTest {
         state.placeObstaclesForTesting(testObstacle(300f, 0f, radius = 34f, kind = ObstacleKind.BUMPER))
         val bumperContact = 300f - 34f - MutableGameState.CORE_RADIUS
         val ricochet = state.obstacleRicochetSpeed()
-        assertTrue(ricochet > 1_260f, "the bounces below stay under the ricochet speed ($ricochet)")
+        assertTrue(ricochet > 840f, "the bounces below stay under the ricochet speed ($ricochet)")
         state.flyIntoObstaclesForTesting(bumperContact + 1f, 0f, 400f, 0f)
         assertEquals(700f, state.speed, 0.5f, "a slow Core leaves at the bumper's minimum")
         assertTrue(state.velocityX < 0f)
         assertEquals(state.maxHp, state.hp, "bumpers never hurt")
         assertEquals(0, state.pendingRicochets, "a bounce below the ricochet speed is no ricochet")
 
-        state.flyIntoObstaclesForTesting(bumperContact + 4f, 0f, 1_200f, 0f)
-        assertEquals(1_260f, state.speed, 0.5f, "1.05 × the incoming speed")
+        state.flyIntoObstaclesForTesting(bumperContact + 4f, 0f, 800f, 0f)
+        assertEquals(840f, state.speed, 0.5f, "1.05 × the incoming speed")
         assertEquals(0, state.pendingRicochets, "holding still behind a bumper farms nothing")
 
         state.flyIntoObstaclesForTesting(bumperContact + ricochet / 240f, 0f, ricochet, 0f)
         assertEquals(1, state.pendingRicochets, "the ricochet speed makes it a ricochet")
         state.flyIntoObstaclesForTesting(bumperContact + 10f, 0f, 3_000f, 0f)
-        assertEquals(1_400f, state.speed, 0.5f, "never faster than the bumper's maximum")
+        assertEquals(minOf(1_400f, state.obstacleLethalSpeed() * state.content.obstacles.bumperLethalShare),
+            state.speed, 0.5f, "the maximum throw respects the current flight's lethal cap")
         assertEquals(1, state.pendingRicochets, "one ricochet per bumper per 1.5 s")
         state.elapsed += 1.6f
         state.flyIntoObstaclesForTesting(bumperContact + 10f, 0f, 3_000f, 0f)

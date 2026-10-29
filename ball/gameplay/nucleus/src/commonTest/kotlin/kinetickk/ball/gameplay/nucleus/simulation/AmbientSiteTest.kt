@@ -35,7 +35,7 @@ import kotlin.test.assertTrue
  * Core, settling clear of obstacles once, caches opened by flying through them and an opened-site FIFO.
  */
 class AmbientSiteTest {
-    private fun game(content: GameplayContentSnapshot = canonicalGameplayContent, seed: Int = 40_417) =
+    private fun game(content: GameplayContentSnapshot = ambientMechanicsContent, seed: Int = 40_417) =
         MutableGameState(content, seed).apply {
             startRun()
             enemies.clear()
@@ -44,8 +44,8 @@ class AmbientSiteTest {
         }
 
     private fun ambient(configure: (AmbientSitePolicy) -> AmbientSitePolicy): GameplayContentSnapshot =
-        canonicalGameplayContent.copy(
-            sites = canonicalGameplayContent.sites.copy(ambient = configure(canonicalGameplayContent.sites.ambient)),
+        ambientMechanicsContent.copy(
+            sites = ambientMechanicsContent.sites.copy(ambient = configure(ambientMechanicsContent.sites.ambient)),
         )
 
     /** Rests the Core at run-local ([x], [y]) without a swept step, regenerates the obstacle window there, steps the sites. */
@@ -452,8 +452,8 @@ class AmbientSiteTest {
 
     @Test
     fun structureFootprintsKeepAmbientSitesOut() {
-        val structures = denseStructureContent()
-        val open = game()
+        val structures = ambientMechanicsContent.copy(structures = denseStructureContent().structures)
+        val open = game(ambientMechanicsContent.copy(structures = ambientMechanicsContent.structures.copy(enabled = false)))
         open.clearObstaclesForTesting()
         open.standAt(24_000f, 18_000f)
         val built = game(structures)

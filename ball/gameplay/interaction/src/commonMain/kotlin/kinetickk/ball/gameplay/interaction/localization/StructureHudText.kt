@@ -17,4 +17,8 @@ internal enum class StructureHudText(
         "Войдя в зал, вы запечатываете его двери, пока не падёт гарнизон. Награда ждёт в последнем зале; покинув " +
             "сооружение, вы её потеряете.",
     ),
+    AspectFallback(
+        "This aspect is already owned or unavailable. Receive {0} base Matter instead; Matter bonuses apply.",
+        "Этот аспект уже получен или недоступен. Вместо него вы получите {0} базовой материи с учётом бонусов к её получению.",
+    ),
 }

@@ -389,7 +389,7 @@ private object PauseBuildMemo {
             critChance == other.critChance && maxShield == other.maxShield && itemStacksSnapshot == other.itemStacksSnapshot &&
             weaponSynergy == other.weaponSynergy && sameSlots(other) && settings.keyBindings == other.settings.keyBindings &&
             reactionDiscoveries() == other.reactionDiscoveries() && pairingDiscoveries() == other.pairingDiscoveries() &&
-            runOmen == other.runOmen && directorPersonality == other.directorPersonality && keynoteTag == other.keynoteTag &&
+            runBoons == other.runBoons && runOmen == other.runOmen && directorPersonality == other.directorPersonality && keynoteTag == other.keynoteTag &&
             keynoteElement == other.keynoteElement && worldEvent?.kind == other.worldEvent?.kind
 
     /** The same effect in every Z/X/C slot (the active items' keys). */

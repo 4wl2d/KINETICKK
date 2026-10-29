@@ -45,6 +45,12 @@ The preferred source for a screenshot is the corresponding game source and the
 steps needed to reproduce the screen. Keep editable source files for future art,
 audio, and store assets whenever those files exist.
 
+## README cover
+
+| Asset | Creator / source | Added | SHA-256 | Rights status |
+|---|---|---|---|---|
+| `docs/assets/readme-cover.png` | Generated with the built-in OpenAI ImageGen tool through Codex for Vladislav Tomilov; no reference images supplied. [Exact generation brief](../assets/readme-cover-brief.md). Promotional artwork, not a gameplay screenshot. | 2026-10-30 | `a800400aa3b8f4e4ee1c9ef216b206e39dab35ff823e3f0d0fb8d5e0e154ed31` | Distributed under GPL-3.0-or-later; see sidecar. No third-party artwork inputs or separate assignment/purchase receipt. |
+
 For every future asset, record its path, creator, creation or acquisition date,
 source, hash, license, and any signed assignment or purchase receipt before the
 asset is committed. Do not add an asset whose chain of rights is unclear.

@@ -298,4 +298,62 @@ class StatusSystemTest {
         enemy.status[StatusCell.EMBRITTLED_UNTIL] = state.elapsed + 1f
         assertTrue(state.statusBits(enemy) and STATUS_EMBRITTLED_BIT != 0)
     }
+
+    @Test
+    fun primedPresentationUsesExactThresholdAndKeepsPackingLaterElements() {
+        val state = buildTestState()
+        val enemy = state.dummy()
+        for (element in StatusElement.entries) {
+            enemy.status.fill(0f)
+            // A primed early element cannot stop the packing of the following elements.
+            for (other in StatusElement.entries) enemy.status[StatusCell.STACKS + other.ordinal] = 1f
+            val threshold = state.breakThreshold(element, enemy)
+            for (count in listOf(0, threshold - 2, threshold - 1, threshold)) {
+                enemy.status[StatusCell.STACKS + element.ordinal] = count.toFloat()
+                val bits = state.statusBits(enemy)
+                assertEquals(count == threshold - 1, bits and STATUS_PRIMED_BIT != 0, "$element at $count")
+                for (other in StatusElement.entries) {
+                    assertEquals(
+                        if (other == element) count else 1,
+                        (bits ushr (other.ordinal * 4)) and 0xF,
+                        "$other after packing $element at $count",
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun primedPresentationTracksBuildChangesConsumedStacksAndExpiredStates() {
+        val state = buildTestState()
+        val enemy = state.dummy()
+        state.applyStatus(enemy, StatusElement.THERMAL, 5, generation = 0)
+        assertFalse(state.statusBits(enemy) and STATUS_PRIMED_BIT != 0)
+        state.own("Flashpoint")
+        assertEquals(6, state.breakThreshold(StatusElement.THERMAL, enemy))
+        assertTrue(state.statusBits(enemy) and STATUS_PRIMED_BIT != 0)
+        state.forceElementBreak(enemy, StatusElement.THERMAL)
+        assertEquals(0, enemy.stacksOf(StatusElement.THERMAL))
+        assertEquals(0, state.statusBits(enemy) and STATUS_PRIMED_BIT, "consumed stacks leave no primed flag")
+
+        val normalCryoThreshold = state.breakThreshold(StatusElement.CRYO, enemy)
+        enemy.status[StatusCell.EMBRITTLED_UNTIL] = state.elapsed + 1f
+        enemy.status[StatusCell.FROZEN_UNTIL] = state.elapsed + 1f
+        enemy.status[StatusCell.BRITTLE] = 1f
+        val embrittledCryoThreshold = state.breakThreshold(StatusElement.CRYO, enemy)
+        assertTrue(embrittledCryoThreshold < normalCryoThreshold, "this fixture must stay above the threshold floor")
+        enemy.status[StatusCell.STACKS + StatusElement.CRYO.ordinal] =
+            (embrittledCryoThreshold - 1).toFloat()
+        assertEquals(
+            STATUS_FROZEN_BIT or STATUS_BRITTLE_BIT or STATUS_EMBRITTLED_BIT or STATUS_PRIMED_BIT,
+            state.statusBits(enemy) and (0xF shl STATUS_STACK_BITS),
+        )
+        state.elapsed += 1f
+        assertEquals(normalCryoThreshold, state.breakThreshold(StatusElement.CRYO, enemy))
+        assertEquals(
+            STATUS_BRITTLE_BIT,
+            state.statusBits(enemy) and (0xF shl STATUS_STACK_BITS),
+            "expired freeze/embrittlement clear their flags and restore the Cryo threshold",
+        )
+    }
 }

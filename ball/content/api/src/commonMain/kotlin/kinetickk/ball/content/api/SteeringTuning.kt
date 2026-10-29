@@ -4,13 +4,15 @@
 package kinetickk.ball.content.api
 
 /**
- * The Core's flight law (0.6.0 piloting): grip steering, the slingshot pump, the launch assist and light straight-line
- * fatigue. Reaches are the centre-to-edge measure of [FatigueTuning.edgeStrainStart] along the viewport's long axis;
+ * The Core's flight law: gradual forward thrust with independent turning and counter-steering authority.
+ * Reaches are the centre-to-edge measure of [FatigueTuning.edgeStrainStart] along the viewport's long axis;
  * speeds derived from them follow the viewport like the obstacle bands. [LEGACY] flies the 0.5.0 law.
  */
 data class SteeringTuning(
     /** Thrust toward the singularity that does not depend on its distance (dp/s²); 92 through 0.5.0. */
     val basePull: Float = 130f,
+    /** Positive along-track thrust only; turning, counter-thrust and the active Brake retain full authority. */
+    val forwardThrustScale: Float = 0.36f,
     /** Share of the backward along-track pull dropped unless the pointer points behind the screen centre. */
     val counterThrustGate: Float = 1f,
     /** Pointer offsets shorter than this reach carry no backward intent. */
@@ -20,15 +22,15 @@ data class SteeringTuning(
     /** Reach whose straight steady speed gives full grip; grip grows linearly from rest. */
     val gripFullReach: Float = 0.5f,
     /** Share of the turning acceleration that becomes forward thrust. */
-    val slingShare: Float = 0.4f,
+    val slingShare: Float = 0.1f,
     /** The sling stops this share above the straight steady speed of the pointer's offset... */
     val slingHeadroom: Float = 0.15f,
     /** ...fading linearly from this share of that stop speed. */
     val slingKneeShare: Float = 0.7f,
     /** Launch assist below the straight steady speed of the forward pointer offset (× magnetism × offset). */
-    val spoolGain: Float = 0.6f,
+    val spoolGain: Float = 0.15f,
     /** Drag rises by this share once the heading has stayed straight. */
-    val straightDrag: Float = 0.3f,
+    val straightDrag: Float = 0f,
     /** Heading turn rate (rad/s) at and above which flight counts as fully curved. */
     val straightCurvatureRate: Float = 0.6f,
     val straightRiseSeconds: Float = 1.2f,
@@ -38,6 +40,9 @@ data class SteeringTuning(
 ) {
     init {
         require(basePull.isFinite() && basePull in 0f..1_000f) { "Base pull must be in 0..1000" }
+        require(forwardThrustScale.isFinite() && forwardThrustScale > 0f && forwardThrustScale <= 1f) {
+            "Forward thrust scale must be in (0, 1]"
+        }
         require(counterThrustGate in 0f..1f) { "Counter-thrust gate must be in 0..1" }
         require(counterThrustDeadzoneReach > 0f && counterThrustDeadzoneReach < 1f) { "Counter-thrust deadzone must be in (0, 1)" }
         require(gripGain in 0f..2f) { "Grip gain must be in 0..2" }
@@ -58,7 +63,8 @@ data class SteeringTuning(
     companion object {
         /** The 0.5.0 law: base pull 92, no gate, grip, sling, launch assist or straight-line fatigue. */
         val LEGACY: SteeringTuning = SteeringTuning(
-            basePull = 92f, counterThrustGate = 0f, gripGain = 0f, slingShare = 0f, spoolGain = 0f, straightDrag = 0f,
+            basePull = 92f, forwardThrustScale = 1f, counterThrustGate = 0f, gripGain = 0f,
+            slingShare = 0f, spoolGain = 0f, straightDrag = 0f,
         )
     }
 }

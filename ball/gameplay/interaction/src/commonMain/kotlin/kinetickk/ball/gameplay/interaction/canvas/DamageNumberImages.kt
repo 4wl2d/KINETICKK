@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.interaction.canvas
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Canvas
@@ -87,7 +88,8 @@ internal class DamageNumberImageCache(
         CanvasDrawScope().draw(face.layoutInput.density, face.layoutInput.layoutDirection, Canvas(bitmap), Size(width.toFloat(), height.toFloat())) {
             translate(-left, -top) { drawDamageNumberInk(face, shadow, color) }
         }
-        return DamageNumberImage(face, shadow, color, bitmap, damageNumberImageBrush(bitmap), left, top).also { entry ->
+        val drawBounds = damageNumberInkBounds(bitmap)
+        return DamageNumberImage(face, shadow, color, bitmap, damageNumberImageBrush(bitmap), left, top, drawBounds).also { entry ->
             entries[slot] = entry
             retainedPixels += pixels.toInt()
             usedThisFrame[slot] = true
@@ -118,12 +120,17 @@ internal class DamageNumberImage(
     internal val color: Color,
     internal val bitmap: ImageBitmap,
     private val brush: Brush,
-    private val left: Float,
-    private val top: Float,
+    internal val left: Float,
+    internal val top: Float,
+    internal val drawBounds: Rect,
 ) {
-    fun draw(scope: DrawScope) = with(scope) {
+    fun draw(scope: DrawScope, animationScale: Float = 1f) = with(scope) {
+        if (drawBounds.isEmpty) return@with
         translate(left, top) {
-            drawRect(brush, Offset.Zero, Size(bitmap.width.toFloat(), bitmap.height.toFloat()))
+            // Below half size the two-source-pixel guard becomes less than one device pixel,
+            // so the cropped rectangle's antialiased edge could affect the tiny exit glyph.
+            if (animationScale < 0.5f) drawRect(brush, Offset.Zero, Size(bitmap.width.toFloat(), bitmap.height.toFloat()))
+            else drawRect(brush, drawBounds.topLeft, drawBounds.size)
         }
     }
 }
@@ -132,3 +139,49 @@ internal val DamageNumberImages = DamageNumberImageCache()
 
 /** Linear sampling keeps animated glyph edges smooth without wrapping a native image per draw. */
 internal expect fun damageNumberImageBrush(bitmap: ImageBitmap): Brush
+
+
+/** Platform pixel access avoids Compose Skia's temporary full-image ByteArray. */
+internal expect fun damageNumberInkBounds(bitmap: ImageBitmap): Rect
+
+/**
+ * Finds only the four outer occupied rows/columns; the interior need not be read. The generous
+ * rasterization padding stays in the bitmap, while two source pixels protect linear filtering.
+ */
+internal inline fun damageNumberInkBounds(width: Int, height: Int, hasInk: (Int, Int) -> Boolean): Rect {
+    var top = 0
+    while (top < height) {
+        var x = 0
+        while (x < width && !hasInk(x, top)) x++
+        if (x < width) break
+        top++
+    }
+    if (top == height) return Rect.Zero
+    var bottom = height - 1
+    while (bottom > top) {
+        var x = 0
+        while (x < width && !hasInk(x, bottom)) x++
+        if (x < width) break
+        bottom--
+    }
+    var left = 0
+    while (left < width) {
+        var y = top
+        while (y <= bottom && !hasInk(left, y)) y++
+        if (y <= bottom) break
+        left++
+    }
+    var right = width - 1
+    while (right > left) {
+        var y = top
+        while (y <= bottom && !hasInk(right, y)) y++
+        if (y <= bottom) break
+        right--
+    }
+    return Rect(
+        (left - 2).coerceAtLeast(0).toFloat(),
+        (top - 2).coerceAtLeast(0).toFloat(),
+        (right + 3).coerceAtMost(width).toFloat(),
+        (bottom + 3).coerceAtMost(height).toFloat(),
+    )
+}

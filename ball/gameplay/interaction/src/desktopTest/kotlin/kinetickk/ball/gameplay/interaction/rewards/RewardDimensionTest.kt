@@ -7,6 +7,8 @@ import kinetickk.ball.content.api.RunBoonKind
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.canvas.with
+import kinetickk.ball.gameplay.interaction.canvas.elementFill
+import kinetickk.ball.gameplay.interaction.canvas.elementIcon
 import kinetickk.ball.gameplay.interaction.localization.DimensionHudText
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
@@ -150,6 +152,32 @@ class RewardDimensionTest {
         val card = offer(WorldLayer.NADIR, ChoiceType.BOON, listOf(cinder), previews = listOf(preview)).rewardPresentation().cards.single()
         assertEquals(listOf(preview.changes[0].presentation(AppLanguage.English)), card.changes)
         assertEquals(listOf("Maximum integrity −20"), card.liabilities)
+    }
+
+    @Test
+    fun dungeonAspectsNameTheirElementAndEffectsWithoutInventingAPactPrice() {
+        val aspects = content.boons.filter { it.kind == RunBoonKind.ASPECT }
+        assertEquals(6, aspects.size)
+        for (language in AppLanguage.entries) {
+            val cards = offer(null, ChoiceType.BOON, aspects.map { boonChoice(it.id) }, language).rewardPresentation(language).cards
+            for ((card, boon) in cards.zip(aspects)) {
+                val template = content.structures.templates.first { it.rewards.any { reward -> reward.boonId == boon.id } }
+                val element = requireNotNull(template.element)
+                assertEquals(language.text(DimensionHudText.BoonAspect), card.bandStart)
+                assertEquals(listOf(boon.description.localizedContent(language)), card.descriptions)
+                assertTrue(card.liabilities.isEmpty(), "${boon.name}: clearing a dungeon has no pact price")
+                assertEquals(elementIcon(element.ordinal), card.icon)
+                for (roles in palettes) {
+                    assertEquals(roles.element(element.ordinal), card.accentColor(roles))
+                    val look = rewardCardLook(card, roles)
+                    assertEquals(elementFill(element.ordinal), look.style.pattern)
+                    assertEquals(KkCardOrnament.RETICLE, look.style.ornament)
+                }
+                if (language == AppLanguage.Russian) (listOf(card.title, card.bandStart) + card.descriptions).forEach {
+                    assertFalse(latin.containsMatchIn(it), "Russian aspect copy: $it")
+                }
+            }
+        }
     }
 
     /**

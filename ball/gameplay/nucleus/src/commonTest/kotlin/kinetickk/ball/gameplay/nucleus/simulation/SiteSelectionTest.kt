@@ -25,6 +25,7 @@ import kotlin.test.assertTrue
 /** Window kinds: two draws from the site stream by weight, positions and every other stream untouched. */
 class SiteSelectionTest {
     private val design = canonicalGameplayContent.withWindowWeights(DesignWindowWeights)
+    private val windowCount = with(design.sites.windows) { ((lastOfferAt - firstOfferAt) / offerInterval).toInt() + 1 }
 
     private fun game(content: GameplayContentSnapshot = canonicalGameplayContent, seed: Int = 731_991) =
         MutableGameState(content, seed).apply { startRun(); enemies.clear() }
@@ -56,7 +57,7 @@ class SiteSelectionTest {
             val drawn = game(design, seed)
             val anomalies = game(canonicalGameplayContent.withAnomalyWindowsOnly(), seed)
             val reference = CloneableXorWowRandom(seed xor MutableGameState.SITE_SEED_SALT)
-            repeat(6) { index ->
+            repeat(windowCount) { index ->
                 drawn.pose(index)
                 anomalies.pose(index)
                 val expected = drawn.releasedPositions()
@@ -86,8 +87,8 @@ class SiteSelectionTest {
         skipped.updateSites(0.01f)
         assertTrue(skipped.sites.isEmpty())
         assertEquals(1, skipped.nextSiteWindowIndex)
-        skipped.sites = listOf(SiteState(0L, SiteKind.RESONANT_CIRCUIT, 4_000f, 0f, 200f))
-        skipped.elapsed = 165f
+        skipped.sites = listOf(SiteState(0L, SiteKind.RESONANT_CIRCUIT, 4_000f, 0f, 320f))
+        skipped.elapsed = 225f
         skipped.updateSites(0.01f)
         assertEquals(2, skipped.nextSiteWindowIndex)
         assertEquals(1, skipped.sites.size)
@@ -98,7 +99,7 @@ class SiteSelectionTest {
     fun aPairNeverRepeatsAKind() {
         for (seed in 0 until 200) {
             val game = game(design, seed)
-            repeat(6) { index ->
+            repeat(windowCount) { index ->
                 val pair = game.offerWindowForTesting(index)
                 assertNotEquals(pair[0].kind, pair[1].kind, "seed $seed window $index")
             }
@@ -112,7 +113,7 @@ class SiteSelectionTest {
     private fun drawnPairs(content: GameplayContentSnapshot, seeds: Int, rebirthLevel: Int = 0): List<List<Pair<SiteKind, SiteKind>>> {
         val game = game(content).apply { this.rebirthLevel = rebirthLevel }
         val windows = content.sites.windows
-        return List(6) { index ->
+        return List(((windows.lastOfferAt - windows.firstOfferAt) / windows.offerInterval).toInt() + 1) { index ->
             val scheduledAt = windows.firstOfferAt + index * windows.offerInterval
             List(seeds) { seed ->
                 game.siteRandom = CloneableXorWowRandom(seed xor MutableGameState.SITE_SEED_SALT)
@@ -152,9 +153,9 @@ class SiteSelectionTest {
         assertTrue(all.none { it.family == SiteFamily.PORTAL }, "a rift is never drawn, only claimed")
         assertTrue(SiteKind.SLALOM_TRIAL !in all, "a kind above the run's Rebirth tier is never drawn")
         assertTrue(drawnPairs(content, 300, rebirthLevel = 3).flatten().any { SiteKind.SLALOM_TRIAL in it.toList() })
-        // The bounty starts at 160 s and keeps a 90 s reserve before the Architect: windows 165..525 s only.
-        assertTrue(SiteKind.BOUNTY_ARENA !in drawn[0] && SiteKind.BOUNTY_ARENA !in drawn[5])
-        assertTrue((1..4).all { SiteKind.BOUNTY_ARENA in drawn[it] })
+        // The bounty starts at 160 s and keeps a 90 s reserve: only the two later windows qualify.
+        assertTrue(SiteKind.BOUNTY_ARENA !in drawn[0])
+        assertTrue((1 until windowCount).all { SiteKind.BOUNTY_ARENA in drawn[it] })
         // The production offer follows the same rule.
         val offered = game(content, seed = 2_026)
         repeat(6) { index -> assertTrue(offered.offerWindowForTesting(index).none { it.kind == SiteKind.SLALOM_TRIAL }) }
@@ -201,7 +202,7 @@ class SiteSelectionTest {
     fun sameSeedSameKinds() {
         fun kinds(seed: Int): List<SiteKind> {
             val game = game(design, seed)
-            return (0 until 6).flatMap { index -> game.pose(index); game.offerWindowForTesting(index).map { it.kind } }
+            return (0 until windowCount).flatMap { index -> game.pose(index); game.offerWindowForTesting(index).map { it.kind } }
         }
         assertEquals(kinds(2_026), kinds(2_026))
         assertTrue((1..20).map(::kinds).toSet().size > 1, "the run seed reshapes the kinds")

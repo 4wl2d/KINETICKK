@@ -360,7 +360,7 @@ class RunVarietyContentTest {
         rejects { SignalPolicy(weights = immutableListOf(1f, 1f, 1f, 1f, 0f.nextBelow())) }
         // Three distinct signals a run need three weighted kinds.
         SignalPolicy(weights = immutableListOf(1f, 0f, 1f, 0f, 1f))
-        rejects { SignalPolicy(weights = immutableListOf(1f, 0f, 0f, 0f, 1f)) }
+        rejects { SignalPolicy(perRun = 3, weights = immutableListOf(1f, 0f, 0f, 0f, 1f)) }
         SignalPolicy(perRun = 2, weights = immutableListOf(1f, 0f, 0f, 0f, 1f))
         listOf<(Float) -> Unit>(
             { SignalPolicy(firstAtSeconds = it) }, { SignalPolicy(intervalSeconds = it) }, { SignalPolicy(lifetimeSeconds = it) },
@@ -371,7 +371,7 @@ class RunVarietyContentTest {
 
     @Test
     fun bootstrapFitsSignalsBetweenTheSiteWindowsAndBeforeTheArchitect() {
-        // Site windows open at 45 + 120k s for 40 s plus a 25 s trial; the Architect arrives at 720 s.
+        // Site windows open at 45 + 180k s for 40 s plus a 25 s trial; the Architect arrives at 720 s.
         fun withSignals(signals: SignalPolicy, tempo: RunTempoProfile = data.tempo, events: Boolean = true) = data.copy(
             tempo = tempo,
             variety = data.variety.copy(
@@ -379,17 +379,19 @@ class RunVarietyContentTest {
                 worldEvents = if (events) data.variety.worldEvents else WorldEventPolicy(enabled = false),
             ),
         )
-        assertEquals(120f, data.sites.windows.offerInterval)
-        rejected(withSignals(SignalPolicy(intervalSeconds = 120f.nextAbove())), "repeat with the site windows")
-        rejected(withSignals(SignalPolicy(intervalSeconds = 120f.nextBelow())), "repeat with the site windows")
+        assertEquals(180f, data.sites.windows.offerInterval)
+        rejected(withSignals(SignalPolicy(intervalSeconds = 180f.nextAbove())), "repeat with the site windows")
+        rejected(withSignals(SignalPolicy(intervalSeconds = 180f.nextBelow())), "repeat with the site windows")
         accepted(withSignals(SignalPolicy(firstAtSeconds = 110f)))
         rejected(withSignals(SignalPolicy(firstAtSeconds = 110f.nextBelow())), "wait for the first site trial")
-        accepted(withSignals(SignalPolicy(lifetimeSeconds = 50f)))
-        rejected(withSignals(SignalPolicy(lifetimeSeconds = 50.01f)), "before the next site window")
-        // The fifth slot fades at 115 + 4 × 120 + 30 = 625 s.
-        accepted(withSignals(SignalPolicy(), RunTempoProfile(bossAtSeconds = 625f.nextAbove()), events = false))
-        rejected(withSignals(SignalPolicy(), RunTempoProfile(bossAtSeconds = 625f), events = false), "last signal must fade")
-        accepted(withSignals(SignalPolicy(slots = 4, perRun = 3), RunTempoProfile(bossAtSeconds = 505f.nextAbove()), events = false))
+        accepted(withSignals(SignalPolicy(lifetimeSeconds = 110f)))
+        rejected(withSignals(SignalPolicy(lifetimeSeconds = 110.01f)), "before the next site window")
+        // The third slot fades at 115 + 2 × 180 + 30 = 505 s.
+        accepted(withSignals(SignalPolicy(), RunTempoProfile(bossAtSeconds = 505f.nextAbove()), events = false))
+        rejected(withSignals(SignalPolicy(), RunTempoProfile(bossAtSeconds = 505f), events = false), "last signal must fade")
+        // This shorter custom run also needs its dimension entrance in the first site window.
+        accepted(withSignals(SignalPolicy(slots = 2, perRun = 2), RunTempoProfile(bossAtSeconds = 325f.nextAbove()), events = false)
+            .copy(dimensions = data.dimensions.copy(firstPortalWindow = 0)))
         // A switched-off system has no schedule to fit.
         accepted(withSignals(SignalPolicy(enabled = false, intervalSeconds = 121f, firstAtSeconds = 1f)))
     }

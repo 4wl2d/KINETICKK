@@ -127,18 +127,29 @@ data class StructureWallSpec(
     val isDoor: Boolean get() = door >= 0
 }
 
-enum class StructureRewardKind { RELIC, KEY, MATTER, DATA, REPAIR, ITEM_OFFER }
+enum class StructureRewardKind { RELIC, KEY, MATTER, DATA, REPAIR, ITEM_OFFER, ASPECT }
+
+/** Base Matter replacing an already owned aspect or an aspect refused by the run's boon cap. */
+const val DUNGEON_ASPECT_SALVAGE_MATTER: Int = 40
 
 /** One payout of a structure's final room through an existing reward channel. */
-data class StructureReward(val kind: StructureRewardKind, val amount: Int = 1, val rarityFloor: ItemRarity? = null) {
+data class StructureReward(
+    val kind: StructureRewardKind,
+    val amount: Int = 1,
+    val rarityFloor: ItemRarity? = null,
+    val boonId: Int? = null,
+) {
     init {
         val amounts = when (kind) {
             StructureRewardKind.RELIC, StructureRewardKind.KEY, StructureRewardKind.REPAIR -> 1..3
             StructureRewardKind.DATA -> 1..16
             StructureRewardKind.MATTER -> 1..400
-            StructureRewardKind.ITEM_OFFER -> 1..1
+            StructureRewardKind.ITEM_OFFER, StructureRewardKind.ASPECT -> 1..1
         }
         require(amount in amounts) { "A $kind reward amount must be in $amounts" }
+        require(if (kind == StructureRewardKind.ASPECT) boonId in RunBoonDefinition.ASPECT_IDS else boonId == null) {
+            "Only an aspect reward names a dungeon aspect in 64..69"
+        }
         if (kind == StructureRewardKind.ITEM_OFFER) {
             val floor = rarityFloor
             require(floor == ItemRarity.UNCOMMON || floor == ItemRarity.RARE || floor == ItemRarity.EPIC) {
@@ -160,6 +171,7 @@ data class StructureReward(val kind: StructureRewardKind, val amount: Int = 1, v
             StructureRewardKind.MATTER -> "Matter"
             StructureRewardKind.DATA -> "Data"
             StructureRewardKind.REPAIR -> "Repair"
+            StructureRewardKind.ASPECT -> dungeonAspectName(checkNotNull(boonId))
             StructureRewardKind.ITEM_OFFER -> when (rarityFloor) {
                 ItemRarity.UNCOMMON -> "Uncommon item"
                 ItemRarity.RARE -> "Rare item"
@@ -203,6 +215,11 @@ data class StructureTemplate(
     /** An easter egg: no garrison, no entry banner, no panel or scrim; reaching the final room records its secret. */
     val secret: Boolean = false,
     val wallHalfThickness: Float = 24f,
+    /** Shared affinity for the palette, trial and its lasting reward. */
+    val element: StatusElement? = null,
+    val trialDescription: String = "",
+    /** Themed alternatives for habitat garrison entries. Fixed guardians and room counts are preserved. */
+    val garrisonTypes: ImmutableList<EnemyType> = immutableListOf(),
 ) {
     /** Compiled walls: solid room walls, then [extraWalls], then one capsule per door in door order. */
     val walls: ImmutableList<StructureWallSpec>
@@ -259,6 +276,9 @@ data class StructureTemplate(
 
     private fun validateLayout() {
         require(name.isNotBlank() && name.length <= MAX_TEMPLATE_NAME_LENGTH) { "Template name must be 1..32 characters" }
+        require(trialDescription.length <= 240) { "A dungeon trial description must stay short" }
+        require(garrisonTypes.size <= 4 && garrisonTypes.distinct().size == garrisonTypes.size) { "A dungeon names at most four distinct garrison kinds" }
+        require(garrisonTypes.none { it == EnemyType.ARCHITECT || it == EnemyType.ELITE || it == EnemyType.HERALD }) { "Themed garrisons cannot select a boss" }
         require(weight.isFinite() && weight >= 0f) { "$name weight must be finite and non-negative" }
         require(minimumDistance.isFinite() && minimumDistance >= 0f) { "$name minimum distance must be non-negative" }
         require(wallHalfThickness in MIN_WALL_HALF_THICKNESS..MAX_WALL_HALF_THICKNESS) {
@@ -329,9 +349,13 @@ data class StructurePolicy(
     val enabled: Boolean = true,
     val cellSize: Float = 4_800f,
     val cellMargin: Float = 300f,
-    val minimumDistance: Float = 4_000f,
-    val fullChanceDistance: Float = 10_000f,
-    val maximumChance: Float = 0.4f,
+    val minimumDistance: Float = 6_000f,
+    val fullChanceDistance: Float = 14_000f,
+    val maximumChance: Float = 0.12f,
+    /** A seed chooses this many weighted, non-secret templates for the entire run, before distance gates. */
+    val templatesPerRun: Int = 3,
+    /** Each secret template exists only in this share of seeds; its placement still uses its ordinary weight. */
+    val secretTemplateChance: Float = 0.2f,
     /** Chance scale per [WorldLayer] ordinal (BASE, ZENITH, NADIR, ARCHIVE). */
     val layerChance: ImmutableList<Float> = immutableListOf(1f, 0f, 0f, 0f),
     val obstacleClearance: Float = 160f,
@@ -342,6 +366,10 @@ data class StructurePolicy(
     val garrisonGateLeadSeconds: Float = 90f,
     val garrisonExtraPerTiers: Int = 4,
     val garrisonScale: Float = 0.8f,
+    /** Room enemies and guardians keep their attack patterns, but their integrity can be balanced independently. */
+    val garrisonHealthMultiplier: Float = 0.75f,
+    /** Damage dealt by room-owned enemies, including their adds; world and site enemies keep their own balance. */
+    val garrisonDamageMultiplier: Float = 0.70f,
     val directorRateWhileSealed: Float = 0.35f,
     val wallDamageScale: Float = 1f,
     val templates: ImmutableList<StructureTemplate> = defaultStructureTemplates(),
@@ -364,6 +392,8 @@ data class StructurePolicy(
             "Structure distances must satisfy 0 <= minimum < full chance"
         }
         require(maximumChance in 0f..1f) { "Structure maximum chance must be in 0..1" }
+        require(templatesPerRun in 1..ContentBounds.MAX_STRUCTURE_TEMPLATES) { "A run must select a bounded template pool" }
+        require(secretTemplateChance in 0f..1f) { "Secret template chance must be in 0..1" }
         require(layerChance.size == WorldLayer.entries.size && layerChance.all { it in 0f..1f }) {
             "Structure layer chances name every layer, each in 0..1"
         }
@@ -379,6 +409,8 @@ data class StructurePolicy(
         require(garrisonGateLeadSeconds in 0f..MAX_GARRISON_GATE_LEAD_SECONDS) { "Garrison gate lead must be in 0..300 s" }
         require(garrisonExtraPerTiers >= 1) { "Garrison extras need at least one tier per enemy" }
         require(garrisonScale in MIN_GARRISON_SCALE..MAX_GARRISON_SCALE) { "Garrison scale must be in 0.25..3" }
+        require(garrisonHealthMultiplier in 0.5f..2f) { "Garrison health multiplier must be in 0.5..2" }
+        require(garrisonDamageMultiplier in 0.5f..1.5f) { "Garrison damage multiplier must be in 0.5..1.5" }
         require(directorRateWhileSealed in 0f..1f) { "Sealed director rate must be in 0..1" }
         require(wallDamageScale in 0f..MAX_WALL_DAMAGE_SCALE) { "Wall damage scale must be in 0..2" }
         require(templates.any { it.weight > 0f && it.minimumDistance <= minimumDistance + cellSize }) {
@@ -410,6 +442,11 @@ fun rotateQuarterY(x: Float, y: Float, quarter: Int): Float = when (quarter and 
  */
 fun validateStructurePolicy(policy: StructurePolicy, enemies: List<EnemyDefinition>, obstacles: ObstacleTuning) {
     policy.templates.forEach { template ->
+        template.garrisonTypes.forEach { type ->
+            require(enemies.firstOrNull { it.type == type }?.rank == EnemyRank.ORDINARY) {
+                "${template.name} themed garrison kinds must be defined ordinary enemies"
+            }
+        }
         template.rooms.forEach { room ->
             val miniBosses = room.garrison.sumOf { entry ->
                 if (enemies.firstOrNull { it.type == entry.type }?.rank == EnemyRank.MINI_BOSS) entry.count else 0

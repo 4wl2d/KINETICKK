@@ -34,6 +34,7 @@ import kinetickk.ball.content.api.RelicKey
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.RelicPairingKind
 import kinetickk.ball.content.api.RunTempoProfile
+import kinetickk.ball.content.api.RunBoonKind
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.StatusElement
@@ -571,7 +572,8 @@ class ContentBootstrapValidationTest {
         assertRejected(data.copy(variety = data.variety.copy(director = director.copy(personalities = herald))), "only ordinary kinds")
         // Boon ids are unique and the catalog holds at most the bound.
         assertRejected(data.copy(boons = data.boons + data.boons.first()), "Boon ids must be unique")
-        val blessings = (32..47).map { data.boons.first().copy(id = it) } + (48..63).map { data.boons.last().copy(id = it) }
+        val blessings = (32..47).map { data.boons.first().copy(id = it) } +
+            (48..63).map { data.boons.first { boon -> boon.kind == RunBoonKind.PACT }.copy(id = it) }
         createContentCatalogForTesting(data.copy(boons = blessings))
         assertEquals(ContentBounds.MAX_BOON_DEFINITIONS, blessings.size)
         assertRejected(data.copy(boons = blessings + blessings.first()), "exceeds bootstrap bound")
@@ -594,6 +596,17 @@ class ContentBootstrapValidationTest {
         }
         assertStructureRejected("does not define") {
             validateStructurePolicy(policy, roster.filter { it.type != EnemyType.SENTRY }, obstacles)
+        }
+
+        // A themed random pick is always a defined ordinary enemy; bosses belong in authored fixed entries.
+        val bossTheme = policy.copy(templates = policy.templates.map { template ->
+            if (template.id == StructureTemplateId.DERELICT_STATION) {
+                template.copy(garrisonTypes = immutableListOf(EnemyType.WARDEN_PRIME))
+            } else template
+        }.toImmutableList())
+        assertStructureRejected("defined ordinary enemies") { validateStructurePolicy(bossTheme, roster, obstacles) }
+        assertStructureRejected("defined ordinary enemies") {
+            validateStructurePolicy(policy, roster.filter { it.type != EnemyType.SHOOTER }, obstacles)
         }
 
         // An ordinary STRUCTURE kind opens at tier 0 from the first second (today Drifter, Sentry and Crawler).

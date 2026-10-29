@@ -40,9 +40,8 @@ import kotlin.math.roundToInt
 internal fun GameplayRenderModel.activeTrial(): TrialProjection? = trial
 
 /** The trial's rules for its (!) info button: the content instruction, or a dungeon's own rules, in the player's language. */
-@Suppress("UnusedReceiverParameter")
 internal fun GameplayRenderModel.trialRules(trial: TrialProjection, language: AppLanguage): String =
-    if (trial.source == TrialSource.STRUCTURE) structureTrialRules(language) else trial.rules.localizedContent(language)
+    if (trial.source == TrialSource.STRUCTURE) structureTrialRules(this, trial, language) else trial.rules.localizedContent(language)
 
 /**
  * Geometry of the top-left trial panel (`Anomaly` board), shared by the renderer, the focusable
@@ -254,10 +253,9 @@ internal fun DrawScope.drawTrialPanel(
         HudLayoutProbe.record(HudBlock.TRIAL_PROGRESS, innerLeft, layout.rowValueCenter - valueHalf, innerLeft + progressWidth,
             layout.rowValueCenter + valueHalf)
     }
-    val reward = trialRewardText(trial)
     val rewardText = if (trial.reward == TrialReward.STRUCTURE_REWARDS) structureTrialRewards(engine, trial, language)
         else if (trial.source == TrialSource.DIMENSION) dimensionTrialReward(trial, language)
-        else TrialScratch.reward.of(language, reward.ordinal.toLong()) { language.text(reward) }
+        else siteTrialRewardLabel(trial, language)
     // A race's medal pips sit left of its medal label.
     val pipSize = (if (layout.compact) 6f else 7f) * unit
     val pipGap = 3f * unit
@@ -318,6 +316,16 @@ internal fun trialRewardText(trial: TrialProjection): HudRedesignText = when (tr
         HudRedesignText.RewardUnknown
 }
 
+/** The primary site reward and its additional base Matter, cached until the reward or language changes. */
+internal fun siteTrialRewardLabel(trial: TrialProjection, language: AppLanguage): String {
+    val reward = trialRewardText(trial)
+    val key = (reward.ordinal.toLong() shl 32) or trial.rewardMatter.toLong()
+    return TrialScratch.reward.of(language, key) {
+        val primary = language.text(reward)
+        if (trial.rewardMatter > 0) "$primary + ${trial.rewardMatter} ${language.text(HudRedesignText.RewardMatter)}" else primary
+    }
+}
+
 /** The trial's remaining time as `m:ss` ("0:15"), shared with the world's ring and point timers. */
 internal fun trialClockText(trial: TrialProjection): String = WorldStrings.timer(trial.seconds)
 
@@ -338,7 +346,8 @@ internal fun DrawScope.drawTrialTooltip(engine: GameplayRenderModel, measurer: T
     val language = measurer.language
     val layout = TrialScratch.layout.update(size.width, size.height, density, measurer.scale)
     val panel = HudDrawCache.rect(HudRect.TRIAL_ANCHOR, layout.left, layout.top, layout.right, layout.bottom)
-    val rules = TrialScratch.rules.of(trial.rules, language.ordinal.toLong()) { engine.trialRules(trial, language) }
+    val rules = if (trial.source == TrialSource.STRUCTURE) engine.trialRules(trial, language)
+    else TrialScratch.rules.of(trial.rules, language.ordinal.toLong()) { engine.trialRules(trial, language) }
     val place = TrialRulesPlacement.update(measurer, rules, panel, size.width, size.height, density)
     val slip = HudDrawCache.rect(HudRect.TRIAL_TOOLTIP, place.left, place.top, place.right, place.bottom)
     drawKkSlip(slip, cutDp = 10f)

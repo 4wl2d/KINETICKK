@@ -51,7 +51,7 @@ class StructurePlacementTest {
         val base = cells.map { (x, y) -> placeStructure(everyLayer, 731_991, WorldLayer.BASE, x, y) }
         val backwards = cells.reversed().map { (x, y) -> placeStructure(everyLayer, 731_991, WorldLayer.BASE, x, y) }.reversed()
         assertEquals(base, backwards, "the visiting order never matters")
-        assertTrue(base.count { it != null } in 100..300, "about 0.4 of 400 far cells hold a structure")
+        assertTrue(base.count { it != null } in 25..75, "about 0.12 of 400 far cells hold a structure")
         assertNotEquals(base, cells.map { (x, y) -> placeStructure(everyLayer, 731_992, WorldLayer.BASE, x, y) })
 
         // The run reads the same pure function whatever it did before.
@@ -103,7 +103,7 @@ class StructurePlacementTest {
                 assertTrue(enabled.template(placement.template).minimumDistance <= cellDistance, "${placement.template} below its distance")
             }
         }
-        assertTrue(placed > 100, "the 20,000 u around the origin hold structures: $placed")
+        assertTrue(placed > 10, "the 20,000 u around the origin still hold occasional structures: $placed")
     }
 
     @Test
@@ -112,7 +112,7 @@ class StructurePlacementTest {
         val reach = enabled.templates.maxOf { it.circumradius }
         var cells = 0
         var placed = 0
-        for (cellY in 3..52) for (cellX in 3..42) {
+        for (cellY in 4..53) for (cellX in 4..43) {
             assertTrue(hypot(cellX * cellSize, cellY * cellSize) - reach >= enabled.fullChanceDistance)
             cells++
             if (placeStructure(enabled, 2_026, WorldLayer.BASE, cellX, cellY) != null) placed++

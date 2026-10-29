@@ -9,8 +9,11 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.TextLayoutResult
+import kinetickk.ball.content.api.ContentBounds
+import kinetickk.ball.content.api.RunBoonKind
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.localizedContent
+import kinetickk.ball.gameplay.interaction.localization.DimensionHudText
 import kinetickk.ball.gameplay.interaction.localization.RunVarietyText
 import kinetickk.ball.gameplay.interaction.rewards.icon
 import kinetickk.ball.gameplay.interaction.rewards.rewardKeynoteLabel
@@ -31,7 +34,9 @@ import kinetickk.foundation.design.kkBoxHeight
 // progress) and the Keynote's corner brackets on its resonance tag and element meter.
 
 /** What a pause Conditions entry is. */
-internal enum class PauseConditionKind { OMEN, PATTERN, KEYNOTE, EVENT }
+internal enum class PauseConditionKind { ASPECT, OMEN, PATTERN, KEYNOTE, EVENT }
+
+private const val MAX_PAUSE_CONDITIONS = ContentBounds.MAX_RUN_BOONS + 4
 
 /**
  * One run condition of the pause build view: its [caption] and [name] and, on the board, what it does ([detail]: the
@@ -48,8 +53,15 @@ internal class PauseConditionEntry(
     val element: StatusElement? = null,
 )
 
-/** The run's conditions in reading order: the omen taken, the director pattern, the Keynote, the world event in progress. */
+/** Earned aspects lead so even a compact view names the dungeon rewards shaping this build. */
 internal fun GameplayRenderModel.pauseConditions(language: AppLanguage): List<PauseConditionEntry> = buildList {
+    for (id in runBoons) {
+        val boon = content.boon(id) ?: continue
+        if (boon.kind != RunBoonKind.ASPECT) continue
+        val element = content.structures.templates.firstOrNull { template -> template.rewards.any { it.boonId == id } }?.element
+        add(PauseConditionEntry(PauseConditionKind.ASPECT, language.text(DimensionHudText.BoonAspect),
+            boon.name.localizedContent(language), boon.description.localizedContent(language), element = element))
+    }
     runOmen?.let { id ->
         val omen = content.variety.omens.definitions[id.ordinal]
         add(PauseConditionEntry(PauseConditionKind.OMEN, language.text(RunVarietyText.ConditionOmen), omen.name.localizedContent(language),
@@ -118,7 +130,7 @@ internal fun pauseConditionsRow(overview: PauseBuildOverview, chip: Float): Floa
 
 /** The board's laid-out condition rows of the last measure (draw-thread scratch, reused while nothing changes). */
 private object ConditionRows {
-    private const val CAPACITY = 4
+    private const val CAPACITY = MAX_PAUSE_CONDITIONS
     private val captions = arrayOfNulls<TextLayoutResult>(CAPACITY)
     private val names = arrayOfNulls<TextLayoutResult>(CAPACITY)
     private val details = arrayOfNulls<TextLayoutResult>(CAPACITY)
@@ -187,7 +199,7 @@ private fun DrawScope.drawConditionRows(entries: List<PauseConditionEntry>, rows
     val unit = k * density
     val textLeft = left + rows.captionWidth
     var y = top
-    for (index in 0 until minOf(entries.size, 4)) {
+    for (index in 0 until minOf(entries.size, MAX_PAUSE_CONDITIONS)) {
         val entry = entries[index]
         val name = rows.name(index)
         val line = maxOf(name.kkBoxHeight, rows.glyph)
@@ -275,7 +287,7 @@ private fun DrawScope.drawConditionChips(
 }
 
 private object ConditionShapes {
-    const val CAPACITY = 4
+    const val CAPACITY = MAX_PAUSE_CONDITIONS
     private val slabs = KkPathCache(CAPACITY)
 
     fun slab(slot: Int, left: Float, top: Float, right: Float, bottom: Float, cut: Float) =

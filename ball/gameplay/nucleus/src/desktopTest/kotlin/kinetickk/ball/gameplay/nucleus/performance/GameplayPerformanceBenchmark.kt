@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus.performance
 
 import kinetickk.ball.gameplay.api.GameplayInstanceId
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
@@ -707,12 +708,13 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
     }
 }
 
-private fun newRunningState(seed: Int): MutableGameState = gameScenario(seed = seed).apply {
-    resize(1_280f, 720f, 1f)
-    startRun()
-    takeSoundCues()
-    takeVisualFxCues()
-}
+private fun newRunningState(seed: Int, content: GameplayContentSnapshot = canonicalGameplayContent): MutableGameState =
+    MutableGameState(content = content, seed = seed).apply {
+        resize(1_280f, 720f, 1f)
+        startRun()
+        takeSoundCues()
+        takeVisualFxCues()
+    }
 
 private fun capacityState(seed: Int): MutableGameState = newRunningState(seed).apply {
     enemies.clear()
@@ -892,15 +894,20 @@ internal const val STRUCTURE_WORKLOAD_ENEMIES = 60
 /** Shots of the `structure_dungeon` workload, half the Core's inside the chapel and half hostile outside it. */
 internal const val STRUCTURE_WORKLOAD_PROJECTILES = 300
 
+/** The benchmark always permits the Reliquary; placement density, layouts and combat content stay shipped values. */
+private val structureWorkloadContent: GameplayContentSnapshot = canonicalGameplayContent.let { content ->
+    content.copy(structures = content.structures.copy(templatesPerRun = content.structures.templates.count { !it.secret }))
+}
+
 /**
- * The `structure_dungeon` workload: the shipped content's Reliquary nearest the run's origin (cells scanned ring by ring
+ * The `structure_dungeon` workload: a Reliquary nearest the run's origin with every combat template available (cells scanned ring by ring
  * from the origin), the Core teleported into its south-west chapel and sealed there around the chapel's garrison by two
  * dungeon steps, then ordinary enemies up to [STRUCTURE_WORKLOAD_ENEMIES] spread over the chapel and in a ring around
  * it, and [STRUCTURE_WORKLOAD_PROJECTILES] shots at the chapel's walls. One fixed step then runs the capsule sweeps,
  * the wall push-out of the Core and every enemy, the garrison clamp, the shots stopped at the walls and the dungeon
  * upkeep.
  */
-internal fun structureDungeonState(seed: Int): MutableGameState = newRunningState(seed).apply {
+internal fun structureDungeonState(seed: Int): MutableGameState = newRunningState(seed, structureWorkloadContent).apply {
     val placement = reliquaryNearTheOrigin()
     val template = content.structures.template(StructureTemplateId.RELIQUARY)
     val chapel = template.rooms[STRUCTURE_WORKLOAD_CHAPEL]
@@ -966,7 +973,7 @@ internal fun structureDungeonState(seed: Int): MutableGameState = newRunningStat
     takeVisualFxCues()
 }
 
-/** The Reliquary the shipped placement puts nearest the run's origin, scanning cells ring by ring. */
+/** The Reliquary the fixture's placement puts nearest the run's origin, scanning cells ring by ring. */
 private fun MutableGameState.reliquaryNearTheOrigin(): StructurePlacement {
     for (ring in 0..STRUCTURE_SCAN_RINGS) {
         for (cellY in -ring..ring) for (cellX in -ring..ring) {

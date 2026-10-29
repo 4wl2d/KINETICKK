@@ -162,11 +162,16 @@ class WorldLayerGenerationTest {
         for (layer in WorldLayer.entries) {
             val state = farState(seed = 4_242, content = withoutObstacleVariants())
             state.switchLayer(layer)
+            // Centre this suppression check on an actual body: a sparse arrival may already be clear.
+            val anchor = state.obstacleField.obstacles.first()
+            state.coreX = anchor.x
+            state.coreY = anchor.y
+            state.refreshObstacleWindow()
             val open = state.obstacleField.obstacles
             state.switchLayer(layer, keepOutRadius = ARRIVAL_CLEAR)
             val cleared = state.obstacleField.obstacles
-            val centreX = state.worldOriginX + FAR_X
-            val centreY = state.worldOriginY + FAR_Y
+            val centreX = state.worldOriginX + state.coreX
+            val centreY = state.worldOriginY + state.coreY
             val inside = open.filter { state.distanceFrom(it, centreX, centreY) < ARRIVAL_CLEAR + it.radius }
             assertTrue(inside.isNotEmpty(), "$layer: the keep-out covers part of the window")
             assertEquals(open - inside.toSet(), cleared, "$layer: everything else keeps its id, place and size")

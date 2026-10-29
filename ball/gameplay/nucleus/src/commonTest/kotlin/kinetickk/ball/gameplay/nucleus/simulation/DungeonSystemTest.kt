@@ -7,6 +7,10 @@ import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.EnemyHabitat
 import kinetickk.ball.content.api.EnemyRank
 import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.ReactionAspect
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.StructureRewardKind
 import kinetickk.ball.content.api.StructureNotice
 import kinetickk.ball.content.api.StructurePolicy
 import kinetickk.ball.content.api.StructureTemplate
@@ -24,6 +28,8 @@ import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.render.WallKind
+import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.test.Test
@@ -322,7 +328,7 @@ class DungeonSystemTest {
             run.pickups.clear()
             run.updateStructures(step)
             assertNull(run.dungeon, "seed $seed: the vault cleared")
-            assertEquals(1, run.pickups.count { it.type == PickupType.RELIC })
+            assertEquals(listOf(65), run.runBoons.toList())
             assertTrue(run.isSpent(vault.placement.id))
         }
 
@@ -412,13 +418,15 @@ class DungeonSystemTest {
         val kills = run.kills
         run.updateStructures(step)
 
-        // Key, 60 Matter and 8 Data at the reactor's centre.
+        // The station grants its run-long Ion aspect and four Data at the reactor's centre.
         val (centreX, centreY) = dungeon.roomCentre(2)
-        assertEquals(1, run.pickups.count { it.type == PickupType.KEY })
-        assertEquals(8, run.pickups.count { it.type == PickupType.DATA })
-        assertEquals(9, run.pickups.size)
+        assertEquals(listOf(64), run.runBoons.toList())
+        assertEquals(0.8f, run.build.skillCooldownScale(StatusElement.ION), 0.0001f)
+        assertTrue(run.build.keystone(ReactionId.SUPERCONDUCT))
+        assertEquals(4, run.pickups.count { it.type == PickupType.DATA })
+        assertEquals(4, run.pickups.size)
         assertTrue(run.pickups.all { abs(it.x - centreX) < 20f && abs(it.y - centreY) < 20f })
-        assertEquals(60.0 * run.matterGain, run.runMatter + run.matterFraction.toDouble() - matter, 0.01)
+        assertEquals(matter, run.runMatter + run.matterFraction.toDouble(), 0.01)
         assertEquals(kills, run.kills)
         assertEquals(StructureNotice.STRUCTURE_CLEARED.key, run.message)
         assertNull(run.dungeon)
@@ -433,10 +441,12 @@ class DungeonSystemTest {
         assertNull(run.dungeon)
         assertTrue(run.pickups.isEmpty())
         assertTrue(run.enemies.isEmpty())
+        assertEquals(listOf(64), run.runBoons.toList(), "revisiting cannot stack the aspect")
+        assertEquals(0.8f, run.build.skillCooldownScale(StatusElement.ION), 0.0001f)
     }
 
     @Test
-    fun aVaultPaysARelicAndAFlooredItemOffer() {
+    fun aVaultPaysItsCryoAspectAndAFlooredItemOffer() {
         val dungeon = Dungeon(StructureTemplateId.VAULT)
         val run = dungeon.run
         dungeon.clear(1)
@@ -448,9 +458,188 @@ class DungeonSystemTest {
         run.killGarrisonForTesting()
         run.pickups.clear()
         run.updateStructures(step)
-        assertEquals(1, run.pickups.count { it.type == PickupType.RELIC })
+        assertEquals(listOf(65), run.runBoons.toList())
+        assertEquals(1.5f, run.build.durationMultiplier(StatusElement.CRYO))
+        assertEquals(1, run.build.breakSpread(StatusElement.CRYO))
         assertEquals(listOf(ItemRarity.RARE), run.pendingFloorOffers.toList())
         assertTrue(run.isSpent(dungeon.placement.id))
+    }
+
+    @Test
+    fun clearingEachTrialChangesItsOwnElementalBuildMechanics() {
+        for (templateId in StructureTemplateId.entries.filter { it != StructureTemplateId.ARCHITECTS_DOODLE }) {
+            val dungeon = Dungeon(templateId)
+            val run = dungeon.run
+            val rewardId = requireNotNull(dungeon.template.rewards.single { it.kind == StructureRewardKind.ASPECT }.boonId)
+            val entropyThreshold = run.breakThreshold(StatusElement.ENTROPY)
+            dungeon.clear(dungeon.template.finalRoom)
+            assertEquals(listOf(rewardId), run.runBoons.toList(), templateId.name)
+            when (templateId) {
+                StructureTemplateId.DERELICT_STATION -> {
+                    assertEquals(0.8f, run.build.skillCooldownScale(StatusElement.ION), 0.0001f)
+                    assertTrue(run.build.keystone(ReactionId.SUPERCONDUCT))
+                }
+                StructureTemplateId.VAULT -> assertEquals(1.5f, run.build.durationMultiplier(StatusElement.CRYO))
+                StructureTemplateId.SPIRE -> {
+                    assertEquals(160f, run.build.coreLinkBonus)
+                    assertEquals(1.3f, run.build.reactionTuning(ReactionId.SHATTERPOINT, ReactionAspect.FORCE), 0.0001f)
+                }
+                StructureTemplateId.LABYRINTH -> assertEquals(entropyThreshold - 1, run.breakThreshold(StatusElement.ENTROPY))
+                StructureTemplateId.FOUNDRY -> assertTrue(run.build.keystone(ReactionId.WILDFIRE))
+                StructureTemplateId.RELIQUARY -> {
+                    assertEquals(1.3f, run.build.fieldDurationScale, 0.0001f)
+                    assertTrue(run.build.keystone(ReactionId.FUSION))
+                }
+                StructureTemplateId.ARCHITECTS_DOODLE -> error("A secret is not a combat trial")
+            }
+            run.recompileBuild()
+            assertEquals(listOf(rewardId), run.runBoons.toList(), "ordinary build recompilation keeps the aspect")
+        }
+    }
+
+    @Test
+    fun theVaultLabyrinthAndFoundryRewardsSpreadTheirStatusesOnceWhenABreakActuallyFires() {
+        val cases = listOf(
+            Triple(StructureTemplateId.VAULT, StatusElement.CRYO, 1),
+            Triple(StructureTemplateId.LABYRINTH, StatusElement.ENTROPY, 2),
+            Triple(StructureTemplateId.FOUNDRY, StatusElement.THERMAL, 1),
+        )
+        for ((templateId, element, spread) in cases) {
+            val dungeon = Dungeon(templateId)
+            val run = dungeon.run
+            dungeon.clear(dungeon.template.finalRoom)
+            run.enemies.clear()
+            val target = run.dummy(x = run.coreX + 400f, y = run.coreY)
+            val nearby = run.dummy(x = target.x + 100f, y = target.y)
+            val distant = run.dummy(x = target.x + 400f, y = target.y)
+            run.applyStatus(target, element, run.breakThreshold(element, target), generation = 0)
+            assertEquals(spread, nearby.stacksOf(element), "$templateId spreads its rewarded element")
+            assertEquals(0, distant.stacksOf(element), "$templateId respects the spread radius")
+            if (element == StatusElement.CRYO) assertTrue(run.isFrozen(target))
+            else assertTrue(target.hp < target.maxHp, "$element Break deals its damage")
+        }
+    }
+
+    @Test
+    fun theFoundryRewardMakesADistantWildfireFeedTheCore() {
+        val dungeon = Dungeon(StructureTemplateId.FOUNDRY)
+        val run = dungeon.run
+        val before = run.dummy(x = run.coreX + 1_000f, y = run.coreY)
+        run.setOff(ReactionId.WILDFIRE, before)
+        assertTrue(run.ablazeUntil <= run.elapsed, "ordinary distant Wildfire cannot feed the Core")
+        run.enemies.clear()
+        dungeon.clear(dungeon.template.finalRoom)
+        run.enemies.clear()
+        val after = run.dummy(x = run.coreX + 1_000f, y = run.coreY)
+        run.setOff(ReactionId.WILDFIRE, after)
+        assertTrue(run.ablazeUntil > run.elapsed, "the earned Firewalker keystone works at any distance")
+    }
+
+    @Test
+    fun themedGarrisonChoicesBelongToTheirTrialAndKeepFixedGuards() {
+        for (id in StructureTemplateId.entries.filter { it != StructureTemplateId.ARCHITECTS_DOODLE }) {
+            val dungeon = Dungeon(id)
+            dungeon.run.elapsed = 500f // Every themed kind's ordinary time gate is open.
+            val template = dungeon.template
+            val room = template.rooms.indexOfFirst { it.garrison.any { entry -> entry.type == null } }
+            dungeon.enterRoom(room)
+            val kinds = dungeon.garrison(room).map { it.type }
+            val fixed = template.rooms[room].garrison.mapNotNull { it.type }
+            assertTrue(kinds.isNotEmpty(), id.name)
+            assertTrue(kinds.any { it in template.garrisonTypes }, "$id fields its elemental enemies")
+            assertTrue(kinds.all { it in template.garrisonTypes || it in fixed || dungeon.run.content.enemy(it).livesIn(EnemyHabitat.STRUCTURE) },
+                "$id keeps themed leaders, authored guards and ordinary habitat supports")
+        }
+    }
+
+    @Test
+    fun roomIntegrityTuningPreservesTheWholeGarrisonIncludingItsGuardian() {
+        val reference = Dungeon(StructureTemplateId.VAULT) { it.copy(garrisonHealthMultiplier = 1f) }
+        val tuned = Dungeon(StructureTemplateId.VAULT) { it.copy(garrisonHealthMultiplier = 0.75f) }
+        reference.enterRoom(3)
+        tuned.enterRoom(3)
+        val original = reference.garrison(3)
+        val reduced = tuned.garrison(3)
+        assertEquals(original.map { it.type }, reduced.map { it.type })
+        assertTrue(reduced.any { it.type == EnemyType.BROOD_QUEEN })
+        original.zip(reduced).forEach { (before, after) ->
+            assertEquals(before.maxHp * 0.75f, after.maxHp, 0.001f)
+            assertEquals(after.maxHp, after.hp)
+            assertEquals(before.x, after.x)
+            assertEquals(before.y, after.y)
+            assertEquals(before.actionTimer, after.actionTimer)
+        }
+        tuned.run.updateStructures(step)
+        assertEquals(reduced.map { it.maxHp }, tuned.garrison(3).map { it.maxHp }, "upkeep never applies the multiplier again")
+    }
+
+    @Test
+    fun aThemedGarrisonWaitsForItsOrdinaryTimeGate() {
+        val early = Dungeon(StructureTemplateId.DERELICT_STATION)
+        early.enterRoom(0)
+        assertTrue(early.garrison(0).any { it.type == EnemyType.SHOOTER })
+        assertTrue(early.garrison(0).none { it.type == EnemyType.LANCER }, "Lancers wait for their time gate")
+        val late = Dungeon(StructureTemplateId.DERELICT_STATION) { policy ->
+            policy.copy(templates = policy.templates.map { template ->
+                if (template.id == StructureTemplateId.DERELICT_STATION) template.copy(garrisonTypes = immutableListOf(EnemyType.LANCER))
+                else template
+            }.toImmutableList())
+        }
+        late.run.elapsed = 200f
+        late.enterRoom(0)
+        assertTrue(late.garrison(0).any { it.type == EnemyType.LANCER })
+    }
+
+    @Test
+    fun anotherTrialOfAnOwnedAspectSalvagesMatterWithoutStackingItsRules() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        run.applyRunBoon(64)
+        val attack = run.attackSpeed
+        dungeon.enterRoom(dungeon.template.finalRoom)
+        run.killGarrisonForTesting()
+        val matter = run.runMatter + run.matterFraction.toDouble()
+        run.updateStructures(step)
+        assertEquals(listOf(64), run.runBoons.toList())
+        assertEquals(attack, run.attackSpeed)
+        assertEquals(0.8f, run.build.skillCooldownScale(StatusElement.ION), 0.0001f)
+        assertEquals(40.0 * run.matterGain, run.runMatter + run.matterFraction.toDouble() - matter, 0.01)
+    }
+
+    @Test
+    fun aFullBoonInventorySalvagesTheAspectWithoutExceedingItsCap() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        repeat(ContentBounds.MAX_RUN_BOONS) { run.applyRunBoon(32 + it) }
+        val owned = run.runBoons
+        dungeon.enterRoom(dungeon.template.finalRoom)
+        run.killGarrisonForTesting()
+        val matter = run.runMatter + run.matterFraction.toDouble()
+        run.updateStructures(step)
+        assertEquals(owned, run.runBoons)
+        assertFalse(run.build.keystone(ReactionId.SUPERCONDUCT))
+        assertEquals(40.0 * run.matterGain, run.runMatter + run.matterFraction.toDouble() - matter, 0.01)
+        assertTrue(run.isSpent(dungeon.placement.id))
+    }
+
+    @Test
+    fun anAspectClearChangesOnlyItsReductionCandidateAndANewRunDropsTheRules() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val source = dungeon.run
+        dungeon.enterRoom(dungeon.template.finalRoom)
+        val originalBuild = source.build
+        val candidate = source.copyForReduction()
+        candidate.killGarrisonForTesting()
+        candidate.updateStructures(step)
+        assertTrue(source.runBoons.isEmpty())
+        assertSame(originalBuild, source.build)
+        assertNotNull(source.dungeon)
+        assertEquals(listOf(64), candidate.runBoons.toList())
+        assertTrue(candidate.build.keystone(ReactionId.SUPERCONDUCT))
+        candidate.startRun()
+        assertTrue(candidate.runBoons.isEmpty())
+        assertFalse(candidate.build.keystone(ReactionId.SUPERCONDUCT))
+        assertEquals(1f, candidate.build.skillCooldownScale(StatusElement.ION))
     }
 
     @Test
@@ -467,6 +656,7 @@ class DungeonSystemTest {
         assertTrue(run.encounters.isEmpty())
         assertEquals(kills, run.kills, "no kills")
         assertTrue(run.pickups.isEmpty(), "no reward")
+        assertTrue(run.runBoons.isEmpty(), "abandonment grants no aspect")
         assertEquals(StructureNotice.STRUCTURE_ABANDONED.key, run.message)
         assertTrue(run.isSpent(dungeon.placement.id))
         assertEquals(List(4) { WallKind.DOOR_OPEN }, dungeon.doors())

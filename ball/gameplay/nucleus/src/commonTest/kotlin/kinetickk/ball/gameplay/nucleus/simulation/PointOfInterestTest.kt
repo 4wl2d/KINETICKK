@@ -30,6 +30,9 @@ class PointOfInterestTest {
         assertTrue(game.sites.isEmpty())
         game.elapsed = 165f
         game.updateSites(0.01f)
+        assertTrue(game.sites.isEmpty(), "the old two-minute cadence no longer offers a site")
+        game.elapsed = 225f
+        game.updateSites(0.01f)
         assertEquals(2, game.sites.size)
     }
 
@@ -98,7 +101,7 @@ class PointOfInterestTest {
         game.updateSites(25f)
         assertTrue(game.sites.isEmpty())
         assertTrue(game.pendingDirectedRewards.isEmpty())
-        game.elapsed = 645f; game.nextSiteWindowIndex = 5
+        game.elapsed = 405f; game.nextSiteWindowIndex = 2
         game.updateSites(0.01f)
         assertEquals(2, game.sites.size)
         game.elapsed = game.content.tempo.bossAtSeconds

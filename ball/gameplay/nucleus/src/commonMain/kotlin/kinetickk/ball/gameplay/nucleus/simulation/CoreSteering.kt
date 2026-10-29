@@ -44,7 +44,8 @@ private const val BRAKE_PULL_FACTOR: Float = 1.12f
  * tether's length and splits into an along-track and a turning part. Backward along-track pull that only
  * camera lag causes is dropped unless the pointer points behind the screen centre; the turning part gains grip
  * with speed; a bounded share of it pumps forward up to a little above the straight steady speed of the
- * pointer's offset; a launch assist adds thrust below the steady speed of the forward offset. Exhaustion
+ * pointer's offset; a launch assist adds thrust below the steady speed of the forward offset. Positive forward
+ * thrust is scaled for gradual acceleration independently of full turning and counter-thrust. Exhaustion
  * removes every positive along-track source alike; lateral control and counter-thrust stay. The Brake flies
  * the plain law. updateCore integrates it; the inverse and the test pilots evaluate it.
  */
@@ -83,6 +84,8 @@ internal fun MutableGameState.steeringAcceleration(
     lateralY *= grip
     along += slingThrust(tuning, length(lateralX, lateralY), length(offsetX, offsetY), currentSpeed)
     along += launchAssist(tuning, magnetism, offsetX * forwardX + offsetY * forwardY, currentSpeed)
+    // Ease into cruise without weakening the lateral or backward pull needed to change course.
+    if (along > 0f) along *= tuning.forwardThrustScale
     // Exhaustion only weakens acceleration along existing momentum, from every source alike. Lateral
     // steering, counter-thrust and the Brake damping remain available even at zero stability.
     if (along > 0f && moving) along *= tetherAuthority
@@ -264,7 +267,7 @@ internal val CAMERA_LAG_SECONDS: Float = run {
 
 /**
  * Steady Core speed that holding the cursor at [reach] along the viewport's long axis sustains with the
- * base movement stats: thrust `pull + magnetism × offset` against drag (straight-line fatigue built) and the
+ * base movement stats: scaled thrust `forwardThrustScale × (pull + magnetism × offset)` against drag and the
  * camera's step-exact lag [CAMERA_LAG_SECONDS] per unit of speed. The long half-axis is the farthest the cursor
  * sits from the centre along a screen axis (the edge run's axis); measuring there keeps the collision bands
  * independent of the heading, so a turn never moves them and turning a phone leaves them in place.
@@ -275,8 +278,9 @@ internal fun MutableGameState.steadyCursorSpeed(reach: Float): Float =
 /** Straight steady Core speed with the cursor held [offset] dp ahead (base stats, straightness built). */
 internal fun MutableGameState.steadyCursorSpeedAtOffset(offset: Float): Float {
     val tuning = content.tempo.steering
-    return (tuning.basePull + BASE_MAGNET_STRENGTH * offset) /
-        (BASE_DRAG_COEFFICIENT * (1f + tuning.straightDrag) + BASE_MAGNET_STRENGTH * CAMERA_LAG_SECONDS)
+    return tuning.forwardThrustScale * (tuning.basePull + BASE_MAGNET_STRENGTH * offset) /
+        (BASE_DRAG_COEFFICIENT * (1f + tuning.straightDrag) +
+            tuning.forwardThrustScale * BASE_MAGNET_STRENGTH * CAMERA_LAG_SECONDS)
 }
 
 /**
@@ -288,5 +292,6 @@ internal fun MutableGameState.buildSteadyCursorSpeed(reach: Float): Float {
     val magnetism = effectiveMagnetism()
     val drag = (if (build.upside(RelicId.PERPETUAL_VECTOR)) dragCoefficient * 0.15f else dragCoefficient) *
         (1f + tuning.straightDrag)
-    return (tuning.basePull + magnetism * reach * longHalfAxis()) / (drag + magnetism * CAMERA_LAG_SECONDS)
+    return tuning.forwardThrustScale * (tuning.basePull + magnetism * reach * longHalfAxis()) /
+        (drag + tuning.forwardThrustScale * magnetism * CAMERA_LAG_SECONDS)
 }

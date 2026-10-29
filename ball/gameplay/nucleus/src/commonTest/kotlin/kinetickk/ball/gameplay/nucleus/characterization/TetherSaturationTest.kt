@@ -143,8 +143,10 @@ class TetherSaturationTest {
                 updatePointer(screenWidth * pointerX, screenHeight * pointerY)
                 updateCore(STEP)
             }
-            assertTrue(stepAt(1f).velocityX > 700f, "$label: a rested Core gains forward speed")
-            assertTrue(stepAt(0f).velocityX < 700f, "$label: an exhausted Core gains no forward speed from any source")
+            val rested = stepAt(1f)
+            val exhausted = stepAt(0f)
+            assertTrue(rested.velocityX > exhausted.velocityX, "$label: a rested Core retains its forward thrust")
+            assertTrue(exhausted.velocityX < 700f, "$label: an exhausted Core gains no forward speed from any source")
         }
     }
 

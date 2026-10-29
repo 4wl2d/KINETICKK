@@ -10,6 +10,8 @@ import kinetickk.ball.content.api.RunBoonKind
 import kinetickk.ball.content.api.RunModifierEffect
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.canvas.overlayGrouped
+import kinetickk.ball.gameplay.interaction.canvas.elementFill
+import kinetickk.ball.gameplay.interaction.canvas.elementIcon
 import kinetickk.ball.gameplay.interaction.localization.DimensionHudText
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
@@ -61,7 +63,13 @@ internal fun GameplayRenderModel.rewardBoonCard(choice: ChoiceOption, index: Int
             bandStart = band,
         )
     }
-    val band = language.text(if (boon.kind == RunBoonKind.BLESSING) DimensionHudText.BoonBlessing else DimensionHudText.BoonPact)
+    val band = language.text(when (boon.kind) {
+        RunBoonKind.BLESSING -> DimensionHudText.BoonBlessing
+        RunBoonKind.PACT -> DimensionHudText.BoonPact
+        RunBoonKind.ASPECT -> DimensionHudText.BoonAspect
+    })
+    val element = if (boon.kind == RunBoonKind.ASPECT) content.structures.templates
+        .firstOrNull { template -> template.rewards.any { it.boonId == boon.id } }?.element else null
     val preview = rewardPreviews.getOrNull(index)?.takeIf { choices.getOrNull(index) == choice }
     // The preview shows every stat the boon moves; the ones a Pact lowers read as its price below instead.
     val changes = preview?.changes?.map { it.presentation(language) }?.filter { it.improved }
@@ -70,14 +78,19 @@ internal fun GameplayRenderModel.rewardBoonCard(choice: ChoiceOption, index: Int
         choice = choice,
         accent = Kk.Bone2,
         tag = band,
-        descriptions = emptyList(),
+        descriptions = if (boon.kind == RunBoonKind.ASPECT) listOf(boon.description.localizedContent(language)) else emptyList(),
         operation = "",
         title = boon.name.localizedContent(language),
         changes = changes,
         liabilities = boon.costs.flatMap { boonPriceLines(it, language) },
         forecasts = preview?.forecasts.orEmpty(),
         rank = BOON_CARD_RANK,
-        icon = if (boon.kind == RunBoonKind.BLESSING) KkIcon.FORMS_RING else KkIcon.SYSTEM_HEAT,
+        icon = when (boon.kind) {
+            RunBoonKind.BLESSING -> KkIcon.FORMS_RING
+            RunBoonKind.PACT -> KkIcon.SYSTEM_HEAT
+            RunBoonKind.ASPECT -> element?.let { elementIcon(it.ordinal) } ?: KkIcon.FORMS_RING
+        },
+        elements = listOfNotNull(element),
         bandStart = band,
         boonKind = boon.kind,
     )
@@ -119,6 +132,7 @@ internal fun boonPriceLines(cost: RunModifierEffect, language: AppLanguage): Lis
 internal fun RunBoonKind.hue(roles: KkRolePalette): Color = when (this) {
     RunBoonKind.BLESSING -> roles.shield
     RunBoonKind.PACT -> roles.heat
+    RunBoonKind.ASPECT -> roles.kinetic
 }
 
 /**
@@ -127,13 +141,21 @@ internal fun RunBoonKind.hue(roles: KkRolePalette): Color = when (this) {
  */
 internal fun rewardBoonCardLook(presentation: RewardCardPresentation, roles: KkRolePalette): RewardCardLook {
     val kind = presentation.boonKind ?: RunBoonKind.BLESSING
-    val hue = kind.hue(roles)
-    val blessing = kind == RunBoonKind.BLESSING
+    val hue = presentation.accentColor(roles)
+    val element = presentation.elements.firstOrNull()
     val style = KkCardStyle(
         material = KkCardMaterial.CHROME,
         hue = hue,
-        pattern = if (blessing) KkFillKind.RINGS else KkFillKind.BARS,
-        ornament = if (blessing) KkCardOrnament.DOUBLE_RIM else KkCardOrnament.VENTS,
+        pattern = when (kind) {
+            RunBoonKind.BLESSING -> KkFillKind.RINGS
+            RunBoonKind.PACT -> KkFillKind.BARS
+            RunBoonKind.ASPECT -> element?.let { elementFill(it.ordinal) } ?: KkFillKind.RINGS
+        },
+        ornament = when (kind) {
+            RunBoonKind.BLESSING -> KkCardOrnament.DOUBLE_RIM
+            RunBoonKind.PACT -> KkCardOrnament.VENTS
+            RunBoonKind.ASPECT -> KkCardOrnament.RETICLE
+        },
         watermark = presentation.icon,
         seed = BOON_SEED + abs(presentation.choice.boonId ?: 0),
         patternBoost = patternBoost(hue, roles),

@@ -24,6 +24,9 @@ import kotlin.math.max
 /** Salt of the placement hash (registered in the structures lane notes). */
 internal const val STRUCTURE_SALT: Long = 0x57C0_C7E5_5EED_0002L
 
+/** Independent of cell placement: revisiting or rebasing never changes the run's available dungeon types. */
+internal const val STRUCTURE_POOL_SALT: Long = 0x57C0_C7E5_5EED_0004L
+
 /** A structure the hash places in one cell: absolute centre and half extents after the quarter [rotation]. */
 internal data class StructurePlacement(
     val id: Long,
@@ -68,7 +71,14 @@ private const val STRUCTURE_CELL_MASK: Long = 0x3FF_FFFFL
  * The structure [policy] places in the absolute cell ([cellX], [cellY]) of [layer] for [runSeed], or null. Pure: the
  * five hash draws (roll, template pick, rotation, offset x, offset y) are taken in this order whatever the outcome.
  */
-internal fun placeStructure(policy: StructurePolicy, runSeed: Int, layer: WorldLayer, cellX: Int, cellY: Int): StructurePlacement? {
+internal fun placeStructure(
+    policy: StructurePolicy,
+    runSeed: Int,
+    layer: WorldLayer,
+    cellX: Int,
+    cellY: Int,
+    templatePool: Int = structureTemplateMask(policy, runSeed),
+): StructurePlacement? {
     if (!policy.enabled) return null
     val layerScale = policy.layerChance[layer.ordinal]
     if (layerScale <= 0f) return null
@@ -80,7 +90,7 @@ internal fun placeStructure(policy: StructurePolicy, runSeed: Int, layer: WorldL
     val offsetY = random.nextFloat()
     val size = policy.cellSize.toDouble()
     val cellDistance = hypot((cellX + 0.5) * size, (cellY + 0.5) * size)
-    val template = weightedTemplate(policy, cellDistance, pick) ?: return null
+    val template = weightedTemplate(policy, templatePool, cellDistance, pick) ?: return null
     val turned = rotation and 1 != 0
     val halfWidth = if (turned) template.halfHeight else template.halfWidth
     val halfHeight = if (turned) template.halfWidth else template.halfHeight
@@ -98,19 +108,19 @@ internal fun placeStructure(policy: StructurePolicy, runSeed: Int, layer: WorldL
  * in order subtracting weights from `pick × total` and takes the first that drops below zero (the last eligible one
  * on rounding); null when none is eligible.
  */
-private fun weightedTemplate(policy: StructurePolicy, cellDistance: Double, pick: Float): StructureTemplate? {
+private fun weightedTemplate(policy: StructurePolicy, pool: Int, cellDistance: Double, pick: Float): StructureTemplate? {
     val templates = policy.templates
     var total = 0.0
     for (index in templates.indices) {
         val template = templates[index]
-        if (template.eligibleAt(cellDistance)) total += template.weight
+        if (template.eligibleAt(cellDistance, pool)) total += template.weight
     }
     if (total <= 0.0) return null
     var remaining = pick * total
     var last: StructureTemplate? = null
     for (index in templates.indices) {
         val template = templates[index]
-        if (!template.eligibleAt(cellDistance)) continue
+        if (!template.eligibleAt(cellDistance, pool)) continue
         last = template
         remaining -= template.weight
         if (remaining < 0.0) return template
@@ -118,11 +128,39 @@ private fun weightedTemplate(policy: StructurePolicy, cellDistance: Double, pick
     return last
 }
 
-private fun StructureTemplate.eligibleAt(cellDistance: Double): Boolean = weight > 0f && minimumDistance <= cellDistance
+private fun StructureTemplate.eligibleAt(cellDistance: Double, pool: Int): Boolean =
+    pool and (1 shl id.ordinal) != 0 && weight > 0f && minimumDistance <= cellDistance
+
+/**
+ * The highest seed ranks choose the ordinary template pool; placement weights still decide its local mix.
+ * Secret templates roll separately. No allocation or stream draws, and disabled templates consume no pool slots.
+ */
+internal fun structureTemplateMask(policy: StructurePolicy, runSeed: Int): Int {
+    var mask = 0
+    repeat(policy.templatesPerRun) {
+        var selected = -1
+        var best = Long.MIN_VALUE
+        for (template in policy.templates) {
+            if (template.secret || template.weight <= 0f || mask and (1 shl template.id.ordinal) != 0) continue
+            val rank = runHash(runSeed, STRUCTURE_POOL_SALT, template.id.ordinal.toLong())
+            if (selected < 0 || rank > best) {
+                selected = template.id.ordinal
+                best = rank
+            }
+        }
+        if (selected >= 0) mask = mask or (1 shl selected)
+    }
+    for (template in policy.templates) {
+        if (template.secret && template.weight > 0f &&
+            hashUnit(runHash(runSeed, STRUCTURE_POOL_SALT, template.id.ordinal.toLong())) < policy.secretTemplateChance
+        ) mask = mask or (1 shl template.id.ordinal)
+    }
+    return mask
+}
 
 /** The structure the run's hash places in the absolute cell of [layer] (the current layer by default), or null. */
 internal fun MutableGameState.structurePlacement(cellX: Int, cellY: Int, layer: WorldLayer = worldLayer): StructurePlacement? =
-    placeStructure(content.structures, runSeed, layer, cellX, cellY)
+    placeStructure(content.structures, runSeed, layer, cellX, cellY, structureTemplatePool)
 
 /** Absolute structure cell index of an absolute coordinate. */
 internal fun MutableGameState.structureCell(absolute: Double): Int = floor(absolute / content.structures.cellSize).toInt()

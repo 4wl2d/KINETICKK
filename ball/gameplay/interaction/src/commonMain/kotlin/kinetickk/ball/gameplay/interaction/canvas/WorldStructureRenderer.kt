@@ -15,6 +15,8 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import kinetickk.ball.content.api.STRUCTURE_OUTSIDE
+import kinetickk.ball.content.api.ContentBounds
+import kinetickk.ball.content.api.DUNGEON_ASPECT_SALVAGE_MATTER
 import kinetickk.ball.content.api.StructureRoom
 import kinetickk.ball.content.api.StructureTemplate
 import kinetickk.ball.content.api.StructureTemplateId
@@ -35,6 +37,7 @@ import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkFillKind
 import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.d
+import kinetickk.foundation.design.drawKkIcon
 import kinetickk.foundation.design.isOnScreen
 import kinetickk.foundation.design.kkFillBrush
 import kinetickk.foundation.design.kkMix
@@ -62,8 +65,15 @@ private const val VIEW_MARGIN = 40f
 /** The thickest slab content accepts (a pillar's half thickness is at most this). */
 private const val SLAB_REACH = 80f
 
-/** The floor plate: a hair lighter than the backdrop's ink. */
+/** Neutral floor for content without an elemental identity. */
 private val FloorColor = kkMix(Kk.Ink, Kk.Ink1, 0.6f)
+
+/** Elemental floors stay dark enough for enemies, projectiles and door states to read above them. */
+internal fun structureFloorColor(template: StructureTemplate, roles: KkRolePalette): Color =
+    template.element?.let { kkMix(FloorColor, roles.element(it.ordinal), 0.075f) } ?: FloorColor
+
+private fun structureAccent(template: StructureTemplate, roles: KkRolePalette): Color =
+    template.element?.let { roles.element(it.ordinal) } ?: Kk.Bone
 
 /** The scrim's ink at full depth, and the depth inside the footprint at which it is full (world units). */
 private const val SCRIM_ALPHA = 0.42f
@@ -90,7 +100,6 @@ private const val ENTRANCE_MARK_MARGIN = 60f
 private const val NO_ROOM = -2
 
 /** Room floor plates of the structures in view, under the obstacles: cleared rooms lighter, the Doodle's planet. */
-@Suppress("UNUSED_PARAMETER")
 internal fun DrawScope.drawStructureFloors(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, roles: KkRolePalette) {
     val structures = engine.structures.structures
     if (structures.isEmpty()) return
@@ -101,17 +110,23 @@ internal fun DrawScope.drawStructureFloors(engine: GameplayRenderModel, shakeX: 
         if (!structureInView(center, structure)) continue
         val rotation = structure.rotation
         val rooms = template.rooms
+        val accent = structureAccent(template, roles)
         if (template.id == StructureTemplateId.ARCHITECTS_DOODLE) {
             val room = rooms[template.finalRoom]
-            drawCircle(Kk.Bone.copy(alpha = 0.06f), DOODLE_PLANET_RADIUS, roomCenter(center, room, rotation))
+            drawCircle(accent.copy(alpha = 0.06f), DOODLE_PLANET_RADIUS, roomCenter(center, room, rotation))
+            template.element?.let { drawKkIcon(elementIcon(it.ordinal), roomCenter(center, room, rotation), 180f, accent, 0.18f) }
         }
         // Rooms without walls (the Doodle's) have no plate: the planet is their floor.
         if (!template.roomWalls) continue
-        translate(center.x, center.y) { drawPath(StructurePaths.floor(template, rotation), FloorColor) }
+        translate(center.x, center.y) { drawPath(StructurePaths.floor(template, rotation), structureFloorColor(template, roles)) }
         val cleared = structure.clearedRooms
         for (room in rooms.indices) {
-            if (cleared and (1 shl room) == 0) continue
             val spec = rooms[room]
+            // A shape as well as a hue identifies the element, including the monochrome palette.
+            template.element?.let {
+                drawKkIcon(elementIcon(it.ordinal), roomCenter(center, spec, rotation), 104f, accent, 0.16f)
+            }
+            if (cleared and (1 shl room) == 0) continue
             val left = center.x + roomLeft(spec, rotation)
             val top = center.y + roomTop(spec, rotation)
             drawRect(Kk.Bone.copy(alpha = 0.025f), Offset(left, top),
@@ -138,10 +153,11 @@ internal fun DrawScope.drawStructureWalls(engine: GameplayRenderModel, shakeX: F
         val center = world(engine, structure.x, structure.y, shakeX, shakeY)
         if (!structureInView(center, structure)) continue
         val rotation = structure.rotation
+        val accent = structureAccent(template, roles)
         val slabs = StructurePaths.walls(template, rotation)
         translate(center.x, center.y) {
             // The stroke's outer half is the rim; the fill covers its inner half and the seams where slabs meet.
-            drawPath(slabs, Kk.Bone, style = kkStroke(2f))
+            drawPath(slabs, kkMix(Kk.Bone, accent, 0.3f), style = kkStroke(2f))
             drawPath(slabs, Kk.Ink3)
         }
         val current = dungeon != null && dungeon.structureId == structure.id
@@ -159,7 +175,7 @@ internal fun DrawScope.drawStructureWalls(engine: GameplayRenderModel, shakeX: F
                 WallKind.SOLID -> drawWallSpine(a, b, wall.halfThickness)
                 WallKind.DOOR_OPEN -> {
                     val next = current && leadsOnward(template, wall.door, structure.clearedRooms, coreRoom)
-                    drawOpenDoor(a, b, if (next) roles.you.copy(alpha = 0.8f) else Kk.Bone.copy(alpha = 0.35f))
+                    drawOpenDoor(a, b, if (next) roles.you.copy(alpha = 0.8f) else kkMix(Kk.Bone, accent, 0.3f).copy(alpha = 0.35f))
                 }
                 WallKind.DOOR_SEALED -> {
                     val live = engaged >= 0 && doorTouches(template, wall.door, engaged)
@@ -169,7 +185,7 @@ internal fun DrawScope.drawStructureWalls(engine: GameplayRenderModel, shakeX: F
         }
         if (engaged >= 0 && engaged < template.rooms.size) drawRoomBrackets(center, template.rooms[engaged], rotation, engine.renderElapsed, roles)
         if (!template.secret && structure.clearedRooms and (1 shl template.finalRoom) == 0) {
-            drawTotemPlates(roomCenter(center, template.rooms[template.finalRoom], rotation), PROMISE_SCALE, Kk.Bone,
+            drawTotemPlates(roomCenter(center, template.rooms[template.finalRoom], rotation), PROMISE_SCALE, accent,
                 keyBlock = false, keyIcon = false)
         }
     }
@@ -274,6 +290,7 @@ internal fun DrawScope.drawMinimapStructures(
     for (index in structures.indices) {
         val structure = structures[index]
         val template = engine.content.structures.template(structure.template)
+        val accent = structureAccent(template, roles)
         val engaged = structure.engagedRoom
         for (wallIndex in structure.wallStart until structure.wallEnd) {
             val wall = walls[wallIndex]
@@ -289,7 +306,7 @@ internal fun DrawScope.drawMinimapStructures(
                 continue
             }
             if (wall.kind == WallKind.SOLID) {
-                drawLine(Kk.Bone.copy(alpha = 0.45f), Offset(ax, ay), Offset(bx, by), wallWidth)
+                drawLine(kkMix(Kk.Bone, accent, 0.3f).copy(alpha = 0.45f), Offset(ax, ay), Offset(bx, by), wallWidth)
             } else {
                 val live = engaged >= 0 && doorTouches(template, wall.door, engaged)
                 drawLine(if (live) roles.threat.copy(alpha = 0.9f) else Kk.Bone.copy(alpha = 0.7f), Offset(ax, ay), Offset(bx, by), doorWidth)
@@ -300,7 +317,8 @@ internal fun DrawScope.drawMinimapStructures(
     for (index in signals.indices) {
         val signal = signals[index]
         val at = pinned(centerX, centerY, half, (signal.x - coreX) * scale, (signal.y - coreY) * scale, mark)
-        drawRect(Kk.Bone, Offset(at.x - mark * 0.5f, at.y - mark * 0.5f), Size(mark, mark), style = kkStroke(1f))
+        val accent = structureAccent(engine.content.structures.template(signal.template), roles)
+        drawRect(accent, Offset(at.x - mark * 0.5f, at.y - mark * 0.5f), Size(mark, mark), style = kkStroke(1f))
     }
 }
 
@@ -318,13 +336,34 @@ private const val SEGMENT_PULSE_SPAN = 0.35f
 /** Draw-thread scratch of the dungeon panel's texts. */
 private object StructurePanelText {
     val rewards = HudKeyedText()
+    val rules = HudKeyedText()
 }
 
 /** The dungeon panel's label: a dungeon names itself a structure, whatever placeholder family its trial carries. */
 internal fun structureTrialLabel(): TextResource = StructureHudText.Structure
 
 /** The rules behind the dungeon panel's (!) in [language]. */
-internal fun structureTrialRules(language: AppLanguage): String = language.text(StructureHudText.Rules)
+internal fun structureTrialRules(engine: GameplayRenderModel, trial: TrialProjection, language: AppLanguage): String {
+    val id = trial.structure ?: return language.text(StructureHudText.Rules)
+    val template = engine.content.structures.template(id)
+    val fallback = engine.structureAspectFallbackMask(template)
+    val key = (fallback.toLong() shl 16) or (id.ordinal.toLong() shl 8) or language.ordinal.toLong()
+    return StructurePanelText.rules.of(engine.content, key) {
+        buildList {
+            if (template.trialDescription.isNotBlank()) add(template.trialDescription.localizedContent(language))
+            add(language.text(StructureHudText.Rules))
+            for (index in template.rewards.indices) {
+                val reward = template.rewards[index]
+                if (fallback and (1 shl index) != 0) {
+                    add(language.text(StructureHudText.AspectFallback, DUNGEON_ASPECT_SALVAGE_MATTER))
+                    continue
+                }
+                val boon = reward.boonId?.let(engine.content::boon) ?: continue
+                add(boon.description.localizedContent(language))
+            }
+        }.joinToString("\n\n")
+    }
+}
 
 /**
  * The dungeon panel's reward row: its template's reward labels in [language] joined with " + " ("Relic + Rare item"),
@@ -333,9 +372,25 @@ internal fun structureTrialRules(language: AppLanguage): String = language.text(
 internal fun structureTrialRewards(engine: GameplayRenderModel, trial: TrialProjection, language: AppLanguage): String {
     val id = trial.structure ?: return language.text(HudRedesignText.RewardUnknown)
     val template = engine.content.structures.template(id)
-    return StructurePanelText.rewards.of(template, language.ordinal.toLong()) {
-        template.rewards.joinToString(" + ") { it.label.localizedContent(language) }
+    val fallback = engine.structureAspectFallbackMask(template)
+    val key = (fallback.toLong() shl 16) or (id.ordinal.toLong() shl 8) or language.ordinal.toLong()
+    return StructurePanelText.rewards.of(engine.content, key) {
+        template.rewards.mapIndexed { index, reward ->
+            (if (fallback and (1 shl index) != 0) "Matter" else reward.label).localizedContent(language)
+        }.joinToString(" + ")
     }
+}
+
+/** The same ownership, capacity and content availability that decide the final-room aspect payout. */
+private fun GameplayRenderModel.structureAspectFallbackMask(template: StructureTemplate): Int {
+    var mask = 0
+    for (index in template.rewards.indices) {
+        val id = template.rewards[index].boonId ?: continue
+        if (id in runBoons || runBoons.size >= ContentBounds.MAX_RUN_BOONS || content.boon(id) == null) {
+            mask = mask or (1 shl index)
+        }
+    }
+    return mask
 }
 
 /**

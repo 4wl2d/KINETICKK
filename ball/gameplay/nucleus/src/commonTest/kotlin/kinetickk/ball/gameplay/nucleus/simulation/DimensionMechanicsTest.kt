@@ -93,8 +93,10 @@ class DimensionMechanicsTest {
     fun paceIsTheSteadySpeedOfItsReachUnderTheCeiling() {
         val policy = canonicalGameplayContent.dimensions
         val desktop = game()
-        assertTrue(desktop.steadyCursorSpeed(policy.paceReach) > policy.paceCeiling, "precondition: desktop flies above the ceiling")
-        assertEquals(policy.paceCeiling, desktop.dimensionPace())
+        assertEquals(minOf(desktop.steadyCursorSpeed(policy.paceReach), policy.paceCeiling), desktop.dimensionPace())
+        val wide = game().apply { resize(1_920f, 1_080f) }
+        assertTrue(wide.steadyCursorSpeed(policy.paceReach) > policy.paceCeiling, "precondition: wide viewport flies above the ceiling")
+        assertEquals(policy.paceCeiling, wide.dimensionPace())
         val phone = game().apply { resize(360f, 640f) }
         val steady = phone.steadyCursorSpeed(policy.paceReach)
         assertTrue(steady < policy.paceCeiling, "a small phone's pace reach is slower than the ceiling: $steady")

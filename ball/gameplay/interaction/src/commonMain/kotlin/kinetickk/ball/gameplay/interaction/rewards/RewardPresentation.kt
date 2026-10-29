@@ -496,7 +496,10 @@ internal data class RewardCardPresentation(
      */
     fun accentColor(roles: KkRolePalette): Color {
         relic?.let { return it.aspect.overlayColor(roles) }
-        boonKind?.let { return it.hue(roles) }
+        boonKind?.let { kind ->
+            if (kind == RunBoonKind.ASPECT) elements.firstOrNull()?.let { return roles.element(it.ordinal) }
+            return kind.hue(roles)
+        }
         choice.rewardFocus?.let { focus -> return focus.relicAspect()?.overlayColor(roles) ?: roles.kinetic }
         if (choice.relicAction == RelicChoiceAction.MELD) return roles.kinetic
         return tone.color(roles, accent)

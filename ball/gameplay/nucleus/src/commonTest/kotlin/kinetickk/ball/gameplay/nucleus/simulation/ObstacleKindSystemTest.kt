@@ -1444,9 +1444,9 @@ class ObstacleKindSystemTest {
             }
         val clean = boosted(0.3f)
         val cap = clean.obstacleLethalSpeed() * kinds.boostLethalShare
-        assertTrue(800f + kinds.gateImpulse * 1.3f < cap, "the test crossing stays under the boost cap: $cap")
-        clean.stepAcrossGateLine(0f, 800f)
-        assertEquals(800f + kinds.gateImpulse * 1.3f, clean.speed, 0.01f, "a gate gives +494 at +30 %")
+        assertTrue(600f + kinds.gateImpulse * 1.3f < cap, "the test crossing stays under the boost cap: $cap")
+        clean.stepAcrossGateLine(0f, 600f)
+        assertEquals(600f + kinds.gateImpulse * 1.3f, clean.speed, 0.01f, "a gate gives +494 at +30 %")
         assertTrue(clean.heat < 50f, "BOOST fired with the gate's kind")
         val doubled = boosted(0.6f, 0.6f)
         doubled.stepAcrossGateLine(0f, 200f)

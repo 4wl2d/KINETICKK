@@ -28,9 +28,12 @@ internal class DesktopCrashReporter(
 ) : CrashDiagnostics {
     private val lock = Any()
     private data class CapturedContext(val capturedAt: Instant, val describe: () -> String)
+    private data class CapturedEvent(val capturedAt: Instant, val category: String, val message: String) {
+        fun format(): String = "$capturedAt [$category] $message"
+    }
     private val contexts = linkedMapOf<String, CapturedContext>()
-    private val events = ArrayDeque<String>()
-    private val inputs = ArrayDeque<String>()
+    private val events = ArrayDeque<CapturedEvent>()
+    private val inputs = ArrayDeque<CapturedEvent>()
     private val started = Instant.now()
     private val pid = ProcessHandle.current().pid()
     private val sessionId = started.toString().replace(':', '-') + "-" + UUID.randomUUID().toString().take(8)
@@ -58,13 +61,15 @@ internal class DesktopCrashReporter(
     }
 
     override fun event(category: String, message: String, highFrequency: Boolean) = bestEffort {
-        val line = "${Instant.now()} [$category] ${message.take(4096)}"
+        // Keep the original timestamp and bounded message; ISO timestamp formatting belongs to
+        // checkpoint/capture, not the gameplay thread at an uncapped display frequency.
+        val event = CapturedEvent(Instant.now(), category, message.take(4096))
         synchronized(lock) {
             if (!closed) {
                 val ring = if (highFrequency) inputs else events
                 val bound = if (highFrequency) 512 else 256
                 if (ring.size == bound) ring.removeFirst()
-                ring.addLast(line)
+                ring.addLast(event)
             }
         }
     }
@@ -133,8 +138,8 @@ internal class DesktopCrashReporter(
             }
         }
         atomicWrite(session.resolve("context.txt"), context)
-        atomicWrite(session.resolve("events.txt"), breadcrumbs.joinToString("\n", postfix = "\n"))
-        atomicWrite(session.resolve("recent-inputs.txt"), recentInputs.joinToString("\n", postfix = "\n"))
+        atomicWrite(session.resolve("events.txt"), breadcrumbs.joinToString("\n", postfix = "\n") { it.format() })
+        atomicWrite(session.resolve("recent-inputs.txt"), recentInputs.joinToString("\n", postfix = "\n") { it.format() })
         log.flush()
     }
 

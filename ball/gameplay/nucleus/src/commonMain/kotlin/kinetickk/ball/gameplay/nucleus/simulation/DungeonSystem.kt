@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.ContentBounds
+import kinetickk.ball.content.api.DUNGEON_ASPECT_SALVAGE_MATTER
 import kinetickk.ball.content.api.EnemyHabitat
 import kinetickk.ball.content.api.EnemyRank
 import kinetickk.ball.content.api.GarrisonEntry
@@ -222,6 +223,7 @@ private fun MutableGameState.engageRoom(current: DungeonState, room: Int) {
         centerY = current.y + rotateQuarterY(localX, localY, current.rotation),
         areaRadius = hypot(spec.maxX - spec.minX, spec.maxY - spec.minY) * 0.5f,
         members = members,
+        integrityShare = policy.garrisonHealthMultiplier,
         abandonDistance = policy.leaveRadius,
         evictOrdinary = false,
         announce = false,
@@ -299,7 +301,8 @@ private fun MutableGameState.finishStructure(current: DungeonState, template: St
 /**
  * The template's rewards at ([x], [y]) through existing channels: Relic, Key and repair pickups in a row, Data on a
  * golden-angle ring, Matter through the run's Matter gain, a floored item offer through the floor-offer queue (a full
- * queue salvages Matter). No stream draw.
+ * queue salvages Matter), and unique lasting Aspects. An owned Aspect or a full boon roster salvages 40 base Matter.
+ * No stream draw.
  */
 private fun MutableGameState.payStructureRewards(template: StructureTemplate, x: Float, y: Float) {
     val rewards = template.rewards
@@ -316,6 +319,14 @@ private fun MutableGameState.payStructureRewards(template: StructureTemplate, x:
             }
             StructureRewardKind.MATTER -> grantMatter(reward.amount.toFloat())
             StructureRewardKind.ITEM_OFFER -> grantSiteReward(SiteReward(itemOfferFloor = reward.rarityFloor), x, y, 0L)
+            StructureRewardKind.ASPECT -> {
+                val id = checkNotNull(reward.boonId)
+                if (id in runBoons || runBoons.size >= ContentBounds.MAX_RUN_BOONS || content.boon(id) == null) {
+                    grantMatter(DUNGEON_ASPECT_SALVAGE_MATTER.toFloat())
+                } else {
+                    applyRunBoon(id)
+                }
+            }
         }
     }
     shockwave(x, y, 0.8f, 300f, 3)
@@ -331,7 +342,8 @@ private class GarrisonPlan(val members: List<EnemyType>, val positions: FloatArr
 /**
  * [room]'s garrison. Counts: an ordinary entry's count scaled by the policy (at least one), the Rebirth extras on the
  * first habitat entry, a mini-boss entry unscaled; at most [MAX_GARRISON] in all, the last ones dropped. Habitat
- * members pick a STRUCTURE kind at the run's threat time plus the gate lead. Positions: FLOOR members take points of
+ * members pick a template's themed kind, or a STRUCTURE kind at the run's threat time plus the gate lead for a template
+ * without a theme. Positions: FLOOR members take points of
  * a 3 × 3 lattice inset into the room, four points apart per member from a hashed start, skipping points near the
  * Core; WALL members take the inner corners (diagonals first), then side midpoints clear of doors, then fall back to
  * FLOOR; a CENTER member takes the room centre, or a point beyond it from a Core standing close; each point is nudged
@@ -360,10 +372,13 @@ private fun MutableGameState.planGarrison(current: DungeonState, room: Int, temp
     for (entryIndex in entries.indices) {
         val entry = entries[entryIndex]
         val fixed = entry.type
-        repeat(entryCount(entry, if (entryIndex == firstHabitat) extra else 0)) {
+        repeat(entryCount(entry, if (entryIndex == firstHabitat) extra else 0)) { slot ->
             if (members.size >= MAX_GARRISON) return@repeat
             val member = members.size
-            val type = fixed ?: pickHabitatType(EnemyHabitat.STRUCTURE, random.nextFloat(), threatSeconds = threat)
+            // A themed lead alternates with ordinary habitat supports. Filling every slot with a themed ranged or
+            // heavy native crowds out the weak members that keep early rooms approachable.
+            val type = fixed ?: if (slot % 2 == 0) pickThemedGarrisonType(template, random, threat)
+            else pickHabitatType(EnemyHabitat.STRUCTURE, random.nextFloat(), threatSeconds = threat)
             val radius = type.profile.radius
             var point: SteeringVector? = when (entry.placement) {
                 GarrisonPlacement.WALL -> wallPoint(spec, template, wallMembers++, radius)
@@ -378,6 +393,19 @@ private fun MutableGameState.planGarrison(current: DungeonState, room: Int, temp
         }
     }
     return GarrisonPlan(members, points.copyOf(members.size * 2))
+}
+
+/** Explicit themed natives may cross habitats, but keep their time and Rebirth gates like ordinary habitat picks. */
+private fun MutableGameState.pickThemedGarrisonType(template: StructureTemplate, random: HashRandom, threat: Float): EnemyType {
+    val eligible = template.garrisonTypes.filter { type ->
+        val definition = content.enemy(type)
+        definition.minimumRebirth <= rebirthLevel && definition.timeGateSeconds <= threat
+    }
+    return if (eligible.isEmpty()) {
+        pickHabitatType(EnemyHabitat.STRUCTURE, random.nextFloat(), threatSeconds = threat)
+    } else {
+        eligible[random.nextIndex(eligible.size)]
+    }
 }
 
 /** Members [room] spawns: the planned counts, at most [MAX_GARRISON]. */

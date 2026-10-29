@@ -13,15 +13,16 @@ class SteeringTuningTest {
         val tuning = RunTempoProfile().steering
         assertEquals(SteeringTuning(), tuning)
         assertEquals(130f, tuning.basePull)
+        assertEquals(0.36f, tuning.forwardThrustScale)
         assertEquals(1f, tuning.counterThrustGate)
         assertEquals(0.15f, tuning.counterThrustDeadzoneReach)
         assertEquals(0.7f, tuning.gripGain)
         assertEquals(0.5f, tuning.gripFullReach)
-        assertEquals(0.4f, tuning.slingShare)
+        assertEquals(0.1f, tuning.slingShare)
         assertEquals(0.15f, tuning.slingHeadroom)
         assertEquals(0.7f, tuning.slingKneeShare)
-        assertEquals(0.6f, tuning.spoolGain)
-        assertEquals(0.3f, tuning.straightDrag)
+        assertEquals(0.15f, tuning.spoolGain)
+        assertEquals(0f, tuning.straightDrag)
         assertEquals(0.6f, tuning.straightCurvatureRate)
         assertEquals(1.2f, tuning.straightRiseSeconds)
         assertEquals(0.2f, tuning.straightFallSeconds)
@@ -29,6 +30,7 @@ class SteeringTuningTest {
 
         val legacy = SteeringTuning.LEGACY
         assertEquals(92f, legacy.basePull)
+        assertEquals(1f, legacy.forwardThrustScale)
         assertEquals(listOf(0f, 0f, 0f, 0f, 0f), listOf(legacy.counterThrustGate, legacy.gripGain, legacy.slingShare, legacy.spoolGain, legacy.straightDrag))
     }
 
@@ -37,6 +39,7 @@ class SteeringTuningTest {
         // knob to (accepted values, rejected values)
         val cases: List<Triple<String, List<Float>, (Float) -> SteeringTuning>> = listOf(
             Triple("basePull", listOf(0f, 1_000f, -0.01f, 1_000.01f)) { SteeringTuning(basePull = it) },
+            Triple("forwardThrustScale", listOf(0.001f, 1f, 0f, 1.01f)) { SteeringTuning(forwardThrustScale = it) },
             Triple("counterThrustGate", listOf(0f, 1f, -0.01f, 1.01f)) { SteeringTuning(counterThrustGate = it) },
             Triple("counterThrustDeadzoneReach", listOf(0.001f, 0.999f, 0f, 1f)) { SteeringTuning(counterThrustDeadzoneReach = it) },
             Triple("gripGain", listOf(0f, 2f, -0.01f, 2.01f)) { SteeringTuning(gripGain = it) },

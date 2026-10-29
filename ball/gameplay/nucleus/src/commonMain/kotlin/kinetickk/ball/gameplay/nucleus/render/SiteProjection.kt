@@ -78,6 +78,8 @@ data class TrialProjection(
     val source: TrialSource = TrialSource.SITE,
     val structure: StructureTemplateId? = null,
     val dimension: WorldLayer? = null,
+    /** Base Matter added to a challenge's directed reward; displayed before run gain modifiers. */
+    val rewardMatter: Int = 0,
 )
 
 /**

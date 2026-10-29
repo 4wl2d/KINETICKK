@@ -112,6 +112,8 @@ class ChallengeSiteTest {
             assertEquals(1, game.sites.size, "$kind runs until its time is up")
             game.hold(1_000f, 0f, delta = 0.02f)
             game.assertGrantedNothing()
+            assertEquals(0L, game.runMatter, "$kind pays no Matter on a timeout")
+            assertEquals(0f, game.matterFraction)
         }
     }
 
@@ -159,10 +161,16 @@ class ChallengeSiteTest {
         game.hold(0f, policy.brakelessRing(10.2f) - 2f, vy = 900f, delta = 0.1f)
         assertEquals(0.2f, game.sites.single().meter, 1e-6f)
 
-        // The twelfth second completes it.
+        // Reaching the requirement grants both the directed offer and the bonus, respecting the run's Matter gain.
+        game.matterGain = 1.25f
+        val beforeMatter = game.runMatter.toDouble() + game.matterFraction
         game.sites = listOf(game.sites.single().copy(meter = policy.brakelessRequired - 0.05f))
         game.hold(0f, 400f, vx = 900f, delta = 0.1f)
         game.assertCompleted(DirectedReward.ITEM_AND_REPAIR)
+        val paidMatter = game.runMatter.toDouble() + game.matterFraction
+        assertEquals(15 * 1.25, paidMatter - beforeMatter, 1e-5)
+        game.hold(0f, 400f, vx = 900f, delta = 0.1f)
+        assertEquals(paidMatter, game.runMatter.toDouble() + game.matterFraction, "a finished challenge never pays again")
     }
 
     @Test

@@ -1975,8 +1975,8 @@ private const val REFIT_SIGNATURE_FLOOR_SHARE: Float = 0.5f
 
 // Ability damage is calibrated by CharacterBalanceTest: averaged over its seeded 90 s fights (packs at
 // random bearings, content bolt damage, exact and jittered timing) every offensive character's ability
-// output stays within 40 % of their median (Orbit 42, Puncture 180, Halo 12/s and 16, Lattice 7 + 3.5
-// per node, slams 120 + 0.25 per u/s from 100 u/s, Pulse burst 40, scars 45, drones 9). The 0.6.0 flight law
+// output stays within 40 % of their median (Orbit 42, Puncture 180, Halo 12/s and 16, Lattice 5.6 + 2.8
+// per node, slams 54 + 0.1125 per u/s from 100 u/s, Pulse burst 40, scars 35, drones 9). The 0.6.0 flight law
 // (grip carves tighter, faster arcs) lifted Orbit and cost the Star and the Dipole their pack meetings: Orbit
 // 70 -> 42, the early Supernova from 12 -> 6 Stellar Mass, Repel 420 -> 700 with throws of 0.6 -> 1.5 s.
 
@@ -2025,8 +2025,8 @@ private const val LATTICE_RECORD_DISTANCE: Float = 120f
 private const val LATTICE_CLOSE_DISTANCE: Float = 130f
 private const val LATTICE_SPACING: Float = 150f
 private const val LATTICE_LIFE_SECONDS: Float = 7f
-internal const val LATTICE_BASE_DAMAGE: Float = 7f
-internal const val LATTICE_NODE_DAMAGE: Float = 3.5f
+internal const val LATTICE_BASE_DAMAGE: Float = 5.6f
+internal const val LATTICE_NODE_DAMAGE: Float = 2.8f
 internal const val LATTICE_INSIDE_MULTIPLIER: Float = 1.5f
 
 private const val STAR_IMPACT_PER_STACK: Float = 0.03f
@@ -2055,8 +2055,8 @@ private const val REPEL_THROW_SHARE: Float = 1f
 internal const val SLAM_MIN_SPEED: Float = 100f
 /** A struck enemy that gains this speed from a slam is thrown on (as fast as a slam needs). */
 internal const val THROW_MIN_SPEED: Float = SLAM_MIN_SPEED
-internal const val SLAM_BASE_DAMAGE: Float = 120f
-internal const val SLAM_DAMAGE_PER_SPEED: Float = 0.25f
+internal const val SLAM_BASE_DAMAGE: Float = 54f
+internal const val SLAM_DAMAGE_PER_SPEED: Float = 0.1125f
 private const val MAX_SLAMS_PER_STEP: Int = 8
 
 /** Thrown enemies that look for a slam partner in one step (the obstacle pass uses the same bound). */
@@ -2081,7 +2081,7 @@ internal const val BLINK_RECHARGE_SECONDS: Float = 2.2f
 private const val BLINK_DRIVE_RANGE_MULTIPLIER: Float = 1.4f
 internal const val SCAR_FUSE_SECONDS: Float = 0.4f
 private const val SCAR_FADE_SECONDS: Float = 0.3f
-internal const val SCAR_DAMAGE: Float = 45f
+internal const val SCAR_DAMAGE: Float = 35f
 private const val SCAR_REACH: Float = 40f
 
 private const val DRONE_CHANCE: Float = 0.25f

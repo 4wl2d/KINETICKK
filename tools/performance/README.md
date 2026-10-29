@@ -44,6 +44,22 @@ selected `:ball:gameplay:interaction:desktopTest --tests '*ReactionHeavyRenderBe
 Their ordinary tests also verify visible feedback, bounded state and retained snapshots.
 Keep raster, native desktop, browser and device results separate.
 
+The opt-in world generation probe measures adjacent and distant chunk-window refreshes and
+structure placement queries, including allocations and deterministic output witnesses. The
+diagnostics probe separates bounded event recording from disk checkpoint time and uses a
+temporary reporter without opening player data:
+
+```bash
+KK_WORLD_GENERATION_BENCH=1 ./gradlew :ball:gameplay:nucleus:desktopTest --tests '*WorldGenerationPerformanceBenchmarkTest' --rerun
+KK_CRASH_EVENT_BENCH=1 ./gradlew :app:shared:desktopTest --tests '*DesktopCrashEventPerformanceBenchmarkTest' --rerun
+```
+
+Both accept `LABEL`, `OUT`, `WARMUPS` and `SAMPLES` with their respective environment prefix.
+Use identical settings and alternate baseline/candidate processes without simultaneous builds or
+tests. `KK_DAMAGE_CROP_BENCH=1` enables the image-construction microbenchmark in
+`DamageNumberImageCacheTest`; the reaction scene remains the end-to-end raster check because it
+includes both new-label construction and subsequent animated draws.
+
 Compare the current clean commit with an exact compatible base SHA:
 
 ```bash

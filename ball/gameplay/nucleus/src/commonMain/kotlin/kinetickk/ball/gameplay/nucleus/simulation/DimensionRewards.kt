@@ -87,6 +87,7 @@ private fun MutableGameState.openBoonOffer(grant: DimensionRewardGrant, kind: Ru
     val tag = when (kind) {
         RunBoonKind.BLESSING -> BLESSING_TAG
         RunBoonKind.PACT -> PACT_TAG
+        RunBoonKind.ASPECT -> error("Dungeon aspects are awarded by their trials")
     }
     val cards = ArrayList<ChoiceOption>(count + 1)
     while (cards.size < count && eligible.isNotEmpty()) {
@@ -170,9 +171,11 @@ internal fun MutableGameState.takeBoonCard(option: ChoiceOption): GameplayAudioC
  * [preview] (reward previews, on a candidate copy) rebuilds no world.
  */
 internal fun MutableGameState.applyRunBoon(id: Int, preview: Boolean = false) {
+    if (id in runBoons) return
     check(runBoons.size < ContentBounds.MAX_RUN_BOONS) { "A run holds at most ${ContentBounds.MAX_RUN_BOONS} boons" }
     val boon = checkNotNull(content.boon(id)) { "Unknown boon $id" }
     for (index in boon.gains.indices) applyRunModifier(boon.gains[index], preview)
     for (index in boon.costs.indices) applyRunModifier(boon.costs[index], preview)
     runBoons = runBoons.toImmutableListAppending(id)
+    if (boon.buildRules.isNotEmpty()) recompileBuild()
 }

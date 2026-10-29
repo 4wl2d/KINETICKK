@@ -1317,3 +1317,140 @@ Golden Drifter's gold glint, an easter-egg exception to gold meaning Rebirth;
 the Baby mode look; the dimension themes; the Core ribbon; the Dipole's
 unlock pace at 40 ricochets now that every ricochet hurts; Mirror Stance's
 single parry; the 1.25 s ember life of the Harvest; the 60 s Nadir visit.
+
+## 2026-10-29 movement and exploration adjustment
+
+This adjustment deliberately replaces the earlier requirement that obstacles
+cut every straight flight short. Ordinary steering should support long straight
+travel, with Dash and Brake remaining tactical tools. Historical measurements
+above describe their original builds and are retained unchanged.
+
+`CoreFlightCalibrationTest` compares the new law with the exact prior steering
+tuning on the same viewport and inputs, without Dash or Brake during cruise:
+
+| Measurement | Before | After |
+|---|---:|---:|
+| Desktop cruise, u/s | 2536.3 | 1645.2 |
+| Phone cruise, u/s | 1851.0 | 1200.7 |
+| Time to 75% of own cruise, s | 0.800 | 2.458 |
+
+Forward thrust is 0.32 of the previous law, launch assistance is 0.15 instead
+of 0.6, turn-to-forward assistance is 0.1 instead of 0.4, and extra straight
+drag is zero. Lateral and counter-steering authority remain intact. A 90-degree
+turn retains about 94% of speed; 30/60/144 Hz inputs give the same result.
+Zenith drag is 0.82 to keep its measured speed benefit at 12.15%, within the
+existing 8–16% band after the base movement change.
+
+`ObstacleNavigationTest` compares identical seeds and regions, with structures
+disabled to isolate obstacle geometry. Across 12 seeds and 2,352 chunks,
+obstacle bodies fall from 4,943 to 1,903 (61.5% fewer). Of 9,600 straight paths
+1,200 u long with an extra 48 u steering margin, 49.3% were clear before and
+78.0% are clear now. The minimum surface gap is 300 u instead of 90 u, including
+chunk seams, and the initial clearing grows from 900 to 1,200 u.
+
+`ExplorationRarityTest` samples the same absolute cells before and after:
+structures fall from 4,945 to 1,496 over 32 seeds and 400 cells per seed;
+caches fall from 4,597 to 1,546 over 64 seeds and 400 cells per seed. Each run
+selects three ordinary dungeon types, with secret types separately eligible.
+These are generation measurements, not player discovery rates.
+
+Three optional-site windows at 45/225/405 s replace six, and one event signal
+is selected among 115/295/475 s. The last window leaves enough time for a late
+entry, a full dimension trial, an exit and a full Archive visit before the
+Architect margin. The regression exercises that route through real portal
+entry and exit in both Zenith/Nadir orders.
+
+The six elemental dungeon aspects use existing build-rule channels. They
+grant once per run; repeated clears or a full boon roster salvage 40 base
+Matter, which the trial preview also states. Runtime tests cover actual status
+spread, reaction changes, duplicate prevention, reduction isolation and reset
+on a new run. Render tests cover elemental palettes, glyphs, localized trial
+rules and the earned-aspect pause view. These checks do not establish the
+subjective feel of live control.
+
+Slower passes also changed relative weapon exposure. The existing weapon
+family bands, family-lead rules, attack-speed benefit, proc limits and armor
+checks remain unchanged. `WeaponBalanceTest` keeps its original mixed-route
+pilot and 380 u tether limit. The existing coefficients were recalibrated:
+
+| Weapon | Coefficients before → after |
+|---|---|
+| Morningstar | Base contact 13.8 → 17 |
+| Null Lance | Base damage 68 → 61 |
+| Quasar Cannon | Base damage 87 → 59 |
+| Singularity Spear | Base damage 100 → 97 |
+| Prism Relay | Base damage 18 → 17.2; mastery twin share 0.20 → 0.18 |
+| Gyre Disc | Base damage 45 → 28 |
+| Scatter Bloom | Base damage 8.4 → 7.7 |
+| Tether Arc | Base DPS 5.5 → 6; range 320 → 350; mastery maximum 8× → 7× |
+| Hunter Salvo | Base damage 9.5 → 8.7 |
+| Glacier Bell | Base damage 37 → 40 |
+| Hollow Rift | Base damage 54 → 42; second burst share 0.60 → 0.12; pull 320 → 120 |
+
+All 34 focused weapon checks passed at fresh, Ascended and Honing 10. Two
+fixture repairs keep those checks interpretable: paired attack-speed flights
+sample uniformly offset initial firing phases, and Hollow Rift's armor/proc
+checks put a target on an actually armed rift while retaining its real fuse,
+detonation and damage path. No damage bands were relaxed.
+
+Optional trials retain their original completion and reward bands. On the
+separate site calibration cohort 2,201–2,300, race par reach 0.65 (from 0.50)
+reduces board gold from 76.5% to 35.3%, with 93.5% phone bronze-or-better.
+Brakeless asks for 16 s instead of 14 s (83.6% completion); Slalom allows
+10 s instead of 18 s (86.9%). The tested 9.5 s alternative dropped Slalom
+completion to 73.3% and reduced mixed challenge reward value, so 10 s is used.
+
+Completed challenges also grant 15 base Matter, shown in the trial HUD. On the
+held-out site gate this gives challenge/anomaly value 0.7706, race value 1.2475
+and bounty value 2.05. Board gold is 39.16%, phone bronze-or-better 93.90%, and
+all five challenge completion shares remain within the unchanged 30–90%
+band. The independent mixed-site calibration gives challenge value 0.8794.
+The final weapon configuration wins 208 of 300 no-POI runs (69.3%), with
+203 meeting the stricter reference-run progression criteria.
+
+Dungeon encounters retain the 0.8 garrison count scale, room geometry and
+attack patterns. Themed leads alternate with ordinary supports, respecting
+their time and Rebirth gates. Their health multiplier is 0.75 and their
+outgoing damage multiplier 0.70. Damage scaling applies only to ROOM-owned
+enemies; actual projectile/contact regressions keep world, site and dimension
+enemies unchanged. Wall damage remains 1.0.
+
+The calibration diagnosis found hostile combat, not travel attrition, was
+driving fresh-profile deaths: all 30 deaths in the diagnostic cohort had no
+registered wall-impact frames and a median 96.95% entry integrity. The upper
+bound on wall-frame HP losses was less than 0.2% of tracked losses. Further
+health reduction alone was not reliably better: health 0.75 versus 0.65 gave
+30.9% versus 32.0% deaths on the initial cohort. Keeping populated rooms and
+reducing hostile hit damage instead gives these results:
+
+| Dungeon population | Fresh clear / died inside | Strong clear / median clear |
+|---|---|---|
+| Independent calibration, i = 2301–2600 | 73.13% / 24.49% (death SE 2.5 pp) | 99.33% / 23.87 s |
+| Unchanged gate, i = 1001–1120 | 68.91% / 27.73% (119 attempts) | 100% / 23.81 s |
+
+All dungeon gate bands remain unchanged. The elemental play-style checks
+also pass after making the comparison opportunities explicit: Glacier Crush
+uses the same durable front-of-pack target and its real cooldown in both
+arms; Embrittle uses deliberate eligible ram passes; Thunderclap finishes a
+dash-distance sample before starting the next one. These fixtures preserve
+the original 10% minimum effect requirement.
+
+The character balance gate also exposed higher contact opportunities for
+Tesseract, Dipole and Crescent under slower flight. Five existing damage
+coefficients changed; timing, throws, fields and defensive mechanics remain:
+Tesseract lattice 7 + 3.5/node becomes 5.6 + 2.8/node; Dipole slam
+120 + 0.25×speed becomes 54 + 0.1125×speed; Crescent scar 45 becomes 35.
+The slam's effective output is not proportional to raw damage because the
+small pack targets cap a hit at their remaining integrity. Across exact and
+jittered input at Refit 0/10, measured output/median is 0.95–1.31 for
+Tesseract, 1.09–1.26 for Dipole and 0.99–1.36 for Crescent, within the
+unchanged 0.6–1.4 band. All 110 selected character balance, ability, Apex-form
+and obstacle checks passed.
+
+A subsequent small speed adjustment raises forward thrust from 0.32 to 0.36.
+Measured desktop cruise rises from about 1,645 to 1,762 u/s (+7.1%), while
+the time to 75% cruise moves from 2.458 to 2.333 s. Grip, counter-steering,
+Brake authority, launch assistance and zero extra straight-line drag stay
+unchanged. The existing flight, polarity, collision-band and dimension
+checks pass; the deterministic intent trace is updated from its measured
+positions, velocities, enemy following and trail counts.

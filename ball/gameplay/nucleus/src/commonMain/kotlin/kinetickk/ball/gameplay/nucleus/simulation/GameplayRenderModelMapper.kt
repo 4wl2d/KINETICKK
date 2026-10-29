@@ -561,22 +561,20 @@ private fun MutableGameState.coreStateProjection(previous: CoreStateProjection?)
 private fun MutableGameState.skillBarProjection(previous: SkillBarProjection?): SkillBarProjection {
     val loadout = skillLoadout
     if (loadout.ownedCount == 0) return SkillBarProjection.EMPTY
-    var changed = previous == null || previous === SkillBarProjection.EMPTY
-    val first = skillSlotProjection(0)
-    val second = skillSlotProjection(1)
-    val third = skillSlotProjection(2)
-    if (!changed) {
-        val slots = checkNotNull(previous).slots
-        changed = slots[0] != first || slots[1] != second || slots[2] != third
-    }
-    if (!changed) return checkNotNull(previous)
+    val slots = previous?.slots
+    val first = skillSlotProjection(0, slots?.get(0))
+    val second = skillSlotProjection(1, slots?.get(1))
+    val third = skillSlotProjection(2, slots?.get(2))
+    if (slots != null && first === slots[0] && second === slots[1] && third === slots[2]) return checkNotNull(previous)
     return SkillBarProjection(kinetickk.foundation.collections.immutableListOf(first, second, third))
 }
 
-private fun MutableGameState.skillSlotProjection(slot: Int): SkillSlotProjection {
-    val id = skillLoadout.skill(slot) ?: return SkillSlotProjection.EMPTY
+private fun MutableGameState.skillSlotProjection(slot: Int, previous: SkillSlotProjection?): SkillSlotProjection {
+    val id = skillLoadout.skill(slot)
+        ?: return previous?.takeIf { it == SkillSlotProjection.EMPTY } ?: SkillSlotProjection.EMPTY
     val runtime = skillRuntime
-    val values = content.skill(id).rank(skillLoadout.rank(slot)).values
+    val rank = skillLoadout.rank(slot)
+    val values = content.skill(id).rank(rank).values
     val readyAt = runtime[slot, SkillCell.READY_AT]
     val cooldown = runtime[slot, SkillCell.LAST_COOLDOWN]
     // With Skill Charges the slot shows its held charges; the cooldown then fills the next one.
@@ -596,20 +594,38 @@ private fun MutableGameState.skillSlotProjection(slot: Int): SkillSlotProjection
         else -> 0f
     }
     val pending = id != SkillId.NULL_SHROUD && pendingAt >= 0f && pendingAt > elapsed
+    val cooldown01 = if (!recharging || cooldown <= 0f) 0f else ((readyAt - elapsed) / cooldown).coerceIn(0f, 1f)
+    val charges = if (charged) held else if (ready) 1 else 0
+    val maxCharges = if (charged) MAX_SKILL_CHARGES.toInt() else 1
+    val active01 = if (activeSeconds > 0f) remainingShare(runtime[slot, SkillCell.ACTIVE_UNTIL], activeSeconds) else 0f
+    val pending01 = if (pending && pendingSeconds > 0f) ((pendingAt - elapsed) / pendingSeconds).coerceIn(0f, 1f) else 0f
+    val anchorX = if (pending) runtime[slot, SkillCell.ANCHOR_X] else 0f
+    val anchorY = if (pending) runtime[slot, SkillCell.ANCHOR_Y] else 0f
+    val refunded = runtime[slot, SkillCell.REFUNDED]
+    val refusal = runtime[slot, SkillCell.REFUSAL].toInt()
+    val refusedAt = runtime[slot, SkillCell.REFUSED_AT]
+    // Match data-class Float equality, including signed zero and canonical NaN, before allocating a new slot.
+    if (previous != null && previous.skill == id.ordinal && previous.rank == rank &&
+        previous.ready == ready && previous.charges == charges && previous.maxCharges == maxCharges &&
+        previous.cooldown01.toBits() == cooldown01.toBits() && previous.active01.toBits() == active01.toBits() &&
+        previous.pending01.toBits() == pending01.toBits() && previous.anchorX.toBits() == anchorX.toBits() &&
+        previous.anchorY.toBits() == anchorY.toBits() && previous.refunded.toBits() == refunded.toBits() &&
+        previous.refusal == refusal && previous.refusedAt.toBits() == refusedAt.toBits()
+    ) return previous
     return SkillSlotProjection(
         skill = id.ordinal,
-        rank = skillLoadout.rank(slot),
-        cooldown01 = if (!recharging || cooldown <= 0f) 0f else ((readyAt - elapsed) / cooldown).coerceIn(0f, 1f),
+        rank = rank,
+        cooldown01 = cooldown01,
         ready = ready,
-        charges = if (charged) held else if (ready) 1 else 0,
-        maxCharges = if (charged) MAX_SKILL_CHARGES.toInt() else 1,
-        active01 = if (activeSeconds > 0f) remainingShare(runtime[slot, SkillCell.ACTIVE_UNTIL], activeSeconds) else 0f,
-        pending01 = if (pending && pendingSeconds > 0f) ((pendingAt - elapsed) / pendingSeconds).coerceIn(0f, 1f) else 0f,
-        anchorX = if (pending) runtime[slot, SkillCell.ANCHOR_X] else 0f,
-        anchorY = if (pending) runtime[slot, SkillCell.ANCHOR_Y] else 0f,
-        refunded = runtime[slot, SkillCell.REFUNDED],
-        refusal = runtime[slot, SkillCell.REFUSAL].toInt(),
-        refusedAt = runtime[slot, SkillCell.REFUSED_AT],
+        charges = charges,
+        maxCharges = maxCharges,
+        active01 = active01,
+        pending01 = pending01,
+        anchorX = anchorX,
+        anchorY = anchorY,
+        refunded = refunded,
+        refusal = refusal,
+        refusedAt = refusedAt,
     )
 }
 

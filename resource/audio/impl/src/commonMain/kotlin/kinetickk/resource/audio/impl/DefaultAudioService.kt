@@ -27,6 +27,7 @@ class DefaultAudioService(
         if (
             preferences.soundEnabled &&
             volume > 0f &&
+            requests.isNotEmpty() &&
             requests.size <= MAX_ACCEPTED_EFFECT_REQUESTS_PER_ADVANCE
         ) {
             selectToneRequests(requests, MAX_SELECTED_EFFECT_REQUESTS_PER_ADVANCE).forEach { request ->
@@ -81,9 +82,20 @@ internal fun selectMusicAdvanceDeltaSeconds(realDeltaSeconds: Float): Float =
         ?.coerceIn(0f, MAX_MUSIC_ADVANCE_DELTA_SECONDS)
         ?: 0f
 
-internal fun selectToneRequests(requests: List<ToneRequest>, limit: Int): List<ToneRequest> = requests
-    .distinct()
-    .take(limit.coerceAtLeast(0))
+internal fun selectToneRequests(requests: List<ToneRequest>, limit: Int): List<ToneRequest> {
+    if (limit <= 0 || requests.isEmpty()) return emptyList()
+    if (requests.size == 1 || limit == 1) return listOf(requests[0])
+    // Playback admits at most three distinct effects. Stop once they are selected instead of
+    // building a set for the full input and then copying its prefix into another list.
+    val selected = ArrayList<ToneRequest>(minOf(limit, requests.size))
+    for (request in requests) {
+        if (request !in selected) {
+            selected.add(request)
+            if (selected.size == limit) break
+        }
+    }
+    return selected
+}
 
 /** Narrow mechanical capability supplied by the app's platform composition broker. */
 interface TonePlaybackCapability {

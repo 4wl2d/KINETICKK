@@ -34,6 +34,7 @@ internal const val AMBIENT_CACHE_SALT: Long = 0x517E_C0A5_0000_0011L
 internal const val AMBIENT_LOST_CURSOR_SALT: Long = 0x517E_C0A5_0000_0012L
 internal const val AMBIENT_GOLDEN_SALT: Long = 0x517E_C0A5_0000_0013L
 internal const val AMBIENT_QUIET_SALT: Long = 0x517E_C0A5_0000_0014L
+internal const val AMBIENT_AVAILABILITY_SALT: Long = 0x517E_C0A5_0000_0015L
 
 /** Contents of a drift cache: `worldHash(runSeed, cellX, cellY, CACHE_CONTENTS_SALT)` (registered SITES salt). */
 internal const val CACHE_CONTENTS_SALT: Long = 0x517E_C0A5_0000_0021L
@@ -149,6 +150,7 @@ private fun MutableGameState.eggFound(kind: SiteKind): Boolean =
  * function of the run seed, the cell and the kind's salt.
  */
 internal fun MutableGameState.ambientCandidate(rule: AmbientSiteRule, cellX: Int, cellY: Int): AmbientCandidate? {
+    if (!rule.enabled || !ambientRuleAvailable(rule, runSeed)) return null
     val random = HashRandom(worldHash(runSeed, cellX, cellY, ambientSalt(rule.kind)))
     val cell = rule.cellSize.toDouble()
     val centreX = (cellX + 0.5) * cell
@@ -166,6 +168,10 @@ internal fun MutableGameState.ambientCandidate(rule: AmbientSiteRule, cellX: Int
     if (absoluteX * absoluteX + absoluteY * absoluteY < minimum * minimum) return null
     return AmbientCandidate(absoluteX, absoluteY)
 }
+
+/** A secret unavailable in this seed stays absent however much of the map is explored. */
+internal fun ambientRuleAvailable(rule: AmbientSiteRule, runSeed: Int): Boolean =
+    hashUnit(runHash(runSeed, AMBIENT_AVAILABILITY_SALT, rule.kind.ordinal.toLong())) < rule.runChance
 
 /** The placement salt of an ambient kind (content admits only these four kinds as ambient rules). */
 private fun ambientSalt(kind: SiteKind): Long = when (kind) {

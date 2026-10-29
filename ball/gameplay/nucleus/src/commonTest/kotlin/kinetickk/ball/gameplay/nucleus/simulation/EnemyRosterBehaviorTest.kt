@@ -27,6 +27,32 @@ import kotlin.test.assertTrue
 
 class EnemyRosterBehaviorTest {
     @Test
+    fun roomBalanceScalesActualShotsAndContactButNeverWorldOrSiteEnemies() {
+        fun damage(owner: EncounterOwner?): Pair<Float, Float> {
+            val tag = owner?.let { encounterTag(it, 1L) } ?: 0L
+            val shots = quietState().apply { elapsed = content.tempo.bossAtSeconds * 0.5f }
+            shots.spawn(EnemyType.SHOOTER, 300f, 0f).apply { ownerTag = tag; actionTimer = 0f }
+            shots.updateEnemies(FIXED)
+            val fired = shots.projectiles.single { it.hostile }
+            shots.projectiles.clear()
+            shots.projectiles += Projectile(shots.coreX, shots.coreY, 0f, 0f, 5f, 1f, damage = fired.damage)
+            shots.resolveProjectileHits()
+            val contact = quietState().apply { elapsed = content.tempo.bossAtSeconds * 0.5f }
+            contact.spawn(EnemyType.DRIFTER, 0f, 0f).ownerTag = tag
+            contact.resolveEnemyCoreCollisions()
+            return shots.maxHp - shots.hp to contact.maxHp - contact.hp
+        }
+        val world = damage(null)
+        assertEquals(12.5f, world.first, 0.001f)
+        assertTrue(world.second > 0f)
+        assertEquals(world, damage(EncounterOwner.SITE))
+        assertEquals(world, damage(EncounterOwner.DIMENSION))
+        val room = damage(EncounterOwner.ROOM)
+        assertEquals(world.first * 0.70f, room.first, 0.001f)
+        assertEquals(world.second * 0.70f, room.second, 0.001f)
+    }
+
+    @Test
     fun hostileShotsCarryTheirSourceDamageAndContactGrowsWithTheRun() {
         val state = quietState()
         state.elapsed = state.content.tempo.bossAtSeconds * 0.5f

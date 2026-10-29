@@ -54,11 +54,12 @@ internal fun MutableGameState.obstacleLethalSpeedBonus(): Float = matrix.obstacl
 
 /**
  * Impact speed at which an asteroid collision is lethal. Bonuses raise it at most to this build's own straight
- * steady speed at [kinetickk.ball.content.api.ObstacleTuning.lethalCeilingReach], so holding the cursor at the
- * edge stays lethal for every Matrix state. A Dash adds its impulse on top of the cruise speed, so the lethal speed
+ * steady speed at [kinetickk.ball.content.api.ObstacleTuning.lethalCeilingReach]. A Dash adds its impulse on top of the
+ * cruise speed, so the lethal speed
  * never drops below the strongest Dash the character can make (an on-beat Pentagon Dash pushes harder) from a cruise
  * at [kinetickk.ball.content.api.ObstacleTuning.dashSafeReach] plus a margin: a Dash from a gentle cruise can hurt
- * but never kills. Only that floor may lie above the ceiling.
+ * but never kills. Only that floor may lie above the ceiling; a slow, protected build can therefore survive its
+ * ordinary cruising impact while still taking collision damage.
  */
 internal fun MutableGameState.obstacleLethalSpeed(): Float {
     val tuning = content.obstacles

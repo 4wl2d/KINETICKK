@@ -38,8 +38,8 @@ class WorldContractBoundsTest {
         assertEquals(DirectedReward.WEAPON, sites.definition(SiteKind.RESONANT_CIRCUIT).reward.directed)
         assertEquals(DirectedReward.RELIC, sites.definition(SiteKind.SEALED_ANOMALY).reward.directed)
         assertEquals(DirectedReward.ITEM_AND_REPAIR, sites.definition(SiteKind.COLLAPSING_ORBIT).reward.directed)
-        // The 0.5.0 window schedule is unchanged.
-        assertEquals(SiteWindowPolicy(45f, 120f, 645f, 40f, 25f, 8f), sites.windows)
+        // Three optional windows leave long stretches for ordinary movement and exploration.
+        assertEquals(SiteWindowPolicy(45f, 180f, 405f, 40f, 25f, 8f), sites.windows)
         assertEquals(EnemyType.WARDEN_PRIME, sites.bounty.bossType)
         assertEquals(SiteReward(itemOfferFloor = ItemRarity.EPIC, matter = 60), sites.secrets.secretReward)
     }

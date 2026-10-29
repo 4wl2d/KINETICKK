@@ -289,6 +289,6 @@ class WorldStructureRenderingTest {
         const val SY = 40_000f
 
         /** The floor plate's ink (the renderer's own mix). */
-        val FloorColor = kkMix(Kk.Ink, Kk.Ink1, 0.6f)
+        val FloorColor = structureFloorColor(StructurePolicy().template(StructureTemplateId.SPIRE), KkRolePalette.Default)
     }
 }

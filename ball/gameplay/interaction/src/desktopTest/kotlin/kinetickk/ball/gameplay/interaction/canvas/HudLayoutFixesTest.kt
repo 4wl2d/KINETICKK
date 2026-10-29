@@ -17,6 +17,7 @@ import androidx.compose.ui.text.platform.Font
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.content.api.SiteFamily
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.content.api.SiteNotice
 import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
@@ -334,6 +335,10 @@ class HudLayoutFixesTest {
                 slots.forEach { slot ->
                     val line = assertNotNull(HudDrawCache.peekLayout(slot), "$where: $slot")
                     assertFalse(line.isCut(), "$where: $slot is cut")
+                    if (slot == HudText.TRIAL_REWARD && kind.family == SiteFamily.CHALLENGE) {
+                        val bonus = if (language == AppLanguage.Russian) "+ 15 МАТЕРИЯ" else "+ 15 MATTER"
+                        assertTrue(line.layoutInput.text.text.endsWith(bonus), "$where: the reward hides its Matter bonus")
+                    }
                 }
                 if (trial.clock != TrialClock.COUNTDOWN) assertNull(HudDrawCache.peekLayout(HudText.TRIAL_CLOCK), "$where: a countdown line")
                 val innerLeft = layout.left + layout.padding - 0.5f

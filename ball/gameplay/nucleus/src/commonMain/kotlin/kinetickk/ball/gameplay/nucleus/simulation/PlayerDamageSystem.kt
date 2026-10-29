@@ -50,7 +50,12 @@ internal fun MutableGameState.hostileDamage(enemy: Enemy?, base: Float): Float =
  * `1 - 0.03 * hollowStacks` (scaled by Void potency, floored at [HOLLOW_OUTPUT_FLOOR]); a dimension's objective boss
  * deals its layer's damage share.
  */
-internal fun MutableGameState.hostileOutputFactor(enemy: Enemy?): Float = hollowOutputFactor(enemy) * objectiveBossDamageShare(enemy)
+internal fun MutableGameState.hostileOutputFactor(enemy: Enemy?): Float {
+    val roomScale = if (enemy != null && encounterOwner(enemy.ownerTag) == EncounterOwner.ROOM) {
+        content.structures.garrisonDamageMultiplier
+    } else 1f
+    return hollowOutputFactor(enemy) * objectiveBossDamageShare(enemy) * roomScale
+}
 
 /** Hostile damage grows by this fraction of run progress; see [hostileDamage]. */
 internal const val HOSTILE_RUN_GROWTH: Float = 0.5f

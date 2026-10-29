@@ -23,11 +23,13 @@ import kotlin.test.assertTrue
  *
  * The thresholds are the structures design's bands (§11.2): a fresh build clears most of its dungeons without
  * trivialising them and rarely dies inside, a strong build clears nearly all of them, clearly more often and within
- * 150 s, every attempt ends within the pilot's 300 s, and the shipped templates turn up. The shipped knobs
- * (`garrisonScale` 0.8, `wallDamageScale` 1.0) meet every band on the structures calibration window i = 2,301..2,400
- * after excluding director spawns from sealed rooms (`KK_DUNGEON_PROBE`; FRESH clear 0.720 SE 0.045, died 0.250
- * SE 0.043; STRONG clear 1.000, median clear 26.12 s). Scale 1.0 and 0.9 both gave a 0.310 fresh death share on
- * that window. The gate population only confirms the chosen content; its design bands stay unchanged.
+ * 150 s, every attempt ends within the pilot's 300 s, and the shipped templates turn up. Elemental squads keep
+ * `garrisonScale` 0.8 and `wallDamageScale` 1.0. The slower flight law is balanced with integrity 0.75 and hostile
+ * damage 0.70 for room-owned enemies. Independent calibration i = 2,301..2,600: fresh clear 0.731 (SE 0.026),
+ * died 0.245 (SE 0.025); strong clear 0.993, median 23.87 s. Lower integrity alone was not reliably better:
+ * on i = 2,301..2,400, 0.75 integrity gave 0.309 deaths and 0.65 gave 0.320. A surface-id/cooldown diagnostic
+ * ruled walls out (no wall-impact frames in those deaths), so room attack damage changed while attacks and
+ * room populations stayed intact. The gate population confirms the candidate without changing its design bands.
  */
 class DungeonPilotGateTest {
     /**
@@ -94,7 +96,7 @@ class DungeonPilotGateTest {
     /**
      * Calibration probe (never the gate population): `KK_DUNGEON_PROBE=first..last` flies the window
      * `i × 7,919 + 13` for both arms (`KK_DUNGEON_ARMS=FRESH,STRONG` picks arms) with the structure knobs of
-     * `KK_DUNGEON_KNOBS=garrisonScale=…,wallDamageScale=…`, and prints every run and the arms' summaries with bootstrap
+     * `KK_DUNGEON_KNOBS=garrisonScale=…,garrisonHealthMultiplier=…,wallDamageScale=…`, and prints every run and the arms' summaries with bootstrap
      * standard errors.
      */
     @Test
@@ -108,7 +110,8 @@ class DungeonPilotGateTest {
         val arms = System.getenv("KK_DUNGEON_ARMS")?.takeIf { it.isNotBlank() }?.split(',')?.map { Arm.valueOf(it.trim()) }
             ?: Arm.entries
         println("DUNGEON PROBE window $first..$last garrisonScale=${content.structures.garrisonScale} " +
-            "wallDamageScale=${content.structures.wallDamageScale}")
+            "garrisonHealthMultiplier=${content.structures.garrisonHealthMultiplier} " +
+            "garrisonDamageMultiplier=${content.structures.garrisonDamageMultiplier} wallDamageScale=${content.structures.wallDamageScale}")
         for (arm in arms) {
             val runs = populationOf(seeds) { seed -> fly(seed, arm, content) }
             runs.forEach { println("DUNGEON PROBE $arm ${it.line()}") }
@@ -129,9 +132,18 @@ class DungeonPilotGateTest {
         val weapon: WeaponId,
         val weaponLevel: Int,
         val reason: String,
+        val entryHpShare: Float,
+        val lastEngagedRoom: Int,
+        val roomEntryHp: String,
+        val wallImpactFrames: Int,
+        val wallHpLossUpperBound: Double,
+        val nonWallHpLoss: Double,
     ) {
         fun line(): String = "seed=$seed ${attempt?.line() ?: "NO_ATTEMPT"} stop=${"%.2f".format(elapsed)} phase=$phase " +
-            "hp=${"%.2f".format(hp)} level=$level weapon=$weapon/$weaponLevel reason=$reason"
+            "hp=${"%.2f".format(hp)} level=$level weapon=$weapon/$weaponLevel reason=$reason " +
+            "entryHpShare=${"%.3f".format(entryHpShare)} lastRoom=$lastEngagedRoom roomHp=$roomEntryHp " +
+            "wallImpactFrames=$wallImpactFrames wallHpLossUpperBound=${"%.2f".format(wallHpLossUpperBound)} " +
+            "nonWallHpLoss=${"%.2f".format(nonWallHpLoss)}"
     }
 
     internal companion object {
@@ -188,10 +200,38 @@ class DungeonPilotGateTest {
             val pilot = DungeonPilot(bot)
             val seekEnd = content.tempo.bossAtSeconds - 150f
             var stopAt = Float.POSITIVE_INFINITY
+            var entryHpShare = Float.NaN
+            var lastEngagedRoom = -1
+            val roomEntryHp = ArrayList<String>()
+            var wallImpactFrames = 0
+            var wallHpLossUpperBound = 0.0
+            var nonWallHpLoss = 0.0
             while (state.elapsed < stopAt && (state.phase == GamePhase.RUNNING || state.phase == GamePhase.CHOICE)) {
+                val heldBefore = state.dungeon != null
+                val damageBefore = state.damageTaken
+                val wallReadyBefore = state.obstacleHitReadyAt
                 if (state.phase == GamePhase.CHOICE) pilot.choose(state) else {
                     pilot.control(state)
                     state.update(0.02f)
+                }
+                if (heldBefore || state.dungeon != null) {
+                    val wallImpact = state.obstacleHitReadyAt != wallReadyBefore && state.structureField.structures.any {
+                        structureSurfaceId(it.id) == state.obstacleHitSurfaceId
+                    }
+                    val hpLoss = state.damageTaken - damageBefore
+                    if (wallImpact) {
+                        wallImpactFrames++
+                        // Cooldown + surface id proves the wall event. Other damage may land in the same frame,
+                        // so the frame's tracked HP loss is only an upper bound, never claimed as exact wall damage.
+                        wallHpLossUpperBound += hpLoss
+                    } else nonWallHpLoss += hpLoss
+                }
+                state.dungeon?.let { held ->
+                    if (entryHpShare.isNaN()) entryHpShare = state.hp / state.maxHp
+                    if (held.engagedRoom >= 0 && held.engagedRoom != lastEngagedRoom) {
+                        lastEngagedRoom = held.engagedRoom
+                        roomEntryHp += "${held.engagedRoom}:${"%.3f".format(state.hp / state.maxHp)}"
+                    }
                 }
                 pilot.observe(state)
                 state.takeSoundCues()
@@ -202,6 +242,8 @@ class DungeonPilotGateTest {
             pilot.observe(state)
             return DungeonRun(
                 seed, pilot.attempt, state.phase, state.elapsed, state.hp, state.level, state.weapon, state.weaponLevel, state.message,
+                entryHpShare, lastEngagedRoom, roomEntryHp.joinToString(","),
+                wallImpactFrames, wallHpLossUpperBound, nonWallHpLoss,
             )
         }
 
@@ -250,6 +292,8 @@ class DungeonPilotGateTest {
                 val (name, value) = entry.split('=').map { it.trim() }
                 structures = when (name) {
                     "garrisonScale" -> structures.copy(garrisonScale = value.toFloat())
+                    "garrisonHealthMultiplier" -> structures.copy(garrisonHealthMultiplier = value.toFloat())
+                    "garrisonDamageMultiplier" -> structures.copy(garrisonDamageMultiplier = value.toFloat())
                     "wallDamageScale" -> structures.copy(wallDamageScale = value.toFloat())
                     else -> error("unknown structure knob $name")
                 }

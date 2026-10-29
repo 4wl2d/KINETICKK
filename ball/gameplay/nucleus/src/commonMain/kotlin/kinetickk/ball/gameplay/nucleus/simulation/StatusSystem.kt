@@ -304,8 +304,6 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
                     loseIntegrity(maxHp * 0.04f)
                 }
             }
-            val spread = build.breakSpread(element)
-            if (spread > 0) applyStatusAround(enemy.x, enemy.y, build.breakSpreadRadius(element), element, spread.toFloat(), outputGeneration, enemy.id)
             shockwave(enemy.x, enemy.y, 0.28f, radius, FxColorCode.elementTone(element))
         }
         StatusElement.CRYO -> {
@@ -397,6 +395,8 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
             shockwave(enemy.x, enemy.y, 0.3f, enemy.radius * 2.6f, FxColorCode.elementTone(element))
         }
     }
+    val spread = build.breakSpread(element)
+    if (spread > 0) applyStatusAround(enemy.x, enemy.y, build.breakSpreadRadius(element), element, spread.toFloat(), outputGeneration, enemy.id)
     if (affinityTier(element) >= 3) applyStatusAround(enemy.x, enemy.y, 130f, element, 2f, outputGeneration, enemy.id)
     recordStatusCue(VisualFxCue.StatusBroken(enemy.x, enemy.y, element.ordinal))
     if (generation == 0 || listens(EffectTrigger.BREAK)) onBreak(enemy, element)
@@ -612,8 +612,9 @@ internal fun MutableGameState.updateStatuses(delta: Float) {
             }
         }
         val gravitic = stacks(enemy, StatusElement.GRAVITIC)
-        val knockback = knockbackTaken(enemy)
-        if (gravitic > 0 && centroidWeight > gravitic && knockback > 0f && !isFrozen(enemy)) {
+        if (gravitic > 0 && centroidWeight > gravitic && !isFrozen(enemy)) {
+            val knockback = knockbackTaken(enemy)
+            if (!(knockback > 0f)) continue
             val dx = centroidX - enemy.x
             val dy = centroidY - enemy.y
             val distance = length(dx, dy)
@@ -775,22 +776,17 @@ internal fun MutableGameState.consumeMark(enemy: Enemy, kind: MarkKind): Boolean
  */
 internal fun MutableGameState.statusBits(enemy: Enemy): Int {
     var bits = 0
+    var primed = false
     for (element in StatusElement.entries) {
-        bits = bits or (min(15, stacks(enemy, element)) shl (element.ordinal * 4))
+        val count = stacks(enemy, element)
+        bits = bits or (min(15, count) shl (element.ordinal * 4))
+        if (!primed && count > 0 && count == breakThreshold(element, enemy) - 1) primed = true
     }
     if (isFrozen(enemy)) bits = bits or STATUS_FROZEN_BIT
     if (enemy.status[StatusCell.BRITTLE] > 0f) bits = bits or STATUS_BRITTLE_BIT
     if (enemy.status[StatusCell.EMBRITTLED_UNTIL] > elapsed) bits = bits or STATUS_EMBRITTLED_BIT
-    if (primed(enemy)) bits = bits or STATUS_PRIMED_BIT
+    if (primed) bits = bits or STATUS_PRIMED_BIT
     return bits
-}
-
-private fun MutableGameState.primed(enemy: Enemy): Boolean {
-    for (element in StatusElement.entries) {
-        val count = stacks(enemy, element)
-        if (count > 0 && count == breakThreshold(element, enemy) - 1) return true
-    }
-    return false
 }
 
 /** Packed affinity for presentation; see [EnemyAffinity]. The shift flag depends on the run time. */

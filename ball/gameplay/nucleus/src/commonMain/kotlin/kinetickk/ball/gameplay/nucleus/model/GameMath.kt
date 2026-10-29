@@ -50,6 +50,14 @@ fun segmentCircleIntersects(
 ): Boolean {
     if (radius < 0f) return false
     val radiusDouble = radius.toDouble()
+    // Most swept pairs are far apart. Reject disjoint bounds before the projection/division,
+    // retaining Double bounds so tangencies at large Float coordinates cannot be rounded away.
+    val left = cx.toDouble() - radiusDouble
+    val right = cx.toDouble() + radiusDouble
+    if (ax < left && bx < left || ax > right && bx > right) return false
+    val top = cy.toDouble() - radiusDouble
+    val bottom = cy.toDouble() + radiusDouble
+    if (ay < top && by < top || ay > bottom && by > bottom) return false
     return pointToSegmentDistanceSquaredDouble(cx, cy, ax, ay, bx, by) <= radiusDouble * radiusDouble
 }
 

@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 class PolarityEdgeTest {
     @Test
     fun defaultCursorSupportsSustainedAccelerationWithoutSpendingPolarity() {
-        val engine = runningEngine()
+        val engine = runningEngine().apply { velocityX = 0f }
         val initialSpeed = engine.speed
         repeat(1_200) {
             engine.updateCore(STEP)

@@ -139,11 +139,11 @@ internal val UntimedFamilies: Set<SiteFamily> =
 internal val AmbientSiteKinds: Set<SiteKind> =
     setOf(SiteKind.DRIFT_CACHE, SiteKind.LOST_CURSOR, SiteKind.GOLDEN_DRIFTER, SiteKind.QUIET_SIGNAL)
 
-/** The six-window schedule; all clocks use active simulation seconds. */
+/** The optional-site schedule; all clocks use active simulation seconds. */
 data class SiteWindowPolicy(
     val firstOfferAt: Float = 45f,
-    val offerInterval: Float = 120f,
-    val lastOfferAt: Float = 645f,
+    val offerInterval: Float = 180f,
+    val lastOfferAt: Float = 405f,
     val offerLifetime: Float = 40f,
     val trialDuration: Float = 25f,
     val orbitRequiredSeconds: Float = 8f,
@@ -173,7 +173,7 @@ data class RacePolicy(
     val nudgeStep: Float = 80f,
     val nudgeAttempts: Int = 5,
     /** Par flight speed: the steady model at this cursor reach. */
-    val parReach: Float = 0.5f,
+    val parReach: Float = 0.65f,
     val turnAllowanceSeconds: Float = 0.3f,
     val goldFactor: Float = 1.0f,
     val silverFactor: Float = 1.3f,
@@ -207,7 +207,7 @@ data class RacePolicy(
 }
 
 data class ChallengePolicy(
-    val brakelessRequired: Float = 14f,
+    val brakelessRequired: Float = 16f,
     val brakelessDuration: Float = 20f,
     val brakelessStartRadius: Float = 900f,
     val brakelessEndRadius: Float = 450f,
@@ -231,7 +231,7 @@ data class ChallengePolicy(
     val velocityMinSpeed: Float = 1_400f,
     val velocityZoneRadius: Float = 1_800f,
     val slalomPoles: Int = 6,
-    val slalomDuration: Float = 18f,
+    val slalomDuration: Float = 10f,
     val slalomFirstAlong: Float = 360f,
     val slalomSpacing: Float = 340f,
     val slalomPoleOffset: Float = 150f,
@@ -291,11 +291,14 @@ data class AmbientSiteRule(
     val revealDistance: Float = 0f,
     /** Proximity trigger instead of fly-through; 0 = fly-through. */
     val triggerRadius: Float = 0f,
+    /** The rule is available in this share of run seeds, independently of per-cell placement. */
+    val runChance: Float = 1f,
 ) {
     init {
         require(kind in AmbientSiteKinds) { "Ambient sites are drift caches or the hash-placed secrets" }
         require(minDistance >= 6_000f && fullDistance > minDistance) { "Ambient sites start at least 6000 u from the origin" }
         require(maxChance in 0f..0.5f) { "Ambient site chance must be in 0..0.5" }
+        require(runChance in 0f..1f) { "Ambient run chance must be in 0..1" }
         require(cellSize in 2_400f..12_000f) { "Ambient site cells must be in 2400..12000" }
         require(revealDistance.isFinite() && revealDistance >= 0f && triggerRadius.isFinite() && triggerRadius >= 0f)
     }
@@ -307,17 +310,20 @@ data class AmbientSitePolicy(
     val settleDistance: Float = 1_800f,
     val rules: ImmutableList<AmbientSiteRule> = immutableListOf(
         AmbientSiteRule(
-            SiteKind.DRIFT_CACHE, cellSize = 3_000f, minDistance = 6_000f, fullDistance = 14_000f, maxChance = 0.18f,
+            SiteKind.DRIFT_CACHE, cellSize = 3_000f, minDistance = 6_000f, fullDistance = 14_000f, maxChance = 0.06f,
             revealDistance = 1_800f,
         ),
-        AmbientSiteRule(SiteKind.LOST_CURSOR, cellSize = 6_000f, minDistance = 9_000f, fullDistance = 18_000f, maxChance = 0.10f),
         AmbientSiteRule(
-            SiteKind.GOLDEN_DRIFTER, cellSize = 4_000f, minDistance = 6_000f, fullDistance = 12_000f, maxChance = 0.08f,
-            triggerRadius = 1_300f,
+            SiteKind.LOST_CURSOR, cellSize = 6_000f, minDistance = 9_000f, fullDistance = 18_000f, maxChance = 0.03f,
+            runChance = 0.45f,
         ),
         AmbientSiteRule(
-            SiteKind.QUIET_SIGNAL, cellSize = 8_000f, minDistance = 20_000f, fullDistance = 30_000f, maxChance = 0.30f,
-            revealDistance = 3_000f,
+            SiteKind.GOLDEN_DRIFTER, cellSize = 4_000f, minDistance = 6_000f, fullDistance = 12_000f, maxChance = 0.025f,
+            triggerRadius = 1_300f, runChance = 0.35f,
+        ),
+        AmbientSiteRule(
+            SiteKind.QUIET_SIGNAL, cellSize = 8_000f, minDistance = 20_000f, fullDistance = 30_000f, maxChance = 0.08f,
+            revealDistance = 3_000f, runChance = 0.3f,
         ),
     ),
     val cacheData: SiteReward = SiteReward(data = 12, matter = 10),
@@ -343,6 +349,8 @@ data class AmbientSitePolicy(
 }
 
 data class SecretPolicy(
+    /** A qualifying journey can reveal the Cartographer in this share of seeds. */
+    val farSigilRunChance: Float = 0.25f,
     val farTravelDistance: Float = 30_000f,
     val farTravelBefore: Float = 480f,
     /** Sigils are refused and fade at `bossAt − sigilCutoff`. */
@@ -376,6 +384,7 @@ data class SecretPolicy(
     val doodleReward: SiteReward = SiteReward(matter = 30),
 ) {
     init {
+        require(farSigilRunChance in 0f..1f) { "Far sigil run chance must be in 0..1" }
         require(spinBuckets in 1..ContentBounds.MAX_SPIN_BUCKETS) { "Spin buckets must be in 1..${ContentBounds.MAX_SPIN_BUCKETS}" }
         require(spinTurns in 1f..20f) { "Spin turns must be in 1..20" }
         require(spinMinDistance.isFinite() && spinMinDistance >= 0f && spinMaxDistance.isFinite() && spinMinDistance < spinMaxDistance) {
@@ -480,24 +489,24 @@ fun defaultSiteDefinitions(): ImmutableList<SiteDefinition> = immutableListOf(
     ),
     SiteDefinition(
         SiteKind.BRAKELESS_TRIAL, "Brakeless run",
-        "Keep moving inside the shrinking ring for fourteen seconds. Braking fails the trial.",
-        SiteReward(directed = DirectedReward.ITEM_AND_REPAIR), windowWeight = CHALLENGE_WINDOW_WEIGHT, duration = 20f,
+        "Keep moving inside the shrinking ring for sixteen seconds. Braking fails the trial.",
+        SiteReward(directed = DirectedReward.ITEM_AND_REPAIR, matter = 15), windowWeight = CHALLENGE_WINDOW_WEIGHT, duration = 20f,
     ),
     SiteDefinition(
         SiteKind.RAM_TRIAL, "Ram rite", "Destroy two marked drifters with Dash impacts.",
-        SiteReward(directed = DirectedReward.WEAPON), windowWeight = CHALLENGE_WINDOW_WEIGHT, duration = 20f,
+        SiteReward(directed = DirectedReward.WEAPON, matter = 15), windowWeight = CHALLENGE_WINDOW_WEIGHT, duration = 20f,
     ),
     SiteDefinition(
         SiteKind.UNTOUCHED_TRIAL, "Untouched", "Stay inside the ring for ten seconds without taking damage.",
-        SiteReward(directed = DirectedReward.RELIC), windowWeight = CHALLENGE_WINDOW_WEIGHT, duration = 22f,
+        SiteReward(directed = DirectedReward.RELIC, matter = 15), windowWeight = CHALLENGE_WINDOW_WEIGHT, duration = 22f,
     ),
     SiteDefinition(
         SiteKind.VELOCITY_TRIAL, "Velocity hold", "Hold Overdrive velocity for six seconds within the zone.",
-        SiteReward(directed = DirectedReward.ITEM_AND_REPAIR), windowWeight = CHALLENGE_WINDOW_WEIGHT,
+        SiteReward(directed = DirectedReward.ITEM_AND_REPAIR, matter = 15), windowWeight = CHALLENGE_WINDOW_WEIGHT,
     ),
     SiteDefinition(
         SiteKind.SLALOM_TRIAL, "Slalom", "Pass each pole on its flagged side, in order.",
-        SiteReward(directed = DirectedReward.WEAPON), windowWeight = CHALLENGE_WINDOW_WEIGHT, duration = 18f,
+        SiteReward(directed = DirectedReward.WEAPON, matter = 15), windowWeight = CHALLENGE_WINDOW_WEIGHT, duration = 10f,
     ),
     SiteDefinition(
         SiteKind.BOUNTY_ARENA, "Bounty", "Defeat the marked target. Leaving the arena forfeits the bounty.",

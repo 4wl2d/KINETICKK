@@ -491,9 +491,9 @@ data class SignalTuning(
 data class SignalPolicy(
     val enabled: Boolean = true,
     val firstAtSeconds: Float = 115f,
-    val intervalSeconds: Float = 120f,
-    val slots: Int = 5,
-    val perRun: Int = 3,
+    val intervalSeconds: Float = 180f,
+    val slots: Int = 3,
+    val perRun: Int = 1,
     val lifetimeSeconds: Float = 30f,
     val distance: Float = 640f,
     val sideAngle: Float = 0.9f,

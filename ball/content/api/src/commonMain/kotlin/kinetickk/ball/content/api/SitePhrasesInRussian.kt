@@ -9,8 +9,8 @@ internal val SitePhrasesInRussian: List<Pair<String, String>> = listOf(
     "Fly through the gates in order. Beat the par time for gold." to
         "Пролетите через врата по порядку. Уложитесь в норматив, чтобы взять золото.",
     "Brakeless run" to "Без тормозов",
-    "Keep moving inside the shrinking ring for fourteen seconds. Braking fails the trial." to
-        "Двигайтесь внутри сужающегося кольца четырнадцать секунд. Торможение проваливает вызов.",
+    "Keep moving inside the shrinking ring for sixteen seconds. Braking fails the trial." to
+        "Двигайтесь внутри сужающегося кольца шестнадцать секунд. Торможение проваливает вызов.",
     "Ram rite" to "Обряд тарана",
     "Destroy two marked drifters with Dash impacts." to "Уничтожьте двух отмеченных дрейферов ударами в рывке.",
     "Untouched" to "Неприкасаемый",
@@ -85,8 +85,8 @@ internal val SitePhrasesInRussian: List<Pair<String, String>> = listOf(
     "Some ruins twist." to "Некоторые руины петляют.",
     "Hot halls where something is still being made." to "Жаркие залы, где что-то ещё производят.",
     "Some ruins are still warm." to "Некоторые руины ещё теплы.",
-    "A shrine that keeps one relic behind its doors." to "Святилище, хранящее за дверями одну реликвию.",
-    "Some ruins keep relics." to "Некоторые руины хранят реликвии.",
+    "A shrine whose guarded sanctum holds a Gravitic aspect." to "Святилище, хранящее гравитационный аспект под защитой стражей.",
+    "Some ruins bend gravity." to "Некоторые руины искривляют гравитацию.",
     "A tiny grey cursor adrift far from the start. Now it follows you." to
         "Крошечный серый курсор, дрейфующий вдали от старта. Теперь он следует за вами.",
     "Something small drifts where no one steers." to "Что-то маленькое дрейфует там, где никто не правит.",
