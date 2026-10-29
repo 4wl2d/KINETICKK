@@ -235,6 +235,11 @@ layout sweeps. `KK_SHOTS=1` renders the full size and language matrix of the
 
 `./gradlew verifyArchitecture` checks the module dependency graph.
 
+CI splits `desktopTest` into parallel shards. `-Pkinetickk.desktopTest.shard=gates-1`
+(through the last `gates-N`) runs one shard of the seeded balance gates, and `rest`
+runs every class that no gate shard lists. The lists live in build-logic's
+`DesktopTestShard`. Without the property, `desktopTest` runs every class.
+
 [CI](.github/workflows/ci.yml) defines the complete platform checks.
 [Performance tools](tools/performance/README.md) cover benchmark comparisons.
 Agent instructions are in [AGENTS.md](AGENTS.md).
