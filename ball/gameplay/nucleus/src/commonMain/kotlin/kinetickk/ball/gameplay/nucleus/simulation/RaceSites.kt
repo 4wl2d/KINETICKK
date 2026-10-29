@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.ObstacleKind
 import kinetickk.ball.content.api.SiteNotice
 import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.gameplay.nucleus.model.SitePoint
@@ -12,6 +13,7 @@ import kinetickk.ball.gameplay.nucleus.model.distanceSquared
 import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.model.segmentCircleIntersects
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
+import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -130,8 +132,8 @@ internal fun MutableGameState.drawnBackFromStructures(
 
 /**
  * One step of the running race [site] (its clock and countdown already exclude this step): lost on time out or once
- * the Core strays from the next gate; a swept pass through the next gate (only the next one counts) advances it, and
- * passing the last finishes it.
+ * the Core strays from the next gate; a swept pass through the next gate (only the next one counts) advances it, boosts
+ * the Core like an accelerator gate, and passing the last finishes it.
  */
 internal fun MutableGameState.advanceRaceSite(site: SiteState, delta: Float) {
     val trial = site.copy(clock = site.clock + delta, remaining = max(0f, site.remaining - delta))
@@ -152,6 +154,31 @@ internal fun MutableGameState.advanceRaceSite(site: SiteState, delta: Float) {
     emitSound(GameplayAudioCue.PICKUP)
     burst(gateX, gateY, 10, GATE_BURST_COLOR)
     if (passed.step < passed.course.size) sites = listOf(passed) else finishRace(passed, gateX, gateY)
+    boostThroughRaceGate(trial, gateX, gateY)
+}
+
+/**
+ * The gate of [race]'s current step at ([gateX], [gateY]) was passed: like an accelerator gate it speeds the Core by
+ * the race policy's gate boost share of the accelerator-gate impulse along its travel (along the course from the
+ * previous mark while the Core rests), capped like every obstacle boost, and fires BOOST with the accelerator gate's
+ * kind. Nothing at a zero share or once the pass opened a choice; it acts last, after the race advanced or finished.
+ */
+private fun MutableGameState.boostThroughRaceGate(race: SiteState, gateX: Float, gateY: Float) {
+    val share = content.sites.race.gateBoostShare
+    if (share <= 0f || phase != GamePhase.RUNNING) return
+    var fromX = race.x
+    var fromY = race.y
+    if (race.step > 0) {
+        val previous = race.course[race.step - 1]
+        fromX += previous.dx
+        fromY += previous.dy
+    }
+    val dx = gateX - fromX
+    val dy = gateY - fromY
+    val distance = length(dx, dy)
+    val restX = if (distance > 1f) dx / distance else lastAimDirectionX
+    val restY = if (distance > 1f) dy / distance else lastAimDirectionY
+    applyObstacleBoost(content.obstacles.kinds.gateImpulse * share, ObstacleKind.ACCEL_GATE, restX, restY)
 }
 
 /**

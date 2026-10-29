@@ -4,7 +4,12 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.DirectedReward
+import kinetickk.ball.content.api.EffectAction
+import kinetickk.ball.content.api.EffectClause
+import kinetickk.ball.content.api.EffectCondition
+import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.GameplayContentSnapshot
+import kinetickk.ball.content.api.ObstacleKind
 import kinetickk.ball.content.api.RacePolicy
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.SiteNotice
@@ -232,6 +237,66 @@ class RaceSiteTest {
         assertEquals(2, game.sites.single().step)
         game.flyStep(gateX - 40f, gateY + radius - 1f, gateX + 40f, gateY + radius - 1f)
         assertEquals(3, game.sites.single().step)
+    }
+
+    /** Calibrated Coil vents heat on BOOST from an accelerator gate. */
+    private val gateBoostContent = contentWithClauses(
+        "Calibrated Coil",
+        EffectClause(EffectTrigger.BOOST, immutableListOf(EffectCondition.ObstacleIs(ObstacleKind.ACCEL_GATE)),
+            immutableListOf(EffectAction.Vent(20f)), cooldownSeconds = 0.5f),
+    )
+
+    /** A run with the gate BOOST clause at 50 heat and no obstacle. */
+    private fun boostingGame(content: GameplayContentSnapshot = gateBoostContent): MutableGameState =
+        buildTestState(content = content, seed = 40_417).apply {
+            clearObstaclesForTesting()
+            own("Calibrated Coil")
+            heat = 50f
+        }
+
+    @Test
+    fun aPassedGateBoostsTheCoreLikeAnAcceleratorGateAtItsShare() {
+        val kinds = canonicalGameplayContent.obstacles.kinds
+        val share = canonicalGameplayContent.sites.race.gateBoostShare
+        assertEquals(0.5f, share)
+        val game = boostingGame()
+        val race = game.startRace()
+        val cap = game.obstacleLethalSpeed() * kinds.boostLethalShare
+        assertTrue(800f + kinds.gateImpulse * share < cap, "the test pass stays under the boost cap: $cap")
+        game.setVelocityForTesting(800f, 0f)
+        game.passGate(race, 0)
+        assertEquals(1, game.sites.single().step)
+        assertEquals(800f + kinds.gateImpulse * share, game.speed, 0.01f)
+        assertEquals(0f, game.velocityY, "along its travel")
+        assertTrue(game.heat < 50f, "BOOST fired with the accelerator gate's kind")
+
+        // At rest the Core is boosted along the course from the previous gate to the passed one.
+        game.setVelocityForTesting(0f, 0f)
+        game.passGate(race, 1)
+        assertEquals(2, game.sites.single().step)
+        val alongX = race.course[1].dx - race.course[0].dx
+        val alongY = race.course[1].dy - race.course[0].dy
+        val along = length(alongX, alongY)
+        assertEquals(kinds.gateImpulse * share, game.speed, 0.01f)
+        assertEquals(alongX / along, game.velocityX / game.speed, 1e-4f)
+        assertEquals(alongY / along, game.velocityY / game.speed, 1e-4f)
+
+        // The last gate finishes the race and still boosts.
+        val finishing = boostingGame()
+        val last = lastGateAt(finishing, clock = 1f)
+        finishing.setVelocityForTesting(800f, 0f)
+        finishing.passGate(last, last.course.lastIndex)
+        assertTrue(finishing.sites.isEmpty())
+        assertEquals(800f + kinds.gateImpulse * share, finishing.speed, 0.01f)
+
+        // A zero share boosts nothing and fires no BOOST.
+        val plain = boostingGame(gateBoostContent.withRace(RacePolicy(gateBoostShare = 0f)))
+        val plainRace = plain.startRace()
+        plain.setVelocityForTesting(800f, 0f)
+        plain.passGate(plainRace, 0)
+        assertEquals(1, plain.sites.single().step)
+        assertEquals(800f, plain.speed)
+        assertEquals(50f, plain.heat)
     }
 
     /** The running race of [game] with its last gate next and [clock] seconds flown. */
