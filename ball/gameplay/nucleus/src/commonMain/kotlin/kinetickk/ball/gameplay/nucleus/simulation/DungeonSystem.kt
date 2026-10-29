@@ -54,9 +54,18 @@ internal const val GARRISON_SALT: Long = 0x57C0_C7E5_5EED_0003L
 /** A sealed room's encounter tag: the structure id with the room index in its free low byte. */
 internal fun roomEncounterTag(structureId: Long, room: Int): Long = encounterTag(EncounterOwner.ROOM, structureId or room.toLong())
 
-/** The dungeon step, after the sites: the Architect's collapse, entry, leaving, the sealed room's upkeep, engagement. */
+/**
+ * The dungeon step, after the sites: the Architect's collapse, entry, leaving, the sealed room's upkeep, engagement. A
+ * seal, or its end however it comes, switches the director's habitat, and the event it planned keeps to the new one.
+ */
 @Suppress("UNUSED_PARAMETER")
 internal fun MutableGameState.updateStructures(delta: Float) {
+    val interior = structureInteriorActive()
+    stepDungeon()
+    if (structureInteriorActive() != interior) keepPendingEventInHabitat()
+}
+
+private fun MutableGameState.stepDungeon() {
     val policy = content.structures
     if (!policy.enabled || phase != GamePhase.RUNNING) return
     if (bossSpawned) {

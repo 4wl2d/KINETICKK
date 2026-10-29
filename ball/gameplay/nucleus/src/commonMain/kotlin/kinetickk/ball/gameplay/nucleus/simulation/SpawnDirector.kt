@@ -53,6 +53,8 @@ internal const val DIRECTOR_CHECK_SECONDS: Float = 0.4f
 internal const val DIRECTOR_RATE_SCALE: Float = 1f
 /** An event never fires below this share of its planned size. */
 internal const val MINIMUM_EVENT_SHARE: Float = 0.6f
+/** Salt of the hashed kind a planned event takes when the habitat changed under it (no run stream is drawn). */
+internal const val EVENT_HABITAT_SALT: Long = 0x0E7E_4AB1_7A7E_0001L
 /** A Swarmling fills this share of an ordinary cap slot and of the spawn budget. */
 internal const val SWARMLING_CAP_COST: Float = 1f / 3f
 internal const val MAX_SPAWN_BUDGET: Float = 14f
@@ -198,6 +200,20 @@ private fun MutableGameState.planAmbush() {
     pendingEventSize = rangeInclusive(3, 5)
     pendingEventType = type.ordinal
     ambushReadyAt = elapsed + AMBUSH_COOLDOWN_SECONDS * ambushCooldownScale()
+}
+
+/**
+ * Run when a room's seal or its end switches [ambientHabitat]: the planned event's fixed kind was picked under the
+ * habitat before, so one with no weight in the habitat now gives way to a kind of this habitat, Swarmlings left out,
+ * from a hash of the run seed and the event count. The event keeps its kind and size, and no stream is drawn.
+ */
+internal fun MutableGameState.keepPendingEventInHabitat() {
+    val typeIndex = pendingEventType
+    if (typeIndex < 0) return
+    val habitat = ambientHabitat()
+    if (content.enemy(EnemyType.entries[typeIndex]).weightIn(habitat) > 0f) return
+    val roll = hashUnit(runHash(runSeed, EVENT_HABITAT_SALT, (spawnEventCount.toLong() shl 8) or habitat.ordinal.toLong()))
+    pendingEventType = pickEnemyType(excludeSwarmling = true, unitRoll = roll).ordinal
 }
 
 /**
@@ -563,11 +579,15 @@ internal fun MutableGameState.typeWeight(
     return weight
 }
 
-/** Weighted type pick over the eligible roster; Wardens past their cap become Weavers. */
+/**
+ * Weighted type pick over the eligible roster; Wardens past their cap become Weavers. The roll is a spawn-stream draw
+ * unless the caller hands one in [0, 1) as [unitRoll].
+ */
 internal fun MutableGameState.pickEnemyType(
     weakOnly: Boolean = false,
     excludeSwarmling: Boolean = false,
     personality: Boolean = true,
+    unitRoll: Float = Float.NaN,
 ): EnemyType {
     val roster = content.enemies
     var total = 0f
@@ -577,7 +597,7 @@ internal fun MutableGameState.pickEnemyType(
         total += typeWeight(definition, weakOnly, personality = personality)
     }
     if (total <= 0f) return EnemyType.DRIFTER
-    var roll = spawnRandom.nextFloat() * total
+    var roll = (if (unitRoll.isNaN()) spawnRandom.nextFloat() else unitRoll) * total
     var picked = EnemyType.DRIFTER
     for (index in roster.indices) {
         val definition = roster[index]

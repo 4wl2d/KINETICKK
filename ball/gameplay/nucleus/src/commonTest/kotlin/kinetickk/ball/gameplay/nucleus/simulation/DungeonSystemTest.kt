@@ -852,6 +852,53 @@ class DungeonSystemTest {
     }
 
     @Test
+    fun anEventPlannedBeforeASealOrItsClearFiresKindsOfTheHabitatItFiresIn() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        run.elapsed = 150f
+        fun livesIn(type: EnemyType, habitat: EnemyHabitat) = run.content.enemy(type).weightIn(habitat) > 0f
+
+        /** Plans until the event's fixed kind is one [habitat] lacks. */
+        fun planOutside(habitat: EnemyHabitat) {
+            var plans = 0
+            do {
+                run.planSpawnEvent()
+                plans++
+            } while ((run.pendingEventType < 0 || livesIn(EnemyType.entries[run.pendingEventType], habitat)) && plans < 500)
+            assertFalse(livesIn(EnemyType.entries[run.pendingEventType], habitat), "a kind $habitat lacks after $plans plans")
+        }
+
+        /** Fires the planned event with budget to spare; returns the kinds it spawned. */
+        fun fire(): List<EnemyType> {
+            run.enemies.removeAll { it.ownerTag == 0L }
+            val kind = run.pendingEventKind
+            val size = run.pendingEventSize
+            run.spawnBudget = 20f
+            run.spawnClock = 0f
+            run.spawnWave(step)
+            assertEquals(-1, run.pendingEventKind, "the event fired")
+            assertEquals(kind, run.lastSpawnEventKind, "the event keeps its kind")
+            assertEquals(size, run.lastSpawnEventPlanned, "the event keeps its size")
+            return run.enemies.filter { it.ownerTag == 0L }.map { it.type }
+        }
+
+        // Planned in open space with a kind that lives only there, fired once the room has sealed.
+        planOutside(EnemyHabitat.STRUCTURE)
+        dungeon.enterRoom(1)
+        assertTrue(run.structureInteriorActive())
+        val sealed = fire()
+        assertTrue(sealed.isNotEmpty() && sealed.all { livesIn(it, EnemyHabitat.STRUCTURE) }, "only STRUCTURE kinds while sealed: $sealed")
+
+        // Planned while sealed with a STRUCTURE-only kind, fired once the room has cleared.
+        planOutside(EnemyHabitat.SPACE)
+        run.killGarrisonForTesting()
+        run.updateStructures(step)
+        assertFalse(run.structureInteriorActive(), "the room cleared")
+        val cleared = fire()
+        assertTrue(cleared.isNotEmpty() && cleared.all { livesIn(it, EnemyHabitat.SPACE) }, "only SPACE kinds after the clear: $cleared")
+    }
+
+    @Test
     fun pilotsSeeEveryStructureOfTheWindowAsOneCircle() {
         val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
         val run = dungeon.run
