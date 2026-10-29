@@ -304,6 +304,20 @@ internal fun rewardCardRestRotation(index: Int, count: Int): Float = when (count
     else -> kkLerp(-4f, 3f, index / (count - 1f))
 }
 
+/** How far a lifted (selected) card rises, in dp. */
+internal const val RewardCardLiftDp = 22f
+
+/**
+ * Whether card [index] of the dealt [cards] rises when lifted: only when no card of the deal sits above it in its column,
+ * so a lower row's lifted card never rides over the frame of the card above it.
+ */
+internal fun rewardCardRises(index: Int, cards: List<Rect>): Boolean {
+    val card = cards.getOrNull(index) ?: return false
+    return cards.indices.none { other ->
+        other != index && cards[other].bottom <= card.top && cards[other].left < card.right && cards[other].right > card.left
+    }
+}
+
 /** Linear deal progress of card [index]: 120 ms after the ring, 90 ms stagger, 600/750 ms. */
 internal fun rewardDealProgress(entranceMs: Float, index: Int, rank: Int): Float =
     ((entranceMs - 120f - index * KkDeal.STAGGER_MS) / (if (rank >= 4) 750f else 600f)).coerceIn(0f, 1f)
@@ -341,6 +355,8 @@ private fun RewardCardDeal(state: RewardOverlayState) {
         if (bounds != null) key(index, card.choice) {
             val selected = state.selected == index
             val lift = if (selected) 1f else 0f
+            // A lifted card rises only with no card above it: in the portrait 2 x 2 deck the lower row stays put.
+            val rise = if (rewardCardRises(index, layout.cards)) lift else 0f
             val rest = rewardCardRestRotation(index, count)
             RewardCard(
                 presentation = card,
@@ -352,7 +368,7 @@ private fun RewardCardDeal(state: RewardOverlayState) {
                     val p = rewardDealProgress(state.entrance(), index, card.rank)
                     val eased = KkEase.Pull.transform(p)
                     translationX = (origin.x - bounds.center.x) * (1f - eased)
-                    translationY = (origin.y - bounds.center.y) * (1f - eased) - 22f * density * lift
+                    translationY = (origin.y - bounds.center.y) * (1f - eased) - RewardCardLiftDp * density * rise
                     rotationZ = kkLerp(-38f, rest, eased) - 1.5f * lift
                     val s = kkLerp(0.6f, 1f, eased)
                     scaleX = s
