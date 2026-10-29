@@ -424,6 +424,24 @@ class ChallengeSiteTest {
         assertEquals(0f, walled.startChallenge(SiteKind.SLALOM_TRIAL).axis)
     }
 
+    @Test
+    fun aSlalomThatWouldRunIntoAStructureTurnsItsAxisUntilEveryPoleKeepsOffIt() {
+        for (seed in listOf(44, 21, 88)) for (offerId in 0 until 3) for (side in 0..1) {
+            val run = vaultSideRunForTesting(seed)
+            val heading = atan2(run.velocityY, run.velocityX)
+            val slalom = run.startChallenge(SiteKind.SLALOM_TRIAL, offerId, side, run.coreX, run.coreY)
+            val label = "seed $seed window $offerId side $side"
+            assertNotEquals(heading, slalom.axis, "$label: the heading runs into the vault")
+            for ((index, pole) in slalom.course.withIndex()) {
+                // A pole in the vault's final room could never be passed: its doors stay sealed while the trial runs.
+                assertTrue(
+                    run.outsideFootprintsForTesting(slalom.x + pole.dx, slalom.y + pole.dy, policy.slalomPoleClearance),
+                    "$label: pole $index lies in a structure footprint",
+                )
+            }
+        }
+    }
+
     /** One step crossing [slalom]'s pole [index] line at [lateral] (axis 0: along x, lateral along y). */
     private fun MutableGameState.cross(slalom: SiteState, index: Int, lateral: Float) {
         val along = policy.slalomFirstAlong + policy.slalomSpacing * index

@@ -148,6 +148,29 @@ class RaceSiteTest {
     }
 
     @Test
+    fun aGateThatWouldFallInAStructureIsDrawnBackTowardTheStartOutOfItsFootprint() {
+        val policy = canonicalGameplayContent.sites.race
+        val bound = policy.maxRadius + policy.nudgeStep * policy.nudgeAttempts
+        var drawnBack = 0
+        for (seed in listOf(44, 21, 88)) for (offerId in 0 until 4) for (side in 0..1) {
+            val run = vaultSideRunForTesting(seed)
+            val race = run.startRace(offerId, side, run.coreX, run.coreY)
+            val label = "seed $seed window $offerId side $side"
+            for ((index, gate) in race.course.withIndex()) {
+                // A gate in the vault's final room could never be reached: its doors stay sealed while the race runs.
+                assertTrue(
+                    run.outsideFootprintsForTesting(race.x + gate.dx, race.y + gate.dy, policy.gateClearance),
+                    "$label: gate $index lies in a structure footprint",
+                )
+                val distance = length(gate.dx, gate.dy)
+                assertTrue(distance <= bound + 0.5f, "$label: gate $index at $distance u")
+                if (distance < policy.minRadius - 0.5f) drawnBack++
+            }
+        }
+        assertTrue(drawnBack > 0, "the vault lay across the courses, so some gates were drawn back")
+    }
+
+    @Test
     fun theParIsTheCourseAtTheSteadySpeedPlusATurnAllowanceAndTheLimitFollowsIt() {
         for (screen in listOf(1_280f to 800f, 412f to 915f)) {
             val game = game()

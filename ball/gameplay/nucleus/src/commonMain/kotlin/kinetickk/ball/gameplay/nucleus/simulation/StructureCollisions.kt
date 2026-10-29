@@ -13,6 +13,8 @@ import kinetickk.ball.gameplay.nucleus.render.EnemyBehavior
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.ProjectileKind
 import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sqrt
 
 /*
@@ -243,6 +245,82 @@ internal fun MutableGameState.structureEjected(x: Float, y: Float, radius: Float
         if (!moved) break
     }
     return steeringVector(px, py)
+}
+
+/** True when a circle of [radius] at ([x], [y]) meets a structure footprint inflated by the margin [structureEjected] keeps. */
+internal fun MutableGameState.structureFootprintBlocks(x: Float, y: Float, radius: Float): Boolean {
+    val structures = structureField.structures
+    val margin = radius + STRUCTURE_EJECT_MARGIN
+    for (index in structures.indices) {
+        val structure = structures[index]
+        val reachX = structure.halfWidth + margin
+        val reachY = structure.halfHeight + margin
+        if (abs(x - structure.x) < reachX && abs(y - structure.y) < reachY) return true
+    }
+    return false
+}
+
+/**
+ * A circle of [radius] at ([x], [y]) drawn back along its line from ([centerX], [centerY]) to just before that line
+ * first meets a structure footprint inflated by [radius] plus the margin [structureEjected] keeps, when the point lies
+ * in one. A footprint the centre stands closer to than that is inflated by half the centre's gap instead, and one that
+ * holds the centre is passed over. Unlike [structureEjected] it never moves a point away from the centre, so a course
+ * mark keeps its bound. A point outside every footprint stays.
+ */
+internal fun MutableGameState.structureClippedToward(
+    centerX: Float,
+    centerY: Float,
+    x: Float,
+    y: Float,
+    radius: Float,
+): SteeringVector {
+    val structures = structureField.structures
+    val margin = radius + STRUCTURE_EJECT_MARGIN
+    val dx = x - centerX
+    val dy = y - centerY
+    var inside = false
+    var entry = 1f
+    for (index in structures.indices) {
+        val structure = structures[index]
+        val fromX = centerX - structure.x
+        val fromY = centerY - structure.y
+        val gap = max(abs(fromX) - structure.halfWidth, abs(fromY) - structure.halfHeight)
+        if (gap <= 0f) continue
+        val inflate = min(margin, gap * 0.5f)
+        val reachX = structure.halfWidth + inflate
+        val reachY = structure.halfHeight + inflate
+        if (abs(x - structure.x) < reachX && abs(y - structure.y) < reachY) inside = true
+        entry = min(entry, boxEntry(fromX, fromY, dx, dy, reachX, reachY))
+    }
+    if (!inside) return steeringVector(x, y)
+    val share = max(0f, entry - EJECT_SEPARATION / length(dx, dy))
+    return steeringVector(centerX + dx * share, centerY + dy * share)
+}
+
+/**
+ * The fraction of the segment from ([fromX], [fromY]) along ([dx], [dy]) at which it enters the open box |x| < [reachX],
+ * |y| < [reachY] it starts outside of, or 1 when it never does.
+ */
+private fun boxEntry(fromX: Float, fromY: Float, dx: Float, dy: Float, reachX: Float, reachY: Float): Float {
+    var enter = 0f
+    var leave = 1f
+    if (dx == 0f) {
+        if (abs(fromX) >= reachX) return 1f
+    } else {
+        val a = (-reachX - fromX) / dx
+        val b = (reachX - fromX) / dx
+        enter = max(enter, min(a, b))
+        leave = min(leave, max(a, b))
+    }
+    if (dy == 0f) {
+        if (abs(fromY) >= reachY) return 1f
+    } else {
+        val a = (-reachY - fromY) / dy
+        val b = (reachY - fromY) / dy
+        enter = max(enter, min(a, b))
+        leave = min(leave, max(a, b))
+    }
+    return if (enter < leave) enter else 1f
 }
 
 /** True when ([x], [y]) lies inside the engaged room of the dungeon held in [structure]. */

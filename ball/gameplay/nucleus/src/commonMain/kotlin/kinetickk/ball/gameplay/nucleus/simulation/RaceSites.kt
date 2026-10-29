@@ -30,10 +30,11 @@ private const val GATE_BURST_COLOR: Int = 1
 
 /**
  * The running race the Core starts by entering [site]: 5..7 gates swept around the start in a loop that never closes
- * on it, each gate moved outward from the start until clear of obstacles. The course comes from a hash of the run seed
- * and the window side, so it draws from no stream; the par is the course's length at the steady speed of the policy's
- * cursor reach plus a turn allowance per gate after the first, and the limit is the par's share, at least the policy's
- * minimum and at most the window's trial.
+ * on it, each gate moved outward from the start until clear of obstacles, and a gate that then lies in a structure
+ * drawn back toward the start out of it. The course comes from a hash of the run seed and the window side, so it draws
+ * from no stream; the par is the course's length at the steady speed of the policy's cursor reach plus a turn allowance
+ * per gate after the first, and the limit is the par's share, at least the policy's minimum and at most the window's
+ * trial.
  */
 internal fun MutableGameState.startedRace(site: SiteState): SiteState {
     val race = content.sites.race
@@ -49,10 +50,11 @@ internal fun MutableGameState.startedRace(site: SiteState): SiteState {
     for (index in 0 until gates) {
         val angle = heading + turn * sweep * index + (2f * random.nextFloat() - 1f) * race.angleJitter
         val radius = race.minRadius + random.nextFloat() * (race.maxRadius - race.minRadius)
-        val gate = nudgedFrom(
+        val nudged = nudgedFrom(
             site.x, site.y, site.x + cos(angle) * radius, site.y + sin(angle) * radius,
             race.gateClearance, race.nudgeStep, race.nudgeAttempts,
         )
+        val gate = drawnBackFromStructures(site.x, site.y, nudged, race.gateClearance, race.nudgeStep, race.nudgeAttempts)
         val dx = gate.x - site.x
         val dy = gate.y - site.y
         path += length(dx - fromX, dy - fromY)
@@ -89,6 +91,38 @@ internal fun MutableGameState.nudgedFrom(
         val distance = max(1f, length(dx, dy))
         pointX += dx / distance * step
         pointY += dy / distance * step
+        moves++
+    }
+    return steeringVector(pointX, pointY)
+}
+
+/**
+ * [mark] drawn back toward ([centerX], [centerY]) out of any structure footprint it lies in, then moved on toward the
+ * centre in [step]s while a circle of [clearance] there is blocked by obstacles or walls (at most [attempts] moves,
+ * never onto the centre). A course mark inside a structure could sit behind a lock-sealed door for the whole trial,
+ * since no room engages while a window site runs; drawn back along its ray it stays within its bound, which moving it
+ * outward past a structure would not. A mark clear of every structure stays.
+ */
+internal fun MutableGameState.drawnBackFromStructures(
+    centerX: Float,
+    centerY: Float,
+    mark: SteeringVector,
+    clearance: Float,
+    step: Float,
+    attempts: Int,
+): SteeringVector {
+    val clipped = structureClippedToward(centerX, centerY, mark.x, mark.y, clearance)
+    if (clipped == mark) return mark
+    var pointX = clipped.x
+    var pointY = clipped.y
+    var moves = 0
+    while (moves < attempts && isSpawnPointBlocked(pointX, pointY, clearance)) {
+        val dx = pointX - centerX
+        val dy = pointY - centerY
+        val distance = length(dx, dy)
+        if (distance <= step) break
+        pointX -= dx / distance * step
+        pointY -= dy / distance * step
         moves++
     }
     return steeringVector(pointX, pointY)

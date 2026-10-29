@@ -12,9 +12,11 @@ import kinetickk.ball.gameplay.nucleus.model.ObstacleField
 import kinetickk.ball.gameplay.nucleus.model.PlacedStructure
 import kinetickk.ball.gameplay.nucleus.model.StructureField
 import kinetickk.ball.gameplay.nucleus.model.Wall
+import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.render.WallKind
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.toImmutableList
+import kotlin.math.abs
 
 /** Canonical content with structures turned on and every shipped placement number. */
 internal val structuresEnabledContent: GameplayContentSnapshot =
@@ -66,6 +68,30 @@ internal fun MutableGameState.teleportCoreForTesting(absoluteX: Double, absolute
     structureField = StructureField.EMPTY
     refreshObstacleWindow()
 }
+
+/**
+ * A started run of [seed] with a Vault in the absolute cell (12, −9) and the Core resting where an offer laid over the
+ * vault's +y side is ejected to (as a window places it), flying into the vault at 600 u/s: a course laid from there
+ * along the flight runs into the vault, whose final room opens only once both galleries are cleared.
+ */
+internal fun vaultSideRunForTesting(seed: Int): MutableGameState {
+    val run = buildTestState(content = forcedStructureContent(StructureTemplateId.VAULT), seed = seed)
+    val placement = run.structureAtForTesting(12, -9)
+    run.teleportCoreForTesting(placement.absoluteX, placement.absoluteY)
+    val vault = run.structureField.structures[run.structureField.indexOf(placement.id)]
+    val (startX, startY) = run.clearPointOfInterestSite(vault.x, vault.y + vault.halfHeight - 200f)
+    run.coreX = startX
+    run.coreY = startY
+    run.previousCoreX = startX
+    run.previousCoreY = startY
+    val distance = length(vault.x - startX, vault.y - startY)
+    run.setVelocityForTesting((vault.x - startX) / distance * 600f, (vault.y - startY) / distance * 600f)
+    return run
+}
+
+/** True when ([x], [y]) lies outside every structure footprint of the window inflated by [inflate]. */
+internal fun MutableGameState.outsideFootprintsForTesting(x: Float, y: Float, inflate: Float): Boolean =
+    structureField.structures.all { s -> abs(x - s.x) >= s.halfWidth + inflate || abs(y - s.y) >= s.halfHeight + inflate }
 
 /** A wall for [placeWallsForTesting] (run-local); its id comes from the structure it is placed in. */
 internal fun testWall(

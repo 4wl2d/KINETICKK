@@ -12,6 +12,7 @@ import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.SitePoint
 import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
+import kinetickk.ball.gameplay.nucleus.model.TAU
 import kinetickk.ball.gameplay.nucleus.model.distanceSquared
 import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
@@ -42,6 +43,9 @@ private const val UNTOUCHED_LANE_SPACING: Float = 60f
 
 /** Fx colour of a passed pole's burst (bone). */
 private const val POLE_BURST_COLOR: Int = 1
+
+/** Axes a slalom blocked by a structure may turn to: this many even turns around the heading. */
+private const val SLALOM_FALLBACK_AXES: Int = 16
 
 /**
  * The running challenge the Core starts by entering [site], or null when it refuses to start (a Ram rite without room
@@ -98,14 +102,16 @@ internal fun siteEncounterTag(site: SiteState): Long = encounterTag(EncounterOwn
 /**
  * The slalom's poles: the first pole side comes from a hash of the run seed and the window side (alternating after it),
  * and the course runs along the flight's heading, or 0.35 rad to either side when that keeps every pole clear of
- * obstacles (the heading again when none does). Pole k lies `first + spacing·k` along the axis and the pole offset to
- * its side; its bit in [SiteState.sides] is set when it is passed on its left.
+ * obstacles and structures (the heading again when none does, unless a pole of the heading's course lies in a
+ * structure: then [slalomAxisOffStructures]). Pole k lies `first + spacing·k` along the axis and the pole offset to its
+ * side; its bit in [SiteState.sides] is set when it is passed on its left.
  */
 private fun MutableGameState.laidSlalom(started: SiteState, policy: ChallengePolicy): SiteState {
     val random = HashRandom(worldHash(runSeed, started.offerId, started.side, SLALOM_COURSE_SALT))
     val firstSide = if (random.nextFloat() < 0.5f) 1f else -1f
     val heading = if (speed >= 80f) atan2(velocityY, velocityX) else atan2(lastAimDirectionY, lastAimDirectionX)
     var axis = heading
+    var clear = false
     for (candidate in 0 until 3) {
         val turn = when (candidate) {
             0 -> 0f
@@ -114,8 +120,12 @@ private fun MutableGameState.laidSlalom(started: SiteState, policy: ChallengePol
         }
         if (slalomClear(started, heading + turn, firstSide, policy)) {
             axis = heading + turn
+            clear = true
             break
         }
+    }
+    if (!clear && !slalomClear(started, heading, firstSide, policy, obstacles = false)) {
+        axis = slalomAxisOffStructures(started, heading, firstSide, policy)
     }
     val unitX = cos(axis)
     val unitY = sin(axis)
@@ -129,15 +139,53 @@ private fun MutableGameState.laidSlalom(started: SiteState, policy: ChallengePol
     return started.copy(step = 0, course = course.toImmutableList(), sides = sides, axis = axis)
 }
 
-/** True when every pole of a slalom along [axis] from [site] is clear of obstacles. */
-private fun MutableGameState.slalomClear(site: SiteState, axis: Float, firstSide: Float, policy: ChallengePolicy): Boolean {
+/**
+ * True when every pole of a slalom along [axis] from [site] keeps off every structure footprint and, with [obstacles],
+ * is clear of obstacles and walls.
+ */
+private fun MutableGameState.slalomClear(
+    site: SiteState,
+    axis: Float,
+    firstSide: Float,
+    policy: ChallengePolicy,
+    obstacles: Boolean = true,
+): Boolean {
     val unitX = cos(axis)
     val unitY = sin(axis)
     for (pole in 0 until policy.slalomPoles) {
         val mark = slalomPole(unitX, unitY, pole, slalomSide(firstSide, pole), policy)
-        if (isSpawnPointBlocked(site.x + mark.dx, site.y + mark.dy, policy.slalomPoleClearance)) return false
+        val x = site.x + mark.dx
+        val y = site.y + mark.dy
+        if (structureFootprintBlocks(x, y, policy.slalomPoleClearance)) return false
+        if (obstacles && isSpawnPointBlocked(x, y, policy.slalomPoleClearance)) return false
     }
     return true
+}
+
+/**
+ * The slalom's axis when no axis near the heading is clear and a pole of the heading's course lies in a structure,
+ * where it could sit behind a lock-sealed door for the whole trial (no room engages while a window site runs): the
+ * nearest of [SLALOM_FALLBACK_AXES] even turns around the heading whose poles are all clear, else the nearest whose
+ * poles all keep off structures, else the heading.
+ */
+private fun MutableGameState.slalomAxisOffStructures(
+    site: SiteState,
+    heading: Float,
+    firstSide: Float,
+    policy: ChallengePolicy,
+): Float {
+    var offStructures = heading
+    var found = false
+    for (index in 1 until SLALOM_FALLBACK_AXES) {
+        val turns = (index + 1) / 2
+        val axis = heading + (if (index % 2 == 1) turns else -turns) * TAU / SLALOM_FALLBACK_AXES
+        if (slalomClear(site, axis, firstSide, policy)) return axis
+        if (!found && slalomClear(site, axis, firstSide, policy, obstacles = false)) {
+            offStructures = axis
+            found = true
+        }
+    }
+    return offStructures
 }
 
 /** +1 (left of the axis) or −1: the first pole's side, alternating. */
