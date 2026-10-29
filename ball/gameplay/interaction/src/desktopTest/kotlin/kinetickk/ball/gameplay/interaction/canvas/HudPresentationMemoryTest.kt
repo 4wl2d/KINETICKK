@@ -411,6 +411,13 @@ class HudPresentationMemoryTest {
         assertEquals(SiteGlyph.DIMENSION, trialGlyph(race.copy(source = TrialSource.DIMENSION)))
         listOf(AppLanguage.English, AppLanguage.Russian).forEach { language ->
             labels.values.forEach { label -> assertTrue(language.text(label).none { it.isDigit() }, "$label in $language") }
+            // The family label above the name never repeats the name: the panel's two lines differ in each language.
+            trialSites().forEach { site ->
+                val trial = siteTrial(site, base.content.sites)
+                val label = language.text(trialLabel(trial))
+                val name = trial.title.localizedContent(language)
+                assertFalse(label.equals(name, ignoreCase = true), "${site.kind}'s label repeats its name \"$name\" in $language")
+            }
         }
     }
 
