@@ -332,7 +332,10 @@ enum class BuildRulesText(override val english: String, override val russian: St
     RuleCoreLinkRadius("Reactions empower the Core from {0} farther", "Реакции усиливают Ядро на {0} дальше"),
     RuleObstacleRestitution("Obstacle bounces keep {0} more speed", "Отскоки от препятствий сохраняют на {0} больше скорости"),
     RuleObstacleDamage("{0} damage from obstacles", "{0} к урону от препятствий"),
-    RuleObstacleLethal("Collisions turn lethal {0} later", "Столкновения становятся смертельными на {0} позже"),
+    RuleObstacleLethal(
+        "Collisions turn lethal {0} later, up to a cap",
+        "Столкновения становятся смертельными на {0} позже, но не выше предела",
+    ),
     RuleBoostPower("Boosts are {0} stronger", "Разгоны сильнее на {0}"),
     RuleWellPull("Gravity knots pull and push enemies {0} harder", "Гравиузлы притягивают и отталкивают врагов на {0} сильнее"),
     RuleDashHeatToSkills("Every 10 dash heat recharges actives by {0}", "Каждые 10 жара рывков ускоряют активные эффекты на {0}"),
