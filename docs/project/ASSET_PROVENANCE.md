@@ -11,9 +11,9 @@ KINETICKK version `0.1.0`, or retained in its reachable Git history.
 | `docs/assets/kinetickk.png` | Screenshot generated from KINETICKK by Vladislav Tomilov (`@4wl2d`) | 2026-07-15 | `416e32d6d8657feffe51185f5c6e63513de490dd3add786c2720aa9e58f23c7a` | GPL-3.0-or-later; see sidecar |
 | `docs/assets/kinetic-void.jpg` (removed, retained in Git history) | Screenshot generated from the former Kinetic Void build by Vladislav Tomilov (`@4wl2d`) | 2026-07-15 | `c40ca51fe652524e04f2186c5a0acf0525045b7b44e47a689f1a0e8bc274d951` | Relicensed under GPL-3.0-or-later by the current NOTICE |
 
-The Android launcher icon was added on 2026-09-06. Its editable XML was generated
-with Codex from the project's Core and singularity geometry and palette, without
-external artwork. These project-authored resources use GPL-3.0-or-later:
+The Android launcher icon was added on 2026-09-06. Its editable XML uses the
+project's Core and singularity geometry and palette, without external artwork.
+These project-authored resources use GPL-3.0-or-later:
 
 | Source | SHA-256 |
 |---|---|
@@ -49,7 +49,7 @@ audio, and store assets whenever those files exist.
 
 | Asset | Creator / source | Added | SHA-256 | Rights status |
 |---|---|---|---|---|
-| `docs/assets/readme-cover.png` | Generated with the built-in OpenAI ImageGen tool through Codex for Vladislav Tomilov; no reference images supplied. [Exact generation brief](../assets/readme-cover-brief.md). Promotional artwork, not a gameplay screenshot. | 2026-10-30 | `a800400aa3b8f4e4ee1c9ef216b206e39dab35ff823e3f0d0fb8d5e0e154ed31` | Distributed under GPL-3.0-or-later; see sidecar. No third-party artwork inputs or separate assignment/purchase receipt. |
+| `docs/assets/readme-cover.png` | KINETICKK project artwork; no reference images supplied. [Design brief](../assets/readme-cover-brief.md). Promotional artwork, not a gameplay screenshot. | 2026-10-30 | `d5ca2d018d5914bcb4ed1d95b6f49583aaed90cab29e32551a97d52b0accb23b` | Distributed under GPL-3.0-or-later; see sidecar. No third-party artwork inputs or separate assignment/purchase receipt. |
 
 For every future asset, record its path, creator, creation or acquisition date,
 source, hash, license, and any signed assignment or purchase receipt before the
