@@ -18,11 +18,12 @@ concurrency:
 
 jobs:
   desktop-shards:
-    # desktopTest no longer fits one 45-minute job: each shard runs its share of the classes
-    # (build-logic DesktopTestShard), and desktop-and-architecture checks their union.
+    # Each shard runs its share of the classes (build-logic DesktopTestShard),
+    # and desktop-and-architecture checks their union.
     name: Desktop and architecture (${{ matrix.shard }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # Leave headroom for cold builds and seeded gates on slower hosted runners.
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
