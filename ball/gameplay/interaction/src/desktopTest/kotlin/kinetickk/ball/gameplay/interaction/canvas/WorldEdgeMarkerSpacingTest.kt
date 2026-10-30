@@ -13,12 +13,13 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.ANOMALY_KIND_COUNT
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.TotemProjection
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
@@ -63,7 +64,7 @@ class WorldEdgeMarkerSpacingTest {
         for ((dpWidth, dpHeight) in sizes) for (density in listOf(1f, 3f)) for (language in AppLanguage.entries) {
             for (textScale in listOf(1f, 1.25f, 1.75f)) for (boss in listOf(false, true)) {
                 val targets = listOf(Offset(-1_400f, -2_600f), Offset(0f, -3_000f), Offset(1_400f, -2_600f))
-                val kinds = listOf(PointOfInterestKind.RESONANT_CIRCUIT, PointOfInterestKind.SEALED_ANOMALY, PointOfInterestKind.COLLAPSING_ORBIT)
+                val kinds = listOf(SiteKind.RESONANT_CIRCUIT, SiteKind.SEALED_ANOMALY, SiteKind.COLLAPSING_ORBIT)
                 val boxes = draw(dpWidth, dpHeight, density, language, textScale, boss, targets.zip(kinds), totem = null)
                 val where = "$language ${dpWidth}x$dpHeight @$density text=$textScale boss=$boss"
                 assertEquals(3, boxes.size, "$where: one marker per offer ($boxes)")
@@ -86,7 +87,7 @@ class WorldEdgeMarkerSpacingTest {
                     val radians = degrees * PI.toFloat() / 180f
                     Offset(cos(radians), sin(radians)) * DISTANCE
                 }
-                val offers = listOf(targets[0] to PointOfInterestKind.SEALED_ANOMALY, targets[1] to PointOfInterestKind.COLLAPSING_ORBIT)
+                val offers = listOf(targets[0] to SiteKind.SEALED_ANOMALY, targets[1] to SiteKind.COLLAPSING_ORBIT)
                 val boxes = draw(dpWidth, dpHeight, 1f, language, textScale, boss, offers, totem = targets[2])
                 val where = "$language ${dpWidth}x$dpHeight text=$textScale boss=$boss direction=$angle separation=$separation"
                 assertEquals(3, boxes.size, "$where: one marker per target ($boxes)")
@@ -185,7 +186,7 @@ class WorldEdgeMarkerSpacingTest {
             val offers = List(2) { side ->
                 val angle = flight.heading + if (side == 0) -1f else 1f
                 Offset(cos(angle), sin(angle)) * OFFER_DISTANCE to
-                    PointOfInterestKind.entries[(flight.course + side) % PointOfInterestKind.entries.size]
+                    SiteKind.entries[(flight.course + side) % ANOMALY_KIND_COUNT]
             }
             val totem = when (flight.totemMode) {
                 0 -> null
@@ -225,7 +226,7 @@ class WorldEdgeMarkerSpacingTest {
         val failures = ArrayList<String>()
         var frames = 0
         val offers = listOf(-1f, 1f).map { side -> Offset(cos(side), sin(side)) * OFFER_DISTANCE }
-            .zip(listOf(PointOfInterestKind.SEALED_ANOMALY, PointOfInterestKind.COLLAPSING_ORBIT))
+            .zip(listOf(SiteKind.SEALED_ANOMALY, SiteKind.COLLAPSING_ORBIT))
         val lineX = offers[0].first.x
         for ((dpWidth, dpHeight) in sizes) for (language in AppLanguage.entries) for (weave in listOf(3f, 8f)) {
             val checks = FlightChecks("$language ${dpWidth}x$dpHeight weave=$weave", dpWidth, dpHeight, failures)
@@ -262,7 +263,7 @@ class WorldEdgeMarkerSpacingTest {
                     val reach = edgeDistance(dpWidth * density + 2f * beyond, dpHeight * density + 2f * beyond, degrees)
                     Offset(cos(radians), sin(radians)) * reach
                 }
-                val offers = listOf(targets[0] to PointOfInterestKind.SEALED_ANOMALY, targets[1] to PointOfInterestKind.COLLAPSING_ORBIT)
+                val offers = listOf(targets[0] to SiteKind.SEALED_ANOMALY, targets[1] to SiteKind.COLLAPSING_ORBIT)
                 startAfresh(dpWidth, dpHeight, density, language)
                 repeat(SETTLE_FRAMES) { draw(dpWidth, dpHeight, density, language, 1.25f, false, offers, targets[2]) }
                 val settled = markerCenters()
@@ -485,7 +486,7 @@ class WorldEdgeMarkerSpacingTest {
             val radians = degrees * PI.toFloat() / 180f
             Offset(cos(radians), sin(radians)) * DISTANCE
         }
-        val offers = listOf(targets[0] to PointOfInterestKind.SEALED_ANOMALY, targets[1] to PointOfInterestKind.COLLAPSING_ORBIT)
+        val offers = listOf(targets[0] to SiteKind.SEALED_ANOMALY, targets[1] to SiteKind.COLLAPSING_ORBIT)
         return draw(dpWidth, dpHeight, 1f, language, textScale, boss, offers, totem = targets[2], shakeX, shakeY)
     }
 
@@ -558,7 +559,7 @@ class WorldEdgeMarkerSpacingTest {
         language: AppLanguage,
         textScale: Float,
         boss: Boolean,
-        offers: List<Pair<Offset, PointOfInterestKind>>,
+        offers: List<Pair<Offset, SiteKind>>,
         totem: Offset?,
         shakeX: Float = 0f,
         shakeY: Float = 0f,
@@ -577,8 +578,8 @@ class WorldEdgeMarkerSpacingTest {
             "totem" to totem?.let { TotemProjection(it.x, it.y, 1f) },
             "enemies" to (if (boss) listOf(EnemyProjection(4, EnemyType.ELITE, 0f, -9_000f, 0f, 0f, 500f, 1_000f, 38f, 0f, 0f, 0f, 0f, 0f, 0f,
                 false)) else emptyList()).toImmutableList(),
-            "pointsOfInterest" to offers.map { (at, kind) ->
-                PointOfInterestProjection(kind, kind.name, at.x, at.y, false, 20f, 0, 0f, immutableListOf(), 0f, 0f)
+            "sites" to offers.map { (at, kind) ->
+                SiteProjection(kind, kind.name, at.x, at.y, false, 20f, -1, 0f, immutableListOf(), 0f, 0f)
             }.toImmutableList(),
         )
         CanvasDrawScope().draw(Density(density), LayoutDirection.Ltr, canvas, Size(width, height)) {

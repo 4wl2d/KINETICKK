@@ -18,12 +18,13 @@ import kinetickk.foundation.design.KkRolePalette
 import kotlin.math.max
 import kotlin.math.PI
 import kotlin.math.sin
+import kotlin.math.hypot
 
 /**
  * Presentation meaning of a nucleus visual color index: 0 dash/Core, 1 kill or pickup, 2 weapon
  * and relic procs, 3 ram impact, elite kill and key pickups, 4 damage taken (the only threat one),
  * 8..14 an element's ring (Breaks and reactions), 15 the Apex gold, 16..22 an element's jagged
- * quake ring ([isQuakeColor]).
+ * quake ring ([isQuakeColor]), 23 Baby mode's soft rings and sparks ([SOFT_RING_COLOR]).
  */
 internal fun fxColor(colorIndex: Int, roles: KkRolePalette): Color = when (colorIndex) {
     0, 3 -> roles.you
@@ -32,6 +33,7 @@ internal fun fxColor(colorIndex: Int, roles: KkRolePalette): Color = when (color
     in ELEMENT_RING_COLORS -> roles.element(colorIndex - ELEMENT_RING_COLORS.first)
     APEX_GOLD_COLOR -> roles.gold.base
     in QUAKE_RING_COLORS -> roles.element(colorIndex - QUAKE_RING_COLORS.first)
+    SOFT_RING_COLOR -> roles.soft
     else -> Kk.Bone
 }
 
@@ -39,6 +41,9 @@ internal fun fxColor(colorIndex: Int, roles: KkRolePalette): Color = when (color
 internal val ELEMENT_RING_COLORS = 8..14
 internal const val APEX_GOLD_COLOR = 15
 internal val QUAKE_RING_COLORS = 16..22
+
+/** Baby mode's soft rings and sparks (nucleus EASY_SOFT_COLOR_INDEX). */
+internal const val SOFT_RING_COLOR = 23
 
 /** Shockwaves of these colour indices draw as a jagged quake ring. */
 internal fun isQuakeColor(colorIndex: Int): Boolean = colorIndex in QUAKE_RING_COLORS
@@ -217,7 +222,7 @@ fun skillGlyph(id: SkillId): KkIcon = when (id) {
 
 /**
  * Enemy outlines on the 24-unit icon grid (`HUD.dc.html`): the five basic shapes of the boards,
- * the elite octagon and a split diamond, then the 0.4.0 roster's outlines. The board's dart is drawn
+ * the elite octagon and a split diamond, then the 0.4.0 and 0.6.0 rosters' outlines. The board's dart is drawn
  * as the pentagon (SPEC hard rule 3). Public so other screens (the Codex) draw enemies the same way.
  */
 enum class EnemySilhouette(vararg contours: FloatArray) {
@@ -248,10 +253,49 @@ enum class EnemySilhouette(vararg contours: FloatArray) {
     SHIELD(floatArrayOf(3f, 5f, 21f, 5f, 21f, 12f, 18f, 18f, 12f, 22f, 6f, 18f, 3f, 12f)),
     /** Herald: a six-point star. */
     HEXAGRAM(floatArrayOf(12f, 1f, 15f, 7f, 22f, 7f, 18f, 12f, 22f, 17f, 15f, 17f, 12f, 23f, 9f, 17f, 2f, 17f, 6f, 12f, 2f, 7f, 9f, 7f)),
+    /** Comet: a capsule streaking along its lane. */
+    PILL(floatArrayOf(9f, 1f, 15f, 1f, 18f, 6f, 18f, 18f, 15f, 23f, 9f, 23f, 6f, 18f, 6f, 6f)),
+    /** Pylon: a turret mast on its mount. */
+    TOWER(floatArrayOf(9f, 2f, 15f, 2f, 15f, 9f, 19f, 9f, 21f, 22f, 3f, 22f, 5f, 9f, 9f, 9f)),
+    /** Sentry: a low dome on its wall. */
+    BUNKER(floatArrayOf(2f, 19f, 2f, 14f, 5f, 7f, 12f, 4f, 19f, 7f, 22f, 14f, 22f, 19f)),
+    /** Crawler: a many-legged hull. */
+    CRAB(floatArrayOf(4f, 8f, 8f, 5f, 16f, 5f, 20f, 8f, 23f, 13f, 19f, 12f, 18f, 18f, 14f, 16f, 10f, 16f, 6f, 18f, 5f, 12f, 1f, 13f)),
+    /** Seraph: spread wings. */
+    WINGS(floatArrayOf(12f, 3f, 15f, 9f, 22f, 5f, 20f, 14f, 14f, 14f, 12f, 21f, 10f, 14f, 4f, 14f, 2f, 5f, 9f, 9f)),
+    /** Choir: a bell. */
+    BELL(floatArrayOf(8f, 3f, 16f, 3f, 18f, 12f, 22f, 18f, 22f, 21f, 2f, 21f, 2f, 18f, 6f, 12f)),
+    /** Imp: a horned head. */
+    HORNS(floatArrayOf(5f, 2f, 9f, 8f, 15f, 8f, 19f, 2f, 21f, 11f, 18f, 21f, 6f, 21f, 3f, 11f)),
+    /** Hound: a jaw. */
+    MAW(floatArrayOf(5f, 3f, 12f, 8f, 19f, 3f, 22f, 12f, 17f, 21f, 7f, 21f, 2f, 12f)),
+    /** Cipher: an offset glyph. */
+    GLYPH(floatArrayOf(3f, 3f, 13f, 3f, 13f, 7f, 21f, 7f, 21f, 21f, 11f, 21f, 11f, 17f, 3f, 17f)),
+    /** Mirror: an hourglass. */
+    HOURGLASS(floatArrayOf(3f, 3f, 21f, 3f, 14f, 12f, 21f, 21f, 3f, 21f, 10f, 12f)),
+    /** Warden Prime: an eight-point star. */
+    OCTAGRAM(floatArrayOf(12f, 1f, 14.8f, 5.3f, 19.8f, 4.2f, 18.7f, 9.2f, 23f, 12f, 18.7f, 14.8f, 19.8f, 19.8f, 14.8f, 18.7f, 12f, 23f, 9.2f, 18.7f, 4.2f, 19.8f, 5.3f, 14.8f, 1f, 12f, 5.3f, 9.2f, 4.2f, 4.2f, 9.2f, 5.3f)),
+    /** Brood Queen: a crown. */
+    CROWN(floatArrayOf(2f, 21f, 2f, 7f, 7f, 12f, 12f, 3f, 17f, 12f, 22f, 7f, 22f, 21f)),
+    /** Throne: an upright seat. */
+    THRONE(floatArrayOf(5f, 2f, 19f, 2f, 19f, 12f, 22f, 12f, 22f, 22f, 2f, 22f, 2f, 12f, 5f, 12f)),
+    /** Pyre Herald: a five-point star. */
+    PENTAGRAM(floatArrayOf(12f, 1f, 14.8f, 8.1f, 22.5f, 8.6f, 16.6f, 13.5f, 18.5f, 20.9f, 12f, 16.8f, 5.5f, 20.9f, 7.4f, 13.5f, 1.5f, 8.6f, 9.2f, 8.1f)),
+    /** Cartographer: a compass rose. */
+    COMPASS(floatArrayOf(12f, 1f, 13.4f, 8.7f, 17.4f, 6.6f, 15.3f, 10.6f, 23f, 12f, 15.3f, 13.4f, 17.4f, 17.4f, 13.4f, 15.3f, 12f, 23f, 10.6f, 15.3f, 6.6f, 17.4f, 8.7f, 13.4f, 1f, 12f, 8.7f, 10.6f, 6.6f, 6.6f, 10.6f, 8.7f)),
+    /** Antecedent: a heptagon around an inverted triangle. */
+    SIGIL(floatArrayOf(12f, 1f, 20.6f, 5.1f, 22.7f, 14.4f, 16.8f, 21.9f, 7.2f, 21.9f, 1.3f, 14.4f, 3.4f, 5.1f), floatArrayOf(12f, 17.5f, 7.2f, 9.2f, 16.8f, 9.2f)),
     ;
 
     /** Closed polygons as x, y pairs on the 24 grid, centered at (12, 12). */
     val contours: List<FloatArray> = contours.toList()
+}
+
+/** The farthest corner of any silhouette from its centre, in enemy radii (the grid's half extent, 10 units, is one radius). */
+internal val EnemySilhouetteReach: Float by lazy {
+    EnemySilhouette.entries.maxOf { shape ->
+        shape.contours.maxOf { points -> (points.indices step 2).maxOf { hypot(points[it] - 12f, points[it + 1] - 12f) } }
+    } / 10f
 }
 
 /** How each enemy type reads in the world; the Architect has its own frame (see drawEnemy). */
@@ -275,14 +319,35 @@ fun enemySilhouette(type: EnemyType): EnemySilhouette = when (type) {
     EnemyType.BROODMOTHER -> EnemySilhouette.DECAGON
     EnemyType.REFLECTOR -> EnemySilhouette.SHIELD
     EnemyType.HERALD -> EnemySilhouette.HEXAGRAM
+    EnemyType.COMET -> EnemySilhouette.PILL
+    EnemyType.PYLON -> EnemySilhouette.TOWER
+    EnemyType.SENTRY -> EnemySilhouette.BUNKER
+    EnemyType.CRAWLER -> EnemySilhouette.CRAB
+    EnemyType.SERAPH -> EnemySilhouette.WINGS
+    EnemyType.CHOIR -> EnemySilhouette.BELL
+    EnemyType.IMP -> EnemySilhouette.HORNS
+    EnemyType.HOUND -> EnemySilhouette.MAW
+    EnemyType.CIPHER -> EnemySilhouette.GLYPH
+    EnemyType.MIRROR -> EnemySilhouette.HOURGLASS
+    EnemyType.WARDEN_PRIME -> EnemySilhouette.OCTAGRAM
+    EnemyType.BROOD_QUEEN -> EnemySilhouette.CROWN
+    EnemyType.THRONE -> EnemySilhouette.THRONE
+    EnemyType.PYRE_HERALD -> EnemySilhouette.PENTAGRAM
+    EnemyType.CARTOGRAPHER -> EnemySilhouette.COMPASS
+    EnemyType.ANTECEDENT -> EnemySilhouette.SIGIL
 }
 
 /**
  * Kinds whose outline points along their aim (the Lancer's lane, the Sniper's sight line, the
- * Reflector's shield) instead of turning on a clock.
+ * Reflector's shield, the Comet's flyby, the Pylon's and the Sentry's barrels, the Hound's lunge)
+ * instead of turning on a clock.
  */
-internal fun facesAim(type: EnemyType): Boolean =
-    type == EnemyType.LANCER || type == EnemyType.SNIPER || type == EnemyType.REFLECTOR
+internal fun facesAim(type: EnemyType): Boolean = when (type) {
+    EnemyType.LANCER, EnemyType.SNIPER, EnemyType.REFLECTOR, EnemyType.COMET, EnemyType.PYLON, EnemyType.SENTRY,
+    EnemyType.HOUND,
+    -> true
+    else -> false
+}
 
 /** Degrees that turn a grid outline (pointing up) toward [facing] radians. */
 internal fun aimDegrees(facing: Float): Float = facing * (180f / PI.toFloat()) + 90f
@@ -314,6 +379,8 @@ internal const val ENEMY_WOBBLE_MAX_DEGREES = ENEMY_LEAN_DEGREES + ENEMY_WOBBLE_
  * any angle and turn slowly, their phase offset by the id. The Architect draws its own frames.
  */
 internal fun enemyRotation(type: EnemyType, elapsed: Float, id: Int): Float {
+    // The Throne and the Antecedent stand upright.
+    if (type == EnemyType.THRONE || type == EnemyType.ANTECEDENT) return 0f
     if (holdsBoardOrientation(enemySilhouette(type))) {
         val span = 2 * ENEMY_LEAN_DEGREES + 1
         val lean = ((id * 37) % span + span) % span - ENEMY_LEAN_DEGREES
@@ -335,6 +402,18 @@ internal fun enemyRotation(type: EnemyType, elapsed: Float, id: Int): Float {
         EnemyType.HERALD -> 360f / 18f
         EnemyType.SHOOTER, EnemyType.INTERCEPTOR, EnemyType.ARCHITECT -> 0f // held above; the Architect turns its own frames
         EnemyType.LANCER, EnemyType.SNIPER, EnemyType.REFLECTOR -> 0f // they point along their aim (aimDegrees)
+        EnemyType.CRAWLER -> 25f
+        EnemyType.SERAPH -> 8f
+        EnemyType.CHOIR -> -6f
+        EnemyType.IMP -> 28f
+        EnemyType.MIRROR -> 10f
+        EnemyType.WARDEN_PRIME -> -4f
+        EnemyType.BROOD_QUEEN -> 3f
+        EnemyType.PYRE_HERALD -> 360f / 16f
+        EnemyType.CARTOGRAPHER -> 360f / 30f
+        EnemyType.CIPHER -> 0f // a glyph that never turns
+        EnemyType.COMET, EnemyType.PYLON, EnemyType.SENTRY, EnemyType.HOUND -> 0f // they point along their aim (aimDegrees)
+        EnemyType.THRONE, EnemyType.ANTECEDENT -> 0f // upright, returned above
     }
     return elapsed * degreesPerSecond + (id * 37 % 360)
 }

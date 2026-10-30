@@ -19,8 +19,9 @@ import kotlin.math.min
  * neither uses nor grants hit i-frames, HURT clauses or shield-break rewards.
  *
  * [OBSTACLE] is an asteroid collision or blast: it scales with `1 + damagePerTier × tier` instead of the
- * Rebirth incoming-damage multiplier, ignores damage reduction and damage-taken modifiers, is absorbed
- * by shields, and neither uses nor grants the hit i-frames (collisions have their own cooldown).
+ * Rebirth incoming-damage multiplier, ignores damage reduction and damage-taken modifiers, shields absorb
+ * all but `shieldBleed` of it, and it neither uses nor grants the hit i-frames (collisions have their own
+ * per-surface cooldown).
  * [cancellableByFacets] is false for it: Prism facets cancel it only while Monolith runs (the Prism's Apex).
  */
 internal enum class IncomingDamage(
@@ -46,9 +47,15 @@ internal fun MutableGameState.hostileDamage(enemy: Enemy?, base: Float): Float =
 
 /**
  * Effects on the attacking enemy that scale its damage output: Hollow (Void) multiplies
- * `1 - 0.03 * hollowStacks` (scaled by Void potency, floored at [HOLLOW_OUTPUT_FLOOR]).
+ * `1 - 0.03 * hollowStacks` (scaled by Void potency, floored at [HOLLOW_OUTPUT_FLOOR]); a dimension's objective boss
+ * deals its layer's damage share.
  */
-internal fun MutableGameState.hostileOutputFactor(enemy: Enemy?): Float = hollowOutputFactor(enemy)
+internal fun MutableGameState.hostileOutputFactor(enemy: Enemy?): Float {
+    val roomScale = if (enemy != null && encounterOwner(enemy.ownerTag) == EncounterOwner.ROOM) {
+        content.structures.garrisonDamageMultiplier
+    } else 1f
+    return hollowOutputFactor(enemy) * objectiveBossDamageShare(enemy) * roomScale
+}
 
 /** Hostile damage grows by this fraction of run progress; see [hostileDamage]. */
 internal const val HOSTILE_RUN_GROWTH: Float = 0.5f
@@ -60,9 +67,11 @@ internal fun MutableGameState.takeDamage(
     rawAmount: Float,
     ignoreReduction: Boolean = false,
     kind: IncomingDamage = IncomingDamage.HIT,
+    obstacle: kinetickk.ball.content.api.ObstacleKind? = null,
+    lethalReason: String = "CORE FRACTURED",
 ) {
     if (kind == IncomingDamage.OBSTACLE) {
-        takeObstacleDamage(rawAmount)
+        takeObstacleDamage(rawAmount, obstacle)
         return
     }
     // Void Step's phase: contacts and shots pass through the Core (the shots are still spent).
@@ -70,7 +79,7 @@ internal fun MutableGameState.takeDamage(
     // Self-inflicted damage neither uses nor grants the hit i-frames, so real hits are never dropped behind it.
     val incoming = kind != IncomingDamage.SELF
     if ((incoming && hurtCooldown > 0f) || invulnerableUntil > elapsed) return
-    var amount = rawAmount * rebirthProfile.incomingDamageMultiplier
+    var amount = rawAmount * rebirthProfile.incomingDamageMultiplier * (if (incoming) incomingDamageFactor else 1f)
     if (kind == IncomingDamage.CONTACT) amount *= matrix.contactDamageMultiplier
     var taken = 1f + buffAmount(BuffStat.DAMAGE_TAKEN) + whileAmount(BuffStat.DAMAGE_TAKEN, null)
     if (build.liability(RelicId.HOLLOW_CROWN)) taken += 0.1f * emptyRelicSlots()
@@ -129,7 +138,7 @@ internal fun MutableGameState.takeDamage(
         if (incoming) onShieldBroken() else aegisAbsorbed = 0f
     }
     if (incoming) fireClauses(EffectTrigger.HURT, null, rawAmount)
-    if (hp <= 0f) resolveLethal()
+    if (hp <= 0f) resolveLethal(lethalReason)
 }
 
 /** Run end message of a collision that leaves the Core at zero integrity. */
@@ -139,9 +148,9 @@ internal const val OBSTACLE_COLLISION_REASON: String = "OBSTACLE COLLISION"
  * See [IncomingDamage.OBSTACLE]. Glass Comet's liability still holds: collisions deal double damage and
  * shields do not absorb them.
  */
-private fun MutableGameState.takeObstacleDamage(rawAmount: Float) {
+private fun MutableGameState.takeObstacleDamage(rawAmount: Float, obstacle: kinetickk.ball.content.api.ObstacleKind? = null) {
     if (rawAmount <= 0f || invulnerableUntil > elapsed) return
-    var amount = rawAmount * (1f + content.obstacles.damagePerTier * rebirthLevel)
+    var amount = rawAmount * (1f + content.obstacles.damagePerTier * rebirthLevel) * incomingDamageFactor
     // Monolith: while it runs, a facet also takes an obstacle collision (and fires its refraction).
     if (monolithTakesCollisions() && spendFacet(amount)) return
     val glass = build.liability(RelicId.GLASS_COMET)
@@ -151,17 +160,18 @@ private fun MutableGameState.takeObstacleDamage(rawAmount: Float) {
     }
     val shieldBefore = shield
     if (shield > 0f && !glass) {
-        val absorbed = min(shield, amount)
+        val absorbed = min(shield, amount * (1f - content.obstacles.shieldBleed))
         absorbShield(absorbed, incoming = true)
         amount -= absorbed
     }
+    amount = capEasyObstacleDamage(amount)
     if (amount > 0f) {
         damageTaken += min(amount, hp.coerceAtLeast(0f)).toDouble()
         hp -= amount
     }
     noteObstacleHurt()
     if (shieldBefore > 0f && shield <= 0f) onShieldBroken()
-    fireClauses(EffectTrigger.HURT, null, rawAmount)
+    fireClauses(EffectTrigger.HURT, null, rawAmount, obstacle = obstacle)
     if (hp <= 0f) resolveLethal(OBSTACLE_COLLISION_REASON)
 }
 
@@ -169,8 +179,11 @@ private fun MutableGameState.takeObstacleDamage(rawAmount: Float) {
  * A collision at or above the lethal speed: integrity drops to zero past shields, then only Second Wind
  * or the Ouroboros Seal may answer it. Only the invulnerability a revive granted protects (the Core may
  * still be flying into the same rock); Glass Comet's and Bulwark's windows do not.
+ * In Baby mode it is an obstacle hit of `lethalObstacleDamageShare` of max integrity instead, which never breaks the Core.
+ * [obstacle] is the kind struck, for that hit's HURT clauses.
  */
-internal fun MutableGameState.takeLethalObstacleHit() {
+internal fun MutableGameState.takeLethalObstacleHit(obstacle: kinetickk.ball.content.api.ObstacleKind? = null) {
+    if (easyMode) { takeObstacleDamage(maxHp * content.easyMode.lethalObstacleDamageShare, obstacle); return }
     if (reviveInvulnerableUntil > elapsed) return
     damageTaken += hp.coerceAtLeast(0f).toDouble()
     hp = 0f

@@ -140,9 +140,9 @@ private fun defaultSkill(id: SkillId): SkillDefinition = when (id) {
         "Vents heat into a flare; the more heat, the more Scorch.",
         "Enemies within two Scorch of Ignite ignite at once.",
         StatusElement.THERMAL, BuildTag.OVERCLOCK, BuildTag.BULWARK, SkillTargeting.SELF, 0f, SkillFamily.STRIKE,
-        rank(8.5f, 30f, 200f, 42f, 1.12f, 2f),
-        rank(7.65f, 40f, 220f, 56f, 1.12f, 2f),
-        rank(6.8f, 50f, 240f, 70f, 1.12f, 2f),
+        rank(8.5f, 30f, 200f, 42f, 0.7f, 2f),
+        rank(7.65f, 40f, 220f, 56f, 0.7f, 2f),
+        rank(6.8f, 50f, 240f, 70f, 0.7f, 2f),
     )
     SkillId.METEOR -> skill(
         id, "Meteor",
@@ -203,9 +203,9 @@ private fun defaultSkill(id: SkillId): SkillDefinition = when (id) {
         "Your Core turns heavy: fast impacts throw enemies and add Mass.",
         "Slams while it runs add 1 Mass to both enemies.",
         StatusElement.GRAVITIC, BuildTag.RAM, BuildTag.BULWARK, SkillTargeting.SELF, 0f, SkillFamily.MOTION,
-        rank(11f, 2f, 1.25f, 0.1f, 700f, 500f),
-        rank(10f, 2.25f, 1.35f, 0.15f, 760f, 500f),
-        rank(9f, 2.5f, 1.45f, 0.2f, 820f, 500f),
+        rank(11f, 2f, 1.17f, 0.1f, 700f, 500f),
+        rank(10f, 2.25f, 1.2f, 0.15f, 760f, 500f),
+        rank(9f, 2.5f, 1.24f, 0.2f, 820f, 500f),
     )
     SkillId.DECAY_SPORES -> skill(
         id, "Decay Spores",
@@ -214,15 +214,15 @@ private fun defaultSkill(id: SkillId): SkillDefinition = when (id) {
         StatusElement.ENTROPY, BuildTag.FORTUNE, BuildTag.CHAIN, SkillTargeting.AREA, 520f, SkillFamily.CATALYST,
         rank(11f, 170f, 4f, 6f, 8f),
         rank(9f, 205f, 6f, 6f, 8f),
-        rank(7f, 240f, 7f, 6f, 8f),
+        rank(7f, 270f, 7f, 6f, 8f),
     )
     SkillId.ENTROPIC_TIDE -> skill(
         id, "Entropic Tide",
         "Draws in all Decay around you: it bursts as damage and mends the Core.",
         "Healing past full integrity becomes shield.",
         StatusElement.ENTROPY, BuildTag.BULWARK, BuildTag.FORTUNE, SkillTargeting.SELF, 0f, SkillFamily.GUARD,
-        rank(10.2f, 300f, 1f, 3f, 8f),
-        rank(9.35f, 320f, 1.2f, 3.5f, 10f),
+        rank(10.2f, 300f, 1f, 3.8f, 8f),
+        rank(9.35f, 320f, 1.2f, 3.9f, 10f),
         rank(8.5f, 340f, 1.4f, 4f, 12f),
     )
     SkillId.SONIC_BOOM -> skill(

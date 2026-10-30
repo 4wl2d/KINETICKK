@@ -23,9 +23,11 @@ internal fun MutableGameState.onEnemyKilled(enemy: Enemy) {
     // that completes a level cannot open a choice in place of the victory.
     val victory = enemy.type == EnemyType.ARCHITECT && phase == GamePhase.RUNNING
     if (victory) phase = GamePhase.VICTORY
-    recordPointDefenderKilled(enemy)
-    // The Herald pays out like an Elite: a Key, a Relic and an Elite kill.
-    val eliteReward = enemy.isElite || enemy.isMiniBoss
+    recordSiteKill(enemy)
+    onEncounterEnemyKilled(enemy)
+    onDimensionEnemyKilled(enemy)
+    // Mini-bosses (the Herald) and secret bosses pay out like an Elite: a Key, a Relic and an Elite kill.
+    val eliteReward = enemy.isElite || enemy.isMiniBoss || enemy.isSecretBoss
     if (eliteReward) pendingEliteKills++
     enemy.dead = true
     kills++
@@ -62,14 +64,15 @@ internal fun MutableGameState.onEnemyKilled(enemy: Enemy) {
     // A Splitter crushed by Mass or a fresh Collapse leaves no fragments.
     if (enemy.type == EnemyType.SPLITTER && !splitterCrushed(enemy)) spawnSplitterFragments(enemy)
     queueVolatileRemains(enemy)
+    onAffixedEnemyKilled(enemy)
     shockwave(
         enemy.x,
         enemy.y,
-        if (enemy.type == EnemyType.ARCHITECT || enemy.isMiniBoss) 0.8f else 0.3f,
-        enemy.radius * if (enemy.type == EnemyType.ARCHITECT) 4.5f else 2.7f,
+        if (enemy.type == EnemyType.ARCHITECT || enemy.isMiniBoss || enemy.isSecretBoss) 0.8f else 0.3f,
+        enemy.radius * if (enemy.type == EnemyType.ARCHITECT) 4.5f else if (enemy.isSecretBoss) 3.5f else 2.7f,
         if (eliteReward) 3 else 1,
     )
-    burst(enemy.x, enemy.y, if (enemy.type == EnemyType.ARCHITECT) 60 else if (enemy.isMiniBoss) 40 else 12, if (eliteReward) 3 else 1)
+    burst(enemy.x, enemy.y, if (enemy.type == EnemyType.ARCHITECT) 60 else if (enemy.isSecretBoss) 50 else if (enemy.isMiniBoss) 40 else 12, if (eliteReward) 3 else 1)
     emitSound(GameplayAudioCue.ENEMY_DESTROYED)
     if (victory) {
         message = "ARCHITECT DISMANTLED"
@@ -102,7 +105,8 @@ internal fun MutableGameState.spawnSplitterFragments(enemy: Enemy) {
             maxHp = fragmentHp,
             radius = SPLITTER_FRAGMENT_RADIUS,
             actionTimer = 0.2f,
-        )
+        ).also { fragment -> fragment.ownerTag = enemy.ownerTag }
+        recordEncounterSpawn(enemy.ownerTag)
     }
 }
 

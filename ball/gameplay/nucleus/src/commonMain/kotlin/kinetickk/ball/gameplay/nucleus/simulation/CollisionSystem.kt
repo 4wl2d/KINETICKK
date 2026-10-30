@@ -31,6 +31,7 @@ internal fun MutableGameState.resolveCollisions(delta: Float) {
 private fun MutableGameState.resolveCollisionPasses(delta: Float) {
     // Shots stopped by an asteroid are spent before they can hit anything beyond it.
     blockProjectilesAtObstacles()
+    blockProjectilesAtWalls()
     resolveEnemyCoreCollisions()
     if (phase != GamePhase.RUNNING) return
     resolveWeaponDamage(delta)
@@ -65,8 +66,9 @@ internal fun MutableGameState.sweepKills() {
     // The Architect resolves first, so a self-inflicted death later in the same sweep cannot undo a victory.
     for (index in killed.indices) if (checkNotNull(killed[index]).type == EnemyType.ARCHITECT) onEnemyKilled(checkNotNull(killed[index]))
     for (index in killed.indices) if (checkNotNull(killed[index]).type != EnemyType.ARCHITECT) onEnemyKilled(checkNotNull(killed[index]))
-    // Matter granted by kills resolved after the terminal bank in this sweep still counts.
-    if (phase != GamePhase.RUNNING) bankRunMatter()
+    // Matter granted by kills resolved after the terminal bank in this sweep still counts. A choice a kill opened is not
+    // the run's end: banking then would leave signals pricing only the Matter earned after it.
+    if (phase == GamePhase.GAME_OVER || phase == GamePhase.VICTORY) bankRunMatter()
     var retainedCount = 0
     for (index in enemies.indices) {
         val enemy = enemies[index]
@@ -86,6 +88,7 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
     for (index in enemies.indices) {
         val enemy = enemies[index]
         if (phase != GamePhase.RUNNING) return
+        if (!(enemy.contactCooldown <= 0f) || enemy.dead || !(enemy.hp > 0f)) continue
         // A Phantom out of phase is not there to hit.
         if (isPhasedPhantom(enemy)) continue
         val combined = coreRadius + enemy.radius
@@ -98,7 +101,7 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             0f,
             combined,
         )
-        if (enemy.contactCooldown <= 0f && sweptHit && !enemy.dead && enemy.hp > 0f) {
+        if (sweptHit) {
             val relativeX = velocityX - enemy.vx
             val relativeY = velocityY - enemy.vy
             val impactSpeed = length(relativeX, relativeY)
@@ -128,6 +131,7 @@ internal fun MutableGameState.resolveEnemyCoreCollisions() {
             onSkillCoreImpact(enemy, coreImpactSpeed, damage, dashContact = newDashContact)
             onCharacterImpact(enemy, impact, coreImpactSpeed, characterMultiplier)
             onWeaponImpact(coreImpactSpeed, damage)
+            onEnemyCoreImpact(enemy, coreImpactSpeed)
             // A fast impact destroys an unprimed Bomber outright, before it can prime, even through a tether.
             if (defusable && enemy.alive && coreImpactSpeed >= BOMBER_DEFUSE_SPEED) {
                 executeEnemy(enemy, HitSource.IMPACT)
@@ -369,9 +373,9 @@ internal const val FLUX_WIDTH_FORM: Float = 2f
 internal const val FLUX_SCORCH_INTERVAL: Float = 2f
 /** Enemies the Flux Wake trail burns at full heat at once; a larger crowd in it shares that heat. */
 internal const val FLUX_FULL_HEAT_ENEMIES: Int = 6
-internal const val MORNINGSTAR_DAMAGE: Float = 13.8f
+internal const val MORNINGSTAR_DAMAGE: Float = 17f
 internal const val MORNINGSTAR_REACH: Float = 24f
-internal const val MORNINGSTAR_SPEED_SHARE: Float = 0.031f
+internal const val MORNINGSTAR_SPEED_SHARE: Float = 0.030f
 internal const val MORNINGSTAR_KNOCKBACK: Float = 160f
 internal const val MORNINGSTAR_SECOND_ORBIT: Float = 0.72f
 internal const val MORNINGSTAR_SECOND_SIZE: Float = 0.45f
@@ -488,7 +492,7 @@ internal fun MutableGameState.resolveProjectileHits() {
         for (enemyIndex in enemies.indices) {
             val enemy = enemies[enemyIndex]
             // Shots pass through a shifting Architect without spending pierce.
-            if (enemy.dead || isShifting(enemy) || projectile.hasRecordedEnemyHit(enemy.id)) continue
+            if (enemy.dead || isShifting(enemy)) continue
             val hitRadius = projectile.radius + enemy.radius
             val hit = segmentCircleIntersects(
                 projectile.previousX - enemy.previousX,
@@ -499,14 +503,18 @@ internal fun MutableGameState.resolveProjectileHits() {
                 0f,
                 hitRadius,
             )
-            if (hit) {
+            // A hit history may span many enemies. Only geometrically overlapping pairs need
+            // its lookup; the broad phase rejects the far more numerous misses cheaply.
+            if (hit && !projectile.hasRecordedEnemyHit(enemy.id)) {
                 // An Apex shot with no strike left passes through boss-class enemies without spending itself.
                 if (projectile.procKey == WeaponRuntime.PROC_APEX && apexShotPassesThrough(enemy)) continue
                 if (!projectile.tryRecordEnemyHit(enemy.id)) continue
-                // A Reflector's front shield meets shots by where they come from, not where the Core is.
+                // A directional guard (the Reflector's front, a Throne's arcs) meets shots by where they come from, not
+                // where the Core is.
                 val shieldBefore = enemy.guarded
-                val shieldFaces = reflectorShieldFaces(enemy, projectile.previousX, projectile.previousY)
-                if (enemy.type == EnemyType.REFLECTOR) enemy.guarded = shieldFaces
+                val directional = enemy.type.profile.directionalGuard
+                val guardFaces = directional && shieldFaces(enemy, projectile.previousX, projectile.previousY)
+                if (directional) enemy.guarded = guardFaces
                 val sourceWeapon = projectile.sourceWeapon
                 if (sourceWeapon != null) {
                     weaponShotHit(projectile, sourceWeapon, enemy)
@@ -521,11 +529,11 @@ internal fun MutableGameState.resolveProjectileHits() {
                         applyStatus(enemy, kinetickk.ball.content.api.StatusElement.entries[projectile.statusElement], 2, 1)
                     }
                 }
-                if (enemy.type == EnemyType.REFLECTOR) enemy.guarded = shieldBefore
+                if (directional) enemy.guarded = shieldBefore
                 burst(enemy.x, enemy.y, 4, projectile.colorIndex)
-                if (shieldFaces) {
-                    // The shield stops the shot and may send one back.
-                    reflectShot(enemy)
+                if (guardFaces) {
+                    // The guard stops the shot; only the Reflector may send one back.
+                    if (enemy.type == EnemyType.REFLECTOR) reflectShot(enemy)
                     consumed = true
                     break
                 }

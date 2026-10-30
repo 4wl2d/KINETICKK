@@ -111,7 +111,7 @@ internal val WeaponPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Pellets leave Puncture marks." to "Дробь оставляет метки прокола.",
     "Tether range +80" to "Дальность привязи +80",
     "A second tether at 75% strength" to "Вторая привязь силой 75%",
-    "The ramp reaches eight times and a kill Overloads" to "Нарастание до восьмикратного, убийство вызывает Разряд",
+    "The ramp reaches seven times and a kill Overloads" to "Нарастание до семикратного, убийство вызывает Разряд",
     "Attract pulls the target in; Repel throws it into slams." to "Притяжение подтягивает цель, отталкивание впечатывает её в преграды.",
     "One more sentry" to "Ещё одна турель",
     "Sentry shots pierce one more enemy" to "Выстрелы турелей пробивают ещё одного врага",

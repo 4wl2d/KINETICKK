@@ -88,6 +88,9 @@ internal fun MutableGameState.strikeDamage(enemy: Enemy): Float {
         EnemyType.LANCER -> if (striking) hostileDamage(enemy, LANCER_DAMAGE) else 0f
         EnemyType.PHANTOM -> if (striking) hostileDamage(enemy, PHANTOM_STRIKE_DAMAGE) else 0f
         EnemyType.HERALD -> contactDamage(enemy)
+        EnemyType.HOUND -> if (striking) contactDamage(enemy) else 0f
+        EnemyType.PYRE_HERALD -> contactDamage(enemy)
+        EnemyType.ANTECEDENT -> if (enemy.phase % 2 == 1) contactDamage(enemy) else 0f
         else -> 0f
     }
 }
@@ -106,21 +109,21 @@ internal fun MutableGameState.hurtByHostileBlast(x: Float, y: Float, damage: Flo
     screenShake = max(screenShake, 7f)
 }
 
-private fun turnToward(current: Float, target: Float, maximumStep: Float): Float {
+internal fun turnToward(current: Float, target: Float, maximumStep: Float): Float {
     var difference = target - current
     while (difference > TAU * 0.5f) difference -= TAU
     while (difference < -TAU * 0.5f) difference += TAU
     return current + clamp(difference, -maximumStep, maximumStep)
 }
 
-private fun angleBetween(a: Float, b: Float): Float {
+internal fun angleBetween(a: Float, b: Float): Float {
     var difference = a - b
     while (difference > TAU * 0.5f) difference -= TAU
     while (difference < -TAU * 0.5f) difference += TAU
     return abs(difference)
 }
 
-private fun Enemy.damp(rate: Float, delta: Float) {
+internal fun Enemy.damp(rate: Float, delta: Float) {
     val factor = exp(-rate * delta)
     vx *= factor
     vy *= factor
@@ -145,28 +148,7 @@ internal fun MutableGameState.updateCharger(enemy: Enemy, dx: Float, dy: Float, 
 }
 
 internal fun MutableGameState.updateSwarmling(enemy: Enemy, dx: Float, dy: Float, distance: Float, delta: Float) {
-    val swirl = if (enemy.id % 2 == 0) 1f else -1f
-    var separationX = 0f
-    var separationY = 0f
-    for (index in enemies.indices) {
-        val other = enemies[index]
-        if (other === enemy || other.type != EnemyType.SWARMLING || other.dead) continue
-        val ox = enemy.x - other.x
-        val oy = enemy.y - other.y
-        val squared = ox * ox + oy * oy
-        if (squared >= SWARM_SPACING * SWARM_SPACING || squared < 1e-4f) continue
-        val apart = kotlin.math.sqrt(squared)
-        val push = (SWARM_SPACING - apart) / SWARM_SPACING
-        separationX += ox / apart * push
-        separationY += oy / apart * push
-    }
-    steerEnemy(
-        enemy,
-        dx / distance * 150f - dy / distance * 42f * swirl + separationX * 110f,
-        dy / distance * 150f + dx / distance * 42f * swirl + separationY * 110f,
-        3.2f,
-        delta,
-    )
+    flock(enemy, dx, dy, distance, delta, SWARM_SPACING, 150f, 42f, 110f, 3.2f)
 }
 
 private const val SWARM_SPACING: Float = 34f
@@ -321,7 +303,15 @@ internal fun MutableGameState.updateAegis(enemy: Enemy, dx: Float, dy: Float, di
         1.5f,
         delta,
     )
-    // Tether the three nearest allies in range; the Herald, the Architect and other Aegises are never linked.
+    tetherNearestAllies(enemy, AEGIS_MAX_LINKS)
+}
+
+/**
+ * Tethers the [links] (1..3) nearest live allies within [AEGIS_LINK_RANGE] of [enemy], nearest first, for
+ * [AEGIS_LINK_HOLD_SECONDS]. The Aegis tethers three ([AEGIS_MAX_LINKS]); a Linked Elite tethers its affix's count.
+ */
+internal fun MutableGameState.tetherNearestAllies(enemy: Enemy, links: Int) {
+    // The three nearest allies in range; boss-class kinds and other Aegises are never linked.
     var firstIndex = -1
     var secondIndex = -1
     var thirdIndex = -1
@@ -331,7 +321,7 @@ internal fun MutableGameState.updateAegis(enemy: Enemy, dx: Float, dy: Float, di
     val rangeSquared = AEGIS_LINK_RANGE * AEGIS_LINK_RANGE
     for (index in enemies.indices) {
         val ally = enemies[index]
-        if (ally === enemy || !ally.alive || ally.isBoss || ally.isMiniBoss || ally.type == EnemyType.AEGIS) continue
+        if (ally === enemy || !ally.alive || ally.isBossClass || ally.type == EnemyType.AEGIS) continue
         val squared = distanceSquared(enemy.x, enemy.y, ally.x, ally.y)
         if (squared > rangeSquared) continue
         if (squared < first) {
@@ -345,9 +335,9 @@ internal fun MutableGameState.updateAegis(enemy: Enemy, dx: Float, dy: Float, di
             thirdIndex = index; third = squared
         }
     }
-    if (firstIndex >= 0) link(enemies[firstIndex], enemy)
-    if (secondIndex >= 0) link(enemies[secondIndex], enemy)
-    if (thirdIndex >= 0) link(enemies[thirdIndex], enemy)
+    if (firstIndex >= 0 && links >= 1) link(enemies[firstIndex], enemy)
+    if (secondIndex >= 0 && links >= 2) link(enemies[secondIndex], enemy)
+    if (thirdIndex >= 0 && links >= 3) link(enemies[thirdIndex], enemy)
 }
 
 private fun MutableGameState.link(ally: Enemy, aegis: Enemy) {
@@ -389,7 +379,7 @@ internal fun MutableGameState.updateMinelayer(enemy: Enemy, dx: Float, dy: Float
     }
 }
 
-private fun MutableGameState.liveMines(): Int {
+internal fun MutableGameState.liveMines(): Int {
     var count = 0
     for (index in projectiles.indices) if (projectiles[index].kind == ProjectileKind.MINE) count++
     return count
@@ -530,9 +520,22 @@ internal fun MutableGameState.updateReflector(enemy: Enemy, dx: Float, dy: Float
     )
 }
 
+/**
+ * True when a hit arriving from ([fromX], [fromY]) meets a directional guard: the Reflector's front shield, or one of
+ * the shield arcs of the Throne or the Antecedent.
+ */
+internal fun shieldFaces(enemy: Enemy, fromX: Float, fromY: Float): Boolean {
+    val theta = atan2(fromY - enemy.y, fromX - enemy.x)
+    return when (enemy.type) {
+        EnemyType.REFLECTOR -> angleBetween(enemy.facing, theta) <= REFLECTOR_ARC
+        EnemyType.THRONE, EnemyType.ANTECEDENT -> arcGuards(enemy, theta)
+        else -> false
+    }
+}
+
 /** True when a hit arriving from ([fromX], [fromY]) meets the Reflector's front shield. */
 internal fun reflectorShieldFaces(enemy: Enemy, fromX: Float, fromY: Float): Boolean =
-    enemy.type == EnemyType.REFLECTOR && angleBetween(enemy.facing, atan2(fromY - enemy.y, fromX - enemy.x)) <= REFLECTOR_ARC
+    enemy.type == EnemyType.REFLECTOR && shieldFaces(enemy, fromX, fromY)
 
 /** Sends a blocked shot back at the Core with the Reflector's own projectile damage, at most once per 0.3 s. */
 internal fun MutableGameState.reflectShot(enemy: Enemy) {
@@ -622,6 +625,10 @@ internal fun MutableGameState.initializeBehavior(enemy: Enemy) {
         EnemyType.SNIPER -> enemy.abilityAt = elapsed + 1.5f
         EnemyType.PHANTOM -> enemy.abilityAt = elapsed + 2f
         EnemyType.HERALD -> enemy.abilityAt = elapsed + HERALD_FIRST_SHIELD_SECONDS
+        EnemyType.COMET, EnemyType.PYLON, EnemyType.SENTRY, EnemyType.CIPHER -> initializeWorldsBehavior(enemy)
+        EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN, EnemyType.THRONE, EnemyType.PYRE_HERALD -> initializeMiniBoss(enemy)
         else -> Unit
     }
+    // A mini or secret boss runs its first phase start on its first step.
+    if (!enemy.isBoss && encounterSpec(enemy) != null) enemy.phaseStartPending = true
 }

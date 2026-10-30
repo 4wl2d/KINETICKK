@@ -501,14 +501,17 @@ internal fun MutableGameState.resolveReaction(
     }
     val bit = 1 shl reaction.ordinal
     val first = !echo && discoveredReactionMask and bit == 0
+    val announced = first && announcesDiscoveries
     if (first) {
         discoveredReactionMask = discoveredReactionMask or bit
         pendingDiscoveredReactionMask = pendingDiscoveredReactionMask or bit
+    }
+    if (announced) {
         emitVisualFx(VisualFxCue.BuildChanged("REACTION DISCOVERED", kinetickk.foundation.collections.immutableListOf("+ " + definition.name)))
     }
     if (generation >= 1) flags = flags or ReactionCueFlags.CASCADE
     if (echo) flags = flags or ReactionCueFlags.ECHO
-    recordStatusCue(VisualFxCue.ReactionTriggered(x, y, reaction.ordinal, max(radius, enemy.radius * 2f), first,
+    recordStatusCue(VisualFxCue.ReactionTriggered(x, y, reaction.ordinal, max(radius, enemy.radius * 2f), announced,
         direction = direction, flags = flags))
     if (!echo) {
         onReaction(enemy, reaction)
@@ -569,7 +572,7 @@ private fun MutableGameState.quake(x: Float, y: Float, radius: Float, damage: Fl
 }
 
 /**
- * Rock Echo: up to [rocks] obstacles within [reach] of ([x], [y]) repeat the quake around their centres
+ * Rock Echo: up to [rocks] echoing obstacles within [reach] of ([x], [y]) repeat the quake around their centres
  * ([radius], [damage]). Obstacles are visited in window-cell order and never changed. Returns the echoes.
  */
 private fun MutableGameState.rockEcho(x: Float, y: Float, rocks: Int, reach: Float, radius: Float, damage: Float): Int {
@@ -582,7 +585,7 @@ private fun MutableGameState.rockEcho(x: Float, y: Float, rocks: Int, reach: Flo
     var thirdX = 0f
     var thirdY = 0f
     forEachObstacleNear(x, y, reach) { _, obstacle ->
-        if (found < limit && distanceSquared(x, y, obstacle.x, obstacle.y) <= square(reach + obstacle.radius)) {
+        if (found < limit && obstacle.kind.echoes && distanceSquared(x, y, obstacle.x, obstacle.y) <= square(reach + obstacle.radius)) {
             when (found) {
                 0 -> { firstX = obstacle.x; firstY = obstacle.y }
                 1 -> { secondX = obstacle.x; secondY = obstacle.y }

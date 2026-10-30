@@ -61,8 +61,6 @@ SKILL.md
 /architecture/
 /docs/ARCHITECTURE.md
 /docs/agents/
-/docs/pokeball-*.md
-/spec/pokeball-architecture-core.md
 
 # Generated benchmark reports belong in build/, not the source tree
 /docs/performance/results/

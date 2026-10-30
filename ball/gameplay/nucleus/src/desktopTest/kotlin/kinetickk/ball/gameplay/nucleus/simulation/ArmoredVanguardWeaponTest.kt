@@ -7,6 +7,7 @@ import kinetickk.ball.content.api.EnemyType
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
@@ -24,6 +25,8 @@ import kotlin.test.assertTrue
  * shockwaves come from impacts, so its pilot reports an impact to the weapon each frame without striking a
  * target (a real strike would crack that target first). After the first phase every plated target is
  * cracked by one impact (the bare twin takes the same impact), and the second phase must match the twin.
+ * For Hollow Rift, one target stands in a rift that the real weapon laid: the plate contract needs a real
+ * detonation hit, independently of how a movement retune aligns the pilot's route with the anchored ring.
  */
 class ArmoredVanguardWeaponTest {
     @Test
@@ -90,6 +93,7 @@ class ArmoredVanguardWeaponTest {
                     // No Core contact: an impact would crack the plate.
                     target.contactCooldown = 1f
                 }
+                placeTargetInArmedRift()
                 val t = frame / WeaponBalanceTest.FPS
                 pilot.fly(game, 0f, 0f)
                 game.setBrake(t % 3f in 2.6f..3f)
@@ -104,6 +108,20 @@ class ArmoredVanguardWeaponTest {
             return dealt
         }
 
+        /** Guarantee exposure, not damage: the normal fuse, collision and weapon-hit path still decide the hit. */
+        private fun placeTargetInArmedRift() {
+            if (weapon != WeaponId.HOLLOW_RIFT) return
+            val rift = game.weaponRuntime.entities.firstOrNull {
+                it.kind == WeaponEntityKind.RIFT && it.phase == RIFT_ARMED
+            } ?: return
+            targets.first().apply {
+                x = (rift.x + rift.endX) * 0.5f
+                y = (rift.y + rift.endY) * 0.5f
+                previousX = x
+                previousY = y
+            }
+        }
+
         /** One impact on every target: the contact pass's own direct hit. */
         fun crack() {
             for (target in targets) game.dealHit(target, 1f, HitSource.IMPACT, canCrit = false)
@@ -111,7 +129,12 @@ class ArmoredVanguardWeaponTest {
     }
 
     private companion object {
-        const val PHASE_SECONDS = 8f
+        /**
+         * Each phase's length: long enough that every weapon's damage path lands well past [MINIMUM_DAMAGE] against the
+         * crowd. Trap weapons have time to arm and detonate; the Hollow Rift fixture guarantees a target in a real
+         * rift instead of depending on the route's timing to cross an anchored target.
+         */
+        const val PHASE_SECONDS = 16f
         const val CROWD_SIZE = 8
         const val CROWD_RING = 150f
         const val INTEGRITY = 2_000f

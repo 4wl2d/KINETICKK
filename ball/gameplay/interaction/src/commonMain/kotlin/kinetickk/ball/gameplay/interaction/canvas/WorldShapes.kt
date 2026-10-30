@@ -9,7 +9,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.localization.WorldRedesignText
 import kinetickk.foundation.common.localization.AppLanguage
@@ -21,7 +21,8 @@ import kinetickk.foundation.common.localization.text
  * and changing numbers resolve to cached strings. All of it is draw-thread confined.
  */
 internal object WorldPaths {
-    private const val CAPACITY = 128
+    /** 35 kinds × body, aspect and immune contours plus the Architect's frames, plates and fragments, with room to spare. */
+    private const val CAPACITY = 160
     private val kinds = IntArray(CAPACITY) { -1 }
     private val sizes = FloatArray(CAPACITY)
     private val paths = arrayOfNulls<Path>(CAPACITY)
@@ -127,6 +128,31 @@ internal object WorldUnitShapes {
         }
     }
 
+    /**
+     * A Comet's streak on a unit length: 0.9 wide at its body (x = 0) tapering to a blunt 0.12-wide tip at x = 1, drawn
+     * scaled by the tail's length along x and the Comet's radius across. The flat tip keeps it a streak, never an arrowhead.
+     */
+    val cometTail: Path by lazy {
+        Path().apply {
+            moveTo(0f, -0.45f)
+            lineTo(1f, -0.06f)
+            lineTo(1f, 0.06f)
+            lineTo(0f, 0.45f)
+            close()
+        }
+    }
+
+    /** The streak's brighter core: the first 55 % of the tail, 0.6 wide at the body, tapering the same way. */
+    val cometTailCore: Path by lazy {
+        Path().apply {
+            moveTo(0f, -0.3f)
+            lineTo(0.55f, -0.06f)
+            lineTo(0.55f, 0.06f)
+            lineTo(0f, 0.3f)
+            close()
+        }
+    }
+
     /** A sheared (−12°) bar 1 × 0.22 centred on the origin (Silence's mute bars). */
     val bar: Path by lazy {
         val lean = 0.11f * 0.2126f
@@ -135,16 +161,6 @@ internal object WorldUnitShapes {
             lineTo(0.5f + lean, -0.11f)
             lineTo(0.5f - lean, 0.11f)
             lineTo(-0.5f - lean, 0.11f)
-            close()
-        }
-    }
-
-    /** The speed tail (`clip-path: polygon(0 20%, 100% 50%, 0 80%)`) from x = 0 to x = 1. */
-    val tail: Path by lazy {
-        Path().apply {
-            moveTo(0f, -0.3f)
-            lineTo(1f, 0f)
-            lineTo(0f, 0.3f)
             close()
         }
     }
@@ -174,25 +190,8 @@ internal object WorldStrokes {
     val dashEffect: PathEffect by lazy { PathEffect.dashPathEffect(floatArrayOf(8f, 7f)) }
 }
 
-/** Horizontal fades from a color to transparent over x = 0..1 (scaled by the caller's transform). */
-internal object WorldBrushes {
-    private const val CAPACITY = 8
-    private val colors = LongArray(CAPACITY)
-    private val brushes = arrayOfNulls<Brush>(CAPACITY)
-    private var next = 0
-
-    fun fade(color: Color): Brush {
-        val key = color.value.toLong()
-        for (index in 0 until CAPACITY) {
-            if (brushes[index] != null && colors[index] == key) return brushes[index]!!
-        }
-        val brush = Brush.horizontalGradient(listOf(color, color.copy(alpha = 0f)), startX = 0f, endX = 1f)
-        colors[next] = key
-        brushes[next] = brush
-        next = (next + 1) % CAPACITY
-        return brush
-    }
-}
+/** Cached world brushes ([edgeGlow]). */
+internal object WorldBrushes
 
 /** Edge glow gradients (color at the edge, transparent [depth] inside); rebuilt only on resize. */
 internal class EdgeGlow(val left: Brush, val right: Brush, val top: Brush, val bottom: Brush)
@@ -228,8 +227,8 @@ internal object WorldStrings {
     private val distanceSuffixes = arrayOfNulls<String>(AppLanguage.entries.size)
     private val crit = arrayOfNulls<String>(AppLanguage.entries.size)
     private val secondsSuffixes = arrayOfNulls<String>(AppLanguage.entries.size)
-    private val pointNameSources = arrayOfNulls<String>(PointOfInterestKind.entries.size * AppLanguage.entries.size)
-    private val pointNames = arrayOfNulls<String>(PointOfInterestKind.entries.size * AppLanguage.entries.size)
+    private val pointNameSources = arrayOfNulls<String>(SiteKind.entries.size * AppLanguage.entries.size)
+    private val pointNames = arrayOfNulls<String>(SiteKind.entries.size * AppLanguage.entries.size)
     /** One slot per reaction (declared before the arrays it sizes). */
     private val REACTION_SLOTS = kinetickk.ball.content.api.ReactionId.entries.size
     private val reactionSources = arrayOfNulls<String>(REACTION_SLOTS * AppLanguage.entries.size)
@@ -259,7 +258,7 @@ internal object WorldStrings {
     fun decimalSeparator(language: AppLanguage): String = if (language == AppLanguage.Russian) "," else "."
 
     /** A point's content [name] in [language], resolved once per kind, language and name. */
-    fun pointName(kind: PointOfInterestKind, name: String, language: AppLanguage): String {
+    fun pointName(kind: SiteKind, name: String, language: AppLanguage): String {
         val slot = kind.ordinal * AppLanguage.entries.size + language.ordinal
         val cached = pointNames[slot]
         if (cached != null && pointNameSources[slot] == name) return cached

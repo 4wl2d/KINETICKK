@@ -146,8 +146,9 @@ data class CoreShapeDefinition(
     val traits: CharacterTraits = when (id) {
         CoreShape.ORB, CoreShape.PENTAGON -> CharacterTraits()
         CoreShape.PRISM -> CharacterTraits(massMultiplier = 1.25f, dragMultiplier = 1.15f, integrityBonus = 20)
-        CoreShape.SHARD -> CharacterTraits(critChanceBonus = 0.08f, integrityBonus = -15, radiusMultiplier = 0.9f,
-            dashHeatMultiplier = 0.85f)
+        // A light Core: its Dash marks a pack rather than smashing it, so the marks are left for its Puncture.
+        CoreShape.SHARD -> CharacterTraits(massMultiplier = 0.8f, critChanceBonus = 0.08f, integrityBonus = -15,
+            radiusMultiplier = 0.9f, dashHeatMultiplier = 0.85f)
         CoreShape.RING -> CharacterTraits(dragMultiplier = 0.95f)
         CoreShape.DIAMOND -> CharacterTraits(critDamageBonus = 0.2f)
         CoreShape.TESSERACT -> CharacterTraits(dashHeatMultiplier = 0.9f)

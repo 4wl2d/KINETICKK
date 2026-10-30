@@ -396,6 +396,12 @@ enum class EffectTrigger(val displayLabel: String) {
     SHOT_ERASED("On erasing a shot"),
     /** You cashed a mark (a Spall throw, a Cracked detonation, a Void Anchor blink, a ringing Shatter); the marked enemy is the clause target. */
     MARK_CONSUMED("On cashing a mark"),
+    /** An obstacle broke: a crystal shattered, an unstable asteroid burst or a derelict mine went off; the effect starts at it. */
+    SHATTER("On breaking an obstacle"),
+    /** An obstacle sped the Core up: an accelerator gate, a gravity-knot sling or a vent's updraft. */
+    BOOST("On boost"),
+    /** The Core skimmed a grazeable obstacle fast without touching it. */
+    GRAZE("On graze"),
 }
 
 /**
@@ -463,7 +469,22 @@ sealed interface EffectCondition {
     }
     /** The equipped weapon belongs to [family] (follows a mid-run weapon switch). */
     data class WeaponFamilyIs(val family: WeaponFamily) : EffectCondition
+    /** The obstacle the trigger is about (RICOCHET, SLAM against an obstacle, HURT from one, SHATTER, BOOST, GRAZE). */
+    data class ObstacleIs(val kind: ObstacleKind) : EffectCondition
+    /** The Core's surface is within [distance] of a solid (materialised) obstacle's surface. */
+    data class NearObstacle(val distance: Float) : EffectCondition {
+        init {
+            require(distance.isFinite() && distance in 40f..NEAR_OBSTACLE_MAX_DISTANCE) {
+                "Near-obstacle distance must be in 40..$NEAR_OBSTACLE_MAX_DISTANCE"
+            }
+        }
+    }
 }
+
+/** Triggers that carry the obstacle they are about, so [EffectCondition.ObstacleIs] can hold on them. */
+val ObstacleTriggers: Set<EffectTrigger> = setOf(
+    EffectTrigger.RICOCHET, EffectTrigger.SLAM, EffectTrigger.HURT, EffectTrigger.SHATTER, EffectTrigger.BOOST, EffectTrigger.GRAZE,
+)
 
 /**
  * True when [this] condition can hold on clauses of [trigger]: dispatch facts exist only on the triggers that
@@ -477,12 +498,14 @@ fun EffectCondition.validOn(trigger: EffectTrigger): Boolean = when (this) {
     is EffectCondition.TargetHas, EffectCondition.TargetElite, EffectCondition.TargetFrozen, is EffectCondition.TargetBelow,
     EffectCondition.TargetMarked, EffectCondition.TargetControlled, EffectCondition.TargetThrown,
     -> trigger in TargetedTriggers || trigger == EffectTrigger.KILL
+    is EffectCondition.ObstacleIs -> trigger in ObstacleTriggers
     else -> true
 }
 
-/** Conditions that read a dispatch (the reaction or skill involved); item rules hold outside any dispatch. */
+/** Conditions that read a dispatch (the reaction, skill or obstacle involved); item rules hold outside any dispatch. */
 val EffectCondition.needsDispatch: Boolean
-    get() = this is EffectCondition.ReactionIs || this is EffectCondition.SkillIs || this is EffectCondition.SkillTagged
+    get() = this is EffectCondition.ReactionIs || this is EffectCondition.SkillIs || this is EffectCondition.SkillTagged ||
+        this is EffectCondition.ObstacleIs
 
 /** What a scaled amount is measured against. */
 enum class DamageBasis {
@@ -768,6 +791,7 @@ data class EffectClause(
             EffectTrigger.DASH_HIT, EffectTrigger.BREAK, EffectTrigger.REACTION, EffectTrigger.PICKUP,
             EffectTrigger.HURT, EffectTrigger.RICOCHET, EffectTrigger.SLAM,
             EffectTrigger.SKILL_HIT, EffectTrigger.FIELD_ENTER, EffectTrigger.SHOT_ERASED, EffectTrigger.MARK_CONSUMED,
+            EffectTrigger.SHATTER, EffectTrigger.BOOST, EffectTrigger.GRAZE,
         )
 
         /** The Apex activates at most every 30 s, so its clauses count at most every third activation. */
@@ -938,6 +962,18 @@ sealed interface ItemRule {
     /** Reactions feed the Core's verbs from [bonus] farther. */
     data class CoreLinkRadius(val bonus: Float) : ItemRule {
         init { requireWithin(bonus, 40f, 240f, "Core link bonus") }
+    }
+    /** Scales one obstacle mechanic while owned; magnitudes scale with stacks, totals are capped when compiled. */
+    data class ObstacleTuning(val aspect: ObstacleAspect, val amount: Float) : ItemRule {
+        init {
+            when (aspect) {
+                ObstacleAspect.RESTITUTION -> requireWithin(amount, 0.05f, 0.3f, "Restitution bonus")
+                ObstacleAspect.COLLISION_DAMAGE -> requireWithin(amount, 0.1f, 0.5f, "Obstacle damage cut")
+                ObstacleAspect.LETHAL_SPEED -> requireWithin(amount, 50f, 300f, "Lethal speed bonus")
+                ObstacleAspect.BOOST_POWER -> requireWithin(amount, 0.1f, 0.6f, "Boost power")
+                ObstacleAspect.WELL_PULL -> requireWithin(amount, 0.1f, 0.6f, "Knot pull on enemies")
+            }
+        }
     }
 }
 

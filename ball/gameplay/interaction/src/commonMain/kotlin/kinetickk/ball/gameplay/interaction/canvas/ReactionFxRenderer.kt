@@ -41,6 +41,9 @@ import kotlin.math.sqrt
 private const val TAU = (2.0 * PI).toFloat()
 private const val RAD_TO_DEG = 57.29578f
 private const val SONIC = 5
+private const val WEAPON_LINK_JITTER = 8f
+private const val WEAPON_LINK_OUTER_WIDTH = 6f
+private const val WEAPON_LINK_EXTENT = WEAPON_LINK_JITTER + WEAPON_LINK_OUTER_WIDTH * 0.5f
 
 /** Live transient looks past which older ones lose their secondary layers. */
 private const val CROWDED_BURSTS = 16
@@ -310,6 +313,14 @@ internal fun DrawScope.drawWeaponArcs(
 
 /** Arc Coil lightning: a bone zigzag over a soft you-color stroke (`HUD.dc.html`). */
 private fun DrawScope.drawWeaponLink(engine: GameplayRenderModel, index: Int, start: Offset, end: Offset, alpha: Float, roles: KkRolePalette) {
+    // Zigzag excursion, half the widest stroke and one device pixel of antialias coverage.
+    val margin = WEAPON_LINK_EXTENT + 1f / engine.worldScale
+    if (alpha <= 0f ||
+        (start.x < -margin && end.x < -margin) ||
+        (start.y < -margin && end.y < -margin) ||
+        (start.x > size.width + margin && end.x > size.width + margin) ||
+        (start.y > size.height + margin && end.y > size.height + margin)
+    ) return
     val dx = end.x - start.x
     val dy = end.y - start.y
     val length = max(1f, sqrt(dx * dx + dy * dy))
@@ -318,9 +329,9 @@ private fun DrawScope.drawWeaponLink(engine: GameplayRenderModel, index: Int, st
     var previous = start
     for (segment in 0 until 6) {
         val t = (segment + 1f) / 6f
-        val jitter = if (segment == 5) 0f else sin(index * 7f + segment * 4.1f + engine.renderElapsed * 40f) * 8f
+        val jitter = if (segment == 5) 0f else sin(index * 7f + segment * 4.1f + engine.renderElapsed * 40f) * WEAPON_LINK_JITTER
         val next = Offset(start.x + dx * t + nx * jitter, start.y + dy * t + ny * jitter)
-        drawLine(roles.you.copy(alpha = alpha * 0.25f), previous, next, 6f)
+        drawLine(roles.you.copy(alpha = alpha * 0.25f), previous, next, WEAPON_LINK_OUTER_WIDTH)
         drawLine(Kk.Bone.copy(alpha = alpha), previous, next, 2f)
         previous = next
     }

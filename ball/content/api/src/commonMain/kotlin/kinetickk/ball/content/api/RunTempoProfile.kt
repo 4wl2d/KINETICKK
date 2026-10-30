@@ -45,6 +45,8 @@ data class RunTempoProfile(
     val weaponAmplificationEveryLevels: Int = 2,
     val maximumAutomaticWeaponLevel: Int = 10,
     val fatigue: FatigueTuning = FatigueTuning(),
+    /** The Core's flight law. */
+    val steering: SteeringTuning = SteeringTuning(),
     /** Highest run level; Data stops levelling here (the Apex unlocks at it). */
     val maximumLevel: Int = DEFAULT_MAXIMUM_LEVEL,
     /**

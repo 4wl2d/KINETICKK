@@ -103,15 +103,35 @@ private fun MutableGameState.advanceDisc(disc: WeaponEntity, delta: Float) {
     disc.angle += GYRE_SPIN * delta
     if (disc.phase == 1) disc.timer = max(0f, disc.timer - delta)
     val blocker = obstacleOnPath(disc.x, disc.y, disc.x + disc.vx * delta, disc.y + disc.vy * delta, disc.radius)
-    if (blocker != null) {
+    val wallIndex = if (blocker == null) {
+        wallOnPath(disc.x, disc.y, disc.x + disc.vx * delta, disc.y + disc.vy * delta, disc.radius)
+    } else -1
+    if (blocker != null || wallIndex >= 0) {
         if (!hasMasteryForm(3)) {
             if (disc.phase == 0) beginDiscReturn(disc) else disc.life = 0f
             return
         }
-        deflectDisc(disc, blocker)
-        // The new heading runs along or away from that rock; a second rock on it holds the disc for this step.
-        val next = obstacleOnPath(disc.x, disc.y, disc.x + disc.vx * delta, disc.y + disc.vy * delta, disc.radius)
-        if (next != null && next !== blocker) return
+        if (blocker != null) {
+            val nx = disc.x - blocker.x
+            val ny = disc.y - blocker.y
+            val distance = max(1f, length(nx, ny))
+            deflectDisc(disc, nx / distance, ny / distance)
+            // The new heading runs along or away from that rock; a second rock on it holds the disc for this step.
+            val next = obstacleOnPath(disc.x, disc.y, disc.x + disc.vx * delta, disc.y + disc.vy * delta, disc.radius)
+            if (next != null && next !== blocker) return
+        } else {
+            // A wall deflects like a rock, off the normal from its nearest point.
+            val wall = structureField.walls[wallIndex]
+            val along = segmentParameter(disc.x, disc.y, wall.ax, wall.ay, wall.bx, wall.by)
+            val nx = disc.x - (wall.ax + (wall.bx - wall.ax) * along)
+            val ny = disc.y - (wall.ay + (wall.by - wall.ay) * along)
+            val distance = max(1f, length(nx, ny))
+            deflectDisc(disc, nx / distance, ny / distance)
+            val nextX = disc.x + disc.vx * delta
+            val nextY = disc.y + disc.vy * delta
+            val nextWall = wallOnPath(disc.x, disc.y, nextX, nextY, disc.radius)
+            if ((nextWall >= 0 && nextWall != wallIndex) || obstacleOnPath(disc.x, disc.y, nextX, nextY, disc.radius) != null) return
+        }
     }
     val stepX = disc.vx * delta
     val stepY = disc.vy * delta
@@ -129,13 +149,11 @@ private fun beginDiscReturn(disc: WeaponEntity) {
     disc.clearHits()
 }
 
-/** The third form at a rock: an outgoing disc reflects off it; a returning one glances along it toward the Core. */
-private fun MutableGameState.deflectDisc(disc: WeaponEntity, blocker: Obstacle) {
-    val nx = disc.x - blocker.x
-    val ny = disc.y - blocker.y
-    val distance = max(1f, length(nx, ny))
-    val ux = nx / distance
-    val uy = ny / distance
+/**
+ * The third form at a rock or wall with outward normal ([ux], [uy]): an outgoing disc reflects off it; a returning one
+ * glances along it toward the Core.
+ */
+private fun MutableGameState.deflectDisc(disc: WeaponEntity, ux: Float, uy: Float) {
     val along = disc.vx * ux + disc.vy * uy
     if (along >= 0f) return
     if (disc.phase == 0) {
@@ -191,7 +209,7 @@ private fun MutableGameState.advanceLens(lens: WeaponEntity, delta: Float) {
     lens.life -= delta
     val nextX = lens.x + lens.vx * delta
     val nextY = lens.y + lens.vy * delta
-    if (obstacleOnPath(lens.x, lens.y, nextX, nextY, lens.radius) != null) {
+    if (obstacleOnPath(lens.x, lens.y, nextX, nextY, lens.radius) != null || wallOnPath(lens.x, lens.y, nextX, nextY, lens.radius) >= 0) {
         collapseLens(lens)
         return
     }
@@ -291,7 +309,9 @@ private fun MutableGameState.advanceShard(shard: WeaponEntity, delta: Float) {
     if (target != null && target.alive) steer(shard, target.x, target.y, AEGIS_SPEED, AEGIS_TURN_RATE, delta)
     val nextX = shard.x + shard.vx * delta
     val nextY = shard.y + shard.vy * delta
-    if (obstacleOnPath(shard.x, shard.y, nextX, nextY, shard.radius) != null) {
+    if (obstacleOnPath(shard.x, shard.y, nextX, nextY, shard.radius) != null ||
+        wallOnPath(shard.x, shard.y, nextX, nextY, shard.radius) >= 0
+    ) {
         shard.life = 0f
         burst(shard.x, shard.y, 3, 0)
         return
@@ -318,7 +338,9 @@ private fun MutableGameState.advanceMissile(missile: WeaponEntity, delta: Float)
     missile.angle = atan2(missile.vy, missile.vx)
     val nextX = missile.x + missile.vx * delta
     val nextY = missile.y + missile.vy * delta
-    if (obstacleOnPath(missile.x, missile.y, nextX, nextY, missile.radius) != null) {
+    if (obstacleOnPath(missile.x, missile.y, nextX, nextY, missile.radius) != null ||
+        wallOnPath(missile.x, missile.y, nextX, nextY, missile.radius) >= 0
+    ) {
         missileBurst(missile, null)
         missile.life = 0f
         return
@@ -338,14 +360,17 @@ private fun steer(entity: WeaponEntity, x: Float, y: Float, speed: Float, turnRa
 }
 
 /**
- * The first asteroid or unstable rock a circle of [radius] runs into from (x0, y0) to (x1, y1) (one it starts
- * overlapping only when it moves inward, see [obstacleStepEntry]); bumpers let it pass.
+ * The first shot-stopping obstacle a circle of [radius] runs into from (x0, y0) to (x1, y1) (one it starts
+ * overlapping only when it moves inward, see [obstacleStepEntry]); bumpers and kinds with no solid body let it pass.
  */
 private fun MutableGameState.obstacleOnPath(x0: Float, y0: Float, x1: Float, y1: Float, radius: Float): Obstacle? {
     if (obstacleField.size == 0) return null
     val reach = length(x1 - x0, y1 - y0) * 0.5f + radius
+    val kinds = content.obstacles.kinds
     forEachObstacleNear((x0 + x1) * 0.5f, (y0 + y1) * 0.5f, reach) { _, obstacle ->
-        if (obstacle.kind != ObstacleKind.BUMPER && obstacleStepEntry(x0, y0, x1, y1, obstacle.x, obstacle.y, obstacle.radius, radius) >= 0f) {
+        if (obstacle.stopsShotsAt(elapsed, kinds) &&
+            obstacleStepEntry(x0, y0, x1, y1, obstacle.x, obstacle.y, obstacle.radius, radius) >= 0f
+        ) {
             return obstacle
         }
     }
@@ -376,13 +401,13 @@ private fun MutableGameState.sweptContact(entity: WeaponEntity, enemy: Enemy): B
     )
 
 /**
- * A Reflector's front shield meets an entity's hit by where the hit comes from ([fromX], [fromY]), as it meets
- * a shot, not by where the Core is; its Core-facing shield holds again after the hit.
+ * A directional guard (a Reflector's front, a Throne's arcs) meets an entity's hit by where the hit comes from
+ * ([fromX], [fromY]), as it meets a shot, not by where the Core is; its Core-facing guard holds again after the hit.
  */
 private inline fun <T> hitFrom(enemy: Enemy, fromX: Float, fromY: Float, hit: () -> T): T {
-    if (enemy.type != EnemyType.REFLECTOR) return hit()
+    if (!enemy.type.profile.directionalGuard) return hit()
     val shieldBefore = enemy.guarded
-    enemy.guarded = reflectorShieldFaces(enemy, fromX, fromY)
+    enemy.guarded = shieldFaces(enemy, fromX, fromY)
     try {
         return hit()
     } finally {
@@ -601,7 +626,7 @@ internal const val SENTRY_SPLASH_RADIUS: Float = 40f
 internal const val SENTRY_SPLASH_SHARE: Float = 0.32f
 internal const val LENS_THROW: Float = 420f
 internal const val LENS_MASS_INTERVAL: Float = 2.5f
-internal const val HOLLOW_PULL: Float = 320f
+internal const val HOLLOW_PULL: Float = 120f
 internal const val AEGIS_TURN_RATE: Float = 9f
 /** The share of its damage a shard keeps for each enemy it pierces on to. */
 internal const val AEGIS_PIERCE_SHARE: Float = 0.9f

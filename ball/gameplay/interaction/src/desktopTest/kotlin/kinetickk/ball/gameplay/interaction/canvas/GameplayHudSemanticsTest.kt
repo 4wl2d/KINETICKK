@@ -6,6 +6,8 @@ package kinetickk.ball.gameplay.interaction.canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.testTag
@@ -33,7 +35,7 @@ import androidx.compose.ui.test.click
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.gameplay.nucleus.render.SkillSlotProjection
 import kinetickk.ball.gameplay.nucleus.render.SkillBarProjection
@@ -51,7 +53,7 @@ import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
 import kinetickk.ball.gameplay.interaction.layout.runningBuildButtonBounds
 import kinetickk.ball.gameplay.interaction.layout.runningControlBounds
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
@@ -88,9 +90,9 @@ class GameplayHudSemanticsTest {
 
     private fun startTrial(pulses: MutableList<GameplayInteractionPulse>) {
         val snapshot = hudTestSnapshot()
-        val orbit = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
+        val orbit = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, -1, 0.4f,
             immutableListOf(), 0f, 0f)
-        trialModel = requireNotNull(snapshot.renderModel).with("pointsOfInterest" to listOf(orbit).toImmutableList())
+        trialModel = requireNotNull(snapshot.renderModel).withSites(orbit)
         val running = snapshot.withModel(trialModel)
         val port = object : GameplayInteractionPort {
             override val instanceId get() = running.instanceId
@@ -159,11 +161,11 @@ class GameplayHudSemanticsTest {
     @Test
     fun keyboardFocusReturnsToTheGameWhenTheTrialEndsWhileItsInfoIsFocused() {
         val snapshot = hudTestSnapshot()
-        val orbit = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
+        val orbit = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, -1, 0.4f,
             immutableListOf(), 0f, 0f)
         val base = requireNotNull(snapshot.renderModel)
-        val withTrial = snapshot.withModel(base.with("pointsOfInterest" to listOf(orbit).toImmutableList()))
-        val afterTrial = snapshot.withModel(base.with("pointsOfInterest" to immutableListOf<PointOfInterestProjection>()))
+        val withTrial = snapshot.withModel(base.withSites(orbit))
+        val afterTrial = snapshot.withModel(base.withSites())
         var current = withTrial
         var trialEnds = false
         val pulses = mutableListOf<GameplayInteractionPulse>()
@@ -208,9 +210,9 @@ class GameplayHudSemanticsTest {
     @Test
     fun trialRulesSitBehindAFocusableInfoNodeAndDesktopPauseAndBuildAreHeaderButtons() {
         val snapshot = hudTestSnapshot()
-        val orbit = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
+        val orbit = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, -1, 0.4f,
             immutableListOf(), 0f, 0f)
-        val model = requireNotNull(snapshot.renderModel).with("pointsOfInterest" to listOf(orbit).toImmutableList())
+        val model = requireNotNull(snapshot.renderModel).withSites(orbit)
         trialModel = model
         val running = snapshot.withModel(model)
         val pulses = mutableListOf<GameplayInteractionPulse>()
@@ -230,7 +232,7 @@ class GameplayHudSemanticsTest {
                 Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
             }
         }
-        val rules = model.content.pointsOfInterest.definition(PointOfInterestKind.COLLAPSING_ORBIT).instruction
+        val rules = model.content.sites.definition(SiteKind.COLLAPSING_ORBIT).instruction
         val info = compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG)
         info.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf(rules)))
         compose.mainClock.advanceTimeByFrame()
@@ -259,6 +261,53 @@ class GameplayHudSemanticsTest {
         assertRect(runningBuildButtonBounds(1_440f, 810f, 1f), build)
         assertTrue(build.right <= pause.left + 0.5f)
         assertRect(HudTrialPanelLayout().update(1_440f, 810f, 1f, model.settings.textScale).infoTarget(1f), bounds(GAMEPLAY_TRIAL_INFO_TAG))
+    }
+
+    /**
+     * Every family's panel (the anomalies, the gate race, the five challenges, the bounty and the sigil duel) keeps
+     * its rules behind the focusable (!) node, described by that trial's own rules, over the panel's (!) target.
+     */
+    @Test
+    fun everyFamilysTrialPanelKeepsItsOwnRulesBehindTheInfoNode() {
+        val snapshot = hudTestSnapshot()
+        val base = requireNotNull(snapshot.renderModel)
+        val sites = trialSites()
+        var current = snapshot.withModel(base.withSites(sites.first()))
+        var next: GameplayRenderSnapshot? = null
+        trialModel = current.renderModel!!
+        val port = object : GameplayInteractionPort {
+            override val instanceId get() = current.instanceId
+            override fun renderSnapshot() = current
+            override fun visualFxSnapshot() = VisualFxProjection.EMPTY
+            override fun accept(pulse: GameplayInteractionPulse): GameplayAcceptance {
+                val switched = next
+                if (switched != null && pulse is GameplayInteractionPulse.FrameElapsed) {
+                    current = switched
+                    next = null
+                    return GameplayAcceptance.Accepted(current.instanceId, current.revision)
+                }
+                return GameplayAcceptance.Rejected(current.instanceId, current.revision, GameplayRejection.RunExited)
+            }
+        }
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides AppLanguage.English) {
+                Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
+            }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        val host = compose.onNodeWithTag(HOST_TAG).getUnclippedBoundsInRoot()
+        val target = HudTrialPanelLayout().update(1_440f, 810f, 1f, base.settings.textScale).infoTarget(1f)
+        sites.forEach { site ->
+            next = snapshot.withModel(base.withSites(site))
+            repeat(3) { compose.mainClock.advanceTimeByFrame() }
+            val rules = base.content.sites.definition(site.kind).instruction
+            val info = compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG)
+            info.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf(rules)))
+            val bounds = info.getUnclippedBoundsInRoot()
+            assertRect(target, Rect(bounds.left.value - host.left.value, bounds.top.value - host.top.value,
+                bounds.right.value - host.left.value, bounds.bottom.value - host.top.value))
+        }
     }
 
     @Test
@@ -371,6 +420,114 @@ class GameplayHudSemanticsTest {
         compose.onNodeWithTag("kinetickk.gameplay.dash").assertExists()
         listOf("kinetickk.gameplay.skill.0", "kinetickk.gameplay.skill.1", "kinetickk.gameplay.skill.2", "kinetickk.gameplay.apex")
             .forEach { compose.onNodeWithTag(it).assertDoesNotExist() }
+    }
+
+    /**
+     * A held dungeon's panel keeps the structure rules behind the same focusable (!) node over the panel's (!) target,
+     * described in the player's language, and the node leaves with the panel when the Core leaves the structure.
+     */
+    @Test
+    fun aDungeonPanelKeepsTheStructureRulesBehindTheInfoNode() {
+        val snapshot = hudTestSnapshot()
+        val base = requireNotNull(snapshot.renderModel)
+        val station = StructureFixture(base.content.structures.template(kinetickk.ball.content.api.StructureTemplateId.DERELICT_STATION),
+            base.coreX, base.coreY, clearedRooms = 0b0001, engagedRoom = 1)
+        val vault = StructureFixture(base.content.structures.template(kinetickk.ball.content.api.StructureTemplateId.VAULT),
+            base.coreX, base.coreY, clearedRooms = 0b0001, engagedRoom = 1)
+        var current = snapshot.withModel(base.withDungeon(station))
+        var next: GameplayRenderSnapshot? = null
+        val port = object : GameplayInteractionPort {
+            override val instanceId get() = current.instanceId
+            override fun renderSnapshot() = current
+            override fun visualFxSnapshot() = VisualFxProjection.EMPTY
+            override fun accept(pulse: GameplayInteractionPulse): GameplayAcceptance {
+                val switched = next
+                if (switched != null && pulse is GameplayInteractionPulse.FrameElapsed) {
+                    current = switched
+                    next = null
+                    return GameplayAcceptance.Accepted(current.instanceId, current.revision)
+                }
+                return GameplayAcceptance.Rejected(current.instanceId, current.revision, GameplayRejection.RunExited)
+            }
+        }
+        var language by androidx.compose.runtime.mutableStateOf(AppLanguage.English)
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides language) {
+                Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
+            }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        val host = compose.onNodeWithTag(HOST_TAG).getUnclippedBoundsInRoot()
+        val target = HudTrialPanelLayout().update(1_440f, 810f, 1f, base.settings.textScale).infoTarget(1f)
+        listOf(AppLanguage.English, AppLanguage.Russian).forEach { shown ->
+            compose.runOnIdle { language = shown }
+            for (fixture in listOf(station, vault, station)) {
+                val model = base.withDungeon(fixture)
+                next = snapshot.withModel(model)
+                repeat(3) { compose.mainClock.advanceTimeByFrame() }
+                val info = compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG)
+                val rules = model.trialRules(requireNotNull(model.activeTrial()), shown)
+                info.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf(rules)))
+                val bounds = info.getUnclippedBoundsInRoot()
+                assertRect(target, Rect(bounds.left.value - host.left.value, bounds.top.value - host.top.value,
+                    bounds.right.value - host.left.value, bounds.bottom.value - host.top.value))
+            }
+        }
+        next = snapshot.withModel(base)
+        repeat(3) { compose.mainClock.advanceTimeByFrame() }
+        compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG).assertDoesNotExist()
+    }
+
+    /**
+     * A dimension objective's panel keeps the objective's instruction behind the same focusable (!) node over the panel's
+     * (!) target, described in the player's language, and the node leaves with the visit.
+     */
+    @Test
+    fun aDimensionObjectiveKeepsItsInstructionBehindTheInfoNode() {
+        val snapshot = hudTestSnapshot()
+        val base = requireNotNull(snapshot.renderModel)
+        val visit = dimensionVisit(kinetickk.ball.content.api.WorldLayer.NADIR, base.coreX, base.coreY, progress = 4)
+        var current = snapshot.withModel(base.inVisit(visit))
+        var next: GameplayRenderSnapshot? = null
+        val port = object : GameplayInteractionPort {
+            override val instanceId get() = current.instanceId
+            override fun renderSnapshot() = current
+            override fun visualFxSnapshot() = VisualFxProjection.EMPTY
+            override fun accept(pulse: GameplayInteractionPulse): GameplayAcceptance {
+                val switched = next
+                if (switched != null && pulse is GameplayInteractionPulse.FrameElapsed) {
+                    current = switched
+                    next = null
+                    return GameplayAcceptance.Accepted(current.instanceId, current.revision)
+                }
+                return GameplayAcceptance.Rejected(current.instanceId, current.revision, GameplayRejection.RunExited)
+            }
+        }
+        var language by androidx.compose.runtime.mutableStateOf(AppLanguage.English)
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides language) {
+                Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
+            }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        val host = compose.onNodeWithTag(HOST_TAG).getUnclippedBoundsInRoot()
+        val target = HudTrialPanelLayout().update(1_440f, 810f, 1f, base.settings.textScale).infoTarget(1f)
+        val instruction = checkNotNull(visit.objective).instruction
+        listOf(AppLanguage.English, AppLanguage.Russian).forEach { shown ->
+            compose.runOnIdle { language = shown }
+            repeat(3) { compose.mainClock.advanceTimeByFrame() }
+            val info = compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG)
+            info.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription,
+                listOf(instruction.localizedContent(shown))))
+            val bounds = info.getUnclippedBoundsInRoot()
+            assertRect(target, Rect(bounds.left.value - host.left.value, bounds.top.value - host.top.value,
+                bounds.right.value - host.left.value, bounds.bottom.value - host.top.value))
+        }
+        next = snapshot.withModel(base)
+        repeat(3) { compose.mainClock.advanceTimeByFrame() }
+        compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG).assertDoesNotExist()
     }
 }
 

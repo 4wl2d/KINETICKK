@@ -27,7 +27,6 @@ import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
-import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
@@ -177,9 +176,9 @@ private object FeedArea {
                 // grows with the text size and pushes its bar down.
                 val boss = FeedBoss.select(engine)
                 if (boss.id >= 0) {
-                    val architect = boss.type == EnemyType.ARCHITECT
-                    if (right - maxWidth < frame.width * 0.5f + HudTopGeometry.bossBarWidth(frame, architect) * 0.5f) {
-                        top = max(top, HudTopGeometry.bossBottom(frame, architect, measurer.scale, rail = boss.statusBits != 0) + frame.u(8f))
+                    val wide = wideBossBlock(boss.rank)
+                    if (right - maxWidth < frame.width * 0.5f + HudTopGeometry.bossBarWidth(frame, wide) * 0.5f) {
+                        top = max(top, HudTopGeometry.bossBottom(frame, wide, measurer.scale, rail = boss.statusBits != 0) + frame.u(8f))
                     }
                 }
                 maxNotices = 1
@@ -984,7 +983,7 @@ private val StateMessages = hashSetOf("OVERHEAT", "POLARITY FIELD STRAIN", "DASH
 /** Whether the current run message appears in the feed (see [drawHudFeed]). */
 internal fun GameplayRenderModel.showsMessage(): Boolean {
     if (messageTime <= 0f || message.isBlank() || message in StateMessages) return false
-    val definitions = content.pointsOfInterest.definitions
+    val definitions = content.sites.definitions
     for (index in definitions.indices) if (definitions[index].instruction == message) return false
     return true
 }

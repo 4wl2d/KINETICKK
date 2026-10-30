@@ -22,17 +22,17 @@ import kotlin.test.assertTrue
  *
  * The two price locks read their medians over [PopulationSeeds] (0.5.0 active items; policy.md, "Balance gate
  * populations"): a five-seed median moves with the reward stream, and the active items' offers moved it enough that the
- * gate seeds became a coin flip. Their bounds stay the design's (by the population threshold rule: the base population
- * meets each with room to spare). The rising medians keep the five gate seeds, which pass with probability 0.99 on the
- * 05885fa9 base and with the active items.
+ * gate seeds became a coin flip. Their bounds stay the design's (by the population threshold rule on the 0.6.0 base:
+ * the base population meets each with room to spare). The rising medians keep the five gate seeds, which pass with
+ * probability 0.996 on the 0.6.0 tree (medians 2,325, 5,171, 12,492 and 23,238 over 300 population runs per arm).
  */
 class MatterIncomeProbeTest {
     /**
      * Every rank-0 Refit and Honing base costs at most 3 % of a fresh tier-0 run's median Matter over
      * [PopulationSeeds]. The five gate seeds met it with probability 0.91 on the 05885fa9 base and 0.84 with the
-     * shipped active items. The base population's median was 2,499 Matter (bootstrap SE 17, n 300), so the largest
-     * base, 55, was 0.022 of it (SE 0.0002); by the population threshold rule the bound is the higher of the design's
-     * 0.03 and that plus two standard errors: 0.03.
+     * shipped active items. On the 0.6.0 base the population's median is 2,325 Matter (bootstrap SE 31, n 300), so the
+     * largest base, 55, is 0.024 of it (SE 0.0003); by the population threshold rule the bound is the higher of the
+     * design's 0.03 and that plus two standard errors: 0.03.
      */
     @Test fun theFirstRefitAndHoningLevelsCostAtMostThreePercentOfAFreshWin() {
         val fresh = population(Setup.T0_FRESH).median
@@ -43,9 +43,9 @@ class MatterIncomeProbeTest {
     /**
      * The tenth Refit level costs 1.0-1.5 and the tenth Honing level 0.7-1.0 full-Matrix tier-6 runs, by the median
      * Matter over [PopulationSeeds]. The five gate seeds met both with probability 0.95 on the 05885fa9 base and 0.89
-     * with the shipped active items. The base population's median was 23,517 Matter (bootstrap SE 183, n 300): Refit 10
-     * cost 1.197 of it (SE 0.009) and Honing 10 0.871 (SE 0.007), so by the population threshold rule each band (the
-     * wider of the design's and the base ± two standard errors) is the design's.
+     * with the shipped active items. On the 0.6.0 base the population's median is 23,238 Matter (bootstrap SE 269,
+     * n 300): Refit 10 costs 1.212 of it (SE 0.014) and Honing 10 0.881 (SE 0.010), so by the population threshold rule
+     * each band (the wider of the design's and the base ± two standard errors) is the design's.
      */
     @Test fun theTenthRefitAndHoningLevelsTrackAFullMatrixTierSixRun() {
         val tierSix = population(Setup.T6_FULL).median

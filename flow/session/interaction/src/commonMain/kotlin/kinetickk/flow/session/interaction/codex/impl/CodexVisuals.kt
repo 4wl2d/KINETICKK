@@ -29,6 +29,7 @@ import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.ball.gameplay.interaction.canvas.EnemySilhouette
 import kinetickk.ball.gameplay.interaction.canvas.drawActiveItemMark
+import kinetickk.ball.gameplay.interaction.canvas.drawWorldDiscoveryMark
 import kinetickk.ball.gameplay.interaction.canvas.enemySilhouette
 import kinetickk.ball.gameplay.interaction.canvas.skillGlyph
 import kinetickk.flow.session.interaction.home.impl.formIndex
@@ -233,7 +234,13 @@ internal fun DrawScope.drawCodexCell(entry: CodexEntry, catalog: UiCatalogSnapsh
             drawCodexForm(icon.id, center, radius * CODEX_FORM_SCALE, if (entry.discovered) Kk.Bone else Kk.Mute)
             if (!entry.discovered) drawKkIcon(KkIcon.SYSTEM_LOCKED, Offset(size.width - 11.dp.toPx(), 11.dp.toPx()), 11.dp.toPx(), Kk.Mute)
         }
-        is CodexIcon.Enemy -> {
+        is CodexIcon.Enemy -> if (icon.hidden) {
+            // A secret boss not discovered yet: the anomaly glyph muted over a hatch, never its shape.
+            drawRect(if (hovered) Kk.Ink3 else Kk.Ink2)
+            drawKkHatch(rect)
+            drawRect(Kk.Line2, style = kkStroke(1.dp.toPx()))
+            drawKkIcon(KkIcon.SYSTEM_ANOMALY, center, radius * 1.1f, Kk.Mute)
+        } else {
             // The world silhouette in the threat hue; a Rebirth-locked enemy is muted, hatched and padlocked.
             drawRect(if (hovered) Kk.Ink3 else Kk.Ink2)
             if (icon.locked) drawKkHatch(rect)
@@ -241,6 +248,13 @@ internal fun DrawScope.drawCodexCell(entry: CodexEntry, catalog: UiCatalogSnapsh
             drawCodexEnemy(enemySilhouette(icon.type), center, radius * 0.95f,
                 if (icon.locked) Kk.Mute else roles.threat, if (icon.locked) Kk.Ink3 else Kk.Ink1)
             if (icon.locked) drawKkIcon(KkIcon.SYSTEM_LOCKED, Offset(size.width - 11.dp.toPx(), 11.dp.toPx()), 11.dp.toPx(), Kk.Mute)
+        }
+        is CodexIcon.World -> {
+            // A found place or secret: its site glyph in Bone. One not found yet: the same glyph muted over a hatch.
+            drawRect(if (hovered) Kk.Ink3 else Kk.Ink2)
+            if (!icon.discovered) drawKkHatch(rect)
+            drawRect(Kk.Line2, style = kkStroke(1.dp.toPx()))
+            drawWorldDiscoveryMark(icon.id, center, radius * 1.1f, if (icon.discovered) Kk.Bone else Kk.Mute)
         }
         is CodexIcon.Locked -> {
             drawRect(Kk.Ink3)

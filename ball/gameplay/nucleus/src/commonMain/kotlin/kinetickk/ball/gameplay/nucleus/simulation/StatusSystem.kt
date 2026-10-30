@@ -59,13 +59,13 @@ internal fun totalStacks(enemy: Enemy): Int {
 }
 
 /**
- * The Architect and the Herald mini-boss: immune to executes, stops and stuns, only briefly silenced, and
- * Unmake meets their weighted integrity. Every element rule and [canAct] ask this one question.
+ * The Architect, the mini-bosses and the secret bosses: immune to executes, stops and stuns, only briefly silenced,
+ * and Unmake meets their weighted integrity. Every element rule and [canAct] ask this one question.
  */
-internal val Enemy.isBossClass: Boolean get() = isBoss || isMiniBoss
+internal val Enemy.isBossClass: Boolean get() = type.profile.bossClass
 
 /** Elites and the bosses; Null Covenant keeps Hollow on them. */
-internal val Enemy.isEliteClass: Boolean get() = isElite || isBossClass
+internal val Enemy.isEliteClass: Boolean get() = type.profile.eliteClass
 
 /**
  * Displacement [enemy] takes from anything the player causes: its frame's knockback, raised by each
@@ -113,7 +113,7 @@ internal fun MutableGameState.enemyMotionScale(enemy: Enemy): Float {
     val chill = stacks(enemy, StatusElement.CRYO)
     if (chill > 0) {
         val slow = min(0.63f, chill * content.build.element(StatusElement.CRYO).perStack * build.potency(StatusElement.CRYO))
-        scale *= 1f - if (enemy.isBoss || enemy.isMiniBoss) slow * 0.5f else slow
+        scale *= 1f - if (enemy.isBossClass) slow * 0.5f else slow
     }
     if (stasisActive() && distanceSquared(enemy.x, enemy.y, coreX, coreY) <= square(stasisRadius())) {
         scale *= 1f - stasisSlow()
@@ -121,6 +121,7 @@ internal fun MutableGameState.enemyMotionScale(enemy: Enemy): Float {
     if (build.liability(RelicId.PANDEMIC_CODEX) && totalStacks(enemy) > 0) scale *= 1.2f
     // Hypercube's cage slows the ordinary enemies inside.
     scale *= hypercubeMotionScale(enemy)
+    scale *= layerTimeScale(enemy)
     return scale
 }
 
@@ -303,8 +304,6 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
                     loseIntegrity(maxHp * 0.04f)
                 }
             }
-            val spread = build.breakSpread(element)
-            if (spread > 0) applyStatusAround(enemy.x, enemy.y, build.breakSpreadRadius(element), element, spread.toFloat(), outputGeneration, enemy.id)
             shockwave(enemy.x, enemy.y, 0.28f, radius, FxColorCode.elementTone(element))
         }
         StatusElement.CRYO -> {
@@ -396,6 +395,8 @@ private fun MutableGameState.resolveBreak(enemy: Enemy, element: StatusElement, 
             shockwave(enemy.x, enemy.y, 0.3f, enemy.radius * 2.6f, FxColorCode.elementTone(element))
         }
     }
+    val spread = build.breakSpread(element)
+    if (spread > 0) applyStatusAround(enemy.x, enemy.y, build.breakSpreadRadius(element), element, spread.toFloat(), outputGeneration, enemy.id)
     if (affinityTier(element) >= 3) applyStatusAround(enemy.x, enemy.y, 130f, element, 2f, outputGeneration, enemy.id)
     recordStatusCue(VisualFxCue.StatusBroken(enemy.x, enemy.y, element.ordinal))
     if (generation == 0 || listens(EffectTrigger.BREAK)) onBreak(enemy, element)
@@ -495,7 +496,7 @@ internal fun MutableGameState.hollowOutputFactor(enemy: Enemy?): Float {
 }
 
 internal fun maxHpProcCooldown(enemy: Enemy): Float = when {
-    enemy.isBoss -> 4f
+    enemy.isBoss || enemy.isSecretBoss -> 4f
     enemy.isElite || enemy.isMiniBoss -> 2f
     else -> 1f
 }
@@ -611,8 +612,9 @@ internal fun MutableGameState.updateStatuses(delta: Float) {
             }
         }
         val gravitic = stacks(enemy, StatusElement.GRAVITIC)
-        val knockback = knockbackTaken(enemy)
-        if (gravitic > 0 && centroidWeight > gravitic && knockback > 0f && !isFrozen(enemy)) {
+        if (gravitic > 0 && centroidWeight > gravitic && !isFrozen(enemy)) {
+            val knockback = knockbackTaken(enemy)
+            if (!(knockback > 0f)) continue
             val dx = centroidX - enemy.x
             val dy = centroidY - enemy.y
             val distance = length(dx, dy)
@@ -645,17 +647,17 @@ private fun MutableGameState.burnBlackfire(enemy: Enemy, delta: Float) {
 }
 
 /**
- * Freezes [enemy] the way a Freeze Break does: ordinary enemies and Elites for [seconds], the Architect for half
- * a second, the Herald not at all (its Break still rearms and leaves it Brittle). The target stops, turns Brittle
- * and resists the next Freeze for a while.
+ * Freezes [enemy] the way a Freeze Break does: ordinary enemies and Elites for [seconds], the Architect and secret
+ * bosses for half a second, mini-bosses such as the Herald not at all (its Break still rearms and leaves it Brittle).
+ * The target stops, turns Brittle and resists the next Freeze for a while.
  */
 internal fun MutableGameState.freeze(enemy: Enemy, seconds: Float) {
     val immunity = when {
-        enemy.isBoss -> ARCHITECT_FREEZE_IMMUNITY_SECONDS
+        enemy.isBoss || enemy.isSecretBoss -> ARCHITECT_FREEZE_IMMUNITY_SECONDS
         enemy.isElite -> ELITE_FREEZE_IMMUNITY_SECONDS
         else -> FREEZE_IMMUNITY_SECONDS
     }
-    val duration = if (enemy.isMiniBoss) 0f else if (enemy.isBoss) 0.5f else seconds
+    val duration = if (enemy.isMiniBoss) 0f else if (enemy.isBoss || enemy.isSecretBoss) 0.5f else seconds
     enemy.status[StatusCell.FROZEN_UNTIL] = elapsed + duration
     enemy.status[StatusCell.FREEZE_IMMUNE_UNTIL] = elapsed + duration + immunity
     enemy.status[StatusCell.REARM_AT + StatusElement.CRYO.ordinal] = elapsed + duration + BREAK_REARM_SECONDS
@@ -669,7 +671,7 @@ internal fun MutableGameState.freeze(enemy: Enemy, seconds: Float) {
 internal fun MutableGameState.thaw(enemy: Enemy) {
     if (!isFrozen(enemy)) return
     val immunity = when {
-        enemy.isBoss -> ARCHITECT_FREEZE_IMMUNITY_SECONDS
+        enemy.isBoss || enemy.isSecretBoss -> ARCHITECT_FREEZE_IMMUNITY_SECONDS
         enemy.isElite -> ELITE_FREEZE_IMMUNITY_SECONDS
         else -> FREEZE_IMMUNITY_SECONDS
     }
@@ -774,22 +776,17 @@ internal fun MutableGameState.consumeMark(enemy: Enemy, kind: MarkKind): Boolean
  */
 internal fun MutableGameState.statusBits(enemy: Enemy): Int {
     var bits = 0
+    var primed = false
     for (element in StatusElement.entries) {
-        bits = bits or (min(15, stacks(enemy, element)) shl (element.ordinal * 4))
+        val count = stacks(enemy, element)
+        bits = bits or (min(15, count) shl (element.ordinal * 4))
+        if (!primed && count > 0 && count == breakThreshold(element, enemy) - 1) primed = true
     }
     if (isFrozen(enemy)) bits = bits or STATUS_FROZEN_BIT
     if (enemy.status[StatusCell.BRITTLE] > 0f) bits = bits or STATUS_BRITTLE_BIT
     if (enemy.status[StatusCell.EMBRITTLED_UNTIL] > elapsed) bits = bits or STATUS_EMBRITTLED_BIT
-    if (primed(enemy)) bits = bits or STATUS_PRIMED_BIT
+    if (primed) bits = bits or STATUS_PRIMED_BIT
     return bits
-}
-
-private fun MutableGameState.primed(enemy: Enemy): Boolean {
-    for (element in StatusElement.entries) {
-        val count = stacks(enemy, element)
-        if (count > 0 && count == breakThreshold(element, enemy) - 1) return true
-    }
-    return false
 }
 
 /** Packed affinity for presentation; see [EnemyAffinity]. The shift flag depends on the run time. */
@@ -802,7 +799,9 @@ internal fun MutableGameState.affinityBits(enemy: Enemy): Int {
         armored = impact < 1f,
         fragile = impact > 1f,
         shifting = isShifting(enemy),
-        phase = if (enemy.isBoss || enemy.isMiniBoss) enemy.phase else 0,
+        phase = if (enemy.isBossClass) enemy.phase else 0,
+        affix = enemy.affix?.ordinal ?: EnemyAffinity.NONE,
+        champion = enemy.champion,
     )
 }
 

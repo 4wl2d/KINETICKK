@@ -35,8 +35,31 @@ class EnemyRosterVisualsTest {
     }
 
     @Test
+    fun theWorldsRosterReadsAsDistinctShapes() {
+        val newcomers = listOf(
+            EnemyType.COMET, EnemyType.PYLON, EnemyType.SENTRY, EnemyType.CRAWLER, EnemyType.SERAPH, EnemyType.CHOIR,
+            EnemyType.IMP, EnemyType.HOUND, EnemyType.CIPHER, EnemyType.MIRROR, EnemyType.WARDEN_PRIME, EnemyType.BROOD_QUEEN,
+            EnemyType.THRONE, EnemyType.PYRE_HERALD, EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT,
+        )
+        val outlines = newcomers.map(::enemySilhouette)
+        assertEquals(newcomers.size, outlines.toSet().size, "Each 0.6.0 kind has its own outline")
+        val earlier = (EnemyType.entries - newcomers.toSet()).map(::enemySilhouette).toSet()
+        assertTrue(outlines.none { it in earlier }, "No 0.6.0 kind borrows an earlier outline")
+        // The Throne and the Antecedent stand upright; the others keep turning or follow their aim.
+        assertEquals(0f, enemyRotation(EnemyType.THRONE, 9f, 3))
+        assertEquals(0f, enemyRotation(EnemyType.ANTECEDENT, 9f, 3))
+        assertTrue(enemyRotation(EnemyType.CRAWLER, 9f, 3) != enemyRotation(EnemyType.CRAWLER, 0f, 3))
+    }
+
+    @Test
     fun aimingKindsPointAlongTheirAimAndOthersTurnOnTheClock() {
-        assertEquals(listOf(EnemyType.LANCER, EnemyType.SNIPER, EnemyType.REFLECTOR), EnemyType.entries.filter(::facesAim))
+        assertEquals(
+            listOf(
+                EnemyType.LANCER, EnemyType.SNIPER, EnemyType.REFLECTOR, EnemyType.COMET, EnemyType.PYLON, EnemyType.SENTRY,
+                EnemyType.HOUND,
+            ),
+            EnemyType.entries.filter(::facesAim),
+        )
         assertEquals(90f, aimDegrees(0f), 1e-4f, "An outline pointing up turns to face +x")
         assertEquals(180f, aimDegrees(kotlin.math.PI.toFloat() / 2f), 1e-3f)
         assertFalse(enemyHasCoreDot(EnemyType.HERALD))

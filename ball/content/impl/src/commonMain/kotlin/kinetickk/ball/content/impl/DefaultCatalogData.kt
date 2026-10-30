@@ -142,7 +142,7 @@ internal fun defaultWeapons(): ImmutableList<WeaponDefinition> =
             "An ion beam locks onto the nearest enemy, ramps its damage while held and jumps to a new target on a kill.",
             WeaponFamily.BEAM, StatusElement.ION, CONTINUOUS, BuildTag.ARSENAL, BuildTag.PRECISION,
             RelicKey.CHARGE, WeaponScaling.ATTACK_SPEED, CoreShape.DIPOLE, cost = 900, rebirth = 2,
-            forms = listOf("Tether range +80", "A second tether at 75% strength", "The ramp reaches eight times and a kill Overloads"),
+            forms = listOf("Tether range +80", "A second tether at 75% strength", "The ramp reaches seven times and a kill Overloads"),
             signature = "Attract pulls the target in; Repel throws it into slams.",
         ),
         weapon(

@@ -30,7 +30,8 @@ import kotlin.test.assertTrue
  * - J4 (upgrades are not progression): tier 6, no Matrix, Orb Refit 10 + Honing 10 on every owned weapon: no win.
  * - J5 (perceptible): Orb/Flux Wake and Pentagon/Arc Coil, maxed against 0, in a 25 s crowd and a 180 s Architect
  *   fight on four fixed seeds: weapon-side damage per engaged second +12 %, character-ability damage per engaged
- *   second +8 %, and no more integrity lost (as a share of maximum integrity).
+ *   second +8 %, and no more integrity lost (as a share of maximum integrity; in the Architect fight a Core below half
+ *   its integrity is repaired, the loss counted, so both flights meet the whole fight).
  *
  * Knob order if a gate fails (economy §4.6): weaponPowerPerLevel 0.03 → 0.025, characterPowerPerLevel
  * 0.02 → 0.015, characterIntegrityPerLevel 2 → 1.5, then the signature step that breaks a band.
@@ -39,11 +40,12 @@ class UpgradeBalanceGateTest {
     /**
      * J1's survival bound is a population gate (0.5.0 active items; policy.md, "Balance gate populations"): five seeds
      * reached a median of 480 s with probability 0.94 on the 05885fa9 base but 0.80 with the shipped active items, so
-     * it re-rolled with the reward stream. The base median survival over the 300 [PopulationSeeds] runs was 687.28 s
-     * (bootstrap SE 20.13 s); the population's median must be at least [J1_MIN_MEDIAN_SURVIVAL] s, by the population
-     * threshold rule the lower of the design's eight minutes and the base minus two standard errors (647.02 s). The win
-     * bound keeps the five gate seeds (they pass with probability 1.00 on the base and now; 1 and 3 of the 300
-     * population runs won).
+     * it re-rolled with the reward stream. On the 0.6.0 base the median survival over the 300 [PopulationSeeds] runs is
+     * 900.01 s (0.62 of the runs are alive at the 900 s cap, so the bootstrap SE is 0.00 s; mean 739.02 s); the
+     * population's median must be at least [J1_MIN_MEDIAN_SURVIVAL] s, by the population threshold rule the lower of the
+     * design's eight minutes and the base minus two standard errors. The win bound keeps the five gate seeds (6 of the
+     * 300 population runs win; the seeds pass with probability 1.00 on the 0.6.0 tree), as do J2-J4 (1.00, 0.998 and
+     * 1.00).
      */
     @Test fun maxedUpgradesKeepTierTenSurvivableButRareForTheStrongBuild() {
         fun strong(seed: Int): Outcome =
@@ -148,7 +150,8 @@ class UpgradeBalanceGateTest {
      * arrival for 180 s. The Core orbits the targets close enough for impacts and dodges shots like that harness.
      * The crowd's Drifters (WeaponBalanceTest's arena targets) hold [CROWD_INTEGRITY] and are topped up below a quarter,
      * so no kill ends or quantizes the measurement and both flights meet the same crowd for all 25 s; the
-     * Architect fight is measured until the Victory or 180 s.
+     * Architect fight is measured until the Victory or 180 s, and a Core that falls below half its integrity there is
+     * repaired to full (its loss counted), so no fall ends it early.
      */
     private fun encounter(shape: CoreShape, weapon: WeaponId, level: Int, boss: Boolean, seed: Int): EncounterMeasure {
         val game = MutableGameState(canonicalGameplayContent, seed = seed).apply {
@@ -177,8 +180,7 @@ class UpgradeBalanceGateTest {
             spawnClock = Float.MAX_VALUE
             nextEliteAt = Float.MAX_VALUE
             bossSpawned = true
-            nextPointOfferIndex = ((content.pointsOfInterest.lastOfferAt - content.pointsOfInterest.firstOfferAt) /
-                content.pointsOfInterest.offerInterval).toInt() + 1
+            quietArenaForTesting()
             coreX = 220f
             previousCoreX = coreX
             velocityY = 420f
@@ -248,9 +250,12 @@ class UpgradeBalanceGateTest {
                     if (time < 0.13f && closest < 28f) urgent = true
                 }
             }
-            val desiredHeading = atan2(accelerationY, accelerationX)
-            heading += atan2(sin(desiredHeading - heading), cos(desiredHeading - heading)).coerceIn(-0.08f, 0.08f)
-            val distance = ((length(accelerationX, accelerationY) - 92f) / game.magnetStrength).coerceIn(65f, 480f)
+            val aim = game.steeringAimFor(accelerationX, accelerationY)
+            val desiredHeading = aim.heading
+            // Braking now needs the pointer behind the screen centre, so the heading must be able to swing back quickly:
+            // at 0.15 rad a frame the orbit keeps the tracking error it had under the 0.5.0 law.
+            heading += atan2(sin(desiredHeading - heading), cos(desiredHeading - heading)).coerceIn(-0.15f, 0.15f)
+            val distance = aim.distance.coerceIn(65f, 480f)
             val edgeMargin = (1f - game.content.tempo.fatigue.edgeStrainStart) * 0.5f
             game.updatePointer(
                 (game.coreX + cos(heading) * distance - game.cameraX + game.screenWidth / 2f)
@@ -262,6 +267,14 @@ class UpgradeBalanceGateTest {
             game.setBrake(brake)
             if (urgent && !brake && game.heat < 45f) game.requestDash()
             val before = targets.sumOf { it.hp.toDouble() }
+            // A fall never ends the Architect fight: below half its integrity the Core is repaired to full (the loss stays
+            // counted), so both flights meet the fight until the Victory or 180 s. The scripted orbit falls to the Architect
+            // under either flight law and any pilot slew, and a fall caps the loss at one integrity plus what was healed, so
+            // the flight that lives longer would read as the one that lost more.
+            if (boss && game.hp < game.maxHp * REPAIR_BELOW) {
+                game.hp = game.maxHp
+                previousIntegrity = game.hp
+            }
             game.update(1f / 60f)
             crowdDamage += before - targets.sumOf { it.hp.toDouble() }
             game.takeVisualFxCues()
@@ -279,10 +292,13 @@ class UpgradeBalanceGateTest {
 
     private companion object {
         /**
-         * J1: the least median survival over [PopulationSeeds] (base 687.28 s, SE 20.13 s, n 300; the population
-         * threshold rule).
+         * J1: the least median survival over [PopulationSeeds] (design 480 s; 0.6.0 base 900.01 s, SE 0.00 s, n 300;
+         * the population threshold rule).
          */
         const val J1_MIN_MEDIAN_SURVIVAL = 480f
+
+        /** In the Architect fight a Core below this share of its integrity is repaired to full before the next step. */
+        const val REPAIR_BELOW = 0.5f
 
         /** The crowd Drifters' integrity pool (WeaponBalanceTest's crowd arena). */
         const val CROWD_INTEGRITY = 900f

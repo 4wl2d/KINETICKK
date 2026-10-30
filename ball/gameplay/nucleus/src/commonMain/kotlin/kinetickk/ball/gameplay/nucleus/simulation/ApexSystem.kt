@@ -144,7 +144,7 @@ internal fun MutableGameState.apexStrike(enemy: Enemy): Float {
     val left = runtime.apex(ApexCell.STRIKES_LEFT)
     if (left < 1f) return 0f
     val integrity = enemy.hp
-    val result = damageEnemy(enemy, architectHitCap(enemy))
+    val result = damageEnemy(enemy, bossHitCap(enemy))
     recordAbilityDamage(integrity, result)
     if (result.amount <= 0f) return 0f
     runtime.setApex(ApexCell.STRIKES_LEFT, left - 1f)

@@ -24,7 +24,12 @@ import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.DirectorPersonalityId
 import kinetickk.ball.content.api.EquippedRelic
+import kinetickk.ball.content.api.OmenId
+import kinetickk.ball.content.api.WorldEventKind
+import kinetickk.ball.gameplay.nucleus.render.WorldEventProjection
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
@@ -118,6 +123,26 @@ class RedesignShotsBuildTest {
                 }
             }
             if (wanted("report-recap")) report(width, height, language, lang)
+            // The pause build view of a run with every condition: an omen taken, its director pattern, a Keynote whose tag
+            // has no point yet and a meteor shower in progress; the full build shows them as chips, an early build (two
+            // relics) with what the omen does and costs.
+            for (textScale in listOf(1.25f, 1.75f).matrix()) for (early in listOf(false, true)) {
+                if (!wanted("pause-conditions")) continue
+                val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64), textScale,
+                    language, HudTestFonts.typography.copy(localeList = language.localeList()))
+                val tag = (if (early) "-early" else "") + if (textScale == 1.25f) "" else "-t175"
+                shot("pause-conditions$tag-${width}x$height-$lang", width, height) {
+                    val model = pauseBuild(width, height, language, textScale).with(
+                        "runOmen" to OmenId.GLASS_SUN, "directorPersonality" to DirectorPersonalityId.TIDE, "keynoteTag" to BuildTag.FORTUNE,
+                        "keynoteElement" to StatusElement.CRYO,
+                        "worldEvent" to WorldEventProjection(WorldEventKind.METEOR_SHOWER, telegraphAt = 440f, startsAt = 443f, endsAt = 473f),
+                    ).let { model ->
+                        if (!early) model else model.with("equippedRelics" to model.equippedRelics.take(2).toImmutableList(),
+                            "build" to model.build.copy(severed = immutableListOf()))
+                    }
+                    drawGameplay(model, VisualFxProjection.EMPTY, measurer, 1.3f, pauseLayoutGeometry(size.width, size.height, 1f))
+                }
+            }
         }
     }
 

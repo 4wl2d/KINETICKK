@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.StatusElement
@@ -19,21 +20,23 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The draft deck's long sweeps (items.md §5.1, §5.2): every floor over 500 seeds at three Rebirth ranks, history's effect
- * on the deal over 2,000 seeds and on offers over 4,000. Too long for the browser runner's per-test limit; DraftDeckTest
- * holds the deck's rules.
+ * The draft deck's long sweeps (items.md §5.1, §5.2): every floor over 500 seeds at three Rebirth ranks, the Keynote's
+ * floors (variety.md §8.2) over the same seeds, history's effect on the deal over 2,000 seeds and on offers over 4,000.
+ * Too long for the browser runner's per-test limit; DraftDeckTest and KeynoteTest hold the deck's rules.
  */
 class DraftDeckSweepTest {
     private val policy = canonicalGameplayContent.build.policy.draftDeck
+    private val shapes = listOf(CoreShape.ORB, CoreShape.PRISM, CoreShape.STAR, CoreShape.HEXAGON, CoreShape.DIPOLE)
 
     @Test
     fun everyDeckDealsItsSharesAndHoldsEveryFloorOverFiveHundredSeeds() {
-        val shapes = listOf(CoreShape.ORB, CoreShape.PRISM, CoreShape.STAR, CoreShape.HEXAGON, CoreShape.DIPOLE)
+        // The deck's own floors, measured without the Keynote's (the next test measures those on the same seeds).
+        val withoutKeynote = canonicalGameplayContent.withoutKeynote()
         for (rebirth in listOf(0, 5, 10)) {
             var growth = 0
             for (seed in 1..500) {
                 val shape = shapes[seed % shapes.size]
-                val state = buildTestState(seed = seed, rebirth = rebirth, shape = shape)
+                val state = buildTestState(seed = seed, rebirth = rebirth, shape = shape, content = withoutKeynote)
                 val deck = state.itemDeck
                 val universe = canonicalGameplayContent.items.filter { it.minimumRebirth <= state.rebirthRank }
                 val dealt = universe.filter { it.id in deck }
@@ -76,20 +79,63 @@ class DraftDeckSweepTest {
         }
     }
 
+    @Test
+    fun everyKeynoteDeckHoldsItsSharesAndAddsAtMostNineItemsOverFiveHundredSeeds() {
+        val keynote = canonicalGameplayContent.variety.keynote
+        val withoutKeynote = canonicalGameplayContent.withoutKeynote()
+        var added = 0
+        for (rebirth in listOf(0, 5, 10)) {
+            var addedAtRank = 0
+            for (seed in 1..500) {
+                val shape = shapes[seed % shapes.size]
+                val state = buildTestState(seed = seed, rebirth = rebirth, shape = shape)
+                val plain = buildTestState(seed = seed, rebirth = rebirth, shape = shape, content = withoutKeynote)
+                val tag = requireNotNull(state.keynoteTag)
+                val element = requireNotNull(state.keynoteElement)
+                val universe = canonicalGameplayContent.items.filter { it.minimumRebirth <= state.rebirthRank }
+                fun holds(share: Float, label: String, qualifies: (ItemDefinition) -> Boolean) {
+                    val eligible = universe.filter(qualifies)
+                    val dealt = eligible.count { it.id in state.itemDeck }
+                    assertTrue(dealt.toFloat() >= share * eligible.size, "Reborn $rebirth seed $seed deals $dealt of ${eligible.size} $label")
+                }
+                holds(keynote.tagShare, "$tag") { it.featuresTag(tag) }
+                holds(keynote.elementShare, "$element") { it.featuresElement(element) }
+                addedAtRank += state.itemDeck.dealtIds().size - plain.itemDeck.dealtIds().size
+            }
+            println("KEYNOTE-DECK reborn $rebirth adds ${addedAtRank / 500.0} items per deck")
+            added += addedAtRank
+        }
+        // The shares (tag 0.8, element 0.7) grow the deck by a few items, about six of the tag and two of the element;
+        // more at higher ranks, whose universe holds more of them.
+        assertTrue(added / 1_500.0 <= 9.0, "Keynote floors add ${added / 1_500.0} items per deck")
+    }
+
 
     @Test
     fun anItemTakenInTheLastRunIsDealtLessOftenOverTwoThousandSeeds() {
         val item = canonicalGameplayContent.items.single { it.name == "Ballast Core" }
         val others = (150 until 181).toList()
-        val plain = (1..2_000).count { seed -> item.id in startedWithHistory(seed, emptyList()).itemDeck }
-        // Taken newest, mid-run (the mean age of a run's 32 acquisitions) and first in the last run.
-        val dealt = listOf(0, 16, 31).map { age ->
-            val lastRun = others.take(31 - age) + item.id + others.drop(31 - age)
-            (1..2_000).count { seed -> item.id in startedWithHistory(seed, lastRun).itemDeck }
+        // History weighs the deal itself; the Keynote's floors deal past it in runs that feature the item's tag.
+        val withoutKeynote = canonicalGameplayContent.withoutKeynote()
+        fun dealtCounts(content: GameplayContentSnapshot): Pair<Int, List<Int>> {
+            val plain = (1..2_000).count { seed -> item.id in startedWithHistory(seed, emptyList(), content).itemDeck }
+            // Taken newest, mid-run (the mean age of a run's 32 acquisitions) and first in the last run.
+            val dealt = listOf(0, 16, 31).map { age ->
+                val lastRun = others.take(31 - age) + item.id + others.drop(31 - age)
+                (1..2_000).count { seed -> item.id in startedWithHistory(seed, lastRun, content).itemDeck }
+            }
+            return plain to dealt
         }
+        val (plain, dealt) = dealtCounts(withoutKeynote)
         println("DECK-HISTORY plain $plain, with history (age 0, 16, 31) $dealt")
         assertTrue(dealt[1] <= 0.8 * plain, "Dealt ${dealt[1]} times taken mid-run against $plain without")
         assertTrue(dealt[0] < dealt[1] && dealt[1] < dealt[2] && dealt[2] < plain, "A newer acquisition is dealt less often")
+        val (keynotePlain, keynoteDealt) = dealtCounts(canonicalGameplayContent)
+        println("DECK-HISTORY with the Keynote: plain $keynotePlain, with history (age 0, 16, 31) $keynoteDealt")
+        assertTrue(
+            keynoteDealt[0] < keynoteDealt[1] && keynoteDealt[1] < keynoteDealt[2] && keynoteDealt[2] < keynotePlain,
+            "With the Keynote a newer acquisition is still dealt less often",
+        )
     }
 
 

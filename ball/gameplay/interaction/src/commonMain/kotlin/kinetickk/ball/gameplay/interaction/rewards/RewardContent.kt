@@ -60,6 +60,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.isUnspecified
@@ -291,7 +292,7 @@ internal class RewardOverlayState(
 internal fun RewardPresentation.defaultSelection(): Int? = when {
     cards.isEmpty() -> null
     kind == RewardLayoutKind.RELIC_BIND && cards.first().choice.relicAction == RelicChoiceAction.REPLACE -> null
-    kind == RewardLayoutKind.CARDS -> (cards.size - 1) / 2
+    kind == RewardLayoutKind.CARDS -> rewardDefaultCard(cards)
     else -> 0
 }
 
@@ -302,6 +303,20 @@ internal fun rewardCardRestRotation(index: Int, count: Int): Float = when (count
     3 -> floatArrayOf(-4f, 0f, 3f)[index.coerceIn(0, 2)]
     4 -> floatArrayOf(-4f, -1f, 1.5f, 3f)[index.coerceIn(0, 3)]
     else -> kkLerp(-4f, 3f, index / (count - 1f))
+}
+
+/** How far a lifted (selected) card rises, in dp. */
+internal const val RewardCardLiftDp = 22f
+
+/**
+ * Whether card [index] of the dealt [cards] rises when lifted: only when no card of the deal sits above it in its column,
+ * so a lower row's lifted card never rides over the frame of the card above it.
+ */
+internal fun rewardCardRises(index: Int, cards: List<Rect>): Boolean {
+    val card = cards.getOrNull(index) ?: return false
+    return cards.indices.none { other ->
+        other != index && cards[other].bottom <= card.top && cards[other].left < card.right && cards[other].right > card.left
+    }
 }
 
 /** Linear deal progress of card [index]: 120 ms after the ring, 90 ms stagger, 600/750 ms. */
@@ -341,6 +356,8 @@ private fun RewardCardDeal(state: RewardOverlayState) {
         if (bounds != null) key(index, card.choice) {
             val selected = state.selected == index
             val lift = if (selected) 1f else 0f
+            // A lifted card rises only with no card above it: in the portrait 2 x 2 deck the lower row stays put.
+            val rise = if (rewardCardRises(index, layout.cards)) lift else 0f
             val rest = rewardCardRestRotation(index, count)
             RewardCard(
                 presentation = card,
@@ -352,7 +369,7 @@ private fun RewardCardDeal(state: RewardOverlayState) {
                     val p = rewardDealProgress(state.entrance(), index, card.rank)
                     val eased = KkEase.Pull.transform(p)
                     translationX = (origin.x - bounds.center.x) * (1f - eased)
-                    translationY = (origin.y - bounds.center.y) * (1f - eased) - 22f * density * lift
+                    translationY = (origin.y - bounds.center.y) * (1f - eased) - RewardCardLiftDp * density * rise
                     rotationZ = kkLerp(-38f, rest, eased) - 1.5f * lift
                     val s = kkLerp(0.6f, 1f, eased)
                     scaleX = s
@@ -393,7 +410,7 @@ private fun RewardHeader(state: RewardOverlayState, modifier: Modifier) {
     val language = LocalAppLanguage.current
     val regular = state.mode == GameplayLayoutMode.REGULAR
     val slam = { ((state.entrance() - 100f) / 500f).coerceIn(0f, 1f) }
-    Box(modifier) {
+    RewardHeadingFrame(presentation.conditions, state.textScale, beside = state.mode == GameplayLayoutMode.COMPACT_LANDSCAPE, modifier) {
         val level = presentation.level
         if (level != null) {
             // The level numeral is display type: the text-size setting does not apply.
@@ -471,7 +488,7 @@ internal fun RewardFooter(state: RewardOverlayState, takeLabel: String, selected
         modifier = Modifier.overlayBounds(layout.take).then(fade).testTag("kinetickk.gameplay.take"),
         variant = KkButtonVariant.PRIMARY,
         size = size,
-        enabled = state.enabled && selected != null,
+        enabled = state.enabled && selected != null && state.presentation.cards.getOrNull(selected)?.locked != true,
         textScale = state.textScale,
         stateDescription = selectedTitle,
     )
@@ -484,6 +501,35 @@ internal fun RewardFooter(state: RewardOverlayState, takeLabel: String, selected
         enabled = state.enabled,
         textScale = state.textScale,
     )
+}
+
+/** The decline card's dashed inner outline: its inset from the card's edges and its slant (the face's 22 dp cut less 6 dp). */
+private const val RewardDeclineInsetDp = 7f
+private const val RewardDeclineCutDp = 16f
+
+/** The clear gap between a decline card's outline and the plate and text inside it. */
+private const val RewardDeclineClearanceDp = 5f
+
+/**
+ * The x (dp from the card's left) of the decline outline's slanted left edge at [yDp] on a card [heightDp] tall whose
+ * band is [bandDp] tall: [RewardDeclineCutDp] in from the inset at the outline's top, at the inset at its bottom.
+ */
+internal fun rewardDeclineOutlineLeftDp(yDp: Float, heightDp: Float, bandDp: Float): Float {
+    val top = bandDp + RewardDeclineInsetDp
+    val bottom = heightDp - RewardDeclineInsetDp
+    val down = ((yDp - top) / (bottom - top).coerceAtLeast(1f)).coerceIn(0f, 1f)
+    return RewardDeclineInsetDp + RewardDeclineCutDp * (1f - down)
+}
+
+/**
+ * How far (dp) a decline card of [spec], [heightDp] tall, moves its plate and text right so both start
+ * [RewardDeclineClearanceDp] clear of the outline at their tops; 0 where they already do (the board card).
+ */
+private fun rewardDeclineShiftDp(spec: RewardCardSpec, heightDp: Float): Float {
+    val band = spec.bandHeight * spec.u
+    val plate = rewardDeclineOutlineLeftDp(spec.plateY * spec.u, heightDp, band) + RewardDeclineClearanceDp - spec.plateX * spec.u
+    val text = rewardDeclineOutlineLeftDp(spec.bodyTop * spec.u, heightDp, band) + RewardDeclineClearanceDp - spec.start * spec.u
+    return max(0f, max(plate, text))
 }
 
 /** Card content dimensions derived from the card's own size (board 300×450 or phone 220×256). */
@@ -519,9 +565,15 @@ internal fun rewardCardUsesCompactLayout(widthDp: Float, heightDp: Float, phoneD
 
 private fun rewardCardSpec(widthDp: Float, heightDp: Float, textScale: Float, phoneDeal: Boolean): RewardCardSpec {
     val compact = rewardCardUsesCompactLayout(widthDp, heightDp, phoneDeal)
-    val u = if (compact) min(widthDp / 220f, heightDp / 256f) else min(widthDp / 300f, heightDp / 450f)
-    val clamped = u.coerceIn(0.6f, 1.25f)
+    val clamped = rewardCardUnit(widthDp, heightDp, phoneDeal)
     return RewardCardSpec(compact, clamped, clamped.coerceIn(0.8f, 1.2f) * textScale)
+}
+
+/** The card layout's unit: its size against the phone (220 × 256) or board (300 × 450) card it was drawn for. */
+internal fun rewardCardUnit(widthDp: Float, heightDp: Float, phoneDeal: Boolean): Float {
+    val compact = rewardCardUsesCompactLayout(widthDp, heightDp, phoneDeal)
+    val u = if (compact) min(widthDp / 220f, heightDp / 256f) else min(widthDp / 300f, heightDp / 450f)
+    return u.coerceIn(0.6f, 1.25f)
 }
 
 /** Forecast chips a card shows at most: three on the board, two on phones. */
@@ -565,16 +617,17 @@ internal fun RewardCard(
     BoxWithConstraints(
         modifier
             .testTag("kinetickk.gameplay.choice.${index + 1}")
+            .rewardLockedLook(presentation.locked)
             .semantics { stateDescription = listOfNotNull(presentation.bandStart, presentation.bandEnd).joinToString(", ") }
             .rewardDragGestures(enabled, scrollState)
             // The body consumes its own scroll first. Header drags and wheel input reach this
             // parent, moving the same text viewport once.
             .scrollable(scrollState, Orientation.Vertical, enabled = enabled, reverseDirection = true)
-            .rewardPreviewInput(enabled, onPreview)
+            .rewardPreviewInput(enabled && !presentation.locked, onPreview)
             // A single activation surface. The nested scrollable cancels this click on drag;
             // wheel events never synthesize activation.
             .clickable(
-                enabled = enabled,
+                enabled = enabled && !presentation.locked,
                 interactionSource = interactionSource,
                 indication = null,
                 role = Role.Button,
@@ -614,14 +667,16 @@ internal fun RewardCard(
             // The rarity frame last, over the plates, so it stays whole round the card.
             drawKkCardFrame(RewardFaceSpecs.bounds(size.width, size.height), clock.value, look.style, dealt)
         }
+        // A decline card's plate and text start clear of its slanted dashed outline (a tall phone card's slant reaches them).
+        val declineShift = if (presentation.decline) rewardDeclineShiftDp(spec, maxHeight.value).dp else 0.dp
         val plateSize = spec.dp(spec.plateSize)
         Box(
-            Modifier.offset(spec.dp(spec.plateX), spec.dp(spec.plateY)).size(plateSize)
+            Modifier.offset(spec.dp(spec.plateX) + declineShift, spec.dp(spec.plateY)).size(plateSize)
                 .testTag("kinetickk.gameplay.choice.${index + 1}.${if (spec.compact) "compact" else "expanded"}")
                 .drawBehind { drawRewardIcon(presentation, accent, iconColor, look.secondHue, look.plateTint, spec.compact, clock.value) },
         )
         // Identity beside the icon: a relic's keys, then an active's slot and lane, Risk, Reborn, Heirloom and tag chips.
-        val chipsLeft = spec.dp(spec.plateX + spec.plateSize + spec.chipsGap)
+        val chipsLeft = spec.dp(spec.plateX + spec.plateSize + spec.chipsGap) + declineShift
         val chipsWidth = (maxWidth - chipsLeft - spec.dp(spec.end)).coerceAtLeast(0.dp)
         val keys = presentation.keys
         // Phone relic cards keep the keys and the Heirloom mark; the attuned tags read on the board (and in the Codex).
@@ -646,7 +701,7 @@ internal fun RewardCard(
         val bodyTop = spec.dp(spec.bodyTop)
         val bodyBottom = spec.dp(spec.bodyBottom)
         val bodyHeight = (maxHeight - bodyTop - bodyBottom - footerHeight).coerceAtLeast(24.dp)
-        val start = spec.dp(spec.start)
+        val start = spec.dp(spec.start) + declineShift
         // The body takes the largest size step at which its content fits, measured before it is
         // shown; only text longer than the last step scrolls. Cards dealt together share the
         // smallest step any of them needs ([bodyFit]).
@@ -952,6 +1007,15 @@ private fun RewardRuleLineText(
  */
 internal fun rewardTextTone(color: Color): Color = kkLiftContrast(color, Kk.Ink3, KK_CARD_LABEL_CONTRAST)
 
+/**
+ * A card's headline value hue: the card's [accent], or bone when the accent is a grey dimmer than bone (Mono's shield
+ * and heat). A grey carries no type, only emphasis, and the headline never reads dimmer than the bone lines under it.
+ */
+internal fun rewardValueTone(accent: Color): Color {
+    val grey = maxOf(accent.red, accent.green, accent.blue) - minOf(accent.red, accent.green, accent.blue) < 0.03f
+    return if (grey && accent.luminance() < Kk.Bone.luminance()) Kk.Bone else accent
+}
+
 /** Test tag of a card's cost block (its threat stripe is drawn on purpose beside the text). */
 internal const val RewardCostTag = "kinetickk.gameplay.reward-cost"
 
@@ -1122,7 +1186,7 @@ private fun RewardStatLine(
     val afterColor = when {
         struck -> roles.threat.copy(alpha = 0.8f)
         !change.improved -> roles.threat
-        change.before.isNotEmpty() || first -> accent
+        change.before.isNotEmpty() || first -> rewardValueTone(accent)
         else -> Kk.Bone
     }
     val strike: (TextStyle) -> TextStyle = { if (struck) it.copy(textDecoration = TextDecoration.LineThrough) else it }
@@ -1230,9 +1294,9 @@ internal fun DrawScope.drawRewardCardFace(
     when {
         presentation.reborn || presentation.heirloom -> drawGoldRim(paths, bounds, presentation.rebirthTier, spec.compact, measurer.roles.gold.base)
         presentation.decline -> {
-            // A calm card: no effects, a dashed inner outline in the line color.
-            val inset = 7f * density
-            val outline = paths.slab(1, inset, bandHeight * density + inset, size.width - inset, size.height - inset, (RewardCardCutDp - 6f) * density)
+            // A calm card: no effects, a dashed inner outline in the line color ([rewardDeclineOutlineLeftDp]).
+            val inset = RewardDeclineInsetDp * density
+            val outline = paths.slab(1, inset, bandHeight * density + inset, size.width - inset, size.height - inset, RewardDeclineCutDp * density)
             drawPath(outline, Kk.Line2, style = RewardCardStrokes.dashed(1.5f * density, density))
         }
     }

@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus
 
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.api.GameplayRejection
@@ -39,6 +40,8 @@ data class GameplayStartInputs(
     val content: GameplayContentSnapshot,
     val profile: GameplayProfileSnapshot,
     val seed: Int,
+    /** The run's rules, fixed for the run. */
+    val mode: RunMode = RunMode.STANDARD,
 )
 
 sealed interface GameplayNucleusPulse {

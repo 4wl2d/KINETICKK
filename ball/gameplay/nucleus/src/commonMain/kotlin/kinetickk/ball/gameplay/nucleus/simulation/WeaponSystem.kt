@@ -525,7 +525,7 @@ internal fun MutableGameState.arcCoilHopRange(): Float = ARC_COIL_HOP_RANGE + if
 
 /** Upper bound of [arcCoilTargetCount]: four, plus two on a Pentagon's beat. */
 internal const val MAX_ARC_COIL_TARGETS: Int = 6
-internal const val ARC_COIL_FIRST_RANGE: Float = 380f
+internal const val ARC_COIL_FIRST_RANGE: Float = 420f
 internal const val ARC_COIL_HOP_RANGE: Float = 220f
 internal const val ARC_COIL_FALLOFF: Float = 0.9f
 
@@ -1143,7 +1143,7 @@ private fun oldestEvictableWeaponEntity(entities: List<WeaponEntity>): Int {
 
 internal const val AIM_ASSIST_CONE: Float = 0.5f
 internal const val AIM_ASSIST_RANGE: Float = 700f
-internal const val NULL_LANCE_DAMAGE: Float = 68f
+internal const val NULL_LANCE_DAMAGE: Float = 61f
 internal const val NULL_LANCE_PIERCE: Int = 5
 internal const val NULL_LANCE_REAR_SHARE: Float = 0.3f
 internal const val MINE_DAMAGE: Float = 68f
@@ -1160,15 +1160,15 @@ internal const val ION_SWARM_DAMAGE: Float = 4.5f
 internal const val ION_SWARM_COOLDOWN: Float = 0.72f
 internal const val ION_SWARM_PIERCE: Int = 1
 internal const val ION_SWARM_FIRE_RATE_FORM: Float = 1.25f
-internal const val ARC_COIL_DAMAGE: Float = 16f
+internal const val ARC_COIL_DAMAGE: Float = 15f
 internal const val ARC_COIL_COOLDOWN: Float = 1.15f
 internal const val ARC_COIL_CHARGE: Int = 1
-internal const val QUASAR_DAMAGE: Float = 87f
+internal const val QUASAR_DAMAGE: Float = 59f
 internal const val QUASAR_BURST_LIFE: Float = 1.3f
 internal const val QUASAR_SIDE_SHARE: Float = 0.1f
 internal const val QUASAR_BURST_SHARE: Float = 0.15f
 internal const val QUASAR_BURST_RADIUS: Float = 120f
-internal const val SPEAR_DAMAGE: Float = 100f
+internal const val SPEAR_DAMAGE: Float = 97f
 internal const val SPEAR_BLINK_COOLDOWN: Float = 2f
 internal const val SPEAR_CROSS_SHARE: Float = 1f
 internal const val SPEAR_REACH: Float = 28f
@@ -1176,15 +1176,15 @@ internal const val SPEAR_SCAR_SHARE: Float = 1f
 internal const val SPEAR_BLINK_REACH: Float = 320f
 internal const val SPEAR_SCAR_FUSE: Float = 0.4f
 internal const val SPEAR_SCAR_REACH: Float = 30f
-internal const val PRISM_RELAY_DAMAGE: Float = 18f
-internal const val PRISM_TWIN_SHARE: Float = 0.2f
+internal const val PRISM_RELAY_DAMAGE: Float = 17.2f
+internal const val PRISM_TWIN_SHARE: Float = 0.18f
 /** Heading change per dp travelled that counts as a hard turn (60° over 100 dp). */
 internal const val FLUX_TURN_CURVATURE: Float = 0.0105f
 internal const val FLUX_LONG_LIFE: Float = 4f
 internal const val FLUX_SPACING: Float = 22f
 internal const val PARRY_TWIST_GUARD: Float = 0.2f
 
-internal const val GYRE_DAMAGE: Float = 45f
+internal const val GYRE_DAMAGE: Float = 28f
 internal const val GYRE_COOLDOWN: Float = 1.3f
 internal const val GYRE_SPEED: Float = 760f
 internal const val GYRE_RETURN_SPEED: Float = 900f
@@ -1198,7 +1198,7 @@ internal const val GYRE_ORBIT_BONUS: Float = 1.25f
 internal const val GYRE_RETURN_BONUS: Float = 1.5f
 internal const val GYRE_EXTRA_SHARE: Float = 0.6f
 
-internal const val SCATTER_DAMAGE: Float = 10f
+internal const val SCATTER_DAMAGE: Float = 7.7f
 internal const val SCATTER_PIERCE: Int = 2
 internal const val SCATTER_PELLETS: Int = 7
 internal const val SCATTER_PASSIVE_PELLETS: Int = 7
@@ -1209,10 +1209,10 @@ internal const val SCATTER_CONE: Float = TAU / 6f
 internal const val SCATTER_POINT_BLANK: Float = 140f
 internal const val SCATTER_PASSIVE_SPREAD: Float = 0.9f
 
-internal const val TETHER_RANGE: Float = 320f
-internal const val TETHER_DPS: Float = 5.5f
+internal const val TETHER_RANGE: Float = 350f
+internal const val TETHER_DPS: Float = 6f
 internal const val TETHER_RAMP_MAX: Float = 3f
-internal const val TETHER_RAMP_FORM: Float = 5f
+internal const val TETHER_RAMP_FORM: Float = 4f
 internal const val TETHER_RAMP_SECONDS: Float = 2.5f
 internal const val TETHER_KILL_KEEP: Float = 0.6f
 internal const val TETHER_SECOND_SHARE: Float = 0.75f
@@ -1230,7 +1230,7 @@ internal const val SENTRY_FOLDED: Int = 1
 internal const val SENTRY_BLAST_RADIUS: Float = 120f
 internal const val SENTRY_BLAST_DAMAGE: Float = 40f
 
-internal const val HUNTER_DAMAGE: Float = 9f
+internal const val HUNTER_DAMAGE: Float = 8.7f
 internal const val HUNTER_DECAY_EVERY: Int = 2
 internal const val HUNTER_COOLDOWN: Float = 2.2f
 internal const val HUNTER_MISSILES: Int = 3
@@ -1259,7 +1259,7 @@ internal const val CONCUSSION_LONE_SHARE: Float = 0.7f
 internal const val CONCUSSION_CROWD_BONUS: Float = 0.18f
 internal const val CONCUSSION_CROWD_CAP: Int = 4
 
-internal const val GLACIER_DAMAGE: Float = 37f
+internal const val GLACIER_DAMAGE: Float = 40f
 internal const val GLACIER_RADIUS: Float = 240f
 internal const val GLACIER_HOLD_SECONDS: Float = 0.3f
 internal const val GLACIER_TOLL_COOLDOWN: Float = 0.8f
@@ -1304,7 +1304,7 @@ internal const val AEGIS_SPEED: Float = 820f
 internal const val AEGIS_SHARD_LIFE: Float = 0.9f
 internal const val AEGIS_RESTORE_COOLDOWN: Float = 60f
 
-internal const val HOLLOW_DAMAGE: Float = 54f
+internal const val HOLLOW_DAMAGE: Float = 42f
 internal const val HOLLOW_REACH: Float = 40f
 internal const val HOLLOW_FUSE: Float = 0.55f
 internal const val HOLLOW_LINGER: Float = 0.45f
@@ -1312,7 +1312,7 @@ internal const val HOLLOW_PASSIVE_SPEED: Float = 600f
 internal const val HOLLOW_PASSIVE_INTERVAL: Float = 2f
 internal const val HOLLOW_PASSIVE_SHARE: Float = 30f / 70f
 internal const val HOLLOW_BLINK_SCALE: Float = 2f
-internal const val HOLLOW_SECOND_SHARE: Float = 0.6f
+internal const val HOLLOW_SECOND_SHARE: Float = 0.12f
 internal const val HOLLOW_SECOND_DELAY: Float = 0.3f
 internal const val HOLLOW_PULL_RADIUS: Float = 120f
 

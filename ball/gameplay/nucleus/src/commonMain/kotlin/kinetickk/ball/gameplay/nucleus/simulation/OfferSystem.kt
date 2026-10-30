@@ -124,8 +124,9 @@ internal fun MutableGameState.buildItemChoices() {
         if (volatileLift) rarity = ItemRarity.entries.firstOrNull { it.rank == rarity.rank + 1 } ?: rarity
         val pityCard = lane == OfferLane.VOLATILE && pityDue && !rareOrBetter
         if (pityCard) rarity = maxOf(rarity, ItemRarity.RARE)
+        offerRarityFloor?.let { rarity = maxOf(rarity, it) }
         val floor = if (pityCard && available.any { it.rarity.rank >= ItemRarity.RARE.rank }) ItemRarity.RARE else ItemRarity.COMMON
-        val tier = available.nearestRarityTier(rarity, floor)
+        val tier = available.nearestRarityTier(rarity, maxOf(floor, offerRarityFloor ?: ItemRarity.COMMON))
         val candidates = when (lane) {
             OfferLane.ALIGNED -> if (laneRoll < lanePolicy.alignedChance) {
                 tier.filter { fit(it, familyFits) > 0f && itemSuppressedShare(it) == 0f }
@@ -202,10 +203,14 @@ internal fun MutableGameState.itemCard(item: ItemDefinition, tag: String, reborn
     )
 }
 
-/** The items of the rolled [rarity], else of the nearest lower tier down to [floor], else of the nearest higher tier. */
+/**
+ * The items of the rolled [rarity], else of the nearest lower tier down to [floor], else of the nearest higher tier,
+ * else (a rarity floor no remaining item meets) of the nearest tier below [floor].
+ */
 private fun List<ItemDefinition>.nearestRarityTier(rarity: ItemRarity, floor: ItemRarity): List<ItemDefinition> {
     val order = ItemRarity.entries.filter { it.rank in floor.rank..rarity.rank }.asReversed() +
-        ItemRarity.entries.filter { it.rank > rarity.rank }
+        ItemRarity.entries.filter { it.rank > rarity.rank } +
+        ItemRarity.entries.filter { it.rank < floor.rank }.asReversed()
     return order.firstNotNullOfOrNull { tier -> filter { it.rarity == tier }.takeIf { it.isNotEmpty() } } ?: this
 }
 

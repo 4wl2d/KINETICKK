@@ -24,8 +24,15 @@ import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.ObstacleKindTuning
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.ANOMALY_KIND_COUNT
+import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.content.api.SignalKind
+import kinetickk.ball.content.api.EliteAffix
+import kinetickk.ball.content.api.WorldEventKind
+import kinetickk.ball.content.api.WorldLayer
+import kinetickk.ball.gameplay.nucleus.render.DimensionProjection
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicAspect
@@ -34,9 +41,15 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPolicy
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
+import kinetickk.ball.content.api.phaseShardSecondsToSolid
+import kinetickk.ball.content.api.phaseShardSolid
+import kinetickk.ball.content.api.ventErupting
+import kinetickk.ball.content.api.ventSecondsToEruption
+import kinetickk.ball.gameplay.interaction.fx.CoreRibbonProjection
 import kinetickk.ball.gameplay.interaction.fx.DamageNumberProjection
 import kinetickk.ball.gameplay.interaction.fx.InteractionFxLimits
 import kinetickk.ball.gameplay.interaction.fx.MotionEchoProjection
@@ -47,11 +60,18 @@ import kinetickk.ball.gameplay.interaction.fx.WeaponArcProjection
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
+import kinetickk.ball.gameplay.nucleus.render.EventSignalProjection
+import kinetickk.ball.gameplay.nucleus.render.EventStrikeProjection
+import kinetickk.ball.gameplay.nucleus.render.WorldEventProjection
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
+import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupType
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteMarkProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.ProjectileProjection
 import kinetickk.ball.gameplay.nucleus.render.TotemProjection
 import kinetickk.ball.gameplay.nucleus.render.TrailPointProjection
@@ -71,6 +91,7 @@ import kinetickk.foundation.design.KkRolePalette
 import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
+import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.test.Test
@@ -83,6 +104,7 @@ import kotlin.test.Test
  */
 class RedesignShotsWorldTest {
     private val fullShots = System.getenv("KK_SHOTS") == "1"
+    private val only = System.getenv("KK_SHOTS_ONLY")?.split(',')?.toSet()
 
     /** The whole list with `KK_SHOTS=1`, else its first entry. */
     private fun <T> List<T>.matrix(): List<T> = if (fullShots) this else take(1)
@@ -91,7 +113,7 @@ class RedesignShotsWorldTest {
     fun rendersWorldStates() {
         val sizes = listOf(1440 to 810, 844 to 390, 390 to 844)
         val languages = listOf(AppLanguage.English to "en", AppLanguage.Russian to "ru")
-        val scenes = scenes()
+        val scenes = scenes().filter { only == null || it.name in only }
         for ((width, height) in sizes.matrix()) for ((language, code) in languages.matrix()) for (scene in scenes) {
             val roles = scene.roles
             val measurer = CanvasTextMeasurer(
@@ -134,8 +156,8 @@ class RedesignShotsWorldTest {
                     (1_000f + 3_000f * cos(radians).toFloat()) to (1_000f + 3_000f * sin(radians).toFloat())
                 }
                 val model = model(width.toFloat(), height.toFloat(), points = listOf(
-                    PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed anomaly", targets[0].first, targets[0].second, false, 31f, 1, 0f, immutableListOf(), 0f, 0f),
-                    PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", targets[1].first, targets[1].second, false, 31f, 1, 0f, immutableListOf(), 0f, 0f)),
+                    SiteProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", targets[0].first, targets[0].second, false, 31f, 0, 0f, immutableListOf(), 0f, 0f),
+                    SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", targets[1].first, targets[1].second, false, 31f, 0, 0f, immutableListOf(), 0f, 0f)),
                     totem = TotemProjection(targets[2].first, targets[2].second, 1f))
                 val bitmap = ImageBitmap(width, height)
                 CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(width.toFloat(), height.toFloat())) {
@@ -169,8 +191,8 @@ class RedesignShotsWorldTest {
     @Test
     fun rendersMarkerFlightStrips() {
         val offers = listOf(-1f, 1f).map { side -> 560f * cos(side) to 560f * sin(side) }
-        fun point(kind: PointOfInterestKind, at: Pair<Float, Float>) =
-            PointOfInterestProjection(kind, kind.name, at.first, at.second, false, 31f, 1, 0f, immutableListOf(), 0f, 0f)
+        fun point(kind: SiteKind, at: Pair<Float, Float>) =
+            SiteProjection(kind, kind.name, at.first, at.second, false, 31f, 0, 0f, immutableListOf(), 0f, 0f)
         fun measurer(language: AppLanguage) = CanvasTextMeasurer(
             ComposeTextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr),
             1.25f, language, Fonts.typography, KkRolePalette.Default,
@@ -202,15 +224,15 @@ class RedesignShotsWorldTest {
             strip(1440, 810, AppLanguage.Russian, kept.last + 1, kept, intArrayOf(420, 20, 1020, 180),
                 "world-fix3-flight-$course-1440x810-ru.png") { frame ->
                 val core = 6f * frame
-                val model = model(1440f, 810f, points = listOf(point(PointOfInterestKind.entries[0], offers[0]), point(PointOfInterestKind.entries[1], offers[1])))
+                val model = model(1440f, 810f, points = listOf(point(SiteKind.entries[0], offers[0]), point(SiteKind.entries[1], offers[1])))
                     .with("coreX" to core * cos(radians), "coreY" to core * sin(radians), "cameraX" to core * cos(radians), "cameraY" to core * sin(radians))
                 Triple(model, 0f, 0f)
             }
         }
         if (fullShots) strip(844, 390, AppLanguage.English, 2_484, 2_474..2_483, intArrayOf(0, 0, 844, 140), "world-fix3-flyby-844x390-en.png") { frame ->
             val x = -4_000f + 3f * frame
-            val model = model(844f, 390f, points = listOf(point(PointOfInterestKind.SEALED_ANOMALY, -150f to -1_400f),
-                point(PointOfInterestKind.COLLAPSING_ORBIT, 0f to -1_450f)), totem = TotemProjection(150f, -1_400f, 1f))
+            val model = model(844f, 390f, points = listOf(point(SiteKind.SEALED_ANOMALY, -150f to -1_400f),
+                point(SiteKind.COLLAPSING_ORBIT, 0f to -1_450f)), totem = TotemProjection(150f, -1_400f, 1f))
                 .with("coreX" to x, "coreY" to 0f, "cameraX" to x, "cameraY" to 0f)
             Triple(model, 0f, 0f)
         }
@@ -229,7 +251,7 @@ class RedesignShotsWorldTest {
         ).matrix()) {
             val points = List(2) { side ->
                 val angle = flight.heading + if (side == 0) -1f else 1f
-                point(PointOfInterestKind.entries[(flight.course + side) % PointOfInterestKind.entries.size], 560f * cos(angle) to 560f * sin(angle))
+                point(SiteKind.entries[(flight.course + side) % ANOMALY_KIND_COUNT], 560f * cos(angle) to 560f * sin(angle))
             }
             val course = flight.heading + Math.toRadians(flight.course * 10.0 + 5.0).toFloat()
             strip(flight.w, flight.h, flight.language, flight.kept.last + 1, flight.kept, flight.crop, "world-fix3-${flight.name}.png") { frame ->
@@ -246,7 +268,7 @@ class RedesignShotsWorldTest {
             val heading = 7 * 45f * Math.PI.toFloat() / 180f + 0.2f
             val points = List(2) { side ->
                 val angle = heading + if (side == 0) -1f else 1f
-                point(PointOfInterestKind.entries[(7 + side) % PointOfInterestKind.entries.size], 560f * cos(angle) to 560f * sin(angle))
+                point(SiteKind.entries[(7 + side) % ANOMALY_KIND_COUNT], 560f * cos(angle) to 560f * sin(angle))
             }
             val side = heading - Math.PI.toFloat() / 2f
             val centerX = 300f * cos(side)
@@ -279,8 +301,8 @@ class RedesignShotsWorldTest {
                 else -> intArrayOf(0, 0, 390, 300)
             }
             strip(width, height, language, 18, 6..17, crop, "world-fix3-gameshake-${width}x$height-${if (language == AppLanguage.English) "en" else "ru"}.png") { frame ->
-                val model = model(width.toFloat(), height.toFloat(), points = listOf(point(PointOfInterestKind.SEALED_ANOMALY, targets[0]),
-                    point(PointOfInterestKind.COLLAPSING_ORBIT, targets[1])), totem = TotemProjection(targets[2].first, targets[2].second, 1f))
+                val model = model(width.toFloat(), height.toFloat(), points = listOf(point(SiteKind.SEALED_ANOMALY, targets[0]),
+                    point(SiteKind.COLLAPSING_ORBIT, targets[1])), totem = TotemProjection(targets[2].first, targets[2].second, 1f))
                 val time = 3f + frame / 60f
                 if (frame < 6) Triple(model, 0f, 0f) else Triple(model, sin(time * 91f) * 6f, cos(time * 77f) * 6f)
             }
@@ -349,17 +371,17 @@ class RedesignShotsWorldTest {
         add(Scene("overdrive", model = { w, h -> model(w, h, overdriveTime = 3f, weapon = WeaponId.ION_SWARM, orbitals = true) }))
         add(Scene("overheat", model = { w, h -> model(w, h, overheated = true, weapon = WeaponId.MORNINGSTAR) }))
         add(Scene("poi-offer", model = { w, h -> model(w, h, points = offers(), totem = TotemProjection(-900f, 120f, 1f)) }))
-        add(Scene("poi-orbit", model = { w, h -> model(w, h, points = listOf(active(PointOfInterestKind.COLLAPSING_ORBIT, 60f, 30f, 0.65f, warning = 0.5f))) }))
+        add(Scene("poi-orbit", model = { w, h -> model(w, h, points = listOf(active(SiteKind.COLLAPSING_ORBIT, 60f, 30f, 0.65f, warning = 0.5f))) }))
         add(Scene("poi-sealed", model = { w, h -> sealed(w, h) }))
-        add(Scene("poi-circuit", model = { w, h -> model(w, h, points = listOf(active(PointOfInterestKind.RESONANT_CIRCUIT, -60f, -170f, 0.33f, nextBeacon = 2))) }))
+        add(Scene("poi-circuit", model = { w, h -> model(w, h, points = listOf(active(SiteKind.RESONANT_CIRCUIT, -60f, -170f, 0.33f, step = 1))) }))
         // Review-fix states: the HUD drawn over the world to check labels and edge markers clear it.
         add(Scene("poi-offer-hud", hud = true, model = { w, h -> model(w, h, points = offers(), totem = TotemProjection(-900f, 120f, 1f)) }))
-        add(Scene("poi-orbit-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(PointOfInterestKind.COLLAPSING_ORBIT, 60f, 30f, 0.65f, warning = 0.5f))) }))
-        add(Scene("poi-orbit-high-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(PointOfInterestKind.COLLAPSING_ORBIT, 40f, -(h * 0.5f + 150f), 0.4f))) }))
-        add(Scene("poi-orbit-low-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(PointOfInterestKind.COLLAPSING_ORBIT, -60f, h * 0.5f - 120f, 0.8f))) }))
+        add(Scene("poi-orbit-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(SiteKind.COLLAPSING_ORBIT, 60f, 30f, 0.65f, warning = 0.5f))) }))
+        add(Scene("poi-orbit-high-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(SiteKind.COLLAPSING_ORBIT, 40f, -(h * 0.5f + 150f), 0.4f))) }))
+        add(Scene("poi-orbit-low-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(SiteKind.COLLAPSING_ORBIT, -60f, h * 0.5f - 120f, 0.8f))) }))
         add(Scene("poi-sealed-hud", hud = true, model = { w, h -> sealed(w, h) }))
-        add(Scene("poi-circuit-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(PointOfInterestKind.RESONANT_CIRCUIT, -60f, -170f, 0.33f, nextBeacon = 2))) }))
-        add(Scene("poi-circuit-far-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(PointOfInterestKind.RESONANT_CIRCUIT, -900f, -700f, 0.66f, nextBeacon = 3))) }))
+        add(Scene("poi-circuit-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(SiteKind.RESONANT_CIRCUIT, -60f, -170f, 0.33f, step = 1))) }))
+        add(Scene("poi-circuit-far-hud", hud = true, model = { w, h -> model(w, h, points = listOf(active(SiteKind.RESONANT_CIRCUIT, -900f, -700f, 0.66f, step = 2))) }))
         add(Scene("numbers-edge", model = { w, h -> model(w, h) }, fx = ::edgeNumbersFx))
         // Second review-fix states (world): timers and marks near the HUD, markers above/below.
         val fixScenes = listOf<Pair<String, (Float, Float) -> GameplayRenderModel>>(
@@ -368,17 +390,17 @@ class RedesignShotsWorldTest {
             // Target beacon cut by the left edge: only its edge marker draws.
             "poi-beacon-edge-hud" to { w, h -> model(w, h, points = listOf(beaconAt(w, h, 30f, 0.5f * h))) },
             // Active vault under the relic row (phone) or the chain (desktop).
-            "poi-vault-relic-hud" to { w, h -> model(w, h, points = listOf(activeAt(PointOfInterestKind.SEALED_ANOMALY, w, h, 0.74f * w, 0.23f * h))) },
+            "poi-vault-relic-hud" to { w, h -> model(w, h, points = listOf(activeAt(SiteKind.SEALED_ANOMALY, w, h, 0.74f * w, 0.23f * h))) },
             // An offer low on the left, next to the integrity cluster.
             "poi-offer-low-hud" to { w, h -> model(w, h, points = listOf(offerAt(w, h, 0.2f * w, 0.62f * h))) },
             // Orbit far above and far below the view.
-            "poi-orbit-high-hud" to { w, h -> model(w, h, points = listOf(active(PointOfInterestKind.COLLAPSING_ORBIT, 40f, -(h * 0.5f + 700f), 0.4f))) },
-            "poi-orbit-below-hud" to { w, h -> model(w, h, points = listOf(active(PointOfInterestKind.COLLAPSING_ORBIT, 40f, h * 0.5f + 700f, 0.4f))) },
+            "poi-orbit-high-hud" to { w, h -> model(w, h, points = listOf(active(SiteKind.COLLAPSING_ORBIT, 40f, -(h * 0.5f + 700f), 0.4f))) },
+            "poi-orbit-below-hud" to { w, h -> model(w, h, points = listOf(active(SiteKind.COLLAPSING_ORBIT, 40f, h * 0.5f + 700f, 0.4f))) },
             // An elite alive and the totem overhead (portrait boss row + marker).
             "poi-boss-marker-hud" to { w, h -> model(w, h, enemies = listOf(enemy(1, EnemyType.ELITE, 150f, 120f, 38f)), totem = TotemProjection(1_040f, 1_000f - h * 0.5f - 900f, 1f)) },
             // Third pass: a boss and a trial at once, the orbit far up-left (markers past the stacked top bands).
             "poi-boss-trial-marker-hud" to { w, h -> model(w, h, enemies = listOf(enemy(1, EnemyType.ELITE, 150f, 120f, 38f)),
-                points = listOf(active(PointOfInterestKind.COLLAPSING_ORBIT, -0.41f * (h * 0.5f + 900f), -(h * 0.5f + 900f), 0.4f)),
+                points = listOf(active(SiteKind.COLLAPSING_ORBIT, -0.41f * (h * 0.5f + 900f), -(h * 0.5f + 900f), 0.4f)),
                 totem = TotemProjection(1_000f + 0.3f * (h * 0.5f + 900f), 1_000f + h * 0.5f + 900f, 1f)) },
             // Target beacon low in a HUD-free bottom gap: whole, place pips included, on screen.
             "poi-beacon-bottom-hud" to { w, h -> model(w, h, points = listOf(beaconAt(w, h, 0.31f * w, h - 67f))) },
@@ -396,14 +418,14 @@ class RedesignShotsWorldTest {
             // The game's pair of offers (560 from the Core at +-1 rad, about 940 apart): a circuit
             // up-left and an orbit down-right of the Core (the second leaves narrow screens).
             "poi-offers-hud" to { w, h -> model(w, h, points = listOf(
-                offerAt(w, h, 0.5f * w - 300f, 0.5f * h - 100f, PointOfInterestKind.RESONANT_CIRCUIT),
-                offerAt(w, h, 0.5f * w + 620f, 0.5f * h + 110f, PointOfInterestKind.COLLAPSING_ORBIT))) },
+                offerAt(w, h, 0.5f * w - 300f, 0.5f * h - 100f, SiteKind.RESONANT_CIRCUIT),
+                offerAt(w, h, 0.5f * w + 620f, 0.5f * h + 110f, SiteKind.COLLAPSING_ORBIT))) },
             // An offer hard against the left edge: its name and timer stay on screen.
             "poi-offer-edge-hud" to { w, h -> model(w, h, points = listOf(offerAt(w, h, 50f, 0.45f * h))) },
             // Two offers and the totem off screen in nearly one direction (above right).
             "poi-markers-crowded-hud" to { w, h -> model(w, h, points = listOf(
-                PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed anomaly", 1_000f + 900f, 1_000f - 2_600f, false, 31f, 1, 0f, immutableListOf(), 0f, 0f),
-                PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 1_000f + 1_150f, 1_000f - 2_500f, false, 31f, 1, 0f, immutableListOf(), 0f, 0f)),
+                SiteProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 1_000f + 900f, 1_000f - 2_600f, false, 31f, 0, 0f, immutableListOf(), 0f, 0f),
+                SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 1_000f + 1_150f, 1_000f - 2_500f, false, 31f, 0, 0f, immutableListOf(), 0f, 0f)),
                 totem = TotemProjection(1_000f + 1_300f, 1_000f - 2_300f, 1f)) },
         )
         fix3Scenes.forEach { (name, build) ->
@@ -416,6 +438,463 @@ class RedesignShotsWorldTest {
         listOf(0, 5, 10).forEach { tier ->
             add(Scene("tier$tier", model = { w, h -> cruise(w, h, rebirthLevel = tier) }, fx = ::cruiseFx))
         }
+        // The Core ribbon follows the recorded path: a carved curve, a Dash with its ghosts, Overdrive, a blink's break.
+        add(Scene("ribbon-curve", model = { w, h -> ribbonRun(w, h, 1_400f, 520f) }, fx = { ribbonFx(it, 520f) }))
+        add(Scene("ribbon-dash", model = { w, h -> ribbonRun(w, h, 1_800f, 900f, dash = 0.18f) }, fx = { ribbonFx(it, 900f, dashNewest = 10) }))
+        add(Scene("ribbon-overdrive", model = { w, h -> ribbonRun(w, h, 2_400f, 700f, overdrive = 3f) }, fx = { ribbonFx(it, 700f) }))
+        add(Scene("ribbon-break", model = { w, h -> ribbonRun(w, h, 1_200f, 600f) }, fx = ::ribbonBreakFx))
+        // The new window sites as offers, before any runs, each with its mark, entry ring, name and time left: a gate race,
+        // a bounty and a Zenith rift; then three challenges (a slalom, a brakeless run, a Ram rite); each also under the HUD.
+        val mixed = listOf(SiteKind.GATE_RACE, SiteKind.BOUNTY_ARENA, SiteKind.ZENITH_RIFT)
+        val challenges = listOf(SiteKind.SLALOM_TRIAL, SiteKind.BRAKELESS_TRIAL, SiteKind.RAM_TRIAL)
+        add(Scene("site-offers-mixed", model = { w, h -> offers(w, h, mixed) }))
+        add(Scene("site-offers-mixed-hud", hud = true, model = { w, h -> offers(w, h, mixed) }))
+        add(Scene("site-offers-challenges", model = { w, h -> offers(w, h, challenges) }))
+        add(Scene("site-offers-challenges-hud", hud = true, model = { w, h -> offers(w, h, challenges) }))
+        // A running gate race: two gates passed, the next in volt, later gates mute, the doubled finish; then the same
+        // course with the next gate far off screen (its edge marker) under the HUD's trial panel.
+        add(Scene("site-race", model = { w, h -> model(w, h, points = listOf(race(step = 2))) }))
+        add(Scene("site-race-hud", hud = true, model = { w, h -> model(w, h, points = listOf(race(step = 2))) }))
+        add(Scene("site-race-far-hud", hud = true, model = { w, h -> model(w, h, points = listOf(race(step = 5, far = true))) }))
+        // The five challenges: a slalom with one pole passed and the next in volt (then under the HUD), the brakeless
+        // run's shrinking ring, the Ram rite's ring with its bracketed drifters (two already destroyed), the untouched
+        // trial's ring with a telegraphed volley, and the velocity hold's wide zone with its progress at the center.
+        add(Scene("site-slalom", model = { w, h -> model(w, h, points = listOf(slalom())) }))
+        add(Scene("site-slalom-hud", hud = true, model = { w, h -> model(w, h, points = listOf(slalom())) }))
+        add(Scene("site-brakeless", hud = true, model = { w, h -> model(w, h, points = listOf(ringChallenge(SiteKind.BRAKELESS_TRIAL, -200f, 150f, 765f, 0.45f))) }))
+        add(Scene("site-ram", hud = true, model = { w, h -> ram(w, h) }))
+        add(Scene("site-untouched", hud = true, model = { w, h ->
+            model(w, h, points = listOf(ringChallenge(SiteKind.UNTOUCHED_TRIAL, -150f, 100f, 650f, 0.3f, warning = 0.5f)))
+        }))
+        add(Scene("site-velocity", hud = true, model = { w, h -> model(w, h, points = listOf(ringChallenge(SiteKind.VELOCITY_TRIAL, 300f, 200f, 1_800f, 0.6f))) }))
+        // Baby mode: the soft cursor with its pacifier wings, the diapered Core, the pastel halftone and ribbon; then under
+        // the HUD (the soft tether and the pacifier plate before the tier plate at tier 3).
+        add(Scene("easy-cruise", model = { w, h -> ribbonRun(w, h, 1_400f, 520f).with("easyMode" to true) }, fx = { ribbonFx(it, 520f) }))
+        add(Scene("easy-cruise-hud", hud = true, model = { w, h -> ribbonRun(w, h, 1_400f, 520f).with("easyMode" to true, "rebirthLevel" to 3) },
+            fx = { ribbonFx(it, 520f) }))
+        // The 0.6.0 roster: the ten new ordinary kinds, the four mini-bosses and the two secret bosses; a judging Throne and a
+        // hardened Antecedent with their bars; a Comet marking its lane and one streaking; Pylons docked on a rock.
+        add(Scene("roster-worlds", model = { w, h -> rosterWorlds(w, h) }))
+        add(Scene("roster-worlds-mono", roles = KkRolePalette.Mono, model = { w, h -> rosterWorlds(w, h) }))
+        add(Scene("roster-worlds-protan", roles = KkRolePalette.Protan, model = { w, h -> rosterWorlds(w, h) }))
+        add(Scene("miniboss-throne", hud = true, model = { w, h -> minibossThrone(w, h) }))
+        add(Scene("secret-antecedent", hud = true, model = { w, h -> secretAntecedent(w, h) }))
+        add(Scene("comet-lane", model = { w, h -> cometLane(w, h) }))
+        add(Scene("pylon-dock", model = { w, h -> pylonDock(w, h) }))
+        // Run variety: each world event in progress under the HUD (its edge band; the meteor's and the ion storm's strikes
+        // filling, the flare's band crossing, the storms' motes), the gravity storm in its telegraph, a Merchant signal on
+        // screen and past the edge, an Elite with each affix and champions beside plain kinds; the meteor, the affixes and
+        // the champions also on the mono and protan palettes.
+        for (kind in WorldEventKind.entries) {
+            add(Scene("event-${eventShotName(kind)}", hud = true, model = { w, h -> worldEvent(w, h, kind) }, fx = ::cruiseFx))
+        }
+        add(Scene("event-gravity-telegraph", hud = true, model = { w, h -> worldEvent(w, h, WorldEventKind.GRAVITY_STORM, elapsed = 1.8f) }))
+        add(Scene("event-meteor-mono", roles = KkRolePalette.Mono, hud = true, model = { w, h -> worldEvent(w, h, WorldEventKind.METEOR_SHOWER) }))
+        add(Scene("event-meteor-protan", roles = KkRolePalette.Protan, hud = true, model = { w, h -> worldEvent(w, h, WorldEventKind.METEOR_SHOWER) }))
+        add(Scene("signal-merchant", hud = true, model = { w, h -> signal(w, h, onScreen = true) }))
+        add(Scene("signal-far", hud = true, model = { w, h -> signal(w, h, onScreen = false) }))
+        for ((suffix, roles) in listOf("" to KkRolePalette.Default, "-mono" to KkRolePalette.Mono, "-protan" to KkRolePalette.Protan)) {
+            add(Scene("elite-affixes$suffix", roles = roles, model = { w, h -> eliteAffixes(w, h) }))
+            add(Scene("champions$suffix", roles = roles, model = { w, h -> champions(w, h) }))
+        }
+        // Drift caches: two bone crates in view, a third past the edge within its reveal distance (its edge marker and
+        // minimap mark).
+        add(Scene("site-cache", model = { w, h -> caches(w, h) }))
+        add(Scene("site-cache-hud", hud = true, model = { w, h -> caches(w, h) }))
+        // The easter eggs: the Lost Cursor drifting and the Quiet Signal rippling where they lie, the found Lost Cursor
+        // circling the Core, and the Golden Drifter fleeing with its gold glint; then under the HUD (the far Quiet
+        // Signal's marker).
+        add(Scene("site-eggs", model = { w, h -> eggs(w, h) }))
+        add(Scene("site-eggs-hud", hud = true, model = { w, h -> eggs(w, h) }))
+        // The bounty: Warden Prime at 60 % integrity with two Warden guards inside the arena's threat edge, the faint exit
+        // band beyond it, and the target in threat brackets; then under the HUD (the trial panel and the boss block).
+        add(Scene("site-bounty", model = { w, h -> bounty(w, h) }))
+        add(Scene("site-bounty-hud", hud = true, model = { w, h -> bounty(w, h) }))
+        // The Cartographer's sigil: offered ahead of the Core in its void ring with its name and time left; then its duel
+        // under the HUD (the sigil dimmed, the Cartographer above it at 65 % integrity, the trial panel and the boss block).
+        add(Scene("site-sigil", model = { w, h -> sigil(w, h, summoned = false) }))
+        add(Scene("site-sigil-hud", hud = true, model = { w, h -> sigil(w, h, summoned = true) }))
+        // Structures: two entrances off screen (their markers, a third entrance farther unmarked), a Spire's crown with its
+        // promise plates seen from outside, a sealed bay around its garrison under the scrim (in each palette), a
+        // Reliquary's locked sanctum doors with the next way to the chapels, a spent station and the Architect's Doodle.
+        add(Scene("structure-signal", hud = true, model = { w, h -> structureSignals(w, h) }))
+        add(Scene("structure-exterior", model = { w, h ->
+            structureModel(model(w, h), structure(StructureTemplateId.SPIRE, -1_350f, 80f, rotation = 1))
+        }))
+        add(Scene("dungeon-sealed", model = { w, h -> sealedBay(w, h) }))
+        add(Scene("dungeon-sealed-mono", roles = KkRolePalette.Mono, model = { w, h -> sealedBay(w, h) }))
+        add(Scene("dungeon-sealed-protan", roles = KkRolePalette.Protan, model = { w, h -> sealedBay(w, h) }))
+        add(Scene("dungeon-locked", model = { w, h -> lockedSanctum(w, h) }))
+        add(Scene("dungeon-cleared", model = { w, h ->
+            structureModel(model(w, h), structure(StructureTemplateId.DERELICT_STATION, 100f, 0f, spent = true))
+        }))
+        add(Scene("doodle", model = { w, h -> doodle(w, h) }))
+        // Every obstacle kind in each state it shows, beside a rock and a bumper; the HUD adds their minimap marks.
+        add(Scene("terrain", model = { w, h -> terrain(w, h) }))
+        add(Scene("terrain-hud", hud = true, model = { w, h -> terrain(w, h) }))
+        add(Scene("terrain-mono", roles = KkRolePalette.Mono, model = { w, h -> terrain(w, h) }))
+        add(Scene("terrain-protan", roles = KkRolePalette.Protan, model = { w, h -> terrain(w, h) }))
+        // Dimensions: each layer's ground and marks (the Zenith's course with an ambient ring, its next ring's arc 60 % into
+        // the split, the Nadir's embers, two of them just thrown from their kills, the Archive's exit rift) and, in
+        // realspace, a window rift offered, the same rift locked, and the glitch rift; in each palette. The slow Zenith
+        // shows the next ring's grey hatched dashes below the pace.
+        for ((suffix, roles) in listOf("" to KkRolePalette.Default, "-mono" to KkRolePalette.Mono, "-protan" to KkRolePalette.Protan)) {
+            for (layer in listOf(WorldLayer.ZENITH, WorldLayer.NADIR, WorldLayer.ARCHIVE)) {
+                add(Scene("dimension-${layer.name.lowercase()}$suffix", roles = roles, model = { w, h -> dimensionScene(w, h, layer) }))
+            }
+            add(Scene("rift-zenith$suffix", roles = roles, model = { w, h -> riftScene(w, h, locked = false) }))
+            add(Scene("rift-locked$suffix", roles = roles, model = { w, h -> riftScene(w, h, locked = true) }))
+            add(Scene("rift-glitch$suffix", roles = roles, model = { w, h -> model(w, h).withDimension(glitchRift(1_000f, 1_000f, 300f, 120f)) }))
+        }
+        add(Scene("dimension-zenith-slow", model = { w, h -> dimensionScene(w, h, WorldLayer.ZENITH, pace = 2_000f) }))
+    }
+
+    /** A visit of [layer] around the Core with two of its natives; [pace] above the Core's speed shows the too-slow look. */
+    private fun dimensionScene(w: Float, h: Float, layer: WorldLayer, pace: Float = 300f): GameplayRenderModel {
+        val (first, second) = when (layer) {
+            WorldLayer.ZENITH -> EnemyType.SERAPH to EnemyType.CHOIR
+            WorldLayer.NADIR -> EnemyType.IMP to EnemyType.HOUND
+            WorldLayer.ARCHIVE, WorldLayer.BASE -> EnemyType.CIPHER to EnemyType.MIRROR
+        }
+        val enemies = listOf(enemy(1, first, -330f, -150f, 18f), enemy(2, second, 420f, 210f, 20f))
+        val visit = when (layer) {
+            WorldLayer.ZENITH -> dimensionVisit(layer, 1_000f, 1_000f, course = listOf(300f to 130f, -60f to 330f), ambient = listOf(-420f to 170f),
+                pace = pace, progress = 3, splitRemaining = 1.12f, splitDuration = 2.8f)
+            WorldLayer.NADIR -> dimensionVisit(layer, 1_000f, 1_000f, embers = List(7) { index ->
+                val angle = index * 0.9f + 0.4f
+                (230f * cos(angle)) to (150f * sin(angle))
+            } + (-150f to -40f), emberLife = 6f, pace = pace, thrownFrom = listOf(-60f to -230f, 380f to 40f), emberAge = 0.12f)
+            WorldLayer.ARCHIVE, WorldLayer.BASE -> dimensionVisit(layer, 1_000f, 1_000f, exit = 300f to 120f, pace = pace, localClock = 7.3f)
+        }
+        return model(w, h, enemies = enemies).withDimension(visit)
+    }
+
+    /** Realspace with a Zenith rift offered at the Core's lower right and a Nadir rift farther left, both [locked] or open. */
+    private fun riftScene(w: Float, h: Float, locked: Boolean): GameplayRenderModel {
+        fun rift(kind: SiteKind, dx: Float, dy: Float) =
+            SiteProjection(kind, if (kind == SiteKind.ZENITH_RIFT) "Zenith rift" else "Nadir rift", 1_000f + dx, 1_000f + dy, false, 34f, 0, 0f,
+                immutableListOf(), 0f, 0f)
+        val sites = listOf(rift(SiteKind.ZENITH_RIFT, 300f, 120f), rift(SiteKind.NADIR_RIFT, -360f, -60f))
+        val dimension = if (locked) DimensionProjection(lockedRifts = WorldLayer.ZENITH.bit or WorldLayer.NADIR.bit) else DimensionProjection.REALSPACE
+        return model(w, h, points = sites).withDimension(dimension)
+    }
+
+    /** A structure of the shots' content centred ([dx], [dy]) from the Core. */
+    private fun structure(
+        template: StructureTemplateId,
+        dx: Float,
+        dy: Float,
+        rotation: Int = 0,
+        cleared: Int = 0,
+        engaged: Int = -1,
+        spent: Boolean = false,
+        id: Long = (template.ordinal + 1).toLong() shl 8,
+    ) = StructureFixture(Content.structures.template(template), 1_000f + dx, 1_000f + dy, rotation, cleared, engaged, spent, id)
+
+    /** [base] with [structures] in the window, [dungeon] (one of them) held, and [signals] announced. */
+    private fun structureModel(
+        base: GameplayRenderModel,
+        vararg structures: StructureFixture,
+        dungeon: StructureFixture? = null,
+        signals: List<StructureFixture> = emptyList(),
+    ): GameplayRenderModel =
+        base.with("structures" to structureProjection(*structures, signals = signals, dungeon = dungeon, garrisonAlive = 4, garrisonTotal = 6))
+
+    /** A Vault, a Spire and a Labyrinth off screen: the two nearest entrances get their markers. */
+    private fun structureSignals(w: Float, h: Float): GameplayRenderModel {
+        val vault = structure(StructureTemplateId.VAULT, 2_600f, -400f, rotation = 1)
+        val spire = structure(StructureTemplateId.SPIRE, -1_800f, -2_600f)
+        val labyrinth = structure(StructureTemplateId.LABYRINTH, -3_400f, 2_600f)
+        return structureModel(model(w, h), vault, spire, labyrinth, signals = listOf(vault, spire, labyrinth))
+    }
+
+    /** The station's bay sealed around the Core and its garrison (the airlock and the hall cleared), the scrim at full depth. */
+    private fun sealedBay(w: Float, h: Float): GameplayRenderModel {
+        val enemies = listOf(
+            enemy(31, EnemyType.CRAWLER, -290f, 250f, 18f), enemy(32, EnemyType.CRAWLER, 290f, -240f, 18f),
+            enemy(33, EnemyType.CRAWLER, 300f, 220f, 18f), enemy(34, EnemyType.DRIFTER, 120f, 110f, 16f),
+            enemy(35, EnemyType.SHOOTER, -160f, -120f, 18f), enemy(36, EnemyType.SENTRY, 40f, -260f, 20f),
+        )
+        // A brackets' pulse at its peak.
+        val station = structure(StructureTemplateId.DERELICT_STATION, -750f, -400f, cleared = 0b0011, engaged = 3)
+        return structureModel(model(w, h, enemies = enemies, elapsed = 3.4034f), station, dungeon = station)
+    }
+
+    /** A Reliquary's nave: the sanctum's doors locked until the chapels fall, the doors to the two near chapels the next way. */
+    private fun lockedSanctum(w: Float, h: Float): GameplayRenderModel {
+        val reliquary = structure(StructureTemplateId.RELIQUARY, 0f, -560f, cleared = 1 shl 7)
+        return structureModel(model(w, h), reliquary, dungeon = reliquary).with("cameraX" to 1_000f, "cameraY" to 1_000f - 90f,
+            "previousCameraX" to 1_000f, "previousCameraY" to 1_000f - 90f)
+    }
+
+    /** The Doodle's planet, held from inside its ring (a secret: no plates, no scrim). */
+    private fun doodle(w: Float, h: Float): GameplayRenderModel {
+        val doodle = structure(StructureTemplateId.ARCHITECTS_DOODLE, 560f, -120f)
+        return structureModel(model(w, h), doodle, dungeon = doodle).with("cameraX" to 1_560f, "cameraY" to 880f,
+            "previousCameraX" to 1_560f, "previousCameraY" to 880f)
+    }
+
+    /**
+     * The ten new ordinary kinds at their run radii in a row (the Pylon and the Sentry mounted, the Seraph and the Choir
+     * with their rings), the four mini-bosses below (three egg sacs, three arcs) and the two secret bosses (the
+     * Antecedent's two arcs of its third phase).
+     */
+    private fun rosterWorlds(w: Float, h: Float): GameplayRenderModel {
+        val ordinary = listOf(EnemyType.COMET to 14f, EnemyType.PYLON to 22f, EnemyType.SENTRY to 20f, EnemyType.CRAWLER to 12f,
+            EnemyType.SERAPH to 21f, EnemyType.CHOIR to 25f, EnemyType.IMP to 15f, EnemyType.HOUND to 16f, EnemyType.CIPHER to 19f,
+            EnemyType.MIRROR to 20f)
+        val minis = listOf(EnemyType.WARDEN_PRIME to 44f, EnemyType.BROOD_QUEEN to 46f, EnemyType.THRONE to 48f, EnemyType.PYRE_HERALD to 50f)
+        val secrets = listOf(EnemyType.CARTOGRAPHER to 54f, EnemyType.ANTECEDENT to 58f)
+        val enemies = ordinary.mapIndexed { index, (type, radius) ->
+            val mounted = type == EnemyType.PYLON || type == EnemyType.SENTRY
+            enemy(index + 1, type, -405f + index * 90f, -270f, radius).copy(
+                behavior = if (mounted) kinetickk.ball.gameplay.nucleus.render.EnemyBehavior.ANCHORED else 0,
+                facing = (PI / 2).toFloat(),
+            )
+        } + minis.mapIndexed { index, (type, radius) ->
+            enemy(20 + index, type, -330f + index * 220f, 70f, radius).copy(charges = if (type == EnemyType.WARDEN_PRIME || type == EnemyType.PYRE_HERALD) 0 else 3)
+        } + secrets.mapIndexed { index, (type, radius) ->
+            enemy(30 + index, type, -160f + index * 320f, 250f, radius,
+                affinity = if (type == EnemyType.ANTECEDENT) phaseAffinity(StatusElement.CRYO, phase = 2) else runAffinity(type))
+                .copy(charges = if (type == EnemyType.ANTECEDENT) 2 else 0, facing = 0.4f)
+        }
+        return model(w, h, enemies = enemies)
+    }
+
+    /** A Throne in its final phase passing judgement (its four lanes firming) behind its last arc, a third of it left. */
+    private fun minibossThrone(w: Float, h: Float) = model(w, h, enemies = listOf(
+        enemy(1, EnemyType.THRONE, 160f, -220f, 48f, hp = 30f, affinity = phaseAffinity(StatusElement.VOID, phase = 2, immune = true)).copy(
+            behavior = kinetickk.ball.gameplay.nucleus.render.EnemyBehavior.TELEGRAPH, behaviorRemaining = 0.35f, facing = 0.6f, charges = 1),
+        enemy(2, EnemyType.SERAPH, -260f, -150f, 21f),
+        enemy(3, EnemyType.CHOIR, 330f, 60f, 25f),
+    ), projectiles = (0 until 8).map { index -> projectile(160f + cos(index * 0.785f) * 120f, -220f + sin(index * 0.785f) * 120f, true) })
+
+    /**
+     * The Antecedent in its third phase behind its two turning arcs, hardened against Cryo (so weak to Thermal), with two
+     * Imps of its second phase still about and an aimed fan in flight.
+     */
+    private fun secretAntecedent(w: Float, h: Float) = model(w, h, enemies = listOf(
+        enemy(1, EnemyType.ANTECEDENT, 140f, -230f, 58f, hp = 45f, affinity = phaseAffinity(StatusElement.CRYO, phase = 2)).copy(
+            charges = 2, facing = 1.1f),
+        enemy(2, EnemyType.IMP, -220f, -90f, 15f),
+        enemy(3, EnemyType.IMP, 300f, 110f, 15f),
+    ), projectiles = (0 until 5).map { index -> projectile(140f - 60f - index * 4f, -230f + 70f + (index - 2) * 22f, true) })
+
+    /** A Comet marking its lane toward the Core and another streaking along its own. */
+    private fun cometLane(w: Float, h: Float) = model(w, h, enemies = listOf(
+        enemy(1, EnemyType.COMET, -320f, -210f, 14f).copy(behavior = kinetickk.ball.gameplay.nucleus.render.EnemyBehavior.TELEGRAPH,
+            behaviorRemaining = 0.45f, facing = kotlin.math.atan2(210f, 320f)),
+        enemy(2, EnemyType.COMET, 260f, 140f, 14f).copy(behavior = kinetickk.ball.gameplay.nucleus.render.EnemyBehavior.STRIKE,
+            facing = (PI * 0.92).toFloat(), vx = -1_100f, vy = 140f),
+    ))
+
+    /** Two Pylons docked on a rock's rim facing the Core: one idle on its mount, one aiming (its sight locked). */
+    private fun pylonDock(w: Float, h: Float): GameplayRenderModel {
+        val rockX = 230f
+        val rockY = -170f
+        val rock = 90f
+        fun docked(id: Int, angle: Float, behavior: Int, remaining: Float): EnemyProjection {
+            val x = rockX + cos(angle) * (rock + 22f)
+            val y = rockY + sin(angle) * (rock + 22f)
+            return enemy(id, EnemyType.PYLON, x, y, 22f).copy(behavior = behavior, behaviorRemaining = remaining,
+                facing = kotlin.math.atan2(-y, -x))
+        }
+        return model(w, h, enemies = listOf(
+            docked(1, (PI * 0.82).toFloat(), kinetickk.ball.gameplay.nucleus.render.EnemyBehavior.ANCHORED, 0f),
+            docked(2, (PI * 0.55).toFloat(), kinetickk.ball.gameplay.nucleus.render.EnemyBehavior.TELEGRAPH, 0.15f),
+        )).with("obstacles" to immutableListOf(ObstacleProjection(1L, ObstacleKind.ASTEROID, 1_000f + rockX, 1_000f + rockY, rock, 7)))
+    }
+
+    /** A boss's affinity: [aspect] (weak to its counter) in [phase], as the nucleus publishes a boss's phase. */
+    private fun phaseAffinity(aspect: StatusElement, phase: Int, immune: Boolean = false) = kinetickk.ball.gameplay.nucleus.render.EnemyAffinity.encode(
+        aspect.ordinal, immune, counterOf(aspect).ordinal, armored = true, fragile = false, shifting = false, phase = phase)
+
+    private fun eventShotName(kind: WorldEventKind): String = when (kind) {
+        WorldEventKind.METEOR_SHOWER -> "meteor"
+        WorldEventKind.DATA_STORM -> "data"
+        WorldEventKind.GRAVITY_STORM -> "gravity"
+        WorldEventKind.ION_STORM -> "ion"
+        WorldEventKind.SOLAR_FLARE -> "solar"
+    }
+
+    /**
+     * The cruise with [kind] at [elapsed] (telegraphed from 0 s, running from 3 s to 33 s): three strikes at different
+     * fills for the meteor (95 u) and the ion storm (120 u), the flare's band half way across, the wind at 30 degrees.
+     */
+    private fun worldEvent(w: Float, h: Float, kind: WorldEventKind, elapsed: Float = 12f): GameplayRenderModel {
+        val ion = kind == WorldEventKind.ION_STORM
+        val radius = if (ion) 120f else 95f
+        val span = if (ion) 1f else 1.4f
+        val strikes = listOf(Triple(-0.22f, -0.14f, 0.2f), Triple(0.18f, 0.16f, 0.6f), Triple(-0.05f, 0.3f, 0.95f)).map { (fx, fy, fill) ->
+            EventStrikeProjection(1_000f + fx * w, 1_000f + fy * h, radius, elapsed - span * fill, elapsed - span * fill + span)
+        }.toImmutableList()
+        return cruise(w, h, elapsed = elapsed).with("worldEvent" to WorldEventProjection(kind, telegraphAt = 0f, startsAt = 3f, endsAt = 33f,
+            windAngle = 0.52f, windStrength = if (elapsed < 3f) 0f else 1f, sweepStartedAt = elapsed - 0.6f, sweepAngle = 0.35f,
+            strikes = if (kind == WorldEventKind.METEOR_SHOWER || ion) strikes else immutableListOf()))
+    }
+
+    /** A Merchant signal 18 s from its end, on screen beside the heading or far past the edge (its marker). */
+    private fun signal(w: Float, h: Float, onScreen: Boolean): GameplayRenderModel {
+        val dx = if (onScreen) w * 0.22f else 2_600f
+        val dy = if (onScreen) -h * 0.12f else -500f
+        return model(w, h).with("eventSignals" to immutableListOf(EventSignalProjection(5, SignalKind.MERCHANT, 1_000f + dx, 1_000f + dy, 21f)))
+    }
+
+    /** One Elite per affix in two rows of three (a Gravitic aspect, as the Keynote bias often deals). */
+    private fun eliteAffixes(w: Float, h: Float) = model(w, h, enemies = EliteAffix.entries.mapIndexed { index, affix ->
+        val spacing = minOf(170f, w * 0.28f)
+        enemy(index + 1, EnemyType.ELITE, (index % 3 - 1) * spacing, (index / 3 - 0.5f) * 190f, 30f,
+            affinity = runAffinity(EnemyType.ELITE, eliteAspect = StatusElement.GRAVITIC) or
+                EnemyAffinity.encode(EnemyAffinity.NONE, false, EnemyAffinity.NONE, false, false, false, 0, affix = affix.ordinal))
+    })
+
+    /** Champions (top row) over the same kinds plain (bottom row). */
+    private fun champions(w: Float, h: Float): GameplayRenderModel {
+        val kinds = listOf(EnemyType.DRIFTER to 17f, EnemyType.CHARGER to 23f, EnemyType.SHOOTER to 20f)
+        val spacing = minOf(170f, w * 0.28f)
+        val championBit = EnemyAffinity.encode(EnemyAffinity.NONE, false, EnemyAffinity.NONE, false, false, false, 0, champion = true)
+        return model(w, h, enemies = kinds.flatMapIndexed { index, (type, radius) ->
+            listOf(
+                enemy(index + 1, type, (index - 1) * spacing, -95f, radius, affinity = runAffinity(type) or championBit),
+                enemy(index + 11, type, (index - 1) * spacing, 95f, radius),
+            )
+        })
+    }
+
+    /**
+     * A cruise moving +x at [speed] whose path bends up behind the Core on a circle of [radius] (centre straight above it),
+     * the nucleus trail on the same circle.
+     */
+    private fun ribbonRun(w: Float, h: Float, speed: Float, radius: Float, dash: Float = 0f, overdrive: Float = 0f): GameplayRenderModel {
+        val step = speed / 120f / radius
+        val trail = (0 until 24).map { index ->
+            val angle = (PI / 2).toFloat() + (index * 6 + 1) * step
+            TrailPointProjection(1_000f + cos(angle) * radius, 1_000f - radius + sin(angle) * radius, index * 0.05f)
+        }
+        return cruise(w, h).with("velocityX" to speed, "velocityY" to 0f, "dashPhaseTime" to dash, "overdriveTime" to overdrive,
+            "trail" to trail.toImmutableList())
+    }
+
+    /** One sample per fixed step on [ribbonRun]'s circle for the model's speed, newest one step behind the Core. */
+    private fun ribbonFx(model: GameplayRenderModel, radius: Float, dashNewest: Int = 0): VisualFxProjection {
+        val step = model.speed / 120f / radius
+        return cruiseFx(model).copy(coreRibbon = curvedRibbon(model.coreX, model.coreY - radius, radius,
+            (PI / 2).toFloat() + step, 47 * step, 48, dashNewest, oldestAge = 0.39f))
+    }
+
+    /** A blink 300 u back: six samples since it, then the older path, which no segment joins. */
+    private fun ribbonBreakFx(model: GameplayRenderModel): VisualFxProjection {
+        val step = model.speed / 120f
+        val since = (1..6).map { model.coreX - it * step to model.coreY }
+        val before = (0 until 30).map { model.coreX - 300f - it * step * cos(it * 0.03f) to model.coreY - 170f - it * step * sin(it * 0.03f) }
+        val points = since + before
+        val ribbon = CoreRibbonProjection.of(
+            FloatArray(points.size * 2) { if (it % 2 == 0) points[it / 2].first else points[it / 2].second },
+            FloatArray(points.size) { it / 120f },
+            IntArray(points.size) {
+                if (it == since.lastIndex || it == points.lastIndex) CoreRibbonProjection.START else 0
+            },
+        )
+        return cruiseFx(model).copy(coreRibbon = ribbon)
+    }
+
+    /** A six-pole slalom from just behind the Core, its axis turned 0.2 rad, pole 0 passed and pole 1 next. */
+    private fun slalom(): SiteProjection {
+        val axis = 0.2f
+        val course = List(6) { index ->
+            val along = 360f + 340f * index
+            val lateral = if (index % 2 == 0) 150f else -150f
+            SiteMarkProjection(cos(axis) * along - sin(axis) * lateral, sin(axis) * along + cos(axis) * lateral)
+        }.toImmutableList()
+        return SiteProjection(SiteKind.SLALOM_TRIAL, "Slalom", 1_000f - 300f, 1_000f - 40f, true, 12.4f, 1, 1f / 6f,
+            immutableListOf(), 0f, 0f, course = course, sides = 0b010101)
+    }
+
+    /** A running ring challenge centred ([dx], [dy]) from the Core; the untouched trial aims its volley at the Core. */
+    private fun ringChallenge(kind: SiteKind, dx: Float, dy: Float, radius: Float, progress: Float, warning: Float = 0f) =
+        SiteProjection(kind, kind.name, 1_000f + dx, 1_000f + dy, true, 13.2f, 0, progress, immutableListOf(), warning,
+            kotlin.math.atan2(-dy, -dx), radius = radius, aimDx = -dx, aimDy = -dy)
+
+    /** The Ram rite with its eight drifters on their ring, two of them already destroyed (gone) and counted. */
+    private fun ram(w: Float, h: Float): GameplayRenderModel {
+        val centerX = 150f
+        val centerY = -80f
+        val foes = (2 until 8).map { index ->
+            val angle = index * 2f * kotlin.math.PI.toFloat() / 8f
+            enemy(index + 1, EnemyType.DRIFTER, centerX + cos(angle) * 320f, centerY + sin(angle) * 320f, 17f)
+        }
+        val rite = SiteProjection(SiteKind.RAM_TRIAL, "Ram rite", 1_000f + centerX, 1_000f + centerY, true, 14.6f, 0, 2f / 6f,
+            (1..8).toList().toImmutableList(), 0f, 0f, radius = 650f)
+        return model(w, h, enemies = foes, points = listOf(rite))
+    }
+
+    /**
+     * Three window offers of [kinds] around the Core, placed by screen fractions clear of the HUD's blocks and of the
+     * pointer's reticle (landscape: left low, right high, up and left of the Core; portrait: upper left, right, lower left), each
+     * with time left on its offer.
+     */
+    private fun offers(w: Float, h: Float, kinds: List<SiteKind>): GameplayRenderModel {
+        val spots = if (w > h) listOf(-0.33f to 0.14f, 0.28f to -0.12f, -0.12f to -0.22f) else listOf(-0.25f to -0.20f, 0.25f to -0.03f, -0.25f to 0.16f)
+        val points = kinds.mapIndexed { index, kind ->
+            val (fx, fy) = spots[index]
+            SiteProjection(kind, Content.sites.definition(kind).name, 1_000f + fx * w, 1_000f + fy * h, false, 24f + index * 9f, 0, 0f,
+                immutableListOf(), 0f, 0f)
+        }
+        return model(w, h, points = points)
+    }
+
+    /** A seven-gate race around the Core: a loop of 330 (the far course 1,300, past every edge). */
+    private fun race(step: Int, far: Boolean = false): SiteProjection {
+        val radius = if (far) 1_300f else 330f
+        val course = List(7) { index ->
+            val angle = -2.4f + index * 0.76f
+            SiteMarkProjection(cos(angle) * radius, sin(angle) * radius)
+        }.toImmutableList()
+        return SiteProjection(SiteKind.GATE_RACE, "Gate race", 1_000f + 40f, 1_000f + 20f, true, 9.3f, step, step / 7f,
+            immutableListOf(), 0f, 0f, course = course, clock = 5.7f, medal = 2)
+    }
+
+    /** Drift caches around the Core: two in view, one 1,500 u up and to the right (inside its 1,800 u reveal distance). */
+    private fun caches(w: Float, h: Float): GameplayRenderModel {
+        fun cache(dx: Float, dy: Float) = SiteProjection(SiteKind.DRIFT_CACHE, "Drift cache", 1_000f + dx, 1_000f + dy, false, 0f, -1,
+            0f, immutableListOf(), 0f, 0f, activationRadius = 70f, reveal = 1_800f)
+        return model(w, h).with("ambientSites" to immutableListOf(cache(-260f, -150f), cache(210f, 170f), cache(1_200f, -900f)))
+    }
+
+    private fun eggs(w: Float, h: Float): GameplayRenderModel {
+        fun egg(kind: SiteKind, dx: Float, dy: Float, reveal: Float) = SiteProjection(kind, kind.name, 1_000f + dx, 1_000f + dy, false,
+            0f, -1, 0f, immutableListOf(), 0f, 0f, activationRadius = 90f, reveal = reveal)
+        return model(w, h, enemies = listOf(enemy(9, EnemyType.DRIFTER, 260f, 150f, 15f))).with(
+            "ambientSites" to immutableListOf(
+                egg(SiteKind.LOST_CURSOR, -280f, -140f, 0f), egg(SiteKind.QUIET_SIGNAL, -150f, 190f, 3_000f),
+                egg(SiteKind.QUIET_SIGNAL, 1_400f, -1_000f, 3_000f),
+            ),
+            "secretFlags" to 1, "goldenDrifterId" to 9,
+        )
+    }
+
+    /** A running bounty centred left of the Core: its target at 60 % integrity and two guards of its encounter. */
+    private fun bounty(w: Float, h: Float): GameplayRenderModel {
+        val centerX = -380f
+        val centerY = 120f
+        val arena = SiteProjection(SiteKind.BOUNTY_ARENA, "Bounty", 1_000f + centerX, 1_000f + centerY, true, 0f, 0, 0.4f,
+            immutableListOf(1), 0f, 0f, radius = 900f)
+        return model(w, h, points = listOf(arena), enemies = listOf(
+            enemy(1, EnemyType.WARDEN_PRIME, -200f, -60f, 44f, hp = 60f),
+            enemy(2, EnemyType.WARDEN, -290f, 40f, 29f),
+            enemy(3, EnemyType.WARDEN, -110f, -170f, 29f),
+        ), projectiles = (0 until 12).map { index -> projectile(-200f + cos(index * 0.524f) * 130f, -60f + sin(index * 0.524f) * 130f, true) })
+    }
+
+    /** The far sigil ahead of the Core, untouched with four minutes left, or [summoned] with the Cartographer above it. */
+    private fun sigil(w: Float, h: Float, summoned: Boolean): GameplayRenderModel {
+        // Away from the pointer's reticle (up and to the right of the Core).
+        val dx = if (summoned) -220f else 330f
+        val dy = if (summoned) 170f else 160f
+        val sigil = SiteProjection(SiteKind.FAR_SIGIL, "Far sigil", 1_000f + dx, 1_000f + dy, summoned, if (summoned) 0f else 240f,
+            0, if (summoned) 0.35f else 0f, if (summoned) immutableListOf(1) else immutableListOf(), 0f, 0f, activationRadius = 80f)
+        val enemies = if (summoned) listOf(enemy(1, EnemyType.CARTOGRAPHER, dx, dy - 260f, 54f, hp = 65f)) else emptyList()
+        return model(w, h, points = listOf(sigil), enemies = enemies)
     }
 
     // Board HUD.png positions (1440 x 810) are converted to world offsets from the Core so every
@@ -546,7 +1025,7 @@ class RedesignShotsWorldTest {
         enemies = listOf(enemy(1, EnemyType.INTERCEPTOR, 175f, -26f, 18f, flash = 1f)))
 
     private fun sealed(w: Float, h: Float): GameplayRenderModel {
-        val point = active(PointOfInterestKind.SEALED_ANOMALY, 200f, -120f, 1f / 3f, defenders = listOf(21, 22, 23))
+        val point = active(SiteKind.SEALED_ANOMALY, 200f, -120f, 1f / 3f, defenders = listOf(21, 22, 23))
         val enemies = listOf(
             enemy(21, EnemyType.WARDEN, 330f, -120f, 26f),
             enemy(22, EnemyType.WARDEN, 135f, -7f, 26f),
@@ -555,28 +1034,70 @@ class RedesignShotsWorldTest {
         return model(w, h, points = listOf(point), enemies = enemies)
     }
 
+    /**
+     * The terrain scene at 3 s: a Mass Knot and a Repulsor, an accelerator gate, a quiet, a glowing and an erupting
+     * thermal vent, a crystal, a dormant and a half-fused derelict mine, a solid, a ghost and a materialising phase shard,
+     * a rock and a bumper, laid on a grid around the Core (five columns on a wide screen, three on a tall one).
+     */
+    private fun terrain(w: Float, h: Float): GameplayRenderModel {
+        val kinds = ObstacleKindTuning()
+        val elapsed = 3f
+        fun seed(accept: ObstacleKindTuning.(Int) -> Boolean) = (1..10_000).first { kinds.accept(it) }
+        val looks = listOf(
+            Triple(ObstacleKind.GRAVITY_WELL, 34f, 13) to false,
+            Triple(ObstacleKind.GRAVITY_WELL, 34f, 17) to true,
+            Triple(ObstacleKind.ACCEL_GATE, 76f, 9_000) to false,
+            Triple(ObstacleKind.THERMAL_VENT, 64f, seed { ventSecondsToEruption(elapsed, it) in 1.5f..2.5f }) to false,
+            Triple(ObstacleKind.THERMAL_VENT, 64f, seed { ventSecondsToEruption(elapsed, it) in 0.2f..0.4f }) to false,
+            Triple(ObstacleKind.THERMAL_VENT, 64f, seed { ventErupting(elapsed - 0.1f, it) && ventErupting(elapsed + 0.1f, it) }) to false,
+            Triple(ObstacleKind.CRYSTAL, 62f, 21) to false,
+            Triple(ObstacleKind.DERELICT_MINE, 56f, 22) to false,
+            Triple(ObstacleKind.DERELICT_MINE, 50f, 23) to false,
+            Triple(ObstacleKind.PHASE_SHARD, 60f, seed { phaseShardSolid(elapsed, it) }) to false,
+            Triple(ObstacleKind.PHASE_SHARD, 60f, seed { phaseShardSecondsToSolid(elapsed, it) > phaseTelegraphSeconds + 0.2f }) to false,
+            Triple(ObstacleKind.PHASE_SHARD, 60f, seed { phaseShardSecondsToSolid(elapsed, it) in 0.1f..0.35f }) to false,
+            Triple(ObstacleKind.ASTEROID, 58f, 11) to false,
+            Triple(ObstacleKind.BUMPER, 34f, 0) to false,
+        )
+        val columns = if (w >= h) 5 else 3
+        val rows = (looks.size + 1 + columns - 1) / columns
+        // Grid cells row by row, skipping the centre cell where the Core flies.
+        val cells = (0 until rows * columns).filter { it != (rows / 2) * columns + columns / 2 }
+        val obstacles = looks.mapIndexed { index, (look, repels) ->
+            val (kind, radius, shapeSeed) = look
+            val cell = cells[index]
+            ObstacleProjection(
+                id = 900L + index, kind = kind,
+                x = worldX(w, (cell % columns + 0.5f) * w / columns), y = worldY(h, (cell / columns + 0.5f) * h / rows),
+                radius = radius, shapeSeed = shapeSeed, repels = repels,
+                fuseAt = if (kind == ObstacleKind.DERELICT_MINE && shapeSeed == 23) elapsed + kinds.mineFuseSeconds * 0.5f else 0f,
+            )
+        }
+        return model(w, h, elapsed = elapsed).with("obstacles" to obstacles.toImmutableList())
+    }
+
     /** Screen position ([x], [y]) at [w] x [h] as a world position (the Core sits at 1000, 1000 at the screen center). */
     private fun worldX(w: Float, x: Float) = 1_000f + x - w * 0.5f
     private fun worldY(h: Float, y: Float) = 1_000f + y - h * 0.5f
 
     /** An active circuit whose target beacon (order 2: 230 right, 200 below the center) sits at screen ([x], [y]). */
-    private fun beaconAt(w: Float, h: Float, x: Float, y: Float) = PointOfInterestProjection(PointOfInterestKind.RESONANT_CIRCUIT, "Resonant circuit",
-        worldX(w, x) - 230f, worldY(h, y) - 200f, true, 14f, 1, 0.33f, immutableListOf(), 0f, 0f)
+    private fun beaconAt(w: Float, h: Float, x: Float, y: Float) = SiteProjection(SiteKind.RESONANT_CIRCUIT, "Resonant circuit",
+        worldX(w, x) - 230f, worldY(h, y) - 200f, true, 14f, 0, 0.33f, immutableListOf(), 0f, 0f)
 
-    private fun activeAt(kind: PointOfInterestKind, w: Float, h: Float, x: Float, y: Float) = PointOfInterestProjection(kind, "Sealed anomaly",
-        worldX(w, x), worldY(h, y), true, 14f, 1, 0.33f, immutableListOf(), 0f, 0f)
+    private fun activeAt(kind: SiteKind, w: Float, h: Float, x: Float, y: Float) = SiteProjection(kind, "Sealed anomaly",
+        worldX(w, x), worldY(h, y), true, 14f, 0, 0.33f, immutableListOf(), 0f, 0f)
 
-    private fun offerAt(w: Float, h: Float, x: Float, y: Float, kind: PointOfInterestKind = PointOfInterestKind.SEALED_ANOMALY) =
-        PointOfInterestProjection(kind, kind.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() },
-            worldX(w, x), worldY(h, y), false, 31f, 1, 0f, immutableListOf(), 0f, 0f)
+    private fun offerAt(w: Float, h: Float, x: Float, y: Float, kind: SiteKind = SiteKind.SEALED_ANOMALY) =
+        SiteProjection(kind, kind.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() },
+            worldX(w, x), worldY(h, y), false, 31f, 0, 0f, immutableListOf(), 0f, 0f)
 
     private fun offers() = listOf(
-        PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed anomaly", 1_000f + 330f, 1_000f - 150f, false, 31f, 1, 0f, immutableListOf(), 0f, 0f),
-        PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 1_000f + 1_300f, 1_000f + 500f, false, 31f, 1, 0f, immutableListOf(), 0f, 0f),
+        SiteProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 1_000f + 330f, 1_000f - 150f, false, 31f, 0, 0f, immutableListOf(), 0f, 0f),
+        SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 1_000f + 1_300f, 1_000f + 500f, false, 31f, 0, 0f, immutableListOf(), 0f, 0f),
     )
 
-    private fun active(kind: PointOfInterestKind, dx: Float, dy: Float, progress: Float, nextBeacon: Int = 1, warning: Float = 0f, defenders: List<Int> = emptyList()) =
-        PointOfInterestProjection(kind, kind.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }, 1_000f + dx, 1_000f + dy, true, 14f, nextBeacon, progress,
+    private fun active(kind: SiteKind, dx: Float, dy: Float, progress: Float, step: Int = 0, warning: Float = 0f, defenders: List<Int> = emptyList()) =
+        SiteProjection(kind, kind.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }, 1_000f + dx, 1_000f + dy, true, 14f, step, progress,
             defenders.toImmutableList(), warning, -0.3f)
 
     private fun enemy(
@@ -604,7 +1125,7 @@ class RedesignShotsWorldTest {
         enemies: List<EnemyProjection> = emptyList(),
         projectiles: List<ProjectileProjection> = emptyList(),
         pickups: List<Pair<PickupType, Pair<Float, Float>>> = emptyList(),
-        points: List<PointOfInterestProjection> = emptyList(),
+        points: List<SiteProjection> = emptyList(),
         totem: TotemProjection? = null,
         coreShape: CoreShape = CoreShape.ORB,
         weapon: WeaponId = WeaponId.ARC_COIL,
@@ -645,7 +1166,9 @@ class RedesignShotsWorldTest {
             weaponOrbitals = if (orbitals) (0 until 4).map { index -> WeaponOrbitalProjection(index, coreX + cos(index * 1.57f) * 70f, coreY + sin(index * 1.57f) * 70f, 8f) }.toImmutableList() else immutableListOf(),
             choices = immutableListOf(), choiceType = ChoiceType.ITEM, pendingRelicChoiceCount = 0,
             itemStacks = immutableListOf(), discoveredItemIds = immutableSetOf(), relicRanks = immutableListOf(),
-            pointsOfInterest = points.toImmutableList(),
+            sites = points.toImmutableList(),
+            // A running site's panel, as Gameplay publishes it with the site.
+            trial = points.firstOrNull { it.active }?.let { siteTrial(it) },
         )
     }
 

@@ -60,7 +60,8 @@ data class ApexDefinition(
  * - PRISM Monolith: facet regrowth s, full-facet impact multiplier, refraction damage
  * - SHARD Vivisect: puncture interval s, mark spread radius, free Dash gap s
  * - RING Corona: locked halo radius, band burn per second, burst interval s, burst damage
- * - DIAMOND Mirror Stance: returned shot damage, locked Edge
+ * - DIAMOND Mirror Stance: returned shot damage, locked Edge. Its bolt budget is the hits it parries: one, since with
+ *   more a braking Diamond took under half the damage a fight without the Apex deals in the same seconds.
  * - TESSERACT Hypercube: cage half-side, inside speed factor, pulse damage, pulse damage per node
  * - STAR Hypernova: Stellar Mass on cast, nova cooldown s, Mass per kill, Mass at the end
  * - SPIRAL Twin Echo: second ghost delay s, strike impact scale, absorb interval s, strike speed
@@ -92,8 +93,8 @@ fun defaultApexDefinition(shape: CoreShape): ApexDefinition = when (shape) {
     )
     CoreShape.DIAMOND -> apex(
         "Mirror Stance",
-        "For 6 s, while you brake, the next four hits are parried and returned at full Edge.",
-        6f, 4, 6, 65f, 5f,
+        "For 6 s, while you brake, the next hit is parried and returned at full Edge.",
+        6f, 1, 6, 65f, 5f,
     )
     CoreShape.TESSERACT -> apex(
         "Hypercube",

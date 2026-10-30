@@ -52,12 +52,13 @@ class DraftDeckTest {
 
     @Test
     fun theRankZeroDeckDealsAboutSixtyPercentOfEveryTier() {
-        val deck = buildTestState(seed = 7).itemDeck
+        // The deck's own deal and floors; the Keynote's floors (KeynoteTest) add its tag's and element's passives on top.
+        val deck = buildTestState(seed = 7, content = canonicalGameplayContent.withoutKeynote()).itemDeck
         val universe = canonicalGameplayContent.items.filter { it.minimumRebirth == 0 }
-        assertEquals(221, universe.size)
-        // Base deals 32 / 41 / 31 / 25 of 58 / 74 / 51 / 38 (the 18 actives among them, no rank-0 Legendary); floors,
-        // which promote passive items only, may add a few.
-        assertTrue(deck.dealtIds().size in 129..142, "Rank-0 deck size ${deck.dealtIds().size}")
+        assertEquals(235, universe.size)
+        // Base deals 32 / 44 / 34 / 26 of 59 / 80 / 56 / 40 (the 18 actives and 14 of the 15 terrain items among them, Glass
+        // Harvest waiting for Reborn 1, no rank-0 Legendary); floors, which promote passive items only, may add a few.
+        assertTrue(deck.dealtIds().size in 136..149, "Rank-0 deck size ${deck.dealtIds().size}")
     }
 
     @Test

@@ -3,16 +3,24 @@
 
 package kinetickk.ball.content.impl
 
+import kinetickk.ball.content.api.BountyPolicy
 import kinetickk.ball.content.api.BuffStat
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.ContentVersion
 import kinetickk.ball.content.api.DamageBasis
+import kinetickk.ball.content.api.DirectorPersonalityId
+import kinetickk.ball.content.api.EasyModeTuning
 import kinetickk.ball.content.api.EffectAction
 import kinetickk.ball.content.api.EffectClause
 import kinetickk.ball.content.api.EffectCondition
 import kinetickk.ball.content.api.EffectTrigger
 import kinetickk.ball.content.api.ElementPick
+import kinetickk.ball.content.api.EnemyHabitat
+import kinetickk.ball.content.api.EnemyType
+import kinetickk.ball.content.api.EnemyWeightBias
+import kinetickk.ball.content.api.GarrisonEntry
+import kinetickk.ball.content.api.GarrisonSelector
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
@@ -26,17 +34,23 @@ import kinetickk.ball.content.api.RelicKey
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.RelicPairingKind
 import kinetickk.ball.content.api.RunTempoProfile
+import kinetickk.ball.content.api.RunBoonKind
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.StructurePolicy
+import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WorldDiscovery
+import kinetickk.ball.content.api.validateStructurePolicy
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ContentBootstrapValidationTest {
@@ -45,7 +59,7 @@ class ContentBootstrapValidationTest {
         val data = defaultContentBootstrapData()
         val gameplay = createContentCatalogForTesting(data).gameplayContent()
 
-        assertEquals(287, gameplay.items.size)
+        assertEquals(302, gameplay.items.size)
         assertEquals(ContentBounds.MAX_WEAPONS, gameplay.weapons.size)
         assertEquals(MatrixNodeId.entries.size, gameplay.matrixNodes.size)
         assertEquals(RelicId.entries.size, gameplay.relics.size)
@@ -528,6 +542,126 @@ class ContentBootstrapValidationTest {
         tags = immutableListOf(), elements = immutableListOf(element),
         rules = immutableListOf(ItemRule.BreakThreshold(element, reduction)), maxStacks = 2, unlockLevel = 1,
     )
+
+    @Test
+    fun worldContractsArePublishedAndCrossCheckedAgainstTheRoster() {
+        val data = defaultContentBootstrapData()
+        val catalog = createContentCatalogForTesting(data)
+        val gameplay = catalog.gameplayContent()
+        assertEquals(data.sites, gameplay.sites)
+        assertEquals(data.sites, catalog.uiCatalog().sites)
+        assertEquals(data.variety, gameplay.variety)
+        assertEquals(data.dimensions, gameplay.dimensions)
+        assertEquals(data.boons, gameplay.boons)
+        assertEquals(StructurePolicy(), gameplay.structures)
+        assertEquals(EasyModeTuning(), gameplay.easyMode)
+        assertEquals(WorldDiscovery.entries, catalog.uiCatalog().worldDiscoveries.map { it.id })
+        assertEquals(data.boons.first(), gameplay.boon(32))
+        assertEquals(null, gameplay.boon(42))
+
+        // The bounty duel needs a mini-boss its encounter can hold: any but the Herald.
+        createContentCatalogForTesting(data.copy(sites = data.sites.copy(bounty = BountyPolicy(bossType = EnemyType.BROOD_QUEEN))))
+        assertRejected(data.copy(sites = data.sites.copy(bounty = BountyPolicy(bossType = EnemyType.HERALD))), "never an encounter boss")
+        assertRejected(data.copy(sites = data.sites.copy(bounty = BountyPolicy(bossType = EnemyType.WARDEN))), "must be a mini-boss")
+        assertRejected(data.copy(sites = data.sites.copy(bounty = BountyPolicy(bossType = EnemyType.CARTOGRAPHER))), "must be a mini-boss")
+        // A personality biases ordinary kinds only.
+        val director = data.variety.director
+        val herald = director.personalities.map {
+            if (it.id == DirectorPersonalityId.SIEGE) it.copy(typeBias = immutableListOf(EnemyWeightBias(EnemyType.HERALD, 1.5f))) else it
+        }.toImmutableList()
+        assertRejected(data.copy(variety = data.variety.copy(director = director.copy(personalities = herald))), "only ordinary kinds")
+        // Boon ids are unique and the catalog holds at most the bound.
+        assertRejected(data.copy(boons = data.boons + data.boons.first()), "Boon ids must be unique")
+        val blessings = (32..47).map { data.boons.first().copy(id = it) } +
+            (48..63).map { data.boons.first { boon -> boon.kind == RunBoonKind.PACT }.copy(id = it) }
+        createContentCatalogForTesting(data.copy(boons = blessings))
+        assertEquals(ContentBounds.MAX_BOON_DEFINITIONS, blessings.size)
+        assertRejected(data.copy(boons = blessings + blessings.first()), "exceeds bootstrap bound")
+    }
+
+    @Test
+    fun structurePolicyIsCrossCheckedAgainstTheRosterAndTheObstacleWindow() {
+        val gameplay = createContentCatalogForTesting(defaultContentBootstrapData()).gameplayContent()
+        val roster = gameplay.enemies
+        val policy = gameplay.structures
+        val obstacles = gameplay.obstacles
+        validateStructurePolicy(policy, roster, obstacles)
+
+        // A fixed garrison kind is ordinary (the Foundry's Wardens live only in open space) or a mini-boss, never a boss.
+        assertFalse(roster[EnemyType.WARDEN.ordinal].livesIn(EnemyHabitat.STRUCTURE))
+        validateStructurePolicy(policy.withFurnaceGuard(EnemyType.WARDEN), roster, obstacles)
+        validateStructurePolicy(policy.withFurnaceGuard(EnemyType.THRONE), roster, obstacles)
+        listOf(EnemyType.CARTOGRAPHER, EnemyType.ANTECEDENT).forEach { type ->
+            assertStructureRejected("ordinary or a mini-boss") { validateStructurePolicy(policy.withFurnaceGuard(type), roster, obstacles) }
+        }
+        assertStructureRejected("does not define") {
+            validateStructurePolicy(policy, roster.filter { it.type != EnemyType.SENTRY }, obstacles)
+        }
+
+        // A themed random pick is always a defined ordinary enemy; bosses belong in authored fixed entries.
+        val bossTheme = policy.copy(templates = policy.templates.map { template ->
+            if (template.id == StructureTemplateId.DERELICT_STATION) {
+                template.copy(garrisonTypes = immutableListOf(EnemyType.WARDEN_PRIME))
+            } else template
+        }.toImmutableList())
+        assertStructureRejected("defined ordinary enemies") { validateStructurePolicy(bossTheme, roster, obstacles) }
+        assertStructureRejected("defined ordinary enemies") {
+            validateStructurePolicy(policy, roster.filter { it.type != EnemyType.SHOOTER }, obstacles)
+        }
+
+        // An ordinary STRUCTURE kind opens at tier 0 from the first second (today Drifter, Sentry and Crawler).
+        val openers = roster.filter { it.livesIn(EnemyHabitat.STRUCTURE) && it.timeGateSeconds == 0f && it.minimumRebirth == 0 }
+        assertEquals(listOf(EnemyType.DRIFTER, EnemyType.SENTRY, EnemyType.CRAWLER), openers.map { it.type })
+        val late = roster.map { if (it in openers) it.copy(timeGateSeconds = 1f) else it }
+        assertStructureRejected("open at tier 0") { validateStructurePolicy(policy, late, obstacles) }
+        val ranked = roster.map { if (it in openers) it.copy(minimumRebirth = 1) else it }
+        assertStructureRejected("open at tier 0") { validateStructurePolicy(policy, ranked, obstacles) }
+        validateStructurePolicy(policy, roster.map { if (it in openers.drop(1)) it.copy(timeGateSeconds = 1f) else it }, obstacles)
+
+        // The obstacle window spans at most three cells per axis (nine structures) and holds the dungeon's structure.
+        validateStructurePolicy(policy, roster, obstacles.copy(chunkSize = 1_920f))
+        assertStructureRejected("three structure cells") { validateStructurePolicy(policy, roster, obstacles.copy(chunkSize = 1_920.5f)) }
+        validateStructurePolicy(policy, roster, obstacles.copy(chunkSize = 1_200f))
+        assertStructureRejected("leave radius") { validateStructurePolicy(policy, roster, obstacles.copy(chunkSize = 1_199.5f)) }
+    }
+
+    @Test
+    fun aStructureRoomGarrisonsAtMostOneMiniBoss() {
+        val gameplay = createContentCatalogForTesting(defaultContentBootstrapData()).gameplayContent()
+        val roster = gameplay.enemies
+        val policy = gameplay.structures
+        val obstacles = gameplay.obstacles
+        fun fixed(type: EnemyType, count: Int) = GarrisonEntry(GarrisonSelector.FIXED, count, type)
+
+        // A room's garrison is one encounter, and an encounter holds at most one boss.
+        validateStructurePolicy(policy.withFurnaceGarrison(fixed(EnemyType.THRONE, 1), fixed(EnemyType.CRAWLER, 3)), roster, obstacles)
+        assertStructureRejected("at most one mini-boss") {
+            validateStructurePolicy(policy.withFurnaceGarrison(fixed(EnemyType.THRONE, 2)), roster, obstacles)
+        }
+        assertStructureRejected("at most one mini-boss") {
+            validateStructurePolicy(policy.withFurnaceGarrison(fixed(EnemyType.THRONE, 1), fixed(EnemyType.BROOD_QUEEN, 1)), roster, obstacles)
+        }
+    }
+
+    /** The Foundry's furnace guarded by one [type] instead of its Wardens and habitat picks. */
+    private fun StructurePolicy.withFurnaceGuard(type: EnemyType): StructurePolicy =
+        withFurnaceGarrison(GarrisonEntry(GarrisonSelector.FIXED, 1, type))
+
+    /** The Foundry's furnace garrisoned by [entries] instead of its Wardens and habitat picks. */
+    private fun StructurePolicy.withFurnaceGarrison(vararg entries: GarrisonEntry): StructurePolicy = copy(
+        templates = templates.map { template ->
+            if (template.id != StructureTemplateId.FOUNDRY) return@map template
+            val rooms = template.rooms.mapIndexed { index, room ->
+                if (index == template.finalRoom) room.copy(garrison = entries.toList().toImmutableList()) else room
+            }
+            template.copy(rooms = rooms.toImmutableList())
+        }.toImmutableList(),
+    )
+
+    private fun assertStructureRejected(expectedMessage: String, check: () -> Unit) {
+        val failure = assertFailsWith<IllegalArgumentException> { check() }
+        assertTrue(failure.message.orEmpty().contains(expectedMessage), "Expected '$expectedMessage' in '${failure.message}'")
+    }
 
     private fun assertRejected(data: ContentBootstrapData, expectedMessage: String) {
         val failure = assertFailsWith<IllegalArgumentException> {

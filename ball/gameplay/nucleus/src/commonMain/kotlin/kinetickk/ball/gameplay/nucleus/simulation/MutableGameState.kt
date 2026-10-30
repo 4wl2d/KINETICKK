@@ -3,13 +3,19 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.DirectorPersonalityId
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
+import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.OmenId
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
@@ -50,6 +56,8 @@ internal class MutableGameState(
     bootstrapProgress: GameplayProfileSnapshot? = null,
     reductionSource: MutableGameState? = null,
     shareStableReductionStorage: Boolean = false,
+    runMode: RunMode = RunMode.STANDARD,
+    offerRunOmen: Boolean = false,
 ) {
     companion object {
         const val CURSOR_KILL_RADIUS = 22f
@@ -70,6 +78,8 @@ internal class MutableGameState(
         /** The draft deck's own stream (seed xor salt): dealing never draws from [rewardRandom]. */
         const val DECK_SEED_SALT = 0x0DEC_C0DE
         const val SPAWN_SEED_SALT = 0x5A_A4_D1_E7
+        /** The site stream's salt (seed xor salt): window kinds never shift offers, spawns or crits. */
+        const val SITE_SEED_SALT = 0x517E_5EED
         const val MAX_SEVERED_RELICS = 4
         const val MAX_GAMEPLAY_SOUND_CUES = 32
         const val MAX_WEAPON_NODES = 12
@@ -176,6 +186,12 @@ internal class MutableGameState(
     internal var pendingAcquiredItemIds: List<Int> = reductionSource?.pendingAcquiredItemIds ?: emptyList()
     /** The draft deck stream's seed ([DECK_SEED_SALT]); the deck is dealt from it when the run starts. */
     internal val deckSeed: Int = reductionSource?.deckSeed ?: (seed xor DECK_SEED_SALT)
+    // ---- 0.6.0 EASY ----
+    /** Baby mode (RunMode.EASY), fixed when the run is created; a run never changes it. */
+    internal val easyMode: Boolean = reductionSource?.easyMode ?: (runMode == RunMode.EASY)
+    // ---- 0.6.0 VARIETY ----
+    /** The production start path offers a run omen beside the Heirloom; fixed when the run is created. */
+    internal val offersRunOmen: Boolean = reductionSource?.offersRunOmen ?: offerRunOmen
     /** The run's draft deck (immutable, replaced when a refill deals); every item until the run deals one. */
     internal var itemDeck: ItemDeck = reductionSource?.itemDeck ?: ItemDeck.EVERYTHING
     /** Down-weights from the Profile's recent acquisitions, fixed for the run. */
@@ -368,11 +384,64 @@ internal class MutableGameState(
     internal var pendingDataPickups: Int = reductionSource?.pendingDataPickups ?: 0
     /** The run banked, so the next progress update also publishes the deferred counters. */
     internal var achievementFlushDue: Boolean = reductionSource?.achievementFlushDue ?: false
-    internal var pointsOfInterest: List<PointOfInterestState> = reductionSource?.pointsOfInterest ?: emptyList()
-    internal var nextPointOfferIndex: Int = reductionSource?.nextPointOfferIndex ?: 0
+    // ---- 0.6.0 SITES ----
+    /** Window sites: the two offers of a window, or the one active trial. Immutable, replaced on change. */
+    internal var sites: List<SiteState> = reductionSource?.sites ?: emptyList()
+    internal var nextSiteWindowIndex: Int = reductionSource?.nextSiteWindowIndex ?: 0
     internal var pendingDirectedRewards: List<kinetickk.ball.content.api.DirectedReward> = reductionSource?.pendingDirectedRewards ?: emptyList()
     internal var directedReward: kinetickk.ball.content.api.DirectedReward? = reductionSource?.directedReward
     internal var selectedRewardFocus: kinetickk.ball.content.api.RewardFocus? = reductionSource?.selectedRewardFocus
+    /** Window kinds draw from their own stream, so sites never shift offers, spawns or crits. */
+    internal var siteRandom: CloneableXorWowRandom = reductionSource?.siteRandom?.let { source ->
+        if (shareStableReductionStorage) source else source.copy()
+    } ?: CloneableXorWowRandom(seed xor SITE_SEED_SALT)
+    internal var ambientSites: AmbientSiteWindow = reductionSource?.ambientSites ?: AmbientSiteWindow.EMPTY
+    internal var secretSigil: SiteState? = reductionSource?.secretSigil
+    /** Ambient sites opened this run, oldest first, at most [ContentBounds.MAX_OPENED_SITES]. */
+    internal var openedSiteIds: List<Long> = reductionSource?.openedSiteIds ?: emptyList()
+    /** [RunSecretFlag] bits of this run. */
+    internal var runSecretFlags: Int = reductionSource?.runSecretFlags ?: 0
+    /** World discoveries known at start plus this run's; the pending mask holds the ones not yet published. */
+    internal var worldDiscoveryMask: Int = reductionSource?.worldDiscoveryMask
+        ?: bootstrapProgress?.collection?.discoveredWorldEntries?.fold(0) { mask, id -> mask or id.bit } ?: 0
+    internal var pendingWorldDiscoveryMask: Int = reductionSource?.pendingWorldDiscoveryMask ?: 0
+    /** Rarity-floor item offers waiting, at most the site policy's bound. */
+    internal var pendingFloorOffers: List<ItemRarity> = reductionSource?.pendingFloorOffers ?: emptyList()
+    /** The Golden Drifter alive (−1: none) and the run second it escapes. */
+    internal var goldenDrifterId: Int = reductionSource?.goldenDrifterId ?: -1
+    internal var goldenDrifterUntil: Float = reductionSource?.goldenDrifterUntil ?: 0f
+    /** Spin Cycle: completed one-second buckets of signed rotation, the running bucket, its clock and last angle. */
+    internal var spinBuckets: List<Float> = reductionSource?.spinBuckets ?: emptyList()
+    internal var spinCurrent: Float = reductionSource?.spinCurrent ?: 0f
+    internal var spinClock: Float = reductionSource?.spinClock ?: 0f
+    internal var spinLastAngle: Float = reductionSource?.spinLastAngle ?: 0f
+    internal var spinPrimed: Boolean = reductionSource?.spinPrimed ?: false
+    // ---- 0.6.0 VARIETY ----
+    internal var omenPending: Boolean = reductionSource?.omenPending ?: false
+    internal var runOmen: OmenId? = reductionSource?.runOmen
+    /** Rebirth mutators a run modifier added (bit per ordinal), on top of the tier's own. */
+    internal var runMutatorMask: Int = reductionSource?.runMutatorMask ?: 0
+    internal var directorPersonality: DirectorPersonalityId? = reductionSource?.directorPersonality
+    internal var featuredAspect: Int = reductionSource?.featuredAspect ?: -1
+    internal var surgeIndex: Int = reductionSource?.surgeIndex ?: 0
+    internal var surgeThemeType: Int = reductionSource?.surgeThemeType ?: -1
+    internal var varietyAnnouncement: Int = reductionSource?.varietyAnnouncement ?: 0
+    internal var keynoteTag: BuildTag? = reductionSource?.keynoteTag
+    internal var keynoteElement: StatusElement? = reductionSource?.keynoteElement
+    /** At most [ContentBounds.MAX_WORLD_EVENTS_PER_RUN] plans. */
+    internal var worldEventPlans: ImmutableList<WorldEventPlan> = reductionSource?.worldEventPlans ?: immutableListOf()
+    internal var nextWorldEvent: Int = reductionSource?.nextWorldEvent ?: 0
+    internal var worldEvent: WorldEventProjection? = reductionSource?.worldEvent
+    internal var worldEventPulse: Int = reductionSource?.worldEventPulse ?: 0
+    internal var worldEventNextPulseAt: Float = reductionSource?.worldEventNextPulseAt ?: 0f
+    internal var eventSignals: ImmutableList<EventSignalProjection> = reductionSource?.eventSignals ?: immutableListOf()
+    internal var nextSignalSlot: Int = reductionSource?.nextSignalSlot ?: 0
+    internal var signalsSpawned: Int = reductionSource?.signalsSpawned ?: 0
+    internal var signalsEngaged: Int = reductionSource?.signalsEngaged ?: 0
+    /** At most [ContentBounds.MAX_PENDING_SIGNAL_PROMPTS] prompts. */
+    internal var pendingSignalPrompts: ImmutableList<SignalPrompt> = reductionSource?.pendingSignalPrompts ?: immutableListOf()
+    /** The open item offer's rarity floor (null: none); rerolls keep it, finishing the choice clears it. */
+    internal var offerRarityFloor: ItemRarity? = reductionSource?.offerRarityFloor
 
     internal var nextEntityId: Int = reductionSource?.nextEntityId ?: 1
     internal var spawnClock: Float = reductionSource?.spawnClock ?: 0f
@@ -391,8 +460,13 @@ internal class MutableGameState(
     internal var pendingEventSize: Int = reductionSource?.pendingEventSize ?: 0
     internal var pendingEventType: Int = reductionSource?.pendingEventType ?: -1
     /** Enemy types (bit per ordinal) used by the last and the previous event; they spawn at half weight. */
-    internal var recentEventTypes: Int = reductionSource?.recentEventTypes ?: 0
-    internal var previousEventTypes: Int = reductionSource?.previousEventTypes ?: 0
+    internal var recentEventTypes: Long = reductionSource?.recentEventTypes ?: 0L
+    internal var previousEventTypes: Long = reductionSource?.previousEventTypes ?: 0L
+    // ---- 0.6.0 ENEMIES ----
+    /** Secret boss kinds spawned this run (bit per EnemyType ordinal); each arrives at most once. */
+    internal var secretBossMask: Long = reductionSource?.secretBossMask ?: 0L
+    /** Live encounter groups, at most MAX_ACTIVE_ENCOUNTERS; value-only, replaced on change. */
+    internal var encounters: ImmutableList<EncounterState> = reductionSource?.encounters ?: immutableListOf()
     internal var ambushReadyAt: Float = reductionSource?.ambushReadyAt ?: 0f
     internal var encircleReadyAt: Float = reductionSource?.encircleReadyAt ?: 0f
     internal var wallReadyAt: Float = reductionSource?.wallReadyAt ?: 0f
@@ -407,6 +481,9 @@ internal class MutableGameState(
     internal var lastSpawnEventSpawned: Int = reductionSource?.lastSpawnEventSpawned ?: 0
     /** Seed of this run; obstacle chunks hash it with their absolute chunk. */
     internal val runSeed: Int = reductionSource?.runSeed ?: seed
+    /** Content and seed are fixed for this state and all reduction siblings; rank the template pool only once. */
+    internal val structureTemplatePool: Int = reductionSource?.structureTemplatePool
+        ?: structureTemplateMask(content.structures, runSeed)
     /** Accumulated rebase shift: an absolute world position is the run-local position plus this origin. */
     internal var worldOriginX: Double = reductionSource?.worldOriginX ?: 0.0
     internal var worldOriginY: Double = reductionSource?.worldOriginY ?: 0.0
@@ -414,15 +491,52 @@ internal class MutableGameState(
     internal var obstacleField: ObstacleField = reductionSource?.obstacleField ?: ObstacleField.EMPTY
     /** Destroyed unstable asteroids, oldest first, at most [ContentBounds.MAX_DESTROYED_OBSTACLES]. */
     internal var destroyedObstacleIds: List<Long> = reductionSource?.destroyedObstacleIds ?: emptyList()
+    // ---- 0.6.0 DIMENSIONS ----
+    /** The run's world layer; only a layer switch writes it. */
+    internal var worldLayer: WorldLayer = reductionSource?.worldLayer ?: WorldLayer.BASE
+    /** The active keep-out of the current layer's generation (null: the origin safe radius applies). */
+    internal var worldKeepOut: WorldKeepOut? = reductionSource?.worldKeepOut
+    /** Run boons owned, in grant order, at most [ContentBounds.MAX_RUN_BOONS]. */
+    internal var runBoons: ImmutableList<Int> = reductionSource?.runBoons ?: immutableListOf()
+    /** Rift offers, visited and completed layers, the open glitch rift, the visit and its pending rewards; a value. */
+    internal var dimensionRun: DimensionRunState = reductionSource?.dimensionRun ?: DimensionRunState.EMPTY
+    /** Seconds the Core has flown below the layer's pace without a break (Nadir heat). */
+    internal var dimensionSlowSeconds: Float = reductionSource?.dimensionSlowSeconds ?: 0f
+    /** Seconds toward the next scorch tick once the heat grace ran out. */
+    internal var dimensionScorchClock: Float = reductionSource?.dimensionScorchClock ?: 0f
+    /** Visit time on the layer's own clock (the Archive's runs with the Core's speed). */
+    internal var dimensionLocalClock: Float = reductionSource?.dimensionLocalClock ?: 0f
+    /** The layer whose reward the open choice is (null: the open choice is no dimension reward). */
+    internal var dimensionRewardLayer: WorldLayer? = reductionSource?.dimensionRewardLayer
     /** Run time before which an asteroid collision deals no further damage and fires no ricochet. */
     internal var obstacleHitReadyAt: Float = reductionSource?.obstacleHitReadyAt ?: 0f
+    // ---- 0.6.0 TERRAIN-P ----
+    /** The solid surface the last hurting collision struck ([NO_SURFACE_ID]: none). */
+    internal var obstacleHitSurfaceId: Long = reductionSource?.obstacleHitSurfaceId ?: NO_SURFACE_ID
     /** Run time before which Near Miss grants no further Overdrive. */
     internal var nearMissReadyAt: Float = reductionSource?.nearMissReadyAt ?: 0f
+    // ---- 0.6.0 TERRAIN-K ----
+    /** Gap from the Core's surface to the nearest solid obstacle surface within reach; +∞ when none (NearObstacle). */
+    internal var coreObstacleGap: Float = reductionSource?.coreObstacleGap ?: Float.POSITIVE_INFINITY
+    /** Run time before which GRAZE cannot fire again. */
+    internal var grazeReadyAt: Float = reductionSource?.grazeReadyAt ?: 0f
+    /** The gravity knot whose influence holds the Core ([NO_OBSTACLE_ID] outside) and the heading it entered with. */
+    internal var slingWellId: Long = reductionSource?.slingWellId ?: NO_OBSTACLE_ID
+    internal var slingEntryHeading: Float = reductionSource?.slingEntryHeading ?: 0f
     /**
      * End of the invulnerability a revive (Second Wind, Ouroboros) granted: the only window a lethal
      * collision honours; other invulnerability (Glass Comet, Bulwark) does not stop it.
      */
     internal var reviveInvulnerableUntil: Float = reductionSource?.reviveInvulnerableUntil ?: 0f
+    // ---- 0.6.0 STRUCTURES ----
+    /** Structure walls, doors and signals of the window around the Core; an immutable value replaced on change. */
+    internal var structureField: StructureField = reductionSource?.structureField ?: StructureField.EMPTY
+    /** The structure the Core is inside (or was, within the leave radius), or null. Value-only. */
+    internal var dungeon: DungeonState? = reductionSource?.dungeon
+    /** Spent or collapsed structures, oldest first, at most [ContentBounds.MAX_SPENT_STRUCTURES]; id or flag. */
+    internal var spentStructureIds: List<Long> = reductionSource?.spentStructureIds ?: emptyList()
+    /** Last structure whose entry banner was shown (re-entering does not repeat it). */
+    internal var lastAnnouncedStructureId: Long = reductionSource?.lastAnnouncedStructureId ?: 0L
     internal var dashBufferTime: Float = reductionSource?.dashBufferTime ?: 0f
     internal var bossSpawned: Boolean = reductionSource?.bossSpawned ?: false
     internal var keyboardBrakeActive: Boolean = reductionSource?.keyboardBrakeActive ?: false
@@ -501,6 +615,9 @@ internal class MutableGameState(
     internal var turnHoldTime: Float = reductionSource?.turnHoldTime ?: 0f
     internal var turnRecoveryCooldown: Float = reductionSource?.turnRecoveryCooldown ?: 0f
     internal var turnDirection: Int = reductionSource?.turnDirection ?: 0
+    // ---- 0.6.0 TERRAIN-P ----
+    /** How straight the Core's heading has stayed (0..1); straight-line fatigue reads it. */
+    internal var coreStraightness: Float = reductionSource?.coreStraightness ?: 0f
     internal var timeSinceDamage: Float = reductionSource?.timeSinceDamage ?: 0f
     internal var hurtCooldown: Float = reductionSource?.hurtCooldown ?: 0f
     internal var lastAimDirectionX: Float = reductionSource?.lastAimDirectionX ?: 1f
@@ -653,6 +770,10 @@ internal class MutableGameState(
         internal set
     var dragCoefficient: Float = reductionSource?.dragCoefficient ?: 0.29f
         internal set
+    // ---- 0.6.0 TERRAIN-P ----
+    /** The flight law's grip and sling build stats (raw; clamped where the law reads them). */
+    internal var gripStrength: Float = reductionSource?.gripStrength ?: 1f
+    internal var slingStrength: Float = reductionSource?.slingStrength ?: 1f
     var polarityStability: Float = reductionSource?.polarityStability ?: 1f
         internal set
 
@@ -784,7 +905,9 @@ internal class MutableGameState(
             ChoiceType.WEAPON -> weaponOfferCandidates().size > WEAPON_OFFER_CHOICES
             ChoiceType.RELIC -> !heirloomOfferActive
             ChoiceType.TOTEM, ChoiceType.RELIC_BIND, ChoiceType.ACTIVE_SLOT -> false
-        }
+            // Omens and dimension boons are never rerolled; a signal prompt deals fixed options.
+            ChoiceType.OMEN, ChoiceType.SIGNAL, ChoiceType.BOON -> false
+        } && !dimensionRewardOpen()
     val pendingRelicChoiceCount: Int get() = pendingRelicChoices
 
     fun relicRank(id: RelicId): Int = relicRanks[id.ordinal]

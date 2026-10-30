@@ -6,6 +6,7 @@ package kinetickk.flow.session.nucleus
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PlayerPreferences
@@ -36,6 +37,7 @@ sealed interface PendingWorkflow {
     data class StartingRun(
         val reason: RunStartReason,
         val runId: RunId,
+        val mode: RunMode,
     ) : PendingWorkflow
 
     data class PausingForOverlay(
@@ -64,6 +66,7 @@ sealed interface PendingWorkflow {
 
     data class StartingRebirthRun(
         val runId: RunId,
+        val mode: RunMode,
     ) : PendingWorkflow
 
     data class ExitingRun(val runId: RunId) : PendingWorkflow
@@ -95,6 +98,8 @@ data class AppSessionState(
     val lifecycle: SessionLifecycle,
     val lastFailure: SessionWorkflowFailureCode?,
     val nextRunId: RunId?,
+    /** Baby mode or not for every next start; chosen on the bare Home, held in memory only. */
+    val runMode: RunMode,
 ) {
     init {
         require(instanceId == LOCAL_APP_SESSION_INSTANCE_ID) {
@@ -130,6 +135,7 @@ data class AppSessionState(
                 lifecycle = persistenceStatus.toSessionLifecycle(),
                 lastFailure = null,
                 nextRunId = RunId(0L),
+                runMode = RunMode.STANDARD,
             )
         }
     }

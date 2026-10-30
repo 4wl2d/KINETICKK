@@ -22,7 +22,7 @@ import kinetickk.foundation.design.*
 import kotlin.math.abs
 import kotlin.math.sqrt
 
-// World-anchored HUD (halos, tether, dash afterimages, overheat stamp) and screen-space state
+// World-anchored HUD (halos, tether, overheat stamp) and screen-space state
 // effects (critical vignette, polarity edge glow, overdrive border). World-anchored
 // geometry uses world units like the Core it hugs; UI text and screen effects use dp.
 
@@ -55,7 +55,6 @@ internal fun DrawScope.drawHudWorldAnchors(
         val worldCursor = Offset(cursor.x / scale, cursor.y / scale)
         drawTether(engine, roles, worldCore, worldCursor, renderTime, critical, draining)
         if (engine.overdriveTime > 0f) drawOverdriveCore(roles, worldCore, renderTime)
-        if (engine.dashPhaseTime > 0f) drawDashAfterimages(engine, roles, worldCore)
         drawCoreHalo(engine, roles, worldCore, haloRadius)
         if (critical) drawCriticalRing(roles, worldCore, renderTime)
         drawCursorHaloArc(engine, roles, worldCursor, renderTime, draining)
@@ -88,13 +87,15 @@ private fun DrawScope.drawTether(
     val close = engine.tetherDistance < CLOSE_CONTACT_DISTANCE
     val weight = (distance / 120f * engine.tetherAuthority.coerceIn(0.35f, 1f)).coerceIn(1f, 3f)
     val pulse = 0.55f + 0.45f * kkPulse(renderTime, 1.2f, KkEase.Out)
+    // Baby mode's cursor is harmless: its tether never turns threat.
+    val danger = if (engine.easyMode) roles.soft else roles.threat
     when {
-        close -> drawLine(roles.threat.copy(alpha = 0.9f), start, end, weight + 1f, StrokeCap.Butt)
+        close -> drawLine(danger.copy(alpha = 0.9f), start, end, weight + 1f, StrokeCap.Butt)
         else -> {
             val color = when {
-                critical -> roles.threat.copy(alpha = 0.9f * pulse)
+                critical -> danger.copy(alpha = 0.9f * pulse)
                 draining -> roles.pol.copy(alpha = 0.55f * pulse)
-                else -> roles.threat.copy(alpha = 0.45f * pulse)
+                else -> danger.copy(alpha = 0.45f * pulse)
             }
             drawLine(color, start, end, weight, StrokeCap.Butt, HudDrawCache.lineDash(6f, 5f))
         }
@@ -146,7 +147,7 @@ private fun DrawScope.drawCursorHaloArc(
     val stroke = kkStroke(3f)
     drawArc(roles.pol.copy(alpha = 0.18f), 120f, CURSOR_ARC_DEGREES, false, topLeft, arcSize, style = stroke)
     if (stability > 0f) {
-        drawArc(if (low) roles.threat else roles.pol, 120f, CURSOR_ARC_DEGREES * stability, false, topLeft, arcSize,
+        drawArc(if (low && !engine.easyMode) roles.threat else roles.pol, 120f, CURSOR_ARC_DEGREES * stability, false, topLeft, arcSize,
             alpha = alpha, style = stroke)
     }
 }
@@ -248,21 +249,6 @@ internal fun placePolarityLabel(
     return 0
 }
 
-/** Three fading rings behind the Core along its travel while a dash is in progress. */
-private fun DrawScope.drawDashAfterimages(engine: GameplayRenderModel, roles: KkRolePalette, core: Offset) {
-    val speed = engine.speed
-    if (speed < 1f) return
-    val bx = -engine.velocityX / speed
-    val by = -engine.velocityY / speed
-    val phase = (engine.dashPhaseTime / 0.24f).coerceIn(0f, 1f)
-    val stroke = kkStroke(2f)
-    for (index in 1..3) {
-        val f = index * 0.2f
-        val distance = 60f * (1f + f * 2f)
-        drawCircle(roles.you.copy(alpha = (0.7f - f) * phase), 18f, Offset(core.x + bx * distance, core.y + by * distance), style = stroke)
-    }
-}
-
 /** Overdrive at the Core: a soft `you` glow and a ring pulsing out every 1.6 s. */
 private fun DrawScope.drawOverdriveCore(roles: KkRolePalette, core: Offset, renderTime: Float) {
     val glowRadius = 90f
@@ -302,7 +288,10 @@ private fun DrawScope.drawOverheatStamp(measurer: TextMeasurer, core: Offset, ha
     }
 }
 
-/** Screen-space state effects: critical vignette, polarity edge glow, overdrive border. */
+/**
+ * Screen-space state effects: critical vignette, polarity edge glow, overdrive border, then the world event's edge,
+ * the Nadir scorch edge and the dungeon vignette.
+ */
 internal fun DrawScope.drawHudScreenStates(
     engine: GameplayRenderModel,
     roles: KkRolePalette,
@@ -313,6 +302,9 @@ internal fun DrawScope.drawHudScreenStates(
     if (critical) drawCriticalVignette(roles, heartbeat(renderTime))
     if (memory != null && memory.polarityDraining(renderTime)) drawPolarityEdge(engine, roles, renderTime)
     if (engine.overdriveTime > 0f) drawOverdriveBorder(roles, renderTime)
+    drawWorldEventEdge(engine, roles, renderTime)
+    drawScorchEdge(engine, roles, renderTime)
+    drawDungeonVignette(engine)
 }
 
 private fun DrawScope.drawCriticalVignette(roles: KkRolePalette, alpha: Float) {

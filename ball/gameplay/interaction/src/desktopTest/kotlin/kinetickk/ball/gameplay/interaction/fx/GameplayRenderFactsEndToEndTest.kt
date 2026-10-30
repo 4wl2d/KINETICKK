@@ -210,13 +210,15 @@ internal object FactRuns {
 
 /**
  * The shipped catalog with a short level curve and active items offered from the first offer (unlocked at level 1, the
- * whole catalog dealt, a high active weight), so a minute of play fills three slots and unlocks the Apex.
+ * whole catalog dealt, a high active weight), so a minute of play fills three slots and unlocks the Apex. The bot's
+ * four-minute flights chase enemies far from the origin and know nothing of walls, so its world has no structures.
  */
 internal fun shortCurveContent(): GameplayContentSnapshot {
     val shipped = createContentCatalog().gameplayContent()
     val maximum = SHORT_MAXIMUM_LEVEL
     val policy = shipped.build.policy
     return shipped.copy(
+        structures = shipped.structures.copy(enabled = false),
         items = shipped.items.map { if (it.isActive) it.copy(unlockLevel = 1) else it }.toImmutableList(),
         build = shipped.build.copy(
             policy = policy.copy(
@@ -234,6 +236,8 @@ internal fun shortCurveContent(): GameplayContentSnapshot {
             // The Architect (boss-class: the Apex strikes it) arrives while the Apex is in play.
             bossAtSeconds = ARCHITECT_AT_SECONDS,
         ),
+        // Seeded frames sample skill and reaction facts: realspace keeps the asteroid field without the obstacle kind mix.
+        obstacles = shipped.obstacles.copy(kinds = shipped.obstacles.kinds.copy(space = kinetickk.ball.content.api.ObstacleMix())),
     )
 }
 
@@ -351,7 +355,14 @@ internal class FactRun(val seed: Int, private val seconds: Float = 240f) {
             when (output) {
                 is GameplayOutput.EmitVisualFx -> {
                     record(output.cues)
-                    reducer.apply(output.cues)
+                    // Cue by cue, as apply walks a batch: a later flash of the same kind inside the merge distance
+                    // joins an earlier one and its flags win, so each reaction cue's flags are read as it lands.
+                    for (cue in output.cues) {
+                        reducer.apply(listOf(cue))
+                        if (cue is VisualFxCue.ReactionTriggered) {
+                            for (burst in reducer.snapshot().elementBursts) projectedReactionFlags = projectedReactionFlags or burst.flags
+                        }
+                    }
                 }
                 is GameplayOutput.SendProfileCommand -> progress = true
                 else -> Unit
@@ -406,6 +417,8 @@ internal class FactRun(val seed: Int, private val seconds: Float = 240f) {
 
     private fun choose(model: GameplayRenderModel): Int {
         val choices = model.choices
+        // The run starts with No omen.
+        if (model.choiceType == ChoiceType.OMEN) return choices.indexOfFirst { it.omenId == null }.coerceAtLeast(0)
         // The run never replaces an active: the slot prompt keeps the loadout.
         if (model.choiceType == ChoiceType.ACTIVE_SLOT) return choices.indexOfFirst { it.activeSlot == null }.coerceAtLeast(0)
         // A focus card only narrows the offer; take a card that resolves it.
@@ -496,7 +509,8 @@ internal class FactRun(val seed: Int, private val seconds: Float = 240f) {
         for (arc in fx.weaponArcs) projectedLinkStyles += arc.style
         for (wave in fx.shockwaves) projectedShockwaveColors += wave.colorIndex
         if (fx.skillBursts.isNotEmpty()) samples.getOrPut("skill-burst") { model to fx }
-        if (fx.elementBursts.count { it.reaction >= 0 } >= 3) samples.getOrPut("reactions") { model to fx }
+        // Drawn samples keep their fact inside the viewport: the renderer culls flashes and glyphs off screen.
+        if (fx.elementBursts.count { it.reaction >= 0 && model.shows(it.x, it.y) } >= 3) samples.getOrPut("reactions") { model to fx }
         if (fx.weaponArcs.any { it.style != LinkStyleCode.WEAPON }) samples.getOrPut("styled-link") { model to fx }
 
         val slots = model.skillBar.slots
@@ -527,8 +541,12 @@ internal class FactRun(val seed: Int, private val seconds: Float = 240f) {
         for (field in model.combatFields) fieldSources += field.source
         if (model.combatFields.isNotEmpty()) samples.getOrPut("fields") { model to fx }
         var bits = 0
-        for (enemy in model.enemies) bits = bits or enemy.controlBits
-        if (bits != 0) samples.getOrPut("control-bits") { model to fx }
+        var shownBits = 0
+        for (enemy in model.enemies) {
+            bits = bits or enemy.controlBits
+            if (!enemy.dead && model.shows(enemy.x, enemy.y)) shownBits = shownBits or enemy.controlBits
+        }
+        if (shownBits != 0) samples.getOrPut("control-bits") { model to fx }
         if (bits and EnemyControlBits.APEX_STRIKE_TARGET != 0) samples.getOrPut("apex-strike-target") { model to fx }
         controlBits = controlBits or bits
         if (model.coreState !== CoreStateProjection.NEUTRAL) {
@@ -536,6 +554,10 @@ internal class FactRun(val seed: Int, private val seconds: Float = 240f) {
             samples.getOrPut("core-state") { model to fx }
         }
     }
+
+    /** True when the world point ([x], [y]) lies inside this frame's viewport. */
+    private fun GameplayRenderModel.shows(x: Float, y: Float): Boolean =
+        abs(x - cameraX) < screenWidth * 0.5f && abs(y - cameraY) < screenHeight * 0.5f
 
     fun report(): String = buildString {
         append("level=$maxLevelSeen/$modelMaxLevel skills=$maxSkillsOwned casts=${skillCasts.sortedBy { it.first }} ")

@@ -38,7 +38,7 @@ class CharacterRuntimeAllocationTest {
         }
         var engine = EngineState(state)
         repeat(CharacterRuntime.GHOST_SAMPLES + 30) { engine = reduce(engine) }
-        engine.model.pointsOfInterest = emptyList()
+        engine.model.sites = emptyList()
         engine.model.spawnBudget = 0f
         return engine
     }

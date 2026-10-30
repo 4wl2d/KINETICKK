@@ -167,6 +167,8 @@ internal data class TerminalPresentation(
     val reactions: List<TerminalReaction> = emptyList(),
     /** What a Victory earns on the Rebirth ladder (null for a defeat or a replayed cleared tier). */
     val rebirthEarned: ReportRebirthLines? = null,
+    /** A Baby mode run: nothing is counted (no bank line, no Rebirth lines, a "Not counted" stamp). */
+    val easy: Boolean = false,
 )
 
 /** A leading archetype of the run: the tag, its name and the resonance tier it reached. */
@@ -221,7 +223,7 @@ internal fun GameplayRenderModel.terminalPresentation(
         rebirthLevel = rebirthLevel,
         form = content.coreShape(coreShape).displayName.localizedContent(language),
         formIcon = coreShape.overlayIcon(),
-        bank = overlayGrouped(totalMatter, language),
+        bank = if (easyMode) null else overlayGrouped(totalMatter, language),
         weaponIcon = weapon.overlayIcon(),
         weaponLevel = overlayLevel(weaponLevel, language),
         weaponMaxLevel = nextWeaponMastery == null,
@@ -237,7 +239,8 @@ internal fun GameplayRenderModel.terminalPresentation(
         reactions = ReactionId.entries.filter { reactionsThisRun and (1 shl it.ordinal) != 0 }.map {
             TerminalReaction(it, content.build.reaction(it).name.localizedContent(language), discoveredThisRun and (1 shl it.ordinal) != 0)
         },
-        rebirthEarned = reportRebirthLines(language),
+        rebirthEarned = if (easyMode) null else reportRebirthLines(language),
+        easy = easyMode,
     )
 }
 
@@ -260,9 +263,10 @@ internal fun TerminalContent(
 /**
  * Run report (Report / Report-Defeat boards): two-line title, cause stamp, matter banked, bank
  * total, build row, the shatter illustration, Combat and Collection statistics on the skewed
- * panel (mirrored when statistics sit on the left) and the game's next actions. [textScale] is
- * the text-size setting: UI text renders at the board size at the default ([overlayUiTextScale]);
- * the title and the matter figure are display type and ignore it.
+ * panel (mirrored when statistics sit on the left) and the game's next actions. A Baby mode run
+ * shows a "Not counted" stamp under the cause, its matter as not banked and no bank or Rebirth
+ * lines. [textScale] is the text-size setting: UI text renders at the board size at the default
+ * ([overlayUiTextScale]); the title and the matter figure are display type and ignore it.
  */
 @Composable
 internal fun TerminalContent(
@@ -617,6 +621,17 @@ private fun ColumnScope.ReportSummary(
         OverlayStamp(stamp, Modifier.testTag("kinetickk.gameplay.results.cause"),
             if (presentation.victory) KkStampVariant.YOU else KkStampVariant.THREAT, fontSize = stampSize * k, textScale = text)
     }
+    if (presentation.easy) {
+        // Baby mode: the soft stamp says the run counted nothing; its (!) says what that means.
+        Spacer(Modifier.height(gap(10f)))
+        Row(Modifier.zIndex(1f).enter(scene, 0.33f), horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            OverlayStamp(language.text(OverlayRedesignText.NotCounted), Modifier.testTag("kinetickk.gameplay.results.not-counted"),
+                KkStampVariant.YOU, color = roles.soft, fontSize = stampSize * k * 0.8f, textScale = text)
+            KkInfoButton(language.text(OverlayRedesignText.NotCountedInfo), Modifier.testTag("kinetickk.gameplay.results.not-counted-info"),
+                KkTooltipPlacement.ABOVE_START, text)
+        }
+    }
     presentation.rebirthEarned?.takeIf { rebirthLines }?.let { earned ->
         Spacer(Modifier.height(gap(14f)))
         ReportRebirthEarned(earned, sp(15f), sp(12f), Modifier.zIndex(1f).enter(scene, 0.35f))
@@ -628,7 +643,8 @@ private fun ColumnScope.ReportSummary(
     }
     Spacer(Modifier.height(gap(if (compact) 18f else 44f)))
     Column(Modifier.enter(scene, 0.4f)) {
-        OverlayText(language.text(OverlayRedesignText.MatterBanked), typography.labelStyle(sp(15f), color = Kk.Mute), uppercase = true)
+        OverlayText(language.text(if (presentation.easy) OverlayRedesignText.MatterNotBanked else OverlayRedesignText.MatterBanked),
+            typography.labelStyle(sp(15f), color = Kk.Mute), uppercase = true)
         Row(Modifier.padding(top = gap(8f)), horizontalArrangement = Arrangement.spacedBy(gap(14f)), verticalAlignment = Alignment.CenterVertically) {
             Canvas(Modifier.size(box(gemSize))) { drawKkGem(center, roles.you, size.minDimension / density) }
             OverlayText("+" + presentation.matter, typography.wideStyle(display(matterSize, 22f), tabular = true, lineHeightEm = 0.9f, color = roles.you),
@@ -999,7 +1015,8 @@ private class ReportAction(
 )
 
 /**
- * Victory: Rebirth (primary) + Re-enter; defeat: Re-enter. The game has no Lab action here. On a
+ * Victory: Rebirth (primary) + Re-enter; defeat, and a Baby mode victory (its clear counted nothing, so it opens no next
+ * cycle): Re-enter. The game has no Lab action here. On a
  * phone in landscape Menu shares the row ([withMenu]). The row is sized as a whole
  * ([overlayRowWidths]): every label keeps its board size while the row has room, and when it has
  * not, all labels shrink by one factor, so the primary label stays the largest and a larger text
@@ -1020,9 +1037,10 @@ private fun ReportActions(
     val big = primaryHeight >= 64f
     val fontScale = if (big) frame.scale else 1f
     val primarySize = if (big) KkButtonSize.LG else KkButtonSize.MD
-    val actions = remember(language, scene.presentation.victory, withMenu, height, primarySize, fontScale, primaryFont, ghostFont) {
+    val rebirthNext = scene.presentation.victory && !scene.presentation.easy
+    val actions = remember(language, rebirthNext, withMenu, height, primarySize, fontScale, primaryFont, ghostFont) {
         buildList {
-            if (scene.presentation.victory) {
+            if (rebirthNext) {
                 add(ReportAction(language.text(GameplayText.RebirthNext), GameplayInput.OpenRebirth, "kinetickk.gameplay.rebirth",
                     KkButtonVariant.PRIMARY, primarySize, primaryFont * fontScale, 1f, height, 0.6f))
                 add(ReportAction(language.text(GameplayText.Reenter), GameplayInput.RestartRun, "kinetickk.gameplay.restart",

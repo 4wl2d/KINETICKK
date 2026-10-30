@@ -12,7 +12,9 @@ import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
 import kinetickk.ball.gameplay.nucleus.protocol.ReactionCueFlags
 import kinetickk.ball.gameplay.nucleus.protocol.SkillCueCodes
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
+import kotlin.math.exp
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotSame
 import kotlin.test.assertSame
@@ -92,11 +94,15 @@ class InteractionFxReducerTest {
         val cues = listOf(
             VisualFxCue.Burst(10f, 20f, 12, 3, ParticleDensity.HIGH),
             VisualFxCue.DirectionalBurst(5f, 6f, 7, 2, 1f, -1f, ParticleDensity.NORMAL),
+            VisualFxCue.MotionSample(1f / 120f, 0f, 0f, 900f, 0f),
+            VisualFxCue.MotionSample(1f / 120f, 7.5f, 0f, 900f, 0f),
+            VisualFxCue.MotionSample(1f / 120f, 15f, 0f, 900f, 0.1f),
             VisualFxCue.EffectsAdvanced(1f / 120f),
         )
         val first = InteractionFxReducer(seed = 47).applyAndSnapshot(cues)
         val second = InteractionFxReducer(seed = 47).applyAndSnapshot(cues)
 
+        assertEquals(3, first.coreRibbon.size)
         assertEquals(first, second)
     }
 
@@ -158,6 +164,77 @@ class InteractionFxReducerTest {
 
         assertEquals(InteractionFxLimits.MAX_PARTICLES, accepted.size)
         assertEquals(accepted, reducer.snapshot().particles)
+    }
+
+    @Test
+    fun saturatedBurstsKeepTheAcceptedPrefixAndDoNotConsumeFutureRandomness() {
+        for (directional in listOf(false, true)) {
+            fun burst(count: Int): VisualFxCue = if (directional) {
+                VisualFxCue.DirectionalBurst(5f, -8f, count, 2, 1f, -1f, ParticleDensity.NORMAL)
+            } else {
+                VisualFxCue.Burst(5f, -8f, count, 2, ParticleDensity.NORMAL)
+            }
+            val overflowing = InteractionFxReducer(seed = 149)
+            val exactlyFull = InteractionFxReducer(seed = 149)
+            val fill = listOf(burst(InteractionFxLimits.MAX_PARTICLES - 3))
+            overflowing.apply(fill)
+            exactlyFull.apply(fill)
+            overflowing.apply(listOf(burst(5_000)))
+            exactlyFull.apply(listOf(burst(3)))
+            val retained = overflowing.snapshot()
+            assertEquals(exactlyFull.snapshot(), retained)
+            overflowing.apply(listOf(
+                VisualFxCue.Burst(10f, 20f, 500, 1, ParticleDensity.HIGH),
+                VisualFxCue.DirectionalBurst(10f, 20f, 500, 1, 0f, 1f, ParticleDensity.HIGH),
+            ))
+            assertSame(retained, overflowing.snapshot())
+            val next = listOf(VisualFxCue.EffectsAdvanced(2f), burst(9))
+            overflowing.apply(next)
+            exactlyFull.apply(next)
+            assertEquals(exactlyFull.snapshot(), overflowing.snapshot())
+            assertEquals(InteractionFxLimits.MAX_PARTICLES, retained.particles.size)
+        }
+    }
+
+    @Test
+    fun advancingMixedLifetimesKeepsSurvivorOrderAndDetachedSnapshots() {
+        val reducer = InteractionFxReducer(seed = 150)
+        val lives = listOf(0.1f, 0.5f, 0.2f, 0.8f, 0.25f)
+        for ((index, life) in lives.withIndex()) {
+            reducer.apply(listOf(
+                VisualFxCue.ShockwaveAdded(index.toFloat(), 0f, life, 10f, 1),
+                VisualFxCue.WeaponArcAdded(0f, 0f, index.toFloat(), 0f, life),
+            ))
+        }
+        reducer.apply(listOf(VisualFxCue.Burst(31f, -17f, 120, 2, ParticleDensity.NORMAL)))
+        val before = reducer.snapshot()
+        val frozen = before.particles.toList()
+        val delta = 0.45f
+        val damping = exp(-2.2f * delta)
+        val expectedParticles = frozen.map { value ->
+            value.copy(
+                x = value.x + value.vx * delta,
+                y = value.y + value.vy * delta,
+                vx = value.vx * damping,
+                vy = value.vy * damping,
+                life = value.life - delta,
+            )
+        }.filter { !(it.life <= 0f) }
+        assertTrue(expectedParticles.size in 1 until frozen.size, "The fixture must expire interleaved particles")
+        reducer.apply(listOf(VisualFxCue.EffectsAdvanced(delta), VisualFxCue.WeaponArcsAdvanced(delta)))
+        val after = reducer.snapshot()
+        assertEquals(expectedParticles, after.particles.toList())
+        assertEquals(listOf(1f, 3f), after.shockwaves.map { it.x })
+        assertEquals(listOf(1f, 3f), after.weaponArcs.map { it.toX })
+        assertEquals(lives, before.shockwaves.map { it.life })
+        assertEquals(lives, before.weaponArcs.map { it.life })
+        assertEquals(frozen, before.particles.toList())
+
+        reducer.apply(listOf(VisualFxCue.EffectsAdvanced(0.1f), VisualFxCue.WeaponArcsAdvanced(0.1f)))
+        assertEquals(listOf(3f), reducer.snapshot().shockwaves.map { it.x })
+        assertEquals(listOf(3f), reducer.snapshot().weaponArcs.map { it.toX })
+        assertEquals(listOf(1f, 3f), after.shockwaves.map { it.x })
+        assertEquals(listOf(1f, 3f), after.weaponArcs.map { it.toX })
     }
 
     @Test
@@ -282,6 +359,8 @@ class InteractionFxReducerTest {
         assertEquals(100f, rebased.shockwaves.single().x)
         assertEquals(100f, rebased.motionEchoes.single().x)
         assertEquals(100f, rebased.weaponArcs.single().fromX)
+        assertEquals(60f, rebased.coreRibbon.x(0))
+        assertEquals(150f, rebased.coreRibbon.y(0))
 
         reducer.apply(listOf(VisualFxCue.ClearAll))
         val cleared = reducer.snapshot()
@@ -488,6 +567,166 @@ class InteractionFxReducerTest {
         assertEquals(InteractionFxReducer(seed = 78).applyAndSnapshot(cues), InteractionFxReducer(seed = 78).applyAndSnapshot(cues))
     }
 
+    @Test
+    fun coreRibbonAcceptsSixtyFourSamplesAndTrimsTheOldestOnTheSixtyFifth() {
+        val reducer = InteractionFxReducer(seed = 80)
+        val limit = InteractionFxLimits.MAX_CORE_RIBBON_SAMPLES
+        // Steps of 5 units at 300 u/s: past the 4-unit spacing and well inside the step's 53-unit reach.
+        repeat(limit) { index -> reducer.apply(listOf(ribbonSample(5f * index))) }
+        val full = reducer.snapshot().coreRibbon
+        assertEquals(limit, full.size)
+        assertEquals(315f, full.x(0), "the newest sample comes first")
+        assertEquals(0f, full.x(limit - 1))
+        assertTrue(full.startsChain(limit - 1), "the run's first sample starts the chain")
+        assertTrue((0 until limit - 1).none(full::startsChain))
+
+        reducer.apply(listOf(ribbonSample(5f * limit)))
+        val trimmed = reducer.snapshot().coreRibbon
+        assertEquals(limit, trimmed.size)
+        assertEquals(List(limit) { 320f - 5f * it }, trimmed.xs(), "the sixty-fifth sample takes the oldest one's place")
+        assertEquals(List(limit) { 315f - 5f * it }, full.xs(), "the published full ribbon keeps its samples")
+    }
+
+    @Test
+    fun coreRibbonSpacesSamplesByTravelAndSpeed() {
+        // 2,000 u/s draws 645 units in 48 parts of 13.4: steps of 4 units store every fourth.
+        val fast = InteractionFxReducer(seed = 81)
+        fast.apply((0..16).map { ribbonSample(4f * it, speed = 2_000f) })
+        assertEquals(listOf(64f, 48f, 32f, 16f, 0f), fast.snapshot().coreRibbon.xs())
+        // 300 u/s keeps the 4-unit floor: steps of 1 unit also store every fourth.
+        val slow = InteractionFxReducer(seed = 82)
+        slow.apply((0..16).map { ribbonSample(1f * it) })
+        assertEquals(listOf(16f, 12f, 8f, 4f, 0f), slow.snapshot().coreRibbon.xs())
+        // A Dash start samples inside the spacing; the Dash's next step does not.
+        slow.apply(listOf(ribbonSample(17f, dash = 0.1f), ribbonSample(18f, dash = 0.1f)))
+        val dashed = slow.snapshot().coreRibbon
+        assertEquals(listOf(17f, 16f, 12f, 8f, 4f, 0f), dashed.xs())
+        assertEquals(listOf(true, false, false, false, false, false), (0 until dashed.size).map(dashed::dash))
+    }
+
+    @Test
+    fun aStillCoreStoresNoRibbon() {
+        val reducer = InteractionFxReducer(seed = 83)
+        val empty = reducer.snapshot()
+        reducer.apply(
+            listOf(ribbonSample(0f, speed = 0f), ribbonSample(10f, speed = RIBBON_MIN_SPEED), VisualFxCue.EffectsAdvanced(1f / 120f)),
+        )
+        assertSame(empty, reducer.snapshot(), "a Core at or below the speed floor changes nothing")
+        // The first speed above the floor stores a sample.
+        val moving = InteractionFxReducer(seed = 84)
+        moving.apply(listOf(ribbonSample(0f, speed = RIBBON_MIN_SPEED.nextAbove())))
+        assertEquals(1, moving.snapshot().coreRibbon.size)
+        // A Dash stores even a still Core.
+        reducer.apply(listOf(ribbonSample(20f, speed = 0f, dash = 0.1f)))
+        val dashed = reducer.snapshot().coreRibbon
+        assertEquals(listOf(20f), dashed.xs())
+        assertTrue(dashed.dash(0))
+        assertTrue(dashed.startsChain(0))
+    }
+
+    @Test
+    fun coreRibbonBreaksAtATeleportAndNotAtARebase() {
+        val reducer = InteractionFxReducer(seed = 85)
+        reducer.apply(listOf(0f, 5f, 10f, 400f).map { ribbonSample(it) })
+        val broken = reducer.snapshot().coreRibbon
+        assertEquals(listOf(400f, 10f, 5f, 0f), broken.xs())
+        assertEquals(listOf(true, false, false, true), (0 until broken.size).map(broken::startsChain))
+
+        // The reach is 300 u/s x 2 / 120 + 48 = 53 units, measured from the last step even when it stored nothing.
+        val reach = InteractionFxReducer(seed = 86)
+        reach.apply(listOf(0f, 1f, 2f, 3f, 56f).map { ribbonSample(it) })
+        val joined = reach.snapshot().coreRibbon
+        assertEquals(listOf(56f, 0f), joined.xs())
+        assertFalse(joined.startsChain(0), "53 units from the last step still joins")
+        reach.apply(listOf(ribbonSample(110f)))
+        assertTrue(reach.snapshot().coreRibbon.startsChain(0), "54 units from the last step breaks")
+        // The faster of the two steps sets the reach: after 3,000 u/s a 90-unit step at 300 u/s still joins.
+        val fast = InteractionFxReducer(seed = 87)
+        fast.apply(listOf(ribbonSample(0f, speed = 3_000f), ribbonSample(90f)))
+        assertFalse(fast.snapshot().coreRibbon.startsChain(0))
+
+        // A rebase between two samples moves the ribbon with the world and keeps the chain.
+        val rebased = InteractionFxReducer(seed = 88)
+        rebased.apply(listOf(ribbonSample(250_000f, 40f), ribbonSample(250_005f, 40f)))
+        val beforeRebase = rebased.snapshot()
+        rebased.apply(listOf(VisualFxCue.WorldRebased(250_000f, 0f)))
+        val afterRebase = rebased.snapshot()
+        assertNotSame(beforeRebase, afterRebase, "a rebase moves a live ribbon")
+        assertEquals(listOf(5f, 0f), afterRebase.coreRibbon.xs())
+        rebased.apply(listOf(ribbonSample(10f, 40f)))
+        val shifted = rebased.snapshot().coreRibbon
+        assertEquals(listOf(10f, 5f, 0f), shifted.xs())
+        assertEquals(listOf(40f, 40f, 40f), shifted.ys())
+        assertEquals(listOf(false, false, true), (0 until shifted.size).map(shifted::startsChain))
+        // Without a live sample a rebase changes nothing visible.
+        val idle = InteractionFxReducer(seed = 89)
+        val idleSnapshot = idle.snapshot()
+        idle.apply(listOf(ribbonSample(0f, speed = 0f), VisualFxCue.WorldRebased(250_000f, 0f)))
+        assertSame(idleSnapshot, idle.snapshot())
+    }
+
+    @Test
+    fun coreRibbonAgesOnlyThroughEffectsAdvanced() {
+        val reducer = InteractionFxReducer(seed = 90)
+        reducer.apply((0..2).map { ribbonSample(10f * it) })
+        assertEquals(listOf(0f, 0f, 0f), reducer.snapshot().coreRibbon.ages())
+        reducer.apply(listOf(VisualFxCue.EffectsAdvanced(0.2f)))
+        assertEquals(listOf(0.2f, 0.2f, 0.2f), reducer.snapshot().coreRibbon.ages())
+        // Motion samples carry their step's delta but age nothing: a pause or a choice freezes the ribbon.
+        reducer.apply(listOf(ribbonSample(30f)))
+        assertEquals(listOf(0f, 0.2f, 0.2f, 0.2f), reducer.snapshot().coreRibbon.ages())
+        reducer.apply(listOf(VisualFxCue.EffectsAdvanced(0.3f)))
+        val pruned = reducer.snapshot().coreRibbon
+        assertEquals(listOf(30f), pruned.xs(), "the samples past the age limit leave, the newest stays")
+        assertEquals(listOf(0.3f), pruned.ages())
+
+        // A sample exactly at the age limit stays; a moment later it is gone and nothing is left to change.
+        val edge = InteractionFxReducer(seed = 91)
+        edge.apply(listOf(ribbonSample(0f, speed = 200f), VisualFxCue.EffectsAdvanced(RIBBON_MAX_AGE)))
+        assertEquals(listOf(RIBBON_MAX_AGE), edge.snapshot().coreRibbon.ages())
+        edge.apply(listOf(VisualFxCue.EffectsAdvanced(0.001f)))
+        val faded = edge.snapshot()
+        assertEquals(0, faded.coreRibbon.size)
+        edge.apply(listOf(VisualFxCue.EffectsAdvanced(0.1f)))
+        assertSame(faded, edge.snapshot())
+    }
+
+    @Test
+    fun publishedCoreRibbonsStayImmutable() {
+        val reducer = InteractionFxReducer(seed = 92)
+        reducer.apply(listOf(ribbonSample(0f, 7f), ribbonSample(10f, 7f, dash = 0.1f)))
+        val published = reducer.snapshot().coreRibbon
+        reducer.apply(listOf(VisualFxCue.Burst(0f, 0f, 1, 0, ParticleDensity.NORMAL)))
+        assertSame(published, reducer.snapshot().coreRibbon, "an unchanged ribbon is shared by the next snapshot")
+
+        reducer.apply(listOf(ribbonSample(20f, 7f), VisualFxCue.WorldRebased(100f, 100f), VisualFxCue.EffectsAdvanced(0.1f)))
+        val later = reducer.snapshot().coreRibbon
+        assertEquals(listOf(10f, 0f), published.xs())
+        assertEquals(listOf(7f, 7f), published.ys())
+        assertEquals(listOf(0f, 0f), published.ages())
+        assertEquals(listOf(true, false), (0 until published.size).map(published::dash))
+        assertEquals(listOf(false, true), (0 until published.size).map(published::startsChain))
+        assertEquals(listOf(-80f, -90f, -100f), later.xs())
+        assertEquals(listOf(-93f, -93f, -93f), later.ys())
+        assertNotEquals(published, later)
+    }
+
+    @Test
+    fun clearAllForgetsTheRibbon() {
+        val reducer = InteractionFxReducer(seed = 93)
+        // 200 u/s leaves no motion echo, so only the ribbon is live.
+        reducer.apply(listOf(ribbonSample(0f, speed = 200f), ribbonSample(10f, speed = 200f)))
+        val live = reducer.snapshot()
+        reducer.apply(listOf(VisualFxCue.ClearAll))
+        val cleared = reducer.snapshot()
+        assertNotSame(live, cleared)
+        assertEquals(0, cleared.coreRibbon.size)
+        reducer.apply(listOf(ribbonSample(20f, speed = 200f)))
+        val restarted = reducer.snapshot().coreRibbon
+        assertEquals(listOf(20f), restarted.xs())
+        assertTrue(restarted.startsChain(0), "the first sample after a clear starts a new chain")
+    }
+
     private fun skillCast(x: Float) = VisualFxCue.SkillCast(SkillId.STORM_COIL, x, 0f, 0f, 0f, 170f, 1)
 
     private fun InteractionFxReducer.applyAndSnapshot(cues: Iterable<VisualFxCue>) =
@@ -502,7 +741,18 @@ class InteractionFxReducerTest {
         elementBursts.size,
         skillBursts.size,
         apexBursts.size,
+        coreRibbon.size,
     )
+
+    /** One fixed step that began at ([x], [y]). */
+    private fun ribbonSample(x: Float, y: Float = 0f, speed: Float = 300f, dash: Float = 0f) =
+        VisualFxCue.MotionSample(1f / 120f, x, y, speed, dash)
+
+    private fun CoreRibbonProjection.xs() = (0 until size).map { x(it) }
+
+    private fun CoreRibbonProjection.ys() = (0 until size).map { y(it) }
+
+    private fun CoreRibbonProjection.ages() = (0 until size).map { age(it) }
 
     private fun motionSample(index: Int) = VisualFxCue.MotionSample(
         deltaSeconds = 0.02f,

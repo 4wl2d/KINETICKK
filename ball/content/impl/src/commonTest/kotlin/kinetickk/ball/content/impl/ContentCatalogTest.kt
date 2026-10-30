@@ -22,6 +22,8 @@ import kinetickk.ball.content.api.MatrixBranch
 import kinetickk.ball.content.api.MatrixEffect
 import kinetickk.ball.content.api.MatrixNodeDefinition
 import kinetickk.ball.content.api.MatrixNodeId
+import kinetickk.ball.content.api.ObstacleAspect
+import kinetickk.ball.content.api.ObstacleKind
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RuleLineKind
 import kinetickk.ball.content.api.SkillId
@@ -56,7 +58,7 @@ class ContentCatalogTest {
 
     @Test
     fun authorityPublishesOneVersionedSetOfCachedQuerySnapshots() {
-        assertEquals("kinetickk-content-3", catalog.version.value)
+        assertEquals("kinetickk-content-4", catalog.version.value)
         assertEquals(KINETICKK_CONTENT_VERSION, catalog.version)
         assertEquals(catalog.version, gameplay.version)
         assertEquals(catalog.version, profile.version)
@@ -99,7 +101,7 @@ class ContentCatalogTest {
     fun itemCatalogHoldsDistinctHandAuthoredItemsWithinTheBound() {
         val items = gameplay.items
 
-        assertEquals(287, items.size)
+        assertEquals(302, items.size)
         assertEquals(320, ContentBounds.MAX_ITEMS)
         assertTrue(items.size <= ContentBounds.MAX_ITEMS)
         assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
@@ -280,7 +282,7 @@ class ContentCatalogTest {
 
         assertEquals(96, expansion.size)
         assertEquals((EXPANSION_END until EXPANSION_050_END).toList(), expansion.map(ItemDefinition::id))
-        assertEquals(gameplay.items.size, ACTIVES_END)
+        assertEquals(gameplay.items.size, TERRAIN_060_END)
         fun mix(items: List<ItemDefinition>) = ItemRarity.entries.associateWith { rarity -> items.count { it.rarity == rarity } }
         assertEquals(
             mapOf(ItemRarity.COMMON to 13, ItemRarity.UNCOMMON to 16, ItemRarity.RARE to 34, ItemRarity.EPIC to 27, ItemRarity.LEGENDARY to 6),
@@ -433,6 +435,60 @@ class ContentCatalogTest {
         actives.filter { it.elements.isNotEmpty() }.groupBy { it.elements.single() }.forEach { (element, group) ->
             assertEquals(group.size, group.map { it.rules.single()::class }.toSet().size, "$element actives share a passive kind")
         }
+    }
+
+    @Test
+    fun terrainItemsBuildOnEveryObstacleKind() {
+        val terrain = terrain()
+        val names = listOf(
+            "Glass Harvest", "Rime Splinters", "Accelerant Loop", "Clean Line", "Sling Harness", "Horizon Surfer",
+            "Sapper's Instinct", "Fuse Reader", "Phase Slip", "Out of Phase", "Vent Diver", "Updraft Kiln", "Pinball Logic",
+            "Rockhound", "Crash Cage",
+        )
+        // Fifteen items appended right after the active items, in authoring order.
+        assertEquals((ACTIVES_END until TERRAIN_060_END).toList(), terrain.map(ItemDefinition::id))
+        assertEquals(names, terrain.map(ItemDefinition::name))
+        assertEquals(gameplay.items.size, TERRAIN_060_END)
+        fun named(name: String) = gameplay.items.single { it.name == name }
+        fun ItemDefinition.kindsNamed(): Set<ObstacleKind> = buildSet {
+            clauses.flatMap { it.conditions }.filterIsInstance<EffectCondition.ObstacleIs>().forEach { add(it.kind) }
+            // Tuning the knots' pull on enemies builds on the gravity knot without naming it.
+            if (rules.any { it is ItemRule.ObstacleTuning && it.aspect == ObstacleAspect.WELL_PULL }) add(ObstacleKind.GRAVITY_WELL)
+        }
+        // Every kind the 0.6.0 field adds is built on by at least two items; bumpers and asteroids by at least one.
+        val newKinds = listOf(
+            ObstacleKind.GRAVITY_WELL, ObstacleKind.ACCEL_GATE, ObstacleKind.CRYSTAL, ObstacleKind.DERELICT_MINE,
+            ObstacleKind.PHASE_SHARD, ObstacleKind.THERMAL_VENT,
+        )
+        newKinds.forEach { kind -> assertTrue(terrain.count { kind in it.kindsNamed() } >= 2, "$kind has two items") }
+        assertTrue(terrain.any { ObstacleKind.BUMPER in it.kindsNamed() }, "a bumper item")
+        assertTrue(terrain.any { ObstacleKind.ASTEROID in it.kindsNamed() }, "an asteroid item")
+        // Every terrain item speaks the obstacle vocabulary (a kind, the gap to an obstacle or an obstacle tuning).
+        terrain.forEach { item ->
+            val vocabulary = item.kindsNamed().isNotEmpty() || item.rules.any { rule ->
+                rule is ItemRule.ObstacleTuning || rule is ItemRule.WhileModifier && rule.condition is EffectCondition.NearObstacle
+            }
+            assertTrue(vocabulary, "${item.name} builds on obstacles")
+        }
+        // The collision guard carries the three defensive aspects; no item outside the terrain items tunes obstacles.
+        assertEquals(
+            listOf(ObstacleAspect.LETHAL_SPEED, ObstacleAspect.COLLISION_DAMAGE, ObstacleAspect.RESTITUTION),
+            named("Crash Cage").rules.map { (it as ItemRule.ObstacleTuning).aspect },
+        )
+        assertTrue(gameplay.items.take(ACTIVES_END).none { item ->
+            item.rules.any { it is ItemRule.ObstacleTuning } || item.clauses.any { clause -> clause.conditions.any { it is EffectCondition.ObstacleIs } }
+        })
+        // Existing tags only (no Arsenal), without wagers, at their rarity's stacks; one new Data-economy item, which waits
+        // for Reborn 1 so the rank-0 Data ladder keeps its 13 items; every other terrain item is ungated.
+        assertEquals(9, BuildTag.entries.size)
+        assertTrue(terrain.all { item -> item.tags.isNotEmpty() && BuildTag.ARSENAL !in item.tags }, "terrain items carry existing archetypes")
+        assertTrue(terrain.all { !it.risk && !it.isActive })
+        assertEquals(mapOf("Glass Harvest" to 1), terrain.filter { it.minimumRebirth > 0 }.associate { it.name to it.minimumRebirth })
+        assertEquals(
+            mapOf(ItemRarity.COMMON to 2, ItemRarity.UNCOMMON to 6, ItemRarity.RARE to 5, ItemRarity.EPIC to 2, ItemRarity.LEGENDARY to 0),
+            ItemRarity.entries.associateWith { rarity -> terrain.count { it.rarity == rarity } },
+        )
+        assertEquals(listOf("Glass Harvest"), terrain.filter { it.isDataEconomy }.map { it.name })
     }
 
     @Test
@@ -702,6 +758,7 @@ class ContentCatalogTest {
         val percentEffects = setOf(
             ItemEffect.IMPACT_DAMAGE, ItemEffect.WEAPON_POWER, ItemEffect.COOLING, ItemEffect.DASH_POWER,
             ItemEffect.ATTACK_SPEED, ItemEffect.DATA_GAIN, ItemEffect.MATTER_GAIN, ItemEffect.OVERDRIVE_GAIN,
+            ItemEffect.GRIP, ItemEffect.SLING,
         )
         profile.matrixNodes.forEach { node ->
             val stats = node.effects.filterIsInstance<MatrixEffect.Stat>().map { it.delta }
@@ -819,6 +876,9 @@ class ContentCatalogTest {
     /** The active items, ids [EXPANSION_050_END] until [ACTIVES_END]. */
     private fun actives(): List<ItemDefinition> = gameplay.items.subList(EXPANSION_050_END, ACTIVES_END)
 
+    /** The 0.6.0 terrain items, ids [ACTIVES_END] until [TERRAIN_060_END]. */
+    private fun terrain(): List<ItemDefinition> = gameplay.items.subList(ACTIVES_END, TERRAIN_060_END)
+
     /** An item with an Apex part: an Apex trigger, an Apex charge, an Apex cooldown cut or an Apex-active condition. */
     private fun usesApex(item: ItemDefinition): Boolean =
         item.clauses.any { clause ->
@@ -841,8 +901,11 @@ class ContentCatalogTest {
         /** One past the last id of the 0.5.0 expansion (ids 173 to 268): the active items start here. */
         const val EXPANSION_050_END = 269
 
-        /** One past the last active item (ids 269 to 286, one per SkillId). */
+        /** One past the last active item (ids 269 to 286, one per SkillId): the terrain items start here. */
         const val ACTIVES_END = 287
+
+        /** One past the 0.6.0 terrain items (ids 287 to 301). */
+        const val TERRAIN_060_END = 302
     }
 
     /** Everything that changes how an item plays, ignoring its name, flavor and id. */

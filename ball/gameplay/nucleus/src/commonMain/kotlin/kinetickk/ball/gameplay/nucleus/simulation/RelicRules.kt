@@ -418,6 +418,7 @@ internal fun MutableGameState.discoverBoundPairings() {
     if (fresh == 0) return
     discoveredPairingMask = discoveredPairingMask or fresh
     pendingDiscoveredPairingMask = pendingDiscoveredPairingMask or fresh
+    if (!announcesDiscoveries) return
     val names = content.build.pairings.filter { fresh and (1 shl it.id.ordinal) != 0 }.map {
         (if (it.kind == kinetickk.ball.content.api.RelicPairingKind.CONCORD) "+ " else "− ") + it.name
     }

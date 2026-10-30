@@ -341,4 +341,7 @@ internal val BuildPhrasesInRussian: List<Pair<String, String>> = listOf(
     "On entering a field" to "При входе в поле",
     "On erasing a shot" to "При стирании снаряда",
     "On cashing a mark" to "При срабатывании метки",
+    "On breaking an obstacle" to "При разрушении препятствия",
+    "On boost" to "При разгоне",
+    "On graze" to "При пролёте впритирку",
 )

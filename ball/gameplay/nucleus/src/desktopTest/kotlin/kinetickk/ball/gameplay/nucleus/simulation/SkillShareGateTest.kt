@@ -39,18 +39,20 @@ import kotlin.test.assertTrue
  *
  * The share is a population gate (policy.md, "Balance gate populations"): judged on 31 owning runs walked from i = 1,
  * it passed with probability 0.99 on the 05885fa9 base but 0.70 with the shipped active items (population median
- * 0.089), so it re-rolled with the reward stream. On the base (its lane skills free from level 2) all 300
- * [PopulationSeeds] runs owned one, 214 were judged and their median share was 0.113 (bootstrap SE 0.0038). By the
- * population threshold rule the band is min(0.08, base − 2 SE) to max(0.20, base + 2 SE), that is [MIN_SHARE] to
- * [MAX_SHARE], the design band. The walk also failed when fewer than 31 of its 124 probes owned an active item; that
- * stays a population statement next to the band: at least [MIN_OWNED_SHARE] of the runs bind one by [OWNED_BY_SECONDS],
- * a design bound that all 300 base runs met.
+ * 0.089), so it re-rolled with the reward stream. On the 0.6.0 base 289 of the 300 [PopulationSeeds] runs bind one by
+ * [OWNED_BY_SECONDS], 211 are judged and their median share is 0.090 (bootstrap SE 0.0061; q10 0.021, q90 0.180). By
+ * the population threshold rule the band is min(0.08, base − 2 SE) to max(0.20, base + 2 SE), rounded outward:
+ * [MIN_SHARE] to [MAX_SHARE] (the base minus two standard errors is 0.078, below the design's 0.08; on the 05885fa9 tree,
+ * which handed the Orb its lane skills from level 2, the median was 0.113, SE 0.0038). The walk also failed when fewer
+ * than 31 of its 124 probes owned an active item; that stays a population statement next to the band: at least
+ * [MIN_OWNED_SHARE] of the runs bind one by [OWNED_BY_SECONDS], a design bound (0.6.0 base 0.963, SE 0.011).
  *
  * The spread is a population gate: with three runs per character the 05885fa9 base kept its top
  * effect within 0.30 with probability 0.76 (Sonic Boom 0.253 over 100 runs per character, 300 for the Orb), so it
  * re-rolled with the reward stream. Each character now walks [PopulationSeeds] until [SPREAD_RUNS] runs bind an active
- * item by [OWNED_BY_SECONDS]: 300 runs, on which the base's top effect read 0.280 (Sonic Boom, bootstrap SE 0.014, with
- * the old per-slot damage). The base plus two standard errors is 0.31; the bound stays the design's 0.30.
+ * item by [OWNED_BY_SECONDS]: 300 runs, on which the 0.6.0 base's top effect reads 0.193 (Storm Coil, bootstrap SE
+ * 0.026; Full Stop 0.191), so the bound stays the design's 0.30 (base plus two standard errors 0.24; on the 05885fa9
+ * tree Sonic Boom read 0.280, SE 0.014, with the old per-slot damage).
  */
 class SkillShareGateTest {
     private class Run(
@@ -149,7 +151,8 @@ class SkillShareGateTest {
         /** The spread walk's bound: at most this many probes per run before the population counts as unfillable. */
         const val MAX_PROBES_PER_RUN = 4
         const val SHARE_SECONDS = 720f
-        const val MIN_SHARE = 0.08
+        /** The band's floor: min(0.08, the 0.6.0 base median 0.090 − 2 × 0.0061), rounded down. */
+        const val MIN_SHARE = 0.07
         /** The least share of the population that binds an active item by [OWNED_BY_SECONDS] (the walk's 31 of 124). */
         const val MIN_OWNED_SHARE = 0.25
         const val MAX_SHARE = 0.20

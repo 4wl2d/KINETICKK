@@ -21,17 +21,23 @@ import kotlin.math.roundToInt
  * Called once when the run starts. The universe is every item the run's Rebirth rank allows (unlock levels gate offers,
  * not the deal). Each rarity tier is ordered by weighted draws without replacement in id order, each weight the item's
  * history deck weight, raised for items the Profile has never discovered; the first share of each order is dealt, at
- * least the tier's minimum. Floors then grow the deck, in order: early choice, an early Rare or better, the rank-0 Data
- * ladder (the policy's floor plus the Matrix's Data stratum, then its early part), the character's archetype, every
- * archetype, every element, the wagers and skill support; a shortfall deals the best-priority qualifying reserve items,
- * tiers Common to Legendary, and nothing is ever removed. Active items are dealt by their tier's share like any item, but
+ * least the tier's minimum. The run's Keynote (a BuildTag and an element) is drawn from the same stream after every
+ * dealing draw, so it never moves the dealt order; a full deck still draws it, from a fresh stream. Floors then grow the
+ * deck, in order: early choice, an early Rare or better, the rank-0 Data ladder (the policy's floor plus the Matrix's
+ * Data stratum, then its early part), the character's archetype, every archetype, every element, the Keynote's tag and
+ * element shares, the wagers and skill support; a shortfall deals the best-priority qualifying reserve items, tiers
+ * Common to Legendary, and nothing is ever removed. Active items are dealt by their tier's share like any item, but
  * every floor counts and promotes passive items only.
  * Float sums run in a fixed order with no transcendental functions, so every platform deals the same deck.
  */
 internal fun MutableGameState.drawItemDeck() {
     val policy = content.build.policy.draftDeck
+    val keynote = content.variety.keynote
+    keynoteTag = null
+    keynoteElement = null
     if (policy.dealsEverything) {
         itemDeck = ItemDeck.EVERYTHING
+        if (keynote.enabled) rollKeynote(CloneableXorWowRandom(deckSeed))
         return
     }
     val random = CloneableXorWowRandom(deckSeed)
@@ -67,15 +73,25 @@ internal fun MutableGameState.drawItemDeck() {
         val dealtCount = share.coerceIn(min(policy.minimums[tier.ordinal], ids.size), ids.size)
         for (index in start until start + dealtCount) dealt[order[index]] = true
     }
+    if (keynote.enabled) rollKeynote(random)
 
     // Floors guarantee passive coverage: an active item never counts toward one and is never promoted by one.
+    // One pass counts the qualifying passives and the dealt ones among them; the walk then deals in priority order.
     fun promote(floor: Int, qualifies: (ItemDefinition) -> Boolean) {
-        val passive: (ItemDefinition) -> Boolean = { !it.isActive && qualifies(it) }
-        val target = min(floor, universe.count(passive))
-        var missing = target - universe.count { dealt[it.id] && passive(it) }
+        var qualifying = 0
+        var dealtQualifying = 0
+        for (index in universe.indices) {
+            val item = universe[index]
+            if (item.isActive || !qualifies(item)) continue
+            qualifying++
+            if (dealt[item.id]) dealtQualifying++
+        }
+        var missing = min(floor, qualifying) - dealtQualifying
         for (id in order) {
             if (missing <= 0) return
-            if (dealt[id] || !passive(content.items[id])) continue
+            if (dealt[id]) continue
+            val item = content.items[id]
+            if (item.isActive || !qualifies(item)) continue
             dealt[id] = true
             missing--
         }
@@ -90,6 +106,12 @@ internal fun MutableGameState.drawItemDeck() {
     promote(policy.characterTagFloor) { it.atMostRare() && characterTag in it.tags }
     BuildTag.entries.forEach { tag -> promote(policy.tagFloor) { it.atMostRare() && tag in it.tags } }
     StatusElement.entries.forEach { element -> promote(policy.elementFloor) { it.atMostRare() && element in it.elements } }
+    keynoteTag?.let { tag ->
+        promote(keynoteFloor(keynote.tagShare, universe.count { it.isKeynotePassive(tag) })) { it.isKeynotePassive(tag) }
+    }
+    keynoteElement?.let { element ->
+        promote(keynoteFloor(keynote.elementShare, universe.count { it.isKeynotePassive(element) })) { it.isKeynotePassive(element) }
+    }
     promote(policy.riskFloor) { it.risk }
     promote(policy.skillFloor) { it.usesSkills }
     itemDeck = ItemDeck.dealt(content.items.size, order, tierSizes, content.items.indices.filter { dealt[it] })

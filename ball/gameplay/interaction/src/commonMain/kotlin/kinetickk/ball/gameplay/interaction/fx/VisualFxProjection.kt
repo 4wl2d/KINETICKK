@@ -186,6 +186,8 @@ data class VisualFxProjection(
     /** Reactions (bits by reaction ordinal) seen in this run, and those first met in this run. */
     val runReactionMask: Int = 0,
     val runDiscoveryMask: Int = 0,
+    /** The Core's recent path for the ribbon behind it (newest first). */
+    val coreRibbon: CoreRibbonProjection = CoreRibbonProjection.EMPTY,
 ) {
     companion object {
         val EMPTY = VisualFxProjection(

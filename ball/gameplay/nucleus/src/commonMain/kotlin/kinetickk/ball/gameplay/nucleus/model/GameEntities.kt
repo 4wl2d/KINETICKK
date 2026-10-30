@@ -7,6 +7,8 @@ import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.render.ProjectileKind
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
+import kinetickk.ball.content.api.EliteAffix
+import kinetickk.ball.content.api.EnemyRank
 import kinetickk.ball.content.api.WeaponId
 
 @ConsistentCopyVisibility
@@ -70,6 +72,16 @@ internal data class Enemy private constructor(
     var armored: Boolean = false,
     /** The plate cracked under an impact; weapons deal full damage from then on. */
     var armorCracked: Boolean = false,
+    /** Encounter that owns this enemy (spawnEncounter tag), or 0 for the ambient director. */
+    var ownerTag: Long = 0L,
+    /** Kind-specific counter: Brood Queen egg sacs, Throne and Antecedent shield arcs; 0 otherwise. */
+    var charges: Int = 0,
+    /** A mini or secret boss reached a gate (or spawned); its phase-start effects run outside the damage pipeline. */
+    var phaseStartPending: Boolean = false,
+    /** An Elite's affix, or null. */
+    var affix: EliteAffix? = null,
+    /** A rare champion ordinary enemy. */
+    var champion: Boolean = false,
     /** Elemental status cells; see [StatusCell]. Copy-on-write so reduction siblings stay isolated. */
     val status: CopyOnWriteFloatArray,
 ) {
@@ -127,11 +139,13 @@ internal data class Enemy private constructor(
         status = CopyOnWriteFloatArray(status),
     )
 
-    /** The run's final boss only: hit cap, encounter lookup and victory. */
-    val isBoss: Boolean get() = type == EnemyType.ARCHITECT
-    val isElite: Boolean get() = type == EnemyType.ELITE
-    /** The scheduled Herald: Elite victim factor, freeze and stop immunity, leash exemption, outside the ordinary cap. */
-    val isMiniBoss: Boolean get() = type == EnemyType.HERALD
+    /** The run's final boss only (the Architect): hit cap, encounter lookup and victory. */
+    val isBoss: Boolean get() = type.profile.rank == EnemyRank.BOSS
+    val isElite: Boolean get() = type.profile.rank == EnemyRank.ELITE
+    /** Mini-bosses: Elite victim factor, freeze and stop immunity, outside the ordinary cap; only the roaming Herald is leashed. */
+    val isMiniBoss: Boolean get() = type.profile.rank == EnemyRank.MINI_BOSS
+    /** Secret bosses: boss-class rules, but they never end the run. */
+    val isSecretBoss: Boolean get() = type.profile.rank == EnemyRank.SECRET_BOSS
     val alive: Boolean get() = !dead && hp > 0f
 
     /** Copies mutable scalar state while sharing the status cells until their first changed write. */

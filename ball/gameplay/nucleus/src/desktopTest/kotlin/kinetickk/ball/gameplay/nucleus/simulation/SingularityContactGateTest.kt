@@ -11,8 +11,8 @@ import kotlin.test.assertTrue
 /**
  * Singularity contact gate (combat-final §9 and §10 Skills): skills and reaction verbs that move the Core are all
  * player-timed or bounded, so a bot using them touches the singularity no more often than the same bot without
- * them, and touches obstacles no more often than the 05885fa9 base measured beyond noise (a contact is the frame the
- * Core first touches a rock or bumper, sampled every 0.02 s input frame). Each arm is the no-POI bot for 300 s, and no
+ * them, and touches obstacles no more often than the 0.6.0 base measured beyond noise (a contact is the frame the
+ * Core first touches a solid obstacle, sampled every 0.02 s input frame). Each arm is the no-POI bot for 300 s, and no
  * active item reaches it through its offers: a skill arm owns one active item from the start and casts its effect
  * by the bot's policy, a reaction arm sets the reaction off on the nearest enemy close to the Core every three seconds,
  * and an item arm owns one item that launches the Core (items.md §6.2) from the start. The baseline, reaction and item
@@ -20,13 +20,12 @@ import kotlin.test.assertTrue
  * (it acquires the active item it measures) and is never offered another.
  *
  * A population gate (0.5.0 active items; policy.md, "Balance gate populations"): on the thirty fixed seeds
- * (`i * 7_919 + 13`, i = 1..30) the base met "at most 15 % more obstacle contacts per second and no more singularity
- * contacts" in every arm with probability 0.205 (one arm alone with 0.44 for Slingshot to 0.94 for Arc Hook). Every
- * arm now plays the 300 [PopulationSeeds] runs. An arm's obstacle-contact rate is at most [MaxBounceRatio] × the
- * baseline's (by the population threshold rule the higher of the design's 1.15 and its base ratio plus two bootstrap
- * standard errors, rounded up; base baseline 0.01061 per second, 899 contacts in 84,733 s), and the share of its runs
- * ending in a singularity contact exceeds the baseline's by at most [MaxExtraContactShare] (0 for every arm without a
- * base contact; Slingshot's two base contacts in 300 runs give 0.02).
+ * (`i * 7_919 + 13`, i = 1..30) the 05885fa9 tree met "at most 15 % more obstacle contacts per second and no more
+ * singularity contacts" in every arm with probability 0.205 (one arm alone with 0.44 for Slingshot to 0.94 for Arc
+ * Hook). Every arm plays the 300 [PopulationSeeds] runs. An arm's obstacle-contact rate is at most [MaxBounceRatio] ×
+ * the baseline's (by the population threshold rule the higher of the design's 1.15 and its 0.6.0 base ratio plus two
+ * bootstrap standard errors, rounded up; the 0.6.0 baseline reads 0.00849 per second, 740 contacts in 87,120 s), and the
+ * share of its runs ending in a singularity contact exceeds the baseline's by at most [MaxExtraContactShare].
  */
 class SingularityContactGateTest {
     private class Arm(val label: String, val contacts: Int, val bouncesPerSecond: Double, val outcomes: String)
@@ -90,6 +89,7 @@ class SingularityContactGateTest {
             state.takeSoundCues()
             state.takeVisualFxCues()
             val touches = state.obstacleField.obstacles.any { obstacle ->
+                if (!obstacle.solidAt(state.elapsed, state.content.obstacles.kinds)) return@any false
                 val reach = obstacle.radius + state.coreRadius + CONTACT_SLACK
                 (obstacle.x - state.coreX) * (obstacle.x - state.coreX) + (obstacle.y - state.coreY) * (obstacle.y - state.coreY) <= reach * reach
             }
@@ -116,25 +116,28 @@ class SingularityContactGateTest {
         const val REACTION_EVERY = 3f
         /**
          * Each arm's largest obstacle-contact rate over the baseline's on [PopulationSeeds]: the design's
-         * [DESIGN_BOUNCE_RATIO], or its 05885fa9 base ratio plus two bootstrap standard errors (20,000 resamples of the
-         * seeds, rounded up) where that is higher. Base ratio (SE, base + 2 SE) over 300 runs: Meteor 0.965 (0.068, 1.11),
-         * Arc Hook 0.836 (0.056, 0.95), Mass Driver 0.981 (0.074, 1.13), Void Step 0.897 (0.058, 1.02), Slingshot 1.129
-         * (0.079, 1.29), Sonic Boom 0.867 (0.056, 0.98), Superconduct 0.881 (0.062, 1.01), Thunderclap 0.995 (0.070,
-         * 1.14), Annihilate 0.882 (0.062, 1.01), Recoil Spring 1.040 (0.069, 1.18), Kickback Plate 0.938 (0.070, 1.08),
-         * Spin Turbine 1.083 (0.076, 1.24), Event Saddle 0.934 (0.067, 1.07), Gravity Assist 0.960 (0.069, 1.10), Crest
-         * Rider 1.041 (0.068, 1.18).
+         * [DESIGN_BOUNCE_RATIO], or its 0.6.0 base ratio plus two bootstrap standard errors (20,000 resamples of the
+         * seeds, paired with the baseline, rounded up) where that is higher. Base ratio (SE, base + 2 SE) over 300 runs:
+         * Meteor 0.946 (0.064, 1.08), Arc Hook 0.857 (0.056, 0.98), Mass Driver 0.948 (0.071, 1.09), Void Step 0.987
+         * (0.066, 1.12), Slingshot 1.328 (0.089, 1.51), Sonic Boom 0.938 (0.067, 1.08), Superconduct 0.856 (0.059, 0.98),
+         * Thunderclap 0.921 (0.064, 1.05), Annihilate 0.836 (0.060, 0.96), Recoil Spring 1.010 (0.066, 1.15), Kickback
+         * Plate 0.962 (0.071, 1.11), Spin Turbine 1.189 (0.081, 1.36), Event Saddle 1.001 (0.066, 1.14), Gravity Assist
+         * 1.029 (0.071, 1.18), Crest Rider 1.026 (0.068, 1.17). Slingshot read 1.129 on the 05885fa9 tree and 1.27 to
+         * 1.37 under the 0.6.0 flight law as the reference bot changed; 1.328 once the bot held the swings that would
+         * throw the Core into a skipped optional site.
          */
         val MaxBounceRatio: Map<String, Double> =
             (MovingSkills.map { it.name } + MovingReactions.map { it.name } + LaunchingItems).associateWith { DESIGN_BOUNCE_RATIO } +
-                mapOf(SkillId.SLINGSHOT.name to 1.29, "Spin Turbine" to 1.24, "Recoil Spring" to 1.18, "Crest Rider" to 1.18)
+                mapOf(SkillId.SLINGSHOT.name to 1.51, "Spin Turbine" to 1.36, "Gravity Assist" to 1.18, "Crest Rider" to 1.17)
         /** The design bound: at most 15 % more obstacle contacts per second than the baseline. */
         const val DESIGN_BOUNCE_RATIO = 1.15
         /**
-         * The largest share of an arm's runs ending in a singularity contact beyond the baseline's: the base difference
-         * plus two standard errors, rounded up. Only Slingshot touched it at the base (2 of 300, SE 0.005); every other
-         * arm and the baseline never did, so they keep "no more than the baseline".
+         * The largest share of an arm's runs ending in a singularity contact beyond the baseline's: the higher of the
+         * design's 0 and the base difference plus two standard errors, rounded up. On the 0.6.0 base no arm and no
+         * baseline run touches the singularity (0 of 300 each, binomial SE 0), so every arm keeps "no more than the
+         * baseline"; 0.5.0's Slingshot allowance of 0.02 (two 05885fa9 contacts in 300 runs) is gone.
          */
-        val MaxExtraContactShare: Map<String, Double> = mapOf(SkillId.SLINGSHOT.name to 0.02)
+        val MaxExtraContactShare: Map<String, Double> = emptyMap()
         const val SINGULARITY_CONTACT = "SINGULARITY CONTACT"
         const val CONTACT_SLACK = 2f
     }

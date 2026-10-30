@@ -15,4 +15,13 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    // DesktopTestShardsTest reads every desktop test source of the repository; it reruns when one changes.
+    inputs.files(
+        fileTree(rootDir.parentFile) {
+            include("**/src/commonTest/kotlin/**/*.kt", "**/src/desktopTest/kotlin/**/*.kt")
+            exclude(".claude/**", "**/build/**", "**/.gradle/**", "build-logic/**")
+        },
+    )
+        .withPropertyName("desktopTestSources")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }

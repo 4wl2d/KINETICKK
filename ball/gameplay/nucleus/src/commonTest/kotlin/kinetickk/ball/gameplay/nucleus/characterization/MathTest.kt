@@ -8,6 +8,7 @@ import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.simulation.*
+import kotlin.random.Random
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -42,6 +43,57 @@ class MathTest {
     fun segmentCircleHandlesZeroLengthSegment() {
         assertTrue(segmentCircleIntersects(2f, 2f, 2f, 2f, 3f, 2f, 1f))
         assertFalse(segmentCircleIntersects(2f, 2f, 2f, 2f, 3.01f, 2f, 1f))
+    }
+
+    @Test
+    fun sweptCircleBoundsKeepReversedCrossingsAndLargeCoordinateTangencies() {
+        assertTrue(segmentCircleIntersects(10f, 0f, -10f, 0f, 0f, 1f, 1f))
+        assertTrue(segmentCircleIntersects(0f, 10f, 0f, -10f, 1f, 0f, 1f))
+        assertTrue(segmentCircleIntersects(-100f, -100f, 100f, 100f, 0f, 0f, 0f))
+        assertTrue(segmentCircleIntersects(Float.MAX_VALUE, 0f, -Float.MAX_VALUE, 0f, 0f, 1f, 1f))
+        val origin = 16_777_216f
+        assertTrue(segmentCircleIntersects(origin, origin, origin + 64f, origin, origin + 32f, origin + 2f, 2f))
+        assertFalse(segmentCircleIntersects(origin, origin, origin + 64f, origin, origin + 32f, origin + 4f, 2f))
+        assertFalse(segmentCircleIntersects(0f, 0f, 10f, 0f, 5f, 0f, Float.NaN))
+        assertFalse(segmentCircleIntersects(Float.NaN, 0f, 10f, 0f, 5f, 0f, 1f))
+        assertTrue(segmentCircleIntersects(0f, 0f, 10f, 0f, 5f, 0f, Float.POSITIVE_INFINITY))
+    }
+
+    @Test
+    fun sweptCircleMatchesExactIntegerGeometryAcrossSeededScenes() {
+        val random = Random(414_991)
+        repeat(20_000) { index ->
+            val ax = random.nextInt(-2_000, 2_001).toLong()
+            val ay = random.nextInt(-2_000, 2_001).toLong()
+            val bx = if (index % 7 == 0) ax else random.nextInt(-2_000, 2_001).toLong()
+            val by = if (index % 11 == 0) ay else random.nextInt(-2_000, 2_001).toLong()
+            val cx = random.nextInt(-2_000, 2_001).toLong()
+            val cy = random.nextInt(-2_000, 2_001).toLong()
+            val radius = random.nextInt(0, 1_001).toLong()
+            val dx = bx - ax
+            val dy = by - ay
+            val px = cx - ax
+            val py = cy - ay
+            val lengthSquared = dx * dx + dy * dy
+            val dot = px * dx + py * dy
+            // Integer cross products provide an independent, division-free geometry oracle.
+            val difference = when {
+                dot <= 0L -> px * px + py * py - radius * radius
+                dot >= lengthSquared -> (cx - bx) * (cx - bx) + (cy - by) * (cy - by) - radius * radius
+                else -> {
+                    val cross = px * dy - py * dx
+                    cross * cross - radius * radius * lengthSquared
+                }
+            }
+            // Exact tangencies have dedicated cases above; irrational projections may round at the boundary.
+            if (difference != 0L) {
+                assertEquals(
+                    difference < 0L,
+                    segmentCircleIntersects(ax.toFloat(), ay.toFloat(), bx.toFloat(), by.toFloat(), cx.toFloat(), cy.toFloat(), radius.toFloat()),
+                    "seeded scene $index",
+                )
+            }
+        }
     }
 
     @Test

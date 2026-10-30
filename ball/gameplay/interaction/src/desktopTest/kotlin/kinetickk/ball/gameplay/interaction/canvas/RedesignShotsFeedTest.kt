@@ -25,7 +25,7 @@ import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicAspect
@@ -50,7 +50,7 @@ import kinetickk.ball.gameplay.nucleus.GameplayState
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
@@ -154,7 +154,7 @@ class RedesignShotsFeedTest {
         }
         val trial = shot == Shot.FEED_TRIAL || shot == Shot.FEED_SYNERGY4_TRIAL
         val points = if (trial) listOf(
-            PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", coreX, coreY, true, 14.2f, 0, 0.65f,
+            SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", coreX, coreY, true, 14.2f, -1, 0.65f,
                 immutableListOf(), 0f, 0f),
         ) else emptyList()
         val model = base.with(
@@ -173,7 +173,8 @@ class RedesignShotsFeedTest {
             "equippedRelics" to listOf(EquippedRelic(RelicId.entries[0], 2), EquippedRelic(RelicId.entries[7], 1),
                 EquippedRelic(RelicId.entries[1], 1)).toImmutableList(),
             "enemies" to enemies.toImmutableList(),
-            "pointsOfInterest" to points.toImmutableList(),
+            "sites" to points.toImmutableList(),
+            "trial" to points.firstOrNull { it.active }?.let { siteTrial(it) },
             "message" to when (shot) {
                 Shot.FEED, Shot.FEED_FADE -> "ELITE SIGNAL"
                 Shot.FEED_ANOMALY -> "TWO ANOMALIES DETECTED // CHOOSE A COURSE"

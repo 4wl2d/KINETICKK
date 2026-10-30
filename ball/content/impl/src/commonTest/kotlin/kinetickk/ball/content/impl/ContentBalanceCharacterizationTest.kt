@@ -16,6 +16,7 @@ import kinetickk.ball.content.api.MatrixNodeId
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.RunModifierEffect
 import kinetickk.ball.content.api.WeaponId
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -28,12 +29,13 @@ class ContentBalanceCharacterizationTest {
     fun itemCatalogCardinalityOrderingAndContentAreGolden() {
         val items = ui.items
 
-        assertEquals(ACTIVES_END, items.size)
+        assertEquals(TERRAIN_060_END, items.size)
         assertEquals((0 until items.size).toList(), items.map(ItemDefinition::id))
-        // The items shipped through 0.4.0 keep their own pin: a release only appends to the catalog.
+        // The items shipped through 0.4.0 keep their own pin: a release only appends to the catalog. The pin also hashes
+        // every ItemEffect, so it moved once when 0.6.0 appended GRIP and SLING (68d4572118b9586d -> 25c0be545c5a2647).
         val shipped = items.subList(0, ITEMS_THROUGH_040)
         assertEquals(
-            "68d4572118b9586d",
+            "25c0be545c5a2647",
             goldenFingerprint {
                 add("item-effects")
                 ItemEffect.entries.forEach { effect ->
@@ -52,10 +54,14 @@ class ContentBalanceCharacterizationTest {
                 shipped.forEach(::addItem)
             },
         )
-        // The 0.5.0 items, appended from id 173 and pinned on their own: always exactly ids 173..268.
+        // The 0.5.0 items, appended from id 173 and pinned on their own: always exactly ids 173..268. The pin moved when
+        // 0.6.0 retuned six of them back over the 5 % perceptible floor under the new flight law
+        // (6ae3869a3317ee94 -> 17777e466f80fc29), and again when Empty Chamber's damage rose 20 -> 25 % after the
+        // Solar Flare retune (17777e466f80fc29 -> bfc80fdf55b64617), and when Loader Sigil's refresh rose 0.5 -> 0.6 s
+        // after the Orbit retune (bfc80fdf55b64617 -> ef1306c885aae256).
         val appended = items.subList(ITEMS_THROUGH_040, EXPANSION_050_END)
         assertEquals(
-            "6ae3869a3317ee94",
+            "ef1306c885aae256",
             goldenFingerprint {
                 add("items-0.5.0")
                 add(appended.size)
@@ -85,6 +91,17 @@ class ContentBalanceCharacterizationTest {
                 }
             },
         )
+        // The 0.6.0 terrain items, appended after the actives and pinned on their own: always exactly ids 287..301
+        // (re-pinned when Glass Harvest moved to Reborn 1, off the rank-0 Data ladder).
+        val terrain = items.subList(ACTIVES_END, TERRAIN_060_END)
+        assertEquals(
+            "7199c257d9d5f681",
+            goldenFingerprint {
+                add("items-0.6.0-terrain")
+                add(terrain.size)
+                terrain.forEach(::addItem)
+            },
+        )
     }
 
     @Test
@@ -92,7 +109,7 @@ class ContentBalanceCharacterizationTest {
         val build = ui.build
 
         assertEquals(
-            "90af4a2ca532d113",
+            "c5ea14c28212923a",
             goldenFingerprint {
                 build.elements.forEach { element ->
                     add(element.element.name)
@@ -229,8 +246,9 @@ class ContentBalanceCharacterizationTest {
             ),
             ui.matrixNodes.map { node -> node.id to node.costs.toList() },
         )
+        // Tether Arc's mastery description now matches the recalibrated sevenfold damage ramp.
         assertEquals(
-            "6e61ebea0bcb73f7",
+            "a7ad525faae809a3",
             goldenFingerprint {
                 add("weapons")
                 ui.weapons.forEach { weapon ->
@@ -309,7 +327,7 @@ class ContentBalanceCharacterizationTest {
     fun skillApexAndUpgradeContentIsGolden() {
         assertEquals(18, ui.skills.size)
         assertEquals(
-            "443334dcc0d91f0d",
+            "e73bd70a41ae42f0",
             goldenFingerprint {
                 add("skills")
                 ui.skills.forEach { skill ->
@@ -398,6 +416,158 @@ class ContentBalanceCharacterizationTest {
             },
         )
     }
+
+    @Test
+    fun runVarietyContentIsGolden() {
+        // Slice variety-0.6.0: every run-variety identity, definition, policy number and notice (pinned when 0.6.0
+        // shipped the run-variety content; re-pinned when the Keynote element share moved 0.8 -> 0.7, when the omen
+        // arms calibration moved Iron Tide, Hungry Dark, Volatile Pact and Still Water, and when Still Water's weapon
+        // power cost moved -10 % -> -15 %, and when exploration signals became one of three 180 s slots).
+        val variety = catalog.gameplayContent().variety
+        assertEquals(
+            "e65a37e3d810c03e",
+            goldenFingerprint {
+                add("variety-0.6.0")
+                kinetickk.ball.content.api.EliteAffix.entries.forEach { add(it.name); add(it.displayName); add(it.signalNotice) }
+                kinetickk.ball.content.api.WorldEventKind.entries.forEach { add(it.name); add(it.displayName) }
+                kinetickk.ball.content.api.SignalKind.entries.forEach { add(it.name); add(it.displayName) }
+                kinetickk.ball.content.api.SignalOption.entries.forEach { add(it.name); add(it.kind?.name ?: "-") }
+
+                val omens = variety.omens
+                add("omens")
+                add(omens.enabled)
+                add(omens.offers)
+                omens.definitions.forEach { omen ->
+                    add(omen.id.name)
+                    add(omen.name)
+                    add(omen.upside)
+                    add(omen.liability)
+                    add(omen.gains.size)
+                    omen.gains.forEach { addRunModifier(it) }
+                    add(omen.costs.size)
+                    omen.costs.forEach { addRunModifier(it) }
+                    add(omen.minimumRank)
+                    add(omen.weight)
+                }
+
+                val director = variety.director
+                add("director")
+                add(director.personalitiesEnabled)
+                director.personalities.forEach { personality ->
+                    add(personality.id.name)
+                    add(personality.name)
+                    add(personality.description)
+                    add(personality.weight)
+                    add(personality.budgetScale)
+                    listOf(personality.phaseRate, personality.phaseDuration).forEach { scales ->
+                        add(scales.calm)
+                        add(scales.build)
+                        add(scales.surge)
+                        add(scales.breather)
+                    }
+                    with(personality.eventWeights) { listOf(single, pack, flank, swarm, wall, encircle).forEach(::add) }
+                    add(personality.ambushCooldownScale)
+                    add(personality.encircleCooldownScale)
+                    add(personality.wallCooldownScale)
+                    add(personality.packSizeBonus)
+                    add(personality.typeBias.size)
+                    personality.typeBias.forEach { bias ->
+                        add(bias.type.name)
+                        add(bias.multiplier)
+                    }
+                    add(personality.featuresAspect)
+                    add(personality.aspectWeight)
+                }
+                add(director.surgeThemesEnabled)
+                add(director.surgeThemeWeight)
+                add(director.surgeThemeMinimumKinds)
+                add(director.announceAtSeconds)
+                add(director.keynoteAnnounceAtSeconds)
+
+                with(variety.affixes) {
+                    add("affixes")
+                    add(enabled)
+                    listOf(
+                        fromThreatSeconds, baseChance, chancePerTier, shieldSeconds, shieldIntervalSeconds, firstShieldSeconds,
+                        wellStrength,
+                    ).forEach(::add)
+                    add(linkCount)
+                    add(splitFragments)
+                    listOf(burstRadius, burstDelaySeconds, hasteSpeed, hasteCadence).forEach(::add)
+                }
+                with(variety.champions) {
+                    add("champions")
+                    add(enabled)
+                    listOf(fromThreatSeconds, baseChance, chancePerTier, integrityScale).forEach(::add)
+                    add(bonusData)
+                    add(matterScale)
+                }
+                with(variety.keynote) {
+                    add("keynote")
+                    add(enabled)
+                    listOf(tagShare, elementShare, eliteAspectBias, stormEliteAspectBias).forEach(::add)
+                }
+                with(variety.worldEvents) {
+                    add("world-events")
+                    add(enabled)
+                    add(minPerRun)
+                    add(maxPerRun)
+                    listOf(extraEventChance, firstAtSeconds, lastEndSeconds, telegraphSeconds, gapSeconds).forEach(::add)
+                    weights.forEach(::add)
+                    with(meteor) {
+                        listOf(
+                            durationSeconds, intervalSeconds, armSeconds, minDistance, distanceSpread, angleSpread, radius,
+                            coreDamage, enemyDamageScale, pushSpeed,
+                        ).forEach(::add)
+                    }
+                    with(dataStorm) {
+                        listOf(durationSeconds, intervalSeconds, minDistance, maxDistance, angleSpread).forEach(::add)
+                        add(killBonusData)
+                    }
+                    with(gravity) { listOf(durationSeconds, turnRate, rampSeconds, coreAcceleration, enemyAcceleration).forEach(::add) }
+                    with(ion) {
+                        listOf(durationSeconds, intervalSeconds, armSeconds, minDistance, maxDistance, radius).forEach(::add)
+                        add(ionStacks)
+                        listOf(enemyDamageScale, coreRadius, coreDamage).forEach(::add)
+                    }
+                    with(solar) {
+                        listOf(durationSeconds, pulseSeconds, coolingPenalty, weaponBonus, buffSeconds, sweepIntervalSeconds).forEach(::add)
+                        add(sweepStacks)
+                        add(sweepRadius)
+                    }
+                }
+                with(variety.signals) {
+                    add("signals")
+                    add(enabled)
+                    add(firstAtSeconds)
+                    add(intervalSeconds)
+                    add(slots)
+                    add(perRun)
+                    listOf(lifetimeSeconds, distance, sideAngle, touchRadius, lostDistance, trialDelaySeconds).forEach(::add)
+                    weights.forEach(::add)
+                    with(tuning) {
+                        listOf(merchantRareCost, merchantEpicCost, merchantRerollCost).forEach(::add)
+                        add(merchantRerolls)
+                        listOf(
+                            shrineBloodShare, shrineBloodImpact, shrineBloodWeapon, shrineWardIntegrity, shrineWardMinimumIntegrity,
+                            shrineWardShield, shrineWardReduction, shrineRelicShare, gambleRerollChance,
+                        ).forEach(::add)
+                        add(gambleRerollWin)
+                        add(gambleMatterShare)
+                        add(gambleMatterMinimum)
+                        listOf(
+                            gambleMatterChance, gambleMatterPayout, gambleIntegrityShare, gambleIntegrityChance, crateCurse,
+                            crateCurseSeconds, reliquaryCurse, reliquaryCurseSeconds, idolCurse, idolCurseSeconds,
+                            derelictRepairShare, derelictCargoMatter, priceBase, priceRampSeconds,
+                        ).forEach(::add)
+                        add(priceStep)
+                    }
+                }
+                add("notices")
+                kinetickk.ball.content.api.RunVarietyNotices.forEach(::add)
+            },
+        )
+    }
 }
 
 /** The item catalog's size through 0.4.0: ids 0..172 (0.5.0 appends from 173). */
@@ -406,8 +576,11 @@ private const val ITEMS_THROUGH_040 = 173
 /** One past the 0.5.0 expansion (ids 173..268); the active items start here. */
 private const val EXPANSION_050_END = 269
 
-/** One past the active items (ids 269..286). */
+/** One past the active items (ids 269..286); the 0.6.0 terrain items start here. */
 private const val ACTIVES_END = 287
+
+/** One past the 0.6.0 terrain items (ids 287..301). */
+private const val TERRAIN_060_END = 302
 
 /** Every Matrix effect kind with its numbers; floats enter by bits, so JVM and Wasm agree. */
 private fun GoldenFingerprint.addMatrixEffect(effect: MatrixEffect) {
@@ -505,6 +678,8 @@ private fun GoldenFingerprint.addCondition(condition: EffectCondition) {
         EffectCondition.ApexActive -> add("apex-active")
         is EffectCondition.SkillsCharging -> { add("skills-charging"); add(condition.count) }
         is EffectCondition.WeaponFamilyIs -> { add("weapon-family-is"); add(condition.family.name) }
+        is EffectCondition.ObstacleIs -> { add("obstacle-is"); add(condition.kind.name) }
+        is EffectCondition.NearObstacle -> { add("near-obstacle"); add(condition.distance) }
     }
 }
 
@@ -576,6 +751,22 @@ private fun GoldenFingerprint.addRule(rule: ItemRule) {
         is ItemRule.CatalysisRate -> { add("catalysis-rate"); add(rule.amount) }
         is ItemRule.ApexCooldown -> { add("apex-cooldown"); add(rule.amount) }
         is ItemRule.CoreLinkRadius -> { add("core-link-radius"); add(rule.bonus) }
+        is ItemRule.ObstacleTuning -> { add("obstacle-tuning"); add(rule.aspect.name); add(rule.amount) }
+    }
+}
+
+/** One run modifier with its kind and numbers (omens, Blessings and Pacts share the vocabulary). */
+private fun GoldenFingerprint.addRunModifier(effect: RunModifierEffect) {
+    when (effect) {
+        is RunModifierEffect.Stat -> { add("stat"); add(effect.effect.name); add(effect.amount) }
+        is RunModifierEffect.MatterGainScale -> { add("matter-gain"); add(effect.factor) }
+        is RunModifierEffect.Rerolls -> { add("rerolls"); add(effect.delta) }
+        is RunModifierEffect.HostileScale -> {
+            add("hostile")
+            listOf(effect.health, effect.speed, effect.incomingDamage, effect.spawnRate, effect.eliteRate).forEach(::add)
+        }
+        is RunModifierEffect.Mutator -> { add("mutator"); add(effect.mutator.name) }
+        is RunModifierEffect.KeynoteFloor -> { add("keynote-floor"); add(effect.share) }
     }
 }
 

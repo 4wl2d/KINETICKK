@@ -23,10 +23,13 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicKey
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.RelicPolicy
+import kinetickk.ball.content.api.RunBoonKind
+import kinetickk.ball.content.api.RebirthMutator
 import kinetickk.ball.content.api.RewardFocus
 import kinetickk.ball.content.api.RuleLineKind
 import kinetickk.ball.content.api.RuleTextContext
 import kinetickk.ball.content.api.SkillDefinition
+import kinetickk.ball.content.api.SignalOption
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.StatusElement
@@ -51,6 +54,7 @@ import kinetickk.ball.gameplay.interaction.canvas.overlayRelicLinks
 import kinetickk.ball.gameplay.interaction.canvas.overlayUpsideMultiplier
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
+import kinetickk.ball.gameplay.interaction.localization.RunVarietyText
 import kinetickk.ball.gameplay.nucleus.render.BuildForecast
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
@@ -99,6 +103,8 @@ internal data class RewardPresentation(
     val totem: RewardTotemHeader? = null,
     /** The relic being bound when every slot choice binds the same incoming relic. */
     val relicPanel: RewardRelicPanel? = null,
+    /** An omen offer's run conditions (director pattern and Keynote), shown under its heading. */
+    val conditions: RewardRunConditions? = null,
 ) {
     /** An Heirloom offer: gold carries its heading. */
     val heirloom: Boolean get() = cards.any { it.heirloom }
@@ -113,12 +119,15 @@ internal fun GameplayRenderModel.rewardPresentation(language: AppLanguage = AppL
         ChoiceType.TOTEM -> RewardLayoutKind.TOTEM
         ChoiceType.RELIC_BIND -> RewardLayoutKind.RELIC_BIND
         ChoiceType.ITEM, ChoiceType.WEAPON, ChoiceType.RELIC, ChoiceType.ACTIVE_SLOT -> RewardLayoutKind.CARDS
+        // Omens, signal prompts and boons lay out as cards.
+        ChoiceType.OMEN, ChoiceType.SIGNAL, ChoiceType.BOON -> RewardLayoutKind.CARDS
     }
     val relicChoice = choiceType == ChoiceType.RELIC || choiceType == ChoiceType.RELIC_BIND
     val incoming = choices.firstOrNull { it.relicAction == RelicChoiceAction.REPLACE }?.relicId?.let(content::relic)
     return RewardPresentation(
         heading = if (choices.any { it.heirloom && it.relicId != null }) language.text(OverlayRedesignText.Heirloom)
-            else rewardHeading(choiceType, choices.firstOrNull()?.relicAction, language),
+            else rewardRunVarietyHeading(language) ?: rewardDimensionHeading(language)
+                ?: rewardHeading(choiceType, choices.firstOrNull()?.relicAction, language),
         subtitle = "",
         cards = choices.mapIndexed { index, choice -> rewardCardPresentation(choice, index, language, touch) },
         titleAccent = Kk.Bone,
@@ -141,6 +150,7 @@ internal fun GameplayRenderModel.rewardPresentation(language: AppLanguage = AppL
                 .joinToString(", ") { overlayLevel(it.minimumLevel, language) }),
         ) else null,
         relicPanel = incoming?.let { relic -> rewardRelicPanel(relic, 1, equippedRelics.map { it.id }, language) },
+        conditions = if (choiceType == ChoiceType.OMEN) rewardRunConditions(language) else null,
     )
 }
 
@@ -360,6 +370,14 @@ internal enum class RewardChipKind {
     ACTIVE,
     /** An unowned active item offered while every slot holds another active: taking it asks which one to replace. */
     REPLACES_ACTIVE,
+    /** The run's director pattern on an omen offer: the personality's sigil ([RewardChip.icon]) and name. */
+    PATTERN,
+    /** The run's Keynote on an omen offer: its tag's mark, the element's mark in its hue, and both names. */
+    KEYNOTE,
+    /** The Rebirth mutator an omen's liability adds for the run ([RewardChip.mutator] draws its sigil). */
+    MUTATOR,
+    /** What a signal card takes: a price, a stake or the integrity it costs, by its mark ([RewardChip.icon]) and number. */
+    COST,
 }
 
 /**
@@ -387,6 +405,10 @@ internal data class RewardChip(
     val core: CoreShape? = null,
     /** The key an ACTIVE chip's slot is bound to, drawn as a key cap after the label (null on touch). */
     val keyCap: String? = null,
+    /** The mark of a PATTERN or COST chip. */
+    val icon: KkIcon? = null,
+    /** The mutator a MUTATOR chip names. */
+    val mutator: RebirthMutator? = null,
 ) {
     /** What the chip reads as: its label, then its key cap. */
     val spoken: String get() = if (keyCap == null) label else "$label $keyCap"
@@ -452,9 +474,18 @@ internal data class RewardCardPresentation(
     val keys: List<RewardRelicKey> = emptyList(),
     /** Rebirth tier shown as ring marks on Reborn and Heirloom cards. */
     val rebirthTier: Int = 0,
+    /** A signal card the run cannot take now (HATCH = locked): it cannot be picked or focused. */
+    val locked: Boolean = false,
+    /** A Blessing or a Pact card: the kind gives its hue and face ([rewardBoonCardLook]). */
+    val boonKind: RunBoonKind? = null,
 ) {
-    /** A relic decline, or the active slot prompt's keep card: both read as declining the offer. */
-    val decline: Boolean get() = choice.relicAction == RelicChoiceAction.DECLINE || choice.keepsActiveLoadout
+    /**
+     * A relic decline, the active slot prompt's keep card, No omen, a signal's Ignore or the Pact offer's Refuse card:
+     * each reads as declining the offer.
+     */
+    val decline: Boolean get() = choice.relicAction == RelicChoiceAction.DECLINE || choice.keepsActiveLoadout ||
+        choice.type == ChoiceType.OMEN && choice.omenId == null || choice.signalOption == SignalOption.IGNORE ||
+        choice.type == ChoiceType.BOON && choice.boonId == null
     val reborn: Boolean get() = choice.reborn && item != null
     val heirloom: Boolean get() = choice.heirloom && relic != null
 
@@ -465,6 +496,10 @@ internal data class RewardCardPresentation(
      */
     fun accentColor(roles: KkRolePalette): Color {
         relic?.let { return it.aspect.overlayColor(roles) }
+        boonKind?.let { kind ->
+            if (kind == RunBoonKind.ASPECT) elements.firstOrNull()?.let { return roles.element(it.ordinal) }
+            return kind.hue(roles)
+        }
         choice.rewardFocus?.let { focus -> return focus.relicAspect()?.overlayColor(roles) ?: roles.kinetic }
         if (choice.relicAction == RelicChoiceAction.MELD) return roles.kinetic
         return tone.color(roles, accent)
@@ -508,6 +543,9 @@ internal fun GameplayRenderModel.rewardCardPresentation(
     touch: Boolean = false,
 ): RewardCardPresentation {
     if (choice.type == ChoiceType.ACTIVE_SLOT) return rewardActiveSlotCard(choice, index, language, touch)
+    if (choice.type == ChoiceType.OMEN) return rewardOmenCard(choice, index, language)
+    if (choice.type == ChoiceType.SIGNAL) return rewardSignalCard(choice, index, language)
+    if (choice.type == ChoiceType.BOON) return rewardBoonCard(choice, index, language)
     val item = choice.itemId?.let(content::item)
     val weapon = choice.weaponId?.let(content::weapon)
     val slotRelic = choice.relicSlot?.let(equippedRelics::getOrNull)
@@ -1062,8 +1100,8 @@ private fun RewardFocus.relicAspect(): RelicAspect? = RelicAspect.entries.firstO
 
 /** What picking a focus leads to, by the directed reward's choice type (artifacts, relics, weapons). */
 private fun rewardFocusEffect(type: ChoiceType): OverlayRedesignText = when (type) {
-    // The active slot prompt is never a directed reward; a focus never leads to one.
-    ChoiceType.ITEM, ChoiceType.ACTIVE_SLOT -> OverlayRedesignText.FocusArtifacts
+    // The active slot prompt, omens, signal prompts and boons are never directed rewards; a focus never leads to one.
+    ChoiceType.ITEM, ChoiceType.ACTIVE_SLOT, ChoiceType.OMEN, ChoiceType.SIGNAL, ChoiceType.BOON -> OverlayRedesignText.FocusArtifacts
     ChoiceType.RELIC, ChoiceType.RELIC_BIND -> OverlayRedesignText.FocusRelics
     ChoiceType.TOTEM, ChoiceType.WEAPON -> OverlayRedesignText.FocusWeapons
 }
@@ -1411,4 +1449,7 @@ internal fun rewardHeading(
     ChoiceType.RELIC -> language.text(GameplayText.RelicIntercept)
     ChoiceType.RELIC_BIND -> if (action == RelicChoiceAction.MELD_TARGET) language.text(GameplayText.RelicMeld) else language.text(GameplayText.RelicRebind)
     ChoiceType.ACTIVE_SLOT -> language.text(GameplayText.ChooseActiveSlot)
+    ChoiceType.OMEN -> language.text(RunVarietyText.ChooseOmen)
+    // A signal prompt is headed by its kind (rewardRunVarietyHeading) and a boon offer by its layer (rewardDimensionHeading).
+    ChoiceType.SIGNAL, ChoiceType.BOON -> language.text(GameplayText.ChooseArtifact)
 }

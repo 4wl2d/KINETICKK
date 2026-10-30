@@ -5,6 +5,7 @@ package kinetickk.flow.session.api
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.foundation.collections.immutableListOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -73,6 +74,15 @@ class AppSessionApiContractTest {
     }
 
     @Test
+    fun theShellOffersTheStandardRunModeUnlessSessionSaysOtherwise() {
+        val home = homeProjection()
+
+        assertEquals(RunMode.STANDARD, home.runMode)
+        assertEquals(RunMode.EASY, home.copy(runMode = RunMode.EASY).runMode)
+        assertEquals(home, home.copy(runMode = RunMode.STANDARD))
+    }
+
+    @Test
     fun unavailableBootstrapAndPendingWorkflowBothBlockNormalInput() {
         val ready = homeProjection()
 
@@ -102,10 +112,12 @@ class AppSessionApiContractTest {
             SessionInteractionPulse.ToggleMuteRequested,
             SessionInteractionPulse.SelectCoreShapeRequested(CoreShape.PRISM),
             SessionInteractionPulse.RebirthRequested(1),
+            SessionInteractionPulse.SelectRunModeRequested(RunMode.EASY),
         )
 
-        assertEquals(9, interactions.size)
+        assertEquals(10, interactions.size)
         assertIs<SessionInteractionPulse.SelectCoreShapeRequested>(interactions[7])
+        assertEquals(RunMode.EASY, assertIs<SessionInteractionPulse.SelectRunModeRequested>(interactions[9]).mode)
         assertEquals(
             setOf(
                 SessionWorkflowFailureCode.PROFILE_COMMAND_REFUSED,

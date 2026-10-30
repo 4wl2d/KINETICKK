@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.interaction.canvas
 
 import kinetickk.ball.content.api.ContentBounds
+import kinetickk.ball.content.api.EnemyRank
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.foundation.design.KkLevelTier
@@ -68,6 +69,7 @@ internal class HudPresentationMemory {
     private var lastMessage: String? = null
     private var lastMessageTime = 0f
     private var messageShownAt = Float.NEGATIVE_INFINITY
+    val dimensionShutter = DimensionShutterMemory() // the world layer's edges, for the dimension shutter
 
     /** Records [engine] as shown at [renderTime]; repeated draws of one frame change nothing. */
     fun observe(engine: GameplayRenderModel, renderTime: Float, boss: BossTarget) {
@@ -85,6 +87,7 @@ internal class HudPresentationMemory {
         if (restarted) forgetOneShots()
         observeLevelTier(engine, renderTime, armed)
         observeSkills(engine, renderTime, armed)
+        dimensionShutter.observe(engine.dimension.layer, renderTime, armed)
 
         val integrity = engine.hp / engine.maxHp.coerceAtLeast(1f)
         if (!first && !lastIntegrity.isNaN() && integrity < lastIntegrity) {
@@ -185,6 +188,7 @@ internal class HudPresentationMemory {
         readyAt.fill(Float.NEGATIVE_INFINITY)
         refundAt.fill(Float.NEGATIVE_INFINITY)
         skillRowShownAt = Float.NEGATIVE_INFINITY
+        dimensionShutter.forget()
     }
 
     /** Level-badge slam progress 0..1 (1 = settled) at [renderTime]. */
@@ -273,11 +277,15 @@ internal class HudPresentationMemory {
     }
 }
 
-/** The boss the HUD tracks top-center: the Architect first, else the first living elite. */
+/** The boss the HUD tracks top-center: the living enemy of the highest content rank above ordinary, the first of it. */
 internal class BossTarget {
     var id: Int = -1
         private set
     var type: EnemyType? = null
+        private set
+
+    /** The tracked boss's content rank; null while none is tracked. */
+    var rank: EnemyRank? = null
         private set
     var integrity: Float = 0f
         private set
@@ -293,29 +301,28 @@ internal class BossTarget {
     fun select(engine: GameplayRenderModel): BossTarget {
         id = -1
         type = null
+        rank = null
         integrity = 0f
         statusBits = 0
         affinityBits = 0
         val enemies = engine.enemies
-        // The Architect outranks a Herald, a Herald outranks Elites; the first of a rank stays tracked.
-        var rank = 0
+        // By content rank ([bossTargetPriority]): the Architect outranks a secret boss, a secret boss a mini-boss, a
+        // mini-boss an Elite; the first of a rank stays tracked.
+        var priority = 0
         for (index in enemies.indices) {
             val enemy = enemies[index]
             if (enemy.dead || enemy.hp <= 0f) continue
-            val candidate = when (enemy.type) {
-                EnemyType.ARCHITECT -> 3
-                EnemyType.HERALD -> 2
-                EnemyType.ELITE -> 1
-                else -> 0
-            }
-            if (candidate > rank) {
-                rank = candidate
+            val enemyRank = engine.content.enemy(enemy.type).rank
+            val candidate = bossTargetPriority(enemyRank)
+            if (candidate > priority) {
+                priority = candidate
                 id = enemy.id
                 type = enemy.type
+                rank = enemyRank
                 integrity = (enemy.hp / enemy.maxHp.coerceAtLeast(1f)).coerceIn(0f, 1f)
                 statusBits = enemy.statusBits
                 affinityBits = enemy.affinityBits
-                if (enemy.type == EnemyType.ARCHITECT) break
+                if (enemyRank == EnemyRank.BOSS) break
             }
         }
         return this

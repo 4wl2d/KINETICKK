@@ -38,7 +38,8 @@ class OfferPitySweepTest {
         val singleRare = canonicalGameplayContent.items.first { it.rarity == ItemRarity.RARE && it.minimumRebirth == 0 }
         val scenarios = mapOf(
             "Rebirth 2" to veteran(rebirth = 2),
-            "a single Rare or better" to veteran(contentOffering { !rareOrBetter(it) || it.id == singleRare.id }),
+            // The whole catalog dealt: the one Rare is offerable whichever items a deal of this catalog holds.
+            "a single Rare or better" to veteran(contentOffering { !rareOrBetter(it) || it.id == singleRare.id }).dealWholeCatalog(),
             "no Rare" to veteran(contentOffering { it.rarity != ItemRarity.RARE }),
             "no Rare or Epic at Rebirth 2" to veteran(
                 contentOffering { it.rarity != ItemRarity.RARE && it.rarity != ItemRarity.EPIC },

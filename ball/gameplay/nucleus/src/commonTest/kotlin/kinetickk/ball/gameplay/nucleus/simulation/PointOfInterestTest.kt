@@ -17,55 +17,60 @@ class PointOfInterestTest {
     @Test fun scheduleOffersTwoWorldFixedPointsAndNeverReplacesSkippedOffer() {
         val game = game()
         game.elapsed = 45f
-        game.updatePointsOfInterest(0.01f)
-        assertEquals(2, game.pointsOfInterest.size)
-        val first = game.pointsOfInterest.toList()
+        game.updateSites(0.01f)
+        assertEquals(2, game.sites.size)
+        val first = game.sites.toList()
         game.coreX += 2_000f
-        game.updatePointsOfInterest(0.01f)
-        assertEquals(first, game.pointsOfInterest)
+        game.updateSites(0.01f)
+        assertEquals(first, game.sites)
         game.elapsed = 86f
-        game.updatePointsOfInterest(0.01f)
-        assertTrue(game.pointsOfInterest.isEmpty())
-        game.updatePointsOfInterest(0.01f)
-        assertTrue(game.pointsOfInterest.isEmpty())
+        game.updateSites(0.01f)
+        assertTrue(game.sites.isEmpty())
+        game.updateSites(0.01f)
+        assertTrue(game.sites.isEmpty())
         game.elapsed = 165f
-        game.updatePointsOfInterest(0.01f)
-        assertEquals(2, game.pointsOfInterest.size)
+        game.updateSites(0.01f)
+        assertTrue(game.sites.isEmpty(), "the old two-minute cadence no longer offers a site")
+        game.elapsed = 225f
+        game.updateSites(0.01f)
+        assertEquals(2, game.sites.size)
     }
 
     @Test fun circuitRequiresThreeSeparatedBeaconsAndReturnAndRewardsExactlyOnce() {
         val game = game()
-        game.activatePointOfInterest(PointOfInterestState(0, PointOfInterestKind.RESONANT_CIRCUIT, 0f, 0f, 85f))
+        game.activateWindowSite(SiteState(0L, SiteKind.RESONANT_CIRCUIT, 0f, 0f, 85f))
         game.previousCoreX = -1_000f; game.previousCoreY = 0f; game.coreX = 1_000f; game.coreY = 0f
-        game.updatePointsOfInterest(0.01f)
-        assertEquals(1, game.pointsOfInterest.single().nextBeacon)
+        game.updateSites(0.01f)
+        assertEquals(0, game.sites.single().step)
         repeat(3) {
-            val beacon = game.pointsOfInterest.single().beacon(it + 1)
-            game.previousCoreX = beacon.x; game.previousCoreY = beacon.y
-            game.coreX = beacon.x; game.coreY = beacon.y
-            game.updatePointsOfInterest(0.01f)
+            val site = game.sites.single()
+            val beaconX = site.x + CircuitBeacons[it].dx
+            val beaconY = site.y + CircuitBeacons[it].dy
+            game.previousCoreX = beaconX; game.previousCoreY = beaconY
+            game.coreX = beaconX; game.coreY = beaconY
+            game.updateSites(0.01f)
         }
         assertEquals(listOf(DirectedReward.WEAPON), game.pendingDirectedRewards)
-        assertTrue(game.pointsOfInterest.isEmpty())
-        game.updatePointsOfInterest(0.01f)
+        assertTrue(game.sites.isEmpty())
+        game.updateSites(0.01f)
         assertEquals(1, game.pendingDirectedRewards.size)
     }
 
     @Test fun orbitNeedsEightSecondsOfActualMovementAndPausesDoNotAdvanceIt() {
         val game = game()
-        game.activatePointOfInterest(PointOfInterestState(0, PointOfInterestKind.COLLAPSING_ORBIT, 0f, 0f, 85f))
+        game.activateWindowSite(SiteState(0L, SiteKind.COLLAPSING_ORBIT, 0f, 0f, 85f))
         game.coreX = 155f; game.previousCoreX = 155f
-        repeat(100) { game.updatePointsOfInterest(0.01f) }
-        assertEquals(0f, game.pointsOfInterest.single().orbitSeconds)
+        repeat(100) { game.updateSites(0.01f) }
+        assertEquals(0f, game.sites.single().meter)
         game.phase = GamePhase.PAUSED
-        val before = game.pointsOfInterest
-        game.updatePointsOfInterest(1f)
-        assertEquals(before, game.pointsOfInterest)
+        val before = game.sites
+        game.updateSites(1f)
+        assertEquals(before, game.sites)
         game.phase = GamePhase.RUNNING
         repeat(810) { index ->
             game.previousCoreX = game.coreX; game.previousCoreY = game.coreY
             game.coreX = cos(index * 0.01f) * 155f; game.coreY = sin(index * 0.01f) * 155f
-            game.updatePointsOfInterest(0.01f)
+            game.updateSites(0.01f)
         }
         assertEquals(listOf(DirectedReward.ITEM_AND_REPAIR), game.pendingDirectedRewards)
         assertEquals(1, game.pendingCompletedOrbits)
@@ -74,34 +79,34 @@ class PointOfInterestTest {
     @Test fun defendersReserveThreeExistingEnemySlotsAndRequireTheirDeaths() {
         val game = game()
         repeat(game.content.rebirth.maxActiveEnemies - 2) { game.addEnemyForTesting(1_000f, 1_000f) }
-        val offer = PointOfInterestState(0, PointOfInterestKind.SEALED_ANOMALY, 0f, 0f, 85f)
-        game.activatePointOfInterest(offer)
-        assertTrue(game.pointsOfInterest.isEmpty())
+        val offer = SiteState(0L, SiteKind.SEALED_ANOMALY, 0f, 0f, 85f)
+        game.activateWindowSite(offer)
+        assertTrue(game.sites.isEmpty())
         game.enemies.removeAt(0)
-        game.activatePointOfInterest(offer)
+        game.activateWindowSite(offer)
         assertEquals(game.content.rebirth.maxActiveEnemies, game.enemies.size)
-        val trial = game.pointsOfInterest.single()
-        val defenders = game.enemies.filter { it.id in trial.defenderIds }
+        val trial = game.sites.single()
+        val defenders = game.enemies.filter { it.id in trial.foeIds }
         defenders.forEach { game.onEnemyKilled(it); game.onEnemyKilled(it) }
-        game.updatePointsOfInterest(0.01f)
+        game.updateSites(0.01f)
         assertEquals(listOf(DirectedReward.RELIC), game.pendingDirectedRewards)
     }
 
     @Test fun timeoutEscapeRebaseAndBossBoundaryCannotDuplicateRewards() {
         val game = game()
-        game.activatePointOfInterest(PointOfInterestState(0, PointOfInterestKind.RESONANT_CIRCUIT, 300_000f, 20f, 85f))
+        game.activateWindowSite(SiteState(0L, SiteKind.RESONANT_CIRCUIT, 300_000f, 20f, 85f))
         game.coreX = 300_000f
         game.rebaseWorldIfNeeded()
-        assertEquals(0f, game.pointsOfInterest.single().x)
-        game.updatePointsOfInterest(25f)
-        assertTrue(game.pointsOfInterest.isEmpty())
+        assertEquals(0f, game.sites.single().x)
+        game.updateSites(25f)
+        assertTrue(game.sites.isEmpty())
         assertTrue(game.pendingDirectedRewards.isEmpty())
-        game.elapsed = 645f; game.nextPointOfferIndex = 5
-        game.updatePointsOfInterest(0.01f)
-        assertEquals(2, game.pointsOfInterest.size)
+        game.elapsed = 405f; game.nextSiteWindowIndex = 2
+        game.updateSites(0.01f)
+        assertEquals(2, game.sites.size)
         game.elapsed = game.content.tempo.bossAtSeconds
-        game.updatePointsOfInterest(0.01f)
-        assertTrue(game.pointsOfInterest.isEmpty())
+        game.updateSites(0.01f)
+        assertTrue(game.sites.isEmpty())
     }
 
     @Test fun aWeaponDirectionOffersOnlyUnlockedWeaponsOfItsFocus() {

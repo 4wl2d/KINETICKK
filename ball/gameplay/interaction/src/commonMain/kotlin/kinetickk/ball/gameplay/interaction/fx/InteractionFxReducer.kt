@@ -16,6 +16,7 @@ import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.exp
+import kotlin.math.max
 import kotlin.math.sin
 
 internal object InteractionFxLimits {
@@ -24,6 +25,9 @@ internal object InteractionFxLimits {
     const val MAX_SHOCKWAVES = 48
     const val MAX_DAMAGE_NUMBERS = 140
     const val MAX_WEAPON_ARCS = 128
+
+    /** Samples of the Core ribbon ring (presentation memory of the Core's path); the oldest is trimmed on overflow. */
+    const val MAX_CORE_RIBBON_SAMPLES = 64
 
     /** Damage numbers pop, settle and drift away from the Core over 600 ms (`KkTime.Drift`). */
     const val DAMAGE_NUMBER_LIFE_SECONDS = 0.6f
@@ -139,6 +143,23 @@ class InteractionFxReducer(seed: Int) {
     private var skillBurstsDirty = false
     private var apexBurstsDirty = false
 
+    // The Core ribbon ring: run-local positions at the start of past fixed steps, their age in simulation seconds and
+    // their CoreRibbonProjection flags. Presentation memory only, like every other field here.
+    private val ribbonPositions = FloatArray(InteractionFxLimits.MAX_CORE_RIBBON_SAMPLES * 2)
+    private val ribbonAges = FloatArray(InteractionFxLimits.MAX_CORE_RIBBON_SAMPLES)
+    private val ribbonFlags = IntArray(InteractionFxLimits.MAX_CORE_RIBBON_SAMPLES)
+    private var ribbonHead = -1 // ring index of the newest sample
+    private var ribbonCount = 0
+    // The last MotionSample's position and speed (every step, sampled or not): a step's jump is measured from it.
+    private var ribbonStepX = Float.NaN
+    private var ribbonStepY = Float.NaN
+    private var ribbonStepSpeed = 0f
+    private var coreRibbonDirty = false
+    // Newest-first staging for a published ribbon, which copies only the live prefix.
+    private val ribbonStagedPositions = FloatArray(InteractionFxLimits.MAX_CORE_RIBBON_SAMPLES * 2)
+    private val ribbonStagedAges = FloatArray(InteractionFxLimits.MAX_CORE_RIBBON_SAMPLES)
+    private val ribbonStagedFlags = IntArray(InteractionFxLimits.MAX_CORE_RIBBON_SAMPLES)
+
     fun apply(cues: Iterable<VisualFxCue>) {
         if (cues is List<*>) {
             @Suppress("UNCHECKED_CAST")
@@ -216,6 +237,7 @@ class InteractionFxReducer(seed: Int) {
             } else cachedProjection.reactionStamps,
             runReactionMask = runReactionMask,
             runDiscoveryMask = runDiscoveryMask,
+            coreRibbon = if (coreRibbonDirty) buildCoreRibbon() else cachedProjection.coreRibbon,
         )
         projectionDirty = false
         particlesDirty = false
@@ -227,6 +249,7 @@ class InteractionFxReducer(seed: Int) {
         reactionStampsDirty = false
         skillBurstsDirty = false
         apexBurstsDirty = false
+        coreRibbonDirty = false
         return cachedProjection
     }
 
@@ -242,7 +265,11 @@ class InteractionFxReducer(seed: Int) {
                 weaponArcsDirty = true
                 true
             }
-            is VisualFxCue.MotionSample -> sampleMotionEcho(cue)
+            is VisualFxCue.MotionSample -> {
+                val echo = sampleMotionEcho(cue)
+                val ribbon = sampleCoreRibbon(cue)
+                echo || ribbon
+            }
             is VisualFxCue.EffectsAdvanced -> advanceEffects(cue.deltaSeconds)
             is VisualFxCue.WeaponArcsAdvanced -> advanceWeaponArcs(cue.deltaSeconds)
             is VisualFxCue.Burst -> burst(cue)
@@ -323,7 +350,9 @@ class InteractionFxReducer(seed: Int) {
                 if (reactionStamps.isNotEmpty()) reactionStampsDirty = true
                 if (skillBursts.isNotEmpty()) skillBurstsDirty = true
                 if (apexBursts.isNotEmpty()) apexBurstsDirty = true
-                changed || elementBursts.isNotEmpty() || reactionStamps.isNotEmpty() || skillBursts.isNotEmpty() || apexBursts.isNotEmpty()
+                val ribbonMoved = rebaseCoreRibbon(cue.shiftX, cue.shiftY)
+                changed || elementBursts.isNotEmpty() || reactionStamps.isNotEmpty() || skillBursts.isNotEmpty() || apexBursts.isNotEmpty() ||
+                    ribbonMoved
             }
             is VisualFxCue.VisualCuesDropped -> false
             is VisualFxCue.SkillCast -> skillCast(cue)
@@ -346,6 +375,7 @@ class InteractionFxReducer(seed: Int) {
             reactionStamps.isNotEmpty() ||
             skillBursts.isNotEmpty() ||
             apexBursts.isNotEmpty() ||
+            ribbonCount > 0 ||
             runReactionMask != 0 || runDiscoveryMask != 0
         elementBursts.clear()
         reactionStamps.clear()
@@ -363,7 +393,13 @@ class InteractionFxReducer(seed: Int) {
         motionEchoClock = 0f
         coreX = Float.NaN
         coreY = Float.NaN
+        ribbonCount = 0
+        ribbonHead = -1
+        ribbonStepX = Float.NaN
+        ribbonStepY = Float.NaN
+        ribbonStepSpeed = 0f
         if (changed) {
+            coreRibbonDirty = true
             particlesDirty = true
             motionEchoesDirty = true
             shockwavesDirty = true
@@ -525,6 +561,98 @@ class InteractionFxReducer(seed: Int) {
         return true
     }
 
+    /**
+     * Records the Core's position at the start of the step on the ribbon once it lies a spacing ([ribbonSpacing]) from
+     * the newest sample; a Dash start always samples. A Core at or below [RIBBON_MIN_SPEED] outside a Dash stores
+     * nothing. A jump beyond the step's reach (a blink) starts a new chain, so no segment crosses it. Returns whether
+     * the ribbon changed: tracking the step alone is not a visible change.
+     */
+    private fun sampleCoreRibbon(cue: VisualFxCue.MotionSample): Boolean {
+        val x = cue.previousCoreX
+        val y = cue.previousCoreY
+        if (!x.isFinite() || !y.isFinite()) return false
+        val lastX = ribbonStepX
+        val lastY = ribbonStepY
+        val lastSpeed = ribbonStepSpeed
+        ribbonStepX = x
+        ribbonStepY = y
+        ribbonStepSpeed = cue.speed
+        val dash = cue.dashPhaseTime > 0f
+        if (cue.speed <= RIBBON_MIN_SPEED && !dash) return false
+        val dashFlag = if (dash) CoreRibbonProjection.DASH else 0
+        val reach = max(lastSpeed, cue.speed) * cue.deltaSeconds * RIBBON_TELEPORT_FACTOR + RIBBON_TELEPORT_SLACK
+        val jumped = !lastX.isNaN() && distanceSquared(lastX, lastY, x, y) > reach * reach
+        if (ribbonCount == 0 || jumped) {
+            appendRibbon(x, y, CoreRibbonProjection.START or dashFlag)
+            return true
+        }
+        val dashStarts = dash && (ribbonFlags[ribbonHead] and CoreRibbonProjection.DASH) == 0
+        val spacing = ribbonSpacing(cue.speed)
+        val fromNewest = distanceSquared(ribbonPositions[ribbonHead * 2], ribbonPositions[ribbonHead * 2 + 1], x, y)
+        if (!dashStarts && fromNewest < spacing * spacing) return false
+        appendRibbon(x, y, dashFlag)
+        return true
+    }
+
+    /** Writes the newest sample at age 0; once the ring is full it takes the oldest sample's slot. */
+    private fun appendRibbon(x: Float, y: Float, flags: Int) {
+        val index = (ribbonHead + 1) % InteractionFxLimits.MAX_CORE_RIBBON_SAMPLES
+        ribbonHead = index
+        ribbonPositions[index * 2] = x
+        ribbonPositions[index * 2 + 1] = y
+        ribbonAges[index] = 0f
+        ribbonFlags[index] = flags
+        if (ribbonCount < InteractionFxLimits.MAX_CORE_RIBBON_SAMPLES) ribbonCount++
+        coreRibbonDirty = true
+    }
+
+    /** Ring index of the live sample [newer] places behind the newest (0 is the newest). */
+    private fun ribbonIndex(newer: Int): Int =
+        (ribbonHead - newer + InteractionFxLimits.MAX_CORE_RIBBON_SAMPLES) % InteractionFxLimits.MAX_CORE_RIBBON_SAMPLES
+
+    /** Ages the live samples in simulation time and drops the oldest past [RIBBON_MAX_AGE]; a pause freezes the ribbon. */
+    private fun ageCoreRibbon(delta: Float) {
+        if (ribbonCount == 0) return
+        for (newer in 0 until ribbonCount) ribbonAges[ribbonIndex(newer)] += delta
+        while (ribbonCount > 0 && ribbonAges[ribbonIndex(ribbonCount - 1)] > RIBBON_MAX_AGE) ribbonCount--
+        coreRibbonDirty = true
+    }
+
+    /**
+     * The ribbon and the tracked step move with the world, so a rebase draws no long segment and breaks no chain.
+     * Returns whether a live sample moved.
+     */
+    private fun rebaseCoreRibbon(shiftX: Float, shiftY: Float): Boolean {
+        ribbonStepX -= shiftX
+        ribbonStepY -= shiftY
+        if (ribbonCount == 0) return false
+        for (newer in 0 until ribbonCount) {
+            val index = ribbonIndex(newer)
+            ribbonPositions[index * 2] -= shiftX
+            ribbonPositions[index * 2 + 1] -= shiftY
+        }
+        coreRibbonDirty = true
+        return true
+    }
+
+    /** Publishes the live samples newest first; the projection copies them out of the staging arrays. */
+    private fun buildCoreRibbon(): CoreRibbonProjection {
+        for (newer in 0 until ribbonCount) {
+            val index = ribbonIndex(newer)
+            ribbonStagedPositions[newer * 2] = ribbonPositions[index * 2]
+            ribbonStagedPositions[newer * 2 + 1] = ribbonPositions[index * 2 + 1]
+            ribbonStagedAges[newer] = ribbonAges[index]
+            ribbonStagedFlags[newer] = ribbonFlags[index]
+        }
+        return CoreRibbonProjection.of(ribbonStagedPositions, ribbonStagedAges, ribbonStagedFlags, ribbonCount)
+    }
+
+    private fun distanceSquared(fromX: Float, fromY: Float, toX: Float, toY: Float): Float {
+        val dx = toX - fromX
+        val dy = toY - fromY
+        return dx * dx + dy * dy
+    }
+
     private fun advanceEffects(delta: Float): Boolean {
         if (
             buildNotifications.isEmpty() &&
@@ -535,44 +663,59 @@ class InteractionFxReducer(seed: Int) {
             elementBursts.isEmpty() &&
             reactionStamps.isEmpty() &&
             skillBursts.isEmpty() &&
-            apexBursts.isEmpty()
+            apexBursts.isEmpty() &&
+            ribbonCount == 0
         ) return false
+        ageCoreRibbon(delta)
         for (index in buildNotifications.indices) {
             val value = buildNotifications[index]
             buildNotifications[index] = value.copy(life = value.life - delta, age = value.age + delta)
         }
-        removeExpired(buildNotifications) { it.life > 0f }
+        retainInPlace(buildNotifications) { it.life > 0f }
         val particleDamping = exp(-2.2f * delta)
-        for (index in particles.indices) {
-            val value = particles[index]
+        retainInPlace(particles) { value ->
             value.x += value.vx * delta
             value.y += value.vy * delta
             value.vx *= particleDamping
             value.vy *= particleDamping
             value.life -= delta
+            !(value.life <= 0f)
         }
-        removeExpired(particles) { value -> !(value.life <= 0f) }
-        for (index in motionEchoes.indices) motionEchoes[index].life -= delta
-        removeExpired(motionEchoes) { value -> !(value.life <= 0f) }
-        for (index in shockwaves.indices) shockwaves[index].life -= delta
-        removeExpired(shockwaves) { value -> !(value.life <= 0f) }
+        retainInPlace(motionEchoes) { value ->
+            value.life -= delta
+            !(value.life <= 0f)
+        }
+        retainInPlace(shockwaves) { value ->
+            value.life -= delta
+            !(value.life <= 0f)
+        }
         // Numbers keep their anchor; the renderer eases the drift from life (see DamageNumberProjection).
-        for (index in damageNumbers.indices) damageNumbers[index].life -= delta
-        removeExpired(damageNumbers) { value -> !(value.life <= 0f) }
+        retainInPlace(damageNumbers) { value ->
+            value.life -= delta
+            !(value.life <= 0f)
+        }
         if (particles.isNotEmpty() || cachedProjection.particles.isNotEmpty()) particlesDirty = true
         if (motionEchoes.isNotEmpty() || cachedProjection.motionEchoes.isNotEmpty()) motionEchoesDirty = true
         if (shockwaves.isNotEmpty() || cachedProjection.shockwaves.isNotEmpty()) shockwavesDirty = true
         if (damageNumbers.isNotEmpty() || cachedProjection.damageNumbers.isNotEmpty()) damageNumbersDirty = true
-        for (index in elementBursts.indices) elementBursts[index].life -= delta
-        removeExpired(elementBursts) { value -> !(value.life <= 0f) }
-        for (index in reactionStamps.indices) reactionStamps[index].life -= delta
-        removeExpired(reactionStamps) { value -> !(value.life <= 0f) }
+        retainInPlace(elementBursts) { value ->
+            value.life -= delta
+            !(value.life <= 0f)
+        }
+        retainInPlace(reactionStamps) { value ->
+            value.life -= delta
+            !(value.life <= 0f)
+        }
         if (elementBursts.isNotEmpty() || cachedProjection.elementBursts.isNotEmpty()) elementBurstsDirty = true
         if (reactionStamps.isNotEmpty() || cachedProjection.reactionStamps.isNotEmpty()) reactionStampsDirty = true
-        for (index in skillBursts.indices) skillBursts[index].life -= delta
-        removeExpired(skillBursts) { value -> !(value.life <= 0f) }
-        for (index in apexBursts.indices) apexBursts[index].life -= delta
-        removeExpired(apexBursts) { value -> !(value.life <= 0f) }
+        retainInPlace(skillBursts) { value ->
+            value.life -= delta
+            !(value.life <= 0f)
+        }
+        retainInPlace(apexBursts) { value ->
+            value.life -= delta
+            !(value.life <= 0f)
+        }
         if (skillBursts.isNotEmpty() || cachedProjection.skillBursts.isNotEmpty()) skillBurstsDirty = true
         if (apexBursts.isNotEmpty() || cachedProjection.apexBursts.isNotEmpty()) apexBurstsDirty = true
         return true
@@ -580,16 +723,18 @@ class InteractionFxReducer(seed: Int) {
 
     private fun advanceWeaponArcs(delta: Float): Boolean {
         if (weaponArcs.isEmpty()) return false
-        for (index in weaponArcs.indices) weaponArcs[index].life -= delta
-        removeExpired(weaponArcs) { value -> !(value.life <= 0f) }
+        retainInPlace(weaponArcs) { value ->
+            value.life -= delta
+            !(value.life <= 0f)
+        }
         weaponArcsDirty = true
         return true
     }
 
     private fun burst(cue: VisualFxCue.Burst): Boolean {
-        val sizeBefore = particles.size
-        repeat(particleCount(cue.requestedCount, cue.density)) { index ->
-            if (particles.size >= InteractionFxLimits.MAX_PARTICLES) return@repeat
+        val available = InteractionFxLimits.MAX_PARTICLES - particles.size
+        if (available == 0) return false
+        repeat(minOf(particleCount(cue.requestedCount, cue.density), available)) { index ->
             val angle = random.nextFloat() * TAU
             val speed = 35f + random.nextFloat() * 185f
             val life = 0.25f + random.nextFloat() * 0.55f
@@ -604,16 +749,15 @@ class InteractionFxReducer(seed: Int) {
                 particleSize(index, random.nextFloat()),
             )
         }
-        return (particles.size != sizeBefore).also { changed ->
-            if (changed) particlesDirty = true
-        }
+        particlesDirty = true
+        return true
     }
 
     private fun directionalBurst(cue: VisualFxCue.DirectionalBurst): Boolean {
-        val sizeBefore = particles.size
+        val available = InteractionFxLimits.MAX_PARTICLES - particles.size
+        if (available == 0) return false
         val baseAngle = atan2(cue.directionY, cue.directionX)
-        repeat(particleCount(cue.requestedCount, cue.density)) { index ->
-            if (particles.size >= InteractionFxLimits.MAX_PARTICLES) return@repeat
+        repeat(minOf(particleCount(cue.requestedCount, cue.density), available)) { index ->
             val angle = baseAngle + (random.nextFloat() - 0.5f) * 1.15f
             val speed = 90f + random.nextFloat() * 310f
             val life = 0.22f + random.nextFloat() * 0.42f
@@ -628,9 +772,8 @@ class InteractionFxReducer(seed: Int) {
                 particleSize(index, random.nextFloat()),
             )
         }
-        return (particles.size != sizeBefore).also { changed ->
-            if (changed) particlesDirty = true
-        }
+        particlesDirty = true
+        return true
     }
 
     /** The first [InteractionFxLimits.SHARDS_PER_BURST] particles are shards, the rest small sparks. */
@@ -650,8 +793,8 @@ class InteractionFxReducer(seed: Int) {
         while (values.size > maximum) values.removeAt(0)
     }
 
-    /** Stable in-place compaction avoids iterator allocation and repeated ArrayList shifts. */
-    private inline fun <Element> removeExpired(
+    /** Visits each value once, allowing its update and stable compaction in the same pass. */
+    private inline fun <Element> retainInPlace(
         values: MutableList<Element>,
         isAlive: (Element) -> Boolean,
     ) {

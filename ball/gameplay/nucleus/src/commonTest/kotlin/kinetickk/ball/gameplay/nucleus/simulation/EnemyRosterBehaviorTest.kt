@@ -27,6 +27,32 @@ import kotlin.test.assertTrue
 
 class EnemyRosterBehaviorTest {
     @Test
+    fun roomBalanceScalesActualShotsAndContactButNeverWorldOrSiteEnemies() {
+        fun damage(owner: EncounterOwner?): Pair<Float, Float> {
+            val tag = owner?.let { encounterTag(it, 1L) } ?: 0L
+            val shots = quietState().apply { elapsed = content.tempo.bossAtSeconds * 0.5f }
+            shots.spawn(EnemyType.SHOOTER, 300f, 0f).apply { ownerTag = tag; actionTimer = 0f }
+            shots.updateEnemies(FIXED)
+            val fired = shots.projectiles.single { it.hostile }
+            shots.projectiles.clear()
+            shots.projectiles += Projectile(shots.coreX, shots.coreY, 0f, 0f, 5f, 1f, damage = fired.damage)
+            shots.resolveProjectileHits()
+            val contact = quietState().apply { elapsed = content.tempo.bossAtSeconds * 0.5f }
+            contact.spawn(EnemyType.DRIFTER, 0f, 0f).ownerTag = tag
+            contact.resolveEnemyCoreCollisions()
+            return shots.maxHp - shots.hp to contact.maxHp - contact.hp
+        }
+        val world = damage(null)
+        assertEquals(12.5f, world.first, 0.001f)
+        assertTrue(world.second > 0f)
+        assertEquals(world, damage(EncounterOwner.SITE))
+        assertEquals(world, damage(EncounterOwner.DIMENSION))
+        val room = damage(EncounterOwner.ROOM)
+        assertEquals(world.first * 0.70f, room.first, 0.001f)
+        assertEquals(world.second * 0.70f, room.second, 0.001f)
+    }
+
+    @Test
     fun hostileShotsCarryTheirSourceDamageAndContactGrowsWithTheRun() {
         val state = quietState()
         state.elapsed = state.content.tempo.bossAtSeconds * 0.5f
@@ -498,14 +524,28 @@ class EnemyRosterBehaviorTest {
     }
 
     @Test
-    fun theHeraldPaysOutLikeAnEliteAndStaysPutPastTheLeash() {
+    fun theHeraldReturnsFromFarTravelIntactAndPaysOutLikeAnElite() {
         val state = quietState()
         val herald = state.spawn(EnemyType.HERALD, 9_000f, 0f)
+        herald.hp = herald.maxHp * 0.5f
+        val integrity = herald.hp
+        val kills = state.eliteKills
+        val matter = state.runMatter
         state.updateEnemies(FIXED)
         assertTrue(herald in state.enemies)
-        assertEquals(9_000f, herald.x, 50f, "The Herald is never relocated")
+        assertTrue(state.enemies.single() === herald, "The live Herald returns without being replaced")
+        val dx = herald.x - state.coreX
+        val dy = herald.y - state.coreY
+        val leash = maxOf(state.screenWidth, state.screenHeight) * 1.15f + 360f
+        assertTrue(sqrt(dx * dx + dy * dy) < leash, "The Herald returns to spawn distance")
+        assertTrue(abs(dx) > state.screenWidth * 0.5f || abs(dy) > state.screenHeight * 0.5f, "The Herald returns outside the viewport")
+        assertEquals(integrity, herald.hp, "Returning neither heals nor damages the Herald")
+        assertEquals(herald.x, herald.previousX, "The teleport must not sweep across the world")
+        assertEquals(herald.y, herald.previousY)
+        assertEquals(kills, state.eliteKills, "Returning a live Herald does not count as a kill")
+        assertEquals(matter, state.runMatter)
+        assertTrue(state.pickups.isEmpty(), "The reward still requires a kill")
 
-        val kills = state.eliteKills
         state.onEnemyKilled(herald)
         assertEquals(kills + 1, state.eliteKills)
         assertTrue(state.pickups.any { it.type == PickupType.KEY })
@@ -546,6 +586,40 @@ class EnemyRosterBehaviorTest {
     private fun quietState(): MutableGameState = buildTestState().apply {
         updatePointer(640f, 360f)
         runGrace = Float.MAX_VALUE
+    }
+
+    @Test
+    fun everyProfileRankMatchesTheShippedRoster() {
+        val content = quietState().content
+        for (type in EnemyType.entries) {
+            val definition = content.enemy(type)
+            assertEquals(definition.rank, type.profile.rank, "$type rank")
+            val enemy = Enemy(id = 1, type = type, x = 0f, y = 0f, hp = 1f, maxHp = 1f, radius = 1f)
+            assertEquals(definition.isBoss, enemy.isBoss, "$type boss")
+            assertEquals(definition.isElite, enemy.isElite, "$type Elite")
+            assertEquals(definition.isMiniBoss, enemy.isMiniBoss, "$type mini-boss")
+            assertEquals(definition.isSecretBoss, enemy.isSecretBoss, "$type secret boss")
+            val bossClass = definition.isBoss || definition.isMiniBoss || definition.isSecretBoss
+            assertEquals(bossClass, enemy.isBossClass, "$type boss class")
+            assertEquals(definition.isElite || bossClass, enemy.isEliteClass, "$type Elite class")
+            assertEquals(!definition.isElite && !bossClass, enemy.isOrdinary, "$type ordinary")
+        }
+        assertEquals(listOf(EnemyType.ARCHITECT), EnemyType.entries.filter { Enemy(1, it, 0f, 0f, hp = 1f, maxHp = 1f, radius = 1f).isBoss })
+        assertEquals(listOf(EnemyType.HERALD), EnemyType.entries.take(19).filter { Enemy(1, it, 0f, 0f, hp = 1f, maxHp = 1f, radius = 1f).isMiniBoss })
+    }
+
+    @Test
+    fun aBossFrameHardensOnlyOverItsProfilesPhases() {
+        val state = quietState()
+        val architect = state.spawn(EnemyType.ARCHITECT, 900f, 0f)
+        val taken = EnemyType.ARCHITECT.profile.impactTaken
+        for (phase in 0..3) {
+            architect.phase = phase
+            assertEquals(taken - 0.05f * phase.coerceAtMost(2), architect.impactTaken, "Architect phase $phase")
+        }
+        val drifter = state.spawn(EnemyType.DRIFTER, 900f, 200f)
+        drifter.phase = 2
+        assertEquals(EnemyType.DRIFTER.profile.impactTaken, drifter.impactTaken, "a kind without a frame never hardens")
     }
 
     private fun MutableGameState.spawn(type: EnemyType, x: Float, y: Float, hp: Float? = null): Enemy {

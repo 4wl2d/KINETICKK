@@ -10,6 +10,7 @@ import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.toImmutableSet
 import kinetickk.ball.profile.api.CharacterAchievementProgress
@@ -293,6 +294,8 @@ private data class PlayerCollectionDto(
     // Recent first acquisitions, oldest first with repeats, so deliberately neither sorted nor unique;
     // written only when non-empty, so older saves keep their bytes.
     @EncodeDefault(EncodeDefault.Mode.NEVER) val recentItemIds: List<Int> = emptyList(),
+    // World discoveries as bits of WorldDiscovery.ordinal; written only when non-zero, so older saves keep their bytes.
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val worldDiscoveryMask: Int = 0,
 )
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -390,6 +393,7 @@ private fun ProfileSnapshot.toDto(): ProfileSnapshotDto {
                 discoveredPairingIds = profile.collection.discoveredPairingIds.map(RelicPairingId::wireId).sorted(),
                 heirloomRelicIds = profile.collection.heirloomRelicIds.map(RelicId::wireId),
                 recentItemIds = profile.collection.recentItemIds,
+                worldDiscoveryMask = profile.collection.discoveredWorldEntries.fold(0) { mask, id -> mask or id.bit },
             ),
             characterAchievements = CharacterAchievementProgressDto(
                 eliteKills = profile.characterAchievements.eliteKills.toString(),
@@ -549,11 +553,16 @@ private fun PlayerCollectionDto.isFromRetiredCatalog(): Boolean {
             recentItemIds.size <= MAX_RECENT_ITEM_IDS,
         ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
     )
+    // Only bits of defined discoveries; a sign or higher bit names none.
+    rejectUnless(
+        worldDiscoveryMask >= 0 && worldDiscoveryMask and WorldDiscovery.VALID_MASK.inv() == 0,
+        ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+    )
     // The retired codec never wrote these fields, so a save carrying them without an epoch was not
     // produced by any version.
     rejectUnless(
         !retired || discoveredReactionIds.isEmpty() && discoveredPairingIds.isEmpty() && heirloomRelicIds.isEmpty() &&
-            recentItemIds.isEmpty(),
+            recentItemIds.isEmpty() && worldDiscoveryMask == 0,
         ProfileSnapshotRejection.INCONSISTENT_PROFILE,
     )
     return retired
@@ -568,6 +577,7 @@ private fun PlayerCollectionDto.toCollection(): PlayerCollection = PlayerCollect
     discoveredPairingIds = discoveredPairingIds.map { it.relicPairingId() }.toImmutableSet(),
     heirloomRelicIds = heirloomRelicIds.map { it.relicId() }.toImmutableList(),
     recentItemIds = recentItemIds.toImmutableList(),
+    discoveredWorldEntries = WorldDiscovery.entries.filter { worldDiscoveryMask and it.bit != 0 }.toImmutableSet(),
 )
 
 private fun validateProfile(profile: PlayerProfile) {

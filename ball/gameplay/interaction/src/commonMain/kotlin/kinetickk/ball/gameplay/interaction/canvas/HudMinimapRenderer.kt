@@ -10,9 +10,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
+import kinetickk.ball.content.api.EnemyRank
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
-import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.PickupType
@@ -123,16 +123,14 @@ private object MinimapScratch {
 /**
  * The run minimap (`HudBlock.MINIMAP`): north-up and centred on the Core, out to
  * [GameplayRenderModel.minimapRange] world units. Obstacles (bumpers as rings, unstable rocks hot),
- * enemies as dots, Elites as aspect-coloured diamonds, Heralds and the Architect large, anomalies,
+ * enemies as dots, Elites as aspect-coloured diamonds, mini-bosses and the Architect large, secret bosses large
+ * in a bone ring, anomalies,
  * the Totem, Keys and Relic resonances (pinned to the rim when beyond it) and the Core's heading.
  * Hidden by the Minimap setting.
  */
 internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMeasurer, frame: HudFrame) {
     if (!engine.settings.minimapEnabled) return
-    var trialActive = false
-    val points = engine.pointsOfInterest
-    for (index in points.indices) if (points[index].active) trialActive = true
-    val trial = if (trialActive) MinimapScratch.trial.update(size.width, size.height, density, measurer.scale) else null
+    val trial = if (engine.trial != null) MinimapScratch.trial.update(size.width, size.height, density, measurer.scale) else null
     val rect = MinimapScratch.rect
     if (!HudMinimapGeometry.place(frame, trial, rect)) return
     val left = rect[0]
@@ -163,10 +161,21 @@ internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMe
             if (x < left - radius || x > left + side + radius || y < top - radius || y > top + side + radius) continue
             when (obstacle.kind) {
                 ObstacleKind.ASTEROID -> drawCircle(Kk.Bone.copy(alpha = 0.32f), radius, Offset(x, y))
+                ObstacleKind.GRAVITY_WELL -> drawMinimapGravityWell(obstacle, Offset(x, y), scale, dot, engine.content.obstacles.kinds, roles)
+                ObstacleKind.ACCEL_GATE -> drawMinimapAccelGate(obstacle, Offset(x, y), scale, dot, engine.content.obstacles.kinds, roles)
+                ObstacleKind.THERMAL_VENT ->
+                    drawMinimapThermalVent(obstacle, Offset(x, y), radius, dot, engine.renderElapsed, engine.content.obstacles.kinds, roles)
+                ObstacleKind.CRYSTAL -> drawMinimapCrystal(Offset(x, y), radius, roles)
+                ObstacleKind.DERELICT_MINE ->
+                    drawMinimapDerelictMine(obstacle, Offset(x, y), radius, scale, engine.content.obstacles.kinds, roles)
+                ObstacleKind.PHASE_SHARD ->
+                    drawMinimapPhaseShard(obstacle, Offset(x, y), radius, engine.renderElapsed, engine.content.obstacles.kinds, roles)
                 ObstacleKind.UNSTABLE -> drawCircle(roles.heat.copy(alpha = 0.7f), radius, Offset(x, y))
                 ObstacleKind.BUMPER -> drawCircle(roles.pol.copy(alpha = 0.8f), radius, Offset(x, y), style = kkStroke(max(1f, dot * 0.6f)))
             }
         }
+        drawMinimapStructures(engine, centerX, centerY, half, scale, dot, roles)
+        drawDimensionMinimapMarks(engine, centerX, centerY, half, scale, dot, roles)
         val pickups = engine.pickups
         for (index in pickups.indices) {
             val pickup = pickups[index]
@@ -174,11 +183,8 @@ internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMe
             val color = if (pickup.type == PickupType.KEY) roles.you else Kk.RLegend
             drawPinnedMark(centerX, centerY, half, (pickup.x - coreX) * scale, (pickup.y - coreY) * scale, dot * 1.6f, color, filled = true)
         }
-        for (index in points.indices) {
-            val point = points[index]
-            drawPinnedMark(centerX, centerY, half, (point.x - coreX) * scale, (point.y - coreY) * scale, dot * 2.2f, roles.you,
-                filled = point.active)
-        }
+        drawMinimapSites(engine, centerX, centerY, half, scale, dot, roles)
+        drawMinimapSignals(engine, centerX, centerY, half, scale, dot)
         engine.totem?.let { totem ->
             drawPinnedMark(centerX, centerY, half, (totem.x - coreX) * scale, (totem.y - coreY) * scale, dot * 2f, roles.you, filled = true)
         }
@@ -188,13 +194,16 @@ internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMe
             if (enemy.dead) continue
             val dx = (enemy.x - coreX) * scale
             val dy = (enemy.y - coreY) * scale
-            when (enemy.type) {
-                EnemyType.HERALD, EnemyType.ARCHITECT -> {
-                    val (x, y) = pinned(centerX, centerY, half, dx, dy, dot * 3f)
+            when (val rank = engine.content.enemy(enemy.type).rank) {
+                EnemyRank.BOSS, EnemyRank.MINI_BOSS, EnemyRank.SECRET_BOSS -> {
+                    // A secret boss's big pin carries a bone ring, kept inside the rim with it.
+                    val secret = rank == EnemyRank.SECRET_BOSS
+                    val (x, y) = pinned(centerX, centerY, half, dx, dy, dot * if (secret) SECRET_RING_DOTS else 3f)
                     drawCircle(roles.threat, dot * 3f, Offset(x, y))
                     drawCircle(Kk.Bone.copy(alpha = 0.8f), dot * 3f, Offset(x, y), style = kkStroke(1f))
+                    if (secret) drawCircle(Kk.Bone.copy(alpha = 0.8f), dot * SECRET_RING_DOTS, Offset(x, y), style = kkStroke(1f))
                 }
-                EnemyType.ELITE -> {
+                EnemyRank.ELITE -> {
                     val (x, y) = pinned(centerX, centerY, half, dx, dy, dot * 2.4f)
                     val aspect = EnemyAffinity.aspect(enemy.affinityBits)
                     val color = if (aspect in roles.elements.indices) roles.elements[aspect] else roles.threat
@@ -203,7 +212,7 @@ internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMe
                         drawRect(color, Offset(x - reach * 0.7f, y - reach * 0.7f), Size(reach * 1.4f, reach * 1.4f))
                     }
                 }
-                else -> {
+                EnemyRank.ORDINARY -> {
                     val x = centerX + dx
                     val y = centerY + dy
                     if (abs(dx) > half || abs(dy) > half) continue
@@ -250,7 +259,7 @@ private fun DrawScope.drawPinnedMark(
 }
 
 /** ([dx], [dy]) from the centre, scaled back onto the square inset by [inset] when it lies beyond it. */
-private fun pinned(centerX: Float, centerY: Float, half: Float, dx: Float, dy: Float, inset: Float): Offset {
+internal fun pinned(centerX: Float, centerY: Float, half: Float, dx: Float, dy: Float, inset: Float): Offset {
     val limit = max(1f, half - inset)
     val reach = max(abs(dx), abs(dy))
     if (reach <= limit) return Offset(centerX + dx, centerY + dy)

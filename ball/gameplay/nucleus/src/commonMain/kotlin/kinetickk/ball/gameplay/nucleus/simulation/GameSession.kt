@@ -95,13 +95,15 @@ internal fun MutableGameState.startRun() {
     arsenalCounter = 0
     necroticClock = 0f
     heirloomOfferActive = false
-    heirloomPending = heirloomCandidates.isNotEmpty() && rebirthRank >= 1
+    heirloomPending = !easyMode && heirloomCandidates.isNotEmpty() && rebirthRank >= 1
+    omenPending = offersRunOmen && content.variety.omens.enabled
     volatileBursts = kinetickk.foundation.collections.immutableListOf()
     totem = null
     nextEntityId = 1
     spawnClock = 0.2f
     nextEliteAt = rebirthProfile.eliteInterval(content.tempo.firstEliteAtSeconds)
     elitesSpawned = 0
+    startRunVariety()
     resetSpawnDirector()
     bossSpawned = false
     accumulator = 0f
@@ -135,6 +137,7 @@ internal fun MutableGameState.startRun() {
     turnHoldTime = 0f
     turnRecoveryCooldown = 0f
     turnDirection = 0
+    coreStraightness = 0f
     elapsed = 0f
     heat = 0f
     overheated = false
@@ -180,11 +183,14 @@ internal fun MutableGameState.startRun() {
     characterUpgradeLevel = characterUpgradeLevels[coreShape.ordinal]
     characterUpgradePower = 1f + content.upgrades.characterPowerPerLevel * characterUpgradeLevel
     resetRunStats()
+    resetDimensions()
     recompileBuild()
     // A new run starts with a new character runtime (Dash count 0), so the weapon's input tracking starts over too.
     weaponRuntime = WeaponRuntime()
     resetWeaponRuntime()
-    resetPointsOfInterest()
+    resetSites()
+    resetRunVariety()
+    resetStructures()
     resetObstacles()
     emitSound(GameplayAudioCue.UI_CLICK)
     spawnOpeningPacks()
@@ -221,10 +227,13 @@ internal fun MutableGameState.resetRunStats() {
     comboWindow = 2.8f
     overdriveGain = 1f
     dragCoefficient = BASE_DRAG_COEFFICIENT
+    gripStrength = 1f
+    slingStrength = 1f
     applyCharacterTraits()
     applyMatrixStats()
     maxHp += content.upgrades.characterIntegrityPerLevel * characterUpgradeLevel
     matterGain *= rebirthProfile.matterGainMultiplier
+    applyOmenStats()
     dashHeatCost *= matrix.dashHeatMultiplier
     dragCoefficient *= matrix.dragMultiplier
     hp = maxHp
@@ -355,7 +364,7 @@ internal fun MutableGameState.choose(index: Int) {
             val itemId = option.itemId ?: return
             val item = content.item(itemId) ?: return
             // The offer resolves when its card is taken, even when the active item still needs a slot.
-            if (directedReward == null) resolveItemOfferPity(item)
+            if (directedReward == null && !dimensionRewardOpen()) resolveItemOfferPity(item)
             if (needsActiveSlot(item)) {
                 pendingActiveItemId = itemId
                 pendingActiveReborn = option.reborn
@@ -430,6 +439,15 @@ internal fun MutableGameState.choose(index: Int) {
             finishChoice(if (slot != null) GameplayAudioCue.LEVEL_UP else GameplayAudioCue.UI_CLICK)
             return
         }
+        // An omen card accepts its omen; No omen changes nothing.
+        ChoiceType.OMEN -> {
+            option.omenId?.let { acceptRunOmen(it) }
+            GameplayAudioCue.UI_CLICK
+        }
+        // A signal card pays through its channel; a locked card or a chained item offer leaves without finishing here.
+        ChoiceType.SIGNAL -> resolveSignalOption(option, before) ?: return
+        // A boon card takes its Blessing or Pact; the Refuse card salvages.
+        ChoiceType.BOON -> takeBoonCard(option)
         ChoiceType.RELIC_BIND -> {
             val slot = option.relicSlot ?: return
             when (option.relicAction ?: return) {
@@ -452,6 +470,8 @@ internal fun MutableGameState.finishChoice(sound: GameplayAudioCue) {
     }
     directedReward = null
     selectedRewardFocus = null
+    offerRarityFloor = null
+    dimensionRewardLayer = null
     choices = emptyList()
     phase = GamePhase.RUNNING
     interpolationPrimed = false
@@ -468,7 +488,9 @@ internal fun MutableGameState.rerollChoices() {
         ChoiceType.ITEM -> buildItemChoices()
         ChoiceType.WEAPON -> buildWeaponChoices()
         ChoiceType.RELIC -> buildRelicChoices()
-        ChoiceType.TOTEM, ChoiceType.RELIC_BIND, ChoiceType.ACTIVE_SLOT -> return
+        ChoiceType.TOTEM, ChoiceType.RELIC_BIND, ChoiceType.ACTIVE_SLOT,
+        ChoiceType.OMEN, ChoiceType.SIGNAL, ChoiceType.BOON,
+        -> return
     }
     emitSound(GameplayAudioCue.UI_CLICK)
 }

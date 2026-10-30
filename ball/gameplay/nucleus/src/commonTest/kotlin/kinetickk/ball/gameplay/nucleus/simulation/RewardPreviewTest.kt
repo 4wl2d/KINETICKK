@@ -4,12 +4,16 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
+import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.toImmutableList
 import kotlin.test.*
 
 class RewardPreviewTest {
@@ -83,6 +87,28 @@ class RewardPreviewTest {
         assertEquals(expected.takeVisualFxCues(), state.takeVisualFxCues())
         assertEquals(expected.choices, state.choices)
         assertEquals(expected.buildStats(), state.buildStats())
+    }
+
+    @Test
+    fun cardsThatChangeNothingPreviewNothingAndEveryCardReadsAsOnACopy() {
+        val rime = canonicalGameplayContent.items.single { it.name == "Rime Rounds" }
+        val state = engine().apply {
+            acquireItem(canonicalGameplayContent.items.single { it.name == "Igniter" }.id)
+            overdriveTime = 2f
+            choices = listOf(
+                ChoiceOption(ChoiceType.OMEN, NO_OMEN_TITLE, NO_OMEN_TEXT, "DECLINE"),
+                ChoiceOption(ChoiceType.TOTEM, "Change", "", "", totemAction = TotemAction.CHANGE_WEAPON),
+                ChoiceOption(ChoiceType.RELIC_BIND, "Keep", "", "", relicSlot = 0, relicAction = RelicChoiceAction.DECLINE),
+                ChoiceOption(ChoiceType.ITEM, rime.name, rime.description, "", itemId = rime.id),
+            )
+            activeChoiceType = ChoiceType.ITEM
+            phase = GamePhase.CHOICE
+        }
+        val previews = state.rewardPreviews()
+        previews.take(3).forEachIndexed { index, preview -> assertEquals(RewardPreview(), preview, state.choices[index].title) }
+        assertEquals(ForecastKind.REACTION, previews[3].forecasts.first().kind, "the item card still previews its build change")
+        // Every preview is what an isolated copy of the state previews, including the cards that copy nothing.
+        assertEquals(previews, state.copyForReduction().rewardPreviews())
     }
 
     @Test
@@ -207,6 +233,31 @@ class RewardPreviewTest {
         val third = rerolled.toRenderModel(second, pointer)
         assertEquals(rerolled.rewardPreviews(), third.rewardPreviews)
         assertNotSame(second.rewardPreviews, third.rewardPreviews)
+    }
+
+    @Test
+    fun aSteeringStatItemPreviewsItsGripAndSlingRows() {
+        // No shipped item carries the steering stats yet: a plain stat item is given them.
+        val plain = canonicalGameplayContent.items.first {
+            !it.isActive && it.stats.size == 1 && it.clauses.isEmpty() && it.rules.isEmpty() && it.maxStacks > 1
+        }
+        val steering = plain.copy(stats = immutableListOf(StatDelta(ItemEffect.GRIP, 0.3f), StatDelta(ItemEffect.SLING, -0.2f)))
+        val content = canonicalGameplayContent.copy(
+            items = canonicalGameplayContent.items.map { if (it.id == plain.id) steering else it }.toImmutableList(),
+        )
+        val state = MutableGameState(content).apply {
+            startRun()
+            offer(ChoiceOption(ChoiceType.ITEM, steering.name, steering.description, "", itemId = steering.id))
+        }
+        val changes = state.rewardPreviews().single().changes
+        val selected = state.copyForReduction().apply { choose(0) }
+        for ((name, after) in listOf("Grip" to 1.3f, "Sling" to 0.8f)) {
+            val change = changes.single { it.name == name }
+            assertEquals(1f, change.before, name)
+            assertEquals(after, change.after, 1e-6f, name)
+            assertEquals("×", change.unit, name)
+            assertEquals(selected.buildStats().single { it.name == name }.value, change.after, name)
+        }
     }
 
     private fun engine() = MutableGameState(canonicalGameplayContent).apply { startRun() }

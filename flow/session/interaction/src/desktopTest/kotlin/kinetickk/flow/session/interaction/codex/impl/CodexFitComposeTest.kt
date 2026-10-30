@@ -131,6 +131,42 @@ class CodexFitComposeTest {
      * signature line, twist, harmony and resonance texts wrap only between words in the side panel
      * and the phone sheet, in both languages at every text size.
      */
+    /**
+     * A locked enemy's facts (where it is found, the Rebirth that opens it) never break a word, whatever the label's
+     * length, and a number stays with the word before it, at every layout in both languages and every text size.
+     */
+    @Test fun factValuesKeepEveryWordWholeAndANumberWithItsWord() {
+        for ((width, height) in sizes) for (language in AppLanguage.entries) for (scale in listOf(1.25f, 1.75f)) {
+            codex(width, height, language, scale) {
+                val where = "${width}x$height ${language.code} @$scale"
+                onNodeWithTag("codex-tab-1").performSemanticsAction(SemanticsActions.OnClick)
+                waitForIdle()
+                onNodeWithTag("codex-category-4").performSemanticsAction(SemanticsActions.OnClick)
+                waitForIdle()
+                onNodeWithTag("codex-grid").performScrollToKey("enemy/REFLECTOR")
+                waitForIdle()
+                onNodeWithTag("codex-slot-enemy/REFLECTOR").performSemanticsAction(SemanticsActions.OnClick)
+                waitForIdle()
+                val texts = onAllNodes(hasAnyAncestor(hasTestTag("codex-fact")), useUnmergedTree = true).fetchSemanticsNodes()
+                    .filter { SemanticsActions.GetTextLayoutResult in it.config }
+                assertTrue(texts.size >= 4, "the locked Reflector's facts are shown ($where)")
+                texts.forEach { node ->
+                    val layouts = mutableListOf<TextLayoutResult>()
+                    node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(layouts)
+                    val layout = layouts.single()
+                    val shown = layout.layoutInput.text.text
+                    for (line in 0 until layout.lineCount - 1) {
+                        val end = layout.getLineEnd(line)
+                        assertFalse(end in 1 until shown.length && shown[end - 1].isLetterOrDigit() && shown[end].isLetterOrDigit(),
+                            "'$shown' breaks inside a word after '${shown.substring(0, end)}' ($where)")
+                        val next = shown.substring(layout.getLineStart(line + 1)).trimStart()
+                        assertFalse(next.firstOrNull()?.isDigit() == true, "'$shown' starts a line with a lone number ($where)")
+                    }
+                }
+            }
+        }
+    }
+
     @Test fun weaponSheetsWrapOnlyBetweenWords() {
         val shipped = kinetickk.ball.content.impl.createContentCatalog().uiCatalog()
         val model = CodexRenderModel(immutableSetOf(), CodexRunStacks(), shipped.items)
@@ -179,11 +215,11 @@ class CodexFitComposeTest {
         }
         waitForIdle()
         // The widest counts the collection can show.
-        val counts = listOf("400/400", "12/12", "40/40", "6/6", "24/24")
+        val counts = listOf("400/400", "12/12", "40/40", "6/6", "24/24", "18/18")
         measurers.forEach { (key, measurer) ->
             val (language, scale) = key
             val titles = listOf(SessionText.ITEMS_TITLE, SessionText.WEAPONS_TITLE, SessionText.RELICS_TITLE, SessionText.FORMS_TITLE)
-                .map { language.text(it) } + language.text(CodexText.ENEMIES_TITLE)
+                .map { language.text(it) } + language.text(CodexText.ENEMIES_TITLE) + language.text(CodexText.WORLD_TITLE)
             // The nav is min(250 dp, 22 % of the width) on wide screens (900 dp and up).
             for (row in listOf(250f, 198f)) {
                 val size = codexNavTitleSize(measurer, titles, counts, row, 1f)
@@ -198,8 +234,8 @@ class CodexFitComposeTest {
         // The case of the finding: the Russian Items title did not fit a 250 dp row at 175 %.
         val russian = measurers.getValue(AppLanguage.Russian to 1.75f)
         val titles = listOf(SessionText.ITEMS_TITLE, SessionText.WEAPONS_TITLE, SessionText.RELICS_TITLE, SessionText.FORMS_TITLE)
-            .map { AppLanguage.Russian.text(it) } + AppLanguage.Russian.text(CodexText.ENEMIES_TITLE)
-        assertTrue(codexNavTitleSize(russian, titles, listOf("216/400", "7/12", "23/40", "5/6", "16/19"), 250f, 1f) < 24f)
+            .map { AppLanguage.Russian.text(it) } + AppLanguage.Russian.text(CodexText.ENEMIES_TITLE) + AppLanguage.Russian.text(CodexText.WORLD_TITLE)
+        assertTrue(codexNavTitleSize(russian, titles, listOf("216/400", "7/12", "23/40", "5/6", "16/19", "3/18"), 250f, 1f) < 24f)
     }
 
     @Test fun collectionNavFitsA1440x810WindowAtEveryTextSizeAndScrollsWithACueWhenShorter() {
@@ -209,7 +245,17 @@ class CodexFitComposeTest {
             waitForIdle()
             val nav = onNodeWithTag("codex-nav").fetchSemanticsNode()
             val range = nav.config.getOrNull(SemanticsProperties.VerticalScrollAxisRange)
-            assertTrue(range == null || range.maxValue() == 0f, "the nav scrolls at rest ($where): ${range?.maxValue()}")
+            val overflow = range?.maxValue() ?: 0f
+            if (scale == 1.75f && overflow > 0f) {
+                // Six sections at 175 %: the nav runs past the window by less than its sixth row (the World), so it scrolls
+                // with its cue and reaches its last legend row.
+                assertTrue(overflow < codexNavRowHeight(codexUiScale(scale)) + 4f, "the nav overflows by $overflow px ($where)")
+                onNodeWithTag("codex-nav-scroll-cue").assertExists()
+                onNodeWithTag("codex-nav").performScrollToNode(hasText(language.text(SessionText.UNDISCOVERED)))
+                onNodeWithText(language.text(SessionText.UNDISCOVERED)).assertIsDisplayed()
+                return@codex
+            }
+            assertTrue(overflow == 0f, "the nav scrolls at rest ($where): $overflow")
             onNodeWithTag("codex-nav-scroll-cue").assertDoesNotExist()
             // The last legend row sits whole inside the nav.
             val last = onNodeWithText(language.text(SessionText.UNDISCOVERED)).fetchSemanticsNode().boundsInRoot

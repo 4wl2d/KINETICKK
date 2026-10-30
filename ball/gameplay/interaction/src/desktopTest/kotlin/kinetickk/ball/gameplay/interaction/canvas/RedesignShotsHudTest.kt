@@ -25,7 +25,7 @@ import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicDefinition
@@ -33,6 +33,7 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPolicy
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatDelta
+import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WeaponMastery
@@ -51,7 +52,7 @@ import kinetickk.ball.gameplay.nucleus.render.ApexProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.SkillBarProjection
 import kinetickk.ball.gameplay.nucleus.render.SkillSlotProjection
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
@@ -153,6 +154,23 @@ class RedesignShotsHudTest {
         // the element-less Catalyze ready at rank II in Z and Dual Infusion cooling at rank I in X (the kinetic role)
         // beside an empty C.
         SKILLS_MIXED, SKILLS_FULL, SKILLS_KINETIC,
+        // The trial panel of the other families: a gate race on its clock (silver still in reach), the brakeless
+        // challenge, the bounty duel and the summoned sigil; each with its edge markers, the race's next gate off screen.
+        TRIAL_RACE, TRIAL_CHALLENGE, TRIAL_BOUNTY, TRIAL_SIGIL,
+        // Baby mode: the soft tether and cursor arc with the pacifier plate alone at tier 0, then before the tier plate
+        // and its sigils at tier 3.
+        EASY, EASY_TIER,
+        // A mini-boss's narrow block (the Throne in its second phase, three parts) and a secret boss's wide one (the
+        // Antecedent in its third phase, four parts, hardened against Cryo so its weakness fills the icon slot).
+        MINIBOSS, SECRET_BOSS,
+        // The dungeon panel: sealed in a Derelict Station's bay with its garrison, two of four rooms clear, the bay's cell
+        // at its pulse's peak, under the scrim and the vignette.
+        DUNGEON,
+        // A dimension visit: the plate in the Rebirth slot and the objective's panel; the Zenith's course at pace with its
+        // next ring's arc half into the split, the Nadir's harvest in its last seconds with the Core scorching (the heat
+        // edge) and an ember just thrown from its kill, the Archive's duel with the Antecedent; then the shutter 150 ms
+        // into the Zenith.
+        DIMENSION_ZENITH, DIMENSION_NADIR, DIMENSION_ARCHIVE, DIMENSION_SHUTTER,
     }
 
     private fun level(shot: Shot, values: Values): Int = when (shot) {
@@ -204,26 +222,38 @@ class RedesignShotsHudTest {
         val enemies = when (shot) {
             Shot.ELITE, Shot.ELITE_MARKERS -> listOf(enemy(1, EnemyType.ELITE, 975f * sx - width * 0.5f, 325f * sy - height * 0.5f, 0.64f, 38f))
             Shot.ARCHITECT, Shot.ARCHITECT_TRIAL -> listOf(enemy(2, EnemyType.ARCHITECT, 710f * sx - width * 0.5f, 290f * sy - height * 0.5f, 0.53f, 74f))
+            Shot.MINIBOSS, Shot.SECRET_BOSS -> listOf(rankBoss(shot, 975f * sx - width * 0.5f, 325f * sy - height * 0.5f, if (shot == Shot.MINIBOSS) 0.48f else 0.41f))
             else -> emptyList()
         }
         val trial = shot == Shot.TRIAL || shot == Shot.TRIAL_INFO
         val points = when {
             trial -> listOf(
-                PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", coreX, coreY, true, 14.2f, 0, 0.65f,
+                SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", coreX, coreY, true, 14.2f, -1, 0.65f,
                     immutableListOf(), 0f, 0f),
             )
             // Offers far above, above-left and above-right of the view: their edge markers.
             shot == Shot.ELITE_MARKERS -> listOf(
-                PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed anomaly", 0f, -3_000f, false, 20f, 0, 0f,
+                SiteProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, -3_000f, false, 20f, -1, 0f,
                     immutableListOf(), 0f, 0f),
-                PointOfInterestProjection(PointOfInterestKind.RESONANT_CIRCUIT, "Resonant circuit", -1_400f, -2_600f, false, 20f, 0, 0f,
+                SiteProjection(SiteKind.RESONANT_CIRCUIT, "Resonant circuit", -1_400f, -2_600f, false, 20f, -1, 0f,
                     immutableListOf(), 0f, 0f),
-                PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 1_400f, -2_600f, false, 20f, 0, 0f,
+                SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 1_400f, -2_600f, false, 20f, -1, 0f,
                     immutableListOf(), 0f, 0f),
             )
+            shot == Shot.TRIAL_RACE || shot == Shot.TRIAL_CHALLENGE || shot == Shot.TRIAL_BOUNTY || shot == Shot.TRIAL_SIGIL -> {
+                val kind = when (shot) {
+                    Shot.TRIAL_RACE -> SiteKind.GATE_RACE
+                    Shot.TRIAL_CHALLENGE -> SiteKind.BRAKELESS_TRIAL
+                    Shot.TRIAL_BOUNTY -> SiteKind.BOUNTY_ARENA
+                    else -> SiteKind.FAR_SIGIL
+                }
+                val running = trialSites(coreX, coreY).single { it.kind == kind }
+                listOf(running, SiteProjection(SiteKind.UNTOUCHED_TRIAL, "Untouched", 1_400f, -2_600f, false, 20f, -1, 0f,
+                    immutableListOf(), 0f, 0f))
+            }
             // An orbit whose ring center sits just under the top band: its timer must avoid the boss block.
             shot == Shot.ARCHITECT_TRIAL -> listOf(
-                PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", coreX, coreY - 120f, true, 14.2f, 0, 0.4f,
+                SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", coreX, coreY - 120f, true, 14.2f, -1, 0.4f,
                     immutableListOf(), 0f, 0f),
             )
             else -> emptyList()
@@ -247,7 +277,8 @@ class RedesignShotsHudTest {
             else listOf(EquippedRelic(RelicId.entries[0], 2), EquippedRelic(RelicId.entries[7], 1),
                 EquippedRelic(RelicId.entries[1], 1))).toImmutableList(),
             "enemies" to enemies.toImmutableList(),
-            "pointsOfInterest" to points.toImmutableList(),
+            "sites" to points.toImmutableList(),
+            "trial" to points.firstOrNull { it.active }?.let { siteTrial(it) },
             "message" to when (shot) {
                 Shot.FEED -> "ELITE SIGNAL"
                 Shot.FEED_ANOMALY -> "TWO ANOMALIES DETECTED // CHOOSE A COURSE"
@@ -266,9 +297,11 @@ class RedesignShotsHudTest {
             "rebirthLevel" to when (shot) {
                 Shot.REBIRTH_5 -> 5
                 Shot.REBIRTH_10 -> 10
+                Shot.EASY_TIER -> 3
                 else -> 0
             },
-        )
+            "easyMode" to (shot == Shot.EASY || shot == Shot.EASY_TIER),
+        ).let { if (shot == Shot.DUNGEON) dungeonShot(it) else it }.let { dimensionShot(shot, it) ?: it }
         val time = 3.37f
         val memory = HudPresentationMemory()
         val boss = BossTarget()
@@ -279,6 +312,7 @@ class RedesignShotsHudTest {
             Shot.CRUISE -> model.with("hp" to 151f)
             Shot.ELITE, Shot.ELITE_MARKERS -> model.with("enemies" to listOf(enemy(1, EnemyType.ELITE, 0f, 0f, 0.7f, 38f)).toImmutableList())
             Shot.ARCHITECT, Shot.ARCHITECT_TRIAL -> model.with("enemies" to listOf(enemy(2, EnemyType.ARCHITECT, 0f, 0f, 0.62f, 74f)).toImmutableList())
+            Shot.MINIBOSS, Shot.SECRET_BOSS -> model.with("enemies" to listOf(rankBoss(shot, 0f, 0f, 0.55f)).toImmutableList())
             // Before the drawn frame X had no refund: the frame plays its refund flash.
             Shot.SKILLS_MIXED -> model.with("skillBar" to MIXED_SKILL_BAR)
             else -> model
@@ -290,6 +324,12 @@ class RedesignShotsHudTest {
                 val lead = if (shot == Shot.TIER_UP) 0.3f else 0.4f
                 memory.observe(lower, time - lead - 0.1f, boss.select(lower))
                 memory.observe(model, time - lead, boss.select(model))
+            }
+            // The layer changed 150 ms before the drawn frame: the shutter is a third of the way across.
+            Shot.DIMENSION_SHUTTER -> {
+                val realspace = model.with("dimension" to kinetickk.ball.gameplay.nucleus.render.DimensionProjection.REALSPACE, "trial" to null)
+                memory.observe(realspace, time - 0.3f, boss.select(realspace))
+                memory.observe(model, time - 0.15f, boss.select(model))
             }
             else -> memory.observe(pre, time - 0.2f, boss.select(pre))
         }
@@ -315,6 +355,66 @@ class RedesignShotsHudTest {
 
     private fun enemy(id: Int, type: EnemyType, x: Float, y: Float, integrity: Float, radius: Float) =
         EnemyProjection(id, type, x, y, 0f, 0f, 1000f * integrity, 1000f, radius, 0f, 0f, 0f, 0f, x, y, false)
+
+    /** [Shot.MINIBOSS]'s Throne (second phase, two arcs) or [Shot.SECRET_BOSS]'s Antecedent (third phase, two arcs). */
+    private fun rankBoss(shot: Shot, x: Float, y: Float, integrity: Float): EnemyProjection {
+        val mini = shot == Shot.MINIBOSS
+        val aspect = if (mini) kinetickk.ball.content.api.StatusElement.VOID else kinetickk.ball.content.api.StatusElement.CRYO
+        val weakness = if (mini) kinetickk.ball.content.api.StatusElement.SONIC else kinetickk.ball.content.api.StatusElement.THERMAL
+        val affinity = kinetickk.ball.gameplay.nucleus.render.EnemyAffinity.encode(aspect.ordinal, mini, weakness.ordinal, armored = true,
+            fragile = false, shifting = false, phase = if (mini) 1 else 2)
+        return enemy(3, if (mini) EnemyType.THRONE else EnemyType.ANTECEDENT, x, y, integrity, if (mini) 48f else 58f)
+            .copy(affinityBits = affinity, charges = 2, facing = 0.5f)
+    }
+
+    /** The dimension shots' models: [model] inside the shot's visit with the layer's natives (null for every other shot). */
+    private fun dimensionShot(shot: Shot, model: GameplayRenderModel): GameplayRenderModel? {
+        val layer = when (shot) {
+            Shot.DIMENSION_ZENITH, Shot.DIMENSION_SHUTTER -> kinetickk.ball.content.api.WorldLayer.ZENITH
+            Shot.DIMENSION_NADIR -> kinetickk.ball.content.api.WorldLayer.NADIR
+            Shot.DIMENSION_ARCHIVE -> kinetickk.ball.content.api.WorldLayer.ARCHIVE
+            else -> return null
+        }
+        val x = model.coreX
+        val y = model.coreY
+        fun native(id: Int, type: EnemyType, dx: Float, dy: Float, radius: Float) = enemy(id, type, x + dx, y + dy, 1f, radius)
+        val visit = when (layer) {
+            kinetickk.ball.content.api.WorldLayer.ZENITH -> dimensionVisit(layer, x, y, course = listOf(420f to -150f, 900f to 120f),
+                ambient = listOf(-380f to 260f), progress = 3, pace = 900f, splitRemaining = 1.3f, splitDuration = 2.6f)
+            kinetickk.ball.content.api.WorldLayer.NADIR -> dimensionVisit(layer, x, y, embers = listOf(160f to -90f, -220f to 140f, 300f to 210f),
+                progress = 7, scorching = 1f, thrownFrom = listOf(-60f to 120f), emberAge = 0.1f).copy(remaining = 8.2f)
+            else -> dimensionVisit(layer, x, y).copy(remaining = 71f)
+        }
+        val natives = when (layer) {
+            kinetickk.ball.content.api.WorldLayer.ZENITH -> listOf(native(41, EnemyType.SERAPH, 330f, 220f, 22f), native(42, EnemyType.CHOIR, -300f, -200f, 24f))
+            kinetickk.ball.content.api.WorldLayer.NADIR -> listOf(native(43, EnemyType.IMP, 260f, -200f, 18f), native(44, EnemyType.HOUND, -260f, 60f, 16f))
+            else -> listOf(rankBoss(Shot.SECRET_BOSS, x + 360f, y - 160f, 0.62f), native(45, EnemyType.CIPHER, -300f, 180f, 18f))
+        }
+        val speed = if (layer == kinetickk.ball.content.api.WorldLayer.NADIR) 520f else 1_150f
+        return model.inVisit(visit, bossShare = 0.38f).with(
+            "enemies" to natives.toImmutableList(),
+            "velocityX" to speed, "velocityY" to 0f,
+            "rebirthLevel" to 4,
+        )
+    }
+
+    /** [Shot.DUNGEON]'s model: [model] with the Core sealed in a Derelict Station's bay among its garrison, depth full. */
+    private fun dungeonShot(model: GameplayRenderModel): GameplayRenderModel {
+        val station = StructureFixture(model.content.structures.template(StructureTemplateId.DERELICT_STATION),
+            model.coreX - 750f, model.coreY - 400f, clearedRooms = 0b0011, engagedRoom = 3)
+        fun member(id: Int, type: EnemyType, dx: Float, dy: Float, radius: Float) =
+            enemy(id, type, model.coreX + dx, model.coreY + dy, 1f, radius)
+        return model.withDungeon(station).with(
+            "previousCoreX" to model.coreX, "previousCoreY" to model.coreY,
+            // The brackets' and the cell's pulse at its peak.
+            "elapsed" to ((kotlin.math.PI / 2.0 + 2.0 * kotlin.math.PI * 441.0) / 6.0).toFloat(),
+            "enemies" to listOf(
+                member(31, EnemyType.CRAWLER, -290f, 250f, 18f), member(32, EnemyType.CRAWLER, 290f, -240f, 18f),
+                member(33, EnemyType.CRAWLER, 300f, 220f, 18f), member(34, EnemyType.DRIFTER, 120f, 110f, 16f),
+                member(35, EnemyType.SHOOTER, -160f, -120f, 18f), member(36, EnemyType.SENTRY, 40f, -260f, 20f),
+            ).toImmutableList(),
+        )
+    }
 
     private fun GameplayRenderModel.with(vararg overrides: Pair<String, Any?>): GameplayRenderModel {
         val map = overrides.toMap()

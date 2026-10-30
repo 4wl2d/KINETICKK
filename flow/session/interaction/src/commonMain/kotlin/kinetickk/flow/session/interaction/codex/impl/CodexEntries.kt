@@ -10,6 +10,7 @@ import kinetickk.ball.content.api.ConversionKind
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.CoreShapeDefinition
 import kinetickk.ball.content.api.EnemyDefinition
+import kinetickk.ball.content.api.EnemyHabitat
 import kinetickk.ball.content.api.EnemyType
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemRule
@@ -28,6 +29,7 @@ import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.ball.content.api.WeaponCadence
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.content.api.defaultSkillDefinitions
 import kinetickk.ball.content.api.lifetimeMatterOfferLevel
 import kinetickk.ball.content.api.liabilityText
@@ -54,8 +56,11 @@ internal sealed interface CodexIcon {
     data class Relic(val definition: RelicDefinition, val rank: Int?, val severed: Boolean = false) : CodexIcon
     data class Weapon(val id: WeaponId) : CodexIcon
     data class Shape(val id: CoreShape) : CodexIcon
-    /** A roster enemy; [locked] while the profile's Rebirth rank is below its minimum. */
-    data class Enemy(val type: EnemyType, val locked: Boolean) : CodexIcon
+    /**
+     * A roster enemy; [locked] while the profile's Rebirth rank is below its minimum; [hidden] for a secret boss not
+     * yet discovered (its shape stays secret).
+     */
+    data class Enemy(val type: EnemyType, val locked: Boolean, val hidden: Boolean = false) : CodexIcon
     /** Content gated behind a Rebirth tier the player has not reached; its identity stays hidden. */
     data class Locked(val rebirth: Int) : CodexIcon
     data class Reaction(val id: ReactionId, val discovered: Boolean, val reachable: Boolean) : CodexIcon
@@ -71,6 +76,8 @@ internal sealed interface CodexIcon {
     data class Tag(val tag: BuildTag, val points: Int?, val tier: Int) : CodexIcon
     data class Affinity(val element: StatusElement, val affinity: Int?, val tier: Int, val dominant: Boolean) : CodexIcon
     data class Key(val key: RelicKey) : CodexIcon
+    /** A world place or secret: its glyph in Bone once [discovered], muted over a hatch before. */
+    data class World(val id: WorldDiscovery, val discovered: Boolean) : CodexIcon
     data object Unknown : CodexIcon
     data object Empty : CodexIcon
 }
@@ -473,13 +480,26 @@ internal fun codexShapeEntry(shape: CoreShapeDefinition, model: CodexRenderModel
 }
 
 /**
- * A roster enemy, always named: its threat, when it joins the waves ("From 5:30") and the Rebirth rank it
- * needs ("Reborn 3"); a rank below that gives it the locked look.
+ * A roster enemy: its threat, where it is found, when it joins the waves in open space ("From 5:30") and the Rebirth
+ * rank it needs ("Reborn 3"); a rank below that gives it the locked look. A secret boss stays "???" (no name,
+ * description or shape) until the Profile records the discovery that reveals it.
  */
-internal fun codexEnemyEntry(enemy: EnemyDefinition, progress: HomeProgressProjection, language: AppLanguage = AppLanguage.English): CodexEntry {
+internal fun codexEnemyEntry(
+    enemy: EnemyDefinition,
+    model: CodexRenderModel,
+    progress: HomeProgressProjection,
+    language: AppLanguage = AppLanguage.English,
+): CodexEntry {
+    if (!codexEnemyVisible(enemy, model)) {
+        return CodexEntry("enemy/${enemy.type}", language.text(CodexText.UNKNOWN_ENEMY), "", language.text(CodexText.SECRET_BOSS_KIND),
+            "?/$MAX_CODEX_THREAT", listOf(codexStatus(language, language.text(CodexText.UNDISCOVERED))),
+            CodexIcon.Enemy(enemy.type, locked = true, hidden = true), Kk.Mute, discovered = false,
+            help = language.text(CodexText.UNKNOWN_ENEMY_HELP))
+    }
     val locked = enemy.minimumRebirth > progress.rebirthProgress.rank
     val kind = language.text(when {
         enemy.isBoss -> CodexText.BOSS_KIND
+        enemy.isSecretBoss -> CodexText.SECRET_BOSS_KIND
         enemy.isMiniBoss -> CodexText.MINI_BOSS_KIND
         enemy.isElite -> CodexText.ELITE_KIND
         else -> CodexText.ENEMY_KIND
@@ -488,7 +508,13 @@ internal fun codexEnemyEntry(enemy: EnemyDefinition, progress: HomeProgressProje
     val facts = buildList {
         add(codexStatus(language, language.text(if (locked) SessionText.LOCKED else CodexText.IN_ROSTER)))
         add(CodexFact(language.text(CodexText.THREAT), threat))
-        add(CodexFact(language.text(CodexText.APPEARS), language.text(CodexText.FROM_TIME, codexClock(enemy.timeGateSeconds))))
+        add(CodexFact(language.text(CodexText.HABITAT), codexHabitats(enemy, language)))
+        val arrival = enemy.arrival
+        if (arrival != null) {
+            add(CodexFact(language.text(CodexText.APPEARS), arrival.localizedContent(language)))
+        } else if (enemy.livesIn(EnemyHabitat.SPACE)) {
+            add(CodexFact(language.text(CodexText.APPEARS), language.text(CodexText.FROM_TIME, codexClock(enemy.timeGateSeconds))))
+        }
         if (enemy.minimumRebirth > 0) {
             add(CodexFact(language.text(CodexText.UNLOCKS_AT), language.text(CodexText.REBORN_GATE, enemy.minimumRebirth)))
         }
@@ -496,6 +522,28 @@ internal fun codexEnemyEntry(enemy: EnemyDefinition, progress: HomeProgressProje
     return CodexEntry("enemy/${enemy.type}", enemy.name.localizedContent(language), enemy.description.localizedContent(language),
         kind, threat, facts, CodexIcon.Enemy(enemy.type, locked), if (locked) Kk.Mute else Kk.Bone, discovered = !locked,
         help = language.text(if (locked) CodexText.ENEMY_LOCKED_HELP else CodexText.ENEMY_HELP))
+}
+
+/** Whether the Codex may name [enemy]: every kind but a secret boss whose revealing discovery is not recorded yet. */
+internal fun codexEnemyVisible(enemy: EnemyDefinition, model: CodexRenderModel): Boolean =
+    !enemy.isSecretBoss || model.isWorldDiscovered(checkNotNull(enemy.revealedBy) { "A secret boss names its discovery" })
+
+/** Enemies the current Rebirth rank lets into runs and the Codex may name, out of the whole roster (the category's count). */
+internal fun codexEnemyCounts(model: CodexRenderModel, catalog: UiCatalogSnapshot, progress: HomeProgressProjection): Pair<Int, Int> =
+    catalog.enemies.count { codexEnemyVisible(it, model) && it.minimumRebirth <= progress.rebirthProgress.rank } to catalog.enemies.size
+
+/** "Everywhere" for a kind of every habitat, else its habitats' names in habitat order ("Open space, Structures"). */
+private fun codexHabitats(enemy: EnemyDefinition, language: AppLanguage): String {
+    if (enemy.habitats == EnemyHabitat.ALL) return language.text(CodexText.HABITAT_ANY)
+    return EnemyHabitat.entries.filter(enemy::livesIn).joinToString(", ") { habitat ->
+        language.text(when (habitat) {
+            EnemyHabitat.SPACE -> CodexText.HABITAT_SPACE
+            EnemyHabitat.STRUCTURE -> CodexText.HABITAT_STRUCTURE
+            EnemyHabitat.ZENITH -> CodexText.HABITAT_ZENITH
+            EnemyHabitat.NADIR -> CodexText.HABITAT_NADIR
+            EnemyHabitat.ARCHIVE -> CodexText.HABITAT_ARCHIVE
+        })
+    }
 }
 
 private const val MAX_CODEX_THREAT = 5
@@ -537,13 +585,19 @@ internal fun codexCatalogEntries(
             }
         }
         3 -> catalog.coreShapes.map { codexShapeEntry(it, model, progress, language) }.filter { search.isBlank() || it.discovered && it.title.contains(search, ignoreCase = true) }
-        // Enemies are always listed by name; a Rebirth gate only gives them the locked look.
-        else -> catalog.enemies.map { codexEnemyEntry(it, progress, language) }.filter { search.isBlank() || it.title.contains(search, ignoreCase = true) }
+        // Enemies are listed by name (a Rebirth gate only gives them the locked look); a hidden secret boss never matches a search.
+        CODEX_ENEMIES_CATEGORY -> catalog.enemies.map { codexEnemyEntry(it, model, progress, language) }
+            .filter { search.isBlank() || (it.icon as? CodexIcon.Enemy)?.hidden != true && it.title.contains(search, ignoreCase = true) }
+        CODEX_WORLD_CATEGORY -> codexWorldEntries(search, model, catalog, language)
+        else -> error("No Codex catalog category $category")
     }
 }
 
 /** Catalog category of the enemy roster (after Items, Weapons, Relics and Forms). */
 internal const val CODEX_ENEMIES_CATEGORY = 4
+
+/** Catalog category of the world's places and secrets (after the enemies). */
+internal const val CODEX_WORLD_CATEGORY = 5
 
 /**
  * The Build tab of a run: character, weapon, every relic slot (empty ones as placeholders, never

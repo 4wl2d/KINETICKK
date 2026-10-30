@@ -53,6 +53,41 @@ class GameplayAudioExecutorTest {
 
         assertEquals(1, service.unlockCount)
     }
+
+    @Test
+    fun emptyAndSingleCueFramesStillAdvanceAudioAndLeaveRetainedRequestsUnchanged() {
+        val service = RecordingAudioService()
+        val executor = ResourceGameplayAudioExecutor(service)
+        executor.advance(0.01f, listOf(GameplayAudioCue.DASH).toImmutableList())
+        val retained = service.lastRequests
+
+        executor.advance(0.02f, emptyList<GameplayAudioCue>().toImmutableList())
+        assertEquals(0.02f, service.lastDeltaSeconds)
+        assertEquals(emptyList(), service.lastRequests)
+
+        executor.advance(0.03f, listOf(GameplayAudioCue.HURT).toImmutableList())
+        assertEquals(0.03f, service.lastDeltaSeconds)
+        assertEquals(listOf(ToneRequest(76f, 0.13f, 0.22f, ToneWave.SQUARE)), service.lastRequests)
+        assertEquals(listOf(ToneRequest(185f, 0.11f, 0.23f, ToneWave.SAW)), retained)
+    }
+
+    @Test
+    fun equalPriorityCuesKeepIngressOrderAndDuplicatesForTheResourceBoundary() {
+        val service = RecordingAudioService()
+        ResourceGameplayAudioExecutor(service).advance(
+            0.01f,
+            listOf(
+                GameplayAudioCue.PICKUP,
+                GameplayAudioCue.SKILL,
+                GameplayAudioCue.IMPACT,
+                GameplayAudioCue.WEAPON_HEAVY,
+                GameplayAudioCue.SKILL,
+                GameplayAudioCue.WEAPON_LIGHT,
+            ).toImmutableList(),
+        )
+
+        assertEquals(listOf(480f, 92f, 132f, 480f, 710f, 420f), service.lastRequests.map { it.frequencyHz })
+    }
 }
 
 private class RecordingAudioService : AudioService {

@@ -25,6 +25,11 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.DirectorPersonalityId
+import kinetickk.ball.content.api.OmenId
+import kinetickk.ball.content.api.SignalKind
+import kinetickk.ball.content.api.SignalOption
+import kinetickk.ball.gameplay.interaction.canvas.with
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicPairingId
@@ -177,6 +182,57 @@ class OverlayTextFitTest {
         }
         assertTrue(checked >= 12, "Desktop and portrait totems show descriptions ($checked scenes)")
     }
+
+    /**
+     * The omen offer (the longest Russian omen and a mutator chip, the run conditions under the heading) and a signal
+     * prompt (a Shrine with its stat previews, Ignore): no text is cut or broken inside a word, every card body fits
+     * without scrolling and the chips stay on their cards.
+     */
+    @Test
+    fun omenAndSignalCardsFitTheirTextWholeInBothLanguages() {
+        forEachFrame(::omenOffer, ::shrinePrompt, ::merchantPrompt) { width, height, model ->
+            val scene = "${model.choiceType} ${width}x$height"
+            assertTextFitsWithoutBreakingWords(scene)
+            model.choices.indices.forEach { index ->
+                val body = onNode(hasTestTag("kinetickk.gameplay.choice.${index + 1}.text"), useUnmergedTree = true).fetchSemanticsNode()
+                assertEquals(0f, body.config[SemanticsProperties.VerticalScrollAxisRange].maxValue(), "$scene card ${index + 1} fits without scrolling")
+                val card = onNodeWithTag("kinetickk.gameplay.choice.${index + 1}").fetchSemanticsNode().boundsInRoot
+                onAllNodes(hasTestTag("kinetickk.gameplay.choice.${index + 1}.chips"), useUnmergedTree = true).fetchSemanticsNodes().forEach { node ->
+                    val chips = node.boundsInRoot
+                    assertTrue(card.inflate(2f).contains(chips.topLeft) && card.inflate(2f).contains(chips.bottomRight),
+                        "$scene chips ${index + 1} stay on their card: $chips in $card")
+                }
+            }
+        }
+    }
+
+    private fun omenOffer(language: AppLanguage, width: Float, height: Float): GameplayRenderModel {
+        val omens = rewardFixtureContent.variety.omens.definitions
+        // Crowned Quarry (the longest upside and a mutator liability), Quickened Host (the longest liability), Amplified Keynote.
+        return rewardFixtureModel(choiceType = ChoiceType.OMEN, language = language, width = width, height = height,
+            choices = listOf(OmenId.CROWNED_QUARRY, OmenId.QUICKENED_HOST, OmenId.AMPLIFIED_KEYNOTE).map { id ->
+                ChoiceOption(ChoiceType.OMEN, omens[id.ordinal].name, omens[id.ordinal].upside, "OMEN", omenId = id)
+            } + ChoiceOption(ChoiceType.OMEN, "No omen", "Start the run as it is.", "DECLINE"),
+        ).with("directorPersonality" to DirectorPersonalityId.ELEMENTAL_STORM, "keynoteTag" to BuildTag.PRECISION,
+            "keynoteElement" to StatusElement.GRAVITIC)
+    }
+
+    private fun shrinePrompt(language: AppLanguage, width: Float, height: Float) = rewardFixtureModel(
+        choiceType = ChoiceType.SIGNAL, language = language, width = width, height = height,
+        choices = listOf(SignalOption.SHRINE_BLOOD to 54, SignalOption.SHRINE_WARD to 20, SignalOption.SHRINE_RELIC to 72, SignalOption.IGNORE to 0)
+            .map { (option, cost) -> signal(option, SignalKind.SHRINE, cost, if (option == SignalOption.SHRINE_WARD) 25 else 0) },
+        previews = listOf(
+            RewardPreview(immutableListOf(RewardStatChange("Impact power", 1.64f, 1.74f, "×"), RewardStatChange("Weapon power", 1.36f, 1.46f, "×"))),
+            RewardPreview(immutableListOf(RewardStatChange("Shield", 0f, 25f, ""), RewardStatChange("Damage reduction", 0f, 4f, "%"))),
+        ),
+    )
+
+    /** The cursed cache's curses and the gamble's stakes: the longest cost lines. */
+    private fun merchantPrompt(language: AppLanguage, width: Float, height: Float) = rewardFixtureModel(
+        choiceType = ChoiceType.SIGNAL, language = language, width = width, height = height,
+        choices = listOf(SignalOption.CACHE_CRATE, SignalOption.CACHE_RELIQUARY, SignalOption.GAMBLE_MATTER, SignalOption.IGNORE)
+            .map { option -> signal(option, option.kind ?: SignalKind.CURSED_CACHE, cost = 1_250, payout = 2_750, locked = option == SignalOption.GAMBLE_MATTER) },
+    )
 
     private fun forEachFrame(
         vararg scenes: (AppLanguage, Float, Float) -> GameplayRenderModel,

@@ -17,6 +17,7 @@ import kinetickk.ball.gameplay.nucleus.render.RelicLinkKind
 import kinetickk.ball.gameplay.nucleus.render.RelicLinkProjection
 import kinetickk.ball.gameplay.nucleus.render.SeveredRelicProjection
 import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableListOfSize
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.abs
@@ -114,11 +115,17 @@ internal fun MutableGameState.buildProjection(): BuildProjection = BuildProjecti
     breakThresholds = immutableListOfSize(StatusElement.entries.size) { breakThreshold(StatusElement.entries[it]) },
 )
 
-/** Contributions are additive deltas in display units and sum to the effective value. */
-internal fun MutableGameState.buildStats(includeTemporary: Boolean = true): ImmutableList<BuildStatSummary> {
+/**
+ * Contributions are additive deltas in display units and sum to the effective value. Without [withContributions]
+ * every row carries no contributions, for readers that compare only names, values and units (the reward previews).
+ */
+internal fun MutableGameState.buildStats(
+    includeTemporary: Boolean = true,
+    withContributions: Boolean = true,
+): ImmutableList<BuildStatSummary> {
     val rows = mutableListOf<BuildStatSummary>()
     fun stat(name: String, current: Float, base: Float, lab: Float = 0f, relics: Float = 0f, unit: String = "") {
-        rows += BuildStatSummary(name, current, unit, listOf(
+        rows += BuildStatSummary(name, current, unit, if (!withContributions) immutableListOf() else listOf(
             BuildStatContribution(BuildStatSource.CHARACTER, base),
             BuildStatContribution(BuildStatSource.LAB, lab),
             BuildStatContribution(BuildStatSource.ITEMS, current - base - lab - relics),
@@ -147,7 +154,7 @@ internal fun MutableGameState.buildStats(includeTemporary: Boolean = true): Immu
     val permanentPower = progressionPower * synergyPower
     val effectivePower = if (includeTemporary) effectiveWeaponPower() else permanentPower
     val matrixWeaponPower = matrixShare(ItemEffect.WEAPON_POWER, 1f)
-    rows += BuildStatSummary("Weapon power", effectivePower, "×", listOf(
+    rows += BuildStatSummary("Weapon power", effectivePower, "×", if (!withContributions) immutableListOf() else listOf(
         BuildStatContribution(BuildStatSource.CHARACTER, 1f),
         BuildStatContribution(BuildStatSource.LAB, matrixWeaponPower + weaponPower * (globalPower - 1f)),
         BuildStatContribution(BuildStatSource.ITEMS, weaponPower - 1f - matrixWeaponPower),
@@ -159,7 +166,7 @@ internal fun MutableGameState.buildStats(includeTemporary: Boolean = true): Immu
     val buildSpeed = masterySpeed * buildActivationBonus()
     val effectiveSpeed = buildSpeed * if (includeTemporary && overdriveTime > 0f) 1.35f else 1f
     val matrixSpeed = matrixShare(ItemEffect.ATTACK_SPEED, 1f)
-    rows += BuildStatSummary("Activation speed", effectiveSpeed, "×", listOf(
+    rows += BuildStatSummary("Activation speed", effectiveSpeed, "×", if (!withContributions) immutableListOf() else listOf(
         BuildStatContribution(BuildStatSource.CHARACTER, 1f),
         BuildStatContribution(BuildStatSource.LAB, matrixSpeed),
         BuildStatContribution(BuildStatSource.ITEMS, attackSpeed - 1f - matrixSpeed),
@@ -194,6 +201,10 @@ internal fun MutableGameState.buildStats(includeTemporary: Boolean = true): Immu
     stat("Combo window", effectiveComboWindow(), 2.8f, relics = effectiveComboWindow() - comboWindow, unit = "s")
     stat("Overdrive gain", overdriveGainFactor(), 1f, matrixShare(ItemEffect.OVERDRIVE_GAIN, 1f),
         relics = overdriveGainFactor() - overdriveGain, unit = "×")
+    // The flight law clamps the steering stats to the content bound; the rows show what it reads.
+    val steeringBound = content.tempo.steering.maximumStatMultiplier
+    stat("Grip", gripStrength.coerceIn(0f, steeringBound), 1f, matrixShare(ItemEffect.GRIP, 1f), unit = "×")
+    stat("Sling", slingStrength.coerceIn(0f, steeringBound), 1f, matrixShare(ItemEffect.SLING, 1f), unit = "×")
     return rows.toImmutableList()
 }
 

@@ -3,43 +3,57 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.DirectorPersonalityId
 import kinetickk.ball.content.api.EquippedRelic
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.OmenId
+import kinetickk.ball.content.api.SignalKind
+import kinetickk.ball.content.api.WorldEventKind
+import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.nucleus.model.CharacterRuntime
 import kinetickk.ball.gameplay.nucleus.model.CombatFieldKind
 import kinetickk.ball.gameplay.nucleus.model.FieldSource
 import kinetickk.ball.gameplay.nucleus.model.MarkKind
+import kinetickk.ball.gameplay.nucleus.model.Obstacle
 import kinetickk.ball.gameplay.nucleus.model.SeveredRelic
 import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.model.Pickup
-import kinetickk.ball.gameplay.nucleus.model.PointOfInterestState
+import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.Totem
 import kinetickk.ball.gameplay.nucleus.model.TrailPoint
 import kinetickk.ball.gameplay.nucleus.model.WeaponNode
 import kinetickk.ball.gameplay.nucleus.model.WeaponOrbital
-import kinetickk.ball.gameplay.nucleus.model.WorldPoint
 import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
 import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
+import kinetickk.ball.gameplay.nucleus.render.DimensionProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyAffinity
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kinetickk.ball.gameplay.nucleus.render.EventSignalProjection
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.PickupType
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
+import kinetickk.ball.gameplay.nucleus.render.StructureRenderProjection
 import kinetickk.ball.gameplay.nucleus.render.WeaponNodeType
+import kinetickk.ball.gameplay.nucleus.render.WorldEventProjection
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
+import kinetickk.foundation.collections.immutableListOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotSame
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -60,10 +74,10 @@ class GameplayRenderModelMapperTest {
                 latticeNodes[3] = -4f
                 latticeTime = 5f
             }
-            pointsOfInterest = listOf(
-                PointOfInterestState(
-                    offerId = 1,
-                    kind = PointOfInterestKind.COLLAPSING_ORBIT,
+            sites = listOf(
+                SiteState(
+                    id = 2L,
+                    kind = SiteKind.COLLAPSING_ORBIT,
                     x = 300f,
                     y = 400f,
                     expiresAt = 90f,
@@ -491,6 +505,93 @@ class GameplayRenderModelMapperTest {
         assertEquals(0.0f.toRawBits(), differentBits.totem!!.x.toRawBits())
     }
 
+    @Test
+    fun worldFactsProjectTheirRunStateAndQuietLanesProjectTheirSharedDefaults() {
+        val quiet = fullyPopulatedState().toRenderModel()
+        assertSame(StructureRenderProjection.EMPTY, quiet.structures)
+        assertSame(DimensionProjection.REALSPACE, quiet.dimension)
+        assertNull(quiet.trial)
+        assertTrue(quiet.ambientSites.isEmpty())
+        assertFalse(quiet.easyMode)
+        assertEquals(-1, quiet.goldenDrifterId)
+        assertEquals(-1, quiet.featuredAspect)
+        assertNull(quiet.runOmen)
+
+        val signals = immutableListOf(EventSignalProjection(id = 3, kind = SignalKind.SHRINE, x = 40f, y = -60f, expiresAt = 90f))
+        val boons = immutableListOf(33, 48)
+        val event = WorldEventProjection(WorldEventKind.ION_STORM, telegraphAt = 100f, startsAt = 104f, endsAt = 130f)
+        val source = MutableGameState(canonicalGameplayContent, seed = 712, initialMatter = 0, runMode = RunMode.EASY).apply {
+            coreStraightness = 0.625f
+            runSecretFlags = 0b101
+            goldenDrifterId = 17
+            runBoons = boons
+            runOmen = OmenId.RICH_VEINS
+            runMutatorMask = 0b1000
+            directorPersonality = DirectorPersonalityId.SIEGE
+            featuredAspect = StatusElement.SONIC.ordinal
+            keynoteTag = BuildTag.entries.last()
+            keynoteElement = StatusElement.VOID
+            worldEvent = event
+            eventSignals = signals
+        }
+        val projected = source.toRenderModel()
+
+        assertTrue(projected.easyMode)
+        assertEquals(0.625f, projected.coreStraightness)
+        assertEquals(0b101, projected.secretFlags)
+        assertEquals(17, projected.goldenDrifterId)
+        assertSame(boons, projected.runBoons)
+        assertEquals(OmenId.RICH_VEINS, projected.runOmen)
+        assertEquals(0b1000, projected.runMutatorMask)
+        assertEquals(DirectorPersonalityId.SIEGE, projected.directorPersonality)
+        assertEquals(StatusElement.SONIC.ordinal, projected.featuredAspect)
+        assertEquals(BuildTag.entries.last(), projected.keynoteTag)
+        assertEquals(StatusElement.VOID, projected.keynoteElement)
+        assertSame(event, projected.worldEvent)
+        assertSame(signals, projected.eventSignals)
+        // The values are immutable state, so a later change in the run never reaches the published projection.
+        source.eventSignals = immutableListOf()
+        source.runBoons = immutableListOf()
+        assertEquals(signals.toList(), projected.eventSignals.toList())
+        assertEquals(listOf(33, 48), projected.runBoons.toList())
+    }
+
+    @Test
+    fun obstacleFuseAndPolarityAndEnemyChargesReprojectOnlyWhenTheyChange() {
+        val source = fullyPopulatedState().apply {
+            enemies.single().charges = 2
+            placeObstaclesForTesting(
+                Obstacle(id = 5L, kind = ObstacleKind.DERELICT_MINE, x = 200f, y = 0f, radius = 30f, shapeSeed = 1, fuseAt = 3.5f),
+                Obstacle(id = 6L, kind = ObstacleKind.GRAVITY_WELL, x = -200f, y = 0f, radius = 40f, shapeSeed = 2, repels = true),
+            )
+        }
+        val retained = source.toRenderModel()
+        assertEquals(mapOf(5L to 3.5f, 6L to 0f), retained.obstacles.associate { it.id to it.fuseAt })
+        assertEquals(mapOf(5L to false, 6L to true), retained.obstacles.associate { it.id to it.repels })
+        assertEquals(2, retained.enemies.single().charges)
+
+        val unrelatedSource = fullyPopulatedState()
+        val equal = source.copyForReduction()
+        val reused = equal.toRenderModel(reusableCollections = retained, identitySource = unrelatedSource)
+        assertSame(retained.obstacles, reused.obstacles)
+        assertSame(retained.enemies, reused.enemies)
+
+        val changed = source.copyForReduction().apply {
+            enemies.single().charges = 1
+            placeObstaclesForTesting(
+                *obstacleField.obstacles.map { if (it.id == 5L) it.copy(fuseAt = 4f) else it.copy(repels = false) }.toTypedArray(),
+            )
+        }
+        val reprojected = changed.toRenderModel(reusableCollections = retained, identitySource = unrelatedSource)
+        assertNotSame(retained.obstacles, reprojected.obstacles)
+        assertNotSame(retained.enemies, reprojected.enemies)
+        assertEquals(mapOf(5L to 4f, 6L to 0f), reprojected.obstacles.associate { it.id to it.fuseAt })
+        assertEquals(mapOf(5L to false, 6L to false), reprojected.obstacles.associate { it.id to it.repels })
+        assertEquals(1, reprojected.enemies.single().charges)
+        assertEquals(mapOf(5L to 3.5f, 6L to 0f), retained.obstacles.associate { it.id to it.fuseAt })
+        assertEquals(2, retained.enemies.single().charges)
+    }
+
     private fun populatedState(): MutableGameState = MutableGameState(
         content = canonicalGameplayContent,
         seed = 712,
@@ -577,7 +678,7 @@ class GameplayRenderModelMapperTest {
                 it.hp.toRawBits(), it.maxHp.toRawBits(), it.radius.toRawBits(), it.actionTimer.toRawBits(),
                 it.flash.toRawBits(), it.contactCooldown.toRawBits(), it.weaponCooldown.toRawBits(),
                 it.previousX.toRawBits(), it.previousY.toRawBits(), it.dead, it.statusBits, it.affinityBits,
-                it.armored, it.controlBits,
+                it.armored, it.controlBits, it.charges,
             )
         },
         "projectiles" to projectiles.map {
@@ -608,13 +709,7 @@ class GameplayRenderModelMapperTest {
         "characterAbility" to listOf(
             characterAbility.toString(),
         ),
-        "pointsOfInterest" to pointsOfInterest.map {
-            listOf(
-                it.kind, it.name, it.x.toRawBits(), it.y.toRawBits(), it.active,
-                it.remaining.toRawBits(), it.nextBeacon, it.progress.toRawBits(), it.defenderIds.toList(),
-                it.warningRemaining.toRawBits(), it.volleyAngle.toRawBits(),
-            )
-        },
+        "sites" to sites.map { it.exactFacts() },
         "itemStacks" to itemStacks.toList(),
         "discoveredItemIds" to discoveredItemIds.toList(),
         "relicRanks" to relicRanks.toList(),
@@ -632,6 +727,30 @@ class GameplayRenderModelMapperTest {
         "apex" to apex,
         "combatFields" to combatFields.toList(),
         "coreState" to coreState,
+        "coreStraightness" to coreStraightness.toRawBits(),
+        "easyMode" to easyMode,
+        "ambientSites" to ambientSites.map { it.exactFacts() },
+        "trial" to trial,
+        "secretFlags" to secretFlags,
+        "goldenDrifterId" to goldenDrifterId,
+        "structures" to structures,
+        "dimension" to dimension,
+        "runBoons" to runBoons.toList(),
+        "runOmen" to runOmen,
+        "runMutatorMask" to runMutatorMask,
+        "directorPersonality" to directorPersonality,
+        "featuredAspect" to featuredAspect,
+        "keynoteTag" to keynoteTag,
+        "keynoteElement" to keynoteElement,
+        "worldEvent" to worldEvent,
+        "eventSignals" to eventSignals.toList(),
+    )
+
+    private fun SiteProjection.exactFacts(): List<Any?> = listOf(
+        kind, name, x.toRawBits(), y.toRawBits(), active, remaining.toRawBits(), step, progress.toRawBits(),
+        foeIds.toList(), warningRemaining.toRawBits(), volleyAngle.toRawBits(),
+        course.map { listOf(it.dx.toRawBits(), it.dy.toRawBits()) }, radius.toRawBits(), sides, clock.toRawBits(), medal,
+        activationRadius.toRawBits(), reveal.toRawBits(), aimDx.toRawBits(), aimDy.toRawBits(),
     )
 
     private class ReadGuardList<Element>(

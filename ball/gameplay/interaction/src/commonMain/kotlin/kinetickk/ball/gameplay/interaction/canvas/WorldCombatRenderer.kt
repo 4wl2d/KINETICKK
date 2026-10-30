@@ -95,9 +95,15 @@ private fun DrawScope.drawWorldLayer(
     // The crowd and the reaction effects setting pick every world look's level of detail this frame.
     val crowd = onScreenEnemyCount(engine, shakeX, shakeY, FxFrame.CROWD_SIG_ONLY + 1)
     FxFrame.begin(crowd, engine.settings.reactionEffects)
-    // Obstacles lie on the backdrop, under everything that moves.
+    // Structure floors and walls, then obstacles, lie on the backdrop, under everything that moves.
+    drawStructureFloors(engine, shakeX, shakeY, roles)
+    drawStructureWalls(engine, shakeX, shakeY, roles)
     drawObstacles(engine, shakeX, shakeY, roles)
-    drawPointsOfInterest(engine, shakeX, shakeY, textMeasurer)
+    drawSites(engine, shakeX, shakeY, textMeasurer)
+    drawAmbientSites(engine, shakeX, shakeY, textMeasurer)
+    drawDimensionWorld(engine, shakeX, shakeY, roles)
+    drawWorldEventAmbient(engine, shakeX, shakeY, roles)
+    drawEventSignals(engine, shakeX, shakeY, textMeasurer)
     // Lingering fields and skill zones are ground decals.
     drawCombatFields(engine, shakeX, shakeY, roles)
     drawSkillMarkers(engine, shakeX, shakeY, roles)
@@ -106,10 +112,12 @@ private fun DrawScope.drawWorldLayer(
     drawShockwaves(engine, visualFx, shakeX, shakeY, roles)
     drawMotionEchoes(engine, visualFx, shakeX, shakeY, roles)
     drawTrail(engine, shakeX, shakeY, roles)
+    drawCoreRibbon(engine, visualFx.coreRibbon, shakeX, shakeY, roles)
     drawWeaponNodes(engine, shakeX, shakeY, roles)
     drawWeaponEntities(engine, shakeX, shakeY, roles, airborne = false)
     drawPickups(engine, shakeX, shakeY, roles)
     drawVolatileBursts(engine, shakeX, shakeY, roles)
+    drawWorldEventStrikes(engine, shakeX, shakeY, roles)
     drawWeapon(engine, core, shakeX, shakeY, roles)
     drawWeaponEntities(engine, shakeX, shakeY, roles, airborne = true)
     drawWeaponArcs(engine, visualFx, shakeX, shakeY, roles)
@@ -132,11 +140,18 @@ private fun DrawScope.drawWorldLayer(
         drawCore(engine, core, roles)
         drawCoreStates(engine, core, roles)
         drawApexActive(engine, core, shakeX, shakeY, roles)
+        drawSecretCompanions(engine, core, shakeX, shakeY, roles)
     }
-    drawSingularity(pointer, engine.renderElapsed, engine.tetherDistance < 75f, roles)
-    // Decided in world units, like the marks they stand in for.
-    collectPointOfInterestEdgeMarkers(engine, textMeasurer, markers)
+    drawStructureScrim(engine, shakeX, shakeY)
+    drawSingularity(pointer, engine.renderElapsed, engine.tetherDistance < 75f, roles, engine.easyMode)
+    // Decided in world units, like the marks they stand in for; the collection order is the priority order (the
+    // batch keeps the first markers it receives).
+    collectSiteEdgeMarkers(engine, textMeasurer, markers)
     collectTotemEdgeMarker(engine, markers)
+    collectSignalEdgeMarker(engine, markers)
+    collectDimensionEdgeMarkers(engine, markers)
+    collectStructureEdgeMarkers(engine, markers)
+    collectAmbientSiteEdgeMarkers(engine, markers)
 }
 
 /**
@@ -195,7 +210,7 @@ private fun DrawScope.drawDamageNumbers(
             rotate(tilt, Offset.Zero)
             scale(pop, pop, Offset.Zero)
         }) {
-            if (image != null) image.draw(this) else drawDamageNumberInk(face, shadow, color)
+            if (image != null) image.draw(this, pop) else drawDamageNumberInk(face, shadow, color)
             if (number.critical) {
                 drawKkStamp(
                     textMeasurer,
@@ -300,8 +315,8 @@ private fun DrawScope.drawImpactMarks(engine: GameplayRenderModel, visualFx: Vis
 }
 
 /**
- * The Core's path history in the you color (a wider band where Flux Wake cuts), plus the speed
- * tail that trails the Core (`HUD.dc.html`: a fading wedge with two bone lines).
+ * The Core's path history in the you color (a wider band where Flux Wake cuts). The ribbon that
+ * trails the Core is [drawCoreRibbon]'s.
  */
 internal fun DrawScope.drawTrail(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, roles: KkRolePalette) {
     val you = roles.you
@@ -331,23 +346,6 @@ internal fun DrawScope.drawTrail(engine: GameplayRenderModel, shakeX: Float, sha
         hasPrevious = true
         previous = location
         previousLife = life
-    }
-    if (engine.phase == GamePhase.GAME_OVER || engine.speed <= 25f) return
-    val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
-    val ratio = min(1f, engine.speed / 920f)
-    val bright = engine.overdriveTime > 0f || engine.dashPhaseTime > 0f
-    val degrees = atan2(-engine.velocityY, -engine.velocityX) * RADIANS_TO_DEGREES
-    withTransform({
-        translate(core.x, core.y)
-        rotate(degrees, Offset.Zero)
-    }) {
-        scale(80f + ratio * 260f, 16f, Offset.Zero) {
-            drawPath(WorldUnitShapes.tail, WorldBrushes.fade(you.copy(alpha = if (bright) 0.85f else 0.55f)))
-        }
-        scale(60f + ratio * 180f, 1f, Offset.Zero) {
-            drawRect(WorldBrushes.fade(Kk.Bone.copy(alpha = 0.5f)), Offset(0f, -14f), Size(1f, 2f))
-            drawRect(WorldBrushes.fade(Kk.Bone.copy(alpha = 0.35f)), Offset(0f, 12f), Size(1f, 2f))
-        }
     }
 }
 
@@ -509,7 +507,7 @@ internal fun DrawScope.drawWeaponNodes(engine: GameplayRenderModel, shakeX: Floa
 /**
  * The Core: a bone form silhouette ([KkFormGeometry]) with a hard ink rim and a soft glow; you-color
  * in overdrive and heat-tinted while overheated (`HUD.dc.html`). Integrity/heat/shield arcs are
- * the HUD's Core halo.
+ * the HUD's Core halo. In Baby mode the form wears a diaper ([drawDiaper]).
  */
 internal fun DrawScope.drawCore(engine: GameplayRenderModel, center: Offset, roles: KkRolePalette) {
     val overdrive = engine.overdriveTime > 0f
@@ -533,6 +531,7 @@ internal fun DrawScope.drawCore(engine: GameplayRenderModel, center: Offset, rol
     }
     // Phased by Void Step: the Core shows at half strength.
     drawCoreForm(engine, center, if (engine.coreState.phased) fill.copy(alpha = 0.5f) else fill, roles)
+    if (engine.easyMode) drawDiaper(engine, center, roles, if (engine.coreState.phased) 0.5f else 1f)
     val ability = engine.characterAbility
     if (ability.charge > 0f && engine.coreShape != CoreShape.RING && engine.coreShape != CoreShape.PRISM) {
         drawArc(roles.you, -90f, 360f * ability.charge.coerceIn(0f, 1f), false,

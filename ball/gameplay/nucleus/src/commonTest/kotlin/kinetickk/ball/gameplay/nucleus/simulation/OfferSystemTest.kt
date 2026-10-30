@@ -116,7 +116,10 @@ class OfferSystemTest {
         for (rebirth in 1..10) assertEquals(gatedUpTo(rebirth), gatedItems(rebirth), "Reborn $rebirth")
         assertTrue("Glacial Heart" in gatedItems(2) && "Resonance Fork" !in gatedItems(3) && "Resonance Fork" in gatedItems(4))
         assertTrue("Last Word" !in gatedItems(9) && "Last Word" in gatedItems(10))
-        assertEquals(43 + 23, gatedItems(10).size, "Three original legendaries, forty gated 0.4.0 items and the gated 0.5.0 items")
+        assertEquals(
+            43 + 23 + 1, gatedItems(10).size,
+            "Three original legendaries, forty gated 0.4.0 items, the gated 0.5.0 items and Glass Harvest (Reborn 1)",
+        )
 
         fun sovereigns(rebirth: Int): Set<RelicId> = buildTestState(rebirth = rebirth).offerableRelics()
             .filter { it.minimumRebirth > 0 }.map { it.id }.toSet()
@@ -129,7 +132,7 @@ class OfferSystemTest {
     @Test
     fun everyItemIsOfferedFromItsOwnTierAndLevelAndIsDiscoveredWhenTaken() {
         val items = canonicalGameplayContent.items
-        assertEquals(287, items.size)
+        assertEquals(302, items.size)
         // A fresh profile per tier: no lifetime Matter, so the run level alone opens the catalog. Each run owns an
         // active item, so skill items have something to work on, and has dealt the whole catalog into its deck
         // (DraftDeckTest covers the deal).
@@ -363,7 +366,8 @@ class OfferSystemTest {
         val singleRare = canonicalGameplayContent.items.first { it.rarity == ItemRarity.RARE && it.minimumRebirth == 0 }
         val scenarios = mapOf(
             "Rebirth 2" to veteran(rebirth = 2),
-            "a single Rare or better" to veteran(contentOffering { !rareOrBetter(it) || it.id == singleRare.id }),
+            // The whole catalog dealt: the one Rare is offerable whichever items a deal of this catalog holds.
+            "a single Rare or better" to veteran(contentOffering { !rareOrBetter(it) || it.id == singleRare.id }).dealWholeCatalog(),
             // The pity card climbs from an empty Rare tier to Epic instead of falling below Rare.
             "no Rare" to veteran(contentOffering { it.rarity != ItemRarity.RARE }),
             // The pity card climbs past the empty Rare and Epic tiers to a Legendary.

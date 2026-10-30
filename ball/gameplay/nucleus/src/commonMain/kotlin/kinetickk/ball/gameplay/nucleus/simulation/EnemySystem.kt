@@ -50,9 +50,28 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
         val dx = coreX - enemy.x
         val dy = coreY - enemy.y
         val distance = max(1f, length(dx, dy))
-        val cadence = delta * motion * attackRate
+        val cadence = delta * motion * attackRate * affixCadence(enemy)
+        // A site that owns this enemy (the Golden Drifter) moves it instead of its kind's behaviour.
+        if (updateSiteOwnedEnemy(enemy, delta)) continue
         when (enemy.type) {
             EnemyType.DRIFTER -> steerEnemy(enemy, dx / distance * 78f, dy / distance * 78f, 2.1f, delta)
+            // 0.6.0 kinds: one dispatch each.
+            EnemyType.COMET -> updateComet(enemy, dx, dy, distance, delta)
+            EnemyType.PYLON -> updatePylon(enemy, dx, dy, distance)
+            EnemyType.SENTRY -> updateSentry(enemy, dx, dy, distance, delta)
+            EnemyType.CRAWLER -> updateCrawler(enemy, dx, dy, distance, delta)
+            EnemyType.SERAPH -> updateSeraph(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.CHOIR -> updateChoir(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.IMP -> updateImp(enemy, dx, dy, distance, delta)
+            EnemyType.HOUND -> updateHound(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.CIPHER -> updateCipher(enemy, dx, dy, distance, delta)
+            EnemyType.MIRROR -> updateMirror(enemy, dx, dy, cadence, delta)
+            EnemyType.WARDEN_PRIME -> updateWardenPrime(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.BROOD_QUEEN -> updateBroodQueen(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.THRONE -> updateThrone(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.PYRE_HERALD -> updatePyreHerald(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.CARTOGRAPHER -> updateCartographer(enemy, dx, dy, distance, cadence, delta)
+            EnemyType.ANTECEDENT -> updateAntecedent(enemy, dx, dy, distance, cadence, delta)
             EnemyType.SHOOTER -> {
                 val desired = if (distance > 340f) 78f else if (distance < 250f) -72f else 0f
                 val tangent = if (enemy.id % 2 == 0) 1f else -1f
@@ -135,13 +154,7 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
                     1.55f,
                     delta,
                 )
-                if (distance < 440f && dashPhaseTime <= 0f && canAttack(enemy)) {
-                    // Ion charge disrupts the well.
-                    val disruption = max(0.2f, 1f - 0.12f * stacks(enemy, StatusElement.ION))
-                    val gravity = (38f + (1f - distance / 440f) * 270f) * disruption
-                    velocityX -= dx / distance * gravity * delta
-                    velocityY -= dy / distance * gravity * delta
-                }
+                applyGravityWell(enemy, dx, dy, distance, delta, strength = 1f)
                 enemy.actionTimer -= cadence
                 if (enemy.actionTimer <= 0f && distance < 780f) {
                     enemy.actionTimer = 2.65f
@@ -159,6 +172,7 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
                 )
             }
             EnemyType.ELITE -> {
+                updateEliteAffix(enemy, dx, dy, distance, delta)
                 val tangent = if (enemy.id % 2 == 0) 1f else -1f
                 steerEnemy(enemy, dx / distance * 52f - dy / distance * 45f * tangent, dy / distance * 52f + dx / distance * 45f * tangent, 1.3f, delta)
                 enemy.actionTimer -= cadence
@@ -187,12 +201,15 @@ internal fun MutableGameState.updateEnemies(delta: Float) {
     enemies.removeMatchingStable { enemy -> enemy.dead }
     val leashDistance = max(screenWidth, screenHeight) * 1.15f + 360f
     val leashSquared = leashDistance * leashDistance
-    val activeDefenders = pointsOfInterest.singleOrNull()?.takeIf { it.active }?.defenderIds
+    val leaderLeashDistance = max(FAR_LEADER_LEASH_DISTANCE, leashDistance)
+    val leaderLeashSquared = leaderLeashDistance * leaderLeashDistance
     for (index in enemies.indices) {
         val enemy = enemies[index]
-        if (leashExempt(enemy, activeDefenders)) continue
-        if (distanceSquared(enemy.x, enemy.y, coreX, coreY) > leashSquared) relocateLeashedEnemy(enemy)
+        if (leashExempt(enemy)) continue
+        val limit = if (enemy.type == EnemyType.ELITE || enemy.type == EnemyType.HERALD) leaderLeashSquared else leashSquared
+        if (distanceSquared(enemy.x, enemy.y, coreX, coreY) > limit) relocateLeashedEnemy(enemy)
     }
+    updateEncounters()
 }
 
 /**
@@ -208,18 +225,43 @@ internal fun MutableGameState.canAttack(enemy: Enemy): Boolean = canAct(enemy) &
 internal fun MutableGameState.steerEnemy(enemy: Enemy, desiredX: Float, desiredY: Float, agility: Float, delta: Float) {
     if (isThrownByPolarity(enemy)) return
     val factor = 1f - exp(-agility * delta)
-    enemy.vx = lerp(enemy.vx, desiredX * rebirthProfile.enemySpeedMultiplier, factor)
-    enemy.vy = lerp(enemy.vy, desiredY * rebirthProfile.enemySpeedMultiplier, factor)
+    enemy.vx = lerp(enemy.vx, desiredX * rebirthProfile.enemySpeedMultiplier * affixSpeedFactor(enemy), factor)
+    enemy.vy = lerp(enemy.vy, desiredY * rebirthProfile.enemySpeedMultiplier * affixSpeedFactor(enemy), factor)
+}
+
+/**
+ * The Warden's gravity well ([strength] 1): while [enemy] can attack, the Core is outside a Dash phase and within 440 u,
+ * the well pulls the Core toward it, harder near its centre; Ion charge on [enemy] disrupts it. A Magnetic Elite runs
+ * the same well at its affix strength.
+ */
+internal fun MutableGameState.applyGravityWell(
+    enemy: Enemy,
+    dx: Float,
+    dy: Float,
+    distance: Float,
+    delta: Float,
+    strength: Float,
+) {
+    if (distance < 440f && dashPhaseTime <= 0f && canAttack(enemy)) {
+        // Ion charge disrupts the well.
+        val disruption = max(0.2f, 1f - 0.12f * stacks(enemy, StatusElement.ION))
+        val gravity = (38f + (1f - distance / 440f) * 270f) * disruption * strength
+        velocityX -= dx / distance * gravity * delta
+        velocityY -= dy / distance * gravity * delta
+    }
 }
 
 internal fun MutableGameState.updateProjectiles(delta: Float) {
+    // Hostile shots follow the world layer's time; the player's own shots never do.
+    val hostileStep = delta * layerTimeScale(null)
     for (projectileIndex in projectiles.indices) {
         val projectile = projectiles[projectileIndex]
+        val step = if (projectile.hostile) hostileStep else delta
         projectile.previousX = projectile.x
         projectile.previousY = projectile.y
-        projectile.x += projectile.vx * delta
-        projectile.y += projectile.vy * delta
-        projectile.life -= delta
+        projectile.x += projectile.vx * step
+        projectile.y += projectile.vy * step
+        projectile.life -= step
         // A Quasar shot running out of life ends with its form's burst before it leaves the list.
         if (projectile.life <= 0f && projectile.sourceWeapon == kinetickk.ball.content.api.WeaponId.QUASAR_CANNON &&
             projectile.life > -delta
@@ -333,6 +375,7 @@ internal inline fun <Element> MutableList<Element>.removeMatchingStable(
 
 internal fun MutableGameState.updateTotem(delta: Float) {
     if (phase != GamePhase.RUNNING) return
+    if (!layerFeatures().totem) return
     val activeTotem = totem
     if (activeTotem != null) {
         activeTotem.pulse = (activeTotem.pulse + delta * 2.5f) % TAU
@@ -358,14 +401,23 @@ private const val TOTEM_CLEARANCE: Float = 70f
 internal fun MutableGameState.spawnEnemy(type: EnemyType): Boolean = spawnScheduled(type)
 
 /**
- * A new [type] at ([x], [y]) with its profile and current spawn integrity. Elites and Heralds roll an
- * aspect from the spawn stream, so only call this for an enemy that is added.
+ * A new [type] at ([x], [y]) with its profile and current spawn integrity (scaled by [integrityShare]), owned by the
+ * encounter [ownerTag] (0: the ambient director). Elites and Heralds roll an aspect from the spawn stream, so only call
+ * this for an enemy that is added.
  */
-internal fun MutableGameState.spawnedEnemy(type: EnemyType, x: Float, y: Float): Enemy {
+internal fun MutableGameState.spawnedEnemy(
+    type: EnemyType,
+    x: Float,
+    y: Float,
+    ownerTag: Long = 0L,
+    integrityShare: Float = 1f,
+): Enemy {
     val profile = type.profile
     var integrity = spawnIntegrity(type)
-    val hardened = type == EnemyType.ELITE && rebirthProfile.has(RebirthMutator.HARDENED_ELITES)
+    val hardened = type == EnemyType.ELITE && runMutatorActive(RebirthMutator.HARDENED_ELITES)
     if (hardened) integrity *= HARDENED_ELITE_INTEGRITY
+    integrity *= integrityShare
+    integrity *= championIntegrityScale(type, nextEntityId, ownerTag)
     val enemy = Enemy(
         id = nextEntityId++,
         type = type,
@@ -382,7 +434,9 @@ internal fun MutableGameState.spawnedEnemy(type: EnemyType, x: Float, y: Float):
         if (hardened) enemy.escortsPending = HARDENED_ELITE_ESCORTS
         if (type == EnemyType.HERALD) enemy.escortsPending = HERALD_ESCORTS
     }
+    enemy.ownerTag = ownerTag
     rollVanguardArmor(enemy)
+    rollEliteVariety(enemy)
     initializeBehavior(enemy)
     return enemy
 }

@@ -1,0 +1,88 @@
+// SPDX-FileCopyrightText: 2026 Vladislav Tomilov
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package kinetickk.ball.content.api
+
+/** Layer, rift and objective names, dimension notices, Codex lines, Blessings and Pacts. */
+internal val DimensionPhrasesInRussian: List<Pair<String, String>> = listOf(
+    "Realspace" to "Явь",
+    "Zenith" to "Зенит",
+    "Nadir" to "Надир",
+    "Archive" to "Архив",
+    "Ascent" to "Восхождение",
+    "Judgement" to "Суд",
+    "Harvest" to "Жатва",
+    "Pyre" to "Костёр",
+    "Complete" to "Завершено",
+    "EXIT RIFT OPEN" to "ВЫХОД ОТКРЫТ",
+    "PULLED BACK TO REALSPACE" to "ВЫБРОС В ЯВЬ",
+    "THE ARCHIVE STIRS" to "АРХИВ ПРОБУЖДАЕТСЯ",
+    "SCORCHED" to "ЯДРО ОБОЖЖЕНО",
+    "Course broken" to "Маршрут сорван",
+    "Rift detected" to "Обнаружен разлом",
+    "Choose a course" to "Выберите путь",
+    "Zenith rift" to "Разлом в Зенит",
+    "Nadir rift" to "Разлом в Надир",
+    "Glitch rift" to "Искажённый разлом",
+    "Exit rift" to "Разлом в явь",
+    "Fly through to cross over. The layer releases you before the Architect arrives." to
+        "Пролетите насквозь, чтобы перейти. Слой отпустит вас до прибытия Архитектора.",
+    "Fly through the halo gates in order, faster than cruising. Reach each gate before its time runs out." to
+        "Пролетите сквозь кольца нимба по порядку, быстрее крейсерской скорости. Успейте к каждому кольцу, пока не истекло его время.",
+    "Defeat the Throne." to "Победите Престол.",
+    "Collect twenty embers thrown from burning enemies. Keep moving: slow flight scorches the Core." to
+        "Соберите двадцать угольков, выброшенных горящими врагами. Не останавливайтесь: медленный полёт обжигает Ядро.",
+    "Defeat the Pyre Herald. Keep moving: slow flight scorches the Core." to
+        "Победите Огненного глашатая. Не останавливайтесь: медленный полёт обжигает Ядро.",
+    "Defeat the Antecedent. Time moves only when you move." to "Победите Предтечу. Время идёт, только когда движетесь вы.",
+    "Blessing" to "Благословение",
+    "Pact" to "Сделка",
+    "Refuse the pact" to "Отказаться от сделки",
+    "A layer of light above realspace. Grace lightens the Core and halo gates mend it. Blessings wait for those who finish its trial." to
+        "Слой света над явью. Благодать облегчает Ядро, кольца нимба чинят его. Тех, кто пройдёт испытание, ждут благословения.",
+    "A layer of heat beneath realspace. Slow flight scorches, and Matter burns twice as bright. Pacts are offered at a price." to
+        "Слой жара под явью. Медленный полёт обжигает, а материя горит вдвое ярче. Сделки здесь предлагают за плату.",
+    "The Architect's memory. Time moves only when you move. Something older waits inside." to
+        "Память Архитектора. Время идёт, только когда движетесь вы. Внутри ждёт нечто более древнее.",
+
+    "Halo of Mending" to "Нимб исцеления",
+    "Seraph Wings" to "Крылья серафима",
+    "Choir Resonance" to "Резонанс хора",
+    "Radiant Mass" to "Сияющая масса",
+    "Aureole" to "Ореол",
+    "Grace of Motion" to "Благодать движения",
+    "Clear Sight" to "Ясный взор",
+    "Providence" to "Провидение",
+    "Ascendant Pull" to "Восходящая тяга",
+    "Steadfast Light" to "Неугасимый свет",
+    "Light remembers your shape." to "Свет помнит вашу форму.",
+    "Borrowed feathers, honest speed." to "Чужие перья, честная скорость.",
+    "The hymn keeps your rhythm." to "Гимн держит ваш ритм.",
+    "Strike like a falling star." to "Бейте, как падающая звезда.",
+    "A crown of light turns blows aside." to "Венец света отводит удары.",
+    "Momentum, blessed." to "Импульс, освящённый свыше.",
+    "See the weak seam before it opens." to "Увидеть слабый шов, пока он не разошёлся.",
+    "Fortune favours the faithful." to "Удача благоволит верным.",
+    "The heavens lean toward you." to "Небеса склоняются к вам.",
+    "It does not go out." to "Он не гаснет.",
+    "Cinder Pact" to "Сделка углей",
+    "Furnace Pact" to "Сделка горна",
+    "Hunger Pact" to "Сделка голода",
+    "Wrath Pact" to "Сделка гнева",
+    "Hound Pact" to "Сделка гончей",
+    "Ash Pact" to "Сделка пепла",
+    "Ember Pact" to "Сделка искр",
+    "Brimstone Pact" to "Сделка серы",
+    "Greed Pact" to "Сделка алчности",
+    "Pyre Pact" to "Сделка костра",
+    "Burn brighter, burn shorter." to "Гореть ярче, сгореть быстрее.",
+    "The forge never rests; neither will you." to "Горн не знает отдыха. И вы не узнаете.",
+    "Take more. They grow fat on it too." to "Берите больше. Они тоже жиреют.",
+    "Every wound is a lesson in rage." to "Каждая рана учит ярости.",
+    "Run with the pack, leave the scraps." to "Бегите со стаей, бросьте объедки.",
+    "A shell of ash over a smaller heart." to "Панцирь из пепла над меньшим сердцем.",
+    "Feed the fire; it feeds them too." to "Кормите огонь: он кормит и их.",
+    "Heavy as sin, slow to answer." to "Тяжёл, как грех, и медлит с ответом.",
+    "Luck has a price, and it is you." to "У удачи есть цена, и это вы.",
+    "Burn the map to light the road." to "Сожгите карту, чтобы осветить путь.",
+)

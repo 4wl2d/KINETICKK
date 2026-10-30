@@ -15,6 +15,7 @@ import kinetickk.ball.gameplay.api.GameplayRunPhase
 import kinetickk.ball.gameplay.api.GameplayRunStatusProjection
 import kinetickk.ball.gameplay.api.GameplayRunPort
 import kinetickk.ball.gameplay.api.RunId
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.api.GameplaySettingsApplied
 import kinetickk.ball.gameplay.api.GameplayRefusal
 import kinetickk.ball.gameplay.api.GameplayRunStarted
@@ -77,8 +78,8 @@ internal class GameComponent private constructor(
         reply: InlineReply<GameplaySettingsApplied, GameplayRefusal>,
     ) = dispatchDirect(reply) { GameplayWorkItem.Settings(GameplayNucleusPulse.ApplyPreferences(preferences), reply) }
 
-    override fun startRun(reply: InlineReply<GameplayRunStarted, GameplayRefusal>) =
-        dispatchDirect(reply) { GameplayWorkItem.Starting(trustedStartContext(), reply) }
+    override fun startRun(mode: RunMode, reply: InlineReply<GameplayRunStarted, GameplayRefusal>) =
+        dispatchDirect(reply) { GameplayWorkItem.Starting(trustedStartContext(mode), reply) }
 
     override fun pauseForOverlay(reply: InlineReply<GameplayOverlayPaused, GameplayRefusal>) =
         dispatchDirect(reply) { GameplayWorkItem.Pausing(reply) }
@@ -125,7 +126,7 @@ internal class GameComponent private constructor(
 
     internal fun stateSnapshot(): GameplayState = committedState
 
-    private fun trustedStartContext(): GameplayContext {
+    private fun trustedStartContext(mode: RunMode): GameplayContext {
         val projection = profilePort.query(ProfileQuery.GetRunBootstrap)
         check(projection.instanceId == profilePort.instanceId) {
             "Profile bootstrap projection came from the wrong instance"
@@ -137,6 +138,7 @@ internal class GameComponent private constructor(
                         content = committedState.content,
                         profile = result.snapshot,
                         seed = seed,
+                        mode = mode,
                     ),
                 ),
             )

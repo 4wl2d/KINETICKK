@@ -1,0 +1,1149 @@
+// SPDX-FileCopyrightText: 2026 Vladislav Tomilov
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package kinetickk.ball.gameplay.nucleus.simulation
+
+import kinetickk.ball.content.api.ContentBounds
+import kinetickk.ball.content.api.EnemyHabitat
+import kinetickk.ball.content.api.EnemyRank
+import kinetickk.ball.content.api.ItemRarity
+import kinetickk.ball.content.api.ReactionAspect
+import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.StructureRewardKind
+import kinetickk.ball.content.api.StructureNotice
+import kinetickk.ball.content.api.StructurePolicy
+import kinetickk.ball.content.api.StructureTemplate
+import kinetickk.ball.content.api.StructureTemplateId
+import kinetickk.ball.content.api.WorldDiscovery
+import kinetickk.ball.content.api.WorldLayer
+import kinetickk.ball.content.api.rotateQuarterX
+import kinetickk.ball.content.api.rotateQuarterY
+import kinetickk.ball.gameplay.nucleus.model.PlacedStructure
+import kinetickk.ball.gameplay.nucleus.model.RunSecretFlag
+import kinetickk.ball.gameplay.nucleus.model.TAU
+import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kinetickk.ball.gameplay.nucleus.model.SiteState
+import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
+import kinetickk.ball.gameplay.nucleus.render.PickupType
+import kinetickk.ball.gameplay.nucleus.render.WallKind
+import kinetickk.foundation.collections.immutableListOf
+import kinetickk.foundation.collections.toImmutableList
+import kotlin.math.abs
+import kotlin.math.floor
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertSame
+import kotlin.test.assertTrue
+
+/**
+ * The dungeon runtime: entering, sealing a room around its garrison, clearing rooms and locks, the final room's
+ * rewards, leaving, abandoning, the Architect's and a layer switch's collapse, the Doodle, the director and isolation
+ * between reduction siblings.
+ */
+class DungeonSystemTest {
+    private val step = MutableGameState.FIXED_STEP
+
+    /** A run with every far cell holding [template]; the Core rests at the centre of the one in cell (12, −9). */
+    private class Dungeon(
+        template: StructureTemplateId,
+        seed: Int = 44,
+        rebirth: Int = 0,
+        configure: (StructurePolicy) -> StructurePolicy = { it },
+    ) {
+        val content = forcedStructureContent(template).let { it.copy(structures = configure(it.structures)) }
+        val run = buildTestState(content = content, seed = seed, rebirth = rebirth)
+        val placement = run.structureAtForTesting(12, -9)
+        val template: StructureTemplate = run.content.structures.template(template)
+
+        init {
+            run.teleportCoreForTesting(placement.absoluteX, placement.absoluteY)
+            run.enemies.clear()
+            run.pickups.clear()
+        }
+
+        val structure: PlacedStructure get() = run.structureField.structures[run.structureField.indexOf(placement.id)]
+
+        /** Run-local point of the template-space point. */
+        fun world(localX: Float, localY: Float): Pair<Float, Float> {
+            val s = structure
+            return s.x + rotateQuarterX(localX, localY, s.rotation) to s.y + rotateQuarterY(localX, localY, s.rotation)
+        }
+
+        fun roomCentre(room: Int): Pair<Float, Float> {
+            val spec = template.rooms[room]
+            return world((spec.minX + spec.maxX) / 2f, (spec.minY + spec.maxY) / 2f)
+        }
+
+        fun moveCore(point: Pair<Float, Float>) {
+            run.coreX = point.first
+            run.coreY = point.second
+            run.previousCoreX = point.first
+            run.previousCoreY = point.second
+        }
+
+        /** Puts the Core in [room] and runs the dungeon step until it holds the structure and acted on the room. */
+        fun enterRoom(room: Int) {
+            moveCore(roomCentre(room))
+            run.updateStructures(MutableGameState.FIXED_STEP)
+            run.updateStructures(MutableGameState.FIXED_STEP)
+        }
+
+        fun doors(): List<WallKind> {
+            val s = structure
+            return run.structureField.walls.subList(s.wallStart, s.wallEnd).filter { it.door >= 0 }.sortedBy { it.door }.map { it.kind }
+        }
+
+        fun tag(room: Int): Long = roomEncounterTag(placement.id, room)
+
+        fun garrison(room: Int) = run.enemies.filter { it.ownerTag == tag(room) && it.alive }
+
+        /** The room holding the run-local point, or −1. */
+        fun roomOf(x: Float, y: Float): Int {
+            val s = structure
+            return roomAt(template, s.rotation, s.x, s.y, x, y, 0f)
+        }
+
+        fun clear(room: Int) {
+            enterRoom(room)
+            check(run.dungeon?.engagedRoom == room) { "room $room did not seal" }
+            run.killGarrisonForTesting()
+            run.updateStructures(MutableGameState.FIXED_STEP)
+        }
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Entry, sealing and the cap.
+
+    @Test
+    fun enteringAStructureAnnouncesItOnceAndRecordsItsDiscovery() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        // Above the airlock: inside the footprint, in no room.
+        dungeon.moveCore(dungeon.world(-900f, -600f))
+        assertEquals(-1, roomAt(dungeon.template, dungeon.structure.rotation, dungeon.structure.x, dungeon.structure.y, run.coreX, run.coreY, 0f))
+        run.updateStructures(step)
+        val held = assertNotNull(run.dungeon)
+        assertEquals(dungeon.placement.id, held.structureId)
+        assertEquals(-1, held.engagedRoom)
+        assertFalse(held.engaged)
+        assertEquals("DERELICT STATION", run.message)
+        assertTrue(run.worldDiscoveryMask and WorldDiscovery.DERELICT_STATION.bit != 0)
+        assertTrue(run.pendingWorldDiscoveryMask and WorldDiscovery.DERELICT_STATION.bit != 0)
+        assertTrue(run.structureTouched())
+
+        // Out and back in: the structure is held again without a second banner.
+        dungeon.moveCore(dungeon.world(0f, 2_600f))
+        run.updateStructures(step)
+        assertNull(run.dungeon)
+        run.message = ""
+        dungeon.moveCore(dungeon.world(-900f, -600f))
+        run.updateStructures(step)
+        assertNotNull(run.dungeon)
+        assertEquals("", run.message)
+    }
+
+    @Test
+    fun enteringARoomSealsItsDoorsAndSpawnsItsGarrisonInsideTheCap() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        val open = WallKind.DOOR_OPEN
+        val sealed = WallKind.DOOR_SEALED
+        assertEquals(List(4) { open }, dungeon.doors())
+        dungeon.enterRoom(1)
+
+        // The hall: its four habitat picks and two Sentries at the garrison scale 0.8 (three and two) on its walls; doors
+        // D1 (airlock) and D2 (bay) seal.
+        val held = assertNotNull(run.dungeon)
+        assertEquals(1, held.engagedRoom)
+        assertTrue(held.engaged)
+        assertEquals(listOf(open, sealed, sealed, open), dungeon.doors())
+        val garrison = dungeon.garrison(1)
+        assertEquals(5, garrison.size)
+        assertEquals(garrison.map { it.id }, held.garrisonIds.toList())
+        assertEquals(5, held.garrisonTotal)
+        assertEquals(2, garrison.count { it.type == EnemyType.SENTRY })
+        assertNotNull(run.encounter(dungeon.tag(1)))
+        val s = dungeon.structure
+        garrison.forEach { enemy ->
+            assertEquals(1, roomAt(dungeon.template, s.rotation, s.x, s.y, enemy.x, enemy.y, 0f), "${enemy.type} spawns in the hall")
+            assertTrue(run.wallsClearOf(enemy.x, enemy.y, enemy.radius), "${enemy.type} spawns clear of the walls")
+            assertTrue(run.isPlaceBound(enemy))
+            assertTrue(run.content.enemy(enemy.type).livesIn(EnemyHabitat.STRUCTURE) || enemy.type == EnemyType.SENTRY)
+        }
+        assertEquals(StructureNotice.DOORS_SEALED.key, run.message)
+        assertTrue(run.structureEngagementActive())
+        assertTrue(run.engagementActive())
+
+        // While sealed nothing else engages and the room spawns nothing more.
+        run.updateStructures(step)
+        assertEquals(5, run.enemies.count { it.ownerTag != 0L })
+    }
+
+    @Test
+    fun aRoomRefusesToEngageWhenTheGarrisonWouldPassTheHardCap() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        val cap = run.content.rebirth.maxActiveEnemies
+        // The hall garrisons five: with cap − 4 enemies alive it does not fit.
+        repeat(cap - 4) { run.addEnemyForTesting(dungeon.structure.x + 3_000f, dungeon.structure.y + it) }
+        dungeon.moveCore(dungeon.roomCentre(1))
+        run.updateStructures(step)
+        val entered = assertNotNull(run.dungeon)
+        val field = run.structureField
+        val message = run.message
+        repeat(3) { run.updateStructures(step) }
+        assertEquals(entered, run.dungeon, "the room stays dormant")
+        assertSame(field, run.structureField, "no door seals")
+        assertEquals(cap - 4, run.enemies.size)
+        assertTrue(run.encounters.isEmpty())
+        assertEquals(message, run.message)
+        assertFalse(run.structureEngagementActive())
+
+        // At cap − 5 the garrison fits exactly and the room seals on the next step.
+        run.enemies.removeAt(run.enemies.lastIndex)
+        run.updateStructures(step)
+        assertEquals(1, run.dungeon?.engagedRoom)
+        assertEquals(cap, run.enemies.size)
+    }
+
+    @Test
+    fun passagesClearOnEntryWithoutSealing() {
+        val dungeon = Dungeon(StructureTemplateId.LABYRINTH)
+        val run = dungeon.run
+        val before = dungeon.doors()
+        dungeon.enterRoom(7)
+        val held = assertNotNull(run.dungeon)
+        assertEquals(1 shl 7, held.clearedRooms)
+        assertEquals(-1, held.engagedRoom)
+        assertFalse(held.engaged, "a passage is no fight")
+        assertEquals(before, dungeon.doors())
+        assertTrue(run.enemies.isEmpty())
+        assertEquals("LABYRINTH", run.message, "a passage clears silently")
+
+        // Leaving after passages only forgets them; the structure stays armed.
+        dungeon.moveCore(dungeon.world(0f, 2_600f))
+        run.updateStructures(step)
+        assertNull(run.dungeon)
+        assertFalse(run.isSpent(dungeon.placement.id))
+    }
+
+    @Test
+    fun clearingOpensTheDoorsAndLocksOpenWhenAllTheirRoomsAreCleared() {
+        val dungeon = Dungeon(StructureTemplateId.VAULT)
+        val run = dungeon.run
+        val open = WallKind.DOOR_OPEN
+        val sealed = WallKind.DOOR_SEALED
+        assertEquals(listOf(open, open, open, sealed, sealed), dungeon.doors())
+
+        dungeon.enterRoom(1)
+        assertEquals(listOf(open, sealed, open, sealed, sealed), dungeon.doors(), "the west gallery seals its own doors")
+        run.killGarrisonForTesting()
+        run.updateStructures(step)
+        assertEquals(StructureNotice.ROOM_CLEARED.key, run.message)
+        assertEquals(listOf(open, open, open, sealed, sealed), dungeon.doors(), "one gallery is not enough")
+        assertNull(run.encounter(dungeon.tag(1)))
+        assertFalse(run.structureEngagementActive())
+
+        dungeon.clear(2)
+        assertEquals(StructureNotice.INNER_DOORS_OPEN.key, run.message)
+        assertEquals(List(5) { open }, dungeon.doors(), "both galleries open the vault")
+        assertEquals(0b0110, run.dungeon!!.clearedRooms and 0b0110)
+
+        // A cleared room never seals again.
+        dungeon.enterRoom(1)
+        assertEquals(-1, run.dungeon!!.engagedRoom)
+    }
+
+    @Test
+    fun aRoomClearsOnlyOnceEveryEnemyItsEncounterOwnsIsGone() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        dungeon.enterRoom(1)
+        val garrison = dungeon.garrison(1)
+        // Ordinary enemies shut in the room do not hold the clear; a tagged straggler (an add or a fragment) does.
+        run.addEnemyForTesting(garrison[0].x, garrison[0].y)
+        val straggler = run.addEnemyForTesting(garrison[0].x, garrison[0].y).apply { ownerTag = dungeon.tag(1) }
+        garrison.forEach { run.onEnemyKilled(it); run.enemies.remove(it) }
+        run.updateStructures(step)
+        assertEquals(1, run.dungeon!!.engagedRoom)
+        assertTrue(run.dungeon!!.garrisonIds.isEmpty(), "the panel counts the members still alive")
+        run.onEnemyKilled(straggler)
+        run.enemies.remove(straggler)
+        run.updateStructures(step)
+        assertEquals(-1, run.dungeon!!.engagedRoom)
+        assertTrue(run.dungeon!!.clearedRooms and (1 shl 1) != 0)
+    }
+
+    @Test
+    fun garrisonsAreLeashExemptNeverEvictedAndClampedToTheirRoom() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        dungeon.enterRoom(1)
+        val garrison = dungeon.garrison(1)
+        garrison.forEach { assertTrue(run.leashExempt(it), "${it.type} is leash-exempt") }
+
+        // Eviction at the cap takes ordinary strangers, never a member.
+        repeat(run.content.rebirth.maxActiveEnemies - run.enemies.size) { run.addEnemyForTesting(run.coreX + 2_000f, run.coreY + it) }
+        repeat(20) { run.evictOldestOrdinaryEnemy() }
+        assertEquals(garrison.map { it.id }.toSet(), run.enemies.filter { it.ownerTag == dungeon.tag(1) }.map { it.id }.toSet())
+
+        // A member knocked out of the hall is held in it.
+        val member = garrison.first { it.type != EnemyType.SENTRY }
+        val (outsideX, outsideY) = dungeon.world(dungeon.template.rooms[1].maxX + 300f, 300f)
+        member.x = outsideX
+        member.y = outsideY
+        run.resolveEnemyObstacles()
+        val s = dungeon.structure
+        assertEquals(1, roomAt(dungeon.template, s.rotation, s.x, s.y, member.x, member.y, 0f))
+    }
+
+    @Test
+    fun bossAddsSpawnedAgainstAWallStayInTheSealedRoomSoItStillClears() {
+        // The Brood Queen keeps her distance from a Core at the vault's centre, so she ends against a wall and hatches
+        // broods aimed through it. Every enemy the vault's encounter owns stays in the vault, and the kills clear it.
+        for (seed in 44..47) {
+            val vault = Dungeon(StructureTemplateId.VAULT, seed)
+            val run = vault.run
+            vault.clear(1)
+            vault.clear(2)
+            vault.enterRoom(3)
+            assertEquals(3, run.dungeon?.engagedRoom)
+            val centre = vault.roomCentre(3)
+            repeat((10f / step).toInt()) {
+                vault.moveCore(centre)
+                run.updateEnemies(step)
+                run.updateStructures(step)
+                run.elapsed += step
+                for (enemy in vault.garrison(3)) {
+                    assertEquals(3, vault.roomOf(enemy.x, enemy.y), "seed $seed: a ${enemy.type} left the vault at ${run.elapsed} s")
+                }
+            }
+            assertTrue(vault.garrison(3).any { it.type == EnemyType.SWARMLING }, "seed $seed: the Queen hatched")
+            vault.garrison(3).filter { vault.roomOf(it.x, it.y) == 3 }.forEach { run.onEnemyKilled(it); run.enemies.remove(it) }
+            run.pickups.clear()
+            run.updateStructures(step)
+            assertNull(run.dungeon, "seed $seed: the vault cleared")
+            assertEquals(listOf(65), run.runBoons.toList())
+            assertTrue(run.isSpent(vault.placement.id))
+        }
+
+        // Warden Prime's final-phase guards spawn beside her as she holds off near the sanctum walls.
+        for (seed in 44..45) {
+            val reliquary = Dungeon(StructureTemplateId.RELIQUARY, seed)
+            val run = reliquary.run
+            for (chapel in listOf(0, 2, 6, 8)) reliquary.clear(chapel)
+            reliquary.enterRoom(4)
+            assertEquals(4, run.dungeon?.engagedRoom)
+            val centre = reliquary.roomCentre(4)
+            repeat((3f / step).toInt()) {
+                reliquary.moveCore(centre)
+                run.updateEnemies(step)
+                run.updateStructures(step)
+                run.elapsed += step
+            }
+            val prime = reliquary.garrison(4).first { it.type == EnemyType.WARDEN_PRIME }
+            val wardens = reliquary.garrison(4).count { it.type == EnemyType.WARDEN }
+            prime.phase = 2
+            prime.phaseStartPending = true
+            run.updateBossPhaseStarts()
+            assertTrue(reliquary.garrison(4).count { it.type == EnemyType.WARDEN } > wardens, "seed $seed: the guards came")
+            run.updateEnemies(step)
+            for (enemy in reliquary.garrison(4)) {
+                assertEquals(4, reliquary.roomOf(enemy.x, enemy.y), "seed $seed: a ${enemy.type} left the sanctum")
+            }
+        }
+    }
+
+    @Test
+    fun aBossHatchesItsAddsOnItsOwnSideOfTheWalls() {
+        // The Brood Queen held against each vault wall, a sealed door and a corner hatches broods aimed every way. Each
+        // Swarmling lands in the vault clear of the walls as it spawns, before a wall pass could pull it back, and none
+        // is dropped.
+        val vault = Dungeon(StructureTemplateId.VAULT)
+        val run = vault.run
+        vault.clear(1)
+        vault.clear(2)
+        vault.enterRoom(3)
+        val queen = vault.garrison(3).first { it.type == EnemyType.BROOD_QUEEN }
+        val room = vault.template.rooms[3]
+        val wall = vault.template.wallHalfThickness
+        val held = queen.radius + wall + 4f
+        val spots = listOf(
+            room.maxX - held to -400f, // east wall
+            room.minX + held to -700f, // west, on the sealed door to the West gallery
+            0f to room.minY + held, // south wall
+            0f to room.maxY - held, // north wall, against the antechamber
+            room.maxX - held to room.minY + held, // south-east corner
+        )
+        val brood = 4
+        for ((localX, localY) in spots) {
+            for (turn in 0 until 12) {
+                val (x, y) = vault.world(localX, localY)
+                queen.x = x
+                queen.y = y
+                run.elapsed = 200f + turn * TAU / brood / 12f
+                val before = run.enemies.size
+                assertEquals(brood, run.spawnBossAdds(queen, EnemyType.SWARMLING, brood, 1f, QUEEN_BROOD_LIVE))
+                val adds = run.enemies.subList(before, run.enemies.size).toList()
+                for (add in adds) {
+                    val s = vault.structure
+                    assertEquals(
+                        3,
+                        roomAt(vault.template, s.rotation, s.x, s.y, add.x, add.y, add.radius + wall - 0.5f),
+                        "Queen at ($localX, $localY), turn $turn: a Swarmling hatched behind a wall",
+                    )
+                }
+                run.enemies.removeAll(adds)
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Rewards, leaving and collapse.
+
+    @Test
+    fun theFinalRoomPaysItsRewardsOnceThroughExistingChannels() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        dungeon.enterRoom(2)
+        assertEquals(2, run.dungeon!!.engagedRoom)
+        run.killGarrisonForTesting()
+        run.pickups.clear()
+        val matter = run.runMatter + run.matterFraction.toDouble()
+        val kills = run.kills
+        run.updateStructures(step)
+
+        // The station grants its run-long Ion aspect and four Data at the reactor's centre.
+        val (centreX, centreY) = dungeon.roomCentre(2)
+        assertEquals(listOf(64), run.runBoons.toList())
+        assertEquals(0.8f, run.build.skillCooldownScale(StatusElement.ION), 0.0001f)
+        assertTrue(run.build.keystone(ReactionId.SUPERCONDUCT))
+        assertEquals(4, run.pickups.count { it.type == PickupType.DATA })
+        assertEquals(4, run.pickups.size)
+        assertTrue(run.pickups.all { abs(it.x - centreX) < 20f && abs(it.y - centreY) < 20f })
+        assertEquals(matter, run.runMatter + run.matterFraction.toDouble(), 0.01)
+        assertEquals(kills, run.kills)
+        assertEquals(StructureNotice.STRUCTURE_CLEARED.key, run.message)
+        assertNull(run.dungeon)
+        assertTrue(run.isSpent(dungeon.placement.id))
+        assertTrue(dungeon.structure.spent)
+        assertEquals(List(4) { WallKind.DOOR_OPEN }, dungeon.doors())
+
+        // A spent structure is never held again and pays nothing more.
+        run.pickups.clear()
+        dungeon.enterRoom(2)
+        dungeon.enterRoom(1)
+        assertNull(run.dungeon)
+        assertTrue(run.pickups.isEmpty())
+        assertTrue(run.enemies.isEmpty())
+        assertEquals(listOf(64), run.runBoons.toList(), "revisiting cannot stack the aspect")
+        assertEquals(0.8f, run.build.skillCooldownScale(StatusElement.ION), 0.0001f)
+    }
+
+    @Test
+    fun aVaultPaysItsCryoAspectAndAFlooredItemOffer() {
+        val dungeon = Dungeon(StructureTemplateId.VAULT)
+        val run = dungeon.run
+        dungeon.clear(1)
+        dungeon.clear(2)
+        // The vault: a Brood Queen guards it.
+        dungeon.enterRoom(3)
+        assertEquals(StructureNotice.GUARDIAN_AWAKENS.key, run.message)
+        assertEquals(1, dungeon.garrison(3).count { it.type == EnemyType.BROOD_QUEEN })
+        run.killGarrisonForTesting()
+        run.pickups.clear()
+        run.updateStructures(step)
+        assertEquals(listOf(65), run.runBoons.toList())
+        assertEquals(1.5f, run.build.durationMultiplier(StatusElement.CRYO))
+        assertEquals(1, run.build.breakSpread(StatusElement.CRYO))
+        assertEquals(listOf(ItemRarity.RARE), run.pendingFloorOffers.toList())
+        assertTrue(run.isSpent(dungeon.placement.id))
+    }
+
+    @Test
+    fun clearingEachTrialChangesItsOwnElementalBuildMechanics() {
+        for (templateId in StructureTemplateId.entries.filter { it != StructureTemplateId.ARCHITECTS_DOODLE }) {
+            val dungeon = Dungeon(templateId)
+            val run = dungeon.run
+            val rewardId = requireNotNull(dungeon.template.rewards.single { it.kind == StructureRewardKind.ASPECT }.boonId)
+            val entropyThreshold = run.breakThreshold(StatusElement.ENTROPY)
+            dungeon.clear(dungeon.template.finalRoom)
+            assertEquals(listOf(rewardId), run.runBoons.toList(), templateId.name)
+            when (templateId) {
+                StructureTemplateId.DERELICT_STATION -> {
+                    assertEquals(0.8f, run.build.skillCooldownScale(StatusElement.ION), 0.0001f)
+                    assertTrue(run.build.keystone(ReactionId.SUPERCONDUCT))
+                }
+                StructureTemplateId.VAULT -> assertEquals(1.5f, run.build.durationMultiplier(StatusElement.CRYO))
+                StructureTemplateId.SPIRE -> {
+                    assertEquals(160f, run.build.coreLinkBonus)
+                    assertEquals(1.3f, run.build.reactionTuning(ReactionId.SHATTERPOINT, ReactionAspect.FORCE), 0.0001f)
+                }
+                StructureTemplateId.LABYRINTH -> assertEquals(entropyThreshold - 1, run.breakThreshold(StatusElement.ENTROPY))
+                StructureTemplateId.FOUNDRY -> assertTrue(run.build.keystone(ReactionId.WILDFIRE))
+                StructureTemplateId.RELIQUARY -> {
+                    assertEquals(1.3f, run.build.fieldDurationScale, 0.0001f)
+                    assertTrue(run.build.keystone(ReactionId.FUSION))
+                }
+                StructureTemplateId.ARCHITECTS_DOODLE -> error("A secret is not a combat trial")
+            }
+            run.recompileBuild()
+            assertEquals(listOf(rewardId), run.runBoons.toList(), "ordinary build recompilation keeps the aspect")
+        }
+    }
+
+    @Test
+    fun theVaultLabyrinthAndFoundryRewardsSpreadTheirStatusesOnceWhenABreakActuallyFires() {
+        val cases = listOf(
+            Triple(StructureTemplateId.VAULT, StatusElement.CRYO, 1),
+            Triple(StructureTemplateId.LABYRINTH, StatusElement.ENTROPY, 2),
+            Triple(StructureTemplateId.FOUNDRY, StatusElement.THERMAL, 1),
+        )
+        for ((templateId, element, spread) in cases) {
+            val dungeon = Dungeon(templateId)
+            val run = dungeon.run
+            dungeon.clear(dungeon.template.finalRoom)
+            run.enemies.clear()
+            val target = run.dummy(x = run.coreX + 400f, y = run.coreY)
+            val nearby = run.dummy(x = target.x + 100f, y = target.y)
+            val distant = run.dummy(x = target.x + 400f, y = target.y)
+            run.applyStatus(target, element, run.breakThreshold(element, target), generation = 0)
+            assertEquals(spread, nearby.stacksOf(element), "$templateId spreads its rewarded element")
+            assertEquals(0, distant.stacksOf(element), "$templateId respects the spread radius")
+            if (element == StatusElement.CRYO) assertTrue(run.isFrozen(target))
+            else assertTrue(target.hp < target.maxHp, "$element Break deals its damage")
+        }
+    }
+
+    @Test
+    fun theFoundryRewardMakesADistantWildfireFeedTheCore() {
+        val dungeon = Dungeon(StructureTemplateId.FOUNDRY)
+        val run = dungeon.run
+        val before = run.dummy(x = run.coreX + 1_000f, y = run.coreY)
+        run.setOff(ReactionId.WILDFIRE, before)
+        assertTrue(run.ablazeUntil <= run.elapsed, "ordinary distant Wildfire cannot feed the Core")
+        run.enemies.clear()
+        dungeon.clear(dungeon.template.finalRoom)
+        run.enemies.clear()
+        val after = run.dummy(x = run.coreX + 1_000f, y = run.coreY)
+        run.setOff(ReactionId.WILDFIRE, after)
+        assertTrue(run.ablazeUntil > run.elapsed, "the earned Firewalker keystone works at any distance")
+    }
+
+    @Test
+    fun themedGarrisonChoicesBelongToTheirTrialAndKeepFixedGuards() {
+        for (id in StructureTemplateId.entries.filter { it != StructureTemplateId.ARCHITECTS_DOODLE }) {
+            val dungeon = Dungeon(id)
+            dungeon.run.elapsed = 500f // Every themed kind's ordinary time gate is open.
+            val template = dungeon.template
+            val room = template.rooms.indexOfFirst { it.garrison.any { entry -> entry.type == null } }
+            dungeon.enterRoom(room)
+            val kinds = dungeon.garrison(room).map { it.type }
+            val fixed = template.rooms[room].garrison.mapNotNull { it.type }
+            assertTrue(kinds.isNotEmpty(), id.name)
+            assertTrue(kinds.any { it in template.garrisonTypes }, "$id fields its elemental enemies")
+            assertTrue(kinds.all { it in template.garrisonTypes || it in fixed || dungeon.run.content.enemy(it).livesIn(EnemyHabitat.STRUCTURE) },
+                "$id keeps themed leaders, authored guards and ordinary habitat supports")
+        }
+    }
+
+    @Test
+    fun roomIntegrityTuningPreservesTheWholeGarrisonIncludingItsGuardian() {
+        val reference = Dungeon(StructureTemplateId.VAULT) { it.copy(garrisonHealthMultiplier = 1f) }
+        val tuned = Dungeon(StructureTemplateId.VAULT) { it.copy(garrisonHealthMultiplier = 0.75f) }
+        reference.enterRoom(3)
+        tuned.enterRoom(3)
+        val original = reference.garrison(3)
+        val reduced = tuned.garrison(3)
+        assertEquals(original.map { it.type }, reduced.map { it.type })
+        assertTrue(reduced.any { it.type == EnemyType.BROOD_QUEEN })
+        original.zip(reduced).forEach { (before, after) ->
+            assertEquals(before.maxHp * 0.75f, after.maxHp, 0.001f)
+            assertEquals(after.maxHp, after.hp)
+            assertEquals(before.x, after.x)
+            assertEquals(before.y, after.y)
+            assertEquals(before.actionTimer, after.actionTimer)
+        }
+        tuned.run.updateStructures(step)
+        assertEquals(reduced.map { it.maxHp }, tuned.garrison(3).map { it.maxHp }, "upkeep never applies the multiplier again")
+    }
+
+    @Test
+    fun aThemedGarrisonWaitsForItsOrdinaryTimeGate() {
+        val early = Dungeon(StructureTemplateId.DERELICT_STATION)
+        early.enterRoom(0)
+        assertTrue(early.garrison(0).any { it.type == EnemyType.SHOOTER })
+        assertTrue(early.garrison(0).none { it.type == EnemyType.LANCER }, "Lancers wait for their time gate")
+        val late = Dungeon(StructureTemplateId.DERELICT_STATION) { policy ->
+            policy.copy(templates = policy.templates.map { template ->
+                if (template.id == StructureTemplateId.DERELICT_STATION) template.copy(garrisonTypes = immutableListOf(EnemyType.LANCER))
+                else template
+            }.toImmutableList())
+        }
+        late.run.elapsed = 200f
+        late.enterRoom(0)
+        assertTrue(late.garrison(0).any { it.type == EnemyType.LANCER })
+    }
+
+    @Test
+    fun anotherTrialOfAnOwnedAspectSalvagesMatterWithoutStackingItsRules() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        run.applyRunBoon(64)
+        val attack = run.attackSpeed
+        dungeon.enterRoom(dungeon.template.finalRoom)
+        run.killGarrisonForTesting()
+        val matter = run.runMatter + run.matterFraction.toDouble()
+        run.updateStructures(step)
+        assertEquals(listOf(64), run.runBoons.toList())
+        assertEquals(attack, run.attackSpeed)
+        assertEquals(0.8f, run.build.skillCooldownScale(StatusElement.ION), 0.0001f)
+        assertEquals(40.0 * run.matterGain, run.runMatter + run.matterFraction.toDouble() - matter, 0.01)
+    }
+
+    @Test
+    fun aFullBoonInventorySalvagesTheAspectWithoutExceedingItsCap() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        repeat(ContentBounds.MAX_RUN_BOONS) { run.applyRunBoon(32 + it) }
+        val owned = run.runBoons
+        dungeon.enterRoom(dungeon.template.finalRoom)
+        run.killGarrisonForTesting()
+        val matter = run.runMatter + run.matterFraction.toDouble()
+        run.updateStructures(step)
+        assertEquals(owned, run.runBoons)
+        assertFalse(run.build.keystone(ReactionId.SUPERCONDUCT))
+        assertEquals(40.0 * run.matterGain, run.runMatter + run.matterFraction.toDouble() - matter, 0.01)
+        assertTrue(run.isSpent(dungeon.placement.id))
+    }
+
+    @Test
+    fun anAspectClearChangesOnlyItsReductionCandidateAndANewRunDropsTheRules() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val source = dungeon.run
+        dungeon.enterRoom(dungeon.template.finalRoom)
+        val originalBuild = source.build
+        val candidate = source.copyForReduction()
+        candidate.killGarrisonForTesting()
+        candidate.updateStructures(step)
+        assertTrue(source.runBoons.isEmpty())
+        assertSame(originalBuild, source.build)
+        assertNotNull(source.dungeon)
+        assertEquals(listOf(64), candidate.runBoons.toList())
+        assertTrue(candidate.build.keystone(ReactionId.SUPERCONDUCT))
+        candidate.startRun()
+        assertTrue(candidate.runBoons.isEmpty())
+        assertFalse(candidate.build.keystone(ReactionId.SUPERCONDUCT))
+        assertEquals(1f, candidate.build.skillCooldownScale(StatusElement.ION))
+    }
+
+    @Test
+    fun leavingAfterAFightAbandonsWithoutRewardAndNeverRearms() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        dungeon.enterRoom(1)
+        val kills = run.kills
+        // Thrown out past the leave radius (a sealed room cannot be walked out of).
+        dungeon.moveCore(dungeon.world(0f, run.content.structures.leaveRadius + 10f))
+        run.updateStructures(step)
+        assertNull(run.dungeon)
+        assertTrue(run.enemies.none { it.ownerTag == dungeon.tag(1) }, "the garrison leaves")
+        assertTrue(run.encounters.isEmpty())
+        assertEquals(kills, run.kills, "no kills")
+        assertTrue(run.pickups.isEmpty(), "no reward")
+        assertTrue(run.runBoons.isEmpty(), "abandonment grants no aspect")
+        assertEquals(StructureNotice.STRUCTURE_ABANDONED.key, run.message)
+        assertTrue(run.isSpent(dungeon.placement.id))
+        assertEquals(List(4) { WallKind.DOOR_OPEN }, dungeon.doors())
+
+        dungeon.enterRoom(1)
+        assertNull(run.dungeon, "an abandoned structure never re-arms")
+        assertTrue(run.enemies.isEmpty())
+    }
+
+    @Test
+    fun leavingBeforeAnyFightLeavesTheStructureArmed() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        dungeon.moveCore(dungeon.world(-900f, -600f))
+        run.updateStructures(step)
+        assertNotNull(run.dungeon)
+        run.message = ""
+        dungeon.moveCore(dungeon.world(0f, run.content.structures.leaveRadius + 10f))
+        run.updateStructures(step)
+        assertNull(run.dungeon)
+        assertFalse(run.isSpent(dungeon.placement.id))
+        assertEquals("", run.message, "nothing to announce")
+
+        dungeon.enterRoom(1)
+        assertEquals(1, run.dungeon?.engagedRoom, "the structure is still armed")
+    }
+
+    @Test
+    fun enteringAnotherFootprintLetsTheFirstStructureGo() {
+        // Cells of 3,000 u and a leave radius of 4,000 u put a neighbour's footprint inside the leave radius.
+        val content = denseStructureContent(
+            canonicalGameplayContent.structures.templates.map { if (it.id == StructureTemplateId.DERELICT_STATION) it else it.copy(weight = 0f) },
+        ) { it.copy(cellSize = 3_000f, leaveRadius = 4_000f) }
+        val run = buildTestState(content = content, seed = 44)
+        val first = run.structureAtForTesting(20, -15)
+        val neighbour = run.structureAtForTesting(21, -15)
+        run.teleportCoreForTesting(first.absoluteX, first.absoluteY)
+        run.enemies.clear()
+        val template = run.content.structures.template(StructureTemplateId.DERELICT_STATION)
+        val placed = run.structureField.structures.single { it.id == first.id }
+        require(run.structureField.indexOf(neighbour.id) >= 0) { "the neighbour lies in the window" }
+        val hall = template.rooms[1]
+        val hallX = (hall.minX + hall.maxX) / 2f
+        val hallY = (hall.minY + hall.maxY) / 2f
+        run.coreX = placed.x + rotateQuarterX(hallX, hallY, placed.rotation)
+        run.coreY = placed.y + rotateQuarterY(hallX, hallY, placed.rotation)
+        run.updateStructures(step)
+        run.updateStructures(step)
+        assertEquals(1, run.dungeon?.engagedRoom)
+
+        run.coreX = (neighbour.absoluteX - run.worldOriginX).toFloat()
+        run.coreY = (neighbour.absoluteY - run.worldOriginY).toFloat()
+        val held = run.dungeon!!
+        assertTrue(kotlin.math.hypot(run.coreX - held.x, run.coreY - held.y) < 4_000f, "still inside the leave radius")
+        run.updateStructures(step)
+        assertNull(run.dungeon)
+        assertTrue(run.isSpent(first.id), "the fought structure is abandoned")
+        assertTrue(run.enemies.none { it.ownerTag != 0L })
+        run.updateStructures(step)
+        assertEquals(neighbour.id, run.dungeon?.structureId, "then the neighbour is held")
+    }
+
+    @Test
+    fun theArchitectCollapsesWallsAndRemovesTheGarrisonWithoutReward() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        dungeon.enterRoom(1)
+        val hall = dungeon.roomCentre(1)
+        val reactor = dungeon.roomCentre(2)
+        val kills = run.kills
+        val matter = run.runMatter
+        run.message = ""
+        run.bossSpawned = true
+        run.updateStructures(step)
+        assertNull(run.dungeon)
+        assertTrue(run.enemies.none { it.ownerTag != 0L })
+        assertTrue(run.encounters.isEmpty())
+        assertEquals(kills, run.kills)
+        assertEquals(matter, run.runMatter)
+        assertTrue(run.pickups.isEmpty())
+        assertEquals("", run.message, "the collapse is silent")
+        assertTrue(run.isSpent(dungeon.placement.id), "the fought structure is spent")
+        assertTrue(run.structureField.bossCollapsed)
+        assertTrue(run.structureField.structures.isEmpty() && run.structureField.walls.isEmpty() && run.structureField.signals.isEmpty())
+        assertFalse(run.wallBlocksPoint(hall.first, hall.second, 20f))
+
+        // Nothing is held or engaged afterwards.
+        dungeon.moveCore(reactor)
+        run.updateStructures(step)
+        run.updateStructures(step)
+        assertNull(run.dungeon)
+        assertTrue(run.enemies.isEmpty())
+    }
+
+    @Test
+    fun theArchitectCollapsesTheDungeonWhenTheWindowMovesInTheStepAfterItArrives() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        run.quietArenaForTesting()
+        dungeon.enterRoom(1)
+        assertEquals(1, run.dungeon?.engagedRoom)
+        // The Core rests half a unit before a chunk border that crosses the hall, clear of its walls.
+        val hall = dungeon.template.rooms[1]
+        val (ax, ay) = dungeon.world(hall.minX + 100f, hall.minY + 100f)
+        val (bx, by) = dungeon.world(hall.maxX - 100f, hall.maxY - 100f)
+        val chunk = run.content.obstacles.chunkSize.toDouble()
+        fun nextBorder(low: Float, origin: Double) = ((floor((origin + low) / chunk) + 1.0) * chunk - origin).toFloat()
+        val borderX = nextBorder(minOf(ax, bx), run.worldOriginX)
+        val borderY = nextBorder(minOf(ay, by), run.worldOriginY)
+        val acrossX = borderX < maxOf(ax, bx)
+        require(acrossX || borderY < maxOf(ay, by)) { "a chunk border crosses the hall" }
+        dungeon.moveCore(if (acrossX) (borderX - 0.5f) to (ay + by) / 2f else (ax + bx) / 2f to (borderY - 0.5f))
+        run.setVelocityForTesting(0f, 0f)
+        run.updateObstacles()
+        val window = run.obstacleField.centerChunkX to run.obstacleField.centerChunkY
+        val placed = dungeon.structure
+
+        // The Architect arrives at the end of a step; in the next one the Core crosses the border, so the window
+        // refresh runs before the dungeon step.
+        run.elapsed = run.content.tempo.bossAtSeconds - step * 0.5f
+        run.simulateStep(step)
+        assertTrue(run.bossSpawned)
+        if (acrossX) run.setVelocityForTesting(240f, 0f) else run.setVelocityForTesting(0f, 240f)
+        run.simulateStep(step)
+        assertTrue(window != run.obstacleField.centerChunkX to run.obstacleField.centerChunkY, "the window moved")
+        assertEquals(1, roomAt(dungeon.template, placed.rotation, placed.x, placed.y, run.coreX, run.coreY, 0f), "the Core is still in the hall")
+
+        assertNull(run.dungeon, "the dungeon collapses")
+        assertTrue(run.isSpent(dungeon.placement.id), "the fought structure is spent")
+        assertFalse(run.structureEngagementActive())
+        assertNull(run.structureTrialProjection(), "no dungeon panel during the Architect")
+        assertTrue(run.structureField.bossCollapsed && run.structureField.structures.isEmpty())
+        repeat(120) { run.simulateStep(step) }
+        assertNull(run.dungeon)
+        assertFalse(run.engagementActive(), "nothing holds an engagement into the Architect's fight")
+        assertNull(run.trialProjection(null))
+    }
+
+    @Test
+    fun noRoomEngagesInTheLastFortyFiveSecondsBeforeTheArchitect() {
+        val cutoff = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val bossAt = cutoff.run.content.tempo.bossAtSeconds
+        val lead = cutoff.run.content.structures.engageCutoffSeconds
+        assertEquals(45f, lead)
+        cutoff.run.elapsed = bossAt - lead
+        cutoff.enterRoom(1)
+        assertEquals(-1, cutoff.run.dungeon!!.engagedRoom)
+        assertTrue(cutoff.run.enemies.isEmpty())
+
+        val before = Dungeon(StructureTemplateId.DERELICT_STATION)
+        // The float just below the cutoff (stepped through its bits; positive, so one bit down is the next float down).
+        before.run.elapsed = Float.fromBits((bossAt - lead).toRawBits() - 1)
+        before.enterRoom(1)
+        assertEquals(1, before.run.dungeon!!.engagedRoom)
+    }
+
+    @Test
+    fun anotherEngagementKeepsTheRoomDormant() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        // A window site's trial runs elsewhere: one engagement at a time.
+        run.sites = listOf(SiteState(0L, SiteKind.entries.first(), run.coreX + 5_000f, run.coreY, Float.POSITIVE_INFINITY, active = true))
+        dungeon.enterRoom(1)
+        repeat(3) { run.updateStructures(step) }
+        assertEquals(-1, run.dungeon!!.engagedRoom)
+        assertTrue(run.enemies.isEmpty())
+        run.sites = emptyList()
+        run.updateStructures(step)
+        assertEquals(1, run.dungeon!!.engagedRoom)
+    }
+
+    @Test
+    fun aLayerChangeCollapsesTheDungeonAndStructuresAtTheArrival() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        dungeon.enterRoom(1)
+        val kills = run.kills
+        run.message = ""
+        run.onWorldLayerChanged(WorldLayer.BASE, WorldLayer.ZENITH)
+        assertNull(run.dungeon)
+        assertTrue(run.enemies.none { it.ownerTag != 0L })
+        assertEquals(kills, run.kills)
+        assertEquals("", run.message)
+        assertTrue(run.isSpent(dungeon.placement.id))
+
+        // A dungeon held without a fight leaves no mark.
+        val calm = Dungeon(StructureTemplateId.DERELICT_STATION)
+        calm.moveCore(calm.world(-900f, -600f))
+        calm.run.updateStructures(step)
+        calm.run.onWorldLayerChanged(WorldLayer.BASE, WorldLayer.NADIR)
+        assertNull(calm.run.dungeon)
+        assertFalse(calm.run.isSpent(calm.placement.id))
+    }
+
+    @Test
+    fun anEncounterEndedElsewhereAbandonsTheDungeon() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        dungeon.enterRoom(1)
+        run.endAllEncounters(despawn = true)
+        run.updateStructures(step)
+        assertNull(run.dungeon)
+        assertTrue(run.isSpent(dungeon.placement.id), "a garrison taken away is never a clear")
+        assertEquals(StructureNotice.STRUCTURE_ABANDONED.key, run.message)
+        assertTrue(run.pickups.isEmpty())
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Spent list, composition, the Doodle.
+
+    @Test
+    fun spentStructuresAreRememberedInABoundedFifo() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        dungeon.clear(2)
+        assertTrue(run.isSpent(dungeon.placement.id))
+        val bound = ContentBounds.MAX_SPENT_STRUCTURES
+        // Thirty-one later structures keep it spent; the thirty-second evicts it and it arms again.
+        repeat(bound - 1) { run.markSpent(structureId(WorldLayer.BASE, 200 + it, 200), SPENT_FLAG) }
+        assertEquals(bound, run.spentStructureIds.size)
+        dungeon.enterRoom(1)
+        assertNull(run.dungeon)
+        run.markSpent(structureId(WorldLayer.BASE, 300, 300), SPENT_FLAG)
+        assertEquals(bound, run.spentStructureIds.size)
+        assertFalse(run.isSpent(dungeon.placement.id))
+        dungeon.enterRoom(1)
+        assertEquals(1, run.dungeon?.engagedRoom, "an evicted structure arms again")
+        assertFalse(dungeon.structure.spent)
+        assertEquals(listOf(WallKind.DOOR_OPEN, WallKind.DOOR_SEALED, WallKind.DOOR_SEALED, WallKind.DOOR_OPEN), dungeon.doors())
+    }
+
+    @Test
+    fun garrisonCompositionDrawsNothingFromTheRunStreams() {
+        fun sealed(seed: Int): Pair<Dungeon, List<EnemyType>> {
+            val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION, seed = seed)
+            val run = dungeon.run
+            val streams = listOf(run.gameplayRandom.snapshot(), run.rewardRandom.snapshot(), run.spawnRandom.snapshot(), run.siteRandom.snapshot())
+            dungeon.enterRoom(1)
+            assertEquals(1, run.dungeon?.engagedRoom)
+            assertEquals(streams, listOf(run.gameplayRandom.snapshot(), run.rewardRandom.snapshot(), run.spawnRandom.snapshot(), run.siteRandom.snapshot()))
+            return dungeon to dungeon.garrison(1).map { it.type }
+        }
+        val (first, kinds) = sealed(44)
+        val (again, sameKinds) = sealed(44)
+        assertEquals(kinds, sameKinds, "the same room at the same time yields the same garrison")
+        assertEquals(first.garrison(1).map { it.x to it.y }, again.garrison(1).map { it.x to it.y })
+
+        // The garrison follows the hash of the run seed and the room, not the run's history.
+        val drawn = Dungeon(StructureTemplateId.DERELICT_STATION, seed = 44)
+        repeat(50) { drawn.run.gameplayRandom.nextInt(); drawn.run.spawnRandom.nextInt(); drawn.run.rewardRandom.nextInt() }
+        drawn.enterRoom(1)
+        assertEquals(kinds, drawn.garrison(1).map { it.type })
+    }
+
+    @Test
+    fun rebirthTiersAddMembersToTheFirstHabitatEntry() {
+        val fresh = Dungeon(StructureTemplateId.DERELICT_STATION, rebirth = 0)
+        fresh.enterRoom(1)
+        val veteran = Dungeon(StructureTemplateId.DERELICT_STATION, rebirth = 8)
+        veteran.enterRoom(1)
+        // One extra per four tiers on the hall's habitat entry (three at the garrison scale 0.8); the Sentries stay two.
+        assertEquals(5, fresh.garrison(1).size)
+        assertEquals(7, veteran.garrison(1).size)
+        assertEquals(2, veteran.garrison(1).count { it.type == EnemyType.SENTRY })
+    }
+
+    @Test
+    fun garrisonsSpawnAwayFromTheCoreInsideTheirRoom() {
+        // 260 u from a Core at the room's centre; the 600 u airlock has no lattice point that far and takes its
+        // farthest (a corner, 226 u for a Shooter).
+        val rooms = listOf(StructureTemplateId.DERELICT_STATION to listOf(0, 1, 2, 3), StructureTemplateId.VAULT to listOf(0, 1, 2))
+        for ((template, indices) in rooms) for (room in indices) {
+            val clearance = if (template == StructureTemplateId.DERELICT_STATION && room == 0) 200f else 260f
+            val dungeon = Dungeon(template)
+            val run = dungeon.run
+            dungeon.enterRoom(room)
+            val garrison = dungeon.garrison(room)
+            assertTrue(garrison.isNotEmpty(), "$template room $room")
+            val s = dungeon.structure
+            garrison.forEach { enemy ->
+                assertEquals(room, roomAt(dungeon.template, s.rotation, s.x, s.y, enemy.x, enemy.y, 0f), "$template room $room ${enemy.type}")
+                val apart = kotlin.math.hypot(enemy.x - run.coreX, enemy.y - run.coreY)
+                assertTrue(apart >= clearance - 0.01f, "$template room $room ${enemy.type} spawned $apart from the Core")
+            }
+        }
+    }
+
+    @Test
+    fun garrisonScaleScalesOrdinaryEntriesButNeverAMiniBossAndStopsAtTwelve() {
+        // The vault: one Brood Queen and three Crawlers; at scale 2 the Crawlers double and the Queen stays one.
+        val doubled = Dungeon(StructureTemplateId.VAULT) { it.copy(garrisonScale = 2f) }
+        doubled.clear(1)
+        doubled.clear(2)
+        doubled.enterRoom(3)
+        val vault = doubled.garrison(3)
+        assertEquals(1, vault.count { it.type == EnemyType.BROOD_QUEEN })
+        assertEquals(6, vault.count { it.type == EnemyType.CRAWLER })
+
+        // The west gallery at scale 3: twelve habitat picks and six Sentries stop at twelve.
+        val tripled = Dungeon(StructureTemplateId.VAULT) { it.copy(garrisonScale = 3f) }
+        tripled.enterRoom(1)
+        assertEquals(ContentBounds.MAX_STRUCTURE_GARRISON, tripled.garrison(1).size)
+        assertEquals(ContentBounds.MAX_STRUCTURE_GARRISON, tripled.run.dungeon!!.garrisonTotal)
+    }
+
+    @Test
+    fun theArchitectsDoodleRecordsItsSecretWithoutAGarrison() {
+        val dungeon = Dungeon(StructureTemplateId.ARCHITECTS_DOODLE)
+        val run = dungeon.run
+        run.message = ""
+        dungeon.moveCore(dungeon.roomCentre(0))
+        run.updateStructures(step)
+        assertNotNull(run.dungeon)
+        assertEquals("", run.message, "a secret shows no entry banner")
+        assertEquals(0, run.worldDiscoveryMask)
+        val matter = run.runMatter + run.matterFraction.toDouble()
+        run.updateStructures(step)
+        assertNull(run.dungeon)
+        assertTrue(run.enemies.isEmpty())
+        assertTrue(run.encounters.isEmpty())
+        assertEquals(12, run.pickups.count { it.type == PickupType.DATA })
+        assertEquals(WorldDiscovery.ARCHITECTS_DOODLE.bit, run.worldDiscoveryMask)
+        assertEquals(WorldDiscovery.ARCHITECTS_DOODLE.bit, run.pendingWorldDiscoveryMask)
+        assertEquals("THE ARCHITECT'S DOODLE", run.message)
+        assertTrue(run.isSpent(dungeon.placement.id))
+        // SITES' discoverDoodle (C08): the run's secret flag and its Matter on top of the template's Data.
+        assertTrue(run.hasSecret(RunSecretFlag.DOODLE_FOUND))
+        assertEquals(matter + 30.0 * run.matterGain, run.runMatter + run.matterFraction.toDouble(), 1e-3)
+
+        run.pickups.clear()
+        run.updateStructures(step)
+        run.updateStructures(step)
+        assertTrue(run.pickups.isEmpty(), "found once")
+        assertEquals(matter + 30.0 * run.matterGain, run.runMatter + run.matterFraction.toDouble(), 1e-3, "found once")
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Director, pilots and isolation.
+
+    @Test
+    fun theDirectorSlowsWhileARoomIsSealed() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        dungeon.moveCore(dungeon.world(-900f, -600f))
+        run.updateStructures(step)
+        assertEquals(1f, run.structureDirectorScale())
+        assertEquals(WorldLayer.BASE.habitat, run.ambientHabitat())
+        assertFalse(run.structureInteriorActive())
+        dungeon.enterRoom(1)
+        assertEquals(run.content.structures.directorRateWhileSealed, run.structureDirectorScale())
+        assertEquals(0.35f, run.structureDirectorScale())
+        assertEquals(EnemyHabitat.STRUCTURE, run.ambientHabitat())
+        run.killGarrisonForTesting()
+        run.updateStructures(step)
+        assertEquals(1f, run.structureDirectorScale())
+        assertEquals(WorldLayer.BASE.habitat, run.ambientHabitat())
+    }
+
+    @Test
+    fun whileARoomIsSealedTheDirectorSpawnsOnlyStructureKinds() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        run.elapsed = 150f
+        run.invulnerableUntil = Float.MAX_VALUE
+        run.runGrace = Float.MAX_VALUE
+        dungeon.enterRoom(1)
+        // A garrison that cannot fall keeps the room sealed while the director runs.
+        dungeon.garrison(1).forEach { it.hp = 1e9f }
+        run.spawnClock = 0f
+        val kinds = mutableSetOf<EnemyType>()
+        repeat((40f / step).toInt()) {
+            run.simulateStep(step)
+            assertTrue(run.structureInteriorActive(), "the room stays sealed")
+            run.enemies.filter { it.ownerTag == 0L }.forEach { enemy ->
+                if (run.content.enemy(enemy.type).rank == EnemyRank.ORDINARY) kinds += enemy.type
+            }
+            run.enemies.removeAll { it.ownerTag == 0L }
+            run.pickups.clear()
+            run.takeVisualFxCues()
+            run.takeSoundCues()
+        }
+        assertTrue(kinds.isNotEmpty(), "the director keeps spawning, slower")
+        assertTrue(STRUCTURE_ROSTER.containsAll(kinds), "only STRUCTURE kinds: ${kinds - STRUCTURE_ROSTER}")
+    }
+
+    @Test
+    fun anEventPlannedBeforeASealOrItsClearFiresKindsOfTheHabitatItFiresIn() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        run.elapsed = 150f
+        fun livesIn(type: EnemyType, habitat: EnemyHabitat) = run.content.enemy(type).weightIn(habitat) > 0f
+
+        /** Plans until the event's fixed kind is one [habitat] lacks. */
+        fun planOutside(habitat: EnemyHabitat) {
+            var plans = 0
+            do {
+                run.planSpawnEvent()
+                plans++
+            } while ((run.pendingEventType < 0 || livesIn(EnemyType.entries[run.pendingEventType], habitat)) && plans < 500)
+            assertFalse(livesIn(EnemyType.entries[run.pendingEventType], habitat), "a kind $habitat lacks after $plans plans")
+        }
+
+        /** Fires the planned event with budget to spare; returns the kinds it spawned. */
+        fun fire(): List<EnemyType> {
+            run.enemies.removeAll { it.ownerTag == 0L }
+            val kind = run.pendingEventKind
+            val size = run.pendingEventSize
+            run.spawnBudget = 20f
+            run.spawnClock = 0f
+            run.spawnWave(step)
+            assertEquals(-1, run.pendingEventKind, "the event fired")
+            assertEquals(kind, run.lastSpawnEventKind, "the event keeps its kind")
+            assertEquals(size, run.lastSpawnEventPlanned, "the event keeps its size")
+            return run.enemies.filter { it.ownerTag == 0L }.map { it.type }
+        }
+
+        // Planned in open space with a kind that lives only there, fired once the room has sealed.
+        planOutside(EnemyHabitat.STRUCTURE)
+        dungeon.enterRoom(1)
+        assertTrue(run.structureInteriorActive())
+        val sealed = fire()
+        assertTrue(sealed.isNotEmpty() && sealed.all { livesIn(it, EnemyHabitat.STRUCTURE) }, "only STRUCTURE kinds while sealed: $sealed")
+
+        // Planned while sealed with a STRUCTURE-only kind, fired once the room has cleared.
+        planOutside(EnemyHabitat.SPACE)
+        run.killGarrisonForTesting()
+        run.updateStructures(step)
+        assertFalse(run.structureInteriorActive(), "the room cleared")
+        val cleared = fire()
+        assertTrue(cleared.isNotEmpty() && cleared.all { livesIn(it, EnemyHabitat.SPACE) }, "only SPACE kinds after the clear: $cleared")
+    }
+
+    @Test
+    fun pilotsSeeEveryStructureOfTheWindowAsOneCircle() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val run = dungeon.run
+        val structures = run.structureField.structures
+        assertTrue(structures.isNotEmpty())
+        val out = FloatArray(MAX_OPTIONAL_SITE_MARKS * 3)
+        assertEquals(structures.size, run.appendStructureMarks(out, 0))
+        structures.forEachIndexed { index, s ->
+            assertEquals(s.x, out[index * 3])
+            assertEquals(s.y, out[index * 3 + 1])
+            assertEquals(kotlin.math.hypot(s.halfWidth, s.halfHeight), out[index * 3 + 2])
+        }
+        assertEquals(MAX_OPTIONAL_SITE_MARKS, run.appendStructureMarks(out, MAX_OPTIONAL_SITE_MARKS), "a full buffer takes no more")
+        assertEquals(MAX_OPTIONAL_SITE_MARKS, run.appendStructureMarks(out, MAX_OPTIONAL_SITE_MARKS - 1))
+        assertFalse(run.structureTouched())
+        assertFalse(run.optionalSitesTouched())
+        dungeon.moveCore(dungeon.world(-900f, -600f))
+        run.updateStructures(step)
+        assertTrue(run.optionalSitesTouched())
+    }
+
+    @Test
+    fun dungeonAndStructureFieldAreIsolatedBetweenReductionSiblings() {
+        val dungeon = Dungeon(StructureTemplateId.DERELICT_STATION)
+        val source = dungeon.run
+        dungeon.moveCore(dungeon.roomCentre(1))
+        source.updateStructures(step)
+        val field = source.structureField
+        val walls = field.walls.toList()
+        val held = source.dungeon
+        val enemies = source.enemies.size
+
+        val candidate = source.copyForReduction()
+        candidate.updateStructures(step)
+        assertEquals(1, candidate.dungeon?.engagedRoom)
+        assertSame(field, source.structureField, "the source keeps its window")
+        assertEquals(walls, source.structureField.walls.toList())
+        assertEquals(held, source.dungeon)
+        assertEquals(enemies, source.enemies.size)
+        assertTrue(source.encounters.isEmpty())
+
+        candidate.killGarrisonForTesting()
+        candidate.updateStructures(step)
+        assertEquals(-1, candidate.dungeon?.engagedRoom)
+        assertSame(field, source.structureField)
+        assertEquals(held, source.dungeon)
+    }
+
+    private companion object {
+        /** The ordinary kinds ENEMIES gives the STRUCTURE habitat. */
+        val STRUCTURE_ROSTER = setOf(
+            EnemyType.DRIFTER, EnemyType.SHOOTER, EnemyType.CHARGER, EnemyType.WEAVER, EnemyType.SPLITTER, EnemyType.SWARMLING,
+            EnemyType.BOMBER, EnemyType.LANCER, EnemyType.AEGIS, EnemyType.MINELAYER, EnemyType.PHANTOM, EnemyType.REFLECTOR,
+            EnemyType.PYLON, EnemyType.SENTRY, EnemyType.CRAWLER,
+        )
+    }
+}

@@ -24,6 +24,30 @@ class DefaultAudioServiceTest {
     }
 
     @Test
+    fun selectionLimitsApplyToDistinctRequestsAndPreserveTheInput() {
+        val requests = listOf(HURT_REQUEST, HURT_REQUEST, DASH_REQUEST, DASH_REQUEST, PICKUP_REQUEST, UI_CLICK_REQUEST)
+        assertEquals(emptyList(), selectToneRequests(requests, -1))
+        assertEquals(emptyList(), selectToneRequests(requests, 0))
+        assertEquals(emptyList(), selectToneRequests(emptyList(), 3))
+        assertEquals(listOf(HURT_REQUEST), selectToneRequests(requests, 1))
+        assertEquals(listOf(HURT_REQUEST, DASH_REQUEST), selectToneRequests(requests, 2))
+        assertEquals(listOf(HURT_REQUEST, DASH_REQUEST, PICKUP_REQUEST), selectToneRequests(requests, 3))
+        assertEquals(listOf(HURT_REQUEST, DASH_REQUEST, PICKUP_REQUEST, UI_CLICK_REQUEST), selectToneRequests(requests, 10))
+        assertEquals(listOf(HURT_REQUEST), selectToneRequests(listOf(HURT_REQUEST), 3))
+        assertEquals(6, requests.size)
+    }
+
+    @Test
+    fun oversizedEffectsAreRejectedWhileMusicContinuesAdvancing() {
+        val player = RecordingTonePlayer()
+        val service = DefaultAudioService(player)
+        service.advance(0.1f, List(33) { HURT_REQUEST })
+        repeat(4) { service.advance(0.1f, emptyList()) }
+
+        assertEquals(listOf(110f, 146.83f), player.tones.map { it.frequencyHz })
+    }
+
+    @Test
     fun servicePreservesRequestOrderAndMusicSequence() {
         val player = RecordingTonePlayer()
         val service = DefaultAudioService(player)

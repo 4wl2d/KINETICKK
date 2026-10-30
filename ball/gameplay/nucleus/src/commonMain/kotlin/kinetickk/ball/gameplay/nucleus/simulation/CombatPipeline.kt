@@ -196,6 +196,7 @@ internal fun MutableGameState.holds(
     element: StatusElement?,
     reaction: ReactionId? = null,
     skill: kinetickk.ball.content.api.SkillId? = null,
+    obstacle: kinetickk.ball.content.api.ObstacleKind? = null,
 ): Boolean = when (condition) {
     is EffectCondition.SpeedAtLeast -> speed >= condition.speed
     is EffectCondition.SpeedBelow -> speed < condition.speed
@@ -209,7 +210,7 @@ internal fun MutableGameState.holds(
         null -> totalStacks(target) >= condition.stacks
         else -> stacks(target, element) >= condition.stacks
     }
-    EffectCondition.TargetElite -> target != null && (target.isElite || target.isBoss || target.isMiniBoss)
+    EffectCondition.TargetElite -> target != null && target.isEliteClass
     EffectCondition.TargetFrozen -> target != null && (isFrozen(target) || target.id == shatteringEnemyId)
     is EffectCondition.TargetBelow -> target != null && target.hp < target.maxHp * condition.fraction
     EffectCondition.SourceImpact -> source == HitSource.IMPACT || source == HitSource.DASH
@@ -228,6 +229,9 @@ internal fun MutableGameState.holds(
     EffectCondition.ApexActive -> apexActive()
     is EffectCondition.SkillsCharging -> skillsCharging() >= condition.count
     is EffectCondition.WeaponFamilyIs -> currentWeaponDefinition.family == condition.family
+    // The obstacle kind the dispatch carries, and the Core's measured gap to the nearest solid obstacle (+∞: none).
+    is EffectCondition.ObstacleIs -> obstacle == condition.kind
+    is EffectCondition.NearObstacle -> coreObstacleGap <= condition.distance
 }
 
 /** A live mark, Blackfire or Embrittle on [target], or [target] is the Void Anchor. */
@@ -366,7 +370,8 @@ private fun MutableGameState.resolveCrit(
     if (build.pairing(RelicPairingId.COLD_VERDICT) && stacks(enemy, StatusElement.CRYO) >= 4) forced = true
     if (build.guaranteedCritAfter > 0 && critMissStreak >= build.guaranteedCritAfter) forced = true
     val critical = if (executioner) {
-        forced || belowExecutionLine(enemy, 0.35f, architectFinalPhase()) || isFrozen(enemy) || enemy.status[StatusCell.BRITTLE] > 0f ||
+        forced || belowExecutionLine(enemy, 0.35f, bossFinalPhaseOf(enemy), phased = encounterSpec(enemy) != null) ||
+            isFrozen(enemy) || enemy.status[StatusCell.BRITTLE] > 0f ||
             statusNearBreak(enemy, 0.75f)
     } else {
         val effectiveChance = if (build.critConversionRate > 0f) min(chance, 0.3f) else chance
@@ -642,8 +647,8 @@ internal fun MutableGameState.basisAmount(basis: DamageBasis, hit: Float, victim
 internal fun victimFactor(enemy: Enemy): Float = enemy.type.profile.victimFactor
 
 /**
- * The low-level applicator and the single enemy-integrity writer: gates the Architect, records damage,
- * flashes and publishes a bounded damage number. [unmitigated] is reported back for clause bases.
+ * The low-level applicator and the single enemy-integrity writer: gates every boss with an encounter spec, records
+ * damage, flashes and publishes a bounded damage number. [unmitigated] is reported back for clause bases.
  */
 internal fun MutableGameState.damageEnemy(
     enemy: Enemy,
@@ -659,8 +664,9 @@ internal fun MutableGameState.damageEnemy(
     if (amount <= 0f || !enemy.alive) return DamageResult(0f, false)
     // Herald shields and Aegis tethers guard the receiver; a phased Phantom takes nothing at all.
     val guarded = guardedDamage(enemy, amount, source, execute)
+    val spec = encounterSpec(enemy)
     val applied = when {
-        enemy.isBoss -> gateArchitectDamage(enemy, guarded)
+        spec != null -> gateBossDamage(enemy, spec, guarded)
         isShifting(enemy) -> 0f
         else -> guarded
     }
@@ -671,9 +677,9 @@ internal fun MutableGameState.damageEnemy(
     rememberHollowDamage(enemy, applied)
     enemy.hp -= applied
     crackArmor(enemy, source)
-    if (enemy.isBoss) {
+    if (spec != null) {
         enemy.lastDamagedAt = elapsed
-        onArchitectDamaged(enemy)
+        onBossDamaged(enemy, spec)
     }
     if (enemy.hp <= 0f) {
         // Kill rules read the source of the killing blow, never an earlier hit.
@@ -874,12 +880,13 @@ internal fun MutableGameState.fireRelicProjectile(x: Float, y: Float, target: En
 internal fun MutableGameState.pushEnemies(x: Float, y: Float, radius: Float, strength: Float, inward: Boolean) {
     for (index in enemies.indices) {
         val target = enemies[index]
-        val knockback = knockbackTaken(target)
-        if (!target.alive || knockback <= 0f && build.knockbackToDamage <= 0f) continue
+        if (!target.alive) continue
         val dx = target.x - x
         val dy = target.y - y
         val distance = max(1f, length(dx, dy))
         if (distance > radius + target.radius) continue
+        val knockback = knockbackTaken(target)
+        if (knockback <= 0f && build.knockbackToDamage <= 0f) continue
         if (knockbackAsDamage(target, knockback, strength) || knockback <= 0f) continue
         val falloff = 1f - (distance / (radius + target.radius)) * 0.5f
         val sign = if (inward) -1f else 1f

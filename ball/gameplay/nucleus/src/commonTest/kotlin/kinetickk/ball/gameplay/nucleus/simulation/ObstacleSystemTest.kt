@@ -10,10 +10,14 @@ import kinetickk.ball.content.api.DamageBasis
 import kinetickk.ball.content.api.EffectAction
 import kinetickk.ball.content.api.EffectClause
 import kinetickk.ball.content.api.EffectTrigger
+import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.MatrixEffect
+import kinetickk.ball.content.api.ObstacleMix
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WorldLayer
+import kinetickk.ball.gameplay.nucleus.model.Obstacle
 import kinetickk.ball.gameplay.nucleus.model.Polarity
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.model.distanceSquared
@@ -25,7 +29,6 @@ import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
 import kotlin.math.max
-import kotlin.math.pow
 import kotlin.math.sqrt
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -36,6 +39,13 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class ObstacleSystemTest {
+    private companion object {
+        /** A test mix that puts every newer kind on asteroid candidates. */
+        val EVERY_KIND_MIX = ObstacleMix(
+            gravityWell = 0.15f, accelGate = 0.15f, crystal = 0.15f, derelictMine = 0.15f, phaseShard = 0.15f, thermalVent = 0.15f,
+        )
+    }
+
     // The Core touches the test asteroid (centre 300, radius 80) when its centre reaches x = 204.
     private val asteroidX = 300f
     private val contactX = asteroidX - 80f - MutableGameState.CORE_RADIUS
@@ -138,7 +148,8 @@ class ObstacleSystemTest {
     @Test
     fun fracturedSpaceAddsDensityAndUnstableAsteroidsWithFewerBumpers() {
         fun census(tier: Int): Map<ObstacleKind, Int> {
-            val state = buildTestState(seed = 5, rebirth = tier)
+            // Far from the origin: a world without structures, whose footprints would clear part of the census.
+            val state = buildTestState(seed = 5, rebirth = tier, content = structuresDisabledContent)
             val counts = mutableMapOf<ObstacleKind, Int>()
             for (chunkX in 10 until 40) for (chunkY in -15 until 15) {
                 state.generateChunk(chunkX, chunkY).forEach { counts[it.kind] = (counts[it.kind] ?: 0) + 1 }
@@ -158,8 +169,140 @@ class ObstacleSystemTest {
         assertEquals(0.08f, fracturedBumpers, 0.03f)
         val asteroids = fracturedTotal - (fractured[ObstacleKind.BUMPER] ?: 0)
         assertEquals(0.15f, (fractured[ObstacleKind.UNSTABLE] ?: 0).toFloat() / asteroids, 0.04f)
-        // Mean per chunk: 2.2 × the tier-4 density (1.2).
-        assertEquals(2.2f * 1.2f, calmTotal / 900f, 0.25f)
+        // Candidate mean scales by the tier-4 density (1.2), before spacing removes overlaps.
+        assertEquals(canonicalGameplayContent.obstacles.meanPerChunk * 1.2f, calmTotal / 900f, 0.25f)
+    }
+
+    @Test
+    fun variantKindsLeaveTheFieldLayoutUnchanged() {
+        val tuning = canonicalGameplayContent.obstacles
+        val mixed = contentWithObstacleMix(EVERY_KIND_MIX)
+        val zero = withoutObstacleVariants()
+        fun compare(rebirth: Int, chunkXs: IntRange, chunkYs: IntRange, content: GameplayContentSnapshot = mixed): List<Obstacle> {
+            val plain = buildTestState(seed = 23, rebirth = rebirth, content = zero)
+            val varied = buildTestState(seed = 23, rebirth = rebirth, content = content)
+            val converted = mutableListOf<Obstacle>()
+            for (chunkX in chunkXs) for (chunkY in chunkYs) {
+                val before = plain.generateChunk(chunkX, chunkY)
+                val after = varied.generateChunk(chunkX, chunkY)
+                assertEquals(before.map { it.id }, after.map { it.id }, "the same candidates survive in chunk $chunkX, $chunkY")
+                before.zip(after).forEach { (candidate, obstacle) ->
+                    assertEquals(candidate.x, obstacle.x)
+                    assertEquals(candidate.y, obstacle.y)
+                    assertEquals(candidate.shapeSeed, obstacle.shapeSeed)
+                    if (candidate.kind != ObstacleKind.ASTEROID) assertEquals(candidate, obstacle, "only asteroid candidates convert")
+                    assertTrue(obstacle.radius <= candidate.radius, "a body never outgrows the asteroid it replaced")
+                    assertTrue(obstacle.radius in tuning.bumperRadius..tuning.asteroidMaximumRadius)
+                    if (obstacle.repels) assertEquals(ObstacleKind.GRAVITY_WELL, obstacle.kind, "only knots repel")
+                    converted += obstacle
+                }
+            }
+            return converted
+        }
+        val realspace = compare(rebirth = 0, chunkXs = 10 until 30, chunkYs = -10 until 10)
+        assertEquals(ObstacleKind.entries.toSet() - ObstacleKind.UNSTABLE, realspace.map { it.kind }.toSet(),
+            "every newer kind appears on asteroid candidates, beside asteroids and bumpers")
+        val knots = realspace.filter { it.kind == ObstacleKind.GRAVITY_WELL }
+        assertTrue(knots.any { it.repels } && knots.any { !it.repels }, "both knots appear")
+        // Fractured Space keeps its unstable asteroids as the layout made them.
+        val fractured = compare(rebirth = 5, chunkXs = 10 until 20, chunkYs = -5 until 5)
+        assertTrue(fractured.any { it.kind == ObstacleKind.UNSTABLE })
+        // The shipped realspace mix moves nothing either, over 400 chunks, and brings every newer kind and both knots.
+        val shipped = compare(rebirth = 0, chunkXs = 10 until 30, chunkYs = -10 until 10, content = canonicalGameplayContent)
+        assertEquals(ObstacleKind.entries.toSet() - ObstacleKind.UNSTABLE, shipped.map { it.kind }.toSet())
+        val shippedKnots = shipped.filter { it.kind == ObstacleKind.GRAVITY_WELL }
+        assertTrue(shippedKnots.any { it.repels } && shippedKnots.any { !it.repels }, "both knots ship")
+    }
+
+    /**
+     * Every obstacle [layer] generates at tier 0 with [content] in the 900 chunks east of the origin, for each of three
+     * runs (more than 1,800 obstacles, enough to compare kind shares across the sparser field). Far from the origin:
+     * a world without structures, whose realspace footprints would clear part of the census.
+     */
+    private fun census(layer: WorldLayer, content: GameplayContentSnapshot = structuresDisabledContent): List<Obstacle> = buildList {
+        for (seed in 31..33) {
+            val state = buildTestState(seed = seed, content = content).apply { worldLayer = layer }
+            for (chunkX in 10 until 40) for (chunkY in -15 until 15) addAll(state.generateChunk(chunkX, chunkY))
+        }
+    }
+
+    /**
+     * The share of all candidates the mix tables give [kind] in a layer: its roll share times the chance a uniform
+     * candidate radius (46..150) is eligible (spec: P = 0.769 for knots and gates, 0.615 for crystals, 0.865 for vents,
+     * every radius for mines and shards) times the layer's non-bumper share (bumpers 0.18 × the layer's scale).
+     */
+    private fun tableShare(mix: ObstacleMix, kind: ObstacleKind): Float {
+        val eligible = when (kind) {
+            ObstacleKind.GRAVITY_WELL, ObstacleKind.ACCEL_GATE -> 80f / 104f
+            ObstacleKind.CRYSTAL -> 64f / 104f
+            ObstacleKind.THERMAL_VENT -> 90f / 104f
+            else -> 1f
+        }
+        return mix.share(kind) * eligible * (1f - 0.18f * mix.bumperScale)
+    }
+
+    @Test
+    fun spaceMixCensusMatchesItsShares() {
+        val kinds = canonicalGameplayContent.obstacles.kinds
+        val field = census(WorldLayer.BASE)
+        val counts = field.groupingBy { it.kind }.eachCount()
+        val total = field.size.toFloat()
+        assertTrue(total > 1_800f, "2,700 chunks still supply a representative obstacle sample: $total")
+        val newKinds = ObstacleKind.entries.filter { kinds.space.share(it) > 0f }
+        assertEquals(6, newKinds.size, "realspace ships every newer kind")
+        newKinds.forEach { kind ->
+            assertEquals(tableShare(kinds.space, kind), (counts[kind] ?: 0) / total, 0.02f, "$kind's share of all candidates")
+        }
+        val converted = newKinds.sumOf { counts[it] ?: 0 } / total
+        assertTrue(converted in 0.25f..0.35f, "new kinds take 25-35 % of realspace candidates: $converted")
+        assertEquals(0.295f, converted, 0.02f)
+        assertEquals(0.18f, (counts[ObstacleKind.BUMPER] ?: 0) / total, 0.04f, "bumpers keep their share")
+        assertEquals(0.525f, (counts[ObstacleKind.ASTEROID] ?: 0) / total, 0.02f, "asteroids keep the rest")
+        assertEquals(null, counts[ObstacleKind.UNSTABLE], "unstable asteroids stay Fractured Space's")
+        val knots = field.filter { it.kind == ObstacleKind.GRAVITY_WELL }
+        assertEquals(kinds.space.repelShare, knots.count { it.repels }.toFloat() / knots.size, 0.15f, "Repulsors among knots")
+    }
+
+    @Test
+    fun layerMixesAreDistinct() {
+        val kinds = canonicalGameplayContent.obstacles.kinds
+        val space = census(WorldLayer.BASE)
+        // Every layer meets its table: each kind within 2 pp, the new kinds' total and the bumpers within 2 pp.
+        val layers = listOf(
+            Triple(WorldLayer.ZENITH, kinds.zenith, 0.345f to 0.234f),
+            Triple(WorldLayer.NADIR, kinds.nadir, 0.464f to 0.108f),
+            Triple(WorldLayer.ARCHIVE, kinds.archive, 0.447f to 0.144f),
+        )
+        val fields = layers.associate { (layer, mix, table) ->
+            val field = census(layer)
+            val counts = field.groupingBy { it.kind }.eachCount()
+            val total = field.size.toFloat()
+            val newKinds = ObstacleKind.entries.filter { mix.share(it) > 0f }
+            newKinds.forEach { kind ->
+                assertEquals(tableShare(mix, kind), (counts[kind] ?: 0) / total, 0.02f, "$layer: $kind's share of all candidates")
+            }
+            assertEquals(table.first, newKinds.sumOf { counts[it] ?: 0 } / total, 0.02f, "$layer: new kinds")
+            assertEquals(table.second, (counts[ObstacleKind.BUMPER] ?: 0) / total, 0.02f, "$layer: bumpers")
+            assertTrue(field.all { it.id ushr 60 != 0L }, "$layer tags its ids")
+            layer to counts
+        }
+        val zenith = fields.getValue(WorldLayer.ZENITH)
+        val nadir = fields.getValue(WorldLayer.NADIR)
+        val archive = fields.getValue(WorldLayer.ARCHIVE)
+        assertEquals(null, zenith[ObstacleKind.DERELICT_MINE], "the Zenith has no mines")
+        assertEquals(null, zenith[ObstacleKind.THERMAL_VENT], "the Zenith has no vents")
+        val spaceCounts = space.groupingBy { it.kind }.eachCount()
+        val all = listOf(spaceCounts, zenith, nadir, archive)
+        assertEquals(nadir, all.maxBy { (it[ObstacleKind.THERMAL_VENT] ?: 0).toFloat() / it.values.sum() }, "the Nadir has the most vents")
+        assertEquals(nadir, all.maxBy { (it[ObstacleKind.DERELICT_MINE] ?: 0).toFloat() / it.values.sum() }, "the Nadir has the most mines")
+        assertEquals(archive, all.maxBy { (it[ObstacleKind.PHASE_SHARD] ?: 0).toFloat() / it.values.sum() }, "the Archive has the most shards")
+        // Density follows each layer's scale: the Zenith a little sparser, the Nadir denser than realspace.
+        assertTrue(zenith.values.sum() < space.size && space.size < nadir.values.sum(),
+            "zenith ${zenith.values.sum()} < space ${space.size} < nadir ${nadir.values.sum()}")
+        // Zenith knots mostly lift (Repulsors), Nadir knots mostly pull.
+        fun repelShare(layer: WorldLayer) = census(layer).filter { it.kind == ObstacleKind.GRAVITY_WELL }
+            .let { knots -> knots.count { it.repels }.toFloat() / knots.size }
+        assertTrue(repelShare(WorldLayer.ZENITH) > 0.5f && repelShare(WorldLayer.NADIR) < 0.5f)
     }
 
     // -----------------------------------------------------------------------------------------
@@ -189,6 +332,74 @@ class ObstacleSystemTest {
         assertTrue(pointX > 600f)
     }
 
+    @Test
+    fun nonSolidKindsNeverCollideOrBlockSegments() {
+        for (kind in listOf(ObstacleKind.ACCEL_GATE, ObstacleKind.DERELICT_MINE, ObstacleKind.THERMAL_VENT)) {
+            val state = buildTestState()
+            val body = testObstacle(asteroidX, 0f, radius = 60f, kind = kind)
+            state.placeObstaclesForTesting(body)
+            // The step runs the Core straight through the body's centre above the lethal speed.
+            val speed = state.obstacleLethalSpeed() + 200f
+            val endX = asteroidX + speed / 240f
+            state.flyIntoObstaclesForTesting(endX, 0f, speed, 0f)
+            assertEquals(GamePhase.RUNNING, state.phase, "$kind")
+            assertEquals(state.maxHp, state.hp, "$kind")
+            assertEquals(0, state.pendingRicochets, "$kind")
+            assertEquals(speed, state.velocityX, "$kind never bounces the Core")
+            assertEquals(endX, state.coreX, "$kind never pushes the Core out")
+            assertFalse(state.obstacleBlocksSegment(0f, 0f, 600f, 0f, 7f), "$kind")
+            // Shots fly on and enemies are neither pushed out nor slowed.
+            val shot = Projectile(x = asteroidX + 30f, y = 0f, vx = 500f, vy = 0f, radius = 5f, life = 2f, hostile = false,
+                previousX = asteroidX - 90f, previousY = 0f)
+            state.projectiles += shot
+            state.blockProjectilesAtObstacles()
+            assertFalse(shot.spent, "$kind lets shots through")
+            val enemy = state.dummy(x = asteroidX - 20f, y = 0f, hp = 10_000f)
+            enemy.vx = 700f
+            state.markThrown(enemy)
+            state.resolveEnemyObstacles()
+            assertEquals(asteroidX - 20f, enemy.x, "$kind")
+            assertEquals(700f, enemy.vx, "$kind")
+            assertEquals(enemy.maxHp, enemy.hp, "$kind")
+            // Spawns keep clear of its hazard reach (a gate's body for a gate).
+            val keepOut = max(body.radius, state.obstacleHazardReach(body)) + 20f + SPAWN_OBSTACLE_CLEARANCE
+            assertTrue(state.isSpawnPointBlocked(asteroidX, keepOut - 1f, 20f), "$kind")
+            assertFalse(state.isSpawnPointBlocked(asteroidX, keepOut + 1f, 20f), "$kind")
+        }
+        val mine = testObstacle(0f, 0f, radius = 50f, kind = ObstacleKind.DERELICT_MINE)
+        val vent = testObstacle(0f, 0f, radius = 50f, kind = ObstacleKind.THERMAL_VENT)
+        val kinds = canonicalGameplayContent.obstacles.kinds
+        val state = buildTestState()
+        assertEquals(50f + kinds.mineArmMargin, state.obstacleHazardReach(mine))
+        assertEquals(50f + kinds.ventPlumeMargin, state.obstacleHazardReach(vent))
+        assertEquals(0f, state.obstacleHazardReach(testObstacle(0f, 0f, kind = ObstacleKind.ACCEL_GATE)))
+    }
+
+    @Test
+    fun bumpersStillLetShotsThroughAndNeverGraze() {
+        // Every GRAZE would gain Data.
+        val grazing = contentWithClauses(
+            "Calibrated Coil", EffectClause(EffectTrigger.GRAZE, immutableListOf(), immutableListOf(EffectAction.GainData(5f))),
+        )
+        val state = buildTestState(content = grazing).apply {
+            own("Calibrated Coil")
+            nextLevelData = Int.MAX_VALUE / 2
+            matrix = matrix.copy(nearMiss = MatrixEffect.NearMiss(40f, 900f, 6f, 0.5f))
+        }
+        state.placeObstaclesForTesting(testObstacle(asteroidX, 0f, radius = 34f, kind = ObstacleKind.BUMPER))
+        val shot = Projectile(x = asteroidX + 30f, y = 0f, vx = 500f, vy = 0f, radius = 5f, life = 2f, hostile = false,
+            previousX = asteroidX - 60f, previousY = 0f)
+        state.projectiles += shot
+        state.blockProjectilesAtObstacles()
+        assertFalse(shot.spent)
+        // Skimming 20 above its surface at 1 000 u/s earns no Near Miss and no GRAZE, though the bumper is a solid surface
+        // nearby.
+        state.flyIntoObstaclesForTesting(asteroidX, 34f + MutableGameState.CORE_RADIUS + 20f, 1_000f, 0f)
+        assertEquals(0f, state.overdriveCharge)
+        assertEquals(0L, state.dataCollected, "no GRAZE")
+        assertEquals(20f, state.coreObstacleGap, 0.01f)
+    }
+
     // -----------------------------------------------------------------------------------------
     // The Core.
 
@@ -209,15 +420,15 @@ class ObstacleSystemTest {
     }
 
     @Test
-    fun theDamageBandScalesWithSpeedIgnoresReductionAndIsAbsorbedByShields() {
+    fun theDamageBandScalesWithSpeedIgnoresReductionAndBleedsThroughShields() {
         val state = buildTestState()
         val start = state.obstacleDamageStartSpeed()
         val lethal = state.obstacleLethalSpeed()
         val speed = state.bandSpeed(0.5f)
         state.damageReduction = 0.5f
         state.ramAsteroid(speed)
-        // Tier 0: forgiving ×0.7, collision tier factor 1 + 0.04 × 0.
-        val expected = state.maxHp * 0.5f * ((speed - start) / (lethal - start)).pow(1.3f) * 0.7f
+        // Tier 0: forgiving ×0.7, collision tier factor 1 + 0.04 × 0; the band runs linearly from the 6 % floor to 55 %.
+        val expected = state.maxHp * (0.06f + 0.49f * (speed - start) / (lethal - start)) * 0.7f
         assertEquals(state.maxHp - expected, state.hp, 0.05f)
         assertEquals(1, state.pendingRicochets)
         assertTrue(state.velocityX < 0f)
@@ -228,8 +439,8 @@ class ObstacleSystemTest {
         shielded.maxShield = 200f
         shielded.shield = 200f
         shielded.ramAsteroid(speed)
-        assertEquals(shielded.maxHp, shielded.hp, "the shield takes the hit")
-        assertEquals(200f - expected, shielded.shield, 0.05f)
+        assertEquals(shielded.maxHp - expected * 0.4f, shielded.hp, 0.05f, "40 % bleeds through the shield")
+        assertEquals(200f - expected * 0.6f, shielded.shield, 0.05f, "the shield takes the rest")
     }
 
     @Test
@@ -241,7 +452,7 @@ class ObstacleSystemTest {
         state.ramAsteroid(speed)
         val start = state.obstacleDamageStartSpeed()
         val lethal = state.obstacleLethalSpeed()
-        val expected = state.maxHp * 0.5f * ((speed - start) / (lethal - start)).pow(1.3f) * (1f + 0.04f * tier)
+        val expected = state.maxHp * (0.06f + 0.49f * (speed - start) / (lethal - start)) * (1f + 0.04f * tier)
         assertEquals(state.maxHp - expected, state.hp, 0.05f)
     }
 
@@ -250,7 +461,11 @@ class ObstacleSystemTest {
         val zero = buildTestState(rebirth = 0)
         val three = buildTestState(rebirth = 3)
         val five = buildTestState(rebirth = 5)
-        assertEquals(three.obstacleDamageStartSpeed() + 80f, zero.obstacleDamageStartSpeed(), 0.01f)
+        assertEquals(
+            three.obstacleDamageStartSpeed() + zero.content.obstacles.forgivingStartBonus,
+            zero.obstacleDamageStartSpeed(),
+            0.01f,
+        )
         assertEquals(three.obstacleDamageStartSpeed(), five.obstacleDamageStartSpeed(), 0.01f)
         assertEquals(three.obstacleLethalSpeed(), zero.obstacleLethalSpeed(), 0.01f)
         val band = 0.6f
@@ -344,7 +559,7 @@ class ObstacleSystemTest {
     @Test
     fun collisionsHurtAtMostOncePerCooldown() {
         val state = buildTestState()
-        val speed = state.bandSpeed(0.4f)
+        val speed = state.obstacleRicochetSpeed() + 20f
         state.ramAsteroid(speed)
         val afterFirst = state.hp
         state.flyIntoObstaclesForTesting(contactX + speed / 240f, 0f, speed, 0f)
@@ -362,16 +577,16 @@ class ObstacleSystemTest {
         val state = buildTestState(content = content)
         state.own("Calibrated Coil")
         val charge = state.overdriveCharge
-        state.ramAsteroid(state.bandSpeed(0.2f))
+        state.ramAsteroid(state.obstacleRicochetSpeed() + 20f)
         assertTrue(state.overdriveCharge >= charge + 20f, "the RICOCHET clause fired")
     }
 
     @Test
     fun ricochetsReachTheRunsProgressUpdate() {
         val state = buildTestState()
-        state.ramAsteroid(state.bandSpeed(0.1f))
+        state.ramAsteroid(state.obstacleRicochetSpeed() + 20f)
         state.placeObstaclesForTesting(testObstacle(300f, 0f, radius = 34f, kind = ObstacleKind.BUMPER))
-        val fast = state.obstacleDamageStartSpeed() + 20f
+        val fast = state.obstacleRicochetSpeed() + 20f
         state.flyIntoObstaclesForTesting(300f - 34f - MutableGameState.CORE_RADIUS + fast / 240f, 0f, fast, 0f)
         assertEquals(2, state.pendingRicochets)
         state.exitRun()
@@ -385,7 +600,7 @@ class ObstacleSystemTest {
         val state = buildTestState()
         state.own("Heat Shunt")
         state.heat = 50f
-        state.ramAsteroid(state.bandSpeed(0.2f))
+        state.ramAsteroid(state.obstacleRicochetSpeed() + 20f)
         assertEquals(1, state.pendingRicochets)
         assertEquals(30f, state.heat, 0.01f, "the shipped RICOCHET clause vented")
         // A slow bounce is no ricochet and vents nothing.
@@ -423,7 +638,7 @@ class ObstacleSystemTest {
         val dipole = state.content.coreShape(CoreShape.DIPOLE)
         assertEquals(CharacterUnlockRequirement.RICOCHETS, dipole.unlockRequirement)
         repeat(dipole.unlockTarget) {
-            state.ramAsteroid(state.bandSpeed(0.05f))
+            state.ramAsteroid(state.obstacleRicochetSpeed() + 20f)
             state.hp = state.maxHp
             state.elapsed += 0.3f
         }
@@ -433,26 +648,27 @@ class ObstacleSystemTest {
     }
 
     @Test
-    fun bumpersThrowTheCoreBackWithinTheirBandAndRicochetOnlyAtDamageSpeedOncePerCooldown() {
+    fun bumpersThrowTheCoreBackWithinTheirBandAndRicochetOnlyAtRicochetSpeedOncePerCooldown() {
         val state = buildTestState()
         state.placeObstaclesForTesting(testObstacle(300f, 0f, radius = 34f, kind = ObstacleKind.BUMPER))
         val bumperContact = 300f - 34f - MutableGameState.CORE_RADIUS
-        val start = state.obstacleDamageStartSpeed()
-        assertTrue(start > 1_260f, "the bounces below stay under the damage start ($start)")
+        val ricochet = state.obstacleRicochetSpeed()
+        assertTrue(ricochet > 840f, "the bounces below stay under the ricochet speed ($ricochet)")
         state.flyIntoObstaclesForTesting(bumperContact + 1f, 0f, 400f, 0f)
         assertEquals(700f, state.speed, 0.5f, "a slow Core leaves at the bumper's minimum")
         assertTrue(state.velocityX < 0f)
         assertEquals(state.maxHp, state.hp, "bumpers never hurt")
-        assertEquals(0, state.pendingRicochets, "a bounce below the damage start is no ricochet")
+        assertEquals(0, state.pendingRicochets, "a bounce below the ricochet speed is no ricochet")
 
-        state.flyIntoObstaclesForTesting(bumperContact + 4f, 0f, 1_200f, 0f)
-        assertEquals(1_260f, state.speed, 0.5f, "1.05 × the incoming speed")
+        state.flyIntoObstaclesForTesting(bumperContact + 4f, 0f, 800f, 0f)
+        assertEquals(840f, state.speed, 0.5f, "1.05 × the incoming speed")
         assertEquals(0, state.pendingRicochets, "holding still behind a bumper farms nothing")
 
-        state.flyIntoObstaclesForTesting(bumperContact + start / 240f, 0f, start, 0f)
-        assertEquals(1, state.pendingRicochets, "the damage start makes it a ricochet")
+        state.flyIntoObstaclesForTesting(bumperContact + ricochet / 240f, 0f, ricochet, 0f)
+        assertEquals(1, state.pendingRicochets, "the ricochet speed makes it a ricochet")
         state.flyIntoObstaclesForTesting(bumperContact + 10f, 0f, 3_000f, 0f)
-        assertEquals(1_400f, state.speed, 0.5f, "never faster than the bumper's maximum")
+        assertEquals(minOf(1_400f, state.obstacleLethalSpeed() * state.content.obstacles.bumperLethalShare),
+            state.speed, 0.5f, "the maximum throw respects the current flight's lethal cap")
         assertEquals(1, state.pendingRicochets, "one ricochet per bumper per 1.5 s")
         state.elapsed += 1.6f
         state.flyIntoObstaclesForTesting(bumperContact + 10f, 0f, 3_000f, 0f)
@@ -540,25 +756,30 @@ class ObstacleSystemTest {
     fun obstacleGuardCutsDamageAndRaisesTheLethalSpeed() {
         val plain = buildTestState()
         val guarded = buildTestState().apply {
-            matrix = matrix.copy(obstacleDamageMultiplier = 0.5f, obstacleLethalSpeedBonus = 300f)
+            matrix = matrix.copy(obstacleDamageMultiplier = 0.5f, obstacleLethalSpeedBonus = 150f)
         }
-        assertEquals(plain.obstacleLethalSpeed() + 300f, guarded.obstacleLethalSpeed(), 0.01f)
+        assertEquals(plain.obstacleLethalSpeed() + 150f, guarded.obstacleLethalSpeed(), 0.01f, "a bonus under the cap adds")
         val speed = plain.bandSpeed(0.6f)
         plain.ramAsteroid(speed)
         guarded.ramAsteroid(speed)
         val plainLoss = plain.maxHp - plain.hp
         val guardedLoss = guarded.maxHp - guarded.hp
         assertTrue(guardedLoss < plainLoss * 0.5f, "guard halves the damage and the wider band lowers it: $guardedLoss vs $plainLoss")
-        val survivor = buildTestState().apply { matrix = matrix.copy(obstacleLethalSpeedBonus = 300f) }
+        val survivor = buildTestState().apply { matrix = matrix.copy(obstacleLethalSpeedBonus = 150f) }
         survivor.ramAsteroid(plain.obstacleLethalSpeed() + 50f)
         assertEquals(GamePhase.RUNNING, survivor.phase, "the lethal speed moved past this collision")
+        // Stacked bonuses stop at the build's straight steady speed at the ceiling reach.
+        val stacked = buildTestState().apply { matrix = matrix.copy(obstacleLethalSpeedBonus = 5_000f) }
+        val ceiling = stacked.buildSteadyCursorSpeed(stacked.content.obstacles.lethalCeilingReach)
+        assertTrue(ceiling < plain.obstacleLethalSpeed() + 5_000f)
+        assertEquals(ceiling, stacked.obstacleLethalSpeed(), 0.01f, "the cap holds the lethal speed")
     }
 
     @Test
     fun ricochetRigBouncesHarderAndBursts() {
         val state = buildTestState().apply { matrix = matrix.copy(ricochetRig = MatrixEffect.RicochetRig(0.75f, 140f)) }
         val near = state.dummy(x = contactX - 40f, y = 60f)
-        val speed = state.bandSpeed(0.2f)
+        val speed = state.obstacleRicochetSpeed() + 20f
         state.ramAsteroid(speed)
         assertEquals(speed * 0.75f, -state.velocityX, 1f)
         assertTrue(near.hp < near.maxHp, "the ricochet bursts for impact damage")
@@ -567,7 +788,7 @@ class ObstacleSystemTest {
     @Test
     fun gravitySurferGrantsDashPhaseOnRicochet() {
         val state = buildTestState().apply { matrix = matrix.copy(ricochetPhaseSeconds = 0.4f) }
-        state.ramAsteroid(state.bandSpeed(0.2f))
+        state.ramAsteroid(state.obstacleRicochetSpeed() + 20f)
         assertEquals(0.4f, state.dashPhaseTime, 0.001f)
         val slow = buildTestState().apply { matrix = matrix.copy(ricochetPhaseSeconds = 0.4f) }
         slow.ramAsteroid(slow.obstacleDamageStartSpeed() - 100f)
@@ -840,7 +1061,7 @@ class ObstacleSystemTest {
         while (state.dashPhaseTime > 0f) state.simulateStep(MutableGameState.FIXED_STEP)
         assertEquals(0, state.latticeNodeCount)
         // Far from that origin, a ricochet's dash phase is no Dash: the old origin never becomes a node.
-        state.ramAsteroid(state.bandSpeed(0.2f))
+        state.ramAsteroid(state.obstacleRicochetSpeed() + 20f)
         assertEquals(0.4f, state.dashPhaseTime, 0.001f)
         state.updateCharacterRuntime(MutableGameState.FIXED_STEP)
         assertEquals(0, state.latticeNodeCount, "the ricochet phase recorded no node")

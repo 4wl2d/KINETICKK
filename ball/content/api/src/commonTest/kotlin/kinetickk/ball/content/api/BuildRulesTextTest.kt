@@ -601,6 +601,50 @@ class BuildRulesTextTest {
         )
     }
 
+    @Test
+    fun theObstacleAndSteeringVocabularyReadsInBothLanguages() {
+        ObstacleKind.entries.forEach { kind ->
+            assertTrue(kind.ruleName.english.isNotBlank() && kind.ruleName.russian.isNotBlank(), "$kind")
+            assertFalse(kind.ruleName.russian.any { it in 'A'..'Z' || it in 'a'..'z' }, "$kind Russian has Latin letters")
+        }
+        assertEquals(ObstacleKind.entries.size, ObstacleKind.entries.map { it.ruleName }.toSet().size)
+
+        fun head(language: AppLanguage) = item(
+            clauses = immutableListOf(
+                EffectClause(
+                    EffectTrigger.BOOST, immutableListOf(EffectCondition.ObstacleIs(ObstacleKind.GRAVITY_WELL)),
+                    immutableListOf(EffectAction.GainData(5f)),
+                ),
+            ),
+        ).ruleLines(language).first().text
+        assertEquals("On boost (gravity knot)", head(AppLanguage.English))
+        assertEquals("При разгоне (гравиузел)", head(AppLanguage.Russian))
+
+        val tuned = item(
+            stats = immutableListOf(StatDelta(ItemEffect.GRIP, 0.2f), StatDelta(ItemEffect.SLING, 0.3f)),
+            rules = immutableListOf(
+                ItemRule.ObstacleTuning(ObstacleAspect.LETHAL_SPEED, 150f),
+                ItemRule.ObstacleTuning(ObstacleAspect.RESTITUTION, 0.1f),
+                ItemRule.WhileModifier(EffectCondition.NearObstacle(180f), BuffStat.DAMAGE, 0.12f),
+            ),
+        )
+        val english = tuned.ruleLines(AppLanguage.English).plain().map { it.text }
+        // The Matrix lethal-speed nodes share the same ceiling, so the item line names the cap like their texts do.
+        assertEquals(
+            listOf("+20 % grip", "+30 % sling", "Collisions turn lethal 150 u/s later, up to a cap", "Obstacle bounces keep 10 % more speed"),
+            english.take(4),
+        )
+        assertTrue(english[4].contains("within 180 of an obstacle"), english[4])
+        val russian = tuned.ruleLines(AppLanguage.Russian).plain().map { it.text }
+        assertEquals(
+            listOf("+20 % к сцеплению", "+30 % к раскрутке", "Столкновения становятся смертельными на 150 ед/с позже, но не выше предела"),
+            russian.take(3),
+        )
+        assertTrue(russian[4].contains("не дальше 180 от препятствия"), russian[4])
+        val damage = item(rules = immutableListOf(ItemRule.ObstacleTuning(ObstacleAspect.COLLISION_DAMAGE, 0.25f)))
+        assertEquals(listOf("−25 % damage from obstacles"), damage.ruleLines(AppLanguage.English).plain().map { it.text })
+    }
+
     private fun item(
         elements: kinetickk.foundation.collections.ImmutableList<StatusElement> = immutableListOf(),
         stats: kinetickk.foundation.collections.ImmutableList<StatDelta> = immutableListOf(),

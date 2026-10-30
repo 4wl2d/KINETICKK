@@ -5,9 +5,13 @@ package kinetickk.ball.gameplay.nucleus.performance
 
 import kinetickk.ball.gameplay.api.GameplayInstanceId
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.StructureTemplateId
+import kinetickk.ball.content.api.rotateQuarterX
+import kinetickk.ball.content.api.rotateQuarterY
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.api.GameplayRevision
@@ -18,6 +22,9 @@ import kinetickk.ball.gameplay.nucleus.GameplayNucleus
 import kinetickk.ball.gameplay.nucleus.GameplayNucleusPulse
 import kinetickk.ball.gameplay.nucleus.GameplayOutput
 import kinetickk.ball.gameplay.nucleus.GameplayState
+import kinetickk.ball.content.api.ContentBounds
+import kinetickk.ball.content.api.DimensionObjective
+import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.characterization.gameScenario
 import kinetickk.ball.gameplay.nucleus.model.Obstacle
 import kinetickk.ball.gameplay.nucleus.model.CombatField
@@ -39,6 +46,10 @@ import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
+import kinetickk.ball.gameplay.nucleus.simulation.StructurePlacement
+import kinetickk.ball.gameplay.nucleus.simulation.structurePlacement
+import kinetickk.ball.gameplay.nucleus.simulation.teleportCoreForTesting
+import kinetickk.ball.gameplay.nucleus.simulation.updateStructures
 import kinetickk.ball.gameplay.nucleus.simulation.ION_SWARM_DAMAGE
 import kinetickk.ball.gameplay.nucleus.simulation.ION_SWARM_PIERCE
 import kinetickk.ball.gameplay.nucleus.simulation.addField
@@ -51,6 +62,8 @@ import kinetickk.ball.gameplay.nucleus.simulation.own
 import kinetickk.ball.gameplay.nucleus.simulation.runScale
 import kinetickk.ball.gameplay.nucleus.simulation.takeProgressUpdate
 import kinetickk.ball.gameplay.nucleus.simulation.addEnemyForTesting
+import kinetickk.ball.gameplay.nucleus.simulation.dropEmber
+import kinetickk.ball.gameplay.nucleus.simulation.enterDimensionForTesting
 import kinetickk.ball.gameplay.nucleus.simulation.consumeFixedStepBudget
 import kinetickk.ball.gameplay.nucleus.simulation.copyForReduction
 import kinetickk.ball.gameplay.nucleus.simulation.simulateStep
@@ -59,6 +72,9 @@ import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
 import kinetickk.ball.gameplay.nucleus.simulation.takeVisualFxCues
 import kinetickk.ball.gameplay.nucleus.simulation.toRenderModel
 import kinetickk.ball.gameplay.nucleus.simulation.togglePause
+import kinetickk.ball.gameplay.nucleus.simulation.placeObstaclesForTesting
+import kinetickk.ball.gameplay.nucleus.simulation.testGate
+import kinetickk.ball.gameplay.nucleus.simulation.testObstacle
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.performance.BenchmarkScenario
 import kinetickk.performance.BenchmarkSuiteIdentity
@@ -66,8 +82,11 @@ import kinetickk.performance.BenchmarkValidation
 import kinetickk.performance.BenchmarkValidationContext
 import kinetickk.performance.runBenchmarkSuite
 import java.lang.reflect.Modifier
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
-internal const val GAMEPLAY_BENCHMARK_SUITE_VERSION = "gameplay-core-v4"
+internal const val GAMEPLAY_BENCHMARK_SUITE_VERSION = "gameplay-core-v5"
 private const val DEFAULT_SEED = 731_991
 private const val MAX_ENEMIES = 120
 private const val MAX_PROJECTILES = 650
@@ -76,6 +95,8 @@ private const val MAX_TRAIL = 110
 private const val COLLISION_ENEMIES = 90
 private const val COLLISION_PROJECTILES = 325
 private const val TRACE_FRAMES = 120
+private const val TERRAIN_ENEMIES = 60
+private const val TERRAIN_OBSTACLES_PER_KIND = 3
 private const val SEMANTIC_OUTPUT_SEED = 1_469_598_103_934_665_603L
 private const val SEMANTIC_VISUAL_FX = 1
 private const val SEMANTIC_AUDIO = 2
@@ -122,6 +143,9 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
     private val fastReactionsSnapshot = GameplayNucleus.renderSnapshot(fastReactionsAuthority)
     private var controlCounter = 1L
     private val traceFingerprint = deterministicTraceFingerprint(seed + 9)
+    private val structureDungeon = structureDungeonState(seed + 11)
+    private val dimensionVisit = dimensionVisitState(seed + 12)
+    private val terrainWindow = terrainWindowState(seed + 13)
 
     fun scenarios(): List<BenchmarkScenario> = listOf(
         BenchmarkScenario(
@@ -391,6 +415,48 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
             validation.observeOutcome { result }
             result
         },
+        BenchmarkScenario(
+            name = "structure_dungeon",
+            category = "simulation",
+            description = "Copy and execute one fixed step sealed in a Reliquary chapel with 60 enemies and 300 shots across its walls.",
+            metadata = stateCardinality(structureDungeon, seed) +
+                baseMetadata(seed, "structure" to "RELIQUARY", "walls" to structureDungeon.structureField.walls.size.toString()),
+            maximumOperations = 10_000,
+        ) { validation ->
+            val candidate = structureDungeon.copyForReduction()
+            candidate.simulateStep(MutableGameState.FIXED_STEP)
+            validation.observeOutcome { canonicalStateFingerprint(candidate) }
+            stateSignature(candidate)
+        },
+        BenchmarkScenario(
+            name = "dimension_visit",
+            category = "simulation",
+            description = "Copy and execute one fixed step of a Nadir Harvest visit: 24 embers, 40 natives and the scorch ticking.",
+            metadata = stateCardinality(dimensionVisit, seed) + baseMetadata(seed, "layer" to "NADIR", "embers" to "24"),
+            maximumOperations = 10_000,
+        ) { validation ->
+            val candidate = dimensionVisit.copyForReduction()
+            candidate.simulateStep(MutableGameState.FIXED_STEP)
+            validation.observeOutcome { canonicalStateFingerprint(candidate) }
+            stateSignature(candidate)
+        },
+        BenchmarkScenario(
+            name = "terrain_window",
+            category = "simulation",
+            description = "Copy and execute one fixed step through a window of every obstacle kind with 60 enemies among them.",
+            metadata = stateCardinality(terrainWindow, seed) + baseMetadata(
+                seed,
+                "workloadVersion" to "terrain-window-v1",
+                "obstacles" to terrainWindow.obstacleField.obstacles.size.toString(),
+                "obstacleKinds" to terrainWindow.obstacleField.obstacles.map { it.kind }.toSet().size.toString(),
+            ),
+            maximumOperations = 5_000,
+        ) { validation ->
+            val candidate = terrainWindow.copyForReduction()
+            candidate.simulateStep(MutableGameState.FIXED_STEP)
+            validation.observeOutcome { canonicalStateFingerprint(candidate) }
+            stateSignature(candidate)
+        },
     ).map { scenario ->
         val expectedOutcomeWitness = outcomeFingerprint(scenario.name)
         scenario.copy(
@@ -442,6 +508,9 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
         "nucleus_frame_paused", "published_frame_paused" ->
             authorityOutcomeFingerprint(pausedAuthority, frame60)
         "trace_2s_60hz" -> traceFingerprint
+        "structure_dungeon" -> fixedStepOutcomeFingerprint(structureDungeon)
+        "dimension_visit" -> fixedStepOutcomeFingerprint(dimensionVisit)
+        "terrain_window" -> fixedStepOutcomeFingerprint(terrainWindow)
         else -> error("Missing semantic outcome fingerprint for benchmark scenario: $name")
     }
 
@@ -488,6 +557,18 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
         "published_reaction_burst_100ms_2x" ->
             publishedReactionSignature(fastReactionsAuthority, fastReactionsSnapshot, frame100Millis)
         "trace_2s_60hz" -> deterministicTraceFingerprint(seed + 9)
+        "structure_dungeon" -> structureDungeon.copyForReduction().run {
+            simulateStep(MutableGameState.FIXED_STEP)
+            stateSignature(this)
+        }
+        "dimension_visit" -> dimensionVisit.copyForReduction().run {
+            simulateStep(MutableGameState.FIXED_STEP)
+            stateSignature(this)
+        }
+        "terrain_window" -> terrainWindow.copyForReduction().run {
+            simulateStep(MutableGameState.FIXED_STEP)
+            stateSignature(this)
+        }
         else -> error("Missing expected timed result for benchmark scenario: $name")
     }
 
@@ -627,12 +708,13 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
     }
 }
 
-private fun newRunningState(seed: Int): MutableGameState = gameScenario(seed = seed).apply {
-    resize(1_280f, 720f, 1f)
-    startRun()
-    takeSoundCues()
-    takeVisualFxCues()
-}
+private fun newRunningState(seed: Int, content: GameplayContentSnapshot = canonicalGameplayContent): MutableGameState =
+    MutableGameState(content = content, seed = seed).apply {
+        resize(1_280f, 720f, 1f)
+        startRun()
+        takeSoundCues()
+        takeVisualFxCues()
+    }
 
 private fun capacityState(seed: Int): MutableGameState = newRunningState(seed).apply {
     enemies.clear()
@@ -803,6 +885,184 @@ private fun collisionState(seed: Int, hit: Boolean): MutableGameState = newRunni
     repeat(MAX_TRAIL) { index -> trail += TrailPoint(-1_300f + index, -700f, 0.5f) }
 }
 
+/** The Reliquary chapel the `structure_dungeon` workload seals the Core in (the south-west chapel). */
+internal const val STRUCTURE_WORKLOAD_CHAPEL = 6
+
+/** Enemies of the `structure_dungeon` workload: the chapel's garrison and ordinary enemies in and around the chapel. */
+internal const val STRUCTURE_WORKLOAD_ENEMIES = 60
+
+/** Shots of the `structure_dungeon` workload, half the Core's inside the chapel and half hostile outside it. */
+internal const val STRUCTURE_WORKLOAD_PROJECTILES = 300
+
+/** The benchmark always permits the Reliquary; placement density, layouts and combat content stay shipped values. */
+private val structureWorkloadContent: GameplayContentSnapshot = canonicalGameplayContent.let { content ->
+    content.copy(structures = content.structures.copy(templatesPerRun = content.structures.templates.count { !it.secret }))
+}
+
+/**
+ * The `structure_dungeon` workload: a Reliquary nearest the run's origin with every combat template available (cells scanned ring by ring
+ * from the origin), the Core teleported into its south-west chapel and sealed there around the chapel's garrison by two
+ * dungeon steps, then ordinary enemies up to [STRUCTURE_WORKLOAD_ENEMIES] spread over the chapel and in a ring around
+ * it, and [STRUCTURE_WORKLOAD_PROJECTILES] shots at the chapel's walls. One fixed step then runs the capsule sweeps,
+ * the wall push-out of the Core and every enemy, the garrison clamp, the shots stopped at the walls and the dungeon
+ * upkeep.
+ */
+internal fun structureDungeonState(seed: Int): MutableGameState = newRunningState(seed, structureWorkloadContent).apply {
+    val placement = reliquaryNearTheOrigin()
+    val template = content.structures.template(StructureTemplateId.RELIQUARY)
+    val chapel = template.rooms[STRUCTURE_WORKLOAD_CHAPEL]
+    val chapelLocalX = (chapel.minX + chapel.maxX) * 0.5f
+    val chapelLocalY = (chapel.minY + chapel.maxY) * 0.5f
+    teleportCoreForTesting(
+        placement.absoluteX + rotateQuarterX(chapelLocalX, chapelLocalY, placement.rotation),
+        placement.absoluteY + rotateQuarterY(chapelLocalX, chapelLocalY, placement.rotation),
+    )
+    enemies.clear()
+    projectiles.clear()
+    pickups.clear()
+    trail.clear()
+    updateStructures(MutableGameState.FIXED_STEP)
+    updateStructures(MutableGameState.FIXED_STEP)
+    check(dungeon?.engagedRoom == STRUCTURE_WORKLOAD_CHAPEL) { "The structure workload must seal its chapel" }
+    // Ordinary enemies: a lattice over the chapel (clear of the Core), the rest in a ring outside the chapel's walls.
+    var inside = (STRUCTURE_WORKLOAD_ENEMIES - enemies.size) / 2
+    val halfSide = (chapel.maxX - chapel.minX) * 0.5f - 90f
+    for (slot in 0 until 36) {
+        if (inside == 0) break
+        val localX = -halfSide + (slot % 6) * (2f * halfSide / 5f)
+        val localY = -halfSide + (slot / 6) * (2f * halfSide / 5f)
+        if (localX * localX + localY * localY < 150f * 150f) continue
+        addEnemyForTesting(coreX + localX, coreY + localY, hp = 1_000_000f, radius = 14f)
+        inside--
+    }
+    val around = STRUCTURE_WORKLOAD_ENEMIES - enemies.size
+    repeat(around) { index ->
+        val angle = index * (2f * kotlin.math.PI.toFloat() / around)
+        val reach = (chapel.maxX - chapel.minX) * 0.5f + 140f
+        addEnemyForTesting(coreX + kotlin.math.cos(angle) * reach, coreY + kotlin.math.sin(angle) * reach, hp = 1_000_000f, radius = 14f)
+    }
+    // Shots on all four sides of the chapel (outer walls, inner walls and sealed doors alike): a quarter of them
+    // hostile just outside a wall and a quarter the Core's just inside one, both stopped there this step; the other
+    // half in flight, the Core's from the middle of the chapel and hostile ones from farther out.
+    val wallLine = (chapel.maxX - chapel.minX) * 0.5f
+    repeat(STRUCTURE_WORKLOAD_PROJECTILES) { index ->
+        val side = (index / 4) % 4
+        val normalX = if (side == 0) 1f else if (side == 2) -1f else 0f
+        val normalY = if (side == 1) 1f else if (side == 3) -1f else 0f
+        val along = -300f + ((index / 16) % 16) * 40f
+        val (offset, outward) = when (index % 4) {
+            0 -> wallLine + 30f to false
+            1 -> wallLine - 30f to true
+            2 -> 120f to true
+            else -> wallLine + 200f to false
+        }
+        val speed = if (outward) 900f else -900f
+        projectiles += Projectile(
+            x = coreX + normalX * offset - normalY * along,
+            y = coreY + normalY * offset + normalX * along,
+            vx = normalX * speed,
+            vy = normalY * speed,
+            radius = 4f,
+            life = 20f,
+            hostile = !outward,
+            damage = 1f,
+            pierce = 2,
+        )
+    }
+    takeSoundCues()
+    takeVisualFxCues()
+}
+
+/** The Reliquary the fixture's placement puts nearest the run's origin, scanning cells ring by ring. */
+private fun MutableGameState.reliquaryNearTheOrigin(): StructurePlacement {
+    for (ring in 0..STRUCTURE_SCAN_RINGS) {
+        for (cellY in -ring..ring) for (cellX in -ring..ring) {
+            if (maxOf(kotlin.math.abs(cellX), kotlin.math.abs(cellY)) != ring) continue
+            val placement = structurePlacement(cellX, cellY) ?: continue
+            if (placement.template == StructureTemplateId.RELIQUARY) return placement
+        }
+    }
+    error("No Reliquary within $STRUCTURE_SCAN_RINGS structure cells of the origin")
+}
+
+private const val STRUCTURE_SCAN_RINGS = 24
+
+// ---- 0.6.0 DIMENSIONS ----
+
+/** Natives closing in on the Core in the dimension visit workload. */
+private const val DIMENSION_VISIT_ENEMIES = 40
+
+/**
+ * A Nadir Harvest visit at its busiest: every ember slot filled in a ring around the Core, Imps and Hounds closing in
+ * and the Core at rest past the scorch's grace, so a step sweeps the embers, ticks the scorch and runs the layer's
+ * director and Desync-free enemy step.
+ */
+internal fun dimensionVisitState(seed: Int): MutableGameState = newRunningState(seed).apply {
+    enemies.clear()
+    elapsed = 200f
+    enterDimensionForTesting(WorldLayer.NADIR, DimensionObjective.HARVEST)
+    repeat(ContentBounds.MAX_EMBERS) { index ->
+        val angle = index * 2f * PI.toFloat() / ContentBounds.MAX_EMBERS
+        dropEmber(coreX + cos(angle) * 640f, coreY + sin(angle) * 640f)
+    }
+    repeat(DIMENSION_VISIT_ENEMIES) { index ->
+        val angle = index * 2f * PI.toFloat() / DIMENSION_VISIT_ENEMIES
+        val type = if (index % 2 == 0) EnemyType.IMP else EnemyType.HOUND
+        addEnemyForTesting(coreX + cos(angle) * 420f, coreY + sin(angle) * 420f, hp = 1_000_000f, type = type)
+    }
+    dimensionSlowSeconds = 2f
+    takeSoundCues()
+    takeVisualFxCues()
+}
+
+/**
+ * A running Core crossing a hand-placed obstacle window that holds [TERRAIN_OBSTACLES_PER_KIND] of every obstacle kind
+ * (pulling and pushing knots, an accelerator gate on its line, a vent and a mine within reach) in rings around it, with
+ * [TERRAIN_ENEMIES] enemies spread among them. The window stays centred on the Core's chunk, so the measured step keeps
+ * it and runs the kind systems, the solid sweeps and the enemy-obstacle contacts rather than a regeneration.
+ */
+internal fun terrainWindowState(seed: Int): MutableGameState = newRunningState(seed).apply {
+    enemies.clear()
+    projectiles.clear()
+    pickups.clear()
+    val radii = mapOf(
+        ObstacleKind.ASTEROID to 80f, ObstacleKind.BUMPER to 40f, ObstacleKind.UNSTABLE to 90f, ObstacleKind.GRAVITY_WELL to 70f,
+        ObstacleKind.ACCEL_GATE to 100f, ObstacleKind.CRYSTAL to 50f, ObstacleKind.DERELICT_MINE to 30f,
+        ObstacleKind.PHASE_SHARD to 60f, ObstacleKind.THERMAL_VENT to 60f,
+    )
+    val kinds = ObstacleKind.entries
+    val count = kinds.size * TERRAIN_OBSTACLES_PER_KIND
+    val ring = List(count) { index ->
+        val kind = kinds[index % kinds.size]
+        val angle = index * 6.2831855f / count
+        val distance = 280f + (index / kinds.size) * 260f
+        testObstacle(
+            coreX + cos(angle) * distance, coreY + sin(angle) * distance, checkNotNull(radii[kind]), kind,
+            id = 9_000L + index, shapeSeed = 11 + index, repels = kind == ObstacleKind.GRAVITY_WELL && index % 2 == 0,
+        )
+    }
+    // On the Core's line: the gate it crosses in the step; within reach: a vent's plume and a mine's arming ring.
+    val near = listOf(
+        testGate(coreX + 12f, coreY, angle = 0f, id = 9_100L),
+        testObstacle(coreX - 140f, coreY + 120f, 60f, ObstacleKind.THERMAL_VENT, id = 9_101L, shapeSeed = 5),
+        testObstacle(coreX + 150f, coreY - 160f, 30f, ObstacleKind.DERELICT_MINE, id = 9_102L, shapeSeed = 6),
+    )
+    placeObstaclesForTesting(*(ring + near).toTypedArray())
+    val types = listOf(EnemyType.DRIFTER, EnemyType.CHARGER, EnemyType.WEAVER, EnemyType.SHOOTER)
+    repeat(TERRAIN_ENEMIES) { index ->
+        val angle = (index + 0.5f) * 6.2831855f / TERRAIN_ENEMIES
+        val distance = 340f + (index % 3) * 260f
+        addEnemyForTesting(coreX + cos(angle) * distance, coreY + sin(angle) * distance, hp = 1_000_000f, radius = 14f,
+            type = types[index % types.size])
+    }
+    velocityX = 900f
+    velocityY = 0f
+    pointerX = 1_000f
+    pointerY = 360f
+    takeSoundCues()
+    takeVisualFxCues()
+}
+
 internal fun authorityState(model: MutableGameState): GameplayState = GameplayState(
     instanceId = GameplayInstanceId(RunId(1L)),
     revision = GameplayRevision.ZERO,
@@ -876,6 +1136,8 @@ private fun stateSignature(state: MutableGameState): Long {
     signature = mix(signature, state.projectiles.size)
     signature = mix(signature, state.pickups.size)
     signature = mix(signature, state.trail.size)
+    // 0.6.0 Baby mode
+    signature = mix(signature, if (state.easyMode) 1 else 0)
     return signature
 }
 
@@ -907,8 +1169,8 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
     signature = mix(signature, state.pendingEventKind)
     signature = mix(signature, state.pendingEventSize)
     signature = mix(signature, state.pendingEventType)
-    signature = mix(signature, state.recentEventTypes)
-    signature = mix(signature, state.previousEventTypes)
+    signature = mixLong(signature, state.recentEventTypes)
+    signature = mixLong(signature, state.previousEventTypes)
     signature = mix(signature, state.ambushReadyAt.toRawBits())
     signature = mix(signature, state.encircleReadyAt.toRawBits())
     signature = mix(signature, state.wallReadyAt.toRawBits())
@@ -939,8 +1201,8 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
     signature = mix(signature, state.pendingRicochets)
     signature = mix(signature, state.pendingDataPickups)
     signature = mix(signature, if (state.achievementFlushDue) 1 else 0)
-    signature = mix(signature, state.pointsOfInterest.toString().hashCode())
-    signature = mix(signature, state.nextPointOfferIndex)
+    signature = mix(signature, state.sites.toString().hashCode())
+    signature = mix(signature, state.nextSiteWindowIndex)
     signature = mix(signature, state.pendingDirectedRewards.toString().hashCode())
     signature = mix(signature, state.directedReward?.ordinal ?: -1)
     signature = mix(signature, state.selectedRewardFocus?.ordinal ?: -1)
@@ -1030,9 +1292,88 @@ internal fun canonicalStateFingerprint(state: MutableGameState): Long {
         signature = mix(signature, it.slamReadyAt.toRawBits())
         signature = mix(signature, if (it.armored) 1 else 0)
         signature = mix(signature, if (it.armorCracked) 1 else 0)
+        // 0.6.0: encounter tag, kind counter, pending phase start, Elite affix and champion flag.
+        signature = mixLong(signature, it.ownerTag)
+        signature = mix(signature, it.charges)
+        signature = mix(signature, if (it.phaseStartPending) 1 else 0)
+        signature = mix(signature, it.affix?.ordinal ?: -1)
+        signature = mix(signature, if (it.champion) 1 else 0)
         it.status.forEach { cell -> signature = mix(signature, cell.toRawBits()) }
     }
+    signature = worldContractFingerprint(signature, state)
     return mixLong(signature, fixtureFingerprint(state))
+}
+
+/** 0.6.0 shared world contracts: terrain, sites, run variety, enemies, structures and dimensions. */
+private fun worldContractFingerprint(current: Long, state: MutableGameState): Long {
+    var signature = current
+    signature = mix(signature, state.coreStraightness.toRawBits())
+    signature = mix(signature, state.gripStrength.toRawBits())
+    signature = mix(signature, state.slingStrength.toRawBits())
+    signature = mixLong(signature, state.obstacleHitSurfaceId)
+    signature = mix(signature, state.coreObstacleGap.toRawBits())
+    signature = mix(signature, state.grazeReadyAt.toRawBits())
+    signature = mixLong(signature, state.slingWellId)
+    signature = mix(signature, state.slingEntryHeading.toRawBits())
+    signature = mix(signature, state.siteRandom.snapshot().hashCode())
+    signature = mix(signature, state.ambientSites.toString().hashCode())
+    signature = mix(signature, state.secretSigil.toString().hashCode())
+    signature = mix(signature, state.openedSiteIds.toString().hashCode())
+    signature = mix(signature, state.runSecretFlags)
+    signature = mix(signature, state.worldDiscoveryMask)
+    signature = mix(signature, state.pendingWorldDiscoveryMask)
+    signature = mix(signature, state.pendingFloorOffers.toString().hashCode())
+    signature = mix(signature, state.goldenDrifterId)
+    signature = mix(signature, state.goldenDrifterUntil.toRawBits())
+    signature = mix(signature, state.spinBuckets.size)
+    state.spinBuckets.forEach { signature = mix(signature, it.toRawBits()) }
+    signature = mix(signature, state.spinCurrent.toRawBits())
+    signature = mix(signature, state.spinClock.toRawBits())
+    signature = mix(signature, state.spinLastAngle.toRawBits())
+    signature = mix(signature, if (state.spinPrimed) 1 else 0)
+    signature = mix(signature, if (state.omenPending) 1 else 0)
+    signature = mix(signature, state.runOmen?.ordinal ?: -1)
+    signature = mix(signature, state.runMutatorMask)
+    signature = mix(signature, state.directorPersonality?.ordinal ?: -1)
+    signature = mix(signature, state.featuredAspect)
+    signature = mix(signature, state.surgeIndex)
+    signature = mix(signature, state.surgeThemeType)
+    signature = mix(signature, state.varietyAnnouncement)
+    signature = mix(signature, state.keynoteTag?.ordinal ?: -1)
+    signature = mix(signature, state.keynoteElement?.ordinal ?: -1)
+    signature = mix(signature, state.worldEventPlans.toString().hashCode())
+    signature = mix(signature, state.nextWorldEvent)
+    signature = mix(signature, state.worldEvent.toString().hashCode())
+    signature = mix(signature, state.worldEventPulse)
+    signature = mix(signature, state.worldEventNextPulseAt.toRawBits())
+    signature = mix(signature, state.eventSignals.toString().hashCode())
+    signature = mix(signature, state.nextSignalSlot)
+    signature = mix(signature, state.signalsSpawned)
+    signature = mix(signature, state.signalsEngaged)
+    signature = mix(signature, state.pendingSignalPrompts.toString().hashCode())
+    signature = mix(signature, state.offerRarityFloor?.ordinal ?: -1)
+    signature = mix(signature, if (state.offersRunOmen) 1 else 0)
+    signature = mix(signature, state.activeRebirthProfile.hashCode())
+    signature = mixLong(signature, state.secretBossMask)
+    signature = mix(signature, state.encounters.toString().hashCode())
+    val structures = state.structureField
+    signature = mix(signature, listOf(structures.centerChunkX, structures.centerChunkY, structures.layer).toString().hashCode())
+    signature = mix(signature, if (structures.bossCollapsed) 1 else 0)
+    signature = mix(signature, structures.structures.toString().hashCode())
+    signature = mix(signature, structures.walls.toString().hashCode())
+    signature = mix(signature, structures.signals.toString().hashCode())
+    signature = mix(signature, state.dungeon.toString().hashCode())
+    signature = mix(signature, state.spentStructureIds.toString().hashCode())
+    signature = mixLong(signature, state.lastAnnouncedStructureId)
+    signature = mix(signature, state.worldLayer.ordinal)
+    signature = mix(signature, state.worldKeepOut.toString().hashCode())
+    signature = mix(signature, state.runBoons.toString().hashCode())
+    signature = mix(signature, state.dimensionRun.toString().hashCode())
+    signature = mix(signature, state.dimensionSlowSeconds.toRawBits())
+    signature = mix(signature, state.dimensionScorchClock.toRawBits())
+    signature = mix(signature, state.dimensionLocalClock.toRawBits())
+    signature = mix(signature, state.dimensionRewardLayer?.ordinal ?: -1)
+    return signature
 }
 
 private fun canonicalRenderFingerprint(state: MutableGameState): Long {
@@ -1080,7 +1421,7 @@ private fun canonicalRenderFingerprint(state: MutableGameState): Long {
     signature = mix(signature, render.coreShape.ordinal)
     signature = mix(signature, render.coreRadius.toRawBits())
     signature = mix(signature, render.characterAbility.toString().hashCode())
-    signature = mix(signature, render.pointsOfInterest.toString().hashCode())
+    signature = mix(signature, render.sites.toString().hashCode())
     signature = mix(signature, if (render.directedChoice) 1 else 0)
     signature = mix(signature, render.effectiveWeaponPower.toRawBits())
     signature = mix(signature, render.abilityPower.toRawBits())
@@ -1099,6 +1440,25 @@ private fun canonicalRenderFingerprint(state: MutableGameState): Long {
     signature = mix(signature, render.volatileBursts.toString().hashCode())
     render.enemies.forEach { signature = mix(signature, if (it.armored) 1 else 0) }
     render.itemStacksSnapshot.forEach { stack -> signature = mix(signature, stack) }
+    render.enemies.forEach { signature = mix(signature, it.charges) }
+    // 0.6.0 world facts: data-class text keeps enum names (stable across processes) where a hash code would not.
+    signature = mix(signature, render.coreStraightness.toRawBits())
+    signature = mix(signature, if (render.easyMode) 1 else 0)
+    signature = mix(signature, render.ambientSites.toString().hashCode())
+    signature = mix(signature, render.trial.toString().hashCode())
+    signature = mix(signature, render.secretFlags)
+    signature = mix(signature, render.goldenDrifterId)
+    signature = mix(signature, render.structures.toString().hashCode())
+    signature = mix(signature, render.dimension.toString().hashCode())
+    render.runBoons.forEach { boon -> signature = mix(signature, boon) }
+    signature = mix(signature, render.runOmen?.ordinal ?: -1)
+    signature = mix(signature, render.runMutatorMask)
+    signature = mix(signature, render.directorPersonality?.ordinal ?: -1)
+    signature = mix(signature, render.featuredAspect)
+    signature = mix(signature, render.keynoteTag?.ordinal ?: -1)
+    signature = mix(signature, render.keynoteElement?.ordinal ?: -1)
+    signature = mix(signature, render.worldEvent.toString().hashCode())
+    signature = mix(signature, render.eventSignals.toString().hashCode())
     return mixLong(signature, fixtureFingerprint(state))
 }
 
@@ -1296,6 +1656,8 @@ internal fun obstacleFieldFingerprint(current: Long, obstacles: List<Obstacle>):
         signature = mix(signature, obstacle.radius.toRawBits())
         signature = mix(signature, obstacle.shapeSeed)
         signature = mix(signature, obstacle.ricochetReadyAt.toRawBits())
+        signature = mix(signature, obstacle.fuseAt.toRawBits())
+        signature = mix(signature, if (obstacle.repels) 1 else 0)
     }
     return signature
 }
@@ -1310,6 +1672,8 @@ internal fun obstacleProjectionFingerprint(current: Long, obstacles: List<Obstac
         signature = mix(signature, obstacle.y.toRawBits())
         signature = mix(signature, obstacle.radius.toRawBits())
         signature = mix(signature, obstacle.shapeSeed)
+        signature = mix(signature, obstacle.fuseAt.toRawBits())
+        signature = mix(signature, if (obstacle.repels) 1 else 0)
     }
     return signature
 }

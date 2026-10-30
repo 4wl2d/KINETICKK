@@ -13,11 +13,12 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.interaction.layout.runningControlBounds
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
@@ -43,7 +44,7 @@ class HudKeepOutTest {
 
     @Test
     fun everyTopBlockTheHudDrawsLiesInsideTheWorldKeepOut() {
-        val orbit = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.4f,
+        val orbit = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, -1, 0.4f,
             immutableListOf(), 0f, 0f)
         for ((dpWidth, dpHeight) in viewports) for (density in listOf(1f, 3f)) for (language in AppLanguage.entries) {
             val width = dpWidth * density
@@ -56,7 +57,8 @@ class HudKeepOutTest {
                     "enemies" to listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f, 0f, 0f, 0f, 0f, 0f, 0f, false,
                         affinityBits = bossAffinity(boss)))
                         .toImmutableList(),
-                    "pointsOfInterest" to (if (trial) listOf(orbit) else emptyList()).toImmutableList(),
+                    "sites" to (if (trial) listOf(orbit) else emptyList()).toImmutableList(),
+                    "trial" to (if (trial) siteTrial(orbit) else null),
                 )
                 drawHudAt(width, height, density, language, textScale) { measurer -> drawHud(model, measurer, 1f) }
                 val keepOut = WorldHudKeepOut().update(width, height, density, textScale, trial, bossPresent = true)
@@ -162,6 +164,36 @@ class HudKeepOutTest {
                         assertFalse(box.overlaps(bossRect), "$where: orbit timer $box on the boss block $bossRect")
                     }
                     centerY += 4f
+                }
+            }
+        }
+    }
+
+    /**
+     * During a dimension visit the plate (in the Rebirth slot) and the objective's panel lie inside the world keep-out
+     * with every other top block, at every reference size, density, language and text size, with a boss on screen.
+     */
+    @Test
+    fun everyTopBlockOfADimensionVisitLiesInsideTheWorldKeepOut() {
+        for ((dpWidth, dpHeight) in viewports) for (density in listOf(1f, 3f)) for (language in AppLanguage.entries) {
+            val width = dpWidth * density
+            val height = dpHeight * density
+            for (textScale in listOf(1f, 1.25f, 1.75f)) for (layer in listOf(WorldLayer.ZENITH, WorldLayer.ARCHIVE)) {
+                val base = hudTestModel(dpWidth, dpHeight).with(
+                    "screenWidth" to width, "screenHeight" to height, "uiScale" to density,
+                    "keys" to 12, "runMatter" to 9_876_543L, "combo" to 128, "comboTime" to 1f, "comboWindow" to 2.8f, *levelOverrides(),
+                    "rebirthLevel" to 10,
+                    "enemies" to listOf(EnemyProjection(4, EnemyType.THRONE, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f, 0f, 0f, 0f, 0f, 0f, 0f, false,
+                        affinityBits = bossAffinity(EnemyType.THRONE))).toImmutableList(),
+                )
+                val model = base.inVisit(dimensionVisit(layer, base.coreX, base.coreY, progress = 3))
+                drawHudAt(width, height, density, language, textScale) { measurer -> drawHud(model, measurer, 1f) }
+                val rects = WorldHudKeepOut().update(width, height, density, textScale, trialActive = true, bossPresent = true).rects()
+                val where = "$language ${dpWidth}x$dpHeight @$density x$textScale $layer"
+                listOf(HudBlock.CLOCK, HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.CHAIN, HudBlock.BOSS, HudBlock.BADGE,
+                    HudBlock.MINIMAP, HudBlock.REBIRTH, HudBlock.TRIAL_PANEL).forEach { block ->
+                    val drawn = assertNotNull(HudLayoutProbe.rect(block), "$where: $block not drawn")
+                    assertTrue(covered(drawn, rects), "$where: $block $drawn is outside the keep-out $rects")
                 }
             }
         }

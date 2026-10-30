@@ -14,7 +14,8 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
  * The five role colors remapped by the Color vision setting (`tokens.json colorVision`).
  *
  * This is the one way screens read the role colors: `you` (volt: player, confirm), `threat`
- * (hazard: enemies, danger), `heat`, `shield` and `pol` (polarity/cursor), plus the damage tones
+ * (hazard: enemies, danger), `heat`, `shield` and `pol` (polarity/cursor), plus `soft` (the easy
+ * run mode's harmless cursor) and the damage tones
  * ([kinetic] and the [elements]). Composables read [LocalKkRolePalette]; Canvas renderers read
  * `CanvasTextMeasurer.roles`. Structural tokens (ink/bone/mute/line) and rarity do not change with
  * Color vision; [gold] does only where a deficiency would see the bright gold as the preset's volt,
@@ -55,6 +56,11 @@ data class KkRolePalette(
      * and gold as its viewers see them.
      */
     val spectrum: KkSpectrum = KkSpectrum.Full,
+    /**
+     * Soft: the harmless cursor of the easy run mode. Kept 15 ΔE from the preset's threat and 12 ΔE from its volt, shield,
+     * Entropy and gold as its viewers see them, and 4.5:1 on ink (KkHueGrammarTest); a pure grey in Mono.
+     */
+    val soft: Color = Color(0xFF9CF7C4),
 ) {
     /** Element color by index 0 (thermal) .. 6 (void). */
     fun element(index: Int): Color = elements[index.coerceIn(0, elements.lastIndex)]
@@ -79,6 +85,7 @@ data class KkRolePalette(
             elements = visionElements(0xFFFFB000, 0xFFBDEBFF, 0xFF728AA1, 0xFFE82CAF, 0xFF63E9AF, 0xFF5AB478, 0xFFD2BAFC),
             gold = KkGold.Deep,
             spectrum = KkSpectrum.Protan,
+            soft = Color(0xFF6CA69A),
         )
         val Deutan = KkRolePalette(
             you = Color(0xFFFFD84A),
@@ -89,6 +96,7 @@ data class KkRolePalette(
             elements = visionElements(0xFFFF9E1A, 0xFFBDEBFF, 0xFF627F93, 0xFFCC80FF, 0xFF2CE88A, 0xFF428A4E, 0xFFF08AE4),
             gold = KkGold.Deep,
             spectrum = KkSpectrum.Deutan,
+            soft = Color(0xFF6CA69A),
         )
         val Tritan = KkRolePalette(
             you = Color(0xFF5CF2E0),
@@ -98,6 +106,7 @@ data class KkRolePalette(
             pol = Color(0xFFFF9ED8),
             elements = visionElements(0xFFFF7A9A, 0xFFCAEBFC, 0xFF427BFF, 0xFFBF55EC, 0xFF55BD51, 0xFF3C8A42, 0xFF9654FC),
             spectrum = KkSpectrum.Tritan,
+            soft = Color(0xFF919E77),
         )
         val Mono = KkRolePalette(
             you = Color(0xFFFFFFFF),
@@ -108,6 +117,7 @@ data class KkRolePalette(
             hatchThreats = true,
             elements = visionRamp(Color(0xFFBDBDBD)),
             spectrum = KkSpectrum.Light,
+            soft = Color(0xFF9E9E9E),
         )
 
         /**

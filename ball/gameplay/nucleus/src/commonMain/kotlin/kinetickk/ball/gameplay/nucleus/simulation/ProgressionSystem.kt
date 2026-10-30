@@ -19,6 +19,7 @@ import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.content.api.lifetimeMatterOfferLevel
 
 import kinetickk.ball.gameplay.api.*
@@ -309,8 +310,17 @@ internal fun MutableGameState.clearRelicRuntime(id: RelicId) {
     }
 }
 
+/**
+ * Opens the next waiting choice in queue order: the run omen, the Heirloom, plain level offers, directed rewards,
+ * rarity-floor offers, Relic choices, dimension rewards, then signal prompts. Level offers chain into the next of
+ * the later kinds.
+ */
 internal fun MutableGameState.openNextPendingChoice() {
     if (phase != GamePhase.RUNNING) return
+    if (omenPending) {
+        openOmenChoice()
+        if (phase != GamePhase.RUNNING) return
+    }
     if (heirloomPending) {
         openHeirloomChoice()
         if (phase != GamePhase.RUNNING) return
@@ -327,9 +337,15 @@ internal fun MutableGameState.openNextPendingChoice() {
                 val reward = pendingDirectedRewards.first()
                 pendingDirectedRewards = pendingDirectedRewards.drop(1)
                 openDirectedReward(reward)
+            } else if (phase == GamePhase.RUNNING && pendingFloorOffers.isNotEmpty()) {
+                openNextFloorOffer()
             } else if (phase == GamePhase.RUNNING && pendingRelicChoices > 0) {
                 pendingRelicChoices--
                 openRelicChoice()
+            } else if (phase == GamePhase.RUNNING && hasPendingDimensionReward()) {
+                openPendingDimensionReward()
+            } else if (phase == GamePhase.RUNNING && pendingSignalPrompts.isNotEmpty()) {
+                openSignalPrompt()
             }
         }
         pendingDirectedRewards.isNotEmpty() -> {
@@ -337,11 +353,21 @@ internal fun MutableGameState.openNextPendingChoice() {
             pendingDirectedRewards = pendingDirectedRewards.drop(1)
             openDirectedReward(reward)
         }
+        pendingFloorOffers.isNotEmpty() -> openNextFloorOffer()
         pendingRelicChoices > 0 -> {
             pendingRelicChoices--
             openRelicChoice()
         }
+        hasPendingDimensionReward() -> openPendingDimensionReward()
+        pendingSignalPrompts.isNotEmpty() -> openSignalPrompt()
     }
+}
+
+/** Opens the oldest waiting rarity-floor item offer. */
+private fun MutableGameState.openNextFloorOffer() {
+    val floor = pendingFloorOffers.first()
+    pendingFloorOffers = pendingFloorOffers.drop(1)
+    openItemOfferWithFloor(floor)
 }
 
 internal fun MutableGameState.amplifyCurrentWeapon() {
@@ -512,6 +538,9 @@ internal fun MutableGameState.applyStatDelta(effect: ItemEffect, amount: Float) 
         ItemEffect.DAMAGE_REDUCTION -> damageReduction = (damageReduction + amount * (1f - damageReduction / 0.65f)).coerceIn(0f, 0.65f)
         ItemEffect.COMBO_WINDOW -> comboWindow = max(0.5f, comboWindow + amount)
         ItemEffect.OVERDRIVE_GAIN -> overdriveGain = max(0.1f, overdriveGain + amount)
+        // The flight law's grip and sling stats; the law reads them clamped.
+        ItemEffect.GRIP -> gripStrength += amount
+        ItemEffect.SLING -> slingStrength += amount
     }
 }
 
@@ -547,7 +576,7 @@ internal fun MutableGameState.resetWeaponRuntime() {
 }
 
 internal fun MutableGameState.grantMatter(base: Float) {
-    matterFraction += base * matterGain
+    matterFraction += base * matterGain * layerMatterMultiplier()
     val whole = floor(matterFraction).toLong()
     if (whole > 0L) {
         runMatter = saturatedAdd(runMatter, whole)
@@ -561,12 +590,14 @@ internal fun MutableGameState.bankRunMatter() {
     val fresh = runMatter - bankedRunMatter
     if (fresh <= 0L) return
     bankedRunMatter = runMatter
+    if (easyMode) return
     totalMatter = saturatedAdd(totalMatter, fresh)
     lifetimeMatter = saturatedAdd(lifetimeMatter, fresh)
     pendingBankedMatter = saturatedAdd(pendingBankedMatter, fresh)
 }
 
 internal fun MutableGameState.takeProgressUpdate(): GameplayProgressUpdate? {
+    if (easyMode) { achievementFlushDue = false; clearPendingProgress(); return null }
     val flushCounters = achievementFlushDue
     achievementFlushDue = false
     if (!hasUrgentProgress() && !(flushCounters && hasPendingAchievementCounters())) return null
@@ -585,7 +616,14 @@ internal fun MutableGameState.takeProgressUpdate(): GameplayProgressUpdate? {
         ricochets = pendingRicochets,
         dataPickups = pendingDataPickups,
         acquiredItemIds = pendingAcquiredItemIds.toImmutableList(),
+        discoveredWorldEntries = WorldDiscovery.entries.filter { pendingWorldDiscoveryMask and it.bit != 0 }.toImmutableSet(),
     )
+    clearPendingProgress()
+    return update
+}
+
+/** Drops every pending Profile fact. Every new outbox field must be cleared here (Baby mode relies on it). */
+internal fun MutableGameState.clearPendingProgress() {
     pendingBankedMatter = 0L
     pendingDiscoveredItemIds.clear()
     pendingDiscoveredRelicMask = 0L
@@ -602,7 +640,7 @@ internal fun MutableGameState.takeProgressUpdate(): GameplayProgressUpdate? {
     pendingRicochets = 0
     pendingDataPickups = 0
     pendingAcquiredItemIds = emptyList()
-    return update
+    pendingWorldDiscoveryMask = 0
 }
 
 /** Progress that is published by the next reduction. */
@@ -612,7 +650,7 @@ internal fun MutableGameState.hasUrgentProgress(): Boolean =
         pendingDiscoveredReactionMask != 0 || pendingDiscoveredPairingMask != 0 ||
         pendingVictoryRelics != null || pendingHeirloomResolved ||
         pendingClearedRebirthLevel != null || pendingEliteKills != 0 || pendingDashHits != 0 ||
-        pendingCompletedOrbits != 0 || pendingArchitectDefeatedWith != null
+        pendingCompletedOrbits != 0 || pendingArchitectDefeatedWith != null || pendingWorldDiscoveryMask != 0
 
 /** Non-urgent progress: counters and first acquisitions ride along with the next update or the run-end flush. */
 internal fun MutableGameState.hasPendingAchievementCounters(): Boolean =
@@ -620,7 +658,7 @@ internal fun MutableGameState.hasPendingAchievementCounters(): Boolean =
 
 /** True when [takeProgressUpdate] would publish an update now. */
 internal fun MutableGameState.hasPublishableProgress(): Boolean =
-    hasUrgentProgress() || achievementFlushDue && hasPendingAchievementCounters()
+    !easyMode && (hasUrgentProgress() || achievementFlushDue && hasPendingAchievementCounters())
 
 internal fun MutableGameState.takeSoundCues(): ImmutableList<GameplayAudioCue> {
     if (soundCues.isEmpty()) return immutableListOf()

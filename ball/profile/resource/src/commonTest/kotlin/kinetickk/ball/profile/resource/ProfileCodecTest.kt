@@ -10,6 +10,7 @@ import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.content.api.WorldDiscovery
 import kinetickk.ball.profile.api.ColorVision
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.DamageNumberFormat
@@ -1140,6 +1141,73 @@ class ProfileCodecTest {
         val retired = LEGACY_DEFAULT_GOLDEN.replace(
             "\"collection\":{\"discoveredItemIds\":[]}",
             "\"collection\":{\"discoveredItemIds\":[],\"recentItemIds\":[1]}",
+        )
+        assertEquals(ProfileSnapshotRejection.INCONSISTENT_PROFILE, decodeRejection(retired))
+    }
+
+    @Test
+    fun worldDiscoveriesRoundTripAsOneMaskWrittenOnlyWhenNonZeroAndOlderSavesReadNone() {
+        // Every existing save keeps its exact bytes and knows no discovery.
+        for (existing in listOf(DEFAULT_GOLDEN, REPRESENTATIVE_GOLDEN, MATRIX_GOLDEN, UPGRADES_GOLDEN)) {
+            assertEquals(emptySet<WorldDiscovery>(), decoded(existing).profile.collection.discoveredWorldEntries)
+            assertFalse(existing.contains("worldDiscoveryMask"))
+            assertEquals(existing, requireEncoded(decoded(existing)))
+        }
+        assertEquals(DEFAULT_GOLDEN, requireEncoded(testSnapshot()))
+
+        // The full mask: one bit per discovery, the secret bosses included, last in the collection.
+        val every = testSnapshot(PlayerProfile(collection = PlayerCollection(emptySet(), discoveredWorldEntries = WorldDiscovery.entries.toSet())))
+        val full = requireEncoded(every)
+        assertTrue(full.contains("\"discoveredItemIds\":[],\"worldDiscoveryMask\":1048575}"), full)
+        assertEquals(every, decoded(full))
+
+        // Bit = ordinal: the Gate race (0), the Quiet Signal (17) and the Antecedent (19).
+        val some = setOf(WorldDiscovery.GATE_RACE, WorldDiscovery.QUIET_SIGNAL, WorldDiscovery.ANTECEDENT)
+        val encoded = requireEncoded(testSnapshot(PlayerProfile(collection = PlayerCollection(emptySet(), discoveredWorldEntries = some))))
+        assertTrue(encoded.contains("\"worldDiscoveryMask\":655361}"), encoded)
+        assertEquals(some, decoded(encoded).profile.collection.discoveredWorldEntries)
+
+        // An empty mask is never written.
+        assertEquals(
+            ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD,
+            decodeRejection(DEFAULT_GOLDEN.replace("\"discoveredItemIds\":[]}", "\"discoveredItemIds\":[],\"worldDiscoveryMask\":0}")),
+        )
+        // The mask follows the recent items, and a save carrying both keeps its bytes.
+        val withMask = REPRESENTATIVE_GOLDEN.replace(
+            "\"heirloomRelicIds\":[\"GLASS_COMET\",\"BLINK_DRIVE\"]}",
+            "\"heirloomRelicIds\":[\"GLASS_COMET\",\"BLINK_DRIVE\"],\"recentItemIds\":[42],\"worldDiscoveryMask\":3}",
+        )
+        assertEquals(setOf(WorldDiscovery.GATE_RACE, WorldDiscovery.TRIALS), decoded(withMask).profile.collection.discoveredWorldEntries)
+        assertEquals(withMask, requireEncoded(decoded(withMask)))
+        assertEquals(
+            ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD,
+            decodeRejection(withMask.replace("\"recentItemIds\":[42],\"worldDiscoveryMask\":3", "\"worldDiscoveryMask\":3,\"recentItemIds\":[42]")),
+        )
+    }
+
+    @Test
+    fun theWorldDiscoveryMaskAcceptsEveryDefinedBitAndRejectsTheNextBitNegativeMasksAndRetiredSaves() {
+        val last = WorldDiscovery.entries.last()
+        val payload = requireEncoded(testSnapshot(PlayerProfile(collection = PlayerCollection(emptySet(), discoveredWorldEntries = setOf(last)))))
+        val canonical = "\"worldDiscoveryMask\":${last.bit}"
+        assertTrue(payload.contains(canonical), payload)
+        assertEquals(setOf(last), decoded(payload).profile.collection.discoveredWorldEntries)
+
+        // The first bit past the defined discoveries, any higher bit and the sign bit name no discovery.
+        listOf(1 shl WorldDiscovery.entries.size, WorldDiscovery.VALID_MASK + 1, 1 shl 30, -1, Int.MIN_VALUE, -WorldDiscovery.VALID_MASK)
+            .forEach { mask ->
+                assertEquals(ProfileSnapshotRejection.VALUE_OUT_OF_RANGE,
+                    decodeRejection(payload.replace(canonical, "\"worldDiscoveryMask\":$mask")), "$mask")
+            }
+        // A mask past Int is no Int, and a mask written as text never re-encodes to its own bytes.
+        assertEquals(ProfileSnapshotRejection.MALFORMED_JSON, decodeRejection(payload.replace(canonical, "\"worldDiscoveryMask\":2147483648")))
+        assertEquals(ProfileSnapshotRejection.NON_CANONICAL_PAYLOAD,
+            decodeRejection(payload.replace(canonical, "\"worldDiscoveryMask\":\"${last.bit}\"")))
+
+        // The retired catalog generation never wrote a mask.
+        val retired = LEGACY_DEFAULT_GOLDEN.replace(
+            "\"collection\":{\"discoveredItemIds\":[]}",
+            "\"collection\":{\"discoveredItemIds\":[],\"worldDiscoveryMask\":1}",
         )
         assertEquals(ProfileSnapshotRejection.INCONSISTENT_PROFILE, decodeRejection(retired))
     }

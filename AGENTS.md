@@ -3,31 +3,23 @@
 
 # Project instructions
 
-## Mandatory Pokeball skills
+## Keep README current
 
-- Use the current installed `pokeball` skill for implementation, architecture,
-  refactoring, debugging, testing and code review in this project. Read its
-  current `SKILL.md` before starting relevant work; do not rely on a remembered
-  or archived copy of its instructions.
-- Resolve the skill through the active skill catalog and read the location it
-  declares. The project's local installation is under `.agents/skills/`.
-  Skill updates belong to the maintained skill source, not copied project docs.
-- Read the current focused skill when the work touches its boundary:
-  `pokeball-binding` for acceptance/dispatch, `pokeball-async` for effects and
-  results, `pokeball-composition` for ownership and cross-authority interaction,
-  and `pokeball-review` for review. Load only the relevant references.
-- If a required skill cannot be found or read, report the missing prerequisite
-  and resolve it before the affected work. Do not substitute old architecture
-  guides for the required skill.
-- Keep general Pokeball guidance in the skills. Do not recreate duplicate local
-  development guides or per-task audit documents unless explicitly requested;
-  report task findings and checks in the response.
-
-Kotlin contracts, tests and project-specific policy/Assembly records remain the
-source of truth for this application's behavior and selected bounds. The pinned
-Core snapshot used by Gradle verification is a verification input, not the
-source for selecting the current skill. Using an updated skill does not silently
-change that baseline or the project's accepted policies.
+- Review `README.md` whenever a change updates the game version, adds or removes
+  player-facing features or content, or changes gameplay, supported platforms,
+  release status, or play/download links. Update affected copy and artwork in the
+  same change; do not leave the README describing an older state of the game.
+- Keep it a short, visually polished introduction in Russian: cover, current
+  version/status, a few sentences about the game, and useful links. Replace stale
+  copy instead of appending a changelog. Do not add tutorials, controls tables,
+  build commands, implementation details, or exhaustive feature lists.
+- Verify claims against current source. Keep the checkout version distinct from
+  the published build behind the play link; never imply an unpublished version is
+  already available. Keep version numbers in editable text, outside the artwork.
+- Put developer instructions in `docs/project/DEVELOPMENT.md` and detailed behavior
+  or balance notes in the appropriate docs. Check local links and image rendering
+  after README edits. If a change leaves the overview accurate, note that the
+  README was reviewed and no text change was needed in the change summary.
 
 ## Last desktop crash
 

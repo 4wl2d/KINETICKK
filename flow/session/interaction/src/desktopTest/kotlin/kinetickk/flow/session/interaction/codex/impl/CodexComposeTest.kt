@@ -66,7 +66,7 @@ class CodexComposeTest {
                     onRoot().captureToImage()
                 }
                 drawCurrentGrid()
-                for ((category, prefix) in listOf("item", "weapon", "relic", "shape", "enemy").withIndex()) {
+                for ((category, prefix) in listOf("item", "weapon", "relic", "shape", "enemy", "world").withIndex()) {
                     onNodeWithTag("codex-category-$category").performClick()
                     drawCurrentGrid()
                     assertTrue(onAllNodes(hasTestTagPrefix("codex-slot-$prefix/")).fetchSemanticsNodes().isNotEmpty())
@@ -341,21 +341,39 @@ class CodexComposeTest {
                 // Compare with the Codex box itself (not the larger test window), using unclipped bounds:
                 // a scrolling row clips its tabs, so clipped bounds could never leave it.
                 val box = onNodeWithTag("codex").getUnclippedBoundsInRoot()
-                // Wide screens list the categories as nav rows; every tab row present must fit unscrolled.
+                // Wide screens list the categories as nav rows; every tab row present must fit unscrolled. The one exception is
+                // the six categories at 175 % on a portrait phone: shrunk to the smallest tab scale they can still run past the
+                // row, which then scrolls and brings every category into view.
+                val crowded = scale == 1.75f && width <= 390
                 val rows = onAllNodes(hasTestTag("codex-tab-row") or hasTestTag("codex-category-row")).fetchSemanticsNodes()
                 assertTrue(rows.isNotEmpty(), where)
+                var categoriesScroll = false
                 rows.forEach { row ->
+                    val tag = row.config[SemanticsProperties.TestTag]
                     val range = row.config.getOrNull(SemanticsProperties.HorizontalScrollAxisRange)
-                    assertTrue(range == null || range.maxValue() == 0f, "${row.config[SemanticsProperties.TestTag]} scrolls at rest at $where")
+                    val scrolls = range != null && range.maxValue() > 0f
+                    if (scrolls && crowded && tag == "codex-category-row") categoriesScroll = true
+                    else assertFalse(scrolls, "$tag scrolls at rest at $where")
                 }
-                ((0..4).map { "codex-tab-$it" } + (0..4).map { "codex-category-$it" } + listOf("codex-filter-0", "codex-filter-2", "codex-filter-3") +
-                    (0..2).map { "codex-sort-$it" })
+                val categories = (0..CODEX_WORLD_CATEGORY).map { "codex-category-$it" }
+                ((0..4).map { "codex-tab-$it" } + (if (categoriesScroll) emptyList() else categories) +
+                    listOf("codex-filter-0", "codex-filter-2", "codex-filter-3") + (0..2).map { "codex-sort-$it" })
                     .forEach { tag ->
                         val bounds = onNodeWithTag(tag).getUnclippedBoundsInRoot()
                         assertTrue(bounds.left >= box.left - 0.5.dp && bounds.right <= box.right + 0.5.dp,
                             "$tag leaves the Codex at $where: $bounds in $box")
                         assertTrue(bounds.width > 0.dp, "$tag is hidden at $where")
                     }
+                if (categoriesScroll) {
+                    categories.forEach { tag ->
+                        onNodeWithTag(tag).performScrollTo()
+                        val bounds = onNodeWithTag(tag).getUnclippedBoundsInRoot()
+                        assertTrue(bounds.left >= box.left - 0.5.dp && bounds.right <= box.right + 0.5.dp,
+                            "$tag cannot be brought into the Codex at $where: $bounds in $box")
+                        assertTrue(bounds.width > 0.dp, "$tag is hidden at $where")
+                    }
+                    onNodeWithTag(categories.first()).performScrollTo()
+                }
                 // The sort names its purpose to a screen reader whether or not its visible label fits; up to the default
                 // text size it shows the label on every layout, phones included, so its segments never pass for more filters.
                 onNodeWithTag("codex-sort").assertContentDescriptionEquals(language.text(CodexText.SORT))
@@ -423,10 +441,11 @@ class CodexComposeTest {
             "the overflowing row must scroll"
         }
         assertTrue(range.maxValue() > 0f && range.value() == 0f)
-        assertTrue(onNodeWithTag("codex-category-4").getUnclippedBoundsInRoot().right > box.right, "the last tab starts beyond the edge")
-        onNodeWithTag("codex-category-4").performScrollTo().performClick()
-        onNodeWithTag("codex-category-4").assertIsSelected()
-        val shown = onNodeWithTag("codex-category-4").getUnclippedBoundsInRoot()
+        val last = "codex-category-$CODEX_WORLD_CATEGORY"
+        assertTrue(onNodeWithTag(last).getUnclippedBoundsInRoot().right > box.right, "the last tab starts beyond the edge")
+        onNodeWithTag(last).performScrollTo().performClick()
+        onNodeWithTag(last).assertIsSelected()
+        val shown = onNodeWithTag(last).getUnclippedBoundsInRoot()
         assertTrue(shown.left >= box.left - 0.5.dp && shown.right <= box.right + 0.5.dp, "scrolling brings the last tab in: $shown in $box")
     }
 
@@ -447,6 +466,31 @@ class CodexComposeTest {
             } else {
                 onNodeWithTag("codex-collection-progress").assertExists()
             }
+        }
+    }
+
+    /** A Rebirth-locked enemy's tile shows its padlock in the top corner, never the threat badge over it; an open one its threat. */
+    @Test fun aLockedEnemyTileShowsItsPadlockNotTheThreatBadge() {
+        for ((width, height) in listOf(1440 to 810, 390 to 844)) androidx.compose.ui.test.v2.runDesktopComposeUiTest(width, height) {
+            setContent {
+                CompositionLocalProvider(LocalAppLanguage provides AppLanguage.English, androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(1f, 1f)) {
+                    Box(Modifier.requiredSize(width.dp, height.dp)) {
+                        CodexContent(codexTestCatalog(), CodexRenderModel(immutableSetOf(), CodexRunStacks(), codexTestCatalog().items), codexTestProgress(), 1.25f) { }
+                    }
+                }
+            }
+            onNodeWithTag("codex-tab-1").performSemanticsAction(SemanticsActions.OnClick)
+            waitForIdle()
+            onNodeWithTag("codex-category-4").performSemanticsAction(SemanticsActions.OnClick)
+            waitForIdle()
+            // The Reflector opens at Rebirth 4 (the test profile has none); the Drifter is open from the start.
+            onNodeWithTag("codex-grid").performScrollToKey("enemy/REFLECTOR")
+            waitForIdle()
+            assertTrue(onAllNodesWithTag("codex-badge-enemy/REFLECTOR", useUnmergedTree = true).fetchSemanticsNodes().isEmpty(),
+                "the locked Reflector has no threat badge over its padlock (${width}x$height)")
+            onNodeWithTag("codex-grid").performScrollToKey("enemy/DRIFTER")
+            waitForIdle()
+            onNodeWithTag("codex-badge-enemy/DRIFTER", useUnmergedTree = true).assertExists()
         }
     }
 

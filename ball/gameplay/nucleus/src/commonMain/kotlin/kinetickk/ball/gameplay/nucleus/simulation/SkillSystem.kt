@@ -761,7 +761,7 @@ private fun MutableGameState.landingClearOfObstacles(x: Float, y: Float, clearan
     forEachObstacleNear(x, y, clearance) { _, obstacle ->
         if (distanceSquared(x, y, obstacle.x, obstacle.y) < square(obstacle.radius + clearance)) return false
     }
-    return true
+    return wallsClearOf(x, y, clearance)
 }
 
 /** The Void Step rift detonates where the step began. */

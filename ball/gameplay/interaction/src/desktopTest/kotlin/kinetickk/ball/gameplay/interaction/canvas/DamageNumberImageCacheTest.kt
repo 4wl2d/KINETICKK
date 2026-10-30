@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
@@ -38,6 +39,77 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class DamageNumberImageCacheTest {
+    @Test
+    fun measureDamageImageConstruction() {
+        if (System.getenv("KK_DAMAGE_CROP_BENCH") != "1") return
+        val case = LabelCase("123456", 36f, 1f, 1.25f, AppLanguage.English, KkRolePalette.Default.you)
+        val labels = (0 until 64).map { label(case.copy(text = (123456 + it).toString())) }
+        val cache = DamageNumberImageCache(capacity = 1)
+        fun construct(index: Int) {
+            cache.beginFrame()
+            val label = labels[index % labels.size]
+            checkNotNull(cache.image(label.face, label.shadow, case.color))
+        }
+        repeat(512) { construct(it) }
+        val samples = LongArray(1_024)
+        val threads = ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
+        val thread = Thread.currentThread().id
+        val before = threads.getThreadAllocatedBytes(thread)
+        for (index in samples.indices) {
+            val started = System.nanoTime()
+            construct(index)
+            samples[index] = System.nanoTime() - started
+        }
+        val allocated = threads.getThreadAllocatedBytes(thread) - before
+        samples.sort()
+        println("Damage image construction medianUs=${samples[samples.size / 2] / 1_000.0} " +
+            "p95Us=${samples[samples.size * 95 / 100] / 1_000.0} meanUs=${samples.average() / 1_000.0} " +
+            "allocatedBytesPerImage=${allocated.toDouble() / samples.size}")
+    }
+
+    @Test
+    fun tightDrawBoundsPreserveFullBitmapSamplingAcrossAnimatedTransforms() {
+        val cases = listOf(
+            LabelCase("742", 25f, 1f, 1.25f, AppLanguage.English, KkRolePalette.Default.you),
+            LabelCase("12.5 M", 45f, 1.5f, 1.25f, AppLanguage.English, KkRolePalette.Protan.threat),
+            LabelCase("1,25 квинтлн", 45f, 2f, 1.25f, AppLanguage.Russian, KkRolePalette.Default.element(5)),
+            LabelCase("1,25 квинтлн", 25f, 3f, 1.25f, AppLanguage.Russian, KkRolePalette.Mono.you, fontScale = 1.5f),
+            LabelCase("", 25f, 1f, 1.25f, AppLanguage.English, KkRolePalette.Default.you),
+        )
+        for (case in cases) {
+            val label = label(case)
+            val image = checkNotNull(DamageNumberImageCache().image(label.face, label.shadow, case.color))
+            val brush = damageNumberImageBrush(image.bitmap)
+            if (case.text.isEmpty()) assertTrue(image.drawBounds.isEmpty)
+            else assertTrue(image.drawBounds.width * image.drawBounds.height < image.bitmap.width * image.bitmap.height,
+                "The test must eliminate transparent padding: $case")
+            for ((pop, tilt) in listOf(1f to 0f, 1.25f to 4.4f, 0.75f to 2.2f, 0.51f to -4.4f, 0.5f to -4.4f, 0.4f to -4.4f, 0.021f to 2.2f)) {
+                for (shift in listOf(0f, 0.37f, -0.625f)) {
+                    val width = (label.face.size.width * 1.7f + 240f).toInt()
+                    val height = (label.face.size.height * 1.7f + 240f).toInt()
+                    fun sampled(crop: Boolean): IntArray {
+                        val bitmap = ImageBitmap(width, height)
+                        CanvasDrawScope().draw(label.face.layoutInput.density, LayoutDirection.Ltr, Canvas(bitmap), Size(width.toFloat(), height.toFloat())) {
+                            withTransform({
+                                translate(width / 2f + shift, height / 2f - shift)
+                                rotate(tilt, Offset.Zero)
+                                scale(pop, pop, Offset.Zero)
+                            }) {
+                                if (crop) image.draw(this, pop) else translate(image.left, image.top) {
+                                    drawRect(brush, Offset.Zero, Size(image.bitmap.width.toFloat(), image.bitmap.height.toFloat()))
+                                }
+                            }
+                        }
+                        val pixels = bitmap.toPixelMap()
+                        return IntArray(width * height) { pixels[it % width, it / width].toArgb() }
+                    }
+                    assertTrue(sampled(false).contentEquals(sampled(true)),
+                        "Cropped sampling changed pixels: $case, pop=$pop, tilt=$tilt, shift=$shift")
+                }
+            }
+        }
+    }
+
     @Test
     fun cachedFaceAndShadowsPreserveGlyphsAcrossDensityLanguageAndPalette() {
         val cases = listOf(
@@ -256,7 +328,7 @@ private fun render(label: LabelLayouts, color: Color, image: DamageNumberImage?,
             rotate(tilt, Offset.Zero)
             scale(pop, pop, Offset.Zero)
         }) {
-            if (image == null) drawDamageNumberInk(label.face, label.shadow, color) else image.draw(this)
+            if (image == null) drawDamageNumberInk(label.face, label.shadow, color) else image.draw(this, pop)
         }
     }
     val pixels = bitmap.toPixelMap()

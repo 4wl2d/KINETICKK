@@ -16,6 +16,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.input.key.Key
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.flow.session.interaction.home.api.HomeOutput
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.profile.api.*
@@ -49,7 +50,7 @@ class SessionPresentationLocalizationTest {
         val feature = DefaultHomeFeature(LocalizationProfilePort(), codexTestCatalog(), LocalizationSilentAudio)
         setContent {
             Box(Modifier.requiredSize(1000.dp, 700.dp)) {
-                feature.Content(inputEnabled = true, onOutput = outputs::add)
+                feature.Content(inputEnabled = true, runMode = RunMode.STANDARD, onOutput = outputs::add)
             }
         }
         mainClock.advanceTimeBy(300)
@@ -84,7 +85,7 @@ class SessionPresentationLocalizationTest {
         val feature = DefaultHomeFeature(LocalizationProfilePort(), codexTestCatalog(), LocalizationSilentAudio)
         setContent {
             Box(Modifier.requiredSize(1000.dp, heightValue)) {
-                feature.Content(inputEnabled = true, onOutput = {})
+                feature.Content(inputEnabled = true, runMode = RunMode.STANDARD, onOutput = {})
             }
         }
         mainClock.advanceTimeBy(100)
@@ -110,7 +111,7 @@ class SessionPresentationLocalizationTest {
         val feature = DefaultHomeFeature(LocalizationProfilePort(), codexTestCatalog(), LocalizationSilentAudio)
         setContent {
             Box(Modifier.requiredSize(1000.dp, 700.dp)) {
-                feature.Content(inputEnabled = true, onOutput = outputs::add)
+                feature.Content(inputEnabled = true, runMode = RunMode.STANDARD, onOutput = outputs::add)
             }
         }
         mainClock.advanceTimeBy(300)
@@ -198,7 +199,7 @@ class SessionPresentationLocalizationTest {
         setContent {
             CompositionLocalProvider(LocalAppLanguage provides languageValue) {
                 Box(Modifier.requiredSize(1000.dp, 700.dp)) {
-                    feature.Content(inputEnabled = true) { }
+                    feature.Content(inputEnabled = true, runMode = RunMode.STANDARD) { }
                 }
             }
         }

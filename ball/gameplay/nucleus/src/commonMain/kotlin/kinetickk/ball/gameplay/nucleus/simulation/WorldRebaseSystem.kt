@@ -63,7 +63,9 @@ internal fun MutableGameState.rebaseWorldIfNeeded() {
     }
     rebaseCharacterRuntime(shiftX, shiftY)
     weaponRuntime.rebase(shiftX, shiftY)
-    pointsOfInterest = pointsOfInterest.map { it.copy(x = it.x - shiftX, y = it.y - shiftY) }
+    sites = sites.map { it.shifted(shiftX, shiftY) }
+    ambientSites = ambientSites.shifted(shiftX, shiftY)
+    secretSigil = secretSigil?.shifted(shiftX, shiftY)
     rebaseCombatFields(shiftX, shiftY)
     rebaseCoreReactionStates(shiftX, shiftY)
     skillRuntime.rebase(shiftX, shiftY)
@@ -71,6 +73,7 @@ internal fun MutableGameState.rebaseWorldIfNeeded() {
     if (volatileBursts.isNotEmpty()) {
         volatileBursts = volatileBursts.map { it.copy(x = it.x - shiftX, y = it.y - shiftY) }.toImmutableList()
     }
+    if (encounters.isNotEmpty()) encounters = encounters.map { it.shifted(shiftX, shiftY) }.toImmutableList()
     morningstarX -= shiftX
     morningstarY -= shiftY
     previousMorningstarX -= shiftX
@@ -79,8 +82,11 @@ internal fun MutableGameState.rebaseWorldIfNeeded() {
     weaponBeamStartY -= shiftY
     weaponBeamEndX -= shiftX
     weaponBeamEndY -= shiftY
+    rebaseRunVariety(shiftX, shiftY)
     // Absolute positions (obstacle chunks) stay put: the origin takes the shift the world gave up.
     worldOriginX += shiftX.toDouble()
     worldOriginY += shiftY.toDouble()
     obstacleField = obstacleField.shifted(shiftX, shiftY)
+    rebaseStructures(shiftX, shiftY)
+    rebaseDimensions(shiftX, shiftY)
 }

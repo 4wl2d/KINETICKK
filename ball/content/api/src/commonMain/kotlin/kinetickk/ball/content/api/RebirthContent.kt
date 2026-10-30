@@ -117,6 +117,9 @@ data class RebirthProfile(
 /** Data requirement growth per Rebirth tier: tier t needs `1 + 0.14t` times the base table (Data supply grows alike). */
 const val REBIRTH_DATA_REQUIREMENT_SCALE_PER_TIER: Float = 0.14f
 
+/** Pack Hunters' extra members in every pack, at a tier that runs it or in a run an omen adds it to. */
+const val PACK_HUNTERS_PACK_SIZE_BONUS: Int = 1
+
 /** Name of the tier without mutators. */
 const val BASELINE_REBIRTH_NAME: String = "Baseline"
 
@@ -162,7 +165,7 @@ fun defaultRebirthProfile(
         minimumSpawnIntervalSeconds = minimumSpawnIntervalSeconds,
         minimumEliteIntervalSeconds = minimumEliteIntervalSeconds,
         mutators = mutators,
-        packSizeBonus = if (RebirthMutator.PACK_HUNTERS in mutators) 1 else 0,
+        packSizeBonus = if (RebirthMutator.PACK_HUNTERS in mutators) PACK_HUNTERS_PACK_SIZE_BONUS else 0,
         obstacleDensityMultiplier = 1f + t * 0.05f,
         dataRequirementScale = 1f + t * REBIRTH_DATA_REQUIREMENT_SCALE_PER_TIER,
     )

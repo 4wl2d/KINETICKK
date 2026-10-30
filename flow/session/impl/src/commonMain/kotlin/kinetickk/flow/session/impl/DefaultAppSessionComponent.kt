@@ -168,12 +168,13 @@ internal class DefaultAppSessionComponent private constructor(
                     check(pending.shape == output.shape)
                 }
                 is AppSessionOutput.StartRun -> {
-                    val runId = when (val pending = next.pendingWorkflow) {
-                        is PendingWorkflow.StartingRun -> pending.runId
-                        is PendingWorkflow.StartingRebirthRun -> pending.runId
+                    val (runId, mode) = when (val pending = next.pendingWorkflow) {
+                        is PendingWorkflow.StartingRun -> pending.runId to pending.mode
+                        is PendingWorkflow.StartingRebirthRun -> pending.runId to pending.mode
                         else -> error("Session start command has no matching workflow")
                     }
                     check(runId == output.runId && runId == next.activeRunId)
+                    check(mode == output.mode && mode == next.runMode) { "Session start command carries another run mode" }
                     if (ensureOutputs.isEmpty()) boundRun(runId)
                 }
                 is AppSessionOutput.PauseForOverlay -> {
@@ -222,7 +223,7 @@ internal class DefaultAppSessionComponent private constructor(
                 refusedInput = { profileCoreShapeRefused(it) },
             )
             is AppSessionOutput.ApplyPreferences -> executeGameplaySettings(output)
-            is AppSessionOutput.StartRun -> executeStart(output.runId)
+            is AppSessionOutput.StartRun -> executeStart(output)
             is AppSessionOutput.PauseForOverlay -> executePause(output.runId)
             is AppSessionOutput.SynchronizeAudioPreferences ->
                 updateAudioPreferences(output.preferences)
@@ -259,10 +260,11 @@ internal class DefaultAppSessionComponent private constructor(
         )
     }
 
-    private fun executeStart(runId: RunId) {
+    private fun executeStart(output: AppSessionOutput.StartRun) {
+        val runId = output.runId
         val target = boundRun(runId)
         acceptance.call(
-            invoke = target::startRun,
+            invoke = { reply -> target.startRun(output.mode, reply) },
             acceptedInput = { result ->
                 check(result.runId == runId) { "Gameplay start result came from another run" }
                 gameplayRunStarted(result)
@@ -384,6 +386,7 @@ internal class DefaultAppSessionComponent private constructor(
                 }
                 SessionInteractionPulse.ToggleMuteRequested,
                 is SessionInteractionPulse.SelectCoreShapeRequested,
+                is SessionInteractionPulse.SelectRunModeRequested,
                 -> Unit
             }
             is AppSessionNucleusPulse.Result -> when (state.pendingWorkflow) {

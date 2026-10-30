@@ -179,10 +179,15 @@ private fun MutableGameState.releaseOrbit(x: Float, y: Float, struck: Enemy?) {
     ability.turnDistance = 0f
     val damage = ORBIT_DAMAGE * abilityPower()
     val dominant = build.dominant
-    // During Perihelion a release reaches boss-class enemies only when the base rules would have charged it too.
+    // During Perihelion a release reaches boss-class enemies only when the base rules would have charged it too, and
+    // only such a release spends the base rules' charge (their arc and distance start again, as a base release's do).
     val perihelion = apexActive()
     val reachesBosses = !perihelion || skillRuntime.apex(ApexCell.AUX) >= 1f
-    if (perihelion && reachesBosses) skillRuntime.setApex(ApexCell.AUX, 0f)
+    if (perihelion && reachesBosses) {
+        skillRuntime.setApex(ApexCell.AUX, 0f)
+        skillRuntime.setApex(ApexCell.BASE_ARC, 0f)
+        skillRuntime.setApex(ApexCell.BASE_DISTANCE, 0f)
+    }
     for (index in enemies.indices) {
         val target = enemies[index]
         if (!target.alive || distanceSquared(x, y, target.x, target.y) > square(ORBIT_RADIUS + target.radius)) continue
@@ -769,23 +774,43 @@ private fun MutableGameState.updateOrbit(ability: CharacterRuntime, turn: Float,
         val sameDirection = ability.turnArc == 0f || turn * ability.turnArc >= 0f
         val arc = if (sameDirection) ability.turnArc + turn else turn
         val distance = if (sameDirection) ability.turnDistance + moved else moved
-        val baseArc = orbitArc()
-        val requiredArc = if (perihelion) apexValue(PERIHELION_ARC) else baseArc
+        val requiredArc = if (perihelion) apexValue(PERIHELION_ARC) else orbitArc()
         val requiredDistance = if (perihelion) PERIHELION_MIN_DISTANCE else ORBIT_MIN_DISTANCE
         val earned = if (abs(arc) >= requiredArc && distance >= requiredDistance) abs(turn) / PI.toFloat() else 0f
-        if (perihelion) {
-            // The charge the base rules would have earned: only a release it completes reaches boss-class enemies.
-            val baseEarned = if (currentSpeed >= ORBIT_MIN_SPEED && ability.previousSpeed >= ORBIT_MIN_SPEED &&
-                abs(arc) >= baseArc && distance >= ORBIT_MIN_DISTANCE
-            ) abs(turn) / PI.toFloat() else 0f
-            skillRuntime.setApex(ApexCell.AUX, min(1f, skillRuntime.apex(ApexCell.AUX) + baseEarned))
-        }
         ability.turnArc = arc.coerceIn(-TAU, TAU)
         ability.turnDistance = min(2_000f, distance)
         ability.charge = min(1f, ability.charge + earned)
     } else {
         ability.turnArc = 0f
         ability.turnDistance = 0f
+    }
+    if (perihelion) {
+        updateBaseOrbitCharge(ability, turn, moved, currentSpeed)
+        // Against boss-class enemies Perihelion keeps the base cadence: once the base rules would have charged Orbit,
+        // it is charged, so the next hit releases it where a base release would land.
+        if (skillRuntime.apex(ApexCell.AUX) >= 1f) ability.charge = 1f
+    }
+}
+
+/**
+ * During Perihelion, the charge the base rules would have earned ([ApexCell.AUX]; only a release it completes reaches
+ * boss-class enemies), on the base arc, distance and speed and on its own arc ([ApexCell.BASE_ARC],
+ * [ApexCell.BASE_DISTANCE]): a release that skips bosses leaves it running, as no base release happened.
+ */
+private fun MutableGameState.updateBaseOrbitCharge(ability: CharacterRuntime, turn: Float, moved: Float, currentSpeed: Float) {
+    val runtime = skillRuntime
+    if (!braking && currentSpeed >= ORBIT_MIN_SPEED && ability.previousSpeed >= ORBIT_MIN_SPEED && moved > 0f) {
+        val previousArc = runtime.apex(ApexCell.BASE_ARC)
+        val sameDirection = previousArc == 0f || turn * previousArc >= 0f
+        val arc = if (sameDirection) previousArc + turn else turn
+        val distance = if (sameDirection) runtime.apex(ApexCell.BASE_DISTANCE) + moved else moved
+        val earned = if (abs(arc) >= orbitArc() && distance >= ORBIT_MIN_DISTANCE) abs(turn) / PI.toFloat() else 0f
+        runtime.setApex(ApexCell.AUX, min(1f, runtime.apex(ApexCell.AUX) + earned))
+        runtime.setApex(ApexCell.BASE_ARC, arc.coerceIn(-TAU, TAU))
+        runtime.setApex(ApexCell.BASE_DISTANCE, min(2_000f, distance))
+    } else {
+        runtime.setApex(ApexCell.BASE_ARC, 0f)
+        runtime.setApex(ApexCell.BASE_DISTANCE, 0f)
     }
 }
 
@@ -1489,8 +1514,12 @@ internal fun MutableGameState.beginApexForm() {
     val ability = characterRuntime
     val runtime = skillRuntime
     when (coreShape) {
-        // The base rules' Orbit charge carries into the activation.
-        CoreShape.ORB -> runtime.setApex(ApexCell.AUX, ability.charge)
+        // The base rules' Orbit charge, arc and distance carry into the activation.
+        CoreShape.ORB -> {
+            runtime.setApex(ApexCell.AUX, ability.charge)
+            runtime.setApex(ApexCell.BASE_ARC, ability.turnArc)
+            runtime.setApex(ApexCell.BASE_DISTANCE, ability.turnDistance)
+        }
         CoreShape.PRISM -> {
             ability.facets = CharacterRuntime.MAX_FACETS
             ability.facetTimer = 0f
@@ -1946,14 +1975,16 @@ private const val REFIT_SIGNATURE_FLOOR_SHARE: Float = 0.5f
 
 // Ability damage is calibrated by CharacterBalanceTest: averaged over its seeded 90 s fights (packs at
 // random bearings, content bolt damage, exact and jittered timing) every offensive character's ability
-// output stays within 40 % of their median (Orbit 70, Puncture 180, Halo 12/s and 16, Lattice 7 + 3.5
-// per node, slams 120 + 0.25 per u/s from 100 u/s, Pulse burst 40, scars 45, drones 9).
+// output stays within 40 % of their median (Orbit 42, Puncture 180, Halo 12/s and 16, Lattice 5.6 + 2.8
+// per node, slams 54 + 0.1125 per u/s from 100 u/s, Pulse burst 40, scars 35, drones 9). The 0.6.0 flight law
+// (grip carves tighter, faster arcs) lifted Orbit and cost the Star and the Dipole their pack meetings: Orbit
+// 70 -> 42, the early Supernova from 12 -> 6 Stellar Mass, Repel 420 -> 700 with throws of 0.6 -> 1.5 s.
 
 private const val ORBIT_ARC: Float = 0.698f
 private const val ORBIT_MIN_DISTANCE: Float = 100f
 private const val ORBIT_MIN_SPEED: Float = 200f
 internal const val ORBIT_RADIUS: Float = 210f
-internal const val ORBIT_DAMAGE: Float = 70f
+internal const val ORBIT_DAMAGE: Float = 42f
 private const val ORBIT_STACKS: Int = 2
 
 internal const val FACET_REGEN_SECONDS: Float = 6f
@@ -1994,14 +2025,14 @@ private const val LATTICE_RECORD_DISTANCE: Float = 120f
 private const val LATTICE_CLOSE_DISTANCE: Float = 130f
 private const val LATTICE_SPACING: Float = 150f
 private const val LATTICE_LIFE_SECONDS: Float = 7f
-internal const val LATTICE_BASE_DAMAGE: Float = 7f
-internal const val LATTICE_NODE_DAMAGE: Float = 3.5f
+internal const val LATTICE_BASE_DAMAGE: Float = 5.6f
+internal const val LATTICE_NODE_DAMAGE: Float = 2.8f
 internal const val LATTICE_INSIDE_MULTIPLIER: Float = 1.5f
 
 private const val STAR_IMPACT_PER_STACK: Float = 0.03f
 private const val STAR_RADIUS_PER_STACK: Float = 0.015f
 private const val STAR_MASS_PER_STACK: Float = 0.02f
-private const val SUPERNOVA_EARLY_STACKS: Int = 12
+private const val SUPERNOVA_EARLY_STACKS: Int = 6
 private const val SUPERNOVA_RADIUS: Float = 160f
 private const val SUPERNOVA_RADIUS_PER_STACK: Float = 8f
 internal const val SUPERNOVA_DAMAGE: Float = 20f
@@ -2018,14 +2049,14 @@ private const val POLARITY_FLIP_INTERVAL: Float = 2f
 internal const val ATTRACT_RADIUS: Float = 300f
 private const val ATTRACT_ACCELERATION: Float = 260f
 internal const val REPEL_RADIUS: Float = 220f
-private const val REPEL_ACCELERATION: Float = 420f
-internal const val THROW_SECONDS: Float = 0.6f
+private const val REPEL_ACCELERATION: Float = 700f
+internal const val THROW_SECONDS: Float = 1.5f
 private const val REPEL_THROW_SHARE: Float = 1f
 internal const val SLAM_MIN_SPEED: Float = 100f
 /** A struck enemy that gains this speed from a slam is thrown on (as fast as a slam needs). */
 internal const val THROW_MIN_SPEED: Float = SLAM_MIN_SPEED
-internal const val SLAM_BASE_DAMAGE: Float = 120f
-internal const val SLAM_DAMAGE_PER_SPEED: Float = 0.25f
+internal const val SLAM_BASE_DAMAGE: Float = 54f
+internal const val SLAM_DAMAGE_PER_SPEED: Float = 0.1125f
 private const val MAX_SLAMS_PER_STEP: Int = 8
 
 /** Thrown enemies that look for a slam partner in one step (the obstacle pass uses the same bound). */
@@ -2050,7 +2081,7 @@ internal const val BLINK_RECHARGE_SECONDS: Float = 2.2f
 private const val BLINK_DRIVE_RANGE_MULTIPLIER: Float = 1.4f
 internal const val SCAR_FUSE_SECONDS: Float = 0.4f
 private const val SCAR_FADE_SECONDS: Float = 0.3f
-internal const val SCAR_DAMAGE: Float = 45f
+internal const val SCAR_DAMAGE: Float = 35f
 private const val SCAR_REACH: Float = 40f
 
 private const val DRONE_CHANCE: Float = 0.25f

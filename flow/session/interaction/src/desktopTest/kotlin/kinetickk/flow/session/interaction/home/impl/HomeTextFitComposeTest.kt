@@ -32,6 +32,7 @@ import kinetickk.foundation.design.KkButtonSize
 import kinetickk.foundation.design.kkButtonWidth
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.LocalAppLanguage
+import kinetickk.foundation.design.condStyle
 import kinetickk.foundation.design.drawKkMenuItem
 import kinetickk.foundation.design.kkBoxHeight
 import kinetickk.foundation.design.labelStyle
@@ -79,7 +80,7 @@ class HomeTextFitComposeTest {
             assertTrue(version.size.width <= layout.scene.versionRight, "version ${version.size.width} at $where")
             // The copyright, license, warranty and source notices left Home: the line is the version alone.
             val shown = version.layoutInput.text.text
-            assertTrue("0.5.0" in shown, shown)
+            assertTrue("0.6.0" in shown, shown)
             assertFalse(listOf("2026", "GPL", "github.com").any { it in shown }, shown)
         }
     }
@@ -160,6 +161,54 @@ class HomeTextFitComposeTest {
             assertEquals(form.mechanicName.localizedContent(language) + "\n" + form.mechanicDescription.localizedContent(language),
                 homeFormInfo(model, language))
         }
+    }
+
+    @Test
+    fun theBabyModeStampFitsTheHeroAtEveryTextSizeAndViewport() = forMeasurers { text, language, scale ->
+        val viewports = listOf(1_440f to 810f, 1_000f to 700f, 900f to 560f, 844f to 390f, 873f to 393f, 804f to 360f, 800f to 360f,
+            600f to 390f, 390f to 844f, 412f to 915f, 360f to 800f, 390f to 600f, 390f to 560f, 320f to 568f)
+        for ((width, height) in viewports) {
+            val layout = homeLayoutGeometry(width, height, 1f)
+            val scene = layout.scene
+            val where = "${language.code} ${width}x$height @$scale"
+            val label = language.text(kinetickk.flow.session.interaction.localization.SessionRedesignText.BABY_MODE)
+            val size = homeBabyStampSize(scene, 1f)
+            assertTrue(size in 11f..17f, "stamp size $size at $where")
+            val stamp = homeBabyStampRect(text, scene, 1f)
+            // The stamp as drawn: turned −6° about its centre, with its ink shadow 3 px (at 17) down and right.
+            val shadow = 3f * size / 17f
+            val turn = 6f * kotlin.math.PI.toFloat() / 180f
+            val halfWidth = stamp.width * 0.5f * kotlin.math.cos(turn) + stamp.height * 0.5f * kotlin.math.sin(turn)
+            val halfHeight = stamp.width * 0.5f * kotlin.math.sin(turn) + stamp.height * 0.5f * kotlin.math.cos(turn)
+            val drawn = androidx.compose.ui.geometry.Rect(stamp.center.x - halfWidth, stamp.center.y - halfHeight,
+                stamp.center.x + halfWidth + shadow, stamp.center.y + halfHeight + shadow)
+            // Under the singularity's 0.27 R ring and inside the hero, the viewport and clear of the menu, facts and form name.
+            val hero = scene.heroCenter
+            val radius = scene.heroRadius
+            assertTrue(stamp.top >= hero.y + 0.27f * radius, "$label sits on the singularity at $where")
+            assertTrue(drawn.left >= hero.x - radius && drawn.right <= hero.x + radius && drawn.bottom <= hero.y + radius,
+                "$label $drawn leaves the hero (${hero.x - radius}..${hero.x + radius}, bottom ${hero.y + radius}) at $where")
+            assertTrue(drawn.left >= 0f && drawn.top >= 0f && drawn.right <= width && drawn.bottom <= height, "$label leaves $where")
+            HomeMenuTargets.forEach { target ->
+                assertFalse(drawn.overlaps(layout.bounds(target)), "$label covers $target at $where")
+            }
+            scene.facts?.let { facts -> assertFalse(drawn.overlaps(facts), "$label covers the facts card at $where") }
+            val name = androidx.compose.ui.geometry.Rect(scene.formNameLeft, scene.formNameCenterY - scene.formNameSize * 0.65f,
+                homeFormNameRight(layout, 1f), scene.formNameCenterY + scene.formNameSize * 0.65f)
+            assertFalse(drawn.overlaps(name), "$label covers the form name at $where")
+            // One whole line: the stamp never wraps or cuts its label.
+            val layoutText = measureKkText(text, label, text.typography.condStyle(size, trackingEm = 0.06f, lineHeightEm = 1f), uppercase = true)
+            assertWhole(layoutText, "$label at $where")
+            assertTrue(layoutText.size.width < stamp.width, "$label is wider than its stamp at $where")
+        }
+    }
+
+    @Test
+    fun theBabyModeTooltipShowsWholeAtEveryTextSize() = forMeasurers { text, language, scale ->
+        // Russian at 175 % takes all twelve lines the slip allows.
+        val info = language.text(kinetickk.flow.session.interaction.localization.SessionRedesignText.BABY_MODE_INFO)
+        val body = kinetickk.foundation.design.measureKkTooltip(text, info, 1f)
+        assertFalse(body.multiParagraph.didExceedMaxLines || body.hasVisualOverflow, "the Baby mode tooltip is cut: ${language.code} @$scale")
     }
 
     @Test

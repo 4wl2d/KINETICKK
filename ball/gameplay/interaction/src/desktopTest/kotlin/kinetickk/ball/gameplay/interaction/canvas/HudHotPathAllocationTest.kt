@@ -13,9 +13,13 @@ import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import kinetickk.ball.content.api.EquippedRelic
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.content.api.SignalKind
+import kinetickk.ball.content.api.WorldEventKind
+import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.SkillId
+import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.gameplay.interaction.fx.BuildNoticeKind
 import kinetickk.ball.gameplay.interaction.fx.BuildNotificationProjection
 import kinetickk.ball.gameplay.nucleus.render.ApexProjection
@@ -26,12 +30,14 @@ import kinetickk.ball.gameplay.nucleus.render.SkillSlotProjection
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kinetickk.ball.gameplay.nucleus.render.EventSignalProjection
+import kinetickk.ball.gameplay.nucleus.render.WorldEventProjection
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupType
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.TotemProjection
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
@@ -68,14 +74,29 @@ class HudHotPathAllocationTest {
                     EnemyProjection(6, EnemyType.DRIFTER, 700f, 900f, 0f, 0f, 40f, 40f, 17f, 0f, 0f, 0f, 0f, 700f, 900f, false),
                     EnemyProjection(7, EnemyType.SWARMLING, -50f, 1_900f, 0f, 0f, 9f, 9f, 10f, 0f, 0f, 0f, 0f, -50f, 1_900f, false))
                     .toImmutableList(),
-                "pointsOfInterest" to listOf(PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,
-                    true, 12f, 0, 0.4f, immutableListOf(), 0f, 0f)).toImmutableList(),
+                "sites" to listOf(SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,
+                    true, 12f, -1, 0.4f, immutableListOf(), 0f, 0f)).toImmutableList(),
+                "trial" to siteTrial(SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,
+                    true, 12f, -1, 0.4f, immutableListOf(), 0f, 0f)),
                 // The minimap: every obstacle kind, a Key and a Relic past its rim, the totem, an Elite and ordinary enemies.
                 "obstacles" to immutableListOf(
                     ObstacleProjection(1L, ObstacleKind.ASTEROID, 600f, 300f, 120f, 3),
                     ObstacleProjection(2L, ObstacleKind.UNSTABLE, -900f, 400f, 90f, 8),
                     ObstacleProjection(3L, ObstacleKind.BUMPER, 200f, -700f, 34f, 1),
                     ObstacleProjection(4L, ObstacleKind.ASTEROID, 9_000f, 0f, 120f, 5),
+                    ObstacleProjection(5L, ObstacleKind.GRAVITY_WELL, -300f, -400f, 34f, 6),
+                    ObstacleProjection(6L, ObstacleKind.GRAVITY_WELL, 700f, -200f, 34f, 9, repels = true),
+                    // A gate and two vents whose eruptions come and go over the measured frames.
+                    ObstacleProjection(7L, ObstacleKind.ACCEL_GATE, -600f, -100f, 100f, 9_000),
+                    ObstacleProjection(8L, ObstacleKind.THERMAL_VENT, 400f, 600f, 90f, 4),
+                    ObstacleProjection(9L, ObstacleKind.THERMAL_VENT, -200f, 900f, 70f, 12),
+                    // A crystal, a dormant mine and an armed one ringing its blast.
+                    ObstacleProjection(10L, ObstacleKind.CRYSTAL, 900f, -600f, 80f, 14),
+                    ObstacleProjection(11L, ObstacleKind.DERELICT_MINE, -800f, -700f, 60f, 15),
+                    ObstacleProjection(12L, ObstacleKind.DERELICT_MINE, 100f, 1_200f, 50f, 16, fuseAt = 1_000f),
+                    // Two phase shards whose cycles turn them solid and ghost over the measured frames.
+                    ObstacleProjection(13L, ObstacleKind.PHASE_SHARD, -1_000f, 300f, 80f, 17),
+                    ObstacleProjection(14L, ObstacleKind.PHASE_SHARD, 1_100f, 500f, 60f, 18),
                 ),
                 "pickups" to immutableListOf(
                     PickupProjection(PickupType.KEY, 300f, 300f, 0f, 0f, 20f, 300f, 300f),
@@ -98,14 +119,16 @@ class HudHotPathAllocationTest {
             // integrity (hit ghost + split channels), chain and orbit progress. Models are built up
             // front so the measured frames only draw.
             val frames = List(FRAMES) { frame ->
+                val orbit = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,
+                    true, 12f, -1, frame / FRAMES.toFloat(), immutableListOf(), 0f, 0f)
                 model.with(
                     "velocityX" to 300f + frame * 7.3f,
                     "polarityStability" to 0.24f - frame * 0.0005f,
                     "elapsed" to frame * GameplayRenderModel.FIXED_STEP,
                     "hp" to 36f - frame * 0.05f,
                     "combo" to 14 + frame,
-                    "pointsOfInterest" to listOf(PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,
-                        true, 12f, 0, frame / FRAMES.toFloat(), immutableListOf(), 0f, 0f)).toImmutableList(),
+                    "sites" to listOf(orbit).toImmutableList(),
+                    "trial" to siteTrial(orbit),
                 )
             }
             val bitmap = ImageBitmap(width, height)
@@ -279,6 +302,367 @@ class HudHotPathAllocationTest {
             val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
             val perFrame = (hudBytes - emptyBytes) / FRAMES
             assertTrue(perFrame <= 64, "chain + polarity frame at x$textScale allocates $perFrame bytes above an empty frame")
+        }
+    }
+
+    /**
+     * The trial panel of every family (the anomalies, the gate race, the five challenges, the bounty and the sigil
+     * duel) with its rules open: once warm, frames whose race clock ticks every frame, whose earned seconds and duel
+     * integrity change every frame allocate nothing (a counted goal changes rarely and keeps its line).
+     */
+    @Test
+    fun theTrialPanelOfEveryFamilyAllocatesNothingOnSteadyFrames() {
+        listOf(1_440 to 810, 390 to 844).forEach { (width, height) ->
+            val base = hudTestModel(width.toFloat(), height.toFloat())
+            val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
+                AppLanguage.Russian)
+            val bitmap = ImageBitmap(width, height)
+            val canvas = Canvas(bitmap)
+            val scope = CanvasDrawScope()
+            val size = Size(width.toFloat(), height.toFloat())
+            val density = Density(1f)
+            val clear: DrawScope.() -> Unit = { drawRect(Kk.Ink) }
+            fun empty() = scope.draw(density, LayoutDirection.Ltr, canvas, size, clear)
+            trialSites().forEach { site ->
+                val counted = siteTrial(site).value == kinetickk.ball.gameplay.nucleus.render.TrialValue.COUNT
+                val frames = List(FRAMES) { frame ->
+                    val running = site.copy(
+                        clock = site.clock + frame * GameplayRenderModel.FIXED_STEP,
+                        progress = if (counted) site.progress else (site.progress + frame * 0.001f).coerceAtMost(1f),
+                    )
+                    base.with("elapsed" to frame * GameplayRenderModel.FIXED_STEP).withSites(running)
+                }
+                val memory = HudPresentationMemory()
+                var current = 0
+                val block: DrawScope.() -> Unit = {
+                    val model = frames[current % FRAMES]
+                    drawHud(model, measurer, 10f + (current % FRAMES) * 0.0001f, 0f, 0f, memory, trialInfoOpen = true)
+                    drawTrialTooltip(model, measurer, open = true)
+                }
+                fun hud(frame: Int) {
+                    current = frame
+                    scope.draw(density, LayoutDirection.Ltr, canvas, size, block)
+                }
+                repeat(FRAMES) { empty(); hud(it) }
+                kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.TRIAL_PANEL), "${site.kind}: no trial panel")
+                val emptyBytes = allocated { repeat(FRAMES) { empty() } }
+                val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
+                val perFrame = (hudBytes - emptyBytes) / FRAMES
+                assertTrue(perFrame <= 64, "${site.kind} trial panel at $width x $height allocates $perFrame bytes above an empty frame")
+            }
+        }
+    }
+
+    /**
+     * A Baby mode run's HUD at tier 0 (the pacifier plate alone in the Rebirth slot) and at tier 3 (the pacifier, then
+     * the tier plate and its sigils), with critical integrity, low polarity and the cursor sweeping from contact range
+     * (the soft solid tether) out past it (the soft pulsing tether): steady frames allocate nothing.
+     */
+    @Test
+    fun babyModeHudFramesAllocateNothing() {
+        listOf(1_440 to 810, 844 to 390, 390 to 844).forEach { (width, height) ->
+            for (tier in listOf(0, 3)) {
+                val base = hudTestModel(width.toFloat(), height.toFloat()).with(*levelOverrides(), "easyMode" to true, "rebirthLevel" to tier,
+                    "coreX" to 0f, "coreY" to 0f, "cameraX" to 0f, "cameraY" to 0f, "hp" to 30f, "maxHp" to 180f, "polarityStability" to 0.2f)
+                val frames = List(FRAMES) { frame ->
+                    base.with("pointerX" to width * 0.5f + 40f + (frame % 100) * 1.6f, "pointerY" to height * 0.5f - 30f,
+                        "velocityX" to 300f + frame * 7.3f, "elapsed" to frame * GameplayRenderModel.FIXED_STEP)
+                }
+                val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
+                    AppLanguage.Russian)
+                val bitmap = ImageBitmap(width, height)
+                val canvas = Canvas(bitmap)
+                val scope = CanvasDrawScope()
+                val size = Size(width.toFloat(), height.toFloat())
+                val density = Density(1f)
+                val clear: DrawScope.() -> Unit = { drawRect(Kk.Ink) }
+                fun empty() = scope.draw(density, LayoutDirection.Ltr, canvas, size, clear)
+                val memory = HudPresentationMemory()
+                var current = 0
+                val block: DrawScope.() -> Unit = {
+                    drawHud(frames[current % FRAMES], measurer, 10f + (current % FRAMES) * 0.002f, 0f, 0f, memory)
+                }
+                fun hud(frame: Int) {
+                    current = frame
+                    scope.draw(density, LayoutDirection.Ltr, canvas, size, block)
+                }
+                repeat(FRAMES) { empty(); hud(it) }
+                kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.REBIRTH), "$width x $height tier $tier: no Baby mode plate")
+                val emptyBytes = allocated { repeat(FRAMES) { empty() } }
+                val hudBytes = List(STEADY_CYCLES) { allocated { repeat(FRAMES) { hud(it) } } }.min()
+                val perFrame = (hudBytes - emptyBytes) / FRAMES
+                assertTrue(perFrame <= 64, "Baby mode HUD at $width x $height tier $tier allocates $perFrame bytes above an empty frame")
+            }
+        }
+    }
+
+    /**
+     * A tracked mini-boss (the Throne: narrow block, three parts) or secret boss (the Antecedent: wide block, four parts,
+     * its weakness or anomaly glyph, the bone ring on its minimap pin) beside the other boss ranks: once warm, frames whose
+     * integrity falls every frame and which cross a phase gate and shift allocate nothing.
+     */
+    @Test
+    fun aTrackedMiniOrSecretBossAllocatesNothingOnSteadyFrames() {
+        listOf(1_440 to 810, 844 to 390, 390 to 844).forEach { (width, height) ->
+            val base = hudTestModel(width.toFloat(), height.toFloat())
+            val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f, AppLanguage.Russian)
+            val bitmap = ImageBitmap(width, height)
+            val canvas = Canvas(bitmap)
+            val scope = CanvasDrawScope()
+            val size = Size(width.toFloat(), height.toFloat())
+            val density = Density(1f)
+            val clear: DrawScope.() -> Unit = { drawRect(Kk.Ink) }
+            fun empty() = scope.draw(density, LayoutDirection.Ltr, canvas, size, clear)
+            for (type in listOf(EnemyType.THRONE, EnemyType.ANTECEDENT)) for (aspected in listOf(false, true)) {
+                val frames = List(FRAMES) { frame ->
+                    // From 70 % down across the two-thirds gate, shifting for the frames after it, then into the next phase.
+                    val hp = 700f - frame * 0.25f
+                    val phase = if (hp > 2_000f / 3f) 0 else 1
+                    val shifting = phase == 1 && frame % 200 < 120
+                    val aspect = if (aspected) kinetickk.ball.content.api.StatusElement.THERMAL.ordinal else kinetickk.ball.gameplay.nucleus.render.EnemyAffinity.NONE
+                    val weakness = if (aspected) kinetickk.ball.content.api.StatusElement.CRYO.ordinal else kinetickk.ball.gameplay.nucleus.render.EnemyAffinity.NONE
+                    val affinity = kinetickk.ball.gameplay.nucleus.render.EnemyAffinity.encode(aspect, false, weakness, armored = true, fragile = false,
+                        shifting = shifting, phase = phase)
+                    base.with(
+                        "elapsed" to frame * GameplayRenderModel.FIXED_STEP,
+                        "enemies" to listOf(
+                            EnemyProjection(3, type, base.coreX + 600f, base.coreY - 300f, 0f, 0f, hp, 1_000f, 48f, 0f, 0f, 0f, 0f,
+                                base.coreX + 600f, base.coreY - 300f, false, affinityBits = affinity),
+                            EnemyProjection(4, EnemyType.CARTOGRAPHER, base.coreX - 900f, base.coreY + 400f, 0f, 0f, 900f, 1_000f, 40f, 0f, 0f,
+                                0f, 0f, base.coreX - 900f, base.coreY + 400f, false),
+                            EnemyProjection(5, EnemyType.WARDEN_PRIME, base.coreX + 9_000f, base.coreY, 0f, 0f, 900f, 1_000f, 40f, 0f, 0f,
+                                0f, 0f, base.coreX + 9_000f, base.coreY, false),
+                            EnemyProjection(6, EnemyType.ELITE, base.coreX - 500f, base.coreY - 300f, 0f, 0f, 400f, 1_000f, 30f, 0f, 0f, 0f, 0f,
+                                base.coreX - 500f, base.coreY - 300f, false, affinityBits = bossAffinity(EnemyType.ELITE)),
+                            EnemyProjection(7, EnemyType.COMET, base.coreX + 300f, base.coreY + 200f, 0f, 0f, 40f, 40f, 17f, 0f, 0f, 0f, 0f,
+                                base.coreX + 300f, base.coreY + 200f, false),
+                        ).toImmutableList(),
+                        "minimapRange" to 2_200f,
+                    )
+                }
+                val memory = HudPresentationMemory()
+                var current = 0
+                val block: DrawScope.() -> Unit = {
+                    drawHud(frames[current % FRAMES], measurer, 10f + (current % FRAMES) * 0.0001f, 0f, 0f, memory)
+                }
+                fun hud(frame: Int) {
+                    current = frame
+                    scope.draw(density, LayoutDirection.Ltr, canvas, size, block)
+                }
+                repeat(FRAMES) { empty(); hud(it) }
+                kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.BOSS), "$type: no boss block")
+                val emptyBytes = allocated { repeat(FRAMES) { empty() } }
+                val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
+                val perFrame = (hudBytes - emptyBytes) / FRAMES
+                assertTrue(perFrame <= 64, "$type (aspect $aspected) at $width x $height allocates $perFrame bytes above an empty frame")
+            }
+        }
+    }
+
+    /**
+     * Every world event's edge band over its whole life (the telegraph ramp, the steady glow, the fade at its end; the
+     * gravity storm's downwind edges with its wind turning a full circle and more) with a live signal pinned on the
+     * minimap's rim: steady frames allocate nothing.
+     */
+    @Test
+    fun everyWorldEventEdgeBandAndALiveSignalOnTheMinimapAllocateNothing() {
+        listOf(1_440 to 810, 844 to 390, 390 to 844).forEach { (width, height) ->
+            val base = hudTestModel(width.toFloat(), height.toFloat()).with(*levelOverrides(), "coreX" to 0f, "coreY" to 0f,
+                "cameraX" to 0f, "cameraY" to 0f, "minimapRange" to 2_200f,
+                "eventSignals" to immutableListOf(EventSignalProjection(9, SignalKind.GAMBLE, 2_900f, -1_100f, 400f)))
+            val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
+                AppLanguage.Russian)
+            val bitmap = ImageBitmap(width, height)
+            val canvas = Canvas(bitmap)
+            val scope = CanvasDrawScope()
+            val size = Size(width.toFloat(), height.toFloat())
+            val density = Density(1f)
+            val clear: DrawScope.() -> Unit = { drawRect(Kk.Ink) }
+            fun empty() = scope.draw(density, LayoutDirection.Ltr, canvas, size, clear)
+            for (kind in WorldEventKind.entries) {
+                val event = WorldEventProjection(kind, telegraphAt = 100f, startsAt = 103f, endsAt = 133f)
+                // From a second into the telegraph to a second before the end.
+                val frames = List(FRAMES) { frame ->
+                    base.with("elapsed" to 101f + frame * (31f / FRAMES),
+                        "worldEvent" to event.copy(windAngle = frame * 0.02f, windStrength = (frame / 100f).coerceAtMost(1f)))
+                }
+                val memory = HudPresentationMemory()
+                var current = 0
+                val block: DrawScope.() -> Unit = {
+                    drawHud(frames[current % FRAMES], measurer, 10f + (current % FRAMES) * 0.002f, 0f, 0f, memory)
+                }
+                fun hud(frame: Int) {
+                    current = frame
+                    scope.draw(density, LayoutDirection.Ltr, canvas, size, block)
+                }
+                repeat(FRAMES) { empty(); hud(it) }
+                val emptyBytes = allocated { repeat(FRAMES) { empty() } }
+                val hudBytes = List(STEADY_CYCLES) { allocated { repeat(FRAMES) { hud(it) } } }.min()
+                val perFrame = (hudBytes - emptyBytes) / FRAMES
+                assertTrue(perFrame <= 64, "$kind edge band at $width x $height allocates $perFrame bytes above an empty frame")
+            }
+        }
+    }
+
+    /**
+     * The minimap with structures: a sealed furnace's walls and threat doors around the Core, a Vault's locked doors and
+     * an entrance pinned to the rim, the Core drifting so every line moves each frame: once warm, nothing is allocated.
+     */
+    @Test
+    fun minimapStructuresAllocateNothingOnSteadyFrames() {
+        listOf(1_440 to 810, 390 to 844).forEach { (width, height) ->
+            val base = hudTestModel(width.toFloat(), height.toFloat()).with("minimapRange" to 2_400f)
+            val templates = base.content.structures
+            val foundry = StructureFixture(templates.template(StructureTemplateId.FOUNDRY), base.coreX - 900f, base.coreY,
+                clearedRooms = 0b011, engagedRoom = 2)
+            val vault = StructureFixture(templates.template(StructureTemplateId.VAULT), base.coreX + 1_800f, base.coreY - 600f, id = 9L shl 8)
+            val far = StructureFixture(templates.template(StructureTemplateId.LABYRINTH), base.coreX + 9_000f, base.coreY + 4_000f,
+                id = 10L shl 8)
+            val structures = structureProjection(foundry, vault, signals = listOf(vault, far), dungeon = foundry, garrisonAlive = 4,
+                garrisonTotal = 6)
+            val frames = List(FRAMES) { frame ->
+                base.with("structures" to structures, "elapsed" to frame * GameplayRenderModel.FIXED_STEP,
+                    "coreX" to base.coreX + frame * 0.37f, "coreY" to base.coreY - frame * 0.21f)
+            }
+            val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
+                AppLanguage.Russian)
+            val bitmap = ImageBitmap(width, height)
+            val canvas = Canvas(bitmap)
+            val scope = CanvasDrawScope()
+            val size = Size(width.toFloat(), height.toFloat())
+            val memory = HudPresentationMemory()
+            fun empty() = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) { drawRect(Kk.Ink) }
+            fun hud(frame: Int) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) {
+                drawHud(frames[frame % FRAMES], measurer, 10f + frame * 0.0001f, 0f, 0f, memory)
+            }
+            repeat(FRAMES) { empty(); hud(it) }
+            kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.MINIMAP), "no minimap at $width x $height")
+            val emptyBytes = allocated { repeat(FRAMES) { empty() } }
+            val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
+            val perFrame = (hudBytes - emptyBytes) / FRAMES
+            assertTrue(perFrame <= 64, "Minimap structures at $width x $height allocate $perFrame bytes above an empty frame")
+        }
+    }
+
+    /**
+     * The dungeon panel of a station with two rooms clear and a third sealed (its cell pulsing, the reward row joined
+     * from the template's labels, the (!) open) and the vignette, the Core walking deeper into the footprint so the
+     * vignette's depth changes every frame: once warm, nothing is allocated.
+     */
+    @Test
+    fun aDungeonPanelAndItsVignetteAllocateNothingOnSteadyFrames() {
+        listOf(1_440 to 810, 844 to 390, 390 to 844).forEach { (width, height) ->
+            val base = hudTestModel(width.toFloat(), height.toFloat())
+            val template = base.content.structures.template(StructureTemplateId.DERELICT_STATION)
+            // The Core 60 u inside the footprint's east edge, walking in: the vignette fades in over the frames.
+            val station = StructureFixture(template, base.coreX + 60f - template.halfWidth, base.coreY, clearedRooms = 0b0011, engagedRoom = 2)
+            val held = base.withDungeon(station)
+            val frames = List(FRAMES) { frame ->
+                val x = base.coreX - frame * 0.5f
+                held.with("elapsed" to frame * GameplayRenderModel.FIXED_STEP, "coreX" to x, "previousCoreX" to x)
+            }
+            check(structureInteriorAmount(frames.first()) < structureInteriorAmount(frames.last())) { "the vignette deepens" }
+            val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
+                AppLanguage.Russian)
+            val bitmap = ImageBitmap(width, height)
+            val canvas = Canvas(bitmap)
+            val scope = CanvasDrawScope()
+            val size = Size(width.toFloat(), height.toFloat())
+            val memory = HudPresentationMemory()
+            fun empty() = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) { drawRect(Kk.Ink) }
+            fun hud(frame: Int) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) {
+                val model = frames[frame % FRAMES]
+                drawHud(model, measurer, 10f + frame * 0.0001f, 0f, 0f, memory, trialInfoOpen = true)
+                drawTrialTooltip(model, measurer, open = true)
+            }
+            repeat(FRAMES) { empty(); hud(it) }
+            kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.TRIAL_PANEL), "no dungeon panel at $width x $height")
+            val emptyBytes = allocated { repeat(FRAMES) { empty() } }
+            val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
+            val perFrame = (hudBytes - emptyBytes) / FRAMES
+            assertTrue(perFrame <= 64, "The dungeon panel and vignette at $width x $height allocate $perFrame bytes above an empty frame")
+        }
+    }
+
+    /**
+     * The minimap inside the Zenith: course and ambient rings, twenty-four embers around the Core and the exit rift pinned
+     * to the rim, the Core drifting so every mark moves each frame: once warm, nothing is allocated.
+     */
+    @Test
+    fun minimapDimensionMarksAllocateNothingOnSteadyFrames() {
+        listOf(1_440 to 810, 390 to 844).forEach { (width, height) ->
+            val base = hudTestModel(width.toFloat(), height.toFloat()).with("minimapRange" to 2_400f)
+            val embers = List(24) { index -> (300f + index * 40f) * kotlin.math.cos(index * 0.5f) to (300f + index * 40f) * kotlin.math.sin(index * 0.5f) }
+            val visit = dimensionVisit(WorldLayer.ZENITH, base.coreX, base.coreY, course = listOf(600f to 200f, -500f to -400f),
+                ambient = listOf(900f to -300f, -1_200f to 700f, 1_500f to 1_500f), embers = embers, exit = 6_000f to 1_000f, completed = false)
+            val frames = List(FRAMES) { frame ->
+                base.withDimension(visit).with("elapsed" to frame * GameplayRenderModel.FIXED_STEP,
+                    "coreX" to base.coreX + frame * 0.37f, "coreY" to base.coreY - frame * 0.21f)
+            }
+            val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
+                AppLanguage.Russian)
+            val bitmap = ImageBitmap(width, height)
+            val canvas = Canvas(bitmap)
+            val scope = CanvasDrawScope()
+            val size = Size(width.toFloat(), height.toFloat())
+            val memory = HudPresentationMemory()
+            fun empty() = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) { drawRect(Kk.Ink) }
+            fun hud(frame: Int) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) {
+                drawHud(frames[frame % FRAMES], measurer, 10f + frame * 0.0001f, 0f, 0f, memory)
+            }
+            repeat(FRAMES) { empty(); hud(it) }
+            kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.MINIMAP), "no minimap at $width x $height")
+            val emptyBytes = allocated { repeat(FRAMES) { empty() } }
+            val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
+            val perFrame = (hudBytes - emptyBytes) / FRAMES
+            assertTrue(perFrame <= 64, "Minimap dimension marks at $width x $height allocate $perFrame bytes above an empty frame")
+        }
+    }
+
+    /**
+     * A dimension visit's HUD in every layer: the plate (sigil, timer counting down, meter, pips), the objective's panel
+     * and the Nadir's pulsing heat edge, first with the shutter of the layer change playing over the measured frames, then
+     * over the visit's last ten seconds with the timer's pulse running through a whole beat: once warm, nothing is
+     * allocated (the timer's text changes once a second, outside the measured frames).
+     */
+    @Test
+    fun aDimensionVisitHudAllocatesNothingOnSteadyFrames() {
+        listOf(1_440 to 810, 844 to 390, 390 to 844).forEach { (width, height) ->
+            for (layer in listOf(WorldLayer.ZENITH, WorldLayer.NADIR, WorldLayer.ARCHIVE)) for (lastSeconds in listOf(false, true)) {
+                val base = hudTestModel(width.toFloat(), height.toFloat()).with("rebirthLevel" to 10, "keys" to 2, "runMatter" to 12_345L)
+                val visit = dimensionVisit(layer, base.coreX, base.coreY, progress = 4, scorching = if (layer == WorldLayer.NADIR) 1f else 0f)
+                val remaining = if (lastSeconds) 6.9f else 52.9f
+                // The shutter needs one run clock (a clock that went back would read as a new run and stop it); the pulse
+                // runs on the clock, through a whole beat over the frames.
+                val frames = List(FRAMES) { frame ->
+                    base.inVisit(visit.copy(remaining = remaining - frame * 0.0015f), bossShare = 0.3f + frame * 0.001f)
+                        .with("elapsed" to if (lastSeconds) 100f + frame * 0.0025f else 100.3f)
+                }
+                val realspace = base.with("elapsed" to 100f)
+                val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
+                    AppLanguage.Russian)
+                val bitmap = ImageBitmap(width, height)
+                val canvas = Canvas(bitmap)
+                val scope = CanvasDrawScope()
+                val size = Size(width.toFloat(), height.toFloat())
+                val memory = HudPresentationMemory()
+                // The layer changed on the first drawn frame: the shutter plays over every frame below.
+                memory.observe(realspace, 9.9f, BossTarget().select(realspace))
+                fun empty() = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) { drawRect(Kk.Ink) }
+                fun hud(frame: Int) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) {
+                    drawHud(frames[frame % FRAMES], measurer, 10f + frame * 0.0001f, 0f, 0f, memory, trialInfoOpen = true)
+                    drawTrialTooltip(frames[frame % FRAMES], measurer, open = true)
+                }
+                repeat(FRAMES) { empty(); hud(it) }
+                val where = "$layer ${remaining}s at $width x $height"
+                kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.REBIRTH), "$where: no plate")
+                kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.TRIAL_PANEL), "$where: no objective panel")
+                if (!lastSeconds) assertTrue(memory.dimensionShutter.progress(10f + FRAMES * 0.0001f) in 0f..1f, "$where: the shutter plays")
+                val emptyBytes = allocated { repeat(FRAMES) { empty() } }
+                val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
+                val perFrame = (hudBytes - emptyBytes) / FRAMES
+                assertTrue(perFrame <= 64, "A dimension visit's HUD ($where) allocates $perFrame bytes above an empty frame")
+            }
         }
     }
 

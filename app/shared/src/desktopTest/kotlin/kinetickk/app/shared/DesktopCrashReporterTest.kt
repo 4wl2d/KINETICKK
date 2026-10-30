@@ -7,6 +7,7 @@ import java.io.ByteArrayOutputStream
 import java.io.PrintStream
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Instant
 import kotlin.concurrent.thread
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -105,6 +106,30 @@ class DesktopCrashReporterTest {
         val report = reporter.capture(IllegalStateException("original failure"), "main", Thread.currentThread())
         assertContains(Files.readString(report.parent.resolve("exception.txt")), "original failure")
         assertTrue(Files.isRegularFile(report))
+        reporter.close()
+    }
+
+    @Test fun checkpointRetainsInputTimestampsTailOrderAndMessageBounds() = withRoot { root ->
+        val reporter = DesktopCrashReporter(root, PrintStream(ByteArrayOutputStream()))
+        val before = Instant.now()
+        repeat(520) { reporter.event("frame", "input-$it", highFrequency = true) }
+        reporter.event("bounded", "x".repeat(4097))
+        val after = Instant.now()
+        reporter.checkpoint()
+
+        val inputs = Files.readAllLines(reporter.session.resolve("recent-inputs.txt"))
+        assertEquals((8 until 520).map { "input-$it" }, inputs.map { it.substringAfter(" [frame] ") })
+        for (line in inputs) {
+            val recorded = Instant.parse(line.substringBefore(" [frame] "))
+            assertTrue(recorded >= before && recorded <= after, "Must retain the event time, not checkpoint time")
+        }
+        val bounded = Files.readAllLines(reporter.session.resolve("events.txt")).last()
+        assertEquals("x".repeat(4096), bounded.substringAfter(" [bounded] "))
+        // A later snapshot appends the new event while the previously read immutable tail stays intact.
+        reporter.event("frame", "input-520", highFrequency = true)
+        reporter.checkpoint()
+        assertEquals("input-520", Files.readAllLines(reporter.session.resolve("recent-inputs.txt")).last().substringAfter(" [frame] "))
+        assertEquals("input-519", inputs.last().substringAfter(" [frame] "))
         reporter.close()
     }
 

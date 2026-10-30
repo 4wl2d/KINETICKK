@@ -11,7 +11,9 @@ import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.KINETICKK_CONTENT_VERSION
-import kinetickk.ball.content.api.PointOfInterestKind
+import kinetickk.ball.content.api.SiteFamily
+import kinetickk.ball.content.api.SiteKind
+import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicPolicy
@@ -33,9 +35,12 @@ import kinetickk.ball.gameplay.nucleus.render.ApexProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
-import kinetickk.ball.gameplay.nucleus.render.PointOfInterestProjection
+import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.SkillBarProjection
 import kinetickk.ball.gameplay.nucleus.render.SkillSlotProjection
+import kinetickk.ball.gameplay.nucleus.render.TrialSource
+import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
+import kinetickk.foundation.common.localization.text
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.PlayerProfile
@@ -47,6 +52,8 @@ import kotlin.math.floor
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class HudPresentationMemoryTest {
@@ -349,7 +356,7 @@ class HudPresentationMemoryTest {
         assertFalse(base.with("message" to "OVERHEAT", "messageTime" to 1f).showsMessage())
         assertFalse(base.with("message" to "POLARITY FIELD STRAIN", "messageTime" to 1f).showsMessage())
         assertFalse(base.with("message" to "KINETIC OVERDRIVE", "messageTime" to 1f).showsMessage())
-        val rules = base.content.pointsOfInterest.definition(PointOfInterestKind.SEALED_ANOMALY).instruction
+        val rules = base.content.sites.definition(SiteKind.SEALED_ANOMALY).instruction
         assertFalse(base.with("message" to rules, "messageTime" to 4f).showsMessage())
         assertTrue(base.with("message" to "ELITE SIGNAL", "messageTime" to 1f).showsMessage())
         assertFalse(base.with("message" to "ELITE SIGNAL", "messageTime" to 0f).showsMessage())
@@ -357,20 +364,75 @@ class HudPresentationMemoryTest {
 
     @Test
     fun trialProgressReadsAsValuesWithoutRuleText() {
-        val orbit = PointOfInterestProjection(PointOfInterestKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, 0, 0.65f,
+        val orbit = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, -1, 0.65f,
             immutableListOf(), 0f, 0f)
-        val model = base.with("pointsOfInterest" to listOf(orbit).toImmutableList())
-        assertEquals(orbit, model.activeTrial())
-        assertEquals("5.2 / 8.0 s", trialProgressText(model, orbit, AppLanguage.English))
-        assertEquals("5,2 / 8,0 с", trialProgressText(model, orbit, AppLanguage.Russian))
-        assertEquals(8, trialSegments(model, orbit))
-        val sealed = PointOfInterestProjection(PointOfInterestKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, 0, 2f / 3f,
+        val model = base.withSites(orbit)
+        val trial = assertNotNull(model.activeTrial())
+        assertEquals(SiteKind.COLLAPSING_ORBIT, trial.kind)
+        assertEquals("5.2 / 8.0 s", trialProgressText(trial, AppLanguage.English))
+        assertEquals("5,2 / 8,0 с", trialProgressText(trial, AppLanguage.Russian))
+        val sealed = SiteProjection(SiteKind.SEALED_ANOMALY, "Sealed anomaly", 0f, 0f, true, 12f, -1, 2f / 3f,
             immutableListOf(1, 2, 3), 0f, 0f)
-        assertEquals("2 / 3", trialProgressText(model, sealed, AppLanguage.English))
-        assertEquals(base.content.pointsOfInterest.definition(PointOfInterestKind.SEALED_ANOMALY).instruction,
-            model.trialRules(sealed, AppLanguage.English))
+        val vault = siteTrial(sealed, base.content.sites)
+        assertEquals("2 / 3", trialProgressText(vault, AppLanguage.English))
+        assertEquals(base.content.sites.definition(SiteKind.SEALED_ANOMALY).instruction,
+            model.trialRules(vault, AppLanguage.English))
+        assertEquals(base.content.sites.definition(SiteKind.SEALED_ANOMALY).instruction.localizedContent(AppLanguage.Russian),
+            model.trialRules(vault, AppLanguage.Russian), "the rules follow the language")
+        // No trial runs while the sites are only offered: the panel shows whatever engagement Gameplay reports.
         val inactive = orbit.copy(active = false)
-        assertEquals(null, base.with("pointsOfInterest" to listOf(inactive).toImmutableList()).activeTrial())
+        assertEquals(null, base.withSites(inactive).activeTrial())
+    }
+
+    @Test
+    fun everyFamilysPanelNamesItsTrialAndRewardWithoutNumeralsInItsLabels() {
+        val labels = trialSites().map { site ->
+            val trial = siteTrial(site, base.content.sites)
+            assertEquals(siteFamilyGlyph(site.kind.family), trialGlyph(trial), "${site.kind} glyph")
+            site.kind.family to trialLabel(trial)
+        }.toMap()
+        assertEquals(HudRedesignText.AnomalyTrial, labels[SiteFamily.ANOMALY])
+        assertEquals(HudRedesignText.RaceTrial, labels[SiteFamily.RACE])
+        assertEquals(HudRedesignText.ChallengeTrial, labels[SiteFamily.CHALLENGE])
+        assertEquals(HudRedesignText.BountyTrial, labels[SiteFamily.BOUNTY])
+        assertEquals(HudRedesignText.SigilTrial, labels[SiteFamily.SECRET])
+        // A race names the best medal its clock still allows, a duel its unknown or boss prize; never a numeral.
+        val race = siteTrial(trialSites().single { it.kind == SiteKind.GATE_RACE }, base.content.sites)
+        assertEquals(listOf(HudRedesignText.RewardNoMedal, HudRedesignText.RewardBronze, HudRedesignText.RewardSilver,
+            HudRedesignText.RewardGold), (0..3).map { trialRewardText(race.copy(medal = it)) })
+        assertEquals(HudRedesignText.RewardKeyAndRelic,
+            trialRewardText(siteTrial(trialSites().single { it.kind == SiteKind.BOUNTY_ARENA }, base.content.sites)))
+        assertEquals(HudRedesignText.RewardUnknown,
+            trialRewardText(siteTrial(trialSites().single { it.kind == SiteKind.FAR_SIGIL }, base.content.sites)))
+        assertEquals("3 / 7", trialProgressText(race.copy(done = 3f, required = 7f), AppLanguage.Russian))
+        assertEquals("", trialProgressText(siteTrial(trialSites().single { it.kind == SiteKind.BOUNTY_ARENA }), AppLanguage.English))
+        // A dungeon or a dimension objective shows its own source glyph whatever its family.
+        val dungeon = race.copy(source = TrialSource.STRUCTURE)
+        assertEquals(SiteGlyph.STRUCTURE, trialGlyph(dungeon))
+        assertEquals(SiteGlyph.DIMENSION, trialGlyph(race.copy(source = TrialSource.DIMENSION)))
+        listOf(AppLanguage.English, AppLanguage.Russian).forEach { language ->
+            labels.values.forEach { label -> assertTrue(language.text(label).none { it.isDigit() }, "$label in $language") }
+            // The family label above the name never repeats the name: the panel's two lines differ in each language.
+            trialSites().forEach { site ->
+                val trial = siteTrial(site, base.content.sites)
+                val label = language.text(trialLabel(trial))
+                val name = trial.title.localizedContent(language)
+                assertFalse(label.equals(name, ignoreCase = true), "${site.kind}'s label repeats its name \"$name\" in $language")
+            }
+        }
+    }
+
+    @Test
+    fun challengeRewardShowsItsMatterBonusAndRefreshesWhenTheAmountOrLanguageChanges() {
+        val trial = siteTrial(trialSites().single { it.kind == SiteKind.RAM_TRIAL }, base.content.sites)
+        assertEquals("Weapon + 15 Matter", siteTrialRewardLabel(trial, AppLanguage.English))
+        val english = siteTrialRewardLabel(trial, AppLanguage.English)
+        assertSame(english, siteTrialRewardLabel(trial, AppLanguage.English), "steady frames reuse their reward string")
+        assertEquals("Weapon + 20 Matter", siteTrialRewardLabel(trial.copy(rewardMatter = 20), AppLanguage.English))
+        assertEquals("Оружие + 15 Материя", siteTrialRewardLabel(trial, AppLanguage.Russian))
+        assertEquals("Weapon + 15 Matter", siteTrialRewardLabel(trial, AppLanguage.English))
+        val anomaly = siteTrial(trialSites().single { it.kind == SiteKind.RESONANT_CIRCUIT }, base.content.sites)
+        assertEquals("Weapon", siteTrialRewardLabel(anomaly, AppLanguage.English), "the bonus belongs only to its challenge")
     }
 
     private fun enemy(id: Int, type: EnemyType, integrity: Float) =

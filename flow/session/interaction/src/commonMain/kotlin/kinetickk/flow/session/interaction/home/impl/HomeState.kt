@@ -3,11 +3,13 @@
 
 package kinetickk.flow.session.interaction.home.impl
 
+import androidx.compose.ui.geometry.Rect
 import kinetickk.ball.content.api.CoreShapeDefinition
 import kinetickk.ball.content.api.MatrixNodeDefinition
 import kinetickk.ball.content.api.RebirthPolicySnapshot
 import kinetickk.ball.content.api.UpgradePolicy
 import kinetickk.ball.content.api.WeaponDefinition
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.ball.profile.api.MatrixProgress
 import kinetickk.ball.profile.api.isAscendant
@@ -15,6 +17,7 @@ import kinetickk.ball.profile.api.rank
 import kinetickk.flow.session.interaction.audio.SessionAudioCue
 import kinetickk.flow.session.interaction.home.api.HomeOutput
 import kinetickk.flow.session.interaction.home.api.HomeUiModel
+import kinetickk.flow.session.interaction.toggled
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 
@@ -26,6 +29,8 @@ internal sealed interface HomeAction {
     data object OpenCodex : HomeAction
     data object OpenSettings : HomeAction
     data object Quit : HomeAction
+    /** The Baby mode toggle: ask Session for [mode] for the next runs. */
+    data class SelectRunMode(val mode: RunMode) : HomeAction
 }
 
 internal sealed interface HomeEffect {
@@ -86,6 +91,7 @@ internal class HomeReducer(
         HomeAction.OpenCodex -> navigate(HomeOutput.OpenCodex)
         HomeAction.OpenSettings -> navigate(HomeOutput.OpenSettings)
         HomeAction.Quit -> navigate(HomeOutput.Quit)
+        is HomeAction.SelectRunMode -> navigate(HomeOutput.SelectRunMode(action.mode))
     }
 
     private fun navigate(output: HomeOutput): HomeReduction = HomeReduction(
@@ -104,10 +110,12 @@ internal data class HomeViewport(
     val quitAvailable: Boolean = false,
 )
 
-internal fun resolveHomePress(viewport: HomeViewport, x: Float, y: Float): HomeAction? {
+/** The action of a press at ([x], [y]); the Baby mode toggle asks for the mode other than the current [runMode]. */
+internal fun resolveHomePress(viewport: HomeViewport, x: Float, y: Float, runMode: RunMode = RunMode.STANDARD): HomeAction? {
     val layout = homeLayoutGeometry(viewport.width, viewport.height, viewport.density, viewport.quitAvailable)
     val quit = layout.quit?.touch
-    if (quit != null && x in quit.left..quit.right && y in quit.top..quit.bottom) return HomeAction.Quit
+    if (quit != null && quit.holds(x, y)) return HomeAction.Quit
+    if (layout.runModeToggle.touch.holds(x, y)) return HomeAction.SelectRunMode(runMode.toggled())
     val hit = layout
         .actions
         .firstOrNull { action ->
@@ -115,6 +123,12 @@ internal fun resolveHomePress(viewport: HomeViewport, x: Float, y: Float): HomeA
         }
     return hit?.target?.toHomeAction()
 }
+
+/** True for a press inside the Baby mode toggle's touch rect. */
+internal fun resolveHomeRunModePress(viewport: HomeViewport, x: Float, y: Float): Boolean =
+    homeLayoutGeometry(viewport.width, viewport.height, viewport.density, viewport.quitAvailable).runModeToggle.touch.holds(x, y)
+
+private fun Rect.holds(x: Float, y: Float): Boolean = x in left..right && y in top..bottom
 
 /** Resolves a press on a drawn (!) info button (its expanded touch rect), if any. */
 internal fun resolveHomeInfoPress(viewport: HomeViewport, x: Float, y: Float): HomeInfoTarget? =

@@ -150,7 +150,11 @@ internal fun MutableGameState.simulateStep(delta: Float) {
     // A slam can level up through a Data clause and open a choice: nothing else acts once it is open.
     if (phase != GamePhase.RUNNING) return
     updateCamera(delta)
-    updatePointsOfInterest(delta)
+    updateSites(delta)
+    updateStructures(delta)
+    updateDimension(delta)
+    if (phase != GamePhase.RUNNING) return
+    updateRunVariety(delta)
     updateWeapons(delta)
     updateEnemies(delta)
     if (phase != GamePhase.RUNNING) return
@@ -177,6 +181,9 @@ internal fun MutableGameState.simulateStep(delta: Float) {
         message = "THE ARCHITECT"
         messageTime = 3f
         projectiles.removeMatchingStable { projectile -> projectile.hostile }
+        // The Architect meets the Core in realspace, and no encounter survives into its fight.
+        forceRealspaceBeforeArchitect()
+        endAllEncounters(despawn = true)
         // The terminal boss has priority over the oldest ordinary enemy at the hard cap.
         if (enemies.size >= content.rebirth.maxActiveEnemies) enemies.removeAt(0)
         spawnEnemy(EnemyType.ARCHITECT)
@@ -472,28 +479,12 @@ internal fun MutableGameState.updateCore(delta: Float) {
         lastAimDirectionX = dx / distance
         lastAimDirectionY = dy / distance
     }
-    val directionX = dx / distance
-    val directionY = dy / distance
-    val overdriveMultiplier = if (overdriveTime > 0f) 1.3f else 1f
-    val pull = (CORE_BASE_PULL + distance * effectiveMagnetism()) * overdriveMultiplier
-    val brakeFactor = if (braking) 1.12f else 1f
     val currentSpeed = speed
-    val forwardX = if (currentSpeed > 1f) velocityX / currentSpeed else directionX
-    val forwardY = if (currentSpeed > 1f) velocityY / currentSpeed else directionY
-    val forwardPull = max(0f, (directionX * forwardX + directionY * forwardY) * pull)
-    // Exhaustion only weakens acceleration along existing momentum. Lateral steering,
-    // counter-thrust and the Brake damping remain available even at zero stability.
-    val suppressedPull = if (currentSpeed > 1f) forwardPull * (1f - tetherAuthority) else 0f
-    velocityX += (directionX * pull - forwardX * suppressedPull) * brakeFactor * delta
-    velocityY += (directionY * pull - forwardY * suppressedPull) * brakeFactor * delta
-    val perpetual = build.upside(RelicId.PERPETUAL_VECTOR)
+    val acceleration = steeringAcceleration(dx, dy, pointerX - screenWidth * 0.5f, pointerY - screenHeight * 0.5f, velocityX, velocityY)
+    velocityX += acceleration.x * delta
+    velocityY += acceleration.y * delta
     val brakeDamping = if (build.liability(RelicId.PERPETUAL_VECTOR)) -2.6f else -5.2f
-    var drag = if (perpetual) dragCoefficient * 0.15f else dragCoefficient
-    // Frictionless: Superconduct strips most of the drag (the Brake still damps as before).
-    if (frictionlessUntil > elapsed && hasVerb(ReactionId.SUPERCONDUCT)) {
-        drag *= reactionValue(ReactionId.SUPERCONDUCT, FRICTIONLESS_DRAG_VALUE)
-    }
-    val damping = exp((if (braking) brakeDamping else -drag) * delta)
+    val damping = exp((if (braking) brakeDamping else -steeringDrag()) * delta)
     velocityX *= damping
     velocityY *= damping
 
@@ -510,7 +501,10 @@ internal fun MutableGameState.updateCore(delta: Float) {
         velocityX = 0f
         velocityY = 0f
     }
+    val smoothedBeforeX = smoothedVelocityX
+    val smoothedBeforeY = smoothedVelocityY
     updatePolarityStability(delta)
+    updateStraightness(delta, smoothedBeforeX, smoothedBeforeY)
     if (braking && speed < currentSpeed) brakeShedSpeed = min(3_000f, brakeShedSpeed + (currentSpeed - speed))
 
     if (runGrace <= 0f && segmentCircleIntersects(
@@ -523,7 +517,7 @@ internal fun MutableGameState.updateCore(delta: Float) {
             MutableGameState.CURSOR_KILL_RADIUS,
         )
     ) {
-        endRun("SINGULARITY CONTACT")
+        if (easyMode) boopOffSingularity(targetX, targetY) else endRun("SINGULARITY CONTACT")
     }
     previousSingularityX = targetX
     previousSingularityY = targetY
@@ -602,9 +596,6 @@ internal fun MutableGameState.fireTurnEdge() {
     onCharacterTurn()
     onTurnForReactions()
 }
-
-/** Thrust toward the singularity that does not depend on its distance. */
-internal const val CORE_BASE_PULL: Float = 92f
 
 /** The camera closes this share of its gap to the Core per second (exponentially). */
 internal const val CAMERA_FOLLOW_RATE: Float = 7.5f

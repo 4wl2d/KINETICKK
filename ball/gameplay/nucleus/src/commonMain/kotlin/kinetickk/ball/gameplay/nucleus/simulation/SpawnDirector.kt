@@ -4,6 +4,8 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.EnemyDefinition
+import kinetickk.ball.content.api.EnemyHabitat
+import kinetickk.ball.content.api.PACK_HUNTERS_PACK_SIZE_BONUS
 import kinetickk.ball.content.api.RebirthMutator
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.model.Enemy
@@ -37,7 +39,7 @@ internal enum class SpawnDirectorPhase(val rate: Float, val minimumSeconds: Floa
 
 internal enum class SpawnEventKind { SINGLE, PACK, FLANK, SWARM, WALL, ENCIRCLE, AMBUSH }
 
-/** An ambush waits for the Core to hold this share of the obstacle damage-start speed. */
+/** An ambush waits for the Core to hold this share of the obstacle ricochet speed ([obstacleRicochetSpeed]). */
 internal const val AMBUSH_SPEED_FRACTION: Float = 0.75f
 internal const val AMBUSH_HOLD_SECONDS: Float = 1.5f
 internal const val AMBUSH_COOLDOWN_SECONDS: Float = 20f
@@ -52,6 +54,8 @@ internal const val DIRECTOR_CHECK_SECONDS: Float = 0.4f
 internal const val DIRECTOR_RATE_SCALE: Float = 1f
 /** An event never fires below this share of its planned size. */
 internal const val MINIMUM_EVENT_SHARE: Float = 0.6f
+/** Salt of the hashed kind a planned event takes when the habitat changed under it (no run stream is drawn). */
+internal const val EVENT_HABITAT_SALT: Long = 0x0E7E_4AB1_7A7E_0001L
 /** A Swarmling fills this share of an ordinary cap slot and of the spawn budget. */
 internal const val SWARMLING_CAP_COST: Float = 1f / 3f
 internal const val MAX_SPAWN_BUDGET: Float = 14f
@@ -79,8 +83,8 @@ internal fun MutableGameState.resetSpawnDirector() {
     pendingEventKind = -1
     pendingEventSize = 0
     pendingEventType = -1
-    recentEventTypes = 0
-    previousEventTypes = 0
+    recentEventTypes = 0L
+    previousEventTypes = 0L
     ambushReadyAt = AMBUSH_COOLDOWN_SECONDS
     encircleReadyAt = 0f
     wallReadyAt = 0f
@@ -91,12 +95,14 @@ internal fun MutableGameState.resetSpawnDirector() {
     lastSpawnEventPlanned = 0
     lastSpawnEventSpawned = 0
     heraldsSpawned = 0
+    secretBossMask = 0L
+    encounters = kinetickk.foundation.collections.immutableListOf()
 }
 
 /** Every hostile attack cadence: run growth of the attack rate, sped up by Overclocked Swarm. */
 internal fun MutableGameState.hostileAttackRate(): Float =
     content.tempo.attackRateMultiplier(threatElapsed) *
-        if (rebirthProfile.has(RebirthMutator.OVERCLOCKED_SWARM)) OVERCLOCKED_ATTACK_RATE else 1f
+        if (runMutatorActive(RebirthMutator.OVERCLOCKED_SWARM)) OVERCLOCKED_ATTACK_RATE else 1f
 
 /** Damage of one hostile projectile [enemy] fires now. */
 internal fun MutableGameState.shotDamage(enemy: Enemy): Float = hostileDamage(enemy, enemy.type.profile.shotDamage)
@@ -110,10 +116,11 @@ internal fun MutableGameState.spawnWave(delta: Float) {
         if (!architectEngaged(boss)) return
     }
     advanceDirectorPhase()
-    if (speed > obstacleDamageStartSpeed() * AMBUSH_SPEED_FRACTION) ambushSpeedSeconds += delta else ambushSpeedSeconds = 0f
+    if (speed > obstacleRicochetSpeed() * AMBUSH_SPEED_FRACTION) ambushSpeedSeconds += delta else ambushSpeedSeconds = 0f
     val phase = SpawnDirectorPhase.entries[directorPhase]
     // The Rebirth interval keeps the published minimum spawn interval as the fastest one-enemy cadence.
-    var rate = phase.rate * DIRECTOR_RATE_SCALE / rebirthProfile.spawnInterval(content.tempo.spawnIntervalSeconds(elapsed))
+    var rate = phase.rate * DIRECTOR_RATE_SCALE / rebirthProfile.spawnInterval(content.tempo.spawnIntervalSeconds(elapsed)) *
+        personalityRateScale(phase) * personalityBudgetScale() * layerSpawnRateMultiplier() * structureDirectorScale()
     if (bossFight) rate /= ARCHITECT_ADD_INTERVAL_SCALE
     spawnBudget = min(MAX_SPAWN_BUDGET, spawnBudget + delta * rate)
     spawnClock -= delta
@@ -123,19 +130,19 @@ internal fun MutableGameState.spawnWave(delta: Float) {
         tryFireSpawnEvent(bossFight)
     }
     if (bossFight) return
-    if (elapsed >= nextEliteAt) {
+    if (layerFeatures().elites && elapsed >= nextEliteAt) {
         nextEliteAt += rebirthProfile.eliteInterval(content.tempo.eliteIntervalSeconds(elapsed)) * jitter(0.75f, 1.25f)
         if (spawnScheduled(EnemyType.ELITE)) {
-            message = "ELITE SIGNAL"
+            message = eliteSignalNotice()
             messageTime = 1.4f
         }
     }
     val heraldDue = when (heraldsSpawned) {
-        0 -> rebirthProfile.has(RebirthMutator.HARDENED_ELITES) && elapsed >= FIRST_HERALD_AT_SECONDS
-        1 -> rebirthProfile.has(RebirthMutator.OVERCLOCKED_SWARM) && elapsed >= SECOND_HERALD_AT_SECONDS
+        0 -> runMutatorActive(RebirthMutator.HARDENED_ELITES) && elapsed >= FIRST_HERALD_AT_SECONDS
+        1 -> runMutatorActive(RebirthMutator.OVERCLOCKED_SWARM) && elapsed >= SECOND_HERALD_AT_SECONDS
         else -> false
     }
-    if (heraldDue && content.enemy(EnemyType.HERALD).minimumRebirth <= rebirthLevel) {
+    if (layerFeatures().heralds && heraldDue && content.enemy(EnemyType.HERALD).minimumRebirth <= rebirthLevel) {
         heraldsSpawned++
         if (enemies.size >= content.rebirth.maxActiveEnemies) evictOldestOrdinaryEnemy()
         if (spawnScheduled(EnemyType.HERALD)) {
@@ -155,7 +162,7 @@ internal fun MutableGameState.spawnOpeningPacks() {
     for (pack in 0 until packs) {
         val size = remaining / (packs - pack)
         remaining -= size
-        val type = pickEnemyType(weakOnly = true, excludeSwarmling = true)
+        val type = pickEnemyType(weakOnly = true, excludeSwarmling = true, personality = false)
         val angle = heading + sectorOffset()
         val distance = viewportEdgeDistance(angle) + 80f + spawnRandom.nextFloat() * 180f
         spawnCluster(type, size, coreX + cos(angle) * distance, coreY + sin(angle) * distance)
@@ -171,10 +178,12 @@ private fun MutableGameState.advanceDirectorPhase() {
     }
     directorPhase = next.ordinal
     directorPhaseUntil = elapsed + phaseDuration(next)
+    onDirectorPhaseStarted(next)
 }
 
 private fun MutableGameState.phaseDuration(phase: SpawnDirectorPhase): Float =
-    phase.minimumSeconds + spawnRandom.nextFloat() * (phase.maximumSeconds - phase.minimumSeconds)
+    (phase.minimumSeconds + spawnRandom.nextFloat() * (phase.maximumSeconds - phase.minimumSeconds)) *
+        personalityDurationScale(phase)
 
 private fun MutableGameState.jitter(minimum: Float, maximum: Float): Float =
     minimum + spawnRandom.nextFloat() * (maximum - minimum)
@@ -191,8 +200,30 @@ private fun MutableGameState.planAmbush() {
     pendingEventKind = SpawnEventKind.AMBUSH.ordinal
     pendingEventSize = rangeInclusive(3, 5)
     pendingEventType = type.ordinal
-    ambushReadyAt = elapsed + AMBUSH_COOLDOWN_SECONDS
+    ambushReadyAt = elapsed + AMBUSH_COOLDOWN_SECONDS * ambushCooldownScale()
 }
+
+/**
+ * Run when a room's seal or its end switches [ambientHabitat]: the planned event's fixed kind was picked under the
+ * habitat before, so one with no weight in the habitat now gives way to a kind of this habitat, Swarmlings left out,
+ * from a hash of the run seed and the event count. The event keeps its kind and size, and no stream is drawn.
+ */
+internal fun MutableGameState.keepPendingEventInHabitat() {
+    val typeIndex = pendingEventType
+    if (typeIndex < 0) return
+    val habitat = ambientHabitat()
+    if (content.enemy(EnemyType.entries[typeIndex]).weightIn(habitat) > 0f) return
+    val roll = hashUnit(runHash(runSeed, EVENT_HABITAT_SALT, (spawnEventCount.toLong() shl 8) or habitat.ordinal.toLong()))
+    pendingEventType = pickEnemyType(excludeSwarmling = true, unitRoll = roll).ordinal
+}
+
+/**
+ * The tier's extra pack members, raised to Pack Hunters' when the run carries that mutator without the tier (an omen
+ * adds it), so the mutator's larger packs come with its more frequent ones ([rollEventKind]).
+ */
+private fun MutableGameState.rebirthPackBonus(): Int =
+    if (runMutatorActive(RebirthMutator.PACK_HUNTERS)) max(rebirthProfile.packSizeBonus, PACK_HUNTERS_PACK_SIZE_BONUS)
+    else rebirthProfile.packSizeBonus
 
 /**
  * Chooses the next event's kind and size; SINGLE and PACK also fix their type, promoting Swarmlings to a
@@ -203,7 +234,7 @@ internal fun MutableGameState.planSpawnEvent() {
     var type = -1
     var size = when (kind) {
         SpawnEventKind.SINGLE -> 1
-        SpawnEventKind.PACK -> rangeInclusive(3, 6) + rebirthProfile.packSizeBonus
+        SpawnEventKind.PACK -> rangeInclusive(3, 6) + rebirthPackBonus() + personalityPackBonus()
         SpawnEventKind.FLANK -> 2 * rangeInclusive(2, 3)
         SpawnEventKind.SWARM -> rangeInclusive(6, 10)
         SpawnEventKind.WALL -> rangeInclusive(5, 7)
@@ -231,7 +262,7 @@ internal fun MutableGameState.planSpawnEvent() {
 private fun MutableGameState.rollEventKind(): SpawnEventKind {
     val phase = SpawnDirectorPhase.entries[directorPhase]
     val swarmReady = typeWeight(content.enemy(EnemyType.SWARMLING), weakOnly = false, recency = false) > 0f
-    val packWeight = if (rebirthProfile.has(RebirthMutator.PACK_HUNTERS)) 1.5f else 1f
+    val packWeight = if (runMutatorActive(RebirthMutator.PACK_HUNTERS)) 1.5f else 1f
     var single = 0f
     var pack = 0f
     var flank = 0f
@@ -258,6 +289,12 @@ private fun MutableGameState.rollEventKind(): SpawnEventKind {
             wall = if (elapsed >= wallReadyAt) 15f else 0f
         }
     }
+    single *= personalityEventScale(SpawnEventKind.SINGLE.ordinal)
+    pack *= personalityEventScale(SpawnEventKind.PACK.ordinal)
+    flank *= personalityEventScale(SpawnEventKind.FLANK.ordinal)
+    swarm *= personalityEventScale(SpawnEventKind.SWARM.ordinal)
+    wall *= personalityEventScale(SpawnEventKind.WALL.ordinal)
+    encircle *= personalityEventScale(SpawnEventKind.ENCIRCLE.ordinal)
     var roll = spawnRandom.nextFloat() * (single + pack + flank + swarm + wall + encircle)
     roll -= single
     if (roll < 0f) return SpawnEventKind.SINGLE
@@ -275,19 +312,23 @@ private fun MutableGameState.rollEventKind(): SpawnEventKind {
 /** Share of an ordinary cap slot [type] fills. */
 internal fun capCost(type: EnemyType): Float = if (type == EnemyType.SWARMLING) SWARMLING_CAP_COST else 1f
 
-/** The ordinary cap: Elites count, the Herald and the Architect do not; Swarmlings fill a third of a slot. */
+/**
+ * The ordinary cap: Elites count, the boss class (the Architect, mini and secret bosses) and encounter members do not;
+ * Swarmlings fill a third of a slot.
+ */
 internal fun MutableGameState.ordinaryCapLoad(): Float {
     var load = 0f
     for (index in enemies.indices) {
         val enemy = enemies[index]
-        if (enemy.dead || enemy.isBoss || enemy.isMiniBoss) continue
+        if (enemy.dead || enemy.isBossClass || enemy.ownerTag != 0L) continue
         load += capCost(enemy.type)
     }
     return load
 }
 
 internal fun MutableGameState.ordinaryEnemyCap(bossFight: Boolean = bossSpawned): Float {
-    val cap = min(content.rebirth.maxActiveEnemies, rebirthProfile.enemyCap(content.tempo.ordinaryEnemyCap(elapsed)))
+    val cap = (min(content.rebirth.maxActiveEnemies, rebirthProfile.enemyCap(content.tempo.ordinaryEnemyCap(elapsed))) *
+        layerOrdinaryCapMultiplier()).toInt()
     return if (bossFight) (cap * ARCHITECT_ADD_CAP_SHARE).toInt().toFloat() else cap.toFloat()
 }
 
@@ -323,8 +364,8 @@ private fun MutableGameState.tryFireSpawnEvent(bossFight: Boolean) {
     val typesUsed = spawnEvent(kind, count)
     spawnBudget = max(0f, spawnBudget - count * unit)
     when (kind) {
-        SpawnEventKind.WALL -> wallReadyAt = elapsed + WALL_COOLDOWN_SECONDS
-        SpawnEventKind.ENCIRCLE -> encircleReadyAt = elapsed + ENCIRCLE_COOLDOWN_SECONDS
+        SpawnEventKind.WALL -> wallReadyAt = elapsed + WALL_COOLDOWN_SECONDS * wallCooldownScale()
+        SpawnEventKind.ENCIRCLE -> encircleReadyAt = elapsed + ENCIRCLE_COOLDOWN_SECONDS * encircleCooldownScale()
         else -> Unit
     }
     previousEventTypes = recentEventTypes
@@ -342,7 +383,7 @@ private fun MutableGameState.tryFireSpawnEvent(bossFight: Boolean) {
  * Places [count] members of the pending event; returns the bit mask of the types it spawned. Only SWARM
  * spawns Swarmlings; the Warden cap holds for every member, not only for the pick.
  */
-private fun MutableGameState.spawnEvent(kind: SpawnEventKind, count: Int): Int {
+private fun MutableGameState.spawnEvent(kind: SpawnEventKind, count: Int): Long {
     val heading = movementAngle()
     val fixedType = if (pendingEventType >= 0) EnemyType.entries[pendingEventType] else null
     return when (kind) {
@@ -361,7 +402,7 @@ private fun MutableGameState.spawnEvent(kind: SpawnEventKind, count: Int): Int {
         }
         SpawnEventKind.FLANK -> {
             val first = (count + 1) / 2
-            var mask = 0
+            var mask = 0L
             for (side in 0 until 2) {
                 val type = pickEnemyType(excludeSwarmling = true)
                 val sign = if (side == 0) 1f else -1f
@@ -381,7 +422,7 @@ private fun MutableGameState.spawnEvent(kind: SpawnEventKind, count: Int): Int {
             val tangentX = -sin(heading)
             val tangentY = cos(heading)
             val spacing = 64f + type.profile.radius * 1.6f
-            var mask = 0
+            var mask = 0L
             for (index in 0 until count) {
                 val lateral = (index - (count - 1) * 0.5f) * spacing
                 val member = withinWardenCap(type)
@@ -404,15 +445,15 @@ private fun MutableGameState.spawnEvent(kind: SpawnEventKind, count: Int): Int {
     }
 }
 
-private fun typeBit(type: EnemyType): Int = 1 shl type.ordinal
+private fun typeBit(type: EnemyType): Long = 1L shl type.ordinal
 
 /**
  * Members on a golden-angle spiral around the anchor, so a pack reads as one group without overlapping;
  * members past the Warden cap take the Warden's stand-in. Returns the bit mask of the types spawned.
  */
-private fun MutableGameState.spawnCluster(type: EnemyType, count: Int, anchorX: Float, anchorY: Float): Int {
+private fun MutableGameState.spawnCluster(type: EnemyType, count: Int, anchorX: Float, anchorY: Float): Long {
     val spread = 14f + type.profile.radius * 1.4f
-    var mask = 0
+    var mask = 0L
     for (index in 0 until count) {
         val radius = spread * sqrt(index.toFloat())
         val angle = index * GOLDEN_ANGLE
@@ -443,6 +484,9 @@ private fun MutableGameState.spawnMember(type: EnemyType, x: Float, y: Float, be
         spawnY = if (outward > 1f) coreY + outwardY * scale else coreY
     }
     val radius = type.profile.radius
+    val ejected = structureEjected(spawnX, spawnY, radius)
+    spawnX = ejected.x
+    spawnY = ejected.y
     var attempts = 0
     while (attempts < SPAWN_NUDGE_ATTEMPTS && isSpawnPointBlocked(spawnX, spawnY, radius)) {
         val dx = spawnX - coreX
@@ -481,14 +525,14 @@ internal fun MutableGameState.sectorOffset(allowBehind: Boolean = true): Float {
  * [POI_SPAWN_CLEARANCE] of a point the player has not entered, so packs do not gather on its circle.
  */
 internal fun MutableGameState.clearOfAnomalies(angle: Float, distance: Float): Float {
-    if (pointsOfInterest.isEmpty()) return angle
+    if (sites.isEmpty()) return angle
     var candidate = angle
     for (attempt in 0 until 4) {
         val x = coreX + cos(candidate) * distance
         val y = coreY + sin(candidate) * distance
         var blocked = false
-        for (index in pointsOfInterest.indices) {
-            val point = pointsOfInterest[index]
+        for (index in sites.indices) {
+            val point = sites[index]
             if (point.active) continue
             val dx = x - point.x
             val dy = y - point.y
@@ -510,42 +554,64 @@ internal fun MutableGameState.viewportEdgeDistance(angle: Float): Float {
     return min(toVertical, toHorizontal)
 }
 
+/** The habitat ambient picks use: a structure interior, else the world layer's own. */
+internal fun MutableGameState.ambientHabitat(): EnemyHabitat =
+    if (structureInteriorActive()) EnemyHabitat.STRUCTURE else worldLayer.habitat
+
 /**
- * Ordinary spawn weight of [definition] now: zero before its time or Rebirth gate, ramping in over
- * [TYPE_RAMP_SECONDS], halved when the last two events used it.
+ * Ordinary spawn weight of [definition] in [habitat] at [threatSeconds]: zero before its time or Rebirth gate, ramping
+ * in over [TYPE_RAMP_SECONDS], halved when the last two events used it ([recency]), then scaled by the director
+ * personality and the onslaught theme ([personality]).
  */
-internal fun MutableGameState.typeWeight(definition: EnemyDefinition, weakOnly: Boolean, recency: Boolean = true): Float {
+internal fun MutableGameState.typeWeight(
+    definition: EnemyDefinition,
+    weakOnly: Boolean,
+    recency: Boolean = true,
+    habitat: EnemyHabitat = ambientHabitat(),
+    threatSeconds: Float = threatElapsed,
+    personality: Boolean = true,
+): Float {
     if (definition.isScheduled || definition.minimumRebirth > rebirthLevel) return 0f
     if (weakOnly && definition.threat > 2) return 0f
     val type = definition.type
     val hunterShift = if (
-        rebirthProfile.has(RebirthMutator.HUNTER_PROTOCOL) && (type == EnemyType.SNIPER || type == EnemyType.LANCER)
+        runMutatorActive(RebirthMutator.HUNTER_PROTOCOL) && (type == EnemyType.SNIPER || type == EnemyType.LANCER)
     ) HUNTER_PROTOCOL_GATE_SHIFT_SECONDS else 0f
     val gate = max(0f, definition.timeGateSeconds - hunterShift)
-    val threat = threatElapsed
+    val threat = threatSeconds
     if (threat < gate) return 0f
     val ramp = clamp((threat - gate) / TYPE_RAMP_SECONDS, MINIMUM_TYPE_RAMP, 1f)
-    var weight = definition.baseWeight(threat) * ramp
-    if (recency && (recentEventTypes or previousEventTypes) and typeBit(type) != 0) weight *= 0.5f
+    var weight = definition.baseWeight(threat, habitat) * ramp
+    if (weight <= 0f) return 0f
+    if (recency && ((recentEventTypes or previousEventTypes) and typeBit(type)) != 0L) weight *= 0.5f
+    if (personality) weight *= personalityTypeMultiplier(type) * surgeThemeMultiplier(type)
     return weight
 }
 
-/** Weighted type pick over the eligible roster; Wardens past their cap become Weavers. */
-internal fun MutableGameState.pickEnemyType(weakOnly: Boolean = false, excludeSwarmling: Boolean = false): EnemyType {
+/**
+ * Weighted type pick over the eligible roster; Wardens past their cap become Weavers. The roll is a spawn-stream draw
+ * unless the caller hands one in [0, 1) as [unitRoll].
+ */
+internal fun MutableGameState.pickEnemyType(
+    weakOnly: Boolean = false,
+    excludeSwarmling: Boolean = false,
+    personality: Boolean = true,
+    unitRoll: Float = Float.NaN,
+): EnemyType {
     val roster = content.enemies
     var total = 0f
     for (index in roster.indices) {
         val definition = roster[index]
         if (excludeSwarmling && definition.type == EnemyType.SWARMLING) continue
-        total += typeWeight(definition, weakOnly)
+        total += typeWeight(definition, weakOnly, personality = personality)
     }
     if (total <= 0f) return EnemyType.DRIFTER
-    var roll = spawnRandom.nextFloat() * total
+    var roll = (if (unitRoll.isNaN()) spawnRandom.nextFloat() else unitRoll) * total
     var picked = EnemyType.DRIFTER
     for (index in roster.indices) {
         val definition = roster[index]
         if (excludeSwarmling && definition.type == EnemyType.SWARMLING) continue
-        val weight = typeWeight(definition, weakOnly)
+        val weight = typeWeight(definition, weakOnly, personality = personality)
         if (weight <= 0f) continue
         picked = definition.type
         roll -= weight
@@ -583,14 +649,13 @@ internal fun MutableGameState.spawnScheduled(type: EnemyType): Boolean {
 }
 
 /**
- * The terminal and mini-bosses take priority over the oldest ordinary enemy at the hard cap; an active
- * trial's defenders stay, so the trial can still be completed.
+ * The terminal and mini-bosses take priority over the oldest ordinary enemy at the hard cap; place-bound enemies (an
+ * encounter's members, an active trial's defenders) stay, so the engagement can still be completed.
  */
 internal fun MutableGameState.evictOldestOrdinaryEnemy() {
-    val activeDefenders = pointsOfInterest.singleOrNull()?.takeIf { it.active }?.defenderIds
     for (index in enemies.indices) {
         val enemy = enemies[index]
-        if (enemy.isBoss || enemy.isMiniBoss || enemy.isElite || activeDefenders?.contains(enemy.id) == true) continue
+        if (enemy.isEliteClass || isPlaceBound(enemy)) continue
         enemies.removeAt(index)
         return
     }
@@ -618,7 +683,7 @@ internal fun MutableGameState.spawnPendingEscorts() {
 }
 
 /**
- * The [index]th eligible ordinary type sharing [aspect] without immunity, in roster order. An aspect no
+ * The [index]th eligible escortable ordinary type sharing [aspect] without immunity, in roster order. An aspect no
  * ordinary type carries takes its eligible [aspectStandIn]; Drifters otherwise.
  */
 internal fun MutableGameState.aspectEscortType(aspect: Int, index: Int): EnemyType {
@@ -627,7 +692,7 @@ internal fun MutableGameState.aspectEscortType(aspect: Int, index: Int): EnemyTy
     for (rosterIndex in roster.indices) {
         val definition = roster[rosterIndex]
         val profile = definition.type.profile
-        if (profile.aspect != aspect || aspect < 0 || profile.aspectImmune) continue
+        if (profile.aspect != aspect || aspect < 0 || profile.aspectImmune || !profile.escortable) continue
         if (typeWeight(definition, weakOnly = false, recency = false) > 0f) matches++
     }
     if (matches == 0) {
@@ -638,7 +703,7 @@ internal fun MutableGameState.aspectEscortType(aspect: Int, index: Int): EnemyTy
     for (rosterIndex in roster.indices) {
         val definition = roster[rosterIndex]
         val profile = definition.type.profile
-        if (profile.aspect != aspect || profile.aspectImmune) continue
+        if (profile.aspect != aspect || profile.aspectImmune || !profile.escortable) continue
         if (typeWeight(definition, weakOnly = false, recency = false) <= 0f) continue
         if (target == 0) return definition.type
         target--
@@ -660,20 +725,48 @@ internal fun aspectStandIn(aspect: Int): EnemyType? = when (aspect) {
 internal fun MutableGameState.rollAspect(): Int = spawnRandom.nextInt(StatusElement.entries.size)
 
 /**
- * A leashed ordinary enemy is moved, integrity intact, back to spawn distance ahead or on a flank; the
- * move is a teleport, so its previous position follows.
+ * Leaders may be left several screens behind during an ordinary retreat. Six thousand units is far travel to the
+ * distant sites and structures: beyond it, their slow steering cannot bring them back into the fight in useful time.
+ * Their leash also stays at least as far away as the ordinary viewport-scaled leash.
+ */
+internal const val FAR_LEADER_LEASH_DISTANCE: Float = 6_000f
+
+/** Stateless leader relocation: returning a leader never shifts the ordinary director's spawn stream. */
+private const val LEADER_LEASH_SALT: Long = 0x4C45_4144_4C45_4153L
+
+/**
+ * A leashed enemy is moved, integrity intact, back to spawn distance ahead or on a flank; the move is a teleport, so
+ * its previous position follows. Roaming Elites and Heralds use a stable per-enemy hash; ordinary enemies keep their
+ * existing spawn draws.
  */
 internal fun MutableGameState.relocateLeashedEnemy(enemy: Enemy) {
-    val rolled = movementAngle() + sectorOffset(allowBehind = false)
-    val distance = viewportEdgeDistance(rolled) + 80f + spawnRandom.nextFloat() * 180f
+    val leader = enemy.type == EnemyType.ELITE || enemy.type == EnemyType.HERALD
+    val hash = if (leader) runHash(runSeed, LEADER_LEASH_SALT, enemy.id.toLong()) else 0L
+    val offset = if (leader) {
+        val side = if (hash and 1L == 0L) 1f else -1f
+        side * (AHEAD_HALF_ANGLE + hashUnit(hash) * (FLANK_OUTER_ANGLE - AHEAD_HALF_ANGLE))
+    } else sectorOffset(allowBehind = false)
+    val rolled = movementAngle() + offset
+    val overscanRoll = if (leader) hashUnit(splitMix64(hash)) else spawnRandom.nextFloat()
+    // An offered site may turn the chosen angle. The diagonal keeps a leader outside the viewport at every angle,
+    // while clearOfAnomalies checks the same distance that placement uses.
+    val viewDistance = if (leader) length(screenWidth, screenHeight) * 0.5f else viewportEdgeDistance(rolled)
+    val distance = viewDistance + 80f + overscanRoll * 180f
     val angle = clearOfAnomalies(rolled, distance)
-    var x = coreX + cos(angle) * distance
-    var y = coreY + sin(angle) * distance
+    val ejected = structureEjected(coreX + cos(angle) * distance, coreY + sin(angle) * distance, enemy.radius)
+    var x = ejected.x
+    var y = ejected.y
     var attempts = 0
     while (attempts < SPAWN_NUDGE_ATTEMPTS && isSpawnPointBlocked(x, y, enemy.radius)) {
         x += cos(angle) * SPAWN_NUDGE_DISTANCE
         y += sin(angle) * SPAWN_NUDGE_DISTANCE
         attempts++
+    }
+    if (leader) {
+        // A rock nudge must not return a roaming leader to the sealed room it was ejected from.
+        val outside = structureEjected(x, y, enemy.radius)
+        x = outside.x
+        y = outside.y
     }
     enemy.x = x
     enemy.y = y
@@ -681,8 +774,9 @@ internal fun MutableGameState.relocateLeashedEnemy(enemy: Enemy) {
     enemy.previousY = y
     enemy.vx = 0f
     enemy.vy = 0f
+    onLeashedEnemyRelocated(enemy)
 }
 
-/** True when [enemy] stays wherever it is: scheduled leaders and the active trial's defenders. */
-internal fun MutableGameState.leashExempt(enemy: Enemy, activeDefenders: List<Int>?): Boolean =
-    enemy.isElite || enemy.isBoss || enemy.isMiniBoss || activeDefenders?.contains(enemy.id) == true
+/** Place-bound enemies and bosses stay; the roaming Elite and Herald instead have a far-travel leash. */
+internal fun MutableGameState.leashExempt(enemy: Enemy): Boolean =
+    (enemy.isEliteClass && enemy.type != EnemyType.ELITE && enemy.type != EnemyType.HERALD) || isPlaceBound(enemy)

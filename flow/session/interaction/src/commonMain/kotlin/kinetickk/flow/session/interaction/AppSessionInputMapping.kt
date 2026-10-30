@@ -4,6 +4,7 @@
 package kinetickk.flow.session.interaction
 
 import androidx.compose.ui.input.key.Key
+import kinetickk.ball.gameplay.api.RunMode
 import kinetickk.ball.gameplay.interaction.GameplayInteractionOutput
 import kinetickk.ball.profile.interaction.rebirth.api.RebirthOutput
 import kinetickk.ball.profile.interaction.settings.api.SettingsOutput
@@ -38,8 +39,15 @@ internal fun Key.toWorkshopAlias(base: AppDestination): WorkshopTab? = when (thi
     else -> null
 }
 
-/** True for a key the shell maps: a session shortcut or a Workshop alias over [base]. */
-internal fun Key.isShellKey(base: AppDestination): Boolean = toSessionShortcut() != null || toWorkshopAlias(base) != null
+/** E over the Home base toggles Baby mode (Session decides; it accepts only a bare Home). Free in a run. */
+internal fun Key.isRunModeKey(base: AppDestination): Boolean = this == Key.E && base == AppDestination.Home
+
+/** The other run mode: what the Baby mode toggle and its E key ask Session for. */
+internal fun RunMode.toggled(): RunMode = if (this == RunMode.EASY) RunMode.STANDARD else RunMode.EASY
+
+/** True for a key the shell maps: a session shortcut, a Workshop alias or the run-mode key over [base]. */
+internal fun Key.isShellKey(base: AppDestination): Boolean =
+    toSessionShortcut() != null || toWorkshopAlias(base) != null || isRunModeKey(base)
 
 /** Null for [HomeOutput.Quit]: closing the game is the host's, not a Session transition. */
 internal fun HomeOutput.toSessionPulse(): SessionInteractionPulse? = when (this) {
@@ -49,6 +57,7 @@ internal fun HomeOutput.toSessionPulse(): SessionInteractionPulse? = when (this)
     HomeOutput.OpenRebirth -> SessionInteractionPulse.OpenOverlay(AppDestination.Rebirth)
     HomeOutput.OpenCodex -> SessionInteractionPulse.OpenOverlay(AppDestination.Codex)
     HomeOutput.Quit -> null
+    is HomeOutput.SelectRunMode -> SessionInteractionPulse.SelectRunModeRequested(mode)
 }
 
 internal fun GameplayInteractionOutput.toSessionPulse(): SessionInteractionPulse = when (this) {

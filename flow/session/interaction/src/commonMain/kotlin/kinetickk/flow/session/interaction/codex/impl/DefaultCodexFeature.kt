@@ -262,8 +262,11 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
         1 -> catalog.weapons.count { it.id in progress.loadout.unlockedWeapons } to catalog.weapons.size
         2 -> catalog.relics.count { model.isRelicDiscovered(it.id) } to catalog.relics.size
         3 -> progress.unlockedCoreShapes.size to catalog.coreShapes.size
-        // Enemies the current Rebirth rank lets into runs, out of the whole roster.
-        else -> catalog.enemies.count { it.minimumRebirth <= progress.rebirthProgress.rank } to catalog.enemies.size
+        // Enemies the current Rebirth rank lets into runs (hidden secret bosses aside), out of the whole roster.
+        CODEX_ENEMIES_CATEGORY -> codexEnemyCounts(model, catalog, progress)
+        // Places and secrets found, out of every one the World lists.
+        CODEX_WORLD_CATEGORY -> codexWorldCounts(model, catalog)
+        else -> error("No Codex catalog category $index")
     }
     val (collectionDiscovered, collectionTotal) = categoryCounts(category)
     // Rebirth locks alone leave the collection empty: the notice shows above them (and above the Items matrix's hatches).
@@ -306,7 +309,7 @@ internal fun CodexContent(catalog: UiCatalogSnapshot, model: CodexRenderModel, p
     }
     LaunchedEffect(Unit) { listFocus.requestFocus() }
     val categoryTitles = listOf(SessionText.ITEMS_TITLE, SessionText.WEAPONS_TITLE, SessionText.RELICS_TITLE, SessionText.FORMS_TITLE)
-        .map { language.text(it) } + language.text(CodexText.ENEMIES_TITLE)
+        .map { language.text(it) } + language.text(CodexText.ENEMIES_TITLE) + language.text(CodexText.WORLD_TITLE)
     val filterTitles = listOf(0 to SessionText.FILTER_ALL, 2 to SessionText.FILTER_BUILD, 3 to SessionText.FILTER_ACTIVE)
     val policy = catalog.build.policy
     val onSelection: ((CodexSelection) -> CodexSelection) -> Unit = { change ->
@@ -818,8 +821,8 @@ private fun CodexEntry.cellBadge(): String? = when (val icon = icon) {
     is CodexIcon.Item -> quantity.takeIf { icon.stack > 0 }
     is CodexIcon.Relic -> quantity.takeIf { icon.rank != null }
     is CodexIcon.Weapon -> quantity.takeIf { it != CODEX_NONE }
-    // An enemy's threat out of five.
-    is CodexIcon.Enemy -> quantity
+    // An enemy's threat out of five; a Rebirth-locked one shows its padlock in that corner instead (the threat is in its facts).
+    is CodexIcon.Enemy -> quantity.takeUnless { icon.locked }
     else -> null
 }
 
@@ -1013,21 +1016,52 @@ private fun CodexIcon.interferes(): Boolean = when (this) {
 
 /**
  * A fact row: mono label (mute) on the left, cond value right-aligned after it, then its (!) if
- * any. A long value (two relic names) wraps between words instead of running out of the row.
+ * any. A long value (two relic names) wraps between words instead of running out of the row; a
+ * number keeps the word before it. When a word of the value would not fit beside the label, the
+ * value goes under the label (right-aligned), so no word is ever broken.
  */
 @Composable
 private fun CodexFactRow(fact: CodexFact, ui: Float) {
     val typography = codexMeasurer().typography
-    Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { }.testTag("codex-fact"), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        BasicText(fact.label.uppercase(), Modifier.alignByBaseline(), style = typography.monoStyle(11f * ui, color = Kk.Mute),
-            softWrap = false, maxLines = 1)
-        BasicText(fact.value.uppercase(), Modifier.weight(1f).alignByBaseline(),
-            style = typography.condStyle(21f * ui, tabular = true, lineHeightEm = 1f, color = Kk.Bone)
-                .copy(textAlign = androidx.compose.ui.text.style.TextAlign.End))
-        fact.info?.let { KkInfoButton(it, placement = KkTooltipPlacement.BELOW, textScale = ui) }
+    val label = fact.label.uppercase()
+    val value = codexGlueNumbers(fact.value.uppercase())
+    val labelStyle = typography.monoStyle(11f * ui, color = Kk.Mute)
+    val valueStyle = typography.condStyle(21f * ui, tabular = true, lineHeightEm = 1f, color = Kk.Bone)
+        .copy(textAlign = androidx.compose.ui.text.style.TextAlign.End)
+    BoxWithConstraints(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { }.testTag("codex-fact")) {
+        val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer(8)
+        val density = LocalDensity.current
+        val gap = 10.dp
+        val info = if (fact.info != null) CODEX_FACT_INFO_DP.dp + gap else 0.dp
+        val stacked = remember(label, value, labelStyle, valueStyle, maxWidth, info, density) {
+            with(density) {
+                val labelWidth = textMeasurer.measure(label, labelStyle, softWrap = false).size.width
+                val longestWord = value.split(' ').filter { it.isNotEmpty() }
+                    .maxOfOrNull { textMeasurer.measure(it, valueStyle, softWrap = false).size.width } ?: 0
+                labelWidth + gap.toPx() + longestWord + info.toPx() > maxWidth.toPx()
+            }
+        }
+        if (stacked) Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(gap)) {
+                BasicText(label, Modifier.weight(1f), style = labelStyle)
+                fact.info?.let { KkInfoButton(it, placement = KkTooltipPlacement.BELOW, textScale = ui) }
+            }
+            BasicText(value, Modifier.fillMaxWidth(), style = valueStyle)
+        } else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(gap)) {
+            BasicText(label, Modifier.alignByBaseline(), style = labelStyle, softWrap = false, maxLines = 1)
+            BasicText(value, Modifier.weight(1f).alignByBaseline(), style = valueStyle)
+            fact.info?.let { KkInfoButton(it, placement = KkTooltipPlacement.BELOW, textScale = ui) }
+        }
     }
 }
+
+/** The (!) button's width beside a fact (KkInfoButton). */
+private const val CODEX_FACT_INFO_DP = 24f
+
+/** [text] with each number bound to the word before it (a no-break space), so a line never starts with a lone number. */
+internal fun codexGlueNumbers(text: String): String = CodexNumberAfterWord.replace(text) { match -> match.groupValues[1] + "\u00A0" }
+
+private val CodexNumberAfterWord = Regex("(\\S) (?=[0-9])")
 
 /** Wide detail title: shrinks (30 to 18 px) until its longest word fits, never breaking a word. */
 @Composable
@@ -1208,8 +1242,8 @@ private fun CodexNavigationTabs(tab: CodexTab, controlScale: Float, compact: Boo
 }
 
 /**
- * Smallest scale tabs shrink to before their row scrolls instead: the five Russian categories at
- * 175 % still fit a 360 dp phone beside the filters (their labels stay near 14 px).
+ * Smallest scale tabs shrink to before their row scrolls instead (their labels stay near 14 px): the six
+ * categories fit every phone up to 150 %; at 175 % a 360 or 390 dp phone scrolls them (English fits 390 dp).
  */
 internal const val CODEX_TAB_MIN_SCALE = 0.45f
 
@@ -1320,7 +1354,8 @@ internal fun codexNavTitleSize(measurer: CanvasTextMeasurer, titles: List<String
 
 /**
  * Section row height (dp) for the [controlScale]: 46 dp at the design size, growing far more slowly
- * than the text so the whole nav (five rows, search, filters, legend) fits a 810 dp tall window at 175 %.
+ * than the text so the whole nav (six rows, search, filters, legend) fits a 810 dp tall window up to
+ * 150 %; at 175 % it runs less than one row past and scrolls with its cue.
  */
 internal fun codexNavRowHeight(controlScale: Float): Float = 46f + 2f * (controlScale - 1f)
 

@@ -10,7 +10,9 @@ import kinetickk.ball.content.api.ContentVersion
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.defaultCoreShapeDefinitions
 import kinetickk.ball.content.api.CoreShapeDefinition
+import kinetickk.ball.content.api.DimensionPolicy
 import kinetickk.ball.content.api.EnemyDefinition
+import kinetickk.ball.content.api.EnemyHabitat
 import kinetickk.ball.content.api.EnemyType
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ItemDefinition
@@ -24,6 +26,9 @@ import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPolicy
+import kinetickk.ball.content.api.RunBoonDefinition
+import kinetickk.ball.content.api.RunVarietyContent
+import kinetickk.ball.content.api.SitePolicy
 import kinetickk.ball.content.api.UiCatalogSnapshot
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
@@ -34,7 +39,9 @@ import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.UpgradePolicy
 import kinetickk.ball.content.api.defaultBuildCatalog
 import kinetickk.ball.content.api.defaultEnemyDefinitions
+import kinetickk.ball.content.api.defaultRunBoons
 import kinetickk.ball.content.api.defaultSkillDefinitions
+import kinetickk.ball.content.api.validateStructurePolicy
 import kinetickk.foundation.collections.toImmutableList
 
 /** Creates the query-only Content authority that application composition owns for its lifetime. */
@@ -59,6 +66,10 @@ internal data class ContentBootstrapData(
     val enemies: List<EnemyDefinition> = defaultEnemyDefinitions(),
     val skills: List<SkillDefinition> = defaultSkillDefinitions(),
     val upgrades: UpgradePolicy = UpgradePolicy(),
+    val sites: SitePolicy = SitePolicy(),
+    val variety: RunVarietyContent = RunVarietyContent(),
+    val dimensions: DimensionPolicy = DimensionPolicy(),
+    val boons: List<RunBoonDefinition> = defaultRunBoons(),
 )
 
 internal fun defaultContentBootstrapData(): ContentBootstrapData = ContentBootstrapData(
@@ -95,6 +106,7 @@ private class DefaultContentCatalog(data: ContentBootstrapData) : ContentCatalog
     private val rebirthProfiles = data.rebirthProfiles.toImmutableList()
     private val enemies = data.enemies.toImmutableList()
     private val skills = data.skills.toImmutableList()
+    private val boons = data.boons.toImmutableList()
 
     private val rebirth = RebirthPolicySnapshot(
         minimumLevel = ContentBounds.MIN_REBIRTH_LEVEL,
@@ -123,6 +135,7 @@ private class DefaultContentCatalog(data: ContentBootstrapData) : ContentCatalog
         relics = relics,
         rebirth = rebirth,
         relicPolicy = data.relicPolicy,
+        sites = data.sites,
         tempo = data.tempo,
         build = data.build,
         coreShapes = coreShapes,
@@ -130,7 +143,14 @@ private class DefaultContentCatalog(data: ContentBootstrapData) : ContentCatalog
         matrixNodes = matrixNodes,
         skills = skills,
         upgrades = data.upgrades,
+        dimensions = data.dimensions,
+        boons = boons,
+        variety = data.variety,
     )
+
+    init {
+        validateStructurePolicy(gameplayContent.structures, enemies, gameplayContent.obstacles)
+    }
 
     private val uiCatalog = UiCatalogSnapshot(
         version = version,
@@ -141,6 +161,7 @@ private class DefaultContentCatalog(data: ContentBootstrapData) : ContentCatalog
         coreShapes = coreShapes,
         rebirth = rebirth,
         relicPolicy = data.relicPolicy,
+        sites = data.sites,
         tempo = data.tempo,
         build = data.build,
         enemies = enemies,
@@ -228,6 +249,9 @@ private fun validateBootstrap(data: ContentBootstrapData) {
 
     validateEnemies(data.enemies)
     validateSkills(data.skills)
+    validateSites(data.sites, data.enemies)
+    validateRunVariety(data)
+    validateDimensions(data)
 
     require(data.relicPolicy.maxSlots <= data.relics.size) {
         "Relic maxSlots must not exceed the relic catalog size"
@@ -305,29 +329,28 @@ private fun requireUniqueIds(name: String, ids: List<*>) {
 }
 
 /**
- * The roster follows [EnemyType] order exactly; the Architect is the only boss and the Herald the only
- * mini-boss, the Elite the only scheduled Elite, and every other kind has ordinary spawn weight.
+ * The roster follows [EnemyType] order exactly; the Architect is the only boss, the Elite the only scheduled Elite
+ * and the Herald stays a mini-boss; mini-bosses and secret bosses may be many. Every ordinary kind carries weight in
+ * exactly its habitats, and every habitat opens with an ordinary kind at second 0 on tier 0.
  */
 private fun validateEnemies(enemies: List<EnemyDefinition>) {
     requireBound("enemies", enemies.size, ContentBounds.MAX_ENEMY_TYPES)
     requireUniqueIds("enemy", enemies.map(EnemyDefinition::type))
-    require(enemies.map(EnemyDefinition::type) == EnemyType.entries.toList()) {
-        "Enemy types must match the stable EnemyType order"
-    }
+    require(enemies.map(EnemyDefinition::type) == EnemyType.entries.toList()) { "Enemy types must match the stable EnemyType order" }
     require(enemies.filter(EnemyDefinition::isBoss).map(EnemyDefinition::type) == listOf(EnemyType.ARCHITECT)) {
         "The Architect must be the only boss"
-    }
-    require(enemies.filter(EnemyDefinition::isMiniBoss).map(EnemyDefinition::type) == listOf(EnemyType.HERALD)) {
-        "The Herald must be the only mini-boss"
     }
     require(enemies.filter(EnemyDefinition::isElite).map(EnemyDefinition::type) == listOf(EnemyType.ELITE)) {
         "The Elite must be the only scheduled Elite"
     }
-    require(enemies.filterNot(EnemyDefinition::isScheduled).all { it.weight > 0f }) {
-        "Every ordinary enemy must carry spawn weight"
-    }
-    require(enemies.any { !it.isScheduled && it.timeGateSeconds <= 0f && it.minimumRebirth == 0 }) {
-        "At least one ordinary enemy must be available from the first second at tier 0"
-    }
+    require(enemies[EnemyType.HERALD.ordinal].isMiniBoss) { "The Herald must stay a mini-boss" }
+    require(enemies.filterNot(EnemyDefinition::isScheduled).all { definition ->
+        EnemyHabitat.entries.all { habitat -> (definition.weightIn(habitat) > 0f) == definition.livesIn(habitat) }
+    }) { "Every ordinary enemy must carry spawn weight in exactly its habitats" }
+    require(EnemyHabitat.entries.all { habitat ->
+        enemies.any { !it.isScheduled && it.weightIn(habitat) > 0f && it.timeGateSeconds <= 0f && it.minimumRebirth == 0 }
+    }) { "At least one ordinary enemy must be available from the first second at tier 0 in every habitat" }
+    val secrets = enemies.filter(EnemyDefinition::isSecretBoss).map(EnemyDefinition::revealedBy)
+    require(secrets.toSet().size == secrets.size) { "Secret bosses need distinct discoveries" }
     require(enemies.map(EnemyDefinition::name).toSet().size == enemies.size) { "Enemy names must be unique" }
 }
