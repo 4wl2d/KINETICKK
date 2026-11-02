@@ -201,7 +201,8 @@ internal fun RelicDefinition.upsideValueRanges(language: AppLanguage, rank: Int)
     return ranges
 }
 
-private val RelicPlaceholder = Regex("\\{[0-9]+}")
+// Android's ICU regex parser requires both literal braces to be escaped.
+private val RelicPlaceholder = Regex("\\{[0-9]+\\}")
 
 /**
  * The upside values a rank change raises, at [from] and at [to] ("15 %", "18 %"; several join with

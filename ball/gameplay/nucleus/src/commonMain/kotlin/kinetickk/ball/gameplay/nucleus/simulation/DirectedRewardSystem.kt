@@ -53,7 +53,18 @@ internal fun MutableGameState.selectRewardFocus(focus: RewardFocus) {
     selectedRewardFocus = focus
     when (reward) {
         DirectedReward.RELIC -> {
-            val aspect = RelicAspect.valueOf(focus.name)
+            // Explicit translation survives enum shrinking/renaming without reflective values().
+            val aspect = when (focus) {
+                RewardFocus.KINETIC -> RelicAspect.KINETIC
+                RewardFocus.THERMAL -> RelicAspect.THERMAL
+                RewardFocus.CRYO -> RelicAspect.CRYO
+                RewardFocus.ION -> RelicAspect.ION
+                RewardFocus.GRAVITIC -> RelicAspect.GRAVITIC
+                RewardFocus.ENTROPY -> RelicAspect.ENTROPY
+                RewardFocus.SONIC -> RelicAspect.SONIC
+                RewardFocus.VOID -> RelicAspect.VOID
+                else -> throw IllegalArgumentException("Not a relic focus: $focus")
+            }
             val pool = offerableRelics()
             val matching = pool.filter { it.aspect == aspect }.shuffled(rewardRandom).take(3)
             // Small aspects are topped up with the build's best attuned relics instead of leaving dead cards.

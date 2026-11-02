@@ -19,7 +19,7 @@ tasks.test {
     inputs.files(
         fileTree(rootDir.parentFile) {
             include("**/src/commonTest/kotlin/**/*.kt", "**/src/desktopTest/kotlin/**/*.kt")
-            exclude(".claude/**", "**/build/**", "**/.gradle/**", "build-logic/**")
+            exclude(".claude/**", "**/build/**", "**/build-debug/**", "**/.gradle/**", "build-logic/**")
         },
     )
         .withPropertyName("desktopTestSources")

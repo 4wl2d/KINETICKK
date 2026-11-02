@@ -158,7 +158,7 @@ internal class RunningControlPressLog {
 
     var touchInput: Boolean = false
 
-    /** The Show FPS counter's value the PERFORMANCE slot draws (`GameplayFpsCounter.NO_VALUE` before one). */
+    /** Lightweight frame-loop counter's latest value; -1 until its first half-second window. */
     var fps: Int = -1
 
     fun press(target: RunningControlTarget, renderTime: Float) {

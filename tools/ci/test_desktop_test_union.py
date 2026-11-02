@@ -56,9 +56,20 @@ class DesktopTestUnionTest(unittest.TestCase):
         self.write("ball/x/src/commonTest/kotlin/a/b/First.kt", SOURCE)
         self.write("ball/x/src/androidDeviceTest/kotlin/a/b/Device.kt", SOURCE.replace("First", "Device"))
         self.write("ball/x/build/src/desktopTest/kotlin/a/b/Generated.kt", SOURCE.replace("First", "Generated"))
+        self.write("ball/x/build-debug/src/desktopTest/kotlin/a/b/Generated.kt", SOURCE.replace("First", "Generated"))
         self.write(".claude/worktrees/w/ball/x/src/desktopTest/kotlin/a/b/Other.kt", SOURCE.replace("First", "Other"))
 
         self.assertEqual(Counter({"a.b.FirstTest": 2, "a.b.SecondTest": 1}), union.tree_tests(self.root))
+
+    def test_counts_only_the_selected_variant_tests(self):
+        self.write("ball/x/src/commonTest/kotlin/a/b/First.kt", SOURCE)
+        self.write("ball/x/src/commonDebugTest/kotlin/a/b/Debug.kt", SOURCE.replace("First", "Debug"))
+        self.write("ball/x/src/desktopReleaseTest/kotlin/a/b/Release.kt", SOURCE.replace("First", "Release"))
+
+        self.assertEqual(Counter({"a.b.FirstTest": 2, "a.b.ReleaseTest": 2, "a.b.SecondTest": 2}),
+                         union.tree_tests(self.root))
+        self.assertEqual(Counter({"a.b.FirstTest": 2, "a.b.DebugTest": 2, "a.b.SecondTest": 2}),
+                         union.tree_tests(self.root, "debug"))
 
     def shards(self, attempt=1, **cases):
         reports = self.root / "reports"

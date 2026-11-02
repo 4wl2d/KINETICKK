@@ -37,21 +37,24 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -76,7 +79,7 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInRoot
@@ -169,6 +172,7 @@ import kinetickk.foundation.design.rememberKkCanvasMeasurer
 import kinetickk.foundation.design.wideStyle
 import kotlin.math.max
 import kotlin.math.min
+import kotlinx.coroutines.flow.collectLatest
 
 /** Milliseconds of the reward entrance choreography (rings, badge slam, deal, footer). */
 internal const val RewardEntranceMs = 1_600f
@@ -205,10 +209,23 @@ internal fun RewardContent(
     onBuild: () -> Unit = {},
     /** The player's input is touch: cards name a Z/X/C slot by number instead of its key. */
     touch: Boolean = false,
+) = RewardContent(engine, layout, rememberUpdatedState(renderTime), enabled, onSelect, onReroll, onBuild, touch)
+
+/** Keep the live clock in drawing/layer reads so animated cards do not recompose and refit their text. */
+@Composable
+internal fun RewardContent(
+    engine: GameplayRenderModel,
+    layout: ChoiceLayoutGeometry,
+    renderTime: State<Float>,
+    enabled: Boolean,
+    onSelect: (Int) -> Unit,
+    onReroll: () -> Unit,
+    onBuild: () -> Unit = {},
+    touch: Boolean = false,
 ) {
     val language = LocalAppLanguage.current
     val presentation = remember(engine, language, touch) { engine.rewardPresentation(language, touch) }
-    RewardContent(presentation, layout, engine.hudWidth, engine.uiScale, engine.settings.textScale, renderTime, enabled, onSelect, onReroll, onBuild)
+    RewardContent(presentation, layout, engine.hudWidth, engine.uiScale, engine.settings.textScale, 0f, enabled, onSelect, onReroll, onBuild, renderTime)
 }
 
 /**
@@ -229,8 +246,9 @@ internal fun RewardContent(
     onSelect: (Int) -> Unit,
     onReroll: () -> Unit,
     onBuild: () -> Unit = {},
+    time: State<Float>? = null,
 ) {
-    val time = rememberUpdatedState(renderTime)
+    val clock = time ?: rememberUpdatedState(renderTime)
     val choiceKey = presentation.cards.map { it.choice }
     var selectedValue by remember(choiceKey) { mutableStateOf(presentation.defaultSelection()) }
     val entrance = remember(choiceKey) { Animatable(0f) }
@@ -248,7 +266,7 @@ internal fun RewardContent(
             layout = layout,
             screenWidth = screenWidth,
             textScale = overlayUiTextScale(textScale),
-            time = time,
+            time = clock,
             entrance = { entrance.value },
             selected = selectedValue,
             onSelected = { selectedValue = it },
@@ -702,9 +720,8 @@ internal fun RewardCard(
         val bodyBottom = spec.dp(spec.bodyBottom)
         val bodyHeight = (maxHeight - bodyTop - bodyBottom - footerHeight).coerceAtLeast(24.dp)
         val start = spec.dp(spec.start) + declineShift
-        // The body takes the largest size step at which its content fits, measured before it is
-        // shown; only text longer than the last step scrolls. Cards dealt together share the
-        // smallest step any of them needs ([bodyFit]).
+        // The body converges on a fitting size during the entrance; text longer than the last
+        // step scrolls. Cards dealt together share the smallest step any of them needs ([bodyFit]).
         val end = spec.dp(spec.end)
         // The face's right edge slants in by RewardCardCutDp toward the bottom and the frame (its border, the epic
         // rim) reaches in from it: the rows under the name (and the costs) end clear of both at the lowest line they
@@ -760,12 +777,11 @@ internal fun RewardCard(
         // Costs are never hidden: a relic's liability in a threat-striped block, laid out under the body
         // as its tail. It fits with the body; when the body still overflows at its smallest size, the
         // cost keeps its whole height at the bottom and only the text above it scrolls.
-        val costs: (@Composable (Float, Boolean, Dp) -> Unit)? = if (presentation.rules.isEmpty() && presentation.liabilities.isNotEmpty()) {
-            { fit, probing, lowest ->
+        val costs: (@Composable (Float, Dp) -> Unit)? = if (presentation.rules.isEmpty() && presentation.liabilities.isNotEmpty()) {
+            { fit, lowest ->
                 val font = spec.font * fit
-                val rowPlates = if (probing) null else plates
                 Column(Modifier.fillMaxWidth().padding(start = start, end = rowsEnd(lowest))
-                    .then(if (probing) Modifier else Modifier.testTag("kinetickk.gameplay.choice.${index + 1}.cost")),
+                    .testTag("kinetickk.gameplay.choice.${index + 1}.cost"),
                     verticalArrangement = Arrangement.spacedBy(gap * fit)) {
                     presentation.liabilities.forEachIndexed { line, liability ->
                         RewardCostBlock(
@@ -774,7 +790,7 @@ internal fun RewardCard(
                             typography.bodyStyle((if (spec.compact) 12.5f else 13.5f) * font, lineHeightEm = spec.lineHeight, color = roles.threat),
                             typography.monoStyle((if (spec.compact) 8.5f else 9.5f) * font, weight = FontWeight.Bold, color = roles.threat),
                             roles.threat,
-                            Modifier.fillMaxWidth().facePlate(rowPlates, "liability$line"),
+                            Modifier.fillMaxWidth().facePlate(plates, "liability$line"),
                         )
                     }
                 }
@@ -782,16 +798,18 @@ internal fun RewardCard(
         } else {
             null
         }
-        val probe = rememberTextMeasurer(cacheSize = 16)
+        val fitState = remember(presentation, maxWidth, maxHeight, textScale, phoneDeal, typography, LocalDensity.current) {
+            RewardCardFitState()
+        }
         // Int.MAX_VALUE until the body is first measured.
         val overflows = scrollState.maxValue in 1 until Int.MAX_VALUE
         Box(Modifier.offset(y = bodyTop).fillMaxWidth().height(bodyHeight).onPlaced { plates?.viewport = it }) {
             val steps = remember(textScale) { rewardCardFitSteps(textScale) }
-            RewardCardFitLayout(steps, bodyFit, probe, onBodyFit, Modifier.fillMaxSize(), probeContent = { fit, lowest -> body(fit, Modifier, null, lowest) },
+            RewardCardFitLayout(steps, bodyFit, fitState, scrollState, bodyHeight, onBodyFit, Modifier.fillMaxSize(),
                 tail = costs, tailGap = { fit -> (gap * fit).roundToPx() }) { fit, lowest ->
                 body(
                     fit,
-                    Modifier.fillMaxSize().testTag("kinetickk.gameplay.choice.${index + 1}.text")
+                    Modifier.fillMaxWidth().testTag("kinetickk.gameplay.choice.${index + 1}.text")
                         // Longer text fades out at the bottom of the text column itself: nothing is
                         // painted over the card, so its rarity glow, border and effects stay whole.
                         .then(if (overflows) Modifier.rewardScrollFade(scrollState, spec.dp(18f)) else Modifier)
@@ -1114,10 +1132,6 @@ private fun RewardCardName(
 
 @Composable
 private fun RewardCardNameText(text: String, rank: Int, style: TextStyle, time: State<Float>) {
-    LocalOverlayTextProbe.current?.let { probe ->
-        OverlayProbeText(probe, text.uppercase(), style, Modifier)
-        return
-    }
     when (rank.coerceIn(1, 5)) {
         5 -> {
             // The legendary foil in the preset's gold (the deep gold where its volt reads as the bright one).
@@ -1693,98 +1707,59 @@ private const val RewardCardFitStep = 0.07f
 /** The UI text factor of the smallest text setting (100 % against the 125 % default). */
 private const val RewardCardSmallestTextScale = 0.8f
 
-private object RewardCardBodySlot
-
-private object RewardCardTailSlot
-
-/** Subcompose keys of the measured-only body at a step, and of the tail, with the lowest line (px) they were measured for. */
-private data class RewardCardProbeSlot(val step: Float, val lowest: Int)
-
-private data class RewardCardTailProbeSlot(val step: Float, val lowest: Int)
+private class RewardCardFitState {
+    var requested by mutableFloatStateOf(1f)
+    var tailOverflows by mutableStateOf(false)
+}
 
 /**
- * Lays out a card body at the largest of [steps] whose [probeContent] (the same body, measured
- * only) fits the height, capped by [cap] (the deal's shared step). Reports the step this card
- * needs through [onFit].
- *
- * A [tail] (a relic's cost; its second argument is true while it is only measured) is laid out
- * [tailGap] px under the body at the same step and fits with it. It always shows whole: when the
- * body overflows even at the smallest step, the body keeps the height the tail leaves (and scrolls)
- * and the tail sits at the bottom.
- *
- * The last argument of each is how far down the box its lowest line reaches. Steps are measured
- * as if it reached the box's bottom. The shown body then tries, a few times, as low as its last
- * measure ended, and keeps the highest such line at which it still ends no lower (wider rows can
- * shrink a long word less and run lower); where none holds, the box's bottom. The tail takes how
- * low it ends under the measured body when it measures no taller there, else the box's bottom.
+ * Measure the actual text once. A bounded fit step follows on the next frame only if that text
+ * overflows, instead of composing several invisible copies of every card at opening.
+ * Costs remain pinned below the body; at the minimum size the body keeps its normal scrolling.
  */
 @Composable
 private fun RewardCardFitLayout(
     steps: FloatArray,
     cap: Float,
-    probe: TextMeasurer,
+    state: RewardCardFitState,
+    scrollState: ScrollState,
+    height: Dp,
     onFit: (Float) -> Unit,
     modifier: Modifier,
-    probeContent: @Composable (Float, Dp) -> Unit,
-    tail: (@Composable (Float, Boolean, Dp) -> Unit)? = null,
+    tail: (@Composable (Float, Dp) -> Unit)? = null,
     tailGap: Density.(Float) -> Int = { 0 },
     content: @Composable (Float, Dp) -> Unit,
 ) {
-    SubcomposeLayout(modifier) { constraints ->
-        var need = steps.last()
+    val fit = min(state.requested, cap)
+    LaunchedEffect(state, state.requested, onFit) { onFit(state.requested) }
+    LaunchedEffect(state, scrollState, fit, steps) {
+        snapshotFlow { scrollState.maxValue in 1 until Int.MAX_VALUE || state.tailOverflows }
+            .collectLatest { overflow ->
+                if (overflow && fit > steps.last() + 0.001f) {
+                    withFrameNanos { }
+                    if (scrollState.maxValue in 1 until Int.MAX_VALUE || state.tailOverflows) {
+                        state.requested = steps.firstOrNull { it < fit - 0.001f } ?: steps.last()
+                    }
+                }
+            }
+    }
+    Layout(
+        content = {
+            Box { content(fit, height) }
+            if (tail != null) Box { tail(fit, height) }
+        },
+        modifier = modifier.clipToBounds(),
+    ) { measurables, constraints ->
         val width = Constraints.fixedWidth(constraints.maxWidth)
-        val box = constraints.maxHeight
-        // Each slot is measured once per pass (a slot is composed once), so its heights are kept.
-        val bodies = HashMap<RewardCardProbeSlot, Int>()
-        val tailHeights = HashMap<RewardCardTailProbeSlot, Int>()
-        fun bodyHeight(step: Float, lowest: Int = box): Int = RewardCardProbeSlot(step, lowest).let { slot ->
-            bodies.getOrPut(slot) {
-                subcompose(slot) { CompositionLocalProvider(LocalOverlayTextProbe provides probe) { probeContent(step, lowest.toDp()) } }
-                    .maxOfOrNull { it.measure(width).height } ?: 0
-            }
-        }
-        fun tailHeight(step: Float, lowest: Int = box): Int = if (tail == null) 0 else RewardCardTailProbeSlot(step, lowest).let { slot ->
-            tailHeights.getOrPut(slot) {
-                val measured = subcompose(slot) { CompositionLocalProvider(LocalOverlayTextProbe provides probe) { tail(step, true, lowest.toDp()) } }
-                    .maxOfOrNull { it.measure(width).height } ?: 0
-                measured + tailGap(step)
-            }
-        }
-        // How low the shown body's lines at [step] reach, at most [limit] unless only the box's bottom holds.
-        fun bodyLowest(step: Float, limit: Int): Int {
-            var lowest = box
-            var candidate = min(bodyHeight(step), limit)
-            repeat(3) {
-                if (candidate >= lowest) return lowest
-                val height = bodyHeight(step, candidate)
-                if (height <= candidate) lowest = candidate
-                candidate = min(height, limit)
-            }
-            return lowest
-        }
-        for (step in steps) {
-            if (bodyHeight(step) + tailHeight(step) <= constraints.maxHeight) {
-                need = step
-                break
-            }
-        }
-        onFit(need)
-        val fit = min(need, cap)
-        if (tail == null) {
-            val lowest = bodyLowest(fit, box).toDp()
-            val placeables = subcompose(RewardCardBodySlot) { content(fit, lowest) }.map { it.measure(constraints) }
-            return@SubcomposeLayout layout(constraints.maxWidth, constraints.maxHeight) { placeables.forEach { it.place(0, 0) } }
-        }
-        // A pixel of slack under the measured body, so a rounding step never makes it scroll.
-        val tailBottom = min(bodyHeight(fit) + 1 + tailHeight(fit), box)
-        val tailLowest = (if (tailHeight(fit, tailBottom) <= tailHeight(fit)) tailBottom else box).toDp()
-        val tails = subcompose(RewardCardTailSlot) { tail(fit, false, tailLowest) }.map { it.measure(width.copy(maxHeight = constraints.maxHeight)) }
-        val tailTop = min(bodyHeight(fit) + 1, (constraints.maxHeight - (tails.maxOfOrNull { it.height } ?: 0) - tailGap(fit)).coerceAtLeast(0))
-        val lowest = bodyLowest(fit, tailTop).toDp()
-        val body = subcompose(RewardCardBodySlot) { content(fit, lowest) }.map { it.measure(constraints.copy(minHeight = 0, maxHeight = tailTop)) }
+        val cost = measurables.getOrNull(1)?.measure(width)
+        val gap = if (cost == null) 0 else tailGap(fit)
+        val available = (constraints.maxHeight - (cost?.height ?: 0) - gap).coerceAtLeast(0)
+        val body = measurables.first().measure(width.copy(maxHeight = available))
+        state.tailOverflows = (cost?.height ?: 0) + gap > constraints.maxHeight
+        val tailTop = min(body.height + 1 + gap, constraints.maxHeight - (cost?.height ?: 0)).coerceAtLeast(0)
         layout(constraints.maxWidth, constraints.maxHeight) {
-            body.forEach { it.place(0, 0) }
-            tails.forEach { it.place(0, tailTop + tailGap(fit)) }
+            body.place(0, 0)
+            cost?.place(0, tailTop)
         }
     }
 }

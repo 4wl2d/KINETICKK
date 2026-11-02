@@ -9,11 +9,14 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import kinetickk.gradle.DESKTOP_TEST_SHARD_PROPERTY
 import kinetickk.gradle.DesktopTestShard
 import kinetickk.gradle.isolatedProjectsProfileEnabled
+import kinetickk.gradle.configureVariantSources
 
 plugins {
     id("kinetickk.base")
     id("org.jetbrains.kotlin.multiplatform")
 }
+
+configureVariantSources()
 
 tasks.withType<JavaCompile>().configureEach {
     sourceCompatibility = "17"

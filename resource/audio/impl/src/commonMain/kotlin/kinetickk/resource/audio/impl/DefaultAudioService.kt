@@ -17,6 +17,10 @@ class DefaultAudioService(
     private var musicStep = 0
     private var closed = false
 
+    override suspend fun prepare(requests: List<ToneRequest>) {
+        if (!closed) platform.prepare(requests + MUSIC_TONES)
+    }
+
     override fun updatePreferences(preferences: AudioPreferences) {
         if (!closed) this.preferences = preferences
     }
@@ -71,6 +75,7 @@ class DefaultAudioService(
         const val MAX_SELECTED_EFFECT_REQUESTS_PER_ADVANCE = 3
         const val MUSIC_STEP_SECONDS = 0.32f
         val MUSIC_NOTES = floatArrayOf(110f, 146.83f, 164.81f, 220f, 196f, 164.81f, 146.83f, 123.47f)
+        val MUSIC_TONES = MUSIC_NOTES.distinct().map { ToneRequest(it, 0.18f, 1f, ToneWave.TRIANGLE) }
     }
 }
 
@@ -99,6 +104,8 @@ internal fun selectToneRequests(requests: List<ToneRequest>, limit: Int): List<T
 
 /** Narrow mechanical capability supplied by the app's platform composition broker. */
 interface TonePlaybackCapability {
+    suspend fun prepare(requests: List<ToneRequest>) = Unit
+
     fun unlock()
 
     fun play(request: ToneRequest)

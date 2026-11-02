@@ -19,6 +19,7 @@ import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkShutter
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.LocalCrashDiagnostics
+import kinetickk.foundation.diagnostics.CrashDiagnostics
 import kinetickk.foundation.design.LocalKkFrameRateCap
 import kinetickk.foundation.design.LocalKkInterfaceScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -144,17 +145,19 @@ fun AppSessionContent(
     }
     val observedShell = shellValue
     SideEffect(observedShell) {
-        diagnostics.context("session.committed") { observedShell.toString() }
+        if (diagnostics !== CrashDiagnostics.None) diagnostics.context("session.committed") { observedShell.toString() }
     }
 
     fun dispatch(pulse: SessionInteractionPulse): Boolean {
         val before = shellValue
-        diagnostics.context("session.before-input") { before.toString() }
-        diagnostics.event("session.input", pulse.toString())
+        if (diagnostics !== CrashDiagnostics.None) {
+            diagnostics.context("session.before-input") { before.toString() }
+            diagnostics.event("session.input", pulse.toString())
+        }
         val accepted = sessionPort.accept(pulse) is SessionAcceptance.Accepted
         shellValue = sessionPort.query(AppSessionQuery.GetShell)
         val after = shellValue
-        diagnostics.context("session.committed") { after.toString() }
+        if (diagnostics !== CrashDiagnostics.None) diagnostics.context("session.committed") { after.toString() }
         return accepted
     }
 

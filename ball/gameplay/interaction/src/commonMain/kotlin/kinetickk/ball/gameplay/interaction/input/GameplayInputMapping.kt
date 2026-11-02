@@ -3,6 +3,8 @@
 
 package kinetickk.ball.gameplay.interaction.input
 
+import kinetickk.foundation.diagnostics.DIAGNOSTICS_ENABLED
+
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.interaction.canvas.HudTrialPanelLayout
@@ -196,7 +198,7 @@ internal fun runningControlInput(target: RunningControlTarget, skillSlots: Int):
     RunningControlTarget.BRAKE -> GameplayInput.Action(
         GameplayInteractionPulse.BrakeChanged(BrakeSource.TOUCH_CONTROL, active = true),
     )
-    RunningControlTarget.PERFORMANCE -> GameplayInput.TogglePerformance
+    RunningControlTarget.PERFORMANCE -> if (DIAGNOSTICS_ENABLED) GameplayInput.TogglePerformance else null
     RunningControlTarget.PAUSE -> GameplayInput.Action(GameplayInteractionPulse.PauseToggled)
     RunningControlTarget.SKILL_1 -> skillInput(0, skillSlots)
     RunningControlTarget.SKILL_2 -> skillInput(1, skillSlots)
@@ -223,6 +225,7 @@ private fun runningControlTargetAt(
         controlMask,
     ) { target, left, top, right, bottom ->
         if (matched != null) return@forEachRunningControlBounds
+        if (target == RunningControlTarget.PERFORMANCE && !DIAGNOSTICS_ENABLED) return@forEachRunningControlBounds
         val hit = x in left..right && y in top..bottom
         if (hit) matched = target
     }

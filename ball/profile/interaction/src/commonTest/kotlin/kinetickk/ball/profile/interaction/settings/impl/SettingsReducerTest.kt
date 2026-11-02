@@ -317,9 +317,10 @@ class SettingsReducerTest {
             SettingsRow.SHOW_FPS to ProfilePreferenceAdjustment.ToggleShowFps,
         )
         for ((row, adjustment) in toggles) {
+            val reduction = SettingsReducer.reduce(initial, SettingsAction.Adjust(row, 1))
             assertEquals(
                 listOf(SettingsEffect.AdjustPreference(adjustment), SettingsEffect.PlayAudio(ProfileAudioCue.UI_CLICK)),
-                SettingsReducer.reduce(initial, SettingsAction.Adjust(row, 1)).effects, "$row",
+                reduction.effects, "$row",
             )
         }
         // Fullscreen is the browser's live state: the press asks the host for the opposite and writes no preference.

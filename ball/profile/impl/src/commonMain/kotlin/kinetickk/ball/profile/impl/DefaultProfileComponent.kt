@@ -13,6 +13,7 @@ import kinetickk.ball.profile.api.LoadoutProjection
 import kinetickk.ball.profile.api.PersistenceStatusProjection
 import kinetickk.ball.profile.api.PreferencesProjection
 import kinetickk.ball.profile.api.ProfileAcceptance
+import kinetickk.ball.profile.api.ProfileEffectRef
 import kinetickk.ball.profile.api.ProfileInstanceId
 import kinetickk.ball.profile.api.ProfilePersistenceStatus
 import kinetickk.ball.profile.api.ProfilePulse
@@ -153,12 +154,8 @@ internal class DefaultProfileComponent(
                 committedState = frame.nextState
             },
             decideCompletion = { item ->
-                when (val decision = ProfileNucleus.decide(committedState, item.pulse)) {
-                    is ProfileDecision.Accepted -> decision.frame
-                    is ProfileDecision.Rejected -> error(
-                        "A trusted Profile Resource completion was rejected: " + decision.reason,
-                    )
-                }
+                check(item is ProfileWorkItem.WriteCompleted)
+                ProfileNucleus.complete(committedState, item.effectRef, item.result)
             },
             execute = { output, item -> execute(output, item) },
         )
@@ -239,8 +236,7 @@ internal class DefaultProfileComponent(
             is ProfileOutput.PersistSnapshot -> {
                 val result = resource.writeSnapshot(output.snapshot)
                 validateWriteCompletion(output, result)
-                val pulse = ProfileNucleusPulse.WriteCompleted(output.effectRef, result)
-                acceptance.retainCompletion(ProfileWorkItem.Local(pulse))
+                acceptance.retainCompletion(ProfileWorkItem.WriteCompleted(output.effectRef, result))
             }
             is ProfileOutput.SettingsChanged -> when (item) {
                 is ProfileWorkItem.Settings -> item.reply.accepted(output.result)
@@ -300,9 +296,8 @@ internal fun hasProfileCommandRevisionCapacity(
 ): Boolean = revision.value <= Long.MAX_VALUE - MAX_ORDINARY_REVISIONS_PER_DISPATCH
 
 private sealed interface ProfileWorkItem {
-    val pulse: ProfileNucleusPulse
-
     sealed interface Direct<Result : Any> : ProfileWorkItem {
+        val pulse: ProfileNucleusPulse
         val reply: InlineReply<Result, ProfileRefusal>
     }
 
@@ -333,7 +328,12 @@ private sealed interface ProfileWorkItem {
         override val pulse: ProfileNucleusPulse = ProfileNucleusPulse.ApplyGameplayProgress(update)
     }
 
-    data class Local(override val pulse: ProfileNucleusPulse) : ProfileWorkItem
+    data class Local(val pulse: ProfileNucleusPulse) : ProfileWorkItem
+
+    data class WriteCompleted(
+        val effectRef: ProfileEffectRef,
+        val result: ProfileWriteResult,
+    ) : ProfileWorkItem
 }
 
 private const val PROFILE_COMPLETION_CAPACITY: Int = 8

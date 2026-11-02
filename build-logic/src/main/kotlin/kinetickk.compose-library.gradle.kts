@@ -10,9 +10,8 @@ plugins {
 }
 
 composeCompiler {
-    // Shipping binaries do not consume Compose tooling source coordinates or
-    // profiler trace markers. Excluding both shrinks every platform artifact
-    // and removes their compiler/runtime bookkeeping without changing UI state.
+    // The in-game recorder has explicit phases and build identity. General Compose inspector
+    // bookkeeping is unused by it and would distort Debug profiling, so omit it in both variants.
     includeSourceInformation.set(false)
     includeTraceMarkers.set(false)
 }

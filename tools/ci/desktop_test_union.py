@@ -7,7 +7,7 @@
 Each shard's report artifact is downloaded into its own directory, named desktop-reports-<shard>-<run>-<attempt>;
 a shard's latest attempt counts, so re-running only the failed shards still checks the whole run. Every JUnit XML
 report under a desktopTest result directory counts. The union of the shards must hold each
-`@Test` method of the tree's commonTest and desktopTest sources once: no test may run in two shards, or twice in
+`@Test` method of the tree's commonTest, desktopTest and selected variant test sources once: no test may run in two shards, or twice in
 one, and none may be missing. The tree has no test base classes, suites, nested test classes or parameterized
 tests, so a declared `@Test` method is exactly one reported test case.
 """
@@ -22,7 +22,7 @@ import xml.etree.ElementTree as ElementTree
 
 ARTIFACT = re.compile(r"desktop-reports-(?P<shard>[a-z0-9-]+?)-(?P<run>\d+)-(?P<attempt>\d+)")
 TEST_SOURCE_ROOTS = ("/src/commonTest/kotlin/", "/src/desktopTest/kotlin/")
-SKIPPED_DIRECTORIES = {".git", ".gradle", ".claude", ".kotlin", "build", "build-logic", "node_modules"}
+SKIPPED_DIRECTORIES = {".git", ".gradle", ".claude", ".kotlin", "build", "build-debug", "build-logic", "node_modules"}
 PACKAGE = re.compile(r"^package ([\w.]+)", re.MULTILINE)
 TOP_LEVEL_CLASS = re.compile(r"^(?:(?:public|internal|private|abstract|open|data)\s+)*class\s+(\w+)")
 TEST_ANNOTATION = re.compile(r"^\s+@Test\b")
@@ -46,13 +46,19 @@ def declared_tests(source):
     return tests
 
 
-def tree_tests(root):
+def tree_tests(root, variant="release"):
     """Counts the declared `@Test` methods per class over every desktop test source set under root."""
+    if variant not in {"debug", "release"}:
+        raise ValueError(f"unknown build variant: {variant}")
+    suffix = variant.capitalize()
+    source_roots = TEST_SOURCE_ROOTS + (
+        f"/src/common{suffix}Test/kotlin/", f"/src/desktop{suffix}Test/kotlin/",
+    )
     tests = Counter()
     for directory, subdirectories, files in os.walk(root):
         subdirectories[:] = sorted(name for name in subdirectories if name not in SKIPPED_DIRECTORIES)
         path = Path(directory).as_posix() + "/"
-        if not any(source_root in path for source_root in TEST_SOURCE_ROOTS):
+        if not any(source_root in path for source_root in source_roots):
             continue
         for name in sorted(files):
             if name.endswith(".kt"):
@@ -122,10 +128,11 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--reports", required=True, help="directory holding one directory per shard artifact")
     parser.add_argument("--sources", default=".", help="repository root")
+    parser.add_argument("--variant", choices=("debug", "release"), default="release")
     arguments = parser.parse_args(argv)
 
     results = shard_results(arguments.reports)
-    declared = tree_tests(arguments.sources)
+    declared = tree_tests(arguments.sources, arguments.variant)
     table = summary(results, declared)
     print(table)
     step_summary = os.environ.get("GITHUB_STEP_SUMMARY")

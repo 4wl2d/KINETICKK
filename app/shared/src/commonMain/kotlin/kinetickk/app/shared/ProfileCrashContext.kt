@@ -9,6 +9,7 @@ import kinetickk.foundation.diagnostics.CrashDiagnostics
 
 /** Format only values already observed by the platform broker; retain no persistence authority. */
 internal fun CrashDiagnostics.recordProfileRead(result: ProfilePersistenceReadResult) {
+    if (this === CrashDiagnostics.None) return
     if (result is ProfilePersistenceReadResult.Observed) {
         val payload = result.payload
         context("profile.loaded.json") { payload ?: "null" }
@@ -17,12 +18,14 @@ internal fun CrashDiagnostics.recordProfileRead(result: ProfilePersistenceReadRe
 }
 
 internal fun CrashDiagnostics.recordProfileWriteAttempt(payload: String) {
+    if (this === CrashDiagnostics.None) return
     context("profile.write-attempt.json") { payload }
     context("profile.write-result") { "IN_PROGRESS (no provider result observed yet)" }
     event("profile.write", "started (${payload.length} characters)")
 }
 
 internal fun CrashDiagnostics.recordProfileWriteResult(payload: String, result: ProfilePersistenceMutationResult) {
+    if (this === CrashDiagnostics.None) return
     context("profile.write-result") { result.name }
     if (result == ProfilePersistenceMutationResult.COMPLETED) {
         context("profile.saved.json") { payload }

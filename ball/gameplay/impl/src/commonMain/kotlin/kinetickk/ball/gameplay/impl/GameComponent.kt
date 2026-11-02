@@ -45,6 +45,11 @@ import kinetickk.foundation.dispatch.call
 import kinetickk.ball.profile.api.ProfileReadPort
 import kinetickk.ball.profile.api.ProfileProgress
 import kinetickk.ball.gameplay.api.GameplayRunExited
+import kinetickk.foundation.diagnostics.CrashDiagnostics
+import kinetickk.foundation.diagnostics.DIAGNOSTICS_ENABLED
+import kinetickk.foundation.diagnostics.DiagnosticPhase
+import kinetickk.foundation.diagnostics.PerformanceDiagnostics
+import kotlin.time.TimeSource
 
 /** Sole owner, acceptor, atomic publisher, and ordered-output dispatcher for one GameplayRun. */
 internal class GameComponent private constructor(
@@ -53,7 +58,9 @@ internal class GameComponent private constructor(
     private val profileProgress: ProfileProgress,
     private val audioExecutor: GameplayAudioExecutor,
     private val seed: Int,
+    private val diagnostics: CrashDiagnostics,
 ) : GameplayRunPort, GameplayPresentationPort, GameplayInteractionPort {
+    private val performanceDiagnostics = if (DIAGNOSTICS_ENABLED) diagnostics as? PerformanceDiagnostics else null
     private val acceptance = InlineAcceptance(gameplayCompletionDeque<GameplayWorkItem>())
 
     private val localOutputItem = GameplayWorkItem.Local
@@ -154,11 +161,18 @@ internal class GameComponent private constructor(
                 "Gameplay local revision capacity exhausted before Intent construction"
             }
             val before = committedState
-            when (val decision = GameplayNucleus.decide(
+            val simulationStartedAt = if (DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true) {
+                TimeSource.Monotonic.markNow()
+            } else null
+            val decision = GameplayNucleus.decide(
                 before,
                 GameplayNucleusPulse.Intent(pulse),
                 GameplayContext.Empty,
-            )) {
+            )
+            if (DIAGNOSTICS_ENABLED && simulationStartedAt != null) {
+                performanceDiagnostics?.phase(DiagnosticPhase.Simulation, simulationStartedAt.elapsedNow().inWholeNanoseconds)
+            }
+            when (decision) {
                 is GameplayDecision.Rejected -> GameplayAcceptance.Rejected(
                     instanceId = before.instanceId,
                     observedRevision = before.revision,
@@ -186,12 +200,18 @@ internal class GameComponent private constructor(
         frame: GameplayAcceptedFrame,
         renderModelNeutralTransition: Boolean = false,
     ) {
+        val projectionStartedAt = if (DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true) {
+            TimeSource.Monotonic.markNow()
+        } else null
         val renderSnapshot = preflight(
             before = before,
             renderModelNeutralTransition = renderModelNeutralTransition,
             item = item,
             frame = frame,
         )
+        if (DIAGNOSTICS_ENABLED && projectionStartedAt != null) {
+            performanceDiagnostics?.phase(DiagnosticPhase.Projection, projectionStartedAt.elapsedNow().inWholeNanoseconds)
+        }
         publish(frame.nextState, renderSnapshot)
         initializeInteractionFxIfStarted(before, item)
     }
@@ -363,7 +383,17 @@ internal class GameComponent private constructor(
     }
 
     private fun publish(state: GameplayState, renderSnapshot: GameplayRenderSnapshot) {
+        val previous = committedFrame
         committedFrame = CommittedGameplayFrame(state, renderSnapshot)
+        if (DIAGNOSTICS_ENABLED && diagnostics.enabled) {
+            if (previous.state.phase != state.phase) {
+                diagnostics.event("gameplay.phase", "${previous.state.phase} -> ${state.phase} revision=${state.revision}")
+            }
+            val model = renderSnapshot.renderModel
+            if (model != null && previous.renderSnapshot.renderModel?.level != model.level) {
+                diagnostics.event("gameplay.level", "level=${model.level} kills=${model.kills} elapsed=${model.elapsed}")
+            }
+        }
     }
 
     private fun initializeInteractionFxIfStarted(
@@ -383,8 +413,18 @@ internal class GameComponent private constructor(
             is GameplayOutput.EmitVisualFx ->
                 checkNotNull(interactionFxReducer).apply(output.cues)
             is GameplayOutput.SendProfileCommand -> executeProfileCommand(output, item)
-            is GameplayOutput.AdvanceAudio ->
-                audioExecutor.advance(output.realDeltaSeconds, output.cues)
+            is GameplayOutput.AdvanceAudio -> {
+                val audioStartedAt = if (DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true) {
+                    TimeSource.Monotonic.markNow()
+                } else null
+                try {
+                    audioExecutor.advance(output.realDeltaSeconds, output.cues)
+                } finally {
+                    if (DIAGNOSTICS_ENABLED && audioStartedAt != null) {
+                        performanceDiagnostics?.phase(DiagnosticPhase.Audio, audioStartedAt.elapsedNow().inWholeNanoseconds)
+                    }
+                }
+            }
             GameplayOutput.EnsureAudioUnlocked ->
                 audioExecutor.ensureUnlocked()
             is GameplayOutput.RunExited -> checkNotNull(item.exitReplyOrNull()).accepted(output.result)
@@ -420,12 +460,14 @@ internal class GameComponent private constructor(
             profileProgress: ProfileProgress,
             audioExecutor: GameplayAudioExecutor,
             seed: Int,
+            diagnostics: CrashDiagnostics = CrashDiagnostics.None,
         ): GameComponent = GameComponent(
             initialState = GameplayState.initial(runId, content),
             profilePort = profilePort,
             audioExecutor = audioExecutor,
             profileProgress = profileProgress,
             seed = seed,
+            diagnostics = diagnostics,
         )
     }
 }

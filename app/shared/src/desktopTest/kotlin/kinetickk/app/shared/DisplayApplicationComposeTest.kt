@@ -82,6 +82,7 @@ class DisplayApplicationComposeTest {
                 Box(Modifier.requiredSize(1000.dp, 700.dp).testTag("app")) { owner.Content() }
             }
             fun settle() {
+                awaitAppStartup()
                 mainClock.advanceTimeBy(260)
                 waitForIdle()
             }
@@ -144,6 +145,7 @@ class DisplayApplicationComposeTest {
                 }
             }
             fun settle() {
+                awaitAppStartup()
                 mainClock.advanceTimeBy(260)
                 waitForIdle()
             }
@@ -191,6 +193,7 @@ class DisplayApplicationComposeTest {
                 }
             }
             fun settle() {
+                awaitAppStartup()
                 mainClock.advanceTimeBy(260)
                 waitForIdle()
             }
@@ -272,6 +275,7 @@ class DisplayApplicationComposeTest {
                 setContent {
                     Box(Modifier.requiredSize(width.dp, height.dp)) { owner.Content() }
                 }
+                awaitAppStartup()
                 mainClock.advanceTimeBy(100)
                 waitForIdle()
                 owner.sessionPort.accept(SessionInteractionPulse.StartRunRequested)

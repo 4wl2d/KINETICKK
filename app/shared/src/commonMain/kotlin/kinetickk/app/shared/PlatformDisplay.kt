@@ -59,6 +59,9 @@ data class HostLiveWindow(val mode: HostWindowMode, val widthDp: Int, val height
 interface PlatformDisplayHost {
     fun support(): HostDisplaySupport
 
+    /** Observed display cadence when synchronized; 0 means uncapped or unavailable. Debug probes only. */
+    fun diagnosticRefreshHz(): Int = 0
+
     /** Applies the changes against the last applied request, or everything again when [force]. */
     fun apply(request: HostDisplayRequest, force: Boolean = false)
 

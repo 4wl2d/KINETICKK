@@ -19,6 +19,7 @@ class ProfileAudioExecutorTest {
 
         executor.play(ProfileAudioCue.UI_CLICK)
         executor.play(ProfileAudioCue.PURCHASE)
+        assertEquals(2, service.unlockCalls)
 
         assertEquals(
             listOf(
@@ -45,6 +46,7 @@ class ProfileAudioExecutorTest {
 }
 
 private class RecordingProfileAudioService : AudioService {
+    var unlockCalls = 0
     var preferences = AudioPreferences()
     val requestBatches = mutableListOf<List<ToneRequest>>()
 
@@ -53,10 +55,11 @@ private class RecordingProfileAudioService : AudioService {
     }
 
     override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) {
+        assertEquals(requestBatches.size + 1, unlockCalls, "Pointer feedback must unlock audio before advancing it")
         assertEquals(0f, realDeltaSeconds)
         requestBatches += requests
     }
 
-    override fun ensureUnlocked() = Unit
+    override fun ensureUnlocked() { unlockCalls++ }
     override fun close() = Unit
 }

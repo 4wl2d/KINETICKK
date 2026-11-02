@@ -3,6 +3,10 @@
 
 package kinetickk.ball.gameplay.impl
 
+import kinetickk.foundation.diagnostics.DIAGNOSTICS_ENABLED
+import kinetickk.foundation.diagnostics.CrashDiagnostics
+import kinetickk.foundation.diagnostics.DiagnosticPhase
+import kinetickk.foundation.diagnostics.PerformanceDiagnostics
 import kinetickk.foundation.dispatch.InlineReply
 import kinetickk.ball.profile.api.ProfileReadPort
 import kinetickk.ball.profile.api.ProfileProgress
@@ -65,6 +69,44 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class GameComponentTest {
+    @Test
+    fun performanceRecordingPreservesTheDeterministicSimulationAndReleaseNeverSamples() {
+        for (collect in listOf(false, true)) {
+            val phases = mutableListOf<DiagnosticPhase>()
+            val diagnostics = object : PerformanceDiagnostics {
+                override val capturesPerformance = collect
+                override fun frame(frameTimeNanos: Long, budgetNanos: Long) = Unit
+                override fun phase(phase: DiagnosticPhase, durationNanos: Long) {
+                    assertTrue(durationNanos >= 0L)
+                    phases += phase
+                }
+                override fun workload(enemies: Int, projectiles: Int, pickups: Int, effects: Int) = Unit
+                override fun context(key: String, describe: () -> String) = Unit
+                override fun event(category: String, message: String, highFrequency: Boolean) = Unit
+            }
+            val plain = component()
+            val recorded = component(diagnostics = diagnostics)
+            plain.start()
+            recorded.start()
+            assertEquals(plain.declineOmenIfOffered(), recorded.declineOmenIfOffered())
+            repeat(90) {
+                val frame = GameplayInteractionPulse.FrameElapsed.fromValidated(1f / 60f)
+                assertEquals(plain.accept(frame), recorded.accept(frame))
+            }
+            assertEquals(
+                requireNotNull(plain.renderSnapshot().renderModel).exactRenderWitness(),
+                requireNotNull(recorded.renderSnapshot().renderModel).exactRenderWitness(),
+            )
+            if (DIAGNOSTICS_ENABLED && collect) {
+                assertTrue(DiagnosticPhase.Simulation in phases)
+                assertTrue(DiagnosticPhase.Projection in phases)
+                assertTrue(DiagnosticPhase.Audio in phases)
+            } else {
+                assertTrue(phases.isEmpty(), "Disabled/Release diagnostics must never sample")
+            }
+        }
+    }
+
     @Test
     fun createdComponentCapturesContentWithoutPublishingSimulation() {
         val component = component()
@@ -615,7 +657,11 @@ class GameComponentTest {
         run1.start()
         val run1Enemies = run1.renderSnapshot().renderModel!!.enemies
         assertEquals(listOf(RunId(0), RunId(1)), asked)
-        assertTrue(recorded.any { it.contains("seed=40000") } && recorded.any { it.contains("seed=47919") }, "$recorded")
+        if (DIAGNOSTICS_ENABLED) {
+            assertTrue(recorded.any { it.contains("seed=40000") } && recorded.any { it.contains("seed=47919") }, "$recorded")
+        } else {
+            assertTrue(recorded.isEmpty(), "Release must not format or record diagnostic events")
+        }
         // A different seed reshapes the opening.
         assertNotEquals(run0Enemies.map { it.x to it.y }, run1Enemies.map { it.x to it.y })
     }
@@ -769,6 +815,7 @@ private fun component(
     profile: TestProfilePort = TestProfilePort(),
     audio: GameplayAudioExecutor = RecordingGameplayAudioExecutor(),
     content: kinetickk.ball.content.api.GameplayContentSnapshot = SyntheticGameplayContent,
+    diagnostics: CrashDiagnostics = CrashDiagnostics.None,
 ): GameComponent {
     val component = GameComponent.create(
         runId = RunId(31),
@@ -777,6 +824,7 @@ private fun component(
         audioExecutor = audio,
         profileProgress = profile,
         seed = DEFAULT_GAMEPLAY_SEED,
+        diagnostics = diagnostics,
     )
     return component
 }

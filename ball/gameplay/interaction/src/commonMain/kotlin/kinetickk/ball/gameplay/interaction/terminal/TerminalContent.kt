@@ -283,7 +283,7 @@ internal fun TerminalContent(
     val actionsEnabled = enabled && terminalActionsReady(elapsed, presentation.victory)
     val roles = LocalKkRolePalette.current
     val accent = if (presentation.victory) roles.you else roles.threat
-    val shatter = remember(presentation.victory) { ReportShatterArt(presentation.victory) }
+    val shatter = reportShatterArt(presentation.victory)
     val t = elapsed - delay
     BoxWithConstraints(
         Modifier.fillMaxSize().testTag("kinetickk.gameplay.results")
@@ -319,6 +319,20 @@ internal class ReportShatterArt(victory: Boolean) {
     val victory: Boolean = victory
     val shape: ReportShatterShape = reportShatterShape(victory)
     val paths: List<Path> by lazy { shape.shards.map { it.path() } }
+}
+
+/** Two deterministic shapes shared by all reports and the in-world defeat; paths are draw-only. */
+private object ReportShatterResources {
+    val defeat by lazy { ReportShatterArt(victory = false) }
+    val victory by lazy { ReportShatterArt(victory = true) }
+}
+
+internal fun reportShatterArt(victory: Boolean): ReportShatterArt =
+    if (victory) ReportShatterResources.victory else ReportShatterResources.defeat
+
+internal fun prepareTerminalVisualResources() {
+    reportShatterArt(false).paths
+    reportShatterArt(true).paths
 }
 
 @Composable

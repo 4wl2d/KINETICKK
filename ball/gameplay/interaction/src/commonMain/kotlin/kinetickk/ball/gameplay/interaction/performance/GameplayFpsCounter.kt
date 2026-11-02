@@ -5,7 +5,7 @@ package kinetickk.ball.gameplay.interaction.performance
 
 /**
  * The Show FPS counter: frames per second over [WINDOW_NANOS] windows of the gameplay frame loop.
- * [frame] counts one presented frame and closes a window once it has lasted [WINDOW_NANOS]; [fps]
+ * [frame] counts one frame callback and closes a window once it has lasted [WINDOW_NANOS]; [fps]
  * changes only when a closed window measured a different whole value, so the HUD reads a value that
  * moves at most twice a second. A gap of more than [STALL_NANOS] between two frames is a stall (a
  * hidden tab, the app in the background), not a frame rate: a new window starts after it. Hiding the
@@ -21,7 +21,7 @@ internal class GameplayFpsCounter {
     var fps: Int = NO_VALUE
         private set
 
-    /** Counts the frame presented at [frameNanos]; true when it closed a window with a new [fps]. */
+    /** Counts the frame callback at [frameNanos]; true when it closed a window with a new [fps]. */
     fun frame(frameNanos: Long): Boolean {
         val previous = lastFrameNanos
         lastFrameNanos = frameNanos

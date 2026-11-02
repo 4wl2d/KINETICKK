@@ -89,8 +89,6 @@ object ProfileNucleus {
                 mutationGate(state)?.let { return rejected(it) }
                 applyGameplayProgress(state, pulse.update)
             }
-            is ProfileNucleusPulse.WriteCompleted ->
-                decideWrite(state, pulse.effectRef, pulse.result)
         }
     }
 
@@ -575,15 +573,23 @@ object ProfileNucleus {
         return accepted(nextState, outputs)
     }
 
-    private fun decideWrite(
+    /**
+     * Settles the one committed write. Unlike a request, its completion cannot be rejected.
+     * Correlation faults are programming errors at this synchronous, trusted boundary: they
+     * commit nothing, and the owner retains the queued completion for diagnosis.
+     */
+    fun complete(
         state: ProfileState,
         effectRef: ProfileEffectRef,
         result: ProfileWriteResult,
-    ): ProfileDecision {
+    ): ProfileAcceptedFrame {
         val pending = checkNotNull(state.persistence as? ProfilePersistenceStatus.Pending)
         check(pending.effectRef == effectRef)
         val persistence = checkNotNull(result.toPersistenceStatus(pending))
-        return accepted(state.copy(revision = state.revision.next(), persistence = persistence))
+        return ProfileAcceptedFrame(
+            state.copy(revision = state.revision.next(), persistence = persistence),
+            immutableListOf(),
+        )
     }
 
     private fun mutationGate(state: ProfileState): ProfileRejection? = when (state.bootstrap) {

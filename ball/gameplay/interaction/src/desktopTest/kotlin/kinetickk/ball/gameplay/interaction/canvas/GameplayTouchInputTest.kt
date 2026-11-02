@@ -87,7 +87,12 @@ class GameplayTouchInputTest {
                 Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST)) { GameplayContent(port, true) {} }
             }
         }
-        compose.mainClock.advanceTimeByFrame()
+        val deadline = compose.mainClock.currentTime + 1000L
+        while (pulses.none { it is GameplayInteractionPulse.FrameElapsed } && compose.mainClock.currentTime < deadline) {
+            compose.mainClock.advanceTimeByFrame()
+        }
+        assertTrue(pulses.any { it is GameplayInteractionPulse.FrameElapsed }, "The gameplay host must finish preparation before touch assertions")
+        compose.waitForIdle()
     }
 
     /** The run moves to [phase] (RUNNING is the started run); the host reads it on the next frame. */

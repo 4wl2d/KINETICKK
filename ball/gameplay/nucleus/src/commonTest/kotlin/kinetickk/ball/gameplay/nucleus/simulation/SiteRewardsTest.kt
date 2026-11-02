@@ -6,6 +6,8 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.content.api.DirectedReward
 import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.WorldDiscovery
+import kinetickk.ball.content.api.RewardFocus
+import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.gameplay.nucleus.model.ItemDeck
 import kinetickk.ball.gameplay.nucleus.model.RunSecretFlag
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
@@ -19,6 +21,21 @@ import kotlin.test.assertTrue
 
 class SiteRewardsTest {
     private fun game() = MutableGameState(canonicalGameplayContent).apply { startRun(); enemies.clear() }
+
+    @Test
+    fun everyRelicDirectionOffersItsNamedAspectFirst() {
+        val aspectNames = RelicAspect.entries.map { it.name }.toSet()
+        val focuses = RewardFocus.entries.filter { it.name in aspectNames }
+        assertEquals(8, focuses.size)
+        for (focus in focuses) {
+            val game = game().apply { rebirthRank = content.relics.maxOf { it.minimumRebirth } }
+            game.openDirectedReward(DirectedReward.RELIC)
+            game.selectRewardFocus(focus)
+            val firstRelic = game.choices.first().relicId
+            assertTrue(firstRelic != null, "$focus must offer a relic")
+            assertEquals(focus.name, game.content.relic(firstRelic).aspect.name)
+        }
+    }
 
     @Test
     fun theFloorQueueAcceptsItsBoundAndRefusesTheNext() {

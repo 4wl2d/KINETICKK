@@ -2,9 +2,35 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import kinetickk.gradle.isolatedProjectsProfileEnabled
+import kinetickk.gradle.BuildVariant
+import kinetickk.gradle.gameBuildVariant
+import kinetickk.gradle.WriteDebugBuildIdentityTask
 
 plugins {
     id("kinetickk.compose-library")
+}
+
+if (gameBuildVariant() == BuildVariant.DEBUG) {
+    val debugBuildIdentity = tasks.register<WriteDebugBuildIdentityTask>("writeDebugBuildIdentity") {
+        gameVersion.set(project.version.toString())
+        gitRevision.set(providers.exec {
+            workingDir(rootDir)
+            commandLine("git", "rev-parse", "HEAD")
+            isIgnoreExitValue = true
+        }.standardOutput.asText)
+        gitStatus.set(providers.exec {
+            workingDir(rootDir)
+            commandLine("git", "status", "--porcelain=v1", "--untracked-files=normal")
+            isIgnoreExitValue = true
+        }.standardOutput.asText)
+        repositoryDirectory.set(rootDir)
+        buildSources.from(fileTree(rootDir) {
+            include("**/src/**/*.kt", "**/*.gradle.kts", "gradle/libs.versions.toml", "gradle.properties")
+            exclude("**/build/**", "**/build-debug/**", "**/.gradle/**")
+        })
+        outputDirectory.set(layout.buildDirectory.dir("generated/debug-build-identity"))
+    }
+    kotlin.sourceSets.named("commonMain") { kotlin.srcDir(debugBuildIdentity) }
 }
 
 kotlin {
@@ -21,6 +47,8 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
+            api(projects.foundation.common)
+            implementation(libs.compose.foundation)
             implementation(projects.foundation.design)
             implementation(libs.compose.runtime)
             implementation(projects.resource.audio.api)

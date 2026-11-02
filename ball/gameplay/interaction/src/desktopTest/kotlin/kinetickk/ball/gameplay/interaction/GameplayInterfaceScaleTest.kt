@@ -76,7 +76,11 @@ class GameplayInterfaceScaleTest {
                     Box(Modifier.requiredSize(WIDTH.dp, HEIGHT.dp)) { GameplayContent(run, inputEnabled = true) {} }
                 }
             }
-            repeat(2) { mainClock.advanceTimeByFrame() }
+            val deadline = mainClock.currentTime + 1000L
+            while (run.pulses.none { it is GameplayInteractionPulse.FrameElapsed } && mainClock.currentTime < deadline) {
+                mainClock.advanceTimeByFrame()
+            }
+            assertTrue(run.pulses.any { it is GameplayInteractionPulse.FrameElapsed }, "The gameplay host must finish preparation before layout assertions")
             waitForIdle()
             val pause = onNodeWithTag("kinetickk.gameplay.pause").fetchSemanticsNode().boundsInRoot
             val dash = onNodeWithTag("kinetickk.gameplay.dash").fetchSemanticsNode().boundsInRoot

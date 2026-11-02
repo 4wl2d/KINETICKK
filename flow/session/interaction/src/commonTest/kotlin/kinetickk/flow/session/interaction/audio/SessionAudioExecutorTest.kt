@@ -18,6 +18,8 @@ class SessionAudioExecutorTest {
 
         SessionAudioExecutor(service).playUiClick()
 
+        assertEquals(1, service.unlockCalls)
+
         assertEquals(
             listOf(ToneRequest(520f, 0.035f, 0.11f, ToneWave.SINE)),
             service.requests,
@@ -55,6 +57,7 @@ private class RecordingSessionAudioService : AudioService {
     }
 
     override fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>) {
+        assertEquals(1, unlockCalls, "Pointer feedback must unlock audio before advancing it")
         assertEquals(0f, realDeltaSeconds)
         this.requests = requests
     }

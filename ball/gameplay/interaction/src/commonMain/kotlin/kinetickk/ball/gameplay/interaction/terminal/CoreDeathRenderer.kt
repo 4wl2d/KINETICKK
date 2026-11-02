@@ -5,7 +5,6 @@ package kinetickk.ball.gameplay.interaction.terminal
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.scale
 import kinetickk.ball.gameplay.interaction.canvas.drawCore
@@ -48,9 +47,10 @@ internal fun DrawScope.drawCoreDeath(
         drawCircle(threat.copy(alpha = (1f - eased) * fade), kkLerp(18f, 150f, eased), core, style = kkStroke(3f))
     }
     // Shards fly out on the board's timeline, compressed.
-    val shape = CoreDeathShapes.shape
+    val art = reportShatterArt(victory = false)
+    val shape = art.shape
     val shardTime = 0.32f + t * 1.4f
-    drawShatterShards(shape, CoreDeathShapes.paths, core, 0.26f, shardTime, threat, spread = 2.4f, alpha = fade, floating = false)
+    drawShatterShards(shape, art.paths, core, 0.26f, shardTime, threat, spread = 2.4f, alpha = fade, floating = false)
     val debris = when (engine.settings.particleDensity) {
         ParticleDensity.LOW -> 6
         ParticleDensity.NORMAL -> 12
@@ -73,9 +73,3 @@ internal fun DrawScope.drawCoreDeath(
 // Glow (0 0 36px 8px threat @45 %) as stacked translucent discs, no blur.
 private val GlowWidths = floatArrayOf(3f, 6f, 10f, 15f)
 private val GlowAlphas = floatArrayOf(0.22f, 0.14f, 0.08f, 0.04f)
-
-/** Defeat shatter geometry, built once on first draw. */
-private object CoreDeathShapes {
-    val shape: ReportShatterShape by lazy { reportShatterShape(victory = false) }
-    val paths: List<Path> by lazy { shape.shards.map { it.path() } }
-}

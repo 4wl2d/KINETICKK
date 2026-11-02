@@ -101,6 +101,8 @@ class DesktopDisplayHost internal constructor(
         )
     }
 
+    override fun diagnosticRefreshHz(): Int = if (vsync) screens.screen(window)?.refreshHz ?: 0 else 0
+
     override fun apply(request: HostDisplayRequest, force: Boolean) {
         val previous = last
         if (!force && request == previous) return

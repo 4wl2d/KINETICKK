@@ -19,6 +19,7 @@ import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.work.DisableCachingByDefault
 import java.io.Serializable
+import java.io.ByteArrayOutputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -32,6 +33,7 @@ abstract class WriteDesktopBuildInfoTask : DefaultTask() {
     @get:Input abstract val composeVersion: Property<String>
     @get:Input abstract val gitRevision: Property<String>
     @get:Input abstract val gitStatus: Property<String>
+    @get:Input abstract val sourceDateEpoch: Property<Long>
     @get:Internal abstract val repositoryDirectory: DirectoryProperty
     @get:InputFiles @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val buildSources: ConfigurableFileCollection
@@ -54,11 +56,20 @@ abstract class WriteDesktopBuildInfoTask : DefaultTask() {
             setProperty("git.dirty", gitStatus.get().isNotBlank().toString())
             setProperty("git.status", gitStatus.get().take(64 * 1024))
             setProperty("source.sha256", digest.digest().joinToString("") { "%02x".format(it) })
-            setProperty("built.at", Instant.now().toString())
+            // Reproducible timestamp: SOURCE_DATE_EPOCH, or the source commit time.
+            setProperty("built.at", Instant.ofEpochSecond(sourceDateEpoch.get()).toString())
         }
         val directory = outputDirectory.get().asFile.apply { mkdirs() }
-        directory.resolve("kinetickk-build.properties").outputStream().use { properties.store(it, "KINETICKK build provenance") }
+        directory.resolve("kinetickk-build.properties").writeBytes(deterministicProperties(properties))
     }
+}
+
+/** Properties.store adds today's date; retain its escaping but replace that unstable header and ordering. */
+internal fun deterministicProperties(properties: Properties): ByteArray {
+    val encoded = ByteArrayOutputStream().also { properties.store(it, null) }.toString(Charsets.ISO_8859_1)
+    val entries = encoded.lineSequence().filter { it.isNotEmpty() && !it.startsWith('#') }.sorted()
+    return ("# KINETICKK build provenance\n" + entries.joinToString("\n", postfix = "\n"))
+        .toByteArray(Charsets.ISO_8859_1)
 }
 
 /** Serializable Gradle action: no execution-time Project access, compatible with configuration cache. */

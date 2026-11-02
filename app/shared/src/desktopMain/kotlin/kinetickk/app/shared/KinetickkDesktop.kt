@@ -12,6 +12,8 @@ import androidx.compose.ui.window.ApplicationScope
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import java.awt.Dimension
+import kinetickk.foundation.diagnostics.CrashDiagnostics
+import kinetickk.foundation.diagnostics.DIAGNOSTICS_ENABLED
 
 /**
  * The desktop application. The composition owner (Profile, Gameplay, Session and audio) lives above
@@ -19,25 +21,25 @@ import java.awt.Dimension
  * run; only the window's own composition is rebuilt. [hostEffects] compose once, outside the window.
  */
 fun runKinetickkDesktop(
-    crashes: DesktopCrashHandler,
+    diagnostics: CrashDiagnostics = CrashDiagnostics.None,
+    windowBoundary: @Composable (@Composable () -> Unit) -> Unit = { it() },
     hostEffects: @Composable ApplicationScope.() -> Unit = {},
 ) {
     val host = DesktopDisplayHost()
     // Profile loads synchronously here, so the stored display preferences shape the first window.
-    val owner = AppCompositionOwner(diagnostics = crashes.reporter, displayHost = host, quitAvailable = true)
+    val owner = AppCompositionOwner(diagnostics = diagnostics, displayHost = host, quitAvailable = true)
     try {
         val initial = owner.preferences()
         // Before the first window: Skiko reads the V-Sync setting when it creates a window's redrawer.
         val pacing = DesktopFramePacing.apply(preferenceVsync = initial.vsync)
-        if (!pacing.vsync) println("KINETICKK uncapped frame rate (V-Sync off)")
         host.start(initial.toHostDisplayRequest(), pacing)
         application(exitProcessOnExit = false) {
-            DesktopCrashBoundary(crashes) {
+            windowBoundary {
                 key(host.generation) {
                     Window(
                         onCloseRequest = ::exitApplication,
                         state = host.windowState,
-                        title = "KINETICKK",
+                        title = if (DIAGNOSTICS_ENABLED) "KINETICKK Debug" else "KINETICKK",
                         undecorated = host.undecorated,
                         resizable = host.resizable,
                     ) {

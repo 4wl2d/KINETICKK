@@ -40,6 +40,9 @@ internal class ResourceGameplayAudioExecutor(
 private val TONE_REQUESTS = GameplayAudioCue.entries.map(GameplayAudioCue::createToneRequest)
 private val SINGLE_TONE_REQUESTS = TONE_REQUESTS.map { listOf(it) }
 
+/** The same fixed effects used by playback, exposed to application startup preparation. */
+fun gameplayPreloadToneRequests(): List<ToneRequest> = TONE_REQUESTS
+
 private fun GameplayAudioCue.createToneRequest(): ToneRequest = when (this) {
     GameplayAudioCue.UI_CLICK -> ToneRequest(520f, 0.035f, 0.11f, ToneWave.SINE)
     GameplayAudioCue.DASH -> ToneRequest(185f, 0.11f, 0.23f, ToneWave.SAW)

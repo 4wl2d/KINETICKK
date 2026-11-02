@@ -63,6 +63,7 @@ class RedesignBeforeAfterShotsTest {
                         Box(Modifier.requiredSize(width.dp, height.dp).testTag("ba")) { owner.Content() }
                     }
                 }
+                awaitAppStartup()
                 fun shot(name: String, advance: Long = 900) {
                     mainClock.advanceTimeBy(advance)
                     waitForIdle()

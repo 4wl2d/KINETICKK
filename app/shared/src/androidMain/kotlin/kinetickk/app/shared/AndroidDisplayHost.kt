@@ -38,6 +38,8 @@ class AndroidDisplayHost(private val activity: Activity) : PlatformDisplayHost {
         touchPrimary = true,
     )
 
+    override fun diagnosticRefreshHz(): Int = display()?.refreshRate?.toInt() ?: 0
+
     override fun apply(request: HostDisplayRequest, force: Boolean) {
         val previous = last
         if (!force && request == previous) return

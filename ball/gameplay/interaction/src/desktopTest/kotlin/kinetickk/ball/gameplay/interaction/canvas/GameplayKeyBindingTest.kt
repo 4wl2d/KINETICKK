@@ -39,6 +39,7 @@ import kinetickk.ball.profile.api.KeyBindings
 import kinetickk.foundation.common.input.BindableKey
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
+import kinetickk.foundation.diagnostics.DIAGNOSTICS_ENABLED
 import org.junit.Rule
 import org.junit.Test
 import kotlin.test.assertEquals
@@ -48,7 +49,7 @@ import kotlin.test.assertTrue
  * The gameplay key handler maps keys through the player's bindings and consumes a bound key only in the
  * phases where its action applies (meta-ui §4.2): a key it does not consume bubbles to the session's
  * shortcuts (C opens the Codex while paused). Escape and Enter stay fixed aliases; the performance key
- * works in every phase.
+ * works in every phase in Debug and remains unconsumed in Release.
  */
 @OptIn(ExperimentalTestApi::class)
 class GameplayKeyBindingTest {
@@ -90,7 +91,12 @@ class GameplayKeyBindingTest {
                 }
             }
         }
-        compose.mainClock.advanceTimeByFrame()
+        val deadline = compose.mainClock.currentTime + 1000L
+        while (pulses.none { it is GameplayInteractionPulse.FrameElapsed } && compose.mainClock.currentTime < deadline) {
+            compose.mainClock.advanceTimeByFrame()
+        }
+        assertTrue(pulses.any { it is GameplayInteractionPulse.FrameElapsed }, "The gameplay host must finish preparation before key assertions")
+        compose.waitForIdle()
     }
 
     /** Presses [key] and returns the gameplay pulses it dispatched (frames, gestures and the viewport aside). */
@@ -128,9 +134,9 @@ class GameplayKeyBindingTest {
             assertEquals(emptyList(), press(key), "$key while running")
             assertEquals(listOf(key), bubbled, "$key did not bubble")
         }
-        // The performance key works in every phase and never reaches the session.
+        // Debug consumes its performance shortcut; Release has no diagnostic action for it.
         assertEquals(emptyList(), press(Key.F3))
-        assertTrue(bubbled.isEmpty(), "F3 bubbled")
+        assertEquals(if (DIAGNOSTICS_ENABLED) emptyList() else listOf(Key.F3), bubbled, "F3 while running")
     }
 
     @Test
@@ -146,7 +152,7 @@ class GameplayKeyBindingTest {
         assertEquals(listOf(GameplayInteractionPulse.BrakeChanged(BrakeSource.KEYBOARD, false)), press(Key.ShiftLeft))
         assertEquals(listOf(Key.ShiftLeft), bubbled)
         assertEquals(emptyList(), press(Key.F3))
-        assertTrue(bubbled.isEmpty(), "F3 bubbled while paused")
+        assertEquals(if (DIAGNOSTICS_ENABLED) emptyList() else listOf(Key.F3), bubbled, "F3 while paused")
     }
 
     @Test

@@ -73,6 +73,7 @@ class ReactionEffectsPreferenceComposeTest {
                 gameplayComponent = gameplay)
             try {
                 setContent { Box(Modifier.requiredSize(1_000.dp, 700.dp).testTag("reaction-effects-app")) { owner.Content() } }
+                awaitAppStartup()
                 fun settle() {
                     mainClock.advanceTimeBy(260)
                     waitForIdle()

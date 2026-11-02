@@ -32,11 +32,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.IntState
 import androidx.compose.runtime.NonRestartableComposable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -72,6 +75,8 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.TextMeasurer as ComposeTextMeasurer
 import androidx.compose.ui.unit.Density
@@ -86,16 +91,16 @@ import kinetickk.foundation.design.KkApexState
 import kinetickk.foundation.design.toBindableKey
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.LocalCrashDiagnostics
-import kinetickk.foundation.diagnostics.CrashDiagnostics
+import kinetickk.foundation.diagnostics.DIAGNOSTICS_ENABLED
+import kinetickk.foundation.diagnostics.DiagnosticPhase
+import kinetickk.foundation.diagnostics.PerformanceDiagnostics
+import kinetickk.foundation.diagnostics.diagnosticFrameBudgetNanos
 import kinetickk.ball.gameplay.interaction.canvas.HudPresentationMemory
 import kinetickk.ball.gameplay.interaction.canvas.HudTrialPanelLayout
 import kinetickk.ball.gameplay.interaction.canvas.activeTrial
 import kinetickk.ball.gameplay.interaction.canvas.badgeState
 import kinetickk.ball.gameplay.interaction.canvas.drawGameplay
-import kinetickk.ball.gameplay.interaction.canvas.drawPerformanceHud
-import kinetickk.ball.gameplay.interaction.canvas.withHudDensity
-import kinetickk.ball.gameplay.interaction.canvas.shouldDrawRunningPresentation
-import kinetickk.ball.gameplay.interaction.canvas.toPerformanceHudProjection
+import kinetickk.ball.gameplay.interaction.canvas.drawCompactFpsReadout
 import kinetickk.ball.gameplay.interaction.canvas.trialRules
 import kinetickk.ball.gameplay.interaction.input.GameInteractionValidator
 import kinetickk.ball.gameplay.interaction.input.GameplayInput
@@ -115,6 +120,7 @@ import kinetickk.ball.gameplay.interaction.input.runningControlTargetAt
 import kinetickk.ball.gameplay.interaction.layout.PauseTarget
 import kinetickk.ball.gameplay.interaction.layout.PauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.RunningControlMask
+import kinetickk.ball.gameplay.interaction.layout.compactFpsReadoutBounds
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
 import kinetickk.ball.gameplay.interaction.layout.skillSlot
 import kinetickk.ball.gameplay.interaction.layout.choiceLayoutGeometry
@@ -125,16 +131,14 @@ import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
 import kinetickk.ball.gameplay.interaction.layout.regularHudUnit
 import kinetickk.ball.gameplay.interaction.layout.runningBuildButtonBounds
 import kinetickk.ball.gameplay.interaction.rewards.RewardContent
+import kinetickk.ball.gameplay.interaction.rewards.RewardUiPreparation
+import kinetickk.ball.gameplay.interaction.performance.GameplayFpsCounter
 import kinetickk.ball.gameplay.interaction.terminal.TerminalContent
 import kinetickk.ball.gameplay.interaction.terminal.terminalActionsReady
-import kinetickk.ball.gameplay.interaction.performance.GameplayFpsCounter
-import kinetickk.ball.gameplay.interaction.performance.GameplayPerformanceSnapshot
-import kinetickk.ball.gameplay.interaction.performance.GameplayPerformanceTelemetry
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
-import kotlin.time.DurationUnit
 import kotlin.time.TimeSource
 import kotlin.math.roundToInt
 
@@ -151,6 +155,10 @@ fun GameplayContent(
 ) {
     val language = LocalAppLanguage.current
     val diagnostics = LocalCrashDiagnostics.current
+    val performanceDiagnostics = if (DIAGNOSTICS_ENABLED) diagnostics as? PerformanceDiagnostics else null
+    fun reportInvalidInteractionInput(failure: ValidationFailure) {
+        if (DIAGNOSTICS_ENABLED && diagnostics.enabled) diagnostics.event("warning.input", "Dropped input: ${failure.code}")
+    }
     val focusRequester = remember(component) { FocusRequester() }
     val composeTextMeasurer = rememberTextMeasurer(cacheSize = 64)
     val localDensity = LocalDensity.current
@@ -174,18 +182,16 @@ fun GameplayContent(
     var visualFxProjectionValue by remember(component) {
         mutableStateOf(component.visualFxSnapshot())
     }
-    var renderTimeSecondsValue by remember(component) { mutableFloatStateOf(0f) }
-    val performanceTelemetry = remember(component) { GameplayPerformanceTelemetry() }
-    var performanceEnabledValue by remember(component) { mutableStateOf(false) }
-    var performanceSnapshotValue by remember(component) {
-        mutableStateOf(GameplayPerformanceSnapshot.Empty)
-    }
-    val performanceEnabledState = rememberUpdatedState(performanceEnabledValue)
+    val renderTimeSeconds = remember(component) { mutableFloatStateOf(0f) }
+    var renderTimeSecondsValue by renderTimeSeconds
     val hudMemory = remember(component) { HudPresentationMemory() }
     val controlLog = remember(component) { RunningControlPressLog() }
     val fpsCounter = remember(component) { GameplayFpsCounter() }
+    val fpsReadout = remember(component) { mutableIntStateOf(GameplayFpsCounter.NO_VALUE) }
     // Names in the skill and Apex semantics; a component plays one content snapshot.
     val content = remember(component) { requireNotNull(component.renderSnapshot().renderModel).content }
+    var rewardUiReady by remember(component) { mutableStateOf(false) }
+    val gameplayInputEnabled = inputEnabled && rewardUiReady
     // The trial panel's (!) opens by keyboard focus, a tap/click (toggle) or a hovering mouse.
     var trialInfoFocusedValue by remember(component) { mutableStateOf(false) }
     var trialInfoOpenValue by remember(component) { mutableStateOf(false) }
@@ -193,10 +199,10 @@ fun GameplayContent(
 
     fun dispatch(
         pulse: GameplayInteractionPulse,
-        collectPerformance: Boolean = performanceEnabledValue,
+        collectPerformance: Boolean = DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true,
     ) {
-        val dispatchStartedAt = if (collectPerformance) TimeSource.Monotonic.markNow() else null
-        if (diagnostics !== CrashDiagnostics.None) {
+        val dispatchStartedAt = if (DIAGNOSTICS_ENABLED && collectPerformance) TimeSource.Monotonic.markNow() else null
+        if (DIAGNOSTICS_ENABLED && diagnostics.enabled && pulse !is GameplayInteractionPulse.FrameElapsed) {
             val before = component.renderSnapshot()
             diagnostics.context("gameplay.before-input") { before.crashContext() }
             diagnostics.context("gameplay.input") { pulse.crashDescription() }
@@ -207,6 +213,9 @@ fun GameplayContent(
         val acceptance = try {
             component.accept(pulse)
         } catch (failure: Throwable) {
+            if (DIAGNOSTICS_ENABLED && diagnostics.enabled) {
+                diagnostics.context("gameplay.input") { pulse.crashDescription() }
+            }
             // A target can publish atomically and then surface a deferred side-effect fault.
             // Republishing the immutable values is also harmless for a pre-commit fault because
             // Compose suppresses equal assignments, so the hot success path needs no pre-query.
@@ -214,11 +223,11 @@ fun GameplayContent(
                 val committed = component.renderSnapshot()
                 renderModelValue = requireNotNull(committed.renderModel)
                 visualFxProjectionValue = component.visualFxSnapshot()
-                diagnostics.context("gameplay.committed") { committed.crashContext() }
+                if (DIAGNOSTICS_ENABLED && diagnostics.enabled) diagnostics.context("gameplay.committed") { committed.crashContext() }
             } catch (snapshotFailure: Throwable) {
                 if (snapshotFailure !== failure) failure.addSuppressed(snapshotFailure)
             }
-            diagnostics.event("gameplay.failure", failure.toString())
+            if (DIAGNOSTICS_ENABLED && diagnostics.enabled) diagnostics.event("gameplay.failure", failure.toString())
             throw failure
         }
         when (acceptance) {
@@ -228,20 +237,21 @@ fun GameplayContent(
             }
             is GameplayAcceptance.Rejected -> Unit
         }
-        if (diagnostics !== CrashDiagnostics.None) {
+        if (DIAGNOSTICS_ENABLED && diagnostics.enabled && pulse !is GameplayInteractionPulse.FrameElapsed) {
             val committed = component.renderSnapshot()
             diagnostics.context("gameplay.committed") { committed.crashContext() }
         }
-        if (dispatchStartedAt != null) {
-            performanceTelemetry.recordDispatchPipelineMillis(
-                dispatchStartedAt.elapsedNow().toDouble(DurationUnit.MILLISECONDS),
-            )
+        if (DIAGNOSTICS_ENABLED && dispatchStartedAt != null) {
+            performanceDiagnostics?.phase(DiagnosticPhase.Dispatch, dispatchStartedAt.elapsedNow().inWholeNanoseconds)
             if (acceptance is GameplayAcceptance.Accepted) {
-                performanceTelemetry.recordEntityCounts(
+                performanceDiagnostics?.workload(
                     enemies = renderModelValue.enemies.size,
                     projectiles = renderModelValue.projectiles.size,
                     pickups = renderModelValue.pickups.size,
-                    trailPoints = renderModelValue.trail.size,
+                    effects = with(visualFxProjectionValue) {
+                        particles.size + motionEchoes.size + shockwaves.size + damageNumbers.size +
+                            weaponArcs.size + elementBursts.size + reactionStamps.size + skillBursts.size + apexBursts.size
+                    },
                 )
             }
         }
@@ -255,23 +265,12 @@ fun GameplayContent(
     }
 
     fun togglePerformanceTelemetry() {
-        val nextPerformanceEnabled = !performanceEnabledValue
-        performanceTelemetry.reset()
-        if (nextPerformanceEnabled) {
-            performanceTelemetry.recordEntityCounts(
-                enemies = renderModelValue.enemies.size,
-                projectiles = renderModelValue.projectiles.size,
-                pickups = renderModelValue.pickups.size,
-                trailPoints = renderModelValue.trail.size,
-            )
-        }
-        performanceSnapshotValue = performanceTelemetry.snapshot()
-        performanceEnabledValue = nextPerformanceEnabled
+        if (DIAGNOSTICS_ENABLED) performanceDiagnostics?.toggleOverlay()
     }
 
     fun dispatchInput(
         input: GameplayInput,
-        collectPerformance: Boolean = performanceEnabledValue,
+        collectPerformance: Boolean = DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true,
     ) {
         when (input) {
             is GameplayInput.Action -> dispatch(input.action, collectPerformance)
@@ -292,7 +291,7 @@ fun GameplayContent(
      */
     fun pressRunningControl(
         target: RunningControlTarget,
-        collectPerformance: Boolean = performanceEnabledValue,
+        collectPerformance: Boolean = DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true,
     ) {
         val model = renderModelValue
         val skillSlots = model.filledSkillSlots()
@@ -343,26 +342,28 @@ fun GameplayContent(
     LaunchedEffect(
         component,
         interactionValidator,
-        performanceTelemetry,
-        performanceEnabledValue,
+        performanceDiagnostics,
         frameRateCap,
+        rewardUiReady,
     ) {
-        val collectPerformance = performanceEnabledValue
+        if (!rewardUiReady) return@LaunchedEffect
         val pacer = KkFramePacer(frameRateCap)
         var previousFrame = pacer.awaitFrame()
+        var previousContextFrame = 0L
         while (true) {
             val frame = pacer.awaitFrame()
             val frameIntervalNanos = frame - previousFrame
             val delta = frameIntervalNanos / 1_000_000_000f
             previousFrame = frame
-            if (collectPerformance && frameIntervalNanos >= 0L) {
-                performanceTelemetry.recordFrameIntervalMillis(frameIntervalNanos / 1_000_000.0)
+            val fpsChanged = if (renderModelValue.settings.showFps) fpsCounter.frame(frame) else fpsCounter.hide()
+            if (fpsChanged) {
+                controlLog.fps = fpsCounter.fps
+                fpsReadout.intValue = fpsCounter.fps
             }
-            // The Show FPS counter measures the loop while the setting is on; the HUD reads its value.
-            if (renderModelValue.settings.showFps) {
-                if (fpsCounter.frame(frame)) controlLog.fps = fpsCounter.fps
-            } else if (fpsCounter.hide()) {
-                controlLog.fps = GameplayFpsCounter.NO_VALUE
+            val collectPerformance = DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true
+            if (DIAGNOSTICS_ENABLED && collectPerformance) {
+                val budgetNanos = diagnosticFrameBudgetNanos(frameRateCap, performanceDiagnostics?.nominalFrameBudgetNanos ?: 0L)
+                performanceDiagnostics?.frame(frame, budgetNanos)
             }
             when (val result = interactionValidator.frameElapsed(delta)) {
                 is InteractionValidationResult.Valid -> {
@@ -373,23 +374,16 @@ fun GameplayContent(
                 }
                 is InteractionValidationResult.Invalid -> reportInvalidInteractionInput(result.failure)
             }
-            if (collectPerformance && performanceTelemetry.shouldPublishSnapshot(frame)) {
-                performanceSnapshotValue = performanceTelemetry.snapshot()
+            // Preserve a recent immutable crash context without per-frame closures or formatting.
+            if (DIAGNOSTICS_ENABLED && diagnostics.enabled &&
+                (previousContextFrame == 0L || frame - previousContextFrame >= 1_000_000_000L)
+            ) {
+                previousContextFrame = frame
+                val committed = component.renderSnapshot()
+                diagnostics.context("gameplay.committed") { committed.crashContext() }
+                diagnostics.context("gameplay.frame") { "FrameElapsed(realDeltaSeconds=$delta) callback_ns=$frame" }
             }
         }
-    }
-
-    // Show FPS (stored) places the FPS counter in the PERFORMANCE slot; a tap on it, F3 and the bound
-    // key toggle the full panel for the session. Portrait phones have no such slot (Build holds it), so
-    // there Show FPS opens the full panel with each run and follows the setting when it reaches the run.
-    val showFpsPanel by remember(component) {
-        derivedStateOf {
-            val model = renderModelValue
-            showFpsOpensPanel(model.settings.showFps, gameplayLayoutMode(model.hudWidth, model.hudHeight, model.hudScale(interfaceScaleState.value)))
-        }
-    }
-    LaunchedEffect(component, showFpsPanel) {
-        if (performanceEnabledValue != showFpsPanel) togglePerformanceTelemetry()
     }
 
     // Pause when unfocused: the window losing focus pauses a running run (an edge, never a level).
@@ -489,13 +483,6 @@ fun GameplayContent(
     val terminalStartedAt = remember(component, phase) { renderTimeSecondsValue }
     val terminalElapsed = if (terminal) (renderTimeSecondsValue - terminalStartedAt).coerceAtLeast(0f) else 0f
     val terminalReady = terminalActionsReady(terminalElapsed, phase == GamePhase.VICTORY)
-    val performanceHudProjection = if (performanceEnabledValue) {
-        remember(performanceSnapshotValue, language) {
-            performanceSnapshotValue.toPerformanceHudProjection(language)
-        }
-    } else {
-        null
-    }
 
     Box(
         modifier = Modifier
@@ -524,10 +511,10 @@ fun GameplayContent(
                 val model = renderModelValue
                 val bindable = event.key.toBindableKey()
                 val action = bindable?.let { model.settings.keyBindings.action(it) }
-                if (action == GameAction.PERFORMANCE_HUD) {
+                if (DIAGNOSTICS_ENABLED && action == GameAction.PERFORMANCE_HUD) {
                     return@onKeyEvent keyDown(event.type, ::togglePerformanceTelemetry)
                 }
-                if (!inputEnabled) return@onKeyEvent false
+                if (!gameplayInputEnabled) return@onKeyEvent false
                 if (terminal && !terminalReady) return@onKeyEvent true
                 val down = event.type == KeyEventType.KeyDown
                 if (down) {
@@ -585,7 +572,7 @@ fun GameplayContent(
                     }
                     GameAction.RESTART -> (model.phase == GamePhase.GAME_OVER || model.phase == GamePhase.VICTORY) &&
                         keyDown(event.type) { onOutput(GameplayInteractionOutput.RestartRun) }
-                    GameAction.PERFORMANCE_HUD -> true // handled above
+                    GameAction.PERFORMANCE_HUD -> DIAGNOSTICS_ENABLED // handled above in Debug
                     null -> when (event.key) {
                         Key.Escape -> keyDown(event.type) {
                             dispatch(GameplayInteractionPulse.PauseToggled)
@@ -605,8 +592,8 @@ fun GameplayContent(
                     }
                 }
             }
-            .pointerInput(component, inputEnabled) {
-                if (!inputEnabled) return@pointerInput
+            .pointerInput(component, gameplayInputEnabled) {
+                if (!gameplayInputEnabled) return@pointerInput
                 awaitPointerEventScope {
                     var secondaryBrakeValue = false
                     try {
@@ -621,7 +608,7 @@ fun GameplayContent(
                                         BrakeSource.SECONDARY_POINTER,
                                         secondaryPressed,
                                     ),
-                                    performanceEnabledState.value,
+                                    DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true,
                                 )
                             }
                         }
@@ -632,7 +619,7 @@ fun GameplayContent(
                                     BrakeSource.SECONDARY_POINTER,
                                     active = false,
                                 ),
-                                performanceEnabledState.value,
+                                DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true,
                             )
                         }
                     }
@@ -644,17 +631,17 @@ fun GameplayContent(
                 .fillMaxSize()
                 .pointerInput(
                     component,
-                    inputEnabled,
+                    gameplayInputEnabled,
                     interactionValidator,
-                    performanceTelemetry,
+                    performanceDiagnostics,
                 ) {
-                    if (!inputEnabled) return@pointerInput
+                    if (!gameplayInputEnabled) return@pointerInput
                     // Up to five pointers: one steers, others hold or tap controls (RunningTouchTracker).
                     val tracker = RunningTouchTracker()
                     awaitPointerEventScope {
                         while (true) {
                             val event = awaitPointerEvent(PointerEventPass.Main)
-                            val collectPerformance = performanceEnabledState.value
+                            val collectPerformance = DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true
                             val currentRenderModel = renderModelValue
                             val changes = event.changes
                             val running = currentRenderModel.phase == GamePhase.RUNNING
@@ -752,7 +739,7 @@ fun GameplayContent(
                     }
                 },
         ) {
-            val drawStartedAt = if (performanceEnabledValue) TimeSource.Monotonic.markNow() else null
+            val drawStartedAt = if (DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true) TimeSource.Monotonic.markNow() else null
             drawGameplay(
                 engine = renderModelValue,
                 visualFx = visualFxProjectionValue,
@@ -766,31 +753,20 @@ fun GameplayContent(
                 hudDensity = hudDensity,
                 hudTextMeasurer = hudTextMeasurer,
             )
-            if (drawStartedAt != null) {
-                // State writes can invalidate the draw scope before recomposition publishes the
-                // lazily-built HUD projection. Treat that single transitional draw as HUD-free;
-                // the next recomposition supplies the exact snapshot without allocating here.
-                val hudProjection = performanceHudProjection
-                if (hudProjection != null && shouldDrawRunningPresentation(renderModelValue.phase)) {
-                    withHudDensity(hudDensity) {
-                        drawPerformanceHud(
-                            projection = hudProjection,
-                            textMeasurer = hudTextMeasurer,
-                        )
-                    }
-                }
-                performanceTelemetry.recordCanvasDrawMillis(
-                    drawStartedAt.elapsedNow().toDouble(DurationUnit.MILLISECONDS),
-                )
+            if (DIAGNOSTICS_ENABLED && drawStartedAt != null) {
+                performanceDiagnostics?.phase(DiagnosticPhase.CanvasDraw, drawStartedAt.elapsedNow().inWholeNanoseconds)
             }
         }
         // The run's overlays and the controls' semantics lay out at the HUD's (interface-scaled) density.
         CompositionLocalProvider(LocalDensity provides hudDensity) {
+            if (!rewardUiReady) key(component) {
+                RewardUiPreparation(renderModelValue) { rewardUiReady = true }
+            }
             if (terminal) {
                 TerminalContent(
                     renderModelValue,
                     terminalElapsed,
-                    inputEnabled,
+                    gameplayInputEnabled,
                     reactionsThisRun = visualFxProjectionValue.runReactionMask,
                     discoveredThisRun = visualFxProjectionValue.runDiscoveryMask,
                 ) { input ->
@@ -798,12 +774,12 @@ fun GameplayContent(
                     dispatchInput(input)
                 }
             }
-            if (phase == GamePhase.CHOICE) {
+            if (phase == GamePhase.CHOICE && rewardUiReady) {
                 RewardContent(
                     engine = renderModelValue,
                     layout = requireNotNull(choiceLayout),
-                    renderTime = renderTimeSecondsValue,
-                    enabled = inputEnabled,
+                    renderTime = renderTimeSeconds,
+                    enabled = gameplayInputEnabled,
                     onSelect = { index ->
                         dispatch(GameplayInteractionPulse.UserGestureObserved)
                         dispatchValidated(interactionValidator.choiceSelected(index))
@@ -817,7 +793,7 @@ fun GameplayContent(
                 )
             }
             // Pause and reward overlays present Codex as their own menu item and button.
-            if (inputEnabled && phase == GamePhase.RUNNING) {
+            if (gameplayInputEnabled && phase == GamePhase.RUNNING) {
                 val buildBounds = remember(layoutDimensions) {
                     runningBuildButtonBounds(layoutDimensions.width, layoutDimensions.height, layoutDimensions.scale)
                 }
@@ -833,14 +809,15 @@ fun GameplayContent(
                     onClick = { onOutput(GameplayInteractionOutput.OpenCodex) },
                 )
             }
-            if (inputEnabled) {
+            if (gameplayInputEnabled) {
                 GameplaySemanticControls(
                     facts = facts,
                     content = content,
                     trialDescription = trialDescription,
                     density = hudDensity,
                     hudScale = hudScale,
-                    performanceEnabled = performanceEnabledValue,
+                    performanceEnabled = DIAGNOSTICS_ENABLED && performanceDiagnostics?.overlayVisible == true,
+                    fps = fpsReadout,
                     pauseLayout = pauseLayout,
                     onTrialInfoFocusChanged = { trialInfoFocusedValue = it },
                     onTrialInfoToggle = { trialInfoOpenValue = !trialInfoOpenValue },
@@ -863,9 +840,30 @@ fun GameplayContent(
                     },
                 )
             }
+            val counterAboveOverlay = phase != GamePhase.RUNNING
+            if (facts.controlMask and RunningControlMask.FPS != 0 &&
+                (counterAboveOverlay || gameplayLayoutMode(layoutDimensions.width, layoutDimensions.height, hudScale) == GameplayLayoutMode.COMPACT_PORTRAIT)
+            ) {
+                val bounds = remember(layoutDimensions, hudScale, counterAboveOverlay) {
+                    compactFpsReadoutBounds(layoutDimensions.width, hudScale, counterAboveOverlay)
+                }
+                val modifier = Modifier.placeInGameplayBounds(bounds, hudDensity).fpsReadoutSemantics(fpsReadout)
+                if (counterAboveOverlay) {
+                    // Draw after the reward/pause content so its scrim cannot hide the numeric readout.
+                    Canvas(modifier) { drawCompactFpsReadout(hudTextMeasurer, Rect(Offset.Zero, size), fpsReadout.intValue) }
+                } else {
+                    Box(modifier) // The portrait HUD already draws the same strip under its clock.
+                }
+            }
         }
     }
 }
+
+private fun Modifier.fpsReadoutSemantics(fps: IntState): Modifier =
+    testTag("kinetickk.gameplay.performance").semantics {
+        contentDescription = "FPS"
+        text = AnnotatedString(if (fps.intValue < 0) "– FPS" else "${fps.intValue} FPS")
+    }
 
 @Composable
 private fun GameplaySemanticControls(
@@ -875,6 +873,7 @@ private fun GameplaySemanticControls(
     density: Density,
     hudScale: Float,
     performanceEnabled: Boolean,
+    fps: IntState,
     pauseLayout: PauseLayoutGeometry?,
     onTrialInfoFocusChanged: (Boolean) -> Unit,
     onTrialInfoToggle: () -> Unit,
@@ -926,6 +925,7 @@ private fun GameplaySemanticControls(
                     bounds = bounds,
                     density = density,
                     enabled = performanceEnabled,
+                    fps = fps,
                     onClick = { onInput(GameplayInput.TogglePerformance) },
                 )
                 RunningControlTarget.PAUSE -> GameplaySemanticAction(
@@ -1072,16 +1072,27 @@ private fun PerformanceSemanticAction(
     bounds: Rect,
     density: Density,
     enabled: Boolean,
+    fps: IntState,
     onClick: () -> Unit,
 ) {
     val language = LocalAppLanguage.current
-    GameplaySemanticAction(
-        bounds = bounds,
-        density = density,
-        tag = "kinetickk.gameplay.performance",
-        description = language.text(GameplayText.PerformanceDescription),
-        state = if (enabled) language.text(GameplayText.OnState) else language.text(GameplayText.OffState),
-        onClick = onClick,
+    val description = language.text(GameplayText.PerformanceDescription)
+    Box(
+        Modifier.placeInGameplayBounds(bounds, density)
+            .testTag("kinetickk.gameplay.performance")
+            .then(if (DIAGNOSTICS_ENABLED) Modifier.onKeyEvent { event ->
+                activateSemanticButtonFromKey(event.key, event.type, onClick)
+            }.focusable() else Modifier)
+            .semantics(mergeDescendants = true) {
+                contentDescription = if (DIAGNOSTICS_ENABLED) description else "FPS"
+                // Observe the half-second readout in semantics; changing it need not recompose the host.
+                text = AnnotatedString(if (fps.intValue < 0) "– FPS" else "${fps.intValue} FPS")
+                if (DIAGNOSTICS_ENABLED) {
+                    role = Role.Button
+                    stateDescription = if (enabled) language.text(GameplayText.OnState) else language.text(GameplayText.OffState)
+                    onClick(label = description) { onClick(); true }
+                }
+            },
     )
 }
 
@@ -1154,12 +1165,6 @@ private fun Modifier.placeInGameplayBounds(bounds: Rect, density: Density): Modi
             height = with(density) { bounds.height.toDp() },
         )
 
-/**
- * Whether Show FPS opens the full performance panel: only where the HUD has no PERFORMANCE slot for the
- * counter (portrait phones); elsewhere the counter shows and the panel stays the player's toggle.
- */
-internal fun showFpsOpensPanel(showFps: Boolean, mode: GameplayLayoutMode): Boolean =
-    showFps && mode == GameplayLayoutMode.COMPACT_PORTRAIT
 
 private const val GAMEPLAY_ROOT_TAG = "kinetickk.gameplay"
 internal const val GAMEPLAY_TRIAL_INFO_TAG = "kinetickk.gameplay.trial-info"
@@ -1286,10 +1291,6 @@ private inline fun activateSemanticButtonFromKey(
 private inline fun keyDown(type: KeyEventType, action: () -> Unit): Boolean {
     if (type == KeyEventType.KeyDown) action()
     return true
-}
-
-private fun reportInvalidInteractionInput(failure: ValidationFailure) {
-    println("KINETICKK interaction input dropped: ${failure.code}")
 }
 
 /** Ghost icon button (`.ibtn`) opening the build overview (Codex) during a run; no key letter. */

@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
+
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -33,11 +34,11 @@ import kinetickk.ball.gameplay.interaction.layout.REGULAR_HUD_BOTTOM_DP
 import kinetickk.ball.gameplay.interaction.layout.RUNNING_CONTROL_MIN_DP
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
 import kinetickk.ball.gameplay.interaction.layout.compactHudFactor
+import kinetickk.ball.gameplay.interaction.layout.compactFpsReadoutBounds
 import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.regularHeaderStep
 import kinetickk.ball.gameplay.interaction.layout.regularHudUnit
-import kinetickk.ball.gameplay.interaction.performance.GameplayFpsCounter
 import kinetickk.ball.gameplay.interaction.layout.runningHudMargin
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
@@ -1841,13 +1842,16 @@ internal fun DrawScope.drawControls(
             RunningControlTarget.PAUSE -> drawHudIconButton(frame, HudPath.PAUSE, left, top, right, bottom, regular) { center, glyph ->
                 drawPauseGlyph(center, glyph)
             }
-            // Placed while Show FPS is on: the counter itself is the control (a tap toggles the full panel).
+            // Show FPS is available in every build; Debug also uses its hit area to open the panel.
             RunningControlTarget.PERFORMANCE -> drawHudIconButton(frame, HudPath.PERFORMANCE, left, top, right, bottom, regular) { center, _ ->
-                drawFpsCounter(textMeasurer, frame, center, controls?.fps ?: GameplayFpsCounter.NO_VALUE)
+                drawFpsCounter(textMeasurer, frame, center, controls?.fps ?: -1)
             }
             // The skill row draws as one (its entrance moves all three); the Apex is the level badge.
             RunningControlTarget.SKILL_1, RunningControlTarget.SKILL_2, RunningControlTarget.SKILL_3, RunningControlTarget.APEX -> Unit
         }
+    }
+    if (frame.portrait && engine.settings.showFps) {
+        drawCompactFpsReadout(textMeasurer, compactFpsReadoutBounds(size.width, density, overlay = false), controls?.fps ?: -1)
     }
     drawSkillBar(engine, textMeasurer, frame, renderTime, memory, controls)
 }
@@ -1975,6 +1979,23 @@ private fun DrawScope.drawFpsCounter(measurer: TextMeasurer, frame: HudFrame, ce
 
 /** The counter's unit, the same in every language (like the panel's own "FPS"). */
 private const val FPS_LABEL = "FPS"
+
+/** Single-line counter for narrow portrait headers and the layer above pause/reward overlays. */
+internal fun DrawScope.drawCompactFpsReadout(measurer: TextMeasurer, bounds: Rect, fps: Int) {
+    val display = HudMeasurers.display(measurer)
+    val number = HudDrawCache.layout(HudText.FPS, display, HudScratch.fps.of(fps.toLong()),
+        measurer.typography.monoStyle(10f, weight = FontWeight.Bold, trackingEm = 0f, lineHeightEm = 1f))
+    val label = HudDrawCache.layout(HudText.FPS_LABEL, display, FPS_LABEL,
+        measurer.typography.labelStyle(8f, lineHeightEm = 1f), uppercase = true)
+    val gap = 4f * density
+    val contentWidth = number.size.width + gap + label.size.width
+    val left = bounds.center.x - contentWidth * 0.5f
+    val height = max(number.kkBoxHeight, label.kkBoxHeight)
+    drawRect(Kk.Ink2.copy(alpha = 0.92f), bounds.topLeft, bounds.size)
+    drawKkText(number, left, bounds.center.y, Kk.Bone, valign = KkVAlign.CENTER)
+    drawKkText(label, left + number.size.width + gap, bounds.center.y, Kk.Mute, valign = KkVAlign.CENTER)
+    HudLayoutProbe.record(HudBlock.FPS, left, bounds.center.y - height * 0.5f, left + contentWidth, bounds.center.y + height * 0.5f)
+}
 
 /** Performance mark: three rising bars. */
 internal fun DrawScope.drawPerformanceGlyph(center: Offset, size: Float, color: Color = Kk.Bone) {

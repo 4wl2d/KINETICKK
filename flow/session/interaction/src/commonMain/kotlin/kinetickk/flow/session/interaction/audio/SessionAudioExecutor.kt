@@ -36,6 +36,7 @@ class SessionAudioExecutor(
     }
 
     internal fun play(cue: SessionAudioCue) {
+        audioService.ensureUnlocked()
         audioService.advance(0f, listOf(cue.toToneRequest()))
     }
 }
@@ -43,3 +44,5 @@ class SessionAudioExecutor(
 private fun SessionAudioCue.toToneRequest(): ToneRequest = when (this) {
     SessionAudioCue.UI_CLICK -> ToneRequest(520f, 0.035f, 0.11f, ToneWave.SINE)
 }
+
+fun sessionPreloadToneRequests(): List<ToneRequest> = SessionAudioCue.entries.map { it.toToneRequest() }

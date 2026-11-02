@@ -56,6 +56,9 @@ data class AudioPreferences(
 
 /** Application-scoped lifecycle and bounded mechanical tone sink. */
 interface AudioService {
+    /** Prepares fixed effects and music without playing sound or unlocking browser audio. */
+    suspend fun prepare(requests: List<ToneRequest>) = Unit
+
     fun updatePreferences(preferences: AudioPreferences)
     fun advance(realDeltaSeconds: Float, requests: List<ToneRequest>)
     fun ensureUnlocked()

@@ -611,6 +611,13 @@ private object DimensionStrokes {
     val hatchedRing: Stroke by lazy { Stroke(11f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(24f, 12f))) }
 }
 
+/** The cracks and ring strokes never depend on the current world, viewport or preferences. */
+internal fun prepareDimensionVisualResources() {
+    DimensionStrokes.ring
+    DimensionStrokes.hatchedRing
+    repeat(CrackLines.size) { DimensionPaths.crack(it) }
+}
+
 /** Half the opening of a Zenith light wedge: narrow enough that ink keeps its share of the screen. */
 private const val RAY_HALF_ANGLE_DEGREES = 3.5f
 

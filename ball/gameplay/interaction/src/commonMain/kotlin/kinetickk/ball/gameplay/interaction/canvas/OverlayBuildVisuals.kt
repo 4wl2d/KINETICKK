@@ -30,11 +30,34 @@ import kotlin.math.roundToLong
 // Presentation mappings shared by the reward, pause and run-report overlays. They only map
 // committed render data to visuals; no rule here decides an outcome.
 
-private val WeaponIcons: Array<KkIcon> = Array(WeaponId.entries.size) { index ->
-    KkIcon.valueOf("WEAPONS_" + WeaponId.entries[index].name)
+// Keep this exhaustive: name-based Enum.valueOf needs reflective enum methods in a shrunk JVM
+// application. Direct references also avoid reflection and temporary names on first opening rewards.
+internal fun WeaponId.overlayIcon(): KkIcon = when (this) {
+    WeaponId.FLUX_WAKE -> KkIcon.WEAPONS_FLUX_WAKE
+    WeaponId.MORNINGSTAR -> KkIcon.WEAPONS_MORNINGSTAR
+    WeaponId.PHASE_LATTICE -> KkIcon.WEAPONS_PHASE_LATTICE
+    WeaponId.NULL_LANCE -> KkIcon.WEAPONS_NULL_LANCE
+    WeaponId.GRAVITY_MINES -> KkIcon.WEAPONS_GRAVITY_MINES
+    WeaponId.ION_SWARM -> KkIcon.WEAPONS_ION_SWARM
+    WeaponId.RIFT_BLADES -> KkIcon.WEAPONS_RIFT_BLADES
+    WeaponId.ARC_COIL -> KkIcon.WEAPONS_ARC_COIL
+    WeaponId.QUASAR_CANNON -> KkIcon.WEAPONS_QUASAR_CANNON
+    WeaponId.ENTROPY_FIELD -> KkIcon.WEAPONS_ENTROPY_FIELD
+    WeaponId.SINGULARITY_SPEAR -> KkIcon.WEAPONS_SINGULARITY_SPEAR
+    WeaponId.PRISM_RELAY -> KkIcon.WEAPONS_PRISM_RELAY
+    WeaponId.GYRE_DISC -> KkIcon.WEAPONS_GYRE_DISC
+    WeaponId.SCATTER_BLOOM -> KkIcon.WEAPONS_SCATTER_BLOOM
+    WeaponId.TETHER_ARC -> KkIcon.WEAPONS_TETHER_ARC
+    WeaponId.SENTRY_GRID -> KkIcon.WEAPONS_SENTRY_GRID
+    WeaponId.HUNTER_SALVO -> KkIcon.WEAPONS_HUNTER_SALVO
+    WeaponId.CONCUSSION_ENGINE -> KkIcon.WEAPONS_CONCUSSION_ENGINE
+    WeaponId.GLACIER_BELL -> KkIcon.WEAPONS_GLACIER_BELL
+    WeaponId.EVENT_LENS -> KkIcon.WEAPONS_EVENT_LENS
+    WeaponId.SOLAR_SWEEP -> KkIcon.WEAPONS_SOLAR_SWEEP
+    WeaponId.AEGIS_SHARDS -> KkIcon.WEAPONS_AEGIS_SHARDS
+    WeaponId.HOLLOW_RIFT -> KkIcon.WEAPONS_HOLLOW_RIFT
+    WeaponId.RESONANCE_DRUM -> KkIcon.WEAPONS_RESONANCE_DRUM
 }
-
-internal fun WeaponId.overlayIcon(): KkIcon = WeaponIcons[ordinal]
 
 /** Form icons follow the character order (see [formIndex]). */
 internal fun CoreShape.overlayIcon(): KkIcon = KkIcon.Forms[formIndex()]

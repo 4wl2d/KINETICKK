@@ -259,6 +259,14 @@ fun DrawScope.drawSiteGlyph(
     }
 }
 
+/** Prepares each normalized glyph once, independent of its eventual screen size or palette. */
+internal fun prepareSiteGlyphs() {
+    for (glyph in SiteGlyph.entries) {
+        SiteGlyphPaths.of(glyph)
+        for (part in glyph.parts) SiteGlyphStrokes.style(part, 2f)
+    }
+}
+
 /** Glyph paths in grid units, one array per glyph, built on first draw (draw-thread confined). */
 private object SiteGlyphPaths {
     private val cache = arrayOfNulls<Array<Path>>(SiteGlyph.entries.size)

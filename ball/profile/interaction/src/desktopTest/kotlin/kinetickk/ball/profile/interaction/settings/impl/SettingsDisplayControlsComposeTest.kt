@@ -54,6 +54,7 @@ import kinetickk.foundation.common.input.BindableKey
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
 import kinetickk.foundation.design.LocalKkInterfaceScale
+import kinetickk.foundation.diagnostics.DIAGNOSTICS_ENABLED
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -184,6 +185,28 @@ class SettingsDisplayControlsComposeTest {
             assertEquals(true, port.preferences.showFps)
             click("kinetickk.settings.interfacescale.130")
             assertEquals(130, port.preferences.interfaceScalePercent)
+        }
+    }
+
+    @Test
+    fun fpsIsAvailableInEveryBuildWhileDiagnosticBindingsFollowTheVariant() {
+        val preferences = PlayerPreferences(
+            language = AppLanguage.English,
+            showFps = true,
+            keyBindings = KeyBindings.DEFAULT.with(GameAction.PERFORMANCE_HUD, BindableKey.F12),
+        )
+        settings(SettingsTestDisplayPort(DESKTOP_SUPPORT), preferences = preferences) { port, _, _ ->
+            click("kinetickk.settings.group.display")
+            val fpsControls = onAllNodesWithTag("kinetickk.settings.showfps.toggle").fetchSemanticsNodes()
+            assertEquals(1, fpsControls.size)
+            click("kinetickk.settings.group.controls")
+            val performanceControls = onAllNodesWithTag("kinetickk.settings.bind.performance.key").fetchSemanticsNodes()
+            assertEquals(if (DIAGNOSTICS_ENABLED) 1 else 0, performanceControls.size)
+            // Hiding a diagnostic binding must not hide or remap the player's actual actions.
+            onNodeWithTag("kinetickk.settings.bind.dash.key").assertContentDescriptionEquals("Dash: Space")
+            onNodeWithTag("kinetickk.settings.bind.restart.key").assertContentDescriptionEquals("Restart: R")
+            assertEquals(preferences, port.preferences)
+            assertTrue(port.adjustments.isEmpty())
         }
     }
 

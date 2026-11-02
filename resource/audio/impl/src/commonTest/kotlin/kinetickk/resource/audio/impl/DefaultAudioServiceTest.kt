@@ -11,8 +11,34 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.startCoroutine
 
 class DefaultAudioServiceTest {
+    @Test
+    fun preparationIncludesEffectsAndMusicWithoutPlayingOrUnlocking() {
+        val player = RecordingTonePlayer()
+        val service = DefaultAudioService(player)
+        var completed = false
+        suspend { service.prepare(listOf(UI_CLICK_REQUEST, HURT_REQUEST)) }.startCoroutine(
+            object : Continuation<Unit> {
+                override val context = EmptyCoroutineContext
+                override fun resumeWith(result: Result<Unit>) {
+                    result.getOrThrow()
+                    completed = true
+                }
+            },
+        )
+        assertTrue(completed)
+        assertTrue(player.prepared.containsAll(listOf(UI_CLICK_REQUEST, HURT_REQUEST)))
+        assertTrue(player.prepared.any { it.frequencyHz == 110f && it.wave == ToneWave.TRIANGLE })
+        assertTrue(player.tones.isEmpty())
+        assertEquals(0, player.unlockCalls)
+        service.advance(0f, emptyList())
+        assertEquals(110f, player.tones.single().frequencyHz)
+    }
+
     @Test
     fun resourcePreservesOwnerOrderAndDeduplicatesMechanicalRequests() {
         val selected = selectToneRequests(
@@ -256,9 +282,14 @@ private val PICKUP_REQUEST = ToneRequest(710f, 0.055f, 0.13f, ToneWave.SINE)
 private val HURT_REQUEST = ToneRequest(76f, 0.13f, 0.22f, ToneWave.SQUARE)
 
 private class RecordingTonePlayer : TonePlaybackCapability {
+    var prepared = emptyList<ToneRequest>()
     val tones = mutableListOf<ToneRequest>()
     var unlockCalls = 0
     var closeCalls = 0
+
+    override suspend fun prepare(requests: List<ToneRequest>) {
+        prepared = requests
+    }
 
     override fun unlock() {
         unlockCalls++

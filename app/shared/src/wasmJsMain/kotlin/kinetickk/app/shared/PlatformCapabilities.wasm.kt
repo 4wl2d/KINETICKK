@@ -99,26 +99,47 @@ internal actual fun createPlatformTonePlaybackCapability(): TonePlaybackCapabili
 @OptIn(ExperimentalWasmJsInterop::class)
 private class WebTonePlaybackCapability : TonePlaybackCapability {
     private var context: JsAny? = null
+    private var closed = false
+    private var gestureFeedbackPending = false
+
+    override suspend fun prepare(requests: List<ToneRequest>) {
+        if (!closed) context = prepareWebAudio(context)
+    }
 
     override fun unlock() {
+        if (closed) return
         context = unlockWebAudio(context)
+        gestureFeedbackPending = true
     }
 
     override fun play(request: ToneRequest) {
+        if (closed) return
         context = playWebTone(
             context,
             request.frequencyHz.toDouble(),
             request.durationSeconds.toDouble(),
             request.gain.toDouble(),
             webToneWaveValue(request.wave),
+            gestureFeedbackPending,
         )
+        gestureFeedbackPending = false
     }
 
     override fun close() {
+        if (closed) return
         closeWebAudio(context)
         context = null
+        closed = true
     }
 }
+
+@OptIn(ExperimentalWasmJsInterop::class)
+private fun prepareWebAudio(current: JsAny?): JsAny? = js(
+    """{
+        const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
+        return current || (AudioContext ? new AudioContext() : null);
+    }""",
+)
 
 internal fun webToneWaveValue(wave: ToneWave): String = when (wave) {
     ToneWave.SINE -> "sine"
@@ -148,15 +169,15 @@ private fun playWebTone(
     duration: Double,
     volume: Double,
     wave: String,
+    allowSuspended: Boolean,
 ): JsAny? = js(
     """{
         const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
         if (!AudioContext) return null;
         const context = current || new AudioContext();
-        if (context.state === 'suspended') {
-            const resume = context.resume();
-            if (resume && typeof resume.catch === 'function') resume.catch(() => undefined);
-        }
+        // resume() resolves asynchronously. The gesture's first cue can already be scheduled;
+        // automatic frames before a gesture must not enqueue sounds into a suspended context.
+        if (context.state === 'suspended' && !allowSuspended) return context;
         const oscillator = context.createOscillator();
         const gain = context.createGain();
         oscillator.type = wave;

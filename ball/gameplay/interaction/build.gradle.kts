@@ -60,6 +60,35 @@ tasks.register<JavaExec>("reactionDesktopBenchmark") {
     }
 }
 
+tasks.register<JavaExec>("rewardDesktopBenchmark") {
+    group = "verification"
+    description = "Measures animated reward cards in the real gameplay host without loading player data."
+    dependsOn(telemetryDesktopBenchmarkCompilation.compileTaskProvider)
+    mainClass.set("kinetickk.ball.gameplay.interaction.rewards.RewardDesktopBenchmarkKt")
+    classpath(
+        telemetryDesktopBenchmarkCompilation.output.allOutputs,
+        telemetryDesktopBenchmarkCompilation.runtimeDependencyFiles,
+    )
+    workingDir(rootDir)
+    val heap = providers.gradleProperty("rewardBenchmarkHeap").getOrElse("1g")
+    require(heap.matches(Regex("[1-9][0-9]*[mMgG]"))) { "rewardBenchmarkHeap must be a heap size such as 128m or 1g" }
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "-Xms$heap", "-Xmx$heap", "-Dfile.encoding=UTF-8")
+    providers.gradleProperty("rewardBenchmarkJava").orNull?.let { version ->
+        javaLauncher.set(project.extensions.getByType<org.gradle.jvm.toolchain.JavaToolchainService>().launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(version.toInt()))
+        })
+    }
+    providers.gradleProperty("rewardBenchmarkJfr").orNull?.let { output ->
+        require(output == file(output).absolutePath && ',' !in output) { "rewardBenchmarkJfr must be an absolute path without commas" }
+        val settings = providers.gradleProperty("rewardBenchmarkJfrSettings").getOrElse("profile")
+        require(',' !in settings) { "rewardBenchmarkJfrSettings must not contain commas" }
+        jvmArgs("-XX:StartFlightRecording=filename=$output,settings=$settings,dumponexit=true")
+    }
+    listOf("skiko.renderApi", "skiko.vsync.enabled").forEach { name ->
+        providers.systemProperty(name).orNull?.let { systemProperty(name, it) }
+    }
+}
+
 tasks.register<JavaExec>("performanceTelemetryBenchmark") {
     group = "verification"
     description = "Measures the disabled and enabled runtime performance telemetry overhead."

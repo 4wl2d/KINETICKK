@@ -132,8 +132,11 @@ class DesktopTestShardsTest {
 
         val desktopTestClasses: Set<String> by lazy { desktopTestSources.keys }
 
-        val TEST_SOURCE_ROOTS = listOf("/src/commonTest/kotlin/", "/src/desktopTest/kotlin/")
-        val SKIPPED_DIRECTORIES = setOf(".git", ".gradle", ".claude", ".kotlin", "build", "build-logic", "node_modules")
+        val TEST_SOURCE_ROOTS = listOf(
+            "/src/commonTest/kotlin/", "/src/desktopTest/kotlin/",
+            "/src/commonReleaseTest/kotlin/", "/src/desktopReleaseTest/kotlin/",
+        )
+        val SKIPPED_DIRECTORIES = setOf(".git", ".gradle", ".claude", ".kotlin", "build", "build-debug", "build-logic", "node_modules")
 
         private val packageLine = Regex("""^package ([\w.]+)""", RegexOption.MULTILINE)
         private val topLevelClass = Regex("""^(?:(?:public|internal|private|abstract|open|data)\s+)*class\s+(\w+)""")

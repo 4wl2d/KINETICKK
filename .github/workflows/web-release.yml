@@ -78,7 +78,7 @@ jobs:
         working-directory: game
         env:
           CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
-        run: ./gradlew wasmJsBrowserTest :app:web:wasmJsBrowserDistribution --no-daemon --max-workers=1 --stacktrace
+        run: ./gradlew -Pkinetickk.variant=release wasmJsBrowserTest :app:web:wasmJsBrowserDistribution --no-daemon --max-workers=1 --stacktrace
       - name: Package verified release assets
         env:
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}

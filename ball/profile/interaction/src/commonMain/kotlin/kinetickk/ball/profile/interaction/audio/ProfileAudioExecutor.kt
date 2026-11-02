@@ -21,6 +21,7 @@ internal class ProfileAudioExecutor(
     private val audioService: AudioService,
 ) {
     fun play(cue: ProfileAudioCue) {
+        audioService.ensureUnlocked()
         audioService.advance(0f, listOf(cue.toToneRequest()))
     }
 
@@ -40,3 +41,5 @@ private fun ProfileAudioCue.toToneRequest(): ToneRequest = when (this) {
     ProfileAudioCue.PURCHASE -> ToneRequest(490f, 0.1f, 0.16f, ToneWave.SINE)
     ProfileAudioCue.REFUSED -> ToneRequest(260f, 0.06f, 0.12f, ToneWave.SINE)
 }
+
+fun profilePreloadToneRequests(): List<ToneRequest> = ProfileAudioCue.entries.map { it.toToneRequest() }

@@ -40,6 +40,7 @@ import kinetickk.flow.session.api.AppDestination
 import kinetickk.flow.session.api.AppSessionQuery
 import kinetickk.foundation.common.input.BindableKey
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.diagnostics.DIAGNOSTICS_ENABLED
 import kinetickk.resource.audio.api.AudioPreferences
 import kinetickk.resource.audio.api.AudioService
 import kinetickk.resource.audio.api.ToneRequest
@@ -105,6 +106,7 @@ class SettingsNavigationComposeTest {
                         owner.Content()
                     }
                 }
+                awaitAppStartup()
                 fun settle() {
                     mainClock.advanceTimeBy(260)
                     waitForIdle()
@@ -185,6 +187,7 @@ class SettingsNavigationComposeTest {
                         owner.Content()
                     }
                 }
+                awaitAppStartup()
                 fun render(expected: AppDestination) {
                     mainClock.advanceTimeBy(260)
                     waitForIdle()

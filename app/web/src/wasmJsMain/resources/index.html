@@ -12,17 +12,62 @@
     <link rel="license" href="META-INF/LICENSE">
     <link rel="source" href="https://github.com/4wl2d/KINETICKK">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
-    <link rel="preload" href="composeResources/kinetickk.foundation.design.generated.resources/font/kk_cond_black_italic.ttf" as="font" type="font/ttf" crossorigin>
-    <link rel="preload" href="composeResources/kinetickk.foundation.design.generated.resources/font/kk_wide_black.ttf" as="font" type="font/ttf" crossorigin>
-    <link rel="preload" href="composeResources/kinetickk.foundation.design.generated.resources/font/kk_body_regular.ttf" as="font" type="font/ttf" crossorigin>
     <title>KINETICKK</title>
     <style>
         html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #0A0B0A; }
         body { touch-action: none; overscroll-behavior: none; }
         canvas { display: block; outline: none; }
+        #kinetickk-boot {
+            position: fixed; inset: 0; z-index: 10; display: grid; place-items: center;
+            color: #F1F0E8; background: #0A0B0A; font: 16px/1.5 system-ui, sans-serif;
+        }
+        .boot-content { width: min(360px, calc(100vw - 48px)); }
+        .boot-title { margin: 0 0 24px; font-size: clamp(32px, 8vw, 48px); font-weight: 900; font-style: italic; letter-spacing: -0.05em; }
+        .boot-progress { height: 4px; overflow: hidden; background: #272B26; }
+        .boot-progress::after { content: ""; display: block; width: 35%; height: 100%; background: #CEFF00; animation: boot-progress 1.2s ease-in-out infinite alternate; }
+        .boot-status { margin: 16px 0 0; color: #B4B8AD; }
+        .boot-retry { margin-top: 24px; padding: 12px 20px; border: 0; color: #0A0B0A; background: #CEFF00; font: inherit; font-weight: 700; cursor: pointer; }
+        .boot-retry:focus-visible { outline: 3px solid #FF4E88; outline-offset: 4px; }
+        @keyframes boot-progress { to { transform: translateX(186%); } }
+        @media (prefers-reduced-motion: reduce) { .boot-progress::after { animation: none; width: 100%; } }
     </style>
 </head>
 <body>
+    <main id="kinetickk-boot" aria-labelledby="boot-title" aria-busy="true">
+        <div class="boot-content">
+            <h1 id="boot-title" class="boot-title">KINETICKK</h1>
+            <div id="boot-progress" class="boot-progress" role="progressbar" aria-label="Загрузка игры"></div>
+            <p id="boot-status" class="boot-status" role="status">Запускаем игру…</p>
+            <button id="boot-retry" class="boot-retry" type="button" hidden>Повторить</button>
+            <noscript><p>Для запуска игры нужен JavaScript.</p></noscript>
+        </div>
+    </main>
+    <script>
+        (() => {
+            const boot = document.getElementById("kinetickk-boot");
+            const status = document.getElementById("boot-status");
+            const retry = document.getElementById("boot-retry");
+            const fail = () => {
+                if (!boot.isConnected) return;
+                boot.setAttribute("aria-busy", "false");
+                document.getElementById("boot-progress").hidden = true;
+                status.setAttribute("role", "alert");
+                status.textContent = "Не удалось загрузить игру. Попробуй ещё раз.";
+                retry.hidden = false;
+            };
+            const onError = event => {
+                if (event.target === window || event.target instanceof HTMLScriptElement) fail();
+            };
+            retry.addEventListener("click", () => window.location.reload());
+            window.addEventListener("error", onError, true);
+            window.addEventListener("unhandledrejection", fail);
+            window.addEventListener("kinetickk:canvas-ready", () => {
+                window.removeEventListener("error", onError, true);
+                window.removeEventListener("unhandledrejection", fail);
+                boot.remove();
+            }, { once: true });
+        })();
+    </script>
     <script src="kinetickk.js"></script>
 </body>
 </html>

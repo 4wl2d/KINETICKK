@@ -95,6 +95,7 @@ class GameplayKeyPrecedenceComposeTest {
             )
             try {
                 setContent { Box(Modifier.requiredSize(1_000.dp, 700.dp).testTag(APP_TAG)) { owner.Content() } }
+                awaitAppStartup()
                 fun settle() {
                     mainClock.advanceTimeBy(260)
                     waitForIdle()

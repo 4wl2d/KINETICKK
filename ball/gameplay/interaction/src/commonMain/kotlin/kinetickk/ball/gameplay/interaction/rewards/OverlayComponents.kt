@@ -18,7 +18,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
@@ -30,7 +29,6 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -130,36 +128,6 @@ internal fun overlayFrame(
 internal fun Modifier.overlayOffset(x: Float, y: Float): Modifier =
     offset { IntOffset(x.roundToInt(), y.roundToInt()) }
 
-/**
- * Set while a layout only measures its content (a size probe): overlay texts then take the size
- * this measurer gives them, drawing nothing and adding no semantics.
- */
-internal val LocalOverlayTextProbe = staticCompositionLocalOf<TextMeasurer?> { null }
-
-/** A text's measured size only (see [LocalOverlayTextProbe]); lays out exactly like [BasicText]. */
-@Composable
-internal fun OverlayProbeText(
-    measurer: TextMeasurer,
-    text: String,
-    style: TextStyle,
-    modifier: Modifier,
-    maxLines: Int = Int.MAX_VALUE,
-    overflow: TextOverflow = TextOverflow.Clip,
-) {
-    Layout(modifier) { _, constraints ->
-        val result = measurer.measure(text, style, overflow, softWrap = true, maxLines = maxLines, constraints = constraints)
-        layout(result.size.width, result.size.height) {}
-    }
-}
-
-/** [OverlayProbeText] for styled text (spans of number tints and weights). */
-@Composable
-internal fun OverlayProbeText(measurer: TextMeasurer, text: AnnotatedString, style: TextStyle, modifier: Modifier) {
-    Layout(modifier) { _, constraints ->
-        val result = measurer.measure(text, style, TextOverflow.Clip, softWrap = true, constraints = constraints)
-        layout(result.size.width, result.size.height) {}
-    }
-}
 
 /**
  * Styled body text (tinted numbers, emphasized values) that never breaks inside a word: when its
@@ -168,11 +136,10 @@ internal fun OverlayProbeText(measurer: TextMeasurer, text: AnnotatedString, sty
 @Composable
 internal fun OverlayRichText(text: AnnotatedString, style: TextStyle, modifier: Modifier = Modifier) {
     val measurer = rememberTextMeasurer(cacheSize = 16)
-    val probe = LocalOverlayTextProbe.current
     BoxWithConstraints(modifier) {
         val width = if (constraints.hasBoundedWidth) constraints.maxWidth.toFloat() else Float.POSITIVE_INFINITY
         val fitted = remember(text.text, style, width) { fitTextStyle(measurer, text.text, style, width, Int.MAX_VALUE, 0.7f) }
-        if (probe != null) OverlayProbeText(probe, text, fitted, Modifier) else BasicText(text, style = fitted)
+        BasicText(text, style = fitted)
     }
 }
 
@@ -189,10 +156,6 @@ internal fun OverlayText(
     val shown = if (uppercase) text.uppercase() else text
     val aligned = if (align != null) style.merge(TextStyle(textAlign = align)) else style
     val overflow = if (maxLines == Int.MAX_VALUE) TextOverflow.Clip else TextOverflow.Ellipsis
-    LocalOverlayTextProbe.current?.let { probe ->
-        OverlayProbeText(probe, shown, aligned, modifier, maxLines, overflow)
-        return
-    }
     BasicText(shown, modifier, style = aligned, maxLines = maxLines, overflow = overflow)
 }
 
@@ -229,11 +192,12 @@ internal fun fitTextStyle(
     minScale: Float,
 ): TextStyle {
     if (maxWidthPx <= 0f || maxWidthPx.isInfinite() || shown.isEmpty()) return style
-    val words = shown.split(' ', '\n').filter(String::isNotEmpty)
+    // Unwrapped lines share one native paragraph instead of shaping every word separately
+    // at every size step. Its width is the same maximum of the individual word widths.
+    val wordLines = shown.split(' ', '\n').filter(String::isNotEmpty).joinToString("\n")
     fun styleAt(scale: Float) = if (scale == 1f) style else style.copy(fontSize = style.fontSize * scale)
-    fun widest(candidate: TextStyle) = words.maxOfOrNull { word ->
-        measurer.measure(word, candidate, softWrap = false, maxLines = 1).size.width.toFloat()
-    } ?: 0f
+    fun widest(candidate: TextStyle) = if (wordLines.isEmpty()) 0f else
+        measurer.measure(wordLines, candidate, softWrap = false).size.width.toFloat()
     fun fits(candidate: TextStyle): Boolean {
         if (widest(candidate) > maxWidthPx) return false
         if (maxLines == Int.MAX_VALUE) return true
@@ -302,14 +266,13 @@ internal fun OverlayFitText(
     minScale: Float = 0.7f,
     align: TextAlign? = null,
 ) {
-    val measurer = rememberTextMeasurer(cacheSize = 16)
     val shown = if (uppercase) text.uppercase() else text
-    val probe = LocalOverlayTextProbe.current
+    val measurer = rememberTextMeasurer(cacheSize = 16)
     BoxWithConstraints(modifier) {
         val width = if (constraints.hasBoundedWidth) constraints.maxWidth.toFloat() else Float.POSITIVE_INFINITY
         val fitted = remember(shown, style, width, maxLines, minScale) { fitTextStyle(measurer, shown, style, width, maxLines, minScale) }
         val aligned = if (align != null) fitted.merge(TextStyle(textAlign = align)) else fitted
-        if (probe != null) OverlayProbeText(probe, shown, aligned, Modifier) else BasicText(shown, style = aligned)
+        BasicText(shown, style = aligned)
     }
 }
 
@@ -329,7 +292,6 @@ internal fun OverlayFitTextOrNothing(
 ) {
     val measurer = rememberTextMeasurer(cacheSize = 16)
     val shown = if (uppercase) text.uppercase() else text
-    val probe = LocalOverlayTextProbe.current
     BoxWithConstraints(modifier) {
         val width = if (constraints.hasBoundedWidth) constraints.maxWidth.toFloat() else Float.POSITIVE_INFINITY
         val fitted = remember(shown, style, width, maxLines, minScale) {
@@ -340,7 +302,7 @@ internal fun OverlayFitTextOrNothing(
             candidate.takeIf { whole && it.fontSize.value >= style.fontSize.value * minScale - 0.01f }
         }
         if (fitted != null) {
-            if (probe != null) OverlayProbeText(probe, shown, fitted, Modifier) else BasicText(shown, style = fitted, maxLines = maxLines)
+            BasicText(shown, style = fitted, maxLines = maxLines)
         }
     }
 }

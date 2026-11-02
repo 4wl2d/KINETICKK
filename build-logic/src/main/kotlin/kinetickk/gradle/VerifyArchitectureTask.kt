@@ -25,6 +25,10 @@ abstract class VerifyArchitectureTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val rootSourceFiles: ConfigurableFileCollection
 
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val nucleusSourceFiles: ConfigurableFileCollection
+
     init {
         leafProjectPaths.convention(emptySet())
     }
@@ -41,6 +45,11 @@ abstract class VerifyArchitectureTask : DefaultTask() {
         val violations = buildList {
             addModuleSetViolations(actualLeafProjects)
             addAll(architectureDependencyViolations(dependencies))
+            nucleusSourceFiles.files.sortedBy { it.invariantSeparatorsPath }.forEach { file ->
+                addAll(nucleusImportViolations(file.readText()).map { violation ->
+                    "${file.invariantSeparatorsPath}:$violation"
+                })
+            }
 
             val sourceFiles = rootSourceFiles.files
                 .filter { it.isFile }
@@ -112,6 +121,12 @@ internal fun architectureDependencyViolations(dependencies: List<ProjectEdge>): 
             add("impl -> impl dependency is forbidden: ${dependency.displayName}")
         }
 
+        if (!dependency.isTest && dependency.source.isContractOrNucleusProject() &&
+            dependency.target != ":foundation:common" && !dependency.target.endsWith(":api")
+        ) {
+            add("api/nucleus production dependencies must target public APIs or foundation:common: ${dependency.displayName}")
+        }
+
         if (isLegacyModule(dependency.source) || isLegacyModule(dependency.target)) {
             add("Legacy core/feature dependency is forbidden: ${dependency.displayName}")
         }
@@ -126,6 +141,8 @@ internal fun architectureDependencyViolations(dependencies: List<ProjectEdge>): 
 }
 
 private fun String.isImplementationProject(): Boolean = endsWith(":impl")
+
+private fun String.isContractOrNucleusProject(): Boolean = endsWith(":api") || endsWith(":nucleus")
 
 private fun isLegacyModule(path: String): Boolean =
     path.startsWith(":core:") || path.startsWith(":feature:")

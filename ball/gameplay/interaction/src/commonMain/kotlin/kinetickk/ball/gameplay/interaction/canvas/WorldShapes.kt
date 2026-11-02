@@ -190,6 +190,22 @@ internal object WorldStrokes {
     val dashEffect: PathEffect by lazy { PathEffect.dashPathEffect(floatArrayOf(8f, 7f)) }
 }
 
+/** Retained unit geometry and native path effects; no guessed viewport or enemy-size cache keys. */
+internal fun prepareWorldVisualResources() {
+    WorldUnitShapes.shard
+    WorldUnitShapes.flame
+    WorldUnitShapes.cometTail
+    WorldUnitShapes.cometTailCore
+    WorldUnitShapes.bar
+    WorldStrokes.dashedHair
+    WorldStrokes.dashedThin
+    WorldStrokes.dashedMedium
+    WorldStrokes.dotted
+    WorldStrokes.arc6
+    WorldStrokes.dashEffect
+    EnemySilhouetteReach
+}
+
 /** Cached world brushes ([edgeGlow]). */
 internal object WorldBrushes
 

@@ -165,7 +165,22 @@ class GameplayRenderFactsEndToEndTest {
      */
     @Test
     fun theReactionEffectsLevelTheRunReceivedShapesTheFxLayer() {
-        val (frame, fx) = runs.flatMap { it.samples.entries }.first { it.key == "reactions" }.value
+        val (publishedFrame, publishedFx) = runs.flatMap { it.samples.entries }.first { it.key == "primary-reaction" }.value
+        val primary = publishedFx.elementBursts.first {
+            it.reaction >= 0 && it.flags and (ReactionCueFlags.ECHO or ReactionCueFlags.CASCADE) == 0
+        }
+        // Isolate a real emitted primary reaction at mid-life and inside the viewport. The earliest
+        // crowded reaction frame can contain only echoes/cascades, for which all settings correctly
+        // use the signature-only form; it cannot prove the quality preference changed the FX layer.
+        val frame = publishedFrame.with(
+            "enemies" to publishedFrame.enemies.take(0).toImmutableList(),
+            "interpolationAlpha" to 1f,
+        )
+        val fx = VisualFxProjection.EMPTY.copy(elementBursts = immutableListOf(primary.copy(
+            x = frame.cameraX + 80f,
+            y = frame.cameraY,
+            life = primary.maxLife * 0.65f,
+        )))
         val used = ReactionEffectsLevel.entries.associateWith { level ->
             val settings = runWithReactionEffects(level).settings
             assertEquals(level, settings.reactionEffects, "the run applied $level")
@@ -511,6 +526,9 @@ internal class FactRun(val seed: Int, private val seconds: Float = 240f) {
         if (fx.skillBursts.isNotEmpty()) samples.getOrPut("skill-burst") { model to fx }
         // Drawn samples keep their fact inside the viewport: the renderer culls flashes and glyphs off screen.
         if (fx.elementBursts.count { it.reaction >= 0 && model.shows(it.x, it.y) } >= 3) samples.getOrPut("reactions") { model to fx }
+        if (fx.elementBursts.any { it.reaction >= 0 && it.flags and (ReactionCueFlags.ECHO or ReactionCueFlags.CASCADE) == 0 }) {
+            samples.getOrPut("primary-reaction") { model to fx }
+        }
         if (fx.weaponArcs.any { it.style != LinkStyleCode.WEAPON }) samples.getOrPut("styled-link") { model to fx }
 
         val slots = model.skillBar.slots

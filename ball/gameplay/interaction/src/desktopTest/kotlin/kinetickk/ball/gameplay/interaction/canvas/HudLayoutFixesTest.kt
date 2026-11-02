@@ -175,13 +175,14 @@ class HudLayoutFixesTest {
     }
 
     /**
-     * Show FPS on desktop and landscape phones: the counter (value and label) fits inside its slot's
+     * Show FPS on desktop and phones: the counter (value and label) fits inside its slot's
      * visual and never meets the clock, the badge, the chips (which step left of it on desktop), the
      * chain or a boss block, at every text size in both languages; the full panel stays closed.
      */
     @Test
     fun theFpsCounterStaysInItsSlotClearOfTheHeader() {
-        val windows = listOf(1_440 to 810, 1_280 to 720, 1_000 to 700, 844 to 390, 740 to 360, 640 to 360, 568 to 320)
+        val windows = listOf(1_440 to 810, 1_280 to 720, 1_000 to 700, 844 to 390, 740 to 360, 640 to 360, 568 to 320,
+            360 to 720, 320 to 640)
         for (language in AppLanguage.entries) for ((w, h) in windows) for (textScale in textScales)
         for (boss in listOf(EnemyType.ELITE, EnemyType.ARCHITECT)) {
             val width = w.toFloat()
@@ -198,7 +199,8 @@ class HudLayoutFixesTest {
             HudDrawCache.forgetLayouts()
             draw(w, h, language, textScale) { measurer -> drawHud(model, measurer, 1f, controls = controls) }
             val where = "$language $w x $h x$textScale $boss"
-            val slot = runningControlBounds(width, height, 1f, kinetickk.ball.gameplay.interaction.layout.RunningControlMask.of(model))
+            val slot = if (h > w) kinetickk.ball.gameplay.interaction.layout.compactFpsReadoutBounds(width, 1f, overlay = false)
+            else runningControlBounds(width, height, 1f, kinetickk.ball.gameplay.interaction.layout.RunningControlMask.of(model))
                 .single { it.target == RunningControlTarget.PERFORMANCE }.bounds
             val counter = assertNotNull(HudLayoutProbe.rect(HudBlock.FPS), "$where: no counter")
             assertTrue(slot.contains(counter.topLeft) && slot.contains(counter.bottomRight), "$where: counter $counter outside its slot $slot")
@@ -207,6 +209,9 @@ class HudLayoutFixesTest {
                 assertFalse(other.overlaps(slot), "$where: $block $other meets the counter's slot $slot")
             }
             val build = runningBuildButtonBounds(width, height, 1f)
+            assertFalse(slot.overlaps(build), "$where: counter $slot meets Build $build")
+            val pause = runningControlBounds(width, height, 1f).single { it.target == RunningControlTarget.PAUSE }.bounds
+            assertFalse(slot.overlaps(pause), "$where: counter $slot meets Pause $pause")
             listOf(HudBlock.MATTER_CHIP, HudBlock.KEY_CHIP, HudBlock.CHAIN).forEach { block ->
                 val other = HudLayoutProbe.rect(block) ?: return@forEach
                 assertFalse(other.overlaps(build), "$where: $block $other meets Build $build")

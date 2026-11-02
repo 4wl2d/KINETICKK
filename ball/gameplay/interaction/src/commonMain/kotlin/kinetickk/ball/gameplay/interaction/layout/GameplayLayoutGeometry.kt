@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.layout
 
+
 import androidx.compose.ui.geometry.Rect
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kotlin.math.max
@@ -44,8 +45,8 @@ internal object RunningControlMask {
     const val APEX = 2
 
     /**
-     * The FPS counter in the PERFORMANCE slot (a tap toggles the performance panel): placed while Show
-     * FPS is on, on desktop and landscape phones (portrait phones have no Performance slot).
+     * The FPS counter in the PERFORMANCE slot (Debug can open the performance panel): placed while Show
+     * FPS is on. Portrait uses a read-only strip below the clock instead of another header button.
      */
     const val FPS = 4
     const val ALL = SKILLS or APEX or FPS
@@ -112,6 +113,16 @@ internal fun runningHudMargin(width: Float, height: Float, scale: Float): Float 
 
 /** Top inset of the phone portrait HUD (status bar area of the Mobile-Portrait board). */
 internal const val PORTRAIT_HUD_TOP_DP = 47f
+
+/** Small read-only FPS strip: under the portrait clock, or above a modal gameplay overlay. */
+internal fun compactFpsReadoutBounds(width: Float, scale: Float, overlay: Boolean): Rect {
+    val unit = scale.coerceAtLeast(1f)
+    val readoutWidth = min(76f * unit, width)
+    val left = if (overlay) (width - readoutWidth - 8f * unit).coerceAtLeast(0f) else (width - readoutWidth) * 0.5f
+    val top = if (overlay) 4f * unit else (PORTRAIT_HUD_TOP_DP + 47f) * unit
+    val height = if (overlay) 20f * unit else 12f * unit
+    return Rect(left, top, left + readoutWidth, top + height)
+}
 
 /** Portrait rows below [PORTRAIT_HUD_TOP_DP], in dp: chips + chain, then the boss (elite/Architect) row. */
 internal const val PORTRAIT_CHIP_ROW_DP = 61f

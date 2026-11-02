@@ -14,7 +14,107 @@
 Use `smoke` to check the harness, `standard` for comparisons, and `deep` for
 longer sampling. Select cases with `-PbenchmarkScenarios=name_a,name_b` and
 write results with `-PbenchmarkOutput=/absolute/path/result.json`.
-Press `F3` in-game for the rolling frame, dispatch, and Canvas performance HUD.
+For interactive investigation, run
+`./gradlew -Pkinetickk.variant=debug :app:desktop:run` and open **DEBUG**.
+Record the problematic gameplay, stop recording, and copy the diagnostic report.
+Release does not contain the diagnostic UI or recorder. Use the same build variant
+on both sides of a performance comparison; Debug measurements include instrumentation.
+
+The recorder's opt-in JVM probe compares stopped, live-panel and recording hooks
+in alternating order, with raw nanoseconds and allocation counters:
+
+```bash
+KK_DEBUG_RECORDER_BENCH=1 KK_DEBUG_RECORDER_OUT=/absolute/path/recorder.jsonl \
+./gradlew -Pkinetickk.variant=debug :app:shared:desktopTest --tests '*DebugRecorderOverheadBenchmarkTest' --rerun
+```
+
+This isolates recorder callback overhead. It excludes panel drawing, report
+formatting, runtime sampling and game work; it does not establish FPS, GPU time
+or a Release speedup.
+
+The reward animation regression uses the real gameplay host with a frozen four-card
+choice. After the deal entrance settles, animation must keep changing the rendered
+image while the frame clock applies no new compositions. Its ordinary run checks
+12 frames; the opt-in probe checks 120 and records a JSON line:
+
+```bash
+KK_REWARD_ANIMATION_BENCH=1 KK_REWARD_ANIMATION_LABEL=candidate \
+KK_REWARD_ANIMATION_OUT=/absolute/path/reward-animation.jsonl \
+./gradlew -Pkinetickk.variant=release :ball:gameplay:interaction:desktopTest \
+  --tests '*RewardAnimationPerformanceTest' --rerun
+```
+
+Use the identical probe and variant on both revisions in separate test JVMs.
+The allocation total covers threads present at the start of the sample; wall time
+includes test-clock advancement and UI synchronization. Neither measurement is FPS
+or GPU presentation time. The frozen fixture excludes simulation, profile storage
+and the initial opening cost; the composition assertion checks the animation path.
+
+To measure the same frozen choice in a native window with the production frame
+loop, use the opt-in desktop probe. It closes its own window after sampling and
+never loads player data:
+
+```bash
+KK_REWARD_DESKTOP_BENCH=1 KK_REWARD_DESKTOP_LABEL=candidate \
+KK_REWARD_DESKTOP_OUT=/absolute/path/reward-desktop.jsonl \
+./gradlew -Pkinetickk.variant=release :ball:gameplay:interaction:rewardDesktopBenchmark \
+  -Dskiko.vsync.enabled=false
+```
+
+`WARMUP_MS` (2400), `SAMPLE_MS` (6000), `WIDTH` (1728), and `HEIGHT` (1084)
+use the `KK_REWARD_DESKTOP_` prefix. Frozen mode starts with CHOICE already
+composed, so use the transition scenario to capture opening work:
+
+```bash
+KK_REWARD_DESKTOP_BENCH=1 KK_REWARD_DESKTOP_SCENARIO=transitions \
+KK_REWARD_DESKTOP_WARMUP_MS=0 KK_REWARD_DESKTOP_SAMPLE_MS=18000 \
+KK_REWARD_DESKTOP_LABEL=candidate KK_REWARD_DESKTOP_OUT=/absolute/path/rewards.jsonl \
+./gradlew -Pkinetickk.variant=release :ball:gameplay:interaction:rewardDesktopBenchmark \
+  -PrewardBenchmarkJava=21 -PrewardBenchmarkHeap=128m \
+  -PrewardBenchmarkJfr=/absolute/path/rewards.jfr -Dskiko.vsync.enabled=false
+```
+
+It opens CHOICE at 1 s after the first gameplay callback, closes at 4 s, and
+reopens at 5/9/13/17 s. Raw rows include wall-clock callback intervals, the supplied
+Compose frame-clock delta, phase age and transition markers. Inspect the entire
+first second and the whole choice interval to detect work delayed past opening.
+Reward UI preparation finishes before gameplay callbacks begin; assess that
+startup cost separately in the JFR/full-process timing.
+
+`KK_REWARD_DESKTOP_PHASE_METRICS=1` adds diagnostic root measure/draw wrappers;
+independent descendant remeasurement may bypass them. Use identical instrumentation
+on both sides. `rewardBenchmarkJfrSettings` accepts a JFR settings name or path.
+
+Compare fresh processes with the
+same variant, viewport, density, renderer and V-Sync setting. JSONL and raw TSV
+separate callback intervals, composition changes, thread allocation and process
+CPU; callback intervals are not GPU presentation times. Initial/settled samples
+must be compared separately, and this fixture excludes simulation and storage.
+
+`OverlayWordFitTest` compares batched word measurement against the previous fitter
+over English/Russian text and width/style boundaries. `KK_WORD_FIT_BENCH=1` with
+`KK_WORD_FIT_OUT=/absolute/path/word-fit.jsonl` enables alternating paired timing
+and allocation samples; these measure text fitting alone.
+
+For Profile owner/decider/completion changes, the codec suite alone does not
+measure the changed path. The opt-in owner probe runs a real mute command and
+its accepted caller with either a fake Resource or the codec and in-memory
+readback. It never opens player storage:
+
+```bash
+KK_PROFILE_OWNER_BENCH=1 KK_PROFILE_OWNER_LABEL=candidate \
+KK_PROFILE_OWNER_REVISION=FULL_SOURCE_SHA KK_PROFILE_OWNER_DIRTY=true \
+KK_PROFILE_OWNER_FORK=1 KK_PROFILE_OWNER_OUT=/absolute/path/candidate-1.jsonl \
+./gradlew :ball:profile:impl:desktopTest --tests '*ProfileOwnerPerformanceBenchmarkTest' --rerun
+```
+
+Copy the identical probe to both revisions, use fresh test JVMs in A-B-B-A
+order and a new output file per fork. `WARMUPS`, `SAMPLES`, and `ITERATION_MS`
+use the `KK_PROFILE_OWNER_` prefix (defaults 5, 10, 180). The output records
+per-sample nanoseconds and allocated bytes per completed command. Allocation
+counters require HotSpot; these are neither RSS nor physical storage timings.
+Do not infer FPS, durable-write latency or statistical significance from this
+probe. See the [0.6.0 evaluation](../../docs/project/BALLARCH-0.6.0.md).
 
 The `published_reaction_frame_60hz_1x`, `published_reaction_frame_60hz_2x`, and
 `published_reaction_burst_100ms_2x` scenarios cover a canonical high-activation
@@ -51,7 +151,7 @@ temporary reporter without opening player data:
 
 ```bash
 KK_WORLD_GENERATION_BENCH=1 ./gradlew :ball:gameplay:nucleus:desktopTest --tests '*WorldGenerationPerformanceBenchmarkTest' --rerun
-KK_CRASH_EVENT_BENCH=1 ./gradlew :app:shared:desktopTest --tests '*DesktopCrashEventPerformanceBenchmarkTest' --rerun
+KK_CRASH_EVENT_BENCH=1 ./gradlew -Pkinetickk.variant=debug :app:shared:desktopTest --tests '*DesktopCrashEventPerformanceBenchmarkTest' --rerun
 ```
 
 Both accept `LABEL`, `OUT`, `WARMUPS` and `SAMPLES` with their respective environment prefix.

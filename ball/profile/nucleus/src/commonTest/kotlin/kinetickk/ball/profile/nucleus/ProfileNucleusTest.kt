@@ -74,9 +74,9 @@ class ProfileNucleusTest {
         assertFalse(state.profile.preferences.runStatisticsOnLeft)
         assertEquals(frame.nextState.profile, assertIs<ProfileOutput.PersistSnapshot>(frame.outputs.single()).snapshot.profile)
         val persist = assertIs<ProfileOutput.PersistSnapshot>(frame.outputs.single())
-        val written = ProfileNucleus.decide(frame.nextState, ProfileNucleusPulse.WriteCompleted(
+        val written = ProfileNucleus.complete(frame.nextState,
             persist.effectRef, ProfileWriteResult.Written(persist.snapshot.revision),
-        )).acceptedFrame()
+        )
         val restored = ProfileNucleus.decide(written.nextState, pulse).acceptedFrame()
         assertFalse(restored.nextState.profile.preferences.runStatisticsOnLeft)
     }
@@ -760,7 +760,7 @@ class ProfileNucleusTest {
     }
 
     @Test
-    fun acceptedResourceEffectStagesOneFactBeforePersistenceCompletion() {
+    fun acceptedResourceEffectSettlesThroughCompletionWithoutARequestVerdict() {
         val mutation = ProfileNucleus.decide(
             readyState(),
             ProfileNucleusPulse.Intent(
@@ -769,37 +769,31 @@ class ProfileNucleusTest {
         ).acceptedFrame()
         val persist = assertIs<ProfileOutput.PersistSnapshot>(mutation.outputs.single())
 
-        val unknown = ProfileNucleus.decide(
+        val unknown = ProfileNucleus.complete(
             mutation.nextState,
-            ProfileNucleusPulse.WriteCompleted(
-                persist.effectRef,
-                ProfileWriteResult.OutcomeUnknown(
-                    ProfileWriteOutcomeUnknownReason.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
-                ),
+            persist.effectRef,
+            ProfileWriteResult.OutcomeUnknown(
+                ProfileWriteOutcomeUnknownReason.PROVIDER_WRITE_MAY_HAVE_EXECUTED,
             ),
-        ).acceptedFrame()
+        )
         assertEquals(mutation.nextState.profile, unknown.nextState.profile)
         assertIs<ProfilePersistenceStatus.OutcomeUnknown>(unknown.nextState.persistence)
         assertTrue(unknown.outputs.isEmpty())
 
-        val failed = ProfileNucleus.decide(
+        val failed = ProfileNucleus.complete(
             mutation.nextState,
-            ProfileNucleusPulse.WriteCompleted(
-                persist.effectRef,
-                ProfileWriteResult.ResourceFailure(
-                    ProfileWriteFailure.PROVIDER_WRITE_FAILED_BEFORE_EXECUTION,
-                ),
+            persist.effectRef,
+            ProfileWriteResult.ResourceFailure(
+                ProfileWriteFailure.PROVIDER_WRITE_FAILED_BEFORE_EXECUTION,
             ),
-        ).acceptedFrame()
+        )
         assertIs<ProfilePersistenceStatus.ResourceFailure>(failed.nextState.persistence)
 
         assertFailsWith<IllegalStateException> {
-            ProfileNucleus.decide(
+            ProfileNucleus.complete(
                 mutation.nextState,
-                ProfileNucleusPulse.WriteCompleted(
-                    ProfileEffectRef(persist.effectRef.sourceRevision, persist.effectRef.ordinal + 1),
-                    ProfileWriteResult.Written(persist.snapshot.revision),
-                ),
+                ProfileEffectRef(persist.effectRef.sourceRevision, persist.effectRef.ordinal + 1),
+                ProfileWriteResult.Written(persist.snapshot.revision),
             )
         }
     }
@@ -1118,10 +1112,10 @@ class ProfileNucleusTest {
 /** Completes the frame's write so the next decision starts from a settled State. */
 private fun ProfileAcceptedFrame.persisted(): ProfileState {
     val persist = assertIs<ProfileOutput.PersistSnapshot>(outputs.first())
-    return ProfileNucleus.decide(
+    return ProfileNucleus.complete(
         nextState,
-        ProfileNucleusPulse.WriteCompleted(persist.effectRef, ProfileWriteResult.Written(persist.snapshot.revision)),
-    ).acceptedFrame().nextState
+        persist.effectRef, ProfileWriteResult.Written(persist.snapshot.revision),
+    ).nextState
 }
 
 private fun ProfileDecision.acceptedFrame(): ProfileAcceptedFrame =

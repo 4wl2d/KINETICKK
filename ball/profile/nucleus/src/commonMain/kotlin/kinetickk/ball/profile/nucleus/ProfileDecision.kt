@@ -13,11 +13,11 @@ import kinetickk.ball.profile.api.ProfileRebirthTierSelected
 import kinetickk.ball.profile.api.ProfileProgressApplied
 import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.profile.api.ProfileWriteResult
 import kinetickk.foundation.collections.ImmutableList
 
 const val MAX_PROFILE_OUTPUTS_PER_DECISION: Int = 2
 
+/** Requests may be rejected; storage completions enter [ProfileNucleus.complete] separately. */
 sealed interface ProfileNucleusPulse {
     data class Intent(val intent: ProfilePulse.Business) : ProfileNucleusPulse
     data object ToggleMute : ProfileNucleusPulse
@@ -25,12 +25,6 @@ sealed interface ProfileNucleusPulse {
     data class SelectRebirthTier(val tier: Int) : ProfileNucleusPulse
     data class ApplyGameplayProgress(val update: GameplayProgressUpdate) : ProfileNucleusPulse
 
-    sealed interface Fact : ProfileNucleusPulse
-
-    data class WriteCompleted(
-        val effectRef: ProfileEffectRef,
-        val result: ProfileWriteResult,
-    ) : Fact
 }
 
 sealed interface ProfileDecision {
