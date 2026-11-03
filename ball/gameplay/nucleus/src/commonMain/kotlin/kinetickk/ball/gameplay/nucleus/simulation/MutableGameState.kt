@@ -132,6 +132,9 @@ internal class MutableGameState(
         offerRunOmen,
     )
 
+    /** Known and pending discoveries. */
+    internal val discoveryState: DiscoveryState = DiscoveryState(content, copySource?.discoveryState, bootstrapProgress)
+
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
     /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */
@@ -149,17 +152,6 @@ internal class MutableGameState(
     internal var characterUpgradeLevel: Int = copySource?.characterUpgradeLevel ?: 0
     /** Refit's character-mechanic damage multiplier, fixed when a run starts. */
     internal var characterUpgradePower: Float = copySource?.characterUpgradePower ?: 1f
-    internal val discoveredItemIds: RunMutableSet<Int> = copySource?.discoveredItemIds?.copy()
-        ?: RunMutableSet(
-            bootstrapProgress?.collection?.discoveredItemIds
-                ?.filterTo(mutableSetOf()) { content.item(it) != null }
-                ?: mutableSetOf(),
-        )
-    internal var discoveredRelicMask: Long = copySource?.discoveredRelicMask
-        ?: bootstrapProgress?.collection?.discoveredRelicIds?.fold(0L) { mask, id -> mask or (1L shl id.ordinal) } ?: 0L
-    internal var pendingDiscoveredRelicMask: Long = copySource?.pendingDiscoveredRelicMask ?: 0L
-    internal var pendingDiscoveredItemIdStorage: RunMutableSet<Int>? =
-        copySource?.pendingDiscoveredItemIdStorage?.copy()
     internal val pendingDiscoveredItemIds: PendingDiscoveredItemIdBuffer
         get() = PendingDiscoveredItemIdBuffer(this)
     internal val itemStacks: RunIntArray = copySource?.itemStacks?.copy()
@@ -203,12 +195,6 @@ internal class MutableGameState(
     internal var skillRuntime: SkillRuntime = copySource?.skillRuntime?.fork() ?: SkillRuntime()
     internal var reactionTokens: Float = copySource?.reactionTokens ?: REACTION_BURST
     internal var breakTokens: Float = copySource?.breakTokens ?: BREAK_BURST
-    internal var discoveredReactionMask: Int = copySource?.discoveredReactionMask
-        ?: bootstrapProgress?.collection?.discoveredReactionIds?.fold(0) { mask, id -> mask or (1 shl id.ordinal) } ?: 0
-    internal var pendingDiscoveredReactionMask: Int = copySource?.pendingDiscoveredReactionMask ?: 0
-    internal var discoveredPairingMask: Int = copySource?.discoveredPairingMask
-        ?: bootstrapProgress?.collection?.discoveredPairingIds?.fold(0) { mask, id -> mask or (1 shl id.ordinal) } ?: 0
-    internal var pendingDiscoveredPairingMask: Int = copySource?.pendingDiscoveredPairingMask ?: 0
     internal var heirloomCandidates: List<RelicId> = copySource?.heirloomCandidates
         ?: bootstrapProgress?.collection?.heirloomRelicIds?.toList().orEmpty()
     internal var heirloomPending: Boolean = copySource?.heirloomPending ?: false
@@ -278,10 +264,6 @@ internal class MutableGameState(
     internal var openedSiteIds: List<Long> = copySource?.openedSiteIds ?: emptyList()
     /** [RunSecretFlag] bits of this run. */
     internal var runSecretFlags: Int = copySource?.runSecretFlags ?: 0
-    /** World discoveries known at start plus this run's; the pending mask holds the ones not yet published. */
-    internal var worldDiscoveryMask: Int = copySource?.worldDiscoveryMask
-        ?: bootstrapProgress?.collection?.discoveredWorldEntries?.fold(0) { mask, id -> mask or id.bit } ?: 0
-    internal var pendingWorldDiscoveryMask: Int = copySource?.pendingWorldDiscoveryMask ?: 0
     /** Rarity-floor item offers waiting, at most the site policy's bound. */
     internal var pendingFloorOffers: List<ItemRarity> = copySource?.pendingFloorOffers ?: emptyList()
     /** The Golden Drifter alive (−1: none) and the run second it escapes. */

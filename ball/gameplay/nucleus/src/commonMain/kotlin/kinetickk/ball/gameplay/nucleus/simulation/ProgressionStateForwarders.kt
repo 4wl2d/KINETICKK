@@ -52,3 +52,44 @@ internal var MutableGameState.itemDeck: ItemDeck
 
 internal val MutableGameState.itemHistory: ItemHistoryWeights
     get() = profileCapture.itemHistory
+
+// DiscoveryState
+
+internal val MutableGameState.discoveredItemIds: RunMutableSet<Int>
+    get() = discoveryState.discoveredItemIds
+
+internal var MutableGameState.discoveredRelicMask: Long
+    get() = discoveryState.discoveredRelicMask
+    set(value) { discoveryState.discoveredRelicMask = value }
+
+internal var MutableGameState.pendingDiscoveredRelicMask: Long
+    get() = discoveryState.pendingDiscoveredRelicMask
+    set(value) { discoveryState.pendingDiscoveredRelicMask = value }
+
+internal var MutableGameState.pendingDiscoveredItemIdStorage: RunMutableSet<Int>?
+    get() = discoveryState.pendingDiscoveredItemIdStorage
+    set(value) { discoveryState.pendingDiscoveredItemIdStorage = value }
+
+internal var MutableGameState.discoveredReactionMask: Int
+    get() = discoveryState.discoveredReactionMask
+    set(value) { discoveryState.discoveredReactionMask = value }
+
+internal var MutableGameState.pendingDiscoveredReactionMask: Int
+    get() = discoveryState.pendingDiscoveredReactionMask
+    set(value) { discoveryState.pendingDiscoveredReactionMask = value }
+
+internal var MutableGameState.discoveredPairingMask: Int
+    get() = discoveryState.discoveredPairingMask
+    set(value) { discoveryState.discoveredPairingMask = value }
+
+internal var MutableGameState.pendingDiscoveredPairingMask: Int
+    get() = discoveryState.pendingDiscoveredPairingMask
+    set(value) { discoveryState.pendingDiscoveredPairingMask = value }
+
+internal var MutableGameState.worldDiscoveryMask: Int
+    get() = discoveryState.worldDiscoveryMask
+    set(value) { discoveryState.worldDiscoveryMask = value }
+
+internal var MutableGameState.pendingWorldDiscoveryMask: Int
+    get() = discoveryState.pendingWorldDiscoveryMask
+    set(value) { discoveryState.pendingWorldDiscoveryMask = value }
