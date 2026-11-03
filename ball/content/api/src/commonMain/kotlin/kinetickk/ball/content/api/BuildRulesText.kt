@@ -444,11 +444,11 @@ private enum class CountForm { ONE, FEW, MANY }
 /** Target conditions read differently after a hit, an impact or a kill. */
 private enum class TargetCase { HIT, IMPACT, KILL }
 
-private class RuleWriter(private val language: AppLanguage, private val context: RuleTextContext) {
-    private val magnitude = context.stackMagnitude.toDouble()
+private class RuleWriter(val language: AppLanguage, val context: RuleTextContext) {
+    val magnitude = context.stackMagnitude.toDouble()
 
     /** Stack magnitude times the item bonus, for what the bonus scales. */
-    private val gain = magnitude * context.bonus
+    val gain = magnitude * context.bonus
 
     fun stat(delta: StatDelta): RuleLine {
         val amount = delta.amount * gain
@@ -512,234 +512,6 @@ private class RuleWriter(private val language: AppLanguage, private val context:
     fun effect(clause: EffectClause): RuleLine {
         val sentence = join(clause.actions.map(::action)).capitalized()
         return RuleLine(RuleLineKind.EFFECT, sentence, clause.actions.firstNotNullOfOrNull(::actionElement))
-    }
-
-    fun rule(rule: ItemRule): List<RuleLine> = when (rule) {
-        is ItemRule.WhileModifier -> listOf(
-            line(
-                rule.isLiability,
-                text(BuildRulesText.RuleConditional, text(rule.stat.phrase, signedPercent(rule.amount * gain)), condition(rule.condition)),
-                conditionElement(rule.condition),
-            ),
-        )
-        is ItemRule.ElementPotency -> listOf(
-            RuleLine(RuleLineKind.RULE, text(BuildRulesText.RulePotency, signedPercent(rule.amount * gain), element(rule.element)), rule.element),
-        )
-        is ItemRule.StatusDuration -> {
-            val change = (rule.multiplier - 1.0) * magnitude
-            listOf(
-                if (change >= 0.0) {
-                    RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleDurationLonger, element(rule.element), percent(change)), rule.element)
-                } else {
-                    RuleLine(
-                        RuleLineKind.COST,
-                        text(BuildRulesText.RuleDurationShorter, element(rule.element), percent((-change).coerceAtMost(MAX_SHORTENING))),
-                        rule.element,
-                        negative = true,
-                    )
-                },
-            )
-        }
-        is ItemRule.BreakThreshold -> listOf(
-            RuleLine(
-                RuleLineKind.RULE,
-                breakThresholdCut(rule.reduction, context.stacks).let { cut ->
-                    if (cut == 1) text(BuildRulesText.RuleThresholdOne, element(rule.element))
-                    else text(BuildRulesText.RuleThresholdFew, element(rule.element), cut)
-                },
-                rule.element,
-            ),
-        )
-        is ItemRule.BreakPower -> listOf(
-            RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleBreakPower, signedPercent(rule.amount * gain), breakName(rule.element, genitive = true)), rule.element),
-        )
-        is ItemRule.BreakSpread -> listOf(
-            RuleLine(
-                RuleLineKind.RULE,
-                text(BuildRulesText.RuleBreakSpread, breakName(rule.element, genitive = false), stacks(scaledStacks(rule.stacks).toDouble(), element(rule.element), named = true)),
-                rule.element,
-            ),
-        )
-        is ItemRule.ReactionPower -> listOf(
-            RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleReactionPower, signedPercent(rule.amount * gain))),
-        )
-        is ItemRule.ReactionResidue -> listOf(
-            RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleReactionResidue, stacks(rule.stacks.toDouble(), text(BuildRulesText.IncomingElement), named = false))),
-        )
-        is ItemRule.ReactionRecoil -> listOf(
-            RuleLine(RuleLineKind.COST, text(BuildRulesText.RuleReactionRecoil, language.number(rule.damage * magnitude, FLAT_DECIMALS)), negative = true),
-        )
-        is ItemRule.AlwaysCrit -> listOf(
-            RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleAlwaysCrit, condition(rule.condition)), conditionElement(rule.condition)),
-        )
-        is ItemRule.CritDamageVersus -> listOf(
-            RuleLine(
-                RuleLineKind.RULE,
-                text(BuildRulesText.RuleCritDamageVersus, signedPercent(rule.amount * gain), condition(rule.condition)),
-                conditionElement(rule.condition),
-            ),
-        )
-        is ItemRule.DamageVersus -> listOf(
-            line(
-                rule.amount < 0f,
-                text(BuildRulesText.RuleDamageVersus, signedPercent(rule.amount * gain), condition(rule.condition)),
-                conditionElement(rule.condition),
-            ),
-        )
-        is ItemRule.NonCriticalDamage -> listOf(
-            if (rule.amount < 0f) {
-                RuleLine(RuleLineKind.COST, text(BuildRulesText.RuleNonCriticalLess, percent(-rule.amount * magnitude)), negative = true)
-            } else {
-                RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleNonCriticalMore, percent(rule.amount * magnitude)))
-            },
-        )
-        is ItemRule.ComboDamage -> listOf(
-            RuleLine(
-                RuleLineKind.RULE,
-                text(BuildRulesText.RuleComboDamage, signedPercent(rule.perCombo * gain), percent(rule.cap * context.bonus.toDouble())),
-            ),
-        )
-        is ItemRule.BonusRerolls -> listOf(
-            RuleLine(
-                RuleLineKind.RULE,
-                text(
-                    when (countForm(rule.count.toDouble())) {
-                        CountForm.ONE -> BuildRulesText.RuleRerollsOne
-                        CountForm.FEW -> BuildRulesText.RuleRerollsFew
-                        CountForm.MANY -> BuildRulesText.RuleRerollsMany
-                    },
-                    rule.count,
-                ),
-            ),
-        )
-        is ItemRule.GuaranteedCritAfter -> listOf(
-            RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleGuaranteedCrit, rule.misses)),
-        )
-        is ItemRule.FreeDash -> listOf(
-            RuleLine(
-                RuleLineKind.RULE,
-                text(BuildRulesText.RuleFreeDash, language.number(rule.heat.toDouble(), FLAT_DECIMALS), seconds(rule.cooldownSeconds.toDouble())),
-            ),
-        )
-        is ItemRule.OfferCards -> listOf(RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleOfferCards)))
-        is ItemRule.Convert -> conversion(rule)
-        is ItemRule.ReactionKeystone -> listOf(
-            RuleLine(
-                RuleLineKind.RULE,
-                text(BuildRulesText.RuleKeystone, reactionName(rule.reaction), localized(DefaultReactions.reaction(rule.reaction).keystone)),
-                rule.reaction.first,
-            ),
-        )
-        is ItemRule.ReactionTuning -> listOf(
-            RuleLine(
-                RuleLineKind.RULE,
-                text(
-                    BuildRulesText.RuleReactionTuning,
-                    rule.reaction?.let(::reactionName) ?: text(BuildRulesText.AllReactions),
-                    signedPercent(rule.amount * gain),
-                    text(rule.aspect.phrase),
-                ),
-                rule.reaction?.first,
-            ),
-        )
-        is ItemRule.FieldTuning -> listOf(
-            RuleLine(
-                RuleLineKind.RULE,
-                text(
-                    if (rule.aspect == FieldAspect.RADIUS) BuildRulesText.RuleFieldRadius else BuildRulesText.RuleFieldDuration,
-                    percent(rule.amount * gain),
-                ),
-            ),
-        )
-        is ItemRule.SkillCooldown -> listOf(
-            RuleLine(
-                RuleLineKind.RULE,
-                rule.element?.let { text(BuildRulesText.RuleSkillCooldown, elementName(it), percent(rule.amount * gain)) }
-                    ?: text(BuildRulesText.RuleSkillCooldownAll, percent(rule.amount * gain)),
-                rule.element,
-            ),
-        )
-        is ItemRule.SkillPower -> listOf(
-            RuleLine(
-                RuleLineKind.RULE,
-                rule.element?.let { text(BuildRulesText.RuleSkillPower, elementName(it), signedPercent(rule.amount * gain)) }
-                    ?: text(BuildRulesText.RuleSkillPowerAll, signedPercent(rule.amount * gain)),
-                rule.element,
-            ),
-        )
-        ItemRule.SkillCharges -> listOf(RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleSkillCharges)))
-        is ItemRule.SkillAttunement -> {
-            val resolved = resolve(rule.pick)
-            listOf(
-                RuleLine(
-                    RuleLineKind.RULE,
-                    when {
-                        resolved != null -> text(BuildRulesText.RuleSkillAttunement, elementName(resolved))
-                        rule.pick == ElementPick.SECONDARY -> text(BuildRulesText.RuleSkillAttunementSecondary)
-                        else -> text(BuildRulesText.RuleSkillAttunementDominant)
-                    },
-                    resolved,
-                ),
-            )
-        }
-        is ItemRule.CatalysisRate -> listOf(RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleCatalysisRate, percent(rule.amount * gain))))
-        is ItemRule.ApexCooldown -> listOf(RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleApexCooldown, percent(rule.amount * gain))))
-        is ItemRule.CoreLinkRadius -> listOf(
-            RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleCoreLinkRadius, language.number(rule.bonus * gain, 0))),
-        )
-        is ItemRule.ObstacleTuning -> listOf(
-            RuleLine(
-                RuleLineKind.RULE,
-                when (rule.aspect) {
-                    ObstacleAspect.RESTITUTION -> text(BuildRulesText.RuleObstacleRestitution, percent(rule.amount * gain))
-                    ObstacleAspect.COLLISION_DAMAGE -> text(BuildRulesText.RuleObstacleDamage, signedPercent(-rule.amount * gain))
-                    ObstacleAspect.LETHAL_SPEED -> text(BuildRulesText.RuleObstacleLethal, speed((rule.amount * gain).toFloat()))
-                    ObstacleAspect.BOOST_POWER -> text(BuildRulesText.RuleBoostPower, percent(rule.amount * gain))
-                    ObstacleAspect.WELL_PULL -> text(BuildRulesText.RuleWellPull, percent(rule.amount * gain))
-                },
-            ),
-        )
-    }
-
-    private fun conversion(rule: ItemRule.Convert): List<RuleLine> = when (rule.kind) {
-        ConversionKind.OVERHEAL_TO_SHIELD -> listOf(
-            RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleOverhealToShield, percent(overhealOverfill(rule.amount, context.stacks).toDouble()))),
-        )
-        ConversionKind.REGENERATION_TO_DECAY -> listOf(
-            RuleLine(RuleLineKind.COST, text(BuildRulesText.RuleRegenerationNoLongerHeals), negative = true),
-            RuleLine(
-                RuleLineKind.RULE,
-                text(BuildRulesText.RuleRegenerationToDecay, stacks(rule.amount * magnitude, element(StatusElement.ENTROPY), named = true)),
-                StatusElement.ENTROPY,
-            ),
-        )
-        ConversionKind.CRIT_CHANCE_TO_DAMAGE -> listOf(
-            RuleLine(RuleLineKind.COST, text(BuildRulesText.RuleCritChanceCap, percent(CRIT_CHANCE_CONVERSION_CAP)), negative = true),
-            RuleLine(
-                RuleLineKind.RULE,
-                text(BuildRulesText.RuleCritChanceToDamage, text(BuildRulesText.UnitPercent, language.number(rule.amount * gain, PERCENT_DECIMALS))),
-            ),
-        )
-        ConversionKind.DASH_HEAT_TO_SKILLS -> listOf(
-            RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleDashHeatToSkills, seconds(rule.amount.toDouble()))),
-            RuleLine(RuleLineKind.COST, text(BuildRulesText.RuleCoolSlower, percent(1.0 - DASH_HEAT_CONVERSION_COOLING)), negative = true),
-        )
-        ConversionKind.DATA_TO_SKILLS -> listOf(
-            RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleDataToSkills, seconds(rule.amount.toDouble()))),
-            RuleLine(RuleLineKind.COST, text(BuildRulesText.RuleDataToSkillsCost, percent(1.0 - DATA_CONVERSION_GAIN)), negative = true),
-        )
-        ConversionKind.SKILLS_COST_HEAT -> listOf(
-            RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleSkillCooldownAll, percent(1.0 - SKILL_HEAT_CONVERSION_COOLDOWN))),
-            RuleLine(
-                RuleLineKind.COST,
-                text(BuildRulesText.RuleSkillsCostHeat, language.number(rule.amount.toDouble(), FLAT_DECIMALS)),
-                negative = true,
-            ),
-        )
-        ConversionKind.SKILL_FIELDS_FOLLOW -> listOf(
-            RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleSkillFieldsFollow, percent(rule.amount.toDouble()))),
-        )
-        ConversionKind.KNOCKBACK_TO_DAMAGE -> listOf(RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleKnockbackToDamage)))
     }
 
     private fun action(action: EffectAction): String = when (action) {
@@ -830,7 +602,7 @@ private class RuleWriter(private val language: AppLanguage, private val context:
         EffectAction.PrimeDash -> text(BuildRulesText.ActionPrimeDash)
     }
 
-    private fun condition(condition: EffectCondition, case: TargetCase = TargetCase.HIT): String = when (condition) {
+    fun condition(condition: EffectCondition, case: TargetCase = TargetCase.HIT): String = when (condition) {
         is EffectCondition.SpeedAtLeast -> text(BuildRulesText.ConditionSpeedAtLeast, speed(condition.speed))
         is EffectCondition.SpeedBelow -> text(BuildRulesText.ConditionSpeedBelow, speed(condition.speed))
         is EffectCondition.IntegrityBelow -> text(BuildRulesText.ConditionIntegrityBelow, percent(condition.fraction.toDouble()))
@@ -931,7 +703,7 @@ private class RuleWriter(private val language: AppLanguage, private val context:
     }
 
     /** English names a resolved element by itself ("2 Gravitic"); Russian always counts layers. */
-    private fun stacks(count: Double, of: String, named: Boolean): String {
+    fun stacks(count: Double, of: String, named: Boolean): String {
         val amount = language.number(count, FLAT_DECIMALS)
         if (named && language == AppLanguage.English) return text(BuildRulesText.ElementAmount, amount, of)
         return text(
@@ -948,7 +720,7 @@ private class RuleWriter(private val language: AppLanguage, private val context:
         if (pick == ElementPick.SECONDARY) BuildRulesText.PickSecondary else BuildRulesText.PickDominant,
     )
 
-    private fun resolve(pick: ElementPick): StatusElement? = pick.element ?: when (pick) {
+    fun resolve(pick: ElementPick): StatusElement? = pick.element ?: when (pick) {
         ElementPick.DOMINANT -> context.dominant
         ElementPick.SECONDARY -> context.secondary
         else -> null
@@ -963,7 +735,7 @@ private class RuleWriter(private val language: AppLanguage, private val context:
         else -> null
     }
 
-    private fun conditionElement(condition: EffectCondition): StatusElement? = when (condition) {
+    fun conditionElement(condition: EffectCondition): StatusElement? = when (condition) {
         is EffectCondition.TargetHas -> condition.element
         is EffectCondition.ElementIs -> condition.element
         EffectCondition.TargetFrozen -> StatusElement.CRYO
@@ -971,7 +743,7 @@ private class RuleWriter(private val language: AppLanguage, private val context:
     }
 
     /** English label, or the Russian genitive every Russian element slot takes. */
-    private fun element(element: StatusElement): String = when (language) {
+    fun element(element: StatusElement): String = when (language) {
         AppLanguage.English -> element.displayLabel
         AppLanguage.Russian -> when (element) {
             StatusElement.THERMAL -> "Термо"
@@ -984,7 +756,7 @@ private class RuleWriter(private val language: AppLanguage, private val context:
         }
     }
 
-    private fun breakName(element: StatusElement, genitive: Boolean): String = when (language) {
+    fun breakName(element: StatusElement, genitive: Boolean): String = when (language) {
         AppLanguage.English -> element.breakLabel
         AppLanguage.Russian -> if (!genitive) element.breakLabel.localizedContent(language) else when (element) {
             StatusElement.THERMAL -> "Воспламенения"
@@ -998,19 +770,19 @@ private class RuleWriter(private val language: AppLanguage, private val context:
     }
 
     /** A reaction's name in this language. */
-    private fun reactionName(reaction: ReactionId): String = localized(DefaultReactions.reaction(reaction).name)
+    fun reactionName(reaction: ReactionId): String = localized(DefaultReactions.reaction(reaction).name)
 
     /** An element's own name (nominative in Russian), as a label rather than an element slot. */
-    private fun elementName(element: StatusElement): String = localized(element.displayLabel)
+    fun elementName(element: StatusElement): String = localized(element.displayLabel)
 
-    private fun localized(english: String): String = english.localizedContent(language)
+    fun localized(english: String): String = english.localizedContent(language)
 
-    private fun line(cost: Boolean, text: String, element: StatusElement?): RuleLine =
+    fun line(cost: Boolean, text: String, element: StatusElement?): RuleLine =
         RuleLine(if (cost) RuleLineKind.COST else RuleLineKind.RULE, text, element, negative = cost)
 
-    private fun scaledStacks(stacks: Int): Int = floor(stacks * magnitude + 0.5 + ROUNDING_EPSILON).toInt().coerceAtLeast(1)
+    fun scaledStacks(stacks: Int): Int = floor(stacks * magnitude + 0.5 + ROUNDING_EPSILON).toInt().coerceAtLeast(1)
 
-    private fun countForm(count: Double): CountForm {
+    fun countForm(count: Double): CountForm {
         val whole = floor(count + ROUNDING_EPSILON)
         if (abs(count - whole) > ROUNDING_EPSILON) return if (language == AppLanguage.English) CountForm.MANY else CountForm.FEW
         val n = whole.toLong()
@@ -1041,19 +813,19 @@ private class RuleWriter(private val language: AppLanguage, private val context:
         else -> parts.dropLast(1).joinToString(text(BuildRulesText.ListComma)) + text(BuildRulesText.ListAnd) + parts.last()
     }
 
-    private fun percent(fraction: Double): String = text(BuildRulesText.UnitPercent, language.number(fraction * 100.0, PERCENT_DECIMALS))
+    fun percent(fraction: Double): String = text(BuildRulesText.UnitPercent, language.number(fraction * 100.0, PERCENT_DECIMALS))
 
-    private fun signedPercent(fraction: Double): String = sign(fraction) + percent(abs(fraction))
+    fun signedPercent(fraction: Double): String = sign(fraction) + percent(abs(fraction))
 
     private fun signed(value: Double, decimals: Int): String = sign(value) + language.number(abs(value), decimals)
 
     private fun sign(value: Double): String = if (value < 0.0) "−" else "+"
 
-    private fun seconds(value: Double): String = text(BuildRulesText.UnitSeconds, language.number(value, SECOND_DECIMALS))
+    fun seconds(value: Double): String = text(BuildRulesText.UnitSeconds, language.number(value, SECOND_DECIMALS))
 
-    private fun speed(value: Float): String = text(BuildRulesText.UnitSpeed, language.number(value.toDouble(), 0))
+    fun speed(value: Float): String = text(BuildRulesText.UnitSpeed, language.number(value.toDouble(), 0))
 
-    private fun text(resource: BuildRulesText, vararg arguments: Any): String = language.text(resource, *arguments)
+    fun text(resource: BuildRulesText, vararg arguments: Any): String = language.text(resource, *arguments)
 }
 
 private fun TargetCase.pick(hit: BuildRulesText, impact: BuildRulesText, kill: BuildRulesText): BuildRulesText = when (this) {
@@ -1063,6 +835,234 @@ private fun TargetCase.pick(hit: BuildRulesText, impact: BuildRulesText, kill: B
 }
 
 private fun String.capitalized(): String = replaceFirstChar { it.uppercaseChar() }
+
+private fun RuleWriter.rule(rule: ItemRule): List<RuleLine> = when (rule) {
+    is ItemRule.WhileModifier -> listOf(
+        line(
+            rule.isLiability,
+            text(BuildRulesText.RuleConditional, text(rule.stat.phrase, signedPercent(rule.amount * gain)), condition(rule.condition)),
+            conditionElement(rule.condition),
+        ),
+    )
+    is ItemRule.ElementPotency -> listOf(
+        RuleLine(RuleLineKind.RULE, text(BuildRulesText.RulePotency, signedPercent(rule.amount * gain), element(rule.element)), rule.element),
+    )
+    is ItemRule.StatusDuration -> {
+        val change = (rule.multiplier - 1.0) * magnitude
+        listOf(
+            if (change >= 0.0) {
+                RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleDurationLonger, element(rule.element), percent(change)), rule.element)
+            } else {
+                RuleLine(
+                    RuleLineKind.COST,
+                    text(BuildRulesText.RuleDurationShorter, element(rule.element), percent((-change).coerceAtMost(MAX_SHORTENING))),
+                    rule.element,
+                    negative = true,
+                )
+            },
+        )
+    }
+    is ItemRule.BreakThreshold -> listOf(
+        RuleLine(
+            RuleLineKind.RULE,
+            breakThresholdCut(rule.reduction, context.stacks).let { cut ->
+                if (cut == 1) text(BuildRulesText.RuleThresholdOne, element(rule.element))
+                else text(BuildRulesText.RuleThresholdFew, element(rule.element), cut)
+            },
+            rule.element,
+        ),
+    )
+    is ItemRule.BreakPower -> listOf(
+        RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleBreakPower, signedPercent(rule.amount * gain), breakName(rule.element, genitive = true)), rule.element),
+    )
+    is ItemRule.BreakSpread -> listOf(
+        RuleLine(
+            RuleLineKind.RULE,
+            text(BuildRulesText.RuleBreakSpread, breakName(rule.element, genitive = false), stacks(scaledStacks(rule.stacks).toDouble(), element(rule.element), named = true)),
+            rule.element,
+        ),
+    )
+    is ItemRule.ReactionPower -> listOf(
+        RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleReactionPower, signedPercent(rule.amount * gain))),
+    )
+    is ItemRule.ReactionResidue -> listOf(
+        RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleReactionResidue, stacks(rule.stacks.toDouble(), text(BuildRulesText.IncomingElement), named = false))),
+    )
+    is ItemRule.ReactionRecoil -> listOf(
+        RuleLine(RuleLineKind.COST, text(BuildRulesText.RuleReactionRecoil, language.number(rule.damage * magnitude, FLAT_DECIMALS)), negative = true),
+    )
+    is ItemRule.AlwaysCrit -> listOf(
+        RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleAlwaysCrit, condition(rule.condition)), conditionElement(rule.condition)),
+    )
+    is ItemRule.CritDamageVersus -> listOf(
+        RuleLine(
+            RuleLineKind.RULE,
+            text(BuildRulesText.RuleCritDamageVersus, signedPercent(rule.amount * gain), condition(rule.condition)),
+            conditionElement(rule.condition),
+        ),
+    )
+    is ItemRule.DamageVersus -> listOf(
+        line(
+            rule.amount < 0f,
+            text(BuildRulesText.RuleDamageVersus, signedPercent(rule.amount * gain), condition(rule.condition)),
+            conditionElement(rule.condition),
+        ),
+    )
+    is ItemRule.NonCriticalDamage -> listOf(
+        if (rule.amount < 0f) {
+            RuleLine(RuleLineKind.COST, text(BuildRulesText.RuleNonCriticalLess, percent(-rule.amount * magnitude)), negative = true)
+        } else {
+            RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleNonCriticalMore, percent(rule.amount * magnitude)))
+        },
+    )
+    is ItemRule.ComboDamage -> listOf(
+        RuleLine(
+            RuleLineKind.RULE,
+            text(BuildRulesText.RuleComboDamage, signedPercent(rule.perCombo * gain), percent(rule.cap * context.bonus.toDouble())),
+        ),
+    )
+    is ItemRule.BonusRerolls -> listOf(
+        RuleLine(
+            RuleLineKind.RULE,
+            text(
+                when (countForm(rule.count.toDouble())) {
+                    CountForm.ONE -> BuildRulesText.RuleRerollsOne
+                    CountForm.FEW -> BuildRulesText.RuleRerollsFew
+                    CountForm.MANY -> BuildRulesText.RuleRerollsMany
+                },
+                rule.count,
+            ),
+        ),
+    )
+    is ItemRule.GuaranteedCritAfter -> listOf(
+        RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleGuaranteedCrit, rule.misses)),
+    )
+    is ItemRule.FreeDash -> listOf(
+        RuleLine(
+            RuleLineKind.RULE,
+            text(BuildRulesText.RuleFreeDash, language.number(rule.heat.toDouble(), FLAT_DECIMALS), seconds(rule.cooldownSeconds.toDouble())),
+        ),
+    )
+    is ItemRule.OfferCards -> listOf(RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleOfferCards)))
+    is ItemRule.Convert -> conversion(rule)
+    is ItemRule.ReactionKeystone -> listOf(
+        RuleLine(
+            RuleLineKind.RULE,
+            text(BuildRulesText.RuleKeystone, reactionName(rule.reaction), localized(DefaultReactions.reaction(rule.reaction).keystone)),
+            rule.reaction.first,
+        ),
+    )
+    is ItemRule.ReactionTuning -> listOf(
+        RuleLine(
+            RuleLineKind.RULE,
+            text(
+                BuildRulesText.RuleReactionTuning,
+                rule.reaction?.let(::reactionName) ?: text(BuildRulesText.AllReactions),
+                signedPercent(rule.amount * gain),
+                text(rule.aspect.phrase),
+            ),
+            rule.reaction?.first,
+        ),
+    )
+    is ItemRule.FieldTuning -> listOf(
+        RuleLine(
+            RuleLineKind.RULE,
+            text(
+                if (rule.aspect == FieldAspect.RADIUS) BuildRulesText.RuleFieldRadius else BuildRulesText.RuleFieldDuration,
+                percent(rule.amount * gain),
+            ),
+        ),
+    )
+    is ItemRule.SkillCooldown -> listOf(
+        RuleLine(
+            RuleLineKind.RULE,
+            rule.element?.let { text(BuildRulesText.RuleSkillCooldown, elementName(it), percent(rule.amount * gain)) }
+                ?: text(BuildRulesText.RuleSkillCooldownAll, percent(rule.amount * gain)),
+            rule.element,
+        ),
+    )
+    is ItemRule.SkillPower -> listOf(
+        RuleLine(
+            RuleLineKind.RULE,
+            rule.element?.let { text(BuildRulesText.RuleSkillPower, elementName(it), signedPercent(rule.amount * gain)) }
+                ?: text(BuildRulesText.RuleSkillPowerAll, signedPercent(rule.amount * gain)),
+            rule.element,
+        ),
+    )
+    ItemRule.SkillCharges -> listOf(RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleSkillCharges)))
+    is ItemRule.SkillAttunement -> {
+        val resolved = resolve(rule.pick)
+        listOf(
+            RuleLine(
+                RuleLineKind.RULE,
+                when {
+                    resolved != null -> text(BuildRulesText.RuleSkillAttunement, elementName(resolved))
+                    rule.pick == ElementPick.SECONDARY -> text(BuildRulesText.RuleSkillAttunementSecondary)
+                    else -> text(BuildRulesText.RuleSkillAttunementDominant)
+                },
+                resolved,
+            ),
+        )
+    }
+    is ItemRule.CatalysisRate -> listOf(RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleCatalysisRate, percent(rule.amount * gain))))
+    is ItemRule.ApexCooldown -> listOf(RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleApexCooldown, percent(rule.amount * gain))))
+    is ItemRule.CoreLinkRadius -> listOf(
+        RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleCoreLinkRadius, language.number(rule.bonus * gain, 0))),
+    )
+    is ItemRule.ObstacleTuning -> listOf(
+        RuleLine(
+            RuleLineKind.RULE,
+            when (rule.aspect) {
+                ObstacleAspect.RESTITUTION -> text(BuildRulesText.RuleObstacleRestitution, percent(rule.amount * gain))
+                ObstacleAspect.COLLISION_DAMAGE -> text(BuildRulesText.RuleObstacleDamage, signedPercent(-rule.amount * gain))
+                ObstacleAspect.LETHAL_SPEED -> text(BuildRulesText.RuleObstacleLethal, speed((rule.amount * gain).toFloat()))
+                ObstacleAspect.BOOST_POWER -> text(BuildRulesText.RuleBoostPower, percent(rule.amount * gain))
+                ObstacleAspect.WELL_PULL -> text(BuildRulesText.RuleWellPull, percent(rule.amount * gain))
+            },
+        ),
+    )
+}
+
+private fun RuleWriter.conversion(rule: ItemRule.Convert): List<RuleLine> = when (rule.kind) {
+    ConversionKind.OVERHEAL_TO_SHIELD -> listOf(
+        RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleOverhealToShield, percent(overhealOverfill(rule.amount, context.stacks).toDouble()))),
+    )
+    ConversionKind.REGENERATION_TO_DECAY -> listOf(
+        RuleLine(RuleLineKind.COST, text(BuildRulesText.RuleRegenerationNoLongerHeals), negative = true),
+        RuleLine(
+            RuleLineKind.RULE,
+            text(BuildRulesText.RuleRegenerationToDecay, stacks(rule.amount * magnitude, element(StatusElement.ENTROPY), named = true)),
+            StatusElement.ENTROPY,
+        ),
+    )
+    ConversionKind.CRIT_CHANCE_TO_DAMAGE -> listOf(
+        RuleLine(RuleLineKind.COST, text(BuildRulesText.RuleCritChanceCap, percent(CRIT_CHANCE_CONVERSION_CAP)), negative = true),
+        RuleLine(
+            RuleLineKind.RULE,
+            text(BuildRulesText.RuleCritChanceToDamage, text(BuildRulesText.UnitPercent, language.number(rule.amount * gain, PERCENT_DECIMALS))),
+        ),
+    )
+    ConversionKind.DASH_HEAT_TO_SKILLS -> listOf(
+        RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleDashHeatToSkills, seconds(rule.amount.toDouble()))),
+        RuleLine(RuleLineKind.COST, text(BuildRulesText.RuleCoolSlower, percent(1.0 - DASH_HEAT_CONVERSION_COOLING)), negative = true),
+    )
+    ConversionKind.DATA_TO_SKILLS -> listOf(
+        RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleDataToSkills, seconds(rule.amount.toDouble()))),
+        RuleLine(RuleLineKind.COST, text(BuildRulesText.RuleDataToSkillsCost, percent(1.0 - DATA_CONVERSION_GAIN)), negative = true),
+    )
+    ConversionKind.SKILLS_COST_HEAT -> listOf(
+        RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleSkillCooldownAll, percent(1.0 - SKILL_HEAT_CONVERSION_COOLDOWN))),
+        RuleLine(
+            RuleLineKind.COST,
+            text(BuildRulesText.RuleSkillsCostHeat, language.number(rule.amount.toDouble(), FLAT_DECIMALS)),
+            negative = true,
+        ),
+    )
+    ConversionKind.SKILL_FIELDS_FOLLOW -> listOf(
+        RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleSkillFieldsFollow, percent(rule.amount.toDouble()))),
+    )
+    ConversionKind.KNOCKBACK_TO_DAMAGE -> listOf(RuleLine(RuleLineKind.RULE, text(BuildRulesText.RuleKnockbackToDamage)))
+}
 
 private const val PERCENT_DECIMALS = 1
 private const val FLAT_DECIMALS = 1
