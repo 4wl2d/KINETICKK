@@ -170,8 +170,6 @@ internal const val CIPHER_TURN_SPREAD: Float = 0.5f
 internal const val CIPHER_SALT: Long = 0x0C1F_E55E_ED00_0013L
 private const val CIPHER_FIRST_GLITCH_SECONDS: Float = 2f
 private const val CIPHER_HASH_TICKS: Float = 120f
-private const val CIPHER_NUDGE_ATTEMPTS: Int = 4
-private const val CIPHER_NUDGE_DISTANCE: Float = 50f
 private const val CIPHER_HOLD_FAR: Float = 420f
 private const val CIPHER_HOLD_NEAR: Float = 300f
 private const val CIPHER_CLOSE_SPEED: Float = 78f
@@ -563,29 +561,7 @@ internal fun MutableGameState.updateSeraph(enemy: Enemy, dx: Float, dy: Float, d
     if (enemy.actionTimer > 0f) return
     enemy.actionTimer = SERAPH_PULSE_SECONDS
     if (!canAttack(enemy)) return
-    // The two nearest eligible allies in range, kept in locals (the Aegis's selection with two slots).
-    var firstIndex = -1
-    var secondIndex = -1
-    var first = Float.MAX_VALUE
-    var second = Float.MAX_VALUE
-    val rangeSquared = SERAPH_LINK_RANGE * SERAPH_LINK_RANGE
-    for (index in enemies.indices) {
-        val ally = enemies[index]
-        if (ally === enemy || !ally.alive || ally.isBossClass || ally.type == EnemyType.SERAPH || isShifting(ally)) continue
-        val squared = distanceSquared(enemy.x, enemy.y, ally.x, ally.y)
-        if (squared > rangeSquared) continue
-        if (squared < first) {
-            secondIndex = firstIndex
-            second = first
-            firstIndex = index
-            first = squared
-        } else if (squared < second) {
-            secondIndex = index
-            second = squared
-        }
-    }
-    if (firstIndex >= 0) mendAlly(enemies[firstIndex])
-    if (secondIndex >= 0) mendAlly(enemies[secondIndex])
+    forNearestAllies(enemy, SERAPH_LINK_RANGE, SERAPH_MAX_LINKS, { it.type == EnemyType.SERAPH || isShifting(it) }) { mendAlly(it) }
     enemy.shieldUntil = max(enemy.shieldUntil, elapsed + SERAPH_SHIELD_SECONDS)
 }
 
@@ -614,10 +590,7 @@ internal fun MutableGameState.updateChoir(enemy: Enemy, dx: Float, dy: Float, di
         if (canAttack(enemy)) {
             val volley = if (content.tempo.denseAttacks(threatElapsed)) CHOIR_DENSE_VOLLEY else CHOIR_VOLLEY
             fireRadial(enemy.x, enemy.y, volley, CHOIR_SHOT_SPEED, elapsed * CHOIR_VOLLEY_SPIN, shotDamage(enemy))
-            if (distance <= CHOIR_WAVE_RADIUS + coreRadius && dashPhaseTime <= 0f) {
-                velocityX += dx / distance * CHOIR_WAVE_PUSH
-                velocityY += dy / distance * CHOIR_WAVE_PUSH
-            }
+            choirShove(dx, dy, distance)
         }
         enemy.mode = EnemyBehavior.IDLE
     }
@@ -626,6 +599,14 @@ internal fun MutableGameState.updateChoir(enemy: Enemy, dx: Float, dy: Float, di
         enemy.mode = EnemyBehavior.TELEGRAPH
         enemy.modeUntil = elapsed + CHOIR_TELEGRAPH_SECONDS
         enemy.actionTimer = CHOIR_PULSE_SECONDS
+    }
+}
+
+/** The Choir's wave: shoves a Core within [CHOIR_WAVE_RADIUS] of the singer away from it (a dash phase slips through). */
+internal fun MutableGameState.choirShove(dx: Float, dy: Float, distance: Float) {
+    if (distance <= CHOIR_WAVE_RADIUS + coreRadius && dashPhaseTime <= 0f) {
+        velocityX += dx / distance * CHOIR_WAVE_PUSH
+        velocityY += dy / distance * CHOIR_WAVE_PUSH
     }
 }
 
@@ -764,21 +745,10 @@ private fun MutableGameState.rematerializeCipher(enemy: Enemy, dx: Float, dy: Fl
     val turnSin = sin(turn)
     val directionX = outX * turnCos - outY * turnSin
     val directionY = outX * turnSin + outY * turnCos
-    var x = coreX + directionX * reach
-    var y = coreY + directionY * reach
-    var attempts = 0
-    while (attempts < CIPHER_NUDGE_ATTEMPTS && isSpawnPointBlocked(x, y, enemy.radius)) {
-        x += directionX * CIPHER_NUDGE_DISTANCE
-        y += directionY * CIPHER_NUDGE_DISTANCE
-        attempts++
-    }
-    enemy.x = x
-    enemy.y = y
-    enemy.previousX = x
-    enemy.previousY = y
+    placeClear(enemy, coreX + directionX * reach, coreY + directionY * reach, directionX, directionY)
     enemy.mode = EnemyBehavior.TELEGRAPH
     enemy.modeUntil = elapsed + CIPHER_AIM_SECONDS
-    enemy.facing = atan2(coreY - y, coreX - x)
+    enemy.facing = atan2(coreY - enemy.y, coreX - enemy.x)
 }
 
 /**

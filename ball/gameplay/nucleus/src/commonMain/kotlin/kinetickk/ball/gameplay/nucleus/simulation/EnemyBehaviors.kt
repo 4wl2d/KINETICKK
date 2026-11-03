@@ -311,17 +311,31 @@ internal fun MutableGameState.updateAegis(enemy: Enemy, dx: Float, dy: Float, di
  * [AEGIS_LINK_HOLD_SECONDS]. The Aegis tethers three ([AEGIS_MAX_LINKS]); a Linked Elite tethers its affix's count.
  */
 internal fun MutableGameState.tetherNearestAllies(enemy: Enemy, links: Int) {
-    // The three nearest allies in range; boss-class kinds and other Aegises are never linked.
+    // Other Aegises are never linked.
+    forNearestAllies(enemy, AEGIS_LINK_RANGE, links, { it.type == EnemyType.AEGIS }) { link(it, enemy) }
+}
+
+/**
+ * Runs [action] on the [count] (1..3) nearest live allies within [range] of [enemy], nearest first, once all three
+ * are chosen. Boss-class kinds and allies [skip] rejects are never chosen. Index locals only, so nothing is allocated.
+ */
+internal inline fun MutableGameState.forNearestAllies(
+    enemy: Enemy,
+    range: Float,
+    count: Int,
+    skip: (Enemy) -> Boolean,
+    action: (Enemy) -> Unit,
+) {
     var firstIndex = -1
     var secondIndex = -1
     var thirdIndex = -1
     var first = Float.MAX_VALUE
     var second = Float.MAX_VALUE
     var third = Float.MAX_VALUE
-    val rangeSquared = AEGIS_LINK_RANGE * AEGIS_LINK_RANGE
+    val rangeSquared = range * range
     for (index in enemies.indices) {
         val ally = enemies[index]
-        if (ally === enemy || !ally.alive || ally.isBossClass || ally.type == EnemyType.AEGIS) continue
+        if (ally === enemy || !ally.alive || ally.isBossClass || skip(ally)) continue
         val squared = distanceSquared(enemy.x, enemy.y, ally.x, ally.y)
         if (squared > rangeSquared) continue
         if (squared < first) {
@@ -335,9 +349,9 @@ internal fun MutableGameState.tetherNearestAllies(enemy: Enemy, links: Int) {
             thirdIndex = index; third = squared
         }
     }
-    if (firstIndex >= 0 && links >= 1) link(enemies[firstIndex], enemy)
-    if (secondIndex >= 0 && links >= 2) link(enemies[secondIndex], enemy)
-    if (thirdIndex >= 0 && links >= 3) link(enemies[thirdIndex], enemy)
+    if (firstIndex >= 0 && count >= 1) action(enemies[firstIndex])
+    if (secondIndex >= 0 && count >= 2) action(enemies[secondIndex])
+    if (thirdIndex >= 0 && count >= 3) action(enemies[thirdIndex])
 }
 
 private fun MutableGameState.link(ally: Enemy, aegis: Enemy) {
@@ -460,22 +474,32 @@ internal fun MutableGameState.updatePhantom(enemy: Enemy, dx: Float, dy: Float, 
 /** Teleports the Phantom about [PHANTOM_REAPPEAR_DISTANCE] from the Core and starts its wind-up. */
 private fun MutableGameState.rematerializePhantom(enemy: Enemy) {
     val angle = movementAngle() + (spawnRandom.nextFloat() * 2f - 1f) * 1.4f
-    var x = coreX + cos(angle) * PHANTOM_REAPPEAR_DISTANCE
-    var y = coreY + sin(angle) * PHANTOM_REAPPEAR_DISTANCE
+    val directionX = cos(angle)
+    val directionY = sin(angle)
+    placeClear(enemy, coreX + directionX * PHANTOM_REAPPEAR_DISTANCE, coreY + directionY * PHANTOM_REAPPEAR_DISTANCE, directionX, directionY)
+    enemy.mode = EnemyBehavior.TELEGRAPH
+    enemy.modeUntil = elapsed + PHANTOM_WINDUP_SECONDS
+    enemy.facing = atan2(coreY - enemy.y, coreX - enemy.x)
+    burst(enemy.x, enemy.y, 8, 2)
+}
+
+/**
+ * Teleports [enemy] to ([startX], [startY]), first nudged up to four times 50 u along ([dirX], [dirY]) while obstacles
+ * block the point, with no interpolation from where it was (the Phantom, the Cipher and the Cartographer's open jump).
+ */
+internal fun MutableGameState.placeClear(enemy: Enemy, startX: Float, startY: Float, dirX: Float, dirY: Float) {
+    var x = startX
+    var y = startY
     var attempts = 0
     while (attempts < 4 && isSpawnPointBlocked(x, y, enemy.radius)) {
-        x += cos(angle) * 50f
-        y += sin(angle) * 50f
+        x += dirX * 50f
+        y += dirY * 50f
         attempts++
     }
     enemy.x = x
     enemy.y = y
     enemy.previousX = x
     enemy.previousY = y
-    enemy.mode = EnemyBehavior.TELEGRAPH
-    enemy.modeUntil = elapsed + PHANTOM_WINDUP_SECONDS
-    enemy.facing = atan2(coreY - y, coreX - x)
-    burst(x, y, 8, 2)
 }
 
 internal fun MutableGameState.updateBroodmother(enemy: Enemy, dx: Float, dy: Float, distance: Float, cadence: Float, delta: Float) {
@@ -532,10 +556,6 @@ internal fun shieldFaces(enemy: Enemy, fromX: Float, fromY: Float): Boolean {
         else -> false
     }
 }
-
-/** True when a hit arriving from ([fromX], [fromY]) meets the Reflector's front shield. */
-internal fun reflectorShieldFaces(enemy: Enemy, fromX: Float, fromY: Float): Boolean =
-    enemy.type == EnemyType.REFLECTOR && shieldFaces(enemy, fromX, fromY)
 
 /** Sends a blocked shot back at the Core with the Reflector's own projectile damage, at most once per 0.3 s. */
 internal fun MutableGameState.reflectShot(enemy: Enemy) {

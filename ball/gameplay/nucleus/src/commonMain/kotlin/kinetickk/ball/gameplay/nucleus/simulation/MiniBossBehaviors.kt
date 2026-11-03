@@ -3,7 +3,6 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.model.Enemy
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.TAU
@@ -139,10 +138,7 @@ internal fun MutableGameState.initializeMiniBoss(enemy: Enemy) {
 internal fun MutableGameState.startMiniBossPhase(enemy: Enemy) {
     if (enemy.phase > 0) {
         shockwave(enemy.x, enemy.y, 0.45f, enemy.radius * MINI_BOSS_SHIFT_RING, MINI_BOSS_MARK_COLOR)
-        for (index in 0 until MINI_BOSS_SHIFT_REPAIRS) {
-            val side = if (index % 2 == 0) 1f else -1f
-            addPickup(Pickup(PickupType.REPAIR, enemy.x + side * 22f, enemy.y - 10f * index))
-        }
+        dropRepairs(enemy.x, enemy.y, MINI_BOSS_SHIFT_REPAIRS)
     }
     when (enemy.type) {
         EnemyType.WARDEN_PRIME -> if (enemy.phase >= 2) {
@@ -161,12 +157,17 @@ internal fun MutableGameState.startMiniBossPhase(enemy: Enemy) {
             enemy.charges = arcs
         }
         EnemyType.PYRE_HERALD -> if (enemy.phase >= 2) {
-            for (index in 0 until PYRE_RING_EMBERS) {
-                val angle = index * TAU / PYRE_RING_EMBERS + elapsed
-                queueEmber(enemy.x + cos(angle) * PYRE_RING_RADIUS, enemy.y + sin(angle) * PYRE_RING_RADIUS, PYRE_RING_DELAY)
-            }
+            queueEmberRing(enemy.x, enemy.y, PYRE_RING_EMBERS, PYRE_RING_RADIUS, PYRE_RING_DELAY)
         }
         else -> Unit
+    }
+}
+
+/** Drops [count] repairs at ([x], [y]), alternating sides and stepping upward: a boss gate's or fall's repairs. */
+internal fun MutableGameState.dropRepairs(x: Float, y: Float, count: Int) {
+    for (index in 0 until count) {
+        val side = if (index % 2 == 0) 1f else -1f
+        addPickup(Pickup(PickupType.REPAIR, x + side * 22f, y - 10f * index))
     }
 }
 
@@ -219,15 +220,14 @@ internal fun MutableGameState.updateWardenPrime(enemy: Enemy, dx: Float, dy: Flo
         enemy.mode = if (pushing) EnemyBehavior.IDLE else EnemyBehavior.PRIMED
         enemy.modeUntil = elapsed + if (pushing) PRIME_PULL_SECONDS else PRIME_PUSH_SECONDS
     }
-    if (distance < PRIME_WELL_RADIUS && dashPhaseTime <= 0f && canAttack(enemy)) {
-        // Ion charge disrupts the well, as it does a Warden's.
-        val disruption = max(0.2f, 1f - 0.12f * stacks(enemy, StatusElement.ION))
-        var gravity = (PRIME_WELL_BASE_PULL + (1f - distance / PRIME_WELL_RADIUS) * PRIME_WELL_PULL) * disruption
-        if (enemy.phase >= 2) gravity *= PRIME_FINAL_WELL_SCALE
-        if (enemy.mode == EnemyBehavior.PRIMED) gravity = -gravity
-        velocityX -= dx / distance * gravity * delta
-        velocityY -= dy / distance * gravity * delta
-    }
+    // The Warden's well at Prime's size; Ion charge disrupts it as it does a Warden's.
+    applyGravityWell(
+        enemy, dx, dy, distance, delta,
+        strength = (if (enemy.phase >= 2) PRIME_FINAL_WELL_SCALE else 1f) * (if (enemy.mode == EnemyBehavior.PRIMED) -1f else 1f),
+        radius = PRIME_WELL_RADIUS,
+        base = PRIME_WELL_BASE_PULL,
+        pull = PRIME_WELL_PULL,
+    )
     val period = primeVolleySeconds(enemy.phase)
     if (shifting) {
         enemy.actionTimer = if (enemy.phase == 1) period * 2f else period

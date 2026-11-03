@@ -40,7 +40,7 @@ internal const val ARMOR_WEAPON_TAKEN: Float = 0.6f
 /** Blackout: a Data pickup the magnet has not caught fades after this long. */
 internal const val BLACKOUT_DATA_LIFE_SECONDS: Float = 10f
 
-/** The Singularity Architect fires its enraged volleys this much more often. */
+/** The Singularity Architect fires its enraged volleys this much more often; it documents the content spec's rate. */
 internal const val ARCHITECT_ENRAGE_ATTACK_RATE: Float = 1.45f
 
 /** Ordinary enemies are neither Elites nor boss class (the Architect, mini-bosses such as the Herald, secret bosses). */
@@ -52,13 +52,21 @@ internal val Enemy.armorIntact: Boolean get() = armored && !armorCracked
 /** R4: an ordinary enemy's death arms a burst [VOLATILE_BURST_DELAY_SECONDS] later inside a telegraph ring. */
 internal fun MutableGameState.queueVolatileRemains(enemy: Enemy) {
     if (!runMutatorActive(RebirthMutator.VOLATILE_REMAINS) || !enemy.isOrdinary) return
+    queueVolatileBurst(enemy.x, enemy.y, VOLATILE_BURST_RADIUS, VOLATILE_BURST_DELAY_SECONDS)
+}
+
+/**
+ * Arms a burst of [radius] at ([x], [y]) that detonates [delay] seconds from now under the Volatile Remains law
+ * (Remains, embers and Volatile Elites alike). None is armed while [MutableGameState.MAX_VOLATILE_BURSTS] bursts wait.
+ */
+internal fun MutableGameState.queueVolatileBurst(x: Float, y: Float, radius: Float, delay: Float) {
     if (volatileBursts.size >= MutableGameState.MAX_VOLATILE_BURSTS) return
     volatileBursts = (volatileBursts + VolatileBurstProjection(
-        x = enemy.x,
-        y = enemy.y,
-        radius = VOLATILE_BURST_RADIUS,
+        x = x,
+        y = y,
+        radius = radius,
         armedAt = elapsed,
-        detonatesAt = elapsed + VOLATILE_BURST_DELAY_SECONDS,
+        detonatesAt = elapsed + delay,
     )).toImmutableList()
 }
 

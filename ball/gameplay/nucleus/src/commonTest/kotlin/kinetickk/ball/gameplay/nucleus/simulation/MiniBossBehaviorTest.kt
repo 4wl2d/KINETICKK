@@ -310,8 +310,6 @@ class MiniBossBehaviorTest {
         assertTrue(through in state.projectiles, "a shot through a gap passes on")
         assertTrue(throne.guarded)
 
-        // The Reflector's alias still answers only for the Reflector.
-        assertFalse(reflectorShieldFaces(throne, throne.x - 200f, throne.y))
         throne.facing = PI.toFloat()
         assertTrue(shieldFaces(throne, throne.x - 200f, throne.y))
     }

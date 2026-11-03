@@ -6,7 +6,6 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
-import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -53,16 +52,6 @@ internal fun MutableGameState.architectGate(enemy: Enemy): Float = bossGate(enem
  * the cap does, and somewhat more again; the cap never exceeds the tier-0 share.
  */
 internal fun MutableGameState.architectHitCap(enemy: Enemy): Float = bossHitCap(enemy, architectSpec())
-
-/**
- * Applies the Architect's gating to a requested amount: nothing while shifting, at most
- * [architectHitCap], and never past the current phase's gate. Never raises integrity.
- */
-internal fun MutableGameState.gateArchitectDamage(enemy: Enemy, amount: Float): Float =
-    gateBossDamage(enemy, architectSpec(), amount)
-
-/** Called after every integrity write on the Architect: reaching a gate starts the next phase. */
-internal fun MutableGameState.onArchitectDamaged(enemy: Enemy) = onBossDamaged(enemy, architectSpec())
 
 /**
  * The Architect's side of a phase start, after the generic gate advanced the phase and began the shift: an aspect
@@ -126,10 +115,7 @@ internal fun MutableGameState.updateBossEncounter() {
     if (escorts <= 0) return
     boss.escortsPending = 0
     fireRadial(boss.x, boss.y, ARCHITECT_SHIFT_RING, ARCHITECT_RADIAL_SPEED, elapsed, shotDamage(boss), ARCHITECT_LATE_RADIAL_LIFE)
-    for (index in 0 until ARCHITECT_SHIFT_REPAIRS) {
-        val side = if (index % 2 == 0) 1f else -1f
-        addPickup(Pickup(PickupType.REPAIR, boss.x + side * 22f, boss.y - 10f * index))
-    }
+    dropRepairs(boss.x, boss.y, ARCHITECT_SHIFT_REPAIRS)
     for (index in 0 until escorts) spawnEnemy(architectEscort(boss.aspect, index))
 }
 
@@ -153,10 +139,10 @@ internal fun MutableGameState.updateArchitect(enemy: Enemy, dx: Float, dy: Float
         // No attacks while shifting; the next volley comes a full cadence after the shift.
         enemy.actionTimer = cadence
     } else {
-        enemy.actionTimer -= delta * hostileAttackRate() * if (enraged) ARCHITECT_ENRAGE_ATTACK_RATE else 1f
+        enemy.actionTimer -= delta * hostileAttackRate() * bossAttackScale(enemy)
         if (enemy.actionTimer <= 0f) {
             enemy.actionTimer = cadence
-            if (projectiles.size < ARCHITECT_VOLLEY_PROJECTILE_BUDGET && canAttack(enemy)) fireArchitectVolley(enemy, atan2(dy, dx))
+            if (canVolley(enemy)) fireArchitectVolley(enemy, atan2(dy, dx))
         }
     }
     if (distance < 180f) {

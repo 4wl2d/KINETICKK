@@ -82,8 +82,7 @@ private val HERALD_PROFILE = EnemyProfile(
     rank = EnemyRank.MINI_BOSS,
 )
 
-// 0.6.0 kinds. No run spawns them yet: Comet and Pylon wait behind their disabled gates, the rest live outside SPACE
-// or arrive only through encounters.
+// 0.6.0 kinds: Comet and Pylon join open space; the rest live in other habitats or arrive through encounters.
 private val COMET_PROFILE = EnemyProfile(
     30f, 14f, 1.0f, 1.5f, 0.7f, StatusElement.CRYO.ordinal, false, false, 1.2f, 1f, dataDrops = 4, matterReward = 1.2f,
     escortable = false,

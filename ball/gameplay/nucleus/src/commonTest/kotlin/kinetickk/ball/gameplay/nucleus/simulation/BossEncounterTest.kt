@@ -62,7 +62,6 @@ class BossEncounterTest {
                                 assertBits(gate, state.architectGate(boss), "Architect gate, $label")
                                 val gated = legacyGated(hp, maxHp, phase, final, cap, amount)
                                 assertBits(gated, state.gateBossDamage(boss, spec, amount), "gated, $label")
-                                assertBits(gated, state.gateArchitectDamage(boss, amount), "Architect gated, $label")
                                 val line = legacyBelowLine(hp, maxHp, phase, 0.35f, final)
                                 assertEquals(line, belowExecutionLine(boss, 0.35f, state.bossFinalPhaseOf(boss), phased = true), label)
                                 assertEquals(line, belowExecutionLine(boss, 0.35f, state.architectFinalPhase()), label)

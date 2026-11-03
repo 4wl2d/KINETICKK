@@ -42,8 +42,7 @@ internal fun MutableGameState.onEnemyKilled(enemy: Enemy) {
     onBuildKill(enemy)
     onCharacterKill(enemy, eliteReward)
     val profile = enemy.type.profile
-    val comboMultiplier = 1f + min(combo, 50) * 0.01f + velocityTier * 0.15f
-    grantMatter(profile.matterReward * comboMultiplier * content.tempo.matterRewardMultiplier)
+    grantMatter(profile.matterReward * killComboMultiplier() * content.tempo.matterRewardMultiplier)
     val dataCount = profile.dataDrops
     gainOverdrive(dataCount * 1.8f)
     // Erasure: an executed victim's Data rushes to the Core (the scatter draws stay the same).
@@ -85,29 +84,39 @@ internal fun MutableGameState.onEnemyKilled(enemy: Enemy) {
     }
 }
 
+/** The kill's Matter multiplier: the combo (counting this kill, at most 50) and the velocity tier. */
+internal fun MutableGameState.killComboMultiplier(): Float = 1f + min(combo, 50) * 0.01f + velocityTier * 0.15f
+
 internal fun MutableGameState.spawnSplitterFragments(enemy: Enemy) {
-    val difficulty = content.tempo.enemyHealthMultiplier(elapsed)
     val fragmentLimit = rebirthProfile.enemyCap(90)
     val fragmentCount = min(2, max(0, fragmentLimit - enemies.count { !it.dead }))
     repeat(fragmentCount) { index ->
         if (enemies.size >= content.rebirth.maxActiveEnemies) return@repeat
-        val angle = gameplayRandom.nextFloat() * TAU + index * TAU * 0.5f
-        val fragmentHp = rebirthProfile.enemyHealth(SPLITTER_FRAGMENT_HEALTH * difficulty) * matrix.enemyIntegrityMultiplier
-        val fragmentSpeed = 175f * rebirthProfile.enemySpeedMultiplier
-        enemies += Enemy(
-            id = nextEntityId++,
-            type = EnemyType.DRIFTER,
-            x = enemy.x + cos(angle) * 13f,
-            y = enemy.y + sin(angle) * 13f,
-            vx = cos(angle) * fragmentSpeed,
-            vy = sin(angle) * fragmentSpeed,
-            hp = fragmentHp,
-            maxHp = fragmentHp,
-            radius = SPLITTER_FRAGMENT_RADIUS,
-            actionTimer = 0.2f,
-        ).also { fragment -> fragment.ownerTag = enemy.ownerTag }
-        recordEncounterSpawn(enemy.ownerTag)
+        addSplitterFragment(enemy, gameplayRandom.nextFloat() * TAU + index * TAU * 0.5f)
     }
+}
+
+/**
+ * One Splitter fragment leaving [source] along [angle]: a Drifter with the fragment integrity and radius, 13 u out and
+ * flying outward, in [source]'s encounter (counted toward its spawned total).
+ */
+internal fun MutableGameState.addSplitterFragment(source: Enemy, angle: Float) {
+    val difficulty = content.tempo.enemyHealthMultiplier(elapsed)
+    val fragmentHp = rebirthProfile.enemyHealth(SPLITTER_FRAGMENT_HEALTH * difficulty) * matrix.enemyIntegrityMultiplier
+    val fragmentSpeed = 175f * rebirthProfile.enemySpeedMultiplier
+    enemies += Enemy(
+        id = nextEntityId++,
+        type = EnemyType.DRIFTER,
+        x = source.x + cos(angle) * 13f,
+        y = source.y + sin(angle) * 13f,
+        vx = cos(angle) * fragmentSpeed,
+        vy = sin(angle) * fragmentSpeed,
+        hp = fragmentHp,
+        maxHp = fragmentHp,
+        radius = SPLITTER_FRAGMENT_RADIUS,
+        actionTimer = 0.2f,
+    ).also { fragment -> fragment.ownerTag = source.ownerTag }
+    recordEncounterSpawn(source.ownerTag)
 }
 
 private fun MutableGameState.splitterCrushed(enemy: Enemy): Boolean =

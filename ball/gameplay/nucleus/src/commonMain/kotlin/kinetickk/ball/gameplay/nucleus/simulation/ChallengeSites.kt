@@ -75,7 +75,6 @@ private fun MutableGameState.spawnRamFoes(site: SiteState, policy: ChallengePoli
             centerY = site.y,
             areaRadius = policy.ramClamp,
             members = List(policy.ramFoes) { EnemyType.DRIFTER },
-            placement = EncounterPlacement.RING,
             ringRadius = policy.ramRingRadius,
             integrityShare = policy.ramFoeHealthShare,
             abandonDistance = WINDOW_SITE_LEASH,

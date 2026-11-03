@@ -12,13 +12,11 @@ import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.model.profile
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
-import kinetickk.ball.gameplay.nucleus.render.VolatileBurstProjection
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
-import kotlin.math.sqrt
 
 /*
  * Encounter spawns for the lanes that own a place (sites, structure rooms, dimensions): a tagged group of enemies kept
@@ -33,18 +31,15 @@ internal const val MAX_ENCOUNTER_RESERVE: Int = 24
 internal const val DEFAULT_ENCOUNTER_ABANDON_DISTANCE: Float = 2_400f
 /** No secret boss is summoned later than this before the Architect. */
 internal const val SECRET_BOSS_LAST_SUMMON_LEAD: Float = 90f
-internal const val MAX_BOSS_ADDS_LIVE: Int = 4
 /** An ember bursts as wide as a Volatile Remains burst. */
 internal const val EMBER_RADIUS: Float = VOLATILE_BURST_RADIUS
 
 private const val ENCOUNTER_NUDGE_ATTEMPTS: Int = 6
 private const val ENCOUNTER_NUDGE_TURN: Float = 0.35f
 private const val ENCOUNTER_NUDGE_DISTANCE: Float = 60f
-private const val ENCOUNTER_GOLDEN_ANGLE: Float = 2.399963f
 private const val BOSS_ADD_SPACING: Float = 50f
 
 internal enum class EncounterOwner { SITE, ROOM, DIMENSION }
-internal enum class EncounterPlacement { RING, CLUSTER }
 
 /** Tag = owner kind in the top byte (1..3), the owner's own id in the low 56 bits; never 0. */
 internal fun encounterTag(owner: EncounterOwner, id: Long): Long =
@@ -61,7 +56,6 @@ internal class EncounterRequest(
     /** Members stay inside (areaRadius − own radius). */
     val areaRadius: Float,
     val members: List<EnemyType>,
-    val placement: EncounterPlacement = EncounterPlacement.RING,
     val ringRadius: Float = areaRadius * 0.55f,
     /** × the kind's spawn integrity. */
     val integrityShare: Float = 1f,
@@ -70,7 +64,7 @@ internal class EncounterRequest(
     val evictOrdinary: Boolean = false,
     /** A boss member sets the arrival banner. */
     val announce: Boolean = true,
-    /** Run-local (x, y) per member in member order; when set it replaces the RING or CLUSTER geometry. */
+    /** Run-local (x, y) per member in member order; when set it replaces the ring geometry. */
     val positions: FloatArray? = null,
 ) {
     init {
@@ -102,21 +96,19 @@ internal data class EncounterState(
     fun shifted(shiftX: Float, shiftY: Float): EncounterState = copy(centerX = centerX - shiftX, centerY = centerY - shiftY)
 }
 
-private val EnemyType.encounterRank: EnemyRank get() = profile.rank
-
 /** All members or none. Returns false, changing nothing, on any capacity refusal. */
 internal fun MutableGameState.spawnEncounter(request: EncounterRequest): Boolean {
     val members = request.members
-    require(members.none { it.encounterRank == EnemyRank.BOSS || it.encounterRank == EnemyRank.ELITE || it == EnemyType.HERALD }) {
+    require(members.none { it.profile.rank == EnemyRank.BOSS || it.profile.rank == EnemyRank.ELITE || it == EnemyType.HERALD }) {
         "Encounters never spawn the Architect, Elites or the Herald"
     }
-    require(members.count { it.encounterRank == EnemyRank.MINI_BOSS || it.encounterRank == EnemyRank.SECRET_BOSS } <= 1) {
+    require(members.count { it.profile.bossClass } <= 1) {
         "An encounter holds at most one boss"
     }
     if (phase != GamePhase.RUNNING || bossSpawned) return false
     if (encounterIndex(request.tag) >= 0) return false
     if (encounters.size >= MAX_ACTIVE_ENCOUNTERS) return false
-    val secret = members.firstOrNull { it.encounterRank == EnemyRank.SECRET_BOSS }
+    val secret = members.firstOrNull { it.profile.rank == EnemyRank.SECRET_BOSS }
     if (secret != null && (secretBossMask and (1L shl secret.ordinal)) != 0L) return false
     if (secret != null && elapsed > content.tempo.bossAtSeconds - SECRET_BOSS_LAST_SUMMON_LEAD) return false
     if (liveTaggedEnemies() + members.size > MAX_ENCOUNTER_RESERVE) return false
@@ -125,9 +117,7 @@ internal fun MutableGameState.spawnEncounter(request: EncounterRequest): Boolean
         if (!request.evictOrdinary || evictableOrdinaryCount() < deficit) return false
         repeat(deficit) { evictOldestOrdinaryEnemy() }
     }
-    val bossIndex = members.indexOfFirst {
-        it.encounterRank == EnemyRank.MINI_BOSS || it.encounterRank == EnemyRank.SECRET_BOSS
-    }
+    val bossIndex = members.indexOfFirst { it.profile.bossClass }
     val others = members.size - if (bossIndex >= 0) 1 else 0
     var bossId = -1
     var ringSlot = 0
@@ -147,17 +137,10 @@ internal fun MutableGameState.spawnEncounter(request: EncounterRequest): Boolean
                 x = request.centerX
                 y = request.centerY
             }
-            request.placement == EncounterPlacement.RING -> {
+            else -> {
                 ringAngle = TAU * ringSlot / others
                 x = request.centerX + cos(ringAngle) * request.ringRadius
                 y = request.centerY + sin(ringAngle) * request.ringRadius
-            }
-            else -> {
-                val spread = 14f + radius * 1.4f
-                val distance = spread * sqrt(ringSlot.toFloat())
-                val angle = ringSlot * ENCOUNTER_GOLDEN_ANGLE
-                x = request.centerX + cos(angle) * distance
-                y = request.centerY + sin(angle) * distance
             }
         }
         if (memberIndex != bossIndex) ringSlot++
@@ -200,7 +183,7 @@ internal fun MutableGameState.spawnEncounter(request: EncounterRequest): Boolean
     if (request.announce && bossIndex >= 0) {
         val boss = members[bossIndex]
         val name = content.enemy(boss).name.uppercase()
-        if (boss.encounterRank == EnemyRank.SECRET_BOSS) {
+        if (boss.profile.rank == EnemyRank.SECRET_BOSS) {
             message = EnemyNotices.SECRET_SIGNAL + " // " + name
             messageTime = 3f
         } else {
@@ -321,7 +304,7 @@ internal fun MutableGameState.onEncounterEnemyKilled(enemy: Enemy) {
  * many spawned. Draws nothing.
  */
 internal fun MutableGameState.spawnBossAdds(boss: Enemy, type: EnemyType, count: Int, integrityShare: Float, maxLive: Int): Int {
-    require(type.encounterRank == EnemyRank.ORDINARY) { "Boss adds are ordinary kinds" }
+    require(type.profile.rank == EnemyRank.ORDINARY) { "Boss adds are ordinary kinds" }
     if (count <= 0) return 0
     val tag = boss.ownerTag
     var allowed = count
@@ -375,15 +358,14 @@ internal fun MutableGameState.spawnBossAdds(boss: Enemy, type: EnemyType, count:
  * damage 6, a Core at 400 u/s or faster escapes), detonated by updateVolatileRemains with or without the R4 mutator.
  * None is queued while [MutableGameState.MAX_VOLATILE_BURSTS] bursts wait. Draws nothing.
  */
-internal fun MutableGameState.queueEmber(x: Float, y: Float, delay: Float) {
-    if (volatileBursts.size >= MutableGameState.MAX_VOLATILE_BURSTS) return
-    volatileBursts = (volatileBursts + VolatileBurstProjection(
-        x = x,
-        y = y,
-        radius = EMBER_RADIUS,
-        armedAt = elapsed,
-        detonatesAt = elapsed + delay,
-    )).toImmutableList()
+internal fun MutableGameState.queueEmber(x: Float, y: Float, delay: Float) = queueVolatileBurst(x, y, EMBER_RADIUS, delay)
+
+/** A ring of [count] embers [radius] from ([x], [y]), turned by the run time, each bursting after [delay] seconds. */
+internal fun MutableGameState.queueEmberRing(x: Float, y: Float, count: Int, radius: Float, delay: Float) {
+    for (index in 0 until count) {
+        val angle = index * TAU / count + elapsed
+        queueEmber(x + cos(angle) * radius, y + sin(angle) * radius, delay)
+    }
 }
 
 /**

@@ -230,9 +230,10 @@ internal fun MutableGameState.steerEnemy(enemy: Enemy, desiredX: Float, desiredY
 }
 
 /**
- * The Warden's gravity well ([strength] 1): while [enemy] can attack, the Core is outside a Dash phase and within 440 u,
- * the well pulls the Core toward it, harder near its centre; Ion charge on [enemy] disrupts it. A Magnetic Elite runs
- * the same well at its affix strength.
+ * The Warden's gravity well ([strength] 1): while [enemy] can attack, the Core is outside a Dash phase and within
+ * [radius] (440 u), the well pulls the Core toward it with [base] plus up to [pull] near its centre; Ion charge on
+ * [enemy] disrupts it. A Magnetic Elite runs the same well at its affix strength, Warden Prime at its own size and a
+ * negative strength while it pushes.
  */
 internal fun MutableGameState.applyGravityWell(
     enemy: Enemy,
@@ -241,11 +242,14 @@ internal fun MutableGameState.applyGravityWell(
     distance: Float,
     delta: Float,
     strength: Float,
+    radius: Float = 440f,
+    base: Float = 38f,
+    pull: Float = 270f,
 ) {
-    if (distance < 440f && dashPhaseTime <= 0f && canAttack(enemy)) {
+    if (distance < radius && dashPhaseTime <= 0f && canAttack(enemy)) {
         // Ion charge disrupts the well.
         val disruption = max(0.2f, 1f - 0.12f * stacks(enemy, StatusElement.ION))
-        val gravity = (38f + (1f - distance / 440f) * 270f) * disruption * strength
+        val gravity = (base + (1f - distance / radius) * pull) * disruption * strength
         velocityX -= dx / distance * gravity * delta
         velocityY -= dy / distance * gravity * delta
     }
@@ -417,7 +421,8 @@ internal fun MutableGameState.spawnedEnemy(
     val hardened = type == EnemyType.ELITE && runMutatorActive(RebirthMutator.HARDENED_ELITES)
     if (hardened) integrity *= HARDENED_ELITE_INTEGRITY
     integrity *= integrityShare
-    integrity *= championIntegrityScale(type, nextEntityId, ownerTag)
+    val champion = rollsChampion(type, nextEntityId, ownerTag)
+    if (champion) integrity *= content.variety.champions.integrityScale
     val enemy = Enemy(
         id = nextEntityId++,
         type = type,
@@ -435,6 +440,7 @@ internal fun MutableGameState.spawnedEnemy(
         if (type == EnemyType.HERALD) enemy.escortsPending = HERALD_ESCORTS
     }
     enemy.ownerTag = ownerTag
+    enemy.champion = champion
     rollVanguardArmor(enemy)
     rollEliteVariety(enemy)
     initializeBehavior(enemy)

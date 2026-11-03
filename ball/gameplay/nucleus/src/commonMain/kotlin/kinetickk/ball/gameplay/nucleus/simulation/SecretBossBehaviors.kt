@@ -79,8 +79,6 @@ internal const val CARTO_FAN_SPACING: Float = 0.18f
 /** Salt of the Cartographer's open-space jump hash (`runHash`); registered in the lane notes. */
 internal const val CARTO_SALT: Long = 0x0CA2_70E5_EED0_0021L
 private const val CARTO_HASH_TICKS: Float = 120f
-private const val CARTO_NUDGE_ATTEMPTS: Int = 4
-private const val CARTO_NUDGE_DISTANCE: Float = 50f
 
 private const val ANTECEDENT_HOLD: Float = 360f
 private const val ANTECEDENT_ORBIT_SPEED: Float = 40f
@@ -122,10 +120,7 @@ internal fun MutableGameState.startSecretBossPhase(enemy: Enemy) {
         EnemyType.CARTOGRAPHER -> {
             if (enemy.phase > 0) {
                 shockwave(enemy.x, enemy.y, 0.45f, enemy.radius * MINI_BOSS_SHIFT_RING, MINI_BOSS_MARK_COLOR)
-                for (index in 0 until CARTO_SHIFT_REPAIRS) {
-                    val side = if (index % 2 == 0) 1f else -1f
-                    addPickup(Pickup(PickupType.REPAIR, enemy.x + side * 22f, enemy.y - 10f * index))
-                }
+                dropRepairs(enemy.x, enemy.y, CARTO_SHIFT_REPAIRS)
             }
             // Cartography starts with its lanes, then alternates with mine lines.
             if (enemy.phase == 1) enemy.charges = 0
@@ -177,10 +172,7 @@ internal fun MutableGameState.announceSecretBossEnrage(enemy: Enemy) {
 internal fun MutableGameState.paySecretBossDefeat(enemy: Enemy) {
     val definition = content.enemy(enemy.type)
     addPickup(Pickup(PickupType.KEY, enemy.x - 15f, enemy.y + 8f))
-    for (index in 0 until SECRET_BOSS_DEFEAT_REPAIRS) {
-        val side = if (index % 2 == 0) 1f else -1f
-        addPickup(Pickup(PickupType.REPAIR, enemy.x + side * 22f, enemy.y - 10f * index))
-    }
+    dropRepairs(enemy.x, enemy.y, SECRET_BOSS_DEFEAT_REPAIRS)
     discoverWorld(checkNotNull(definition.revealedBy) { "Secret bosses name the discovery that reveals them" })
     message = EnemyNotices.SECRET_BOSS_DEFEATED + " // " + definition.name.uppercase()
     messageTime = SECRET_BOSS_DEFEAT_NOTICE_SECONDS
@@ -319,37 +311,28 @@ private fun MutableGameState.rematerializeCartographer(enemy: Enemy) {
             }
         }
     }
-    var x: Float
-    var y: Float
     if (bestDistance < Float.MAX_VALUE) {
         // The rim keeps its gap from the rock by construction; the push-out settles any other overlap.
         val apart = sqrt(bestDistance)
         val rim = rockRadius + enemy.radius + CARTO_RIM_GAP
-        x = rockX + (rockX - coreX) / apart * rim
-        y = rockY + (rockY - coreY) / apart * rim
+        val x = rockX + (rockX - coreX) / apart * rim
+        val y = rockY + (rockY - coreY) / apart * rim
+        enemy.x = x
+        enemy.y = y
+        enemy.previousX = x
+        enemy.previousY = y
     } else {
         val hash = runHash(runSeed, CARTO_SALT, (enemy.id.toLong() shl 20) xor (elapsed * CARTO_HASH_TICKS).toLong())
         val angle = hashUnit(hash) * TAU
         val directionX = cos(angle)
         val directionY = sin(angle)
-        x = coreX + directionX * CARTO_FALLBACK_REACH
-        y = coreY + directionY * CARTO_FALLBACK_REACH
-        var attempts = 0
-        while (attempts < CARTO_NUDGE_ATTEMPTS && isSpawnPointBlocked(x, y, enemy.radius)) {
-            x += directionX * CARTO_NUDGE_DISTANCE
-            y += directionY * CARTO_NUDGE_DISTANCE
-            attempts++
-        }
+        placeClear(enemy, coreX + directionX * CARTO_FALLBACK_REACH, coreY + directionY * CARTO_FALLBACK_REACH, directionX, directionY)
     }
-    enemy.x = x
-    enemy.y = y
-    enemy.previousX = x
-    enemy.previousY = y
     enemy.vx = 0f
     enemy.vy = 0f
     enemy.mode = EnemyBehavior.TELEGRAPH
     enemy.modeUntil = elapsed + CARTO_AIM_SECONDS
-    enemy.facing = atan2(coreY - y, coreX - x)
+    enemy.facing = atan2(coreY - enemy.y, coreX - enemy.x)
 }
 
 private fun MutableGameState.triangulationVolley(enemy: Enemy) {
@@ -427,14 +410,7 @@ internal fun MutableGameState.updateAntecedent(enemy: Enemy, dx: Float, dy: Floa
             if (elapsed >= enemy.abilityAt) {
                 enemy.abilityAt = elapsed + bossClockSeconds(enemy, ANTECEDENT_EMBER_RING_SECONDS)
                 if (canAttack(enemy)) {
-                    for (index in 0 until ANTECEDENT_RING_EMBERS) {
-                        val angle = index * TAU / ANTECEDENT_RING_EMBERS + elapsed
-                        queueEmber(
-                            enemy.x + cos(angle) * ANTECEDENT_EMBER_RING_RADIUS,
-                            enemy.y + sin(angle) * ANTECEDENT_EMBER_RING_RADIUS,
-                            PYRE_RING_DELAY,
-                        )
-                    }
+                    queueEmberRing(enemy.x, enemy.y, ANTECEDENT_RING_EMBERS, ANTECEDENT_EMBER_RING_RADIUS, PYRE_RING_DELAY)
                 }
             }
         }
@@ -474,13 +450,10 @@ private fun MutableGameState.antecedentPulse(enemy: Enemy, dx: Float, dy: Float,
     if (enemy.mode != EnemyBehavior.TELEGRAPH || elapsed < enemy.modeUntil) return
     enemy.mode = EnemyBehavior.IDLE
     if (!canAttack(enemy)) return
-    if (projectiles.size < ARCHITECT_VOLLEY_PROJECTILE_BUDGET) {
+    if (canVolley(enemy)) {
         fireRadial(enemy.x, enemy.y, ANTECEDENT_PULSE, CHOIR_SHOT_SPEED, elapsed * CHOIR_VOLLEY_SPIN, shotDamage(enemy))
     }
-    if (distance <= CHOIR_WAVE_RADIUS + coreRadius && dashPhaseTime <= 0f) {
-        velocityX += dx / distance * CHOIR_WAVE_PUSH
-        velocityY += dy / distance * CHOIR_WAVE_PUSH
-    }
+    choirShove(dx, dy, distance)
 }
 
 private fun MutableGameState.antecedentSpiral(enemy: Enemy, bolts: Int) {
