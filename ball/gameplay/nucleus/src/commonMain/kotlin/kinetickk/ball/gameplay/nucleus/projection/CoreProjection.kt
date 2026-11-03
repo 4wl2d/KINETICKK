@@ -3,7 +3,9 @@
 
 package kinetickk.ball.gameplay.nucleus.projection
 
+import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.foundation.collections.mapToImmutableList
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.simulation.*
@@ -117,3 +119,23 @@ internal fun MutableGameState.runStatisticsProjection(reusable: RunStatistics?):
         bestCombo = bestCombo,
     )
 }
+
+/** The same list or equal relics keep the previous projection. */
+internal fun MutableGameState.equippedRelicProjection(
+    reusableCollections: GameplayRenderModel?,
+    identitySource: MutableGameState?,
+): ImmutableList<EquippedRelic> =
+    equippedRelics.reuseIfIdentical(
+        identitySource?.equippedRelics,
+        reusableCollections?.equippedRelics,
+    ) ?: equippedRelics.reuseIfContentEqual(reusableCollections?.equippedRelics)
+        ?: equippedRelics.toImmutableList()
+
+/** The same list or equal options keep the previous projection. */
+internal fun MutableGameState.choiceProjection(
+    reusableCollections: GameplayRenderModel?,
+    identitySource: MutableGameState?,
+): ImmutableList<ChoiceOption> =
+    choices.reuseIfIdentical(identitySource?.choices, reusableCollections?.choices)
+        ?: choices.reuseIfContentEqual(reusableCollections?.choices)
+        ?: choices.toImmutableList()

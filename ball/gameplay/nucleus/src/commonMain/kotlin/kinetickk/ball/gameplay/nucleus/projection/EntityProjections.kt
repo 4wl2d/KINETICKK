@@ -11,6 +11,8 @@ import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.simulation.*
 import kinetickk.ball.gameplay.nucleus.simulation.characters.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
+import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
+import kinetickk.ball.gameplay.nucleus.simulation.variety.*
 
 /**
  * Control and mark bits of [enemy] ([EnemyControlBits]): stopped (never a boss), silenced, thrown, burning
@@ -117,3 +119,224 @@ private fun ObstacleProjection.matches(obstacle: Obstacle): Boolean =
         shapeSeed == obstacle.shapeSeed &&
         fuseAt.sameBitsAs(obstacle.fuseAt) &&
         repels == obstacle.repels
+
+/** The Totem, or null; the same Totem or an equal position and pulse keeps the previous projection. */
+internal fun MutableGameState.totemProjection(
+    reusableCollections: GameplayRenderModel?,
+    identitySource: MutableGameState?,
+): TotemProjection? =
+    totem?.let { value ->
+        reusableCollections?.totem?.takeIf { previous ->
+            value === identitySource?.totem ||
+                (value.x.sameBitsAs(previous.x) &&
+                    value.y.sameBitsAs(previous.y) &&
+                    value.pulse.sameBitsAs(previous.pulse))
+        } ?: TotemProjection(value.x, value.y, value.pulse)
+    }
+
+/** The same list, an empty one or equal enemies keep the previous projection. */
+internal fun MutableGameState.enemyProjections(
+    reusableCollections: GameplayRenderModel?,
+    identitySource: MutableGameState?,
+): ImmutableList<EnemyProjection> =
+    enemies.reuseIfIdentical(identitySource?.enemies, reusableCollections?.enemies)
+        ?: enemies.reuseEmptyProjection(reusableCollections?.enemies)
+        ?: enemies.reuseProjectionIfContentEqual(reusableCollections?.enemies) { value, previous ->
+            value.id == previous.id &&
+                value.type == previous.type &&
+                value.x.sameBitsAs(previous.x) &&
+                value.y.sameBitsAs(previous.y) &&
+                value.vx.sameBitsAs(previous.vx) &&
+                value.vy.sameBitsAs(previous.vy) &&
+                value.hp.sameBitsAs(previous.hp) &&
+                value.maxHp.sameBitsAs(previous.maxHp) &&
+                value.radius.sameBitsAs(previous.radius) &&
+                value.actionTimer.sameBitsAs(previous.actionTimer) &&
+                value.flash.sameBitsAs(previous.flash) &&
+                value.contactCooldown.sameBitsAs(previous.contactCooldown) &&
+                value.weaponCooldown.sameBitsAs(previous.weaponCooldown) &&
+                value.previousX.sameBitsAs(previous.previousX) &&
+                value.previousY.sameBitsAs(previous.previousY) &&
+                value.dead == previous.dead &&
+                statusBits(value) == previous.statusBits &&
+                affinityBits(value) == previous.affinityBits &&
+                value.mode == previous.behavior &&
+                behaviorRemaining(value).sameBitsAs(previous.behaviorRemaining) &&
+                value.facing.sameBitsAs(previous.facing) &&
+                linkedTo(value) == previous.linkedTo &&
+                shielded(value) == previous.shielded &&
+                value.armorIntact == previous.armored &&
+                controlBits(value) == previous.controlBits &&
+                value.charges == previous.charges
+        }
+        ?: enemies.mapToImmutableList { value ->
+            EnemyProjection(
+                id = value.id,
+                type = value.type,
+                x = value.x,
+                y = value.y,
+                vx = value.vx,
+                vy = value.vy,
+                hp = value.hp,
+                maxHp = value.maxHp,
+                radius = value.radius,
+                actionTimer = value.actionTimer,
+                flash = value.flash,
+                contactCooldown = value.contactCooldown,
+                weaponCooldown = value.weaponCooldown,
+                previousX = value.previousX,
+                previousY = value.previousY,
+                dead = value.dead,
+                statusBits = statusBits(value),
+                affinityBits = affinityBits(value),
+                behavior = value.mode,
+                behaviorRemaining = behaviorRemaining(value),
+                facing = value.facing,
+                linkedTo = linkedTo(value),
+                shielded = shielded(value),
+                armored = value.armorIntact,
+                controlBits = controlBits(value),
+                charges = value.charges,
+            )
+        }
+
+/** An empty list, the same list or equal shots keep the previous projection. */
+internal fun MutableGameState.projectileProjections(
+    reusableCollections: GameplayRenderModel?,
+    identitySource: MutableGameState?,
+): ImmutableList<ProjectileProjection> =
+    projectiles.reuseEmptyProjection(reusableCollections?.projectiles)
+        ?: projectiles.reuseIfIdentical(
+            identitySource?.projectiles,
+            reusableCollections?.projectiles,
+        )
+        ?: projectiles.reuseProjectionIfContentEqual(
+            reusableCollections?.projectiles,
+        ) { value, previous ->
+            value.x.sameBitsAs(previous.x) &&
+                value.y.sameBitsAs(previous.y) &&
+                value.vx.sameBitsAs(previous.vx) &&
+                value.vy.sameBitsAs(previous.vy) &&
+                value.radius.sameBitsAs(previous.radius) &&
+                value.life.sameBitsAs(previous.life) &&
+                value.hostile == previous.hostile &&
+                value.damage.sameBitsAs(previous.damage) &&
+                value.pierce == previous.pierce &&
+                value.colorIndex == previous.colorIndex &&
+                value.sourceWeapon == previous.sourceWeapon &&
+                value.previousX.sameBitsAs(previous.previousX) &&
+                value.previousY.sameBitsAs(previous.previousY) &&
+                value.kind == previous.kind
+        }
+        ?: projectiles.mapToImmutableList { value ->
+            ProjectileProjection(
+                x = value.x,
+                y = value.y,
+                vx = value.vx,
+                vy = value.vy,
+                radius = value.radius,
+                life = value.life,
+                hostile = value.hostile,
+                damage = value.damage,
+                pierce = value.pierce,
+                colorIndex = value.colorIndex,
+                sourceWeapon = value.sourceWeapon,
+                previousX = value.previousX,
+                previousY = value.previousY,
+                kind = value.kind,
+            )
+        }
+
+/** An empty list, the same list or equal pickups keep the previous projection. */
+internal fun MutableGameState.pickupProjections(
+    reusableCollections: GameplayRenderModel?,
+    identitySource: MutableGameState?,
+): ImmutableList<PickupProjection> =
+    pickups.reuseEmptyProjection(reusableCollections?.pickups)
+        ?: pickups.reuseIfIdentical(identitySource?.pickups, reusableCollections?.pickups)
+        ?: pickups.reuseProjectionIfContentEqual(reusableCollections?.pickups) { value, previous ->
+            value.type == previous.type &&
+                value.x.sameBitsAs(previous.x) &&
+                value.y.sameBitsAs(previous.y) &&
+                value.vx.sameBitsAs(previous.vx) &&
+                value.vy.sameBitsAs(previous.vy) &&
+                value.life.sameBitsAs(previous.life) &&
+                value.previousX.sameBitsAs(previous.previousX) &&
+                value.previousY.sameBitsAs(previous.previousY)
+        }
+        ?: pickups.mapToImmutableList { value ->
+            PickupProjection(
+                value.type,
+                value.x,
+                value.y,
+                value.vx,
+                value.vy,
+                value.life,
+                value.previousX,
+                value.previousY,
+            )
+        }
+
+/** An empty trail, the same list or equal points keep the previous projection. */
+internal fun MutableGameState.trailProjections(
+    reusableCollections: GameplayRenderModel?,
+    identitySource: MutableGameState?,
+): ImmutableList<TrailPointProjection> =
+    trail.reuseEmptyProjection(reusableCollections?.trail)
+        ?: trail.reuseIfIdentical(identitySource?.trail, reusableCollections?.trail)
+        ?: trail.reuseProjectionIfContentEqual(reusableCollections?.trail) { value, previous ->
+            value.x.sameBitsAs(previous.x) &&
+                value.y.sameBitsAs(previous.y) &&
+                value.age.sameBitsAs(previous.age) &&
+                value.life.sameBitsAs(previous.life) &&
+                value.scale.sameBitsAs(previous.scale)
+        }
+        ?: trail.mapToImmutableList { value -> TrailPointProjection(value.x, value.y, value.age, value.life, value.scale) }
+
+/** An empty list, the same list or equal nodes keep the previous projection. */
+internal fun MutableGameState.weaponNodeProjections(
+    reusableCollections: GameplayRenderModel?,
+    identitySource: MutableGameState?,
+): ImmutableList<WeaponNodeProjection> =
+    weaponNodes.reuseEmptyProjection(reusableCollections?.weaponNodes)
+        ?: weaponNodes.reuseIfIdentical(
+            identitySource?.weaponNodes,
+            reusableCollections?.weaponNodes,
+        )
+        ?: weaponNodes.reuseProjectionIfContentEqual(
+            reusableCollections?.weaponNodes,
+        ) { value, previous ->
+            value.type == previous.type &&
+                value.x.sameBitsAs(previous.x) &&
+                value.y.sameBitsAs(previous.y) &&
+                value.life.sameBitsAs(previous.life) &&
+                value.maxLife.sameBitsAs(previous.maxLife) &&
+                value.radius.sameBitsAs(previous.radius)
+        }
+        ?: weaponNodes.mapToImmutableList { value ->
+            WeaponNodeProjection(value.type, value.x, value.y, value.life, value.maxLife, value.radius)
+        }
+
+/** An empty list, the same list or equal orbitals keep the previous projection. */
+internal fun MutableGameState.weaponOrbitalProjections(
+    reusableCollections: GameplayRenderModel?,
+    identitySource: MutableGameState?,
+): ImmutableList<WeaponOrbitalProjection> =
+    weaponOrbitals.reuseEmptyProjection(reusableCollections?.weaponOrbitals)
+        ?: weaponOrbitals.reuseIfIdentical(
+            identitySource?.weaponOrbitals,
+            reusableCollections?.weaponOrbitals,
+        )
+        ?: weaponOrbitals.reuseProjectionIfContentEqual(
+            reusableCollections?.weaponOrbitals,
+        ) { value, previous ->
+            value.index == previous.index &&
+                value.x.sameBitsAs(previous.x) &&
+                value.y.sameBitsAs(previous.y) &&
+                value.radius.sameBitsAs(previous.radius) &&
+                value.previousX.sameBitsAs(previous.previousX) &&
+                value.previousY.sameBitsAs(previous.previousY)
+        }
+        ?: weaponOrbitals.mapToImmutableList { value ->
+            WeaponOrbitalProjection(value.index, value.x, value.y, value.radius, value.previousX, value.previousY)
+        }

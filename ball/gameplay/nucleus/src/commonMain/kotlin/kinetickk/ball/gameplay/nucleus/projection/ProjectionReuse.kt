@@ -4,6 +4,8 @@
 package kinetickk.ball.gameplay.nucleus.projection
 
 import kinetickk.foundation.collections.ImmutableList
+import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
 
 internal fun <Source : Any, Projection> Source.reuseIfIdentical(
     previousSource: Source?,
@@ -40,4 +42,28 @@ internal fun <Element> List<Element>.reuseIfContentEqual(
         index++
     }
     return previous
+}
+
+/**
+ * The reuse inputs of [toRenderModel] agree: an identity source or captured sources, never both, and an identity
+ * source and a reusable model of the same content.
+ */
+internal fun MutableGameState.requireReuseSources(
+    reusableCollections: GameplayRenderModel?,
+    identitySource: MutableGameState?,
+    sources: ProjectionSources?,
+) {
+    require(identitySource == null || sources == null) {
+        "A projection reuses by identity source or by captured sources, never both"
+    }
+    require(identitySource == null || identitySource.content === content) {
+        "Identity-based Gameplay projection reuse requires matching content"
+    }
+    require(
+        reusableCollections == null ||
+            identitySource == null ||
+            reusableCollections.content === identitySource.content,
+    ) {
+        "Reusable Gameplay projection does not match its identity source"
+    }
 }
