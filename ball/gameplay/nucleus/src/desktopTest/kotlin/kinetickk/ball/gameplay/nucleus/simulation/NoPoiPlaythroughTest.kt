@@ -673,13 +673,19 @@ internal class NoPoiBot(
         s.choose(index)
     }
 
-    /** SEEK ranks a Data-gain card by its Data weight above every other card; AVOID scores it −5 000. */
+    /**
+     * SEEK ranks a Data-gain card by its Data weight above every other card; AVOID scores it −15 000, below an
+     * active it would only salvage for Matter, so it takes Data only when every card gains Data (a counted breach)
+     * or is Decay Spores.
+     */
     private fun policyScore(s: MutableGameState, c: ChoiceOption, index: Int): Float = when {
-        // An active the bot would not take (it would only salvage, or AVOID's Decay Spores) is a last resort.
+        // AVOID's Decay Spores (Spored deaths drop Data) ranks below its Data cards.
+        dataPolicy == DataPolicy.AVOID && activeEffect(s, c) == SkillId.DECAY_SPORES -> -20_000f
+        // Any other active the bot would not take only salvages: a last resort.
         activeEffect(s, c) != null && activeEffect(s, c) !in wantedActives(s) -> -10_000f
         dataPolicy == DataPolicy.NEUTRAL || !isDataGainCard(s, c) -> score(s, c, index)
         dataPolicy == DataPolicy.SEEK -> dataWeight(s, c)
-        else -> -5_000f
+        else -> -15_000f
     }
 
     /** `5 000 + 1 000 × ΣDATA_GAIN + 500 × [has GainData]` for a Data-gain item card (economy §2.1). */
