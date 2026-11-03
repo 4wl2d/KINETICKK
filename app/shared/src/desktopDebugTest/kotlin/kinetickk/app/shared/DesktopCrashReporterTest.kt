@@ -19,11 +19,11 @@ class DesktopCrashReporterTest {
     @Test fun profilingSuspendsPeriodicDiskWritesButFatalCaptureRetainsCurrentContext() = withRoot { root ->
         val reporter = DesktopCrashReporter(root, PrintStream(ByteArrayOutputStream()))
         reporter.context("state") { "before recording" }
-        reporter.checkpoint()
+        reporter.checkpoint(periodic = true)
         val before = Files.readString(reporter.session.resolve("context.txt"))
         reporter.performanceRecordingChanged(true)
         reporter.context("state") { "during recording" }
-        reporter.checkpoint()
+        reporter.checkpoint(periodic = true)
         assertEquals(before, Files.readString(reporter.session.resolve("context.txt")))
         val report = reporter.capture(IllegalStateException("during profiling"), "test", Thread.currentThread())
         assertContains(Files.readString(report.parent.resolve("context.txt")), "during recording")
@@ -35,8 +35,17 @@ class DesktopCrashReporterTest {
         reporter.performanceRecordingChanged(true)
         reporter.context("state") { "resumed" }
         reporter.performanceRecordingChanged(false)
-        reporter.checkpoint()
+        reporter.checkpoint(periodic = true)
         assertContains(Files.readString(reporter.session.resolve("context.txt")), "resumed")
+        reporter.close()
+    }
+
+    @Test fun shutdownCheckpointIsWrittenDuringProfiling() = withRoot { root ->
+        val reporter = DesktopCrashReporter(root, PrintStream(ByteArrayOutputStream()))
+        reporter.performanceRecordingChanged(true)
+        reporter.context("state") { "terminated while recording" }
+        reporter.checkpoint()
+        assertContains(Files.readString(reporter.session.resolve("context.txt")), "terminated while recording")
         reporter.close()
     }
 

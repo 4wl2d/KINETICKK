@@ -8,10 +8,10 @@ import kotlin.js.ExperimentalWasmJsInterop
 
 // Browsers do not expose portable process CPU, Wasm-GC heap or collection counters.
 // In particular, nonstandard performance.memory describes a JS heap, not this game's Wasm heap.
-actual fun collectDebugRuntimeSample(): DebugRuntimeSample = DebugRuntimeSample()
+internal actual fun collectDebugRuntimeSample(): DebugRuntimeSample = DebugRuntimeSample()
 
 @OptIn(ExperimentalWasmJsInterop::class)
-actual fun debugRuntimeDescription(): String = runCatching {
+internal actual fun debugRuntimeDescription(): String = runCatching {
     "Web/Wasm; ${window.navigator.userAgent.take(512)}; " +
         "heap, process CPU and GC counters unavailable in the browser"
 }.getOrDefault("Web/Wasm; runtime metrics unavailable")

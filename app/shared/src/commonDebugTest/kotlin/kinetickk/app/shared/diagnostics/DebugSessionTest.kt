@@ -86,6 +86,7 @@ class DebugSessionTest {
         session.panelVisible = true
         session.frame(21L, 10L)
         session.frame(31L, 10L)
+        session.frame(41L, 10L)
         session.event("input", "not recorded")
         assertEquals(export, session.export())
         assertTrue(export.contains("run=before"))
@@ -155,20 +156,48 @@ class DebugSessionTest {
     }
 
     @Test
-    fun requestedFpsWorksWithoutOpeningPanelOrTakingSnapshots() {
+    fun livePanelCoversOnlyTheLatest600IntervalsWithoutRecording() {
         val session = DebugSession()
-        session.showFpsRequested = true
+        session.panelVisible = true
         assertTrue(session.capturesPerformance)
-        assertFalse(session.overlayVisible)
         session.frame(1L, 0L)
         repeat(700) { session.frame(1L + (it + 1) * 10_000_000L, 0L) }
-        assertEquals(100, session.framesPerSecond)
-        // The rolling average subtracts overwritten intervals without sorting a snapshot.
+        assertEquals(100.0, session.snapshot().fps)
+        // Overwritten intervals leave the live statistics.
         repeat(600) { session.frame(7_000_000_001L + (it + 1) * 20_000_000L, 0L) }
-        assertEquals(50, session.framesPerSecond)
+        assertEquals(50.0, session.snapshot().fps)
         assertFalse(session.hasRecording)
-        session.showFpsRequested = false
+        session.panelVisible = false
         assertFalse(session.capturesPerformance)
+    }
+
+    @Test
+    fun reopenedPanelDoesNotMixIntervalsFromAnEarlierCapturePeriod() {
+        val session = DebugSession()
+        session.panelVisible = true
+        repeat(5) { session.frame(1L + it * 10_000_000L, 0L) }
+        assertEquals(100.0, session.snapshot().fps)
+        session.panelVisible = false
+        session.panelVisible = true
+        repeat(5) { session.frame(1_000_000_001L + it * 20_000_000L, 0L) }
+        assertEquals(50.0, session.snapshot().fps)
+        assertEquals(4L, session.snapshot().frames)
+    }
+
+    @Test
+    fun recordingKeepsRuntimeBoundariesAndThrottlesRepeatedSamples() {
+        var now = 0L
+        val session = DebugSession(nowNanos = { now })
+        session.start()
+        // A restarted panel loop samples immediately; the boundary sample already covers it.
+        session.sampleRuntime()
+        now = 1_499_999_999L
+        session.sampleRuntime()
+        now = 1_500_000_000L
+        session.sampleRuntime()
+        now = 1_600_000_000L
+        session.stop()
+        assertTrue(session.export().contains("runtime_samples_total=3;"))
     }
 
     @Test
@@ -182,7 +211,6 @@ class DebugSessionTest {
         val session = DebugSession(sink)
         session.stop()
         session.panelVisible = true
-        session.showFpsRequested = true
         assertTrue(transitions.isEmpty())
         session.start()
         session.start()

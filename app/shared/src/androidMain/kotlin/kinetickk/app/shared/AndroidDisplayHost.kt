@@ -13,6 +13,7 @@ import android.view.WindowInsetsController
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlin.math.roundToInt
 
 /**
  * The Android display host: the refresh rate (a display mode at the current resolution; Auto picks
@@ -38,7 +39,7 @@ class AndroidDisplayHost(private val activity: Activity) : PlatformDisplayHost {
         touchPrimary = true,
     )
 
-    override fun diagnosticRefreshHz(): Int = display()?.refreshRate?.toInt() ?: 0
+    override fun diagnosticRefreshHz(): Int = display()?.refreshRate?.roundToInt() ?: 0
 
     override fun apply(request: HostDisplayRequest, force: Boolean) {
         val previous = last

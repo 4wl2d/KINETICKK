@@ -8,4 +8,4 @@ import androidx.compose.ui.platform.ClipEntry
 import java.awt.datatransfer.StringSelection
 
 @OptIn(ExperimentalComposeUiApi::class)
-actual fun createDebugClipEntry(text: String): ClipEntry = ClipEntry(StringSelection(text))
+internal actual fun createDebugClipEntry(text: String): ClipEntry = ClipEntry(StringSelection(text))

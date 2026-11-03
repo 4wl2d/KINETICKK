@@ -157,7 +157,7 @@ class DesktopCrashHandler private constructor(private val showDialogs: Boolean) 
             System.setErr(tee(handler.originalErr, handler.reporter.log, handler.originalErr))
             Runtime.getRuntime().addShutdownHook(handler.shutdownHook)
             handler.scheduler.scheduleWithFixedDelay({
-                runCatching { handler.reporter.checkpoint() }
+                runCatching { handler.reporter.checkpoint(periodic = true) }
                     .onFailure { handler.originalErr.println("KINETICKK crash checkpoint failed: $it") }
             }, 0, 1, TimeUnit.SECONDS)
             handler.originalOut.println("KINETICKK crash reports: ${handler.reporter.root.toAbsolutePath()}")

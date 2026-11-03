@@ -6,4 +6,4 @@ package kinetickk.app.shared.diagnostics
 import android.content.ClipData
 import androidx.compose.ui.platform.ClipEntry
 
-actual fun createDebugClipEntry(text: String): ClipEntry = ClipEntry(ClipData.newPlainText("KINETICKK diagnostics", text))
+internal actual fun createDebugClipEntry(text: String): ClipEntry = ClipEntry(ClipData.newPlainText("KINETICKK diagnostics", text))

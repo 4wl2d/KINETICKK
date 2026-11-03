@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import kinetickk.app.shared.diagnostics.DebugRuntimeSample
 import kinetickk.app.shared.diagnostics.DebugReportPages
 import kinetickk.app.shared.diagnostics.DebugSession
+import kinetickk.app.shared.diagnostics.EXPORT_MARKER
 import kinetickk.app.shared.diagnostics.createDebugClipEntry
 import kinetickk.app.shared.diagnostics.decimal
 import kinetickk.foundation.diagnostics.CrashDiagnostics
@@ -60,7 +61,7 @@ fun createDebugDiagnostics(downstream: CrashDiagnostics): CrashDiagnostics =
     }
 
 @Composable
-fun rememberDebugDiagnostics(downstream: CrashDiagnostics): CrashDiagnostics =
+internal fun rememberDebugDiagnostics(downstream: CrashDiagnostics): CrashDiagnostics =
     remember(downstream) { createDebugDiagnostics(downstream) }
 
 private val DebugBackground = Color(0xff14181e)
@@ -83,7 +84,7 @@ internal fun DebugToolsHost(
 
 /** Separate composition scope: the game never observes the panel's 2Hz presentation state. */
 @Composable
-fun DebugTools(diagnostics: CrashDiagnostics, displayHost: PlatformDisplayHost = PlatformDisplayHost.None) {
+internal fun DebugTools(diagnostics: CrashDiagnostics, displayHost: PlatformDisplayHost = PlatformDisplayHost.None) {
     val session = diagnostics as? DebugSession ?: return
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
@@ -115,10 +116,9 @@ fun DebugTools(diagnostics: CrashDiagnostics, displayHost: PlatformDisplayHost =
     }
     val visible = session.panelVisible
     val recording = session.recording
-    val showFpsRequested = session.showFpsRequested
-    LaunchedEffect(session, visible, recording, showFpsRequested, displayHost) {
+    LaunchedEffect(session, visible, recording, displayHost) {
         var ticks = 0
-        while (visible || recording || showFpsRequested) {
+        while (visible || recording) {
             val refreshHz = runCatching { displayHost.diagnosticRefreshHz() }.getOrDefault(0)
             session.nominalFrameBudgetNanos = if (refreshHz > 0) 1_000_000_000L / refreshHz else 0L
             session.context("display.refresh") { "observed_hz=$refreshHz; 0=unknown_or_uncapped" }
@@ -196,7 +196,7 @@ fun DebugTools(diagnostics: CrashDiagnostics, displayHost: PlatformDisplayHost =
                         DebugButton("Далее", enabled = page + 1 < reportPages.count, tag = "kinetickk.debug.nextPage") { reportPageValue = page + 1 }
                     }
                     DebugButton("Копировать часть", enabled = !copyingValue, tag = "kinetickk.debug.copyPage") {
-                        copyText("KINETICKK_DEBUG_DIAGNOSTICS_V1\nREPORT_FRAGMENT ${page + 1}/${reportPages.count}\n" + reportPages.page(page))
+                        copyText("$EXPORT_MARKER\nREPORT_FRAGMENT ${page + 1}/${reportPages.count}\n" + reportPages.page(page))
                     }
                     BasicTextField(
                         value = reportPages.page(page),

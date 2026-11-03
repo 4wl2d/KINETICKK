@@ -12,14 +12,14 @@ import kotlin.math.max
 import kotlin.math.roundToLong
 import kotlin.time.TimeSource
 
-private const val EXPORT_MARKER = "KINETICKK_DEBUG_DIAGNOSTICS_V1"
+internal const val EXPORT_MARKER = "KINETICKK_DEBUG_DIAGNOSTICS_V1"
 private const val MAX_CONTEXTS = 48
 private const val MAX_RUNTIME_SAMPLES = 512
 private const val FRAME_DISCONTINUITY_NANOS = 2_000_000_000L
+private const val RUNTIME_SAMPLE_INTERVAL_NANOS = 1_500_000_000L
 
-data class DebugSnapshot(
+internal data class DebugSnapshot(
     val frames: Long,
-    val retainedFrames: Int,
     val fps: Double,
     val meanMillis: Double,
     val p95Millis: Double,
@@ -39,16 +39,21 @@ data class DebugSnapshot(
     val effects: Int,
 )
 
+/** Monotonic nanoseconds. A primitive SAM keeps recorded frame callbacks free of boxed results. */
+internal fun interface NanoClock {
+    fun nanos(): Long
+}
+
 /**
  * Game/UI-thread recorder. No sorting, strings, collection growth or Compose state writes in frame
  * callbacks. Recording is a bounded tail; counters disclose everything overwritten by the rings.
  * UI snapshots and runtime sampling are explicitly invoked at a much lower frequency.
  */
-class DebugSession(
+internal class DebugSession(
     private val downstream: CrashDiagnostics = CrashDiagnostics.None,
     frameCapacity: Int = 12_000,
     eventCapacity: Int = 2_048,
-    private val nowNanos: () -> Long = monotonicClock(),
+    private val nowNanos: NanoClock = monotonicClock(),
 ) : PerformanceDiagnostics {
     private val live = FrameRing(600)
     private val recorded = FrameRing(frameCapacity)
@@ -59,6 +64,7 @@ class DebugSession(
     private var runtimeWrites = 0L
     private var startNanos = 0L
     private var stopNanos = 0L
+    private var lastRuntimeSampleNanos = 0L
     private var lastFrameNanos = 0L
     private var dispatchNanos = 0L
     private var simulationNanos = 0L
@@ -78,10 +84,8 @@ class DebugSession(
 
     private val recordingState = mutableStateOf(false)
     private val panelVisibleState = mutableStateOf(false)
-    private val showFpsRequestedState = mutableStateOf(false)
     private var recordingFlag = false
     private var panelVisibleFlag = false
-    private var showFpsFlag = false
     private var captureEnabled = false
     var recording: Boolean
         get() = recordingState.value
@@ -99,18 +103,9 @@ class DebugSession(
             updateCaptureEnabled()
         }
 
-    override var showFpsRequested: Boolean
-        get() = showFpsRequestedState.value
-        set(value) {
-            if (showFpsFlag == value) return
-            showFpsFlag = value
-            showFpsRequestedState.value = value
-            updateCaptureEnabled()
-        }
     override val capturesPerformance: Boolean get() = captureEnabled
     override val overlayVisible: Boolean get() = panelVisibleFlag
     override var nominalFrameBudgetNanos: Long = 0L
-    override val framesPerSecond: Int get() = live.framesPerSecond.roundToLong().toInt()
     override fun toggleOverlay() { panelVisible = !panelVisible }
     val hasRecording: Boolean get() = eventWrites > 0 || recorded.total > 0
     val recordedFrames: Long get() = recorded.total
@@ -132,22 +127,22 @@ class DebugSession(
     fun start() {
         if (recordingFlag) return
         clear()
-        startNanos = nowNanos()
+        startNanos = nowNanos.nanos()
         recording = true
         runCatching { downstream.performanceRecordingChanged(true) }
         resetFrameBoundary()
         appendEvent("session", "recording started; frame/phase callbacks are game-thread measurements")
         initialContexts = captureContexts()
         runtimeDescription = runCatching { debugRuntimeDescription().take(1_024) }.getOrDefault("unavailable")
-        sampleRuntime()
+        sampleRuntime(boundary = true)
     }
 
     fun stop() {
         if (!recordingFlag) return
         try {
             appendEvent("session", "recording stopped; pending incomplete frame excluded")
-            sampleRuntime()
-            stopNanos = nowNanos()
+            sampleRuntime(boundary = true)
+            stopNanos = nowNanos.nanos()
         } finally {
             recording = false
             runCatching { downstream.performanceRecordingChanged(false) }
@@ -164,6 +159,7 @@ class DebugSession(
         runtimeWrites = 0L
         startNanos = 0L
         stopNanos = 0L
+        lastRuntimeSampleNanos = 0L
         discontinuities = 0L
         contextFailures = 0L
         initialContexts = emptyMap()
@@ -174,7 +170,8 @@ class DebugSession(
         if (!capturesPerformance) return
         val interval = if (lastFrameNanos == 0L) 0L else frameTimeNanos - lastFrameNanos
         if (interval > 0L) {
-            val timestamp = nowNanos() - startNanos
+            // Only the recording exports timestamps; the live panel needs intervals alone.
+            val timestamp = if (recordingFlag) nowNanos.nanos() - startNanos else 0L
             live.add(timestamp, interval, this.budgetNanos, dispatchNanos, simulationNanos, drawNanos, projectionNanos, audioNanos,
                 enemies, projectiles, pickups, effects)
             if (recordingFlag) recorded.add(timestamp, interval, this.budgetNanos, dispatchNanos,
@@ -215,13 +212,17 @@ class DebugSession(
         this.effects = effects
     }
 
-    /** Call at most once every two seconds, plus recording boundaries. */
-    fun sampleRuntime(): DebugRuntimeSample {
+    /** Call about every two seconds. A recording keeps its boundaries and at most one sample per 1.5 s. */
+    fun sampleRuntime(boundary: Boolean = false): DebugRuntimeSample {
         val value = runCatching { collectDebugRuntimeSample() }.getOrDefault(DebugRuntimeSample())
         if (recordingFlag) {
-            runtimeSamples[(runtimeWrites % runtimeSamples.size).toInt()] =
-                TimedRuntimeSample(nowNanos() - startNanos, value)
-            runtimeWrites++
+            val now = nowNanos.nanos()
+            if (boundary || now - lastRuntimeSampleNanos >= RUNTIME_SAMPLE_INTERVAL_NANOS) {
+                runtimeSamples[(runtimeWrites % runtimeSamples.size).toInt()] =
+                    TimedRuntimeSample(now - startNanos, value)
+                runtimeWrites++
+                lastRuntimeSampleNanos = now
+            }
         }
         return value
     }
@@ -294,7 +295,7 @@ class DebugSession(
 
     private fun appendEvent(category: String, message: String) {
         events[(eventWrites % events.size).toInt()] =
-            DebugEvent(nowNanos() - startNanos, category.take(80), message.take(1_024))
+            DebugEvent(nowNanos.nanos() - startNanos, category.take(80), message.take(1_024))
         eventWrites++
     }
 
@@ -308,15 +309,17 @@ class DebugSession(
     }
 
     private fun updateCaptureEnabled() {
-        val enabled = recordingFlag || panelVisibleFlag || showFpsFlag
+        val enabled = recordingFlag || panelVisibleFlag
         if (enabled != captureEnabled) resetFrameBoundary()
+        // The live panel describes only the current capture period.
+        if (enabled && !captureEnabled) live.clear()
         captureEnabled = enabled
     }
 }
 
-private fun monotonicClock(): () -> Long {
+private fun monotonicClock(): NanoClock {
     val origin = TimeSource.Monotonic.markNow()
-    return { origin.elapsedNow().inWholeNanoseconds }
+    return NanoClock { origin.elapsedNow().inWholeNanoseconds }
 }
 
 private data class DebugEvent(val elapsedNanos: Long, val category: String, val message: String)
@@ -338,15 +341,11 @@ private class FrameRing(val capacity: Int) {
     val effects = IntArray(capacity)
     var total = 0L
         private set
-    private var rollingIntervalTotal = 0L
     val size: Int get() = minOf(total, capacity.toLong()).toInt()
-    val framesPerSecond: Double get() = if (rollingIntervalTotal == 0L) 0.0 else size * 1e9 / rollingIntervalTotal
 
     fun add(time: Long, frame: Long, target: Long, dispatchTime: Long, simulationTime: Long,
             drawTime: Long, projectionTime: Long, audioTime: Long, enemyCount: Int, projectileCount: Int, pickupCount: Int, effectCount: Int) {
         val i = (total % capacity).toInt()
-        if (total >= capacity) rollingIntervalTotal -= interval[i]
-        rollingIntervalTotal += frame
         timestamp[i] = time
         interval[i] = frame
         budget[i] = target
@@ -364,7 +363,6 @@ private class FrameRing(val capacity: Int) {
 
     fun clear() {
         total = 0L
-        rollingIntervalTotal = 0L
     }
 
     inline fun forEachIndex(block: (Int) -> Unit) {
@@ -403,7 +401,7 @@ private class FrameRing(val capacity: Int) {
             else sorted[(ceil(count * fraction).toInt() - 1).coerceIn(0, count - 1)] / 1e6
         val last = if (total == 0L) 0 else ((total - 1) % capacity).toInt()
         val divisor = max(1, count) * 1e6
-        return DebugSnapshot(total, count, if (sum == 0L) 0.0 else count * 1e9 / sum,
+        return DebugSnapshot(total, if (sum == 0L) 0.0 else count * 1e9 / sum,
             sum / divisor, percentile(0.95), percentile(0.99), percentile(1.0), jank, budgeted,
             missed, dispatchSum / divisor, simulationSum / divisor, drawSum / divisor, projectionSum / divisor, audioSum / divisor,
             enemies[last], projectiles[last], pickups[last], effects[last])

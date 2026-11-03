@@ -6,4 +6,4 @@ package kinetickk.app.shared.diagnostics
 import androidx.compose.ui.platform.ClipEntry
 
 /** Platform construction also rejects unavailable browser clipboard APIs instead of a silent no-op. */
-expect fun createDebugClipEntry(text: String): ClipEntry
+internal expect fun createDebugClipEntry(text: String): ClipEntry

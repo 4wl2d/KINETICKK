@@ -7,7 +7,7 @@ package kinetickk.app.shared.diagnostics
 
 import androidx.compose.ui.platform.ClipEntry
 
-actual fun createDebugClipEntry(text: String): ClipEntry {
+internal actual fun createDebugClipEntry(text: String): ClipEntry {
     check(browserClipboardWriteAvailable()) { "Clipboard requires a secure context and a supported browser API" }
     return ClipEntry.withPlainText(text)
 }

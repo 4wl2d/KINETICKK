@@ -24,12 +24,8 @@ interface CrashDiagnostics {
 interface PerformanceDiagnostics : CrashDiagnostics {
     val capturesPerformance: Boolean get() = true
     val overlayVisible: Boolean get() = false
-    val framesPerSecond: Int get() = -1
     var nominalFrameBudgetNanos: Long
         get() = 0L
-        set(@Suppress("UNUSED_PARAMETER") value) = Unit
-    var showFpsRequested: Boolean
-        get() = false
         set(@Suppress("UNUSED_PARAMETER") value) = Unit
     fun toggleOverlay() = Unit
     /** Absolute monotonic frame timestamp; zero budget means uncapped or unknown refresh rate. */

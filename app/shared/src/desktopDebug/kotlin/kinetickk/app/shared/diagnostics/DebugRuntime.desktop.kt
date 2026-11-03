@@ -16,7 +16,7 @@ private object DesktopDebugRuntime {
         runCatching { ManagementFactory.getOperatingSystemMXBean() as? OperatingSystemMXBean }.getOrNull()
 }
 
-actual fun collectDebugRuntimeSample(): DebugRuntimeSample = runCatching {
+internal actual fun collectDebugRuntimeSample(): DebugRuntimeSample = runCatching {
     val runtime = DesktopDebugRuntime.runtime
     val committed = runtime.totalMemory()
     var count = 0L
@@ -44,7 +44,7 @@ actual fun collectDebugRuntimeSample(): DebugRuntimeSample = runCatching {
     )
 }.getOrElse { DebugRuntimeSample() }
 
-actual fun debugRuntimeDescription(): String = runCatching {
+internal actual fun debugRuntimeDescription(): String = runCatching {
     "Desktop ${System.getProperty("os.name")} ${System.getProperty("os.version")} " +
         "${System.getProperty("os.arch")}; JVM ${System.getProperty("java.vm.name")} " +
         "${System.getProperty("java.version")}; processors=${Runtime.getRuntime().availableProcessors()}; " +

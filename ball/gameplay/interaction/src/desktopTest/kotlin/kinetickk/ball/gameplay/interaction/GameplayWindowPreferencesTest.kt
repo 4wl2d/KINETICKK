@@ -86,7 +86,6 @@ class GameplayWindowPreferencesTest {
         override var capturesPerformance: Boolean by mutableStateOf(false)
         override val overlayVisible: Boolean get() = capturesPerformance
         var frames = 0
-        override var showFpsRequested: Boolean = false
         override fun toggleOverlay() { capturesPerformance = !capturesPerformance }
         override fun frame(frameTimeNanos: Long, budgetNanos: Long) { frames++ }
         override fun phase(phase: DiagnosticPhase, durationNanos: Long) = Unit
@@ -119,7 +118,6 @@ class GameplayWindowPreferencesTest {
         waitForIdle()
         assertMeasuredFps()
         assertEquals(0, diagnostics.frames, "Showing FPS must not start performance recording")
-        assertFalse(diagnostics.showFpsRequested, "The counter must not request diagnostic instrumentation")
         if (DIAGNOSTICS_ENABLED && width > height) {
             assertEquals("off", performanceState(), "$width x $height: Show FPS shows the counter, not the panel")
             onNodeWithTag("kinetickk.gameplay.performance").performSemanticsAction(SemanticsActions.OnClick)

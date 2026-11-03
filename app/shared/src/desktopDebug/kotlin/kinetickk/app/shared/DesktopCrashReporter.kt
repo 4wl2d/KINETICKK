@@ -75,9 +75,12 @@ internal class DesktopCrashReporter(
         }
     }
 
-    /** Periodic disk evidence for native crashes and abrupt termination; not a replay/savegame. */
-    fun checkpoint() = synchronized(this) {
-        if (!closed && report == null && !checkpointSuspended) writeContext()
+    /**
+     * Disk evidence for native crashes and abrupt termination; not a replay/savegame. A performance
+     * recording pauses only the [periodic] writes; the shutdown checkpoint is always written.
+     */
+    fun checkpoint(periodic: Boolean = false) = synchronized(this) {
+        if (!closed && report == null && !(periodic && checkpointSuspended)) writeContext()
     }
 
     override fun performanceRecordingChanged(active: Boolean) {

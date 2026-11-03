@@ -7,7 +7,7 @@ import android.os.Build
 import android.os.Debug
 import android.os.Process
 
-actual fun collectDebugRuntimeSample(): DebugRuntimeSample = runCatching {
+internal actual fun collectDebugRuntimeSample(): DebugRuntimeSample = runCatching {
     val runtime = Runtime.getRuntime()
     val committed = runtime.totalMemory()
     DebugRuntimeSample(
@@ -20,7 +20,7 @@ actual fun collectDebugRuntimeSample(): DebugRuntimeSample = runCatching {
     )
 }.getOrElse { DebugRuntimeSample() }
 
-actual fun debugRuntimeDescription(): String = runCatching {
+internal actual fun debugRuntimeDescription(): String = runCatching {
     "Android ${Build.VERSION.RELEASE} API ${Build.VERSION.SDK_INT}; " +
         "${Build.MANUFACTURER} ${Build.MODEL}; processors=${Runtime.getRuntime().availableProcessors()}; " +
         "heap=managed ART only; GC totals approximate; process CPU includes all process threads"

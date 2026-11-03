@@ -4,7 +4,7 @@
 package kinetickk.app.shared.diagnostics
 
 /** Cumulative process counters, sampled sparsely; null means unavailable, never zero. */
-data class DebugRuntimeSample(
+internal data class DebugRuntimeSample(
     val heapUsedBytes: Long? = null,
     val heapCommittedBytes: Long? = null,
     val gcCount: Long? = null,
@@ -12,5 +12,5 @@ data class DebugRuntimeSample(
     val processCpuNanos: Long? = null,
 )
 
-expect fun collectDebugRuntimeSample(): DebugRuntimeSample
-expect fun debugRuntimeDescription(): String
+internal expect fun collectDebugRuntimeSample(): DebugRuntimeSample
+internal expect fun debugRuntimeDescription(): String
