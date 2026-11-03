@@ -20,8 +20,10 @@ import kotlin.test.Test
  * The Totem chest economy probe (structures window i = 2,301..2,400, combined window 2,501..2,800; never the gate
  * population): Elite resonance gives every Elite-class kill a weapon level and drops a Key, and a Key opens a Totem
  * chest charge whose Amplify adds another, so a run that clears dungeons stacks both on the automatic amplification.
- * [DungeonCampaignPilot] seeks and fights dungeons over the whole run and spends its Keys at the chests; each seed flies
- * twice, with the shipped chests and with `TotemChestPolicy(enabled = false)`, paired by seed. The arms load out as
+ * [DungeonCampaignPilot] seeks and fights dungeons over the whole run and spends its Keys at the chests within the
+ * structure signal range (6,000 u); unbounded, the bot's own chest law flew it back across the map to every chest,
+ * past the Elites it would otherwise fight. Each seed flies twice, with the shipped chests and with
+ * `TotemChestPolicy(enabled = false)`, paired by seed. The arms load out as
  * [DungeonPilotGateTest]'s: FRESH (gate A's fresh tier-0 Orb, Arc Coil on even seeds and Flux Wake on odd ones) and
  * STRONG (gate B's full-Matrix tier-3 Pentagon on its Arc Coil). A run plays until it ends or 900 s.
  *
@@ -38,8 +40,9 @@ import kotlin.test.Test
  *
  * `KK_CHEST_PROBE=2301..2400,2501..2800` names the windows (comma-separated `first..last`); `KK_CHEST_ARMS=FRESH,STRONG`
  * picks arms; `KK_CHEST_KNOBS=chance.VAULT=0.6,minCharges.RELIQUARY=1,weights=55/33/12` overrides chest content (`;`
- * separates sets flown one after another). `--rerun` makes Gradle run it again with new variables; the lines land in
- * the suite's JUnit XML.
+ * separates sets flown one after another); `KK_CHEST_REACH=Infinity` flies the bot's own chest law (any other value
+ * bounds the chest trips in u). `--rerun` makes Gradle run it again with new variables; the lines land in the suite's
+ * JUnit XML.
  */
 class TotemChestEconomyProbeTest {
     @Test
@@ -48,13 +51,15 @@ class TotemChestEconomyProbeTest {
         val windows = text.split(',').map { probeWindow(it.trim()) }
         val arms = System.getenv("KK_CHEST_ARMS")?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }
             ?.map { Arm.valueOf(it.uppercase()) } ?: Arm.entries
+        val reach = System.getenv("KK_CHEST_REACH")?.trim()?.takeIf { it.isNotEmpty() }?.toFloat()
+            ?: canonicalGameplayContent.structures.signalRange
         for (knobs in System.getenv("KK_CHEST_KNOBS").orEmpty().split(';')) {
             val chests = chestContent(knobs)
             val none = chests.copy(structures = chests.structures.copy(totemChest = TotemChestPolicy(enabled = false)))
-            println("CHEST PROBE windows=$windows knobs='$knobs' ${chestContentLine(chests)}")
+            println("CHEST PROBE windows=$windows knobs='$knobs' reach=$reach ${chestContentLine(chests)}")
             for (arm in arms) {
                 val byWindow = windows.map { window ->
-                    populationOf(windowSeeds(window)) { seed -> ChestPair(flyChestCampaign(seed, arm, chests), flyChestCampaign(seed, arm, none)) }
+                    populationOf(windowSeeds(window)) { seed -> ChestPair(flyChestCampaign(seed, arm, chests, reach), flyChestCampaign(seed, arm, none, reach)) }
                 }
                 byWindow.flatten().forEach { println("CHEST PROBE $arm ON ${it.on.line()}\nCHEST PROBE $arm OFF ${it.off.line()}") }
                 windows.forEachIndexed { index, window -> printSummary("$arm window=$window", byWindow[index]) }
@@ -118,7 +123,7 @@ internal class ChestPair(val on: ChestRun, val off: ChestRun) {
 private const val CHEST_RUN_CAP = 900f
 
 /** One campaign run of [arm] on [seed] with [content], loaded out as [DungeonPilotGateTest.fly] loads out the arm. */
-internal fun flyChestCampaign(seed: Int, arm: Arm, content: GameplayContentSnapshot): ChestRun {
+internal fun flyChestCampaign(seed: Int, arm: Arm, content: GameplayContentSnapshot, chestReach: Float = Float.POSITIVE_INFINITY): ChestRun {
     val profile = when (arm) {
         Arm.FRESH -> gateProfile(GateMatrix.NONE, tier = 0, weapon = if (seed % 2 == 0) WeaponId.ARC_COIL else WeaponId.FLUX_WAKE, content = content)
         Arm.STRONG -> gateProfile(GateMatrix.FULL, tier = 3, shape = CoreShape.PENTAGON, weapon = WeaponId.ARC_COIL, content = content)
@@ -128,7 +133,7 @@ internal fun flyChestCampaign(seed: Int, arm: Arm, content: GameplayContentSnaps
         Arm.STRONG -> NoPoiBot(avoidWeaponHarmony = true)
     }
     val state = startGateRun(seed, profile, content = content)
-    val campaign = DungeonCampaignPilot(bot)
+    val campaign = DungeonCampaignPilot(bot, chestReach)
     val ledger = ChestLedger(state)
     var at360: LevelMark? = null
     var at720: LevelMark? = null

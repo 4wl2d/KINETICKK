@@ -13,14 +13,18 @@ import kinetickk.ball.gameplay.nucleus.simulation.world.*
  * - The first attempt seeks from 90 s, as the dungeon gate's does; each later one from the frame the previous attempt
  *   ended with the Core outside every structure, until [DungeonPilot.SEEK_LEAD] seconds before the Architect. Then
  *   the bot flies as in the population runs (its own chest branch still opens a chest while it holds a Key).
- * - Outside a dungeon, in realspace, the bot steers instead of the seek while it holds a Key and a chest waits (it
- *   flies to the nearest chest and opens one charge per Key, taking the bot's Totem choice: Amplify, or a weapon change
- *   when its weapon is off its order) or while a Key lies within [KEY_REACH] (the seek flies past drops it would lose).
- *   An interrupted seek resumes with the same target.
+ * - Outside a dungeon, in realspace, the bot steers instead of the seek while it holds a Key and a chest waits within
+ *   its chest reach (it flies to the nearest chest and opens one charge per Key, taking the bot's Totem choice:
+ *   Amplify, or a weapon change when its weapon is off its order) or while a Key lies within [KEY_REACH] (the seek
+ *   flies past drops it would lose). An interrupted seek resumes with the same target.
  * - Inside a dungeon the pilot never yields to an errand: it fights the attempt as the dungeon gate's pilot does.
  * - The bot's cursor resyncs when it takes over from the pilot's steering.
  */
-internal class DungeonCampaignPilot(private val bot: NoPoiBot) {
+internal class DungeonCampaignPilot(
+    private val bot: NoPoiBot,
+    /** How far the bot flies to a waiting chest; unbounded, it flies to the nearest wherever it waits (the bot's law). */
+    private val chestReach: Float = Float.POSITIVE_INFINITY,
+) {
     private var pilot = DungeonPilot(bot)
     private val ended = ArrayList<DungeonAttempt>()
     private var heldCharges = 0
@@ -33,11 +37,25 @@ internal class DungeonCampaignPilot(private val bot: NoPoiBot) {
     var chargesFound = 0
         private set
 
-    /** A new attempt once the last one ended outside a structure; the bot's errand for a Key or a chest first. */
+    /**
+     * A new attempt once the last one ended outside a structure; the bot's errand for a Key or a chest first. With a
+     * finite [chestReach] the bot also steers as if it held no Key while no chest lies within reach: it reads the Key
+     * count only to decide a chest trip, and the count is restored before the step.
+     */
     fun control(s: MutableGameState) {
         if (pilot.attempt != null && s.dungeon == null && s.elapsed < s.content.tempo.bossAtSeconds - DungeonPilot.SEEK_LEAD) {
             pilot = DungeonPilot(bot, seekFrom = s.elapsed)
         }
+        val keys = s.keys
+        if (keys > 0 && !chestWithinReach(s)) s.keys = 0
+        try {
+            steer(s)
+        } finally {
+            s.keys = keys
+        }
+    }
+
+    private fun steer(s: MutableGameState) {
         if (pilot.attempt == null && !pilot.inside && wantsErrand(s)) {
             if (piloted) bot.syncCursor(s)
             bot.control(s)
@@ -70,6 +88,10 @@ internal class DungeonCampaignPilot(private val bot: NoPoiBot) {
             if (pickup.type == PickupType.KEY && distanceSquared(s.coreX, s.coreY, pickup.x, pickup.y) < KEY_REACH * KEY_REACH) return true
         }
         return false
+    }
+
+    private fun chestWithinReach(s: MutableGameState): Boolean = s.structures.totemChests.any {
+        chestReach == Float.POSITIVE_INFINITY || distanceSquared(s.coreX, s.coreY, it.x, it.y) < chestReach * chestReach
     }
 
     companion object {
