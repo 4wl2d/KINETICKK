@@ -21,6 +21,24 @@
   after README edits. If a change leaves the overview accurate, note that the
   README was reviewed and no text change was needed in the change summary.
 
+## Architecture and code standards
+
+- Read `docs/project/ARCHITECTURE.md` before adding a module, package, gameplay
+  system, renderer, sound or setting, and before changing the frame loop, the
+  render contract or a hot path. It says where code goes and which rules apply.
+- `./gradlew :build-logic:test verifyArchitecture` must pass. It checks module
+  edges, nucleus and api imports, file/function/package size ratchets,
+  renderer and feature import boundaries, and package cycles.
+- Fix a size or boundary failure by changing the code. Ceilings in
+  `build-logic/source-structure-baseline.tsv` only go down: run
+  `./gradlew updateSourceStructureBaseline` to lower them or carry a moved file;
+  never raise or add a row, and use `-Pkinetickk.sourceStructure.resetBaseline=true`
+  only when the maintainer asks.
+- Keep gameplay deterministic (fixed step, seeded streams, no hash-order
+  decisions), give every new retained field the checklist in ARCHITECTURE.md,
+  and keep per-frame code allocation-free with benchmark numbers for hot-path
+  changes.
+
 ## Last desktop crash
 
 For requests to fix the latest crash, run `bash tools/crashes/latest.sh --path`

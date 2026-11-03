@@ -274,9 +274,13 @@ layout sweeps. `KK_SHOTS=1` renders the full size and language matrix of the
 `KK_SHOTS_OUT` names a folder, and the before/after captures only into `KK_BA_DIR`.
 `KK_FULL_SWEEPS=1` runs every sweep in full.
 
-`./gradlew verifyArchitecture` checks the module dependency graph and forbidden
-imports in production nucleus sources. API/nucleus production dependencies use
-public APIs or foundation/common. The import sensor is not a full purity proof;
+`./gradlew verifyArchitecture` checks the module dependency graph, forbidden
+imports and ambient randomness in production nucleus sources, platform-free API
+sources, and source structure: file, function and package size ratchets,
+renderer and feature import boundaries, package cycles and package/directory
+agreement. The rules, limits and baseline policy are in
+[ARCHITECTURE.md](ARCHITECTURE.md); `./gradlew updateSourceStructureBaseline`
+lowers the ratchet ceilings. The import sensor is not a full purity proof;
 qualified calls and effects behind helpers still require review.
 See the [Ballarch 0.6.0 evaluation](BALLARCH-0.6.0.md) for scope, measurements,
 and the distinction between these checks and Core runtime conformance.
