@@ -594,7 +594,7 @@ class GameplayCollectionBoundsTest {
             assertEquals(itemCards + 1, relicState.choices.size)
         }
 
-        // A Totem recalibration offers three weapons, never the Ledger-widened item bound.
+        // A Totem choice's weapon change offers three weapons, never the Ledger-widened item bound.
         listOf(WEAPON_OFFER_CHOICES, WEAPON_OFFER_CHOICES + 1).forEachIndexed { index, candidateCount ->
             val currentWeapon = canonicalGameplayContent.weapon(WeaponId.FLUX_WAKE)
             val weaponCandidates = canonicalGameplayContent.weapons

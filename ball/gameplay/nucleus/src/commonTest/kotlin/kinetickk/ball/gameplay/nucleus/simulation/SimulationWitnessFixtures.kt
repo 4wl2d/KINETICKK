@@ -1091,9 +1091,6 @@ internal fun MutableGameState.exactSimulationFingerprint(): List<Pair<String, An
             float("$prefix.previousX", orbital.previousX)
             float("$prefix.previousY", orbital.previousY)
         }
-
-        value("totem.present", totem != null)
-        totem?.let { activeTotem -> floats("totem", listOf(activeTotem.x, activeTotem.y, activeTotem.pulse)) }
     }.fields
 
 /**

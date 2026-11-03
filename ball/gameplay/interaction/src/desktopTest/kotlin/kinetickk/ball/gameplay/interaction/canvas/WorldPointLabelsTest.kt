@@ -243,7 +243,7 @@ class WorldPointLabelsTest {
 
     private fun model(width: Int, height: Int, points: List<SiteProjection>): GameplayRenderModel =
         hudTestModel(width.toFloat(), height.toFloat()).with(
-            "coreX" to 0f, "coreY" to 0f, "cameraX" to 0f, "cameraY" to 0f, "totem" to null,
+            "coreX" to 0f, "coreY" to 0f, "cameraX" to 0f, "cameraY" to 0f,
             "enemies" to immutableListOf<EnemyProjection>(), "sites" to points.toImmutableList(),
             // A running site's trial panel joins the HUD's keep-out.
             "trial" to points.firstOrNull { it.active }?.let { siteTrial(it) },

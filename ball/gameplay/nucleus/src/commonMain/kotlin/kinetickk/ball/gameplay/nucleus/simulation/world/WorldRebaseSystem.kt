@@ -75,7 +75,6 @@ internal fun MutableGameState.rebaseWorldIfNeeded() {
     rebaseCombatFields(shiftX, shiftY)
     rebaseCoreReactionStates(shiftX, shiftY)
     skillRuntime.rebase(shiftX, shiftY)
-    totem?.let { it.x -= shiftX; it.y -= shiftY }
     if (volatileBursts.isNotEmpty()) {
         volatileBursts = volatileBursts.map { it.copy(x = it.x - shiftX, y = it.y - shiftY) }.toImmutableList()
     }

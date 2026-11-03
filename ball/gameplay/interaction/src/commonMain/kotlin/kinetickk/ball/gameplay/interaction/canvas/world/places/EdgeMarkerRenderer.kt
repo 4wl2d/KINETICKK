@@ -20,7 +20,7 @@ private val EDGE_DISTANCE_SP = worldLabelSp(11f)
 /** Kinds of off-screen targets; each draws a small mark (no arrow shapes). */
 internal enum class EdgeMarkerIcon {
     TOTEM, SEALED_ANOMALY, COLLAPSING_ORBIT, RESONANT_CIRCUIT, RACE, CHALLENGE, BOUNTY, CACHE, QUIET, SIGIL, PORTAL, SIGNAL,
-    STRUCTURE, HALO,
+    STRUCTURE, HALO, TOTEM_LOCKED,
 }
 
 /** The widest distance an edge marker is laid out for (world units; four digits). */
@@ -62,7 +62,7 @@ private fun DrawScope.drawEdgeMarker(x: Float, y: Float, distance: Float, icon: 
     val marker = Offset(x, y)
     val iconSize = d(EDGE_ICON_DP)
     when (icon) {
-        EdgeMarkerIcon.TOTEM, EdgeMarkerIcon.RESONANT_CIRCUIT -> drawTotemIcon(marker, iconSize, color)
+        EdgeMarkerIcon.TOTEM, EdgeMarkerIcon.TOTEM_LOCKED, EdgeMarkerIcon.RESONANT_CIRCUIT -> drawTotemIcon(marker, iconSize, color)
         EdgeMarkerIcon.SEALED_ANOMALY -> drawKkIcon(KkIcon.SYSTEM_ANOMALY, marker, iconSize, color)
         EdgeMarkerIcon.COLLAPSING_ORBIT -> {
             drawCircle(color, iconSize * 0.36f, marker, style = kkStroke(d(1.5f)))
@@ -93,15 +93,16 @@ private fun DrawScope.drawEdgeMarker(x: Float, y: Float, distance: Float, icon: 
 }
 
 /**
- * An edge marker's color: volt for the player's own course (totem, circuit, race, the next halo ring), threat only for a bounty, the void
- * hue for the sigil, mute for the quiet ambient sites, bone for rules, rifts, event signals and structure entrances.
+ * An edge marker's color: volt for the player's own course (an openable Totem chest, circuit, race, the next halo ring), threat
+ * only for a bounty, the void hue for the sigil, mute for the quiet ambient sites and a locked chest, bone for rules, rifts,
+ * event signals and structure entrances.
  */
 internal fun edgeMarkerColor(icon: EdgeMarkerIcon, roles: KkRolePalette): Color = when (icon) {
     EdgeMarkerIcon.TOTEM, EdgeMarkerIcon.RESONANT_CIRCUIT, EdgeMarkerIcon.RACE, EdgeMarkerIcon.HALO -> roles.you
     EdgeMarkerIcon.SEALED_ANOMALY -> Kk.AGravitic
     EdgeMarkerIcon.COLLAPSING_ORBIT, EdgeMarkerIcon.CHALLENGE, EdgeMarkerIcon.PORTAL -> Kk.Bone
     EdgeMarkerIcon.BOUNTY -> roles.threat
-    EdgeMarkerIcon.CACHE, EdgeMarkerIcon.QUIET -> Kk.Mute
+    EdgeMarkerIcon.CACHE, EdgeMarkerIcon.QUIET, EdgeMarkerIcon.TOTEM_LOCKED -> Kk.Mute
     EdgeMarkerIcon.SIGIL -> sigilColor(roles)
     // A signal and a structure entrance are bone by their lanes' specs.
     EdgeMarkerIcon.SIGNAL, EdgeMarkerIcon.STRUCTURE -> Kk.Bone
@@ -129,7 +130,7 @@ internal fun edgeMarkerColorGroup(icon: EdgeMarkerIcon): Int = when (icon) {
     EdgeMarkerIcon.STRUCTURE,
     -> 2
     EdgeMarkerIcon.BOUNTY -> 3
-    EdgeMarkerIcon.CACHE, EdgeMarkerIcon.QUIET -> 4
+    EdgeMarkerIcon.CACHE, EdgeMarkerIcon.QUIET, EdgeMarkerIcon.TOTEM_LOCKED -> 4
     EdgeMarkerIcon.SIGIL -> 5
 }
 

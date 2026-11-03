@@ -431,7 +431,7 @@ class WorldDimensionRenderingTest {
 
     private fun base(): GameplayRenderModel = hudTestModel(width.toFloat(), height.toFloat()).with(
         "coreX" to CORE, "coreY" to CORE, "cameraX" to CORE, "cameraY" to CORE, "previousCoreX" to CORE, "previousCoreY" to CORE,
-        "previousCameraX" to CORE, "previousCameraY" to CORE, "totem" to null, "sites" to immutableListOf<SiteProjection>(), "trial" to null,
+        "previousCameraX" to CORE, "previousCameraY" to CORE, "sites" to immutableListOf<SiteProjection>(), "trial" to null,
         "enemies" to immutableListOf<EnemyProjection>(), "obstacles" to immutableListOf<ObstacleProjection>(),
     )
 

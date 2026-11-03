@@ -19,6 +19,7 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.WorldDiscovery
+import kinetickk.ball.content.api.EnemyNotices
 import kinetickk.ball.content.api.lifetimeMatterOfferLevel
 
 import kinetickk.ball.gameplay.api.*
@@ -26,6 +27,7 @@ import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
+import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kotlin.math.floor
 import kotlin.math.max
@@ -41,7 +43,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.weapons.*
 
 internal const val MAX_GENERATED_REWARD_CHOICES: Int = 4
 
-/** A Totem recalibration offers up to three other owned weapon systems; Gambler's Ledger only widens item offers. */
+/** A Totem choice's weapon change offers up to three other owned weapon systems; Gambler's Ledger only widens item offers. */
 internal const val WEAPON_OFFER_CHOICES: Int = 3
 
 internal fun MutableGameState.openItemChoice() {
@@ -186,15 +188,27 @@ private fun MutableGameState.openNextFloorOffer() {
     openItemOfferWithFloor(floor)
 }
 
-internal fun MutableGameState.amplifyCurrentWeapon() {
+/** One more level of the current weapon, announced as `[title] // LEVEL n` (or the mastery it reaches). */
+internal fun MutableGameState.amplifyCurrentWeapon(title: String = currentWeaponDefinition.name.uppercase()) {
     weaponLevel++
     val reachedMastery = content.weaponMasteries.firstOrNull { it.minimumLevel == weaponLevel }
     message = if (reachedMastery != null) {
-        currentWeaponDefinition.name.uppercase() + " // " + reachedMastery.displayLabel.uppercase()
+        title + " // " + reachedMastery.displayLabel.uppercase()
     } else {
-        currentWeaponDefinition.name.uppercase() + " // LEVEL " + weaponLevel
+        title + " // LEVEL " + weaponLevel
     }
     messageTime = 1.5f
+}
+
+/**
+ * Elite resonance: an Elite-class kill (the kills that drop a Key) amplifies the current weapon by the tempo's
+ * resonance levels at once (0: off). It draws from no stream.
+ */
+internal fun MutableGameState.resonateEliteKill() {
+    val levels = content.tempo.eliteResonanceLevels
+    if (levels <= 0) return
+    repeat(levels) { amplifyCurrentWeapon(title = EnemyNotices.ELITE_RESONANCE) }
+    emitSound(GameplayAudioCue.WEAPON_ACQUIRED)
 }
 
 /**

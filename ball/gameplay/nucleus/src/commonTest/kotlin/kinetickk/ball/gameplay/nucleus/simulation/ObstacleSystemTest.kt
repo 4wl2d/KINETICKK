@@ -329,9 +329,9 @@ class ObstacleSystemTest {
     fun totemsAndAnomaliesMoveOutFromUnderObstacles() {
         val state = buildTestState()
         state.placeObstaclesForTesting(testObstacle(600f, 0f, radius = 140f))
-        val (totemX, totemY) = state.nudgedClearOfObstacles(600f, 0f, 70f)
-        assertFalse(state.isSpawnPointBlocked(totemX, totemY, 70f))
-        assertEquals(0f, totemY, 0.01f)
+        val (nudgedX, nudgedY) = state.nudgedClearOfObstacles(600f, 0f, 70f)
+        assertFalse(state.isSpawnPointBlocked(nudgedX, nudgedY, 70f))
+        assertEquals(0f, nudgedY, 0.01f)
         val (pointX, pointY) = state.clearPointOfInterestSite(600f, 0f)
         assertFalse(state.pointSiteBlocked(pointX, pointY))
         assertTrue(pointX > 600f)

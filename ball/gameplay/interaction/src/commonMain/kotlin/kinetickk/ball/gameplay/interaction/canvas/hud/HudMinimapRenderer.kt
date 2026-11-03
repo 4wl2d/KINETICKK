@@ -130,7 +130,7 @@ private object MinimapScratch {
  * [GameplayRenderModel.minimapRange] world units. Obstacles (bumpers as rings, unstable rocks hot),
  * enemies as dots, Elites as aspect-coloured diamonds, mini-bosses and the Architect large, secret bosses large
  * in a bone ring, anomalies,
- * the Totem, Keys and Relic resonances (pinned to the rim when beyond it) and the Core's heading.
+ * Totem chests, Keys and Relic resonances (pinned to the rim when beyond it) and the Core's heading.
  * Hidden by the Minimap setting.
  */
 internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMeasurer, frame: HudFrame) {
@@ -190,9 +190,7 @@ internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMe
         }
         drawMinimapSites(engine, centerX, centerY, half, scale, dot, roles)
         drawMinimapSignals(engine, centerX, centerY, half, scale, dot)
-        engine.totem?.let { totem ->
-            drawPinnedMark(centerX, centerY, half, (totem.x - coreX) * scale, (totem.y - coreY) * scale, dot * 2f, roles.you, filled = true)
-        }
+        drawMinimapTotemChests(engine, centerX, centerY, half, scale, dot, roles)
         val enemies = engine.enemies
         for (index in enemies.indices) {
             val enemy = enemies[index]
@@ -239,6 +237,27 @@ internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMe
         drawCircle(roles.you, dot * 1.7f, Offset(centerX, centerY))
     }
     drawPath(square, Kk.Bone.copy(alpha = 0.22f), style = kkStroke(KkStrokeWidth.Line))
+}
+
+/** Totem chests on the minimap: a `you` square while a Key opens them, a hollow bone one while they are locked. */
+private fun DrawScope.drawMinimapTotemChests(
+    engine: GameplayRenderModel,
+    centerX: Float,
+    centerY: Float,
+    half: Float,
+    scale: Float,
+    dot: Float,
+    roles: KkRolePalette,
+) {
+    val chests = engine.totemChests
+    val openable = engine.keys > 0
+    val color = if (openable) roles.you else Kk.Bone
+    for (index in chests.indices) {
+        val chest = chests[index]
+        val dx = (chest.x - engine.renderCoreX) * scale
+        val dy = (chest.y - engine.renderCoreY) * scale
+        drawPinnedMark(centerX, centerY, half, dx, dy, dot * 2f, color, filled = openable)
+    }
 }
 
 /**

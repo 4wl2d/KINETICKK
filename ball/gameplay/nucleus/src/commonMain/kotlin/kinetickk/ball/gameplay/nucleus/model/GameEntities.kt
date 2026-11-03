@@ -394,8 +394,6 @@ internal data class TrailPoint(
 internal const val TRAIL_LIFE_SECONDS: Float = 1.8f
 internal const val TRAIL_FADE_SECONDS: Float = 0.45f
 
-internal data class Totem(var x: Float, var y: Float, var pulse: Float = 0f)
-
 internal data class WeaponNode(
     val type: WeaponNodeType,
     var x: Float,

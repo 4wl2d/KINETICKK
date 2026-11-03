@@ -12,7 +12,6 @@ import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.content.api.RelicId
-import kinetickk.ball.gameplay.nucleus.model.Totem
 import kinetickk.ball.gameplay.nucleus.model.TotemChest
 import kinetickk.ball.gameplay.nucleus.model.TrailPoint
 import kinetickk.ball.gameplay.nucleus.model.WeaponHitCadence
@@ -63,11 +62,6 @@ internal fun MutableGameState.finalPhaseArchitectForTesting(
         architect.shiftUntil = 0f
         architect.hp = hp
     }
-}
-
-internal fun MutableGameState.activateTotemForTesting(x: Float = coreX, y: Float = coreY) {
-    keys++
-    totem = Totem(x, y)
 }
 
 /**

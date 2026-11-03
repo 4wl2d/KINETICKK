@@ -91,7 +91,6 @@ import kinetickk.ball.gameplay.nucleus.render.PortalProjection
 import kinetickk.ball.gameplay.nucleus.render.SiteMarkProjection
 import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.ProjectileProjection
-import kinetickk.ball.gameplay.nucleus.render.TotemProjection
 import kinetickk.ball.gameplay.nucleus.render.TrailPointProjection
 import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
 import kinetickk.ball.gameplay.nucleus.render.WeaponEntityProjection
@@ -357,7 +356,7 @@ class WorldHotPathAllocationTest {
         dash: Float = 0f,
         easy: Boolean = false,
     ) {
-        // The off-screen totem and sealed-anomaly offer move every frame, so their edge-marker
+        // The off-screen Totem chest and sealed-anomaly offer move every frame, so their edge-marker
         // distances change every frame: they must be drawn from cached digit layouts, never
         // measured as text. Warm-up frames draw distances from a range the measured frames never
         // use, and every measured frame draws two distances no earlier frame drew (a measuring
@@ -429,12 +428,12 @@ class WorldHotPathAllocationTest {
         )
     }
 
-    /** The larger of the two edge-marker distances (totem, sealed-anomaly offer) in [model]. */
+    /** The larger of the two edge-marker distances (Totem chest, sealed-anomaly offer) in [model]. */
     private fun edgeDistance(model: GameplayRenderModel): Float {
-        val totem = requireNotNull(model.totem)
+        val chest = model.totemChests.single()
         val offer = model.sites.last()
         return maxOf(
-            kotlin.math.hypot(totem.x - model.coreX, totem.y - model.coreY),
+            kotlin.math.hypot(chest.x - model.coreX, chest.y - model.coreY),
             kotlin.math.hypot(offer.x - model.coreX, offer.y - model.coreY),
         )
     }
@@ -443,14 +442,14 @@ class WorldHotPathAllocationTest {
     fun worldAndHudDigitsKeepSeparateParagraphs() {
         // The game's measurer caches 64 layouts, and Compose shares one paragraph between layouts
         // whose styles differ only in color. At 1440 x 810 the trial panel draws the collapsing
-        // orbit's clock in bone mono digits, and the off-screen totem's edge marker draws its
+        // orbit's clock in bone mono digits, and the off-screen Totem chest's edge marker draws its
         // distance in you-color mono digits. Both digit sets are first measured in the same frame;
         // if they shared paragraphs, each would be repainted in the other color every frame.
         val width = 1_440
         val height = 810
         val base = hudTestModel(width.toFloat(), height.toFloat())
         val frames = List(HUD_FRAMES) { frame ->
-            base.with("totem" to TotemProjection(base.coreX - 1_300f - frame * 11f, base.coreY + 90f, 1f))
+            base.with("totemChests" to totemChests(base.coreX - 1_300f - frame * 11f to base.coreY + 90f), "keys" to 1)
                 .withSites(SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit",
                     base.coreX + 60f, base.coreY + 40f, true, 12f, -1, frame / HUD_FRAMES.toFloat(), immutableListOf(), 0f, 0f))
         }
@@ -475,7 +474,7 @@ class WorldHotPathAllocationTest {
         repeat(HUD_FRAMES) { frame(it) }
         val frameBytes = threads.getThreadAllocatedBytes(thread) - before
         val perFrame = (frameBytes - emptyBytes) / HUD_FRAMES
-        assertTrue(perFrame <= 96, "A world + HUD frame with an orbit trial and an off-screen totem allocates $perFrame bytes above an empty frame")
+        assertTrue(perFrame <= 96, "A world + HUD frame with an orbit trial and an off-screen chest allocates $perFrame bytes above an empty frame")
     }
 
     @Test
@@ -732,7 +731,7 @@ class WorldHotPathAllocationTest {
             weapon = weapon, weaponLevel = level, overdriveCharge = 10f, overdriveTime = 0f, rerollsRemaining = 1, acquiredItemCount = 0,
             recentItem = null, equippedRelics = immutableListOf(), morningstarAngle = 0.3f, morningstarX = CORE + 60f,
             morningstarY = CORE + 40f, weaponBeamTime = 0f, weaponBeamStartX = 0f, weaponBeamStartY = 0f, weaponBeamEndX = 0f,
-            weaponBeamEndY = 0f, totem = TotemProjection(CORE - 1_600f - drift, CORE + 100f + drift * 0.3f, 1f), totemChests = immutableListOf(), coreShape = shape,
+            weaponBeamEndY = 0f, totemChests = totemChests(CORE - 1_600f - drift to CORE + 100f + drift * 0.3f), coreShape = shape,
             enemies = enemies.toImmutableList(),
             projectiles = ((0 until 12).map { index ->
                 ProjectileProjection(CORE - 200f + index * 25f, CORE + 120f, 0f, 0f, 4.5f, 1f, index % 3 != 0, 1f, 0, 0, null,
@@ -789,7 +788,7 @@ class WorldHotPathAllocationTest {
         "pickups" to immutableListOf<PickupProjection>(), "weaponNodes" to immutableListOf<WeaponNodeProjection>(),
         "weaponEntities" to immutableListOf<WeaponEntityProjection>(), "obstacles" to immutableListOf<ObstacleProjection>(),
         "volatileBursts" to immutableListOf<kinetickk.ball.gameplay.nucleus.render.VolatileBurstProjection>(),
-        "sites" to immutableListOf<SiteProjection>(), "trial" to null, "totem" to null, "characterAbility" to CharacterAbilityProjection(),
+        "sites" to immutableListOf<SiteProjection>(), "trial" to null, "characterAbility" to CharacterAbilityProjection(),
         "damageFlash" to 0f, "lastImpactTime" to 0f, "pointerX" to WIDTH * 0.5f + 140f, "pointerY" to HEIGHT * 0.5f,
     )
 

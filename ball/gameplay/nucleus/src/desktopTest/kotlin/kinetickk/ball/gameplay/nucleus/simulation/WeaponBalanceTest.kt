@@ -287,8 +287,9 @@ class WeaponBalanceTest {
 
         const val VARIANTS = 4
 
+        /** The arena is about each weapon at a fixed checkpoint level, so a falling Elite target never resonates. */
         fun arenaState(weapon: WeaponId, checkpoint: Checkpoint, shape: CoreShape, seed: Int = 6_061, honing: Int = 0): MutableGameState =
-            MutableGameState(canonicalGameplayContent, seed = seed).apply {
+            MutableGameState(FixedLevelContent, seed = seed).apply {
                 coreShape = shape
                 unlockWeaponsForTesting(listOf(weapon))
                 startingWeapon = weapon
@@ -530,3 +531,8 @@ class WeaponBalanceTest {
         }
     }
 }
+
+/** The canonical content without Elite resonance: the weapon arenas measure fixed checkpoint levels. */
+private val FixedLevelContent = canonicalGameplayContent.copy(
+    tempo = canonicalGameplayContent.tempo.copy(eliteResonanceLevels = 0),
+)

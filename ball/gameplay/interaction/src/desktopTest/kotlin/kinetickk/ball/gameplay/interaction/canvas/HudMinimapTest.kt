@@ -144,7 +144,7 @@ class HudMinimapTest {
     fun siteFamiliesPinTheirOwnMarksInsideTheMapAndEasterEggsNeverShow() {
         val roles = KkRolePalette.Default
         val base = hudTestModel().with(
-            "velocityX" to 0f, "velocityY" to 0f, "obstacles" to immutableListOf<ObstacleProjection>(), "totem" to null,
+            "velocityX" to 0f, "velocityY" to 0f, "obstacles" to immutableListOf<ObstacleProjection>(),
             "enemies" to immutableListOf<EnemyProjection>(), "pickups" to immutableListOf<kinetickk.ball.gameplay.nucleus.render.PickupProjection>(),
         )
         val range = base.minimapRange
@@ -192,7 +192,7 @@ class HudMinimapTest {
         val roles = KkRolePalette.Default
         val range = 2_400f
         val base = hudTestModel().with(
-            "velocityX" to 0f, "velocityY" to 0f, "obstacles" to immutableListOf<ObstacleProjection>(), "totem" to null,
+            "velocityX" to 0f, "velocityY" to 0f, "obstacles" to immutableListOf<ObstacleProjection>(),
             "enemies" to immutableListOf<EnemyProjection>(), "pickups" to immutableListOf<kinetickk.ball.gameplay.nucleus.render.PickupProjection>(),
             "minimapRange" to range,
         )

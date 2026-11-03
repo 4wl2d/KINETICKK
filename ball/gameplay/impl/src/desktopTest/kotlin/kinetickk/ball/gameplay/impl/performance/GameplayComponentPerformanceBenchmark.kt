@@ -829,12 +829,15 @@ private fun appendRenderCollections(initial: Long, render: GameplayRenderModel):
     signature = mix(signature, synergy.scalingMultiplier.toRawBits())
     signature = mix(signature, synergy.masteryForms)
     signature = mix(signature, synergy.activeMasteryForm?.hashCode() ?: 0)
-    val totem = render.totem
-    signature = mix(signature, if (totem == null) 0 else 1)
-    if (totem != null) {
-        signature = mix(signature, totem.x.toRawBits())
-        signature = mix(signature, totem.y.toRawBits())
-        signature = mix(signature, totem.pulse.toRawBits())
+    val chests = render.totemChests
+    signature = mix(signature, chests.size)
+    for (index in chests.indices) {
+        val chest = chests[index]
+        signature = mix(signature, chest.id.hashCode())
+        signature = mix(signature, chest.x.toRawBits())
+        signature = mix(signature, chest.y.toRawBits())
+        signature = mix(signature, chest.charges)
+        signature = mix(signature, chest.armedAt.toRawBits())
     }
     return signature
 }

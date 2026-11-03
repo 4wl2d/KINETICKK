@@ -236,7 +236,7 @@ class WorldStructureRenderingTest {
         "elapsed" to (PI / 12).toFloat(),
         "obstacles" to immutableListOf<ObstacleProjection>(), "enemies" to immutableListOf<EnemyProjection>(),
         "pickups" to immutableListOf<PickupProjection>(), "trail" to immutableListOf<TrailPointProjection>(),
-        "sites" to immutableListOf<SiteProjection>(), "totem" to null, "trial" to null,
+        "sites" to immutableListOf<SiteProjection>(), "trial" to null,
     )
 
     private fun render(model: GameplayRenderModel, density: Float): PixelMap {

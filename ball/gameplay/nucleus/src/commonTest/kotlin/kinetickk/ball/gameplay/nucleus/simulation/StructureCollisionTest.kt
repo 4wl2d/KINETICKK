@@ -631,9 +631,9 @@ class StructureCollisionTest {
         val far = run.structureEjected(structure.x + 5_000f, structure.y, 20f)
         assertEquals(structure.x + 5_000f, far.x, "a point away from every footprint stays")
 
-        val (totemX, totemY) = run.nudgedClearOfObstacles(structure.x, structure.y, 70f)
-        assertTrue(run.outsideFootprintsForTesting(totemX, totemY, 70f), "the Totem left the footprint")
-        assertFalse(run.isSpawnPointBlocked(totemX, totemY, 70f))
+        val (nudgedX, nudgedY) = run.nudgedClearOfObstacles(structure.x, structure.y, 70f)
+        assertTrue(run.outsideFootprintsForTesting(nudgedX, nudgedY, 70f), "the nudged point left the footprint")
+        assertFalse(run.isSpawnPointBlocked(nudgedX, nudgedY, 70f))
         val (pointX, pointY) = run.clearPointOfInterestSite(structure.x, structure.y)
         assertTrue(run.outsideFootprintsForTesting(pointX, pointY, 320f), "the anomaly, its ring and its beacons left the footprint")
 
@@ -708,9 +708,9 @@ class StructureCollisionTest {
             run.relocateLeashedEnemy(leashed)
             assertTrue(outside(leashed.x, leashed.y, leashed.radius), "relocated into the sealed structure at (${leashed.x}, ${leashed.y})")
         }
-        // A Totem or a window site offered from a point in the sealed gallery is placed outside the structure too.
-        val (totemX, totemY) = run.nudgedClearOfObstacles(run.coreX, run.coreY + 400f, 70f)
-        assertTrue(outside(totemX, totemY, 70f), "the Totem lies in the sealed structure at ($totemX, $totemY)")
+        // A point (a window site, a dimension arrival) nudged from the sealed gallery is placed outside the structure too.
+        val (nudgedX, nudgedY) = run.nudgedClearOfObstacles(run.coreX, run.coreY + 400f, 70f)
+        assertTrue(outside(nudgedX, nudgedY, 70f), "the nudged point lies in the sealed structure at ($nudgedX, $nudgedY)")
         val (siteX, siteY) = run.clearPointOfInterestSite(run.coreX, run.coreY + 400f)
         assertTrue(outside(siteX, siteY, 320f), "the site lies in the sealed structure at ($siteX, $siteY)")
         assertEquals(1, run.dungeon?.engagedRoom, "the gallery stayed sealed")
@@ -754,8 +754,8 @@ class StructureCollisionTest {
                         overStructure++
                         val (siteX, siteY) = run.clearPointOfInterestSite(offerX, offerY)
                         assertTrue(run.outsideFootprintsForTesting(siteX, siteY, 320f), "$template seed $seed: the site rests in the structure at ($siteX, $siteY)")
-                        val (totemX, totemY) = run.nudgedClearOfObstacles(offerX, offerY, 70f)
-                        assertTrue(run.outsideFootprintsForTesting(totemX, totemY, 70f), "$template seed $seed: the Totem rests in the structure at ($totemX, $totemY)")
+                        val (nudgedX, nudgedY) = run.nudgedClearOfObstacles(offerX, offerY, 70f)
+                        assertTrue(run.outsideFootprintsForTesting(nudgedX, nudgedY, 70f), "$template seed $seed: the nudged point rests in the structure at ($nudgedX, $nudgedY)")
                     }
                 }
             }

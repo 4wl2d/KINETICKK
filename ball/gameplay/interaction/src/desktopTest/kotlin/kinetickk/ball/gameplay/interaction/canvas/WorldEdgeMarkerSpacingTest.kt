@@ -24,7 +24,7 @@ import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.SiteProjection
-import kinetickk.ball.gameplay.nucleus.render.TotemProjection
+import kinetickk.ball.gameplay.nucleus.render.TotemChestProjection
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
@@ -46,7 +46,7 @@ import kotlin.test.assertTrue
 import kotlin.test.fail
 
 /**
- * Several off-screen targets at once (two offers and the totem, as the game spawns them) drawn by
+ * Several off-screen targets at once (two offers and an openable Totem chest, the "totem" below) drawn by
  * the real world renderer next to the real HUD (bundled fonts): no two edge markers of a frame
  * overlap, each keeps [EDGE_MARKER_SPACING_DP] from the others, and they keep the order of their
  * targets along the edge, so every distance stays legible and each still points its own way.
@@ -579,7 +579,7 @@ class WorldEdgeMarkerSpacingTest {
         val model = base(dpWidth, dpHeight).with(
             "screenWidth" to width, "screenHeight" to height, "uiScale" to density,
             "coreX" to core.x, "coreY" to core.y, "cameraX" to core.x, "cameraY" to core.y,
-            "totem" to totem?.let { TotemProjection(it.x, it.y, 1f) },
+            "totemChests" to (totem?.let { totemChests(it.x to it.y) } ?: immutableListOf<TotemChestProjection>()), "keys" to 1,
             "enemies" to (if (boss) listOf(EnemyProjection(4, EnemyType.ELITE, 0f, -9_000f, 0f, 0f, 500f, 1_000f, 38f, 0f, 0f, 0f, 0f, 0f, 0f,
                 false)) else emptyList()).toImmutableList(),
             "sites" to offers.map { (at, kind) ->

@@ -18,7 +18,6 @@ import kinetickk.ball.gameplay.nucleus.render.EnemyBehavior
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
-import kinetickk.ball.gameplay.nucleus.render.TotemProjection
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.CanvasTextMeasurer
@@ -58,16 +57,16 @@ class InterpolatedAnimationTimeTest {
         val architect = listOf(-360f / 40f * half, 360f / 18f * half, -360f / 12f * half)
         assertTrue(turns.windowed(3).any { window -> window.indices.all { abs(window[it] - architect[it]) < TOLERANCE } },
             "the Architect frames turn by $architect between the steps: $turns")
-        // The totem's dashed ring (24 s per turn).
-        val totem = 360f / 24f * half
-        assertTrue(turns.any { abs(it - totem) < TOLERANCE }, "the totem ring turns by $totem between the steps: $turns")
+        // A Totem chest's dashed ring (24 s per turn).
+        val chest = 360f / 24f * half
+        assertTrue(turns.any { abs(it - chest) < TOLERANCE }, "the chest ring turns by $chest between the steps: $turns")
         // A phased Phantom's faint outline (2 s per turn).
         val phantom = 360f / 2f * half
         assertTrue(turns.any { abs(it - phantom) < TOLERANCE }, "the phased Phantom ring turns by $phantom between the steps: $turns")
     }
 
     /**
-     * A running frame with an Architect, a phased Phantom and the weapon totem on screen, nothing moving
+     * A running frame with an Architect, a phased Phantom and a Totem chest on screen, nothing moving
      * between steps.
      */
     private fun scene(): GameplayRenderModel {
@@ -82,7 +81,7 @@ class InterpolatedAnimationTimeTest {
             behavior = EnemyBehavior.PHASED)
         return base.with(
             "enemies" to immutableListOf(architect, phantom),
-            "totem" to TotemProjection(base.cameraX - 280f, base.cameraY, 0f),
+            "totemChests" to totemChests(base.cameraX - 280f to base.cameraY),
             "elapsed" to ELAPSED,
             "previousCoreX" to base.coreX, "previousCoreY" to base.coreY,
             "previousCameraX" to base.cameraX, "previousCameraY" to base.cameraY,

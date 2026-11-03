@@ -72,7 +72,7 @@ private fun DrawScope.drawWorldLayer(
     drawCombatFields(engine, shakeX, shakeY, roles)
     drawSkillMarkers(engine, shakeX, shakeY, roles)
     drawCharacterField(engine, shakeX, shakeY, roles)
-    drawTotem(engine, shakeX, shakeY, textMeasurer)
+    drawTotemChests(engine, shakeX, shakeY, roles)
     drawShockwaves(engine, visualFx, shakeX, shakeY, roles)
     drawMotionEchoes(engine, visualFx, shakeX, shakeY, roles)
     drawTrail(engine, shakeX, shakeY, roles)
@@ -111,7 +111,7 @@ private fun DrawScope.drawWorldLayer(
     // Decided in world units, like the marks they stand in for; the collection order is the priority order (the
     // batch keeps the first markers it receives).
     collectSiteEdgeMarkers(engine, textMeasurer, markers)
-    collectTotemEdgeMarker(engine, markers)
+    collectTotemChestEdgeMarker(engine, markers)
     collectSignalEdgeMarker(engine, markers)
     collectDimensionEdgeMarkers(engine, markers)
     collectStructureEdgeMarkers(engine, markers)

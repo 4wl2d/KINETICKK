@@ -1794,7 +1794,6 @@ private fun fixtureFingerprint(state: MutableGameState): Long {
     signature = mix(signature, synergy.scalingMultiplier.toRawBits())
     signature = mix(signature, synergy.masteryForms)
     signature = mix(signature, synergy.activeMasteryForm?.hashCode() ?: 0)
-    render.totem?.let { totem -> signature = mix(mix(mix(signature, totem.x.toRawBits()), totem.y.toRawBits()), totem.pulse.toRawBits()) }
     signature = mix(signature, render.totemChests.size)
     for (c in render.totemChests) signature = mix(mix(mix(mix(mix(mixLong(signature, c.id), c.x.toRawBits()), c.y.toRawBits()), c.charges), c.bornAt.toRawBits()), c.armedAt.toRawBits())
     return signature

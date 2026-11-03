@@ -1113,7 +1113,7 @@ private fun GameplayRenderModel.exactRenderWitness(): List<Any?> = listOf(
     weaponBeamStartY.toRawBits(),
     weaponBeamEndX.toRawBits(),
     weaponBeamEndY.toRawBits(),
-    totem,
+    totemChests.toList(),
     coreShape,
     enemies.toList(),
     projectiles.toList(),

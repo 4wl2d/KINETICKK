@@ -93,10 +93,10 @@ private const val BRACKET_STROKE = 3f
 /** The Doodle's planet around its one room (the radius of its ring of chords). */
 private const val DOODLE_PLANET_RADIUS = 672f
 
-/** The stacked plates promising the final room's reward (the Totem's plates, 66 units wide). */
+/** The stacked plates promising the final room's reward (the Totem chest's plates, 66 units wide). */
 private const val PROMISE_SCALE = 2.2f
 
-/** An edge marker stands in for an entrance this far off the view at least (world units), like the Totem's. */
+/** An edge marker stands in for an entrance this far off the view at least (world units), like the Totem chest's. */
 private const val ENTRANCE_MARK_MARGIN = 60f
 
 /** No room: the Core is not inside the structure, or the structure is not the dungeon. */

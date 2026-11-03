@@ -13,6 +13,7 @@ import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.StructureProjection
 import kinetickk.ball.gameplay.nucleus.render.StructureRenderProjection
 import kinetickk.ball.gameplay.nucleus.render.StructureSignalProjection
+import kinetickk.ball.gameplay.nucleus.render.TotemChestProjection
 import kinetickk.ball.gameplay.nucleus.render.TrialClock
 import kinetickk.ball.gameplay.nucleus.render.TrialProjection
 import kinetickk.ball.gameplay.nucleus.render.TrialReward
@@ -20,6 +21,7 @@ import kinetickk.ball.gameplay.nucleus.render.TrialSource
 import kinetickk.ball.gameplay.nucleus.render.TrialValue
 import kinetickk.ball.gameplay.nucleus.render.WallKind
 import kinetickk.ball.gameplay.nucleus.render.WallProjection
+import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.toImmutableList
 
 /**
@@ -140,3 +142,10 @@ internal fun GameplayRenderModel.withDungeon(fixture: StructureFixture): Gamepla
         "structures" to structureProjection(fixture, dungeon = fixture),
         "trial" to structureTrial(fixture),
     )
+
+/**
+ * Totem chests at the run-local points [at] with [charges] each, materialised and armed from run time [armedAt]
+ * ([bornAt] 0: long since grown in); ids are distinct structure ids.
+ */
+internal fun totemChests(vararg at: Pair<Float, Float>, charges: Int = 2, bornAt: Float = 0f, armedAt: Float = 0f): ImmutableList<TotemChestProjection> =
+    at.mapIndexed { index, (x, y) -> TotemChestProjection((index + 1L) shl 8, x, y, charges, bornAt, armedAt) }.toImmutableList()

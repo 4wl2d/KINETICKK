@@ -37,10 +37,11 @@ class TotemEnemySystemsTest {
         engine.rerollChoices()
         assertEquals(rerolls, engine.rerollsRemaining)
 
-        // A fresh profile owns only the starter: the Totem can amplify it, never recalibrate into nothing.
+        // A fresh profile owns only the starter: a Totem chest can amplify it, never recalibrate into nothing.
         val starter = runningEngine(seed = 203, owned = emptyList())
         assertEquals(setOf(WeaponId.FLUX_WAKE), starter.unlockedWeapons)
-        starter.activateTotemForTesting()
+        starter.keys++
+        starter.placeTotemChestForTesting()
         starter.update(GameScenario.FIXED_STEP)
         assertEquals(ChoiceType.TOTEM, starter.choiceType)
         assertEquals(listOf(TotemAction.AMPLIFY_CURRENT), starter.choices.map { it.totemAction })
@@ -84,7 +85,7 @@ class TotemEnemySystemsTest {
         openTotemChoice(engine)
 
         assertEquals(0, engine.keys)
-        assertNull(engine.totem)
+        assertTrue(engine.structures.totemChests.isEmpty(), "its only charge shattered the chest")
         assertEquals(ChoiceType.TOTEM, engine.choiceType)
         assertEquals(
             setOf(TotemAction.AMPLIFY_CURRENT, TotemAction.CHANGE_WEAPON),
@@ -140,7 +141,7 @@ class TotemEnemySystemsTest {
     }
 
     @Test
-    fun enemyKillsDoNotAdvanceWeaponLevelWithoutATotem() {
+    fun ordinaryKillsDoNotAdvanceWeaponLevel() {
         val engine = runningEngine(seed = 202)
         engine.equipWeaponForTesting(WeaponId.ENTROPY_FIELD)
         val weaponLevelBeforeKills = engine.weaponLevel
@@ -330,7 +331,8 @@ class TotemEnemySystemsTest {
     }
 
     private fun openTotemChoice(engine: GameScenario) {
-        engine.activateTotemForTesting()
+        engine.keys++
+        engine.placeTotemChestForTesting()
         engine.update(GameScenario.FIXED_STEP)
         assertEquals(GamePhase.CHOICE, engine.phase)
         assertEquals(ChoiceType.TOTEM, engine.choiceType)

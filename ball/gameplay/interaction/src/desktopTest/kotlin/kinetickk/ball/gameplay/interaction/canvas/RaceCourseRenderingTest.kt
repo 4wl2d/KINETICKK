@@ -121,7 +121,7 @@ class RaceCourseRenderingTest {
 
     private fun model(width: Int, height: Int, race: SiteProjection): GameplayRenderModel =
         hudTestModel(width.toFloat(), height.toFloat()).with(
-            "coreX" to 0f, "coreY" to 0f, "cameraX" to 0f, "cameraY" to 0f, "totem" to null,
+            "coreX" to 0f, "coreY" to 0f, "cameraX" to 0f, "cameraY" to 0f,
             "enemies" to immutableListOf<EnemyProjection>(), "sites" to immutableListOf(race),
             "trial" to siteTrial(race),
         )

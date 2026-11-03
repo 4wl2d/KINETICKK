@@ -26,7 +26,6 @@ import kinetickk.ball.gameplay.nucleus.model.StatusCell
 import kinetickk.ball.gameplay.nucleus.model.Pickup
 import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.model.Projectile
-import kinetickk.ball.gameplay.nucleus.model.Totem
 import kinetickk.ball.gameplay.nucleus.model.TrailPoint
 import kinetickk.ball.gameplay.nucleus.model.WeaponNode
 import kinetickk.ball.gameplay.nucleus.model.WeaponOrbital
@@ -160,7 +159,7 @@ class GameplayRenderModelMapperTest {
         )
 
         assertSame(retained.equippedRelics, projected.equippedRelics)
-        assertSame(retained.totem, projected.totem)
+        assertSame(retained.totemChests, projected.totemChests)
         assertSame(retained.enemies, projected.enemies)
         assertSame(retained.projectiles, projected.projectiles)
         assertSame(retained.pickups, projected.pickups)
@@ -435,7 +434,7 @@ class GameplayRenderModelMapperTest {
 
         assertNotSame(retained.enemies, projected.enemies)
         assertSame(retained.equippedRelics, projected.equippedRelics)
-        assertSame(retained.totem, projected.totem)
+        assertSame(retained.totemChests, projected.totemChests)
         assertSame(retained.projectiles, projected.projectiles)
         assertSame(retained.pickups, projected.pickups)
         assertSame(retained.trail, projected.trail)
@@ -458,7 +457,7 @@ class GameplayRenderModelMapperTest {
             itemStacks[0] = 7
             discoveredItemIds += 303
             relicRanks[0] = 3
-            totem!!.x = 91f
+            structures.totemChests = listOf(structures.totemChests.single().copy(x = 91f))
             enemies.single().x = 92f
         }
         val unrelatedSource = fullyPopulatedState()
@@ -472,22 +471,22 @@ class GameplayRenderModelMapperTest {
         assertNotSame(retained.itemStacks, projected.itemStacks)
         assertNotSame(retained.discoveredItemIds, projected.discoveredItemIds)
         assertNotSame(retained.relicRanks, projected.relicRanks)
-        assertNotSame(retained.totem, projected.totem)
+        assertNotSame(retained.totemChests, projected.totemChests)
         assertNotSame(retained.enemies, projected.enemies)
         assertEquals("Initial", retained.choices.single().title)
         assertEquals(2, retained.itemStack(0))
-        assertEquals(10f, retained.totem!!.x)
+        assertEquals(10f, retained.totemChests.single().x)
         assertEquals(10f, retained.enemies.single().x)
         assertEquals("Changed", projected.choices.single().title)
         assertEquals(7, projected.itemStack(0))
-        assertEquals(91f, projected.totem!!.x)
+        assertEquals(91f, projected.totemChests.single().x)
         assertEquals(92f, projected.enemies.single().x)
     }
 
     @Test
     fun identityMismatchFallsBackToRawFloatBitsRatherThanNumericEquality() {
         val source = populatedState().apply {
-            totem = Totem(x = -0.0f, y = 1f, pulse = 2f)
+            placeTotemChestForTesting(x = -0.0f, y = 1f, charges = 2)
         }
         val retained = source.toRenderModel()
         val candidate = source.deepCopy()
@@ -497,16 +496,16 @@ class GameplayRenderModelMapperTest {
             reusableCollections = retained,
             identitySource = unrelatedSource,
         )
-        candidate.totem!!.x = 0.0f
+        candidate.structures.totemChests = listOf(candidate.structures.totemChests.single().copy(x = 0.0f))
         val differentBits = candidate.toRenderModel(
             reusableCollections = retained,
             identitySource = unrelatedSource,
         )
 
-        assertSame(retained.totem, bitExact.totem)
-        assertNotSame(retained.totem, differentBits.totem)
-        assertEquals((-0.0f).toRawBits(), retained.totem!!.x.toRawBits())
-        assertEquals(0.0f.toRawBits(), differentBits.totem!!.x.toRawBits())
+        assertSame(retained.totemChests, bitExact.totemChests)
+        assertNotSame(retained.totemChests, differentBits.totemChests)
+        assertEquals((-0.0f).toRawBits(), retained.totemChests.single().x.toRawBits())
+        assertEquals(0.0f.toRawBits(), differentBits.totemChests.single().x.toRawBits())
     }
 
     @Test
@@ -599,7 +598,7 @@ class GameplayRenderModelMapperTest {
     }
 
     private fun fullyPopulatedState(): MutableGameState = populatedState().apply {
-        totem = Totem(x = 10f, y = 20f, pulse = 0.5f)
+        placeTotemChestForTesting(x = 10f, y = 20f, charges = 2)
         addEnemyForTesting(x = 10f, y = 20f).apply {
             silencedUntil = 0.5f
             setMark(this, MarkKind.SPALL, 0.5f)
@@ -665,7 +664,7 @@ class GameplayRenderModelMapperTest {
             coreShape, choiceType, pendingRelicChoiceCount, directedChoice,
         ),
         "equippedRelics" to equippedRelics.toList(),
-        "totem" to totem?.let { listOf(it.x.toRawBits(), it.y.toRawBits(), it.pulse.toRawBits()) },
+        "totemChests" to totemChests.map { listOf(it.id, it.x.toRawBits(), it.y.toRawBits(), it.charges, it.bornAt.toRawBits(), it.armedAt.toRawBits()) },
         "enemies" to enemies.map {
             listOf(
                 it.id, it.type, it.x.toRawBits(), it.y.toRawBits(), it.vx.toRawBits(), it.vy.toRawBits(),

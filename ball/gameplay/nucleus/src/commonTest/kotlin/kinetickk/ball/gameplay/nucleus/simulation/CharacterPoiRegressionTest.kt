@@ -23,22 +23,25 @@ import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.sites.*
 import kinetickk.ball.gameplay.nucleus.simulation.flight.*
+import kinetickk.ball.gameplay.nucleus.simulation.structures.*
 
 class CharacterPoiRegressionTest {
     @Test
-    fun legacyTotemCannotConsumeAKeyOrReplaceAnExistingRewardChoice() {
+    fun aChestNeitherConsumesAKeyNorReplacesAnOpenRewardChoice() {
         val game = game()
-        game.activateTotemForTesting()
+        game.keys++
+        game.placeTotemChestForTesting()
         game.openDirectedReward(DirectedReward.ITEM_AND_REPAIR)
         val focusOptions = game.choices
-        game.updateTotem(0.01f)
+        game.updateTotemChests()
         assertEquals(focusOptions, game.choices)
         assertEquals(1, game.keys)
         assertEquals(DirectedReward.ITEM_AND_REPAIR, game.directedReward)
         game.phase = GamePhase.PAUSED
-        val before = game.totem?.copy()
-        game.updateTotem(1f)
-        assertEquals(before, game.totem)
+        val before = game.structures.totemChests
+        game.updateTotemChests()
+        assertEquals(before, game.structures.totemChests)
+        assertEquals(1, game.keys)
         assertEquals(GamePhase.PAUSED, game.phase)
     }
 
@@ -99,7 +102,7 @@ class CharacterPoiRegressionTest {
     }
 
     @Test
-    fun legacyTotemAndSimultaneousLevelRelicAndPoiRewardsAreAllConsumedOnce() {
+    fun aChestAndSimultaneousLevelRelicAndPoiRewardsAreAllConsumedOnce() {
         val game = game()
         game.pendingLevelChoices = 1
         game.pendingRelicChoices = 1
@@ -107,8 +110,9 @@ class CharacterPoiRegressionTest {
         game.hp = 50f
         val startCeiling = game.maxHp
         val startLevel = game.weaponLevel
-        game.activateTotemForTesting()
-        game.updateTotem(0.01f)
+        game.keys++
+        game.placeTotemChestForTesting()
+        game.updateTotemChests()
         assertEquals(ChoiceType.TOTEM, game.choiceType)
         game.choose(0)
         assertEquals(startLevel + 1, game.weaponLevel)

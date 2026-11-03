@@ -647,8 +647,6 @@ internal class MutableGameState(
     var weaponBeamEndY: Float = copySource?.weaponBeamEndY ?: 0f
         internal set
 
-    var totem: Totem? = copySource?.totem?.copy()
-        internal set
     var coreShape: CoreShape = copySource?.coreShape
         ?: bootstrapProgress?.loadout?.coreShape ?: CoreShape.ORB
         internal set

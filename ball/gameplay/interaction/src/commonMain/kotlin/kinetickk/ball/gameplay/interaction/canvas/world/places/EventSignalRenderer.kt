@@ -67,7 +67,7 @@ internal fun DrawScope.drawEventSignals(engine: GameplayRenderModel, shakeX: Flo
 }
 
 /**
- * Adds the live signal whose mark is not shown to [batch] as a [EdgeMarkerIcon.SIGNAL] marker, after the Totem's (the
+ * Adds the live signal whose mark is not shown to [batch] as a [EdgeMarkerIcon.SIGNAL] marker, after the Totem chest's (the
  * collection order is the priority order). Decided in the unshaken view in world units, like [drawEventSignals]; [batch]
  * receives device pixels.
  */

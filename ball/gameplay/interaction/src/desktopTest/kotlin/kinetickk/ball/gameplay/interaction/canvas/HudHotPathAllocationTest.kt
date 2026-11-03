@@ -38,7 +38,6 @@ import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupProjection
 import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.render.SiteProjection
-import kinetickk.ball.gameplay.nucleus.render.TotemProjection
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
@@ -81,7 +80,7 @@ class HudHotPathAllocationTest {
                     true, 12f, -1, 0.4f, immutableListOf(), 0f, 0f)).toImmutableList(),
                 "trial" to siteTrial(SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f,
                     true, 12f, -1, 0.4f, immutableListOf(), 0f, 0f)),
-                // The minimap: every obstacle kind, a Key and a Relic past its rim, the totem, an Elite and ordinary enemies.
+                // The minimap: every obstacle kind, a Key and a Relic past its rim, a Totem chest, an Elite and ordinary enemies.
                 "obstacles" to immutableListOf(
                     ObstacleProjection(1L, ObstacleKind.ASTEROID, 600f, 300f, 120f, 3),
                     ObstacleProjection(2L, ObstacleKind.UNSTABLE, -900f, 400f, 90f, 8),
@@ -106,7 +105,7 @@ class HudHotPathAllocationTest {
                     PickupProjection(PickupType.RELIC, 5_000f, -4_000f, 0f, 0f, 20f, 5_000f, -4_000f),
                     PickupProjection(PickupType.DATA, 100f, 100f, 0f, 0f, 20f, 100f, 100f),
                 ),
-                "totem" to TotemProjection(-1_400f, 800f, 1f),
+                "totemChests" to totemChests(-1_400f to 800f),
                 "minimapRange" to 2_200f,
                 // Tier 10: the Rebirth strip with all ten mutator sigils and the four-part Architect bar.
                 "rebirthLevel" to 10,

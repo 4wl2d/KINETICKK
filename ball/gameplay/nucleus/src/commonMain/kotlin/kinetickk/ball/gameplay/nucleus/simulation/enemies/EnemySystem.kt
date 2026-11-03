@@ -284,30 +284,6 @@ internal fun MutableGameState.applyGravityWell(
     }
 }
 
-internal fun MutableGameState.updateTotem(delta: Float) {
-    if (phase != GamePhase.RUNNING) return
-    if (!inBaseLayer()) return
-    val activeTotem = totem
-    if (activeTotem != null) {
-        activeTotem.pulse = (activeTotem.pulse + delta * 2.5f) % TAU
-        if (segmentCircleIntersects(previousCoreX, previousCoreY, coreX, coreY, activeTotem.x, activeTotem.y, 45f) && keys > 0) {
-            keys--
-            totem = null
-            openTotemChoice()
-        }
-    } else if (keys > 0 && phase == GamePhase.RUNNING) {
-        val angle = gameplayRandom.nextFloat() * TAU
-        val distance = 520f + gameplayRandom.nextFloat() * 180f
-        val (totemX, totemY) = nudgedClearOfObstacles(coreX + cos(angle) * distance, coreY + sin(angle) * distance, TOTEM_CLEARANCE)
-        totem = Totem(totemX, totemY)
-        message = "TOTEM DETECTED"
-        messageTime = 1.5f
-    }
-}
-
-/** Room a Totem keeps from obstacles, so the Core can always reach it. */
-private const val TOTEM_CLEARANCE: Float = 70f
-
 /** Spawns a scheduled or escort enemy of [type] at spawn distance; false at the hard cap. */
 internal fun MutableGameState.spawnEnemy(type: EnemyType): Boolean = spawnScheduled(type)
 

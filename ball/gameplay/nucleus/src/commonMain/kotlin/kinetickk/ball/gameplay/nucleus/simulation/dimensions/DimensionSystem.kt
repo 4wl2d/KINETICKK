@@ -178,9 +178,8 @@ private fun MutableGameState.switchLayer(target: WorldLayer) {
 
 /**
  * Removes every hostile of the layer being left without a kill (no Data, Matter, Keys or kill effects): encounters
- * end first and despawn their members, then the remaining enemies, hostile shots and mines, pending blasts and the
- * Totem go (the Keys stay and place a new Totem in realspace). A removed Elite is rescheduled to [eliteRescheduleAt]
- * at the latest.
+ * end first and despawn their members, then the remaining enemies, hostile shots and mines and pending blasts go
+ * (the Keys and the realspace Totem chests stay). A removed Elite is rescheduled to [eliteRescheduleAt] at the latest.
  */
 internal fun MutableGameState.clearHostilesForLayerChange(eliteRescheduleAt: Float) {
     endAllEncounters(despawn = true)
@@ -190,7 +189,6 @@ internal fun MutableGameState.clearHostilesForLayerChange(eliteRescheduleAt: Flo
     if (displacedElite) nextEliteAt = min(nextEliteAt, eliteRescheduleAt)
     projectiles.removeMatchingStable { projectile -> projectile.hostile }
     if (volatileBursts.isNotEmpty()) volatileBursts = immutableListOf()
-    totem = null
 }
 
 /** Moves every pickup onto the Core, so the normal collection pass collects it with all its effects; none is lost. */

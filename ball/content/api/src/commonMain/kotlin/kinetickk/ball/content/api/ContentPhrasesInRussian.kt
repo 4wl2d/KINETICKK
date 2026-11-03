@@ -354,7 +354,6 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "ELITE KEY ACQUIRED" to "ПОЛУЧЕН ЭЛИТНЫЙ КЛЮЧ",
     "ELITE RESONANCE" to "РЕЗОНАНС ЭЛИТЫ",
     "RELIC RESONANCE" to "РЕЗОНАНС РЕЛИКВИИ",
-    "TOTEM DETECTED" to "ОБНАРУЖЕН ТОТЕМ",
     "ELITE SIGNAL" to "ЭЛИТНЫЙ СИГНАЛ",
     "HERALD APPROACHES" to "ПРИБЛИЖАЕТСЯ ГЛАШАТАЙ",
     "TWO ANOMALIES DETECTED // CHOOSE A COURSE" to "ОБНАРУЖЕНЫ ДВЕ АНОМАЛИИ // ВЫБЕРИТЕ ПУТЬ",

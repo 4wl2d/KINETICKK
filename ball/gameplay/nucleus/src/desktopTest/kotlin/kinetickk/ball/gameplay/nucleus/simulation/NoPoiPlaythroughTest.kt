@@ -22,6 +22,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.sites.*
 import kinetickk.ball.gameplay.nucleus.simulation.skills.*
 import kinetickk.ball.gameplay.nucleus.simulation.variety.*
+import kinetickk.ball.gameplay.nucleus.simulation.structures.*
 import kinetickk.ball.gameplay.nucleus.simulation.world.*
 
 /**
@@ -331,14 +332,15 @@ internal class NoPoiBot(
             targetY = targetEnemy.y + targetEnemy.vy * 0.3f
             radius = if (s.weapon in BotOrbitWeapons) 280f else 0f
         }
-        val totem = s.totem
+        // A waiting Totem chest while the bot holds a Key (population runs never finish a dungeon, so never there).
+        val chest = if (s.keys > 0 && s.inBaseLayer()) s.structures.totemChests.minByOrNull { distanceSquared(s.coreX, s.coreY, it.x, it.y) } else null
         val pickup = s.pickups.filter { it.type == PickupType.KEY || it.type == PickupType.RELIC || it.type == PickupType.REPAIR && s.hp < s.maxHp - 15f || it.type == PickupType.DATA && distanceSquared(s.coreX, s.coreY, it.x, it.y) < 180f * 180f }
             .minByOrNull { distanceSquared(s.coreX, s.coreY, it.x, it.y) }
         if (boss != null) {
             targetX = boss.x; targetY = boss.y
             radius = if (s.weapon == WeaponId.FLUX_WAKE) WAKE_BOSS_RADIUS else ARC_BOSS_RADIUS
-        } else if (totem != null && s.keys > 0) {
-            targetX = totem.x; targetY = totem.y; radius = 5f
+        } else if (chest != null) {
+            targetX = chest.x; targetY = chest.y; radius = 5f
         } else if (pickup != null) {
             targetX = pickup.x; targetY = pickup.y; radius = 10f
         }
