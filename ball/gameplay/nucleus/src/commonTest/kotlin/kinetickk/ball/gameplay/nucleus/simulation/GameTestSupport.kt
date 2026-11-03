@@ -92,6 +92,15 @@ internal fun MutableGameState.acquireItemForTesting(id: Int) = acquireItem(id)
 
 internal fun MutableGameState.acquireRelicForTesting(id: RelicId) = acquireRelic(id)
 
+/**
+ * Binds [id] as a run gets it through a Relic offer: the offer claims one of the run's Relic opportunities, then its
+ * card binds or ranks the Relic. Gate setups bind their starting Relics with it, so they spend the Relic budget.
+ */
+internal fun MutableGameState.claimRelicForTesting(id: RelicId) {
+    relicRun.relicClaims++
+    acquireRelic(id)
+}
+
 internal fun MutableGameState.openRelicChoiceForTesting() {
     pendingRelicChoices++
     openNextPendingChoice()

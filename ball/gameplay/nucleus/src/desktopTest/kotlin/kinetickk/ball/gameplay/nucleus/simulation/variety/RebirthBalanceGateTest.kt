@@ -281,7 +281,7 @@ class RebirthBalanceGateTest {
         )
         state.unlockWeaponsForTesting(ReferenceArmory)
         state.startRun()
-        setup.relics.forEach(state::acquireRelicForTesting)
+        setup.relics.forEach(state::claimRelicForTesting)
         val synergy = linkedMapOf("start" to state.toRenderModel().weaponSynergy)
         val bot = NoPoiBot(archetypeTag = BuildTag.RAM, weaponOrder = setup.weaponOrder,
             dataPolicy = if (seekData) DataPolicy.SEEK else DataPolicy.NEUTRAL, avoidWeaponHarmony = setup.withoutHarmony)
@@ -366,7 +366,8 @@ class RebirthBalanceGateTest {
 
         /**
          * The strong build: the signature Arc Coil, a Charge-key Relic (Stormheart Capacitor) in harmony with
-         * it and three proven Relics bound from the start, every Matrix rank. The gates read the weapon
+         * it and three proven Relics bound from the start, every Matrix rank. The four binds claim the run's whole
+         * Relic budget, as four Relic offers taken would, so the run offers no further Relic. The gates read the weapon
          * synergy projection to confirm the signature and harmony bonuses are active.
          */
         val Strong = Setup(

@@ -38,10 +38,11 @@ import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 class NoPoiPlaythroughTest {
     /**
      * A fresh run wins as the reference did: VICTORY within 720-900 s with the Architect arriving at 720 s, every POI
-     * skipped, no completed orbit pending, the foundation at 180 s (weapon level 3, three items, a Relic slot) and the
-     * opportunity at 360 s (four Elites seen, four Relic slots), and weapon level 10 with four Relics, two of them
-     * ranked, at the end. On the Elite-resonance base 221 of the 300 runs win so (0.737, SE 0.025; base - 2 SE 0.686;
-     * 0.717 on the tree before it); at least [MIN_REFERENCE_SHARE] must.
+     * skipped, no completed orbit pending, the foundation at 180 s (weapon level 3, three items, a Relic claimed) and the
+     * opportunity at 360 s (four Elites seen, two Relics claimed: the Relic budget unlocks its Elite drops at 30, 195,
+     * 360 and 525 s), and weapon level 10 with the whole Relic budget claimed at the end. On the Elite-resonance base,
+     * when the rule read four Relic slots at 360 s and four Relics, two of them ranked, at the end, 221 of the 300 runs
+     * won so (0.737, SE 0.025; base - 2 SE 0.686; 0.717 on the tree before it); at least [MIN_REFERENCE_SHARE] must.
      */
     @Test fun freshProfilesWinNoPoiRunsWithinTwelveToFifteenActiveMinutes() {
         java.io.File(System.getProperty("java.io.tmpdir"), "kinetickk-nopoi-evidence.txt").writeText("")
@@ -57,7 +58,7 @@ class NoPoiPlaythroughTest {
     /**
      * The reference win is not a knife-edge seed: other fresh-profile runs win without a POI. Only a victory that
      * skipped every POI is a no-POI win (the bot's avoidance is a heuristic), and each one lasts 720-900 s and ends
-     * with four Relics. On the Elite-resonance base 248 of the 300 runs win so (0.827, SE 0.022; 0.720 on the tree
+     * with the whole Relic budget claimed. On the Elite-resonance base 248 of the 300 runs win so (0.827, SE 0.022; 0.720 on the tree
      * before it); at least [MIN_NO_POI_WIN_SHARE] must, the seeded five of ten, since the base minus two standard errors
      * (0.783) lies above it. Earlier, on the ten fixed probe seeds: 6 wins after wave A, 7 after the second wave, all 10
      * after the final weapon balance (floor 5).
@@ -65,7 +66,7 @@ class NoPoiPlaythroughTest {
     @Test fun freshProfileAlsoWinsFurtherReferenceNoPoiSeeds() {
         population.filter { it.noPoiWin }.forEach { run ->
             assertTrue(run.seconds in 720f..900f, "seed=${run.seed} activeSeconds=${run.seconds}")
-            assertEquals(4, run.relics.size, "seed=${run.seed}")
+            assertEquals(canonicalGameplayContent.relicPolicy.acquisitionsPerRun, run.relicClaims, "seed=${run.seed}")
         }
         val share = population.shareOf { it.noPoiWin }
         report("NOPOI FURTHER population ${population.count { it.noPoiWin }} of ${population.size} (${"%.3f".format(share)})")
@@ -173,7 +174,7 @@ class NoPoiPlaythroughTest {
             }
             val run = NoPoiRun(seed, state.phase, state.elapsed, state.message, state.hp, state.level, state.weapon, state.weaponLevel,
                 state.kills, state.itemStacks.indices.map { state.itemStacks[it] }, state.equippedRelics.toList(), bossObservedAt,
-                poiEngaged, state.pendingCompletedOrbits, foundation, fourSlotOpportunity)
+                poiEngaged, state.pendingCompletedOrbits, foundation, fourSlotOpportunity, state.relicRun.relicClaims)
             if (reportAttempt != null) report("NOPOI FINAL seed=$seed sec=${state.elapsed} phase=${state.phase} reason=${state.message} hp=${state.hp} kills=${state.kills} level=${state.level} weapon=${state.weapon}/${state.weaponLevel} damage=$damage bossAt=$bossObservedAt completedOrbits=${state.pendingCompletedOrbits} poi=$poiEngaged foundation=$foundation sixMinutes=$fourSlotOpportunity")
             return run
         }
@@ -186,23 +187,29 @@ internal data class NoPoiRun(
     val weapon: WeaponId, val weaponLevel: Int, val kills: Int, val itemStacks: List<Int>, val relics: List<EquippedRelic>,
     val bossObservedAt: Float?, val poiEngaged: Boolean, val pendingCompletedOrbits: Int,
     val foundation: Milestone?, val sixMinutes: Milestone?,
+    /** Relic opportunities the run claimed (its Relic budget's count). */
+    val relicClaims: Int,
 ) {
     /** A victory that skipped every POI. */
     val noPoiWin: Boolean get() = phase == GamePhase.VICTORY && !poiEngaged
 
-    /** The reference rule: a POI-free victory in 720-900 s that reached both milestones and the late build. */
+    /**
+     * The reference rule: a POI-free victory in 720-900 s that reached both milestones and the late build. The Relic
+     * clauses follow the Relic budget: one claim by 180 s, two by 360 s (the schedule's first two Elite drops) and the
+     * whole budget at the end, however the bot spent each claim (a bind, a rank-up or a Meld).
+     */
     val winsLikeTheReference: Boolean get() = noPoiWin && seconds in 720f..900f && bossObservedAt?.let { it in 720f..720.05f } == true &&
         pendingCompletedOrbits == 0 &&
-        foundation?.let { it.weaponLevel >= 3 && it.items >= 3 && it.relicSlots >= 1 } == true &&
-        sixMinutes?.let { it.eliteOpportunities >= 4 && it.relicSlots == 4 } == true &&
-        weaponLevel >= 10 && relics.size == 4 && relics.count { it.rank > 1 } >= 2
+        foundation?.let { it.weaponLevel >= 3 && it.items >= 3 && it.relicClaims >= 1 } == true &&
+        sixMinutes?.let { it.eliteOpportunities >= 4 && it.relicClaims >= 2 } == true &&
+        weaponLevel >= 10 && relicClaims == canonicalGameplayContent.relicPolicy.acquisitionsPerRun
 
     fun summary(): String = "$seed:$phase@${seconds.toInt()}s(L$level $reason)"
 }
 
-internal data class Milestone(val level: Int, val weaponLevel: Int, val items: Int, val relicSlots: Int, val eliteOpportunities: Int)
+internal data class Milestone(val level: Int, val weaponLevel: Int, val items: Int, val relicClaims: Int, val eliteOpportunities: Int)
 private fun milestone(state: MutableGameState, eliteOpportunities: Int) = Milestone(
-    state.level, state.weaponLevel, state.acquiredItemCount, state.equippedRelics.size, eliteOpportunities,
+    state.level, state.weaponLevel, state.acquiredItemCount, state.relicRun.relicClaims, eliteOpportunities,
 )
 
 private fun report(value: String) {

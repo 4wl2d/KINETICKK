@@ -155,7 +155,7 @@ internal fun gateProfile(
 
 /**
  * Plays one gate run of [profile] on [seed] with [bot] and returns the final state. [relics] are bound at the
- * start; [observe] sees the state after every bot decision or step, before the cues are taken; [shown] sees every
+ * start, each claiming one of the run's Relic opportunities; [observe] sees the state after every bot decision or step, before the cues are taken; [shown] sees every
  * choice screen the bot is shown (a reroll's new cards are a new screen) before the bot decides.
  */
 internal fun playGateRun(
@@ -183,7 +183,7 @@ internal fun playGateRun(
     return state
 }
 
-/** A started gate run of [profile] on [seed]: the reference armory unlocked and [relics] bound at the start. */
+/** A started gate run of [profile] on [seed]: the reference armory unlocked and [relics] bound (and claimed) at the start. */
 internal fun startGateRun(
     seed: Int,
     profile: GameplayProfileSnapshot,
@@ -193,7 +193,7 @@ internal fun startGateRun(
     val state = MutableGameState(content, seed = seed, bootstrapProgress = profile)
     state.unlockWeaponsForTesting(ReferenceArmory)
     state.startRun()
-    relics.forEach(state::acquireRelicForTesting)
+    relics.forEach(state::claimRelicForTesting)
     return state
 }
 
