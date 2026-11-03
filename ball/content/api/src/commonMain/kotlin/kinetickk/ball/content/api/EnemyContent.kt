@@ -381,7 +381,7 @@ fun defaultEnemyDefinitions(): ImmutableList<EnemyDefinition> = listOf(
         habitats = EnemyHabitat.ZENITH.bit, habitatWeights = HabitatWeights(zenith = 9f),
     ),
     EnemyDefinition(
-        EnemyType.IMP, "Imp", "Jinks at the Core and bursts, scattering embers that burn a slow Core.",
+        EnemyType.IMP, "Imp", "Jinks at the Core and bursts, leaving fire traps that burn a slow Core.",
         threat = 2, timeGateSeconds = 0f, minimumRebirth = 0, weight = 0f,
         habitats = EnemyHabitat.NADIR.bit, habitatWeights = HabitatWeights(nadir = 14f),
     ),
@@ -417,7 +417,7 @@ fun defaultEnemyDefinitions(): ImmutableList<EnemyDefinition> = listOf(
     ),
     EnemyDefinition(
         EnemyType.PYRE_HERALD, "Pyre Herald",
-        "A mini-boss with spiral volleys, a trail of embers and a shield only impacts can break.",
+        "A mini-boss with spiral volleys, a trail of fire traps and a shield only impacts can break.",
         threat = 5, timeGateSeconds = 165f, minimumRebirth = 0, weight = 0f, rank = EnemyRank.MINI_BOSS,
         habitats = EnemyHabitat.NADIR.bit, encounter = MINI_BOSS_ENCOUNTER,
     ),

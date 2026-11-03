@@ -165,7 +165,8 @@ class DimensionSystemTest {
             assertEquals(claim, MutableGameState(canonicalGameplayContent, seed).claimPortalForWindow(1, 165f), "seed $seed")
         }
         val share = claimed.toFloat() / samples
-        assertTrue(share in 0.27f..0.33f, "rift share $share for chance ${policy.portalWindowChance}")
+        val chance = policy.portalWindowChance
+        assertTrue(share in chance - 0.03f..chance + 0.03f, "rift share $share for chance $chance")
         assertEquals(setOf(WorldLayer.ZENITH, WorldLayer.NADIR), targets)
         assertEquals(setOf(0, 1), sides)
     }

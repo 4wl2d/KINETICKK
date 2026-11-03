@@ -362,9 +362,10 @@ internal fun MutableGameState.spawnBossAdds(boss: Enemy, type: EnemyType, count:
 }
 
 /**
- * An ember: a delayed Volatile-Remains-style burst at ([x], [y]) after [delay] seconds (radius [EMBER_RADIUS], base
- * damage 6, a Core at 400 u/s or faster escapes), detonated by updateVolatileRemains with or without the R4 mutator.
- * None is queued while [MutableGameState.MAX_VOLATILE_BURSTS] bursts wait. Draws nothing.
+ * A fire trap (the players' name; no Harvest ember): a delayed Volatile-Remains-style burst at ([x], [y]) after [delay]
+ * seconds (radius [EMBER_RADIUS], base damage 6, a Core at 400 u/s or faster escapes), detonated by
+ * updateVolatileRemains with or without the R4 mutator. None is queued while [MutableGameState.MAX_VOLATILE_BURSTS]
+ * bursts wait. Draws nothing.
  */
 internal fun MutableGameState.queueEmber(x: Float, y: Float, delay: Float) = queueVolatileBurst(x, y, EMBER_RADIUS, delay)
 

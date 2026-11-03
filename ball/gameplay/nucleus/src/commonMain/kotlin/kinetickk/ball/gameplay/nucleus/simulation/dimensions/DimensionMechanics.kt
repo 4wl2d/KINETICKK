@@ -68,7 +68,6 @@ private const val HALO_CLEARANCE: Float = 30f
 private const val HALO_BURST_COLOR: Int = 2
 /** Room kept between a thrown ember and any obstacle. */
 private const val EMBER_CLEARANCE: Float = 40f
-private const val TWO_PI: Float = (2.0 * PI).toFloat()
 
 /**
  * The speed a dimension measures flight against: the steady speed of the pace reach along the viewport's long axis
@@ -319,15 +318,15 @@ private fun MutableGameState.updateEmbers(visit: DimensionVisit) {
 }
 
 /**
- * A burning [enemy] died during an open Harvest: its ember is thrown from where it fell, in a direction and to a
- * distance within the tuning's throw range from a stateless hash of the run, the visit and the enemy, moved clear of
+ * A burning [enemy] died during an open Harvest: its ember is thrown from where it fell, within the tuning's half arc
+ * of the Core's heading and its throw range, from a stateless hash of the run, the visit and the enemy, moved clear of
  * obstacles. Draws nothing.
  */
 internal fun MutableGameState.throwEmber(enemy: Enemy) {
     val visit = dimensionRun.visit ?: return
     val tuning = content.dimensions.objectives
     val random = HashRandom(worldHash(runSeed, visit.layer, visit.serial, enemy.id, EMBER_SALT))
-    val angle = random.nextFloat() * TWO_PI
+    val angle = travelHeading() + (2f * random.nextFloat() - 1f) * tuning.emberThrowHalfArcDegrees * DEGREES_TO_RADIANS
     val distance = tuning.emberThrowMinimum + random.nextFloat() * (tuning.emberThrowMaximum - tuning.emberThrowMinimum)
     val (x, y) = nudgedClearOfObstacles(enemy.x + cos(angle) * distance, enemy.y + sin(angle) * distance, EMBER_CLEARANCE)
     dropEmber(x, y, enemy.x, enemy.y)

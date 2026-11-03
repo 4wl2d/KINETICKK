@@ -44,6 +44,15 @@ import kotlin.test.assertTrue
  * (0.050), Judgement 0.633 (0.062); N0 survival 0.992 (0.008), Harvest 0.833 (0.048), Pyre 0.717 (0.059), scorch 0.339
  * (0.035); Z10 0.970 (0.017) and 0.730 (0.044); N10 0.890 (0.031) and 0.870 (0.033); A3 1.000 and 0.325 (0.043); A0
  * 0.949 (0.020) and 0.068 (0.023).
+ *
+ * A human could not finish the Harvest (the instant pilot's 0.84 on the window fell to 0.23 when it saw the embers 200 ms
+ * late) and the Antecedent was a coin a full Matrix rarely won, so both were recalibrated on the window against the H200
+ * pilot and A3: ember life 1.25 s thrown within 150 degrees of the Core's heading (window H200 0.91, N0 1.00), the
+ * Archive's boss share 0.77 once Desync reached its deadlines (window A3 0.57, A0 0.13). The N0 Harvest ceiling left with
+ * it (the instant pilot may finish every Harvest); H200 holds the human floor. On the gate seeds: Z0 survival 0.983
+ * (0.012), Ascent 0.817 (0.050), Judgement 0.633 (0.062); N0 survival 0.992 (0.008), Harvest 0.983 (0.017), Pyre 0.717
+ * (0.059), scorch 0.298 (0.034); H200 0.908 (0.027); Z10 0.960 (0.020) and 0.720 (0.045); N10 0.940 (0.024) and 0.920
+ * (0.027); A3 1.000 and 0.475 (0.046); A0 0.966 (0.017) and 0.197 (0.037).
  */
 class DimensionPilotGateTest {
     /**
@@ -76,6 +85,16 @@ class DimensionPilotGateTest {
         assertShare("N0 harvest", harvest, N0_HARVEST.start, N0_HARVEST.endInclusive) { it.completed }
         assertShare("N0 pyre", pyre, N0_PYRE.start, N0_PYRE.endInclusive) { it.completed }
         assertTrue(scorch <= N0_SCORCH_SHARE, "N0 scorch took $scorch of the visit damage, above $N0_SCORCH_SHARE")
+    }
+
+    /**
+     * H200: a fresh run's Harvest flown by a pilot that sees the embers 200 ms late (a player's reaction time) completes
+     * at least [H200_HARVEST] of its visits: the Harvest is calibrated on it, not on the instant pilot of N0.
+     */
+    @Test fun aPlayersReactionStillCompletesTheHarvest() {
+        val runs = runsOf(DimensionArm.H200)
+        assertEveryOpenRiftEntered(DimensionArm.H200, runs)
+        assertShare("H200 harvest", runs.entered(), H200_HARVEST, 1.0) { it.completed }
     }
 
     /**
@@ -128,7 +147,7 @@ class DimensionPilotGateTest {
      * population. `KK_DIMENSION_KNOBS=name=value,...` overrides the shipped dimension knobs (graceDrag, paceReach,
      * paceCeiling, scorch, rings, embers, emberLife, emberRadius, haloRadius, turnMin, turnMax, spacingMin, spacingMax,
      * splitFactor, throwMin, throwMax,
-     * zenithBossShare, nadirBossShare, zenithBossDamage, nadirBossDamage, and the Nadir's nadirSpawn, nadirCap and
+     * zenithBossShare, nadirBossShare, archiveBossShare, zenithBossDamage, nadirBossDamage, and the Nadir's nadirSpawn, nadirCap and
      * nadirVisit seconds). `KK_DIMENSION_OBJECTIVE=HARVEST` (any objective) forces it on every window seed of the arms that
      * play it, in place of the two halves. The outcome arms
      * OC (no rift), OZ and ON (a Zenith or Nadir visit at 165 s with its rolled objective) play whole runs and print the
@@ -220,7 +239,10 @@ class DimensionPilotGateTest {
             val half = (seeds.size + 1) / 2
             return populationOf(seeds.withIndex().toList()) { (index, seed) ->
                 val objective = if (index < half) objectives.first() else objectives.last()
-                flyDimensionRun(seed, arm.profile, arm.target, arm.riftAt, objective, arm.takeRefuse, content = content, observer = observer(seed))
+                flyDimensionRun(
+                    seed, arm.profile, arm.target, arm.riftAt, objective, arm.takeRefuse, content = content,
+                    reactionFrames = arm.reactionMillis / PILOT_INPUT_MILLIS, observer = observer(seed),
+                )
             }
         }
 
@@ -286,8 +308,14 @@ class DimensionPilotGateTest {
                         "splitFactor" -> copy(objectives = objectives.copy(ascentSplitFactor = value))
                         "throwMin" -> copy(objectives = objectives.copy(emberThrowMinimum = value))
                         "throwMax" -> copy(objectives = objectives.copy(emberThrowMaximum = value))
-                        "zenithBossShare", "nadirBossShare" -> copy(definitions = definitions.map { d ->
-                            val layer = if (name == "zenithBossShare") WorldLayer.ZENITH else WorldLayer.NADIR
+                        "emberArc" -> copy(objectives = objectives.copy(emberThrowHalfArcDegrees = value))
+                        "riftChance" -> copy(portalWindowChance = value)
+                        "zenithBossShare", "nadirBossShare", "archiveBossShare" -> copy(definitions = definitions.map { d ->
+                            val layer = when (name) {
+                                "zenithBossShare" -> WorldLayer.ZENITH
+                                "nadirBossShare" -> WorldLayer.NADIR
+                                else -> WorldLayer.ARCHIVE
+                            }
                             if (d.layer == layer) d.copy(bossIntegrityShare = value) else d
                         }.toImmutableList())
                         "zenithBossDamage", "nadirBossDamage" -> copy(definitions = definitions.map { d ->
@@ -312,8 +340,10 @@ class DimensionPilotGateTest {
                 "spacing=${policy.objectives.ascentMinimumSpacing}..${policy.objectives.ascentMaximumSpacing} " +
                 "splitFactor=${policy.objectives.ascentSplitFactor} " +
                 "throw=${policy.objectives.emberThrowMinimum}..${policy.objectives.emberThrowMaximum} " +
+                "emberArc=${policy.objectives.emberThrowHalfArcDegrees} riftChance=${policy.portalWindowChance} " +
                 "zenithBossShare=${policy.definition(WorldLayer.ZENITH).bossIntegrityShare} " +
                 "nadirBossShare=${policy.definition(WorldLayer.NADIR).bossIntegrityShare} " +
+                "archiveBossShare=${policy.definition(WorldLayer.ARCHIVE).bossIntegrityShare} " +
                 "nadirBossDamage=${policy.definition(WorldLayer.NADIR).bossDamageShare} " +
                 "zenithBossDamage=${policy.definition(WorldLayer.ZENITH).bossDamageShare} " +
                 "nadirSpawn=${policy.definition(WorldLayer.NADIR).spawnRateMultiplier} " +
@@ -327,9 +357,15 @@ class DimensionPilotGateTest {
         val Z0_JUDGEMENT = 0.45..0.88
         const val Z0_MEDIAN_COMPLETION = 55.0
 
-        /** N0: a fresh run's Nadir survival floor, its Harvest and Pyre completion bands and the scorch's share of damage. */
+        /**
+         * N0: a fresh run's Nadir survival floor, its Harvest and Pyre completion bands and the scorch's share of damage.
+         * The instant pilot may complete every Harvest: the band's floor guards the content, H200 its human reach.
+         */
         const val N0_SURVIVAL = 0.85
-        val N0_HARVEST = 0.50..0.90
+        val N0_HARVEST = 0.50..1.0
+
+        /** H200: the Harvest a pilot with a player's 200 ms reaction completes at least. */
+        const val H200_HARVEST = 0.75
         val N0_PYRE = 0.40..0.85
         const val N0_SCORCH_SHARE = 0.45
 
@@ -337,9 +373,12 @@ class DimensionPilotGateTest {
         const val STRONG_SURVIVAL = 0.75
         const val STRONG_COMPLETION = 0.50
 
-        /** A3: the tier-3 full Matrix's Archive survival floor and Antecedent defeat band; A0: the fresh run's. */
+        /**
+         * A3: the tier-3 full Matrix's Archive survival floor and Antecedent defeat band (the expert pilot fells it in
+         * about three fights of five); A0: the fresh run's.
+         */
         const val A3_SURVIVAL = 0.65
-        val A3_DEFEAT = 0.20..0.65
+        val A3_DEFEAT = 0.35..0.75
         const val A0_SURVIVAL = 0.45
         const val A0_DEFEAT = 0.35
     }
@@ -356,6 +395,8 @@ internal enum class DimensionArm(
     val riftAt: Float,
     val objectives: List<DimensionObjective>,
     val takeRefuse: Boolean = false,
+    /** The pilot's reaction time (0: it sees each frame as it happens). */
+    val reactionMillis: Int = 0,
 ) {
     Z0("Z0", DimensionProfile.FRESH_TIER_0, WorldLayer.ZENITH, FRESH_RIFT_AT, listOf(DimensionObjective.ASCENT, DimensionObjective.JUDGEMENT)),
     N0("N0", DimensionProfile.FRESH_TIER_0, WorldLayer.NADIR, FRESH_RIFT_AT, listOf(DimensionObjective.HARVEST, DimensionObjective.PYRE)),
@@ -363,4 +404,10 @@ internal enum class DimensionArm(
     N10("N10", DimensionProfile.STRONG_TIER_10, WorldLayer.NADIR, 285f, listOf(DimensionObjective.HARVEST, DimensionObjective.PYRE), takeRefuse = true),
     A3("A3", DimensionProfile.SIGNATURE_TIER_3, WorldLayer.ARCHIVE, 405f, listOf(DimensionObjective.ANTECEDENT)),
     A0("A0", DimensionProfile.FRESH_TIER_0, WorldLayer.ARCHIVE, 405f, listOf(DimensionObjective.ANTECEDENT)),
+
+    /** N0's fresh Harvest flown with a player's reaction time: the pilot sees the embers 200 ms late. */
+    H200("H200", DimensionProfile.FRESH_TIER_0, WorldLayer.NADIR, FRESH_RIFT_AT, listOf(DimensionObjective.HARVEST), reactionMillis = 200),
 }
+
+/** The pilot's input period: a reaction time is this many milliseconds per frame of lag. */
+internal const val PILOT_INPUT_MILLIS = 20

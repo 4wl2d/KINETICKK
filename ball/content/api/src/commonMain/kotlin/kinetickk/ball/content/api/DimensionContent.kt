@@ -110,12 +110,20 @@ data class DimensionObjectiveTuning(
     val ascentSplitFactor: Float = 4.25f,
     val haloRadius: Float = 70f,
     val harvestEmbers: Int = 20,
-    /** A thrown ember waits this long: the Harvest is a chase to each one, not a sweep behind the kills. */
-    val emberLifeSeconds: Float = 1.0f,
+    /**
+     * A thrown ember waits this long: the Harvest is a chase to each one, not a sweep behind the kills. Calibrated on a
+     * pilot that sees the embers 200 ms late (a player's reaction), which completes nine Harvests in ten.
+     */
+    val emberLifeSeconds: Float = 1.25f,
     val emberRadius: Float = 70f,
     /** A burning kill throws its ember this far (from the minimum to the maximum, by a stateless hash). */
     val emberThrowMinimum: Float = 140f,
     val emberThrowMaximum: Float = 320f,
+    /**
+     * A burning kill throws its ember within this many degrees either side of the Core's heading (180: any way), so the
+     * Harvest is a chase ahead of the Core rather than a turn back for each ember.
+     */
+    val emberThrowHalfArcDegrees: Float = 150f,
     val bossDistance: Float = 900f,
     val bossDelaySeconds: Float = 2f,
     val antecedentDelaySeconds: Float = 4f,
@@ -134,6 +142,7 @@ data class DimensionObjectiveTuning(
         require(emberThrowMinimum in 0f..600f && emberThrowMaximum in emberThrowMinimum..600f) {
             "Ember throws must be ordered within 0..600"
         }
+        require(emberThrowHalfArcDegrees in 0f..180f) { "The ember throw's half arc must be in 0..180 degrees" }
         require(bossDelaySeconds.isFinite() && bossDelaySeconds >= 0f && antecedentDelaySeconds.isFinite() && antecedentDelaySeconds >= 0f) {
             "Boss delays must be non-negative"
         }
@@ -143,7 +152,8 @@ data class DimensionObjectiveTuning(
 data class DimensionPolicy(
     /** False: no rifts at all (the harness "without dimensions" arm). */
     val enabled: Boolean = true,
-    val portalWindowChance: Float = 0.30f,
+    /** A POI window past the first rift window hosts a rift with this chance (0.30 before the dimension fixes). */
+    val portalWindowChance: Float = 0.35f,
     val firstPortalWindow: Int = 1,
     val maxPortalOffersPerRun: Int = 3,
     val exitMarginSeconds: Float = 60f,
@@ -276,6 +286,9 @@ fun defaultDimensionDefinitions(): ImmutableList<DimensionDefinition> = listOf(
         spawnRateMultiplier = 0.85f, ordinaryCapMultiplier = 0.8f,
         physics = DimensionPhysics(desyncMinimumScale = 0.25f, desyncMaximumScale = 1.25f, desyncBossFloor = 0.5f),
         reward = DimensionReward(DimensionRewardKind.ARCHIVE_TROVE, cardsOnSuccess = 3, matterOnSuccess = 120f, matterOnFailure = 60f),
+        // The Antecedent of the Archive: a full Matrix at tier 3 fells it in about three fights of five once Desync
+        // reached its deadlines (a fresh run in about one of eight).
+        bossIntegrityShare = 0.77f,
     ),
 ).toImmutableList()
 
