@@ -117,237 +117,250 @@ internal fun homeLayoutGeometry(width: Float, height: Float, density: Float, qui
         w <= h -> HomeLayoutMode.COMPACT_PORTRAIT
         else -> HomeLayoutMode.COMPACT_LANDSCAPE
     }
+    val layout = HomeLayoutBuilder(w, h, scale)
+    val scene = when (mode) {
+        HomeLayoutMode.REGULAR -> layout.regularScene(quitAvailable)
+        HomeLayoutMode.COMPACT_LANDSCAPE -> layout.compactLandscapeScene()
+        HomeLayoutMode.COMPACT_PORTRAIT -> layout.compactPortraitScene()
+    }
+    return HomeLayoutGeometry(mode, layout.actions, layout.infos, scene, layout.quit, layout.runModeToggle)
+}
+
+/** The bounds [homeLayoutGeometry] collects while one layout mode places its scene, in board units ([w], [h]) scaled to px. */
+private class HomeLayoutBuilder(val w: Float, val h: Float, private val scale: Float) {
+    val actions = ArrayList<HomeActionBounds>(HomeLayoutTarget.entries.size)
+    val infos = ArrayList<HomeInfoBounds>(2)
+    var quit: HomeQuitBounds? = null
+
+    // The Baby mode toggle takes the header's right end in every layout; the text chips end 8 dp left of it.
+    lateinit var runModeToggle: HomeToggleBounds
+
     fun px(value: Float): Float = value * scale
     fun rect(left: Float, top: Float, right: Float, bottom: Float) = Rect(px(left), px(top), px(right), px(bottom))
     fun info(target: HomeInfoTarget, left: Float, centerY: Float): HomeInfoBounds {
         val bounds = rect(left, centerY - 12f, left + 24f, centerY + 12f)
         return HomeInfoBounds(target, bounds, rect(left - 10f, centerY - 22f, left + 34f, centerY + 22f))
     }
-    val actions = ArrayList<HomeActionBounds>(HomeLayoutTarget.entries.size)
-    val infos = ArrayList<HomeInfoBounds>(2)
-    var quit: HomeQuitBounds? = null
-    // The Baby mode toggle takes the header's right end in every layout; the text chips end 8 dp left of it.
-    lateinit var runModeToggle: HomeToggleBounds
-    val scene = when (mode) {
-        HomeLayoutMode.REGULAR -> {
-            // Home.png anchors: header and hero from the left, menu and form panel from the right,
-            // the facts card and form panel pinned to the bottom, the menu centered vertically.
-            val s = min(w / 1440f, h / 810f)
-            fun lx(x: Float) = x * s
-            fun rx(x: Float) = w - (1440f - x) * s
-            fun ty(y: Float) = y * s
-            fun by(y: Float) = h - (810f - y) * s
-            val centerOffset = (h - 810f * s) * 0.5f
-            fun cy(y: Float) = y * s + centerOffset
-            // Five rows of 80 board px, centred on board y 346 (146..546) like the six rows of 74 before.
-            HomeMenuTargets.forEachIndexed { index, target ->
-                val top = cy(146f + index * 80f)
-                val row = Rect(rx(880f - index * 12f), top, w - 16f, top + 80f * s)
-                actions += HomeActionBounds(target, rect(row.left, row.top, row.right, row.bottom))
-            }
-            // The form name (and its (!)) shares the facts card's center line, under the menu. The mechanic's
-            // text is the form's (!) tooltip; characters change in the Workshop.
-            val formNameSize = 30f * s
-            val formNameY = by(686f)
-            // A small Quit plate ends at the version line's right edge on the form name's center line;
-            // the form's (!) then moves left of it.
-            if (quitAvailable) {
-                val plate = rect(rx(1268f), formNameY - 20f * s, rx(1392f), formNameY + 20f * s)
-                val touchHalf = max(22f, 20f * s)
-                quit = HomeQuitBounds(plate, rect(rx(1268f), formNameY - touchHalf, rx(1392f), formNameY + touchHalf))
-            }
-            infos += info(HomeInfoTarget.FORM, if (quitAvailable) rx(1268f) - 48f else rx(1368f), formNameY)
-            // The facts card keeps at least 480 px (board 560) on smaller desktops, short of the form panel.
-            val factsRight = max(lx(616f), min(lx(56f) + 480f, rx(826f) - 24f))
-            infos += info(HomeInfoTarget.FACTS, factsRight - 44f * s, by(686f))
-            // The toggle plate is a chip-high slab 46 board px wide; its press area keeps 44 dp on the smallest desktop.
-            val toggle = Rect(rx(1392f) - 46f * s, ty(25f), rx(1392f), ty(25f) + 34f * s)
-            val toggleHalfWidth = max(22f, 23f * s)
-            val toggleHalfHeight = max(22f, 17f * s)
-            runModeToggle = HomeToggleBounds(
-                rect(toggle.left, toggle.top, toggle.right, toggle.bottom),
-                rect(toggle.center.x - toggleHalfWidth, toggle.center.y - toggleHalfHeight, toggle.center.x + toggleHalfWidth,
-                    toggle.center.y + toggleHalfHeight),
-            )
-            HomeScene(
-                unit = px(s),
-                gridSpacing = px(48f * s),
-                logo = Offset(px(lx(56f)), px(ty(42f))),
-                logoMark = px(30f * s),
-                wordmarkSize = px(19f * s),
-                chipsRight = px(toggle.left - 8f),
-                chipsTop = px(ty(25f)),
-                chipHeight = px(34f * s),
-                chipCount = 2,
-                compactChips = false,
-                heroCenter = Offset(px(lx(340f)), px(cy(430f))),
-                heroRadius = px(260f * s),
-                wordLeft = px(lx(24f)),
-                wordTop = px(by(600f)),
-                wordSize = px(200f * s),
-                menuFontSize = px(64f * s),
-                menuColumns = 1,
-                facts = rect(lx(56f), by(640f), factsRight, by(732f)),
-                formNameLeft = px(rx(826f)),
-                formNameCenterY = px(formNameY),
-                formNameSize = px(formNameSize),
-                versionRight = px(rx(1392f)),
-                versionBaseline = px(by(788f)),
-                versionSize = px(11f * s),
-            )
-        }
-        HomeLayoutMode.COMPACT_LANDSCAPE -> {
-            // Mobile-Home.png: hero left, stepped menu right, the form name along the bottom-left.
-            val side = (w * 0.04f).coerceIn(16f, 44f)
-            val menuLeft = w * 0.58f
-            val versionBaseline = h - 5f
-            // The lowest (Settings) row is the widest and passes over the version line. Selected, its echo
-            // ends (49 + 40 turn) × font / 64 below the row's center, dropped by the −2° turn of the
-            // row's left half (see homeSelectedMenuFootprint): the rows shrink from 52 toward 48 px,
-            // then the font, until that edge ends 2 px above the version's tallest glyphs.
-            val lowestWidth = w - side - (menuLeft - (HomeMenuTargets.size - 1) * 9f)
-            val lowestCenter = versionBaseline - HOME_VERSION_ASCENT_EM * COMPACT_VERSION_SIZE - 2f - HOME_MENU_TURN * lowestWidth * 0.5f
-            val echoDrop = (49f + 40f * HOME_MENU_TURN) / 64f
-            val menuTop = 48f
-            // 36 px from 660 px wide; narrower screens scale it so Russian labels with a stamp still fit.
-            val widthFont = 36f * min(1f, w / 660f)
-            val rowSpan = HomeMenuTargets.size - 0.5f
-            // Never below the two-column phone font: that floor binds only under 356 px tall, or past
-            // about 1,400 px wide at 360 px tall (no target size).
-            fun menuFontFor(rowHeight: Float) = min(widthFont, (lowestCenter - menuTop - rowSpan * rowHeight) / echoDrop).coerceAtLeast(28f)
-            fun rowsFor(rowHeight: Float) = HomeMenuTargets.indices.map { index ->
-                val top = menuTop + index * rowHeight
-                Rect(menuLeft - index * 9f, top, w - side, top + rowHeight)
-            }
-            // The form name centres on a touch-row band (50 px, 48 below 380 px tall) ending 10 px above the bottom.
-            val nameCenter = h - 10f - (if (h >= 380f) 50f else 48f) * 0.5f
-            // Rows grow from 48 toward 58 px with the height, but only while every selected row's slab and
-            // speed lines leave the form name its room (narrow screens keep the shorter rows).
-            var rowHeight = ((lowestCenter - echoDrop * widthFont - menuTop) / rowSpan).coerceIn(48f, 58f)
-            while (rowHeight > 48f &&
-                homeFormNameRoom(rowsFor(rowHeight), menuFontFor(rowHeight), side + 36f, w - side, nameCenter, COMPACT_FORM_NAME_SIZE) <
-                HOME_FORM_NAME_ROOM) {
-                rowHeight = max(48f, rowHeight - 0.5f)
-            }
-            val menuFont = menuFontFor(rowHeight)
-            val rows = rowsFor(rowHeight)
-            HomeMenuTargets.forEachIndexed { index, target ->
-                val row = rows[index]
-                actions += HomeActionBounds(target, rect(row.left, row.top, row.right, row.bottom))
-            }
-            // The (!) leads the form name at the left edge, clear of the selected menu slab and trail.
-            infos += info(HomeInfoTarget.FORM, side, nameCenter)
-            val regionTop = 44f
-            val regionBottom = nameCenter - 16f
-            val heroRadius = min(135f, min((menuLeft - 45f - side) * 0.42f, (regionBottom - regionTop) * 0.9f))
-            val wordSize = 104f * h / 390f
-            // The toggle plate spans the chips' row; its press area ends where the first menu row starts.
-            runModeToggle = HomeToggleBounds(rect(w - side - 38f, 12f, w - side, 40f), rect(w - side - 41f, 4f, w - side + 3f, 48f))
-            HomeScene(
-                unit = px(heroRadius / 260f),
-                gridSpacing = px(32f),
-                logo = Offset(px(side), px(26f)),
-                logoMark = px(22f),
-                wordmarkSize = px(14f),
-                chipsRight = px(w - side - 46f),
-                chipsTop = px(12f),
-                chipHeight = px(28f),
-                chipCount = 2,
-                compactChips = true,
-                heroCenter = Offset(px(side + (menuLeft - 45f - side) * 0.44f), px((regionTop + regionBottom) * 0.5f)),
-                heroRadius = px(heroRadius),
-                wordLeft = px(12f),
-                wordTop = px(h - wordSize * 1.02f),
-                wordSize = px(wordSize),
-                menuFontSize = px(menuFont),
-                menuColumns = 1,
-                facts = null,
-                formNameLeft = px(side + 36f),
-                formNameCenterY = px(nameCenter),
-                formNameSize = px(COMPACT_FORM_NAME_SIZE),
-                versionRight = px(w - side),
-                versionBaseline = px(versionBaseline),
-                versionSize = px(COMPACT_VERSION_SIZE),
-            )
-        }
-        HomeLayoutMode.COMPACT_PORTRAIT -> {
-            // Portrait adaptation: header, hero, the form name, then the menu at thumb height.
-            val side = 16f
-            val columns = if (h < 600f) 2 else 1
-            val rowHeight = if (columns == 1) 52f else 50f
-            val columnWidth = (w - side * 2f - 8f * (columns - 1)) / columns
-            // One column: rows step 6 px left going down, and the lowest row sits so far right that
-            // its selected speed lines end at the side margin. The font (36 px from 418 px wide)
-            // scales down on narrower phones so a Russian label with its stamp still fits the row.
-            // Two columns: 28 px from a 166 px column (the widest label, Russian ПЕРЕРОЖДЕНИЕ, takes
-            // 163 px of it with its lead) scales down on narrower phones, so every label stays whole
-            // in its column and a selected right-column item slides and casts its echo clear of the
-            // label left of it.
-            val menuFont = if (columns == 1) 36f * min(1f, w / 418f) else 28f * min(1f, columnWidth / 166f)
-            val menuReach = HOME_MENU_REACH * menuFont / 64f
-            val versionBaseline = h - 4f
-            // Two columns: Play spans the first row and the other four fill two rows, so no row has a lone item.
-            val rowCount = if (columns == 1) HomeMenuTargets.size else 1 + HomeMenuTargets.size / 2
-            val lastRowLeft = if (columns == 1) side + menuReach else side + columnWidth + 8f
-            val lastRow = Rect(lastRowLeft, 0f, w - side, rowHeight)
-            val selectedBottom = homeSelectedMenuFootprint(lastRow, menuFont).maxOf { it.bottom }
-            // Reserve the whole version line above its baseline, plus 2 px, including the
-            // selected row's rotated echo. A fixed bottom inset overlaps taller Linux glyphs.
-            val menuTop = min(
-                h - 16f - rowHeight * rowCount,
-                versionBaseline - HOME_VERSION_ASCENT_EM * COMPACT_VERSION_SIZE - 2f -
-                    (rowCount - 1) * rowHeight - selectedBottom,
-            )
-            HomeMenuTargets.forEachIndexed { index, target ->
-                if (columns == 1) {
-                    val top = menuTop + index * rowHeight
-                    val left = side + menuReach + (HomeMenuTargets.size - 1 - index) * 6f
-                    actions += HomeActionBounds(target, rect(left, top, w - side, top + rowHeight))
-                } else if (index == 0) {
-                    actions += HomeActionBounds(target, rect(side, menuTop, w - side, menuTop + rowHeight))
-                } else {
-                    val left = side + ((index - 1) % 2) * (columnWidth + 8f)
-                    val top = menuTop + (1 + (index - 1) / 2) * rowHeight
-                    actions += HomeActionBounds(target, rect(left, top, left + columnWidth, top + rowHeight))
-                }
-            }
-            // The name sits over the menu, its line box clear of the top row's selected slab.
-            val nameCenter = menuTop - (if (columns == 1) 20f else 16f) - 16f
-            infos += info(HomeInfoTarget.FORM, w - side - 24f, nameCenter)
-            val regionTop = 52f
-            val regionBottom = nameCenter - 20f
-            val heroRadius = min(w * 0.42f, (regionBottom - regionTop) * 0.5f)
-            val wordSize = w * 0.26f
-            runModeToggle = HomeToggleBounds(rect(w - side - 38f, 14f, w - side, 42f), rect(w - side - 41f, 6f, w - side + 3f, 50f))
-            HomeScene(
-                unit = px(heroRadius / 260f),
-                gridSpacing = px(32f),
-                logo = Offset(px(side), px(28f)),
-                logoMark = px(22f),
-                wordmarkSize = px(14f),
-                chipsRight = px(w - side - 46f),
-                chipsTop = px(14f),
-                chipHeight = px(28f),
-                chipCount = 2,
-                compactChips = true,
-                heroCenter = Offset(px(w * 0.5f), px((regionTop + regionBottom) * 0.5f)),
-                heroRadius = px(heroRadius),
-                wordLeft = px(8f),
-                wordTop = px(max(regionTop, nameCenter - 26f - wordSize)),
-                wordSize = px(wordSize),
-                menuFontSize = px(menuFont),
-                menuColumns = columns,
-                facts = null,
-                formNameLeft = px(side),
-                formNameCenterY = px(nameCenter),
-                formNameSize = px(16f),
-                versionRight = px(w - side),
-                versionBaseline = px(versionBaseline),
-                versionSize = px(COMPACT_VERSION_SIZE),
-            )
+}
+
+private fun HomeLayoutBuilder.regularScene(quitAvailable: Boolean): HomeScene {
+    // Home.png anchors: header and hero from the left, menu and form panel from the right,
+    // the facts card and form panel pinned to the bottom, the menu centered vertically.
+    val s = min(w / 1440f, h / 810f)
+    fun lx(x: Float) = x * s
+    fun rx(x: Float) = w - (1440f - x) * s
+    fun ty(y: Float) = y * s
+    fun by(y: Float) = h - (810f - y) * s
+    val centerOffset = (h - 810f * s) * 0.5f
+    fun cy(y: Float) = y * s + centerOffset
+    // Five rows of 80 board px, centred on board y 346 (146..546) like the six rows of 74 before.
+    HomeMenuTargets.forEachIndexed { index, target ->
+        val top = cy(146f + index * 80f)
+        val row = Rect(rx(880f - index * 12f), top, w - 16f, top + 80f * s)
+        actions += HomeActionBounds(target, rect(row.left, row.top, row.right, row.bottom))
+    }
+    // The form name (and its (!)) shares the facts card's center line, under the menu. The mechanic's
+    // text is the form's (!) tooltip; characters change in the Workshop.
+    val formNameSize = 30f * s
+    val formNameY = by(686f)
+    // A small Quit plate ends at the version line's right edge on the form name's center line;
+    // the form's (!) then moves left of it.
+    if (quitAvailable) {
+        val plate = rect(rx(1268f), formNameY - 20f * s, rx(1392f), formNameY + 20f * s)
+        val touchHalf = max(22f, 20f * s)
+        quit = HomeQuitBounds(plate, rect(rx(1268f), formNameY - touchHalf, rx(1392f), formNameY + touchHalf))
+    }
+    infos += info(HomeInfoTarget.FORM, if (quitAvailable) rx(1268f) - 48f else rx(1368f), formNameY)
+    // The facts card keeps at least 480 px (board 560) on smaller desktops, short of the form panel.
+    val factsRight = max(lx(616f), min(lx(56f) + 480f, rx(826f) - 24f))
+    infos += info(HomeInfoTarget.FACTS, factsRight - 44f * s, by(686f))
+    // The toggle plate is a chip-high slab 46 board px wide; its press area keeps 44 dp on the smallest desktop.
+    val toggle = Rect(rx(1392f) - 46f * s, ty(25f), rx(1392f), ty(25f) + 34f * s)
+    val toggleHalfWidth = max(22f, 23f * s)
+    val toggleHalfHeight = max(22f, 17f * s)
+    runModeToggle = HomeToggleBounds(
+        rect(toggle.left, toggle.top, toggle.right, toggle.bottom),
+        rect(toggle.center.x - toggleHalfWidth, toggle.center.y - toggleHalfHeight, toggle.center.x + toggleHalfWidth,
+            toggle.center.y + toggleHalfHeight),
+    )
+    return HomeScene(
+        unit = px(s),
+        gridSpacing = px(48f * s),
+        logo = Offset(px(lx(56f)), px(ty(42f))),
+        logoMark = px(30f * s),
+        wordmarkSize = px(19f * s),
+        chipsRight = px(toggle.left - 8f),
+        chipsTop = px(ty(25f)),
+        chipHeight = px(34f * s),
+        chipCount = 2,
+        compactChips = false,
+        heroCenter = Offset(px(lx(340f)), px(cy(430f))),
+        heroRadius = px(260f * s),
+        wordLeft = px(lx(24f)),
+        wordTop = px(by(600f)),
+        wordSize = px(200f * s),
+        menuFontSize = px(64f * s),
+        menuColumns = 1,
+        facts = rect(lx(56f), by(640f), factsRight, by(732f)),
+        formNameLeft = px(rx(826f)),
+        formNameCenterY = px(formNameY),
+        formNameSize = px(formNameSize),
+        versionRight = px(rx(1392f)),
+        versionBaseline = px(by(788f)),
+        versionSize = px(11f * s),
+    )
+}
+
+private fun HomeLayoutBuilder.compactLandscapeScene(): HomeScene {
+    // Mobile-Home.png: hero left, stepped menu right, the form name along the bottom-left.
+    val side = (w * 0.04f).coerceIn(16f, 44f)
+    val menuLeft = w * 0.58f
+    val versionBaseline = h - 5f
+    // The lowest (Settings) row is the widest and passes over the version line. Selected, its echo
+    // ends (49 + 40 turn) × font / 64 below the row's center, dropped by the −2° turn of the
+    // row's left half (see homeSelectedMenuFootprint): the rows shrink from 52 toward 48 px,
+    // then the font, until that edge ends 2 px above the version's tallest glyphs.
+    val lowestWidth = w - side - (menuLeft - (HomeMenuTargets.size - 1) * 9f)
+    val lowestCenter = versionBaseline - HOME_VERSION_ASCENT_EM * COMPACT_VERSION_SIZE - 2f - HOME_MENU_TURN * lowestWidth * 0.5f
+    val echoDrop = (49f + 40f * HOME_MENU_TURN) / 64f
+    val menuTop = 48f
+    // 36 px from 660 px wide; narrower screens scale it so Russian labels with a stamp still fit.
+    val widthFont = 36f * min(1f, w / 660f)
+    val rowSpan = HomeMenuTargets.size - 0.5f
+    // Never below the two-column phone font: that floor binds only under 356 px tall, or past
+    // about 1,400 px wide at 360 px tall (no target size).
+    fun menuFontFor(rowHeight: Float) = min(widthFont, (lowestCenter - menuTop - rowSpan * rowHeight) / echoDrop).coerceAtLeast(28f)
+    fun rowsFor(rowHeight: Float) = HomeMenuTargets.indices.map { index ->
+        val top = menuTop + index * rowHeight
+        Rect(menuLeft - index * 9f, top, w - side, top + rowHeight)
+    }
+    // The form name centres on a touch-row band (50 px, 48 below 380 px tall) ending 10 px above the bottom.
+    val nameCenter = h - 10f - (if (h >= 380f) 50f else 48f) * 0.5f
+    // Rows grow from 48 toward 58 px with the height, but only while every selected row's slab and
+    // speed lines leave the form name its room (narrow screens keep the shorter rows).
+    var rowHeight = ((lowestCenter - echoDrop * widthFont - menuTop) / rowSpan).coerceIn(48f, 58f)
+    while (rowHeight > 48f &&
+        homeFormNameRoom(rowsFor(rowHeight), menuFontFor(rowHeight), side + 36f, w - side, nameCenter, COMPACT_FORM_NAME_SIZE) <
+        HOME_FORM_NAME_ROOM) {
+        rowHeight = max(48f, rowHeight - 0.5f)
+    }
+    val menuFont = menuFontFor(rowHeight)
+    val rows = rowsFor(rowHeight)
+    HomeMenuTargets.forEachIndexed { index, target ->
+        val row = rows[index]
+        actions += HomeActionBounds(target, rect(row.left, row.top, row.right, row.bottom))
+    }
+    // The (!) leads the form name at the left edge, clear of the selected menu slab and trail.
+    infos += info(HomeInfoTarget.FORM, side, nameCenter)
+    val regionTop = 44f
+    val regionBottom = nameCenter - 16f
+    val heroRadius = min(135f, min((menuLeft - 45f - side) * 0.42f, (regionBottom - regionTop) * 0.9f))
+    val wordSize = 104f * h / 390f
+    // The toggle plate spans the chips' row; its press area ends where the first menu row starts.
+    runModeToggle = HomeToggleBounds(rect(w - side - 38f, 12f, w - side, 40f), rect(w - side - 41f, 4f, w - side + 3f, 48f))
+    return HomeScene(
+        unit = px(heroRadius / 260f),
+        gridSpacing = px(32f),
+        logo = Offset(px(side), px(26f)),
+        logoMark = px(22f),
+        wordmarkSize = px(14f),
+        chipsRight = px(w - side - 46f),
+        chipsTop = px(12f),
+        chipHeight = px(28f),
+        chipCount = 2,
+        compactChips = true,
+        heroCenter = Offset(px(side + (menuLeft - 45f - side) * 0.44f), px((regionTop + regionBottom) * 0.5f)),
+        heroRadius = px(heroRadius),
+        wordLeft = px(12f),
+        wordTop = px(h - wordSize * 1.02f),
+        wordSize = px(wordSize),
+        menuFontSize = px(menuFont),
+        menuColumns = 1,
+        facts = null,
+        formNameLeft = px(side + 36f),
+        formNameCenterY = px(nameCenter),
+        formNameSize = px(COMPACT_FORM_NAME_SIZE),
+        versionRight = px(w - side),
+        versionBaseline = px(versionBaseline),
+        versionSize = px(COMPACT_VERSION_SIZE),
+    )
+}
+
+private fun HomeLayoutBuilder.compactPortraitScene(): HomeScene {
+    // Portrait adaptation: header, hero, the form name, then the menu at thumb height.
+    val side = 16f
+    val columns = if (h < 600f) 2 else 1
+    val rowHeight = if (columns == 1) 52f else 50f
+    val columnWidth = (w - side * 2f - 8f * (columns - 1)) / columns
+    // One column: rows step 6 px left going down, and the lowest row sits so far right that
+    // its selected speed lines end at the side margin. The font (36 px from 418 px wide)
+    // scales down on narrower phones so a Russian label with its stamp still fits the row.
+    // Two columns: 28 px from a 166 px column (the widest label, Russian ПЕРЕРОЖДЕНИЕ, takes
+    // 163 px of it with its lead) scales down on narrower phones, so every label stays whole
+    // in its column and a selected right-column item slides and casts its echo clear of the
+    // label left of it.
+    val menuFont = if (columns == 1) 36f * min(1f, w / 418f) else 28f * min(1f, columnWidth / 166f)
+    val menuReach = HOME_MENU_REACH * menuFont / 64f
+    val versionBaseline = h - 4f
+    // Two columns: Play spans the first row and the other four fill two rows, so no row has a lone item.
+    val rowCount = if (columns == 1) HomeMenuTargets.size else 1 + HomeMenuTargets.size / 2
+    val lastRowLeft = if (columns == 1) side + menuReach else side + columnWidth + 8f
+    val lastRow = Rect(lastRowLeft, 0f, w - side, rowHeight)
+    val selectedBottom = homeSelectedMenuFootprint(lastRow, menuFont).maxOf { it.bottom }
+    // Reserve the whole version line above its baseline, plus 2 px, including the
+    // selected row's rotated echo. A fixed bottom inset overlaps taller Linux glyphs.
+    val menuTop = min(
+        h - 16f - rowHeight * rowCount,
+        versionBaseline - HOME_VERSION_ASCENT_EM * COMPACT_VERSION_SIZE - 2f -
+            (rowCount - 1) * rowHeight - selectedBottom,
+    )
+    HomeMenuTargets.forEachIndexed { index, target ->
+        if (columns == 1) {
+            val top = menuTop + index * rowHeight
+            val left = side + menuReach + (HomeMenuTargets.size - 1 - index) * 6f
+            actions += HomeActionBounds(target, rect(left, top, w - side, top + rowHeight))
+        } else if (index == 0) {
+            actions += HomeActionBounds(target, rect(side, menuTop, w - side, menuTop + rowHeight))
+        } else {
+            val left = side + ((index - 1) % 2) * (columnWidth + 8f)
+            val top = menuTop + (1 + (index - 1) / 2) * rowHeight
+            actions += HomeActionBounds(target, rect(left, top, left + columnWidth, top + rowHeight))
         }
     }
-    return HomeLayoutGeometry(mode, actions, infos, scene, quit, runModeToggle)
+    // The name sits over the menu, its line box clear of the top row's selected slab.
+    val nameCenter = menuTop - (if (columns == 1) 20f else 16f) - 16f
+    infos += info(HomeInfoTarget.FORM, w - side - 24f, nameCenter)
+    val regionTop = 52f
+    val regionBottom = nameCenter - 20f
+    val heroRadius = min(w * 0.42f, (regionBottom - regionTop) * 0.5f)
+    val wordSize = w * 0.26f
+    runModeToggle = HomeToggleBounds(rect(w - side - 38f, 14f, w - side, 42f), rect(w - side - 41f, 6f, w - side + 3f, 50f))
+    return HomeScene(
+        unit = px(heroRadius / 260f),
+        gridSpacing = px(32f),
+        logo = Offset(px(side), px(28f)),
+        logoMark = px(22f),
+        wordmarkSize = px(14f),
+        chipsRight = px(w - side - 46f),
+        chipsTop = px(14f),
+        chipHeight = px(28f),
+        chipCount = 2,
+        compactChips = true,
+        heroCenter = Offset(px(w * 0.5f), px((regionTop + regionBottom) * 0.5f)),
+        heroRadius = px(heroRadius),
+        wordLeft = px(8f),
+        wordTop = px(max(regionTop, nameCenter - 26f - wordSize)),
+        wordSize = px(wordSize),
+        menuFontSize = px(menuFont),
+        menuColumns = columns,
+        facts = null,
+        formNameLeft = px(side),
+        formNameCenterY = px(nameCenter),
+        formNameSize = px(16f),
+        versionRight = px(w - side),
+        versionBaseline = px(versionBaseline),
+        versionSize = px(COMPACT_VERSION_SIZE),
+    )
 }
 
 /**

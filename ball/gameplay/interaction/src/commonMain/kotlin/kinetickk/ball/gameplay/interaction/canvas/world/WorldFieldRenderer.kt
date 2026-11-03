@@ -158,157 +158,17 @@ internal fun DrawScope.drawCombatFields(engine: GameplayRenderModel, shakeX: Flo
         val inside = engine.coreState.inFieldMask and (1 shl field.kind.ordinal) != 0
         val pulse2 = (sin(elapsed * TAU * 2f) + 1f) * 0.5f
         when (field.kind) {
-            CombatFieldVisual.FUSION -> {
-                drawFieldTimer(center, radius, remaining, b, 2f, fade, null)
-                val ending = left < 0.25f
-                if (fieldMotion(4)) {
-                    drawCircle(if (ending) Kk.Bone else a, 10f + 4f * pulse2, center, alpha = fade * 0.9f)
-                    val turn = elapsed * 40f / RAD_TO_DEG
-                    for (spoke in 0 until 6) {
-                        val angle = turn + spoke * TAU / 6f
-                        drawLine(a, polar(center, 12f, angle), polar(center, 26f, angle), 2f, alpha = fade)
-                    }
-                }
-                if (fieldMotion(6)) {
-                    ctx.progress = (age % 0.8f) / 0.8f
-                    drawFxLayer(FieldMotions.fusionSpiral, 6)
-                }
-                if (ending) {
-                    val t = 1f - left / 0.25f
-                    drawCircle(b, max(1f, radius * (1f - 0.9f * t)), center, alpha = fade, style = kkStroke(4.5f))
-                }
-                if (left < 0.08f) {
-                    val t = 1f - left / 0.08f
-                    drawCircle(Kk.Bone, max(1f, radius * (0.1f + 1.1f * t)), center, style = kkStroke(KkStrokeWidth.Icon))
-                }
-            }
-            CombatFieldVisual.ROT_WELL -> {
-                drawCircle(Kk.Ink, radius, center, alpha = 0.30f * fillScale * fade)
-                val growths = (field.charge01 * 3f).roundToInt()
-                drawFieldTimer(center, radius, remaining, a, if (growths <= 0) 2f else if (growths == 1) 3f else 4.5f, fade, null)
-                if (fieldMotion(6)) {
-                    ctx.progress = (age % 1f)
-                    drawFxLayer(FieldMotions.rotDots, 6)
-                }
-            }
-            CombatFieldVisual.DARK_STAR -> {
-                FxDrawBudget.take(FxPool.FIELDS, 1, signature = true)
-                drawCircle(a, radius, center, alpha = fade, style = WorldStrokes.dashedMedium)
-                if (fieldMotion(5)) {
-                    ctx.progress = (age % 1.2f) / 1.2f
-                    drawFxLayer(FieldMotions.darkSpiral, 4)
-                    drawCircle(Kk.Ink, radius * 0.25f, center, alpha = fade)
-                }
-            }
-            CombatFieldVisual.ECHO_RING -> {
-                drawFieldTimer(center, radius, remaining, a, 1.5f, fade, null)
-                if (fieldMotion(7)) {
-                    drawShearedSquare(center, 8f, a, fade, 2f)
-                    val beat = (elapsed % 0.75f) / 0.4f
-                    if (beat < 1f) drawCircle(a, radius * (0.6f + 0.4f * beat), center, alpha = 0.6f * (1f - beat) * fade, style = kkStroke(KkStrokeWidth.Icon))
-                    val used = (field.charge01 * ECHO_TICKS).roundToInt()
-                    for (tick in 0 until used) {
-                        val angle = -PI.toFloat() / 2f + tick * TAU / ECHO_TICKS
-                        drawLine(Kk.Bone, polar(center, radius - 4f, angle), polar(center, radius + 4f, angle), 2f, alpha = fade)
-                    }
-                }
-            }
-            CombatFieldVisual.NULL_WELL -> {
-                val core45 = radius * 0.45f
-                drawCircle(Kk.Ink, core45, center, alpha = 0.55f * fillScale * fade)
-                val eaten = (field.charge01 * 20f).roundToInt()
-                val armed = eaten >= 5
-                FxDrawBudget.take(FxPool.FIELDS, 1, signature = true)
-                drawCircle(if (armed) Kk.Bone else b, core45, center, alpha = fade, style = kkStroke(KkStrokeWidth.Heavy))
-                drawFieldTimer(center, radius, remaining, b, 1.5f, fade, null)
-                if (fieldMotion(6 + eaten)) {
-                    val turn = -elapsed * 120f
-                    for (arc in 0 until 6) {
-                        val r = radius * 0.75f
-                        drawArc(a, turn + arc * 60f - 15f, 30f, false, Offset(center.x - r, center.y - r), Size(r * 2f, r * 2f), alpha = fade,
-                            style = kkStroke(KkStrokeWidth.Icon))
-                    }
-                    for (notch in 0 until eaten.coerceAtMost(20)) {
-                        val angle = -PI.toFloat() / 2f + notch * 18f / RAD_TO_DEG
-                        drawLine(b, polar(center, core45 - 3f, angle), polar(center, core45 + 3f, angle), 1.5f, alpha = fade)
-                    }
-                }
-                if (armed && left < 0.12f) {
-                    val t = 1f - left / 0.12f
-                    drawCircle(Kk.Bone, max(1f, radius * (0.45f + 0.75f * t)), center, style = kkStroke(KkStrokeWidth.Icon))
-                }
-            }
-            CombatFieldVisual.PLASMA -> {
-                drawCircle(a, radius, center, alpha = 0.10f * fillScale * fade)
-                if (inside) drawFieldTimer(center, radius, remaining, a, 2f, fade, null)
-                else drawFieldTimer(center, radius, remaining, b, 2f, fade, WorldStrokes.dashedMedium)
-                if (fieldMotion(5) && sin(elapsed * TAU * 2f) > 0f) {
-                    for (dot in 0 until 5) {
-                        val angle = fxHash(ctx.seed, dot) * TAU
-                        drawCircle(a, 3f, polar(center, radius * (0.2f + 0.6f * fxHash(ctx.seed, dot + 9)), angle), alpha = fade)
-                    }
-                }
-            }
-            CombatFieldVisual.HUSH -> {
-                drawCircle(Kk.Ink, radius, center, alpha = 0.18f * fillScale * fade)
-                drawFieldTimer(center, radius, remaining, b, 2f, fade, null)
-                if (fieldMotion(8)) for (tick in 0 until 8) {
-                    val angle = tick * TAU / 8f
-                    val point = polar(center, radius, angle)
-                    val tx = -sin(angle) * 5f
-                    val ty = cos(angle) * 5f
-                    drawLine(a, Offset(point.x - tx, point.y - ty), Offset(point.x + tx, point.y + ty), 2f, alpha = 0.5f * fade)
-                }
-            }
-            CombatFieldVisual.TIME_BUBBLE -> {
-                drawCircle(a, radius, center, alpha = 0.06f * fillScale * fade)
-                drawFieldTimer(center, radius, remaining, a, 2f, fade, null)
-                if (fieldMotion(13)) {
-                    val mark = if (inside) Kk.Bone else a
-                    for (tick in 0 until 12) {
-                        val angle = tick * TAU / 12f
-                        drawLine(mark, polar(center, radius - 8f, angle), polar(center, radius, angle), 2f, alpha = fade)
-                    }
-                    val hand = -PI.toFloat() / 2f + TAU * (age / total)
-                    drawLine(mark, center, polar(center, radius * 0.8f, hand), 2f, alpha = fade)
-                }
-            }
-            CombatFieldVisual.ATTRACTOR -> {
-                FxDrawBudget.take(FxPool.FIELDS, 1, signature = true)
-                drawCircle(b, radius, center, alpha = fade, style = WorldStrokes.dashedHair)
-                if (fieldMotion(6)) {
-                    val turn = elapsed * 90f
-                    for (ring in 0..1) {
-                        val r = radius * (if (ring == 0) 0.35f else 0.6f)
-                        val start = if (ring == 0) turn else -turn
-                        for (arc in 0 until 3) {
-                            drawArc(if (ring == 0) a else b, start + arc * 120f - 25f, 50f, false, Offset(center.x - r, center.y - r),
-                                Size(r * 2f, r * 2f), alpha = fade, style = kkStroke(KkStrokeWidth.Icon))
-                        }
-                    }
-                }
-            }
-            CombatFieldVisual.STORM_COIL -> {
-                drawFieldTimer(center, radius, remaining, a, 1.5f, fade, WorldStrokes.dashedThin)
-                if (fieldMotion(4)) {
-                    drawShearedSquare(center, 9f, a, fade, 2f)
-                    val tick = (age % 0.5f) / 0.5f
-                    if (tick < 0.4f) {
-                        val flash = (1f - tick / 0.4f) * fade
-                        drawCircle(a, 8f, center, alpha = flash, style = kkStroke(KkStrokeWidth.Line2))
-                        drawCircle(a, 12f, center, alpha = flash, style = kkStroke(KkStrokeWidth.Line2))
-                        drawCircle(a, 16f, center, alpha = flash, style = kkStroke(KkStrokeWidth.Line2))
-                    }
-                }
-            }
-            CombatFieldVisual.GRAVITY_WELL -> {
-                drawCircle(Kk.Ink, radius * 0.3f, center, alpha = 0.25f * fillScale * fade)
-                drawFieldTimer(center, radius, remaining, a, 2f, fade, null)
-                if (fieldMotion(6)) {
-                    ctx.progress = (age % 0.8f) / 0.8f
-                    drawFxLayer(FieldMotions.wellSpiral, 6)
-                }
-            }
+            CombatFieldVisual.FUSION -> drawFusionField(center, radius, remaining, left, age, fade, a, b, elapsed, pulse2, ctx)
+            CombatFieldVisual.ROT_WELL -> drawRotWellField(field, center, radius, remaining, age, fade, a, fillScale, ctx)
+            CombatFieldVisual.DARK_STAR -> drawDarkStarField(center, radius, age, fade, a, ctx)
+            CombatFieldVisual.ECHO_RING -> drawEchoRingField(field, center, radius, remaining, fade, a, elapsed)
+            CombatFieldVisual.NULL_WELL -> drawNullWellField(field, center, radius, remaining, left, fade, a, b, elapsed, fillScale)
+            CombatFieldVisual.PLASMA -> drawPlasmaField(center, radius, remaining, fade, a, b, elapsed, fillScale, inside, ctx)
+            CombatFieldVisual.HUSH -> drawHushField(center, radius, remaining, fade, a, b, fillScale)
+            CombatFieldVisual.TIME_BUBBLE -> drawTimeBubbleField(center, radius, remaining, age, total, fade, a, fillScale, inside)
+            CombatFieldVisual.ATTRACTOR -> drawAttractorField(center, radius, fade, a, b, elapsed)
+            CombatFieldVisual.STORM_COIL -> drawStormCoilField(center, radius, remaining, age, fade, a)
+            CombatFieldVisual.GRAVITY_WELL -> drawGravityWellField(center, radius, remaining, age, fade, a, fillScale, ctx)
             CombatFieldVisual.FROST_LINE -> Unit
         }
         if (field.source == CombatFieldSource.SKILL) {
@@ -319,6 +179,168 @@ internal fun DrawScope.drawCombatFields(engine: GameplayRenderModel, shakeX: Flo
                 drawLine(roles.you, polar(center, radius - 3f, angle), polar(center, radius + 3f, angle), 2f, alpha = fade)
             }
         }
+    }
+}
+
+private fun DrawScope.drawFusionField(center: Offset, radius: Float, remaining: Float, left: Float, age: Float, fade: Float, a: Color, b: Color, elapsed: Float, pulse2: Float, ctx: FxContext) {
+    drawFieldTimer(center, radius, remaining, b, 2f, fade, null)
+    val ending = left < 0.25f
+    if (fieldMotion(4)) {
+        drawCircle(if (ending) Kk.Bone else a, 10f + 4f * pulse2, center, alpha = fade * 0.9f)
+        val turn = elapsed * 40f / RAD_TO_DEG
+        for (spoke in 0 until 6) {
+            val angle = turn + spoke * TAU / 6f
+            drawLine(a, polar(center, 12f, angle), polar(center, 26f, angle), 2f, alpha = fade)
+        }
+    }
+    if (fieldMotion(6)) {
+        ctx.progress = (age % 0.8f) / 0.8f
+        drawFxLayer(FieldMotions.fusionSpiral, 6)
+    }
+    if (ending) {
+        val t = 1f - left / 0.25f
+        drawCircle(b, max(1f, radius * (1f - 0.9f * t)), center, alpha = fade, style = kkStroke(4.5f))
+    }
+    if (left < 0.08f) {
+        val t = 1f - left / 0.08f
+        drawCircle(Kk.Bone, max(1f, radius * (0.1f + 1.1f * t)), center, style = kkStroke(KkStrokeWidth.Icon))
+    }
+}
+
+private fun DrawScope.drawRotWellField(field: CombatFieldProjection, center: Offset, radius: Float, remaining: Float, age: Float, fade: Float, a: Color, fillScale: Float, ctx: FxContext) {
+    drawCircle(Kk.Ink, radius, center, alpha = 0.30f * fillScale * fade)
+    val growths = (field.charge01 * 3f).roundToInt()
+    drawFieldTimer(center, radius, remaining, a, if (growths <= 0) 2f else if (growths == 1) 3f else 4.5f, fade, null)
+    if (fieldMotion(6)) {
+        ctx.progress = (age % 1f)
+        drawFxLayer(FieldMotions.rotDots, 6)
+    }
+}
+
+private fun DrawScope.drawDarkStarField(center: Offset, radius: Float, age: Float, fade: Float, a: Color, ctx: FxContext) {
+    FxDrawBudget.take(FxPool.FIELDS, 1, signature = true)
+    drawCircle(a, radius, center, alpha = fade, style = WorldStrokes.dashedMedium)
+    if (fieldMotion(5)) {
+        ctx.progress = (age % 1.2f) / 1.2f
+        drawFxLayer(FieldMotions.darkSpiral, 4)
+        drawCircle(Kk.Ink, radius * 0.25f, center, alpha = fade)
+    }
+}
+
+private fun DrawScope.drawEchoRingField(field: CombatFieldProjection, center: Offset, radius: Float, remaining: Float, fade: Float, a: Color, elapsed: Float) {
+    drawFieldTimer(center, radius, remaining, a, 1.5f, fade, null)
+    if (fieldMotion(7)) {
+        drawShearedSquare(center, 8f, a, fade, 2f)
+        val beat = (elapsed % 0.75f) / 0.4f
+        if (beat < 1f) drawCircle(a, radius * (0.6f + 0.4f * beat), center, alpha = 0.6f * (1f - beat) * fade, style = kkStroke(KkStrokeWidth.Icon))
+        val used = (field.charge01 * ECHO_TICKS).roundToInt()
+        for (tick in 0 until used) {
+            val angle = -PI.toFloat() / 2f + tick * TAU / ECHO_TICKS
+            drawLine(Kk.Bone, polar(center, radius - 4f, angle), polar(center, radius + 4f, angle), 2f, alpha = fade)
+        }
+    }
+}
+
+private fun DrawScope.drawNullWellField(field: CombatFieldProjection, center: Offset, radius: Float, remaining: Float, left: Float, fade: Float, a: Color, b: Color, elapsed: Float, fillScale: Float) {
+    val core45 = radius * 0.45f
+    drawCircle(Kk.Ink, core45, center, alpha = 0.55f * fillScale * fade)
+    val eaten = (field.charge01 * 20f).roundToInt()
+    val armed = eaten >= 5
+    FxDrawBudget.take(FxPool.FIELDS, 1, signature = true)
+    drawCircle(if (armed) Kk.Bone else b, core45, center, alpha = fade, style = kkStroke(KkStrokeWidth.Heavy))
+    drawFieldTimer(center, radius, remaining, b, 1.5f, fade, null)
+    if (fieldMotion(6 + eaten)) {
+        val turn = -elapsed * 120f
+        for (arc in 0 until 6) {
+            val r = radius * 0.75f
+            drawArc(a, turn + arc * 60f - 15f, 30f, false, Offset(center.x - r, center.y - r), Size(r * 2f, r * 2f), alpha = fade,
+                style = kkStroke(KkStrokeWidth.Icon))
+        }
+        for (notch in 0 until eaten.coerceAtMost(20)) {
+            val angle = -PI.toFloat() / 2f + notch * 18f / RAD_TO_DEG
+            drawLine(b, polar(center, core45 - 3f, angle), polar(center, core45 + 3f, angle), 1.5f, alpha = fade)
+        }
+    }
+    if (armed && left < 0.12f) {
+        val t = 1f - left / 0.12f
+        drawCircle(Kk.Bone, max(1f, radius * (0.45f + 0.75f * t)), center, style = kkStroke(KkStrokeWidth.Icon))
+    }
+}
+
+private fun DrawScope.drawPlasmaField(center: Offset, radius: Float, remaining: Float, fade: Float, a: Color, b: Color, elapsed: Float, fillScale: Float, inside: Boolean, ctx: FxContext) {
+    drawCircle(a, radius, center, alpha = 0.10f * fillScale * fade)
+    if (inside) drawFieldTimer(center, radius, remaining, a, 2f, fade, null)
+    else drawFieldTimer(center, radius, remaining, b, 2f, fade, WorldStrokes.dashedMedium)
+    if (fieldMotion(5) && sin(elapsed * TAU * 2f) > 0f) {
+        for (dot in 0 until 5) {
+            val angle = fxHash(ctx.seed, dot) * TAU
+            drawCircle(a, 3f, polar(center, radius * (0.2f + 0.6f * fxHash(ctx.seed, dot + 9)), angle), alpha = fade)
+        }
+    }
+}
+
+private fun DrawScope.drawHushField(center: Offset, radius: Float, remaining: Float, fade: Float, a: Color, b: Color, fillScale: Float) {
+    drawCircle(Kk.Ink, radius, center, alpha = 0.18f * fillScale * fade)
+    drawFieldTimer(center, radius, remaining, b, 2f, fade, null)
+    if (fieldMotion(8)) for (tick in 0 until 8) {
+        val angle = tick * TAU / 8f
+        val point = polar(center, radius, angle)
+        val tx = -sin(angle) * 5f
+        val ty = cos(angle) * 5f
+        drawLine(a, Offset(point.x - tx, point.y - ty), Offset(point.x + tx, point.y + ty), 2f, alpha = 0.5f * fade)
+    }
+}
+
+private fun DrawScope.drawTimeBubbleField(center: Offset, radius: Float, remaining: Float, age: Float, total: Float, fade: Float, a: Color, fillScale: Float, inside: Boolean) {
+    drawCircle(a, radius, center, alpha = 0.06f * fillScale * fade)
+    drawFieldTimer(center, radius, remaining, a, 2f, fade, null)
+    if (fieldMotion(13)) {
+        val mark = if (inside) Kk.Bone else a
+        for (tick in 0 until 12) {
+            val angle = tick * TAU / 12f
+            drawLine(mark, polar(center, radius - 8f, angle), polar(center, radius, angle), 2f, alpha = fade)
+        }
+        val hand = -PI.toFloat() / 2f + TAU * (age / total)
+        drawLine(mark, center, polar(center, radius * 0.8f, hand), 2f, alpha = fade)
+    }
+}
+
+private fun DrawScope.drawAttractorField(center: Offset, radius: Float, fade: Float, a: Color, b: Color, elapsed: Float) {
+    FxDrawBudget.take(FxPool.FIELDS, 1, signature = true)
+    drawCircle(b, radius, center, alpha = fade, style = WorldStrokes.dashedHair)
+    if (fieldMotion(6)) {
+        val turn = elapsed * 90f
+        for (ring in 0..1) {
+            val r = radius * (if (ring == 0) 0.35f else 0.6f)
+            val start = if (ring == 0) turn else -turn
+            for (arc in 0 until 3) {
+                drawArc(if (ring == 0) a else b, start + arc * 120f - 25f, 50f, false, Offset(center.x - r, center.y - r),
+                    Size(r * 2f, r * 2f), alpha = fade, style = kkStroke(KkStrokeWidth.Icon))
+            }
+        }
+    }
+}
+
+private fun DrawScope.drawStormCoilField(center: Offset, radius: Float, remaining: Float, age: Float, fade: Float, a: Color) {
+    drawFieldTimer(center, radius, remaining, a, 1.5f, fade, WorldStrokes.dashedThin)
+    if (fieldMotion(4)) {
+        drawShearedSquare(center, 9f, a, fade, 2f)
+        val tick = (age % 0.5f) / 0.5f
+        if (tick < 0.4f) {
+            val flash = (1f - tick / 0.4f) * fade
+            drawCircle(a, 8f, center, alpha = flash, style = kkStroke(KkStrokeWidth.Line2))
+            drawCircle(a, 12f, center, alpha = flash, style = kkStroke(KkStrokeWidth.Line2))
+            drawCircle(a, 16f, center, alpha = flash, style = kkStroke(KkStrokeWidth.Line2))
+        }
+    }
+}
+
+private fun DrawScope.drawGravityWellField(center: Offset, radius: Float, remaining: Float, age: Float, fade: Float, a: Color, fillScale: Float, ctx: FxContext) {
+    drawCircle(Kk.Ink, radius * 0.3f, center, alpha = 0.25f * fillScale * fade)
+    drawFieldTimer(center, radius, remaining, a, 2f, fade, null)
+    if (fieldMotion(6)) {
+        ctx.progress = (age % 0.8f) / 0.8f
+        drawFxLayer(FieldMotions.wellSpiral, 6)
     }
 }
 

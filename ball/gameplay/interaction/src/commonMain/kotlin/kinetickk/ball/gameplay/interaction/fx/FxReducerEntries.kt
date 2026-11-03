@@ -6,6 +6,7 @@ package kinetickk.ball.gameplay.interaction.fx
 import kinetickk.ball.gameplay.nucleus.render.formatDamageNumber
 import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.mapToImmutableList
 
 /*
  * The live entries of [InteractionFxReducer]: mutable presentation memory it advances in place each step and copies
@@ -120,3 +121,100 @@ internal data class WeaponArc(
     val style: Int,
     val maxLife: Float,
 )
+
+/** Drops the oldest entries of [values] until at most [maximum] remain. */
+internal fun <Element> trimFront(values: MutableList<Element>, maximum: Int) {
+    while (values.size > maximum) values.removeAt(0)
+}
+
+/** Visits each value once, allowing its update and stable compaction in the same pass. */
+internal inline fun <Element> retainInPlace(
+    values: MutableList<Element>,
+    isAlive: (Element) -> Boolean,
+) {
+    var retainedCount = 0
+    for (index in values.indices) {
+        val value = values[index]
+        if (isAlive(value)) {
+            if (retainedCount != index) values[retainedCount] = value
+            retainedCount++
+        }
+    }
+    var index = values.lastIndex
+    while (index >= retainedCount) {
+        values.removeAt(index)
+        index--
+    }
+}
+
+// The published copies of the live entries ([InteractionFxReducer.snapshot]).
+
+internal fun List<BuildNotice>.toNotificationProjections(): ImmutableList<BuildNotificationProjection> = mapToImmutableList { value ->
+    BuildNotificationProjection(value.title, value.details, value.life, value.kind, value.maxLife, value.age)
+}
+
+internal fun List<Particle>.toParticleProjections(): ImmutableList<ParticleProjection> = mapToImmutableList { value ->
+    ParticleProjection(
+        value.x,
+        value.y,
+        value.vx,
+        value.vy,
+        value.life,
+        value.maxLife,
+        value.colorIndex,
+        value.size,
+    )
+}
+
+internal fun List<MotionEcho>.toMotionEchoProjections(): ImmutableList<MotionEchoProjection> = mapToImmutableList { value ->
+    MotionEchoProjection(value.x, value.y, value.life, value.maxLife, value.intensity)
+}
+
+internal fun List<Shockwave>.toShockwaveProjections(): ImmutableList<ShockwaveProjection> = mapToImmutableList { value ->
+    ShockwaveProjection(
+        value.x,
+        value.y,
+        value.life,
+        value.maxLife,
+        value.maxRadius,
+        value.colorIndex,
+    )
+}
+
+internal fun List<DamageNumber>.toDamageNumberProjections(): ImmutableList<DamageNumberProjection> = mapToImmutableList { value ->
+    DamageNumberProjection(
+        x = value.x,
+        y = value.y,
+        amount = value.amount,
+        critical = value.critical,
+        life = value.life,
+        compactAmount = value.compactAmount,
+        fullAmount = value.fullAmount,
+        russianCompactAmount = value.russianCompactAmount,
+        driftX = value.driftX,
+        driftY = value.driftY,
+        tone = value.tone,
+    )
+}
+
+internal fun List<WeaponArc>.toWeaponArcProjections(): ImmutableList<WeaponArcProjection> = mapToImmutableList { value ->
+    WeaponArcProjection(value.fromX, value.fromY, value.toX, value.toY, value.life, value.style, value.maxLife)
+}
+
+internal fun List<ElementBurst>.toElementBurstProjections(): ImmutableList<ElementBurstProjection> = mapToImmutableList { value ->
+    ElementBurstProjection(value.x, value.y, value.primary, value.secondary, value.reaction, value.radius, value.life,
+        value.maxLife, value.weight, value.direction, value.flags, value.seed)
+}
+
+internal fun List<SkillBurst>.toSkillBurstProjections(): ImmutableList<SkillBurstProjection> = mapToImmutableList { value ->
+    SkillBurstProjection(value.skill, value.phase, value.x, value.y, value.dirX, value.dirY, value.radius, value.rank,
+        value.flags, value.seed, value.life, value.maxLife)
+}
+
+internal fun List<ApexBurst>.toApexBurstProjections(): ImmutableList<ApexBurstProjection> = mapToImmutableList { value ->
+    ApexBurstProjection(value.shape, value.x, value.y, value.seed, value.life, value.maxLife)
+}
+
+internal fun List<ReactionStamp>.toReactionStampProjections(): ImmutableList<ReactionStampProjection> = mapToImmutableList { value ->
+    ReactionStampProjection(value.x, value.y, value.reaction, value.life, value.maxLife)
+}

@@ -24,6 +24,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kinetickk.ball.content.api.UiCatalogSnapshot
@@ -31,15 +32,11 @@ import kinetickk.ball.profile.api.rank
 import kinetickk.foundation.design.*
 import kotlin.math.max
 import kotlin.math.min
-import kinetickk.flow.session.interaction.localization.SessionRedesignText
-import kinetickk.flow.session.interaction.localization.CodexText
 import kinetickk.ball.content.api.localizedContent
 import androidx.compose.runtime.saveable.rememberSaveable
 import kinetickk.ball.content.api.StatusElement
-import kinetickk.ball.gameplay.api.BuildStatSource
 import kinetickk.ball.profile.api.HomeProgressProjection
 import kinetickk.flow.session.interaction.codex.api.*
-import kotlin.math.roundToInt
 import kinetickk.ball.gameplay.api.GameplayBuildSummaryProjection
 import androidx.compose.runtime.saveable.SaveableStateHolder
 
@@ -335,212 +332,100 @@ internal fun CodexGridPane(
         val statsFit = rememberCodexPairFit(statRows, maxWidth - 12.dp - 28.dp, 12.dp, 16f * ui,
             typography.wideStyle(20f * ui, tabular = true)) { size -> typography.bodyStyle(size) }
         scrollHolder.SaveableStateProvider(if (tab == CodexTab.CATALOG) "${tab.ordinal}/$category" else "${tab.ordinal}") {
-            val grid = rememberLazyGridState()
-            var priorKeysValue by rememberSaveable { mutableStateOf<String?>(null) }
-            val resultKey = remember(entries) { entries.joinToString("|") { it.key } }
-            LaunchedEffect(resultKey) {
-                if (priorKeysValue != null && priorKeysValue != resultKey) grid.scrollToItem(0)
-                priorKeysValue = resultKey
-            }
-            // The latest keyboard move in the Items matrix; it lives with this grid, so a revisited tab replays none.
-            var matrixMoveValue by remember { mutableStateOf<CodexMatrixMove?>(null) }
-            LaunchedEffect(matrixMoveValue) {
-                val move = matrixMoveValue ?: return@LaunchedEffect
-                if (move.scroll) {
-                    // Not composed: bring it in first, then focus it once it is.
-                    grid.scrollToItem(move.index)
-                    withFrameNanos { }
-                    slotFocus[move.target]?.requestFocus()
-                }
-                // A wrapped line keeps its row's name in view where the row fits.
-                grid.revealCodexRow(move.rowStart, move.target, move.lines, move.gapPx)
-            }
-            // Row/column highlight of the previewed cell in flat (catalog) grids.
-            val previewIndex = if (tab == CodexTab.CATALOG && itemGrid == null) {
-                entries.indexOfFirst { it.key == selection().previewKey }
-            } else -1
-            // In the Items matrix: the previewed cell's row, and in the banded layout its column and rarity.
-            val previewPosition = itemGrid?.positions?.get(selection().previewKey)
-            val previewRow = previewPosition?.rowIndex ?: -1
-            val previewColumn = if (itemGrid?.layout == CodexItemLayout.BANDED) previewPosition?.column ?: -1 else -1
-            val previewRarity = itemGrid?.bands?.firstOrNull { previewColumn >= it.column && previewColumn < it.column + it.width }?.rarity
-            val noticeOffset = if (emptyState != CodexEmptyState.NONE) 1 else 0
-            // Arrows, Home / End and Page Up / Page Down walk the matrix; at an edge the key goes on unconsumed.
-            val matrixKeys = Modifier.onPreviewKeyEvent { event ->
-                val matrix = itemGrid
-                if (matrix == null || sheetVisible || event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                val move = codexItemMove(event.key) ?: return@onPreviewKeyEvent false
-                val from = selection().focusKey?.takeIf { it in matrix.positions }
-                val target = when {
-                    from != null -> codexItemNeighbour(matrix, from, move)
-                    gridFocused() -> selection().pinnedKey?.takeIf { it in matrix.positions } ?: matrix.cells.firstOrNull()?.key
-                    else -> null
-                } ?: return@onPreviewKeyEvent false
-                val position = matrix.positions[target] ?: return@onPreviewKeyEvent false
-                val requester = slotFocus[target]
-                requester?.requestFocus()
-                val rowStart = matrix.rowStart(position.rowIndex)
-                val lines = position.line - matrix.items[rowStart].line
-                val gapPx = CODEX_ITEM_GAP_DP * labelDensity
-                matrixMoveValue = CodexMatrixMove(target, noticeOffset + position.gridIndex, requester == null,
-                    noticeOffset + rowStart, lines, gapPx)
-                true
-            }
-            LazyVerticalGrid(GridCells.Fixed(columns), Modifier.fillMaxSize().then(matrixKeys).focusRequester(listFocus)
-                .onFocusChanged { onGridFocused(it.isFocused) }.focusable(enabled = !sheetVisible).testTag("codex-grid"),
-                state = grid, horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(gap),
-                contentPadding = PaddingValues(top = 6.dp, bottom = 16.dp, start = 6.dp, end = 6.dp)) {
-                if (emptyState != CodexEmptyState.NONE) item(key = "empty", contentType = CodexGridContentType.NOTICE, span = { GridItemSpan(maxLineSpan) }) {
-                    EmptyNotice(emptyState, ui, dense = compactHeader)
-                }
-                fun heading(key: String, title: String, value: String? = null, info: String? = null, badge: String? = null) {
-                    item(key = "heading/$key", contentType = CodexGridContentType.HEADING, span = { GridItemSpan(maxLineSpan) }) {
-                        CodexSectionHeading(title, ui, value, info, badge)
-                    }
-                }
-                fun cells(sectionEntries: List<CodexEntry>) {
-                    items(sectionEntries, key = { it.key }, contentType = { CodexGridContentType.SLOT }) { entry ->
-                        CodexSlot(entry, catalog, ui, selection(), slotFocus, band = false, onSelection)
-                    }
-                }
-                fun meters(sectionEntries: List<CodexEntry>) {
-                    itemsIndexed(sectionEntries, key = { _, entry -> entry.key }, contentType = { _, _ -> CodexGridContentType.ROW },
-                        span = { index, _ -> GridItemSpan(if (listTab) 1 else codexRowSpan(maxLineSpan, meterCells, index)) }) { _, entry ->
-                        CodexMeterRow(entry, catalog, ui, selection(), slotFocus, describeMeters, onSelection)
-                    }
-                }
-                fun pairings(sectionEntries: List<CodexEntry>, showKind: (CodexEntry) -> Boolean) {
-                    itemsIndexed(sectionEntries, key = { _, entry -> entry.key }, contentType = { _, _ -> CodexGridContentType.ROW },
-                        span = { index, _ -> GridItemSpan(if (listTab) 1 else codexRowSpan(maxLineSpan, pairingCells, index)) }) { _, entry ->
-                        CodexPairingRow(entry, catalog, ui, selection(), slotFocus, showKind(entry), onSelection)
-                    }
-                }
-                when (tab) {
-                    CodexTab.BUILD -> if (build != null) {
-                        // Form and weapon share one line; the run's Rebirth tier rides beside them in gold.
-                        heading("loadout", language.text(CodexText.SECTION_LOADOUT),
-                            badge = progress.rebirthProgress.level.takeIf { it > 0 }?.let { language.text(SessionText.REBIRTH_LEVEL, it) })
-                        cells(entries.filter { it.icon is CodexIcon.Shape || it.icon is CodexIcon.Weapon })
-                        heading("relics", language.text(SessionText.RELICS_TITLE), "${build.relics.size}/${catalog.relicPolicy.maxSlots}")
-                        cells(entries.filter { it.icon is CodexIcon.Relic || it.icon == CodexIcon.Empty })
-                        if (build.relics.isNotEmpty() || build.severedRelicIds.isNotEmpty()) {
-                            heading("costs", language.text(CodexText.SECTION_COSTS))
-                            item(key = "costs", contentType = CodexGridContentType.BLOCK, span = { GridItemSpan(maxLineSpan) }) {
-                                CodexCostBlock(build, catalog, ui)
-                            }
-                        }
-                        heading("items", language.text(SessionText.ITEMS))
-                        cells(entries.filter { it.icon is CodexIcon.Item })
-                        if (entries.none { it.icon is CodexIcon.Item }) item(key = "empty-inventory", contentType = CodexGridContentType.NOTICE, span = { GridItemSpan(maxLineSpan) }) { EmptyNotice(CodexEmptyState.EMPTY_INVENTORY, ui) }
-                        entries.filter { it.icon is CodexIcon.Tag }.takeIf { it.isNotEmpty() }?.let { tags ->
-                            heading("resonance", language.text(CodexText.SECTION_RESONANCE), info = language.text(CodexText.TAGS_RULE,
-                                policy.resonanceThresholds[0], policy.resonanceThresholds[1], policy.resonanceThresholds[2]))
-                            meters(tags)
-                        }
-                        entries.filter { it.icon is CodexIcon.Affinity }.takeIf { it.isNotEmpty() }?.let { affinity ->
-                            heading("affinity", language.text(CodexText.SECTION_AFFINITY), info = language.text(CodexText.AFFINITY_RULE,
-                                policy.affinityThresholds[0], policy.affinityThresholds[1], policy.affinityThresholds[2]))
-                            meters(affinity)
-                        }
-                        entries.filter { it.icon is CodexIcon.Pairing }.takeIf { it.isNotEmpty() }?.let { links ->
-                            heading("links", language.text(CodexText.SECTION_LINKS))
-                            pairings(links) { true }
-                        }
-                        entries.filter { it.icon is CodexIcon.Reaction }.takeIf { it.isNotEmpty() }?.let { reactions ->
-                            heading("reactions", language.text(CodexText.SECTION_REACTIONS), info = language.text(CodexText.REACTION_RULE))
-                            item(key = "build-reactions", contentType = CodexGridContentType.CHIPS, span = { GridItemSpan(maxLineSpan) }) {
-                                CodexReactionChips(reactions, ui, selection(), slotFocus, onSelection)
-                            }
-                        }
-                        item(key = "stats-heading", contentType = CodexGridContentType.HEADING, span = { GridItemSpan(maxLineSpan) }) {
-                            Box(Modifier.padding(top = 12.dp)) {
-                                CodexToggleButton(language.text(SessionRedesignText.STATS), statsExpanded(), "codex-stats", controlScale) { onStatsExpanded(!statsExpanded()) }
-                            }
-                        }
-                        if (statsExpanded()) itemsIndexed(build.stats, key = { _, stat -> "stat/${stat.name}" }, contentType = { _, _ -> CodexGridContentType.STAT }, span = { _, _ -> GridItemSpan(maxLineSpan) }) { index, stat ->
-                            val (name, value) = statRows[index]
-                            CodexStatRow(name, value, selectedStat() == stat.name, "codex-stat-${stat.name}", ui, statsFit, { onSelectedStat(if (selectedStat() == stat.name) null else stat.name) }) {
-                                stat.contributions.forEach { contribution ->
-                                    val name = when (contribution.source) {
-                                        BuildStatSource.CHARACTER -> language.text(SessionText.CHARACTER_SOURCE)
-                                        BuildStatSource.LAB -> language.text(SessionText.LAB_SOURCE)
-                                        BuildStatSource.ITEMS -> language.text(SessionText.ITEMS_TITLE)
-                                        BuildStatSource.RELICS -> language.text(SessionText.RELICS_TITLE)
-                                        BuildStatSource.SYNERGIES -> language.text(CodexText.RESONANCE_SOURCE)
-                                        BuildStatSource.MASTERY -> language.text(SessionText.MASTERY_SOURCE)
-                                        BuildStatSource.TEMPORARY -> language.text(SessionText.TEMPORARY_SOURCE)
-                                    }
-                                    BasicText("$name  ${codexNumber(contribution.amount, language)}${stat.unit.localizedContent(language)}",
-                                        style = typography.monoStyle(11f * ui, color = Kk.Bone2))
-                                }
-                            }
-                        }
-                    }
-                    CodexTab.CATALOG -> if (itemGrid != null && labelFit != null) {
-                        // The Items matrix: one lazy item per header, label, rule, spacer and cell, every line spanning the grid.
-                        val parts = itemGrid.items
-                        items(parts.size, key = { parts[it].key }, span = { GridItemSpan(parts[it].span) },
-                            contentType = { parts[it].contentType }) { index ->
-                            val part = parts[index]
-                            val rowBand = previewRow >= 0 && part.rowIndex == previewRow
-                            val stripe = if (previewColumn >= 0 && part.covers(previewColumn)) previewColumn - part.column else -1
-                            // A line holding a side label is as tall as the label; its cells and blanks centre in it.
-                            val lineDp = if (part.line in itemGrid.labelled) labelFit.height else itemGrid.geometry.cellDp
-                            when (part) {
-                                is CodexGridItem.Head -> CodexItemsHead(itemGrid.bands, part.span, gridHeight, previewColumn, previewRarity)
-                                is CodexGridItem.Label -> if (part.stacked) CodexItemRowHeading(part.row, rowBand, ui)
-                                    else CodexItemRowLabel(part.row, rowBand, labelFit, ui)
-                                is CodexGridItem.Rule -> CodexItemRule()
-                                is CodexGridItem.Spacer -> CodexItemSpacer(part.span, lineDp, rowBand, stripe)
-                                is CodexGridItem.Cell ->
-                                    CodexItemRowSlot(part.cell.entry, selection(), slotFocus, rowBand || stripe >= 0, lineDp, onSelection)
-                            }
-                        }
-                    } else itemsIndexed(entries, key = { _, entry -> entry.key },
-                        contentType = { _, _ -> CodexGridContentType.SLOT }) { index, entry ->
-                        val band = previewIndex >= 0 && (index / columns == previewIndex / columns || index % columns == previewIndex % columns)
-                        CodexSlot(entry, catalog, ui, selection(), slotFocus, band, onSelection)
-                    }
-                    CodexTab.REACTIONS -> item(key = "matrix", contentType = CodexGridContentType.MATRIX, span = { GridItemSpan(maxLineSpan) }) {
-                        CodexReactionMatrix(entries, gridHeight, ui, selection(), slotFocus, residue, residueSource, onSelection)
-                    }
-                    CodexTab.PAIRINGS -> CodexPairingSection.entries.forEach { section ->
-                        val sectionEntries = entries.filter { it.pairingSection() == section }
-                        if (sectionEntries.isEmpty()) return@forEach
-                        heading("pairings-$section", language.text(section.title), sectionEntries.size.toString())
-                        // A section of one kind needs no kind tags: only rows of another kind keep theirs.
-                        pairings(sectionEntries) { entry ->
-                            when (section) {
-                                CodexPairingSection.CONCORDS, CodexPairingSection.HARMONY -> false
-                                CodexPairingSection.DISSONANCE -> (entry.icon as? CodexIcon.Pairing)?.kind?.named == true
-                                CodexPairingSection.INCOMPATIBLE -> true
-                            }
-                        }
-                    }
-                    CodexTab.TAGS -> {
-                        heading("resonance", language.text(CodexText.SECTION_RESONANCE), info = language.text(CodexText.TAGS_RULE,
-                            policy.resonanceThresholds[0], policy.resonanceThresholds[1], policy.resonanceThresholds[2]))
-                        meters(entries.filter { it.icon is CodexIcon.Tag })
-                        heading("affinity", language.text(CodexText.SECTION_AFFINITY), info = language.text(CodexText.AFFINITY_RULE,
-                            policy.affinityThresholds[0], policy.affinityThresholds[1], policy.affinityThresholds[2]))
-                        meters(entries.filter { it.icon is CodexIcon.Affinity })
-                        heading("keys", language.text(CodexText.SECTION_KEYS), info = language.text(CodexText.KEYS_RULE,
-                            ((policy.harmonyScale - 1f) * 100f).roundToInt(), ((1f - policy.dissonanceScale) * 100f).roundToInt()))
-                        item(key = "keys", contentType = CodexGridContentType.CHIPS, span = { GridItemSpan(maxLineSpan) }) {
-                            val byKey = entries.associateBy { it.key }
-                            CodexKeyChips(codexKeyGroups().map { group -> group.mapNotNull { byKey["key/$it"] } }, ui, selection(), slotFocus, onSelection)
-                        }
-                    }
-                }
-            }
+            CodexGridList(
+                tab, entries, itemGrid, labelFit, columns, gap, gridHeight, catalog, ui, compactHeader, sheetVisible, emptyState,
+                labelDensity, slotFocus, listFocus, selection, onSelection, gridFocused, onGridFocused,
+                CodexGridItems(language, catalog, ui, listTab, meterCells, pairingCells, describeMeters, slotFocus, selection, onSelection),
+                build, progress, typography, controlScale, statsExpanded, onStatsExpanded, selectedStat, onSelectedStat, statRows, statsFit,
+                residue, residueSource,
+            )
         }
     }
 }
 
-private val CodexPairingSection.title: CodexText
-    get() = when (this) {
-        CodexPairingSection.CONCORDS -> CodexText.SECTION_CONCORDS
-        CodexPairingSection.HARMONY -> CodexText.SECTION_HARMONY
-        CodexPairingSection.DISSONANCE -> CodexText.SECTION_DISSONANCE
-        CodexPairingSection.INCOMPATIBLE -> CodexText.SECTION_INCOMPATIBLE
+/** The lazy grid of one Codex tab, with its scroll memory and the Items matrix's keyboard walk. */
+@Composable
+@NonRestartableComposable
+private fun CodexGridList(
+    tab: CodexTab, entries: List<CodexEntry>, itemGrid: CodexItemGrid?, labelFit: CodexRowLabelFit?, columns: Int, gap: Dp,
+    gridHeight: Dp, catalog: UiCatalogSnapshot, ui: Float, compactHeader: Boolean, sheetVisible: Boolean,
+    emptyState: CodexEmptyState, labelDensity: Float, slotFocus: MutableMap<String, FocusRequester>, listFocus: FocusRequester,
+    selection: () -> CodexSelection, onSelection: ((CodexSelection) -> CodexSelection) -> Unit, gridFocused: () -> Boolean,
+    onGridFocused: (Boolean) -> Unit, items: CodexGridItems, build: GameplayBuildSummaryProjection?,
+    progress: HomeProgressProjection, typography: InterfaceTypography, controlScale: Float, statsExpanded: () -> Boolean,
+    onStatsExpanded: (Boolean) -> Unit, selectedStat: () -> String?, onSelectedStat: (String?) -> Unit,
+    statRows: List<Pair<String, String>>, statsFit: CodexPairFit, residue: StatusElement?, residueSource: String?,
+) {
+    val grid = rememberLazyGridState()
+    var priorKeysValue by rememberSaveable { mutableStateOf<String?>(null) }
+    val resultKey = remember(entries) { entries.joinToString("|") { it.key } }
+    LaunchedEffect(resultKey) {
+        if (priorKeysValue != null && priorKeysValue != resultKey) grid.scrollToItem(0)
+        priorKeysValue = resultKey
     }
+    // The latest keyboard move in the Items matrix; it lives with this grid, so a revisited tab replays none.
+    var matrixMoveValue by remember { mutableStateOf<CodexMatrixMove?>(null) }
+    LaunchedEffect(matrixMoveValue) {
+        val move = matrixMoveValue ?: return@LaunchedEffect
+        if (move.scroll) {
+            // Not composed: bring it in first, then focus it once it is.
+            grid.scrollToItem(move.index)
+            withFrameNanos { }
+            slotFocus[move.target]?.requestFocus()
+        }
+        // A wrapped line keeps its row's name in view where the row fits.
+        grid.revealCodexRow(move.rowStart, move.target, move.lines, move.gapPx)
+    }
+    // Row/column highlight of the previewed cell in flat (catalog) grids.
+    val previewIndex = if (tab == CodexTab.CATALOG && itemGrid == null) {
+        entries.indexOfFirst { it.key == selection().previewKey }
+    } else -1
+    // In the Items matrix: the previewed cell's row, and in the banded layout its column and rarity.
+    val previewPosition = itemGrid?.positions?.get(selection().previewKey)
+    val previewRow = previewPosition?.rowIndex ?: -1
+    val previewColumn = if (itemGrid?.layout == CodexItemLayout.BANDED) previewPosition?.column ?: -1 else -1
+    val previewRarity = itemGrid?.bands?.firstOrNull { previewColumn >= it.column && previewColumn < it.column + it.width }?.rarity
+    val noticeOffset = if (emptyState != CodexEmptyState.NONE) 1 else 0
+    // Arrows, Home / End and Page Up / Page Down walk the matrix; at an edge the key goes on unconsumed.
+    val matrixKeys = Modifier.onPreviewKeyEvent { event ->
+        val matrix = itemGrid
+        if (matrix == null || sheetVisible || event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+        val move = codexItemMove(event.key) ?: return@onPreviewKeyEvent false
+        val from = selection().focusKey?.takeIf { it in matrix.positions }
+        val target = when {
+            from != null -> codexItemNeighbour(matrix, from, move)
+            gridFocused() -> selection().pinnedKey?.takeIf { it in matrix.positions } ?: matrix.cells.firstOrNull()?.key
+            else -> null
+        } ?: return@onPreviewKeyEvent false
+        val position = matrix.positions[target] ?: return@onPreviewKeyEvent false
+        val requester = slotFocus[target]
+        requester?.requestFocus()
+        val rowStart = matrix.rowStart(position.rowIndex)
+        val lines = position.line - matrix.items[rowStart].line
+        val gapPx = CODEX_ITEM_GAP_DP * labelDensity
+        matrixMoveValue = CodexMatrixMove(target, noticeOffset + position.gridIndex, requester == null,
+            noticeOffset + rowStart, lines, gapPx)
+        true
+    }
+    LazyVerticalGrid(GridCells.Fixed(columns), Modifier.fillMaxSize().then(matrixKeys).focusRequester(listFocus)
+        .onFocusChanged { onGridFocused(it.isFocused) }.focusable(enabled = !sheetVisible).testTag("codex-grid"),
+        state = grid, horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(gap),
+        contentPadding = PaddingValues(top = 6.dp, bottom = 16.dp, start = 6.dp, end = 6.dp)) {
+        if (emptyState != CodexEmptyState.NONE) item(key = "empty", contentType = CodexGridContentType.NOTICE, span = { GridItemSpan(maxLineSpan) }) {
+            EmptyNotice(emptyState, ui, dense = compactHeader)
+        }
+        with(items) {
+            when (tab) {
+                CodexTab.BUILD -> if (build != null) {
+                    buildSections(entries, build, progress, typography, controlScale, statsExpanded, onStatsExpanded, selectedStat,
+                        onSelectedStat, statRows, statsFit)
+                }
+                CodexTab.CATALOG -> catalogSection(entries, itemGrid, labelFit, columns, gridHeight, previewIndex, previewRow,
+                    previewColumn, previewRarity)
+                CodexTab.REACTIONS -> reactionMatrix(entries, gridHeight, residue, residueSource)
+                CodexTab.PAIRINGS -> pairingSections(entries)
+                CodexTab.TAGS -> tagSections(entries)
+            }
+        }
+    }
+}

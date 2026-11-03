@@ -345,200 +345,220 @@ internal fun DrawScope.drawCardOrnament(bounds: Rect, cut: Float, bandBottom: Fl
     val edge = ornamentInset(bounds, style.material)
     when (style.ornament) {
         KkCardOrnament.NONE -> Unit
-        KkCardOrnament.BUMPER -> {
-            // Small (phone) cards take a slimmer bar, without the rail.
-            val compact = k < COMPACT_SCALE
-            val bar = if (compact) d(3f) else d(6f) * k
-            val inset = edge + bar * 0.5f
-            val rail = inset + bar * 0.5f + d(4f) * k
-            // The bar's (or the rail's) right edge, with the antialiased fringe.
-            val reach = if (compact) inset + bar * 0.5f + d(1f) else rail + d(1f) * k
-            val y1 = bounds.bottom - edge - d(if (compact) 6f else 10f) * k
-            var y0 = max(bandBottom + d(16f) * k, y1 - (bounds.bottom - bandBottom) * BUMPER_MAX_SHARE)
-            if (!textLeft.isNaN()) {
-                // The slanted edge leans into the text toward the top: the bar starts where it clears the column.
-                val room = textLeft - d(TEXT_CLEARANCE_DP) - reach - bounds.left
-                val clear = bounds.top + bounds.height * (1f - room / cut)
-                y0 = max(y0, clear)
-            }
-            if (y1 - y0 < d(24f) * k) return
-            drawLine(hue, Offset(leftEdge(bounds, cut, y0) + inset, y0), Offset(leftEdge(bounds, cut, y1) + inset, y1), bar, alpha = oa)
-            if (!compact) {
-                drawLine(hue, Offset(leftEdge(bounds, cut, y0) + rail, y0 + d(6f) * k), Offset(leftEdge(bounds, cut, y1) + rail, y1 - d(6f) * k),
-                    d(1f) * k, alpha = 0.35f)
-            }
-            val first = 0.16f + kkSeedFraction(seed, 20) * 0.08f
-            val rivet = if (compact) 0.75f else 1f
-            for (index in 0 until 3) {
-                val y = kkLerp(y0, y1, first + index * (1f - 2f * first) / 2f)
-                val center = Offset(leftEdge(bounds, cut, y) + inset, y)
-                drawCircle(Kk.Ink2, d(3.2f) * k * rivet, center)
-                drawCircle(hue, d(2.3f) * k * rivet, center, alpha = 0.8f)
-                drawCircle(Kk.Ink2, d(0.9f) * k * rivet, center, alpha = 0.8f)
-            }
+        KkCardOrnament.BUMPER -> drawBumperOrnament(bounds, cut, bandBottom, textLeft, k, hue, seed, oa, edge)
+        KkCardOrnament.SLASHES -> drawSlashesOrnament(bounds, cut, bandBottom, k, hue, oa, edge)
+        KkCardOrnament.WEIGHT -> drawWeightOrnament(bounds, cut, k, hue, seed, oa, edge)
+        KkCardOrnament.RACK -> drawRackOrnament(bounds, cut, k, hue, seed, oa, edge)
+        KkCardOrnament.RETICLE -> drawReticleOrnament(bounds, cut, bandBottom, k, hue, seed, oa, edge)
+        KkCardOrnament.DOUBLE_RIM -> drawDoubleRimOrnament(bounds, cut, k, hue, seed, oa, edge)
+        KkCardOrnament.VENTS -> drawVentsOrnament(bounds, cut, style, k, hue, oa, edge)
+        KkCardOrnament.PERFORATION -> drawPerforationOrnament(bounds, k, hue, seed, oa, edge)
+        KkCardOrnament.TICKET -> drawTicketOrnament(bounds, cut, k, hue, seed, oa)
+        KkCardOrnament.PATTERN_CORNER -> drawPatternCornerOrnament(bounds, cut, style, hue, edge)
+    }
+}
+
+private fun DrawScope.drawBumperOrnament(bounds: Rect, cut: Float, bandBottom: Float, textLeft: Float, k: Float, hue: Color, seed: Int, oa: Float, edge: Float) {
+    // Small (phone) cards take a slimmer bar, without the rail.
+    val compact = k < COMPACT_SCALE
+    val bar = if (compact) d(3f) else d(6f) * k
+    val inset = edge + bar * 0.5f
+    val rail = inset + bar * 0.5f + d(4f) * k
+    // The bar's (or the rail's) right edge, with the antialiased fringe.
+    val reach = if (compact) inset + bar * 0.5f + d(1f) else rail + d(1f) * k
+    val y1 = bounds.bottom - edge - d(if (compact) 6f else 10f) * k
+    var y0 = max(bandBottom + d(16f) * k, y1 - (bounds.bottom - bandBottom) * BUMPER_MAX_SHARE)
+    if (!textLeft.isNaN()) {
+        // The slanted edge leans into the text toward the top: the bar starts where it clears the column.
+        val room = textLeft - d(TEXT_CLEARANCE_DP) - reach - bounds.left
+        val clear = bounds.top + bounds.height * (1f - room / cut)
+        y0 = max(y0, clear)
+    }
+    if (y1 - y0 < d(24f) * k) return
+    drawLine(hue, Offset(leftEdge(bounds, cut, y0) + inset, y0), Offset(leftEdge(bounds, cut, y1) + inset, y1), bar, alpha = oa)
+    if (!compact) {
+        drawLine(hue, Offset(leftEdge(bounds, cut, y0) + rail, y0 + d(6f) * k), Offset(leftEdge(bounds, cut, y1) + rail, y1 - d(6f) * k),
+            d(1f) * k, alpha = 0.35f)
+    }
+    val first = 0.16f + kkSeedFraction(seed, 20) * 0.08f
+    val rivet = if (compact) 0.75f else 1f
+    for (index in 0 until 3) {
+        val y = kkLerp(y0, y1, first + index * (1f - 2f * first) / 2f)
+        val center = Offset(leftEdge(bounds, cut, y) + inset, y)
+        drawCircle(Kk.Ink2, d(3.2f) * k * rivet, center)
+        drawCircle(hue, d(2.3f) * k * rivet, center, alpha = 0.8f)
+        drawCircle(Kk.Ink2, d(0.9f) * k * rivet, center, alpha = 0.8f)
+    }
+}
+
+private fun DrawScope.drawSlashesOrnament(bounds: Rect, cut: Float, bandBottom: Float, k: Float, hue: Color, oa: Float, edge: Float) {
+    val top = bandBottom + d(KK_ORNAMENT_FRAME_CLEARANCE_DP) * k
+    for (index in 0 until 3) {
+        val length = d(30f - index * 6f) * k
+        val x = rightEdge(bounds, cut, top) - edge - d(2f + index * 8.5f) * k
+        // Leaning like the slash cut; butt caps give straight ends.
+        drawLine(hue, Offset(x, top), Offset(x - length * KkShape.SlashRatio, top + length), d(3.5f) * k,
+            StrokeCap.Butt, alpha = oa + 0.08f * (2 - index))
+    }
+}
+
+private fun DrawScope.drawWeightOrnament(bounds: Rect, cut: Float, k: Float, hue: Color, seed: Int, oa: Float, edge: Float) {
+    val bar = d(6f) * k
+    // The end blocks reach 0.9 bar widths below the bar's middle.
+    val y = bounds.bottom - edge - bar * 0.9f
+    val half = bounds.width * BOTTOM_SPAN * 0.5f
+    val left = bounds.center.x - half
+    val right = bounds.center.x + half
+    drawLine(hue, Offset(left, y), Offset(right, y), bar, alpha = oa)
+    // Heavier blocks at both ends.
+    drawRect(hue, Offset(left, y - bar * 0.9f), Size(d(10f) * k, bar * 1.8f), alpha = oa + 0.1f)
+    drawRect(hue, Offset(right - d(10f) * k, y - bar * 0.9f), Size(d(10f) * k, bar * 1.8f), alpha = oa + 0.1f)
+    // Link notches cut into the bar.
+    val pitch = d(16f) * k
+    var x = left + d(18f) * k + kkSeedFraction(seed, 21) * pitch
+    while (x < right - d(20f) * k) {
+        capsule(Kk.Ink2, x, y, x + d(7f) * k, y, bar * 0.44f, 1f)
+        x += pitch
+    }
+}
+
+private fun DrawScope.drawRackOrnament(bounds: Rect, cut: Float, k: Float, hue: Color, seed: Int, oa: Float, edge: Float) {
+    val top = bounds.top + bounds.height * 0.3f
+    val pitch = d(17f) * k
+    val count = ((bounds.bottom - d(26f) * k - top) / pitch).toInt().coerceIn(0, 12)
+    val railY0 = top - d(4f) * k
+    val railY1 = top + count * pitch
+    val rail = edge + d(0.5f) * k
+    drawLine(hue, Offset(rightEdge(bounds, cut, railY0) - rail, railY0), Offset(rightEdge(bounds, cut, railY1) - rail, railY1),
+        d(1f) * k, alpha = 0.35f)
+    for (index in 0 until count) {
+        val y = top + index * pitch
+        val round = d(4.5f) * k
+        val x = rightEdge(bounds, cut, y) - edge - d(4f) * k - round
+        val spent = kkSeedFraction(seed, 30 + index) < 0.3f
+        capsule(hue, x + round * 0.5f, y + round * 0.5f, x + round * 0.5f, y + d(12f) * k - round * 0.5f, round,
+            if (spent) 0.22f else oa)
+    }
+}
+
+private fun DrawScope.drawReticleOrnament(bounds: Rect, cut: Float, bandBottom: Float, k: Float, hue: Color, seed: Int, oa: Float, edge: Float) {
+    val inset = edge + d(1f) * k
+    val leg = d(14f) * k
+    val w = d(1.3f) * k
+    val top = bandBottom + inset
+    val bottom = bounds.bottom - inset
+    val lt = leftEdge(bounds, cut, top) + inset
+    val lb = leftEdge(bounds, cut, bottom) + inset
+    val rt = rightEdge(bounds, cut, top) - inset
+    val rb = rightEdge(bounds, cut, bottom) - inset
+    val a = oa + 0.1f
+    drawLine(hue, Offset(lt, top), Offset(lt + leg, top), w, alpha = a)
+    drawLine(hue, Offset(lt, top), Offset(lt - leg * cut / bounds.height, top + leg), w, alpha = a)
+    drawLine(hue, Offset(rt, top), Offset(rt - leg, top), w, alpha = a)
+    drawLine(hue, Offset(rt, top), Offset(rt - leg * cut / bounds.height, top + leg), w, alpha = a)
+    drawLine(hue, Offset(lb, bottom), Offset(lb + leg, bottom), w, alpha = a)
+    drawLine(hue, Offset(lb, bottom), Offset(lb + leg * cut / bounds.height, bottom - leg), w, alpha = a)
+    drawLine(hue, Offset(rb, bottom), Offset(rb - leg, bottom), w, alpha = a)
+    drawLine(hue, Offset(rb, bottom), Offset(rb + leg * cut / bounds.height, bottom - leg), w, alpha = a)
+    // Range ticks on the side edges.
+    val mid = kkLerp(top, bottom, 0.45f + kkSeedFraction(seed, 22) * 0.1f)
+    for (index in -1..1) {
+        val y = mid + index * d(7f) * k
+        val tick = if (index == 0) d(7f) * k else d(4f) * k
+        drawLine(hue, Offset(leftEdge(bounds, cut, y) + edge, y), Offset(leftEdge(bounds, cut, y) + edge + tick, y), w, alpha = a)
+        drawLine(hue, Offset(rightEdge(bounds, cut, y) - edge, y), Offset(rightEdge(bounds, cut, y) - edge - tick, y), w, alpha = a)
+    }
+}
+
+private fun DrawScope.drawDoubleRimOrnament(bounds: Rect, cut: Float, k: Float, hue: Color, seed: Int, oa: Float, edge: Float) {
+    // A shield's double rim on the two lower corners only: never a second outline round the card.
+    val outer = edge + d(2f) * k
+    val inner = outer + d(4f + kkSeedFraction(seed, 23) * 2f) * k
+    val across = bounds.width * (0.22f + kkSeedFraction(seed, 26) * 0.04f)
+    val up = bounds.height * 0.18f
+    for (ring in 0..1) {
+        val inset = if (ring == 0) outer else inner
+        val width = d(if (ring == 0) 1.6f else 1f) * k
+        val alpha = if (ring == 0) oa * 0.62f else 0.2f
+        // The inner rim is shorter, so the two read as one bevelled shield edge.
+        val shrink = if (ring == 0) 0f else inner - outer
+        val y0 = bounds.bottom - inset - (up - shrink)
+        val y1 = bounds.bottom - inset
+        val half = width * 0.5f
+        val l1 = leftEdge(bounds, cut, y1) + inset
+        val r1 = rightEdge(bounds, cut, y1) - inset
+        // Butt ends meeting at the corners without overlapping (the sides reach past the bottom by half a width).
+        drawLine(hue, Offset(leftEdge(bounds, cut, y0) + inset, y0), Offset(l1, y1 + half), width, StrokeCap.Butt, alpha = alpha)
+        drawLine(hue, Offset(l1 + half, y1), Offset(l1 + across - shrink, y1), width, StrokeCap.Butt, alpha = alpha)
+        drawLine(hue, Offset(r1, y1 + half), Offset(rightEdge(bounds, cut, y0) - inset, y0), width, StrokeCap.Butt, alpha = alpha)
+        drawLine(hue, Offset(r1 - half, y1), Offset(r1 - across + shrink, y1), width, StrokeCap.Butt, alpha = alpha)
+    }
+}
+
+private fun DrawScope.drawVentsOrnament(bounds: Rect, cut: Float, style: KkCardStyle, k: Float, hue: Color, oa: Float, edge: Float) {
+    // At the lower right, or the lower left when the face's lower right carries art.
+    val count = 5
+    for (index in 0 until count) {
+        val y = bounds.bottom - edge - d(5f) * k - index * d(6f) * k
+        val width = d(if (index % 2 == 0) 20f else 16f) * k
+        val slot = d(3f) * k
+        if (style.ornamentLeft) {
+            val left = leftEdge(bounds, cut, y) + edge
+            capsule(hue, left + slot * 0.5f, y, left + width - slot * 0.5f, y, slot, oa - index * 0.04f)
+        } else {
+            val right = rightEdge(bounds, cut, y) - edge
+            capsule(hue, right - width + slot * 0.5f, y, right - slot * 0.5f, y, slot, oa - index * 0.04f)
         }
-        KkCardOrnament.SLASHES -> {
-            val top = bandBottom + d(KK_ORNAMENT_FRAME_CLEARANCE_DP) * k
-            for (index in 0 until 3) {
-                val length = d(30f - index * 6f) * k
-                val x = rightEdge(bounds, cut, top) - edge - d(2f + index * 8.5f) * k
-                // Leaning like the slash cut; butt caps give straight ends.
-                drawLine(hue, Offset(x, top), Offset(x - length * KkShape.SlashRatio, top + length), d(3.5f) * k,
-                    StrokeCap.Butt, alpha = oa + 0.08f * (2 - index))
-            }
+    }
+}
+
+private fun DrawScope.drawPerforationOrnament(bounds: Rect, k: Float, hue: Color, seed: Int, oa: Float, edge: Float) {
+    val y = bounds.bottom - edge - d(3f) * k
+    val half = bounds.width * BOTTOM_SPAN * 0.5f
+    val left = bounds.center.x - half
+    val right = bounds.center.x + half
+    val pitch = d(9f) * k
+    val phase = (kkSeedFraction(seed, 24) * 4f).toInt()
+    var x = left
+    var index = 0
+    while (x <= right && index < 48) {
+        if ((index + phase) % 4 == 0) {
+            capsule(hue, x - d(2f) * k, y, x + d(2f) * k, y, d(3f) * k, oa)
+        } else {
+            drawCircle(hue, d(1.5f) * k, Offset(x, y), alpha = oa)
         }
-        KkCardOrnament.WEIGHT -> {
-            val bar = d(6f) * k
-            // The end blocks reach 0.9 bar widths below the bar's middle.
-            val y = bounds.bottom - edge - bar * 0.9f
-            val half = bounds.width * BOTTOM_SPAN * 0.5f
-            val left = bounds.center.x - half
-            val right = bounds.center.x + half
-            drawLine(hue, Offset(left, y), Offset(right, y), bar, alpha = oa)
-            // Heavier blocks at both ends.
-            drawRect(hue, Offset(left, y - bar * 0.9f), Size(d(10f) * k, bar * 1.8f), alpha = oa + 0.1f)
-            drawRect(hue, Offset(right - d(10f) * k, y - bar * 0.9f), Size(d(10f) * k, bar * 1.8f), alpha = oa + 0.1f)
-            // Link notches cut into the bar.
-            val pitch = d(16f) * k
-            var x = left + d(18f) * k + kkSeedFraction(seed, 21) * pitch
-            while (x < right - d(20f) * k) {
-                capsule(Kk.Ink2, x, y, x + d(7f) * k, y, bar * 0.44f, 1f)
-                x += pitch
-            }
+        x += pitch
+        index++
+    }
+}
+
+private fun DrawScope.drawTicketOrnament(bounds: Rect, cut: Float, k: Float, hue: Color, seed: Int, oa: Float) {
+    // Ticket notches cut into both side edges (a notch is a short local mark, never a run along the frame).
+    val y = bounds.top + bounds.height * (0.52f + kkSeedFraction(seed, 25) * 0.14f)
+    val radius = d(7f) * k
+    for (side in 0..1) {
+        val x = if (side == 0) leftEdge(bounds, cut, y) else rightEdge(bounds, cut, y)
+        drawCircle(Kk.Ink, radius, Offset(x, y))
+        drawCircle(hue, radius, Offset(x, y), alpha = oa, style = kkStroke(d(1.3f) * k))
+        val direction = if (side == 0) 1f else -1f
+        for (dash in 0 until 3) {
+            val x0 = x + direction * (radius + d(4f + dash * 6f) * k)
+            drawLine(hue, Offset(x0, y), Offset(x0 + direction * d(3f) * k, y), d(1.3f) * k, alpha = 0.4f)
         }
-        KkCardOrnament.RACK -> {
-            val top = bounds.top + bounds.height * 0.3f
-            val pitch = d(17f) * k
-            val count = ((bounds.bottom - d(26f) * k - top) / pitch).toInt().coerceIn(0, 12)
-            val railY0 = top - d(4f) * k
-            val railY1 = top + count * pitch
-            val rail = edge + d(0.5f) * k
-            drawLine(hue, Offset(rightEdge(bounds, cut, railY0) - rail, railY0), Offset(rightEdge(bounds, cut, railY1) - rail, railY1),
-                d(1f) * k, alpha = 0.35f)
-            for (index in 0 until count) {
-                val y = top + index * pitch
-                val round = d(4.5f) * k
-                val x = rightEdge(bounds, cut, y) - edge - d(4f) * k - round
-                val spent = kkSeedFraction(seed, 30 + index) < 0.3f
-                capsule(hue, x + round * 0.5f, y + round * 0.5f, x + round * 0.5f, y + d(12f) * k - round * 0.5f, round,
-                    if (spent) 0.22f else oa)
-            }
-        }
-        KkCardOrnament.RETICLE -> {
-            val inset = edge + d(1f) * k
-            val leg = d(14f) * k
-            val w = d(1.3f) * k
-            val top = bandBottom + inset
-            val bottom = bounds.bottom - inset
-            val lt = leftEdge(bounds, cut, top) + inset
-            val lb = leftEdge(bounds, cut, bottom) + inset
-            val rt = rightEdge(bounds, cut, top) - inset
-            val rb = rightEdge(bounds, cut, bottom) - inset
-            val a = oa + 0.1f
-            drawLine(hue, Offset(lt, top), Offset(lt + leg, top), w, alpha = a)
-            drawLine(hue, Offset(lt, top), Offset(lt - leg * cut / bounds.height, top + leg), w, alpha = a)
-            drawLine(hue, Offset(rt, top), Offset(rt - leg, top), w, alpha = a)
-            drawLine(hue, Offset(rt, top), Offset(rt - leg * cut / bounds.height, top + leg), w, alpha = a)
-            drawLine(hue, Offset(lb, bottom), Offset(lb + leg, bottom), w, alpha = a)
-            drawLine(hue, Offset(lb, bottom), Offset(lb + leg * cut / bounds.height, bottom - leg), w, alpha = a)
-            drawLine(hue, Offset(rb, bottom), Offset(rb - leg, bottom), w, alpha = a)
-            drawLine(hue, Offset(rb, bottom), Offset(rb + leg * cut / bounds.height, bottom - leg), w, alpha = a)
-            // Range ticks on the side edges.
-            val mid = kkLerp(top, bottom, 0.45f + kkSeedFraction(seed, 22) * 0.1f)
-            for (index in -1..1) {
-                val y = mid + index * d(7f) * k
-                val tick = if (index == 0) d(7f) * k else d(4f) * k
-                drawLine(hue, Offset(leftEdge(bounds, cut, y) + edge, y), Offset(leftEdge(bounds, cut, y) + edge + tick, y), w, alpha = a)
-                drawLine(hue, Offset(rightEdge(bounds, cut, y) - edge, y), Offset(rightEdge(bounds, cut, y) - edge - tick, y), w, alpha = a)
-            }
-        }
-        KkCardOrnament.DOUBLE_RIM -> {
-            // A shield's double rim on the two lower corners only: never a second outline round the card.
-            val outer = edge + d(2f) * k
-            val inner = outer + d(4f + kkSeedFraction(seed, 23) * 2f) * k
-            val across = bounds.width * (0.22f + kkSeedFraction(seed, 26) * 0.04f)
-            val up = bounds.height * 0.18f
-            for (ring in 0..1) {
-                val inset = if (ring == 0) outer else inner
-                val width = d(if (ring == 0) 1.6f else 1f) * k
-                val alpha = if (ring == 0) oa * 0.62f else 0.2f
-                // The inner rim is shorter, so the two read as one bevelled shield edge.
-                val shrink = if (ring == 0) 0f else inner - outer
-                val y0 = bounds.bottom - inset - (up - shrink)
-                val y1 = bounds.bottom - inset
-                val half = width * 0.5f
-                val l1 = leftEdge(bounds, cut, y1) + inset
-                val r1 = rightEdge(bounds, cut, y1) - inset
-                // Butt ends meeting at the corners without overlapping (the sides reach past the bottom by half a width).
-                drawLine(hue, Offset(leftEdge(bounds, cut, y0) + inset, y0), Offset(l1, y1 + half), width, StrokeCap.Butt, alpha = alpha)
-                drawLine(hue, Offset(l1 + half, y1), Offset(l1 + across - shrink, y1), width, StrokeCap.Butt, alpha = alpha)
-                drawLine(hue, Offset(r1, y1 + half), Offset(rightEdge(bounds, cut, y0) - inset, y0), width, StrokeCap.Butt, alpha = alpha)
-                drawLine(hue, Offset(r1 - half, y1), Offset(r1 - across + shrink, y1), width, StrokeCap.Butt, alpha = alpha)
-            }
-        }
-        KkCardOrnament.VENTS -> {
-            // At the lower right, or the lower left when the face's lower right carries art.
-            val count = 5
-            for (index in 0 until count) {
-                val y = bounds.bottom - edge - d(5f) * k - index * d(6f) * k
-                val width = d(if (index % 2 == 0) 20f else 16f) * k
-                val slot = d(3f) * k
-                if (style.ornamentLeft) {
-                    val left = leftEdge(bounds, cut, y) + edge
-                    capsule(hue, left + slot * 0.5f, y, left + width - slot * 0.5f, y, slot, oa - index * 0.04f)
-                } else {
-                    val right = rightEdge(bounds, cut, y) - edge
-                    capsule(hue, right - width + slot * 0.5f, y, right - slot * 0.5f, y, slot, oa - index * 0.04f)
-                }
-            }
-        }
-        KkCardOrnament.PERFORATION -> {
-            val y = bounds.bottom - edge - d(3f) * k
-            val half = bounds.width * BOTTOM_SPAN * 0.5f
-            val left = bounds.center.x - half
-            val right = bounds.center.x + half
-            val pitch = d(9f) * k
-            val phase = (kkSeedFraction(seed, 24) * 4f).toInt()
-            var x = left
-            var index = 0
-            while (x <= right && index < 48) {
-                if ((index + phase) % 4 == 0) {
-                    capsule(hue, x - d(2f) * k, y, x + d(2f) * k, y, d(3f) * k, oa)
-                } else {
-                    drawCircle(hue, d(1.5f) * k, Offset(x, y), alpha = oa)
-                }
-                x += pitch
-                index++
-            }
-        }
-        KkCardOrnament.TICKET -> {
-            // Ticket notches cut into both side edges (a notch is a short local mark, never a run along the frame).
-            val y = bounds.top + bounds.height * (0.52f + kkSeedFraction(seed, 25) * 0.14f)
-            val radius = d(7f) * k
-            for (side in 0..1) {
-                val x = if (side == 0) leftEdge(bounds, cut, y) else rightEdge(bounds, cut, y)
-                drawCircle(Kk.Ink, radius, Offset(x, y))
-                drawCircle(hue, radius, Offset(x, y), alpha = oa, style = kkStroke(d(1.3f) * k))
-                val direction = if (side == 0) 1f else -1f
-                for (dash in 0 until 3) {
-                    val x0 = x + direction * (radius + d(4f + dash * 6f) * k)
-                    drawLine(hue, Offset(x0, y), Offset(x0 + direction * d(3f) * k, y), d(1.3f) * k, alpha = 0.4f)
-                }
-            }
-        }
-        KkCardOrnament.PATTERN_CORNER -> {
-            // The pattern in the lower left corner, fading out from it, inside the frame's clearance.
-            val kind = style.pattern ?: KkFillKind.SLASH
-            val corner = Offset(leftEdge(bounds, cut, bounds.bottom) + edge, bounds.bottom - edge)
-            val patch = KkRects.of(corner.x, corner.y - bounds.height * CORNER_SHARE, corner.x + bounds.width * CORNER_SHARE, corner.y)
-            clipPath(insetSlab(bounds, cut, edge)) {
-                val canvas = drawContext.canvas
-                canvas.saveLayer(patch, KkLayers.paint)
-                drawRect(kkFillBrush(kind, hue), patch.topLeft, patch.size, alpha = CORNER_ALPHA)
-                kkApplyEllipseMask(patch, corner.x, corner.y, patch.width, patch.height, 0.2f)
-                canvas.restore()
-            }
-        }
+    }
+}
+
+private fun DrawScope.drawPatternCornerOrnament(bounds: Rect, cut: Float, style: KkCardStyle, hue: Color, edge: Float) {
+    // The pattern in the lower left corner, fading out from it, inside the frame's clearance.
+    val kind = style.pattern ?: KkFillKind.SLASH
+    val corner = Offset(leftEdge(bounds, cut, bounds.bottom) + edge, bounds.bottom - edge)
+    val patch = KkRects.of(corner.x, corner.y - bounds.height * CORNER_SHARE, corner.x + bounds.width * CORNER_SHARE, corner.y)
+    clipPath(insetSlab(bounds, cut, edge)) {
+        val canvas = drawContext.canvas
+        canvas.saveLayer(patch, KkLayers.paint)
+        drawRect(kkFillBrush(kind, hue), patch.topLeft, patch.size, alpha = CORNER_ALPHA)
+        kkApplyEllipseMask(patch, corner.x, corner.y, patch.width, patch.height, 0.2f)
+        canvas.restore()
     }
 }
 
