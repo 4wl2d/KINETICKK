@@ -28,6 +28,13 @@ import kotlin.test.assertTrue
  * Judgement 0.847 (0.047), median 28.8 s; N0 survival 0.991 (0.009), Harvest 0.877 (0.044), Pyre 0.610 (0.064), scorch
  * 0.357 (0.033); Z10 survival 0.980 (0.014), completion 0.630 (0.049); N10 0.930 (0.025) and 0.810 (0.039); A3 survival
  * 1.000, defeat 0.292 (0.041); A0 survival 0.893 (0.030), defeat 0.117 (0.031).
+ *
+ * The slower flight law scaled every steady speed by 0.695 but not the 900 u/s pace ceiling, so a desktop pace rose from
+ * 0.67 to 0.96 of its reach's steady speed (gate Ascent 0.421, N0 scorch 0.569). Recalibrated on the window: pace
+ * ceiling 700, scorch 0.024, ember life 1.1 s. On the gate seeds: Z0 survival 0.965 (0.017), Ascent 0.825 (0.050),
+ * Judgement 0.776 (0.054); N0 survival 0.965 (0.017), Harvest 0.860 (0.046), Pyre 0.638 (0.063), scorch 0.359 (0.032);
+ * Z10 0.980 (0.014) and 0.713 (0.045); N10 0.832 (0.037) and 0.782 (0.041); A3 1.000 and 0.308 (0.042); A0 0.931
+ * (0.025) and 0.078 (0.027).
  */
 class DimensionPilotGateTest {
     /**
@@ -91,10 +98,13 @@ class DimensionPilotGateTest {
         assertShare("A0 defeat", fresh.entered(), 0.0, A0_DEFEAT) { it.completed }
     }
 
-    /** One seed's Nadir visit flown twice by the pilot ends in the same canonical state at the return. */
+    /**
+     * One seed's Nadir visit flown twice by the pilot ends in the same canonical state at the return. The seed is the
+     * first of [PopulationSeeds] whose fresh run lives to its rift and enters it: a run that falls in realspace first
+     * has no visit to replay (the first seed's falls at 93 s).
+     */
     @Test fun aDimensionVisitReplaysIdentically() {
-        val seed = PopulationSeeds.first()
-        val first = flyToTheReturn(seed)
+        val (seed, first) = PopulationSeeds.asSequence().map { it to flyToTheReturn(it) }.first { (_, state) -> state.dimensionRun.visitedMask != 0 }
         val second = flyToTheReturn(seed)
         assertEquals(WorldLayer.BASE, first.worldLayer, "the visit returned")
         assertEquals(WorldLayer.NADIR.bit, first.dimensionRun.visitedMask)

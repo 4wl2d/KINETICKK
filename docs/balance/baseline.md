@@ -1525,3 +1525,41 @@ Monolith leaves the fight's damage as it is (nothing attacks there): ApexActive
 +8.0 %, the APEX trigger probe +11.6 -> +22.1 %, ApexCooldown +25.0 % either
 way; every character other than the Orb read ApexActive +5.3 to +9.7 %. The
 probe's strength and the 5 % floor are unchanged.
+
+### Dimension pace after the slower flight law
+
+The slower law scaled every steady speed by 0.695, but the dimension pace's
+absolute 900 u/s ceiling stayed, so on a 1280 × 720 viewport the pace rose
+from 0.67 to 0.96 of the reach-0.4 steady speed (938.9 u/s). The Ascent's
+rings and the Nadir's scorch measured flight against that pace: on the gate
+the Ascent fell to 0.421, N0 survival to 0.826 with a 0.569 scorch share,
+N10 survival to 0.673, and the Nadir moved the fresh win share by -0.092.
+The old law and its 0.65 Grace drag, with the rest of the tree unchanged,
+passed every dimension band, so the flight law is the cause. Three dimension
+knobs were recalibrated on the dimensions window i = 2,401..2,500, and the
+gate seeds then confirmed them:
+
+| Knob | Before | After |
+|---|---:|---:|
+| `paceCeiling` | 900 u/s | 700 u/s |
+| Nadir `scorchSharePerSecond` | 0.035 | 0.024 |
+| `emberLifeSeconds` | 1.25 s | 1.1 s |
+
+The exact rescale (626 u/s) overshot the window's Harvest at 0.957. A 700 u/s
+ceiling alone restores the Ascent (0.766), the Pyre (0.755) and the outcome
+shifts (Zenith +0.10, Nadir +0.03, control 0.76), but the Harvest's ember
+chase still scorched 0.481 of the visit damage. With the scorch and the ember
+life the window reads Harvest 0.809, Pyre 0.776, scorch share 0.380 and a
+Nadir shift of -0.02. Gate results with bootstrap SE:
+
+| Gate | Before | After | Band |
+|---|---:|---:|---|
+| Z0 survival / Ascent / Judgement | 0.957 / 0.421 / 0.776 | 0.965 / 0.825 (0.050) / 0.776 (0.054) | >= 0.92 / [0.55, 0.92] / [0.45, 0.88] |
+| N0 survival / Harvest / Pyre / scorch | 0.826 / 0.754 / 0.310 / 0.569 | 0.965 / 0.860 (0.046) / 0.638 (0.063) / 0.359 (0.032) | >= 0.85 / [0.50, 0.90] / [0.40, 0.85] / <= 0.45 |
+| Z10 / N10 survival and completion | 0.980, 0.455 / 0.673, 0.545 | 0.980, 0.713 / 0.832, 0.782 | survival >= 0.75; completion >= 0.50 |
+| A3 / A0 survival and defeat | 1.000, 0.308 / 0.892, 0.108 | 1.000, 0.308 / 0.931, 0.078 | >= 0.65, [0.20, 0.65] / >= 0.45, <= 0.35 |
+| Win shift, Zenith / Nadir | +0.025 / -0.092 | -0.008 (0.050) / +0.050 (0.045) | [-0.06, +0.15] |
+
+The visit replay now takes the first population seed whose fresh run reaches
+its rift. The first seed's run falls at 93 s in realspace under the slower
+law, so it has no visit to replay.

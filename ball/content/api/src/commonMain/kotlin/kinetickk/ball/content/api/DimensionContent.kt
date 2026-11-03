@@ -111,7 +111,7 @@ data class DimensionObjectiveTuning(
     val haloRadius: Float = 70f,
     val harvestEmbers: Int = 20,
     /** A thrown ember waits this long: the Harvest is a chase to each one, not a sweep behind the kills. */
-    val emberLifeSeconds: Float = 1.25f,
+    val emberLifeSeconds: Float = 1.1f,
     val emberRadius: Float = 70f,
     /** A burning kill throws its ember this far (from the minimum to the maximum, by a stateless hash). */
     val emberThrowMinimum: Float = 140f,
@@ -154,7 +154,8 @@ data class DimensionPolicy(
     val glitchPortalDistance: Float = 700f,
     val glitchPortalLifetimeSeconds: Float = 30f,
     val paceReach: Float = 0.40f,
-    val paceCeiling: Float = 900f,
+    /** An absolute speed, unlike the reach's pace: a retuned flight law needs it retuned too (900 before the slower law). */
+    val paceCeiling: Float = 700f,
     val objectives: DimensionObjectiveTuning = DimensionObjectiveTuning(),
     val definitions: ImmutableList<DimensionDefinition> = defaultDimensionDefinitions(),
 ) {
@@ -259,7 +260,7 @@ fun defaultDimensionDefinitions(): ImmutableList<DimensionDefinition> = listOf(
             DimensionObjectiveWeight(DimensionObjective.HARVEST, 1f), DimensionObjectiveWeight(DimensionObjective.PYRE, 1f),
         ),
         spawnRateMultiplier = 1.2f, ordinaryCapMultiplier = 1.15f,
-        physics = DimensionPhysics(scorchSharePerSecond = 0.035f, scorchGraceSeconds = 0.75f, scorchTickSeconds = 0.5f, matterMultiplier = 2f),
+        physics = DimensionPhysics(scorchSharePerSecond = 0.024f, scorchGraceSeconds = 0.75f, scorchTickSeconds = 0.5f, matterMultiplier = 2f),
         reward = DimensionReward(DimensionRewardKind.PACT_OFFER, cardsOnSuccess = 3, cardsOnFailure = 2, declineMatter = 10),
         // The Pyre Herald of a Pyre, fought at the pace the scorch asks for: a fresh run's visit at 165 s fells it in
         // over half of the fights.

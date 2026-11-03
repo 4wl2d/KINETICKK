@@ -15,7 +15,9 @@ import kotlin.test.assertTrue
  *
  * Measured on the 0.6.0 lane tree: on the window i = 2,401..2,500 the Zenith moves the win share by +0.02 and the Nadir
  * by +0.06 (control 0.78); on the gate seeds by +0.025 (paired SE 0.038) and -0.008 (0.046) against the control's 88 of
- * 120. The strong build won none of its five seeds with either visit.
+ * 120. The strong build won none of its five seeds with either visit. After the pace recalibration for the slower
+ * flight law: window +0.10 and -0.02 (control 0.76); gate seeds -0.008 (0.050) and +0.050 (0.045) against the control's
+ * 83 of 120, and still no strong win.
  */
 class DimensionRunOutcomeGateTest {
     /**
