@@ -30,8 +30,7 @@ data class StructureProjection(
     val halfHeight: Float,
     val wallStart: Int,
     val wallEnd: Int,
-    val spent: Boolean,
-    /** Room bits cleared (every room bit once spent) and the engaged room, or -1. */
+    /** Room bits cleared and the engaged room, or -1 (a spent structure has left the window). */
     val clearedRooms: Int,
     val engagedRoom: Int,
 )

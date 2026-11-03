@@ -44,14 +44,15 @@ import kotlin.math.sin
 
 /*
  * The dungeon runtime, the single writer of MutableGameState.dungeon, lastAnnouncedStructureId and (through markSpent)
- * the spent list. One dungeon at a time, one sealed room at a time:
+ * the run-long spent list. One dungeon at a time, one sealed room at a time:
  * - entering an unspent structure's footprint holds it as the dungeon (banner once per structure, its discovery);
  * - entering a room with a garrison seals its doors and spawns the garrison as a room encounter (all or nothing inside
  *   the enemy cap; a refusal leaves the room dormant and open); a room without one clears on entry;
  * - killing every enemy the room's encounter owns clears it: its doors open and locks open once their rooms are clear;
- * - clearing the final room pays the template's rewards through existing channels and spends the structure;
- * - leaving beyond the leave radius (or into another footprint) after any fight abandons and spends it without reward,
- *   before any fight drops it silently; the Architect and a world layer switch collapse it silently.
+ * - clearing the final room pays the template's rewards through existing channels, spends the structure and
+ *   disintegrates it (StructureDisintegration);
+ * - leaving beyond the leave radius (or into another footprint) after any fight abandons, spends and disintegrates it
+ *   without reward, before any fight drops it silently; the Architect and a world layer switch collapse it silently.
  * Garrison kinds and positions draw only from a hash of the run seed, the structure cell and the room, never from a run
  * stream; nothing here allocates per step outside a seal, a clear or a finish.
  */
@@ -115,23 +116,15 @@ internal fun MutableGameState.collapseDungeonForLayerChange() {
 }
 
 /**
- * The step after the Architect arrives, once the dungeon collapsed silently: every structure of the window bursts at
- * its centre and the window empties (the footprints stay clearings).
+ * The step after the Architect arrives, once the dungeon collapsed silently: every structure of the window shatters
+ * and the window empties (the footprints stay clearings).
  */
 private fun MutableGameState.collapseStructuresForArchitect() {
-    val structures = structureField.structures
-    for (index in structures.indices) {
-        val structure = structures[index]
-        shockwave(structure.x, structure.y, 0.6f, 300f, 3)
-        burst(structure.x, structure.y, 24, 3)
-    }
+    disintegrateWindowStructures()
     refreshStructureField(obstacleField.centerChunkX, obstacleField.centerChunkY)
 }
 
-/**
- * The first structure of the window whose footprint holds the Core becomes the dungeon unless the spent list holds it
- * (one the list forgot arms again, its doors back as the lock rules say).
- */
+/** The first structure of the window whose footprint holds the Core becomes the dungeon unless the run spent it. */
 private fun MutableGameState.enterStructure() {
     val structures = structureField.structures
     for (index in structures.indices) {
@@ -165,7 +158,7 @@ private fun MutableGameState.coreInsideAnotherStructure(structureId: Long): Bool
 
 /**
  * Lets the dungeon go: a live garrison is removed without kills or reward and a structure that saw a fight is spent
- * (abandoned, with its notice when [announce]); one that never did stays armed for a later visit.
+ * and disintegrates (abandoned, with its notice when [announce]); one that never did stays armed for a later visit.
  */
 private fun MutableGameState.dropDungeon(current: DungeonState, announce: Boolean) {
     if (current.engagedRoom >= 0) endEncounter(roomEncounterTag(current.structureId, current.engagedRoom), despawn = true)
@@ -177,7 +170,7 @@ private fun MutableGameState.dropDungeon(current: DungeonState, announce: Boolea
         }
     }
     dungeon = null
-    applyStructureDoors(current.structureId)
+    if (current.engaged) retireSpentStructure(current.structureId) else applyStructureDoors(current.structureId)
 }
 
 /**
@@ -271,7 +264,7 @@ private fun MutableGameState.clearRoom(current: DungeonState, room: Int) {
     messageTime = if (locksOpened) 2f else 1.4f
 }
 
-/** Pays the final room's rewards at its centre, records the Doodle, spends the structure and opens every door. */
+/** Pays the final room's rewards at its centre, records the Doodle, spends the structure and disintegrates it. */
 private fun MutableGameState.finishStructure(current: DungeonState, template: StructureTemplate) {
     val room = template.rooms[template.finalRoom]
     val localX = (room.minX + room.maxX) * 0.5f
@@ -290,7 +283,7 @@ private fun MutableGameState.finishStructure(current: DungeonState, template: St
     messageTime = 2.5f
     markSpent(current.structureId)
     dungeon = null
-    applyStructureDoors(current.structureId)
+    retireSpentStructure(current.structureId)
 }
 
 /**

@@ -142,18 +142,13 @@ class DungeonTemplateTourTest {
                     run.killGarrisonForTesting()
                 }
             } else if (wasHeld != null) {
-                // The finish: rewards through their channels at the final room's centre, the structure spent.
+                // The finish: rewards through their channels at the final room's centre, the structure spent and gone
+                // from the window, none of its walls colliding.
                 assertEquals(template.finalRoom, wasHeld.engagedRoom, "$label finished in its final room")
                 assertFinalRewards(run, label, template, placement.rotation, placement.absoluteX, placement.absoluteY, pickups, matter)
                 assertTrue(run.isSpent(placement.id), label)
-                val index = run.structureField.indexOf(placement.id)
-                val structure = run.structureField.structures[index]
-                assertTrue(structure.spent, label)
-                assertTrue(
-                    (structure.wallStart until structure.wallEnd).map { run.structureField.walls[it] }
-                        .filter { it.door >= 0 }.all { it.kind == WallKind.DOOR_OPEN },
-                    "$label: every door of a spent structure stands open",
-                )
+                assertEquals(-1, run.structureField.indexOf(placement.id), "$label disintegrated")
+                assertTrue(run.structureField.walls.none { it.id and 0xFFL.inv() == placement.id }, "$label: no wall of it collides")
                 rewardsChecked = true
             }
         }

@@ -24,8 +24,8 @@ import kinetickk.foundation.collections.toImmutableList
 
 /**
  * One structure of a render fixture: [template] (the model content's, so the renderer's path cache keys match) centred
- * at run-local ([x], [y]) and turned by [rotation], with its room progress. Doors follow the runtime's rules: open once
- * [spent]; sealed while their room is [engagedRoom] or while their lock waits on a room not in [clearedRooms].
+ * at run-local ([x], [y]) and turned by [rotation], with its room progress. Doors follow the runtime's rules: sealed
+ * while their room is [engagedRoom] or while their lock waits on a room not in [clearedRooms].
  */
 internal class StructureFixture(
     val template: StructureTemplate,
@@ -34,7 +34,6 @@ internal class StructureFixture(
     val rotation: Int = 0,
     val clearedRooms: Int = 0,
     val engagedRoom: Int = -1,
-    val spent: Boolean = false,
     val id: Long = (template.id.ordinal + 1).toLong() shl 8,
 ) {
     /** The run-local point of the template-space point ([localX], [localY]). */
@@ -54,7 +53,6 @@ internal class StructureFixture(
     }
 
     fun doorKind(door: Int): WallKind {
-        if (spent) return WallKind.DOOR_OPEN
         val spec = template.doors[door]
         if (engagedRoom >= 0 && (spec.roomA == engagedRoom || spec.roomB == engagedRoom)) return WallKind.DOOR_SEALED
         if (spec.lockRooms != 0 && clearedRooms and spec.lockRooms != spec.lockRooms) return WallKind.DOOR_SEALED
@@ -91,8 +89,7 @@ internal fun structureProjection(
             halfHeight = if (turned) fixture.template.halfWidth else fixture.template.halfHeight,
             wallStart = start,
             wallEnd = walls.size,
-            spent = fixture.spent,
-            clearedRooms = if (fixture.spent) (1 shl fixture.template.rooms.size) - 1 else fixture.clearedRooms,
+            clearedRooms = fixture.clearedRooms,
             engagedRoom = fixture.engagedRoom,
         )
     }

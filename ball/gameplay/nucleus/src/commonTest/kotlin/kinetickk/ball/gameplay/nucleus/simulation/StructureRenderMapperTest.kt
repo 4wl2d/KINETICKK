@@ -94,7 +94,7 @@ class StructureRenderMapperTest {
     }
 
     @Test
-    fun clearedRoomsCountAndASpentStructureShowsEveryRoomWithoutItsSignal() {
+    fun clearedRoomsCountAndASpentStructureLeavesTheProjectionWithItsSignal() {
         val site = DungeonFixture(StructureTemplateId.DERELICT_STATION)
         val run = site.run
         site.clear(0)
@@ -109,15 +109,12 @@ class StructureRenderMapperTest {
         assertNull(run.dungeon)
         assertTrue(run.isSpent(site.placement.id))
         projected = run.toRenderModel().structures
-        // Spent: every room bit, no dungeon, and its entrance no longer signals although the window still lists it.
-        val structure = projected.structures[run.structureField.indexOf(site.placement.id)]
-        assertTrue(structure.spent)
-        assertEquals(0b1111, structure.clearedRooms)
+        // Spent: it disintegrated, so neither the structure, its walls nor its entrance are published, and no dungeon.
+        assertTrue(projected.structures.none { it.id == site.placement.id })
+        assertTrue(projected.walls.none { it.id and 0xFFL.inv() == site.placement.id })
         assertNull(projected.dungeon)
-        assertTrue(run.structureField.signals.any { it.id == site.placement.id })
+        assertFalse(run.structureField.signals.any { it.id == site.placement.id })
         assertFalse(projected.signals.any { it.id == site.placement.id })
-        val doors = projected.walls.subList(structure.wallStart, structure.wallEnd).filter { it.door >= 0 }
-        assertTrue(doors.all { it.kind == WallKind.DOOR_OPEN })
     }
 
     @Test

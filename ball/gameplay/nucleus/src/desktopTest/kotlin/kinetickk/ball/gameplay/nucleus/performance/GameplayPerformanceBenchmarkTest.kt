@@ -367,7 +367,7 @@ class GameplayPerformanceBenchmarkTest {
             ) },
             { structureField = StructureField.of(
                 0, 0, 0, false,
-                listOf(PlacedStructure(1L shl 63, StructureTemplateId.VAULT, 0, 900f, 0f, 300f, 200f, 0, 1, false)),
+                listOf(PlacedStructure(1L shl 63, StructureTemplateId.VAULT, 0, 900f, 0f, 300f, 200f, 0, 1)),
                 listOf(Wall(1L shl 63, WallKind.SOLID, 600f, -200f, 1_200f, -200f, 24f)),
                 emptyList(),
             ) },

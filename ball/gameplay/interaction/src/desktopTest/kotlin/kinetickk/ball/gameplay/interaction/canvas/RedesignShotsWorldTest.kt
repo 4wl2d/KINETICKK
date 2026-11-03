@@ -518,7 +518,8 @@ class RedesignShotsWorldTest {
         add(Scene("site-sigil-hud", hud = true, model = { w, h -> sigil(w, h, summoned = true) }))
         // Structures: two entrances off screen (their markers, a third entrance farther unmarked), a Spire's crown with its
         // promise plates seen from outside, a sealed bay around its garrison under the scrim (in each palette), a
-        // Reliquary's locked sanctum doors with the next way to the chapels, a spent station and the Architect's Doodle.
+        // Reliquary's locked sanctum doors with the next way to the chapels, a station cleared but its reactor and the
+        // Architect's Doodle.
         add(Scene("structure-signal", hud = true, model = { w, h -> structureSignals(w, h) }))
         add(Scene("structure-exterior", model = { w, h ->
             structureModel(model(w, h), structure(StructureTemplateId.SPIRE, -1_350f, 80f, rotation = 1))
@@ -528,7 +529,7 @@ class RedesignShotsWorldTest {
         add(Scene("dungeon-sealed-protan", roles = KkRolePalette.Protan, model = { w, h -> sealedBay(w, h) }))
         add(Scene("dungeon-locked", model = { w, h -> lockedSanctum(w, h) }))
         add(Scene("dungeon-cleared", model = { w, h ->
-            structureModel(model(w, h), structure(StructureTemplateId.DERELICT_STATION, 100f, 0f, spent = true))
+            structureModel(model(w, h), structure(StructureTemplateId.DERELICT_STATION, 100f, 0f, cleared = 0b1011))
         }))
         add(Scene("doodle", model = { w, h -> doodle(w, h) }))
         // Every obstacle kind in each state it shows, beside a rock and a bumper; the HUD adds their minimap marks.
@@ -589,9 +590,8 @@ class RedesignShotsWorldTest {
         rotation: Int = 0,
         cleared: Int = 0,
         engaged: Int = -1,
-        spent: Boolean = false,
         id: Long = (template.ordinal + 1).toLong() shl 8,
-    ) = StructureFixture(Content.structures.template(template), 1_000f + dx, 1_000f + dy, rotation, cleared, engaged, spent, id)
+    ) = StructureFixture(Content.structures.template(template), 1_000f + dx, 1_000f + dy, rotation, cleared, engaged, id)
 
     /** [base] with [structures] in the window, [dungeon] (one of them) held, and [signals] announced. */
     private fun structureModel(

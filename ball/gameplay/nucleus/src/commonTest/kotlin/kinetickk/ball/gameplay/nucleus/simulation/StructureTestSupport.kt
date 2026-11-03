@@ -138,7 +138,6 @@ internal fun MutableGameState.placeWallsForTesting(vararg structures: List<Wall>
             halfHeight = (maxY - minY) / 2f,
             wallStart = start,
             wallEnd = walls.size,
-            spent = false,
         )
     }
     structureField = StructureField.of(obstacleField.centerChunkX, obstacleField.centerChunkY, worldLayer.ordinal, false, placed, walls, emptyList())
@@ -195,13 +194,18 @@ internal class DungeonFixture(
         run.pickups.clear()
     }
 
-    val structure: PlacedStructure get() = run.structureField.structures[run.structureField.indexOf(placement.id)]
+    val structure: PlacedStructure get() = requireNotNull(structureOrNull) { "The window no longer holds the structure" }
+
+    /** The windowed structure, or null once it left the window (a spent structure disintegrates). */
+    val structureOrNull: PlacedStructure? get() = run.structureField.structures.firstOrNull { it.id == placement.id }
+
+    /** Run-local centre of the placement, valid whether or not the window holds it. */
+    private val centreX: Float get() = (placement.absoluteX - run.worldOriginX).toFloat()
+    private val centreY: Float get() = (placement.absoluteY - run.worldOriginY).toFloat()
 
     /** Run-local point of the template-space point. */
-    fun world(localX: Float, localY: Float): Pair<Float, Float> {
-        val s = structure
-        return s.x + rotateQuarterX(localX, localY, s.rotation) to s.y + rotateQuarterY(localX, localY, s.rotation)
-    }
+    fun world(localX: Float, localY: Float): Pair<Float, Float> =
+        centreX + rotateQuarterX(localX, localY, placement.rotation) to centreY + rotateQuarterY(localX, localY, placement.rotation)
 
     fun roomCentre(room: Int): Pair<Float, Float> {
         val spec = template.rooms[room]
@@ -232,10 +236,7 @@ internal class DungeonFixture(
     fun garrison(room: Int) = run.enemies.filter { it.ownerTag == tag(room) && it.alive }
 
     /** The room holding the run-local point, or −1. */
-    fun roomOf(x: Float, y: Float): Int {
-        val s = structure
-        return template.roomAt(x - s.x, y - s.y, s.rotation)
-    }
+    fun roomOf(x: Float, y: Float): Int = template.roomAt(x - centreX, y - centreY, placement.rotation)
 
     fun clear(room: Int) {
         enterRoom(room)

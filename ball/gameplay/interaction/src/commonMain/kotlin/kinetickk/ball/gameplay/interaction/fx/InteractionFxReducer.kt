@@ -247,7 +247,7 @@ class InteractionFxReducer(seed: Int) {
                 true
             }
             is VisualFxCue.WorldRebased -> worldRebased(cue)
-            is VisualFxCue.VisualCuesDropped -> false
+            is VisualFxCue.VisualCuesDropped, is VisualFxCue.StructureDisintegrated -> false
             is VisualFxCue.SkillCast -> skillCast(cue)
             is VisualFxCue.ApexActivated -> {
                 apexBursts += ApexBurst(cue.shape.ordinal, cue.x, cue.y, random.nextInt(), ApexFxSpec.activation.life,

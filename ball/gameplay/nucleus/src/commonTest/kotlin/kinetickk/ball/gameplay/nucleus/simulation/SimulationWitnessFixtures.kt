@@ -208,7 +208,7 @@ internal fun MutableGameState.populateAdditionalRetainedState() {
     structureField = StructureField.of(
         4, -3, WorldLayer.BASE.ordinal, false,
         listOf(PlacedStructure((1L shl 63) or (5L shl 34) or (6L shl 8), StructureTemplateId.VAULT, 1,
-            2_000f, 1_500f, 600f, 400f, 0, 1, false)),
+            2_000f, 1_500f, 600f, 400f, 0, 1)),
         listOf(Wall((1L shl 63) or (5L shl 34) or (6L shl 8), WallKind.DOOR_SEALED, 1_800f, 1_400f, 2_200f, 1_400f, 24f, door = 0)),
         listOf(StructureSignal(77L, StructureTemplateId.SPIRE, 5_000f, 4_000f, 5_100f, 4_200f)),
     )

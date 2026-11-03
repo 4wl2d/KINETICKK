@@ -7,6 +7,7 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
@@ -190,6 +191,17 @@ sealed interface VisualFxCue {
         val y: Float,
     ) : VisualFxCue
 
+    /**
+     * A spent structure left the world at its run-local centre ([x], [y]) in quarter turn [rotation]; presentation
+     * shatters its walls over a moment. Never read back.
+     */
+    data class StructureDisintegrated(
+        val template: StructureTemplateId,
+        val rotation: Int,
+        val x: Float,
+        val y: Float,
+    ) : VisualFxCue
+
     /** Particles, damage text and Break and reaction flashes rebase; shockwaves stay in place. */
     data class WorldRebased(
         val shiftX: Float,
@@ -288,6 +300,7 @@ internal class BoundedVisualFxCueAccumulator private constructor(
         is VisualFxCue.WeaponArcAdded,
         is VisualFxCue.SkillCast,
         is VisualFxCue.ApexActivated,
+        is VisualFxCue.StructureDisintegrated,
         -> false
     }
 

@@ -30,7 +30,6 @@ internal data class PlacedStructure(
     val halfHeight: Float,
     val wallStart: Int,
     val wallEnd: Int,
-    val spent: Boolean,
 ) {
     fun shifted(shiftX: Float, shiftY: Float): PlacedStructure = copy(x = x - shiftX, y = y - shiftY)
 }
@@ -97,6 +96,26 @@ internal class StructureField private constructor(
         return StructureField(centerChunkX, centerChunkY, layer, bossCollapsed, nextStructures, nextWalls, signals)
     }
 
+    /**
+     * The same window key (chunk, layer, collapse) without structure [index]: its wall slice and its signal leave and
+     * the slices after it shift down, so the next refresh rebuilds only when the key changes.
+     */
+    fun withoutStructure(index: Int): StructureField {
+        val removed = structures[index]
+        val length = removed.wallEnd - removed.wallStart
+        val nextStructures = ArrayList<PlacedStructure>(structures.size - 1)
+        for (at in structures.indices) {
+            val structure = structures[at]
+            if (at < index) nextStructures += structure
+            if (at > index) nextStructures += structure.copy(wallStart = structure.wallStart - length, wallEnd = structure.wallEnd - length)
+        }
+        val nextWalls = ArrayList<Wall>(walls.size - length)
+        for (at in walls.indices) if (at < removed.wallStart || at >= removed.wallEnd) nextWalls += walls[at]
+        val nextSignals = ArrayList<StructureSignal>(signals.size)
+        for (at in signals.indices) if (signals[at].id != removed.id) nextSignals += signals[at]
+        return StructureField(centerChunkX, centerChunkY, layer, bossCollapsed, nextStructures, nextWalls, nextSignals)
+    }
+
     companion object {
         val EMPTY: StructureField = StructureField(Int.MIN_VALUE, Int.MIN_VALUE, -1, false, emptyList(), emptyList(), emptyList())
 
@@ -142,8 +161,9 @@ internal data class DungeonState(
     val clearedRooms: Int = 0,
     /** −1: no sealed room. */
     val engagedRoom: Int = -1,
-    /** A garrison fight ever started (leaving marks it spent). */
+    /** A garrison fight ever started (leaving marks it spent and it disintegrates). */
     val engaged: Boolean = false,
 ) {
     fun shifted(shiftX: Float, shiftY: Float): DungeonState = copy(x = x - shiftX, y = y - shiftY)
 }
+
