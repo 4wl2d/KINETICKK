@@ -19,7 +19,6 @@ internal val expectedLeafProjects: Set<String> = sortedSetOf(
     ":ball:profile:impl",
     ":ball:profile:interaction",
     ":ball:profile:nucleus",
-    ":ball:profile:resource",
     ":flow:session:api",
     ":flow:session:impl",
     ":flow:session:interaction",

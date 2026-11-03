@@ -12,6 +12,7 @@ import kinetickk.ball.profile.api.PlayerEconomy
 import kinetickk.ball.profile.interaction.ProfileLayoutMode
 import kinetickk.ball.profile.interaction.TestMatrixNodes
 import kinetickk.ball.profile.interaction.profileFrame
+import kinetickk.ball.profile.interaction.workshop.matrix.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull

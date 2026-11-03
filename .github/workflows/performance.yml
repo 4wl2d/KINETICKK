@@ -158,7 +158,7 @@ jobs:
           REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
         run: >-
           ./gradlew
-          :ball:profile:resource:profilePerformanceBenchmark
+          :ball:profile:impl:profilePerformanceBenchmark
           -PbenchmarkProfile="$PERFORMANCE_PROFILE"
           -PbenchmarkOutput="$GITHUB_WORKSPACE/kinetickk/build/performance/ci/profile.json"
           -PbenchmarkLabel=ci-bootstrap

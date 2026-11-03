@@ -42,7 +42,7 @@ class IncrementalGateContractTest(unittest.TestCase):
         root = PERFORMANCE_ROOT.parent.parent
         adapters = {
             "gameplay": root / "ball/gameplay/nucleus/src/desktopTest/kotlin/kinetickk/ball/gameplay/nucleus/performance/GameplayPerformanceBenchmark.kt",
-            "profile": root / "ball/profile/resource/src/desktopTest/kotlin/kinetickk/ball/profile/resource/performance/ProfilePerformanceBenchmark.kt",
+            "profile": root / "ball/profile/impl/src/desktopTest/kotlin/kinetickk/ball/profile/impl/storage/performance/ProfilePerformanceBenchmark.kt",
         }
         self.assertEqual(set(adapters), set(marker["suiteVersions"]))
         for suite, adapter in adapters.items():

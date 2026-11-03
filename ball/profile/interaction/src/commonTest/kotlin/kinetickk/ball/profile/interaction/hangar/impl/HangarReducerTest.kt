@@ -23,7 +23,7 @@ import kinetickk.ball.profile.api.LOCAL_PROFILE_INSTANCE_ID
 import kinetickk.ball.profile.api.ProfileRevision
 import kinetickk.ball.profile.interaction.ProfileLayoutMode
 import kinetickk.ball.profile.interaction.audio.ProfileAudioCue
-import kinetickk.ball.profile.interaction.hangar.api.HangarOutput
+import kinetickk.ball.profile.interaction.workshop.hangar.HangarOutput
 import kinetickk.ball.profile.interaction.profileFrame
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.ball.profile.interaction.workshop.impl.WorkshopSegment
@@ -32,6 +32,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kinetickk.ball.profile.interaction.workshop.hangar.*
 
 internal fun hangarProjection(
     unlocked: Set<CoreShape> = setOf(CoreShape.ORB, CoreShape.PRISM),

@@ -9,12 +9,13 @@ import kinetickk.ball.profile.api.ProfileSettings
 import kinetickk.ball.profile.api.ProfileLoadout
 import kinetickk.ball.profile.api.ProfileRebirth
 import kinetickk.ball.profile.api.ProfileProgress
-import kinetickk.ball.profile.resource.ExactProfilePersistence
-import kinetickk.ball.profile.resource.ProfileProviderMutationResult
-import kinetickk.ball.profile.resource.ProfileProviderReadResult
-import kinetickk.ball.profile.resource.createProfileResource
 
-/** Exact persistence operations supplied by the platform composition broker. */
+/**
+ * Exact persistence operations supplied by the platform composition broker.
+ *
+ * Platform stores, roots, nodes, key selection, bulk clearing, and global acquisition are
+ * deliberately absent. The app platform broker is the only place that may hold those powers.
+ */
 interface ProfilePersistenceCapability {
     fun readSnapshot(): ProfilePersistenceReadResult
 
@@ -51,28 +52,6 @@ fun createProfileComponent(
     policy: ProfilePolicySnapshot,
 ): ProfileComponent =
     DefaultProfileComponent(
-        resource = createProfileResource(ProfilePersistenceAdapter(persistence)),
+        resource = createProfileResource(persistence),
         policy = policy,
     )
-
-private class ProfilePersistenceAdapter(
-    private val capability: ProfilePersistenceCapability,
-) : ExactProfilePersistence {
-    override fun readSnapshot(): ProfileProviderReadResult =
-        capability.readSnapshot().toProviderResult()
-
-    override fun writeSnapshot(payload: String): ProfileProviderMutationResult =
-        capability.writeSnapshot(payload).toProviderResult()
-}
-
-private fun ProfilePersistenceReadResult.toProviderResult(): ProfileProviderReadResult = when (this) {
-    is ProfilePersistenceReadResult.Observed -> ProfileProviderReadResult.Observed(payload)
-    ProfilePersistenceReadResult.Failed -> ProfileProviderReadResult.Failed
-}
-
-private fun ProfilePersistenceMutationResult.toProviderResult(): ProfileProviderMutationResult = when (this) {
-    ProfilePersistenceMutationResult.COMPLETED -> ProfileProviderMutationResult.COMPLETED
-    ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION ->
-        ProfileProviderMutationResult.FAILED_BEFORE_EXECUTION
-    ProfilePersistenceMutationResult.POSSIBLE_EXECUTION -> ProfileProviderMutationResult.POSSIBLE_EXECUTION
-}

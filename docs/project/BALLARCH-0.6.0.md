@@ -211,12 +211,12 @@ benchmark fixture. Он исправлен до замеров; последую
 ```sh
 ./gradlew :build-logic:test verifyArchitecture \
   :ball:profile:nucleus:desktopTest :ball:profile:impl:desktopTest \
-  :ball:profile:resource:desktopTest :flow:session:nucleus:desktopTest \
+  :flow:session:nucleus:desktopTest \
   :flow:session:impl:desktopTest :foundation:common:desktopTest :app:shared:desktopTest
 ./gradlew verifyArchitecture -Pkinetickk.gradle.isolatedProfile=true --isolated-projects
 CHROME_BIN=/path/to/chromium ./gradlew -Pkinetickk.variant=debug \
   :ball:profile:nucleus:wasmJsBrowserTest :ball:profile:impl:wasmJsBrowserTest \
-  :ball:profile:resource:wasmJsBrowserTest :app:web:compileKotlinWasmJs \
+  :app:web:compileKotlinWasmJs \
   :app:android:assembleDebug
 ```
 

@@ -36,7 +36,6 @@ include(
     ":ball:content:impl",
     ":ball:profile:api",
     ":ball:profile:nucleus",
-    ":ball:profile:resource",
     ":ball:profile:interaction",
     ":ball:profile:impl",
     ":ball:gameplay:api",
