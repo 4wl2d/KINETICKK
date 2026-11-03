@@ -261,6 +261,19 @@ class DimensionSystemTest {
     }
 
     @Test
+    fun aBossClassEnemyAwaitingItsKillKeepsARiftLockedUntilTheSweepCountsIt() {
+        val game = game()
+        // Brought to zero integrity this step; the kill resolves in the step's later sweep.
+        val herald = game.addEnemyForTesting(900f, 0f, type = EnemyType.HERALD).apply { hp = 0f }
+        val kills = game.kills
+        assertFalse(game.canEnterDimension(WorldLayer.NADIR), "entering would delete it without its kill")
+        game.sweepKills()
+        assertTrue(herald.dead)
+        assertEquals(kills + 1, game.kills, "its kill was counted")
+        assertTrue(game.canEnterDimension(WorldLayer.NADIR))
+    }
+
+    @Test
     fun theTimerPullsTheCoreBackWithTheSmallerRewardAndAQuietDirector() {
         val game = game()
         game.nextEliteAt = 500f

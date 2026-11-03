@@ -63,7 +63,7 @@ internal enum class DimensionExit { PORTAL, TIMER, FORCED }
 /**
  * True when a rift into [target] may be entered now: rifts are enabled, the run is running in realspace before the
  * Architect, [target] is a dimension not entered this run, at least the minimum visit fits before the exit margin,
- * and no boss-class enemy lives (entering would delete it and its reward).
+ * and no boss-class enemy lives or awaits its kill at zero integrity (entering would delete it and its reward).
  */
 internal fun MutableGameState.canEnterDimension(target: WorldLayer): Boolean =
     phase == GamePhase.RUNNING && dimensionEntryOpen(target)
@@ -79,7 +79,7 @@ internal fun MutableGameState.dimensionEntryOpen(target: WorldLayer): Boolean {
     if (content.tempo.bossAtSeconds - policy.exitMarginSeconds - elapsed < policy.minimumVisitSeconds) return false
     for (index in enemies.indices) {
         val enemy = enemies[index]
-        if (enemy.alive && enemy.isBossClass) return false
+        if (!enemy.dead && enemy.isBossClass) return false
     }
     return true
 }
