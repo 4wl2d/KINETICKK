@@ -11,8 +11,8 @@ package kinetickk.gradle
  * The separate project-edge rules stop production nucleus/API dependencies on implementations.
  */
 internal fun nucleusImportViolations(source: String): List<String> {
-    val code = maskKotlinCommentsAndLiterals(source)
-    return IMPORT.findAll(code).mapNotNull { match ->
+    val code = maskKotlinSource(source)
+    return KOTLIN_IMPORT.findAll(code).mapNotNull { match ->
         val imported = match.groupValues[1]
         val forbidden = FORBIDDEN_IMPORTS.any { prefix ->
             imported == prefix || imported.startsWith("$prefix.") ||
@@ -24,8 +24,6 @@ internal fun nucleusImportViolations(source: String): List<String> {
     }.toList()
 }
 
-private val IMPORT = Regex("(?m)^[ \\t]*import[ \\t]+([A-Za-z_][A-Za-z0-9_.*]*)")
-
 private val FORBIDDEN_IMPORTS = listOf(
     "android", "androidx", "java", "javax", "platform",
     "kotlin.io", "kotlin.system", "kotlin.reflect", "kotlin.concurrent",
@@ -35,48 +33,3 @@ private val FORBIDDEN_IMPORTS = listOf(
     "kinetickk.foundation.design", "kinetickk.foundation.diagnostics",
     "kinetickk.foundation.dispatch",
 )
-
-/** Preserve offsets/newlines so comments and documentation examples cannot produce diagnostics. */
-private fun maskKotlinCommentsAndLiterals(source: String): String {
-    val result = source.toCharArray()
-    var index = 0
-    fun maskTo(end: Int) {
-        while (index < end) {
-            if (result[index] != '\n' && result[index] != '\r') result[index] = ' '
-            index++
-        }
-    }
-    while (index < source.length) {
-        when {
-            source.startsWith("//", index) ->
-                maskTo(source.indexOf('\n', index).takeIf { it >= 0 } ?: source.length)
-            source.startsWith("/*", index) -> {
-                var end = index + 2
-                var depth = 1
-                while (end < source.length && depth > 0) {
-                    when {
-                        source.startsWith("/*", end) -> { depth++; end += 2 }
-                        source.startsWith("*/", end) -> { depth--; end += 2 }
-                        else -> end++
-                    }
-                }
-                maskTo(end)
-            }
-            source.startsWith("\"\"\"", index) -> {
-                val close = source.indexOf("\"\"\"", index + 3)
-                maskTo(if (close < 0) source.length else close + 3)
-            }
-            source[index] == '\"' || source[index] == '\'' -> {
-                val quote = source[index]
-                var end = index + 1
-                while (end < source.length) {
-                    if (source[end] == '\\') end = (end + 2).coerceAtMost(source.length)
-                    else if (source[end++] == quote) break
-                }
-                maskTo(end)
-            }
-            else -> index++
-        }
-    }
-    return result.concatToString()
-}

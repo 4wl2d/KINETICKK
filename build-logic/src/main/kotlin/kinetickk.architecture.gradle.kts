@@ -3,7 +3,10 @@
 
 import kinetickk.gradle.ARCHITECTURE_EDGE_ELEMENTS_CONFIGURATION_NAME
 import kinetickk.gradle.ARCHITECTURE_EDGE_REPORTS_CONFIGURATION_NAME
+import kinetickk.gradle.SourceStructureTask
+import kinetickk.gradle.UpdateSourceStructureBaselineTask
 import kinetickk.gradle.VerifyArchitectureTask
+import kinetickk.gradle.VerifySourceStructureTask
 
 val leafProjects = rootProject.subprojects.filter { it.childProjects.isEmpty() }
 val leafProjectPathValues = leafProjects.map { it.path }.toSet()
@@ -27,22 +30,65 @@ dependencies {
     }
 }
 
-tasks.register<VerifyArchitectureTask>("verifyArchitecture") {
+val repositoryRoot = layout.projectDirectory
+
+// Module paths map directly to directories in settings.gradle.kts. Trees are built from path strings
+// with the root project's services, without invoking another Project during configuration, and are
+// rooted at <leaf>/src so they never walk .claude/, build/ or node_modules/.
+fun leafSourceTree(leafPath: String, production: Boolean) =
+    rootProject.fileTree(repositoryRoot.dir(leafPath.removePrefix(":").replace(':', '/') + "/src")) {
+        if (production) {
+            // Every production root, including variant roots such as commonDebug; test source set names end in Test.
+            include("*/kotlin/**/*.kt")
+            exclude("*Test/**")
+        } else {
+            include("*Test/kotlin/**/*.kt")
+        }
+    }
+
+fun SourceStructureTask.useRepositorySources() {
+    repositoryDirectory.set(repositoryRoot)
+    leafProjectPaths.set(leafProjectPathValues)
+    leafProjectPathValues.sorted().forEach { leaf ->
+        mainSourceFiles.from(leafSourceTree(leaf, production = true))
+        testSourceFiles.from(leafSourceTree(leaf, production = false))
+    }
+    architectureDocument.set(repositoryRoot.file("docs/project/ARCHITECTURE.md"))
+    baselineFile.set(repositoryRoot.file("build-logic/source-structure-baseline.tsv"))
+}
+
+tasks.register<VerifySourceStructureTask>("verifySourceStructure") {
+    group = "verification"
+    description = "Verifies file, function and package size ratchets, import boundaries and package cycles."
+    useRepositorySources()
+    reportFile.set(layout.buildDirectory.file("reports/source-structure/report.txt"))
+    doNotTrackState("Scans about 1,000 Kotlin files in under a second; always re-verifies so moved files never reuse a stale result")
+}
+
+tasks.register<UpdateSourceStructureBaselineTask>("updateSourceStructureBaseline") {
+    group = "verification"
+    description = "Lowers source-structure ceilings and deletes stale rows; " +
+        "-Pkinetickk.sourceStructure.resetBaseline=true rewrites them."
+    useRepositorySources()
+    resetBaseline.set(
+        providers.gradleProperty("kinetickk.sourceStructure.resetBaseline").map(String::toBooleanStrict).orElse(false),
+    )
+    doNotTrackState("Rewrites the checked-in baseline")
+}
+
+val verifyModuleGraph = tasks.register<VerifyArchitectureTask>("verifyModuleGraph") {
     group = "verification"
     description = "Verifies module boundaries and forbidden nucleus imports without resolving classpaths."
     leafProjectPaths.set(leafProjectPathValues)
     architectureEdgeReportFiles.from(architectureEdgeReports)
     rootSourceFiles.from(rootProject.fileTree("src"))
     leafProjectPathValues.filter { it.endsWith(":nucleus") }.forEach { nucleusPath ->
-        // These module paths map directly to directories in settings.gradle.kts. Build the tree
-        // with the root project's services, without invoking another Project during configuration.
-        val sourceDirectory = rootProject.layout.projectDirectory.dir(
-            nucleusPath.removePrefix(":").replace(':', '/') + "/src",
-        )
-        nucleusSourceFiles.from(rootProject.fileTree(sourceDirectory) {
-            // Every production root, including variant roots such as commonDebug; test source set names end in Test.
-            include("*/kotlin/**/*.kt")
-            exclude("*Test/**")
-        })
+        nucleusSourceFiles.from(leafSourceTree(nucleusPath, production = true))
     }
+}
+
+tasks.register("verifyArchitecture") {
+    group = "verification"
+    description = "Verifies module boundaries and forbidden nucleus imports."
+    dependsOn(verifyModuleGraph)
 }
