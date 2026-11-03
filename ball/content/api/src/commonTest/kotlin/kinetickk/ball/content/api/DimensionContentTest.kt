@@ -47,7 +47,7 @@ class DimensionContentTest {
         assertEquals(4.25f, objectives.ascentSplitFactor)
         assertEquals(20, objectives.harvestEmbers)
         assertTrue(DimensionObjective.HARVEST.instruction.startsWith("Collect twenty embers"))
-        assertEquals(1.1f, objectives.emberLifeSeconds)
+        assertEquals(1.0f, objectives.emberLifeSeconds)
         assertEquals(140f to 320f, objectives.emberThrowMinimum to objectives.emberThrowMaximum)
         // Only the duels name a boss, and each boss is the one the instruction names.
         assertEquals(

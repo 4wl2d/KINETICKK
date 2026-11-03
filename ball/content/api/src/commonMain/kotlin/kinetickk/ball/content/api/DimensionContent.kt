@@ -111,7 +111,7 @@ data class DimensionObjectiveTuning(
     val haloRadius: Float = 70f,
     val harvestEmbers: Int = 20,
     /** A thrown ember waits this long: the Harvest is a chase to each one, not a sweep behind the kills. */
-    val emberLifeSeconds: Float = 1.1f,
+    val emberLifeSeconds: Float = 1.0f,
     val emberRadius: Float = 70f,
     /** A burning kill throws its ember this far (from the minimum to the maximum, by a stateless hash). */
     val emberThrowMinimum: Float = 140f,

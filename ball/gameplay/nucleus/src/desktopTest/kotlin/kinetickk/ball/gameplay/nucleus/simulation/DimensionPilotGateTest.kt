@@ -36,6 +36,13 @@ import kotlin.test.assertTrue
  * Judgement 0.776 (0.054); N0 survival 0.965 (0.017), Harvest 0.860 (0.046), Pyre 0.638 (0.063), scorch 0.359 (0.032);
  * Z10 0.980 (0.014) and 0.713 (0.045); N10 0.832 (0.037) and 0.782 (0.041); A3 1.000 and 0.308 (0.042); A0 0.931
  * (0.025) and 0.078 (0.027).
+ *
+ * On the tree with Totem chests, Elite resonance, the dungeon collapse and Core Stasis the Harvest read 0.933 (0.032) on
+ * the gate seeds and 0.98 on the window with every window seed forced to it, above its 0.90 ceiling. Recalibrated on
+ * the window: ember life 1.0 s (window Harvest 0.80). On the gate seeds: Z0 survival 0.983 (0.012), Ascent 0.817
+ * (0.050), Judgement 0.633 (0.062); N0 survival 0.992 (0.008), Harvest 0.833 (0.048), Pyre 0.717 (0.059), scorch 0.339
+ * (0.035); Z10 0.970 (0.017) and 0.730 (0.044); N10 0.890 (0.031) and 0.870 (0.033); A3 1.000 and 0.325 (0.043); A0
+ * 0.949 (0.020) and 0.068 (0.023).
  */
 class DimensionPilotGateTest {
     /**
