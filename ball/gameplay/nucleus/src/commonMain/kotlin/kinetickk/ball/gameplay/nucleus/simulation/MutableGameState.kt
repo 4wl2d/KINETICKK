@@ -183,6 +183,9 @@ internal class MutableGameState(
     /** Frame admission, viewport and display feedback. */
     internal val frameState: FrameState = FrameState(copySource?.frameState)
 
+    /** Sound and visual cues awaiting the owner. */
+    internal val cueOutbox: CueOutbox = CueOutbox(copySource?.cueOutbox)
+
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
     /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */
@@ -216,12 +219,8 @@ internal class MutableGameState(
     internal var freeDashPrimed: Boolean = copySource?.freeDashPrimed ?: false
     internal var freeDashReadyAt: Float = copySource?.freeDashReadyAt ?: 0f
     internal var dashHitThisDash: Boolean = copySource?.dashHitThisDash ?: false
-    internal var soundCueStorage: MutableList<GameplayAudioCue>? =
-        copySource?.soundCueStorage?.let { source -> ArrayList(source) }
     internal val soundCues: PendingSoundCueBuffer
         get() = PendingSoundCueBuffer(this)
-    internal var visualFxCueStorage: BoundedVisualFxCueAccumulator? =
-        copySource?.visualFxCueStorage?.copy()
     internal val visualFxCues: PendingVisualFxCueBuffer
         get() = PendingVisualFxCueBuffer(this)
     /** Window kinds draw from their own stream, so sites never shift offers, spawns or crits. */

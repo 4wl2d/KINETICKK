@@ -1485,7 +1485,7 @@ internal object FuzzFiniteScan {
         "coreObstacleGap", "splitEndsAt", "expiresAt", "lastDamagedAt", "bossSpawnAt", "sweepStartedAt", "reveal", "age",
     )
 
-    private val Skipped = setOf("content", "build", "profileCapture.itemHistory", "profileCapture.itemDeck", "matrix", "profileCapture.activeRebirthProfile", "soundCueStorage", "visualFxCueStorage")
+    private val Skipped = setOf("content", "build", "profileCapture.itemHistory", "profileCapture.itemDeck", "matrix", "profileCapture.activeRebirthProfile", "cueOutbox.soundCueStorage", "cueOutbox.visualFxCueStorage")
 
     fun first(state: MutableGameState): String? = scan(state, "state", 0)
 

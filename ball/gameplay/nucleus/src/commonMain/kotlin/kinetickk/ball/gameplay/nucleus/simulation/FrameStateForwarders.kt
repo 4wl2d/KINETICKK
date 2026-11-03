@@ -3,6 +3,8 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.gameplay.nucleus.protocol.BoundedVisualFxCueAccumulator
+import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 
 /*
  * Legacy forwarders; new code uses the holder; never add a forwarder for a new field.
@@ -66,3 +68,13 @@ internal var MutableGameState.message: String
 internal var MutableGameState.messageTime: Float
     get() = frameState.messageTime
     set(value) { frameState.messageTime = value }
+
+// CueOutbox
+
+internal var MutableGameState.soundCueStorage: MutableList<GameplayAudioCue>?
+    get() = cueOutbox.soundCueStorage
+    set(value) { cueOutbox.soundCueStorage = value }
+
+internal var MutableGameState.visualFxCueStorage: BoundedVisualFxCueAccumulator?
+    get() = cueOutbox.visualFxCueStorage
+    set(value) { cueOutbox.visualFxCueStorage = value }
