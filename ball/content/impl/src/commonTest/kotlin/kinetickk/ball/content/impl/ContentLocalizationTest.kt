@@ -207,7 +207,6 @@ class ContentLocalizationTest {
             }
             content.relics.forEach { relic ->
                 add("Replace ${relic.name}")
-                add("Meld ${relic.name}")
                 add("Break slot 4 and bind ${relic.name} at rank 1.")
                 add("${relic.name.uppercase()} // RESONANCE SALVAGED")
                 add("${relic.name.uppercase()} // RANK 3")
@@ -219,9 +218,9 @@ class ContentLocalizationTest {
                 "Advance the current system from level 2 to 3 immediately.",
                 "Merge the duplicate resonance and advance rank 2 to 3.",
                 "This resonance is already rank 3; selecting it salvages Kinetic Matter.",
-                "Collapse this offering into one of the four bound Relics and raise its rank.",
-                "Collapse the offering into slot 4 and advance rank 2 to 3.",
                 "Slot 4 is already rank 3; salvage the excess resonance.",
+                "Meld", "Seal the empty slot for this run for lasting damage and maximum integrity.",
+                "Salvage resonance", "Salvage the resonance for Kinetic Matter.",
                 "SLOT 4 // REPLACE", "SLOT 4 // RANK 3", "LEVEL 20",
                 "Impact power +0.05×", "Cooling +1.5/s", "Combo window +0.08s",
                 "+4.5% Impact damage  //  +0.2/s Integrity regeneration",
@@ -250,7 +249,7 @@ class ContentLocalizationTest {
             "DRIFT PHASE", "THE ARCHITECT", "THE ARCHITECT ENRAGES", "KINETIC OVERDRIVE", "DASH ONLINE", "OVERHEAT",
             "SINGULARITY CONTACT", "POLARITY FIELD STRAIN", "ARCHITECT DISMANTLED",
             "CATALOG COMPLETE // MATTER SALVAGED", "CORE FRACTURED", "ELITE KEY ACQUIRED",
-            "RELIC RESONANCE", "ELITE RESONANCE", "ELITE SIGNAL", "HERALD APPROACHES",
+            "RELIC RESONANCE", "RESONANCE SALVAGED", "SLOT SEALED // MELD", "ELITE RESONANCE", "ELITE SIGNAL", "HERALD APPROACHES",
             "TWO ANOMALIES DETECTED // CHOOSE A COURSE", "ANOMALY LOST", "ANOMALY RESOLVED",
             "SECOND WIND", "OBSTACLE COLLISION", "APEX ONLINE", "CORE FROZEN",
             "BOOP",

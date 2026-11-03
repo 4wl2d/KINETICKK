@@ -288,8 +288,8 @@ internal class NoPoiBot(
     /** How the bot treats Data-gain cards (economy §2.1); [DataPolicy.NEUTRAL] plays exactly as the reference bot. */
     private val dataPolicy: DataPolicy = DataPolicy.NEUTRAL,
     /**
-     * A setup measured without key harmony: the bot leaves a Relic slot hollow rather than bind a Relic that carries
-     * the equipped weapon's key. Off, the bot plays exactly as the reference bot.
+     * A setup measured without key harmony: the bot melds rather than bind a Relic that carries the equipped weapon's
+     * key. Off, the bot plays exactly as the reference bot.
      */
     private val avoidWeaponHarmony: Boolean = false,
     /** How the bot presses Dash; [DashRule.HUMAN] unless a probe flies the old bot. */
@@ -836,18 +836,16 @@ internal class NoPoiBot(
 
     /**
      * A committed Ram and Entropy build: archetype and element items first, survival stats second,
-     * then whatever already has points. Relics fill empty slots, then rank up through duplicates and
-     * Meld. A small deterministic spread stands in for a player's taste between equal cards.
+     * then whatever already has points. Each Relic offer spends one of the run's Relic opportunities: a Relic it likes
+     * binds into an open slot first, a rank-up of a bound Relic comes next, and it melds when every Relic card is a poor
+     * fit (one whose liability it avoids, [MELD_SCORE]). A small deterministic spread stands in for a player's taste
+     * between equal cards.
      */
     private fun score(s: MutableGameState, c: ChoiceOption, index: Int): Float {
-        val full = s.equippedRelics.size >= s.content.relicPolicy.maxSlots
+        val full = s.openRelicSlots() <= 0
         val spread = ((decisions * 31 + index * 7) % 7).toFloat()
         if (c.relicAction == RelicChoiceAction.DECLINE) return -50f
-        if (c.relicAction == RelicChoiceAction.MELD) return if (full) 40f else -40f
-        if (c.relicAction == RelicChoiceAction.MELD_TARGET) {
-            val relic = s.equippedRelics[c.relicSlot ?: return -1000f]
-            return if (s.canMeld(relic.id)) 60f - relic.rank * 10f + spread else -1000f
-        }
+        if (c.relicAction == RelicChoiceAction.MELD) return MELD_SCORE
         if (c.relicAction == RelicChoiceAction.REPLACE) return -10f - (s.equippedRelics.getOrNull(c.relicSlot ?: 0)?.rank ?: 0)
         if (c.totemAction == TotemAction.CHANGE_WEAPON) return if (s.weapon !in weaponOrder) 1_000f else -1f
         if (c.totemAction == TotemAction.AMPLIFY_CURRENT) return 100f
@@ -879,15 +877,22 @@ internal class NoPoiBot(
         }
         c.relicId?.let { id ->
             if (avoidWeaponHarmony && s.currentWeaponDefinition.key in s.content.relic(id).keys) return -100f
+            val taste = relicTaste[id] ?: 0f
             return when {
-                s.relicRank(id) > 0 -> if (full) 50f else 15f + spread
+                s.relicRank(id) > 0 -> 30f + spread + taste
                 full -> -20f
-                else -> 40f + spread + (relicTaste[id] ?: 0f)
+                else -> 40f + spread + taste
             }
         }
         return 0f
     }
 }
+
+/**
+ * The bot's Meld score: above every Relic card it dislikes (a new one at most 26, its liability taste -20 or lower), below
+ * a Relic it likes (at least 40) and a rank-up of one it bound (at least 30).
+ */
+private const val MELD_SCORE = 27f
 
 /** How a bot treats Data-gain cards: as any other card, first ([SEEK], with rerolls) or last ([AVOID]). */
 internal enum class DataPolicy { NEUTRAL, SEEK, AVOID }

@@ -6,6 +6,7 @@ package kinetickk.ball.gameplay.interaction.overlay
 import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.ReactionId
+import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.RelicDefinition
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
@@ -155,6 +156,8 @@ internal class PauseBuildOverview(
     /** The run's Conditions: the omen taken, the director pattern, the Keynote, the world event in progress. */
     val conditionsLabel: String = "",
     val conditions: List<PauseConditionEntry> = emptyList(),
+    /** The last free slots of [relics] a Meld sealed (drawn sealed; [relicsLabel] names the Melds' bonus). */
+    val sealedSlots: Int = 0,
 ) {
     /** The names the brackets carry, in bracket order. */
     val synergyNames: List<String> = brackets.map { it.name }
@@ -166,23 +169,7 @@ internal class PauseBuildOverview(
 internal fun GameplayRenderModel.pauseBuildOverview(language: AppLanguage, touch: Boolean = false): PauseBuildOverview {
     val policy = content.relicPolicy
     val slots = List(policy.maxSlots) { index -> equippedRelics.getOrNull(index) }
-    val relics = slots.map { equipped ->
-        equipped?.let {
-            val upside = build.relicUpside(it.id)
-            PauseRelicEntry(
-                definition = content.relic(it.id),
-                rank = it.rank,
-                maxRank = policy.maxRank,
-                multiplier = overlayMultiplier(upside, language),
-                tone = when {
-                    upside > 1.0005f -> PauseValueTone.YOU
-                    upside < 0.9995f -> PauseValueTone.THREAT
-                    else -> PauseValueTone.BONE
-                },
-                spent = it.id == RelicId.OUROBOROS_SEAL && build.ouroborosSpent,
-            )
-        }
-    }
+    val relics = slots.map { equipped -> equipped?.let { pauseRelicEntry(it, language) } }
     val links = overlayRelicLinks(slots.map { it?.id })
     val brackets = pauseBrackets(links, language)
     val costs = relics.filterNotNull().map {
@@ -223,8 +210,9 @@ internal fun GameplayRenderModel.pauseBuildOverview(language: AppLanguage, touch
         levelCap = maxLevel,
         apex = apex.badgeState(),
         apexActive = apex.active01,
-        relicsLabel = language.text(OverlayRedesignText.Relics) + " " + equippedRelics.size + "/" + policy.maxSlots,
+        relicsLabel = pauseRelicsLabel(language),
         relics = relics,
+        sealedSlots = build.meldedSlots,
         brackets = brackets,
         costLabel = language.text(OverlayRedesignText.Cost),
         costs = costs.take(MAX_COST_LINES),
@@ -264,6 +252,37 @@ internal fun GameplayRenderModel.pauseBuildOverview(language: AppLanguage, touch
         conditionsLabel = language.text(RunVarietyText.Conditions),
         conditions = pauseConditions(language),
     )
+}
+
+/** A bound relic of the pause matrix: its rank and the net multiplier its links make of its upside. */
+private fun GameplayRenderModel.pauseRelicEntry(equipped: EquippedRelic, language: AppLanguage): PauseRelicEntry {
+    val upside = build.relicUpside(equipped.id)
+    return PauseRelicEntry(
+        definition = content.relic(equipped.id),
+        rank = equipped.rank,
+        maxRank = content.relicPolicy.maxRank,
+        multiplier = overlayMultiplier(upside, language),
+        tone = when {
+            upside > 1.0005f -> PauseValueTone.YOU
+            upside < 0.9995f -> PauseValueTone.THREAT
+            else -> PauseValueTone.BONE
+        },
+        spent = equipped.id == RelicId.OUROBOROS_SEAL && build.ouroborosSpent,
+    )
+}
+
+/** The Melds' lasting bonus after [melds] Melds: "Meld ×2: damage +25%, integrity +21%". */
+internal fun GameplayRenderModel.meldTotal(melds: Int, language: AppLanguage): String {
+    val policy = content.relicPolicy
+    fun percent(multiplier: Float) = overlayDecimal(((multiplier - 1f) * 100f).roundToLong().toFloat(), language)
+    return language.text(OverlayRedesignText.MeldTotal, melds, percent(policy.meldDamageMultiplier(melds)),
+        percent(policy.meldIntegrityMultiplier(melds)))
+}
+
+/** "Relics 2/4", then the Melds' lasting bonus once a slot is sealed ("Relics 2/4 · Meld ×1: damage +12%, integrity +10%"). */
+private fun GameplayRenderModel.pauseRelicsLabel(language: AppLanguage): String {
+    val bound = language.text(OverlayRedesignText.Relics) + " " + equippedRelics.size + "/" + content.relicPolicy.maxSlots
+    return if (build.meldedSlots > 0) bound + " · " + meldTotal(build.meldedSlots, language) else bound
 }
 
 /**

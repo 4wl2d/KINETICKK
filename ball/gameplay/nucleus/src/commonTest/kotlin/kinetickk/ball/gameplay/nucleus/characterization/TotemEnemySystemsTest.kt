@@ -76,7 +76,7 @@ class TotemEnemySystemsTest {
     }
 
     @Test
-    fun totemAmplifyAndChangeFormATwoStageChoiceThatPreservesWeaponLevel() {
+    fun totemAmplifyAndChangeFormATwoStageChoiceThatKeepsMostOfTheWeaponLevel() {
         val engine = runningEngine(seed = 201)
         val startingWeapon = engine.weapon
         // The Orb starts its signature Flux Wake one level up.
@@ -136,7 +136,8 @@ class TotemEnemySystemsTest {
         assertEquals(GamePhase.RUNNING, engine.phase)
         assertEquals(selectedWeapon, engine.weapon)
         assertNotEquals(startingWeapon, engine.weapon)
-        assertEquals(amplified, engine.weaponLevel)
+        // The run's one weapon change keeps the tempo's share of the level.
+        assertEquals(engine.content.tempo.weaponLevelAfterChange(amplified), engine.weaponLevel)
         assertTrue(engine.choices.isEmpty())
     }
 

@@ -24,8 +24,8 @@ import kinetickk.ball.gameplay.nucleus.simulation.skills.*
 internal fun MutableGameState.onDirectHit(enemy: Enemy, result: DamageResult, source: HitSource, sourceWeapon: WeaponId?) {
     enemy.status[StatusCell.LAST_SOURCE] = (source.ordinal + 1).toFloat()
     // Derived damage measures the hit before the receiver's own multipliers, so armour never leaks to others,
-    // and before the Matrix damage multiplier, which every proc, status and field applies once itself.
-    val basis = result.unmitigated / matrix.damageMultiplier
+    // and before the run damage multiplier (Matrix and Melds), which every proc, status and field applies once itself.
+    val basis = result.unmitigated / runDamageMultiplier()
     when (source) {
         HitSource.IMPACT -> fireClauses(EffectTrigger.IMPACT, enemy, basis, source)
         HitSource.WEAPON -> {

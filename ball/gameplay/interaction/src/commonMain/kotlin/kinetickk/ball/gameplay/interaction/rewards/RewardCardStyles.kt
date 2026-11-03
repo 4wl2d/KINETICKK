@@ -183,8 +183,8 @@ internal fun buildRewardCardLook(presentation: RewardCardPresentation, roles: Kk
             RewardCardLook(style, null, hue, hue)
         }
         choice.relicAction == RelicChoiceAction.MELD -> {
-            // A meld joins two forms and has no element: Kinetic in a steel frame, a perforated link edge,
-            // two forms joined as its watermark.
+            // A Meld seals an empty slot and has no element: Kinetic in a steel frame, a perforated edge,
+            // the joined forms of the sealed slot as its watermark.
             val hue = roles.kinetic
             val style = KkCardStyle(
                 material = KkCardMaterial.STEEL,

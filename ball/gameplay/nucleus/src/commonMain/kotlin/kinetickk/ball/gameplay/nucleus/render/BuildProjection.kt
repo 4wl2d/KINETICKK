@@ -48,6 +48,14 @@ data class BuildProjection(
     val invulnerable: Boolean = false,
     val overdriveBurnout: Boolean = false,
     val breakThresholds: ImmutableList<Int> = immutableListOf(),
+    /** Relic opportunities claimed this run, the open offer included (the budget is the content's Relic policy). */
+    val relicClaims: Int = 0,
+    /** No further Relic opportunity fits the run's budget: every one is claimed, queued or lying on the field. */
+    val relicBudgetSpent: Boolean = false,
+    /** Relic slots sealed by a Meld this run; the content's Relic policy prices each Meld's bonus. */
+    val meldedSlots: Int = 0,
+    /** The run made every weapon change it may (Totem chests and weapon sites then only amplify). */
+    val weaponChangesSpent: Boolean = false,
 ) {
     fun tagPoints(tag: BuildTag): Int = tagPoints.getOrElse(tag.ordinal) { 0 }
     fun tagTier(tag: BuildTag): Int = tagTiers.getOrElse(tag.ordinal) { 0 }

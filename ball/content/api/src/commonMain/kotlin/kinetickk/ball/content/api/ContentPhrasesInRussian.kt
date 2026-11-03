@@ -368,20 +368,16 @@ internal val ContentPhrasesInRussian: List<Pair<String, String>> = listOf(
     "Change weapon" to "Сменить оружие",
     "Recalibrate the Totem, then choose another weapon system you own." to "Перенастройте Тотем и выберите другую свою оружейную систему.",
     "RECALIBRATE" to "ПЕРЕНАСТРОЙКА",
-    "Meld resonance" to "Слить резонанс",
-    "Leave hollow" to "Оставить пустой",
-    "Keep the slot empty and salvage the resonance for Kinetic Matter." to
-        "Оставить ячейку пустой и утилизировать резонанс в кинетическую материю.",
+    "Meld" to "Слияние",
+    "Seal the empty slot for this run for lasting damage and maximum integrity." to
+        "Запечатать пустую ячейку до конца забега ради постоянного урона и максимальной целостности.",
     "Leave the heirloom" to "Отказаться от наследия",
     "Start without it and gain two rerolls." to "Начать без него и получить два обновления.",
-    "Collapse this offering into a bound Relic and raise it to rank 2." to
-        "Слить дар с привязанной реликвией и повысить её до ранга 2.",
     "Salvage resonance" to "Утилизировать резонанс",
-    "Collapse this offering into a bound Relic for Kinetic Matter." to
-        "Слить дар с привязанной реликвией и получить кинетическую материю.",
+    "Salvage the resonance for Kinetic Matter." to "Утилизировать резонанс в кинетическую материю.",
     "DECLINE" to "ОТКАЗ",
     "HEIRLOOM" to "НАСЛЕДИЕ",
-    "SLOT LEFT HOLLOW" to "ЯЧЕЙКА ОСТАВЛЕНА ПУСТОЙ",
+    "SLOT SEALED // MELD" to "ЯЧЕЙКА ЗАПЕЧАТАНА // СЛИЯНИЕ",
     "HEIRLOOM LEFT // +2 REROLLS" to "НАСЛЕДИЕ ОСТАВЛЕНО // +2 ОБНОВЛЕНИЯ",
     "OUROBOROS // REBORN" to "УРОБОРОС // ПЕРЕРОЖДЕНИЕ",
     "REACTION DISCOVERED" to "РЕАКЦИЯ ОТКРЫТА",

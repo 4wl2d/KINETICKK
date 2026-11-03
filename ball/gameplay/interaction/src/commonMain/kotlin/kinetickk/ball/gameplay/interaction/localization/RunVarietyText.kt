@@ -40,6 +40,7 @@ internal enum class RunVarietyText(
     ShrineWardCost("−20 maximum integrity", "−20 к максимальной прочности"),
     ShrineRelicTitle("Relic rite", "Обряд реликвии"),
     RelicOffer("A Relic offer", "Предложение реликвии"),
+    RelicBudgetSpent("The run's Relic budget is spent", "Лимит реликвий забега исчерпан"),
     GambleRerollTitle("Wager a reroll", "Поставить обновление"),
     GambleRerollText("Even odds to win three rerolls", "Равные шансы выиграть три обновления"),
     GambleRerollStake("Stake: 1 reroll", "Ставка: 1 обновление"),

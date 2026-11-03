@@ -211,7 +211,7 @@ internal class RewardOverlayState(
 
 /**
  * The lifted card/row at first: the middle card of a deal (as dealt on the board), the first
- * totem offering, a meld target; replacing a relic starts with no slot so nothing is armed.
+ * totem offering; replacing a relic starts with no slot so nothing is armed.
  */
 internal fun RewardPresentation.defaultSelection(): Int? = when {
     cards.isEmpty() -> null

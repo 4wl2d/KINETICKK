@@ -1487,7 +1487,7 @@ private fun worldContractFingerprint(current: Long, state: MutableGameState): Lo
     signature = mix(signature, state.dimensionScorchClock.toRawBits())
     signature = mix(signature, state.dimensionLocalClock.toRawBits())
     signature = mix(signature, state.dimensionRewardLayer?.ordinal ?: -1)
-    return mixLong(signature, coreStasisStateFingerprint(state))
+    return mixLong(mixLong(signature, coreStasisStateFingerprint(state)), buildLimitsStateFingerprint(state))
 }
 
 private fun canonicalRenderFingerprint(state: MutableGameState): Long {

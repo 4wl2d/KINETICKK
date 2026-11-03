@@ -3,6 +3,7 @@
 
 package kinetickk.ball.gameplay.interaction.rewards
 
+import kotlin.math.roundToInt
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import kinetickk.ball.content.api.BuildTag
@@ -97,7 +98,7 @@ internal fun GameplayRenderModel.rewardPresentation(language: AppLanguage = AppL
     return RewardPresentation(
         heading = if (choices.any { it.heirloom && it.relicId != null }) language.text(OverlayRedesignText.Heirloom)
             else rewardRunVarietyHeading(language) ?: rewardDimensionHeading(language)
-                ?: rewardHeading(choiceType, choices.firstOrNull()?.relicAction, language),
+                ?: rewardHeading(choiceType, language),
         subtitle = "",
         cards = choices.mapIndexed { index, choice -> rewardCardPresentation(choice, index, language, touch) },
         titleAccent = Kk.Bone,
@@ -117,7 +118,11 @@ internal fun GameplayRenderModel.rewardPresentation(language: AppLanguage = AppL
             title = language.text(GameplayText.WeaponTotem),
             masteryInfo = language.text(OverlayRedesignText.MasteryInfo, content.weaponMasteries
                 .filter { it.minimumLevel > 1 }
-                .joinToString(", ") { overlayLevel(it.minimumLevel, language) }),
+                .joinToString(", ") { overlayLevel(it.minimumLevel, language) },
+                (content.tempo.weaponChangeKeptLevelShare * 100f).roundToInt()),
+            changeSpent = if (build.weaponChangesSpent && content.tempo.weaponChangesPerRun > 0) {
+                language.text(OverlayRedesignText.WeaponChangeSpent)
+            } else null,
         ) else null,
         relicPanel = incoming?.let { relic -> rewardRelicPanel(relic, 1, equippedRelics.map { it.id }, language) },
         conditions = if (choiceType == ChoiceType.OMEN) rewardRunConditions(language) else null,
@@ -223,6 +228,9 @@ private fun GameplayRenderModel.rewardRelicMatrix(language: AppLanguage): Reward
     }
     val links = overlayRelicLinks(slots.map { it?.id })
     return RewardRelicMatrix(
+        sealed = build.meldedSlots,
+        claims = build.relicClaims,
+        budget = content.relicPolicy.acquisitionsPerRun,
         slots = slots,
         names = slots.map { slot -> slot?.let { content.relic(it.id).name.localizedContent(language) } ?: language.text(OverlayRedesignText.FreeSlot) },
         ranks = slots.map { slot -> slot?.let { language.text(OverlayRedesignText.Rank, it.rank) }.orEmpty() },
@@ -235,7 +243,8 @@ private fun GameplayRenderModel.rewardRelicMatrix(language: AppLanguage): Reward
     )
 }
 
-internal data class RewardTotemHeader(val title: String, val masteryInfo: String)
+/** The Totem board's title, its mastery note and, once the run's weapon change is spent, the note saying so. */
+internal data class RewardTotemHeader(val title: String, val masteryInfo: String, val changeSpent: String? = null)
 
 /** Left "incoming" relic panel: rune diamond, tags, name, upside, its mandatory cost, keys and attunement. */
 internal data class RewardRelicPanel(
@@ -258,7 +267,10 @@ internal data class RewardRelicPanel(
     val level: Int = 1,
 )
 
-/** The equipped relic matrix in slot order ([slots] has one entry per slot; null is free). */
+/**
+ * The equipped relic matrix in slot order ([slots] has one entry per slot; null is free), the last [sealed] free slots
+ * sealed by Melds, and the [claims] of the run's Relic [budget].
+ */
 internal data class RewardRelicMatrix(
     val slots: List<OverlayRelicSlot?>,
     val names: List<String>,
@@ -270,6 +282,9 @@ internal data class RewardRelicMatrix(
     /** The bound relic of each slot (null when free), for its rune. */
     val definitions: List<RelicDefinition?> = emptyList(),
     val policy: RelicPolicy = RelicPolicy(maxSlots.coerceAtLeast(1), 1),
+    val sealed: Int = 0,
+    val claims: Int = 0,
+    val budget: Int = 0,
 )
 
 /** How a relic choice would change the matrix: target slot, relic links formed or broken, rows. */
@@ -287,6 +302,8 @@ internal data class RewardRelicPreview(
     val primaryLabel: String,
     /** The relic entering [targetSlot] (its rune previews in the slot). */
     val incoming: RelicDefinition? = null,
+    /** A Meld: [targetSlot] is the slot it seals. */
+    val meld: Boolean = false,
 )
 
 /**
@@ -512,14 +529,13 @@ internal fun rewardCardIsCompact(widthDp: Float, heightDp: Float): Boolean =
 
 internal fun rewardHeading(
     type: ChoiceType,
-    action: RelicChoiceAction?,
     language: AppLanguage = AppLanguage.English,
 ): String = when (type) {
     ChoiceType.ITEM -> language.text(GameplayText.ChooseArtifact)
     ChoiceType.TOTEM -> language.text(GameplayText.TotemResonance)
     ChoiceType.WEAPON -> language.text(GameplayText.WeaponSynchronization)
     ChoiceType.RELIC -> language.text(GameplayText.RelicIntercept)
-    ChoiceType.RELIC_BIND -> if (action == RelicChoiceAction.MELD_TARGET) language.text(GameplayText.RelicMeld) else language.text(GameplayText.RelicRebind)
+    ChoiceType.RELIC_BIND -> language.text(GameplayText.RelicRebind)
     ChoiceType.ACTIVE_SLOT -> language.text(GameplayText.ChooseActiveSlot)
     ChoiceType.OMEN -> language.text(RunVarietyText.ChooseOmen)
     // A signal prompt is headed by its kind (rewardRunVarietyHeading) and a boon offer by its layer (rewardDimensionHeading).

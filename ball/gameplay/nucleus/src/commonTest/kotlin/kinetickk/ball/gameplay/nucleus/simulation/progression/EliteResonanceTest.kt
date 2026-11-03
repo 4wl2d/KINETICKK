@@ -26,6 +26,8 @@ class EliteResonanceTest {
     fun everyEliteClassKillAmplifiesTheCurrentWeaponOnce() {
         for (type in listOf(EnemyType.ELITE, EnemyType.HERALD, EnemyType.WARDEN_PRIME, EnemyType.CARTOGRAPHER)) {
             val run = buildTestState(seed = 71)
+            // The Relic budget's first Elite-drop opportunity is unlocked.
+            run.elapsed = run.content.relicPolicy.firstUnlockSeconds
             val level = run.weaponLevel
             run.takeSoundCues()
             run.killEnemyForTesting(type, x = run.coreX + 400f)

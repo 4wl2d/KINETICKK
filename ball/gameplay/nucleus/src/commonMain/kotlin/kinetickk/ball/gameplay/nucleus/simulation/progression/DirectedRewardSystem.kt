@@ -17,7 +17,12 @@ import kinetickk.ball.gameplay.nucleus.simulation.builds.*
  * Directed rewards: a resolved window site queues one; its choice first offers directions, then three matching offers.
  */
 
+/** Opens a queued directed reward; a Relic reward claims its Relic opportunity (a stray one past the budget salvages). */
 internal fun MutableGameState.openDirectedReward(reward: DirectedReward) {
+    if (reward == DirectedReward.RELIC && !claimRelicOpportunity()) {
+        openNextPendingChoice()
+        return
+    }
     directedReward = reward
     selectedRewardFocus = null
     activeChoiceType = when (reward) {

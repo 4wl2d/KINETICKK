@@ -155,9 +155,8 @@ class RewardCardStylesTest {
             card(ChoiceType.TOTEM, ChoiceOption(ChoiceType.TOTEM, "Amplify", "", "AMPLIFY", weaponId = content.weapons.first().id,
                 totemAction = TotemAction.AMPLIFY_CURRENT)),
             card(ChoiceType.TOTEM, ChoiceOption(ChoiceType.TOTEM, "Change weapon", "", "RECALIBRATE", totemAction = TotemAction.CHANGE_WEAPON)),
-            card(ChoiceType.RELIC, ChoiceOption(ChoiceType.RELIC, "Leave hollow", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE)),
-            card(ChoiceType.RELIC_BIND, ChoiceOption(ChoiceType.RELIC_BIND, "Meld", "", "MELD", relicId = RelicId.GLASS_COMET,
-                relicAction = RelicChoiceAction.MELD)),
+            card(ChoiceType.RELIC, ChoiceOption(ChoiceType.RELIC, "Salvage resonance", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE)),
+            card(ChoiceType.RELIC, ChoiceOption(ChoiceType.RELIC, "Meld", "", "MELD", relicAction = RelicChoiceAction.MELD)),
         )
         val focus = RewardFocus.entries.map { focus ->
             val type = when (focus) {

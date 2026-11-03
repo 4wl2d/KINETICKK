@@ -387,7 +387,11 @@ class BossEncounterTest {
 
     @Test
     fun aSecretBossNeverEndsTheRunAndPaysItsDiscovery() {
-        val state = buildTestState().apply { quietArenaForTesting() }
+        // At 30 s the Relic budget's first Elite-drop opportunity is unlocked.
+        val state = buildTestState().apply {
+            quietArenaForTesting()
+            elapsed = content.relicPolicy.firstUnlockSeconds
+        }
         val tag = encounterTag(EncounterOwner.SITE, 0x00F0_0000_0000_0010L)
         assertTrue(state.spawnEncounter(EncounterRequest(tag, state.coreX + 600f, state.coreY, 900f, listOf(EnemyType.CARTOGRAPHER))))
         assertEquals("SECRET SIGNAL // CARTOGRAPHER", state.message)

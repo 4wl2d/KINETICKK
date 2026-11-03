@@ -169,7 +169,7 @@ class RewardActivePresentationTest {
         assertEquals(listOf("Every active stays and ${meteor.name} is salvaged for +7 matter"), kept.descriptions)
         // Shown with the amount and its unit on one line.
         assertTrue(rewardKeepUnits(kept.descriptions.single()).endsWith("+7\u00A0matter"))
-        // The band names the category it keeps, as the relic Leave hollow's reads "Relics".
+        // The band names the category it keeps, as the relic salvage card's reads "Relics".
         assertEquals("Actives", kept.bandStart)
         assertNull(kept.item)
         assertTrue(kept.chips.isEmpty())

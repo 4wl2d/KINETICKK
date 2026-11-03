@@ -589,8 +589,8 @@ class GameplayCollectionBoundsTest {
                 candidateCount - itemCards,
                 relicContent.relics.count { relic -> relic.id !in selectedRelicIds },
             )
-            // The fourth card declines into an empty slot; it never consumes a relic candidate.
-            assertEquals(RelicChoiceAction.DECLINE, relicState.choices.last().relicAction)
+            // The fourth card melds an empty slot; it never consumes a relic candidate.
+            assertEquals(RelicChoiceAction.MELD, relicState.choices.last().relicAction)
             assertEquals(itemCards + 1, relicState.choices.size)
         }
 

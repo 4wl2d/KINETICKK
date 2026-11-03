@@ -288,6 +288,11 @@ internal fun RewardTotem(state: RewardOverlayState) {
                 Modifier.testTag("kinetickk.gameplay.rewards.heading"), uppercase = true)
             presentation.totem?.let { totem ->
                 KkInfoButton(totem.masteryInfo, Modifier.testTag("kinetickk.gameplay.rewards.info"), KkTooltipPlacement.BELOW, state.textScale)
+                // Once the run's weapon change is spent the offerings only amplify; the note says why.
+                totem.changeSpent?.let { note ->
+                    OverlayText(note, typography.labelStyle(frame.sp(spec.headingSize * 0.6f, 12f), color = Kk.Mute),
+                        Modifier.testTag("kinetickk.gameplay.rewards.changeSpent"), uppercase = true)
+                }
             }
         }
         val count = presentation.cards.size.coerceAtLeast(1)

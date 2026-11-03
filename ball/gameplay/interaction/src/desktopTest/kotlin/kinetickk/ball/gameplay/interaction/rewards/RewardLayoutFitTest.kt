@@ -137,7 +137,7 @@ class RewardLayoutFitTest {
      */
     @Test
     fun relicSlotNamesShareOneSizeAndTheirRanksOneBaseline() {
-        forEachScene(::replacing, ::melding) { scene, _ ->
+        forEachScene(::replacing) { scene, _ ->
             val names = textsUnder("kinetickk.gameplay.rewards.slot-name").sortedBy { it.first.boundsInRoot.left }
             assertTrue(names.size >= 3, "$scene: the slots show their names")
             assertEquals(1, names.map { it.second.layoutInput.style.fontSize }.distinct().size, "$scene: one name size for the row")
@@ -161,36 +161,6 @@ class RewardLayoutFitTest {
                 assertTrue(kicker.top - rankBottom >= 16f - 0.5f, "$scene: the rank labels end at $rankBottom, the preview heading starts at ${kicker.top}")
             }
             assertTextFitsWithoutBreakingWords(scene)
-        }
-    }
-
-    /**
-     * At the default text size the meld preview shows every signed row with its whole detail
-     * line, also on the phone where the relic row's labels push the preview column down.
-     */
-    @Test
-    fun meldPreviewKeepsEveryRowDetailAtTheDefaultTextSize() {
-        forEachScene(::melding, settings = listOf(1.25f)) { scene, model ->
-            val language = if ("Russian" in scene) AppLanguage.Russian else AppLanguage.English
-            val presentation = model.rewardPresentation(language)
-            val rows = requireNotNull(presentation.cards[requireNotNull(presentation.defaultSelection())].relicPreview).rows
-            // The next-rank row shows the values the meld raises; the link rows keep their detail.
-            assertTrue(rows.size >= 2 && rows.all { it.detail != null || it.after != null }, "$scene: the meld preview has detailed rows: $rows")
-            // The preview measures the plans it drops too; only the placed one shows.
-            val shown = textsUnder("kinetickk.gameplay.rewards.preview-row").filter { (node, _) ->
-                generateSequence(node.layoutInfo) { it.parentInfo }.all { it.isPlaced }
-            }
-            val texts = shown.map { it.second.layoutInput.text.text }
-            rows.forEach { row ->
-                assertTrue(row.title.uppercase() in texts, "$scene: the preview shows the \"${row.title}\" row: $texts")
-                row.detail?.let { detail ->
-                    assertTrue(rewardKeepUnits(detail) in texts, "$scene: the \"${row.title}\" row shows its detail \"$detail\": $texts")
-                }
-                row.after?.let { after -> assertTrue(after in texts, "$scene: the \"${row.title}\" row shows its value \"$after\": $texts") }
-            }
-            shown.forEach { (_, layout) ->
-                assertTrue(!layout.isCut() && !layout.didOverflowHeight, "$scene: \"${layout.layoutInput.text}\" shows whole")
-            }
         }
     }
 
@@ -257,7 +227,7 @@ class RewardLayoutFitTest {
                     val relic = rewardFixtureContent.relic(id)
                     ChoiceOption(ChoiceType.RELIC, relic.name, relic.upside, relic.aspect.displayLabel.uppercase(), relicId = id,
                         relicAction = RelicChoiceAction.ACQUIRE)
-                } + ChoiceOption(ChoiceType.RELIC, "Leave hollow", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE))
+                } + ChoiceOption(ChoiceType.RELIC, "Salvage resonance", "", "DECLINE", relicAction = RelicChoiceAction.DECLINE))
             val weapons = weapons(language, 1440f, 810f, 1.25f)
             // Active items: a free slot in the run character's lane, a full loadout, an owned one reaching rank III.
             val base = rewardFixtureActiveBase
@@ -320,12 +290,12 @@ class RewardLayoutFitTest {
     @Test
     fun everyPromptHeadingStaysOnTheScreen() {
         var checked = 0
-        forEachScene(::directedTotem, ::replacing, ::melding, ::weapons, ::relicOffers, ::activeSlotPrompt) { scene, model ->
+        forEachScene(::directedTotem, ::replacing, ::weapons, ::relicOffers, ::activeSlotPrompt) { scene, model ->
             val heading = onNodeWithTag("kinetickk.gameplay.rewards.heading", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
             assertTrue(heading.left >= -0.5f && heading.right <= model.screenWidth + 0.5f, "$scene: heading $heading inside the screen")
             checked++
         }
-        assertTrue(checked == frames.size * 2 * settings.size * 6, "Checked every heading ($checked)")
+        assertTrue(checked == frames.size * 2 * settings.size * 5, "Checked every heading ($checked)")
     }
 
     /**
@@ -683,15 +653,6 @@ class RewardLayoutFitTest {
         },
     )
 
-    private fun melding(language: AppLanguage, width: Float, height: Float, setting: Float) = rewardFixtureModel(
-        choiceType = ChoiceType.RELIC_BIND, relics = relics3, language = language, width = width, height = height, textScale = setting,
-        choices = relics3.mapIndexed { index, equipped ->
-            ChoiceOption(ChoiceType.RELIC_BIND, "Meld ${rewardFixtureContent.relic(equipped.id).name}", "", "", relicId = equipped.id,
-                relicAction = RelicChoiceAction.MELD_TARGET, relicSlot = index)
-        },
-        previews = listOf(RewardPreview(immutableListOf(RewardStatChange("Damage: speed ≥500", 10f, 15f, "%", sourceRelic = RelicId.PERPETUAL_VECTOR)))),
-    )
-
     // The Pentagon runs: Arc Coil, its signature weapon, carries the Signature chip.
     private fun weapons(language: AppLanguage, width: Float, height: Float, setting: Float) = rewardFixtureModel(
         choiceType = ChoiceType.WEAPON, language = language, width = width, height = height, textScale = setting, coreShape = CoreShape.PENTAGON,
@@ -745,11 +706,11 @@ class RewardLayoutFitTest {
     }
 
     private fun relicOffersWithMeld(language: AppLanguage, width: Float, height: Float, setting: Float) = rewardFixtureModel(
-        choiceType = ChoiceType.RELIC, relics = relics4, language = language, width = width, height = height, textScale = setting,
+        choiceType = ChoiceType.RELIC, relics = relics3, language = language, width = width, height = height, textScale = setting,
         choices = listOf(RelicId.EVENT_HORIZON, RelicId.ECHO_CHAMBER).map { id ->
             val relic = rewardFixtureContent.relic(id)
             ChoiceOption(ChoiceType.RELIC, relic.name, relic.upside, relic.aspect.displayLabel.uppercase(), relicId = id, relicAction = RelicChoiceAction.ACQUIRE)
-        } + ChoiceOption(ChoiceType.RELIC, "Meld resonance", "Collapse this offering into one of the four bound Relics and raise its rank.", "MELD",
+        } + ChoiceOption(ChoiceType.RELIC, "Meld", "Seal the empty slot for this run for lasting damage and maximum integrity.", "MELD",
             relicAction = RelicChoiceAction.MELD),
     )
 }

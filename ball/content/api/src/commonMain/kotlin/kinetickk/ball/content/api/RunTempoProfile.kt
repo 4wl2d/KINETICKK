@@ -69,6 +69,10 @@ data class RunTempoProfile(
      * table and a value at or above [maximumLevel] scales nothing.
      */
     val rebirthScaleFromLevel: Int = LEGACY_LEVELS + 1,
+    /** Weapon changes one run may make (a Totem chest's or a weapon site's change); Amplify is never limited. */
+    val weaponChangesPerRun: Int = 1,
+    /** Share of the current weapon level a changed weapon keeps, rounded down and never below level 1. */
+    val weaponChangeKeptLevelShare: Float = 0.6f,
 ) {
     init {
         require(bossAtSeconds.isFinite() && bossAtSeconds > 0f)
@@ -92,6 +96,10 @@ data class RunTempoProfile(
         require(levelRepair.isFinite() && levelRepair >= 0f)
         require(rebirthScaleFromLevel in 1..ContentBounds.MAX_RUN_LEVEL) {
             "The Rebirth Data scale must start on a run level within 1..${ContentBounds.MAX_RUN_LEVEL}"
+        }
+        require(weaponChangesPerRun in 0..10) { "Weapon changes per run must be in 0..10" }
+        require(weaponChangeKeptLevelShare.isFinite() && weaponChangeKeptLevelShare in 0f..1f) {
+            "A weapon change keeps a share of the level in 0..1"
         }
     }
 
@@ -139,6 +147,9 @@ data class RunTempoProfile(
     }
 
     fun grantsWeaponAmplification(level: Int): Boolean = level > 1 && level % weaponAmplificationEveryLevels == 0
+
+    /** The level a weapon change from weapon level [level] starts the new weapon at. */
+    fun weaponLevelAfterChange(level: Int): Int = (level * weaponChangeKeptLevelShare).toInt().coerceAtLeast(1)
 
     companion object {
         /** A run needs at least one level-up below its cap. */

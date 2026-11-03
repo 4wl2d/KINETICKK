@@ -118,6 +118,10 @@ internal fun MutableGameState.buildProjection(): BuildProjection = BuildProjecti
     invulnerable = invulnerableUntil > elapsed,
     overdriveBurnout = overdriveBurnoutUntil > elapsed,
     breakThresholds = immutableListOfSize(StatusElement.entries.size) { breakThreshold(StatusElement.entries[it]) },
+    relicClaims = relicRun.relicClaims,
+    relicBudgetSpent = relicBudgetLeft() <= 0,
+    meldedSlots = relicRun.meldedSlots,
+    weaponChangesSpent = weaponChangesLeft() <= 0,
 )
 
 /**

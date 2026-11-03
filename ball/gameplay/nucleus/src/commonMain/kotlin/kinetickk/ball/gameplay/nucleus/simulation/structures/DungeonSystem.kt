@@ -299,7 +299,7 @@ private fun MutableGameState.payStructureRewards(template: StructureTemplate, x:
     for (index in rewards.indices) {
         val reward = rewards[index]
         when (reward.kind) {
-            StructureRewardKind.RELIC -> repeat(reward.amount) { k -> addPickup(Pickup(PickupType.RELIC, x + 15f * k, y - 8f)) }
+            StructureRewardKind.RELIC -> repeat(reward.amount) { k -> dropRelicResonance(x + 15f * k, y - 8f, paced = false) }
             StructureRewardKind.KEY -> repeat(reward.amount) { k -> addPickup(Pickup(PickupType.KEY, x - 15f * k, y + 8f)) }
             StructureRewardKind.REPAIR -> repeat(reward.amount) { k -> addPickup(Pickup(PickupType.REPAIR, x + 30f * k, y + 20f)) }
             StructureRewardKind.DATA -> repeat(reward.amount) { k ->
