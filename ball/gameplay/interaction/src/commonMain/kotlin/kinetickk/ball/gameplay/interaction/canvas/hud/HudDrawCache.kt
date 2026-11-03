@@ -3,7 +3,6 @@
 
 package kinetickk.ball.gameplay.interaction.canvas.hud
 
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -383,5 +382,3 @@ internal enum class HudBrush {
     VIGNETTE, EDGE_LEFT, EDGE_RIGHT, EDGE_TOP, EDGE_BOTTOM, OVERDRIVE_GLOW, CORE_GLOW,
     EVENT_LEFT, EVENT_RIGHT, EVENT_TOP, EVENT_BOTTOM, SCORCH_EDGE, DUNGEON,
 }
-
-internal fun Offset.isFiniteOffset(): Boolean = x.isFinite() && y.isFinite()
