@@ -1993,13 +1993,3 @@ internal fun DrawScope.drawCompactFpsReadout(measurer: TextMeasurer, left: Float
     drawKkText(label, textLeft + number.size.width + gap, centerY, Kk.Mute, valign = KkVAlign.CENTER)
     HudLayoutProbe.record(HudBlock.FPS, textLeft, centerY - height * 0.5f, textLeft + contentWidth, centerY + height * 0.5f)
 }
-
-/** Performance mark: three rising bars. */
-internal fun DrawScope.drawPerformanceGlyph(center: Offset, size: Float, color: Color = Kk.Bone) {
-    val unit = size / 24f
-    val stroke = 2f * unit
-    val base = center.y + 7f * unit
-    drawLine(color, Offset(center.x - 6f * unit, base), Offset(center.x - 6f * unit, base - 6f * unit), stroke, StrokeCap.Square)
-    drawLine(color, Offset(center.x, base), Offset(center.x, base - 11f * unit), stroke, StrokeCap.Square)
-    drawLine(color, Offset(center.x + 6f * unit, base), Offset(center.x + 6f * unit, base - 15f * unit), stroke, StrokeCap.Square)
-}
