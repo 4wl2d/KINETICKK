@@ -69,7 +69,8 @@ private const val STRUCTURE_CELL_MASK: Long = 0x3FF_FFFFL
 
 /**
  * The structure [policy] places in the absolute cell ([cellX], [cellY]) of [layer] for [runSeed], or null. Pure: the
- * five hash draws (roll, template pick, rotation, offset x, offset y) are taken in this order whatever the outcome.
+ * five hash draws (roll, template pick, rotation, offset x, offset y) are taken in this order whatever the outcome; a
+ * roll no ramp can accept returns before the template is weighed.
  */
 internal fun placeStructure(
     policy: StructurePolicy,
@@ -88,6 +89,8 @@ internal fun placeStructure(
     val rotation = random.nextInt() ushr 30
     val offsetX = random.nextFloat()
     val offsetY = random.nextFloat()
+    // The ramp is at most 1, so a roll this high fails the ramped test below too.
+    if (roll >= policy.maximumChance * layerScale) return null
     val size = policy.cellSize.toDouble()
     val cellDistance = hypot((cellX + 0.5) * size, (cellY + 0.5) * size)
     val template = weightedTemplate(policy, templatePool, cellDistance, pick) ?: return null
