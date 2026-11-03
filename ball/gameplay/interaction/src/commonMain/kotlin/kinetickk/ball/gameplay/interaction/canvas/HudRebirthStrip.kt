@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.interaction.canvas
 
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
+import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_CHIP_ROW_DP
 import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_CHIP_ROW_HEIGHT_DP
@@ -36,11 +37,9 @@ import kotlin.math.min
  * plate and sigils follow it on the same row.
  */
 internal fun DrawScope.drawRebirthStrip(engine: GameplayRenderModel, hostMeasurer: TextMeasurer, frame: HudFrame) {
-    // A dimension visit's plate takes the strip's slot while it lasts.
-    if (drawDimensionPlate(engine, hostMeasurer, frame)) return
     val tier = engine.rebirthLevel
     val easy = engine.easyMode
-    if (tier <= 0 && !easy) return
+    if (tier <= 0 && !easy && engine.dimension.layer == WorldLayer.BASE) return
     val centerY: Float
     val height: Float
     val stripLeft: Float
@@ -70,19 +69,21 @@ internal fun DrawScope.drawRebirthStrip(engine: GameplayRenderModel, hostMeasure
         val clock = HudDrawCache.peekLayout(HudText.TIMER)?.size?.width?.toFloat() ?: frame.u(120f)
         frame.width * 0.5f - clock * 0.5f - frame.u(14f)
     }
+    // A dimension visit's plate takes the strip's slot while it lasts.
+    if (drawDimensionPlate(engine, hostMeasurer, frame, stripLeft, right, centerY, height)) return
     val top = centerY - height * 0.5f
     var left = stripLeft
     var drawnRight = stripLeft
     if (easy) {
         val plate = min(height, right - left)
-        if (plate >= frame.u(14f)) {
+        if (plate >= frame.u(MIN_PLATE_DP)) {
             drawEasyStripPlate(hostMeasurer.roles, left + plate * 0.5f, centerY, plate * 0.5f, frame)
             drawnRight = left + plate
             left += plate + frame.u(6f)
         }
     }
     val plate = min(height, right - left)
-    if (tier > 0 && plate >= frame.u(14f)) {
+    if (tier > 0 && plate >= frame.u(MIN_PLATE_DP)) {
         drawnRight = max(drawnRight, drawTierPlateAndSigils(engine, hostMeasurer, frame, tier, left, plate, height, centerY, right))
     }
     if (drawnRight > stripLeft) HudLayoutProbe.record(HudBlock.REBIRTH, stripLeft, top, drawnRight, top + height)
@@ -149,6 +150,9 @@ private fun DrawScope.drawTierPlateAndSigils(
 
 /** Chip-row width (reference dp) the portrait strip leaves for the chain at the row's end. */
 private const val PORTRAIT_CHAIN_RESERVE_DP = 72f
+
+/** The smallest legible lead plate (reference dp): the dimension plate, the pacifier and the tier plate. */
+internal const val MIN_PLATE_DP = 14f
 
 /** Largest mutator sigil (reference dp) and the smallest still drawn. */
 private const val MAX_SIGIL_DP = 14f

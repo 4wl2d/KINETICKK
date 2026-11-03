@@ -23,6 +23,7 @@ internal enum class GameplayText : TextResource {
     SettingsDescription,
     ExitDescription,
     PerformanceDescription,
+    FpsReadout,
     WorkshopDescription,
     OnState,
     OffState,

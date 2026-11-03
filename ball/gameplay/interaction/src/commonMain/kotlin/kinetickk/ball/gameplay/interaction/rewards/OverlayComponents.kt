@@ -128,7 +128,6 @@ internal fun overlayFrame(
 internal fun Modifier.overlayOffset(x: Float, y: Float): Modifier =
     offset { IntOffset(x.roundToInt(), y.roundToInt()) }
 
-
 /**
  * Styled body text (tinted numbers, emphasized values) that never breaks inside a word: when its
  * longest word is wider than the line, the font shrinks until it fits.

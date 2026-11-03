@@ -197,23 +197,19 @@ fun GameplayContent(
     var trialInfoOpenValue by remember(component) { mutableStateOf(false) }
     var trialInfoHoveredValue by remember(component) { mutableStateOf(false) }
 
-    fun dispatch(
-        pulse: GameplayInteractionPulse,
-        collectPerformance: Boolean = DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true,
-    ) {
-        val dispatchStartedAt = if (DIAGNOSTICS_ENABLED && collectPerformance) TimeSource.Monotonic.markNow() else null
+    fun dispatch(pulse: GameplayInteractionPulse) {
+        val dispatchStartedAt =
+            if (DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true) TimeSource.Monotonic.markNow() else null
         if (DIAGNOSTICS_ENABLED && diagnostics.enabled && pulse !is GameplayInteractionPulse.FrameElapsed) {
             val before = component.renderSnapshot()
             diagnostics.context("gameplay.before-input") { before.crashContext() }
             diagnostics.context("gameplay.input") { pulse.crashDescription() }
-            diagnostics.event("gameplay.input", pulse.crashDescription(),
-                highFrequency = pulse is GameplayInteractionPulse.FrameElapsed ||
-                    pulse is GameplayInteractionPulse.PointerMoved)
+            diagnostics.event("gameplay.input", pulse.crashDescription(), highFrequency = pulse is GameplayInteractionPulse.PointerMoved)
         }
         val acceptance = try {
             component.accept(pulse)
         } catch (failure: Throwable) {
-            if (DIAGNOSTICS_ENABLED && diagnostics.enabled) {
+            if (DIAGNOSTICS_ENABLED && diagnostics.enabled && pulse is GameplayInteractionPulse.FrameElapsed) {
                 diagnostics.context("gameplay.input") { pulse.crashDescription() }
             }
             // A target can publish atomically and then surface a deferred side-effect fault.
@@ -265,15 +261,12 @@ fun GameplayContent(
     }
 
     fun togglePerformanceTelemetry() {
-        if (DIAGNOSTICS_ENABLED) performanceDiagnostics?.toggleOverlay()
+        performanceDiagnostics?.toggleOverlay()
     }
 
-    fun dispatchInput(
-        input: GameplayInput,
-        collectPerformance: Boolean = DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true,
-    ) {
+    fun dispatchInput(input: GameplayInput) {
         when (input) {
-            is GameplayInput.Action -> dispatch(input.action, collectPerformance)
+            is GameplayInput.Action -> dispatch(input.action)
             GameplayInput.OpenSettings -> onOutput(GameplayInteractionOutput.OpenSettings)
             GameplayInput.OpenWorkshop -> onOutput(GameplayInteractionOutput.OpenWorkshop)
             GameplayInput.OpenRebirth -> onOutput(GameplayInteractionOutput.OpenRebirth)
@@ -289,10 +282,7 @@ fun GameplayContent(
      * Apex refusal shake when it is cooling, then the control's input. An empty skill slot is a HUD
      * position that does nothing.
      */
-    fun pressRunningControl(
-        target: RunningControlTarget,
-        collectPerformance: Boolean = DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true,
-    ) {
+    fun pressRunningControl(target: RunningControlTarget) {
         val model = renderModelValue
         val skillSlots = model.filledSkillSlots()
         val slot = target.skillSlot
@@ -305,16 +295,16 @@ fun GameplayContent(
             dispatchValidated(interactionValidator.skillRequested(slot))
             return
         }
-        runningControlInput(target, skillSlots)?.let { dispatchInput(it, collectPerformance) }
+        runningControlInput(target, skillSlots)?.let(::dispatchInput)
     }
 
     /** Steers toward [change]'s position (validated) unless it lies on a HUD control. */
-    fun steerTo(change: PointerInputChange, model: GameplayRenderModel, collectPerformance: Boolean) {
+    fun steerTo(change: PointerInputChange, model: GameplayRenderModel) {
         val x = change.position.x
         val y = change.position.y
         if (model.isHudControlPosition(x, y, interfaceScaleState.value)) return
         when (val result = interactionValidator.pointerMoved(x, y, density = model.viewportDensity)) {
-            is InteractionValidationResult.Valid -> dispatch(result.intent, collectPerformance)
+            is InteractionValidationResult.Valid -> dispatch(result.intent)
             is InteractionValidationResult.Invalid -> reportInvalidInteractionInput(result.failure)
         }
     }
@@ -360,17 +350,15 @@ fun GameplayContent(
                 controlLog.fps = fpsCounter.fps
                 fpsReadout.intValue = fpsCounter.fps
             }
-            val collectPerformance = DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true
-            if (DIAGNOSTICS_ENABLED && collectPerformance) {
-                val budgetNanos = diagnosticFrameBudgetNanos(frameRateCap, performanceDiagnostics?.nominalFrameBudgetNanos ?: 0L)
-                performanceDiagnostics?.frame(frame, budgetNanos)
+            if (DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true) {
+                performanceDiagnostics.frame(frame, diagnosticFrameBudgetNanos(frameRateCap, performanceDiagnostics.nominalFrameBudgetNanos))
             }
             when (val result = interactionValidator.frameElapsed(delta)) {
                 is InteractionValidationResult.Valid -> {
                     renderTimeSecondsValue += selectGameplayPresentationDelta(
                         result.intent.realDeltaSeconds,
                     )
-                    dispatch(result.intent, collectPerformance)
+                    dispatch(result.intent)
                 }
                 is InteractionValidationResult.Invalid -> reportInvalidInteractionInput(result.failure)
             }
@@ -603,24 +591,12 @@ fun GameplayContent(
                                 .isSecondaryPressed
                             if (secondaryPressed != secondaryBrakeValue) {
                                 secondaryBrakeValue = secondaryPressed
-                                dispatch(
-                                    GameplayInteractionPulse.BrakeChanged(
-                                        BrakeSource.SECONDARY_POINTER,
-                                        secondaryPressed,
-                                    ),
-                                    DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true,
-                                )
+                                dispatch(GameplayInteractionPulse.BrakeChanged(BrakeSource.SECONDARY_POINTER, secondaryPressed))
                             }
                         }
                     } finally {
                         if (secondaryBrakeValue) {
-                            dispatch(
-                                GameplayInteractionPulse.BrakeChanged(
-                                    BrakeSource.SECONDARY_POINTER,
-                                    active = false,
-                                ),
-                                DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true,
-                            )
+                            dispatch(GameplayInteractionPulse.BrakeChanged(BrakeSource.SECONDARY_POINTER, active = false))
                         }
                     }
                 }
@@ -641,17 +617,13 @@ fun GameplayContent(
                     awaitPointerEventScope {
                         while (true) {
                             val event = awaitPointerEvent(PointerEventPass.Main)
-                            val collectPerformance = DIAGNOSTICS_ENABLED && performanceDiagnostics?.capturesPerformance == true
                             val currentRenderModel = renderModelValue
                             val changes = event.changes
                             val running = currentRenderModel.phase == GamePhase.RUNNING
                             // Away from RUNNING a held Brake is released, and engaged again on return;
                             // pointers keep their roles, so a thumb held through a choice steers again.
                             if (tracker.running(running)) {
-                                dispatch(
-                                    GameplayInteractionPulse.BrakeChanged(BrakeSource.TOUCH_CONTROL, active = running),
-                                    collectPerformance,
-                                )
+                                dispatch(GameplayInteractionPulse.BrakeChanged(BrakeSource.TOUCH_CONTROL, active = running))
                             }
                             if (currentRenderModel.phase == GamePhase.CHOICE ||
                                 currentRenderModel.phase == GamePhase.GAME_OVER ||
@@ -687,7 +659,7 @@ fun GameplayContent(
                                 val id = change.id.value
                                 when {
                                     change.pressed && !change.previousPressed -> {
-                                        dispatch(GameplayInteractionPulse.UserGestureObserved, collectPerformance)
+                                        dispatch(GameplayInteractionPulse.UserGestureObserved)
                                         if (change.type == PointerType.Touch) {
                                             controlLog.keyHints = false
                                             controlLog.touchInput = true
@@ -697,13 +669,13 @@ fun GameplayContent(
                                         val onTrialInfo = currentRenderModel.isTrialInfoPosition(x, y, hudInterfaceScale)
                                         trialInfoOpenValue = onTrialInfo && !trialInfoOpenValue
                                         if (!running) {
-                                            currentRenderModel.resolveGameplayPress(x, y, hudInterfaceScale)?.let { dispatchInput(it, collectPerformance) }
+                                            currentRenderModel.resolveGameplayPress(x, y, hudInterfaceScale)?.let(::dispatchInput)
                                         } else {
                                             val target = currentRenderModel.runningControlTargetAt(x, y, hudInterfaceScale)
                                             when (tracker.down(id, target, hudPosition = onTrialInfo)) {
                                                 RunningTouchTracker.DOWN_CONTROL ->
-                                                    if (target != null) pressRunningControl(target, collectPerformance)
-                                                RunningTouchTracker.DOWN_STEER -> steerTo(change, currentRenderModel, collectPerformance)
+                                                    if (target != null) pressRunningControl(target)
+                                                RunningTouchTracker.DOWN_STEER -> steerTo(change, currentRenderModel)
                                                 else -> Unit
                                             }
                                         }
@@ -711,27 +683,24 @@ fun GameplayContent(
                                     !change.pressed && change.previousPressed -> {
                                         val lifted = tracker.up(id)
                                         if (lifted == RunningTouchTracker.UP_BRAKE_RELEASED) {
-                                            dispatch(
-                                                GameplayInteractionPulse.BrakeChanged(BrakeSource.TOUCH_CONTROL, active = false),
-                                                collectPerformance,
-                                            )
+                                            dispatch(GameplayInteractionPulse.BrakeChanged(BrakeSource.TOUCH_CONTROL, active = false))
                                         } else if (lifted >= RunningTouchTracker.UP_STEER_PROMOTED && running) {
                                             // The oldest waiting pointer takes over the steering from where it is.
                                             val promoted = tracker.idAt(lifted - RunningTouchTracker.UP_STEER_PROMOTED)
                                             for (other in 0 until changes.size) {
                                                 val candidate = changes[other]
                                                 if (candidate.id.value == promoted && candidate.pressed) {
-                                                    steerTo(candidate, currentRenderModel, collectPerformance)
+                                                    steerTo(candidate, currentRenderModel)
                                                 }
                                             }
                                         }
                                     }
                                     // Every pointer reports in each event; only the steering one, when it moved, steers.
                                     change.pressed -> if (running && tracker.move(id) && change.position != change.previousPosition) {
-                                        steerTo(change, currentRenderModel, collectPerformance)
+                                        steerTo(change, currentRenderModel)
                                     }
                                     // A hovering mouse steers (not over a control).
-                                    change.type == PointerType.Mouse && running -> steerTo(change, currentRenderModel, collectPerformance)
+                                    change.type == PointerType.Mouse && running -> steerTo(change, currentRenderModel)
                                 }
                                 if (change.pressed) change.consume()
                             }
@@ -847,10 +816,10 @@ fun GameplayContent(
                 val bounds = remember(layoutDimensions, hudScale, counterAboveOverlay) {
                     compactFpsReadoutBounds(layoutDimensions.width, hudScale, counterAboveOverlay)
                 }
-                val modifier = Modifier.placeInGameplayBounds(bounds, hudDensity).fpsReadoutSemantics(fpsReadout)
+                val modifier = Modifier.placeInGameplayBounds(bounds, hudDensity).fpsReadoutSemantics(language, fpsReadout)
                 if (counterAboveOverlay) {
                     // Draw after the reward/pause content so its scrim cannot hide the numeric readout.
-                    Canvas(modifier) { drawCompactFpsReadout(hudTextMeasurer, Rect(Offset.Zero, size), fpsReadout.intValue) }
+                    Canvas(modifier) { drawCompactFpsReadout(hudTextMeasurer, 0f, 0f, size.width, size.height, fpsReadout.intValue) }
                 } else {
                     Box(modifier) // The portrait HUD already draws the same strip under its clock.
                 }
@@ -859,11 +828,15 @@ fun GameplayContent(
     }
 }
 
-private fun Modifier.fpsReadoutSemantics(fps: IntState): Modifier =
+private fun Modifier.fpsReadoutSemantics(language: AppLanguage, fps: IntState): Modifier =
     testTag("kinetickk.gameplay.performance").semantics {
-        contentDescription = "FPS"
-        text = AnnotatedString(if (fps.intValue < 0) "– FPS" else "${fps.intValue} FPS")
+        contentDescription = language.text(GameplayText.PerformanceDescription)
+        text = fpsReadoutText(language, fps.intValue)
     }
+
+/** The Show FPS readout's spoken text: the measured value, or a dash until the first window closes. */
+private fun fpsReadoutText(language: AppLanguage, fps: Int): AnnotatedString =
+    AnnotatedString(language.text(GameplayText.FpsReadout, if (fps < 0) "–" else fps))
 
 @Composable
 private fun GameplaySemanticControls(
@@ -1084,9 +1057,9 @@ private fun PerformanceSemanticAction(
                 activateSemanticButtonFromKey(event.key, event.type, onClick)
             }.focusable() else Modifier)
             .semantics(mergeDescendants = true) {
-                contentDescription = if (DIAGNOSTICS_ENABLED) description else "FPS"
+                contentDescription = description
                 // Observe the half-second readout in semantics; changing it need not recompose the host.
-                text = AnnotatedString(if (fps.intValue < 0) "– FPS" else "${fps.intValue} FPS")
+                text = fpsReadoutText(language, fps.intValue)
                 if (DIAGNOSTICS_ENABLED) {
                     role = Role.Button
                     stateDescription = if (enabled) language.text(GameplayText.OnState) else language.text(GameplayText.OffState)
@@ -1164,7 +1137,6 @@ private fun Modifier.placeInGameplayBounds(bounds: Rect, density: Density): Modi
             width = with(density) { bounds.width.toDp() },
             height = with(density) { bounds.height.toDp() },
         )
-
 
 private const val GAMEPLAY_ROOT_TAG = "kinetickk.gameplay"
 internal const val GAMEPLAY_TRIAL_INFO_TAG = "kinetickk.gameplay.trial-info"

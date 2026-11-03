@@ -5,9 +5,10 @@ package kinetickk.ball.gameplay.interaction.rewards
 
 import androidx.compose.ui.graphics.Color
 import kinetickk.ball.content.api.DimensionRewardKind
-import kinetickk.ball.content.api.ModifierUnit
+import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.RunBoonKind
 import kinetickk.ball.content.api.RunModifierEffect
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.canvas.overlayGrouped
 import kinetickk.ball.gameplay.interaction.canvas.elementFill
@@ -68,12 +69,11 @@ internal fun GameplayRenderModel.rewardBoonCard(choice: ChoiceOption, index: Int
         RunBoonKind.PACT -> DimensionHudText.BoonPact
         RunBoonKind.ASPECT -> DimensionHudText.BoonAspect
     })
-    val element = if (boon.kind == RunBoonKind.ASPECT) content.structures.templates
-        .firstOrNull { template -> template.rewards.any { it.boonId == boon.id } }?.element else null
-    val preview = rewardPreviews.getOrNull(index)?.takeIf { choices.getOrNull(index) == choice }
+    val element = if (boon.kind == RunBoonKind.ASPECT) content.aspectElement(boon.id) else null
+    val preview = rewardPreviewOf(choice, index)
     // The preview shows every stat the boon moves; the ones a Pact lowers read as its price below instead.
     val changes = preview?.changes?.map { it.presentation(language) }?.filter { it.improved }
-        ?: boon.gains.mapNotNull { (it as? RunModifierEffect.Stat)?.let { stat -> boonStatLine(stat, language) } }
+        ?: boon.gains.mapNotNull { (it as? RunModifierEffect.Stat)?.let { stat -> statPresentation(stat.effect, stat.amount, language) } }
     return RewardCardPresentation(
         choice = choice,
         accent = Kk.Bone2,
@@ -96,28 +96,16 @@ internal fun GameplayRenderModel.rewardBoonCard(choice: ChoiceOption, index: Int
     )
 }
 
-/** A gain as a stat line: the stat's name and its signed amount in the stat's unit. */
-private fun boonStatLine(stat: RunModifierEffect.Stat, language: AppLanguage): RewardStatPresentation =
-    RewardStatPresentation(stat.effect.displayLabel.localizedContent(language), "", boonAmount(stat, language), stat.amount > 0f)
-
-/** A stat amount signed in its unit ("+25", "+20%", "−0.6 s"). */
-private fun boonAmount(stat: RunModifierEffect.Stat, language: AppLanguage): String {
-    val (shown, unit) = when (stat.effect.unit) {
-        ModifierUnit.PERCENT -> stat.amount * 100f to "%"
-        ModifierUnit.PER_SECOND -> stat.amount to "/s"
-        ModifierUnit.SECONDS -> stat.amount to "s"
-        ModifierUnit.FLAT -> stat.amount to ""
-    }
-    val number = rewardNumber(shown, unit, language)
-    return if (stat.amount > 0f) "+$number" else number
-}
+/** The element of the dungeon whose reward grants the Aspect [boonId], or null. */
+internal fun GameplayContentSnapshot.aspectElement(boonId: Int): StatusElement? =
+    structures.templates.firstOrNull { template -> template.rewards.any { it.boonId == boonId } }?.element
 
 /**
  * A Pact's price as cost lines: a lowered stat ("Max integrity −20"), and each hostile scale above 1 as its own line
  * ("Enemy integrity +12%", "Enemy speed +8%", "Damage taken +15%").
  */
 internal fun boonPriceLines(cost: RunModifierEffect, language: AppLanguage): List<String> = when (cost) {
-    is RunModifierEffect.Stat -> listOf(cost.effect.displayLabel.localizedContent(language) + " " + boonAmount(cost, language))
+    is RunModifierEffect.Stat -> listOf(statPresentation(cost.effect, cost.amount, language).let { it.name + " " + it.after })
     is RunModifierEffect.HostileScale -> buildList {
         fun percent(scale: Float) = ((scale - 1f) * 100f).roundToInt()
         if (cost.health > 1f) add(language.text(DimensionHudText.EnemyIntegrityUp, percent(cost.health)))

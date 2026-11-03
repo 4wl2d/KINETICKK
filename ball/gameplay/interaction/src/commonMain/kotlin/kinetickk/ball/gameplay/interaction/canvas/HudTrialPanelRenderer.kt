@@ -20,6 +20,7 @@ import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.regularHudUnit
 import kinetickk.ball.gameplay.interaction.layout.runningHudMargin
+import kinetickk.ball.gameplay.interaction.localization.DimensionHudText
 import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
 import kinetickk.ball.gameplay.interaction.localization.StructureHudText
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
@@ -290,15 +291,18 @@ internal fun trialGlyph(trial: TrialProjection): SiteGlyph = when (trial.source)
  * The panel's family label; a dungeon or a dimension objective names itself by its source (a dungeon a structure, whatever
  * placeholder family its trial carries).
  */
-internal fun trialLabel(trial: TrialProjection): TextResource = if (trial.source == TrialSource.STRUCTURE) StructureHudText.Structure
-    else if (trial.source == TrialSource.DIMENSION) dimensionTrialLabel() else when (trial.family) {
-    SiteFamily.ANOMALY -> HudRedesignText.AnomalyTrial
-    SiteFamily.RACE -> HudRedesignText.RaceTrial
-    SiteFamily.CHALLENGE -> HudRedesignText.ChallengeTrial
-    SiteFamily.BOUNTY -> HudRedesignText.BountyTrial
-    SiteFamily.SECRET -> HudRedesignText.SigilTrial
-    // No site of these families runs a trial; a dungeon or a dimension objective names itself by its source.
-    SiteFamily.CACHE, SiteFamily.PORTAL, SiteFamily.SIGNAL -> HudRedesignText.AnomalyTrial
+internal fun trialLabel(trial: TrialProjection): TextResource = when (trial.source) {
+    TrialSource.STRUCTURE -> StructureHudText.Structure
+    TrialSource.DIMENSION -> DimensionHudText.Objective
+    TrialSource.SITE -> when (trial.family) {
+        SiteFamily.ANOMALY -> HudRedesignText.AnomalyTrial
+        SiteFamily.RACE -> HudRedesignText.RaceTrial
+        SiteFamily.CHALLENGE -> HudRedesignText.ChallengeTrial
+        SiteFamily.BOUNTY -> HudRedesignText.BountyTrial
+        SiteFamily.SECRET -> HudRedesignText.SigilTrial
+        // No site of these families runs a trial; a dungeon or a dimension objective names itself by its source.
+        SiteFamily.CACHE, SiteFamily.PORTAL, SiteFamily.SIGNAL -> HudRedesignText.AnomalyTrial
+    }
 }
 
 /** The reward label; a race names the medal its clock still allows. */

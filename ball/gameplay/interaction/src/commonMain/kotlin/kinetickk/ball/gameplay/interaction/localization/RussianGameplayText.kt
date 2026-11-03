@@ -39,6 +39,7 @@ internal fun russianGameplayText(key: GameplayText): String = when (key) {
     GameplayText.SettingsDescription -> "Открыть настройки игры"
     GameplayText.ExitDescription -> "Выйти в главное меню"
     GameplayText.PerformanceDescription -> "Показатели производительности"
+    GameplayText.FpsReadout -> "{0} КАДР/С"
     GameplayText.WorkshopDescription -> "Открыть мастерскую"
     GameplayText.OnState -> "включены"
     GameplayText.OffState -> "выключены"

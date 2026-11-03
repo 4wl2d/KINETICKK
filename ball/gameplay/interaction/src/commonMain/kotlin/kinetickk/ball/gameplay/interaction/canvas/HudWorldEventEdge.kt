@@ -33,11 +33,7 @@ internal const val EVENT_EDGE_ACTIVE = 0.30f
  * over the telegraph, a steady glow while the event runs and a fade over its last seconds (the end cue). The four bands
  * are cached gradients ([HudBrush.EVENT_LEFT] … [HudBrush.EVENT_BOTTOM], keyed by colour and size) drawn at that alpha.
  */
-internal fun DrawScope.drawWorldEventEdge(
-    engine: GameplayRenderModel,
-    roles: KkRolePalette,
-    @Suppress("UNUSED_PARAMETER") renderTime: Float,
-) {
+internal fun DrawScope.drawWorldEventEdge(engine: GameplayRenderModel, roles: KkRolePalette) {
     val event = engine.worldEvent ?: return
     val intensity = worldEventEdgeIntensity(event, engine.renderElapsed)
     if (intensity <= 0f) return

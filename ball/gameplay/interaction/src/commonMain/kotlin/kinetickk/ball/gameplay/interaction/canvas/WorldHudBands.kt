@@ -136,7 +136,7 @@ internal class WorldHudKeepOut {
         if (bossPresent) {
             // The elite / Architect block under the clock (its own row on portrait phones), with the
             // name at the current text size; whichever boss it is, both shapes are covered.
-            val half = max(HudTopGeometry.bossBarWidth(frame, architect = true), HudTopGeometry.bossBarWidth(frame, architect = false)) * 0.5f
+            val half = max(HudTopGeometry.bossBarWidth(frame, wide = true), HudTopGeometry.bossBarWidth(frame, wide = false)) * 0.5f
             val bottom = max(HudTopGeometry.bossBottom(frame, true, textScale), HudTopGeometry.bossBottom(frame, false, textScale))
             add(max(0f, centerX - half - pad), 0f, min(width, centerX + half + pad), bottom + pad)
         }

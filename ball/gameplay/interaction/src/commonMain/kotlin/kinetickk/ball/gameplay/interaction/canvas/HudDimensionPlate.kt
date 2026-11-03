@@ -14,9 +14,6 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.text.font.FontWeight
 import kinetickk.ball.content.api.DimensionObjective
 import kinetickk.ball.content.api.WorldLayer
-import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
-import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_CHIP_ROW_DP
-import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_CHIP_ROW_HEIGHT_DP
 import kinetickk.ball.gameplay.interaction.localization.DimensionHudText
 import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
@@ -49,43 +46,25 @@ import kotlin.math.min
  */
 
 /**
- * The visit's plate in the Rebirth strip's slot (same anchors and right limit as the strip): the layer's sigil on an ink
- * disc ringed in the layer's accent, the visit timer (m:ss, tabular mono in bone, pulsing over its last ten seconds,
- * never in threat) over a meter of the time left in the accent, then a pip per course ring or ember (filled as counted;
- * boss objectives show their boss bar instead). Where the timer does not fit only the sigil is drawn, and below a
- * legible plate nothing. Realspace never draws it and returns false; during a visit it returns true, so the strip yields
- * its whole slot (C20: the plate before the Baby mode pacifier and the tier plate).
+ * The visit's plate in the Rebirth strip's slot (from [left] up to [right], [height] tall about [centerY]): the layer's
+ * sigil on an ink disc ringed in the layer's accent, the visit timer (m:ss, tabular mono in bone, pulsing over its last
+ * ten seconds, never in threat) over a meter of the time left in the accent, then a pip per course ring or ember (filled
+ * as counted; boss objectives show their boss bar instead). Where the timer does not fit only the sigil is drawn, and
+ * below a legible plate nothing. Realspace never draws it and returns false; during a visit it returns true, so the strip
+ * yields its whole slot (C20: the plate before the Baby mode pacifier and the tier plate).
  */
-internal fun DrawScope.drawDimensionPlate(engine: GameplayRenderModel, hostMeasurer: TextMeasurer, frame: HudFrame): Boolean {
+internal fun DrawScope.drawDimensionPlate(
+    engine: GameplayRenderModel,
+    hostMeasurer: TextMeasurer,
+    frame: HudFrame,
+    left: Float,
+    right: Float,
+    centerY: Float,
+    height: Float,
+): Boolean {
     val dimension = engine.dimension
     val layer = dimension.layer
     if (layer == WorldLayer.BASE) return false
-    val centerY: Float
-    val height: Float
-    val left: Float
-    when (frame.mode) {
-        GameplayLayoutMode.REGULAR -> {
-            centerY = HudScratch.badgeTop + (HudScratch.badgeBottom - HudScratch.badgeTop) * 0.5f
-            height = min(frame.u(34f), HudScratch.badgeBottom - HudScratch.badgeTop)
-            left = HudScratch.badgeRight + frame.u(18f)
-        }
-        GameplayLayoutMode.COMPACT_LANDSCAPE -> {
-            centerY = HudScratch.badgeTop + (HudScratch.badgeBottom - HudScratch.badgeTop) * 0.5f
-            height = min(frame.u(28f), HudScratch.badgeBottom - HudScratch.badgeTop)
-            left = HudScratch.economyRight + frame.u(12f)
-        }
-        GameplayLayoutMode.COMPACT_PORTRAIT -> {
-            height = frame.u(PORTRAIT_CHIP_ROW_HEIGHT_DP)
-            centerY = frame.top + frame.u(PORTRAIT_CHIP_ROW_DP) + height * 0.5f
-            left = HudScratch.economyRight + frame.u(10f)
-        }
-    }
-    val right = if (frame.mode == GameplayLayoutMode.COMPACT_PORTRAIT) {
-        min(frame.width - frame.margin - frame.u(PLATE_PORTRAIT_CHAIN_RESERVE_DP), HudScratch.chainLeft - frame.u(10f))
-    } else {
-        val clock = HudDrawCache.peekLayout(HudText.TIMER)?.size?.width?.toFloat() ?: frame.u(120f)
-        frame.width * 0.5f - clock * 0.5f - frame.u(14f)
-    }
     val plate = min(height, right - left)
     if (plate < frame.u(MIN_PLATE_DP)) return true
     val roles = hostMeasurer.roles
@@ -288,9 +267,6 @@ internal class DimensionShutterMemory {
         if (changedAt == Float.NEGATIVE_INFINITY) -1f else (renderTime - changedAt) * 1000f / KkTime.Shutter
 }
 
-/** The trial panel's label for a dimension objective. */
-internal fun dimensionTrialLabel(): TextResource = DimensionHudText.Objective
-
 /** The trial panel's first-row mark for a dimension objective: its layer's sigil, [size] px across. */
 internal fun DrawScope.drawDimensionTrialIcon(trial: TrialProjection, center: Offset, size: Float, color: Color) =
     drawDimensionSigil(trial.dimension ?: WorldLayer.BASE, center, size * 0.5f, color)
@@ -324,8 +300,7 @@ private object DimensionHudScratch {
     }
 }
 
-/** The plate's smallest legible size (reference dp); the sigil fills this share of its disc. */
-private const val MIN_PLATE_DP = 14f
+/** The sigil fills this share of the plate's disc. */
 private const val SIGIL_SHARE = 0.72f
 
 /** The timer's text size as a share of the plate's height. */
@@ -338,9 +313,6 @@ private const val TIMER_PULSE_LOW = 0.55f
 /** The objective's pips: their largest and smallest size (reference dp). */
 private const val MAX_PIP_DP = 7f
 private const val MIN_PIP_DP = 3f
-
-/** Chip-row width (reference dp) the portrait plate leaves for the chain at the row's end (the strip's reserve). */
-private const val PLATE_PORTRAIT_CHAIN_RESERVE_DP = 72f
 
 /** The shutter: three slabs of 0.42 screens, overlapping by 2 dp, led by a 3 dp edge, each 12 % faster than the last. */
 private const val SHUTTER_SLABS = 3

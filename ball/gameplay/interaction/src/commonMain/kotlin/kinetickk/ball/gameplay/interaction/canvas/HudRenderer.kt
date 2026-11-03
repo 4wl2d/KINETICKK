@@ -3,7 +3,6 @@
 
 package kinetickk.ball.gameplay.interaction.canvas
 
-
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -42,6 +41,7 @@ import kinetickk.ball.gameplay.interaction.layout.regularHudUnit
 import kinetickk.ball.gameplay.interaction.layout.runningHudMargin
 import kinetickk.ball.gameplay.interaction.localization.GameplayText
 import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
+import kinetickk.ball.gameplay.interaction.performance.GameplayFpsCounter
 import kinetickk.ball.profile.api.GameAction
 import kinetickk.ball.gameplay.nucleus.model.formatRunTime
 import kinetickk.ball.gameplay.nucleus.render.ApexProjection
@@ -638,8 +638,8 @@ internal const val COND_LINE_HEIGHT_EM = 0.86f
 /**
  * Geometry of the HUD's top-center column (clock, then the elite / Architect block under it),
  * shared by the renderer and the world keep-out ([WorldHudKeepOut]) so world labels and edge
- * markers follow the HUD at every text size. px for the [HudFrame]'s viewport. An `architect` flag reads as the wide
- * block ([wideBossBlock]: the Architect and the secret bosses).
+ * markers follow the HUD at every text size. px for the [HudFrame]'s viewport. A `wide` flag selects the wide block
+ * ([wideBossBlock]: the Architect and the secret bosses).
  */
 internal object HudTopGeometry {
     /** Clock size in sp (display type: never scaled by the text-size setting). */
@@ -666,24 +666,24 @@ internal object HudTopGeometry {
         else -> clockTop(frame) + clockHeight(frame) + frame.u(6f)
     }
 
-    fun bossBarWidth(frame: HudFrame, architect: Boolean): Float = when {
-        frame.regular -> min(frame.u(if (architect) 700f else 320f), frame.width - frame.margin * 2f - frame.u(660f))
+    fun bossBarWidth(frame: HudFrame, wide: Boolean): Float = when {
+        frame.regular -> min(frame.u(if (wide) 700f else 320f), frame.width - frame.margin * 2f - frame.u(660f))
         frame.portrait -> min(frame.width - frame.margin * 2f, frame.u(320f))
         else -> min(frame.u(260f) * frame.factor, frame.width * 0.3f)
     }.coerceAtLeast(frame.u(140f))
 
     /** Board size (sp) of the boss name; UI text, so it grows with the text-size setting. */
-    fun bossNameSize(frame: HudFrame, architect: Boolean): Float = when {
-        frame.regular -> frame.t(if (architect) 20f else 22f)
-        else -> if (architect) 14f else 16f
+    fun bossNameSize(frame: HudFrame, wide: Boolean): Float = when {
+        frame.regular -> frame.t(if (wide) 20f else 22f)
+        else -> if (wide) 14f else 16f
     }
 
-    fun bossNameLineHeight(architect: Boolean): Float = if (architect) WIDE_LINE_HEIGHT_EM else COND_LINE_HEIGHT_EM
+    fun bossNameLineHeight(wide: Boolean): Float = if (wide) WIDE_LINE_HEIGHT_EM else COND_LINE_HEIGHT_EM
 
     fun bossNameGap(frame: HudFrame): Float = frame.u(if (frame.regular) 9f else 5f)
 
-    fun bossBarHeight(frame: HudFrame, architect: Boolean): Float =
-        frame.u(if (architect) (if (frame.regular) 14f else 8f) else (if (frame.regular) 8f else 6f))
+    fun bossBarHeight(frame: HudFrame, wide: Boolean): Float =
+        frame.u(if (wide) (if (frame.regular) 14f else 8f) else (if (frame.regular) 8f else 6f))
 
     /** Gap between the boss bar and its status rail. */
     fun bossRailGap(frame: HudFrame): Float = frame.u(if (frame.regular) 6f else 4f)
@@ -698,10 +698,10 @@ internal object HudTopGeometry {
      * portrait phones draw the rail on the name's row. One px covers the name's layout box, which
      * rounds up to whole pixels.
      */
-    fun bossBottom(frame: HudFrame, architect: Boolean, textScale: Float, rail: Boolean = true): Float {
-        val name = bossNameSize(frame, architect) * bossNameLineHeight(architect) * frame.density * hudUiScale(textScale)
+    fun bossBottom(frame: HudFrame, wide: Boolean, textScale: Float, rail: Boolean = true): Float {
+        val name = bossNameSize(frame, wide) * bossNameLineHeight(wide) * frame.density * hudUiScale(textScale)
         val reserve = if (frame.regular || (rail && !frame.portrait)) bossRailGap(frame) + bossRailHeight(frame) else 0f
-        return bossTop(frame) + name + frame.density + bossNameGap(frame) + bossBarHeight(frame, architect) + reserve
+        return bossTop(frame) + name + frame.density + bossNameGap(frame) + bossBarHeight(frame, wide) + reserve
     }
 }
 
@@ -1844,14 +1844,17 @@ internal fun DrawScope.drawControls(
             }
             // Show FPS is available in every build; Debug also uses its hit area to open the panel.
             RunningControlTarget.PERFORMANCE -> drawHudIconButton(frame, HudPath.PERFORMANCE, left, top, right, bottom, regular) { center, _ ->
-                drawFpsCounter(textMeasurer, frame, center, controls?.fps ?: -1)
+                drawFpsCounter(textMeasurer, frame, center, controls?.fps ?: GameplayFpsCounter.NO_VALUE)
             }
             // The skill row draws as one (its entrance moves all three); the Apex is the level badge.
             RunningControlTarget.SKILL_1, RunningControlTarget.SKILL_2, RunningControlTarget.SKILL_3, RunningControlTarget.APEX -> Unit
         }
     }
     if (frame.portrait && engine.settings.showFps) {
-        drawCompactFpsReadout(textMeasurer, compactFpsReadoutBounds(size.width, density, overlay = false), controls?.fps ?: -1)
+        val fps = controls?.fps ?: GameplayFpsCounter.NO_VALUE
+        compactFpsReadoutBounds(size.width, density, overlay = false) { left, top, right, bottom ->
+            drawCompactFpsReadout(textMeasurer, left, top, right, bottom, fps)
+        }
     }
     drawSkillBar(engine, textMeasurer, frame, renderTime, memory, controls)
 }
@@ -1980,8 +1983,8 @@ private fun DrawScope.drawFpsCounter(measurer: TextMeasurer, frame: HudFrame, ce
 /** The counter's unit, the same in every language (like the panel's own "FPS"). */
 private const val FPS_LABEL = "FPS"
 
-/** Single-line counter for narrow portrait headers and the layer above pause/reward overlays. */
-internal fun DrawScope.drawCompactFpsReadout(measurer: TextMeasurer, bounds: Rect, fps: Int) {
+/** Single-line counter for narrow portrait headers and the layer above pause/reward overlays, in the given px bounds. */
+internal fun DrawScope.drawCompactFpsReadout(measurer: TextMeasurer, left: Float, top: Float, right: Float, bottom: Float, fps: Int) {
     val display = HudMeasurers.display(measurer)
     val number = HudDrawCache.layout(HudText.FPS, display, HudScratch.fps.of(fps.toLong()),
         measurer.typography.monoStyle(10f, weight = FontWeight.Bold, trackingEm = 0f, lineHeightEm = 1f))
@@ -1989,12 +1992,13 @@ internal fun DrawScope.drawCompactFpsReadout(measurer: TextMeasurer, bounds: Rec
         measurer.typography.labelStyle(8f, lineHeightEm = 1f), uppercase = true)
     val gap = 4f * density
     val contentWidth = number.size.width + gap + label.size.width
-    val left = bounds.center.x - contentWidth * 0.5f
+    val centerY = top + (bottom - top) / 2f
+    val textLeft = left + (right - left) / 2f - contentWidth * 0.5f
     val height = max(number.kkBoxHeight, label.kkBoxHeight)
-    drawRect(Kk.Ink2.copy(alpha = 0.92f), bounds.topLeft, bounds.size)
-    drawKkText(number, left, bounds.center.y, Kk.Bone, valign = KkVAlign.CENTER)
-    drawKkText(label, left + number.size.width + gap, bounds.center.y, Kk.Mute, valign = KkVAlign.CENTER)
-    HudLayoutProbe.record(HudBlock.FPS, left, bounds.center.y - height * 0.5f, left + contentWidth, bounds.center.y + height * 0.5f)
+    drawRect(Kk.Ink2.copy(alpha = 0.92f), Offset(left, top), Size(right - left, bottom - top))
+    drawKkText(number, textLeft, centerY, Kk.Bone, valign = KkVAlign.CENTER)
+    drawKkText(label, textLeft + number.size.width + gap, centerY, Kk.Mute, valign = KkVAlign.CENTER)
+    HudLayoutProbe.record(HudBlock.FPS, textLeft, centerY - height * 0.5f, textLeft + contentWidth, centerY + height * 0.5f)
 }
 
 /** Performance mark: three rising bars. */

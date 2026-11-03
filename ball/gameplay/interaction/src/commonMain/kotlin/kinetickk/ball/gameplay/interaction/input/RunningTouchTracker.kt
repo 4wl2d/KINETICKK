@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.interaction.input
 
 import kinetickk.ball.gameplay.interaction.layout.RunningControlTarget
+import kinetickk.ball.gameplay.interaction.performance.GameplayFpsCounter
 
 /**
  * The running HUD's multi-pointer model: which of up to [MAX_POINTERS] pressed pointers steers the
@@ -158,8 +159,8 @@ internal class RunningControlPressLog {
 
     var touchInput: Boolean = false
 
-    /** Lightweight frame-loop counter's latest value; -1 until its first half-second window. */
-    var fps: Int = -1
+    /** Lightweight frame-loop counter's latest value; [GameplayFpsCounter.NO_VALUE] until its first half-second window. */
+    var fps: Int = GameplayFpsCounter.NO_VALUE
 
     fun press(target: RunningControlTarget, renderTime: Float) {
         pressedAt[target.ordinal] = renderTime

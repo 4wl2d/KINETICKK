@@ -39,6 +39,7 @@ internal fun englishGameplayText(key: GameplayText): String = when (key) {
     GameplayText.SettingsDescription -> "Open gameplay settings"
     GameplayText.ExitDescription -> "Exit to home"
     GameplayText.PerformanceDescription -> "Performance metrics"
+    GameplayText.FpsReadout -> "{0} FPS"
     GameplayText.WorkshopDescription -> "Open the Workshop"
     GameplayText.OnState -> "on"
     GameplayText.OffState -> "off"

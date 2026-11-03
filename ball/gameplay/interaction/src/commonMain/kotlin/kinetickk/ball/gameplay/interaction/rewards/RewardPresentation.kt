@@ -1372,8 +1372,11 @@ internal fun rewardNumber(value: Float, unit: String, language: AppLanguage, pre
 }
 
 /** A passive stat line of an offered item: [scale] × the per-copy amount; negative amounts are costs. */
-private fun StatDelta.presentation(scale: Float, language: AppLanguage): RewardStatPresentation {
-    val value = amount * scale
+private fun StatDelta.presentation(scale: Float, language: AppLanguage): RewardStatPresentation =
+    statPresentation(effect, amount * scale, language)
+
+/** A stat line: the stat's name and [value] signed in its unit ("+25", "+20%", "−0.6 s"); negative values are costs. */
+internal fun statPresentation(effect: ItemEffect, value: Float, language: AppLanguage): RewardStatPresentation {
     val (shown, unit) = when (effect.unit) {
         ModifierUnit.PERCENT -> value * 100f to "%"
         ModifierUnit.PER_SECOND -> value to "/s"

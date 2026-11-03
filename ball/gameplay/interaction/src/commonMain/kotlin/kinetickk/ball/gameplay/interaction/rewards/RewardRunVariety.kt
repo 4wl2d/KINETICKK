@@ -109,7 +109,7 @@ internal fun OmenId.icon(keynote: BuildTag?): KkIcon = when (this) {
 }
 
 /** The nucleus preview of card [index], when it belongs to [choice]. */
-private fun GameplayRenderModel.rewardPreviewOf(choice: ChoiceOption, index: Int): RewardPreview? =
+internal fun GameplayRenderModel.rewardPreviewOf(choice: ChoiceOption, index: Int): RewardPreview? =
     rewardPreviews.getOrNull(index)?.takeIf { choices.getOrNull(index) == choice }
 
 /**

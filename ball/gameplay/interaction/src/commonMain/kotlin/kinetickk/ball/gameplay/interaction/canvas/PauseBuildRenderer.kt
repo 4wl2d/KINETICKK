@@ -1018,7 +1018,7 @@ private fun DrawScope.drawPauseTags(
             tag.points > 0 -> Kk.Bone2
             else -> Kk.Mute
         }, nameBox, valign = KkVAlign.CENTER)
-        if (tag.keynote) drawPauseKeynoteBrackets(Rect(x - 3f * k * density, y + 1f * k * density, x + cell + 3f * k * density, y + row - 1f * k * density),
+        if (tag.keynote) drawPauseKeynoteBrackets(x - 3f * k * density, y + 1f * k * density, x + cell + 3f * k * density, y + row - 1f * k * density,
             5f * k * density, 1.5f * k * density)
         val ladderLeft = x + cell - ladder
         val pipTop = middle - pipHeightPx * 0.5f
@@ -1070,7 +1070,7 @@ private fun DrawScope.drawPauseElements(
         val shown = element.affinity > 0
         drawKkIcon(elementIcon(element.element), glyphCenter, glyph, if (shown) color else Kk.Ink4)
         if (element.dominant) drawCircle(color, ring, glyphCenter, style = kkStroke(ringStroke))
-        if (element.keynote) drawPauseKeynoteBrackets(Rect(cellLeft, top, cellLeft + box, top + height), 5f * k * density, 1.5f * k * density)
+        if (element.keynote) drawPauseKeynoteBrackets(cellLeft, top, cellLeft + box, top + height, 5f * k * density, 1.5f * k * density)
         if (names) {
             val nameTop = glyphCenter.y + ring + ringStroke + 3f * k * density
             val name = fitOverlayText(ui, element.label, KkTextRole.COND, nameSize, box, uppercase = true)
@@ -1121,7 +1121,7 @@ private fun DrawScope.drawPauseElementRows(
         val center = Offset(columnLeft + glyph * 0.6f, middle)
         drawKkIcon(elementIcon(element.element), center, glyph, if (element.affinity > 0) color else Kk.Ink4)
         if (element.dominant) drawCircle(color, glyph * DOMINANT_RING, center, style = kkStroke(1.2f * k * density))
-        if (element.keynote) drawPauseKeynoteBrackets(Rect(columnLeft, middle - row * 0.5f, columnLeft + columnWidth, middle + row * 0.5f),
+        if (element.keynote) drawPauseKeynoteBrackets(columnLeft, middle - row * 0.5f, columnLeft + columnWidth, middle + row * 0.5f,
             4f * k * density, 1.2f * k * density)
         drawElementMeter(overview, element, color, columnLeft + glyph * 1.6f, middle - 2.5f * k * density, columnWidth - glyph * 1.6f, k)
     }

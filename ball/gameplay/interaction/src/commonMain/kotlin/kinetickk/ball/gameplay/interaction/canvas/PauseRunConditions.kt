@@ -4,7 +4,6 @@
 package kinetickk.ball.gameplay.interaction.canvas
 
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -15,6 +14,7 @@ import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.localization.DimensionHudText
 import kinetickk.ball.gameplay.interaction.localization.RunVarietyText
+import kinetickk.ball.gameplay.interaction.rewards.aspectElement
 import kinetickk.ball.gameplay.interaction.rewards.icon
 import kinetickk.ball.gameplay.interaction.rewards.rewardKeynoteLabel
 import kinetickk.ball.gameplay.interaction.rewards.sigil
@@ -58,9 +58,8 @@ internal fun GameplayRenderModel.pauseConditions(language: AppLanguage): List<Pa
     for (id in runBoons) {
         val boon = content.boon(id) ?: continue
         if (boon.kind != RunBoonKind.ASPECT) continue
-        val element = content.structures.templates.firstOrNull { template -> template.rewards.any { it.boonId == id } }?.element
         add(PauseConditionEntry(PauseConditionKind.ASPECT, language.text(DimensionHudText.BoonAspect),
-            boon.name.localizedContent(language), boon.description.localizedContent(language), element = element))
+            boon.name.localizedContent(language), boon.description.localizedContent(language), element = content.aspectElement(id)))
     }
     runOmen?.let { id ->
         val omen = content.variety.omens.definitions[id.ordinal]
@@ -295,14 +294,10 @@ private object ConditionShapes {
 }
 
 /**
- * Bone corner brackets round [rect] (the Keynote's resonance tag and element meter): four short L marks of [arm] length,
- * nothing along the edges between them. Allocation-free.
+ * Bone corner brackets round [l], [t], [r], [b] (the Keynote's resonance tag and element meter): four short L marks of
+ * [arm] length, nothing along the edges between them. Allocation-free.
  */
-internal fun DrawScope.drawPauseKeynoteBrackets(rect: Rect, arm: Float, stroke: Float, color: Color = Kk.Bone) {
-    val l = rect.left
-    val t = rect.top
-    val r = rect.right
-    val b = rect.bottom
+internal fun DrawScope.drawPauseKeynoteBrackets(l: Float, t: Float, r: Float, b: Float, arm: Float, stroke: Float, color: Color = Kk.Bone) {
     drawLine(color, Offset(l, t), Offset(l + arm, t), stroke)
     drawLine(color, Offset(l, t), Offset(l, t + arm), stroke)
     drawLine(color, Offset(r, t), Offset(r - arm, t), stroke)

@@ -3,8 +3,6 @@
 
 package kinetickk.ball.gameplay.interaction.input
 
-import kinetickk.foundation.diagnostics.DIAGNOSTICS_ENABLED
-
 import kinetickk.ball.gameplay.api.BrakeSource
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.interaction.canvas.HudTrialPanelLayout
@@ -17,6 +15,7 @@ import kinetickk.ball.gameplay.interaction.layout.forEachRunningControlBounds
 import kinetickk.ball.gameplay.interaction.layout.pauseLayoutGeometry
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kinetickk.foundation.diagnostics.DIAGNOSTICS_ENABLED
 import kotlin.math.max
 
 /** A pointer result is either a live-run action or a request for the Session-owned host. */

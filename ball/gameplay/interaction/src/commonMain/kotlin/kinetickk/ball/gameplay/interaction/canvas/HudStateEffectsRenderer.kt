@@ -302,7 +302,7 @@ internal fun DrawScope.drawHudScreenStates(
     if (critical) drawCriticalVignette(roles, heartbeat(renderTime))
     if (memory != null && memory.polarityDraining(renderTime)) drawPolarityEdge(engine, roles, renderTime)
     if (engine.overdriveTime > 0f) drawOverdriveBorder(roles, renderTime)
-    drawWorldEventEdge(engine, roles, renderTime)
+    drawWorldEventEdge(engine, roles)
     drawScorchEdge(engine, roles, renderTime)
     drawDungeonVignette(engine)
 }
