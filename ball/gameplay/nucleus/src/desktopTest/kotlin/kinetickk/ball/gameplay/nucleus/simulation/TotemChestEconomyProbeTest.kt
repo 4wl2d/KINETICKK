@@ -9,7 +9,7 @@ import kinetickk.ball.content.api.TotemChestPolicy
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
-import kinetickk.ball.gameplay.nucleus.simulation.DungeonPilotGateTest.Arm
+import kinetickk.ball.gameplay.nucleus.simulation.structures.DungeonPilotGateTest.Arm
 import kinetickk.ball.gameplay.nucleus.simulation.structures.*
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.toImmutableList
