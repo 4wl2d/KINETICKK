@@ -21,7 +21,7 @@ import kinetickk.ball.gameplay.nucleus.protocol.FxColorCode
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kinetickk.ball.gameplay.nucleus.simulation.build.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 import kinetickk.ball.gameplay.nucleus.simulation.characters.*
 import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*

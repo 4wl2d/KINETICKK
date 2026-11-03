@@ -8,8 +8,8 @@ import kinetickk.ball.gameplay.api.BuildStatSummary
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
-import kinetickk.ball.gameplay.nucleus.simulation.build.CompiledBuild
-import kinetickk.ball.gameplay.nucleus.simulation.build.buildStats
+import kinetickk.ball.gameplay.nucleus.simulation.builds.CompiledBuild
+import kinetickk.ball.gameplay.nucleus.simulation.builds.buildStats
 import kinetickk.foundation.collections.ImmutableList
 
 /**

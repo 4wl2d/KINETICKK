@@ -16,7 +16,7 @@ import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kinetickk.ball.gameplay.nucleus.simulation.build.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.variety.*
 import kinetickk.ball.gameplay.nucleus.simulation.world.*

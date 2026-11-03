@@ -11,7 +11,7 @@ import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kinetickk.ball.gameplay.nucleus.simulation.build.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 
 /*
  * Directed rewards: a resolved window site queues one; its choice first offers directions, then three matching offers.

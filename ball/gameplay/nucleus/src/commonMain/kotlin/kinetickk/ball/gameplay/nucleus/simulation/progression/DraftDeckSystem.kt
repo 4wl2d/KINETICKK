@@ -12,7 +12,7 @@ import kinetickk.ball.content.api.lifetimeMatterOfferLevel
 import kinetickk.ball.content.api.usesSkills
 import kinetickk.ball.gameplay.nucleus.model.ItemDeck
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kinetickk.ball.gameplay.nucleus.simulation.build.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 import kinetickk.ball.gameplay.nucleus.simulation.variety.*
 import kinetickk.foundation.random.CloneableXorWowRandom
 import kotlin.math.max

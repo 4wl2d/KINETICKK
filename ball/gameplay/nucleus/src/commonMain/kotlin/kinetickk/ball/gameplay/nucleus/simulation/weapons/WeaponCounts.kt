@@ -5,7 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation.weapons
 
 import kinetickk.ball.content.api.WeaponMastery
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kinetickk.ball.gameplay.nucleus.simulation.build.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 import kinetickk.ball.gameplay.nucleus.simulation.characters.*
 
 /** The same bounded counts drive spawning and reward previews. */

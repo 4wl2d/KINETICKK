@@ -10,7 +10,7 @@ import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.api.BuildStatSummary
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kinetickk.ball.gameplay.nucleus.simulation.build.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
 import kinetickk.ball.gameplay.nucleus.simulation.variety.*
 import kinetickk.ball.gameplay.nucleus.simulation.weapons.*

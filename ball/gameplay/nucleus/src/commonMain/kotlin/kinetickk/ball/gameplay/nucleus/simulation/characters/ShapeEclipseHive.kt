@@ -27,7 +27,7 @@ import kinetickk.ball.gameplay.nucleus.model.CharacterRuntime.Companion.SCAR_Y0
 import kinetickk.ball.gameplay.nucleus.model.CharacterRuntime.Companion.SCAR_Y1
 import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kinetickk.ball.gameplay.nucleus.simulation.build.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
 import kinetickk.ball.gameplay.nucleus.simulation.enemies.*

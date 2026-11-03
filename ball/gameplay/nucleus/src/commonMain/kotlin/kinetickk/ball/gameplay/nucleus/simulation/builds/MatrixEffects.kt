@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package kinetickk.ball.gameplay.nucleus.simulation.build
+package kinetickk.ball.gameplay.nucleus.simulation.builds
 
 import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.MatrixEffect

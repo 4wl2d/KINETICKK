@@ -39,9 +39,7 @@ import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.jvm.JvmInline
-import kinetickk.ball.gameplay.nucleus.simulation.build.*
 import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
-import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.structures.*
 import kinetickk.ball.gameplay.nucleus.simulation.world.*
@@ -49,6 +47,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.skills.SkillCastState
 import kinetickk.ball.gameplay.nucleus.simulation.elements.CoreReactionState
 import kinetickk.ball.gameplay.nucleus.simulation.director.SpawnDirectorState
 import kinetickk.ball.gameplay.nucleus.simulation.flight.CoreStasisState
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 
 /**
  * Reducer-owned simulation state. Each field declares its initial value and its copy from [copySource] together,

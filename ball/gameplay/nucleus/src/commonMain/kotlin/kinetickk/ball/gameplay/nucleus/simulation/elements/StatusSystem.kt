@@ -8,13 +8,9 @@ import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kinetickk.ball.gameplay.nucleus.simulation.build.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 import kinetickk.ball.gameplay.nucleus.simulation.characters.*
-import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
-import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
-import kinetickk.ball.gameplay.nucleus.simulation.skills.*
-import kinetickk.ball.gameplay.nucleus.simulation.world.*
 import kotlin.math.max
 import kotlin.math.min
 

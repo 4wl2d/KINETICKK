@@ -14,8 +14,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.test.Test
-import kinetickk.ball.gameplay.nucleus.simulation.build.*
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 
 class RelicSystemTest {
     @Test

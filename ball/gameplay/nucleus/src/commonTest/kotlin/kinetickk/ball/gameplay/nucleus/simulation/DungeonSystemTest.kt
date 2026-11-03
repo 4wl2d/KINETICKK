@@ -38,7 +38,6 @@ import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kinetickk.ball.gameplay.nucleus.projection.*
-import kinetickk.ball.gameplay.nucleus.simulation.build.*
 import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
 import kinetickk.ball.gameplay.nucleus.simulation.director.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
@@ -47,6 +46,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.sites.*
 import kinetickk.ball.gameplay.nucleus.simulation.structures.*
 import kinetickk.ball.gameplay.nucleus.simulation.world.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 
 /**
  * The dungeon runtime: entering, sealing a room around its garrison, clearing rooms and locks, the final room's

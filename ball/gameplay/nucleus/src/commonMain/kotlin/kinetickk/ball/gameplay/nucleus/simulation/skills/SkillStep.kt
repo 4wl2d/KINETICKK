@@ -6,7 +6,7 @@ package kinetickk.ball.gameplay.nucleus.simulation.skills
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kinetickk.ball.gameplay.nucleus.simulation.build.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 import kinetickk.ball.gameplay.nucleus.simulation.characters.*
 import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
 import kotlin.math.max

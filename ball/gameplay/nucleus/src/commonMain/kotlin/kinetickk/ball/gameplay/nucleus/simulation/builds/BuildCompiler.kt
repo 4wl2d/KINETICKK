@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Vladislav Tomilov
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package kinetickk.ball.gameplay.nucleus.simulation.build
+package kinetickk.ball.gameplay.nucleus.simulation.builds
 
 import kinetickk.ball.content.api.BuffStat
 import kinetickk.ball.content.api.BuildTag
@@ -20,11 +20,7 @@ import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.gameplay.nucleus.render.RelicLinkKind
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.toImmutableList
-import kinetickk.ball.gameplay.nucleus.simulation.*
 import kinetickk.ball.gameplay.nucleus.simulation.characters.*
-import kinetickk.ball.gameplay.nucleus.simulation.elements.*
-import kinetickk.ball.gameplay.nucleus.simulation.skills.*
-import kinetickk.ball.gameplay.nucleus.simulation.weapons.*
 
 /** A conditional "while X: Y" modifier collected from owned items, already scaled by magnitude. */
 internal data class WhileModifier(val condition: EffectCondition, val stat: BuffStat, val amount: Float)

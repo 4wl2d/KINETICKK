@@ -9,10 +9,10 @@ import kinetickk.ball.gameplay.nucleus.model.*
 import kotlin.math.exp
 import kotlin.math.max
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kinetickk.ball.gameplay.nucleus.simulation.build.*
 import kinetickk.ball.gameplay.nucleus.simulation.characters.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
 import kinetickk.ball.gameplay.nucleus.simulation.weapons.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 
 internal fun MutableGameState.resolveWeaponDamage(delta: Float) {
     val power = effectiveWeaponPower()

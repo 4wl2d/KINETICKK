@@ -11,7 +11,7 @@ import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.isDataEconomy
 import kinetickk.ball.content.api.usesSkills
-import kinetickk.ball.gameplay.nucleus.simulation.build.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.random.CloneableXorWowRandom

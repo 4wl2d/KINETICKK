@@ -10,8 +10,8 @@ import kinetickk.ball.gameplay.nucleus.model.*
 import kotlin.math.max
 import kotlin.math.min
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kinetickk.ball.gameplay.nucleus.simulation.build.*
 import kinetickk.ball.gameplay.nucleus.simulation.combat.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 
 internal fun MutableGameState.openRelicChoice() {
     activeChoiceType = ChoiceType.RELIC

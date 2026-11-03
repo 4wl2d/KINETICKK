@@ -33,13 +33,13 @@ import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kinetickk.ball.gameplay.nucleus.simulation.build.*
 import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
 import kinetickk.ball.gameplay.nucleus.simulation.sites.*
 import kinetickk.ball.gameplay.nucleus.simulation.skills.*
 import kinetickk.ball.gameplay.nucleus.simulation.variety.*
 import kinetickk.ball.gameplay.nucleus.simulation.weapons.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 
 internal const val MAX_GENERATED_REWARD_CHOICES: Int = 4
 

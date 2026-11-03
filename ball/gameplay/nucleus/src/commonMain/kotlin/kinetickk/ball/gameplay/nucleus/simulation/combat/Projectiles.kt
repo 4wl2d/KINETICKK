@@ -9,7 +9,7 @@ import kinetickk.ball.gameplay.nucleus.protocol.FxColorCode
 import kotlin.math.cos
 import kotlin.math.sin
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kinetickk.ball.gameplay.nucleus.simulation.build.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 
 internal fun MutableGameState.firePlayerProjectile(
     x: Float,

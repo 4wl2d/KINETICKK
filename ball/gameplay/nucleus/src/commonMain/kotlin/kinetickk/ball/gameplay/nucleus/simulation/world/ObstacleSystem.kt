@@ -9,12 +9,6 @@ import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.render.ProjectileKind
 import kotlin.math.max
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kinetickk.ball.gameplay.nucleus.simulation.build.*
-import kinetickk.ball.gameplay.nucleus.simulation.characters.*
-import kinetickk.ball.gameplay.nucleus.simulation.combat.*
-import kinetickk.ball.gameplay.nucleus.simulation.elements.*
-import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
-import kinetickk.ball.gameplay.nucleus.simulation.skills.*
 import kinetickk.ball.gameplay.nucleus.simulation.structures.*
 import kinetickk.ball.gameplay.nucleus.simulation.variety.*
 

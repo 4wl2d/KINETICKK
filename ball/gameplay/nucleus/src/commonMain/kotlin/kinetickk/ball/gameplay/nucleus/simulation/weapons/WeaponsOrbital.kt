@@ -14,11 +14,11 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kinetickk.ball.gameplay.nucleus.simulation.build.*
 import kinetickk.ball.gameplay.nucleus.simulation.characters.*
 import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
 import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 
 /** Prism signature: damage and size per intact facet. */
 internal fun MutableGameState.morningstarScale(): Float = if (signatureActive()) 1f + 0.1f * intactFacets else 1f

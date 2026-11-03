@@ -5,9 +5,9 @@ package kinetickk.ball.gameplay.nucleus.simulation.progression
 
 import kotlin.math.floor
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kinetickk.ball.gameplay.nucleus.simulation.build.*
 import kinetickk.ball.gameplay.nucleus.simulation.characters.*
 import kinetickk.ball.gameplay.nucleus.simulation.weapons.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 
 /** Data needed to go from run level [level] to the next: the content table scaled by the run's Rebirth tier. */
 internal fun MutableGameState.dataRequiredForLevel(level: Int): Int =

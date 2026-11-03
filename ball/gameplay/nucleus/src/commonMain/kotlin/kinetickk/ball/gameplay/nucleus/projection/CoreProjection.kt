@@ -9,8 +9,8 @@ import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kinetickk.ball.gameplay.nucleus.simulation.build.*
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 
 /**
  * The previous reward previews while the same choice is open over an unchanged build: the same offered cards, relics

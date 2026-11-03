@@ -9,7 +9,7 @@ import kinetickk.ball.content.api.WeaponDefinition
 import kinetickk.ball.content.api.WeaponScaling
 import kinetickk.ball.gameplay.nucleus.render.WeaponSynergyProjection
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kinetickk.ball.gameplay.nucleus.simulation.build.*
+import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.flight.coreStasisActivationMultiplier
 import kotlin.math.min

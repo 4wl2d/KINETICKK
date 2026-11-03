@@ -3,7 +3,7 @@
 
 package kinetickk.ball.gameplay.nucleus
 
-import kinetickk.ball.gameplay.nucleus.simulation.build.buildSummary
+import kinetickk.ball.gameplay.nucleus.simulation.builds.buildSummary
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.MatrixNodeId
