@@ -69,6 +69,8 @@ internal fun flyVarietyRun(
 ): VarietyRun {
     val state = MutableGameState(content, seed = seed)
     state.unlockWeaponsForTesting(ReferenceArmory)
+    // The fresh population bot loads out its first owned preferred weapon, as in the NoPoi harnesses (H1).
+    state.startingWeapon = botLoadout(BotWeaponOrder, ReferenceArmory)
     state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
     state.startRun()
     state.forceRunOmenForTesting(omen)
