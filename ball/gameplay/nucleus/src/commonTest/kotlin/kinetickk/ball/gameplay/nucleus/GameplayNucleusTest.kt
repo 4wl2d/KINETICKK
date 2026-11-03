@@ -47,6 +47,7 @@ import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
+import kinetickk.ball.gameplay.nucleus.simulation.weaponUpgradeLevels
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

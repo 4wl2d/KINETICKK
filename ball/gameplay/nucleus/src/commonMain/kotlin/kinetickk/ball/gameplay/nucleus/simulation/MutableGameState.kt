@@ -37,7 +37,6 @@ import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.immutableSetOf
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.jvm.JvmInline
 import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
@@ -122,6 +121,17 @@ internal class MutableGameState(
     /** Core Stasis: the leash anchor, speed average and stillness clocks. */
     internal val coreStasis: CoreStasisState = CoreStasisState(copySource?.coreStasis)
 
+    /** Profile capture, run options and the draft deck. */
+    internal val profileCapture: RunProfileCapture = RunProfileCapture(
+        content,
+        copySource?.profileCapture,
+        seed,
+        initialRebirthLevel,
+        bootstrapProgress,
+        runMode,
+        offerRunOmen,
+    )
+
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
     /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */
@@ -133,37 +143,8 @@ internal class MutableGameState(
      */
     internal var spawnRandom: CloneableXorWowRandom = copySource?.spawnRandom?.copy()
         ?: CloneableXorWowRandom(seed xor SPAWN_SEED_SALT)
-    internal var activeRebirthProfile: RebirthProfile = copySource?.activeRebirthProfile
-        ?: content.rebirth.profile(
-            bootstrapProgress?.rebirthProgress?.level ?: initialRebirthLevel,
-        )
-    internal val unlockedWeaponSet: RunMutableSet<WeaponId> = copySource?.unlockedWeaponSet?.copy()
-        ?: RunMutableSet(mutableSetOf<WeaponId>().apply {
-            addAll(bootstrapProgress?.loadout?.unlockedWeapons.orEmpty())
-            add(WeaponId.FLUX_WAKE)
-        })
-    internal var unlockedWeaponView: Set<WeaponId> = copySource?.unlockedWeaponView
-        ?: unlockedWeaponSet.toSet()
-    /** Owned Core Matrix ranks by content node index, captured from the profile at bootstrap. */
-    internal val matrixRanks: RunIntArray = copySource?.matrixRanks?.copy()
-        ?: RunIntArray(IntArray(content.matrixNodes.size) { index ->
-            val definition = content.matrixNodes[index]
-            (bootstrapProgress?.matrix?.rank(definition.id) ?: 0).coerceIn(0, definition.maxRanks)
-        })
     /** Folded Matrix effects of [matrixRanks]; immutable, refolded when a run starts. */
     internal var matrix: MatrixModifiers = copySource?.matrix ?: foldMatrix()
-    /** Bought Refit levels by [CoreShape.ordinal], captured from the profile at bootstrap; a run never writes them. */
-    internal val characterUpgradeLevels: RunIntArray = copySource?.characterUpgradeLevels?.copy()
-        ?: RunIntArray(IntArray(CoreShape.entries.size) { index ->
-            (bootstrapProgress?.upgrades?.characterLevels?.getOrElse(index) { 0 } ?: 0)
-                .coerceIn(0, content.upgrades.maxLevel)
-        })
-    /** Bought Honing levels by [WeaponId.ordinal], captured from the profile at bootstrap; a run never writes them. */
-    internal val weaponUpgradeLevels: RunIntArray = copySource?.weaponUpgradeLevels?.copy()
-        ?: RunIntArray(IntArray(WeaponId.entries.size) { index ->
-            (bootstrapProgress?.upgrades?.weaponLevels?.getOrElse(index) { 0 } ?: 0)
-                .coerceIn(0, content.upgrades.maxLevel)
-        })
     /** The selected character's Refit level, fixed when a run starts. */
     internal var characterUpgradeLevel: Int = copySource?.characterUpgradeLevel ?: 0
     /** Refit's character-mechanic damage multiplier, fixed when a run starts. */
@@ -195,19 +176,8 @@ internal class MutableGameState(
      * change, at most [MAX_RECENT_ITEM_IDS] (the oldest drop first).
      */
     internal var pendingAcquiredItemIds: List<Int> = copySource?.pendingAcquiredItemIds ?: emptyList()
-    /** The draft deck stream's seed ([DECK_SEED_SALT]); the deck is dealt from it when the run starts. */
-    internal val deckSeed: Int = copySource?.deckSeed ?: (seed xor DECK_SEED_SALT)
     /** Baby mode (RunMode.EASY), fixed when the run is created; a run never changes it. */
     internal val easyMode: Boolean = copySource?.easyMode ?: (runMode == RunMode.EASY)
-    /** The production start path offers a run omen beside the Heirloom; fixed when the run is created. */
-    internal val offersRunOmen: Boolean = copySource?.offersRunOmen ?: offerRunOmen
-    /** The run's draft deck (immutable, replaced when a refill deals); every item until the run deals one. */
-    internal var itemDeck: ItemDeck = copySource?.itemDeck ?: ItemDeck.EVERYTHING
-    /** Down-weights from the Profile's recent acquisitions, fixed for the run. */
-    internal val itemHistory: ItemHistoryWeights = copySource?.itemHistory ?: ItemHistoryWeights.of(
-        bootstrapProgress?.recentItemIds.orEmpty(), content.items.size, MAX_RECENT_ITEM_IDS,
-        content.build.policy.draftDeck.historyPenalty, content.build.policy.draftDeck.historyFloor,
-    )
     /** Immutable compiled build shared by reduction siblings; replaced by [recompileBuild]. */
     internal var build: CompiledBuild = copySource?.build ?: CompiledBuild.empty(content)
     internal val clauseReadyAt: RunFloatArray = copySource?.clauseReadyAt?.copy()

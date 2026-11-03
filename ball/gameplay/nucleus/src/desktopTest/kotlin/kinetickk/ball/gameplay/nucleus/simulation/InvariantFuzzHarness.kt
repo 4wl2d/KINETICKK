@@ -1485,7 +1485,7 @@ internal object FuzzFiniteScan {
         "coreObstacleGap", "splitEndsAt", "expiresAt", "lastDamagedAt", "bossSpawnAt", "sweepStartedAt", "reveal", "age",
     )
 
-    private val Skipped = setOf("content", "build", "itemHistory", "itemDeck", "matrix", "activeRebirthProfile", "soundCueStorage", "visualFxCueStorage")
+    private val Skipped = setOf("content", "build", "profileCapture.itemHistory", "profileCapture.itemDeck", "matrix", "profileCapture.activeRebirthProfile", "soundCueStorage", "visualFxCueStorage")
 
     fun first(state: MutableGameState): String? = scan(state, "state", 0)
 
@@ -1526,7 +1526,7 @@ internal object FuzzFiniteScan {
         }
         for (field in instanceFields(type)) {
             val name = field.name
-            if (depth == 0 && name in Skipped) continue
+            if (depth <= 1 && "$path.$name".removePrefix("state.") in Skipped) continue
             when (field.type) {
                 java.lang.Float.TYPE -> {
                     val number = field.getFloat(value)
