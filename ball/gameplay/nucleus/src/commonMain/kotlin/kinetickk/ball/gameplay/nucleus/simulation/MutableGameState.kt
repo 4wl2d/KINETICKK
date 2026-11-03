@@ -9,7 +9,6 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.DirectorPersonalityId
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.GameplayContentSnapshot
-import kinetickk.ball.content.api.ItemRarity
 import kinetickk.ball.content.api.OmenId
 import kinetickk.ball.content.api.RebirthProfile
 import kinetickk.ball.content.api.RelicId
@@ -45,6 +44,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.elements.CoreReactionState
 import kinetickk.ball.gameplay.nucleus.simulation.director.SpawnDirectorState
 import kinetickk.ball.gameplay.nucleus.simulation.flight.CoreStasisState
 import kinetickk.ball.gameplay.nucleus.simulation.builds.*
+import kinetickk.ball.gameplay.nucleus.simulation.sites.SiteRunState
 
 /**
  * Reducer-owned simulation state. Each field declares its initial value and its copy from [copySource] together,
@@ -157,6 +157,9 @@ internal class MutableGameState(
     /** Build stats. */
     internal val coreStats: CoreStatsState = CoreStatsState(content, copySource?.coreStats)
 
+    /** Sites, directed rewards and run secrets. */
+    internal val siteRun: SiteRunState = SiteRunState(copySource?.siteRun)
+
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
     /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */
@@ -237,32 +240,9 @@ internal class MutableGameState(
     internal var characterRuntime: CharacterRuntime = copySource?.characterRuntime?.fork() ?: CharacterRuntime()
     /** Owned state of the equipped weapon (entities, proc gates, element cadences, scaling inputs); a deep copy forks it. */
     internal var weaponRuntime: WeaponRuntime = copySource?.weaponRuntime?.fork() ?: WeaponRuntime()
-    /** Window sites: the two offers of a window, or the one active trial. Immutable, replaced on change. */
-    internal var sites: List<SiteState> = copySource?.sites ?: emptyList()
-    internal var nextSiteWindowIndex: Int = copySource?.nextSiteWindowIndex ?: 0
-    internal var pendingDirectedRewards: List<kinetickk.ball.content.api.DirectedReward> = copySource?.pendingDirectedRewards ?: emptyList()
-    internal var directedReward: kinetickk.ball.content.api.DirectedReward? = copySource?.directedReward
-    internal var selectedRewardFocus: kinetickk.ball.content.api.RewardFocus? = copySource?.selectedRewardFocus
     /** Window kinds draw from their own stream, so sites never shift offers, spawns or crits. */
     internal var siteRandom: CloneableXorWowRandom = copySource?.siteRandom?.copy()
         ?: CloneableXorWowRandom(seed xor SITE_SEED_SALT)
-    internal var ambientSites: AmbientSiteWindow = copySource?.ambientSites ?: AmbientSiteWindow.EMPTY
-    internal var secretSigil: SiteState? = copySource?.secretSigil
-    /** Ambient sites opened this run, oldest first, at most [ContentBounds.MAX_OPENED_SITES]. */
-    internal var openedSiteIds: List<Long> = copySource?.openedSiteIds ?: emptyList()
-    /** [RunSecretFlag] bits of this run. */
-    internal var runSecretFlags: Int = copySource?.runSecretFlags ?: 0
-    /** Rarity-floor item offers waiting, at most the site policy's bound. */
-    internal var pendingFloorOffers: List<ItemRarity> = copySource?.pendingFloorOffers ?: emptyList()
-    /** The Golden Drifter alive (−1: none) and the run second it escapes. */
-    internal var goldenDrifterId: Int = copySource?.goldenDrifterId ?: -1
-    internal var goldenDrifterUntil: Float = copySource?.goldenDrifterUntil ?: 0f
-    /** Spin Cycle: completed one-second buckets of signed rotation, the running bucket, its clock and last angle. */
-    internal var spinBuckets: List<Float> = copySource?.spinBuckets ?: emptyList()
-    internal var spinCurrent: Float = copySource?.spinCurrent ?: 0f
-    internal var spinClock: Float = copySource?.spinClock ?: 0f
-    internal var spinLastAngle: Float = copySource?.spinLastAngle ?: 0f
-    internal var spinPrimed: Boolean = copySource?.spinPrimed ?: false
     internal var omenPending: Boolean = copySource?.omenPending ?: false
     internal var runOmen: OmenId? = copySource?.runOmen
     /** Rebirth mutators a run modifier added (bit per ordinal), on top of the tier's own. */
