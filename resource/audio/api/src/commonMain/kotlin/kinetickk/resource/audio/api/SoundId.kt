@@ -24,4 +24,6 @@ enum class SoundId {
     VICTORY,
     SKILL,
     APEX,
+    /** A spent structure shatters (a finish, a fought abandon or the Architect's collapse). */
+    STRUCTURE_COLLAPSE,
 }

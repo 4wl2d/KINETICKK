@@ -22,4 +22,6 @@ enum class GameplayAudioCue {
     VICTORY,
     SKILL,
     APEX,
+    /** A spent structure leaves the world and shatters. */
+    STRUCTURE_COLLAPSE,
 }
