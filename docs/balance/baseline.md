@@ -67,7 +67,7 @@ catalog objects.
 
 ### Audio
 
-All sixteen existing semantic cues keep their frequency, duration, gain, and
+All seventeen existing semantic cues keep their frequency, duration, gain, and
 wave mapping. The music sequence and `0.32s` step remain unchanged. At most 32
 caller cue requests are accepted and 3 caller sound requests are selected per
 advance; the independent internal music tone is separate. Invalid tone
