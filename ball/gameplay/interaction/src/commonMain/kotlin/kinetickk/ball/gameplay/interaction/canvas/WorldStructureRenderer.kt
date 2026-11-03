@@ -6,12 +6,10 @@ package kinetickk.ball.gameplay.interaction.canvas
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import kinetickk.ball.content.api.STRUCTURE_OUTSIDE
@@ -31,7 +29,6 @@ import kinetickk.ball.gameplay.nucleus.render.StructureRenderProjection
 import kinetickk.ball.gameplay.nucleus.render.TrialProjection
 import kinetickk.ball.gameplay.nucleus.render.WallKind
 import kinetickk.foundation.common.localization.AppLanguage
-import kinetickk.foundation.common.localization.TextResource
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkFillKind
@@ -316,9 +313,8 @@ internal fun DrawScope.drawMinimapStructures(
     val mark = dot * 2.4f
     for (index in signals.indices) {
         val signal = signals[index]
-        val at = pinned(centerX, centerY, half, (signal.x - coreX) * scale, (signal.y - coreY) * scale, mark)
         val accent = structureAccent(engine.content.structures.template(signal.template), roles)
-        drawRect(accent, Offset(at.x - mark * 0.5f, at.y - mark * 0.5f), Size(mark, mark), style = kkStroke(1f))
+        drawPinnedMark(centerX, centerY, half, (signal.x - coreX) * scale, (signal.y - coreY) * scale, mark, accent, filled = false)
     }
 }
 
@@ -338,9 +334,6 @@ private object StructurePanelText {
     val rewards = HudKeyedText()
     val rules = HudKeyedText()
 }
-
-/** The dungeon panel's label: a dungeon names itself a structure, whatever placeholder family its trial carries. */
-internal fun structureTrialLabel(): TextResource = StructureHudText.Structure
 
 /** The rules behind the dungeon panel's (!) in [language]. */
 internal fun structureTrialRules(engine: GameplayRenderModel, trial: TrialProjection, language: AppLanguage): String {
@@ -418,20 +411,7 @@ internal fun DrawScope.drawSealedRoomSegment(engine: GameplayRenderModel, trial:
  */
 internal fun DrawScope.drawDungeonVignette(engine: GameplayRenderModel) {
     val amount = structureInteriorAmount(engine)
-    if (amount <= 0.01f) return
-    val w = size.width
-    val h = size.height
-    if (w <= 0f || h <= 0f) return
-    // The critical vignette's geometry: a circle of the corner radius squashed vertically into the screen's ellipse.
-    val brush = HudDrawCache.brush(HudBrush.DUNGEON, w, h, 0f, 0f, Kk.Ink) {
-        Brush.radialGradient(
-            0f to Color.Transparent, VIGNETTE_CLEAR to Color.Transparent, 1f to Kk.Ink.copy(alpha = VIGNETTE_ALPHA),
-            center = Offset(w * 0.5f, h * 0.5f), radius = w * 0.5f / SQRT_HALF,
-        )
-    }
-    scale(1f, h / w, Offset(w * 0.5f, h * 0.5f)) {
-        drawRect(brush, Offset(0f, h * 0.5f - w * 0.5f), Size(w, w), amount)
-    }
+    if (amount > 0.01f) drawScreenVignette(HudBrush.DUNGEON, VIGNETTE_CLEAR, Kk.Ink.copy(alpha = VIGNETTE_ALPHA), amount)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -628,7 +608,7 @@ internal fun slabOutline(ax: Float, ay: Float, bx: Float, by: Float, halfThickne
  * kinds each) whose evicted paths are reset and reused. Draw-thread confined.
  */
 internal object StructurePaths {
-    const val CAPACITY = 32
+    private const val CAPACITY = 32
     private const val FLOOR = 0
     private const val WALLS = 1
     private const val SCRIM = 2

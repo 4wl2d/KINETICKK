@@ -235,26 +235,19 @@ fun worldDiscoveryGlyph(id: WorldDiscovery): SiteGlyph = when (id) {
 }
 
 /**
- * Draws [glyph] centered at [center], [size] px across (the 24-unit grid maps to [size]); [strokeWidth] is in grid
- * units. Paths are built once per glyph and strokes cached, so drawing allocates nothing.
+ * Draws [glyph] centered at [center], [size] px across (the 24-unit grid maps to [size]), its strokes 2 grid units wide.
+ * Paths are built once per glyph and strokes cached, so drawing allocates nothing.
  */
-fun DrawScope.drawSiteGlyph(
-    glyph: SiteGlyph,
-    center: Offset,
-    size: Float,
-    color: Color,
-    alpha: Float = 1f,
-    strokeWidth: Float = 2f,
-) {
+fun DrawScope.drawSiteGlyph(glyph: SiteGlyph, center: Offset, size: Float, color: Color, alpha: Float = 1f) {
     if (size <= 0f || alpha <= 0f) return
-    glyph.icon?.let { drawKkIcon(it, center, size, color, alpha, strokeWidth) }
+    glyph.icon?.let { drawKkIcon(it, center, size, color, alpha) }
     val parts = glyph.parts
     if (parts.isEmpty()) return
     val paths = SiteGlyphPaths.of(glyph)
     val scale = size / KK_ICON_GRID
     translate(center.x - size * 0.5f, center.y - size * 0.5f) {
         scale(scale, scale, Offset.Zero) {
-            for (index in parts.indices) drawPath(paths[index], color, alpha, SiteGlyphStrokes.style(parts[index], strokeWidth))
+            for (index in parts.indices) drawPath(paths[index], color, alpha, SiteGlyphStrokes.style(parts[index]))
         }
     }
 }
@@ -263,7 +256,7 @@ fun DrawScope.drawSiteGlyph(
 internal fun prepareSiteGlyphs() {
     for (glyph in SiteGlyph.entries) {
         SiteGlyphPaths.of(glyph)
-        for (part in glyph.parts) SiteGlyphStrokes.style(part, 2f)
+        for (part in glyph.parts) SiteGlyphStrokes.style(part)
     }
 }
 
@@ -295,30 +288,15 @@ private object SiteGlyphPaths {
     }
 }
 
-/** Blunt-ended strokes in grid units for a few widths at once (the draw transform scales them with the glyph). */
+/** Blunt-ended strokes 2 grid units wide (the draw transform scales them with the glyph). */
 private object SiteGlyphStrokes {
-    private val dashEffect: PathEffect by lazy { PathEffect.dashPathEffect(floatArrayOf(2.5f, 2f)) }
-    private val widths = FloatArray(4) { Float.NaN }
-    private val solids = arrayOfNulls<Stroke>(4)
-    private val dashes = arrayOfNulls<Stroke>(4)
-    private var next = 0
-
-    fun style(part: SiteGlyphPart, width: Float): DrawStyle = when (part) {
-        is GlyphLine -> if (part.fill) Fill else if (part.dashed) dashed(width) else solid(width)
-        is GlyphArc -> if (part.fill) Fill else solid(width)
+    private val solid: Stroke by lazy { Stroke(2f, miter = 4f, cap = StrokeCap.Butt, join = StrokeJoin.Miter) }
+    private val dashed: Stroke by lazy {
+        Stroke(2f, miter = 4f, cap = StrokeCap.Butt, join = StrokeJoin.Miter, pathEffect = PathEffect.dashPathEffect(floatArrayOf(2.5f, 2f)))
     }
 
-    private fun solid(width: Float): Stroke = solids[slot(width)]!!
-
-    private fun dashed(width: Float): Stroke = dashes[slot(width)]!!
-
-    private fun slot(width: Float): Int {
-        for (index in widths.indices) if (widths[index] == width) return index
-        val slot = next
-        next = (next + 1) % widths.size
-        widths[slot] = width
-        solids[slot] = Stroke(width, miter = 4f, cap = StrokeCap.Butt, join = StrokeJoin.Miter)
-        dashes[slot] = Stroke(width, miter = 4f, cap = StrokeCap.Butt, join = StrokeJoin.Miter, pathEffect = dashEffect)
-        return slot
+    fun style(part: SiteGlyphPart): DrawStyle = when (part) {
+        is GlyphLine -> if (part.fill) Fill else if (part.dashed) dashed else solid
+        is GlyphArc -> if (part.fill) Fill else solid
     }
 }

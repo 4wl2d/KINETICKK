@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import kinetickk.ball.content.api.EliteAffix
 import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.gameplay.interaction.localization.WorldRedesignText
@@ -128,6 +129,18 @@ internal object WorldUnitShapes {
         }
     }
 
+    /** A sheared (−12°) bar 1 × 0.22 centred on the origin (Silence's mute bars). */
+    val bar: Path by lazy {
+        val lean = 0.11f * 0.2126f
+        Path().apply {
+            moveTo(-0.5f + lean, -0.11f)
+            lineTo(0.5f + lean, -0.11f)
+            lineTo(0.5f - lean, 0.11f)
+            lineTo(-0.5f - lean, 0.11f)
+            close()
+        }
+    }
+
     /**
      * A Comet's streak on a unit length: 0.9 wide at its body (x = 0) tapering to a blunt 0.12-wide tip at x = 1, drawn
      * scaled by the tail's length along x and the Comet's radius across. The flat tip keeps it a streak, never an arrowhead.
@@ -149,18 +162,6 @@ internal object WorldUnitShapes {
             lineTo(0.55f, -0.06f)
             lineTo(0.55f, 0.06f)
             lineTo(0f, 0.3f)
-            close()
-        }
-    }
-
-    /** A sheared (−12°) bar 1 × 0.22 centred on the origin (Silence's mute bars). */
-    val bar: Path by lazy {
-        val lean = 0.11f * 0.2126f
-        Path().apply {
-            moveTo(-0.5f + lean, -0.11f)
-            lineTo(0.5f + lean, -0.11f)
-            lineTo(0.5f - lean, 0.11f)
-            lineTo(-0.5f - lean, 0.11f)
             close()
         }
     }
@@ -204,15 +205,13 @@ internal fun prepareWorldVisualResources() {
     WorldStrokes.arc6
     WorldStrokes.dashEffect
     EnemySilhouetteReach
+    for (affix in EliteAffix.entries) AffixGlyphs.of(affix)
 }
-
-/** Cached world brushes ([edgeGlow]). */
-internal object WorldBrushes
 
 /** Edge glow gradients (color at the edge, transparent [depth] inside); rebuilt only on resize. */
 internal class EdgeGlow(val left: Brush, val right: Brush, val top: Brush, val bottom: Brush)
 
-internal fun WorldBrushes.edgeGlow(color: Color, width: Float, height: Float, depth: Float): EdgeGlow =
+internal fun edgeGlow(color: Color, width: Float, height: Float, depth: Float): EdgeGlow =
     EdgeGlowCache.get(color, width, height, depth)
 
 private object EdgeGlowCache {

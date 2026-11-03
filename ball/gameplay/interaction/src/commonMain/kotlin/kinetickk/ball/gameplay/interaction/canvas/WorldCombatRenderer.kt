@@ -100,7 +100,7 @@ private fun DrawScope.drawWorldLayer(
     drawStructureWalls(engine, shakeX, shakeY, roles)
     drawObstacles(engine, shakeX, shakeY, roles)
     drawSites(engine, shakeX, shakeY, textMeasurer)
-    drawAmbientSites(engine, shakeX, shakeY, textMeasurer)
+    drawAmbientSites(engine, shakeX, shakeY)
     drawDimensionWorld(engine, shakeX, shakeY, roles)
     drawWorldEventAmbient(engine, shakeX, shakeY, roles)
     drawEventSignals(engine, shakeX, shakeY, textMeasurer)
@@ -362,7 +362,7 @@ internal fun DrawScope.drawScreenFx(
     val flash = engine.damageFlash
     if (flash > 0f) {
         val depth = d(60f)
-        val glow = WorldBrushes.edgeGlow(roles.threat.copy(alpha = 0.9f), size.width, size.height, depth)
+        val glow = edgeGlow(roles.threat.copy(alpha = 0.9f), size.width, size.height, depth)
         val alpha = flash * 0.4f
         drawRect(glow.left, Offset.Zero, Size(depth, size.height), alpha)
         drawRect(glow.right, Offset(size.width - depth, 0f), Size(depth, size.height), alpha)

@@ -11,7 +11,6 @@ import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.lostCursorFollows
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkRolePalette
-import kinetickk.foundation.design.TextMeasurer
 import kinetickk.foundation.design.isOnScreen
 import kinetickk.foundation.design.kkStroke
 import kotlin.math.PI
@@ -62,12 +61,7 @@ private const val GOLDEN_GLINT_RATE = 4f
  * view, so exactly one of them draws; beyond it the site simply draws while on screen. The Golden Drifter's trigger is
  * never drawn.
  */
-internal fun DrawScope.drawAmbientSites(
-    engine: GameplayRenderModel,
-    shakeX: Float,
-    shakeY: Float,
-    @Suppress("UNUSED_PARAMETER") textMeasurer: TextMeasurer,
-) {
+internal fun DrawScope.drawAmbientSites(engine: GameplayRenderModel, shakeX: Float, shakeY: Float) {
     val ambient = engine.ambientSites
     for (index in ambient.indices) {
         val point = ambient[index]

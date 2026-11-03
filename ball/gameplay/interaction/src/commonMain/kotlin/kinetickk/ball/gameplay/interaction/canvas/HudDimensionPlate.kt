@@ -6,12 +6,10 @@ package kinetickk.ball.gameplay.interaction.canvas
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.text.font.FontWeight
 import kinetickk.ball.content.api.DimensionObjective
@@ -255,22 +253,7 @@ internal class DimensionShutterGeometry {
  */
 internal fun DrawScope.drawScorchEdge(engine: GameplayRenderModel, roles: KkRolePalette, renderTime: Float) {
     val alpha = scorchEdgeAlpha(engine.dimension.scorching, renderTime)
-    if (alpha <= 0f) return
-    val w = size.width
-    val h = size.height
-    if (w <= 0f || h <= 0f) return
-    val heat = roles.heat
-    val radius = w * 0.5f * SQRT_2
-    val brush = HudDrawCache.brush(HudBrush.SCORCH_EDGE, w, h, 0f, 0f, heat) {
-        Brush.radialGradient(
-            0f to Color.Transparent, SCORCH_CLEAR_STOP to Color.Transparent, 1f to heat,
-            center = Offset(w * 0.5f, h * 0.5f), radius = radius,
-        )
-    }
-    // The circle of the farthest corner squashed into the screen's ellipse, like the critical vignette.
-    scale(1f, h / w, Offset(w * 0.5f, h * 0.5f)) {
-        drawRect(brush, Offset(0f, h * 0.5f - w * 0.5f), Size(w, w), alpha)
-    }
+    if (alpha > 0f) drawScreenVignette(HudBrush.SCORCH_EDGE, SCORCH_CLEAR_STOP, roles.heat, alpha)
 }
 
 /** The heat edge's alpha for a [scorching] warning at [time]: 0.30 × the warning, pulsing at 1.2 Hz at full. */
@@ -372,4 +355,3 @@ private const val SCORCH_EDGE_ALPHA = 0.30f
 private const val SCORCH_CLEAR_STOP = 0.5f
 private const val SCORCH_PULSE_HZ = 1.2f
 private const val SCORCH_PULSE_LOW = 0.55f
-private const val SQRT_2 = 1.4142135f

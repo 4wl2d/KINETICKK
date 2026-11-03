@@ -92,10 +92,11 @@ internal fun DrawScope.drawMinimapSignals(
 ) {
     val signals = engine.eventSignals
     val side = dot * 2.2f
+    val coreX = engine.renderCoreX
+    val coreY = engine.renderCoreY
     for (index in signals.indices) {
         val signal = signals[index]
-        val at = pinned(centerX, centerY, half, (signal.x - engine.renderCoreX) * scale, (signal.y - engine.renderCoreY) * scale, side)
-        drawRect(Kk.Bone, Offset(at.x - side * 0.5f, at.y - side * 0.5f), Size(side, side), style = kkStroke(1f))
+        drawPinnedMark(centerX, centerY, half, (signal.x - coreX) * scale, (signal.y - coreY) * scale, side, Kk.Bone, filled = false)
     }
 }
 

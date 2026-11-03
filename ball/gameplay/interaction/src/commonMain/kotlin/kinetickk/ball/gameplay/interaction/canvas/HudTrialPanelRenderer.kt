@@ -21,6 +21,7 @@ import kinetickk.ball.gameplay.interaction.layout.gameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.regularHudUnit
 import kinetickk.ball.gameplay.interaction.layout.runningHudMargin
 import kinetickk.ball.gameplay.interaction.localization.HudRedesignText
+import kinetickk.ball.gameplay.interaction.localization.StructureHudText
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.TrialClock
 import kinetickk.ball.gameplay.nucleus.render.TrialProjection
@@ -285,8 +286,11 @@ internal fun trialGlyph(trial: TrialProjection): SiteGlyph = when (trial.source)
     TrialSource.DIMENSION -> SiteGlyph.DIMENSION
 }
 
-/** The panel's family label; a dungeon or a dimension objective names itself by its source. */
-internal fun trialLabel(trial: TrialProjection): TextResource = if (trial.source == TrialSource.STRUCTURE) structureTrialLabel()
+/**
+ * The panel's family label; a dungeon or a dimension objective names itself by its source (a dungeon a structure, whatever
+ * placeholder family its trial carries).
+ */
+internal fun trialLabel(trial: TrialProjection): TextResource = if (trial.source == TrialSource.STRUCTURE) StructureHudText.Structure
     else if (trial.source == TrialSource.DIMENSION) dimensionTrialLabel() else when (trial.family) {
     SiteFamily.ANOMALY -> HudRedesignText.AnomalyTrial
     SiteFamily.RACE -> HudRedesignText.RaceTrial

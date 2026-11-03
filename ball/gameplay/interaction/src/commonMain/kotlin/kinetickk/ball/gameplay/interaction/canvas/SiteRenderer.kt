@@ -265,7 +265,7 @@ private fun DrawScope.drawMinimapSite(
     val dy = (point.y - engine.renderCoreY) * scale
     when (point.kind) {
         SiteKind.RESONANT_CIRCUIT, SiteKind.SEALED_ANOMALY, SiteKind.COLLAPSING_ORBIT ->
-            drawMinimapSquare(pinned(centerX, centerY, half, dx, dy, dot * 2.2f), dot * 2.2f, roles.you, filled = point.active)
+            drawPinnedMark(centerX, centerY, half, dx, dy, dot * 2.2f, roles.you, filled = point.active)
         SiteKind.GATE_RACE -> {
             val at = pinned(centerX, centerY, half, dx, dy, dot * 2.2f)
             val post = dot * 1.2f
@@ -289,31 +289,21 @@ private fun DrawScope.drawMinimapSite(
             }
         }
         SiteKind.BOUNTY_ARENA -> {
-            val at = pinned(centerX, centerY, half, dx, dy, dot * 2.2f)
-            drawMinimapSquare(at, dot * 2.2f, Kk.Bone.copy(alpha = if (point.active) 0.9f else 0.5f), filled = true)
-            drawMinimapSquare(at, dot * 2.2f, roles.threat, filled = false)
+            drawPinnedMark(centerX, centerY, half, dx, dy, dot * 2.2f, Kk.Bone.copy(alpha = if (point.active) 0.9f else 0.5f), filled = true)
+            drawPinnedMark(centerX, centerY, half, dx, dy, dot * 2.2f, roles.threat, filled = false)
         }
-        SiteKind.ZENITH_RIFT -> drawMinimapSquare(pinned(centerX, centerY, half, dx, dy, dot * 2.2f), dot * 2.2f, roles.shield, filled = false)
-        SiteKind.NADIR_RIFT -> drawMinimapSquare(pinned(centerX, centerY, half, dx, dy, dot * 2.2f), dot * 2.2f, roles.heat, filled = false)
+        SiteKind.ZENITH_RIFT -> drawPinnedMark(centerX, centerY, half, dx, dy, dot * 2.2f, roles.shield, filled = false)
+        SiteKind.NADIR_RIFT -> drawPinnedMark(centerX, centerY, half, dx, dy, dot * 2.2f, roles.heat, filled = false)
         SiteKind.FAR_SIGIL -> {
             val at = pinned(centerX, centerY, half, dx, dy, dot * 2f)
             val color = sigilColor(roles)
             drawCircle(color, dot * 1.6f, at, style = kkStroke(1f))
             drawCircle(color, dot * 0.6f, at)
         }
-        SiteKind.DRIFT_CACHE -> drawMinimapSquare(pinned(centerX, centerY, half, dx, dy, dot * 1.4f), dot * 1.4f,
-            Kk.Bone.copy(alpha = 0.7f), filled = true)
+        SiteKind.DRIFT_CACHE -> drawPinnedMark(centerX, centerY, half, dx, dy, dot * 1.4f, Kk.Bone.copy(alpha = 0.7f), filled = true)
         SiteKind.QUIET_SIGNAL -> drawCircle(Kk.Mute, dot * 1.6f, pinned(centerX, centerY, half, dx, dy, dot * 2f), style = kkStroke(1f))
         // Easter eggs are found, never shown.
         SiteKind.LOST_CURSOR, SiteKind.GOLDEN_DRIFTER -> Unit
-    }
-}
-
-private fun DrawScope.drawMinimapSquare(at: Offset, size: Float, color: Color, filled: Boolean) {
-    if (filled) {
-        drawRect(color, Offset(at.x - size * 0.5f, at.y - size * 0.5f), Size(size, size))
-    } else {
-        drawRect(color, Offset(at.x - size * 0.5f, at.y - size * 0.5f), Size(size, size), style = kkStroke(1f))
     }
 }
 

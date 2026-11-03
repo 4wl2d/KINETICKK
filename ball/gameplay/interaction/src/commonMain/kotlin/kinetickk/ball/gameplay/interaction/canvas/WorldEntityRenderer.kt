@@ -148,51 +148,30 @@ internal fun DrawScope.drawEnemy(
             drawPath(WorldPaths.silhouette(silhouette, enemy.radius * IMMUNE_CONTOUR), aspectHue, style = kkStroke(1.5f))
         }
     }
+    // Mini-bosses carry the Herald's glyph; the Brood Queen's egg sacs orbit it, the Throne's shield arcs ring it.
+    if (rank == EnemyRank.MINI_BOSS) drawKkIcon(KkIcon.SYSTEM_ELITE, center, enemy.radius * 0.8f, threat)
     when (enemy.type) {
         EnemyType.SHOOTER -> drawCircle(threat, max(2.5f, enemy.radius * 0.2f), center)
         EnemyType.WARDEN -> drawCircle(threat, enemy.radius * 0.24f, center, style = kkStroke(2f))
         EnemyType.ELITE -> drawKkIcon(KkIcon.SYSTEM_ELITE, center, enemy.radius * 1.05f, threat)
-        EnemyType.HERALD -> {
-            drawKkIcon(KkIcon.SYSTEM_ELITE, center, enemy.radius * 0.8f, threat)
-            if (enemy.shielded) {
-                val pulse = (sin(engine.renderElapsed * SHIELD_PULSE) + 1f) * 0.5f
-                val shield = enemy.radius * (1.55f + 0.04f * pulse)
-                drawCircle(Kk.Bone, shield, center, alpha = 0.05f + 0.05f * pulse)
-                drawCircle(Kk.Bone, shield, center, alpha = 0.45f + 0.4f * pulse, style = kkStroke(3f))
-            }
-        }
-        EnemyType.REFLECTOR -> {
-            // The front shield: a bone arc across the 120 degree face it turns toward the Core.
-            val arc = enemy.radius + 7f
-            val start = enemy.facing * RAD_TO_DEG - REFLECTOR_ARC_DEGREES * 0.5f
-            drawArc(Kk.Bone, start, REFLECTOR_ARC_DEGREES, false, Offset(center.x - arc, center.y - arc), Size(arc * 2f, arc * 2f),
-                style = kkStroke(3f))
-        }
+        // The front shield: a bone arc across the 120 degree face it turns toward the Core.
+        EnemyType.REFLECTOR ->
+            drawBoneArc(center, enemy.radius + 7f, enemy.facing * RAD_TO_DEG - REFLECTOR_ARC_DEGREES * 0.5f, REFLECTOR_ARC_DEGREES)
         EnemyType.AEGIS -> drawCircle(Kk.Bone, enemy.radius * 0.18f, center)
         EnemyType.BROODMOTHER -> drawCircle(threat, enemy.radius * 0.3f, center, style = kkStroke(2f))
         EnemyType.PYLON, EnemyType.SENTRY -> if (enemy.behavior == EnemyBehavior.ANCHORED || enemy.behavior == EnemyBehavior.TELEGRAPH) {
             // The mount: a bone arc behind it, opposite its aim.
-            val arc = enemy.radius + MOUNT_ARC_GAP
             val start = (enemy.facing + PI.toFloat()) * RAD_TO_DEG - MOUNT_ARC_DEGREES * 0.5f
-            drawArc(Kk.Bone, start, MOUNT_ARC_DEGREES, false, Offset(center.x - arc, center.y - arc), Size(arc * 2f, arc * 2f),
-                style = kkStroke(3f))
+            drawBoneArc(center, enemy.radius + MOUNT_ARC_GAP, start, MOUNT_ARC_DEGREES)
         }
         // Secondary accents of ordinary kinds follow the crowd's level of detail.
         EnemyType.SERAPH -> if (statusDetail) drawCircle(Kk.Bone, enemy.radius * SERAPH_RING, center, style = kkStroke(1.5f))
         EnemyType.CHOIR -> if (statusDetail) drawCircle(Kk.Bone, enemy.radius * CHOIR_RING, center, style = kkStroke(1.5f))
-        // Mini-bosses carry the Herald's glyph; the Brood Queen's egg sacs orbit it, the Throne's shield arcs ring it.
-        EnemyType.WARDEN_PRIME, EnemyType.PYRE_HERALD -> drawKkIcon(KkIcon.SYSTEM_ELITE, center, enemy.radius * 0.8f, threat)
-        EnemyType.BROOD_QUEEN -> {
-            drawKkIcon(KkIcon.SYSTEM_ELITE, center, enemy.radius * 0.8f, threat)
-            repeat(enemy.charges) { sac ->
-                val angle = engine.renderElapsed * QUEEN_SAC_ORBIT_RATE + sac * QUEEN_SAC_SPACING
-                drawCircle(Kk.Bone, QUEEN_SAC_RADIUS, polar(center, enemy.radius + QUEEN_SAC_GAP, angle))
-            }
+        EnemyType.BROOD_QUEEN -> repeat(enemy.charges) { sac ->
+            val angle = engine.renderElapsed * QUEEN_SAC_ORBIT_RATE + sac * QUEEN_SAC_SPACING
+            drawCircle(Kk.Bone, QUEEN_SAC_RADIUS, polar(center, enemy.radius + QUEEN_SAC_GAP, angle))
         }
-        EnemyType.THRONE -> {
-            drawKkIcon(KkIcon.SYSTEM_ELITE, center, enemy.radius * 0.8f, threat)
-            drawShieldArcs(enemy, center)
-        }
+        EnemyType.THRONE -> drawShieldArcs(enemy, center)
         // Secret bosses carry the anomaly glyph inside a slowly turning bone ring; the Antecedent's arcs ring it too.
         EnemyType.CARTOGRAPHER -> drawSecretBossMark(engine, enemy, center, threat, roles)
         EnemyType.ANTECEDENT -> {
@@ -201,7 +180,7 @@ internal fun DrawScope.drawEnemy(
         }
         else -> Unit
     }
-    if (enemy.shielded && enemy.type != EnemyType.HERALD) drawImpactShield(engine, enemy, center)
+    if (enemy.shielded) drawImpactShield(engine, enemy, center, rank)
     drawArmorPlates(enemy, center)
     if (bits != 0) drawEnemyStatus(engine, center, enemy.radius + STATUS_RING_GAP, enemy.radius, bits, dominant, statusFill, roles, patterned)
     drawWeaknessTab(center, enemy.radius + STATUS_RING_GAP + WEAKNESS_TAB_GAP, EnemyAffinity.weakness(affinity), patterned, roles)
@@ -282,7 +261,6 @@ private const val PRIME_WELL_REACH = 560f
 /** Warden Prime's second phase fires a ring at the half of its double cycle: the half is one volley period. */
 private const val PRIME_PAIR_HALF = 2f
 private const val PRIME_VOLLEY_LEAD = 0.35f
-private const val QUEEN_BROOD_LEAD = 0.6f
 private const val QUEEN_SAC_RADIUS = 4.5f
 private const val QUEEN_SAC_GAP = 10f
 private const val QUEEN_SAC_ORBIT_RATE = 0.7f
@@ -292,7 +270,6 @@ private const val THRONE_ARC_SPACING = (2.0 * PI / 3.0).toFloat()
 private const val THRONE_ARC_GAP = 9f
 private const val THRONE_LANE_REACH = 900f
 private const val THRONE_JUDGEMENT_SECONDS = 1f
-private const val HERALD_VOLLEY_LEAD = 0.3f
 
 /**
  * Presentation copies of the secret bosses' marks and reaches: the anomaly glyph and its turning bone ring (24 s per
@@ -539,12 +516,7 @@ private fun DrawScope.drawEnemyTelegraph(
             drawLine(threat.copy(alpha = 0.12f + charge * 0.42f), center, core, 1f + charge * 1.2f, pathEffect = WorldStrokes.dashEffect)
             drawCircle(threat.copy(alpha = 0.5f), enemy.radius + 15f * (1f - charge), center, style = kkStroke(1.5f))
         }
-        EnemyType.CHARGER -> if (enemy.actionTimer < 0f) {
-            val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
-            val charge = clamp(-enemy.actionTimer / 0.45f, 0f, 1f)
-            drawLine(threat.copy(alpha = 0.2f + charge * 0.62f), center, core, 2f + charge * 2f)
-            drawCircle(threat.copy(alpha = 0.72f), enemy.radius + 28f * (1f - charge), center, style = WorldStrokes.dashedMedium)
-        }
+        EnemyType.CHARGER -> if (enemy.actionTimer < 0f) drawWindup(engine, enemy, center, shakeX, shakeY, threat, 0.45f)
         EnemyType.INTERCEPTOR -> {
             val predicted = world(
                 engine,
@@ -579,17 +551,10 @@ private fun DrawScope.drawEnemyTelegraph(
         EnemyType.ELITE -> if (enemy.actionTimer in 0f..0.28f) {
             drawCircle(threat.copy(alpha = 0.48f), enemy.radius + 20f + enemy.actionTimer * 38f, center, style = kkStroke(1.5f))
         }
-        EnemyType.HERALD -> if (enemy.actionTimer in 0f..0.3f) {
+        EnemyType.HERALD, EnemyType.PYRE_HERALD, EnemyType.ANTECEDENT -> if (enemy.actionTimer in 0f..0.3f) {
             drawCircle(threat.copy(alpha = 0.5f), enemy.radius + 22f + enemy.actionTimer * 40f, center, style = kkStroke(2f))
         }
-        EnemyType.BOMBER -> if (enemy.behavior == EnemyBehavior.PRIMED) {
-            // The fuse blinks faster as it burns; the ring shows the blast's reach.
-            val remaining = enemy.behaviorRemaining
-            val blink = if (sin(engine.renderElapsed * (18f + (0.6f - remaining).coerceAtLeast(0f) * 60f)) > 0f) 1f else 0.35f
-            drawCircle(threat.copy(alpha = 0.10f * blink), BOMBER_BLAST_REACH, center)
-            drawCircle(threat.copy(alpha = 0.75f * blink), BOMBER_BLAST_REACH, center, style = WorldStrokes.dashedMedium)
-            drawCircle(Kk.Bone.copy(alpha = 0.8f * blink), enemy.radius + 5f, center, style = kkStroke(2f))
-        }
+        EnemyType.BOMBER -> if (enemy.behavior == EnemyBehavior.PRIMED) drawFuse(engine, enemy, center, threat, BOMBER_BLAST_REACH, 0.6f)
         EnemyType.LANCER -> when (enemy.behavior) {
             EnemyBehavior.TELEGRAPH -> {
                 val charge = (1f - enemy.behaviorRemaining / 0.7f).coerceIn(0f, 1f)
@@ -604,14 +569,7 @@ private fun DrawScope.drawEnemyTelegraph(
             else -> Unit
         }
         EnemyType.SNIPER -> if (enemy.behavior == EnemyBehavior.TELEGRAPH) {
-            val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
-            val reach = sqrt((core.x - center.x) * (core.x - center.x) + (core.y - center.y) * (core.y - center.y)) + 120f
-            val locked = enemy.behaviorRemaining <= 0.22f
-            val charge = (1f - enemy.behaviorRemaining / 1.1f).coerceIn(0f, 1f)
-            val end = polar(center, reach, enemy.facing)
-            if (locked) drawLine(threat.copy(alpha = 0.95f), center, end, 2.5f)
-            else drawLine(threat.copy(alpha = 0.25f + charge * 0.45f), center, end, 1.2f, pathEffect = WorldStrokes.dashEffect)
-            drawCircle(threat.copy(alpha = 0.6f), enemy.radius + 10f * (1f - charge), center, style = kkStroke(1.5f))
+            drawSightLine(engine, enemy, center, shakeX, shakeY, threat, 0.22f, 1.1f)
         }
         EnemyType.PHANTOM -> if (enemy.behavior == EnemyBehavior.TELEGRAPH) {
             val charge = (1f - enemy.behaviorRemaining / 0.35f).coerceIn(0f, 1f)
@@ -619,7 +577,7 @@ private fun DrawScope.drawEnemyTelegraph(
             drawLine(threat.copy(alpha = 0.25f + charge * 0.5f), center, core, 1.5f + charge * 2f)
             drawCircle(threat.copy(alpha = 0.7f), enemy.radius + 24f * (1f - charge), center, style = WorldStrokes.dashedMedium)
         }
-        EnemyType.BROODMOTHER -> if (enemy.actionTimer in 0f..0.6f) {
+        EnemyType.BROODMOTHER, EnemyType.BROOD_QUEEN -> if (enemy.actionTimer in 0f..0.6f) {
             drawCircle(threat.copy(alpha = 0.45f), enemy.radius + 10f + enemy.actionTimer * 30f, center, style = WorldStrokes.dashedThin)
         }
         EnemyType.COMET -> when (enemy.behavior) {
@@ -645,16 +603,9 @@ private fun DrawScope.drawEnemyTelegraph(
             }
             else -> Unit
         }
-        // The Sniper's sight line: dashed while it tracks the Core, solid once locked, with a closing muzzle ring.
+        // The Sniper's sight line on its own timings.
         EnemyType.PYLON -> if (enemy.behavior == EnemyBehavior.TELEGRAPH) {
-            val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
-            val reach = sqrt((core.x - center.x) * (core.x - center.x) + (core.y - center.y) * (core.y - center.y)) + 120f
-            val locked = enemy.behaviorRemaining <= PYLON_LOCK_SECONDS
-            val charge = (1f - enemy.behaviorRemaining / PYLON_AIM_SECONDS).coerceIn(0f, 1f)
-            val end = polar(center, reach, enemy.facing)
-            if (locked) drawLine(threat.copy(alpha = 0.95f), center, end, 2.5f)
-            else drawLine(threat.copy(alpha = 0.25f + charge * 0.45f), center, end, 1.2f, pathEffect = WorldStrokes.dashEffect)
-            drawCircle(threat.copy(alpha = 0.6f), enemy.radius + 10f * (1f - charge), center, style = kkStroke(1.5f))
+            drawSightLine(engine, enemy, center, shakeX, shakeY, threat, PYLON_LOCK_SECONDS, PYLON_AIM_SECONDS)
         }
         // The corridor its bolt train will run down, thickening as the aim holds.
         EnemyType.SENTRY -> if (enemy.behavior == EnemyBehavior.TELEGRAPH) {
@@ -674,20 +625,9 @@ private fun DrawScope.drawEnemyTelegraph(
             drawCircle(threat.copy(alpha = 0.3f + charge * 0.5f), ring * 0.6f, center, style = WorldStrokes.dashedThin)
         }
         // The Bomber's fuse look at the Imp's smaller reach.
-        EnemyType.IMP -> if (enemy.behavior == EnemyBehavior.PRIMED) {
-            val remaining = enemy.behaviorRemaining
-            val blink = if (sin(engine.renderElapsed * (18f + (IMP_FUSE_SECONDS - remaining).coerceAtLeast(0f) * 60f)) > 0f) 1f else 0.35f
-            drawCircle(threat.copy(alpha = 0.10f * blink), IMP_BLAST_REACH, center)
-            drawCircle(threat.copy(alpha = 0.75f * blink), IMP_BLAST_REACH, center, style = WorldStrokes.dashedMedium)
-            drawCircle(Kk.Bone.copy(alpha = 0.8f * blink), enemy.radius + 5f, center, style = kkStroke(2f))
-        }
+        EnemyType.IMP -> if (enemy.behavior == EnemyBehavior.PRIMED) drawFuse(engine, enemy, center, threat, IMP_BLAST_REACH, IMP_FUSE_SECONDS)
         // The Charger's wind-up look over the Hound's shorter wind-up.
-        EnemyType.HOUND -> if (enemy.actionTimer < 0f) {
-            val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
-            val charge = clamp(-enemy.actionTimer / HOUND_WINDUP_SECONDS, 0f, 1f)
-            drawLine(threat.copy(alpha = 0.2f + charge * 0.62f), center, core, 2f + charge * 2f)
-            drawCircle(threat.copy(alpha = 0.72f), enemy.radius + 28f * (1f - charge), center, style = WorldStrokes.dashedMedium)
-        }
+        EnemyType.HOUND -> if (enemy.actionTimer < 0f) drawWindup(engine, enemy, center, shakeX, shakeY, threat, HOUND_WINDUP_SECONDS)
         EnemyType.CIPHER -> if (enemy.behavior == EnemyBehavior.TELEGRAPH) {
             val charge = (1f - enemy.behaviorRemaining / CIPHER_AIM_SECONDS).coerceIn(0f, 1f)
             val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
@@ -713,10 +653,6 @@ private fun DrawScope.drawEnemyTelegraph(
                 drawCircle(threat.copy(alpha = 0.52f), enemy.radius + 18f + volley * 50f, center, style = kkStroke(2f))
             }
         }
-        // The Broodmother's look before a brood.
-        EnemyType.BROOD_QUEEN -> if (enemy.actionTimer in 0f..QUEEN_BROOD_LEAD) {
-            drawCircle(threat.copy(alpha = 0.45f), enemy.radius + 10f + enemy.actionTimer * 30f, center, style = WorldStrokes.dashedThin)
-        }
         // Judgement: the four lanes its bolt trains will run down, firming while the arcs stand still.
         EnemyType.THRONE -> if (enemy.behavior == EnemyBehavior.TELEGRAPH) {
             val charge = (1f - enemy.behaviorRemaining / THRONE_JUDGEMENT_SECONDS).coerceIn(0f, 1f)
@@ -725,10 +661,6 @@ private fun DrawScope.drawEnemyTelegraph(
                 val angle = enemy.facing + PI.toFloat() * 0.25f + index * PI.toFloat() * 0.5f
                 drawLine(lane, center, polar(center, THRONE_LANE_REACH, angle), 1.5f, pathEffect = WorldStrokes.dashEffect)
             }
-        }
-        // The Herald's volley ring.
-        EnemyType.PYRE_HERALD, EnemyType.ANTECEDENT -> if (enemy.actionTimer in 0f..HERALD_VOLLEY_LEAD) {
-            drawCircle(threat.copy(alpha = 0.5f), enemy.radius + 22f + enemy.actionTimer * 40f, center, style = kkStroke(2f))
         }
         // Survey: the three parallel lanes its bolt trains will run down, firming while it holds the aim (its final
         // phase's short aim after a jump marks none).
@@ -750,14 +682,74 @@ private fun DrawScope.drawEnemyTelegraph(
     if (enemy.linkedTo >= 0) drawAegisTether(engine, enemy, center, shakeX, shakeY)
 }
 
+/** A charge's wind-up: a firming line to the Core and a dashed ring closing onto the body over [windupSeconds]. */
+private fun DrawScope.drawWindup(
+    engine: GameplayRenderModel,
+    enemy: EnemyProjection,
+    center: Offset,
+    shakeX: Float,
+    shakeY: Float,
+    threat: androidx.compose.ui.graphics.Color,
+    windupSeconds: Float,
+) {
+    val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
+    val charge = clamp(-enemy.actionTimer / windupSeconds, 0f, 1f)
+    drawLine(threat.copy(alpha = 0.2f + charge * 0.62f), center, core, 2f + charge * 2f)
+    drawCircle(threat.copy(alpha = 0.72f), enemy.radius + 28f * (1f - charge), center, style = WorldStrokes.dashedMedium)
+}
+
+/** A primed fuse: it blinks faster as it burns down from [fuseSeconds]; the ring shows the blast's [reach]. */
+private fun DrawScope.drawFuse(
+    engine: GameplayRenderModel,
+    enemy: EnemyProjection,
+    center: Offset,
+    threat: androidx.compose.ui.graphics.Color,
+    reach: Float,
+    fuseSeconds: Float,
+) {
+    val remaining = enemy.behaviorRemaining
+    val blink = if (sin(engine.renderElapsed * (18f + (fuseSeconds - remaining).coerceAtLeast(0f) * 60f)) > 0f) 1f else 0.35f
+    drawCircle(threat.copy(alpha = 0.10f * blink), reach, center)
+    drawCircle(threat.copy(alpha = 0.75f * blink), reach, center, style = WorldStrokes.dashedMedium)
+    drawCircle(Kk.Bone.copy(alpha = 0.8f * blink), enemy.radius + 5f, center, style = kkStroke(2f))
+}
+
+/**
+ * The Sniper's sight line: dashed while it tracks the Core over [aimSeconds], solid once [lockSeconds] remain, with a
+ * closing muzzle ring.
+ */
+private fun DrawScope.drawSightLine(
+    engine: GameplayRenderModel,
+    enemy: EnemyProjection,
+    center: Offset,
+    shakeX: Float,
+    shakeY: Float,
+    threat: androidx.compose.ui.graphics.Color,
+    lockSeconds: Float,
+    aimSeconds: Float,
+) {
+    val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
+    val reach = sqrt((core.x - center.x) * (core.x - center.x) + (core.y - center.y) * (core.y - center.y)) + 120f
+    val locked = enemy.behaviorRemaining <= lockSeconds
+    val charge = (1f - enemy.behaviorRemaining / aimSeconds).coerceIn(0f, 1f)
+    val end = polar(center, reach, enemy.facing)
+    if (locked) drawLine(threat.copy(alpha = 0.95f), center, end, 2.5f)
+    else drawLine(threat.copy(alpha = 0.25f + charge * 0.45f), center, end, 1.2f, pathEffect = WorldStrokes.dashEffect)
+    drawCircle(threat.copy(alpha = 0.6f), enemy.radius + 10f * (1f - charge), center, style = kkStroke(1.5f))
+}
+
 /** The shield arcs of a Throne or the Antecedent: [EnemyProjection.charges] bone arcs of 80° spaced 120° from its facing. */
 private fun DrawScope.drawShieldArcs(enemy: EnemyProjection, center: Offset) {
-    val arc = enemy.radius + THRONE_ARC_GAP
     repeat(enemy.charges) { index ->
         val start = (enemy.facing + index * THRONE_ARC_SPACING) * RAD_TO_DEG - THRONE_ARC_DEGREES * 0.5f
-        drawArc(Kk.Bone, start, THRONE_ARC_DEGREES, false, Offset(center.x - arc, center.y - arc), Size(arc * 2f, arc * 2f),
-            style = kkStroke(3f))
+        drawBoneArc(center, enemy.radius + THRONE_ARC_GAP, start, THRONE_ARC_DEGREES)
     }
+}
+
+/** A bone arc of [radius] around [center] (a front shield, a mount, a shield arc). */
+private fun DrawScope.drawBoneArc(center: Offset, radius: Float, startDegrees: Float, sweepDegrees: Float) {
+    drawArc(Kk.Bone, startDegrees, sweepDegrees, false, Offset(center.x - radius, center.y - radius), Size(radius * 2f, radius * 2f),
+        style = kkStroke(3f))
 }
 
 /**
@@ -798,12 +790,12 @@ private fun DrawScope.drawAegisTether(engine: GameplayRenderModel, enemy: EnemyP
 }
 
 /**
- * A shield that only impacts break on anything but the Herald (which draws its own): boss ranks keep the Herald's
- * ring; ordinary and Elite enemies (a Seraph's mend) a smaller, lighter one with the same pulse.
+ * A shield that only impacts break: boss ranks (the Herald among them) a pulsing ring at 1.55 radii; ordinary and Elite
+ * enemies (a Seraph's mend) a smaller, lighter one with the same pulse.
  */
-private fun DrawScope.drawImpactShield(engine: GameplayRenderModel, enemy: EnemyProjection, center: Offset) {
+private fun DrawScope.drawImpactShield(engine: GameplayRenderModel, enemy: EnemyProjection, center: Offset, rank: EnemyRank) {
     val pulse = (sin(engine.renderElapsed * SHIELD_PULSE) + 1f) * 0.5f
-    when (engine.content.enemy(enemy.type).rank) {
+    when (rank) {
         EnemyRank.MINI_BOSS, EnemyRank.BOSS, EnemyRank.SECRET_BOSS -> {
             val shield = enemy.radius * (1.55f + 0.04f * pulse)
             drawCircle(Kk.Bone, shield, center, alpha = 0.05f + 0.05f * pulse)

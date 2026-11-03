@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
 import kinetickk.ball.content.api.ObstacleKindTuning
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.gateAngle
 import kinetickk.ball.content.api.gateHalfSpan
 import kinetickk.ball.content.api.obstacleSeedUnit
@@ -68,7 +69,7 @@ internal fun DrawScope.drawGravityWell(
     kinds: ObstacleKindTuning,
     roles: KkRolePalette,
 ) {
-    val gravitic = roles.element(GRAVITIC_HUE)
+    val gravitic = roles.element(StatusElement.GRAVITIC.ordinal)
     val body = obstacle.radius
     val influence = max(kinds.wellInfluence, body)
     drawCircle(gravitic.copy(alpha = 0.10f), influence, center, style = kkStroke(1f))
@@ -102,14 +103,11 @@ internal fun DrawScope.drawMinimapGravityWell(
     kinds: ObstacleKindTuning,
     roles: KkRolePalette,
 ) {
-    val gravitic = roles.element(GRAVITIC_HUE)
+    val gravitic = roles.element(StatusElement.GRAVITIC.ordinal)
     drawCircle(gravitic.copy(alpha = 0.85f), max(dot * 0.9f, obstacle.radius * scale), center)
     val influence = kinds.wellInfluence * scale
     if (influence >= 2f * dot) drawCircle(gravitic.copy(alpha = 0.2f), influence, center, style = kkStroke(1f))
 }
-
-/** The palette's element hue of Gravitic (the content's element order). */
-private const val GRAVITIC_HUE: Int = 3
 
 // ---------------------------------------------------------------------------------------------
 // Accelerator gates.
@@ -326,15 +324,12 @@ private fun addHexagon(path: Path, angle: Float, cornerReach: Float) {
     path.close()
 }
 
-/** The palette's element hue of Cryo (the content's element order). */
-private const val CRYO_HUE: Int = 1
-
 /**
  * A crystal: a solid ink hexagon hugging its collision circle with a Cryo rim, an inner Cryo facet and three spokes
  * out to alternate corners. It breaks into Cryo shards when struck hard.
  */
 internal fun DrawScope.drawCrystal(obstacle: ObstacleProjection, center: Offset, roles: KkRolePalette) {
-    val cryo = roles.element(CRYO_HUE)
+    val cryo = roles.element(StatusElement.CRYO.ordinal)
     val facets = ObstaclePaths.crystalFacets(obstacle.shapeSeed, obstacle.radius)
     val lines = ObstaclePaths.crystalFacetLines(obstacle.shapeSeed, obstacle.radius)
     translate(center.x, center.y) {
@@ -346,7 +341,7 @@ internal fun DrawScope.drawCrystal(obstacle: ObstacleProjection, center: Offset,
 
 /** A crystal on the minimap: a Cryo dot. */
 internal fun DrawScope.drawMinimapCrystal(center: Offset, radius: Float, roles: KkRolePalette) {
-    drawCircle(roles.element(CRYO_HUE).copy(alpha = 0.75f), radius, center)
+    drawCircle(roles.element(StatusElement.CRYO.ordinal).copy(alpha = 0.75f), radius, center)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -462,9 +457,6 @@ internal fun DrawScope.drawMinimapDerelictMine(
 // ---------------------------------------------------------------------------------------------
 // Phase shards.
 
-/** The palette's element hue of Void (the content's element order). */
-private const val VOID_HUE: Int = 6
-
 /** One dash and its gap along a ghost shard's outline, roughly (world units; the dashes divide the outline evenly). */
 private const val PHASE_DASH_PERIOD: Float = 18f
 
@@ -482,10 +474,9 @@ private const val PHASE_TELEGRAPH_FILL: Float = 0.8f
 
 /**
  * A ghost shard's dashed outline: the asteroid [outline] of its shape cut into evenly spaced blunt dashes, so it hugs the
- * same circle the solid shard fills (see [ObstaclePaths.phaseDashes]).
+ * same circle the solid shard fills (see [ObstaclePaths.phaseDashes]). The caller's reused [measure] is reset here.
  */
-internal fun buildPhaseShardDashes(path: Path, outline: Path) {
-    val measure = PathMeasure()
+internal fun buildPhaseShardDashes(path: Path, outline: Path, measure: PathMeasure) {
     measure.setPath(outline, forceClosed = true)
     val length = measure.length
     if (length <= 0f) return
@@ -501,7 +492,7 @@ internal fun buildPhaseShardDashes(path: Path, outline: Path) {
  * How far a ghost phase shard has come through its telegraph: 0 until the telegraph starts, rising to 1 as the shard
  * materialises; 0 while it is solid.
  */
-internal fun ObstacleKindTuning.phaseShardTelegraph(time: Float, seed: Int): Float {
+private fun ObstacleKindTuning.phaseShardTelegraph(time: Float, seed: Int): Float {
     if (phaseShardSolid(time, seed) || phaseTelegraphSeconds <= 0f) return 0f
     val untilSolid = phaseShardSecondsToSolid(time, seed)
     if (untilSolid > phaseTelegraphSeconds) return 0f
@@ -522,7 +513,7 @@ internal fun DrawScope.drawPhaseShard(
 ) {
     val seed = obstacle.shapeSeed
     val radius = obstacle.radius
-    val void = roles.element(VOID_HUE)
+    val void = roles.element(StatusElement.VOID.ordinal)
     if (kinds.phaseShardSolid(time, seed)) {
         val outline = ObstaclePaths.outline(seed, radius)
         translate(center.x, center.y) {
@@ -555,5 +546,5 @@ internal fun DrawScope.drawMinimapPhaseShard(
     roles: KkRolePalette,
 ) {
     val solid = kinds.phaseShardSolid(time, obstacle.shapeSeed)
-    drawCircle(roles.element(VOID_HUE).copy(alpha = if (solid) 0.7f else 0.25f), radius, center)
+    drawCircle(roles.element(StatusElement.VOID.ordinal).copy(alpha = if (solid) 0.7f else 0.25f), radius, center)
 }

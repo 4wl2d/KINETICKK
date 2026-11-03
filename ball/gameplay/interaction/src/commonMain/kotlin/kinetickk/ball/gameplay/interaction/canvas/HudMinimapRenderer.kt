@@ -240,7 +240,7 @@ internal fun DrawScope.drawMinimap(engine: GameplayRenderModel, measurer: TextMe
  * A mark at ([dx], [dy]) from the centre, pinned inside the rim when it lies beyond the range, so the
  * direction of an objective is always on the map.
  */
-private fun DrawScope.drawPinnedMark(
+internal fun DrawScope.drawPinnedMark(
     centerX: Float,
     centerY: Float,
     half: Float,

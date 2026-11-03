@@ -56,10 +56,10 @@ internal fun dimensionSigilPolygons(layer: WorldLayer, radius: Float): List<Floa
     }
 }
 
-/** [layer]'s sigil filled in [color] at [alpha], centred on [center] and fitting the circle of [radius]. Allocation-free once cached. */
-internal fun DrawScope.drawDimensionSigil(layer: WorldLayer, center: Offset, radius: Float, color: Color, alpha: Float = 1f) {
+/** [layer]'s sigil filled in [color], centred on [center] and fitting the circle of [radius]. Allocation-free once cached. */
+internal fun DrawScope.drawDimensionSigil(layer: WorldLayer, center: Offset, radius: Float, color: Color) {
     val path = DimensionSigilPaths.get(layer, radius)
-    translate(center.x, center.y) { drawPath(path, color, alpha = alpha) }
+    translate(center.x, center.y) { drawPath(path, color) }
 }
 
 /**

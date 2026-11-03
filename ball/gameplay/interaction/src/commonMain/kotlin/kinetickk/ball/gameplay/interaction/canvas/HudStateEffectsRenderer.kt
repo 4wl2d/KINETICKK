@@ -307,23 +307,30 @@ internal fun DrawScope.drawHudScreenStates(
     drawDungeonVignette(engine)
 }
 
-private fun DrawScope.drawCriticalVignette(roles: KkRolePalette, alpha: Float) {
+// `radial-gradient(ellipse at center, transparent 42%, threat 42% alpha at 100%)`.
+private fun DrawScope.drawCriticalVignette(roles: KkRolePalette, alpha: Float) =
+    drawScreenVignette(HudBrush.VIGNETTE, 0.42f, roles.threat.copy(alpha = 0.42f), alpha)
+
+/**
+ * [edge] closing in from the screen's edges at [alpha], clear out to [clearStop] of the farthest-corner radius: a circle
+ * of that radius squashed vertically into the screen's ellipse. One cached gradient per [slot], size and colour.
+ */
+internal fun DrawScope.drawScreenVignette(slot: HudBrush, clearStop: Float, edge: Color, alpha: Float) {
     val w = size.width
     val h = size.height
     if (w <= 0f || h <= 0f) return
-    // `radial-gradient(ellipse at center, transparent 42%, threat 42% alpha at 100%)`: a circle of
-    // the farthest-corner radius squashed vertically into the screen's ellipse.
-    val radius = w * 0.5f * 1.4142f
-    val brush = HudDrawCache.brush(HudBrush.VIGNETTE, w, h, 0f, 0f, roles.threat) {
+    val brush = HudDrawCache.brush(slot, w, h, 0f, 0f, edge) {
         Brush.radialGradient(
-            0f to Color.Transparent, 0.42f to Color.Transparent, 1f to roles.threat.copy(alpha = 0.42f),
-            center = Offset(w * 0.5f, h * 0.5f), radius = radius,
+            0f to Color.Transparent, clearStop to Color.Transparent, 1f to edge,
+            center = Offset(w * 0.5f, h * 0.5f), radius = w * 0.5f * SQRT_2,
         )
     }
     scale(1f, h / w, Offset(w * 0.5f, h * 0.5f)) {
         drawRect(brush, Offset(0f, h * 0.5f - w * 0.5f), Size(w, w), alpha)
     }
 }
+
+private const val SQRT_2 = 1.4142135f
 
 /**
  * Threat edge glow on the side the cursor strains toward, pulsing (`edge-warn`, 0.9 s): a narrow

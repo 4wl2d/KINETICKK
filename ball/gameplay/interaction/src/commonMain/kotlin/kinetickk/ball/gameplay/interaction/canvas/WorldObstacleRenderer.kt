@@ -5,8 +5,10 @@ package kinetickk.ball.gameplay.interaction.canvas
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.translate
+import kinetickk.ball.content.api.obstacleSeedUnit
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.render.ObstacleProjection
@@ -92,9 +94,9 @@ internal object ObstaclePaths {
     private const val FACETS = 2
     private const val FACET_LINES = 3
     private const val DASHED = 4
-    private const val MINE_PIPS = 5
-    private const val MINE_STUBS = 6
-    private const val MINE_LIGHTS = 7
+    private const val PIP_DISCS = 5
+    private const val PIP_STUBS = 6
+    private const val PIP_LIGHTS = 7
     private const val GATE_BARS = 8
     private val seeds = IntArray(CAPACITY)
     private val radii = FloatArray(CAPACITY) { -1f }
@@ -102,6 +104,7 @@ internal object ObstaclePaths {
     private val paths = arrayOfNulls<Path>(CAPACITY)
     private var next = 0
     private val scratch = Path()
+    private val measure = PathMeasure()
 
     /** The jagged rim of an asteroid with [seed] and [radius]. */
     fun outline(seed: Int, radius: Float): Path = get(OUTLINE, seed, radius)
@@ -119,13 +122,13 @@ internal object ObstaclePaths {
     fun crystalFacetLines(seed: Int, radius: Float): Path = get(FACET_LINES, seed, radius)
 
     /** The three pip discs of a derelict mine with [seed] and [radius]. */
-    fun minePips(seed: Int, radius: Float): Path = get(MINE_PIPS, seed, radius)
+    fun minePips(seed: Int, radius: Float): Path = get(PIP_DISCS, seed, radius)
 
     /** The stubs around a derelict mine's pips. */
-    fun mineStubs(seed: Int, radius: Float): Path = get(MINE_STUBS, seed, radius)
+    fun mineStubs(seed: Int, radius: Float): Path = get(PIP_STUBS, seed, radius)
 
     /** The warning lights at a derelict mine's pips. */
-    fun mineLights(seed: Int, radius: Float): Path = get(MINE_LIGHTS, seed, radius)
+    fun mineLights(seed: Int, radius: Float): Path = get(PIP_LIGHTS, seed, radius)
 
     /** The dashed outline of a ghost phase shard with [seed] and [radius] (the asteroid outline, cut into dashes). */
     fun phaseDashes(seed: Int, radius: Float): Path = get(DASHED, seed, radius)
@@ -143,10 +146,10 @@ internal object ObstaclePaths {
             CRACKS -> buildCracks(path, seed, radius)
             FACETS -> buildCrystalFacets(path, seed, radius)
             FACET_LINES -> buildCrystalFacetLines(path, seed, radius)
-            MINE_PIPS -> buildMinePips(path, seed, radius)
-            MINE_STUBS -> buildMineStubs(path, seed, radius)
-            MINE_LIGHTS -> buildMineLights(path, seed, radius)
-            DASHED -> buildPhaseShardDashes(path, scratch.also { it.rewind(); buildOutline(it, seed, radius) })
+            PIP_DISCS -> buildMinePips(path, seed, radius)
+            PIP_STUBS -> buildMineStubs(path, seed, radius)
+            PIP_LIGHTS -> buildMineLights(path, seed, radius)
+            DASHED -> buildPhaseShardDashes(path, scratch.also { it.rewind(); buildOutline(it, seed, radius) }, measure)
             else -> buildGateBars(path, seed, radius)
         }
         kinds[next] = kind
@@ -191,9 +194,9 @@ internal object ObstaclePaths {
     }
 
     private fun cornerAngle(seed: Int, corner: Int, step: Float): Float =
-        corner * step + (unit(seed, corner * 2) - 0.5f) * step * ANGLE_JITTER
+        corner * step + (obstacleSeedUnit(seed, corner * 2) - 0.5f) * step * ANGLE_JITTER
 
-    private fun cornerReach(seed: Int, corner: Int): Float = 1f + REACH_JITTER * unit(seed, corner * 2 + 1)
+    private fun cornerReach(seed: Int, corner: Int): Float = 1f + REACH_JITTER * obstacleSeedUnit(seed, corner * 2 + 1)
 
     /** Distance from the origin to the segment ([x0], [y0])–([x1], [y1]). */
     private fun distanceToSegment(x0: Float, y0: Float, x1: Float, y1: Float): Float {
@@ -207,21 +210,12 @@ internal object ObstaclePaths {
 
     private fun buildCracks(path: Path, seed: Int, radius: Float) {
         for (crack in 0 until 3) {
-            val angle = crack * TWO_PI / 3f + unit(seed, 40 + crack) * 1.2f
-            val bend = angle + (unit(seed, 50 + crack) - 0.5f) * 0.8f
+            val angle = crack * TWO_PI / 3f + obstacleSeedUnit(seed, 40 + crack) * 1.2f
+            val bend = angle + (obstacleSeedUnit(seed, 50 + crack) - 0.5f) * 0.8f
             path.moveTo(cos(angle) * radius * 0.14f, sin(angle) * radius * 0.14f)
             path.lineTo(cos(bend) * radius * 0.5f, sin(bend) * radius * 0.5f)
             path.lineTo(cos(angle) * radius * 0.78f, sin(angle) * radius * 0.78f)
         }
-    }
-
-    /** A stateless hash of the seed and [salt] mapped to [0, 1). */
-    private fun unit(seed: Int, salt: Int): Float {
-        var mixed = seed * -0x61c88647 + salt * 0x27d4eb2d
-        mixed = (mixed xor (mixed ushr 15)) * 0x2c1b3c6d
-        mixed = (mixed xor (mixed ushr 12)) * 0x297a2d39
-        mixed = mixed xor (mixed ushr 15)
-        return (mixed ushr 8) / 16_777_216f
     }
 
     private const val TWO_PI: Float = 6.2831855f

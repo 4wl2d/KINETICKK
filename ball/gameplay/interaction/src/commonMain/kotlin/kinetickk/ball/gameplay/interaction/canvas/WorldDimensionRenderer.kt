@@ -13,7 +13,9 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
+import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WorldLayer
+import kinetickk.ball.content.api.obstacleSeedUnit
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.PortalProjection
 import kinetickk.ball.profile.api.ParticleDensity
@@ -159,9 +161,9 @@ internal object DimensionThemes {
                 )
             }
             WorldLayer.ARCHIVE -> {
-                val void = hue(roles.element(VOID_ELEMENT))
+                val void = hue(roles.element(StatusElement.VOID.ordinal))
                 DimensionTheme(
-                    ground = ground(roles.element(VOID_ELEMENT), 0.05f), grid = bone.copy(alpha = 0.055f),
+                    ground = ground(roles.element(StatusElement.VOID.ordinal), 0.05f), grid = bone.copy(alpha = 0.055f),
                     gridMajor = bone.copy(alpha = 0.09f), halftone = void.copy(alpha = 0.06f), mote = bone.copy(alpha = 0.32f),
                     moteAlt = void.copy(alpha = 0.32f), ray = none, crack = none, crackRim = none, scanline = bone.copy(alpha = 0.03f),
                 )
@@ -178,14 +180,11 @@ internal object DimensionThemes {
     }
 }
 
-/** Index of the void element in the palette's element colours (the Archive's hue). */
-private const val VOID_ELEMENT = 6
-
 /** A rift's accent by its target: the Zenith shield, the Nadir heat, the Archive void, realspace bone. */
 internal fun riftAccent(target: WorldLayer, roles: KkRolePalette): Color = when (target) {
     WorldLayer.ZENITH -> roles.shield
     WorldLayer.NADIR -> roles.heat
-    WorldLayer.ARCHIVE -> roles.element(VOID_ELEMENT)
+    WorldLayer.ARCHIVE -> roles.element(StatusElement.VOID.ordinal)
     WorldLayer.BASE -> Kk.Bone
 }
 
@@ -214,16 +213,23 @@ internal fun DrawScope.drawDimensionBackdrop(engine: GameplayRenderModel, shakeX
 
 /** The world-anchored 40-unit grid in the theme; every fourth world line takes the major colour. */
 private fun DrawScope.drawDimensionGrid(engine: GameplayRenderModel, theme: DimensionTheme, shakeX: Float, shakeY: Float) {
+    val firstX = worldGridOffset(engine.renderCameraX, size.width, shakeX)
+    val firstY = worldGridOffset(engine.renderCameraY, size.height, shakeY)
+    // One colour (the Zenith and the Nadir) batches like the realspace grid; only the Archive alternates major lines.
+    if (theme.gridMajor == theme.grid) {
+        drawWorldGrid(Offset(firstX, firstY), theme.grid)
+        return
+    }
     val shiftX = size.width * 0.5f - engine.renderCameraX + shakeX
     val shiftY = size.height * 0.5f - engine.renderCameraY + shakeY
-    var x = worldGridOffset(engine.renderCameraX, size.width, shakeX) - WORLD_GRID_SPACING
+    var x = firstX - WORLD_GRID_SPACING
     var column = ((x - shiftX) / WORLD_GRID_SPACING).roundToInt()
     while (x <= size.width) {
         if (x >= 0f) drawLine(if (column and 3 == 0) theme.gridMajor else theme.grid, Offset(x, 0f), Offset(x, size.height), 1f)
         x += WORLD_GRID_SPACING
         column++
     }
-    var y = worldGridOffset(engine.renderCameraY, size.height, shakeY) - WORLD_GRID_SPACING
+    var y = firstY - WORLD_GRID_SPACING
     var row = ((y - shiftY) / WORLD_GRID_SPACING).roundToInt()
     while (y <= size.height) {
         if (y >= 0f) drawLine(if (row and 3 == 0) theme.gridMajor else theme.grid, Offset(0f, y), Offset(size.width, y), 1f)
@@ -253,10 +259,10 @@ private fun DrawScope.drawNadirCracks(engine: GameplayRenderModel, theme: Dimens
     val lastY = floor((size.height - originY + CRACK_REACH) / DIMENSION_MOTE_CELL).toInt()
     for (cy in firstY..lastY) for (cx in firstX..lastX) {
         val hash = dimensionCellHash(cx, cy, WorldLayer.NADIR.ordinal)
-        if (dimensionUnit(hash, CRACK_SALT) >= CRACK_SHARE) continue
-        val crack = DimensionPaths.crack(min(2, (dimensionUnit(hash, CRACK_SALT + 1) * 3f).toInt()))
-        val x = originX + (cx + 0.3f + 0.4f * dimensionUnit(hash, CRACK_SALT + 2)) * DIMENSION_MOTE_CELL
-        val y = originY + (cy + 0.3f + 0.4f * dimensionUnit(hash, CRACK_SALT + 3)) * DIMENSION_MOTE_CELL
+        if (obstacleSeedUnit(hash, CRACK_SALT) >= CRACK_SHARE) continue
+        val crack = DimensionPaths.crack(min(2, (obstacleSeedUnit(hash, CRACK_SALT + 1) * 3f).toInt()))
+        val x = originX + (cx + 0.3f + 0.4f * obstacleSeedUnit(hash, CRACK_SALT + 2)) * DIMENSION_MOTE_CELL
+        val y = originY + (cy + 0.3f + 0.4f * obstacleSeedUnit(hash, CRACK_SALT + 3)) * DIMENSION_MOTE_CELL
         translate(x, y) {
             drawPath(crack, theme.crackRim, style = kkStroke(3f))
             drawPath(crack, theme.crack, style = kkStroke(1.5f))
@@ -310,10 +316,10 @@ internal inline fun forEachDimensionMote(
     for (cy in firstY..lastY) for (cx in firstX..lastX) {
         if (crowded && (cx + cy) and 1 != 0) continue
         val hash = dimensionCellHash(cx, cy, layer.ordinal)
-        if (dimensionUnit(hash, 0) >= density) continue
-        val rise = riseBase + riseSpread * dimensionUnit(hash, 3)
-        val x = (cx + dimensionUnit(hash, 1)) * DIMENSION_MOTE_CELL
-        val y = cy * DIMENSION_MOTE_CELL + positiveModulo(dimensionUnit(hash, 2) * DIMENSION_MOTE_CELL - rise * time, DIMENSION_MOTE_CELL)
+        if (obstacleSeedUnit(hash, 0) >= density) continue
+        val rise = riseBase + riseSpread * obstacleSeedUnit(hash, 3)
+        val x = (cx + obstacleSeedUnit(hash, 1)) * DIMENSION_MOTE_CELL
+        val y = cy * DIMENSION_MOTE_CELL + positiveModulo(obstacleSeedUnit(hash, 2) * DIMENSION_MOTE_CELL - rise * time, DIMENSION_MOTE_CELL)
         action(x, y, hash)
     }
 }
@@ -333,20 +339,20 @@ private fun DrawScope.drawDimensionMotes(engine: GameplayRenderModel, layer: Wor
     ) { x, y, hash ->
         val at = Offset(x + originX, y + originY)
         // At least 24 s per twinkle.
-        val twinkle = sin(time * 0.26f + TWO_PI * dimensionUnit(hash, 4))
-        val alt = dimensionUnit(hash, 5) < 0.4f
+        val twinkle = sin(time * 0.26f + TWO_PI * obstacleSeedUnit(hash, 4))
+        val alt = obstacleSeedUnit(hash, 5) < 0.4f
         val color = if (alt) theme.moteAlt else theme.mote
         when (layer) {
             WorldLayer.ZENITH ->
-                drawCircle(color.copy(alpha = (color.alpha + 0.15f * twinkle).coerceIn(0f, 1f)), 1.6f + dimensionUnit(hash, 6), at)
+                drawCircle(color.copy(alpha = (color.alpha + 0.15f * twinkle).coerceIn(0f, 1f)), 1.6f + obstacleSeedUnit(hash, 6), at)
             WorldLayer.NADIR -> {
-                val side = 2f + dimensionUnit(hash, 6) * 1.2f
+                val side = 2f + obstacleSeedUnit(hash, 6) * 1.2f
                 drawRect(color.copy(alpha = (color.alpha + 0.1f * twinkle).coerceIn(0f, 1f)), Offset(at.x - side * 0.5f, at.y - side * 0.5f),
                     Size(side, side))
             }
             WorldLayer.ARCHIVE -> {
                 // Each square blinks on its own phase of the local clock.
-                if (positiveModulo(time * 0.4f + dimensionUnit(hash, 6), 1f) < 0.55f) {
+                if (positiveModulo(time * 0.4f + obstacleSeedUnit(hash, 6), 1f) < 0.55f) {
                     drawRect(color.copy(alpha = (color.alpha + 0.1f * twinkle).coerceIn(0f, 1f)), Offset(at.x - 2f, at.y - 2f), Size(4f, 4f),
                         style = kkStroke(1f))
                 }
@@ -494,7 +500,7 @@ private fun DrawScope.drawPortalRings(center: Offset, color: Color, time: Float)
 }
 
 /** How far a glitch rift's ghost rings stand off at [time]: a stateless step every quarter second, 40 % to all of the shift. */
-internal fun portalGlitchOffset(time: Float): Float = PORTAL_GLITCH_SHIFT * (0.4f + 0.6f * dimensionUnit(floor(time * 4f).toInt(), GLITCH_SALT))
+internal fun portalGlitchOffset(time: Float): Float = PORTAL_GLITCH_SHIFT * (0.4f + 0.6f * obstacleSeedUnit(floor(time * 4f).toInt(), GLITCH_SALT))
 
 private const val GLITCH_SALT = 11
 
@@ -551,7 +557,11 @@ internal fun DrawScope.drawDimensionMinimapMarks(
     val dimension = engine.dimension
     val coreX = engine.renderCoreX
     val coreY = engine.renderCoreY
-    dimension.glitchPortal?.let { drawMinimapRift(it, centerX, centerY, half, scale, dot, coreX, coreY, roles) }
+    // A rift is an outline square in its target's accent, pinned inside the rim when beyond the range (as window rifts are).
+    val rift = dot * 2.2f
+    dimension.glitchPortal?.let {
+        drawPinnedMark(centerX, centerY, half, (it.x - coreX) * scale, (it.y - coreY) * scale, rift, riftAccent(it.target, roles), filled = false)
+    }
     // Rings, embers and the exit rift belong to a visit; realspace never shows them.
     if (dimension.layer == WorldLayer.BASE) return
     val halos = dimension.halos
@@ -568,24 +578,9 @@ internal fun DrawScope.drawDimensionMinimapMarks(
         if (abs(dx) > half || abs(dy) > half) continue
         drawCircle(roles.heat, dot * 0.95f, Offset(centerX + dx, centerY + dy))
     }
-    dimension.exitPortal?.let { drawMinimapRift(it, centerX, centerY, half, scale, dot, coreX, coreY, roles) }
-}
-
-/** A rift as an outline square in its target's accent, pinned inside the rim when beyond the range (as window rifts are). */
-private fun DrawScope.drawMinimapRift(
-    portal: PortalProjection,
-    centerX: Float,
-    centerY: Float,
-    half: Float,
-    scale: Float,
-    dot: Float,
-    coreX: Float,
-    coreY: Float,
-    roles: KkRolePalette,
-) {
-    val size = dot * 2.2f
-    val at = pinned(centerX, centerY, half, (portal.x - coreX) * scale, (portal.y - coreY) * scale, size)
-    drawRect(riftAccent(portal.target, roles), Offset(at.x - size * 0.5f, at.y - size * 0.5f), Size(size, size), style = kkStroke(1f))
+    dimension.exitPortal?.let {
+        drawPinnedMark(centerX, centerY, half, (it.x - coreX) * scale, (it.y - coreY) * scale, rift, riftAccent(it.target, roles), filled = false)
+    }
 }
 
 /** A stateless 32-bit hash of a mote cell of [layer] (any ordinal). */
@@ -594,15 +589,6 @@ internal fun dimensionCellHash(cellX: Int, cellY: Int, layer: Int): Int {
     mixed = (mixed xor (mixed ushr 16)) * -0x7a143595
     mixed = (mixed xor (mixed ushr 13)) * -0x3d4d51cb
     return mixed xor (mixed ushr 16)
-}
-
-/** A stateless hash of [hash] and [salt] mapped to [0, 1). */
-internal fun dimensionUnit(hash: Int, salt: Int): Float {
-    var mixed = hash * -0x61c88647 + salt * 0x27d4eb2d
-    mixed = (mixed xor (mixed ushr 15)) * 0x2c1b3c6d
-    mixed = (mixed xor (mixed ushr 12)) * 0x297a2d39
-    mixed = mixed xor (mixed ushr 15)
-    return (mixed ushr 8) / 16_777_216f
 }
 
 /** Dashed strokes of the rift rings and the next halo's ring (created once). */

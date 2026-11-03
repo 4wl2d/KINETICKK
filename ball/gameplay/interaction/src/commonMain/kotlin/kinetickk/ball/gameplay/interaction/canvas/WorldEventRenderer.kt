@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.translate
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WorldEventKind
+import kinetickk.ball.content.api.obstacleSeedUnit
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.WorldEventProjection
 import kinetickk.ball.profile.api.ParticleDensity
@@ -164,15 +165,15 @@ private fun DrawScope.drawEventMotes(
     val strength = 0.4f + 0.6f * event.windStrength.coerceIn(0f, 1f)
     val pol = roles.pol
     for (cellY in firstY..lastY) for (cellX in firstX..lastX) {
-        val hash = eventCellHash(cellX, cellY, kind)
+        val hash = dimensionCellHash(cellX, cellY, kind)
         if (halved && (hash and 1) == 0) continue
-        val baseX = (cellX + eventUnit(hash, 3)) * cell
-        val baseY = (cellY + eventUnit(hash, 11)) * cell
-        val phase = eventUnit(hash, 19)
+        val baseX = (cellX + obstacleSeedUnit(hash, 3)) * cell
+        val baseY = (cellY + obstacleSeedUnit(hash, 11)) * cell
+        val phase = obstacleSeedUnit(hash, 19)
         if (gravity) {
             val travel = fraction(now * GRAVITY_DRIFT / cell + phase)
             val along = (travel - 0.5f) * cell
-            val length = (GRAVITY_STREAK_MIN + GRAVITY_STREAK_SPREAD * eventUnit(hash, 7)) * strength
+            val length = (GRAVITY_STREAK_MIN + GRAVITY_STREAK_SPREAD * obstacleSeedUnit(hash, 7)) * strength
             val head = world(engine, baseX + windX * along, baseY + windY * along, shakeX, shakeY)
             val tail = Offset(head.x - windX * length, head.y - windY * length)
             val alpha = 0.5f * share * sin(PI.toFloat() * travel)
@@ -182,11 +183,11 @@ private fun DrawScope.drawEventMotes(
             val sway = sin(now * 1.3f + phase * 6.2832f) * DATA_SWAY
             val center = world(engine, baseX + sway, baseY + (0.5f - travel) * cell, shakeX, shakeY)
             val fade = sin(PI.toFloat() * travel)
-            if (eventUnit(hash, 27) < DATA_GLINT_SHARE) {
+            if (obstacleSeedUnit(hash, 27) < DATA_GLINT_SHARE) {
                 val glint = 0.5f + 0.5f * sin(now * 5f + phase * 6.2832f)
                 drawCircle(Kk.Bone.copy(alpha = (0.35f + 0.45f * glint) * share * fade), 2.6f, center)
             } else {
-                drawCircle(Kk.Bone.copy(alpha = 0.3f * share * fade), 1.4f + 1.2f * eventUnit(hash, 7), center)
+                drawCircle(Kk.Bone.copy(alpha = 0.3f * share * fade), 1.4f + 1.2f * obstacleSeedUnit(hash, 7), center)
             }
         }
     }
@@ -233,16 +234,3 @@ private object EventBrushes {
 }
 
 private fun fraction(value: Float): Float = value - floor(value)
-
-/** A stateless hash of an ambient cell and the event kind (murmur3's finalizer over the mixed coordinates). */
-internal fun eventCellHash(cellX: Int, cellY: Int, kind: Int): Int {
-    var h = cellX * -0x61c88647 xor (cellY * 0x27d4eb2f) xor (kind * 0x165667b1)
-    h = h xor (h ushr 16)
-    h *= -0x7a143595
-    h = h xor (h ushr 13)
-    h *= -0x3d4d51cb
-    return h xor (h ushr 16)
-}
-
-/** A 0..1 value from [hash] (its bits rotated by [salt]). */
-private fun eventUnit(hash: Int, salt: Int): Float = ((hash.rotateLeft(salt) ushr 8) and 0xFFFF) / 65_536f
