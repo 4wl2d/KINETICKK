@@ -19,7 +19,7 @@ import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
 import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
-import kinetickk.ball.gameplay.nucleus.simulation.copyForReduction
+import kinetickk.ball.gameplay.nucleus.simulation.deepCopy
 import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.profile.api.ProfileProgressApplied
 import kinetickk.ball.profile.api.ProfileRevision
@@ -84,7 +84,7 @@ private class NucleusTraceRunner(
     private var choiceFrames = 0
     private var rerolled = false
     private var cursorAngle = (seed and 7).toFloat()
-    private var ticked = state.copy(engine = EngineState(checkNotNull(state.engine).model.copyForReduction()))
+    private var ticked = state.copy(engine = EngineState(checkNotNull(state.engine).model.deepCopy()))
     private var tickedSnapshot: GameplayRenderSnapshot = GameplayNucleus.renderSnapshot(ticked)
     private val tickOutputs = GameplayTickOutputs()
     var choices = 0
@@ -97,7 +97,7 @@ private class NucleusTraceRunner(
     /** An independent runner on a deep copy of this one's committed state and counters. */
     fun fork(): NucleusTraceRunner {
         val engine = checkNotNull(state.engine)
-        return NucleusTraceRunner(seed, state.copy(engine = EngineState(engine.model.copyForReduction()))).also { copy ->
+        return NucleusTraceRunner(seed, state.copy(engine = EngineState(engine.model.deepCopy()))).also { copy ->
             copy.fxHash = fxHash
             copy.audioHash = audioHash
             copy.progress = progress

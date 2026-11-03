@@ -225,7 +225,7 @@ class SynergySystemTest {
         val sourceEchoes = state.echoHits.toList()
 
         // Replacing a relic removes the runtime it owned, only in the candidate.
-        val copy = state.copyForReduction()
+        val copy = state.deepCopy()
         copy.replaceRelic(0, RelicId.GYRE_ENGINE)
         copy.replaceRelic(1, RelicId.BLINK_DRIVE)
         assertTrue(copy.echoHits.isEmpty())

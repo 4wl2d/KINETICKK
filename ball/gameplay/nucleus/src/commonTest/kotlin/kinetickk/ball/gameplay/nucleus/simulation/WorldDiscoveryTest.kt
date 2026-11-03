@@ -124,7 +124,7 @@ class WorldDiscoveryTest {
     fun aReductionCandidateKeepsItsDiscoveriesApartFromItsSource() {
         val source = game()
         source.discoverWorld(WorldDiscovery.GATE_RACE)
-        val candidate = source.copyForReduction()
+        val candidate = source.deepCopy()
         candidate.discoverWorld(WorldDiscovery.VAULT)
         assertEquals(setOf(WorldDiscovery.GATE_RACE, WorldDiscovery.VAULT), assertNotNull(candidate.takeProgressUpdate()).discoveredWorldEntries)
 

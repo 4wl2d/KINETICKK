@@ -365,20 +365,13 @@ internal class GameComponent private constructor(
             check(render.phase == expectedRenderPhase)
         }
         check(frame.outputs.size <= MAX_GAMEPLAY_OUTPUTS_PER_DECISION)
+        // GameplayAcceptedFrame already admits only the FX -> Profile -> Audio -> result order.
         var profileOutput: GameplayOutput.SendProfileCommand? = null
         var profileOutputCount = 0
         var directResultCount = 0
         var outputIndex = 0
-        var previousDispatchOrder = 0
         while (outputIndex < frame.outputs.size) {
             val output = frame.outputs[outputIndex]
-            val dispatchOrder = output.dispatchOrder
-            if (outputIndex > 0) {
-                check(previousDispatchOrder <= dispatchOrder) {
-                    "Gameplay outputs are not in FX -> Profile -> Audio -> result order"
-                }
-            }
-            previousDispatchOrder = dispatchOrder
             if (output is GameplayOutput.SendProfileCommand) {
                 profileOutputCount++
                 if (profileOutput == null) {
@@ -631,18 +624,6 @@ private fun GameplayWorkItem.exitReplyOrNull(): InlineReply<GameplayRunExited, G
     is GameplayWorkItem.ProgressCompletion -> exitReply
     else -> null
 }
-
-private val GameplayOutput.dispatchOrder: Int
-    get() = when (this) {
-        is GameplayOutput.EmitVisualFx -> 0
-        is GameplayOutput.SendProfileCommand -> 1
-        is GameplayOutput.AdvanceAudio,
-        GameplayOutput.EnsureAudioUnlocked,
-        -> 2
-        is GameplayOutput.RunExited, is GameplayOutput.SettingsApplied,
-        is GameplayOutput.RunStarted, is GameplayOutput.OverlayPaused,
-        -> 3
-    }
 
 private const val GAMEPLAY_COMPLETION_CAPACITY: Int = 8
 private const val MAX_LOCAL_REVISIONS_PER_DISPATCH: Long = 2L

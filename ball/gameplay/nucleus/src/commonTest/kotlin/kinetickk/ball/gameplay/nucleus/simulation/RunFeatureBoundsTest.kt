@@ -130,7 +130,7 @@ class RunFeatureBoundsTest {
         val sourceMatter = source.runMatter + source.matterFraction.toDouble()
 
         // The eleventh completion refuses the queue and salvages 8 Matter (after the run's gain) instead of crashing.
-        val candidate = source.copyForReduction()
+        val candidate = source.deepCopy()
         candidate.sites = completingCircuit()
         candidate.updateSites(0.01f)
         assertEquals(bound, candidate.pendingDirectedRewards.size)

@@ -130,7 +130,7 @@ internal class GameReducer {
                 outputs = SimulationOutputs.Empty,
             )
             ReductionOutcome.SUB_STEP -> {
-                val candidate = state.model.copyForScalarInputReduction()
+                val candidate = state.model.deepCopy()
                 reduceInPlace(candidate, intent, outcome, sink)
                 GameReductionResult.Accepted(
                     state = EngineState(candidate),
@@ -141,11 +141,7 @@ internal class GameReducer {
                 )
             }
             ReductionOutcome.STEPPED -> {
-                val candidate = if (intent.preservesStableSimulationStorage()) {
-                    state.model.copyForScalarInputReduction()
-                } else {
-                    state.model.copyForReduction()
-                }
+                val candidate = state.model.deepCopy()
                 reduceInPlace(candidate, intent, outcome, sink)
                 val frameIntent = intent as? GameplayInteractionPulse.FrameElapsed
                 val advanceAudio = frameIntent != null || sink.soundCues.isNotEmpty()
@@ -278,22 +274,6 @@ internal class GameReducer {
             else -> null
         }
 
-    private fun GameplayInteractionPulse.preservesStableSimulationStorage(): Boolean = when (this) {
-        is GameplayInteractionPulse.ViewportChanged,
-        is GameplayInteractionPulse.PointerMoved,
-        is GameplayInteractionPulse.BrakeChanged,
-        GameplayInteractionPulse.DashRequested,
-        GameplayInteractionPulse.PauseToggled,
-        is GameplayInteractionPulse.SkillRequested,
-        GameplayInteractionPulse.ApexRequested,
-        -> true
-        is GameplayInteractionPulse.FrameElapsed,
-        is GameplayInteractionPulse.ChoiceSelected,
-        GameplayInteractionPulse.ChoicesRerolled,
-        GameplayInteractionPulse.UserGestureObserved,
-        -> false
-    }
-
     private fun GameplayInteractionPulse.leavesStateUnchanged(state: MutableGameState): Boolean =
         when (this) {
             is GameplayInteractionPulse.ViewportChanged -> {
@@ -369,6 +349,4 @@ internal class GameReducer {
         soundCues.isNotEmpty() ||
             !visualFxCues.isEmpty() ||
             hasPublishableProgress()
-
-    private fun Float.sameBitsAs(other: Float): Boolean = toBits() == other.toBits()
 }

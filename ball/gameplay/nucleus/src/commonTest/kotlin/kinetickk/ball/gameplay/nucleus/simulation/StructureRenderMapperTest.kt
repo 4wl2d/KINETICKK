@@ -146,10 +146,10 @@ class StructureRenderMapperTest {
         assertNotSame(StructureRenderProjection.EMPTY, first)
 
         // A sibling sharing the window, dungeon and spent list keeps the whole projection.
-        val sibling = source.copyForReduction()
+        val sibling = source.deepCopy()
         assertSame(first, sibling.toRenderModel(retained, source).structures)
         // Without an identity source, equal content keeps it too (raw float bits).
-        assertSame(first, source.copyForReduction().toRenderModel(retained, null).structures)
+        assertSame(first, source.deepCopy().toRenderModel(retained, null).structures)
 
         // Sealing a room replaces one wall slice and the room progress: walls and structures reproject, signals stay.
         site.enterRoom(1)
@@ -161,14 +161,14 @@ class StructureRenderMapperTest {
         assertEquals(1, sealed.dungeon?.engagedRoom)
 
         // A garrison member falling changes nothing the projection shows: the whole projection is kept.
-        val identity = source.copyForReduction()
+        val identity = source.deepCopy()
         source.enemies.first { it.ownerTag == roomEncounterTag(site.placement.id, 1) }.hp = 0f
         val fallen = source.toRenderModel(retainedSealed, identity).structures
         assertSame(sealed, fallen)
 
         // Another structure spent while the window and the dungeon stay the same: its entrance stops signalling.
         val other = assertNotNull(source.structureField.signals.firstOrNull { it.id != site.placement.id }).id
-        val unchanged = source.copyForReduction()
+        val unchanged = source.deepCopy()
         val retainedFallen = source.toRenderModel(retainedSealed, identity)
         source.markSpent(other)
         val dropped = source.toRenderModel(retainedFallen, unchanged).structures

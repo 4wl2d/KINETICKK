@@ -159,15 +159,12 @@ class CombatFieldTableTest {
     }
 
     @Test
-    fun reductionForksIsolateTheTableAndScalarSiblingsShareIt() {
+    fun reductionForksIsolateTheTable() {
         val state = buildTestState()
         state.addTestField(CombatFieldKind.ROT_WELL, x = 10f, y = 20f, radius = 30f, seconds = 2f)
         val before = state.fieldRecords
 
-        val scalar = state.copyForScalarInputReduction()
-        assertSame(state.combatFieldTable, scalar.combatFieldTable)
-
-        val candidate = state.copyForReduction()
+        val candidate = state.deepCopy()
         assertNotSame(state.combatFieldTable, candidate.combatFieldTable)
         assertTrue(candidate.combatFieldTable.sharesStorageWith(state.combatFieldTable), "A fork copies nothing up front")
         candidate.updateCombatFields(0.5f)
@@ -177,7 +174,7 @@ class CombatFieldTableTest {
         assertEquals(2, candidate.combatFieldTable.count)
         assertEquals(1.5f, candidate.fieldRecords[0].remaining)
 
-        val sibling = state.copyForReduction()
+        val sibling = state.deepCopy()
         sibling.combatFieldTable.clear()
         assertEquals(before, state.fieldRecords)
         assertEquals(2, candidate.combatFieldTable.count)
@@ -237,10 +234,10 @@ class CombatFieldTableTest {
         assertEquals(listOf(false, false, true), fields.map { it.followsCore })
 
         // A step that only ages the fields reprojects nothing; a moved field rebuilds the list.
-        val aged = state.copyForReduction().apply { updateCombatFields(0.1f) }
+        val aged = state.deepCopy().apply { updateCombatFields(0.1f) }
         assertSame(fields, aged.toRenderModel(reusableCollections = model, identitySource = state).combatFields)
-        assertSame(fields, state.copyForScalarInputReduction().toRenderModel(model, state).combatFields)
-        val moved = state.copyForReduction().apply { rebaseCombatFields(10f, 0f) }
+        assertSame(fields, state.deepCopy().toRenderModel(model, state).combatFields)
+        val moved = state.deepCopy().apply { rebaseCombatFields(10f, 0f) }
         val rebuilt = moved.toRenderModel(reusableCollections = model, identitySource = state).combatFields
         assertNotSame(fields, rebuilt)
         assertEquals(listOf(90f, -110f, -10f), rebuilt.map { it.x })

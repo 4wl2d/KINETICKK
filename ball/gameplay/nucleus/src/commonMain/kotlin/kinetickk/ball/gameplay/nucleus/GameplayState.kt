@@ -44,7 +44,7 @@ data class GameplayState internal constructor(
     }
 }
 
-private fun GamePhase.toRunPhase(): GameplayRunPhase = when (this) {
+internal fun GamePhase.toRunPhase(): GameplayRunPhase = when (this) {
     GamePhase.RUNNING -> GameplayRunPhase.RUNNING
     GamePhase.PAUSED -> GameplayRunPhase.PAUSED
     GamePhase.CHOICE -> GameplayRunPhase.CHOICE

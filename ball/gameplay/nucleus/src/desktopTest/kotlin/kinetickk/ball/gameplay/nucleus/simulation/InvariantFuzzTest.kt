@@ -58,12 +58,12 @@ class InvariantFuzzTest {
         repeat(500) { if (state.phase == GamePhase.RUNNING) state.update(0.02f) }
         assertTrue(state.enemies.isNotEmpty(), "the probe state has enemies")
         assertNull(FuzzFiniteScan.first(state), "a played state holds no non-finite value")
-        assertNull(FuzzStateDiff.first(state, state.copyForReduction(), "state", FuzzScratchFields), "a reduction copy loses nothing")
+        assertNull(FuzzStateDiff.first(state, state.deepCopy(), "state", FuzzScratchFields), "a reduction copy loses nothing")
 
-        val copy = state.copyForReduction()
+        val copy = state.deepCopy()
         copy.enemies[0].hp += 1f
         assertEquals("state.enemies[0].hp", FuzzStateDiff.first(state, copy, "state", FuzzScratchFields)?.substringBefore(':'))
-        val written = state.copyForReduction()
+        val written = state.deepCopy()
         written.runBoons = immutableListOf(0)
         assertEquals("state.runBoons.size", FuzzStateDiff.first(state, written, "state", FuzzScratchFields)?.substringBefore(':'))
 

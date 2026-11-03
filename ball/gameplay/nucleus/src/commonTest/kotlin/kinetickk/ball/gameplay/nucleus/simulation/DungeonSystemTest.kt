@@ -566,7 +566,7 @@ class DungeonSystemTest {
         val source = dungeon.run
         dungeon.enterRoom(dungeon.template.finalRoom)
         val originalBuild = source.build
-        val candidate = source.copyForReduction()
+        val candidate = source.deepCopy()
         candidate.killGarrisonForTesting()
         candidate.updateStructures(step)
         assertTrue(source.runBoons.isEmpty())
@@ -1059,7 +1059,7 @@ class DungeonSystemTest {
         val held = source.dungeon
         val enemies = source.enemies.size
 
-        val candidate = source.copyForReduction()
+        val candidate = source.deepCopy()
         candidate.updateStructures(step)
         assertEquals(1, candidate.dungeon?.engagedRoom)
         assertSame(field, source.structureField, "the source keeps its window")

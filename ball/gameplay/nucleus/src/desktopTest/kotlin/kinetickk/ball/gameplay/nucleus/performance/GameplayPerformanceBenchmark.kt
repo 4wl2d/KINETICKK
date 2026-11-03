@@ -65,7 +65,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.addEnemyForTesting
 import kinetickk.ball.gameplay.nucleus.simulation.dimensions.dropEmber
 import kinetickk.ball.gameplay.nucleus.simulation.enterDimensionForTesting
 import kinetickk.ball.gameplay.nucleus.simulation.consumeFixedStepBudget
-import kinetickk.ball.gameplay.nucleus.simulation.copyForReduction
+import kinetickk.ball.gameplay.nucleus.simulation.deepCopy
 import kinetickk.ball.gameplay.nucleus.simulation.simulateStep
 import kinetickk.ball.gameplay.nucleus.simulation.startRun
 import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
@@ -188,7 +188,7 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
             metadata = stateCardinality(idle, seed),
             maximumOperations = 100_000,
         ) { validation ->
-            val state = idle.copyForReduction()
+            val state = idle.deepCopy()
             validation.observeOutcome { canonicalStateFingerprint(state) }
             stateSignature(state)
         },
@@ -199,7 +199,7 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
             metadata = stateCardinality(capacity, seed),
             maximumOperations = 20_000,
         ) { validation ->
-            val state = capacity.copyForReduction()
+            val state = capacity.deepCopy()
             validation.observeOutcome { canonicalStateFingerprint(state) }
             stateSignature(state)
         },
@@ -254,7 +254,7 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
             metadata = stateCardinality(collisionMiss, seed) + baseMetadata(seed, "collisionMode" to "miss"),
             maximumOperations = 10_000,
         ) { validation ->
-            val candidate = collisionMiss.copyForReduction()
+            val candidate = collisionMiss.deepCopy()
             candidate.simulateStep(MutableGameState.FIXED_STEP)
             validation.observeOutcome { canonicalStateFingerprint(candidate) }
             stateSignature(candidate)
@@ -266,7 +266,7 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
             metadata = stateCardinality(collisionHit, seed) + baseMetadata(seed, "collisionMode" to "hit"),
             maximumOperations = 5_000,
         ) { validation ->
-            val candidate = collisionHit.copyForReduction()
+            val candidate = collisionHit.deepCopy()
             candidate.simulateStep(MutableGameState.FIXED_STEP)
             validation.observeOutcome { canonicalStateFingerprint(candidate) }
             stateSignature(candidate)
@@ -278,7 +278,7 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
             metadata = stateCardinality(idle, seed) + baseMetadata(seed, "fixedSteps" to "48"),
             maximumOperations = 2_000,
         ) { validation ->
-            val candidate = idle.copyForReduction()
+            val candidate = idle.deepCopy()
             candidate.accumulator = MutableGameState.FIXED_STEP * 48f
             candidate.consumeFixedStepBudget()
             validation.observeOutcome { canonicalStateFingerprint(candidate) }
@@ -423,7 +423,7 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
                 baseMetadata(seed, "structure" to "RELIQUARY", "walls" to structureDungeon.structureField.walls.size.toString()),
             maximumOperations = 10_000,
         ) { validation ->
-            val candidate = structureDungeon.copyForReduction()
+            val candidate = structureDungeon.deepCopy()
             candidate.simulateStep(MutableGameState.FIXED_STEP)
             validation.observeOutcome { canonicalStateFingerprint(candidate) }
             stateSignature(candidate)
@@ -435,7 +435,7 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
             metadata = stateCardinality(dimensionVisit, seed) + baseMetadata(seed, "layer" to "NADIR", "embers" to "24"),
             maximumOperations = 10_000,
         ) { validation ->
-            val candidate = dimensionVisit.copyForReduction()
+            val candidate = dimensionVisit.deepCopy()
             candidate.simulateStep(MutableGameState.FIXED_STEP)
             validation.observeOutcome { canonicalStateFingerprint(candidate) }
             stateSignature(candidate)
@@ -452,7 +452,7 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
             ),
             maximumOperations = 5_000,
         ) { validation ->
-            val candidate = terrainWindow.copyForReduction()
+            val candidate = terrainWindow.deepCopy()
             candidate.simulateStep(MutableGameState.FIXED_STEP)
             validation.observeOutcome { canonicalStateFingerprint(candidate) }
             stateSignature(candidate)
@@ -478,15 +478,15 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
         "run_start" -> canonicalStateFingerprint(
             gameScenario(seed = seed).apply { startRun() },
         )
-        "copy_idle" -> canonicalStateFingerprint(idle.copyForReduction())
-        "copy_capacity" -> canonicalStateFingerprint(capacity.copyForReduction())
+        "copy_idle" -> canonicalStateFingerprint(idle.deepCopy())
+        "copy_capacity" -> canonicalStateFingerprint(capacity.deepCopy())
         "render_model_idle" -> canonicalRenderFingerprint(idle)
         "render_model_capacity" -> canonicalRenderFingerprint(capacity)
         "reducer_frame_60hz_idle" -> reducerOutcomeFingerprint(idle, frame60)
         "reducer_frame_100ms_idle" -> reducerOutcomeFingerprint(idle, frame100Millis)
         "fixed_step_collision_miss" -> fixedStepOutcomeFingerprint(collisionMiss)
         "fixed_step_collision_hit" -> fixedStepOutcomeFingerprint(collisionHit)
-        "fixed_step_budget_48_idle" -> idle.copyForReduction().run {
+        "fixed_step_budget_48_idle" -> idle.deepCopy().run {
             accumulator = MutableGameState.FIXED_STEP * 48f
             consumeFixedStepBudget()
             canonicalStateFingerprint(this)
@@ -518,21 +518,21 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
         "harness_control" -> nextControlValue(1L)
         "state_initialization" -> stateSignature(gameScenario(seed = seed))
         "run_start" -> stateSignature(gameScenario(seed = seed).apply { startRun() })
-        "copy_idle" -> stateSignature(idle.copyForReduction())
-        "copy_capacity" -> stateSignature(capacity.copyForReduction())
+        "copy_idle" -> stateSignature(idle.deepCopy())
+        "copy_capacity" -> stateSignature(capacity.deepCopy())
         "render_model_idle" -> renderSignature(idle)
         "render_model_capacity" -> renderSignature(capacity)
         "reducer_frame_60hz_idle" -> reducerSignature(idle, frame60)
         "reducer_frame_100ms_idle" -> reducerSignature(idle, frame100Millis)
-        "fixed_step_collision_miss" -> collisionMiss.copyForReduction().run {
+        "fixed_step_collision_miss" -> collisionMiss.deepCopy().run {
             simulateStep(MutableGameState.FIXED_STEP)
             stateSignature(this)
         }
-        "fixed_step_collision_hit" -> collisionHit.copyForReduction().run {
+        "fixed_step_collision_hit" -> collisionHit.deepCopy().run {
             simulateStep(MutableGameState.FIXED_STEP)
             stateSignature(this)
         }
-        "fixed_step_budget_48_idle" -> idle.copyForReduction().run {
+        "fixed_step_budget_48_idle" -> idle.deepCopy().run {
             accumulator = MutableGameState.FIXED_STEP * 48f
             consumeFixedStepBudget()
             stateSignature(this)
@@ -557,15 +557,15 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
         "published_reaction_burst_100ms_2x" ->
             publishedReactionSignature(fastReactionsAuthority, fastReactionsSnapshot, frame100Millis)
         "trace_2s_60hz" -> deterministicTraceFingerprint(seed + 9)
-        "structure_dungeon" -> structureDungeon.copyForReduction().run {
+        "structure_dungeon" -> structureDungeon.deepCopy().run {
             simulateStep(MutableGameState.FIXED_STEP)
             stateSignature(this)
         }
-        "dimension_visit" -> dimensionVisit.copyForReduction().run {
+        "dimension_visit" -> dimensionVisit.deepCopy().run {
             simulateStep(MutableGameState.FIXED_STEP)
             stateSignature(this)
         }
-        "terrain_window" -> terrainWindow.copyForReduction().run {
+        "terrain_window" -> terrainWindow.deepCopy().run {
             simulateStep(MutableGameState.FIXED_STEP)
             stateSignature(this)
         }
@@ -576,7 +576,7 @@ private class GameplayBenchmarkFixtures(private val seed: Int) {
         value * 2_862_933_555_777_941_757L + 3_037_000_493L
 
     private fun fixedStepOutcomeFingerprint(source: MutableGameState): Long =
-        source.copyForReduction().run {
+        source.deepCopy().run {
             simulateStep(MutableGameState.FIXED_STEP)
             canonicalStateFingerprint(this)
         }

@@ -739,7 +739,7 @@ class ObstacleSystemTest {
         state.destroyedObstacleIds = listOf(target.id)
         assertTrue(state.generateChunk(chunk, 4).none { it.id == target.id })
         assertEquals(
-            state.copyForReduction().apply { destroyedObstacleIds = emptyList() }.generateChunk(chunk, 4).filter { it.id != target.id },
+            state.deepCopy().apply { destroyedObstacleIds = emptyList() }.generateChunk(chunk, 4).filter { it.id != target.id },
             state.generateChunk(chunk, 4),
             "the rest of the chunk does not move",
         )
@@ -1174,11 +1174,11 @@ class ObstacleSystemTest {
             assertEquals(obstacle.radius, projection.radius)
             assertEquals(obstacle.shapeSeed, projection.shapeSeed)
         }
-        val next = state.copyForReduction()
+        val next = state.deepCopy()
         next.coreX += 10f
         val second = next.toRenderModel(first, state)
         assertSame(first.obstacles, second.obstacles)
-        val equalContent = state.copyForReduction().apply { obstacleField = obstacleField.shifted(0f, 0f) }
+        val equalContent = state.deepCopy().apply { obstacleField = obstacleField.shifted(0f, 0f) }
         assertSame(first.obstacles, equalContent.toRenderModel(first, null).obstacles)
     }
 

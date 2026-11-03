@@ -94,7 +94,7 @@ internal fun MutableGameState.toRenderModel(
         rewardPreviews = if (phase == GamePhase.CHOICE && identitySource?.phase == GamePhase.CHOICE &&
             choices === identitySource.choices && reusableCollections != null &&
             equippedRelics === identitySource.equippedRelics && weapon == identitySource.weapon && elapsed == identitySource.elapsed &&
-            itemStacks.sharesStorageWith(identitySource.itemStacks) && build === identitySource.build &&
+            itemStacks.reuseIfContentEqual(reusableCollections.itemStacks) != null && build === identitySource.build &&
             discoveredPairingMask == identitySource.discoveredPairingMask &&
             discoveredReactionMask == identitySource.discoveredReactionMask &&
             buildStats(withContributions = false) == identitySource.buildStats(withContributions = false)
@@ -330,23 +330,14 @@ internal fun MutableGameState.toRenderModel(
             reusable = reusableCollections?.sites,
             identitySource = identitySource,
         ),
-        itemStacks = itemStacks.reuseIfStorageShared(
-            identitySource?.itemStacks,
-            reusableCollections?.itemStacks,
-        ) ?: itemStacks.reuseIfContentEqual(reusableCollections?.itemStacks)
+        itemStacks = itemStacks.reuseIfContentEqual(reusableCollections?.itemStacks)
             ?: itemStacks.toImmutableList(),
         discoveredRelicMask = discoveredRelicMask,
-        discoveredItemIds = discoveredItemIds.reuseIfStorageShared(
-            identitySource?.discoveredItemIds,
-            reusableCollections?.discoveredItemIds,
-        ) ?: discoveredItemIds.reuseIfContentEqual(reusableCollections?.discoveredItemIds)
+        discoveredItemIds = discoveredItemIds.reuseIfContentEqual(reusableCollections?.discoveredItemIds)
             ?: discoveredItemIds.toImmutableSet(),
-        relicRanks = relicRanks.reuseIfStorageShared(
-            identitySource?.relicRanks,
-            reusableCollections?.relicRanks,
-        ) ?: relicRanks.reuseIfContentEqual(reusableCollections?.relicRanks)
+        relicRanks = relicRanks.reuseIfContentEqual(reusableCollections?.relicRanks)
             ?: relicRanks.toImmutableList(),
-        build = buildProjection(reusableCollections?.build, identitySource),
+        build = buildProjection(reusableCollections?.build, identitySource, reusableCollections?.itemStacks),
         discoveredReactionMask = discoveredReactionMask,
         discoveredPairingMask = discoveredPairingMask,
         coreRadius = coreRadius,
@@ -362,7 +353,7 @@ internal fun MutableGameState.toRenderModel(
         obstacles = obstacleProjection(reusableCollections?.obstacles, identitySource?.obstacleField),
         minimapRange = minimapRange(),
         weaponEntities = weaponEntityProjection(reusableCollections?.weaponEntities, identitySource?.weaponRuntime),
-        // A scalar-input sibling shares the weapon runtime and changes no synergy input.
+        // The same weapon runtime changes no synergy input.
         weaponSynergy = reusableCollections?.weaponSynergy?.takeIf { identitySource != null && weaponRuntime === identitySource.weaponRuntime }
             ?: weaponSynergyProjection(reusableCollections?.weaponSynergy),
         rebirthRank = rebirthRank,
@@ -446,7 +437,7 @@ private fun MutableGameState.anchorsAttractor(enemyId: Int): Boolean {
     return false
 }
 
-/** The same table (a scalar-input sibling) or equal records keep the previous projection. */
+/** The same table or equal records keep the previous projection. */
 private fun MutableGameState.combatFieldProjection(
     reusable: ImmutableList<CombatFieldProjection>?,
     identityTable: CombatFieldTable?,
@@ -649,15 +640,19 @@ private fun MutableGameState.remainingShare(until: Float, seconds: Float): Float
     else -> ((until - elapsed) / seconds).coerceIn(0f, 1f)
 }
 
-/** Relic gauges change during combat; the compiled build's immutable collections do not. */
+/**
+ * Relic gauges change during combat; the compiled build's immutable collections do not. The same build and pairing
+ * mask with equal item stacks ([previousItemStacks]) and Reborn flags keep everything but the gauges.
+ */
 private fun MutableGameState.buildProjection(
     previous: BuildProjection?,
     identitySource: MutableGameState?,
+    previousItemStacks: ImmutableList<Int>?,
 ): BuildProjection {
     if (previous == null || identitySource == null || build !== identitySource.build ||
         discoveredPairingMask != identitySource.discoveredPairingMask ||
-        !itemStacks.sharesStorageWith(identitySource.itemStacks) ||
-        !rebornItems.sharesStorageWith(identitySource.rebornItems)
+        itemStacks.reuseIfContentEqual(previousItemStacks) == null ||
+        !rebornItemsMatch(previous.rebornItemIds)
     ) return buildProjection()
 
     val severed = severedRelics.reuseProjectionIfContentEqual(previous.severed) { value, projection ->
@@ -685,7 +680,20 @@ private fun MutableGameState.buildProjection(
     )
 }
 
-/** The same runtime (a scalar-input sibling) or equal entities keep the previous projection. */
+/** True when [ids] lists exactly the items whose Reborn flag is set, in content order (as [buildProjection] builds). */
+private fun MutableGameState.rebornItemsMatch(ids: ImmutableList<Int>): Boolean {
+    var next = 0
+    val items = content.items
+    for (index in items.indices) {
+        val id = items[index].id
+        if (rebornItems[id] == 0) continue
+        if (next >= ids.size || ids[next] != id) return false
+        next++
+    }
+    return next == ids.size
+}
+
+/** The same runtime or equal entities keep the previous projection. */
 private fun MutableGameState.weaponEntityProjection(
     reusable: ImmutableList<WeaponEntityProjection>?,
     identityRuntime: WeaponRuntime?,
@@ -802,7 +810,7 @@ private fun MutableGameState.runStatisticsProjection(reusable: RunStatistics?): 
     )
 }
 
-/** The same runtime (a scalar-input sibling) or equal content keeps the previous projection. */
+/** The same runtime or equal content keeps the previous projection. */
 private fun MutableGameState.characterAbilityProjection(
     reusable: CharacterAbilityProjection?,
     identityRuntime: CharacterRuntime?,
@@ -989,15 +997,3 @@ private fun <Element> List<Element>.reuseIfContentEqual(
     }
     return previous
 }
-
-private fun CopyOnWriteIntArray.reuseIfStorageShared(
-    previousSource: CopyOnWriteIntArray?,
-    previousProjection: ImmutableList<Int>?,
-): ImmutableList<Int>? =
-    previousProjection?.takeIf { previousSource != null && sharesStorageWith(previousSource) }
-
-private fun <Element> CopyOnWriteMutableSet<Element>.reuseIfStorageShared(
-    previousSource: CopyOnWriteMutableSet<Element>?,
-    previousProjection: ImmutableSet<Element>?,
-): ImmutableSet<Element>? =
-    previousProjection?.takeIf { previousSource != null && sharesStorageWith(previousSource) }

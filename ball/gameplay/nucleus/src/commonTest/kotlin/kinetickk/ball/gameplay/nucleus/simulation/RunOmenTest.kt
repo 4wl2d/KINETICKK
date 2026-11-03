@@ -98,7 +98,7 @@ class RunOmenTest {
         assertEquals(GamePhase.RUNNING, pending.phase)
         assertFalse(pending.omenPending)
         // The arming flag is part of the run and survives every reduction copy.
-        assertTrue(startedRun().copyForReduction().offersRunOmen)
+        assertTrue(startedRun().deepCopy().offersRunOmen)
     }
 
     @Test
@@ -396,7 +396,7 @@ class RunOmenTest {
                     assertTrue(preview.changes.isEmpty(), "Seed $seed: No omen previews nothing")
                     return@forEachIndexed
                 }
-                val accepted = state.copyForReduction().apply { choose(index) }
+                val accepted = state.deepCopy().apply { choose(index) }
                 val afterStats = accepted.buildStats()
                 val changed = afterStats.filterIndexed { row, stat -> kotlin.math.abs(stat.value - beforeStats[row].value) >= 0.00001f }
                 assertEquals(changed.map { it.name }, preview.changes.map { it.name }, "Seed $seed ${card.omenId}")

@@ -313,7 +313,7 @@ class CoreSteeringTest {
     @Test
     fun steeringStateIsIsolatedInReductionCopiesAndResetForTheNextRun() {
         val source = steeringState().apply { coreStraightness = 0.4f }
-        val fork = source.copyForReduction()
+        val fork = source.deepCopy()
         assertEquals(0.4f, fork.coreStraightness)
         assertEquals(1f, fork.gripStrength)
         assertEquals(1f, fork.slingStrength)

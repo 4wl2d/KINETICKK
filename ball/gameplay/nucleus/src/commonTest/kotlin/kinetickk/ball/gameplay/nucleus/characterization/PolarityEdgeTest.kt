@@ -150,8 +150,8 @@ class PolarityEdgeTest {
     @Test
     fun resizingPreservesRelativeEdgeStrainAndReductionDoesNotMutateTheSource() {
         val source = runningEngine().apply { updatePointer(screenWidth * 0.95f, screenHeight * 0.5f) }
-        val first = source.copyForReduction()
-        val second = source.copyForReduction()
+        val first = source.deepCopy()
+        val second = source.deepCopy()
         second.resize(720f, 1_280f)
         repeat(120) {
             first.updatePolarityStability(STEP)

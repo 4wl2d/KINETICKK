@@ -354,7 +354,7 @@ class EncounterDuelGateTest {
         /** The run of [seed] to the arena, forked into one duel per boss of [arm]; null when it never got there. */
         fun duelsOf(arm: Arm, seed: Int): List<Duel>? {
             val (state, bot) = approach(arm, seed) ?: return null
-            return arm.bosses.map { boss -> duel(state.copyForReduction(), bot.copy(), boss, seed) }
+            return arm.bosses.map { boss -> duel(state.deepCopy(), bot.copy(), boss, seed) }
         }
 
         /**

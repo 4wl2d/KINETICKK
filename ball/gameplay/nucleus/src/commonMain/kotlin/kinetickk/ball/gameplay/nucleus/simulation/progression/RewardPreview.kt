@@ -38,7 +38,7 @@ private fun MutableGameState.rewardPreview(
 ): RewardPreview {
     if (option.rewardFocus != null) return RewardPreview()
     var copy: MutableGameState? = null
-    fun candidate(): MutableGameState = copy ?: copyForReduction().also { copy = it }
+    fun candidate(): MutableGameState = copy ?: deepCopy().also { copy = it }
     when (option.type) {
         ChoiceType.ITEM -> option.itemId?.let { id ->
             val item = content.item(id) ?: return RewardPreview()

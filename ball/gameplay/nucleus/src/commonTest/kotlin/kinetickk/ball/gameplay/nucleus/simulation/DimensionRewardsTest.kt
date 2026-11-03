@@ -754,7 +754,7 @@ class DimensionRewardsTest {
             val state = game().apply { offer(boonCard(boon.id)) }
             val before = state.buildStats()
             val preview = state.rewardPreviews().single()
-            val taken = state.copyForReduction().apply { choose(0) }
+            val taken = state.deepCopy().apply { choose(0) }
             val after = taken.buildStats()
             var moved = 0
             before.zip(after).forEach { (old, new) ->
@@ -808,7 +808,7 @@ class DimensionRewardsTest {
 
         // Taking a card leaves the item pity alone.
         state.offerPity = 4
-        val taken = state.copyForReduction().apply { choose(state.choices.indexOfFirst { state.content.items[it.itemId!!].active == null }.coerceAtLeast(0)) }
+        val taken = state.deepCopy().apply { choose(state.choices.indexOfFirst { state.content.items[it.itemId!!].active == null }.coerceAtLeast(0)) }
         assertEquals(4, taken.offerPity)
         assertTrue(items.any { taken.itemStack(it.id) == 1 })
 

@@ -31,7 +31,7 @@ class ApexArchitectCastTest {
         val cases = CoreShape.entries.flatMap { shape -> listOf(0, 10).map { tier -> shape to tier } }
         val fights = populationOf(cases) { (shape, tier) ->
             firstRuns(shape, tier, CAST_FIGHTS_PER_CASE, PopulationSeeds) { _, state, bot ->
-                fight(state.copyForReduction(), bot.copy(), apex = true, windows = emptyList()).casts
+                fight(state.deepCopy(), bot.copy(), apex = true, windows = emptyList()).casts
             }.map { (seed, casts) -> Triple("$shape tier $tier", seed, casts) }
         }.flatten()
         val silent = fights.filter { it.third == 0 }

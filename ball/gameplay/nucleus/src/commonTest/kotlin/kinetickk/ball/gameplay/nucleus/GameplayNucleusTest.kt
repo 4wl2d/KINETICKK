@@ -28,7 +28,7 @@ import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
-import kinetickk.ball.gameplay.nucleus.simulation.copyForReduction
+import kinetickk.ball.gameplay.nucleus.simulation.deepCopy
 import kinetickk.ball.gameplay.nucleus.simulation.sites.discoverWorld
 import kinetickk.ball.gameplay.nucleus.simulation.emitSound
 import kinetickk.ball.gameplay.nucleus.simulation.emitVisualFx
@@ -407,7 +407,7 @@ class GameplayNucleusTest {
     @Test
     fun atMostOneProfileCommandCanBePending() {
         val state = start(initial(24)).nextState
-        val firstCandidate = state.engine!!.model.copyForReduction().apply { pendingBankedMatter = 3 }
+        val firstCandidate = state.engine!!.model.deepCopy().apply { pendingBankedMatter = 3 }
         val first = interaction(
             state.copy(engine = EngineState(firstCandidate)),
             GameplayInteractionPulse.FrameElapsed.fromValidated(0f),
@@ -421,7 +421,7 @@ class GameplayNucleusTest {
         assertTrue(stateOnlyFrame.outputs.isEmpty())
         assertTrue(stateOnlyFrame.nextState.progressPending)
 
-        val secondCandidate = first.engine!!.model.copyForReduction().apply { pendingBankedMatter = 4 }
+        val secondCandidate = first.engine!!.model.deepCopy().apply { pendingBankedMatter = 4 }
         assertIntentRejection(
             first.copy(engine = EngineState(secondCandidate)),
             GameplayInteractionPulse.FrameElapsed.fromValidated(0f),
@@ -432,7 +432,7 @@ class GameplayNucleusTest {
     @Test
     fun outputsKeepFxProfileAudioOrderAndBound() {
         val state = start(initial(25)).nextState
-        val candidate = state.engine!!.model.copyForReduction().apply {
+        val candidate = state.engine!!.model.deepCopy().apply {
             pendingBankedMatter = 9
             emitVisualFx(VisualFxCue.ShockwaveAdded(1f, 2f, 0.3f, 40f, 2))
             emitSound(GameplayAudioCue.DASH)
@@ -587,7 +587,7 @@ class GameplayNucleusTest {
     @Test
     fun easyRunPublishesNoProfileProgressThroughVictoryAndExit() {
         fun victoryFacts(state: GameplayState): GameplayState = state.copy(
-            engine = EngineState(state.engine!!.model.copyForReduction().apply {
+            engine = EngineState(state.engine!!.model.deepCopy().apply {
                 pendingClearedRebirthLevel = 0
                 pendingArchitectDefeatedWith = CoreShape.ORB
                 pendingVictoryRelics = listOf(RelicId.GYRE_ENGINE)
@@ -656,7 +656,7 @@ class GameplayNucleusTest {
 
     private fun startedWithProgress(runId: Long, bankedMatter: Long): GameplayState {
         val state = start(initial(runId)).nextState
-        val candidate = state.engine!!.model.copyForReduction().apply { runMatter = bankedMatter }
+        val candidate = state.engine!!.model.deepCopy().apply { runMatter = bankedMatter }
         return state.copy(engine = EngineState(candidate))
     }
 }

@@ -221,7 +221,7 @@ class SiteRenderMappingTest {
         assertEquals(0f, before.sites.single().progress)
         // A sibling with the same sites list and clock but a wounded boss: the identity shortcut must not keep the
         // previous duel progress.
-        val sibling = game.copyForReduction()
+        val sibling = game.deepCopy()
         sibling.enemies.single { it.id == boss.id }.hp = boss.maxHp * 0.4f
         val after: GameplayRenderModel = sibling.toRenderModel(reusableCollections = before, identitySource = game)
         assertEquals(0.6f, after.sites.single().progress, 1e-5f)

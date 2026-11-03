@@ -129,7 +129,7 @@ class ReworkContractHelpersTest {
         assertTrue(state.projectiles.isEmpty())
         assertTrue(state.hp < state.maxHp)
 
-        assertEquals(30f, state.copyForReduction().coreRadius)
+        assertEquals(30f, state.deepCopy().coreRadius)
         state.resetRunStats()
         assertEquals(MutableGameState.CORE_RADIUS, state.coreRadius, "a new run starts at the default radius")
     }

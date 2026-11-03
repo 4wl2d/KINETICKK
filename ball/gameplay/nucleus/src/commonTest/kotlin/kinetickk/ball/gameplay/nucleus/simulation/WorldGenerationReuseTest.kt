@@ -53,7 +53,7 @@ class WorldGenerationReuseTest {
     fun templatePoolRemainsEquivalentToPurePlacementAcrossReductionSiblings() {
         for (seed in listOf(0, 731_991, -42)) {
             val original = MutableGameState(canonicalGameplayContent, seed = seed).apply { startRun() }
-            val sibling = original.copyForReduction()
+            val sibling = original.deepCopy()
             for (state in listOf(original, sibling)) {
                 for (layer in WorldLayer.entries) for (x in -7..7) for (y in -7..7) {
                     assertEquals(

@@ -625,7 +625,7 @@ class SecretSiteTest {
             return (0 until count).any { marks[it * 3] == sigil.x && marks[it * 3 + 1] == sigil.y }
         }
         assertTrue(projected() && marked())
-        val realspace = game.copyForReduction()
+        val realspace = game.deepCopy()
         val realspaceProjections = game.siteProjections(null, null)
 
         // A Zenith rift taken before the touch: inside, the sigil is neither shown, marked nor touchable.
@@ -641,7 +641,7 @@ class SecretSiteTest {
         assertTrue(game.enemies.none { it.type == SIGIL_BOSS })
 
         // Back in realspace it lies where it was and summons its duel at the touch.
-        val dimension = game.copyForReduction()
+        val dimension = game.deepCopy()
         game.exitDimension(DimensionExit.PORTAL)
         assertEquals(WorldLayer.BASE, game.worldLayer)
         assertEquals(sigil, game.secretSigil, "the sigil waited where it lay")

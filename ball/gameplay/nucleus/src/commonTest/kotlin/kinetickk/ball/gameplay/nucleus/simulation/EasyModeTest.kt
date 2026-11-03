@@ -279,11 +279,10 @@ class EasyModeTest {
     @Test
     fun babyModeSurvivesEveryReductionCopy() {
         val committed = cursorOnTheCore(RunMode.EASY).apply { repeat(12) { update(1f / 24f) } }
-        assertTrue(committed.copyForReduction().easyMode)
-        assertTrue(committed.copyForScalarInputReduction().easyMode)
+        assertTrue(committed.deepCopy().easyMode)
         val facts = committed.facts()
 
-        val candidate = committed.copyForReduction()
+        val candidate = committed.deepCopy()
         candidate.hurtCooldown = 0f
         candidate.takeDamage(10f)
         candidate.boopOffSingularity(candidate.coreX + 3f, candidate.coreY)

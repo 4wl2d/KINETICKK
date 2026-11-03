@@ -231,7 +231,7 @@ class ActiveItemFrequencyGateTest {
                     sampledLevel = s.level
                     // Forks only: the run itself never opens the reward, so its stream and outcome are untouched.
                     for (focus in PoiFocuses) repeat(POI_SAMPLES) { sample ->
-                        val fork = s.copyForReduction()
+                        val fork = s.deepCopy()
                         fork.rewardRandom = CloneableXorWowRandom(seed * 31 + s.level * 1_009 + focus.ordinal * 97 + sample)
                         fork.openDirectedReward(DirectedReward.ITEM_AND_REPAIR)
                         fork.selectRewardFocus(focus)

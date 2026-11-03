@@ -31,9 +31,8 @@ import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
 import kinetickk.ball.gameplay.nucleus.reducer.ReductionOutcome
 import kinetickk.ball.gameplay.nucleus.reducer.initialEngineState
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
-import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.simulation.applyPreferences
-import kinetickk.ball.gameplay.nucleus.simulation.copyForReduction
+import kinetickk.ball.gameplay.nucleus.simulation.deepCopy
 import kinetickk.ball.gameplay.nucleus.simulation.exitRun
 import kinetickk.ball.gameplay.nucleus.simulation.pauseForOverlay
 import kinetickk.ball.gameplay.nucleus.simulation.startRun
@@ -86,7 +85,7 @@ object GameplayNucleus {
         if (outcome == ReductionOutcome.REJECTED) return GameplayTickResult.Rejected(checkNotNull(sink.rejection))
         // Earned progress awaits its Profile reply: a step that could publish more runs on a copy a rejection drops.
         val isolated = outcome == ReductionOutcome.STEPPED && state.progressPending
-        val model = if (isolated) engine.model.copyForReduction() else engine.model
+        val model = if (isolated) engine.model.deepCopy() else engine.model
         reducer.reduceInPlace(model, pulse, outcome, sink)
         val publishesProgress = sink.progressUpdate != null
         if (publishesProgress && state.progressPending) {
@@ -488,7 +487,7 @@ object GameplayNucleus {
         engine: EngineState,
         mutation: (kinetickk.ball.gameplay.nucleus.simulation.MutableGameState) -> Unit,
     ): GameReduction {
-        val candidate = engine.model.copyForReduction()
+        val candidate = engine.model.deepCopy()
         mutation(candidate)
         val visualFxCues = candidate.takeVisualFxCues()
         val progressUpdate = candidate.takeProgressUpdate()
@@ -554,14 +553,6 @@ object GameplayNucleus {
 
     private fun rejected(reason: GameplayRejection): GameplayDecision.Rejected =
         GameplayDecision.Rejected(reason)
-
-    private fun GamePhase.toRunPhase(): GameplayRunPhase = when (this) {
-        GamePhase.RUNNING -> GameplayRunPhase.RUNNING
-        GamePhase.PAUSED -> GameplayRunPhase.PAUSED
-        GamePhase.CHOICE -> GameplayRunPhase.CHOICE
-        GamePhase.GAME_OVER -> GameplayRunPhase.GAME_OVER
-        GamePhase.VICTORY -> GameplayRunPhase.VICTORY
-    }
 
     private fun GameplayRevision.next(): GameplayRevision = GameplayRevision(value + 1L)
 }

@@ -642,7 +642,6 @@ class SkillSystemTest {
         assertEquals(1 shl slot, buffered.model.skillBufferMask)
         assertEquals(MutableGameState.SKILL_INPUT_BUFFER_SECONDS, buffered.model.skillBufferTime)
         assertEquals(0, model.skillBufferMask, "the committed state is untouched")
-        assertSame(model.skillRuntime, buffered.model.skillRuntime, "a request shares the skill runtime")
 
         assertSame(buffered, assertIs<GameReductionResult.Accepted>(reducer.reduce(buffered, request)).state, "a repeat")
         val empty = GameplayInteractionPulse.SkillRequested.fromValidated(slot + 1)
@@ -677,7 +676,7 @@ class SkillSystemTest {
         state.castSkill(slot)
         val committed = state.skillRuntime.toString()
         val loadout = state.skillLoadout
-        val candidate = state.copyForReduction()
+        val candidate = state.deepCopy()
         assertTrue(candidate.skillRuntime.sharesStorageWith(state.skillRuntime), "a fork shares until it writes")
         candidate.elapsed = candidate.skillRuntime[slot, SkillCell.PENDING_AT]
         candidate.updateSkills(0f)

@@ -400,7 +400,7 @@ class EventSignalTest {
                 itemDeck = ItemDeck.EVERYTHING
                 level = 60
             }
-            val plain = prompt.copyForReduction()
+            val plain = prompt.deepCopy()
             prompt.openPrompt(option.kind!!)
             prompt.take(option)
             plain.openItemChoice()
@@ -481,7 +481,7 @@ class EventSignalTest {
             val state = arena().openPrompt(SignalKind.SHRINE)
             val preview = state.rewardPreviews()[state.choices.indexOfFirst { it.signalOption == option }]
             assertTrue(preview.changes.isNotEmpty(), "$option previews its stats")
-            val taken = state.copyForReduction().apply { take(option) }.buildStats()
+            val taken = state.deepCopy().apply { take(option) }.buildStats()
             preview.changes.forEach { change ->
                 assertEquals(taken.single { it.name == change.name }.value, change.after, 0.0001f, "$option ${change.name}")
             }
@@ -655,7 +655,7 @@ class EventSignalTest {
                 elapsed = 300f
                 runMatter = 400L
             }.openPrompt(kind)
-            val reference = state.copyForReduction()
+            val reference = state.deepCopy()
             state.take(SignalOption.IGNORE)
             assertTrue(state.pendingSignalPrompts.isEmpty())
             assertEquals(GamePhase.RUNNING, state.phase)
@@ -677,7 +677,7 @@ class EventSignalTest {
             runMatter = 100L
         }.openPrompt(SignalKind.MERCHANT)
         val prompts = state.pendingSignalPrompts
-        val fork = state.copyForReduction()
+        val fork = state.deepCopy()
         fork.take(SignalOption.MERCHANT_REROLLS)
         assertEquals(70L, fork.runMatter)
         assertEquals(100L, state.runMatter)

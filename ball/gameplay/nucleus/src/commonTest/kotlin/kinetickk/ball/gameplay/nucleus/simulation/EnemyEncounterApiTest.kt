@@ -287,7 +287,7 @@ class EnemyEncounterApiTest {
         val source = game()
         val tag = encounterTag(EncounterOwner.SITE, 5)
         assertTrue(source.spawnEncounter(request(5, List(2) { EnemyType.DRIFTER })))
-        val candidate = source.copyForReduction()
+        val candidate = source.deepCopy()
         candidate.onEnemyKilled(candidate.enemies.first())
         candidate.endEncounter(tag, despawn = false)
         assertEquals(0, assertNotNull(source.encounter(tag)).killed)
