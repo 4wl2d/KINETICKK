@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.BuildTag
+import kinetickk.ball.content.api.CoreStasisTuning
 import kinetickk.ball.content.api.DirectorPersonalityId
 import kinetickk.ball.content.api.EquippedRelic
 import kinetickk.ball.content.api.OmenId
@@ -551,6 +552,30 @@ class GameplayRenderModelMapperTest {
     }
 
     @Test
+    fun coreStasisProjectsItsLevelAndFractureFlagAndNothingWhenMeasureOnly() {
+        val thawed = fullyPopulatedState().toRenderModel()
+        assertEquals(0f, thawed.coreStasis)
+        assertFalse(thawed.coreStasisFracturing)
+        val frozen = fullyPopulatedState().apply {
+            coreStasis.stillSeconds = 16f
+        }.toRenderModel()
+        assertEquals(0.5f, frozen.coreStasis)
+        assertFalse(frozen.coreStasisFracturing)
+        val fracturing = fullyPopulatedState().apply {
+            coreStasis.stillSeconds = content.coreStasis.fullStasisSeconds
+            coreStasis.frozenSeconds = content.coreStasis.fractureDelaySeconds
+        }
+        assertEquals(1f, fracturing.toRenderModel().coreStasis)
+        assertTrue(fracturing.toRenderModel().coreStasisFracturing)
+        val measured = MutableGameState(canonicalGameplayContent.copy(coreStasis = CoreStasisTuning.MEASURE_ONLY)).apply {
+            coreStasis.stillSeconds = 22f
+            coreStasis.frozenSeconds = 6f
+        }.toRenderModel()
+        assertEquals(0f, measured.coreStasis)
+        assertFalse(measured.coreStasisFracturing)
+    }
+
+    @Test
     fun obstacleFuseAndPolarityAndEnemyChargesReprojectOnlyWhenTheyChange() {
         val source = fullyPopulatedState().apply {
             enemies.single().charges = 2
@@ -723,6 +748,8 @@ class GameplayRenderModelMapperTest {
         "coreState" to coreState,
         "coreStraightness" to coreStraightness.toRawBits(),
         "easyMode" to easyMode,
+        "coreStasis" to coreStasis.toRawBits(),
+        "coreStasisFracturing" to coreStasisFracturing,
         "ambientSites" to ambientSites.map { it.exactFacts() },
         "trial" to trial,
         "secretFlags" to secretFlags,

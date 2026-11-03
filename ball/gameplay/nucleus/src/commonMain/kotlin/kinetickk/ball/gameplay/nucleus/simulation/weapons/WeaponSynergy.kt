@@ -11,6 +11,7 @@ import kinetickk.ball.gameplay.nucleus.render.WeaponSynergyProjection
 import kinetickk.ball.gameplay.nucleus.simulation.*
 import kinetickk.ball.gameplay.nucleus.simulation.build.*
 import kinetickk.ball.gameplay.nucleus.simulation.combat.*
+import kinetickk.ball.gameplay.nucleus.simulation.flight.coreStasisActivationMultiplier
 import kotlin.math.min
 import kotlin.math.pow
 
@@ -130,10 +131,11 @@ internal fun MutableGameState.weaponOverdriveFactor(): Float =
 
 /**
  * Rate multiplier of CONTINUOUS and CONTACT weapons (damage and orbit or sweep speed): three quarters
- * of the attack-speed, mastery and build activation gain. Discrete weapons take [cooldown] instead.
+ * of the attack-speed, mastery, build activation and Core Stasis gain. Discrete weapons take [cooldown] instead.
  */
 internal fun MutableGameState.continuousWeaponRate(): Float {
-    val rate = attackSpeed * (1f + currentWeaponMastery.activationSpeedBonus) * buildActivationBonus()
+    val rate = attackSpeed * (1f + currentWeaponMastery.activationSpeedBonus) * buildActivationBonus() *
+        coreStasisActivationMultiplier()
     val scaled = 1f + 0.75f * (rate - 1f)
     return if (!(scaled >= 0.25f)) 0.25f else scaled
 }

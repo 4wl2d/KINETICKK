@@ -219,6 +219,7 @@ internal fun MutableGameState.populateAdditionalRetainedState() {
     spentStructureIds = listOf(11L, 12L)
     lastAnnouncedStructureId = 13L
     coreStraightness = 0.25f
+    populateCoreStasisRetainedState()
     gripStrength = 1.5f
     slingStrength = 0.75f
     pendingDirectedRewards = listOf(DirectedReward.ITEM_AND_REPAIR, DirectedReward.WEAPON)
@@ -841,6 +842,7 @@ internal fun MutableGameState.exactSimulationFingerprint(): List<Pair<String, An
         float("turnRecoveryCooldown", turnRecoveryCooldown)
         value("turnDirection", turnDirection)
         float("coreStraightness", coreStraightness)
+        coreStasisFingerprint(this@exactSimulationFingerprint)
         float("timeSinceDamage", timeSinceDamage)
         float("hurtCooldown", hurtCooldown)
         float("lastAimDirectionX", lastAimDirectionX)
@@ -1158,9 +1160,7 @@ internal fun ExactFingerprint.buildFingerprint(state: MutableGameState) {
 internal class ExactFingerprint {
     val fields = mutableListOf<Pair<String, Any?>>()
 
-    fun value(name: String, value: Any?) {
-        fields += name to value
-    }
+    fun value(name: String, value: Any?) { fields += name to value }
 
     fun float(name: String, value: Float) {
         fields += name to value.toRawBits()

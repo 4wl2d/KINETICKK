@@ -16,6 +16,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
 import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
+import kinetickk.ball.gameplay.nucleus.simulation.flight.*
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.skills.*
 import kinetickk.ball.gameplay.nucleus.simulation.variety.*
@@ -114,6 +115,7 @@ internal fun MutableGameState.toRenderModel(
         combatFields = combatFieldProjection(reusableCollections?.combatFields, identitySource?.combatFieldTable),
         coreState = coreStateProjection(reusableCollections?.coreState),
         coreStraightness = coreStraightness, easyMode = easyMode,
+        coreStasis = coreStasisLevel(), coreStasisFracturing = coreStasisFracturing(),
         ambientSites = ambientSiteProjections(reusableCollections?.ambientSites, identitySource),
         trial = trialProjection(reusableCollections?.trial),
         secretFlags = runSecretFlags, goldenDrifterId = goldenDrifterId,

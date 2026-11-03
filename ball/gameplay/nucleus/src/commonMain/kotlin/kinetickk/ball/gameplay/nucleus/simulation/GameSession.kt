@@ -16,6 +16,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
 import kinetickk.ball.gameplay.nucleus.simulation.director.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
+import kinetickk.ball.gameplay.nucleus.simulation.flight.*
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.sites.*
 import kinetickk.ball.gameplay.nucleus.simulation.structures.*
@@ -142,15 +143,7 @@ internal fun MutableGameState.startRun() {
     touchBrakeActive = false
     updateBraking()
     dashBufferTime = 0f
-    saturationHeadingX = 1f
-    saturationHeadingY = 0f
-    smoothedVelocityX = 0f
-    smoothedVelocityY = 0f
-    turnHeadingEstablished = false
-    turnHoldTime = 0f
-    turnRecoveryCooldown = 0f
-    turnDirection = 0
-    coreStraightness = 0f
+    resetCoreMotionMemory()
     elapsed = 0f
     heat = 0f
     overheated = false

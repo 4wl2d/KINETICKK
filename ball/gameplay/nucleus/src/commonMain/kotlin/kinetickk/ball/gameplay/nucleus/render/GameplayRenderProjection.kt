@@ -501,6 +501,10 @@ class GameplayRenderModel(
     val coreStraightness: Float = 0f,
     /** The run was started in Easy mode (fixed for the whole run). */
     val easyMode: Boolean = false,
+    /** Core Stasis level 0..1 (0: off, measure-only or thawed); renderers and later audio read it. */
+    val coreStasis: Float = 0f,
+    /** The frozen Core is fracturing (integrity ticks); never true in Easy mode. */
+    val coreStasisFracturing: Boolean = false,
     /** Hash-placed caches and signals around the Core (never offered by a window). */
     val ambientSites: ImmutableList<SiteProjection> = immutableListOf(),
     /** The one HUD trial panel's facts: the active site, dungeon or dimension objective, or null. */

@@ -48,6 +48,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.world.*
 import kinetickk.ball.gameplay.nucleus.simulation.skills.SkillCastState
 import kinetickk.ball.gameplay.nucleus.simulation.elements.CoreReactionState
 import kinetickk.ball.gameplay.nucleus.simulation.director.SpawnDirectorState
+import kinetickk.ball.gameplay.nucleus.simulation.flight.CoreStasisState
 
 /**
  * Reducer-owned simulation state. Each field declares its initial value and its copy from [copySource] together,
@@ -119,6 +120,8 @@ internal class MutableGameState(
     internal val spawnDirector: SpawnDirectorState = SpawnDirectorState(content, copySource?.spawnDirector)
     /** Structure window, dungeon and spent structures. */
     internal val structures: StructureRunState = StructureRunState(copySource?.structures)
+    /** Core Stasis: the leash anchor, speed average and stillness clocks. */
+    internal val coreStasis: CoreStasisState = CoreStasisState(copySource?.coreStasis)
 
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
@@ -792,9 +795,7 @@ internal value class PendingDiscoveredItemIdBuffer(
         return true
     }
 
-    operator fun plusAssign(itemId: Int) {
-        add(itemId)
-    }
+    operator fun plusAssign(itemId: Int) { add(itemId) }
 
     fun clear() {
         owner.pendingDiscoveredItemIdStorage = null
@@ -830,9 +831,7 @@ internal value class PendingSoundCueBuffer(
         return true
     }
 
-    operator fun plusAssign(cue: GameplayAudioCue) {
-        add(cue)
-    }
+    operator fun plusAssign(cue: GameplayAudioCue) { add(cue) }
 
     fun clear() {
         owner.soundCueStorage = null

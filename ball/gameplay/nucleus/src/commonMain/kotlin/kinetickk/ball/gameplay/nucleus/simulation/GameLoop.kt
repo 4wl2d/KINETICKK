@@ -134,7 +134,6 @@ internal fun MutableGameState.simulateStep(delta: Float) {
             combo / 2
         } else 0
     }
-
     updateSurvival(delta)
     updateOverdrive(delta)
     updateHeat(delta)
@@ -163,6 +162,7 @@ internal fun MutableGameState.simulateStep(delta: Float) {
     updateSites(delta)
     updateStructures(delta)
     updateDimension(delta)
+    updateCoreStasis(delta)
     if (phase != GamePhase.RUNNING) return
     updateRunVariety(delta)
     // A world-event strike can end the run: nothing else acts once it did.
