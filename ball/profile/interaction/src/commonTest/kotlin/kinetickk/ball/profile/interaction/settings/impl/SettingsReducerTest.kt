@@ -302,7 +302,7 @@ class SettingsReducerTest {
         assertEquals(2f, model.preferences.simulationSpeed)
         assertEquals(1f, model.preferences.textScale)
         assertEquals("65%", settingValue(PlayerPreferences(), SettingsRow.MASTER_VOLUME))
-        assertEquals("50/200/1 тыс.", settingValue(PlayerPreferences(), SettingsRow.DAMAGE_COLOR_THRESHOLDS))
+        assertEquals("50/200/1K", settingValue(PlayerPreferences(), SettingsRow.DAMAGE_COLOR_THRESHOLDS))
         assertEquals("50/200/1K", settingValue(PlayerPreferences(language = AppLanguage.English), SettingsRow.DAMAGE_COLOR_THRESHOLDS))
     }
 

@@ -3,10 +3,11 @@
 
 package kinetickk.ball.gameplay.interaction.fx
 
-import kinetickk.ball.gameplay.nucleus.render.formatDamageNumber
 import kinetickk.ball.profile.api.DamageNumberFormat
+import kinetickk.ball.profile.api.formatDamageNumber
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.mapToImmutableList
+import kinetickk.foundation.common.localization.AppLanguage
 
 /*
  * The live entries of [InteractionFxReducer]: mutable presentation memory it advances in place each step and copies
@@ -57,9 +58,10 @@ internal data class DamageNumber(
     val amount: Long,
     val critical: Boolean,
     var life: Float = InteractionFxLimits.DAMAGE_NUMBER_LIFE_SECONDS,
-    val compactAmount: String = formatDamageNumber(amount, DamageNumberFormat.COMPACT),
-    val fullAmount: String = formatDamageNumber(amount, DamageNumberFormat.FULL),
-    val russianCompactAmount: String = compactAmount.russianDamageNumber(),
+    val compactAmount: String = formatDamageNumber(amount, DamageNumberFormat.COMPACT, AppLanguage.English),
+    val fullAmount: String = damageNumberText(amount, DamageNumberFormat.FULL, AppLanguage.English, compactAmount),
+    val russianCompactAmount: String = damageNumberText(amount, DamageNumberFormat.COMPACT, AppLanguage.Russian, compactAmount),
+    val russianFullAmount: String = damageNumberText(amount, DamageNumberFormat.FULL, AppLanguage.Russian, compactAmount),
     val driftX: Float = 0f,
     val driftY: Float = -1f,
     val tone: Int = 0,
@@ -191,6 +193,7 @@ internal fun List<DamageNumber>.toDamageNumberProjections(): ImmutableList<Damag
         compactAmount = value.compactAmount,
         fullAmount = value.fullAmount,
         russianCompactAmount = value.russianCompactAmount,
+        russianFullAmount = value.russianFullAmount,
         driftX = value.driftX,
         driftY = value.driftY,
         tone = value.tone,

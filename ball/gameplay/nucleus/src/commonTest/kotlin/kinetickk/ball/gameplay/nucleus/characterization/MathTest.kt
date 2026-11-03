@@ -3,7 +3,6 @@
 
 package kinetickk.ball.gameplay.nucleus.characterization
 
-import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
@@ -112,24 +111,6 @@ class MathTest {
         assertEquals(719f, softVelocity(719f), 0f)
         assertTrue(softVelocity(2_000f) in 720f..2_000f)
         assertTrue(softVelocity(10_000f) < 10_000f)
-    }
-
-    @Test
-    fun abbreviatesIncrementalHudValues() {
-        assertEquals("999", abbreviateNumber(999L))
-        assertEquals("1K", abbreviateNumber(1_000L))
-        assertEquals("1.2K", abbreviateNumber(1_240L))
-        assertEquals("-1.2K", abbreviateNumber(-1_240L))
-        assertEquals("1M", abbreviateNumber(999_999L))
-        assertEquals("9.2Qi", abbreviateNumber(Long.MAX_VALUE))
-    }
-
-    @Test
-    fun damageNumbersSupportCompactAndFullFormats() {
-        assertEquals("999", formatDamageNumber(999L, DamageNumberFormat.COMPACT))
-        assertEquals("14K", formatDamageNumber(14_000L, DamageNumberFormat.COMPACT))
-        assertEquals("14000", formatDamageNumber(14_000L, DamageNumberFormat.FULL))
-        assertEquals(Long.MAX_VALUE.toString(), formatDamageNumber(Long.MAX_VALUE, DamageNumberFormat.FULL))
     }
 
     @Test

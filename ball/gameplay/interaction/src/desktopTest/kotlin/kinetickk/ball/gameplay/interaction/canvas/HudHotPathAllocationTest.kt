@@ -269,6 +269,30 @@ class HudHotPathAllocationTest {
     }
 
     /**
+     * A Rebirth 10 HUD reads integrity in the compact form (power units × 3,600: "1.08M"): once warm, frames whose
+     * integrity falls every frame inside one shown value, splitting the channels while the hit ghost drains, allocate
+     * nothing, on a desktop and on a portrait phone.
+     */
+    @Test
+    fun aTierTenCompactIntegrityNumberAllocatesNothingOnSteadyFrames() {
+        listOf(1_440 to 810, 390 to 844).forEach { (width, height) ->
+            val model = hudTestModel(width.toFloat(), height.toFloat()).with("maxHp" to 320f, "rebirthLevel" to 10, "numberScale" to 3_600.0)
+            val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
+                AppLanguage.English)
+            val memory = HudPresentationMemory()
+            // 300 → 298.8 integrity reads 1,080,000 → 1,075,680: one shown value, a new raw value every frame.
+            val frames = List(FRAMES) { frame ->
+                model.with("hp" to 300f - frame * 0.003f, "elapsed" to frame * GameplayRenderModel.FIXED_STEP)
+            }
+            val perFrame = steadyFrameBytes(width, height, STEADY_CYCLES) { frame ->
+                drawHud(frames[frame], measurer, 10f + frame * 0.0001f, 0f, 0f, memory)
+            }
+            kotlin.test.assertEquals("1.08M", HudScratch.integrity.current())
+            assertTrue(perFrame <= 64, "tier-10 integrity frame at $width x $height allocates $perFrame bytes above an empty frame")
+        }
+    }
+
+    /**
      * The trial panel of every family (the anomalies, the gate race, the five challenges, the bounty and the sigil
      * duel) with its rules open: once warm, frames whose race clock ticks every frame, whose earned seconds and duel
      * integrity change every frame allocate nothing (a counted goal changes rarely and keeps its line).

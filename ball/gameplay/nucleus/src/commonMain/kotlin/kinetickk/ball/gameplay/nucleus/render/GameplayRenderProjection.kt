@@ -341,23 +341,6 @@ data class WeaponEntityProjection(
     val phase: Int,
 )
 
-/**
- * What links the equipped weapon to the build right now (SPEC 10.2): points in its two tags and the
- * power they add, whether the character is its signature, the bound Relic carrying its key, the element
- * its hits apply or adopt, its scaling multiplier and how many of its three mastery forms are open
- * ([activeMasteryForm] is the latest one's content text).
- */
-data class WeaponSynergyProjection(
-    val tagPoints: Int = 0,
-    val tagBonus: Float = 0f,
-    val signatureActive: Boolean = false,
-    val harmonizingRelic: RelicId? = null,
-    val infusionElement: kinetickk.ball.content.api.StatusElement? = null,
-    val scalingMultiplier: Float = 1f,
-    val masteryForms: Int = 0,
-    val activeMasteryForm: String? = null,
-)
-
 /** Immutable, API-owned projection of a committed GameplayRun frame. */
 class GameplayRenderModel(
     val content: GameplayContentSnapshot,
@@ -497,6 +480,8 @@ class GameplayRenderModel(
     val weaponSynergy: WeaponSynergyProjection = WeaponSynergyProjection(),
     /** Rebirth rank (one above the highest clear) the run started with; the Victory screen names what it earns. */
     val rebirthRank: Int = rebirthLevel,
+    /** Display scale of absolute numbers (damage, integrity, shield): shown values are power units × this. */
+    val numberScale: Double = 1.0,
     /** Volatile Remains bursts waiting to detonate (Rebirth R4). */
     val volatileBursts: ImmutableList<VolatileBurstProjection> = kinetickk.foundation.collections.immutableListOf(),
     /** The run's level cap; at it [level] equals it and Data charges the Apex instead. */

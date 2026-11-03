@@ -8,13 +8,13 @@ import kinetickk.ball.content.api.DimensionRewardKind
 import kinetickk.ball.content.api.RunBoonKind
 import kinetickk.ball.content.api.RunModifierEffect
 import kinetickk.ball.content.api.localizedContent
-import kinetickk.ball.gameplay.interaction.canvas.look.overlayGrouped
 import kinetickk.ball.gameplay.interaction.canvas.look.elementFill
 import kinetickk.ball.gameplay.interaction.canvas.look.elementIcon
 import kinetickk.ball.gameplay.interaction.localization.DimensionHudText
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.formatGroupedNumber
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkCardMaterial
@@ -57,7 +57,7 @@ internal fun GameplayRenderModel.rewardBoonCard(choice: ChoiceOption, index: Int
             choice = choice,
             accent = Kk.Mute2,
             tag = band,
-            descriptions = listOf(language.text(DimensionHudText.RefuseEffect, overlayGrouped((choice.salvageMatter ?: 0).toLong(), language))),
+            descriptions = listOf(language.text(DimensionHudText.RefuseEffect, formatGroupedNumber((choice.salvageMatter ?: 0).toLong(), language))),
             operation = "",
             title = choice.title.localizedContent(language),
             icon = KkIcon.SYSTEM_MATTER,
@@ -73,7 +73,7 @@ internal fun GameplayRenderModel.rewardBoonCard(choice: ChoiceOption, index: Int
     val preview = rewardPreviewOf(choice, index)
     // The preview shows every stat the boon moves; the ones a Pact lowers read as its price below instead.
     val changes = preview?.changes?.map { it.presentation(language) }?.filter { it.improved }
-        ?: boon.gains.mapNotNull { (it as? RunModifierEffect.Stat)?.let { stat -> statPresentation(stat.effect, stat.amount, language) } }
+        ?: boon.gains.mapNotNull { (it as? RunModifierEffect.Stat)?.let { stat -> statPresentation(stat.effect, stat.amount, numberScale, language) } }
     return RewardCardPresentation(
         choice = choice,
         accent = Kk.Bone2,
@@ -82,7 +82,7 @@ internal fun GameplayRenderModel.rewardBoonCard(choice: ChoiceOption, index: Int
         operation = "",
         title = boon.name.localizedContent(language),
         changes = changes,
-        liabilities = boon.costs.flatMap { boonPriceLines(it, language) },
+        liabilities = boon.costs.flatMap { boonPriceLines(it, numberScale, language) },
         forecasts = preview?.forecasts.orEmpty(),
         rank = BOON_CARD_RANK,
         icon = when (boon.kind) {
@@ -100,8 +100,8 @@ internal fun GameplayRenderModel.rewardBoonCard(choice: ChoiceOption, index: Int
  * A Pact's price as cost lines: a lowered stat ("Max integrity −20"), and each hostile scale above 1 as its own line
  * ("Enemy integrity +12%", "Enemy speed +8%", "Damage taken +15%").
  */
-internal fun boonPriceLines(cost: RunModifierEffect, language: AppLanguage): List<String> = when (cost) {
-    is RunModifierEffect.Stat -> listOf(statPresentation(cost.effect, cost.amount, language).let { it.name + " " + it.after })
+internal fun boonPriceLines(cost: RunModifierEffect, numberScale: Double, language: AppLanguage): List<String> = when (cost) {
+    is RunModifierEffect.Stat -> listOf(statPresentation(cost.effect, cost.amount, numberScale, language).let { it.name + " " + it.after })
     is RunModifierEffect.HostileScale -> buildList {
         fun percent(scale: Float) = ((scale - 1f) * 100f).roundToInt()
         if (cost.health > 1f) add(language.text(DimensionHudText.EnemyIntegrityUp, percent(cost.health)))

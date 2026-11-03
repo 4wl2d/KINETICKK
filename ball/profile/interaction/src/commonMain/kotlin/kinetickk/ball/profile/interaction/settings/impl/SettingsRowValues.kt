@@ -5,18 +5,17 @@ package kinetickk.ball.profile.interaction.settings.impl
 
 import androidx.compose.ui.graphics.Color
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
-import kinetickk.ball.profile.api.DamageNumberFormat
 import kinetickk.ball.profile.api.GameAction
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.WindowMode
 import kinetickk.ball.profile.interaction.localization.ProfileText
 import kinetickk.ball.profile.interaction.localization.SettingsRedesignText
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.formatCompactNumber
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.label
-import kinetickk.foundation.design.formatCompact
 import kinetickk.foundation.design.formatMultiplier
 import kotlin.math.roundToInt
 
@@ -187,7 +186,7 @@ internal fun SettingsRow.sliderOutput(
     language: AppLanguage,
     platform: SettingsPlatform = SettingsPlatform.DEFAULT,
 ): String = when (this) {
-    SettingsRow.DAMAGE_COLOR_THRESHOLDS -> formatCompact(preferences.damageNumberTierThreshold.toLong(), language)
+    SettingsRow.DAMAGE_COLOR_THRESHOLDS -> formatCompactNumber(preferences.damageNumberTierThreshold.toLong(), language)
     SettingsRow.WINDOW_SIZE -> platform.liveSizeOverride(preferences)?.let { settingsWindowSizeText(it.widthDp, it.heightDp, language) }
         ?: settingsWindowSizeText(preferences.windowSize.widthDp, preferences.windowSize.heightDp, language)
     SettingsRow.FRAME_RATE_CAP -> settingsFrameRateText(preferences.frameRateCap, language)
@@ -209,7 +208,7 @@ private fun SettingsRow.sliderValueRaw(preferences: PlayerPreferences): Float = 
 }
 
 internal fun settingsThresholdOutputSamples(language: AppLanguage): List<String> =
-    DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.map { formatCompact(it.toLong(), language) }
+    DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.map { formatCompactNumber(it.toLong(), language) }
 
 private fun thresholdIndex(preferences: PlayerPreferences): Int =
     DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS.indices.minByOrNull { index ->
@@ -244,7 +243,7 @@ internal fun settingValue(
         val first = preferences.damageNumberTierThreshold.toLong()
         val second = first * DAMAGE_NUMBER_POWERFUL_MULTIPLIER
         val third = first * DAMAGE_NUMBER_DEVASTATING_MULTIPLIER
-        "${formatCompact(first, language)}/${formatCompact(second, language)}/${formatCompact(third, language)}"
+        "${formatCompactNumber(first, language)}/${formatCompactNumber(second, language)}/${formatCompactNumber(third, language)}"
     }
     SettingsRow.PAUSE_ON_FOCUS_LOSS, SettingsRow.VSYNC, SettingsRow.IMMERSIVE, SettingsRow.SHOW_FPS, SettingsRow.FULLSCREEN ->
         onOff(row.isOn(preferences, platform), language)
@@ -262,12 +261,6 @@ internal fun settingValue(
 /** Damage number color tiers start at the threshold, four times it and twenty times it. */
 internal const val DAMAGE_NUMBER_POWERFUL_MULTIPLIER = 4L
 internal const val DAMAGE_NUMBER_DEVASTATING_MULTIPLIER = 20L
-
-/** Damage number sample in the preview, formatted like the run formats it. */
-internal fun settingsDamageSample(amount: Long, format: DamageNumberFormat, language: AppLanguage): String = when (format) {
-    DamageNumberFormat.COMPACT -> formatCompact(amount, language)
-    DamageNumberFormat.FULL -> amount.toString()
-}
 
 /** Tier color of a sample: bone, then you, heat and threat as the magnitude climbs. */
 internal fun settingsDamageColor(amount: Long, threshold: Int, roles: KkRolePalette): Color = when {

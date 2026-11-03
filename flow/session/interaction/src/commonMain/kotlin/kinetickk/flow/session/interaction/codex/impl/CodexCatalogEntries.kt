@@ -18,6 +18,8 @@ import kinetickk.ball.content.api.lifetimeMatterOfferLevel
 import kinetickk.ball.content.api.liabilityText
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.content.api.ruleLines
+import kinetickk.ball.content.api.showsDamage
+import kinetickk.ball.content.api.showsIntegrityAmounts
 import kinetickk.ball.content.api.upsideText
 import kinetickk.ball.gameplay.api.GameplayBuildSummaryProjection
 import kinetickk.ball.profile.api.HomeProgressProjection
@@ -93,6 +95,8 @@ internal fun codexItemEntry(
         }
         add(CodexFact(language.text(SessionText.OFFERS_FROM_LEVEL), language.text(SessionText.LEVEL_SHORT, codexOfferedFromLevel(item, lifetimeMatter)),
             language.text(if (item.isActive) CodexText.ACTIVE_OFFERS_HELP else SessionText.OFFERS_FROM_LEVEL_HELP)))
+        val skill = item.active?.let { (catalog?.skills ?: DefaultSkills)[it.ordinal] }
+        if (item.showsIntegrityAmounts || skill?.showsDamage == true) add(codexBaseValuesFact(language))
     }
     val active = codexActivePart(item, catalog?.skills ?: DefaultSkills, stack, language)
     val description = buildString {
@@ -113,6 +117,10 @@ internal fun codexItemEntry(
         spoken = if (active != null) language.text(CodexText.ACTIVE_ITEM) else null,
     )
 }
+
+/** The fact that an entry's integrity, shield and damage numbers are the tier-0 base, which a run's Rebirth tier scales. */
+internal fun codexBaseValuesFact(language: AppLanguage): CodexFact =
+    CodexFact(language.text(CodexText.BASE_VALUES), language.text(SessionText.REBIRTH_LEVEL, 0), language.text(CodexText.BASE_VALUES_HELP))
 
 /** A cell for content behind a Rebirth tier not reached yet: the tier, never the identity. */
 internal fun codexLockedEntry(key: String, rebirth: Int, language: AppLanguage): CodexEntry = CodexEntry(

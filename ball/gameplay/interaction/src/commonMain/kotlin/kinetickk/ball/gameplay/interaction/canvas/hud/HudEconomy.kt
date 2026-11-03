@@ -10,6 +10,7 @@ import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_CHIP_ROW_DP
 import kinetickk.ball.gameplay.interaction.layout.PORTRAIT_CHIP_ROW_HEIGHT_DP
 import kinetickk.ball.gameplay.interaction.layout.regularHeaderStep
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kinetickk.foundation.common.localization.formatCompactNumber
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
 import kotlin.math.min
@@ -25,7 +26,7 @@ internal fun DrawScope.drawEconomy(engine: GameplayRenderModel, hostMeasurer: Te
     val language = hostMeasurer.language
     // Chip values are UI text: they follow the text size (board size at the default).
     val measurer = HudMeasurers.ui(hostMeasurer)
-    val matter = HudScratch.matter.of(language, engine.runMatter) { "+" + formatCompact(engine.runMatter, language) }
+    val matter = HudScratch.matter.of(language, engine.runMatter) { "+" + formatCompactNumber(engine.runMatter, language) }
     val locked = engine.keys <= 0 && engine.totemChests.isNotEmpty()
     val keys = if (engine.keys > 0 || locked) HudScratch.keys.of(engine.keys.coerceAtLeast(0).toLong()) else null
     val keyIcon = if (locked) KkIcon.SYSTEM_LOCKED else KkIcon.SYSTEM_KEY

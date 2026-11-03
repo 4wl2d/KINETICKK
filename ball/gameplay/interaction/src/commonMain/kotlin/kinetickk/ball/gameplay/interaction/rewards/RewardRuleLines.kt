@@ -19,6 +19,8 @@ import kinetickk.ball.content.api.SkillDefinition
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.content.api.StatDelta
 import kinetickk.ball.content.api.StatusElement
+import kinetickk.ball.content.api.WEAPON_BASIS_UNIT_DAMAGE
+import kinetickk.ball.content.api.flatDamageScale
 import kinetickk.ball.content.api.rankLines
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.content.api.ruleLines
@@ -51,17 +53,18 @@ internal fun GameplayRenderModel.rewardItemRules(
 ): List<RewardRuleLine> {
     val policy = content.build.policy
     val attuned = equippedRelics.any { bound -> content.relic(bound.id).attunedTags.any { it in item.tags } }
-    val runScale = content.tempo.runScaleGrowth(elapsed) * content.rebirth.profile(rebirthLevel).playerPowerMultiplier
+    val runScale = content.tempo.flatDamageScale(elapsed, content.rebirth.profile(rebirthLevel))
     val shield = maxShield * sqrt(runScale)
     val context = RuleTextContext(
         stackMagnitude = policy.stackMagnitude(stacks.coerceAtLeast(1)),
         dominant = build.dominant,
         secondary = build.secondary,
         flatScale = runScale,
-        weaponUnit = WeaponUnitDamage * abilityPower,
+        weaponUnit = WEAPON_BASIS_UNIT_DAMAGE * abilityPower,
         shieldCapacity = shield.takeIf { it > 0f },
         bonus = (if (reborn) policy.rebornMagnitude else 1f) * (if (attuned) 1f + policy.attunementBonus else 1f),
         stacks = stacks.coerceIn(1, ContentBounds.MAX_ITEM_STACKS),
+        numberScale = numberScale,
     )
     val empty = immutableListOf<StatDelta>()
     val lines = ArrayList<RewardRuleLine>()
@@ -95,7 +98,7 @@ internal fun GameplayRenderModel.rewardActiveRules(item: ItemDefinition, rank: I
     return buildList {
         add(RewardRuleLine(RuleLineKind.TRIGGER, language.text(OverlayRedesignText.ActivePart), element))
         add(RewardRuleLine(RuleLineKind.EFFECT, skill.summary.localizedContent(language), element))
-        add(RewardRuleLine(RuleLineKind.RULE, skill.activeRankNumbers(rank, language), element))
+        add(RewardRuleLine(RuleLineKind.RULE, skill.activeRankNumbers(rank, language, numberScale), element))
         if (rank >= ContentBounds.MAX_SKILL_RANK) {
             // Its numbers keep the word before them, as the numbers line does, so a wrap never leaves "3 s." alone.
             add(RewardRuleLine(RuleLineKind.RULE, skill.rankThree.localizedContent(language).replace(SpaceBeforeNumber, "\u00A0"), element))
@@ -163,7 +166,7 @@ internal fun GameplayRenderModel.rewardActiveSlotCard(
         add(RewardRuleLine(RuleLineKind.TRIGGER, language.text(OverlayRedesignText.ActivePart), element))
         if (skill != null) {
             add(RewardRuleLine(RuleLineKind.EFFECT, skill.summary.localizedContent(language), element))
-            add(RewardRuleLine(RuleLineKind.RULE, skill.activeRankNumbers(rank, language), element))
+            add(RewardRuleLine(RuleLineKind.RULE, skill.activeRankNumbers(rank, language, numberScale), element))
         }
         add(RewardRuleLine(RuleLineKind.RULE, language.text(OverlayRedesignText.ActiveIncoming, incomingName), incoming?.elements?.firstOrNull()))
     }
@@ -193,19 +196,16 @@ internal fun GameplayRenderModel.rewardActiveSlotCard(
  * The numbers of an active effect at [rank] as one line, as the reward cards and the Codex write them: its cooldown and
  * values ([SkillDefinition.rankLines] after the rank line, which a card's band already shows), joined by commas since
  * overlay copy uses no separator marks. Each value keeps its label and unit on its line (no-break spaces), so a wrap
- * never leaves a number alone.
+ * never leaves a number alone. Damage reads at [numberScale]: the run's on a card, 1 (the tier-0 base) in the Codex.
  */
-fun SkillDefinition.activeRankNumbers(rank: Int, language: AppLanguage): String =
-    rankLines(rank, language).drop(1).joinToString(", ") { it.replace(' ', '\u00A0') }
+fun SkillDefinition.activeRankNumbers(rank: Int, language: AppLanguage, numberScale: Double = 1.0): String =
+    rankLines(rank, language, numberScale).drop(1).joinToString(", ") { it.replace(' ', '\u00A0') }
 
 /** A space before a number, which a no-break space replaces to keep the number with the word before it. */
 private val SpaceBeforeNumber = Regex(" (?=[−+]?\\d)")
 
 /** The active slot prompt's keep card: every held active stays and the incoming active item is salvaged. */
 internal val ChoiceOption.keepsActiveLoadout: Boolean get() = type == ChoiceType.ACTIVE_SLOT && activeSlot == null
-
-/** The damage of one weapon unit; mirrors the nucleus damage pipeline. */
-private const val WeaponUnitDamage = 40f
 
 /**
  * The bound relic whose liability voids this clause, mirroring the nucleus suppression read:

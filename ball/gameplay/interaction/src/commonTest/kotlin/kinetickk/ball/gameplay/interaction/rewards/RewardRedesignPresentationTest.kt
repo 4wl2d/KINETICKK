@@ -122,7 +122,7 @@ class RewardRedesignPresentationTest {
             previews = listOf(RewardPreview(immutableListOf(RewardStatChange("Dash power", 873f, 1083f, "")))),
         ).rewardCardPresentation(itemChoice(0), 0)
         assertEquals("873", compared.changes.single().before)
-        assertEquals("1083", compared.changes.single().after)
+        assertEquals("1.08K", compared.changes.single().after, "from 1,000 on a value reads in the compact form")
         assertEquals(false, compared.isNewDiscovery)
         val text = listOf(plain, reborn, risk, legendary, compared).flatMap { card ->
             card.changes.flatMap { listOf(it.name, it.before, it.after) } + card.descriptions + card.liabilities +
@@ -581,6 +581,32 @@ class RewardRedesignPresentationTest {
             assertTrue(terser != fuller)
         }
         assertEquals(listOf(RelicPreviewPlan(0, 0, 0)), relicPreviewPlans(0, 0))
+    }
+
+    @Test
+    fun cardIntegrityAndDamageAmountsReadAtTheRunsNumberScale() {
+        // Shock Plate with +20 maximum integrity, a flat burst of 140 and a heal of 10.
+        val content = rewardFixtureContent.copy(items = rewardFixtureContent.items.map { item ->
+            if (item.id != 4) item else item.copy(
+                stats = immutableListOf(StatDelta(ItemEffect.MAX_INTEGRITY, 20f), StatDelta(ItemEffect.CRIT_CHANCE, 0.05f)),
+                clauses = immutableListOf(EffectClause(EffectTrigger.IMPACT, actions = immutableListOf(
+                    EffectAction.Burst(80f, DamageBasis.FLAT, 140f), EffectAction.Heal(10f)), cooldownSeconds = 2f)),
+            )
+        }.toImmutableList())
+        fun card(numberScale: Double, language: AppLanguage = AppLanguage.English) =
+            rewardFixtureModel(content = content, choices = listOf(itemChoice(4)), elapsed = 0f, rebirthLevel = 0, numberScale = numberScale,
+                language = language).rewardCardPresentation(itemChoice(4), 0, language)
+        val base = card(1.0)
+        assertEquals(listOf("+20", "+5%"), base.changes.map { it.after })
+        assertTrue(base.rules.single { it.kind == RuleLineKind.EFFECT }.text.let { "140" in it && "10" in it })
+        // Rebirth 10 (×3,600): integrity and damage in the compact form; the percentage stays as it is.
+        val tierTen = card(3_600.0)
+        assertEquals(listOf("+72K", "+5%"), tierTen.changes.map { it.after })
+        val effect = tierTen.rules.single { it.kind == RuleLineKind.EFFECT }.text
+        assertTrue("504K" in effect && "36K" in effect, effect)
+        val russian = card(3_600.0, AppLanguage.Russian).rules.single { it.kind == RuleLineKind.EFFECT }.text
+        assertTrue("504K" in russian && "36K" in russian, russian)
+        assertTrue(card(2.3, AppLanguage.Russian).changes.first().after == "+46")
     }
 
     @Test

@@ -510,6 +510,20 @@ class GameplayRenderModelMapperTest {
     }
 
     @Test
+    fun theNumberScaleIsTheRunTiersDisplayScaleWhileIntegrityStaysInPowerUnits() {
+        val tierZero = MutableGameState(canonicalGameplayContent, seed = 712, initialMatter = 0).toRenderModel()
+        assertEquals(1.0, tierZero.numberScale)
+        val tierTen = MutableGameState(canonicalGameplayContent, seed = 712, initialMatter = 0, initialRebirthLevel = 10)
+        val model = tierTen.toRenderModel()
+        assertEquals(10, model.rebirthLevel)
+        assertEquals(3_600.0, model.numberScale)
+        assertEquals(tierTen.rebirthProfile.numberScale, model.numberScale)
+        // Only presentation multiplies: the projected integrity is the simulation's power units.
+        assertEquals(tierTen.hp, model.hp)
+        assertEquals(tierTen.maxHp, model.maxHp)
+    }
+
+    @Test
     fun worldFactsProjectTheirRunStateAndQuietLanesProjectTheirSharedDefaults() {
         val quiet = fullyPopulatedState().toRenderModel()
         assertSame(StructureRenderProjection.EMPTY, quiet.structures)

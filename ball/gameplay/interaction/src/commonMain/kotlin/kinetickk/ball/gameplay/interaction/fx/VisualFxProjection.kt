@@ -4,11 +4,12 @@
 package kinetickk.ball.gameplay.interaction.fx
 
 import kinetickk.ball.content.api.StructureTemplateId
-import kinetickk.ball.gameplay.nucleus.render.formatDamageNumber
 import kinetickk.ball.profile.api.DamageNumberFormat
+import kinetickk.ball.profile.api.formatDamageNumber
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.COMPACT_NUMBER_THRESHOLD
 
 data class ParticleProjection(
     val x: Float,
@@ -48,36 +49,27 @@ data class DamageNumberProjection(
     val amount: Long,
     val critical: Boolean,
     val life: Float,
-    val compactAmount: String = formatDamageNumber(amount, DamageNumberFormat.COMPACT),
-    val fullAmount: String = formatDamageNumber(amount, DamageNumberFormat.FULL),
-    val russianCompactAmount: String = compactAmount.russianDamageNumber(),
+    val compactAmount: String = formatDamageNumber(amount, DamageNumberFormat.COMPACT, AppLanguage.English),
+    val fullAmount: String = damageNumberText(amount, DamageNumberFormat.FULL, AppLanguage.English, compactAmount),
+    val russianCompactAmount: String = damageNumberText(amount, DamageNumberFormat.COMPACT, AppLanguage.Russian, compactAmount),
+    val russianFullAmount: String = damageNumberText(amount, DamageNumberFormat.FULL, AppLanguage.Russian, compactAmount),
     val driftX: Float = 0f,
     val driftY: Float = -1f,
     /** 0 for Kinetic damage, otherwise 1 + the status element ordinal (the hue of the number). */
     val tone: Int = 0,
 ) {
     fun formattedAmount(format: DamageNumberFormat, language: AppLanguage = AppLanguage.English): String = when (format) {
-        DamageNumberFormat.COMPACT -> when (language) {
-            AppLanguage.English -> compactAmount
-            AppLanguage.Russian -> russianCompactAmount
-        }
-        DamageNumberFormat.FULL -> fullAmount
+        DamageNumberFormat.COMPACT -> if (language == AppLanguage.Russian) russianCompactAmount else compactAmount
+        DamageNumberFormat.FULL -> if (language == AppLanguage.Russian) russianFullAmount else fullAmount
     }
 }
 
-/** Translate the already rounded number; general UI formatting truncates and has different bounds. */
-internal fun String.russianDamageNumber(): String {
-    val suffix = when {
-        endsWith("Qa") -> "Qa" to " квадрлн"
-        endsWith("Qi") -> "Qi" to " квинтлн"
-        endsWith("K") -> "K" to " тыс."
-        endsWith("M") -> "M" to " млн"
-        endsWith("B") -> "B" to " млрд"
-        endsWith("T") -> "T" to " трлн"
-        else -> return this
-    }
-    return removeSuffix(suffix.first).replace('.', ',') + suffix.second
-}
+/**
+ * [amount] as a damage number in [format] and [language], formatted once when the number appears. Below the compact
+ * threshold every form is the plain integer, so [plain] (that integer, already built) is reused instead of a new string.
+ */
+internal fun damageNumberText(amount: Long, format: DamageNumberFormat, language: AppLanguage, plain: String): String =
+    if (amount > -COMPACT_NUMBER_THRESHOLD && amount < COMPACT_NUMBER_THRESHOLD) plain else formatDamageNumber(amount, format, language)
 
 data class WeaponArcProjection(
     val fromX: Float,

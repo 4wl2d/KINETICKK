@@ -17,7 +17,7 @@ import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.TextMeasurer
 import kinetickk.foundation.design.drawKkText
-import kinetickk.foundation.design.formatCompact
+import kinetickk.foundation.common.localization.formatCompactNumber
 import kinetickk.foundation.design.labelStyle
 import kinetickk.foundation.design.monoStyle
 import kotlin.math.abs
@@ -181,7 +181,7 @@ private fun PerformanceDurationStats.hudLine(label: String, language: AppLanguag
         language.text(GameplayText.MaxRegular, maxMillis.tenths(language)) +
         language.text(GameplayText.Samples, totalSampleCount, sampleCount)
 
-private fun Number.compact(language: AppLanguage): String = formatCompact(toLong(), language)
+private fun Number.compact(language: AppLanguage): String = formatCompactNumber(toLong(), language)
 
 private fun Double.percent(language: AppLanguage): String = "${(this * 100.0).tenths(language)}%"
 

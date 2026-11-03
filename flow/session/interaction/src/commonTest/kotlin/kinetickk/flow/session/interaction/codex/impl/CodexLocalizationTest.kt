@@ -53,7 +53,11 @@ class CodexLocalizationTest {
         val rules = assertIsItem(russianEntry).lines
         assertEquals(item.ruleLines(AppLanguage.Russian).map { it.text }, rules.map { it.text })
         assertTrue(rules.single().text.contains("восстановлению прочности"), rules.single().text)
-        assertEquals(CodexFact("Выпадает с", "Ур. 1", russianEntry.facts.single().info), russianEntry.facts.single())
+        assertEquals(CodexFact("Выпадает с", "Ур. 1", russianEntry.facts.first().info), russianEntry.facts.first())
+        // Its regeneration is an integrity amount: the Codex says the number is the tier-0 base a run scales.
+        assertEquals(CodexFact("Значения", "Перерождение 0", "Числа прочности, щита и урона здесь даны для перерождения 0; " +
+            "в забеге они растут с уровнем перерождения."), russianEntry.facts.last())
+        assertEquals(2, russianEntry.facts.size)
     }
 
     @Test

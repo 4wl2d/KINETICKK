@@ -13,6 +13,9 @@ import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.gameplay.interaction.layout.GameplayLayoutMode
 import kinetickk.ball.gameplay.interaction.layout.REGULAR_HUD_BOTTOM_DP
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kinetickk.foundation.common.localization.COMPACT_NUMBER_THRESHOLD
+import kinetickk.foundation.common.localization.compactNumberRounded
+import kinetickk.foundation.common.localization.formatCompactNumber
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.*
 import kotlin.math.max
@@ -113,19 +116,18 @@ internal fun DrawScope.drawCoreStatus(
 
     // Number row: integrity number (split channels while a hit ghost drains), shield cells, ability.
     val numberBottom = barTop - frame.u(if (frame.regular) 8f else 5f)
-    val value = engine.hp.coerceAtLeast(0f).toLong()
+    val value = (engine.hp.coerceAtLeast(0f).toDouble() * engine.numberScale).toLong()
     val style = measurer.typography.wideStyle(numberSize, tabular = true, trackingEm = colorTracking(if (critical) 3 else 0))
     val numberTop = numberBottom - digitBoxHeight(measurer, style)
-    val numberColor = if (critical) roles.threat else Kk.Bone
     if (ghost > 0f) {
-        // Split channels while the hit ghost drains, each copy with its own digit layouts.
+        // Split channels while the hit ghost drains, each copy with its own layouts.
         val split = d(2f) * (ghost * 4f).coerceAtMost(1f)
-        drawKkTabularNumber(measurer, value, measurer.typography.wideStyle(numberSize, tabular = true, trackingEm = colorTracking(1)),
+        drawIntegrityNumber(measurer, value, measurer.typography.wideStyle(numberSize, tabular = true, trackingEm = colorTracking(1)),
             left - split, numberTop, roles.threat, alpha = 0.7f)
-        drawKkTabularNumber(measurer, value, measurer.typography.wideStyle(numberSize, tabular = true, trackingEm = colorTracking(2)),
+        drawIntegrityNumber(measurer, value, measurer.typography.wideStyle(numberSize, tabular = true, trackingEm = colorTracking(2)),
             left + split, numberTop, roles.shield, alpha = 0.55f)
     }
-    val numberWidth = drawKkTabularNumber(measurer, value, style, left, numberTop, numberColor)
+    val numberWidth = drawIntegrityNumber(measurer, value, style, left, numberTop, if (critical) roles.threat else Kk.Bone)
     HudLayoutProbe.record(HudBlock.INTEGRITY, left, numberTop, max(left + width, left + numberWidth), bottom)
 
     val right = left + width
@@ -142,6 +144,28 @@ internal fun DrawScope.drawCoreStatus(
         anchorBottom -= d(cellHeight) + frame.u(7f)
     }
     drawAbilityMeter(engine, frame, roles, right, anchorBottom)
+}
+
+/**
+ * The displayed integrity [value] (integrity × the run's number scale): below 1,000 from cached digit layouts, which
+ * stay allocation-free while it changes; above, its compact text ("1.08M"), built again only when the shown text
+ * changes (keyed by [compactNumberRounded]). Returns the drawn width.
+ */
+private fun DrawScope.drawIntegrityNumber(
+    measurer: TextMeasurer,
+    value: Long,
+    style: androidx.compose.ui.text.TextStyle,
+    x: Float,
+    top: Float,
+    color: Color,
+    alpha: Float = 1f,
+): Float {
+    if (value < COMPACT_NUMBER_THRESHOLD) return drawKkTabularNumber(measurer, value, style, x, top, color, alpha = alpha)
+    val language = measurer.language
+    val text = HudScratch.integrity.of(language, compactNumberRounded(value)) { formatCompactNumber(value, language) }
+    val layout = measureKkText(measurer, text, style)
+    drawKkText(layout, x, top, color, alpha = alpha)
+    return layout.size.width.toFloat()
 }
 
 internal const val DASH_PHASE_SECONDS = 0.24f

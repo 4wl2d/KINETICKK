@@ -104,7 +104,8 @@ internal fun MutableGameState.toRenderModel(
         // The same weapon runtime changes no synergy input.
         weaponSynergy = reusableCollections?.weaponSynergy?.takeIf { identitySource != null && weaponRuntime === identitySource.weaponRuntime }
             ?: weaponSynergyProjection(reusableCollections?.weaponSynergy),
-        rebirthRank = rebirthRank, volatileBursts = volatileBursts, maxLevel = content.tempo.maximumLevel,
+        rebirthRank = rebirthRank, numberScale = rebirthProfile.numberScale, volatileBursts = volatileBursts,
+        maxLevel = content.tempo.maximumLevel,
         skillBar = skillBarProjection(reusableCollections?.skillBar),
         apex = apexProjection(reusableCollections?.apex),
         combatFields = combatFieldProjection(reusableCollections?.combatFields, identitySource?.combatFieldTable),

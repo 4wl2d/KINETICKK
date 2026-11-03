@@ -148,7 +148,7 @@ private fun GameplayRenderModel.rewardItemEffects(
         // amounts are the item's costs: they read as cost lines with the rules, never as stats.
         val marginal = stackPolicy.stackMagnitude(itemStackAfter) - stackPolicy.stackMagnitude(itemStackAfter - 1)
         val scale = marginal * if (reborn) stackPolicy.rebornMagnitude else 1f
-        item.stats.filter { it.amount > 0f }.map { stat -> stat.presentation(scale, language).copy(suppressed = stat in voidedStats) }
+        item.stats.filter { it.amount > 0f }.map { stat -> stat.presentation(scale, numberScale, language).copy(suppressed = stat in voidedStats) }
     } else emptyList()
 }
 

@@ -5,21 +5,17 @@ package kinetickk.ball.gameplay.nucleus.render
 
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.DEFAULT_DAMAGE_NUMBER_TIER_THRESHOLD
-import kinetickk.ball.profile.api.DamageNumberFormat
-import kotlin.math.abs
 import kotlin.math.max
-import kotlin.math.roundToLong
 
 enum class DamageNumberTier { STANDARD, STRONG, POWERFUL, DEVASTATING }
 
 const val DAMAGE_NUMBER_POWERFUL_MULTIPLIER = 4L
 const val DAMAGE_NUMBER_DEVASTATING_MULTIPLIER = 20L
 
-fun formatDamageNumber(amount: Long, format: DamageNumberFormat): String = when (format) {
-    DamageNumberFormat.COMPACT -> abbreviateNumber(amount)
-    DamageNumberFormat.FULL -> amount.toString()
-}
-
+/**
+ * The color tier of a damage number of [amount] displayed damage: the player's [firstThreshold], four and twenty times it
+ * compare against the number as it is shown, so the tiers read the same on every Rebirth tier's scale.
+ */
 fun damageNumberTier(
     amount: Long,
     firstThreshold: Int = DEFAULT_DAMAGE_NUMBER_TIER_THRESHOLD,
@@ -47,29 +43,4 @@ fun formatRunTime(seconds: Float): String {
     val minutes = total / 60
     val remaining = total % 60
     return minutes.toString().padStart(2, '0') + ":" + remaining.toString().padStart(2, '0')
-}
-
-private val NUMBER_SUFFIXES = arrayOf("", "K", "M", "B", "T", "Qa", "Qi")
-
-fun abbreviateNumber(value: Long): String {
-    if (value in -999L..999L) return value.toString()
-
-    var scaled = value.toDouble()
-    var suffixIndex = 0
-    while (abs(scaled) >= 1_000.0 && suffixIndex < NUMBER_SUFFIXES.lastIndex) {
-        scaled /= 1_000.0
-        suffixIndex++
-    }
-
-    var roundedTenths = (scaled * 10.0).roundToLong()
-    if (abs(roundedTenths) >= 10_000L && suffixIndex < NUMBER_SUFFIXES.lastIndex) {
-        scaled /= 1_000.0
-        suffixIndex++
-        roundedTenths = (scaled * 10.0).roundToLong()
-    }
-
-    val whole = roundedTenths / 10L
-    val fraction = abs(roundedTenths % 10L)
-    val number = if (fraction == 0L) whole.toString() else "$whole.$fraction"
-    return number + NUMBER_SUFFIXES[suffixIndex]
 }

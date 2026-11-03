@@ -18,11 +18,11 @@ import kinetickk.ball.gameplay.interaction.localization.OverlayRedesignText
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.RelicLinkKind
 import kinetickk.foundation.common.localization.AppLanguage
+import kinetickk.foundation.common.localization.formatCompactNumber
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.KkRolePalette
-import kinetickk.foundation.design.formatCompact
 import kotlin.math.abs
 import kotlin.math.roundToLong
 import kinetickk.ball.content.api.RelicDefinition
@@ -242,22 +242,12 @@ internal fun overlayDecimal(value: Float, language: AppLanguage): String {
 internal fun overlayPercent(fraction: Float, language: AppLanguage): String =
     overlayDecimal((fraction * 100f).roundToLong().toFloat(), language) + "%"
 
-/** Thousands grouped per language: "1,412" / "1 412" (narrow no-break space). */
-internal fun overlayGrouped(value: Long, language: AppLanguage): String {
-    val digits = abs(value).toString()
-    val separator = if (language == AppLanguage.Russian) " " else ","
-    val grouped = buildString {
-        digits.forEachIndexed { index, digit ->
-            if (index > 0 && (digits.length - index) % 3 == 0) append(separator)
-            append(digit)
-        }
-    }
-    return if (value < 0) "−$grouped" else grouped
-}
-
-/** Large totals such as damage ("612K"); small values stay grouped. */
-internal fun overlayCompact(value: Long, language: AppLanguage): String =
-    if (value < 100_000L) overlayGrouped(value, language) else formatCompact(value, language)
+/**
+ * An absolute run quantity (damage, integrity, shield) given in power units, as the player reads it: times the run's
+ * number scale, in the compact form ("612K").
+ */
+internal fun GameplayRenderModel.overlayAmount(power: Double, language: AppLanguage): String =
+    formatCompactNumber((power * numberScale).roundToLong(), language)
 
 /** The localized "Lvl" label followed by [level] ("Lvl 7" / "Ур. 7"). */
 internal fun overlayLevel(level: Int, language: AppLanguage): String =

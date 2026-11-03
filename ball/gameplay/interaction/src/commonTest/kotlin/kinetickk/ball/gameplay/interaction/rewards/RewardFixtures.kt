@@ -232,6 +232,7 @@ internal fun rewardFixtureModel(
         pickupsCollected = 2_904L, keysCollected = 4L, eliteKills = 2, bestCombo = 31,
     ),
     rebirthLevel: Int = 3,
+    numberScale: Double = 1.0,
     runStatisticsOnLeft: Boolean = false,
     coreShape: CoreShape = CoreShape.ORB,
     skillBar: SkillBarProjection = SkillBarProjection.EMPTY,
@@ -283,6 +284,7 @@ internal fun rewardFixtureModel(
     build = build,
     discoveredPairingMask = discoveredPairings.fold(0) { mask, id -> mask or (1 shl id.ordinal) },
     discoveredReactionMask = discoveredReactions.fold(0) { mask, id -> mask or (1 shl id.ordinal) },
+    numberScale = numberScale,
 )
 
 internal fun itemChoice(id: Int, reborn: Boolean = false): ChoiceOption {
