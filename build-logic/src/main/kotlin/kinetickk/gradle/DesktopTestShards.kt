@@ -35,59 +35,59 @@ enum class DesktopTestShard(
     // SMT cores, and CI's gameplay benchmarks run 2.7 times slower per thread than this host. Keep a shard under about
     // 1,350 CPU-seconds; a class that size needs a shard of its own.
     GATES_1("gates-1", NUCLEUS, listOf(
-        "$SIMULATION.RebirthBalanceGateTest",
+        "$SIMULATION.variety.RebirthBalanceGateTest",
     )),
     GATES_2("gates-2", NUCLEUS, listOf(
-        "$SIMULATION.ApexArchitectOffenceTest",
+        "$SIMULATION.characters.ApexArchitectOffenceTest",
     )),
     GATES_3("gates-3", NUCLEUS, listOf(
-        "$SIMULATION.ApexArchitectDiamondDefenceTest",
+        "$SIMULATION.characters.ApexArchitectDiamondDefenceTest",
     )),
     GATES_4("gates-4", NUCLEUS, listOf(
-        "$SIMULATION.ApexArchitectPrismDefenceTest",
-        "$SIMULATION.CharacterBalanceTest",
+        "$SIMULATION.characters.ApexArchitectPrismDefenceTest",
+        "$SIMULATION.characters.CharacterBalanceTest",
     )),
     GATES_5("gates-5", NUCLEUS, listOf(
-        "$SIMULATION.ApexArchitectCastTest",
-        "$SIMULATION.BountyGateTest",
-        "$SIMULATION.DirectorPersonalityBudgetGateTest",
+        "$SIMULATION.characters.ApexArchitectCastTest",
+        "$SIMULATION.sites.BountyGateTest",
+        "$SIMULATION.variety.DirectorPersonalityBudgetGateTest",
     )),
     GATES_6("gates-6", NUCLEUS, listOf(
-        "$SIMULATION.ApexArchitectFightTest",
-        "$SIMULATION.UpgradeBalanceGateTest",
-        "$SIMULATION.EncounterDuelGateTest",
+        "$SIMULATION.characters.ApexArchitectFightTest",
+        "$SIMULATION.characters.UpgradeBalanceGateTest",
+        "$SIMULATION.enemies.EncounterDuelGateTest",
     )),
     GATES_7("gates-7", NUCLEUS, listOf(
-        "$SIMULATION.RunOmenArmsGateTest",
-        "$SIMULATION.DimensionRunOutcomeGateTest",
-        "$SIMULATION.DungeonPilotGateTest",
+        "$SIMULATION.variety.RunOmenArmsGateTest",
+        "$SIMULATION.dimensions.DimensionRunOutcomeGateTest",
+        "$SIMULATION.structures.DungeonPilotGateTest",
     )),
     GATES_8("gates-8", NUCLEUS, listOf(
-        "$SIMULATION.RunOmenArmsBGateTest",
-        "$SIMULATION.DimensionPilotGateTest",
+        "$SIMULATION.variety.RunOmenArmsBGateTest",
+        "$SIMULATION.dimensions.DimensionPilotGateTest",
     )),
     GATES_9("gates-9", NUCLEUS, listOf(
-        "$SIMULATION.RunOmenArmsCGateTest",
+        "$SIMULATION.variety.RunOmenArmsCGateTest",
         "$SIMULATION.NoPoiPlaythroughTest",
     )),
     GATES_10("gates-10", NUCLEUS, listOf(
-        "$SIMULATION.SingularityContactGateTest",
-        "$SIMULATION.SkillShareGateTest",
-        "$SIMULATION.PerceptibleItemImpactTest",
+        "$SIMULATION.skills.SingularityContactGateTest",
+        "$SIMULATION.skills.SkillShareGateTest",
+        "$SIMULATION.builds.PerceptibleItemImpactTest",
     )),
     GATES_11("gates-11", NUCLEUS, listOf(
-        "$SIMULATION.ItemVarietyTest",
-        "$SIMULATION.RunLevelCalibrationGateTest",
+        "$SIMULATION.progression.ItemVarietyTest",
+        "$SIMULATION.progression.RunLevelCalibrationGateTest",
     )),
     GATES_12("gates-12", NUCLEUS, listOf(
         "$SIMULATION.MatterIncomeProbeTest",
-        "$SIMULATION.EventSignalEngagementGateTest",
-        "$SIMULATION.RunSkeletonVarietyTest",
+        "$SIMULATION.variety.EventSignalEngagementGateTest",
+        "$SIMULATION.variety.RunSkeletonVarietyTest",
     )),
     GATES_13("gates-13", NUCLEUS, listOf(
-        "$SIMULATION.SiteEngagementGateTest",
-        "$SIMULATION.ActiveItemFrequencyGateTest",
-        "$SIMULATION.SkillBalanceTest",
+        "$SIMULATION.sites.SiteEngagementGateTest",
+        "$SIMULATION.progression.ActiveItemFrequencyGateTest",
+        "$SIMULATION.skills.SkillBalanceTest",
     )),
     REST("rest", null, emptyList()),
     ;

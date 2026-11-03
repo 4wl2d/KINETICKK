@@ -39,7 +39,8 @@ import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
  * the suite's JUnit XML (`build/test-results/desktopTest/TEST-…CoreStasisBotProbeTest.xml`):
  *
  * `KK_STASIS_PROBE=2501..2800 ./gradlew -Pkinetickk.variant=release :ball:gameplay:nucleus:desktopTest --tests
- * 'kinetickk.ball.gameplay.nucleus.simulation.CoreStasisBotProbeTest' --rerun`, then the same with `KK_STASIS_PROBE=gates`.
+ * 'kinetickk.ball.gameplay.nucleus.simulation.flight.CoreStasisBotProbeTest' --rerun`, then the same with
+ * `KK_STASIS_PROBE=gates`.
  */
 class CoreStasisBotProbeTest {
     @Test
