@@ -29,6 +29,11 @@ abstract class VerifyArchitectureTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val nucleusSourceFiles: ConfigurableFileCollection
 
+    /** Production sources of the `:api` modules, checked by the api import sensor. */
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val contractSourceFiles: ConfigurableFileCollection
+
     init {
         leafProjectPaths.convention(emptySet())
     }
@@ -46,7 +51,12 @@ abstract class VerifyArchitectureTask : DefaultTask() {
             addModuleSetViolations(actualLeafProjects)
             addAll(architectureDependencyViolations(dependencies))
             nucleusSourceFiles.files.sortedBy { it.invariantSeparatorsPath }.forEach { file ->
-                addAll(nucleusImportViolations(file.readText()).map { violation ->
+                val source = file.readText()
+                val sourceViolations = nucleusImportViolations(source) + ambientRandomnessViolations(source)
+                addAll(sourceViolations.map { violation -> "${file.invariantSeparatorsPath}:$violation" })
+            }
+            contractSourceFiles.files.sortedBy { it.invariantSeparatorsPath }.forEach { file ->
+                addAll(apiImportViolations(file.readText()).map { violation ->
                     "${file.invariantSeparatorsPath}:$violation"
                 })
             }

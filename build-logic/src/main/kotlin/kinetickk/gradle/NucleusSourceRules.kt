@@ -10,23 +10,47 @@ package kinetickk.gradle
  * review and deterministic tests. Seeded Random instances and explicit Duration values are legal.
  * The separate project-edge rules stop production nucleus/API dependencies on implementations.
  */
-internal fun nucleusImportViolations(source: String): List<String> {
-    val code = maskKotlinCommentsAndLiterals(source)
-    return IMPORT.findAll(code).mapNotNull { match ->
-        val imported = match.groupValues[1]
-        val forbidden = FORBIDDEN_IMPORTS.any { prefix ->
+internal fun nucleusImportViolations(source: String): List<String> =
+    forbiddenImportViolations(source, FORBIDDEN_NUCLEUS_IMPORTS, "nucleus", "keep effects in the owner/adapters")
+
+/** The same sensor for production `:api` sources; api commands may use the dispatch reply types. */
+internal fun apiImportViolations(source: String): List<String> =
+    forbiddenImportViolations(source, FORBIDDEN_API_IMPORTS, "api", "keep public contracts platform- and effect-free")
+
+internal fun forbiddenImportViolations(
+    source: String,
+    forbidden: List<String>,
+    scope: String,
+    advice: String,
+): List<String> {
+    val code = maskKotlinSource(source)
+    return kotlinImports(code).mapNotNull { import ->
+        val imported = import.name
+        val isForbidden = forbidden.any { prefix ->
             imported == prefix || imported.startsWith("$prefix.") ||
                 (imported.endsWith(".*") && prefix.startsWith(imported.removeSuffix("*")))
         }
-        if (!forbidden) return@mapNotNull null
-        val line = code.take(match.range.first).count { it == '\n' } + 1
-        "$line: forbidden nucleus import '$imported'; keep effects in the owner/adapters"
-    }.toList()
+        if (isForbidden) "${import.line}: forbidden $scope import '$imported'; $advice" else null
+    }
 }
 
-private val IMPORT = Regex("(?m)^[ \\t]*import[ \\t]+([A-Za-z_][A-Za-z0-9_.*]*)")
+/**
+ * Ambient randomness calls in production nucleus code: `Random.nextX()`, `Random.Default` and the
+ * unseeded collection helpers. `import kotlin.random.Random` stays legal for seeded instances, so
+ * the import sensor cannot see these calls. Fully qualified calls are a known blind spot.
+ */
+internal fun ambientRandomnessViolations(source: String): List<String> {
+    val code = maskKotlinSource(source)
+    val lines = KotlinLineIndex(code)
+    return AMBIENT_RANDOMNESS.flatMap { it.findAll(code) }
+        .sortedBy { it.range.first }
+        .map { match ->
+            val call = match.value.replace(WHITESPACE, " ")
+            "${lines.lineOf(match.range.first)}: ambient randomness '$call'; draw from a seeded run stream or worldHash"
+        }
+}
 
-private val FORBIDDEN_IMPORTS = listOf(
+private val FORBIDDEN_NUCLEUS_IMPORTS = listOf(
     "android", "androidx", "java", "javax", "platform",
     "kotlin.io", "kotlin.system", "kotlin.reflect", "kotlin.concurrent",
     "kotlin.native.concurrent", "kotlinx.coroutines", "kotlinx.io", "io.ktor", "okio",
@@ -36,47 +60,11 @@ private val FORBIDDEN_IMPORTS = listOf(
     "kinetickk.foundation.dispatch",
 )
 
-/** Preserve offsets/newlines so comments and documentation examples cannot produce diagnostics. */
-private fun maskKotlinCommentsAndLiterals(source: String): String {
-    val result = source.toCharArray()
-    var index = 0
-    fun maskTo(end: Int) {
-        while (index < end) {
-            if (result[index] != '\n' && result[index] != '\r') result[index] = ' '
-            index++
-        }
-    }
-    while (index < source.length) {
-        when {
-            source.startsWith("//", index) ->
-                maskTo(source.indexOf('\n', index).takeIf { it >= 0 } ?: source.length)
-            source.startsWith("/*", index) -> {
-                var end = index + 2
-                var depth = 1
-                while (end < source.length && depth > 0) {
-                    when {
-                        source.startsWith("/*", end) -> { depth++; end += 2 }
-                        source.startsWith("*/", end) -> { depth--; end += 2 }
-                        else -> end++
-                    }
-                }
-                maskTo(end)
-            }
-            source.startsWith("\"\"\"", index) -> {
-                val close = source.indexOf("\"\"\"", index + 3)
-                maskTo(if (close < 0) source.length else close + 3)
-            }
-            source[index] == '\"' || source[index] == '\'' -> {
-                val quote = source[index]
-                var end = index + 1
-                while (end < source.length) {
-                    if (source[end] == '\\') end = (end + 2).coerceAtMost(source.length)
-                    else if (source[end++] == quote) break
-                }
-                maskTo(end)
-            }
-            else -> index++
-        }
-    }
-    return result.concatToString()
-}
+private val FORBIDDEN_API_IMPORTS = FORBIDDEN_NUCLEUS_IMPORTS - "kinetickk.foundation.dispatch"
+
+private val AMBIENT_RANDOMNESS = listOf(
+    Regex("""(?<![\w.])Random\s*\.\s*(?:Default\b|next\w*\s*\()"""),
+    Regex("""\.\s*(?:random|randomOrNull|shuffled|shuffle)\s*\(\s*\)"""),
+)
+
+private val WHITESPACE = Regex("\\s+")

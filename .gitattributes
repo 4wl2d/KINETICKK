@@ -5,3 +5,5 @@ gradlew text eol=lf
 
 *.jar binary
 *.jpg binary
+
+build-logic/source-structure-baseline.tsv text eol=lf
