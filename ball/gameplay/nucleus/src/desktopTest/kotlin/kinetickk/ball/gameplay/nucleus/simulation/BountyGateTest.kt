@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 
 /**
  * Opt-in site gate S-G2 (spec §14.3): the bounty arena's duel against its mini-boss (Warden Prime at the bounty policy's
- * integrity share). The [SitePilot]'s bounty arm takes every bounty the windows offer (windows 165 to 525 s) and fights
+ * integrity share). The [SitePilot]'s bounty arm takes every bounty the windows offer (at 225 and 405 s) and fights
  * the boss as the NoPoi bot fights the Architect, pulled back toward the arena's centre past 800 u; on the first
  * [GATE_RUNS] [PopulationSeeds] at 1280×800, once as the fresh tier-0 Orb and once as a tier-6 profile with the full
  * Core Matrix. A run is flown until its last window can no longer run; every bounty counts, a death during one as a
@@ -70,7 +70,7 @@ class BountyGateTest {
         /** Runs per arm: the first [GATE_RUNS] of [PopulationSeeds] (C42). */
         const val GATE_RUNS = 150
 
-        /** An arm that engaged fewer bounties than this measured nothing (up to four per run). */
+        /** An arm that engaged fewer bounties than this measured nothing (up to two per run). */
         const val MIN_ENGAGEMENTS = 200
 
         /** The sigil arm's least share of runs that reach the summoning (a pilot check; 0.91 on the SITES window). */

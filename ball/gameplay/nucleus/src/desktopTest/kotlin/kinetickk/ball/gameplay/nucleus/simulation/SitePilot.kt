@@ -69,11 +69,13 @@ internal enum class SiteArm(val kinds: Set<SiteKind>) {
      * The content the arm plays: the shipped policy with only the arm's kinds and the anomalies taking window weight,
      * the arm's kinds [ARM_TARGET_WEIGHT] each, so every window the family is eligible for offers it (the first draw in
      * all but a fraction of a percent of windows, else almost always the second). The anomaly arm offers anomaly pairs;
-     * the sigil arm plays the shipped weights.
+     * the sigil arm plays the shipped weights, and far travel reveals its sigil on every seed (the shipped
+     * `farSigilRunChance` reveals it on a quarter of them; ExplorationRarityTest covers that seed lottery).
      */
     fun content(base: GameplayContentSnapshot = canonicalGameplayContent): GameplayContentSnapshot = when (this) {
         ANOMALY -> base.withAnomalyWindowsOnly()
-        MIXED, SIGIL -> base
+        MIXED -> base
+        SIGIL -> base.copy(sites = base.sites.copy(secrets = base.sites.secrets.copy(farSigilRunChance = 1f)))
         else -> base.withWindowWeights(kinds.associateWith { ARM_TARGET_WEIGHT } + ANOMALY.kinds.associateWith { 1f })
     }
 
