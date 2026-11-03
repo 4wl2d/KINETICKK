@@ -1678,3 +1678,421 @@ or the earlier steering knobs, and one (tier 6) with the earlier obstacle
 field. With the fix, 0 of 300 `PopulationSeeds` runs at tier 3 and 1 of
 300 at tier 6 reach 42 before 720 s, so the seeded arm passes with
 probability 0.98, as recorded for the 0.6.0 tree.
+
+## 2026-11-03 Totem chests, Elite resonance, dungeon collapse and Core Stasis
+
+The open-world Totem is gone and its power moved to Elite kills; dungeons hold
+Totem chests and collapse once spent; a Core that stays still freezes. These
+changes alter the reward stream on purpose, so the population gates were
+restated once against the tree that landed them, LEAD_SHA, the
+Elite-resonance base the gate KDocs cite (policy, balance gate populations).
+Historical entries above describe their own builds and remain unchanged.
+
+- **Elite resonance.** An Elite-class kill that pays its Elite reward (Elites,
+  Heralds, mini-bosses and secret bosses: the kills that drop a Key) amplifies
+  the current weapon at once by `RunTempoProfile.eliteResonanceLevels` levels
+  (1; content allows 0 to 3). Like the old Totem it is uncapped; the automatic
+  amplification every two levels is unchanged.
+- **Totem chests.** Keys now open dungeon Totem chests. A combat template
+  rolls its chest from a structure hash with `totemChestChance` (Derelict
+  Station and Spire 0.5, Labyrinth and Foundry 0.6, Vault 0.8, Reliquary 1.0,
+  the secret Doodle none) and 1 to 3 charges (weights 55/33/12; the Vault and
+  the Reliquary at least 2). The chest appears when the final room clears and
+  each Key opens one charge as the Totem choice (Amplify or change weapon). At
+  most four chests wait per run; a chest that finds the list full salvages 40
+  Matter per charge.
+- **Dungeon collapse.** A finished or fought-abandoned structure leaves the
+  world at once and shatters, with the eighteenth semantic audio cue
+  (`STRUCTURE_COLLAPSE`); a spent structure stays spent for the whole run.
+- **Core Stasis.** A Core within 240 u of its anchor whose speed average
+  (1.5 s EMA) stays below 120 u/s gathers still time. Past a 10 s grace its
+  stasis ramps to full over 12 s and slows weapon activation by up to 0.65;
+  after 6 s at full stasis it fractures 5 % of maximum integrity every 1.5 s.
+  Moving thaws it. The Nadir and every paused or choice phase are exempt, and
+  Easy Mode never fractures.
+
+"Before" below is the behaviour-neutral pre-feature tree `2231294d`, which
+plays exactly like `bdc061ce`; the 0.6.0 numbers above were read on
+`15b23096` and stay history. "After" reads the population and seeded gates
+at `24716fab` (the features, the harness changes, Core Stasis at 120 u/s and
+the pilot stall breaker) and the dungeon and dimension gates after their own
+retunes, which touch no other gate: every other suite prints the same output
+on the merged tree.
+
+### Why the gates moved
+
+1. **The run stream.** Each world Totem spawn drew two `gameplayRandom` floats
+   (angle and distance) from the stream that also draws kill Data scatter, the
+   repair roll, splitter angles and combat chance rolls. Once a run collected
+   its first Key every later draw differed, so every bot-driven gate that
+   plays past its first Key moved, together with the characterization
+   goldens.
+2. **Resonance power.** The old bot took one Amplify per claimed Key, minus
+   the first Totem, which it spent on a weapon change, and detoured 520 to
+   700 u to every Totem. Resonance pays at once for every Elite-class kill,
+   including kills whose Key the bot never collects, and never detours. Fresh
+   runs grew stronger: gate A's fresh wins rose from 0.737 to 0.837 and fresh
+   survival to 720 s from 0.767 to 0.883.
+3. **The weapon mix (harness H1 and H2).** Without the first Totem's weapon
+   change the population bots would fly the Flux Wake all run. H1: the
+   population bots, `RunVarietyGateHarness` included, start on their first
+   owned preferred weapon, as a player would load out before the run. H2: the
+   dungeon gate's fresh arm alternates an orbiting weapon (Arc Coil, even
+   seeds) and a ram weapon (Flux Wake, odd seeds); all-ram would push its
+   deaths toward the ram rate of about 0.49 against the 0.30 ceiling, and
+   all-orbit its clears toward 0.96 against the 0.85 ceiling. H1 is also why
+   the bounty veteran clear fell (see the design gates below).
+4. **Core Stasis.** At 120 u/s with the pilot stall breaker no probed gate
+   run reaches the grace, so Core Stasis acts on no gate run and the
+   population gates carry the first three causes alone. Apart from Core
+   Stasis fingerprints, the fuzz sessions, timing lines and the two pilots the
+   stall breaker changed (the dungeon gate and the bounty gate's sigil arm),
+   every suite prints what the tree without Core Stasis printed.
+
+### Core Stasis still speed and the pilot stall breaker
+
+The design statement: no reference-bot gate run may gather still time past
+the grace; a bot that would is fixed only when it is not playing legitimately,
+otherwise the threshold moves. The still speed was chosen on the combined
+window i = 2,501..2,800 with the measure-only `CoreStasisBotProbeTest`, never
+on gate seeds; the anchor radius, grace and ramp stayed. Runs whose still
+clock reached 10 s, on the tree with Core Stasis alone:
+
+| `stillSpeed` | Window runs over the grace | Dungeon fresh | Dungeon strong | Sigil | Other populations |
+|---|---:|---:|---:|---:|---:|
+| 220 u/s (first draft) | 140 | 77/300 | 6/300 | 25/300 | 32 |
+| 200 u/s | 118 | 71/300 | 3/300 | 18/300 | 26 |
+| 160 u/s | 79 | 59/300 | 3/300 | 10/300 | 7 |
+| 120 u/s (chosen) | 46 | 39/300 | 2/300 | 5/300 | 0 |
+
+At 220 u/s 63 gate runs crossed. On the merged tree at 120 u/s 10 window runs
+and 4 gate runs still crossed, and every one was a pinned pilot, not play:
+four Flux Wake runs in the Foundry's East hall rammed a Sentry straight
+through the conveyor fin, where the ram and the wall's push cancel, until the
+130 s cap; boss and target orbits pressed against a wall; one bot was held
+between a crowd and a skipped site's keep-away zone; and the sigil duel's
+return leash held the Core against a Cartographer that keeps its distance.
+
+`PilotStallBreaker` (harness only) reads the Core's motion, never the stasis
+clock. After 3 s with the pilot's own 1 s speed average below 150 u/s, the
+dungeon pilot flies round a wall up to 600 u long that hides what it chases,
+by its corners at 600 u/s for at most 3 s; otherwise it side-steps for 1.5 s
+at 600 u/s at right angles to its target, away from a wall within 200 u or
+on alternating sides. The site pilot's sigil arm side-steps the same way while
+it flies far, approaches the sigil or duels. No sealed room, duel or boss is
+exempt from Core Stasis. Maximum still clock and runs over the grace:
+
+| Population | Window 2,501..2,800 | Gate seeds |
+|---|---|---|
+| NoPoi | 3.44 s, 0 of 300 | 0.99 s, 0 of 301 |
+| Site arms | 4.81 s (ram arm, no breaker), 0 | 1.36 s, 0 |
+| Sigil | 3.19 s, 0 of 300 (22.97 s, 2 before) | 2.96 s, 0 of 150 (8.88 s before) |
+| Dungeon fresh | 3.69 s, 0 of 300 (130 s, 6 before) | 2.98 s, 0 of 120 (130 s, 3 before) |
+| Dungeon strong | 3.69 s, 0 of 300 (14.23 s, 2 before) | 2.93 s, 0 of 120 (11.97 s, 1 before) |
+| Dimension, six arms | 3.54 s, 0 | 2.14 s, 0 |
+| Apex approach / fight / arena | 0.92 / 0.00 / 0.80 s, 0 | 1.56 / 0.00 / 0.80 s, 0 |
+
+After the room integrity retune below the dungeon pilot reads 2.87 s fresh and
+3.07 s strong on the gates and 4.64 s and 2.98 s on the window, none over the
+grace. The four Foundry-pinned runs now resolve within 31 to 34 s of entry:
+one clears and three die in the furnace, having entered with 0.44 integrity
+or less. The breaker moved the bounty gate's sigil arm, which has no balance
+threshold: broken 0.557 -> 0.517 (SE 0.041), median fight 131.3 -> 138.6 s,
+summoned 0.993 against 0.5. The detector's unit tests built around 220 u/s
+now jiggle 20 u at 1 Hz in place and move for 0.5 s between stills. The probe's
+Apex fight stage reads 0.00 s on the merged tree against 2.07 s with Core
+Stasis alone; it was not investigated, since neither crosses the grace.
+
+### Seeded gates
+
+Every seeded gate keeps its seeds and thresholds: on 300 runs with the gate's
+own bot, profile, tier and statement, each passes with probability at least
+0.93 before and 0.95 after.
+
+| Gate (statement on its fixed seeds) | Per-run share, before -> after (of 300) | P(pass) before | P(pass) after |
+|---|---|---:|---:|
+| Rebirth B, tier-3 Matrix + signature, >= 2 of 5 win | 299 -> 299 | 1.000 | 1.000 |
+| Rebirth C, tier-6 fresh, no win | 0 -> 0 | 1.000 | 1.000 |
+| Rebirth E, tier 2 >= 2 of 5 win, tier 8 >= 4 of 5 lose | tier 2 292 -> 296; tier 8 2 -> 1 win | 1.000 | 1.000 |
+| Rebirth F, tier-10 median clear >= 1.3 x tier 3 | tier-3 median 81.11 -> 80.96 s | 1.000 | 1.000 |
+| Rebirth G, tier-10 Matrix + signature, < 5 of 5 win | 9 -> 6 win | 1.000 | 1.000 |
+| Rebirth D / H win bounds, <= 3 of 5 | 8 -> 7 / 0 -> 0 win | 1.000 | 1.000 |
+| Run level, Data-seeking tier 0, >= 4 of 5 cap in 510-630 s | 273 -> 285 | 0.933 | 0.977 |
+| Run level, Data-seeking tier 3, >= 3 of 5 in 480-660 s | 283 -> 275 | 0.998 | 0.995 |
+| Run level, Data-seeking tier 6, >= 3 of 5 in 480-660 s | 239 -> 243 | 0.940 | 0.950 |
+| Run level, Data-avoiding tier 0, none before 720 s, >= 4 of 5 without breach | 0 early; 0 -> 1 breach | 1.000 | 1.000 |
+| Run level, Data-avoiding tiers 3 / 6, none before 720 s | 0 -> 1 / 1 -> 1 early | 1.000 / 0.983 | 0.983 / 0.983 |
+| Run level, Data-avoiding maxed tier 0, none before 720 s | 0 -> 0 | 1.000 | 1.000 |
+| Matter P3, medians fresh < T0 < T3 < T6 | 2,416 / 5,271 / 12,707 / 22,558 -> 2,448 / 5,353 / 12,983 / 23,329 | 0.994 | 0.996 |
+| Upgrade J1 win bound <= 3 of 5 / J2 < 5 of 5 win | 8 -> 7 / 16 -> 4 win | 1.000 | 1.000 |
+| Upgrade J3 >= 4 of 5 lose / J4 no win | 3 -> 5 / 0 -> 0 win | 0.999 / 1.000 | 0.997 / 1.000 |
+| ItemVariety V1 (12 seeds x 4 characters) / V3 / V4 | every chain mean <= 0.12; coverage >= 0.90 | 0.984 / 1.000 / 1.000 | 1.000 each |
+| Apex contract clauses other than the cast (72 fights) | 0 of 312 fights broke a clause | 1.000 | 1.000 |
+
+Together the Data-avoiding tier-3 and tier-6 test passes with 0.967 and the
+Data-seeking tier-3 and tier-6 test with 0.945. No gate moved to
+`PopulationSeeds`.
+
+### Population gates
+
+Restated once by the threshold rule against the new base: a floor is
+min(design or seeded threshold, base − 2 SE) and a ceiling max(that
+threshold, base + 2 SE), rounded outward; a design target never weakens. Over
+`PopulationSeeds` (n 300 unless named; SE binomial for shares, bootstrap for
+medians and ratios):
+
+| Gate | Before (SE) | After (SE) | Threshold | Decision |
+|---|---|---|---|---|
+| A, fresh tier-0 wins | 0.737 (0.025) | 0.837 (0.021) | 0.62 | kept (design) |
+| I, median clear with / without actives | 90.73 / 106.53 s = 0.852 | 94.48 / 114.57 s = 0.825 (paired 0.024) | 0.80 -> 0.77 | restated, loosened (base − 2 SE 0.777) |
+| D, strong tier-10 median survival | 900.01 s (30.38) | 900.01 s (20.69), 157 of 300 at the cap | 480 s | kept (design) |
+| H, strong + Data tier-10 median survival | 900.01 s | 900.01 s (3.20), 174 of 300 at the cap | 480 s | kept (design) |
+| NoPoi, wins as the reference | 0.717 (0.026) | 0.737 (0.025) | 0.56 -> 0.68 | restated, tightened |
+| NoPoi, POI-free wins | 0.720 (0.026) | 0.827 (0.022) | 0.50 | kept (seeded) |
+| Fresh tier-0 alive at 720 s | 0.767 (0.024) | 0.883 (0.019) | 0.65 -> 0.81 | restated, tightened (the seeded 9 of 11) |
+| Alive runs outside level 22-30 | 11/230 = 0.048 (0.014) | 7/265 = 0.026 (0.010) | 0.10 -> 0.05 | restated, tightened |
+| Active share, median (judged runs) | 0.080 (0.0047), 228 | 0.096 (0.0049), 263 | [0.07, 0.20] -> [0.08, 0.20] | restated, floor back to the design's 0.08 |
+| Active share, owned by 360 s / spread top | 0.957 / Storm Coil 0.208 | 0.993 (0.005) / Storm Coil 0.233 (0.021) | 0.25 / 0.30 | kept (design) |
+| Matter P1, 55 / fresh median | 0.0228 | 0.0225 (0.0003) | 0.03 | kept |
+| Matter P2, Refit 10 / Honing 10 over the T6 median | 1.248 / 0.908 | 1.207 (0.013) / 0.878 (0.009) | [1.0, 1.5] / [0.7, 1.0] | kept (design) |
+| J1, maxed strong tier-10 median survival | 900.01 s, 8 win | 900.01 s (0.00), 7 win | 480 s | kept |
+| Apex casts (312 fights) | 312/312 | 312/312 | 1.00 | kept |
+| Added singularity contacts, every arm | 0 of 300 | 0 of 300 | 0 | kept |
+
+The D and H floors read the window i = 2,801..3,400 (600 runs, never tuned
+on): M 900.01 s (SE 56.12) for D and 900.01 s (SE 14.45) for H, so M − 2 SE is
+787.76 s and 871.11 s and both floors stay at the design's 480 s, far from the
+420 s stop. 300 and 332 of the 600 runs reach the harness's 900 s cap and 164
+and 163 end before 420 s; the means are 664.41 s and 673.28 s. A 300-run
+median clears 480 s with probability 1.00 in both arms.
+
+ItemVariety V2, the whole-catalog over 0.4.0-lane overlap ratio per
+character, is at most max(0.75, base + 2 SE) and never above the accepted
+0.81, which the base meets for every character (jackknife SE):
+
+| Character | Before | After (SE) | Base + 2 SE | Ceiling |
+|---|---:|---:|---:|---|
+| Orb | 0.758 | 0.735 (0.018) | 0.770 | 0.76 -> 0.77 |
+| Prism | 0.735 | 0.752 (0.020) | 0.792 | 0.78 -> 0.80 |
+| Star | 0.772 | 0.737 (0.018) | 0.774 | 0.79 -> 0.78 |
+| Hexagon | 0.758 | 0.760 (0.018) | 0.796 | 0.81 -> 0.80 |
+
+Singularity obstacle-contact ratio over the paired baseline (300 runs of
+300 s; the baseline rate moved from 0.0046 to 0.0067 contacts per second);
+each ceiling is max(1.15, base + 2 SE):
+
+| Arm | Before | After (SE) | Base + 2 SE | Ceiling |
+|---|---:|---:|---:|---|
+| Slingshot | 0.910 | 1.030 (0.084) | 1.199 | 1.51 -> 1.20 |
+| Spin Turbine | 0.968 | 1.149 (0.094) | 1.337 | 1.36 -> 1.34 |
+| Kickback Plate | 1.001 | 1.060 (0.075) | 1.210 | 1.15 -> 1.22 |
+| Gravity Assist | 0.950 | 1.027 (0.068) | 1.162 | 1.18 -> 1.17 |
+| Mass Driver | 0.811 | 0.989 (0.084) | 1.158 | 1.15 -> 1.16 |
+| Crest Rider | 0.741 | 1.024 (0.053) | 1.130 | 1.17 -> 1.15 |
+| Recoil Spring | 0.761 | 1.034 (0.054) | 1.142 | 1.15 |
+| The other eight arms | 0.747 to 1.034 | 0.726 to 0.983 | 0.852 to 1.146 | 1.15 |
+
+The Apex offence and defence are design bands and never weaken (offence 96
+runs x 4 forks, defence 128 x 4; SE resamples whole runs with their forks):
+
+| Gate | Before | After (SE) | Band | Decision |
+|---|---|---|---|---|
+| Offence median time-to-kill ratio (3,840 pairs) | 0.826 | 0.792 (0.006) | [0.75, 0.95] | kept |
+| Offence per character / median benefit | 0.79 (Ring) to 1.23 (Shard) | 0.67 (Ring, 0.043) to 1.24 (Hexagon, 0.050) | [0.60, 1.40] | kept; the whole rule holds with probability 0.94 |
+| Defence Prism (512 pairs) | 0.808 | 0.744 (0.048) | [0.55, 0.85] | kept; in band with probability 0.995 |
+| Defence Diamond (512 pairs) | 0.600 | 0.567 (0.032) | [0.55, 0.85] | kept; in band with probability 0.71 |
+
+No population gate reads below its design target, so no knob was tuned for
+them: `eliteResonanceLevels` stays 1 and the automatic weapon level cap is
+unchanged. The restatement loosened Gate I, V2 for the Orb and the Prism and
+the Kickback Plate and Mass Driver ceilings. It tightened the NoPoi reference,
+fresh survival, the level band, the active share floor, V2 for the Star and
+the Hexagon and the Slingshot, Spin Turbine, Gravity Assist and Crest Rider
+ceilings. The tightenings hold on this tree by construction; a later change
+that weakens fresh runs fails them as a regression.
+
+### Dungeon pilot gate and room integrity
+
+Elite resonance shortened fresh dungeon fights (median clear 69.30 -> 63.56 s)
+and ended the abandons (0.136 -> 0): resonance levels let the Flux Wake kill
+the Brood Queen instead of orbiting it to the pilot's 300 s give-up. Fresh
+clear rose to 0.867, over the 0.85 ceiling, and the strong-over-fresh gap fell
+to 0.133, under 0.15. With nothing abandoned the 0.30 death ceiling is also a
+0.70 clear floor, so the reachable fresh band is [0.70, 0.85].
+
+Room integrity (`StructurePolicy.garrisonHealthMultiplier`) is the direct
+counterweight to the extra weapon power and was retuned on the structures
+window. Target stated before choosing: on i = 2,301..2,400 with its
+sub-windows 2,401..2,500 and 2,501..2,600, as the "Dungeon pilot and room
+damage" entry did, pooled fresh clear in [0.75, 0.80], every sub-window inside
+the band and strong clear at least 0.95, with the smallest single step. Fresh
+n = 299 pooled (100 per sub-window, 99 on 2,401..2,500), strong n = 300,
+binomial SE:
+
+| Integrity | Damage | Fresh clear pooled (SE) | Died pooled | Sub-window clear | Sub-window died | Fresh median | Strong clear / median |
+|---|---|---|---:|---|---|---:|---|
+| 0.75 (before) | 0.72 | 0.853 (0.020) | 0.147 | 0.880 / 0.788 / 0.890 | 0.120 / 0.212 / 0.110 | 61.85 s | 0.997 / 23.16 s |
+| 0.80 | 0.72 | 0.829 (0.022) | 0.171 | 0.840 / 0.828 / 0.820 | 0.160 / 0.172 / 0.180 | 63.64 s | 0.997 / 23.81 s |
+| 0.85 | 0.72 | 0.809 (0.023) | 0.191 | 0.790 / 0.828 / 0.810 | 0.210 / 0.172 / 0.190 | 65.68 s | 0.997 / 24.75 s |
+| **0.90 (chosen)** | 0.72 | **0.773 (0.024)** | 0.224 | 0.810 / 0.758 / 0.750 | 0.190 / 0.242 / 0.240 | 69.40 s | 0.997 / 25.58 s |
+| 0.95 | 0.72 | 0.756 (0.025) | 0.244 | 0.810 / 0.707 / 0.750 | 0.190 / 0.293 / 0.250 | 72.86 s | 0.997 / 26.14 s |
+| 1.00 | 0.72 | 0.749 (0.025) | 0.247 | 0.790 / 0.727 / 0.730 | 0.210 / 0.263 / 0.270 | 70.32 s | 0.997 / 26.75 s |
+| 1.05 | 0.72 | 0.729 (0.026) | 0.268 | 0.750 / 0.727 / 0.710 | 0.250 / 0.263 / 0.290 | 75.80 s | 0.997 / 26.94 s |
+| 1.10 | 0.72 | 0.729 (0.026) | 0.268 | 0.740 / 0.707 / 0.740 | 0.260 / 0.283 / 0.260 | 75.86 s | 0.997 / 27.35 s |
+| 0.75 | 0.85 | 0.786 (0.024) | 0.214 | 0.850 / 0.717 / 0.790 | 0.150 / 0.283 / 0.210 | 62.18 s | 0.997 / 23.16 s |
+| 0.75 | 0.90 | 0.766 (0.024) | 0.234 | 0.820 / 0.707 / 0.770 | 0.180 / 0.293 / 0.230 | 63.24 s | 0.997 / 23.16 s |
+| 0.75 | 0.95 | 0.753 (0.025) | 0.247 | 0.810 / 0.677 / 0.770 | 0.190 / 0.323 / 0.230 | 62.58 s | 0.997 / 23.16 s |
+| 0.75 | 1.00 | 0.732 (0.026) | 0.268 | 0.780 / 0.677 / 0.740 | 0.220 / 0.323 / 0.260 | 63.01 s | 0.997 / 23.16 s |
+| 0.75 | 1.05 | 0.719 (0.026) | 0.281 | 0.760 / 0.677 / 0.720 | 0.240 / 0.323 / 0.280 | 62.58 s | 0.997 / 23.16 s |
+| 0.75 | 1.10 | 0.702 (0.026) | 0.298 | 0.750 / 0.657 / 0.700 | 0.250 / 0.343 / 0.300 | 63.31 s | 0.997 / 23.16 s |
+
+Integrity 0.90 restores the pre-feature fight length (pooled median 69.40 s
+against the gate's earlier 69.30 s). Damage 0.85 meets the numbers too, but
+its sub-windows spread from 0.717 to 0.850, one on the ceiling. Garrison
+scale 0.8, room damage 0.72 and wall damage 1.0 stay; the dungeon room health
+the "Dungeon encounters" paragraph of the 2026-10-29 entry gives as 0.75 is
+now 0.90. `DungeonPilotGateTest` on its 120 `PopulationSeeds` (no threshold
+changed; pass probability binomial on 120 attempts):
+
+| Statement | Before (SE) | Features, before the retune | After (SE) | P(pass) after | Decision |
+|---|---|---|---|---:|---|
+| Fresh clear in [0.35, 0.85] | 0.670 (0.043) | 0.867 (0.031), fails | 0.758 (0.039) | 0.995 | retuned content |
+| Fresh died inside <= 0.30 | 0.195 (0.037) | 0.133 (0.031) | 0.242 (0.039) | 0.942 | retuned content |
+| Fresh abandoned / median clear | 0.136 / 69.30 s | 0 / 63.56 s | 0 / 73.86 s (6.92) | - | - |
+| Strong clear >= 0.85 | 0.992 (0.008) | 1.000 | 1.000 | ~1 | kept |
+| Strong − fresh clear >= 0.15 | 0.322 | 0.133, fails | 0.242 | 0.995 | retuned content |
+| Strong median clear <= 150 s | 27.87 s (5.42) | 24.24 s (0.92) | 26.54 s (1.19) | ~1 | kept |
+| Attempts, 300 s limit, templates, replay | hold | hold | hold | - | kept |
+
+Both fresh clauses pass together with probability 0.937 at the gate reading
+and 0.962 at the window's (0.334 before the retune); the binomial model
+ignores that orbiting runs clear every attempt, so the true figures are
+higher. Core Stasis turned the one abandon left on the tree without it into a
+death inside; the stall breaker turned that run's fin pin into a furnace
+death and moved one strong template (Vault 30 -> 31, Foundry 19 -> 18).
+
+The pilot opens the Totem chests after its attempt, in the 5 s tail after the
+measured outcome is frozen, and the gate prints `chestsOpened`. The first
+probe left 16 of 517 waiting chests shut: after the pilot's seek the bot
+steered from a cursor angle it had last set before the seek, which swung the
+singularity onto the Core (34 singularity deaths in the 5 s after a clear on
+i = 2,301..2,600). The bot now resyncs its cursor after any frame the pilot
+steered, and every per-run attempt line on the window is byte-identical
+before and after that fix. Every waiting chest was opened: window fresh
+116/116 and 103/103, strong 199/199 at 0.75 and 0.90; gate fresh 36/36 and
+strong 81/81. `DungeonTemplateTourTest` prints the same output.
+
+### Dimension gates and the Harvest's ember life
+
+A3 failed its "every open rift entered" check on seed 8196178, a pilot
+limitation rather than a simulation bug. At 405 s the run offered a Nadir
+window rift; the glitch rift opened at 407.00 s, 576 u from it. At 408.19 s
+the bot's threat Dash, read by the pilot along its pointer, passed 238 u from
+the Nadir rift, but the impulse adds to the existing velocity, so the Core
+flew at (173, 1263) u/s straight into it. Entering any dimension clears the
+open glitch rift (as it did on `bdc061ce`); the stream shift only moved this
+run's geometry. The pilot now reads a pushed Dash along the post-Dash
+velocity as the game computes it, for both its solid-body and skipped-site
+guards (a Blink Drive landing still along the pointer);
+`DimensionPilotRiftBerthTest` covers it. On the gate seeds only that seed
+changed, and 0 of 900 window runs left a rift unentered.
+
+The N0 Harvest band [0.50, 0.90] read 0.933 (SE 0.032), pass probability
+0.21. `DimensionObjectiveTuning.emberLifeSeconds`, the knob the 0.6.0 pace
+recalibration used for the same band, was retuned on the dimensions window
+i = 2,401..2,500 with every seed forced to the Harvest (n 100; N10 Harvest
+n 85; the Pyre reads 0.710, SE 0.045, in every row), aiming for the 0.809 that
+calibration chose:
+
+| Candidate | N0 Harvest (SE) | N0 survival | Median completion | Harvest scorch share | N10 Harvest (SE) |
+|---|---:|---:|---:|---:|---:|
+| 20 embers, 1.1 s (before) | 0.980 (0.014) | 1.00 | 42.4 s | 0.667 | 0.812 (0.042) |
+| 21 embers | 0.980 (0.014) | 1.00 | 44.3 s | 0.670 | |
+| 22 embers | 0.940 (0.024) | 1.00 | 47.3 s | 0.667 | |
+| 23 embers | 0.910 (0.029) | 1.00 | 48.4 s | 0.671 | |
+| 24 embers | 0.840 (0.037) | 1.00 | 49.4 s | 0.673 | 0.753 (0.047) |
+| 1.05 s | 0.880 (0.032) | 0.97 | 45.0 s | 0.669 | 0.835 (0.040) |
+| **1.0 s (chosen)** | **0.800 (0.040)** | 0.97 | 46.6 s | 0.703 | 0.824 (0.041) |
+| 0.95 s | 0.770 (0.042) | 1.00 | 50.4 s | 0.688 | |
+| 22 embers + 1.05 s | 0.830 (0.038) | 0.97 | 47.9 s | 0.675 | 0.765 (0.046) |
+| 23 embers + 1.05 s | 0.760 (0.043) | 0.97 | 50.3 s | 0.676 | 0.753 (0.047) |
+
+The ember goal stays 20: the Harvest's English and Russian instructions say
+"twenty embers" and 24 is the content maximum. The shorter life costs 3 of 100
+window Harvest runs (1 fractured, 2 scorched), where none died before.
+`DimensionPilotGateTest` (first 120 gate seeds; SE bootstrap):
+
+| Statement | Before (SE) | Features, before the fixes | After (SE) | Decision |
+|---|---|---|---|---|
+| Every open rift entered | holds | A3 fails (8196178) | holds | harness fix |
+| Z0 survival >= 0.92 / Ascent [0.55, 0.92] | 0.991 / 0.825 (0.051) | 0.983 / 0.817 | 0.983 (0.012) / 0.817 (0.050) | kept |
+| Z0 Judgement [0.45, 0.88] / median completion <= 55 s | 0.828 (0.050) / 16.47 s | 0.633 / 13.66 s | 0.633 (0.062) / 13.66 s (4.03) | kept |
+| N0 survival >= 0.85 | 0.974 (0.015) | 0.983 | 0.992 (0.008) | kept |
+| N0 Harvest [0.50, 0.90] | 0.877 (0.043) | 0.933 (0.032), fails | 0.833 (0.048); P(pass) 0.95 | retuned content |
+| N0 Pyre [0.40, 0.85] / scorch share <= 0.45 | 0.672 (0.062) / 0.359 (0.032) | 0.717 / 0.324 | 0.717 (0.059) / 0.339 (0.035) | kept |
+| Z10 survival / completion >= 0.75 / 0.50 | 0.990 / 0.782 | 0.970 / 0.730 | 0.970 (0.017) / 0.730 (0.044) | kept |
+| N10 survival / completion >= 0.75 / 0.50 | 0.842 / 0.822 | 0.900 / 0.890 | 0.890 (0.031) / 0.870 (0.033) | kept |
+| A3 survival >= 0.65 / defeat [0.20, 0.65] | 1.000 / 0.317 (0.042) | 1.000 / 0.328 | 1.000 / 0.325 (0.043) | kept |
+| A0 survival >= 0.45 / defeat <= 0.35 | 0.951 (0.021) / 0.157 (0.036) | 0.949 / 0.068 | 0.949 (0.020) / 0.068 (0.023) | kept |
+
+`DimensionRunOutcomeGateTest`, thresholds unchanged: the Zenith win shift
+reads +0.008 -> +0.050 (SE 0.042) and the Nadir's -0.050 -> -0.042 (SE 0.043)
+against [-0.06, +0.15]; no strong tier-10 run with a visit wins. The window
+reads a Nadir shift of +0.04 at 1.0 s and +0.03 at 1.1 s, so the shorter
+ember life does not make the Nadir a trap.
+
+### Design gates
+
+The opt-in design gates keep their bands and are not restated; every one
+passes (before -> after):
+
+| Gate | Reading | Band |
+|---|---|---|
+| Sites S-G1, bronze-up / silver-up / gold / phone bronze-up | 0.990 -> 0.988 / 0.806 -> 0.833 / 0.375 -> 0.430 (0.024) / 0.957 -> 0.930 | >= 0.75 / >= 0.35 / [0.10, 0.45] / >= 0.65 |
+| Sites S-G3 completion, five challenges | 0.670 to 0.866 -> 0.732 to 0.848 | [0.30, 0.90] each |
+| Sites S-G4, bounty value / challenge / race | 1.416 -> 1.544 / 0.920 -> 0.964 / 1.235 -> 1.254 | [1.0, 2.2] / [0.75, 1.5] each |
+| Sites S-G4, engaging win share against no-POI | 0.772 vs 0.753 -> 0.820 vs 0.833 | loss <= 0.10 |
+| Bounty S-G2, fresh / veteran clear | 0.698 -> 0.573 / 0.739 -> 0.408 (0.036) | [0.40, 0.85] / [0.40, 0.90] |
+| Bounty S-G2, median fight fresh / veteran | 43.2 -> 43.0 s / 43.1 -> 53.0 s | <= 75 s |
+| Sigil summoned | 0.893 -> 0.993 | >= 0.5 |
+| Omen arms, largest win shift | Still Water +0.033 -> +0.057 (0.027) | <= 0.12 |
+| Event signal, reach / win shift / Matter ratio | 1.000 -> 1.000 / +0.023 -> -0.007 / 0.995 -> 0.996 | >= 0.85 / [-0.08, +0.12] / >= 0.80 |
+| Run skeleton variety | 0.8415 -> 0.8435 | >= 0.75 |
+| Active frequency, fresh unowned / highest level 2-10 / shown by 10 | 0.059 -> 0.061 / 0.170 -> 0.147 / 0.915 -> 0.933 | [0.04, 0.10] / <= 0.20 / >= 0.80 |
+| Active frequency, veteran unowned / highest / shown by 16 | 0.050 -> 0.051 / 0.065 -> 0.076 / 0.957 -> 0.973 | as above |
+| Active frequency, highest POI reward share / median held | 0.117 -> 0.117 / 3 -> 3 | <= 0.20 / [1, 3] |
+
+The director budget prints the same output, and the encounter duels moved by
+about 1 s per median and 0.02 per share at most. The bounty veteran fell to
+the floor through H1, not resonance: run with the old Flux Wake start, the
+new tree reads fresh 0.682 and veteran 0.863 (median fight 39.6 s), but the
+fresh arm then engages 195 bounties, under the gate's 200, so reverting H1 for
+this gate is no drop-in fix. Arc Coil kills a bounty boss more slowly, and
+148 of 255 veteran bounties escape the 65 s limit.
+
+### For the owner
+
+No value is below a hard floor (D and H read M − 2 SE 787.76 s and 871.11 s
+against 480 s and the 420 s stop), and no design target fails. Each passes
+now, but these are close to a coin flip under any further stream change and
+only the owner can widen them:
+
+- The dungeon fresh band holds only as an average over H2's weapon mix: at
+  0.90 the Arc Coil clears 150 of 150 window attempts and the Flux Wake dies
+  in 0.45 of its attempts, and no room setting probed puts either weapon in
+  the band alone. The bot's ram law pressing into its target below the
+  hurting speed, flagged in the earlier entry, is the cause.
+- The Apex Diamond defence reads 0.567 (SE 0.032) against 0.55; a resampled
+  population lands in band with probability 0.71.
+- The bounty veteran clear reads 0.408 (SE 0.036) against 0.40 (H1, above).
+- Site gold reads 0.430 against at most 0.45, and the Apex offence's Ring 0.67
+  of the median benefit against 0.60.
+- The Nadir win shift reads -0.042 against -0.06 on the gate seeds (-0.050 on
+  the tree before).
+- Gate I loosened from 0.80 to 0.77 by the rule; at 0.80 a resampled
+  population passes only 0.84 of the time (0.98 at 0.77). Keeping 0.80 would
+  make it a design target.
+- Elite resonance stays uncapped, like the old Totem.
+
+The playtest flag on the Harvest's ember life (0.6.0 entry) now concerns
+1.0 s.
