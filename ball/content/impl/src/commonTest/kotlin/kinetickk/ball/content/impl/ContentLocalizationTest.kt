@@ -27,7 +27,6 @@ import kinetickk.ball.content.api.StructureNotice
 import kinetickk.ball.content.api.StructureReward
 import kinetickk.ball.content.api.StructureRewardKind
 import kinetickk.ball.content.api.WorldDiscovery
-import kinetickk.ball.content.api.WorldDiscoveryKind
 import kinetickk.ball.content.api.liabilityText
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.ball.content.api.ruleLines
@@ -340,12 +339,11 @@ class ContentLocalizationTest {
     }
 
     @Test
-    fun everyWorldDiscoveryTextOutsideTheStructureTemplatesIsLocalized() {
-        // Structure template names are keys of the structures lane's phrase list, which ships empty until its templates do.
+    fun everyWorldDiscoveryTextIsLocalized() {
         content.worldDiscoveries.forEach { discovery ->
             assertFullyLocalized(discovery.description)
             assertFullyLocalized(discovery.hint)
-            if (discovery.id.kind != WorldDiscoveryKind.STRUCTURE) assertFullyLocalized(discovery.name)
+            assertFullyLocalized(discovery.name)
         }
     }
 
