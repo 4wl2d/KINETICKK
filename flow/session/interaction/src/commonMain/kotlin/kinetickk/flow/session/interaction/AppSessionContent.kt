@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.runtime.CompositionLocalProvider
@@ -110,20 +111,24 @@ fun AppSessionContent(
 ) {
     val diagnostics = LocalCrashDiagnostics.current
     val traced = diagnostics.enabled
+    // One read of the accepted preferences seeds the language, the palette, the bindings and the display state.
+    val initialPreferences = remember(sessionPort, profileReadPort) {
+        profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences
+    }
     var languageValue by remember(sessionPort, profileReadPort) {
-        mutableStateOf(profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences?.language ?: initialLanguage)
+        mutableStateOf(initialPreferences?.language ?: initialLanguage)
     }
     var colorVisionValue by remember(sessionPort, profileReadPort) {
-        mutableStateOf(profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences?.colorVision ?: ColorVision.DEFAULT)
+        mutableStateOf(initialPreferences?.colorVision ?: ColorVision.DEFAULT)
     }
     // Keys bound to gameplay actions reach a running run before the session shortcuts.
     var bindingsValue by remember(sessionPort, profileReadPort) {
-        mutableStateOf(profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences?.keyBindings ?: KeyBindings.DEFAULT)
+        mutableStateOf(initialPreferences?.keyBindings ?: KeyBindings.DEFAULT)
     }
     var workshopRequestValue by shellMemory::workshopRequest
     // The accepted preferences as last read; display options, frame pacing and interface scale follow them.
     var preferencesValue by remember(sessionPort, profileReadPort) {
-        mutableStateOf(profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences)
+        mutableStateOf(initialPreferences)
     }
     // Interface scale: Home and every overlay lay out at a scaled density; the run keeps the raw one.
     val rawDensity = LocalDensity.current
@@ -190,6 +195,21 @@ fun AppSessionContent(
         }
     }
 
+    fun onSettingsOutput(output: SettingsOutput) {
+        when (output) {
+            is SettingsOutput.LanguageChanged -> {
+                languageValue = output.language
+                // Settings reports every accepted preference change through this output.
+                profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences?.let { preferences ->
+                    colorVisionValue = preferences.colorVision
+                    bindingsValue = preferences.keyBindings
+                    preferencesValue = preferences
+                }
+            }
+            SettingsOutput.Back -> output.toSessionPulse()?.let { dispatch(it) }
+        }
+    }
+
     SideEffect(languageValue, onLanguageChanged) { onLanguageChanged(languageValue) }
     SideEffect(preferencesValue, onPreferencesChanged) { preferencesValue?.let(onPreferencesChanged) }
 
@@ -222,123 +242,14 @@ fun AppSessionContent(
             modifier = Modifier
                 .fillMaxSize()
                 .onSizeChanged { rootSizeValue = it }
-                .drawWithContent {
-                    if (transition.recording) {
-                        snapshot.record { this@drawWithContent.drawContent() }
-                        drawLayer(snapshot)
-                        transition.recorded()
-                    } else {
-                        drawContent()
-                    }
-                    val elapsed = transition.elapsedMs
-                    when (transition.kind) {
-                        SessionTransitionKind.NONE -> Unit
-                        SessionTransitionKind.SHUTTER -> {
-                            if (elapsed < KkShutter.SWAP_MS) drawLayer(snapshot)
-                            drawKkShutter(elapsed, roles)
-                        }
-                        SessionTransitionKind.CROSSFADE ->
-                            drawRect(Kk.Ink, alpha = (1f - elapsed / SessionTransitionKind.CROSSFADE.durationMs).coerceIn(0f, 1f))
-                    }
-                }
+                .sessionTransitionLayer(transition, snapshot, roles)
                 .focusRequester(focusRequester)
-                .onPreviewKeyEvent { event ->
-                    // Codex owns text entry, slot activation and its two-step Escape.
-                    if (shellValue.overlay == AppDestination.Codex) return@onPreviewKeyEvent false
-                    // Settings owns slider keys and numeric editing (including Ctrl/Cmd+A).
-                    if (shellValue.overlay == AppDestination.Settings) return@onPreviewKeyEvent false
-                    // Let a focused semantic control own Enter. When focus remains on
-                    // this root, the bubble handler below preserves the global shortcut.
-                    if (event.key == Key.Enter) return@onPreviewKeyEvent false
-                    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                    if (gameplayFirst(event.key)) return@onPreviewKeyEvent false
-                    if (!event.key.isShellKey(shellValue.base)) return@onPreviewKeyEvent false
-                    audioExecutor.ensureUnlocked()
-                    dispatchKey(event.key)
-                }
-                .onKeyEvent { event ->
-                    if (shellValue.overlay == AppDestination.Codex) return@onKeyEvent true
-                    if (shellValue.overlay == AppDestination.Settings) {
-                        if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
-                        if (!event.key.isShellKey(shellValue.base)) return@onKeyEvent false
-                        audioExecutor.ensureUnlocked()
-                        return@onKeyEvent dispatchKey(event.key)
-                    }
-                    // A bound key the running run did not consume (its action does not apply now)
-                    // keeps its session meaning: C still opens the Codex while paused.
-                    if (event.type == KeyEventType.KeyDown && gameplayFirst(event.key)) {
-                        if (!event.key.isShellKey(shellValue.base)) return@onKeyEvent false
-                        audioExecutor.ensureUnlocked()
-                        return@onKeyEvent dispatchKey(event.key)
-                    }
-                    if (event.key != Key.Enter || event.type != KeyEventType.KeyDown) {
-                        return@onKeyEvent false
-                    }
-                    audioExecutor.ensureUnlocked()
-                    dispatch(SessionInteractionPulse.ShortcutObserved(SessionShortcut.ENTER))
-                }
+                .sessionShellKeys({ shellValue }, audioExecutor, ::gameplayFirst, ::dispatchKey, ::dispatch)
                 .focusable(),
         ) {
-            when (shellValue.base) {
-                AppDestination.Home -> homeFeature.Content(
-                    inputEnabled = normalInputEnabled && shellValue.overlay == null,
-                    runMode = shellValue.runMode,
-                    onOutput = { output -> if (output == HomeOutput.Quit) onQuit() else output.toSessionPulse()?.let { dispatch(it) } },
-                )
-                // The run keeps the raw density: the interface scale never changes the visible arena.
-                AppDestination.Gameplay -> CompositionLocalProvider(LocalDensity provides rawDensity) {
-                    gameplayPresentation.Content(
-                        inputEnabled = normalInputEnabled && shellValue.overlay == null,
-                        onOutput = { output -> dispatch(output.toSessionPulse()) },
-                    )
-                }
-                AppDestination.Settings,
-                AppDestination.Workshop,
-                AppDestination.Rebirth,
-                AppDestination.Codex,
-                -> error("Only Home and Gameplay may be base destinations")
-            }
-
-            when (shellValue.overlay.takeIf { normalInputEnabled }) {
-                null -> Unit
-                AppDestination.Settings -> settingsFeature.Content(
-                    routeToken = shellValue.routeToken.value,
-                    onOutput = { output ->
-                        when (output) {
-                            is SettingsOutput.LanguageChanged -> {
-                                languageValue = output.language
-                                // Settings reports every accepted preference change through this output.
-                                profileReadPort?.query(ProfileQuery.GetPreferences)?.preferences?.let { preferences ->
-                                    colorVisionValue = preferences.colorVision
-                                    bindingsValue = preferences.keyBindings
-                                    preferencesValue = preferences
-                                }
-                            }
-                            SettingsOutput.Back -> output.toSessionPulse()?.let { dispatch(it) }
-                        }
-                    },
-                )
-                AppDestination.Workshop -> workshopFeature.Content(
-                    routeToken = shellValue.routeToken.value,
-                    tabRequest = workshopRequestValue,
-                    characterSelectionAvailable = shellValue.characterSelectionAvailable,
-                    activeRunWeapon = activeGameplayWeapon(shellValue, gameplayPresentation),
-                    onOutput = { output -> dispatch(output.toSessionPulse()) },
-                )
-                AppDestination.Rebirth -> rebirthFeature.Content(
-                    routeToken = shellValue.routeToken.value,
-                    eligible = shellValue.rebirthEligible,
-                    confirmationArmed = shellValue.rebirthConfirmationArmed,
-                    onOutput = { output -> dispatch(output.toSessionPulse()) },
-                )
-                AppDestination.Codex -> codexFeature.Content(
-                    runStacks = currentRunStacks(shellValue, gameplayPresentation),
-                    onOutput = { output -> dispatch(output.toSessionPulse()) },
-                )
-                AppDestination.Home,
-                AppDestination.Gameplay,
-                -> error("Base destinations cannot be overlays")
-            }
+            SessionBase(shellValue, normalInputEnabled, homeFeature, gameplayPresentation, rawDensity, onQuit, ::dispatch)
+            SessionOverlay(shellValue, normalInputEnabled, settingsFeature, workshopFeature, rebirthFeature, codexFeature,
+                workshopRequestValue, gameplayPresentation, ::onSettingsOutput, ::dispatch)
 
             if (shellValue.lifecycle.showsProfileUnavailable()) {
                 profileUnavailableFeature.Content()
@@ -348,6 +259,154 @@ fun AppSessionContent(
         }
     }
 }
+
+/** The base destination: Home or the running run. */
+@Composable
+private fun SessionBase(
+    shell: AppShellProjection,
+    normalInputEnabled: Boolean,
+    homeFeature: HomeFeature,
+    gameplayPresentation: GameplayPresentation,
+    rawDensity: Density,
+    onQuit: () -> Unit,
+    dispatch: (SessionInteractionPulse) -> Boolean,
+) {
+    when (shell.base) {
+        AppDestination.Home -> homeFeature.Content(
+            inputEnabled = normalInputEnabled && shell.overlay == null,
+            runMode = shell.runMode,
+            onOutput = { output -> if (output == HomeOutput.Quit) onQuit() else output.toSessionPulse()?.let { dispatch(it) } },
+        )
+        // The run keeps the raw density: the interface scale never changes the visible arena.
+        AppDestination.Gameplay -> CompositionLocalProvider(LocalDensity provides rawDensity) {
+            gameplayPresentation.Content(
+                inputEnabled = normalInputEnabled && shell.overlay == null,
+                onOutput = { output -> dispatch(output.toSessionPulse()) },
+            )
+        }
+        AppDestination.Settings,
+        AppDestination.Workshop,
+        AppDestination.Rebirth,
+        AppDestination.Codex,
+        -> error("Only Home and Gameplay may be base destinations")
+    }
+}
+
+/** The overlay feature over the base, while normal input is enabled. */
+@Composable
+private fun SessionOverlay(
+    shell: AppShellProjection,
+    normalInputEnabled: Boolean,
+    settingsFeature: SettingsFeature,
+    workshopFeature: WorkshopFeature,
+    rebirthFeature: RebirthFeature,
+    codexFeature: CodexFeature,
+    workshopRequest: WorkshopTabRequest?,
+    gameplayPresentation: GameplayPresentation,
+    onSettingsOutput: (SettingsOutput) -> Unit,
+    dispatch: (SessionInteractionPulse) -> Boolean,
+) {
+    when (shell.overlay.takeIf { normalInputEnabled }) {
+        null -> Unit
+        AppDestination.Settings -> settingsFeature.Content(
+            routeToken = shell.routeToken.value,
+            onOutput = onSettingsOutput,
+        )
+        AppDestination.Workshop -> workshopFeature.Content(
+            routeToken = shell.routeToken.value,
+            tabRequest = workshopRequest,
+            characterSelectionAvailable = shell.characterSelectionAvailable,
+            activeRunWeapon = activeGameplayWeapon(shell, gameplayPresentation),
+            onOutput = { output -> dispatch(output.toSessionPulse()) },
+        )
+        AppDestination.Rebirth -> rebirthFeature.Content(
+            routeToken = shell.routeToken.value,
+            eligible = shell.rebirthEligible,
+            confirmationArmed = shell.rebirthConfirmationArmed,
+            onOutput = { output -> dispatch(output.toSessionPulse()) },
+        )
+        AppDestination.Codex -> codexFeature.Content(
+            runStacks = currentRunStacks(shell, gameplayPresentation),
+            onOutput = { output -> dispatch(output.toSessionPulse()) },
+        )
+        AppDestination.Home,
+        AppDestination.Gameplay,
+        -> error("Base destinations cannot be overlays")
+    }
+}
+
+/** Screen changes: records the shown menu frames, then draws the shutter or the fade from ink over the next screen. */
+private fun Modifier.sessionTransitionLayer(
+    transition: SessionTransitionState,
+    snapshot: GraphicsLayer,
+    roles: KkRolePalette,
+): Modifier = this
+    .drawWithContent {
+        if (transition.recording) {
+            snapshot.record { this@drawWithContent.drawContent() }
+            drawLayer(snapshot)
+            transition.recorded()
+        } else {
+            drawContent()
+        }
+        val elapsed = transition.elapsedMs
+        when (transition.kind) {
+            SessionTransitionKind.NONE -> Unit
+            SessionTransitionKind.SHUTTER -> {
+                if (elapsed < KkShutter.SWAP_MS) drawLayer(snapshot)
+                drawKkShutter(elapsed, roles)
+            }
+            SessionTransitionKind.CROSSFADE ->
+                drawRect(Kk.Ink, alpha = (1f - elapsed / SessionTransitionKind.CROSSFADE.durationMs).coerceIn(0f, 1f))
+        }
+    }
+
+/**
+ * Shell keys: Codex and Settings own their keys, a focused control owns Enter, a key bound to a gameplay
+ * action reaches a running run first, and the shell keys left become Session shortcuts.
+ */
+private fun Modifier.sessionShellKeys(
+    shell: () -> AppShellProjection,
+    audioExecutor: SessionAudioExecutor,
+    gameplayFirst: (Key) -> Boolean,
+    dispatchKey: (Key) -> Boolean,
+    dispatch: (SessionInteractionPulse) -> Boolean,
+): Modifier = this
+    .onPreviewKeyEvent { event ->
+        // Codex owns text entry, slot activation and its two-step Escape.
+        if (shell().overlay == AppDestination.Codex) return@onPreviewKeyEvent false
+        // Settings owns slider keys and numeric editing (including Ctrl/Cmd+A).
+        if (shell().overlay == AppDestination.Settings) return@onPreviewKeyEvent false
+        // Let a focused semantic control own Enter. When focus remains on
+        // this root, the bubble handler below preserves the global shortcut.
+        if (event.key == Key.Enter) return@onPreviewKeyEvent false
+        if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+        if (gameplayFirst(event.key)) return@onPreviewKeyEvent false
+        if (!event.key.isShellKey(shell().base)) return@onPreviewKeyEvent false
+        audioExecutor.ensureUnlocked()
+        dispatchKey(event.key)
+    }
+    .onKeyEvent { event ->
+        if (shell().overlay == AppDestination.Codex) return@onKeyEvent true
+        if (shell().overlay == AppDestination.Settings) {
+            if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+            if (!event.key.isShellKey(shell().base)) return@onKeyEvent false
+            audioExecutor.ensureUnlocked()
+            return@onKeyEvent dispatchKey(event.key)
+        }
+        // A bound key the running run did not consume (its action does not apply now)
+        // keeps its session meaning: C still opens the Codex while paused.
+        if (event.type == KeyEventType.KeyDown && gameplayFirst(event.key)) {
+            if (!event.key.isShellKey(shell().base)) return@onKeyEvent false
+            audioExecutor.ensureUnlocked()
+            return@onKeyEvent dispatchKey(event.key)
+        }
+        if (event.key != Key.Enter || event.type != KeyEventType.KeyDown) {
+            return@onKeyEvent false
+        }
+        audioExecutor.ensureUnlocked()
+        dispatch(SessionInteractionPulse.ShortcutObserved(SessionShortcut.ENTER))
+    }
 
 /** Screen-change styles (Motion board): the shutter, or a 150 ms fade from ink. */
 internal enum class SessionTransitionKind(val durationMs: Float) {
