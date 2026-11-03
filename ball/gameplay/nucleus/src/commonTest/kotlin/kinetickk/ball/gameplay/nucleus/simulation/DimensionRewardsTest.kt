@@ -424,6 +424,23 @@ class DimensionRewardsTest {
     }
 
     @Test
+    fun anObjectiveBossAtZeroIntegrityWhenTheVisitEndsCompletesItBeforeTheExit() {
+        val state = game(openWorld).apply { enterDimensionForTesting(WorldLayer.ZENITH, DimensionObjective.JUDGEMENT) }
+        state.elapsed = 200f + tuning.bossDelaySeconds
+        state.updateDimension(step)
+        val boss = state.enemies.single { it.type == DimensionObjective.JUDGEMENT.boss }
+        // Struck to zero integrity before the dimension step of the visit's last step; the kill resolves in the sweep.
+        boss.hp = 0f
+        state.elapsed = state.visit().endsAt
+        state.updateDimension(step)
+        assertEquals(WorldLayer.ZENITH, state.worldLayer, "the visit waits for the kill sweep")
+        state.sweepKills()
+        assertTrue(state.visit().completed, "the sweep completes the objective")
+        state.updateDimension(step)
+        assertEquals(WorldLayer.BASE, state.worldLayer, "the visit then ends")
+    }
+
+    @Test
     fun aFullArenaMakesRoomForTheObjectiveBoss() {
         val state = game(openWorld).apply { enterDimensionForTesting(WorldLayer.ZENITH, DimensionObjective.JUDGEMENT) }
         val cap = state.content.rebirth.maxActiveEnemies

@@ -428,7 +428,8 @@ internal fun MutableGameState.updateDimension(delta: Float) {
     }
     val visit = dimensionRun.visit ?: return
     dimensionLocalClock += delta * layerTimeScale(null)
-    if (elapsed >= visit.endsAt) {
+    // An objective boss at zero integrity awaits the step's kill sweep, which completes the visit; it ends a step later.
+    if (elapsed >= visit.endsAt && enemyById(visit.bossId)?.let { !it.dead && it.hp <= 0f } != true) {
         exitDimension(DimensionExit.TIMER)
         return
     }
