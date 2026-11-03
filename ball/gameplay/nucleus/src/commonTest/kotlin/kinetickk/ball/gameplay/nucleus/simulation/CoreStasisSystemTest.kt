@@ -31,7 +31,7 @@ import kotlin.test.assertTrue
 
 /**
  * Core Stasis detector rules, driven step by step with a scripted Core (position and velocity written before each
- * [updateCoreStasis]) against the shipped thresholds: anchor radius 240 u, still speed 220 u/s, travel floor 30 u/s,
+ * [updateCoreStasis]) against the shipped thresholds: anchor radius 240 u, still speed 120 u/s, travel floor 30 u/s,
  * speed EMA 1.5 s, decay 4x, grace 10 s, ramp 12 s.
  */
 class CoreStasisSystemTest {
@@ -51,7 +51,8 @@ class CoreStasisSystemTest {
     @Test
     fun jiggleInPlaceStillFreezes() {
         val state = buildTestState()
-        state.drive(30f, { t, out -> pose(out, 30f * sin(TWO_PI * t), 0f, 30f * TWO_PI * cos(TWO_PI * t), 0f) }) { t ->
+        // 20 u at 1 Hz averages 80 u/s, below the still speed.
+        state.drive(30f, { t, out -> pose(out, 20f * sin(TWO_PI * t), 0f, 20f * TWO_PI * cos(TWO_PI * t), 0f) }) { t ->
             if (t >= 23f) assertEquals(1f, state.coreStasisLevel(), "level at $t")
         }
     }
@@ -128,11 +129,12 @@ class CoreStasisSystemTest {
     fun mostlyStillWithBriefMovesStillFreezes() {
         val state = buildTestState()
         var frozeInCycle = -1
+        // A 300 u hop: a full second at 600 u/s keeps the speed average above the still speed for 1.3 s more and thaws.
         repeat(6) { cycle ->
             state.drive(9f, hold(state)) { if (frozeInCycle < 0 && state.coreStasisLevel() > 0f) frozeInCycle = cycle }
-            state.drive(1f, straight(speed = 600f, fromX = state.coreX))
+            state.drive(0.5f, straight(speed = 600f, fromX = state.coreX))
         }
-        assertTrue(frozeInCycle in 0..2, "still 9 s and move 1 s froze in cycle $frozeInCycle")
+        assertTrue(frozeInCycle in 0..2, "still 9 s and move 0.5 s froze in cycle $frozeInCycle")
     }
 
     @Test
