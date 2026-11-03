@@ -245,8 +245,10 @@ advance.
 
 ## 9. Tests and balance gates
 
-- A test lives in the same module and package as the code it tests and may use `internal` members. Shared fixtures
-  live in a fixture file of that package.
+- A test lives in the same module and package as the code it tests and may use `internal` members: a nucleus domain
+  test in its `simulation.<domain>`, a mapper test in `projection`. Tests of the whole step or of several domains (the
+  reference bots, whole-run gates of no single domain, the invariant fuzz) stay in `simulation`. A fixture lives in
+  the package of most of its users, so fixtures shared across domains live in `simulation`.
 - Test sources must keep the shape the CI scanners understand: one top-level `class` per test at column 0, indented
   `@Test` functions, no test base classes, nested test classes, `object` holders or parameterized tests
   (`tools/ci/desktop_test_union.py`, `DesktopTestShardsTest`).
