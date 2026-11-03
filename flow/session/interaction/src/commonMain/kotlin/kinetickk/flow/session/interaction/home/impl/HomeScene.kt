@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.lerp
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.flow.session.interaction.home.api.HomeUiModel
 import kinetickk.flow.session.interaction.localization.SessionRedesignText
+import kinetickk.flow.session.interaction.shared.formIndex
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.Kk
@@ -267,9 +268,6 @@ private fun DrawScope.drawCore(
         drawCircle(Kk.Bone, radius * 0.24f, center)
     }
 }
-
-/** The form index of a character: [KkFormGeometry] and [KkIcon.Forms] follow the character order. */
-internal fun CoreShape.formIndex(): Int = ordinal
 
 private fun DrawScope.drawEnemies(
     text: CanvasTextMeasurer,

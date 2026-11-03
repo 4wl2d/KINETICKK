@@ -32,7 +32,7 @@ import kinetickk.ball.gameplay.interaction.canvas.look.drawActiveItemMark
 import kinetickk.ball.gameplay.interaction.canvas.look.drawWorldDiscoveryMark
 import kinetickk.ball.gameplay.interaction.canvas.look.enemySilhouette
 import kinetickk.ball.gameplay.interaction.canvas.look.skillGlyph
-import kinetickk.flow.session.interaction.home.impl.formIndex
+import kinetickk.flow.session.interaction.shared.formIndex
 import kinetickk.foundation.design.CanvasTextMeasurer
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkAlign
