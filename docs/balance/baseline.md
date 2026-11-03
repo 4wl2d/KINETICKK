@@ -67,8 +67,9 @@ catalog objects.
 
 ### Audio
 
-All seventeen existing semantic cues keep their frequency, duration, gain, and
-wave mapping. The music sequence and `0.32s` step remain unchanged. At most 32
+All eighteen semantic cues keep their frequency, duration, gain, and wave
+mapping; the eighteenth, the structure collapse, came with the 2026-11-03
+dungeon collapse (see below). The music sequence and `0.32s` step remain unchanged. At most 32
 caller cue requests are accepted and 3 caller sound requests are selected per
 advance; the independent internal music tone is separate. Invalid tone
 requests remain rejected. Normal cue and music behavior is unchanged;
