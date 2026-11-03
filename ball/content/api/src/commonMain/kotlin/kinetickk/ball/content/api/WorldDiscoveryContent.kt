@@ -50,7 +50,7 @@ data class WorldDiscoveryDefinition(val id: WorldDiscovery, val name: String, va
 
 /**
  * The discoveries in [WorldDiscovery] order. Names reuse the keys of the content that owns each discovery (site,
- * layer, structure template and enemy names); the structure and dimension lanes may refine their rows.
+ * layer, structure template and enemy names).
  */
 fun defaultWorldDiscoveryDefinitions(): ImmutableList<WorldDiscoveryDefinition> = listOf(
     WorldDiscoveryDefinition(

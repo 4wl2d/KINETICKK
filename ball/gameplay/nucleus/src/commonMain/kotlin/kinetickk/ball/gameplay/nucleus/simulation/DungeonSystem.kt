@@ -48,7 +48,7 @@ import kotlin.math.sin
  * stream; nothing here allocates per step outside a seal, a clear or a finish.
  */
 
-/** Salt of the garrison hash (registered in the structures lane notes). */
+/** Salt of the garrison hash. */
 internal const val GARRISON_SALT: Long = 0x57C0_C7E5_5EED_0003L
 
 /** A sealed room's encounter tag: the structure id with the room index in its free low byte. */

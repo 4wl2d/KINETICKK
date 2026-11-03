@@ -21,7 +21,7 @@ import kotlin.math.max
  * obstacle layouts; obstacle candidates inside a footprint are dropped after yielding, so no other obstacle moves.
  */
 
-/** Salt of the placement hash (registered in the structures lane notes). */
+/** Salt of the placement hash. */
 internal const val STRUCTURE_SALT: Long = 0x57C0_C7E5_5EED_0002L
 
 /** Independent of cell placement: revisiting or rebasing never changes the run's available dungeon types. */

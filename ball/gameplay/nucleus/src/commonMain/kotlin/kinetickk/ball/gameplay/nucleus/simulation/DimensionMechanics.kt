@@ -33,11 +33,11 @@ import kotlin.math.sin
  * here is the identity there. Nothing draws from a run stream: rings and ember throws come from stateless hashes.
  */
 
-/** Salt of the ambient halo ring placement (registered in the lane notes). */
+/** Salt of the ambient halo ring placement. */
 internal const val HALO_SALT: Long = 0x0D13_E5A1_0000_0003L
-/** Salt of the Ascent course ring placement (registered in the lane notes). */
+/** Salt of the Ascent course ring placement. */
 internal const val COURSE_SALT: Long = 0x0D13_E5A1_0000_0004L
-/** Salt of the Harvest's ember throws (registered in the lane notes). */
+/** Salt of the Harvest's ember throws. */
 internal const val EMBER_SALT: Long = 0x0D13_E5A1_0000_0006L
 
 /** An Ascent shows the ring to fly through next and the one after it. */

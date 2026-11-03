@@ -7,7 +7,7 @@ import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.WorldLayer
 
 /*
- * Rifts offered by POI windows. The sites lane draws a window's two kinds first, then asks here whether a rift claims
+ * Rifts offered by POI windows. The site system draws a window's two kinds first, then asks here whether a rift claims
  * one side; the claim is a stateless hash of the run seed and the window, so it never draws from the site stream.
  */
 

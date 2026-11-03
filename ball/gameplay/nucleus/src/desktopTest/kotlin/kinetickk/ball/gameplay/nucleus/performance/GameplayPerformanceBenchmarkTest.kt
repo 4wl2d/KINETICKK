@@ -427,8 +427,6 @@ class GameplayPerformanceBenchmarkTest {
         assertEquals(original, canonicalStateFingerprint(model), "Benchmark repetitions must retain the source")
     }
 
-    // ---- 0.6.0 DIMENSIONS ----
-
     /**
      * The dimension visit workload measures what it names: a copy of a Nadir Harvest visit with every ember slot filled
      * steps once inside the visit, the resting Core keeps its scorch clock running, no ember is in reach, and the

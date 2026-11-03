@@ -14,8 +14,7 @@ import kotlin.test.assertTrue
 
 /**
  * The 0.6.0 world contracts (sites, discoveries, run variety, dimensions, boons, structures): each policy accepts
- * its bounds and rejects the first value past them, and the shipped values keep every new system out of the run until
- * its lane turns it on.
+ * its bounds and rejects the first value past them.
  */
 class WorldContractBoundsTest {
     @Test

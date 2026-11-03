@@ -29,7 +29,7 @@ internal data class SeveredRelic(val id: RelicId, val until: Float)
 
 /**
  * Keys of what granted a buff or a weapon refresh: items by id, then disjoint negative ranges (world events from
- * −300, signal options from −320; −400 and below belong to dimension boons).
+ * −300, signal options from −320).
  */
 internal object BuffSource {
     const val APEX: Int = -200

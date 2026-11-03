@@ -7,14 +7,14 @@ import kinetickk.ball.content.api.WorldLayer
 
 /*
  * Stateless hashes for everything placed in absolute space or rolled once per run. None of them draws from a run
- * stream, so a lane's placement never shifts offers, spawns or crits.
+ * stream, so a placement never shifts offers, spawns or crits.
  *
  * Id namespaces (all non-zero bits disjoint by construction):
  * - obstacle ids: bits 0-3 slot, 4-31 chunkY, 32-59 chunkX, 60-62 world layer, bit 63 = 0;
  * - structureId = bit 63 | layer shl 60 | cellX (26 bits) shl 34 | cellY (26 bits) shl 8; a wall id is
  *   structureId or its index (0..47), structureSurfaceId = structureId or 0xFF;
  * - encounter tags: the owner byte in bits 56-63, the owner's id in the low 56 bits.
- * Each lane keeps its salts in its own files and registers them in its notes.
+ * Each system keeps its salt beside its use.
  */
 
 /** 0 for BASE, so realspace hashes equal the pre-layer ones. */

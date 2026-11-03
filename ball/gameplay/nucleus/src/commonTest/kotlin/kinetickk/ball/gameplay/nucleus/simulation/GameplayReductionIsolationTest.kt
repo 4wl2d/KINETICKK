@@ -838,7 +838,6 @@ class GameplayReductionIsolationTest {
         assertEquals(2f, production.model.skillRuntime.apex(ApexCell.CAST_COUNT), "the trace casts the Apex")
     }
 
-    // ---- 0.6.0 DIMENSIONS ----
     @Test
     fun aDimensionVisitIsIsolatedAcrossReductions() {
         val source = MutableGameState(canonicalGameplayContent, seed = 6_061, initialMatter = 0).apply {
@@ -974,7 +973,6 @@ class GameplayReductionIsolationTest {
         assertEquals(WorldLayer.NADIR, source.dimensionRewardLayer)
     }
 
-    // ---- 0.6.0 VARIETY ----
     @Test
     fun omenAcceptanceAndPreviewsInAForkNeverChangeTheCommittedState() {
         // An offer dealing Fault Line, the omen that rebuilds the obstacle window.

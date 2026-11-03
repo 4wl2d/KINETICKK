@@ -10,8 +10,8 @@ import kinetickk.foundation.collections.mapToImmutableList
 import kotlin.math.max
 
 /*
- * Run-long modifiers (the run variety lane owns this file): the run-mutator mask on top of the Rebirth tier's
- * mutators and the one fold every omen, Blessing and Pact effect goes through. No run applies one yet.
+ * Run-long modifiers: the run-mutator mask on top of the Rebirth tier's mutators and the one fold every omen,
+ * Blessing and Pact effect goes through.
  */
 
 /** True when [mutator] runs this run: the Rebirth tier's own mutators or one a run modifier added. */

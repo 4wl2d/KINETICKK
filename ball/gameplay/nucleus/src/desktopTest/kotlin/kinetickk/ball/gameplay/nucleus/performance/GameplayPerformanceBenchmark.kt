@@ -987,8 +987,6 @@ private fun MutableGameState.reliquaryNearTheOrigin(): StructurePlacement {
 
 private const val STRUCTURE_SCAN_RINGS = 24
 
-// ---- 0.6.0 DIMENSIONS ----
-
 /** Natives closing in on the Core in the dimension visit workload. */
 private const val DIMENSION_VISIT_ENEMIES = 40
 

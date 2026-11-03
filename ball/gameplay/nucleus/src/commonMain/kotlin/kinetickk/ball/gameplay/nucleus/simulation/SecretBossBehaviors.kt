@@ -76,7 +76,7 @@ internal const val CARTO_RING_SPEED: Float = 135f
 internal const val CARTO_FAN: Int = 5
 internal const val CARTO_FAN_SPEED: Float = 250f
 internal const val CARTO_FAN_SPACING: Float = 0.18f
-/** Salt of the Cartographer's open-space jump hash (`runHash`); registered in the lane notes. */
+/** Salt of the Cartographer's open-space jump hash (`runHash`). */
 internal const val CARTO_SALT: Long = 0x0CA2_70E5_EED0_0021L
 private const val CARTO_HASH_TICKS: Float = 120f
 

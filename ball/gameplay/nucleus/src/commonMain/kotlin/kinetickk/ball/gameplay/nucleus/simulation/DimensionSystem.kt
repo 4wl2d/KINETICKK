@@ -33,7 +33,7 @@ import kotlin.math.sin
  * Nothing here draws from a run stream: objectives and rifts come from stateless hashes.
  */
 
-/** Salts of the dimension hashes (registered in the lane notes). */
+/** Salts of the dimension hashes. */
 internal const val PORTAL_WINDOW_SALT: Long = 0x0D13_E5A1_0000_0001L
 internal const val DIMENSION_OBJECTIVE_SALT: Long = 0x0D13_E5A1_0000_0002L
 

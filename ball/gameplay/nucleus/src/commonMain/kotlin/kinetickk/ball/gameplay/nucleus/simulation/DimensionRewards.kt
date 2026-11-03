@@ -26,7 +26,7 @@ import kotlin.math.roundToInt
  * a reward never draws from a run stream. A dimension reward is never rerolled and leaves the item pity alone.
  */
 
-/** Salt of the dimension reward hands (registered in the lane notes). */
+/** Salt of the dimension reward hands. */
 internal const val BOON_SALT: Long = 0x0D13_E5A1_0000_0005L
 
 /** Hash keys of the two hands a layer may deal. */

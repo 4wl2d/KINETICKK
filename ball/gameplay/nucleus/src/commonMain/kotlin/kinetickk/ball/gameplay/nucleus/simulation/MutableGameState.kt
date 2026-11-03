@@ -186,10 +186,8 @@ internal class MutableGameState(
     internal var pendingAcquiredItemIds: List<Int> = reductionSource?.pendingAcquiredItemIds ?: emptyList()
     /** The draft deck stream's seed ([DECK_SEED_SALT]); the deck is dealt from it when the run starts. */
     internal val deckSeed: Int = reductionSource?.deckSeed ?: (seed xor DECK_SEED_SALT)
-    // ---- 0.6.0 EASY ----
     /** Baby mode (RunMode.EASY), fixed when the run is created; a run never changes it. */
     internal val easyMode: Boolean = reductionSource?.easyMode ?: (runMode == RunMode.EASY)
-    // ---- 0.6.0 VARIETY ----
     /** The production start path offers a run omen beside the Heirloom; fixed when the run is created. */
     internal val offersRunOmen: Boolean = reductionSource?.offersRunOmen ?: offerRunOmen
     /** The run's draft deck (immutable, replaced when a refill deals); every item until the run deals one. */
@@ -384,7 +382,6 @@ internal class MutableGameState(
     internal var pendingDataPickups: Int = reductionSource?.pendingDataPickups ?: 0
     /** The run banked, so the next progress update also publishes the deferred counters. */
     internal var achievementFlushDue: Boolean = reductionSource?.achievementFlushDue ?: false
-    // ---- 0.6.0 SITES ----
     /** Window sites: the two offers of a window, or the one active trial. Immutable, replaced on change. */
     internal var sites: List<SiteState> = reductionSource?.sites ?: emptyList()
     internal var nextSiteWindowIndex: Int = reductionSource?.nextSiteWindowIndex ?: 0
@@ -416,7 +413,6 @@ internal class MutableGameState(
     internal var spinClock: Float = reductionSource?.spinClock ?: 0f
     internal var spinLastAngle: Float = reductionSource?.spinLastAngle ?: 0f
     internal var spinPrimed: Boolean = reductionSource?.spinPrimed ?: false
-    // ---- 0.6.0 VARIETY ----
     internal var omenPending: Boolean = reductionSource?.omenPending ?: false
     internal var runOmen: OmenId? = reductionSource?.runOmen
     /** Rebirth mutators a run modifier added (bit per ordinal), on top of the tier's own. */
@@ -462,7 +458,6 @@ internal class MutableGameState(
     /** Enemy types (bit per ordinal) used by the last and the previous event; they spawn at half weight. */
     internal var recentEventTypes: Long = reductionSource?.recentEventTypes ?: 0L
     internal var previousEventTypes: Long = reductionSource?.previousEventTypes ?: 0L
-    // ---- 0.6.0 ENEMIES ----
     /** Secret boss kinds spawned this run (bit per EnemyType ordinal); each arrives at most once. */
     internal var secretBossMask: Long = reductionSource?.secretBossMask ?: 0L
     /** Live encounter groups, at most MAX_ACTIVE_ENCOUNTERS; value-only, replaced on change. */
@@ -491,7 +486,6 @@ internal class MutableGameState(
     internal var obstacleField: ObstacleField = reductionSource?.obstacleField ?: ObstacleField.EMPTY
     /** Destroyed unstable asteroids, oldest first, at most [ContentBounds.MAX_DESTROYED_OBSTACLES]. */
     internal var destroyedObstacleIds: List<Long> = reductionSource?.destroyedObstacleIds ?: emptyList()
-    // ---- 0.6.0 DIMENSIONS ----
     /** The run's world layer; only a layer switch writes it. */
     internal var worldLayer: WorldLayer = reductionSource?.worldLayer ?: WorldLayer.BASE
     /** The active keep-out of the current layer's generation (null: the origin safe radius applies). */
@@ -510,12 +504,10 @@ internal class MutableGameState(
     internal var dimensionRewardLayer: WorldLayer? = reductionSource?.dimensionRewardLayer
     /** Run time before which an asteroid collision deals no further damage and fires no ricochet. */
     internal var obstacleHitReadyAt: Float = reductionSource?.obstacleHitReadyAt ?: 0f
-    // ---- 0.6.0 TERRAIN-P ----
     /** The solid surface the last hurting collision struck ([NO_SURFACE_ID]: none). */
     internal var obstacleHitSurfaceId: Long = reductionSource?.obstacleHitSurfaceId ?: NO_SURFACE_ID
     /** Run time before which Near Miss grants no further Overdrive. */
     internal var nearMissReadyAt: Float = reductionSource?.nearMissReadyAt ?: 0f
-    // ---- 0.6.0 TERRAIN-K ----
     /** Gap from the Core's surface to the nearest solid obstacle surface within reach; +∞ when none (NearObstacle). */
     internal var coreObstacleGap: Float = reductionSource?.coreObstacleGap ?: Float.POSITIVE_INFINITY
     /** Run time before which GRAZE cannot fire again. */
@@ -528,7 +520,6 @@ internal class MutableGameState(
      * collision honours; other invulnerability (Glass Comet, Bulwark) does not stop it.
      */
     internal var reviveInvulnerableUntil: Float = reductionSource?.reviveInvulnerableUntil ?: 0f
-    // ---- 0.6.0 STRUCTURES ----
     /** Structure walls, doors and signals of the window around the Core; an immutable value replaced on change. */
     internal var structureField: StructureField = reductionSource?.structureField ?: StructureField.EMPTY
     /** The structure the Core is inside (or was, within the leave radius), or null. Value-only. */
@@ -615,7 +606,6 @@ internal class MutableGameState(
     internal var turnHoldTime: Float = reductionSource?.turnHoldTime ?: 0f
     internal var turnRecoveryCooldown: Float = reductionSource?.turnRecoveryCooldown ?: 0f
     internal var turnDirection: Int = reductionSource?.turnDirection ?: 0
-    // ---- 0.6.0 TERRAIN-P ----
     /** How straight the Core's heading has stayed (0..1); straight-line fatigue reads it. */
     internal var coreStraightness: Float = reductionSource?.coreStraightness ?: 0f
     internal var timeSinceDamage: Float = reductionSource?.timeSinceDamage ?: 0f
@@ -770,7 +760,6 @@ internal class MutableGameState(
         internal set
     var dragCoefficient: Float = reductionSource?.dragCoefficient ?: 0.29f
         internal set
-    // ---- 0.6.0 TERRAIN-P ----
     /** The flight law's grip and sling build stats (raw; clamped where the law reads them). */
     internal var gripStrength: Float = reductionSource?.gripStrength ?: 1f
     internal var slingStrength: Float = reductionSource?.slingStrength ?: 1f
