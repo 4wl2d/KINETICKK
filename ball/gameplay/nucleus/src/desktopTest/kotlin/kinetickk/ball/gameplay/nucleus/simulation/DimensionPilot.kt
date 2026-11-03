@@ -163,7 +163,8 @@ internal class DimensionPilot(
         val nadir = view.layer == WorldLayer.NADIR
         val floor = if (nadir) pace * NADIR_PACE_SHARE else 0f
         val exit = view.exitPortal
-        if (view.completed && exit != null) return goal(exit.x, exit.y, max(EXIT_SPEED, floor))
+        // Done, or broken (a failed Ascent): the way back.
+        if ((view.completed || view.failed) && exit != null) return goal(exit.x, exit.y, max(EXIT_SPEED, floor))
         when (view.objective) {
             DimensionObjective.ASCENT -> {
                 val ring = view.halos.firstOrNull { it.id == view.nextHaloId }

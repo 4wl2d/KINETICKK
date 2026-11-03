@@ -25,8 +25,10 @@ import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.director.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
+import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
 import kinetickk.ball.gameplay.nucleus.simulation.flight.*
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
+import kinetickk.ball.gameplay.nucleus.simulation.variety.*
 import kinetickk.ball.gameplay.nucleus.simulation.world.*
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.immutableListOf
@@ -453,6 +455,103 @@ class DimensionMechanicsTest {
     }
 
     @Test
+    fun desyncStretchesEveryHostileDeadlineAheadByTheTimeItDidNotRun() {
+        val physics = archive.physics
+        val game = visiting(WorldLayer.ARCHIVE)
+        game.setVelocityForTesting(0f, 0f)
+        val cipher = game.addEnemyForTesting(400f, 0f, type = EnemyType.CIPHER)
+        val throne = game.addEnemyForTesting(-400f, 0f, type = EnemyType.THRONE)
+        val start = game.elapsed
+        for (enemy in listOf(cipher, throne)) {
+            enemy.modeUntil = start + 1f
+            enemy.abilityAt = start + 2f
+            enemy.shieldUntil = start + 3f
+            enemy.shiftUntil = start + 4f
+            enemy.linkedUntil = start + 5f
+        }
+        // A deadline already past stays, and the player's own stun is no hostile deadline.
+        cipher.silencedUntil = start + 1f
+        throne.slamReadyAt = start + 1f
+        cipher.disabledUntil = start - 1f
+        val steps = 120
+        repeat(steps) {
+            game.elapsed += step
+            game.updateDimension(step)
+        }
+        fun lag(scale: Float) = steps * step * (1f - scale)
+        for ((enemy, scale) in listOf(cipher to physics.desyncMinimumScale, throne to physics.desyncBossFloor)) {
+            val stretched = listOf(enemy.modeUntil, enemy.abilityAt, enemy.shieldUntil, enemy.shiftUntil, enemy.linkedUntil)
+            stretched.forEachIndexed { index, deadline ->
+                assertEquals(start + 1f + index + lag(scale), deadline, 1e-3f, "${enemy.type} deadline $index at a still Core")
+            }
+        }
+        assertEquals(start + 1f, cipher.silencedUntil)
+        assertEquals(start + 1f, throne.slamReadyAt)
+        assertEquals(start - 1f, cipher.disabledUntil)
+
+        // At pace hostile time is real time, and no other layer bends it.
+        val deadline = cipher.modeUntil
+        game.setVelocityForTesting(game.dimensionPace(), 0f)
+        game.elapsed += step
+        game.updateDimension(step)
+        assertEquals(deadline, cipher.modeUntil, 1e-5f)
+        val zenith = visiting(WorldLayer.ZENITH)
+        zenith.setVelocityForTesting(0f, 0f)
+        val seraph = zenith.addEnemyForTesting(400f, 0f, type = EnemyType.SERAPH).apply { modeUntil = zenith.elapsed + 1f }
+        zenith.elapsed += step
+        zenith.updateDimension(step)
+        assertEquals(zenith.elapsed - step + 1f, seraph.modeUntil)
+    }
+
+    /**
+     * The Archive's own native follows "time moves only when you move": a Cipher held at 380 u by a still Core fires
+     * about a quarter of the volleys it fires in realspace (its phase, aim and glitch are run-clock deadlines).
+     */
+    @Test
+    fun aStillCoreSlowsTheArchivesCipherToTheDesyncScale() {
+        fun shots(layer: WorldLayer): Int {
+            val game = if (layer == WorldLayer.BASE) game() else visiting(layer)
+            game.dimensionRun.visit?.let { game.dimensionRun = game.dimensionRun.copy(visit = it.copy(bossSpawnAt = Float.POSITIVE_INFINITY)) }
+            game.setVelocityForTesting(0f, 0f)
+            game.addEnemyForTesting(380f, 0f, type = EnemyType.CIPHER)
+            var shots = 0
+            repeat((DESYNC_PROBE_SECONDS / step).roundToInt()) {
+                game.elapsed += step
+                game.updateDimension(step)
+                game.updateEnemies(step)
+                for (index in game.projectiles.indices) if (game.projectiles[index].hostile) shots++
+                game.projectiles.clear()
+            }
+            return shots
+        }
+        val realspace = shots(WorldLayer.BASE)
+        val archived = shots(WorldLayer.ARCHIVE)
+        assertTrue(realspace >= 6 * CIPHER_VOLLEY, "the Cipher keeps firing in realspace: $realspace shots")
+        val ratio = archived.toFloat() / realspace
+        assertTrue(ratio in 0.15f..0.4f, "a still Core slows the Cipher to about ${archive.physics.desyncMinimumScale}: $archived of $realspace shots")
+    }
+
+    @Test
+    fun desyncSlowsAVolatileFuseWithTheRestOfHostileTime() {
+        fun fuse(layer: WorldLayer): Float {
+            val game = if (layer == WorldLayer.BASE) game() else visiting(layer)
+            game.setVelocityForTesting(0f, 0f)
+            game.queueEmber(game.coreX + 600f, game.coreY, 1f)
+            var seconds = 0f
+            while (game.volatileBursts.isNotEmpty() && seconds < 10f) {
+                game.elapsed += step
+                seconds += step
+                game.updateDimension(step)
+                game.updateVolatileRemains()
+            }
+            return seconds
+        }
+        assertEquals(1f, fuse(WorldLayer.BASE), 1.5f * step)
+        assertEquals(1f, fuse(WorldLayer.NADIR), 1.5f * step, "the Nadir keeps real time")
+        assertEquals(1f / archive.physics.desyncMinimumScale, fuse(WorldLayer.ARCHIVE), 0.05f, "a still Core's Archive burns it four times slower")
+    }
+
+    @Test
     fun desyncKeepsTheSimulationIndependentOfTheFrameRate() {
         val traces = DESYNC_FRAME_RATES.associateWith { rate -> archiveTrace(rate) }
         val reference = traces.getValue(DESYNC_FRAME_RATES.first())
@@ -567,5 +666,7 @@ class DimensionMechanicsTest {
         const val CRUISE_SECONDS = 25f
         val DESYNC_FRAME_RATES = listOf(30, 60, 144, 240)
         const val DESYNC_SECONDS = 4
+        /** The Cipher probe's length: long enough for about nine realspace volleys. */
+        const val DESYNC_PROBE_SECONDS = 30f
     }
 }

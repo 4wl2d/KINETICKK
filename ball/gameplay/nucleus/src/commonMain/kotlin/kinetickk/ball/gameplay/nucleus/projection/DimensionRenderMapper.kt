@@ -14,6 +14,7 @@ import kinetickk.ball.gameplay.nucleus.render.DimensionProjection
 import kinetickk.ball.gameplay.nucleus.render.EmberProjection
 import kinetickk.ball.gameplay.nucleus.render.HaloProjection
 import kinetickk.ball.gameplay.nucleus.render.PortalProjection
+import kinetickk.ball.gameplay.nucleus.render.RiftLock
 import kinetickk.ball.gameplay.nucleus.simulation.*
 import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
 import kinetickk.ball.gameplay.nucleus.simulation.sites.*
@@ -24,8 +25,9 @@ import kotlin.math.min
 
 /**
  * The world layer and its visit as presentation draws them. Realspace with no open glitch rift, no locked window rift
- * and no open dimension reward publishes the shared [DimensionProjection.REALSPACE]. A visit publishes its layer, objective, clock, pace and
- * heat, the ring to fly through next and the split to it, the exit rift, its halo rings and embers. An equal projection keeps [previous];
+ * and no open dimension reward publishes the shared [DimensionProjection.REALSPACE]; a locked rift carries its reason. A
+ * visit publishes its layer, objective, clock, failure, pace, heat and Desync, the ring to fly through next and the
+ * split to it, the exit rift, its halo rings and embers with their catch radii. An equal projection keeps [previous];
  * the halo list keeps its previous instance when the [identitySource] held the same rings, and otherwise each list
  * whose content matches (raw float bits) keeps its previous instance. A pure read: nothing here writes state.
  */
@@ -49,6 +51,7 @@ private fun MutableGameState.realspaceProjection(run: DimensionRunState, previou
             portalProjection(it, locked = locked and WorldLayer.ARCHIVE.bit != 0, glitch = true, previous?.glitchPortal)
         },
         lockedRifts = locked,
+        riftLock = if (locked == 0) RiftLock.NONE else riftLock(),
         rewardLayer = reward,
     )
 }
@@ -68,9 +71,14 @@ private fun MutableGameState.visitProjection(
         progress = visit.progress,
         goal = visit.goal,
         completed = visit.completed,
+        failed = visit.failed,
         pace = dimensionPace(),
         scorching = scorching(physics),
         localClock = dimensionLocalClock,
+        timeScale = layerTimeScale(null),
+        hostileLag = elapsed - hostileElapsed(),
+        haloRadius = content.dimensions.objectives.haloRadius,
+        emberRadius = content.dimensions.objectives.emberRadius,
         nextHaloId = nextHaloId(visit),
         exitPortal = visit.exitPortal?.let { portalProjection(it, locked = false, glitch = false, previous?.exitPortal) },
         // The shared empty list proves nothing about where the previous rings came from, so only rings are matched by identity.
@@ -103,6 +111,12 @@ private fun MutableGameState.lockedRiftMask(glitch: DimensionPortal?): Int {
 
 private fun MutableGameState.riftRefused(target: WorldLayer): Boolean = engagementActive() || !dimensionEntryOpen(target)
 
+/** Why the locked rifts are locked: the entry rules' reason first, else the engagement that runs. */
+private fun MutableGameState.riftLock(): RiftLock {
+    val lock = dimensionEntryLock()
+    return if (lock != RiftLock.NONE) lock else RiftLock.ENGAGEMENT
+}
+
 /** The Nadir's heat warning: the slow clock's share of the grace, 1 once the scorch ticks; 0 where nothing scorches. */
 private fun MutableGameState.scorching(physics: DimensionPhysics): Float = when {
     physics.scorchSharePerSecond <= 0f || dimensionSlowSeconds <= 0f -> 0f
@@ -124,7 +138,9 @@ private fun MutableGameState.portalProjection(
     glitch: Boolean,
     previous: PortalProjection?,
 ): PortalProjection {
-    val projection = PortalProjection(portal.id, portal.x, portal.y, portal.target, locked, glitch, max(0f, portal.expiresAt - elapsed))
+    val projection = PortalProjection(
+        portal.id, portal.x, portal.y, portal.target, locked, glitch, max(0f, portal.expiresAt - elapsed), content.dimensions.portalRadius,
+    )
     return if (projection == previous) previous else projection
 }
 

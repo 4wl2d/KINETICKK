@@ -19,6 +19,7 @@ import kinetickk.ball.gameplay.nucleus.model.segmentCircleIntersects
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.ball.gameplay.nucleus.render.RiftLock
 import kinetickk.ball.gameplay.nucleus.simulation.*
 import kinetickk.ball.gameplay.nucleus.simulation.director.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
@@ -28,6 +29,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.sites.*
 import kinetickk.ball.gameplay.nucleus.simulation.world.*
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableListAppending
+import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.max
@@ -43,6 +45,10 @@ import kotlin.math.sin
 /** Salts of the dimension hashes. */
 internal const val PORTAL_WINDOW_SALT: Long = 0x0D13_E5A1_0000_0001L
 internal const val DIMENSION_OBJECTIVE_SALT: Long = 0x0D13_E5A1_0000_0002L
+private const val GLITCH_SIDE_SALT: Long = 0x0D13_E5A1_0000_0007L
+
+/** A quarter turn: the glitch rift opens square to the Core's heading. */
+private const val QUARTER_TURN: Float = (PI / 2.0).toFloat()
 
 /** A displaced Elite returns, and any due Elite arrives, this long after the Core is back in realspace. */
 internal const val EXIT_ELITE_DELAY_SECONDS: Float = 8f
@@ -81,14 +87,26 @@ internal fun MutableGameState.canEnterDimension(target: WorldLayer): Boolean =
  */
 internal fun MutableGameState.dimensionEntryOpen(target: WorldLayer): Boolean {
     val policy = content.dimensions
-    if (!policy.enabled || worldLayer != WorldLayer.BASE || bossSpawned) return false
+    if (!policy.enabled || worldLayer != WorldLayer.BASE) return false
     if (target == WorldLayer.BASE || dimensionRun.visitedMask and target.bit != 0) return false
-    if (content.tempo.bossAtSeconds - policy.exitMarginSeconds - elapsed < policy.minimumVisitSeconds) return false
+    return dimensionEntryLock() == RiftLock.NONE
+}
+
+/**
+ * Why the entry rules refuse every rift in realspace now, apart from the phase and the target: the Architect is here
+ * or too close for the minimum visit before the exit margin ([RiftLock.ARCHITECT]), or a boss-class enemy lives or
+ * awaits its kill at zero integrity ([RiftLock.BOSS]: crossing over would delete it and its reward).
+ */
+internal fun MutableGameState.dimensionEntryLock(): RiftLock {
+    val policy = content.dimensions
+    if (bossSpawned || content.tempo.bossAtSeconds - policy.exitMarginSeconds - elapsed < policy.minimumVisitSeconds) {
+        return RiftLock.ARCHITECT
+    }
     for (index in enemies.indices) {
         val enemy = enemies[index]
-        if (!enemy.dead && enemy.isBossClass) return false
+        if (!enemy.dead && enemy.isBossClass) return RiftLock.BOSS
     }
-    return true
+    return RiftLock.NONE
 }
 
 /** Enters [target] at the Core; false (nothing changes) when [canEnterDimension] refuses. */
@@ -154,7 +172,7 @@ internal fun MutableGameState.exitDimension(reason: DimensionExit) {
         grantMatter(if (visit.completed) reward.matterOnSuccess else reward.matterOnFailure)
     }
     val glitch = archiveUnlocked(next)
-    if (glitch) next = next.copy(glitchPortal = glitchPortalAhead(next.nextPortalId), nextPortalId = next.nextPortalId + 1)
+    if (glitch) next = next.copy(glitchPortal = glitchPortalBeside(next.nextPortalId), nextPortalId = next.nextPortalId + 1)
     dimensionRun = next
     // A forced return happens as the Architect arrives: its announcement stands.
     if (reason != DimensionExit.FORCED) {
@@ -332,19 +350,13 @@ internal fun MutableGameState.objectiveBossDamageShare(enemy: Enemy?): Float {
 internal fun MutableGameState.completeObjective(announce: Boolean = true) {
     val visit = dimensionRun.visit ?: return
     if (visit.completed) return
-    val policy = content.dimensions
-    val heading = travelHeading()
-    val (x, y) = nudgedClearOfObstacles(
-        coreX + cos(heading) * policy.exitPortalDistance, coreY + sin(heading) * policy.exitPortalDistance,
-        policy.portalRadius + PORTAL_CLEARANCE,
-    )
     dimensionRun = dimensionRun.copy(
         visit = visit.copy(
             progress = visit.goal,
             completed = true,
             splitEndsAt = Float.POSITIVE_INFINITY,
             splitSeconds = 0f,
-            exitPortal = DimensionPortal(dimensionRun.nextPortalId, x, y, WorldLayer.BASE, visit.endsAt),
+            exitPortal = exitRiftAhead(visit),
         ),
         nextPortalId = dimensionRun.nextPortalId + 1,
     )
@@ -353,6 +365,20 @@ internal fun MutableGameState.completeObjective(announce: Boolean = true) {
         messageTime = 2f
     }
     emitSound(GameplayAudioCue.LEVEL_UP)
+}
+
+/**
+ * The visit's exit rift with the next rift id: [DimensionPolicy.exitPortalDistance] ahead of the Core, moved clear of
+ * obstacles, open until the visit's end. The caller advances the id.
+ */
+internal fun MutableGameState.exitRiftAhead(visit: DimensionVisit): DimensionPortal {
+    val policy = content.dimensions
+    val heading = travelHeading()
+    val (x, y) = nudgedClearOfObstacles(
+        coreX + cos(heading) * policy.exitPortalDistance, coreY + sin(heading) * policy.exitPortalDistance,
+        policy.portalRadius + PORTAL_CLEARANCE,
+    )
+    return DimensionPortal(dimensionRun.nextPortalId, x, y, WorldLayer.BASE, visit.endsAt)
 }
 
 /** The way the Core is going: its velocity when it moves, else its last aim (the window sites' heading). */
@@ -377,10 +403,16 @@ private fun MutableGameState.archiveUnlocked(state: DimensionRunState): Boolean 
     return state.completedMask and both == both && archiveReachable(state)
 }
 
-/** The glitch rift [glitchPortalDistance] ahead of the Core, moved clear of obstacles. */
-private fun MutableGameState.glitchPortalAhead(id: Int): DimensionPortal {
+/**
+ * The glitch rift [glitchPortalDistance] from the Core square to its heading (the side from a stateless hash of the
+ * run and the rift), moved clear of obstacles: beside the line the Core flies on after the return, never on it, so the
+ * Archive is entered by choice and not by flying on after the reward.
+ */
+private fun MutableGameState.glitchPortalBeside(id: Int): DimensionPortal {
     val policy = content.dimensions
-    val heading = travelHeading()
+    val hash = worldHash(runSeed, WorldLayer.ARCHIVE, id, 0, GLITCH_SIDE_SALT)
+    val side = if ((hash ushr 33) and 1L == 0L) 1f else -1f
+    val heading = travelHeading() + side * QUARTER_TURN
     return glitchPortalAt(id, coreX + cos(heading) * policy.glitchPortalDistance, coreY + sin(heading) * policy.glitchPortalDistance)
 }
 
@@ -433,6 +465,7 @@ internal fun MutableGameState.updateDimension(delta: Float) {
     }
     val visit = dimensionRun.visit ?: return
     dimensionLocalClock += delta * layerTimeScale(null)
+    desyncHostileDeadlines(delta)
     // An objective boss at zero integrity awaits the step's kill sweep, which completes the visit; it ends a step later.
     if (elapsed >= visit.endsAt && enemyById(visit.bossId)?.let { !it.dead && it.hp <= 0f } != true) {
         exitDimension(DimensionExit.TIMER)

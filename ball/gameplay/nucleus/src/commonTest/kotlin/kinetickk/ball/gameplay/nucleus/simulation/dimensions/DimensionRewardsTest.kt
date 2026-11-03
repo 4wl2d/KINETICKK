@@ -251,13 +251,15 @@ class DimensionRewardsTest {
         assertEquals(Float.POSITIVE_INFINITY, broken.splitEndsAt)
         assertEquals(DimensionNotices.broken(DimensionObjective.ASCENT), state.message)
         assertEquals(-1, state.dimensionProjection(null, null).nextHaloId, "no ring to fly through next")
-        // A broken course counts nothing more, the visit runs on to its timer and pays the smaller reward.
+        // A broken course counts nothing more and never strands the Core: the exit rift opens ahead until the visit's end,
+        // and leaving through it pays the smaller reward.
+        val exit = assertNotNull(broken.exitPortal, "a broken course opens the exit rift")
+        assertEquals(WorldLayer.BASE to broken.endsAt, exit.target to exit.expiresAt)
         state.flyThrough(third.x, third.y)
         assertEquals(2, state.visit().progress)
-        assertNull(state.visit().exitPortal)
-        state.skipToVisitEndForTesting()
-        state.updateDimension(step)
+        state.flyThrough(exit.x, exit.y)
         assertEquals(WorldLayer.BASE, state.worldLayer)
+        assertEquals(DimensionNotices.REALSPACE, state.message)
         assertEquals(immutableListOf(DimensionRewardGrant(WorldLayer.ZENITH, completed = false)), state.dimensionRun.pendingRewards)
         state.openNextPendingChoice()
         assertEquals(policy.definition(WorldLayer.ZENITH).reward.cardsOnFailure, state.choices.size)

@@ -18,6 +18,7 @@ import kinetickk.ball.gameplay.nucleus.render.EmberProjection
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.HaloProjection
 import kinetickk.ball.gameplay.nucleus.render.PortalProjection
+import kinetickk.ball.gameplay.nucleus.render.RiftLock
 import kinetickk.ball.gameplay.nucleus.render.TrialClock
 import kinetickk.ball.gameplay.nucleus.render.TrialReward
 import kinetickk.ball.gameplay.nucleus.render.TrialSource
@@ -65,11 +66,15 @@ class DimensionRenderMapperTest {
         val projection = archive.dimensionProjection(null, null)
         assertEquals(WorldLayer.BASE, projection.layer)
         assertEquals(
-            PortalProjection(portal.id, x, y, WorldLayer.ARCHIVE, locked = false, glitch = true, remaining = portal.expiresAt - archive.elapsed),
+            PortalProjection(
+                portal.id, x, y, WorldLayer.ARCHIVE, locked = false, glitch = true, remaining = portal.expiresAt - archive.elapsed,
+                radius = archive.content.dimensions.portalRadius,
+            ),
             projection.glitchPortal,
         )
         assertNull(projection.exitPortal)
         assertEquals(0, projection.lockedRifts)
+        assertEquals(RiftLock.NONE, projection.riftLock)
     }
 
     @Test
@@ -85,6 +90,7 @@ class DimensionRenderMapperTest {
         val locked = game.dimensionProjection(null, null)
         assertEquals(WorldLayer.NADIR.bit or WorldLayer.ARCHIVE.bit, locked.lockedRifts)
         assertTrue(checkNotNull(locked.glitchPortal).locked)
+        assertEquals(RiftLock.BOSS, locked.riftLock, "the lock names the boss")
 
         // The phase is not an entry rule of the look: pausing keeps both a locked and an open rift as they were.
         game.phase = GamePhase.PAUSED
@@ -96,7 +102,13 @@ class DimensionRenderMapperTest {
         // A trial in progress refuses both rifts too (one engagement at a time).
         val trial = SiteState(id = 1L, kind = SiteKind.COLLAPSING_ORBIT, x = game.coreX - 400f, y = game.coreY, expiresAt = 260f, active = true)
         game.sites = game.sites + trial
-        assertEquals(WorldLayer.NADIR.bit or WorldLayer.ARCHIVE.bit, game.dimensionProjection(null, null).lockedRifts)
+        val engaged = game.dimensionProjection(null, null)
+        assertEquals(WorldLayer.NADIR.bit or WorldLayer.ARCHIVE.bit, engaged.lockedRifts)
+        assertEquals(RiftLock.ENGAGEMENT, engaged.riftLock, "the lock names the engagement")
+
+        // Too close to the Architect for the shortest visit: the lock names it before anything else.
+        game.elapsed = game.content.tempo.bossAtSeconds - game.content.dimensions.exitMarginSeconds - game.content.dimensions.minimumVisitSeconds + 1f
+        assertEquals(RiftLock.ARCHITECT, game.dimensionProjection(null, null).riftLock)
     }
 
     @Test
@@ -117,6 +129,10 @@ class DimensionRenderMapperTest {
         assertEquals(game.dimensionPace(), projection.pace)
         assertEquals(3.25f, projection.localClock)
         assertEquals(0f, projection.scorching, "nothing scorches in the Zenith")
+        assertFalse(projection.failed)
+        assertEquals(1f to 0f, projection.timeScale to projection.hostileLag, "the Zenith keeps real time")
+        val tuning = game.content.dimensions.objectives
+        assertEquals(tuning.haloRadius to tuning.emberRadius, projection.haloRadius to projection.emberRadius, "the catch radii come from content")
         // The course's first two rings with their places; the next ring is the one whose place is the progress.
         assertEquals(visit.halos.map { HaloProjection(it.id, it.x, it.y, it.courseIndex) }, projection.halos.toList())
         assertEquals(listOf(0, 1), projection.halos.filter { it.courseIndex >= 0 }.map { it.courseIndex })
@@ -131,7 +147,10 @@ class DimensionRenderMapperTest {
         assertTrue(completed.completed)
         assertEquals(-1, completed.nextHaloId)
         assertEquals(
-            PortalProjection(exit.id, exit.x, exit.y, WorldLayer.BASE, locked = false, glitch = false, remaining = exit.expiresAt - game.elapsed),
+            PortalProjection(
+                exit.id, exit.x, exit.y, WorldLayer.BASE, locked = false, glitch = false, remaining = exit.expiresAt - game.elapsed,
+                radius = game.content.dimensions.portalRadius,
+            ),
             completed.exitPortal,
         )
 
@@ -202,9 +221,27 @@ class DimensionRenderMapperTest {
         game.updateDimension(MutableGameState.FIXED_STEP)
         val broken = game.dimensionProjection(null, null)
         assertFalse(broken.completed)
+        assertTrue(broken.failed, "the failure is published, so the plate and the panel can show it")
         assertEquals(-1, broken.nextHaloId)
         assertEquals(0f to 0f, broken.splitRemaining to broken.splitDuration)
         assertTrue(broken.halos.none { it.courseIndex >= 0 }, "the broken course's rings left")
+        assertNotNull(broken.exitPortal, "a broken course opens the way back")
+    }
+
+    @Test
+    fun anArchiveVisitPublishesItsDesyncAndTheHostileClocksLag() {
+        val game = game()
+        game.enterDimensionForTesting(WorldLayer.ARCHIVE, DimensionObjective.ANTECEDENT)
+        game.setVelocityForTesting(0f, 0f)
+        val physics = game.content.dimensions.definition(WorldLayer.ARCHIVE).physics
+        repeat(60) {
+            game.elapsed += MutableGameState.FIXED_STEP
+            game.updateDimension(MutableGameState.FIXED_STEP)
+        }
+        val still = game.dimensionProjection(null, null)
+        assertEquals(physics.desyncMinimumScale, still.timeScale)
+        assertEquals(game.elapsed - game.hostileElapsed(), still.hostileLag)
+        assertEquals(60 * MutableGameState.FIXED_STEP * (1f - physics.desyncMinimumScale), still.hostileLag, 1e-3f)
     }
 
     @Test
