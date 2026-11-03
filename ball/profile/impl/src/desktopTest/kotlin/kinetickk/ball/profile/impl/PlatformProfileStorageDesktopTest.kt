@@ -53,13 +53,13 @@ private const val LEGACY_MATTER = "kinetickk_matter"
 
 private class IsolatedDesktopPersistence(
     private val profileNode: Preferences,
-) : ExactProfilePersistence {
-    override fun readSnapshot(): ProfileProviderReadResult =
-        ProfileProviderReadResult.Observed(profileNode.get(SNAPSHOT, null))
+) : ProfilePersistenceCapability {
+    override fun readSnapshot(): ProfilePersistenceReadResult =
+        ProfilePersistenceReadResult.Observed(profileNode.get(SNAPSHOT, null))
 
-    override fun writeSnapshot(payload: String): ProfileProviderMutationResult {
+    override fun writeSnapshot(payload: String): ProfilePersistenceMutationResult {
         profileNode.put(SNAPSHOT, payload)
         profileNode.flush()
-        return ProfileProviderMutationResult.COMPLETED
+        return ProfilePersistenceMutationResult.COMPLETED
     }
 }

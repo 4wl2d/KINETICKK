@@ -14,49 +14,23 @@ import kinetickk.ball.profile.impl.storage.ProfileDecodeResult
 import kinetickk.ball.profile.impl.storage.ProfileEncodeResult
 
 /** Minimal synchronous port exposed to the Profile acceptor. */
-interface ProfileResource {
+internal interface ProfileResource {
     fun readSnapshot(): ProfileSnapshotReadResult
 
     fun writeSnapshot(snapshot: ProfileSnapshot): ProfileWriteResult
 }
 
-/**
- * Exact persistence authority accepted by the Profile Resource.
- *
- * Platform stores, roots, nodes, key selection, bulk clearing, and global acquisition are
- * deliberately absent. The app platform broker is the only place that may hold those powers.
- */
-interface ExactProfilePersistence {
-    fun readSnapshot(): ProfileProviderReadResult
-
-    fun writeSnapshot(payload: String): ProfileProviderMutationResult
-}
-
-/** Closed evidence returned by the exact persistence provider for a non-mutating read. */
-sealed interface ProfileProviderReadResult {
-    data class Observed(val payload: String?) : ProfileProviderReadResult
-
-    data object Failed : ProfileProviderReadResult
-}
-
-/** Closed evidence returned by the exact persistence provider for a possibly mutating call. */
-enum class ProfileProviderMutationResult {
-    COMPLETED,
-    FAILED_BEFORE_EXECUTION,
-    POSSIBLE_EXECUTION,
-}
-
-fun createProfileResource(
-    persistence: ExactProfilePersistence,
+internal fun createProfileResource(
+    persistence: ProfilePersistenceCapability,
 ): ProfileResource = FixedKeyProfileResource(persistence)
 
 private class FixedKeyProfileResource(
-    private val provider: ExactProfilePersistence,
+    private val provider: ProfilePersistenceCapability,
 ) : ProfileResource {
     override fun readSnapshot(): ProfileSnapshotReadResult {
         val payload = when (val result = provider.readSnapshot()) {
-            is ProfileProviderReadResult.Observed -> result.payload
-            ProfileProviderReadResult.Failed -> return readFailure()
+            is ProfilePersistenceReadResult.Observed -> result.payload
+            ProfilePersistenceReadResult.Failed -> return readFailure()
         } ?: return ProfileSnapshotReadResult.Observed(snapshot = null)
 
         return when (val decoded = ProfileCodec.decode(payload)) {
@@ -72,23 +46,23 @@ private class FixedKeyProfileResource(
         }
 
         when (provider.writeSnapshot(payload)) {
-            ProfileProviderMutationResult.COMPLETED -> Unit
-            ProfileProviderMutationResult.FAILED_BEFORE_EXECUTION -> {
+            ProfilePersistenceMutationResult.COMPLETED -> Unit
+            ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION -> {
                 return ProfileWriteResult.ResourceFailure(
                     ProfileWriteFailure.PROVIDER_WRITE_FAILED_BEFORE_EXECUTION,
                 )
             }
-            ProfileProviderMutationResult.POSSIBLE_EXECUTION -> return writeOutcomeUnknown()
+            ProfilePersistenceMutationResult.POSSIBLE_EXECUTION -> return writeOutcomeUnknown()
         }
         return when (val readBack = provider.readSnapshot()) {
-            is ProfileProviderReadResult.Observed -> {
+            is ProfilePersistenceReadResult.Observed -> {
                 if (readBack.payload == payload) {
                     ProfileWriteResult.Written(snapshot.revision)
                 } else {
                     writeOutcomeUnknown()
                 }
             }
-            ProfileProviderReadResult.Failed -> writeOutcomeUnknown()
+            ProfilePersistenceReadResult.Failed -> writeOutcomeUnknown()
         }
     }
 

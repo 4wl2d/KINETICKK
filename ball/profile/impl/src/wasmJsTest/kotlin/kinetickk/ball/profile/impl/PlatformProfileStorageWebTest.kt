@@ -48,12 +48,12 @@ class PlatformProfileStorageWebTest {
 private class IsolatedWebPersistence(
     private val storage: Storage,
     private val snapshotKey: String,
-) : ExactProfilePersistence {
-    override fun readSnapshot(): ProfileProviderReadResult =
-        ProfileProviderReadResult.Observed(storage.getItem(snapshotKey))
+) : ProfilePersistenceCapability {
+    override fun readSnapshot(): ProfilePersistenceReadResult =
+        ProfilePersistenceReadResult.Observed(storage.getItem(snapshotKey))
 
-    override fun writeSnapshot(payload: String): ProfileProviderMutationResult {
+    override fun writeSnapshot(payload: String): ProfilePersistenceMutationResult {
         storage.setItem(snapshotKey, payload)
-        return ProfileProviderMutationResult.COMPLETED
+        return ProfilePersistenceMutationResult.COMPLETED
     }
 }

@@ -46,35 +46,35 @@ private enum class ReadEvidence { NEW_PAYLOAD, OLD_PAYLOAD, FAILED }
 private data class PersistenceFate(
     val name: String,
     val applied: Boolean,
-    val report: ProfileProviderMutationResult,
+    val report: ProfilePersistenceMutationResult,
     val readEvidence: ReadEvidence,
     val expected: WriteKnowledge,
     val expectedReads: Int,
 )
 
 private val persistenceFates = listOf(
-    PersistenceFate("applied and confirmed", true, ProfileProviderMutationResult.COMPLETED,
+    PersistenceFate("applied and confirmed", true, ProfilePersistenceMutationResult.COMPLETED,
         ReadEvidence.NEW_PAYLOAD, WriteKnowledge.CONFIRMED, 1),
-    PersistenceFate("applied but confirmation lost", true, ProfileProviderMutationResult.POSSIBLE_EXECUTION,
+    PersistenceFate("applied but confirmation lost", true, ProfilePersistenceMutationResult.POSSIBLE_EXECUTION,
         ReadEvidence.NEW_PAYLOAD, WriteKnowledge.UNCERTAIN, 0),
-    PersistenceFate("not applied but confirmation lost", false, ProfileProviderMutationResult.POSSIBLE_EXECUTION,
+    PersistenceFate("not applied but confirmation lost", false, ProfilePersistenceMutationResult.POSSIBLE_EXECUTION,
         ReadEvidence.OLD_PAYLOAD, WriteKnowledge.UNCERTAIN, 0),
     // Preferences/SharedPreferences may expose the new value in memory after a failed flush.
     // A matching read cannot upgrade the ambiguous provider report to durable success.
-    PersistenceFate("cache updated but flush not confirmed", false, ProfileProviderMutationResult.POSSIBLE_EXECUTION,
+    PersistenceFate("cache updated but flush not confirmed", false, ProfilePersistenceMutationResult.POSSIBLE_EXECUTION,
         ReadEvidence.NEW_PAYLOAD, WriteKnowledge.UNCERTAIN, 0),
-    PersistenceFate("refused before execution", false, ProfileProviderMutationResult.FAILED_BEFORE_EXECUTION,
+    PersistenceFate("refused before execution", false, ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION,
         ReadEvidence.OLD_PAYLOAD, WriteKnowledge.NOT_APPLIED, 0),
-    PersistenceFate("applied but readback differs", true, ProfileProviderMutationResult.COMPLETED,
+    PersistenceFate("applied but readback differs", true, ProfilePersistenceMutationResult.COMPLETED,
         ReadEvidence.OLD_PAYLOAD, WriteKnowledge.UNCERTAIN, 1),
-    PersistenceFate("applied but readback fails", true, ProfileProviderMutationResult.COMPLETED,
+    PersistenceFate("applied but readback fails", true, ProfilePersistenceMutationResult.COMPLETED,
         ReadEvidence.FAILED, WriteKnowledge.UNCERTAIN, 1),
 )
 
 private class EvidenceDestination(
     private val before: String,
     private val fate: PersistenceFate,
-) : ExactProfilePersistence {
+) : ProfilePersistenceCapability {
     var durablePayload: String = before
         private set
     var writes: Int = 0
@@ -83,19 +83,19 @@ private class EvidenceDestination(
         private set
     private var receivedPayload: String? = null
 
-    override fun writeSnapshot(payload: String): ProfileProviderMutationResult {
+    override fun writeSnapshot(payload: String): ProfilePersistenceMutationResult {
         writes++
         receivedPayload = payload
         if (fate.applied) durablePayload = payload
         return fate.report
     }
 
-    override fun readSnapshot(): ProfileProviderReadResult {
+    override fun readSnapshot(): ProfilePersistenceReadResult {
         reads++
         return when (fate.readEvidence) {
-            ReadEvidence.NEW_PAYLOAD -> ProfileProviderReadResult.Observed(checkNotNull(receivedPayload))
-            ReadEvidence.OLD_PAYLOAD -> ProfileProviderReadResult.Observed(before)
-            ReadEvidence.FAILED -> ProfileProviderReadResult.Failed
+            ReadEvidence.NEW_PAYLOAD -> ProfilePersistenceReadResult.Observed(checkNotNull(receivedPayload))
+            ReadEvidence.OLD_PAYLOAD -> ProfilePersistenceReadResult.Observed(before)
+            ReadEvidence.FAILED -> ProfilePersistenceReadResult.Failed
         }
     }
 }

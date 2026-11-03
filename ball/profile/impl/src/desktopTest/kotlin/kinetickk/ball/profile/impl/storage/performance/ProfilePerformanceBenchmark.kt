@@ -42,13 +42,13 @@ import kinetickk.ball.profile.api.RebirthProgress
 import kinetickk.ball.profile.api.SIMULATION_SPEED_OPTIONS
 import kinetickk.ball.profile.api.WindowMode
 import kinetickk.ball.profile.api.WindowSizePreset
-import kinetickk.ball.profile.impl.ExactProfilePersistence
+import kinetickk.ball.profile.impl.ProfilePersistenceCapability
 import kinetickk.ball.profile.impl.storage.MAX_PROFILE_PAYLOAD_BYTES
 import kinetickk.ball.profile.impl.storage.ProfileCodec
 import kinetickk.ball.profile.impl.storage.ProfileDecodeResult
 import kinetickk.ball.profile.impl.storage.ProfileEncodeResult
-import kinetickk.ball.profile.impl.ProfileProviderMutationResult
-import kinetickk.ball.profile.impl.ProfileProviderReadResult
+import kinetickk.ball.profile.impl.ProfilePersistenceMutationResult
+import kinetickk.ball.profile.impl.ProfilePersistenceReadResult
 import kinetickk.ball.profile.impl.createProfileResource
 import kinetickk.performance.BenchmarkScenario
 import kinetickk.performance.BenchmarkSuiteIdentity
@@ -321,7 +321,7 @@ private class ProfileBenchmarkFixtures {
     }
 
     private fun resource(payload: String?) =
-        createProfileResource(InMemoryExactProfilePersistence(payload))
+        createProfileResource(InMemoryProfilePersistence(payload))
 
     private fun roundtripSignature(snapshot: ProfileSnapshot): Long {
         val payload = encodeOrFail(snapshot)
@@ -406,17 +406,17 @@ internal fun maximumBusinessSnapshot(): ProfileSnapshot = ProfileSnapshot(
     ),
 )
 
-private class InMemoryExactProfilePersistence(
+private class InMemoryProfilePersistence(
     initialPayload: String?,
-) : ExactProfilePersistence {
+) : ProfilePersistenceCapability {
     private var payload: String? = initialPayload
 
-    override fun readSnapshot(): ProfileProviderReadResult =
-        ProfileProviderReadResult.Observed(payload)
+    override fun readSnapshot(): ProfilePersistenceReadResult =
+        ProfilePersistenceReadResult.Observed(payload)
 
-    override fun writeSnapshot(payload: String): ProfileProviderMutationResult {
+    override fun writeSnapshot(payload: String): ProfilePersistenceMutationResult {
         this.payload = payload
-        return ProfileProviderMutationResult.COMPLETED
+        return ProfilePersistenceMutationResult.COMPLETED
     }
 }
 

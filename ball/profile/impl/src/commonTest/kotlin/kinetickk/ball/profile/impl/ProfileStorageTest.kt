@@ -134,7 +134,7 @@ class ProfileStorageTest {
         assertEquals(null, provider.payload)
     }
 
-    private fun resource(provider: ExactProfilePersistence): ProfileResource =
+    private fun resource(provider: ProfilePersistenceCapability): ProfileResource =
         createProfileResource(provider)
 }
 
@@ -145,25 +145,25 @@ private class RecordingStorageProvider(
     private val possibleWrite: Boolean = false,
     private val failWriteBeforeExecution: Boolean = false,
     private val programmingFaultOn: Set<String> = emptySet(),
-) : ExactProfilePersistence {
+) : ProfilePersistenceCapability {
     val operations = mutableListOf<String>()
 
-    override fun readSnapshot(): ProfileProviderReadResult {
+    override fun readSnapshot(): ProfilePersistenceReadResult {
         operations += "readSnapshot"
         if ("readSnapshot" in programmingFaultOn) error("private provider programming fault")
         return if (failedReads) {
-            ProfileProviderReadResult.Failed
+            ProfilePersistenceReadResult.Failed
         } else {
-            ProfileProviderReadResult.Observed(payload)
+            ProfilePersistenceReadResult.Observed(payload)
         }
     }
 
-    override fun writeSnapshot(payload: String): ProfileProviderMutationResult {
+    override fun writeSnapshot(payload: String): ProfilePersistenceMutationResult {
         operations += "writeSnapshot"
         if ("writeSnapshot" in programmingFaultOn) error("private provider programming fault")
-        if (failWriteBeforeExecution) return ProfileProviderMutationResult.FAILED_BEFORE_EXECUTION
-        if (possibleWrite) return ProfileProviderMutationResult.POSSIBLE_EXECUTION
+        if (failWriteBeforeExecution) return ProfilePersistenceMutationResult.FAILED_BEFORE_EXECUTION
+        if (possibleWrite) return ProfilePersistenceMutationResult.POSSIBLE_EXECUTION
         if (!ignoreWrite) this.payload = payload
-        return ProfileProviderMutationResult.COMPLETED
+        return ProfilePersistenceMutationResult.COMPLETED
     }
 }

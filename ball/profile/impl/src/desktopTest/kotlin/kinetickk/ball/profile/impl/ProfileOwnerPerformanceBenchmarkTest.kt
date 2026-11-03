@@ -199,9 +199,9 @@ private fun ownerWithCodecFixture(): OwnerBenchmarkFixture {
             return ProfilePersistenceMutationResult.COMPLETED
         }
     }
-    val verificationReader = createProfileResource(object : ExactProfilePersistence {
-        override fun readSnapshot() = ProfileProviderReadResult.Observed(storedPayload)
-        override fun writeSnapshot(payload: String): ProfileProviderMutationResult =
+    val verificationReader = createProfileResource(object : ProfilePersistenceCapability {
+        override fun readSnapshot() = ProfilePersistenceReadResult.Observed(storedPayload)
+        override fun writeSnapshot(payload: String): ProfilePersistenceMutationResult =
             error("The verification reader must never write")
     })
     return OwnerBenchmarkFixture(
