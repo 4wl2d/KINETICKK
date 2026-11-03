@@ -14,6 +14,7 @@ import kinetickk.ball.gameplay.nucleus.render.PickupType
 import kinetickk.ball.gameplay.nucleus.simulation.*
 import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.director.*
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.cos

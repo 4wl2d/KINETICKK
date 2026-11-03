@@ -8,7 +8,6 @@ import kinetickk.ball.gameplay.nucleus.simulation.*
 import kinetickk.ball.gameplay.nucleus.simulation.characters.*
 import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
-import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.structures.*
 import kinetickk.ball.gameplay.nucleus.simulation.variety.*
 import kinetickk.foundation.collections.toImmutableList

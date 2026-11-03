@@ -7,7 +7,6 @@ import kinetickk.ball.content.api.DirectorPersonalityId
 import kinetickk.ball.content.api.PhaseScales
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.simulation.director.*
-import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.math.abs
 import kotlin.math.ceil

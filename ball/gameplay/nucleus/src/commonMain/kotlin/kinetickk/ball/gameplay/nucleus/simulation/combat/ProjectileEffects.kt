@@ -8,35 +8,14 @@ import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
 import kinetickk.ball.gameplay.nucleus.protocol.FxColorCode
-import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
-import kinetickk.ball.gameplay.nucleus.protocol.LinkStyleCode
-import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 import kinetickk.ball.gameplay.nucleus.simulation.*
 import kinetickk.ball.gameplay.nucleus.simulation.build.*
 import kinetickk.ball.gameplay.nucleus.simulation.characters.*
-import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
-import kinetickk.ball.gameplay.nucleus.simulation.progression.*
-import kinetickk.ball.gameplay.nucleus.simulation.variety.*
 import kinetickk.ball.gameplay.nucleus.simulation.weapons.*
 
-
-internal fun MutableGameState.endRun(reason: String) {
-    if (phase != GamePhase.RUNNING) return
-    phase = GamePhase.GAME_OVER
-    message = reason
-    messageTime = 10f
-    keyboardBrakeActive = false
-    secondaryBrakeActive = false
-    touchBrakeActive = false
-    updateBraking()
-    dashBufferTime = 0f
-    burst(coreX, coreY, 45, 4)
-    bankRunMatter()
-    emitSound(GameplayAudioCue.GAME_OVER)
-}
 
 internal fun MutableGameState.firePlayerProjectile(
     x: Float,
@@ -133,83 +112,6 @@ internal fun MutableGameState.addProjectile(projectile: Projectile) {
     if (projectiles.size < MutableGameState.MAX_PROJECTILES) projectiles += projectile
 }
 
-/** At the cap a new Data or repair is dropped; a Key or Relic resonance evicts the oldest Data instead. */
-internal fun MutableGameState.addPickup(pickup: Pickup) {
-    if (pickup.type == PickupType.DATA) pickup.life = blackoutDataLife(pickup.life)
-    if (pickups.size >= MutableGameState.MAX_PICKUPS) {
-        if (pickup.expires) return
-        val oldest = oldestEvictablePickup()
-        if (oldest < 0) return
-        pickups.removeAt(oldest)
-    }
-    pickups += pickup
-}
-
-internal fun MutableGameState.burst(x: Float, y: Float, requestedCount: Int, colorIndex: Int) {
-    emitVisualFx(
-        VisualFxCue.Burst(
-            x = x,
-            y = y,
-            requestedCount = requestedCount,
-            colorIndex = colorIndex,
-            density = settings.particleDensity,
-        ),
-    )
-}
-
-internal fun MutableGameState.directionalBurst(
-    x: Float,
-    y: Float,
-    requestedCount: Int,
-    colorIndex: Int,
-    directionX: Float,
-    directionY: Float,
-) {
-    emitVisualFx(
-        VisualFxCue.DirectionalBurst(
-            x = x,
-            y = y,
-            requestedCount = requestedCount,
-            colorIndex = colorIndex,
-            directionX = directionX,
-            directionY = directionY,
-            density = settings.particleDensity,
-        ),
-    )
-}
-
-internal fun MutableGameState.shockwave(x: Float, y: Float, life: Float, maxRadius: Float, colorIndex: Int) {
-    emitVisualFx(
-        VisualFxCue.ShockwaveAdded(
-            x = x,
-            y = y,
-            life = life,
-            maxRadius = maxRadius,
-            colorIndex = colorIndex,
-        ),
-    )
-}
-
-internal fun MutableGameState.addWeaponArc(
-    fromX: Float,
-    fromY: Float,
-    toX: Float,
-    toY: Float,
-    life: Float = 0.14f,
-    style: Int = LinkStyleCode.WEAPON,
-) {
-    emitVisualFx(
-        VisualFxCue.WeaponArcAdded(
-            fromX = fromX,
-            fromY = fromY,
-            toX = toX,
-            toY = toY,
-            life = life,
-            style = style,
-        ),
-    )
-}
-
 /** What spent a hostile bolt. */
 internal enum class EraseCause { REACTION, SKILL, ITEM, CHARACTER, APEX }
 
@@ -241,25 +143,6 @@ internal fun MutableGameState.eraseHostileShot(shot: Projectile, cause: EraseCau
 }
 
 internal const val MAX_SHOT_ERASURES_SHOWN_PER_STEP: Int = 4
-
-/** Nearest live enemy within [range]; a shifting Architect is never a target. */
-internal fun MutableGameState.nearestEnemy(x: Float, y: Float, range: Float): Enemy? {
-    var nearest: Enemy? = null
-    var nearestDistanceSquared = range * range
-    for (index in enemies.indices) {
-        val candidate = enemies[index]
-        if (candidate.dead || !(candidate.hp > 0f) || isShifting(candidate)) continue
-        val candidateDistanceSquared = distanceSquared(x, y, candidate.x, candidate.y)
-        if (
-            candidateDistanceSquared <= nearestDistanceSquared &&
-            (nearest == null || candidateDistanceSquared < nearestDistanceSquared)
-        ) {
-            nearest = candidate
-            nearestDistanceSquared = candidateDistanceSquared
-        }
-    }
-    return nearest
-}
 
 internal fun MutableGameState.movementAngle(): Float {
     if (speed > 20f) return atan2(velocityY, velocityX)

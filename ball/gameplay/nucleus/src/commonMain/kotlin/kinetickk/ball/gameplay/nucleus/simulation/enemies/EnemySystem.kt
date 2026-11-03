@@ -18,13 +18,11 @@ import kotlin.math.sin
 import kinetickk.ball.gameplay.nucleus.simulation.*
 import kinetickk.ball.gameplay.nucleus.simulation.characters.*
 import kinetickk.ball.gameplay.nucleus.simulation.combat.*
-import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
 import kinetickk.ball.gameplay.nucleus.simulation.director.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.sites.*
 import kinetickk.ball.gameplay.nucleus.simulation.variety.*
-import kinetickk.ball.gameplay.nucleus.simulation.weapons.*
 import kinetickk.ball.gameplay.nucleus.simulation.world.*
 
 
@@ -263,128 +261,6 @@ internal fun MutableGameState.applyGravityWell(
         val gravity = (base + (1f - distance / radius) * pull) * disruption * strength
         velocityX -= dx / distance * gravity * delta
         velocityY -= dy / distance * gravity * delta
-    }
-}
-
-internal fun MutableGameState.updateProjectiles(delta: Float) {
-    // Hostile shots follow the world layer's time; the player's own shots never do.
-    val hostileStep = delta * layerTimeScale(null)
-    for (projectileIndex in projectiles.indices) {
-        val projectile = projectiles[projectileIndex]
-        val step = if (projectile.hostile) hostileStep else delta
-        projectile.previousX = projectile.x
-        projectile.previousY = projectile.y
-        projectile.x += projectile.vx * step
-        projectile.y += projectile.vy * step
-        projectile.life -= step
-        // A Quasar shot running out of life ends with its form's burst before it leaves the list.
-        if (projectile.life <= 0f && projectile.sourceWeapon == kinetickk.ball.content.api.WeaponId.QUASAR_CANNON &&
-            projectile.life > -delta
-        ) quasarShotEnded(projectile)
-    }
-    projectiles.removeMatchingStable { projectile ->
-        projectile.life <= 0f ||
-            distanceSquared(projectile.x, projectile.y, coreX, coreY) > 1_600f * 1_600f
-    }
-    while (projectiles.size > MutableGameState.MAX_PROJECTILES) projectiles.removeAt(0)
-}
-
-/**
- * Pickups drift from where they dropped until they enter the magnet radius; there they latch and home on
- * the Core at `max(vacuumSpeed, coreSpeed × factor)` with no damping until collected. Event Horizon's
- * liability turns the latch off: pickups are then only pulled while inside the radius, weaker at its rim.
- * Keys and Relic resonances never expire, and a latched pickup does not age while it homes.
- */
-internal fun MutableGameState.updatePickups(delta: Float) {
-    val radius = effectivePickupRadius()
-    val latching = latchedVacuumActive()
-    val tuning = content.pickups
-    val homingSpeed = max(tuning.vacuumSpeed, speed * tuning.vacuumCoreSpeedFactor)
-    val drag = exp(-1.8f * delta)
-    for (pickupIndex in pickups.indices) {
-        val pickup = pickups[pickupIndex]
-        pickup.previousX = pickup.x
-        pickup.previousY = pickup.y
-        val dx = coreX - pickup.x
-        val dy = coreY - pickup.y
-        val distance = max(1f, length(dx, dy))
-        if (latching && !pickup.attracted && distance < radius) pickup.attracted = true
-        val homing = latching && pickup.attracted
-        // A latched pickup is on its way in and never fades before it arrives.
-        if (pickup.expires && !homing) pickup.life -= delta
-        if (homing) {
-            pickup.vx = dx / distance * homingSpeed
-            pickup.vy = dy / distance * homingSpeed
-        } else {
-            if (!latching && distance < radius) {
-                val pull = (radius - distance) * 4.8f
-                pickup.vx += dx / distance * pull * delta
-                pickup.vy += dy / distance * pull * delta
-            }
-            pickup.vx *= drag
-            pickup.vy *= drag
-        }
-        pickup.x += pickup.vx * delta
-        pickup.y += pickup.vy * delta
-    }
-    pickups.removeMatchingStable { pickup -> pickup.expires && pickup.life <= 0f }
-    while (pickups.size > MutableGameState.MAX_PICKUPS) {
-        val oldest = oldestEvictablePickup()
-        pickups.removeAt(if (oldest >= 0) oldest else 0)
-    }
-}
-
-/** Data and repairs fade; Keys and Relic resonances wait until they are collected. */
-internal val Pickup.expires: Boolean get() = type == PickupType.DATA || type == PickupType.REPAIR
-
-/** Index of the oldest pickup the cap may evict (Data first, then repairs), or -1. */
-internal fun MutableGameState.oldestEvictablePickup(): Int {
-    var repair = -1
-    for (index in pickups.indices) {
-        val type = pickups[index].type
-        if (type == PickupType.DATA) return index
-        if (repair < 0 && type == PickupType.REPAIR) repair = index
-    }
-    return repair
-}
-
-/** Event Horizon's liability disables the latched vacuum and the level-up vacuum. */
-internal fun MutableGameState.latchedVacuumActive(): Boolean =
-    !build.liability(kinetickk.ball.content.api.RelicId.EVENT_HORIZON)
-
-/**
- * A level-up, and the end of a choice, latch every Data pickup inside the viewport onto the Core
- * (unless Event Horizon's liability holds).
- */
-internal fun MutableGameState.vacuumOnScreenData() {
-    if (!latchedVacuumActive() || pickups.isEmpty()) return
-    val halfWidth = screenWidth * 0.5f
-    val halfHeight = screenHeight * 0.5f
-    for (index in pickups.indices) {
-        val pickup = pickups[index]
-        if (pickup.type != PickupType.DATA || pickup.attracted) continue
-        if (kotlin.math.abs(pickup.x - cameraX) <= halfWidth && kotlin.math.abs(pickup.y - cameraY) <= halfHeight) {
-            pickup.attracted = true
-        }
-    }
-}
-
-/** Stable one-pass compaction without iterator or stdlib predicate-wrapper allocation. */
-internal inline fun <Element> MutableList<Element>.removeMatchingStable(
-    remove: (Element) -> Boolean,
-) {
-    var retainedCount = 0
-    for (index in indices) {
-        val value = this[index]
-        if (!remove(value)) {
-            if (retainedCount != index) this[retainedCount] = value
-            retainedCount++
-        }
-    }
-    var index = lastIndex
-    while (index >= retainedCount) {
-        removeAt(index)
-        index--
     }
 }
 

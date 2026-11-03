@@ -19,7 +19,6 @@ import kinetickk.ball.gameplay.nucleus.simulation.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
 import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
 import kinetickk.ball.gameplay.nucleus.simulation.sites.*
-import kinetickk.ball.gameplay.nucleus.simulation.weapons.*
 import kotlin.math.min
 
 /*

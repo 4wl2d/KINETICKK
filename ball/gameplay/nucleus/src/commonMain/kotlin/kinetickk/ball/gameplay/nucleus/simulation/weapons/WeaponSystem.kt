@@ -24,7 +24,6 @@ import kinetickk.ball.gameplay.nucleus.simulation.characters.*
 import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
 import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
-import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.world.*
 
 /*
@@ -1099,12 +1098,6 @@ internal fun MutableGameState.pushEnemy(enemy: Enemy, x: Float, y: Float, streng
     enemy.vx += dx / distance * strength * knockback
     enemy.vy += dy / distance * strength * knockback
     markThrown(enemy)
-}
-
-internal fun MutableGameState.enemyById(id: Int): Enemy? {
-    if (id < 0) return null
-    for (index in enemies.indices) if (enemies[index].id == id) return enemies[index]
-    return null
 }
 
 /**

@@ -11,7 +11,6 @@ import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.projection.*
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.WeaponSynergyProjection
-import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.weapons.*
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.ball.profile.api.GameplayProfileSnapshot

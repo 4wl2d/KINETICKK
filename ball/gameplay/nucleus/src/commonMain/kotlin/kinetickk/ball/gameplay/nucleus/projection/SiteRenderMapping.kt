@@ -16,9 +16,9 @@ import kinetickk.ball.gameplay.nucleus.render.TrialReward
 import kinetickk.ball.gameplay.nucleus.render.TrialValue
 import kinetickk.ball.gameplay.nucleus.simulation.*
 import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
+import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
 import kinetickk.ball.gameplay.nucleus.simulation.sites.*
 import kinetickk.ball.gameplay.nucleus.simulation.structures.*
-import kinetickk.ball.gameplay.nucleus.simulation.weapons.*
 import kinetickk.ball.gameplay.nucleus.simulation.world.*
 import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.immutableListOf

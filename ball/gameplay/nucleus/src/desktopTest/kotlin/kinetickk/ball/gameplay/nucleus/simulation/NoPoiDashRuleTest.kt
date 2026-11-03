@@ -7,7 +7,6 @@ import kinetickk.ball.gameplay.nucleus.model.Projectile
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.simulation.characters.*
 import kinetickk.ball.gameplay.nucleus.simulation.combat.*
-import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.world.*
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.test.Test

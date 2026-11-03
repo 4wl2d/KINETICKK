@@ -30,6 +30,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
 import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
 import kinetickk.ball.gameplay.nucleus.simulation.skills.*
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 
 /** Nested clause dispatch is bounded: a clause's own consequences may dispatch at most one more level. */
 internal const val MAX_CLAUSE_DEPTH: Int = 2

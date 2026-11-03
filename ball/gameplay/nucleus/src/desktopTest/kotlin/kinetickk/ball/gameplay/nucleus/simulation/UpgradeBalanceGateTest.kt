@@ -9,7 +9,6 @@ import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.TAU
 import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
-import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
 import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
 import kinetickk.ball.gameplay.nucleus.simulation.flight.*

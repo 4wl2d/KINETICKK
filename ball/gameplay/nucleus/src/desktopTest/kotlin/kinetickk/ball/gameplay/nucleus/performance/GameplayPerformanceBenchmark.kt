@@ -68,8 +68,8 @@ import kinetickk.ball.gameplay.nucleus.simulation.consumeFixedStepBudget
 import kinetickk.ball.gameplay.nucleus.simulation.copyForReduction
 import kinetickk.ball.gameplay.nucleus.simulation.simulateStep
 import kinetickk.ball.gameplay.nucleus.simulation.startRun
-import kinetickk.ball.gameplay.nucleus.simulation.progression.takeSoundCues
-import kinetickk.ball.gameplay.nucleus.simulation.progression.takeVisualFxCues
+import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
+import kinetickk.ball.gameplay.nucleus.simulation.takeVisualFxCues
 import kinetickk.ball.gameplay.nucleus.projection.toRenderModel
 import kinetickk.ball.gameplay.nucleus.simulation.togglePause
 import kinetickk.ball.gameplay.nucleus.simulation.placeObstaclesForTesting

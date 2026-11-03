@@ -21,7 +21,6 @@ import kinetickk.ball.gameplay.nucleus.simulation.characters.*
 import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
 import kinetickk.ball.gameplay.nucleus.simulation.flight.*
-import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.variety.*
 import kinetickk.ball.gameplay.nucleus.simulation.world.*
 import kinetickk.foundation.collections.ImmutableList

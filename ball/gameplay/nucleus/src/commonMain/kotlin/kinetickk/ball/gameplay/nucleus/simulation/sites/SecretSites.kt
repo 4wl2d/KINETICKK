@@ -16,11 +16,8 @@ import kinetickk.ball.gameplay.nucleus.model.segmentCircleIntersects
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
 import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
-import kinetickk.ball.gameplay.nucleus.simulation.progression.*
-import kinetickk.ball.gameplay.nucleus.simulation.weapons.*
 import kinetickk.ball.gameplay.nucleus.simulation.world.*
 import kinetickk.foundation.collections.immutableListOf
 import kotlin.math.PI

@@ -11,7 +11,6 @@ import kinetickk.ball.gameplay.nucleus.simulation.*
 import kinetickk.ball.gameplay.nucleus.simulation.characters.*
 import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.flight.*
-import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow

@@ -25,9 +25,6 @@ import kinetickk.ball.content.api.lifetimeMatterOfferLevel
 import kinetickk.ball.gameplay.api.*
 import kinetickk.ball.gameplay.nucleus.render.*
 import kinetickk.ball.gameplay.nucleus.model.*
-import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
-import kinetickk.foundation.collections.ImmutableList
-import kinetickk.foundation.collections.immutableListOf
 import kinetickk.ball.profile.api.GameplayProgressUpdate
 import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
@@ -38,7 +35,6 @@ import kinetickk.ball.gameplay.nucleus.simulation.*
 import kinetickk.ball.gameplay.nucleus.simulation.build.*
 import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
-import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
 import kinetickk.ball.gameplay.nucleus.simulation.sites.*
 import kinetickk.ball.gameplay.nucleus.simulation.skills.*
 import kinetickk.ball.gameplay.nucleus.simulation.variety.*
@@ -651,20 +647,3 @@ internal fun MutableGameState.hasPendingAchievementCounters(): Boolean =
 /** True when [takeProgressUpdate] would publish an update now. */
 internal fun MutableGameState.hasPublishableProgress(): Boolean =
     !easyMode && (hasUrgentProgress() || achievementFlushDue && hasPendingAchievementCounters())
-
-internal fun MutableGameState.takeSoundCues(): ImmutableList<GameplayAudioCue> {
-    if (soundCues.isEmpty()) return immutableListOf()
-    val result = soundCues.toImmutableList()
-    soundCues.clear()
-    return result
-}
-
-internal fun MutableGameState.takeVisualFxCues(): ImmutableList<VisualFxCue> = visualFxCues.drain()
-
-internal fun MutableGameState.emitSound(cue: GameplayAudioCue) {
-    if (soundCues.size < MutableGameState.MAX_GAMEPLAY_SOUND_CUES) soundCues += cue
-}
-
-internal fun MutableGameState.emitVisualFx(cue: VisualFxCue) {
-    visualFxCues.record(cue)
-}

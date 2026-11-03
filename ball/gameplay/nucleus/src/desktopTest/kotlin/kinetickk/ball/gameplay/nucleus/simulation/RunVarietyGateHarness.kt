@@ -14,7 +14,6 @@ import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.simulation.director.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
 import kinetickk.ball.gameplay.nucleus.simulation.flight.*
-import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.sites.*
 import kinetickk.ball.gameplay.nucleus.simulation.world.*
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent

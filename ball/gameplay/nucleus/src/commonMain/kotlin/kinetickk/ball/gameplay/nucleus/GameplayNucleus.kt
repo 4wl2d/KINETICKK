@@ -37,8 +37,8 @@ import kinetickk.ball.gameplay.nucleus.simulation.exitRun
 import kinetickk.ball.gameplay.nucleus.simulation.pauseForOverlay
 import kinetickk.ball.gameplay.nucleus.simulation.startRun
 import kinetickk.ball.gameplay.nucleus.simulation.progression.takeProgressUpdate
-import kinetickk.ball.gameplay.nucleus.simulation.progression.takeSoundCues
-import kinetickk.ball.gameplay.nucleus.simulation.progression.takeVisualFxCues
+import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
+import kinetickk.ball.gameplay.nucleus.simulation.takeVisualFxCues
 import kinetickk.ball.gameplay.nucleus.projection.toRenderModel
 import kinetickk.ball.profile.api.DAMAGE_NUMBER_TIER_THRESHOLD_OPTIONS
 import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS

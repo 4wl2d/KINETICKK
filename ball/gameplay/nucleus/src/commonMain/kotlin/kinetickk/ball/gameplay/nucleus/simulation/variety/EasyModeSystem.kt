@@ -6,8 +6,6 @@ package kinetickk.ball.gameplay.nucleus.simulation.variety
 import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.protocol.GameplayAudioCue
 import kinetickk.ball.gameplay.nucleus.simulation.*
-import kinetickk.ball.gameplay.nucleus.simulation.combat.*
-import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
