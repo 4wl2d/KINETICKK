@@ -3,6 +3,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.CoreStasisTuning
 import kinetickk.ball.content.api.EnemyType
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
@@ -158,7 +159,8 @@ class UpgradeBalanceGateTest {
      * repaired to full (its loss counted), so no fall ends it early.
      */
     private fun encounter(shape: CoreShape, weapon: WeaponId, level: Int, boss: Boolean, seed: Int): EncounterMeasure {
-        val game = MutableGameState(canonicalGameplayContent, seed = seed).apply {
+        // The scripted orbit measures upgrades, not player behaviour; Core Stasis is off.
+        val game = MutableGameState(canonicalGameplayContent.copy(coreStasis = CoreStasisTuning.DISABLED), seed = seed).apply {
             coreShape = shape
             startingWeapon = weapon
             characterUpgradeLevels[shape.ordinal] = level

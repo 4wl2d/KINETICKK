@@ -6,6 +6,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.content.api.BuffStat
 import kinetickk.ball.content.api.ConversionKind
 import kinetickk.ball.content.api.CoreShape
+import kinetickk.ball.content.api.CoreStasisTuning
 import kinetickk.ball.content.api.EffectAction
 import kinetickk.ball.content.api.EffectCondition
 import kinetickk.ball.content.api.EffectTrigger
@@ -591,12 +592,11 @@ class PerceptibleItemImpactTest {
         }.toImmutableList())
 
     /**
-     * [this] content with an empty generated obstacle field: no encounter is about the generated field (the obstacle arenas
-     * place their own test obstacles), and a scripted path whose Dashes carry it toward the start area's rim must not meet
-     * the rocks the window holds there (Addendum B2: a harness whose subject is not terrain flies an emptied field).
+     * [this] content for a scripted arena: no generated obstacles (Addendum B2: no encounter is about terrain, and Dashes
+     * must not meet the start area's rim) and Core Stasis off (the scripted hovers measure items, not player behaviour).
      */
-    private fun GameplayContentSnapshot.withoutGeneratedObstacles(): GameplayContentSnapshot =
-        copy(obstacles = obstacles.copy(meanPerChunk = 0f))
+    private fun GameplayContentSnapshot.scriptedArena(): GameplayContentSnapshot =
+        copy(obstacles = obstacles.copy(meanPerChunk = 0f), coreStasis = CoreStasisTuning.DISABLED)
 
     /** Thirty consecutive item offers at Reborn 10 with every item unlocked: the summed rarity of the cards. */
     private fun offers(setup: Setup, item: ItemDefinition?, content: GameplayContentSnapshot): Outcome {
@@ -618,7 +618,7 @@ class PerceptibleItemImpactTest {
     private fun fight(setup: Setup, item: ItemDefinition?, variant: Int, content: GameplayContentSnapshot): Outcome {
         val arena = setup.arena
         val phase = variant * 0.7f
-        val game = MutableGameState(content.withoutGeneratedObstacles(), seed = SEED + variant, initialMatter = 0).apply {
+        val game = MutableGameState(content.scriptedArena(), seed = SEED + variant, initialMatter = 0).apply {
             coreShape = if (arena.apex) APEX_CHARACTER else CoreShape.ORB
             startingWeapon = setup.weapon ?: WeaponId.FLUX_WAKE
             unlockWeaponsForTesting(listOf(startingWeapon))

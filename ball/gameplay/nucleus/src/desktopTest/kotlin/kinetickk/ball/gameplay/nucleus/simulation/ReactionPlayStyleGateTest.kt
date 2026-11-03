@@ -3,6 +3,7 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import java.util.IdentityHashMap
+import kinetickk.ball.content.api.CoreStasisTuning
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.StatusElement
 import kinetickk.ball.content.api.WeaponId
@@ -87,8 +88,9 @@ class ReactionPlayStyleGateTest {
     }
 
     private fun arena(reaction: ReactionId, verbs: Boolean): Outcome {
-        val state = buildTestState(seed = 6_060, content = if (verbs) canonicalGameplayContent else contentWithoutReactionVerbs,
-            weapon = WeaponId.NULL_LANCE)
+        // The scripted holds measure reactions, not player behaviour; Core Stasis is off.
+        val content = (if (verbs) canonicalGameplayContent else contentWithoutReactionVerbs).copy(coreStasis = CoreStasisTuning.DISABLED)
+        val state = buildTestState(seed = 6_060, content = content, weapon = WeaponId.NULL_LANCE)
         state.maxHp = 1_000_000f
         state.hp = state.maxHp
         // No level or anomaly choice interrupts the arena.
