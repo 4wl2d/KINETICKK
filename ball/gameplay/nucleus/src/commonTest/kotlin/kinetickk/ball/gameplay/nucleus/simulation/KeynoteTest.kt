@@ -260,11 +260,12 @@ class KeynoteTest {
         assertEquals(KEYNOTE_ANNOUNCEMENT, plain.varietyAnnouncement)
         assertEquals("", plain.message)
     }
+}
 
-    private fun assertShareHolds(deck: ItemDeck, items: List<ItemDefinition>, share: Float, label: String) {
-        val dealt = items.count { it.id in deck }
-        assertTrue(dealt.toFloat() >= share * items.size, "$label: $dealt of ${items.size} dealt, share $share")
-    }
+/** Asserts that [deck] deals at least [share] of [items]. */
+internal fun assertShareHolds(deck: ItemDeck, items: List<ItemDefinition>, share: Float, label: String) {
+    val dealt = items.count { it.id in deck }
+    assertTrue(dealt.toFloat() >= share * items.size, "$label: $dealt of ${items.size} dealt, share $share")
 }
 
 /** A passive item at most Rare with the Keynote's [tag], the kind its tag floor deals. */

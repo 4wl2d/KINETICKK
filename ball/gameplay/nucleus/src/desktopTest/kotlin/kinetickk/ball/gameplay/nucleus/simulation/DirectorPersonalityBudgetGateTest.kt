@@ -30,11 +30,11 @@ import kotlin.test.assertTrue
 class DirectorPersonalityBudgetGateTest {
     @Test
     fun everyPersonalitySpawnsThePlainDirectorsBudget() {
-        val identity = populationOf(Seeds) { flyDirector(it, null) }
+        val identity = Arms.getValue(null)
         val failures = ArrayList<String>()
         failures += held(null, identity)
         for (id in DirectorPersonalityId.entries) {
-            val runs = populationOf(Seeds) { flyDirector(it, id) }
+            val runs = Arms.getValue(id)
             failures += held(id, runs)
             val pairs = identity.zip(runs)
             val (count, countSe) = bootstrap(pairs, ::countRatio)
@@ -52,8 +52,7 @@ class DirectorPersonalityBudgetGateTest {
     @Test
     fun everyPersonalityStillMixesItsEventsInTheFirstFourMinutes() {
         val failures = ArrayList<String>()
-        for (id in listOf<DirectorPersonalityId?>(null) + DirectorPersonalityId.entries) {
-            val runs = populationOf(Seeds) { flyDirector(it, id) }
+        for ((id, runs) in Arms) {
             failures += held(id, runs)
             val mean = runs.sumOf { it.events }.toDouble() / runs.size
             val fewest = runs.minBy { it.eventKinds.size }
@@ -79,6 +78,13 @@ class DirectorPersonalityBudgetGateTest {
 
     private companion object {
         val Seeds: List<Int> = varietyMetricSeeds(60)
+
+        /** The plain director (null) and each personality flown once on [Seeds], shared by both flight gates. */
+        val Arms: Map<DirectorPersonalityId?, List<DirectorRun>> by lazy {
+            (listOf<DirectorPersonalityId?>(null) + DirectorPersonalityId.entries).associateWith { id ->
+                populationOf(Seeds) { flyDirector(it, id) }
+            }
+        }
 
         /** Design (§3.3, §17 deviation 5): cap units within ±5 % (plus 2 SE), integrity within ±15 %. */
         const val COUNT_BAND = 0.05

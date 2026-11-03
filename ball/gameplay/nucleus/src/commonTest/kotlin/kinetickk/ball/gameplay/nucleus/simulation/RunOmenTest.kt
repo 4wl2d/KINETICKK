@@ -4,7 +4,6 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.GameplayContentSnapshot
-import kinetickk.ball.content.api.ItemDefinition
 import kinetickk.ball.content.api.OmenId
 import kinetickk.ball.content.api.OmenPolicy
 import kinetickk.ball.content.api.RebirthMutator
@@ -308,8 +307,8 @@ class RunOmenTest {
         val reward = state.rewardRandom.snapshot()
         state.acceptRunOmen(OmenId.AMPLIFIED_KEYNOTE)
         val universe = state.content.items.filter { it.minimumRebirth <= state.rebirthRank }
-        assertShareHolds(state, universe.filter { it.isKeynotePassive(tag) }, 0.95f)
-        assertShareHolds(state, universe.filter { it.isKeynotePassive(element) }, 0.95f)
+        assertShareHolds(state.itemDeck, universe.filter { it.isKeynotePassive(tag) }, 0.95f, "$tag")
+        assertShareHolds(state.itemDeck, universe.filter { it.isKeynotePassive(element) }, 0.95f, "$element")
         assertEquals(reward, state.rewardRandom.snapshot(), "The floors draw nothing")
 
         val keynoteOmen = definitions[OmenId.AMPLIFIED_KEYNOTE.ordinal]
@@ -494,11 +493,6 @@ class RunOmenTest {
 
     private fun frame(state: GameplayState, pulse: GameplayInteractionPulse): GameplayState =
         assertIs<GameplayDecision.Accepted>(GameplayNucleus.decide(state, GameplayNucleusPulse.Intent(pulse))).frame.nextState
-
-    private fun assertShareHolds(state: MutableGameState, items: List<ItemDefinition>, share: Float) {
-        val dealt = items.count { it.id in state.itemDeck }
-        assertTrue(dealt.toFloat() >= share * items.size, "$dealt of ${items.size} dealt, share $share")
-    }
 
     /** What a run plays out to: positions, health, economy, entities, obstacles, every stream and the run's modifiers. */
     private fun MutableGameState.outcome(): List<Any?> = listOf(
