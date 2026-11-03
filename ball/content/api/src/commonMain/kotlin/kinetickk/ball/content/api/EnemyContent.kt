@@ -92,8 +92,10 @@ const val MAX_BOSS_ENRAGE_RATE: Float = 2f
 
 /**
  * The phase gate of a boss-class kind: [phases] equal integrity parts (gates at 1/phases steps), at most
- * [hitCapShare] of the tier-0 integrity per damage instance, shrunk by [hitCapTierShrink] per selected tier but
- * never below [hitCapMinimumScale] of it, [shiftSeconds] without damage or attacks at each gate. [enragePhases]
+ * [hitCapShare] of the boss's own integrity per damage instance, shrunk by [hitCapTierShrink] per selected tier but
+ * never below [hitCapMinimumScale] of it (a share, so a build whose hits reach the cap at a tier clears the bar in the
+ * same number of hits at every tier: permanent progression, not the hit count, decides the tier), [shiftSeconds]
+ * without damage or attacks at each gate. [enragePhases]
  * extra phases exist while [enrageMutator] is selected and run [enrageAttackRate] faster; [enrageAfterSeconds] > 0
  * also enrages a boss that long after its encounter started (secret and mini-bosses never stall forever).
  */

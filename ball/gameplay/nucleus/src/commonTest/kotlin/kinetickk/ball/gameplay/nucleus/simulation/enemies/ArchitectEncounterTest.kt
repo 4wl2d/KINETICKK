@@ -148,23 +148,25 @@ class ArchitectEncounterTest {
     }
 
     @Test
-    fun aHarderTierCapsEachHitBelowTheTierZeroShareSoItsIntegrityCostsCappedBuildsMoreHits() {
-        // Tier 0: 3,000 integrity, at most 45 per instance.
+    fun aHarderTierCapsEachHitAtAShrinkingShareOfItsOwnIntegrity() {
+        // Tier 0: 3,000 integrity, at most 45 per instance (1.5 %).
         val base = buildTestState()
         assertEquals(45f, base.damageEnemy(base.architect(), 10_000f).amount, 0.01f)
 
-        // Tier 3 scales the same Architect's integrity; one instance removes at most 45, less 2 % per tier.
+        // Tier 3 scales the Architect's integrity and the cap with it, less 2 % per tier: a capped build needs 1/0.94
+        // of the tier-0 hits, whatever the tier's integrity curve.
         val middle = buildTestState(rebirth = 3)
-        val middleBoss = middle.architect(maxHp = 3_000f * middle.rebirthProfile.enemyHealthMultiplier)
-        assertEquals(45f * 0.94f, middle.damageEnemy(middleBoss, 10_000f).amount, 0.05f)
+        val middleScale = middle.rebirthProfile.enemyHealthMultiplier
+        val middleBoss = middle.architect(maxHp = 3_000f * middleScale)
+        assertEquals(45f * middleScale * 0.94f, middle.damageEnemy(middleBoss, 10_000f).amount, 0.05f * middleScale)
 
-        // Tier 10: at most 36 (80 % of the tier-0 share) against an integrity more than eight times larger.
+        // Tier 10: 80 % of the tier-0 share of an integrity more than ten times larger.
         val hard = buildTestState(rebirth = 10)
         val scale = hard.rebirthProfile.enemyHealthMultiplier
-        assertTrue(scale > 8f)
+        assertTrue(scale > 10f)
         val boss = hard.architect(maxHp = 3_000f * scale)
-        assertEquals(36f, hard.damageEnemy(boss, 10_000f).amount, 0.05f)
-        assertEquals(3_000f * scale - 36f, boss.hp, 0.05f)
+        assertEquals(36f * scale, hard.damageEnemy(boss, 10_000f).amount, 0.05f * scale)
+        assertEquals(3_000f * scale - 36f * scale, boss.hp, 0.05f * scale)
         // A hit below the cap lands in full on every tier.
         assertEquals(30f, hard.damageEnemy(boss, 30f).amount, 0.01f)
     }

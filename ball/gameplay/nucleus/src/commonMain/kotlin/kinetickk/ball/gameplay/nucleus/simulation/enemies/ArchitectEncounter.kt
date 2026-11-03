@@ -17,11 +17,11 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 // The gate constants document the content ARCHITECT_ENCOUNTER, which the generic boss gate reads; they must equal it.
-/** Largest share of the Architect's tier-0 integrity one damage instance may remove (see [architectHitCap]). */
+/** Largest share of the Architect's integrity one damage instance may remove (see [architectHitCap]). */
 internal const val ARCHITECT_HIT_CAP: Float = 0.015f
-/** Share of the tier-0 hit cap each selected Rebirth tier removes (tier 10 keeps 80 %). */
+/** Share of the hit cap each selected Rebirth tier removes (tier 10 keeps 80 %). */
 internal const val ARCHITECT_HIT_CAP_TIER_SHRINK: Float = 0.02f
-/** The tier shrink never takes the cap below this share of the tier-0 cap (a longer custom ladder). */
+/** The tier shrink never takes the cap below this share of its tier-0 share (a longer custom ladder). */
 internal const val ARCHITECT_HIT_CAP_MIN_SCALE: Float = 0.5f
 /** Last phase of the ordinary Architect; Singularity (Rebirth R10) adds an enraged one after it. */
 internal const val ARCHITECT_FINAL_PHASE: Int = 2
@@ -52,10 +52,9 @@ internal fun MutableGameState.isPhasedPhantom(enemy: Enemy): Boolean = isShiftin
 internal fun MutableGameState.architectGate(enemy: Enemy): Float = bossGate(enemy, architectSpec())
 
 /**
- * Largest amount one damage instance may remove: [ARCHITECT_HIT_CAP] of the integrity the Architect
- * would have without the tier's integrity multiplier, shrunk by [ARCHITECT_HIT_CAP_TIER_SHRINK] per
- * selected tier. A build that hits the cap therefore needs more hits on a harder tier, as a build below
- * the cap does, and somewhat more again; the cap never exceeds the tier-0 share.
+ * Largest amount one damage instance may remove: [ARCHITECT_HIT_CAP] of the Architect's own integrity,
+ * shrunk by [ARCHITECT_HIT_CAP_TIER_SHRINK] per selected tier. A build that hits the cap needs a few more
+ * hits on a harder tier; whether its hits reach the cap is what its permanent power decides.
  */
 internal fun MutableGameState.architectHitCap(enemy: Enemy): Float = bossHitCap(enemy, architectSpec())
 

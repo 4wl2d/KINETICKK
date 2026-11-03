@@ -13,8 +13,8 @@ import kotlin.math.min
 
 /*
  * The phase gate every boss-class kind with a content encounter spec shares: equal integrity parts, a per-instance hit
- * cap on the tier-0 integrity, a shift without damage at each gate and an optional enrage. The Architect's numbers are
- * its spec, and these functions run the same float operations in the same order as its own gate always did.
+ * cap on the boss's own integrity, a shift without damage at each gate and an optional enrage. The Architect's numbers
+ * are its spec, and these functions run the same float operations in the same order as its own gate did.
  */
 
 /** The content encounter spec of [enemy]'s kind; null for every kind without a phase gate (the Herald among them). */
@@ -45,15 +45,16 @@ internal fun MutableGameState.bossGate(enemy: Enemy, spec: BossEncounterSpec): F
 }
 
 /**
- * Largest amount one damage instance may remove: [BossEncounterSpec.hitCapShare] of the integrity [enemy] would have
- * without the tier's integrity multiplier, shrunk by [BossEncounterSpec.hitCapTierShrink] per selected tier but never
- * below [BossEncounterSpec.hitCapMinimumScale] of it. A kind without a spec (the Herald) takes the Architect's share.
+ * Largest amount one damage instance may remove: [BossEncounterSpec.hitCapShare] of [enemy]'s own integrity (before
+ * a dimension objective's share), shrunk by [BossEncounterSpec.hitCapTierShrink] per selected tier but never below
+ * [BossEncounterSpec.hitCapMinimumScale] of it. The cap follows the tier's integrity curve, so the permanent power that
+ * answers the curve also reaches the cap. A kind without a spec (the Herald) takes the Architect's share.
  */
 internal fun MutableGameState.bossHitCap(
     enemy: Enemy,
     spec: BossEncounterSpec = encounterSpec(enemy) ?: architectSpec(),
 ): Float =
-    spec.hitCapShare * enemy.maxHp / rebirthProfile.enemyHealthMultiplier.coerceAtLeast(1f) *
+    spec.hitCapShare * enemy.maxHp *
         (1f - spec.hitCapTierShrink * rebirthProfile.tier).coerceIn(spec.hitCapMinimumScale, 1f) / objectiveBossIntegrityShare(enemy)
 
 /**
