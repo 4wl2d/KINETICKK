@@ -32,9 +32,9 @@ import kinetickk.ball.gameplay.api.GameplayAcceptance
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.interaction.canvas.hudTestSnapshot
 import kinetickk.ball.gameplay.interaction.canvas.with
+import kinetickk.ball.gameplay.interaction.canvas.withModel
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
-import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.foundation.common.localization.AppLanguage
@@ -299,12 +299,4 @@ class GameplayWindowPreferencesTest {
         val measured = assertNotNull(text.removeSuffix(" FPS").toIntOrNull(), "A half-second window must display numeric FPS: $text")
         assertTrue(measured in 60..63, "The test frame clock advances every 16 ms: $text")
     }
-}
-
-private fun GameplayRenderSnapshot.withModel(model: GameplayRenderModel): GameplayRenderSnapshot {
-    val constructor = GameplayRenderSnapshot::class.java.declaredConstructors.first { it.parameterCount == 4 }
-    constructor.isAccessible = true
-    val identity = GameplayRenderSnapshot::class.java.declaredFields.first { it.name == "projectionSourceIdentity" }
-        .also { it.isAccessible = true }.get(this)
-    return constructor.newInstance(instanceId, revision, model, identity) as GameplayRenderSnapshot
 }

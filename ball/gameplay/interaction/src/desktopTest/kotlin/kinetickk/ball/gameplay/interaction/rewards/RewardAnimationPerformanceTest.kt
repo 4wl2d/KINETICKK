@@ -25,11 +25,11 @@ import kinetickk.ball.gameplay.interaction.GameplayContent
 import kinetickk.ball.gameplay.interaction.GameplayInteractionPort
 import kinetickk.ball.gameplay.interaction.canvas.hudTestSnapshot
 import kinetickk.ball.gameplay.interaction.canvas.with
+import kinetickk.ball.gameplay.interaction.canvas.withModel
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
-import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
 import org.junit.Rule
@@ -112,14 +112,7 @@ class RewardAnimationPerformanceTest {
     }
 
     private class FrozenChoiceRun(model: GameplayRenderModel) : GameplayInteractionPort {
-        private val base = hudTestSnapshot(1440f, 900f)
-        // The snapshot constructor is module-internal; preserve its identity as the other desktop host fixtures do.
-        private val snapshot = GameplayRenderSnapshot::class.java.declaredConstructors.first { it.parameterCount == 4 }.let {
-            it.isAccessible = true
-            val identity = GameplayRenderSnapshot::class.java.declaredFields.first { field -> field.name == "projectionSourceIdentity" }
-                .also { field -> field.isAccessible = true }.get(base)
-            it.newInstance(base.instanceId, base.revision, model, identity) as GameplayRenderSnapshot
-        }
+        private val snapshot = hudTestSnapshot(1440f, 900f).withModel(model)
         var frames = 0
             private set
         override val instanceId get() = snapshot.instanceId

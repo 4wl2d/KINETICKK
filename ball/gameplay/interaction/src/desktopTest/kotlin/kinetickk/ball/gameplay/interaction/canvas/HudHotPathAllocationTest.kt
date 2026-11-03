@@ -179,35 +179,13 @@ class HudHotPathAllocationTest {
             )
             val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
                 AppLanguage.Russian)
-            val bitmap = ImageBitmap(width, height)
-            val canvas = Canvas(bitmap)
-            val scope = CanvasDrawScope()
-            val size = Size(width.toFloat(), height.toFloat())
-            // One density and one draw block per scenario: until the JIT compiles the harness, a fresh
-            // Density and a capturing lambda per frame would count against the HUD.
-            val density = Density(1f)
-            val clear: DrawScope.() -> Unit = { drawRect(Kk.Ink) }
-            fun empty() = scope.draw(density, LayoutDirection.Ltr, canvas, size, clear)
             scenarios.forEach { (name, build) ->
                 val frames = List(FRAMES) { build(it) }
                 val memory = HudPresentationMemory()
-                var current = 0
                 // 0.8 s of presentation time: the foil, sheen, glow pulse and rays all move.
-                val block: DrawScope.() -> Unit = {
-                    drawHud(frames[current % FRAMES], measurer, 10f + (current % FRAMES) * 0.002f, 0f, 0f, memory)
+                val perFrame = steadyFrameBytes(width, height, STEADY_CYCLES) { frame ->
+                    drawHud(frames[frame % FRAMES], measurer, 10f + (frame % FRAMES) * 0.002f, 0f, 0f, memory)
                 }
-                fun hud(frame: Int) {
-                    current = frame
-                    scope.draw(density, LayoutDirection.Ltr, canvas, size, block)
-                }
-                repeat(FRAMES) { empty(); hud(it) }
-                val emptyBytes = allocated { repeat(FRAMES) { empty() } }
-                // The steady frame: the quietest of three full cycles. Each cycle replays the same
-                // frames, so an allocation that recurs every frame or every cycle shows in all three;
-                // a one-off burst while the JIT recompiles (seen after other HUD tests in the same JVM,
-                // ≈ 27 KB once) shows in one only.
-                val hudBytes = List(STEADY_CYCLES) { allocated { repeat(FRAMES) { hud(it) } } }.min()
-                val perFrame = (hudBytes - emptyBytes) / FRAMES
                 assertTrue(perFrame <= 64, "$name level cluster at $width x $height allocates $perFrame bytes above an empty frame")
             }
         }
@@ -236,33 +214,16 @@ class HudHotPathAllocationTest {
             val locked = base.with("skillBar" to MIXED_SKILL_BAR)
             val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
                 AppLanguage.Russian)
-            val bitmap = ImageBitmap(width, height)
-            val canvas = Canvas(bitmap)
-            val scope = CanvasDrawScope()
-            val size = Size(width.toFloat(), height.toFloat())
             val controls = keyboardControls()
-            // One density and one draw block: the harness allocates nothing per frame itself.
-            val density = Density(1f)
-            val clear: DrawScope.() -> Unit = { drawRect(Kk.Ink) }
-            fun empty() = scope.draw(density, LayoutDirection.Ltr, canvas, size, clear)
             val memory = HudPresentationMemory()
-            var current = 0
-            val block: DrawScope.() -> Unit = {
-                val time = 10f + (current % FRAMES) * 0.002f
+            val perFrame = steadyFrameBytes(width, height) { frame ->
+                val time = 10f + (frame % FRAMES) * 0.002f
                 // The X slot is pressed every frame: its Bone press flash stays on.
                 controls.press(kinetickk.ball.gameplay.interaction.layout.RunningControlTarget.SKILL_2, time)
-                drawHud(frames[current % FRAMES], measurer, time, 0f, 0f, memory, controls = controls)
+                drawHud(frames[frame % FRAMES], measurer, time, 0f, 0f, memory, controls = controls)
                 drawControls(locked, measurer, time, null, controls)
             }
-            fun hud(frame: Int) {
-                current = frame
-                scope.draw(density, LayoutDirection.Ltr, canvas, size, block)
-            }
-            repeat(FRAMES) { empty(); hud(it) }
             kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.SKILLS), "the skill row is not drawn")
-            val emptyBytes = allocated { repeat(FRAMES) { empty() } }
-            val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
-            val perFrame = (hudBytes - emptyBytes) / FRAMES
             assertTrue(perFrame <= 64, "skill bar frame at $width x $height allocates $perFrame bytes above an empty frame")
         }
     }
@@ -316,13 +277,6 @@ class HudHotPathAllocationTest {
             val base = hudTestModel(width.toFloat(), height.toFloat())
             val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
                 AppLanguage.Russian)
-            val bitmap = ImageBitmap(width, height)
-            val canvas = Canvas(bitmap)
-            val scope = CanvasDrawScope()
-            val size = Size(width.toFloat(), height.toFloat())
-            val density = Density(1f)
-            val clear: DrawScope.() -> Unit = { drawRect(Kk.Ink) }
-            fun empty() = scope.draw(density, LayoutDirection.Ltr, canvas, size, clear)
             trialSites().forEach { site ->
                 val counted = siteTrial(site).value == kinetickk.ball.gameplay.nucleus.render.TrialValue.COUNT
                 val frames = List(FRAMES) { frame ->
@@ -333,21 +287,12 @@ class HudHotPathAllocationTest {
                     base.with("elapsed" to frame * GameplayRenderModel.FIXED_STEP).withSites(running)
                 }
                 val memory = HudPresentationMemory()
-                var current = 0
-                val block: DrawScope.() -> Unit = {
-                    val model = frames[current % FRAMES]
-                    drawHud(model, measurer, 10f + (current % FRAMES) * 0.0001f, 0f, 0f, memory, trialInfoOpen = true)
+                val perFrame = steadyFrameBytes(width, height) { frame ->
+                    val model = frames[frame % FRAMES]
+                    drawHud(model, measurer, 10f + (frame % FRAMES) * 0.0001f, 0f, 0f, memory, trialInfoOpen = true)
                     drawTrialTooltip(model, measurer, open = true)
                 }
-                fun hud(frame: Int) {
-                    current = frame
-                    scope.draw(density, LayoutDirection.Ltr, canvas, size, block)
-                }
-                repeat(FRAMES) { empty(); hud(it) }
                 kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.TRIAL_PANEL), "${site.kind}: no trial panel")
-                val emptyBytes = allocated { repeat(FRAMES) { empty() } }
-                val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
-                val perFrame = (hudBytes - emptyBytes) / FRAMES
                 assertTrue(perFrame <= 64, "${site.kind} trial panel at $width x $height allocates $perFrame bytes above an empty frame")
             }
         }
@@ -370,27 +315,11 @@ class HudHotPathAllocationTest {
                 }
                 val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
                     AppLanguage.Russian)
-                val bitmap = ImageBitmap(width, height)
-                val canvas = Canvas(bitmap)
-                val scope = CanvasDrawScope()
-                val size = Size(width.toFloat(), height.toFloat())
-                val density = Density(1f)
-                val clear: DrawScope.() -> Unit = { drawRect(Kk.Ink) }
-                fun empty() = scope.draw(density, LayoutDirection.Ltr, canvas, size, clear)
                 val memory = HudPresentationMemory()
-                var current = 0
-                val block: DrawScope.() -> Unit = {
-                    drawHud(frames[current % FRAMES], measurer, 10f + (current % FRAMES) * 0.002f, 0f, 0f, memory)
+                val perFrame = steadyFrameBytes(width, height, STEADY_CYCLES) { frame ->
+                    drawHud(frames[frame % FRAMES], measurer, 10f + (frame % FRAMES) * 0.002f, 0f, 0f, memory)
                 }
-                fun hud(frame: Int) {
-                    current = frame
-                    scope.draw(density, LayoutDirection.Ltr, canvas, size, block)
-                }
-                repeat(FRAMES) { empty(); hud(it) }
                 kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.REBIRTH), "$width x $height tier $tier: no Baby mode plate")
-                val emptyBytes = allocated { repeat(FRAMES) { empty() } }
-                val hudBytes = List(STEADY_CYCLES) { allocated { repeat(FRAMES) { hud(it) } } }.min()
-                val perFrame = (hudBytes - emptyBytes) / FRAMES
                 assertTrue(perFrame <= 64, "Baby mode HUD at $width x $height tier $tier allocates $perFrame bytes above an empty frame")
             }
         }
@@ -406,13 +335,6 @@ class HudHotPathAllocationTest {
         listOf(1_440 to 810, 844 to 390, 390 to 844).forEach { (width, height) ->
             val base = hudTestModel(width.toFloat(), height.toFloat())
             val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f, AppLanguage.Russian)
-            val bitmap = ImageBitmap(width, height)
-            val canvas = Canvas(bitmap)
-            val scope = CanvasDrawScope()
-            val size = Size(width.toFloat(), height.toFloat())
-            val density = Density(1f)
-            val clear: DrawScope.() -> Unit = { drawRect(Kk.Ink) }
-            fun empty() = scope.draw(density, LayoutDirection.Ltr, canvas, size, clear)
             for (type in listOf(EnemyType.THRONE, EnemyType.ANTECEDENT)) for (aspected in listOf(false, true)) {
                 val frames = List(FRAMES) { frame ->
                     // From 70 % down across the two-thirds gate, shifting for the frames after it, then into the next phase.
@@ -441,19 +363,10 @@ class HudHotPathAllocationTest {
                     )
                 }
                 val memory = HudPresentationMemory()
-                var current = 0
-                val block: DrawScope.() -> Unit = {
-                    drawHud(frames[current % FRAMES], measurer, 10f + (current % FRAMES) * 0.0001f, 0f, 0f, memory)
+                val perFrame = steadyFrameBytes(width, height) { frame ->
+                    drawHud(frames[frame % FRAMES], measurer, 10f + (frame % FRAMES) * 0.0001f, 0f, 0f, memory)
                 }
-                fun hud(frame: Int) {
-                    current = frame
-                    scope.draw(density, LayoutDirection.Ltr, canvas, size, block)
-                }
-                repeat(FRAMES) { empty(); hud(it) }
                 kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.BOSS), "$type: no boss block")
-                val emptyBytes = allocated { repeat(FRAMES) { empty() } }
-                val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
-                val perFrame = (hudBytes - emptyBytes) / FRAMES
                 assertTrue(perFrame <= 64, "$type (aspect $aspected) at $width x $height allocates $perFrame bytes above an empty frame")
             }
         }
@@ -472,13 +385,6 @@ class HudHotPathAllocationTest {
                 "eventSignals" to immutableListOf(EventSignalProjection(9, SignalKind.GAMBLE, 2_900f, -1_100f, 400f)))
             val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
                 AppLanguage.Russian)
-            val bitmap = ImageBitmap(width, height)
-            val canvas = Canvas(bitmap)
-            val scope = CanvasDrawScope()
-            val size = Size(width.toFloat(), height.toFloat())
-            val density = Density(1f)
-            val clear: DrawScope.() -> Unit = { drawRect(Kk.Ink) }
-            fun empty() = scope.draw(density, LayoutDirection.Ltr, canvas, size, clear)
             for (kind in WorldEventKind.entries) {
                 val event = WorldEventProjection(kind, telegraphAt = 100f, startsAt = 103f, endsAt = 133f)
                 // From a second into the telegraph to a second before the end.
@@ -487,18 +393,9 @@ class HudHotPathAllocationTest {
                         "worldEvent" to event.copy(windAngle = frame * 0.02f, windStrength = (frame / 100f).coerceAtMost(1f)))
                 }
                 val memory = HudPresentationMemory()
-                var current = 0
-                val block: DrawScope.() -> Unit = {
-                    drawHud(frames[current % FRAMES], measurer, 10f + (current % FRAMES) * 0.002f, 0f, 0f, memory)
+                val perFrame = steadyFrameBytes(width, height, STEADY_CYCLES) { frame ->
+                    drawHud(frames[frame % FRAMES], measurer, 10f + (frame % FRAMES) * 0.002f, 0f, 0f, memory)
                 }
-                fun hud(frame: Int) {
-                    current = frame
-                    scope.draw(density, LayoutDirection.Ltr, canvas, size, block)
-                }
-                repeat(FRAMES) { empty(); hud(it) }
-                val emptyBytes = allocated { repeat(FRAMES) { empty() } }
-                val hudBytes = List(STEADY_CYCLES) { allocated { repeat(FRAMES) { hud(it) } } }.min()
-                val perFrame = (hudBytes - emptyBytes) / FRAMES
                 assertTrue(perFrame <= 64, "$kind edge band at $width x $height allocates $perFrame bytes above an empty frame")
             }
         }
@@ -526,20 +423,11 @@ class HudHotPathAllocationTest {
             }
             val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
                 AppLanguage.Russian)
-            val bitmap = ImageBitmap(width, height)
-            val canvas = Canvas(bitmap)
-            val scope = CanvasDrawScope()
-            val size = Size(width.toFloat(), height.toFloat())
             val memory = HudPresentationMemory()
-            fun empty() = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) { drawRect(Kk.Ink) }
-            fun hud(frame: Int) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) {
+            val perFrame = steadyFrameBytes(width, height) { frame ->
                 drawHud(frames[frame % FRAMES], measurer, 10f + frame * 0.0001f, 0f, 0f, memory)
             }
-            repeat(FRAMES) { empty(); hud(it) }
             kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.MINIMAP), "no minimap at $width x $height")
-            val emptyBytes = allocated { repeat(FRAMES) { empty() } }
-            val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
-            val perFrame = (hudBytes - emptyBytes) / FRAMES
             assertTrue(perFrame <= 64, "Minimap structures at $width x $height allocate $perFrame bytes above an empty frame")
         }
     }
@@ -564,22 +452,13 @@ class HudHotPathAllocationTest {
             check(structureInteriorAmount(frames.first()) < structureInteriorAmount(frames.last())) { "the vignette deepens" }
             val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
                 AppLanguage.Russian)
-            val bitmap = ImageBitmap(width, height)
-            val canvas = Canvas(bitmap)
-            val scope = CanvasDrawScope()
-            val size = Size(width.toFloat(), height.toFloat())
             val memory = HudPresentationMemory()
-            fun empty() = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) { drawRect(Kk.Ink) }
-            fun hud(frame: Int) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) {
+            val perFrame = steadyFrameBytes(width, height) { frame ->
                 val model = frames[frame % FRAMES]
                 drawHud(model, measurer, 10f + frame * 0.0001f, 0f, 0f, memory, trialInfoOpen = true)
                 drawTrialTooltip(model, measurer, open = true)
             }
-            repeat(FRAMES) { empty(); hud(it) }
             kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.TRIAL_PANEL), "no dungeon panel at $width x $height")
-            val emptyBytes = allocated { repeat(FRAMES) { empty() } }
-            val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
-            val perFrame = (hudBytes - emptyBytes) / FRAMES
             assertTrue(perFrame <= 64, "The dungeon panel and vignette at $width x $height allocate $perFrame bytes above an empty frame")
         }
     }
@@ -601,20 +480,11 @@ class HudHotPathAllocationTest {
             }
             val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
                 AppLanguage.Russian)
-            val bitmap = ImageBitmap(width, height)
-            val canvas = Canvas(bitmap)
-            val scope = CanvasDrawScope()
-            val size = Size(width.toFloat(), height.toFloat())
             val memory = HudPresentationMemory()
-            fun empty() = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) { drawRect(Kk.Ink) }
-            fun hud(frame: Int) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) {
+            val perFrame = steadyFrameBytes(width, height) { frame ->
                 drawHud(frames[frame % FRAMES], measurer, 10f + frame * 0.0001f, 0f, 0f, memory)
             }
-            repeat(FRAMES) { empty(); hud(it) }
             kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.MINIMAP), "no minimap at $width x $height")
-            val emptyBytes = allocated { repeat(FRAMES) { empty() } }
-            val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
-            val perFrame = (hudBytes - emptyBytes) / FRAMES
             assertTrue(perFrame <= 64, "Minimap dimension marks at $width x $height allocate $perFrame bytes above an empty frame")
         }
     }
@@ -641,29 +511,73 @@ class HudHotPathAllocationTest {
                 val realspace = base.with("elapsed" to 100f)
                 val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
                     AppLanguage.Russian)
-                val bitmap = ImageBitmap(width, height)
-                val canvas = Canvas(bitmap)
-                val scope = CanvasDrawScope()
-                val size = Size(width.toFloat(), height.toFloat())
                 val memory = HudPresentationMemory()
                 // The layer changed on the first drawn frame: the shutter plays over every frame below.
                 memory.observe(realspace, 9.9f, BossTarget().select(realspace))
-                fun empty() = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) { drawRect(Kk.Ink) }
-                fun hud(frame: Int) = scope.draw(Density(1f), LayoutDirection.Ltr, canvas, size) {
+                val perFrame = steadyFrameBytes(width, height) { frame ->
                     drawHud(frames[frame % FRAMES], measurer, 10f + frame * 0.0001f, 0f, 0f, memory, trialInfoOpen = true)
                     drawTrialTooltip(frames[frame % FRAMES], measurer, open = true)
                 }
-                repeat(FRAMES) { empty(); hud(it) }
                 val where = "$layer ${remaining}s at $width x $height"
                 kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.REBIRTH), "$where: no plate")
                 kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.TRIAL_PANEL), "$where: no objective panel")
                 if (!lastSeconds) assertTrue(memory.dimensionShutter.progress(10f + FRAMES * 0.0001f) in 0f..1f, "$where: the shutter plays")
-                val emptyBytes = allocated { repeat(FRAMES) { empty() } }
-                val hudBytes = allocated { repeat(FRAMES) { hud(it) } }
-                val perFrame = (hudBytes - emptyBytes) / FRAMES
                 assertTrue(perFrame <= 64, "A dimension visit's HUD ($where) allocates $perFrame bytes above an empty frame")
             }
         }
+    }
+
+    /**
+     * Show FPS on a portrait phone: the strip under the clock with a held readout (it changes at most twice a second, so a
+     * steady frame shows one value): once warm, nothing is allocated.
+     */
+    @Test
+    fun thePortraitShowFpsStripAllocatesNothingOnSteadyFrames() {
+        val base = hudTestModel(390f, 844f)
+        val model = base.with("settings" to base.settings.copy(showFps = true))
+        val frames = List(FRAMES) { frame -> model.with("elapsed" to frame * GameplayRenderModel.FIXED_STEP) }
+        val measurer = CanvasTextMeasurer(TextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr), 1f,
+            AppLanguage.Russian)
+        val controls = kinetickk.ball.gameplay.interaction.input.RunningControlPressLog().apply { fps = 144 }
+        val memory = HudPresentationMemory()
+        val perFrame = steadyFrameBytes(390, 844) { frame ->
+            drawHud(frames[frame % FRAMES], measurer, 10f + frame * 0.0001f, 0f, 0f, memory, controls = controls)
+        }
+        kotlin.test.assertNotNull(HudLayoutProbe.rect(HudBlock.FPS), "no Show FPS strip at 390 x 844")
+        assertTrue(perFrame <= 64, "The portrait Show FPS strip allocates $perFrame bytes above an empty frame")
+    }
+
+    /**
+     * Bytes a steady [draw] frame (given the frame index) allocates above an empty frame on a [width] × [height] canvas:
+     * [FRAMES] frames warm every digit, label and path, then [FRAMES] frames are measured against as many empty ones.
+     * With [cycles] above 1 the steady frame is the quietest of that many full cycles: each replays the same frames, so an
+     * allocation that recurs every frame or every cycle shows in all of them, while a one-off burst as the JIT recompiles
+     * (seen after other HUD tests in the same JVM, ≈ 27 KB once) shows in one only. One density and one draw block per
+     * call: until the JIT compiles the harness, a fresh Density and a capturing lambda per frame would count against the HUD.
+     */
+    private inline fun steadyFrameBytes(width: Int, height: Int, cycles: Int = 1, crossinline draw: DrawScope.(frame: Int) -> Unit): Long {
+        val canvas = Canvas(ImageBitmap(width, height))
+        val scope = CanvasDrawScope()
+        val size = Size(width.toFloat(), height.toFloat())
+        val density = Density(1f)
+        val clear: DrawScope.() -> Unit = { drawRect(Kk.Ink) }
+        var current = 0
+        val frame: DrawScope.() -> Unit = { draw(current) }
+        repeat(FRAMES) {
+            scope.draw(density, LayoutDirection.Ltr, canvas, size, clear)
+            current = it
+            scope.draw(density, LayoutDirection.Ltr, canvas, size, frame)
+        }
+        val emptyBytes = allocated { repeat(FRAMES) { scope.draw(density, LayoutDirection.Ltr, canvas, size, clear) } }
+        val hudBytes = List(cycles) {
+            allocated {
+                repeat(FRAMES) {
+                    current = it
+                    scope.draw(density, LayoutDirection.Ltr, canvas, size, frame)
+                }
+            }
+        }.min()
+        return (hudBytes - emptyBytes) / FRAMES
     }
 
     private inline fun allocated(block: () -> Unit): Long {

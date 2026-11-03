@@ -27,12 +27,12 @@ import kinetickk.ball.gameplay.interaction.GameplayContent
 import kinetickk.ball.gameplay.interaction.GameplayInteractionPort
 import kinetickk.ball.gameplay.interaction.canvas.hudTestSnapshot
 import kinetickk.ball.gameplay.interaction.canvas.with
+import kinetickk.ball.gameplay.interaction.canvas.withModel
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
-import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.design.LocalAppLanguage
 import kotlinx.coroutines.CompletableDeferred
@@ -135,10 +135,6 @@ private class FrozenDesktopChoice(
     private val transitions: Boolean,
 ) : GameplayInteractionPort {
     private val base = hudTestSnapshot(initialModel.screenWidth, initialModel.screenHeight)
-    private val constructor = GameplayRenderSnapshot::class.java.declaredConstructors.first { it.parameterCount == 4 }
-        .also { it.isAccessible = true }
-    private val identity = GameplayRenderSnapshot::class.java.declaredFields.first { it.name == "projectionSourceIdentity" }
-        .also { it.isAccessible = true }.get(base)
     var model = initialModel
         private set
     private var snapshot = snapshot()
@@ -146,7 +142,7 @@ private class FrozenDesktopChoice(
     private var phaseStarted = 0L
     private var transitionCount = 0
     private val accepted = GameplayAcceptance.Accepted(base.instanceId, base.revision)
-    private fun snapshot() = constructor.newInstance(base.instanceId, base.revision, model, identity) as GameplayRenderSnapshot
+    private fun snapshot() = base.withModel(model)
     override val instanceId get() = base.instanceId
     override fun renderSnapshot() = snapshot
     override fun visualFxSnapshot() = VisualFxProjection.EMPTY

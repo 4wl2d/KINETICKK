@@ -98,6 +98,26 @@ class GameplayHudSemanticsTest {
         compose.onNodeWithTag(PAUSE_TAG).assertExists("The gameplay host must finish preparation before semantics assertions")
     }
 
+    /** The gameplay host on a 1440 × 810 window (density 1) in [language], driven by hand once its controls are composed. */
+    private fun setGameplay(port: GameplayInteractionPort, language: () -> AppLanguage = { AppLanguage.English }) {
+        // The gameplay frame loop never idles; drive the clock by hand.
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides language()) {
+                Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
+            }
+        }
+        awaitRunningControls()
+    }
+
+    /** [tag]'s bounds relative to the 1440 × 810 host (the test window may be smaller and center it). */
+    private fun boundsInHost(tag: String): Rect {
+        val host = compose.onNodeWithTag(HOST_TAG).getUnclippedBoundsInRoot()
+        return compose.onNodeWithTag(tag).getUnclippedBoundsInRoot().let {
+            Rect(it.left.value - host.left.value, it.top.value - host.top.value, it.right.value - host.left.value, it.bottom.value - host.top.value)
+        }
+    }
+
     private fun startTrial(pulses: MutableList<GameplayInteractionPulse>) {
         val snapshot = hudTestSnapshot()
         val orbit = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, -1, 0.4f,
@@ -113,13 +133,7 @@ class GameplayHudSemanticsTest {
                 return GameplayAcceptance.Rejected(running.instanceId, running.revision, GameplayRejection.RunExited)
             }
         }
-        compose.mainClock.autoAdvance = false
-        compose.setContent {
-            CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides AppLanguage.English) {
-                Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
-            }
-        }
-        awaitRunningControls()
+        setGameplay(port)
     }
 
     @Test
@@ -193,13 +207,7 @@ class GameplayHudSemanticsTest {
                 return GameplayAcceptance.Rejected(current.instanceId, current.revision, GameplayRejection.RunExited)
             }
         }
-        compose.mainClock.autoAdvance = false
-        compose.setContent {
-            CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides AppLanguage.English) {
-                Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
-            }
-        }
-        awaitRunningControls()
+        setGameplay(port)
         val info = compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG)
         info.performSemanticsAction(SemanticsActions.RequestFocus) { it() }
         info.assertIsFocused()
@@ -219,30 +227,9 @@ class GameplayHudSemanticsTest {
 
     @Test
     fun trialRulesSitBehindAFocusableInfoNodeAndDesktopPauseAndBuildAreHeaderButtons() {
-        val snapshot = hudTestSnapshot()
-        val orbit = SiteProjection(SiteKind.COLLAPSING_ORBIT, "Collapsing orbit", 0f, 0f, true, 12f, -1, 0.4f,
-            immutableListOf(), 0f, 0f)
-        val model = requireNotNull(snapshot.renderModel).withSites(orbit)
-        trialModel = model
-        val running = snapshot.withModel(model)
         val pulses = mutableListOf<GameplayInteractionPulse>()
-        val port = object : GameplayInteractionPort {
-            override val instanceId get() = running.instanceId
-            override fun renderSnapshot() = running
-            override fun visualFxSnapshot() = VisualFxProjection.EMPTY
-            override fun accept(pulse: GameplayInteractionPulse): GameplayAcceptance {
-                pulses += pulse
-                return GameplayAcceptance.Rejected(running.instanceId, running.revision, GameplayRejection.RunExited)
-            }
-        }
-        // The gameplay frame loop never idles; drive the clock by hand.
-        compose.mainClock.autoAdvance = false
-        compose.setContent {
-            CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides AppLanguage.English) {
-                Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
-            }
-        }
-        awaitRunningControls()
+        startTrial(pulses)
+        val model = trialModel
         val rules = model.content.sites.definition(SiteKind.COLLAPSING_ORBIT).instruction
         val info = compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG)
         info.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf(rules)))
@@ -257,21 +244,17 @@ class GameplayHudSemanticsTest {
         compose.onNodeWithTag("kinetickk.gameplay.pause").performSemanticsAction(SemanticsActions.OnClick) { it() }
         compose.mainClock.advanceTimeByFrame()
         assertTrue(GameplayInteractionPulse.PauseToggled in pulses)
-        // Bounds relative to the 1440 × 810 host (the test window may be smaller and center it).
-        val host = compose.onNodeWithTag(HOST_TAG).getUnclippedBoundsInRoot()
-        fun bounds(tag: String): Rect = compose.onNodeWithTag(tag).getUnclippedBoundsInRoot().let {
-            Rect(it.left.value - host.left.value, it.top.value - host.top.value, it.right.value - host.left.value, it.bottom.value - host.top.value)
-        }
         val controls = runningControlBounds(1_440f, 810f, 1f).associate { it.target to it.bounds }
-        val pause = bounds("kinetickk.gameplay.pause")
+        val pause = boundsInHost("kinetickk.gameplay.pause")
         assertRect(controls.getValue(RunningControlTarget.PAUSE), pause)
         assertTrue(pause.top < 60f && pause.right > 1_380f, "pause is not top-right: $pause")
-        assertRect(controls.getValue(RunningControlTarget.DASH), bounds("kinetickk.gameplay.dash"))
-        assertRect(controls.getValue(RunningControlTarget.BRAKE), bounds("kinetickk.gameplay.brake"))
-        val build = bounds("kinetickk.gameplay.build")
+        assertRect(controls.getValue(RunningControlTarget.DASH), boundsInHost("kinetickk.gameplay.dash"))
+        assertRect(controls.getValue(RunningControlTarget.BRAKE), boundsInHost("kinetickk.gameplay.brake"))
+        val build = boundsInHost("kinetickk.gameplay.build")
         assertRect(runningBuildButtonBounds(1_440f, 810f, 1f), build)
         assertTrue(build.right <= pause.left + 0.5f)
-        assertRect(HudTrialPanelLayout().update(1_440f, 810f, 1f, model.settings.textScale).infoTarget(1f), bounds(GAMEPLAY_TRIAL_INFO_TAG))
+        assertRect(HudTrialPanelLayout().update(1_440f, 810f, 1f, model.settings.textScale).infoTarget(1f),
+            boundsInHost(GAMEPLAY_TRIAL_INFO_TAG))
     }
 
     /**
@@ -283,41 +266,17 @@ class GameplayHudSemanticsTest {
         val snapshot = hudTestSnapshot()
         val base = requireNotNull(snapshot.renderModel)
         val sites = trialSites()
-        var current = snapshot.withModel(base.withSites(sites.first()))
-        var next: GameplayRenderSnapshot? = null
-        trialModel = current.renderModel!!
-        val port = object : GameplayInteractionPort {
-            override val instanceId get() = current.instanceId
-            override fun renderSnapshot() = current
-            override fun visualFxSnapshot() = VisualFxProjection.EMPTY
-            override fun accept(pulse: GameplayInteractionPulse): GameplayAcceptance {
-                val switched = next
-                if (switched != null && pulse is GameplayInteractionPulse.FrameElapsed) {
-                    current = switched
-                    next = null
-                    return GameplayAcceptance.Accepted(current.instanceId, current.revision)
-                }
-                return GameplayAcceptance.Rejected(current.instanceId, current.revision, GameplayRejection.RunExited)
-            }
-        }
-        compose.mainClock.autoAdvance = false
-        compose.setContent {
-            CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides AppLanguage.English) {
-                Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
-            }
-        }
-        awaitRunningControls()
-        val host = compose.onNodeWithTag(HOST_TAG).getUnclippedBoundsInRoot()
+        val port = SwitchingPort(snapshot.withModel(base.withSites(sites.first())))
+        trialModel = port.renderSnapshot().renderModel!!
+        setGameplay(port)
         val target = HudTrialPanelLayout().update(1_440f, 810f, 1f, base.settings.textScale).infoTarget(1f)
         sites.forEach { site ->
-            next = snapshot.withModel(base.withSites(site))
+            port.next = snapshot.withModel(base.withSites(site))
             repeat(3) { compose.mainClock.advanceTimeByFrame() }
             val rules = base.content.sites.definition(site.kind).instruction
             val info = compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG)
             info.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf(rules)))
-            val bounds = info.getUnclippedBoundsInRoot()
-            assertRect(target, Rect(bounds.left.value - host.left.value, bounds.top.value - host.top.value,
-                bounds.right.value - host.left.value, bounds.bottom.value - host.top.value))
+            assertRect(target, boundsInHost(GAMEPLAY_TRIAL_INFO_TAG))
         }
     }
 
@@ -352,13 +311,7 @@ class GameplayHudSemanticsTest {
                 else GameplayAcceptance.Rejected(running.instanceId, running.revision, GameplayRejection.RunExited)
             }
         }
-        compose.mainClock.autoAdvance = false
-        compose.setContent {
-            CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides language) {
-                Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
-            }
-        }
-        awaitRunningControls()
+        setGameplay(port) { language }
         val content = model.content
         fun name(id: SkillId) = content.skill(id).name.localizedContent(language)
         fun expect(tag: String, description: String, state: String?) {
@@ -380,14 +333,10 @@ class GameplayHudSemanticsTest {
             assertEquals("перезаряжается", language.text(GameplayText.RechargingState))
         }
         // Over their canvas targets.
-        val host = compose.onNodeWithTag(HOST_TAG).getUnclippedBoundsInRoot()
-        fun bounds(tag: String): Rect = compose.onNodeWithTag(tag).getUnclippedBoundsInRoot().let {
-            Rect(it.left.value - host.left.value, it.top.value - host.top.value, it.right.value - host.left.value, it.bottom.value - host.top.value)
-        }
         val controls = runningControlBounds(1_440f, 810f, 1f).associate { it.target to it.bounds }
-        assertRect(controls.getValue(RunningControlTarget.SKILL_1), bounds("kinetickk.gameplay.skill.0"))
-        assertRect(controls.getValue(RunningControlTarget.SKILL_3), bounds("kinetickk.gameplay.skill.2"))
-        assertRect(controls.getValue(RunningControlTarget.APEX), bounds("kinetickk.gameplay.apex"))
+        assertRect(controls.getValue(RunningControlTarget.SKILL_1), boundsInHost("kinetickk.gameplay.skill.0"))
+        assertRect(controls.getValue(RunningControlTarget.SKILL_3), boundsInHost("kinetickk.gameplay.skill.2"))
+        assertRect(controls.getValue(RunningControlTarget.APEX), boundsInHost("kinetickk.gameplay.apex"))
         fun activate(tag: String): List<GameplayInteractionPulse> {
             pulses.clear()
             compose.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.OnClick) { it() }
@@ -421,13 +370,7 @@ class GameplayHudSemanticsTest {
             override fun accept(pulse: GameplayInteractionPulse): GameplayAcceptance =
                 GameplayAcceptance.Rejected(running.instanceId, running.revision, GameplayRejection.RunExited)
         }
-        compose.mainClock.autoAdvance = false
-        compose.setContent {
-            CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides AppLanguage.English) {
-                Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
-            }
-        }
-        awaitRunningControls()
+        setGameplay(port)
         compose.onNodeWithTag("kinetickk.gameplay.dash").assertExists()
         listOf("kinetickk.gameplay.skill.0", "kinetickk.gameplay.skill.1", "kinetickk.gameplay.skill.2", "kinetickk.gameplay.apex")
             .forEach { compose.onNodeWithTag(it).assertDoesNotExist() }
@@ -445,47 +388,23 @@ class GameplayHudSemanticsTest {
             base.coreX, base.coreY, clearedRooms = 0b0001, engagedRoom = 1)
         val vault = StructureFixture(base.content.structures.template(kinetickk.ball.content.api.StructureTemplateId.VAULT),
             base.coreX, base.coreY, clearedRooms = 0b0001, engagedRoom = 1)
-        var current = snapshot.withModel(base.withDungeon(station))
-        var next: GameplayRenderSnapshot? = null
-        val port = object : GameplayInteractionPort {
-            override val instanceId get() = current.instanceId
-            override fun renderSnapshot() = current
-            override fun visualFxSnapshot() = VisualFxProjection.EMPTY
-            override fun accept(pulse: GameplayInteractionPulse): GameplayAcceptance {
-                val switched = next
-                if (switched != null && pulse is GameplayInteractionPulse.FrameElapsed) {
-                    current = switched
-                    next = null
-                    return GameplayAcceptance.Accepted(current.instanceId, current.revision)
-                }
-                return GameplayAcceptance.Rejected(current.instanceId, current.revision, GameplayRejection.RunExited)
-            }
-        }
+        val port = SwitchingPort(snapshot.withModel(base.withDungeon(station)))
         var language by androidx.compose.runtime.mutableStateOf(AppLanguage.English)
-        compose.mainClock.autoAdvance = false
-        compose.setContent {
-            CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides language) {
-                Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
-            }
-        }
-        awaitRunningControls()
-        val host = compose.onNodeWithTag(HOST_TAG).getUnclippedBoundsInRoot()
+        setGameplay(port) { language }
         val target = HudTrialPanelLayout().update(1_440f, 810f, 1f, base.settings.textScale).infoTarget(1f)
         listOf(AppLanguage.English, AppLanguage.Russian).forEach { shown ->
             compose.runOnIdle { language = shown }
             for (fixture in listOf(station, vault, station)) {
                 val model = base.withDungeon(fixture)
-                next = snapshot.withModel(model)
+                port.next = snapshot.withModel(model)
                 repeat(3) { compose.mainClock.advanceTimeByFrame() }
                 val info = compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG)
                 val rules = model.trialRules(requireNotNull(model.activeTrial()), shown)
                 info.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf(rules)))
-                val bounds = info.getUnclippedBoundsInRoot()
-                assertRect(target, Rect(bounds.left.value - host.left.value, bounds.top.value - host.top.value,
-                    bounds.right.value - host.left.value, bounds.bottom.value - host.top.value))
+                assertRect(target, boundsInHost(GAMEPLAY_TRIAL_INFO_TAG))
             }
         }
-        next = snapshot.withModel(base)
+        port.next = snapshot.withModel(base)
         repeat(3) { compose.mainClock.advanceTimeByFrame() }
         compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG).assertDoesNotExist()
     }
@@ -499,31 +418,9 @@ class GameplayHudSemanticsTest {
         val snapshot = hudTestSnapshot()
         val base = requireNotNull(snapshot.renderModel)
         val visit = dimensionVisit(kinetickk.ball.content.api.WorldLayer.NADIR, base.coreX, base.coreY, progress = 4)
-        var current = snapshot.withModel(base.inVisit(visit))
-        var next: GameplayRenderSnapshot? = null
-        val port = object : GameplayInteractionPort {
-            override val instanceId get() = current.instanceId
-            override fun renderSnapshot() = current
-            override fun visualFxSnapshot() = VisualFxProjection.EMPTY
-            override fun accept(pulse: GameplayInteractionPulse): GameplayAcceptance {
-                val switched = next
-                if (switched != null && pulse is GameplayInteractionPulse.FrameElapsed) {
-                    current = switched
-                    next = null
-                    return GameplayAcceptance.Accepted(current.instanceId, current.revision)
-                }
-                return GameplayAcceptance.Rejected(current.instanceId, current.revision, GameplayRejection.RunExited)
-            }
-        }
+        val port = SwitchingPort(snapshot.withModel(base.inVisit(visit)))
         var language by androidx.compose.runtime.mutableStateOf(AppLanguage.English)
-        compose.mainClock.autoAdvance = false
-        compose.setContent {
-            CompositionLocalProvider(LocalDensity provides Density(1f), LocalAppLanguage provides language) {
-                Box(Modifier.requiredSize(1_440.dp, 810.dp).testTag(HOST_TAG)) { GameplayContent(port, true) {} }
-            }
-        }
-        awaitRunningControls()
-        val host = compose.onNodeWithTag(HOST_TAG).getUnclippedBoundsInRoot()
+        setGameplay(port) { language }
         val target = HudTrialPanelLayout().update(1_440f, 810f, 1f, base.settings.textScale).infoTarget(1f)
         val instruction = checkNotNull(visit.objective).instruction
         listOf(AppLanguage.English, AppLanguage.Russian).forEach { shown ->
@@ -532,13 +429,28 @@ class GameplayHudSemanticsTest {
             val info = compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG)
             info.assert(SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription,
                 listOf(instruction.localizedContent(shown))))
-            val bounds = info.getUnclippedBoundsInRoot()
-            assertRect(target, Rect(bounds.left.value - host.left.value, bounds.top.value - host.top.value,
-                bounds.right.value - host.left.value, bounds.bottom.value - host.top.value))
+            assertRect(target, boundsInHost(GAMEPLAY_TRIAL_INFO_TAG))
         }
-        next = snapshot.withModel(base)
+        port.next = snapshot.withModel(base)
         repeat(3) { compose.mainClock.advanceTimeByFrame() }
         compose.onNodeWithTag(GAMEPLAY_TRIAL_INFO_TAG).assertDoesNotExist()
+    }
+}
+
+/** Shows [current] and rejects every pulse; a snapshot set as [next] replaces it on the next frame. */
+private class SwitchingPort(private var current: GameplayRenderSnapshot) : GameplayInteractionPort {
+    var next: GameplayRenderSnapshot? = null
+    override val instanceId get() = current.instanceId
+    override fun renderSnapshot() = current
+    override fun visualFxSnapshot() = VisualFxProjection.EMPTY
+    override fun accept(pulse: GameplayInteractionPulse): GameplayAcceptance {
+        val switched = next
+        if (switched != null && pulse is GameplayInteractionPulse.FrameElapsed) {
+            current = switched
+            next = null
+            return GameplayAcceptance.Accepted(current.instanceId, current.revision)
+        }
+        return GameplayAcceptance.Rejected(current.instanceId, current.revision, GameplayRejection.RunExited)
     }
 }
 
@@ -551,12 +463,4 @@ private fun assertRect(expected: Rect, actual: Rect) {
     assertEquals(expected.top, actual.top, 0.5f, "top of $actual")
     assertEquals(expected.right, actual.right, 0.5f, "right of $actual")
     assertEquals(expected.bottom, actual.bottom, 0.5f, "bottom of $actual")
-}
-
-private fun GameplayRenderSnapshot.withModel(model: kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel): GameplayRenderSnapshot {
-    val constructor = GameplayRenderSnapshot::class.java.declaredConstructors.first { it.parameterCount == 4 }
-    constructor.isAccessible = true
-    val identity = GameplayRenderSnapshot::class.java.declaredFields.first { it.name == "projectionSourceIdentity" }
-        .also { it.isAccessible = true }.get(this)
-    return constructor.newInstance(instanceId, revision, model, identity) as GameplayRenderSnapshot
 }

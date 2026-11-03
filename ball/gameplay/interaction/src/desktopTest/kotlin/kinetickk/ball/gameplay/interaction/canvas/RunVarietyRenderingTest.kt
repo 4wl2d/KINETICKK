@@ -81,7 +81,7 @@ class RunVarietyRenderingTest {
     @Test
     fun theGravityStormTintsOnlyItsDownwindEdgesAndOtherEventsEveryEdge() {
         fun edges(kind: WorldEventKind, wind: Float): Map<String, Color> {
-            val pixels = draw { model -> drawWorldEventEdge(model, roles, 0f) }(
+            val pixels = draw { model -> drawWorldEventEdge(model, roles) }(
                 running(WorldEventProjection(kind, 0f, 3f, 33f, windAngle = wind, windStrength = 1f)),
             )
             return mapOf("left" to pixels[1, H / 2], "right" to pixels[W - 2, H / 2], "top" to pixels[W / 2, 1], "bottom" to pixels[W / 2, H - 2])

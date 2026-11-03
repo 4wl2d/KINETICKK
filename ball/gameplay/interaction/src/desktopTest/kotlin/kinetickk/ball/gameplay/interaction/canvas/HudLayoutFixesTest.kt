@@ -82,15 +82,16 @@ class HudLayoutFixesTest {
     }
 
     /**
-     * An elite or the Architect carrying three elements, Brittle, Embrittled and a primed stack: its
-     * status rail stays inside the boss block's reserve (under the bar, or on the name's row on
-     * portrait phones) and on screen, so the feed and world labels that dock under it never meet it.
+     * An elite, the Architect, a secret boss (wide block) or a mini-boss (narrow block) carrying three
+     * elements, Brittle, Embrittled and a primed stack: its status rail stays inside the boss block's
+     * reserve (under the bar, or on the name's row on portrait phones) and on screen, so the feed and
+     * world labels that dock under it never meet it.
      */
     @Test
     fun bossStatusRailStaysInsideTheBossReserve() {
         val bits = 7 or (3 shl 8) or (2 shl 12) or EnemyStatusBits.BRITTLE or EnemyStatusBits.EMBRITTLED or EnemyStatusBits.PRIMED
         for (language in AppLanguage.entries) sizes.forEach { (w, h) ->
-            for (textScale in textScales) for (boss in listOf(EnemyType.ELITE, EnemyType.ARCHITECT)) {
+            for (textScale in textScales) for (boss in listOf(EnemyType.ELITE, EnemyType.ARCHITECT, EnemyType.ANTECEDENT, EnemyType.THRONE)) {
                 val model = hudTestModel(w.toFloat(), h.toFloat()).with(
                     "enemies" to listOf(EnemyProjection(4, boss, 0f, 0f, 0f, 0f, 500f, 1_000f, 60f, 0f, 0f, 0f, 0f, 0f, 0f, false, statusBits = bits,
                         affinityBits = bossAffinity(boss)))
@@ -100,7 +101,7 @@ class HudLayoutFixesTest {
                 val where = "$language $w x $h x$textScale $boss"
                 val block = assertNotNull(HudLayoutProbe.rect(HudBlock.BOSS), where)
                 val frame = HudFrame().update(w.toFloat(), h.toFloat(), 1f)
-                val reserve = HudTopGeometry.bossBottom(frame, boss == EnemyType.ARCHITECT, textScale)
+                val reserve = HudTopGeometry.bossBottom(frame, wideBossBlock(model.content.enemy(boss).rank), textScale)
                 assertTrue(block.bottom <= reserve + 0.5f, "$where: the boss block $block reaches past its reserve $reserve")
                 assertTrue(block.left >= 0f && block.right <= w, "$where: $block off screen")
             }

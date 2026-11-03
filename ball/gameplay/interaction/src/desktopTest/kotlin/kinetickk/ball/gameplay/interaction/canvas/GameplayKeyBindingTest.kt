@@ -33,7 +33,6 @@ import kinetickk.ball.gameplay.interaction.rewards.rewardFixtureModel
 import kinetickk.ball.gameplay.nucleus.render.ApexProjection
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
-import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
 import kinetickk.ball.profile.api.GameAction
 import kinetickk.ball.profile.api.KeyBindings
 import kinetickk.foundation.common.input.BindableKey
@@ -67,7 +66,7 @@ class GameplayKeyBindingTest {
     }
 
     private fun start(model: GameplayRenderModel) {
-        val snapshot = hudTestSnapshot().withRenderModel(model)
+        val snapshot = hudTestSnapshot().withModel(model)
         val port = object : GameplayInteractionPort {
             override val instanceId get() = snapshot.instanceId
             override fun renderSnapshot() = snapshot
@@ -185,11 +184,3 @@ class GameplayKeyBindingTest {
 }
 
 private const val GAMEPLAY_ROOT_TAG = "kinetickk.gameplay"
-
-private fun GameplayRenderSnapshot.withRenderModel(model: GameplayRenderModel): GameplayRenderSnapshot {
-    val constructor = GameplayRenderSnapshot::class.java.declaredConstructors.first { it.parameterCount == 4 }
-    constructor.isAccessible = true
-    val identity = GameplayRenderSnapshot::class.java.declaredFields.first { it.name == "projectionSourceIdentity" }
-        .also { it.isAccessible = true }.get(this)
-    return constructor.newInstance(instanceId, revision, model, identity) as GameplayRenderSnapshot
-}

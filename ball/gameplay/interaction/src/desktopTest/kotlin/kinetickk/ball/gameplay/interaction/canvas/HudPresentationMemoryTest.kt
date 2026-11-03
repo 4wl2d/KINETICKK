@@ -35,6 +35,7 @@ import kinetickk.ball.gameplay.nucleus.render.ApexProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyProjection
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
 import kinetickk.ball.gameplay.nucleus.render.SiteProjection
 import kinetickk.ball.gameplay.nucleus.render.SkillBarProjection
 import kinetickk.ball.gameplay.nucleus.render.SkillSlotProjection
@@ -494,8 +495,20 @@ internal fun hudTestModel(width: Float = 1_440f, height: Float = 810f): Gameplay
     requireNotNull(hudTestSnapshot(width, height).renderModel).with("interpolationAlpha" to 1f)
 
 /** The render snapshot of a started run at [width] × [height] (density 1). */
-internal fun hudTestSnapshot(width: Float = 1_440f, height: Float = 810f): kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot =
+internal fun hudTestSnapshot(width: Float = 1_440f, height: Float = 810f): GameplayRenderSnapshot =
     GameplayNucleus.renderSnapshot(hudTestState(width, height))
+
+/** This snapshot publishing [model] instead, with its instance, revision and projection identity. */
+internal fun GameplayRenderSnapshot.withModel(model: GameplayRenderModel): GameplayRenderSnapshot =
+    snapshotConstructor.newInstance(instanceId, revision, model, snapshotIdentity.get(this)) as GameplayRenderSnapshot
+
+// The snapshot's constructor is module-internal: resolved once, so a benchmark rebuilding snapshots reflects no further.
+private val snapshotConstructor by lazy {
+    GameplayRenderSnapshot::class.java.declaredConstructors.first { it.parameterCount == 4 }.also { it.isAccessible = true }
+}
+private val snapshotIdentity by lazy {
+    GameplayRenderSnapshot::class.java.declaredFields.first { it.name == "projectionSourceIdentity" }.also { it.isAccessible = true }
+}
 
 /** A started run's committed state at [width] × [height] (density 1). */
 internal fun hudTestState(width: Float = 1_440f, height: Float = 810f): GameplayState {

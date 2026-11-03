@@ -34,12 +34,12 @@ import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.interaction.GameplayContent
 import kinetickk.ball.gameplay.interaction.GameplayInteractionPort
 import kinetickk.ball.gameplay.interaction.canvas.hudTestSnapshot
+import kinetickk.ball.gameplay.interaction.canvas.withModel
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
 import kinetickk.ball.gameplay.nucleus.render.ChoiceOption
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
-import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.common.localization.AppLanguage
@@ -165,13 +165,7 @@ class GameplayRewardPreparationTest {
         val pulses = mutableListOf<GameplayInteractionPulse>()
         val frames get() = pulses.count { it is GameplayInteractionPulse.FrameElapsed }
         val selections get() = pulses.count { it is GameplayInteractionPulse.ChoiceSelected }
-        private val base = hudTestSnapshot(1440f, 900f)
-        private val snapshot = GameplayRenderSnapshot::class.java.declaredConstructors.first { it.parameterCount == 4 }.let {
-            it.isAccessible = true
-            val identity = GameplayRenderSnapshot::class.java.declaredFields.first { field -> field.name == "projectionSourceIdentity" }
-                .also { field -> field.isAccessible = true }.get(base)
-            it.newInstance(base.instanceId, base.revision, model, identity) as GameplayRenderSnapshot
-        }
+        private val snapshot = hudTestSnapshot(1440f, 900f).withModel(model)
         override val instanceId get() = snapshot.instanceId
         override fun renderSnapshot() = snapshot
         override fun visualFxSnapshot() = VisualFxProjection.EMPTY
