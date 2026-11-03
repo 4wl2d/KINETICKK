@@ -145,6 +145,15 @@ internal class MutableGameState(
     /** Run statistics. */
     internal val runStats: RunStatsState = RunStatsState(copySource?.runStats)
 
+    /** Level, Data, Keys and Matter. */
+    internal val runEconomy: RunEconomyState = RunEconomyState(
+        content,
+        copySource?.runEconomy,
+        profileCapture.activeRebirthProfile,
+        initialMatter,
+        bootstrapProgress,
+    )
+
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
     /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */
@@ -355,8 +364,6 @@ internal class MutableGameState(
     internal var weaponSecondaryClock: Float = copySource?.weaponSecondaryClock ?: 0f
     internal val agonyMutationCounts: RunIntArray = copySource?.agonyMutationCounts?.copy()
         ?: RunIntArray(IntArray(content.weapons.size))
-    internal var dataFraction: Float = copySource?.dataFraction ?: 0f
-    internal var matterFraction: Float = copySource?.matterFraction ?: 0f
     internal var shieldRechargeDelay: Float = copySource?.shieldRechargeDelay ?: 0f
     internal var overheatHoldTime: Float = copySource?.overheatHoldTime ?: 0f
     internal var saturationHeadingX: Float = copySource?.saturationHeadingX ?: 1f
@@ -433,27 +440,10 @@ internal class MutableGameState(
         internal set
     var maxShield: Float = copySource?.maxShield ?: 0f
         internal set
-    var level: Int = copySource?.level ?: 1
-        internal set
-    var data: Int = copySource?.data ?: 0
-        internal set
-    var nextLevelData: Int = copySource?.nextLevelData
-        ?: content.tempo.dataRequiredForLevel(1, activeRebirthProfile)
-        internal set
-    var keys: Int = copySource?.keys ?: 0
-        internal set
 
     var combo: Int = copySource?.combo ?: 0
         internal set
     var comboTime: Float = copySource?.comboTime ?: 0f
-        internal set
-    var runMatter: Long = copySource?.runMatter ?: 0L
-        internal set
-    var totalMatter: Long = copySource?.totalMatter ?: initialMatter?.toLong()
-        ?: bootstrapProgress?.economy?.matter ?: 0L
-        internal set
-    var lifetimeMatter: Long = copySource?.lifetimeMatter ?: initialMatter?.toLong()
-        ?: bootstrapProgress?.economy?.lifetimeMatter ?: totalMatter
         internal set
     var lastImpact: Float = copySource?.lastImpact ?: 0f
         internal set

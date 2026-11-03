@@ -265,3 +265,41 @@ internal var MutableGameState.eliteKills: Int
 internal var MutableGameState.bestCombo: Int
     get() = runStats.bestCombo
     set(value) { runStats.bestCombo = value }
+
+// RunEconomyState
+
+internal var MutableGameState.level: Int
+    get() = runEconomy.level
+    set(value) { runEconomy.level = value }
+
+internal var MutableGameState.data: Int
+    get() = runEconomy.data
+    set(value) { runEconomy.data = value }
+
+internal var MutableGameState.dataFraction: Float
+    get() = runEconomy.dataFraction
+    set(value) { runEconomy.dataFraction = value }
+
+internal var MutableGameState.nextLevelData: Int
+    get() = runEconomy.nextLevelData
+    set(value) { runEconomy.nextLevelData = value }
+
+internal var MutableGameState.keys: Int
+    get() = runEconomy.keys
+    set(value) { runEconomy.keys = value }
+
+internal var MutableGameState.runMatter: Long
+    get() = runEconomy.runMatter
+    set(value) { runEconomy.runMatter = value }
+
+internal var MutableGameState.matterFraction: Float
+    get() = runEconomy.matterFraction
+    set(value) { runEconomy.matterFraction = value }
+
+internal var MutableGameState.totalMatter: Long
+    get() = runEconomy.totalMatter
+    set(value) { runEconomy.totalMatter = value }
+
+internal var MutableGameState.lifetimeMatter: Long
+    get() = runEconomy.lifetimeMatter
+    set(value) { runEconomy.lifetimeMatter = value }
