@@ -94,6 +94,8 @@ Rules for every module:
 - A feature's `impl` package is private to that feature **[checked, ratchet]**: `x.impl` may be imported only from
   `x` and its sub-packages, and from the composition root `kinetickk.app`. Share through `x.api` or a neutral package.
 - Leaf packages stay leaves: interaction `fx`, `layout` and `localization` import no other package of their module.
+- No package segment is named `build` or `build-debug`: `.gitignore`, the Debug source fingerprint
+  (`sourceIdentityFiles` in `build-logic`) and the CI test scanner treat those directories as build output.
 
 `:ball:gameplay:nucleus` (`kinetickk.ball.gameplay.nucleus`):
 
@@ -150,7 +152,7 @@ the content model, never duplicated as literals.
 | Change | Touch, in this order | Prove it with |
 |---|---|---|
 | New enemy | `EnemyType` and an `EnemyDefinition` entry in `defaultEnemyDefinitions()` (`ball/content/api/src/commonMain/kotlin/kinetickk/ball/content/api/EnemyContent.kt`); behaviour in `simulation.enemies` (`EnemyBehaviors.kt`, `EnemyBehaviorsWorlds.kt`, bosses in `MiniBossBehaviors.kt` / `SecretBossBehaviors.kt`); projection only if it needs new visible state (`EnemyProjection` in `render/GameplayRenderProjection.kt`); drawing in `canvas/world/EnemyRenderer.kt` and `enemySilhouette` (`canvas/look/GameplayVisualSemantics.kt`); Russian name in the content phrase tables; Codex entry | behaviour test in the enemies package; `EnemyWorldsAllocationTest`; affected balance gates (spawn weights change outcomes) |
-| New item | `ItemEffect` / `ItemDefinition` (`ContentDefinitions.kt`), an `ItemDraft` in `:ball:content:impl`, appended after the last draft list that `defaultItems()` concatenates (`ball/content/impl/src/commonMain/kotlin/kinetickk/ball/content/impl/ItemCatalogAssembly.kt`; item ids are positions in that order and profiles store them); compile in `simulation.build` (`BuildCompiler.kt`); rule text via the content rule writer (`BuildRulesText.kt`) and Russian phrases (`ItemPhrasesInRussian.kt`); icon in `canvas/look/ItemIconRenderer.kt` | build compile test; rule-text test; `RewardCardFaceAllocationTest` if the card face changes; item gates under the balance policy |
+| New item | `ItemEffect` / `ItemDefinition` (`ContentDefinitions.kt`), an `ItemDraft` in `:ball:content:impl`, appended after the last draft list that `defaultItems()` concatenates (`ball/content/impl/src/commonMain/kotlin/kinetickk/ball/content/impl/ItemCatalogAssembly.kt`; item ids are positions in that order and profiles store them); compile in `simulation.builds` (`BuildCompiler.kt`); rule text via the content rule writer (`BuildRulesText.kt`) and Russian phrases (`ItemPhrasesInRussian.kt`); icon in `canvas/look/ItemIconRenderer.kt` | build compile test; rule-text test; `RewardCardFaceAllocationTest` if the card face changes; item gates under the balance policy |
 | New site | `SiteKind` and `SiteDefinition` (`SiteContent.kt`); rules in `simulation.sites` (`updateSites` in `SiteSystem.kt`); `SiteProjection` (`ball/gameplay/nucleus/src/commonMain/kotlin/kinetickk/ball/gameplay/nucleus/render/SiteProjection.kt`) plus its mapper (`projection/SiteRenderMapping.kt`); drawing in `canvas/world/places/SiteRenderer.kt`, glyph in `canvas/look/SiteGlyphs.kt`, edge marker in `canvas/world/places/EdgeMarkerRenderer.kt` | site tests; the opt-in site pilot gates; world hot-path allocation test |
 | New renderer / visual layer | a file in the matching `canvas.<layer>` package, called from the compositor at its place in the layer order (`drawGameplay` in `GameplayRenderer.kt`, world layers in `drawWorld`, `WorldCompositor.kt`); read only the render model and the FX projection; colours, strokes and type from `:foundation:design` tokens; cached paths/brushes/text slots (§8) | extend the matching `*HotPathAllocationTest`; a `RedesignShots*` screenshot smoke |
 | New sound | a semantic cue in `GameplayAudioCue` (`nucleus.protocol`), its `SoundId` entry (`resource/audio/api/src/commonMain/kotlin/kinetickk/resource/audio/api/SoundId.kt`) and mapping in `GameplayAudioExecutor.kt`, its tone and priority in the one tone table (`resource/audio/impl/src/commonMain/kotlin/kinetickk/resource/audio/impl/ToneCatalog.kt`); emitted from the simulation through `emitSound` (`SimulationOutput.kt`), never from UI code; no new mixer or bus | cue order/priority test; `DefaultAudioServiceTest` when the service changes |
@@ -192,8 +194,8 @@ Every new field that survives a step:
 7. has tests for each lifecycle edge it can meet: layer switch, Architect collapse, rebase, structure-window move, run
    reset, preview fork, pause/choice freeze.
 
-Homes for planned mechanics. None of these mechanics exists yet; when one lands, use these places instead of
-inventing new ones:
+Homes for run-long dungeon, Core-motion, render and presentation state. New mechanics of these kinds extend these
+places instead of inventing new ones:
 - Run-long state of dungeon structures and their rewards goes into `StructureRunState`, written only by the
   `structures` domain (landed: the run-long spent list, written through `markSpent`, and the bounded Totem chest list,
   whose single writer `TotemChestSystem.kt` is also the only code that spends a Key, in `openTotemChest`).
