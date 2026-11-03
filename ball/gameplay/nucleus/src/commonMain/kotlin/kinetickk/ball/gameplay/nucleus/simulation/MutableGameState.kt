@@ -166,6 +166,9 @@ internal class MutableGameState(
     /** Rifts, the visit, its clocks and its reward. */
     internal val dimensionVisits: DimensionVisitState = DimensionVisitState(copySource?.dimensionVisits)
 
+    /** Owned items, clause timers and counters, buffs. */
+    internal val buildRun: BuildRunState = BuildRunState(content, copySource?.buildRun)
+
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
     /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */
@@ -185,30 +188,10 @@ internal class MutableGameState(
     internal var characterUpgradePower: Float = copySource?.characterUpgradePower ?: 1f
     internal val pendingDiscoveredItemIds: PendingDiscoveredItemIdBuffer
         get() = PendingDiscoveredItemIdBuffer(this)
-    internal val itemStacks: RunIntArray = copySource?.itemStacks?.copy()
-        ?: RunIntArray(IntArray(content.items.size))
-    internal val rebornItems: RunIntArray = copySource?.rebornItems?.copy()
-        ?: RunIntArray(IntArray(content.items.size))
-    /**
-     * Build gains in order: item ids at first acquisition (a replaced active item's id leaves it) and relic binds or
-     * rank-three upgrades as [relicGain] entries. Decides affinity ties. Immutable value, replaced on change.
-     */
-    internal var acquisitionOrder: List<Int> = copySource?.acquisitionOrder ?: emptyList()
     /** Baby mode (RunMode.EASY), fixed when the run is created; a run never changes it. */
     internal val easyMode: Boolean = copySource?.easyMode ?: (runMode == RunMode.EASY)
     /** Immutable compiled build shared by reduction siblings; replaced by [recompileBuild]. */
     internal var build: CompiledBuild = copySource?.build ?: CompiledBuild.empty(content)
-    internal val clauseReadyAt: RunFloatArray = copySource?.clauseReadyAt?.copy()
-        ?: RunFloatArray(FloatArray(content.totalClauseCount))
-    internal val clauseCounters: RunIntArray = copySource?.clauseCounters?.copy()
-        ?: RunIntArray(IntArray(content.totalClauseCount))
-    /** Fractional status stacks per item, so stack magnitudes apply deterministically without RNG. */
-    internal val statusAccumulators: RunFloatArray = copySource?.statusAccumulators?.copy()
-        ?: RunFloatArray(FloatArray(content.items.size))
-    /** Earliest time each item may apply statuses again (per-item rate bound). */
-    internal val itemStatusReadyAt: RunFloatArray = copySource?.itemStatusReadyAt?.copy()
-        ?: RunFloatArray(FloatArray(content.items.size))
-    internal var buffs: List<ActiveBuff> = copySource?.buffs ?: emptyList()
     /** Lingering fields; a deep copy forks the table. */
     internal val combatFieldTable: CombatFieldTable = copySource?.combatFieldTable?.fork() ?: CombatFieldTable()
     /** Field kinds the Core stood in at the last field pass, one bit per [CombatFieldKind] ordinal. */
@@ -230,10 +213,7 @@ internal class MutableGameState(
     internal var critMissStreak: Int = copySource?.critMissStreak ?: 0
     internal var freeDashPrimed: Boolean = copySource?.freeDashPrimed ?: false
     internal var freeDashReadyAt: Float = copySource?.freeDashReadyAt ?: 0f
-    internal var comboKillCounter: Int = copySource?.comboKillCounter ?: 0
     internal var dashHitThisDash: Boolean = copySource?.dashHitThisDash ?: false
-    internal var clauseDepth: Int = copySource?.clauseDepth ?: 0
-    internal var arsenalCounter: Int = copySource?.arsenalCounter ?: 0
     internal var soundCueStorage: MutableList<GameplayAudioCue>? =
         copySource?.soundCueStorage?.let { source -> ArrayList(source) }
     internal val soundCues: PendingSoundCueBuffer
