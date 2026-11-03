@@ -19,7 +19,8 @@ import kotlin.test.assertTrue
  * The dimension gates' pilot flies through the rift it was sent to (DimensionPilotGateTest: a rift is never left to
  * close unentered) while it keeps its berth from every other skipped optional site. A rift that opens inside such a
  * berth (in the gate a glitch rift beside a structure's 1,300 u mark) must not hold the Core where the berth balances
- * the approach, and a threat Dash flown along the pilot's pointer must not carry the Core onto such a site.
+ * the approach, and a threat Dash flown along the pilot's pointer must not carry the Core onto such a site, read along
+ * the path the Core flies after the Dash.
  */
 class DimensionPilotRiftBerthTest {
     @Test fun thePilotReachesARiftThatOpenedInsideAnotherSkippedSitesBerth() {
@@ -55,6 +56,45 @@ class DimensionPilotRiftBerthTest {
     @Test fun thePilotDropsAThreatDashThatWouldCarryItOntoASkippedSite() {
         assertTrue(keepsThreatDash(site = false), "the bot asked for no threat Dash")
         assertFalse(keepsThreatDash(site = true), "the pilot kept a threat Dash onto the skipped site beside its rift")
+    }
+
+    /**
+     * A Dash's impulse adds to the velocity the Core already has, so the pilot reads a pushed Dash along the path the Core
+     * then flies, not along its pointer: cruising away from its rift, the pilot turns back toward it, and the threat Dash
+     * the bot asks for would carry the Core past a skipped site that the pointer's own line clears. In the A3 gate such a
+     * Dash flew into a Nadir window rift that its pointer's line passed 238 u from, and the glitch rift was lost.
+     */
+    @Test fun thePilotReadsAPushedDashAlongThePathTheCoreFlies() {
+        assertTrue(keepsDashFromItsCruise(site = false), "the bot asked for no threat Dash")
+        assertFalse(keepsDashFromItsCruise(site = true), "the pilot kept a Dash whose path runs onto the skipped site")
+    }
+
+    /**
+     * The Core cruises along +x at [CRUISE] u/s with its rift behind it ([RIFT_BEHIND], [RIFT_ASIDE]) and, with [site], a
+     * skipped Nadir rift on the post-Dash path; once the pilot's cursor turned back toward its rift a hostile shot closes
+     * on the Core: true when the threat Dash the bot asks for survives the pilot's input. The site lies well outside the
+     * pilot's berth, so both runs steer alike.
+     */
+    private fun keepsDashFromItsCruise(site: Boolean): Boolean {
+        val state = quietArena()
+        state.dashBufferTime = 0f
+        state.setVelocityForTesting(CRUISE, 0f)
+        state.dimensionRun = state.dimensionRun.copy(
+            glitchPortal = DimensionPortal(
+                state.dimensionRun.nextPortalId, state.coreX - RIFT_BEHIND, state.coreY - RIFT_ASIDE, WorldLayer.ARCHIVE, state.elapsed + 30f,
+            ),
+            nextPortalId = state.dimensionRun.nextPortalId + 1,
+        )
+        if (site) {
+            state.sites = listOf(SiteState(0L, SiteKind.NADIR_RIFT, state.coreX - PATH_SITE_BEHIND, state.coreY - PATH_SITE_ASIDE, state.elapsed + 60f))
+        }
+        val pilot = DimensionPilot(WorldLayer.ARCHIVE, NoPoiBot()).apply { riftDue = true }
+        repeat(TURN_INPUTS) { pilot.control(state) }
+        assertEquals(0f, state.dashBufferTime, "a Dash was asked for before the shot")
+        // The shot keeps the Core's cruise along x and closes on it along +y.
+        state.projectiles += Projectile(state.coreX, state.coreY - SHOT_DISTANCE, CRUISE, SHOT_SPEED, radius = 6f, life = 2f, hostile = true)
+        pilot.control(state)
+        return state.dashBufferTime > 0f
     }
 
     /**
@@ -112,5 +152,15 @@ class DimensionPilotRiftBerthTest {
         const val TURN_INPUTS = 10
         const val SHOT_DISTANCE = 100f
         const val SHOT_SPEED = 800f
+        const val CRUISE = 700f
+        const val RIFT_BEHIND = 610f
+        const val RIFT_ASIDE = 350f
+
+        /**
+         * About 100 u beyond the end of the post-Dash path's 0.3 s line and about 185 u from the end of the pointer's line
+         * at the speed the pointer alone would give, against the site's 65 u radius and the 85 u guard.
+         */
+        const val PATH_SITE_BEHIND = 200f
+        const val PATH_SITE_ASIDE = 100f
     }
 }

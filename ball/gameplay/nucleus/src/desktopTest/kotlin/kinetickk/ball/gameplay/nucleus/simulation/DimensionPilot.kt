@@ -16,6 +16,7 @@ import kinetickk.ball.gameplay.nucleus.projection.*
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.DimensionProjection
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.ball.gameplay.nucleus.simulation.characters.*
 import kinetickk.ball.gameplay.nucleus.simulation.combat.*
 import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
 import kinetickk.ball.gameplay.nucleus.simulation.elements.*
@@ -74,6 +75,9 @@ private const val SITE_CLEARANCE_MARGIN = 295f
  * speed) or a skipped optional site lies this long along it.
  */
 private const val DASH_LOOKAHEAD_SECONDS = 0.3f
+
+/** The share of a backward velocity part a Dash cancels before its impulse (performDash's reverse assist). */
+private const val DASH_REVERSE_ASSIST = 0.72f
 
 /**
  * The NoPoi bot's Blink rule: with Blink Drive a Dash may teleport up to [BLINK_LANDING_REACH] along the pointer, so it
@@ -305,37 +309,61 @@ internal class DimensionPilot(
     }
 
     /**
-     * The bot's two Dash rules applied along the pilot's pointer (ux, uy): no solid body on the Dash line at the lethal
+     * True when the line from the Core to ([endX], [endY]) passes within [SITE_GUARD_MARGIN] of a skipped optional site's
+     * radius (the rift the pilot flies to is no skipped site when [skipGoalRift]).
+     */
+    private fun crossesSkippedSite(s: MutableGameState, endX: Float, endY: Float, skipGoalRift: Boolean): Boolean {
+        val count = s.optionalSiteMarks(marks)
+        for (mark in 0 until count) {
+            val base = mark * 3
+            if (skipGoalRift && marks[base] == goalX && marks[base + 1] == goalY) continue
+            if (segmentCircleIntersects(s.coreX, s.coreY, endX, endY, marks[base], marks[base + 1], marks[base + 2] + SITE_GUARD_MARGIN)) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /**
+     * The bot's two Dash rules applied along the pilot's pointer (ux, uy): no solid body on the Dash's path at the lethal
      * speed, and with Blink Drive no Blink landing on a skipped optional site (the rift the pilot flies to is no skipped
      * site when [skipGoalRift]). The bot checks both along its own cursor, which the pilot has replaced.
      *
      * The site guard also holds a pushed Dash's line. The bot needs no such rule, since its berth keeps it 295 u outside
      * every site; the pilot flies inside that berth when a site lies beside its rift (the berth then reaches only to
      * the rift), and there a pushed Dash at about 1,000 u/s crosses the room left before the berth can turn it.
+     *
+     * A pushed Dash's line is the path the Core flies after it: the velocity performDash leaves (its reverse assist,
+     * then the impulse at the character's strongest multiplier, as the bot's human Dash rule predicts it), not the
+     * pointer, since the impulse adds to the velocity the Core already has. In the A3 gate a Dash pushed across a
+     * Slingshot's swing at about 1,270 u/s passed 238 u from a Nadir window rift along the pointer but flew straight
+     * into it, and the glitch rift was lost.
      */
     private fun dashAllowed(s: MutableGameState, ux: Float, uy: Float, skipGoalRift: Boolean): Boolean {
-        val dashSpeed = length(s.velocityX + ux * s.effectiveDashImpulse(), s.velocityY + uy * s.effectiveDashImpulse())
-        if (!dashLineClear(s, ux, uy, dashSpeed)) return false
-        var reach = dashSpeed * DASH_LOOKAHEAD_SECONDS
-        if (s.relicRank(RelicId.BLINK_DRIVE) > 0) reach = max(reach, BLINK_LANDING_REACH)
-        val endX = s.coreX + ux * reach
-        val endY = s.coreY + uy * reach
-        val count = s.optionalSiteMarks(marks)
-        for (mark in 0 until count) {
-            val base = mark * 3
-            if (skipGoalRift && marks[base] == goalX && marks[base + 1] == goalY) continue
-            if (segmentCircleIntersects(s.coreX, s.coreY, endX, endY, marks[base], marks[base + 1], marks[base + 2] + SITE_GUARD_MARGIN)) {
-                return false
-            }
+        var vx = s.velocityX
+        var vy = s.velocityY
+        val forward = vx * ux + vy * uy
+        if (forward < 0f) {
+            vx -= ux * forward * DASH_REVERSE_ASSIST
+            vy -= uy * forward * DASH_REVERSE_ASSIST
         }
-        return true
+        val impulse = s.effectiveDashImpulse() * s.maxCharacterDashImpulseMultiplier()
+        vx += ux * impulse
+        vy += uy * impulse
+        val endX = s.coreX + vx * DASH_LOOKAHEAD_SECONDS
+        val endY = s.coreY + vy * DASH_LOOKAHEAD_SECONDS
+        if (!dashLineClear(s, endX, endY, length(vx, vy))) return false
+        if (crossesSkippedSite(s, endX, endY, skipGoalRift)) return false
+        return s.relicRank(RelicId.BLINK_DRIVE) == 0 ||
+            !crossesSkippedSite(s, s.coreX + ux * BLINK_LANDING_REACH, s.coreY + uy * BLINK_LANDING_REACH, skipGoalRift)
     }
 
-    /** False when a Dash along (ux, uy) reaches the lethal obstacle speed ([dashSpeed]) with a solid body on its line. */
-    private fun dashLineClear(s: MutableGameState, ux: Float, uy: Float, dashSpeed: Float): Boolean {
+    /**
+     * False when a Dash reaches the lethal obstacle speed ([dashSpeed]) with a solid body on its line from the Core to
+     * ([endX], [endY]).
+     */
+    private fun dashLineClear(s: MutableGameState, endX: Float, endY: Float, dashSpeed: Float): Boolean {
         if (dashSpeed < s.obstacleLethalSpeed()) return true
-        val endX = s.coreX + ux * dashSpeed * DASH_LOOKAHEAD_SECONDS
-        val endY = s.coreY + uy * dashSpeed * DASH_LOOKAHEAD_SECONDS
         for (obstacle in s.obstacleField.obstacles) {
             if (!obstacle.kind.solid) continue
             if (segmentCircleIntersects(s.coreX, s.coreY, endX, endY, obstacle.x, obstacle.y, obstacle.radius + s.coreRadius)) return false
