@@ -23,10 +23,10 @@ internal fun relicAspectColor(aspect: RelicAspect): Color = Kk.aspect(aspect.ord
 
 /**
  * Interaction maps semantic identity, aspect and rank into a shared geometric mark. [accent] is
- * the aspect hue; overlays pass it resolved under the player's color-vision preset so the rune
- * matches the plate or slot it sits on.
+ * the aspect hue, by default the aspect token; overlays and the Codex pass it resolved under the
+ * player's color-vision preset so the rune matches the plate or slot it sits on.
  */
-internal fun DrawScope.drawRelicIcon(
+fun DrawScope.drawRelicIcon(
     definition: RelicDefinition,
     policy: RelicPolicy,
     center: Offset,
@@ -78,7 +78,7 @@ internal fun DrawScope.drawUnresolvedRelicIcon(center: Offset, radius: Float, ti
 }
 
 /** One distinct rune per relic, chosen for what the relic does (40 styles serve the 22 relics). */
-internal fun RelicId.toCanvasRuneStyle(): CanvasRuneStyle = when (this) {
+fun RelicId.toCanvasRuneStyle(): CanvasRuneStyle = when (this) {
     RelicId.PERPETUAL_VECTOR -> CanvasRuneStyle.RADIAL_WHEEL
     RelicId.BLINK_DRIVE -> CanvasRuneStyle.OFFSET_CHEVRONS
     RelicId.GYRE_ENGINE -> CanvasRuneStyle.FOUR_SWIRL_ARMS

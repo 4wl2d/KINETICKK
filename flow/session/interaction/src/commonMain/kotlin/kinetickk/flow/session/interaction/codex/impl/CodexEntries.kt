@@ -29,6 +29,8 @@ import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
 import kinetickk.foundation.design.KkIcon
 import kinetickk.foundation.design.KkRolePalette
+import kinetickk.ball.content.api.RelicAspect
+import kinetickk.foundation.design.Kk
 
 internal sealed interface CodexIcon {
     data class Item(val definition: ItemDefinition, val stack: Int, val reborn: Boolean = false, val suppressed: Boolean = false) : CodexIcon
@@ -221,6 +223,13 @@ internal const val CODEX_NONE = "—"
 
 internal fun codexStatus(language: AppLanguage, value: String, info: String? = null): CodexFact =
     CodexFact(language.text(SessionText.STATUS), value, info, isStatus = true)
+
+/**
+ * Aspect color in the player's color-vision palette: an element's hue, the preset's volt for
+ * Kinetic, gold for Sovereign. The Default palette gives the foundation aspect tokens.
+ */
+internal fun relicAspectColor(aspect: RelicAspect, roles: KkRolePalette = KkRolePalette.Default): Color =
+    aspect.element?.let(roles::of) ?: if (aspect == RelicAspect.KINETIC) roles.kinetic else Kk.aspect(aspect.ordinal)
 
 /**
  * An item's hue is its first element in the player's color-vision mode; items without one deal
