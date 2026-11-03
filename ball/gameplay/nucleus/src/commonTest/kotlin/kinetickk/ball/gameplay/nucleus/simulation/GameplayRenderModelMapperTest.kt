@@ -150,7 +150,7 @@ class GameplayRenderModelMapperTest {
         source.equippedRelics = guardedRelics
         source.choices = guardedChoices
         val retained = source.toRenderModel()
-        val candidate = source.copyForScalarInputReduction()
+        val candidate = source.deepCopy()
         guardedRelics.rejectReads = true
         guardedChoices.rejectReads = true
 
@@ -192,10 +192,10 @@ class GameplayRenderModelMapperTest {
         assertTrue(retained.build.links.single { it.pairing == RelicPairingId.MELTDOWN }.discovered)
         assertEquals(source.build.affinity(StatusElement.THERMAL), retained.build.affinity(StatusElement.THERMAL))
 
-        val scalar = source.copyForScalarInputReduction()
+        val scalar = source.deepCopy()
         assertSame(retained.build, scalar.toRenderModel(reusableCollections = retained, identitySource = source).build)
 
-        val charged = source.copyForReduction().apply { stormCharge = 0.5f }
+        val charged = source.deepCopy().apply { stormCharge = 0.5f }
         val recharged = charged.toRenderModel(reusableCollections = retained, identitySource = source)
         assertNotSame(retained.build, recharged.build)
         assertEquals(0.5f, recharged.build.stormCharge)
@@ -231,8 +231,8 @@ class GameplayRenderModelMapperTest {
         cases.forEach { (name, setup, change) ->
             val committed = source(setup)
             val retained = committed.toRenderModel()
-            assertSame(retained.build, committed.copyForReduction().toRenderModel(retained, identitySource = committed).build, name)
-            val candidate = committed.copyForReduction().apply(change)
+            assertSame(retained.build, committed.deepCopy().toRenderModel(retained, identitySource = committed).build, name)
+            val candidate = committed.deepCopy().apply(change)
             val projected = candidate.toRenderModel(retained, identitySource = committed)
             assertNotSame(retained.build, projected.build, name)
             assertEquals(candidate.buildProjection(), projected.build, name)
@@ -248,7 +248,7 @@ class GameplayRenderModelMapperTest {
             recompileBuild()
         }
         val retained = source.toRenderModel()
-        val candidate = source.copyForReduction().apply { elapsed = 11f }
+        val candidate = source.deepCopy().apply { elapsed = 11f }
         val projected = candidate.toRenderModel(retained, identitySource = source)
         assertEquals(candidate.buildProjection(), projected.build)
         assertEquals(39f, projected.build.severed.single().remaining)
@@ -268,16 +268,16 @@ class GameplayRenderModelMapperTest {
         val retained = source.toRenderModel()
         assertTrue(retained.enemies.single().statusBits and STATUS_FROZEN_BIT != 0)
 
-        val unchanged = source.copyForReduction().toRenderModel(retained, identitySource = source)
+        val unchanged = source.deepCopy().toRenderModel(retained, identitySource = source)
         assertSame(retained.enemies, unchanged.enemies)
 
-        val thawed = source.copyForReduction().apply { elapsed = 5.1f }
+        val thawed = source.deepCopy().apply { elapsed = 5.1f }
         val projected = thawed.toRenderModel(retained, identitySource = source)
         assertNotSame(retained.enemies, projected.enemies)
         assertEquals(0, projected.enemies.single().statusBits and (STATUS_FROZEN_BIT or STATUS_EMBRITTLED_BIT))
         assertTrue(retained.enemies.single().statusBits and STATUS_FROZEN_BIT != 0, "The retained view stays immutable")
 
-        val stacked = source.copyForReduction().apply { enemies.single().status[StatusCell.STACKS + StatusElement.ION.ordinal] = 2f }
+        val stacked = source.deepCopy().apply { enemies.single().status[StatusCell.STACKS + StatusElement.ION.ordinal] = 2f }
         val restacked = stacked.toRenderModel(retained, identitySource = source)
         assertNotSame(retained.enemies, restacked.enemies)
         assertEquals(2, (restacked.enemies.single().statusBits shr (StatusElement.ION.ordinal * 4)) and 0xF)
@@ -295,10 +295,10 @@ class GameplayRenderModelMapperTest {
         assertTrue(EnemyAffinity.shifting(retained.enemies.single().affinityBits))
         assertEquals(1, EnemyAffinity.phase(retained.enemies.single().affinityBits))
 
-        val unchanged = source.copyForReduction().toRenderModel(retained, identitySource = source)
+        val unchanged = source.deepCopy().toRenderModel(retained, identitySource = source)
         assertSame(retained.enemies, unchanged.enemies, "Equal affinity reuses the projection")
 
-        val settled = source.copyForReduction().apply { elapsed = 5.1f }
+        val settled = source.deepCopy().apply { elapsed = 5.1f }
         val projected = settled.toRenderModel(retained, identitySource = source)
         assertNotSame(retained.enemies, projected.enemies)
         assertEquals(retained.enemies.single().statusBits, projected.enemies.single().statusBits)
@@ -306,7 +306,7 @@ class GameplayRenderModelMapperTest {
         assertEquals(1, EnemyAffinity.phase(projected.enemies.single().affinityBits))
         assertTrue(EnemyAffinity.shifting(retained.enemies.single().affinityBits), "The retained view stays immutable")
 
-        val hardened = source.copyForReduction().apply {
+        val hardened = source.deepCopy().apply {
             assignAspect(enemies.single(), StatusElement.CRYO.ordinal, immune = false)
         }
         val reprojected = hardened.toRenderModel(retained, identitySource = source)
@@ -320,7 +320,7 @@ class GameplayRenderModelMapperTest {
     fun equalStableCollectionsAndEmptyDynamicProjectionsAreStructurallyShared() {
         val source = populatedState()
         val retained = source.toRenderModel()
-        val unchangedCandidate = source.copyForReduction()
+        val unchangedCandidate = source.deepCopy()
 
         val projected = unchangedCandidate.toRenderModel(retained)
 
@@ -341,7 +341,7 @@ class GameplayRenderModelMapperTest {
     fun changedStableCollectionsAreRebuiltAndRetainedProjectionStaysImmutable() {
         val source = populatedState()
         val retained = source.toRenderModel()
-        val changedCandidate = source.copyForReduction().apply {
+        val changedCandidate = source.deepCopy().apply {
             equippedRelics = listOf(EquippedRelic(RelicId.PERPETUAL_VECTOR, rank = 2))
             choices = listOf(choice(title = "Changed"))
             itemStacks[0] = 3
@@ -385,7 +385,7 @@ class GameplayRenderModelMapperTest {
         )
         source.weaponOrbitals += WeaponOrbital(index = 0, x = 15f, y = 25f, radius = 4f)
         val retained = source.toRenderModel()
-        val candidate = source.copyForReduction()
+        val candidate = source.deepCopy()
 
         val unchangedProjection = candidate.toRenderModel(retained)
         candidate.enemies.single().x = 30f
@@ -427,7 +427,7 @@ class GameplayRenderModelMapperTest {
     fun fullReductionRebuildsOnlyTheChangedProjectionFamily() {
         val source = fullyPopulatedState()
         val retained = source.toRenderModel()
-        val candidate = source.copyForReduction().apply {
+        val candidate = source.deepCopy().apply {
             enemies.single().x = 44f
         }
 
@@ -456,7 +456,7 @@ class GameplayRenderModelMapperTest {
     fun mismatchedIdentitySourceUsesExactFallbackAndCannotReuseChangedStorage() {
         val source = fullyPopulatedState()
         val retained = source.toRenderModel()
-        val candidate = source.copyForReduction().apply {
+        val candidate = source.deepCopy().apply {
             choices = listOf(choice(title = "Changed"))
             itemStacks[0] = 7
             discoveredItemIds += 303
@@ -493,7 +493,7 @@ class GameplayRenderModelMapperTest {
             totem = Totem(x = -0.0f, y = 1f, pulse = 2f)
         }
         val retained = source.toRenderModel()
-        val candidate = source.copyForReduction()
+        val candidate = source.deepCopy()
         val unrelatedSource = populatedState()
 
         val bitExact = candidate.toRenderModel(
@@ -568,12 +568,12 @@ class GameplayRenderModelMapperTest {
         assertEquals(2, retained.enemies.single().charges)
 
         val unrelatedSource = fullyPopulatedState()
-        val equal = source.copyForReduction()
+        val equal = source.deepCopy()
         val reused = equal.toRenderModel(reusableCollections = retained, identitySource = unrelatedSource)
         assertSame(retained.obstacles, reused.obstacles)
         assertSame(retained.enemies, reused.enemies)
 
-        val changed = source.copyForReduction().apply {
+        val changed = source.deepCopy().apply {
             enemies.single().charges = 1
             placeObstaclesForTesting(
                 *obstacleField.obstacles.map { if (it.id == 5L) it.copy(fuseAt = 4f) else it.copy(repels = false) }.toTypedArray(),

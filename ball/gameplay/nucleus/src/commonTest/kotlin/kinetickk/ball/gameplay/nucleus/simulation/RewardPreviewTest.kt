@@ -37,7 +37,7 @@ class RewardPreviewTest {
             }
             val before = state.buildStats()
             val preview = state.rewardPreviews().single()
-            val selected = state.copyForReduction().apply { choose(0) }
+            val selected = state.deepCopy().apply { choose(0) }
             val after = selected.buildStats()
             before.zip(after).forEach { (old, new) ->
                 val forecast = preview.changes.firstOrNull { it.name == old.name }
@@ -85,7 +85,7 @@ class RewardPreviewTest {
     @Test
     fun repeatedReadsPreserveRandomnessDiscoveryAndOutputs() {
         val state = engine().apply { openItemChoice() }
-        val expected = state.copyForReduction()
+        val expected = state.deepCopy()
         repeat(5) { state.rewardPreviews() }
         assertEquals(expected.gameplayRandom.nextInt(), state.gameplayRandom.nextInt())
         assertEquals(expected.takeProgressUpdate(), state.takeProgressUpdate())
@@ -114,7 +114,7 @@ class RewardPreviewTest {
         previews.take(3).forEachIndexed { index, preview -> assertEquals(RewardPreview(), preview, state.choices[index].title) }
         assertEquals(ForecastKind.REACTION, previews[3].forecasts.first().kind, "the item card still previews its build change")
         // Every preview is what an isolated copy of the state previews, including the cards that copy nothing.
-        assertEquals(previews, state.copyForReduction().rewardPreviews())
+        assertEquals(previews, state.deepCopy().rewardPreviews())
     }
 
     @Test
@@ -124,7 +124,7 @@ class RewardPreviewTest {
             offer(ChoiceOption(ChoiceType.TOTEM, "Amplify", "", "", weaponId = weapon, totemAction = TotemAction.AMPLIFY_CURRENT))
         }
         val preview = state.rewardPreviews().single()
-        val selected = state.copyForReduction().apply { choose(0) }
+        val selected = state.deepCopy().apply { choose(0) }
         for (name in listOf("Weapon power", "Activation speed")) {
             val change = preview.changes.single { it.name == name }
             assertEquals(selected.buildStats().single { it.name == name }.value, change.after)
@@ -222,7 +222,7 @@ class RewardPreviewTest {
         val mass = preview.changes.single { it.name == "Mass" }
         assertEquals(1.8f, mass.before, 0.0001f)
         assertEquals(2.1f, mass.after, 0.0001f)
-        val selected = state.copyForReduction().apply { choose(0) }
+        val selected = state.deepCopy().apply { choose(0) }
         assertEquals(2, selected.relicRank(RelicId.NEUTRON_HEART))
         assertEquals(selected.buildStats().single { it.name == "Mass" }.value, mass.after)
         assertEquals(1, state.relicRank(RelicId.NEUTRON_HEART))
@@ -232,10 +232,10 @@ class RewardPreviewTest {
     fun scalarPointerProjectionReusesPreviewAndRerollReplacesIt() {
         val state = engine().apply { openItemChoice() }
         val first = state.toRenderModel()
-        val pointer = state.copyForScalarInputReduction().apply { pointerX += 20f }
+        val pointer = state.deepCopy().apply { pointerX += 20f }
         val second = pointer.toRenderModel(first, state)
         assertSame(first.rewardPreviews, second.rewardPreviews)
-        val rerolled = pointer.copyForReduction().apply { buildItemChoices() }
+        val rerolled = pointer.deepCopy().apply { buildItemChoices() }
         val third = rerolled.toRenderModel(second, pointer)
         assertEquals(rerolled.rewardPreviews(), third.rewardPreviews)
         assertNotSame(second.rewardPreviews, third.rewardPreviews)
@@ -256,7 +256,7 @@ class RewardPreviewTest {
             offer(ChoiceOption(ChoiceType.ITEM, steering.name, steering.description, "", itemId = steering.id))
         }
         val changes = state.rewardPreviews().single().changes
-        val selected = state.copyForReduction().apply { choose(0) }
+        val selected = state.deepCopy().apply { choose(0) }
         for ((name, after) in listOf("Grip" to 1.3f, "Sling" to 0.8f)) {
             val change = changes.single { it.name == name }
             assertEquals(1f, change.before, name)

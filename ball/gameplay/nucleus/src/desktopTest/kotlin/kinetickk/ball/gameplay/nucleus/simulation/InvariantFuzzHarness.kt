@@ -535,7 +535,7 @@ private class FuzzSession(private val plan: FuzzPlan, private val options: FuzzO
     private fun frameStep() {
         val committed = model
         maybeSwitchPilot(committed)
-        val scratch = committed.copyForReduction()
+        val scratch = committed.deepCopy()
         scratch.dashBufferTime = 0f
         scratch.skillBufferMask = 0
         scratch.skillBufferTime = 0f
@@ -732,7 +732,7 @@ private class FuzzSession(private val plan: FuzzPlan, private val options: FuzzO
             return
         }
         // Every card on a copy: a card that is not locked must do something, and some card must.
-        val outcomes = committed.choices.indices.map { index -> committed.copyForReduction().also { it.choose(index) } }
+        val outcomes = committed.choices.indices.map { index -> committed.deepCopy().also { it.choose(index) } }
         var firstResolving = -1
         for (index in outcomes.indices) {
             val outcome = outcomes[index]
@@ -773,7 +773,7 @@ private class FuzzSession(private val plan: FuzzPlan, private val options: FuzzO
     }
 
     private fun pilotChoice(committed: MutableGameState, outcomes: List<MutableGameState>, firstResolving: Int): GameplayInteractionPulse {
-        val scratch = committed.copyForReduction()
+        val scratch = committed.deepCopy()
         pilot.choose(scratch)
         if (scratch.rerollsRemaining < committed.rerollsRemaining) return GameplayInteractionPulse.ChoicesRerolled
         for (index in outcomes.indices) {
@@ -866,10 +866,10 @@ private class FuzzSession(private val plan: FuzzPlan, private val options: FuzzO
     // Copy and isolation: a committed state equals its own reduction copy, and no reduction writes into it.
 
     private fun copyCheckBefore(committed: MutableGameState): MutableGameState? {
-        val copy = committed.copyForReduction()
+        val copy = committed.deepCopy()
         val lost = FuzzStateDiff.first(committed, copy, "state", FuzzScratchFields)
         if (lost != null) {
-            record(FuzzInvariant.COPY_ISOLATION, "copyForReduction lost a retained fact: $lost")
+            record(FuzzInvariant.COPY_ISOLATION, "deepCopy lost a retained fact: $lost")
             return null
         }
         return copy

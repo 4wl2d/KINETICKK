@@ -55,7 +55,7 @@ class SiteRewardsTest {
             itemDeck = ItemDeck.EVERYTHING
             level = 60
         }
-        val floored = plain.copyForReduction()
+        val floored = plain.deepCopy()
         plain.openItemChoice()
         assertTrue(floored.enqueueFloorOffer(ItemRarity.RARE))
         floored.openNextPendingChoice()

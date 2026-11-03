@@ -462,7 +462,7 @@ class ActiveItemOfferTest {
         state.offer(incoming, reborn = true)
         state.choose(0)
         val loadout = state.skillLoadout
-        val fork = state.copyForReduction()
+        val fork = state.deepCopy()
         assertEquals(incoming.id, fork.pendingActiveItemId)
         assertTrue(fork.pendingActiveReborn)
         fork.choose(0)

@@ -146,7 +146,6 @@ class ApexSystemTest {
         assertNotSame(state, buffered)
         assertEquals(MutableGameState.SKILL_INPUT_BUFFER_SECONDS, buffered.model.apexBufferTime)
         assertEquals(0f, model.apexBufferTime, "the committed state is untouched")
-        assertSame(model.skillRuntime, buffered.model.skillRuntime, "a request shares the runtime")
         assertSame(buffered, assertIs<GameReductionResult.Accepted>(reducer.reduce(buffered, request)).state, "a repeat")
 
         val paused = EngineState(arena().apply { unlockNow(); togglePause(); takeVisualFxCues(); takeSoundCues() })
@@ -277,7 +276,7 @@ class ApexSystemTest {
         val state = arena()
         state.unlockNow()
         val committed = state.skillRuntime.toString()
-        val candidate = state.copyForReduction()
+        val candidate = state.deepCopy()
         candidate.castNow()
         assertTrue(candidate.apexActive())
         assertFalse(state.apexActive())

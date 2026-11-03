@@ -33,11 +33,14 @@ import kinetickk.ball.gameplay.nucleus.GameplayOutput
 import kinetickk.ball.gameplay.nucleus.GameplayStartContext
 import kinetickk.ball.gameplay.nucleus.GameplayStartInputs
 import kinetickk.ball.gameplay.nucleus.GameplayState
+import kinetickk.ball.gameplay.nucleus.GameplayTickOutputs
+import kinetickk.ball.gameplay.nucleus.GameplayTickResult
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderSnapshot
 import kinetickk.ball.profile.api.PlayerPreferences
 import kinetickk.ball.profile.api.ProfileQuery
 import kinetickk.ball.profile.api.ProfileRunBootstrapResult
+import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.dispatch.BoundedCompletionDeque
 import kinetickk.foundation.dispatch.InlineAcceptance
 import kinetickk.foundation.dispatch.InlineReply
@@ -73,6 +76,10 @@ internal class GameComponent private constructor(
     private val committedRenderSnapshot: GameplayRenderSnapshot
         get() = committedFrame.renderSnapshot
     private var interactionFxReducer: InteractionFxReducer? = null
+    /** Reused by every local tick; read only between the tick and the next one. */
+    private val tickOutputs = GameplayTickOutputs()
+    /** A tick that threw may have left the run mid-step; it never simulates again. */
+    private var tickFault: Throwable? = null
 
     override val instanceId
         get() = committedState.instanceId
@@ -155,37 +162,91 @@ internal class GameComponent private constructor(
         }
     }
 
+    /**
+     * Frames and inputs tick the committed engine in place. Without Profile progress the owner restamps or projects the
+     * snapshot, publishes it and executes FX then audio directly; progress takes the ordered output and completion route.
+     */
     private fun dispatchLocal(pulse: GameplayInteractionPulse): GameplayAcceptance =
         acceptance.dispatch {
             check(committedState.revision.value <= Long.MAX_VALUE - MAX_LOCAL_REVISIONS_PER_DISPATCH) {
                 "Gameplay local revision capacity exhausted before Intent construction"
             }
+            tickFault?.let { fault -> throw IllegalStateException("A failed Gameplay tick stopped this run", fault) }
             val before = committedState
-            val decision = timed(DiagnosticPhase.Simulation) {
-                GameplayNucleus.decide(
-                    before,
-                    GameplayNucleusPulse.Intent(pulse),
-                    GameplayContext.Empty,
-                )
+            val result = try {
+                timed(DiagnosticPhase.Simulation) { GameplayNucleus.tick(before, pulse, tickOutputs) }
+            } catch (failure: Throwable) {
+                tickFault = failure
+                throw failure
             }
-            when (decision) {
-                is GameplayDecision.Rejected -> GameplayAcceptance.Rejected(
+            when (result) {
+                is GameplayTickResult.Rejected -> GameplayAcceptance.Rejected(
                     instanceId = before.instanceId,
                     observedRevision = before.revision,
-                    reason = decision.reason,
+                    reason = result.reason,
                 )
-                is GameplayDecision.Accepted -> {
-                    dispatchAccepted(
-                        rootFrame = decision.frame,
-                        rootItem = localOutputItem,
-                        renderModelNeutralTransition = pulse === GameplayInteractionPulse.DashRequested,
-                    )
+                is GameplayTickResult.Accepted -> {
+                    val next = result.nextState
+                    if (tickOutputs.progressUpdate == null) {
+                        acceptTick(before, next)
+                    } else {
+                        dispatchAccepted(
+                            rootFrame = tickOutputs.toAcceptedFrame(next),
+                            rootItem = localOutputItem,
+                            tickedRoot = true,
+                        )
+                    }
                     GameplayAcceptance.Accepted(
-                        instanceId = decision.frame.nextState.instanceId,
-                        revision = decision.frame.nextState.revision,
+                        instanceId = next.instanceId,
+                        revision = next.revision,
                     )
                 }
             }
+        }
+
+    /** The tick fast path: publish the restamped or projected snapshot, then run every effect before the first fault. */
+    private fun acceptTick(before: GameplayState, next: GameplayState) {
+        val outputs = tickOutputs
+        val renderSnapshot = timed(DiagnosticPhase.Projection) { tickRenderSnapshot(before, next) }
+        publish(next, renderSnapshot)
+        var fault: Throwable? = null
+        if (outputs.visualFxCues.isNotEmpty()) {
+            try {
+                checkNotNull(interactionFxReducer).apply(outputs.visualFxCues)
+            } catch (failure: Throwable) {
+                fault = failure
+            }
+        }
+        if (outputs.frameAccepted || outputs.audioCues.isNotEmpty()) {
+            try {
+                timed(DiagnosticPhase.Audio) {
+                    if (outputs.audioCues.isNotEmpty()) audioExecutor.play(outputs.audioCues)
+                    if (outputs.frameAccepted) audioExecutor.tick(outputs.frameRealDeltaSeconds)
+                }
+            } catch (failure: Throwable) {
+                fault = keepFirstFault(fault, failure)
+            }
+        }
+        if (outputs.ensuresAudioUnlocked) {
+            try {
+                audioExecutor.ensureUnlocked()
+            } catch (failure: Throwable) {
+                fault = keepFirstFault(fault, failure)
+            }
+        }
+        fault?.let { throw it }
+    }
+
+    /** The tick mutated the committed engine: restamp a render-neutral tick, project any other against the last snapshot. */
+    private fun tickRenderSnapshot(before: GameplayState, next: GameplayState): GameplayRenderSnapshot =
+        if (tickOutputs.renderNeutral) {
+            GameplayNucleus.reuseRenderSnapshot(
+                state = next,
+                reusableState = before,
+                reusableSnapshot = committedRenderSnapshot,
+            )
+        } else {
+            GameplayNucleus.renderSnapshot(next, committedRenderSnapshot)
         }
 
     /** Runs [block] and, while performance capture is on, records its duration as [phase]. */
@@ -206,12 +267,12 @@ internal class GameComponent private constructor(
         before: GameplayState,
         item: GameplayWorkItem,
         frame: GameplayAcceptedFrame,
-        renderModelNeutralTransition: Boolean = false,
+        tickedRoot: Boolean = false,
     ) {
         val renderSnapshot = timed(DiagnosticPhase.Projection) {
             preflight(
                 before = before,
-                renderModelNeutralTransition = renderModelNeutralTransition,
+                tickedRoot = tickedRoot,
                 item = item,
                 frame = frame,
             )
@@ -225,7 +286,7 @@ internal class GameComponent private constructor(
     private inline fun dispatchAccepted(
         rootFrame: GameplayAcceptedFrame,
         rootItem: GameplayWorkItem,
-        renderModelNeutralTransition: Boolean = false,
+        tickedRoot: Boolean = false,
     ) {
         acceptance.acceptAndDrain(
             rootItem = rootItem,
@@ -236,7 +297,7 @@ internal class GameComponent private constructor(
                     before = committedState,
                     item = item,
                     frame = frame,
-                    renderModelNeutralTransition = renderModelNeutralTransition && item === rootItem,
+                    tickedRoot = tickedRoot && item === rootItem,
                 )
             },
             decideCompletion = { completion ->
@@ -256,7 +317,7 @@ internal class GameComponent private constructor(
 
     private fun preflight(
         before: GameplayState,
-        renderModelNeutralTransition: Boolean,
+        tickedRoot: Boolean,
         item: GameplayWorkItem,
         frame: GameplayAcceptedFrame,
     ): GameplayRenderSnapshot {
@@ -268,10 +329,11 @@ internal class GameComponent private constructor(
             "Gameplay revision must advance exactly once"
         }
         if (item is GameplayWorkItem.Direct<*>) item.reply.checkAvailable()
-        val renderSnapshot = if (
-            next.engine === before.engine ||
-            renderModelNeutralTransition
-        ) {
+        val renderSnapshot = if (tickedRoot) {
+            check(committedRenderSnapshot.instanceId == before.instanceId)
+            check(committedRenderSnapshot.revision == before.revision)
+            tickRenderSnapshot(before, next)
+        } else if (next.engine === before.engine) {
             check(committedRenderSnapshot.instanceId == before.instanceId)
             check(committedRenderSnapshot.revision == before.revision)
             GameplayNucleus.reuseRenderSnapshot(
@@ -303,20 +365,13 @@ internal class GameComponent private constructor(
             check(render.phase == expectedRenderPhase)
         }
         check(frame.outputs.size <= MAX_GAMEPLAY_OUTPUTS_PER_DECISION)
+        // GameplayAcceptedFrame already admits only the FX -> Profile -> Audio -> result order.
         var profileOutput: GameplayOutput.SendProfileCommand? = null
         var profileOutputCount = 0
         var directResultCount = 0
         var outputIndex = 0
-        var previousDispatchOrder = 0
         while (outputIndex < frame.outputs.size) {
             val output = frame.outputs[outputIndex]
-            val dispatchOrder = output.dispatchOrder
-            if (outputIndex > 0) {
-                check(previousDispatchOrder <= dispatchOrder) {
-                    "Gameplay outputs are not in FX -> Profile -> Audio -> result order"
-                }
-            }
-            previousDispatchOrder = dispatchOrder
             if (output is GameplayOutput.SendProfileCommand) {
                 profileOutputCount++
                 if (profileOutput == null) {
@@ -417,8 +472,11 @@ internal class GameComponent private constructor(
             is GameplayOutput.EmitVisualFx ->
                 checkNotNull(interactionFxReducer).apply(output.cues)
             is GameplayOutput.SendProfileCommand -> executeProfileCommand(output, item)
-            is GameplayOutput.AdvanceAudio ->
-                timed(DiagnosticPhase.Audio) { audioExecutor.advance(output.realDeltaSeconds, output.cues) }
+            // Music advances only for the frame this tick accepted; lifecycle audio only plays its cues.
+            is GameplayOutput.AdvanceAudio -> timed(DiagnosticPhase.Audio) {
+                if (output.cues.isNotEmpty()) audioExecutor.play(output.cues)
+                if (item === localOutputItem && tickOutputs.frameAccepted) audioExecutor.tick(output.realDeltaSeconds)
+            }
             GameplayOutput.EnsureAudioUnlocked ->
                 audioExecutor.ensureUnlocked()
             is GameplayOutput.RunExited -> checkNotNull(item.exitReplyOrNull()).accepted(output.result)
@@ -464,6 +522,23 @@ internal class GameComponent private constructor(
             diagnostics = diagnostics,
         )
     }
+}
+
+/** Today's ordered outputs of a tick that published Profile progress: FX, the Profile command, then audio. */
+private fun GameplayTickOutputs.toAcceptedFrame(next: GameplayState): GameplayAcceptedFrame {
+    val outputs = ArrayList<GameplayOutput>(MAX_GAMEPLAY_OUTPUTS_PER_DECISION)
+    if (visualFxCues.isNotEmpty()) outputs += GameplayOutput.EmitVisualFx(visualFxCues)
+    outputs += GameplayOutput.SendProfileCommand(checkNotNull(progressUpdate))
+    if (frameAccepted || audioCues.isNotEmpty()) {
+        outputs += GameplayOutput.AdvanceAudio(if (frameAccepted) frameRealDeltaSeconds else 0f, audioCues)
+    }
+    return GameplayAcceptedFrame(nextState = next, outputs = outputs.toImmutableList())
+}
+
+private fun keepFirstFault(first: Throwable?, later: Throwable): Throwable {
+    if (first == null) return later
+    if (first !== later) first.addSuppressed(later)
+    return first
 }
 
 private data class CommittedGameplayFrame(
@@ -549,18 +624,6 @@ private fun GameplayWorkItem.exitReplyOrNull(): InlineReply<GameplayRunExited, G
     is GameplayWorkItem.ProgressCompletion -> exitReply
     else -> null
 }
-
-private val GameplayOutput.dispatchOrder: Int
-    get() = when (this) {
-        is GameplayOutput.EmitVisualFx -> 0
-        is GameplayOutput.SendProfileCommand -> 1
-        is GameplayOutput.AdvanceAudio,
-        GameplayOutput.EnsureAudioUnlocked,
-        -> 2
-        is GameplayOutput.RunExited, is GameplayOutput.SettingsApplied,
-        is GameplayOutput.RunStarted, is GameplayOutput.OverlayPaused,
-        -> 3
-    }
 
 private const val GAMEPLAY_COMPLETION_CAPACITY: Int = 8
 private const val MAX_LOCAL_REVISIONS_PER_DISPATCH: Long = 2L

@@ -1130,7 +1130,7 @@ class ObstacleKindSystemTest {
         source.placeObstaclesForTesting(crystal(300f, 0f), mine(200f, 150f))
         val field = source.obstacleField
         val destroyed = source.destroyedObstacleIds
-        val candidate = source.copyForReduction()
+        val candidate = source.deepCopy()
         candidate.flyIntoCrystal(candidate.obstacleDamageStartSpeed())
         assertEquals(listOf(81L), candidate.destroyedObstacleIds)
         assertEquals(candidate.elapsed + kinds.mineFuseSeconds, candidate.mineWithId(71L)!!.fuseAt, "the candidate armed the mine")

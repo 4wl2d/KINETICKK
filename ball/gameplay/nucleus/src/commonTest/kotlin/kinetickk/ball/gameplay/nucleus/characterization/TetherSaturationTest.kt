@@ -202,7 +202,7 @@ class TetherSaturationTest {
             turnRecoveryCooldown = 0.45f
             turnHeadingEstablished = true
         }
-        val fork = engine.copyForReduction()
+        val fork = engine.deepCopy()
         assertEquals(engine.smoothedVelocityX, fork.smoothedVelocityX)
         assertEquals(engine.smoothedVelocityY, fork.smoothedVelocityY)
         assertEquals(engine.turnHoldTime, fork.turnHoldTime)

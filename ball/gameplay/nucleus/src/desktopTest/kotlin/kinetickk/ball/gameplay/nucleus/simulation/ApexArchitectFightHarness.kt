@@ -136,8 +136,8 @@ internal object ApexArchitectFightHarness {
         val played = linkedMapOf<Triple<CoreShape, Int, Int>, Pair<Fight, Fight>>()
         for (shape in CoreShape.entries) for (tier in listOf(0, 10)) {
             firstRuns(shape, tier, FIGHTS_PER_CASE) { _, state, bot ->
-                val apex = fight(state.copyForReduction(), bot.copy(), apex = true, windows = emptyList())
-                apex to fight(state.copyForReduction(), bot.copy(), apex = false, windows = apex.windows)
+                val apex = fight(state.deepCopy(), bot.copy(), apex = true, windows = emptyList())
+                apex to fight(state.deepCopy(), bot.copy(), apex = false, windows = apex.windows)
             }.forEach { (seed, pair) -> played[Triple(shape, tier, seed)] = pair }
         }
         played
@@ -190,7 +190,7 @@ internal object ApexArchitectFightHarness {
     }
 
     /** An independent copy of the run at the Architect's arrival, its Core moved by [fork] × [FORK_OFFSET]. */
-    fun MutableGameState.forked(fork: Int): MutableGameState = copyForReduction().also { it.coreX += fork * FORK_OFFSET }
+    fun MutableGameState.forked(fork: Int): MutableGameState = deepCopy().also { it.coreX += fork * FORK_OFFSET }
 
     fun median(values: List<Float>): Float {
         val sorted = values.sorted()

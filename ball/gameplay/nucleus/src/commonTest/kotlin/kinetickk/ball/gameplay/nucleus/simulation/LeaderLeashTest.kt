@@ -95,7 +95,7 @@ class LeaderLeashTest {
             for (seed in 1..64) {
                 val state = arena(seed)
                 val leader = state.spawn(type, -12_000f)
-                val withoutSite = state.copyForReduction()
+                val withoutSite = state.deepCopy()
                 // A site beyond the short viewport edge can redirect a returning leader toward the long edge.
                 state.sites = listOf(SiteState(
                     id = 7L,
@@ -154,9 +154,9 @@ class LeaderLeashTest {
         val source = arena()
         val leader = source.spawn(EnemyType.HERALD, -12_000f)
         val ordinary = source.spawn(EnemyType.DRIFTER, 12_000f)
-        val first = source.copyForReduction()
-        val second = source.copyForReduction()
-        val withoutLeader = source.copyForReduction().apply { enemies.removeAt(0) }
+        val first = source.deepCopy()
+        val second = source.deepCopy()
+        val withoutLeader = source.deepCopy().apply { enemies.removeAt(0) }
         val expectedOrdinaryStream = source.spawnRandom.copy().apply { repeat(4) { nextFloat() } }.snapshot()
 
         first.updateEnemies(0f)

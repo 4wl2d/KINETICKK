@@ -123,7 +123,7 @@ class GameplayReductionIsolationTest {
             populateWorldControlState()
         }
 
-        listOf(source.copyForReduction(), source.copyForScalarInputReduction()).forEach { fork ->
+        listOf(source.deepCopy()).forEach { fork ->
             assertEquivalentSimulation(source, fork)
             val projection = fork.toRenderModel()
             assertEquals(WeaponId.MORNINGSTAR, projection.weapon)
@@ -133,7 +133,7 @@ class GameplayReductionIsolationTest {
         }
 
         // A later cleared value must stay cleared, including fields with no bootstrap value.
-        val cleared = source.copyForReduction().apply {
+        val cleared = source.deepCopy().apply {
             pendingBindingRelic = null
             pendingRelicBindAction = null
             pendingActiveItemId = null
@@ -147,7 +147,7 @@ class GameplayReductionIsolationTest {
             selectedRewardFocus = null
             dimensionRewardLayer = null
         }
-        listOf(cleared.copyForReduction(), cleared.copyForScalarInputReduction()).forEach { fork ->
+        listOf(cleared.deepCopy()).forEach { fork ->
             assertEquivalentSimulation(cleared, fork)
         }
     }
@@ -222,200 +222,6 @@ class GameplayReductionIsolationTest {
     }
 
     @Test
-    fun fullReductionAfterScalarCowDoesNotMutateSourceOrSiblingBranch() {
-        val relicIndex = RelicId.ECHO_CHAMBER.ordinal
-        val weaponIndex = WeaponId.FLUX_WAKE.ordinal
-        val source = MutableGameState(
-            content = canonicalGameplayContent,
-            seed = 1_337,
-            initialMatter = 0,
-        ).apply {
-            unlockedWeaponSet += WeaponId.MORNINGSTAR
-            unlockedWeaponView = unlockedWeaponSet.toSet()
-            matrixRanks[0] = 1
-            characterUpgradeLevels[0] = 4
-            weaponUpgradeLevels[weaponIndex] = 6
-            discoveredItemIds += 17
-            itemStacks[0] = 2
-            rebornItems[0] = 1
-            clauseCounters[0] = 3
-            statusAccumulators[0] = 0.25f
-            relicRanks[relicIndex] = 1
-            relicCooldowns[relicIndex] = 0.75f
-            relicCounters[relicIndex] = 2
-            clauseReadyAt[0] = 0.4f
-            itemStatusReadyAt[0] = 0.6f
-            agonyMutationCounts[weaponIndex] = 4
-
-            val enemy = addEnemyForTesting(x = 10f, y = 20f)
-            enemy.status[StatusCell.STACKS + StatusElement.CRYO.ordinal] = 5f
-            enemy.status[StatusCell.DECAY_AT + StatusElement.CRYO.ordinal] = 0.5f
-            enemy.status[StatusCell.CINDER_BANK] = 6f
-            echoHits += EchoHit(
-                enemyId = enemy.id,
-                delay = 1f,
-                damage = 7f,
-                appliesDominant = false,
-            )
-
-            projectiles += Projectile(
-                x = 11f,
-                y = 21f,
-                vx = 0f,
-                vy = 0f,
-                radius = 2f,
-                life = 1f,
-                hostile = false,
-            ).also { projectile ->
-                assertTrue(projectile.tryRecordEnemyHit(enemy.id))
-            }
-            pickups += Pickup(PickupType.DATA, 12f, 22f)
-            trail += TrailPoint(13f, 23f)
-            weaponNodes += WeaponNode(
-                type = WeaponNodeType.GRAVITY_MINE,
-                x = 14f,
-                y = 24f,
-                life = 1f,
-                maxLife = 2f,
-                radius = 3f,
-            )
-            weaponOrbitals += WeaponOrbital(index = 0, x = 15f, y = 25f, radius = 4f)
-            weaponRuntime.entities += WeaponEntity(WeaponEntityKind.DISC, x = 17f, y = 27f, radius = 5f, life = 1f, maxLife = 1f)
-                .also { it.recordHit(enemy.id) }
-            weaponRuntime.tetherRamp = 1.5f
-            totem = Totem(16f, 26f, 0.25f)
-        }
-        val expectedNextRandom = source.gameplayRandom.copy().nextInt()
-        val reducer = GameReducer()
-        val sourceEngine = EngineState(source)
-
-        val pointerBranch = assertIs<GameReductionResult.Accepted>(
-            reducer.reduce(
-                sourceEngine,
-                GameplayInteractionPulse.PointerMoved.fromValidated(901f, 360f),
-            ),
-        ).state
-        val siblingBranch = assertIs<GameReductionResult.Accepted>(
-            reducer.reduce(
-                sourceEngine,
-                GameplayInteractionPulse.BrakeChanged(
-                    source = BrakeSource.KEYBOARD,
-                    active = true,
-                ),
-            ),
-        ).state
-
-        // These assertions prove the test actually traverses the optimized scalar-COW path.
-        assertSame(source.gameplayRandom, pointerBranch.model.gameplayRandom)
-        assertSame(source.matrixRanks, pointerBranch.model.matrixRanks)
-        assertSame(source.characterUpgradeLevels, pointerBranch.model.characterUpgradeLevels)
-        assertSame(source.weaponUpgradeLevels, pointerBranch.model.weaponUpgradeLevels)
-        assertSame(source.enemies, pointerBranch.model.enemies)
-        assertSame(source.projectiles, pointerBranch.model.projectiles)
-        assertSame(source.enemies, siblingBranch.model.enemies)
-
-        // A reroll outside a choice is a production full reduction that simulates nothing, so it
-        // isolates copy ownership alone. (A sub-step frame deliberately shares storage instead.)
-        val isolated = assertIs<GameReductionResult.Accepted>(
-            reducer.reduce(
-                pointerBranch,
-                GameplayInteractionPulse.ChoicesRerolled,
-            ),
-        ).state.model
-
-        assertNotSame(pointerBranch.model.gameplayRandom, isolated.gameplayRandom)
-        assertNotSame(pointerBranch.model.matrixRanks, isolated.matrixRanks)
-        assertNotSame(pointerBranch.model.characterUpgradeLevels, isolated.characterUpgradeLevels)
-        assertNotSame(pointerBranch.model.weaponUpgradeLevels, isolated.weaponUpgradeLevels)
-        assertNotSame(pointerBranch.model.enemies, isolated.enemies)
-        assertNotSame(pointerBranch.model.projectiles, isolated.projectiles)
-        assertNotSame(pointerBranch.model.totem, isolated.totem)
-        assertSame(source.weaponRuntime, pointerBranch.model.weaponRuntime)
-        assertNotSame(pointerBranch.model.weaponRuntime, isolated.weaponRuntime)
-
-        // Mutate every mutable storage family that the scalar COW path is allowed to share.
-        isolated.gameplayRandom.nextInt()
-        isolated.unlockedWeaponSet.clear()
-        isolated.matrixRanks[0] = 91
-        isolated.characterUpgradeLevels[0] = 9
-        isolated.weaponUpgradeLevels[weaponIndex] = 10
-        isolated.discoveredItemIds.clear()
-        isolated.itemStacks[0] = 92
-        isolated.rebornItems[0] = 0
-        isolated.clauseCounters[0] = 93
-        isolated.statusAccumulators[0] = 0.75f
-        isolated.relicRanks[relicIndex] = 94
-        isolated.relicCooldowns[relicIndex] = 95f
-        isolated.relicCounters[relicIndex] = 96
-        isolated.clauseReadyAt[0] = 97f
-        isolated.itemStatusReadyAt[0] = 97.5f
-        isolated.agonyMutationCounts[weaponIndex] = 98
-        isolated.echoHits.single().delay = 99f
-        isolated.enemies.single().apply {
-            x = 100f
-            status[StatusCell.STACKS + StatusElement.CRYO.ordinal] = 101f
-            status[StatusCell.DECAY_AT + StatusElement.CRYO.ordinal] = 102f
-            status[StatusCell.CINDER_BANK] = 103f
-        }
-        isolated.projectiles.single().apply {
-            x = 104f
-            assertTrue(tryRecordEnemyHit(10_000))
-        }
-        isolated.pickups.single().x = 105f
-        isolated.trail.single().x = 106f
-        isolated.weaponNodes.single().x = 107f
-        isolated.weaponOrbitals.single().x = 108f
-        isolated.totem!!.x = 109f
-        isolated.weaponRuntime.entities.single().apply {
-            x = 110f
-            recordHit(10_001)
-        }
-        isolated.weaponRuntime.tetherRamp = 2.5f
-
-        listOf(source, siblingBranch.model).forEach { retained ->
-            assertEquals(expectedNextRandom, retained.gameplayRandom.copy().nextInt())
-            assertTrue(WeaponId.FLUX_WAKE in retained.unlockedWeaponSet)
-            assertTrue(WeaponId.MORNINGSTAR in retained.unlockedWeaponSet)
-            assertEquals(1, retained.matrixRanks[0])
-            assertEquals(4, retained.characterUpgradeLevels[0])
-            assertEquals(6, retained.weaponUpgradeLevels[weaponIndex])
-            assertTrue(17 in retained.discoveredItemIds)
-            assertEquals(2, retained.itemStacks[0])
-            assertEquals(1, retained.rebornItems[0])
-            assertEquals(3, retained.clauseCounters[0])
-            assertEquals(0.25f, retained.statusAccumulators[0])
-            assertEquals(1, retained.relicRanks[relicIndex])
-            assertEquals(0.75f, retained.relicCooldowns[relicIndex])
-            assertEquals(2, retained.relicCounters[relicIndex])
-            assertEquals(0.4f, retained.clauseReadyAt[0])
-            assertEquals(0.6f, retained.itemStatusReadyAt[0])
-            assertEquals(4, retained.agonyMutationCounts[weaponIndex])
-            assertEquals(1f, retained.echoHits.single().delay)
-
-            retained.enemies.single().let { enemy ->
-                assertEquals(10f, enemy.x)
-                assertEquals(5f, enemy.status[StatusCell.STACKS + StatusElement.CRYO.ordinal])
-                assertEquals(0.5f, enemy.status[StatusCell.DECAY_AT + StatusElement.CRYO.ordinal])
-                assertEquals(6f, enemy.status[StatusCell.CINDER_BANK])
-            }
-            retained.projectiles.single().let { projectile ->
-                assertEquals(11f, projectile.x)
-                assertFalse(projectile.hasRecordedEnemyHit(10_000))
-            }
-            assertEquals(12f, retained.pickups.single().x)
-            assertEquals(13f, retained.trail.single().x)
-            assertEquals(14f, retained.weaponNodes.single().x)
-            assertEquals(15f, retained.weaponOrbitals.single().x)
-            assertEquals(16f, retained.totem!!.x)
-            retained.weaponRuntime.entities.single().let { entity ->
-                assertEquals(17f, entity.x)
-                assertFalse(entity.hasHit(10_001))
-            }
-            assertEquals(1.5f, retained.weaponRuntime.tetherRamp)
-        }
-    }
-
-    @Test
     fun scalarReductionDrainsCopiedPendingOutputsWithoutMutatingSourceOrSiblings() {
         val source = MutableGameState(canonicalGameplayContent, seed = 6_101).apply {
             pendingBankedMatter = 7L
@@ -443,8 +249,6 @@ class GameplayReductionIsolationTest {
 
         reductions.forEach { reduction ->
             assertFalse(reduction.state.model.hasPendingReductionOutputs())
-            assertSame(source.matrixRanks, reduction.state.model.matrixRanks)
-            assertSame(source.enemies, reduction.state.model.enemies)
             assertEquals(
                 listOf(
                     VisualFxCue.EffectsAdvanced(0.125f),
@@ -542,7 +346,7 @@ class GameplayReductionIsolationTest {
     }
 
     @Test
-    fun subStepFrameRunsNoStepSharesStableStorageAndLeavesTheCommittedStateUntouched() {
+    fun subStepFrameRunsNoStepAndLeavesTheCommittedStateUntouched() {
         val source = MutableGameState(canonicalGameplayContent, seed = 7_331).apply {
             startRun()
             spawnClock = 1_000f
@@ -576,11 +380,6 @@ class GameplayReductionIsolationTest {
         assertNull(subStep.outputs.visualFxCuesOrNull)
         assertNull(subStep.outputs.progressUpdate)
         assertEquals(MutableGameState.FIXED_STEP * 0.25f, subStep.outputs.audioRealDeltaSeconds)
-        assertSame(committed.enemies, candidate.enemies)
-        assertSame(committed.projectiles, candidate.projectiles)
-        assertSame(committed.pickups, candidate.pickups)
-        assertSame(committed.weaponOrbitals, candidate.weaponOrbitals)
-        assertSame(committed.gameplayRandom, candidate.gameplayRandom)
         assertEquals(retained, committed.exactSimulationFingerprint())
         assertEquals(randomBefore, committed.gameplayRandom.copy().nextInt())
 
@@ -608,7 +407,7 @@ class GameplayReductionIsolationTest {
         assertNull(idle.outputs.progressUpdate)
         assertSame(source, idle.state.model, "counters alone leave an unchanged input unreduced")
 
-        val banked = source.copyForReduction().apply { bankRunMatter() }
+        val banked = source.deepCopy().apply { bankRunMatter() }
         val update = assertNotNull(banked.takeProgressUpdate())
         assertEquals(5, update.totalKills)
         assertEquals(6, update.ricochets)
@@ -617,7 +416,7 @@ class GameplayReductionIsolationTest {
         assertEquals(5, source.pendingTotalKills, "the committed source keeps its counters")
 
         // Any other progress carries the counters along without waiting for the bank.
-        val elite = source.copyForReduction().apply { pendingEliteKills = 1 }
+        val elite = source.deepCopy().apply { pendingEliteKills = 1 }
         assertEquals(5, assertNotNull(elite.takeProgressUpdate()).totalKills)
     }
 
@@ -937,7 +736,7 @@ class GameplayReductionIsolationTest {
         assertFalse(checkNotNull(source.dimensionRun.visit).failed)
 
         // The split clock, the failed objective and an ember's throw origin are retained facts of the exact fingerprint.
-        val withEmber = source.copyForReduction().apply {
+        val withEmber = source.deepCopy().apply {
             dimensionRun = dimensionRun.copy(visit = checkNotNull(dimensionRun.visit).copy(embers = immutableListOf(Ember(1f, 2f, 230f))))
         }
         val base = withEmber.exactSimulationFingerprint()
@@ -946,9 +745,9 @@ class GameplayReductionIsolationTest {
             { it.copy(embers = immutableListOf(Ember(1f, 2f, 230f, fromX = 4f, fromY = 2f))) },
             { it.copy(embers = immutableListOf(Ember(1f, 2f, 230f, fromX = 1f, fromY = 5f))) },
         ).forEachIndexed { index, change ->
-            val changed = withEmber.copyForReduction().apply { dimensionRun = dimensionRun.copy(visit = change(checkNotNull(dimensionRun.visit))) }
+            val changed = withEmber.deepCopy().apply { dimensionRun = dimensionRun.copy(visit = change(checkNotNull(dimensionRun.visit))) }
             assertNotEquals(base, changed.exactSimulationFingerprint(), "change $index")
-            assertEquals(changed.exactSimulationFingerprint(), changed.copyForReduction().exactSimulationFingerprint())
+            assertEquals(changed.exactSimulationFingerprint(), changed.deepCopy().exactSimulationFingerprint())
         }
     }
 

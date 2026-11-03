@@ -62,7 +62,7 @@ class CharacterAbilityTest {
         val source = game(CoreShape.SPIRAL)
         repeat(10) { source.moveAt(400f, 0f) }
         val committedPath = source.characterRuntime.ghostPath.toList()
-        val fork = source.copyForReduction()
+        val fork = source.deepCopy()
         val pages = source.characterRuntime.ghostPath.pageCount
         assertNotSame(source.characterRuntime, fork.characterRuntime)
         assertEquals(pages, fork.characterRuntime.ghostPath.sharedPagesWith(source.characterRuntime.ghostPath))
@@ -73,8 +73,6 @@ class CharacterAbilityTest {
         assertEquals(committedPath, source.characterRuntime.ghostPath.toList())
         assertEquals(10, source.characterRuntime.ghostSamples)
         assertEquals(15, fork.characterRuntime.ghostSamples)
-        // A scalar-input sibling shares the committed runtime: it never runs a step.
-        assertSame(source.characterRuntime, source.copyForScalarInputReduction().characterRuntime)
     }
 
     @Test fun eachOneStepReductionCopiesOnlyThePageItsEchoSampleLandsOn() {
@@ -84,7 +82,7 @@ class CharacterAbilityTest {
         // Three full turns of pages, one fixed step per reduction, wrapping around the ring.
         repeat(3 * CharacterRuntime.GHOST_SAMPLES) {
             val committed = state.characterRuntime.toString()
-            val fork = state.copyForReduction()
+            val fork = state.deepCopy()
             fork.moveAt(300f, 0f)
             assertEquals(pages - 1, fork.characterRuntime.ghostPath.sharedPagesWith(state.characterRuntime.ghostPath))
             assertEquals(committed, state.characterRuntime.toString(), "the committed ring is untouched")
@@ -671,7 +669,7 @@ class CharacterAbilityTest {
             game.addEnemyForTesting(80f, 0f)
             repeat(200) { index -> game.moveAt(cos(index * 0.03f) * 700f, sin(index * 0.03f) * 700f) }
             val before = game.characterRuntime.toString()
-            val fork = game.copyForReduction()
+            val fork = game.deepCopy()
             repeat(30) { fork.moveAt(800f, 0f) }
             assertEquals(before, game.characterRuntime.toString(), "$shape fork leaked into its source")
             assertEquals(GamePhase.RUNNING, fork.phase)

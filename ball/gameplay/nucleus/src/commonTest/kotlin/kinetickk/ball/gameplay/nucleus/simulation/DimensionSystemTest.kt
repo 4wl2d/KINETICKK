@@ -715,7 +715,7 @@ class DimensionSystemTest {
         assertEquals(MAX_OPTIONAL_SITE_MARKS, game.appendDimensionMarks(marks, MAX_OPTIONAL_SITE_MARKS), "nothing past the bound")
 
         // The mark is the circle that enters the rift: a pass just outside it skips the Archive, one just inside enters.
-        fun passEnters(offset: Float): Boolean = game.copyForReduction().run {
+        fun passEnters(offset: Float): Boolean = game.deepCopy().run {
             previousCoreX = glitch.x - 40f
             previousCoreY = glitch.y + policy.portalRadius + offset
             coreX = glitch.x + 40f

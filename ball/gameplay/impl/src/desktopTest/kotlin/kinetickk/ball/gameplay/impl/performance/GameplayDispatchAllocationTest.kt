@@ -49,8 +49,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Bytes the owner allocates per dispatched gameplay frame, and per FX snapshot, measured before the in-place tick and
- * the FX snapshot work optimise them. Each ceiling is the measured value plus a quarter; a ceiling may only go down.
+ * Bytes the owner allocates per dispatched gameplay frame, and per FX snapshot. Each ceiling is the measured value plus
+ * a quarter; a ceiling may only go down.
  * With `KK_ALLOCATION_OUT=<file>` the measured values are appended to that file (never printed).
  */
 class GameplayDispatchAllocationTest {
@@ -188,10 +188,10 @@ private const val FX_WARM_SNAPSHOTS = 400
 private const val FX_MEASURED_SNAPSHOTS = 100
 private const val FX_ADVANCE_SECONDS = 0.0001f
 
-// Measured at bdc061ce (14,136, 49,210 and 36,520 bytes), each times 1.25. Lower them when an optimisation lands; never
-// raise them.
-private const val IDLE_FRAME_CEILING_BYTES = 17_670L
-private const val CAPACITY_FRAME_CEILING_BYTES = 61_513L
+// Measured with the in-place tick (5,864 and 18,760 bytes; 14,136 and 49,210 at bdc061ce) and at bdc061ce (36,520
+// bytes for the FX snapshot), each times 1.25. Lower them when an optimisation lands; never raise them.
+private const val IDLE_FRAME_CEILING_BYTES = 7_330L
+private const val CAPACITY_FRAME_CEILING_BYTES = 23_450L
 private const val FX_SNAPSHOT_CEILING_BYTES = 45_650L
 
 /** A crowd that fills the enemy cap and survives: durable, slow enemies around a Core that takes no damage. */
@@ -216,7 +216,8 @@ private val AllocationCapacityContent by lazy {
 }
 
 private object AllocationAudioExecutor : GameplayAudioExecutor {
-    override fun advance(realDeltaSeconds: Float, cues: ImmutableList<GameplayAudioCue>) = Unit
+    override fun play(cues: ImmutableList<GameplayAudioCue>) = Unit
+    override fun tick(realDeltaSeconds: Float) = Unit
     override fun ensureUnlocked() = Unit
 }
 

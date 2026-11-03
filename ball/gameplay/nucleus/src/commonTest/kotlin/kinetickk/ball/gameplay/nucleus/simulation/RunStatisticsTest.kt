@@ -64,7 +64,7 @@ class RunStatisticsTest {
     fun reductionCandidatesAndRetainedRenderSnapshotsStayIsolatedAndRestartResetsTotals() {
         val accepted = engine()
         val retained = accepted.toRenderModel()
-        val candidate = accepted.copyForReduction()
+        val candidate = accepted.deepCopy()
         candidate.damageEnemy(candidate.addEnemyForTesting(500f, 500f, hp = 30f), 100f)
         candidate.pickups += Pickup(PickupType.KEY, candidate.coreX, candidate.coreY)
         candidate.resolvePickupCollection()

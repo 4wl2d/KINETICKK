@@ -257,9 +257,9 @@ class GameComponentTest {
         profile.calls.clear()
         profile.results.clear()
         profile.replies.clear()
-        audio.frames.clear()
+        audio.calls.clear()
         events.clear()
-        audio.throwOnAdvance = true
+        audio.throwOnAudio = true
         val beforeRevision = component.stateSnapshot().revision
 
         assertFailsWith<AudioResourceFault> {
@@ -287,7 +287,7 @@ class GameComponentTest {
         profile.calls.clear()
         profile.results.clear()
         profile.replies.clear()
-        audio.frames.clear()
+        audio.calls.clear()
         events.clear()
         profile.mode = ProfileMode.DeliverThenThrow
         val beforeRevision = component.stateSnapshot().revision
@@ -300,7 +300,7 @@ class GameComponentTest {
         assertEquals(1, profile.results.size)
         assertFailsWith<IllegalStateException> { profile.replies.single().checkAvailable() }
         assertEquals(listOf("profile", "audio"), events)
-        assertEquals(1, audio.frames.size)
+        assertEquals(1, audio.calls.size)
         assertFalse(component.query(GameplayQuery.GetRunStatus).progressPending)
         assertEquals(beforeRevision.value + 2L, component.stateSnapshot().revision.value)
         assertEquals(component.stateSnapshot().revision, component.renderSnapshot().revision)
@@ -756,8 +756,8 @@ class GameComponentTest {
         // The first fixed step opens the omen offer; the run takes No omen (revisions 2 and 3) before the faulting frame.
         assertIs<GameplayAcceptance.Accepted>(frameComponent.accept(GameplayInteractionPulse.FrameElapsed.fromValidated(1f / 60f)))
         assertTrue(frameComponent.declineOmenIfOffered())
-        frameAudio.frames.clear()
-        frameAudio.throwOnAdvance = true
+        frameAudio.calls.clear()
+        frameAudio.throwOnAudio = true
 
         assertFailsWith<AudioResourceFault> {
             frameComponent.accept(GameplayInteractionPulse.FrameElapsed.fromValidated(0.1f))
@@ -765,11 +765,41 @@ class GameComponentTest {
         val advanced = frameComponent.query(GameplayQuery.GetRunStatus)
         assertEquals(GameplayRevision(4), advanced.revision)
         assertEquals(GameplayRunPhase.RUNNING, advanced.phase)
-        assertEquals(1, frameAudio.frames.size)
+        assertEquals(1, frameAudio.calls.size)
         assertEquals(GameplayRevision(1), frameStart.revision)
         assertEquals(advanced.revision, frameComponent.stateSnapshot().revision)
         assertEquals(advanced.revision, frameComponent.renderSnapshot().revision)
         assertSame(frameComponent.renderSnapshot(), frameComponent.renderSnapshot())
+    }
+
+    @Test
+    fun musicTicksOncePerAcceptedFrameAfterItsCuesAndNeverForInputsOrCommands() {
+        val audio = RecordingGameplayAudioExecutor()
+        val component = component(audio = audio)
+        component.start()
+        assertTrue(audio.calls.none { it.startsWith("tick:") }, "Starting advanced music: ${audio.calls}")
+
+        assertIs<GameplayAcceptance.Accepted>(component.accept(GameplayInteractionPulse.FrameElapsed.fromValidated(0.02f)))
+        assertEquals(listOf("tick:0.02"), audio.calls.filter { it.startsWith("tick:") })
+        assertEquals("tick:0.02", audio.calls.last(), "A frame's cues play before its music tick")
+        component.declineOmenIfOffered()
+
+        audio.calls.clear()
+        component.accept(GameplayInteractionPulse.PointerMoved.fromValidated(900f, 300f))
+        component.accept(GameplayInteractionPulse.DashRequested)
+        component.accept(GameplayInteractionPulse.SkillRequested.fromValidated(0))
+        component.accept(GameplayInteractionPulse.UserGestureObserved)
+        component.accept(GameplayInteractionPulse.PauseToggled)
+        assertTrue(audio.calls.none { it.startsWith("tick:") }, "Inputs advanced music: ${audio.calls}")
+
+        // A paused run still advances music by every accepted frame, once.
+        assertEquals(GameplayRunPhase.PAUSED, component.query(GameplayQuery.GetRunStatus).phase)
+        assertIs<GameplayAcceptance.Accepted>(component.accept(GameplayInteractionPulse.FrameElapsed.fromValidated(0.03f)))
+        assertEquals(listOf("tick:0.03"), audio.calls.filter { it.startsWith("tick:") })
+
+        audio.calls.clear()
+        component.exit()
+        assertTrue(audio.calls.none { it.startsWith("tick:") }, "Exiting advanced music: ${audio.calls}")
     }
 
     @Test
@@ -1118,17 +1148,24 @@ private fun gameplayFeature(profile: TestProfilePort): DefaultGameplayFeature =
     )
 
 private class RecordingGameplayAudioExecutor(
-    var throwOnAdvance: Boolean = false,
+    var throwOnAudio: Boolean = false,
     var throwOnUnlock: Boolean = false,
     private val eventSink: (String) -> Unit = {},
 ) : GameplayAudioExecutor {
-    val frames = mutableListOf<Pair<Float, List<GameplayAudioCue>>>()
+    /** Every audio call in order: `play:<cues>` or `tick:<delta>`. */
+    val calls = mutableListOf<String>()
     var unlockCount = 0
 
-    override fun advance(realDeltaSeconds: Float, cues: ImmutableList<GameplayAudioCue>) {
-        frames += realDeltaSeconds to cues.toList()
+    override fun play(cues: ImmutableList<GameplayAudioCue>) {
+        calls += "play:${cues.joinToString(",")}"
         eventSink("audio")
-        if (throwOnAdvance) throw AudioResourceFault()
+        if (throwOnAudio) throw AudioResourceFault()
+    }
+
+    override fun tick(realDeltaSeconds: Float) {
+        calls += "tick:$realDeltaSeconds"
+        eventSink("audio")
+        if (throwOnAudio) throw AudioResourceFault()
     }
 
     override fun ensureUnlocked() {

@@ -19,7 +19,7 @@ class PendingOutputBufferIsolationTest {
     fun relicDiscoveryBelongsToTheAcceptedAcquisitionAndSurvivesReplacement() {
         val source = MutableGameState(canonicalGameplayContent, seed = 9001)
         val retained = source.toRenderModel()
-        val candidate = source.copyForReduction()
+        val candidate = source.deepCopy()
         val first = kinetickk.ball.content.api.RelicId.PERPETUAL_VECTOR
         val second = kinetickk.ball.content.api.RelicId.BLINK_DRIVE
         candidate.acquireRelic(first)
@@ -40,7 +40,7 @@ class PendingOutputBufferIsolationTest {
     @Test
     fun emptyReductionCopyKeepsEveryOutputStorageUnmaterialized() {
         val source = MutableGameState(canonicalGameplayContent, seed = 10_101)
-        val candidate = source.copyForReduction()
+        val candidate = source.deepCopy()
 
         assertNull(source.pendingDiscoveredItemIdStorage)
         assertNull(source.soundCueStorage)
@@ -67,8 +67,8 @@ class PendingOutputBufferIsolationTest {
             emitSound(GameplayAudioCue.UI_CLICK)
             emitVisualFx(VisualFxCue.EffectsAdvanced(0.125f))
         }
-        val drainedBranch = source.copyForReduction()
-        val retainedSibling = source.copyForReduction()
+        val drainedBranch = source.deepCopy()
+        val retainedSibling = source.deepCopy()
 
         assertEquals(
             Triple(7L, setOf(0), 1),

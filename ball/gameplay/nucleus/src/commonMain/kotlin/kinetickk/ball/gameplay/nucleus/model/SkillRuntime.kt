@@ -86,8 +86,8 @@ internal object ApexCell {
 /**
  * Timing and per-cast state of the three skill slots and the Apex, then the run's skill damage per active effect: one
  * fixed copy-on-write float block ([ContentBounds.SKILL_SLOTS] × [SkillCell.STRIDE] + [ApexCell.STRIDE] +
- * [ContentBounds.MAX_SKILLS]). A full reduction forks it (the block is shared until the candidate first writes it), a
- * scalar-input reduction shares it, a new run replaces it. A step allocates nothing.
+ * [ContentBounds.MAX_SKILLS]). A deep copy forks it (the block is shared until the copy first writes it), a new run
+ * replaces it. A step allocates nothing.
  */
 internal class SkillRuntime private constructor(
     private val cells: CopyOnWriteFloatArray,

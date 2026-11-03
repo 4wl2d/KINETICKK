@@ -42,7 +42,6 @@ import kinetickk.ball.gameplay.nucleus.render.WorldEventProjection
 import kinetickk.ball.gameplay.nucleus.simulation.enemies.EncounterOwner
 import kinetickk.ball.gameplay.nucleus.simulation.enemies.EncounterState
 import kinetickk.ball.gameplay.nucleus.simulation.world.WorldKeepOut
-import kinetickk.ball.gameplay.nucleus.simulation.copyForScalarInputReduction
 import kinetickk.ball.gameplay.nucleus.simulation.enemies.encounterTag
 import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.mapToImmutableList
@@ -65,7 +64,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.weapons.ION_SWARM_COOLDOWN
 import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
 import kinetickk.ball.gameplay.nucleus.simulation.elements.addField
 import kinetickk.ball.gameplay.nucleus.simulation.combat.cooldown
-import kinetickk.ball.gameplay.nucleus.simulation.copyForReduction
+import kinetickk.ball.gameplay.nucleus.simulation.deepCopy
 import kinetickk.ball.gameplay.nucleus.simulation.simulateStep
 import kinetickk.ball.gameplay.nucleus.simulation.startRun
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
@@ -78,11 +77,12 @@ import kotlin.test.assertTrue
 class GameplayPerformanceBenchmarkTest {
     @Test
     fun releaseWorkloadRetainsAllScenariosAndValidatesDeterministicOutcomes() {
-        assertEquals("gameplay-core-v5", GAMEPLAY_BENCHMARK_SUITE_VERSION)
+        assertEquals("gameplay-core-v6", GAMEPLAY_BENCHMARK_SUITE_VERSION)
         val first = gameplayBenchmarkScenarios()
         val second = gameplayBenchmarkScenarios()
-        assertEquals(27, first.size)
+        assertEquals(30, first.size)
         assertTrue(first.any { it.name == "terrain_window" })
+        assertTrue(first.any { it.name == "tick_frame_60hz_idle" })
         assertEquals(first.map { it.name }.toSet().size, first.size)
         assertEquals(first.map { it.metadata }, second.map { it.metadata })
         first.forEach { validateBenchmarkScenario(it) }
@@ -342,16 +342,15 @@ class GameplayPerformanceBenchmarkTest {
             { enemies.first().champion = true },
         )
         changes.forEachIndexed { index, change ->
-            val changed = source.copyForReduction().apply(change)
+            val changed = source.deepCopy().apply(change)
             assertNotEquals(original, canonicalStateFingerprint(changed), "change $index")
-            assertEquals(canonicalStateFingerprint(changed), canonicalStateFingerprint(changed.copyForReduction()))
+            assertEquals(canonicalStateFingerprint(changed), canonicalStateFingerprint(changed.deepCopy()))
             assertEquals(original, canonicalStateFingerprint(source))
         }
         // Baby mode is fixed when the run is created, so it is witnessed by construction and survives every copy.
         val easy = MutableGameState(canonicalGameplayContent, runMode = RunMode.EASY).apply { startRun() }
         assertNotEquals(original, canonicalStateFingerprint(easy))
-        assertTrue(easy.copyForReduction().easyMode)
-        assertTrue(easy.copyForScalarInputReduction().easyMode)
+        assertTrue(easy.deepCopy().easyMode)
     }
 
     @Test
@@ -361,7 +360,7 @@ class GameplayPerformanceBenchmarkTest {
         val kinds = source.obstacleField.obstacles.map { it.kind }.toSet()
         assertEquals(ObstacleKind.entries.toSet(), kinds, "every obstacle kind is in the window")
         assertEquals(60, source.enemies.size)
-        val candidate = source.copyForReduction()
+        val candidate = source.deepCopy()
         candidate.simulateStep(MutableGameState.FIXED_STEP)
         assertEquals(GamePhase.RUNNING, candidate.phase)
         assertEquals(source.obstacleField.centerChunkX, candidate.obstacleField.centerChunkX, "the step keeps the window")
@@ -418,11 +417,11 @@ class GameplayPerformanceBenchmarkTest {
         assertTrue(model.structureField.walls.any { it.kind == WallKind.DOOR_SEALED })
         val original = canonicalStateFingerprint(model)
 
-        val result = model.copyForReduction().apply { simulateStep(MutableGameState.FIXED_STEP) }
+        val result = model.deepCopy().apply { simulateStep(MutableGameState.FIXED_STEP) }
         assertEquals(GamePhase.RUNNING, result.phase)
         assertEquals(STRUCTURE_WORKLOAD_CHAPEL, result.dungeon?.engagedRoom)
         assertTrue(result.projectiles.size < model.projectiles.size, "shots stop at the chapel's walls")
-        val repeated = model.copyForReduction().apply { simulateStep(MutableGameState.FIXED_STEP) }
+        val repeated = model.deepCopy().apply { simulateStep(MutableGameState.FIXED_STEP) }
         assertEquals(canonicalStateFingerprint(result), canonicalStateFingerprint(repeated))
         assertEquals(original, canonicalStateFingerprint(model), "Benchmark repetitions must retain the source")
     }
@@ -441,7 +440,7 @@ class GameplayPerformanceBenchmarkTest {
         assertEquals(DimensionObjective.HARVEST, visit.objective)
         assertEquals(ContentBounds.MAX_EMBERS, visit.embers.size)
 
-        val candidate = source.copyForReduction()
+        val candidate = source.deepCopy()
         candidate.simulateStep(MutableGameState.FIXED_STEP)
 
         assertEquals(GamePhase.RUNNING, candidate.phase)
@@ -462,9 +461,9 @@ class GameplayPerformanceBenchmarkTest {
             { visit -> visit.copy(embers = visit.embers.mapToImmutableList { it.copy(fromX = it.fromX + 1f) }) },
             { visit -> visit.copy(embers = visit.embers.mapToImmutableList { it.copy(fromY = it.fromY - 1f) }) },
         ).forEachIndexed { index, change ->
-            val changed = source.copyForReduction().apply { dimensionRun = dimensionRun.copy(visit = change(checkNotNull(dimensionRun.visit))) }
+            val changed = source.deepCopy().apply { dimensionRun = dimensionRun.copy(visit = change(checkNotNull(dimensionRun.visit))) }
             assertNotEquals(original, canonicalStateFingerprint(changed), "change $index")
-            assertEquals(canonicalStateFingerprint(changed), canonicalStateFingerprint(changed.copyForReduction()))
+            assertEquals(canonicalStateFingerprint(changed), canonicalStateFingerprint(changed.deepCopy()))
         }
         assertEquals(original, canonicalStateFingerprint(source))
     }
