@@ -2096,3 +2096,144 @@ only the owner can widen them:
 
 The playtest flag on the Harvest's ember life (0.6.0 entry) now concerns
 1.0 s.
+
+## 2026-11-03 Totem chest economy and the resonance stack
+
+Elite resonance pays a weapon level for every Elite-class kill, and the Key
+that kill drops opens a Totem chest charge whose Amplify pays another, so a
+run that clears dungeons stacks both on the automatic amplification. No gate
+measured the stack: the dungeon gate's pilot opens chests only after its
+measured attempt. `TotemChestEconomyProbeTest` (`KK_CHEST_PROBE`, default
+off, never on `PopulationSeeds`) flies `DungeonCampaignPilot`: the dungeon
+pilot attempts one dungeon after another from 90 s until 150 s before the
+Architect, and between attempts the NoPoi bot collects Keys within 1,200 u
+and opens waiting chests. It plays the structures window i = 2,301..2,400 and
+the combined window 2,501..2,800, every seed with the chests and with
+`TotemChestPolicy(enabled = false)`, in the dungeon gate's arms: fresh (Arc
+Coil on even seeds, Flux Wake on odd ones) and strong (the full-Matrix
+tier-3 Pentagon on its Arc Coil). A run ends with the run or at 900 s; the
+weapon level at 720 s is the last level of a run that ended earlier. SEs are
+bootstrap (20,000 resamples, RNG seed 20261027) over seeds, both arms
+together.
+
+Target, stated before the first reading: over the pooled windows' seeds
+whose first attempt clears (312 fresh, 400 strong; the arms play identically
+until a chest appears, so both share the set), the mean weapon level at
+720 s with chests is at most 1.25 times the mean without them in each arm,
+and the dungeon gate keeps its bands. A reading above it retunes only chest
+content on these windows.
+
+### The pilot's chest reach
+
+The first reading flew the bot's own chest law (with a Key it flies to the
+nearest waiting chest, wherever it waits, and chases no enemy on the way): fresh 1.231
+(SE 0.023), strong 1.145 (SE 0.011). That law is not how the run is played:
+236 of the 800 chest runs ended holding Keys beside waiting charges, and the
+strong arm, flying back across the map after 570 s instead of fighting its
+Elites, read 13.10 resonance levels by 720 s against 16.08 without chests.
+The probe's pilot now opens chests within the structure signal range
+(6,000 u) and keeps its fights (16.55 resonance levels against 16.08); it
+reads fresh 1.278 (SE 0.023) and strong 1.210 (SE 0.010), so the fresh arm
+exceeds the target. `KK_CHEST_REACH=Infinity` still flies the bot's law.
+
+### Chest chances
+
+Candidates on the pooled windows (clearing seeds; the strong arm where
+flown). Expected charges per clear use the fresh arm's clear mix (Derelict
+Station 0.301, Vault 0.227, Labyrinth 0.177, Spire 0.141, Foundry 0.103,
+Reliquary 0.051):
+
+| Chest content | Charges per clear | Fresh ratio at 720 s (SE) | Sub-windows | Strong ratio (SE) |
+|---|---:|---|---|---|
+| shipped: 0.5 / 0.8 / 0.5 / 0.6 / 0.6 / 1.0, weights 55/33/12 | 1.104 | 1.278 (0.023) | 1.263 / 1.283 | 1.210 (0.010) |
+| weights 65/27/8 | 1.040 | 1.273 (0.023) | 1.255 / 1.279 | |
+| weights 70/24/6 | 1.008 | 1.263 (0.022) | 1.254 / 1.267 | |
+| weights 75/20/5 | 0.983 | 1.263 (0.022) | 1.250 / 1.268 | |
+| Vault 0.6 | 1.008 | 1.251 (0.023) | 1.234 / 1.257 | |
+| Vault 0.5 | 0.959 | 1.241 (0.022) | 1.237 / 1.243 | |
+| every chance x 0.9 | 0.993 | 1.252 (0.022) | 1.242 / 1.255 | |
+| every chance x 0.85 | 0.938 | 1.228 (0.022) | 1.235 / 1.225 | |
+| every chance x 0.8 | 0.883 | 1.217 (0.022) | 1.231 / 1.213 | |
+| every chance − 0.05 | 1.018 | 1.257 (0.022) | 1.248 / 1.260 | |
+| every chance − 0.10 | 0.932 | 1.234 (0.022) | 1.241 / 1.231 | |
+| − 0.05 but the Reliquary | 1.023 | 1.258 (0.022) | 1.248 / 1.262 | 1.204 (0.010) |
+| **− 0.10 but the Reliquary (chosen)** | **0.942** | **1.235 (0.022)** | 1.241 / 1.233 | 1.191 (0.010) |
+| − 0.15 but the Reliquary | 0.862 | 1.213 (0.021) | 1.207 / 1.215 | 1.190 (0.009) |
+
+The Vault and the Reliquary carry 0.45 of the expected charges, and their
+minimum of two charges leaves the weights only the split between two and
+three, so no weight set met the target. The chosen cut lowers every other
+template by the same step on the 0.05 grid: Derelict Station and Spire 0.4,
+Labyrinth and Foundry 0.5, Vault 0.7. It keeps the design's order of rich
+and poor templates, the Reliquary that always pays (a nucleus test asserts
+it) and the weights and minimums; − 0.05 left 1.258. The Vault alone at 0.5
+also meets the target with a slightly smaller cut, but would make the Vault,
+the richest dungeon after the Reliquary, rarer than the Labyrinth and the
+Foundry.
+
+### Readings before and after
+
+Pooled windows; level readings over the clearing seeds, the rest over all
+400 seeds of an arm. Bounded pilot unless named:
+
+| Reading | Fresh before -> after | Strong before -> after |
+|---|---|---|
+| Level ratio at 720 s, with / without chests | 1.278 (0.023) -> 1.235 (0.022) | 1.210 (0.010) -> 1.191 (0.010) |
+| The same with the bot's own chest law | 1.231 (0.023) -> 1.205 (0.022) | 1.145 (0.011) -> 1.131 (0.011) |
+| Level ratio at 360 s | 1.096 (0.009) -> 1.085 (0.009) | 1.164 (0.007) -> 1.147 (0.007) |
+| Mean level at 720 s, with / without | 20.31 / 15.89 -> 19.63 / 15.89 | 33.67 / 27.83 -> 33.14 / 27.83 |
+| Ratio of levels gained by 720 s | 1.304 (0.026) -> 1.257 (0.024) | 1.245 (0.011) -> 1.223 (0.011) |
+| Win, with / without (paired delta) | 0.615 / 0.515 (+0.100, 0.021) -> 0.595 / 0.515 (+0.080, 0.021) | 1.000 / 1.000 |
+| Alive at 720 s | 0.653 / 0.545 (+0.108, 0.019) -> 0.630 / 0.545 (+0.085, 0.019) | 1.000 / 1.000 |
+| Mean survival (900 s cap) | +67.1 s (10.3) -> +53.3 s (9.4) | 900 s each |
+| Clears per run | 3.97 / 3.47 (+0.49, 0.08) -> 3.86 / 3.47 (+0.39, 0.07) | 8.78 / 8.83 (-0.06, 0.05) -> 8.78 / 8.83 (-0.06, 0.05) |
+| Clear share of attempts | 0.926 / 0.892 (+0.034, 0.006) -> 0.922 / 0.892 (+0.030, 0.005) | 1.000 / 1.000 |
+
+The Key and chest economy per run (with chests; the Keys without them in
+parentheses):
+
+| Per run | Fresh before -> after | Strong before -> after |
+|---|---|---|
+| Key drops (Elite-class kills) | 9.27 -> 9.00 | 18.05 -> 18.03 |
+| Keys collected | 8.84 -> 8.57 (7.53) | 17.93 -> 17.90 (17.75) |
+| Chest charges found | 4.47 -> 3.80 | 9.48 -> 8.03 |
+| Materialised / salvaged (a full list) | 4.42 / 0.05 -> 3.78 / 0.02 | 8.57 / 0.92 -> 7.57 / 0.47 |
+| Opened (Keys spent) | 2.89 -> 2.60 | 5.56 -> 5.22 |
+| Weapon changes taken at a chest | 0.29 -> 0.26 | 0 -> 0 |
+| Keys left / charges waiting at the end | 5.93 / 1.51 -> 5.95 / 1.17 | 12.35 / 2.99 -> 12.67 / 2.34 |
+
+Shares of the weapon levels gained by 720 s (clearing seeds, after; directed
+sites add 0.001, since the bot skips them):
+
+| Arm | Resonance | Chests | Automatic | Per run (resonance / chests / automatic) |
+|---|---:|---:|---:|---|
+| Fresh with chests | 0.496 | 0.164 | 0.339 | 9.07 / 3.00 / 6.19 |
+| Fresh without | 0.553 | 0 | 0.447 | 8.04 / 0 / 6.50 |
+| Strong with chests | 0.561 | 0.179 | 0.260 | 16.34 / 5.22 / 7.58 |
+| Strong without | 0.675 | 0 | 0.325 | 16.08 / 0 / 7.75 |
+
+Before the cut the chests' shares were 0.176 (fresh) and 0.187 (strong).
+`DungeonPilotGateTest` passes unchanged on its 120 `PopulationSeeds`: fresh
+clear 0.758 (SE 0.039), died 0.242, median 73.86 s; strong clear 1.000,
+median 26.54 s. Chest content cannot reach its measured attempt, so only
+the tail's `chestsOpened` moved: fresh 36/36 -> 33/33, strong 81/81 ->
+68/68. No gate threshold changed.
+
+### For the owner
+
+- **The stack.** Every Elite-class kill pays a weapon level and a Key, and
+  Keys are in surplus: a dungeon-clearing run ends with about 7 (fresh) or
+  13 (strong) unspent. So chest charges, not Keys, bound the chest levels;
+  each charge found along the route becomes a level. After the cut chests
+  still add 3.0 (fresh) and 5.2 (strong) levels by 720 s, and the fresh
+  ratio of 1.235 lies 0.7 SE under the 1.25 target: more chest charges, a
+  richer template mix or another Key source would cross it. Resonance and
+  chest levels also count against the automatic amplification's cap, whose
+  share falls from 0.45 to 0.34 of the fresh levels gained.
+- **Where the fresh win gain comes from.** Chests raise fresh wins by 0.080
+  (SE 0.021), almost all of it Flux Wake runs that change weapon at their
+  first chest (88 of 200): Flux Wake starts win 0.345 with chests and 0.160
+  without, Arc Coil starts 0.845 and 0.870.
+- Population runs never finish a dungeon, so no population gate sees the
+  stack; only this probe does. Capping Elite resonance or chest Amplify per
+  run would bound it directly; neither is a content knob today.
