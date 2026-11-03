@@ -99,6 +99,11 @@ import kinetickk.ball.gameplay.nucleus.simulation.voidAnchorUntil
 import kinetickk.ball.gameplay.nucleus.simulation.weaveDamage
 import kinetickk.ball.gameplay.nucleus.simulation.weaveRange
 import kinetickk.ball.gameplay.nucleus.simulation.weaveUntil
+import kinetickk.ball.gameplay.nucleus.simulation.integrityLiabilityCut
+import kinetickk.ball.gameplay.nucleus.simulation.matrixFreeDashReadyAt
+import kinetickk.ball.gameplay.nucleus.simulation.secondWindSpent
+import kinetickk.ball.gameplay.nucleus.simulation.stasisBank
+import kinetickk.ball.gameplay.nucleus.simulation.stormCharge
 
 class GameplayPerformanceBenchmarkTest {
     @Test

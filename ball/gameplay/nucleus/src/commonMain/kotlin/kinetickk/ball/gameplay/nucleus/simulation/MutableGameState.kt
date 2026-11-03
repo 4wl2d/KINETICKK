@@ -109,6 +109,8 @@ internal class MutableGameState(
     internal val skillCast: SkillCastState = SkillCastState(copySource?.skillCast)
     /** Lingering reaction effects on the Core. */
     internal val coreReactions: CoreReactionState = CoreReactionState(copySource?.coreReactions)
+    /** Retained relic mechanic timers, charges and counters. */
+    internal val relicMechanics: RelicMechanicState = RelicMechanicState(copySource?.relicMechanics)
 
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
@@ -237,24 +239,7 @@ internal class MutableGameState(
     internal var ouroborosSpent: Boolean = copySource?.ouroborosSpent ?: false
     internal var ouroborosLockedUntil: Float = copySource?.ouroborosLockedUntil ?: 0f
     internal var invulnerableUntil: Float = copySource?.invulnerableUntil ?: 0f
-    internal var glassInvulnerabilityReadyAt: Float = copySource?.glassInvulnerabilityReadyAt ?: 0f
-    internal var bulwarkInvulnerabilityReadyAt: Float = copySource?.bulwarkInvulnerabilityReadyAt ?: 0f
-    internal var stormCharge: Float = copySource?.stormCharge ?: 0f
-    internal var stasisMeter: Float = copySource?.stasisMeter ?: STASIS_SECONDS
-    internal var stasisBank: Int = copySource?.stasisBank ?: 0
-    internal var stasisLockedUntil: Float = copySource?.stasisLockedUntil ?: 0f
-    internal var sinceTurn: Float = copySource?.sinceTurn ?: 0f
-    internal var gyreReadyAt: Float = copySource?.gyreReadyAt ?: 0f
-    /** Endless Gyre's delayed second ring: when it fires (negative when none is pending) and its damage. */
-    internal var gyreEchoAt: Float = copySource?.gyreEchoAt ?: -1f
-    internal var gyreEchoDamage: Float = copySource?.gyreEchoDamage ?: 0f
     internal var overdriveBurnoutUntil: Float = copySource?.overdriveBurnoutUntil ?: 0f
-    internal var overdriveExtension: Float = copySource?.overdriveExtension ?: 0f
-    internal var overdriveKills: Int = copySource?.overdriveKills ?: 0
-    internal var aegisAbsorbed: Float = copySource?.aegisAbsorbed ?: 0f
-    internal var aegisNovaReadyAt: Float = copySource?.aegisNovaReadyAt ?: 0f
-    internal var shieldBreakArmed: Boolean = copySource?.shieldBreakArmed ?: false
-    internal var shieldBreakReadyAt: Float = copySource?.shieldBreakReadyAt ?: 0f
     internal var overheatArmed: Boolean = copySource?.overheatArmed ?: true
     internal var wasBraking: Boolean = copySource?.wasBraking ?: false
     internal var brakeHoldTime: Float = copySource?.brakeHoldTime ?: 0f
@@ -263,20 +248,12 @@ internal class MutableGameState(
     internal var freeDashPrimed: Boolean = copySource?.freeDashPrimed ?: false
     internal var freeDashReadyAt: Float = copySource?.freeDashReadyAt ?: 0f
     internal var comboKillCounter: Int = copySource?.comboKillCounter ?: 0
-    internal var glassCharge: Float = copySource?.glassCharge ?: 0f
-    /** Maximum integrity Null Covenant's liability currently withholds (0 when none). */
-    internal var integrityLiabilityCut: Float = copySource?.integrityLiabilityCut ?: 0f
-    internal var cinderRecoilReadyAt: Float = copySource?.cinderRecoilReadyAt ?: 0f
     internal var offerPity: Int = copySource?.offerPity ?: 0
     /** Item offers opened this run; the Matrix widens every n-th one. */
     internal var itemOffersOpened: Int = copySource?.itemOffersOpened ?: 0
-    internal var secondWindSpent: Boolean = copySource?.secondWindSpent ?: false
-    /** When the next heat-free Matrix Dash is ready. */
-    internal var matrixFreeDashReadyAt: Float = copySource?.matrixFreeDashReadyAt ?: 0f
     internal var dashHitThisDash: Boolean = copySource?.dashHitThisDash ?: false
     internal var clauseDepth: Int = copySource?.clauseDepth ?: 0
     internal var arsenalCounter: Int = copySource?.arsenalCounter ?: 0
-    internal var necroticClock: Float = copySource?.necroticClock ?: 0f
     internal var soundCueStorage: MutableList<GameplayAudioCue>? =
         copySource?.soundCueStorage?.let { source -> ArrayList(source) }
     internal val soundCues: PendingSoundCueBuffer

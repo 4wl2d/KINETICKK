@@ -207,3 +207,93 @@ internal var MutableGameState.markDispatches: Int
 internal var MutableGameState.shotsErased: Long
     get() = coreReactions.shotsErased
     set(value) { coreReactions.shotsErased = value }
+
+// RelicMechanicState
+
+internal var MutableGameState.glassInvulnerabilityReadyAt: Float
+    get() = relicMechanics.glassInvulnerabilityReadyAt
+    set(value) { relicMechanics.glassInvulnerabilityReadyAt = value }
+
+internal var MutableGameState.bulwarkInvulnerabilityReadyAt: Float
+    get() = relicMechanics.bulwarkInvulnerabilityReadyAt
+    set(value) { relicMechanics.bulwarkInvulnerabilityReadyAt = value }
+
+internal var MutableGameState.stormCharge: Float
+    get() = relicMechanics.stormCharge
+    set(value) { relicMechanics.stormCharge = value }
+
+internal var MutableGameState.stasisMeter: Float
+    get() = relicMechanics.stasisMeter
+    set(value) { relicMechanics.stasisMeter = value }
+
+internal var MutableGameState.stasisBank: Int
+    get() = relicMechanics.stasisBank
+    set(value) { relicMechanics.stasisBank = value }
+
+internal var MutableGameState.stasisLockedUntil: Float
+    get() = relicMechanics.stasisLockedUntil
+    set(value) { relicMechanics.stasisLockedUntil = value }
+
+internal var MutableGameState.sinceTurn: Float
+    get() = relicMechanics.sinceTurn
+    set(value) { relicMechanics.sinceTurn = value }
+
+internal var MutableGameState.gyreReadyAt: Float
+    get() = relicMechanics.gyreReadyAt
+    set(value) { relicMechanics.gyreReadyAt = value }
+
+internal var MutableGameState.gyreEchoAt: Float
+    get() = relicMechanics.gyreEchoAt
+    set(value) { relicMechanics.gyreEchoAt = value }
+
+internal var MutableGameState.gyreEchoDamage: Float
+    get() = relicMechanics.gyreEchoDamage
+    set(value) { relicMechanics.gyreEchoDamage = value }
+
+internal var MutableGameState.overdriveExtension: Float
+    get() = relicMechanics.overdriveExtension
+    set(value) { relicMechanics.overdriveExtension = value }
+
+internal var MutableGameState.overdriveKills: Int
+    get() = relicMechanics.overdriveKills
+    set(value) { relicMechanics.overdriveKills = value }
+
+internal var MutableGameState.aegisAbsorbed: Float
+    get() = relicMechanics.aegisAbsorbed
+    set(value) { relicMechanics.aegisAbsorbed = value }
+
+internal var MutableGameState.aegisNovaReadyAt: Float
+    get() = relicMechanics.aegisNovaReadyAt
+    set(value) { relicMechanics.aegisNovaReadyAt = value }
+
+internal var MutableGameState.shieldBreakArmed: Boolean
+    get() = relicMechanics.shieldBreakArmed
+    set(value) { relicMechanics.shieldBreakArmed = value }
+
+internal var MutableGameState.shieldBreakReadyAt: Float
+    get() = relicMechanics.shieldBreakReadyAt
+    set(value) { relicMechanics.shieldBreakReadyAt = value }
+
+internal var MutableGameState.glassCharge: Float
+    get() = relicMechanics.glassCharge
+    set(value) { relicMechanics.glassCharge = value }
+
+internal var MutableGameState.integrityLiabilityCut: Float
+    get() = relicMechanics.integrityLiabilityCut
+    set(value) { relicMechanics.integrityLiabilityCut = value }
+
+internal var MutableGameState.cinderRecoilReadyAt: Float
+    get() = relicMechanics.cinderRecoilReadyAt
+    set(value) { relicMechanics.cinderRecoilReadyAt = value }
+
+internal var MutableGameState.secondWindSpent: Boolean
+    get() = relicMechanics.secondWindSpent
+    set(value) { relicMechanics.secondWindSpent = value }
+
+internal var MutableGameState.matrixFreeDashReadyAt: Float
+    get() = relicMechanics.matrixFreeDashReadyAt
+    set(value) { relicMechanics.matrixFreeDashReadyAt = value }
+
+internal var MutableGameState.necroticClock: Float
+    get() = relicMechanics.necroticClock
+    set(value) { relicMechanics.necroticClock = value }
