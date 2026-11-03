@@ -18,7 +18,8 @@ import kotlin.test.assertTrue
  * and this gate measures them with an engaging pilot. [DungeonPilot] flies one dungeon attempt per run on the first
  * [GATE_RUNS] of [PopulationSeeds] (C42), in two arms: FRESH, gate A's fresh tier-0 profile (the Orb and the Flux
  * Wake, no Matrix), and STRONG, gate B's full-Matrix tier-3 Pentagon with its signature Arc Coil. A run stops
- * [TAIL_SECONDS] after its attempt's outcome, or when no attempt started by 150 s before the Architect.
+ * [TAIL_SECONDS] after its attempt's outcome (long enough for the pilot to open a waiting Totem chest, which the
+ * finished attempt no longer measures), or when no attempt started by 150 s before the Architect.
  *
  * The thresholds are the structures design's bands (§11.2): a fresh build clears most of its dungeons without
  * trivialising them and rarely dies inside, a strong build clears nearly all of them, clearly more often and within
@@ -144,12 +145,21 @@ class DungeonPilotGateTest {
         val wallImpactFrames: Int,
         val wallHpLossUpperBound: Double,
         val nonWallHpLoss: Double,
+        /** Totem chest charges the attempted structure pays on its clear (0: none). */
+        val chestCharges: Int,
+        /** Keys the Core held when the attempt ended (-1 without an outcome). */
+        val keysAtOutcome: Int,
+        /** Chest charges the pilot opened after the outcome, before the run stopped (Keys spent: only a chest spends one). */
+        val chestOpens: Int,
     ) {
+        /** True when the attempt cleared a structure that pays a chest while the Core held a Key: the pilot should open it. */
+        val chestWaiting: Boolean get() = attempt?.outcome == DungeonOutcome.CLEARED && chestCharges > 0 && keysAtOutcome > 0
+
         fun line(): String = "seed=$seed ${attempt?.line() ?: "NO_ATTEMPT"} stop=${"%.2f".format(elapsed)} phase=$phase " +
             "hp=${"%.2f".format(hp)} level=$level weapon=$weapon/$weaponLevel reason=$reason " +
             "entryHpShare=${"%.3f".format(entryHpShare)} lastRoom=$lastEngagedRoom roomHp=$roomEntryHp " +
             "wallImpactFrames=$wallImpactFrames wallHpLossUpperBound=${"%.2f".format(wallHpLossUpperBound)} " +
-            "nonWallHpLoss=${"%.2f".format(nonWallHpLoss)}"
+            "nonWallHpLoss=${"%.2f".format(nonWallHpLoss)} chest=$chestCharges keysAtOutcome=$keysAtOutcome chestOpens=$chestOpens"
     }
 
     internal companion object {
@@ -214,10 +224,15 @@ class DungeonPilotGateTest {
             var wallImpactFrames = 0
             var wallHpLossUpperBound = 0.0
             var nonWallHpLoss = 0.0
+            var chestCharges = 0
+            var keysAtOutcome = -1
+            var chestOpens = 0
             while (state.elapsed < stopAt && (state.phase == GamePhase.RUNNING || state.phase == GamePhase.CHOICE)) {
                 val heldBefore = state.dungeon != null
                 val damageBefore = state.damageTaken
                 val wallReadyBefore = state.obstacleHitReadyAt
+                val endedBefore = pilot.attempt != null
+                val keysBefore = state.keys
                 if (state.phase == GamePhase.CHOICE) pilot.choose(state) else {
                     pilot.control(state)
                     state.update(0.02f)
@@ -234,7 +249,9 @@ class DungeonPilotGateTest {
                         wallHpLossUpperBound += hpLoss
                     } else nonWallHpLoss += hpLoss
                 }
+                if (endedBefore && state.keys < keysBefore) chestOpens += keysBefore - state.keys
                 state.dungeon?.let { held ->
+                    chestCharges = held.chestCharges
                     if (entryHpShare.isNaN()) entryHpShare = state.hp / state.maxHp
                     if (held.engagedRoom >= 0 && held.engagedRoom != lastEngagedRoom) {
                         lastEngagedRoom = held.engagedRoom
@@ -242,6 +259,7 @@ class DungeonPilotGateTest {
                     }
                 }
                 pilot.observe(state)
+                if (pilot.attempt != null && keysAtOutcome < 0) keysAtOutcome = state.keys
                 observer(state)
                 state.takeSoundCues()
                 state.takeVisualFxCues()
@@ -252,11 +270,14 @@ class DungeonPilotGateTest {
             return DungeonRun(
                 seed, pilot.attempt, state.phase, state.elapsed, state.hp, state.level, state.weapon, state.weaponLevel, state.message,
                 entryHpShare, lastEngagedRoom, roomEntryHp.joinToString(","),
-                wallImpactFrames, wallHpLossUpperBound, nonWallHpLoss,
+                wallImpactFrames, wallHpLossUpperBound, nonWallHpLoss, chestCharges, keysAtOutcome, chestOpens,
             )
         }
 
-        /** The arm's shares and median clear with bootstrap standard errors (resamples of runs) and its templates. */
+        /**
+         * The arm's shares and median clear with bootstrap standard errors (resamples of runs), its templates, and how
+         * many cleared attempts that left a chest while the Core held a Key had it opened before the run stopped.
+         */
         fun summary(runs: List<DungeonRun>): String {
             val metrics = listOf<Pair<String, (List<DungeonRun>) -> Double>>(
                 "attemptShare" to { sample -> sample.count { it.attempt != null }.toDouble() / sample.size },
@@ -268,8 +289,10 @@ class DungeonPilotGateTest {
             )
             val attempts = runs.mapNotNull { it.attempt }
             val templates = attempts.groupingBy { it.template }.eachCount().toSortedMap()
+            val waiting = runs.filter { it.chestWaiting }
             return "n=${runs.size} attempts=${attempts.size} " +
-                metrics.joinToString(" ") { (name, metric) -> bootstrapLine(name, runs, metric = metric) } + " templates=$templates"
+                metrics.joinToString(" ") { (name, metric) -> bootstrapLine(name, runs, metric = metric) } + " templates=$templates" +
+                " chestsOpened=${waiting.count { it.chestOpens > 0 }}/${waiting.size}"
         }
 
         /** The share of the runs' attempts that ended in [outcome] (NaN without an attempt). */
