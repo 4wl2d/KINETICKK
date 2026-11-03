@@ -36,6 +36,13 @@ import kotlin.test.assertTrue
  * Judgement 0.776 (0.054); N0 survival 0.965 (0.017), Harvest 0.860 (0.046), Pyre 0.638 (0.063), scorch 0.359 (0.032);
  * Z10 0.980 (0.014) and 0.713 (0.045); N10 0.832 (0.037) and 0.782 (0.041); A3 1.000 and 0.308 (0.042); A0 0.931
  * (0.025) and 0.078 (0.027).
+ *
+ * On the tree with Totem chests, Elite resonance, the dungeon collapse and Core Stasis the Harvest read 0.933 (0.032) on
+ * the gate seeds and 0.98 on the window with every window seed forced to it, above its 0.90 ceiling. Recalibrated on
+ * the window: ember life 1.0 s (window Harvest 0.80). On the gate seeds: Z0 survival 0.983 (0.012), Ascent 0.817
+ * (0.050), Judgement 0.633 (0.062); N0 survival 0.992 (0.008), Harvest 0.833 (0.048), Pyre 0.717 (0.059), scorch 0.339
+ * (0.035); Z10 0.970 (0.017) and 0.730 (0.044); N10 0.890 (0.031) and 0.870 (0.033); A3 1.000 and 0.325 (0.043); A0
+ * 0.949 (0.020) and 0.068 (0.023).
  */
 class DimensionPilotGateTest {
     /**
@@ -121,7 +128,8 @@ class DimensionPilotGateTest {
      * paceCeiling, scorch, rings, embers, emberLife, emberRadius, haloRadius, turnMin, turnMax, spacingMin, spacingMax,
      * splitFactor, throwMin, throwMax,
      * zenithBossShare, nadirBossShare, zenithBossDamage, nadirBossDamage, and the Nadir's nadirSpawn, nadirCap and
-     * nadirVisit seconds). The outcome arms
+     * nadirVisit seconds). `KK_DIMENSION_OBJECTIVE=HARVEST` (any objective) forces it on every window seed of the arms that
+     * play it, in place of the two halves. The outcome arms
      * OC (no rift), OZ and ON (a Zenith or Nadir visit at 165 s with its rolled objective) play whole runs and print the
      * win shares the outcome gate compares.
      */
@@ -131,10 +139,12 @@ class DimensionPilotGateTest {
         val seeds = windowSeeds(indices)
         val content = probedContent(System.getenv("KK_DIMENSION_KNOBS").orEmpty())
         val wanted = System.getenv("KK_DIMENSION_ARMS")?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }
-        println("DIMENSION PROBE window $indices knobs ${knobs(content)}")
+        val forced = System.getenv("KK_DIMENSION_OBJECTIVE")?.takeIf { it.isNotBlank() }?.let { DimensionObjective.valueOf(it.trim()) }
+        println("DIMENSION PROBE window $indices knobs ${knobs(content)}${forced?.let { " objective $it" }.orEmpty()}")
         for (arm in DimensionArm.entries) {
             if (wanted != null && arm.label !in wanted) continue
-            val runs = flyArm(arm, seeds, content)
+            if (forced != null && forced !in arm.objectives) continue
+            val runs = flyArm(arm, seeds, content, objectives = forced?.let { listOf(it) } ?: arm.objectives)
             runs.forEach { println("DIMENSION PROBE ${arm.label} $it") }
             println("DIMENSION PROBE SUMMARY ${arm.label} ${summary(runs)}")
         }
@@ -196,18 +206,19 @@ class DimensionPilotGateTest {
         }
 
         /**
-         * [arm] on [seeds]: the first half forced to the arm's first objective, the rest to its last. Probes pass an
-         * [observer] per seed that sees the state after every input frame.
+         * [arm] on [seeds]: the first half forced to the first of [objectives] (the arm's own), the rest to its last.
+         * Probes pass an [observer] per seed that sees the state after every input frame.
          */
         fun flyArm(
             arm: DimensionArm,
             seeds: List<Int>,
             content: GameplayContentSnapshot,
+            objectives: List<DimensionObjective> = arm.objectives,
             observer: (Int) -> (MutableGameState) -> Unit = { {} },
         ): List<DimensionVisitRun> {
             val half = (seeds.size + 1) / 2
             return populationOf(seeds.withIndex().toList()) { (index, seed) ->
-                val objective = if (index < half) arm.objectives.first() else arm.objectives.last()
+                val objective = if (index < half) objectives.first() else objectives.last()
                 flyDimensionRun(seed, arm.profile, arm.target, arm.riftAt, objective, arm.takeRefuse, content = content, observer = observer(seed))
             }
         }
