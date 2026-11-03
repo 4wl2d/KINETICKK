@@ -290,6 +290,28 @@ class WorldEventTest {
     }
 
     @Test
+    fun aStrikeDueInTheEventsLastStepLandsBeforeTheSkiesClear() {
+        val meteor = policy.meteor
+        val state = arena()
+        val plan = state.planOnly(WorldEventKind.METEOR_SHOWER)
+        state.eventStepAt(plan.startsAt + 5f)
+        val x = state.coreX + 600f
+        val y = state.coreY
+        val target = state.addEnemyForTesting(x, y)
+        // Armed so that it lands exactly at the end, as armStrike allows.
+        state.worldEvent = checkNotNull(state.worldEvent).copy(
+            strikes = immutableListOf(EventStrikeProjection(x, y, meteor.radius, plan.endsAt - meteor.armSeconds, plan.endsAt)),
+        )
+        state.worldEventNextPulseAt = Float.MAX_VALUE
+        state.eventStepAt(plan.endsAt)
+        assertTrue(target.hp < 1_000f, "The strike landed on the enemy inside its ring")
+        assertEquals(1, state.pickups.count { it.type == PickupType.DATA && it.x == x && it.y == y }, "and left its Data")
+        assertNull(state.worldEvent, "The event still ends at its end")
+        assertEquals(SKIES_CLEAR, state.message)
+        assertEquals(1, state.nextWorldEvent)
+    }
+
+    @Test
     fun aDataStormRainsDataAroundTheHeadingAndEveryKillPaysMore() {
         val storm = policy.dataStorm
         val state = arena()

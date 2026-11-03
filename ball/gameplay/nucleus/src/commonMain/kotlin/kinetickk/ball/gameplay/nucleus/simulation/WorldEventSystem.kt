@@ -154,8 +154,8 @@ private fun WorldEventPolicy.pulseSecondsOf(kind: WorldEventKind): Float = when 
 /**
  * One step of the world events. The Architect's arrival and any world layer but realspace end the event in progress
  * silently and consume every plan whose telegraph passes meanwhile. Otherwise the next plan starts at its telegraph
- * (with its banner), the event ends at its end (SKIES CLEAR), due strikes land in list order, and an active event runs
- * its kind's step and at most one pulse.
+ * (with its banner), due strikes land in list order (one due in the event's last step too), the event ends at its end
+ * (SKIES CLEAR), and an active event runs its kind's step and at most one pulse.
  */
 internal fun MutableGameState.updateWorldEvents(delta: Float) {
     if (bossSpawned || !inBaseLayer()) {
@@ -174,15 +174,16 @@ internal fun MutableGameState.updateWorldEvents(delta: Float) {
         startWorldEvent(plan)
     }
     val event = worldEvent ?: return
+    // A telegraphed strike lands even in the step its event ends.
+    if (event.strikes.isNotEmpty()) {
+        landDueStrikes(event)
+        if (phase != GamePhase.RUNNING) return
+    }
     if (elapsed >= event.endsAt) {
         clearWorldEvent()
         message = SKIES_CLEAR
         messageTime = SKIES_CLEAR_SECONDS
         return
-    }
-    if (event.strikes.isNotEmpty()) {
-        landDueStrikes(event)
-        if (phase != GamePhase.RUNNING) return
     }
     if (elapsed < event.startsAt) return
     val policy = content.variety.worldEvents
