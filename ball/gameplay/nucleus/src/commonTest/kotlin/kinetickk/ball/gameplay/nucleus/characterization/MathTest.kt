@@ -128,6 +128,21 @@ class MathTest {
     }
 
     @Test
+    fun theSamePowerUnitHitEarnsTheSameTierOnEveryRebirthTier() {
+        // The threshold is tier-0 damage: at Rebirth 10 (×3,600) a hit shows 3,600 times larger and so do the tiers.
+        val scale = 3_600.0
+        for (power in listOf(10L, 49L, 50L, 199L, 200L, 999L, 1_000L, 25_000L)) for (critical in listOf(false, true)) {
+            assertEquals(damageNumberTier(power, firstThreshold = 50, critical = critical),
+                damageNumberTier((power * scale).toLong(), firstThreshold = 50, critical = critical, numberScale = scale), "$power $critical")
+        }
+        assertEquals(DamageNumberTier.STANDARD, damageNumberTier(176_400L, firstThreshold = 50, numberScale = scale))
+        assertEquals(DamageNumberTier.STRONG, damageNumberTier(180_000L, firstThreshold = 50, numberScale = scale))
+        assertEquals(DamageNumberTier.DEVASTATING, damageNumberTier(3_600_000L, firstThreshold = 50, numberScale = scale))
+        assertEquals(damageNumberTier(199L, firstThreshold = 50), damageNumberTier(199L, firstThreshold = 50, numberScale = 0.5),
+            "a scale below 1 reads as 1: it never lowers the thresholds")
+    }
+
+    @Test
     fun criticalDamageIsAtLeastPowerfulButStillEarnsTheRedTierByMagnitude() {
         assertEquals(DamageNumberTier.POWERFUL, damageNumberTier(10L, firstThreshold = 50, critical = true))
         assertEquals(DamageNumberTier.DEVASTATING, damageNumberTier(1_000L, firstThreshold = 50, critical = true))
