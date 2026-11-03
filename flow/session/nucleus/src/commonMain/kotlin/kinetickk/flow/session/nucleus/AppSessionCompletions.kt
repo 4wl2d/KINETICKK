@@ -114,7 +114,7 @@ internal fun completeRebirthProfileResult(
     )
 }
 
-internal fun completeStart(state: AppSessionState, pulse: GameplayRunStartedPulse): AppSessionDecision {
+internal fun completeStart(state: AppSessionState, pulse: AppSessionNucleusPulse.Result.GameplayRunStarted): AppSessionDecision {
     val expectedRun = state.pendingStartRunId()
     check(pulse.result.runId == expectedRun && expectedRun == state.activeRunId)
     return accepted(state.copy(
@@ -129,7 +129,7 @@ internal fun completeStart(state: AppSessionState, pulse: GameplayRunStartedPuls
     ))
 }
 
-internal fun completePause(state: AppSessionState, pulse: GameplayOverlayPausedPulse): AppSessionDecision {
+internal fun completePause(state: AppSessionState, pulse: AppSessionNucleusPulse.Result.GameplayOverlayPaused): AppSessionDecision {
     val pending = checkNotNull(state.pendingWorkflow as? PendingWorkflow.PausingForOverlay)
     check(pulse.result.runId == pending.runId && pending.runId == state.activeRunId)
     return accepted(state.copy(
@@ -143,7 +143,7 @@ internal fun completePause(state: AppSessionState, pulse: GameplayOverlayPausedP
     ))
 }
 
-internal fun rejectStart(state: AppSessionState, pulse: GameplayStartRefusedPulse): AppSessionDecision {
+internal fun rejectStart(state: AppSessionState, pulse: AppSessionNucleusPulse.Refusal.GameplayStartRefused): AppSessionDecision {
     check(pulse.runId == state.pendingStartRunId() && pulse.runId == state.activeRunId)
     return accepted(state.copy(
         revision = state.nextRevision(),
@@ -156,7 +156,7 @@ internal fun rejectStart(state: AppSessionState, pulse: GameplayStartRefusedPuls
     ))
 }
 
-internal fun rejectPause(state: AppSessionState, pulse: GameplayPauseRefusedPulse): AppSessionDecision {
+internal fun rejectPause(state: AppSessionState, pulse: AppSessionNucleusPulse.Refusal.GameplayPauseRefused): AppSessionDecision {
     val pending = checkNotNull(state.pendingWorkflow as? PendingWorkflow.PausingForOverlay)
     check(pulse.runId == pending.runId && pending.runId == state.activeRunId)
     return accepted(state.copy(revision = state.nextRevision(), pendingWorkflow = null,
@@ -171,7 +171,7 @@ private fun AppSessionState.pendingStartRunId(): RunId = when (val pending = pen
 
 internal fun completeGameplaySettings(
     state: AppSessionState,
-    pulse: GameplaySettingsAppliedPulse,
+    pulse: AppSessionNucleusPulse.Result.GameplaySettingsApplied,
 ): AppSessionDecision = when (val pending = state.pendingWorkflow) {
     is PendingWorkflow.ApplyingSettings -> {
         check(pulse.result.runId == pending.runId && pending.runId == state.activeRunId)
@@ -208,7 +208,7 @@ internal fun rejectProfileSettings(state: AppSessionState): AppSessionDecision {
 
 internal fun rejectGameplaySettings(
     state: AppSessionState,
-    pulse: GameplaySettingsRefusedPulse,
+    pulse: AppSessionNucleusPulse.Refusal.GameplaySettingsRefused,
 ): AppSessionDecision {
     val expectedRun = when (val pending = state.pendingWorkflow) {
         is PendingWorkflow.ApplyingSettings -> pending.runId
@@ -267,7 +267,7 @@ internal fun rejectRebirth(state: AppSessionState): AppSessionDecision {
     ))
 }
 
-internal fun rejectExit(state: AppSessionState, pulse: GameplayExitRefusedPulse): AppSessionDecision {
+internal fun rejectExit(state: AppSessionState, pulse: AppSessionNucleusPulse.Refusal.GameplayExitRefused): AppSessionDecision {
     val pending = checkNotNull(state.pendingWorkflow as? PendingWorkflow.ExitingRun)
     check(pulse.runId == pending.runId && pulse.runId == state.activeRunId)
     return accepted(state.copy(
