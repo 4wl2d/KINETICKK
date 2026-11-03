@@ -7,7 +7,6 @@
 Исходная версия игры: `b1a5faf52806e665c456c08f4bcab6ae49c5e8f1`.
 Источник архитектуры зафиксирован на
 [`e216e21d`](https://github.com/4wl2d/Ballarch/tree/e216e21d91617ce751a90c9968c293c126382759):
-[AI agents](https://github.com/4wl2d/Ballarch/blob/e216e21d91617ce751a90c9968c293c126382759/docs/ai-agents.md),
 [Core 2.0.0-rc.1](https://github.com/4wl2d/Ballarch/blob/e216e21d91617ce751a90c9968c293c126382759/spec/ballarch-core-2.0.md),
 [переход с 1.5](https://github.com/4wl2d/Ballarch/blob/e216e21d91617ce751a90c9968c293c126382759/docs/migration-from-1.5.md).
 
@@ -49,8 +48,9 @@ Kotlin reference рассчитан на JVM; проекту с Android, Desktop
 3. `verifyArchitecture` теперь запрещает production-зависимости `api` и
    `nucleus` на закрытые реализации, UI и resource-модули. Разрешены публичные
    `:api` и `:foundation:common`; тестовые зависимости для fixture сохранены.
-4. Добавлена проверка импортов всех `nucleus/src/*Main/kotlin` на UI,
-   платформенное I/O, корутины, reflection и источники внешнего времени.
+4. Добавлена проверка импортов всех рабочих `nucleus/src/*/kotlin` (кроме
+   `*Test`) на UI, платформенное I/O, корутины, reflection и источники
+   внешнего времени.
    Отрицательные примеры покрывают 36 запрещённых рёбер и 13 вариантов импортов.
    Это **проверка импортов**, а не доказательство чистоты: полностью
    квалифицированные обращения, default imports и эффекты внутри разрешённых
@@ -172,7 +172,6 @@ SharedPreferences. FPS, frame time, GPU, энергопотребление и �
 | UX и игровые возможности | Не изменены; не исправлялись сообщения интерфейса и баланс |
 | Независимость от библиотеки | Новый runtime/dependency не нужен; изменения остаются обычным KMP-кодом |
 | Полное соответствие Ballarch | Нет: внедрены отдельные принципы, conformance Core 2.0 не проходился |
-| Работа AI-агентов / скорость разработки | Не измерены. Сам `ai-agents.md` не заявляет доказанного выигрыша |
 | Зрелость подхода | Исследована версия 2.0.0-rc.1; перенос всего проекта повысил бы зависимость от ещё меняющейся спецификации |
 
 Итоговая оценка: небольшое положительное изменение в ясности контракта,
@@ -194,7 +193,6 @@ SharedPreferences. FPS, frame time, GPU, энергопотребление и �
 - `:app:android:assembleDebug` и `:app:web:compileKotlinWasmJs`.
 - `verifyArchitecture` в обычном и isolated-projects режиме,
   включая отрицательные fixture новых правил.
-- Независимое ревью изменения по исходникам: замечаний не найдено.
 
 Отдельно на исходном production-коде выполнены 159 JUnit-результатов трёх
 модулей Profile, включая ту же новую матрицу семи исходов хранилища: всё
@@ -216,21 +214,10 @@ benchmark fixture. Он исправлен до замеров; последую
   :ball:profile:resource:desktopTest :flow:session:nucleus:desktopTest \
   :flow:session:impl:desktopTest :foundation:common:desktopTest :app:shared:desktopTest
 ./gradlew verifyArchitecture -Pkinetickk.gradle.isolatedProfile=true --isolated-projects
-CHROME_BIN=/path/to/chromium ./gradlew \
+CHROME_BIN=/path/to/chromium ./gradlew -Pkinetickk.variant=debug \
   :ball:profile:nucleus:wasmJsBrowserTest :ball:profile:impl:wasmJsBrowserTest \
   :ball:profile:resource:wasmJsBrowserTest :app:web:compileKotlinWasmJs \
   :app:android:assembleDebug
 ```
 
 Для измерений см. [performance tools](../../tools/performance/README.md).
-Сырые данные и логи этой сессии лежат в игнорируемом
-`build/reports/ballarch-0.6.0/`: `benchmark-manifest.json`,
-`candidate-production.patch`, `baseline-1.jsonl`, `candidate-1.jsonl`,
-`candidate-2.jsonl`, `baseline-2.jsonl`, `comparison.json`,
-`static-comparison.json`, `test-counts.json`, `browser-test-counts.json`,
-`baseline-test-counts.json`
-и логи проверок. В manifest зафиксированы hash fixture, hash изменения
-production-кода, команды, порядок запусков и exit codes.
-
-Изменения локальные в ветке `feature/worlds-0.6.0`; публикация, push и
-GitHub PR в рамках этой оценки не выполнялись.

@@ -29,10 +29,10 @@ Prototype artifacts built from an uncommitted working tree are development
 builds, not official releases.
 
 The current project version is `0.6.0`. The macOS `jpackage` tool rejects an
-application version whose first number is zero, so `createDistributable` cannot
-produce the native app until the release owner chooses a positive-major macOS
-package version. Record that mapping in the release notes; do not silently
-present the prototype as version `1.0.0`.
+application version whose first number is zero, so macOS package metadata uses
+`(major + 1).minor.patch`: `0.6.0` packages as `1.6.0` (see
+[Development](DEVELOPMENT.md)). Record that mapping in the release notes; do not
+silently present the prototype as version `1.0.0`.
 
 ## Building from source
 
@@ -41,7 +41,7 @@ With JDK 17 or newer:
 ```bash
 ./gradlew desktopTest
 ./gradlew run
-./gradlew :app:android:assembleDebug
+./gradlew -Pkinetickk.variant=debug :app:android:assembleDebug
 ./gradlew wasmJsBrowserDistribution
 ```
 

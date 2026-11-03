@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <a href="https://tomilov.tech/game/"><strong>ИГРАТЬ В БРАУЗЕРЕ ↗</strong></a>
+  <a href="https://tomilov.tech/game/"><strong>ИГРАТЬ В БРАУЗЕРЕ (0.5.0) ↗</strong></a>
   &nbsp; · &nbsp;
   <a href="https://github.com/4wl2d/KINETICKK/releases">Релизы</a>
   &nbsp; · &nbsp;

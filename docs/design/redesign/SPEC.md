@@ -347,9 +347,9 @@ localization.
 - Settings: first row in GRAPHICS, segmented control with the five options, (!) info:
   "Remaps you, threat, heat, shield and polarity to pairs you can tell apart. Mono adds
   hatching to every threat." Add EN + RU strings.
-- Rendering: one `KkRolePalette(you, threat, heat, shield, pol)` value from `tokens.json
+- Rendering: one `KkRolePalette(you, threat, heat, shield, pol, soft)` value from `tokens.json
   colorVision`, provided to every renderer (CompositionLocal for composables; passed through
-  the existing render context for Canvas renderers). All role colors (Volt/Hazard/Heat/Shield/Pol)
+  the existing render context for Canvas renderers). All role colors (Volt/Hazard/Heat/Shield/Pol/Soft)
   in world + UI read from it. MONO also draws the hatch fill over every threat (enemies,
   projectiles, hazard meters).
 
@@ -386,7 +386,7 @@ localization.
 
 ```bash
 ./gradlew desktopTest
-./gradlew :app:android:assembleDebug :app:android:assembleDebugAndroidTest :app:shared:assembleAndroidDeviceTest
+./gradlew -Pkinetickk.variant=debug :app:android:assembleDebug :app:android:assembleDebugAndroidTest :app:shared:assembleAndroidDeviceTest
 CHROME_BIN=/path/to/chrome ./gradlew wasmJsBrowserTest wasmJsBrowserDistribution --max-workers=1
 ./gradlew verifyArchitecture
 ```
