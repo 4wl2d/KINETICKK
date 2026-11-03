@@ -592,15 +592,11 @@ class PerceptibleItemImpactTest {
         }.toImmutableList())
 
     /**
-     * [this] content for a scripted arena: no generated obstacles (Addendum B2: no encounter is about terrain, and Dashes
-     * must not meet the start area's rim), no Elite resonance (an Elite target that respawns as it falls never levels the
-     * weapon up mid-measurement) and Core Stasis off (the scripted hovers measure items, not player behaviour).
+     * [this] content for a scripted arena: no generated obstacles (Addendum B2), no Elite resonance (a respawning Elite
+     * target never levels the weapon mid-measurement) and Core Stasis off (the hovers measure items, not players).
      */
-    private fun GameplayContentSnapshot.scriptedArena(): GameplayContentSnapshot = copy(
-        obstacles = obstacles.copy(meanPerChunk = 0f),
-        tempo = tempo.copy(eliteResonanceLevels = 0),
-        coreStasis = CoreStasisTuning.DISABLED,
-    )
+    private fun GameplayContentSnapshot.scriptedArena(): GameplayContentSnapshot = copy(obstacles = obstacles.copy(meanPerChunk = 0f),
+        tempo = tempo.copy(eliteResonanceLevels = 0), coreStasis = CoreStasisTuning.DISABLED)
 
     /** Thirty consecutive item offers at Reborn 10 with every item unlocked: the summed rarity of the cards. */
     private fun offers(setup: Setup, item: ItemDefinition?, content: GameplayContentSnapshot): Outcome {
