@@ -40,6 +40,8 @@ import kinetickk.ball.gameplay.nucleus.simulation.takeVisualFxCues
 import kinetickk.ball.gameplay.nucleus.simulation.update
 import kinetickk.ball.gameplay.nucleus.simulation.updatePointer
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
+import kinetickk.ball.gameplay.nucleus.simulation.trailLastX
+import kinetickk.ball.gameplay.nucleus.simulation.trailLastY
 import kotlin.math.roundToInt
 import kotlin.test.Test
 import kotlin.test.assertEquals

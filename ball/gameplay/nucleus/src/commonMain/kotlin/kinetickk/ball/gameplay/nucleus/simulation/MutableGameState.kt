@@ -43,6 +43,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.builds.*
 import kinetickk.ball.gameplay.nucleus.simulation.sites.SiteRunState
 import kinetickk.ball.gameplay.nucleus.simulation.variety.VarietyRunState
 import kinetickk.ball.gameplay.nucleus.simulation.elements.ElementRunState
+import kinetickk.ball.gameplay.nucleus.simulation.weapons.WeaponRunState
 
 /**
  * Reducer-owned simulation state. Each field declares its initial value and its copy from [copySource] together,
@@ -173,6 +174,9 @@ internal class MutableGameState(
     /** Combat fields and the reaction and break budgets. */
     internal val elementRun: ElementRunState = ElementRunState(copySource?.elementRun)
 
+    /** Weapon level, runtime, clocks and weapon entities. */
+    internal val weaponRun: WeaponRunState = WeaponRunState(content, copySource?.weaponRun)
+
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
     /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */
@@ -220,8 +224,6 @@ internal class MutableGameState(
         get() = PendingVisualFxCueBuffer(this)
     /** Mutable character state; a deep copy forks it (scalars and buffers copied). */
     internal var characterRuntime: CharacterRuntime = copySource?.characterRuntime?.fork() ?: CharacterRuntime()
-    /** Owned state of the equipped weapon (entities, proc gates, element cadences, scaling inputs); a deep copy forks it. */
-    internal var weaponRuntime: WeaponRuntime = copySource?.weaponRuntime?.fork() ?: WeaponRuntime()
     /** Window kinds draw from their own stream, so sites never shift offers, spawns or crits. */
     internal var siteRandom: CloneableXorWowRandom = copySource?.siteRandom?.copy()
         ?: CloneableXorWowRandom(seed xor SITE_SEED_SALT)
@@ -254,21 +256,11 @@ internal class MutableGameState(
     /** Camera at the start of the last fixed step; renderers interpolate toward [cameraX]. */
     internal var previousCameraX: Float = copySource?.previousCameraX ?: 0f
     internal var previousCameraY: Float = copySource?.previousCameraY ?: 0f
-    /** Morningstar position at the start of the last fixed step (render interpolation only). */
-    internal var previousMorningstarX: Float = copySource?.previousMorningstarX ?: 0f
-    internal var previousMorningstarY: Float = copySource?.previousMorningstarY ?: 0f
     /**
      * Whether a fixed step has run since the simulation last entered RUNNING, so every previous
      * position is that step's start. Until then renderers present the exact state (render only).
      */
     internal var interpolationPrimed: Boolean = copySource?.interpolationPrimed ?: false
-    internal var trailLastX: Float = copySource?.trailLastX ?: 0f
-    internal var trailLastY: Float = copySource?.trailLastY ?: 0f
-    internal var trailDistanceCarry: Float = copySource?.trailDistanceCarry ?: 0f
-    internal var weaponClock: Float = copySource?.weaponClock ?: 0f
-    internal var weaponSecondaryClock: Float = copySource?.weaponSecondaryClock ?: 0f
-    internal val agonyMutationCounts: RunIntArray = copySource?.agonyMutationCounts?.copy()
-        ?: RunIntArray(IntArray(content.weapons.size))
     internal var shieldRechargeDelay: Float = copySource?.shieldRechargeDelay ?: 0f
     internal var overheatHoldTime: Float = copySource?.overheatHoldTime ?: 0f
     internal var saturationHeadingX: Float = copySource?.saturationHeadingX ?: 1f
@@ -371,30 +363,11 @@ internal class MutableGameState(
         internal set
     var startingWeapon: WeaponId = copySource?.startingWeapon ?: weapon
         internal set
-    var weaponLevel: Int = copySource?.weaponLevel ?: 1
-        internal set
     var overdriveCharge: Float = copySource?.overdriveCharge ?: 0f
         internal set
     var overdriveTime: Float = copySource?.overdriveTime ?: 0f
         internal set
     var equippedRelics: List<EquippedRelic> = copySource?.equippedRelics ?: emptyList()
-        internal set
-
-    var morningstarAngle: Float = copySource?.morningstarAngle ?: 0f
-        internal set
-    var morningstarX: Float = copySource?.morningstarX ?: 0f
-        internal set
-    var morningstarY: Float = copySource?.morningstarY ?: 0f
-        internal set
-    var weaponBeamTime: Float = copySource?.weaponBeamTime ?: 0f
-        internal set
-    var weaponBeamStartX: Float = copySource?.weaponBeamStartX ?: 0f
-        internal set
-    var weaponBeamStartY: Float = copySource?.weaponBeamStartY ?: 0f
-        internal set
-    var weaponBeamEndX: Float = copySource?.weaponBeamEndX ?: 0f
-        internal set
-    var weaponBeamEndY: Float = copySource?.weaponBeamEndY ?: 0f
         internal set
 
     var coreShape: CoreShape = copySource?.coreShape

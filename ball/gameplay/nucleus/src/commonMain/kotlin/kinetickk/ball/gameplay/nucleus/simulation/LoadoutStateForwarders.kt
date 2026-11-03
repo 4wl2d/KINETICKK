@@ -7,6 +7,7 @@ import kinetickk.ball.gameplay.nucleus.model.ActiveBuff
 import kinetickk.ball.gameplay.nucleus.model.CombatFieldTable
 import kinetickk.ball.gameplay.nucleus.model.RunFloatArray
 import kinetickk.ball.gameplay.nucleus.model.RunIntArray
+import kinetickk.ball.gameplay.nucleus.model.WeaponRuntime
 
 /*
  * Legacy forwarders; new code uses the holder; never add a forwarder for a new field.
@@ -77,3 +78,76 @@ internal var MutableGameState.reactionTokens: Float
 internal var MutableGameState.breakTokens: Float
     get() = elementRun.breakTokens
     set(value) { elementRun.breakTokens = value }
+
+// WeaponRunState
+
+internal var MutableGameState.weaponLevel: Int
+    get() = weaponRun.weaponLevel
+    set(value) { weaponRun.weaponLevel = value }
+
+internal var MutableGameState.weaponRuntime: WeaponRuntime
+    get() = weaponRun.weaponRuntime
+    set(value) { weaponRun.weaponRuntime = value }
+
+internal var MutableGameState.weaponClock: Float
+    get() = weaponRun.weaponClock
+    set(value) { weaponRun.weaponClock = value }
+
+internal var MutableGameState.weaponSecondaryClock: Float
+    get() = weaponRun.weaponSecondaryClock
+    set(value) { weaponRun.weaponSecondaryClock = value }
+
+internal val MutableGameState.agonyMutationCounts: RunIntArray
+    get() = weaponRun.agonyMutationCounts
+
+internal var MutableGameState.trailLastX: Float
+    get() = weaponRun.trailLastX
+    set(value) { weaponRun.trailLastX = value }
+
+internal var MutableGameState.trailLastY: Float
+    get() = weaponRun.trailLastY
+    set(value) { weaponRun.trailLastY = value }
+
+internal var MutableGameState.trailDistanceCarry: Float
+    get() = weaponRun.trailDistanceCarry
+    set(value) { weaponRun.trailDistanceCarry = value }
+
+internal var MutableGameState.morningstarAngle: Float
+    get() = weaponRun.morningstarAngle
+    set(value) { weaponRun.morningstarAngle = value }
+
+internal var MutableGameState.morningstarX: Float
+    get() = weaponRun.morningstarX
+    set(value) { weaponRun.morningstarX = value }
+
+internal var MutableGameState.morningstarY: Float
+    get() = weaponRun.morningstarY
+    set(value) { weaponRun.morningstarY = value }
+
+internal var MutableGameState.previousMorningstarX: Float
+    get() = weaponRun.previousMorningstarX
+    set(value) { weaponRun.previousMorningstarX = value }
+
+internal var MutableGameState.previousMorningstarY: Float
+    get() = weaponRun.previousMorningstarY
+    set(value) { weaponRun.previousMorningstarY = value }
+
+internal var MutableGameState.weaponBeamTime: Float
+    get() = weaponRun.weaponBeamTime
+    set(value) { weaponRun.weaponBeamTime = value }
+
+internal var MutableGameState.weaponBeamStartX: Float
+    get() = weaponRun.weaponBeamStartX
+    set(value) { weaponRun.weaponBeamStartX = value }
+
+internal var MutableGameState.weaponBeamStartY: Float
+    get() = weaponRun.weaponBeamStartY
+    set(value) { weaponRun.weaponBeamStartY = value }
+
+internal var MutableGameState.weaponBeamEndX: Float
+    get() = weaponRun.weaponBeamEndX
+    set(value) { weaponRun.weaponBeamEndX = value }
+
+internal var MutableGameState.weaponBeamEndY: Float
+    get() = weaponRun.weaponBeamEndY
+    set(value) { weaponRun.weaponBeamEndY = value }
