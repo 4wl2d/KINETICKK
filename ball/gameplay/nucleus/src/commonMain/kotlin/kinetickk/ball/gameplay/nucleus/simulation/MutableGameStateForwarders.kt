@@ -4,6 +4,8 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.RelicId
+import kinetickk.ball.gameplay.nucleus.model.DungeonState
+import kinetickk.ball.gameplay.nucleus.model.StructureField
 import kinetickk.ball.gameplay.nucleus.render.RelicChoiceAction
 import kinetickk.ball.gameplay.nucleus.simulation.enemies.EncounterState
 import kinetickk.foundation.collections.ImmutableList
@@ -393,3 +395,21 @@ internal var MutableGameState.lastSpawnEventPlanned: Int
 internal var MutableGameState.lastSpawnEventSpawned: Int
     get() = spawnDirector.lastSpawnEventSpawned
     set(value) { spawnDirector.lastSpawnEventSpawned = value }
+
+// StructureRunState
+
+internal var MutableGameState.structureField: StructureField
+    get() = structures.structureField
+    set(value) { structures.structureField = value }
+
+internal var MutableGameState.dungeon: DungeonState?
+    get() = structures.dungeon
+    set(value) { structures.dungeon = value }
+
+internal var MutableGameState.spentStructureIds: List<Long>
+    get() = structures.spentStructureIds
+    set(value) { structures.spentStructureIds = value }
+
+internal var MutableGameState.lastAnnouncedStructureId: Long
+    get() = structures.lastAnnouncedStructureId
+    set(value) { structures.lastAnnouncedStructureId = value }

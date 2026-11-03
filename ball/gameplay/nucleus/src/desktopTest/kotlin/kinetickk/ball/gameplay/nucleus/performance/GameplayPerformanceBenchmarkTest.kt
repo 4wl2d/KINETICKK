@@ -116,6 +116,10 @@ import kinetickk.ball.gameplay.nucleus.simulation.recentEventTypes
 import kinetickk.ball.gameplay.nucleus.simulation.secretBossMask
 import kinetickk.ball.gameplay.nucleus.simulation.spawnBudget
 import kinetickk.ball.gameplay.nucleus.simulation.spawnEventCount
+import kinetickk.ball.gameplay.nucleus.simulation.dungeon
+import kinetickk.ball.gameplay.nucleus.simulation.lastAnnouncedStructureId
+import kinetickk.ball.gameplay.nucleus.simulation.spentStructureIds
+import kinetickk.ball.gameplay.nucleus.simulation.structureField
 
 class GameplayPerformanceBenchmarkTest {
     @Test

@@ -114,6 +114,8 @@ internal class MutableGameState(
     internal val relicMechanics: RelicMechanicState = RelicMechanicState(copySource?.relicMechanics)
     /** Spawn pacing, director plan and live encounters. */
     internal val spawnDirector: SpawnDirectorState = SpawnDirectorState(content, copySource?.spawnDirector)
+    /** Structure window, dungeon and spent structures. */
+    internal val structures: StructureRunState = StructureRunState(copySource?.structures)
 
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
@@ -389,14 +391,6 @@ internal class MutableGameState(
      * collision honours; other invulnerability (Glass Comet, Bulwark) does not stop it.
      */
     internal var reviveInvulnerableUntil: Float = copySource?.reviveInvulnerableUntil ?: 0f
-    /** Structure walls, doors and signals of the window around the Core; an immutable value replaced on change. */
-    internal var structureField: StructureField = copySource?.structureField ?: StructureField.EMPTY
-    /** The structure the Core is inside (or was, within the leave radius), or null. Value-only. */
-    internal var dungeon: DungeonState? = copySource?.dungeon
-    /** Cleared or abandoned structures, oldest first, at most [ContentBounds.MAX_SPENT_STRUCTURES]; id or flag. */
-    internal var spentStructureIds: List<Long> = copySource?.spentStructureIds ?: emptyList()
-    /** Last structure whose entry banner was shown (re-entering does not repeat it). */
-    internal var lastAnnouncedStructureId: Long = copySource?.lastAnnouncedStructureId ?: 0L
     internal var dashBufferTime: Float = copySource?.dashBufferTime ?: 0f
     internal var bossSpawned: Boolean = copySource?.bossSpawned ?: false
     internal var keyboardBrakeActive: Boolean = copySource?.keyboardBrakeActive ?: false
