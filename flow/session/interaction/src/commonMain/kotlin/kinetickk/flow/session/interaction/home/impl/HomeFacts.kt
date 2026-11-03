@@ -3,14 +3,12 @@
 
 package kinetickk.flow.session.interaction.home.impl
 
-import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.localizedContent
 import kinetickk.flow.session.interaction.home.api.HomeUiModel
 import kinetickk.flow.session.interaction.localization.SessionRedesignText
 import kinetickk.flow.session.interaction.localization.SessionText
 import kinetickk.foundation.common.localization.AppLanguage
 import kinetickk.foundation.common.localization.text
-import kinetickk.foundation.design.KkIcon
 
 /** Facts card content: the item's label, one big value, facts from real data and its (!) text. */
 internal class HomeFacts(
@@ -139,6 +137,3 @@ internal fun homeFormInfo(model: HomeUiModel, language: AppLanguage): String {
     val definition = model.coreShape(model.coreShape)
     return definition.mechanicName.localizedContent(language) + "\n" + definition.mechanicDescription.localizedContent(language)
 }
-
-/** The form icon of a character: [KkIcon.Forms] follows the character order. */
-internal fun CoreShape.formIcon(): KkIcon = KkIcon.Forms[ordinal]
