@@ -8,23 +8,30 @@ import kinetickk.foundation.collections.ImmutableList
 import kinetickk.resource.audio.api.AudioService
 import kinetickk.resource.audio.api.SoundId
 
-/** Executes accepted gameplay audio work through the mechanical Resource boundary. */
+/**
+ * Executes accepted gameplay audio work through the mechanical Resource boundary. Cues play when a pulse emits them;
+ * music advances only by the real time of an accepted frame, once per frame and after that frame's cues.
+ */
 internal interface GameplayAudioExecutor {
-    fun advance(realDeltaSeconds: Float, cues: ImmutableList<GameplayAudioCue>)
+    fun play(cues: ImmutableList<GameplayAudioCue>)
+    fun tick(realDeltaSeconds: Float)
     fun ensureUnlocked()
 }
 
 internal class ResourceGameplayAudioExecutor(
     private val audioService: AudioService,
 ) : GameplayAudioExecutor {
-    override fun advance(realDeltaSeconds: Float, cues: ImmutableList<GameplayAudioCue>) {
-        // Frames without a simulation step still tick music. The common empty/single-cue paths
-        // reuse immutable id lists instead of allocating at the display rate; the resource ranks them.
+    override fun play(cues: ImmutableList<GameplayAudioCue>) {
+        // The common empty/single-cue paths reuse immutable id lists instead of allocating at the
+        // display rate; the resource ranks them.
         when (cues.size) {
             0 -> Unit
             1 -> audioService.play(SINGLE_SOUNDS[cues[0].ordinal])
             else -> audioService.play(List(cues.size) { index -> SOUNDS[cues[index].ordinal] })
         }
+    }
+
+    override fun tick(realDeltaSeconds: Float) {
         audioService.tick(realDeltaSeconds)
     }
 

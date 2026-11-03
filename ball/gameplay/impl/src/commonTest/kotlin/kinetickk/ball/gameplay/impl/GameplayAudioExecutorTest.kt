@@ -13,14 +13,23 @@ import kotlin.test.assertEquals
 
 class GameplayAudioExecutorTest {
     @Test
-    fun mapsGameplayOwnedCuesToSoundIdsInIngressOrderThenTicksMusic() {
+    fun mapsGameplayOwnedCuesToSoundIdsInIngressOrderWithoutTickingMusic() {
         val service = RecordingAudioService()
         val executor = ResourceGameplayAudioExecutor(service)
 
-        executor.advance(0.125f, GameplayAudioCue.entries.toImmutableList())
+        executor.play(GameplayAudioCue.entries.toImmutableList())
 
         assertEquals(GameplayAudioCue.entries.map { SoundId.valueOf(it.name) }, service.lastSounds)
-        assertEquals(listOf("play", "tick"), service.calls)
+        assertEquals(listOf("play"), service.calls)
+    }
+
+    @Test
+    fun ticksMusicByTheGivenFrameTimeOnly() {
+        val service = RecordingAudioService()
+
+        ResourceGameplayAudioExecutor(service).tick(0.125f)
+
+        assertEquals(listOf("tick"), service.calls)
         assertEquals(0.125f, service.lastDeltaSeconds)
     }
 
@@ -37,14 +46,18 @@ class GameplayAudioExecutorTest {
     fun emptyAndSingleCueFramesStillAdvanceAudioAndLeaveRetainedRequestsUnchanged() {
         val service = RecordingAudioService()
         val executor = ResourceGameplayAudioExecutor(service)
-        executor.advance(0.01f, listOf(GameplayAudioCue.DASH).toImmutableList())
+        fun frame(delta: Float, cues: List<GameplayAudioCue>) {
+            executor.play(cues.toImmutableList())
+            executor.tick(delta)
+        }
+        frame(0.01f, listOf(GameplayAudioCue.DASH))
         val retained = service.lastSounds
 
-        executor.advance(0.02f, emptyList<GameplayAudioCue>().toImmutableList())
+        frame(0.02f, emptyList())
         assertEquals(0.02f, service.lastDeltaSeconds)
-        assertEquals(listOf("play", "tick", "tick"), service.calls)
+        assertEquals(listOf("play", "tick", "tick"), service.calls, "An empty frame plays nothing and still ticks")
 
-        executor.advance(0.03f, listOf(GameplayAudioCue.HURT).toImmutableList())
+        frame(0.03f, listOf(GameplayAudioCue.HURT))
         assertEquals(0.03f, service.lastDeltaSeconds)
         assertEquals(listOf(SoundId.HURT), service.lastSounds)
         assertEquals(listOf(SoundId.DASH), retained)
@@ -53,8 +66,7 @@ class GameplayAudioExecutorTest {
     @Test
     fun equalPriorityCuesKeepIngressOrderAndDuplicatesForTheResourceBoundary() {
         val service = RecordingAudioService()
-        ResourceGameplayAudioExecutor(service).advance(
-            0.01f,
+        ResourceGameplayAudioExecutor(service).play(
             listOf(
                 GameplayAudioCue.PICKUP,
                 GameplayAudioCue.SKILL,

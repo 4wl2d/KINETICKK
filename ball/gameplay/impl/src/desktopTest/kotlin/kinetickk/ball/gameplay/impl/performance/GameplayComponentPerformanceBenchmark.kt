@@ -348,7 +348,7 @@ private object BenchmarkProfilePort : ProfileReadPort, ProfileProgress {
 }
 
 private class BenchmarkAudioExecutor : GameplayAudioExecutor {
-    var advanceCount: Int = 0
+    var tickCount: Int = 0
         private set
     var unlockCount: Int = 0
         private set
@@ -357,10 +357,13 @@ private class BenchmarkAudioExecutor : GameplayAudioExecutor {
     var lastCues: ImmutableList<GameplayAudioCue>? = null
         private set
 
-    override fun advance(realDeltaSeconds: Float, cues: ImmutableList<GameplayAudioCue>) {
-        advanceCount += 1
-        lastDeltaBits = realDeltaSeconds.toRawBits()
+    override fun play(cues: ImmutableList<GameplayAudioCue>) {
         lastCues = cues
+    }
+
+    override fun tick(realDeltaSeconds: Float) {
+        tickCount += 1
+        lastDeltaBits = realDeltaSeconds.toRawBits()
     }
 
     override fun ensureUnlocked() {
@@ -368,7 +371,7 @@ private class BenchmarkAudioExecutor : GameplayAudioExecutor {
     }
 
     fun reset() {
-        advanceCount = 0
+        tickCount = 0
         unlockCount = 0
         lastDeltaBits = 0
         lastCues = null
@@ -396,7 +399,7 @@ private fun timedPipelineSignature(
     signature = mix(signature, visualFx.shockwaves.size)
     signature = mix(signature, visualFx.damageNumbers.size)
     signature = mix(signature, visualFx.weaponArcs.size)
-    signature = mix(signature, audio.advanceCount)
+    signature = mix(signature, audio.tickCount)
     signature = mix(signature, audio.lastDeltaBits)
     return mix(signature, audio.lastCues?.size ?: 0)
 }
@@ -429,7 +432,7 @@ private fun canonicalPipelineFingerprint(
     signature = mixLong(signature, snapshot.revision.value)
     signature = mixLong(signature, canonicalRenderFingerprint(render))
     signature = mixLong(signature, canonicalVisualFxFingerprint(visualFx))
-    signature = mix(signature, audio.advanceCount)
+    signature = mix(signature, audio.tickCount)
     signature = mix(signature, audio.unlockCount)
     signature = mix(signature, audio.lastDeltaBits)
     val cues = audio.lastCues

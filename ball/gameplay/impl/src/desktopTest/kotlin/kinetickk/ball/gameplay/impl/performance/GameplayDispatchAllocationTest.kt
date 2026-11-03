@@ -216,7 +216,8 @@ private val AllocationCapacityContent by lazy {
 }
 
 private object AllocationAudioExecutor : GameplayAudioExecutor {
-    override fun advance(realDeltaSeconds: Float, cues: ImmutableList<GameplayAudioCue>) = Unit
+    override fun play(cues: ImmutableList<GameplayAudioCue>) = Unit
+    override fun tick(realDeltaSeconds: Float) = Unit
     override fun ensureUnlocked() = Unit
 }
 

@@ -220,10 +220,8 @@ internal class GameComponent private constructor(
         if (outputs.frameAccepted || outputs.audioCues.isNotEmpty()) {
             try {
                 timed(DiagnosticPhase.Audio) {
-                    audioExecutor.advance(
-                        if (outputs.frameAccepted) outputs.frameRealDeltaSeconds else 0f,
-                        outputs.audioCues,
-                    )
+                    if (outputs.audioCues.isNotEmpty()) audioExecutor.play(outputs.audioCues)
+                    if (outputs.frameAccepted) audioExecutor.tick(outputs.frameRealDeltaSeconds)
                 }
             } catch (failure: Throwable) {
                 fault = keepFirstFault(fault, failure)
@@ -481,8 +479,11 @@ internal class GameComponent private constructor(
             is GameplayOutput.EmitVisualFx ->
                 checkNotNull(interactionFxReducer).apply(output.cues)
             is GameplayOutput.SendProfileCommand -> executeProfileCommand(output, item)
-            is GameplayOutput.AdvanceAudio ->
-                timed(DiagnosticPhase.Audio) { audioExecutor.advance(output.realDeltaSeconds, output.cues) }
+            // Music advances only for the frame this tick accepted; lifecycle audio only plays its cues.
+            is GameplayOutput.AdvanceAudio -> timed(DiagnosticPhase.Audio) {
+                if (output.cues.isNotEmpty()) audioExecutor.play(output.cues)
+                if (item === localOutputItem && tickOutputs.frameAccepted) audioExecutor.tick(output.realDeltaSeconds)
+            }
             GameplayOutput.EnsureAudioUnlocked ->
                 audioExecutor.ensureUnlocked()
             is GameplayOutput.RunExited -> checkNotNull(item.exitReplyOrNull()).accepted(output.result)

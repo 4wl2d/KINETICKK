@@ -296,20 +296,36 @@ private fun GameplayInteractionPulse.traceName(): String = when (this) {
     GameplayInteractionPulse.ApexRequested -> "apex"
 }
 
-/** Records the audio work the owner executes, in today's `advance(delta, cues)` shape: `play[cues] tick=<delta>`. */
+/**
+ * Records the audio work the owner executes as `play[cues] tick=<delta>`: a frame's cues with its music tick, and
+ * `tick=-` for cues played without one.
+ */
 private class FrameTraceAudio : GameplayAudioExecutor {
     private val calls = mutableListOf<String>()
+    private var played: ImmutableList<GameplayAudioCue>? = null
     private var unlocks = 0
 
-    override fun advance(realDeltaSeconds: Float, cues: ImmutableList<GameplayAudioCue>) {
-        calls += "play[${cues.joinToString(",")}] tick=$realDeltaSeconds"
+    override fun play(cues: ImmutableList<GameplayAudioCue>) {
+        flushPlayed()
+        played = cues
+    }
+
+    override fun tick(realDeltaSeconds: Float) {
+        calls += "play[${played.orEmpty().joinToString(",")}] tick=$realDeltaSeconds"
+        played = null
     }
 
     override fun ensureUnlocked() {
         unlocks++
     }
 
+    private fun flushPlayed() {
+        played?.let { cues -> calls += "play[${cues.joinToString(",")}] tick=-" }
+        played = null
+    }
+
     fun drain(): String {
+        flushPlayed()
         val played = if (calls.isEmpty()) "play[] tick=-" else calls.joinToString(";")
         val text = "$played unlock=$unlocks"
         calls.clear()
