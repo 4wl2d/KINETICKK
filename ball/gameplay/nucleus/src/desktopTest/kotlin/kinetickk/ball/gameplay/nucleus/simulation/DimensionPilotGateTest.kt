@@ -116,12 +116,11 @@ class DimensionPilotGateTest {
      */
     @Test fun probeTheCalibrationWindow() {
         val window = System.getenv("KK_DIMENSION_PROBE")?.takeIf { it.isNotBlank() } ?: return
-        val (first, last) = window.split("..").map { it.trim().toInt() }
-        require(first in 1..last && (last < GATE_FIRST || first > GATE_LAST)) { "the gate population is never probed: $window" }
-        val seeds = (first..last).map { it * 7_919 + 13 }
+        val indices = probeWindow(window)
+        val seeds = windowSeeds(indices)
         val content = probedContent(System.getenv("KK_DIMENSION_KNOBS").orEmpty())
         val wanted = System.getenv("KK_DIMENSION_ARMS")?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }
-        println("DIMENSION PROBE window $first..$last knobs ${knobs(content)}")
+        println("DIMENSION PROBE window $indices knobs ${knobs(content)}")
         for (arm in DimensionArm.entries) {
             if (wanted != null && arm.label !in wanted) continue
             val runs = flyArm(arm, seeds, content)
@@ -134,15 +133,13 @@ class DimensionPilotGateTest {
                 flyDimensionRun(seed, DimensionProfile.FRESH_TIER_0, target, FRESH_RIFT_AT, runToEnd = true, content = content)
             }
             runs.forEach { println("DIMENSION PROBE $label $it") }
-            println("DIMENSION PROBE SUMMARY $label n=${runs.size} win=${describe(runs) { s -> s.count { it.won }.toDouble() / s.size }} " +
+            println("DIMENSION PROBE SUMMARY $label n=${runs.size} ${bootstrapLine("win", runs) { s -> s.count { it.won }.toDouble() / s.size }} " +
                 "entered=${runs.count { it.entered }} completed=${runs.count { it.completed }}")
         }
     }
 
     private fun flyToTheReturn(seed: Int): MutableGameState {
-        val state = MutableGameState(canonicalGameplayContent, seed = seed, bootstrapProgress = DimensionProfile.FRESH_TIER_0.snapshot(canonicalGameplayContent))
-        state.unlockWeaponsForTesting(ReferenceArmory)
-        state.startRun()
+        val state = startGateRun(seed, DimensionProfile.FRESH_TIER_0.snapshot(canonicalGameplayContent))
         val pilot = DimensionPilot(WorldLayer.NADIR, DimensionProfile.FRESH_TIER_0.bot())
         var opened = false
         while (state.elapsed < 400f && (state.phase == GamePhase.RUNNING || state.phase == GamePhase.CHOICE)) {
@@ -175,9 +172,6 @@ class DimensionPilotGateTest {
     }
 
     private companion object {
-        const val GATE_FIRST = 1_001
-        const val GATE_LAST = 1_300
-
         /** The gate seeds: the first 120 of the population (C42), never tuned on. */
         val GateSeeds: List<Int> = PopulationSeeds.take(120)
 
@@ -213,16 +207,16 @@ class DimensionPilotGateTest {
             return "n=${runs.size} entered=${entered.size} fellBefore=${runs.count { !it.entered && it.phase == GamePhase.GAME_OVER }} " +
                 "neverOpened=${runs.count { !it.entered && it.openedAt.isNaN() && it.phase != GamePhase.GAME_OVER }} " +
                 "medianOpenedAt=${runs.map { it.openedAt }.finiteMedian()} " +
-                "survival=${describe(entered) { s -> s.count { it.survived }.toDouble() / s.size }} " +
-                "completion=${describe(entered) { s -> s.count { it.completed }.toDouble() / s.size }} " +
+                bootstrapLine("survival", entered) { s -> s.count { it.survived }.toDouble() / s.size } + " " +
+                bootstrapLine("completion", entered) { s -> s.count { it.completed }.toDouble() / s.size } + " " +
                 objectives.joinToString(" ") { objective ->
                     val played = entered.filter { it.objective == objective }
-                    "$objective=${describe(played) { s -> s.count { it.completed }.toDouble() / s.size }}(n=${played.size})"
+                    bootstrapLine("$objective", played) { s -> s.count { it.completed }.toDouble() / s.size } + "(n=${played.size})"
                 } +
-                " medianCompletion=${describe(entered) { s -> s.filter { it.completed }.map { it.completionSeconds }.finiteMedian() }}" +
-                " scorchShare=${describe(entered) { it.scorchShare() }}" +
-                " medianBossLost=${describe(entered.filter { it.objective?.boss != null }) { s -> s.map { it.bossLost }.finiteMedian() }}" +
-                " medianIntegrityAtReturn=${describe(entered) { s -> s.map { it.integrityAtReturn }.finiteMedian() }}" +
+                " " + bootstrapLine("medianCompletion", entered) { s -> s.filter { it.completed }.map { it.completionSeconds }.finiteMedian() } +
+                " " + bootstrapLine("scorchShare", entered) { it.scorchShare() } +
+                " " + bootstrapLine("medianBossLost", entered.filter { it.objective?.boss != null }) { s -> s.map { it.bossLost }.finiteMedian() } +
+                " " + bootstrapLine("medianIntegrityAtReturn", entered) { s -> s.map { it.integrityAtReturn }.finiteMedian() } +
                 " deaths=${entered.filter { !it.survived }.groupingBy { it.reason }.eachCount()}"
         }
 
@@ -279,6 +273,7 @@ class DimensionPilotGateTest {
         fun knobs(content: GameplayContentSnapshot): String {
             val policy = content.dimensions
             return "graceDrag=${policy.definition(WorldLayer.ZENITH).physics.dragMultiplier} paceReach=${policy.paceReach} " +
+                "paceCeiling=${policy.paceCeiling} " +
                 "scorch=${policy.definition(WorldLayer.NADIR).physics.scorchSharePerSecond} rings=${policy.objectives.ascentRings} " +
                 "embers=${policy.objectives.harvestEmbers} emberLife=${policy.objectives.emberLifeSeconds} " +
                 "emberRadius=${policy.objectives.emberRadius} haloRadius=${policy.objectives.haloRadius} " +
@@ -288,7 +283,11 @@ class DimensionPilotGateTest {
                 "throw=${policy.objectives.emberThrowMinimum}..${policy.objectives.emberThrowMaximum} " +
                 "zenithBossShare=${policy.definition(WorldLayer.ZENITH).bossIntegrityShare} " +
                 "nadirBossShare=${policy.definition(WorldLayer.NADIR).bossIntegrityShare} " +
-                "nadirBossDamage=${policy.definition(WorldLayer.NADIR).bossDamageShare}"
+                "nadirBossDamage=${policy.definition(WorldLayer.NADIR).bossDamageShare} " +
+                "zenithBossDamage=${policy.definition(WorldLayer.ZENITH).bossDamageShare} " +
+                "nadirSpawn=${policy.definition(WorldLayer.NADIR).spawnRateMultiplier} " +
+                "nadirCap=${policy.definition(WorldLayer.NADIR).ordinaryCapMultiplier} " +
+                "nadirVisit=${policy.definition(WorldLayer.NADIR).visitSeconds}"
         }
 
         /** Z0: a fresh run's Zenith survival floor, its Ascent and Judgement completion bands and the completion median. */

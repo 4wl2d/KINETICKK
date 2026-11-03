@@ -3,17 +3,12 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ObstacleMix
-import kinetickk.ball.content.api.RelicId
-import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.render.ObstacleKind
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.math.max
-import kotlin.math.sqrt
-import kotlin.random.Random
 import kotlin.test.Test
 
 /**
@@ -35,14 +30,12 @@ class ObstacleMixProbeTest {
     @Test
     fun probeTheMixOnTheCalibrationWindow() {
         val window = System.getenv("KK_OBSTACLE_MIX_PROBE")?.takeIf { it.isNotBlank() } ?: return
-        val (first, last) = window.split("..").map { it.trim().toInt() }
-        require(first in 1..last) { "KK_OBSTACLE_MIX_PROBE must be first..last, got $window" }
-        require(last < GATE_FIRST || first > GATE_LAST) { "the gate population ($GATE_FIRST..$GATE_LAST) is never probed" }
-        val seeds = (first..last).map { it * 7_919 + 13 }
+        val indices = probeWindow(window)
+        val seeds = windowSeeds(indices)
         val shipped = canonicalGameplayContent
         val empty = shipped.copy(obstacles = shipped.obstacles.copy(kinds = shipped.obstacles.kinds.copy(space = ObstacleMix())))
-        println("OBSTACLE MIX PROBE window $first..$last space ${shipped.obstacles.kinds.space}")
-        for (arm in Arm.entries) {
+        println("OBSTACLE MIX PROBE window $indices space ${shipped.obstacles.kinds.space}")
+        for (arm in listOf(DimensionProfile.FRESH_TIER_0, DimensionProfile.STRONG_TIER_10)) {
             val without = populationOf(seeds) { seed -> play(seed, arm, empty) }
             val with = populationOf(seeds) { seed -> play(seed, arm, shipped) }
             without.forEach { println("OBSTACLE MIX PROBE ${arm.label} empty $it") }
@@ -52,8 +45,6 @@ class ObstacleMixProbeTest {
             println("OBSTACLE MIX PROBE DELTA ${arm.label} shipped-empty ${delta(without, with)}")
         }
     }
-
-    private enum class Arm(val label: String) { FRESH_TIER_0("fresh-t0"), STRONG_TIER_10("strong-t10") }
 
     private class Run(
         val seed: Int,
@@ -77,7 +68,7 @@ class ObstacleMixProbeTest {
                 "boostShare=${"%.3f".format(boostShare)} boostRiseShare=${"%.3f".format(boostRiseShare)} broken=$broken matter=$matter"
     }
 
-    private fun play(seed: Int, arm: Arm, content: GameplayContentSnapshot): Run {
+    private fun play(seed: Int, arm: DimensionProfile, content: GameplayContentSnapshot): Run {
         val kinds = content.obstacles.kinds
         var contacts = 0
         var touching = false
@@ -123,18 +114,7 @@ class ObstacleMixProbeTest {
                 broken.addAll(destroyed)
             }
         }
-        val state = when (arm) {
-            Arm.FRESH_TIER_0 -> playGateRun(seed, gateProfile(GateMatrix.NONE, tier = 0, content = content), NoPoiBot(),
-                content = content, observe = observe)
-            Arm.STRONG_TIER_10 -> playGateRun(
-                seed,
-                gateProfile(GateMatrix.FULL, tier = 10, shape = CoreShape.PENTAGON, weapon = WeaponId.ARC_COIL, content = content),
-                NoPoiBot(),
-                relics = StrongRelics,
-                content = content,
-                observe = observe,
-            )
-        }
+        val state = arm.play(seed, content, observe = observe)
         val outcome = when (state.phase) {
             GamePhase.VICTORY -> "WIN"
             GamePhase.GAME_OVER -> "LOSS"
@@ -161,47 +141,16 @@ class ObstacleMixProbeTest {
     )
 
     /** Point values of the arm's metrics with bootstrap standard errors over its runs. */
-    private fun summary(runs: List<Run>): String {
-        val random = Random(BOOTSTRAP_SEED)
-        val resampled = List(metrics.size) { DoubleArray(BOOTSTRAP_RESAMPLES) }
-        repeat(BOOTSTRAP_RESAMPLES) { resample ->
-            val sample = List(runs.size) { runs[random.nextInt(runs.size)] }
-            metrics.forEachIndexed { index, (_, metric) -> resampled[index][resample] = metric(sample) }
-        }
-        return "n=${runs.size} " + metrics.mapIndexed { index, (name, metric) ->
-            "$name=${"%.4f".format(metric(runs))}(SE ${"%.4f".format(standardError(resampled[index]))})"
-        }.joinToString(" ")
-    }
+    private fun summary(runs: List<Run>): String =
+        "n=${runs.size} " + metrics.joinToString(" ") { (name, metric) -> bootstrapLine(name, runs, metric = metric) }
 
     /** Shipped minus empty for every metric, resampling the seeds in pairs (both arms play the same seeds). */
-    private fun delta(without: List<Run>, with: List<Run>): String {
-        val random = Random(BOOTSTRAP_SEED)
-        val resampled = List(metrics.size) { DoubleArray(BOOTSTRAP_RESAMPLES) }
-        repeat(BOOTSTRAP_RESAMPLES) { resample ->
-            val picks = IntArray(without.size) { random.nextInt(without.size) }
-            val a = picks.map { without[it] }
-            val b = picks.map { with[it] }
-            metrics.forEachIndexed { index, (_, metric) -> resampled[index][resample] = metric(b) - metric(a) }
-        }
-        return metrics.mapIndexed { index, (name, metric) ->
-            "$name=${"%+.4f".format(metric(with) - metric(without))}(SE ${"%.4f".format(standardError(resampled[index]))})"
-        }.joinToString(" ")
-    }
-
-    private fun standardError(values: DoubleArray): Double {
-        val mean = values.average()
-        return sqrt(values.sumOf { (it - mean) * (it - mean) } / (values.size - 1))
+    private fun delta(without: List<Run>, with: List<Run>): String = metrics.joinToString(" ") { (name, metric) ->
+        bootstrapLine(name, without.zip(with), "%+.4f") { pairs -> metric(pairs.map { it.second }) - metric(pairs.map { it.first }) }
     }
 
     private companion object {
-        /** Gate D's strong build: Stormheart Capacitor in key harmony with Arc Coil and three proven Relics. */
-        val StrongRelics =
-            listOf(RelicId.STORMHEART_CAPACITOR, RelicId.PANDEMIC_CODEX, RelicId.THUNDER_CHOIR, RelicId.CINDER_CROWN)
-        const val GATE_FIRST = 1_001
-        const val GATE_LAST = 1_300
         const val CONTACT_SLACK = 2f
         const val SINGULARITY_CONTACT = "SINGULARITY CONTACT"
-        const val BOOTSTRAP_RESAMPLES = 20_000
-        const val BOOTSTRAP_SEED = 20_261_027
     }
 }

@@ -24,8 +24,6 @@ import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
-import kotlin.math.sqrt
-import kotlin.random.Random
 
 /*
  * The opt-in site pilot of the site gates (SiteEngagementGateTest, BountyGateTest; spec §14.3) and of the SITES
@@ -257,11 +255,7 @@ private fun MutableGameState.endedOutcome(before: FrameBefore): Pair<SiteOutcome
  */
 internal fun flySiteRun(seed: Int, arm: SiteArm, setup: SiteRunSetup = SiteRunSetup(), tuning: SitePilotTuning = SitePilotTuning()): SiteRun {
     val content = arm.content(setup.base)
-    val state = if (setup.profile == null) {
-        MutableGameState(content, seed = seed)
-    } else {
-        MutableGameState(content, seed = seed, bootstrapProgress = setup.profile)
-    }
+    val state = MutableGameState(content, seed = seed, bootstrapProgress = setup.profile)
     state.unlockWeaponsForTesting(ReferenceArmory)
     state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
     state.resize(setup.width, setup.height)
@@ -314,16 +308,11 @@ internal fun flySiteRun(seed: Int, arm: SiteArm, setup: SiteRunSetup = SiteRunSe
  * One NoPoi run of the fresh tier-0 Orb on [seed] with the shipped site weights, flown like NoPoiPlaythroughTest's
  * population but in the site arms' viewport: the S-G4 baseline of runs that never opt into a site.
  */
-internal fun flyNoPoiRun(
-    seed: Int,
-    base: GameplayContentSnapshot = canonicalGameplayContent,
-    width: Float = 1_280f,
-    height: Float = 800f,
-): SiteRun {
+internal fun flyNoPoiRun(seed: Int, base: GameplayContentSnapshot = canonicalGameplayContent): SiteRun {
     val state = MutableGameState(base, seed = seed)
     state.unlockWeaponsForTesting(ReferenceArmory)
     state.applyPreferences(state.settings.copy(simulationSpeed = 1f))
-    state.resize(width, height)
+    state.resize(1_280f, 800f)
     state.startRun()
     val bot = NoPoiBot()
     var touched = false
@@ -439,7 +428,7 @@ internal class SitePilot(
             aimHeading = atan2(dashY, dashX)
             aimDistance = max(DASH_TETHER, length(heldX, heldY))
         }
-        val placed = place(s, held)
+        val placed = s.placeCursor(held, aimHeading, aimDistance)
         if (dashWanted && abs(angleBetween(placed, atan2(dashY, dashX))) <= DASH_AIM) s.requestDash()
     }
 
@@ -460,60 +449,6 @@ internal class SitePilot(
             steer(s, site, dodge = true, brake = null)
             return
         }
-    }
-
-    /**
-     * Places the cursor for the aim ([aimHeading], [aimDistance]) and returns the heading it got. The cursor swings around
-     * the Core at most [CURSOR_SWING] radians a frame from where it was held ([held]), as the NoPoi bot's does (a cursor
-     * jumping across the Core would sweep the singularity through it), and it stays inside the area where ordinary
-     * steering keeps polarity, at least [MIN_TETHER] from the Core and more ahead of a fast Core
-     * ([FORWARD_MARGIN_SECONDS]). When the Core's lag already carries it to that area's edge (a fast Core on a narrow
-     * phone screen), the nearest heading within the swing that keeps the tether is taken, then one within
-     * [EMERGENCY_SWING] (still too short a jump for the singularity's sweep to touch the Core), and as a last resort the
-     * screen centre's direction.
-     */
-    private fun place(s: MutableGameState, held: Float): Float {
-        for (bound in floatArrayOf(CURSOR_SWING, EMERGENCY_SWING)) {
-            val target = held + angleBetween(aimHeading, held).coerceIn(-bound, bound)
-            var step = 0
-            while (step * SWING_SEARCH_STEP <= 2f * bound) {
-                val angle = target + ((step + 1) / 2) * SWING_SEARCH_STEP * if (step % 2 == 1) 1f else -1f
-                step++
-                if (abs(angleBetween(angle, held)) > bound + 1e-4f) continue
-                val room = room(s, angle)
-                // Ahead of a fast Core the singularity keeps a margin of the Core's closing speed, so a Core pinned near
-                // the area's edge never runs onto a singularity held just ahead of it.
-                val need = MIN_TETHER + max(0f, s.velocityX * cos(angle) + s.velocityY * sin(angle)) * FORWARD_MARGIN_SECONDS
-                if (room >= need) {
-                    hold(s, angle, aimDistance.coerceIn(need, room))
-                    return angle
-                }
-            }
-        }
-        val centre = atan2(s.cameraY - s.coreY, s.cameraX - s.coreX)
-        hold(s, centre, max(MIN_TETHER, min(aimDistance, room(s, centre))))
-        return centre
-    }
-
-    /** How far from the Core along [heading] the pointer may sit inside the polarity area (negative when outside it). */
-    private fun room(s: MutableGameState, heading: Float): Float {
-        val unitX = cos(heading)
-        val unitY = sin(heading)
-        val offsetX = s.coreX - s.cameraX
-        val offsetY = s.coreY - s.cameraY
-        val halfWidth = s.screenWidth * 0.5f * s.content.tempo.fatigue.edgeStrainStart - 10f
-        val halfHeight = s.screenHeight * 0.5f * s.content.tempo.fatigue.edgeStrainStart - 10f
-        val availableX = if (unitX > 0f) (halfWidth - offsetX) / unitX else if (unitX < 0f) (-halfWidth - offsetX) / unitX else 10_000f
-        val availableY = if (unitY > 0f) (halfHeight - offsetY) / unitY else if (unitY < 0f) (-halfHeight - offsetY) / unitY else 10_000f
-        return min(availableX, availableY)
-    }
-
-    /** Holds the singularity [distance] from the Core along [heading]. */
-    private fun hold(s: MutableGameState, heading: Float, distance: Float) {
-        s.updatePointer(
-            s.screenWidth * 0.5f + s.coreX - s.cameraX + cos(heading) * distance,
-            s.screenHeight * 0.5f + s.coreY - s.cameraY + sin(heading) * distance,
-        )
     }
 
     private fun play(s: MutableGameState, trial: SiteState) {
@@ -675,11 +610,11 @@ internal class SitePilot(
     /** The NoPoi bot's chase of a target: an orbit at its weapon's range, or a ram with the Flux Wake. */
     private fun combat(s: MutableGameState, targetX: Float, targetY: Float, boss: Boolean) {
         val radius = when {
-            boss -> if (s.weapon == WeaponId.FLUX_WAKE) 100f else 300f
-            s.weapon == WeaponId.ARC_COIL || s.weapon == WeaponId.ION_SWARM || s.weapon == WeaponId.PRISM_RELAY -> 280f
+            boss -> if (s.weapon == WeaponId.FLUX_WAKE) WAKE_BOSS_RADIUS else ARC_BOSS_RADIUS
+            s.weapon in BotOrbitWeapons -> 280f
             else -> 0f
         }
-        val orbitSpeed = if (boss && s.weapon == WeaponId.FLUX_WAKE) 350f else 460f
+        val orbitSpeed = if (boss && s.weapon == WeaponId.FLUX_WAKE) WAKE_BOSS_SPEED else ARC_BOSS_SPEED
         val dx = s.coreX - targetX
         val dy = s.coreY - targetY
         val distance = max(1f, length(dx, dy))
@@ -779,26 +714,10 @@ internal class SitePilot(
         // course, slows below that speed (B2: a competent pilot near rocks).
         val hurting = s.obstacleDamageStartSpeed()
         val fast = s.speed > hurting
-        val lookahead = if (fast) FAST_LOOKAHEAD else 0.3f
-        var rockAhead = false
-        for (obstacle in s.obstacleField.obstacles) {
-            val reach = s.obstacleHazardReach(obstacle)
-            if (reach <= 0f) continue
-            val px = s.coreX + s.velocityX * lookahead - obstacle.x
-            val py = s.coreY + s.velocityY * lookahead - obstacle.y
-            val clearance = reach + s.coreRadius + if (obstacle.kind.solid) 110f else 40f
-            val distance = max(1f, length(px, py))
-            if (distance < clearance) {
-                desiredX += px / distance * (clearance - distance) * 6f
-                desiredY += py / distance * (clearance - distance) * 6f
-            }
-            if (fast && obstacle.kind.solid && !rockAhead) {
-                rockAhead = segmentCircleIntersects(
-                    s.coreX, s.coreY, s.coreX + s.velocityX * GOVERNOR_SECONDS, s.coreY + s.velocityY * GOVERNOR_SECONDS,
-                    obstacle.x, obstacle.y, reach + s.coreRadius + GOVERNOR_CLEARANCE,
-                )
-            }
-        }
+        val avoided = s.avoidRocks(desiredX, desiredY, if (fast) FAST_LOOKAHEAD else 0.3f)
+        desiredX = avoided.first
+        desiredY = avoided.second
+        val rockAhead = fast && s.rockOnCourse()
         if (rockAhead) {
             val desired = length(desiredX, desiredY)
             val cap = hurting * GOVERNOR_SHARE
@@ -807,18 +726,10 @@ internal class SitePilot(
                 desiredY *= cap / desired
             }
         }
-        if (dodge) for (shot in s.projectiles) if (shot.hostile) {
-            val px = shot.x - s.coreX
-            val py = shot.y - s.coreY
-            val vx = shot.vx - s.velocityX
-            val vy = shot.vy - s.velocityY
-            val time = -(px * vx + py * vy) / max(1f, vx * vx + vy * vy)
-            if (time in 0f..0.45f && length(px + vx * time, py + vy * time) < 80f) {
-                val relative = max(1f, length(vx, vy))
-                val side = if (px * -vy + py * vx > 0f) -1f else 1f
-                desiredX += -vy / relative * side * 380f
-                desiredY += vx / relative * side * 380f
-            }
+        if (dodge) {
+            val dodged = s.dodgeShots(desiredX, desiredY)
+            desiredX = dodged.first
+            desiredY = dodged.second
         }
         if (brake != null) s.setBrake(brake || rockAhead && mayBrakeNearRocks && s.speed > hurting * GOVERNOR_BRAKE)
         val aim = s.steeringAimFor(
@@ -853,14 +764,14 @@ private const val EMERGENCY_SWING = 2.0f
 private const val SWING_SEARCH_STEP = 0.1f
 
 /** Seconds ahead the pilot reads obstacles once it flies fast enough for a rock to hurt (the bot's 0.3 s below). */
-private const val FAST_LOOKAHEAD = 0.45f
+internal const val FAST_LOOKAHEAD = 0.45f
 
 /** A fast Core with a solid body within this many seconds of its course, at this clearance, slows below the hurting speed. */
 private const val GOVERNOR_SECONDS = 0.6f
 private const val GOVERNOR_CLEARANCE = 60f
 
 /** The share of the hurting speed the slowed pilot asks for, and the share above which it also Brakes (never in the brakeless trial). */
-private const val GOVERNOR_SHARE = 0.9f
+internal const val GOVERNOR_SHARE = 0.9f
 private const val GOVERNOR_BRAKE = 1.4f
 
 /** The slalom's Core counts as out on its pole's side this far beyond what the pass needs. */
@@ -881,44 +792,70 @@ private const val MIN_TETHER = 65f
 /** The signed turn from [from] to [to], in −π..π. */
 private fun angleBetween(to: Float, from: Float): Float = atan2(sin(to - from), cos(to - from))
 
+/**
+ * Places the cursor for the aim ([heading], [distance]) and returns the heading it got. The cursor swings around the
+ * Core at most [CURSOR_SWING] radians a frame from where it was held ([held]), as the NoPoi bot's does (a cursor
+ * jumping across the Core would sweep the singularity through it), and it stays inside the area where ordinary
+ * steering keeps polarity ([pointerRoom]), at least [MIN_TETHER] from the Core and more ahead of a fast Core
+ * ([FORWARD_MARGIN_SECONDS]). When the Core's lag already carries it to that area's edge (a fast Core on a narrow
+ * phone screen), the nearest heading within the swing that keeps the tether is taken, then one within
+ * [EMERGENCY_SWING] (still too short a jump for the singularity's sweep to touch the Core), and as a last resort the
+ * screen centre's direction.
+ */
+internal fun MutableGameState.placeCursor(held: Float, heading: Float, distance: Float): Float {
+    for (bound in floatArrayOf(CURSOR_SWING, EMERGENCY_SWING)) {
+        val target = held + angleBetween(heading, held).coerceIn(-bound, bound)
+        var step = 0
+        while (step * SWING_SEARCH_STEP <= 2f * bound) {
+            val angle = target + ((step + 1) / 2) * SWING_SEARCH_STEP * if (step % 2 == 1) 1f else -1f
+            step++
+            if (abs(angleBetween(angle, held)) > bound + 1e-4f) continue
+            val room = pointerRoom(cos(angle), sin(angle))
+            // Ahead of a fast Core the singularity keeps a margin of the Core's closing speed, so a Core pinned near
+            // the area's edge never runs onto a singularity held just ahead of it.
+            val need = MIN_TETHER + max(0f, velocityX * cos(angle) + velocityY * sin(angle)) * FORWARD_MARGIN_SECONDS
+            if (room >= need) {
+                holdCursor(angle, distance.coerceIn(need, room))
+                return angle
+            }
+        }
+    }
+    val centre = atan2(cameraY - coreY, cameraX - coreX)
+    holdCursor(centre, max(MIN_TETHER, min(distance, pointerRoom(cos(centre), sin(centre)))))
+    return centre
+}
+
+/** Holds the singularity [distance] from the Core along [heading]. */
+private fun MutableGameState.holdCursor(heading: Float, distance: Float) {
+    updatePointer(
+        screenWidth * 0.5f + coreX - cameraX + cos(heading) * distance,
+        screenHeight * 0.5f + coreY - cameraY + sin(heading) * distance,
+    )
+}
+
+/**
+ * True when a solid body lies within [GOVERNOR_SECONDS] of the Core's course at [GOVERNOR_CLEARANCE]: a fast Core then
+ * slows below the speed at which a rock starts to hurt.
+ */
+internal fun MutableGameState.rockOnCourse(): Boolean {
+    for (obstacle in obstacleField.obstacles) {
+        val reach = obstacleHazardReach(obstacle)
+        if (reach <= 0f || !obstacle.kind.solid) continue
+        if (segmentCircleIntersects(
+                coreX, coreY, coreX + velocityX * GOVERNOR_SECONDS, coreY + velocityY * GOVERNOR_SECONDS,
+                obstacle.x, obstacle.y, reach + coreRadius + GOVERNOR_CLEARANCE,
+            )
+        ) return true
+    }
+    return false
+}
+
 /** How far beyond another optional site's radius the pilot keeps the momentum-projected Core (the bot's margin). */
 private const val SITE_PILOT_CLEARANCE = 295f
-
-/** Bootstrap standard errors: 20,000 resamples of the runs, RNG seed 20261027 (the calibration convention). */
-internal const val SITE_BOOTSTRAP_RESAMPLES: Int = 20_000
-internal const val SITE_BOOTSTRAP_SEED: Int = 20_261_027
-
-/** [metric] over [runs] and its bootstrap standard error (runs resampled whole, so a run's engagements stay together). */
-internal fun <T> bootstrap(runs: List<T>, metric: (List<T>) -> Double): Pair<Double, Double> {
-    val random = Random(SITE_BOOTSTRAP_SEED)
-    val values = DoubleArray(SITE_BOOTSTRAP_RESAMPLES)
-    val sample = ArrayList<T>(runs.size)
-    for (resample in 0 until SITE_BOOTSTRAP_RESAMPLES) {
-        sample.clear()
-        repeat(runs.size) { sample += runs[random.nextInt(runs.size)] }
-        values[resample] = metric(sample)
-    }
-    val mean = values.average()
-    val se = sqrt(values.sumOf { (it - mean) * (it - mean) } / (values.size - 1))
-    return metric(runs) to se
-}
-
-/** "name=value(SE se)" with four decimals. */
-internal fun <T> bootstrapLine(name: String, runs: List<T>, metric: (List<T>) -> Double): String {
-    val (value, se) = bootstrap(runs, metric)
-    return "$name=${"%.4f".format(value)}(SE ${"%.4f".format(se)})"
-}
 
 /** Engagements of [runs] that ended in a readable result (DIED counts as a failure; a CUT one never ran its course). */
 internal fun List<SiteRun>.judged(kind: Set<SiteKind>): List<SiteEngagement> =
     flatMap { run -> run.engagements.filter { it.kind in kind && it.outcome != SiteOutcome.CUT } }
 
-/** The share of [engagements] matching [predicate] (0 when there are none). */
-internal fun List<SiteEngagement>.shareWhere(predicate: (SiteEngagement) -> Boolean): Double =
-    if (isEmpty()) 0.0 else count(predicate).toDouble() / size
-
 /** Mean value per engagement (0 when there are none). */
 internal fun List<SiteEngagement>.meanValue(): Double = if (isEmpty()) 0.0 else sumOf { it.value } / size
-
-/** Seeds of the calibration window `i * 7_919 + 13` for i in [first]..[last] (plan §8.2; SITES: 2,201..2,300). */
-internal fun siteWindowSeeds(first: Int, last: Int): List<Int> = (first..last).map { it * 7_919 + 13 }

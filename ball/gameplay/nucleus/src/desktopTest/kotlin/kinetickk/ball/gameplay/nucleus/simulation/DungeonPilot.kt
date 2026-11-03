@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.ContentBounds
 import kinetickk.ball.content.api.StructureNotice
 import kinetickk.ball.content.api.StructureTemplate
 import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.STRUCTURE_OUTSIDE
 import kinetickk.ball.content.api.WallAxis
-import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.content.api.roomAt
 import kinetickk.ball.content.api.rotateQuarterX
 import kinetickk.ball.content.api.rotateQuarterY
@@ -58,7 +58,7 @@ internal data class DungeonAttempt(
 
 /**
  * Test-only opt-in pilot of the dungeon gates (structures §11.2): the input-only NoPoi bot (its steering law, its
- * choices, its skills) that, once per run from [seekFrom] until [seekLead] seconds before the Architect, flies into the
+ * choices, its skills) that, once per run from [seekFrom] until [SEEK_LEAD] seconds before the Architect, flies into the
  * nearest structure signal and fights through the dungeon. Every pointer it sets inverts a desired velocity through the
  * production steering inverse ([steeringAimFor]); all motion and damage go through `update()`, and it avoids nothing
  * the dungeon gates measure.
@@ -83,7 +83,6 @@ internal data class DungeonAttempt(
 internal class DungeonPilot(
     private val bot: NoPoiBot,
     private val seekFrom: Float = 90f,
-    private val seekLead: Float = 150f,
 ) {
     /** The finished attempt, or null while none ended. */
     var attempt: DungeonAttempt? = null
@@ -103,6 +102,7 @@ internal class DungeonPilot(
     private var targeting = false
     private var approachStage = 0
     private var stageDoor = -1
+    private var stageRoom = STRUCTURE_OUTSIDE
     private var doorStage = 0
     private var braking = false
     private val corner = FloatArray(2)
@@ -116,7 +116,7 @@ internal class DungeonPilot(
         when {
             attempt != null -> bot.control(s)
             holding && held != null && held.structureId == heldId -> dungeonControl(s, held)
-            s.elapsed >= seekFrom && s.elapsed < s.content.tempo.bossAtSeconds - seekLead -> seekControl(s)
+            s.elapsed >= seekFrom && s.elapsed < s.content.tempo.bossAtSeconds - SEEK_LEAD -> seekControl(s)
             else -> bot.control(s)
         }
     }
@@ -242,9 +242,9 @@ internal class DungeonPilot(
                 desiredY += py / pd * (clearance - pd) * 8f
             }
         }
-        val avoided = avoidRocks(s, desiredX, desiredY)
+        val avoided = s.avoidRocks(desiredX, desiredY)
         val walled = repelWalls(s, avoided.first, avoided.second)
-        val dodged = dodgeShots(s, walled.first, walled.second)
+        val dodged = s.dodgeShots(walled.first, walled.second)
         steer(s, dodged.first, dodged.second, brakeAbove = SEEK_BRAKE_ON, releaseBelow = SEEK_BRAKE_OFF)
         dashOnThreat(s)
         bot.castSkills(s)
@@ -330,7 +330,7 @@ internal class DungeonPilot(
         if (room >= 0) lastRoom = room
         val (desiredX, desiredY) = if (held.engagedRoom >= 0) fightVelocity(s, held, template) else routeVelocity(s, held, template)
         val walled = repelWalls(s, desiredX, desiredY)
-        val dodged = dodgeShots(s, walled.first, walled.second)
+        val dodged = s.dodgeShots(walled.first, walled.second)
         steer(s, dodged.first, dodged.second, brakeAbove = INSIDE_BRAKE_ON, releaseBelow = INSIDE_BRAKE_OFF)
         dashOnThreat(s)
         bot.castSkills(s)
@@ -355,7 +355,7 @@ internal class DungeonPilot(
                 best = distance
                 targetX = enemy.x + enemy.vx * 0.3f
                 targetY = enemy.y + enemy.vy * 0.3f
-                radius = if (s.weapon in ORBITING_WEAPONS) ORBIT_RADIUS else 0f
+                radius = if (s.weapon in BotOrbitWeapons) ORBIT_RADIUS else 0f
             }
         }
         val dx = s.coreX - targetX
@@ -432,8 +432,6 @@ internal class DungeonPilot(
             arrive(s, doorX + normalX * DOOR_WAYPOINT, doorY + normalY * DOOR_WAYPOINT, DOOR_SPEED, DOOR_SPEED)
         }
     }
-
-    private var stageRoom = STRUCTURE_OUTSIDE
 
     /**
      * The first door of a breadth-first route over open doors from [from] (a room, or outside) to the nearest room
@@ -516,25 +514,6 @@ internal class DungeonPilot(
         return dx / distance * speed to dy / distance * speed
     }
 
-    /** The bot's rock avoidance from where momentum carries the Core. */
-    private fun avoidRocks(s: MutableGameState, x: Float, y: Float): Pair<Float, Float> {
-        var desiredX = x
-        var desiredY = y
-        for (obstacle in s.obstacleField.obstacles) {
-            val reach = s.obstacleHazardReach(obstacle)
-            if (reach <= 0f) continue
-            val px = s.coreX + s.velocityX * 0.3f - obstacle.x
-            val py = s.coreY + s.velocityY * 0.3f - obstacle.y
-            val clearance = reach + s.coreRadius + if (obstacle.kind.solid) 110f else 40f
-            val pd = max(1f, length(px, py))
-            if (pd < clearance) {
-                desiredX += px / pd * (clearance - pd) * 6f
-                desiredY += py / pd * (clearance - pd) * 6f
-            }
-        }
-        return desiredX to desiredY
-    }
-
     /** Pushes the desired velocity off solid walls (sealed doors included) within [WALL_REACH] of the predicted Core. */
     private fun repelWalls(s: MutableGameState, x: Float, y: Float): Pair<Float, Float> {
         val px = s.coreX + s.velocityX * 0.3f
@@ -549,26 +528,6 @@ internal class DungeonPilot(
         }
         if (gap >= WALL_REACH) return x to y
         return x + nx * (WALL_REACH - gap) * WALL_GAIN to y + ny * (WALL_REACH - gap) * WALL_GAIN
-    }
-
-    /** The bot's side-step from hostile shots closing within 0.45 s. */
-    private fun dodgeShots(s: MutableGameState, x: Float, y: Float): Pair<Float, Float> {
-        var desiredX = x
-        var desiredY = y
-        for (shot in s.projectiles) if (shot.hostile) {
-            val px = shot.x - s.coreX
-            val py = shot.y - s.coreY
-            val vx = shot.vx - s.velocityX
-            val vy = shot.vy - s.velocityY
-            val time = -(px * vx + py * vy) / max(1f, vx * vx + vy * vy)
-            if (time in 0f..0.45f && length(px + vx * time, py + vy * time) < 80f) {
-                val length = max(1f, length(vx, vy))
-                val side = if (px * -vy + py * vx > 0f) -1f else 1f
-                desiredX += -vy / length * side * 380f
-                desiredY += vx / length * side * 380f
-            }
-        }
-        return desiredX to desiredY
     }
 
     /**
@@ -588,11 +547,7 @@ internal class DungeonPilot(
         val angle = pointerAngle + difference.coerceIn(-0.45f, 0.45f)
         val ux = cos(angle)
         val uy = sin(angle)
-        val normalHalfWidth = s.screenWidth * 0.5f * s.content.tempo.fatigue.edgeStrainStart - 10f
-        val normalHalfHeight = s.screenHeight * 0.5f * s.content.tempo.fatigue.edgeStrainStart - 10f
-        val availableX = if (ux > 0f) (normalHalfWidth - offsetX) / ux else if (ux < 0f) (-normalHalfWidth - offsetX) / ux else 10_000f
-        val availableY = if (uy > 0f) (normalHalfHeight - offsetY) / uy else if (uy < 0f) (-normalHalfHeight - offsetY) / uy else 10_000f
-        val tether = min(aim.distance.coerceIn(65f, 400f), min(availableX, availableY)).coerceAtLeast(65f)
+        val tether = min(aim.distance.coerceIn(65f, 400f), s.pointerRoom(ux, uy)).coerceAtLeast(65f)
         s.updatePointer(s.screenWidth * 0.5f + offsetX + ux * tether, s.screenHeight * 0.5f + offsetY + uy * tether)
         if (s.speed > brakeAbove) braking = true
         if (s.speed < releaseBelow) braking = false
@@ -632,7 +587,11 @@ internal class DungeonPilot(
         /** Seconds inside after which the pilot gives the attempt up as abandoned. */
         const val GIVE_UP_SECONDS = 300f
 
-        private const val ROUTE_NODES = 17
+        /** The pilot seeks a structure only until this many seconds before the Architect. */
+        const val SEEK_LEAD = 150f
+
+        /** Route nodes: every room of the largest structure and the outside. */
+        private const val ROUTE_NODES = ContentBounds.MAX_STRUCTURE_ROOMS + 1
         private const val ROUTE_NONE = -1
         private const val ROUTE_HERE = -2
         private const val SEARCH_SPEED = 900f
@@ -662,7 +621,58 @@ internal class DungeonPilot(
         private const val SEEK_BRAKE_OFF = 780f
         private const val INSIDE_BRAKE_ON = 850f
         private const val INSIDE_BRAKE_OFF = 600f
-        /** The weapons the NoPoi bot orbits its target with; it rams with every other one. */
-        private val ORBITING_WEAPONS = setOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.PRISM_RELAY)
     }
+}
+
+/** The NoPoi bot's berth of obstacles ahead, read from where momentum carries the Core [lookahead] seconds on. */
+internal fun MutableGameState.avoidRocks(x: Float, y: Float, lookahead: Float = 0.3f): Pair<Float, Float> {
+    var desiredX = x
+    var desiredY = y
+    for (obstacle in obstacleField.obstacles) {
+        val reach = obstacleHazardReach(obstacle)
+        if (reach <= 0f) continue
+        val px = coreX + velocityX * lookahead - obstacle.x
+        val py = coreY + velocityY * lookahead - obstacle.y
+        val clearance = reach + coreRadius + if (obstacle.kind.solid) 110f else 40f
+        val pd = max(1f, length(px, py))
+        if (pd < clearance) {
+            desiredX += px / pd * (clearance - pd) * 6f
+            desiredY += py / pd * (clearance - pd) * 6f
+        }
+    }
+    return desiredX to desiredY
+}
+
+/** The NoPoi bot's side-step from hostile shots closing within 0.45 s. */
+internal fun MutableGameState.dodgeShots(x: Float, y: Float): Pair<Float, Float> {
+    var desiredX = x
+    var desiredY = y
+    for (shot in projectiles) if (shot.hostile) {
+        val px = shot.x - coreX
+        val py = shot.y - coreY
+        val vx = shot.vx - velocityX
+        val vy = shot.vy - velocityY
+        val time = -(px * vx + py * vy) / max(1f, vx * vx + vy * vy)
+        if (time in 0f..0.45f && length(px + vx * time, py + vy * time) < 80f) {
+            val relative = max(1f, length(vx, vy))
+            val side = if (px * -vy + py * vx > 0f) -1f else 1f
+            desiredX += -vy / relative * side * 380f
+            desiredY += vx / relative * side * 380f
+        }
+    }
+    return desiredX to desiredY
+}
+
+/**
+ * How far from the Core along the unit direction ([ux], [uy]) the pointer may sit inside the area where ordinary
+ * steering keeps polarity (the NoPoi bot's cursor area; negative when outside it).
+ */
+internal fun MutableGameState.pointerRoom(ux: Float, uy: Float): Float {
+    val offsetX = coreX - cameraX
+    val offsetY = coreY - cameraY
+    val halfWidth = screenWidth * 0.5f * content.tempo.fatigue.edgeStrainStart - 10f
+    val halfHeight = screenHeight * 0.5f * content.tempo.fatigue.edgeStrainStart - 10f
+    val availableX = if (ux > 0f) (halfWidth - offsetX) / ux else if (ux < 0f) (-halfWidth - offsetX) / ux else 10_000f
+    val availableY = if (uy > 0f) (halfHeight - offsetY) / uy else if (uy < 0f) (-halfHeight - offsetY) / uy else 10_000f
+    return min(availableX, availableY)
 }

@@ -8,8 +8,6 @@ import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
-import kotlin.math.sqrt
-import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -96,20 +94,18 @@ class DungeonPilotGateTest {
     /**
      * Calibration probe (never the gate population): `KK_DUNGEON_PROBE=first..last` flies the window
      * `i × 7,919 + 13` for both arms (`KK_DUNGEON_ARMS=FRESH,STRONG` picks arms) with the structure knobs of
-     * `KK_DUNGEON_KNOBS=garrisonScale=…,garrisonHealthMultiplier=…,wallDamageScale=…`, and prints every run and the arms' summaries with bootstrap
+     * `KK_DUNGEON_KNOBS=garrisonScale=…,garrisonHealthMultiplier=…,garrisonDamageMultiplier=…,wallDamageScale=…`, and prints every run and the arms' summaries with bootstrap
      * standard errors.
      */
     @Test
     fun probeTheCalibrationWindow() {
         val window = System.getenv("KK_DUNGEON_PROBE")?.takeIf { it.isNotBlank() } ?: return
-        val (first, last) = window.split("..").map { it.trim().toInt() }
-        require(first in 1..last) { "KK_DUNGEON_PROBE must be first..last, got $window" }
-        require(last < GATE_FIRST || first > GATE_LAST) { "the gate population ($GATE_FIRST..$GATE_LAST) is never probed" }
-        val seeds = (first..last).map { it * 7_919 + 13 }
+        val indices = probeWindow(window)
+        val seeds = windowSeeds(indices)
         val content = probedContent(System.getenv("KK_DUNGEON_KNOBS").orEmpty())
         val arms = System.getenv("KK_DUNGEON_ARMS")?.takeIf { it.isNotBlank() }?.split(',')?.map { Arm.valueOf(it.trim()) }
             ?: Arm.entries
-        println("DUNGEON PROBE window $first..$last garrisonScale=${content.structures.garrisonScale} " +
+        println("DUNGEON PROBE window $indices garrisonScale=${content.structures.garrisonScale} " +
             "garrisonHealthMultiplier=${content.structures.garrisonHealthMultiplier} " +
             "garrisonDamageMultiplier=${content.structures.garrisonDamageMultiplier} wallDamageScale=${content.structures.wallDamageScale}")
         for (arm in arms) {
@@ -150,9 +146,6 @@ class DungeonPilotGateTest {
         /** Runs per arm: the first of [PopulationSeeds] (C42). */
         const val GATE_RUNS = 120
 
-        const val GATE_FIRST = 1_001
-        const val GATE_LAST = 1_300
-
         /** Seconds a run continues after its attempt's outcome. */
         const val TAIL_SECONDS = 5f
 
@@ -167,9 +160,6 @@ class DungeonPilotGateTest {
         const val STRONG_MAX_MEDIAN_CLEAR = 150f
         const val MIN_ATTEMPT_SHARE = 0.9
         const val MIN_TEMPLATES = 5
-
-        const val BOOTSTRAP_RESAMPLES = 20_000
-        const val BOOTSTRAP_SEED = 20261027
 
         /** The six dungeon templates (the Architect's Doodle is a secret, not a dungeon). */
         val DungeonTemplates: List<StructureTemplateId> =
@@ -194,11 +184,9 @@ class DungeonPilotGateTest {
                 // Gate B's setup: the bot never binds a Relic in key harmony with its weapon.
                 Arm.STRONG -> NoPoiBot(avoidWeaponHarmony = true)
             }
-            val state = MutableGameState(content, seed = seed, bootstrapProgress = profile)
-            state.unlockWeaponsForTesting(ReferenceArmory)
-            state.startRun()
+            val state = startGateRun(seed, profile, content = content)
             val pilot = DungeonPilot(bot)
-            val seekEnd = content.tempo.bossAtSeconds - 150f
+            val seekEnd = content.tempo.bossAtSeconds - DungeonPilot.SEEK_LEAD
             var stopAt = Float.POSITIVE_INFINITY
             var entryHpShare = Float.NaN
             var lastEngagedRoom = -1
@@ -255,22 +243,12 @@ class DungeonPilotGateTest {
                 "diedShare" to { sample -> sample.shareOfAttempts(DungeonOutcome.DIED_INSIDE) },
                 "abandonedShare" to { sample -> sample.shareOfAttempts(DungeonOutcome.ABANDONED) },
                 "collapsedShare" to { sample -> sample.shareOfAttempts(DungeonOutcome.COLLAPSED) },
-                "medianClear" to { sample -> sample.medianClearSeconds().toDouble() },
+                "medianClear" to { sample -> sample.medianClearSeconds() },
             )
-            val random = Random(BOOTSTRAP_SEED)
-            val resampled = List(metrics.size) { DoubleArray(BOOTSTRAP_RESAMPLES) }
-            repeat(BOOTSTRAP_RESAMPLES) { resample ->
-                val sample = List(runs.size) { runs[random.nextInt(runs.size)] }
-                metrics.forEachIndexed { index, (_, metric) -> resampled[index][resample] = metric(sample) }
-            }
             val attempts = runs.mapNotNull { it.attempt }
             val templates = attempts.groupingBy { it.template }.eachCount().toSortedMap()
-            return "n=${runs.size} attempts=${attempts.size} " + metrics.mapIndexed { index, (name, metric) ->
-                val values = resampled[index].filter { !it.isNaN() }
-                val mean = values.average()
-                val se = sqrt(values.sumOf { (it - mean) * (it - mean) } / (values.size - 1))
-                "$name=${"%.4f".format(metric(runs))}(SE ${"%.4f".format(se)})"
-            }.joinToString(" ") + " templates=$templates"
+            return "n=${runs.size} attempts=${attempts.size} " +
+                metrics.joinToString(" ") { (name, metric) -> bootstrapLine(name, runs, metric = metric) } + " templates=$templates"
         }
 
         /** The share of the runs' attempts that ended in [outcome] (NaN without an attempt). */
@@ -280,10 +258,8 @@ class DungeonPilotGateTest {
         }
 
         /** Median seconds from entering to the clear over the cleared attempts (NaN without one). */
-        fun List<DungeonRun>.medianClearSeconds(): Float {
-            val clears = mapNotNull { run -> run.attempt?.takeIf { it.outcome == DungeonOutcome.CLEARED }?.seconds }
-            return if (clears.isEmpty()) Float.NaN else clears.gateMedian()
-        }
+        fun List<DungeonRun>.medianClearSeconds(): Double =
+            mapNotNull { run -> run.attempt?.takeIf { it.outcome == DungeonOutcome.CLEARED }?.seconds }.finiteMedian()
 
         /** The shipped content with the structure knobs of [overrides] (`name=value`, comma-separated). */
         fun probedContent(overrides: String): GameplayContentSnapshot {

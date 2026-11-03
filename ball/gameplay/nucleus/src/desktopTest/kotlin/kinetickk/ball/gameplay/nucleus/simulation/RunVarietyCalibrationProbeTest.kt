@@ -30,15 +30,15 @@ class RunVarietyCalibrationProbeTest {
     @Test
     fun printsTheVarietyArmsOnTheNamedWindow() {
         val window = System.getenv("KK_VARIETY_PROBE")?.trim()?.takeIf { it.isNotEmpty() } ?: return
-        val (first, last) = window.split("..").map { it.trim().toInt() }.let { it[0] to (it.getOrNull(1) ?: (it[0] + 299)) }
-        val seeds = varietyWindowSeeds(first, last)
+        val indices = probeWindow(window, defaultLength = 300)
+        val seeds = windowSeeds(indices)
         val arms = (System.getenv("KK_VARIETY_ARMS")?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: listOf("BASE", "OMENS"))
             .flatMap { if (it == "OMENS") OmenId.entries.map { omen -> omen.name } else listOf(it) }
         // Knob sets that change only omens share one base (No omen never reads them).
         val bases = HashMap<GameplayContentSnapshot, List<VarietyRun>>()
         for (knobs in System.getenv("KK_VARIETY_KNOBS").orEmpty().split(';')) {
             val content = varietyKnobbed(canonicalGameplayContent, knobs)
-            println("VARIETY-PROBE window=$first..$last knobs='$knobs'")
+            println("VARIETY-PROBE window=$indices knobs='$knobs'")
             val base = bases.getOrPut(content.copy(variety = content.variety.copy(omens = canonicalGameplayContent.variety.omens))) {
                 timed("BASE") { populationOf(seeds) { flyVarietyRun(it, content) } }
             }

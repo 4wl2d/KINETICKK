@@ -37,20 +37,20 @@ class SiteEngagementGateTest {
         val race = setOf(SiteKind.GATE_RACE)
         val board = raceBoard.judged(race)
         val phone = racePhone.judged(race)
-        val bronze = board.shareWhere { it.outcome.medal >= 1 }
-        val silver = board.shareWhere { it.outcome.medal >= 2 }
-        val gold = board.shareWhere { it.outcome.medal >= 3 }
-        val phoneBronze = phone.shareWhere { it.outcome.medal >= 1 }
+        val bronze = board.shareOf { it.outcome.medal >= 1 }
+        val silver = board.shareOf { it.outcome.medal >= 2 }
+        val gold = board.shareOf { it.outcome.medal >= 3 }
+        val phoneBronze = phone.shareOf { it.outcome.medal >= 1 }
         println(
             "S-G1 board n=${board.size} " +
-                bootstrapLine("bronzeUp", raceBoard) { it.judged(race).shareWhere { e -> e.outcome.medal >= 1 } } + " " +
-                bootstrapLine("silverUp", raceBoard) { it.judged(race).shareWhere { e -> e.outcome.medal >= 2 } } + " " +
-                bootstrapLine("gold", raceBoard) { it.judged(race).shareWhere { e -> e.outcome.medal >= 3 } } +
+                bootstrapLine("bronzeUp", raceBoard) { it.judged(race).shareOf { e -> e.outcome.medal >= 1 } } + " " +
+                bootstrapLine("silverUp", raceBoard) { it.judged(race).shareOf { e -> e.outcome.medal >= 2 } } + " " +
+                bootstrapLine("gold", raceBoard) { it.judged(race).shareOf { e -> e.outcome.medal >= 3 } } +
                 " outcomes=${outcomes(board)}",
         )
         println(
             "S-G1 phone n=${phone.size} " +
-                bootstrapLine("bronzeUp", racePhone) { it.judged(race).shareWhere { e -> e.outcome.medal >= 1 } } +
+                bootstrapLine("bronzeUp", racePhone) { it.judged(race).shareOf { e -> e.outcome.medal >= 1 } } +
                 " outcomes=${outcomes(phone)}",
         )
         assertTrue(board.size >= MIN_ENGAGEMENTS && phone.size >= MIN_ENGAGEMENTS, "the race arms engaged ${board.size} and ${phone.size} races")
@@ -69,10 +69,10 @@ class SiteEngagementGateTest {
         val failures = ArrayList<String>()
         for ((arm, runs) in challenges) {
             val engagements = runs.judged(arm.kinds)
-            val completion = engagements.shareWhere { it.outcome.success }
+            val completion = engagements.shareOf { it.outcome.success }
             println(
                 "S-G3 $arm n=${engagements.size} " +
-                    bootstrapLine("completion", runs) { it.judged(arm.kinds).shareWhere { e -> e.outcome.success } } +
+                    bootstrapLine("completion", runs) { it.judged(arm.kinds).shareOf { e -> e.outcome.success } } +
                     " outcomes=${outcomes(engagements)}",
             )
             if (engagements.size < MIN_ENGAGEMENTS) failures += "$arm engaged only ${engagements.size} challenges"
@@ -104,7 +104,7 @@ class SiteEngagementGateTest {
                 "S-G4 $family n=${engagements.size} " +
                     bootstrapLine("valueRatio", mixed) { it.judged(kinds).meanValue() / it.judged(kindsOf(SiteFamily.ANOMALY)).meanValue() } +
                     " " + bootstrapLine("value", mixed) { it.judged(kinds).meanValue() } +
-                    " " + bootstrapLine("success", mixed) { it.judged(kinds).shareWhere { e -> e.outcome.success } },
+                    " " + bootstrapLine("success", mixed) { it.judged(kinds).shareOf { e -> e.outcome.success } },
             )
             if (engagements.size < MIN_FAMILY_ENGAGEMENTS) failures += "the mixed arm engaged only ${engagements.size} ${family}s"
             if (ratio !in band) failures += "$family pays ${"%.3f".format(ratio)} anomalies per engagement; expected within $band"
@@ -112,14 +112,14 @@ class SiteEngagementGateTest {
         val anomalies = mixed.judged(kindsOf(SiteFamily.ANOMALY))
         println(
             "S-G4 ANOMALY n=${anomalies.size} " + bootstrapLine("value", mixed) { it.judged(kindsOf(SiteFamily.ANOMALY)).meanValue() } +
-                " " + bootstrapLine("success", mixed) { it.judged(kindsOf(SiteFamily.ANOMALY)).shareWhere { e -> e.outcome.success } },
+                " " + bootstrapLine("success", mixed) { it.judged(kindsOf(SiteFamily.ANOMALY)).shareOf { e -> e.outcome.success } },
         )
         val pairs = mixed.zip(noPoi)
         val engaging = engagingWinShare(pairs)
         val withoutSites = noPoiWinShare(pairs)
         println(
-            "S-G4 wins engaging=${mixed.count { it.engagements.isNotEmpty() }} " + bootstrapLine("engagingWinShare", pairs, ::engagingWinShare) +
-                " " + bootstrapLine("noPoiWinShare", pairs, ::noPoiWinShare) +
+            "S-G4 wins engaging=${mixed.count { it.engagements.isNotEmpty() }} " + bootstrapLine("engagingWinShare", pairs, metric = ::engagingWinShare) +
+                " " + bootstrapLine("noPoiWinShare", pairs, metric = ::noPoiWinShare) +
                 " " + bootstrapLine("difference", pairs) { engagingWinShare(it) - noPoiWinShare(it) },
         )
         if (engaging < withoutSites - MAX_WIN_SHARE_LOSS) {
@@ -163,7 +163,7 @@ class SiteEngagementGateTest {
         }
 
         val mixed: List<SiteRun> by lazy { populationOf(Seeds) { seed -> flySiteRun(seed, SiteArm.MIXED) } }
-        val noPoi: List<SiteRun> by lazy { populationOf(Seeds) { seed -> flyNoPoiRun(seed, width = 1_280f, height = 800f) } }
+        val noPoi: List<SiteRun> by lazy { populationOf(Seeds) { seed -> flyNoPoiRun(seed) } }
 
         fun kindsOf(family: SiteFamily): Set<SiteKind> = SiteArm.MIXED.kinds.filter { it.family == family }.toSet()
 

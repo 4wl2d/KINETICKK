@@ -34,7 +34,7 @@ class RunSkeletonVarietyTest {
     fun runSkeletonsDifferFromSeedToSeed() {
         val v = variety(shipped)
         val duplicates = shipped.size - shipped.toSet().size
-        println("SKELETON-GATE V=${"%.4f".format(v)} " + bootstrapLine("V", shipped, ::variety) + " duplicates=$duplicates of ${shipped.size} " +
+        println("SKELETON-GATE V=${"%.4f".format(v)} " + bootstrapLine("V", shipped, metric = ::variety) + " duplicates=$duplicates of ${shipped.size} " +
             "components=" + (0 until COMPONENTS).joinToString(",") { index -> "%.3f".format(componentDistance(shipped, index)) })
         assertTrue(v >= MIN_VARIETY, "run skeletons vary only ${"%.4f".format(v)}; expected at least $MIN_VARIETY")
         assertTrue(duplicates.toDouble() / shipped.size <= MAX_DUPLICATE_SHARE, "$duplicates of ${shipped.size} runs repeat a skeleton")

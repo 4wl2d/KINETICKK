@@ -24,7 +24,6 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
-import kotlin.random.Random
 
 /*
  * The opt-in pilot of the dimension gates and the harness that flies one visit. The reference NoPoi bot plays the run
@@ -52,12 +51,6 @@ private const val MIN_TETHER = 65f
 private const val MAX_TETHER = 400f
 private const val CURSOR_TURN = 0.45f
 
-/** The NoPoi bot's boss engagement: its orbit radius and speed with the Flux Wake, else with an arc weapon. */
-private const val WAKE_BOSS_RADIUS = 100f
-private const val WAKE_BOSS_SPEED = 350f
-private const val ARC_BOSS_RADIUS = 300f
-private const val ARC_BOSS_SPEED = 460f
-
 /** The NoPoi bot's hunt orbit around its nearest target with an arc weapon (others fly through their target). */
 private const val ARC_HUNT_RADIUS = 280f
 
@@ -65,10 +58,8 @@ private const val ARC_HUNT_RADIUS = 280f
 private const val BRAKE_ABOVE_SHARE = 1.6f
 private const val BRAKE_RELEASE_SHARE = 1.25f
 
-/** The NoPoi bot's berths: optional sites from the Core 0.35 s ahead, obstacles 0.3 s ahead, and the hostile-shot dodge. */
+/** The NoPoi bot's berth of optional sites from the Core 0.35 s ahead (obstacles and shots: [avoidRocks], [dodgeShots]). */
 private const val SITE_CLEARANCE_MARGIN = 295f
-private const val SOLID_CLEARANCE_MARGIN = 110f
-private const val HAZARD_CLEARANCE_MARGIN = 40f
 
 /** A Dash the bot asked for is kept only when no solid body lies this long along the pilot's Dash line. */
 private const val DASH_LOOKAHEAD_SECONDS = 0.3f
@@ -221,7 +212,7 @@ internal class DimensionPilot(
             length(it.x - s.coreX, it.y - s.coreY) - if (it.type == EnemyType.ELITE) 250f else 0f
         }
         if (prey != null) {
-            val arc = s.weapon in listOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.PRISM_RELAY)
+            val arc = s.weapon in BotOrbitWeapons
             return goal(prey.x + prey.vx * 0.3f, prey.y + prey.vy * 0.3f, speed, orbit = if (arc) ARC_HUNT_RADIUS else 0f)
         }
         val heading = s.travelHeading()
@@ -271,39 +262,16 @@ internal class DimensionPilot(
                 desiredY += py / pd * (clearance - pd) * 8f
             }
         }
-        for (obstacle in s.obstacleField.obstacles) {
-            val reach = s.obstacleHazardReach(obstacle)
-            if (reach <= 0f) continue
-            val px = s.coreX + s.velocityX * 0.3f - obstacle.x
-            val py = s.coreY + s.velocityY * 0.3f - obstacle.y
-            val clearance = reach + s.coreRadius + if (obstacle.kind.solid) SOLID_CLEARANCE_MARGIN else HAZARD_CLEARANCE_MARGIN
-            val pd = max(1f, length(px, py))
-            if (pd < clearance) {
-                desiredX += px / pd * (clearance - pd) * 6f
-                desiredY += py / pd * (clearance - pd) * 6f
-            }
-        }
-        for (shot in s.projectiles) if (shot.hostile) {
-            val px = shot.x - s.coreX
-            val py = shot.y - s.coreY
-            val vx = shot.vx - s.velocityX
-            val vy = shot.vy - s.velocityY
-            val time = -(px * vx + py * vy) / max(1f, vx * vx + vy * vy)
-            if (time in 0f..0.45f && length(px + vx * time, py + vy * time) < 80f) {
-                val shotSpeed = max(1f, length(vx, vy))
-                val side = if (px * -vy + py * vx > 0f) -1f else 1f
-                desiredX += -vy / shotSpeed * side * 380f
-                desiredY += vx / shotSpeed * side * 380f
-            }
-        }
+        val avoided = s.avoidRocks(desiredX, desiredY)
+        val (steerX, steerY) = s.dodgeShots(avoided.first, avoided.second)
         // The Brake only reins in a Core far above the wanted speed; the rest of the time it would bleed the pace.
         if (s.speed > goalSpeed * BRAKE_ABOVE_SHARE) braking = true
         if (s.speed < goalSpeed * BRAKE_RELEASE_SHARE) braking = false
         s.setBrake(braking)
         val drag = s.steeringDrag()
         val aim = s.steeringAimFor(
-            (desiredX - s.velocityX) * VELOCITY_GAIN + s.velocityX * drag,
-            (desiredY - s.velocityY) * VELOCITY_GAIN + s.velocityY * drag,
+            (steerX - s.velocityX) * VELOCITY_GAIN + s.velocityX * drag,
+            (steerY - s.velocityY) * VELOCITY_GAIN + s.velocityY * drag,
         )
         val offsetX = s.coreX - s.cameraX
         val offsetY = s.coreY - s.cameraY
@@ -317,11 +285,7 @@ internal class DimensionPilot(
         val ux = cos(cursorAngle)
         val uy = sin(cursorAngle)
         // The bot's cursor area: the pointer stays where ordinary steering keeps its polarity.
-        val halfWidth = s.screenWidth * 0.5f * s.content.tempo.fatigue.edgeStrainStart - 10f
-        val halfHeight = s.screenHeight * 0.5f * s.content.tempo.fatigue.edgeStrainStart - 10f
-        val availableX = if (ux > 0f) (halfWidth - offsetX) / ux else if (ux < 0f) (-halfWidth - offsetX) / ux else 10_000f
-        val availableY = if (uy > 0f) (halfHeight - offsetY) / uy else if (uy < 0f) (-halfHeight - offsetY) / uy else 10_000f
-        val tether = min(aim.distance.coerceIn(MIN_TETHER, MAX_TETHER), min(availableX, availableY)).coerceAtLeast(MIN_TETHER)
+        val tether = min(aim.distance.coerceIn(MIN_TETHER, MAX_TETHER), s.pointerRoom(ux, uy)).coerceAtLeast(MIN_TETHER)
         s.updatePointer(s.screenWidth * 0.5f + offsetX + ux * tether, s.screenHeight * 0.5f + offsetY + uy * tether)
         // A threat Dash the bot asked for now flies along this pointer: dropped when it would ram a solid body at speed or
         // Blink onto a skipped site.
@@ -388,6 +352,10 @@ internal enum class DimensionProfile(val label: String) {
         }
 
     fun bot(): NoPoiBot = NoPoiBot(avoidWeaponHarmony = this == SIGNATURE_TIER_3)
+
+    /** One gate run of this profile on [seed] ([playGateRun]): its snapshot of [content], [bot] and its Relics. */
+    fun play(seed: Int, content: GameplayContentSnapshot, bot: NoPoiBot = bot(), observe: (MutableGameState) -> Unit = {}): MutableGameState =
+        playGateRun(seed, snapshot(content), bot, relics, content, observe = observe)
 }
 
 /** One run of a dimension gate: where it went, what the visit did and how it ended. */
@@ -434,7 +402,7 @@ internal const val AFTER_RETURN_SECONDS = 5f
  * Plays [profile] on [seed]: the NoPoi bot until [riftAt], when [target]'s rift opens 560 u ahead (a window rift for
  * the Zenith or the Nadir, the glitch rift for the Archive); the pilot flies through it and the visit, with
  * [objective] forced in place of the rolled one when given. The run stops [AFTER_RETURN_SECONDS] after the return, or
- * at [until] when [runToEnd] (a full run, as the outcome gate reads it). A null [target] plays the run with no rift.
+ * at 900 s when [runToEnd] (a full run, as the outcome gate reads it). A null [target] plays the run with no rift.
  */
 internal fun flyDimensionRun(
     seed: Int,
@@ -444,13 +412,9 @@ internal fun flyDimensionRun(
     objective: DimensionObjective? = null,
     takeRefuse: Boolean = false,
     runToEnd: Boolean = false,
-    until: Float = 900f,
     content: GameplayContentSnapshot = canonicalGameplayContent,
 ): DimensionVisitRun {
-    val state = MutableGameState(content, seed = seed, bootstrapProgress = profile.snapshot(content))
-    state.unlockWeaponsForTesting(ReferenceArmory)
-    state.startRun()
-    profile.relics.forEach(state::acquireRelicForTesting)
+    val state = startGateRun(seed, profile.snapshot(content), profile.relics, content)
     // Without a target the pilot's rift never comes due, so the bot plays the whole run.
     val pilot = DimensionPilot(target ?: WorldLayer.ZENITH, profile.bot(), takeRefuse)
     var opened = false
@@ -469,7 +433,7 @@ internal fun flyDimensionRun(
     var damage = 0f
     var scorch = 0f
     var bossLost = 0f
-    var stopAt = until
+    var stopAt = 900f
     val physics = content.dimensions.definition(target ?: WorldLayer.BASE).physics
     while (state.elapsed < stopAt && (state.phase == GamePhase.RUNNING || state.phase == GamePhase.CHOICE)) {
         if (target != null && !opened && state.phase == GamePhase.RUNNING && state.elapsed >= riftAt) {
@@ -516,7 +480,7 @@ internal fun flyDimensionRun(
         if (!enteredAt.isNaN() && returnedAt.isNaN() && state.worldLayer == WorldLayer.BASE) {
             returnedAt = state.elapsed
             integrityAtReturn = state.hp / state.maxHp
-            if (!runToEnd) stopAt = min(until, returnedAt + AFTER_RETURN_SECONDS)
+            if (!runToEnd) stopAt = min(900f, returnedAt + AFTER_RETURN_SECONDS)
         }
         // A rift that closed unentered ends a visit's run: nothing is left to measure.
         if (target != null && opened && enteredAt.isNaN() && !runToEnd && !riftOffered(state, target)) break
@@ -553,33 +517,4 @@ private fun scorchTicks(
     val start = if (continued && slowBefore > grace) clockBefore else 0f
     val pastGrace = if (continued) min(frame, slowAfter - grace) else slowAfter - grace
     return ((start + pastGrace - after.dimensionScorchClock) / tick).roundToInt().coerceAtLeast(0)
-}
-
-/** Bootstrap standard errors of the gates and probes: 20,000 resamples with RNG seed 20261027 (policy.md procedure). */
-internal const val DIMENSION_BOOTSTRAP_RESAMPLES = 20_000
-internal const val DIMENSION_BOOTSTRAP_SEED = 20_261_027
-
-/** [metric] over [runs] and its bootstrap standard error. */
-internal fun <T> bootstrapped(runs: List<T>, metric: (List<T>) -> Double): Pair<Double, Double> {
-    if (runs.isEmpty()) return Double.NaN to Double.NaN
-    val random = Random(DIMENSION_BOOTSTRAP_SEED)
-    val values = DoubleArray(DIMENSION_BOOTSTRAP_RESAMPLES) {
-        metric(List(runs.size) { runs[random.nextInt(runs.size)] })
-    }
-    val finite = values.filter { it.isFinite() }
-    val mean = finite.average()
-    val se = kotlin.math.sqrt(finite.sumOf { (it - mean) * (it - mean) } / max(1, finite.size - 1))
-    return metric(runs) to se
-}
-
-/** "value(SE se)" with four decimals. */
-internal fun <T> describe(runs: List<T>, metric: (List<T>) -> Double): String {
-    val (value, se) = bootstrapped(runs, metric)
-    return "${"%.4f".format(value)}(SE ${"%.4f".format(se)})"
-}
-
-/** The median of the finite values (NaN for none); the upper middle of an even count. */
-internal fun List<Float>.finiteMedian(): Double {
-    val finite = filter { it.isFinite() }.sorted()
-    return if (finite.isEmpty()) Double.NaN else finite[finite.size / 2].toDouble()
 }

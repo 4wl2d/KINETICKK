@@ -3,15 +3,11 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.ObstacleTuning
-import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.SteeringTuning
-import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
-import kotlin.random.Random
 import kotlin.test.Test
 
 /**
@@ -38,14 +34,9 @@ class TerrainCalibrationProbeTest {
     @Test
     fun probeTheCalibrationWindow() {
         val probe = System.getenv("KK_TERRAIN_PROBE")?.takeIf { it.isNotBlank() } ?: return
-        val windows = probe.split(',').map { window ->
-            val (first, last) = window.split("..").map { it.trim().toInt() }
-            require(first in 1..last) { "KK_TERRAIN_PROBE must be first..last[,first..last...], got $probe" }
-            require(last < GATE_FIRST || first > GATE_LAST) { "the gate population ($GATE_FIRST..$GATE_LAST) is never probed" }
-            first..last
-        }
+        val windows = probe.split(',').map { probeWindow(it) }
         require(windows.flatten().toSet().size == windows.sumOf { it.count() }) { "KK_TERRAIN_PROBE windows overlap: $probe" }
-        val seeds = windows.flatMap { window -> window.map { it * 7_919 + 13 } }
+        val seeds = windows.flatMap { windowSeeds(it) }
         val label = windows.joinToString(",") { "${it.first}..${it.last}" }
         val content = probedContent(
             System.getenv("KK_TERRAIN_STEERING").orEmpty(),
@@ -59,12 +50,12 @@ class TerrainCalibrationProbeTest {
         println("TERRAIN PROBE window $label steering ${content.tempo.steering}")
         println("TERRAIN PROBE window $label obstacles ${content.obstacles.impactKnobs()}")
         println("TERRAIN PROBE window $label dash $dashRule")
-        for (arm in Arm.entries) {
+        for (arm in listOf(DimensionProfile.FRESH_TIER_0, DimensionProfile.STRONG_TIER_10)) {
             val runs = populationOf(seeds) { seed -> play(seed, arm, content, dashRule) }
             runs.forEach { println("TERRAIN PROBE ${arm.label} $it") }
             if (windows.size > 1) {
                 windows.forEach { window ->
-                    val inWindow = window.map { it * 7_919 + 13 }.toSet()
+                    val inWindow = windowSeeds(window).toSet()
                     println("TERRAIN PROBE SUMMARY ${arm.label} window ${window.first}..${window.last} " +
                         summary(runs.filter { it.seed in inWindow }))
                 }
@@ -72,8 +63,6 @@ class TerrainCalibrationProbeTest {
             println("TERRAIN PROBE SUMMARY ${arm.label} ${summary(runs)}")
         }
     }
-
-    private enum class Arm(val label: String) { FRESH_TIER_0("fresh-t0"), STRONG_TIER_10("strong-t10") }
 
     private class Run(
         val seed: Int,
@@ -102,7 +91,7 @@ class TerrainCalibrationProbeTest {
                 "ambushHolds=$ambushHolds ambushSeconds=$ambushSeconds dashes=$dashes end=$end"
     }
 
-    private fun play(seed: Int, arm: Arm, content: GameplayContentSnapshot, dashRule: DashRule): Run {
+    private fun play(seed: Int, arm: DimensionProfile, content: GameplayContentSnapshot, dashRule: DashRule): Run {
         var contacts = 0
         var touching = false
         var hurts = 0
@@ -138,29 +127,14 @@ class TerrainCalibrationProbeTest {
             if (held >= AMBUSH_HOLD_SECONDS && heldBefore < AMBUSH_HOLD_SECONDS) ambushHolds++
             heldBefore = held
         }
-        val state = when (arm) {
-            Arm.FRESH_TIER_0 -> playGateRun(
-                seed, gateProfile(GateMatrix.NONE, tier = 0, content = content), NoPoiBot(dashRule = dashRule),
-                content = content, observe = observe,
-            )
-            Arm.STRONG_TIER_10 -> playGateRun(
-                seed,
-                gateProfile(
-                    GateMatrix.FULL, tier = 10, shape = CoreShape.PENTAGON, weapon = WeaponId.ARC_COIL, content = content,
-                ),
-                NoPoiBot(dashRule = dashRule),
-                relics = StrongRelics,
-                content = content,
-                observe = observe,
-            )
-        }
+        val state = arm.play(seed, content, NoPoiBot(dashRule = dashRule), observe)
         val outcome = when (state.phase) {
             GamePhase.VICTORY -> "WIN"
             GamePhase.GAME_OVER -> "LOSS"
             else -> "TIMEOUT"
         }
         val ended = state.phase == GamePhase.GAME_OVER
-        val obstacleKill = ended && state.message == OBSTACLE_COLLISION
+        val obstacleKill = ended && state.message == OBSTACLE_COLLISION_REASON
         return Run(
             // A lethal-speed hit sets integrity to exactly zero; band damage leaves it below.
             seed, outcome, state.elapsed, ended && state.message == SINGULARITY_CONTACT, obstacleKill,
@@ -191,18 +165,7 @@ class TerrainCalibrationProbeTest {
             "meanSurvival" to { sample -> sample.sumOf { it.seconds.toDouble() } / sample.size },
             "dashesPerMinute" to { sample -> sample.sumOf { it.dashes } * 60.0 / sample.sumOf { it.seconds.toDouble() } },
         )
-        val random = Random(BOOTSTRAP_SEED)
-        val resampled = List(metrics.size) { DoubleArray(BOOTSTRAP_RESAMPLES) }
-        repeat(BOOTSTRAP_RESAMPLES) { resample ->
-            val sample = List(runs.size) { runs[random.nextInt(runs.size)] }
-            metrics.forEachIndexed { index, (_, metric) -> resampled[index][resample] = metric(sample) }
-        }
-        return "n=${runs.size} " + metrics.mapIndexed { index, (name, metric) ->
-            val values = resampled[index]
-            val mean = values.average()
-            val se = kotlin.math.sqrt(values.sumOf { (it - mean) * (it - mean) } / (values.size - 1))
-            "$name=${"%.4f".format(metric(runs))}(SE ${"%.4f".format(se)})"
-        }.joinToString(" ")
+        return "n=${runs.size} " + metrics.joinToString(" ") { (name, metric) -> bootstrapLine(name, runs, metric = metric) }
     }
 
     /**
@@ -263,15 +226,7 @@ class TerrainCalibrationProbeTest {
     }
 
     private companion object {
-        /** Gate D's strong build: Stormheart Capacitor in key harmony with Arc Coil and three proven Relics. */
-        val StrongRelics =
-            listOf(RelicId.STORMHEART_CAPACITOR, RelicId.PANDEMIC_CODEX, RelicId.THUNDER_CHOIR, RelicId.CINDER_CROWN)
-        const val GATE_FIRST = 1_001
-        const val GATE_LAST = 1_300
         const val CONTACT_SLACK = 2f
         const val SINGULARITY_CONTACT = "SINGULARITY CONTACT"
-        const val OBSTACLE_COLLISION = "OBSTACLE COLLISION"
-        const val BOOTSTRAP_RESAMPLES = 20_000
-        const val BOOTSTRAP_SEED = 20_261_027
     }
 }

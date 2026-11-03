@@ -20,6 +20,9 @@ import kinetickk.ball.profile.api.RebirthProgress
 import java.util.concurrent.Callable
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import kotlin.math.max
+import kotlin.math.sqrt
+import kotlin.random.Random
 
 /*
  * Shared full-run harness of the economy gates (run level calibration, Matter income, upgrades). It plays
@@ -30,6 +33,9 @@ import java.util.concurrent.Executors
 
 /** The gate seeds of RebirthBalanceGateTest: the second half of the NoPoi probe (`i * 7_919 + 13`, i = 6..10). */
 internal val EconomyGateSeeds: List<Int> = (6..10).map { it * 7_919 + 13 }
+
+/** The probe indices `i` of [PopulationSeeds]; no calibration window ever overlaps them. */
+internal val PopulationIndices: IntRange = 1_001..1_300
 
 /**
  * The population of the seeded gates restated as population gates (policy.md, "Balance gate populations"): the NoPoi
@@ -45,7 +51,23 @@ internal val EconomyGateSeeds: List<Int> = (6..10).map { it * 7_919 + 13 }
  * a gate more strictly only where the base itself meets it (ItemVariety V2's 0.81 does). Each test's KDoc records its
  * base value, SE and threshold.
  */
-internal val PopulationSeeds: List<Int> = (1_001..1_300).map { it * 7_919 + 13 }
+internal val PopulationSeeds: List<Int> = windowSeeds(PopulationIndices)
+
+/** The probe seeds `i * 7_919 + 13` for i in [indices]. */
+internal fun windowSeeds(indices: IntRange): List<Int> = indices.map { it * 7_919 + 13 }
+
+/**
+ * The calibration window a probe's [text] names: `first..last`, or `first` alone for [defaultLength] indices from it.
+ * It starts at 1 or above and never overlaps the gate population ([PopulationIndices]).
+ */
+internal fun probeWindow(text: String, defaultLength: Int? = null): IntRange {
+    val bounds = text.split("..").map { it.trim().toInt() }
+    val first = bounds[0]
+    val last = bounds.getOrNull(1) ?: (first + requireNotNull(defaultLength) { "a probe window is first..last, got $text" } - 1)
+    require(first in 1..last) { "a probe window is first..last, got $text" }
+    require(last < PopulationIndices.first || first > PopulationIndices.last) { "the gate population ($PopulationIndices) is never probed: $text" }
+    return first..last
+}
 
 /**
  * [work] on every one of [items] on a small pool of daemon threads. Each run is independent and deterministic and the
@@ -142,10 +164,7 @@ internal fun playGateRun(
     shown: (MutableGameState) -> Unit = {},
     observe: (MutableGameState) -> Unit = {},
 ): MutableGameState {
-    val state = MutableGameState(content, seed = seed, bootstrapProgress = profile)
-    state.unlockWeaponsForTesting(ReferenceArmory)
-    state.startRun()
-    relics.forEach(state::acquireRelicForTesting)
+    val state = startGateRun(seed, profile, relics, content)
     while (state.elapsed < 900f && (state.phase == GamePhase.RUNNING || state.phase == GamePhase.CHOICE)) {
         if (state.phase == GamePhase.CHOICE) {
             shown(state)
@@ -161,5 +180,51 @@ internal fun playGateRun(
     return state
 }
 
+/** A started gate run of [profile] on [seed]: the reference armory unlocked and [relics] bound at the start. */
+internal fun startGateRun(
+    seed: Int,
+    profile: GameplayProfileSnapshot,
+    relics: List<RelicId> = emptyList(),
+    content: GameplayContentSnapshot = canonicalGameplayContent,
+): MutableGameState {
+    val state = MutableGameState(content, seed = seed, bootstrapProgress = profile)
+    state.unlockWeaponsForTesting(ReferenceArmory)
+    state.startRun()
+    relics.forEach(state::acquireRelicForTesting)
+    return state
+}
+
 /** The median of an odd-sized sample (the upper middle of an even one). */
 internal fun List<Float>.gateMedian(): Float = sorted()[size / 2]
+
+/** The median of the finite values (NaN for none); the upper middle of an even count. */
+internal fun List<Float>.finiteMedian(): Double {
+    val finite = filter { it.isFinite() }.sorted()
+    return if (finite.isEmpty()) Double.NaN else finite[finite.size / 2].toDouble()
+}
+
+/** Bootstrap standard errors of the gates and probes: 20,000 resamples with RNG seed 20261027 (policy.md procedure). */
+internal const val BOOTSTRAP_RESAMPLES: Int = 20_000
+internal const val BOOTSTRAP_SEED: Int = 20_261_027
+
+/**
+ * [metric] over [runs] and its bootstrap standard error over the finite resamples (NaN for no runs). Runs are resampled
+ * whole, so a run's engagements (or a seed's paired arms) stay together.
+ */
+internal fun <T> bootstrap(runs: List<T>, metric: (List<T>) -> Double): Pair<Double, Double> {
+    if (runs.isEmpty()) return Double.NaN to Double.NaN
+    val random = Random(BOOTSTRAP_SEED)
+    val values = DoubleArray(BOOTSTRAP_RESAMPLES) {
+        metric(List(runs.size) { runs[random.nextInt(runs.size)] })
+    }
+    val finite = values.filter { it.isFinite() }
+    val mean = finite.average()
+    val se = sqrt(finite.sumOf { (it - mean) * (it - mean) } / max(1, finite.size - 1))
+    return metric(runs) to se
+}
+
+/** "name=value(SE se)": the value in [format], the standard error with four decimals. */
+internal fun <T> bootstrapLine(name: String, runs: List<T>, format: String = "%.4f", metric: (List<T>) -> Double): String {
+    val (value, se) = bootstrap(runs, metric)
+    return "$name=${format.format(value)}(SE ${"%.4f".format(se)})"
+}

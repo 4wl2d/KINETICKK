@@ -3,7 +3,6 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.WorldLayer
-import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
@@ -33,7 +32,9 @@ class DimensionRunOutcomeGateTest {
             }
             val unentered = visited.filter { !it.entered && !it.openedAt.isNaN() }
             assertTrue(unentered.isEmpty(), "$target: rifts left unentered on ${unentered.map { it.seed }}")
-            val (shift, se) = pairedShift(control, visited)
+            // The visit arm's win minus the control's on each seed, with its paired bootstrap SE.
+            val pairs = control.zip(visited) { a, b -> (if (b.won) 1.0 else 0.0) - (if (a.won) 1.0 else 0.0) }
+            val (shift, se) = bootstrap(pairs) { it.average() }
             println("DIMENSION OUTCOME $target wins ${visited.count { it.won }} of ${visited.size} " +
                 "(entered ${visited.count { it.entered }}, completed ${visited.count { it.completed }}) against the control's " +
                 "${control.count { it.won }}: shift ${"%.4f".format(shift)}(SE ${"%.4f".format(se)})")
@@ -63,14 +64,5 @@ class DimensionRunOutcomeGateTest {
         /** The strong arms' rift time (the pilot gate's Z10 and N10) and gate D's win bound on its five seeds. */
         const val STRONG_RIFT_AT = 285f
         const val MAX_STRONG_WINS = 3
-
-        /** The visit arm's win share minus the control's over the same seeds, with its paired bootstrap SE. */
-        fun pairedShift(control: List<DimensionVisitRun>, visited: List<DimensionVisitRun>): Pair<Double, Double> {
-            val pairs = control.zip(visited) { a, b -> (if (b.won) 1.0 else 0.0) - (if (a.won) 1.0 else 0.0) }
-            val random = Random(DIMENSION_BOOTSTRAP_SEED)
-            val values = DoubleArray(DIMENSION_BOOTSTRAP_RESAMPLES) { List(pairs.size) { pairs[random.nextInt(pairs.size)] }.average() }
-            val mean = values.average()
-            return pairs.average() to kotlin.math.sqrt(values.sumOf { (it - mean) * (it - mean) } / (values.size - 1))
-        }
     }
 }

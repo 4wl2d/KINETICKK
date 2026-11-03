@@ -17,23 +17,22 @@ import kotlin.test.Test
  * SIGIL; all by default), `KK_SITE_KNOBS` overrides the site knobs (`name=value`, comma-separated: goldFactor,
  * silverFactor, bronzeFactor, parReach, limitFactor, turnAllowanceSeconds, brakelessRequired, ramRequired, ramFoes,
  * ramFoeHealthShare, ramRingRadius, ramDuration, untouchedRequired, velocityRequired, velocityMinSpeed, slalomDuration,
- * bossIntegrityShare) and `KK_SITE_PILOT` the pilot's gains by their [SitePilotTuning] names; several sets separated by
- * `;` run one after the other.
+ * bossIntegrityShare) and `KK_SITE_PILOT` the pilot's gains by their [SitePilotTuning] names (raceDashAngle in radians);
+ * several sets separated by `;` run one after the other.
  */
 class SiteCalibrationProbeTest {
     @Test
     fun printsTheSiteArmsOnTheNamedWindow() {
         val window = System.getenv("KK_SITE_PROBE")?.trim()?.takeIf { it.isNotEmpty() } ?: return
-        val (first, last) = window.split("..").map { it.trim().toInt() }.let { it[0] to (it.getOrNull(1) ?: (it[0] + 99)) }
-        require(last < 1_001 || first > 1_300) { "the probe never runs on gate seeds (1,001..1,300)" }
-        val seeds = siteWindowSeeds(first, last)
+        val indices = probeWindow(window, defaultLength = 100)
+        val seeds = windowSeeds(indices)
         val arms = System.getenv("KK_SITE_ARMS")?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }
             ?: listOf("RACE", "RACE_PHONE", "BRAKELESS", "RAM", "UNTOUCHED", "VELOCITY", "SLALOM", "BOUNTY", "BOUNTY_T6", "ANOMALY", "MIXED", "NOPOI", "SIGIL")
         // Several knob or gain sets run one after the other, separated by ';'.
         for (knobs in System.getenv("KK_SITE_KNOBS").orEmpty().split(';')) for (gains in System.getenv("KK_SITE_PILOT").orEmpty().split(';')) {
             val base = knobbed(canonicalGameplayContent, knobs)
             val tuning = pilot(gains)
-            println("SITE-PROBE window=$first..$last knobs='$knobs' pilot='$gains'")
+            println("SITE-PROBE window=$indices knobs='$knobs' pilot='$gains'")
             for (name in arms) {
                 val started = System.nanoTime()
                 val runs = populationOf(seeds) { seed -> probeRun(name, seed, base, tuning) }
@@ -65,12 +64,12 @@ class SiteCalibrationProbeTest {
             bootstrapLine("noPoiWinShare", runs) { sample -> sample.count { it.noPoiWin }.toDouble() / sample.size },
         )
         if (name == "NOPOI" || engagements.isEmpty()) return parts.joinToString(" ")
-        parts += bootstrapLine("success", runs) { sample -> sample.judged(kinds).shareWhere { it.outcome.success } }
+        parts += bootstrapLine("success", runs) { sample -> sample.judged(kinds).shareOf { it.outcome.success } }
         parts += bootstrapLine("value", runs) { sample -> sample.judged(kinds).meanValue() }
         if (SiteKind.GATE_RACE in kinds) {
-            parts += bootstrapLine("bronzeUp", runs) { sample -> sample.judged(kinds).shareWhere { it.outcome.medal >= 1 } }
-            parts += bootstrapLine("silverUp", runs) { sample -> sample.judged(kinds).shareWhere { it.outcome.medal >= 2 } }
-            parts += bootstrapLine("gold", runs) { sample -> sample.judged(kinds).shareWhere { it.outcome.medal >= 3 } }
+            parts += bootstrapLine("bronzeUp", runs) { sample -> sample.judged(kinds).shareOf { it.outcome.medal >= 1 } }
+            parts += bootstrapLine("silverUp", runs) { sample -> sample.judged(kinds).shareOf { it.outcome.medal >= 2 } }
+            parts += bootstrapLine("gold", runs) { sample -> sample.judged(kinds).shareOf { it.outcome.medal >= 3 } }
         }
         if (SiteKind.BOUNTY_ARENA in kinds || SiteKind.FAR_SIGIL in kinds) {
             parts += bootstrapLine("medianFight", runs) { sample ->
@@ -85,7 +84,7 @@ class SiteCalibrationProbeTest {
             parts += "unread=${unread.map { "${it.kind}:${it.outcome}:'${it.notice}'" }}"
         }
         if (kinds.size > 1) for (kind in kinds.sortedBy { it.ordinal }) {
-            parts += "$kind:n=${runs.judged(setOf(kind)).size}:" + bootstrapLine("success", runs) { sample -> sample.judged(setOf(kind)).shareWhere { it.outcome.success } }
+            parts += "$kind:n=${runs.judged(setOf(kind)).size}:" + bootstrapLine("success", runs) { sample -> sample.judged(setOf(kind)).shareOf { it.outcome.success } }
         }
         if (name == "MIXED") for (family in engagements.map { it.kind.family }.distinct()) {
             val familyKinds = engagements.filter { it.kind.family == family }.map { it.kind }.toSet()
@@ -133,6 +132,7 @@ class SiteCalibrationProbeTest {
                 "raceReach" -> tuning.copy(raceReach = value)
                 "raceBlendReach" -> tuning.copy(raceBlendReach = value)
                 "raceBlend" -> tuning.copy(raceBlend = value)
+                "raceDashAngle" -> tuning.copy(raceDashAngle = value)
                 "raceDashReach" -> tuning.copy(raceDashReach = value)
                 "brakelessShare" -> tuning.copy(brakelessShare = value)
                 "brakelessSpeed" -> tuning.copy(brakelessSpeed = value)
@@ -146,6 +146,7 @@ class SiteCalibrationProbeTest {
                 "slalomSpeed" -> tuning.copy(slalomSpeed = value)
                 "slalomLead" -> tuning.copy(slalomLead = value)
                 "bountyReturn" -> tuning.copy(bountyReturn = value)
+                "duelReturn" -> tuning.copy(duelReturn = value)
                 "beaconSpeed" -> tuning.copy(beaconSpeed = value)
                 "orbitBand" -> tuning.copy(orbitBand = value)
                 "orbitSpeed" -> tuning.copy(orbitSpeed = value)

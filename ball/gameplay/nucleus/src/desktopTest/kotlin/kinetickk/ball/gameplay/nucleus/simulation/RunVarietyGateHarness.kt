@@ -8,7 +8,6 @@ import kinetickk.ball.content.api.OmenId
 import kinetickk.ball.content.api.SignalKind
 import kinetickk.ball.content.api.SignalOption
 import kinetickk.ball.gameplay.nucleus.model.length
-import kinetickk.ball.gameplay.nucleus.model.segmentCircleIntersects
 import kinetickk.ball.gameplay.nucleus.render.ChoiceType
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
@@ -32,12 +31,6 @@ import kotlin.math.sin
 /** The run-variety metric seeds (spec §11.2, §11.4): `i * 7_919 + 101` for i = 1..[count]. */
 internal fun varietyMetricSeeds(count: Int): List<Int> = (1..count).map { it * 7_919 + 101 }
 
-/** Seeds `i * 7_919 + 13` for i in [first]..[last]; VARIETY calibrates on 1,601..1,900 and never on the gate seeds. */
-internal fun varietyWindowSeeds(first: Int, last: Int): List<Int> {
-    require(last < 1_001 || first > 1_300) { "calibration never runs on the gate seeds (1,001..1,300)" }
-    return (first..last).map { it * 7_919 + 13 }
-}
-
 /** One fresh run as the run-variety gates read it. */
 internal data class VarietyRun(
     val seed: Int,
@@ -51,8 +44,6 @@ internal data class VarietyRun(
     val signalsEngaged: Int,
     /** The card the seeker took at each signal prompt, in order. */
     val picks: List<SignalOption>,
-    /** The kinds of the signals the run spawned, in order. */
-    val signalKinds: List<SignalKind>,
     /** The run opted into an optional site that is not an event signal. */
     val touchedSite: Boolean,
 ) {
@@ -80,18 +71,12 @@ internal fun flyVarietyRun(
     val seeker = if (seek) SignalSeeker(bot) else null
     var levelAt600 = -1
     var touchedSite = false
-    val kinds = ArrayList<SignalKind>(3)
-    var spawned = 0
     while (state.elapsed < min(900f, until) && (state.phase == GamePhase.RUNNING || state.phase == GamePhase.CHOICE)) {
         if (state.phase == GamePhase.CHOICE) {
             if (seeker != null) seeker.choose(state) else bot.choose(state)
         } else {
             if (seeker != null) seeker.control(state) else bot.control(state)
             state.update(0.02f)
-        }
-        if (state.signalsSpawned != spawned) {
-            spawned = state.signalsSpawned
-            state.eventSignals.firstOrNull()?.let { kinds += it.kind }
         }
         if (levelAt600 < 0 && state.elapsed >= 600f) levelAt600 = state.level
         touchedSite = touchedSite || state.optionalSitesTouchedOtherThanSignals()
@@ -101,7 +86,7 @@ internal fun flyVarietyRun(
     }
     return VarietyRun(
         seed, state.phase, state.elapsed, state.runMatter, if (levelAt600 < 0) state.level else levelAt600, state.signalsSpawned,
-        state.signalsEngaged, seeker?.picks.orEmpty().toList(), kinds, touchedSite,
+        state.signalsEngaged, seeker?.picks.orEmpty().toList(), touchedSite,
     )
 }
 
@@ -183,98 +168,24 @@ internal class SignalSeeker(private val bot: NoPoiBot = NoPoiBot()) {
         }
         val hurting = s.obstacleDamageStartSpeed()
         val fast = s.speed > hurting
-        val lookahead = if (fast) 0.45f else 0.3f
-        var rockAhead = false
-        for (obstacle in s.obstacleField.obstacles) {
-            val reach = s.obstacleHazardReach(obstacle)
-            if (reach <= 0f) continue
-            val px = s.coreX + s.velocityX * lookahead - obstacle.x
-            val py = s.coreY + s.velocityY * lookahead - obstacle.y
-            val clearance = reach + s.coreRadius + if (obstacle.kind.solid) 110f else 40f
-            val gap = max(1f, length(px, py))
-            if (gap < clearance) {
-                desiredX += px / gap * (clearance - gap) * 6f
-                desiredY += py / gap * (clearance - gap) * 6f
-            }
-            if (fast && obstacle.kind.solid && !rockAhead) {
-                rockAhead = segmentCircleIntersects(
-                    s.coreX, s.coreY, s.coreX + s.velocityX * 0.6f, s.coreY + s.velocityY * 0.6f,
-                    obstacle.x, obstacle.y, reach + s.coreRadius + 60f,
-                )
-            }
-        }
-        if (rockAhead) {
+        val avoided = s.avoidRocks(desiredX, desiredY, if (fast) FAST_LOOKAHEAD else 0.3f)
+        desiredX = avoided.first
+        desiredY = avoided.second
+        if (fast && s.rockOnCourse()) {
             val desired = length(desiredX, desiredY)
-            val cap = hurting * 0.9f
+            val cap = hurting * GOVERNOR_SHARE
             if (desired > cap) {
                 desiredX *= cap / desired
                 desiredY *= cap / desired
             }
         }
-        for (shot in s.projectiles) if (shot.hostile) {
-            val px = shot.x - s.coreX
-            val py = shot.y - s.coreY
-            val vx = shot.vx - s.velocityX
-            val vy = shot.vy - s.velocityY
-            val time = -(px * vx + py * vy) / max(1f, vx * vx + vy * vy)
-            if (time in 0f..0.45f && length(px + vx * time, py + vy * time) < 80f) {
-                val relative = max(1f, length(vx, vy))
-                val side = if (px * -vy + py * vx > 0f) -1f else 1f
-                desiredX += -vy / relative * side * 380f
-                desiredY += vx / relative * side * 380f
-            }
-        }
+        val (dodgedX, dodgedY) = s.dodgeShots(desiredX, desiredY)
         val aim = s.steeringAimFor(
-            (desiredX - s.velocityX) * STEERING_GAIN + s.velocityX * s.dragCoefficient,
-            (desiredY - s.velocityY) * STEERING_GAIN + s.velocityY * s.dragCoefficient,
+            (dodgedX - s.velocityX) * STEERING_GAIN + s.velocityX * s.dragCoefficient,
+            (dodgedY - s.velocityY) * STEERING_GAIN + s.velocityY * s.dragCoefficient,
         )
-        place(s, held, aim.heading, aim.distance)
+        s.placeCursor(held, aim.heading, aim.distance)
     }
-
-    /**
-     * Holds the pointer for the aim, swinging around the Core at most the bot's 0.45 rad a frame from [held] and staying
-     * inside the area where steering keeps polarity, at least 65 dp from the Core (the SITES pilot's placement).
-     */
-    private fun place(s: MutableGameState, held: Float, heading: Float, distance: Float) {
-        for (bound in floatArrayOf(CURSOR_SWING, EMERGENCY_SWING)) {
-            val target = held + turn(heading, held).coerceIn(-bound, bound)
-            var step = 0
-            while (step * SWING_STEP <= 2f * bound) {
-                val angle = target + ((step + 1) / 2) * SWING_STEP * if (step % 2 == 1) 1f else -1f
-                step++
-                if (abs(turn(angle, held)) > bound + 1e-4f) continue
-                val room = room(s, angle)
-                val need = MIN_TETHER + max(0f, s.velocityX * cos(angle) + s.velocityY * sin(angle)) * 0.06f
-                if (room >= need) {
-                    hold(s, angle, distance.coerceIn(need, room))
-                    return
-                }
-            }
-        }
-        val centre = atan2(s.cameraY - s.coreY, s.cameraX - s.coreX)
-        hold(s, centre, max(MIN_TETHER, min(distance, room(s, centre))))
-    }
-
-    private fun room(s: MutableGameState, heading: Float): Float {
-        val unitX = cos(heading)
-        val unitY = sin(heading)
-        val offsetX = s.coreX - s.cameraX
-        val offsetY = s.coreY - s.cameraY
-        val halfWidth = s.screenWidth * 0.5f * s.content.tempo.fatigue.edgeStrainStart - 10f
-        val halfHeight = s.screenHeight * 0.5f * s.content.tempo.fatigue.edgeStrainStart - 10f
-        val availableX = if (unitX > 0f) (halfWidth - offsetX) / unitX else if (unitX < 0f) (-halfWidth - offsetX) / unitX else 10_000f
-        val availableY = if (unitY > 0f) (halfHeight - offsetY) / unitY else if (unitY < 0f) (-halfHeight - offsetY) / unitY else 10_000f
-        return min(availableX, availableY)
-    }
-
-    private fun hold(s: MutableGameState, heading: Float, distance: Float) {
-        s.updatePointer(
-            s.screenWidth * 0.5f + s.coreX - s.cameraX + cos(heading) * distance,
-            s.screenHeight * 0.5f + s.coreY - s.cameraY + sin(heading) * distance,
-        )
-    }
-
-    private fun turn(to: Float, from: Float): Float = atan2(sin(to - from), cos(to - from))
 
     private companion object {
         const val SHRINE_LINE = 0.6f
@@ -283,10 +194,6 @@ internal class SignalSeeker(private val bot: NoPoiBot = NoPoiBot()) {
         const val APPROACH_REACH = 0.45f
         const val SITE_CLEARANCE = 295f
         const val STEERING_GAIN = 5f
-        const val CURSOR_SWING = 0.45f
-        const val EMERGENCY_SWING = 2.0f
-        const val SWING_STEP = 0.1f
-        const val MIN_TETHER = 65f
     }
 }
 

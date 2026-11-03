@@ -533,7 +533,7 @@ private class FuzzSession(private val plan: FuzzPlan, private val options: FuzzO
         scratch.skillBufferMask = 0
         scratch.skillBufferTime = 0f
         scratch.apexBufferTime = 0f
-        syncBotCursor(bot, scratch)
+        bot.syncCursor(scratch)
         pilot.control(scratch)
         var pointerX = scratch.pointerX
         var pointerY = scratch.pointerY
@@ -660,8 +660,8 @@ private class FuzzSession(private val plan: FuzzPlan, private val options: FuzzO
             val follow = when {
                 newRift && random.nextFloat() < 0.65f -> dimensionPilot(rift!!)
                 newSignal && random.nextFloat() < 0.45f -> SeekFuzzPilot(bot)
-                newStructure && m.dungeon == null && m.elapsed < content.tempo.bossAtSeconds - 150f && random.nextFloat() < 0.35f ->
-                    DungeonFuzzPilot(DungeonPilot(bot, seekFrom = m.elapsed, seekLead = 150f))
+                newStructure && m.dungeon == null && m.elapsed < content.tempo.bossAtSeconds - DungeonPilot.SEEK_LEAD && random.nextFloat() < 0.35f ->
+                    DungeonFuzzPilot(DungeonPilot(bot, seekFrom = m.elapsed))
                 else -> null
             }
             if (follow != null) {
@@ -684,7 +684,7 @@ private class FuzzSession(private val plan: FuzzPlan, private val options: FuzzO
             when {
                 roll < 0.2f -> BotFuzzPilot(bot)
                 roll < 0.42f -> SiteFuzzPilot(SitePilot(if (plan.contentKind == FuzzContent.ARM) plan.arm else armFor(m), bot))
-                roll < 0.62f && m.elapsed < content.tempo.bossAtSeconds - 150f -> DungeonFuzzPilot(DungeonPilot(bot, seekFrom = m.elapsed, seekLead = 150f))
+                roll < 0.62f && m.elapsed < content.tempo.bossAtSeconds - DungeonPilot.SEEK_LEAD -> DungeonFuzzPilot(DungeonPilot(bot, seekFrom = m.elapsed))
                 roll < 0.82f -> dimensionPilot(offeredRift ?: WorldLayer.entries[1 + random.nextInt(WorldLayer.entries.size - 1)])
                 else -> SeekFuzzPilot(bot)
             }
@@ -695,7 +695,7 @@ private class FuzzSession(private val plan: FuzzPlan, private val options: FuzzO
     private fun onlyPilot(kind: String, m: MutableGameState): FuzzPilot = when (kind) {
         "bot" -> BotFuzzPilot(bot)
         "site" -> SiteFuzzPilot(SitePilot(if (plan.contentKind == FuzzContent.ARM) plan.arm else SiteArm.MIXED, bot))
-        "dungeon" -> DungeonFuzzPilot(DungeonPilot(bot, seekFrom = m.elapsed, seekLead = 150f))
+        "dungeon" -> DungeonFuzzPilot(DungeonPilot(bot, seekFrom = m.elapsed))
         "dimension" -> dimensionPilot(if (m.worldLayer != WorldLayer.BASE) m.worldLayer else WorldLayer.ZENITH)
         "seek" -> SeekFuzzPilot(bot)
         else -> error("unknown pilot kind $kind")
@@ -1182,7 +1182,7 @@ private class FuzzSession(private val plan: FuzzPlan, private val options: FuzzO
         if (mode != RunMode.EASY) return
         if (!m.easyMode) record(FuzzInvariant.EASY_MODE, "a Baby mode run's state is not easy")
         if (m.phase == GamePhase.GAME_OVER && m.message == "SINGULARITY CONTACT") record(FuzzInvariant.EASY_MODE, "a Baby mode run ended on singularity contact")
-        if (m.phase == GamePhase.GAME_OVER && m.message == "OBSTACLE COLLISION") record(FuzzInvariant.EASY_MODE, "a Baby mode run died to an obstacle")
+        if (m.phase == GamePhase.GAME_OVER && m.message == OBSTACLE_COLLISION_REASON) record(FuzzInvariant.EASY_MODE, "a Baby mode run died to an obstacle")
         if (m.hasPublishableProgress()) record(FuzzInvariant.EASY_MODE, "a Baby mode run holds publishable progress")
         if (m.heirloomPending || m.heirloomOfferActive || m.choices.any { it.heirloom }) {
             record(FuzzInvariant.EASY_MODE, "a Baby mode run offers Heirlooms")
@@ -1235,17 +1235,6 @@ private fun pointSegmentDistance(x: Float, y: Float, ax: Float, ay: Float, bx: F
 
 /** How far (dp) a jitter twitch keeps the singularity's path from the Core's centre. */
 private const val TWITCH_CORE_CLEARANCE = 60f
-
-private val BotCursorAngle: Field = NoPoiBot::class.java.getDeclaredField("cursorAngle").apply { isAccessible = true }
-
-/**
- * Turns the bot's remembered cursor to where the pointer is: another pilot (or the jitter) may have moved it, and the
- * bot swings its cursor from what it remembers, so a stale angle would throw the singularity across the Core.
- */
-private fun syncBotCursor(bot: NoPoiBot, s: MutableGameState) {
-    val angle = atan2(s.pointerY - s.screenHeight * 0.5f - (s.coreY - s.cameraY), s.pointerX - s.screenWidth * 0.5f - (s.coreX - s.cameraX))
-    BotCursorAngle.setFloat(bot, angle)
-}
 
 /** A short text of a throwable: its type, message and the frames of the game and the harness it passed through. */
 private fun describe(failure: Throwable): String {
@@ -1337,20 +1326,7 @@ private class SeekFuzzPilot(private val bot: NoPoiBot) : FuzzPilot {
         val toX = bestX - s.coreX
         val toY = bestY - s.coreY
         val distance = max(1f, length(toX, toY))
-        var desiredX = toX / distance * SEEK_SPEED
-        var desiredY = toY / distance * SEEK_SPEED
-        for (obstacle in s.obstacleField.obstacles) {
-            val reach = s.obstacleHazardReach(obstacle)
-            if (reach <= 0f) continue
-            val px = s.coreX + s.velocityX * 0.3f - obstacle.x
-            val py = s.coreY + s.velocityY * 0.3f - obstacle.y
-            val clearance = reach + s.coreRadius + if (obstacle.kind.solid) 110f else 40f
-            val pd = max(1f, length(px, py))
-            if (pd < clearance) {
-                desiredX += px / pd * (clearance - pd) * 6f
-                desiredY += py / pd * (clearance - pd) * 6f
-            }
-        }
+        val (desiredX, desiredY) = s.avoidRocks(toX / distance * SEEK_SPEED, toY / distance * SEEK_SPEED)
         val drag = s.steeringDrag()
         val aim = s.steeringAimFor((desiredX - s.velocityX) * 5f + s.velocityX * drag, (desiredY - s.velocityY) * 5f + s.velocityY * drag)
         val offsetX = s.coreX - s.cameraX
@@ -1360,11 +1336,7 @@ private class SeekFuzzPilot(private val bot: NoPoiBot) : FuzzPilot {
         val angle = held + turn.coerceIn(-0.45f, 0.45f)
         val ux = cos(angle)
         val uy = sin(angle)
-        val halfWidth = s.screenWidth * 0.5f * s.content.tempo.fatigue.edgeStrainStart - 10f
-        val halfHeight = s.screenHeight * 0.5f * s.content.tempo.fatigue.edgeStrainStart - 10f
-        val availableX = if (ux > 0f) (halfWidth - offsetX) / ux else if (ux < 0f) (-halfWidth - offsetX) / ux else 10_000f
-        val availableY = if (uy > 0f) (halfHeight - offsetY) / uy else if (uy < 0f) (-halfHeight - offsetY) / uy else 10_000f
-        val tether = min(aim.distance.coerceIn(65f, 400f), min(availableX, availableY)).coerceAtLeast(65f)
+        val tether = min(aim.distance.coerceIn(65f, 400f), s.pointerRoom(ux, uy)).coerceAtLeast(65f)
         s.updatePointer(s.screenWidth * 0.5f + offsetX + ux * tether, s.screenHeight * 0.5f + offsetY + uy * tether)
     }
 

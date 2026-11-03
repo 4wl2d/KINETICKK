@@ -3,19 +3,14 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.EnemyHabitat
 import kinetickk.ball.content.api.EnemyRank
 import kinetickk.ball.content.api.GameplayContentSnapshot
-import kinetickk.ball.content.api.RelicId
-import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.profile
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.toImmutableList
-import kotlin.math.sqrt
-import kotlin.random.Random
 import kotlin.test.Test
 
 /**
@@ -37,18 +32,16 @@ class EnemyCalibrationProbeTest {
     @Test
     fun probeTheSpaceKindsOnTheCalibrationWindow() {
         val window = System.getenv("KK_ENEMY_PROBE")?.takeIf { it.isNotBlank() } ?: return
-        val (first, last) = window.split("..").map { it.trim().toInt() }
-        require(first in 1..last) { "KK_ENEMY_PROBE must be first..last, got $window" }
-        require(last < GATE_FIRST || first > GATE_LAST) { "the gate population ($GATE_FIRST..$GATE_LAST) is never probed" }
-        val seeds = (first..last).map { it * 7_919 + 13 }
+        val indices = probeWindow(window)
+        val seeds = windowSeeds(indices)
         val shipped = withSpaceWeights(canonicalGameplayContent, probeWeights())
         val without = withSpaceWeights(canonicalGameplayContent, SpaceKinds.associateWith { 0f })
-        println("ENEMY PROBE window $first..$last weights " +
+        println("ENEMY PROBE window $indices weights " +
             SpaceKinds.joinToString(",") { "$it=${shipped.enemy(it).weight}" })
         for (tier in listOf(0, 10)) {
             println("ENEMY PROBE WEIGHT SHARE tier=$tier 0..600s ${weightShare(shipped, tier)}")
         }
-        for (arm in Arm.entries) {
+        for (arm in listOf(DimensionProfile.FRESH_TIER_0, DimensionProfile.STRONG_TIER_10)) {
             val runsWithout = populationOf(seeds) { seed -> play(seed, arm, without) }
             val runsWith = populationOf(seeds) { seed -> play(seed, arm, shipped) }
             runsWithout.forEach { println("ENEMY PROBE ${arm.label} without $it") }
@@ -58,8 +51,6 @@ class EnemyCalibrationProbeTest {
             println("ENEMY PROBE DELTA ${arm.label} shipped-without ${delta(runsWithout, runsWith)}")
         }
     }
-
-    private enum class Arm(val label: String) { FRESH_TIER_0("fresh-t0"), STRONG_TIER_10("strong-t10") }
 
     private class Run(
         val seed: Int,
@@ -79,7 +70,7 @@ class EnemyCalibrationProbeTest {
                 "spaceSpawns600=$spaceSpawns comets600=$comets pylons600=$pylons"
     }
 
-    private fun play(seed: Int, arm: Arm, content: GameplayContentSnapshot): Run {
+    private fun play(seed: Int, arm: DimensionProfile, content: GameplayContentSnapshot): Run {
         val seen = HashSet<Int>()
         var spaceSpawns = 0
         var comets = 0
@@ -94,18 +85,7 @@ class EnemyCalibrationProbeTest {
                 if (enemy.type == EnemyType.PYLON) pylons++
             }
         }
-        val state = when (arm) {
-            Arm.FRESH_TIER_0 -> playGateRun(seed, gateProfile(GateMatrix.NONE, tier = 0, content = content), NoPoiBot(),
-                content = content, observe = observe)
-            Arm.STRONG_TIER_10 -> playGateRun(
-                seed,
-                gateProfile(GateMatrix.FULL, tier = 10, shape = CoreShape.PENTAGON, weapon = WeaponId.ARC_COIL, content = content),
-                NoPoiBot(),
-                relics = StrongRelics,
-                content = content,
-                observe = observe,
-            )
-        }
+        val state = arm.play(seed, content, observe = observe)
         val outcome = when (state.phase) {
             GamePhase.VICTORY -> "WIN"
             GamePhase.GAME_OVER -> "LOSS"
@@ -139,36 +119,12 @@ class EnemyCalibrationProbeTest {
     )
 
     /** Point values of the arm's metrics with bootstrap standard errors over its runs. */
-    private fun summary(runs: List<Run>): String {
-        val random = Random(BOOTSTRAP_SEED)
-        val resampled = List(metrics.size) { DoubleArray(BOOTSTRAP_RESAMPLES) }
-        repeat(BOOTSTRAP_RESAMPLES) { resample ->
-            val sample = List(runs.size) { runs[random.nextInt(runs.size)] }
-            metrics.forEachIndexed { index, (_, metric) -> resampled[index][resample] = metric(sample) }
-        }
-        return "n=${runs.size} " + metrics.mapIndexed { index, (name, metric) ->
-            "$name=${"%.4f".format(metric(runs))}(SE ${"%.4f".format(standardError(resampled[index]))})"
-        }.joinToString(" ")
-    }
+    private fun summary(runs: List<Run>): String =
+        "n=${runs.size} " + metrics.joinToString(" ") { (name, metric) -> bootstrapLine(name, runs, metric = metric) }
 
     /** Shipped minus without for every metric, resampling the seeds in pairs (both arms play the same seeds). */
-    private fun delta(without: List<Run>, with: List<Run>): String {
-        val random = Random(BOOTSTRAP_SEED)
-        val resampled = List(metrics.size) { DoubleArray(BOOTSTRAP_RESAMPLES) }
-        repeat(BOOTSTRAP_RESAMPLES) { resample ->
-            val picks = IntArray(without.size) { random.nextInt(without.size) }
-            val a = picks.map { without[it] }
-            val b = picks.map { with[it] }
-            metrics.forEachIndexed { index, (_, metric) -> resampled[index][resample] = metric(b) - metric(a) }
-        }
-        return metrics.mapIndexed { index, (name, metric) ->
-            "$name=${"%+.4f".format(metric(with) - metric(without))}(SE ${"%.4f".format(standardError(resampled[index]))})"
-        }.joinToString(" ")
-    }
-
-    private fun standardError(values: DoubleArray): Double {
-        val mean = values.average()
-        return sqrt(values.sumOf { (it - mean) * (it - mean) } / (values.size - 1))
+    private fun delta(without: List<Run>, with: List<Run>): String = metrics.joinToString(" ") { (name, metric) ->
+        bootstrapLine(name, without.zip(with), "%+.4f") { pairs -> metric(pairs.map { it.second }) - metric(pairs.map { it.first }) }
     }
 
     /**
@@ -223,15 +179,8 @@ class EnemyCalibrationProbeTest {
     private companion object {
         val SpaceKinds = listOf(EnemyType.COMET, EnemyType.PYLON)
 
-        /** Gate D's strong build: Stormheart Capacitor in key harmony with Arc Coil and three proven Relics. */
-        val StrongRelics =
-            listOf(RelicId.STORMHEART_CAPACITOR, RelicId.PANDEMIC_CODEX, RelicId.THUNDER_CHOIR, RelicId.CINDER_CROWN)
-        const val GATE_FIRST = 1_001
-        const val GATE_LAST = 1_300
         const val MIX_SECONDS = 600f
         const val CORE_FRACTURED = "CORE FRACTURED"
         const val SINGULARITY_CONTACT = "SINGULARITY CONTACT"
-        const val BOOTSTRAP_RESAMPLES = 20_000
-        const val BOOTSTRAP_SEED = 20_261_027
     }
 }

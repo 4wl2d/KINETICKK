@@ -30,12 +30,12 @@ class BountyGateTest {
         val failures = ArrayList<String>()
         for ((name, runs, band) in listOf(Triple("FRESH", fresh, FRESH_BAND), Triple("VETERAN", veteran, VETERAN_BAND))) {
             val engagements = runs.judged(SiteArm.BOUNTY.kinds)
-            val clear = engagements.shareWhere { it.outcome.success }
+            val clear = engagements.shareOf { it.outcome.success }
             val fight = medianFight(runs)
             println(
                 "S-G2 $name n=${engagements.size} " +
-                    bootstrapLine("clear", runs) { it.judged(SiteArm.BOUNTY.kinds).shareWhere { e -> e.outcome.success } } + " " +
-                    bootstrapLine("medianFight", runs, ::medianFight) +
+                    bootstrapLine("clear", runs) { it.judged(SiteArm.BOUNTY.kinds).shareOf { e -> e.outcome.success } } + " " +
+                    bootstrapLine("medianFight", runs, metric = ::medianFight) +
                     " outcomes=" + engagements.groupingBy { it.outcome }.eachCount().entries.sortedBy { it.key.ordinal }
                     .joinToString(",") { "${it.key}:${it.value}" },
             )
@@ -59,7 +59,7 @@ class BountyGateTest {
         val duels = sigil.flatMap { it.engagements }
         println(
             "SIGIL ARM runs=${sigil.size} duels=${duels.size} " + bootstrapLine("summoned", sigil) { it.shareOf { run -> run.engagements.isNotEmpty() } } +
-                " " + bootstrapLine("broken", sigil) { it.judged(SiteArm.SIGIL.kinds).shareWhere { e -> e.outcome.success } } +
+                " " + bootstrapLine("broken", sigil) { it.judged(SiteArm.SIGIL.kinds).shareOf { e -> e.outcome.success } } +
                 " " + bootstrapLine("medianFight", sigil) { medianFight(it, SiteArm.SIGIL.kinds) } +
                 " outcomes=" + duels.groupingBy { it.outcome }.eachCount().entries.sortedBy { it.key.ordinal }.joinToString(",") { "${it.key}:${it.value}" },
         )

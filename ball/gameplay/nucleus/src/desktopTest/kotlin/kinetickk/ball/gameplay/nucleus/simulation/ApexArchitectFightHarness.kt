@@ -2,22 +2,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package kinetickk.ball.gameplay.nucleus.simulation
 
-import kinetickk.ball.content.api.BuildTag
 import kinetickk.ball.content.api.CoreShape
-import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
 import kinetickk.ball.gameplay.nucleus.model.ApexCell
 import kinetickk.ball.gameplay.nucleus.model.WeaponRuntime
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
-import kinetickk.ball.profile.api.GameplayProfileSnapshot
-import kinetickk.ball.profile.api.MatrixProgress
-import kinetickk.ball.profile.api.PlayerCollection
-import kinetickk.ball.profile.api.PlayerEconomy
-import kinetickk.ball.profile.api.PlayerLoadout
-import kinetickk.ball.profile.api.PlayerPreferences
-import kinetickk.ball.profile.api.RebirthProgress
 import java.util.concurrent.Callable
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
@@ -104,8 +95,6 @@ internal object ApexArchitectFightHarness {
     const val ESCORT_FRAMES = 5
     val DEFENSIVE = listOf(CoreShape.PRISM, CoreShape.DIAMOND)
     val OFFENSIVE = CoreShape.entries - DEFENSIVE.toSet()
-    val BotWeapons: List<WeaponId> = listOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.ENTROPY_FIELD, WeaponId.PRISM_RELAY)
-    val StrongRelics = listOf(RelicId.STORMHEART_CAPACITOR, RelicId.PANDEMIC_CODEX, RelicId.THUNDER_CHOIR, RelicId.CINDER_CROWN)
 
     /**
      * The fights run on a small pool: each run and its arms are independent and deterministic, and every case
@@ -207,24 +196,13 @@ internal object ApexArchitectFightHarness {
 
     /** The run up to the Architect's arrival, its integrity refilled; null when it never arrives. */
     fun approach(shape: CoreShape, tier: Int, seed: Int): Pair<MutableGameState, NoPoiBot>? {
-        val content = canonicalGameplayContent
         val strong = tier > 0
-        val state = MutableGameState(
-            content,
-            seed = seed,
-            bootstrapProgress = GameplayProfileSnapshot(
-                preferences = PlayerPreferences(simulationSpeed = 1f),
-                economy = PlayerEconomy(),
-                loadout = PlayerLoadout(shape, if (strong) WeaponId.ARC_COIL else WeaponId.FLUX_WAKE, ReferenceArmory.toSet()),
-                matrix = MatrixProgress(content.matrixNodes.map { if (strong) it.maxRanks else 0 }),
-                collection = PlayerCollection(),
-                rebirthProgress = RebirthProgress(level = tier, highestCleared = tier - 1),
-            ),
+        val state = startGateRun(
+            seed,
+            gateProfile(if (strong) GateMatrix.FULL else GateMatrix.NONE, tier, shape, if (strong) WeaponId.ARC_COIL else WeaponId.FLUX_WAKE),
+            relics = if (strong) DimensionProfile.STRONG_TIER_10.relics else emptyList(),
         )
-        state.unlockWeaponsForTesting(ReferenceArmory)
-        state.startRun()
-        if (strong) StrongRelics.forEach(state::acquireRelicForTesting)
-        val bot = NoPoiBot(archetypeTag = BuildTag.RAM, weaponOrder = BotWeapons)
+        val bot = NoPoiBot()
         while (state.elapsed < 900f && (state.phase == GamePhase.RUNNING || state.phase == GamePhase.CHOICE)) {
             state.invulnerableUntil = Float.MAX_VALUE
             if (state.phase == GamePhase.CHOICE) bot.choose(state) else {

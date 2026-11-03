@@ -207,6 +207,18 @@ private const val BLINK_DRIVE_MINIMUM_RANGE = 30f
  */
 internal enum class DashRule { HUMAN, LEGACY }
 
+/** The weapons the bot orbits its target with; it rams with every other one. */
+internal val BotOrbitWeapons: Set<WeaponId> = setOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.PRISM_RELAY)
+
+/**
+ * The bot's boss engagement: its orbit radius and speed with the Flux Wake, else with any other weapon (the speed of
+ * its every other orbit too).
+ */
+internal const val WAKE_BOSS_RADIUS = 100f
+internal const val WAKE_BOSS_SPEED = 350f
+internal const val ARC_BOSS_RADIUS = 300f
+internal const val ARC_BOSS_SPEED = 460f
+
 internal class NoPoiBot(
     private val archetypeTag: BuildTag = BuildTag.RAM,
     private val element: StatusElement? = StatusElement.ENTROPY,
@@ -255,6 +267,14 @@ internal class NoPoiBot(
     var avoidBreaches = 0
         private set
 
+    /**
+     * Turns the remembered cursor to where the pointer is: another pilot (or a jitter) may have moved it, and the bot
+     * swings its cursor from what it remembers, so a stale angle would throw the singularity across the Core.
+     */
+    fun syncCursor(s: MutableGameState) {
+        cursorAngle = atan2(s.pointerY - s.screenHeight * 0.5f - (s.coreY - s.cameraY), s.pointerX - s.screenWidth * 0.5f - (s.coreX - s.cameraX))
+    }
+
     fun control(s: MutableGameState) {
         val boss = s.enemies.firstOrNull { it.type == EnemyType.ARCHITECT }
         var targetX = 0f
@@ -266,14 +286,14 @@ internal class NoPoiBot(
         if (targetEnemy != null) {
             targetX = targetEnemy.x + targetEnemy.vx * 0.3f
             targetY = targetEnemy.y + targetEnemy.vy * 0.3f
-            radius = if (s.weapon in listOf(WeaponId.ARC_COIL, WeaponId.ION_SWARM, WeaponId.PRISM_RELAY)) 280f else 0f
+            radius = if (s.weapon in BotOrbitWeapons) 280f else 0f
         }
         val totem = s.totem
         val pickup = s.pickups.filter { it.type == PickupType.KEY || it.type == PickupType.RELIC || it.type == PickupType.REPAIR && s.hp < s.maxHp - 15f || it.type == PickupType.DATA && distanceSquared(s.coreX, s.coreY, it.x, it.y) < 180f * 180f }
             .minByOrNull { distanceSquared(s.coreX, s.coreY, it.x, it.y) }
         if (boss != null) {
             targetX = boss.x; targetY = boss.y
-            radius = if (s.weapon == WeaponId.FLUX_WAKE) 100f else 300f
+            radius = if (s.weapon == WeaponId.FLUX_WAKE) WAKE_BOSS_RADIUS else ARC_BOSS_RADIUS
         } else if (totem != null && s.keys > 0) {
             targetX = totem.x; targetY = totem.y; radius = 5f
         } else if (pickup != null) {
@@ -284,7 +304,7 @@ internal class NoPoiBot(
         val dist = max(1f, length(dx, dy))
         val nx = if (dist > 2f) dx / dist else 1f
         val ny = if (dist > 2f) dy / dist else 0f
-        val orbitSpeed = if (boss != null && s.weapon == WeaponId.FLUX_WAKE) 350f else 460f
+        val orbitSpeed = if (boss != null && s.weapon == WeaponId.FLUX_WAKE) WAKE_BOSS_SPEED else ARC_BOSS_SPEED
         val radial = ((radius - dist) * 2.4f).coerceIn(-480f, 480f)
         var desiredX = -ny * orbitSpeed + nx * radial
         var desiredY = nx * orbitSpeed + ny * radial
