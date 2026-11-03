@@ -9,8 +9,6 @@ import kinetickk.foundation.collections.ImmutableList
 import kinetickk.foundation.collections.mapToImmutableList
 import kinetickk.foundation.collections.toImmutableList
 import kinetickk.foundation.random.CloneableXorWowRandom
-import kinetickk.ball.profile.api.DamageNumberFormat
-import kinetickk.ball.gameplay.nucleus.render.formatDamageNumber
 import kinetickk.ball.profile.api.ParticleDensity
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kotlin.math.atan2
@@ -248,54 +246,7 @@ class InteractionFxReducer(seed: Int) {
                 weaponArcsDirty = true
                 true
             }
-            is VisualFxCue.WorldRebased -> {
-                coreX -= cue.shiftX
-                coreY -= cue.shiftY
-                val changed = particles.isNotEmpty() || damageNumbers.isNotEmpty()
-                for (index in particles.indices) {
-                    val value = particles[index]
-                    value.x -= cue.shiftX
-                    value.y -= cue.shiftY
-                }
-                for (index in damageNumbers.indices) {
-                    val value = damageNumbers[index]
-                    value.x -= cue.shiftX
-                    value.y -= cue.shiftY
-                }
-                // Break and reaction flashes and the reaction name stamps mark the enemy that set them
-                // off, so they move with the world like damage numbers (shockwaves keep the baseline
-                // policy and end in place).
-                for (index in elementBursts.indices) {
-                    val value = elementBursts[index]
-                    value.x -= cue.shiftX
-                    value.y -= cue.shiftY
-                }
-                for (index in reactionStamps.indices) {
-                    val value = reactionStamps[index]
-                    value.x -= cue.shiftX
-                    value.y -= cue.shiftY
-                }
-                // Skill and Apex looks mark where the cast landed in the world.
-                for (index in skillBursts.indices) {
-                    val value = skillBursts[index]
-                    value.x -= cue.shiftX
-                    value.y -= cue.shiftY
-                }
-                for (index in apexBursts.indices) {
-                    val value = apexBursts[index]
-                    value.x -= cue.shiftX
-                    value.y -= cue.shiftY
-                }
-                if (particles.isNotEmpty()) particlesDirty = true
-                if (damageNumbers.isNotEmpty()) damageNumbersDirty = true
-                if (elementBursts.isNotEmpty()) elementBurstsDirty = true
-                if (reactionStamps.isNotEmpty()) reactionStampsDirty = true
-                if (skillBursts.isNotEmpty()) skillBurstsDirty = true
-                if (apexBursts.isNotEmpty()) apexBurstsDirty = true
-                val ribbonMoved = rebaseCoreRibbon(cue.shiftX, cue.shiftY)
-                changed || elementBursts.isNotEmpty() || reactionStamps.isNotEmpty() || skillBursts.isNotEmpty() || apexBursts.isNotEmpty() ||
-                    ribbonMoved
-            }
+            is VisualFxCue.WorldRebased -> worldRebased(cue)
             is VisualFxCue.VisualCuesDropped -> false
             is VisualFxCue.SkillCast -> skillCast(cue)
             is VisualFxCue.ApexActivated -> {
@@ -306,6 +257,56 @@ class InteractionFxReducer(seed: Int) {
                 true
             }
         }
+
+    /** Moves world-anchored looks by the rebase shift; returns whether the projection changed. */
+    private fun worldRebased(cue: VisualFxCue.WorldRebased): Boolean {
+        coreX -= cue.shiftX
+        coreY -= cue.shiftY
+        val changed = particles.isNotEmpty() || damageNumbers.isNotEmpty()
+        for (index in particles.indices) {
+            val value = particles[index]
+            value.x -= cue.shiftX
+            value.y -= cue.shiftY
+        }
+        for (index in damageNumbers.indices) {
+            val value = damageNumbers[index]
+            value.x -= cue.shiftX
+            value.y -= cue.shiftY
+        }
+        // Break and reaction flashes and the reaction name stamps mark the enemy that set them
+        // off, so they move with the world like damage numbers (shockwaves keep the baseline
+        // policy and end in place).
+        for (index in elementBursts.indices) {
+            val value = elementBursts[index]
+            value.x -= cue.shiftX
+            value.y -= cue.shiftY
+        }
+        for (index in reactionStamps.indices) {
+            val value = reactionStamps[index]
+            value.x -= cue.shiftX
+            value.y -= cue.shiftY
+        }
+        // Skill and Apex looks mark where the cast landed in the world.
+        for (index in skillBursts.indices) {
+            val value = skillBursts[index]
+            value.x -= cue.shiftX
+            value.y -= cue.shiftY
+        }
+        for (index in apexBursts.indices) {
+            val value = apexBursts[index]
+            value.x -= cue.shiftX
+            value.y -= cue.shiftY
+        }
+        if (particles.isNotEmpty()) particlesDirty = true
+        if (damageNumbers.isNotEmpty()) damageNumbersDirty = true
+        if (elementBursts.isNotEmpty()) elementBurstsDirty = true
+        if (reactionStamps.isNotEmpty()) reactionStampsDirty = true
+        if (skillBursts.isNotEmpty()) skillBurstsDirty = true
+        if (apexBursts.isNotEmpty()) apexBurstsDirty = true
+        val ribbonMoved = rebaseCoreRibbon(cue.shiftX, cue.shiftY)
+        return changed || elementBursts.isNotEmpty() || reactionStamps.isNotEmpty() || skillBursts.isNotEmpty() || apexBursts.isNotEmpty() ||
+            ribbonMoved
+    }
 
     private fun clearAll(): Boolean {
         val changed = buildNotifications.isNotEmpty() || particles.isNotEmpty() ||
@@ -763,115 +764,6 @@ class InteractionFxReducer(seed: Int) {
             index--
         }
     }
-
-    /**
-     * A live build toast, published as a [BuildNotificationProjection]. Its title, kind and lifetime never
-     * change; [life] and [age] advance in place each step, and a merge replaces [details] (an immutable
-     * list) and restarts [life].
-     */
-    private class BuildNotice(val title: String, var details: ImmutableList<String>, var life: Float, val kind: BuildNoticeKind) {
-        val maxLife: Float = kind.lifeSeconds
-        var age: Float = maxLife - life
-    }
-
-    private data class Particle(
-        var x: Float,
-        var y: Float,
-        var vx: Float,
-        var vy: Float,
-        var life: Float,
-        val maxLife: Float,
-        val colorIndex: Int,
-        val size: Float,
-    )
-
-    private data class MotionEcho(
-        val x: Float,
-        val y: Float,
-        var life: Float,
-        val maxLife: Float,
-        val intensity: Float,
-    )
-
-    private data class Shockwave(
-        val x: Float,
-        val y: Float,
-        var life: Float,
-        val maxLife: Float,
-        val maxRadius: Float,
-        val colorIndex: Int,
-    )
-
-    private data class DamageNumber(
-        var x: Float,
-        var y: Float,
-        val amount: Long,
-        val critical: Boolean,
-        var life: Float = InteractionFxLimits.DAMAGE_NUMBER_LIFE_SECONDS,
-        val compactAmount: String = formatDamageNumber(amount, DamageNumberFormat.COMPACT),
-        val fullAmount: String = formatDamageNumber(amount, DamageNumberFormat.FULL),
-        val russianCompactAmount: String = compactAmount.russianDamageNumber(),
-        val driftX: Float = 0f,
-        val driftY: Float = -1f,
-        val tone: Int = 0,
-    )
-
-    private data class ElementBurst(
-        var x: Float,
-        var y: Float,
-        val primary: Int,
-        val secondary: Int,
-        val reaction: Int,
-        var radius: Float,
-        var life: Float,
-        val maxLife: Float,
-        var weight: Int,
-        var direction: Float,
-        var flags: Int,
-        val seed: Int,
-    )
-
-    private data class SkillBurst(
-        val skill: Int,
-        val phase: Int,
-        var x: Float,
-        var y: Float,
-        val dirX: Float,
-        val dirY: Float,
-        val radius: Float,
-        val rank: Int,
-        val flags: Int,
-        val seed: Int,
-        var life: Float,
-        val maxLife: Float,
-    )
-
-    private data class ApexBurst(
-        val shape: Int,
-        var x: Float,
-        var y: Float,
-        val seed: Int,
-        var life: Float,
-        val maxLife: Float,
-    )
-
-    private data class ReactionStamp(
-        var x: Float,
-        var y: Float,
-        val reaction: Int,
-        var life: Float,
-        val maxLife: Float,
-    )
-
-    private data class WeaponArc(
-        val fromX: Float,
-        val fromY: Float,
-        val toX: Float,
-        val toY: Float,
-        var life: Float,
-        val style: Int,
-        val maxLife: Float,
-    )
 
     private companion object {
         const val NOTICE_DROPPED = 0
