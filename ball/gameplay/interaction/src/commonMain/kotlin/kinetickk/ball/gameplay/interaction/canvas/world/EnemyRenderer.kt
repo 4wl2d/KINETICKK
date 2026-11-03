@@ -22,7 +22,7 @@ import kotlin.math.sin
 import kinetickk.ball.gameplay.interaction.canvas.*
 import kinetickk.ball.gameplay.interaction.canvas.look.*
 
-internal const val RAD_TO_DEG = 57.29578f
+internal const val RAD_TO_DEG = CanvasMath.RAD_TO_DEG
 
 /** Degrees per second for a full turn every [seconds]. */
 internal fun spin(seconds: Float): Float = 360f / seconds

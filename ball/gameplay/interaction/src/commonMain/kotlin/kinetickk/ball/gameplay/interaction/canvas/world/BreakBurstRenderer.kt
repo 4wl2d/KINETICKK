@@ -13,7 +13,6 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.gameplay.interaction.fx.VisualFxProjection
-import kotlin.math.PI
 import kinetickk.ball.gameplay.interaction.canvas.*
 import kinetickk.ball.gameplay.interaction.canvas.world.places.*
 
@@ -131,7 +130,7 @@ internal fun DrawScope.drawBreakBurst(
     }
 }
 
-private const val TAU = (2.0 * PI).toFloat()
+private const val TAU = CanvasMath.TAU
 
 /** Reaction name stamps: cond 30 at the world label scale, big enough to read mid-fight. */
 private val REACTION_STAMP_SP = worldLabelSp(30f)

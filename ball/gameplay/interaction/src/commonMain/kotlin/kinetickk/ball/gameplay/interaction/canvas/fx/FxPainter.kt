@@ -29,8 +29,8 @@ import kotlin.math.tan
 import kinetickk.ball.gameplay.interaction.canvas.*
 import kinetickk.ball.gameplay.interaction.canvas.world.*
 
-private const val TAU = (2.0 * PI).toFloat()
-private const val DEG = (PI / 180.0).toFloat()
+private const val TAU = CanvasMath.TAU
+private const val DEG = CanvasMath.DEG_TO_RAD
 
 /** Golden-ratio increment of the per-element hash (`0x9E3779B9`). */
 private const val GOLDEN = -0x61c88647

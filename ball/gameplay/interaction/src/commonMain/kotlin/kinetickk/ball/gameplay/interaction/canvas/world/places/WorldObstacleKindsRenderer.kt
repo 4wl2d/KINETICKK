@@ -29,6 +29,7 @@ import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kinetickk.ball.gameplay.interaction.canvas.CanvasMath
 
 /*
  * The 0.6.0 obstacle kinds in the world and on the minimap. Each look is object-local, drawn from cached strokes and
@@ -271,7 +272,7 @@ internal fun DrawScope.drawMinimapThermalVent(
 // ---------------------------------------------------------------------------------------------
 // Crystals.
 
-private const val TWO_PI: Float = 6.2831855f
+private const val TWO_PI: Float = CanvasMath.TAU
 
 /** Corners of a crystal's facet hexagon. */
 internal const val CRYSTAL_CORNERS: Int = 6

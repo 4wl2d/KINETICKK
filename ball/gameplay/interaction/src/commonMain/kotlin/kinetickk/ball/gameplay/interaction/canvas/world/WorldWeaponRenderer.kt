@@ -31,8 +31,8 @@ import kinetickk.ball.gameplay.interaction.canvas.*
  * last two fixed-step states; spins and pulses follow renderElapsed. Nothing here allocates per frame.
  */
 
-private const val RADIANS_TO_DEGREES = 57.29578f
-private const val TAU = (PI * 2.0).toFloat()
+private const val RADIANS_TO_DEGREES = CanvasMath.RAD_TO_DEG
+private const val TAU = CanvasMath.TAU
 
 /** Mirrors of the simulation's geometry the world draws (the nucleus keeps the authoritative values). */
 private const val PHASE_LATTICE_CENTER = 110f

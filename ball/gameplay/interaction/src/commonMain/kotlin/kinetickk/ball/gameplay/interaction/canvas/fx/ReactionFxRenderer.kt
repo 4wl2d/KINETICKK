@@ -30,7 +30,6 @@ import kinetickk.ball.gameplay.nucleus.protocol.ReactionCueFlags
 import kinetickk.ball.gameplay.nucleus.protocol.SkillCueCodes
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
 import kinetickk.ball.profile.api.ReactionEffectsLevel
-import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.max
 import kotlin.math.min
@@ -39,8 +38,8 @@ import kotlin.math.sqrt
 import kinetickk.ball.gameplay.interaction.canvas.*
 import kinetickk.ball.gameplay.interaction.canvas.world.*
 
-private const val TAU = (2.0 * PI).toFloat()
-private const val RAD_TO_DEG = 57.29578f
+private const val TAU = CanvasMath.TAU
+private const val RAD_TO_DEG = CanvasMath.RAD_TO_DEG
 private const val SONIC = 5
 private const val WEAPON_LINK_JITTER = 8f
 private const val WEAPON_LINK_OUTER_WIDTH = 6f

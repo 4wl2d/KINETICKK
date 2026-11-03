@@ -219,7 +219,7 @@ internal object ObstaclePaths {
         }
     }
 
-    private const val TWO_PI: Float = 6.2831855f
+    private const val TWO_PI: Float = CanvasMath.TAU
 
     /** Corner angles wander by at most ±10 % of the corner spacing. */
     private const val ANGLE_JITTER: Float = 0.2f

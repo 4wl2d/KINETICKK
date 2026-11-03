@@ -18,11 +18,11 @@ import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.scale
 import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.kkLuminance
-import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+import kinetickk.ball.gameplay.interaction.canvas.CanvasMath
 
 // Epic signature illustrations (static, faint, behind the text), part A: the nine Kinetic epics,
 // drawn in the card hue (bone) as machined objects.
@@ -42,7 +42,7 @@ private const val MaskSlot = RewardArtCache.SLOTS - 1
 /** Rect slot of the fade layer's bounds. */
 private const val LayerSlot = 0
 
-internal const val Deg = (PI / 180.0).toFloat()
+internal const val Deg = CanvasMath.DEG_TO_RAD
 
 /**
  * The design space of these illustrations: the 300 × 450 board card in board dp, anchored at the
@@ -223,7 +223,7 @@ internal fun lightBrush(hue: Color, x0: Float, y0: Float, x1: Float, y1: Float, 
 
 // region shared
 
-internal const val DEG = 0.017453292f
+internal const val DEG = CanvasMath.DEG_TO_RAD
 internal const val HALF_PI = 1.5707964f
 internal const val SQRT3_HALF = 0.8660254f
 

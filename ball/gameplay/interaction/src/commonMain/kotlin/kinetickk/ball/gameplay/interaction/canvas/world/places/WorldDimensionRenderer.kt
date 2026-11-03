@@ -95,7 +95,7 @@ private const val CRACK_SHARE = 0.18f
 private const val SCANLINE_HEIGHT = 24f
 private const val SCANLINE_SPEED = 36f
 
-private const val TWO_PI = (2.0 * PI).toFloat()
+private const val TWO_PI = CanvasMath.TAU
 
 /** A dimension's backdrop colours for one rebirth tier and Color vision palette. */
 internal class DimensionTheme(

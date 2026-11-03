@@ -20,7 +20,7 @@ import kotlin.math.max
 import kotlin.math.sin
 import kinetickk.ball.gameplay.interaction.canvas.*
 
-private const val RADIANS_TO_DEGREES = 57.29578f
+private const val RADIANS_TO_DEGREES = CanvasMath.RAD_TO_DEG
 
 /** Weapons in the world read as the player's: bone bodies with you-color accents. */
 internal fun DrawScope.drawWeapon(engine: GameplayRenderModel, core: Offset, shakeX: Float, shakeY: Float, roles: KkRolePalette) {

@@ -215,7 +215,7 @@ private fun DrawScope.drawSolarSweep(event: WorldEventProjection, now: Float, sh
     }
 }
 
-private const val RADIANS_TO_DEGREES = 57.29578f
+private const val RADIANS_TO_DEGREES = CanvasMath.RAD_TO_DEG
 
 /** The flare's band gradient across its width, built once per colour (draw-thread confined). */
 private object EventBrushes {

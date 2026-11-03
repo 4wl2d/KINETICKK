@@ -21,6 +21,7 @@ import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kinetickk.ball.gameplay.interaction.canvas.CanvasMath
 
 /** Board box of the shatter (Report board: 420 x 420, center 210, drawn at 80 %). */
 internal const val ShatterBox = 420f
@@ -62,7 +63,7 @@ internal fun reportShatterShape(victory: Boolean): ReportShatterShape {
         seed = (seed * 16_807L) % 2_147_483_647L
         return ((seed - 1).toDouble() / 2_147_483_646.0).toFloat()
     }
-    val tau = (PI * 2).toFloat()
+    val tau = CanvasMath.TAU
     val r = 168f
     val ri = 44f
     val n = 11
