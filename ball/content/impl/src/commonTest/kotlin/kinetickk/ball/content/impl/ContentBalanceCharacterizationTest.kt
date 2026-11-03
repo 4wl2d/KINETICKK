@@ -398,7 +398,7 @@ class ContentBalanceCharacterizationTest {
         assertEquals(3, ui.relicPolicy.maxRank)
         assertEquals(RelicId.entries.toList(), relics.map(RelicDefinition::id))
         assertEquals(
-            "c8c02a43bec87968",
+            "ac78cf6e774b74ca",
             goldenFingerprint {
                 add(relics.size)
                 relics.forEach { relic ->
@@ -414,6 +414,7 @@ class ContentBalanceCharacterizationTest {
                     relic.values.forEach { value ->
                         add(value.base)
                         add(value.perRank)
+                        add(value.powerUnits)
                     }
                     add(relic.minimumRebirth)
                     add(relic.meldable)

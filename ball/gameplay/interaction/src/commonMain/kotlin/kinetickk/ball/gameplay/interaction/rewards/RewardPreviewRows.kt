@@ -119,7 +119,7 @@ internal fun GameplayRenderModel.rewardRelicPreview(
     val rows = buildList {
         if (action == RelicChoiceAction.REPLACE && slotRelic != null) {
             val lost = content.relic(slotRelic.id)
-            add(RewardPreviewRow("−", lost.name.localizedContent(language), lost.upsideText(language, slotRelic.rank), RewardTone.THREAT))
+            add(RewardPreviewRow("−", lost.name.localizedContent(language), lost.upsideText(language, slotRelic.rank, numberScale), RewardTone.THREAT))
             // Severance: the replaced relic's liability lingers after it leaves.
             add(RewardPreviewRow("=", language.text(OverlayRedesignText.CostStays, overlayDecimal(content.build.policy.severanceSeconds, language)),
                 lost.liabilityText(language), RewardTone.THREAT))
@@ -128,9 +128,9 @@ internal fun GameplayRenderModel.rewardRelicPreview(
             val target = content.relic(slotRelic.id)
             if (slotRelic.rank < policy.maxRank) {
                 // The panel shows the whole upside at the next rank; the row shows only the values that grow.
-                val (before, after) = target.rankValueChange(language, slotRelic.rank, slotRelic.rank + 1)
+                val (before, after) = target.rankValueChange(language, slotRelic.rank, slotRelic.rank + 1, numberScale)
                 add(RewardPreviewRow("+", language.text(OverlayRedesignText.Rank, slotRelic.rank + 1),
-                    if (after == null) target.upsideText(language, slotRelic.rank + 1) else null, RewardTone.YOU, before = before, after = after))
+                    if (after == null) target.upsideText(language, slotRelic.rank + 1, numberScale) else null, RewardTone.YOU, before = before, after = after))
             } else {
                 add(RewardPreviewRow("+", relicAction.label, language.text(OverlayRedesignText.SalvageEffect), RewardTone.MUTE))
             }

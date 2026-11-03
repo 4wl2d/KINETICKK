@@ -125,7 +125,7 @@ internal fun GameplayRenderModel.rewardCardPresentation(
         chips = rewardCardChips(choice, item, relic, heirloom, weapon, touch, language),
         forecast = rewardCardForecast(item, preview, relic, relicPreview, language),
         rules = itemRules,
-        values = if (relic != null) relic.upsideValueRanges(language, rank ?: ownedRank.coerceAtLeast(1)) else emptyList(),
+        values = if (relic != null) relic.upsideValueRanges(language, rank ?: ownedRank.coerceAtLeast(1), numberScale) else emptyList(),
         keys = if (relic != null) rewardRelicKeys(relic, equippedRelics.map { it.id }.filter {
             choice.relicAction != RelicChoiceAction.REPLACE || it != slotRelic?.id
         }, language) else emptyList(),
@@ -209,7 +209,7 @@ private fun GameplayRenderModel.rewardDescriptions(
             addAll(itemRules.filter { it.kind != RuleLineKind.COST }.map { it.text })
             if (preview != null && preview.changes.isEmpty() && itemRules.isEmpty()) add(language.text(GameplayText.NoStatChange))
         }
-        relic != null -> add(relic.upsideText(language, rank ?: ownedRank.coerceAtLeast(1)))
+        relic != null -> add(relic.upsideText(language, rank ?: ownedRank.coerceAtLeast(1), numberScale))
         decline -> add(if (choice.heirloom) language.text(OverlayRedesignText.LeaveHeirloomEffect, content.relicPolicy.heirloomDeclineRerolls)
             else language.text(OverlayRedesignText.LeaveHollowEffect, content.relicPolicy.salvageMatter))
         choice.totemAction == TotemAction.AMPLIFY_CURRENT -> add(currentWeaponDefinition.description.localizedContent(language))

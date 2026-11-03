@@ -230,6 +230,7 @@ internal fun codexRelicEntry(
         })
         if (rank != null) add(CodexFact(language.text(SessionText.RANK), "$rank/${if (relic.meldable) maxRank else 1}"))
         if (relic.minimumRebirth > 0) add(CodexFact(language.text(CodexText.UNLOCKS_AT), language.text(SessionText.REBIRTH_LEVEL, relic.minimumRebirth)))
+        if (relic.values.any { it.powerUnits }) add(codexBaseValuesFact(language))
     }
     val bound = build?.relics.orEmpty().filter { it.id != relic.id }.map { catalog.relic(it.id) }
     val opposedBound = relic.keys.filter { key -> bound.any { other -> other.keys.any { RelicKey.opposed(key, it) } } }.toSet()

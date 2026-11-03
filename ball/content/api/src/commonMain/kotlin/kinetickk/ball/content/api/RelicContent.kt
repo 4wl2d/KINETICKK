@@ -81,9 +81,10 @@ enum class RelicId {
 
 /**
  * A numeric Relic parameter: [base] at rank 1 plus [perRank] for every rank above it. Upside text
- * references values positionally as `{0}`, `{1}`, … so balance never edits prose.
+ * references values positionally as `{0}`, `{1}`, … so balance never edits prose. A [powerUnits] value is an
+ * integrity or damage amount: a run's text shows it at the run's number scale.
  */
-data class RelicValue(val base: Float, val perRank: Float = 0f) {
+data class RelicValue(val base: Float, val perRank: Float = 0f, val powerUnits: Boolean = false) {
     init {
         require(base.isFinite() && perRank.isFinite())
     }

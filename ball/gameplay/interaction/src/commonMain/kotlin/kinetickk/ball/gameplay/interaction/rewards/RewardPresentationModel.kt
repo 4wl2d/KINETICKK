@@ -137,10 +137,10 @@ internal fun GameplayRenderModel.rewardRelicPanel(
     rank = language.text(OverlayRedesignText.Rank, rank),
     isNew = !isRelicDiscovered(relic.id),
     name = relic.name.localizedContent(language),
-    description = relic.upsideText(language, rank),
+    description = relic.upsideText(language, rank, numberScale),
     liability = relic.liabilityText(language),
     relic = relic,
-    values = relic.upsideValueRanges(language, rank),
+    values = relic.upsideValueRanges(language, rank, numberScale),
     keys = rewardRelicKeys(relic, partners, language),
     attuned = rewardAttunedChips(relic, language),
     heirloom = heirloom,
@@ -148,12 +148,12 @@ internal fun GameplayRenderModel.rewardRelicPanel(
 )
 
 /**
- * Where the rank-scaled values of the upside sit in [RelicDefinition.upsideText]: the localized
+ * Where the rank-scaled values of the upside sit in [RelicDefinition.upsideText] at [numberScale]: the localized
  * template's literal parts are matched in order, and what lies between them is a value.
  */
-internal fun RelicDefinition.upsideValueRanges(language: AppLanguage, rank: Int): List<IntRange> {
+internal fun RelicDefinition.upsideValueRanges(language: AppLanguage, rank: Int, numberScale: Double = 1.0): List<IntRange> {
     val template = upside.localizedContent(language)
-    val text = upsideText(language, rank)
+    val text = upsideText(language, rank, numberScale)
     val parts = template.split(RelicPlaceholder)
     if (parts.size < 2 || !text.startsWith(parts.first())) return emptyList()
     val ranges = ArrayList<IntRange>(parts.size - 1)
@@ -178,10 +178,10 @@ private val RelicPlaceholder = Regex("\\{[0-9]+\\}")
  * The upside values a rank change raises, at [from] and at [to] ("15 %", "18 %"; several join with
  * a comma), each with the percent mark that follows it in the text. Null when no value changes.
  */
-internal fun RelicDefinition.rankValueChange(language: AppLanguage, from: Int, to: Int): Pair<String?, String?> {
+internal fun RelicDefinition.rankValueChange(language: AppLanguage, from: Int, to: Int, numberScale: Double): Pair<String?, String?> {
     fun values(rank: Int): List<String> {
-        val text = upsideText(language, rank)
-        return upsideValueRanges(language, rank).map { range ->
+        val text = upsideText(language, rank, numberScale)
+        return upsideValueRanges(language, rank, numberScale).map { range ->
             val unit = text.substring(range.last + 1).takeWhile { it == ' ' || it == '\u00A0' || it == '%' }
             text.substring(range) + if ('%' in unit) "\u00A0%" else ""
         }

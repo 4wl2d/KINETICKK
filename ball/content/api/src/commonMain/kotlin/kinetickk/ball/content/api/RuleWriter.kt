@@ -21,11 +21,12 @@ internal class RuleWriter(val language: AppLanguage, val context: RuleTextContex
 
     fun stat(delta: StatDelta): RuleLine {
         val amount = delta.amount * gain
-        val scale = if (delta.effect.isIntegrityAmount) context.numberScale else 1.0
+        // Integrity stats are power units, written at the run's number scale.
+        fun flat() = if (delta.effect.isIntegrityAmount) signedIntegrity(amount) else signed(amount, FLAT_DECIMALS)
         val value = when (delta.effect.unit) {
             ModifierUnit.PERCENT -> signedPercent(amount)
-            ModifierUnit.FLAT -> signedAmount(amount, scale)
-            ModifierUnit.PER_SECOND -> text(BuildRulesText.UnitPerSecond, signedAmount(amount, scale))
+            ModifierUnit.FLAT -> flat()
+            ModifierUnit.PER_SECOND -> text(BuildRulesText.UnitPerSecond, flat())
             ModifierUnit.SECONDS -> text(BuildRulesText.UnitSeconds, signed(amount, SECOND_DECIMALS))
         }
         val sentence = text(delta.effect.phrase, value)
@@ -389,8 +390,7 @@ internal class RuleWriter(val language: AppLanguage, val context: RuleTextContex
 
     private fun signed(value: Double, decimals: Int): String = sign(value) + language.number(abs(value), decimals)
 
-    /** A flat stat amount: an integrity stat at [scale] (the number scale), any other one as it is. */
-    private fun signedAmount(value: Double, scale: Double): String = sign(value) + language.amount(abs(value), FLAT_DECIMALS, scale)
+    private fun signedIntegrity(value: Double): String = sign(value) + integrity(abs(value))
 
     /** An integrity amount healed, shielded or taken, at the run's number scale. */
     fun integrity(value: Double): String = language.amount(value, FLAT_DECIMALS, context.numberScale)

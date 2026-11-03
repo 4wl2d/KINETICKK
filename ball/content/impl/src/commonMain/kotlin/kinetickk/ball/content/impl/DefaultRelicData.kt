@@ -159,9 +159,11 @@ internal fun defaultRelics(): ImmutableList<RelicDefinition> = listOf(
     relic(
         RelicId.VERDANT_ROT, "Verdant Rot", RelicAspect.ENTROPY,
         listOf(RelicKey.DECAY, RelicKey.LIFE), listOf(BuildTag.BULWARK),
-        "Impacts apply 2 Entropy. Every Entropy stack within 320 u heals you {0} per second, up to 3.5.",
+        "Impacts apply 2 Entropy. Every Entropy stack within 320 u heals you {0} per second, up to {1}.",
         "All other healing is disabled, and every Entropy stack close to you makes you take 1.5 % more damage.",
-        RelicValue(0.25f, 0.05f),
+        RelicValue(0.25f, 0.05f, powerUnits = true),
+        // The heal cap in integrity per second (the simulation reads it).
+        RelicValue(3.5f, powerUnits = true),
     ),
     relic(
         RelicId.PANDEMIC_CODEX, "Pandemic Codex", RelicAspect.ENTROPY,
@@ -195,7 +197,7 @@ internal fun defaultRelics(): ImmutableList<RelicDefinition> = listOf(
             "grants two seconds of invulnerability. Then the seal is spent but keeps its slot.",
         "Data gain −25 % while the seal is bound. The singularity still kills, and a spent seal locks its " +
             "slot for two minutes.",
-        RelicValue(120f, 60f),
+        RelicValue(120f, 60f, powerUnits = true),
         minimumRebirth = 5,
     ),
     relic(

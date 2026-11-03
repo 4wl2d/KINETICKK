@@ -27,7 +27,11 @@ internal const val STASIS_RADIUS: Float = 240f
 internal const val STASIS_MAX_BANK: Int = 24
 internal const val EVENT_HORIZON_RADIUS: Float = 280f
 internal const val VERDANT_RADIUS: Float = 320f
-internal const val VERDANT_CAP: Float = 3.5f
+
+/** Verdant Rot's heal cap in integrity per second: its second relic value, which its upside text shows. */
+internal fun MutableGameState.verdantCap(): Float = content.relic(RelicId.VERDANT_ROT).value(VERDANT_CAP_VALUE, 1)
+
+private const val VERDANT_CAP_VALUE = 1
 internal const val OUROBOROS_LOCK_SECONDS: Float = 120f
 internal const val GLASS_INVULNERABILITY_SECONDS: Float = 0.25f
 internal const val GLASS_INVULNERABILITY_COOLDOWN: Float = 1.5f
@@ -110,7 +114,7 @@ internal fun MutableGameState.updateRelicRuntime(delta: Float) {
                 nearby += stacks(enemy, StatusElement.ENTROPY)
             }
         }
-        if (nearby > 0) heal(min(VERDANT_CAP, nearby * relicValue(RelicId.VERDANT_ROT, 0)) * delta, HealSource.VERDANT)
+        if (nearby > 0) heal(min(verdantCap(), nearby * relicValue(RelicId.VERDANT_ROT, 0)) * delta, HealSource.VERDANT)
     }
     if (build.liability(RelicId.FURNACE_COVENANT) && heat >= 80f) {
         loseIntegrity(3f * delta)
