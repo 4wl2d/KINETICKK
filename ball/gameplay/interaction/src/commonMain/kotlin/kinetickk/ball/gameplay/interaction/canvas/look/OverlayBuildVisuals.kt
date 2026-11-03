@@ -6,7 +6,6 @@ package kinetickk.ball.gameplay.interaction.canvas.look
 import androidx.compose.ui.graphics.Color
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.GameplayContentSnapshot
-import kinetickk.ball.content.api.ItemEffect
 import kinetickk.ball.content.api.RelicAspect
 import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.RelicPairingId
@@ -218,23 +217,6 @@ internal fun OverlayRelicLink.overlayDescription(content: GameplayContentSnapsho
 
 /** One stat row of the pause build overview. [highlight] marks a value above its neutral 1×. */
 internal class OverlayStat(val label: String, val value: String, val highlight: Boolean)
-
-/** The build stats the render model offers, labelled with the item effect names they share. */
-internal fun GameplayRenderModel.overlayBuildStats(language: AppLanguage): List<OverlayStat> {
-    fun label(effect: ItemEffect) = effect.displayLabel.localizedContent(language)
-    return listOf(
-        OverlayStat(label(ItemEffect.IMPACT_DAMAGE), overlayMultiplier(damageMultiplier, language), damageMultiplier > 1.001f),
-        OverlayStat(label(ItemEffect.WEAPON_POWER), overlayMultiplier(effectiveWeaponPower, language), effectiveWeaponPower > 1.001f),
-        OverlayStat(label(ItemEffect.MASS), overlayDecimal(mass, language), false),
-        OverlayStat(label(ItemEffect.MAGNETISM), overlayDecimal(magnetStrength, language), false),
-        OverlayStat(label(ItemEffect.COOLING), overlayDecimal(coolingRate, language), false),
-        OverlayStat(label(ItemEffect.MAX_INTEGRITY), overlayGrouped(maxHp.roundToLong(), language), false),
-        OverlayStat(label(ItemEffect.DASH_POWER), overlayGrouped(dashImpulse.roundToLong(), language), false),
-        OverlayStat(label(ItemEffect.CRIT_CHANCE), overlayPercent(critChance, language), false),
-        OverlayStat(label(ItemEffect.OVERDRIVE_GAIN), overlayMultiplier(overdriveGain, language), overdriveGain > 1.001f),
-        OverlayStat(label(ItemEffect.PICKUP_RADIUS), overlayGrouped(pickupRadius.roundToLong(), language), false),
-    )
-}
 
 /** "×1.64" with the language's decimal separator (two decimals, trailing zeros removed). */
 internal fun overlayMultiplier(value: Float, language: AppLanguage): String = "×" + overlayDecimal(value, language)
