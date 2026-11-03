@@ -62,6 +62,9 @@ private fun DrawScope.drawWorldLayer(
     // Structure floors and walls, then obstacles, lie on the backdrop, under everything that moves.
     drawStructureFloors(engine, shakeX, shakeY, roles)
     drawStructureWalls(engine, shakeX, shakeY, roles)
+    // A dungeon's air and thresholds, then its fight's telegraphs on the ground (breaches, hazards, the guardian's sigil).
+    drawDungeonAtmosphere(engine, shakeX, shakeY, roles)
+    drawDungeonFight(engine, shakeX, shakeY, roles)
     drawStructureDisintegrations(engine, visualFx, shakeX, shakeY, roles)
     drawObstacles(engine, shakeX, shakeY, roles)
     drawSites(engine, shakeX, shakeY, textMeasurer)
@@ -100,6 +103,7 @@ private fun DrawScope.drawWorldLayer(
     drawCharacterActors(engine, shakeX, shakeY, roles)
     drawProjectiles(engine, shakeX, shakeY, roles)
     drawImpactMarks(engine, visualFx, shakeX, shakeY)
+    drawDungeonMoments(engine, visualFx, shakeX, shakeY, roles)
     // The tether and the Core/cursor halos are HUD (screen-space) elements drawn by HudRenderer.
     if (engine.phase != GamePhase.GAME_OVER) {
         drawCore(engine, core, roles)

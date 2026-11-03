@@ -75,9 +75,11 @@ internal data class DungeonAttempt(
  *   outward from the absolute origin at 900 u/s until one appears. Rocks, other optional sites and other structures
  *   are avoided as the bot avoids them; the search's heading excuses none of them. The Architect's Doodle is a
  *   secret, not a dungeon: it is never the target, and the search rounds it like any other skipped structure.
- * - Inside a sealed room, at most 800 u/s: a boss-class garrison member (the Vault's Brood Queen, the Reliquary's
- *   Warden Prime) is fought as the bot fights the Architect, and as the site and dimension pilots fight their bosses:
- *   orbited at 300 u, or at 100 u and 350 u/s with the Flux Wake, never rammed. Otherwise the nearest member is the
+ * - Inside a sealed room, at most 800 u/s: the room's guardian (a boss-class member such as the Vault's Brood Queen or
+ *   the Reliquary's Warden Prime, or an ordinary guardian) is fought as the bot fights the Architect, and as the site
+ *   and dimension pilots fight their bosses: orbited at 300 u, or at 100 u and 350 u/s with the Flux Wake, never rammed.
+ *   With a human's 0.2 s reaction it steers out of a telegraphed hazard (a vent's disc, a lance's line) and off the
+ *   incoming wave's breach points before they strike or land. Otherwise the nearest member is the
  *   target and the bot's hunting law decides how: its orbiting weapons (Arc Coil, Ion Swarm, Prism Relay) circle it
  *   at 220 u, every other weapon rams it. Walls within 140 u of the predicted Core push it off (gain 6,
  *   [nearestWall]); a Dash only dodges a shot when its line is clear of walls and solid rocks, and never while
@@ -85,7 +87,9 @@ internal data class DungeonAttempt(
  * - Inside with no sealed room: a breadth-first route over open doors to the nearest room still to clear (an
  *   uncleared room with a garrison, or the final room once its locks are open), through door waypoints 160 u on each
  *   side of every door centre. Held from outside the walls (a notch of the footprint), it first leaves the footprint
- *   and rounds it to the entrance.
+ *   and rounds it to the entrance. Between rooms below [RETREAT_HP_SHARE] of its integrity it retreats as a careful
+ *   player would rather than open the next fight: the same route to the outside door, then straight away from the
+ *   structure until it lets go (an abandoned attempt).
  * - After the outcome the bot flies as before (footprint avoidance on), opening a waiting Totem chest while it holds
  *   a Key. Its cursor picks up where the pilot left the singularity; a stale cursor had swung across the Core's path
  *   and ended runs on singularity contact moments after their clear.
@@ -134,6 +138,7 @@ internal class DungeonPilot(
     /** True after a frame the pilot steered itself (seek, dungeon, a way out): the bot's cursor resyncs on handover. */
     private var pilotSteered = false
     private var rounding = false
+    private var retreating = false
     private val wallBox = FloatArray(4)
 
     /** The pilot's steering until the attempt ends, then the bot's; a stall's way out first. */
@@ -465,7 +470,14 @@ internal class DungeonPilot(
         val template = s.content.structures.template(held.template)
         val room = template.roomAt(s.coreX - held.x, s.coreY - held.y, held.rotation)
         if (room >= 0) lastRoom = room
-        val (desiredX, desiredY) = if (held.engagedRoom >= 0) fightVelocity(s, held, template) else routeVelocity(s, held, template)
+        if (held.engagedRoom < 0 && s.hp < s.maxHp * RETREAT_HP_SHARE) retreating = true
+        val (wantedX, wantedY) = when {
+            held.engagedRoom >= 0 -> fightVelocity(s, held, template)
+            !retreating -> routeVelocity(s, held, template, route(template, held, lastRoom))
+            room < 0 && lastRoom == template.entranceRoom -> awayVelocity(s, held)
+            else -> routeVelocity(s, held, template, exitRoute(template, held, lastRoom))
+        }
+        val (desiredX, desiredY) = avoidTelegraphs(s, held, wantedX, wantedY)
         val walled = repelWalls(s, desiredX, desiredY)
         val dodged = s.dodgeShots(walled.first, walled.second)
         steer(s, dodged.first, dodged.second, brakeAbove = INSIDE_BRAKE_ON, releaseBelow = INSIDE_BRAKE_OFF)
@@ -489,7 +501,8 @@ internal class DungeonPilot(
         targetY = held.y + rotateQuarterY(roomLocalX, roomLocalY, held.rotation)
         var radius = 0f
         var orbitSpeed = ORBIT_SPEED
-        val boss = s.enemies.firstOrNull { it.ownerTag == tag && it.alive && it.isBossClass }
+        val guardian = held.fight?.guardianId ?: -1
+        val boss = s.enemies.firstOrNull { it.ownerTag == tag && it.alive && (it.isBossClass || it.id == guardian) }
         if (boss != null) {
             // The bot's fight against the Architect (as the site and dimension pilots fight their bosses): a tight
             // orbit with the Flux Wake, a wide one with every other weapon, never a ram.
@@ -533,9 +546,54 @@ internal class DungeonPilot(
         return desiredX to desiredY
     }
 
-    /** Toward the next door waypoint of the route to the nearest room still to clear (or that room's centre). */
-    private fun routeVelocity(s: MutableGameState, held: DungeonState, template: StructureTemplate): Pair<Float, Float> {
-        val firstDoor = route(template, held, lastRoom)
+    /**
+     * The desired velocity pushed out of every telegraph the pilot has seen for [REACTION_SECONDS]: a hazard's disc or
+     * line until it struck, and the incoming wave's breach points until they land, read from where momentum carries
+     * the Core 0.25 s on.
+     */
+    private fun avoidTelegraphs(s: MutableGameState, held: DungeonState, x: Float, y: Float): Pair<Float, Float> {
+        val fight = held.fight ?: return x to y
+        var desiredX = x
+        var desiredY = y
+        val px = s.coreX + s.velocityX * 0.25f
+        val py = s.coreY + s.velocityY * 0.25f
+        fun pushFrom(ax: Float, ay: Float, bx: Float, by: Float, radius: Float) {
+            val along = segmentNearest(px, py, ax, ay, bx, by)
+            val dx = px - (ax + (bx - ax) * along)
+            val dy = py - (ay + (by - ay) * along)
+            val distance = max(1f, length(dx, dy))
+            val reach = radius + s.coreRadius + TELEGRAPH_MARGIN
+            if (distance >= reach) return
+            desiredX += dx / distance * (TELEGRAPH_ESCAPE + (reach - distance) * WALL_GAIN)
+            desiredY += dy / distance * (TELEGRAPH_ESCAPE + (reach - distance) * WALL_GAIN)
+        }
+        for (hazard in fight.hazards) {
+            if (s.elapsed - hazard.armedAt < REACTION_SECONDS || s.elapsed > hazard.strikesAt) continue
+            pushFrom(hazard.ax, hazard.ay, hazard.bx, hazard.by, hazard.radius)
+        }
+        val telegraph = s.content.structures.waveTelegraphSeconds
+        if (fight.incomingAt >= 0f && s.elapsed - (fight.incomingAt - telegraph) >= REACTION_SECONDS) {
+            val points = fight.incomingPoints
+            for (member in fight.incoming.indices) {
+                pushFrom(points[member * 2], points[member * 2 + 1], points[member * 2], points[member * 2 + 1], BREACH_REACH)
+            }
+        }
+        return desiredX to desiredY
+    }
+
+    /** Straight away from the structure's centre, out past its leave radius. */
+    private fun awayVelocity(s: MutableGameState, held: DungeonState): Pair<Float, Float> {
+        val dx = s.coreX - held.x
+        val dy = s.coreY - held.y
+        val distance = max(1f, length(dx, dy))
+        return dx / distance * ROOM_SPEED to dy / distance * ROOM_SPEED
+    }
+
+    /**
+     * Toward the next door waypoint of a route whose [firstDoor] the caller found (to the nearest room still to clear, or
+     * out of the structure), or the current room's centre without one.
+     */
+    private fun routeVelocity(s: MutableGameState, held: DungeonState, template: StructureTemplate, firstDoor: Int): Pair<Float, Float> {
         if (firstDoor == ROUTE_NONE || firstDoor == ROUTE_HERE) {
             // In the room to clear but short of its entry inset, or nowhere to go: its centre.
             val room = template.rooms[if (lastRoom == STRUCTURE_OUTSIDE) template.entranceRoom else lastRoom]
@@ -616,6 +674,34 @@ internal class DungeonPilot(
                 parentDoor[next] = index
                 if (toClear(template, held, next)) return firstDoorTo(template, next, start, outside)
                 if (held.clearedRooms and (1 shl next) != 0 || rooms[next].garrison.isEmpty()) queue[tail++] = next
+            }
+        }
+        return ROUTE_NONE
+    }
+
+    /** The first door of a breadth-first route over open doors from room [from] out of the structure, or [ROUTE_NONE]. */
+    private fun exitRoute(template: StructureTemplate, held: DungeonState, from: Int): Int {
+        val outside = template.rooms.size
+        if (from == STRUCTURE_OUTSIDE) return ROUTE_NONE
+        parentDoor.fill(-1)
+        var visited = 1 shl from
+        var head = 0
+        var tail = 0
+        queue[tail++] = from
+        while (head < tail) {
+            val node = queue[head++]
+            for (index in template.doors.indices) {
+                val door = template.doors[index]
+                if (!doorOpen(door.lockRooms, held) || (door.roomA != node && door.roomB != node)) continue
+                if (door.leadsOutside) {
+                    parentDoor[outside] = index
+                    return firstDoorTo(template, outside, from, outside)
+                }
+                val next = if (door.roomA == node) door.roomB else door.roomA
+                if (visited and (1 shl next) != 0) continue
+                visited = visited or (1 shl next)
+                parentDoor[next] = index
+                queue[tail++] = next
             }
         }
         return ROUTE_NONE
@@ -775,6 +861,17 @@ internal class DungeonPilot(
         private const val SEEK_BRAKE_OFF = 780f
         private const val INSIDE_BRAKE_ON = 850f
         private const val INSIDE_BRAKE_OFF = 600f
+
+        /** Between rooms below this share of its integrity the pilot leaves the structure instead of fighting on. */
+        const val RETREAT_HP_SHARE = 0.4f
+
+        /** A human's reaction to a telegraph (s), the berth kept from it (u) and the escape speed out of it (u/s). */
+        private const val REACTION_SECONDS = 0.2f
+        private const val TELEGRAPH_MARGIN = 30f
+        private const val TELEGRAPH_ESCAPE = 420f
+
+        /** Berth of a breach point (an incoming member's radius and some). */
+        private const val BREACH_REACH = 40f
 
         /** Unstick: walls up to this long (u) are rounded, for at most this long (s)... */
         const val ROUND_WALL_LENGTH = 600f

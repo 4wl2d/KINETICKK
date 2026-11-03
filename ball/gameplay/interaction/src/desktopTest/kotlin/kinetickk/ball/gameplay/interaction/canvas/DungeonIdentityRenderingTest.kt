@@ -44,9 +44,11 @@ class DungeonIdentityRenderingTest {
                     drawStructureFloors(model, 0f, 0f, roles)
                 }
                 val pixels = bitmap.toPixelMap()
-                val background = pixels[20, 20]
-                val backgroundBrightness = background.red + background.green + background.blue
-                assertTrue(backgroundBrightness < 0.5f, "${template.name}: floor leaves combat readable")
+                // The floor's brightness away from the glyph: the median of a patch, so a floor line under one pixel
+                // neither passes nor fails it.
+                val patch = (10 until 50).flatMap { y -> (10 until 50).map { x -> pixels[x, y].let { it.red + it.green + it.blue } } }.sorted()
+                val backgroundBrightness = patch[patch.size / 2]
+                assertTrue(backgroundBrightness < 0.5f, "${template.name}: floor leaves combat readable ($backgroundBrightness)")
                 var glyphPixels = 0
                 var fingerprint = 1
                 for (py in 160 until 280) for (px in 160 until 280) {

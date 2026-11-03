@@ -79,17 +79,21 @@ class StructureRenderMapperTest {
         assertEquals(expected.first, own.x, 0.01f)
         assertEquals(expected.second, own.y, 0.01f)
 
-        // The dungeon: its structure, the sealed room and a panel (the trial projection carries the room counts).
+        // The dungeon: its structure, the sealed room and a panel (the trial projection carries the room counts), and
+        // the hall's fight: sealed now, the first of its two waves standing, six members, no guardian, nothing incoming.
         val panel = assertNotNull(projected.dungeon)
         assertEquals(site.placement.id, panel.structureId)
         assertEquals(1, panel.engagedRoom)
         assertTrue(panel.panel)
+        assertEquals(listOf(run.elapsed, 2f, 1f, 6f, -1f, -1f), listOf(panel.sealedAt, panel.waves.toFloat(),
+            panel.wavesLanded.toFloat(), panel.liveGarrison.toFloat(), panel.guardianId.toFloat(), panel.incomingAt))
+        assertTrue(panel.breaches.isEmpty() && panel.hazards.isEmpty())
 
-        // A member falling changes nothing the projection shows; the run is only read.
+        // A member falling only counts down the live garrison; the run is only read.
         val fallen = run.enemies.first { it.ownerTag == roomEncounterTag(site.placement.id, 1) }
         fallen.hp = 0f
         val after = run.toRenderModel().structures
-        assertEquals(panel, after.dungeon)
+        assertEquals(panel.copy(liveGarrison = panel.liveGarrison - 1), after.dungeon)
         assertSame(dungeon, run.dungeon)
     }
 
@@ -157,11 +161,14 @@ class StructureRenderMapperTest {
         assertSame(first.signals, sealed.signals)
         assertEquals(1, sealed.dungeon?.engagedRoom)
 
-        // A garrison member falling changes nothing the projection shows: the whole projection is kept.
+        // A garrison member falling only reprojects the dungeon's live count: structures, walls and signals are kept.
         val identity = source.deepCopy()
         source.enemies.first { it.ownerTag == roomEncounterTag(site.placement.id, 1) }.hp = 0f
         val fallen = source.toRenderModel(retainedSealed, identity).structures
-        assertSame(sealed, fallen)
+        assertSame(sealed.structures, fallen.structures)
+        assertSame(sealed.walls, fallen.walls)
+        assertSame(sealed.signals, fallen.signals)
+        assertEquals(checkNotNull(sealed.dungeon).liveGarrison - 1, fallen.dungeon?.liveGarrison)
 
         // Another structure spent while the window and the dungeon stay the same: its entrance stops signalling.
         val other = assertNotNull(source.structureField.signals.firstOrNull { it.id != site.placement.id }).id

@@ -25,6 +25,8 @@ import kinetickk.ball.gameplay.nucleus.simulation.elements.*
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.variety.*
 import kotlin.math.PI
+import kinetickk.ball.content.api.GameplayContentSnapshot
+import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.math.abs
 import kotlin.math.sqrt
 import kotlin.test.Test
@@ -35,16 +37,19 @@ import kotlin.test.assertTrue
 class EnemyRosterBehaviorTest {
     @Test
     fun roomBalanceScalesActualShotsAndContactButNeverWorldOrSiteEnemies() {
+        // Rooms ship at the open world's damage; the lever, set below it, scales room enemies alone.
+        assertEquals(1f, canonicalGameplayContent.structures.garrisonDamageMultiplier)
+        val lever = canonicalGameplayContent.copy(structures = canonicalGameplayContent.structures.copy(garrisonDamageMultiplier = 0.72f))
         fun damage(owner: EncounterOwner?): Pair<Float, Float> {
             val tag = owner?.let { encounterTag(it, 1L) } ?: 0L
-            val shots = quietState().apply { elapsed = content.tempo.bossAtSeconds * 0.5f }
+            val shots = quietState(lever).apply { elapsed = content.tempo.bossAtSeconds * 0.5f }
             shots.spawn(EnemyType.SHOOTER, 300f, 0f).apply { ownerTag = tag; actionTimer = 0f }
             shots.updateEnemies(FIXED)
             val fired = shots.projectiles.single { it.hostile }
             shots.projectiles.clear()
             shots.projectiles += Projectile(shots.coreX, shots.coreY, 0f, 0f, 5f, 1f, damage = fired.damage)
             shots.resolveProjectileHits()
-            val contact = quietState().apply { elapsed = content.tempo.bossAtSeconds * 0.5f }
+            val contact = quietState(lever).apply { elapsed = content.tempo.bossAtSeconds * 0.5f }
             contact.spawn(EnemyType.DRIFTER, 0f, 0f).ownerTag = tag
             contact.resolveEnemyCoreCollisions()
             return shots.maxHp - shots.hp to contact.maxHp - contact.hp
@@ -592,7 +597,7 @@ class EnemyRosterBehaviorTest {
     }
 
     /** A quiet arena with the pointer on the Core; the grace keeps the singularity from ending the run. */
-    private fun quietState(): MutableGameState = buildTestState().apply {
+    private fun quietState(content: GameplayContentSnapshot = canonicalGameplayContent): MutableGameState = buildTestState(content = content).apply {
         updatePointer(640f, 360f)
         runGrace = Float.MAX_VALUE
     }

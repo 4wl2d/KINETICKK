@@ -3,6 +3,8 @@
 
 package kinetickk.ball.gameplay.nucleus.simulation
 
+import kinetickk.ball.content.api.ContentBounds
+import kinetickk.ball.content.api.DungeonHazardKind
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.StructurePolicy
 import kinetickk.ball.content.api.StructureTemplate
@@ -11,11 +13,14 @@ import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.content.api.roomAt
 import kinetickk.ball.content.api.rotateQuarterX
 import kinetickk.ball.content.api.rotateQuarterY
+import kinetickk.ball.gameplay.nucleus.model.DungeonHazard
 import kinetickk.ball.gameplay.nucleus.model.ObstacleField
 import kinetickk.ball.gameplay.nucleus.model.PlacedStructure
+import kinetickk.ball.gameplay.nucleus.model.RoomFight
 import kinetickk.ball.gameplay.nucleus.model.StructureField
 import kinetickk.ball.gameplay.nucleus.model.Wall
 import kinetickk.ball.gameplay.nucleus.model.length
+import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.WallKind
 import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.simulation.structures.*
@@ -164,16 +169,42 @@ internal fun wallGapForTesting(x: Float, y: Float, wall: Wall): Float {
 
 /**
  * Kills every live enemy the dungeon's sealed room owns, as if the Core had destroyed them (kills, rewards and clauses
- * run); the next dungeon step clears the room.
+ * run); with [laterWaves] the room's waves still to come count as fought too, so the next dungeon step clears the room.
  */
-internal fun MutableGameState.killGarrisonForTesting() {
-    val dungeon = requireNotNull(dungeon) { "No dungeon" }
-    require(dungeon.engagedRoom >= 0) { "No sealed room" }
-    val tag = roomEncounterTag(dungeon.structureId, dungeon.engagedRoom)
+internal fun MutableGameState.killGarrisonForTesting(laterWaves: Boolean = true) {
+    val held = requireNotNull(dungeon) { "No dungeon" }
+    require(held.engagedRoom >= 0) { "No sealed room" }
+    val tag = roomEncounterTag(held.structureId, held.engagedRoom)
     enemies.filter { it.ownerTag == tag && it.alive }.forEach { enemy ->
         onEnemyKilled(enemy)
         enemies.remove(enemy)
     }
+    val fight = held.fight ?: return
+    if (!laterWaves) return
+    dungeon = held.copy(
+        fight = fight.copy(landed = fight.waves, incomingAt = -1f, incoming = emptyList(), incomingPoints = emptyList(), incomingGuardian = -1),
+    )
+}
+
+/**
+ * Fights the sealed room up to its last wave (a final room's guardian wave): each time kills the landed wave as the Core
+ * would, lets the next one's telegraph run out (the run clock jumps to its landing) and lands it.
+ */
+internal fun MutableGameState.fightToLastWaveForTesting() {
+    repeat(ContentBounds.MAX_DUNGEON_WAVES) {
+        val fight = dungeon?.fight ?: return
+        if (fight.landed >= fight.waves) return
+        killGarrisonForTesting(laterWaves = false)
+        updateStructures(MutableGameState.FIXED_STEP)
+        elapsed = dungeon?.fight?.incomingAt?.takeIf { it >= 0f } ?: return
+        updateStructures(MutableGameState.FIXED_STEP)
+    }
+}
+
+/** True while the sealed room's next wave is on its way and lands, or was due, at most [within] seconds from now. */
+internal fun MutableGameState.roomWaveDueForTesting(within: Float): Boolean {
+    val incomingAt = dungeon?.fight?.incomingAt ?: return false
+    return incomingAt >= 0f && abs(incomingAt - elapsed) <= within
 }
 
 /** A run with every far cell holding [template]; the Core rests at the centre of the one in cell (12, −9). */
@@ -245,3 +276,10 @@ internal class DungeonFixture(
         run.updateStructures(MutableGameState.FIXED_STEP)
     }
 }
+
+/** A sealed room's fight with every field off its default: a wave on its way, a guardian and a struck hazard cycle. */
+internal val WitnessRoomFight: RoomFight = RoomFight(
+    sealedAt = 4f, waves = 2, landedAt = 6f, landedMembers = 5, incomingAt = 7.2f, incoming = listOf(EnemyType.CRAWLER),
+    incomingPoints = listOf(2_050f, 1_480f), incomingGuardian = 0, guardianId = 21, hazardCycles = 1, hazardsStruck = true,
+    hazards = listOf(DungeonHazard(DungeonHazardKind.VENT, 1_990f, 1_510f, 1_990f, 1_510f, 120f, 7f, 8.3f)),
+)

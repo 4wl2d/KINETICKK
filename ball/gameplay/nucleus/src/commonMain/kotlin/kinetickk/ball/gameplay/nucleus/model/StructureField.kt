@@ -4,7 +4,9 @@
 package kinetickk.ball.gameplay.nucleus.model
 
 import kinetickk.ball.content.api.ContentBounds
+import kinetickk.ball.content.api.DungeonHazardKind
 import kinetickk.ball.content.api.StructureTemplateId
+import kinetickk.ball.gameplay.nucleus.render.EnemyType
 import kinetickk.ball.gameplay.nucleus.render.WallKind
 
 /** One capsule wall: the segment ([ax], [ay]) → ([bx], [by]) inflated by [halfThickness]; [door] is its door index or −1. */
@@ -169,8 +171,65 @@ internal data class DungeonState(
     val engaged: Boolean = false,
     /** Totem chest charges the final room pays (copied from the placed structure at entry; 0: none). */
     val chestCharges: Int = 0,
+    /** The sealed room's fight, exactly while [engagedRoom] is a room. */
+    val fight: RoomFight? = null,
 ) {
-    fun shifted(shiftX: Float, shiftY: Float): DungeonState = copy(x = x - shiftX, y = y - shiftY)
+    fun shifted(shiftX: Float, shiftY: Float): DungeonState = copy(x = x - shiftX, y = y - shiftY, fight = fight?.shifted(shiftX, shiftY))
+}
+
+/**
+ * A sealed room's fight: its waves, the next wave on its way in, its guardian and its hazards. Value-only: every
+ * change (a wave planned or landed, a guardian, a hazard cycle) replaces it, so a quiet step allocates nothing.
+ */
+internal data class RoomFight(
+    /** Run time the room sealed (its first wave landed then). */
+    val sealedAt: Float,
+    /** Waves the room's garrison holds (1..[ContentBounds.MAX_DUNGEON_WAVES]) and how many have landed. */
+    val waves: Int,
+    val landed: Int = 1,
+    /** Run time the latest wave landed and the members it brought. */
+    val landedAt: Float = sealedAt,
+    val landedMembers: Int,
+    /**
+     * The next wave: the run time it lands (−1: none on its way), its kinds, run-local points (x, y per member) and its
+     * guardian's index among them (−1: none).
+     */
+    val incomingAt: Float = -1f,
+    val incoming: List<EnemyType> = emptyList(),
+    val incomingPoints: List<Float> = emptyList(),
+    val incomingGuardian: Int = -1,
+    /** The guardian's enemy id once its wave landed (−1: not yet, or none in this room). */
+    val guardianId: Int = -1,
+    /**
+     * Hazard cycles started, the latest cycle's hazards (at most [ContentBounds.MAX_DUNGEON_HAZARDS], all striking at
+     * once) and whether they struck.
+     */
+    val hazardCycles: Int = 0,
+    val hazards: List<DungeonHazard> = emptyList(),
+    val hazardsStruck: Boolean = false,
+) {
+    fun shifted(shiftX: Float, shiftY: Float): RoomFight = copy(
+        incomingPoints = incomingPoints.mapIndexed { index, value -> if (index % 2 == 0) value - shiftX else value - shiftY },
+        hazards = hazards.map { it.shifted(shiftX, shiftY) },
+    )
+}
+
+/**
+ * One telegraphed hazard of a sealed room, run-local: a VENT disc of [radius] centred at ([ax], [ay]) (b = a), or a
+ * LANCE from ([ax], [ay]) to ([bx], [by]) of half width [radius]. It glows from [armedAt] and strikes once at [strikesAt].
+ */
+internal data class DungeonHazard(
+    val kind: DungeonHazardKind,
+    val ax: Float,
+    val ay: Float,
+    val bx: Float,
+    val by: Float,
+    val radius: Float,
+    val armedAt: Float,
+    val strikesAt: Float,
+) {
+    fun shifted(shiftX: Float, shiftY: Float): DungeonHazard =
+        copy(ax = ax - shiftX, ay = ay - shiftY, bx = bx - shiftX, by = by - shiftY)
 }
 
 /** A dungeon's Totem chest waiting in realspace. Value-only: every change replaces the list that holds it. */

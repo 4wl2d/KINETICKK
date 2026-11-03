@@ -214,7 +214,7 @@ internal fun MutableGameState.populateAdditionalRetainedState() {
     )
     dungeon = DungeonState(
         structureId = (1L shl 63) or (5L shl 34) or (6L shl 8), template = StructureTemplateId.VAULT, rotation = 1,
-        x = 2_000f, y = 1_500f, clearedRooms = 0b1, engagedRoom = 2, engaged = true, chestCharges = 3,
+        x = 2_000f, y = 1_500f, clearedRooms = 0b1, engagedRoom = 2, engaged = true, chestCharges = 3, fight = WitnessRoomFight,
     )
     spentStructureIds = listOf(11L, 12L)
     lastAnnouncedStructureId = 13L

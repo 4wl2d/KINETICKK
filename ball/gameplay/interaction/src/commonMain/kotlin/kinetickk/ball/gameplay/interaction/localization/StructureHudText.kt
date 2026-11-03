@@ -15,10 +15,10 @@ internal enum class StructureHudText(
 ) : TextResource {
     Structure("Structure", "Сооружение"),
     Rules(
-        "Entering a room seals its doors until its garrison falls. The reward waits in the last room; leaving the " +
-            "structure forfeits it. A cleared or abandoned structure collapses.",
-        "Войдя в зал, вы запечатываете его двери, пока не падёт гарнизон. Награда ждёт в последнем зале; покинув " +
-            "сооружение, вы её потеряете. Зачищенное или покинутое сооружение рушится.",
+        "Rooms seal until their waves fall; a guardian holds the last, where the reward waits. Glowing floor strikes. " +
+            "Leaving forfeits the reward; a cleared or abandoned structure collapses.",
+        "Зал запечатан, пока не падут его волны; последний, с наградой, стережёт страж. Светящийся пол бьёт. " +
+            "Уйдя, вы потеряете награду; зачищенное или покинутое сооружение рушится.",
     ),
     /** Joined to [Rules] when the final room pays a Totem chest (its charges); short, as a phone tooltip has no line to spare. */
     TotemChestRule("Totem chest charges: {0}, one Key each.", "Заряды сундука тотема: {0}, по ключу на каждый."),

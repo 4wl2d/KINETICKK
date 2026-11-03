@@ -20,15 +20,24 @@ enum class GarrisonSelector { HABITAT, FIXED }
 /** Where a garrison member appears inside its room. */
 enum class GarrisonPlacement { FLOOR, WALL, CENTER }
 
+/** A sealed room's telegraphed hazard: VENT, a floor vent erupting in a disc; LANCE, a line spanning the room. */
+enum class DungeonHazardKind { VENT, LANCE }
+
 /** The room index a door names when it opens to the outside. */
 const val STRUCTURE_OUTSIDE: Int = -1
 
-/** [count] enemies of one room's garrison; [type] is set exactly for [GarrisonSelector.FIXED]. */
+/**
+ * [count] enemies of one room's garrison arriving with [wave] (0 lands with the seal, each later wave once the one
+ * before thins out); [type] is set exactly for [GarrisonSelector.FIXED]. A [guardian] entry is one fixed ordinary
+ * enemy that leads its wave with the policy's guardian integrity (a mini-boss entry is its room's guardian anyway).
+ */
 data class GarrisonEntry(
     val selector: GarrisonSelector,
     val count: Int,
     val type: EnemyType? = null,
     val placement: GarrisonPlacement = GarrisonPlacement.FLOOR,
+    val wave: Int = 0,
+    val guardian: Boolean = false,
 ) {
     init {
         require(count in 1..ContentBounds.MAX_STRUCTURE_GARRISON) {
@@ -38,6 +47,8 @@ data class GarrisonEntry(
         require(type != EnemyType.ARCHITECT && type != EnemyType.ELITE && type != EnemyType.HERALD) {
             "A garrison never holds the Architect, an Elite or the Herald"
         }
+        require(wave in 0 until ContentBounds.MAX_DUNGEON_WAVES) { "A garrison wave must be in 0..${ContentBounds.MAX_DUNGEON_WAVES - 1}" }
+        require(!guardian || (type != null && count == 1)) { "A guardian entry is one fixed enemy" }
     }
 }
 
@@ -53,10 +64,17 @@ data class StructureRoom(
         require(minX.isFinite() && minY.isFinite() && maxX.isFinite() && maxY.isFinite()) { "Room bounds must be finite" }
         require(maxX - minX >= MIN_ROOM_SIDE && maxY - minY >= MIN_ROOM_SIDE) { "A room spans at least 400 u per side" }
         require(garrison.size <= MAX_GARRISON_ENTRIES) { "A room garrison has at most $MAX_GARRISON_ENTRIES entries" }
-        require(garrison.sumOf { it.count } <= ContentBounds.MAX_STRUCTURE_GARRISON) {
-            "A room garrisons at most ${ContentBounds.MAX_STRUCTURE_GARRISON} enemies"
+        for (wave in 0 until ContentBounds.MAX_DUNGEON_WAVES) {
+            require(garrison.sumOf { if (it.wave == wave) it.count else 0 } <= ContentBounds.MAX_STRUCTURE_GARRISON) {
+                "A room wave garrisons at most ${ContentBounds.MAX_STRUCTURE_GARRISON} enemies"
+            }
         }
+        require((0 until waves).all { wave -> garrison.any { it.wave == wave } }) { "A room's waves follow each other from wave 0" }
+        require(garrison.count { it.guardian } <= 1) { "A room has at most one guardian entry" }
     }
+
+    /** Waves the garrison arrives in (0 for a passage). */
+    val waves: Int get() = if (garrison.isEmpty()) 0 else garrison.maxOf { it.wave } + 1
 
     /** The whole opening of [door] lies on one of the room's edges. */
     internal fun holdsOpening(door: StructureDoor): Boolean = when (door.axis) {
@@ -185,6 +203,7 @@ data class StructureReward(
 enum class StructureNotice(val key: String) {
     DOORS_SEALED("DOORS SEALED"),
     GUARDIAN_AWAKENS("GUARDIAN AWAKENS"),
+    REINFORCEMENTS("REINFORCEMENTS"),
     ROOM_CLEARED("ROOM CLEARED"),
     INNER_DOORS_OPEN("INNER DOORS OPEN"),
     STRUCTURE_CLEARED("STRUCTURE CLEARED"),
@@ -224,6 +243,8 @@ data class StructureTemplate(
     val totemChestChance: Float = 0f,
     /** Fewest charges its chest rolls (1..[ContentBounds.MAX_TOTEM_CHEST_CHARGES]): a lower roll is raised to this. */
     val totemChestMinCharges: Int = 1,
+    /** The hazard its sealed rooms telegraph (the final room alternates it with the other kind); null: none. */
+    val hazard: DungeonHazardKind? = null,
 ) {
     /** Compiled walls: solid room walls, then [extraWalls], then one capsule per door in door order. */
     val walls: ImmutableList<StructureWallSpec>
@@ -289,7 +310,7 @@ data class StructureTemplate(
         require(totemChestMinCharges in 1..ContentBounds.MAX_TOTEM_CHEST_CHARGES) {
             "$name Totem chest minimum charges must be in 1..${ContentBounds.MAX_TOTEM_CHEST_CHARGES}"
         }
-        require(!secret || totemChestChance == 0f) { "$name is secret and pays no Totem chest" }
+        require(!secret || (totemChestChance == 0f && hazard == null)) { "$name is secret: it pays no Totem chest and telegraphs no hazard" }
         require(wallHalfThickness in MIN_WALL_HALF_THICKNESS..MAX_WALL_HALF_THICKNESS) {
             "$name wall half thickness must be in 12..60"
         }
@@ -373,14 +394,25 @@ data class StructurePolicy(
     val entryInset: Float = 80f,
     val engageCutoffSeconds: Float = 45f,
     val garrisonGateLeadSeconds: Float = 90f,
-    val garrisonExtraPerTiers: Int = 4,
-    val garrisonScale: Float = 0.8f,
-    /** Room enemies and guardians keep their attack patterns, but their integrity can be balanced independently. */
-    val garrisonHealthMultiplier: Float = 0.90f,
+    /** Ordinary entries' counts (× the Rebirth tier's enemy-cap multiplier, like the open world's cap). */
+    val garrisonScale: Float = 1f,
+    /** Room enemies take the open world's integrity and damage; these levers stay for calibration. */
+    val garrisonHealthMultiplier: Float = 1f,
     /** Damage dealt by room-owned enemies, including their adds; world and site enemies keep their own balance. */
-    val garrisonDamageMultiplier: Float = 0.72f,
+    val garrisonDamageMultiplier: Float = 1f,
+    /** The next wave comes once at most this share of the last wave's members lives, or [waveIntervalSeconds] after it. */
+    val waveTriggerShare: Float = 0.34f,
+    val waveIntervalSeconds: Float = 18f,
+    /** Seconds the next wave's breach points glow before it lands. */
+    val waveTelegraphSeconds: Float = 1.2f,
+    /** Integrity of an ordinary guardian entry (× its kind's spawn integrity); a mini-boss keeps its own. */
+    val guardianIntegrityScale: Float = 6f,
+    /** From this Rebirth tier a room member is a champion with `perTier × tier` chance. */
+    val garrisonChampionFromTier: Int = 2,
+    val garrisonChampionChancePerTier: Float = 0.04f,
     val directorRateWhileSealed: Float = 0.35f,
     val wallDamageScale: Float = 1f,
+    val hazards: DungeonHazardPolicy = DungeonHazardPolicy(),
     val totemChest: TotemChestPolicy = TotemChestPolicy(),
     val templates: ImmutableList<StructureTemplate> = defaultStructureTemplates(),
 ) {
@@ -417,8 +449,12 @@ data class StructurePolicy(
         require(entryInset in MIN_ENTRY_INSET..MAX_ENTRY_INSET) { "Structure entry inset must be in 48..200" }
         require(engageCutoffSeconds in 0f..MAX_ENGAGE_CUTOFF_SECONDS) { "Structure engage cutoff must be in 0..120 s" }
         require(garrisonGateLeadSeconds in 0f..MAX_GARRISON_GATE_LEAD_SECONDS) { "Garrison gate lead must be in 0..300 s" }
-        require(garrisonExtraPerTiers >= 1) { "Garrison extras need at least one tier per enemy" }
         require(garrisonScale in MIN_GARRISON_SCALE..MAX_GARRISON_SCALE) { "Garrison scale must be in 0.25..3" }
+        require(waveTriggerShare in 0f..1f) { "Wave trigger share must be in 0..1" }
+        require(waveIntervalSeconds in 4f..120f && waveTelegraphSeconds in 0.4f..3f) { "Wave times must be in 4..120 s and 0.4..3 s" }
+        require(guardianIntegrityScale in 1f..12f) { "Guardian integrity scale must be in 1..12" }
+        val topChampions = garrisonChampionChancePerTier * ContentBounds.MAX_REBIRTH_LEVEL
+        require(garrisonChampionFromTier >= 0 && topChampions in 0f..0.6f) { "Room champions reach at most 0.6 at the top tier" }
         require(garrisonHealthMultiplier in 0.5f..2f) { "Garrison health multiplier must be in 0.5..2" }
         require(garrisonDamageMultiplier in 0.5f..1.5f) { "Garrison damage multiplier must be in 0.5..1.5" }
         require(directorRateWhileSealed in 0f..1f) { "Sealed director rate must be in 0..1" }
@@ -426,6 +462,37 @@ data class StructurePolicy(
         require(templates.any { it.weight > 0f && it.minimumDistance <= minimumDistance + cellSize }) {
             "At least one weighted template must be placeable within a cell of the minimum distance"
         }
+    }
+}
+
+/**
+ * The sealed rooms' hazards: [firstDelaySeconds] after the seal and then every [periodSeconds] a cycle telegraphs its
+ * vents (one under the Core, the rest by the room's hash) or lances (one through the Core) for [telegraphSeconds];
+ * then each strikes once, a hostile blast of [coreDamage] (hostile run growth and Rebirth apply) on a Core it meets,
+ * and shows its strike for [strikeSeconds]. The final room adds one hazard per cycle, and so does every
+ * [extraPerTiers]th Rebirth tier (at most [ContentBounds.MAX_DUNGEON_HAZARDS]). [enabled] false: none anywhere.
+ */
+data class DungeonHazardPolicy(
+    val enabled: Boolean = true,
+    val firstDelaySeconds: Float = 1.5f,
+    val periodSeconds: Float = 3.5f,
+    val telegraphSeconds: Float = 1.2f,
+    val strikeSeconds: Float = 0.35f,
+    val coreDamage: Float = 12f,
+    val ventRadius: Float = 120f,
+    val ventsPerCycle: Int = 2,
+    val lanceHalfWidth: Float = 36f,
+    val lancesPerCycle: Int = 1,
+    val extraPerTiers: Int = 1,
+) {
+    init {
+        require(firstDelaySeconds in 0f..30f && telegraphSeconds in 0.4f..3f && strikeSeconds in 0.05f..1f && extraPerTiers >= 1) {
+            "Hazard delay, telegraph and strike times must be in 0..30, 0.4..3 and 0.05..1 s, extras need a tier"
+        }
+        require(periodSeconds in telegraphSeconds + strikeSeconds..30f) { "A hazard cycle holds its telegraph and strike" }
+        require(coreDamage in 0f..100f && ventRadius in 40f..240f && lanceHalfWidth in 12f..80f) { "Hazard damage and sizes out of range" }
+        val most = ContentBounds.MAX_DUNGEON_HAZARDS - 1
+        require(ventsPerCycle in 1..most && lancesPerCycle in 1..most) { "A cycle holds 1..$most hazards before the final room's extra one" }
     }
 }
 
@@ -478,10 +545,12 @@ fun validateStructurePolicy(policy: StructurePolicy, enemies: List<EnemyDefiniti
                 if (enemies.firstOrNull { it.type == entry.type }?.rank == EnemyRank.MINI_BOSS) entry.count else 0
             }
             require(miniBosses <= 1) { "${template.name} garrisons $miniBosses mini-bosses in one room; at most one mini-boss" }
+            require(miniBosses == 0 || room.garrison.none { it.guardian }) { "${template.name} has a mini-boss and a guardian in one room" }
             room.garrison.forEach { entry ->
                 val type = entry.type ?: return@forEach
                 val definition = enemies.firstOrNull { it.type == type }
                 requireNotNull(definition) { "${template.name} garrisons $type, which the roster does not define" }
+                require(!entry.guardian || definition.rank == EnemyRank.ORDINARY) { "${template.name} guardian entries are ordinary kinds" }
                 require(
                     type != EnemyType.HERALD &&
                         (definition.rank == EnemyRank.ORDINARY || definition.rank == EnemyRank.MINI_BOSS),
@@ -509,7 +578,7 @@ fun validateStructurePolicy(policy: StructurePolicy, enemies: List<EnemyDefiniti
 }
 
 private const val MIN_ROOM_SIDE: Float = 400f
-private const val MAX_GARRISON_ENTRIES: Int = 4
+private const val MAX_GARRISON_ENTRIES: Int = 8
 private const val MIN_DOOR_WIDTH: Float = 160f
 private const val MAX_DOOR_WIDTH: Float = 400f
 private const val MIN_WALL_HALF_THICKNESS: Float = 12f

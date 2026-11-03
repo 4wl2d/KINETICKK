@@ -25,15 +25,12 @@ import kinetickk.ball.gameplay.nucleus.render.StructureRenderProjection
 import kinetickk.ball.gameplay.nucleus.render.TrialProjection
 import kinetickk.ball.gameplay.nucleus.render.WallKind
 import kinetickk.foundation.design.Kk
-import kinetickk.foundation.design.KkFillKind
 import kinetickk.foundation.design.KkRolePalette
 import kinetickk.foundation.design.d
 import kinetickk.foundation.design.drawKkIcon
 import kinetickk.foundation.design.isOnScreen
-import kinetickk.foundation.design.kkFillBrush
 import kinetickk.foundation.design.kkMix
 import kinetickk.foundation.design.kkShear
-import kinetickk.foundation.design.kkStroke
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -44,15 +41,17 @@ import kinetickk.ball.gameplay.interaction.canvas.*
 import kinetickk.ball.gameplay.interaction.canvas.hud.*
 import kinetickk.ball.gameplay.interaction.canvas.look.*
 import kinetickk.ball.gameplay.interaction.canvas.world.*
-import kinetickk.foundation.design.KkStrokeWidth
 
 /*
- * Structures and dungeons in the world layer: room floor plates, wall slabs and doors, the sealed room's brackets, the
- * final room's plates and the scrim outside the dungeon the Core is inside; their entrances as edge markers and on the
- * minimap; on the HUD the dungeon trial panel's label, rules, rewards and sealed-room cell, and the vignette. Ink dominates, bone reads as solid, HATCH as locked, threat only for a live garrison and volt only for the
- * player's next way; no arrow, numeral or text marks a structure. Room and wall shapes come from the run's content
- * template, cached per template, rotation and kind in StructurePaths (never from projection floats, so a rebase keeps
- * them); positions, doors and progress come from the projection. Allocation-free per frame once the paths are cached.
+ * Structures and dungeons in the world layer: room floor plates (their detail, lights and runes in DungeonFloorRenderer),
+ * wall slabs with depth, doors and sconces (DungeonWallRenderer), the sealed room's brackets, the final room's plates and
+ * the scrim outside the dungeon the Core is inside; their entrances as edge markers and on the minimap; on the HUD the
+ * dungeon trial panel's label, rules, rewards and sealed-room cell, and the vignette with the sealed room's alarm. Ink
+ * dominates, bone reads as solid, HATCH as locked, threat only for danger (a live garrison's barrier, brackets and alarm,
+ * the fight's telegraphs, the threshold of a structure still to fight) and volt only for the player's next way; no arrow,
+ * numeral or text marks a structure. Room and wall shapes come from the run's content template, cached per template,
+ * rotation and kind in StructurePaths (never from projection floats, so a rebase keeps them); positions, doors and
+ * progress come from the projection. Allocation-free per frame once the paths are cached.
  */
 
 /** A structure is drawn while its footprint, its thickest slab and this margin meet the view (world units). */
@@ -112,6 +111,7 @@ internal fun DrawScope.drawStructureFloors(engine: GameplayRenderModel, shakeX: 
         // Rooms without walls (the Doodle's) have no plate: the planet is their floor.
         if (!template.roomWalls) continue
         translate(center.x, center.y) { drawPath(StructurePaths.floor(template, rotation), structureFloorColor(template, roles)) }
+        drawDungeonFloor(template, structure, engine.structures.dungeon, center, engine.renderElapsed, roles)
         val cleared = structure.clearedRooms
         for (room in rooms.indices) {
             val spec = rooms[room]
@@ -147,12 +147,7 @@ internal fun DrawScope.drawStructureWalls(engine: GameplayRenderModel, shakeX: F
         if (!structureInView(center, structure)) continue
         val rotation = structure.rotation
         val accent = structureAccent(template, roles)
-        val slabs = StructurePaths.walls(template, rotation)
-        translate(center.x, center.y) {
-            // The stroke's outer half is the rim; the fill covers its inner half and the seams where slabs meet.
-            drawPath(slabs, kkMix(Kk.Bone, accent, 0.3f), style = kkStroke(KkStrokeWidth.Icon))
-            drawPath(slabs, Kk.Ink3)
-        }
+        drawDungeonSlabs(StructurePaths.walls(template, rotation), center, accent)
         val current = dungeon != null && dungeon.structureId == structure.id
         val coreRoom = if (current) {
             template.roomAt(engine.renderCoreX - structure.x, engine.renderCoreY - structure.y, rotation)
@@ -165,17 +160,19 @@ internal fun DrawScope.drawStructureWalls(engine: GameplayRenderModel, shakeX: F
             val a = world(engine, wall.ax, wall.ay, shakeX, shakeY)
             val b = world(engine, wall.bx, wall.by, shakeX, shakeY)
             when (wall.kind) {
-                WallKind.SOLID -> drawWallSpine(a, b, wall.halfThickness)
+                WallKind.SOLID -> drawSlabCrest(a, b, wall.halfThickness, accent)
                 WallKind.DOOR_OPEN -> {
                     val next = current && leadsOnward(template, wall.door, structure.clearedRooms, coreRoom)
-                    drawOpenDoor(a, b, if (next) roles.you.copy(alpha = 0.8f) else kkMix(Kk.Bone, accent, 0.3f).copy(alpha = 0.35f))
+                    val color = if (next) roles.you.copy(alpha = 0.8f) else kkMix(Kk.Bone, accent, 0.3f).copy(alpha = 0.35f)
+                    drawDungeonOpenDoor(a, b, color, next, engine.renderElapsed)
                 }
                 WallKind.DOOR_SEALED -> {
                     val live = engaged >= 0 && doorTouches(template, wall.door, engaged)
-                    drawSealedDoor(a, b, wall.halfThickness, if (live) roles.threat else Kk.Bone.copy(alpha = 0.6f))
+                    drawDungeonSealedDoor(a, b, wall.halfThickness, live, dungeon?.sealedAt ?: -1f, engine.renderElapsed, roles)
                 }
             }
         }
+        if (template.dungeon) drawDungeonSconces(template, structure, dungeon, center, engine.renderElapsed, roles)
         if (engaged >= 0 && engaged < template.rooms.size) drawRoomBrackets(center, template.rooms[engaged], rotation, engine.renderElapsed, roles)
         if (!template.secret && structure.clearedRooms and (1 shl template.finalRoom) == 0) {
             // The Totem chest's own plates promise the reward: a key block and a pip per charge when one waits.
@@ -349,12 +346,24 @@ internal fun DrawScope.drawSealedRoomSegment(engine: GameplayRenderModel, trial:
 /**
  * The HUD vignette while the Core is inside a dungeon: ink closing in from the screen's edges (clear out to
  * [VIGNETTE_CLEAR] of the corner radius, [VIGNETTE_ALPHA] at the corners), as deep as the world's scrim, so both fade in
- * on the way in and out on the way out. None for a secret template or outside the dungeon's rooms.
+ * on the way in and out on the way out, and while a room is sealed its threat alarm over it. None for a secret template
+ * or outside the dungeon's rooms.
  */
-internal fun DrawScope.drawDungeonVignette(engine: GameplayRenderModel) {
+internal fun DrawScope.drawDungeonVignette(engine: GameplayRenderModel, roles: KkRolePalette, time: Float) {
     val amount = structureInteriorAmount(engine)
-    if (amount > 0.01f) drawScreenVignette(HudBrush.DUNGEON, VIGNETTE_CLEAR, Kk.Ink.copy(alpha = VIGNETTE_ALPHA), amount)
+    if (amount <= 0.01f) return
+    drawScreenVignette(HudBrush.DUNGEON, VIGNETTE_CLEAR, Kk.Ink.copy(alpha = VIGNETTE_ALPHA), amount)
+    // A sealed room's alarm closes in from the edges on its beat, harder while the room's guardian lives.
+    val dungeon = engine.structures.dungeon ?: return
+    if (dungeon.engagedRoom < 0) return
+    val edge = roles.threat.copy(alpha = if (dungeon.guardianId >= 0) ALARM_GUARDIAN_ALPHA else ALARM_ALPHA)
+    drawScreenVignette(HudBrush.DUNGEON_ALARM, ALARM_CLEAR, edge, amount * (0.45f + 0.55f * (0.5f + 0.5f * sin(time * 6f))))
 }
+
+/** The alarm vignette is clear out to this share of the corner radius, this threat alpha at the corners (guardian: more). */
+private const val ALARM_CLEAR = 0.62f
+private const val ALARM_ALPHA = 0.3f
+private const val ALARM_GUARDIAN_ALPHA = 0.45f
 
 // ---------------------------------------------------------------------------------------------
 // Pieces.
@@ -372,33 +381,6 @@ private fun dungeonStructure(projection: StructureRenderProjection): StructurePr
     val structures = projection.structures
     for (index in structures.indices) if (structures[index].id == dungeon.structureId) return structures[index]
     return null
-}
-
-/** The spine of a solid slab along its centre line (a round boss for a pillar). */
-private fun DrawScope.drawWallSpine(a: Offset, b: Offset, halfThickness: Float) {
-    val color = Kk.Ink4.copy(alpha = 0.6f)
-    if (a.x == b.x && a.y == b.y) {
-        drawCircle(color, halfThickness * 0.45f, a)
-    } else {
-        drawLine(color, a, b, (halfThickness * 0.5f).roundToInt().toFloat())
-    }
-}
-
-/** An open doorway: two dashes across its gap, at 20–42 % and 58–80 % of it. */
-private fun DrawScope.drawOpenDoor(a: Offset, b: Offset, color: androidx.compose.ui.graphics.Color) {
-    val dx = b.x - a.x
-    val dy = b.y - a.y
-    drawLine(color, Offset(a.x + dx * 0.2f, a.y + dy * 0.2f), Offset(a.x + dx * 0.42f, a.y + dy * 0.42f), 3f)
-    drawLine(color, Offset(a.x + dx * 0.58f, a.y + dy * 0.58f), Offset(a.x + dx * 0.8f, a.y + dy * 0.8f), 3f)
-}
-
-/** A sealed doorway: the door capsule's slab rect in ink, hatched in bone (locked), edged in [edge]. */
-private fun DrawScope.drawSealedDoor(a: Offset, b: Offset, halfThickness: Float, edge: androidx.compose.ui.graphics.Color) {
-    val topLeft = Offset(min(a.x, b.x) - halfThickness, min(a.y, b.y) - halfThickness)
-    val size = Size(abs(b.x - a.x) + halfThickness * 2f, abs(b.y - a.y) + halfThickness * 2f)
-    drawRect(Kk.Ink3, topLeft, size)
-    drawRect(kkFillBrush(KkFillKind.HATCH, Kk.Bone.copy(alpha = 0.55f)), topLeft, size)
-    drawRect(edge, topLeft, size, style = kkStroke(KkStrokeWidth.Icon))
 }
 
 /** Four threat brackets in the corners of the sealed room, pulsing. */
@@ -444,35 +426,35 @@ private fun pending(room: Int, cleared: Int, counted: Int): Boolean =
     room != STRUCTURE_OUTSIDE && counted and (1 shl room) != 0 && cleared and (1 shl room) == 0
 
 /** The centre of [room] turned by [rotation], as a point from the structure centre [center]. */
-private fun roomCenter(center: Offset, room: StructureRoom, rotation: Int): Offset {
+internal fun roomCenter(center: Offset, room: StructureRoom, rotation: Int): Offset {
     val x = (room.minX + room.maxX) * 0.5f
     val y = (room.minY + room.maxY) * 0.5f
     return Offset(center.x + rotateQuarterX(x, y, rotation), center.y + rotateQuarterY(x, y, rotation))
 }
 
 // The bounds of a room turned by a quarter rotation (quarter turns keep rooms axis-aligned).
-private fun roomLeft(room: StructureRoom, rotation: Int): Float = when (rotation and 3) {
+internal fun roomLeft(room: StructureRoom, rotation: Int): Float = when (rotation and 3) {
     0 -> room.minX
     1 -> -room.maxY
     2 -> -room.maxX
     else -> room.minY
 }
 
-private fun roomTop(room: StructureRoom, rotation: Int): Float = when (rotation and 3) {
+internal fun roomTop(room: StructureRoom, rotation: Int): Float = when (rotation and 3) {
     0 -> room.minY
     1 -> room.minX
     2 -> -room.maxY
     else -> -room.maxX
 }
 
-private fun roomRight(room: StructureRoom, rotation: Int): Float = when (rotation and 3) {
+internal fun roomRight(room: StructureRoom, rotation: Int): Float = when (rotation and 3) {
     0 -> room.maxX
     1 -> -room.minY
     2 -> -room.minX
     else -> room.maxY
 }
 
-private fun roomBottom(room: StructureRoom, rotation: Int): Float = when (rotation and 3) {
+internal fun roomBottom(room: StructureRoom, rotation: Int): Float = when (rotation and 3) {
     0 -> room.maxY
     1 -> room.maxX
     2 -> -room.minY

@@ -259,15 +259,27 @@ class StructureContentTest {
         // Doors.
         assertEquals(ContentBounds.MAX_STRUCTURE_DOORS, grid(columns = 4, rows = 3, count = 12, extraDoors = 4).doors.size)
         assertRejected("17 doors") { grid(columns = 4, rows = 3, count = 12, extraDoors = 5) }
-        // Garrison per room: twelve enemies over at most four entries.
+        // Garrison per room: twelve enemies a wave over at most eight entries, three waves following each other.
         val habitat = { count: Int -> GarrisonEntry(GarrisonSelector.HABITAT, count) }
+        val wave = { count: Int, index: Int -> GarrisonEntry(GarrisonSelector.HABITAT, count, wave = index) }
         room(habitat(12))
         room(habitat(6), habitat(6))
-        room(habitat(3), habitat(3), habitat(3), habitat(3))
+        room(habitat(12), wave(12, 1), wave(12, 2))
+        room(*Array(8) { habitat(1) })
+        assertEquals(3, StructureRoom(0f, 0f, 400f, 400f, immutableListOf(habitat(1), wave(1, 1), wave(1, 2))).waves)
         assertFailsWith<IllegalArgumentException> { habitat(13) }
         assertFailsWith<IllegalArgumentException> { habitat(0) }
+        assertFailsWith<IllegalArgumentException> { wave(1, ContentBounds.MAX_DUNGEON_WAVES) }
         assertFailsWith<IllegalArgumentException> { room(habitat(6), habitat(7)) }
-        assertFailsWith<IllegalArgumentException> { room(habitat(1), habitat(1), habitat(1), habitat(1), habitat(1)) }
+        assertFailsWith<IllegalArgumentException> { room(wave(6, 1), habitat(1), wave(7, 1)) }
+        assertFailsWith<IllegalArgumentException> { room(*Array(9) { habitat(1) }) }
+        assertFailsWith<IllegalArgumentException> { room(habitat(1), wave(1, 2)) }
+        // A guardian is one fixed enemy, one per room.
+        val guardian = GarrisonEntry(GarrisonSelector.FIXED, 1, EnemyType.LANCER, wave = 1, guardian = true)
+        room(habitat(3), guardian)
+        assertFailsWith<IllegalArgumentException> { room(habitat(3), guardian, guardian) }
+        assertFailsWith<IllegalArgumentException> { GarrisonEntry(GarrisonSelector.FIXED, 2, EnemyType.LANCER, guardian = true) }
+        assertFailsWith<IllegalArgumentException> { GarrisonEntry(GarrisonSelector.HABITAT, 1, guardian = true) }
         // Footprint per axis, centred on the origin.
         assertEquals(1_200f, pair(halfWidth = 1_200f).halfWidth)
         assertRejected("exceeds") { pair(halfWidth = 1_200.5f) }
@@ -318,6 +330,35 @@ class StructureContentTest {
         assertRejected("1..12 allowed") { base.copy(rooms = immutableListOf(), doors = immutableListOf()) }
         assertRejected("weight") { base.copy(weight = -1f) }
         assertRejected("minimum distance") { base.copy(minimumDistance = Float.NaN) }
+    }
+
+    @Test
+    fun everyDungeonFightsInWavesUnderAGuardianAndTelegraphsAHazard() {
+        val combat = templates.filterNot { it.secret }
+        combat.forEach { template ->
+            template.rooms.forEachIndexed { index, room ->
+                if (room.garrison.isEmpty()) return@forEachIndexed
+                val waves = if (index == template.finalRoom) 3 else 2
+                assertEquals(waves, room.waves, "${template.name} room $index waves")
+            }
+            val final = template.rooms[template.finalRoom].garrison
+            val leads = final.filter { it.guardian || it.type == EnemyType.BROOD_QUEEN || it.type == EnemyType.WARDEN_PRIME }
+            assertEquals(listOf(2), leads.map { it.wave }, "${template.name} leads its last wave with one guardian")
+            assertTrue(final.count { it.wave == 2 } >= 2, "${template.name}'s guardian comes with escorts")
+            assertTrue(template.hazard != null, "${template.name} telegraphs a hazard")
+        }
+        assertEquals(DungeonHazardKind.entries.toSet(), combat.mapNotNull { it.hazard }.toSet())
+        assertRejected("no hazard") { templates[StructureTemplateId.ARCHITECTS_DOODLE.ordinal].copy(hazard = DungeonHazardKind.VENT) }
+        // The hazard policy at its bounds and just past them.
+        DungeonHazardPolicy(firstDelaySeconds = 30f, periodSeconds = 30f, telegraphSeconds = 3f, strikeSeconds = 1f)
+        DungeonHazardPolicy(periodSeconds = 1.5f, telegraphSeconds = 1.25f, strikeSeconds = 0.25f)
+        assertRejected("holds its telegraph") { DungeonHazardPolicy(periodSeconds = 1.5f.nextBelow(), telegraphSeconds = 1.25f, strikeSeconds = 0.25f) }
+        assertRejected("sizes") { DungeonHazardPolicy(ventRadius = 240f.nextAbove()) }
+        assertRejected("sizes") { DungeonHazardPolicy(lanceHalfWidth = 12f.nextBelow()) }
+        DungeonHazardPolicy(ventsPerCycle = ContentBounds.MAX_DUNGEON_HAZARDS - 1, lancesPerCycle = ContentBounds.MAX_DUNGEON_HAZARDS - 1)
+        assertRejected("before the final room") { DungeonHazardPolicy(ventsPerCycle = ContentBounds.MAX_DUNGEON_HAZARDS) }
+        assertRejected("before the final room") { DungeonHazardPolicy(lancesPerCycle = 0) }
+        assertRejected("extras need a tier") { DungeonHazardPolicy(extraPerTiers = 0) }
     }
 
     @Test
@@ -389,8 +430,17 @@ class StructureContentTest {
         assertRejected("engage cutoff") { StructurePolicy(engageCutoffSeconds = 120f.nextAbove()) }
         assertRejected("gate lead") { StructurePolicy(garrisonGateLeadSeconds = 300f.nextAbove()) }
         assertRejected("obstacle clearance") { StructurePolicy(obstacleClearance = 600f.nextAbove()) }
-        StructurePolicy(garrisonExtraPerTiers = 1)
-        assertRejected("at least one tier") { StructurePolicy(garrisonExtraPerTiers = 0) }
+        StructurePolicy(waveTriggerShare = 0f, waveIntervalSeconds = 4f, waveTelegraphSeconds = 0.4f)
+        StructurePolicy(waveTriggerShare = 1f, waveIntervalSeconds = 120f, waveTelegraphSeconds = 3f)
+        assertRejected("trigger share") { StructurePolicy(waveTriggerShare = 1f.nextAbove()) }
+        assertRejected("Wave times") { StructurePolicy(waveIntervalSeconds = 4f.nextBelow()) }
+        assertRejected("Wave times") { StructurePolicy(waveTelegraphSeconds = 3f.nextAbove()) }
+        StructurePolicy(guardianIntegrityScale = 1f)
+        StructurePolicy(guardianIntegrityScale = 12f)
+        assertRejected("Guardian integrity") { StructurePolicy(guardianIntegrityScale = 12f.nextAbove()) }
+        StructurePolicy(garrisonChampionFromTier = 0, garrisonChampionChancePerTier = 0.06f)
+        assertRejected("Room champions") { StructurePolicy(garrisonChampionChancePerTier = 0.061f) }
+        assertRejected("Room champions") { StructurePolicy(garrisonChampionFromTier = -1) }
         StructurePolicy(garrisonScale = 0.25f)
         StructurePolicy(garrisonScale = 3f)
         assertRejected("Garrison scale") { StructurePolicy(garrisonScale = 0.25f.nextBelow()) }

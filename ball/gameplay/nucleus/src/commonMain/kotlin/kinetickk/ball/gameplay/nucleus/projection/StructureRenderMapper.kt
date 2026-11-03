@@ -5,16 +5,22 @@ package kinetickk.ball.gameplay.nucleus.projection
 
 import kinetickk.ball.gameplay.nucleus.model.DungeonState
 import kinetickk.ball.gameplay.nucleus.model.PlacedStructure
+import kinetickk.ball.gameplay.nucleus.model.RoomFight
+import kinetickk.ball.gameplay.nucleus.model.profile
 import kinetickk.ball.gameplay.nucleus.model.StructureSignal
 import kinetickk.ball.gameplay.nucleus.model.Wall
+import kinetickk.ball.gameplay.nucleus.render.DungeonBreachProjection
+import kinetickk.ball.gameplay.nucleus.render.DungeonHazardProjection
 import kinetickk.ball.gameplay.nucleus.render.DungeonProjection
 import kinetickk.ball.gameplay.nucleus.render.StructureProjection
 import kinetickk.ball.gameplay.nucleus.render.StructureRenderProjection
 import kinetickk.ball.gameplay.nucleus.render.StructureSignalProjection
 import kinetickk.ball.gameplay.nucleus.render.WallProjection
 import kinetickk.ball.gameplay.nucleus.simulation.*
+import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
 import kinetickk.ball.gameplay.nucleus.simulation.structures.*
 import kinetickk.foundation.collections.ImmutableList
+import kinetickk.foundation.collections.immutableListOf
 import kinetickk.foundation.collections.mapToImmutableList
 
 /**
@@ -50,19 +56,84 @@ internal fun MutableGameState.structureRenderProjection(
 }
 
 /**
- * The dungeon's structure, its sealed room and whether a panel shows (not for secret templates); the panel's room
- * counts come from the trial projection. Equal facts keep [previous].
+ * The dungeon's structure, its sealed room and whether a panel shows (not for secret templates), and the sealed room's
+ * fight: its seal, waves, live members, living guardian, the incoming wave's breach points and the hazards; the
+ * panel's room counts come from the trial projection. Equal facts keep [previous] (its lists compared by content).
  */
 private fun MutableGameState.dungeonProjection(current: DungeonState, previous: DungeonProjection?): DungeonProjection {
     val panel = !content.structures.template(current.template).secret
+    val fight = current.fight
+    val tag = if (current.engagedRoom >= 0) roomEncounterTag(current.structureId, current.engagedRoom) else 0L
+    val live = liveEncounterMembers(tag)
+    val guardian = fight?.guardianId?.takeIf { id -> enemyById(id)?.alive == true } ?: -1
     if (previous != null && previous.structureId == current.structureId && previous.engagedRoom == current.engagedRoom &&
-        previous.panel == panel && previous.chestCharges == current.chestCharges
+        previous.panel == panel && previous.chestCharges == current.chestCharges && previous.liveGarrison == live &&
+        previous.guardianId == guardian && previous.sealedAt.sameBitsAs(fight?.sealedAt ?: -1f) &&
+        previous.waves == (fight?.waves ?: 0) && previous.wavesLanded == (fight?.landed ?: 0) &&
+        previous.incomingAt.sameBitsAs(fight?.incomingAt ?: -1f) && breachesMatch(previous.breaches, fight) &&
+        hazardsMatch(previous.hazards, fight)
     ) {
         return previous
     }
     return DungeonProjection(
-        structureId = current.structureId, engagedRoom = current.engagedRoom, panel = panel, chestCharges = current.chestCharges,
+        structureId = current.structureId,
+        engagedRoom = current.engagedRoom,
+        panel = panel,
+        chestCharges = current.chestCharges,
+        sealedAt = fight?.sealedAt ?: -1f,
+        waves = fight?.waves ?: 0,
+        wavesLanded = fight?.landed ?: 0,
+        liveGarrison = live,
+        guardianId = guardian,
+        incomingAt = fight?.incomingAt ?: -1f,
+        breaches = if (previous != null && breachesMatch(previous.breaches, fight)) previous.breaches else breaches(fight),
+        hazards = if (previous != null && hazardsMatch(previous.hazards, fight)) previous.hazards else hazards(fight),
     )
+}
+
+private fun breaches(fight: RoomFight?): ImmutableList<DungeonBreachProjection> {
+    if (fight == null || fight.incoming.isEmpty()) return immutableListOf()
+    val points = fight.incomingPoints
+    return fight.incoming.indices.mapToImmutableList { member ->
+        DungeonBreachProjection(points[member * 2], points[member * 2 + 1], fight.incoming[member].profile.radius, member == fight.incomingGuardian)
+    }
+}
+
+private fun breachesMatch(projected: ImmutableList<DungeonBreachProjection>, fight: RoomFight?): Boolean {
+    val incoming = fight?.incoming ?: return projected.isEmpty()
+    if (projected.size != incoming.size) return false
+    val points = fight.incomingPoints
+    for (member in projected.indices) {
+        val breach = projected[member]
+        if (!breach.x.sameBitsAs(points[member * 2]) || !breach.y.sameBitsAs(points[member * 2 + 1]) ||
+            breach.guardian != (member == fight.incomingGuardian)
+        ) {
+            return false
+        }
+    }
+    return true
+}
+
+private fun hazards(fight: RoomFight?): ImmutableList<DungeonHazardProjection> {
+    if (fight == null || fight.hazards.isEmpty()) return immutableListOf()
+    return fight.hazards.mapToImmutableList { hazard ->
+        DungeonHazardProjection(hazard.kind, hazard.ax, hazard.ay, hazard.bx, hazard.by, hazard.radius, hazard.armedAt, hazard.strikesAt)
+    }
+}
+
+private fun hazardsMatch(projected: ImmutableList<DungeonHazardProjection>, fight: RoomFight?): Boolean {
+    val hazards = fight?.hazards ?: return projected.isEmpty()
+    if (projected.size != hazards.size) return false
+    for (index in projected.indices) {
+        val one = projected[index]
+        val hazard = hazards[index]
+        if (one.kind != hazard.kind || !one.ax.sameBitsAs(hazard.ax) || !one.ay.sameBitsAs(hazard.ay) ||
+            !one.bx.sameBitsAs(hazard.bx) || !one.by.sameBitsAs(hazard.by) || !one.strikesAt.sameBitsAs(hazard.strikesAt)
+        ) {
+            return false
+        }
+    }
+    return true
 }
 
 private fun MutableGameState.structureProjections(

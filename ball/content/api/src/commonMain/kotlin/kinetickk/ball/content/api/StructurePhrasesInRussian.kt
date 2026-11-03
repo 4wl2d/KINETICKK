@@ -16,6 +16,7 @@ internal val StructurePhrasesInRussian: List<Pair<String, String>> = listOf(
     "Reliquary" to "Реликварий",
     "DOORS SEALED" to "ДВЕРИ ЗАПЕЧАТАНЫ",
     "GUARDIAN AWAKENS" to "СТРАЖ ПРОБУЖДАЕТСЯ",
+    "REINFORCEMENTS" to "ПОДКРЕПЛЕНИЕ",
     "ROOM CLEARED" to "ЗАЛ ЗАЧИЩЕН",
     "INNER DOORS OPEN" to "ВНУТРЕННИЕ ДВЕРИ ОТКРЫТЫ",
     "STRUCTURE CLEARED" to "СООРУЖЕНИЕ ЗАЧИЩЕНО",

@@ -309,7 +309,7 @@ internal fun DrawScope.drawHudScreenStates(
     drawWorldEventEdge(engine, roles)
     drawScorchEdge(engine, roles, renderTime)
     drawCoreStasisFrost(engine, roles, renderTime)
-    drawDungeonVignette(engine)
+    drawDungeonVignette(engine, roles, renderTime)
 }
 
 // `radial-gradient(ellipse at center, transparent 42%, threat 42% alpha at 100%)`.

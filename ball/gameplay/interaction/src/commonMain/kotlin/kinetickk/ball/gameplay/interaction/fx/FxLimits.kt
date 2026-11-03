@@ -71,4 +71,7 @@ internal object InteractionFxLimits {
 
     /** How long a spent structure takes to shatter and fade. */
     const val DISINTEGRATION_SECONDS = 1.6f
+
+    /** Dungeon moments playing at once: a clear can follow a wave and a guardian within a moment. */
+    const val MAX_DUNGEON_MOMENTS = 6
 }

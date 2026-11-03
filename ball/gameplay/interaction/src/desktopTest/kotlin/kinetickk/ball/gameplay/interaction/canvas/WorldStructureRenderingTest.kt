@@ -45,9 +45,11 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Structures in the world layer, drawn by the real world renderer: slab outlines that hug the collision capsules, floor
- * plates, hatched sealed doors edged in threat, the sealed room's threat brackets and the volt dashes of the next way at
- * densities 1 and 2, a scrim that darkens outside the dungeon's rooms and never inside them, and paths built once.
+ * Structures in the world layer, drawn by the real world renderer: slab outlines that hug the collision capsules, dark
+ * floors lit by their rooms' moods (threat while sealed, bone once cleared) and held by the walls, slabs with depth (lit
+ * top, crest, face, rim, shadow), sealed doors as hatched threat barriers, the sealed room's threat brackets and the
+ * volt dashes of the next way at densities 1 and 2, a scrim that darkens outside the dungeon's rooms and never inside
+ * them, and paths built once.
  */
 class WorldStructureRenderingTest {
     private val roles = KkRolePalette.Default
@@ -109,18 +111,30 @@ class WorldStructureRenderingTest {
         for (density in listOf(1f, 2f)) {
             val sealed = render(sealedScene(), density)
             val where = "@$density"
-            // Floors: the sealed hall's plate, the cleared base lighter, nothing outside the footprint.
-            assertTrue(near(sealed.at(300f, 450f, density), FloorColor, 0.004f), "hall floor $where: ${sealed.at(300f, 450f, density)}")
-            assertTrue(sealed.at(300f, 800f, density).red > FloorColor.red + 0.01f, "the cleared base is lighter $where")
+            // Floors stay dark under every light: the sealed hall's lit in threat, the cleared base in bone; nothing
+            // outside the footprint (the walls hold the rooms' light and the slabs' shadows stay within reach).
+            val dormant = render(dormantScene(), density)
+            val hall = sealed.at(300f, 450f, density)
+            val clearedBase = sealed.at(300f, 800f, density)
+            assertTrue(luminance(hall) < 0.2f && luminance(hall) > luminance(Kk.Ink), "hall floor $where: $hall")
+            val alarm = sealed.at(-465f, 300f, density)
+            assertTrue(alarm.red > dormant.at(-465f, 300f, density).red + 0.02f, "the sealed hall's walls glow in threat $where: $alarm")
+            assertTrue(luminance(clearedBase) < 0.2f && luminance(clearedBase) > luminance(dormant.at(300f, 800f, density)) - 0.002f,
+                "the cleared base is lit in bone $where: $clearedBase")
             assertTrue(near(sealed.at(560f, 450f, density), Kk.Ink, 0.004f), "outside the footprint $where")
-            // The fin's slab: a darker spine, the ink body and a bone rim.
-            assertTrue(near(sealed.at(0f, 300f, density), kkMix(Kk.Ink3, Kk.Ink4, 0.6f), 0.012f), "fin spine $where")
-            assertTrue(near(sealed.at(0f, 315f, density), Kk.Ink3, 0.006f), "fin body $where")
-            assertTrue((320 until 330).maxOf { luminance(sealed.at(0f, it.toFloat(), density)) } > 0.6f, "fin rim $where")
-            // The sealed hall's lower door: a hatched ink slab edged in threat.
+            // The fin's slab with depth: a lit top under a lighter crest seam, a darker face along its lower edge, a
+            // bone rim, and its shadow on the floor below it.
+            val top = sealed.at(0f, 281f, density)
+            val crest = sealed.at(0f, 293f, density)
+            val face = sealed.at(0f, 318f, density)
+            assertTrue(luminance(crest) > luminance(top) + 0.01f, "fin crest $where: $crest over $top")
+            assertTrue(luminance(face) < luminance(top), "fin face $where: $face under $top")
+            assertTrue((322 until 330).maxOf { luminance(sealed.at(0f, it.toFloat(), density)) } > 0.6f, "fin rim $where")
+            assertTrue(luminance(sealed.at(0f, 334f, density)) < luminance(sealed.at(0f, 420f, density)), "fin shadow $where")
+            // The sealed hall's lower door: a hatched barrier glowing in threat, edged in threat.
             val hatch = (-400 until -100 step 2).flatMap { x -> (582 until 619 step 2).map { y -> sealed.at(x.toFloat(), y.toFloat(), density) } }
             assertTrue(hatch.count { luminance(it) > luminance(Kk.Ink3) + 0.15f } > 20, "hatch lines $where")
-            assertTrue(hatch.count { near(it, Kk.Ink3, 0.02f) } > 20, "the slab between the hatch lines $where")
+            assertTrue(hatch.count { it.red > it.green + 0.08f } > 20, "the barrier between the hatch lines $where")
             assertEquals(roles.threat, nearest(sealed.at(-250f, 576f, density)), "threat door edge $where")
             // The sealed hall's brackets, at their full pulse.
             assertEquals(roles.threat, nearest(sealed.at(-420f, 36f, density)), "top-left bracket $where")
@@ -192,10 +206,12 @@ class WorldStructureRenderingTest {
     fun aWarmFrameBuildsNoPath() {
         val scene = sealedScene()
         render(scene, 1f)
-        val built = StructurePaths.builds
+        render(onwardScene(), 1f)
+        val built = listOf(StructurePaths.builds, DungeonFloorPaths.builds, DungeonLightBrushes.builds)
         render(scene, 1f)
         render(onwardScene(), 1f)
-        assertEquals(built, StructurePaths.builds, "the floor, slab and scrim paths come from the cache")
+        assertEquals(built, listOf(StructurePaths.builds, DungeonFloorPaths.builds, DungeonLightBrushes.builds),
+            "the floor, slab, scrim and floor-detail paths and the light brushes come from the caches")
     }
 
     // -----------------------------------------------------------------------------------------
@@ -208,6 +224,12 @@ class WorldStructureRenderingTest {
     /** The lower hall sealed around the Core (the base cleared): threat doors and brackets, the scrim at full depth. */
     private fun sealedScene(): GameplayRenderModel {
         val spire = spire(clearedRooms = 0b0001, engagedRoom = 1)
+        return base.with("structures" to structureProjection(spire, dungeon = spire))
+    }
+
+    /** The base cleared, the Core in the lower hall before it seals: every room but the base dormant. */
+    private fun dormantScene(): GameplayRenderModel {
+        val spire = spire(clearedRooms = 0b0001, engagedRoom = -1)
         return base.with("structures" to structureProjection(spire, dungeon = spire))
     }
 

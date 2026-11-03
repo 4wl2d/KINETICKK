@@ -6,6 +6,7 @@ package kinetickk.ball.content.api
 import kinetickk.ball.content.api.EnemyType.BROOD_QUEEN
 import kinetickk.ball.content.api.EnemyType.AEGIS
 import kinetickk.ball.content.api.EnemyType.BOMBER
+import kinetickk.ball.content.api.EnemyType.CHARGER
 import kinetickk.ball.content.api.EnemyType.CHOIR
 import kinetickk.ball.content.api.EnemyType.CRAWLER
 import kinetickk.ball.content.api.EnemyType.LANCER
@@ -16,6 +17,8 @@ import kinetickk.ball.content.api.EnemyType.SNIPER
 import kinetickk.ball.content.api.EnemyType.WARDEN
 import kinetickk.ball.content.api.EnemyType.WARDEN_PRIME
 import kinetickk.ball.content.api.EnemyType.WEAVER
+import kinetickk.ball.content.api.DungeonHazardKind.LANCE
+import kinetickk.ball.content.api.DungeonHazardKind.VENT
 import kinetickk.ball.content.api.GarrisonPlacement.CENTER
 import kinetickk.ball.content.api.GarrisonPlacement.FLOOR
 import kinetickk.ball.content.api.GarrisonPlacement.WALL
@@ -32,6 +35,8 @@ import kinetickk.foundation.collections.toImmutableList
 /**
  * The shipped structure templates in [StructureTemplateId] order (weights total 103 from 12,000 u). Template space:
  * origin at the footprint centre, +x east, +y south; room indices are list positions; a door joins rooms `a` and `b`.
+ * Every garrisoned room fights in two waves (`w1` entries arrive as the first thins out) and every final room in three,
+ * the last led by its guardian (a mini-boss, or a themed ordinary kind at the guardian integrity) with escorts.
  */
 fun defaultStructureTemplates(): ImmutableList<StructureTemplate> = listOf(
     derelictStation(), vault(), spire(), labyrinth(), foundry(), reliquary(), architectsDoodle(),
@@ -47,11 +52,15 @@ private fun derelictStation() = StructureTemplate(
     trialDescription = "Ion trial: shooters and lancers turn the station's long halls into firing lanes. Cross their aim to close the distance.",
     garrisonTypes = immutableListOf(SHOOTER, LANCER),
     totemChestChance = 0.4f,
+    hazard = LANCE,
     rooms = immutableListOf(
-        room(-1100, -300, -500, 300, habitat(3)), // 0 Airlock (entrance)
-        room(-500, -700, 400, 700, habitat(4), fixed(SENTRY, 2, WALL)), // 1 Hall
-        room(400, -700, 1100, 100, habitat(4), fixed(SENTRY, 2, WALL)), // 2 Reactor (final)
-        room(400, 100, 1100, 700, fixed(CRAWLER, 4), habitat(2)), // 3 Bay
+        room(-1100, -300, -500, 300, habitat(3), habitat(2, W1)), // 0 Airlock (entrance)
+        room(-500, -700, 400, 700, habitat(4), fixed(SENTRY, 2, WALL), habitat(3, W1)), // 1 Hall
+        room(
+            400, -700, 1100, 100, habitat(4), fixed(SENTRY, 2, WALL), habitat(3, W1),
+            guardian(LANCER), habitat(3, W2),
+        ), // 2 Reactor (final)
+        room(400, 100, 1100, 700, fixed(CRAWLER, 4), habitat(2), fixed(CRAWLER, 3, wave = W1), habitat(1, W1)), // 3 Bay
     ),
     doors = immutableListOf(
         door(VERTICAL, -1100, 0, 0, OUTSIDE),
@@ -78,11 +87,15 @@ private fun vault() = StructureTemplate(
     garrisonTypes = immutableListOf(WEAVER, SNIPER),
     totemChestChance = 0.7f,
     totemChestMinCharges = 2,
+    hazard = VENT,
     rooms = immutableListOf(
-        room(-400, 300, 400, 1100, habitat(3)), // 0 Antechamber (entrance)
-        room(-1100, -1100, -400, 1100, habitat(4), fixed(SENTRY, 2, WALL)), // 1 West gallery
-        room(400, -1100, 1100, 1100, habitat(3), fixed(CRAWLER, 4)), // 2 East gallery
-        room(-400, -1100, 400, 300, fixed(BROOD_QUEEN, 1, CENTER), fixed(CRAWLER, 3)), // 3 Vault (final)
+        room(-400, 300, 400, 1100, habitat(3), habitat(2, W1)), // 0 Antechamber (entrance)
+        room(-1100, -1100, -400, 1100, habitat(4), fixed(SENTRY, 2, WALL), habitat(3, W1)), // 1 West gallery
+        room(400, -1100, 1100, 1100, habitat(3), fixed(CRAWLER, 4), habitat(2, W1), fixed(CRAWLER, 2, wave = W1)), // 2 East gallery
+        room(
+            -400, -1100, 400, 300, habitat(3), fixed(CRAWLER, 3), habitat(3, W1),
+            fixed(BROOD_QUEEN, 1, CENTER, W2), fixed(CRAWLER, 3, wave = W2),
+        ), // 3 Vault (final)
     ),
     doors = immutableListOf(
         door(HORIZONTAL, 1100, 0, 0, OUTSIDE),
@@ -106,11 +119,15 @@ private fun spire() = StructureTemplate(
     trialDescription = "Sonic trial: choirs fill narrow halls with radial pulses and pushback. Use the fins to break their lines of fire.",
     garrisonTypes = immutableListOf(CHOIR),
     totemChestChance = 0.4f,
+    hazard = LANCE,
     rooms = immutableListOf(
-        room(-500, 600, 500, 1200, habitat(4)), // 0 Base (entrance)
-        room(-500, 0, 500, 600, fixed(CHOIR, 2, WALL), habitat(2)), // 1 Lower hall
-        room(-500, -600, 500, 0, fixed(CHOIR, 2, WALL), fixed(CRAWLER, 3)), // 2 Upper hall
-        room(-500, -1200, 500, -600, fixed(CHOIR, 3, WALL), habitat(2)), // 3 Crown (final)
+        room(-500, 600, 500, 1200, habitat(4), habitat(2, W1)), // 0 Base (entrance)
+        room(-500, 0, 500, 600, fixed(CHOIR, 2, WALL), habitat(2), habitat(3, W1)), // 1 Lower hall
+        room(-500, -600, 500, 0, fixed(CHOIR, 2, WALL), fixed(CRAWLER, 3), fixed(CRAWLER, 3, wave = W1), habitat(1, W1)), // 2 Upper hall
+        room(
+            -500, -1200, 500, -600, fixed(CHOIR, 2, WALL), habitat(2), habitat(3, W1),
+            guardian(CHOIR), fixed(CHOIR, 1, WALL, W2), habitat(2, W2),
+        ), // 3 Crown (final)
     ),
     doors = immutableListOf(
         door(HORIZONTAL, 1200, 0, 0, OUTSIDE),
@@ -140,16 +157,20 @@ private fun labyrinth() = StructureTemplate(
     trialDescription = "Entropy trial: crawlers pursue through the maze while minelayers deny corners. Leave room to turn before entering a side chamber.",
     garrisonTypes = immutableListOf(CRAWLER, MINELAYER),
     totemChestChance = 0.5f,
+    hazard = VENT,
     rooms = immutableListOf(
-        room(-1050, -1050, -350, -350, habitat(2), fixed(SENTRY, 1, WALL)), // 0 NW
-        room(-350, -1050, 350, -350, fixed(CRAWLER, 4)), // 1 N
-        room(350, -1050, 1050, -350, habitat(4), fixed(CRAWLER, 3)), // 2 NE (final)
+        room(-1050, -1050, -350, -350, habitat(2), fixed(SENTRY, 1, WALL), habitat(2, W1)), // 0 NW
+        room(-350, -1050, 350, -350, fixed(CRAWLER, 4), fixed(CRAWLER, 3, wave = W1)), // 1 N
+        room(
+            350, -1050, 1050, -350, habitat(3), fixed(CRAWLER, 3), habitat(2, W1), fixed(CRAWLER, 2, wave = W1),
+            guardian(MINELAYER), habitat(2, W2),
+        ), // 2 NE (final)
         room(-1050, -350, -350, 350), // 3 W (passage)
-        room(-350, -350, 350, 350, habitat(3), fixed(CRAWLER, 2)), // 4 Centre
-        room(350, -350, 1050, 350, habitat(3)), // 5 E (side)
-        room(-1050, 350, -350, 1050, fixed(CRAWLER, 3)), // 6 SW (entrance)
+        room(-350, -350, 350, 350, habitat(3), fixed(CRAWLER, 2), fixed(CRAWLER, 3, wave = W1)), // 4 Centre
+        room(350, -350, 1050, 350, habitat(3), habitat(2, W1)), // 5 E (side)
+        room(-1050, 350, -350, 1050, fixed(CRAWLER, 3), fixed(CRAWLER, 2, wave = W1)), // 6 SW (entrance)
         room(-350, 350, 350, 1050), // 7 S (passage)
-        room(350, 350, 1050, 1050, fixed(CRAWLER, 5)), // 8 SE (side)
+        room(350, 350, 1050, 1050, fixed(CRAWLER, 5), fixed(CRAWLER, 3, wave = W1)), // 8 SE (side)
     ),
     doors = immutableListOf(
         door(HORIZONTAL, 1050, -700, 6, OUTSIDE, 260),
@@ -177,10 +198,11 @@ private fun foundry() = StructureTemplate(
     trialDescription = "Thermal trial: sentry volleys and exploding bombers pressure the smelting halls. Pillars offer cover before the furnace fight.",
     garrisonTypes = immutableListOf(SENTRY, BOMBER),
     totemChestChance = 0.5f,
+    hazard = VENT,
     rooms = immutableListOf(
-        room(-1200, -800, -100, 800, habitat(6)), // 0 West hall (entrance)
-        room(-100, -800, 700, 800, habitat(4), fixed(SENTRY, 2, WALL)), // 1 East hall
-        room(700, -400, 1200, 400, fixed(WARDEN, 2), habitat(4)), // 2 Furnace (final)
+        room(-1200, -800, -100, 800, habitat(6), habitat(4, W1)), // 0 West hall (entrance)
+        room(-100, -800, 700, 800, habitat(4), fixed(SENTRY, 2, WALL), habitat(3, W1)), // 1 East hall
+        room(700, -400, 1200, 400, fixed(WARDEN, 2), habitat(2), habitat(3, W1), guardian(CHARGER), habitat(3, W2)), // 2 Furnace (final)
     ),
     doors = immutableListOf(
         door(VERTICAL, -1200, 0, 0, OUTSIDE),
@@ -212,16 +234,20 @@ private fun reliquary() = StructureTemplate(
     garrisonTypes = immutableListOf(AEGIS, WARDEN),
     totemChestChance = 1f,
     totemChestMinCharges = 2,
+    hazard = LANCE,
     rooms = immutableListOf(
-        room(-1200, -1200, -400, -400, habitat(3), fixed(SENTRY, 1, WALL)), // 0 NW chapel
+        room(-1200, -1200, -400, -400, habitat(3), fixed(SENTRY, 1, WALL), habitat(2, W1)), // 0 NW chapel
         room(-400, -1200, 400, -400), // 1 North walk
-        room(400, -1200, 1200, -400, habitat(2), fixed(CRAWLER, 3)), // 2 NE chapel
+        room(400, -1200, 1200, -400, habitat(2), fixed(CRAWLER, 3), habitat(2, W1)), // 2 NE chapel
         room(-1200, -400, -400, 400), // 3 West walk
-        room(-400, -400, 400, 400, fixed(WARDEN_PRIME, 1, CENTER), habitat(3)), // 4 Sanctum (final)
+        room(
+            -400, -400, 400, 400, habitat(3), habitat(3, W1), fixed(CRAWLER, 3, wave = W1),
+            fixed(WARDEN_PRIME, 1, CENTER, W2), habitat(3, W2),
+        ), // 4 Sanctum (final)
         room(400, -400, 1200, 400), // 5 East walk
-        room(-1200, 400, -400, 1200, habitat(2), fixed(CRAWLER, 3)), // 6 SW chapel
+        room(-1200, 400, -400, 1200, habitat(2), fixed(CRAWLER, 3), habitat(2, W1)), // 6 SW chapel
         room(-400, 400, 400, 1200), // 7 Nave (entrance)
-        room(400, 400, 1200, 1200, habitat(3), fixed(SENTRY, 1, WALL)), // 8 SE chapel
+        room(400, 400, 1200, 1200, habitat(3), fixed(SENTRY, 1, WALL), habitat(2, W1)), // 8 SE chapel
     ),
     doors = immutableListOf(
         door(HORIZONTAL, 1200, 0, 7, OUTSIDE),
@@ -286,10 +312,17 @@ private const val CHAPELS: Int = (1 shl 0) or (1 shl 2) or (1 shl 6) or (1 shl 8
 private fun room(minX: Int, minY: Int, maxX: Int, maxY: Int, vararg garrison: GarrisonEntry) =
     StructureRoom(minX.toFloat(), minY.toFloat(), maxX.toFloat(), maxY.toFloat(), garrison.toList().toImmutableList())
 
-private fun habitat(count: Int) = GarrisonEntry(GarrisonSelector.HABITAT, count)
+/** The second and third waves of a room's garrison. */
+private const val W1: Int = 1
+private const val W2: Int = 2
 
-private fun fixed(type: EnemyType, count: Int, placement: GarrisonPlacement = FLOOR) =
-    GarrisonEntry(GarrisonSelector.FIXED, count, type, placement)
+private fun habitat(count: Int, wave: Int = 0) = GarrisonEntry(GarrisonSelector.HABITAT, count, wave = wave)
+
+private fun fixed(type: EnemyType, count: Int, placement: GarrisonPlacement = FLOOR, wave: Int = 0) =
+    GarrisonEntry(GarrisonSelector.FIXED, count, type, placement, wave)
+
+/** A final room's ordinary guardian, leading the third wave from the room's centre. */
+private fun guardian(type: EnemyType) = GarrisonEntry(GarrisonSelector.FIXED, 1, type, CENTER, W2, guardian = true)
 
 private fun door(axis: WallAxis, line: Int, center: Int, a: Int, b: Int, width: Int = 280, lock: Int = 0) =
     StructureDoor(axis, line.toFloat(), center.toFloat(), width.toFloat(), a, b, lock)
