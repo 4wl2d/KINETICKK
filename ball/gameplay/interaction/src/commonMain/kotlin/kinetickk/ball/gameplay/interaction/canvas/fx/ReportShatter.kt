@@ -23,8 +23,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kinetickk.ball.gameplay.interaction.canvas.CanvasMath
 
-/** Board box of the shatter (Report board: 420 x 420, center 210, drawn at 80 %). */
-internal const val ShatterBox = 420f
+/** Centre of the shatter's board box (Report board: 420 x 420, drawn at 80 %). */
 internal const val ShatterCenter = 210f
 
 /** One wedge shard: polygon in board units, fly-out offset/rotation and its delay. */
