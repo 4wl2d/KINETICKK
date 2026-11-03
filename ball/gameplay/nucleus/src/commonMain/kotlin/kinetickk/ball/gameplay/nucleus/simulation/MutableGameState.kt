@@ -137,6 +137,9 @@ internal class MutableGameState(
     /** Profile progress awaiting publication. */
     internal val progressOutbox: ProgressOutbox = ProgressOutbox(copySource?.progressOutbox)
 
+    /** Relic ranks, cooldowns, counters and the Heirloom offer. */
+    internal val relicRun: RelicRunState = RelicRunState(content, copySource?.relicRun, bootstrapProgress)
+
     internal var gameplayRandom: CloneableXorWowRandom = copySource?.gameplayRandom?.copy()
         ?: CloneableXorWowRandom(seed)
     /** Offers draw from their own stream, so drafting choices never shift spawns or crits. */
@@ -192,15 +195,6 @@ internal class MutableGameState(
     internal var skillRuntime: SkillRuntime = copySource?.skillRuntime?.fork() ?: SkillRuntime()
     internal var reactionTokens: Float = copySource?.reactionTokens ?: REACTION_BURST
     internal var breakTokens: Float = copySource?.breakTokens ?: BREAK_BURST
-    internal var heirloomCandidates: List<RelicId> = copySource?.heirloomCandidates
-        ?: bootstrapProgress?.collection?.heirloomRelicIds?.toList().orEmpty()
-    internal var heirloomPending: Boolean = copySource?.heirloomPending ?: false
-    internal var heirloomOfferActive: Boolean = copySource?.heirloomOfferActive ?: false
-    internal var pendingHeirloomResolved: Boolean = copySource?.pendingHeirloomResolved ?: false
-    internal var pendingVictoryRelics: List<RelicId>? = copySource?.pendingVictoryRelics
-    internal var severedRelics: List<SeveredRelic> = copySource?.severedRelics ?: emptyList()
-    internal var ouroborosSpent: Boolean = copySource?.ouroborosSpent ?: false
-    internal var ouroborosLockedUntil: Float = copySource?.ouroborosLockedUntil ?: 0f
     internal var invulnerableUntil: Float = copySource?.invulnerableUntil ?: 0f
     internal var overdriveBurnoutUntil: Float = copySource?.overdriveBurnoutUntil ?: 0f
     internal var overheatArmed: Boolean = copySource?.overheatArmed ?: true
@@ -359,17 +353,6 @@ internal class MutableGameState(
     internal var trailDistanceCarry: Float = copySource?.trailDistanceCarry ?: 0f
     internal var weaponClock: Float = copySource?.weaponClock ?: 0f
     internal var weaponSecondaryClock: Float = copySource?.weaponSecondaryClock ?: 0f
-    internal val relicRanks: RunIntArray = copySource?.relicRanks?.copy()
-        ?: RunIntArray(IntArray(content.relics.size))
-    internal val relicCooldowns: RunFloatArray = copySource?.relicCooldowns?.copy()
-        ?: RunFloatArray(FloatArray(content.relics.size))
-    internal val relicCounters: RunIntArray = copySource?.relicCounters?.copy()
-        ?: RunIntArray(IntArray(content.relics.size))
-    internal val echoHits: MutableList<EchoHit> = copySource?.echoHits
-        ?.let { source ->
-            source.mapTo(ArrayList(source.size), EchoHit::copy)
-        }
-        ?: mutableListOf()
     internal val agonyMutationCounts: RunIntArray = copySource?.agonyMutationCounts?.copy()
         ?: RunIntArray(IntArray(content.weapons.size))
     internal var dataFraction: Float = copySource?.dataFraction ?: 0f

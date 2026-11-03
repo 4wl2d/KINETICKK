@@ -5,11 +5,15 @@ package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.content.api.CoreShape
 import kinetickk.ball.content.api.RebirthProfile
+import kinetickk.ball.content.api.RelicId
 import kinetickk.ball.content.api.WeaponId
+import kinetickk.ball.gameplay.nucleus.model.EchoHit
 import kinetickk.ball.gameplay.nucleus.model.ItemDeck
 import kinetickk.ball.gameplay.nucleus.model.ItemHistoryWeights
+import kinetickk.ball.gameplay.nucleus.model.RunFloatArray
 import kinetickk.ball.gameplay.nucleus.model.RunIntArray
 import kinetickk.ball.gameplay.nucleus.model.RunMutableSet
+import kinetickk.ball.gameplay.nucleus.model.SeveredRelic
 
 /*
  * Legacy forwarders; new code uses the holder; never add a forwarder for a new field.
@@ -144,3 +148,49 @@ internal var MutableGameState.pendingAcquiredItemIds: List<Int>
 internal var MutableGameState.bankedRunMatter: Long
     get() = progressOutbox.bankedRunMatter
     set(value) { progressOutbox.bankedRunMatter = value }
+
+// RelicRunState
+
+internal val MutableGameState.relicRanks: RunIntArray
+    get() = relicRun.relicRanks
+
+internal val MutableGameState.relicCooldowns: RunFloatArray
+    get() = relicRun.relicCooldowns
+
+internal val MutableGameState.relicCounters: RunIntArray
+    get() = relicRun.relicCounters
+
+internal val MutableGameState.echoHits: MutableList<EchoHit>
+    get() = relicRun.echoHits
+
+internal var MutableGameState.severedRelics: List<SeveredRelic>
+    get() = relicRun.severedRelics
+    set(value) { relicRun.severedRelics = value }
+
+internal var MutableGameState.ouroborosSpent: Boolean
+    get() = relicRun.ouroborosSpent
+    set(value) { relicRun.ouroborosSpent = value }
+
+internal var MutableGameState.ouroborosLockedUntil: Float
+    get() = relicRun.ouroborosLockedUntil
+    set(value) { relicRun.ouroborosLockedUntil = value }
+
+internal var MutableGameState.heirloomCandidates: List<RelicId>
+    get() = relicRun.heirloomCandidates
+    set(value) { relicRun.heirloomCandidates = value }
+
+internal var MutableGameState.heirloomPending: Boolean
+    get() = relicRun.heirloomPending
+    set(value) { relicRun.heirloomPending = value }
+
+internal var MutableGameState.heirloomOfferActive: Boolean
+    get() = relicRun.heirloomOfferActive
+    set(value) { relicRun.heirloomOfferActive = value }
+
+internal var MutableGameState.pendingHeirloomResolved: Boolean
+    get() = relicRun.pendingHeirloomResolved
+    set(value) { relicRun.pendingHeirloomResolved = value }
+
+internal var MutableGameState.pendingVictoryRelics: List<RelicId>?
+    get() = relicRun.pendingVictoryRelics
+    set(value) { relicRun.pendingVictoryRelics = value }

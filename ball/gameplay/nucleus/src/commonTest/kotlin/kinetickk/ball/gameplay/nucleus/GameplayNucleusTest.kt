@@ -51,6 +51,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.weaponUpgradeLevels
 import kinetickk.ball.gameplay.nucleus.simulation.pendingArchitectDefeatedWith
 import kinetickk.ball.gameplay.nucleus.simulation.pendingBankedMatter
 import kinetickk.ball.gameplay.nucleus.simulation.pendingClearedRebirthLevel
+import kinetickk.ball.gameplay.nucleus.simulation.pendingVictoryRelics
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
