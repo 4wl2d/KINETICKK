@@ -6,14 +6,11 @@ package kinetickk.ball.gameplay.interaction.canvas.world.places
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.ImageShader
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.PaintingStyle
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.ShaderBrush
-import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.PointMode
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -21,6 +18,7 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import kinetickk.ball.gameplay.interaction.canvas.*
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kinetickk.foundation.design.positiveModulo
 import kotlin.math.floor
 
 /*
@@ -34,10 +32,11 @@ import kotlin.math.floor
 internal fun DrawScope.drawArchiveSignal(engine: GameplayRenderModel, theme: DimensionTheme, shakeX: Float, shakeY: Float) {
     val w = size.width
     val h = size.height
-    drawSoftDisc(DimensionGlows.of(theme.glow.copy(alpha = 0.16f), 0.2f), 0f, 0f, w * 0.7f, h * 0.8f)
-    drawSoftDisc(DimensionGlows.of(theme.glowAlt.copy(alpha = 0.13f), 0.2f), w, h, w * 0.7f, h * 0.8f)
+    with(ScreenGlows) {
+        drawScreenGlow(ScreenGlow.ARCHIVE_SIGNAL, theme.glow.copy(alpha = 0.18f), 0f, 0f, h * 0.75f)
+        drawScreenGlow(ScreenGlow.ARCHIVE_GLITCH, theme.glowAlt.copy(alpha = 0.15f), w, h, h * 0.75f)
+    }
     drawDataRain(engine, theme, shakeX, shakeY)
-    drawVignette(DimensionGlows.vignette(Color.Black.copy(alpha = 0.7f), 0.5f), w * 0.72f, h * 0.85f)
 }
 
 /** Data rain: column width, the share of columns that carry data, the cell height a drop falls through and its speed. */
@@ -73,7 +72,7 @@ private fun DrawScope.drawDataRain(engine: GameplayRenderModel, theme: Dimension
         val length = 90f + 140f * cellUnit(columnHash, 3)
         for (row in firstY..lastY) {
             val hash = dimensionCellHash(column, row, RAIN_SALT + 1)
-            val head = originY + row * RAIN_CELL + wrapped(cellUnit(hash, 0) * RAIN_CELL + fall * time, RAIN_CELL)
+            val head = originY + row * RAIN_CELL + positiveModulo(cellUnit(hash, 0) * RAIN_CELL + fall * time, RAIN_CELL)
             if (head < -4f || head - length > size.height) continue
             translate(x, head - length) {
                 scale(1.6f, length, Offset.Zero) { drawRect(trail, Offset(-0.5f, 0f), Size(1f, 1f)) }
@@ -92,10 +91,12 @@ private fun DrawScope.drawDataRain(engine: GameplayRenderModel, theme: Dimension
     }
 }
 
-/** The Archive's scanlines over the whole screen (one repeating brush) and its brighter band moving on the local clock. */
+/** The Archive's scanlines over the whole screen (one batched draw of thin lines) and its brighter band on the local clock. */
 internal fun DrawScope.drawArchiveScanlines(engine: GameplayRenderModel, theme: DimensionTheme) {
-    drawRect(ArchiveResources.scanlines(theme.scanline), alpha = 0.5f)
-    val top = wrapped(engine.dimension.localClock * SCANLINE_SPEED, size.height + SCANLINE_HEIGHT) - SCANLINE_HEIGHT
+    val paint = ArchiveResources.scanlinePaint
+    paint.color = theme.scanline.copy(alpha = 0.07f)
+    drawContext.canvas.drawRawPoints(PointMode.Lines, ArchiveResources.scanlines(size.width, size.height), paint)
+    val top = positiveModulo(engine.dimension.localClock * SCANLINE_SPEED, size.height + SCANLINE_HEIGHT) - SCANLINE_HEIGHT
     drawRect(theme.scanline.copy(alpha = 0.05f), Offset(0f, top), Size(size.width, SCANLINE_HEIGHT))
 }
 
@@ -183,35 +184,50 @@ internal object ArchiveResources {
     /** How far a shard's magenta and cyan copies stand off, in its unit space. */
     const val SHARD_SPLIT = 0.09f
     private val shards = arrayOfNulls<Path>(SHARDS)
-    private val trailColors = arrayOfNulls<Color>(2)
+    // Keys as raw colour values: an array of Color would box each colour it compares.
+    private val trailKeys = LongArray(2)
     private val trails = arrayOfNulls<Brush>(2)
-    private var scanlineColor = Color.Unspecified
-    private var scanlineBrush: Brush? = null
+    private var nextTrail = 0
+    private var scanlineWidth = Float.NaN
+    private var scanlineHeight = Float.NaN
+    private var scanlineEnds = FloatArray(0)
+
+    /** The scanlines' one-pixel stroke (its colour set per frame from the theme). */
+    val scanlinePaint = Paint().apply {
+        style = PaintingStyle.Stroke
+        strokeWidth = 1f
+    }
 
     /** A shard's line in its unit space: about 1.3 px on a 14 u shard. */
     val shardStroke: Stroke by lazy { Stroke(0.09f) }
 
     /** A unit trail fading in from its top to [color] at its foot (two colours kept: the rain's cyan and magenta). */
     fun rainTrail(color: Color): Brush {
-        for (index in trails.indices) if (trailColors[index] == color) return trails[index]!!
-        val slot = if (trailColors[0] == null) 0 else 1
+        val key = color.value.toLong()
+        for (index in trails.indices) if (trails[index] != null && trailKeys[index] == key) return trails[index]!!
         val brush = Brush.verticalGradient(0f to color.copy(alpha = 0f), 0.7f to color.copy(alpha = 0.35f), 1f to color.copy(alpha = 0.8f),
             startY = 0f, endY = 1f)
-        trailColors[slot] = color
-        trails[slot] = brush
+        trailKeys[nextTrail] = key
+        trails[nextTrail] = brush
+        nextTrail = (nextTrail + 1) % trails.size
         return brush
     }
 
-    /** One line of [color] in every four rows, repeated over the screen; rebuilt only for a new colour. */
-    fun scanlines(color: Color): Brush {
-        val cached = scanlineBrush
-        if (cached != null && color == scanlineColor) return cached
-        val tile = ImageBitmap(1, SCANLINE_PERIOD)
-        Canvas(tile).drawRect(0f, 0f, 1f, 1f, Paint().apply { this.color = color.copy(alpha = 0.18f) })
-        return ShaderBrush(ImageShader(tile, TileMode.Repeated, TileMode.Repeated)).also {
-            scanlineBrush = it
-            scanlineColor = color
+    /** The ends of one line every [SCANLINE_PERIOD] rows across a [width] × [height] screen; rebuilt only on a resize. */
+    fun scanlines(width: Float, height: Float): FloatArray {
+        if (width == scanlineWidth && height == scanlineHeight) return scanlineEnds
+        scanlineWidth = width
+        scanlineHeight = height
+        val lines = (height / SCANLINE_PERIOD).toInt() + 1
+        scanlineEnds = FloatArray(lines * 4) { index ->
+            val y = (index / 4) * SCANLINE_PERIOD + 0.5f
+            when (index % 4) {
+                0 -> 0f
+                2 -> width
+                else -> y
+            }
         }
+        return scanlineEnds
     }
 
     /** Shard [variant]: an angular glyph fragment (a broken bracket, a split chevron, a cut frame) in unit space. */
@@ -222,7 +238,7 @@ internal object ArchiveResources {
         shards[variant] = path
     }
 
-    private const val SCANLINE_PERIOD = 4
+    private const val SCANLINE_PERIOD = 4f
 }
 
 /** The shards' polylines (x, y pairs in unit space). */

@@ -23,11 +23,7 @@ import kinetickk.foundation.design.Kk
 import kinetickk.foundation.design.KkLayerHues
 import kinetickk.foundation.design.KkRebirthTiers
 import kinetickk.foundation.design.KkRolePalette
-import kinetickk.foundation.design.drawKkRadialHalftone
 import kinetickk.foundation.design.kkMix
-import kinetickk.foundation.design.positiveModulo
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
 
 /*
  * The dimensions' atmosphere: each layer paints its own sky over a dark ground instead of the realspace grid (the
@@ -48,7 +44,6 @@ internal class DimensionTheme(
     val grid: Color,
     /** Every fourth grid line (the Archive's; the other layers draw every line alike). */
     val gridMajor: Color,
-    val halftone: Color,
     val mote: Color,
     val moteAlt: Color,
     /** The Zenith's light shafts. */
@@ -105,7 +100,7 @@ internal object DimensionThemes {
                 val grid = kkMix(gold, radiance, 0.5f).copy(alpha = arena)
                 DimensionTheme(
                     ground = ground(KkLayerHues.ZenithGround), glow = radiance, glowAlt = hue(KkLayerHues.Haze),
-                    grid = grid, gridMajor = grid, halftone = gold.copy(alpha = 0.08f), mote = radiance.copy(alpha = 0.42f),
+                    grid = grid, gridMajor = grid, mote = radiance.copy(alpha = 0.42f),
                     moteAlt = gold.copy(alpha = 0.34f), ray = radiance, crack = none, crackGlow = none, smoke = none,
                     scanline = none, rain = none, highlight = gold, sky = hue(KkLayerHues.Dawn),
                 )
@@ -115,7 +110,7 @@ internal object DimensionThemes {
                 val grid = hue(KkLayerHues.Crimson).copy(alpha = arena + 0.05f)
                 DimensionTheme(
                     ground = ground(KkLayerHues.NadirGround), glow = hue(KkLayerHues.Crimson), glowAlt = magma, grid = grid,
-                    gridMajor = grid, halftone = magma.copy(alpha = 0.05f), mote = magma.copy(alpha = 0.55f),
+                    gridMajor = grid, mote = magma.copy(alpha = 0.55f),
                     moteAlt = hue(KkLayerHues.MagmaCore).copy(alpha = 0.5f), ray = none, crack = hue(KkLayerHues.MagmaCore),
                     crackGlow = magma, smoke = if (horizon) Color.Black else KkLayerHues.Soot, scanline = none, rain = none,
                     highlight = hue(KkLayerHues.MagmaCore), sky = none,
@@ -126,7 +121,7 @@ internal object DimensionThemes {
                 DimensionTheme(
                     ground = ground(KkLayerHues.ArchiveGround), glow = signal, glowAlt = hue(KkLayerHues.Glitch),
                     grid = signal.copy(alpha = arena + 0.02f), gridMajor = signal.copy(alpha = arena + 0.07f),
-                    halftone = signal.copy(alpha = 0.05f), mote = hue(Kk.Bone).copy(alpha = 0.32f), moteAlt = signal.copy(alpha = 0.4f),
+                    mote = hue(Kk.Bone).copy(alpha = 0.32f), moteAlt = signal.copy(alpha = 0.4f),
                     ray = none, crack = none, crackGlow = none, smoke = none, scanline = signal, rain = signal, highlight = hue(Kk.Bone),
                     sky = none,
                 )
@@ -136,7 +131,7 @@ internal object DimensionThemes {
                 val arenaTheme = arenaTheme(tier)
                 DimensionTheme(
                     ground = Kk.Ink, glow = none, glowAlt = none, grid = arenaTheme.grid, gridMajor = arenaTheme.grid,
-                    halftone = arenaTheme.halftone, mote = none, moteAlt = none, ray = none, crack = none, crackGlow = none,
+                    mote = none, moteAlt = none, ray = none, crack = none, crackGlow = none,
                     smoke = none, scanline = none, rain = none, highlight = none, sky = none,
                 )
             }
@@ -147,13 +142,10 @@ internal object DimensionThemes {
     private fun Color.luminanceShare(): Float = (0.3f * red + 0.59f * green + 0.11f * blue).coerceIn(0f, 1f)
 }
 
-/** The halftone disc under the Core, as realspace draws it. */
-private const val HALFTONE_DIAMETER = 700f
-private val DimensionHalftoneRect = Rect(-HALFTONE_DIAMETER * 0.5f, -HALFTONE_DIAMETER * 0.5f, HALFTONE_DIAMETER * 0.5f, HALFTONE_DIAMETER * 0.5f)
-
 /**
  * The ground of a dimension, drawn instead of the realspace grid while the Core is in one: the layer's ground, its sky
- * (light, clouds, cracks, smoke or falling data), its grid, the halftone disc at the Core and the stateless motes.
+ * (light, clouds, cracks, smoke or falling data), its grid and the stateless motes (no halftone disc: the sky lights
+ * the Core's surroundings instead, and the disc's composite shader costs more than every sky).
  */
 internal fun DrawScope.drawDimensionBackdrop(engine: GameplayRenderModel, shakeX: Float, shakeY: Float, roles: KkRolePalette) {
     val layer = engine.dimension.layer
@@ -167,10 +159,6 @@ internal fun DrawScope.drawDimensionBackdrop(engine: GameplayRenderModel, shakeX
         WorldLayer.BASE -> Unit
     }
     drawDimensionGrid(engine, theme, shakeX, shakeY)
-    val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
-    translate(core.x, core.y) {
-        drawKkRadialHalftone(DimensionHalftoneRect, theme.halftone)
-    }
     drawDimensionMotes(engine, layer, theme, shakeX, shakeY)
     if (layer == WorldLayer.ARCHIVE) drawArchiveScanlines(engine, theme)
 }
@@ -230,23 +218,6 @@ internal object DimensionGlows {
             0f to color, core to color.copy(alpha = color.alpha * 0.55f), 1f to color.copy(alpha = 0f),
             center = Offset.Zero, radius = 1f,
         )
-        return remember(key, core, brush)
-    }
-
-    /** A vignette of unit radius: clear inside [clear] of the radius, [color] at the radius and beyond. */
-    fun vignette(color: Color, clear: Float): Brush {
-        val key = color.value.toLong()
-        // A vignette keys its falloff negated, apart from the discs.
-        for (index in 0 until CAPACITY) {
-            if (brushes[index] != null && colors[index] == key && cores[index] == -clear) return brushes[index]!!
-        }
-        val brush = Brush.radialGradient(
-            0f to color.copy(alpha = 0f), clear to color.copy(alpha = 0f), 1f to color, center = Offset.Zero, radius = 1f,
-        )
-        return remember(key, -clear, brush)
-    }
-
-    private fun remember(key: Long, core: Float, brush: Brush): Brush {
         colors[next] = key
         cores[next] = core
         brushes[next] = brush
@@ -255,27 +226,54 @@ internal object DimensionGlows {
     }
 }
 
-/** [brush] (a [DimensionGlows.vignette]) over the whole screen, its unit circle stretched to [radiusX] by [radiusY] about the centre. */
-internal fun DrawScope.drawVignette(brush: Brush, radiusX: Float, radiusY: Float, alpha: Float = 1f) {
-    val halfWidth = size.width * 0.5f
-    val halfHeight = size.height * 0.5f
-    translate(halfWidth, halfHeight) {
-        scale(radiusX, radiusY, Offset.Zero) {
-            drawRect(brush, Offset(-halfWidth / radiusX, -halfHeight / radiusY), Size(2f * halfWidth / radiusX, 2f * halfHeight / radiusY), alpha)
+/**
+ * Glows fixed to the screen (a layer's sun, its fire light, its corner lights), each in its own [ScreenGlow] slot: a
+ * gradient brush at its real size and place, so it draws as one plain circle with no transform (a scaled unit disc
+ * costs about twice as much to fill). Rebuilt only when the screen, the colour or the place changes.
+ */
+internal object ScreenGlows {
+    private val keys = LongArray(ScreenGlow.entries.size)
+    private val centersX = FloatArray(ScreenGlow.entries.size)
+    private val centersY = FloatArray(ScreenGlow.entries.size)
+    private val radii = FloatArray(ScreenGlow.entries.size)
+    private val brushes = arrayOfNulls<Brush>(ScreenGlow.entries.size)
+
+    /** A soft glow of [color] in [slot] centred at ([x], [y]) fading out by [radius], drawn as one circle. */
+    fun DrawScope.drawScreenGlow(slot: ScreenGlow, color: Color, x: Float, y: Float, radius: Float, core: Float = 0.2f) {
+        val index = slot.ordinal
+        val key = color.value.toLong()
+        if (brushes[index] == null || keys[index] != key || centersX[index] != x || centersY[index] != y || radii[index] != radius) {
+            keys[index] = key
+            centersX[index] = x
+            centersY[index] = y
+            radii[index] = radius
+            brushes[index] = Brush.radialGradient(
+                0f to color, core to color.copy(alpha = color.alpha * 0.55f), 1f to color.copy(alpha = 0f),
+                center = Offset(x, y), radius = radius,
+            )
         }
+        drawCircle(brushes[index]!!, radius, Offset(x, y))
     }
 }
 
-/** A soft disc of [brush] ([DimensionGlows]) centred at ([x], [y]), [radiusX] by [radiusY] wide, at [alpha]. */
+/** The screen-fixed glows, one cached brush each. */
+internal enum class ScreenGlow { ZENITH_SUN, NADIR_PIT, NADIR_FIRE, ARCHIVE_SIGNAL, ARCHIVE_GLITCH }
+
+/**
+ * A soft disc of [brush] ([DimensionGlows]) centred at ([x], [y]), [radiusX] by [radiusY] wide, at [alpha]. Its gradient
+ * is clear past the unit circle, so it fills the circle's square: a plain quad rasterizes far faster than an ellipse.
+ */
 internal fun DrawScope.drawSoftDisc(brush: Brush, x: Float, y: Float, radiusX: Float, radiusY: Float = radiusX, alpha: Float = 1f) {
     translate(x, y) {
-        scale(radiusX, radiusY, Offset.Zero) { drawCircle(brush, 1f, Offset.Zero, alpha = alpha) }
+        scale(radiusX, radiusY, Offset.Zero) { drawRect(brush, UnitSquareCorner, UnitSquare, alpha = alpha) }
     }
 }
+
+private val UnitSquareCorner = Offset(-1f, -1f)
+private val UnitSquare = androidx.compose.ui.geometry.Size(2f, 2f)
 
 /** Round-capped strokes of the atmosphere and the dimension marks (created once). */
 internal object AtmosphereStrokes {
-    val crackBloom: Stroke by lazy { Stroke(30f, cap = StrokeCap.Round, join = StrokeJoin.Round) }
     val crackGlow: Stroke by lazy { Stroke(12f, cap = StrokeCap.Round, join = StrokeJoin.Round) }
     val crackBody: Stroke by lazy { Stroke(4.5f, cap = StrokeCap.Round, join = StrokeJoin.Round) }
     val crackCore: Stroke by lazy { Stroke(1.8f, cap = StrokeCap.Round, join = StrokeJoin.Round) }
@@ -321,9 +319,6 @@ internal fun DrawScope.worldOriginY(engine: GameplayRenderModel, shakeY: Float):
 /** A stateless unit of [hash] for [salt] in [0, 1) (the obstacle seed's mixer, shared by every dimension look). */
 internal fun cellUnit(hash: Int, salt: Int): Float = kinetickk.ball.content.api.obstacleSeedUnit(hash, salt)
 
-/** [value] wrapped into 0 until [period]. */
-internal fun wrapped(value: Float, period: Float): Float = positiveModulo(value, period)
-
-/** A screen [size] grown by [margin] each way, for culling against a reach. */
+/** Whether ([x], [y]) lies on the screen grown by [margin] each way (culling against a reach). */
 internal fun DrawScope.inView(x: Float, y: Float, margin: Float): Boolean =
     x >= -margin && y >= -margin && x <= size.width + margin && y <= size.height + margin

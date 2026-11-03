@@ -247,7 +247,6 @@ internal fun prepareDimensionVisualResources() {
     MarkStrokes.ring
     MarkStrokes.hatchedRing
     MarkStrokes.catchRing
-    AtmosphereStrokes.crackBloom
     AtmosphereStrokes.crackGlow
     AtmosphereStrokes.crackBody
     AtmosphereStrokes.crackCore

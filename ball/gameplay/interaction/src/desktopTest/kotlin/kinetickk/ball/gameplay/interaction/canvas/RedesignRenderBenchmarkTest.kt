@@ -61,9 +61,7 @@ class RedesignRenderBenchmarkTest {
     fun measureGameplayDraw() {
         if (System.getenv("KK_RENDER_BENCH") != "1") return
         val width = 1440; val height = 810
-        // KK_RENDER_LAYER=ZENITH|NADIR|ARCHIVE draws every scene inside that layer's visit (rings, embers, the exit rift).
-        val layer = System.getenv("KK_RENDER_LAYER")?.let { kinetickk.ball.content.api.WorldLayer.valueOf(it) }
-        val scenes = scenes(width, height).map { busy(it) }.map { if (layer == null) it else inLayer(it, layer) }
+        val scenes = scenes(width, height).map { busy(it) }
         val counts = scenes.map { "${it.enemies.size}/${it.projectiles.size}/${it.pickups.size}/${it.trail.size}" }
         val measurer = CanvasTextMeasurer(
             ComposeTextMeasurer(createFontFamilyResolver(), Density(1f), LayoutDirection.Ltr, cacheSize = 64),
@@ -158,11 +156,6 @@ class RedesignRenderBenchmarkTest {
         constructor.isAccessible = true
         return constructor.newInstance(*args) as GameplayRenderModel
     }
-
-    private fun inLayer(model: GameplayRenderModel, layer: kinetickk.ball.content.api.WorldLayer): GameplayRenderModel =
-        model.withDimension(dimensionVisit(layer, model.coreX, model.coreY, course = listOf(260f to -60f, -240f to 200f),
-            ambient = listOf(-380f to -180f, 400f to 230f), embers = List(12) { (150f + it * 15f) * cos(it * 0.5f) to (150f + it * 15f) * sin(it * 0.5f) },
-            exit = 300f to 160f, completed = false, localClock = model.elapsed))
 
     private fun step(state: GameplayState, pulse: GameplayInteractionPulse): GameplayState =
         when (val decision = GameplayNucleus.decide(state, GameplayNucleusPulse.Intent(pulse))) {

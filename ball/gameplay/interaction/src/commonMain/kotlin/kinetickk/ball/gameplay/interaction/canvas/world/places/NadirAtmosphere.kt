@@ -4,18 +4,23 @@
 package kinetickk.ball.gameplay.interaction.canvas.world.places
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import kinetickk.ball.gameplay.interaction.canvas.*
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kinetickk.foundation.design.positiveModulo
 import kotlin.math.PI
 import kotlin.math.floor
 import kotlin.math.sin
 
 /*
- * The Nadir is hell: a crimson glow over soot-black ground split by glowing magma cracks that breathe, smoke banks
+ * The Nadir is hell: a crimson glow over soot-black ground, fire light from below the screen, glowing magma cracks that breathe, smoke banks
  * drifting over them, bands of heat shimmer rising up the screen, and sparks raining upward through the field (the
  * weather). The cracks belong to the world (stateless cells), the smoke and the shimmer to the air above it.
  */
@@ -26,12 +31,13 @@ internal fun DrawScope.drawNadirDepths(engine: GameplayRenderModel, theme: Dimen
     val h = size.height
     // The pit's crimson glow, fire light rising from below the screen (hell is lit from beneath, heaven from above),
     // black at the edges of sight.
-    drawSoftDisc(DimensionGlows.of(theme.glow.copy(alpha = 0.75f), 0.2f), w * 0.5f, h * 0.55f, w * 0.75f, h * 0.85f)
-    drawSoftDisc(DimensionGlows.of(theme.crackGlow.copy(alpha = 0.22f), 0.15f), w * 0.5f, h * 1.12f, w * 0.85f, h * 0.5f)
+    with(ScreenGlows) {
+        drawScreenGlow(ScreenGlow.NADIR_PIT, theme.glow.copy(alpha = 0.8f), w * 0.5f, h * 0.55f, maxOf(w, h) * 0.62f)
+        drawScreenGlow(ScreenGlow.NADIR_FIRE, theme.crackGlow.copy(alpha = 0.22f), w * 0.5f, h + w * 0.28f, w * 0.48f, core = 0.15f)
+    }
     drawNadirCracks(engine, theme, shakeX, shakeY)
     drawNadirSmoke(engine, theme)
     drawHeatShimmer(theme, engine.renderElapsed)
-    drawVignette(DimensionGlows.vignette(theme.smoke.copy(alpha = 0.85f), 0.45f), w * 0.7f, h * 0.8f)
 }
 
 /** Side of a crack cell in world units, the share of cells with a crack and how far a crack reaches from its anchor. */
@@ -42,8 +48,8 @@ internal const val CRACK_SALT = 6
 
 /**
  * Magma cracks in a share of the Nadir's cells, one of the cached shapes per cell: a wide glow, the magma body and its
- * bright core, the glow breathing on its own slow phase (once per six seconds or slower); every other crack sits over
- * a faint pool of light.
+ * bright core, the glow breathing on its own slow phase (once per six seconds or slower); one crack in four sits over a
+ * faint pool of light.
  */
 private fun DrawScope.drawNadirCracks(engine: GameplayRenderModel, theme: DimensionTheme, shakeX: Float, shakeY: Float) {
     val originX = worldOriginX(engine, shakeX)
@@ -55,11 +61,10 @@ private fun DrawScope.drawNadirCracks(engine: GameplayRenderModel, theme: Dimens
         val y = originY + worldY
         val crack = NadirPaths.crack(variant)
         val breath = 0.65f + 0.35f * sin(time * TWO_PI / (6f + 3f * cellUnit(hash, CRACK_SALT + 4)) + TWO_PI * cellUnit(hash, CRACK_SALT + 5))
-        if (cellUnit(hash, CRACK_SALT + 6) < 0.6f) drawSoftDisc(pool, x, y, 140f * (0.8f + 0.2f * breath), alpha = breath)
+        if (cellUnit(hash, CRACK_SALT + 6) < 0.25f) drawSoftDisc(pool, x, y, 110f * (0.8f + 0.2f * breath), alpha = breath)
         // Each cell turns its shape its own way, so the field never repeats a crack in line.
         translate(x, y) {
             rotate(360f * cellUnit(hash, CRACK_SALT + 7), Offset.Zero) {
-                drawPath(crack, theme.crackGlow, alpha = 0.16f * breath, style = AtmosphereStrokes.crackBloom)
                 drawPath(crack, theme.crackGlow, alpha = 0.32f * breath, style = AtmosphereStrokes.crackGlow)
                 drawPath(crack, theme.crackGlow, alpha = 0.75f + 0.25f * breath, style = AtmosphereStrokes.crackBody)
                 drawPath(crack, theme.crack, alpha = 0.7f + 0.3f * breath, style = AtmosphereStrokes.crackCore)
@@ -92,7 +97,7 @@ internal inline fun forEachNadirCrack(left: Float, top: Float, right: Float, bot
 }
 
 /** Smoke banks: how many, how fast they drift and at what share of the world's motion. */
-private const val SMOKE_BANKS = 8
+private const val SMOKE_BANKS = 2
 private const val SMOKE_WIND = 16f
 private const val SMOKE_PARALLAX = 0.8f
 
@@ -103,28 +108,30 @@ private fun DrawScope.drawNadirSmoke(engine: GameplayRenderModel, theme: Dimensi
     val spanY = size.height + 600f
     for (index in 0 until SMOKE_BANKS) {
         val hash = dimensionCellHash(index, 7, SMOKE_SALT)
-        val x = wrapped(cellUnit(hash, 0) * spanX - engine.renderCameraX * SMOKE_PARALLAX + engine.renderElapsed * SMOKE_WIND * (0.6f + 0.8f * cellUnit(hash, 1)), spanX) - 400f
-        val y = wrapped(cellUnit(hash, 2) * spanY - engine.renderCameraY * SMOKE_PARALLAX, spanY) - 300f
-        val radius = 260f + 220f * cellUnit(hash, 3)
+        val x = positiveModulo(cellUnit(hash, 0) * spanX - engine.renderCameraX * SMOKE_PARALLAX + engine.renderElapsed * SMOKE_WIND * (0.6f + 0.8f * cellUnit(hash, 1)), spanX) - 400f
+        val y = positiveModulo(cellUnit(hash, 2) * spanY - engine.renderCameraY * SMOKE_PARALLAX, spanY) - 300f
+        val radius = 170f + 110f * cellUnit(hash, 3)
         drawSoftDisc(brush, x, y, radius * 1.4f, radius)
     }
 }
 
 private const val SMOKE_SALT = 47
 
-/** Heat shimmer: bands rising up the screen at this speed, this far apart. */
+/** Heat shimmer: bands rising up the screen at this speed, each this tall. */
 private const val SHIMMER_BANDS = 4
 private const val SHIMMER_RISE = 22f
+private const val SHIMMER_HEIGHT = 34f
 
-/** Bands of heat shimmer rising up the screen, each a wide faint wave swaying sideways. */
+/** Bands of heat shimmer rising up the screen: soft strips of heat light, each breathing on its own phase. */
 private fun DrawScope.drawHeatShimmer(theme: DimensionTheme, time: Float) {
-    val wave = NadirPaths.shimmer(size.width)
-    val span = size.height + 120f
+    val band = NadirPaths.shimmerBrush(theme.crackGlow)
+    val span = size.height + SHIMMER_HEIGHT * 2f
     for (index in 0 until SHIMMER_BANDS) {
-        val y = wrapped(span * index / SHIMMER_BANDS - time * SHIMMER_RISE, span) - 60f
-        val sway = 50f * sin(time * 0.35f + index * 1.9f)
-        translate(sway - 100f, y) {
-            drawPath(wave, theme.crackGlow, alpha = 0.03f + 0.015f * sin(time * 0.8f + index), style = AtmosphereStrokes.shimmer)
+        val y = positiveModulo(span * index / SHIMMER_BANDS - time * SHIMMER_RISE, span) - SHIMMER_HEIGHT
+        translate(0f, y) {
+            scale(1f, SHIMMER_HEIGHT, Offset.Zero) {
+                drawRect(band, size = Size(size.width, 1f), alpha = 0.07f + 0.04f * sin(time * 0.8f + index * 1.9f))
+            }
         }
     }
 }
@@ -161,7 +168,7 @@ internal fun DrawScope.drawNadirEmberRain(
         val hash = dimensionCellHash(cx, cy, SPARK_SALT)
         if (cellUnit(hash, 0) >= SPARK_SHARE * density) continue
         val rise = SPARK_RISE + SPARK_RISE_SPREAD * cellUnit(hash, 1)
-        val climb = wrapped(cellUnit(hash, 2) * SPARK_CELL - rise * time, SPARK_CELL)
+        val climb = positiveModulo(cellUnit(hash, 2) * SPARK_CELL - rise * time, SPARK_CELL)
         val x = originX + (cx + cellUnit(hash, 3)) * SPARK_CELL + 6f * sin(time * 3f + TWO_PI * cellUnit(hash, 4))
         val y = originY + cy * SPARK_CELL + climb
         if (!inView(x, y, 20f) || !atmosphereAffords(2)) continue
@@ -176,12 +183,10 @@ internal fun DrawScope.drawNadirEmberRain(
 
 private const val TWO_PI = (2.0 * PI).toFloat()
 
-/** Cached paths of the Nadir: the crack shapes (object-local) and the shimmer wave (per screen width). */
+/** Cached shapes of the Nadir: the crack paths (object-local) and the shimmer strip's brush. */
 internal object NadirPaths {
     const val CRACKS = 5
     private val cracks = arrayOfNulls<Path>(CRACKS)
-    private val wave = Path()
-    private var waveWidth = Float.NaN
 
     /** Crack [variant]: open polylines turning only at obtuse angles, around the origin. */
     fun crack(variant: Int): Path = cracks[variant] ?: Path().also { path ->
@@ -192,20 +197,18 @@ internal object NadirPaths {
         cracks[variant] = path
     }
 
-    /** A gentle wave across [width] and 200 u beyond it (the band sways sideways), rebuilt only when the width changes. */
-    fun shimmer(width: Float): Path {
-        if (width == waveWidth) return wave
-        waveWidth = width
-        wave.rewind()
-        val end = width + 200f
-        wave.moveTo(0f, 0f)
-        var x = 0f
-        while (x < end) {
-            wave.quadraticTo(x + 45f, -9f, x + 90f, 0f)
-            wave.quadraticTo(x + 135f, 9f, x + 180f, 0f)
-            x += 180f
-        }
-        return wave
+    private var shimmerColor = Color.Unspecified
+    private var shimmer: Brush? = null
+
+    /** A unit-tall strip of [color] clear at its edges, strongest in its middle; rebuilt only for a new colour. */
+    fun shimmerBrush(color: Color): Brush {
+        val cached = shimmer
+        if (cached != null && color == shimmerColor) return cached
+        return Brush.verticalGradient(0f to color.copy(alpha = 0f), 0.5f to color, 1f to color.copy(alpha = 0f), startY = 0f, endY = 1f)
+            .also {
+                shimmer = it
+                shimmerColor = color
+            }
     }
 }
 

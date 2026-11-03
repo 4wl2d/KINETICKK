@@ -49,7 +49,8 @@ class DimensionWorldAllocationTest {
     fun everyLayersAtmosphereAndMarksDrawWithoutAllocating() {
         for (layer in listOf(WorldLayer.ZENITH, WorldLayer.NADIR, WorldLayer.ARCHIVE)) {
             for (roles in listOf(KkRolePalette.Default, KkRolePalette.Mono)) for (crowded in listOf(false, true)) {
-                val perFrame = steadyFrameBytes(roles) { frame -> visitFrame(layer, frame, crowded) }
+                // The mono palette flies below the pace (the slow look of the next ring).
+                val perFrame = steadyFrameBytes(roles) { frame -> visitFrame(layer, frame, crowded, slow = roles == KkRolePalette.Mono) }
                 assertTrue(perFrame < MAX_BYTES, "$layer ${if (crowded) "in a crowd " else ""}allocates $perFrame bytes a frame")
             }
         }
@@ -62,7 +63,7 @@ class DimensionWorldAllocationTest {
     }
 
     /** A visit of [layer] at [frame]: every mark, the weather at the high density, a moving camera and clocks. */
-    private fun visitFrame(layer: WorldLayer, frame: Int, crowded: Boolean): GameplayRenderModel {
+    private fun visitFrame(layer: WorldLayer, frame: Int, crowded: Boolean, slow: Boolean): GameplayRenderModel {
         val base = hudTestModel(WIDTH.toFloat(), HEIGHT.toFloat())
         val x = base.coreX
         val y = base.coreY
@@ -70,6 +71,7 @@ class DimensionWorldAllocationTest {
         val visit = dimensionVisit(layer, x, y, course = listOf(260f to -60f, -240f to 200f), ambient = listOf(-380f to -180f, 400f to 230f),
             embers = embers, emberLife = 0.9f - frame * 0.002f, thrownFrom = listOf(-200f to 0f), emberAge = 0.05f + frame * 0.002f,
             exit = 300f to 160f, completed = false, failed = layer == WorldLayer.ZENITH, localClock = 4f + frame * 0.013f,
+            pace = if (slow) 10_000f else 1f,
             timeScale = 0.25f + (frame % 20) * 0.05f, splitRemaining = 1f, splitDuration = 2f)
             .copy(hostileLag = 3f, glitchPortal = PortalProjection(2, x - 260f, y + 220f, WorldLayer.ARCHIVE, locked = true, glitch = true,
                 remaining = 20f, radius = FIXTURE_CATCH_RADIUS), lockedRifts = WorldLayer.ARCHIVE.bit, riftLock = RiftLock.BOSS)

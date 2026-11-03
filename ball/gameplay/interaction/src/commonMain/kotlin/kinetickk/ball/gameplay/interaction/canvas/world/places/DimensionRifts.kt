@@ -36,6 +36,7 @@ import kinetickk.foundation.design.isOnScreen
 import kinetickk.foundation.design.kkFillBrush
 import kinetickk.foundation.design.labelStyle
 import kinetickk.foundation.design.measureKkText
+import kinetickk.foundation.design.positiveModulo
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.floor
@@ -158,7 +159,7 @@ private val VortexTurns = floatArrayOf(15f, -12f, 9f)
 /** Sparks drawn in from the glow's edge to the tear, each on its own phase, brightening as they near the void. */
 private fun DrawScope.drawRiftSparks(center: Offset, radius: Float, accent: Color, time: Float) {
     for (index in 0 until RIFT_SPARKS) {
-        val phase = wrapped(time / RIFT_SPARK_SECONDS + index * 0.37f, 1f)
+        val phase = positiveModulo(time / RIFT_SPARK_SECONDS + index * 0.37f, 1f)
         val angle = index * TWO_PI / RIFT_SPARKS + time * 0.25f
         val reach = radius * (TEAR_GLOW - (TEAR_GLOW - 0.35f) * phase)
         drawCircle(accent.copy(alpha = 0.25f + 0.7f * phase), 1.6f + 1.4f * phase,

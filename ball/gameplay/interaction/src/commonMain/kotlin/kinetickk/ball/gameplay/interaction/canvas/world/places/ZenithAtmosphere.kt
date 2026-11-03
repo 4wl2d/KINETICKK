@@ -4,6 +4,7 @@
 package kinetickk.ball.gameplay.interaction.canvas.world.places
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -14,11 +15,11 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import kinetickk.ball.gameplay.interaction.canvas.*
 import kinetickk.ball.gameplay.nucleus.render.GameplayRenderModel
+import kinetickk.foundation.design.positiveModulo
 import kotlin.math.PI
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.sin
-import kotlin.math.tan
 
 /*
  * The Zenith is heaven: a dusk-gold ground lit from above, god rays fanning down from a sun beyond the top of the
@@ -30,28 +31,30 @@ import kotlin.math.tan
 internal fun DrawScope.drawZenithSky(engine: GameplayRenderModel, theme: DimensionTheme, shakeX: Float, shakeY: Float) {
     val w = size.width
     val h = size.height
-    // Heaven's light from above the screen: a wide gold dawn, a white sun beyond the top edge and a warm floor glow
-    // where the Core flies; the clouds below catch it and the shafts fall through it.
-    drawSoftDisc(DimensionGlows.of(theme.sky.copy(alpha = 0.26f), 0.05f), w * 0.5f, -h * 0.05f, w * 0.95f, h * 0.85f)
-    drawSoftDisc(DimensionGlows.of(theme.glow.copy(alpha = 0.62f), 0.12f), w * 0.5f, -h * 0.14f, w * 0.45f, h * 0.5f)
-    val core = world(engine, engine.renderCoreX, engine.renderCoreY, shakeX, shakeY)
-    drawSoftDisc(DimensionGlows.of(theme.highlight.copy(alpha = 0.12f), 0.3f), core.x, core.y, 560f)
+    // Heaven's light from above the screen: the gold dawn fading down its upper part and a white sun beyond the top
+    // edge; the clouds below catch it and the shafts fall through it. (Few large fills: a gradient's cost is its area.)
+    // Kept below the HUD's needs: the clock and the plate read bone and gold on it.
+    drawRect(ZenithPaths.dawnBrush(theme.sky.copy(alpha = 0.24f), h * DAWN_REACH), size = Size(w, h * DAWN_REACH))
+    with(ScreenGlows) { drawScreenGlow(ScreenGlow.ZENITH_SUN, theme.glow.copy(alpha = 0.4f), w * 0.5f, -h * 0.3f, h * 0.7f, core = 0.1f) }
     drawZenithClouds(engine, theme, shakeX, shakeY)
     drawZenithShafts(theme, engine.renderElapsed)
 }
 
+/** The dawn fades out this share of the way down the screen. */
+private const val DAWN_REACH = 0.7f
+
 /** Cloud banks parallax at this share of the world's motion and drift with the wind. */
 private const val CLOUD_PARALLAX = 0.5f
-private const val CLOUD_CELL = 560f
-private const val CLOUD_SHARE = 0.45f
+private const val CLOUD_CELL = 720f
+private const val CLOUD_SHARE = 0.32f
 private const val CLOUD_WIND = 7f
-private const val CLOUD_BLOBS = 5
+private const val CLOUD_BLOBS = 2
 /** A bank reaches this far from its centre. */
-private const val CLOUD_REACH = 420f
+private const val CLOUD_REACH = 380f
 
 /**
- * Cloud banks in the far layer: each cell of the parallax plane holds one when its hash says so, five soft blobs of
- * haze around a hashed centre, the plane sliding with the wind so the banks drift past.
+ * Cloud banks in the far layer: each cell of the parallax plane holds one when its hash says so, a soft body of dawn with
+ * two lit tops of haze about a hashed centre, the plane sliding with the wind so the banks drift past.
  */
 private fun DrawScope.drawZenithClouds(engine: GameplayRenderModel, theme: DimensionTheme, shakeX: Float, shakeY: Float) {
     val drift = engine.renderElapsed * CLOUD_WIND
@@ -71,40 +74,36 @@ private fun DrawScope.drawZenithClouds(engine: GameplayRenderModel, theme: Dimen
         val bankX = (cx + 0.2f + 0.6f * cellUnit(hash, 1)) * CLOUD_CELL - centerX + size.width * 0.5f + shakeX
         val bankY = (cy + 0.2f + 0.6f * cellUnit(hash, 2)) * CLOUD_CELL - centerY + size.height * 0.5f + shakeY
         if (!inView(bankX, bankY, CLOUD_REACH)) continue
-        // Each blob's body, then the light on its upper side.
+        // The bank's body, then the light on each blob's upper side.
+        drawSoftDisc(body, bankX, bankY, CLOUD_REACH * 0.8f, CLOUD_REACH * 0.36f)
         for (blob in 0 until CLOUD_BLOBS) {
             val spread = (blob - (CLOUD_BLOBS - 1) * 0.5f) / CLOUD_BLOBS
-            val radius = 120f + 130f * cellUnit(hash, 3 + blob)
-            val x = bankX + spread * 520f
-            val y = bankY + 60f * (cellUnit(hash, 8 + blob) - 0.5f)
-            drawSoftDisc(body, x, y, radius * 1.35f, radius * 0.7f)
-            drawSoftDisc(lit, x - radius * 0.15f, y - radius * 0.28f, radius * 0.8f, radius * 0.38f)
+            val radius = 95f + 80f * cellUnit(hash, 3 + blob)
+            drawSoftDisc(lit, bankX + spread * 380f, bankY - radius * 0.3f + 50f * (cellUnit(hash, 8 + blob) - 0.5f), radius * 1.15f, radius * 0.45f)
         }
     }
 }
 
 private const val CLOUD_LAYER_SALT = 41
 
-/** The shafts fan out from one sun beyond the top of the screen: their angles off the vertical, half openings and alphas. */
+/** The shafts fan out from one sun beyond the top of the screen: their angles off the vertical, widths and alphas. */
 private val ShaftAngles = floatArrayOf(-30f, -15f, 0f, 14f, 29f)
-private val ShaftHalfAngles = floatArrayOf(3f, 4.5f, 3.5f, 5f, 3f)
-private val ShaftAlphas = floatArrayOf(0.12f, 0.15f, 0.18f, 0.14f, 0.11f)
+private val ShaftWidths = floatArrayOf(60f, 90f, 70f, 95f, 60f)
+private val ShaftAlphas = floatArrayOf(0.16f, 0.2f, 0.24f, 0.2f, 0.15f)
 
 /**
- * God rays: five shafts of light fanning down from a sun above the top of the screen, each a soft wedge (a wide faint
- * one round a narrow bright one) fading toward its foot, swaying a few degrees once per 40 s or slower (an ambient loop
+ * God rays: five shafts of light fanning down from a sun above the top of the screen, each a long soft streak brightest
+ * across the upper screen and fading out by its foot, swaying a few degrees once per 40 s or slower (an ambient loop
  * never turns faster than once per 24 s).
  */
 private fun DrawScope.drawZenithShafts(theme: DimensionTheme, time: Float) {
-    val length = max(size.width, size.height) * 1.9f
-    val brush = ZenithPaths.shaftBrush(theme.ray)
+    val reach = max(size.width, size.height) * 0.62f
+    val brush = DimensionGlows.of(theme.ray, 0.3f)
     translate(size.width * 0.5f, -size.height * 0.55f) {
         for (index in ShaftAngles.indices) {
             val sway = 3f * sin(time * TWO_PI / (40f + 6f * index) + index * 1.7f)
-            val wedge = ZenithPaths.shaft(index)
             rotate(ShaftAngles[index] + sway, Offset.Zero) {
-                scale(length * 2.2f, length, Offset.Zero) { drawPath(wedge, brush, alpha = ShaftAlphas[index] * 0.4f) }
-                scale(length, length, Offset.Zero) { drawPath(wedge, brush, alpha = ShaftAlphas[index]) }
+                drawSoftDisc(brush, 0f, reach, ShaftWidths[index], reach, alpha = ShaftAlphas[index])
             }
         }
     }
@@ -142,7 +141,7 @@ internal fun DrawScope.drawZenithFeathers(
         val hash = dimensionCellHash(cx, cy, FEATHER_SALT)
         if (cellUnit(hash, 0) >= FEATHER_SHARE * density) continue
         val phase = TWO_PI * cellUnit(hash, 1)
-        val fall = wrapped(cellUnit(hash, 2) * FEATHER_CELL + FEATHER_FALL * (0.7f + 0.6f * cellUnit(hash, 3)) * time, FEATHER_CELL)
+        val fall = positiveModulo(cellUnit(hash, 2) * FEATHER_CELL + FEATHER_FALL * (0.7f + 0.6f * cellUnit(hash, 3)) * time, FEATHER_CELL)
         val x = originX + (cx + cellUnit(hash, 4)) * FEATHER_CELL + 22f * sin(time * 0.7f + phase)
         val y = originY + cy * FEATHER_CELL + fall
         if (!inView(x, y, 30f) || !atmosphereAffords(2)) continue
@@ -162,32 +161,22 @@ internal fun DrawScope.drawZenithFeathers(
 
 private const val TWO_PI = (2.0 * PI).toFloat()
 
-/** Cached unit paths of the Zenith: the shafts' wedges (one per opening), a feather's vane and shaft, and the shafts' fade. */
+/** Cached shapes of the Zenith: the dawn's fade, a feather's vane and shaft. */
 private object ZenithPaths {
-    private val shafts = arrayOfNulls<Path>(ShaftHalfAngles.size)
-    private var shaftColor = Color.Unspecified
-    private var shaftFade: Brush? = null
+    private var dawnColor = Color.Unspecified
+    private var dawnHeight = Float.NaN
+    private var dawnFade: Brush? = null
 
-    /** A unit wedge opening downward from the origin to y = 1 with half opening [ShaftHalfAngles] of [index]. */
-    fun shaft(index: Int): Path = shafts[index] ?: Path().also { path ->
-        val spread = tan(ShaftHalfAngles[index] * PI.toFloat() / 180f)
-        path.moveTo(0f, 0f)
-        path.lineTo(spread, 1f)
-        path.lineTo(-spread, 1f)
-        path.close()
-        shafts[index] = path
-    }
-
-    /** The shafts' light: [color] at the top fading out before the foot (unit length), rebuilt only for a new colour. */
-    fun shaftBrush(color: Color): Brush {
-        val cached = shaftFade
-        if (cached != null && color == shaftColor) return cached
-        return Brush.verticalGradient(0f to color, 0.25f to color, 0.55f to color.copy(alpha = 0.5f), 1f to color.copy(alpha = 0f),
-            startY = 0f, endY = 1f)
-            .also {
-                shaftFade = it
-                shaftColor = color
-            }
+    /** The dawn: [color] at the top fading out [height] down, rebuilt only for a new colour or height. */
+    fun dawnBrush(color: Color, height: Float): Brush {
+        val cached = dawnFade
+        if (cached != null && color == dawnColor && height == dawnHeight) return cached
+        return Brush.verticalGradient(0f to color, 0.45f to color.copy(alpha = color.alpha * 0.4f), 1f to color.copy(alpha = 0f),
+            startY = 0f, endY = height).also {
+            dawnFade = it
+            dawnColor = color
+            dawnHeight = height
+        }
     }
 
     /** A unit feather: the vane, pointed at the top (y = -0.5) and tapering into the quill at y = 0.5. */
@@ -218,5 +207,4 @@ internal fun prepareZenithResources() {
     ZenithPaths.feather
     ZenithPaths.featherShaft
     ZenithPaths.shaftStroke
-    repeat(ShaftHalfAngles.size) { ZenithPaths.shaft(it) }
 }
