@@ -89,10 +89,10 @@ internal data class DungeonAttempt(
  * - After the outcome the bot flies as before (footprint avoidance on), opening a waiting Totem chest while it holds
  *   a Key. Its cursor picks up where the pilot left the singularity; a stale cursor had swung across the Core's path
  *   and ended runs on singularity contact moments after their clear.
- * - Unstick ([PilotStallBreaker]), in every phase, after 3 s of crawling (its 1 s speed average below 150 u/s): when a
- *   wall of at most [ROUND_WALL_LENGTH] (a pillar, the Foundry's conveyor fin) stands between the Core and what it
- *   chases (its target, its waypoint, or the nearest enemy while the bot steers), it flies round that wall's box by
- *   its corners at 600 u/s until it sees past it (at most [ROUND_SECONDS]) instead of ramming it for minutes;
+ * - Unstick ([PilotStallBreaker]), in every phase, after 1.2 s of crawling (its 0.3 s speed average below 150 u/s):
+ *   when a wall of at most [ROUND_WALL_LENGTH] (a pillar, the Foundry's conveyor fin) stands between the Core and
+ *   what it chases (its target, its waypoint, or the nearest enemy while the bot steers), it flies round that wall's
+ *   box by its corners at 600 u/s until it sees past it (at most [ROUND_SECONDS]) instead of ramming it for minutes;
  *   otherwise it side-steps 1.5 s at 600 u/s at right angles to what it chases, which leaves an orbit pressed into a
  *   wall. Either way out keeps the berth of rocks, walls and skipped sites and the shot dodge.
  *

@@ -301,6 +301,8 @@ internal class NoPoiBot(
     private val siteMarks = FloatArray(MAX_OPTIONAL_SITE_MARKS * 3)
     private var decisions = 0
     private var nextSkillCheckAt = 0f
+    /** The unstick rule a player follows when the Core crawls (and Core Freeze would close in). */
+    private val stall = PilotStallBreaker()
 
     /** An independent bot in this bot's current state (a forked run continues with it). */
     fun copy(): NoPoiBot = NoPoiBot(archetypeTag, element, weaponOrder, relicTaste, dataPolicy, avoidWeaponHarmony, dashRule).also { copy ->
@@ -309,6 +311,7 @@ internal class NoPoiBot(
         copy.decisions = decisions
         copy.nextSkillCheckAt = nextSkillCheckAt
         copy.avoidBreaches = avoidBreaches
+        copy.stall.copyFrom(stall)
     }
 
     /**
@@ -363,6 +366,13 @@ internal class NoPoiBot(
         if (radius < 50f) {
             desiredX = -nx * 650f
             desiredY = -ny * 650f
+        }
+        // A crawl (terms that cancel, a rock between the Core and its target) breaks out sideways; the berths below
+        // still apply to the way out.
+        if (stall.stalled(s)) stall.sideStep(s, targetX, targetY)
+        if (stall.escaping(s)) {
+            desiredX = stall.escapeX
+            desiredY = stall.escapeY
         }
         // Keep voluntarily skipped optional sites outside the intended path.
         val siteCount = s.optionalSiteMarks(siteMarks)
