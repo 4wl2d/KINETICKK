@@ -84,7 +84,8 @@ internal class ItemDraft(
     val active: SkillId? = null,
 )
 
-private val Drafts: List<ItemDraft> = listOf(
+/** Ids 0-89: the tag families, the elements, the conversions and cross-element reactions, Sonic and Void. */
+private val FamilyDrafts: List<ItemDraft> = listOf(
     // RAM: collisions, mass and raw momentum.
     ItemDraft("Ballast Core", "Lead in the heart of the Core turns every collision into a shove.", COMMON, listOf(RAM),
         stats = listOf(stat(ItemEffect.MASS, 0.12f), stat(ItemEffect.IMPACT_DAMAGE, 0.06f)),
@@ -363,7 +364,9 @@ private val Drafts: List<ItemDraft> = listOf(
             given = listOf(EffectCondition.TargetHas(StatusElement.VOID)))), unlock = 8),
     ItemDraft("Abyssal Lens", "Aim for the hole the void left behind.", UNCOMMON, listOf(PRECISION), listOf(StatusElement.VOID),
         rules = listOf(ItemRule.DamageVersus(EffectCondition.TargetHas(StatusElement.VOID, 3), 0.15f)), unlock = 10),
+)
 
+private val ThemeDrafts: List<ItemDraft> = listOf(
     // Ids 90-172: the 0.4.0 expansion, grouped by theme. Commons and Uncommons are ungated; Rares, Epics, the six
     // legendaries and Fault Line each wait for a Rebirth tier, four items per tier.
     // SONIC (ids 90-95).
@@ -635,7 +638,9 @@ private val Drafts: List<ItemDraft> = listOf(
         clauses = listOf(on(EffectTrigger.KILL, EffectAction.Heal(3f), EffectAction.Buff(BuffStat.DAMAGE, 0.15f, 2.5f, maxStacks = 2),
             cooldown = 0.5f)),
         rules = listOf(ItemRule.DamageVersus(EffectCondition.TargetElite, -0.25f)), rebirth = 9, risk = true),
+)
 
+private val MechanicDrafts: List<ItemDraft> = listOf(
     // 0.5.0 (ids 173 onward): items built on skills, the Apex, reaction keystones, fields, marks and the Core's
     // movement, appended in themed batches of twelve.
     // CASTING (SKILL BUILDS) (ids 173-184).
@@ -1084,7 +1089,7 @@ private fun pair(first: StatusElement, second: StatusElement): List<EffectCondit
     listOf(EffectCondition.ElementIs(first), EffectCondition.ElementIs(second))
 
 internal fun defaultItems(): ImmutableList<ItemDefinition> =
-    (Drafts + ActiveDrafts + ObstacleDrafts).mapIndexed { index, draft ->
+    (FamilyDrafts + ThemeDrafts + MechanicDrafts + ActiveDrafts + ObstacleDrafts).mapIndexed { index, draft ->
         ItemDefinition(
             id = index,
             name = draft.name,
