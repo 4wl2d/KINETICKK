@@ -29,10 +29,10 @@ import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
 import kinetickk.ball.gameplay.nucleus.simulation.MutableGameState
 import kinetickk.ball.gameplay.nucleus.simulation.copyForReduction
-import kinetickk.ball.gameplay.nucleus.simulation.discoverWorld
-import kinetickk.ball.gameplay.nucleus.simulation.emitSound
-import kinetickk.ball.gameplay.nucleus.simulation.emitVisualFx
-import kinetickk.ball.gameplay.nucleus.simulation.takeSoundCues
+import kinetickk.ball.gameplay.nucleus.simulation.sites.discoverWorld
+import kinetickk.ball.gameplay.nucleus.simulation.progression.emitSound
+import kinetickk.ball.gameplay.nucleus.simulation.progression.emitVisualFx
+import kinetickk.ball.gameplay.nucleus.simulation.progression.takeSoundCues
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.ball.profile.api.GameplayProfileSnapshot
 import kinetickk.ball.profile.api.MatrixProgress

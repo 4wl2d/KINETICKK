@@ -4,6 +4,8 @@
 package kinetickk.ball.gameplay.nucleus.simulation
 
 import kinetickk.ball.gameplay.nucleus.model.Enemy
+import kinetickk.ball.gameplay.nucleus.simulation.combat.*
+import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 

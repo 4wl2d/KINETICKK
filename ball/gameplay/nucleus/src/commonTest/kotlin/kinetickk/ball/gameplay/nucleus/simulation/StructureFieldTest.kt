@@ -11,6 +11,7 @@ import kinetickk.ball.gameplay.nucleus.model.StructureField
 import kinetickk.ball.gameplay.nucleus.model.StructureSignal
 import kinetickk.ball.gameplay.nucleus.model.Wall
 import kinetickk.ball.gameplay.nucleus.render.WallKind
+import kinetickk.ball.gameplay.nucleus.simulation.world.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

@@ -17,6 +17,9 @@ import kinetickk.ball.gameplay.nucleus.model.TrailPoint
 import kinetickk.ball.gameplay.nucleus.model.WeaponHitCadence
 import kinetickk.ball.content.api.WeaponId
 import kotlin.math.max
+import kinetickk.ball.gameplay.nucleus.simulation.combat.*
+import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 
 internal fun MutableGameState.setVelocityForTesting(x: Float, y: Float) {
     velocityX = x

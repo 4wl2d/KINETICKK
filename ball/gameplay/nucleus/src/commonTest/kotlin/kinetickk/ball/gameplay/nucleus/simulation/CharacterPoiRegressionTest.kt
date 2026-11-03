@@ -18,6 +18,10 @@ import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.nucleus.simulation.combat.*
+import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
+import kinetickk.ball.gameplay.nucleus.simulation.sites.*
 
 class CharacterPoiRegressionTest {
     @Test

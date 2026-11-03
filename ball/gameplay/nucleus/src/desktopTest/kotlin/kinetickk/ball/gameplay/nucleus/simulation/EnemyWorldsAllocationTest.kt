@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import java.lang.management.ManagementFactory
 import kinetickk.ball.gameplay.nucleus.render.EnemyBehavior
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

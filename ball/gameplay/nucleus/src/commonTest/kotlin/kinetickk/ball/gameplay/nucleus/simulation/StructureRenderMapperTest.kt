@@ -7,12 +7,14 @@ import kinetickk.ball.content.api.SiteKind
 import kinetickk.ball.content.api.StructureTemplateId
 import kinetickk.ball.content.api.WallAxis
 import kinetickk.ball.gameplay.nucleus.model.SiteState
+import kinetickk.ball.gameplay.nucleus.projection.*
 import kinetickk.ball.gameplay.nucleus.render.StructureRenderProjection
 import kinetickk.ball.gameplay.nucleus.render.TrialClock
 import kinetickk.ball.gameplay.nucleus.render.TrialReward
 import kinetickk.ball.gameplay.nucleus.render.TrialSource
 import kinetickk.ball.gameplay.nucleus.render.TrialValue
 import kinetickk.ball.gameplay.nucleus.render.WallKind
+import kinetickk.ball.gameplay.nucleus.simulation.structures.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

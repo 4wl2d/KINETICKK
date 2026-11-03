@@ -52,6 +52,13 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 import kotlin.random.Random
+import kinetickk.ball.gameplay.nucleus.simulation.combat.*
+import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
+import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
+import kinetickk.ball.gameplay.nucleus.simulation.flight.*
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
+import kinetickk.ball.gameplay.nucleus.simulation.sites.*
+import kinetickk.ball.gameplay.nucleus.simulation.structures.*
 
 /*
  * The invariant fuzz harness. Each seed plays one session through the real nucleus boundary (GameplayNucleus.decide:

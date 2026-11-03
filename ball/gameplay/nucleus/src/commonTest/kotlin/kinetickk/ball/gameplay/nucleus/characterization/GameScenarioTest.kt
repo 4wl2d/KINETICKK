@@ -18,6 +18,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.test.Test
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 
 class GameScenarioTest {
     @Test

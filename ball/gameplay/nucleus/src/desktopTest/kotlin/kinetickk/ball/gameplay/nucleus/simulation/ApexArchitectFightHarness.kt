@@ -17,6 +17,10 @@ import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+import kinetickk.ball.gameplay.nucleus.simulation.characters.*
+import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
+import kinetickk.ball.gameplay.nucleus.simulation.variety.*
 
 /**
  * The fights of the Apex against the Architect (combat-final §5.2, §10 "Apex"), shared by [ApexArchitectFightTest]

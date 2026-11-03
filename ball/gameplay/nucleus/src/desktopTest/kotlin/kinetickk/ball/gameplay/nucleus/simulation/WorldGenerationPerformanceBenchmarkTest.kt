@@ -7,6 +7,8 @@ import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import java.io.File
 import java.lang.management.ManagementFactory
 import kotlin.test.Test
+import kinetickk.ball.gameplay.nucleus.simulation.structures.*
+import kinetickk.ball.gameplay.nucleus.simulation.world.*
 
 /** Chunk generation is separate from the fixed-step terrain benchmark, which starts with a built window. */
 class WorldGenerationPerformanceBenchmarkTest {

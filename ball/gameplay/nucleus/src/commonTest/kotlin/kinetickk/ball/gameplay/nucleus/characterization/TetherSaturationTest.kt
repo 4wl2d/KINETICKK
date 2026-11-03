@@ -6,6 +6,7 @@ package kinetickk.ball.gameplay.nucleus.characterization
 import kinetickk.ball.content.api.GameplayContentSnapshot
 import kinetickk.ball.content.api.SteeringTuning
 import kinetickk.ball.gameplay.nucleus.simulation.*
+import kinetickk.ball.gameplay.nucleus.simulation.flight.*
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kotlin.math.exp
 import kotlin.test.Test

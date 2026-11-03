@@ -5,6 +5,7 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import java.lang.management.ManagementFactory
 import kinetickk.ball.gameplay.nucleus.model.CombatFieldKind
 import kinetickk.ball.gameplay.nucleus.model.FieldSource
+import kinetickk.ball.gameplay.nucleus.simulation.elements.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

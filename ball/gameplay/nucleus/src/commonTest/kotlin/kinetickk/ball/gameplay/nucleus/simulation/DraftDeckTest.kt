@@ -14,6 +14,8 @@ import kinetickk.ball.gameplay.api.GameplayRevision
 import kinetickk.ball.gameplay.api.RunId
 import kinetickk.ball.gameplay.nucleus.model.ItemDeck
 import kinetickk.ball.gameplay.nucleus.model.ItemHistoryWeights
+import kinetickk.ball.gameplay.nucleus.simulation.build.*
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.ball.profile.api.MAX_RECENT_ITEM_IDS
 import kinetickk.foundation.random.CloneableXorWowRandom

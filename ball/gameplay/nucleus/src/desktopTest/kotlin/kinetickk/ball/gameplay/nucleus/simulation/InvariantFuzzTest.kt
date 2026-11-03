@@ -13,6 +13,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
 
 /**
  * The invariant fuzz of [fuzzSession] (InvariantFuzzHarness.kt) on seeds `i * 7_919 + 13`, never on the gate population

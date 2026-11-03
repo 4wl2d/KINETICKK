@@ -19,6 +19,10 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
+import kinetickk.ball.gameplay.nucleus.simulation.sites.*
+import kinetickk.ball.gameplay.nucleus.simulation.structures.*
 
 /** Compare the same seeds and absolute cells with the prior dense policy and the shipped exploration policy. */
 class ExplorationRarityTest {

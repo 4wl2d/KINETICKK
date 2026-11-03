@@ -5,6 +5,9 @@ package kinetickk.ball.gameplay.nucleus.simulation
 import kinetickk.ball.content.api.ReactionId
 import kinetickk.ball.content.api.SkillId
 import kinetickk.ball.gameplay.nucleus.render.GamePhase
+import kinetickk.ball.gameplay.nucleus.simulation.elements.*
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
+import kinetickk.ball.gameplay.nucleus.simulation.world.*
 import kotlin.test.Test
 import kotlin.test.assertTrue
 

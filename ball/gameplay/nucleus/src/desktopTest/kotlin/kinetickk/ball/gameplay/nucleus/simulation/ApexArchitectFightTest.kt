@@ -8,6 +8,7 @@ import kinetickk.ball.gameplay.nucleus.simulation.ApexArchitectFightHarness.FRAM
 import kinetickk.ball.gameplay.nucleus.simulation.ApexArchitectFightHarness.arena
 import kinetickk.ball.gameplay.nucleus.simulation.ApexArchitectFightHarness.fights
 import kinetickk.ball.gameplay.nucleus.simulation.ApexArchitectFightHarness.fightsOf
+import kinetickk.ball.gameplay.nucleus.simulation.enemies.*
 import kotlin.test.Test
 import kotlin.test.assertTrue
 

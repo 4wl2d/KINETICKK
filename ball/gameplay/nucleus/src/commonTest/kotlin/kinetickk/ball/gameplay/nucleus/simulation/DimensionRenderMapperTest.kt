@@ -10,6 +10,7 @@ import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.api.GameplayInteractionPulse
 import kinetickk.ball.gameplay.nucleus.model.DimensionRewardGrant
 import kinetickk.ball.gameplay.nucleus.model.SiteState
+import kinetickk.ball.gameplay.nucleus.projection.*
 import kinetickk.ball.gameplay.nucleus.reducer.EngineState
 import kinetickk.ball.gameplay.nucleus.reducer.GameReducer
 import kinetickk.ball.gameplay.nucleus.reducer.GameReductionResult
@@ -22,6 +23,7 @@ import kinetickk.ball.gameplay.nucleus.render.TrialClock
 import kinetickk.ball.gameplay.nucleus.render.TrialReward
 import kinetickk.ball.gameplay.nucleus.render.TrialSource
 import kinetickk.ball.gameplay.nucleus.render.TrialValue
+import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
 import kinetickk.ball.gameplay.nucleus.testing.canonicalGameplayContent
 import kinetickk.foundation.collections.toImmutableList
 import kotlin.test.Test

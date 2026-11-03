@@ -7,6 +7,8 @@ import kinetickk.ball.content.api.EnemyRank
 import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.model.profile
 import kinetickk.ball.gameplay.nucleus.render.EnemyType
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
+import kinetickk.ball.gameplay.nucleus.simulation.world.*
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin

@@ -11,6 +11,10 @@ import kinetickk.ball.gameplay.nucleus.model.WeaponHitCadence
 import kinetickk.ball.gameplay.nucleus.model.length
 import kinetickk.ball.gameplay.nucleus.protocol.VisualFxCue
 import kinetickk.ball.gameplay.nucleus.render.WeaponEntityKind
+import kinetickk.ball.gameplay.nucleus.simulation.build.*
+import kinetickk.ball.gameplay.nucleus.simulation.combat.*
+import kinetickk.ball.gameplay.nucleus.simulation.progression.*
+import kinetickk.ball.gameplay.nucleus.simulation.weapons.*
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.test.Test

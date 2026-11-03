@@ -43,10 +43,10 @@ internal class EnemyProfile(
     val frameStep: Float = 0f,
     val frameSteps: Int = 0,
 ) {
-    /** The Architect, the mini-bosses and the secret bosses ([kinetickk.ball.gameplay.nucleus.simulation.isBossClass]). */
+    /** The Architect, the mini-bosses and the secret bosses ([kinetickk.ball.gameplay.nucleus.simulation.elements.isBossClass]). */
     val bossClass: Boolean = rank == EnemyRank.BOSS || rank == EnemyRank.MINI_BOSS || rank == EnemyRank.SECRET_BOSS
 
-    /** Elites and every boss class ([kinetickk.ball.gameplay.nucleus.simulation.isEliteClass]). */
+    /** Elites and every boss class ([kinetickk.ball.gameplay.nucleus.simulation.elements.isEliteClass]). */
     val eliteClass: Boolean = rank == EnemyRank.ELITE || bossClass
 }
 

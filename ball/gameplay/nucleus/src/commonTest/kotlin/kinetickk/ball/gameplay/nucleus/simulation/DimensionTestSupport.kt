@@ -11,6 +11,8 @@ import kinetickk.ball.content.api.WorldLayer
 import kinetickk.ball.gameplay.nucleus.model.DimensionPortal
 import kinetickk.ball.gameplay.nucleus.model.SiteState
 import kinetickk.ball.gameplay.nucleus.model.windowSiteId
+import kinetickk.ball.gameplay.nucleus.simulation.dimensions.*
+import kinetickk.ball.gameplay.nucleus.simulation.world.*
 import kotlin.math.cos
 import kotlin.math.sin
 
